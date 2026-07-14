@@ -107,24 +107,15 @@ export function disabledReasonForActiveGit(
   return target.enabled ? null : target.reason;
 }
 
-export async function confirmOpenReview(
+export function showConflictDetails(
   context: RendererPluginContext,
   title: string,
   body: string,
   detail?: string
 ): Promise<void> {
-  const sourceContext = context.panels.getActiveContext();
-  const confirmed = await confirmDialog(
-    context,
+  return context.dialogs.alert({
+    body: [body, detail].filter(Boolean).join("\n\n"),
+    size: "default",
     title,
-    body,
-    pluginText(context, "gitConflictOpenReview", "Open Review"),
-    detail
-  );
-  if (confirmed) {
-    context.panels.open(
-      "pier.git.changes",
-      sourceContext ? { context: sourceContext } : undefined
-    );
-  }
+  });
 }

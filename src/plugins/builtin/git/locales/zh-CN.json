@@ -1,10 +1,5 @@
 {
   "commands": {
-    "pier.git.changes.open": {
-      "aliases": ["变更", "打开变更面板", "biangeng"],
-      "category": "Git",
-      "title": "Git: 打开变更面板"
-    },
     "pier.git.merge": {
       "aliases": ["合并分支", "git merge", "he bing fen zhi"],
       "category": "Git",
@@ -155,7 +150,6 @@
     "ui.statusDropdownOpenLabel": "打开 {{name}} 的 Git 状态",
     "ui.statusDropdownOpenTooltip": "点击打开 Git 状态",
     "ui.gitStatusLabel": "Git 状态",
-    "ui.statusDropdownOpenChanges": "打开 Git 变更",
     "ui.statusDropdownPull": "拉取更改",
     "ui.statusDropdownPulling": "正在拉取更改…",
     "ui.statusDropdownPullSuccess": "更改已拉取",
@@ -213,17 +207,6 @@
     "ui.srDeletions": "行删除",
     "ui.largeChange": "变更过大",
     "ui.gitUnsupported": "当前目录不是 Git 仓库",
-    "ui.changes.binaryFile": "二进制文件不可预览",
-    "ui.changes.diffErrorFallback": "差异加载失败",
-    "ui.changes.diffErrorTitle": "无法加载差异",
-    "ui.changes.diffLoading": "正在加载差异…",
-    "ui.changes.loadErrorFallback": "Git 状态加载失败",
-    "ui.changes.loadErrorTitle": "无法加载 Git 变更",
-    "ui.changes.loading": "正在加载变更…",
-    "ui.changes.noChanges": "无可展示的变更",
-    "ui.changes.selectFile": "选择文件以预览变更",
-    "ui.panelHint.gitChangesClean": "工作区没有未提交的变更",
-    "ui.panelTitle.gitChanges": "Git 变更",
     "ui.branchDefault": "默认",
     "ui.branchGraph": "提交图",
     "ui.branchGraphCaveatTitle": "仅表示提交图差异；squash/rebase 合并后，已应用内容仍可能显示为分支独有提交。",
@@ -245,7 +228,6 @@
     "ui.pruneConfirmButton": "清理",
     "ui.worktreePruneSuccess": "已清理失效工作树",
     "ui.gitErrorUnavailable": "Git 操作失败",
-    "ui.gitConflictOpenReview": "打开 Review",
     "ui.gitLoadingBranches": "正在加载分支...",
     "ui.gitLoadingMerge": "正在合并...",
     "ui.gitLoadingSwitchBranch": "正在切换分支...",
@@ -342,12 +324,6 @@
     "ui.worktreeCreate.startTaskNoAgents": "没有可用的已启用智能体。",
     "ui.worktreeCreate.title": "新建工作树",
     "ui.worktreeCreate.unavailable": "工作树不可用: {{message}}"
-  },
-  "panels": {
-    "pier.git.changes": {
-      "description": "Git 变更预览的占位面板,正式实现稍后到来。",
-      "title": "Git 变更"
-    }
   },
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {

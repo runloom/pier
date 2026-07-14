@@ -160,15 +160,13 @@ describe("pluginManifestSchema", () => {
     ]);
   });
 
-  it("git 插件声明变更面板和命令需要的 git 权限", () => {
+  it("Git 插件禁用变更面板后不再申请 panel 权限", () => {
     expect(collectEffectivePermissions(GIT_PLUGIN_MANIFEST)).toEqual([
       "environment:read",
       "workspace:open",
       "worktree:read",
       "worktree:write",
-      "panel:open",
       "command:register",
-      "panel:register",
       "git:read",
       "git:write",
       "ai:invoke",

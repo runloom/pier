@@ -1,10 +1,5 @@
 {
   "commands": {
-    "pier.git.changes.open": {
-      "aliases": ["git changes", "open changes"],
-      "category": "Git",
-      "title": "Git: Open Changes"
-    },
     "pier.git.merge": {
       "aliases": ["git merge", "merge branch", "branch merge"],
       "category": "Git",
@@ -137,7 +132,6 @@
     "ui.statusDropdownOpenLabel": "Open Git status for {{name}}",
     "ui.statusDropdownOpenTooltip": "Click to open Git status",
     "ui.gitStatusLabel": "Git status",
-    "ui.statusDropdownOpenChanges": "Open Git Changes",
     "ui.statusDropdownPull": "Pull Changes",
     "ui.statusDropdownPulling": "Pulling changes…",
     "ui.statusDropdownPullSuccess": "Changes pulled",
@@ -195,17 +189,6 @@
     "ui.srDeletions": "deletions",
     "ui.largeChange": "large change",
     "ui.gitUnsupported": "Current directory is not a Git repository",
-    "ui.changes.binaryFile": "Binary file cannot be previewed",
-    "ui.changes.diffErrorFallback": "Failed to load diff",
-    "ui.changes.diffErrorTitle": "Unable to load diff",
-    "ui.changes.diffLoading": "Loading diff…",
-    "ui.changes.loadErrorFallback": "Failed to load Git status",
-    "ui.changes.loadErrorTitle": "Unable to load Git changes",
-    "ui.changes.loading": "Loading changes…",
-    "ui.changes.noChanges": "No changes to display",
-    "ui.changes.selectFile": "Select a file to preview its changes",
-    "ui.panelHint.gitChangesClean": "No changes in the working tree",
-    "ui.panelTitle.gitChanges": "Git Changes",
     "ui.branchDefault": "default",
     "ui.branchGraph": "graph",
     "ui.branchGraphCaveatTitle": "Commit graph counts only. Squash or rebase merges may show already-applied commits as branch-only.",
@@ -227,7 +210,6 @@
     "ui.worktreePruneSuccess": "Stale worktrees pruned",
     "ui.worktreeDeleteSuccess": "Worktree deleted",
     "ui.gitErrorUnavailable": "Git operation failed",
-    "ui.gitConflictOpenReview": "Open Review",
     "ui.gitLoadingBranches": "Loading branches...",
     "ui.gitLoadingMerge": "Merging...",
     "ui.gitLoadingSwitchBranch": "Switching branch...",
@@ -324,12 +306,6 @@
     "ui.worktreeCreate.startTaskNoAgents": "No enabled agent is available.",
     "ui.worktreeCreate.title": "New Worktree",
     "ui.worktreeCreate.unavailable": "Worktrees are unavailable: {{message}}"
-  },
-  "panels": {
-    "pier.git.changes": {
-      "description": "Placeholder panel for upcoming git change preview.",
-      "title": "Git Changes"
-    }
   },
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {

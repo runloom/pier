@@ -30,7 +30,7 @@ const PANEL_CONTEXT = {
 } as const satisfies PanelContext;
 
 const DIRTY_MODEL = model({
-  actions: [{ id: "openChanges" }, { id: "switchWorktree" }],
+  actions: [{ id: "switchWorktree" }],
   statusGroups: [
     { parts: [{ icon: "changed", label: "7 changed", tone: "warning" }] },
     {
@@ -64,7 +64,7 @@ const DIRTY_MODEL = model({
 });
 
 const COMPLETED_MODEL = model({
-  actions: [{ id: "switchWorktree" }, { id: "openChanges" }],
+  actions: [{ id: "switchWorktree" }],
   statusGroups: [
     {
       parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
@@ -80,7 +80,7 @@ const COMPLETED_MODEL = model({
 });
 
 const REBASE_MODEL = model({
-  actions: [{ id: "openChanges" }, { id: "switchWorktree" }],
+  actions: [{ id: "switchWorktree" }],
   statusGroups: [
     { parts: [{ icon: "rebase", label: "Rebase paused", tone: "info" }] },
     { parts: [{ icon: "conflict", label: "3 conflicts", tone: "danger" }] },
@@ -89,22 +89,13 @@ const REBASE_MODEL = model({
 });
 
 const CLEAN_MODEL = model({
-  actions: [
-    { id: "openChanges" },
-    { id: "switchBranch" },
-    { id: "switchWorktree" },
-  ],
+  actions: [{ id: "switchBranch" }, { id: "switchWorktree" }],
   statusGroups: [{ parts: [{ label: "No local changes", tone: "default" }] }],
   variant: "clean",
 });
 
 const AHEAD_MODEL = model({
-  actions: [
-    { id: "push" },
-    { id: "openChanges" },
-    { id: "switchBranch" },
-    { id: "switchWorktree" },
-  ],
+  actions: [{ id: "push" }, { id: "switchBranch" }, { id: "switchWorktree" }],
   statusGroups: [
     {
       parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
@@ -119,12 +110,7 @@ const AHEAD_MODEL = model({
 });
 
 const BEHIND_MODEL = model({
-  actions: [
-    { id: "pull" },
-    { id: "openChanges" },
-    { id: "switchBranch" },
-    { id: "switchWorktree" },
-  ],
+  actions: [{ id: "pull" }, { id: "switchBranch" }, { id: "switchWorktree" }],
   statusGroups: [
     {
       parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
@@ -146,7 +132,6 @@ const BEHIND_MODEL = model({
 const DIVERGED_MODEL = model({
   actions: [
     { id: "syncChanges" },
-    { id: "openChanges" },
     { id: "switchBranch" },
     { id: "switchWorktree" },
   ],
@@ -280,11 +265,7 @@ async function openDropdown(
   model: GitStatusDropdownModel
 ): Promise<void> {
   render(
-    <GitStatusDropdown
-      context={PANEL_CONTEXT}
-      model={model}
-      pluginContext={pluginContext}
-    >
+    <GitStatusDropdown model={model} pluginContext={pluginContext}>
       <button type="button">trigger</button>
     </GitStatusDropdown>
   );
@@ -301,17 +282,6 @@ describe("GitStatusDropdown", () => {
     cleanup();
   });
 
-  it("opens Git Changes from the dirty dropdown", async () => {
-    const pluginContext = makePluginContext();
-    await openDropdown(pluginContext, DIRTY_MODEL);
-
-    fireEvent.click(screen.getByRole("menuitem", { name: "Open Git Changes" }));
-
-    expect(pluginContext.panels.open).toHaveBeenCalledWith("pier.git.changes", {
-      context: PANEL_CONTEXT,
-    });
-  });
-
   it("renders compact dropdown menu actions instead of primary blue pills", async () => {
     const pluginContext = makePluginContext();
     await openDropdown(pluginContext, DIRTY_MODEL);
@@ -319,9 +289,6 @@ describe("GitStatusDropdown", () => {
     expect(screen.getByRole("menu", { name: "Git status" })).toHaveClass(
       "w-72"
     );
-    expect(
-      screen.getByRole("menuitem", { name: "Open Git Changes" })
-    ).toHaveAttribute("data-slot", "dropdown-menu-item");
     expect(
       screen.getByRole("menuitem", { name: "Switch Worktree" })
     ).toHaveAttribute("data-slot", "dropdown-menu-item");
@@ -364,7 +331,6 @@ describe("GitStatusDropdown", () => {
     const pluginContext = makePluginContext();
     const translations: Record<string, string> = {
       "ui.gitStatusLabel": "Git 状态",
-      "ui.statusDropdownOpenChanges": "打开 Git 变更",
       "ui.statusDropdownStateDirty": "有变更",
       "ui.statusDropdownSwitchWorktree": "切换工作树",
     };
@@ -379,9 +345,6 @@ describe("GitStatusDropdown", () => {
     await openDropdown(pluginContext, DIRTY_MODEL);
 
     expect(screen.getByRole("menu", { name: "Git 状态" })).toBeInTheDocument();
-    expect(
-      screen.getByRole("menuitem", { name: "打开 Git 变更" })
-    ).toBeInTheDocument();
     expect(
       screen.getByRole("menuitem", { name: "切换工作树" })
     ).toBeInTheDocument();
@@ -470,7 +433,7 @@ describe("GitStatusDropdown", () => {
     const pluginContext = makePluginContext();
     await openDropdown(pluginContext, DIRTY_MODEL);
 
-    fireEvent.click(screen.getByRole("menuitem", { name: "Open Git Changes" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: "Switch Worktree" }));
 
     await waitFor(() => {
       expect(screen.queryByRole("menu")).not.toBeInTheDocument();

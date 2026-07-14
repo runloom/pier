@@ -142,11 +142,6 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       title: "Prune Stale Worktrees",
     },
     {
-      id: "pier.git.changes.open",
-      permissions: ["panel:open"],
-      title: "Git: Open Changes",
-    },
-    {
       id: "pier.git.switchBranch",
       permissions: ["git:read", "git:write"],
       title: "Git: Switch Branch...",
@@ -214,8 +209,6 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       "worktree:write",
       "environment:read",
       "command:register",
-      "panel:register",
-      "panel:open",
       "git:read",
       "git:write",
     ],
@@ -243,10 +236,6 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       locales: {
         en: {
           commands: {
-            "pier.git.changes.open": {
-              aliases: ["locale git changes"],
-              title: "Git: Open Changes",
-            },
             "pier.git.merge": {
               aliases: ["locale git merge"],
               title: "Git: Merge Branch...",
@@ -340,10 +329,6 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         },
         "zh-CN": {
           commands: {
-            "pier.git.changes.open": {
-              aliases: ["本地化 Git 变更"],
-              title: "Git: 打开变更面板",
-            },
             "pier.git.merge": {
               aliases: ["本地化合并分支"],
               title: "Git: 合并分支...",
@@ -414,20 +399,12 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         },
       },
       name: "Git",
-      panels: [
-        {
-          id: "pier.git.changes",
-          permissions: ["panel:register", "panel:open"],
-          title: "Git Changes",
-        },
-      ],
+      panels: [],
       permissions: [
         "worktree:read",
         "worktree:write",
         "workspace:open",
         "command:register",
-        "panel:register",
-        "panel:open",
         "git:read",
         "git:write",
       ],
@@ -831,27 +808,11 @@ describe("git builtin plugin", () => {
     ).toBe(true);
   });
 
-  it("启用时注册 git-changes panel 和打开变更命令", () => {
-    const addPanel = vi.fn();
-    useWorkspaceStore.setState({
-      api: {
-        addPanel,
-        panels: [],
-      },
-    } as never);
+  it("禁用旧 Git Changes 面板和打开变更命令", () => {
     dispose = activateWorktreePlugin();
 
-    expect(getPluginPanelRegistrations().has("pier.git.changes")).toBe(true);
-    expect(actionRegistry.get("pier.git.changes.open")).toBeDefined();
-    actionRegistry.get("pier.git.changes.open")?.handler();
-
-    expect(
-      usePanelDescriptorStore.getState().descriptors["pier.git.changes"]
-        ?.context
-    ).toMatchObject({
-      cwd: "/Users/xyz/ABC/pier",
-      gitRoot: "/Users/xyz/ABC/pier",
-    });
+    expect(getPluginPanelRegistrations().has("pier.git.changes")).toBe(false);
+    expect(actionRegistry.get("pier.git.changes.open")).toBeUndefined();
   });
 
   it("worktree 命令接入命令面板 aliases 搜索模型", () => {
@@ -1450,7 +1411,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 合并冲突后按 LoomDesk 流程确认打开 Review 面板占位", async () => {
+  it("Git 合并冲突后显示详情且不打开已禁用的 Review 面板", async () => {
     const addPanel = vi.fn();
     useWorkspaceStore.setState({
       api: {
@@ -1489,31 +1450,26 @@ describe("git builtin plugin", () => {
 
     const acceptPromise = branchPick.onAccept(branchItem);
     expect(await screen.findByText("Merge Conflicts")).toBeVisible();
-    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
-    expect(screen.getByRole("button", { name: "Open Review" })).toHaveAttribute(
-      "data-variant",
+    expect(
+      screen.getByText(
+        "Merge resulted in 2 conflict(s) that need to be resolved."
+      )
+    ).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute(
+      "data-size",
       "default"
     );
     expect(useCommandPaletteController.getState().quickPick?.title).not.toBe(
       "Merge Conflicts"
     );
-    fireEvent.click(screen.getByRole("button", { name: "Open Review" }));
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await acceptPromise;
 
     expect(toastMocks.dismiss).toHaveBeenCalledWith("git-loading-toast");
-    expect(addPanel).toHaveBeenCalledWith(
-      expect.objectContaining({
-        component: "pier.git.changes",
-        id: "pier.git.changes",
-      })
-    );
+    expect(addPanel).not.toHaveBeenCalled();
     expect(
       usePanelDescriptorStore.getState().descriptors["pier.git.changes"]
-        ?.context
-    ).toMatchObject({
-      cwd: "/Users/xyz/ABC/pier",
-      gitRoot: "/Users/xyz/ABC/pier",
-    });
+    ).toBeUndefined();
   });
 
   it("Git 弹出暂存命令列出 stash 并 pop 选中项", async () => {
@@ -1545,7 +1501,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 弹出暂存遇到冲突后按 LoomDesk 流程确认打开 Review 面板占位", async () => {
+  it("Git 弹出暂存遇到冲突后显示详情且不打开已禁用的 Review 面板", async () => {
     const addPanel = vi.fn();
     useWorkspaceStore.setState({
       api: {
@@ -1580,26 +1536,26 @@ describe("git builtin plugin", () => {
     }
     const acceptPromise = stashPick.onAccept(stashItem);
     expect(await screen.findByText("Stash Conflicts")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Stash was applied but resulted in conflicts that need to be resolved."
+      )
+    ).toBeVisible();
     expect(useCommandPaletteController.getState().quickPick?.title).not.toBe(
       "Stash Conflicts"
     );
-    fireEvent.click(screen.getByRole("button", { name: "Open Review" }));
+    expect(screen.getByRole("alertdialog")).toHaveAttribute(
+      "data-size",
+      "default"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await acceptPromise;
 
     expect(toastMocks.dismiss).toHaveBeenCalledWith("git-loading-toast");
-    expect(addPanel).toHaveBeenCalledWith(
-      expect.objectContaining({
-        component: "pier.git.changes",
-        id: "pier.git.changes",
-      })
-    );
+    expect(addPanel).not.toHaveBeenCalled();
     expect(
       usePanelDescriptorStore.getState().descriptors["pier.git.changes"]
-        ?.context
-    ).toMatchObject({
-      cwd: "/Users/xyz/ABC/pier",
-      gitRoot: "/Users/xyz/ABC/pier",
-    });
+    ).toBeUndefined();
   });
 
   it("Git 暂存列表 unavailable 时展示 LoomDesk 风格失败信息", async () => {
@@ -1696,6 +1652,64 @@ describe("git builtin plugin", () => {
       "Stash applied (kept in stash list)",
       { id: "git-loading-toast" }
     );
+  });
+
+  it("Git 应用暂存遇到冲突后显示详情且不打开已禁用的 Review 面板", async () => {
+    const addPanel = vi.fn();
+    useWorkspaceStore.setState({
+      api: {
+        addPanel,
+        panels: [],
+      },
+    } as never);
+    vi.mocked(window.pier.git.listStashes).mockResolvedValueOnce({
+      entries: [
+        {
+          date: "2026-01-01T00:00:00.000Z",
+          hash: "abc123",
+          index: 1,
+          message: "WIP on main",
+        },
+      ],
+      kind: "ok",
+    });
+    vi.mocked(window.pier.git.applyStash).mockResolvedValueOnce({
+      kind: "conflict",
+    });
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.stashApply")?.handler();
+    const stashPick = useCommandPaletteController.getState().quickPick;
+    const stashItem = stashPick?.items?.find(
+      (candidate) => candidate.id === "1"
+    );
+    if (!(stashPick && stashItem)) {
+      throw new Error("expected stash quick pick");
+    }
+
+    const acceptPromise = stashPick.onAccept(stashItem);
+    expect(await screen.findByText("Stash Conflicts")).toBeVisible();
+    expect(
+      screen.getByText(
+        "Stash was applied but resulted in conflicts that need to be resolved."
+      )
+    ).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute(
+      "data-size",
+      "default"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    await acceptPromise;
+
+    expect(window.pier.git.applyStash).toHaveBeenCalledWith(
+      "/Users/xyz/ABC/pier",
+      1
+    );
+    expect(window.pier.git.popStash).not.toHaveBeenCalled();
+    expect(addPanel).not.toHaveBeenCalled();
+    expect(
+      usePanelDescriptorStore.getState().descriptors["pier.git.changes"]
+    ).toBeUndefined();
   });
 
   it("Git 删除暂存需确认弹窗通过后才调用 dropStash", async () => {
@@ -1828,7 +1842,48 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 变基冲突后按 LoomDesk 流程确认打开 Review 面板占位", async () => {
+  it("Git 继续变基仍有冲突时显示详情且不打开已禁用的 Review 面板", async () => {
+    const addPanel = vi.fn();
+    useWorkspaceStore.setState({
+      api: {
+        addPanel,
+        panels: [],
+      },
+    } as never);
+    vi.mocked(window.pier.git.continueRebase).mockResolvedValueOnce({
+      kind: "conflict",
+      message: "CONFLICT (content): still unresolved",
+    });
+    dispose = activateWorktreePlugin();
+
+    const handlerPromise = actionRegistry
+      .get("pier.git.rebaseContinue")
+      ?.handler();
+
+    expect(await screen.findByText("Rebase Conflicts")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      "Rebase still has conflicts. Resolve them, then continue."
+    );
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      "CONFLICT (content): still unresolved"
+    );
+    expect(screen.getByRole("alertdialog")).toHaveAttribute(
+      "data-size",
+      "default"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
+    await handlerPromise;
+
+    expect(window.pier.git.continueRebase).toHaveBeenCalledWith(
+      "/Users/xyz/ABC/pier"
+    );
+    expect(addPanel).not.toHaveBeenCalled();
+    expect(
+      usePanelDescriptorStore.getState().descriptors["pier.git.changes"]
+    ).toBeUndefined();
+  });
+
+  it("Git 变基冲突后显示详情且不打开已禁用的 Review 面板", async () => {
     const addPanel = vi.fn();
     useWorkspaceStore.setState({
       api: {
@@ -1867,26 +1922,27 @@ describe("git builtin plugin", () => {
 
     const acceptPromise = branchPick.onAccept(branchItem);
     expect(await screen.findByText("Rebase Conflicts")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      "Rebase paused due to conflicts. Resolve them, then continue."
+    );
+    expect(screen.getByRole("alertdialog")).toHaveTextContent(
+      "CONFLICT (content): Merge conflict"
+    );
     expect(useCommandPaletteController.getState().quickPick?.title).not.toBe(
       "Rebase Conflicts"
     );
-    fireEvent.click(screen.getByRole("button", { name: "Open Review" }));
+    expect(screen.getByRole("alertdialog")).toHaveAttribute(
+      "data-size",
+      "default"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await acceptPromise;
 
     expect(toastMocks.dismiss).toHaveBeenCalledWith("git-loading-toast");
-    expect(addPanel).toHaveBeenCalledWith(
-      expect.objectContaining({
-        component: "pier.git.changes",
-        id: "pier.git.changes",
-      })
-    );
+    expect(addPanel).not.toHaveBeenCalled();
     expect(
       usePanelDescriptorStore.getState().descriptors["pier.git.changes"]
-        ?.context
-    ).toMatchObject({
-      cwd: "/Users/xyz/ABC/pier",
-      gitRoot: "/Users/xyz/ABC/pier",
-    });
+    ).toBeUndefined();
   });
 
   it("终端状态栏下拉面板使用自身 panel context 打开 worktree 列表", async () => {
@@ -2589,8 +2645,6 @@ describe("git builtin plugin", () => {
       "src/plugins/builtin/git/renderer/git-sequencer-actions.ts",
       "src/plugins/builtin/git/renderer/git-stash-actions.ts",
       "src/plugins/builtin/git/renderer/git-status-item.tsx",
-      "src/plugins/builtin/git/renderer/git-changes-action.ts",
-      "src/plugins/builtin/git/renderer/git-changes-panel.tsx",
     ];
     const source = (
       await Promise.all(

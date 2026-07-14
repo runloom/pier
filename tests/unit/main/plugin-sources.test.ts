@@ -37,7 +37,6 @@ describe("createDefaultPluginSources", () => {
         expect.objectContaining({ id: "pier.worktree.create" }),
         expect.objectContaining({ id: "pier.worktree.delete" }),
         expect.objectContaining({ id: "pier.worktree.prune" }),
-        expect.objectContaining({ id: "pier.git.changes.open" }),
       ])
     );
     expect(GIT_PLUGIN_MANIFEST).toMatchObject({
@@ -135,7 +134,6 @@ describe("createDefaultPluginSources", () => {
     );
     expect(englishLocale).toMatchObject({
       commands: {
-        "pier.git.changes.open": { title: "Git: Open Changes" },
         "pier.worktree.create": { title: "Create Worktree" },
         "pier.worktree.delete": { title: "Delete Worktrees..." },
         "pier.worktree.list": { title: "List Worktrees" },
@@ -173,7 +171,6 @@ describe("createDefaultPluginSources", () => {
         locales: {
           en: {
             commands: {
-              "pier.git.changes.open": { title: "Git: Open Changes" },
               "pier.worktree.create": { title: "Create Worktree" },
               "pier.worktree.delete": { title: "Delete Worktrees..." },
               "pier.worktree.list": { title: "List Worktrees" },
@@ -187,7 +184,6 @@ describe("createDefaultPluginSources", () => {
           },
           "zh-CN": {
             commands: {
-              "pier.git.changes.open": { title: "Git: 打开变更面板" },
               "pier.worktree.create": { title: "创建工作树" },
               "pier.worktree.delete": { title: "删除工作树..." },
               "pier.worktree.list": { title: "工作树列表" },

@@ -123,7 +123,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     });
 
     expect(
-      await screen.findByRole("menuitem", { name: "Open Git Changes" })
+      await screen.findByRole("menuitem", { name: "Switch Worktree" })
     ).toBeInTheDocument();
   });
 

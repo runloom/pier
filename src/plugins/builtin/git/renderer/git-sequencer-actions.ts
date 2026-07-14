@@ -10,9 +10,9 @@ import {
   activeCwdOrMessage,
   commandTitle,
   confirmDialog,
-  confirmOpenReview,
   disabledReasonForActiveGit,
   enabledForActiveGit,
+  showConflictDetails,
   showError,
   showLoading,
   showUnavailable,
@@ -156,7 +156,7 @@ export function registerRebaseContinueAction(
         );
       } else if (result.kind === "conflict") {
         loading.dismiss();
-        await confirmOpenReview(
+        await showConflictDetails(
           context,
           pluginText(context, "gitRebaseConflictTitle", "Rebase Conflicts"),
           pluginText(

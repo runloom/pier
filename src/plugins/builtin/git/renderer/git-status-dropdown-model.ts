@@ -7,7 +7,6 @@ import type {
 import type { PanelContext } from "@shared/contracts/panel.ts";
 
 export type GitStatusDropdownActionId =
-  | "openChanges"
   | "pull"
   | "push"
   | "switchBranch"
@@ -99,9 +98,6 @@ const EMPTY_COUNTS: GitCounts = {
 };
 
 const ACTIONS = {
-  openChanges: {
-    id: "openChanges",
-  },
   pull: {
     id: "pull",
   },
@@ -390,7 +386,7 @@ export function deriveGitStatusDropdownModel(
     const statusGroups = activeStatusGroups(status.repoState, counts, text);
     return {
       ...base,
-      actions: [action("openChanges"), action("switchWorktree")],
+      actions: [action("switchWorktree")],
       statusGroups,
       variant: "active",
     };
@@ -401,11 +397,7 @@ export function deriveGitStatusDropdownModel(
     const syncAction = remoteSyncAction(status, counts);
     return {
       ...base,
-      actions: [
-        action("openChanges"),
-        ...(syncAction ? [syncAction] : []),
-        action("switchWorktree"),
-      ],
+      actions: [...(syncAction ? [syncAction] : []), action("switchWorktree")],
       statusGroups,
       variant: "dirty",
     };
@@ -419,17 +411,8 @@ export function deriveGitStatusDropdownModel(
     return {
       ...base,
       actions: syncAction
-        ? [
-            syncAction,
-            action("switchBranch"),
-            action("switchWorktree"),
-            action("openChanges"),
-          ]
-        : [
-            action("switchBranch"),
-            action("switchWorktree"),
-            action("openChanges"),
-          ],
+        ? [syncAction, action("switchBranch"), action("switchWorktree")]
+        : [action("switchBranch"), action("switchWorktree")],
       statusGroups,
       variant: "completed",
     };
@@ -441,7 +424,6 @@ export function deriveGitStatusDropdownModel(
     ...base,
     actions: [
       ...(syncAction ? [syncAction] : []),
-      action("openChanges"),
       action("switchBranch"),
       action("switchWorktree"),
     ],

@@ -110,7 +110,6 @@ describe("deriveGitStatusDropdownModel", () => {
 
     expect(model.variant).toBe("dirty");
     expect(model.actions.map((action) => action.id)).toEqual([
-      "openChanges",
       "switchWorktree",
     ]);
     expect(summaryText(model)).toContain("7 changed");
@@ -163,7 +162,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["push", "openChanges", "switchBranch", "switchWorktree"]);
+    ).toEqual(["push", "switchBranch", "switchWorktree"]);
   });
 
   it("offers pull when the clean branch is only behind its upstream", () => {
@@ -181,7 +180,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["pull", "openChanges", "switchBranch", "switchWorktree"]);
+    ).toEqual(["pull", "switchBranch", "switchWorktree"]);
   });
 
   it("offers sync when the clean branch is both ahead and behind", () => {
@@ -199,7 +198,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["syncChanges", "openChanges", "switchBranch", "switchWorktree"]);
+    ).toEqual(["syncChanges", "switchBranch", "switchWorktree"]);
   });
 
   it("does not offer pull or sync when local changes could be disturbed", () => {
@@ -218,7 +217,7 @@ describe("deriveGitStatusDropdownModel", () => {
           counts: { conflict: 0, modified: 2, staged: 1, untracked: 2 },
         })
       )
-    ).toEqual(["openChanges", "switchWorktree"]);
+    ).toEqual(["switchWorktree"]);
     expect(
       actionIds(
         makeStatus({
@@ -234,7 +233,7 @@ describe("deriveGitStatusDropdownModel", () => {
           counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
         })
       )
-    ).toEqual(["openChanges", "switchWorktree"]);
+    ).toEqual(["switchWorktree"]);
   });
 
   it("does not offer sync operations without a usable upstream", () => {
@@ -252,7 +251,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["openChanges", "switchBranch", "switchWorktree"]);
+    ).toEqual(["switchBranch", "switchWorktree"]);
     expect(
       actionIds(
         makeStatus({
@@ -267,7 +266,7 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["switchBranch", "switchWorktree", "openChanges"]);
+    ).toEqual(["switchBranch", "switchWorktree"]);
   });
 
   it("models rebasing conflicts without write actions", () => {
@@ -290,7 +289,6 @@ describe("deriveGitStatusDropdownModel", () => {
 
     expect(model.variant).toBe("active");
     expect(model.actions.map((action) => action.id)).toEqual([
-      "openChanges",
       "switchWorktree",
     ]);
     expect(summaryText(model)).toContain("Rebase paused");
@@ -331,7 +329,7 @@ describe("deriveGitStatusDropdownModel", () => {
           repoState: { conflictCount: 2, kind: "cherry-picking" },
         })
       )
-    ).toEqual(["openChanges", "switchWorktree"]);
+    ).toEqual(["switchWorktree"]);
   });
 
   it("models clean merged upstream-gone branch without prune", () => {
@@ -358,7 +356,6 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(model.actions.map((action) => action.id)).toEqual([
       "switchBranch",
       "switchWorktree",
-      "openChanges",
     ]);
     expect(summaryText(model)).toBe(
       "No local changes · merged · upstream gone"
@@ -400,7 +397,6 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(summaryText(model)).toBe("No local changes · ↑2 ↓3");
     expect(model.actions.map((action) => action.id)).toEqual([
       "syncChanges",
-      "openChanges",
       "switchBranch",
       "switchWorktree",
     ]);

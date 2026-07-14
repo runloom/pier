@@ -10,10 +10,8 @@ import {
 } from "@pier/ui/dropdown-menu.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   Download,
-  FileDiff,
   FolderGit,
   GitBranch,
   GitCommitHorizontal,
@@ -44,7 +42,6 @@ import type {
 } from "./git-status-dropdown-model.ts";
 
 const ACTION_ICONS: Record<GitStatusDropdownActionId, LucideIcon> = {
-  openChanges: FileDiff,
   pull: Download,
   push: Upload,
   switchBranch: GitBranch,
@@ -56,10 +53,6 @@ const ACTION_LABELS: Record<
   GitStatusDropdownActionId,
   { fallback: string; key: string }
 > = {
-  openChanges: {
-    fallback: "Open Git Changes",
-    key: "statusDropdownOpenChanges",
-  },
   pull: {
     fallback: "Pull Changes",
     key: "statusDropdownPull",
@@ -222,12 +215,10 @@ function SummaryLine({
 
 export function GitStatusDropdown({
   children,
-  context,
   model,
   pluginContext,
 }: {
   children: React.ReactElement;
-  context: PanelContext;
   model: GitStatusDropdownModel;
   pluginContext: RendererPluginContext;
 }): React.ReactElement {
@@ -239,7 +230,6 @@ export function GitStatusDropdown({
     setOpen(false);
     runGitStatusDropdownAction({
       actionId,
-      context,
       model,
       pluginContext,
     }).catch((err: unknown) => {

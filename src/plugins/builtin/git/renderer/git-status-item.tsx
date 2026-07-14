@@ -264,7 +264,7 @@ function pendingDropdownModel({
           "Git status unavailable"
         );
   return {
-    actions: [{ id: "openChanges" }, { id: "switchWorktree" }],
+    actions: [{ id: "switchWorktree" }],
     branchLabel,
     contextLine: worktreeName,
     statusGroups: [
@@ -433,11 +433,7 @@ function WorktreeStatusItem({
   );
 
   return (
-    <GitStatusDropdown
-      context={panelContext}
-      model={dropdownModel}
-      pluginContext={pluginContext}
-    >
+    <GitStatusDropdown model={dropdownModel} pluginContext={pluginContext}>
       {trigger}
     </GitStatusDropdown>
   );

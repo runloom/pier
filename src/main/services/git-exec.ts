@@ -1,99 +1,103 @@
 import { spawn as nodeSpawn } from "node:child_process";
-import { StringDecoder } from "node:string_decoder";
+import { createExecGitRaw } from "./git-exec-raw.ts";
+import {
+  type CreateExecGitRawOptions,
+  type GitExecFailureCause,
+  GitExecRawError,
+  type GitExecRawResult,
+} from "./git-exec-raw-contract.ts";
+import { GIT_EXEC_DEFAULT_MAX_OUTPUT_BYTES } from "./git-exec-raw-utils.ts";
 
-const DEFAULT_TIMEOUT_MS = 10_000;
-const DEFAULT_MAX_OUTPUT_BYTES = 16 * 1024 * 1024;
-/**
- * SIGTERM 后等待子进程退出的宽限时间。超时后强制 SIGKILL，
- * 避免 git 在某些 lock 清理路径下忽略 SIGTERM 让 Promise 永挂。
- */
-const SIGKILL_GRACE_MS = 1500;
+export {
+  createExecGitRaw,
+  execGitRaw,
+} from "./git-exec-raw.ts";
+export type {
+  CreateExecGitRawOptions,
+  ExecGitRaw,
+  GitExecFailureCause,
+  GitExecRawOptions,
+  GitExecRawResult,
+} from "./git-exec-raw-contract.ts";
+export {
+  GIT_EXEC_DEFAULT_MAX_NUL_RECORDS,
+  GIT_EXEC_DIAGNOSTIC_TAIL_BYTES,
+  GIT_EXEC_HARD_MAX_NUL_RECORDS,
+  GIT_EXEC_MAX_NUL_RECORD_BYTES,
+  GIT_EXEC_MAX_OUTPUT_BYTES,
+  GIT_EXEC_MAX_STDIN_BYTES,
+  GIT_EXEC_MAX_TIMEOUT_MS,
+  GitExecRawError,
+} from "./git-exec-raw-contract.ts";
 
-/** git 子进程执行失败时的统一异常。保留完整 stdout/stderr/exitCode 便于上层错误分类。 */
+/** 旧文本执行器的公共兼容错误；大输出字段现在只保留 64 KiB 尾部。 */
 export class GitExecError extends Error {
   readonly args: readonly string[];
+  readonly causeKind: GitExecFailureCause;
   readonly cwd: string;
   readonly exitCode: number | null;
-  /**
-   * 若 stderr 中出现 `<path> died of signal N`（git 对被信号杀掉的 hook 打的标准日志），
-   * 提取 hook 路径与信号编号；否则为 `null`。上层可据此区分"git 逻辑错" vs
-   * "hook 被外部信号杀"（典型：macOS XProtect 首次扫描 hook 慢 + 上游 timeout →
-   * SIGKILL 波及 hook）。
-   */
   readonly hookSignal: { hookPath: string; signal: number } | null;
+  readonly signal: NodeJS.Signals | null;
   readonly stderr: string;
+  readonly stderrBytes: number;
+  readonly stderrTail: Buffer;
   readonly stdout: string;
+  readonly stdoutBytes: number;
+  readonly stdoutTail: Buffer;
 
   constructor(options: {
     args: readonly string[];
+    causeKind?: GitExecFailureCause;
     cwd: string;
     exitCode: number | null;
     hookSignal?: { hookPath: string; signal: number } | null;
     message: string;
+    signal?: NodeJS.Signals | null;
     stderr: string;
+    stderrBytes?: number;
+    stderrTail?: Buffer;
     stdout: string;
+    stdoutBytes?: number;
+    stdoutTail?: Buffer;
   }) {
     super(options.message);
     this.name = "GitExecError";
     this.args = options.args;
+    this.causeKind = options.causeKind ?? "exit";
     this.cwd = options.cwd;
     this.exitCode = options.exitCode;
     this.hookSignal = options.hookSignal ?? null;
+    this.signal = options.signal ?? null;
     this.stderr = options.stderr;
+    this.stderrTail = Buffer.from(
+      options.stderrTail ?? Buffer.from(options.stderr, "utf8")
+    );
+    this.stderrBytes = options.stderrBytes ?? this.stderrTail.length;
     this.stdout = options.stdout;
+    this.stdoutTail = Buffer.from(
+      options.stdoutTail ?? Buffer.from(options.stdout, "utf8")
+    );
+    this.stdoutBytes = options.stdoutBytes ?? this.stdoutTail.length;
   }
 }
 
 export interface GitExecOptions {
   cwd: string;
   env?: Readonly<Record<string, string>>;
-  /** stdout + stderr 累计字节上限（默认 16MB）。按 chunk byteLength 累加，非 string.length。 */
+  /** stdout + stderr 累计字节上限（默认 16 MiB）。 */
   maxOutputBytes?: number;
   onSuccessStderr?: (stderr: string) => void;
   timeoutMs?: number;
 }
 
 export interface CreateExecGitOptions {
-  /** spawn 替身。测试可注入 fake child 验证 SIGKILL fallback、stream error 等。 */
+  /** spawn 替身。测试可注入 kill、stream error 与边界竞态。 */
   spawn?: typeof nodeSpawn;
 }
 
-const GIT_ENV: Readonly<Record<string, string>> = {
-  GIT_OPTIONAL_LOCKS: "0",
-  GIT_PAGER: "cat",
-  GIT_TERMINAL_PROMPT: "0",
-  LANG: "C",
-  LC_ALL: "C",
-};
-
 /**
- * git 报 hook 被信号杀时会在 stderr 里打 `<path> died of signal N`（标准文案）。
- * 匹配一次即可（同一次 exec 里 git 只打一条这种日志）。
- * 例：`error: /path/.husky/_/post-checkout died of signal 9`
- */
-const HOOK_SIGNAL_PATTERN = /(\S+) died of signal (\d+)/;
-
-function parseHookSignal(
-  stderr: string
-): { hookPath: string; signal: number } | null {
-  const match = HOOK_SIGNAL_PATTERN.exec(stderr);
-  if (!match) {
-    return null;
-  }
-  const [, hookPath, rawSignal] = match;
-  if (!(hookPath && rawSignal)) {
-    return null;
-  }
-  const signal = Number.parseInt(rawSignal, 10);
-  if (!Number.isFinite(signal)) {
-    return null;
-  }
-  return { hookPath, signal };
-}
-
-/**
- * 工厂：返回与默认 `execGit` 同形态的函数，但 spawn 可注入用于测试。
- * 生产侧请直接 import 默认导出的 `execGit`；本工厂主要给单测用。
+ * 旧文本签名的兼容适配器。spawn、timeout、输出限制和 kill 状态机全部由
+ * createExecGitRaw 持有，此处只负责 UTF-8 解码与成功 stderr 回调。
  */
 export function createExecGit({
   spawn = nodeSpawn,
@@ -101,172 +105,58 @@ export function createExecGit({
   args: readonly string[],
   options: GitExecOptions
 ) => Promise<string> {
-  /**
-   * 统一 spawn 原生 git 的底座。
-   * 应用：超时（默认 10s）、输出字节上限（默认 16MB）、统一环境变量；失败 throw GitExecError。
-   * 调用者拿到的是 stdout（保留原样，不 trim）。
-   *
-   * 实现要点：
-   * - 用 StringDecoder 累积 Buffer chunks，避免 chunk 边界切断多字节 UTF-8 字符
-   * - 字节计数按 chunk.length（== Buffer.byteLength），不按 string.length（code units）
-   * - 超时/超限触发 SIGTERM；SIGKILL_GRACE_MS 后未退出再升级 SIGKILL
-   * - stdout/stderr 的 "error" 事件累加到 streamErrors，settle 时合并进 GitExecError.message
-   *   （而非 noop 吞，确保 EPIPE 等诊断信息不丢失）
-   */
-  return function execGit(args, options): Promise<string> {
-    return new Promise((resolve, reject) => {
-      const timeoutMs = options.timeoutMs ?? DEFAULT_TIMEOUT_MS;
-      const maxOutputBytes = options.maxOutputBytes ?? DEFAULT_MAX_OUTPUT_BYTES;
-      const child = spawn("git", [...args], {
+  const execRaw = createExecGitRaw({ spawn } satisfies CreateExecGitRawOptions);
+  return async function execGit(args, options): Promise<string> {
+    let result: GitExecRawResult;
+    try {
+      result = await execRaw(args, {
         cwd: options.cwd,
-        env: { ...process.env, ...GIT_ENV, ...(options.env ?? {}) },
-        stdio: ["ignore", "pipe", "pipe"],
+        ...(options.env === undefined ? {} : { env: options.env }),
+        maxOutputBytes:
+          options.maxOutputBytes ?? GIT_EXEC_DEFAULT_MAX_OUTPUT_BYTES,
+        mode: "collect",
+        ...(options.timeoutMs === undefined
+          ? {}
+          : { timeoutMs: options.timeoutMs }),
       });
-
-      const stdoutDecoder = new StringDecoder("utf8");
-      const stderrDecoder = new StringDecoder("utf8");
-      const streamErrors: string[] = [];
-      let stdout = "";
-      let stderr = "";
-      let outputBytes = 0;
-      let exceededLimit = false;
-      let timedOut = false;
-      let settled = false;
-      let killEscalationTimer: NodeJS.Timeout | null = null;
-
-      const timer = setTimeout(() => {
-        timedOut = true;
-        forceKill("SIGTERM");
-      }, timeoutMs);
-
-      function forceKill(signal: "SIGTERM" | "SIGKILL"): void {
-        child.kill(signal);
-        if (signal === "SIGTERM" && killEscalationTimer === null) {
-          killEscalationTimer = setTimeout(() => {
-            if (!settled) {
-              child.kill("SIGKILL");
-            }
-          }, SIGKILL_GRACE_MS);
-        }
+    } catch (error) {
+      if (!(error instanceof GitExecRawError)) {
+        throw error;
       }
-
-      function appendStreamDiagnostics(base: string): string {
-        if (streamErrors.length === 0) {
-          return base;
-        }
-        return `${base} [stream errors: ${streamErrors.join("; ")}]`;
-      }
-
-      function settle(payload: {
-        cause: "ok" | "exit" | "spawn-error" | "size-limit" | "timeout";
-        exitCode: number | null;
-        message?: string;
-      }): void {
-        if (settled) {
-          return;
-        }
-        settled = true;
-        clearTimeout(timer);
-        if (killEscalationTimer !== null) {
-          clearTimeout(killEscalationTimer);
-        }
-        // 把 decoder 内部 pending 字节冲洗出来
-        stdout += stdoutDecoder.end();
-        stderr += stderrDecoder.end();
-        if (payload.cause === "ok" && streamErrors.length === 0) {
-          options.onSuccessStderr?.(stderr);
-          resolve(stdout);
-          return;
-        }
-        const reasonPrefix = (() => {
-          if (payload.cause === "ok") {
-            return "git 成功退出但 stream 有 error";
-          }
-          if (payload.cause === "spawn-error") {
-            return "git 无法启动";
-          }
-          if (payload.cause === "size-limit") {
-            return `git 输出超过字节上限(${maxOutputBytes} bytes)`;
-          }
-          if (payload.cause === "timeout") {
-            return `git 执行超过 ${timeoutMs}ms 超时`;
-          }
-          return `git 退出码 ${payload.exitCode}`;
-        })();
-        const baseMessage =
-          payload.message != null && payload.message.length > 0
-            ? `${reasonPrefix}: ${payload.message}`
-            : reasonPrefix;
-        reject(
-          new GitExecError({
-            args,
-            cwd: options.cwd,
-            exitCode: payload.exitCode,
-            hookSignal: parseHookSignal(stderr),
-            message: appendStreamDiagnostics(baseMessage),
-            stderr,
-            stdout,
-          })
-        );
-      }
-
-      function trackChunkBytes(chunk: Buffer): boolean {
-        if (exceededLimit) {
-          return false;
-        }
-        outputBytes += chunk.length;
-        if (outputBytes > maxOutputBytes) {
-          exceededLimit = true;
-          forceKill("SIGTERM");
-          return false;
-        }
-        return true;
-      }
-
-      // stream "error" 累加到诊断字段(典型:EPIPE)。settle 时合并进 GitExecError.message
-      child.stdout.on("error", (err: Error) => {
-        streamErrors.push(`stdout: ${err.message}`);
+      throw new GitExecError({
+        args: error.args,
+        causeKind: error.causeKind,
+        cwd: error.cwd,
+        exitCode: error.exitCode,
+        hookSignal: error.hookSignal,
+        message: error.message,
+        signal: error.signal,
+        stderr: error.stderrTail.toString("utf8"),
+        stderrBytes: error.stderrBytes,
+        stderrTail: error.stderrTail,
+        stdout: error.stdoutTail.toString("utf8"),
+        stdoutBytes: error.stdoutBytes,
+        stdoutTail: error.stdoutTail,
       });
-      child.stderr.on("error", (err: Error) => {
-        streamErrors.push(`stderr: ${err.message}`);
+    }
+    if (result.kind !== "collected") {
+      throw new GitExecError({
+        args,
+        causeKind: "stream-error",
+        cwd: options.cwd,
+        exitCode: null,
+        message: "文本 Git 执行器收到非 collect 结果",
+        stderr: result.stderrTail.toString("utf8"),
+        stderrBytes: result.stderrBytes,
+        stderrTail: result.stderrTail,
+        stdoutBytes: result.stdoutBytes,
+        stdout: "",
+        stdoutTail: Buffer.alloc(0),
       });
-
-      child.stdout.on("data", (chunk: Buffer) => {
-        if (!trackChunkBytes(chunk)) {
-          return;
-        }
-        stdout += stdoutDecoder.write(chunk);
-      });
-
-      child.stderr.on("data", (chunk: Buffer) => {
-        if (!trackChunkBytes(chunk)) {
-          return;
-        }
-        stderr += stderrDecoder.write(chunk);
-      });
-
-      child.on("error", (err) => {
-        settle({ cause: "spawn-error", exitCode: null, message: err.message });
-      });
-
-      child.on("close", (code) => {
-        if (exceededLimit) {
-          settle({ cause: "size-limit", exitCode: code });
-          return;
-        }
-        if (timedOut) {
-          settle({ cause: "timeout", exitCode: code });
-          return;
-        }
-        if (code === 0) {
-          settle({ cause: "ok", exitCode: 0 });
-          return;
-        }
-        settle({ cause: "exit", exitCode: code, message: stderr.trim() });
-      });
-    });
+    }
+    options.onSuccessStderr?.(result.stderrTail.toString("utf8"));
+    return result.stdout.toString("utf8");
   };
 }
 
-/** 生产默认实现。下游 import 这个即可,行为与之前 export function execGit 等价。 */
 export const execGit = createExecGit();

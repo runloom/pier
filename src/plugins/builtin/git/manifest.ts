@@ -39,12 +39,6 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "Git",
-      id: "pier.git.changes.open",
-      permissions: ["panel:open"],
-      title: "Git: Open Changes",
-    },
-    {
-      category: "Git",
       id: "pier.git.switchBranch",
       permissions: ["git:read", "git:write"],
       title: "Git: Switch Branch...",
@@ -153,21 +147,13 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     locales: ["en", "zh-CN"],
   },
   name: "Git",
-  panels: [
-    {
-      id: "pier.git.changes",
-      permissions: ["panel:register", "panel:open"],
-      title: "Git Changes",
-    },
-  ],
+  panels: [],
   permissions: [
     "command:register",
     "worktree:read",
     "worktree:write",
     "environment:read",
     "workspace:open",
-    "panel:register",
-    "panel:open",
     "git:read",
     "git:write",
     "ai:invoke",
