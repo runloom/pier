@@ -9,6 +9,7 @@ import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { FileEditorAdapter } from "./file-editor-adapter.tsx";
 import type { FileEditorController } from "./file-editor-controller.ts";
 import { FileImagePreview } from "./file-image-preview.tsx";
+import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
 import {
   MissingTemporaryState,
   ReadOnlyErrorState,
@@ -20,6 +21,7 @@ import type {
   FileViewMode,
 } from "./files-document-types.ts";
 import type { FilesTranslate } from "./files-i18n.ts";
+import type { MarkdownInternalTarget } from "./markdown-ir-renderer.tsx";
 import { useFilesDocument } from "./use-files-document.ts";
 
 let nextInlineEditorOwnerId = 1;
@@ -30,6 +32,8 @@ function createEditorSessionId(ownerId: string): string {
 
 export function ResolvedFilePanel({
   context,
+  markdownAnchor,
+  markdownAnchorRequestId,
   controller,
   mode,
   panelContext,
@@ -39,6 +43,8 @@ export function ResolvedFilePanel({
   t,
 }: {
   context: RendererPluginContext | undefined;
+  markdownAnchor?: string | undefined;
+  markdownAnchorRequestId?: string | undefined;
   controller: FileEditorController;
   mode: FileViewMode;
   panelContext: PanelContext | undefined;
@@ -56,6 +62,7 @@ export function ResolvedFilePanel({
   }
   const editorOwnerId = panelId ?? inlineEditorOwnerIdRef.current;
   const editorSessionId = document ? createEditorSessionId(editorOwnerId) : "";
+  const externalUrlInFlightRef = useRef<string | null>(null);
 
   // 编辑器右键 → 走宿主 contextMenu.popup, source 塞进 metadata。source 层
   // (files/editor) 与 tree (files/tree-item) 分开,权限声明和菜单顺序也各自
@@ -144,6 +151,109 @@ export function ResolvedFilePanel({
     }
   }, [context, document, t]);
 
+  const handleOpenExternal = useCallback(
+    async (url: string) => {
+      if (!context || externalUrlInFlightRef.current === url) {
+        return;
+      }
+      if (externalUrlInFlightRef.current) {
+        context.notifications.info(
+          t(
+            "filePanel.markdown.externalOpenBusy",
+            "Another external link is already opening."
+          )
+        );
+        return;
+      }
+      externalUrlInFlightRef.current = url;
+      try {
+        const result = await context.externalNavigation.open(url);
+        if (!result.opened && result.reason === "busy") {
+          context.notifications.info(
+            t(
+              "filePanel.markdown.externalOpenBusy",
+              "Another external link is already opening."
+            )
+          );
+        } else if (!result.opened) {
+          await context.dialogs.alert({
+            body: t(
+              "filePanel.markdown.externalOpenFailed.description",
+              "The external link could not be opened."
+            ),
+            size: "sm",
+            title: t(
+              "filePanel.markdown.externalOpenFailed.title",
+              "Unable to open link"
+            ),
+          });
+        }
+      } catch (error) {
+        await context.dialogs
+          .alert({
+            body: error instanceof Error ? error.message : String(error),
+            size: "default",
+            title: t(
+              "filePanel.markdown.externalOpenFailed.title",
+              "Unable to open link"
+            ),
+          })
+          .catch(() => undefined);
+      } finally {
+        if (externalUrlInFlightRef.current === url) {
+          externalUrlInFlightRef.current = null;
+        }
+      }
+    },
+    [context, t]
+  );
+  const handleOpenMarkdownInternal = useCallback(
+    (target: MarkdownInternalTarget) => {
+      if (!(context && document?.source.kind === "disk")) return;
+      const nextSource: FilesDocumentPanelSource = {
+        kind: "disk",
+        path: target.path,
+        root: document.source.root,
+      };
+      context.panels.openInstance({
+        componentId: FILES_FILE_PANEL_ID,
+        ...(panelContext ? { context: panelContext } : {}),
+        dropUnpinnedInstances: true,
+        instanceId: createFileFilePanelInstanceId(nextSource),
+        params: {
+          ...(target.fragment ? { markdownAnchor: target.fragment } : {}),
+          ...(target.fragment
+            ? { markdownAnchorRequestId: crypto.randomUUID() }
+            : {}),
+          pinned: false,
+          source: nextSource,
+        },
+        title: target.path.split("/").at(-1) ?? target.path,
+      });
+    },
+    [context, document, panelContext]
+  );
+  const handleCopyMarkdownCode = useCallback(
+    async (code: string) => {
+      try {
+        await navigator.clipboard.writeText(code);
+      } catch (error) {
+        if (context) {
+          await context.dialogs.alert({
+            body: error instanceof Error ? error.message : String(error),
+            size: "default",
+            title: t(
+              "filePanel.editor.clipboardFailed",
+              "Clipboard unavailable"
+            ),
+          });
+        }
+        throw error;
+      }
+    },
+    [context, t]
+  );
+
   if (!document) {
     if (source.kind === "untitled") {
       return <MissingTemporaryState name={source.name} t={t} />;
@@ -160,8 +270,8 @@ export function ResolvedFilePanel({
     );
   }
 
-  if (document.preview) {
-    return <FileImagePreview document={document} t={t} />;
+  if (document.preview && context) {
+    return <FileImagePreview context={context} document={document} t={t} />;
   }
 
   if (document.readOnlyReason) {
@@ -258,6 +368,7 @@ export function ResolvedFilePanel({
     <div className="flex min-h-0 flex-1 flex-col bg-background">
       {/* 保留 sr-only h1:测试用 role="heading" 拿文件名,同时无障碍读屏能定位当前文档标题。 */}
       <h1 className="sr-only">{document.name}</h1>
+
       {document.error ? (
         <div className="shrink-0 px-4 py-3">
           <Alert variant="destructive">
@@ -286,8 +397,43 @@ export function ResolvedFilePanel({
             ),
             sourceEditor: t("filePanel.editor.sourceLabel", "Source editor"),
           }}
+          markdownAppearance={context?.appearance}
+          markdownCharts={context?.charts}
+          markdownCopyCode={context ? handleCopyMarkdownCode : undefined}
+          markdownErrorLabel={t(
+            "filePanel.markdown.renderFailed",
+            "Unable to render Markdown preview."
+          )}
+          markdownFileResources={context}
+          markdownInitialAnchor={markdownAnchor}
+          markdownInitialAnchorRequestId={markdownAnchorRequestId}
+          markdownLabels={{
+            copiedCode: t("filePanel.markdown.copiedCode", "Copied"),
+            copyCode: t("filePanel.markdown.copyCode", "Copy code"),
+            diagramFailed: t(
+              "filePanel.markdown.diagramFailed",
+              "Unable to render diagram"
+            ),
+            diagramLabel: t(
+              "filePanel.markdown.diagramLabel",
+              "Mermaid diagram"
+            ),
+            completedTask: t(
+              "filePanel.markdown.completedTask",
+              "Completed task"
+            ),
+            incompleteTask: t(
+              "filePanel.markdown.incompleteTask",
+              "Incomplete task"
+            ),
+          }}
+          markdownSource={
+            document.source.kind === "disk" ? document.source : undefined
+          }
           mode={mode}
           onEditorContextMenu={handleEditorContextMenu}
+          onOpenMarkdownInternal={handleOpenMarkdownInternal}
+          openExternal={handleOpenExternal}
           readOnly={document.readOnly || document.loadState === "loading"}
           searchLabels={{
             close: t("filePanel.search.close", "Close"),

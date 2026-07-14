@@ -1,3 +1,4 @@
+import type { ExternalNavigationResult } from "@shared/contracts/external-navigation.ts";
 import {
   cleanup,
   fireEvent,
@@ -11,7 +12,24 @@ import { initI18n } from "@/i18n/index.ts";
 import { AgentsSection } from "@/pages/settings/components/agents-section.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import type * as AppDialogStoreModule from "@/stores/app-dialog.store.ts";
 import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
+
+const appDialogMocks = vi.hoisted(() => ({
+  showAppAlert: vi.fn(async () => undefined),
+}));
+
+const toastMocks = vi.hoisted(() => ({
+  info: vi.fn(),
+}));
+
+vi.mock("sonner", () => ({ toast: toastMocks }));
+
+// Vitest must load the real store through its mock factory before overriding one export.
+vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => ({
+  ...(await importOriginal<typeof AppDialogStoreModule>()),
+  showAppAlert: appDialogMocks.showAppAlert,
+}));
 
 /**
  * agent-preferences store 只关心 agent 设置字段, 但整个 preferences 对象
@@ -34,6 +52,13 @@ function makePierMock(detectedIds: string[] = []) {
       detect: vi.fn(async () => ({ detectedIds })),
       refresh: vi.fn(async () => ({ detectedIds })),
     },
+    externalNavigation: {
+      open: vi.fn(
+        async (): Promise<ExternalNavigationResult> => ({
+          opened: true,
+        })
+      ),
+    },
     preferences: {
       read: vi.fn(async () => makeFakePreferences(DEFAULT_PREFERENCES)),
       update: vi.fn(async (patch: Record<string, unknown>) =>
@@ -50,6 +75,8 @@ function makePierMock(detectedIds: string[] = []) {
 describe("AgentsSection", () => {
   beforeEach(async () => {
     await initI18n();
+    appDialogMocks.showAppAlert.mockClear();
+    toastMocks.info.mockClear();
 
     useAgentDetectStore.setState({
       detectedIds: [],
@@ -264,7 +291,13 @@ describe("AgentsSection", () => {
       "href",
       "https://github.com/openai/codex"
     );
-    expect(websiteLink).toHaveAttribute("target", "_blank");
+    expect(websiteLink).not.toHaveAttribute("target");
+    fireEvent.click(websiteLink);
+    await waitFor(() => {
+      expect(window.pier.externalNavigation.open).toHaveBeenCalledWith(
+        "https://github.com/openai/codex"
+      );
+    });
     expect(
       codex.queryByRole("button", { name: "Set default" })
     ).not.toBeInTheDocument();
@@ -274,6 +307,59 @@ describe("AgentsSection", () => {
     expect(
       codex.queryByRole("button", { name: "Enable" })
     ).not.toBeInTheDocument();
+  });
+
+  it("surfaces agent website failures in the app dialog", async () => {
+    const pier = makePierMock(["claude"]);
+    pier.externalNavigation.open.mockResolvedValue({
+      opened: false,
+      reason: "open-failed",
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: pier,
+    });
+    render(<AgentsSection />);
+    const websiteLink = within(screen.getByTestId("agent-row-codex")).getByRole(
+      "link",
+      { name: "Website" }
+    );
+
+    fireEvent.click(websiteLink);
+
+    await waitFor(() => {
+      expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
+        body: "The agent website could not be opened.",
+        size: "sm",
+        title: "Unable to open website",
+      });
+    });
+  });
+
+  it("uses busy feedback when another external link is opening", async () => {
+    const pier = makePierMock(["claude"]);
+    pier.externalNavigation.open.mockResolvedValue({
+      opened: false,
+      reason: "busy",
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: pier,
+    });
+    render(<AgentsSection />);
+    const websiteLink = within(screen.getByTestId("agent-row-codex")).getByRole(
+      "link",
+      { name: "Website" }
+    );
+
+    fireEvent.click(websiteLink);
+
+    await waitFor(() => {
+      expect(toastMocks.info).toHaveBeenCalledWith(
+        "Another external link is already opening."
+      );
+    });
+    expect(appDialogMocks.showAppAlert).not.toHaveBeenCalled();
   });
 
   it("Refresh button calls refresh() and reflects isRefreshing", async () => {

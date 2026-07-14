@@ -1,3 +1,4 @@
+import { createRequire } from "node:module";
 import { resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
@@ -8,6 +9,12 @@ import { createSandboxedPreloadConfig } from "./scripts/preload-build-config.ts"
 // 当前 worktree dev profile (端口/HMR/userData). 多 worktree 并存时按 worktree
 // 路径派生不同端口, 避免抢用. 详 scripts/dev-profile.mjs.
 const devProfile = resolveDevProfile();
+const nodeRequire = createRequire(import.meta.url);
+// Renderer 的 browser condition 会选中 DOM 解码器；Markdown module worker
+// 没有 document，统一使用包的 default/worker-safe 入口。
+const workerSafeNamedCharacterReference = nodeRequire.resolve(
+  "decode-named-character-reference"
+);
 
 export default defineConfig({
   main: {
@@ -62,6 +69,10 @@ export default defineConfig({
         {
           find: "@pier/ui",
           replacement: resolve(import.meta.dirname, "packages/ui/src"),
+        },
+        {
+          find: "decode-named-character-reference",
+          replacement: workerSafeNamedCharacterReference,
         },
         // 注意: 不要给 react-grid-layout 加 alias 或 optimizeDeps.exclude 让它
         // 绕过预打包生服 —— 其依赖 fast-equals@4(browser 字段指向 UMD)、

@@ -1,0 +1,45 @@
+diff --git a/dist/index.js b/dist/index.js
+index e7e087bcb6f29d0d8f36cd558e0183bc0f162fcb..1dd0bb0e3b59f4cb5a33666a88ee659c6fc01d20 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -5950,11 +5950,12 @@ function ensureElk() {
+   const g = globalThis;
+   const hadSelf = "self" in g;
+   const origSelf = g.self;
+-  if (hadSelf && typeof g.document === "undefined") {
+-    delete g.self;
+-  }
++  const removedSelf =
++    hadSelf && typeof g.document === "undefined"
++      ? delete g.self && !("self" in g)
++      : false;
+   elk = new ELKBundled();
+-  if (hadSelf) g.self = origSelf;
++  if (removedSelf) g.self = origSelf;
+   globalThis.setTimeout = origSetTimeout;
+   pending.forEach((fn) => fn());
+   rawWorker = elk.worker.worker;
+diff --git a/src/elk-instance.ts b/src/elk-instance.ts
+index 6406f3d38edf5bf4dbdf18237e704e9fe11ce7f5..e60ae2d8cb20e5ca42d7e448d73e358201cf43cc 100644
+--- a/src/elk-instance.ts
++++ b/src/elk-instance.ts
+@@ -54,14 +54,14 @@ function ensureElk(): void {
+   const g = globalThis as Record<string, unknown>
+   const hadSelf = 'self' in g
+   const origSelf = g.self
+-  if (hadSelf && typeof g.document === 'undefined') {
+-    delete g.self
+-  }
++  const removedSelf = hadSelf && typeof g.document === 'undefined'
++    ? delete g.self && !('self' in g)
++    : false
+ 
+   elk = new ELKBundled()
+ 
+-  // Restore self
+-  if (hadSelf) g.self = origSelf
++  // Restore self only when the temporary deletion succeeded.
++  if (removedSelf) g.self = origSelf
+ 
+   // Restore setTimeout immediately
+   globalThis.setTimeout = origSetTimeout

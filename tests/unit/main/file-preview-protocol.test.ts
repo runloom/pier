@@ -9,12 +9,13 @@ import {
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
-  createFilePreviewUrl,
+  authorizeFilePreviewRequest,
   FILE_PREVIEW_SCHEME,
   handleFilePreviewProtocol,
   registerFilePreviewScheme,
   resolveFilePreviewResponse,
 } from "@main/files/file-preview-protocol.ts";
+import { filePreviewTicketRegistry } from "@main/files/file-preview-ticket-registry.ts";
 import {
   MAX_IMAGE_PREVIEW_FILE_BYTES,
   readFileWithinImagePreviewLimit,
@@ -23,6 +24,24 @@ import { readFileDocument } from "@main/services/file-document-reader.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 let root: string;
+const owner = {
+  partition: "test-partition",
+  recordId: "files",
+  runtimeId: "test",
+  webContentsId: 42,
+};
+
+function ticketUrl(locator: {
+  mime?: string;
+  path: string;
+  revision: string;
+  root: string;
+}): string {
+  return filePreviewTicketRegistry.issue({
+    locator: { mime: locator.mime ?? "image/png", ...locator },
+    owner,
+  }).url;
+}
 
 beforeEach(async () => {
   root = await mkdtemp(join(tmpdir(), "pier-file-preview-"));
@@ -37,7 +56,12 @@ async function previewUrl(path: string): Promise<string> {
   if (result.kind !== "image") {
     throw new Error("expected image document");
   }
-  return createFilePreviewUrl({ path, revision: result.revision, root });
+  return ticketUrl({
+    mime: result.mime,
+    path,
+    revision: result.revision,
+    root,
+  });
 }
 
 describe("file preview protocol", () => {
@@ -89,11 +113,7 @@ describe("file preview protocol", () => {
     ["path escape", "../outside.png", 404],
     ["missing file", "missing.png", 404],
   ])("rejects %s", async (_label, path, status) => {
-    const url = createFilePreviewUrl({
-      path,
-      revision: "file-v1:missing",
-      root,
-    });
+    const url = ticketUrl({ path, revision: "file-v1:missing", root });
     await expect(resolveFilePreviewResponse(url)).resolves.toMatchObject({
       status,
     });
@@ -106,7 +126,7 @@ describe("file preview protocol", () => {
 
     for (const path of ["folder", "vector.svg", "spoof.png"]) {
       const response = await resolveFilePreviewResponse(
-        createFilePreviewUrl({ path, revision: "file-v1:any", root })
+        ticketUrl({ path, revision: "file-v1:any", root })
       );
       expect(response.status).toBe(404);
     }
@@ -122,7 +142,7 @@ describe("file preview protocol", () => {
       await symlink(join(outside, "image.png"), join(root, "linked.png"));
 
       const response = await resolveFilePreviewResponse(
-        createFilePreviewUrl({
+        ticketUrl({
           path: "linked.png",
           revision: "file-v1:any",
           root,
@@ -165,7 +185,7 @@ describe("file preview protocol", () => {
     await truncate(target, MAX_IMAGE_PREVIEW_FILE_BYTES + 1);
 
     const response = await resolveFilePreviewResponse(
-      createFilePreviewUrl({ path, revision: "file-v1:any", root })
+      ticketUrl({ path, revision: "file-v1:any", root })
     );
 
     expect(response.status).toBe(413);
@@ -180,6 +200,33 @@ describe("file preview protocol", () => {
     await expect(
       readFileWithinImagePreviewLimit(target, inspectedSize)
     ).resolves.toBeNull();
+  });
+
+  it("authorizes only the ticket-owning partition and webContents", () => {
+    const url = ticketUrl({
+      path: "image.png",
+      revision: "file-v1:test",
+      root,
+    });
+
+    expect(
+      authorizeFilePreviewRequest(
+        { url, webContentsId: owner.webContentsId },
+        owner.partition
+      )
+    ).toBe(true);
+    expect(
+      authorizeFilePreviewRequest(
+        { url, webContentsId: owner.webContentsId + 1 },
+        owner.partition
+      )
+    ).toBe(false);
+    expect(
+      authorizeFilePreviewRequest(
+        { url, webContentsId: owner.webContentsId },
+        "other-partition"
+      )
+    ).toBe(false);
   });
 
   it("registers only the secure standard fetch-enabled preview scheme", () => {

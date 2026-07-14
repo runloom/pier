@@ -42,6 +42,7 @@ export const pierCapabilitySchema = z.enum([
   "secret:write",
   "usage:publish",
   "evidence:write",
+  "external:open",
   "network",
   "ai:invoke",
 ]);
@@ -91,6 +92,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "file:read",
     "file:write",
     "ai:invoke",
+    "external:open",
     // network 用于 plugin.checkUpdates / plugin.install / plugin.update
     // 拉取签名官方索引与下载 GitHub Release asset (design §5)。
     "network",

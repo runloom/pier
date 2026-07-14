@@ -48,6 +48,8 @@ import {
 } from "@plugins/builtin/files/renderer/files-tree-registry.ts";
 import { clearFilesTreeStore } from "@plugins/builtin/files/renderer/files-tree-store.ts";
 import { FilesWatchHub } from "@plugins/builtin/files/renderer/files-watch-hub.ts";
+import type * as MarkdownParserModule from "@plugins/builtin/files/renderer/markdown/markdown-parser.ts";
+import type * as MarkdownRuntimeModule from "@plugins/builtin/files/renderer/markdown/markdown-runtime.ts";
 import {
   FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
   FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
@@ -55,6 +57,7 @@ import {
   FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY,
 } from "@plugins/builtin/files/settings.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
+import type { FilePreviewTicketIssueResult } from "@shared/contracts/file-preview-ticket.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   act,
@@ -104,6 +107,33 @@ vi.mock("react-dom/client", async () => {
     },
   };
 });
+
+vi.mock(
+  "@plugins/builtin/files/renderer/markdown/markdown-runtime.ts",
+  async () => {
+    const actual = await vi.importActual<typeof MarkdownRuntimeModule>(
+      "@plugins/builtin/files/renderer/markdown/markdown-runtime.ts"
+    );
+    const parser = await vi.importActual<typeof MarkdownParserModule>(
+      "@plugins/builtin/files/renderer/markdown/markdown-parser.ts"
+    );
+    const markdownRuntime: MarkdownRuntimeModule.MarkdownRuntime = {
+      closeSession: () => undefined,
+      dispose: () => undefined,
+      parse: async (input) => {
+        const document = parser.parseMarkdownToIr(input.source);
+        return {
+          document,
+          pagination: actual.paginateMarkdownDocument(document),
+          revision: input.revision,
+          status: "parsed" as const,
+        };
+      },
+      setSessionVisible: () => undefined,
+    };
+    return { ...actual, markdownRuntime };
+  }
+);
 
 const OUTSIDE_WORKSPACE_PATTERN = /outside the restored workspace/i;
 const PROJECT_ROOT = "/workspace/pier";
@@ -155,11 +185,14 @@ function createMockContext(overrides?: {
   configurationGet?: RendererPluginContext["configuration"]["get"];
   configurationOnDidChange?: RendererPluginContext["configuration"]["onDidChange"];
   flushLayout?: RendererPluginContext["panels"]["flushLayout"];
+  issuePreview?: RendererPluginContext["filePreviews"]["issue"];
   inspectWriteTarget?: RendererPluginContext["files"]["inspectWriteTarget"];
   list?: RendererPluginContext["files"]["list"];
   listIgnored?: RendererPluginContext["git"]["listIgnored"];
   listInstances?: RendererPluginContext["panels"]["listInstances"];
   notifyInfo?: RendererPluginContext["notifications"]["info"];
+  openExternal?: RendererPluginContext["externalNavigation"]["open"];
+  releasePreview?: RendererPluginContext["filePreviews"]["release"];
   openInstance?: RendererPluginContext["panels"]["openInstance"];
   pickSaveTarget?: RendererPluginContext["files"]["pickSaveTarget"];
   readDocument?: RendererPluginContext["files"]["readDocument"];
@@ -255,6 +288,22 @@ function createMockContext(overrides?: {
       onDidChange: overrides?.configurationOnDidChange ?? vi.fn(() => vi.fn()),
       reset: vi.fn(async () => undefined),
       set: vi.fn(async () => undefined),
+    },
+    externalNavigation: {
+      open:
+        overrides?.openExternal ??
+        vi.fn(async () => ({ opened: true as const })),
+    },
+    filePreviews: {
+      issue:
+        overrides?.issuePreview ??
+        vi.fn(async () => ({
+          expiresAt: Date.now() + 60_000,
+          issued: true as const,
+          ticket: "preview-ticket-00000000",
+          url: "pier-file-preview://file/preview-ticket-00000000",
+        })),
+      release: overrides?.releasePreview ?? vi.fn(async () => true),
     },
     git: {
       getStatus: vi.fn(async () => ({
@@ -727,8 +776,24 @@ describe("Files file-panel", () => {
 
     const image = await screen.findByRole("img", { name: "photo.png" });
     expect(image.getAttribute("src")).toMatch(
-      /^pier-file-preview:\/\/file\/?\?/u
+      /^pier-file-preview:\/\/file\/[A-Za-z0-9_-]{22,}$/u
     );
+    expect(document.querySelector('[data-slot="skeleton"]')).not.toBeNull();
+    expect(screen.getByRole("status")).toHaveTextContent("Loading image");
+    expect(
+      screen.getByRole("region", { name: "Image preview" })
+    ).toHaveAttribute("aria-busy", "true");
+    expect(
+      screen.queryByRole("toolbar", { name: "Image controls" })
+    ).toBeNull();
+
+    fireEvent.load(image);
+
+    expect(document.querySelector('[data-slot="skeleton"]')).toBeNull();
+    expect(screen.queryByRole("status")).toBeNull();
+    expect(
+      screen.getByRole("region", { name: "Image preview" })
+    ).toHaveAttribute("aria-busy", "false");
     const toolbar = screen.getByRole("toolbar", { name: "Image controls" });
     expect(toolbar).toBeVisible();
     expect(toolbar).toHaveClass("absolute", "right-3", "bottom-3");
@@ -761,7 +826,7 @@ describe("Files file-panel", () => {
     ).not.toBeNull();
   });
 
-  it("retries an image after its revision changes from a failed preview URL", () => {
+  it("exchanges and revokes image tickets after a revision change", async () => {
     const initial = createDiskDocumentRecord({
       draft: null,
       id: "disk:image-preview-retry",
@@ -779,24 +844,228 @@ describe("Files file-panel", () => {
       size: 2048,
     });
     const t = (_key: string, fallback?: string) => fallback ?? _key;
+    const issuePreview = vi
+      .fn<RendererPluginContext["filePreviews"]["issue"]>()
+      .mockResolvedValueOnce({
+        expiresAt: 1,
+        issued: true,
+        ticket: "first-ticket-0000000000",
+        url: "pier-file-preview://file/first-ticket-0000000000",
+      })
+      .mockResolvedValueOnce({
+        expiresAt: 2,
+        issued: true,
+        ticket: "second-ticket-000000000",
+        url: "pier-file-preview://file/second-ticket-000000000",
+      });
+    const releasePreview = vi.fn(async () => true);
+    const context = createMockContext({ issuePreview, releasePreview });
     const first = withDocumentReadResult(initial, imageResult("file-v1:first"));
-    const view = render(<FileImagePreview document={first} t={t} />);
-    const failedImage = screen.getByRole("img", { name: "photo.png" });
+    const view = render(
+      <FileImagePreview context={context} document={first} t={t} />
+    );
+    expect(screen.queryByText("Unable to display image")).toBeNull();
+    expect(
+      view.container.querySelector('[data-slot="skeleton"]')
+    ).not.toBeNull();
+    const failedImage = await screen.findByRole("img", { name: "photo.png" });
+    fireEvent.load(failedImage);
     const failedUrl = failedImage.getAttribute("src");
 
-    fireEvent.error(failedImage);
-    expect(screen.getByText("Unable to display image")).toBeVisible();
-
     const next = withDocumentReadResult(first, imageResult("file-v1:next"));
-    view.rerender(<FileImagePreview document={next} t={t} />);
+    view.rerender(<FileImagePreview context={context} document={next} t={t} />);
 
+    await waitFor(() => {
+      expect(
+        screen.getByRole("img", { name: "photo.png" }).getAttribute("src")
+      ).not.toBe(failedUrl);
+    });
     const retriedImage = screen.getByRole("img", { name: "photo.png" });
-    expect(retriedImage.getAttribute("src")).not.toBe(failedUrl);
+    fireEvent.load(retriedImage);
+    expect(issuePreview).toHaveBeenLastCalledWith(
+      expect.objectContaining({ revision: "file-v1:next" }),
+      "first-ticket-0000000000"
+    );
     expect(screen.queryByText("Unable to display image")).toBeNull();
 
     fireEvent.error(failedImage);
     expect(screen.getByRole("img", { name: "photo.png" })).toBeVisible();
     expect(screen.queryByText("Unable to display image")).toBeNull();
+    fireEvent.error(retriedImage);
+    expect(screen.getByText("Unable to display image")).toBeVisible();
+    expect(releasePreview).toHaveBeenCalledWith("second-ticket-000000000");
+  });
+
+  it("ignores stale image events while a replacement ticket is pending", async () => {
+    const source = createDiskDocumentRecord({
+      draft: null,
+      id: "disk:image-preview-stale-event",
+      path: "assets/photo.png",
+      root: PROJECT_ROOT,
+    });
+    const imageResult = (revision: string) => ({
+      canonicalPath: "assets/photo.png",
+      kind: "image" as const,
+      mime: "image/png" as const,
+      mtimeMs: 1,
+      path: "assets/photo.png",
+      revision,
+      root: PROJECT_ROOT,
+      size: 2048,
+    });
+    let resolveReplacement:
+      | ((result: FilePreviewTicketIssueResult) => void)
+      | undefined;
+    const replacement = new Promise<FilePreviewTicketIssueResult>((resolve) => {
+      resolveReplacement = resolve;
+    });
+    const issuePreview = vi
+      .fn<RendererPluginContext["filePreviews"]["issue"]>()
+      .mockResolvedValueOnce({
+        expiresAt: 1,
+        issued: true,
+        ticket: "stale-ticket-0000000000",
+        url: "pier-file-preview://file/stale-ticket-0000000000",
+      })
+      .mockReturnValueOnce(replacement);
+    const releasePreview = vi.fn(async () => true);
+    const context = createMockContext({ issuePreview, releasePreview });
+    const first = withDocumentReadResult(source, imageResult("file-v1:first"));
+    const view = render(
+      <FileImagePreview
+        context={context}
+        document={first}
+        t={(_key, fallback) => fallback ?? _key}
+      />
+    );
+    const staleImage = await screen.findByRole("img", { name: "photo.png" });
+    fireEvent.load(staleImage);
+
+    view.rerender(
+      <FileImagePreview
+        context={context}
+        document={withDocumentReadResult(first, imageResult("file-v1:next"))}
+        t={(_key, fallback) => fallback ?? _key}
+      />
+    );
+    expect(screen.getByRole("status")).toHaveTextContent("Loading image");
+
+    fireEvent.error(staleImage);
+
+    expect(screen.getByRole("status")).toHaveTextContent("Loading image");
+    expect(releasePreview).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveReplacement?.({
+        expiresAt: 2,
+        issued: true,
+        ticket: "replacement-ticket-00000",
+        url: "pier-file-preview://file/replacement-ticket-00000",
+      });
+      await replacement;
+    });
+    const replacementImage = await screen.findByRole("img", {
+      name: "photo.png",
+    });
+    expect(replacementImage).not.toBe(staleImage);
+    fireEvent.load(replacementImage);
+    expect(screen.queryByRole("status")).toBeNull();
+  });
+
+  it("releases the active image ticket on unmount", async () => {
+    const source = createDiskDocumentRecord({
+      draft: null,
+      id: "disk:image-preview-unmount",
+      path: "assets/photo.png",
+      root: PROJECT_ROOT,
+    });
+    const document = withDocumentReadResult(source, {
+      canonicalPath: "assets/photo.png",
+      kind: "image" as const,
+      mime: "image/png" as const,
+      mtimeMs: 1,
+      path: "assets/photo.png",
+      revision: "file-v1:unmount",
+      root: PROJECT_ROOT,
+      size: 2048,
+    });
+    const releasePreview = vi.fn(async () => true);
+    const context = createMockContext({
+      issuePreview: vi.fn(async () => ({
+        expiresAt: 1,
+        issued: true as const,
+        ticket: "unmount-ticket-00000000",
+        url: "pier-file-preview://file/unmount-ticket-00000000",
+      })),
+      releasePreview,
+    });
+    const view = render(
+      <FileImagePreview
+        context={context}
+        document={document}
+        t={(_key, fallback) => fallback ?? _key}
+      />
+    );
+    await screen.findByRole("img", { name: "photo.png" });
+    expect(releasePreview).not.toHaveBeenCalled();
+
+    view.unmount();
+
+    await waitFor(() => {
+      expect(releasePreview).toHaveBeenCalledOnce();
+    });
+    expect(releasePreview).toHaveBeenCalledWith("unmount-ticket-00000000");
+  });
+
+  it("shows an error and releases the active ticket when replacement issuance rejects", async () => {
+    const initial = createDiskDocumentRecord({
+      draft: null,
+      id: "disk:image-preview-rejection",
+      path: "assets/photo.png",
+      root: PROJECT_ROOT,
+    });
+    const imageResult = (revision: string) => ({
+      canonicalPath: "assets/photo.png",
+      kind: "image" as const,
+      mime: "image/png" as const,
+      mtimeMs: 1,
+      path: "assets/photo.png",
+      revision,
+      root: PROJECT_ROOT,
+      size: 2048,
+    });
+    const issuePreview = vi
+      .fn<RendererPluginContext["filePreviews"]["issue"]>()
+      .mockResolvedValueOnce({
+        expiresAt: 1,
+        issued: true,
+        ticket: "active-ticket-000000000",
+        url: "pier-file-preview://file/active-ticket-000000000",
+      })
+      .mockRejectedValueOnce(new Error("preview service unavailable"));
+    const releasePreview = vi.fn(async () => true);
+    const context = createMockContext({ issuePreview, releasePreview });
+    const first = withDocumentReadResult(initial, imageResult("file-v1:first"));
+    const view = render(
+      <FileImagePreview
+        context={context}
+        document={first}
+        t={(_key, fallback) => fallback ?? _key}
+      />
+    );
+    await screen.findByRole("img", { name: "photo.png" });
+
+    const next = withDocumentReadResult(first, imageResult("file-v1:next"));
+    view.rerender(
+      <FileImagePreview
+        context={context}
+        document={next}
+        t={(_key, fallback) => fallback ?? _key}
+      />
+    );
+
+    expect(await screen.findByText("Unable to display image")).toBeVisible();
+    expect(releasePreview).toHaveBeenCalledWith("active-ticket-000000000");
   });
 
   it("clamps image zoom controls between 10% and 800%", async () => {
@@ -820,6 +1089,7 @@ describe("Files file-panel", () => {
       createMockContext({ readDocument })
     );
     await screen.findByRole("img", { name: "preview.webp" });
+    fireEvent.load(screen.getByRole("img", { name: "preview.webp" }));
     fireEvent.keyDown(
       screen.getByRole("button", { name: "Zoom level: Fit to window" }),
       { key: "Enter" }
@@ -930,6 +1200,7 @@ describe("Files file-panel", () => {
         documentId="unimplemented"
         editorSessionId="unimplemented"
         mode="rich"
+        openExternal={() => undefined}
         value=""
       />
     );
@@ -3631,7 +3902,7 @@ describe("Files file-panel", () => {
     });
   });
 
-  it("renders a no-project-context Markdown document without mounting or loading the sidebar", () => {
+  it("renders a no-project-context Markdown document without mounting or loading the sidebar", async () => {
     const list = vi.fn<RendererPluginContext["files"]["list"]>(() =>
       Promise.reject(
         new Error("no project context should not load a file tree")
@@ -3650,7 +3921,7 @@ describe("Files file-panel", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
 
     expect(
-      screen.getByRole("heading", { name: "Standalone note" })
+      await screen.findByRole("heading", { name: "Standalone note" })
     ).toBeVisible();
     expect(screen.getByText("No workspace attached.")).toBeVisible();
     expect(
@@ -3659,7 +3930,7 @@ describe("Files file-panel", () => {
     expect(list).not.toHaveBeenCalled();
   });
 
-  it("renders Markdown tables, lists, and code blocks in preview mode", () => {
+  it("renders Markdown tables, lists, and code blocks in preview mode", async () => {
     const document = createUntitledMarkdownDocument({
       contents:
         "| A | B |\n| - | - |\n| 1 | 2 |\n\n- alpha\n- beta\n\n```ts\nconst value = 1;\n```",
@@ -3674,20 +3945,18 @@ describe("Files file-panel", () => {
     expect(
       container.querySelector('[data-slot="markdown-preview"]')
     ).toHaveAttribute("data-scrollbar", "stable");
-    expect(screen.getByRole("table")).toBeVisible();
+    const table = await screen.findByRole("table");
+    expect(table).toBeVisible();
     expect(screen.getByRole("list")).toBeVisible();
     expect(screen.getByText("const value = 1;")).toBeVisible();
     expect(container.querySelector("pre")).toHaveAttribute(
       "data-scrollbar",
       "overlay"
     );
-    expect(screen.getByRole("table").parentElement).toHaveAttribute(
-      "data-scrollbar",
-      "overlay"
-    );
+    expect(table.parentElement).toHaveAttribute("data-scrollbar", "overlay");
   });
 
-  it("preserves editor state, selection, scroll, and undo history across view mode switches", () => {
+  it("preserves editor state, selection, scroll, and undo history across view mode switches", async () => {
     const document = createUntitledMarkdownDocument({
       contents: "# Before\n\n- draft",
     });
@@ -3704,7 +3973,7 @@ describe("Files file-panel", () => {
       editedView.scrollDOM.scrollTop = 143;
     });
     fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
-    expect(screen.getByRole("heading", { name: "After" })).toBeVisible();
+    expect(await screen.findByRole("heading", { name: "After" })).toBeVisible();
     expect(screen.getByText("kept through preview")).toBeVisible();
 
     fireEvent.click(screen.getByRole("radio", { name: "Source" }));
@@ -3770,28 +4039,129 @@ describe("Files file-panel", () => {
     expect(renamedView.state.doc.toString()).toBe("before\n");
   });
 
-  it("does not render raw HTML or allow link clicks to navigate the current window", () => {
+  it("does not render raw HTML and routes safe links through the host", async () => {
     const startHref = window.location.href;
+    const openExternal = vi.fn(async () => ({ opened: true as const }));
+    const context = createMockContext({ openExternal });
     const document = createUntitledMarkdownDocument({
       contents:
         '<span id="raw-html">raw</span>\n\n[bad](javascript:alert(1)) [vb](vbscript:msgbox(1)) [data](data:text/html,<script>alert(1)</script>) [safe](https://example.com/docs)',
     });
 
-    const { container } = renderFilePanel({
-      context: panelContext,
-      source: { id: document.id, kind: "untitled", name: document.name },
-    });
+    const { container } = renderFilePanel(
+      {
+        context: panelContext,
+        source: { id: document.id, kind: "untitled", name: document.name },
+      },
+      context
+    );
     fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
 
     expect(container.querySelector("#raw-html")).toBeNull();
+    const safeLink = await screen.findByRole("link", { name: "safe" });
     for (const label of ["bad", "vb", "data"]) {
       expect(screen.getByText(label).closest("a")).not.toHaveAttribute("href");
     }
 
-    const safeLink = screen.getByRole("link", { name: "safe" });
     expect(safeLink).toHaveAttribute("href", "https://example.com/docs");
     expect(fireEvent.click(safeLink)).toBe(false);
+    await waitFor(() => {
+      expect(openExternal).toHaveBeenCalledWith("https://example.com/docs");
+    });
     expect(window.location.href).toBe(startHref);
+  });
+
+  it("shows external link failures in the host dialog", async () => {
+    const context = createMockContext({
+      openExternal: vi.fn(async () => ({
+        opened: false as const,
+        reason: "open-failed" as const,
+      })),
+    });
+    const document = createUntitledMarkdownDocument({
+      contents: "[safe](https://example.com/docs)",
+    });
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { id: document.id, kind: "untitled", name: document.name },
+      },
+      context
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+
+    fireEvent.click(await screen.findByRole("link", { name: "safe" }));
+    await waitFor(() => {
+      expect(context.dialogs.alert).toHaveBeenCalledWith({
+        body: "The external link could not be opened.",
+        size: "sm",
+        title: "Unable to open link",
+      });
+    });
+  });
+
+  it("uses busy feedback when another preview owns external navigation", async () => {
+    const notifyInfo = vi.fn();
+    const context = createMockContext({
+      notifyInfo,
+      openExternal: vi.fn(async () => ({
+        opened: false as const,
+        reason: "busy" as const,
+      })),
+    });
+    const document = createUntitledMarkdownDocument({
+      contents: "[safe](https://example.com/docs)",
+    });
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { id: document.id, kind: "untitled", name: document.name },
+      },
+      context
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+
+    fireEvent.click(await screen.findByRole("link", { name: "safe" }));
+    await waitFor(() => {
+      expect(notifyInfo).toHaveBeenCalledWith(
+        "Another external link is already opening."
+      );
+    });
+    expect(context.dialogs.alert).not.toHaveBeenCalled();
+  });
+
+  it("coalesces duplicate clicks while an external link is opening", async () => {
+    let resolveOpen: ((result: { opened: true }) => void) | undefined;
+    const openExternal = vi.fn(
+      () =>
+        new Promise<{ opened: true }>((resolve) => {
+          resolveOpen = resolve;
+        })
+    );
+    const context = createMockContext({ openExternal });
+    const document = createUntitledMarkdownDocument({
+      contents: "[safe](https://example.com/docs)",
+    });
+    renderFilePanel(
+      {
+        context: panelContext,
+        source: { id: document.id, kind: "untitled", name: document.name },
+      },
+      context
+    );
+    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+
+    const link = await screen.findByRole("link", { name: "safe" });
+    fireEvent.click(link);
+    fireEvent.click(link);
+    expect(openExternal).toHaveBeenCalledOnce();
+    expect(context.dialogs.alert).not.toHaveBeenCalled();
+
+    await act(async () => {
+      resolveOpen?.({ opened: true });
+      await Promise.resolve();
+    });
+    expect(context.dialogs.alert).not.toHaveBeenCalled();
   });
 
   it("keeps temporary document bodies out of dockview params", () => {
@@ -3889,7 +4259,7 @@ describe("Files file-panel", () => {
     expect(writeText).not.toHaveBeenCalled();
   });
 
-  it("restores an untitled Markdown document body after renderer memory is lost", () => {
+  it("restores an untitled Markdown document body after renderer memory is lost", async () => {
     const document = createUntitledMarkdownDocument({
       contents: "# Restored after force quit\n\n- persisted draft",
     });
@@ -3903,7 +4273,7 @@ describe("Files file-panel", () => {
     fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
 
     expect(
-      screen.getByRole("heading", { name: "Restored after force quit" })
+      await screen.findByRole("heading", { name: "Restored after force quit" })
     ).toBeVisible();
     expect(screen.getByText("persisted draft")).toBeVisible();
     expect(getDocument(document.id)?.currentContents).toContain(
@@ -4284,23 +4654,6 @@ describe("Files file-panel", () => {
 
     // 干净文档随真关闭丢弃,重开从磁盘新读(不保留 undo/光标/内容缓存)。
     expect(getDocument(diskDocument.id)).toBeNull();
-  });
-
-  it("does not include unsafe Markdown rendering primitives in implementation", async () => {
-    const rendererDir = join(
-      process.cwd(),
-      "src/plugins/builtin/files/renderer"
-    );
-    const [previewSource, panelSource] = await Promise.all([
-      readFile(join(rendererDir, "markdown-preview.tsx"), "utf8"),
-      readFile(join(rendererDir, "file-panel.tsx"), "utf8"),
-    ]);
-
-    expect(`${previewSource}\n${panelSource}`).not.toContain("rehype-raw");
-    expect(`${previewSource}\n${panelSource}`).not.toContain(
-      "dangerouslySetInnerHTML"
-    );
-    expect(previewSource).toContain("rehype-sanitize");
   });
 
   it("renders a Cursor-style breadcrumb from project root through the disk path", async () => {

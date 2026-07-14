@@ -1,149 +1,273 @@
-import type { MouseEvent } from "react";
-import ReactMarkdown from "react-markdown";
-import rehypeSanitize from "rehype-sanitize";
-import remarkGfm from "remark-gfm";
+import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
+import { Skeleton } from "@pier/ui/skeleton.tsx";
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
+import { FilesSearchBar } from "./files-search-bar.tsx";
+import type { MarkdownCodeHighlighter } from "./markdown/markdown-code-highlighter.ts";
+import {
+  type MarkdownPagination,
+  type MarkdownRuntime,
+  markdownRuntime,
+} from "./markdown/markdown-runtime.ts";
+import {
+  type MarkdownDiskSource,
+  type MarkdownFileResources,
+  type MarkdownInternalTarget,
+  MarkdownIrRenderer,
+  type MarkdownRendererLabels,
+} from "./markdown-ir-renderer.tsx";
+import {
+  findMarkdownSearchMatches,
+  type MarkdownSearchMatch,
+} from "./markdown-search.ts";
 
-const BLOCKED_PROTOCOLS = new Set(["data:", "javascript:", "vbscript:"]);
-const EXPLICIT_PROTOCOL_PATTERN = /^[a-zA-Z][a-zA-Z\d+.-]*:/;
-const SAFE_ABSOLUTE_PROTOCOLS = new Set(["http:", "https:", "mailto:"]);
-
-function isProtocolRelativeUrl(value: string): boolean {
-  return value.startsWith("//");
+interface MarkdownPreviewProps {
+  appearance?: RendererPluginContext["appearance"] | undefined;
+  charts?: RendererPluginContext["charts"] | undefined;
+  codeHighlighter?: MarkdownCodeHighlighter | undefined;
+  codeTheme?: string | undefined;
+  copyCode?: ((code: string) => Promise<void>) | undefined;
+  errorLabel?: string | undefined;
+  fileResources?: MarkdownFileResources | undefined;
+  initialAnchor?: string | undefined;
+  initialAnchorRequestId?: string | undefined;
+  labels?: MarkdownRendererLabels | undefined;
+  openExternal: (url: string) => void;
+  openInternal?: ((target: MarkdownInternalTarget) => void) | undefined;
+  runtime?: MarkdownRuntime | undefined;
+  searchLabels?: MarkdownPreviewSearchLabels | undefined;
+  searchRequest?: number | undefined;
+  sessionId: string;
+  source?: MarkdownDiskSource | undefined;
+  value: string;
 }
 
-function hasExplicitProtocol(value: string): boolean {
-  return EXPLICIT_PROTOCOL_PATTERN.test(value);
+interface MarkdownPreviewSearchLabels {
+  close: string;
+  next: string;
+  noMatches: string;
+  placeholder: string;
+  previous: string;
 }
 
-export function safeMarkdownUrl(value: string | null | undefined): string {
-  const trimmedValue = value?.trim();
-  if (!trimmedValue) {
-    return "";
-  }
+type PreviewState =
+  | { status: "loading" }
+  | { pagination: MarkdownPagination; status: "ready" }
+  | { status: "error" };
 
-  try {
-    const parsed = new URL(trimmedValue, "https://pier.local");
-    if (BLOCKED_PROTOCOLS.has(parsed.protocol)) {
-      return "";
+export { safeMarkdownUrl } from "./markdown-ir-renderer.tsx";
+
+const DEFAULT_RENDERER_LABELS: MarkdownRendererLabels = {
+  copiedCode: "Copied",
+  copyCode: "Copy code",
+  completedTask: "Completed task",
+  diagramFailed: "Unable to render diagram",
+  diagramLabel: "Mermaid diagram",
+  incompleteTask: "Incomplete task",
+};
+
+const DEFAULT_SEARCH_LABELS: MarkdownPreviewSearchLabels = {
+  close: "Close",
+  next: "Next match",
+  noMatches: "No matches",
+  placeholder: "Find",
+  previous: "Previous match",
+};
+
+const EMPTY_SEARCH_MATCHES: readonly MarkdownSearchMatch[] = [];
+
+export function MarkdownPreview({
+  appearance,
+  charts,
+  codeHighlighter,
+  codeTheme,
+  copyCode,
+  errorLabel = "Unable to render Markdown preview.",
+  fileResources,
+  labels = DEFAULT_RENDERER_LABELS,
+  initialAnchor,
+  initialAnchorRequestId,
+  openExternal,
+  openInternal,
+  runtime = markdownRuntime,
+  searchLabels = DEFAULT_SEARCH_LABELS,
+  searchRequest,
+  sessionId,
+  source,
+  value,
+}: MarkdownPreviewProps) {
+  const [state, setState] = useState<PreviewState>({ status: "loading" });
+  const [appearanceCodeTheme, setAppearanceCodeTheme] = useState(
+    () => appearance?.current().codeTheme ?? "github-dark"
+  );
+  const [searchOpen, setSearchOpen] = useState(false);
+  const [searchValue, setSearchValue] = useState("");
+  const deferredSearchValue = useDeferredValue(searchValue);
+  const [searchFocusSignal, setSearchFocusSignal] = useState(0);
+  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const handledSearchRequestRef = useRef(searchRequest);
+  const revisionRef = useRef(0);
+  const searchMatches = useMemo(
+    () =>
+      searchOpen &&
+      deferredSearchValue &&
+      deferredSearchValue === searchValue &&
+      state.status === "ready"
+        ? findMarkdownSearchMatches(state.pagination, deferredSearchValue)
+        : EMPTY_SEARCH_MATCHES,
+    [deferredSearchValue, searchOpen, searchValue, state]
+  );
+  const activeSearchMatch = searchMatches[activeSearchIndex];
+  const searchMatchText = (() => {
+    if (!searchValue) return "";
+    if (deferredSearchValue !== searchValue) return "";
+    if (searchMatches.length === 0) return searchLabels.noMatches;
+    return `${activeSearchIndex + 1}/${searchMatches.length}`;
+  })();
+  useEffect(() => {
+    let active = true;
+    revisionRef.current += 1;
+    const revision = `${sessionId}:${revisionRef.current}`;
+    setState({ status: "loading" });
+    runtime
+      .parse({ revision, sessionId, source: value })
+      .then((outcome) => {
+        if (!(active && outcome.revision === revision)) return;
+        if (outcome.status === "parsed") {
+          setState({ pagination: outcome.pagination, status: "ready" });
+        } else if (outcome.status === "error") {
+          setState({ status: "error" });
+        }
+      })
+      .catch(() => {
+        if (active) setState({ status: "error" });
+      });
+    return () => {
+      active = false;
+    };
+  }, [runtime, sessionId, value]);
+
+  useEffect(
+    () => () => {
+      runtime.closeSession(sessionId);
+    },
+    [runtime, sessionId]
+  );
+
+  useEffect(() => {
+    if (!appearance) return;
+    setAppearanceCodeTheme(appearance.current().codeTheme);
+    return appearance.onDidChange((next) => {
+      setAppearanceCodeTheme(next.codeTheme);
+    });
+  }, [appearance]);
+
+  useEffect(() => {
+    const root = rootRef.current;
+    let intersecting = true;
+    const updateVisibility = () => {
+      runtime.setSessionVisible(
+        sessionId,
+        intersecting && document.visibilityState !== "hidden"
+      );
+    };
+    const observer =
+      root && typeof IntersectionObserver !== "undefined"
+        ? new IntersectionObserver((entries) => {
+            intersecting = entries[0]?.isIntersecting ?? false;
+            updateVisibility();
+          })
+        : null;
+    if (root) observer?.observe(root);
+    document.addEventListener("visibilitychange", updateVisibility);
+    updateVisibility();
+    return () => {
+      observer?.disconnect();
+      document.removeEventListener("visibilitychange", updateVisibility);
+      runtime.setSessionVisible(sessionId, false);
+    };
+  }, [runtime, sessionId]);
+
+  useEffect(() => {
+    if (handledSearchRequestRef.current === searchRequest) return;
+    handledSearchRequestRef.current = searchRequest;
+    if (searchRequest) {
+      setSearchOpen(true);
+      setSearchFocusSignal((current) => current + 1);
     }
-    if (hasExplicitProtocol(trimmedValue)) {
-      return SAFE_ABSOLUTE_PROTOCOLS.has(parsed.protocol) ? trimmedValue : "";
-    }
-    if (isProtocolRelativeUrl(trimmedValue)) {
-      return "";
-    }
-    return trimmedValue;
-  } catch {
-    return "";
-  }
-}
+  }, [searchRequest]);
 
-function preventRendererNavigation(event: MouseEvent<HTMLAnchorElement>): void {
-  event.preventDefault();
-}
+  useEffect(() => {
+    if (activeSearchIndex >= searchMatches.length) setActiveSearchIndex(0);
+  }, [activeSearchIndex, searchMatches.length]);
 
-export function MarkdownPreview({ value }: { value: string }) {
+  const navigateSearch = (direction: "next" | "previous") => {
+    if (searchMatches.length === 0) return;
+    setActiveSearchIndex((current) =>
+      direction === "next"
+        ? (current + 1) % searchMatches.length
+        : (current - 1 + searchMatches.length) % searchMatches.length
+    );
+  };
+
   return (
-    <div
-      className="h-full overflow-auto bg-background p-4 text-foreground text-sm"
-      data-scrollbar="stable"
-      data-slot="markdown-preview"
-    >
-      <div className="flex max-w-none flex-col gap-3 leading-6">
-        <ReactMarkdown
-          components={{
-            a: ({ children, href }) => {
-              const safeHref = safeMarkdownUrl(href);
-              return (
-                <a
-                  aria-disabled={safeHref ? undefined : true}
-                  className="font-medium text-primary underline underline-offset-4 aria-disabled:pointer-events-none aria-disabled:text-muted-foreground aria-disabled:no-underline"
-                  href={safeHref || undefined}
-                  onClick={preventRendererNavigation}
-                  rel="noreferrer noopener"
-                  target={safeHref ? "_blank" : undefined}
-                >
-                  {children}
-                </a>
-              );
-            },
-            blockquote: ({ children }) => (
-              <blockquote className="border-border border-l-2 pl-3 text-muted-foreground">
-                {children}
-              </blockquote>
-            ),
-            code: ({ children, className }) => (
-              <code
-                className={
-                  className
-                    ? "rounded-md bg-muted px-1 py-0.5 font-mono text-foreground text-xs"
-                    : "rounded bg-muted px-1 py-0.5 font-mono text-foreground text-xs"
-                }
-              >
-                {children}
-              </code>
-            ),
-            h1: ({ children }) => (
-              <h1 className="font-semibold text-foreground text-xl leading-7">
-                {children}
-              </h1>
-            ),
-            h2: ({ children }) => (
-              <h2 className="font-semibold text-foreground text-lg leading-7">
-                {children}
-              </h2>
-            ),
-            h3: ({ children }) => (
-              <h3 className="font-semibold text-base text-foreground leading-6">
-                {children}
-              </h3>
-            ),
-            li: ({ children }) => <li className="pl-1">{children}</li>,
-            ol: ({ children }) => (
-              <ol className="ml-5 list-decimal">{children}</ol>
-            ),
-            p: ({ children }) => <p>{children}</p>,
-            pre: ({ children }) => (
-              <pre
-                className="overflow-auto rounded-lg border border-border bg-muted/50 p-3 font-mono text-foreground text-xs leading-5"
-                data-scrollbar="overlay"
-              >
-                {children}
-              </pre>
-            ),
-            table: ({ children }) => (
-              <div
-                className="overflow-x-auto rounded-lg border border-border"
-                data-scrollbar="overlay"
-              >
-                <table className="w-full border-collapse text-left text-sm">
-                  {children}
-                </table>
-              </div>
-            ),
-            tbody: ({ children }) => <tbody>{children}</tbody>,
-            td: ({ children }) => (
-              <td className="border-border border-t px-3 py-2 align-top">
-                {children}
-              </td>
-            ),
-            th: ({ children }) => (
-              <th className="bg-muted/50 px-3 py-2 font-medium text-muted-foreground">
-                {children}
-              </th>
-            ),
-            thead: ({ children }) => <thead>{children}</thead>,
-            tr: ({ children }) => <tr>{children}</tr>,
-            ul: ({ children }) => (
-              <ul className="ml-5 list-disc">{children}</ul>
-            ),
+    <div className="relative h-full min-h-0 overflow-hidden bg-background text-foreground text-sm">
+      {searchOpen ? (
+        <FilesSearchBar
+          className="absolute top-2 right-3 z-20 max-w-[calc(100%-1.5rem)]"
+          focusSignal={searchFocusSignal}
+          labels={searchLabels}
+          matchText={searchMatchText}
+          navigationDisabled={searchMatches.length === 0}
+          onChange={(next) => {
+            setSearchValue(next);
+            setActiveSearchIndex(0);
           }}
-          rehypePlugins={[rehypeSanitize]}
-          remarkPlugins={[remarkGfm]}
-          urlTransform={safeMarkdownUrl}
-        >
-          {value}
-        </ReactMarkdown>
+          onClose={() => setSearchOpen(false)}
+          onNavigate={navigateSearch}
+          testId="files-markdown-search-bar"
+          value={searchValue}
+        />
+      ) : null}
+      <div
+        className="h-full overflow-auto p-4"
+        data-scrollbar="stable"
+        data-slot="markdown-preview"
+        ref={rootRef}
+      >
+        {state.status === "loading" ? (
+          <div className="flex flex-col gap-3" data-slot="markdown-loading">
+            <Skeleton className="h-8 w-1/3 rounded-md" />
+            <Skeleton className="h-4 w-full rounded-md" />
+            <Skeleton className="h-4 w-4/5 rounded-md" />
+            <Skeleton className="h-28 w-full rounded-md" />
+          </div>
+        ) : null}
+        {state.status === "error" ? (
+          <Alert variant="destructive">
+            <AlertDescription>{errorLabel}</AlertDescription>
+          </Alert>
+        ) : null}
+        {state.status === "ready" ? (
+          <MarkdownIrRenderer
+            activeSearchMatchId={activeSearchMatch?.id}
+            activeSearchPageIndex={activeSearchMatch?.pageIndex}
+            charts={charts}
+            codeHighlighter={codeHighlighter}
+            codeTheme={codeTheme ?? appearanceCodeTheme}
+            copyCode={copyCode}
+            fileResources={fileResources}
+            initialAnchor={initialAnchor}
+            initialAnchorRequestId={initialAnchorRequestId}
+            labels={labels}
+            onOpenExternal={openExternal}
+            onOpenInternal={openInternal}
+            pagination={state.pagination}
+            searchMatches={searchMatches}
+            source={source}
+          />
+        ) : null}
       </div>
     </div>
   );
