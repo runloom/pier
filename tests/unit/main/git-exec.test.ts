@@ -141,4 +141,57 @@ describe("execGit", () => {
       expect(error.message).toMatch(SIZE_LIMIT_RE);
     }
   });
+
+  // hookSignal 解析:git 报 hook 被外部信号杀 (`<path> died of signal N`,例如
+  // macOS 26+ XProtect 首次扫描 hook 慢 + 上游 timeout → SIGKILL 波及 hook),
+  // 上层可据此显示"重试建议"而非技术噪音 (见 PierCommandErrorCode.git_hook_signal_killed)。
+  it("stderr 含 `died of signal N` 时填充 GitExecError.hookSignal", async () => {
+    const fakeChild = new FakeChild();
+    const fakeSpawn = (() =>
+      fakeChild) as unknown as typeof import("node:child_process").spawn;
+    const exec = createExecGit({ spawn: fakeSpawn });
+
+    const pending = exec(["worktree", "add", "/tmp/foo", "-b", "test"], {
+      cwd: "/tmp/fake",
+    });
+
+    queueMicrotask(() => {
+      fakeChild.stderr.emit(
+        "data",
+        Buffer.from(
+          "Preparing worktree (new branch 'test')\nerror: /repo/.husky/_/post-checkout died of signal 9\n"
+        )
+      );
+      fakeChild.emit("close", 1);
+    });
+
+    const error = await pending.catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(GitExecError);
+    if (error instanceof GitExecError) {
+      expect(error.hookSignal).toEqual({
+        hookPath: "/repo/.husky/_/post-checkout",
+        signal: 9,
+      });
+    }
+  });
+
+  it("stderr 不含 `died of signal` 时 hookSignal 为 null", async () => {
+    const fakeChild = new FakeChild();
+    const fakeSpawn = (() =>
+      fakeChild) as unknown as typeof import("node:child_process").spawn;
+    const exec = createExecGit({ spawn: fakeSpawn });
+
+    const pending = exec(["status"], { cwd: "/tmp/fake" });
+
+    queueMicrotask(() => {
+      fakeChild.stderr.emit("data", Buffer.from("fatal: not a git repository"));
+      fakeChild.emit("close", 128);
+    });
+
+    const error = await pending.catch((err: unknown) => err);
+    expect(error).toBeInstanceOf(GitExecError);
+    if (error instanceof GitExecError) {
+      expect(error.hookSignal).toBeNull();
+    }
+  });
 });

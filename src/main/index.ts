@@ -39,6 +39,7 @@ import { registerSystemStatsIpc } from "./ipc/system-stats.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
+import { registerUsageDataIpc } from "./ipc/usage-data.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
 import {
   handlePluginAssetProtocol,
@@ -393,6 +394,7 @@ if (gotTheLock) {
       registerAgentsIpc(ipcMain);
       registerForegroundActivityIpc(ipcMain);
       registerSystemStatsIpc(ipcMain);
+      registerUsageDataIpc(ipcMain, appCore.services.usageData);
       ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {
         appQuitRendererTransport.handleDecision(payload);
       });

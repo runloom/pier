@@ -29,6 +29,10 @@ export const PIER = {
     "pier://environment:pick-project-directory",
   // 系统资源快照（renderer 拉取式轮询;指挥中心 system-resources 物料）
   SYSTEM_STATS_SNAPSHOT: "pier://system-stats:snapshot",
+  // 跨插件 API 等价成本聚合快照的初值拉取（增量走 PIER_BROADCAST.USAGE_DATA_CHANGED）。
+  USAGE_DATA_SNAPSHOT: "pier://usage-data:snapshot",
+  // 触发所有注册源的 rescan + 广播；成本物料手动刷新入口。
+  USAGE_DATA_REFRESH_ALL: "pier://usage-data:refresh-all",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -84,6 +88,8 @@ export const PIER_BROADCAST = {
   // 工作树创建的真实后台阶段。payload 只含随机操作标识与阶段，
   // 不广播项目路径、分支名或脚本输出。
   WORKTREE_CREATE_PROGRESS: "pier://worktree-create:progress",
+  // 跨插件成本聚合快照增量 (main → 所有 renderer, payload UsageAggregateSnapshot).
+  USAGE_DATA_CHANGED: "pier://usage-data:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

@@ -11,13 +11,7 @@ const APPROVED_BUNDLED_WIDGET_SIZE_POLICIES = [
     pluginId: "pier.codex",
     widgetId: "pier.codex.accounts",
   },
-  {
-    defaultSize: { h: 3, w: 4 },
-    maxSize: { h: 5, w: 8 },
-    minSize: { h: 3, w: 2 },
-    pluginId: "pier.codex",
-    widgetId: "pier.codex.cost",
-  },
+  // v1.2: `pier.codex.cost` widget 已由宿主 `core.cost-overview` 替代，不再打包。
 ] as const;
 
 const packagesRoot = join(process.cwd(), "packages");

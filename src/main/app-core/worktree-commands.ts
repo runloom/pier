@@ -126,13 +126,8 @@ function agentTerminalTab(
   };
 }
 
-function buildAgentInitialInput(
-  taskPrompt: string | undefined
-): string | undefined {
-  const normalized = taskPrompt
-    ?.replaceAll("\0", "")
-    .replace(/\r\n?/g, "\n")
-    .trim();
+function buildInitialInput(input: string | undefined): string | undefined {
+  const normalized = input?.replaceAll("\0", "").replace(/\r\n?/g, "\n").trim();
   if (!normalized) {
     return;
   }
@@ -217,9 +212,11 @@ async function executeWorktreeOpenTerminalCommand(
   const launch = command.agentId
     ? { agentId: command.agentId, cwd: target.path, ...launchEnv }
     : { cwd: target.path, ...launchEnv };
+  // agent 场景：taskPrompt 优先，作为 agent 首输入
+  // 非 agent 场景：initialCommand 作为 shell 首输入（用于 worktree 创建后自动跑 setup 命令）
   const initialInput = command.agentId
-    ? buildAgentInitialInput(command.taskPrompt)
-    : undefined;
+    ? buildInitialInput(command.taskPrompt)
+    : buildInitialInput(command.initialCommand);
   return await executeTerminalOpenCommand(
     requestId,
     {
@@ -274,8 +271,7 @@ async function executeWorktreeCreateCommand(
     const project = await services.localEnvironments.resolveProject(
       check.mainPath
     );
-    const shouldRunSetup =
-      project !== null && project.setupCommand.trim() !== "";
+    const setupCommand = project?.setupCommand.trim() ?? "";
 
     created = await services.worktrees.create(command);
     phase = "initializing";
@@ -291,19 +287,29 @@ async function executeWorktreeCreateCommand(
       project?.copyPatterns ?? []
     );
 
-    if (shouldRunSetup && project) {
+    // agent 会在 create 返回后立即启动，因此必须先完成 setup；普通终端流程则
+    // 把命令返回给 renderer，在新终端中执行并展示实时输出。
+    if (command.runSetupBeforeReturn && setupCommand.length > 0 && project) {
       await services.localEnvironments.runLifecycle({
         cwd: created.targetPath,
-        project,
         phase: "setup",
+        project,
       });
     }
+    const pendingSetupCommand =
+      !command.runSetupBeforeReturn && setupCommand.length > 0
+        ? setupCommand
+        : undefined;
 
     worktreeCreateLog.info("create succeeded", {
       ...worktreeCreateLogContext(requestId, command, phase),
       targetPath: created.targetPath,
     });
-    return success(requestId, { ...created, copiedFiles });
+    return success(requestId, {
+      ...created,
+      copiedFiles,
+      ...(pendingSetupCommand ? { pendingSetupCommand } : {}),
+    });
   } catch (err) {
     worktreeCreateLog.error(
       "create failed",

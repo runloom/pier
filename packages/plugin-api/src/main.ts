@@ -47,6 +47,8 @@ export type UsageDataScope =
 export interface UsageTokenObservation {
   cachedInputTokens: number;
   date: string;
+  /** 数据源内稳定的调用或消息标识，仅用于跨存储去重，不参与费用聚合。 */
+  eventId?: string;
   inputTokens: number;
   modelId: string | null;
   outputTokens: number;
@@ -82,6 +84,12 @@ export interface UsageDataDailyBucket {
   tokens: UsageTokenTotals;
 }
 
+export interface UsageModelBreakdown {
+  estimatedCostMicrousd: number | null;
+  modelId: string;
+  totalTokens: number;
+}
+
 export interface UsageDataSnapshot {
   buckets: UsageDataDailyBucket[];
   coverage: UsageDataPublishInput["coverage"];
@@ -90,11 +98,21 @@ export interface UsageDataSnapshot {
   scope: UsageDataScope;
   sourceId: string;
   summary: {
+    /** 按模型分组的观测周期内总量。用于跨源聚合的 byModel 展示，
+     *  未识别 modelId 归类到空串 `""`。 */
+    byModel: UsageModelBreakdown[];
     estimatedCostMicrousd: number | null;
     latestDayTokens: number;
     periodTokens: number;
     todayEstimatedCostMicrousd: number | null;
   };
+}
+
+export interface MainPluginUsageSource {
+  /** Plugin-scoped source id. Host prefixes it with `${pluginId}/` for uniqueness. */
+  readonly id: string;
+  /** Host calls this during `usageData.refreshAll()` fan-out. */
+  rescan(): Promise<void>;
 }
 
 export interface MainPluginUsageData {
@@ -103,6 +121,12 @@ export interface MainPluginUsageData {
     sourceId: string,
     scope: UsageDataScope
   ): Promise<UsageDataSnapshot | null>;
+  /**
+   * Register the plugin as a refreshable usage source. Returns a dispose
+   * callback the plugin should invoke on deactivation. The host prefixes the
+   * plugin id in front of the caller-provided `source.id` before dispatching.
+   */
+  registerSource(source: MainPluginUsageSource): () => void;
 }
 
 export interface MainPluginModule {

@@ -1,6 +1,7 @@
 import type { UsageTokenObservation } from "@pier/plugin-api/main";
+import catalog from "./pricing-catalog.json" with { type: "json" };
 
-interface ModelPricing {
+export interface ModelPricing {
   cachedInputMicrousd: number;
   inputMicrousd: number;
   longContext?: ModelPricing & { threshold: number };
@@ -8,147 +9,29 @@ interface ModelPricing {
   priority?: ModelPricing;
 }
 
-// API 等价成本估算目录。费率单位为每 token 的微美元，集中在宿主持有，
+interface CatalogEntry extends ModelPricing {
+  aliases?: string[];
+}
+
+// API 等价成本估算目录（`pricing-catalog.json` 的宿主快照）。费率单位为每 token 的微美元，集中在宿主持有，
 // 数据采集插件只发布原始 token，避免各插件产生不可聚合的金额口径。
-const MODEL_PRICING: Readonly<Record<string, ModelPricing>> = {
-  "gpt-5.6-sol": {
-    cachedInputMicrousd: 0.5,
-    inputMicrousd: 5,
-    outputMicrousd: 30,
-    priority: {
-      cachedInputMicrousd: 1,
-      inputMicrousd: 10,
-      outputMicrousd: 60,
-    },
-  },
-  "gpt-5.6-terra": {
-    cachedInputMicrousd: 0.25,
-    inputMicrousd: 2.5,
-    outputMicrousd: 15,
-    priority: {
-      cachedInputMicrousd: 0.5,
-      inputMicrousd: 5,
-      outputMicrousd: 30,
-    },
-  },
-  "gpt-5.6-luna": {
-    cachedInputMicrousd: 0.1,
-    inputMicrousd: 1,
-    outputMicrousd: 6,
-    priority: {
-      cachedInputMicrousd: 0.2,
-      inputMicrousd: 2,
-      outputMicrousd: 12,
-    },
-  },
-  "gpt-5": {
-    cachedInputMicrousd: 0.125,
-    inputMicrousd: 1.25,
-    outputMicrousd: 10,
-  },
-  "gpt-5-codex": {
-    cachedInputMicrousd: 0.125,
-    inputMicrousd: 1.25,
-    outputMicrousd: 10,
-  },
-  "gpt-5-mini": {
-    cachedInputMicrousd: 0.025,
-    inputMicrousd: 0.25,
-    outputMicrousd: 2,
-  },
-  "gpt-5.1": {
-    cachedInputMicrousd: 0.125,
-    inputMicrousd: 1.25,
-    outputMicrousd: 10,
-  },
-  "gpt-5.1-codex": {
-    cachedInputMicrousd: 0.125,
-    inputMicrousd: 1.25,
-    outputMicrousd: 10,
-  },
-  "gpt-5.1-codex-mini": {
-    cachedInputMicrousd: 0.025,
-    inputMicrousd: 0.25,
-    outputMicrousd: 2,
-  },
-  "gpt-5.2": {
-    cachedInputMicrousd: 0.175,
-    inputMicrousd: 1.75,
-    outputMicrousd: 14,
-  },
-  "gpt-5.2-codex": {
-    cachedInputMicrousd: 0.175,
-    inputMicrousd: 1.75,
-    outputMicrousd: 14,
-  },
-  "gpt-5.3-codex": {
-    cachedInputMicrousd: 0.175,
-    inputMicrousd: 1.75,
-    outputMicrousd: 14,
-  },
-  "gpt-5.3-codex-spark": {
-    cachedInputMicrousd: 0,
-    inputMicrousd: 0,
-    outputMicrousd: 0,
-  },
-  "gpt-5.4": {
-    cachedInputMicrousd: 0.25,
-    inputMicrousd: 2.5,
-    longContext: {
-      cachedInputMicrousd: 0.5,
-      inputMicrousd: 5,
-      outputMicrousd: 22.5,
-      threshold: 272_000,
-    },
-    outputMicrousd: 15,
-    priority: {
-      cachedInputMicrousd: 0.5,
-      inputMicrousd: 5,
-      outputMicrousd: 30,
-    },
-  },
-  "gpt-5.4-mini": {
-    cachedInputMicrousd: 0.075,
-    inputMicrousd: 0.75,
-    outputMicrousd: 4.5,
-    priority: {
-      cachedInputMicrousd: 0.15,
-      inputMicrousd: 1.5,
-      outputMicrousd: 9,
-    },
-  },
-  "gpt-5.4-nano": {
-    cachedInputMicrousd: 0.02,
-    inputMicrousd: 0.2,
-    outputMicrousd: 1.25,
-  },
-  "gpt-5.4-pro": {
-    cachedInputMicrousd: 30,
-    inputMicrousd: 30,
-    outputMicrousd: 180,
-  },
-  "gpt-5.5": {
-    cachedInputMicrousd: 0.5,
-    inputMicrousd: 5,
-    longContext: {
-      cachedInputMicrousd: 1,
-      inputMicrousd: 10,
-      outputMicrousd: 45,
-      threshold: 272_000,
-    },
-    outputMicrousd: 30,
-    priority: {
-      cachedInputMicrousd: 1.25,
-      inputMicrousd: 12.5,
-      outputMicrousd: 75,
-    },
-  },
-  "gpt-5.5-pro": {
-    cachedInputMicrousd: 30,
-    inputMicrousd: 30,
-    outputMicrousd: 180,
-  },
-};
+const MODEL_PRICING: Readonly<Record<string, CatalogEntry>> = (
+  catalog as { models: Record<string, CatalogEntry> }
+).models;
+
+// 别名解析辅助表：精确别名 → 直接命中；`foo-*` 通配转成前缀（去掉尾部 `*`）。
+const EXACT_ALIASES = new Map<string, string>();
+const WILDCARD_ALIASES: { prefix: string; modelId: string }[] = [];
+for (const [modelId, entry] of Object.entries(MODEL_PRICING)) {
+  for (const alias of entry.aliases ?? []) {
+    const lower = alias.toLowerCase();
+    if (lower.endsWith("-*")) {
+      WILDCARD_ALIASES.push({ modelId, prefix: lower.slice(0, -1) });
+    } else {
+      EXACT_ALIASES.set(lower, modelId);
+    }
+  }
+}
 
 function normalizedModelId(modelId: string): string {
   return modelId
@@ -157,11 +40,35 @@ function normalizedModelId(modelId: string): string {
     .replace(/-(latest|\d{4}-\d{2}-\d{2})$/, "");
 }
 
+function resolvePricing(modelId: string): ModelPricing | null {
+  const exact = modelId.trim().toLowerCase();
+  const direct = MODEL_PRICING[exact];
+  if (direct) return direct;
+  const exactAlias = EXACT_ALIASES.get(exact);
+  if (exactAlias) return MODEL_PRICING[exactAlias] ?? null;
+  const normalized = normalizedModelId(exact);
+  const normalizedDirect = MODEL_PRICING[normalized];
+  if (normalizedDirect) return normalizedDirect;
+  const aliased = EXACT_ALIASES.get(normalized);
+  if (aliased) return MODEL_PRICING[aliased] ?? null;
+  // 最长前缀通配匹配：`foo-bar-*` 优先于 `foo-*`。
+  let best: { modelId: string; length: number } | null = null;
+  for (const entry of WILDCARD_ALIASES) {
+    if (
+      (exact.startsWith(entry.prefix) || normalized.startsWith(entry.prefix)) &&
+      (best === null || entry.prefix.length > best.length)
+    ) {
+      best = { length: entry.prefix.length, modelId: entry.modelId };
+    }
+  }
+  return best ? (MODEL_PRICING[best.modelId] ?? null) : null;
+}
+
 export function estimateObservationCostMicrousd(
   observation: UsageTokenObservation
 ): number | null {
   if (!observation.modelId) return null;
-  const basePricing = MODEL_PRICING[normalizedModelId(observation.modelId)];
+  const basePricing = resolvePricing(observation.modelId);
   if (!basePricing) return null;
   let pricing: ModelPricing = basePricing;
   if (

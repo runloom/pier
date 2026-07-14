@@ -8,6 +8,7 @@ import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
 import { TaskRunsErrorBridge } from "@/components/common/task-runs-error-bridge.tsx";
 import { TerminalDebugSnapshotBridge } from "@/components/common/terminal-debug-snapshot-bridge.tsx";
 import { TitleBar } from "@/components/common/title-bar.tsx";
+import { UsageDataBridge } from "@/components/common/usage-data-bridge.tsx";
 import { Toaster } from "@/components/primitives/sonner.tsx";
 import { WorkspaceHost } from "@/components/workspace/workspace-host.tsx";
 import { SettingsDialog } from "@/pages/settings/settings-dialog.tsx";
@@ -30,6 +31,7 @@ export function AppShell() {
       <PluginOverlayHost />
       <TerminalDebugSnapshotBridge />
       <ForegroundActivityBridge />
+      <UsageDataBridge />
       <TaskRunsErrorBridge />
       <Toaster />
     </div>

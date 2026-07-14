@@ -1,7 +1,16 @@
 import { mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
 import writeFileAtomic from "write-file-atomic";
-import { z } from "zod/mini";
+import { z } from "zod";
+
+/**
+ * 通用增量扫描缓存：`path → (mtime, size, observations)`。
+ *
+ * Agent collector 用这个持久化上次扫描结果——rescan 时如果文件 mtime + size
+ * 未变，直接复用 observation 列表；变了才重新解析。跨会话保留。
+ *
+ * 文件是每 agent 一个（避免 collector 之间互相污染 key namespace）。
+ */
 
 export interface CachedTokenUsage {
   cachedInputTokens: number;
@@ -30,27 +39,30 @@ export interface FileUsage {
 const observationSchema = z.object({
   fingerprint: z.string(),
   usage: z.object({
-    cachedInputTokens: z.number().check(z.int(), z.nonnegative()),
+    cachedInputTokens: z.number().int().nonnegative(),
     date: z.string(),
-    inputTokens: z.number().check(z.int(), z.nonnegative()),
+    inputTokens: z.number().int().nonnegative(),
     modelId: z.nullable(z.string()),
-    outputTokens: z.number().check(z.int(), z.nonnegative()),
-    reasoningTokens: z.number().check(z.int(), z.nonnegative()),
+    outputTokens: z.number().int().nonnegative(),
+    reasoningTokens: z.number().int().nonnegative(),
     serviceTier: z.nullable(z.string()),
   }),
 });
+
 const fileUsageSchema = z.object({
   forkedFromId: z.nullable(z.string()),
-  malformedLines: z.number().check(z.int(), z.nonnegative()),
-  modifiedAt: z.number().check(z.nonnegative()),
+  malformedLines: z.number().int().nonnegative(),
+  modifiedAt: z.number().nonnegative(),
   observations: z.array(observationSchema),
   sessionId: z.nullable(z.string()),
-  size: z.number().check(z.int(), z.nonnegative()),
+  size: z.number().int().nonnegative(),
 });
+
 const cacheSchema = z.object({
   entries: z.record(z.string(), fileUsageSchema),
   version: z.literal(2),
 });
+
 export type LocalUsageCache = z.infer<typeof cacheSchema>;
 
 export async function readLocalUsageCache(

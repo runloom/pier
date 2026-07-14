@@ -73,6 +73,7 @@ import {
   type PierTerminalStatusBarPrefsAPI,
   terminalStatusBarPrefsApi,
 } from "./terminal-status-bar-api.ts";
+import { type PierUsageDataAPI, usageDataApi } from "./usage-data-api.ts";
 import { type PierWorktreesAPI, worktreesApi } from "./worktree-api.ts";
 
 export type WindowInfo = SharedWindowInfo;
@@ -229,6 +230,7 @@ export interface PierWindowAPI {
   terminal: TerminalAPI;
   terminalStatusBarPrefs: PierTerminalStatusBarPrefsAPI;
   theme: PierThemeAPI;
+  usageData: PierUsageDataAPI;
   window: PierWindowNsAPI;
   workspace: PierWorkspaceAPI;
   worktrees: PierWorktreesAPI;
@@ -381,6 +383,7 @@ const api: PierWindowAPI = {
   tasks: tasksApi,
   terminal: terminalApi,
   terminalStatusBarPrefs: terminalStatusBarPrefsApi,
+  usageData: usageDataApi,
   managedPlugins: createManagedPluginsPreloadApi(),
   pluginRpc: createPluginRpcPreloadApi(),
   app: createAppPreloadApi(),

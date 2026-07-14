@@ -66,6 +66,53 @@ export function SystemResourcesWidgetPreview() {
   );
 }
 
+// 5 根堆叠柱的静态示意：[x, 底层 y+高度, 顶层 y+高度]。
+const COST_PREVIEW_BARS: readonly [number, number, number, number, number][] = [
+  [4, 14, 10, 8, 6],
+  [22, 10, 14, 6, 4],
+  [40, 16, 8, 8, 8],
+  [58, 8, 16, 4, 4],
+  [76, 12, 12, 6, 6],
+];
+
+export function CostOverviewWidgetPreview() {
+  return (
+    <div className="flex h-full flex-col gap-1.5 p-2.5">
+      <div className="grid grid-cols-2 gap-1.5">
+        <PreviewTile />
+        <PreviewTile />
+      </div>
+      <svg
+        aria-hidden="true"
+        className="min-h-0 w-full flex-1 text-primary/60"
+        preserveAspectRatio="none"
+        viewBox="0 0 100 24"
+      >
+        {COST_PREVIEW_BARS.map(([x, bottomY, bottomH, topY, topH]) => (
+          <g key={x}>
+            <rect
+              fill="currentColor"
+              height={bottomH}
+              opacity="0.35"
+              width="10"
+              x={x}
+              y={bottomY}
+            />
+            <rect
+              fill="currentColor"
+              height={topH}
+              opacity="0.65"
+              width="10"
+              x={x}
+              y={topY}
+            />
+          </g>
+        ))}
+      </svg>
+    </div>
+  );
+}
+
 export function CustomCardWidgetPreview() {
   return (
     <div className="flex h-full flex-col gap-1.5 p-2.5">

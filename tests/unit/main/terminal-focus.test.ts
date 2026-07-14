@@ -524,6 +524,12 @@ describe("terminal focus restoration", () => {
     );
 
     expect(result).toEqual({ ok: true });
+    // initial-input-gate 把注入延后到 shell 打完 banner + 首个 prompt 之后。
+    // 测试模拟第一次 OSC 7 触发（生产链路是 native shell integration 上报 cwd）。
+    const { signalPromptReady } = await import(
+      "@main/ipc/terminal-initial-input-gate.ts"
+    );
+    signalPromptReady("terminal-1");
     expect(fakeAddon.sendText).toHaveBeenCalledWith(
       "7::terminal-1",
       "修复终端焦点问题\r"

@@ -475,6 +475,12 @@ export type PierCommandErrorCode =
    * 插件可据此分类("already exists"、"not fully merged"、"dirty worktree" 等)。
    */
   | "git_error"
+  /**
+   * git 触发的 hook 被外部信号杀掉（stderr 中出现 `died of signal N`）。
+   * 典型场景：macOS 26+ XProtect 首次扫描 hook 慢，上游给 git spawn 设 timeout
+   * → SIGKILL 波及 hook。UI 侧应当引导用户重试而非展示技术噪音。
+   */
+  | "git_hook_signal_killed"
   | WorktreeOperationErrorReason;
 
 export type PierCommandResult =
