@@ -33,9 +33,9 @@ export interface ContributionCountItem {
 /** Contribution counts by kind. */
 export interface ContributionCounts {
   readonly commands: number;
-  readonly missionControlWidgets: number;
   readonly panels: number;
   readonly terminalStatusItems: number;
+  readonly workbenchWidgets: number;
 }
 
 /** 只保留非零的贡献点计数, 每项配一个 lucide 图标。 */
@@ -73,10 +73,10 @@ export function contributionCountItemsFromCounts(
     },
     {
       Icon: LayoutDashboard,
-      count: counts.missionControlWidgets,
-      id: "missionControlWidgets",
-      pluralKey: "settings.plugins.contributionSummary.missionControlWidgets",
-      singularKey: "settings.plugins.contributionSummary.missionControlWidget",
+      count: counts.workbenchWidgets,
+      id: "workbenchWidgets",
+      pluralKey: "settings.plugins.contributionSummary.workbenchWidgets",
+      singularKey: "settings.plugins.contributionSummary.workbenchWidget",
     },
   ];
   return buckets
@@ -97,7 +97,7 @@ export function contributionCountItems(
   return contributionCountItemsFromCounts(
     {
       commands: entry.manifest.commands.length,
-      missionControlWidgets: entry.manifest.missionControlWidgets.length,
+      workbenchWidgets: entry.manifest.workbenchWidgets.length,
       panels: entry.manifest.panels.length,
       terminalStatusItems: entry.manifest.terminalStatusItems.length,
     },

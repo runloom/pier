@@ -22,7 +22,7 @@ function manifest(
     engines: { pier: ">=0.1.0" },
     id: "pier.codex",
     main: "dist/main.js",
-    missionControlWidgets: [],
+    workbenchWidgets: [],
     name: "Codex",
     panels: [],
     permissions: [],

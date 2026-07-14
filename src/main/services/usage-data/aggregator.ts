@@ -9,7 +9,7 @@ import type {
 } from "@shared/contracts/usage-data.ts";
 
 /**
- * 聚合多个源快照为一份指挥中心可消费的整体快照。
+ * 聚合多个源快照为一份工作台可消费的整体快照。
  *
  * 语义：
  * - `buckets`：按 `date` 分组求和；`estimatedCostMicrousd` 全 `null` 才保持 `null`，

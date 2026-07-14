@@ -4,7 +4,7 @@ import {
   installCodexPlugin,
   launchApp,
   setWindowSize,
-} from "./mission-control-e2e-harness.ts";
+} from "./workbench-e2e-harness.ts";
 
 interface AppearanceGeometry {
   cardWidth: number;

@@ -166,7 +166,7 @@ await showAppAlert({
 | `managed-plugin-rows.tsx`          | promise error 拼长串                       | 短 toast 或 alert |
 
 
-仅短 title 的调用（如 `keybindings-section`、`new-agent-action`、mission-control arrange success）保留 toast，改皮即可。
+仅短 title 的调用（如 `keybindings-section`、`new-agent-action`、workbench arrange success）保留 toast，改皮即可。
 
 ### 6.3 插件 notification API
 

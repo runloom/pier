@@ -27,7 +27,7 @@ export const PIER = {
   PLUGIN_RENDERER_ACTIVATION_REPORT: "pier://plugin:renderer-activation-report",
   ENVIRONMENT_PICK_PROJECT_DIRECTORY:
     "pier://environment:pick-project-directory",
-  // 系统资源快照（renderer 拉取式轮询;指挥中心 system-resources 物料）
+  // 系统资源快照（renderer 拉取式轮询;工作台 system-resources 物料）
   SYSTEM_STATS_SNAPSHOT: "pier://system-stats:snapshot",
   // 跨插件 API 等价成本聚合快照的初值拉取（增量走 PIER_BROADCAST.USAGE_DATA_CHANGED）。
   USAGE_DATA_SNAPSHOT: "pier://usage-data:snapshot",

@@ -242,8 +242,8 @@ export const settings = {
     contributionSummary: {
       command: "{{count}} command",
       commands: "{{count}} commands",
-      missionControlWidget: "{{count}} Mission Control widget",
-      missionControlWidgets: "{{count}} Mission Control widgets",
+      workbenchWidget: "{{count}} Workbench widget",
+      workbenchWidgets: "{{count}} Workbench widgets",
       none: "No contributions",
       panel: "{{count}} panel",
       panels: "{{count}} panels",

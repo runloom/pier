@@ -11,9 +11,12 @@ import {
   vi,
 } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import { registerPanelActions } from "@/lib/actions/panel-actions.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
+import { registerRunActions } from "@/lib/actions/run-actions.ts";
 import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
+import { registerTerminalActions } from "@/panel-kits/terminal/register-actions.ts";
 import { useTaskRunSelectionStore } from "@/stores/task-run-selection.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -213,14 +216,7 @@ describe("terminal content context menu actions", () => {
     });
   });
 
-  async function registerActions(): Promise<void> {
-    const { registerPanelActions } = await import(
-      "@/lib/actions/panel-actions.ts"
-    );
-    const { registerTerminalActions } = await import(
-      "@/panel-kits/terminal/register-actions.ts"
-    );
-    const { registerRunActions } = await import("@/lib/actions/run-actions.ts");
+  function registerActions(): void {
     disposers.push(registerPanelActions());
     disposers.push(registerTerminalActions());
     disposers.push(registerRunActions());

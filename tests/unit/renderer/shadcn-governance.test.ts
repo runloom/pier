@@ -14,13 +14,13 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/components/primitives/sidebar.tsx",
   // Dockview tab action 必须保留其原生 class 与事件边界。
   "src/renderer/components/workspace/panel-tab-header.tsx",
-  // 指挥中心显式拖拽抓手属于网格几何交互，不是普通业务按钮。
-  "src/renderer/panel-kits/mission-control/mission-control-widget-card.tsx",
+  // 工作台显式拖拽抓手属于网格几何交互，不是普通业务按钮。
+  "src/renderer/panel-kits/workbench/workbench-widget-card.tsx",
   // 物料添加卡与物料预览卡属于响应式网格中的专用几何表面。
-  "src/renderer/panel-kits/mission-control/mission-control-add-card.tsx",
+  "src/renderer/panel-kits/workbench/workbench-add-card.tsx",
   // 活动列表和物料库预览卡需要保持卡内响应式几何与整面点击区域。
-  "src/renderer/panel-kits/mission-control/core-widgets/activity-widget.tsx",
-  "src/renderer/panel-kits/mission-control/mission-control-library-dialog.tsx",
+  "src/renderer/panel-kits/workbench/core-widgets/activity-widget.tsx",
+  "src/renderer/panel-kits/workbench/workbench-library-dialog.tsx",
   // 环境列表按钮由 Item asChild 提供视觉和交互原语。
   "src/renderer/pages/settings/components/environment-section.tsx",
 ]);
@@ -246,7 +246,7 @@ describe("shadcn composition governance", () => {
     const widgetLibrary = readFileSync(
       join(
         ROOT,
-        "src/renderer/panel-kits/mission-control/mission-control-library-dialog.tsx"
+        "src/renderer/panel-kits/workbench/workbench-library-dialog.tsx"
       ),
       "utf8"
     );

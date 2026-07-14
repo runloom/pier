@@ -46,7 +46,7 @@ function entry(id: string): PluginRegistryEntry {
       },
       engines: { pier: ">=0.1.0" },
       id,
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       name: `${id}-name`,
       panels: [],
       permissions: [],

@@ -27,7 +27,7 @@ function externalEntry(): PluginRegistryEntry {
       commands: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.external",
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       name: "External",
       panels: [
         { id: "pier.external.panel", permissions: [], title: "External" },

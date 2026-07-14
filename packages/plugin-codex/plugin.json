@@ -15,7 +15,7 @@
           "title": "Codex Accounts"
         }
       },
-      "missionControlWidgets": {
+      "workbenchWidgets": {
         "pier.codex.accounts": {
           "title": "Codex Account & Quota",
           "description": "Switch the active Codex account and monitor its quota."
@@ -94,7 +94,7 @@
           "title": "Codex 账号"
         }
       },
-      "missionControlWidgets": {
+      "workbenchWidgets": {
         "pier.codex.accounts": {
           "title": "Codex 账号与配额",
           "description": "切换当前 Codex 账号并查看对应配额。"
@@ -167,7 +167,7 @@
     }
   },
   "main": "dist/main.js",
-  "missionControlWidgets": [
+  "workbenchWidgets": [
     {
       "category": "agent",
       "defaultSize": { "w": 4, "h": 3 },
@@ -187,5 +187,5 @@
   "renderer": "dist/renderer.js",
   "settingsPages": [{ "id": "pier.codex.accounts" }],
   "terminalStatusItems": [],
-  "version": "1.2.0"
+  "version": "1.3.0"
 }

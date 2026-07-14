@@ -8,7 +8,7 @@ import {
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type {
   ExternalRendererPluginContext,
-  MissionControlWidgetComponentProps,
+  WorkbenchWidgetComponentProps,
 } from "../../../packages/plugin-api/src/renderer.ts";
 import {
   AccountsWidget,
@@ -19,8 +19,8 @@ import { sortUsageWindows } from "../../../packages/plugin-codex/src/renderer/us
 import type { CodexAccountsSnapshot } from "../../../packages/plugin-codex/src/shared/accounts.ts";
 
 function baseProps(
-  overrides: Partial<MissionControlWidgetComponentProps> = {}
-): MissionControlWidgetComponentProps {
+  overrides: Partial<WorkbenchWidgetComponentProps> = {}
+): WorkbenchWidgetComponentProps {
   return {
     instanceId: "widget-1",
     params: {},
@@ -120,7 +120,7 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
         reset: vi.fn(async () => undefined),
         set: vi.fn(async () => undefined),
       },
-      missionControlWidgets: { register: vi.fn(() => () => undefined) },
+      workbenchWidgets: { register: vi.fn(() => () => undefined) },
       dialogs: { alert: vi.fn(), confirm: vi.fn(async () => true) },
       i18n: {
         language: () => "en",
@@ -317,7 +317,7 @@ describe("AccountsWidget (usage)", () => {
 
   it("registers only the account/quota widget (cost owns host core.cost-overview)", () => {
     const { context } = contextWithSnapshot(usageSnapshot());
-    const register = vi.mocked(context.missionControlWidgets.register);
+    const register = vi.mocked(context.workbenchWidgets.register);
     const dispose = plugin.activate(context);
 
     expect(register).toHaveBeenCalledTimes(1);

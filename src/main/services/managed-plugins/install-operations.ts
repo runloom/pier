@@ -26,7 +26,7 @@ export interface BundledPluginRegistration {
   readonly archivePath: string;
   readonly contributionCounts?: {
     readonly commands: number;
-    readonly missionControlWidgets: number;
+    readonly workbenchWidgets: number;
     readonly panels: number;
     readonly terminalStatusItems: number;
   };

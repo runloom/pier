@@ -25,7 +25,7 @@ function demoEntry(
       commands: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.demo",
-      missionControlWidgets: [],
+      workbenchWidgets: [],
       name: "Demo",
       panels: [],
       permissions: [],
