@@ -1,4 +1,5 @@
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
+import type { UsageAggregateSnapshot } from "@shared/contracts/usage-data.ts";
 import i18next from "i18next";
 import {
   activityCounts,
@@ -8,6 +9,7 @@ import {
   acquireSystemStatsPolling,
   useSystemStatsStore,
 } from "@/stores/system-stats.store.ts";
+import { useUsageDataStore } from "@/stores/usage-data.store.ts";
 import type { MetricValue } from "./metric-registry.ts";
 import { registerMetric } from "./metric-registry.ts";
 
@@ -74,7 +76,78 @@ function systemInstant(
   };
 }
 
+function usageInstant(
+  select: (snapshot: UsageAggregateSnapshot) => number | null
+): { read(): MetricValue; subscribe(listener: () => void): () => void } {
+  return {
+    read: () => {
+      const snapshot = useUsageDataStore.getState().snapshot;
+      return {
+        kind: "instant",
+        value: snapshot === null ? null : select(snapshot),
+      };
+    },
+    subscribe: (listener) => useUsageDataStore.subscribe(listener),
+  };
+}
+
+const MICROUSD_PER_USD = 1_000_000;
+
+function costMicrousdToUsd(microusd: number | null): number | null {
+  return microusd === null ? null : microusd / MICROUSD_PER_USD;
+}
+
+function costDailySeries(): MetricValue {
+  const snapshot = useUsageDataStore.getState().snapshot;
+  if (snapshot === null) return { kind: "series", points: [] };
+  const points = snapshot.overall.buckets.flatMap((bucket) => {
+    if (bucket.estimatedCostMicrousd === null) return [];
+    // 用 UTC 中午避免 timezone 偏移把日期挪到相邻天
+    const ts = Date.parse(`${bucket.date}T12:00:00Z`);
+    return Number.isFinite(ts)
+      ? [{ ts, value: bucket.estimatedCostMicrousd / MICROUSD_PER_USD }]
+      : [];
+  });
+  return { kind: "series", points };
+}
+
+function groupedCostItems<T>(
+  rows: readonly T[],
+  extract: (row: T) => { cost: number | null; label: string }
+): MetricValue {
+  const items = rows
+    .flatMap((row) => {
+      const { cost, label } = extract(row);
+      return cost === null ? [] : [{ label, value: cost / MICROUSD_PER_USD }];
+    })
+    .sort((a, b) => b.value - a.value);
+  return { items, kind: "grouped" };
+}
+
+function costByModel(): MetricValue {
+  const snapshot = useUsageDataStore.getState().snapshot;
+  if (snapshot === null) return { items: [], kind: "grouped" };
+  return groupedCostItems(snapshot.overall.summary.byModel, (row) => ({
+    cost: row.estimatedCostMicrousd,
+    label: row.modelId || i18next.t("missionControl.metrics.unknown"),
+  }));
+}
+
+function costBySource(): MetricValue {
+  const snapshot = useUsageDataStore.getState().snapshot;
+  if (snapshot === null) return { items: [], kind: "grouped" };
+  return groupedCostItems(snapshot.sources, (source) => ({
+    cost: source.snapshot.summary.estimatedCostMicrousd,
+    label: `${source.pluginId}/${source.sourceId}`,
+  }));
+}
+
 let registered = false;
+
+/** 测试用重置：与 `clearMetricsForTests` 配对使用，重放注册幂等守卫。 */
+export function resetCoreMetricsForTests(): void {
+  registered = false;
+}
 
 export function ensureCoreMetricsRegistered(): void {
   if (registered) {
@@ -180,5 +253,67 @@ export function ensureCoreMetricsRegistered(): void {
       titleKey: "missionControl.metrics.systemLoad1",
     },
     ...systemInstant((snapshot) => snapshot.loadAvg1),
+  });
+
+  registerMetric({
+    descriptor: {
+      format: "decimal",
+      id: "core.cost.today",
+      kind: "instant",
+      titleKey: "missionControl.metrics.costToday",
+    },
+    ...usageInstant((snapshot) =>
+      costMicrousdToUsd(snapshot.overall.summary.todayEstimatedCostMicrousd)
+    ),
+  });
+  registerMetric({
+    descriptor: {
+      format: "decimal",
+      id: "core.cost.periodInstant",
+      kind: "instant",
+      titleKey: "missionControl.metrics.costPeriod",
+    },
+    ...usageInstant((snapshot) =>
+      costMicrousdToUsd(snapshot.overall.summary.estimatedCostMicrousd)
+    ),
+  });
+  registerMetric({
+    descriptor: {
+      format: "compactNumber",
+      id: "core.cost.periodTokens",
+      kind: "instant",
+      titleKey: "missionControl.metrics.costPeriodTokens",
+    },
+    ...usageInstant((snapshot) => snapshot.overall.summary.periodTokens),
+  });
+  registerMetric({
+    descriptor: {
+      format: "decimal",
+      id: "core.cost.dailySeries",
+      kind: "series",
+      titleKey: "missionControl.metrics.costDailySeries",
+    },
+    read: costDailySeries,
+    subscribe: (listener) => useUsageDataStore.subscribe(listener),
+  });
+  registerMetric({
+    descriptor: {
+      format: "decimal",
+      id: "core.cost.byModel",
+      kind: "grouped",
+      titleKey: "missionControl.metrics.costByModel",
+    },
+    read: costByModel,
+    subscribe: (listener) => useUsageDataStore.subscribe(listener),
+  });
+  registerMetric({
+    descriptor: {
+      format: "decimal",
+      id: "core.cost.bySource",
+      kind: "grouped",
+      titleKey: "missionControl.metrics.costBySource",
+    },
+    read: costBySource,
+    subscribe: (listener) => useUsageDataStore.subscribe(listener),
   });
 }

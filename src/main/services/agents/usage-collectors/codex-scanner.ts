@@ -5,24 +5,34 @@ import type {
   UsageDataPublishInput,
   UsageTokenObservation,
 } from "@pier/plugin-api/main";
-import { COST_USAGE_PERIOD_DAYS } from "../shared/constants.ts";
+import { scanCodexUsageFile } from "./codex-parser.ts";
+import { dateDaysAgo, datesInRange, todayDate } from "./date-range.ts";
 import {
   type CachedTokenUsage,
   type FileUsage,
   readLocalUsageCache,
   writeLocalUsageCache,
-} from "./local-usage-cache.ts";
-import { scanLocalUsageFile } from "./local-usage-session-parser.ts";
+} from "./file-cache.ts";
 
+/**
+ * Codex CLI usage scanner。扫 `<codexHome>/sessions/**\/*.jsonl` +
+ * `<codexHome>/archived_sessions/**\/*.jsonl`，抽 token 观测，组装成
+ * `UsageDataPublishInput`。缓存机制：`file mtime + size` 未变则跳过重解析。
+ */
+
+/** 覆盖窗口。跟前端 core cost widget 展示窗口对齐。 */
+const CODEX_USAGE_PERIOD_DAYS = 31;
 const MAX_FILES = 5000;
 const STAT_CONCURRENCY = 32;
 
-export interface UsageCandidate {
+export const CODEX_USAGE_SOURCE_ID = "codex-local-sessions";
+
+interface UsageCandidate {
   date: string;
   path: string;
 }
 
-export interface LocalUsageDiagnostics {
+export interface CodexUsageDiagnostics {
   candidateFiles: number;
   deduplicatedEvents: number;
   failedFiles: number;
@@ -34,30 +44,9 @@ export interface LocalUsageDiagnostics {
   uniqueEvents: number;
 }
 
-export interface LocalUsageScanResult {
-  diagnostics: LocalUsageDiagnostics;
+export interface CodexUsageScanResult {
+  diagnostics: CodexUsageDiagnostics;
   input: UsageDataPublishInput;
-}
-
-export interface LocalUsageScanner {
-  scan(): Promise<LocalUsageScanResult>;
-}
-
-function dateDaysAgo(days: number): string {
-  const date = new Date();
-  date.setUTCDate(date.getUTCDate() - days);
-  return date.toISOString().slice(0, 10);
-}
-
-function datesInRange(from: string, to: string): string[] {
-  const dates: string[] = [];
-  const current = new Date(`${from}T00:00:00Z`);
-  const end = new Date(`${to}T00:00:00Z`);
-  while (current <= end) {
-    dates.push(current.toISOString().slice(0, 10));
-    current.setUTCDate(current.getUTCDate() + 1);
-  }
-  return dates;
 }
 
 async function safeReadDir(path: string): Promise<Dirent[]> {
@@ -153,17 +142,17 @@ function lineageRoot(
   return current;
 }
 
-async function scanLocalUsage(
+async function scanCodexUsage(
   codexHome: string,
   cachePath: string
-): Promise<LocalUsageScanResult> {
-  const from = dateDaysAgo(COST_USAGE_PERIOD_DAYS - 1);
-  const to = new Date().toISOString().slice(0, 10);
+): Promise<CodexUsageScanResult> {
+  const from = dateDaysAgo(CODEX_USAGE_PERIOD_DAYS - 1);
+  const to = todayDate();
   const allCandidates = await candidateFiles(codexHome, from, to);
   const paths = selectRecentCandidatePaths(allCandidates, MAX_FILES);
   const cache = await readLocalUsageCache(cachePath);
   const entries: Record<string, FileUsage> = {};
-  const diagnostics: LocalUsageDiagnostics = {
+  const diagnostics: CodexUsageDiagnostics = {
     candidateFiles: paths.length,
     deduplicatedEvents: 0,
     failedFiles: 0,
@@ -191,7 +180,7 @@ async function scanLocalUsage(
             diagnostics.reusedFiles += 1;
             return;
           }
-          entries[path] = await scanLocalUsageFile(path, from);
+          entries[path] = await scanCodexUsageFile(path, from);
           diagnostics.parsedFiles += 1;
         } catch {
           diagnostics.failedFiles += 1;
@@ -262,20 +251,24 @@ async function scanLocalUsage(
       ),
       observedAt: Date.now(),
       scope: { kind: "machine" },
-      sourceId: "codex-local-sessions",
+      sourceId: CODEX_USAGE_SOURCE_ID,
     },
   };
 }
 
-export function createLocalUsageScanner(options: {
+export interface CodexUsageScanner {
+  scan(): Promise<CodexUsageScanResult>;
+}
+
+export function createCodexUsageScanner(options: {
   cachePath: string;
   codexHome: string;
-}): LocalUsageScanner {
-  let inFlight: Promise<LocalUsageScanResult> | null = null;
+}): CodexUsageScanner {
+  let inFlight: Promise<CodexUsageScanResult> | null = null;
   return {
-    scan(): Promise<LocalUsageScanResult> {
+    scan(): Promise<CodexUsageScanResult> {
       if (inFlight) return inFlight;
-      inFlight = scanLocalUsage(options.codexHome, options.cachePath).finally(
+      inFlight = scanCodexUsage(options.codexHome, options.cachePath).finally(
         () => {
           inFlight = null;
         }

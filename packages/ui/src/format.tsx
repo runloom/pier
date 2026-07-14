@@ -49,6 +49,32 @@ export function formatCurrency(
   }).format(value);
 }
 
+/**
+ * 紧凑货币：`$1.2K` / `$5M` / `$0.42`——图表轴 tick 用，保证任意量级都在
+ * ≤ 5-6 字符范围内，避免因 axis 宽度不足被裁切。小于 1 时按标准 2 位小数
+ * 展示（`$0.42` 而非 `$420m`）。
+ */
+export function formatCompactCurrency(
+  value: number,
+  locale: string,
+  currency = "USD"
+): string {
+  if (!Number.isFinite(value)) return "—";
+  const options: Intl.NumberFormatOptions = {
+    currency,
+    currencyDisplay: "narrowSymbol",
+    style: "currency",
+  };
+  if (Math.abs(value) >= 1000) {
+    options.notation = "compact";
+    options.maximumFractionDigits = 1;
+  } else {
+    options.maximumFractionDigits = 2;
+    options.minimumFractionDigits = 0;
+  }
+  return safeNumberFormat(locale, options).format(value);
+}
+
 const BYTE_UNITS = ["B", "KB", "MB", "GB", "TB"] as const;
 
 /** 字节数：38 GB / 812 MB（1024 进制，最多 1 位小数）。 */

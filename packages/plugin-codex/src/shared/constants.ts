@@ -1,3 +1,2 @@
-export const COST_USAGE_PERIOD_DAYS = 31;
 export const LOGIN_TIMEOUT_MINUTES = 5;
 export const LOGIN_TIMEOUT_MS = LOGIN_TIMEOUT_MINUTES * 60 * 1000;

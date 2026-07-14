@@ -1,7 +1,19 @@
 import { createReadStream } from "node:fs";
 import { stat } from "node:fs/promises";
 import { createInterface } from "node:readline";
-import type { CachedObservation, FileUsage } from "./local-usage-cache.ts";
+import type { CachedObservation, FileUsage } from "./file-cache.ts";
+
+/**
+ * 解析 Codex CLI 单个会话 jsonl 文件（`~/.codex/sessions/**\/*.jsonl` 或
+ * `~/.codex/archived_sessions/**\/*.jsonl`）。抽出规范化 token 观测：
+ *
+ * - 只关心 `event_msg` + `payload.type === "token_count"` 行。
+ * - 优先取 `last_token_usage`（当前 turn 增量）；缺席时用 `total_token_usage`
+ *   减上一次累计值补差，避免 total-only 会话被漏掉。
+ * - `session_meta` 提供会话 id 与 fork 血统，用于跨文件去重。
+ * - `turn_context` 提供当前 turn 的 `model_id` / `service_tier`；缺失显式
+ *   model 的行，若整文件只出现一种 model，回填之。
+ */
 
 function numeric(record: Record<string, unknown>, ...keys: string[]): number {
   for (const key of keys) {
@@ -38,7 +50,7 @@ function tokenVector(record: Record<string, unknown>): string {
   ].join(":");
 }
 
-export async function scanLocalUsageFile(
+export async function scanCodexUsageFile(
   path: string,
   from: string
 ): Promise<FileUsage> {

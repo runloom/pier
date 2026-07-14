@@ -4,6 +4,7 @@ import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
+import type { UsageAggregateSnapshot } from "@shared/contracts/usage-data.ts";
 import type { WorktreeCreateProgress } from "@shared/contracts/worktree.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { findInternalWindowId } from "../windows/window-identity.ts";
@@ -67,4 +68,10 @@ export function broadcastWorktreeCreateProgress(
   progress: WorktreeCreateProgress
 ): void {
   broadcastToAllWindows(PIER_BROADCAST.WORKTREE_CREATE_PROGRESS, progress);
+}
+
+export function broadcastUsageDataChanged(
+  snapshot: UsageAggregateSnapshot
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.USAGE_DATA_CHANGED, snapshot);
 }

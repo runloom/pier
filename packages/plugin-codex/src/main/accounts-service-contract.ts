@@ -1,7 +1,6 @@
 import type {
   AddAccountPayload,
   CodexAccountsSnapshot,
-  CodexCostUsageSnapshot,
   RemoveAccountPayload,
   SelectAccountPayload,
 } from "../shared/accounts.ts";
@@ -32,6 +31,5 @@ export interface CodexAccountsService {
   }): Promise<void>;
   remove(payload: RemoveAccountPayload): Promise<void>;
   select(payload: SelectAccountPayload): Promise<void>;
-  setCostUsage(snapshot: CodexCostUsageSnapshot | null): void;
   snapshot(): CodexAccountsSnapshot;
 }

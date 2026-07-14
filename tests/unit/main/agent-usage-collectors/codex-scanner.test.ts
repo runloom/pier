@@ -3,9 +3,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import {
-  createLocalUsageScanner,
+  createCodexUsageScanner,
   selectRecentCandidatePaths,
-} from "../../../packages/plugin-codex/src/main/local-usage-scanner.ts";
+} from "../../../../src/main/services/agents/usage-collectors/codex-scanner.ts";
 
 const tempDirs: string[] = [];
 
@@ -102,7 +102,7 @@ describe("local Codex usage scanner", () => {
       },
       tokenEvent(date, 100, 100),
     ]);
-    const scanner = createLocalUsageScanner({ cachePath, codexHome });
+    const scanner = createCodexUsageScanner({ cachePath, codexHome });
 
     const result = await scanner.scan();
 
@@ -134,7 +134,7 @@ describe("local Codex usage scanner", () => {
       },
       tokenEvent(date, 100, 100),
     ]);
-    const scanner = createLocalUsageScanner({ cachePath, codexHome });
+    const scanner = createCodexUsageScanner({ cachePath, codexHome });
     await scanner.scan();
 
     const warm = await scanner.scan();
@@ -158,7 +158,7 @@ describe("local Codex usage scanner", () => {
       },
     ]);
 
-    const result = await createLocalUsageScanner({
+    const result = await createCodexUsageScanner({
       cachePath,
       codexHome,
     }).scan();
@@ -196,7 +196,7 @@ describe("local Codex usage scanner", () => {
       modelContext,
     ]);
 
-    const result = await createLocalUsageScanner({
+    const result = await createCodexUsageScanner({
       cachePath,
       codexHome,
     }).scan();
@@ -225,7 +225,7 @@ describe("local Codex usage scanner", () => {
       parentEvent,
       tokenEvent(date, 50, 150),
     ]);
-    const scanner = createLocalUsageScanner({ cachePath, codexHome });
+    const scanner = createCodexUsageScanner({ cachePath, codexHome });
 
     const result = await scanner.scan();
 
@@ -252,7 +252,7 @@ describe("local Codex usage scanner", () => {
 
   it("coalesces overlapping scans into one in-flight task", async () => {
     const { cachePath, codexHome } = await fixture();
-    const scanner = createLocalUsageScanner({ cachePath, codexHome });
+    const scanner = createCodexUsageScanner({ cachePath, codexHome });
 
     const first = scanner.scan();
     const second = scanner.scan();
@@ -266,7 +266,7 @@ describe("local Codex usage scanner", () => {
     const sessionsDir = join(codexHome, "sessions", ...date.split("-"));
     await mkdir(sessionsDir, { recursive: true });
     await writeFile(join(sessionsDir, "broken.jsonl"), "{not-json", "utf8");
-    const scanner = createLocalUsageScanner({ cachePath, codexHome });
+    const scanner = createCodexUsageScanner({ cachePath, codexHome });
 
     const result = await scanner.scan();
 

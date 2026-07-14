@@ -295,7 +295,7 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
         {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: the grid captures pointer and keyboard context-menu gestures */}
         <section
           aria-label={t("missionControl.context.canvasLabel")}
-          className="min-h-full min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
+          className="relative min-h-full min-w-0 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           data-responsive-cols={cols}
           data-testid="mission-control-grid-wrapper"
           onContextMenu={nativeMenu.onContextMenu}
@@ -304,104 +304,115 @@ export function MissionControlPanel(props: IDockviewPanelProps) {
           // biome-ignore lint/a11y/noNoninteractiveTabindex: focus is required for the grid Shift+F10 native context-menu contract
           tabIndex={0}
         >
-          <GridLayout
-            compactor={MISSION_CONTROL_ORDERED_GRID_COMPACTOR}
-            dragConfig={{
-              cancel:
-                "button:not(.mission-control-widget-drag-handle), a, input, textarea, select, [role='menuitem'], [data-no-drag]",
-              enabled: true,
-              handle: ".mission-control-widget-drag-handle",
-            }}
-            gridConfig={{
-              cols,
-              containerPadding: MISSION_CONTROL_GRID_CONTAINER_PADDING,
-              margin: MARGIN,
-              rowHeight: ROW_HEIGHT,
-            }}
-            layout={renderedLayout}
-            onDrag={handleDragMove}
-            onDragStop={handleDragStop}
-            onLayoutChange={() => undefined}
-            onResize={handleResizeMove}
-            onResizeStop={handleResizeStop}
-            resizeConfig={{ enabled: true, handles: ["se"] }}
-            {...(dragPreviewHeight === null
-              ? {}
-              : { style: { height: `${dragPreviewHeight}px` } })}
-            width={Math.max(1, viewport.width)}
-          >
-            {resolved.map((widget) => {
-              const item = renderedLayout.find(
-                (candidate) => candidate.i === widget.instanceId
-              );
-              const size: MissionControlGridSize = {
-                h: item?.h ?? 3,
-                w: item?.w ?? 4,
-              };
-              return (
-                <div
-                  data-highlighted={widget.instanceId === state.highlightId}
-                  data-mission-control-instance-id={widget.instanceId}
-                  key={widget.instanceId}
-                >
+          {resolved.length === 0 ? (
+            <MissionControlAddCard
+              isEmpty
+              onBrowse={() => setLibraryOpen(true)}
+            />
+          ) : (
+            <GridLayout
+              compactor={MISSION_CONTROL_ORDERED_GRID_COMPACTOR}
+              dragConfig={{
+                cancel:
+                  "button:not(.mission-control-widget-drag-handle), a, input, textarea, select, [role='menuitem'], [data-no-drag]",
+                enabled: true,
+                handle: ".mission-control-widget-drag-handle",
+              }}
+              gridConfig={{
+                cols,
+                containerPadding: MISSION_CONTROL_GRID_CONTAINER_PADDING,
+                margin: MARGIN,
+                rowHeight: ROW_HEIGHT,
+              }}
+              layout={renderedLayout}
+              onDrag={handleDragMove}
+              onDragStop={handleDragStop}
+              onLayoutChange={() => undefined}
+              onResize={handleResizeMove}
+              onResizeStop={handleResizeStop}
+              resizeConfig={{ enabled: true, handles: ["se"] }}
+              {...(dragPreviewHeight === null
+                ? {}
+                : { style: { height: `${dragPreviewHeight}px` } })}
+              width={Math.max(1, viewport.width)}
+            >
+              {resolved.map((widget) => {
+                const item = renderedLayout.find(
+                  (candidate) => candidate.i === widget.instanceId
+                );
+                const size: MissionControlGridSize = {
+                  h: item?.h ?? 3,
+                  w: item?.w ?? 4,
+                };
+                return (
                   <div
-                    className="relative h-full transition-transform duration-150"
-                    data-mission-control-preview-instance-id={widget.instanceId}
-                    style={missionControlPreviewTransform(
-                      dragPreviewOffsets.get(widget.instanceId)
-                    )}
+                    data-highlighted={widget.instanceId === state.highlightId}
+                    data-mission-control-instance-id={widget.instanceId}
+                    key={widget.instanceId}
                   >
-                    <MissionControlWidgetCard
-                      onDuplicate={() =>
-                        state.handleDuplicate(widget.instanceId)
+                    <div
+                      className="relative h-full transition-transform duration-150"
+                      data-mission-control-preview-instance-id={
+                        widget.instanceId
                       }
-                      onLayoutKeyDown={(event, title) =>
-                        handleLayoutKeyDown(event, widget.instanceId, title)
-                      }
-                      onOpenSettings={() =>
-                        setSettingsInstanceId(widget.instanceId)
-                      }
-                      onRefresh={() => state.refreshOne(widget.instanceId)}
-                      onRemove={() => state.handleRemove(widget.instanceId)}
-                      refreshToken={state.refreshTokens[widget.instanceId] ?? 0}
-                      size={size}
-                      updateParams={(patch) =>
-                        state.handleUpdateParams(widget.instanceId, patch)
-                      }
-                      visible={visible}
-                      widget={widget}
-                    />
-                    {resizePreview?.instanceId === widget.instanceId &&
-                    resizePreview.size ? (
-                      <Badge
-                        aria-hidden="true"
-                        className="pointer-events-none absolute right-3 bottom-3 z-20 tabular-nums"
-                        data-testid="mission-control-resize-size"
-                        size="xs"
-                        variant="secondary"
-                      >
-                        {resizePreview.size.w} × {resizePreview.size.h}
-                      </Badge>
-                    ) : null}
+                      style={missionControlPreviewTransform(
+                        dragPreviewOffsets.get(widget.instanceId)
+                      )}
+                    >
+                      <MissionControlWidgetCard
+                        onDuplicate={() =>
+                          state.handleDuplicate(widget.instanceId)
+                        }
+                        onLayoutKeyDown={(event, title) =>
+                          handleLayoutKeyDown(event, widget.instanceId, title)
+                        }
+                        onOpenSettings={() =>
+                          setSettingsInstanceId(widget.instanceId)
+                        }
+                        onRefresh={() => state.refreshOne(widget.instanceId)}
+                        onRemove={() => state.handleRemove(widget.instanceId)}
+                        refreshToken={
+                          state.refreshTokens[widget.instanceId] ?? 0
+                        }
+                        size={size}
+                        updateParams={(patch) =>
+                          state.handleUpdateParams(widget.instanceId, patch)
+                        }
+                        visible={visible}
+                        widget={widget}
+                      />
+                      {resizePreview?.instanceId === widget.instanceId &&
+                      resizePreview.size ? (
+                        <Badge
+                          aria-hidden="true"
+                          className="pointer-events-none absolute right-3 bottom-3 z-20 tabular-nums"
+                          data-testid="mission-control-resize-size"
+                          size="xs"
+                          variant="secondary"
+                        >
+                          {resizePreview.size.w} × {resizePreview.size.h}
+                        </Badge>
+                      ) : null}
+                    </div>
                   </div>
+                );
+              })}
+              <div className="h-full" key={ADD_TILE_ID}>
+                <div
+                  className="h-full transition-transform duration-150"
+                  data-mission-control-preview-instance-id={ADD_TILE_ID}
+                  style={missionControlPreviewTransform(
+                    dragPreviewOffsets.get(ADD_TILE_ID)
+                  )}
+                >
+                  <MissionControlAddCard
+                    isEmpty={false}
+                    onBrowse={() => setLibraryOpen(true)}
+                  />
                 </div>
-              );
-            })}
-            <div className="h-full" key={ADD_TILE_ID}>
-              <div
-                className="h-full transition-transform duration-150"
-                data-mission-control-preview-instance-id={ADD_TILE_ID}
-                style={missionControlPreviewTransform(
-                  dragPreviewOffsets.get(ADD_TILE_ID)
-                )}
-              >
-                <MissionControlAddCard
-                  isEmpty={resolved.length === 0}
-                  onBrowse={() => setLibraryOpen(true)}
-                />
               </div>
-            </div>
-          </GridLayout>
+            </GridLayout>
+          )}
         </section>
       </div>
       <div aria-live="polite" className="sr-only">

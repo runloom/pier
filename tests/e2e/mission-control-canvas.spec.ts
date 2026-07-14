@@ -46,10 +46,10 @@ const MATERIALS: readonly MaterialCase[] = [
     name: "Codex accounts",
   },
   {
-    id: "pier.codex.cost",
+    id: "core.cost-overview",
     max: { h: 5, w: 8 },
-    min: { h: 3, w: 2 },
-    name: "Codex cost",
+    min: { h: 2, w: 2 },
+    name: "cost overview",
   },
 ] as const;
 
@@ -117,12 +117,50 @@ async function assertPrimaryContentUsable(
     await expect(dialog).not.toBeVisible();
     return;
   }
-  if (material.id === "pier.codex.cost") {
-    await expect(
-      content.locator(
-        ':scope > [data-slot="codex-cost-widget"], :scope > [data-slot="widget-empty"], :scope > [data-slot="widget-error"], :scope > [data-slot="widget-skeleton"]'
-      )
-    ).toBeVisible({ timeout: 30_000 });
+  if (material.id === "core.cost-overview") {
+    const body = content.locator(
+      ':scope > [data-testid="cost-overview-content"]'
+    );
+    const state = content.locator(
+      ':scope > [data-testid="cost-overview-content"], :scope > [data-slot="widget-empty"], :scope > [data-slot="widget-error"], :scope > [data-slot="widget-skeleton"]'
+    );
+    await expect(state).toBeVisible({ timeout: 30_000 });
+    if (await body.isVisible()) {
+      await expect(
+        body.locator('[data-testid="cost-overview-kpis"]')
+      ).toBeVisible();
+      const chart = body.locator('[data-testid="cost-overview-chart"]');
+      if ((await chart.count()) > 0) {
+        const bars = chart.locator(".recharts-bar-rectangle");
+        await expect
+          .poll(() =>
+            bars.evaluateAll((elements) =>
+              elements.some(
+                (element) => element.getBoundingClientRect().height > 0
+              )
+            )
+          )
+          .toBe(true);
+      }
+      const metrics = await content.evaluate((element) => ({
+        clientHeight: element.clientHeight,
+        scrollHeight: element.scrollHeight,
+      }));
+      if (metrics.scrollHeight > metrics.clientHeight) {
+        await content.evaluate((element) => {
+          element.scrollTop = element.scrollHeight;
+        });
+        await expect
+          .poll(() => content.evaluate((element) => element.scrollTop))
+          .toBeGreaterThan(0);
+        await expect(
+          body.locator('[data-testid="cost-overview-observed-at"]')
+        ).toBeVisible();
+        if ((await chart.count()) > 0) {
+          await expect(chart).toBeVisible();
+        }
+      }
+    }
     return;
   }
   const accountState = content.locator(

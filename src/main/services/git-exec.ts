@@ -14,6 +14,13 @@ export class GitExecError extends Error {
   readonly args: readonly string[];
   readonly cwd: string;
   readonly exitCode: number | null;
+  /**
+   * 若 stderr 中出现 `<path> died of signal N`（git 对被信号杀掉的 hook 打的标准日志），
+   * 提取 hook 路径与信号编号；否则为 `null`。上层可据此区分"git 逻辑错" vs
+   * "hook 被外部信号杀"（典型：macOS XProtect 首次扫描 hook 慢 + 上游 timeout →
+   * SIGKILL 波及 hook）。
+   */
+  readonly hookSignal: { hookPath: string; signal: number } | null;
   readonly stderr: string;
   readonly stdout: string;
 
@@ -21,6 +28,7 @@ export class GitExecError extends Error {
     args: readonly string[];
     cwd: string;
     exitCode: number | null;
+    hookSignal?: { hookPath: string; signal: number } | null;
     message: string;
     stderr: string;
     stdout: string;
@@ -30,6 +38,7 @@ export class GitExecError extends Error {
     this.args = options.args;
     this.cwd = options.cwd;
     this.exitCode = options.exitCode;
+    this.hookSignal = options.hookSignal ?? null;
     this.stderr = options.stderr;
     this.stdout = options.stdout;
   }
@@ -56,6 +65,31 @@ const GIT_ENV: Readonly<Record<string, string>> = {
   LANG: "C",
   LC_ALL: "C",
 };
+
+/**
+ * git 报 hook 被信号杀时会在 stderr 里打 `<path> died of signal N`（标准文案）。
+ * 匹配一次即可（同一次 exec 里 git 只打一条这种日志）。
+ * 例：`error: /path/.husky/_/post-checkout died of signal 9`
+ */
+const HOOK_SIGNAL_PATTERN = /(\S+) died of signal (\d+)/;
+
+function parseHookSignal(
+  stderr: string
+): { hookPath: string; signal: number } | null {
+  const match = HOOK_SIGNAL_PATTERN.exec(stderr);
+  if (!match) {
+    return null;
+  }
+  const [, hookPath, rawSignal] = match;
+  if (!(hookPath && rawSignal)) {
+    return null;
+  }
+  const signal = Number.parseInt(rawSignal, 10);
+  if (!Number.isFinite(signal)) {
+    return null;
+  }
+  return { hookPath, signal };
+}
 
 /**
  * 工厂：返回与默认 `execGit` 同形态的函数，但 spawn 可注入用于测试。
@@ -168,6 +202,7 @@ export function createExecGit({
             args,
             cwd: options.cwd,
             exitCode: payload.exitCode,
+            hookSignal: parseHookSignal(stderr),
             message: appendStreamDiagnostics(baseMessage),
             stderr,
             stdout,

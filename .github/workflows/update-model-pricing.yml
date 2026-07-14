@@ -1,0 +1,67 @@
+name: Update model pricing
+
+# 每周一 UTC 03:00 自动跑，跟 LiteLLM canonical 目录同步。也可以手动触发。
+# 有价格变化时开 PR（title `chore(pricing): weekly refresh`），reviewer 检查
+# `pricing-diff.md` 里的涨跌明细 → merge。
+on:
+  schedule:
+    - cron: "0 3 * * MON"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+concurrency:
+  group: update-model-pricing
+  cancel-in-progress: false
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 11
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Fetch and normalize LiteLLM pricing
+        run: node scripts/update-model-pricing.mjs --diff-out=pricing-diff.md
+
+      - name: Detect changes
+        id: diff
+        run: |
+          if git diff --quiet src/main/services/usage-data/pricing-catalog.json; then
+            echo "changed=false" >> "$GITHUB_OUTPUT"
+          else
+            echo "changed=true" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Install dependencies
+        if: steps.diff.outputs.changed == 'true'
+        run: pnpm install --frozen-lockfile
+
+      - name: Guardrail — schema tests
+        if: steps.diff.outputs.changed == 'true'
+        run: pnpm exec vitest run tests/unit/main/pricing-catalog-schema.test.ts tests/unit/main/pricing-catalog.test.ts --run
+
+      - name: Open PR
+        if: steps.diff.outputs.changed == 'true'
+        uses: peter-evans/create-pull-request@v6
+        with:
+          commit-message: "chore(pricing): weekly LiteLLM refresh"
+          title: "chore(pricing): weekly LiteLLM refresh"
+          body-path: pricing-diff.md
+          branch: chore/pricing-refresh
+          delete-branch: true
+          add-paths: |
+            src/main/services/usage-data/pricing-catalog.json
+          labels: |
+            chore
+            pricing

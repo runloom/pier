@@ -2,10 +2,12 @@ import { Button } from "@pier/ui/button.tsx";
 import {
   Empty,
   EmptyContent,
+  EmptyDescription,
   EmptyHeader,
+  EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
-import { Plus } from "lucide-react";
+import { LayoutDashboard, Plus } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
 
 interface MissionControlAddCardProps {
@@ -13,7 +15,7 @@ interface MissionControlAddCardProps {
   onBrowse: () => void;
 }
 
-/** 响应式 2×1 添加入口；作为有序网格的最后一个伪条目参与排布。 */
+/** 空画布显示完整空态；已有物料时作为有序网格末尾的 2×1 添加入口。 */
 export function MissionControlAddCard({
   isEmpty,
   onBrowse,
@@ -35,11 +37,17 @@ export function MissionControlAddCard({
   if (!isEmpty) return card;
 
   return (
-    <Empty className="size-full gap-1 p-1" data-testid="mission-control-empty">
-      <EmptyHeader className="gap-0">
+    <Empty className="absolute inset-0 p-6" data-testid="mission-control-empty">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <LayoutDashboard aria-hidden />
+        </EmptyMedia>
         <EmptyTitle>{t("missionControl.empty")}</EmptyTitle>
+        <EmptyDescription>
+          {t("missionControl.emptyDescription")}
+        </EmptyDescription>
       </EmptyHeader>
-      <EmptyContent className="gap-0">
+      <EmptyContent>
         <Button
           data-testid="mission-control-add-widget"
           onClick={onBrowse}
