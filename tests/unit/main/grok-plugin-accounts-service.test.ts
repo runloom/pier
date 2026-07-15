@@ -45,14 +45,18 @@ function createProvider(
     readApiKey: vi.fn(
       async (accountId: string) => apiKeys.get(accountId) ?? null
     ),
+    readCurrentAuthContent: vi.fn(async () => null),
     readCurrentIdentity: vi.fn(async () => null),
     readIdentity: vi.fn(async () => OIDC_IDENTITY),
     readManagedAuthContent: vi.fn(async () => "{}"),
+    restoreCurrentAuthContent: vi.fn(async () => undefined),
     storeApiKey: vi.fn(async (accountId: string, apiKey: string) => {
       apiKeys.set(accountId, apiKey);
     }),
     syncBack: vi.fn(async () => "ok" as const),
     watchExternalAuth: vi.fn(() => () => undefined),
+    writeCurrentAuthContent: vi.fn(async () => undefined),
+    writeManagedAuthContent: vi.fn(async () => undefined),
     ...overrides,
   };
 }

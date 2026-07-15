@@ -131,22 +131,27 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
     });
   }
 
-  const productUsage = config.productUsage;
-  if (Array.isArray(productUsage)) {
-    for (const item of productUsage) {
-      const row = asRecord(item);
-      if (!row) continue;
-      const productUsed = asFiniteNumber(row.usagePercent);
-      if (productUsed === null) continue;
-      const product =
-        typeof row.product === "string" && row.product.length > 0
-          ? row.product
-          : "unknown";
+  const productUsage = Array.isArray(config.productUsage)
+    ? config.productUsage.flatMap((item) => {
+        const row = asRecord(item);
+        if (!row) return [];
+        const usedPercent = asFiniteNumber(row.usagePercent);
+        if (usedPercent === null) return [];
+        const product =
+          typeof row.product === "string" && row.product.length > 0
+            ? row.product
+            : "unknown";
+        return [{ product, usedPercent }];
+      })
+    : [];
+  const hasPeriodWindow = windows.some((window) => window.id === "grok:period");
+  if (productUsage.length > 1 || !hasPeriodWindow) {
+    for (const productRow of productUsage) {
       windows.push({
-        id: `grok:product:${product}`,
+        id: `grok:product:${productRow.product}`,
         limitId: "product",
-        limitName: productLabel(product),
-        usedPercent: productUsed,
+        limitName: productLabel(productRow.product),
+        usedPercent: productRow.usedPercent,
         ...(endMs === null ? {} : { resetsAt: endMs }),
         ...(minutes === undefined ? {} : { windowMinutes: minutes }),
       });

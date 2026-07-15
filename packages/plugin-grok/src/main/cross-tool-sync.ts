@@ -14,7 +14,9 @@ import type { CrossToolSyncTarget } from "../shared/accounts.ts";
  * - OpenCode `~/.local/share/opencode/auth.json`: provider key `xai`
  *   - oauth: `{ type: "oauth", access, refresh, expires, accountId? }`
  *   - api: `{ type: "api", key }`
- * - pi `~/.pi/agent/auth.json`: provider key `xai` (same oauth/api shapes)
+ * - pi `~/.pi/agent/auth.json`: provider key `xai`
+ *   - api only: `{ type: "api_key", key }`
+ *   - no xAI OAuth handler; OIDC sync must not write a fake oauth entry
  * - omp `~/.omp/agent/agent.db` `auth_credentials`:
  *   - provider `xai-oauth`, credential_type `oauth`,
  *     identity_key `account:<user_id>`,
@@ -103,25 +105,35 @@ function oauthAuthEntry(
   };
 }
 
-function apiAuthEntry(
-  tokens: Extract<GrokSyncCredential, { kind: "api_key" }>
-) {
+function opencodeAuthEntry(credential: GrokSyncCredential) {
+  if (credential.kind === "oauth") {
+    return oauthAuthEntry(credential);
+  }
   return {
     type: "api",
-    key: tokens.apiKey,
+    key: credential.apiKey,
+  };
+}
+
+function piAuthEntry(credential: GrokSyncCredential) {
+  if (credential.kind === "oauth") {
+    throw new Error(
+      "pi does not support xAI OAuth; sync a Grok API-key account or set XAI_API_KEY"
+    );
+  }
+  // pi AuthStorage only accepts type "api_key" (not OpenCode's "api").
+  return {
+    type: "api_key",
+    key: credential.apiKey,
   };
 }
 
 async function syncJsonProvider(
   path: string,
   providerKey: string,
-  credential: GrokSyncCredential
+  entry: Record<string, unknown>
 ): Promise<void> {
   const existing = await readJsonObject(path);
-  const entry =
-    credential.kind === "oauth"
-      ? oauthAuthEntry(credential)
-      : apiAuthEntry(credential);
   const updated = {
     ...existing,
     [providerKey]: entry,
@@ -136,19 +148,46 @@ async function syncOpencode(
   credential: GrokSyncCredential,
   opts: CrossToolSyncOptions
 ): Promise<void> {
-  await syncJsonProvider(opencodeAuthPath(opts), "xai", credential);
+  await syncJsonProvider(
+    opencodeAuthPath(opts),
+    "xai",
+    opencodeAuthEntry(credential)
+  );
 }
 
 async function syncPi(
   credential: GrokSyncCredential,
   opts: CrossToolSyncOptions
 ): Promise<void> {
-  await syncJsonProvider(piAuthPath(opts), "xai", credential);
+  await syncJsonProvider(piAuthPath(opts), "xai", piAuthEntry(credential));
 }
 
 interface DatabaseSyncLike {
   close(): void;
+  exec(sql: string): void;
   prepare(sql: string): PreparedStmt;
+}
+
+function runImmediateTransaction<T>(
+  db: DatabaseSyncLike,
+  operation: () => T
+): T {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = operation();
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    try {
+      db.exec("ROLLBACK");
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [error, rollbackError],
+        "OMP credential update and rollback failed"
+      );
+    }
+    throw error;
+  }
 }
 
 interface PreparedStmt {
@@ -192,42 +231,76 @@ async function syncOmp(
         refresh: credential.refreshToken,
         expires: credential.expiresAtMs,
       });
+      runImmediateTransaction(db, () => {
+        const row = db.prepare(
+          "SELECT id FROM auth_credentials WHERE provider = ? AND identity_key = ?"
+        ) as PreparedStmt;
+        const existing = row.get("xai-oauth", identityKey) as
+          | { id: number }
+          | undefined;
+        let targetId: number;
+        if (existing) {
+          const update = db.prepare(
+            "UPDATE auth_credentials SET data = ?, disabled_cause = NULL, updated_at = ? WHERE id = ?"
+          ) as PreparedStmt;
+          update.run(data, nowSec, existing.id);
+          targetId = existing.id;
+        } else {
+          const insert = db.prepare(
+            "INSERT INTO auth_credentials (provider, credential_type, data, identity_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+          ) as PreparedStmt;
+          insert.run("xai-oauth", "oauth", data, identityKey, nowSec, nowSec);
+          targetId = Number(
+            (
+              (
+                db.prepare("SELECT last_insert_rowid() AS id") as PreparedStmt
+              ).get() as { id: number } | undefined
+            )?.id
+          );
+        }
+        // Disable other xai-oauth rows so omp's credential selector can only
+        // pick the active account. omp selects the most recently updated
+        // non-disabled row; leaving stale rows enabled lets it choose a
+        // wrong-account token after a switch.
+        const disableOthers = db.prepare(
+          "UPDATE auth_credentials SET disabled_cause = 'superseded by active account', updated_at = ? WHERE provider = ? AND id != ? AND disabled_cause IS NULL"
+        ) as PreparedStmt;
+        disableOthers.run(nowSec, "xai-oauth", targetId);
+      });
+      return;
+    }
+
+    const data = JSON.stringify({ key: credential.apiKey });
+    runImmediateTransaction(db, () => {
       const row = db.prepare(
-        "SELECT id FROM auth_credentials WHERE provider = ? AND identity_key = ?"
+        "SELECT id FROM auth_credentials WHERE provider = ? AND credential_type = ? AND identity_key IS NULL"
       ) as PreparedStmt;
-      const existing = row.get("xai-oauth", identityKey) as
-        | { id: number }
-        | undefined;
+      const existing = row.get("xai", "api_key") as { id: number } | undefined;
+      let targetId: number;
       if (existing) {
         const update = db.prepare(
           "UPDATE auth_credentials SET data = ?, disabled_cause = NULL, updated_at = ? WHERE id = ?"
         ) as PreparedStmt;
         update.run(data, nowSec, existing.id);
+        targetId = existing.id;
       } else {
         const insert = db.prepare(
           "INSERT INTO auth_credentials (provider, credential_type, data, identity_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
         ) as PreparedStmt;
-        insert.run("xai-oauth", "oauth", data, identityKey, nowSec, nowSec);
+        insert.run("xai", "api_key", data, null, nowSec, nowSec);
+        targetId = Number(
+          (
+            (
+              db.prepare("SELECT last_insert_rowid() AS id") as PreparedStmt
+            ).get() as { id: number } | undefined
+          )?.id
+        );
       }
-      return;
-    }
-
-    const data = JSON.stringify({ key: credential.apiKey });
-    const row = db.prepare(
-      "SELECT id FROM auth_credentials WHERE provider = ? AND credential_type = ? AND identity_key IS NULL"
-    ) as PreparedStmt;
-    const existing = row.get("xai", "api_key") as { id: number } | undefined;
-    if (existing) {
-      const update = db.prepare(
-        "UPDATE auth_credentials SET data = ?, disabled_cause = NULL, updated_at = ? WHERE id = ?"
+      const disableOthers = db.prepare(
+        "UPDATE auth_credentials SET disabled_cause = 'superseded by active API key', updated_at = ? WHERE provider = ? AND credential_type = ? AND id != ? AND disabled_cause IS NULL"
       ) as PreparedStmt;
-      update.run(data, nowSec, existing.id);
-    } else {
-      const insert = db.prepare(
-        "INSERT INTO auth_credentials (provider, credential_type, data, identity_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-      ) as PreparedStmt;
-      insert.run("xai", "api_key", data, null, nowSec, nowSec);
-    }
+      disableOthers.run(nowSec, "xai", "api_key", targetId);
+    });
   } finally {
     db.close();
   }

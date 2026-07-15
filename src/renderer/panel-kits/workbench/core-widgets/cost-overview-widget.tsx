@@ -3,8 +3,8 @@ import {
   type ChartConfig,
   ChartContainer,
   ChartTooltip,
-  ChartTooltipPortalContent,
 } from "@pier/ui/chart.tsx";
+import { ChartTooltipPortalContent } from "@pier/ui/chart-tooltip-portal.tsx";
 import {
   formatCompactNumber,
   formatCurrency,

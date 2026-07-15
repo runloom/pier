@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   isOverlayBlockingDialogOpen,
   scheduleAfterOverlay,
@@ -18,7 +18,8 @@ export interface DeferredDialogOpenOptions {
  * - Close is always synchronous (render path).
  * - Open is synchronous when no overlay is active.
  * - Open is deferred until overlay dismiss / body unlock when a menu/select is
- *   still mounted or body pointer-events are locked.
+ *   still mounted or body pointer-events are locked — including first mount
+ *   with `open={true}` (host content dialogs open by mounting a new layer).
  * - If still blocked after the wait budget, open is abandoned (not force-opened).
  * - Setting `open` back to false cancels any pending deferred open.
  *
@@ -29,7 +30,14 @@ export function useDeferredDialogOpen(
   open: boolean | undefined,
   options: DeferredDialogOpenOptions = {}
 ): boolean | undefined {
-  const [renderedOpen, setRenderedOpen] = useState(() => open === true);
+  // Never force-open on first mount while a menu/body lock is active.
+  // Host content dialogs mount with open=true in the same turn as a menu item
+  // click; initializing true here reintroduces the body pointer-events residual.
+  const [renderedOpen, setRenderedOpen] = useState(
+    () => open === true && !isOverlayBlockingDialogOpen()
+  );
+  const onAbandonRef = useRef(options.onAbandon);
+  onAbandonRef.current = options.onAbandon;
 
   // Keep the no-conflict open path on the render tree: if the desired state is
   // open and nothing blocks, return true immediately without waiting for effect.
@@ -57,11 +65,11 @@ export function useDeferredDialogOpen(
       {
         onAbandon: () => {
           setRenderedOpen(false);
-          options.onAbandon?.();
+          onAbandonRef.current?.();
         },
       }
     );
-  }, [open, options.onAbandon]);
+  }, [open]);
 
   if (open === undefined) {
     return;

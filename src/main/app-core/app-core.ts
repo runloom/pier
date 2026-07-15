@@ -66,7 +66,10 @@ import { showNativeWindowCloseFailure } from "../windows/native-window-close-fai
 import { windowManager } from "../windows/window-manager.ts";
 import { requireAppCoreInitialization } from "./app-core-readiness.ts";
 import { createAppCoreUsageData } from "./app-core-usage-data.ts";
-import { readBundledPlugin } from "./bundled-plugin-reader.ts";
+import {
+  collectBundledPluginRegistrations,
+  OFFICIAL_BUNDLED_PLUGIN_SPECS,
+} from "./bundled-official-plugins.ts";
 import {
   createClientRegistry,
   type PierClientRegistry,
@@ -78,10 +81,7 @@ import {
 } from "./command-router.ts";
 import { createPierEventBus, type PierEventBus } from "./event-bus.ts";
 import { createLazyAppCore } from "./lazy-app-core.ts";
-import {
-  type ManagedPluginDevRuntimeWatch,
-  startManagedPluginDevRuntimeWatch,
-} from "./managed-plugin-dev-runtime-watch.ts";
+import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
@@ -120,22 +120,10 @@ function createPierAppCore(): PierAppCore {
   const managedPluginOpLog = createManagedPluginOperationLog(
     managedPluginPaths.operationLogFile
   );
-  const codexBundle = readBundledPlugin({
-    devPackageDir: "packages/plugin-codex",
-    fallbackId: "pier.codex",
-    fallbackName: "Codex",
-    fallbackVersion: "1.0.0",
-    prodPluginDirName: "pier.codex",
-  });
-  const codexSeedAvailable = codexBundle !== null;
-  const grokBundle = readBundledPlugin({
-    devPackageDir: "packages/plugin-grok",
-    fallbackId: "pier.grok",
-    fallbackName: "Grok",
-    fallbackVersion: "1.0.0",
-    prodPluginDirName: "pier.grok",
-  });
-  const grokSeedAvailable = grokBundle !== null;
+  const {
+    availableById: bundledPluginAvailableById,
+    registrations: bundledPluginRegistrations,
+  } = collectBundledPluginRegistrations();
   let pluginHostRef: MainPluginHostApi | null = null;
   const httpIndex = createHttpOfficialIndexProvider({
     cachePath: managedPluginPaths.officialIndexCacheFile,
@@ -150,49 +138,13 @@ function createPierAppCore(): PierAppCore {
   let externalMainRuntimeReconciler: ReturnType<
     typeof createManagedPluginRuntimeReconciler
   > | null = null;
-  let managedPluginDevRuntimeWatch: ManagedPluginDevRuntimeWatch | null = null;
+  const managedPluginDevRuntimeWatches =
+    createManagedPluginDevRuntimeWatchRegistry();
   const managedPlugins: ManagedPluginInstallService =
     createManagedPluginInstallService({
       appendOperationLog: (record) => managedPluginOpLog.append(record),
       assetFetcher,
-      bundledPlugins: [
-        ...(codexBundle
-          ? [
-              {
-                archivePath: codexBundle.archivePath,
-                contributionCounts: codexBundle.contributionCounts,
-                displayName: codexBundle.name,
-                id: "pier.codex",
-                sha256: codexBundle.sha256,
-                version: codexBundle.version,
-                ...(codexBundle.description
-                  ? { description: codexBundle.description }
-                  : {}),
-                ...(codexBundle.locales
-                  ? { locales: codexBundle.locales }
-                  : {}),
-                ...(codexBundle.size ? { size: codexBundle.size } : {}),
-              },
-            ]
-          : []),
-        ...(grokBundle
-          ? [
-              {
-                archivePath: grokBundle.archivePath,
-                contributionCounts: grokBundle.contributionCounts,
-                displayName: grokBundle.name,
-                id: "pier.grok",
-                sha256: grokBundle.sha256,
-                version: grokBundle.version,
-                ...(grokBundle.description
-                  ? { description: grokBundle.description }
-                  : {}),
-                ...(grokBundle.locales ? { locales: grokBundle.locales } : {}),
-                ...(grokBundle.size ? { size: grokBundle.size } : {}),
-              },
-            ]
-          : []),
-      ],
+      bundledPlugins: bundledPluginRegistrations,
       officialIndexProvider: () => httpIndex.snapshot(),
       officialIndexRefresh: async (refreshOptions) => {
         await httpIndex.refresh(refreshOptions);
@@ -321,41 +273,25 @@ function createPierAppCore(): PierAppCore {
       // Dev-only: an installed bundled plugin always runs from the source package.
       // The dev override owns its own manifest version, so a version bump must not
       // strand the runtime on the previously installed immutable version.
-      if (isDevRuntime() && codexSeedAvailable) {
-        const codexDevPackageDir = join(process.cwd(), "packages/plugin-codex");
+      if (isDevRuntime()) {
         const index = managedPlugins.getIndex();
-        const codex = index.plugins["pier.codex"];
-        if (codex?.activeVersion && !codex.uninstalledAt) {
+        for (const spec of OFFICIAL_BUNDLED_PLUGIN_SPECS) {
+          if (bundledPluginAvailableById.get(spec.id) !== true) continue;
+          const entry = index.plugins[spec.id];
+          if (!(entry?.activeVersion && !entry.uninstalledAt)) continue;
+          const packageDir = join(process.cwd(), spec.devPackageDir);
           await managedPlugins
-            .setDevOverride("pier.codex", codexDevPackageDir)
-            .then(() => managedPlugins.simulateRestartForTests())
-            .catch((err: unknown) => {
-              console.error("[managed-plugins] dev override sync failed:", err);
-            });
-          managedPluginDevRuntimeWatch ??= startManagedPluginDevRuntimeWatch({
-            logger: createLogger("managed-plugins"),
-            packageDir: codexDevPackageDir,
-            refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
-          });
-        }
-      }
-      if (isDevRuntime() && grokSeedAvailable) {
-        const grokDevPackageDir = join(process.cwd(), "packages/plugin-grok");
-        const index = managedPlugins.getIndex();
-        const grok = index.plugins["pier.grok"];
-        if (grok?.activeVersion && !grok.uninstalledAt) {
-          await managedPlugins
-            .setDevOverride("pier.grok", grokDevPackageDir)
+            .setDevOverride(spec.id, packageDir)
             .then(() => managedPlugins.simulateRestartForTests())
             .catch((err: unknown) => {
               console.error(
-                "[managed-plugins] grok dev override sync failed:",
+                `[managed-plugins] ${spec.id} dev override sync failed:`,
                 err
               );
             });
-          startManagedPluginDevRuntimeWatch({
+          managedPluginDevRuntimeWatches.ensure(spec.id, {
             logger: createLogger("managed-plugins"),
-            packageDir: grokDevPackageDir,
+            packageDir,
             refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
           });
         }
@@ -530,8 +466,7 @@ function createPierAppCore(): PierAppCore {
     }),
     eventBus,
     disposeManagedPluginDevRuntimeWatch: () => {
-      managedPluginDevRuntimeWatch?.dispose();
-      managedPluginDevRuntimeWatch = null;
+      managedPluginDevRuntimeWatches.dispose();
     },
     flushExternalPluginsBeforeQuit: () =>
       externalMainRuntime.flushAllBeforeQuit(),

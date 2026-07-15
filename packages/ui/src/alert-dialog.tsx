@@ -11,9 +11,19 @@ import { cn } from "./utils.ts";
 
 function AlertDialog({
   open,
+  onAbandonOpen,
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  const deferredOpen = useDeferredDialogOpen(open);
+}: React.ComponentProps<typeof AlertDialogPrimitive.Root> & {
+  /**
+   * Called when a deferred open is abandoned because a menu/body lock never
+   * cleared. Host shells may use this to drop staged modal state.
+   */
+  onAbandonOpen?: () => void;
+}) {
+  const deferredOpen = useDeferredDialogOpen(
+    open,
+    onAbandonOpen === undefined ? {} : { onAbandon: onAbandonOpen }
+  );
   return (
     <AlertDialogPrimitive.Root
       data-slot="alert-dialog"

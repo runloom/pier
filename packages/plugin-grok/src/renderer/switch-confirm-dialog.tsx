@@ -19,16 +19,23 @@ export interface SwitchConfirmResult {
 }
 
 function SwitchConfirmContent({
+  accountKind,
   mode,
   t,
   close,
 }: {
+  accountKind: "api_key" | "oidc";
   mode: PeerSyncDialogMode;
   t: Translate;
   close: RendererPluginContentDialogRenderProps<SwitchConfirmResult>["close"];
 }): JSX.Element {
+  // pi has no xAI OAuth support, so OIDC accounts never offer it as a peer target.
+  const availableTargets =
+    accountKind === "api_key"
+      ? ALL_SYNC_TARGETS
+      : ALL_SYNC_TARGETS.filter((target) => target !== "pi");
   const [syncTargets, setSyncTargets] = useState<Set<CrossToolSyncTarget>>(
-    () => new Set(ALL_SYNC_TARGETS)
+    () => new Set(availableTargets)
   );
 
   function toggleTarget(target: CrossToolSyncTarget): void {
@@ -45,8 +52,8 @@ function SwitchConfirmContent({
 
   const targetLabel: Record<Exclude<CrossToolSyncTarget, "grok">, string> = {
     opencode: t("pier.grok.switch.syncTarget.opencode", "OpenCode"),
-    pi: t("pier.grok.switch.syncTarget.pi", "pi"),
-    omp: t("pier.grok.switch.syncTarget.omp", "omp"),
+    pi: t("pier.grok.switch.syncTarget.pi", "Pi"),
+    omp: t("pier.grok.switch.syncTarget.omp", "OMP"),
   };
 
   const sectionLabel =
@@ -69,7 +76,7 @@ function SwitchConfirmContent({
       <div className="flex flex-col gap-3">
         <p className="font-medium text-sm">{sectionLabel}</p>
         <div className="flex flex-col gap-2">
-          {ALL_SYNC_TARGETS.map((target) => {
+          {availableTargets.map((target) => {
             const checked = syncTargets.has(target);
             return (
               <label
@@ -113,12 +120,13 @@ function SwitchConfirmContent({
 }
 
 export async function openSwitchConfirmDialog(options: {
+  accountKind: "api_key" | "oidc";
   context: ExternalRendererPluginContext;
   mode?: PeerSyncDialogMode;
   t: Translate;
 }): Promise<SwitchConfirmResult> {
   const mode = options.mode ?? "switch";
-  const { context, t } = options;
+  const { accountKind, context, t } = options;
   const title =
     mode === "sync"
       ? t(
@@ -146,7 +154,12 @@ export async function openSwitchConfirmDialog(options: {
     description,
     size: "sm",
     content: (props) => (
-      <SwitchConfirmContent close={props.close} mode={mode} t={t} />
+      <SwitchConfirmContent
+        accountKind={accountKind}
+        close={props.close}
+        mode={mode}
+        t={t}
+      />
     ),
   });
   const result = await handle.result;

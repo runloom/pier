@@ -161,7 +161,7 @@ export function QuotaGroup({
       {errorBanner}
       <div
         className={cn(
-          "grid min-w-0 grid-cols-2 gap-4 data-[count=1]:grid-cols-1 max-[36rem]:grid-cols-1"
+          "grid min-w-0 gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))] max-[36rem]:grid-cols-1"
         )}
       >
         {windows.map((window) => (

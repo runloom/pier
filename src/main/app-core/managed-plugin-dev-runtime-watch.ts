@@ -21,7 +21,7 @@ export interface ManagedPluginDevRuntimeWatch {
   dispose(): void;
 }
 
-export function startManagedPluginDevRuntimeWatch(options: {
+export interface ManagedPluginDevRuntimeWatchOptions {
   readonly debounceMs?: number;
   readonly logger?: {
     error(message: string, meta?: unknown): void;
@@ -29,7 +29,11 @@ export function startManagedPluginDevRuntimeWatch(options: {
   };
   readonly packageDir: string;
   readonly refreshRuntimeSources: () => Promise<void>;
-}): ManagedPluginDevRuntimeWatch {
+}
+
+export function startManagedPluginDevRuntimeWatch(
+  options: ManagedPluginDevRuntimeWatchOptions
+): ManagedPluginDevRuntimeWatch {
   let disposed = false;
   let timer: NodeJS.Timeout | null = null;
   const debounceMs = options.debounceMs ?? 100;
@@ -84,6 +88,57 @@ export function startManagedPluginDevRuntimeWatch(options: {
       }
       watcher?.close();
       watcher = null;
+    },
+  };
+}
+
+export interface ManagedPluginDevRuntimeWatchRegistry {
+  dispose(): void;
+  ensure(pluginId: string, options: ManagedPluginDevRuntimeWatchOptions): void;
+}
+
+export function createManagedPluginDevRuntimeWatchRegistry(
+  start: (
+    options: ManagedPluginDevRuntimeWatchOptions
+  ) => ManagedPluginDevRuntimeWatch = startManagedPluginDevRuntimeWatch
+): ManagedPluginDevRuntimeWatchRegistry {
+  const watchesByPluginId = new Map<string, ManagedPluginDevRuntimeWatch>();
+  let disposed = false;
+
+  return {
+    dispose(): void {
+      disposed = true;
+      const errors: unknown[] = [];
+      try {
+        for (const watch of watchesByPluginId.values()) {
+          try {
+            watch.dispose();
+          } catch (error) {
+            errors.push(error);
+          }
+        }
+      } finally {
+        watchesByPluginId.clear();
+      }
+
+      if (errors.length === 1) {
+        throw errors[0];
+      }
+      if (errors.length > 1) {
+        throw new AggregateError(
+          errors,
+          "Failed to dispose managed plugin dev runtime watchers"
+        );
+      }
+    },
+    ensure(
+      pluginId: string,
+      options: ManagedPluginDevRuntimeWatchOptions
+    ): void {
+      if (disposed || watchesByPluginId.has(pluginId)) {
+        return;
+      }
+      watchesByPluginId.set(pluginId, start(options));
     },
   };
 }

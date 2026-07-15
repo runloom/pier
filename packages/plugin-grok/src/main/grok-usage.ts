@@ -1,5 +1,15 @@
+import {
+  classifyBillingHttpError,
+  isAuthFailureMessage,
+} from "./billing-http-error.ts";
 import { parseGrokBillingResult } from "./billing-parse.ts";
 import type { AccountUsageResult } from "./types.ts";
+
+export {
+  type BillingHttpErrorClassification,
+  type BillingHttpErrorKind,
+  classifyBillingHttpError,
+} from "./billing-http-error.ts";
 
 export const GROK_BILLING_URL = "https://cli-chat-proxy.grok.com/v1/billing";
 export const GROK_BILLING_CREDITS_URL =
@@ -8,6 +18,8 @@ export const API_KEY_QUOTA_ERROR =
   "API key accounts cannot report Grok quota — switch to an OIDC account";
 export const SESSION_EXPIRED_RELOGIN_ERROR =
   "Grok session expired — re-login required";
+export const ACCESS_DENIED_ERROR =
+  "Grok account cannot access billing for this product";
 const RPC_TIMEOUT_MS = 15_000;
 const REFRESH_SKEW_MS = 60_000;
 
@@ -144,18 +156,14 @@ function resolveTokenEndpoint(entry: OidcAuthEntry): string | null {
   return `${entry.oidc_issuer.replace(/\/$/, "")}/oauth2/token`;
 }
 
-function isAuthFailureMessage(message: string): boolean {
-  const lower = message.toLowerCase();
-  return (
-    lower.includes("invalid_grant") ||
-    lower.includes("invalid or expired credentials") ||
-    lower.includes("refresh token") ||
-    lower.includes("no auth context") ||
-    lower.includes("unauthorized") ||
-    lower.includes("permissiondenied") ||
-    /\b401\b/.test(lower) ||
-    /\b403\b/.test(lower)
-  );
+function throwIfSignalAborted(signal: AbortSignal): void {
+  if (!signal.aborted) return;
+  if (signal.reason !== undefined) {
+    throw signal.reason;
+  }
+  const error = new Error("Aborted");
+  error.name = "AbortError";
+  throw error;
 }
 
 function authFailureResult(detail?: string): AccountUsageResult {
@@ -164,6 +172,14 @@ function authFailureResult(detail?: string): AccountUsageResult {
     error: detail
       ? `${SESSION_EXPIRED_RELOGIN_ERROR} (${detail})`
       : SESSION_EXPIRED_RELOGIN_ERROR,
+    windows: [],
+  };
+}
+
+function accessDeniedResult(detail?: string): AccountUsageResult {
+  return {
+    status: "error",
+    error: detail ? `${ACCESS_DENIED_ERROR} (${detail})` : ACCESS_DENIED_ERROR,
     windows: [],
   };
 }
@@ -204,7 +220,9 @@ async function refreshOidcSession(options: {
       method: "POST",
       signal: options.signal,
     });
+    throwIfSignalAborted(options.signal);
     const text = await response.text();
+    throwIfSignalAborted(options.signal);
     let json: Record<string, unknown> | null = null;
     try {
       json = asRecord(JSON.parse(text));
@@ -261,7 +279,7 @@ async function refreshOidcSession(options: {
     };
   } catch (error) {
     if (options.signal.aborted) {
-      return { error: "Aborted" };
+      throwIfSignalAborted(options.signal);
     }
     return {
       error: error instanceof Error ? error.message : String(error),
@@ -306,27 +324,29 @@ export async function fetchGrokUsage(options: {
       : options.signal;
 
   let sessionKey = selected.entry.key;
-  if (needsRefresh(selected.entry, Date.now())) {
-    const refreshed = await refreshOidcSession({
-      entry: selected.entry,
-      entryKey: selected.entryKey,
-      fetchImpl,
-      rawAuthJson: authJson,
-      signal,
-    });
-    if ("error" in refreshed) {
-      if (refreshed.error === "Aborted") {
-        return { status: "error", error: "Aborted", windows: [] };
-      }
-      return authFailureResult(refreshed.error);
-    }
-    authJson = refreshed.authJson;
-    sessionKey = refreshed.sessionKey;
-    selected = selectOidcAuthEntry(authJson) ?? selected;
-    await options.onAuthJsonUpdated?.(authJson);
-  }
-
   try {
+    throwIfSignalAborted(signal);
+    if (needsRefresh(selected.entry, Date.now())) {
+      const refreshed = await refreshOidcSession({
+        entry: selected.entry,
+        entryKey: selected.entryKey,
+        fetchImpl,
+        rawAuthJson: authJson,
+        signal,
+      });
+      if ("error" in refreshed) {
+        if (refreshed.error === "Aborted") {
+          return { status: "error", error: "Aborted", windows: [] };
+        }
+        return authFailureResult(refreshed.error);
+      }
+      authJson = refreshed.authJson;
+      sessionKey = refreshed.sessionKey;
+      selected = selectOidcAuthEntry(authJson) ?? selected;
+      await options.onAuthJsonUpdated?.(authJson);
+      throwIfSignalAborted(signal);
+    }
+
     const headers = {
       Accept: "application/json",
       Authorization: `Bearer ${sessionKey}`,
@@ -335,60 +355,64 @@ export async function fetchGrokUsage(options: {
     };
 
     async function request(url: string): Promise<AccountUsageResult> {
-      const response = await fetchImpl(url, {
-        headers,
-        method: "GET",
-        signal,
-      });
-      const text = await response.text();
-      if (!response.ok) {
-        let message = `Grok billing request failed (${response.status})`;
-        try {
-          const body = JSON.parse(text) as {
-            error?: string;
-            message?: string;
-          };
-          if (typeof body.error === "string" && body.error.length > 0) {
-            message = body.error;
-          } else if (
-            typeof body.message === "string" &&
-            body.message.length > 0
-          ) {
-            message = body.message;
-          }
-        } catch {
-          /* keep status message */
-        }
-        if (
-          response.status === 401 ||
-          response.status === 403 ||
-          isAuthFailureMessage(message)
-        ) {
-          return authFailureResult(message);
-        }
-        return { status: "error", error: message, windows: [] };
-      }
-      let json: unknown;
       try {
-        json = JSON.parse(text);
-      } catch {
+        const response = await fetchImpl(url, {
+          headers,
+          method: "GET",
+          signal,
+        });
+        throwIfSignalAborted(signal);
+        const text = await response.text();
+        throwIfSignalAborted(signal);
+        if (!response.ok) {
+          const classification = classifyBillingHttpError(
+            response.status,
+            text
+          );
+          if (classification.kind === "auth") {
+            return authFailureResult(classification.detail);
+          }
+          if (classification.kind === "access") {
+            return accessDeniedResult(classification.detail);
+          }
+          return {
+            status: "error",
+            error: classification.detail,
+            windows: [],
+          };
+        }
+        let json: unknown;
+        try {
+          json = JSON.parse(text);
+        } catch {
+          return {
+            status: "error",
+            error: "Invalid Grok billing response",
+            windows: [],
+          };
+        }
+        return parseGrokBillingResult(json);
+      } catch (error) {
+        if (signal.aborted) {
+          throwIfSignalAborted(signal);
+        }
         return {
           status: "error",
-          error: "Invalid Grok billing response",
+          error: error instanceof Error ? error.message : String(error),
           windows: [],
         };
       }
-      return parseGrokBillingResult(json);
     }
 
     async function requestWithOptionalRefresh(
       url: string
     ): Promise<AccountUsageResult> {
       const first = await request(url);
+      throwIfSignalAborted(signal);
       if (
         first.status !== "error" ||
         !first.error ||
-        !isAuthFailureMessage(first.error) ||
+        !first.error.includes(SESSION_EXPIRED_RELOGIN_ERROR) ||
         typeof selected?.entry.refresh_token !== "string"
       ) {
         return first;
@@ -412,29 +436,32 @@ export async function fetchGrokUsage(options: {
       selected = selectOidcAuthEntry(authJson) ?? selected;
       headers.Authorization = `Bearer ${sessionKey}`;
       await options.onAuthJsonUpdated?.(authJson);
+      throwIfSignalAborted(signal);
       return await request(url);
     }
 
-    // Default endpoint currently returns used/monthlyLimit cents.
-    // format=credits is richer when populated (percent + product split),
-    // but can be sparse — try default first, then enrich/fallback to credits.
-    const primary = await requestWithOptionalRefresh(GROK_BILLING_URL);
-    if (primary.status === "ok" && primary.windows.length > 0) {
-      return primary;
+    // format=credits reflects the actual credit-based quota that gates API
+    // access (weekly period, creditUsagePercent, product breakdown). The
+    // default endpoint returns monthly cash spending (used/monthlyLimit cents)
+    // which can look healthy while weekly credits are exhausted.
+    // Try credits first; fall back to default when credits is sparse/empty.
+    const credits = await requestWithOptionalRefresh(GROK_BILLING_CREDITS_URL);
+    if (credits.status === "ok" && credits.windows.length > 0) {
+      return credits;
     }
     if (
-      primary.status === "error" &&
-      primary.error?.includes(SESSION_EXPIRED_RELOGIN_ERROR)
+      credits.status === "error" &&
+      (credits.error?.includes(SESSION_EXPIRED_RELOGIN_ERROR) ||
+        credits.error?.includes(ACCESS_DENIED_ERROR))
     ) {
-      return primary;
+      return credits;
     }
-    const secondary = await requestWithOptionalRefresh(
-      GROK_BILLING_CREDITS_URL
-    );
-    if (secondary.status === "ok" && secondary.windows.length > 0) {
-      return secondary;
+    throwIfSignalAborted(signal);
+    const fallback = await requestWithOptionalRefresh(GROK_BILLING_URL);
+    if (fallback.status === "ok" && fallback.windows.length > 0) {
+      return fallback;
     }
-    return primary.status === "error" ? primary : secondary;
+    return credits.status === "error" ? credits : fallback;
   } catch (error) {
     if (options.signal.aborted) {
       return { status: "error", error: "Aborted", windows: [] };

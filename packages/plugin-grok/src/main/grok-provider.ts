@@ -47,15 +47,25 @@ export interface GrokAccountProvider {
   materializeOidc(accountHomeDir: string): Promise<void>;
   moveCredential(fromHomeDir: string, toHomeDir: string): Promise<void>;
   readApiKey(accountId: string): Promise<string | null>;
+  readCurrentAuthContent(): Promise<string | null>;
   readCurrentIdentity(): Promise<AccountIdentity | null>;
   readIdentity(homeDir: string): Promise<AccountIdentity | null>;
   readManagedAuthContent(accountHomeDir: string): Promise<string>;
+  restoreCurrentAuthContent(options: {
+    expectedCurrent: string;
+    previousContent: string | null;
+  }): Promise<void>;
   storeApiKey(accountId: string, apiKey: string): Promise<void>;
   syncBack(
     accountHomeDir: string,
     expectedProviderAccountId: string | undefined
   ): Promise<"identity-mismatch" | "ok">;
   watchExternalAuth(cb: () => void): () => void;
+  writeCurrentAuthContent(content: string | null): Promise<void>;
+  writeManagedAuthContent(
+    accountHomeDir: string,
+    content: string
+  ): Promise<void>;
 }
 
 function defaultRealGrokHome(
@@ -169,6 +179,27 @@ export function createGrokProvider(
     return legacyContent;
   }
 
+  async function readCurrentAuthUnlocked(): Promise<string | null> {
+    try {
+      return await readFile(join(realGrokHome, "auth.json"), "utf-8");
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+      throw error;
+    }
+  }
+
+  async function writeCurrentAuthUnlocked(
+    content: string | null
+  ): Promise<void> {
+    const authPath = join(realGrokHome, "auth.json");
+    if (content === null) {
+      await rm(authPath, { force: true });
+      return;
+    }
+    await mkdir(realGrokHome, { recursive: true });
+    await writeFileAtomic(authPath, content, { mode: 0o600 });
+  }
+
   async function withManagedAuthUnlocked<T>(
     accountHomeDir: string,
     fn: () => Promise<T>
@@ -216,10 +247,9 @@ export function createGrokProvider(
   }
 
   async function materializeEmptyAuth(): Promise<void> {
-    await mkdir(realGrokHome, { recursive: true });
-    await writeFileAtomic(join(realGrokHome, "auth.json"), "{}", {
-      mode: 0o600,
-    });
+    await withCredentialLock(realGrokHome, () =>
+      writeCurrentAuthUnlocked("{}")
+    );
   }
 
   return {
@@ -244,7 +274,9 @@ export function createGrokProvider(
 
     async readIdentity(homeDir: string): Promise<AccountIdentity | null> {
       if (homeDir === realGrokHome) {
-        return readGrokIdentity(homeDir);
+        return await withCredentialLock(realGrokHome, () =>
+          readGrokIdentity(realGrokHome)
+        );
       }
       return await withCredentialLock(homeDir, async () => {
         const authPath = join(homeDir, "auth.json");
@@ -263,17 +295,43 @@ export function createGrokProvider(
       });
     },
 
-    readCurrentIdentity(): Promise<AccountIdentity | null> {
-      return readGrokIdentity(realGrokHome);
+    async readCurrentIdentity(): Promise<AccountIdentity | null> {
+      return await withCredentialLock(realGrokHome, () =>
+        readGrokIdentity(realGrokHome)
+      );
+    },
+
+    async readCurrentAuthContent(): Promise<string | null> {
+      return await withCredentialLock(realGrokHome, readCurrentAuthUnlocked);
+    },
+
+    async writeCurrentAuthContent(content: string | null): Promise<void> {
+      await withCredentialLock(realGrokHome, () =>
+        writeCurrentAuthUnlocked(content)
+      );
+    },
+
+    async restoreCurrentAuthContent(options: {
+      expectedCurrent: string;
+      previousContent: string | null;
+    }): Promise<void> {
+      await withCredentialLock(realGrokHome, async () => {
+        const current = await readCurrentAuthUnlocked();
+        if (current === options.expectedCurrent) {
+          await writeCurrentAuthUnlocked(options.previousContent);
+          return;
+        }
+        if (current === options.previousContent) {
+          return;
+        }
+        throw new Error("Current Grok auth changed during rollback");
+      });
     },
 
     async materializeOidc(accountHomeDir: string): Promise<void> {
-      await withCredentialLock(accountHomeDir, async () => {
+      await withCredentialLocks([accountHomeDir, realGrokHome], async () => {
         const content = await readManagedAuth(accountHomeDir);
-        await mkdir(realGrokHome, { recursive: true });
-        await writeFileAtomic(join(realGrokHome, "auth.json"), content, {
-          mode: 0o600,
-        });
+        await writeCurrentAuthUnlocked(content);
       });
     },
 
@@ -330,24 +388,37 @@ export function createGrokProvider(
       );
     },
 
+    async writeManagedAuthContent(
+      accountHomeDir: string,
+      content: string
+    ): Promise<void> {
+      await withCredentialLock(accountHomeDir, async () => {
+        await credentials.set(credentialKey(accountHomeDir), content);
+        await rm(join(accountHomeDir, "auth.json"), { force: true });
+      });
+    },
+
     async syncBack(
       accountHomeDir: string,
       expectedProviderAccountId: string | undefined
     ): Promise<"identity-mismatch" | "ok"> {
-      return await withCredentialLock(accountHomeDir, async () => {
-        const src = join(realGrokHome, "auth.json");
-        if (!existsSync(src)) return "ok";
-        if (expectedProviderAccountId !== undefined) {
-          const identity = await readGrokIdentity(realGrokHome);
-          if (identity?.providerAccountId !== expectedProviderAccountId) {
-            return "identity-mismatch";
+      return await withCredentialLocks(
+        [accountHomeDir, realGrokHome],
+        async () => {
+          const src = join(realGrokHome, "auth.json");
+          if (!existsSync(src)) return "ok";
+          if (expectedProviderAccountId !== undefined) {
+            const identity = await readGrokIdentity(realGrokHome);
+            if (identity?.providerAccountId !== expectedProviderAccountId) {
+              return "identity-mismatch";
+            }
           }
+          const content = await readFile(src, "utf-8");
+          await credentials.set(credentialKey(accountHomeDir), content);
+          await rm(join(accountHomeDir, "auth.json"), { force: true });
+          return "ok";
         }
-        const content = await readFile(src, "utf-8");
-        await credentials.set(credentialKey(accountHomeDir), content);
-        await rm(join(accountHomeDir, "auth.json"), { force: true });
-        return "ok";
-      });
+      );
     },
 
     watchExternalAuth(cb: () => void): () => void {

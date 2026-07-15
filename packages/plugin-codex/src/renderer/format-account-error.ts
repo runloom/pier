@@ -16,7 +16,7 @@ export function formatAccountError(err: unknown, t: Translate): string {
   ) {
     return t(
       "pier.codex.accounts.settings.syncPeersFailedOmp",
-      "Couldn't sync credentials to omp. Make sure omp is installed and has been opened at least once on this device."
+      "Couldn't sync credentials to OMP. Make sure OMP is installed and has been opened at least once on this device."
     );
   }
   if (
@@ -34,7 +34,7 @@ export function formatAccountError(err: unknown, t: Translate): string {
   ) {
     return t(
       "pier.codex.accounts.settings.syncPeersFailedPi",
-      "Couldn't sync credentials to pi. Make sure pi is installed on this device."
+      "Couldn't sync credentials to Pi. Make sure Pi is installed on this device."
     );
   }
   if (lower.includes("no active managed account")) {

@@ -37,7 +37,7 @@ export interface AppContentDialogHandle<TResult = unknown> {
 export interface AppContentDialogLayer {
   closeOnOverlayClick: boolean;
   content: ComponentType<AppContentDialogRenderProps<unknown>>;
-  description?: string;
+  description?: string | undefined;
   dismissible: boolean;
   id: string;
   resolve: (result: unknown) => void;
@@ -99,7 +99,8 @@ export function updateAppContentDialog(
   id: string,
   patch: {
     title?: string;
-    description?: string;
+    /** Present with `undefined` clears the description. */
+    description?: string | undefined;
     dismissible?: boolean;
     closeOnOverlayClick?: boolean;
   }
@@ -107,10 +108,9 @@ export function updateAppContentDialog(
   useAppContentDialogStore.setState((state) => ({
     stack: state.stack.map((layer) => {
       if (layer.id !== id) return layer;
-      return {
+      const next: AppContentDialogLayer = {
         ...layer,
         ...(patch.title === undefined ? {} : { title: patch.title }),
-        ...("description" in patch ? { description: patch.description } : {}),
         ...(patch.dismissible === undefined
           ? {}
           : { dismissible: patch.dismissible }),
@@ -118,6 +118,10 @@ export function updateAppContentDialog(
           ? {}
           : { closeOnOverlayClick: patch.closeOnOverlayClick }),
       };
+      if ("description" in patch) {
+        next.description = patch.description;
+      }
+      return next;
     }),
   }));
 }

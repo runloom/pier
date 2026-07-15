@@ -199,26 +199,45 @@ async function syncOmp(
 
     const nowSec = Math.floor(Date.now() / 1000);
 
-    // node:sqlite expects positional binds as separate arguments, not an array.
-    // Passing an array is treated as a named-parameter object → "Unknown named parameter '0'".
-    const row = db.prepare(
-      "SELECT id FROM auth_credentials WHERE provider = ? AND identity_key = ?"
-    ) as PreparedStmt;
-    const existing = row.get("openai-codex", identityKey) as
-      | { id: number }
-      | undefined;
+    runImmediateTransaction(db, () => {
+      // node:sqlite expects positional binds as separate arguments, not an array.
+      // Passing an array is treated as a named-parameter object → "Unknown named parameter '0'".
+      const row = db.prepare(
+        "SELECT id FROM auth_credentials WHERE provider = ? AND identity_key = ?"
+      ) as PreparedStmt;
+      const existing = row.get("openai-codex", identityKey) as
+        | { id: number }
+        | undefined;
 
-    if (existing) {
-      const update = db.prepare(
-        "UPDATE auth_credentials SET data = ?, disabled_cause = NULL, updated_at = ? WHERE id = ?"
+      let targetId: number;
+      if (existing) {
+        const update = db.prepare(
+          "UPDATE auth_credentials SET data = ?, disabled_cause = NULL, updated_at = ? WHERE id = ?"
+        ) as PreparedStmt;
+        update.run(data, nowSec, existing.id);
+        targetId = existing.id;
+      } else {
+        const insert = db.prepare(
+          "INSERT INTO auth_credentials (provider, credential_type, data, identity_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
+        ) as PreparedStmt;
+        insert.run("openai-codex", "oauth", data, identityKey, nowSec, nowSec);
+        targetId = Number(
+          (
+            (
+              db.prepare("SELECT last_insert_rowid() AS id") as PreparedStmt
+            ).get() as { id: number } | undefined
+          )?.id
+        );
+      }
+      // Disable other openai-codex rows so omp's credential selector can only
+      // pick the active account. omp selects the most recently updated
+      // non-disabled row; leaving stale rows enabled lets it choose a
+      // wrong-account token after a switch.
+      const disableOthers = db.prepare(
+        "UPDATE auth_credentials SET disabled_cause = 'superseded by active account', updated_at = ? WHERE provider = ? AND id != ? AND disabled_cause IS NULL"
       ) as PreparedStmt;
-      update.run(data, nowSec, existing.id);
-    } else {
-      const insert = db.prepare(
-        "INSERT INTO auth_credentials (provider, credential_type, data, identity_key, created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?)"
-      ) as PreparedStmt;
-      insert.run("openai-codex", "oauth", data, identityKey, nowSec, nowSec);
-    }
+      disableOthers.run(nowSec, "openai-codex", targetId);
+    });
   } finally {
     db.close();
   }
@@ -226,7 +245,30 @@ async function syncOmp(
 
 interface DatabaseSyncLike {
   close(): void;
+  exec(sql: string): void;
   prepare(sql: string): PreparedStmt;
+}
+
+function runImmediateTransaction<T>(
+  db: DatabaseSyncLike,
+  operation: () => T
+): T {
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    const result = operation();
+    db.exec("COMMIT");
+    return result;
+  } catch (error) {
+    try {
+      db.exec("ROLLBACK");
+    } catch (rollbackError) {
+      throw new AggregateError(
+        [error, rollbackError],
+        "OMP credential update and rollback failed"
+      );
+    }
+    throw error;
+  }
 }
 
 interface PreparedStmt {

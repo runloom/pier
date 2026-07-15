@@ -121,7 +121,16 @@ export function AccountsSettingsPage({
   };
 
   const handleSelect = (accountId: string): void => {
-    openSwitchConfirmDialog({ context, mode: "switch", t }).then((result) => {
+    const account = snapshot?.accounts.find((entry) => entry.id === accountId);
+    if (!account) {
+      return;
+    }
+    openSwitchConfirmDialog({
+      accountKind: account.kind,
+      context,
+      mode: "switch",
+      t,
+    }).then((result) => {
       if (!result.confirmed) {
         return;
       }
@@ -139,7 +148,16 @@ export function AccountsSettingsPage({
   };
 
   const handleSyncPeers = (accountId: string): void => {
-    openSwitchConfirmDialog({ context, mode: "sync", t }).then((result) => {
+    const account = snapshot?.accounts.find((entry) => entry.id === accountId);
+    if (!account) {
+      return;
+    }
+    openSwitchConfirmDialog({
+      accountKind: account.kind,
+      context,
+      mode: "sync",
+      t,
+    }).then((result) => {
       if (!result.confirmed) {
         return;
       }

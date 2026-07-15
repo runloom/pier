@@ -49,7 +49,12 @@ export function AccountPicker({
   };
 
   const handleSelectAccount = async (accountId: string): Promise<void> => {
+    const account = accounts.find((entry) => entry.id === accountId);
+    if (!account) {
+      return;
+    }
     const result = await openSwitchConfirmDialog({
+      accountKind: account.kind,
       context,
       mode: "switch",
       t,

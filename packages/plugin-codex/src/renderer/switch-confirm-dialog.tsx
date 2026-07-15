@@ -42,8 +42,8 @@ function SwitchConfirmContent({
 
   const targetLabel: Record<Exclude<CrossToolSyncTarget, "codex">, string> = {
     opencode: t("pier.codex.switch.syncTarget.opencode", "OpenCode"),
-    pi: t("pier.codex.switch.syncTarget.pi", "pi"),
-    omp: t("pier.codex.switch.syncTarget.omp", "omp"),
+    pi: t("pier.codex.switch.syncTarget.pi", "Pi"),
+    omp: t("pier.codex.switch.syncTarget.omp", "OMP"),
   };
 
   const sectionLabel =

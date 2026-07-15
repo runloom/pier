@@ -88,6 +88,37 @@ describe("parseGrokBillingResult", () => {
     });
   });
 
+  it("omits one valid product duplicate when another product row is invalid", () => {
+    const result = parseGrokBillingResult({
+      config: {
+        creditUsagePercent: 42,
+        currentPeriod: {
+          end: "2026-07-21T00:00:00.000Z",
+          start: "2026-07-14T00:00:00.000Z",
+          type: "USAGE_PERIOD_TYPE_WEEKLY",
+        },
+        productUsage: [
+          { product: "Api", usagePercent: 42 },
+          { product: "GrokBuild", usagePercent: "not-a-number" },
+        ],
+      },
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.windows.map((window) => window.id)).toEqual(["grok:period"]);
+  });
+
+  it("keeps a single product window when no period total is present", () => {
+    expect(
+      parseGrokBillingResult({
+        config: { productUsage: [{ product: "Api", usagePercent: 73 }] },
+      })
+    ).toMatchObject({
+      status: "ok",
+      windows: [{ id: "grok:product:Api", usedPercent: 73 }],
+    });
+  });
+
   it("includes on-demand window when cap > 0", () => {
     const result = parseGrokBillingResult({
       config: {

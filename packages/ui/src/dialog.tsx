@@ -10,9 +10,19 @@ import { cn } from "./utils.ts";
 
 function Dialog({
   open,
+  onAbandonOpen,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  const deferredOpen = useDeferredDialogOpen(open);
+}: React.ComponentProps<typeof DialogPrimitive.Root> & {
+  /**
+   * Called when a deferred open is abandoned because a menu/body lock never
+   * cleared. Host content dialogs use this to pop the stack layer.
+   */
+  onAbandonOpen?: () => void;
+}) {
+  const deferredOpen = useDeferredDialogOpen(
+    open,
+    onAbandonOpen === undefined ? {} : { onAbandon: onAbandonOpen }
+  );
   return (
     <DialogPrimitive.Root
       data-slot="dialog"

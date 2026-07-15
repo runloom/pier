@@ -3,7 +3,8 @@ import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
 import type { AddAccountPayload } from "../shared/accounts.ts";
-import { LOGIN_TIMEOUT_MS, WATCH_SUPPRESS_MS } from "../shared/constants.ts";
+import { WATCH_SUPPRESS_MS } from "../shared/constants.ts";
+import { addOidcAccount } from "./accounts-add-oidc.ts";
 import {
   buildApiKeyAccountRecord,
   buildOidcAccountRecord,
@@ -25,7 +26,6 @@ import {
   USAGE_POLL_INTERVAL_MS,
   type UsageCacheEntry,
 } from "./accounts-usage.ts";
-import { classifyLoginError } from "./login-error.ts";
 import {
   ensureManagedAccountDir,
   grokAccountHomeDir,
@@ -190,128 +190,33 @@ export function createGrokAccountsService(
   }
 
   async function doAddOidc(mode: "oauth" | "device"): Promise<void> {
-    const id = randomUUID();
-    const dir = await ensureManagedDir(id);
-    lastLoginError = null;
-    loginPending = true;
-    loginMode = mode;
-    emitSnapshot();
-
-    const abort = new AbortController();
-    loginAbort = abort;
-    let timedOut = false;
-    const loginTimeout = setTimeout(() => {
-      timedOut = true;
-      abort.abort();
-    }, LOGIN_TIMEOUT_MS);
-
-    let failure: Error | null = null;
-    const previousState = stateStore.get();
-    let stateMutated = false;
-    let activatedId: string | null = null;
-    try {
-      await provider.login(dir, abort.signal, mode);
-      const identity = await provider.readIdentity(dir);
-      if (!identity) {
-        throw new Error("Login completed but no identity found");
-      }
-      const state = previousState;
-      const existing = state.accounts.find(
-        (a) => a.providerAccountId === identity.providerAccountId
-      );
-      if (existing) {
-        const existingDir = accountHomeDir(existing.id);
-        await provider.moveCredential(dir, existingDir);
-        await rm(dir, { recursive: true, force: true });
-        if (stateStore.get().activeAccountId === existing.id) {
-          suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-          await provider.materializeOidc(existingDir);
-          suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-        }
-        stateStore.mutate((s) => ({
-          ...s,
-          accounts: s.accounts.map((a) =>
-            a.id === existing.id
-              ? mergeIdentityIntoAccount(a, identity, now(), now())
-              : a
-          ),
-          revision: s.revision + 1,
-        }));
-        stateMutated = true;
-        if (stateStore.get().activeAccountId === null) {
-          suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-          await provider.materializeOidc(existingDir);
-          suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-          stateStore.mutate((s) => ({
-            ...s,
-            activeAccountId: existing.id,
-            revision: s.revision + 1,
-          }));
-          activatedId = existing.id;
-        }
-      } else {
-        const account = buildOidcAccountRecord(identity, id, now(), now());
-        stateStore.mutate((s) => ({
-          ...s,
-          accounts: [...s.accounts, account],
-          revision: s.revision + 1,
-        }));
-        stateMutated = true;
-        if (stateStore.get().activeAccountId === null) {
-          suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-          await provider.materializeOidc(dir);
-          suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-          stateStore.mutate((s) => ({
-            ...s,
-            activeAccountId: id,
-            revision: s.revision + 1,
-          }));
-          activatedId = id;
-        }
-      }
-      await stateStore.flush();
-      lastLoginError = null;
-      if (activatedId) {
-        doRefreshUsage({ accountId: activatedId, force: true }).catch(
-          () => undefined
-        );
-      }
-    } catch (err) {
-      let rollbackError: unknown = null;
-      if (stateMutated) {
-        stateStore.mutate(() => previousState);
-        try {
-          await stateStore.flush();
-        } catch (error) {
-          rollbackError = error;
-        }
-      }
-      await provider.deleteCredential(dir);
-      await rm(dir, { recursive: true, force: true }).catch(() => {
-        /* fire-and-forget */
-      });
-      const classified = classifyLoginError(err, {
-        aborted: abort.signal.aborted,
-        at: now(),
-        timedOut,
-      });
-      lastLoginError = classified.errorState;
-      failure = rollbackError
-        ? new AggregateError(
-            [classified.failure, rollbackError],
-            "Grok account add and metadata rollback failed"
-          )
-        : classified.failure;
-    } finally {
-      clearTimeout(loginTimeout);
-      loginAbort = null;
-      loginPending = false;
-      loginMode = null;
-      emitSnapshot();
-    }
-    if (failure) {
-      throw failure;
-    }
+    await addOidcAccount(
+      {
+        accountHomeDir,
+        doRefreshUsage,
+        emitSnapshot,
+        ensureManagedDir,
+        now,
+        provider,
+        setLastLoginError: (error) => {
+          lastLoginError = error;
+        },
+        setLoginAbort: (abort) => {
+          loginAbort = abort;
+        },
+        setLoginMode: (modeValue) => {
+          loginMode = modeValue;
+        },
+        setLoginPending: (pending) => {
+          loginPending = pending;
+        },
+        setSuppressWatchUntil: (ts) => {
+          suppressWatchUntil = ts;
+        },
+        stateStore,
+      },
+      mode
+    );
   }
 
   async function doAddApiKey(apiKey: string, label?: string): Promise<void> {

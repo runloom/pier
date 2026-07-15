@@ -45,6 +45,20 @@ describe("useDeferredDialogOpen", () => {
     expect(getByTestId("open").textContent).toBe("true");
   });
 
+  it("defers first mount when body pointer-events are already locked", () => {
+    vi.useFakeTimers();
+    document.body.style.pointerEvents = "none";
+
+    const { getByTestId } = render(<Probe open={true} />);
+    expect(getByTestId("open").textContent).toBe("false");
+
+    document.body.style.pointerEvents = "";
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(getByTestId("open").textContent).toBe("true");
+  });
+
   it("waits until the menu overlay is gone before opening", () => {
     vi.useFakeTimers();
     const menu = document.createElement("div");

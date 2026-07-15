@@ -1,10 +1,13 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  ACCESS_DENIED_ERROR,
   API_KEY_QUOTA_ERROR,
+  classifyBillingHttpError,
   extractSessionKeyFromAuthJson,
   fetchGrokUsage,
   GROK_BILLING_CREDITS_URL,
   GROK_BILLING_URL,
+  SESSION_EXPIRED_RELOGIN_ERROR,
 } from "../../../packages/plugin-grok/src/main/grok-usage.ts";
 
 const AUTH_ENTRY = {
@@ -32,6 +35,57 @@ const EXPIRED_AUTH = JSON.stringify({
   },
 });
 
+describe("classifyBillingHttpError", () => {
+  it("classifies 401 as session auth failure", () => {
+    expect(classifyBillingHttpError(401, "Unauthorized")).toEqual({
+      kind: "auth",
+      detail: "Unauthorized",
+    });
+  });
+
+  it("classifies structured auth codes as session failure", () => {
+    expect(
+      classifyBillingHttpError(
+        403,
+        JSON.stringify({ error: "permissionDenied", code: "permissionDenied" })
+      )
+    ).toEqual({
+      kind: "auth",
+      detail: "permissionDenied",
+    });
+    expect(
+      classifyBillingHttpError(403, JSON.stringify({ code: "invalid_grant" }))
+    ).toEqual({
+      kind: "auth",
+      detail: "invalid_grant",
+    });
+  });
+
+  it("classifies structured access-denied codes without re-login", () => {
+    expect(
+      classifyBillingHttpError(403, JSON.stringify({ code: "access_denied" }))
+    ).toEqual({
+      kind: "access",
+      detail: "access_denied",
+    });
+    expect(
+      classifyBillingHttpError(
+        403,
+        JSON.stringify({ error: "insufficient_permissions" })
+      )
+    ).toEqual({
+      kind: "access",
+      detail: "insufficient_permissions",
+    });
+  });
+
+  it("classifies plain 403 Forbidden as generic, not re-login", () => {
+    expect(classifyBillingHttpError(403, "Forbidden")).toEqual({
+      kind: "generic",
+      detail: "Grok billing request failed (403)",
+    });
+  });
+});
 describe("fetchGrokUsage", () => {
   it("extracts the newest OIDC session key", () => {
     expect(extractSessionKeyFromAuthJson(AUTH)).toBe("session-token-abc");
@@ -50,7 +104,7 @@ describe("fetchGrokUsage", () => {
     });
   });
 
-  it("uses default billing endpoint first with bearer session key", async () => {
+  it("falls back to default billing endpoint when credits response has no windows", async () => {
     const fetchImpl = vi.fn(async (url: string) => ({
       ok: true,
       status: 200,
@@ -72,7 +126,13 @@ describe("fetchGrokUsage", () => {
       kind: "oidc",
       signal: new AbortController().signal,
     });
-    expect(fetchImpl).toHaveBeenCalledWith(
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      GROK_BILLING_CREDITS_URL,
+      expect.any(Object)
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
       GROK_BILLING_URL,
       expect.objectContaining({
         headers: expect.objectContaining({
@@ -87,7 +147,154 @@ describe("fetchGrokUsage", () => {
     );
   });
 
-  it("falls back to credits format when default response has no windows", async () => {
+  it("falls back to default billing after a credits transport failure", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url === GROK_BILLING_CREDITS_URL) {
+        throw new Error("credits unavailable");
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ config: { monthlyLimit: 100, used: 25 } }),
+      };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toMatchObject({ status: "ok" });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
+      GROK_BILLING_CREDITS_URL,
+      expect.any(Object)
+    );
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      2,
+      GROK_BILLING_URL,
+      expect.any(Object)
+    );
+  });
+
+  it("does not treat a plain 403 response as a re-login failure", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 403,
+      text: async () => "Forbidden",
+    }));
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toMatchObject({
+      status: "error",
+      error: "Grok billing request failed (403)",
+    });
+    expect(result.error).not.toMatch(/re-?login|session expired/i);
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+  });
+
+  it("treats a permissionDenied 403 response as a re-login failure", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 403,
+      text: async () => JSON.stringify({ error: "permissionDenied" }),
+    }));
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toMatchObject({ status: "error" });
+    expect(result.error).toContain(SESSION_EXPIRED_RELOGIN_ERROR);
+    expect(result.error).toMatch(/permissionDenied/i);
+  });
+
+  it("treats access_denied 403 as access error without re-login", async () => {
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 403,
+      text: async () => JSON.stringify({ code: "access_denied" }),
+    }));
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toEqual({
+      status: "error",
+      error: `${ACCESS_DENIED_ERROR} (access_denied)`,
+      windows: [],
+    });
+    expect(result.error).not.toMatch(/re-?login|session expired/i);
+    // Access denial is terminal for both billing shapes.
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fall back after an aborted transport", async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn(async () => {
+      controller.abort();
+      throw new Error("transport aborted");
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: controller.signal,
+    });
+
+    expect(result).toEqual({
+      status: "error",
+      error: "Aborted",
+      windows: [],
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not fall back when the caller aborts but credits returns sparse success", async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn(async () => {
+      controller.abort(new Error("caller cancelled"));
+      return {
+        ok: true,
+        status: 200,
+        text: async () => JSON.stringify({ config: {} }),
+      };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: controller.signal,
+    });
+
+    expect(result).toEqual({
+      status: "error",
+      error: "Aborted",
+      windows: [],
+    });
+    expect(fetchImpl).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses credits format first with bearer session key", async () => {
     const fetchImpl = vi.fn(async (url: string) => ({
       ok: true,
       status: 200,
@@ -121,7 +328,8 @@ describe("fetchGrokUsage", () => {
       kind: "oidc",
       signal: new AbortController().signal,
     });
-    expect(fetchImpl).toHaveBeenCalledWith(
+    expect(fetchImpl).toHaveBeenNthCalledWith(
+      1,
       GROK_BILLING_CREDITS_URL,
       expect.any(Object)
     );
@@ -174,7 +382,7 @@ describe("fetchGrokUsage", () => {
       expect.objectContaining({ method: "POST" })
     );
     expect(fetchImpl).toHaveBeenCalledWith(
-      GROK_BILLING_URL,
+      GROK_BILLING_CREDITS_URL,
       expect.objectContaining({
         headers: expect.objectContaining({
           Authorization: "Bearer fresh-session-token",

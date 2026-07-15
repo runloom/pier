@@ -15,6 +15,7 @@ const PRODUCTION_SOURCE_ROOTS = [
   join(ROOT, "src", "renderer"),
   join(ROOT, "src", "plugins", "builtin"),
   join(ROOT, "packages", "plugin-codex", "src", "renderer"),
+  join(ROOT, "packages", "plugin-grok", "src", "renderer"),
 ];
 
 /**
@@ -81,15 +82,38 @@ describe("overlay → dialog open governance", () => {
       join(ROOT, "packages", "ui", "src", "schedule-after-overlay.ts"),
       "utf8"
     );
+    const contentHostSource = readFileSync(
+      join(
+        ROOT,
+        "src",
+        "renderer",
+        "components",
+        "common",
+        "app-content-dialog-host.tsx"
+      ),
+      "utf8"
+    );
 
     expect(deferredHook).toContain("export function useDeferredDialogOpen");
     expect(deferredHook).toContain("onAbandon");
+    // First-mount open=true must also respect body/menu locks. Host content
+    // dialogs mount a new layer with open=true in the same turn as a menu click.
+    expect(deferredHook).toContain(
+      "open === true && !isOverlayBlockingDialogOpen()"
+    );
     expect(dialogSource).toContain("useDeferredDialogOpen");
+    expect(dialogSource).toContain("onAbandonOpen");
     expect(dialogSource).toContain("isTopmostModalContent");
     expect(alertDialogSource).toContain("useDeferredDialogOpen");
+    expect(alertDialogSource).toContain("onAbandonOpen");
     expect(alertDialogSource).toContain("isTopmostModalContent");
     expect(scheduleSource).toContain("options.onAbandon");
     expect(scheduleSource).toContain("options.onAbandon?.()");
+    // Content dialog host must retain closed shells for exit animation and
+    // abandon-open must drop staged layers instead of leaving body locked.
+    expect(contentHostSource).toContain("retainedStack");
+    expect(contentHostSource).toContain("onAbandonOpen");
+    expect(contentHostSource).toContain("data-content-dialog-layer");
   });
 
   it("forbids menu item handlers from manually scheduling after overlay", () => {
