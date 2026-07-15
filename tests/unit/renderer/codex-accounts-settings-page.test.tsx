@@ -8,6 +8,13 @@ import {
   screen,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AppContentDialogHost } from "@/components/common/app-content-dialog-host.tsx";
+import {
+  closeAppContentDialog,
+  openAppContentDialog,
+  resetAppContentDialogForTests,
+  updateAppContentDialog,
+} from "@/stores/app-content-dialog.store.ts";
 import type { ExternalRendererPluginContext } from "../../../packages/plugin-api/src/renderer.ts";
 import pluginManifest from "../../../packages/plugin-codex/plugin.json" with {
   type: "json",
@@ -102,6 +109,21 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
       dialogs: {
         alert: vi.fn(async () => undefined),
         confirm: vi.fn(async () => true),
+        open: (request) =>
+          openAppContentDialog({
+            ...request,
+            namespace: "pier.codex",
+          }),
+        update: (id, patch) =>
+          updateAppContentDialog(
+            id.includes(":") ? id : `pier.codex:${id}`,
+            patch
+          ),
+        close: (id, result) =>
+          closeAppContentDialog(
+            id.includes(":") ? id : `pier.codex:${id}`,
+            result
+          ),
       },
       i18n: {
         language: () => "en",
@@ -131,11 +153,17 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
 describe("AccountsSettingsPage", () => {
   afterEach(() => {
     cleanup();
+    resetAppContentDialogForTests();
   });
 
   it("renders the active account chrome without redundant copy or cost UI", async () => {
     const { context } = contextWithSnapshot(snapshotWithAccount());
-    const { container } = render(<AccountsSettingsPage context={context} />);
+    const { container } = render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     expect(
       await screen.findByRole("heading", { level: 1, name: "Codex Accounts" })
@@ -272,7 +300,12 @@ describe("AccountsSettingsPage", () => {
 
   it("renders the active account once with a system-default badge", async () => {
     const { context } = contextWithSnapshot(snapshotWithAccount());
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     expect(await screen.findByText("test@codex.dev")).toBeDefined();
     expect(screen.getAllByText("System default")).toHaveLength(1);
@@ -300,7 +333,12 @@ describe("AccountsSettingsPage", () => {
         activeAccountId: "acc-1",
       })
     );
-    const { container } = render(<AccountsSettingsPage context={context} />);
+    const { container } = render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     await screen.findByText("other@codex.dev");
     const media = container.querySelector(
@@ -330,7 +368,12 @@ describe("AccountsSettingsPage", () => {
         ],
       })
     );
-    const { container } = render(<AccountsSettingsPage context={context} />);
+    const { container } = render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     expect(await screen.findByText(/^TEAM · Updated/)).toBeDefined();
     expect(screen.queryByText(/quota resets/)).toBeNull();
@@ -362,7 +405,12 @@ describe("AccountsSettingsPage", () => {
         ],
       })
     );
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     expect(await screen.findByText("Code review · 30-day quota")).toBeDefined();
     expect(screen.queryByText("5-hour quota")).toBeNull();
@@ -389,7 +437,12 @@ describe("AccountsSettingsPage", () => {
         ],
       })
     );
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     expect(await screen.findByText("Usage update failed")).toBeDefined();
     expect(screen.queryByText("No usage data")).toBeNull();
@@ -397,7 +450,12 @@ describe("AccountsSettingsPage", () => {
 
   it("renders dashed empty state when no managed accounts", async () => {
     const { context } = contextWithSnapshot(emptySnapshot());
-    const { container } = render(<AccountsSettingsPage context={context} />);
+    const { container } = render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     expect(await screen.findByText("No managed accounts")).toBeDefined();
     expect(screen.queryByText("System default")).toBeNull();
@@ -406,7 +464,12 @@ describe("AccountsSettingsPage", () => {
 
   it("opens account authorization before starting the browser login", async () => {
     const { context, invokeCalls } = contextWithSnapshot(emptySnapshot());
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     const addAccountButton = await screen.findByText("Add account");
     await act(async () => {
@@ -495,7 +558,12 @@ describe("AccountsSettingsPage", () => {
       ],
     });
     const { context, invokeCalls } = contextWithSnapshot(snap);
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     await screen.findByText("other@codex.dev");
     expect(screen.queryByText("Available")).toBeNull();
@@ -533,7 +601,12 @@ describe("AccountsSettingsPage", () => {
       ],
     });
     const { context, invokeCalls } = contextWithSnapshot(snap);
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     await screen.findByText("active@codex.dev");
     fireEvent.click(
@@ -578,7 +651,12 @@ describe("AccountsSettingsPage", () => {
       ],
     });
     const { context, invokeCalls } = contextWithSnapshot(snap);
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     await screen.findByText("active@codex.dev");
     fireEvent.click(
@@ -618,7 +696,12 @@ describe("AccountsSettingsPage", () => {
       ],
     });
     const { context, invokeCalls } = contextWithSnapshot(snap);
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     await screen.findByText("other@codex.dev");
     fireEvent.click(
@@ -658,7 +741,12 @@ describe("AccountsSettingsPage", () => {
       ],
     });
     const { context, invokeCalls } = contextWithSnapshot(snap);
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     await screen.findByText("other@codex.dev");
     await act(async () => {
@@ -691,7 +779,12 @@ describe("AccountsSettingsPage", () => {
       if (method === "accounts.refreshUsage") await refreshPending;
       return null as T;
     };
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     const refreshButton = await screen.findByRole("button", {
       name: "Refresh usage",
@@ -721,7 +814,12 @@ describe("AccountsSettingsPage", () => {
       login: { provider: "codex", startedAt: Date.now() },
     });
     const { context } = contextWithSnapshot(snap);
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     expect(
       await screen.findByText("Waiting for browser authorization")
@@ -734,28 +832,35 @@ describe("AccountsSettingsPage", () => {
     const { context } = contextWithSnapshot(emptySnapshot());
     const t = (_key: string, fallback: string): string => fallback;
     const { rerender } = render(
-      <AddAccountDialog
-        context={context}
-        login={{ provider: "codex", startedAt: Date.now() }}
-        onError={vi.fn()}
-        t={t}
-      />
+      <>
+        <AppContentDialogHost />
+        <AddAccountDialog
+          context={context}
+          login={{ provider: "codex", startedAt: Date.now() }}
+          onError={vi.fn()}
+          t={t}
+        />
+      </>
     );
 
     const dialog = await screen.findByRole("dialog");
     expect(dialog).toHaveTextContent("Waiting for browser authorization");
     rerender(
-      <AddAccountDialog
-        context={context}
-        login={null}
-        onError={vi.fn()}
-        t={t}
-      />
+      <>
+        <AppContentDialogHost />
+        <AddAccountDialog
+          context={context}
+          login={null}
+          onError={vi.fn()}
+          t={t}
+        />
+      </>
     );
 
-    expect(dialog).toHaveAttribute("data-state", "closed");
-    expect(dialog).toHaveTextContent("Waiting for browser authorization");
-    expect(dialog).not.toHaveTextContent("Add Codex account");
+    // Content dialog closes when login clears; host removes the layer.
+    await vi.waitFor(() => {
+      expect(screen.queryByRole("dialog")).toBeNull();
+    });
   });
 
   it("cancels a pending browser login", async () => {
@@ -763,7 +868,12 @@ describe("AccountsSettingsPage", () => {
       login: { provider: "codex", startedAt: Date.now() },
     });
     const { context, invokeCalls } = contextWithSnapshot(snap);
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     const cancelButton = await screen.findByRole("button", {
       name: "Cancel login",
@@ -790,7 +900,12 @@ describe("AccountsSettingsPage", () => {
       }
       return null as T;
     };
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     const cancelButton = await screen.findByRole("button", {
       name: "Cancel login",
@@ -813,7 +928,12 @@ describe("AccountsSettingsPage", () => {
       login: { provider: "codex", startedAt: Date.now() },
     });
     const { context, invokeCalls } = contextWithSnapshot(snap);
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     const reopenButton = await screen.findByRole("button", {
       name: "Reopen browser",
@@ -842,7 +962,12 @@ describe("AccountsSettingsPage", () => {
       if (method === "accounts.add") throw new Error("browser login failed");
       return null as T;
     };
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     const addAccountButton = await screen.findByText("Add account");
     await act(async () => {
@@ -891,7 +1016,12 @@ describe("AccountsSettingsPage", () => {
       ],
     });
     const { context } = contextWithSnapshot(snap);
-    const { container } = render(<AccountsSettingsPage context={context} />);
+    const { container } = render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     await screen.findByText("first@codex.dev");
     expect(screen.getByText("second@codex.dev")).toBeDefined();
@@ -924,7 +1054,12 @@ describe("AccountsSettingsPage", () => {
       ],
     });
     const { context } = contextWithSnapshot(snap);
-    const { container } = render(<AccountsSettingsPage context={context} />);
+    const { container } = render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     await screen.findByText("thresholds@codex.dev");
     expect(
@@ -983,7 +1118,12 @@ describe("AccountsSettingsPage", () => {
       ],
     });
     const { context } = contextWithSnapshot(snap);
-    render(<AccountsSettingsPage context={context} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
 
     await screen.findByText("missing@codex.dev");
     expect(

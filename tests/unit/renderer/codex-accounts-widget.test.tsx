@@ -7,6 +7,13 @@ import {
   within,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { AppContentDialogHost } from "@/components/common/app-content-dialog-host.tsx";
+import {
+  closeAppContentDialog,
+  openAppContentDialog,
+  resetAppContentDialogForTests,
+  updateAppContentDialog,
+} from "@/stores/app-content-dialog.store.ts";
 import type {
   ExternalRendererPluginContext,
   WorkbenchWidgetComponentProps,
@@ -122,7 +129,25 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
         set: vi.fn(async () => undefined),
       },
       workbenchWidgets: { register: vi.fn(() => () => undefined) },
-      dialogs: { alert: vi.fn(), confirm: vi.fn(async () => true) },
+      dialogs: {
+        alert: vi.fn(async () => undefined),
+        confirm: vi.fn(async () => true),
+        open: (request) =>
+          openAppContentDialog({
+            ...request,
+            namespace: "pier.codex",
+          }),
+        update: (id, patch) =>
+          updateAppContentDialog(
+            id.includes(":") ? id : `pier.codex:${id}`,
+            patch
+          ),
+        close: (id, result) =>
+          closeAppContentDialog(
+            id.includes(":") ? id : `pier.codex:${id}`,
+            result
+          ),
+      },
       i18n: {
         language: () => "en",
         t: vi.fn((_key: string, fallback?: string) => fallback ?? _key),
@@ -150,13 +175,17 @@ function openDropdown(triggerName: string): void {
 describe("AccountsWidget (usage)", () => {
   afterEach(() => {
     cleanup();
+    resetAppContentDialogForTests();
   });
 
   it("renders remaining percent for dynamic usage windows", async () => {
     const snap = usageSnapshot();
     const { context } = contextWithSnapshot(snap);
     const { container } = render(
-      <AccountsWidget context={context} {...baseProps()} />
+      <>
+        <AppContentDialogHost />
+        <AccountsWidget context={context} {...baseProps()} />
+      </>
     );
 
     await screen.findByText("5-hour quota");
@@ -168,7 +197,12 @@ describe("AccountsWidget (usage)", () => {
 
   it("hides the account switcher when no alternative account exists", async () => {
     const { context } = contextWithSnapshot(usageSnapshot());
-    render(<AccountsWidget context={context} {...baseProps()} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsWidget context={context} {...baseProps()} />
+      </>
+    );
 
     await screen.findByText("test@codex.dev");
     expect(screen.queryByRole("button", { name: "Switch account" })).toBeNull();
@@ -193,7 +227,12 @@ describe("AccountsWidget (usage)", () => {
       activeAccountId: "acc-1",
     });
     const { context } = contextWithSnapshot(snap);
-    render(<AccountsWidget context={context} {...baseProps()} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsWidget context={context} {...baseProps()} />
+      </>
+    );
 
     await screen.findByText("active@codex.dev");
     openDropdown("Switch account");
@@ -230,7 +269,12 @@ describe("AccountsWidget (usage)", () => {
       activeAccountId: "acc-1",
     });
     const { context, invokeCalls } = contextWithSnapshot(snap);
-    render(<AccountsWidget context={context} {...baseProps()} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsWidget context={context} {...baseProps()} />
+      </>
+    );
 
     await screen.findByText("active@codex.dev");
     openDropdown("Switch account");
@@ -277,7 +321,12 @@ describe("AccountsWidget (usage)", () => {
       activeAccountId: "acc-1",
     });
     const { context } = contextWithSnapshot(snap);
-    render(<AccountsWidget context={context} {...baseProps()} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsWidget context={context} {...baseProps()} />
+      </>
+    );
 
     await screen.findByText("active@codex.dev");
     openDropdown("Switch account");
@@ -285,9 +334,7 @@ describe("AccountsWidget (usage)", () => {
       fireEvent.click(await screen.findByText("other@codex.dev"));
     });
 
-    // Dialog primitive owns deferred open; product state may already be true.
-    expect(screen.queryByRole("dialog")).toBeNull();
-
+    // Host content dialog opens without Dialog+menu nesting deferral.
     expect(
       await screen.findByRole("dialog", undefined, { timeout: 1000 })
     ).toBeTruthy();
@@ -327,7 +374,12 @@ describe("AccountsWidget (usage)", () => {
       }
       return invoke<T>(method, payload);
     };
-    render(<AccountsWidget context={context} {...baseProps()} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsWidget context={context} {...baseProps()} />
+      </>
+    );
 
     await screen.findByText("active@codex.dev");
     openDropdown("Switch account");
@@ -369,7 +421,12 @@ describe("AccountsWidget (usage)", () => {
       activeAccountId: "acc-1",
     });
     const { context } = contextWithSnapshot(snap);
-    render(<AccountsWidget context={context} {...baseProps()} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsWidget context={context} {...baseProps()} />
+      </>
+    );
 
     await screen.findByText("test@codex.dev");
     openDropdown("Switch account");
@@ -411,7 +468,12 @@ describe("AccountsWidget (usage)", () => {
   it("renders an explicit fallback when no account is active", async () => {
     const snap = noActiveAccountSnapshot();
     const { context } = contextWithSnapshot(snap);
-    render(<AccountsWidget context={context} {...baseProps()} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsWidget context={context} {...baseProps()} />
+      </>
+    );
 
     expect(await screen.findByText("No active account")).toBeDefined();
   });
@@ -532,7 +594,12 @@ describe("AccountsWidget (usage)", () => {
     // 新契约：refresh 状态归 header 按钮 spinner，widget body 不再自渲另一份
     // 「Refreshing」badge——防两个 loading 指示同时出现的错觉 bug。
     const { context } = contextWithSnapshot(usageSnapshot());
-    render(<AccountsWidget context={context} {...baseProps()} />);
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsWidget context={context} {...baseProps()} />
+      </>
+    );
     expect(screen.queryByText("Refreshing")).toBeNull();
     expect(
       document.querySelector('[data-slot="spinner"][aria-label="Refreshing"]')

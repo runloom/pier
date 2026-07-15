@@ -18,14 +18,15 @@ import {
 import { ArrowLeftRight, Settings } from "lucide-react";
 import type { JSX } from "react";
 import { useState } from "react";
-import type { CodexAccountSummary } from "../shared/accounts.ts";
+import type { GrokAccountSummary } from "../shared/accounts.ts";
+import { accountDisplayLabel } from "./account-display.tsx";
 import { openSwitchConfirmDialog } from "./account-switch.ts";
-import { formatAccountError } from "./format-account-error.ts";
+import { formatAccountError, type Translate } from "./format-account-error.ts";
 
 export interface AccountPickerProps {
-  accounts: readonly CodexAccountSummary[];
+  accounts: readonly GrokAccountSummary[];
   context: ExternalRendererPluginContext;
-  t: (key: string, fallback: string) => string;
+  t: Translate;
 }
 
 export function AccountPicker({
@@ -36,11 +37,13 @@ export function AccountPicker({
   const [switchingAccountId, setSwitchingAccountId] = useState<string | null>(
     null
   );
-  if (accounts.length === 0) return null;
+  if (accounts.length === 0) {
+    return null;
+  }
 
   const reportError = async (err: unknown): Promise<void> => {
     await context.dialogs.alert({
-      title: t("pier.codex.widget.actionFailed", "Account action failed"),
+      title: t("pier.grok.widget.actionFailed", "Account action failed"),
       body: formatAccountError(err, t),
     });
   };
@@ -51,12 +54,14 @@ export function AccountPicker({
       mode: "switch",
       t,
     });
-    if (!result.confirmed) return;
+    if (!result.confirmed) {
+      return;
+    }
     setSwitchingAccountId(accountId);
     try {
       await context.rpc.invoke("accounts.select", {
         accountId,
-        syncTargets: result.syncTargets.filter((target) => target !== "codex"),
+        syncTargets: result.syncTargets.filter((target) => target !== "grok"),
       });
     } catch (error) {
       await reportError(error);
@@ -74,7 +79,7 @@ export function AccountPicker({
               <Button
                 aria-busy={switchingAccountId !== null || undefined}
                 aria-label={t(
-                  "pier.codex.widget.switchAccount",
+                  "pier.grok.widget.switchAccount",
                   "Switch account"
                 )}
                 disabled={switchingAccountId !== null}
@@ -82,27 +87,21 @@ export function AccountPicker({
                 variant="ghost"
               >
                 {switchingAccountId ? (
-                  <Spinner
-                    aria-label={t(
-                      "pier.codex.widget.switchingAccount",
-                      "Switching account"
-                    )}
-                    data-icon="inline-start"
-                  />
+                  <Spinner data-icon="inline-start" />
                 ) : (
                   <ArrowLeftRight data-icon="inline-start" />
                 )}
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
-          <TooltipContent data-pier-codex-scope="">
-            {t("pier.codex.widget.switchAccount", "Switch account")}
+          <TooltipContent data-pier-grok-scope="">
+            {t("pier.grok.widget.switchAccount", "Switch account")}
           </TooltipContent>
         </Tooltip>
       </TooltipProvider>
       <DropdownMenuContent
         align="end"
-        data-pier-codex-scope=""
+        data-pier-grok-scope=""
         style={{
           maxWidth: "var(--radix-dropdown-menu-content-available-width)",
           minWidth:
@@ -119,28 +118,24 @@ export function AccountPicker({
             >
               <span className="min-w-0">
                 <span className="block whitespace-normal break-words">
-                  {account.label}
+                  {accountDisplayLabel(account)}
                 </span>
-                {account.planType ? (
-                  <span className="block text-muted-foreground text-xs">
-                    {account.planType.toUpperCase()}
-                  </span>
-                ) : null}
+                <span className="block text-muted-foreground text-xs">
+                  {account.kind === "api_key" ? "API key" : "OIDC"}
+                </span>
               </span>
             </DropdownMenuItem>
           ))}
         </DropdownMenuGroup>
-
         <DropdownMenuSeparator />
-
         <DropdownMenuGroup>
           <DropdownMenuItem
             onSelect={() => {
-              context.app.openSettings({ section: "plugin:pier.codex" });
+              context.app.openSettings({ section: "plugin:pier.grok" });
             }}
           >
             <Settings />
-            {t("pier.codex.widget.manageAccounts", "Manage accounts...")}
+            {t("pier.grok.widget.manageAccounts", "Manage accounts...")}
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>

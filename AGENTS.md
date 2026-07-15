@@ -57,6 +57,13 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - `showAppAlert` 可保持默认尺寸，用于错误详情时避免把长输出塞进小弹窗；短 alert 如需小尺寸应由调用方显式传 `size: "sm"`。
 - 检查点在 `tests/unit/renderer/app-dialog-governance.test.ts`：锁定文档存在、禁止绕过 `AppDialogHost` 直接使用 shadcn `AlertDialog` primitive，并要求 confirm API 的 `size` / `intent` 保持必填。
 
+复杂内容弹窗（表单、多步、等待态、带自定义 body）统一走宿主 `AppContentDialogHost`：
+
+- 宿主业务使用 `openAppContentDialog` / `updateAppContentDialog` / `closeAppContentDialog`；插件使用 `context.dialogs.open` / `update` / `close`（不要再挂自己的 `@pier/ui/dialog` 产品壳）。
+- 插件 renderer 禁止 import `@pier/ui/dialog` 或 `@pier/ui/alert-dialog`；嵌套插件 Dialog（Settings 内再开插件 Dialog）一律禁止。
+- 短确认/破坏性确认仍走 `dialogs.confirm` / `showAppConfirm`，不要把纯确认塞进 content dialog。
+- 检查点在 `tests/unit/renderer/plugin-product-dialog-governance.test.ts` 与 content dialog 单测。
+
 ### 浮层后打开 Dialog / 设置
 
 从 DropdownMenu / ContextMenu / Select 等 Radix overlay 的菜单项打开 Dialog 或设置时，业务代码写普通 controlled state 即可：

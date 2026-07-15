@@ -32,6 +32,8 @@
         "packages/plugin-api/src/**",
         "packages/plugin-codex/src/**",
         "packages/plugin-codex/vite.config.*.ts",
+        "packages/plugin-grok/src/**",
+        "packages/plugin-grok/vite.config.*.ts",
         "electron.vite.config.ts",
         "vitest.config.ts",
         "tailwind.config.ts",
@@ -69,7 +71,10 @@
       "linter": { "enabled": false }
     },
     {
-      "includes": ["packages/plugin-codex/src/renderer/styles.css"],
+      "includes": [
+        "packages/plugin-codex/src/renderer/styles.css",
+        "packages/plugin-grok/src/renderer/styles.css"
+      ],
       "linter": {
         "rules": { "suspicious": { "noUnknownAtRules": "off" } }
       }

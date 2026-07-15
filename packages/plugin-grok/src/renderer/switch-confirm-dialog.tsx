@@ -9,7 +9,7 @@ import {
   ALL_SYNC_TARGETS,
   type CrossToolSyncTarget,
 } from "../shared/accounts.ts";
-import type { Translate } from "./usage-meter.tsx";
+import type { Translate } from "./format-account-error.ts";
 
 export type PeerSyncDialogMode = "switch" | "sync";
 
@@ -34,35 +34,38 @@ function SwitchConfirmContent({
   function toggleTarget(target: CrossToolSyncTarget): void {
     setSyncTargets((prev) => {
       const next = new Set(prev);
-      if (next.has(target)) next.delete(target);
-      else next.add(target);
+      if (next.has(target)) {
+        next.delete(target);
+      } else {
+        next.add(target);
+      }
       return next;
     });
   }
 
-  const targetLabel: Record<Exclude<CrossToolSyncTarget, "codex">, string> = {
-    opencode: t("pier.codex.switch.syncTarget.opencode", "OpenCode"),
-    pi: t("pier.codex.switch.syncTarget.pi", "pi"),
-    omp: t("pier.codex.switch.syncTarget.omp", "omp"),
+  const targetLabel: Record<Exclude<CrossToolSyncTarget, "grok">, string> = {
+    opencode: t("pier.grok.switch.syncTarget.opencode", "OpenCode"),
+    pi: t("pier.grok.switch.syncTarget.pi", "pi"),
+    omp: t("pier.grok.switch.syncTarget.omp", "omp"),
   };
 
   const sectionLabel =
     mode === "sync"
       ? t(
-          "pier.codex.accounts.settings.syncPeersSectionLabel",
-          "Sync the OpenAI account to:"
+          "pier.grok.accounts.settings.syncPeersSectionLabel",
+          "Sync the Grok account to:"
         )
       : t(
-          "pier.codex.switch.syncSectionLabel",
-          "Also switch the OpenAI account in:"
+          "pier.grok.switch.syncSectionLabel",
+          "Also switch the Grok account in:"
         );
   const confirmLabel =
     mode === "sync"
-      ? t("pier.codex.accounts.settings.syncPeersAction", "Sync")
-      : t("pier.codex.accounts.settings.switchConfirmAction", "Confirm");
+      ? t("pier.grok.accounts.settings.syncPeersAction", "Sync")
+      : t("pier.grok.accounts.settings.switchConfirmAction", "Confirm");
 
   return (
-    <div className="flex flex-col gap-4" data-pier-codex-scope="">
+    <div className="flex flex-col gap-4" data-pier-grok-scope="">
       <div className="flex flex-col gap-3">
         <p className="font-medium text-sm">{sectionLabel}</p>
         <div className="flex flex-col gap-2">
@@ -93,7 +96,7 @@ function SwitchConfirmContent({
           type="button"
           variant="outline"
         >
-          {t("pier.codex.accounts.settings.cancel", "Cancel")}
+          {t("pier.grok.accounts.settings.cancel", "Cancel")}
         </Button>
         <Button
           disabled={mode === "sync" && syncTargets.size === 0}
@@ -119,22 +122,22 @@ export async function openSwitchConfirmDialog(options: {
   const title =
     mode === "sync"
       ? t(
-          "pier.codex.accounts.settings.syncPeersTitle",
-          "Sync OpenAI account to other tools?"
+          "pier.grok.accounts.settings.syncPeersTitle",
+          "Sync Grok account to other tools?"
         )
       : t(
-          "pier.codex.accounts.settings.switchConfirmTitle",
-          "Switch Codex account?"
+          "pier.grok.accounts.settings.switchConfirmTitle",
+          "Switch Grok account?"
         );
   const description =
     mode === "sync"
       ? t(
-          "pier.codex.accounts.settings.syncPeersBody",
-          "Write this Codex account's OpenAI credentials into the selected tools. Already-running sessions in those tools may need a restart."
+          "pier.grok.accounts.settings.syncPeersBody",
+          "Write this Grok account's xAI credentials into the selected tools. Already-running sessions in those tools may need a restart."
         )
       : t(
-          "pier.codex.accounts.settings.switchConfirmBody",
-          "New Codex sessions will use this account. Restart any Codex sessions that are already running for the change to take effect."
+          "pier.grok.accounts.settings.switchConfirmBody",
+          "New Grok sessions will use this account. Restart any Grok sessions that are already running for the change to take effect."
         );
 
   const handle = context.dialogs.open<SwitchConfirmResult>({

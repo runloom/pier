@@ -85,7 +85,9 @@ describe("overlay → dialog open governance", () => {
     expect(deferredHook).toContain("export function useDeferredDialogOpen");
     expect(deferredHook).toContain("onAbandon");
     expect(dialogSource).toContain("useDeferredDialogOpen");
+    expect(dialogSource).toContain("isTopmostModalContent");
     expect(alertDialogSource).toContain("useDeferredDialogOpen");
+    expect(alertDialogSource).toContain("isTopmostModalContent");
     expect(scheduleSource).toContain("options.onAbandon");
     expect(scheduleSource).toContain("options.onAbandon?.()");
   });
@@ -130,6 +132,32 @@ describe("overlay → dialog open governance", () => {
 
     // Dialog is mounted only after unlock; Radix itself may set body styles
     // while the open dialog is present, so do not assert body unlock here.
+    expect(getByRole("dialog")).toBeTruthy();
+  });
+
+  it("opens a dialog while an existing modal shell locks body pointer-events", async () => {
+    document.body.style.pointerEvents = "none";
+    const parent = document.createElement("div");
+    parent.setAttribute("data-slot", "dialog-content");
+    document.body.append(parent);
+
+    const { getByRole, queryByRole, rerender } = render(
+      <Dialog open={false}>
+        <DialogContent>
+          <DialogTitle>Nested</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+    expect(queryByRole("dialog")).toBeNull();
+
+    rerender(
+      <Dialog open={true}>
+        <DialogContent>
+          <DialogTitle>Nested</DialogTitle>
+        </DialogContent>
+      </Dialog>
+    );
+
     expect(getByRole("dialog")).toBeTruthy();
   });
 
