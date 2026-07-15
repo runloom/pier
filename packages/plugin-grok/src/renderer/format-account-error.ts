@@ -72,6 +72,7 @@ export function formatAccountError(err: unknown, t: Translate): string {
     );
   }
   if (
+    lower.includes("billing request timed out") ||
     lower.includes("billing request failed") ||
     lower.includes("no grok quota windows") ||
     lower.includes("session token missing")

@@ -9,11 +9,15 @@ import { defineConfig } from "vite";
  *   bundle so no node_modules resolution is required from userData.
  * - Node builtins stay external (node:crypto, node:fs, ...) — Node ESM
  *   resolves them at runtime.
- * - `@pier/plugin-api/main` is types-only — kept as external so the type
- *   contract is not duplicated into the plugin bundle.
+ * - `@pier/plugin-api` / `@pier/plugin-api/main` are types-only entry points
+ *   and stay external. Runtime helpers under `@pier/plugin-api/*` (e.g.
+ *   `account-usage`) must be **inlined** — installed packages have no
+ *   node_modules, and package validation rejects unresolved main imports.
  */
 export default defineConfig({
   build: {
+    // Preserve dist/renderer.js when only main is rebuilt.
+    emptyOutDir: false,
     lib: {
       entry: { main: "src/main/index.ts" },
       formats: ["es"],
@@ -23,7 +27,7 @@ export default defineConfig({
       external: (id) =>
         id.startsWith("node:") ||
         id === "@pier/plugin-api" ||
-        id.startsWith("@pier/plugin-api/"),
+        id === "@pier/plugin-api/main",
       output: {
         // ESM bundle needs CJS globals shimmed for inlined libs (write-file-atomic
         // uses `__filename` inside getTmpname). Emit a banner that computes both

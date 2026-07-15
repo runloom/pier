@@ -60,20 +60,6 @@ function containsUnauthorizedRawColor(filePath: string): boolean {
   return RAW_COLOR_RE.test(allowance ? source.replace(allowance, "") : source);
 }
 
-function relativeLuminance(hex: string): number {
-  const channels = hex
-    .slice(1)
-    .match(/.{2}/g)
-    ?.map((channel) => Number.parseInt(channel, 16) / 255);
-  if (channels?.length !== 3) {
-    throw new Error(`invalid RGB color: ${hex}`);
-  }
-  const linear = channels.map((channel) =>
-    channel <= 0.040_45 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4
-  );
-  return 0.2126 * linear[0]! + 0.7152 * linear[1]! + 0.0722 * linear[2]!;
-}
-
 function contrastRatio(a: number, b: number): number {
   const lighter = Math.max(a, b);
   const darker = Math.min(a, b);
@@ -199,50 +185,63 @@ describe("color token governance", () => {
     expect(progress).not.toContain('data: "bg-data-primary"');
   });
 
-  // ── Tier 1: strict WCAG 4.5:1 — light theme badge glyph contrast ────
-  // :root.light uses dark status colors with light solid-foreground.
-  // This is real text/glyph readability and must pass WCAG AA (4.5:1).
+  // ── Soft status surfaces (Ant Design Alert map tokens) ─────────────
+  // Soft alerts/badges use colorXxxBg + colorXxxBorder + colorXxx for icon.
+  // Title/description stay on neutral foreground (not tinted). Solid
+  // white-on-status contrast is intentionally not required for light seeds
+  // like Ant Design's #faad14 / #52c41a / #1677ff.
 
-  it("keeps solid status text above the WCAG 4.5:1 floor in light theme", () => {
+  it("keeps Ant Design soft status map tokens for both themes", () => {
     const globals = readFileSync(
       join(ROOT, "src/renderer/app/globals.css"),
       "utf8"
     );
-    const block = cssBlock(globals, ":root.light");
-    const foregroundLuminance =
-      neutralOklchLightness(cssVariable(block, "status-solid-foreground")) ** 3;
-    for (const token of ["destructive", "warning", "success", "info", "done"]) {
-      expect(
-        contrastRatio(
-          relativeLuminance(cssVariable(block, token)),
-          foregroundLuminance
-        )
-      ).toBeGreaterThanOrEqual(4.5);
-    }
+    const light = cssBlock(globals, ":root.light");
+    const dark = cssBlock(globals, ":root");
+
+    expect(cssVariable(light, "status-warning-bg")).toBe("#fffbe6");
+    expect(cssVariable(light, "status-warning-border")).toBe("#ffe58f");
+    expect(cssVariable(light, "status-warning-fg")).toBe("#faad14");
+    expect(cssVariable(light, "warning")).toBe("#faad14");
+
+    expect(cssVariable(dark, "status-warning-bg")).toBe("#2b2111");
+    expect(cssVariable(dark, "status-warning-border")).toBe("#594214");
+    expect(cssVariable(dark, "status-warning-fg")).toBe("#d89614");
+    expect(cssVariable(dark, "warning")).toBe("#d89614");
+
+    expect(cssVariable(light, "status-info-bg")).toBe("#e6f4ff");
+    expect(cssVariable(light, "status-success-bg")).toBe("#f6ffed");
+    expect(cssVariable(light, "status-danger-bg")).toBe("#fff2f0");
+    expect(cssVariable(dark, "status-info-bg")).toBe("#111a2c");
+    expect(cssVariable(dark, "status-success-bg")).toBe("#162312");
+    expect(cssVariable(dark, "status-danger-bg")).toBe("#2c1618");
   });
 
-  // ── Tier 3: design decision — dark theme badge palette ───────────────
-  // :root (dark theme) intentionally uses bright status colors with a
-  // unified light solid-foreground (oklch(0.985 0 0)). The WCAG luminance-
-  // only formula reports ratios of 1.6–2.7 for these combinations, below
-  // even the 3:1 non-text threshold. This is a deliberate visual design
-  // decision: (1) the glyphs are simple shapes (✓ ℹ ⚠ ✕) recognisable at
-  // low luminance contrast, (2) the dark surround in a dark theme shifts
-  // visual adaptation so badges appear brighter and glyphs more salient,
-  // (3) chromatic contrast (hue difference) provides an additional cue the
-  // WCAG 2.x formula ignores. If this design changes, restore strict
-  // enforcement for :root by adding it back to the loop above.
+  // ── Tier 3: design decision — solid status seeds vs white glyphs ────
+  // Both themes now use Ant Design status seeds that are chromatic fills /
+  // icons, not white-on-solid badge bases. WCAG luminance-only ratios for
+  // white glyphs on these seeds are often < 3:1; toast solid glyphs keep a
+  // dark capsule surround. Soft alerts put neutral text on soft surfaces.
 
-  it("documents the dark theme badge contrast design decision", () => {
+  it("documents solid status seed tokens exist in both themes", () => {
     const globals = readFileSync(
       join(ROOT, "src/renderer/app/globals.css"),
       "utf8"
     );
-    const rootBlock = cssBlock(globals, ":root");
-    // Verify the tokens exist (design decision is about values, not presence).
-    expect(cssVariable(rootBlock, "status-solid-foreground")).toBeTruthy();
-    for (const token of ["destructive", "warning", "success", "info", "done"]) {
-      expect(cssVariable(rootBlock, token)).toBeTruthy();
+    for (const block of [
+      cssBlock(globals, ":root"),
+      cssBlock(globals, ":root.light"),
+    ]) {
+      expect(cssVariable(block, "status-solid-foreground")).toBeTruthy();
+      for (const token of [
+        "destructive",
+        "warning",
+        "success",
+        "info",
+        "done",
+      ]) {
+        expect(cssVariable(block, token)).toBeTruthy();
+      }
     }
   });
 
@@ -281,6 +280,10 @@ describe("color token governance", () => {
       join(ROOT, "src/renderer/components/primitives/sonner.tsx"),
       "utf8"
     );
+    const statusIcon = readFileSync(
+      join(ROOT, "packages/ui/src/status-icon.tsx"),
+      "utf8"
+    );
     for (const block of [
       cssBlock(globals, ":root"),
       cssBlock(globals, ":root.light"),
@@ -298,7 +301,10 @@ describe("color token governance", () => {
     expect(globals).toContain("--toast-action-bg:");
     expect(sonner).toContain('"--normal-bg": "var(--toast-surface)"');
     expect(sonner).toContain('"--normal-text": "var(--toast-foreground)"');
-    expect(sonner).toContain("text-status-solid-foreground");
+    expect(sonner).toContain('StatusIcon kind="success"');
+    expect(sonner).toContain('StatusIcon kind="warning"');
+    expect(statusIcon).toContain("text-status-solid-foreground");
+    expect(statusIcon).toContain("var(--warning)");
     expect(sonner).not.toContain("text-[color:var(--toast-surface)]");
   });
 });

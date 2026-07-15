@@ -1,3 +1,4 @@
+import { agents } from "./agents.ts";
 import commandPaletteAliases from "./command-palette.aliases.json" with {
   type: "json",
 };
@@ -10,6 +11,7 @@ import { workbench } from "./workbench.ts";
 import { workspace } from "./workspace.ts";
 
 export const zhCN = {
+  agents,
   commandPalette: {
     ...commandPalette,
     aliases: commandPaletteAliases,

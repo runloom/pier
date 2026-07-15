@@ -42,6 +42,7 @@ export const commandPalette = {
     newWindowFailed: "无法新建窗口",
     openCreatePanel: "新建面板...",
     newAgent: "启动默认智能体",
+    listAgents: "智能体列表…",
     startAgent: "启动 {{agent}}",
     newWorkbench: "新建工作台",
     runTask: "运行任务…",

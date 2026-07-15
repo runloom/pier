@@ -98,6 +98,7 @@
         "pier.grok.usage.used": "Used",
         "pier.grok.usage.period.weekly": "Weekly limit",
         "pier.grok.usage.period.monthly": "Monthly limit",
+        "pier.grok.usage.period.monthlySpend": "Monthly spend",
         "pier.grok.usage.product.api": "API",
         "pier.grok.usage.product.grokBuild": "Grok Build",
         "pier.grok.usage.onDemand": "On-demand",
@@ -134,7 +135,7 @@
       }
     },
     "zh-CN": {
-      "name": "Grok 账户管理",
+      "name": "Grok 账号管理",
       "description": "在 Pier 中管理 Grok 账号、登录与切换。",
       "settingsPages": {
         "pier.grok.accounts": {
@@ -219,6 +220,7 @@
         "pier.grok.usage.used": "已使用",
         "pier.grok.usage.period.weekly": "周额度",
         "pier.grok.usage.period.monthly": "月额度",
+        "pier.grok.usage.period.monthlySpend": "月消费",
         "pier.grok.usage.product.api": "API",
         "pier.grok.usage.product.grokBuild": "Grok Build",
         "pier.grok.usage.onDemand": "按需额度",
@@ -289,5 +291,5 @@
     }
   ],
   "terminalStatusItems": [],
-  "version": "1.0.0"
+  "version": "1.0.1"
 }

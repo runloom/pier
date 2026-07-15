@@ -24,6 +24,7 @@ import {
 } from "./terminal-session-store.ts";
 
 export type { TerminalPanelSession } from "./terminal-session-state-schemas.ts";
+export { peekTerminalPanelContext } from "./terminal-session-store.ts";
 
 const ensureStore = ensureTerminalSessionStore;
 

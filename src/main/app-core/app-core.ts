@@ -21,6 +21,7 @@ import { registerPluginRpcIpc } from "../plugins/plugin-rpc-ipc.ts";
 import { createPluginSecretsFacade } from "../plugins/plugin-secrets.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
 import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
+import { createAgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
 import { createAgentUsageService } from "../services/agents/agent-usage-service.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
@@ -42,6 +43,11 @@ import {
 } from "../services/managed-plugins/install-service.ts";
 import { createManagedPluginOperationLog } from "../services/managed-plugins/operation-log.ts";
 import { createManagedPluginPaths } from "../services/managed-plugins/paths.ts";
+import {
+  getPierPluginMode,
+  listConfiguredWorkspaceRoots,
+} from "../services/managed-plugins/plugin-mode.ts";
+import { bootWorkspacePluginMode } from "../services/managed-plugins/workspace-boot.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
 import { createPluginService } from "../services/plugin-service.ts";
 import { createPluginSettingsService } from "../services/plugin-settings-service.ts";
@@ -120,10 +126,8 @@ function createPierAppCore(): PierAppCore {
   const managedPluginOpLog = createManagedPluginOperationLog(
     managedPluginPaths.operationLogFile
   );
-  const {
-    availableById: bundledPluginAvailableById,
-    registrations: bundledPluginRegistrations,
-  } = collectBundledPluginRegistrations();
+  const { registrations: bundledPluginRegistrations } =
+    collectBundledPluginRegistrations();
   let pluginHostRef: MainPluginHostApi | null = null;
   const httpIndex = createHttpOfficialIndexProvider({
     cachePath: managedPluginPaths.officialIndexCacheFile,
@@ -140,6 +144,25 @@ function createPierAppCore(): PierAppCore {
   > | null = null;
   const managedPluginDevRuntimeWatches =
     createManagedPluginDevRuntimeWatchRegistry();
+  const pluginMode = getPierPluginMode(process.cwd());
+  const workspaceDevPluginSpecs = [
+    ...OFFICIAL_BUNDLED_PLUGIN_SPECS.map((s) => ({
+      devPackageDir: s.devPackageDir,
+      id: s.id,
+    })),
+    ...listConfiguredWorkspaceRoots(process.cwd()).map((r) => ({
+      devPackageDir: r.path,
+      id: r.id,
+    })),
+  ];
+  // Custom roots override first-party when id collides.
+  const workspaceSpecById = new Map<
+    string,
+    { devPackageDir: string; id: string }
+  >();
+  for (const spec of workspaceDevPluginSpecs)
+    workspaceSpecById.set(spec.id, spec);
+  const dedupedSpecs = [...workspaceSpecById.values()];
   const managedPlugins: ManagedPluginInstallService =
     createManagedPluginInstallService({
       appendOperationLog: (record) => managedPluginOpLog.append(record),
@@ -161,8 +184,10 @@ function createPierAppCore(): PierAppCore {
       expectedRendererWindowIds: () =>
         windowManager.list().map((item) => item.id),
       pierVersion: "0.1.0",
+      pluginMode,
       runtimeMode: isDevRuntime() ? "development" : "production",
       store: managedPluginIndexStore,
+      workspaceDevPluginSpecs: pluginMode === "workspace" ? dedupedSpecs : [],
     });
   registerPluginActivationIpc(managedPlugins);
   const basePlugins = createPluginService({
@@ -270,31 +295,20 @@ function createPierAppCore(): PierAppCore {
       httpIndex.refresh().catch((err: unknown) => {
         console.error("[managed-plugins] official-index refresh failed:", err);
       });
-      // Dev-only: an installed bundled plugin always runs from the source package.
-      // The dev override owns its own manifest version, so a version bump must not
-      // strand the runtime on the previously installed immutable version.
-      if (isDevRuntime()) {
-        const index = managedPlugins.getIndex();
-        for (const spec of OFFICIAL_BUNDLED_PLUGIN_SPECS) {
-          if (bundledPluginAvailableById.get(spec.id) !== true) continue;
-          const entry = index.plugins[spec.id];
-          if (!(entry?.activeVersion && !entry.uninstalledAt)) continue;
-          const packageDir = join(process.cwd(), spec.devPackageDir);
-          await managedPlugins
-            .setDevOverride(spec.id, packageDir)
-            .then(() => managedPlugins.simulateRestartForTests())
-            .catch((err: unknown) => {
-              console.error(
-                `[managed-plugins] ${spec.id} dev override sync failed:`,
-                err
-              );
-            });
-          managedPluginDevRuntimeWatches.ensure(spec.id, {
-            logger: createLogger("managed-plugins"),
-            packageDir,
-            refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
-          });
-        }
+      // Workspace mode: pin runtime to local package dirs (first-party + custom roots).
+      if (pluginMode === "workspace") {
+        await bootWorkspacePluginMode(dedupedSpecs, {
+          managedPlugins,
+          managedPluginIndexStore,
+          managedPluginDevRuntimeWatches,
+          officialBundledPluginIds: OFFICIAL_BUNDLED_PLUGIN_SPECS.map(
+            (s) => s.id
+          ),
+        });
+      } else {
+        createLogger("managed-plugins").info(
+          "[managed-plugins] plugin mode: release"
+        );
       }
     });
   const processEnvironment = createProcessEnvironmentService();
@@ -307,8 +321,13 @@ function createPierAppCore(): PierAppCore {
   const agentUsage = createAgentUsageService({
     userDataDir: app.getPath("userData"),
   });
+  const agentRuntimeIndex = createAgentRuntimeIndexService({
+    snapshot: () => foregroundActivityService.snapshot(),
+    rendererCommand,
+  });
   const services: PierCoreServices = {
     agentDetection,
+    agentRuntimeIndex,
     agentUsage,
     ai: createAiService({
       detectAgents: async () => (await agentDetection.detect()).detectedIds,

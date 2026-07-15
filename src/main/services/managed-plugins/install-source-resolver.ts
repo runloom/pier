@@ -11,8 +11,13 @@ import { selectNewestVersion } from "./version.ts";
 /**
  * Chooses which archive to install for a bundled plugin id.
  *
- * Priority: official index 与 bundled 中版本较新者；同版本优先官方资产。
- * HTTP is only attempted when the operations context has both an
+ * Production priority: official index 与 bundled 中版本较新者；同版本优先官方资产。
+ * Development priority: **always** workspace bundled package when available.
+ * That isolates local plugin work from published GitHub release assets so
+ * "Install" never re-pins an older official tgz over the package under
+ * packages/plugin-*.
+ *
+ * HTTP is only attempted (prod) when the operations context has both an
  * `officialIndexProvider` result (with matching entry) AND an `assetFetcher`.
  * Any failure (download, redirect budget, size mismatch, sha256 mismatch)
  * falls back to the bundled archive so first-launch offline installs still
@@ -48,10 +53,30 @@ export interface OfficialUpdateSourceFailure {
   message: string;
 }
 
+function bundledInstallSource(
+  bundled: BundledPluginRegistration
+): ResolvedInstallSource {
+  return {
+    archivePath: bundled.archivePath,
+    logKind: "install-from-bundle",
+    packageUrl: `bundled://${bundled.id}/${bundled.version}`,
+    sha256: bundled.sha256,
+    ...(bundled.size ? { size: bundled.size } : {}),
+    version: bundled.version,
+  };
+}
+
 export async function resolveInstallSource(
   ctx: OperationsContext,
   bundled: BundledPluginRegistration
 ): Promise<ResolvedInstallSource> {
+  // Workspace mode: never pull official release assets — pin to dist-pkg in repo.
+  // Release mode (including `PIER_PLUGIN_MODE=release` under electron-vite) may
+  // still fetch the official index so developers can simulate production install.
+  if (ctx.pluginMode === "workspace") {
+    return bundledInstallSource(bundled);
+  }
+
   if (ctx.officialIndexRefresh) {
     await ctx.officialIndexRefresh().catch(() => {
       /* fall through to bundled */
@@ -100,14 +125,7 @@ export async function resolveInstallSource(
       }
     }
   }
-  return {
-    archivePath: bundled.archivePath,
-    logKind: "install-from-bundle",
-    packageUrl: `bundled://${bundled.id}/${bundled.version}`,
-    sha256: bundled.sha256,
-    ...(bundled.size ? { size: bundled.size } : {}),
-    version: bundled.version,
-  };
+  return bundledInstallSource(bundled);
 }
 
 export async function resolveOfficialUpdateSource(

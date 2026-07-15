@@ -11,11 +11,14 @@ export type CommandPaletteSurface = "command-palette" | (string & {});
 export interface QuickPickItemBadge {
   readonly label: string;
   readonly variant?:
+    | "danger"
     | "default"
     | "destructive"
     | "ghost"
+    | "info"
     | "outline"
-    | "secondary";
+    | "secondary"
+    | "warning";
 }
 
 export interface QuickPickItem {

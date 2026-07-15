@@ -56,6 +56,12 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
+    // L4 零选择：跳到下一个 Needs you（仅快捷键；不进命令面板、不嵌列表假行）
+    commandId: "pier.agents.focusWaiting",
+    keys: "Mod+Shift+KeyY",
+    scope: "global",
+  },
+  {
     commandId: "pier.commandPalette.toggle",
     keys: "Mod+Shift+KeyP",
     scope: "global",

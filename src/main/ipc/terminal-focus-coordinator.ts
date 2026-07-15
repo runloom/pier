@@ -207,6 +207,11 @@ export class TerminalFocusCoordinator {
     };
   }
 
+  /** Dockview 当前 active panel；尚无 host snapshot 时为 null。 */
+  activePanelId(win: AppWindow): string | null {
+    return this.records.get(win.id)?.desired?.activePanelId ?? null;
+  }
+
   private recordFor(win: AppWindow): WindowRecord {
     const existing = this.records.get(win.id);
     if (existing) {

@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import { deriveAppStyleTokens } from "@/lib/theme/derive-tokens.ts";
-import { chromaOf, contrast } from "@/lib/theme/oklch.ts";
+import { chromaOf, contrast, oklabLightness } from "@/lib/theme/oklch.ts";
 import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
 
 const HEX6_RE = /^#[0-9a-f]{6}$/;
@@ -86,7 +86,7 @@ describe("renderer/lib/theme/derive-tokens", () => {
     expect(chromaOf(tokens.primary)).toBeGreaterThanOrEqual(0.1);
     expect(
       contrast(tokens.primary, tokens["primary-foreground"])
-    ).toBeGreaterThanOrEqual(4.5);
+    ).toBeGreaterThanOrEqual(4);
     expect(contrast(tokens.background, tokens.muted)).toBeGreaterThanOrEqual(
       1.05
     );
@@ -130,6 +130,21 @@ describe("renderer/lib/theme/derive-tokens", () => {
     expect(["#000000", "#ffffff"]).toContain(tokens["primary-foreground"]);
     expect(
       contrast(tokens.primary, tokens["primary-foreground"])
-    ).toBeGreaterThanOrEqual(4.5);
+    ).toBeGreaterThanOrEqual(4);
+  });
+
+  it("uses white labels on dark-theme blue CTAs", () => {
+    const tokens = deriveAppStyleTokens(
+      getShikiTheme("pierre", "dark"),
+      "dark"
+    );
+
+    expect(tokens["primary-foreground"]).toBe("#ffffff");
+    expect(contrast(tokens.primary, "#ffffff")).toBeGreaterThanOrEqual(4);
+    expect(contrast(tokens.background, tokens.primary)).toBeGreaterThanOrEqual(
+      3
+    );
+    // Keep brand blues vivid; do not crush under ~0.55 L just for 4.5:1.
+    expect(oklabLightness(tokens.primary)).toBeGreaterThan(0.55);
   });
 });

@@ -196,6 +196,7 @@ class WindowManager {
       mode,
       recordId: opts.recordId ?? id,
       windowId: id,
+      electronWindowId: String(electronWindowId),
     });
 
     const rendererShowGate = createRendererShowGate({

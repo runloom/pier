@@ -308,9 +308,18 @@ export type ManagedPluginCatalogRow = z.infer<
   typeof managedPluginCatalogRowSchema
 >;
 
+const pluginModeSchema = z.enum(["workspace", "release"]);
+
 export const managedPluginCatalogSnapshotSchema = z.object({
   checkedAt: z.number().int().nonnegative(),
+  /**
+   * Host plugin load mode. `workspace` = local package dirs; `release` =
+   * managed install/update like production.
+   */
+  pluginMode: pluginModeSchema.default("release"),
   plugins: z.array(managedPluginCatalogRowSchema),
+  /** Whether UI should offer official install/update actions. */
+  officialMutationsAllowed: z.boolean().default(true),
 });
 export type ManagedPluginCatalogSnapshot = z.infer<
   typeof managedPluginCatalogSnapshotSchema

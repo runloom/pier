@@ -1,7 +1,6 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import type { PluginRegistryDiagnostic } from "@shared/contracts/plugin.ts";
 import type { TFunction } from "i18next";
-import { TriangleAlert } from "lucide-react";
 import type { JSX } from "react";
 import type { RendererPluginRuntimeDiagnostic } from "@/lib/plugins/plugin-runtime-diagnostics.ts";
 
@@ -69,8 +68,7 @@ export function PluginDiagnosticsSummary({
       data-testid="plugin-diagnostics-summary"
     >
       {groups.map((group) => (
-        <Alert key={group.key}>
-          <TriangleAlert />
+        <Alert key={group.key} variant="warning">
           <AlertTitle>{kindLabel(group.kind, t)}</AlertTitle>
           {group.detail ? (
             <AlertDescription>{group.detail}</AlertDescription>

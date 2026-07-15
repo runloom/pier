@@ -111,7 +111,7 @@
       }
     },
     "zh-CN": {
-      "name": "Codex 账户管理",
+      "name": "Codex 账号管理",
       "description": "管理 Codex 账号，登录、切换、观测用量。",
       "settingsPages": {
         "pier.codex.accounts": {

@@ -12,7 +12,7 @@
           "description": "Manage Codex accounts, login, switch, and monitor usage."
         },
         "zh-CN": {
-          "name": "Codex 账户管理",
+          "name": "Codex 账号管理",
           "description": "管理 Codex 账号，登录、切换、观测用量。"
         }
       },
@@ -36,7 +36,7 @@
           "description": "Manage Grok accounts, login, and switch for Pier."
         },
         "zh-CN": {
-          "name": "Grok 账户管理",
+          "name": "Grok 账号管理",
           "description": "在 Pier 中管理 Grok 账号、登录与切换。"
         }
       },

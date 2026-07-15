@@ -10,6 +10,7 @@ import type {
   TerminalStatusBarPrefs,
 } from "@shared/contracts/terminal-status-bar.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
+import type { AgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import type { AgentDetectionService } from "../services/agents/agent-detection-service.ts";
 import type { AgentUsageService } from "../services/agents/agent-usage-service.ts";
 import type { AiService } from "../services/ai/ai-service.ts";
@@ -33,6 +34,7 @@ import type { PluginDisableTransitionCoordinator } from "./plugin-disable-transi
 
 export interface PierCoreServices {
   agentDetection: AgentDetectionService;
+  agentRuntimeIndex: AgentRuntimeIndexService;
   agentUsage: AgentUsageService;
   ai: AiService;
   appUpdates: AppUpdateService;

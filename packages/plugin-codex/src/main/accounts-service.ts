@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  createUsageRefreshScheduler,
+  USAGE_REFRESH_CONCURRENCY,
+} from "@pier/plugin-api/account-usage";
 import writeFileAtomic from "write-file-atomic";
 import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
 import { LOGIN_TIMEOUT_MS } from "../shared/constants.ts";
@@ -19,12 +23,10 @@ import type {
 } from "./accounts-service-contract.ts";
 import { buildAccountsSnapshot } from "./accounts-snapshot.ts";
 import {
-  activeUsageCacheKey,
-  createUsageCacheEntry,
-  USAGE_MIN_REFETCH_MS,
   USAGE_POLL_INTERVAL_MS,
   type UsageCacheEntry,
 } from "./accounts-usage.ts";
+import { createCodexUsageRefreshRunner } from "./accounts-usage-refresh.ts";
 import { PIER_MANAGED_HOME_MARKER } from "./codex-provider.ts";
 import { migrateLegacyAccountsToState } from "./legacy-migration.ts";
 import { classifyLoginError } from "./login-error.ts";
@@ -34,16 +36,11 @@ import {
 } from "./managed-account-home.ts";
 import { reconcileManagedCredentials } from "./managed-credential-reconciliation.ts";
 import { createSerialMutationQueue } from "./serial-mutation-queue.ts";
-import type { AccountUsageResult } from "./types.ts";
-import {
-  createUsageRefreshScheduler,
-  USAGE_REFRESH_CONCURRENCY,
-} from "./usage-refresh-scheduler.ts";
 
 const WATCH_SUPPRESS_MS = 1500;
 
+export { USAGE_REFRESH_CONCURRENCY } from "@pier/plugin-api/account-usage";
 export { SYSTEM_USAGE_CACHE_KEY } from "./accounts-usage.ts";
-export { USAGE_REFRESH_CONCURRENCY } from "./usage-refresh-scheduler.ts";
 
 export function createCodexAccountsService(
   opts: CodexAccountsServiceOpts
@@ -63,6 +60,8 @@ export function createCodexAccountsService(
   let suppressWatchUntil = 0;
 
   const enqueueMutation = createSerialMutationQueue();
+  let runUsageRefresh: ReturnType<typeof createCodexUsageRefreshRunner> | null =
+    null;
   const refreshAllUsage = createUsageRefreshScheduler({
     concurrency: USAGE_REFRESH_CONCURRENCY,
     getAccountIds: () => stateStore.get().accounts.map((account) => account.id),
@@ -185,6 +184,7 @@ export function createCodexAccountsService(
     let failure: Error | null = null;
     const previousState = stateStore.get();
     let stateMutated = false;
+    let existingId: string | null = null;
     try {
       await provider.login(dir, abort.signal);
       const identity = await provider.readIdentity(dir);
@@ -198,6 +198,7 @@ export function createCodexAccountsService(
           )
         : null;
       if (existing) {
+        existingId = existing.id;
         const existingDir = accountHomeDir(existing.id);
         if (provider.moveCredential) {
           await provider.moveCredential(dir, existingDir);
@@ -269,6 +270,12 @@ export function createCodexAccountsService(
     if (failure) {
       throw failure;
     }
+    // Refresh usage for the added (or merged) account so the UI does not stay
+    // skeleton. If the account was not activated, this still fills the cache.
+    const refreshId = existingId ?? id;
+    doRefreshUsage({ accountId: refreshId, force: true }).catch(
+      () => undefined
+    );
   }
 
   async function doSelect(
@@ -358,32 +365,20 @@ export function createCodexAccountsService(
     ) {
       throw new Error(`Account not found: ${targetId}`);
     }
-    const cacheKey = activeUsageCacheKey(targetId);
-    const cached = usageCache[cacheKey];
-    if (
-      !options.force &&
-      cached &&
-      now() - cached.fetchedAt < USAGE_MIN_REFETCH_MS
-    ) {
-      return;
+    if (!runUsageRefresh) {
+      runUsageRefresh = createCodexUsageRefreshRunner({
+        accountHomeDir,
+        emitSnapshot,
+        ensureUsageEnv,
+        now,
+        provider,
+        usageCache,
+      });
     }
-    await ensureUsageEnv();
-    const abort = new AbortController();
-    let result: AccountUsageResult;
-    try {
-      result = await provider.fetchUsage(
-        targetId ? accountHomeDir(targetId) : undefined,
-        abort.signal
-      );
-    } catch (error) {
-      result = {
-        error: error instanceof Error ? error.message : String(error),
-        status: "error" as const,
-        windows: [],
-      };
-    }
-    usageCache[cacheKey] = createUsageCacheEntry(result, cached, now());
-    emitSnapshot();
+    await runUsageRefresh({
+      ...(targetId ? { accountId: targetId } : {}),
+      ...(options.force ? { force: true } : {}),
+    });
   }
 
   async function handleDrift(): Promise<void> {

@@ -2,12 +2,17 @@ import { describe, expect, it, vi } from "vitest";
 import {
   ACCESS_DENIED_ERROR,
   API_KEY_QUOTA_ERROR,
+  BILLING_HOP_TIMEOUT_MS,
+  BILLING_TIMEOUT_ERROR,
   classifyBillingHttpError,
   extractSessionKeyFromAuthJson,
   fetchGrokUsage,
   GROK_BILLING_CREDITS_URL,
   GROK_BILLING_URL,
+  OIDC_REFRESH_TIMEOUT_MS,
   SESSION_EXPIRED_RELOGIN_ERROR,
+  USAGE_OVERALL_DEADLINE_MS,
+  USAGE_RETRY_OVERALL_DEADLINE_MS,
 } from "../../../packages/plugin-grok/src/main/grok-usage.ts";
 
 const AUTH_ENTRY = {
@@ -126,6 +131,7 @@ describe("fetchGrokUsage", () => {
       kind: "oidc",
       signal: new AbortController().signal,
     });
+    // sparse credits (no transport retry) + cash default
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
       GROK_BILLING_CREDITS_URL,
@@ -141,13 +147,68 @@ describe("fetchGrokUsage", () => {
       })
     );
     expect(result.status).toBe("ok");
-    expect(result.windows[0]?.usedPercent).toBeCloseTo(
-      (4112 / 15_000) * 100,
-      5
-    );
+    expect(result.windows[0]).toMatchObject({
+      limitName: "Monthly spend",
+      usedPercent: expect.closeTo((4112 / 15_000) * 100, 5),
+    });
   });
 
-  it("falls back to default billing after a credits transport failure", async () => {
+  it("retries credits once after a transport failure before cash fallback", async () => {
+    let creditsCalls = 0;
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url === GROK_BILLING_CREDITS_URL) {
+        creditsCalls += 1;
+        if (creditsCalls === 1) {
+          throw new Error("credits unavailable");
+        }
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              config: {
+                creditUsagePercent: 9,
+                currentPeriod: {
+                  end: "2026-07-21T00:00:00.000Z",
+                  start: "2026-07-14T00:00:00.000Z",
+                  type: "USAGE_PERIOD_TYPE_WEEKLY",
+                },
+                productUsage: [
+                  { product: "GrokBuild", usagePercent: 8 },
+                  { product: "Api", usagePercent: 1 },
+                ],
+              },
+            }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({ config: { monthlyLimit: 100, used: 25 } }),
+      };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toMatchObject({ status: "ok" });
+    expect(result.windows[0]).toMatchObject({
+      limitName: "Weekly limit",
+      usedPercent: 9,
+    });
+    expect(creditsCalls).toBe(2);
+    // Cash default must not be hit when credits retry succeeds.
+    expect(
+      fetchImpl.mock.calls.some((call) => call[0] === GROK_BILLING_URL)
+    ).toBe(false);
+  });
+
+  it("falls back to cash monthly spend only after credits retries fail", async () => {
     const fetchImpl = vi.fn(async (url: string) => {
       if (url === GROK_BILLING_CREDITS_URL) {
         throw new Error("credits unavailable");
@@ -168,17 +229,91 @@ describe("fetchGrokUsage", () => {
     });
 
     expect(result).toMatchObject({ status: "ok" });
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(result.windows[0]?.limitName).toBe("Monthly spend");
+    // credits attempt + credits retry + cash
+    expect(
+      fetchImpl.mock.calls.filter(
+        (call) => call[0] === GROK_BILLING_CREDITS_URL
+      ).length
+    ).toBe(2);
+    expect(
+      fetchImpl.mock.calls.some((call) => call[0] === GROK_BILLING_URL)
+    ).toBe(true);
+  });
+
+  it("uses per-hop budgets so one slow credits hop does not block fallback", async () => {
+    // Multi-hop (refresh + credits + fallback) must not share a single 15s budget.
+    expect(USAGE_OVERALL_DEADLINE_MS).toBeGreaterThan(BILLING_HOP_TIMEOUT_MS);
+    expect(USAGE_OVERALL_DEADLINE_MS).toBeGreaterThanOrEqual(
+      OIDC_REFRESH_TIMEOUT_MS + BILLING_HOP_TIMEOUT_MS * 2
+    );
+
+    const fetchImpl = vi.fn(
+      async (url: string, init?: { signal?: AbortSignal }) => {
+        if (url === GROK_BILLING_CREDITS_URL) {
+          const hopError = new Error(
+            "The operation was aborted due to timeout"
+          );
+          hopError.name = "TimeoutError";
+          // Simulate hop AbortSignal.timeout without burning real wall clock.
+          if (init?.signal && !init.signal.aborted) {
+            // leave hop signal alone; throw timeout-like transport error
+          }
+          throw hopError;
+        }
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({ config: { monthlyLimit: 100, used: 40 } }),
+        };
+      }
+    );
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("ok");
+    // credits timeout + credits retry + cash
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
       GROK_BILLING_CREDITS_URL,
       expect.any(Object)
     );
     expect(fetchImpl).toHaveBeenNthCalledWith(
-      2,
+      3,
       GROK_BILLING_URL,
       expect.any(Object)
     );
+  });
+
+  it("surfaces a stable timeout error when every hop times out (incl. silent retry)", async () => {
+    const fetchImpl = vi.fn(async () => {
+      const hopError = new Error("The operation was aborted due to timeout");
+      hopError.name = "TimeoutError";
+      throw hopError;
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result).toEqual({
+      status: "error",
+      error: BILLING_TIMEOUT_ERROR,
+      windows: [],
+    });
+    // Per attempt: credits + credits-retry + cash; two attempts via silent retry.
+    expect(fetchImpl).toHaveBeenCalledTimes(6);
+    expect(USAGE_RETRY_OVERALL_DEADLINE_MS).toBeGreaterThan(0);
   });
 
   it("does not treat a plain 403 response as a re-login failure", async () => {
@@ -200,6 +335,7 @@ describe("fetchGrokUsage", () => {
       error: "Grok billing request failed (403)",
     });
     expect(result.error).not.toMatch(/re-?login|session expired/i);
+    // plain 403 is not transport/auth-shaped: credits once + cash once
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 

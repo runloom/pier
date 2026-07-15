@@ -1,22 +1,43 @@
+import type { AgentRuntimeIndexService } from "@main/services/agent-runtime-index/index.ts";
 import type {
   SystemNotificationRequest,
   SystemNotificationResult,
 } from "@shared/contracts/notification.ts";
-import { type IpcMain, Notification } from "electron";
+import type { IpcMain } from "electron";
+import { focusAgentFromNotificationClick } from "../services/agent-attention/notification-click-focus.ts";
+import { showSystemNotification } from "../services/system-notification.ts";
 
-export function registerNotificationIpc(ipcMain: IpcMain): void {
+export interface NotificationIpcDeps {
+  index?: AgentRuntimeIndexService;
+}
+
+/**
+ * 系统通知 IPC。Attention 与 renderer 共用 `showSystemNotification`；
+ * click → 唯一 `focusAgentFromNotificationClick`。
+ */
+export function registerNotificationIpc(
+  ipcMain: IpcMain,
+  deps: NotificationIpcDeps = {}
+): void {
   ipcMain.handle(
     "pier:notification:system",
-    (_event, request: SystemNotificationRequest): SystemNotificationResult => {
-      if (!Notification.isSupported()) {
-        return { shown: false };
-      }
-      const notification = new Notification({
-        title: request.title,
-        ...(request.body ? { body: request.body } : {}),
-      });
-      notification.show();
-      return { shown: true };
-    }
+    async (
+      _event,
+      request: SystemNotificationRequest
+    ): Promise<SystemNotificationResult> =>
+      showSystemNotification(request, {
+        onClick: async (shown) => {
+          if (!deps.index) {
+            return;
+          }
+          await focusAgentFromNotificationClick(deps.index, shown);
+        },
+      })
   );
+}
+
+export function bindNotificationFocus(
+  index: AgentRuntimeIndexService
+): NotificationIpcDeps {
+  return { index };
 }

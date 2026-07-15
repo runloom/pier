@@ -19,6 +19,7 @@ import {
 import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
 import { installWorkspaceRendererCommandListener } from "./components/workspace/workspace-renderer-command-listener.ts";
 import { initI18n } from "./i18n/index.ts";
+import { registerAgentRuntimeActions } from "./lib/actions/agent-runtime-actions.ts";
 import { registerAgentStartActions } from "./lib/actions/agent-start-actions.ts";
 import { registerCommandPaletteAction } from "./lib/actions/command-palette-action.ts";
 import { registerCommandPaletteMruAction } from "./lib/actions/command-palette-mru-action.ts";
@@ -140,6 +141,7 @@ async function bootstrap() {
   registerConfigActions();
   registerCommandPaletteAction();
   registerNewAgentAction();
+  registerAgentRuntimeActions();
   registerAgentStartActions();
   registerRunActions();
   registerPanelActions();

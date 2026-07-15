@@ -186,17 +186,20 @@ export function ManagedRowExtraActions({
   row,
   win,
   onRefresh,
+  officialMutationsAllowed = true,
 }: {
   row: CatalogRow;
   win: ManagedPluginsWindowShim | undefined;
   onRefresh: () => void;
+  /** When false (workspace mode), hide official update/rollback. */
+  officialMutationsAllowed?: boolean;
 }): JSX.Element {
   const t = useT();
   const display = resolveRowDisplay(row);
   const { pending, run } = usePluginOp(display.name, onRefresh);
   return (
     <>
-      {row.update ? (
+      {officialMutationsAllowed && row.update ? (
         <Button
           disabled={pending}
           onClick={() => {
@@ -215,7 +218,8 @@ export function ManagedRowExtraActions({
           {t("settings.plugins.action.update")}
         </Button>
       ) : null}
-      {row.lastKnownGoodVersion &&
+      {officialMutationsAllowed &&
+      row.lastKnownGoodVersion &&
       row.effective &&
       row.lastKnownGoodVersion !== row.effective.version ? (
         <Button
@@ -345,12 +349,14 @@ export function UnavailableManagedRow({
   pending,
   row,
   win,
+  officialMutationsAllowed = true,
 }: {
   onRefresh: () => void;
   onToggle: () => void;
   pending: boolean;
   row: CatalogRow;
   win: ManagedPluginsWindowShim | undefined;
+  officialMutationsAllowed?: boolean;
 }): JSX.Element {
   const t = useT();
   const display = resolveRowDisplay(row);
@@ -387,7 +393,12 @@ export function UnavailableManagedRow({
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <ContributionCountsInline counts={row.contributionCounts} />
           <div className="flex flex-wrap items-center gap-2">
-            <ManagedRowExtraActions onRefresh={onRefresh} row={row} win={win} />
+            <ManagedRowExtraActions
+              officialMutationsAllowed={officialMutationsAllowed}
+              onRefresh={onRefresh}
+              row={row}
+              win={win}
+            />
             <Button
               aria-label={t(`settings.plugins.action.${actionKey}Plugin`, {
                 name: display.name,

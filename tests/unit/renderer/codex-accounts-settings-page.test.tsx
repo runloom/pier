@@ -384,6 +384,15 @@ describe("AccountsSettingsPage", () => {
     expect(
       container.querySelector('[data-slot="codex-quota-group"][data-count="1"]')
     ).not.toBeNull();
+    // Single meter must force 1-col full width — do not leave half-row via auto-fit.
+    const grid = container.querySelector(
+      '[data-slot="codex-quota-grid"][data-layout="single"]'
+    );
+    expect(grid).not.toBeNull();
+    expect(grid?.className).toContain("block");
+    expect(grid?.className).toContain("w-full");
+    expect(grid?.className).not.toContain("auto-fit");
+    expect(grid?.className).not.toContain("grid-cols");
   });
 
   it("labels a 30-day named quota from its dynamic metadata", async () => {
@@ -759,7 +768,7 @@ describe("AccountsSettingsPage", () => {
 
     expect(invokeCalls).toContainEqual({
       method: "accounts.refreshUsage",
-      payload: { accountId: "acc-2" },
+      payload: { accountId: "acc-2", force: true },
     });
     expect(invokeCalls).not.toContainEqual({
       method: "accounts.select",

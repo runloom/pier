@@ -44,6 +44,10 @@ export interface ActivityCounts {
   waiting: number;
 }
 
+/**
+ * 本窗 FA 计数（工作台 overview 等）。与标题栏 `agentIndexCounts` 有意分叉：
+ * 不计 launch、waiting 不含 error；勿混用两套桶。
+ */
 export function activityCounts(
   activities: Record<string, ForegroundActivity>,
   taskRuns?: TaskRunsSnapshot

@@ -3,21 +3,11 @@ import type {
   AgentActivity,
   ForegroundActivity,
 } from "@shared/contracts/foreground-activity.ts";
-import { useEffect, useState } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
-import { useT } from "@/i18n/use-t.ts";
+import { AgentStatusLabel } from "@/components/agent-status/agent-status-label.tsx";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
-import { AgentShimmerText } from "./agent-shimmer-text.tsx";
-import {
-  agentStatusTextKey,
-  longRunLevel,
-  shouldShimmer,
-  statusColorVar,
-} from "./agent-status-visual.ts";
 import { CORE_AGENT_STATUS_ITEM_ID } from "./core-terminal-status-items.ts";
 import { terminalStatusItemRegistry } from "./terminal-status-bar.tsx";
-
-const LONG_RUN_TICK_MS = 250;
 
 function isAgentActivity(
   activity: ForegroundActivity | undefined
@@ -29,33 +19,19 @@ function isAgentActivity(
  * 终端状态栏 agent item —— 结构对齐 loomdesk status-bar-activity-item：
  * [品牌图标(20px 容器内 12px)] [badge 文案(11px): 状态词 (+ · N 个子代理)] [sr-only agent 名]
  * 无状态点、无 agent 名可见文本、无计时（loomdesk 的 dot 属 session-manager,
- * duration 在其状态栏 badge 中被显式忽略）。250ms ticker 仅驱动长跑色。
+ * duration 在其状态栏 badge 中被显式忽略）。文案/shimmer 走共享 AgentStatusLabel。
  */
 function AgentStatusItemView({ panelId }: { panelId: string }) {
-  const t = useT();
   const activity = useForegroundActivityStore((s) => s.activities[panelId]);
-  const [nowMs, setNowMs] = useState(() => Date.now());
-
   const agent = isAgentActivity(activity) ? activity : null;
-  const status = agent?.status;
-  const shimmer = status !== undefined && shouldShimmer(status);
-  useEffect(() => {
-    if (!shimmer) {
-      return;
-    }
-    setNowMs(Date.now());
-    const id = setInterval(() => setNowMs(Date.now()), LONG_RUN_TICK_MS);
-    return () => clearInterval(id);
-  }, [shimmer]);
 
   if (!agent) {
     return null;
   }
   const agentLabel =
     getAgentCatalogEntry(agent.agentId)?.label ?? agent.agentId;
-  // 无 hook 证据（launch 先验, 如 `omp update` 这类非会话子命令）→
-  // icon-only：只出品牌图标, 不谎报状态文案。status 唯 hook 证据可设。
-  if (status === undefined) {
+  // 无 hook 证据（launch 先验）→ icon-only。
+  if (agent.status === undefined) {
     return (
       <span
         className="inline-flex shrink-0 items-center gap-1"
@@ -69,37 +45,22 @@ function AgentStatusItemView({ panelId }: { panelId: string }) {
       </span>
     );
   }
-  // ready 可见（loomdesk："等待输入"）——hook 证据在场时五态全部出文案。
-  const level = shimmer
-    ? longRunLevel(
-        Math.max(0, nowMs - (agent.stateStartedAt ?? agent.spawnedAt))
-      )
-    : null;
-  const colorVar = statusColorVar(status, level);
-  const label = t(agentStatusTextKey(status));
-  const badge =
-    agent.subagentCount > 0
-      ? `${label} · ${t("terminal.agentStatus.subagentCount", {
-          count: agent.subagentCount,
-        })}`
-      : label;
 
   return (
     <span
       className="inline-flex shrink-0 items-center gap-1"
-      data-agent-status={status}
+      data-agent-status={agent.status}
       data-testid="agent-status-item"
     >
       <span className="inline-flex size-5 shrink-0 items-center justify-center">
         <AgentIcon agentId={agent.agentId} size={12} />
       </span>
-      <span className="whitespace-nowrap text-[11px]" data-activity-badge>
-        {shimmer ? (
-          <AgentShimmerText colorVar={colorVar} text={badge} />
-        ) : (
-          <span data-activity-badge-text>{badge}</span>
-        )}
-      </span>
+      <AgentStatusLabel
+        spawnedAt={agent.spawnedAt}
+        stateStartedAt={agent.stateStartedAt}
+        status={agent.status}
+        subagentCount={agent.subagentCount}
+      />
       <span className="sr-only">{agentLabel}</span>
     </span>
   );

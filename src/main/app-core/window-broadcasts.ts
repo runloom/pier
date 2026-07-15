@@ -1,6 +1,11 @@
+import type {
+  AgentRuntimeFocusResult,
+  AgentRuntimeIndexSnapshot,
+} from "@shared/contracts/agent-runtime-index.ts";
 import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
+import type { SystemNotificationUnavailableReason } from "@shared/contracts/notification.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
@@ -74,4 +79,22 @@ export function broadcastUsageDataChanged(
   snapshot: UsageAggregateSnapshot
 ): void {
   broadcastToAllWindows(PIER_BROADCAST.USAGE_DATA_CHANGED, snapshot);
+}
+
+export function broadcastAgentRuntimeIndexChanged(
+  snapshot: AgentRuntimeIndexSnapshot
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.AGENT_RUNTIME_INDEX_CHANGED, snapshot);
+}
+
+export function broadcastAgentRuntimeFocusFeedback(
+  result: AgentRuntimeFocusResult
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.AGENT_RUNTIME_FOCUS_FEEDBACK, result);
+}
+
+export function broadcastAgentAttentionDegraded(payload: {
+  reason: SystemNotificationUnavailableReason;
+}): void {
+  broadcastToAllWindows(PIER_BROADCAST.AGENT_ATTENTION_DEGRADED, payload);
 }

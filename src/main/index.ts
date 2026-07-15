@@ -31,6 +31,7 @@ import {
   registerAssetScheme,
 } from "./fonts/asset-protocol.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
+import { registerAgentRuntimeHostIpc } from "./ipc/agent-runtime-host.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import { registerExternalNavigationIpc } from "./ipc/external-navigation.ts";
@@ -44,7 +45,6 @@ import {
 } from "./ipc/foreground-activity.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
-import { registerNotificationIpc } from "./ipc/notification.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerSystemStatsIpc } from "./ipc/system-stats.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
@@ -385,6 +385,7 @@ if (gotTheLock) {
       registerMenuIpc(ipcMain);
       registerAgentsIpc(ipcMain);
       registerForegroundActivityIpc(ipcMain);
+      registerAgentRuntimeHostIpc(ipcMain, appCore.services.agentRuntimeIndex);
       registerSystemStatsIpc(ipcMain);
       registerUsageDataIpc(ipcMain, appCore.services.usageData);
       ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {
@@ -417,7 +418,6 @@ if (gotTheLock) {
         isQuitting: () => windowManager.isQuitting(),
       });
       registerThemeIpc(ipcMain);
-      registerNotificationIpc(ipcMain);
       registerGitWatchIpc();
       registerFileWatchIpc();
       localControlRegistration.start();
