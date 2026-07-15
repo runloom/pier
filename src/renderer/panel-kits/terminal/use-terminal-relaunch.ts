@@ -1,4 +1,5 @@
 import { useEffect } from "react";
+import { syncTaskPanelParams } from "@/lib/workspace/task-panel-params-sync.ts";
 import { rejectTerminalLaunch } from "@/lib/workspace/terminal-launch-confirmation.ts";
 import type { TerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import type { ActiveTerminalLaunch } from "./terminal-panel-params.ts";
@@ -54,6 +55,12 @@ export function useTerminalRelaunch({
           task: relaunchRequest.task,
           taskOutput: undefined,
         });
+        if (relaunchRequest.task) {
+          syncTaskPanelParams(panelId, {
+            ...(relaunchRequest.tab ? { tab: relaunchRequest.tab } : {}),
+            task: relaunchRequest.task,
+          });
+        }
       })
       .catch((error: unknown) => {
         console.error(`[terminal-panel] relaunch ${panelId} failed:`, error);

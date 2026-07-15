@@ -464,6 +464,7 @@ export type PierCommandEnvelope = z.infer<typeof pierCommandEnvelopeSchema>;
 
 export type PierCommandErrorCode =
   | "invalid_command"
+  | "cancelled"
   | "permission_denied"
   | "not_found"
   | "platform_unavailable"

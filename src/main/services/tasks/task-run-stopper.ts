@@ -174,15 +174,6 @@ export function createTaskRunStopper({
         }
       }
       const stopped = taskRuns.forceStop(runId, stoppedTaskIds) ?? current;
-      for (const node of Object.values(stopped.nodes)) {
-        if (node.panelId && isBackgroundPanelId(node.panelId)) {
-          backgroundRuns.setNodeFromSnapshot(
-            stopped.projectRootPath,
-            stopped.runId,
-            node
-          );
-        }
-      }
       if (isFinishedControlRun(stopped)) {
         forgetSnapshotTasks(stopped);
       }

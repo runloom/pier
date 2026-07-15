@@ -1,4 +1,3 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Card,
@@ -88,17 +87,32 @@ function translatedCopy() {
   };
 }
 
+function retryStartup(): void {
+  const relaunch = window.pier?.app?.relaunch;
+  if (relaunch) {
+    // Pier 窗口是 BaseWindow + WebContentsView。dev 下真正的 soft restart
+    // 走 main 侧 webContents.reload()（见 performDevSoftRelaunch）；
+    // location.reload() 在这条路径上不可靠，会出现“点了没反应”。
+    relaunch().catch((error: unknown) => {
+      console.error("[pier] startup relaunch failed:", error);
+      window.location.reload();
+    });
+    return;
+  }
+  window.location.reload();
+}
+
 export function StartupErrorScreen({
   error,
-  onRetry = () => window.location.reload(),
+  onRetry = retryStartup,
 }: StartupErrorScreenProps) {
   const copy = translatedCopy();
   const detail = formatStartupError(error);
 
   return (
     <main className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
-      <Card className="w-full max-w-xl">
-        <CardHeader>
+      <Card className="flex max-h-[min(80vh,36rem)] w-full max-w-xl">
+        <CardHeader className="shrink-0">
           <div className="flex items-start gap-3">
             <CircleAlert
               aria-hidden
@@ -114,17 +128,20 @@ export function StartupErrorScreen({
             </div>
           </div>
         </CardHeader>
-        <CardContent>
-          <Alert variant="destructive">
-            <AlertTitle>{copy.details}</AlertTitle>
-            <AlertDescription>
-              <pre className="max-h-40 overflow-auto whitespace-pre-wrap break-words font-mono text-xs">
-                {detail}
-              </pre>
-            </AlertDescription>
-          </Alert>
+        <CardContent
+          className="min-h-0 flex-1 overflow-y-auto px-0"
+          data-scrollbar="stable"
+        >
+          <div className="px-(--card-spacing)">
+            <div className="font-medium text-destructive text-sm">
+              {copy.details}
+            </div>
+            <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-destructive/90 text-xs leading-5">
+              {detail}
+            </pre>
+          </div>
         </CardContent>
-        <CardFooter className="justify-end">
+        <CardFooter className="shrink-0 justify-end">
           <Button onClick={onRetry} size="sm" type="button">
             <RotateCcw aria-hidden data-icon="inline-start" />
             {copy.retry}

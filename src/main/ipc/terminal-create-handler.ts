@@ -1,11 +1,15 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { taskOutputPanelParamsSchema } from "@shared/contracts/tasks.ts";
+import {
+  isPanelTaskLive,
+  taskOutputPanelParamsSchema,
+} from "@shared/contracts/tasks.ts";
 import type {
   CreateTerminalArgs,
   CreateTerminalResult,
 } from "@shared/contracts/terminal.ts";
 import { resolveAgentResumeLaunch } from "../services/agents/agent-resume-adapters.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
+import type { TaskService } from "../services/tasks/task-service-types.ts";
 import {
   clearTerminalPanelAgent,
   readTerminalPanelSession,
@@ -44,6 +48,7 @@ export async function handleTerminalCreate(args: {
     | undefined;
   taskLifecycle: RegisteredTerminalTaskLifecycle;
   taskOutputBindings: TaskOutputTerminalBindings | null;
+  taskService: TaskService | null;
   win: AppWindow | null;
 }): Promise<CreateTerminalResult> {
   const {
@@ -54,6 +59,7 @@ export async function handleTerminalCreate(args: {
     recordAgentLaunch,
     taskLifecycle,
     taskOutputBindings,
+    taskService,
     win,
   } = args;
   if (!addon) {
@@ -122,12 +128,14 @@ export async function handleTerminalCreate(args: {
       sessionScope,
       createArgs.panelId
     );
-    const taskLive = foregroundActivityService
-      .snapshot(String(win.id))
-      .activities.some(
-        (activity) =>
-          activity.kind === "task" && activity.panelId === createArgs.panelId
-      );
+    const windowId = findInternalWindowId(win) ?? undefined;
+    const taskLive = taskService
+      ? isPanelTaskLive(
+          taskService.runsSnapshot(windowId),
+          createArgs.panelId,
+          windowId
+        )
+      : false;
     const launch = resolveCreateTerminalLaunch(createArgs, saved, { taskLive });
     const lifecycleId = launch.task?.runId ?? "";
     taskLifecycle.resetPanel(

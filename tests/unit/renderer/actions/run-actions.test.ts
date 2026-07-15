@@ -4,7 +4,6 @@ import type {
   TaskSpawnResult,
 } from "@shared/contracts/tasks.ts";
 import type { DockviewApi } from "dockview-react";
-import { toast } from "sonner";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -17,14 +16,6 @@ import {
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
-vi.mock("sonner", () => ({
-  toast: {
-    dismiss: vi.fn(),
-    loading: vi.fn(() => "task-spawn-loading"),
-  },
-}));
-
-const TASK_SPAWN_LOADING_DELAY_MS = 300;
 function context(path: string): PanelContext {
   return {
     contextId: `ctx:${path}`,
@@ -187,7 +178,6 @@ describe("run actions", () => {
     await initI18n();
     vi.restoreAllMocks();
     vi.clearAllMocks();
-    vi.mocked(toast.loading).mockReturnValue("task-spawn-loading");
     resetAppDialogForTests();
     useCommandPaletteController.setState({
       mode: "commands",
@@ -472,16 +462,11 @@ describe("run actions", () => {
     expect(terminalOther.api.setActive).not.toHaveBeenCalled();
   });
 
-  it("shows delayed loading feedback only for a slow selected task spawn", async () => {
-    vi.useFakeTimers();
+  it("does not show loading toast when starting a task from the command palette", async () => {
     installWorkspaceApi();
-    const spawn = deferred<TaskSpawnResult>();
-    vi.mocked(window.pier.tasks.spawn).mockReturnValueOnce(spawn.promise);
     disposeRunActions = registerRunActions();
 
-    const run = runTaskAction();
-    await vi.advanceTimersByTimeAsync(0);
-    await run;
+    await runTaskAction();
 
     const quickPick = useCommandPaletteController.getState().quickPick;
     const target = quickPick?.sections
@@ -491,94 +476,22 @@ describe("run actions", () => {
       throw new Error("expected task item");
     }
 
-    const accepted = quickPick.onAccept(target);
-    expect(toast.loading).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(TASK_SPAWN_LOADING_DELAY_MS - 1);
-    expect(toast.loading).not.toHaveBeenCalled();
-
-    await vi.advanceTimersByTimeAsync(1);
-    expect(toast.loading).toHaveBeenCalledTimes(1);
-
-    spawn.resolve({
-      panelIds: ["terminal-task"],
-      primaryPanelId: "terminal-task",
-      status: "started",
-    });
-    await accepted;
-
-    expect(toast.dismiss).toHaveBeenCalledWith("task-spawn-loading");
-    vi.useRealTimers();
-  });
-
-  it("does not show loading feedback for a fast selected task spawn", async () => {
-    vi.useFakeTimers();
-    installWorkspaceApi();
-    disposeRunActions = registerRunActions();
-
-    const run = runTaskAction();
-    await vi.advanceTimersByTimeAsync(0);
-    await run;
-
-    const quickPick = useCommandPaletteController.getState().quickPick;
-    const target = quickPick?.sections?.[0]?.items[0];
-    if (!(quickPick && target)) {
-      throw new Error("expected task item");
-    }
-
     await quickPick.onAccept(target);
-    await vi.advanceTimersByTimeAsync(TASK_SPAWN_LOADING_DELAY_MS);
 
-    expect(toast.loading).not.toHaveBeenCalled();
-    expect(toast.dismiss).not.toHaveBeenCalled();
-    vi.useRealTimers();
+    expect(window.pier.tasks.spawn).toHaveBeenCalledWith(
+      expect.objectContaining({
+        projectRootPath: "/Users/xyz/ABC/pier",
+        taskId: "package-script:test",
+      })
+    );
   });
 
-  it("dismisses delayed loading feedback when a slow selected task spawn rejects", async () => {
-    vi.useFakeTimers();
-    installWorkspaceApi();
-    const spawn = deferred<TaskSpawnResult>();
-    vi.mocked(window.pier.tasks.spawn).mockReturnValueOnce(spawn.promise);
-    disposeRunActions = registerRunActions();
-
-    const run = runTaskAction();
-    await vi.advanceTimersByTimeAsync(0);
-    await run;
-
-    const quickPick = useCommandPaletteController.getState().quickPick;
-    const target = quickPick?.sections?.[0]?.items[0];
-    if (!(quickPick && target)) {
-      throw new Error("expected task item");
-    }
-
-    const accepted = quickPick.onAccept(target);
-    await vi.advanceTimersByTimeAsync(TASK_SPAWN_LOADING_DELAY_MS);
-    expect(toast.loading).toHaveBeenCalledTimes(1);
-
-    spawn.reject(new Error("boom"));
-    await vi.waitFor(() => {
-      expect(useAppDialogStore.getState().current).toMatchObject({
-        body: "boom",
-        kind: "alert",
-        title: "Failed to start task",
-      });
-    });
-    resetAppDialogForTests();
-    await accepted;
-
-    expect(toast.dismiss).toHaveBeenCalledWith("task-spawn-loading");
-    vi.useRealTimers();
-  });
-
-  it("does not show delayed loading feedback after a fast selected task spawn rejects", async () => {
-    vi.useFakeTimers();
+  it("shows an alert when spawn rejects without loading toast", async () => {
     installWorkspaceApi();
     vi.mocked(window.pier.tasks.spawn).mockRejectedValueOnce(new Error("boom"));
     disposeRunActions = registerRunActions();
 
-    const run = runTaskAction();
-    await vi.advanceTimersByTimeAsync(0);
-    await run;
+    await runTaskAction();
 
     const quickPick = useCommandPaletteController.getState().quickPick;
     const target = quickPick?.sections?.[0]?.items[0];
@@ -596,11 +509,6 @@ describe("run actions", () => {
     });
     resetAppDialogForTests();
     await accepted;
-    await vi.advanceTimersByTimeAsync(TASK_SPAWN_LOADING_DELAY_MS);
-
-    expect(toast.loading).not.toHaveBeenCalled();
-    expect(toast.dismiss).not.toHaveBeenCalled();
-    vi.useRealTimers();
   });
 
   it("shows an alert when main reports that a selected task is unsupported", async () => {

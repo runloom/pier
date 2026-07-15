@@ -1,5 +1,5 @@
 /** Terminal session state persistence: panel metadata per window + terminal id. */
-import { taskTabStateForActivityStatus } from "@shared/contracts/foreground-activity.ts";
+
 import {
   normalizePanelTabChromeInput,
   type PanelContext,
@@ -11,6 +11,7 @@ import {
   type TaskPanelMetadata,
   type TaskPanelStatus,
   taskPanelMetadataSchema,
+  taskRunTabState,
 } from "@shared/contracts/tasks.ts";
 import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
 import {
@@ -474,7 +475,7 @@ export async function reconcileOrphanedRunningTasks(
         windowState.panels[panelId] = {
           ...panel,
           tab: mergePanelTabChrome(panel.tab, {
-            state: taskTabStateForActivityStatus("cancelled"),
+            state: taskRunTabState("cancelled"),
           }),
           task: nextTask.data,
           updatedAt: new Date(now()).toISOString(),

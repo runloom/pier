@@ -3,22 +3,23 @@ import { agentTabIconId } from "@shared/contracts/agent-session.ts";
 import {
   type ForegroundActivity,
   tabStatusForActivityStatus,
-  taskTabStateForActivityStatus,
 } from "@shared/contracts/foreground-activity.ts";
 import {
   normalizePanelTabChromeInput,
   type PanelContext,
   type PanelDescriptor,
   type PanelTabChrome,
-  type PanelTabState,
 } from "@shared/contracts/panel.ts";
-import type {
-  TaskOutputPanelParams,
-  TaskPanelMetadata,
-  TaskRunNodeStatus,
-  TaskRunsSnapshot,
+import {
+  committedTaskOutputRunId,
+  isActiveTaskRunNodeStatus,
+  type TaskOutputPanelParams,
+  type TaskPanelMetadata,
+  type TaskRunNodeStatus,
+  type TaskRunsSnapshot,
+  taskRunTabState,
 } from "@shared/contracts/tasks.ts";
-import { selectedTaskOutputRunId } from "@shared/contracts/tasks.ts";
+import { taskRunsOwnedByPanel } from "@/stores/task-runs.store.ts";
 
 /**
  * 路径 basename — POSIX 形式 (终端始终在 macOS).
@@ -140,14 +141,13 @@ export function agentTabTitleFromTerminal(
  *
  * - `agent` kind: 状态点从 agent status 派生, icon 换 agent；title 用短 OSC
  *   或 catalog label（长 prompt 不进 tab，完整标题走 tooltip）
- * - `task` kind: 完整 tab state（指示器+label+色 token）由
- *   taskTabStateForActivityStatus 派生兼容投影；实时任务状态最终由精确 runId 的
- *   TaskRunsSnapshot overlay 覆盖；label 作为 title
+ * - `task` kind: 无 tab state overlay（活体状态只读 TaskRunsSnapshot）；label 作为 title
  * - `shell` / `idle` / undefined: 无 overlay, 走 tab 默认呈现
  */
 export function activityTabChromeOverlay(
   activity: ForegroundActivity | undefined,
-  terminalTitle?: string | null
+  terminalTitle?: string | null,
+  taskRuns?: TaskRunsSnapshot
 ): Partial<PanelTabChrome> | null {
   if (!activity) {
     return null;
@@ -165,61 +165,60 @@ export function activityTabChromeOverlay(
     };
   }
   if (activity.kind === "task") {
-    return {
-      state: taskTabStateForActivityStatus(activity.status, activity.exitCode),
-      title: activity.label,
-    };
+    const run = taskRuns?.runs[activity.runId];
+    if (!(run && isActiveTaskRunNodeStatus(run.status))) {
+      return null;
+    }
+    return { title: activity.label };
   }
   return null;
 }
 
-function taskOutputTabState(
-  status: TaskRunNodeStatus,
-  exitCode?: number
-): PanelTabState {
-  switch (status) {
-    case "pending":
-      return { label: "Pending", status: "waiting" };
-    case "running":
-      return { label: "Running", status: "running" };
-    case "stopping":
-      return { label: "Stopping", status: "waiting" };
-    case "succeeded":
-      return { colorToken: "success", label: "Succeeded", status };
-    case "failed":
-      return {
-        colorToken: "destructive",
-        label: exitCode === undefined ? "Failed" : `Failed ${exitCode}`,
-        status,
-      };
-    case "blocked":
-      return { colorToken: "warning", label: "Blocked", status };
-    default:
-      return { colorToken: "warning", label: "Cancelled", status };
-  }
+function taskOutputTabState(status: TaskRunNodeStatus, exitCode?: number) {
+  return taskRunTabState(status, exitCode);
 }
 
 /**
- * 普通任务终端的状态按精确 runId 读取 TaskRunsSnapshot。
- * ForegroundActivity 仍负责活动呈现和兼容回退，但旧 PTY 的迟到退出事件不得覆盖
- * 已重绑到同一 panelId 的新运行状态。
+ * 普通任务终端 tab 状态：只反映 node.panelId 占用该 panel 的 run。
+ * background 的 originPanelId 关联只出现在 RC，不覆盖 shell tab 的 loading。
  */
 export function taskRunTabChromeOverlay(
-  task: TaskPanelMetadata | undefined,
-  snapshot: TaskRunsSnapshot
+  panelId: string,
+  snapshot: TaskRunsSnapshot,
+  fallback?: TaskPanelMetadata,
+  selectedRunId?: string | null
 ): Partial<PanelTabChrome> | null {
-  if (!task) {
+  const runs = taskRunsOwnedByPanel(snapshot, panelId);
+  const run =
+    (selectedRunId
+      ? runs.find((candidate) => candidate.runId === selectedRunId)
+      : undefined) ?? runs[0];
+  if (run) {
+    const node =
+      run.nodes[run.rootTaskId] ??
+      Object.values(run.nodes).find(
+        (candidate) => candidate.panelId === panelId
+      );
+    if (node) {
+      const status = node.status ?? run.status;
+      return {
+        state: taskOutputTabState(status, node.exitCode),
+        title: node.label ?? fallback?.label,
+      };
+    }
+  }
+  if (!fallback) {
     return null;
   }
-  const run = snapshot.runs[task.runId];
-  const node = run?.nodes[task.taskId];
-  const status = node?.status ?? run?.status;
+  const fallbackRun = snapshot.runs[fallback.runId];
+  const node = fallbackRun?.nodes[fallback.taskId];
+  const status = node?.status ?? fallbackRun?.status;
   if (!status) {
     return null;
   }
   return {
     state: taskOutputTabState(status, node?.exitCode),
-    title: node?.label ?? task.label,
+    title: node?.label ?? fallback.label,
   };
 }
 
@@ -231,7 +230,8 @@ export function taskOutputTabChromeOverlay(
   if (!output) {
     return null;
   }
-  const run = snapshot.runs[selectedTaskOutputRunId(output)];
+  const runId = committedTaskOutputRunId(output);
+  const run = snapshot.runs[runId];
   const node = run?.nodes[output.taskId];
   const status = node?.status ?? run?.status;
   return {

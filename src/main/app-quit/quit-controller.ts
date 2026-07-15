@@ -1,5 +1,6 @@
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import type { AppQuitConfirmationMode } from "@shared/contracts/preferences.ts";
+import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import {
   type QuitActivitySummary,
@@ -22,6 +23,7 @@ export interface AppQuitControllerDeps {
   flushBeforeQuit: () => Promise<void>;
   getActivities: () => readonly ForegroundActivity[];
   getDialogParent: () => AppWindow | null;
+  getTaskRuns?: () => TaskRunsSnapshot;
   logFailure: (error: unknown) => void;
   proceedToQuit: () => void;
   readConfirmationMode: () => Promise<AppQuitConfirmationMode>;
@@ -48,7 +50,10 @@ export function createAppQuitController(
   async function runQuitFlow(): Promise<void> {
     try {
       const mode = await deps.readConfirmationMode();
-      const summaries = summarizeDangerousQuitActivities(deps.getActivities());
+      const summaries = summarizeDangerousQuitActivities(
+        deps.getActivities(),
+        deps.getTaskRuns?.()
+      );
       const shouldConfirm =
         !deps.shouldBypassQuitConfirmationForTests?.() &&
         shouldConfirmBeforeQuit(mode, summaries.length);

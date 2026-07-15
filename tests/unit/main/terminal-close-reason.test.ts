@@ -227,7 +227,7 @@ describe("terminal close IPC reason semantics", () => {
     expect(taskService.markPanelClosed).not.toHaveBeenCalled();
   });
 
-  it("preserves the running task activity across a relaunch close so the exit lands", async () => {
+  it("preserves the task occupation across a relaunch close until cleared", async () => {
     const { invokeHandlers, win } = await setupHarness();
     // 动态 import 必须晚于 setupHarness 的 vi.doMock（resetModules 后按测试
     // 注册 mock）——静态 import 会绑定未 mock 的模块实例。
@@ -252,37 +252,23 @@ describe("terminal close IPC reason semantics", () => {
       expect.objectContaining({
         kind: "task",
         panelId: "terminal-1",
-        status: "running",
         taskId: "task-dev",
       }),
     ]);
 
-    // 生产时序里旧 pty 死亡会在 close 与 finish 之间送达 process-closed →
-    // ptyExited；task 层必须挺过这一拍（aggregator 按层语义保留 task 层）。
     foregroundActivityService.ptyExited("terminal-1");
     expect(foregroundActivityService.snapshot().activities).toEqual([
       expect.objectContaining({
         kind: "task",
         panelId: "terminal-1",
-        status: "running",
       }),
     ]);
 
     foregroundActivityService.taskFinished("terminal-1", "window-main", {
-      exitCode: 0,
       runId: "run-1",
-      status: "success",
     });
 
-    const after = foregroundActivityService.snapshot().activities;
-    expect(after).toEqual([
-      expect.objectContaining({
-        exitCode: 0,
-        kind: "task",
-        panelId: "terminal-1",
-        status: "success",
-      }),
-    ]);
+    expect(foregroundActivityService.snapshot().activities).toEqual([]);
   });
 
   // 非回归守卫：真实关闭（无 reason）仍走 panelClosed 清理——锚住 else 分支，

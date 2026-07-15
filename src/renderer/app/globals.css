@@ -941,6 +941,9 @@ body {
    长错误走 showAppAlert。 */
 [data-sonner-toaster] {
   font-family: var(--pier-ui-font-family);
+  /* 保证落在终端 NSView 之上的命中层语义清晰；实际命中靠 webOverlayRects。 */
+  pointer-events: auto;
+  z-index: 100;
 }
 
 /* 轨道居中后，短胶囊用 left/right + margin auto 在轨道内再居中；
@@ -971,6 +974,8 @@ body {
   overflow-wrap: normal !important;
   word-break: keep-all !important;
   white-space: nowrap !important;
+  pointer-events: auto !important;
+  -webkit-app-region: no-drag;
 }
 
 [data-sonner-toast].pier-toast [data-content] {
@@ -1009,4 +1014,7 @@ body {
   color: var(--toast-foreground) !important;
   margin-left: 4px !important;
   flex-shrink: 0 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  -webkit-app-region: no-drag;
 }

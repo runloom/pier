@@ -24,10 +24,14 @@ function formatActivityName(
   t: TFunction,
   summary: QuitActivitySummary
 ): string {
+  const label =
+    summary.kind === "shell" && !summary.commandLine
+      ? t("dialog.appQuit.shellFallback")
+      : summary.label;
   return truncateActivityName(
     t("dialog.appQuit.activityName", {
       kind: t(`dialog.appQuit.activityKind.${summary.kind}`),
-      label: summary.label,
+      label,
     })
   );
 }

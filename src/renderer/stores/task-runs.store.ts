@@ -40,6 +40,23 @@ export async function initTaskRunsStore(): Promise<void> {
   }
 }
 
+export function taskRunsOwnedByPanel(
+  snapshot: TaskRunsSnapshot,
+  panelId: string
+): TaskRunControlEntry[] {
+  return Object.values(snapshot.runs)
+    .filter((run) =>
+      Object.values(run.nodes).some((node) => node.panelId === panelId)
+    )
+    .sort(
+      (a, b) =>
+        b.updatedAt - a.updatedAt ||
+        b.startedAt - a.startedAt ||
+        a.runId.localeCompare(b.runId)
+    );
+}
+
+/** RC / 动作作用域：包含从该 panel 发起的 background run（originPanelId）。 */
 export function taskRunsForPanel(
   snapshot: TaskRunsSnapshot,
   panelId: string

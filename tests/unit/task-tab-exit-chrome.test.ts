@@ -1,44 +1,16 @@
-import { createForegroundActivityAggregator } from "@main/services/foreground-activity/aggregator.ts";
 import type { PanelTabChrome } from "@shared/contracts/panel.ts";
 import type {
   TaskPanelMetadata,
   TaskRunsSnapshot,
 } from "@shared/contracts/tasks.ts";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 import {
   activityTabChromeOverlay,
   mergeTabChrome,
   taskRunTabChromeOverlay,
 } from "@/panel-kits/terminal/terminal-tab-chrome.ts";
 
-/**
- * 回归：task 退出后 tab chrome 不得回退到陈旧 "Running" 基线。
- *
- * 老 TERMINAL_TAB_CHROME_PATCHED 推送通路已下线, renderer 的 task 退出
- * chrome 单源是 foreground-activity 广播（terminal-panel.tsx: base →
- * restore-patch → activity overlay）。修复前聚合器在 taskFinished 后 5s
- * linger 即丢弃 task 层, overlay 变 null, mergeTabChrome 原样返回 base,
- * tab 卡死在 "Running" 转圈。本测试跨 main/renderer 缝合面复现：退出 60s
- * 后取 snapshot, 走与生产完全一致的 overlay+merge 管线断言终态。
- */
-describe("task exit tab chrome across aggregator → overlay seam", () => {
-  let clock = 0;
-  const now = (): number => clock;
-
-  beforeEach(() => {
-    clock = 0;
-    vi.useFakeTimers();
-  });
-  afterEach(() => {
-    vi.useRealTimers();
-  });
-
-  function advance(ms: number): void {
-    clock += ms;
-    vi.advanceTimersByTime(ms);
-  }
-
-  /** task panel 启动时的真实基线 chrome（task-execution-plan.ts）。 */
+describe("task exit tab chrome uses TaskRuns as single live source", () => {
   function runningBase(): PanelTabChrome {
     return {
       state: { label: "Running", status: "running" },
@@ -62,7 +34,7 @@ describe("task exit tab chrome across aggregator → overlay seam", () => {
 
   function runsSnapshot(
     runId: string,
-    status: "failed" | "running"
+    status: "failed" | "running" | "succeeded"
   ): TaskRunsSnapshot {
     return {
       runs: {
@@ -89,97 +61,147 @@ describe("task exit tab chrome across aggregator → overlay seam", () => {
     };
   }
 
-  it("success 退出 60s 后 merged chrome 为 succeeded, 非陈旧 running", () => {
-    const agg = createForegroundActivityAggregator({ now });
-    agg.taskLaunched("p1", "1", {
-      taskId: "t1",
-      label: "npm build",
-      runId: "run-1",
-    });
-    agg.taskFinished("p1", { runId: "run-1", status: "success", exitCode: 0 });
-    // 远超旧 5s linger——修复前活动在此已被丢弃
-    advance(60_000);
-
-    // 与 terminal-panel.tsx 相同的数据流：活动缺席时 overlay 为 null,
-    // merge 回退 base——断言将以 "running" 失败, 即本 bug 的确切症状。
-    const activity = agg.snapshot().activities.find((a) => a.panelId === "p1");
+  it("TaskRuns overlay shows succeeded instead of stale running base", () => {
     const merged = mergeTabChrome(
       runningBase(),
-      activityTabChromeOverlay(activity)
+      taskRunTabChromeOverlay(
+        "p1",
+        runsSnapshot("run-1", "succeeded"),
+        task("run-1")
+      )
     );
 
     expect(merged?.state?.status).toBe("succeeded");
     expect(merged?.title).toBe("npm build");
-
-    // 佐证：活动本体确实以终态常驻（而非碰巧由别的层供给 chrome）
-    expect(activity?.kind).toBe("task");
-    if (activity?.kind === "task") {
-      expect(activity.status).toBe("success");
-    }
-    agg.dispose();
   });
 
-  it("failure 退出 60s 后 merged chrome 为 failed", () => {
-    const agg = createForegroundActivityAggregator({ now });
-    agg.taskLaunched("p1", "1", {
-      taskId: "t1",
-      label: "npm build",
-      runId: "run-1",
-    });
-    agg.taskFinished("p1", { runId: "run-1", status: "failure", exitCode: 1 });
-    advance(60_000);
-
-    const activity = agg.snapshot().activities.find((a) => a.panelId === "p1");
+  it("TaskRuns overlay shows failed with exit code", () => {
     const merged = mergeTabChrome(
       runningBase(),
-      activityTabChromeOverlay(activity)
+      taskRunTabChromeOverlay(
+        "p1",
+        runsSnapshot("run-1", "failed"),
+        task("run-1")
+      )
     );
 
     expect(merged?.state?.status).toBe("failed");
-    expect(merged?.title).toBe("npm build");
-    expect(activity?.kind).toBe("task");
-    if (activity?.kind === "task") {
-      expect(activity.exitCode).toBe(1);
-    }
-    agg.dispose();
+    expect(merged?.state?.label).toBe("Failed 1");
   });
 
-  it("keeps a restarted panel on the new run when the old activity finishes late", () => {
-    const agg = createForegroundActivityAggregator({ now });
-    agg.taskLaunched("p1", "1", {
-      taskId: "build",
-      label: "npm build",
-      runId: "run-1",
-    });
-    agg.taskFinished("p1", { runId: "run-1", status: "cancelled" });
-    const activity = agg
-      .snapshot()
-      .activities.find((item) => item.panelId === "p1");
-    const currentTask = task("run-new");
-    const snapshot = runsSnapshot("run-new", "running");
-
-    const merged = mergeTabChrome(
-      mergeTabChrome(runningBase(), activityTabChromeOverlay(activity)),
-      taskRunTabChromeOverlay(currentTask, snapshot)
+  it("activity overlay for task only contributes title, not status", () => {
+    const overlay = activityTabChromeOverlay(
+      {
+        kind: "task",
+        label: "npm build",
+        panelId: "p1",
+        runId: "run-1",
+        spawnedAt: 1,
+        taskId: "build",
+        updatedAt: 2,
+        windowId: "1",
+      },
+      undefined,
+      runsSnapshot("run-1", "running")
     );
 
-    expect(activity).toMatchObject({ kind: "task", status: "cancelled" });
+    expect(overlay).toEqual({ title: "npm build" });
+    expect(overlay?.state).toBeUndefined();
+  });
+
+  it("keeps a restarted panel on the new run when the old run finished", () => {
+    const merged = mergeTabChrome(
+      mergeTabChrome(runningBase(), { title: "npm build" }),
+      taskRunTabChromeOverlay(
+        "p1",
+        runsSnapshot("run-new", "running"),
+        task("run-old")
+      )
+    );
+
     expect(merged?.state).toMatchObject({
       label: "Running",
       status: "running",
     });
-    agg.dispose();
   });
 
-  it("uses the new run failure instead of an older activity result", () => {
-    const overlay = taskRunTabChromeOverlay(
-      task("run-new"),
-      runsSnapshot("run-new", "failed")
+  it("keeps running tab overlay during relaunch while TaskRuns still report active", () => {
+    const relaunchBase = mergeTabChrome(runningBase(), { title: "npm build" });
+    const duringRelaunch = mergeTabChrome(
+      relaunchBase,
+      taskRunTabChromeOverlay(
+        "p1",
+        runsSnapshot("run-1", "running"),
+        task("run-1")
+      )
     );
 
-    expect(overlay).toMatchObject({
-      state: { label: "Failed 1", status: "failed" },
-      title: "npm build",
+    expect(duringRelaunch?.state).toMatchObject({
+      label: "Running",
+      status: "running",
     });
+    expect(
+      activityTabChromeOverlay(
+        {
+          kind: "task",
+          label: "npm build",
+          panelId: "p1",
+          runId: "run-1",
+          spawnedAt: 1,
+          taskId: "build",
+          updatedAt: 2,
+          windowId: "1",
+        },
+        undefined,
+        runsSnapshot("run-1", "running")
+      )?.state
+    ).toBeUndefined();
+  });
+
+  it("ignores stale foreground task title when the run is no longer active", () => {
+    expect(
+      activityTabChromeOverlay(
+        {
+          kind: "task",
+          label: "npm build",
+          panelId: "p1",
+          runId: "run-1",
+          spawnedAt: 1,
+          taskId: "build",
+          updatedAt: 2,
+          windowId: "1",
+        },
+        undefined,
+        runsSnapshot("run-1", "succeeded")
+      )
+    ).toBeNull();
+  });
+
+  it("does not show task tab loading on a background origin shell", () => {
+    const snapshot: TaskRunsSnapshot = {
+      runs: {
+        "run-bg": {
+          mode: "background",
+          nodes: {
+            dev: {
+              label: "dev",
+              panelId: "background-task:run-bg:dev",
+              status: "running",
+              taskId: "dev",
+            },
+          },
+          originPanelId: "p1",
+          projectRootPath: "/repo",
+          rootTaskId: "dev",
+          runId: "run-bg",
+          startedAt: 1,
+          status: "running",
+          updatedAt: 2,
+        },
+      },
+      version: 1,
+    };
+
+    expect(taskRunTabChromeOverlay("p1", snapshot)).toBeNull();
   });
 });

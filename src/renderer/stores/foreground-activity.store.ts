@@ -2,6 +2,10 @@ import type {
   ForegroundActivity,
   ForegroundActivityBroadcast,
 } from "@shared/contracts/foreground-activity.ts";
+import {
+  activeTaskRunCount,
+  type TaskRunsSnapshot,
+} from "@shared/contracts/tasks.ts";
 import { create } from "zustand";
 
 interface ForegroundActivityState {
@@ -33,15 +37,18 @@ export const useForegroundActivityStore = create<ForegroundActivityState>(
   })
 );
 
+export { combinedActivityRows } from "@shared/task-activity-sources.ts";
+
 export interface ActivityCounts {
   running: number;
   waiting: number;
 }
 
 export function activityCounts(
-  activities: Record<string, ForegroundActivity>
+  activities: Record<string, ForegroundActivity>,
+  taskRuns?: TaskRunsSnapshot
 ): ActivityCounts {
-  let running = 0;
+  let running = taskRuns ? activeTaskRunCount(taskRuns) : 0;
   let waiting = 0;
   for (const a of Object.values(activities)) {
     if (a.kind === "agent") {
@@ -50,8 +57,6 @@ export function activityCounts(
       } else if (a.status === "waiting") {
         waiting += 1;
       }
-    } else if (a.kind === "task" && a.status === "running") {
-      running += 1;
     }
   }
   return { running, waiting };

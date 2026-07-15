@@ -141,14 +141,12 @@ export interface ShellLayer {
   windowId: string;
 }
 
-/** command 层：pier task（用户显式触发）。 */
+/** command 层：pier task（用户显式触发，仅占位指针无 status）。 */
 export interface TaskLayer {
-  exitCode?: number;
   kind: "task";
   label: string;
   runId: string;
   spawnedAt: number;
-  status: "cancelled" | "failure" | "running" | "success";
   taskId: string;
   updatedAt: number;
   windowId: string;
@@ -426,7 +424,6 @@ export function newTaskLayer(
     label,
     runId,
     spawnedAt: at,
-    status: "running",
     taskId,
     updatedAt: at,
     windowId,
@@ -450,12 +447,10 @@ export function projectSlot(
       label: command.label,
       panelId,
       spawnedAt: command.spawnedAt,
-      status: command.status,
       taskId: command.taskId,
       runId: command.runId,
       updatedAt: command.updatedAt,
       windowId: command.windowId,
-      ...(command.exitCode === undefined ? {} : { exitCode: command.exitCode }),
     };
   }
   if (hook && !hook.hidden) {

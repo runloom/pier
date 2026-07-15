@@ -1,9 +1,8 @@
 import {
+  committedTaskOutputRunId,
   selectedTaskOutputRunId,
   type TaskOutputPanelParams,
   type TaskOutputPanelParamsV2,
-  taskOutputBindingGeneration,
-  taskOutputPanelParamsSchema,
 } from "@shared/contracts/tasks.ts";
 import type { DockviewApi } from "dockview-react";
 import {
@@ -11,21 +10,31 @@ import {
   activateWorkspacePanel,
 } from "@/lib/workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
+import {
+  findMergeableTaskOutputPanel,
+  resolveTaskOutputContextId,
+  type TaskOutputPanelLike,
+  taskOutputFromPanel,
+  upgradeTaskOutputContextId,
+} from "./task-output-panel-identity.ts";
+import {
+  nextTaskOutputBinding,
+  rebindTaskOutputPanel,
+} from "./task-output-panel-rebind.ts";
 
-interface TaskOutputPanelLike {
-  api: {
-    setActive(): void;
-    updateParameters(params: Record<string, unknown>): void;
-  };
-  id: string;
-  params?: unknown;
-  view: { contentComponent: string };
-}
-
-export interface RebindTaskOutputPanelResult {
-  error?: string;
-  ok: boolean;
-}
+export {
+  resolveTaskOutputContextId,
+  taskOutputFromPanel,
+} from "./task-output-panel-identity.ts";
+export type { RebindTaskOutputPanelResult } from "./task-output-panel-rebind.ts";
+export {
+  nextTaskOutputBinding,
+  rebindTaskOutputPanel,
+} from "./task-output-panel-rebind.ts";
+export {
+  maintainTaskOutputPanels,
+  syncTaskOutputPanelsToActiveRuns,
+} from "./task-output-panel-sync.ts";
 
 export interface TaskOutputPanelBinding {
   panelId: string;
@@ -35,22 +44,6 @@ export interface TaskOutputPanelBinding {
 export type OpenTaskOutputPanelResult =
   | ActivateWorkspacePanelResult
   | { code: "rebind_failed"; message: string; ok: false };
-
-function taskOutputFromPanel(
-  panel: TaskOutputPanelLike
-): TaskOutputPanelParams | null {
-  if (
-    !(
-      panel.params &&
-      typeof panel.params === "object" &&
-      "taskOutput" in panel.params
-    )
-  ) {
-    return null;
-  }
-  const parsed = taskOutputPanelParamsSchema.safeParse(panel.params.taskOutput);
-  return parsed.success ? parsed.data : null;
-}
 
 /** 查找当前仍展示指定运行的 Task Output 视图；重新运行只重绑这些视图。 */
 export function taskOutputPanelsForRun(
@@ -69,26 +62,6 @@ export function taskOutputPanelsForRun(
   });
 }
 
-function sameLogicalView(
-  left: TaskOutputPanelParams,
-  right: TaskOutputPanelParams
-): boolean {
-  if ("contextId" in left && "contextId" in right) {
-    return (
-      left.contextId === right.contextId &&
-      left.taskId === right.taskId &&
-      left.instanceId === right.instanceId
-    );
-  }
-  // v1 没有 contextId；runId 在 TaskService 进程内全局唯一，因此只有同一次
-  // run + task 才允许视为同一逻辑视图，避免跨工作区误合并。
-  return (
-    !("contextId" in left) &&
-    left.taskId === right.taskId &&
-    selectedTaskOutputRunId(left) === selectedTaskOutputRunId(right)
-  );
-}
-
 export function taskOutputPanelId(params: TaskOutputPanelParams): string {
   if ("contextId" in params) {
     const instance = params.instanceId
@@ -100,122 +73,16 @@ export function taskOutputPanelId(params: TaskOutputPanelParams): string {
   return `task-output-${encodeURIComponent(params.runId)}-${encodeURIComponent(params.taskId)}`;
 }
 
-export function nextTaskOutputBinding(
-  current: TaskOutputPanelParams,
-  selectedRunId: string,
-  identity?: {
-    contextId: string;
-    projectRootPath: string;
-  }
-): TaskOutputPanelParamsV2 {
-  const contextId =
-    "contextId" in current ? current.contextId : identity?.contextId;
-  const projectRootPath =
-    "projectRootPath" in current
-      ? current.projectRootPath
-      : identity?.projectRootPath;
-  if (!(contextId && projectRootPath)) {
-    throw new Error("task output view identity is unavailable");
-  }
-  return {
-    contextId,
-    generation: taskOutputBindingGeneration(current) + 1,
-    ...("instanceId" in current && current.instanceId
-      ? { instanceId: current.instanceId }
-      : {}),
-    label: current.label,
-    projectRootPath,
-    selectedRunId,
-    taskId: current.taskId,
-    version: 2,
-  };
-}
-
-/**
- * 同一逻辑 Task Output view 的显式重绑定入口。
- *
- * 顺序固定为 native adapter 成功 → dockview 参数提交；adapter 失败时视图参数
- * 保持旧值。极少数参数提交异常会用更高 generation 尽力补偿回旧运行。
- */
-export async function rebindTaskOutputPanel(
-  api: DockviewApi,
-  panelId: string,
-  next: TaskOutputPanelParamsV2
-): Promise<RebindTaskOutputPanelResult> {
-  const panel = api.panels.find((candidate) => candidate.id === panelId) as
-    | TaskOutputPanelLike
-    | undefined;
-  if (!panel) {
-    return { ok: false, error: `panel not found: ${panelId}` };
-  }
-  const current = taskOutputFromPanel(panel);
-  if (!current) {
-    return { ok: false, error: `panel is not a task output view: ${panelId}` };
-  }
-  if (
-    selectedTaskOutputRunId(current) === next.selectedRunId &&
-    taskOutputBindingGeneration(current) >= next.generation
-  ) {
-    return { ok: true };
-  }
-
-  const result = await window.pier.terminal.rebindTaskOutput(panelId, next);
-  if (!result.ok) {
-    return { ok: false, error: result.error ?? "task output rebind failed" };
-  }
-  if (result.stale) {
-    return { ok: false, error: "task output rebind was superseded" };
-  }
-
-  const rootParams =
-    panel.params && typeof panel.params === "object"
-      ? (panel.params as Record<string, unknown>)
-      : {};
-  try {
-    panel.api.updateParameters({
-      ...rootParams,
-      tab: {
-        icon: { id: "pier.task", label: "Task" },
-        title: next.label,
-      },
-      taskOutput: next,
-    });
-  } catch (error) {
-    const rollback = nextTaskOutputBinding(
-      next,
-      selectedTaskOutputRunId(current)
-    );
-    const rollbackResult = await window.pier.terminal.rebindTaskOutput(
-      panelId,
-      rollback
-    );
-    if (rollbackResult.ok && !rollbackResult.stale) {
-      try {
-        panel.api.updateParameters({
-          ...rootParams,
-          taskOutput: rollback,
-        });
-      } catch {
-        // dockview 参数提交持续失败时无法再建立可靠视图状态；调用方会展示原错误。
-      }
-    }
-    return {
-      ok: false,
-      error: error instanceof Error ? error.message : String(error),
-    };
-  }
-  return { ok: true };
-}
-
 /** 工作区内任务输出面板的唯一创建入口：同一逻辑任务默认复用 dedicated view。 */
 export async function openTaskOutputPanel(
   api: DockviewApi,
   params: TaskOutputPanelParamsV2
 ): Promise<OpenTaskOutputPanelResult> {
-  const existing = api.panels.find((candidate) => {
-    const output = taskOutputFromPanel(candidate as TaskOutputPanelLike);
-    return output ? sameLogicalView(output, params) : false;
-  }) as TaskOutputPanelLike | undefined;
+  const resolvedParams = upgradeTaskOutputContextId(
+    params,
+    resolveTaskOutputContextId(api, params.projectRootPath, params.taskId)
+  );
+  const existing = findMergeableTaskOutputPanel(api, resolvedParams);
 
   if (existing) {
     const current = taskOutputFromPanel(existing);
@@ -226,15 +93,18 @@ export async function openTaskOutputPanel(
         ok: false,
       };
     }
+    const next = nextTaskOutputBinding(
+      current,
+      resolvedParams.selectedRunId,
+      resolvedParams
+    );
+    const upgraded = upgradeTaskOutputContextId(next, resolvedParams.contextId);
     if (
       !("contextId" in current) ||
-      selectedTaskOutputRunId(current) !== params.selectedRunId
+      committedTaskOutputRunId(current) !== upgraded.selectedRunId ||
+      upgraded.contextId !== ("contextId" in current ? current.contextId : "")
     ) {
-      const rebound = await rebindTaskOutputPanel(
-        api,
-        existing.id,
-        nextTaskOutputBinding(current, params.selectedRunId, params)
-      );
+      const rebound = await rebindTaskOutputPanel(api, existing.id, upgraded);
       if (!rebound.ok) {
         return {
           code: "rebind_failed",
@@ -246,7 +116,7 @@ export async function openTaskOutputPanel(
     return activateWorkspacePanel(api, existing.id, { reveal: "always" });
   }
 
-  const id = taskOutputPanelId(params);
+  const id = taskOutputPanelId(resolvedParams);
   const activeGroup = api.activeGroup;
   api.addPanel({
     component: "terminal",
@@ -256,9 +126,9 @@ export async function openTaskOutputPanel(
         icon: { id: "pier.task", label: "Task" },
         title: params.label,
       },
-      taskOutput: params,
+      taskOutput: resolvedParams,
     },
-    title: params.label,
+    title: resolvedParams.label,
     ...(activeGroup
       ? {
           position: {

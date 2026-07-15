@@ -377,21 +377,16 @@ export function createForegroundActivityAggregator(
 
     taskFinished(panelId, args, windowId) {
       for (const key of keysForPanel(slots, panelId, windowId)) {
-        const command = slots.get(key)?.command;
-        if (command?.kind !== "task" || command.runId !== args.runId) {
+        const slot = slots.get(key);
+        const command = slot?.command;
+        if (!slot || command?.kind !== "task" || command.runId !== args.runId) {
           continue;
         }
-        command.status = args.status;
-        command.updatedAt = now();
-        if (args.exitCode !== undefined) {
-          command.exitCode = args.exitCode;
-        }
+        clearSlotTimers(slot);
+        slot.command = null;
         scheduleEmit();
         return;
       }
-      // 终态常驻：task 层保留最终状态直到 panelClosed / rerun(taskLaunched) /
-      // 新命令接管。activity 只保留任务活动投影和 TaskRuns 不可用时的兼容回退；
-      // 实时任务状态由带 runId 的 TaskRunsSnapshot 负责。
     },
 
     panelClosed(panelId, windowId) {
