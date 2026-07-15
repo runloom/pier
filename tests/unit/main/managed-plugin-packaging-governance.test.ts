@@ -77,19 +77,25 @@ describe("managed plugin packaging governance", () => {
     expect(releaseWorkflow).toContain("PIER_PLUGIN_INDEX_SIGNING_KEY_ID");
   });
 
-  it("automatically publishes an immutable plugin release after one version change lands on main", () => {
+  it("automatically publishes immutable plugin releases for every package.json change on main", () => {
     expect(releaseWorkflow).toMatch(
       /push:\s+branches:\s+- main\s+paths:\s+- 'packages\/plugin-\*\/package\.json'/
     );
     expect(releaseWorkflow).toContain(
+      "expected at least one changed plugin package.json"
+    );
+    expect(releaseWorkflow).not.toContain(
       "expected exactly one changed plugin package.json"
     );
-    expect(releaseWorkflow).toContain('if [ "$ACTUAL_VERSION" != "$VERSION" ]');
+    expect(releaseWorkflow).toContain("release_targets");
+    expect(releaseWorkflow).toContain("sorted by tail");
+    expect(releaseWorkflow).toContain("same-version hash drift");
     expect(releaseWorkflow).toContain("Check existing release");
     expect(releaseWorkflow).toContain(
       "Verify existing release asset is immutable"
     );
-    expect(releaseWorkflow).toContain("same-version hash drift");
+    expect(releaseWorkflow).toContain("pnpm plugins:index");
+    expect(releaseWorkflow).toContain("chore(plugins): update index for");
   });
 
   it("does not commit an unsigned official index", () => {

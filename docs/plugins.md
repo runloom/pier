@@ -141,9 +141,9 @@ Pier 安装官方插件时依次执行：
 
 1. 更新 `packages/plugin-<id>/package.json` 和 `plugin.json` 中的版本。
 2. 在本地运行对应构建、打包和测试。
-3. 每次只把一个 `packages/plugin-*/package.json` 版本变更合入 `main`，保持发布原子性。
-4. `.github/workflows/release-plugin.yml` 构建插件，并创建 `plugin-<id>-v<version>` GitHub Release。
-5. 同一工作流重新生成、签名并提交 `plugins/index.v1.json`。
+3. 可在同一合入中变更多个 `packages/plugin-*/package.json`；release workflow 会按插件 id tail 排序串行发布。
+4. `.github/workflows/release-plugin.yml` 为每个变更插件构建并创建/校验 `plugin-<id>-v<version>` GitHub Release。
+5. 全部插件发布成功后，同一工作流只重新生成、签名并提交一次 `plugins/index.v1.json`。
 6. 索引提交触发 `.github/workflows/publish-index.yml` 发布官方索引。
 
 `workflow_dispatch` 只用于指定官方插件和版本的恢复发布，不是常规发布入口。
