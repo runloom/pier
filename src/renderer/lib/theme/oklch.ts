@@ -293,7 +293,13 @@ function searchOklchCandidate(
       return best.color;
     }
   }
-  return best?.color ?? null;
+  return readSearchCandidateColor(best);
+}
+
+function readSearchCandidateColor(
+  value: { color: string; delta: number; chroma: number } | null
+): string | null {
+  return value === null ? null : value.color;
 }
 
 // 主题色优先严格保留 Shiki / Pierre 源值；只有关键 UI/终端组合低于最低对比度时才修正。

@@ -162,9 +162,9 @@ function needsYouRank(status: AgentRuntimeIndexEntry["status"]): number {
 
 export interface SortAgentIndexEntriesOptions {
   /** 当前锚点 projectRootPath；同窗内略优先。 */
-  preferredProjectRootPath?: string;
+  preferredProjectRootPath?: string | undefined;
   /** 当前前台 windowId；同刻度略优先。 */
-  preferredWindowId?: string;
+  preferredWindowId?: string | undefined;
 }
 
 /**

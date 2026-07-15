@@ -127,7 +127,7 @@ export async function fetchGrokUsage(options: {
     run: ({ isRetry }) =>
       fetchGrokUsageAttempt({
         authJson,
-        fetchImpl: options.fetchImpl,
+        ...(options.fetchImpl ? { fetchImpl: options.fetchImpl } : {}),
         onAuthJsonUpdated,
         overallDeadlineMs: isRetry
           ? USAGE_RETRY_OVERALL_DEADLINE_MS

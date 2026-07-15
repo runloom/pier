@@ -13,13 +13,13 @@ import {
 const LONG_RUN_TICK_MS = 250;
 
 export interface AgentStatusLabelProps {
-  className?: string;
+  className?: string | undefined;
   /** launch 无 status 时：null 不渲染（状态栏 icon-only）；文案则由调用方自理 */
-  fallbackLabel?: string;
-  spawnedAt?: number;
-  stateStartedAt?: number;
+  fallbackLabel?: string | undefined;
+  spawnedAt?: number | undefined;
+  stateStartedAt?: number | undefined;
   status: ActivityStatus | undefined;
-  subagentCount?: number;
+  subagentCount?: number | undefined;
 }
 
 /**

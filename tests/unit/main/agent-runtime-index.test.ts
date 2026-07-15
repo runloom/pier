@@ -12,7 +12,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const peekContext = vi.hoisted(() =>
   vi.fn(
-    () =>
+    (_windowId: string, _panelId: string) =>
       null as null | {
         cwd?: string;
         projectRootPath: string;
@@ -28,7 +28,7 @@ vi.mock("@main/state/terminal-session-state.ts", async (importOriginal) => {
     >();
   return {
     ...actual,
-    peekTerminalPanelContext: (...args: unknown[]) => peekContext(...args),
+    peekTerminalPanelContext: peekContext,
   };
 });
 

@@ -1,10 +1,10 @@
+import type { StylePresetId } from "@shared/contracts/preferences.ts";
 import { describe, expect, it } from "vitest";
 import { deriveAppStyleTokens } from "@/lib/theme/derive-tokens.ts";
 import { chromaOf, contrast } from "@/lib/theme/oklch.ts";
 import {
   getShikiTheme,
   STYLE_PRESET_REGISTRY,
-  type StylePresetId,
 } from "@/lib/theme/preset-registry.ts";
 
 describe("primary cleanliness", () => {

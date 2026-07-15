@@ -1,12 +1,22 @@
 import { createLogger } from "@shared/logger.ts";
 import type { ManagedPluginIndexStore } from "./index-state.ts";
-import type { ManagedPluginDevRuntimeWatchRegistry } from "./install-runtime.ts";
 import type { ManagedPluginInstallService } from "./install-service.ts";
 import {
   createSeededWorkspaceIndexEntry,
   syncWorkspaceDevPluginOverrides,
   workspacePackageDir,
 } from "./workspace-dev-plugins.ts";
+
+interface ManagedPluginDevRuntimeWatchRegistry {
+  ensure(
+    pluginId: string,
+    options: {
+      logger: ReturnType<typeof createLogger>;
+      packageDir: string;
+      refreshRuntimeSources: () => Promise<void>;
+    }
+  ): void;
+}
 
 interface WorkspaceBootHost {
   managedPluginDevRuntimeWatches: ManagedPluginDevRuntimeWatchRegistry;

@@ -17,13 +17,13 @@ import type {
 export const AGENT_INDEX_NEW_ID = "agents:new";
 
 export interface BuildAgentIndexQuickPickOptions {
-  emptyAction?: "new-agent";
-  limit?: number;
-  now?: number;
+  emptyAction?: "new-agent" | undefined;
+  limit?: number | undefined;
+  now?: number | undefined;
   /** 当前锚点工作区，同窗内略优先 */
-  preferredProjectRootPath?: string;
+  preferredProjectRootPath?: string | undefined;
   /** 当前窗 electron windowId，用于「本窗口」标注与同序加权 */
-  preferredWindowId?: string;
+  preferredWindowId?: string | undefined;
 }
 
 export interface AgentIndexQuickPickModel {

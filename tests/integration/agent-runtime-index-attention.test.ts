@@ -58,7 +58,7 @@ describe("agent runtime index + attention integration", () => {
       rendererCommand: {
         execute: vi.fn(async () => ({
           data: null,
-          ok: true,
+          ok: true as const,
           requestId: "r1",
         })),
         resolve: () => undefined,
