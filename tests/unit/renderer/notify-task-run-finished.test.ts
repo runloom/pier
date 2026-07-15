@@ -28,6 +28,26 @@ vi.mock("@/stores/app-dialog.store.ts", () => ({
   showAppAlert: vi.fn(async () => undefined),
 }));
 
+function toastActionOnClick(
+  options: { action?: unknown } | undefined
+): (() => void) | null {
+  const action = options?.action;
+  if (
+    !(
+      action &&
+      typeof action === "object" &&
+      "onClick" in action &&
+      typeof action.onClick === "function"
+    )
+  ) {
+    return null;
+  }
+  const onClick = action.onClick as (event?: unknown) => void;
+  return () => {
+    onClick();
+  };
+}
+
 function run(
   status: TaskRunControlEntry["status"],
   options: {
@@ -86,10 +106,11 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
       })
     );
 
-    const action = vi.mocked(toast.success).mock.calls[0]?.[1]?.action as {
-      onClick(): void;
-    };
-    action.onClick();
+    const onClick = toastActionOnClick(
+      vi.mocked(toast.success).mock.calls[0]?.[1]
+    );
+    expect(onClick).not.toBeNull();
+    onClick?.();
     expect(revealTaskRun).toHaveBeenCalledWith(current);
     expect(openTaskRunOutput).not.toHaveBeenCalled();
   });
@@ -105,10 +126,11 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
       })
     );
 
-    const action = vi.mocked(toast.error).mock.calls[0]?.[1]?.action as {
-      onClick(): void;
-    };
-    action.onClick();
+    const onClick = toastActionOnClick(
+      vi.mocked(toast.error).mock.calls[0]?.[1]
+    );
+    expect(onClick).not.toBeNull();
+    onClick?.();
     expect(openTaskRunOutput).toHaveBeenCalledWith(current, "Test suite");
     expect(revealTaskRun).not.toHaveBeenCalled();
   });
@@ -121,10 +143,11 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     });
     notifyTaskRunFinishedIfNeeded(current);
 
-    const action = vi.mocked(toast.success).mock.calls[0]?.[1]?.action as {
-      onClick(): void;
-    };
-    action.onClick();
+    const onClick = toastActionOnClick(
+      vi.mocked(toast.success).mock.calls[0]?.[1]
+    );
+    expect(onClick).not.toBeNull();
+    onClick?.();
     await vi.waitFor(() => {
       expect(showAppAlert).toHaveBeenCalledWith({
         body: "boom",
