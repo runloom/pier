@@ -7,8 +7,8 @@ import {
   FieldSet,
 } from "@pier/ui/field.tsx";
 import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
-import { Spinner } from "@pier/ui/spinner.tsx";
 import { ToggleGroup, ToggleGroupItem } from "@pier/ui/toggle-group.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import { AGENT_CATALOG, getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import {
   type AgentKind,
@@ -16,6 +16,7 @@ import {
 } from "@shared/contracts/agent.ts";
 import { RefreshCw } from "lucide-react";
 import { Fragment, useEffect } from "react";
+import { toast } from "sonner";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { AgentRow } from "@/pages/settings/components/agent-row.tsx";
@@ -23,6 +24,7 @@ import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 
 const PERMISSION_MODE_OPTIONS: Array<{
   value: "yolo" | "manual";
@@ -180,16 +182,27 @@ function AgentListCard() {
         <CardTitle>{t("settings.agents.list.title")}</CardTitle>
         <Button
           disabled={isRefreshing}
-          onClick={() => refresh().catch(() => undefined)}
+          onClick={() => {
+            refresh()
+              .then(() => {
+                toast.success(t("settings.agents.list.refreshSuccess"));
+              })
+              .catch((err: unknown) => {
+                showAppAlert({
+                  title: t("settings.agents.list.refreshFailed"),
+                  body: err instanceof Error ? err.message : String(err),
+                });
+              });
+          }}
           size="sm"
           type="button"
           variant="ghost"
         >
-          {isRefreshing ? (
-            <Spinner data-icon="inline-start" />
-          ) : (
-            <RefreshCw data-icon="inline-start" />
-          )}
+          <RefreshCw
+            aria-hidden
+            className={cn(isRefreshing && "animate-spin")}
+            data-icon="inline-start"
+          />
           {t("settings.agents.list.refresh")}
         </Button>
       </CardHeader>

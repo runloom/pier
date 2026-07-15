@@ -26,6 +26,14 @@ const WIDGET_SOURCES = [
   "packages/plugin-codex/src/renderer/usage-meter.tsx",
 ] as const;
 
+/** Settings + widget quota grids that must force single-window full width. */
+const QUOTA_LAYOUT_SOURCES = [
+  "packages/plugin-codex/src/renderer/account-display.tsx",
+  "packages/plugin-codex/src/renderer/usage-meter.tsx",
+  "packages/plugin-grok/src/renderer/account-display.tsx",
+  "packages/plugin-grok/src/renderer/usage-meter.tsx",
+] as const;
+
 describe("widget size adaptation governance", () => {
   it("documents the size adaptation policy in project agent context", () => {
     const context = source("AGENTS.md");
@@ -84,5 +92,26 @@ describe("widget size adaptation governance", () => {
   it("uses size prop for structural decisions in accounts widget", () => {
     const accounts = source(WIDGET_SOURCES[0]);
     expect(accounts, "AccountsWidget should use size prop").toMatch(/\bsize\b/);
+  });
+
+  it("forces single-window quota meters to full width without auto-fit grid", () => {
+    for (const path of QUOTA_LAYOUT_SOURCES) {
+      const contents = source(path);
+      expect(
+        contents,
+        `${path} must branch on a single window (not auto-fit alone)`
+      ).toMatch(/length === 1|const single = /);
+      expect(
+        contents,
+        `${path} must emit data-layout single for the full-width path`
+      ).toContain("data-layout={");
+      expect(contents).toContain('"single"');
+      // Single path must avoid auto-fit; multi path may still use it.
+      expect(contents).toMatch(
+        /single\s*\?\s*"block"|single\s*\?\s*"flex flex-col/
+      );
+      expect(contents).toContain("auto-fit");
+      expect(contents).toContain("w-full");
+    }
   });
 });

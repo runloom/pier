@@ -7,6 +7,8 @@
     ".": "./src/index.ts",
     "./main": "./src/main.ts",
     "./renderer": "./src/renderer.ts",
+    "./account-usage": "./src/account-usage/index.ts",
+    "./account-usage/renderer": "./src/account-usage/renderer.ts",
     "./react": "./src/react.ts",
     "./jsx-runtime": "./src/jsx-runtime.ts",
     "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts",

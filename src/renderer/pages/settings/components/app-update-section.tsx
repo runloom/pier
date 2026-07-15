@@ -1,3 +1,4 @@
+import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Card,
@@ -95,7 +96,9 @@ export function AppUpdateSection() {
             </div>
           ) : null}
           {snapshot?.error ? (
-            <div className="text-destructive text-xs">{snapshot.error}</div>
+            <Alert variant="destructive">
+              <AlertDescription>{snapshot.error}</AlertDescription>
+            </Alert>
           ) : null}
           <div className="flex flex-wrap gap-2">
             <Button

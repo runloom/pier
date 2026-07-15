@@ -168,6 +168,14 @@ describe("Grok accounts widget", () => {
     expect(
       document.querySelector("[data-slot='grok-usage-progress']")
     ).toBeTruthy();
+    // activeUsage has one window → full-width single column (not half-row auto-fit).
+    const grid = document.querySelector(
+      '[data-slot="grok-quota-grid"][data-layout="single"]'
+    );
+    expect(grid).toBeTruthy();
+    expect(grid?.className).toContain("block");
+    expect(grid?.className).toContain("w-full");
+    expect(grid?.className).not.toContain("auto-fit");
     expect(
       screen.queryByText("Quota monitoring is not available yet")
     ).toBeNull();

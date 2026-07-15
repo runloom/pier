@@ -277,6 +277,14 @@ export const settings = {
     },
     trustNotice:
       "Official plugins are managed trusted code and are not sandboxed.",
+    pluginMode: {
+      workspaceTitle: "Workspace plugin mode",
+      workspaceBody:
+        "Loading plugins from local package directories. Official updates are disabled so release assets cannot overwrite local work.",
+      releaseTitle: "Release plugin mode",
+      releaseBody:
+        "Plugins follow managed install/update, like a production build. Use PIER_PLUGIN_MODE=workspace for local package development.",
+    },
     checkUpdates: "Check for Updates",
     restartNow: "Restart Pier Now",
     restartNotice: "Restart Pier to use the installed plugin version.",
@@ -367,6 +375,8 @@ export const settings = {
       title: "Agent CLIs",
       description: "Supported and detected agent CLIs",
       refresh: "Refresh",
+      refreshSuccess: "Agent list refreshed",
+      refreshFailed: "Failed to refresh agent list",
     },
     status: {
       detected: "Detected",

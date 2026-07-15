@@ -59,6 +59,7 @@ function makeServices(): PierCoreServices {
   );
   return {
     agentDetection: trap as never,
+    agentRuntimeIndex: trap as never,
     agentUsage: trap as never,
     managedPlugins: trap as never,
     appUpdates: trap as never,

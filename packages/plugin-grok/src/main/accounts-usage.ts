@@ -1,32 +1,27 @@
+import {
+  createUsageCacheEntry as createSharedUsageCacheEntry,
+  type UsageCacheEntryBase,
+} from "@pier/plugin-api/account-usage";
 import type { GrokUsageSnapshot } from "../shared/accounts.ts";
 import type { AccountUsageResult } from "./types.ts";
 
-export const USAGE_MIN_REFETCH_MS = 5 * 60 * 1000;
-export const USAGE_POLL_INTERVAL_MS = 15 * 60 * 1000;
-export const SYSTEM_USAGE_CACHE_KEY = "__system__";
+export {
+  activeUsageCacheKey,
+  SYSTEM_USAGE_CACHE_KEY,
+  USAGE_MIN_REFETCH_MS,
+  USAGE_POLL_INTERVAL_MS,
+} from "@pier/plugin-api/account-usage";
 
-export interface UsageCacheEntry {
-  error?: string;
-  fetchedAt: number;
-  raw?: unknown;
-  status: "error" | "ok";
-  windows: AccountUsageResult["windows"];
-}
+export type UsageCacheEntry = UsageCacheEntryBase<
+  AccountUsageResult["windows"][number]
+>;
 
 export function createUsageCacheEntry(
   result: AccountUsageResult,
   cached: UsageCacheEntry | undefined,
   fetchedAt: number
 ): UsageCacheEntry {
-  const retained = result.status === "error" ? cached : undefined;
-  return {
-    fetchedAt,
-    raw: result,
-    status: result.status,
-    windows:
-      result.status === "error" ? (retained?.windows ?? []) : result.windows,
-    ...(result.error ? { error: result.error } : {}),
-  };
+  return createSharedUsageCacheEntry(result, cached, fetchedAt);
 }
 
 export function toUsageSnapshot(entry: UsageCacheEntry): GrokUsageSnapshot {
@@ -37,8 +32,4 @@ export function toUsageSnapshot(entry: UsageCacheEntry): GrokUsageSnapshot {
     ...(entry.error ? { error: entry.error } : {}),
     ...(entry.raw === undefined ? {} : { raw: entry.raw }),
   };
-}
-
-export function activeUsageCacheKey(activeAccountId: string | null): string {
-  return activeAccountId ?? SYSTEM_USAGE_CACHE_KEY;
 }

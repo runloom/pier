@@ -42,6 +42,7 @@ export const commandPalette = {
     newWindowFailed: "Couldn’t create window",
     openCreatePanel: "New Panel…",
     newAgent: "Start Default Agent",
+    listAgents: "Agent List…",
     startAgent: "Start {{agent}}",
     newWorkbench: "New Workbench",
     runTask: "Run Task…",

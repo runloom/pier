@@ -67,17 +67,53 @@ describe("parseGrokBillingResult", () => {
     });
   });
 
-  it("maps used/monthlyLimit cents from default billing endpoint", () => {
+  it("maps used/monthlyLimit cents from default billing as monthly spend", () => {
     const result = parseGrokBillingResult(DEFAULT_FIXTURE);
     expect(result.status).toBe("ok");
     expect(result.windows).toHaveLength(1);
     expect(result.windows[0]).toMatchObject({
       id: "grok:period",
       limitId: "period",
-      limitName: "Monthly limit",
+      // Cash path must not be labeled as credit "limit".
+      limitName: "Monthly spend",
       usedPercent: expect.closeTo((4112 / 15_000) * 100, 5),
       windowMinutes: 44_640,
     });
+  });
+
+  it("prefers creditUsagePercent over cash monthly when both are present", () => {
+    const result = parseGrokBillingResult({
+      config: {
+        creditUsagePercent: 91,
+        currentPeriod: {
+          end: "2026-07-21T00:00:00.000Z",
+          start: "2026-07-14T00:00:00.000Z",
+          type: "USAGE_PERIOD_TYPE_WEEKLY",
+        },
+        monthlyLimit: { val: 15_000 },
+        productUsage: [
+          { product: "GrokBuild", usagePercent: 80 },
+          { product: "Api", usagePercent: 11 },
+        ],
+        used: { val: 417 },
+      },
+    });
+    expect(result.status).toBe("ok");
+    expect(result.windows[0]).toMatchObject({
+      id: "grok:period",
+      limitName: "Weekly limit",
+      usedPercent: 91,
+      windowMinutes: 10_080,
+    });
+    // Must not surface cash monthly as the period meter.
+    expect(result.windows.some((w) => w.limitName === "Monthly spend")).toBe(
+      false
+    );
+    expect(result.windows.map((w) => w.id)).toEqual([
+      "grok:period",
+      "grok:product:GrokBuild",
+      "grok:product:Api",
+    ]);
   });
 
   it("returns error for sparse credits response with no usable meters", () => {

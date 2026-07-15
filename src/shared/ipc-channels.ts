@@ -38,6 +38,10 @@ export const PIER = {
   USAGE_DATA_SNAPSHOT: "pier://usage-data:snapshot",
   // 触发所有注册源的 rescan + 广播；成本物料手动刷新入口。
   USAGE_DATA_REFRESH_ALL: "pier://usage-data:refresh-all",
+  // Agent Runtime Index：本机 agent 投影 list / focus（独立 invoke，不进 PierCommand）。
+  AGENT_RUNTIME_INDEX_LIST: "pier://agent-runtime-index:list",
+  AGENT_RUNTIME_INDEX_FOCUS: "pier://agent-runtime-index:focus",
+  AGENT_RUNTIME_INDEX_FOCUS_WAITING: "pier://agent-runtime-index:focusWaiting",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -95,6 +99,13 @@ export const PIER_BROADCAST = {
   WORKTREE_CREATE_PROGRESS: "pier://worktree-create:progress",
   // 跨插件成本聚合快照增量 (main → 所有 renderer, payload UsageAggregateSnapshot).
   USAGE_DATA_CHANGED: "pier://usage-data:changed",
+  // Agent Runtime Index 本机快照推送 (main → 所有 renderer, payload AgentRuntimeIndexSnapshot)。
+  // 与 FA 本窗过滤广播独立；勿复用 FOREGROUND_ACTIVITY_CHANGED。
+  AGENT_RUNTIME_INDEX_CHANGED: "pier://agent-runtime-index:changed",
+  // Index focus 失败反馈（如通知 click）；payload AgentRuntimeFocusResult（仅非 ok）。
+  AGENT_RUNTIME_FOCUS_FEEDBACK: "pier://agent-runtime-index:focus-feedback",
+  // Attention 系统通知不可用（权限拒绝等）；payload { reason }
+  AGENT_ATTENTION_DEGRADED: "pier://agent-attention:degraded",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

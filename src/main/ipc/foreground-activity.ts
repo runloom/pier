@@ -112,6 +112,21 @@ function sendToWindow(
  * tab 状态点/icon/title 全部由 renderer 从该广播（+挂载时 snapshot pull）
  * 单源渲染。
  */
+const publishListeners = new Set<(b: ForegroundActivityBroadcast) => void>();
+
+/**
+ * FA 每次向各窗推送本窗 publication 之后的副作用钩子（如 Agent Runtime Index
+ * 全机快照 fan-out）。不改变 FA 按窗过滤语义。
+ */
+export function onForegroundActivityPublished(
+  listener: (b: ForegroundActivityBroadcast) => void
+): () => void {
+  publishListeners.add(listener);
+  return () => {
+    publishListeners.delete(listener);
+  };
+}
+
 function handleBroadcast(b: ForegroundActivityBroadcast): void {
   const liveWindowIds = listAppWindowIds();
   log.debug("publish", {
@@ -124,6 +139,9 @@ function handleBroadcast(b: ForegroundActivityBroadcast): void {
     liveWindowIds
   )) {
     sendToWindow(publication.windowId, publication.payload);
+  }
+  for (const listener of publishListeners) {
+    listener(b);
   }
 }
 

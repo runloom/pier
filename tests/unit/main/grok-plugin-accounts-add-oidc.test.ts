@@ -493,4 +493,43 @@ describe("addOidcAccount", () => {
     expect(deletedHomes).not.toContain(existingDir);
     expect(existsSync(join(existingDir, "keep"))).toBe(true);
   });
+
+  it("refreshes usage for a newly added non-active account", async () => {
+    const existingId = "existing-account";
+    const previousState: GrokAccountsFileState = {
+      accounts: [
+        {
+          createdAt: 1,
+          email: "old@example.com",
+          id: existingId,
+          kind: "oidc",
+          provider: "grok",
+          providerAccountId: "old-user",
+          updatedAt: 1,
+        },
+      ],
+      activeAccountId: existingId,
+      revision: 1,
+      schemaVersion: 1,
+    };
+    const provider = createProvider();
+    const stateStore = createStateStore(previousState);
+    const { host } = createHost({ provider, stateStore });
+
+    await addOidcAccount(host, "oauth");
+
+    // New account was added but NOT activated (activeAccountId stays existingId).
+    expect(stateStore.get().accounts).toHaveLength(2);
+    expect(stateStore.get().activeAccountId).toBe(existingId);
+
+    // doRefreshUsage must be called with the NEW account id, not just activatedId.
+    const newAccount = stateStore
+      .get()
+      .accounts.find((a) => a.id !== existingId);
+    expect(newAccount).toBeTruthy();
+    expect(host.doRefreshUsage).toHaveBeenCalledWith({
+      accountId: newAccount!.id,
+      force: true,
+    });
+  });
 });

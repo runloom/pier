@@ -150,6 +150,13 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
   };
 }
 
+function activateTab(name: string | RegExp): void {
+  // Radix Tabs switches selection on mousedown; click alone is not enough.
+  const tab = screen.getByRole("tab", { name });
+  fireEvent.mouseDown(tab, { button: 0 });
+  fireEvent.click(tab);
+}
+
 describe("AccountsSettingsPage", () => {
   afterEach(() => {
     cleanup();
@@ -384,6 +391,15 @@ describe("AccountsSettingsPage", () => {
     expect(
       container.querySelector('[data-slot="codex-quota-group"][data-count="1"]')
     ).not.toBeNull();
+    // Single meter must force 1-col full width — do not leave half-row via auto-fit.
+    const grid = container.querySelector(
+      '[data-slot="codex-quota-grid"][data-layout="single"]'
+    );
+    expect(grid).not.toBeNull();
+    expect(grid?.className).toContain("block");
+    expect(grid?.className).toContain("w-full");
+    expect(grid?.className).not.toContain("auto-fit");
+    expect(grid?.className).not.toContain("grid-cols");
   });
 
   it("labels a 30-day named quota from its dynamic metadata", async () => {
@@ -496,6 +512,38 @@ describe("AccountsSettingsPage", () => {
     expect(invokeCalls).toContainEqual({ method: "accounts.add", payload: {} });
     await vi.waitFor(() => {
       expect(screen.queryByText("Add Codex account")).toBeNull();
+    });
+  });
+
+  it("imports the local account from the Local import tab", async () => {
+    const { context, invokeCalls } = contextWithSnapshot(emptySnapshot());
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
+
+    const addAccountButton = await screen.findByText("Add account");
+    await act(async () => {
+      fireEvent.click(addAccountButton);
+    });
+    await act(async () => {
+      activateTab("Local import");
+    });
+    expect(
+      await screen.findByText(
+        /Import the account already signed in on this device/i
+      )
+    ).toBeDefined();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Import local account" })
+      );
+    });
+    expect(invokeCalls).toContainEqual({
+      method: "accounts.adoptCurrent",
+      payload: null,
     });
   });
 
@@ -759,7 +807,7 @@ describe("AccountsSettingsPage", () => {
 
     expect(invokeCalls).toContainEqual({
       method: "accounts.refreshUsage",
-      payload: { accountId: "acc-2" },
+      payload: { accountId: "acc-2", force: true },
     });
     expect(invokeCalls).not.toContainEqual({
       method: "accounts.select",

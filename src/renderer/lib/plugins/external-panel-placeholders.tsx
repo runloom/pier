@@ -125,7 +125,10 @@ function ExternalPluginPanelSlot({
   const unavailable = failure || !snapshot.hasRendererEntry;
   return (
     <div className="flex h-full items-center justify-center p-6 text-foreground">
-      <Alert className="max-w-md">
+      <Alert
+        className="max-w-md"
+        variant={unavailable ? "destructive" : "info"}
+      >
         <AlertTitle>
           {t(
             unavailable

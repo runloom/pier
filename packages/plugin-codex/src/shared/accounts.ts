@@ -111,6 +111,7 @@ export interface RemoveAccountPayload {
 
 export interface RefreshUsagePayload {
   accountId?: string | undefined;
+  force?: boolean | undefined;
 }
 
 const nonEmptyStringSchema = z.string().check(z.minLength(1));
@@ -130,5 +131,6 @@ export const removeAccountPayloadSchema = z.strictObject({
 });
 export const refreshUsagePayloadSchema = z.strictObject({
   accountId: z.optional(nonEmptyStringSchema),
+  force: z.optional(z.boolean()),
 });
 export const emptyRpcPayloadSchema = z.null();

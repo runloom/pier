@@ -49,15 +49,25 @@ function indexPluginQuickPickItems(
 }
 
 function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
-  const pluginItemsById = indexPluginQuickPickItems(quickPick);
-  const pluginItemFor = (item: QuickPickItem) =>
-    pluginItemsById.get(item.id) ?? item;
+  // Mutable so query-derived items can be registered when first generated.
+  const pluginItemsById = new Map(indexPluginQuickPickItems(quickPick));
+  const pluginItemFor = (item: QuickPickItem): RendererPluginQuickPickItem => {
+    const pluginItem = pluginItemsById.get(item.id);
+    if (!pluginItem) {
+      throw new Error(`unknown plugin quick pick item: ${item.id}`);
+    }
+    return pluginItem;
+  };
   return {
     ...(quickPick.getQueryItem
       ? {
           getQueryItem: (query: string) => {
             const item = quickPick.getQueryItem?.(query);
-            return item ? adaptQuickPickItem(item) : null;
+            if (!item) {
+              return null;
+            }
+            pluginItemsById.set(item.id, item);
+            return adaptQuickPickItem(item);
           },
         }
       : {}),

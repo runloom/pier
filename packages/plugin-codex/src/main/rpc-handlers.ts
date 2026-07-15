@@ -28,6 +28,11 @@ export function registerCodexRpcHandlers(options: {
     await service.add(addAccountPayloadSchema.parse(payload));
     return null;
   });
+  rpc.handle("accounts.adoptCurrent", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    await service.adoptCurrent();
+    return null;
+  });
   rpc.handle("accounts.cancelLogin", async (payload) => {
     emptyRpcPayloadSchema.parse(payload);
     await service.cancelLogin();
@@ -49,7 +54,7 @@ export function registerCodexRpcHandlers(options: {
     const request = refreshUsagePayloadSchema.parse(payload ?? {});
     await service.refreshUsage({
       ...(request.accountId ? { accountId: request.accountId } : {}),
-      force: true,
+      force: request.force ?? true,
     });
     return null;
   });

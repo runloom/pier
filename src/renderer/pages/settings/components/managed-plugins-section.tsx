@@ -18,7 +18,7 @@ import {
 import { cn } from "@pier/ui/utils.ts";
 import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { Puzzle, RefreshCw } from "lucide-react";
 import {
   Fragment,
   type JSX,
@@ -130,7 +130,7 @@ function EmptyList({
     <Empty className="py-8">
       <EmptyHeader>
         <EmptyMedia variant="icon">
-          <AlertCircle aria-hidden />
+          <Puzzle aria-hidden />
         </EmptyMedia>
         <EmptyTitle>{t(`settings.plugins.${emptyKey}Title`)}</EmptyTitle>
         <EmptyDescription>
@@ -150,6 +150,7 @@ function UnifiedList({
   pendingManagedId,
   pendingBuiltinId,
   emptyKey,
+  officialMutationsAllowed = true,
 }: {
   rows: readonly UnifiedRow[];
   win: ManagedPluginsWindowShim | undefined;
@@ -159,6 +160,7 @@ function UnifiedList({
   pendingManagedId: string | null;
   pendingBuiltinId: string | null;
   emptyKey: "emptyInstalled" | "emptyAvailable";
+  officialMutationsAllowed?: boolean;
 }): JSX.Element {
   if (rows.length === 0) {
     return <EmptyList emptyKey={emptyKey} />;
@@ -188,6 +190,7 @@ function UnifiedList({
                 <ItemSeparator className="mx-(--card-spacing) my-0 data-horizontal:w-auto" />
               ) : null}
               <UnavailableManagedRow
+                officialMutationsAllowed={officialMutationsAllowed}
                 onRefresh={onRefreshManaged}
                 onToggle={() => onToggleManaged(row.row)}
                 pending={pendingManagedId === row.row.id}
@@ -203,6 +206,7 @@ function UnifiedList({
           : row.entry;
         const extraActions: ReactNode = managedRow ? (
           <ManagedRowExtraActions
+            officialMutationsAllowed={officialMutationsAllowed}
             onRefresh={onRefreshManaged}
             row={managedRow}
             win={win}
@@ -338,8 +342,27 @@ export function ManagedPluginsSection({
     return <PluginsLoadingState />;
   }
 
+  const pluginMode = catalog?.pluginMode ?? "release";
+  const officialMutationsAllowed = catalog?.officialMutationsAllowed ?? true;
+
   return (
     <div className="flex flex-col gap-2">
+      {catalog ? (
+        <div className="mx-(--card-spacing) -mt-2 mb-2">
+          <Alert variant={pluginMode === "workspace" ? "warning" : "info"}>
+            <AlertTitle>
+              {pluginMode === "workspace"
+                ? t("settings.plugins.pluginMode.workspaceTitle")
+                : t("settings.plugins.pluginMode.releaseTitle")}
+            </AlertTitle>
+            <AlertDescription>
+              {pluginMode === "workspace"
+                ? t("settings.plugins.pluginMode.workspaceBody")
+                : t("settings.plugins.pluginMode.releaseBody")}
+            </AlertDescription>
+          </Alert>
+        </div>
+      ) : null}
       <Tabs defaultValue="installed">
         {error ? (
           <div className="mx-(--card-spacing) mb-2">
@@ -376,34 +399,37 @@ export function ManagedPluginsSection({
                 {t("settings.plugins.restartNow")}
               </Button>
             ) : null}
-            <TooltipProvider delayDuration={0} disableHoverableContent>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    aria-label={t("settings.plugins.checkUpdates")}
-                    disabled={checkingUpdates}
-                    onClick={handleCheckUpdates}
-                    size="icon-sm"
-                    type="button"
-                    variant="outline"
-                  >
-                    <RefreshCw
-                      aria-hidden
-                      className={cn(checkingUpdates && "animate-spin")}
-                      data-icon="inline-start"
-                    />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>
-                  {t("settings.plugins.checkUpdates")}
-                </TooltipContent>
-              </Tooltip>
-            </TooltipProvider>
+            {officialMutationsAllowed ? (
+              <TooltipProvider delayDuration={0} disableHoverableContent>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      aria-label={t("settings.plugins.checkUpdates")}
+                      disabled={checkingUpdates}
+                      onClick={handleCheckUpdates}
+                      size="icon-sm"
+                      type="button"
+                      variant="outline"
+                    >
+                      <RefreshCw
+                        aria-hidden
+                        className={cn(checkingUpdates && "animate-spin")}
+                        data-icon="inline-start"
+                      />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {t("settings.plugins.checkUpdates")}
+                  </TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            ) : null}
           </div>
         </div>
         <TabsContent value="installed">
           <UnifiedList
             emptyKey="emptyInstalled"
+            officialMutationsAllowed={officialMutationsAllowed}
             onRefreshManaged={refresh}
             onToggleBuiltin={onToggleBuiltin}
             onToggleManaged={toggleManaged}
@@ -416,6 +442,7 @@ export function ManagedPluginsSection({
         <TabsContent value="available">
           <UnifiedList
             emptyKey="emptyAvailable"
+            officialMutationsAllowed={officialMutationsAllowed}
             onRefreshManaged={refresh}
             onToggleBuiltin={onToggleBuiltin}
             onToggleManaged={toggleManaged}

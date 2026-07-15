@@ -193,16 +193,21 @@ export function UsageMeter({
   }
 
   const sorted = sortUsageWindows(windows);
+  const single = sorted.length === 1;
 
   return (
     <div
       className={cn(
-        "grid w-full min-w-0 content-start gap-3",
+        "w-full min-w-0 content-start",
         "[--codex-quota-item-min-width:18rem]",
-        "grid-cols-[repeat(auto-fit,minmax(min(100%,var(--codex-quota-item-min-width)),1fr))]",
+        single
+          ? "flex flex-col gap-3"
+          : "grid grid-cols-[repeat(auto-fit,minmax(min(100%,var(--codex-quota-item-min-width)),1fr))] gap-3",
         "pier-codex-usage-meter",
         className
       )}
+      data-count={sorted.length}
+      data-layout={single ? "single" : "auto-fit"}
       data-slot="codex-usage-meter"
     >
       {sorted.map((window) => (

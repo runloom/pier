@@ -35,6 +35,15 @@ export function formatAccountError(err: unknown, t: Translate): string {
     );
   }
   if (
+    lower.includes("no valid grok login") ||
+    lower.includes("no valid login found at auth.json")
+  ) {
+    return t(
+      "pier.grok.errors.noLocalLogin",
+      "No valid local Grok login found. Sign in with the Grok CLI first."
+    );
+  }
+  if (
     lower.includes("api key accounts cannot report") ||
     lower.includes("cannot report grok quota")
   ) {
@@ -72,6 +81,7 @@ export function formatAccountError(err: unknown, t: Translate): string {
     );
   }
   if (
+    lower.includes("billing request timed out") ||
     lower.includes("billing request failed") ||
     lower.includes("no grok quota windows") ||
     lower.includes("session token missing")

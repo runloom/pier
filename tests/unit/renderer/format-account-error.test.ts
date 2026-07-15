@@ -12,6 +12,17 @@ describe("formatAccountError", () => {
     );
   });
 
+  it("maps missing local Codex login errors", () => {
+    expect(
+      formatAccountError(
+        new Error("No valid codex login found at ~/.codex/auth.json"),
+        t
+      )
+    ).toBe(
+      "No valid local Codex login found. Sign in with the Codex CLI first."
+    );
+  });
+
   it("maps missing active account errors", () => {
     expect(
       formatAccountError(

@@ -67,6 +67,8 @@ function externalEntry(enabled: boolean): PluginRegistryEntry {
 function catalog(enabled: boolean): ManagedPluginCatalogSnapshot {
   return {
     checkedAt: 1,
+    officialMutationsAllowed: true,
+    pluginMode: "release",
     plugins: [
       {
         desired: { enabled, source: "official", version: "1.0.0" },
@@ -87,6 +89,8 @@ function catalog(enabled: boolean): ManagedPluginCatalogSnapshot {
 function catalogWithUpdate(): ManagedPluginCatalogSnapshot {
   return {
     checkedAt: 1,
+    officialMutationsAllowed: true,
+    pluginMode: "release",
     plugins: [
       {
         desired: { enabled: true, source: "official", version: "1.0.0" },
@@ -217,6 +221,75 @@ describe("ManagedPluginsSection", () => {
       expect(update).toHaveBeenCalledWith("pier.codex");
     });
     expect(install).not.toHaveBeenCalled();
+  });
+
+  it("renders workspace plugin mode banner as warning with icon", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        managedPlugins: {
+          checkUpdates: vi.fn(async () => catalog(true)),
+          disable: vi.fn(),
+          enable: vi.fn(),
+          install: vi.fn(),
+          list: vi.fn(async () => ({
+            ...catalog(true),
+            pluginMode: "workspace",
+          })),
+          rollback: vi.fn(),
+          uninstall: vi.fn(),
+          update: vi.fn(),
+        },
+      },
+    });
+
+    render(
+      <ManagedPluginsSection
+        builtinEntries={[externalEntry(true)]}
+        builtinInitialized
+        onToggleBuiltin={vi.fn()}
+        pendingBuiltinId={null}
+      />
+    );
+
+    const alert = (await screen.findByText("Workspace plugin mode")).closest(
+      '[data-slot="alert"]'
+    );
+    expect(alert).toHaveAttribute("data-variant", "warning");
+    expect(alert?.querySelector("svg")).not.toBeNull();
+  });
+
+  it("renders release plugin mode banner as info with icon", async () => {
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        managedPlugins: {
+          checkUpdates: vi.fn(async () => catalog(true)),
+          disable: vi.fn(),
+          enable: vi.fn(),
+          install: vi.fn(),
+          list: vi.fn(async () => catalog(true)),
+          rollback: vi.fn(),
+          uninstall: vi.fn(),
+          update: vi.fn(),
+        },
+      },
+    });
+
+    render(
+      <ManagedPluginsSection
+        builtinEntries={[externalEntry(true)]}
+        builtinInitialized
+        onToggleBuiltin={vi.fn()}
+        pendingBuiltinId={null}
+      />
+    );
+
+    const alert = (await screen.findByText("Release plugin mode")).closest(
+      '[data-slot="alert"]'
+    );
+    expect(alert).toHaveAttribute("data-variant", "info");
+    expect(alert?.querySelector("svg")).not.toBeNull();
   });
 
   it("renders plugin tabs without counts and keeps check updates as an icon button on the tab row", async () => {

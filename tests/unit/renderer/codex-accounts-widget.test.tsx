@@ -518,6 +518,7 @@ describe("AccountsWidget (usage)", () => {
       '[data-slot="codex-usage-progress"]'
     );
     expect(meter?.className).toContain("pier-codex-usage-meter");
+    expect(meter?.getAttribute("data-layout")).toBe("auto-fit");
     expect(meter?.className).toContain("auto-fit");
     expect(meter?.className).toContain("content-start");
     expect(windows).toHaveLength(2);
@@ -530,6 +531,40 @@ describe("AccountsWidget (usage)", () => {
         '[data-slot="codex-usage-progress"] [data-slot="progress"]'
       )
     ).toHaveLength(2);
+  });
+
+  it("forces a single quota meter onto a full-width column", async () => {
+    const snapshot = usageSnapshot({
+      activeUsage: {
+        fetchedAt: Date.now(),
+        status: "ok",
+        windows: [
+          {
+            id: "codex:primary",
+            limitId: "codex",
+            resetsAt: Date.now() + 3_600_000,
+            usedPercent: 10,
+            windowMinutes: 300,
+          },
+        ],
+      },
+    });
+    const { context } = contextWithSnapshot(snapshot);
+    const { container } = render(
+      <AccountsWidget context={context} {...baseProps()} />
+    );
+
+    await screen.findByText("5-hour quota");
+    const meter = container.querySelector(
+      '[data-slot="codex-usage-meter"][data-layout="single"]'
+    );
+    expect(meter).not.toBeNull();
+    expect(meter?.className).toContain("flex");
+    expect(meter?.className).toContain("w-full");
+    expect(meter?.className).not.toContain("auto-fit");
+    expect(
+      container.querySelectorAll('[data-slot="codex-usage-progress"]')
+    ).toHaveLength(1);
   });
 
   it("keeps primary quota windows before model-specific windows", () => {

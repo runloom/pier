@@ -59,6 +59,7 @@ export async function addOidcAccount(
   let dir = host.accountHomeDir(id);
   let failure: Error | null = null;
   let activatedId: string | null = null;
+  let existingId: string | null = null;
   let metadataCompensationRegistered = false;
 
   // These are registered first so every state/auth restoration runs before
@@ -128,6 +129,7 @@ export async function addOidcAccount(
       (account) => account.providerAccountId === identity.providerAccountId
     );
     if (existing) {
+      existingId = existing.id;
       const existingDir = host.accountHomeDir(existing.id);
       const previousManagedAuth =
         await host.provider.readManagedAuthContent(existingDir);
@@ -246,11 +248,11 @@ export async function addOidcAccount(
     host.setLoginMode(null);
     host.emitSnapshot();
   }
-
   if (failure) throw failure;
-  if (activatedId) {
-    host
-      .doRefreshUsage({ accountId: activatedId, force: true })
-      .catch(() => undefined);
-  }
+  // Always refresh usage for the account that was added (or merged into).
+  // Without this, a non-activated new account stays skeleton until manual refresh.
+  const refreshId = activatedId ?? existingId ?? id;
+  host
+    .doRefreshUsage({ accountId: refreshId, force: true })
+    .catch(() => undefined);
 }

@@ -5,7 +5,7 @@ import {
   shimmerTiers,
   shouldShimmer,
   statusColorVar,
-} from "../../src/renderer/panel-kits/terminal/agent-status-visual.ts";
+} from "../../src/renderer/components/agent-status/agent-status-visual.ts";
 
 describe("longRunLevel (loomdesk 长跑警示)", () => {
   it("< 5min → null", () => {

@@ -70,24 +70,24 @@ function Quota({
   const risk = usageRisk(window.usedPercent);
   return (
     <div
-      className="min-w-0"
+      className="w-full min-w-0"
       data-compact={compact || undefined}
       data-risk={risk}
       data-slot="grok-usage-progress"
     >
-      <div className="mb-2.5 flex items-baseline justify-between gap-4">
-        <span className="font-semibold text-xs">{label}</span>
-        <strong className="font-semibold tabular-nums tracking-tight">
+      <div className="mb-2.5 flex w-full items-baseline justify-between gap-4">
+        <span className="min-w-0 truncate font-semibold text-xs">{label}</span>
+        <strong className="shrink-0 font-semibold tabular-nums tracking-tight">
           {formatPercent(remaining / 100, language)}
         </strong>
       </div>
       <Progress
         aria-label={`${label} ${formatPercent(remaining / 100, language)}`}
-        className={compact ? "h-1" : "h-1.5"}
+        className={cn("w-full", compact ? "h-1" : "h-1.5")}
         value={remaining}
         variant={usageProgressVariant(risk)}
       />
-      <div className="mt-2 min-h-4 text-right text-muted-foreground text-xs tabular-nums">
+      <div className="mt-2 min-h-4 w-full text-right text-muted-foreground text-xs tabular-nums">
         {reset
           ? `${t("pier.grok.widget.resetsIn", "Resets in")} ${reset}`
           : "—"}
@@ -149,20 +149,32 @@ export function QuotaGroup({
     );
   }
 
+  const single = windows.length === 1;
+
   return (
     <div
       className={cn(
-        "flex min-w-0 flex-col gap-3",
+        "flex w-full min-w-0 flex-col gap-3",
         compact && "flex-1 max-[48rem]:col-span-full max-[48rem]:row-start-2"
       )}
       data-count={windows.length}
       data-slot="grok-quota-group"
     >
       {errorBanner}
+      {/*
+        Single window: block + w-full only — never auto-fit grid.
+        auto-fit with one item can still size the track to content on a wide
+        settings card, leaving the meter on a half-row.
+      */}
       <div
         className={cn(
-          "grid min-w-0 gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))] max-[36rem]:grid-cols-1"
+          "w-full min-w-0",
+          single
+            ? "block"
+            : "grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))] max-[36rem]:grid-cols-1"
         )}
+        data-layout={single ? "single" : "auto-fit"}
+        data-slot="grok-quota-grid"
       >
         {windows.map((window) => (
           <Quota

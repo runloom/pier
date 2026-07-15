@@ -323,4 +323,40 @@ describe("Grok accounts settings page", () => {
       ).toBe(true);
     });
   });
+
+  it("imports the local account from the Local import tab", async () => {
+    const { context, invokeCalls } = contextWithSnapshot(emptySnapshot());
+    await act(async () => {
+      render(
+        <>
+          <AppContentDialogHost />
+          <AccountsSettingsPage context={context} />
+        </>
+      );
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: /Add account/i }));
+    });
+    await act(async () => {
+      activateTab("Local import");
+    });
+    expect(
+      await screen.findByText(
+        /Import the account already signed in on this device/i
+      )
+    ).toBeTruthy();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Import local account" })
+      );
+    });
+    await waitFor(() => {
+      expect(
+        invokeCalls.some(
+          (call) =>
+            call.method === "accounts.adoptCurrent" && call.payload === null
+        )
+      ).toBe(true);
+    });
+  });
 });

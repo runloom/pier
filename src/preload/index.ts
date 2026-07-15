@@ -36,6 +36,10 @@ import type {
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
+import {
+  agentRuntimeIndexApi,
+  type PierAgentRuntimeIndexAPI,
+} from "./agent-runtime-index-api.ts";
 import { aiApi, type PierAiAPI } from "./ai-api.ts";
 import {
   environmentsApi,
@@ -207,6 +211,7 @@ export interface PierEnvAPI {
 }
 
 export interface PierWindowAPI {
+  agentRuntimeIndex: PierAgentRuntimeIndexAPI;
   agents: PierAgentsAPI;
   ai: PierAiAPI;
   app: AppPreloadApi;
@@ -388,6 +393,7 @@ const keybindingApi: PierKeybindingAPI = {
 const api: PierWindowAPI = {
   agents: agentsApi,
   appQuit: appQuitApi,
+  agentRuntimeIndex: agentRuntimeIndexApi,
   foregroundActivity: foregroundActivityApi,
   ai: aiApi,
   closeWindow: (windowId) =>

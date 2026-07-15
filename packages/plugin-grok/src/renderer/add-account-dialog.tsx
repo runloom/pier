@@ -15,6 +15,7 @@ import { Spinner } from "@pier/ui/spinner.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
 import {
   ExternalLink,
+  HardDrive,
   MonitorSmartphone,
   ShieldCheck,
   UserPlus,
@@ -28,29 +29,26 @@ import {
   useState,
 } from "react";
 import type { GrokLoginState } from "../shared/accounts.ts";
+import { AddAccountWaiting } from "./add-account-waiting.tsx";
 import type { Translate } from "./format-account-error.ts";
 
 function isLoginCancellation(error: unknown): boolean {
   return (
-    (error instanceof Error && error.name === "AbortError") ||
-    (error instanceof Error && error.message === "Login cancelled")
+    error instanceof Error &&
+    (error.name === "AbortError" || error.message === "Login cancelled")
   );
 }
 
-type AddTab = "account" | "api_key";
+type AddTab = "account" | "api_key" | "local";
 type OidcMode = "oauth" | "device";
-
 const ADD_DIALOG_ID = "accounts.add";
-
-interface AddAccountContentProps
-  extends RendererPluginContentDialogRenderProps {
+type AddAccountContentProps = RendererPluginContentDialogRenderProps & {
   context: ExternalRendererPluginContext;
   initialLogin: GrokLoginState | null;
   login: GrokLoginState | null;
   onError: (error: unknown) => void;
   t: Translate;
-}
-
+};
 function AddAccountContent({
   context,
   login,
@@ -78,7 +76,6 @@ function AddAccountContent({
   const apiKeyInputId = useId();
   const apiKeyLabelInputId = useId();
   const waiting = login !== null || starting;
-
   useEffect(() => {
     if (login) {
       setPresentation("waiting");
@@ -143,7 +140,6 @@ function AddAccountContent({
         }
       });
   };
-
   const submitApiKey = (): void => {
     const trimmed = apiKey.trim();
     if (trimmed.length === 0) {
@@ -174,6 +170,27 @@ function AddAccountContent({
       });
   };
 
+  const adoptLocal = (): void => {
+    const currentOperation = ++operationId.current;
+    setStarting(true);
+    context.rpc
+      .invoke("accounts.adoptCurrent", null)
+      .then(() => {
+        if (operationId.current === currentOperation) {
+          close(null);
+        }
+      })
+      .catch((error: unknown) => {
+        if (operationId.current === currentOperation) {
+          onError(error);
+        }
+      })
+      .finally(() => {
+        if (operationId.current === currentOperation) {
+          setStarting(false);
+        }
+      });
+  };
   const cancelLogin = (): void => {
     setPendingAction("cancel");
     context.rpc
@@ -192,7 +209,6 @@ function AddAccountContent({
         setPendingAction(null);
       });
   };
-
   const restartLogin = (): void => {
     setPendingAction("restart");
     context.rpc
@@ -208,53 +224,80 @@ function AddAccountContent({
         setPendingAction(null);
       });
   };
-
   if (presentation === "waiting") {
     return (
-      <div className="flex flex-col gap-4" data-pier-grok-scope="">
-        <Item size="sm" variant="muted">
-          <ItemMedia variant="icon">
-            <Spinner />
-          </ItemMedia>
-          <ItemContent>
-            <ItemDescription>
-              {t(
-                "pier.grok.accounts.settings.addDialogWaitingStatus",
-                "Waiting for Grok authorization…"
-              )}
-            </ItemDescription>
-          </ItemContent>
-        </Item>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            aria-busy={pendingAction === "cancel" || undefined}
-            disabled={pendingAction !== null}
-            onClick={cancelLogin}
-            type="button"
-            variant="outline"
-          >
-            {pendingAction === "cancel" ? (
-              <Spinner data-icon="inline-start" />
-            ) : null}
-            {t("pier.grok.accounts.settings.cancelLogin", "Cancel login")}
-          </Button>
-          <Button
-            aria-busy={pendingAction === "restart" || undefined}
-            disabled={pendingAction !== null}
-            onClick={restartLogin}
-            type="button"
-            variant="secondary"
-          >
-            {pendingAction === "restart" ? (
-              <Spinner data-icon="inline-start" />
-            ) : null}
-            {t(
-              "pier.grok.accounts.settings.addDialogReopenBrowser",
-              "Reopen browser"
-            )}
-          </Button>
-        </div>
-      </div>
+      <AddAccountWaiting
+        onCancel={cancelLogin}
+        onRestart={restartLogin}
+        pendingAction={pendingAction}
+        t={t}
+      />
+    );
+  }
+
+  let actionButtons: JSX.Element;
+  if (tab === "api_key") {
+    actionButtons = (
+      <Button
+        aria-busy={starting || undefined}
+        disabled={starting || apiKey.trim().length === 0}
+        onClick={submitApiKey}
+        type="button"
+      >
+        {starting ? <Spinner data-icon="inline-start" /> : null}
+        {t("pier.grok.accounts.settings.addDialogApiKeySubmit", "Add API key")}
+      </Button>
+    );
+  } else if (tab === "local") {
+    actionButtons = (
+      <Button
+        aria-busy={starting || undefined}
+        disabled={starting}
+        onClick={adoptLocal}
+        type="button"
+      >
+        {starting ? (
+          <Spinner data-icon="inline-start" />
+        ) : (
+          <HardDrive data-icon="inline-start" />
+        )}
+        {t(
+          "pier.grok.accounts.settings.addDialogLocalSubmit",
+          "Import local account"
+        )}
+      </Button>
+    );
+  } else {
+    actionButtons = (
+      <>
+        <Button
+          disabled={starting}
+          onClick={() => startOidc("device")}
+          type="button"
+          variant="outline"
+        >
+          {starting && oidcMode === "device" ? (
+            <Spinner data-icon="inline-start" />
+          ) : (
+            <MonitorSmartphone data-icon="inline-start" />
+          )}
+          {t("pier.grok.accounts.settings.addDialogDevice", "Use device code")}
+        </Button>
+        <Button
+          disabled={starting}
+          onClick={() => startOidc("oauth")}
+          type="button"
+        >
+          {starting && oidcMode === "oauth" ? (
+            <Spinner data-icon="inline-start" />
+          ) : null}
+          {t(
+            "pier.grok.accounts.settings.addDialogContinue",
+            "Continue in browser"
+          )}
+          <ExternalLink data-icon="inline-end" />
+        </Button>
+      </>
     );
   }
 
@@ -276,7 +319,7 @@ function AddAccountContent({
 
       <Tabs
         onValueChange={(value) => {
-          if (value === "account" || value === "api_key") {
+          if (value === "account" || value === "api_key" || value === "local") {
             setTab(value);
           }
         }}
@@ -291,6 +334,9 @@ function AddAccountContent({
           </TabsTrigger>
           <TabsTrigger className="flex-1" value="api_key">
             {t("pier.grok.accounts.settings.addDialogTabApiKey", "API key")}
+          </TabsTrigger>
+          <TabsTrigger className="flex-1" value="local">
+            {t("pier.grok.accounts.settings.addDialogTabLocal", "Local import")}
           </TabsTrigger>
         </TabsList>
 
@@ -345,6 +391,15 @@ function AddAccountContent({
             )}
           </p>
         </TabsContent>
+
+        <TabsContent className="mt-3" value="local">
+          <p className="text-muted-foreground text-sm">
+            {t(
+              "pier.grok.accounts.settings.addDialogLocalDescription",
+              "Import the account already signed in on this device (~/.grok/auth.json). It becomes the active Pier account."
+            )}
+          </p>
+        </TabsContent>
       </Tabs>
 
       <div className="flex flex-wrap justify-end gap-2">
@@ -356,58 +411,11 @@ function AddAccountContent({
         >
           {t("pier.grok.accounts.settings.cancel", "Cancel")}
         </Button>
-        {tab === "api_key" ? (
-          <Button
-            aria-busy={starting || undefined}
-            disabled={starting || apiKey.trim().length === 0}
-            onClick={submitApiKey}
-            type="button"
-          >
-            {starting ? <Spinner data-icon="inline-start" /> : null}
-            {t(
-              "pier.grok.accounts.settings.addDialogApiKeySubmit",
-              "Add API key"
-            )}
-          </Button>
-        ) : (
-          <>
-            <Button
-              disabled={starting}
-              onClick={() => startOidc("device")}
-              type="button"
-              variant="outline"
-            >
-              {starting && oidcMode === "device" ? (
-                <Spinner data-icon="inline-start" />
-              ) : (
-                <MonitorSmartphone data-icon="inline-start" />
-              )}
-              {t(
-                "pier.grok.accounts.settings.addDialogDevice",
-                "Use device code"
-              )}
-            </Button>
-            <Button
-              disabled={starting}
-              onClick={() => startOidc("oauth")}
-              type="button"
-            >
-              {starting && oidcMode === "oauth" ? (
-                <Spinner data-icon="inline-start" />
-              ) : null}
-              {t(
-                "pier.grok.accounts.settings.addDialogContinue",
-                "Continue in browser"
-              )}
-              <ExternalLink data-icon="inline-end" />
-            </Button>
-          </>
-        )}
+        {actionButtons}
       </div>
     </div>
   );
 }
-
 export function AddAccountDialog({
   context,
   login,
@@ -430,7 +438,7 @@ export function AddAccountDialog({
       ),
       description: t(
         "pier.grok.accounts.settings.addDialogDescription",
-        "Choose how to add a Grok account. Browser login and device code use the Grok CLI; API keys are stored only on this device."
+        "Choose how to add a Grok account. Browser login and device code use the Grok CLI; API keys and local import use credentials already on this device."
       ),
       size: "default",
       dismissible: login === null,

@@ -1,3 +1,5 @@
+import { AgentIndexChromeBar } from "@/components/common/agent-index-chrome-bar.tsx";
+import { AgentRuntimeIndexBridge } from "@/components/common/agent-runtime-index-bridge.tsx";
 import { AppContentDialogHost } from "@/components/common/app-content-dialog-host.tsx";
 import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
 import { AppQuitDialogBridge } from "@/components/common/app-quit-dialog-bridge.tsx";
@@ -21,7 +23,7 @@ export function AppShell() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <DocumentTitle />
-      {IS_MAC && <TitleBar />}
+      {IS_MAC ? <TitleBar /> : <AgentIndexChromeBar />}
       <div className="min-h-0 flex-1 overflow-hidden">
         <WorkspaceHost />
       </div>
@@ -34,6 +36,7 @@ export function AppShell() {
       <PluginOverlayHost />
       <TerminalDebugSnapshotBridge />
       <ForegroundActivityBridge />
+      <AgentRuntimeIndexBridge />
       <UsageDataBridge />
       <TaskRunsErrorBridge />
       <TaskOutputSyncBridge />

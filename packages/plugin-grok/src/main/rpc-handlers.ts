@@ -26,6 +26,11 @@ export function registerGrokRpcHandlers(options: {
     await service.add(addAccountPayloadSchema.parse(payload));
     return null;
   });
+  rpc.handle("accounts.adoptCurrent", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    await service.adoptCurrent();
+    return null;
+  });
   rpc.handle("accounts.cancelLogin", async (payload) => {
     emptyRpcPayloadSchema.parse(payload);
     await service.cancelLogin();

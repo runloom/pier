@@ -75,9 +75,14 @@ function pushPeriodWindow(
 /**
  * Map Grok CLI chat-proxy billing JSON into Codex-shaped usage windows.
  *
- * Supports two observed shapes:
- * 1. Default `/v1/billing`: `{ monthlyLimit, used, onDemandCap, billingPeriod* }`
- * 2. `?format=credits` (when populated): `{ creditUsagePercent, productUsage, currentPeriod, ... }`
+ * Priority (must match product semantics):
+ * 1. Credit percent meters (`creditUsagePercent` / `productUsage`) — gates API.
+ * 2. Cash monthly spend (`used` / `monthlyLimit` cents) — last-resort only;
+ *    labeled "Monthly spend" so it is not confused with credit quota.
+ *
+ * Supports:
+ * - `?format=credits` populated shape
+ * - default `/v1/billing` cash shape
  */
 export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
   const root = asRecord(payload);
@@ -97,32 +102,9 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
   const minutes = windowMinutesFromRange(startMs, endMs);
   const windows: AccountUsageResult["windows"] = [];
 
-  // Shape A: absolute cents used / monthlyLimit (default /v1/billing).
-  const monthlyLimit = asCents(config.monthlyLimit);
-  const used = asCents(config.used);
-  if (monthlyLimit !== null && monthlyLimit > 0 && used !== null) {
-    pushPeriodWindow(windows, {
-      endMs,
-      limitName:
-        periodLabel(period?.type) === "Quota"
-          ? "Monthly limit"
-          : periodLabel(period?.type),
-      minutes:
-        minutes ??
-        windowMinutesFromRange(
-          parseIsoMs(config.billingPeriodStart),
-          parseIsoMs(config.billingPeriodEnd)
-        ),
-      usedPercent: (used / monthlyLimit) * 100,
-    });
-  }
-
-  // Shape B: explicit percent (format=credits when populated).
+  // 1) Credit period percent first — real rate-limit / credit quota.
   const creditUsagePercent = asFiniteNumber(config.creditUsagePercent);
-  if (
-    creditUsagePercent !== null &&
-    !windows.some((w) => w.id === "grok:period")
-  ) {
+  if (creditUsagePercent !== null) {
     pushPeriodWindow(windows, {
       endMs,
       limitName: periodLabel(period?.type),
@@ -131,6 +113,7 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
     });
   }
 
+  // 2) Product breakdown (credits shape). Keep a lone product when no period.
   const productUsage = Array.isArray(config.productUsage)
     ? config.productUsage.flatMap((item) => {
         const row = asRecord(item);
@@ -158,11 +141,32 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
     }
   }
 
+  // 3) Cash monthly only when no credit period meter exists.
+  // Cash spend can look healthy while weekly credits are exhausted — never let
+  // it override creditUsagePercent, and label it as spend not "limit".
+  const monthlyLimit = asCents(config.monthlyLimit);
+  const used = asCents(config.used);
+  if (
+    !hasPeriodWindow &&
+    monthlyLimit !== null &&
+    monthlyLimit > 0 &&
+    used !== null
+  ) {
+    pushPeriodWindow(windows, {
+      endMs,
+      limitName: "Monthly spend",
+      minutes:
+        minutes ??
+        windowMinutesFromRange(
+          parseIsoMs(config.billingPeriodStart),
+          parseIsoMs(config.billingPeriodEnd)
+        ),
+      usedPercent: (used / monthlyLimit) * 100,
+    });
+  }
+
   const cap = asCents(config.onDemandCap);
-  const onDemandUsed =
-    asCents(config.onDemandUsed) ??
-    // default shape may only expose onDemandCap without a separate used field
-    null;
+  const onDemandUsed = asCents(config.onDemandUsed);
   if (cap !== null && cap > 0 && onDemandUsed !== null) {
     windows.push({
       id: "grok:on-demand",
@@ -171,8 +175,6 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
       usedPercent: (onDemandUsed / cap) * 100,
     });
   }
-
-  // Prepaid remaining balance is not a used-percent window; skip as meter.
 
   if (windows.length === 0) {
     return {

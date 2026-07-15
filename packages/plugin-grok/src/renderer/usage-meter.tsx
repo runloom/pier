@@ -31,6 +31,26 @@ function replace(template: string, values: Record<string, string>): string {
   );
 }
 
+function localizeLimitName(name: string, t: Translate): string {
+  if (name === "Weekly limit") {
+    return t("pier.grok.usage.period.weekly", "Weekly limit");
+  }
+  if (name === "Monthly limit") {
+    return t("pier.grok.usage.period.monthly", "Monthly limit");
+  }
+  if (name === "Monthly spend") {
+    return t("pier.grok.usage.period.monthlySpend", "Monthly spend");
+  }
+  if (name === "API") return t("pier.grok.usage.product.api", "API");
+  if (name === "Grok Build") {
+    return t("pier.grok.usage.product.grokBuild", "Grok Build");
+  }
+  if (name === "On-demand") {
+    return t("pier.grok.usage.onDemand", "On-demand");
+  }
+  return name;
+}
+
 export function usageWindowLabel(
   window: GrokUsageWindow,
   language: string,
@@ -55,7 +75,7 @@ export function usageWindowLabel(
   }
   return window.limitName
     ? replace(t("pier.grok.usage.namedQuota", "{name} · {quota}"), {
-        name: window.limitName,
+        name: localizeLimitName(window.limitName, t),
         quota,
       })
     : quota;
@@ -191,16 +211,21 @@ export function UsageMeter({
   }
 
   const sorted = sortUsageWindows(windows);
+  const single = sorted.length === 1;
 
   return (
     <div
       className={cn(
-        "grid w-full min-w-0 content-start gap-3",
+        "w-full min-w-0 content-start",
         "[--grok-quota-item-min-width:18rem]",
-        "grid-cols-[repeat(auto-fit,minmax(min(100%,var(--grok-quota-item-min-width)),1fr))]",
+        single
+          ? "flex flex-col gap-3"
+          : "grid grid-cols-[repeat(auto-fit,minmax(min(100%,var(--grok-quota-item-min-width)),1fr))] gap-3",
         "pier-grok-usage-meter",
         className
       )}
+      data-count={sorted.length}
+      data-layout={single ? "single" : "auto-fit"}
       data-slot="grok-usage-meter"
     >
       {sorted.map((window) => (

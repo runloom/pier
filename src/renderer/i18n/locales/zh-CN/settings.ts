@@ -281,6 +281,14 @@ export const settings = {
       available: "未安装",
     },
     trustNotice: "官方插件按可信代码运行，不设沙箱隔离。",
+    pluginMode: {
+      workspaceTitle: "工作区插件模式",
+      workspaceBody:
+        "正在从本地包目录加载插件，并已禁用官方更新，避免覆盖本地改动。",
+      releaseTitle: "发布插件模式",
+      releaseBody:
+        "插件走受管理安装/更新，行为接近生产包。本地开发请用 PIER_PLUGIN_MODE=workspace。",
+    },
     checkUpdates: "检查更新",
     restartNow: "立即重启",
     restartNotice: "重启 Pier 以使新版本生效。",
@@ -359,6 +367,8 @@ export const settings = {
       title: "智能体列表",
       description: "支持和检测到的 CLI agent",
       refresh: "刷新",
+      refreshSuccess: "智能体列表已刷新",
+      refreshFailed: "刷新智能体列表失败",
     },
     status: {
       detected: "已检测",

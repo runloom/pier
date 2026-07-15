@@ -2,6 +2,11 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  createInflightCoalescer,
+  createUsageRefreshScheduler,
+  USAGE_REFRESH_CONCURRENCY,
+} from "@pier/plugin-api/account-usage";
 import type { AddAccountPayload } from "../shared/accounts.ts";
 import { WATCH_SUPPRESS_MS } from "../shared/constants.ts";
 import { addOidcAccount } from "./accounts-add-oidc.ts";
@@ -34,13 +39,9 @@ import {
 import { reconcileManagedCredentials } from "./managed-credential-reconciliation.ts";
 import { createSerialMutationQueue } from "./serial-mutation-queue.ts";
 import type { AccountUsageResult } from "./types.ts";
-import {
-  createUsageRefreshScheduler,
-  USAGE_REFRESH_CONCURRENCY,
-} from "./usage-refresh-scheduler.ts";
 
+export { USAGE_REFRESH_CONCURRENCY } from "@pier/plugin-api/account-usage";
 export { SYSTEM_USAGE_CACHE_KEY } from "./accounts-usage.ts";
-export { USAGE_REFRESH_CONCURRENCY } from "./usage-refresh-scheduler.ts";
 
 export function createGrokAccountsService(
   opts: GrokAccountsServiceOpts
@@ -56,6 +57,7 @@ export function createGrokAccountsService(
   let lastLoginError: { at: number; message: string } | null = null;
   let suppressWatchUntil = 0;
   const usageCache: Record<string, UsageCacheEntry> = {};
+  const usageRefreshInflight = createInflightCoalescer();
   let usagePollTimer: ReturnType<typeof setInterval> | null = null;
 
   const enqueueMutation = createSerialMutationQueue();
@@ -116,38 +118,57 @@ export function createGrokAccountsService(
       return;
     }
 
-    let result: AccountUsageResult;
-    if (targetId) {
-      const account = state.accounts.find((entry) => entry.id === targetId);
-      const abort = new AbortController();
-      try {
-        result = await provider.fetchUsage({
-          kind: account?.kind === "api_key" ? "api_key" : "oidc",
-          signal: abort.signal,
-          ...(account?.kind === "api_key"
-            ? {}
-            : { accountHomeDir: accountHomeDir(targetId) }),
-        });
-      } catch (error) {
+    // Coalesce concurrent refresh for the same account (settings lease +
+    // manual refresh + poll must not stampede multi-hop remote calls).
+    await usageRefreshInflight.run(cacheKey, async () => {
+      const latestCached = usageCache[cacheKey];
+      if (
+        !options.force &&
+        latestCached &&
+        now() - latestCached.fetchedAt < USAGE_MIN_REFETCH_MS
+      ) {
+        return;
+      }
+
+      let result: AccountUsageResult;
+      if (targetId) {
+        const account = stateStore
+          .get()
+          .accounts.find((entry) => entry.id === targetId);
+        const abort = new AbortController();
+        try {
+          result = await provider.fetchUsage({
+            kind: account?.kind === "api_key" ? "api_key" : "oidc",
+            signal: abort.signal,
+            ...(account?.kind === "api_key"
+              ? {}
+              : { accountHomeDir: accountHomeDir(targetId) }),
+          });
+        } catch (error) {
+          result = {
+            error: error instanceof Error ? error.message : String(error),
+            status: "error",
+            windows: [],
+          };
+        }
+      } else {
         result = {
-          error: error instanceof Error ? error.message : String(error),
           status: "error",
+          error: "No active Grok account",
           windows: [],
         };
       }
-    } else {
-      result = {
-        status: "error",
-        error: "No active Grok account",
-        windows: [],
-      };
-    }
 
-    usageCache[cacheKey] = createUsageCacheEntry(result, cached, now());
-    if (targetId && cacheKey !== targetId) {
-      usageCache[targetId] = usageCache[cacheKey];
-    }
-    emitSnapshot();
+      usageCache[cacheKey] = createUsageCacheEntry(
+        result,
+        usageCache[cacheKey],
+        now()
+      );
+      if (targetId && cacheKey !== targetId) {
+        usageCache[targetId] = usageCache[cacheKey];
+      }
+      emitSnapshot();
+    });
   }
 
   async function doAdoptCurrent(): Promise<void> {
@@ -232,7 +253,6 @@ export function createGrokAccountsService(
         : "API key";
     const previousState = stateStore.get();
     let stateMutated = false;
-    let activated = false;
     try {
       await provider.storeApiKey(id, trimmed);
       const account = buildApiKeyAccountRecord(id, displayLabel, now());
@@ -251,14 +271,13 @@ export function createGrokAccountsService(
           activeAccountId: id,
           revision: s.revision + 1,
         }));
-        activated = true;
       }
       await stateStore.flush();
       lastLoginError = null;
       emitSnapshot();
-      if (activated) {
-        doRefreshUsage({ accountId: id, force: true }).catch(() => undefined);
-      }
+      // Always refresh — even non-activated accounts need a cache entry to
+      // leave the skeleton state. API keys return a known error result.
+      doRefreshUsage({ accountId: id, force: true }).catch(() => undefined);
     } catch (error) {
       if (stateMutated) {
         stateStore.mutate(() => previousState);
@@ -448,6 +467,7 @@ export function createGrokAccountsService(
     flush: () => stateStore.flush(),
     snapshot: () => buildSnapshot(),
     add: (payload) => enqueueMutation(() => doAdd(payload)),
+    adoptCurrent: () => enqueueMutation(doAdoptCurrent),
     cancelLogin: () => {
       loginAbort?.abort();
       return enqueueMutation(() => {

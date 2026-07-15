@@ -20,7 +20,9 @@ function currentDefaultAgentId() {
   return pickAgent(defaultAgentId, detectedIds, disabledAgentIds);
 }
 
-async function handleNewAgent(invocation?: ActionInvocation): Promise<void> {
+export async function handleNewAgent(
+  invocation?: ActionInvocation
+): Promise<void> {
   const target = captureAnchoredTerminalTarget(
     useWorkspaceStore.getState().api,
     invocation

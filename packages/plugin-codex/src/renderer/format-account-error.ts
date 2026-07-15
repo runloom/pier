@@ -9,6 +9,12 @@ export function formatAccountError(err: unknown, t: Translate): string {
   const raw = err instanceof Error ? err.message : String(err);
   const lower = raw.toLowerCase();
 
+  if (lower.includes("no valid codex login")) {
+    return t(
+      "pier.codex.errors.noLocalLogin",
+      "No valid local Codex login found. Sign in with the Codex CLI first."
+    );
+  }
   if (
     lower.includes("unknown named parameter") ||
     lower.includes("omp database not found") ||

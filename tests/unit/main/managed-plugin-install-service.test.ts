@@ -143,6 +143,7 @@ interface CreateServiceOptions {
   readonly officialIndexRefresh?: (options?: {
     force?: boolean;
   }) => Promise<void>;
+  readonly pluginMode?: "workspace" | "release";
   readonly runtimeMode?: "development" | "production" | "test";
 }
 
@@ -178,6 +179,7 @@ async function createService(options: CreateServiceOptions = {}): Promise<{
       : {}),
     paths,
     pierVersion: "0.1.5",
+    ...(options.pluginMode ? { pluginMode: options.pluginMode } : {}),
     runtimeMode: options.runtimeMode ?? "test",
     store,
   });
@@ -303,6 +305,76 @@ describe("managed plugin install service", () => {
     expect(operationLog).toHaveBeenCalledWith(
       expect.objectContaining({ operation: "install-from-bundle" })
     );
+  });
+
+  it("workspace mode install uses local bundled package over official HTTP", async () => {
+    const officialSeed = await createSeedArchive("1.0.0");
+    const bundledSeed = await createSeedArchive("1.0.0");
+    const assetFetcher = vi.fn(async () => ({
+      body: await readFile(officialSeed.archivePath),
+      finalUrl: "https://example.test/pier.codex-1.0.0.tgz",
+      redirectCount: 0,
+    }));
+    const { service, operationLog } = await createService({
+      assetFetcher,
+      bundledArchive: bundledSeed,
+      bundledVersion: "1.0.0",
+      officialIndex: officialIndexFor("1.0.0", officialSeed),
+      pluginMode: "workspace",
+      runtimeMode: "development",
+    });
+
+    await expect(service.install("pier.codex")).resolves.toMatchObject({
+      ok: true,
+      version: "1.0.0",
+    });
+    expect(assetFetcher).not.toHaveBeenCalled();
+    expect(operationLog).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: "install-from-bundle" })
+    );
+  });
+
+  it("release mode under development may fetch official install assets", async () => {
+    const officialSeed = await createSeedArchive("1.0.0");
+    const bundledSeed = await createSeedArchive("1.0.0");
+    const assetFetcher = vi.fn(async () => ({
+      body: await readFile(officialSeed.archivePath),
+      finalUrl:
+        "https://objects.githubusercontent.com/github-production-release-asset/test/pier.codex.tgz",
+      redirectCount: 0,
+    }));
+    const { service, operationLog } = await createService({
+      assetFetcher,
+      bundledArchive: bundledSeed,
+      bundledVersion: "1.0.0",
+      officialIndex: officialIndexFor("1.0.0", officialSeed),
+      pluginMode: "release",
+      runtimeMode: "development",
+    });
+
+    await expect(service.install("pier.codex")).resolves.toMatchObject({
+      ok: true,
+      version: "1.0.0",
+    });
+    expect(assetFetcher).toHaveBeenCalled();
+    expect(operationLog).toHaveBeenCalledWith(
+      expect.objectContaining({ operation: "install" })
+    );
+  });
+
+  it("workspace mode denies official update", async () => {
+    const seed = await createSeedArchive("1.0.0");
+    const { service } = await createService({
+      bundledArchive: seed,
+      bundledVersion: "1.0.0",
+      pluginMode: "workspace",
+      runtimeMode: "development",
+    });
+    await service.install("pier.codex");
+    await expect(service.update("pier.codex")).resolves.toMatchObject({
+      ok: false,
+      error: { code: "denied" },
+    });
   });
 
   it("install is idempotent — second call at same version is a no-op", async () => {

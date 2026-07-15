@@ -7,8 +7,9 @@ import {
   CardTitle,
 } from "@pier/ui/card.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
+import { StatusIcon } from "@pier/ui/status-icon.tsx";
 import i18next from "i18next";
-import { CircleAlert, RotateCcw } from "lucide-react";
+import { RotateCcw } from "lucide-react";
 
 export interface StartupErrorScreenProps {
   error: unknown;
@@ -114,10 +115,7 @@ export function StartupErrorScreen({
       <Card className="flex max-h-[min(80vh,36rem)] w-full max-w-xl">
         <CardHeader className="shrink-0">
           <div className="flex items-start gap-3">
-            <CircleAlert
-              aria-hidden
-              className="mt-0.5 size-5 shrink-0 text-destructive"
-            />
+            <StatusIcon className="mt-0.5" kind="error" />
             <div className="min-w-0 flex-1">
               <CardTitle>
                 <h1>{copy.title}</h1>
@@ -133,10 +131,10 @@ export function StartupErrorScreen({
           data-scrollbar="stable"
         >
           <div className="px-(--card-spacing)">
-            <div className="font-medium text-destructive text-sm">
+            <div className="font-medium text-foreground text-sm">
               {copy.details}
             </div>
-            <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-destructive/90 text-xs leading-5">
+            <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-muted-foreground text-xs leading-5">
               {detail}
             </pre>
           </div>

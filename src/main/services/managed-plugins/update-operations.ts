@@ -13,6 +13,23 @@ export async function performUpdate(
   ctx: OperationsContext,
   id: string
 ): Promise<ManagedPluginOperationResult> {
+  if (ctx.pluginMode === "workspace") {
+    await ctx.appendOperationLog({
+      actorKind: "desktop-renderer",
+      operation: "update",
+      pluginId: id,
+      result: "denied",
+      timestamp: ctx.now(),
+    });
+    return {
+      error: {
+        code: "denied" as const,
+        message:
+          "Official plugin update is disabled in workspace plugin mode. Rebuild packages/plugin-* (or your custom root) instead.",
+      },
+      ok: false as const,
+    };
+  }
   const state = ctx.store.get();
   const existing = state.plugins[id];
   if (!existing?.activeVersion || existing.uninstalledAt) {
