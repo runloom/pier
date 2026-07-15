@@ -23,9 +23,13 @@ export const terminal = {
     blocked: "Blocked",
     cancelled: "Cancelled",
     controlLabel: "Task run controls: {{label}}",
-    dismiss: "Dismiss task result",
     duration: "Elapsed time: {{duration}}",
     failed: "Failed",
+    finishedBlocked: "Task blocked: {{label}}",
+    finishedCancelled: "Task cancelled: {{label}}",
+    finishedFailed: "Task failed: {{label}}",
+    finishedForceCancelled: "Task force-stopped: {{label}}",
+    finishedSuccess: "Task finished: {{label}}",
     forceStop: "Force stop",
     forceStopBody:
       "The task process did not stop. Force stopping terminates it immediately; terminal task panels keep a result summary.",
@@ -53,6 +57,7 @@ export const terminal = {
     stopFailed: "Failed to stop task",
     stopping: "Stopping",
     succeeded: "Succeeded",
+    viewDetails: "View details",
   },
   statusBar: {
     item: {

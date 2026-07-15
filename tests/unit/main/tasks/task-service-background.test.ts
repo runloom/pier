@@ -337,4 +337,91 @@ describe("task-service background runs", () => {
     ]);
     expect(service.output(started.runId, "lint")).toBeNull();
   });
+
+  it("force-stops origin-bound background runs when the origin panel closes", async () => {
+    const projectRootPath = "/repo";
+    const forceKill = vi.fn(() => true);
+    let exit: ((exitCode: number | null) => void) | undefined;
+    const service = createTaskService({
+      processEnvironment: {
+        resolve: async () => ({
+          diagnostics: {
+            cacheHit: false,
+            pathChanged: false,
+            shellEnvStatus: "skipped",
+            source: "task",
+          },
+          env: {},
+        }),
+      },
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      spawnBackgroundTask: ({ onExit }) => {
+        exit = onExit;
+        return { forceKill, kill: () => true, pid: 4242 };
+      },
+      writeRecentState: async () => undefined,
+    });
+
+    const started = await service.startBackgroundRun({
+      launches: [taskLaunch(projectRootPath)],
+      originPanelId: "terminal-1",
+      projectRootPath,
+      rootTaskId: "package-script:test",
+      windowId: "main",
+    });
+    await waitFor(() => exit !== undefined);
+
+    service.markPanelClosed("terminal-1", "main");
+
+    expect(forceKill).toHaveBeenCalledTimes(1);
+    await waitFor(
+      () =>
+        service.runsSnapshot("main").runs[started.runId]?.status === "cancelled"
+    );
+  });
+
+  it("ends quit shutdown early once background processes exit after TERM", async () => {
+    const projectRootPath = "/repo";
+    let interruptCalls = 0;
+    const service = createTaskService({
+      processEnvironment: {
+        resolve: async () => ({
+          diagnostics: {
+            cacheHit: false,
+            pathChanged: false,
+            shellEnvStatus: "skipped",
+            source: "task",
+          },
+          env: {},
+        }),
+      },
+      readRecentState: async () => ({ entries: [], version: 1 }),
+      spawnBackgroundTask: ({ onExit }) => ({
+        interrupt: () => {
+          interruptCalls += 1;
+          queueMicrotask(() => {
+            onExit(0);
+          });
+          return true;
+        },
+        kill: () => true,
+        pid: 5151,
+      }),
+      writeRecentState: async () => undefined,
+    });
+
+    await service.startBackgroundRun({
+      launches: [taskLaunch(projectRootPath)],
+      projectRootPath,
+      rootTaskId: "package-script:test",
+      windowId: "main",
+    });
+    await waitFor(() => interruptCalls === 0);
+    await new Promise<void>((resolve) => setTimeout(resolve, 0));
+
+    const startedAt = Date.now();
+    await service.shutdownForQuit(2000);
+    expect(Date.now() - startedAt).toBeLessThan(800);
+    expect(interruptCalls).toBe(1);
+  });
 });

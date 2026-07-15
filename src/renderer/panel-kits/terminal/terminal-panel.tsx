@@ -461,7 +461,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
                 content: (
                   <TerminalRuntimeControl
                     now={runtimeControl.now}
-                    onDismissRun={runtimeControl.dismissRun}
                     panelId={panelId}
                     runs={runtimeControl.runs}
                   />

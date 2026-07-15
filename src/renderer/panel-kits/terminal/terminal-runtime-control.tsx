@@ -4,6 +4,7 @@ import { formatDurationShort } from "@pier/ui/format.tsx";
 import { Separator } from "@pier/ui/separator.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type { TaskRunControlEntry } from "@shared/contracts/tasks.ts";
 import {
   LocateFixed,
@@ -12,7 +13,6 @@ import {
   RotateCcw,
   Square,
   SquareTerminal,
-  X,
 } from "lucide-react";
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
@@ -36,20 +36,24 @@ import { useTerminalRunSelection } from "./use-terminal-run-selection.ts";
 import { isActiveTaskRunStatus } from "./use-terminal-runtime-control-presentation.ts";
 
 function ActionButton({
+  className,
   disabled,
   icon: Icon,
   label,
   loading = false,
   onClick,
   testId,
+  tone = "default",
   variant = "ghost",
 }: {
+  className?: string;
   disabled?: boolean;
   icon: LucideIcon;
   label: string;
   loading?: boolean;
   onClick(): Promise<void> | void;
   testId?: string;
+  tone?: "default" | "muted";
   variant?: "destructive" | "ghost";
 }) {
   return (
@@ -57,10 +61,12 @@ function ActionButton({
       <TooltipTrigger asChild>
         <Button
           aria-label={label}
+          className={className}
           data-testid={testId}
           disabled={disabled}
           onClick={onClick}
           size="icon-sm"
+          tone={tone}
           type="button"
           variant={variant}
         >
@@ -78,12 +84,10 @@ function ActionButton({
 
 export function TerminalRuntimeControl({
   now,
-  onDismissRun,
   panelId,
   runs,
 }: {
   now: number;
-  onDismissRun(runId: string): void;
   panelId: string;
   runs: readonly TaskRunControlEntry[];
 }) {
@@ -101,6 +105,7 @@ export function TerminalRuntimeControl({
   if (!run) {
     return null;
   }
+
   const node = taskRunPanelNode(run, panelId);
   const completed = Object.values(run.nodes).filter(
     (candidate) => !isActiveTaskRunStatus(candidate.status)
@@ -113,6 +118,7 @@ export function TerminalRuntimeControl({
   const duration = formatDurationShort(
     (isActiveTaskRunStatus(run.status) ? now : run.updatedAt) - run.startedAt
   );
+  const active = isActiveTaskRunStatus(run.status);
 
   const stop = async () => {
     setPendingAction("stop");
@@ -139,8 +145,6 @@ export function TerminalRuntimeControl({
       setPendingAction(null);
     }
   };
-
-  const active = isActiveTaskRunStatus(run.status);
 
   return (
     <fieldset
@@ -223,11 +227,14 @@ export function TerminalRuntimeControl({
             }
             onClick={stop}
             testId="terminal-runtime-control-stop"
-            variant={force ? "destructive" : "ghost"}
+            variant="destructive"
           />
         ) : null}
         {!active || run.status === "running" ? (
           <ActionButton
+            className={cn(
+              "text-action-accent hover:bg-action-accent/10 hover:text-action-accent"
+            )}
             disabled={pendingAction !== null}
             icon={RotateCcw}
             label={t("terminal.runtimeControl.restart")}
@@ -243,6 +250,7 @@ export function TerminalRuntimeControl({
             label={t("terminal.runtimeControl.openOutput")}
             onClick={openOutput}
             testId="terminal-runtime-control-open-output"
+            tone="muted"
           />
         ) : null}
         {run.mode !== "background" && run.status !== "pending" ? (
@@ -252,15 +260,9 @@ export function TerminalRuntimeControl({
             label={t("terminal.runtimeControl.reveal")}
             onClick={reveal}
             testId="terminal-runtime-control-reveal"
+            tone="muted"
           />
         ) : null}
-        <ActionButton
-          disabled={pendingAction !== null}
-          icon={X}
-          label={t("terminal.runtimeControl.dismiss")}
-          onClick={() => onDismissRun(run.runId)}
-          testId="terminal-runtime-control-dismiss"
-        />
       </div>
     </fieldset>
   );

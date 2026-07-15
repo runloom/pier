@@ -92,6 +92,7 @@ export interface TaskService {
   recordRecent(launch: TaskLaunchPlan): Promise<void>;
   recordStarted(record: TaskStartedRecord): void;
   runsSnapshot(windowId?: string | undefined): TaskRunsSnapshot;
+  shutdownForQuit(graceMs?: number): Promise<void>;
   startBackgroundRun(args: {
     clientEnv?: Record<string, string> | undefined;
     launches: readonly TaskLaunchPlan[];

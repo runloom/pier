@@ -3,7 +3,10 @@ import type {
   TaskRunSnapshot,
   TaskSpawnPreparation,
 } from "@shared/contracts/tasks.ts";
-import { deriveBackgroundSnapshot } from "@shared/contracts/tasks.ts";
+import {
+  deriveBackgroundSnapshot,
+  isActiveTaskRunNodeStatus,
+} from "@shared/contracts/tasks.ts";
 import {
   isBackgroundPanelId,
   panelRefKey,
@@ -196,6 +199,13 @@ export function createTaskService({
     runListeners.clear();
   }
 
+  async function shutdownForQuit(graceMs?: number): Promise<void> {
+    if (disposed) {
+      return;
+    }
+    await backgroundRuns.shutdownForQuit(graceMs);
+  }
+
   function recordStartedRun({
     panelId,
     projectRootPath,
@@ -301,6 +311,7 @@ export function createTaskService({
       return result;
     },
     dispose,
+    shutdownForQuit,
     async completePanel(panelId, exitCode, windowId, expectedRunId) {
       if (isBackgroundPanelId(panelId)) {
         return await backgroundRuns.finishPanel(panelId, exitCode, windowId);
@@ -334,6 +345,48 @@ export function createTaskService({
       if (isBackgroundPanelId(panelId)) {
         backgroundRuns.cancelPanel(panelId, windowId);
         return;
+      }
+      // 关闭发起终端时，确认文案承诺会终止绑定的 background。
+      // 绕过 stopRun 的 grace 两阶段，直接强制结束。
+      const snapshot = taskRuns.runsSnapshot();
+      for (const run of Object.values(snapshot.runs)) {
+        if (
+          run.mode !== "background" ||
+          run.originPanelId !== panelId ||
+          !isActiveTaskRunNodeStatus(run.status)
+        ) {
+          continue;
+        }
+        taskRuns.requestStop(run.runId);
+        const stopping =
+          taskRuns.controlStatus(run.runId) ??
+          taskRuns.runsSnapshot().runs[run.runId];
+        if (!stopping) {
+          continue;
+        }
+        const stoppedTaskIds = new Set<string>();
+        for (const node of Object.values(stopping.nodes)) {
+          if (
+            !(
+              node.panelId &&
+              isBackgroundPanelId(node.panelId) &&
+              (node.status === "stopping" || node.status === "running")
+            )
+          ) {
+            continue;
+          }
+          const result = backgroundRuns.forceStopPanel(
+            node.panelId,
+            node.windowId
+          );
+          if (result.ok) {
+            stoppedTaskIds.add(node.taskId);
+          }
+        }
+        const forced = taskRuns.forceStop(run.runId, stoppedTaskIds);
+        if (forced && !isActiveTaskRunNodeStatus(forced.status)) {
+          forgetSnapshotTasks(forced);
+        }
       }
       markPanelActuallyClosed(panelId, windowId);
     },

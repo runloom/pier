@@ -18,6 +18,7 @@ export interface TaskBackgroundRuns {
     windowId?: string | undefined
   ): { message?: string; ok: boolean };
   output(runId: string, taskId: string): TaskOutputUpdate | null;
+  shutdownForQuit(graceMs?: number): Promise<void>;
   start(args: {
     clientEnv?: Record<string, string> | undefined;
     launches: readonly TaskLaunchPlan[];

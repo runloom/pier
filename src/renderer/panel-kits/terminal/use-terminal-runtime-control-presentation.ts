@@ -14,15 +14,13 @@ import {
   taskRunsForPanel,
   useTaskRunsStore,
 } from "@/stores/task-runs.store.ts";
+import { notifyTaskRunFinishedIfNeeded } from "./notify-task-run-finished.ts";
 
 export const RUNTIME_CONTROL_EXIT_MS = 180;
-export const RUNTIME_CONTROL_SUCCESS_LINGER_MS = 5000;
-export const RUNTIME_CONTROL_CANCELLED_LINGER_MS = 3000;
 
 export type TerminalRuntimeControlPhase = "exiting" | "visible";
 
 interface TerminalRuntimeControlPresentation {
-  dismissRun(runId: string): void;
   mounted: boolean;
   now: number;
   phase: TerminalRuntimeControlPhase;
@@ -36,6 +34,7 @@ export function isActiveTaskRunStatus(status: TaskRunNodeStatus): boolean {
   return status === "pending" || status === "running" || status === "stopping";
 }
 
+/** @deprecated 终态一律 linger 后退场；保留导出供旧测试/调用方过渡。 */
 export function isPersistentTaskRun(run: TaskRunControlEntry): boolean {
   if (run.status === "failed" || run.status === "blocked") {
     return true;
@@ -98,29 +97,9 @@ export function currentTaskRunsByLogicalTask(
   return currentRuns.toSorted(compareTaskRuns);
 }
 
-function lingerDuration(status: TaskRunNodeStatus): number {
-  return status === "cancelled"
-    ? RUNTIME_CONTROL_CANCELLED_LINGER_MS
-    : RUNTIME_CONTROL_SUCCESS_LINGER_MS;
-}
-
-function shouldPresentRun(
-  run: TaskRunControlEntry,
-  now: number,
-  dismissedRunIds: ReadonlySet<string>,
-  pausedMs: number
-): boolean {
-  if (dismissedRunIds.has(run.runId)) {
-    return false;
-  }
-  if (isActiveTaskRunStatus(run.status)) {
-    return true;
-  }
-  if (isPersistentTaskRun(run)) {
-    return true;
-  }
-  const effectiveElapsed = now - run.updatedAt - pausedMs;
-  return effectiveElapsed < lingerDuration(run.status);
+function shouldPresentRun(run: TaskRunControlEntry): boolean {
+  // 终态由 toast（查看详情）承接；浮层只覆盖活跃进程控制。
+  return isActiveTaskRunStatus(run.status);
 }
 
 function reducedMotionEnabled(): boolean {
@@ -143,17 +122,14 @@ function sameRuns(
 /**
  * 运行控制浮层的唯一呈现状态机。
  *
- * 任务运行状态仍由 TaskService / taskRuns store 所有；这里仅负责严重程度分级、
- * 用户关闭和退出在场管理。退出阶段冻结最后一次完整 runs，保证内容与容器作为
- * 一个整体退场，不会先渲染空壳。
+ * 任务运行状态仍由 TaskService / taskRuns store 所有；这里仅负责退出在场管理。
+ * 活跃任务显示控制条；进入终态后立即退场，由 toast（含查看详情）承接结果反馈。
+ * 退出阶段冻结最后一次完整 runs，保证内容与容器作为一个整体退场。
  */
 export function useTerminalRuntimeControlPresentation(
   panelId: string
 ): TerminalRuntimeControlPresentation {
   const snapshot = useTaskRunsStore((state) => state.snapshot);
-  const [dismissedRunIds, setDismissedRunIds] = useState<ReadonlySet<string>>(
-    () => new Set()
-  );
   const [now, setNow] = useState(() => Date.now());
   const panelRuns = useMemo(
     () => taskRunsForPanel(snapshot, panelId),
@@ -163,25 +139,7 @@ export function useTerminalRuntimeControlPresentation(
     () => currentTaskRunsByLogicalTask(panelRuns),
     [panelRuns]
   );
-  const pauseStartedAtRef = useRef<number | null>(null);
-  const pausedMsByRunIdRef = useRef<Map<string, number>>(new Map());
-  const currentRunsRef = useRef(currentRuns);
-  currentRunsRef.current = currentRuns;
-  const [, setPauseRevision] = useState(0);
-  const pauseStartedAt = pauseStartedAtRef.current;
-  const eligibleRuns = currentRuns.filter((run) => {
-    const accumulatedPause = pausedMsByRunIdRef.current.get(run.runId) ?? 0;
-    const openPause =
-      pauseStartedAt === null
-        ? 0
-        : Math.max(0, now - Math.max(pauseStartedAt, run.updatedAt));
-    return shouldPresentRun(
-      run,
-      now,
-      dismissedRunIds,
-      accumulatedPause + openPause
-    );
-  });
+  const eligibleRuns = currentRuns.filter(shouldPresentRun);
   const [retainedRuns, setRetainedRuns] = useState<
     readonly TaskRunControlEntry[]
   >(() => eligibleRuns);
@@ -216,11 +174,8 @@ export function useTerminalRuntimeControlPresentation(
   );
 
   useEffect(() => {
-    const currentRunIds = new Set(currentRuns.map((run) => run.runId));
-    for (const runId of pausedMsByRunIdRef.current.keys()) {
-      if (!currentRunIds.has(runId)) {
-        pausedMsByRunIdRef.current.delete(runId);
-      }
+    for (const run of currentRuns) {
+      notifyTaskRunFinishedIfNeeded(run);
     }
   }, [currentRuns]);
 
@@ -234,12 +189,27 @@ export function useTerminalRuntimeControlPresentation(
       setPhase("visible");
       return;
     }
-    if (retainedRunsRef.current.length === 0) {
+
+    // 终态不单独挂载：只有从可见活跃态退出时才播退场动画。
+    if (phaseRef.current === "hidden" || retainedRunsRef.current.length === 0) {
+      clearExitTimer();
+      if (retainedRunsRef.current.length > 0) {
+        retainedRunsRef.current = [];
+        setRetainedRuns([]);
+      }
       setPhase("hidden");
       return;
     }
+
     if (phaseRef.current === "exiting") {
       return;
+    }
+
+    const exitRuns =
+      currentRuns.length > 0 ? currentRuns : retainedRunsRef.current;
+    if (!sameRuns(retainedRunsRef.current, exitRuns)) {
+      retainedRunsRef.current = exitRuns;
+      setRetainedRuns(exitRuns);
     }
 
     setPhase("exiting");
@@ -252,59 +222,13 @@ export function useTerminalRuntimeControlPresentation(
       },
       reducedMotionEnabled() ? 0 : RUNTIME_CONTROL_EXIT_MS
     );
-  }, [clearExitTimer, eligibleRuns, setPhase]);
+  }, [clearExitTimer, currentRuns, eligibleRuns, setPhase]);
 
-  const dismissRun = useCallback((runId: string) => {
-    setDismissedRunIds((current) => {
-      if (current.has(runId)) {
-        return current;
-      }
-      return new Set([...current, runId]);
-    });
-  }, []);
-
-  const setAutoExitPause = useCallback((paused: boolean) => {
-    if (paused) {
-      if (pauseStartedAtRef.current !== null) {
-        return;
-      }
-      pauseStartedAtRef.current = Date.now();
-      setPauseRevision((current) => current + 1);
-      return;
-    }
-
-    const pauseStartedAt = pauseStartedAtRef.current;
-    if (pauseStartedAt === null) {
-      return;
-    }
-    const pauseEndedAt = Date.now();
-    pauseStartedAtRef.current = null;
-    const currentRunIds = new Set<string>();
-    for (const run of currentRunsRef.current) {
-      currentRunIds.add(run.runId);
-      if (isActiveTaskRunStatus(run.status) || isPersistentTaskRun(run)) {
-        continue;
-      }
-      const overlap = Math.max(
-        0,
-        pauseEndedAt - Math.max(pauseStartedAt, run.updatedAt)
-      );
-      if (overlap > 0) {
-        const accumulated = pausedMsByRunIdRef.current.get(run.runId) ?? 0;
-        pausedMsByRunIdRef.current.set(run.runId, accumulated + overlap);
-      }
-    }
-    for (const runId of pausedMsByRunIdRef.current.keys()) {
-      if (!currentRunIds.has(runId)) {
-        pausedMsByRunIdRef.current.delete(runId);
-      }
-    }
-    setPauseRevision((current) => current + 1);
-  }, []);
+  // 终态已无 linger；保留 API 以兼容浮层 interaction 接线。
+  const setAutoExitPause = useCallback((_paused: boolean) => {}, []);
 
   const runs = eligibleRuns.length > 0 ? eligibleRuns : retainedRuns;
   return {
-    dismissRun,
     mounted: runs.length > 0,
     now,
     phase: eligibleRuns.length > 0 || phase === "hidden" ? "visible" : phase,

@@ -3,6 +3,11 @@ import type {
   TaskOutputUpdate,
   TaskRunSnapshot,
 } from "@shared/contracts/tasks.ts";
+import { TASK_STOP_GRACE_MS } from "@shared/contracts/tasks.ts";
+import {
+  forgetBackgroundTaskProcess,
+  rememberBackgroundTaskProcess,
+} from "../../state/background-task-process-ledger.ts";
 import type { ProcessEnvironmentService } from "../process-environment-service.ts";
 import { backgroundPanelId, panelRefKey } from "./task-background-panel-id.ts";
 import type {
@@ -75,12 +80,43 @@ export function createTaskBackgroundRuns(
       : {}),
   });
 
+  function forgetProcess(runId: string): void {
+    forgetBackgroundTaskProcess(runId).catch((error: unknown) => {
+      console.error("[tasks] forget background process ledger failed:", error);
+    });
+  }
+
+  function rememberProcess(
+    runId: string,
+    process: BackgroundTaskProcess,
+    command: string
+  ): void {
+    if (typeof process.pid !== "number" || process.pid <= 0) {
+      return;
+    }
+    rememberBackgroundTaskProcess({
+      command,
+      pid: process.pid,
+      runId,
+      startedAt: now(),
+    }).catch((error: unknown) => {
+      console.error(
+        "[tasks] remember background process ledger failed:",
+        error
+      );
+    });
+  }
+
   async function finishPanel(
     panelId: string,
     exitCode: number,
     windowId?: string | undefined
   ): Promise<TaskRunSnapshot | null> {
     const processKey = panelRefKey(panelId, windowId);
+    const processRecord = processes.get(processKey);
+    if (processRecord) {
+      forgetProcess(processRecord.runId);
+    }
     processes.delete(processKey);
     try {
       const result = await options.completePanel(panelId, exitCode, windowId);
@@ -107,7 +143,11 @@ export function createTaskBackgroundRuns(
     const processRecord = processes.get(processKey);
     processes.delete(processKey);
     cancelledProcessKeys.add(processKey);
-    processRecord?.process?.kill();
+    if (processRecord) {
+      forgetProcess(processRecord.runId);
+      // Quit/dispose：先 TERM 再由 shutdownForQuit 升级；单次 cancel 仍发 TERM。
+      signalBackgroundTaskProcess(processRecord.process, false);
+    }
     options.markPanelClosed(panelId, windowId);
     options.forgetRunningPanel(panelId, windowId);
   }
@@ -168,6 +208,7 @@ export function createTaskBackgroundRuns(
     if (!accepted) {
       return { message: "background process rejected force stop", ok: false };
     }
+    forgetProcess(processRecord.runId);
     outputs.flush(processRecord.runId, processRecord.outputTaskId);
     finishPanel(panelId, 137, windowId).catch((error: unknown) => {
       console.error("[tasks] background force stop completion failed:", error);
@@ -236,6 +277,7 @@ export function createTaskBackgroundRuns(
       });
       if (!completedSynchronously) {
         processes.set(processKey, { ...processRecord, process });
+        rememberProcess(processRecord.runId, process, launch.rawCommand);
       }
     }, 0);
     spawnTimers.set(processKey, spawnTimer);
@@ -311,6 +353,34 @@ export function createTaskBackgroundRuns(
     });
   }
 
+  async function shutdownForQuit(graceMs = TASK_STOP_GRACE_MS): Promise<void> {
+    for (const spawnTimer of spawnTimers.values()) {
+      clearTimeout(spawnTimer);
+    }
+    spawnTimers.clear();
+
+    const live = [...processes.values()];
+    for (const record of live) {
+      signalBackgroundTaskProcess(record.process, false);
+    }
+    if (live.length > 0 && graceMs > 0) {
+      const deadline = now() + graceMs;
+      while (processes.size > 0 && now() < deadline) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 50);
+        });
+      }
+    }
+    for (const record of [...processes.values()]) {
+      signalBackgroundTaskProcess(record.process, true);
+      forgetProcess(record.runId);
+      processes.delete(panelRefKey(record.panelId, record.windowId));
+      options.markPanelClosed(record.panelId, record.windowId);
+      options.forgetRunningPanel(record.panelId, record.windowId);
+    }
+    cancelledProcessKeys.clear();
+  }
+
   function dispose(): void {
     for (const spawnTimer of spawnTimers.values()) {
       clearTimeout(spawnTimer);
@@ -323,6 +393,11 @@ export function createTaskBackgroundRuns(
     for (const ref of panelRefs) {
       cancelPanel(ref.panelId, ref.windowId);
     }
+    for (const record of [...processes.values()]) {
+      signalBackgroundTaskProcess(record.process, true);
+      forgetProcess(record.runId);
+    }
+    processes.clear();
     cancelledProcessKeys.clear();
     outputs.dispose();
   }
@@ -333,6 +408,7 @@ export function createTaskBackgroundRuns(
     finishPanel,
     forceStopPanel,
     output: (runId, taskId) => outputs.snapshot(runId, taskId),
+    shutdownForQuit,
     start,
     stopPanel,
   };
