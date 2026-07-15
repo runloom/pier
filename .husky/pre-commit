@@ -1,1 +1,3 @@
 pnpm lint-staged
+# 文件大小硬上限很快，放在 commit 拦「上帝文件」；完整 typecheck 仍走 pre-push。
+bash scripts/check-file-size.sh

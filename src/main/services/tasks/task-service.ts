@@ -3,10 +3,7 @@ import type {
   TaskRunSnapshot,
   TaskSpawnPreparation,
 } from "@shared/contracts/tasks.ts";
-import {
-  deriveBackgroundSnapshot,
-  isActiveTaskRunNodeStatus,
-} from "@shared/contracts/tasks.ts";
+import { deriveBackgroundSnapshot } from "@shared/contracts/tasks.ts";
 import {
   isBackgroundPanelId,
   panelRefKey,
@@ -15,6 +12,7 @@ import { spawnBackgroundTask } from "./task-background-runner.ts";
 import { createTaskBackgroundRuns } from "./task-background-runs.ts";
 import { createTaskCatalog } from "./task-catalog.ts";
 import { requiredInputsForTask } from "./task-execution-plan.ts";
+import { stopBackgroundRunsForOriginPanelClose } from "./task-origin-panel-close.ts";
 import { createTaskPanelReuseRegistry } from "./task-panel-reuse-registry.ts";
 import {
   createTaskRecentLauncher,
@@ -346,48 +344,12 @@ export function createTaskService({
         backgroundRuns.cancelPanel(panelId, windowId);
         return;
       }
-      // 关闭发起终端时，确认文案承诺会终止绑定的 background。
-      // 绕过 stopRun 的 grace 两阶段，直接强制结束。
-      const snapshot = taskRuns.runsSnapshot();
-      for (const run of Object.values(snapshot.runs)) {
-        if (
-          run.mode !== "background" ||
-          run.originPanelId !== panelId ||
-          !isActiveTaskRunNodeStatus(run.status)
-        ) {
-          continue;
-        }
-        taskRuns.requestStop(run.runId);
-        const stopping =
-          taskRuns.controlStatus(run.runId) ??
-          taskRuns.runsSnapshot().runs[run.runId];
-        if (!stopping) {
-          continue;
-        }
-        const stoppedTaskIds = new Set<string>();
-        for (const node of Object.values(stopping.nodes)) {
-          if (
-            !(
-              node.panelId &&
-              isBackgroundPanelId(node.panelId) &&
-              (node.status === "stopping" || node.status === "running")
-            )
-          ) {
-            continue;
-          }
-          const result = backgroundRuns.forceStopPanel(
-            node.panelId,
-            node.windowId
-          );
-          if (result.ok) {
-            stoppedTaskIds.add(node.taskId);
-          }
-        }
-        const forced = taskRuns.forceStop(run.runId, stoppedTaskIds);
-        if (forced && !isActiveTaskRunNodeStatus(forced.status)) {
-          forgetSnapshotTasks(forced);
-        }
-      }
+      stopBackgroundRunsForOriginPanelClose({
+        backgroundRuns,
+        forgetSnapshotTasks,
+        panelId,
+        taskRuns,
+      });
       markPanelActuallyClosed(panelId, windowId);
     },
     output: (runId, taskId) => backgroundRuns.output(runId, taskId),
