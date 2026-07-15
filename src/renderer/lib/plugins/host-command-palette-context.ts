@@ -49,7 +49,8 @@ function indexPluginQuickPickItems(
 }
 
 function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
-  const pluginItemsById = indexPluginQuickPickItems(quickPick);
+  // Mutable so query-derived items can be registered when first generated.
+  const pluginItemsById = new Map(indexPluginQuickPickItems(quickPick));
   const pluginItemFor = (item: QuickPickItem): RendererPluginQuickPickItem => {
     const pluginItem = pluginItemsById.get(item.id);
     if (!pluginItem) {
@@ -62,7 +63,11 @@ function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
       ? {
           getQueryItem: (query: string) => {
             const item = quickPick.getQueryItem?.(query);
-            return item ? adaptQuickPickItem(item) : null;
+            if (!item) {
+              return null;
+            }
+            pluginItemsById.set(item.id, item);
+            return adaptQuickPickItem(item);
           },
         }
       : {}),
