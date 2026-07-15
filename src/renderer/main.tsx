@@ -10,6 +10,7 @@ import {
   installTerminalInputRoutingPointerDownListener,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { installBundledFontFaces } from "./app/fonts.ts";
+import { AppContentDialogHost } from "./components/common/app-content-dialog-host.tsx";
 import { AppDialogHost } from "./components/common/app-dialog-host.tsx";
 import {
   StartupErrorScreen,
@@ -94,6 +95,7 @@ async function bootstrap() {
   root.render(
     <>
       <AppDialogHost />
+      <AppContentDialogHost />
       <RendererBootSignal key="startup" />
       <StartupScreen />
     </>
@@ -171,6 +173,7 @@ bootstrap().catch((err) => {
     getApplicationRoot().render(
       <>
         <AppDialogHost />
+        <AppContentDialogHost />
         <RendererBootSignal key="startup-error" />
         <StartupErrorScreen error={err} />
       </>
