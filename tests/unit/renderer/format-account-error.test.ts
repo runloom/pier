@@ -8,7 +8,7 @@ describe("formatAccountError", () => {
     expect(
       formatAccountError(new Error("omp: Unknown named parameter '0'"), t)
     ).toBe(
-      "Couldn't sync credentials to omp. Make sure omp is installed and has been opened at least once on this device."
+      "Couldn't sync credentials to OMP. Make sure OMP is installed and has been opened at least once on this device."
     );
   });
 
