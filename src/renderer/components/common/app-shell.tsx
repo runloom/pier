@@ -5,6 +5,7 @@ import { DocumentTitle } from "@/components/common/document-title.tsx";
 import { ForegroundActivityBridge } from "@/components/common/foreground-activity-bridge.tsx";
 import { PluginOverlayHost } from "@/components/common/plugin-overlay-host.tsx";
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
+import { TaskOutputSyncBridge } from "@/components/common/task-output-sync-bridge.tsx";
 import { TaskRunsErrorBridge } from "@/components/common/task-runs-error-bridge.tsx";
 import { TerminalDebugSnapshotBridge } from "@/components/common/terminal-debug-snapshot-bridge.tsx";
 import { TitleBar } from "@/components/common/title-bar.tsx";
@@ -33,6 +34,7 @@ export function AppShell() {
       <ForegroundActivityBridge />
       <UsageDataBridge />
       <TaskRunsErrorBridge />
+      <TaskOutputSyncBridge />
       <Toaster />
     </div>
   );

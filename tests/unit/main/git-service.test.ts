@@ -1523,6 +1523,49 @@ describe("createGitService", () => {
     expect(calls[0]).toEqual(["branch", "feature/a", "origin/main"]);
   });
 
+  it("createAndSwitchBranch 先校验名称再用 git switch -c 原子新建切换", async () => {
+    const calls: Array<{
+      args: readonly string[];
+      options: { timeoutMs?: number } | undefined;
+    }> = [];
+    const service = createGitService({
+      execGit: (args, _cwd, options) => {
+        calls.push({ args, options });
+        return Promise.resolve("");
+      },
+    });
+
+    await service.createAndSwitchBranch("/repo", "feature/new");
+
+    expect(calls).toEqual([
+      {
+        args: ["check-ref-format", "--branch", "feature/new"],
+        options: undefined,
+      },
+      {
+        args: ["switch", "-c", "feature/new"],
+        options: { timeoutMs: 60_000 },
+      },
+    ]);
+  });
+
+  it("createAndSwitchBranch 校验失败时不执行写操作", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push([...args]);
+        return args[0] === "check-ref-format"
+          ? Promise.reject(new Error("invalid branch"))
+          : Promise.resolve("");
+      },
+    });
+
+    await expect(
+      service.createAndSwitchBranch("/repo", "feature bad")
+    ).rejects.toThrow("invalid branch");
+    expect(calls).toEqual([["check-ref-format", "--branch", "feature bad"]]);
+  });
+
   it("deleteBranch 默认 -d;force=true 用 -D", async () => {
     const calls: Array<readonly string[]> = [];
     const service = createGitService({

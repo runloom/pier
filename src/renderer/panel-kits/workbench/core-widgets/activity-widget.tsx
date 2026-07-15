@@ -2,6 +2,15 @@ import { cn } from "@pier/ui/utils.ts";
 import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
 import type { WorkbenchWidgetComponentProps } from "@plugins/api/renderer.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
+import {
+  isActiveTaskRunNodeStatus,
+  type TaskRunNodeStatus,
+} from "@shared/contracts/tasks.ts";
+import {
+  combinedActivityRows,
+  revealPanelIdForTaskActivity,
+  taskNodeStatusForActivity,
+} from "@shared/task-activity-sources.ts";
 import { PanelsTopLeft } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
@@ -9,6 +18,7 @@ import {
   activityCounts,
   useForegroundActivityStore,
 } from "@/stores/foreground-activity.store.ts";
+import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 /**
@@ -49,7 +59,23 @@ function StatTile({
   );
 }
 
-function activityStatusDot(activity: ForegroundActivity): string {
+function taskRunStatusDot(status: TaskRunNodeStatus): string {
+  if (status === "running") {
+    return "bg-success";
+  }
+  if (status === "failed" || status === "blocked") {
+    return "bg-destructive";
+  }
+  if (isActiveTaskRunNodeStatus(status)) {
+    return "bg-warning";
+  }
+  return "bg-muted-foreground/40";
+}
+
+function activityStatusDot(
+  activity: ForegroundActivity,
+  taskRunStatus?: TaskRunNodeStatus
+): string {
   if (activity.kind === "agent") {
     if (activity.status === "processing" || activity.status === "tool") {
       return "bg-success";
@@ -63,13 +89,9 @@ function activityStatusDot(activity: ForegroundActivity): string {
     return "bg-muted-foreground/40";
   }
   if (activity.kind === "task") {
-    if (activity.status === "running") {
-      return "bg-success";
-    }
-    if (activity.status === "failure") {
-      return "bg-destructive";
-    }
-    return "bg-muted-foreground/40";
+    return taskRunStatus
+      ? taskRunStatusDot(taskRunStatus)
+      : "bg-muted-foreground/40";
   }
   return "bg-muted-foreground/40";
 }
@@ -95,14 +117,10 @@ function activityLabel(
 export function ActivityWidget(_props: WorkbenchWidgetComponentProps) {
   const t = useT();
   const activities = useForegroundActivityStore((s) => s.activities);
+  const taskRuns = useTaskRunsStore((s) => s.snapshot);
   const workspaceApi = useWorkspaceStore((s) => s.api);
-  const { running, waiting } = activityCounts(activities);
-  const total = Object.keys(activities).length;
-
-  // 非 idle 活动按最近更新排序 —— 每行都是 drill-down 入口（点击聚焦对应面板）
-  const rows = Object.values(activities)
-    .filter((a) => a.kind !== "idle")
-    .sort((a, b) => b.updatedAt - a.updatedAt);
+  const { running, waiting } = activityCounts(activities, taskRuns);
+  const rows = combinedActivityRows(activities, taskRuns);
 
   const handleReveal = (panelId: string): void => {
     if (!workspaceApi) {
@@ -121,7 +139,7 @@ export function ActivityWidget(_props: WorkbenchWidgetComponentProps) {
       >
         <StatTile
           label={t("workbench.widget.activityOverview.total")}
-          value={total}
+          value={rows.length}
         />
         <StatTile
           dotClass="bg-success"
@@ -145,7 +163,13 @@ export function ActivityWidget(_props: WorkbenchWidgetComponentProps) {
                 i > 0 && "border-border/50 border-t"
               )}
               key={activity.panelId}
-              onClick={() => handleReveal(activity.panelId)}
+              onClick={() =>
+                handleReveal(
+                  activity.kind === "task"
+                    ? revealPanelIdForTaskActivity(activity, taskRuns)
+                    : activity.panelId
+                )
+              }
               type="button"
             >
               <span className="flex min-w-0 items-center gap-2">
@@ -153,7 +177,16 @@ export function ActivityWidget(_props: WorkbenchWidgetComponentProps) {
                   aria-hidden="true"
                   className={cn(
                     "size-2 shrink-0 rounded-full",
-                    activityStatusDot(activity)
+                    activityStatusDot(
+                      activity,
+                      activity.kind === "task"
+                        ? taskNodeStatusForActivity(
+                            taskRuns,
+                            activity.runId,
+                            activity.taskId
+                          )
+                        : undefined
+                    )
                   )}
                 />
                 <span className="truncate font-medium text-sm">

@@ -77,15 +77,12 @@ export interface ForegroundActivityAggregator {
 
   snapshot(windowId?: string): ForegroundActivityBroadcast;
   /**
-   * Task 完成：更新 task activity status + exitCode。终态常驻——activity
-   * 保留到 panelClosed / rerun / 新命令接管, 供 tab 退出 chrome 持续呈现。
+   * Task 完成：释放 task 占用指针。活体状态以 TaskRunsSnapshot 为准。
    */
   taskFinished(
     panelId: string,
     args: {
       runId: string;
-      status: "success" | "failure" | "cancelled";
-      exitCode?: number;
     },
     windowId?: string
   ): void;

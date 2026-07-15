@@ -127,7 +127,7 @@ async function spawnSlowTaskUntilRunning(
 }
 
 test.describe("Terminal task status e2e", () => {
-  test("keeps a failed background run visible until the user dismisses it", async () => {
+  test("auto-hides a failed background run when toast appears", async () => {
     test.setTimeout(120_000);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-task-failure-e2e-"));
     const projectRoot = mkdtempSync(join(tmpdir(), "pier-task-failure-proj-"));
@@ -152,19 +152,22 @@ test.describe("Terminal task status e2e", () => {
       expect(started.status).toBe("started");
 
       await win.locator('[data-panel-tab-id="terminal-1"]').click();
-      const control = win.getByTestId("terminal-runtime-control");
-      await expect(control).toHaveAttribute("data-run-status", "failed");
-      const floatingItem = win.locator(
-        '[data-floating-item="runtime-controls"]'
-      );
       await expect
-        .poll(async () => (await floatingItem.boundingBox())?.width ?? 0)
-        .toBeLessThanOrEqual(400);
-      await win.waitForTimeout(3000);
-      await expect(control).toHaveAttribute("data-run-status", "failed");
-
-      await win.getByTestId("terminal-runtime-control-dismiss").click();
-      await expect(control).toHaveCount(0);
+        .poll(async () => {
+          const snapshot = await win.evaluate(async () =>
+            window.pier.tasks.runsSnapshot()
+          );
+          return Object.values(snapshot.runs).some(
+            (candidate) => candidate.status === "failed"
+          );
+        })
+        .toBe(true);
+      await expect(
+        win.getByRole("button", { name: "View details" })
+      ).toBeVisible({ timeout: 5000 });
+      await expect(win.getByTestId("terminal-runtime-control")).toHaveCount(0, {
+        timeout: 2000,
+      });
     } finally {
       await app.close();
       rmSync(userDataDir, { recursive: true, force: true });
@@ -172,7 +175,7 @@ test.describe("Terminal task status e2e", () => {
     }
   });
 
-  test("keeps a successful background result while the runtime control is hovered", async () => {
+  test("auto-hides a successful background run when toast appears", async () => {
     test.setTimeout(120_000);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-task-success-e2e-"));
     const projectRoot = mkdtempSync(join(tmpdir(), "pier-task-success-proj-"));
@@ -198,23 +201,21 @@ test.describe("Terminal task status e2e", () => {
 
       await win.locator('[data-panel-tab-id="terminal-1"]').click();
       const control = win.getByTestId("terminal-runtime-control");
-      const floatingItem = win.locator(
-        '[data-floating-item="runtime-controls"]'
-      );
       await expect(control).toHaveAttribute("data-run-status", "running");
-      await floatingItem.hover();
-      await expect(control).toHaveAttribute("data-run-status", "succeeded");
+      await expect
+        .poll(async () => {
+          const snapshot = await win.evaluate(async () =>
+            window.pier.tasks.runsSnapshot()
+          );
+          return Object.values(snapshot.runs).some(
+            (candidate) => candidate.status === "succeeded"
+          );
+        })
+        .toBe(true);
       await expect(
-        win.getByTestId("terminal-runtime-control-dismiss")
-      ).toBeVisible();
-      await floatingItem.hover();
-      await win.waitForTimeout(5500);
-      await expect(control).toBeVisible();
-
-      await win
-        .getByTestId("terminal-panel-root")
-        .hover({ position: { x: 4, y: 200 } });
-      await expect(control).toHaveCount(0, { timeout: 7000 });
+        win.getByRole("button", { name: "View details" })
+      ).toBeVisible({ timeout: 5000 });
+      await expect(control).toHaveCount(0, { timeout: 2000 });
     } finally {
       await app.close();
       rmSync(userDataDir, { recursive: true, force: true });
@@ -783,7 +784,7 @@ test.describe("Terminal task status e2e", () => {
       const panelBox = await panelRootBeforeReload.boundingBox();
       expect(runtimeBox).not.toBeNull();
       expect(panelBox).not.toBeNull();
-      expect(runtimeBox?.width).toBeGreaterThanOrEqual(256);
+      expect(runtimeBox?.width).toBeGreaterThanOrEqual(200);
       expect(runtimeBox?.x).toBeGreaterThanOrEqual(panelBox?.x ?? 0);
       expect(
         (runtimeBox?.x ?? 0) + (runtimeBox?.width ?? 0)

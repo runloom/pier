@@ -43,14 +43,10 @@ export interface TaskTerminalProcessController {
 }
 
 export interface TaskActivityCallbacks {
-  onFinished(
+  onCleared(
     panelId: string,
     windowId: string | undefined,
-    args: {
-      runId: string;
-      status: "success" | "failure" | "cancelled";
-      exitCode?: number;
-    }
+    args: { runId: string }
   ): void;
   onLaunched(
     panelId: string,
@@ -96,6 +92,7 @@ export interface TaskService {
   recordRecent(launch: TaskLaunchPlan): Promise<void>;
   recordStarted(record: TaskStartedRecord): void;
   runsSnapshot(windowId?: string | undefined): TaskRunsSnapshot;
+  shutdownForQuit(graceMs?: number): Promise<void>;
   startBackgroundRun(args: {
     clientEnv?: Record<string, string> | undefined;
     launches: readonly TaskLaunchPlan[];

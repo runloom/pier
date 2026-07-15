@@ -63,6 +63,7 @@ describe("Git 分支名规整", () => {
       "feature//dialog",
       "feature/dialog.",
       "feature/@{dialog",
+      "HEAD",
     ]) {
       expect(isValidGitBranchName(branch)).toBe(false);
     }

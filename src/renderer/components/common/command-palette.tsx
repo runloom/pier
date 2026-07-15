@@ -33,6 +33,8 @@ import {
   isQuickPickItemSelectable,
   QuickPickView,
   quickPickItems,
+  quickPickPresentedItems,
+  quickPickQueryItem,
 } from "@/components/common/command-palette-quick-pick-view.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import {
@@ -212,9 +214,14 @@ export function CommandPalette() {
     if (requestId !== lastRequestIdRef.current) {
       return;
     }
-    const items = quickPickItems(quickPick);
+    const items = quickPickPresentedItems(quickPick, normalizedQuery);
     const selected = items.find((item) => item.id === selectedValue);
-    if (selected && isQuickPickItemSelectable(quickPick, selected)) {
+    const queryItem = quickPickQueryItem(quickPick, normalizedQuery);
+    if (
+      selected &&
+      (selected.id === queryItem?.id ||
+        isQuickPickItemSelectable(quickPick, selected))
+    ) {
       return;
     }
     const next =
@@ -222,7 +229,26 @@ export function CommandPalette() {
         (item) => item.checked && isQuickPickItemSelectable(quickPick, item)
       ) ?? items.find((item) => isQuickPickItemSelectable(quickPick, item));
     setSelectedValue(next?.id ?? "");
-  }, [isOpen, mode, quickPick, requestId, selectedValue]);
+  }, [isOpen, mode, normalizedQuery, quickPick, requestId, selectedValue]);
+
+  // 输入变化后将高亮重置到当前展示的第一项；动态候选因此能成为明确的
+  // Enter 默认动作，而不是在无可见提示时隐式提交文本。
+  useEffect(() => {
+    if (!isOpen || mode !== "quick-pick" || !quickPick) {
+      return;
+    }
+    const queryItem = quickPickQueryItem(quickPick, normalizedQuery);
+    if (queryItem) {
+      setSelectedValue(queryItem.id);
+      return;
+    }
+    const items = quickPickPresentedItems(quickPick, normalizedQuery);
+    const next =
+      items.find(
+        (item) => item.checked && isQuickPickItemSelectable(quickPick, item)
+      ) ?? items.find((item) => isQuickPickItemSelectable(quickPick, item));
+    setSelectedValue(next?.id ?? "");
+  }, [isOpen, mode, normalizedQuery, quickPick]);
 
   // 关闭 (Esc 已走 goBack 路径或点击遮罩) 时, 若 quick-pick 未 accept 调 onDismiss。
   // goBack() 内联调过 onDismiss, 但 close() 路径 (点击遮罩) 没调, 这里补。
@@ -310,7 +336,9 @@ export function CommandPalette() {
     if (mode !== "quick-pick" || !quickPick?.onChangeSelection) {
       return;
     }
-    const item = quickPickItems(quickPick).find((i) => i.id === next);
+    const item = quickPickPresentedItems(quickPick, normalizedQuery).find(
+      (i) => i.id === next
+    );
     if (!(item && isQuickPickItemSelectable(quickPick, item))) {
       return;
     }

@@ -23,9 +23,13 @@ export const terminal = {
     blocked: "已阻塞",
     cancelled: "已取消",
     controlLabel: "任务运行控制：{{label}}",
-    dismiss: "关闭任务结果",
     duration: "已运行：{{duration}}",
     failed: "失败",
+    finishedBlocked: "任务已阻塞：{{label}}",
+    finishedCancelled: "任务已取消：{{label}}",
+    finishedFailed: "任务失败：{{label}}",
+    finishedForceCancelled: "任务已强制停止：{{label}}",
+    finishedSuccess: "任务完成：{{label}}",
     forceStop: "强制停止",
     forceStopBody:
       "任务进程未能正常停止。强制停止会立即终止进程；终端任务面板会保留结果摘要。",
@@ -53,6 +57,7 @@ export const terminal = {
     stopFailed: "停止任务失败",
     stopping: "正在停止",
     succeeded: "成功",
+    viewDetails: "查看详情",
   },
   statusBar: {
     item: {

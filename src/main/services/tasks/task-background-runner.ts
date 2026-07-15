@@ -14,6 +14,7 @@ export interface BackgroundTaskProcess {
   forceKill?(): boolean;
   interrupt?(): boolean;
   kill(): boolean;
+  pid?: number | undefined;
 }
 
 export type SpawnBackgroundTask = (
@@ -75,5 +76,6 @@ export const spawnBackgroundTask: SpawnBackgroundTask = ({
     forceKill: () => signal("SIGKILL"),
     interrupt: () => signal("SIGINT"),
     kill: () => signal("SIGTERM"),
+    ...(typeof child.pid === "number" ? { pid: child.pid } : {}),
   };
 };

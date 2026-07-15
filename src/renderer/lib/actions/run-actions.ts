@@ -7,7 +7,6 @@ import type {
 } from "@shared/contracts/tasks.ts";
 import i18next from "i18next";
 import { List, Play } from "lucide-react";
-import { toast } from "sonner";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
@@ -23,38 +22,32 @@ import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { spawnTaskWithInputResolution } from "./task-input-flow.ts";
+import { scheduleTaskOutputPanelSync } from "./task-output-sync.ts";
 
-const TASK_SPAWN_LOADING_DELAY_MS = 300;
-
-type ToastId = string | number;
-
-async function withTaskSpawnLoading<T>(
-  taskLabel: string | undefined,
-  operation: () => Promise<T>
-): Promise<T> {
-  let toastId: ToastId | undefined;
-  let settled = false;
-  const timer = window.setTimeout(() => {
-    if (settled) {
-      return;
-    }
-    toastId = toast.loading(
-      taskLabel
-        ? i18next.t("commandPalette.run.startingTaskWithLabel", {
-            label: taskLabel,
-          })
-        : i18next.t("commandPalette.run.startingTask")
-    );
-  }, TASK_SPAWN_LOADING_DELAY_MS);
-  try {
-    return await operation();
-  } finally {
-    settled = true;
-    window.clearTimeout(timer);
-    if (toastId !== undefined) {
-      toast.dismiss(toastId);
-    }
-  }
+async function spawnTask(args: {
+  forceRestart: boolean;
+  inputs?: Record<string, string>;
+  mode?: TaskSpawnMode;
+  project: ProjectContext;
+  terminalPanelId?: string | undefined;
+  taskId: string;
+}): Promise<TaskSpawnResult> {
+  const terminalPanelId =
+    args.terminalPanelId ??
+    (args.mode === "background" ? args.project.terminalPanelId : undefined);
+  return await window.pier.tasks.spawn({
+    focus: args.mode !== "background",
+    forceRestart: args.forceRestart,
+    ...(args.inputs ? { inputs: args.inputs } : {}),
+    ...(args.mode === "background" ? { mode: args.mode } : {}),
+    placement: "active-tab",
+    projectRootPath: args.project.projectRootPath,
+    ...(terminalPanelId ? { terminalPanelId } : {}),
+    ...(args.project.targetGroupId
+      ? { targetGroupId: args.project.targetGroupId }
+      : {}),
+    taskId: args.taskId,
+  });
 }
 
 interface ProjectContext {
@@ -195,43 +188,12 @@ function buildTaskSections(result: TaskListResult): QuickPickSection[] {
   return sections;
 }
 
-async function spawnTask(args: {
-  forceRestart: boolean;
-  inputs?: Record<string, string>;
-  mode?: TaskSpawnMode;
-  project: ProjectContext;
-  terminalPanelId?: string | undefined;
-  taskId: string;
-  taskLabel?: string | undefined;
-}): Promise<TaskSpawnResult> {
-  return await withTaskSpawnLoading(args.taskLabel, async () => {
-    const terminalPanelId =
-      args.terminalPanelId ??
-      (args.mode === "background" ? args.project.terminalPanelId : undefined);
-    const result = await window.pier.tasks.spawn({
-      focus: args.mode !== "background",
-      forceRestart: args.forceRestart,
-      ...(args.inputs ? { inputs: args.inputs } : {}),
-      ...(args.mode === "background" ? { mode: args.mode } : {}),
-      placement: "active-tab",
-      projectRootPath: args.project.projectRootPath,
-      ...(terminalPanelId ? { terminalPanelId } : {}),
-      ...(args.project.targetGroupId
-        ? { targetGroupId: args.project.targetGroupId }
-        : {}),
-      taskId: args.taskId,
-    });
-    return result;
-  });
-}
-
 async function spawnTaskWithInputFlow(
   project: ProjectContext,
   taskId: string,
   options: {
     forceRestart: boolean;
     mode?: TaskSpawnMode;
-    taskLabel?: string | undefined;
     terminalPanelId?: string | undefined;
   }
 ): Promise<void> {
@@ -247,6 +209,10 @@ async function spawnTaskWithInputFlow(
         body: result.message,
         title: i18next.t("commandPalette.run.startFailed"),
       });
+      return;
+    }
+    if (result.status === "started") {
+      scheduleTaskOutputPanelSync();
     }
   } catch (error) {
     await showAppAlert({
@@ -260,7 +226,6 @@ function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
   return spawnTaskWithInputFlow(project, item.id, {
     forceRestart: false,
     mode: project.defaultTaskSpawnMode ?? "terminal-tab",
-    taskLabel: item.label,
   });
 }
 

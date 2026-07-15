@@ -2,7 +2,6 @@ import type {
   ForegroundActivity,
   IdleActivity,
   ShellActivity,
-  TaskActivity,
 } from "@shared/contracts/foreground-activity.ts";
 import type { AppQuitConfirmationMode } from "@shared/contracts/preferences.ts";
 import { describe, expect, it, vi } from "vitest";
@@ -75,17 +74,6 @@ function shellActivity(commandLine = "pnpm test"): ShellActivity {
   };
 }
 
-function taskActivity(status: TaskActivity["status"]): TaskActivity {
-  return {
-    kind: "task",
-    runId: "run-1",
-    ...BASE_ACTIVITY,
-    taskId: "task-1",
-    label: "Build release",
-    status,
-  };
-}
-
 function fakeParentWindow({ destroyed = false } = {}): AppWindow {
   return {
     focus: vi.fn(),
@@ -144,7 +132,6 @@ describe("createAppQuitController", () => {
     const { controller, deps, operations } = createHarness({
       getActivities: vi.fn((): readonly ForegroundActivity[] => [
         idleActivity(),
-        taskActivity("success"),
       ]),
     });
     const event = quitEvent();
@@ -190,6 +177,58 @@ describe("createAppQuitController", () => {
     });
     expect(deps.flushBeforeQuit).not.toHaveBeenCalled();
     expect(deps.proceedToQuit).not.toHaveBeenCalled();
+  });
+
+  it("confirms quit for active background task runs missing from foreground activity", async () => {
+    const parent = fakeParentWindow();
+    const { controller, deps } = createHarness({
+      confirmQuit: vi.fn(async () => false),
+      getActivities: vi.fn((): readonly ForegroundActivity[] => [
+        idleActivity(),
+      ]),
+      getDialogParent: vi.fn(() => parent),
+      getTaskRuns: vi.fn(() => ({
+        runs: {
+          "run-bg": {
+            mode: "background" as const,
+            nodes: {
+              test: {
+                label: "test",
+                panelId: "background-task:run-bg:test",
+                status: "running" as const,
+                taskId: "package-script:test",
+              },
+            },
+            originPanelId: "terminal-1",
+            ownerWindowId: "window-1",
+            projectRootPath: "/repo",
+            rootTaskId: "package-script:test",
+            runId: "run-bg",
+            startedAt: 1,
+            status: "running" as const,
+            updatedAt: 2,
+          },
+        },
+        version: 1,
+      })),
+    });
+
+    controller.handleBeforeQuit(quitEvent());
+    await vi.waitFor(() => {
+      expect(controller.getPhase()).toBe("idle");
+    });
+
+    expect(deps.confirmQuit).toHaveBeenCalledWith({
+      parent,
+      summaries: [
+        {
+          kind: "task",
+          label: "test",
+          panelId: "terminal-1",
+          windowId: "window-1",
+        },
+      ],
+    });
   });
 
   it("flushes before proceeding when dangerous activity confirmation is accepted", async () => {

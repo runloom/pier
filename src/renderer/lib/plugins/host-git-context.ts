@@ -24,6 +24,10 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:write");
       return window.pier.git.checkoutBranch(cwd, name);
     },
+    createAndSwitchBranch: (cwd, name) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.createAndSwitchBranch(cwd, name);
+    },
     continueRebase: (cwd) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.continueRebase(cwd);

@@ -31,6 +31,7 @@ import type {
 } from "../../shared/contracts/git.ts";
 import { listBranches as listGitBranches } from "./git-branch-list.ts";
 import { searchBranches as searchGitBranches } from "./git-branch-search.ts";
+import { assertSafeBranchName, switchBranch } from "./git-branch-switch.ts";
 import { execGit } from "./git-exec.ts";
 import { listIgnoredPaths } from "./git-ignored.ts";
 import {
@@ -84,19 +85,6 @@ export type GitDeleteBranchOptions = z.infer<
 /** 写操作统一 60s 超时(避免大仓库继承 git-exec 默认 10s 失败)。 */
 const WRITE_TIMEOUT_MS = 60_000;
 
-/**
- * branch name 不允许以 "-" 开头,否则 git 会把它当 flag(`git branch --help` 等)。
- * spawn argv 模式虽不构成 shell 注入,但语义会被破坏:任何拿到 git:write 的插件
- * 传 `name: "--force"` 都会触发非预期分支。
- */
-function assertSafeBranchName(name: string): void {
-  if (name.startsWith("-")) {
-    throw new Error(
-      `branch name must not start with "-" (would be interpreted as git flag): ${name}`
-    );
-  }
-}
-
 export interface GitService {
   abortMerge(cwd: string): Promise<GitMergeAbortResult>;
   abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
@@ -104,6 +92,7 @@ export interface GitService {
   checkoutBranch(cwd: string, name: string): Promise<void>;
   commit(cwd: string, options: GitCommitOptions): Promise<void>;
   continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
+  createAndSwitchBranch(cwd: string, name: string): Promise<void>;
   createBranch(cwd: string, options: GitCreateBranchOptions): Promise<void>;
   deleteBranch(cwd: string, options: GitDeleteBranchOptions): Promise<void>;
   discardChanges(cwd: string, request: GitPathsRequest): Promise<void>;
@@ -473,16 +462,22 @@ export function createGitService({
       }
       await runGit(args, cwd, { timeoutMs: WRITE_TIMEOUT_MS });
     },
+    createAndSwitchBranch: (cwd, name) =>
+      switchBranch(runGit, cwd, name, {
+        create: true,
+        timeoutMs: WRITE_TIMEOUT_MS,
+      }),
     deleteBranch: async (cwd, options) => {
       assertSafeBranchName(options.name);
       await runGit(["branch", options.force ? "-D" : "-d", options.name], cwd, {
         timeoutMs: WRITE_TIMEOUT_MS,
       });
     },
-    checkoutBranch: async (cwd, name) => {
-      assertSafeBranchName(name);
-      await runGit(["switch", name], cwd, { timeoutMs: WRITE_TIMEOUT_MS });
-    },
+    checkoutBranch: (cwd, name) =>
+      switchBranch(runGit, cwd, name, {
+        create: false,
+        timeoutMs: WRITE_TIMEOUT_MS,
+      }),
     merge: (cwd, branch) => mergeBranch(runGit, cwd, branch),
     applyStash: (cwd, index) => applyStash(runGit, cwd, index),
     dropStash: (cwd, index) => dropStash(runGit, cwd, index),

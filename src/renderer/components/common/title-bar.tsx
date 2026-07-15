@@ -5,6 +5,7 @@ import {
   useForegroundActivityStore,
 } from "@/stores/foreground-activity.store.ts";
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
+import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 
 const TITLEBAR_HEIGHT = "38px";
 
@@ -34,11 +35,11 @@ export function TitleBar() {
 
   // resolveLong 可能返回空字符串 (descriptor 字段空值降级时), `||` 而非 `??`,
   // 让空串也回退到 "Pier" — 与 document-title.tsx 的兜底行为对齐.
-  const runningCount = useForegroundActivityStore(
-    (s) => activityCounts(s.activities).running
-  );
-  const waitingCount = useForegroundActivityStore(
-    (s) => activityCounts(s.activities).waiting
+  const activities = useForegroundActivityStore((s) => s.activities);
+  const taskRuns = useTaskRunsStore((s) => s.snapshot);
+  const { running: runningCount, waiting: waitingCount } = activityCounts(
+    activities,
+    taskRuns
   );
   const text = (active && resolveLong(active)) || "Pier";
   return (

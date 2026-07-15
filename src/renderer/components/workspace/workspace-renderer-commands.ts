@@ -1,6 +1,5 @@
 import type { PierCommandErrorCode } from "@shared/contracts/commands.ts";
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
-import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import {
   rejectTerminalLaunch,
@@ -10,7 +9,6 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { requestTerminalRelaunch } from "@/stores/terminal-relaunch.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { referenceGroupById } from "@/stores/workspace-panel-helpers.ts";
-import { closeNativeTerminalPanel } from "@/stores/workspace-terminal-close.ts";
 import { panelKindOf } from "./panel-registry.ts";
 import { buildWorkspacePanelSnapshots } from "./workspace-panel-snapshots.ts";
 
@@ -72,14 +70,13 @@ async function closePanelForCommand(panelId: string): Promise<void> {
       `panel not found: ${panelId}`
     );
   }
-  if (api.totalPanels <= 1) {
-    if (panel.view.contentComponent === "terminal") {
-      closeNativeTerminalPanel(panel.id);
-    }
-    await closeCurrentWindow();
-    return;
+  const closed = await state.closePanel(panelId);
+  if (!closed) {
+    throw new RendererCommandExecutionError(
+      "cancelled",
+      `panel close cancelled: ${panelId}`
+    );
   }
-  await state.closePanel(panelId);
 }
 
 function addPanelForCommand(

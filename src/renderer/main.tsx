@@ -33,6 +33,7 @@ import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { bootstrapBuiltinPlugins } from "./lib/plugins/bootstrap.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
+import { registerTerminalPanelCloseGuard } from "./panel-kits/terminal/register-close-guard.ts";
 import { initAgentDetection } from "./stores/agent-detect.store.ts";
 import { initAgentPreferences } from "./stores/agent-preferences.store.ts";
 import { initAppQuitPreferences } from "./stores/app-quit-preferences.store.ts";
@@ -145,6 +146,7 @@ async function bootstrap() {
   registerCommandPaletteMruAction();
   registerTerminalDebugActions();
   registerTerminalActions();
+  registerTerminalPanelCloseGuard();
   await initPluginSettingsStore();
   const pluginBootstrap = await bootstrapBuiltinPlugins();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);

@@ -61,6 +61,7 @@ import { isDevRuntime } from "./runtime-mode.ts";
 import { createExternalNavigationService } from "./services/external-navigation.ts";
 import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
 import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
+import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
 import { reconcileOrphanedRunningTasks } from "./state/terminal-session-state.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/window-manager.ts";
@@ -215,6 +216,8 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
       appCore.services.usageData.flush(),
     ]);
   });
+  // Clean quit：在销毁窗口前对 background 任务做 TERM→grace→KILL。
+  await appCore.services.tasks.shutdownForQuit();
   await localControlRegistration.close();
 }
 
@@ -248,6 +251,7 @@ const appQuitController = createAppQuitController({
   },
   flushBeforeQuit: flushBeforeQuitConfirmed,
   getActivities: () => foregroundActivityService.snapshot().activities,
+  getTaskRuns: () => appCore.services.tasks.runsSnapshot(),
   getDialogParent: getQuitDialogParentWindow,
   logFailure: (error) => {
     appQuitLog.error("failed before quit", { error });
@@ -419,6 +423,12 @@ if (gotTheLock) {
       localControlRegistration.start();
       // 孤儿 task 清算必须先于窗口恢复：renderer readSession 读到的磁盘状态
       // 从此不说谎（上进程遗留的 running 一律 cancelled）。
+      // background OS 进程回收在 UI sweep 之前：只杀本 app 登记过的 pid。
+      await reconcileOrphanedBackgroundProcesses().catch((error: unknown) => {
+        terminalSessionLog.error("orphan background process sweep failed", {
+          error,
+        });
+      });
       await reconcileOrphanedRunningTasks().catch((error: unknown) => {
         terminalSessionLog.error("orphan task sweep failed", { error });
       });

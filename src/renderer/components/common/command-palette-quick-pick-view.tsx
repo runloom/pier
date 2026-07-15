@@ -16,6 +16,34 @@ export function quickPickItems(quickPick: QuickPick): readonly QuickPickItem[] {
   return quickPick.items ?? [];
 }
 
+export function quickPickQueryItem(
+  quickPick: QuickPick,
+  query: string
+): QuickPickItem | null {
+  if (quickPick.loading === true) {
+    return null;
+  }
+  return quickPick.getQueryItem?.(query) ?? null;
+}
+
+export function quickPickPresentedItems(
+  quickPick: QuickPick,
+  query: string
+): readonly QuickPickItem[] {
+  const queryItem = quickPickQueryItem(quickPick, query);
+  let items: readonly QuickPickItem[];
+  if (quickPick.loading) {
+    items = quickPickItems(quickPick);
+  } else if (quickPick.sections && quickPick.sections.length > 0) {
+    items = quickPick.sections.flatMap((section) =>
+      quickPickResults(section.items, query, section.heading)
+    );
+  } else {
+    items = quickPickResults(quickPick.items ?? [], query);
+  }
+  return queryItem ? [queryItem, ...items] : items;
+}
+
 export function isQuickPickItemSelectable(
   quickPick: QuickPick,
   item: QuickPickItem
@@ -87,6 +115,7 @@ export function QuickPickView({
   onAccept: (item: QuickPickItem) => Promise<void>;
   query: string;
 }): ReactNode {
+  const queryItem = quickPickQueryItem(quickPick, query);
   const renderItem = (item: QuickPickItem) => {
     const disabled = !isQuickPickItemSelectable(quickPick, item);
     const content = quickPick.renderItem ? (
@@ -122,8 +151,12 @@ export function QuickPickView({
 
   return (
     <div className="mt-2">
-      {quickPick.sections && quickPick.sections.length > 0
-        ? quickPick.sections.map((section) => {
+      {quickPick.sections && quickPick.sections.length > 0 ? (
+        <>
+          {queryItem ? (
+            <CommandGroup>{renderItem(queryItem)}</CommandGroup>
+          ) : null}
+          {quickPick.sections.map((section) => {
             const items =
               quickPick.loading === true
                 ? section.items
@@ -138,11 +171,18 @@ export function QuickPickView({
                 {items.map(renderItem)}
               </CommandGroup>
             );
-          })
-        : (quickPick.loading === true
-            ? (quickPick.items ?? [])
-            : quickPickResults(quickPick.items ?? [], query)
-          ).map(renderItem)}
+          })}
+        </>
+      ) : (
+        <CommandGroup>
+          {[
+            ...(queryItem ? [queryItem] : []),
+            ...(quickPick.loading === true
+              ? (quickPick.items ?? [])
+              : quickPickResults(quickPick.items ?? [], query)),
+          ].map(renderItem)}
+        </CommandGroup>
+      )}
     </div>
   );
 }

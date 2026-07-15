@@ -1,5 +1,3 @@
-import { Button } from "@pier/ui/button.tsx";
-import { cn } from "@pier/ui/utils.ts";
 import {
   type PanelFloatingPosition,
   panelFloatingLayoutFromParams,
@@ -10,7 +8,6 @@ import type { IDockviewPanelProps } from "dockview-react";
 import { SquareTerminal } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
-  type ReactNode,
   useCallback,
   useEffect,
   useMemo,
@@ -22,7 +19,6 @@ import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
 import { taskPanelMetadataFromParams } from "@/lib/workspace/task-panel-metadata.ts";
 import {
-  computeMonoFontFamily,
   computeMonoFontFamilyList,
   useFontStore,
 } from "@/stores/font.store.ts";
@@ -40,6 +36,7 @@ import {
 } from "@/stores/terminal-panel-session-hints.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+import { TerminalPanelBody } from "./terminal-panel-body.tsx";
 import { TerminalPanelFloatingHost } from "./terminal-panel-floating-host.tsx";
 import {
   type ActiveTerminalLaunch,
@@ -49,8 +46,6 @@ import {
 } from "./terminal-panel-params.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 import {
-  RestoredAgentResultView,
-  RestoredTaskResultView,
   restoredAgentResultFromSession,
   restoredTaskResultFromSession,
 } from "./terminal-restored-result-view.tsx";
@@ -61,7 +56,6 @@ import {
   TerminalStatusBar,
   useTerminalStatusBarItems,
 } from "./terminal-status-bar.tsx";
-import { TerminalSurfacePlaceholder } from "./terminal-surface-placeholder.tsx";
 import {
   activityTabChromeOverlay,
   mergeTabChrome,
@@ -73,6 +67,7 @@ import { useTerminalFloatingLayoutRevision } from "./use-terminal-floating-layou
 import { useTerminalNativeLifecycle } from "./use-terminal-native-lifecycle.ts";
 import { useTerminalPanelDescriptor } from "./use-terminal-panel-descriptor.ts";
 import { useTerminalRelaunch } from "./use-terminal-relaunch.ts";
+import { useTerminalRunSelection } from "./use-terminal-run-selection.ts";
 import { useTerminalRuntimeControlPresentation } from "./use-terminal-runtime-control-presentation.ts";
 import { useTerminalSearchOpen } from "./use-terminal-search-open.ts";
 import { useTerminalSurfaceClose } from "./use-terminal-surface-close.ts";
@@ -166,12 +161,19 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
   const activity = useForegroundActivityStore((s) => s.activities[panelId]);
   const taskRunsSnapshot = useTaskRunsStore((state) => state.snapshot);
+  const panelTaskRuns = useMemo(
+    () => taskRunsForPanel(taskRunsSnapshot, panelId),
+    [panelId, taskRunsSnapshot]
+  );
+  const { selectedRunId: selectedTaskRunId } = useTerminalRunSelection(
+    panelId,
+    panelTaskRuns
+  );
   const currentTaskOutput =
     taskOutputFromParams(props.params) ?? activeLaunch.taskOutput;
   const runtimeControl = useTerminalRuntimeControlPresentation(panelId);
   const forceStoppedRun = taskRunsForPanel(taskRunsSnapshot, panelId).find(
     (run) =>
-      run.runId === activeLaunch.task?.runId &&
       Object.values(run.nodes).some(
         (node) =>
           node.panelId === panelId &&
@@ -185,11 +187,13 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     mergeTabChrome(
       mergeTabChrome(
         savedSession?.tab ?? activeLaunch.tab,
-        activityTabChromeOverlay(activity, effectiveTitle)
+        activityTabChromeOverlay(activity, effectiveTitle, taskRunsSnapshot)
       ),
       taskRunTabChromeOverlay(
+        panelId,
+        taskRunsSnapshot,
         savedSession?.task ?? activeLaunch.task,
-        taskRunsSnapshot
+        selectedTaskRunId
       )
     ),
     taskOutputTabChromeOverlay(currentTaskOutput, taskRunsSnapshot)
@@ -324,7 +328,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     panelId,
     setActive: activatePanel,
   });
-  useTerminalSurfaceClose(panelId);
+  useTerminalSurfaceClose(panelId, props.params);
 
   useEffect(() => {
     const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {
@@ -356,78 +360,28 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const terminalContentClassName = hasStatusBar
     ? "absolute inset-x-0 top-0 bottom-6"
     : "absolute inset-0";
-  // 占位显示：终端首次就绪前，或窗口 resize 期间（见 TerminalSurfacePlaceholder）。
-  const showPlaceholder =
-    !error && (!nativeTerminalReady || resizePlaceholderVisible);
-  let terminalBody: ReactNode;
-  if (forceStoppedRun && activeLaunch.task) {
-    terminalBody = (
-      <RestoredTaskResultView
-        className={terminalContentClassName}
-        fontFamily={computeMonoFontFamily(monoFontFamily)}
-        fontSize={effectiveMonoFontSize}
-        onContextMenu={openTaskResultContextMenu}
-        task={{
-          ...activeLaunch.task,
-          finishedAt: forceStoppedRun.updatedAt,
-          status: "cancelled",
-        }}
-      />
-    );
-  } else if (restoredTaskResult) {
-    terminalBody = (
-      <RestoredTaskResultView
-        className={terminalContentClassName}
-        fontFamily={computeMonoFontFamily(monoFontFamily)}
-        fontSize={effectiveMonoFontSize}
-        onContextMenu={openTaskResultContextMenu}
-        task={restoredTaskResult}
-      />
-    );
-  } else if (restoredAgentResult) {
-    terminalBody = (
-      <RestoredAgentResultView
-        agent={restoredAgentResult}
-        className={terminalContentClassName}
-        fontFamily={computeMonoFontFamily(monoFontFamily)}
-        fontSize={effectiveMonoFontSize}
-      />
-    );
-  } else {
-    terminalBody = (
-      <>
-        <div
-          className={cn("terminal-anchor", terminalContentClassName)}
-          ref={anchorRef}
-        />
-        {showPlaceholder ? (
-          <TerminalSurfacePlaceholder className={terminalContentClassName} />
-        ) : null}
-        {error ? (
-          <div
-            className={cn(
-              terminalContentClassName,
-              "flex flex-col items-center justify-center gap-3 bg-[var(--terminal-background,var(--background))] px-4 text-center"
-            )}
-          >
-            <p className="text-muted-foreground text-sm">{error}</p>
-            {errorRetryable ? (
-              <Button onClick={retryTerminalCreate} size="sm" type="button">
-                重试
-              </Button>
-            ) : null}
-          </div>
-        ) : null}
-      </>
-    );
-  }
   return (
     <div
       className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
       data-testid="terminal-panel-root"
       ref={panelRootRef}
     >
-      {terminalBody}
+      <TerminalPanelBody
+        activeTask={activeLaunch.task}
+        anchorRef={anchorRef}
+        effectiveMonoFontSize={effectiveMonoFontSize}
+        error={error}
+        errorRetryable={errorRetryable}
+        forceStoppedRun={forceStoppedRun}
+        monoFontFamily={monoFontFamily}
+        nativeTerminalReady={nativeTerminalReady}
+        onContextMenu={openTaskResultContextMenu}
+        onRetry={retryTerminalCreate}
+        resizePlaceholderVisible={resizePlaceholderVisible}
+        restoredAgentResult={restoredAgentResult}
+        restoredTaskResult={restoredTaskResult}
+        terminalContentClassName={terminalContentClassName}
+      />
       <TerminalPanelFloatingHost
         layout={floatingLayout}
         layoutRevision={floatingLayoutRevision}
@@ -451,7 +405,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
                 content: (
                   <TerminalRuntimeControl
                     now={runtimeControl.now}
-                    onDismissRun={runtimeControl.dismissRun}
                     panelId={panelId}
                     runs={runtimeControl.runs}
                   />

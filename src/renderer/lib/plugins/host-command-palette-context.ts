@@ -53,6 +53,14 @@ function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
   const pluginItemFor = (item: QuickPickItem) =>
     pluginItemsById.get(item.id) ?? item;
   return {
+    ...(quickPick.getQueryItem
+      ? {
+          getQueryItem: (query: string) => {
+            const item = quickPick.getQueryItem?.(query);
+            return item ? adaptQuickPickItem(item) : null;
+          },
+        }
+      : {}),
     onAccept: (item) => quickPick.onAccept(pluginItemFor(item)),
     ...(quickPick.items
       ? { items: quickPick.items.map(adaptQuickPickItem) }

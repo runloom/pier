@@ -631,32 +631,23 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("taskLaunched / taskFinished → task activity 生命周期", () => {
+  it("taskLaunched / taskFinished → task occupation pointer", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.taskLaunched("p1", "1", {
       taskId: "t1",
       label: "npm build",
       runId: "run-1",
     });
-    let a = agg.snapshot().activities[0] as TaskActivity;
+    const a = agg.snapshot().activities[0] as TaskActivity;
     expect(a.kind).toBe("task");
-    expect(a.status).toBe("running");
     expect(a.label).toBe("npm build");
-    agg.taskFinished("p1", { runId: "run-1", status: "success", exitCode: 0 });
-    a = agg.snapshot().activities[0] as TaskActivity;
-    expect(a.status).toBe("success");
-    expect(a.exitCode).toBe(0);
-    // 终态常驻：保留活动投影，供 TaskRuns 暂不可用时兼容回退。
-    advance(60_000);
-    a = agg.snapshot().activities[0] as TaskActivity;
-    expect(a.status).toBe("success");
-    // panel 关闭才清
-    agg.panelClosed("p1");
+    expect("status" in a).toBe(false);
+    agg.taskFinished("p1", { runId: "run-1" });
     expect(agg.snapshot().activities).toHaveLength(0);
     agg.dispose();
   });
 
-  it("跨窗口同 panelId 的 taskFinished 只更新目标窗口", () => {
+  it("跨窗口同 panelId 的 taskFinished 只清除目标窗口", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.taskLaunched("same-panel", "w-1", {
       label: "one",
@@ -669,18 +660,12 @@ describe("ForegroundActivityAggregator", () => {
       taskId: "task-2",
     });
 
-    agg.taskFinished(
-      "same-panel",
-      { runId: "run-1", status: "success" },
-      "w-1"
-    );
+    agg.taskFinished("same-panel", { runId: "run-1" }, "w-1");
 
-    expect(agg.snapshot("w-1").activities[0]).toMatchObject({
-      status: "success",
-      windowId: "w-1",
-    });
+    expect(agg.snapshot("w-1").activities).toHaveLength(0);
     expect(agg.snapshot("w-2").activities[0]).toMatchObject({
-      status: "running",
+      label: "two",
+      runId: "run-2",
       windowId: "w-2",
     });
     agg.dispose();
@@ -715,16 +700,13 @@ describe("ForegroundActivityAggregator", () => {
     });
 
     agg.taskFinished("p1", {
-      exitCode: 143,
       runId: "run-1",
-      status: "failure",
     });
 
     expect(agg.snapshot().activities[0]).toMatchObject({
       kind: "task",
       label: "new",
       runId: "run-2",
-      status: "running",
     });
     agg.dispose();
   });
@@ -1021,28 +1003,22 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("回归: task 终态常驻, rerun(taskLaunched) 复位为 running", () => {
+  it("回归: taskFinished 清除占用, rerun(taskLaunched) 重建指针", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.taskLaunched("p1", "1", {
       taskId: "t1",
       label: "test",
       runId: "run-1",
     });
-    agg.taskFinished("p1", { runId: "run-1", status: "failure", exitCode: 1 });
-    // 终态跨任意时长常驻，作为任务活动投影保留。
-    advance(30_000);
-    let a = agg.snapshot().activities[0] as TaskActivity;
-    expect(a.status).toBe("failure");
-    expect(a.exitCode).toBe(1);
-    // 同 panel rerun：task 层整体替换, 回 running（#41 终端复用流）
+    agg.taskFinished("p1", { runId: "run-1" });
+    expect(agg.snapshot().activities).toHaveLength(0);
     agg.taskLaunched("p1", "1", {
       taskId: "t1",
       label: "test",
-      runId: "run-1",
+      runId: "run-2",
     });
-    a = agg.snapshot().activities[0] as TaskActivity;
-    expect(a.status).toBe("running");
-    expect(a.exitCode).toBeUndefined();
+    const a = agg.snapshot().activities[0] as TaskActivity;
+    expect(a.runId).toBe("run-2");
     agg.dispose();
   });
 
@@ -1099,7 +1075,7 @@ describe("ForegroundActivityAggregator", () => {
       label: "test",
       runId: "run-1",
     });
-    agg.taskFinished("p1", { runId: "run-1", status: "success", exitCode: 0 });
+    agg.taskFinished("p1", { runId: "run-1" });
     agg.windowClosed("1");
     expect(agg.snapshot().activities).toHaveLength(0);
     // advance 后不应有幽灵 emit / 状态复活
@@ -1273,49 +1249,32 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("回归: ptyExited ≠ panelClosed — task 终态在 pty 退出后常驻", () => {
+  it("回归: taskFinished 后 ptyExited 不再保留 task 占用", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.taskLaunched("p1", "1", {
       taskId: "t1",
       label: "test",
       runId: "run-1",
     });
-    agg.taskFinished("p1", { runId: "run-1", status: "success", exitCode: 0 });
-    // 原生 pty 进程退出 ≠ 面板关闭：task 活动投影必须保留
+    agg.taskFinished("p1", { runId: "run-1" });
     agg.ptyExited("p1");
-    let snap = agg.snapshot();
-    expect(snap.activities).toHaveLength(1);
-    let a = snap.activities[0] as TaskActivity;
-    expect(a.kind).toBe("task");
-    expect(a.status).toBe("success");
-    expect(a.exitCode).toBe(0);
-    // 跨任意时长常驻（若 ptyExited 走了 panelClosed 清层路径, 此处已为空）
-    advance(10_000);
-    snap = agg.snapshot();
-    expect(snap.activities).toHaveLength(1);
-    a = snap.activities[0] as TaskActivity;
-    expect(a.status).toBe("success");
+    expect(agg.snapshot().activities).toHaveLength(0);
     agg.dispose();
   });
 
-  it("回归: crash 顺序容忍 — ptyExited 先于 taskFinished 到达时 task 层不丢", () => {
+  it("回归: crash 顺序容忍 — ptyExited 先于 taskFinished 到达时 task 层保留到 clear", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.taskLaunched("p1", "1", {
       taskId: "t1",
       label: "test",
       runId: "run-1",
     });
-    // crash/kill：无 exit marker, 原生 process-close 先到, lifecycle 尚未收尾
     agg.ptyExited("p1");
-    let a = agg.snapshot().activities[0] as TaskActivity;
+    const a = agg.snapshot().activities[0] as TaskActivity;
     expect(a).toBeDefined();
     expect(a.kind).toBe("task");
-    expect(a.status).toBe("running");
-    // 随后异步 lifecycle 的 taskFinished 照常落在本 slot 上
-    agg.taskFinished("p1", { runId: "run-1", status: "failure", exitCode: 1 });
-    a = agg.snapshot().activities[0] as TaskActivity;
-    expect(a.status).toBe("failure");
-    expect(a.exitCode).toBe(1);
+    agg.taskFinished("p1", { runId: "run-1" });
+    expect(agg.snapshot().activities).toHaveLength(0);
     agg.dispose();
   });
 
@@ -1338,30 +1297,27 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("回归: task 面板 ptyExited 清 hook 证据并冷却迟到 hook, task 投影不动", () => {
+  it("回归: task 面板 ptyExited 清 hook 证据并冷却迟到 hook", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.taskLaunched("p1", "1", {
       taskId: "t1",
       label: "test",
       runId: "run-1",
     });
-    // hook 层在 task 投影之下建立（task 压住 hook 投影）
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
-    agg.taskFinished("p1", { runId: "run-1", status: "success", exitCode: 0 });
     agg.ptyExited("p1");
     let snap = agg.snapshot();
     expect(snap.activities).toHaveLength(1);
     let a = snap.activities[0] as TaskActivity;
     expect(a.kind).toBe("task");
-    expect(a.status).toBe("success");
-    // 迟到 hook 落在冷却上 → 不得重建 hook 层 / 改动投影
     agg.ingestAgentEvent(hookEvent("ToolStart"));
     advance(250);
     snap = agg.snapshot();
     expect(snap.activities).toHaveLength(1);
     a = snap.activities[0] as TaskActivity;
     expect(a.kind).toBe("task");
-    expect(a.status).toBe("success");
+    agg.taskFinished("p1", { runId: "run-1" });
+    expect(agg.snapshot().activities).toHaveLength(0);
     agg.dispose();
   });
 

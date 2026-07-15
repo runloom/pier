@@ -193,8 +193,6 @@ export const foregroundActivityService = {
     windowId: string,
     args: {
       runId: string;
-      status: "success" | "failure" | "cancelled";
-      exitCode?: number;
     }
   ): void {
     const win = findAppWindowByInternalId(windowId);
