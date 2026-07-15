@@ -1,6 +1,5 @@
 import type { LucideIcon } from "lucide-react";
 import type { ComponentProps, ReactNode } from "react";
-import { Alert, AlertDescription } from "./alert.tsx";
 import { Button } from "./button.tsx";
 import { Skeleton } from "./skeleton.tsx";
 import { cn } from "./utils.ts";
@@ -69,6 +68,7 @@ function WidgetEmpty({
 
 interface WidgetErrorProps {
   children?: ReactNode;
+  className?: string;
   message: string;
   /** 提供后显示重试按钮（调用方接 refreshToken 递增等重拉逻辑）。 */
   onRetry?: () => void;
@@ -77,26 +77,42 @@ interface WidgetErrorProps {
 
 function WidgetError({
   children,
+  className,
   message,
   onRetry,
   retryLabel,
 }: WidgetErrorProps) {
+  // Borderless: widgets already sit in a card; nested Alert frames stack poorly.
   return (
-    <Alert
-      className="m-3 w-auto"
+    <div
+      className={cn(
+        "flex min-h-16 w-full flex-col justify-center gap-1 p-(--card-spacing) text-sm",
+        className
+      )}
       data-slot="widget-error"
-      variant="destructive"
+      role="alert"
     >
-      <AlertDescription className="flex flex-col items-start gap-2">
-        <span className="break-all">{message}</span>
-        {children}
-        {onRetry && retryLabel ? (
-          <Button onClick={onRetry} size="xs" variant="outline">
-            {retryLabel}
-          </Button>
-        ) : null}
-      </AlertDescription>
-    </Alert>
+      {children ? <div className="text-destructive">{children}</div> : null}
+      <p
+        className={cn(
+          "break-all",
+          children ? "text-muted-foreground text-xs" : "text-destructive"
+        )}
+      >
+        {message}
+      </p>
+      {onRetry && retryLabel ? (
+        <Button
+          className="mt-1 self-start"
+          onClick={onRetry}
+          size="xs"
+          type="button"
+          variant="outline"
+        >
+          {retryLabel}
+        </Button>
+      ) : null}
+    </div>
   );
 }
 

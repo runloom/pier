@@ -3,13 +3,35 @@ import { Dialog as DialogPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 import { Button } from "./button.tsx";
+import { isTopmostModalContent } from "./modal-layer.ts";
+import { useDeferredDialogOpen } from "./use-deferred-dialog-open.ts";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
 function Dialog({
+  open,
+  onAbandonOpen,
   ...props
-}: React.ComponentProps<typeof DialogPrimitive.Root>) {
-  return <DialogPrimitive.Root data-slot="dialog" {...props} />;
+}: React.ComponentProps<typeof DialogPrimitive.Root> & {
+  /**
+   * Called when a deferred open is abandoned because a menu/body lock never
+   * cleared. Host content dialogs use this to pop the stack layer.
+   */
+  onAbandonOpen?: () => void;
+}) {
+  const deferredOpen = useDeferredDialogOpen(
+    open,
+    onAbandonOpen === undefined ? {} : { onAbandon: onAbandonOpen }
+  );
+  return (
+    <DialogPrimitive.Root
+      data-slot="dialog"
+      {...props}
+      {...(open === undefined || deferredOpen === undefined
+        ? {}
+        : { open: deferredOpen })}
+    />
+  );
 }
 
 function DialogTrigger({
@@ -117,6 +139,7 @@ function DialogContent({
   overlayClassName,
   showCloseButton = false,
   onOpenAutoFocus,
+  onEscapeKeyDown,
   onPointerDownOutside,
   onInteractOutside,
   tabIndex = -1,
@@ -137,6 +160,14 @@ function DialogContent({
           className
         )}
         data-slot="dialog-content"
+        onEscapeKeyDown={(event) => {
+          // Host multi-layer content dialogs: only the topmost shell dismisses.
+          if (!isTopmostModalContent(event.currentTarget)) {
+            event.preventDefault();
+            return;
+          }
+          onEscapeKeyDown?.(event);
+        }}
         onFocusOutside={(e) => {
           // focus 跳到 Select / Popover 等 portal 时不该 close Dialog
           e.preventDefault();

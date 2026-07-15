@@ -15,38 +15,49 @@ import {
   TooltipProvider,
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
-import { ArrowLeftRight, Check, Settings } from "lucide-react";
+import { ArrowLeftRight, Settings } from "lucide-react";
 import type { JSX } from "react";
 import { useState } from "react";
-import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
-import { confirmAccountSwitch } from "./account-switch.ts";
+import type { CodexAccountSummary } from "../shared/accounts.ts";
+import { openSwitchConfirmDialog } from "./account-switch.ts";
+import { formatAccountError } from "./format-account-error.ts";
 
 export interface AccountPickerProps {
+  accounts: readonly CodexAccountSummary[];
   context: ExternalRendererPluginContext;
-  snapshot: CodexAccountsSnapshot;
   t: (key: string, fallback: string) => string;
 }
 
 export function AccountPicker({
+  accounts,
   context,
-  snapshot,
   t,
-}: AccountPickerProps): JSX.Element {
+}: AccountPickerProps): JSX.Element | null {
   const [switchingAccountId, setSwitchingAccountId] = useState<string | null>(
     null
   );
+  if (accounts.length === 0) return null;
+
   const reportError = async (err: unknown): Promise<void> => {
     await context.dialogs.alert({
       title: t("pier.codex.widget.actionFailed", "Account action failed"),
-      body: err instanceof Error ? err.message : String(err),
+      body: formatAccountError(err, t),
     });
   };
 
-  const handleSelect = async (accountId: string): Promise<void> => {
-    if (!(await confirmAccountSwitch(context, t))) return;
+  const handleSelectAccount = async (accountId: string): Promise<void> => {
+    const result = await openSwitchConfirmDialog({
+      context,
+      mode: "switch",
+      t,
+    });
+    if (!result.confirmed) return;
     setSwitchingAccountId(accountId);
     try {
-      await context.rpc.invoke("accounts.select", { accountId });
+      await context.rpc.invoke("accounts.select", {
+        accountId,
+        syncTargets: result.syncTargets.filter((target) => target !== "codex"),
+      });
     } catch (error) {
       await reportError(error);
     } finally {
@@ -78,8 +89,9 @@ export function AccountPicker({
                     )}
                     data-icon="inline-start"
                   />
-                ) : null}
-                <ArrowLeftRight data-icon="inline-start" />
+                ) : (
+                  <ArrowLeftRight data-icon="inline-start" />
+                )}
               </Button>
             </DropdownMenuTrigger>
           </TooltipTrigger>
@@ -90,21 +102,25 @@ export function AccountPicker({
       </TooltipProvider>
       <DropdownMenuContent
         align="end"
-        className="min-w-64"
         data-pier-codex-scope=""
+        style={{
+          maxWidth: "var(--radix-dropdown-menu-content-available-width)",
+          minWidth:
+            "min(16rem, var(--radix-dropdown-menu-content-available-width))",
+        }}
       >
         <DropdownMenuGroup>
-          {snapshot.accounts.map((account) => (
+          {accounts.map((account) => (
             <DropdownMenuItem
-              disabled={account.id === snapshot.activeAccountId}
               key={account.id}
-              onClick={() => {
-                handleSelect(account.id).catch(reportError);
+              onSelect={() => {
+                handleSelectAccount(account.id).catch(() => undefined);
               }}
             >
-              {account.id === snapshot.activeAccountId ? <Check /> : null}
               <span className="min-w-0">
-                <span className="block truncate">{account.label}</span>
+                <span className="block whitespace-normal break-words">
+                  {account.label}
+                </span>
                 {account.planType ? (
                   <span className="block text-muted-foreground text-xs">
                     {account.planType.toUpperCase()}
@@ -119,7 +135,7 @@ export function AccountPicker({
 
         <DropdownMenuGroup>
           <DropdownMenuItem
-            onClick={() => {
+            onSelect={() => {
               context.app.openSettings({ section: "plugin:pier.codex" });
             }}
           >

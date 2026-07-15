@@ -105,13 +105,43 @@ export function terminalPanelDescriptor(args: {
 }
 
 /**
+ * Agent tab 可见标题上限。Grok / 部分 TUI 会把整段 prompt、图片占位符甚至
+ * 对话摘要写进 OSC 0/2；这些适合 tooltip，不适合 tab 栏。
+ *
+ * 短且像会话名的标题（如 "Fix parser crash"）仍可进 tab；超长或含换行则回退
+ * catalog label，完整 OSC 仍经 display.long / terminalTitle 进 tooltip。
+ */
+export const MAX_AGENT_TAB_TITLE_LENGTH = 40;
+
+/**
+ * 从 agent 终端 OSC 标题派生 tab 短标题。
+ * - 空 / 仅空白 → catalog label
+ * - 含换行或超长 → catalog label（避免 Grok 把用户消息顶上 tab）
+ * - 否则保留原标题（含有意义的短会话名）
+ */
+export function agentTabTitleFromTerminal(
+  terminalTitle: string | null | undefined,
+  agentLabel: string
+): string {
+  const trimmed = terminalTitle?.trim();
+  if (!trimmed) {
+    return agentLabel;
+  }
+  if (trimmed.includes("\n") || trimmed.length > MAX_AGENT_TAB_TITLE_LENGTH) {
+    return agentLabel;
+  }
+  return trimmed;
+}
+
+/**
  * 前台活动 → tab 呈现 overlay：状态点 + icon + title 全部由 renderer store
  * 消费同一 `ForegroundActivityBroadcast` 单源驱动（纯呈现层, 不进
  * tab-chrome-patch 持久化管线）——reload 后经 snapshot pull 自动恢复,
  * 活动消失即自动回退。
  *
- * - `agent` kind: 状态点从 agent status 派生, icon 换 agent, title 优先保留终端标题
- * - `task` kind: 无 tab state overlay（活体状态只读 TaskRunsSnapshot）
+ * - `agent` kind: 状态点从 agent status 派生, icon 换 agent；title 用短 OSC
+ *   或 catalog label（长 prompt 不进 tab，完整标题走 tooltip）
+ * - `task` kind: 无 tab state overlay（活体状态只读 TaskRunsSnapshot）；label 作为 title
  * - `shell` / `idle` / undefined: 无 overlay, 走 tab 默认呈现
  */
 export function activityTabChromeOverlay(
@@ -127,10 +157,11 @@ export function activityTabChromeOverlay(
       state: { status: tabStatusForActivityStatus(activity.status) },
     };
     const entry = getAgentCatalogEntry(activity.agentId);
+    const agentLabel = entry?.label || activity.agentId;
     return {
       ...state,
       icon: { id: agentTabIconId(activity.agentId) },
-      title: terminalTitle?.trim() || entry?.label || activity.agentId,
+      title: agentTabTitleFromTerminal(terminalTitle, agentLabel),
     };
   }
   if (activity.kind === "task") {

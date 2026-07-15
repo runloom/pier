@@ -40,6 +40,7 @@ export interface AccountsWidgetProps extends WorkbenchWidgetComponentProps {
 export function AccountsWidget({
   context,
   instanceId,
+  size,
   visible,
 }: AccountsWidgetProps): JSX.Element {
   const { error: loadError, snapshot } = useCodexAccountsSnapshot(context);
@@ -65,6 +66,9 @@ export function AccountsWidget({
   const activeAccount = snapshot.accounts.find(
     (account) => account.id === snapshot.activeAccountId
   );
+  const switchableAccounts = snapshot.accounts.filter(
+    (account) => account.id !== snapshot.activeAccountId
+  );
   const usage = snapshot.activeUsage;
   const fetchedLabel = usage
     ? formatRelativeTime(usage.fetchedAt, Date.now(), context.i18n.language())
@@ -78,10 +82,7 @@ export function AccountsWidget({
   let usageContent: JSX.Element;
   if (!usage) {
     usageContent = (
-      <Skeleton
-        className="min-h-20 w-full flex-1"
-        data-slot="codex-usage-loading"
-      />
+      <Skeleton className="min-h-20 w-full" data-slot="codex-usage-loading" />
     );
   } else if (usage.status === "ok") {
     usageContent = (
@@ -123,8 +124,11 @@ export function AccountsWidget({
                   "Account unavailable"
                 )}
             </span>
-            {fetchedLabel ? (
-              <span className="@[22rem]:inline hidden"> · {fetchedLabel}</span>
+            {fetchedLabel && size.w >= 4 ? (
+              <span>
+                {" · "}
+                {fetchedLabel}
+              </span>
             ) : null}
           </ItemDescription>
         </ItemContent>
@@ -137,12 +141,18 @@ export function AccountsWidget({
             {creditsLabel}
           </Badge>
         ) : null}
-        <ItemActions>
-          <AccountPicker context={context} snapshot={snapshot} t={t} />
-        </ItemActions>
+        {switchableAccounts.length > 0 ? (
+          <ItemActions>
+            <AccountPicker
+              accounts={switchableAccounts}
+              context={context}
+              t={t}
+            />
+          </ItemActions>
+        ) : null}
       </Item>
 
-      {usageContent}
+      <div className="flex min-h-0 flex-1 flex-col">{usageContent}</div>
     </div>
   );
 }

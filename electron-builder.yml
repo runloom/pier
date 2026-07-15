@@ -28,6 +28,12 @@ extraResources:
       - '*.tgz'
       - '*.tgz.sha256'
       - 'plugin.json'
+  - from: packages/plugin-grok/dist-pkg
+    to: plugin-packages
+    filter:
+      - '*.tgz'
+      - '*.tgz.sha256'
+      - 'plugin.json'
 
 asar: true
 asarUnpack:

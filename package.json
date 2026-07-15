@@ -17,7 +17,7 @@
   "scripts": {
     "typecheck": "pnpm typecheck:host && pnpm typecheck:packages",
     "typecheck:host": "tsc --noEmit",
-    "typecheck:packages": "tsc -p packages/ui/tsconfig.json --noEmit && tsc -p packages/plugin-api/tsconfig.json --noEmit && tsc -p packages/plugin-codex/tsconfig.json --noEmit",
+    "typecheck:packages": "tsc -p packages/ui/tsconfig.json --noEmit && tsc -p packages/plugin-api/tsconfig.json --noEmit && tsc -p packages/plugin-codex/tsconfig.json --noEmit && tsc -p packages/plugin-grok/tsconfig.json --noEmit",
     "lint": "ultracite check",
     "lint:fix": "ultracite fix",
     "format": "ultracite fix",
@@ -29,6 +29,8 @@
     "build:icons": "node ./scripts/build-app-icons.mjs",
     "plugin:codex:build": "pnpm --filter @pier/plugin-codex build",
     "plugin:codex:pack": "pnpm --filter @pier/plugin-codex build:package",
+    "plugin:grok:build": "pnpm --filter @pier/plugin-grok build",
+    "plugin:grok:pack": "pnpm --filter @pier/plugin-grok build:package",
     "plugins:pack": "pnpm -r --filter '@pier/plugin-*' --workspace-concurrency=1 run build:package",
     "plugins:index": "node ./scripts/generate-plugin-index.mjs",
     "pricing:update": "node ./scripts/update-model-pricing.mjs",

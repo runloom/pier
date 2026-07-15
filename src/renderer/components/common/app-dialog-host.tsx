@@ -172,7 +172,7 @@ function ActiveAppDialog({
             </AlertDialogDescription>
           ) : null}
         </AlertDialogHeader>
-        <AlertDialogFooter>
+        <AlertDialogFooter singleAction={dialog.kind === "alert"}>
           {dialog.kind === "confirm" ? (
             <AlertDialogCancel
               onClick={() => dialog.resolve(false)}
@@ -182,6 +182,7 @@ function ActiveAppDialog({
             </AlertDialogCancel>
           ) : null}
           <AlertDialogAction
+            className={dialog.kind === "alert" ? "min-w-24" : undefined}
             onClick={() => dialog.resolve(true)}
             variant={isDestructive ? "destructive" : "default"}
           >

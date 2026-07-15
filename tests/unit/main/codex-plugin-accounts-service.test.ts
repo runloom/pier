@@ -7,12 +7,26 @@ import {
   SYSTEM_USAGE_CACHE_KEY,
   USAGE_REFRESH_CONCURRENCY,
 } from "../../../packages/plugin-codex/src/main/accounts-service.ts";
+import * as crossToolSync from "../../../packages/plugin-codex/src/main/cross-tool-sync.ts";
 import type { AccountIdentity } from "../../../packages/plugin-codex/src/main/identity.ts";
 import { createCodexAccountsStateStore } from "../../../packages/plugin-codex/src/main/state.ts";
 import type {
   AccountUsageResult,
   AgentAccountProvider,
 } from "../../../packages/plugin-codex/src/main/types.ts";
+
+vi.mock(
+  "../../../packages/plugin-codex/src/main/cross-tool-sync.ts",
+  async () => {
+    const actual = await vi.importActual<
+      typeof import("../../../packages/plugin-codex/src/main/cross-tool-sync.ts")
+    >("../../../packages/plugin-codex/src/main/cross-tool-sync.ts");
+    return {
+      ...actual,
+      syncCrossToolCredentials: vi.fn(async () => []),
+    };
+  }
+);
 
 let dir = "";
 
@@ -37,6 +51,10 @@ function createProvider(
     ),
     login: vi.fn(async () => undefined),
     materialize: vi.fn(async () => undefined),
+    readManagedAuthContent: vi.fn(
+      async () =>
+        '{"tokens":{"access_token":"x","refresh_token":"y","account_id":"z"}}'
+    ),
     readCurrentIdentity: vi.fn(
       async (): Promise<AccountIdentity | null> => ({
         email: "current@example.com",
@@ -642,6 +660,86 @@ describe("pier.codex accounts service", () => {
       status: "error",
       windows: [{ usedPercent: 25 }],
     });
+    service.dispose();
+  });
+
+  it("syncs peer tools from the active account without selecting", async () => {
+    const { provider, service, stateFile } =
+      await seedManagedActiveAccount(dir);
+    const syncCrossToolCredentials = vi.mocked(
+      crossToolSync.syncCrossToolCredentials
+    );
+    syncCrossToolCredentials.mockResolvedValue([
+      { ok: true, target: "omp" },
+      { ok: true, target: "pi" },
+    ]);
+
+    await service.syncToPeers({ syncTargets: ["omp", "pi"] });
+
+    expect(provider.materialize).not.toHaveBeenCalled();
+    expect(JSON.parse(await readFile(stateFile, "utf8"))).toMatchObject({
+      activeAccountId: "managed-active",
+    });
+    expect(syncCrossToolCredentials).toHaveBeenCalledWith(
+      ["omp", "pi"],
+      expect.objectContaining({
+        accessToken: "x",
+        accountId: "z",
+        email: "managed@example.com",
+        refreshToken: "y",
+      }),
+      expect.anything()
+    );
+    service.dispose();
+  });
+
+  it("rejects peer sync without an active managed account", async () => {
+    const stateFile = join(dir, "accounts.json");
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        activeAccountId: null,
+        accounts: [],
+        revision: 1,
+        schemaVersion: 1,
+      }),
+      "utf8"
+    );
+    const service = createCodexAccountsService({
+      managedBaseDir: join(dir, "managed"),
+      onChanged: vi.fn(),
+      provider: createProvider({
+        readCurrentIdentity: vi.fn(async () => null),
+      }),
+      stateStore: createCodexAccountsStateStore(stateFile),
+    });
+    await service.init();
+
+    await expect(service.syncToPeers({ syncTargets: ["omp"] })).rejects.toThrow(
+      /active managed account/i
+    );
+    service.dispose();
+  });
+
+  it("rejects peer sync when no tools are selected", async () => {
+    const { service } = await seedManagedActiveAccount(dir);
+
+    await expect(service.syncToPeers({ syncTargets: [] })).rejects.toThrow(
+      /at least one/i
+    );
+    service.dispose();
+  });
+
+  it("surfaces peer sync failures to the caller", async () => {
+    const { service } = await seedManagedActiveAccount(dir);
+    vi.mocked(crossToolSync.syncCrossToolCredentials).mockResolvedValue([
+      { error: "db locked", ok: false, target: "omp" },
+      { ok: true, target: "pi" },
+    ]);
+
+    await expect(
+      service.syncToPeers({ syncTargets: ["omp", "pi"] })
+    ).rejects.toThrow(/omp: db locked/i);
     service.dispose();
   });
 

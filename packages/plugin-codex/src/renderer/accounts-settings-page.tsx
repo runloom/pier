@@ -35,16 +35,18 @@ import {
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { CircleUserRound, RefreshCw } from "lucide-react";
-import { Fragment, type JSX } from "react";
+import { CircleUserRound, RefreshCw, Share2 } from "lucide-react";
+import { Fragment, type JSX, useState } from "react";
+import type { PeerSyncTarget } from "../shared/accounts.ts";
 import {
   AccountAvatar,
   OtherAccount,
   QuotaGroup,
   resetCredits,
 } from "./account-display.tsx";
-import { confirmAccountSwitch } from "./account-switch.ts";
+import { openSwitchConfirmDialog } from "./account-switch.ts";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
+import { formatAccountError } from "./format-account-error.ts";
 import type { Translate } from "./usage-meter.tsx";
 import { useAccountsRefresh } from "./use-accounts-refresh.ts";
 import { useCodexAccountsSnapshot } from "./use-accounts-snapshot.ts";
@@ -67,8 +69,8 @@ function SettingsSkeleton(): JSX.Element {
   );
 }
 
-function errorMessage(err: unknown): string {
-  return err instanceof Error ? err.message : String(err);
+function errorMessage(err: unknown, t: Translate): string {
+  return formatAccountError(err, t);
 }
 
 export function AccountsSettingsPage({
@@ -77,10 +79,11 @@ export function AccountsSettingsPage({
   const { error: loadError, snapshot } = useCodexAccountsSnapshot(context);
   useUsagePollingLease(context, "settings:accounts", true);
   const t: Translate = (key, fallback) => context.i18n.t(key, fallback);
+  const [, setBusyAccountId] = useState<string | null>(null);
   const reportError = (err: unknown): void => {
     context.dialogs
       .alert({
-        body: errorMessage(err),
+        body: errorMessage(err, t),
         title: t(
           "pier.codex.accounts.settings.actionFailed",
           "Account action failed"
@@ -91,11 +94,12 @@ export function AccountsSettingsPage({
   const invoke = (method: string, payload: unknown = null): void => {
     context.rpc.invoke(method, payload).catch(reportError);
   };
-  const { refreshingAccountIds, refreshUsage } = useAccountsRefresh({
-    context,
-    onAccountError: reportError,
-    t,
-  });
+  const { refreshingAccountIds, refreshingAll, refreshAllUsage, refreshUsage } =
+    useAccountsRefresh({
+      context,
+      onAccountError: reportError,
+      t,
+    });
   const handleRemove = async (accountId: string): Promise<void> => {
     const ok = await context.dialogs.confirm({
       body: t(
@@ -110,10 +114,52 @@ export function AccountsSettingsPage({
     });
     if (ok) invoke("accounts.remove", { accountId });
   };
-  const handleSelect = async (accountId: string): Promise<void> => {
-    const ok = await confirmAccountSwitch(context, t);
-    if (ok) invoke("accounts.select", { accountId });
+  const handleSelect = (accountId: string): void => {
+    openSwitchConfirmDialog({ context, mode: "switch", t })
+      .then((result) => {
+        if (!result.confirmed) return;
+        setBusyAccountId(accountId);
+        context.rpc
+          .invoke("accounts.select", {
+            accountId,
+            syncTargets: result.syncTargets.filter(
+              (target) => target !== "codex"
+            ),
+          })
+          .catch(reportError)
+          .finally(() => {
+            setBusyAccountId(null);
+          });
+      })
+      .catch(reportError);
   };
+
+  const handleSyncPeers = (accountId: string): void => {
+    openSwitchConfirmDialog({ context, mode: "sync", t })
+      .then((result) => {
+        if (!result.confirmed) return;
+        const peers = result.syncTargets.filter(
+          (target): target is PeerSyncTarget => target !== "codex"
+        );
+        if (peers.length === 0) return;
+        context.rpc
+          .invoke("accounts.syncToPeers", {
+            accountId,
+            syncTargets: peers,
+          })
+          .then(() => {
+            context.notifications.success(
+              t(
+                "pier.codex.accounts.settings.syncPeersSuccess",
+                "Synced credentials to selected tools"
+              )
+            );
+          })
+          .catch(reportError);
+      })
+      .catch(reportError);
+  };
+
   if (loadError)
     return (
       <div className={SETTINGS_LAYOUT_CLASS}>
@@ -143,12 +189,35 @@ export function AccountsSettingsPage({
         <h1 className="font-semibold text-xl tracking-tight">
           {t("pier.codex.accounts.settings.title", "Codex Accounts")}
         </h1>
-        <AddAccountDialog
-          context={context}
-          login={snapshot.login}
-          onError={reportError}
-          t={t}
-        />
+        <div className="flex items-center gap-2">
+          <Button
+            aria-busy={refreshingAll || undefined}
+            aria-label={t(
+              "pier.codex.accounts.settings.refreshAllUsage",
+              "Refresh all usage"
+            )}
+            disabled={refreshingAll || snapshot.accounts.length === 0}
+            onClick={() => {
+              refreshAllUsage(snapshot.accounts.map((account) => account.id));
+            }}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <RefreshCw
+              className={cn(
+                refreshingAll && "animate-spin motion-reduce:animate-none"
+              )}
+              data-icon="inline-start"
+            />
+          </Button>
+          <AddAccountDialog
+            context={context}
+            login={snapshot.login}
+            onError={reportError}
+            t={t}
+          />
+        </div>
       </header>
       {active ? (
         <Card data-testid="codex-active-account" size="sm">
@@ -164,6 +233,28 @@ export function AccountsSettingsPage({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
+                      aria-label={t(
+                        "pier.codex.accounts.settings.syncPeers",
+                        "Sync to other tools"
+                      )}
+                      onClick={() => handleSyncPeers(active.id)}
+                      size="icon-sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Share2 data-icon="inline-start" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent data-pier-codex-scope="">
+                    {t(
+                      "pier.codex.accounts.settings.syncPeers",
+                      "Sync to other tools"
+                    )}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
                       aria-busy={
                         refreshingAccountIds.has(active.id) || undefined
                       }
@@ -171,7 +262,9 @@ export function AccountsSettingsPage({
                         "pier.codex.accounts.settings.refreshUsage",
                         "Refresh usage"
                       )}
-                      disabled={refreshingAccountIds.has(active.id)}
+                      disabled={
+                        refreshingAll || refreshingAccountIds.has(active.id)
+                      }
                       onClick={() => refreshUsage(active.id)}
                       size="icon-sm"
                       type="button"
@@ -278,8 +371,10 @@ export function AccountsSettingsPage({
                     language={language}
                     onRefresh={() => refreshUsage(account.id)}
                     onRemove={() => handleRemove(account.id).catch(reportError)}
-                    onSelect={() => handleSelect(account.id).catch(reportError)}
-                    refreshing={refreshingAccountIds.has(account.id)}
+                    onSelect={() => handleSelect(account.id)}
+                    refreshing={
+                      refreshingAll || refreshingAccountIds.has(account.id)
+                    }
                     t={t}
                   />
                 </Fragment>

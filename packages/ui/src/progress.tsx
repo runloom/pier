@@ -4,19 +4,25 @@ import type * as React from "react";
 
 import { cn } from "./utils.ts";
 
-const progressIndicatorVariants = cva("size-full flex-1 transition-all", {
-  defaultVariants: {
-    variant: "default",
-  },
-  variants: {
-    variant: {
-      default: "bg-primary",
-      destructive: "bg-destructive",
-      success: "bg-success",
-      warning: "bg-warning",
+// 只过渡 transform（指示器靠 translateX 表达进度），避免连带颜色/尺寸等无关
+// 属性。数值变化（轮询、刷新）时平滑更新；首次挂载时若 value 已是终值，浏览器
+// 通常不会对初始 style 做 transition。
+const progressIndicatorVariants = cva(
+  "size-full flex-1 transition-transform duration-300 ease-out motion-reduce:transition-none",
+  {
+    defaultVariants: {
+      variant: "default",
     },
-  },
-});
+    variants: {
+      variant: {
+        default: "bg-primary",
+        destructive: "bg-destructive",
+        success: "bg-success",
+        warning: "bg-warning",
+      },
+    },
+  }
+);
 
 function Progress({
   className,

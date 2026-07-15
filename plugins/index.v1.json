@@ -1,11 +1,11 @@
 {
-  "generatedAt": 1783777530714,
+  "generatedAt": 1784078931034,
   "plugins": {
     "pier.codex": {
       "description": "Codex account management and usage monitoring for Pier.",
       "displayName": "Codex Account Management",
       "id": "pier.codex",
-      "latest": "1.0.5",
+      "latest": "1.3.1",
       "locales": {
         "en": {
           "name": "Codex Account Management",
@@ -17,20 +17,44 @@
         }
       },
       "versions": {
-        "1.0.5": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.0.5/pier.codex-1.0.5.tgz",
+        "1.3.1": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.3.1/pier.codex-1.3.1.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "0bdc4ab05730cb82c6948f039164fb9c66438010fa9124dcebb33716a6b1f4ad",
-          "size": 454709
+          "sha256": "d6245c5b029761a9327c7dd49e04ab1ce7ef8e711675a65b6707d3366835649f",
+          "size": 550975
+        }
+      }
+    },
+    "pier.grok": {
+      "description": "Manage Grok accounts, login, and switch for Pier.",
+      "displayName": "Grok Account Management",
+      "id": "pier.grok",
+      "latest": "1.0.0",
+      "locales": {
+        "en": {
+          "name": "Grok Account Management",
+          "description": "Manage Grok accounts, login, and switch for Pier."
+        },
+        "zh-CN": {
+          "name": "Grok 账户管理",
+          "description": "在 Pier 中管理 Grok 账号、登录与切换。"
+        }
+      },
+      "versions": {
+        "1.0.0": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.0.0/pier.grok-1.0.0.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "dd8c891ba8618bcfca120475588b8669f87d57a3d72c364ba7a7c3e484fcd90a",
+          "size": 581695
         }
       }
     }
   },
-  "sequence": 6,
+  "sequence": 7,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "vyBD1L8kJwZ5UguWHs97SGoIMbbBYblVL7+v3gqA+JGpPm4xzI4YYEPn0dIFzXyQsTEoBrZGF5+EBYPrxeuyCw=="
+    "value": "CAIF5nCJJw2jiXlSKJzGc0gWZzm7faaBLMQ7SmoKFtjtnAzH5+NAaXoacorudQae1GlylPf59I4KuQg4vD1zAg=="
   }
 }

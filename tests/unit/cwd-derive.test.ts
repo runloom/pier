@@ -66,7 +66,12 @@ describe("activityTabChromeOverlay", () => {
     windowId: "1",
   } satisfies ForegroundActivity;
 
-  it("uses the terminal title for agent tabs when present", () => {
+  const grokActivity = {
+    ...agentActivity,
+    agentId: "grok",
+  } satisfies ForegroundActivity;
+
+  it("uses a short terminal title for agent tabs when present", () => {
     expect(
       activityTabChromeOverlay(agentActivity, "Fix parser crash")
     ).toMatchObject({
@@ -78,6 +83,23 @@ describe("activityTabChromeOverlay", () => {
 
   it("falls back to the agent label when the terminal title is empty", () => {
     expect(activityTabChromeOverlay(agentActivity, "  ")).toMatchObject({
+      title: "Claude",
+    });
+  });
+
+  it("falls back to the agent label when Grok dumps a long prompt into OSC title", () => {
+    const longPrompt =
+      "[Image #3] 如图当前代码实现 tab 的内容还是路径 name , 这里是为什么呢？agent 对应的标题设置没有生效吗？ - grok";
+    expect(activityTabChromeOverlay(grokActivity, longPrompt)).toMatchObject({
+      icon: { id: "agent:grok" },
+      title: "Grok",
+    });
+  });
+
+  it("falls back to the agent label when the terminal title contains newlines", () => {
+    expect(
+      activityTabChromeOverlay(agentActivity, "line one\nline two")
+    ).toMatchObject({
       title: "Claude",
     });
   });

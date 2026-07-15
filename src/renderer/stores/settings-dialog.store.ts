@@ -12,6 +12,11 @@ interface SettingsDialogState {
   setOpen: (open: boolean) => void;
 }
 
+/**
+ * Open paths set state immediately. Actual Dialog mount is deferred inside
+ * `@pier/ui/dialog` so menu → settings handoffs stay clickable without
+ * product code remembering scheduleAfterOverlay / modal=false.
+ */
 export const useSettingsDialogStore = create<SettingsDialogState>((set) => ({
   activeSection: "appearance",
   close: () => set({ isOpen: false }),

@@ -11,6 +11,13 @@ const APPROVED_BUNDLED_WIDGET_SIZE_POLICIES = [
     pluginId: "pier.codex",
     widgetId: "pier.codex.accounts",
   },
+  {
+    defaultSize: { h: 3, w: 4 },
+    maxSize: { h: 4, w: 8 },
+    minSize: { h: 3, w: 2 },
+    pluginId: "pier.grok",
+    widgetId: "pier.grok.accounts",
+  },
   // v1.2: `pier.codex.cost` widget 已由宿主 `core.cost-overview` 替代，不再打包。
 ] as const;
 
@@ -59,7 +66,7 @@ describe("managed plugin packaging governance", () => {
     expect(builderConfig).toContain("*.tgz");
     expect(builderConfig).toContain("*.tgz.sha256");
     expect(builderConfig).toContain("plugin.json");
-    expect(buildDistScript).toContain("pnpm plugin:codex:pack");
+    expect(buildDistScript).toContain("pnpm plugins:pack");
   });
 
   it("requires Ed25519 signing when the release workflow regenerates the official index", () => {

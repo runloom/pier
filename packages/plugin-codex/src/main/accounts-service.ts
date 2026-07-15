@@ -9,6 +9,10 @@ import {
   buildAccountRecord,
   mergeIdentityIntoAccount,
 } from "./accounts-records.ts";
+import {
+  selectManagedAccount,
+  syncManagedAccountPeers,
+} from "./accounts-select.ts";
 import type {
   CodexAccountsService,
   CodexAccountsServiceOpts,
@@ -47,6 +51,7 @@ export function createCodexAccountsService(
   const { managedBaseDir, provider, stateStore, onChanged } = opts;
   const hasVisibleTarget = opts.hasVisibleTarget ?? (() => true);
   const ensureUsageEnv = opts.ensureUsageEnv ?? (() => Promise.resolve());
+  const logger = opts.logger;
 
   let broadcastSeq = 0;
   let loginAbort: AbortController | null = null;
@@ -266,44 +271,46 @@ export function createCodexAccountsService(
     }
   }
 
-  async function doSelect(accountId: string): Promise<void> {
-    const state = stateStore.get();
-    const target = state.accounts.find((a) => a.id === accountId);
-    if (!target) {
-      throw new Error(`Account not found: ${accountId}`);
-    }
-    if (state.activeAccountId === accountId) {
-      return;
-    }
+  async function doSelect(
+    accountId: string,
+    syncTargets?: Parameters<typeof selectManagedAccount>[2]
+  ): Promise<void> {
+    await selectManagedAccount(
+      {
+        accountHomeDir,
+        handleDrift,
+        ...(logger ? { logger } : {}),
+        now,
+        onSelected: (selectedId) => {
+          emitSnapshot();
+          doRefreshUsage({ accountId: selectedId, force: true }).catch(() => {
+            // 用量 error 经 snapshot 传播；此 catch 仅防 unhandled rejection。
+          });
+        },
+        provider,
+        setSuppressWatchUntil: (until) => {
+          suppressWatchUntil = until;
+        },
+        stateStore,
+        watchSuppressMs: WATCH_SUPPRESS_MS,
+      },
+      accountId,
+      syncTargets
+    );
+  }
 
-    if (state.activeAccountId) {
-      const activeAccount = state.accounts.find(
-        (a) => a.id === state.activeAccountId
-      );
-      suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-      const syncResult = await provider.syncBack(
-        accountHomeDir(state.activeAccountId),
-        activeAccount?.providerAccountId
-      );
-      suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-      if (syncResult === "identity-mismatch") {
-        await handleDrift();
-      }
-    }
-    suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-    await provider.materialize(accountHomeDir(accountId));
-    suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-
-    stateStore.mutate((s) => ({
-      ...s,
-      activeAccountId: accountId,
-      revision: s.revision + 1,
-    }));
-    await stateStore.flush();
-    emitSnapshot();
-    doRefreshUsage({ accountId, force: true }).catch(() => {
-      /* fire-and-forget */
-    });
+  async function doSyncToPeers(
+    payload: Parameters<typeof syncManagedAccountPeers>[1]
+  ): Promise<void> {
+    await syncManagedAccountPeers(
+      {
+        accountHomeDir,
+        ...(logger ? { logger } : {}),
+        provider,
+        stateStore,
+      },
+      payload
+    );
   }
 
   async function doRemove(accountId: string): Promise<void> {
@@ -452,12 +459,13 @@ export function createCodexAccountsService(
           return;
         }
         refreshAllUsage().catch(() => {
-          /* fire-and-forget */
+          // 用量 error 已通过 doRefreshUsage → usageCache → emitSnapshot 传播到 UI；
+          // 此 catch 仅防 unhandled rejection，不面向用户。
         });
       }, USAGE_POLL_INTERVAL_MS);
       if (hasVisibleTarget()) {
         refreshAllUsage().catch(() => {
-          /* fire-and-forget */
+          // 同上：用量 error 经 snapshot 传播，此 catch 仅防 unhandled rejection。
         });
       }
     },
@@ -480,7 +488,9 @@ export function createCodexAccountsService(
         return Promise.resolve();
       });
     },
-    select: (payload) => enqueueMutation(() => doSelect(payload.accountId)),
+    select: (payload) =>
+      enqueueMutation(() => doSelect(payload.accountId, payload.syncTargets)),
+    syncToPeers: (payload) => enqueueMutation(() => doSyncToPeers(payload)),
     remove: (payload) => enqueueMutation(() => doRemove(payload.accountId)),
     refreshUsage: (options) => doRefreshUsage(options),
     refreshAllUsage,
