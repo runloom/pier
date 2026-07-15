@@ -10,9 +10,11 @@ import {
   ItemMedia,
 } from "@pier/ui/item.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
-import { ExternalLink, ShieldCheck, UserPlus } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
+import { ExternalLink, HardDrive, ShieldCheck, UserPlus } from "lucide-react";
 import { type JSX, useCallback, useEffect, useRef, useState } from "react";
 import type { CodexLoginState } from "../shared/accounts.ts";
+import { AddAccountWaiting } from "./add-account-waiting.tsx";
 import type { Translate } from "./usage-meter.tsx";
 
 function isLoginCancellation(error: unknown): boolean {
@@ -22,6 +24,7 @@ function isLoginCancellation(error: unknown): boolean {
   );
 }
 
+type AddTab = "account" | "local";
 const ADD_DIALOG_ID = "accounts.add";
 
 function AddAccountContent({
@@ -41,6 +44,7 @@ function AddAccountContent({
   t: Translate;
   initialLogin: CodexLoginState | null;
 }): JSX.Element {
+  const [tab, setTab] = useState<AddTab>("account");
   const [presentation, setPresentation] = useState<"authorize" | "waiting">(
     initialLogin ? "waiting" : "authorize"
   );
@@ -112,6 +116,22 @@ function AddAccountContent({
       });
   };
 
+  const adoptLocal = (): void => {
+    const currentOperation = ++operationId.current;
+    setStarting(true);
+    context.rpc
+      .invoke("accounts.adoptCurrent", null)
+      .then(() => {
+        if (operationId.current === currentOperation) close(null);
+      })
+      .catch((error: unknown) => {
+        if (operationId.current === currentOperation) onError(error);
+      })
+      .finally(() => {
+        if (operationId.current === currentOperation) setStarting(false);
+      });
+  };
+
   const cancelLogin = (): void => {
     setPendingAction("cancel");
     context.rpc
@@ -149,50 +169,13 @@ function AddAccountContent({
 
   if (presentation === "waiting") {
     return (
-      <div className="flex flex-col gap-4" data-pier-codex-scope="">
-        <Item size="sm" variant="muted">
-          <ItemMedia variant="icon">
-            <Spinner />
-          </ItemMedia>
-          <ItemContent>
-            <ItemDescription>
-              {t(
-                "pier.codex.accounts.settings.addDialogWaitingStatus",
-                "Waiting for Codex authorization…"
-              )}
-            </ItemDescription>
-          </ItemContent>
-        </Item>
-        <div className="flex flex-wrap justify-end gap-2">
-          <Button
-            aria-busy={pendingAction === "cancel" || undefined}
-            disabled={pendingAction !== null || login === null}
-            onClick={cancelLogin}
-            type="button"
-            variant="outline"
-          >
-            {pendingAction === "cancel" ? (
-              <Spinner data-icon="inline-start" />
-            ) : null}
-            {t("pier.codex.accounts.settings.cancelLogin", "Cancel login")}
-          </Button>
-          <Button
-            aria-busy={pendingAction === "restart" || undefined}
-            disabled={pendingAction !== null || login === null}
-            onClick={restartLogin}
-            type="button"
-            variant="secondary"
-          >
-            {pendingAction === "restart" ? (
-              <Spinner data-icon="inline-start" />
-            ) : null}
-            {t(
-              "pier.codex.accounts.settings.addDialogReopenBrowser",
-              "Reopen browser"
-            )}
-          </Button>
-        </div>
-      </div>
+      <AddAccountWaiting
+        loginActive={login !== null}
+        onCancel={cancelLogin}
+        onRestart={restartLogin}
+        pendingAction={pendingAction}
+        t={t}
+      />
     );
   }
 
@@ -211,6 +194,47 @@ function AddAccountContent({
           </ItemDescription>
         </ItemContent>
       </Item>
+
+      <Tabs
+        onValueChange={(value) => {
+          if (value === "account" || value === "local") {
+            setTab(value);
+          }
+        }}
+        value={tab}
+      >
+        <TabsList className="w-full">
+          <TabsTrigger className="flex-1" value="account">
+            {t(
+              "pier.codex.accounts.settings.addDialogTabAccount",
+              "Account login"
+            )}
+          </TabsTrigger>
+          <TabsTrigger className="flex-1" value="local">
+            {t(
+              "pier.codex.accounts.settings.addDialogTabLocal",
+              "Local import"
+            )}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent className="mt-3" value="account">
+          <p className="text-muted-foreground text-sm">
+            {t(
+              "pier.codex.accounts.settings.addDialogAccountDescription",
+              "Continue in your browser to sign in with the Codex CLI. The account appears here after authorization."
+            )}
+          </p>
+        </TabsContent>
+        <TabsContent className="mt-3" value="local">
+          <p className="text-muted-foreground text-sm">
+            {t(
+              "pier.codex.accounts.settings.addDialogLocalDescription",
+              "Import the account already signed in on this device (~/.codex/auth.json). It becomes the active Pier account."
+            )}
+          </p>
+        </TabsContent>
+      </Tabs>
+
       <div className="flex flex-wrap justify-end gap-2">
         <Button
           disabled={waiting}
@@ -220,13 +244,38 @@ function AddAccountContent({
         >
           {t("pier.codex.accounts.settings.cancel", "Cancel")}
         </Button>
-        <Button disabled={starting} onClick={startLogin} type="button">
-          {t(
-            "pier.codex.accounts.settings.addDialogContinue",
-            "Continue in browser"
-          )}
-          <ExternalLink data-icon="inline-end" />
-        </Button>
+        {tab === "local" ? (
+          <Button
+            aria-busy={starting || undefined}
+            disabled={starting}
+            onClick={adoptLocal}
+            type="button"
+          >
+            {starting ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <HardDrive data-icon="inline-start" />
+            )}
+            {t(
+              "pier.codex.accounts.settings.addDialogLocalSubmit",
+              "Import local account"
+            )}
+          </Button>
+        ) : (
+          <Button
+            aria-busy={starting || undefined}
+            disabled={starting}
+            onClick={startLogin}
+            type="button"
+          >
+            {starting ? <Spinner data-icon="inline-start" /> : null}
+            {t(
+              "pier.codex.accounts.settings.addDialogContinue",
+              "Continue in browser"
+            )}
+            <ExternalLink data-icon="inline-end" />
+          </Button>
+        )}
       </div>
     </div>
   );
@@ -254,7 +303,7 @@ export function AddAccountDialog({
       ),
       description: t(
         "pier.codex.accounts.settings.addDialogDescription",
-        "Pier will open Codex login in your browser. The account appears here automatically after authorization."
+        "Choose how to add a Codex account. Browser login opens Codex CLI authorization; local import uses ~/.codex/auth.json on this device."
       ),
       size: "default",
       dismissible: login === null,

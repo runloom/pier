@@ -34,7 +34,7 @@
         "pier.codex.accounts.settings.actions": "Actions",
         "pier.codex.accounts.settings.addAccount": "Add account",
         "pier.codex.accounts.settings.addDialogTitle": "Add Codex account",
-        "pier.codex.accounts.settings.addDialogDescription": "Pier will open Codex login in your browser. The account appears here automatically after authorization.",
+        "pier.codex.accounts.settings.addDialogDescription": "Choose how to add a Codex account. Browser login opens Codex CLI authorization; local import uses ~/.codex/auth.json on this device.",
         "pier.codex.accounts.settings.addDialogLocalCredential": "Credentials are stored only on this device",
         "pier.codex.accounts.settings.addDialogContinue": "Continue in browser",
         "pier.codex.accounts.settings.addDialogWaitingTitle": "Waiting for browser authorization",
@@ -107,7 +107,13 @@
         "pier.codex.switch.syncTarget.pi": "Pi",
         "pier.codex.switch.syncTarget.omp": "OMP",
         "pier.codex.accounts.settings.refreshAllUsage": "Refresh all usage",
-        "pier.codex.accounts.settings.usageRefreshAllSuccess": "All account usage refreshed"
+        "pier.codex.accounts.settings.usageRefreshAllSuccess": "All account usage refreshed",
+        "pier.codex.accounts.settings.addDialogTabAccount": "Account login",
+        "pier.codex.accounts.settings.addDialogTabLocal": "Local import",
+        "pier.codex.accounts.settings.addDialogAccountDescription": "Continue in your browser to sign in with the Codex CLI. The account appears here after authorization.",
+        "pier.codex.accounts.settings.addDialogLocalDescription": "Import the account already signed in on this device (~/.codex/auth.json). It becomes the active Pier account.",
+        "pier.codex.accounts.settings.addDialogLocalSubmit": "Import local account",
+        "pier.codex.errors.noLocalLogin": "No valid local Codex login found. Sign in with the Codex CLI first."
       }
     },
     "zh-CN": {
@@ -132,7 +138,7 @@
         "pier.codex.accounts.settings.actions": "操作",
         "pier.codex.accounts.settings.addAccount": "添加账号",
         "pier.codex.accounts.settings.addDialogTitle": "添加 Codex 账号",
-        "pier.codex.accounts.settings.addDialogDescription": "将在浏览器中打开 Codex 登录。完成授权后，此账号会自动出现在 Pier 中。",
+        "pier.codex.accounts.settings.addDialogDescription": "选择添加方式。浏览器登录走 Codex CLI 授权；本地导入使用本机 ~/.codex/auth.json。",
         "pier.codex.accounts.settings.addDialogLocalCredential": "凭据仅保存在这台设备上",
         "pier.codex.accounts.settings.addDialogContinue": "在浏览器中继续",
         "pier.codex.accounts.settings.addDialogWaitingTitle": "等待浏览器授权",
@@ -205,7 +211,13 @@
         "pier.codex.switch.syncTarget.pi": "Pi",
         "pier.codex.switch.syncTarget.omp": "OMP",
         "pier.codex.accounts.settings.refreshAllUsage": "刷新全部用量",
-        "pier.codex.accounts.settings.usageRefreshAllSuccess": "已刷新全部账号用量"
+        "pier.codex.accounts.settings.usageRefreshAllSuccess": "已刷新全部账号用量",
+        "pier.codex.accounts.settings.addDialogTabAccount": "账号登录",
+        "pier.codex.accounts.settings.addDialogTabLocal": "本地导入",
+        "pier.codex.accounts.settings.addDialogAccountDescription": "通过 Codex CLI 在浏览器中登录。授权完成后，账号会自动出现在这里。",
+        "pier.codex.accounts.settings.addDialogLocalDescription": "导入本机已登录的账号（~/.codex/auth.json），并设为 Pier 当前账号。",
+        "pier.codex.accounts.settings.addDialogLocalSubmit": "导入本地账号",
+        "pier.codex.errors.noLocalLogin": "本机未找到有效的 Codex 登录。请先用 Codex CLI 登录。"
       }
     }
   },

@@ -5,6 +5,7 @@ import { registerGrokRpcHandlers } from "../../../packages/plugin-grok/src/main/
 function serviceStub(): GrokAccountsService {
   return {
     add: vi.fn(),
+    adoptCurrent: vi.fn(),
     cancelLogin: vi.fn(),
     dispose: vi.fn(),
     flush: vi.fn(),
@@ -43,6 +44,7 @@ describe("Grok plugin RPC handlers", () => {
 
     expect([...handlers.keys()].sort()).toEqual([
       "accounts.add",
+      "accounts.adoptCurrent",
       "accounts.cancelLogin",
       "accounts.refreshAllUsage",
       "accounts.refreshUsage",
@@ -62,6 +64,9 @@ describe("Grok plugin RPC handlers", () => {
       apiKey: "xai-1",
       kind: "api_key",
     });
+
+    await handlers.get("accounts.adoptCurrent")?.(null);
+    expect(service.adoptCurrent).toHaveBeenCalledOnce();
 
     await handlers.get("accounts.select")?.({
       accountId: "a1",

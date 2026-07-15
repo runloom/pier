@@ -25,6 +25,8 @@ export interface CodexAccountsServiceOpts {
 
 export interface CodexAccountsService {
   add(payload: AddAccountPayload): Promise<void>;
+  /** Import the current local CLI login into managed accounts and activate it. */
+  adoptCurrent(): Promise<void>;
   cancelLogin(): Promise<void>;
   dispose(): void;
   flush(): Promise<void>;

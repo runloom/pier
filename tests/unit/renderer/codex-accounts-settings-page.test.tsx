@@ -150,6 +150,13 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
   };
 }
 
+function activateTab(name: string | RegExp): void {
+  // Radix Tabs switches selection on mousedown; click alone is not enough.
+  const tab = screen.getByRole("tab", { name });
+  fireEvent.mouseDown(tab, { button: 0 });
+  fireEvent.click(tab);
+}
+
 describe("AccountsSettingsPage", () => {
   afterEach(() => {
     cleanup();
@@ -505,6 +512,38 @@ describe("AccountsSettingsPage", () => {
     expect(invokeCalls).toContainEqual({ method: "accounts.add", payload: {} });
     await vi.waitFor(() => {
       expect(screen.queryByText("Add Codex account")).toBeNull();
+    });
+  });
+
+  it("imports the local account from the Local import tab", async () => {
+    const { context, invokeCalls } = contextWithSnapshot(emptySnapshot());
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
+
+    const addAccountButton = await screen.findByText("Add account");
+    await act(async () => {
+      fireEvent.click(addAccountButton);
+    });
+    await act(async () => {
+      activateTab("Local import");
+    });
+    expect(
+      await screen.findByText(
+        /Import the account already signed in on this device/i
+      )
+    ).toBeDefined();
+    await act(async () => {
+      fireEvent.click(
+        screen.getByRole("button", { name: "Import local account" })
+      );
+    });
+    expect(invokeCalls).toContainEqual({
+      method: "accounts.adoptCurrent",
+      payload: null,
     });
   });
 

@@ -135,6 +135,7 @@ export function createCodexAccountsService(
     }
     await stateStore.flush();
     emitSnapshot();
+    doRefreshUsage({ force: true }).catch(() => undefined);
   }
 
   async function migrateLegacyAccountsIfNeeded(): Promise<boolean> {
@@ -474,6 +475,7 @@ export function createCodexAccountsService(
     flush: () => stateStore.flush(),
     snapshot: () => buildSnapshot(),
     add: (_payload) => enqueueMutation(doAdd),
+    adoptCurrent: () => enqueueMutation(doAdoptCurrent),
     cancelLogin: () => {
       loginAbort?.abort();
       return enqueueMutation(() => {

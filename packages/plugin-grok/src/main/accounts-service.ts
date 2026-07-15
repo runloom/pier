@@ -467,6 +467,7 @@ export function createGrokAccountsService(
     flush: () => stateStore.flush(),
     snapshot: () => buildSnapshot(),
     add: (payload) => enqueueMutation(() => doAdd(payload)),
+    adoptCurrent: () => enqueueMutation(doAdoptCurrent),
     cancelLogin: () => {
       loginAbort?.abort();
       return enqueueMutation(() => {
