@@ -18,7 +18,7 @@ function serviceStub(): GrokAccountsService {
       activeAccountId: null,
       login: null,
       revision: 1,
-      schemaVersion: 1,
+      schemaVersion: 1 as const,
     })),
     syncToPeers: vi.fn(),
   };

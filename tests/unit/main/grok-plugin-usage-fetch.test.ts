@@ -130,7 +130,7 @@ describe("fetchGrokUsage", () => {
   });
 
   it("refreshes expired OIDC session before billing and persists new auth", async () => {
-    const onAuthJsonUpdated = vi.fn(async () => undefined);
+    const onAuthJsonUpdated = vi.fn(async (_authJson: string) => undefined);
     const fetchImpl = vi.fn(async (url: string) => {
       if (url.includes("token")) {
         return {
@@ -182,7 +182,9 @@ describe("fetchGrokUsage", () => {
       })
     );
     expect(onAuthJsonUpdated).toHaveBeenCalledTimes(1);
-    const persisted = JSON.parse(String(onAuthJsonUpdated.mock.calls[0]?.[0]));
+    const firstCall = onAuthJsonUpdated.mock.calls.at(0);
+    expect(firstCall).toBeDefined();
+    const persisted = JSON.parse(String(firstCall?.[0]));
     const entry = Object.values(persisted)[0] as {
       key?: string;
       refresh_token?: string;

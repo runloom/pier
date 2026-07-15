@@ -117,6 +117,14 @@ function contextWithSnapshot(snapshot: GrokAccountsSnapshot): {
       dialogs: {
         alert: vi.fn(async () => undefined),
         confirm: vi.fn(async () => true),
+        open: vi.fn(() => ({
+          id: "pier.grok:test",
+          result: Promise.resolve(null),
+          close: vi.fn(),
+          update: vi.fn(),
+        })),
+        update: vi.fn(),
+        close: vi.fn(),
       },
       i18n: {
         language: () => "en",
@@ -136,9 +144,6 @@ function contextWithSnapshot(snapshot: GrokAccountsSnapshot): {
         on: vi.fn(() => () => undefined),
       },
       settingsPages: {
-        register: vi.fn(() => () => undefined),
-      },
-      terminalStatusItems: {
         register: vi.fn(() => () => undefined),
       },
     },
@@ -218,7 +223,7 @@ describe("Grok accounts widget", () => {
     expect(alert.querySelector('[data-slot="badge"]')).toBeNull();
     expect(alert.querySelector('[data-slot="alert"]')).toBeNull();
     expect(
-      container.querySelector('[data-slot="widget-error"]')
+      container.querySelector('[data-slot="grok-usage-error"]')
     ).not.toBeNull();
   });
 });

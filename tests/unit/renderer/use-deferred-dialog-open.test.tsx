@@ -9,7 +9,10 @@ function Probe({
   open: boolean | undefined;
   onAbandon?: () => void;
 }) {
-  const deferred = useDeferredDialogOpen(open, { onAbandon });
+  const deferred = useDeferredDialogOpen(
+    open,
+    onAbandon === undefined ? {} : { onAbandon }
+  );
   return <div data-testid="open">{String(deferred)}</div>;
 }
 

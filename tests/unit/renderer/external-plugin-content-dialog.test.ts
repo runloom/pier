@@ -34,7 +34,7 @@ function entry(): PluginRegistryEntry {
       publisher: "Pier",
       locales: {},
     },
-  } as PluginRegistryEntry;
+  } as unknown as PluginRegistryEntry;
 }
 
 describe("external plugin content dialog wiring", () => {

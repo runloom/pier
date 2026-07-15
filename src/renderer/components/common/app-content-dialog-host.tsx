@@ -47,7 +47,10 @@ function ContentDialogLayerView({
         updateAppContentDialog(layer.id, { title });
       },
       setDescription: (description) => {
-        updateAppContentDialog(layer.id, { description });
+        updateAppContentDialog(
+          layer.id,
+          description === undefined ? {} : { description }
+        );
       },
     }),
     [layer.id]

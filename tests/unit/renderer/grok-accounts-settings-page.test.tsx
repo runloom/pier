@@ -123,9 +123,6 @@ function contextWithSnapshot(snapshot: GrokAccountsSnapshot): {
       settingsPages: {
         register: vi.fn(() => () => undefined),
       },
-      terminalStatusItems: {
-        register: vi.fn(() => () => undefined),
-      },
     },
     invokeCalls,
   };
