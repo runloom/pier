@@ -53,8 +53,8 @@
   "sequence": 7,
   "version": 1,
   "signature": {
-    "alg": "unsigned",
+    "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "0000000000000000000000000000000000000000000000000000000000000000000000000000000000000000"
+    "value": "CAIF5nCJJw2jiXlSKJzGc0gWZzm7faaBLMQ7SmoKFtjtnAzH5+NAaXoacorudQae1GlylPf59I4KuQg4vD1zAg=="
   }
 }
