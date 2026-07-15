@@ -1,10 +1,15 @@
 {
   "apiVersion": 1,
   "dataSchemas": {
-    "codex.accounts": { "read": ">=1 <=1", "write": 1 }
+    "codex.accounts": {
+      "read": ">=1 <=1",
+      "write": 1
+    }
   },
   "description": "Codex account management and usage monitoring for Pier.",
-  "engines": { "pier": ">=0.1.0 <0.2.0" },
+  "engines": {
+    "pier": ">=0.1.0 <0.2.0"
+  },
   "id": "pier.codex",
   "locales": {
     "en": {
@@ -100,7 +105,9 @@
         "pier.codex.switch.syncSectionLabel": "Also switch the OpenAI account in:",
         "pier.codex.switch.syncTarget.opencode": "OpenCode",
         "pier.codex.switch.syncTarget.pi": "pi",
-        "pier.codex.switch.syncTarget.omp": "omp"
+        "pier.codex.switch.syncTarget.omp": "omp",
+        "pier.codex.accounts.settings.refreshAllUsage": "Refresh all usage",
+        "pier.codex.accounts.settings.usageRefreshAllSuccess": "All account usage refreshed"
       }
     },
     "zh-CN": {
@@ -196,7 +203,9 @@
         "pier.codex.switch.syncSectionLabel": "同时切换以下工具的 OpenAI 账号：",
         "pier.codex.switch.syncTarget.opencode": "OpenCode",
         "pier.codex.switch.syncTarget.pi": "pi",
-        "pier.codex.switch.syncTarget.omp": "omp"
+        "pier.codex.switch.syncTarget.omp": "omp",
+        "pier.codex.accounts.settings.refreshAllUsage": "刷新全部用量",
+        "pier.codex.accounts.settings.usageRefreshAllSuccess": "已刷新全部账号用量"
       }
     }
   },
@@ -204,11 +213,20 @@
   "workbenchWidgets": [
     {
       "category": "agent",
-      "defaultSize": { "w": 4, "h": 3 },
+      "defaultSize": {
+        "w": 4,
+        "h": 3
+      },
       "description": "Switch the active Codex account and monitor its quota.",
       "id": "pier.codex.accounts",
-      "maxSize": { "w": 8, "h": 4 },
-      "minSize": { "w": 2, "h": 3 },
+      "maxSize": {
+        "w": 8,
+        "h": 4
+      },
+      "minSize": {
+        "w": 2,
+        "h": 3
+      },
       "refreshable": false,
       "searchTerms": ["codex", "account", "quota", "账号", "配额"],
       "title": "Codex Account & Quota"
@@ -219,7 +237,11 @@
   "permissions": ["plugin:read", "secret:read", "secret:write"],
   "publisher": "Pier",
   "renderer": "dist/renderer.js",
-  "settingsPages": [{ "id": "pier.codex.accounts" }],
+  "settingsPages": [
+    {
+      "id": "pier.codex.accounts"
+    }
+  ],
   "terminalStatusItems": [],
   "version": "1.3.0"
 }

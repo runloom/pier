@@ -53,6 +53,11 @@ export function registerCodexRpcHandlers(options: {
     });
     return null;
   });
+  rpc.handle("accounts.refreshAllUsage", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    await service.refreshAllUsage({ force: true });
+    return null;
+  });
   rpc.handle("accounts.usagePolling.acquire", async (payload) => {
     const { consumerId } = usagePollingPayloadSchema.parse(payload);
     await acquireUsagePolling(consumerId);

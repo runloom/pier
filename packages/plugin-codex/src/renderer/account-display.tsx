@@ -1,5 +1,4 @@
 import { Avatar, AvatarFallback } from "@pier/ui/avatar.tsx";
-import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { Empty, EmptyDescription, EmptyHeader } from "@pier/ui/empty.tsx";
 import {
@@ -124,39 +123,31 @@ export function QuotaGroup({
     );
   }
 
-  const errorState = error ? (
-    <TooltipProvider delayDuration={200}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge
-            className="col-span-full justify-self-start"
-            role="status"
-            tabIndex={0}
-            variant="danger"
-          >
-            {t(
-              "pier.codex.accounts.settings.usageFailed",
-              "Usage update failed"
-            )}
-          </Badge>
-        </TooltipTrigger>
-        <TooltipContent className="max-w-80" data-pier-codex-scope="">
-          {error}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  ) : null;
+  const errorBanner =
+    error !== undefined && error.length > 0 ? (
+      <div
+        className="flex w-full flex-col gap-1 text-sm"
+        data-slot="codex-usage-error"
+        role="alert"
+      >
+        <p className="text-destructive">
+          {t("pier.codex.accounts.settings.usageFailed", "Usage update failed")}
+        </p>
+        <p className="break-all text-muted-foreground text-xs">{error}</p>
+      </div>
+    ) : null;
 
   if (windows.length === 0) {
+    if (errorBanner) {
+      return errorBanner;
+    }
     return (
-      <Empty className="min-h-19 gap-0 p-3">
-        {errorState ?? (
-          <EmptyHeader className="gap-0">
-            <EmptyDescription>
-              {t("pier.codex.accounts.settings.noUsage", "No usage data")}
-            </EmptyDescription>
-          </EmptyHeader>
-        )}
+      <Empty className="min-h-19 gap-0 border-0 p-3">
+        <EmptyHeader className="gap-0">
+          <EmptyDescription>
+            {t("pier.codex.accounts.settings.noUsage", "No usage data")}
+          </EmptyDescription>
+        </EmptyHeader>
       </Empty>
     );
   }
@@ -164,23 +155,29 @@ export function QuotaGroup({
   return (
     <div
       className={cn(
-        "grid min-w-0 grid-cols-2 gap-4 data-[count=1]:grid-cols-1 max-[36rem]:grid-cols-1",
+        "flex min-w-0 flex-col gap-3",
         compact && "flex-1 max-[48rem]:col-span-full max-[48rem]:row-start-2"
       )}
       data-count={windows.length}
       data-slot="codex-quota-group"
     >
-      {windows.map((window) => (
-        <Quota
-          compact={compact}
-          key={window.id}
-          label={usageWindowLabel(window, language, t)}
-          language={language}
-          t={t}
-          window={window}
-        />
-      ))}
-      {errorState}
+      {errorBanner}
+      <div
+        className={cn(
+          "grid min-w-0 grid-cols-2 gap-4 data-[count=1]:grid-cols-1 max-[36rem]:grid-cols-1"
+        )}
+      >
+        {windows.map((window) => (
+          <Quota
+            compact={compact}
+            key={window.id}
+            label={usageWindowLabel(window, language, t)}
+            language={language}
+            t={t}
+            window={window}
+          />
+        ))}
+      </div>
     </div>
   );
 }

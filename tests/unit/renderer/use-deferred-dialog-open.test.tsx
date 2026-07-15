@@ -84,6 +84,40 @@ describe("useDeferredDialogOpen", () => {
     expect(getByTestId("open").textContent).toBe("true");
   });
 
+  it("opens nested dialogs immediately while a parent modal locks body", () => {
+    const setTimeoutSpy = vi.spyOn(globalThis, "setTimeout");
+    document.body.style.pointerEvents = "none";
+    const parent = document.createElement("div");
+    parent.setAttribute("data-slot", "dialog-content");
+    document.body.append(parent);
+
+    const { getByTestId, rerender } = render(<Probe open={false} />);
+    rerender(<Probe open={true} />);
+    expect(getByTestId("open").textContent).toBe("true");
+    expect(setTimeoutSpy).not.toHaveBeenCalled();
+  });
+
+  it("still defers when a menu is open inside a parent modal", () => {
+    vi.useFakeTimers();
+    document.body.style.pointerEvents = "none";
+    const parent = document.createElement("div");
+    parent.setAttribute("data-slot", "dialog-content");
+    document.body.append(parent);
+    const menu = document.createElement("div");
+    menu.setAttribute("data-slot", "dropdown-menu-content");
+    document.body.append(menu);
+
+    const { getByTestId, rerender } = render(<Probe open={false} />);
+    rerender(<Probe open={true} />);
+    expect(getByTestId("open").textContent).toBe("false");
+
+    menu.remove();
+    act(() => {
+      vi.runAllTimers();
+    });
+    expect(getByTestId("open").textContent).toBe("true");
+  });
+
   it("abandons deferred open and notifies when still blocked after timeout", () => {
     vi.useFakeTimers();
     document.body.style.pointerEvents = "none";

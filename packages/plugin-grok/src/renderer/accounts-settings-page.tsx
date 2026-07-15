@@ -88,11 +88,12 @@ export function AccountsSettingsPage({
       .catch(() => undefined);
   };
 
-  const { refreshUsage, refreshingAccountIds } = useAccountsRefresh({
-    context,
-    onAccountError: reportError,
-    t,
-  });
+  const { refreshAllUsage, refreshUsage, refreshingAccountIds, refreshingAll } =
+    useAccountsRefresh({
+      context,
+      onAccountError: reportError,
+      t,
+    });
 
   const handleRemove = async (accountId: string): Promise<void> => {
     const ok = await context.dialogs.confirm({
@@ -205,12 +206,35 @@ export function AccountsSettingsPage({
         <h1 className="font-semibold text-xl tracking-tight">
           {t("pier.grok.accounts.settings.title", "Grok Accounts")}
         </h1>
-        <AddAccountDialog
-          context={context}
-          login={snapshot.login}
-          onError={reportError}
-          t={t}
-        />
+        <div className="flex items-center gap-2">
+          <Button
+            aria-busy={refreshingAll || undefined}
+            aria-label={t(
+              "pier.grok.accounts.settings.refreshAllUsage",
+              "Refresh all usage"
+            )}
+            disabled={refreshingAll || snapshot.accounts.length === 0}
+            onClick={() => {
+              refreshAllUsage(snapshot.accounts.map((account) => account.id));
+            }}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <RefreshCw
+              className={cn(
+                refreshingAll && "animate-spin motion-reduce:animate-none"
+              )}
+              data-icon="inline-start"
+            />
+          </Button>
+          <AddAccountDialog
+            context={context}
+            login={snapshot.login}
+            onError={reportError}
+            t={t}
+          />
+        </div>
       </header>
 
       {snapshot.login ? (
@@ -268,12 +292,12 @@ export function AccountsSettingsPage({
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
-                      aria-busy={activeRefreshing || undefined}
+                      aria-busy={refreshingAll || activeRefreshing || undefined}
                       aria-label={t(
                         "pier.grok.accounts.settings.refreshUsage",
                         "Refresh usage"
                       )}
-                      disabled={activeRefreshing}
+                      disabled={refreshingAll || activeRefreshing}
                       onClick={() => refreshUsage(active.id)}
                       size="icon-sm"
                       type="button"
@@ -281,7 +305,7 @@ export function AccountsSettingsPage({
                     >
                       <RefreshCw
                         className={cn(
-                          activeRefreshing &&
+                          (refreshingAll || activeRefreshing) &&
                             "animate-spin motion-reduce:animate-none"
                         )}
                         data-icon="inline-start"
@@ -362,19 +386,29 @@ export function AccountsSettingsPage({
             <CardTitle>
               {t("pier.grok.accounts.settings.otherAccounts", "Other accounts")}
             </CardTitle>
+            <CardAction>
+              <Badge variant="secondary">{others.length}</Badge>
+            </CardAction>
           </CardHeader>
-          <CardContent>
-            <ItemGroup>
+          <CardContent className="px-0" data-testid="grok-account-table">
+            <ItemGroup className="gap-0">
               {others.map((account, index) => (
                 <Fragment key={account.id}>
                   {index > 0 ? <ItemSeparator /> : null}
                   <OtherAccount
                     account={account}
                     busy={busyAccountId === account.id}
+                    language={language}
+                    onRefresh={(id) => {
+                      refreshUsage(id);
+                    }}
                     onRemove={(id) => {
                       handleRemove(id).catch(() => undefined);
                     }}
                     onSelect={handleSelect}
+                    refreshing={
+                      refreshingAll || refreshingAccountIds.has(account.id)
+                    }
                     t={t}
                   />
                 </Fragment>

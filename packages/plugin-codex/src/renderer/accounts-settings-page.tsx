@@ -94,11 +94,12 @@ export function AccountsSettingsPage({
   const invoke = (method: string, payload: unknown = null): void => {
     context.rpc.invoke(method, payload).catch(reportError);
   };
-  const { refreshingAccountIds, refreshUsage } = useAccountsRefresh({
-    context,
-    onAccountError: reportError,
-    t,
-  });
+  const { refreshingAccountIds, refreshingAll, refreshAllUsage, refreshUsage } =
+    useAccountsRefresh({
+      context,
+      onAccountError: reportError,
+      t,
+    });
   const handleRemove = async (accountId: string): Promise<void> => {
     const ok = await context.dialogs.confirm({
       body: t(
@@ -188,12 +189,35 @@ export function AccountsSettingsPage({
         <h1 className="font-semibold text-xl tracking-tight">
           {t("pier.codex.accounts.settings.title", "Codex Accounts")}
         </h1>
-        <AddAccountDialog
-          context={context}
-          login={snapshot.login}
-          onError={reportError}
-          t={t}
-        />
+        <div className="flex items-center gap-2">
+          <Button
+            aria-busy={refreshingAll || undefined}
+            aria-label={t(
+              "pier.codex.accounts.settings.refreshAllUsage",
+              "Refresh all usage"
+            )}
+            disabled={refreshingAll || snapshot.accounts.length === 0}
+            onClick={() => {
+              refreshAllUsage(snapshot.accounts.map((account) => account.id));
+            }}
+            size="icon-sm"
+            type="button"
+            variant="ghost"
+          >
+            <RefreshCw
+              className={cn(
+                refreshingAll && "animate-spin motion-reduce:animate-none"
+              )}
+              data-icon="inline-start"
+            />
+          </Button>
+          <AddAccountDialog
+            context={context}
+            login={snapshot.login}
+            onError={reportError}
+            t={t}
+          />
+        </div>
       </header>
       {active ? (
         <Card data-testid="codex-active-account" size="sm">
@@ -238,7 +262,9 @@ export function AccountsSettingsPage({
                         "pier.codex.accounts.settings.refreshUsage",
                         "Refresh usage"
                       )}
-                      disabled={refreshingAccountIds.has(active.id)}
+                      disabled={
+                        refreshingAll || refreshingAccountIds.has(active.id)
+                      }
                       onClick={() => refreshUsage(active.id)}
                       size="icon-sm"
                       type="button"
@@ -346,7 +372,9 @@ export function AccountsSettingsPage({
                     onRefresh={() => refreshUsage(account.id)}
                     onRemove={() => handleRemove(account.id).catch(reportError)}
                     onSelect={() => handleSelect(account.id)}
-                    refreshing={refreshingAccountIds.has(account.id)}
+                    refreshing={
+                      refreshingAll || refreshingAccountIds.has(account.id)
+                    }
                     t={t}
                   />
                 </Fragment>

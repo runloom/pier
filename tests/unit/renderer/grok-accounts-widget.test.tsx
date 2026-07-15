@@ -191,4 +191,34 @@ describe("Grok accounts widget", () => {
       section: "plugin:pier.grok",
     });
   });
+
+  it("renders usage failure via borderless WidgetError, not badge or nested alert card", async () => {
+    const snap = activeSnapshot();
+    snap.activeUsage = {
+      error: "Grok session expired — re-login required",
+      fetchedAt: Date.now(),
+      status: "error",
+      windows: [],
+    };
+    if (snap.accounts[0]) {
+      snap.accounts[0] = {
+        ...snap.accounts[0],
+        usage: snap.activeUsage,
+      };
+    }
+    const { context } = contextWithSnapshot(snap);
+    const { container } = render(
+      <AccountsWidget context={context} {...baseProps()} />
+    );
+
+    const alert = await screen.findByRole("alert");
+    expect(alert).toHaveTextContent(
+      /session expired|re-login|usage update failed/i
+    );
+    expect(alert.querySelector('[data-slot="badge"]')).toBeNull();
+    expect(alert.querySelector('[data-slot="alert"]')).toBeNull();
+    expect(
+      container.querySelector('[data-slot="widget-error"]')
+    ).not.toBeNull();
+  });
 });

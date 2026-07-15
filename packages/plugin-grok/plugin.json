@@ -104,6 +104,8 @@
         "pier.grok.errors.apiKeyQuotaUnsupported": "API key accounts cannot report Grok quota — switch to an OIDC account",
         "pier.grok.errors.removeActiveBlocked": "Cannot remove the active account — select another first",
         "pier.grok.errors.billingUnavailable": "Could not load Grok quota. Try refresh, or re-login if the session expired.",
+        "pier.grok.errors.sessionExpired": "Grok session expired — re-login required",
+        "pier.grok.errors.pluginNotReady": "Grok plugin is still starting — try again in a moment",
         "pier.grok.accounts.settings.addDialogReopenBrowser": "Reopen browser",
         "pier.grok.accounts.settings.switchConfirmAction": "Confirm",
         "pier.grok.accounts.settings.syncPeers": "Sync to other tools",
@@ -125,7 +127,9 @@
         "pier.grok.accounts.settings.addDialogTabAccount": "Account login",
         "pier.grok.accounts.settings.addDialogTabApiKey": "API key",
         "pier.grok.accounts.settings.addDialogAccountDescription": "Recommended: continue in your browser to sign in with the Grok CLI. Use device code only when a browser is unavailable. The account appears here after authorization.",
-        "pier.grok.accounts.settings.addDialogOtherMethods": "Other ways to connect"
+        "pier.grok.accounts.settings.addDialogOtherMethods": "Other ways to connect",
+        "pier.grok.accounts.settings.refreshAllUsage": "Refresh all usage",
+        "pier.grok.accounts.settings.usageRefreshAllSuccess": "All account usage refreshed"
       }
     },
     "zh-CN": {
@@ -220,6 +224,8 @@
         "pier.grok.errors.apiKeyQuotaUnsupported": "API key 账号无法报告 Grok 配额 — 请切换到 OIDC 账号",
         "pier.grok.errors.removeActiveBlocked": "不能移除当前账号 — 请先切换到其他账号",
         "pier.grok.errors.billingUnavailable": "无法加载 Grok 配额。请重试刷新；若会话过期请重新登录。",
+        "pier.grok.errors.sessionExpired": "Grok 会话已过期，请重新登录",
+        "pier.grok.errors.pluginNotReady": "Grok 插件仍在启动，请稍后再试",
         "pier.grok.accounts.settings.addDialogReopenBrowser": "重新打开浏览器",
         "pier.grok.accounts.settings.switchConfirmAction": "确认",
         "pier.grok.accounts.settings.syncPeers": "同步到其他工具",
@@ -241,7 +247,9 @@
         "pier.grok.accounts.settings.addDialogTabAccount": "账号登录",
         "pier.grok.accounts.settings.addDialogTabApiKey": "API key",
         "pier.grok.accounts.settings.addDialogAccountDescription": "推荐：通过 Grok CLI 在浏览器中登录；仅在无法打开浏览器时使用设备码。授权完成后，账号会自动出现在这里。",
-        "pier.grok.accounts.settings.addDialogOtherMethods": "其他连接方式"
+        "pier.grok.accounts.settings.addDialogOtherMethods": "其他连接方式",
+        "pier.grok.accounts.settings.refreshAllUsage": "刷新全部用量",
+        "pier.grok.accounts.settings.usageRefreshAllSuccess": "已刷新全部账号用量"
       }
     }
   },

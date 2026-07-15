@@ -1,6 +1,12 @@
+import { OPEN_MODAL_CONTENT_SELECTOR } from "./modal-layer.ts";
+
 /**
  * Open Radix portals that currently own modal pointer-events / focus.
  * Present when a menu/select is still mounted in the same turn a Dialog opens.
+ *
+ * Intentionally excludes dialog / alert-dialog content: an already-open modal
+ * (settings, host confirm shell) also sets body pointer-events=none, and nested
+ * dialogs opened from inside it must not wait for that lock to clear.
  */
 export const OPEN_OVERLAY_SELECTOR = [
   "[data-slot=select-content]",
@@ -14,6 +20,8 @@ export const OPEN_OVERLAY_SELECTOR = [
   "[role=menu]",
 ].join(",");
 
+const OPEN_MODAL_SHELL_SELECTOR = OPEN_MODAL_CONTENT_SELECTOR;
+
 const MAX_WAIT_MS = 1000;
 const POLL_MS = 16;
 
@@ -21,11 +29,16 @@ export function isOverlayBlockingDialogOpen(): boolean {
   if (typeof document === "undefined") {
     return false;
   }
+  // Menus/selects always block — even when a parent dialog is open.
   if (document.querySelector(OPEN_OVERLAY_SELECTOR)) {
     return true;
   }
-  // Radix modal menus lock body while closing.
-  return document.body.style.pointerEvents === "none";
+  // Radix modal menus lock body while closing. An already-open dialog also
+  // leaves body pointer-events=none; that lock alone must not block nested opens.
+  if (document.body.style.pointerEvents !== "none") {
+    return false;
+  }
+  return document.querySelector(OPEN_MODAL_SHELL_SELECTOR) === null;
 }
 
 export interface ScheduleAfterOverlayOptions {

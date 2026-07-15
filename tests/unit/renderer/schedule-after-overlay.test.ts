@@ -44,6 +44,18 @@ describe("scheduleAfterOverlay", () => {
     expect(task).toHaveBeenCalledOnce();
   });
 
+  it("does not treat parent dialog body lock as blocking", () => {
+    const task = vi.fn();
+    document.body.style.pointerEvents = "none";
+    const parent = document.createElement("div");
+    parent.setAttribute("data-slot", "dialog-content");
+    document.body.append(parent);
+
+    scheduleAfterOverlay(task);
+    vi.runAllTimers();
+    expect(task).toHaveBeenCalledOnce();
+  });
+
   it("abandons instead of force-running when still blocked after timeout", () => {
     const task = vi.fn();
     const onAbandon = vi.fn();

@@ -128,6 +128,14 @@ function createPierAppCore(): PierAppCore {
     prodPluginDirName: "pier.codex",
   });
   const codexSeedAvailable = codexBundle !== null;
+  const grokBundle = readBundledPlugin({
+    devPackageDir: "packages/plugin-grok",
+    fallbackId: "pier.grok",
+    fallbackName: "Grok",
+    fallbackVersion: "1.0.0",
+    prodPluginDirName: "pier.grok",
+  });
+  const grokSeedAvailable = grokBundle !== null;
   let pluginHostRef: MainPluginHostApi | null = null;
   const httpIndex = createHttpOfficialIndexProvider({
     cachePath: managedPluginPaths.officialIndexCacheFile,
@@ -147,23 +155,44 @@ function createPierAppCore(): PierAppCore {
     createManagedPluginInstallService({
       appendOperationLog: (record) => managedPluginOpLog.append(record),
       assetFetcher,
-      bundledPlugins: codexBundle
-        ? [
-            {
-              archivePath: codexBundle.archivePath,
-              contributionCounts: codexBundle.contributionCounts,
-              displayName: codexBundle.name,
-              id: "pier.codex",
-              sha256: codexBundle.sha256,
-              version: codexBundle.version,
-              ...(codexBundle.description
-                ? { description: codexBundle.description }
-                : {}),
-              ...(codexBundle.locales ? { locales: codexBundle.locales } : {}),
-              ...(codexBundle.size ? { size: codexBundle.size } : {}),
-            },
-          ]
-        : [],
+      bundledPlugins: [
+        ...(codexBundle
+          ? [
+              {
+                archivePath: codexBundle.archivePath,
+                contributionCounts: codexBundle.contributionCounts,
+                displayName: codexBundle.name,
+                id: "pier.codex",
+                sha256: codexBundle.sha256,
+                version: codexBundle.version,
+                ...(codexBundle.description
+                  ? { description: codexBundle.description }
+                  : {}),
+                ...(codexBundle.locales
+                  ? { locales: codexBundle.locales }
+                  : {}),
+                ...(codexBundle.size ? { size: codexBundle.size } : {}),
+              },
+            ]
+          : []),
+        ...(grokBundle
+          ? [
+              {
+                archivePath: grokBundle.archivePath,
+                contributionCounts: grokBundle.contributionCounts,
+                displayName: grokBundle.name,
+                id: "pier.grok",
+                sha256: grokBundle.sha256,
+                version: grokBundle.version,
+                ...(grokBundle.description
+                  ? { description: grokBundle.description }
+                  : {}),
+                ...(grokBundle.locales ? { locales: grokBundle.locales } : {}),
+                ...(grokBundle.size ? { size: grokBundle.size } : {}),
+              },
+            ]
+          : []),
+      ],
       officialIndexProvider: () => httpIndex.snapshot(),
       officialIndexRefresh: async (refreshOptions) => {
         await httpIndex.refresh(refreshOptions);
@@ -252,6 +281,7 @@ function createPierAppCore(): PierAppCore {
         },
         processEnv: {
           CODEX_HOME: process.env.CODEX_HOME,
+          GROK_HOME: process.env.GROK_HOME,
           HOME: process.env.HOME,
           PATH: process.env.PATH,
         },
@@ -305,6 +335,27 @@ function createPierAppCore(): PierAppCore {
           managedPluginDevRuntimeWatch ??= startManagedPluginDevRuntimeWatch({
             logger: createLogger("managed-plugins"),
             packageDir: codexDevPackageDir,
+            refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
+          });
+        }
+      }
+      if (isDevRuntime() && grokSeedAvailable) {
+        const grokDevPackageDir = join(process.cwd(), "packages/plugin-grok");
+        const index = managedPlugins.getIndex();
+        const grok = index.plugins["pier.grok"];
+        if (grok?.activeVersion && !grok.uninstalledAt) {
+          await managedPlugins
+            .setDevOverride("pier.grok", grokDevPackageDir)
+            .then(() => managedPlugins.simulateRestartForTests())
+            .catch((err: unknown) => {
+              console.error(
+                "[managed-plugins] grok dev override sync failed:",
+                err
+              );
+            });
+          startManagedPluginDevRuntimeWatch({
+            logger: createLogger("managed-plugins"),
+            packageDir: grokDevPackageDir,
             refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
           });
         }

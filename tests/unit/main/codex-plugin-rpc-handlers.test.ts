@@ -47,6 +47,9 @@ describe("Codex plugin RPC handlers", () => {
       accountId: "account-1",
       force: true,
     });
+
+    await handlers.get("accounts.refreshAllUsage")?.(null);
+    expect(service.refreshAllUsage).toHaveBeenCalledWith({ force: true });
   });
 
   it("no longer exposes usage.refreshCost — cost refresh is host-owned", () => {

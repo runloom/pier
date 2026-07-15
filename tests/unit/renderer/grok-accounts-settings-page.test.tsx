@@ -169,6 +169,11 @@ describe("Grok accounts settings page", () => {
     expect(await screen.findByText("active@example.com")).toBeTruthy();
     expect(screen.getByText("Work key")).toBeTruthy();
     expect(screen.getByText("Other accounts")).toBeTruthy();
+    // Codex parity: other-accounts card shows a count badge in CardAction.
+    const otherHeading = screen.getByText("Other accounts");
+    const otherCard = otherHeading.closest('[data-slot="card"]');
+    expect(otherCard).not.toBeNull();
+    expect(otherCard?.textContent ?? "").toMatch(/Other accounts\s*1/);
   });
 
   it("opens switch confirm dialog before selecting accounts", async () => {
@@ -183,7 +188,7 @@ describe("Grok accounts settings page", () => {
         </>
       );
     });
-    const switchButton = await screen.findByRole("button", { name: "Switch" });
+    const switchButton = await screen.findByRole("button", { name: /Switch/ });
     await act(async () => {
       fireEvent.click(switchButton);
     });
