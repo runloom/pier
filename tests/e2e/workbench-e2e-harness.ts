@@ -67,9 +67,10 @@ export async function setWindowSize(
   width: number,
   height: number
 ): Promise<void> {
-  // CI macOS 虚拟屏可能夹住高度（例如请求 800 只剩 ~684）。
-  // 这里设 content size，再以 Electron 实际 content size 对齐 window.inner*，
-  // 不把「请求值」当硬断言，避免 title bar / 屏高夹持导致全套 e2e 起不来。
+  // CI macOS 虚拟屏常夹高度（请求 800 → 实际 ~684），且 content size 与
+  // page.inner* 可能短暂不一致。只保证可用下限，不硬等请求尺寸。
+  const minWidth = Math.min(width, 1024);
+  const minHeight = Math.min(height, 600);
   const applied = await app.evaluate(
     ({ BaseWindow, screen }, size) => {
       const targetWindow = BaseWindow.getAllWindows()[0];
@@ -78,15 +79,17 @@ export async function setWindowSize(
       }
       const display = screen.getDisplayMatching(targetWindow.getBounds());
       const work = display.workArea;
-      // 先挪到 workArea 左上，减少被屏外裁切的概率。
       targetWindow.setPosition(work.x, work.y);
-      const maxWidth = Math.max(320, work.width);
-      const maxHeight = Math.max(240, work.height);
-      const nextWidth = Math.min(size.width, maxWidth);
-      const nextHeight = Math.min(size.height, maxHeight);
+      const nextWidth = Math.min(size.width, Math.max(320, work.width));
+      const nextHeight = Math.min(size.height, Math.max(240, work.height));
       targetWindow.setContentSize(nextWidth, nextHeight);
-      const [contentWidth = nextWidth, contentHeight = nextHeight] =
+      let [contentWidth = nextWidth, contentHeight = nextHeight] =
         targetWindow.getContentSize();
+      if (contentWidth < nextWidth || contentHeight < nextHeight) {
+        targetWindow.setSize(nextWidth, nextHeight);
+        [contentWidth = nextWidth, contentHeight = nextHeight] =
+          targetWindow.getContentSize();
+      }
       return {
         height: contentHeight,
         id: targetWindow.id,
@@ -98,17 +101,28 @@ export async function setWindowSize(
   expect(applied.id).toBeGreaterThan(0);
   await expect
     .poll(
-      () =>
-        win.evaluate(() => ({
+      async () => {
+        const metrics = await win.evaluate(() => ({
           height: window.innerHeight,
           width: window.innerWidth,
-        })),
-      { timeout: 5000 }
+        }));
+        if (metrics.width < minWidth || metrics.height < minHeight) {
+          await app.evaluate(
+            ({ BaseWindow }, size) => {
+              const targetWindow = BaseWindow.getAllWindows()[0];
+              targetWindow?.setContentSize(size.width, size.height);
+            },
+            {
+              height: Math.max(applied.height, minHeight),
+              width: Math.max(applied.width, minWidth),
+            }
+          );
+        }
+        return metrics.width >= minWidth && metrics.height >= minHeight;
+      },
+      { timeout: 8000 }
     )
-    .toEqual({ height: applied.height, width: applied.width });
-  // 仍保证有可用工作区，避免夹到不可用的极小窗。
-  expect(applied.width).toBeGreaterThanOrEqual(Math.min(width, 1024));
-  expect(applied.height).toBeGreaterThanOrEqual(Math.min(height, 600));
+    .toBe(true);
 }
 
 async function openPaletteAction(win: Page, name: RegExp): Promise<void> {
