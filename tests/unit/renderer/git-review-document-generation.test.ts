@@ -163,4 +163,42 @@ describe("GitReviewDocumentGeneration", () => {
       ]);
     }
   });
+
+  it("同代 soft budget 回收 idle 时仍保留已 loaded 正文", () => {
+    const entries = [entry(0), entry(1)];
+    const controller = new GitReviewDocumentGeneration({
+      current: {
+        resources: entries.map((item) => ({ entry: item, kind: "idle" })),
+        retainedEntryKeys: [],
+        settled: false,
+      },
+      generation: 1,
+      previousByEntryKey: new Map(),
+      protectedEntryKey: null,
+    });
+    const loaded = {
+      document: document(0),
+      entry: entries[0]!,
+      kind: "loaded" as const,
+    };
+    expect(
+      controller.apply({ resources: [loaded], settled: false }, null)
+        .changedResources
+    ).toEqual([loaded]);
+
+    const idleAgain = { entry: entries[0]!, kind: "idle" as const };
+    const change = controller.apply(
+      { resources: [idleAgain], settled: false },
+      null
+    );
+    // 已是 retained loaded 时 apply idle 是 no-op（不重复发 change）。
+    expect(change.changedResources).toEqual([]);
+    expect(
+      controller
+        .snapshot([])
+        .resources.find(
+          (resource) => resource.entry.entryKey === entries[0]!.entryKey
+        )
+    ).toEqual(loaded);
+  });
 });

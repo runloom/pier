@@ -297,7 +297,16 @@ export class GitReviewDocumentGeneration {
       return;
     }
     const previous = this.#previousByEntryKey.get(entryKey);
-    if (previous && current.kind !== "loaded") {
+    const index = this.#indexByEntryKey.get(entryKey);
+    const effective =
+      index === undefined ? undefined : this.#effectiveResources[index];
+    const retainedLoaded =
+      previous ?? (effective?.kind === "loaded" ? effective : undefined);
+    // 在新的 loaded 到达前，保留已有正文：
+    // - soft budget idle 不会抹掉 diff
+    // - loading/error/unchanged 期间继续显示旧正文
+    // 真正替换只发生在 current.kind === "loaded"。
+    if (retainedLoaded && current.kind !== "loaded") {
       if (current.kind === "error") {
         this.#refreshFailures.set(entryKey, current);
       } else {
@@ -308,7 +317,7 @@ export class GitReviewDocumentGeneration {
       } else {
         this.#staleEntryKeys.delete(entryKey);
       }
-      this.#replaceEffective(entryKey, previous, changed);
+      this.#replaceEffective(entryKey, retainedLoaded, changed);
       return;
     }
     this.#refreshFailures.delete(entryKey);
