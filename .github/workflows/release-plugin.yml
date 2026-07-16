@@ -16,9 +16,10 @@ on:
         required: true
 
 # Plugin package version changes merged to `main` automatically build every
-# changed `packages/plugin-<tail>`, publish each tgz under
-# `plugin-<tail>-v<version>` (serially, sorted by tail), then regenerate
-# `plugins/index.v1.json` once. `workflow_dispatch` remains available for
+# changed releasable `packages/plugin-<tail>` (must have `plugin.json`),
+# publish each tgz under `plugin-<tail>-v<version>` (serially, sorted by
+# tail), then regenerate `plugins/index.v1.json` once. Shared packages such
+# as `plugin-api` are ignored. `workflow_dispatch` remains available for
 # single-plugin recovery.
 
 permissions:
@@ -43,6 +44,11 @@ jobs:
             TAIL="${{ github.event.inputs.plugin }}"
             VERSION="${{ github.event.inputs.version }}"
             PACKAGE_JSON="packages/plugin-${TAIL}/package.json"
+            PLUGIN_JSON="packages/plugin-${TAIL}/plugin.json"
+            if [ ! -f "$PLUGIN_JSON" ]; then
+              echo "packages/plugin-${TAIL} is not a releasable plugin (missing plugin.json)" >&2
+              exit 1
+            fi
             ACTUAL_VERSION=$(node -p "require('./${PACKAGE_JSON}').version")
             if [ "$ACTUAL_VERSION" != "$VERSION" ]; then
               echo "requested ${TAIL}@${VERSION}, but ${PACKAGE_JSON} declares ${ACTUAL_VERSION}" >&2
@@ -67,11 +73,13 @@ jobs:
               printf '%s\n' "$CHANGED" >&2
               exit 1
             fi
-            # Resolve every changed package.json into release targets, sorted by tail.
+            # Resolve releasable targets only (must have plugin.json), sorted by tail.
+            # Shared packages like plugin-api change package.json but are not released.
             TARGETS=$(printf '%s\n' "$CHANGED" | node -e '
               const fs = require("node:fs");
               const paths = fs.readFileSync(0, "utf8").split(/\r?\n/).filter(Boolean);
-              const targets = paths.map((packageJson) => {
+              const targets = [];
+              for (const packageJson of paths) {
                 if (!/^packages\/plugin-[^/]+\/package\.json$/.test(packageJson)) {
                   throw new Error(`unexpected package path: ${packageJson}`);
                 }
@@ -79,23 +87,39 @@ jobs:
                   "packages/plugin-".length,
                   -"/package.json".length
                 );
+                const pluginJson = `packages/plugin-${tail}/plugin.json`;
+                if (!fs.existsSync(pluginJson)) {
+                  console.error(`skipping non-releasable package (no plugin.json): ${packageJson}`);
+                  continue;
+                }
                 const version = JSON.parse(fs.readFileSync(packageJson, "utf8")).version;
                 if (typeof version !== "string" || version.length === 0) {
                   throw new Error(`missing version in ${packageJson}`);
                 }
-                return {
+                targets.push({
                   tail,
                   version,
                   tag: `plugin-${tail}-v${version}`,
                   package: `@pier/plugin-${tail}`,
                   packageJson,
-                };
-              });
+                });
+              }
               targets.sort((a, b) => a.tail.localeCompare(b.tail));
               console.log(JSON.stringify(targets));
             ')
           fi
+          TARGET_COUNT=$(echo "$TARGETS" | node -e 'const t=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(String(t.length));')
+          if [ "$TARGET_COUNT" -eq 0 ]; then
+            echo "no releasable plugin package.json changes (plugin.json required); skipping release"
+            {
+              echo "should_release=false"
+              echo "release_targets=[]"
+              echo "release_tags="
+            } >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
           {
+            echo "should_release=true"
             echo "release_targets<<EOF"
             echo "$TARGETS"
             echo "EOF"
@@ -106,15 +130,19 @@ jobs:
           echo "release_tags=$TAGS" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v4
+        if: steps.parse.outputs.should_release == 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.parse.outputs.should_release == 'true'
         with:
           node-version: 24
           cache: 'pnpm'
 
-      - run: pnpm install --frozen-lockfile
+      - if: steps.parse.outputs.should_release == 'true'
+        run: pnpm install --frozen-lockfile
 
       - name: Build, verify, and publish each plugin release
+        if: steps.parse.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
           RELEASE_TARGETS: ${{ steps.parse.outputs.release_targets }}
@@ -176,6 +204,7 @@ jobs:
           ')
 
       - name: Regenerate plugin index
+        if: steps.parse.outputs.should_release == 'true'
         env:
           PIER_PLUGIN_INDEX_REQUIRE_SIGNATURE: "1"
           PIER_PLUGIN_INDEX_SIGNING_KEY_ID: ${{ secrets.PIER_PLUGIN_INDEX_SIGNING_KEY_ID }}
@@ -183,6 +212,7 @@ jobs:
         run: pnpm plugins:index
 
       - name: Commit index update
+        if: steps.parse.outputs.should_release == 'true'
         env:
           RELEASE_TAGS: ${{ steps.parse.outputs.release_tags }}
         run: |

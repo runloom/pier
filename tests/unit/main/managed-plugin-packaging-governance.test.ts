@@ -89,6 +89,14 @@ describe("managed plugin packaging governance", () => {
     );
     expect(releaseWorkflow).toContain("release_targets");
     expect(releaseWorkflow).toContain("sorted by tail");
+    expect(releaseWorkflow).toContain("must have plugin.json");
+    expect(releaseWorkflow).toContain(
+      "skipping non-releasable package (no plugin.json)"
+    );
+    expect(releaseWorkflow).toContain("should_release");
+    expect(releaseWorkflow).toContain(
+      "no releasable plugin package.json changes (plugin.json required)"
+    );
     expect(releaseWorkflow).toContain("same-version hash drift");
     expect(releaseWorkflow).toContain("Check existing release");
     expect(releaseWorkflow).toContain(
