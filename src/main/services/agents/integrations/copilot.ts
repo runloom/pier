@@ -17,7 +17,7 @@ const TIMEOUT_SECONDS = 5;
 const configPath = () => join(homedir(), ".copilot", "hooks", "pier.json");
 
 /** Copilot CLI hook 事件 → pier 事件名。 */
-const COPILOT_EVENTS: ReadonlyArray<{
+export const COPILOT_EVENTS: ReadonlyArray<{
   nativeEvent: string;
   pierEvent: string;
 }> = [

@@ -226,4 +226,69 @@ describe("agent attention service", () => {
     );
     expect(showNotification).toHaveBeenCalledTimes(2);
   });
+
+  it("skips notify when enabled is false", async () => {
+    const service = createService({ enabled: false });
+    await service.observe(null, {
+      activities: [agent({ panelId: "p1", status: "waiting", windowId: "11" })],
+      ts: 1,
+    });
+    expect(showNotification).not.toHaveBeenCalled();
+  });
+
+  it("notifies even when focused if suppressWhenFocused is false", async () => {
+    isTargetPanelFocused.mockReturnValue(true);
+    const service = createService({ suppressWhenFocused: false });
+    await service.observe(null, {
+      activities: [agent({ panelId: "p1", status: "waiting", windowId: "11" })],
+      ts: 1,
+    });
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not re-notify waiting→error when both in trigger set", async () => {
+    const service = createService({ enableErrorAttention: true });
+    await service.observe(null, {
+      activities: [agent({ panelId: "p1", status: "waiting", windowId: "11" })],
+      ts: 1,
+    });
+    expect(showNotification).toHaveBeenCalledTimes(1);
+
+    await service.observe(
+      {
+        activities: [
+          agent({ panelId: "p1", status: "waiting", windowId: "11" }),
+        ],
+        ts: 1,
+      },
+      {
+        activities: [agent({ panelId: "p1", status: "error", windowId: "11" })],
+        ts: 2,
+      }
+    );
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not re-notify error→waiting when both in trigger set", async () => {
+    const service = createService({ enableErrorAttention: true });
+    await service.observe(null, {
+      activities: [agent({ panelId: "p1", status: "error", windowId: "11" })],
+      ts: 1,
+    });
+    expect(showNotification).toHaveBeenCalledTimes(1);
+
+    await service.observe(
+      {
+        activities: [agent({ panelId: "p1", status: "error", windowId: "11" })],
+        ts: 1,
+      },
+      {
+        activities: [
+          agent({ panelId: "p1", status: "waiting", windowId: "11" }),
+        ],
+        ts: 2,
+      }
+    );
+    expect(showNotification).toHaveBeenCalledTimes(1);
+  });
 });

@@ -67,7 +67,7 @@ interface AgentPreferencesState extends AgentPreferenceSnapshot {
 }
 
 export const useAgentPreferencesStore = create<AgentPreferencesState>(
-  (set) => ({
+  (set, get) => ({
     agentCommandOverrides: {},
     agentDefaultArgs: {},
     agentDefaultEnv: {},
@@ -169,16 +169,20 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
     },
 
     async setAgentStatusHooks(next) {
+      const prev = get().agentStatusHooks;
+      set({ agentStatusHooks: next });
       try {
         const merged = await window.pier.preferences.update({
           agentStatusHooks: next,
         });
         useAgentPreferencesStore.getState()._hydrate(snapshotFrom(merged));
       } catch (err) {
+        set({ agentStatusHooks: prev });
         console.error(
           "[agent-preferences.store] setAgentStatusHooks failed:",
           err
         );
+        throw err;
       }
     },
   })

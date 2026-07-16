@@ -36,6 +36,7 @@ import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { bootstrapBuiltinPlugins } from "./lib/plugins/bootstrap.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
 import { registerTerminalPanelCloseGuard } from "./panel-kits/terminal/register-close-guard.ts";
+import { initAgentAttentionPreferences } from "./stores/agent-attention-preferences.store.ts";
 import { initAgentDetection } from "./stores/agent-detect.store.ts";
 import { initAgentPreferences } from "./stores/agent-preferences.store.ts";
 import { initAppQuitPreferences } from "./stores/app-quit-preferences.store.ts";
@@ -118,6 +119,7 @@ async function bootstrap() {
       initTerminalPreferences(),
       initAppQuitPreferences(),
       initAgentPreferences(),
+      initAgentAttentionPreferences(),
       initTerminalStatusBarPrefs(),
       initTaskRunsStore(),
       initWorktreePreferences(),

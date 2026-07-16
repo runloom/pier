@@ -1,5 +1,6 @@
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import {
+  Bell,
   Bot,
   Box,
   Download,
@@ -38,6 +39,7 @@ export const NAV_ITEMS: readonly StaticNavItem[] = [
   { id: "environment", icon: Box, variant: "static" },
   { id: "keybindings", icon: Keyboard, variant: "static" },
   { id: "agents", icon: Bot, variant: "static" },
+  { id: "notifications", icon: Bell, variant: "static" },
   { id: "plugins", icon: Plug, variant: "static" },
   { id: "updates", icon: Download, variant: "static" },
 ] as const;

@@ -150,6 +150,21 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
 检查点在 `tests/unit/renderer/shadcn-governance.test.ts`；新增例外必须写明组件边界和
 无法使用现有 shadcn 原语的原因。
 
+### 设置页状态提示布局
+
+宿主设置页（`src/renderer/pages/settings/**`）里用于权限、错误、模式说明的
+`@pier/ui/Alert` **必须放在 `Card` / `CardContent` 内**，不得与 `Card` 并列作为
+section 根节点下的裸子节点。
+
+- 设置页一级标题（`h1`）仍在卡片外（见上节 shadcn 规范）。
+- 多卡片分段时：健康/错误提示**并入内容 Card 顶部**（与表单/列表同卡）；禁止
+  `h1 → 裸 Alert → Card`，也禁止「仅包一层 Alert 的空壳 Card」（Alert 已自带
+  边框，套 Card 会双重描边）。
+- 参考：`plugins-section.tsx`（错误 Alert 在内容 Card 内）、
+  `notifications-section.tsx`（权限/hooks Alert 在策略 Card 顶部）。
+- 一次性动作失败的详情仍走 `showAppAlert`（与本条不冲突）。
+- 检查点在 `tests/unit/renderer/settings-section-alert-layout-governance.test.ts`（仅扫描 `settings-dialog` 直接挂载的 `*-section.tsx`；嵌套在父 Card 内的子块不扫）。
+
 ### 前台活动模块 `src/main/services/foreground-activity/`
 
 统一 agent / task / shell / idle 四态活动聚合器：

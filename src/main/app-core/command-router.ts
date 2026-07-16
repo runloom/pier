@@ -161,11 +161,13 @@ async function executeAppStateCommand(
     case "preferences.update": {
       const merged = await services.preferences.update(command.patch);
       if (command.patch.agentStatusHooks !== undefined) {
-        applyAgentStatusHooksPreference(merged.agentStatusHooks).catch(
-          (err) => {
-            console.error("[preferences] agent hook install failed:", err);
-          }
-        );
+        // 偏好与摄入门闸以落盘值为准；hook 安装/卸载 best-effort，
+        // 单家失败只记日志，不让 preferences.update 失败回滚 UI。
+        try {
+          await applyAgentStatusHooksPreference(merged.agentStatusHooks);
+        } catch (err) {
+          console.error("[preferences] agent hook install failed:", err);
+        }
       }
       return success(requestId, merged);
     }

@@ -385,7 +385,10 @@ if (gotTheLock) {
       registerMenuIpc(ipcMain);
       registerAgentsIpc(ipcMain);
       registerForegroundActivityIpc(ipcMain);
-      registerAgentRuntimeHostIpc(ipcMain, appCore.services.agentRuntimeIndex);
+      registerAgentRuntimeHostIpc(ipcMain, {
+        eventBus: appCore.eventBus,
+        index: appCore.services.agentRuntimeIndex,
+      });
       registerSystemStatsIpc(ipcMain);
       registerUsageDataIpc(ipcMain, appCore.services.usageData);
       ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {

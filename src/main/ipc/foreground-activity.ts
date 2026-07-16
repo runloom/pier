@@ -10,6 +10,10 @@ import {
   installAgentHooksEmitScript,
 } from "../services/agents/agent-hooks-install.ts";
 import {
+  isAgentStatusHooksIngestEnabled,
+  setAgentStatusHooksIngestEnabled,
+} from "../services/agents/agent-status-hooks-gate.ts";
+import {
   getAgentHookIntegration,
   installAllAgentHooks,
   uninstallAllAgentHooks,
@@ -269,6 +273,9 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   jsonlObserver = createJsonlObserver({
     filePath: eventsJsonlPath(app.getPath("userData")),
     onAgentEvent: (event) => {
+      if (!isAgentStatusHooksIngestEnabled()) {
+        return;
+      }
       const accepted = foregroundActivityAggregator.ingestAgentEvent(event, {
         stopAuthority:
           getAgentHookIntegration(event.agent)?.runtime.stopAuthority ?? "none",
@@ -322,9 +329,12 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   // 启动时按偏好双向对齐 hook 安装状态（幂等）：开→装, 关→卸。
   // 关闭态必须主动卸载, 防止旧版本/外部同步写回的 hook 静默复活。
   readPreferences()
-    .then((prefs) =>
-      prefs.agentStatusHooks ? installAllAgentHooks() : uninstallAllAgentHooks()
-    )
+    .then((prefs) => {
+      setAgentStatusHooksIngestEnabled(prefs.agentStatusHooks);
+      return prefs.agentStatusHooks
+        ? installAllAgentHooks()
+        : uninstallAllAgentHooks();
+    })
     .catch((err) => {
       log.error("startup hook install failed", { err });
     });

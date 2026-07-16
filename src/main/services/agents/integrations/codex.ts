@@ -84,6 +84,8 @@ const CODEX_SPEC: NestedJsonIntegrationSpec = {
   ],
 };
 
+export const CODEX_HOOK_EVENTS = CODEX_SPEC.events;
+
 export const codexIntegration = createNestedJsonIntegration(CODEX_SPEC);
 
 /** 兼容导出（与 claude.ts 一致的模式；语义与工厂一致）。 */

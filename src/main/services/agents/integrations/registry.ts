@@ -1,4 +1,5 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { setAgentStatusHooksIngestEnabled } from "../agent-status-hooks-gate.ts";
 import { aiderIntegration } from "./aider.ts";
 import { ampIntegration } from "./amp.ts";
 import { antigravityIntegration } from "./antigravity.ts";
@@ -80,7 +81,7 @@ export function getAgentHookIntegration(
 
 /**
  * 幂等安装全部已检测到的集成。单个失败不影响其他（逐个隔离告警）——
- * 一家 agent 的配置异常不应拖垮整个状态功能。
+ * 一家 agent 的配置异常不应拖垮整个状态功能 / 偏好切换。
  */
 export async function installAllAgentHooks(): Promise<void> {
   await Promise.allSettled(
@@ -100,6 +101,7 @@ export async function installAllAgentHooks(): Promise<void> {
 /**
  * 卸载全部集成。不设 detect 门控——二进制已卸但配置残留时也要能清干净；
  * 对从未安装过的目标, 变换无变化不落盘, 零副作用。
+ * 单个失败不影响其他，也不回滚偏好 / 摄入门闸。
  */
 export async function uninstallAllAgentHooks(): Promise<void> {
   await Promise.allSettled(
@@ -116,5 +118,6 @@ export async function uninstallAllAgentHooks(): Promise<void> {
 export async function applyAgentStatusHooksPreference(
   enabled: boolean
 ): Promise<void> {
+  setAgentStatusHooksIngestEnabled(enabled);
   await (enabled ? installAllAgentHooks() : uninstallAllAgentHooks());
 }

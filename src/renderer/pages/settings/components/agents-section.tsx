@@ -153,7 +153,12 @@ function AgentStatusHooksRow() {
       id="agent-status-hooks"
       label={t("settings.agents.statusHooks.label")}
       onCheckedChange={(next) => {
-        setEnabled(next).catch(() => undefined);
+        setEnabled(next).catch((err: unknown) => {
+          showAppAlert({
+            body: err instanceof Error ? err.message : String(err),
+            title: t("settings.agents.statusHooks.failed"),
+          }).catch(() => undefined);
+        });
       }}
     />
   );

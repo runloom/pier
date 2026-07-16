@@ -21,23 +21,25 @@ const configPath = () => join(homedir(), ".cursor", "hooks.json");
  * → PermissionRequest；afterAgentResponse 近似"仍在处理" → processing
  * （loomdesk running≈processing 的映射）。
  */
-const CURSOR_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> =
-  [
-    { nativeEvent: "sessionStart", pierEvent: "SessionStart" },
-    { nativeEvent: "beforeSubmitPrompt", pierEvent: "PromptSubmit" },
-    { nativeEvent: "preToolUse", pierEvent: "ToolStart" },
-    { nativeEvent: "postToolUse", pierEvent: "ToolComplete" },
-    { nativeEvent: "postToolUseFailure", pierEvent: "ToolComplete" },
-    { nativeEvent: "beforeShellExecution", pierEvent: "PermissionRequest" },
-    { nativeEvent: "beforeMCPExecution", pierEvent: "PermissionRequest" },
-    { nativeEvent: "afterShellExecution", pierEvent: "ToolComplete" },
-    { nativeEvent: "afterMCPExecution", pierEvent: "ToolComplete" },
-    { nativeEvent: "afterAgentResponse", pierEvent: "processing" },
-    { nativeEvent: "subagentStart", pierEvent: "SubagentStart" },
-    { nativeEvent: "subagentStop", pierEvent: "SubagentStop" },
-    { nativeEvent: "stop", pierEvent: "Stop" },
-    { nativeEvent: "sessionEnd", pierEvent: "SessionEnd" },
-  ];
+export const CURSOR_EVENTS: ReadonlyArray<{
+  nativeEvent: string;
+  pierEvent: string;
+}> = [
+  { nativeEvent: "sessionStart", pierEvent: "SessionStart" },
+  { nativeEvent: "beforeSubmitPrompt", pierEvent: "PromptSubmit" },
+  { nativeEvent: "preToolUse", pierEvent: "ToolStart" },
+  { nativeEvent: "postToolUse", pierEvent: "ToolComplete" },
+  { nativeEvent: "postToolUseFailure", pierEvent: "ToolComplete" },
+  { nativeEvent: "beforeShellExecution", pierEvent: "PermissionRequest" },
+  { nativeEvent: "beforeMCPExecution", pierEvent: "PermissionRequest" },
+  { nativeEvent: "afterShellExecution", pierEvent: "ToolComplete" },
+  { nativeEvent: "afterMCPExecution", pierEvent: "ToolComplete" },
+  { nativeEvent: "afterAgentResponse", pierEvent: "processing" },
+  { nativeEvent: "subagentStart", pierEvent: "SubagentStart" },
+  { nativeEvent: "subagentStop", pierEvent: "SubagentStop" },
+  { nativeEvent: "stop", pierEvent: "Stop" },
+  { nativeEvent: "sessionEnd", pierEvent: "SessionEnd" },
+];
 
 interface CursorHookEntry {
   command: string;
