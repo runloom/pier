@@ -25,7 +25,7 @@ export function reviewNavigationKey(
  */
 export function isReviewNavigationContentReady(
   resource: GitReviewDocumentResource | undefined
-): boolean {
+): resource is Extract<GitReviewDocumentResource, { kind: "loaded" }> {
   return resource?.kind === "loaded";
 }
 
