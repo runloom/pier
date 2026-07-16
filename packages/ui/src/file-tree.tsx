@@ -104,6 +104,7 @@ export function PierFileTree({
 
   const fileTreeStyle = React.useMemo(() => pierFileTreeStyle(style), [style]);
   const programmaticSelectionRef = React.useRef<{ path: string } | null>(null);
+  const lastOpenedPathRef = React.useRef<string | null>(null);
 
   const handleSelectionChange =
     React.useCallback<FileTreeSelectionChangeListener>(
@@ -125,11 +126,44 @@ export function PierFileTree({
         readRefs().onSelectPaths?.(outwardSelectedPaths);
 
         if (selectedItem?.kind === "file" && !suppressOpenPath) {
+          lastOpenedPathRef.current = selectedItem.path;
           readRefs().onOpenPath?.(selectedItem.path);
         }
       },
       [readRefs]
     );
+  const handleHostClickCapture = React.useCallback(
+    (event: React.MouseEvent<HTMLDivElement>) => {
+      // Pierre trees 对已选中行再点不会 bump selectionVersion，
+      // 因此 onSelectionChange/onOpenPath 不会重入。Review 等需要
+      // 再点同一文件时重新定位正文。
+      if (event.button !== 0) {
+        return;
+      }
+      const target = event.target;
+      if (!(target instanceof Element)) {
+        return;
+      }
+      const row = target.closest<HTMLElement>("[data-item-path]");
+      if (!row || row.dataset.itemType === "folder") {
+        return;
+      }
+      const officialPath = row.dataset.itemPath;
+      if (!officialPath) {
+        return;
+      }
+      const item = readRefs().itemsByPath.get(officialPath);
+      if (item?.kind !== "file") {
+        return;
+      }
+      if (lastOpenedPathRef.current !== item.path) {
+        return;
+      }
+      readRefs().onOpenPath?.(item.path);
+    },
+    [readRefs]
+  );
+
   const modelAheadMovesRef = React.useRef(new Map<string, string>());
   const renameSession = React.useMemo(() => new FileTreeRenameSession(), []);
 
@@ -443,6 +477,7 @@ export function PierFileTree({
     <div
       className={cn("h-full min-h-0 w-full", className)}
       data-slot="pier-file-tree-bridge"
+      onClickCapture={handleHostClickCapture}
       ref={containerRef}
     >
       <PierreFileTree

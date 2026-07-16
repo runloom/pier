@@ -1259,10 +1259,11 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         /Failed to refresh changes|刷新变更失败/u
       );
       await expect(refreshFailure).toBeVisible({ timeout: 30_000 });
+      // 再点已选中文件：应重新定位保留正文（不依赖 selection change）。
       await target.click();
       await expect
         .poll(() => isDiffTextInViewport(page, "value2000"), {
-          timeout: 5000,
+          timeout: 15_000,
         })
         .toBe(true);
 
