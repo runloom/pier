@@ -90,7 +90,7 @@ function ReviewDocumentsComponent({
   const renderedGenerationRef = useRef(0);
   const renderWindowRef = useRef<PierDiffViewRenderWindow | null>(null);
   const seedEntryKeysRef = useRef<readonly string[]>([]);
-  const stickyMaterializedEntryKeysRef = useRef<ReadonlySet<string>>(new Set());
+  const demandPrefetchEntryKeysRef = useRef<ReadonlySet<string>>(new Set());
   const currentDemandRef = useRef<ReviewDocumentDemand>({
     bufferedEntryKeys: [],
     visibleEntryKeys: [],
@@ -100,7 +100,7 @@ function ReviewDocumentsComponent({
   const [viewState, setViewState] = useState(EMPTY_DOCUMENT_VIEW_STATE);
   const [projection, setProjection] = useState(EMPTY_REVIEW_PROJECTION);
   const [projectionGeneration, setProjectionGeneration] = useState(0);
-  const [stickyVersion, setStickyVersion] = useState(0);
+  const [demandPrefetchVersion, setDemandPrefetchVersion] = useState(0);
   const [renderFeedback, setRenderFeedback] =
     useState<ReviewRenderFeedback | null>(null);
   const { selectedEntryKey, selectedTreeEntry, setSelectedEntryKey } =
@@ -170,8 +170,8 @@ function ReviewDocumentsComponent({
     navigationPending,
     renderWindowRef,
     seedEntryKeysRef,
-    stickyMaterializedEntryKeysRef,
-    stickyVersion,
+    demandPrefetchEntryKeysRef,
+    demandPrefetchVersion,
   });
   const {
     applyItemUpdates,
@@ -240,9 +240,9 @@ function ReviewDocumentsComponent({
     seedEntryKeysRef,
     setProjection,
     setProjectionGeneration,
-    setStickyVersion,
+    setDemandPrefetchVersion,
     setViewState,
-    stickyMaterializedEntryKeysRef,
+    demandPrefetchEntryKeysRef,
     viewStateRef,
   });
   useGitReviewProjectionCommit({
@@ -304,12 +304,12 @@ function ReviewDocumentsComponent({
     }
     const anchor = resolveReviewAnchor(pending, itemIdsRef.current);
     if (anchor && diffHandleRef.current?.restoreAnchor(anchor)) {
-      if (viewStateRef.current.snapshot.settled) {
+      if (viewStateRef.current.settled) {
         pendingAnchorRef.current = null;
       } else {
         pendingAnchorRef.current = { ...pending, restored: true };
       }
-    } else if (viewStateRef.current.snapshot.settled) {
+    } else if (viewStateRef.current.settled) {
       pendingAnchorRef.current = null;
     }
   }, [hasPendingNavigation]);

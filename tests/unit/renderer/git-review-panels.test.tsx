@@ -770,7 +770,7 @@ describe("Git review panel", () => {
       previousByEntryKey: previous,
       protectedEntryKey: selectedEntryKey,
     });
-    const reconciled = controller.initialViewState();
+    const reconciled = controller.snapshot([]);
 
     expect(
       controller
@@ -778,7 +778,7 @@ describe("Git review panel", () => {
         .filter((change) => change.source === "refresh")
     ).toHaveLength(1);
     expect(
-      reconciled.snapshot.resources.find(
+      reconciled.resources.find(
         (resource) => resource.entry.entryKey === selectedEntryKey
       )
     ).toMatchObject({
@@ -786,9 +786,7 @@ describe("Git review panel", () => {
       kind: "loaded",
     });
     expect(
-      reconciled.snapshot.resources.filter(
-        (resource) => resource.kind === "loaded"
-      )
+      reconciled.resources.filter((resource) => resource.kind === "loaded")
     ).toHaveLength(201);
     expect(previous.has(selectedEntryKey)).toBe(true);
     expect(previous.has(entry(1).entryKey)).toBe(true);

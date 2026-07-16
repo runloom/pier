@@ -18,8 +18,8 @@ export function useGitReviewDocumentDemand({
   navigationPending,
   renderWindowRef,
   seedEntryKeysRef,
-  stickyMaterializedEntryKeysRef,
-  stickyVersion,
+  demandPrefetchEntryKeysRef,
+  demandPrefetchVersion,
 }: {
   readonly currentDemandRef: RefObject<ReviewDocumentDemand>;
   readonly entries: readonly GitReviewIndexEntry[];
@@ -30,8 +30,8 @@ export function useGitReviewDocumentDemand({
   readonly navigationPending: boolean;
   readonly renderWindowRef: RefObject<PierDiffViewRenderWindow | null>;
   readonly seedEntryKeysRef: RefObject<readonly string[]>;
-  readonly stickyMaterializedEntryKeysRef: RefObject<ReadonlySet<string>>;
-  readonly stickyVersion: number;
+  readonly demandPrefetchEntryKeysRef: RefObject<ReadonlySet<string>>;
+  readonly demandPrefetchVersion: number;
 }): (window: PierDiffViewRenderWindow) => void {
   const entryKeysInOrder = useMemo(
     () => entries.map((entry) => entry.entryKey),
@@ -52,7 +52,7 @@ export function useGitReviewDocumentDemand({
         navigationPending: pending,
         seedEntryKeys: seedEntryKeysRef.current,
         selectedEntryKey: getSelectedEntryKey(),
-        stickyMaterializedEntryKeys: stickyMaterializedEntryKeysRef.current,
+        demandPrefetchEntryKeys: demandPrefetchEntryKeysRef.current,
         windowDemand,
       });
       currentDemandRef.current = demand;
@@ -64,7 +64,7 @@ export function useGitReviewDocumentDemand({
       getSelectedEntryKey,
       loaderRef,
       seedEntryKeysRef,
-      stickyMaterializedEntryKeysRef,
+      demandPrefetchEntryKeysRef,
     ]
   );
   const applyRenderWindow = useCallback(
@@ -86,9 +86,9 @@ export function useGitReviewDocumentDemand({
     [applyRenderWindow, hasPendingNavigation]
   );
   useEffect(() => {
-    // stickyVersion 是 membership epoch：变化时重算 lookahead demand。
-    const stickyEpoch = stickyVersion;
-    if (stickyEpoch < 0) {
+    // demandPrefetchVersion 是 membership epoch：变化时重算 lookahead demand。
+    const prefetchEpoch = demandPrefetchVersion;
+    if (prefetchEpoch < 0) {
       return;
     }
     const window = renderWindowRef.current;
@@ -106,7 +106,7 @@ export function useGitReviewDocumentDemand({
     applyRenderWindow,
     navigationPending,
     renderWindowRef,
-    stickyVersion,
+    demandPrefetchVersion,
   ]);
   return requestRenderWindow;
 }

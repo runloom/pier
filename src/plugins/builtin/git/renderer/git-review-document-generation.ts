@@ -144,14 +144,14 @@ export class GitReviewDocumentGeneration {
     return changes;
   }
 
+  /**
+   * UI 元状态。完整资源请用 snapshot(retainedEntryKeys)。
+   */
   initialViewState(): ReviewDocumentViewState {
     return {
       generation: this.#generation,
-      snapshot: {
-        resources: this.#effectiveResources,
-        retainedEntryKeys: [...this.#previousByEntryKey.keys()],
-        settled: this.#settled,
-      },
+      retainedEntryKeys: [...this.#previousByEntryKey.keys()],
+      settled: this.#settled,
       staleRetainedCount: this.#staleEntryKeys.size,
     };
   }

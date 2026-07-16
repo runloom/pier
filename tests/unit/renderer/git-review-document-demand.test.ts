@@ -231,7 +231,7 @@ describe("composeReviewDocumentDemand", () => {
       navigationPending: false,
       seedEntryKeys: seed,
       selectedEntryKey: null,
-      stickyMaterializedEntryKeys: sticky,
+      demandPrefetchEntryKeys: sticky,
       windowDemand: {
         bufferedEntryKeys: ["entry:30"],
         visibleEntryKeys: ["entry:5"],
@@ -250,7 +250,7 @@ describe("composeReviewDocumentDemand", () => {
         navigationPending: true,
         seedEntryKeys: seed,
         selectedEntryKey: "entry:39",
-        stickyMaterializedEntryKeys: new Set(),
+        demandPrefetchEntryKeys: new Set(),
         windowDemand: {
           bufferedEntryKeys: ["entry:6"],
           visibleEntryKeys: ["entry:5"],

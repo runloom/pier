@@ -1,21 +1,24 @@
 import type { ReviewDocumentDemand } from "./git-review-document-demand.ts";
 import type { GitReviewDocumentResource } from "./git-review-document-resource.ts";
 
-export function isMaterializedReviewResource(
+/** 非 idle 资源：已进入 loader 生命周期，可供 demand/lookahead 覆盖跟踪。 */
+export function isActiveReviewResource(
   resource: GitReviewDocumentResource
 ): boolean {
   return resource.kind !== "idle";
 }
 
 /**
- * 代内粘性 materialized 集合：
- * - 离开 idle 即加入
+ * demand 预取覆盖集合（不是 CodeView 成员集）：
+ * - 离开 idle 即加入，供 lookahead 锚点
  * - 从 index 消失即删除
  * - loader 回到 idle 且不再被 demand/selected/retained 覆盖时，在 allowReclaim 时回收
- * - 导航事务中禁止回收，避免 CodeView 拓扑反复增删导致闪屏
+ * - 导航事务中禁止回收，避免 seed/window 抖动导致重复预取
  * 返回按 index 顺序的稳定数组。
+ *
+ * CodeView 成员始终 = 全量轻量槽；本集合只影响 seed/window/lookahead demand。
  */
-export function nextMaterializedEntryKeys(options: {
+export function nextDemandPrefetchEntryKeys(options: {
   readonly allowReclaim?: boolean;
   readonly demand: ReviewDocumentDemand;
   readonly entryKeysInOrder: readonly string[];
@@ -40,11 +43,11 @@ export function nextMaterializedEntryKeys(options: {
     if (resource === undefined) {
       continue;
     }
-    if (isMaterializedReviewResource(resource)) {
+    if (isActiveReviewResource(resource)) {
       next.add(entryKey);
       continue;
     }
-    // idle：导航中或仍被 demand / selected / retained 保护时保留粘性。
+    // idle：导航中或仍被 demand / selected / retained 保护时保留预取覆盖。
     if (
       !allowReclaim ||
       demanded.has(entryKey) ||
@@ -59,7 +62,7 @@ export function nextMaterializedEntryKeys(options: {
     if (!indexKeys.has(entryKey)) {
       continue;
     }
-    if (isMaterializedReviewResource(resource)) {
+    if (isActiveReviewResource(resource)) {
       next.add(entryKey);
     }
   }

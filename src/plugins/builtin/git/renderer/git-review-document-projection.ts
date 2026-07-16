@@ -21,21 +21,21 @@ import type {
 
 const STATE_PATCH_PATH = "__pier_git_review_state__";
 
-const EMPTY_DOCUMENT_SNAPSHOT: GitReviewDocumentLoaderSnapshot = {
-  retainedEntryKeys: [],
-  resources: [],
-  settled: false,
-};
-
+/**
+ * UI 元状态：不持有完整 document resources。
+ * 真资源只在 GitReviewDocumentGeneration / loader；locale 重投影必须读 controller.snapshot。
+ */
 export interface ReviewDocumentViewState {
   readonly generation: number;
-  readonly snapshot: GitReviewDocumentLoaderSnapshot;
+  readonly retainedEntryKeys: readonly string[];
+  readonly settled: boolean;
   readonly staleRetainedCount: number;
 }
 
 export const EMPTY_DOCUMENT_VIEW_STATE: ReviewDocumentViewState = {
   generation: 0,
-  snapshot: EMPTY_DOCUMENT_SNAPSHOT,
+  retainedEntryKeys: [],
+  settled: false,
   staleRetainedCount: 0,
 };
 
@@ -216,6 +216,12 @@ function statePatch(message: string): string {
   ].join("\n");
 }
 
+export interface ReconciledReviewDocumentSnapshot {
+  readonly generation: number;
+  readonly snapshot: GitReviewDocumentLoaderSnapshot;
+  readonly staleRetainedCount: number;
+}
+
 export function reconcileReviewDocumentSnapshot(
   current: GitReviewDocumentLoaderSnapshot,
   previousByEntryKey: Map<
@@ -224,7 +230,7 @@ export function reconcileReviewDocumentSnapshot(
   >,
   generation: number,
   protectedEntryKey: string | null
-): ReviewDocumentViewState {
+): ReconciledReviewDocumentSnapshot {
   let staleRetainedCount = 0;
   for (const resource of current.resources) {
     if (resource.kind === "loaded") {

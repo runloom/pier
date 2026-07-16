@@ -2,8 +2,8 @@ import type { GitReviewIndexEntry } from "@shared/contracts/git-review.ts";
 import { describe, expect, it } from "vitest";
 import type { GitReviewDocumentResource } from "../../../src/plugins/builtin/git/renderer/git-review-document-resource.ts";
 import {
-  isMaterializedReviewResource,
-  nextMaterializedEntryKeys,
+  isActiveReviewResource,
+  nextDemandPrefetchEntryKeys,
 } from "../../../src/plugins/builtin/git/renderer/git-review-materialization.ts";
 
 function entry(index: number): GitReviewIndexEntry {
@@ -63,10 +63,10 @@ function resourceMap(
   return new Map(items.map((item) => [item.entry.entryKey, item]));
 }
 
-describe("nextMaterializedEntryKeys", () => {
-  it("adds non-idle resources and keeps sticky idle only while demanded/selected/retained", () => {
+describe("nextDemandPrefetchEntryKeys", () => {
+  it("tracks active resources and keeps idle only while demanded/selected/retained", () => {
     const keys = ["entry:0", "entry:1", "entry:2", "entry:3"];
-    const first = nextMaterializedEntryKeys({
+    const first = nextDemandPrefetchEntryKeys({
       demand: {
         bufferedEntryKeys: [],
         visibleEntryKeys: ["entry:0", "entry:1"],
@@ -84,7 +84,7 @@ describe("nextMaterializedEntryKeys", () => {
     });
     expect(first).toEqual(["entry:0", "entry:1"]);
 
-    const reclaimed = nextMaterializedEntryKeys({
+    const reclaimed = nextDemandPrefetchEntryKeys({
       demand: {
         bufferedEntryKeys: [],
         visibleEntryKeys: ["entry:1"],
@@ -102,7 +102,7 @@ describe("nextMaterializedEntryKeys", () => {
     });
     expect(reclaimed).toEqual(["entry:1"]);
 
-    const protectedSelected = nextMaterializedEntryKeys({
+    const protectedSelected = nextDemandPrefetchEntryKeys({
       demand: {
         bufferedEntryKeys: [],
         visibleEntryKeys: [],
@@ -123,7 +123,7 @@ describe("nextMaterializedEntryKeys", () => {
 
   it("blocks reclaim while navigation is pending", () => {
     expect(
-      nextMaterializedEntryKeys({
+      nextDemandPrefetchEntryKeys({
         allowReclaim: false,
         demand: {
           bufferedEntryKeys: [],
@@ -143,7 +143,7 @@ describe("nextMaterializedEntryKeys", () => {
 
   it("drops entries that leave the current index", () => {
     expect(
-      nextMaterializedEntryKeys({
+      nextDemandPrefetchEntryKeys({
         demand: {
           bufferedEntryKeys: [],
           visibleEntryKeys: [],
@@ -158,13 +158,13 @@ describe("nextMaterializedEntryKeys", () => {
   });
 });
 
-describe("isMaterializedReviewResource", () => {
-  it("treats only idle as non-materialized", () => {
-    expect(isMaterializedReviewResource(resource(0, "idle"))).toBe(false);
-    expect(isMaterializedReviewResource(resource(0, "loading"))).toBe(true);
-    expect(isMaterializedReviewResource(resource(0, "loaded"))).toBe(true);
-    expect(isMaterializedReviewResource(resource(0, "error"))).toBe(true);
-    expect(isMaterializedReviewResource(resource(0, "unchanged"))).toBe(true);
-    expect(isMaterializedReviewResource(resource(0, "cancelling"))).toBe(true);
+describe("isActiveReviewResource", () => {
+  it("treats only idle as inactive for demand prefetch", () => {
+    expect(isActiveReviewResource(resource(0, "idle"))).toBe(false);
+    expect(isActiveReviewResource(resource(0, "loading"))).toBe(true);
+    expect(isActiveReviewResource(resource(0, "loaded"))).toBe(true);
+    expect(isActiveReviewResource(resource(0, "error"))).toBe(true);
+    expect(isActiveReviewResource(resource(0, "unchanged"))).toBe(true);
+    expect(isActiveReviewResource(resource(0, "cancelling"))).toBe(true);
   });
 });

@@ -39,7 +39,7 @@ import {
   EMPTY_REVIEW_PROJECTION,
 } from "./git-review-document-ui-state.ts";
 import {
-  nextMaterializedEntryKeys,
+  nextDemandPrefetchEntryKeys,
   sameStringSet,
 } from "./git-review-materialization.ts";
 
@@ -99,9 +99,9 @@ export function useGitReviewDocumentSession(options: {
   readonly seedEntryKeysRef: RefObject<readonly string[]>;
   readonly setProjection: Dispatch<SetStateAction<ReviewDocumentProjection>>;
   readonly setProjectionGeneration: Dispatch<SetStateAction<number>>;
-  readonly setStickyVersion: Dispatch<SetStateAction<number>>;
+  readonly setDemandPrefetchVersion: Dispatch<SetStateAction<number>>;
   readonly setViewState: Dispatch<SetStateAction<ReviewDocumentViewState>>;
-  readonly stickyMaterializedEntryKeysRef: RefObject<ReadonlySet<string>>;
+  readonly demandPrefetchEntryKeysRef: RefObject<ReadonlySet<string>>;
   readonly viewStateRef: RefObject<ReviewDocumentViewState>;
 }): void {
   const {
@@ -128,9 +128,9 @@ export function useGitReviewDocumentSession(options: {
     seedEntryKeysRef,
     setProjection,
     setProjectionGeneration,
-    setStickyVersion,
+    setDemandPrefetchVersion,
     setViewState,
-    stickyMaterializedEntryKeysRef,
+    demandPrefetchEntryKeysRef,
     viewStateRef,
   } = options;
   // 代际 effect 只随 index/scope 重建；refs/setState 故意不进 deps。
@@ -148,7 +148,7 @@ export function useGitReviewDocumentSession(options: {
     const currentEntryKeys = new Set(entryKeysInOrder);
     const seedEntryKeys = gitReviewSeedEntryKeys(entryKeysInOrder);
     seedEntryKeysRef.current = seedEntryKeys;
-    stickyMaterializedEntryKeysRef.current = new Set();
+    demandPrefetchEntryKeysRef.current = new Set();
     currentDemandRef.current = {
       bufferedEntryKeys: [],
       visibleEntryKeys: [],
@@ -224,43 +224,42 @@ export function useGitReviewDocumentSession(options: {
     documentControllerRef.current = controller;
     loader.setRetentionLimits(controller.retentionLimits());
     const initialViewState = controller.initialViewState();
+    // 真资源只在 controller；UI viewState 仅 meta。
+    const initialSnapshot = controller.snapshot(loader.getRetainedEntryKeys());
     // 金标准：代际接受时一次投全量轻量槽；同代只 sparse 正文更新，绝不因 load 改拓扑。
     const initialProjection = projectReviewDocuments(
-      initialViewState.snapshot,
+      initialSnapshot,
       context,
       projectionLocaleRef.current
     );
     const initialResourceByEntryKey = new Map(
-      initialViewState.snapshot.resources.map((resource) => [
+      initialSnapshot.resources.map((resource) => [
         resource.entry.entryKey,
         resource,
       ])
     );
-    stickyMaterializedEntryKeysRef.current = new Set(
-      nextMaterializedEntryKeys({
+    demandPrefetchEntryKeysRef.current = new Set(
+      nextDemandPrefetchEntryKeys({
         demand: {
           bufferedEntryKeys: [],
           visibleEntryKeys: seedEntryKeys,
         },
         entryKeysInOrder,
         previous: new Set(),
-        retainedEntryKeys: new Set(initialViewState.snapshot.retainedEntryKeys),
+        retainedEntryKeys: new Set(initialViewState.retainedEntryKeys),
         resourceByEntryKey: initialResourceByEntryKey,
         selectedEntryKey,
       })
     );
     projectedLocaleRef.current = projectionLocaleRef.current;
-    const lightViewState = {
+    const uiViewState: ReviewDocumentViewState = {
       generation: initialViewState.generation,
-      snapshot: {
-        resources: [],
-        retainedEntryKeys: initialViewState.snapshot.retainedEntryKeys,
-        settled: initialViewState.snapshot.settled,
-      },
+      retainedEntryKeys: initialViewState.retainedEntryKeys,
+      settled: initialViewState.settled,
       staleRetainedCount: initialViewState.staleRetainedCount,
     };
-    viewStateRef.current = lightViewState;
-    setViewState(lightViewState);
+    viewStateRef.current = uiViewState;
+    setViewState(uiViewState);
     setProjection(initialProjection);
     setProjectionGeneration(generation);
     generationCallbacksRef.current.resetGenerationFailures(
@@ -279,30 +278,30 @@ export function useGitReviewDocumentSession(options: {
         resourceByEntryKey.set(resource.entry.entryKey, resource);
       }
       const retainedEntryKeys = loader.getRetainedEntryKeys();
-      // sticky/materialized 只服务 demand/lookahead 与回收启发式，绝不决定 CodeView 成员（成员=全量轻量槽）。
-      const stickyLookup = new Map<string, GitReviewDocumentResource>();
-      for (const entryKey of stickyMaterializedEntryKeysRef.current) {
+      // demand 预取覆盖只服务 seed/window/lookahead；CodeView 成员始终=全量轻量槽。
+      const prefetchLookup = new Map<string, GitReviewDocumentResource>();
+      for (const entryKey of demandPrefetchEntryKeysRef.current) {
         const resource = resourceByEntryKey.get(entryKey);
         if (resource) {
-          stickyLookup.set(entryKey, resource);
+          prefetchLookup.set(entryKey, resource);
         }
       }
       for (const resource of next.changedResources) {
-        stickyLookup.set(resource.entry.entryKey, resource);
+        prefetchLookup.set(resource.entry.entryKey, resource);
       }
-      const stickyKeys = nextMaterializedEntryKeys({
+      const prefetchKeys = nextDemandPrefetchEntryKeys({
         allowReclaim: !generationCallbacksRef.current.hasPendingNavigation(),
         demand: currentDemandRef.current,
         entryKeysInOrder,
-        previous: stickyMaterializedEntryKeysRef.current,
+        previous: demandPrefetchEntryKeysRef.current,
         retainedEntryKeys: new Set(retainedEntryKeys),
-        resourceByEntryKey: stickyLookup,
+        resourceByEntryKey: prefetchLookup,
         selectedEntryKey: protectedKey,
       });
-      const stickySet = new Set(stickyKeys);
-      if (!sameStringSet(stickyMaterializedEntryKeysRef.current, stickySet)) {
-        stickyMaterializedEntryKeysRef.current = stickySet;
-        setStickyVersion((value) => value + 1);
+      const prefetchSet = new Set(prefetchKeys);
+      if (!sameStringSet(demandPrefetchEntryKeysRef.current, prefetchSet)) {
+        demandPrefetchEntryKeysRef.current = prefetchSet;
+        setDemandPrefetchVersion((value) => value + 1);
       }
       // 同代拓扑冻结：只 sparse update 已变化 entry 的正文/占位 cacheKey。
       const itemUpdates = next.changedResources.flatMap(
@@ -332,20 +331,17 @@ export function useGitReviewDocumentSession(options: {
           generationCallbacksRef.current.tryPendingNavigation();
         }
       }
-      const nextViewState = {
+      const nextViewState: ReviewDocumentViewState = {
         generation,
-        snapshot: {
-          resources: [],
-          retainedEntryKeys,
-          settled: next.settled,
-        },
+        retainedEntryKeys,
+        settled: next.settled,
         staleRetainedCount: next.staleRetainedCount,
       };
       const previousViewState = viewStateRef.current;
       viewStateRef.current = nextViewState;
       if (
         previousViewState.generation !== nextViewState.generation ||
-        previousViewState.snapshot.settled !== nextViewState.snapshot.settled ||
+        previousViewState.settled !== nextViewState.settled ||
         previousViewState.staleRetainedCount !==
           nextViewState.staleRetainedCount
       ) {
@@ -369,7 +365,7 @@ export function useGitReviewDocumentSession(options: {
       navigationPending: generationCallbacksRef.current.hasPendingNavigation(),
       seedEntryKeys,
       selectedEntryKey,
-      stickyMaterializedEntryKeys: stickyMaterializedEntryKeysRef.current,
+      demandPrefetchEntryKeys: demandPrefetchEntryKeysRef.current,
       windowDemand,
     });
     currentDemandRef.current = finalDemand;

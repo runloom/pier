@@ -78,12 +78,13 @@ export function gitReviewSeedEntryKeys(
 }
 
 /**
- * 在 demand∩sticky 的最大下标之后，只取紧邻的 lookahead 个槽位中尚未 sticky 的 entry。
- * 不跨过 sticky 向远方扫描，避免有界 look-ahead 退化成全表 drain。
+ * 在 demand∩prefetch 的最大下标之后，只取紧邻的 lookahead 个槽位中尚未 prefetch 的 entry。
+ * 不跨过已覆盖槽位向远方扫描，避免有界 look-ahead 退化成全表 drain。
+ * prefetch 集合只服务 demand，不表示 CodeView 成员。
  */
 export function gitReviewLookaheadEntryKeys(
   entryKeysInOrder: readonly string[],
-  stickyMaterializedEntryKeys: ReadonlySet<string>,
+  demandPrefetchEntryKeys: ReadonlySet<string>,
   demand: ReviewDocumentDemand,
   lookahead: number = GIT_REVIEW_LOOKAHEAD
 ): string[] {
@@ -96,21 +97,21 @@ export function gitReviewLookaheadEntryKeys(
   ]);
   let maxIndex = -1;
   for (const [index, entryKey] of entryKeysInOrder.entries()) {
-    if (demanded.has(entryKey) && stickyMaterializedEntryKeys.has(entryKey)) {
+    if (demanded.has(entryKey) && demandPrefetchEntryKeys.has(entryKey)) {
       maxIndex = index;
     }
   }
   if (maxIndex < 0) {
     return [];
   }
-  // 只看紧邻的 lookahead 个槽位，不跳过 sticky 继续向远方 drain。
+  // 只看紧邻的 lookahead 个槽位，不跳过已覆盖项继续向远方 drain。
   const result: string[] = [];
   for (let offset = 1; offset <= lookahead; offset += 1) {
     const entryKey = entryKeysInOrder[maxIndex + offset];
     if (entryKey === undefined) {
       break;
     }
-    if (!stickyMaterializedEntryKeys.has(entryKey)) {
+    if (!demandPrefetchEntryKeys.has(entryKey)) {
       result.push(entryKey);
     }
   }
@@ -155,14 +156,15 @@ export function composeReviewDocumentDemand(options: {
   readonly navigationPending: boolean;
   readonly selectedEntryKey: string | null;
   readonly seedEntryKeys: readonly string[];
-  readonly stickyMaterializedEntryKeys: ReadonlySet<string>;
+  /** demand 预取覆盖（非 CodeView 成员）。 */
+  readonly demandPrefetchEntryKeys: ReadonlySet<string>;
   readonly windowDemand: ReviewDocumentDemand;
   readonly lookahead?: number;
 }): ReviewDocumentDemand {
-  // lookahead 只跟 Pierre 窗口走，不跟 seed 连锁，避免 sticky 增长无限 drain。
+  // lookahead 只跟 Pierre 窗口走，不跟 seed 连锁，避免预取覆盖无限 drain。
   const lookaheadKeys = gitReviewLookaheadEntryKeys(
     options.entryKeysInOrder,
-    options.stickyMaterializedEntryKeys,
+    options.demandPrefetchEntryKeys,
     options.windowDemand,
     options.lookahead
   );

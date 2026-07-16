@@ -41,6 +41,7 @@ export function useGitReviewLocaleProjection({
     if (!(controller && loader)) {
       return;
     }
+    // 禁止读 UI viewState：完整 resources 只在 controller。
     const snapshot = controller.snapshot(loader.getRetainedEntryKeys());
     if (snapshot.resources.length === 0) {
       return;

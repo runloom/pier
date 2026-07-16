@@ -63,6 +63,7 @@ describe("Git diff renderer governance", () => {
       "packages/ui/src/diff-view-worker.tsx",
       "packages/ui/src/diff-view.tsx",
       "packages/ui/src/use-diff-view-handle.ts",
+      "packages/ui/src/use-diff-view-headers.tsx",
       "packages/ui/src/use-diff-view-item-apply.ts",
     ]);
   });
@@ -212,6 +213,7 @@ describe("Git diff renderer governance", () => {
       const isAdapter = [
         join(ROOT, "packages/ui/src/diff-view.tsx"),
         join(ROOT, "packages/ui/src/use-diff-view-handle.ts"),
+        join(ROOT, "packages/ui/src/use-diff-view-headers.tsx"),
         join(ROOT, "packages/ui/src/use-diff-view-item-apply.ts"),
       ].includes(file);
       if (
@@ -227,6 +229,9 @@ describe("Git diff renderer governance", () => {
     const adapter = [
       reviewSources.get(join(ROOT, "packages/ui/src/diff-view.tsx")),
       reviewSources.get(join(ROOT, "packages/ui/src/use-diff-view-handle.ts")),
+      reviewSources.get(
+        join(ROOT, "packages/ui/src/use-diff-view-headers.tsx")
+      ),
       reviewSources.get(
         join(ROOT, "packages/ui/src/use-diff-view-item-apply.ts")
       ),
@@ -284,7 +289,14 @@ describe("Git diff renderer governance", () => {
       ),
       "utf8"
     );
-    const reviewRuntime = `${reviewContent}\n${projectionCommit}\n${itemReplay}`;
+    const documentSession = await readFile(
+      join(
+        ROOT,
+        "src/plugins/builtin/git/renderer/use-git-review-document-session.ts"
+      ),
+      "utf8"
+    );
+    const reviewRuntime = `${reviewContent}\n${projectionCommit}\n${itemReplay}\n${documentSession}`;
     const reviewPanelLayout = await readFile(
       join(
         ROOT,
@@ -307,19 +319,22 @@ describe("Git diff renderer governance", () => {
     expect(projectionCommit).toContain(
       "itemIdsRef.current = projectionIndex.itemIds;"
     );
-    expect(reviewContent).toContain(
+    expect(documentSession).toContain(
       "itemCacheKeysRef.current.set(item.id, item.cacheKey);"
     );
-    expect(reviewContent).not.toContain("new Map(itemCacheKeysRef.current)");
-    expect(reviewContent).toContain("projectReviewDocumentResource(");
-    expect(reviewContent).toContain(
+    expect(reviewRuntime).not.toContain("new Map(itemCacheKeysRef.current)");
+    expect(documentSession).toContain("projectReviewDocumentResource(");
+    expect(documentSession).toContain(
       "generationCallbacksRef.current.applyItemUpdates("
     );
     expect(itemReplay).toContain("handle.updateItems(items, {");
-    expect(reviewContent).toContain(
+    expect(documentSession).toContain(
       "useEffect(() => {\n    const generation = Math.max("
     );
     expect(reviewContent).not.toContain("diffHandleRef.current = null");
+    // demand 预取覆盖不是 CodeView 成员；全量轻量槽在 projectReviewDocuments。
+    expect(documentSession).toContain("nextDemandPrefetchEntryKeys(");
+    expect(documentSession).toContain("projectReviewDocuments(");
     expect(
       reviewRuntime.match(/entryKeyBySectionIdRef\.current\s*=/gu)
     ).toHaveLength(1);
@@ -364,7 +379,9 @@ describe("Git diff renderer governance", () => {
       },
       {
         command: "git.getReviewFileDocument",
-        consumers: ["src/plugins/builtin/git/renderer/git-review-content.tsx"],
+        consumers: [
+          "src/plugins/builtin/git/renderer/use-git-review-document-session.ts",
+        ],
         method: "getReviewFileDocument",
         service: "getFileDocument",
       },
@@ -372,7 +389,7 @@ describe("Git diff renderer governance", () => {
         command: "git.cancelReviewRequest",
         consumers: [
           "src/plugins/builtin/git/renderer/git-changes-panel.tsx",
-          "src/plugins/builtin/git/renderer/git-review-content.tsx",
+          "src/plugins/builtin/git/renderer/use-git-review-document-session.ts",
         ],
         method: "cancelReviewRequest",
         service: "cancelReviewRequest",

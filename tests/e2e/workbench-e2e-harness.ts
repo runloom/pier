@@ -67,13 +67,14 @@ export async function setWindowSize(
   width: number,
   height: number
 ): Promise<void> {
+  // 目标是 content size（window.inner*）。outer setSize 在 macOS 会扣掉 title bar。
   const windowId = await app.evaluate(
     ({ BaseWindow }, size) => {
       const targetWindow = BaseWindow.getAllWindows()[0];
       if (!targetWindow) {
         throw new Error("Expected Pier BaseWindow before resizing");
       }
-      targetWindow.setSize(size.width, size.height);
+      targetWindow.setContentSize(size.width, size.height);
       return targetWindow.id;
     },
     { height, width }
