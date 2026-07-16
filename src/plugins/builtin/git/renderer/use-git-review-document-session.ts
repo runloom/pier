@@ -320,6 +320,29 @@ export function useGitReviewDocumentSession(options: {
         generationCallbacksRef.current.notifyProjectionChanged(
           itemUpdates.map((item) => item.id)
         );
+        // 稀疏正文必须回写 React projection。否则 CodeView remount /
+        // 虚拟化重建只会看到代际初的 placeholder，刷新失败后正文“消失”。
+        setProjection((previous) => {
+          if (previous.items.length === 0) {
+            return previous;
+          }
+          const byId = new Map(itemUpdates.map((item) => [item.id, item]));
+          let changed = false;
+          const items = previous.items.map((item) => {
+            const next = byId.get(item.id);
+            if (!next || next.cacheKey === item.cacheKey) {
+              return item;
+            }
+            changed = true;
+            return next;
+          });
+          return changed
+            ? {
+                entryKeyBySectionId: previous.entryKeyBySectionId,
+                items,
+              }
+            : previous;
+        });
         const handle = diffHandleRef.current;
         if (handle && committedProjectionGenerationRef.current === generation) {
           generationCallbacksRef.current.applyItemUpdates(

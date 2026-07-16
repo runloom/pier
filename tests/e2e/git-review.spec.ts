@@ -1270,7 +1270,10 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         /Failed to refresh changes|刷新变更失败/u
       );
       await expect(refreshFailure).toBeVisible({ timeout: 30_000 });
-      // 刷新失败不得丢掉已加载正文；不依赖“再点已选中行”的 selection 语义。
+      // 刷新失败不得丢掉已加载正文。用换选强制 scroll，避免仅靠已选中 re-click。
+      const nearby = page.getByRole("treeitem", { name: /file-1999\.ts/u });
+      await nearby.click();
+      await target.click();
       await expect
         .poll(
           () =>
@@ -1281,20 +1284,12 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
                   (host.shadowRoot?.textContent ?? "").includes("value2000")
                 )
               ),
-          { timeout: 10_000 }
+          { timeout: 30_000 }
         )
         .toBe(true);
-      await page.evaluate(() => {
-        for (const host of document.querySelectorAll("diffs-container")) {
-          if ((host.shadowRoot?.textContent ?? "").includes("value2000")) {
-            host.scrollIntoView({ block: "center" });
-            return;
-          }
-        }
-      });
       await expect
         .poll(() => isDiffTextInViewport(page, "value2000"), {
-          timeout: 10_000,
+          timeout: 15_000,
         })
         .toBe(true);
 
