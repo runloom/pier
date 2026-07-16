@@ -59,13 +59,27 @@ const electronMock = vi.hoisted(() => {
 
 const focusFeedback = vi.hoisted(() => ({
   broadcastAgentRuntimeFocusFeedback: vi.fn(),
+  broadcastSystemNotificationPermissionChanged: vi.fn(),
 }));
 
 vi.mock("electron", () => ({
   Notification: electronMock.MockNotification,
+  app: {
+    focus: vi.fn(),
+    hide: vi.fn(),
+    isPackaged: true,
+  },
+  shell: { openExternal: vi.fn(async () => undefined) },
 }));
 
 vi.mock("@main/app-core/window-broadcasts.ts", () => focusFeedback);
+
+vi.mock("@main/windows/window-manager.ts", () => ({
+  windowManager: {
+    getAll: () => [],
+    getFocused: () => null,
+  },
+}));
 
 import { registerNotificationIpc } from "@main/ipc/notification.ts";
 import { resetSystemNotificationPermissionStateForTests } from "@main/services/system-notification.ts";
@@ -119,7 +133,7 @@ describe("notification IPC", () => {
     });
 
     expect(electronMock.constructed).toEqual([
-      { body: "Rebase finished", title: "Pier" },
+      { body: "Rebase finished", silent: false, title: "Pier" },
     ]);
     expect(electronMock.show).toHaveBeenCalledTimes(1);
     expect(result).toEqual({ shown: true });
@@ -130,7 +144,9 @@ describe("notification IPC", () => {
 
     await handler({} as IpcMainInvokeEvent, { title: "Pier" });
 
-    expect(electronMock.constructed).toEqual([{ title: "Pier" }]);
+    expect(electronMock.constructed).toEqual([
+      { silent: false, title: "Pier" },
+    ]);
   });
 
   it("reports shown=false without constructing when unsupported", async () => {

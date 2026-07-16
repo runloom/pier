@@ -5,7 +5,10 @@ import type {
 import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
-import type { SystemNotificationUnavailableReason } from "@shared/contracts/notification.ts";
+import type {
+  SystemNotificationPermissionSnapshot,
+  SystemNotificationUnavailableReason,
+} from "@shared/contracts/notification.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
@@ -97,4 +100,13 @@ export function broadcastAgentAttentionDegraded(payload: {
   reason: SystemNotificationUnavailableReason;
 }): void {
   broadcastToAllWindows(PIER_BROADCAST.AGENT_ATTENTION_DEGRADED, payload);
+}
+
+export function broadcastSystemNotificationPermissionChanged(
+  snapshot: SystemNotificationPermissionSnapshot
+): void {
+  broadcastToAllWindows(
+    PIER_BROADCAST.SYSTEM_NOTIFICATION_PERMISSION_CHANGED,
+    snapshot
+  );
 }

@@ -71,6 +71,8 @@ const DROID_SPEC: NestedJsonIntegrationSpec = {
   ],
 };
 
+export const DROID_HOOK_EVENTS = DROID_SPEC.events;
+
 const droidBase = createNestedJsonIntegration(DROID_SPEC);
 
 export const droidIntegration: typeof droidBase = {

@@ -43,6 +43,8 @@ const CLAUDE_SPEC: NestedJsonIntegrationSpec = {
   ],
 };
 
+export const CLAUDE_HOOK_EVENTS = CLAUDE_SPEC.events;
+
 export const claudeIntegration = createNestedJsonIntegration(CLAUDE_SPEC);
 
 /** 兼容导出（既有测试/调用方使用；语义与工厂一致）。 */

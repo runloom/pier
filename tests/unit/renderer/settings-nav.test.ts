@@ -23,6 +23,7 @@ describe("settings navigation metadata", () => {
       "environment",
       "keybindings",
       "agents",
+      "notifications",
       "plugins",
       "updates",
     ]);

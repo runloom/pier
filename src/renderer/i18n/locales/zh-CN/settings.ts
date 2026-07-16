@@ -12,6 +12,7 @@ export const settings = {
     updates: "更新",
     workspace: "工作区",
     agents: "智能体",
+    notifications: "通知",
     pluginGroup: "插件设置",
   },
   section: {
@@ -24,6 +25,7 @@ export const settings = {
     updates: "更新",
     workspace: "工作区",
     agents: "智能体",
+    notifications: "通知",
   },
   environment: {
     addEnvironment: "添加环境设置",
@@ -400,7 +402,49 @@ export const settings = {
     statusHooks: {
       label: "Agent 状态感知",
       description:
-        "面板实时显示 Claude Code 运行/等待状态（经 ~/.claude/settings.json 状态上报 hook）。关闭将移除 Pier 安装的 hook 并停止重装",
+        "面板实时显示 agent 运行/等待状态（经状态上报 hook）。关闭将卸载 Pier hook 并停止重装；不会出现 Needs you 系统通知。已在运行的会话可能仍上报，重开后完全生效",
+      failed: "无法更新 Agent 状态感知",
+    },
+  },
+  notifications: {
+    enabled: "启用系统通知",
+    enabledDesc:
+      "智能体需要你时通过本机系统通知提醒（关闭后标题栏计数仍更新）。",
+    waitingHint: "需要确认（waiting）：跟随上方总开关。",
+    error: "出错时通知",
+    errorDesc: "智能体进入错误状态时也发送系统通知。默认关闭。",
+    suppress: "专注时抑制",
+    suppressDesc: "目标智能体面板已聚焦时不发送系统通知。",
+    cooldownLabel: "同一智能体冷却",
+    cooldownDesc: "同一智能体面板两次系统通知之间的最短间隔。",
+    cooldown: {
+      "60000": "1 分钟",
+      "180000": "3 分钟",
+      "600000": "10 分钟",
+    },
+    sendTest: "发送测试通知",
+    openSystemSettings: "打开系统设置",
+    testSent: "已发送测试通知",
+    testFailed: "测试通知失败",
+    testFailedShort: "无法展示测试通知",
+    testFailedDetail:
+      "无法投递系统通知（{{reason}}）。请到「系统设置 → 通知」允许本应用，然后重试。",
+    testHint: "成功表示已交给系统。前台可能看不到横幅，可到通知中心确认。",
+    openSettingsFailed: "无法打开系统设置",
+    openSettingsManual:
+      "请手动打开系统通知设置并为 Pier 开启允许，然后发送测试通知验证。",
+    saveFailed: "无法保存通知设置",
+    hooksOffTitle: "Agent 状态感知已关闭",
+    hooksOffBody:
+      "关闭后不会出现 Needs you 系统通知。已在运行的智能体会话可能仍会上报，重开会话后完全生效。",
+    permission: {
+      deniedTitle: "系统通知未授权",
+      deniedBody: "请在系统设置中为 Pier 开启通知，然后发送测试通知验证。",
+      unsupportedTitle: "系统不支持通知",
+      unsupportedBody:
+        "当前环境无法展示系统通知。请使用标题栏 Needs you 计数与智能体列表。",
+      unknownTitle: "尚未确认通知权限",
+      unknownBody: "发送测试通知以检查 Pier 能否投递系统提醒。",
     },
   },
 } as const;

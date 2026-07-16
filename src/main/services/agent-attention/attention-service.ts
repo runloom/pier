@@ -34,6 +34,7 @@ export interface CreateAgentAttentionServiceArgs {
   isTargetPanelFocused(electronWindowId: string, panelId: string): boolean;
   now?(): number;
   resolveLocale?(): AttentionUiLocale | Promise<AttentionUiLocale>;
+  /** 同步读取当前策略（main 缓存）；禁止在此做异步 IO。 */
   settings?(): AgentAttentionSettings;
   showNotification(
     request: SystemNotificationRequest
@@ -55,7 +56,8 @@ function agentStatusMap(
   return map;
 }
 
-function shouldTriggerForStatus(
+/** 触发集 T：waiting 恒在；error 仅当 enableErrorAttention。 */
+function inTriggerSet(
   status: ActivityStatus | undefined,
   settings: AgentAttentionSettings
 ): boolean {
@@ -65,15 +67,16 @@ function shouldTriggerForStatus(
   return settings.enableErrorAttention && status === "error";
 }
 
+/**
+ * 仅当 previous ∉ T 且 next ∈ T 时进入候选（非 previous !== next）。
+ * waiting↔error 同属 T 时不重复通知。
+ */
 function enteredAttention(
   previous: ActivityStatus | undefined,
   next: ActivityStatus | undefined,
   settings: AgentAttentionSettings
 ): boolean {
-  if (!shouldTriggerForStatus(next, settings)) {
-    return false;
-  }
-  return previous !== next;
+  return !inTriggerSet(previous, settings) && inTriggerSet(next, settings);
 }
 
 export function createAgentAttentionService({
@@ -91,6 +94,10 @@ export function createAgentAttentionService({
     },
     async observe(previous, next) {
       const prefs = settings();
+      if (!prefs.enabled) {
+        return;
+      }
+
       const prevMap = previous
         ? agentStatusMap(previous.activities)
         : new Map<string, ActivityStatus | undefined>();
@@ -106,7 +113,10 @@ export function createAgentAttentionService({
           continue;
         }
 
-        if (isTargetPanelFocused(activity.windowId, activity.panelId)) {
+        if (
+          prefs.suppressWhenFocused &&
+          isTargetPanelFocused(activity.windowId, activity.panelId)
+        ) {
           log.debug("skip notify: target panel focused", { agentRef });
           continue;
         }

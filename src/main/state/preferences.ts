@@ -1,5 +1,6 @@
 import { join } from "node:path";
 import { resolvePermissionMode } from "@shared/contracts/agent.ts";
+import { DEFAULT_AGENT_ATTENTION_SETTINGS } from "@shared/contracts/agent-attention.ts";
 import {
   DEFAULT_APP_QUIT_CONFIRMATION_MODE,
   DEFAULT_GIT_AUTO_FETCH_ENABLED,
@@ -48,6 +49,7 @@ const DEFAULTS: ProjectPreferences = {
   agentCommandOverrides: {},
   worktreeRootPath: "",
   agentStatusHooks: true,
+  agentAttention: { ...DEFAULT_AGENT_ATTENTION_SETTINGS },
   gitAutoFetchEnabled: DEFAULT_GIT_AUTO_FETCH_ENABLED,
   gitAutoFetchIntervalMinutes: DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
 };

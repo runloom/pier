@@ -42,6 +42,10 @@ export const PIER = {
   AGENT_RUNTIME_INDEX_LIST: "pier://agent-runtime-index:list",
   AGENT_RUNTIME_INDEX_FOCUS: "pier://agent-runtime-index:focus",
   AGENT_RUNTIME_INDEX_FOCUS_WAITING: "pier://agent-runtime-index:focusWaiting",
+  // 系统通知：权限快照 / 测试 / 打开系统设置
+  SYSTEM_NOTIFICATION_PERMISSION: "pier://notification:permission",
+  SYSTEM_NOTIFICATION_TEST: "pier://notification:test",
+  SYSTEM_NOTIFICATION_OPEN_SETTINGS: "pier://notification:open-settings",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -106,6 +110,9 @@ export const PIER_BROADCAST = {
   AGENT_RUNTIME_FOCUS_FEEDBACK: "pier://agent-runtime-index:focus-feedback",
   // Attention 系统通知不可用（权限拒绝等）；payload { reason }
   AGENT_ATTENTION_DEGRADED: "pier://agent-attention:degraded",
+  // 系统通知权限探针快照变化；payload SystemNotificationPermissionSnapshot
+  SYSTEM_NOTIFICATION_PERMISSION_CHANGED:
+    "pier://notification:permission-changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];
