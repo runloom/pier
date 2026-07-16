@@ -30,6 +30,7 @@ export interface GitExecExecutionBudget {
   failureReason(): "output-limit" | "timeout" | null;
   remainingTimeMs(): number;
   readonly signal: AbortSignal;
+  trackDetachedOperation?(operation: Promise<unknown>): void;
 }
 
 interface GitExecRawOptionsBase {
@@ -49,14 +50,21 @@ export interface GitExecRawCollectOptions extends GitExecRawOptionsBase {
 
 export interface GitExecRawStreamOptions extends GitExecRawOptionsBase {
   maxRecordBytes?: number;
-  maxRecords?: number;
+  /** null 表示只受聚合输出字节、单 record 字节和期限约束。 */
+  maxRecords?: number | null;
   mode: "stream";
   onRecord: (record: Buffer) => GitExecRecordDecision;
 }
 
+export interface GitExecRawChunkOptions extends GitExecRawOptionsBase {
+  mode: "chunks";
+  onStdoutChunk: (chunk: Buffer) => void;
+}
+
 export type GitExecRawOptions =
   | GitExecRawCollectOptions
-  | GitExecRawStreamOptions;
+  | GitExecRawStreamOptions
+  | GitExecRawChunkOptions;
 
 interface GitExecRawResultBase {
   stderrBytes: number;
@@ -76,6 +84,9 @@ export type GitExecRawResult =
   | (GitExecRawResultBase & {
       completeRecords: number;
       kind: "truncated";
+    })
+  | (GitExecRawResultBase & {
+      kind: "consumed";
     });
 
 export interface CreateExecGitRawOptions {

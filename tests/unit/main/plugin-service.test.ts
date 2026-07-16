@@ -160,13 +160,15 @@ describe("pluginManifestSchema", () => {
     ]);
   });
 
-  it("Git 插件禁用变更面板后不再申请 panel 权限", () => {
+  it("Git 插件为变更树和 diff 面板申请 panel 权限", () => {
     expect(collectEffectivePermissions(GIT_PLUGIN_MANIFEST)).toEqual([
       "environment:read",
       "workspace:open",
       "worktree:read",
       "worktree:write",
+      "panel:open",
       "command:register",
+      "panel:register",
       "git:read",
       "git:write",
       "ai:invoke",

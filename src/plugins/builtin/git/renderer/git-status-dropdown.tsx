@@ -22,6 +22,7 @@ import {
   GitPullRequestClosed,
   type LucideIcon,
   RefreshCw,
+  SquareSplitHorizontal,
   Upload,
 } from "lucide-react";
 import type React from "react";
@@ -47,6 +48,7 @@ const ACTION_ICONS: Record<GitStatusDropdownActionId, LucideIcon> = {
   switchBranch: GitBranch,
   switchWorktree: FolderGit,
   syncChanges: RefreshCw,
+  viewChanges: SquareSplitHorizontal,
 };
 
 const ACTION_LABELS: Record<
@@ -72,6 +74,10 @@ const ACTION_LABELS: Record<
   syncChanges: {
     fallback: "Sync Changes",
     key: "statusDropdownSync",
+  },
+  viewChanges: {
+    fallback: "View Changes",
+    key: "statusDropdownViewChanges",
   },
 };
 
@@ -216,10 +222,12 @@ function SummaryLine({
 export function GitStatusDropdown({
   children,
   model,
+  onViewChanges,
   pluginContext,
 }: {
   children: React.ReactElement;
   model: GitStatusDropdownModel;
+  onViewChanges: () => void;
   pluginContext: RendererPluginContext;
 }): React.ReactElement {
   const [open, setOpen] = useState(false);
@@ -228,6 +236,10 @@ export function GitStatusDropdown({
   const variantLabel = STATUS_LABELS[model.variant];
   const onRun = (actionId: GitStatusDropdownActionId): void => {
     setOpen(false);
+    if (actionId === "viewChanges") {
+      onViewChanges();
+      return;
+    }
     runGitStatusDropdownAction({
       actionId,
       model,

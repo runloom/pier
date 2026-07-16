@@ -17,7 +17,6 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitStatus } from "@shared/contracts/git.ts";
 import { SearchX } from "lucide-react";
 import {
-  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
   useCallback,
@@ -62,10 +61,6 @@ import { useFilesTreeSearch } from "./use-files-tree-search.ts";
 import { useFilesTreeVisibility } from "./use-files-tree-visibility.ts";
 
 const TREE_DOUBLE_CLICK_WINDOW_MS = 400;
-const FILES_TREE_STYLE: CSSProperties & {
-  "--trees-padding-inline-override": string;
-} = { "--trees-padding-inline-override": "4px" };
-
 export function FileTreeSidebar({
   activeFilePath,
   context,
@@ -88,12 +83,10 @@ export function FileTreeSidebar({
     watchHub,
     treeVisibility.list
   );
-  // Git 装饰:变更染色(getStatus + git.watch 增量) + ignored 变暗(listIgnored)。
   const [gitDecorations, setGitDecorations] = useState<FilesGitDecorations>(
     EMPTY_GIT_DECORATIONS
   );
   useEffect(() => {
-    // git namespace 是可缺失能力(无 git:read 的宿主/测试环境):树退化为无染色。
     const gitApi = (context as Partial<RendererPluginContext>).git;
     if (!gitApi?.getStatus) {
       return;
@@ -141,9 +134,7 @@ export function FileTreeSidebar({
           refresh();
         }
       });
-    } catch {
-      // 非 git 目录/watch 能力缺失:保留一次性染色。
-    }
+    } catch {}
     return () => {
       disposed = true;
       unsubscribe();
@@ -154,7 +145,6 @@ export function FileTreeSidebar({
     () =>
       [...snapshot.entriesByPath.values()].map((entry) => {
         const item = toTreeItem(entry);
-        // 变更状态优先于 ignored(ignored 路径不会出现在 status 里,但保守起见)。
         const gitStatus =
           gitDecorations.changedByPath.get(entry.path) ??
           ignoredStatusFor(entry.path, gitDecorations);
@@ -216,8 +206,6 @@ export function FileTreeSidebar({
     [context, root, t, treeVisibility]
   );
 
-  // 拖拽/inline rename 共用的真实 fs move + 级联;失败刷新树回滚视觉状态。
-  // 成功后 toast 提供「撤销」= 反向 move(撤销本身不再叠加 toast,防循环)。
   const performMove = useCallback(
     async (from: string, to: string, options?: { silent?: boolean }) => {
       try {
@@ -409,7 +397,6 @@ export function FileTreeSidebar({
         onSelectPaths={handleSelectPaths}
         revealPath={activeFilePath ?? null}
         stickyFolders
-        style={FILES_TREE_STYLE}
         treeApiRef={treeSearch.attachTreeApi}
       />
     );
@@ -420,6 +407,16 @@ export function FileTreeSidebar({
     treeSearchMatchText = treeSearch.loading
       ? t("filePanel.tree.searching", "Searching…")
       : String(treeSearch.matchCount);
+  }
+  let treeSearchMatchAnnouncement = "";
+  if (treeSearch.loading) {
+    treeSearchMatchAnnouncement = treeSearchMatchText;
+  } else if (treeSearch.matchCount > 0) {
+    treeSearchMatchAnnouncement = t(
+      "filePanel.search.matchAnnouncement",
+      "Matches: {{count}}",
+      { count: treeSearch.matchCount }
+    );
   }
   const searchHasNoResults =
     snapshot.rootLoaded &&
@@ -453,6 +450,7 @@ export function FileTreeSidebar({
               placeholder: t("panel.tree.search", "Find in tree"),
               previous: t("filePanel.search.previous", "Previous match"),
             }}
+            matchAnnouncement={treeSearchMatchAnnouncement}
             matchText={treeSearchMatchText}
             navigationDisabled={searchActionsDisabled}
             onChange={treeSearch.changeSearch}

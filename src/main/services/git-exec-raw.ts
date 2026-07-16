@@ -315,6 +315,19 @@ export function createExecGitRaw({
           stdoutChunks.push(Buffer.from(chunk));
           return;
         }
+        if (options.mode === "chunks") {
+          try {
+            options.onStdoutChunk(chunk);
+          } catch (error) {
+            fail(
+              "record-consumer",
+              `Git stdout consumer 失败: ${
+                error instanceof Error ? error.message : String(error)
+              }`
+            );
+          }
+          return;
+        }
         try {
           parser?.push(chunk, (record) => {
             completeRecords += 1;
@@ -331,8 +344,13 @@ export function createExecGitRaw({
               return false;
             }
             const maxRecords =
-              options.maxRecords ?? GIT_EXEC_DEFAULT_MAX_NUL_RECORDS;
-            if (decision === "stop" || completeRecords >= maxRecords) {
+              options.maxRecords === null
+                ? null
+                : (options.maxRecords ?? GIT_EXEC_DEFAULT_MAX_NUL_RECORDS);
+            if (
+              decision === "stop" ||
+              (maxRecords !== null && completeRecords >= maxRecords)
+            ) {
               stopped = true;
               forceKill("SIGTERM");
               return false;
@@ -418,6 +436,15 @@ export function createExecGitRaw({
             resolve({
               completeRecords,
               kind: "streamed",
+              stderrBytes,
+              stderrTail: stderrTail.toBuffer(),
+              stdoutBytes,
+            });
+            return;
+          }
+          if (options.mode === "chunks") {
+            resolve({
+              kind: "consumed",
               stderrBytes,
               stderrTail: stderrTail.toBuffer(),
               stdoutBytes,

@@ -54,7 +54,10 @@ export function getGitExecConfigurationError(
       "maxRecordBytes",
       options.mode === "stream" ? options.maxRecordBytes : undefined,
     ],
-    ["maxRecords", options.mode === "stream" ? options.maxRecords : undefined],
+    [
+      "maxRecords",
+      options.mode === "stream" ? (options.maxRecords ?? undefined) : undefined,
+    ],
   ];
   for (const [name, value] of positiveLimits) {
     if (value !== undefined && !(Number.isSafeInteger(value) && value > 0)) {
@@ -74,10 +77,18 @@ export function getGitExecConfigurationError(
   }
   if (
     options.mode === "stream" &&
+    options.maxRecords !== null &&
     (options.maxRecords ?? GIT_EXEC_DEFAULT_MAX_NUL_RECORDS) >
       GIT_EXEC_HARD_MAX_NUL_RECORDS
   ) {
     return `maxRecords 不得超过 ${GIT_EXEC_HARD_MAX_NUL_RECORDS}`;
+  }
+  if (
+    options.mode === "stream" &&
+    options.maxRecords === null &&
+    options.budget === undefined
+  ) {
+    return "maxRecords=null 必须提供聚合执行预算";
   }
   if (
     options.timeoutMs !== undefined &&

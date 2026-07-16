@@ -22,6 +22,7 @@ import {
   gitStashPopOptionsSchema,
   listBranchesOptionsSchema,
 } from "./git.ts";
+import { gitReviewCommandSchemas } from "./git-review.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
 import {
   appRelaunchCommandSchema,
@@ -259,6 +260,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   ...fileCommandSchemas,
   // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
   z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),
+  ...gitReviewCommandSchemas,
   z.object({ type: z.literal("git.listIgnored"), cwd: z.string().min(1) }),
   z.object({ type: z.literal("git.getRepoInfo"), cwd: z.string().min(1) }),
   z.object({

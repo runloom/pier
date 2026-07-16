@@ -333,6 +333,7 @@ export function FilesGroupView({
   if (outsideWorkspace && selectedSource) {
     center = (
       <FilePanelBreadcrumb
+        ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
         segments={breadcrumbSegmentsForSource(selectedSource, projectName)}
       />
     );
@@ -385,6 +386,7 @@ export function FilesGroupView({
     };
     center = (
       <FilePanelBreadcrumb
+        ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
         onSegmentClick={handleBreadcrumbClick}
         segments={breadcrumbSegmentsForSource(selectedSource, projectName)}
       />
@@ -435,6 +437,7 @@ export function FilesGroupView({
           trailing={trailing}
         />
       }
+      onSidebarAutoCollapse={() => setTreeCollapsed(true)}
       sidebar={sidebar}
     >
       {body}

@@ -107,6 +107,53 @@ describe("PierFileTree", () => {
     expect(bridge?.firstElementChild).toBe(host);
   });
 
+  it("keeps navigation-only trees free of rename and drag capabilities", () => {
+    const treeApi = { current: null as PierFileTreeApi | null };
+    const { container } = render(
+      <PierFileTree
+        items={[{ kind: "file", path: "README.md" }]}
+        label="Project files"
+        treeApiRef={treeApi}
+      />
+    );
+
+    const readme = within(getFileTree(container)).getByRole("treeitem", {
+      name: README_NAME_PATTERN,
+    });
+    expect(readme).not.toHaveAttribute("draggable", "true");
+    expect(treeApi.current?.startRenaming("README.md")).toBe(false);
+  });
+
+  it("reveals and selects an external active path without reopening it", async () => {
+    const onOpenPath = vi.fn();
+    const { container } = render(
+      <PierFileTree
+        items={items}
+        label="Project files"
+        onOpenPath={onOpenPath}
+        revealPath="README.md"
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: README_NAME_PATTERN,
+          selected: true,
+        })
+      ).toBeVisible();
+    });
+    expect(onOpenPath).not.toHaveBeenCalled();
+
+    fireEvent.click(
+      within(getFileTree(container)).getByRole("treeitem", {
+        name: APP_TSX_NAME_PATTERN,
+      })
+    );
+    expect(onOpenPath).toHaveBeenCalledOnce();
+    expect(onOpenPath).toHaveBeenCalledWith("src/app.tsx");
+  });
+
   it("keeps scrolling on the official shadow scroller instead of the wrapper host", () => {
     const { container } = render(
       <PierFileTree items={items} label="Project files" />

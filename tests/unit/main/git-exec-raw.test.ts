@@ -130,6 +130,48 @@ describe("createExecGitRaw", () => {
     });
   });
 
+  it("chunks 模式逐块消费 stdout 且不累计正文", async () => {
+    const child = new FakeChild();
+    const { exec } = createRawFor(child);
+    const chunks: Buffer[] = [];
+    const pending = exec(["diff"], {
+      cwd: "/repo",
+      mode: "chunks",
+      onStdoutChunk: (chunk) => chunks.push(Buffer.from(chunk)),
+    });
+
+    child.stdout.emit("data", Buffer.from("first"));
+    child.stdout.emit("data", Buffer.from("second"));
+    child.emit("close", 0);
+
+    expect(chunks).toEqual([Buffer.from("first"), Buffer.from("second")]);
+    await expect(pending).resolves.toMatchObject({
+      kind: "consumed",
+      stdoutBytes: 11,
+    });
+  });
+
+  it("chunks consumer 失败后立即终止 Git 并停止后续回调", async () => {
+    const child = new FakeChild();
+    const { exec } = createRawFor(child);
+    const consumer = vi.fn(() => {
+      throw new Error("invalid patch envelope");
+    });
+    const pending = exec(["diff"], {
+      cwd: "/repo",
+      mode: "chunks",
+      onStdoutChunk: consumer,
+    });
+
+    child.stdout.emit("data", Buffer.from("invalid"));
+    child.stdout.emit("data", Buffer.from("late"));
+    child.emit("close", null);
+
+    expect(child.killed).toEqual(["SIGTERM"]);
+    expect(consumer).toHaveBeenCalledOnce();
+    expect((await rawError(pending)).causeKind).toBe("record-consumer");
+  });
+
   it("拒绝 EOF 半条 record", async () => {
     const child = new FakeChild();
     const { exec } = createRawFor(child);
@@ -294,7 +336,7 @@ describe("createExecGitRaw", () => {
     secondChild.emit("close", null);
 
     expect((await rawError(second)).causeKind).toBe("output-limit");
-    expect(budget.snapshot().outputBytes).toBe(6);
+    expect(budget.failureReason()).toBe("output-limit");
   });
 
   it("启动前取消不 spawn，运行中取消关闭 stdin 并只结算一次", async () => {
@@ -563,6 +605,51 @@ describe("createExecGitRaw", () => {
 
     await expect(promise).resolves.toMatchObject({ kind: "streamed" });
     expect(spawn).toHaveBeenCalledOnce();
+  });
+
+  it("只有聚合执行预算可以显式取消 record 数量门", async () => {
+    const rejectedSpawn = vi.fn();
+    const rejectedExec = createExecGitRaw({
+      spawn:
+        rejectedSpawn as unknown as typeof import("node:child_process").spawn,
+    });
+    expect(
+      (
+        await rawError(
+          rejectedExec(["status"], {
+            cwd: "/repo",
+            maxRecords: null,
+            mode: "stream",
+            onRecord: () => "continue",
+          })
+        )
+      ).causeKind
+    ).toBe("configuration");
+    expect(rejectedSpawn).not.toHaveBeenCalled();
+
+    const child = new FakeChild();
+    const { exec } = createRawFor(child);
+    const budget = new GitReviewBudget();
+    let recordCount = 0;
+    const pending = exec(["status", "-z"], {
+      budget,
+      cwd: "/repo",
+      maxRecords: null,
+      mode: "stream",
+      onRecord: () => {
+        recordCount += 1;
+        return "continue";
+      },
+    });
+    child.stdout.emit("data", Buffer.from("x\0".repeat(8200)));
+    child.emit("close", 0);
+
+    await expect(pending).resolves.toMatchObject({
+      completeRecords: 8200,
+      kind: "streamed",
+    });
+    expect(recordCount).toBe(8200);
+    budget.dispose();
   });
 
   it("signal 与 budget 共享时保留 typed budget failure", async () => {

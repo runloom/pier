@@ -4,28 +4,21 @@ import {
   GIT_REVIEW_STATUS_PRIORITY,
   type GitReviewGroup,
   type GitReviewIndexEntry,
-  type GitReviewResolvedQuery,
   type GitReviewWarning,
   gitReviewIndexEntrySchema,
 } from "../../../shared/contracts/git-review.ts";
 import {
-  GIT_REVIEW_INDEX_ENTRY_LIMIT,
-  GIT_REVIEW_RENAME_LIMIT,
-  type GitReviewIndexExecutionBudget,
-  GitReviewIndexExecutionError,
+  GIT_REVIEW_INDEX_TREE_MAX_SEGMENTS,
   type GitReviewIndexGroupFact,
   type GitReviewIndexPrimaryParseResult,
   GitReviewIndexProtocolError,
-  type GitReviewIndexStatEntry,
   type GitReviewIndexStatParseResult,
 } from "./git-review-index-contract.ts";
 import { GitReviewRecordDigest } from "./git-review-index-protocol.ts";
+import { createGitReviewSectionKey } from "./git-review-section-key.ts";
 
-export interface AssembleGitReviewIndexOptions {
-  readonly budget: GitReviewIndexExecutionBudget;
+interface AssembleGitReviewIndexOptions {
   readonly primary: GitReviewIndexPrimaryParseResult;
-  readonly query: GitReviewResolvedQuery;
-  readonly renameDetectionLimited: boolean;
   readonly statsByGroup: Readonly<
     Partial<Record<GitReviewGroup, GitReviewIndexStatParseResult>>
   >;
@@ -60,30 +53,12 @@ interface SortableEntry {
 }
 
 export function assembleGitReviewIndex({
-  budget,
   primary,
-  query,
-  renameDetectionLimited,
   statsByGroup,
 }: AssembleGitReviewIndexOptions): AssembledGitReviewIndex {
-  const allowedGroups = allowedGroupsForQuery(query);
   const allGroups = new Set<GitReviewGroup>(GIT_REVIEW_GROUP_ORDER);
-  const allMerged =
-    query.kind === "uncommitted"
-      ? mergePrimaryEntries(primary, allGroups, query)
-      : null;
-  const sourceFilesTruncated =
-    primary.truncated ||
-    (allMerged !== null && allMerged.size > GIT_REVIEW_INDEX_ENTRY_LIMIT);
-  const merged =
-    allMerged !== null &&
-    query.kind === "uncommitted" &&
-    query.groups.length === 2
-      ? allMerged
-      : mergePrimaryEntries(primary, allowedGroups, query);
+  const merged = mergePrimaryEntries(primary, allGroups);
 
-  const statMaps = createStatMaps(statsByGroup, merged);
-  let statsUnavailable = 0;
   const sortable: SortableEntry[] = [];
   for (const mergedEntry of merged.values()) {
     const groups = GIT_REVIEW_GROUP_ORDER.filter(
@@ -93,10 +68,6 @@ export function assembleGitReviewIndex({
       Record<GitReviewGroup, GitReviewIndexEntry["status"]>
     > = {};
     const oldPaths: string[] = [];
-    let additions = 0;
-    let deletions = 0;
-    let hasCompleteNumericStats = true;
-    let entryStatsMissing = false;
     for (const group of groups) {
       const fact = mergedEntry.groupFacts[group];
       if (fact === undefined) {
@@ -106,25 +77,6 @@ export function assembleGitReviewIndex({
       if (fact.oldPath !== null && !oldPaths.includes(fact.oldPath)) {
         oldPaths.push(fact.oldPath);
       }
-      if (!fact.statsExpected) {
-        hasCompleteNumericStats = false;
-        continue;
-      }
-      const stat = statMaps[group]?.get(fact.targetPath);
-      if (stat === undefined || !statMatchesFact(stat, fact)) {
-        hasCompleteNumericStats = false;
-        entryStatsMissing = true;
-        continue;
-      }
-      if (stat.additions === null || stat.deletions === null) {
-        hasCompleteNumericStats = false;
-        continue;
-      }
-      additions = addSafeCount(additions, stat.additions);
-      deletions = addSafeCount(deletions, stat.deletions);
-    }
-    if (entryStatsMissing) {
-      statsUnavailable += 1;
     }
     const status = GIT_REVIEW_STATUS_PRIORITY.find((candidate) =>
       Object.values(groupStatuses).includes(candidate)
@@ -133,13 +85,29 @@ export function assembleGitReviewIndex({
       throw new GitReviewIndexProtocolError("Git index 条目缺少状态");
     }
     const entry = gitReviewIndexEntrySchema.parse({
-      additions: hasCompleteNumericStats ? additions : null,
-      deletions: hasCompleteNumericStats ? deletions : null,
       entryKey: entryKeyForPath(mergedEntry.path),
-      groups,
-      groupStatuses,
       oldPaths,
       path: mergedEntry.path,
+      renderSlots: groups.map((group) => {
+        const fact = mergedEntry.groupFacts[group];
+        if (fact === undefined) {
+          throw new GitReviewIndexProtocolError(
+            `Git index 条目缺少 ${group} 事实`
+          );
+        }
+        const oldPath = group === "conflict" ? null : fact.oldPath;
+        return {
+          group,
+          oldPath,
+          sectionKey: createGitReviewSectionKey(
+            group,
+            oldPath,
+            fact.targetPath
+          ),
+          status: fact.status,
+          targetPath: fact.targetPath,
+        };
+      }),
       status,
     });
     sortable.push({
@@ -153,15 +121,19 @@ export function assembleGitReviewIndex({
 
   const entries: GitReviewIndexEntry[] = [];
   const resolvedEntries: GitReviewIndexResolvedEntry[] = [];
-  let fileBudgetTruncated = false;
+  const acceptedDirectories = new Set<string>();
+  let pathsOverDepthLimit = 0;
   for (const item of sortable) {
-    if (!budget.tryConsumeFiles()) {
-      const failure = budget.failureReason();
-      if (failure !== null) {
-        throw new GitReviewIndexExecutionError(failure, `Git index ${failure}`);
-      }
-      fileBudgetTruncated = true;
-      break;
+    const pendingDirectories = pendingTreeDirectories(
+      item.path,
+      acceptedDirectories
+    );
+    if (pendingDirectories === null) {
+      pathsOverDepthLimit += 1;
+      continue;
+    }
+    for (const directory of pendingDirectories) {
+      acceptedDirectories.add(directory);
     }
     entries.push(item.entry);
     resolvedEntries.push(
@@ -172,13 +144,10 @@ export function assembleGitReviewIndex({
     );
   }
   const warnings: GitReviewWarning[] = [];
-  if (sourceFilesTruncated || fileBudgetTruncated) {
+  if (pathsOverDepthLimit > 0) {
     warnings.push({
-      code: "filesTruncated",
-      limit: fileBudgetTruncated
-        ? Math.min(GIT_REVIEW_INDEX_ENTRY_LIMIT, entries.length)
-        : GIT_REVIEW_INDEX_ENTRY_LIMIT,
-      omitted: null,
+      code: "pathDepthExceeded",
+      skipped: pathsOverDepthLimit,
     });
   }
   if (primary.invalidPathEntries > 0) {
@@ -187,28 +156,17 @@ export function assembleGitReviewIndex({
       skipped: primary.invalidPathEntries,
     });
   }
-  if (renameDetectionLimited) {
-    warnings.push({
-      code: "renameDetectionLimited",
-      limit: GIT_REVIEW_RENAME_LIMIT,
-    });
-  }
-  if (statsUnavailable > 0) {
-    warnings.push({ code: "entryStatsUnavailable", count: statsUnavailable });
-  }
-
   return Object.freeze({
     entries: Object.freeze(entries),
     resolvedEntries: Object.freeze(resolvedEntries),
-    revision: createIndexRevision(query, primary, statsByGroup),
+    revision: createIndexRevision(primary, statsByGroup),
     warnings: Object.freeze(warnings),
   });
 }
 
 function mergePrimaryEntries(
   primary: GitReviewIndexPrimaryParseResult,
-  allowedGroups: ReadonlySet<GitReviewGroup>,
-  query: GitReviewResolvedQuery
+  allowedGroups: ReadonlySet<GitReviewGroup>
 ): Map<string, MutableMergedEntry> {
   const merged = new Map<string, MutableMergedEntry>();
   for (const observation of primary.entries) {
@@ -244,17 +202,13 @@ function mergePrimaryEntries(
       existing.groupFacts[group] = fact;
     }
   }
-  mergeUncommittedRenameChains(merged, query);
+  mergeUncommittedRenameChains(merged);
   return merged;
 }
 
 function mergeUncommittedRenameChains(
-  entries: Map<string, MutableMergedEntry>,
-  query: GitReviewResolvedQuery
+  entries: Map<string, MutableMergedEntry>
 ): void {
-  if (query.kind !== "uncommitted") {
-    return;
-  }
   const destinationsByOldPath = new Map<string, MutableMergedEntry[]>();
   for (const entry of entries.values()) {
     const groups = Object.keys(entry.groupFacts) as GitReviewGroup[];
@@ -293,70 +247,6 @@ function mergeUncommittedRenameChains(
   }
 }
 
-function allowedGroupsForQuery(
-  query: GitReviewResolvedQuery
-): Set<GitReviewGroup> {
-  if (query.kind === "uncommitted") {
-    return new Set<GitReviewGroup>([...query.groups, "conflict"]);
-  }
-  return new Set<GitReviewGroup>([query.kind]);
-}
-
-function createStatMaps(
-  statsByGroup: Readonly<
-    Partial<Record<GitReviewGroup, GitReviewIndexStatParseResult>>
-  >,
-  merged: ReadonlyMap<string, MutableMergedEntry>
-): Partial<Record<GitReviewGroup, Map<string, GitReviewIndexStatEntry>>> {
-  const result: Partial<
-    Record<GitReviewGroup, Map<string, GitReviewIndexStatEntry>>
-  > = {};
-  for (const group of GIT_REVIEW_GROUP_ORDER) {
-    const parsed = statsByGroup[group];
-    if (parsed === undefined) {
-      continue;
-    }
-    const expectedPaths = new Set<string>();
-    for (const mergedEntry of merged.values()) {
-      const fact = mergedEntry.groupFacts[group];
-      if (fact?.statsExpected) {
-        expectedPaths.add(fact.targetPath);
-      }
-    }
-    const map = new Map<string, GitReviewIndexStatEntry>();
-    for (const entry of parsed.entries) {
-      if (!expectedPaths.has(entry.path)) {
-        continue;
-      }
-      if (map.has(entry.path)) {
-        throw new GitReviewIndexProtocolError(
-          `numstat 返回了重复的 ${group} 路径`
-        );
-      }
-      map.set(entry.path, entry);
-    }
-    result[group] = map;
-  }
-  return result;
-}
-
-function statMatchesFact(
-  stat: GitReviewIndexStatEntry,
-  fact: GitReviewIndexGroupFact
-): boolean {
-  return fact.status === "renamed"
-    ? stat.oldPath === fact.oldPath
-    : stat.oldPath === null;
-}
-
-function addSafeCount(left: number, right: number): number {
-  const result = left + right;
-  if (!Number.isSafeInteger(result)) {
-    throw new GitReviewIndexProtocolError("Git index 统计超过安全整数上限");
-  }
-  return result;
-}
-
 function entryKeyForPath(path: string): string {
   return `sha256:${createHash("sha256")
     .update("pier.git-review.entry.v1\0", "utf8")
@@ -365,33 +255,46 @@ function entryKeyForPath(path: string): string {
 }
 
 function createIndexRevision(
-  query: GitReviewResolvedQuery,
   primary: GitReviewIndexPrimaryParseResult,
   statsByGroup: Readonly<
     Partial<Record<GitReviewGroup, GitReviewIndexStatParseResult>>
   >
 ): string {
   const digest = new GitReviewRecordDigest("pier.git-review.revision.v1");
-  digest.update(Buffer.from(JSON.stringify(query), "utf8"));
-  const includedGroups = allowedGroupsForQuery(query);
   for (const group of GIT_REVIEW_GROUP_ORDER) {
-    if (!includedGroups.has(group)) {
-      continue;
-    }
     const primaryDigest = primary.digestByGroup[group];
     if (primaryDigest !== undefined) {
       digest.update(Buffer.from(`${group}:primary:${primaryDigest}`, "utf8"));
     }
     const stats = statsByGroup[group];
     if (stats !== undefined) {
-      digest.update(
-        Buffer.from(
-          `${group}:stats:${stats.digest}:truncated=${stats.truncated}`,
-          "utf8"
-        )
-      );
+      digest.update(Buffer.from(`${group}:stats:${stats.digest}`, "utf8"));
     }
   }
-  digest.update(Buffer.from(`primary-truncated=${primary.truncated}`, "utf8"));
   return digest.digest();
+}
+
+function pendingTreeDirectories(
+  path: string,
+  acceptedDirectories: ReadonlySet<string>
+): string[] | null {
+  const pending: string[] = [];
+  let segmentCount = 1;
+  let cursor = 0;
+  while (true) {
+    const slash = path.indexOf("/", cursor);
+    if (slash < 0) {
+      break;
+    }
+    segmentCount += 1;
+    if (segmentCount > GIT_REVIEW_INDEX_TREE_MAX_SEGMENTS) {
+      return null;
+    }
+    const directory = path.slice(0, slash);
+    if (!acceptedDirectories.has(directory)) {
+      pending.push(directory);
+    }
+    cursor = slash + 1;
+  }
+  return pending;
 }

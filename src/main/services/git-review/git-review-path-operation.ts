@@ -1,4 +1,5 @@
 import type { FileHandle } from "node:fs/promises";
+import type { GitExecExecutionBudget } from "../git-exec-raw-contract.ts";
 import { GitReviewPathError } from "./git-review-path-contract.ts";
 
 export function assertGitReviewPathActive(
@@ -12,7 +13,8 @@ export function assertGitReviewPathActive(
 export async function raceGitReviewPathOperation<T>(
   operation: () => Promise<T>,
   signal: AbortSignal | undefined,
-  onLateSuccess?: (value: T) => void
+  onLateSuccess?: (value: T) => void,
+  budget?: GitExecExecutionBudget
 ): Promise<T> {
   assertGitReviewPathActive(signal);
   if (signal === undefined) {
@@ -20,6 +22,7 @@ export async function raceGitReviewPathOperation<T>(
   }
   return new Promise<T>((resolve, reject) => {
     let settled = false;
+    let pending: Promise<T> | undefined;
     const cleanup = (): void => signal.removeEventListener("abort", abort);
     const abort = (): void => {
       if (settled) {
@@ -27,6 +30,9 @@ export async function raceGitReviewPathOperation<T>(
       }
       settled = true;
       cleanup();
+      if (pending !== undefined) {
+        budget?.trackDetachedOperation?.(pending);
+      }
       reject(abortedPathError(signal.reason));
     };
     signal.addEventListener("abort", abort, { once: true });
@@ -34,7 +40,6 @@ export async function raceGitReviewPathOperation<T>(
       abort();
       return;
     }
-    let pending: Promise<T>;
     try {
       pending = operation();
     } catch (error) {
@@ -65,13 +70,18 @@ export async function raceGitReviewPathOperation<T>(
   });
 }
 
-export function closeGitReviewFileHandleInBackground(handle: FileHandle): void {
-  settleGitReviewPathOperationInBackground(handle.close());
+export function closeGitReviewFileHandleInBackground(
+  handle: FileHandle,
+  budget?: GitExecExecutionBudget
+): void {
+  settleGitReviewPathOperationInBackground(handle.close(), budget);
 }
 
 export function settleGitReviewPathOperationInBackground(
-  promise: Promise<unknown>
+  promise: Promise<unknown>,
+  budget?: GitExecExecutionBudget
 ): void {
+  budget?.trackDetachedOperation?.(promise);
   promise.catch(() => undefined);
 }
 

@@ -116,6 +116,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const [terminalRetryNonce, setTerminalRetryNonce] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
+  const getGroupId = useCallback(() => api.group?.id ?? null, [api]);
   const floatingLayoutRevision = useTerminalFloatingLayoutRevision(api);
   const floatingLayout = useMemo(
     () => panelFloatingLayoutFromParams(props.params),
@@ -179,8 +180,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           node.termination === "force"
       )
   );
-  // agent 会话呈现 overlay 叠在最外层：icon/status 换 agent, title 保留 agent
-  // TUI 设置的终端标题；会话消失自动回退。
+  // agent overlay 替换 icon/status，保留 TUI 标题；会话消失自动回退。
   const effectiveTab = mergeTabChrome(
     mergeTabChrome(
       mergeTabChrome(
@@ -197,6 +197,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const statusContext = {
     context: effectiveContext,
     cwd: effectiveCwd,
+    getGroupId,
     panelId,
     title: effectiveTitle,
   };
@@ -480,12 +481,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             : []
         }
       />
-      <TerminalStatusBar
-        context={effectiveContext}
-        cwd={effectiveCwd}
-        panelId={panelId}
-        title={effectiveTitle}
-      />
+      <TerminalStatusBar {...statusContext} />
     </div>
   );
 }

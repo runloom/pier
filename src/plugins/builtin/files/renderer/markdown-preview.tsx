@@ -44,6 +44,7 @@ interface MarkdownPreviewProps {
 
 interface MarkdownPreviewSearchLabels {
   close: string;
+  matchAnnouncement: string;
   next: string;
   noMatches: string;
   placeholder: string;
@@ -68,6 +69,7 @@ const DEFAULT_RENDERER_LABELS: MarkdownRendererLabels = {
 
 const DEFAULT_SEARCH_LABELS: MarkdownPreviewSearchLabels = {
   close: "Close",
+  matchAnnouncement: "Matches: {{count}}",
   next: "Next match",
   noMatches: "No matches",
   placeholder: "Find",
@@ -218,6 +220,14 @@ export function MarkdownPreview({
           className="absolute top-2 right-3 z-20 max-w-[calc(100%-1.5rem)]"
           focusSignal={searchFocusSignal}
           labels={searchLabels}
+          matchAnnouncement={
+            searchMatches.length === 0
+              ? searchLabels.noMatches
+              : searchLabels.matchAnnouncement.replace(
+                  "{{count}}",
+                  searchMatchText
+                )
+          }
           matchText={searchMatchText}
           navigationDisabled={searchMatches.length === 0}
           onChange={(next) => {

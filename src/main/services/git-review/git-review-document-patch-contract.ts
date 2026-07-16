@@ -1,4 +1,3 @@
-import type { GitReviewResolvedQuery } from "../../../shared/contracts/git-review.ts";
 import type { ExecGitRaw } from "../git-exec.ts";
 import type {
   GitReviewIndexExecutionBudget,
@@ -6,13 +5,8 @@ import type {
 } from "./git-review-index-contract.ts";
 
 export const GIT_REVIEW_PATCH_MAX_BYTES = 8 * 1024 * 1024;
-export const GIT_REVIEW_DEFAULT_CONTEXT_LINES = 20;
 
-export type GitReviewRenderableGroup =
-  | "branch"
-  | "commit"
-  | "staged"
-  | "unstaged";
+export type GitReviewRenderableGroup = "staged" | "unstaged";
 
 export type GitReviewPatchStateReason =
   | "binary"
@@ -24,21 +18,14 @@ export type GitReviewPatchStateReason =
 
 export type GitReviewPatchMaterial =
   | {
-      readonly additions: number;
-      readonly byteSize: number;
-      readonly deletions: number;
       readonly kind: "patch";
-      readonly lineCount: number;
       readonly patch: string;
       readonly sourceOid: string | null;
       readonly sourceRevision: string;
       readonly targetOid: string | null;
     }
   | {
-      readonly byteSize: number | null;
       readonly kind: "state";
-      readonly lineCount: number | null;
-      readonly message: string | null;
       readonly reason: GitReviewPatchStateReason;
       readonly sourceOid: string | null;
       readonly sourceRevision: string;
@@ -47,13 +34,11 @@ export type GitReviewPatchMaterial =
 
 export interface ReadGitReviewPatchOptions {
   readonly budget: GitReviewIndexExecutionBudget;
-  /** 测试 seam；生产默认在 os.tmpdir() 下创建 0700 临时目录。 */
-  readonly createTemporaryRoot?: () => Promise<string>;
   readonly execGitRaw: ExecGitRaw;
   readonly fact: GitReviewIndexGroupFact;
   readonly gitRootPath: string;
   readonly group: GitReviewRenderableGroup;
-  readonly query: GitReviewResolvedQuery;
+  readonly headOid: string | null;
   readonly signal?: AbortSignal;
 }
 

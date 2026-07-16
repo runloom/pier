@@ -1,6 +1,5 @@
 import type { GitReviewGroup } from "../../../shared/contracts/git-review.ts";
 import {
-  GIT_REVIEW_INDEX_PRIMARY_FACT_LIMIT,
   type GitReviewIndexGroupFact,
   type GitReviewIndexPrimaryEntry,
   type GitReviewIndexPrimaryParseResult,
@@ -30,14 +29,9 @@ export class GitReviewPorcelainV2Parser {
     unstaged: new GitReviewRecordDigest("pier.git-review.status.unstaged.v1"),
   };
   readonly #entries: GitReviewIndexPrimaryEntry[] = [];
-  readonly #indexDigest = new GitReviewRecordDigest(
-    "pier.git-review.index-token.v1"
-  );
-  #factCount = 0;
   #finished = false;
   #invalidPathEntries = 0;
   #pending: PendingPorcelainRename | null = null;
-  #truncated = false;
 
   push(record: Buffer): "continue" | "stop" {
     this.#assertPushable();
@@ -98,9 +92,7 @@ export class GitReviewPorcelainV2Parser {
         unstaged: this.#digests.unstaged.digest(),
       }),
       entries: Object.freeze(this.#entries),
-      indexDigest: this.#indexDigest.digest(),
       invalidPathEntries: this.#invalidPathEntries,
-      truncated: this.#truncated,
     });
   }
 
@@ -131,8 +123,10 @@ export class GitReviewPorcelainV2Parser {
         movement: movementFromStatusCode(xy[0] ?? ""),
         oldPath: null,
         origin: "tracked",
+        sourceOid: fields[6]?.toString("ascii") ?? null,
         statsExpected: gitReviewStatsExpected(fields[3], fields[4]),
         status: stagedStatus,
+        targetOid: fields[7]?.toString("ascii") ?? null,
       };
     }
     if (unstagedStatus !== null) {
@@ -140,8 +134,10 @@ export class GitReviewPorcelainV2Parser {
         movement: movementFromStatusCode(xy[1] ?? ""),
         oldPath: null,
         origin: "tracked",
+        sourceOid: fields[7]?.toString("ascii") ?? null,
         statsExpected: gitReviewStatsExpected(fields[4], fields[5]),
         status: unstagedStatus,
+        targetOid: null,
       };
     }
     if (Object.keys(groupFacts).length === 0) {
@@ -170,8 +166,10 @@ export class GitReviewPorcelainV2Parser {
           movement: null,
           oldPath: null,
           origin: "conflict",
+          sourceOid: null,
           statsExpected: false,
           status: "conflicted",
+          targetOid: null,
         },
       },
       [record],
@@ -188,8 +186,10 @@ export class GitReviewPorcelainV2Parser {
           movement: null,
           oldPath: null,
           origin: "untracked",
+          sourceOid: null,
           statsExpected: false,
           status: "added",
+          targetOid: null,
         },
       },
       [record],
@@ -204,12 +204,6 @@ export class GitReviewPorcelainV2Parser {
     records: readonly Buffer[],
     fields: readonly Buffer[] | null
   ): "continue" | "stop" {
-    const factCount = Object.keys(groupFacts).length;
-    if (this.#factCount + factCount > GIT_REVIEW_INDEX_PRIMARY_FACT_LIMIT) {
-      this.#truncated = true;
-      return "stop";
-    }
-    this.#factCount += factCount;
     for (const group of Object.keys(groupFacts) as GitReviewGroup[]) {
       let digest = this.#digests.unstaged;
       if (group === "conflict") {
@@ -227,15 +221,6 @@ export class GitReviewPorcelainV2Parser {
           records
         )
       );
-    }
-    const indexProjection = createPorcelainIndexProjection(
-      groupFacts,
-      fields,
-      pathBytes,
-      oldPathBytes
-    );
-    if (indexProjection !== null) {
-      this.#indexDigest.update(indexProjection);
     }
     const path = decodeGitReviewPath(pathBytes);
     const oldPath =
@@ -262,49 +247,12 @@ export class GitReviewPorcelainV2Parser {
   }
 
   #assertPushable(): void {
-    if (this.#finished || this.#truncated) {
+    if (this.#finished) {
       throw new GitReviewIndexProtocolError(
         "不能继续使用已结束的 porcelain parser"
       );
     }
   }
-}
-
-function createPorcelainIndexProjection(
-  groupFacts: Partial<Record<GitReviewGroup, GitReviewIndexGroupFactDraft>>,
-  fields: readonly Buffer[] | null,
-  path: Buffer,
-  oldPath: Buffer | null
-): Buffer | null {
-  if (fields === null) {
-    return null;
-  }
-  if (groupFacts.conflict !== undefined) {
-    return joinDigestProjection([
-      fields[0] ?? Buffer.alloc(0),
-      fields[1] ?? Buffer.alloc(0),
-      fields[3] ?? Buffer.alloc(0),
-      fields[4] ?? Buffer.alloc(0),
-      fields[5] ?? Buffer.alloc(0),
-      fields[7] ?? Buffer.alloc(0),
-      fields[8] ?? Buffer.alloc(0),
-      fields[9] ?? Buffer.alloc(0),
-      path,
-    ]);
-  }
-  if (groupFacts.staged === undefined) {
-    return null;
-  }
-  return joinDigestProjection([
-    fields[0] ?? Buffer.alloc(0),
-    fields[1]?.subarray(0, 1) ?? Buffer.alloc(0),
-    fields[4] ?? Buffer.alloc(0),
-    fields[7] ?? Buffer.alloc(0),
-    path,
-    ...(groupFacts.staged.status === "renamed" && oldPath !== null
-      ? [oldPath]
-      : []),
-  ]);
 }
 
 function movementFromStatusCode(

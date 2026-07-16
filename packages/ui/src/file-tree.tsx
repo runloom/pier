@@ -7,14 +7,12 @@ import * as React from "react";
 import {
   fileTreeContextMenuOption,
   itemsToGitStatusEntries,
-  readRenameView,
 } from "./file-tree-internal.ts";
 import {
   cloneCompositionForRedraw,
   collectExpandedDirectoryPaths,
   collectPreservedExpandedDirectoryPaths,
   isDirectoryHandle,
-  lastSegment,
   samePaths,
   singlePathMutation,
   stripTrailingSlash,
@@ -22,10 +20,15 @@ import {
   toOfficialPath,
   treeRenderSignature,
 } from "./file-tree-model.ts";
+import { FileTreeRenameSession } from "./file-tree-rename-session.ts";
 import { usePierFileTreeScrollController } from "./file-tree-scroll-controller.ts";
 import * as treeSearch from "./file-tree-search.ts";
 import { pierFileTreeStyle, TREE_SCROLLBAR_CSS } from "./file-tree-style.ts";
 import type { PierFileTreeProps } from "./file-tree-types.ts";
+import {
+  fileTreeDragAndDropConfig,
+  fileTreeRenamingConfig,
+} from "./file-tree-write-options.ts";
 import { useFileTreeContextMenuComposition } from "./use-file-tree-context-menu.ts";
 import { useFileTreeRefs } from "./use-file-tree-refs.ts";
 import { cn } from "./utils.ts";
@@ -100,12 +103,17 @@ export function PierFileTree({
   });
 
   const fileTreeStyle = React.useMemo(() => pierFileTreeStyle(style), [style]);
+  const programmaticSelectionRef = React.useRef<{ path: string } | null>(null);
 
   const handleSelectionChange =
     React.useCallback<FileTreeSelectionChangeListener>(
       (selectedPaths) => {
         const nextSelectedPaths = [...selectedPaths];
         const selectedPath = nextSelectedPaths.at(-1);
+        const suppressOpenPath =
+          selectedPath != null &&
+          programmaticSelectionRef.current?.path === selectedPath;
+        programmaticSelectionRef.current = null;
         const selectedItem =
           selectedPath == null
             ? undefined
@@ -116,73 +124,47 @@ export function PierFileTree({
 
         readRefs().onSelectPaths?.(outwardSelectedPaths);
 
-        if (selectedItem?.kind === "file") {
+        if (selectedItem?.kind === "file" && !suppressOpenPath) {
           readRefs().onOpenPath?.(selectedItem.path);
         }
       },
       [readRefs]
     );
+  const modelAheadMovesRef = React.useRef(new Map<string, string>());
+  const renameSession = React.useMemo(() => new FileTreeRenameSession(), []);
 
   const { model } = useFileTree({
     ...fileTreeContextMenuOption(onOpenItemContextMenu != null, refs),
     density: "compact",
     unsafeCSS: TREE_SCROLLBAR_CSS,
-    // 拖拽移动:库在模型层先行 move,onDropComplete 把 official path 折算成
-    // caller path 交业务方执行真实 fs move;失败方负责刷新树回滚视觉状态。
-    dragAndDrop: {
-      onDropComplete: (event) => {
-        const handler = readRefs().onMovePaths;
-        if (!handler) {
-          return;
-        }
-        const targetDirOfficial =
-          event.target.kind === "directory" ? event.target.directoryPath : null;
-        const targetDir =
-          targetDirOfficial === null
-            ? ""
-            : stripTrailingSlash(targetDirOfficial);
-        const moves = event.draggedPaths.map((draggedPath) => {
-          const from = stripTrailingSlash(draggedPath);
-          const name = lastSegment(from);
-          return {
-            from,
-            to: targetDir.length > 0 ? `${targetDir}/${name}` : name,
-          };
-        });
-        if (moves.length > 0) {
-          handler(moves);
-        }
-      },
-    },
+    // 只读调用方不配置模型写能力；Files 传入回调时才开启官方拖拽。
+    ...(onMovePaths
+      ? { dragAndDrop: fileTreeDragAndDropConfig(readRefs) }
+      : {}),
     flattenEmptyDirectories: true,
     gitStatus,
     initialExpandedPaths,
     onSelectionChange: handleSelectionChange,
     paths,
-    renaming: {
-      onRename: (event) => {
-        const from = stripTrailingSlash(event.sourcePath);
-        const to = stripTrailingSlash(event.destinationPath);
-        if (from !== to) {
-          modelAheadMovesRef.current.set(from, to);
+    ...(onRenamePath
+      ? {
+          renaming: fileTreeRenamingConfig(
+            readRefs,
+            modelAheadMovesRef,
+            renameSession.deliveryRef
+          ),
         }
-        readRefs().onRenamePath?.({
-          from,
-          isFolder: event.isFolder,
-          to,
-        });
-      },
-    },
+      : {}),
     // 搜索走 setSearch 编程驱动 + 业务层自绘搜索栏;不渲染库内置搜索头。
     fileTreeSearchMode: "hide-non-matches",
     renderRowDecoration: ({ item }) =>
       toOfficialDecoration(readRefs().decorationsByPath.get(item.path)),
     ...(stickyFolders ? { stickyFolders: true } : {}),
   });
+  React.useEffect(() => () => renameSession.dispose(), [renameSession]);
   useFileTreeContextMenuComposition(model, onOpenItemContextMenu != null, refs);
   treeSearch.useSearchMatchState(model, nextRefs, onSearchMatchStateChange);
   const activeSearchRef = React.useRef<string | null>(null);
-  const modelAheadMovesRef = React.useRef(new Map<string, string>());
   React.useImperativeHandle(
     treeApiRef,
     () => ({
@@ -247,6 +229,9 @@ export function PierFileTree({
         }
       },
       startRenaming: (path, options) => {
+        if (!readRefs().onRenamePath) {
+          return false;
+        }
         const item = readRefs().itemsByPath.get(path);
         const officialPath = item ? toOfficialPath(item) : path;
         const callerPath = item?.path ?? stripTrailingSlash(path);
@@ -260,55 +245,17 @@ export function PierFileTree({
         }
         // 库在 basename 未改时不调 onRename;新建占位确认默认名需要补一次回调。
         // Esc/空提交走 removeIfCanceled → onMutation(remove) → onModelPathsRemoved。
-        let settled = false;
-        let renameDelivered = false;
-        const previousOnRename = readRefs().onRenamePath;
-        const settle = () => {
-          if (settled) {
-            return;
-          }
-          settled = true;
-          readRefs().onRenamePath = previousOnRename;
-          unsubscribeMutation();
-          unsubscribeSubscribe();
-        };
-        readRefs().onRenamePath = (move) => {
-          renameDelivered = true;
-          previousOnRename?.(move);
-          settle();
-        };
-        const unsubscribeMutation = model.onMutation("remove", (event) => {
-          const removed = stripTrailingSlash(event.path);
-          if (
-            removed !== callerPath &&
-            removed !== stripTrailingSlash(officialPath)
-          ) {
-            return;
-          }
-          settle();
-          readRefs().onModelPathsRemoved?.([callerPath]);
-        });
-        const unsubscribeSubscribe = model.subscribe(() => {
-          const renameView = readRenameView(model);
-          if (!renameView || renameView.isActive() || renameDelivered) {
-            return;
-          }
-          const stillPresent = Boolean(
-            model.getItem(officialPath) || model.getItem(callerPath)
-          );
-          settle();
-          if (stillPresent) {
-            previousOnRename?.({
-              from: callerPath,
-              isFolder: item?.kind === "directory",
-              to: callerPath,
-            });
-          }
+        renameSession.begin({
+          callerPath,
+          isFolder: item?.kind === "directory",
+          model,
+          officialPath,
+          readRefs,
         });
         return started;
       },
     }),
-    [model, readRefs]
+    [model, readRefs, renameSession]
   );
 
   // active 文件变化时定位并选中；model 选中不会触发用户路径的 onOpenPath。
@@ -329,6 +276,17 @@ export function PierFileTree({
     try {
       model.scrollToPath(officialPath, { focus: false, offset: "nearest" });
       model.focusPath(officialPath);
+      const programmaticSelection = { path: officialPath };
+      programmaticSelectionRef.current = programmaticSelection;
+      try {
+        model.selectOnlyPath(officialPath);
+      } finally {
+        queueMicrotask(() => {
+          if (programmaticSelectionRef.current === programmaticSelection) {
+            programmaticSelectionRef.current = null;
+          }
+        });
+      }
     } catch {
       // 路径尚未在可见投影中(父目录未展开):静默忽略,下一次 items 变化重试。
       lastRevealRef.current = null;

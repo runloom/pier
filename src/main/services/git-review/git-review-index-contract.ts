@@ -3,30 +3,21 @@ import type {
   GitReviewGroup,
 } from "../../../shared/contracts/git-review.ts";
 import type { GitExecExecutionBudget } from "../git-exec-raw-contract.ts";
-import { GIT_REVIEW_MAX_FILES } from "./git-review-budget.ts";
 
-export const GIT_REVIEW_INDEX_ENTRY_LIMIT = GIT_REVIEW_MAX_FILES;
-/** staged/unstaged 链最多各占一个事实；4,001 个事实足以证明超过 2,000 个最终文件。 */
-export const GIT_REVIEW_INDEX_PRIMARY_FACT_LIMIT =
-  GIT_REVIEW_INDEX_ENTRY_LIMIT * 2;
-/** porcelain v2 的 4,001 个 rename/copy 事实的最坏物理 record 数。 */
-export const GIT_REVIEW_INDEX_MAX_NUL_RECORDS =
-  (GIT_REVIEW_INDEX_PRIMARY_FACT_LIMIT + 1) * 2;
-/** raw/numstat 完整读取第 2,001 个 rename/copy tuple 所需的 record 数。 */
-export const GIT_REVIEW_INDEX_RANGE_MAX_NUL_RECORDS =
-  (GIT_REVIEW_INDEX_ENTRY_LIMIT + 1) * 3;
-export const GIT_REVIEW_RENAME_LIMIT = 2000;
+export const GIT_REVIEW_INDEX_TREE_MAX_SEGMENTS = 128;
 
-export interface GitReviewIndexExecutionBudget extends GitExecExecutionBudget {
-  tryConsumeFiles(delta?: number): boolean;
-}
+export type GitReviewIndexExecutionBudget = GitExecExecutionBudget;
 
 export interface GitReviewIndexGroupFact {
   readonly movement: "copy" | "rename" | null;
   readonly oldPath: string | null;
   readonly origin: "conflict" | "tracked" | "untracked";
+  /** 本 section 的 Git 原始侧对象；worktree/untracked 没有对象时为 null。 */
+  readonly sourceOid: string | null;
   readonly statsExpected: boolean;
   readonly status: GitReviewFileStatus;
+  /** 本 section 的 Git 目标侧对象；worktree/untracked 没有对象时为 null。 */
+  readonly targetOid: string | null;
   readonly targetPath: string;
 }
 
@@ -37,25 +28,14 @@ export interface GitReviewIndexPrimaryEntry {
   readonly path: string;
 }
 
-export interface GitReviewIndexStatEntry {
-  readonly additions: number | null;
-  readonly deletions: number | null;
-  readonly oldPath: string | null;
-  readonly path: string;
-}
-
 export interface GitReviewIndexPrimaryParseResult {
   readonly digestByGroup: Readonly<Partial<Record<GitReviewGroup, string>>>;
   readonly entries: readonly GitReviewIndexPrimaryEntry[];
-  readonly indexDigest: string | null;
   readonly invalidPathEntries: number;
-  readonly truncated: boolean;
 }
 
 export interface GitReviewIndexStatParseResult {
   readonly digest: string;
-  readonly entries: readonly GitReviewIndexStatEntry[];
-  readonly truncated: boolean;
 }
 
 export class GitReviewIndexProtocolError extends Error {

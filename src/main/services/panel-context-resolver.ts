@@ -8,11 +8,19 @@ import type {
   PanelContextSource,
 } from "@shared/contracts/panel.ts";
 import { execGit } from "./git-exec.ts";
+import type { GitExecExecutionBudget } from "./git-exec-raw-contract.ts";
+import { parseGitSinglePathOutput } from "./git-path-output.ts";
+
+export interface PanelContextResolutionControl {
+  budget?: GitExecExecutionBudget;
+  signal?: AbortSignal;
+}
 
 export interface ResolvePanelContextOptions {
   execGit?: (
     args: readonly string[],
-    cwd: string
+    cwd: string,
+    control?: PanelContextResolutionControl
   ) => Promise<string | { stdout: string }>;
   now?: () => number;
   pathKind?: "auto" | "file";
@@ -21,15 +29,21 @@ export interface ResolvePanelContextOptions {
   stat?: (path: string) => Promise<Stats>;
 }
 
-function defaultExecGit(args: readonly string[], cwd: string): Promise<string> {
-  return execGit(args, { cwd });
+function defaultExecGit(
+  args: readonly string[],
+  cwd: string,
+  control: PanelContextResolutionControl = {}
+): Promise<string> {
+  return execGit(args, { cwd, ...control });
 }
 
 function outputText(output: string | { stdout: string }): string {
   return typeof output === "string" ? output : output.stdout;
 }
 
-function cleanOutput(output: string | { stdout: string } | undefined): string {
+function cleanScalarOutput(
+  output: string | { stdout: string } | undefined
+): string {
   return outputText(output ?? "").trim();
 }
 
@@ -55,14 +69,31 @@ async function safeStat(
   }
 }
 
-async function safeGit(
+async function safeGitScalar(
   args: readonly string[],
   cwd: string,
-  execGit: NonNullable<ResolvePanelContextOptions["execGit"]>
+  execGit: NonNullable<ResolvePanelContextOptions["execGit"]>,
+  control: PanelContextResolutionControl
 ): Promise<string | undefined> {
   try {
-    const output = cleanOutput(await execGit(args, cwd));
+    const output = cleanScalarOutput(await execGit(args, cwd, control));
     return output.length > 0 ? output : undefined;
+  } catch {
+    return;
+  }
+}
+
+async function safeGitPath(
+  args: readonly string[],
+  cwd: string,
+  execGit: NonNullable<ResolvePanelContextOptions["execGit"]>,
+  control: PanelContextResolutionControl
+): Promise<string | undefined> {
+  try {
+    return (
+      parseGitSinglePathOutput(outputText(await execGit(args, cwd, control))) ??
+      undefined
+    );
   } catch {
     return;
   }
@@ -70,10 +101,11 @@ async function safeGit(
 
 async function supportsGitWorktree(
   cwd: string,
-  execGit: NonNullable<ResolvePanelContextOptions["execGit"]>
+  execGit: NonNullable<ResolvePanelContextOptions["execGit"]>,
+  control: PanelContextResolutionControl
 ): Promise<boolean> {
   try {
-    await execGit(["worktree", "list", "--porcelain", "-z"], cwd);
+    await execGit(["worktree", "list", "--porcelain", "-z"], cwd, control);
     return true;
   } catch {
     return false;
@@ -104,7 +136,8 @@ export async function resolvePanelContextForPath(
     realpath = fsRealpath,
     source = "command",
     stat = fsStat,
-  }: ResolvePanelContextOptions = {}
+  }: ResolvePanelContextOptions = {},
+  control: PanelContextResolutionControl = {}
 ): Promise<PanelContext> {
   const openedPath = await safeRealpath(inputPath, realpath);
   const pathStats = await safeStat(openedPath, stat);
@@ -114,24 +147,35 @@ export async function resolvePanelContextForPath(
       : openedPath;
 
   const gitRoot = await realGitPath(
-    await safeGit(["rev-parse", "--show-toplevel"], cwd, execGit),
+    await safeGitPath(["rev-parse", "--show-toplevel"], cwd, execGit, control),
     realpath
   );
   const gitCommonDir = await realGitPath(
-    await safeGit(
+    await safeGitPath(
       ["rev-parse", "--path-format=absolute", "--git-common-dir"],
       cwd,
-      execGit
+      execGit,
+      control
     ),
     realpath
   );
-  const branch = await safeGit(["branch", "--show-current"], cwd, execGit);
-  const head = await safeGit(["rev-parse", "--verify", "HEAD"], cwd, execGit);
+  const branch = await safeGitScalar(
+    ["branch", "--show-current"],
+    cwd,
+    execGit,
+    control
+  );
+  const head = await safeGitScalar(
+    ["rev-parse", "--verify", "HEAD"],
+    cwd,
+    execGit,
+    control
+  );
   const projectRoot = gitRoot ?? cwd;
   const worktreeRoot = gitRoot;
   const worktreeKey = worktreeRoot ?? projectRoot;
   const worktreeSupported = gitRoot
-    ? await supportsGitWorktree(cwd, execGit)
+    ? await supportsGitWorktree(cwd, execGit, control)
     : undefined;
   return {
     contextId: contextIdFor(worktreeKey),

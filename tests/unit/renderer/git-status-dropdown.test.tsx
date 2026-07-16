@@ -265,7 +265,11 @@ async function openDropdown(
   model: GitStatusDropdownModel
 ): Promise<void> {
   render(
-    <GitStatusDropdown model={model} pluginContext={pluginContext}>
+    <GitStatusDropdown
+      model={model}
+      onViewChanges={vi.fn()}
+      pluginContext={pluginContext}
+    >
       <button type="button">trigger</button>
     </GitStatusDropdown>
   );

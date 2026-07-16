@@ -141,6 +141,18 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.getLog": { capabilities: ["git:read"] },
   "git.getRepoInfo": { capabilities: ["git:read"] },
   "git.getStatus": { capabilities: ["git:read"] },
+  "git.getReviewIndex": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["git:read"],
+  },
+  "git.getReviewFileDocument": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["git:read"],
+  },
+  "git.cancelReviewRequest": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["git:read"],
+  },
   "git.listIgnored": { capabilities: ["git:read"] },
   "git.isWorkingTreeClean": { capabilities: ["git:read"] },
   "git.listBranches": { capabilities: ["git:read"] },

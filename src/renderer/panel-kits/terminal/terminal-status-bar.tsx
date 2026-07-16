@@ -170,12 +170,13 @@ function renderStatusGroup(
 export function TerminalStatusBar({
   context,
   cwd,
+  getGroupId,
   panelId,
   title,
 }: TerminalStatusItemContext) {
   const groups = useTerminalStatusBarItems();
   const plugins = usePluginRegistryStore((s) => s.plugins);
-  const statusContext = { context, cwd, panelId, title };
+  const statusContext = { context, cwd, getGroupId, panelId, title };
   const visible = visibleTerminalStatusItems(groups, statusContext);
   // F4:挂载判定见 shouldMountTerminalStatusBar 注释 —— 此前只看「当前有可见
   // 项」,用户把全部项都隐藏后容器连同右键管理入口一起 unmount,没有任何 UI

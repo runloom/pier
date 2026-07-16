@@ -118,8 +118,13 @@ export async function selectTheme(
   if (theme.id === "light") {
     await expect(root).toHaveClass(/light/);
   } else {
-    await expect(root).not.toHaveClass(/light/);
+    await expect(root).toHaveClass(/dark/);
   }
+  await expect
+    .poll(() => win.evaluate(() => window.pier.preferences.read()), {
+      timeout: 10_000,
+    })
+    .toMatchObject({ theme: theme.id });
 }
 
 export async function installCodexPlugin(context: AppContext): Promise<void> {

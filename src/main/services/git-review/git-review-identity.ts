@@ -1,14 +1,13 @@
 import { realpath as fsRealpath } from "node:fs/promises";
+import { gitReviewRootPathSchema } from "@shared/contracts/git-review.ts";
 import { type ExecGitRaw, execGitRaw, GitExecRawError } from "../git-exec.ts";
+import { parseGitSinglePathOutput } from "../git-path-output.ts";
 import {
   assertGitReviewIdentityExecutionOptions,
-  forwardGitReviewIdentityAbort,
   raceGitReviewIdentityBoundary,
 } from "./git-review-identity-boundary.ts";
 import {
   type CreateGitReviewIdentityResolverOptions,
-  type GitReviewBranchIdentity,
-  type GitReviewCommitIdentity,
   GitReviewIdentityError,
   type GitReviewIdentityExecutionOptions,
   type GitReviewObjectFormat,
@@ -37,61 +36,12 @@ export class GitReviewIdentityResolver {
   ): Promise<GitReviewRepositoryIdentity> {
     assertGitReviewIdentityExecutionOptions(options);
     const base = await this.resolveRepositoryBase(cwd, options);
-    const siblingController = new AbortController();
-    const parentSignal =
-      options.signal === options.budget?.signal ? undefined : options.signal;
-    const removeParentAbort = forwardGitReviewIdentityAbort(
-      parentSignal,
-      siblingController
+    const headOid = await this.#resolveHead(
+      base.canonicalRoot,
+      base.oidLength,
+      options
     );
-    let firstError: unknown;
-    let hasFirstError = false;
-    const cancelSiblingOnFailure = async <T>(
-      promise: Promise<T>
-    ): Promise<T> => {
-      try {
-        return await promise;
-      } catch (error) {
-        if (!hasFirstError) {
-          firstError = error;
-          hasFirstError = true;
-        }
-        siblingController.abort("identity-sibling-failed");
-        throw error;
-      }
-    };
-    try {
-      const [headResult, emptyTreeResult] = await Promise.allSettled([
-        cancelSiblingOnFailure(
-          this.#resolveHead(base.canonicalRoot, base.oidLength, {
-            ...options,
-            signal: siblingController.signal,
-          })
-        ),
-        cancelSiblingOnFailure(
-          this.#resolveEmptyTree(base.canonicalRoot, base.oidLength, {
-            ...options,
-            signal: siblingController.signal,
-          })
-        ),
-      ]);
-      if (hasFirstError) {
-        throw firstError;
-      }
-      if (headResult.status !== "fulfilled") {
-        throw headResult.reason;
-      }
-      if (emptyTreeResult.status !== "fulfilled") {
-        throw emptyTreeResult.reason;
-      }
-      return Object.freeze({
-        ...base,
-        emptyTreeOid: emptyTreeResult.value,
-        headOid: headResult.value,
-      });
-    } finally {
-      removeParentAbort();
-    }
+    return Object.freeze({ ...base, headOid });
   }
 
   async resolveRepositoryBase(
@@ -101,7 +51,7 @@ export class GitReviewIdentityResolver {
     assertGitReviewIdentityExecutionOptions(options);
     let reportedRoot: string;
     try {
-      reportedRoot = await this.#collectLine(
+      reportedRoot = await this.#collectPath(
         ["rev-parse", "--path-format=absolute", "--show-toplevel"],
         cwd,
         options
@@ -131,160 +81,10 @@ export class GitReviewIdentityResolver {
     });
   }
 
-  async resolveCommit(
-    cwd: string,
-    revision: string,
-    options: GitReviewIdentityExecutionOptions = {}
-  ): Promise<GitReviewCommitIdentity> {
-    assertGitReviewIdentityExecutionOptions(options);
-    const repository = await this.resolveRepositoryBase(cwd, options);
-    return this.resolveCommitInRepository(repository, revision, options);
-  }
-
-  async resolveCommitInRepository(
-    repository: GitReviewRepositoryBaseIdentity,
-    revision: string,
-    options: GitReviewIdentityExecutionOptions = {}
-  ): Promise<GitReviewCommitIdentity> {
-    assertGitReviewIdentityExecutionOptions(options);
-    let oid: string;
-    try {
-      oid = await this.#collectLine(
-        [
-          "rev-parse",
-          "--verify",
-          "--quiet",
-          "--end-of-options",
-          `${revision}^{commit}`,
-        ],
-        repository.canonicalRoot,
-        options
-      );
-    } catch (error) {
-      if (
-        error instanceof GitExecRawError &&
-        error.causeKind === "exit" &&
-        error.exitCode === 1
-      ) {
-        throw new GitReviewIdentityError(
-          "invalidReference",
-          "目标提交不存在或不是 commit",
-          { cause: error }
-        );
-      }
-      throw error;
-    }
-    assertOid(oid, repository.oidLength, "commit");
-    const record = await this.#collectLine(
-      ["rev-list", "--parents", "--max-count=1", oid, "--"],
-      repository.canonicalRoot,
-      options
-    );
-    const [resolvedOid, ...parentOids] = record.split(" ");
-    if (resolvedOid !== oid) {
-      throw new GitReviewIdentityError(
-        "invalidOutput",
-        "git rev-list 返回了不一致的 commit OID"
-      );
-    }
-    for (const parentOid of parentOids) {
-      assertOid(parentOid, repository.oidLength, "parent commit");
-    }
-    return Object.freeze({
-      firstParentOid: parentOids[0] ?? null,
-      oid,
-      parentOids: Object.freeze(parentOids),
-    });
-  }
-
-  async resolveBranchInRepository(
-    repository: GitReviewRepositoryBaseIdentity,
-    targetRef: string,
-    headOid: string | null,
-    options: GitReviewIdentityExecutionOptions = {}
-  ): Promise<GitReviewBranchIdentity> {
-    assertGitReviewIdentityExecutionOptions(options);
-    if (headOid === null) {
-      throw new GitReviewIdentityError(
-        "unbornHead",
-        "unborn HEAD 无法进行分支对比"
-      );
-    }
-    assertOid(headOid, repository.oidLength, "HEAD");
-    let record: string;
-    try {
-      record = await this.#collectLine(
-        [
-          "for-each-ref",
-          "--count=2",
-          "--format=%(refname)%09%(objectname)%09%(objecttype)",
-          "--",
-          targetRef,
-        ],
-        repository.canonicalRoot,
-        options
-      );
-    } catch (error) {
-      if (
-        error instanceof GitReviewIdentityError &&
-        error.kind === "invalidOutput"
-      ) {
-        throw new GitReviewIdentityError(
-          "invalidReference",
-          "目标分支不存在或返回了非法身份",
-          { cause: error }
-        );
-      }
-      throw error;
-    }
-    const fields = record.split("\t");
-    if (
-      fields.length !== 3 ||
-      fields[0] !== targetRef ||
-      fields[2] !== "commit"
-    ) {
-      throw new GitReviewIdentityError(
-        "invalidReference",
-        "目标分支必须精确指向一个 commit"
-      );
-    }
-    const targetOid = fields[1] ?? "";
-    assertOid(targetOid, repository.oidLength, "target branch");
-    let mergeBaseOid: string;
-    try {
-      mergeBaseOid = await this.#collectLine(
-        ["merge-base", "--", headOid, targetOid],
-        repository.canonicalRoot,
-        options
-      );
-    } catch (error) {
-      if (
-        error instanceof GitExecRawError &&
-        error.causeKind === "exit" &&
-        error.exitCode === 1
-      ) {
-        throw new GitReviewIdentityError(
-          "noMergeBase",
-          "目标分支与请求开始时的 HEAD 没有共同基点",
-          { cause: error }
-        );
-      }
-      throw error;
-    }
-    assertOid(mergeBaseOid, repository.oidLength, "merge base");
-    return Object.freeze({
-      headOid,
-      mergeBaseOid,
-      targetOid,
-      targetRef,
-    });
-  }
-
-  async #collectLine(
+  async #collectOutput(
     args: readonly string[],
     cwd: string,
-    options: GitReviewIdentityExecutionOptions,
-    stdin?: Buffer
+    options: GitReviewIdentityExecutionOptions
   ): Promise<string> {
     const result = await this.#execGitRaw(args, {
       cwd,
@@ -295,7 +95,6 @@ export class GitReviewIdentityResolver {
         ? {}
         : { deadlineAtMs: options.deadlineAtMs }),
       ...(options.signal === undefined ? {} : { signal: options.signal }),
-      ...(stdin === undefined ? {} : { stdin }),
       ...(options.timeoutMs === undefined
         ? {}
         : { timeoutMs: options.timeoutMs }),
@@ -316,6 +115,15 @@ export class GitReviewIdentityResolver {
         { cause: error }
       );
     }
+    return decoded;
+  }
+
+  async #collectLine(
+    args: readonly string[],
+    cwd: string,
+    options: GitReviewIdentityExecutionOptions
+  ): Promise<string> {
+    const decoded = await this.#collectOutput(args, cwd, options);
     let line = decoded;
     if (decoded.endsWith("\r\n")) {
       line = decoded.slice(0, -2);
@@ -336,19 +144,22 @@ export class GitReviewIdentityResolver {
     return line;
   }
 
-  async #resolveEmptyTree(
-    root: string,
-    oidLength: number,
+  async #collectPath(
+    args: readonly string[],
+    cwd: string,
     options: GitReviewIdentityExecutionOptions
   ): Promise<string> {
-    const oid = await this.#collectLine(
-      ["hash-object", "-t", "tree", "--stdin"],
-      root,
-      options,
-      Buffer.alloc(0)
+    const path = parseGitSinglePathOutput(
+      await this.#collectOutput(args, cwd, options)
     );
-    assertOid(oid, oidLength, "empty tree");
-    return oid;
+    const parsed = gitReviewRootPathSchema.safeParse(path);
+    if (!parsed.success) {
+      throw new GitReviewIdentityError(
+        "invalidOutput",
+        "identity Git 命令返回了非法绝对路径"
+      );
+    }
+    return parsed.data;
   }
 
   async #resolveHead(

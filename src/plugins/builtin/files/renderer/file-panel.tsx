@@ -133,8 +133,6 @@ function FilePanelContent({
   if (ownerIdRef.current === null) {
     ownerIdRef.current = Symbol(props.api?.id ?? "inline");
   }
-  // group 一旦存在就永远走薄壳,绝不等 claim 成功再切 —— 否则首帧会短暂
-  // mount 内联 FileTreeSidebar,用户感知为「目录树跳一下」。
   const prefersSharedGroupView = Boolean(
     runtimeContext && group && props.api?.id && ownerIdRef.current
   );
@@ -151,9 +149,6 @@ function FilePanelContent({
     };
   }, [controller, inlineUntitledDocumentId]);
 
-  // 薄壳唯一的共享视图职责:claim/release(owner 计数)。数据(active/
-  // params/source)由 FilesGroupView 直读 dockview,薄壳不再镜像任何状态,
-  // 也就不存在陈旧闭包写回的问题。
   useLayoutEffect(() => {
     if (
       !(
@@ -168,7 +163,6 @@ function FilePanelContent({
     }
     const groupId = group.id;
     const ownerId = ownerIdRef.current;
-    // claim 可能失败:layout 恢复期 group 容器尚未挂进 DOM。RAF 重试兜底。
     let cancelled = false;
     let retryHandle: number | null = null;
     let attempts = 0;
@@ -257,7 +251,6 @@ function FilePanelContent({
     });
   }, [props.api, props.params, trackedDirty]);
 
-  // 真关闭由 dockview 明确信号转发给控制器;普通 remount 不结束会话。
   useEffect(() => {
     const panelId = props.api?.id;
     const containerApi = (
@@ -365,14 +358,20 @@ function FilePanelContent({
   const outsideWorkspace =
     selectedSource?.kind === "disk" &&
     !isDiskSourceRootAllowed(selectedSource.root, props.params?.context);
+  const shellProps = {
+    onSidebarAutoCollapse: () => setTreeCollapsed(true),
+    sidebar,
+  };
 
   if (outsideWorkspace && selectedSource) {
     return (
       <FilePanelShell
+        {...shellProps}
         header={
           <FilePanelChrome
             center={
               <FilePanelBreadcrumb
+                ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
                 segments={breadcrumbSegmentsForSource(
                   selectedSource,
                   projectName
@@ -382,7 +381,6 @@ function FilePanelContent({
             leading={chromeLeading}
           />
         }
-        sidebar={sidebar}
       >
         <ReadOnlyErrorState
           message={t(
@@ -399,6 +397,7 @@ function FilePanelContent({
   if (sourceState.kind === "invalid") {
     return (
       <FilePanelShell
+        {...shellProps}
         header={
           <FilePanelChrome
             center={
@@ -409,7 +408,6 @@ function FilePanelContent({
             leading={chromeLeading}
           />
         }
-        sidebar={sidebar}
       >
         <ReadOnlyErrorState
           message={sourceState.message}
@@ -423,6 +421,7 @@ function FilePanelContent({
   if (!selectedSource) {
     return (
       <FilePanelShell
+        {...shellProps}
         header={
           <FilePanelChrome
             center={
@@ -433,7 +432,6 @@ function FilePanelContent({
             leading={chromeLeading}
           />
         }
-        sidebar={sidebar}
       >
         <EmptyFileState hasProjectTree={Boolean(root)} t={t} />
       </FilePanelShell>
@@ -442,10 +440,12 @@ function FilePanelContent({
 
   return (
     <FilePanelShell
+      {...shellProps}
       header={
         <FilePanelChrome
           center={
             <FilePanelBreadcrumb
+              ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
               segments={breadcrumbSegmentsForSource(
                 selectedSource,
                 projectName
@@ -465,7 +465,6 @@ function FilePanelContent({
           }
         />
       }
-      sidebar={sidebar}
     >
       <ResolvedFilePanel
         context={runtimeContext}

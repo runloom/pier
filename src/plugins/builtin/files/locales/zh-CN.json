@@ -6,6 +6,7 @@
   },
   "messages": {
     "filePanel.title": "文件",
+    "filePanel.breadcrumbLabel": "文件位置",
     "filePanel.empty.title": "未选择文件",
     "filePanel.empty.withTree.description": "从项目目录树中选择一个文件，在当前标签页打开。",
     "filePanel.empty.noTree.description": "打开文件或终端 Markdown 内容预览后开始编辑。",
@@ -172,6 +173,7 @@
     "filePanel.tree.search": "在树中查找",
     "filePanel.tree.action.search": "在文件树中查找",
     "filePanel.search.close": "关闭搜索",
+    "filePanel.search.matchAnnouncement": "匹配项：{{count}}",
     "filePanel.search.matchCase": "区分大小写",
     "filePanel.search.next": "下一个匹配",
     "filePanel.search.noMatches": "无匹配",

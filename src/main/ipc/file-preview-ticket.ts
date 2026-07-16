@@ -15,6 +15,7 @@ import {
   filePreviewTicketRegistry,
 } from "../files/file-preview-ticket-registry.ts";
 import { windowManager } from "../windows/window-manager.ts";
+import { isTrustedMainFrame } from "./trusted-main-frame.ts";
 
 interface RuntimeLease {
   leaseId: string;
@@ -39,12 +40,6 @@ function rendererCanReadFiles(sender: WebContents): boolean {
     client = appCore.clients.heartbeat(clientId);
   }
   return client?.capabilities.includes("file:read") === true;
-}
-
-function isMainFrame(event: IpcMainInvokeEvent): boolean {
-  return (
-    event.senderFrame !== null && event.senderFrame === event.sender.mainFrame
-  );
 }
 
 function randomToken(): string {
@@ -95,7 +90,7 @@ export function registerFilePreviewTicketIpc(): void {
     !sender.isDestroyed() && lifecycleGeneration.get(sender) === generation;
 
   const liveLease = async (event: IpcMainInvokeEvent, leaseId: string) => {
-    if (!(isMainFrame(event) && rendererCanReadFiles(event.sender)))
+    if (!(isTrustedMainFrame(event) && rendererCanReadFiles(event.sender)))
       return null;
     const lease = leases.get(leaseId);
     if (!lease || lease.owner.webContentsId !== event.sender.id) return null;
@@ -104,7 +99,7 @@ export function registerFilePreviewTicketIpc(): void {
     if (
       leases.get(leaseId) !== lease ||
       !senderIsLive(event.sender, generation) ||
-      !isMainFrame(event) ||
+      !isTrustedMainFrame(event) ||
       !(entry?.enabled && entry.effectivePermissions.includes("file:read"))
     ) {
       revokeLease(leaseId);
@@ -119,7 +114,7 @@ export function registerFilePreviewTicketIpc(): void {
       const parsed = filePreviewRuntimeAcquireRequestSchema.safeParse(payload);
       if (!parsed.success)
         return { acquired: false, reason: "invalid-request" } as const;
-      if (!(isMainFrame(event) && rendererCanReadFiles(event.sender)))
+      if (!(isTrustedMainFrame(event) && rendererCanReadFiles(event.sender)))
         return { acquired: false, reason: "forbidden" } as const;
       hookLifecycle(event.sender);
       const generation = lifecycleGeneration.get(event.sender) ?? -1;
@@ -129,7 +124,7 @@ export function registerFilePreviewTicketIpc(): void {
       if (
         !(
           senderIsLive(event.sender, generation) &&
-          isMainFrame(event) &&
+          isTrustedMainFrame(event) &&
           entry?.enabled &&
           entry.effectivePermissions.includes("file:read")
         )
@@ -201,7 +196,7 @@ export function registerFilePreviewTicketIpc(): void {
     PIER.FILE_PREVIEW_RUNTIME_REVOKE,
     (event: IpcMainInvokeEvent, payload: unknown) => {
       const parsed = filePreviewRuntimeRevokeRequestSchema.safeParse(payload);
-      if (!(parsed.success && isMainFrame(event))) return false;
+      if (!(parsed.success && isTrustedMainFrame(event))) return false;
       const lease = leases.get(parsed.data.leaseId);
       return lease?.owner.webContentsId === event.sender.id
         ? revokeLease(parsed.data.leaseId)

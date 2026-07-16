@@ -8,22 +8,16 @@ import {
 } from "@main/services/git-exec.ts";
 import { GitReviewBudget } from "@main/services/git-review/git-review-budget.ts";
 import type { GitReviewRepositoryIdentity } from "@main/services/git-review/git-review-identity.ts";
-import { GitReviewIndexReader } from "@main/services/git-review/git-review-index.ts";
-import {
-  GIT_REVIEW_INDEX_MAX_NUL_RECORDS,
-  GIT_REVIEW_INDEX_RANGE_MAX_NUL_RECORDS,
-  type GitReviewIndexExecutionBudget,
-} from "@main/services/git-review/git-review-index-contract.ts";
+import { GIT_REVIEW_INDEX_TREE_MAX_SEGMENTS } from "@main/services/git-review/git-review-index-contract.ts";
 import { toGitReviewIndexFailure } from "@main/services/git-review/git-review-index-execution.ts";
 import { createGitReviewScheduler } from "@main/services/git-review/git-review-scheduler.ts";
-import type { GitReviewQuery } from "@shared/contracts/git-review.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { TestGitReviewIndexReader as GitReviewIndexReader } from "./git-review-test-fixtures.ts";
 
 const roots: string[] = [];
 const sha1 = "1".repeat(40);
 const sha1New = "2".repeat(40);
 const zeroSha1 = "0".repeat(40);
-const emptyTree = "4b825dc642cb6eb9a060e54bf8d69288fbee4904";
 const scope = { contextId: "worktree:test", gitRootPath: "/repo" } as const;
 
 afterEach(async () => {
@@ -52,7 +46,6 @@ async function commitAll(root: string, message: string): Promise<string> {
 function repositoryIdentity(): GitReviewRepositoryIdentity {
   return {
     canonicalRoot: "/repo",
-    emptyTreeOid: emptyTree,
     headOid: sha1,
     objectFormat: "sha1",
     oidLength: 40,
@@ -61,21 +54,6 @@ function repositoryIdentity(): GitReviewRepositoryIdentity {
 
 function fakeIdentityResolver(identity = repositoryIdentity()) {
   return {
-    async resolveBranchInRepository() {
-      return {
-        headOid: identity.headOid ?? sha1,
-        mergeBaseOid: "2".repeat(40),
-        targetOid: "3".repeat(40),
-        targetRef: "refs/heads/main",
-      } as const;
-    },
-    async resolveCommitInRepository() {
-      return {
-        firstParentOid: "2".repeat(40),
-        oid: "3".repeat(40),
-        parentOids: ["2".repeat(40)],
-      };
-    },
     async resolveRepository() {
       return identity;
     },
@@ -159,6 +137,30 @@ function createRenameChainRecords(count: number): {
   };
 }
 
+function createPathRecordsExec(paths: readonly string[]): ExecGitRaw {
+  return createRecordExec((args) => ({
+    records: args.includes("status")
+      ? paths.map((path) => Buffer.from(`? ${path}`))
+      : paths.map((path) => Buffer.from(`1\t0\t${path}`)),
+  }));
+}
+
+function countTreeNodes(paths: readonly string[]): number {
+  const directories = new Set<string>();
+  for (const path of paths) {
+    let cursor = 0;
+    while (true) {
+      const slash = path.indexOf("/", cursor);
+      if (slash < 0) {
+        break;
+      }
+      directories.add(path.slice(0, slash));
+      cursor = slash + 1;
+    }
+  }
+  return paths.length + directories.size;
+}
+
 describe("GitReviewIndexReader", () => {
   it("以常数命令合并 staged/unstaged，并固定 literal NUL 协议", async () => {
     const execGitRaw = createRecordExec((args) => {
@@ -179,20 +181,11 @@ describe("GitReviewIndexReader", () => {
     });
 
     const result = await reader.read({
-      query: { groups: ["unstaged", "staged"], kind: "uncommitted" },
       scope,
     });
 
     expect(result).toMatchObject({
-      entries: [
-        {
-          additions: 2,
-          deletions: 4,
-          groups: ["unstaged", "staged"],
-          groupStatuses: { staged: "modified", unstaged: "modified" },
-          path: "src/a.ts",
-        },
-      ],
+      entries: [{ path: "src/a.ts" }],
       kind: "ok",
     });
     expect(execGitRaw).toHaveBeenCalledTimes(3);
@@ -204,10 +197,11 @@ describe("GitReviewIndexReader", () => {
       calls.every((args) => args.includes("--ignore-submodules=none"))
     ).toBe(true);
     expect(calls[0]).toContain("--porcelain=v2");
+    expect(calls[0]).toContain("status.renameLimit=0");
     expect(calls.slice(1).every((args) => args.includes("--numstat"))).toBe(
       true
     );
-    expect(calls.slice(1).every((args) => args.includes("-l2000"))).toBe(true);
+    expect(calls.slice(1).every((args) => args.includes("-l0"))).toBe(true);
     expect(
       calls.slice(1).every((args) => args.includes("--find-copies=50%"))
     ).toBe(true);
@@ -215,7 +209,7 @@ describe("GitReviewIndexReader", () => {
       .mocked(execGitRaw)
       .mock.calls.map(([, callOptions]) => callOptions);
     expect(options[0]).toMatchObject({
-      maxRecords: GIT_REVIEW_INDEX_MAX_NUL_RECORDS,
+      maxRecords: null,
       mode: "stream",
     });
     expect(
@@ -223,8 +217,7 @@ describe("GitReviewIndexReader", () => {
         .slice(1)
         .every(
           (callOptions) =>
-            callOptions.mode === "stream" &&
-            callOptions.maxRecords === GIT_REVIEW_INDEX_RANGE_MAX_NUL_RECORDS
+            callOptions.mode === "stream" && callOptions.maxRecords === null
         )
     ).toBe(true);
   });
@@ -246,10 +239,8 @@ describe("GitReviewIndexReader", () => {
     const scheduler = createGitReviewScheduler();
     const lease = scheduler.schedule({
       budget: new GitReviewBudget(),
-      intent: "manual-read",
       key: {
         canonicalRequestKey: "index:unstaged",
-        contentRequirement: "full",
         operationKind: "index",
         repositoryKey: "/repo",
         sourceKey: "unstaged",
@@ -263,7 +254,6 @@ describe("GitReviewIndexReader", () => {
       run: ({ budget, signal }) =>
         reader.read(
           {
-            query: { groups: ["unstaged"], kind: "uncommitted" },
             scope,
           },
           { budget, signal }
@@ -274,14 +264,9 @@ describe("GitReviewIndexReader", () => {
       entries: [expect.objectContaining({ path: "src/a.ts" })],
       kind: "ok",
     });
-    expect(scheduler.snapshot()).toEqual({
-      activeLeases: 0,
-      pendingJobs: 0,
-      runningJobs: 0,
-    });
   });
 
-  it("公开 indexToken 不重复混入由 resolved query 单独持有的 HEAD", async () => {
+  it("HEAD 与 index fence 只保留在 main 私有解析结果", async () => {
     const execGitRaw = createRecordExec((args) => ({
       records: args.includes("status")
         ? [
@@ -294,8 +279,7 @@ describe("GitReviewIndexReader", () => {
     const first = await new GitReviewIndexReader({
       execGitRaw,
       identityResolver: fakeIdentityResolver(repositoryIdentity()),
-    }).read({
-      query: { groups: ["unstaged"], kind: "uncommitted" },
+    }).resolve({
       scope,
     });
     const second = await new GitReviewIndexReader({
@@ -304,27 +288,18 @@ describe("GitReviewIndexReader", () => {
         ...repositoryIdentity(),
         headOid: sha1New,
       }),
-    }).read({
-      query: { groups: ["unstaged"], kind: "uncommitted" },
+    }).resolve({
       scope,
     });
 
-    expect(first).toMatchObject({
-      kind: "ok",
-      query: { headOid: sha1, kind: "uncommitted" },
-    });
-    expect(second).toMatchObject({
-      kind: "ok",
-      query: { headOid: sha1New, kind: "uncommitted" },
-    });
-    if (
-      first.kind === "ok" &&
-      first.query.kind === "uncommitted" &&
-      second.kind === "ok" &&
-      second.query.kind === "uncommitted"
-    ) {
-      expect(first.query.indexToken).toBe(second.query.indexToken);
-      expect(first.revision).not.toBe(second.revision);
+    if (first.kind === "ok" && second.kind === "ok") {
+      expect(first.metadata.headOid).toBe(sha1);
+      expect(second.metadata.headOid).toBe(sha1New);
+      expect(first.metadata.indexRevision).not.toBe(
+        second.metadata.indexRevision
+      );
+      expect(first.result).not.toHaveProperty("query");
+      expect(first.result).not.toHaveProperty("revision");
     }
   });
 
@@ -344,7 +319,6 @@ describe("GitReviewIndexReader", () => {
 
     await expect(
       reader.read({
-        query: { groups: ["unstaged"], kind: "uncommitted" },
         scope,
       })
     ).resolves.toMatchObject({
@@ -354,130 +328,97 @@ describe("GitReviewIndexReader", () => {
     });
   });
 
-  it("文件预算只裁切最终条目，不将半条数据发布为成功", async () => {
-    const execGitRaw = createRecordExec((args) => ({
-      records: args.includes("status")
-        ? [
-            Buffer.from(`1 .M N... 100644 100644 100644 ${sha1} ${sha1} a.ts`),
-            Buffer.from(`1 .M N... 100644 100644 100644 ${sha1} ${sha1} b.ts`),
-          ]
-        : [Buffer.from("1\t0\ta.ts"), Buffer.from("1\t0\tb.ts")],
-    }));
-    const budget = new GitReviewBudget({ maxFiles: 1 });
+  it("超过旧树节点上限时仍接纳全部合法路径", async () => {
+    const deepPaths = Array.from({ length: 78 }, (_, index) =>
+      [
+        `a${index.toString().padStart(3, "0")}`,
+        ...Array.from(
+          { length: GIT_REVIEW_INDEX_TREE_MAX_SEGMENTS - 2 },
+          () => "d"
+        ),
+        "file.ts",
+      ].join("/")
+    );
+    const shallowPaths = Array.from(
+      { length: 17 },
+      (_, index) => `z${index.toString().padStart(2, "0")}.ts`
+    );
     const reader = new GitReviewIndexReader({
-      execGitRaw,
+      execGitRaw: createPathRecordsExec([...deepPaths, ...shallowPaths]),
       identityResolver: fakeIdentityResolver(),
     });
 
-    const result = await reader.read(
-      {
-        query: { groups: ["unstaged"], kind: "uncommitted" },
-        scope,
-      },
-      { budget }
-    );
-    budget.dispose();
+    const result = await reader.read({ scope });
 
-    expect(result).toMatchObject({
-      entries: [{ path: "a.ts" }],
-      kind: "ok",
-      warnings: [{ code: "filesTruncated", limit: 1, omitted: null }],
-    });
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") {
+      return;
+    }
+    expect(
+      countTreeNodes(result.entries.map((entry) => entry.path))
+    ).toBeGreaterThan(10_000);
+    expect(result.entries).toHaveLength(95);
+    expect(result.warnings).toEqual([]);
   });
 
-  it("注入预算零剩余额度时返回 limit=0，不退化成 internal", async () => {
-    const controller = new AbortController();
-    const budget: GitReviewIndexExecutionBudget = {
-      consumeOutputBytes: () => "ok",
-      failureReason: () => null,
-      remainingTimeMs: () => 1000,
-      signal: controller.signal,
-      tryConsumeFiles: () => false,
-    };
-    const reader = new GitReviewIndexReader({
-      execGitRaw: createRecordExec((args) => ({
-        records: args.includes("status")
-          ? [Buffer.from(`1 .M N... 100644 100644 100644 ${sha1} ${sha1} a.ts`)]
-          : [Buffer.from("1\t0\ta.ts")],
-      })),
-      identityResolver: fakeIdentityResolver(),
-    });
-
-    await expect(
-      reader.read(
-        {
-          query: { groups: ["unstaged"], kind: "uncommitted" },
-          scope,
-        },
-        { budget }
-      )
-    ).resolves.toMatchObject({
-      entries: [],
-      kind: "ok",
-      warnings: [{ code: "filesTruncated", limit: 0, omitted: null }],
-    });
-  });
-
-  it("组装期间跨过 deadline 返回 timeout，不误报 filesTruncated", async () => {
-    let now = 0;
-    const inner = new GitReviewBudget({ deadlineAtMs: 1, now: () => now });
-    const budget: GitReviewIndexExecutionBudget = {
-      consumeOutputBytes: (delta) => inner.consumeOutputBytes(delta),
-      failureReason: () => inner.failureReason(),
-      remainingTimeMs: () => inner.remainingTimeMs(),
-      signal: inner.signal,
-      tryConsumeFiles: (delta) => {
-        now = 1;
-        return inner.tryConsumeFiles(delta);
-      },
-    };
-    const execGitRaw = createRecordExec((args) => ({
-      records: args.includes("status")
-        ? [Buffer.from(`1 .M N... 100644 100644 100644 ${sha1} ${sha1} a.ts`)]
-        : [Buffer.from("1\t0\ta.ts")],
-    }));
-    const reader = new GitReviewIndexReader({
-      execGitRaw,
-      identityResolver: fakeIdentityResolver(),
-    });
-
-    const result = await reader.read(
-      {
-        query: { groups: ["unstaged"], kind: "uncommitted" },
-        scope,
-      },
-      { budget }
+  it("只拒绝超过单路径深度边界的条目，不限制其它文件数量", async () => {
+    const deepPaths = Array.from({ length: 100 }, (_, index) =>
+      [
+        `a${index.toString().padStart(4, "0")}`,
+        ...Array.from(
+          {
+            length: GIT_REVIEW_INDEX_TREE_MAX_SEGMENTS - (index === 0 ? 1 : 2),
+          },
+          () => "d".repeat(30)
+        ),
+        "file.ts",
+      ].join("/")
     );
-    inner.dispose();
+    const literalBackslashPath = "z-dir\\..\\file.ts";
+    const reader = new GitReviewIndexReader({
+      execGitRaw: createPathRecordsExec([...deepPaths, literalBackslashPath]),
+      identityResolver: fakeIdentityResolver(),
+    });
 
-    expect(result).toMatchObject({
-      kind: "error",
-      reason: "timeout",
-      retryable: true,
+    const result = await reader.read({ scope });
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") {
+      return;
+    }
+    expect(result.entries.map((entry) => entry.path)).toContain(
+      literalBackslashPath
+    );
+    expect(result.entries).not.toContainEqual(
+      expect.objectContaining({ path: deepPaths[0] })
+    );
+    expect(result.entries).toHaveLength(100);
+    expect(
+      countTreeNodes(result.entries.map((entry) => entry.path))
+    ).toBeGreaterThan(10_000);
+    expect(result.warnings).toContainEqual({
+      code: "pathDepthExceeded",
+      skipped: 1,
     });
   });
 
   it("最终结果校验期间跨过 deadline 仍返回 timeout", async () => {
     let now = 0;
-    let readerClockCalls = 0;
+    let commandCount = 0;
     const budget = new GitReviewBudget({ deadlineAtMs: 1, now: () => now });
     const reader = new GitReviewIndexReader({
-      execGitRaw: createRecordExec((args) => ({
-        records: args.includes("status") ? [] : [],
-      })),
-      identityResolver: fakeIdentityResolver(),
-      now: () => {
-        readerClockCalls += 1;
-        if (readerClockCalls === 2) {
+      execGitRaw: createRecordExec(() => {
+        commandCount += 1;
+        if (commandCount === 2) {
           now = 1;
         }
-        return 0;
-      },
+        return { records: [] };
+      }),
+      identityResolver: fakeIdentityResolver(),
     });
 
     const result = await reader.read(
       {
-        query: { groups: ["unstaged"], kind: "uncommitted" },
         scope,
       },
       { budget }
@@ -505,7 +446,6 @@ describe("GitReviewIndexReader", () => {
     await expect(
       reader.read(
         {
-          query: { groups: ["unstaged"], kind: "uncommitted" },
           scope,
         },
         { signal: controller.signal }
@@ -517,7 +457,7 @@ describe("GitReviewIndexReader", () => {
     });
   });
 
-  it("单 group 查询仍按 primary 全量逻辑项截断，空结果不伪装 clean", async () => {
+  it("primary 超过 2,000 条时仍返回全部轻量索引", async () => {
     const statusRecords = Array.from({ length: 2001 }, (_, index) =>
       Buffer.from(
         `1 .M N... 100644 100644 100644 ${sha1} ${sha1} unstaged-${index}.ts`
@@ -531,24 +471,19 @@ describe("GitReviewIndexReader", () => {
       identityResolver: fakeIdentityResolver(),
     });
 
-    await expect(
-      reader.read({
-        query: { groups: ["staged"], kind: "uncommitted" },
-        scope,
-      })
-    ).resolves.toMatchObject({
-      entries: [],
-      kind: "ok",
-      warnings: [{ code: "filesTruncated", limit: 2000, omitted: null }],
-    });
-    expect(execGitRaw).toHaveBeenCalledTimes(2);
+    const result = await reader.read({ scope });
+
+    expect(result.kind).toBe("ok");
+    if (result.kind !== "ok") {
+      return;
+    }
+    expect(result.entries).toHaveLength(2001);
+    expect(result.warnings).toEqual([]);
+    expect(execGitRaw).toHaveBeenCalledTimes(3);
   });
 
-  it("2,000/2,001 条非相邻 rename 链按最终文件口径截断", async () => {
-    for (const [count, truncated] of [
-      [2000, false],
-      [2001, true],
-    ] as const) {
+  it("2,000/2,001 条非相邻 rename 链均按最终文件口径完整返回", async () => {
+    for (const count of [2000, 2001] as const) {
       const fixture = createRenameChainRecords(count);
       const execGitRaw = createRecordExec((args) => {
         if (args.includes("status")) {
@@ -564,20 +499,17 @@ describe("GitReviewIndexReader", () => {
         execGitRaw,
         identityResolver: fakeIdentityResolver(),
       }).read({
-        query: { groups: ["unstaged", "staged"], kind: "uncommitted" },
         scope,
       });
 
-      expect(result).toMatchObject({ entries: { length: 2000 }, kind: "ok" });
+      expect(result).toMatchObject({ entries: { length: count }, kind: "ok" });
       if (result.kind === "ok") {
-        expect(
-          result.warnings.some((warning) => warning.code === "filesTruncated")
-        ).toBe(truncated);
+        expect(result.warnings).toEqual([]);
       }
     }
   }, 15_000);
 
-  it("不为 binary/submodule/untracked 伪造统计，仅对应有统计的错配报警", async () => {
+  it("binary/submodule/untracked 保持 canonical 条目且不制造额外警告", async () => {
     const execGitRaw = createRecordExec((args) => {
       if (args.includes("status")) {
         return {
@@ -600,22 +532,21 @@ describe("GitReviewIndexReader", () => {
     });
 
     const result = await reader.read({
-      query: { groups: ["unstaged"], kind: "uncommitted" },
       scope,
     });
 
     expect(result).toMatchObject({
       entries: expect.arrayContaining([
-        expect.objectContaining({ additions: null, path: "missing.ts" }),
-        expect.objectContaining({ additions: null, path: "submodule" }),
-        expect.objectContaining({ additions: null, path: "untracked.ts" }),
+        expect.objectContaining({ path: "missing.ts" }),
+        expect.objectContaining({ path: "submodule" }),
+        expect.objectContaining({ path: "untracked.ts" }),
       ]),
       kind: "ok",
       warnings: [],
     });
   });
 
-  it("缺失或 rename oldPath 错配的 numstat 不会附到其他条目", async () => {
+  it("rename oldPath 错配的 numstat 不改变 canonical 条目", async () => {
     const execGitRaw = createRecordExec((args) => {
       if (args.includes("status")) {
         return {
@@ -642,19 +573,16 @@ describe("GitReviewIndexReader", () => {
 
     await expect(
       reader.read({
-        query: { groups: ["unstaged"], kind: "uncommitted" },
         scope,
       })
     ).resolves.toMatchObject({
-      entries: [
-        expect.objectContaining({ additions: null, path: "target.ts" }),
-      ],
+      entries: [expect.objectContaining({ path: "target.ts" })],
       kind: "ok",
-      warnings: [{ code: "entryStatsUnavailable", count: 1 }],
+      warnings: [],
     });
   });
 
-  it("一对一 staged→unstaged rename 链合并为最终路径并按 group targetPath 取统计", async () => {
+  it("一对一 staged→unstaged rename 链合并为最终路径", async () => {
     const execGitRaw = createRecordExec((args) => {
       if (args.includes("status")) {
         return {
@@ -683,51 +611,17 @@ describe("GitReviewIndexReader", () => {
 
     await expect(
       reader.read({
-        query: { groups: ["unstaged", "staged"], kind: "uncommitted" },
         scope,
       })
     ).resolves.toMatchObject({
       entries: [
         expect.objectContaining({
-          additions: 3,
-          deletions: 1,
-          groups: ["unstaged", "staged"],
           oldPaths: ["b.ts", "a.ts"],
           path: "c.ts",
         }),
       ],
       kind: "ok",
       warnings: [],
-    });
-    await expect(
-      reader.read({
-        query: { groups: ["staged"], kind: "uncommitted" },
-        scope,
-      })
-    ).resolves.toMatchObject({
-      entries: [
-        expect.objectContaining({
-          groups: ["staged"],
-          oldPaths: ["a.ts"],
-          path: "b.ts",
-        }),
-      ],
-      kind: "ok",
-    });
-    await expect(
-      reader.read({
-        query: { groups: ["unstaged"], kind: "uncommitted" },
-        scope,
-      })
-    ).resolves.toMatchObject({
-      entries: [
-        expect.objectContaining({
-          groups: ["unstaged"],
-          oldPaths: ["b.ts"],
-          path: "c.ts",
-        }),
-      ],
-      kind: "ok",
     });
   });
 
@@ -760,19 +654,18 @@ describe("GitReviewIndexReader", () => {
 
     await expect(
       reader.read({
-        query: { groups: ["unstaged", "staged"], kind: "uncommitted" },
         scope,
       })
     ).resolves.toMatchObject({
       entries: [
-        expect.objectContaining({ groups: ["staged"], path: "b.ts" }),
-        expect.objectContaining({ groups: ["unstaged"], path: "c.ts" }),
+        expect.objectContaining({ path: "b.ts" }),
+        expect.objectContaining({ path: "c.ts" }),
       ],
       kind: "ok",
     });
   });
 
-  it("deleted 与 conflict 在索引层保留唯一且有序的 group", async () => {
+  it("deleted 与 conflict 在固定双组索引中保留正确聚合状态", async () => {
     const execGitRaw = createRecordExec((args) => {
       if (args.includes("status")) {
         return {
@@ -801,24 +694,20 @@ describe("GitReviewIndexReader", () => {
     });
 
     const result = await reader.read({
-      query: { groups: ["unstaged", "staged"], kind: "uncommitted" },
       scope,
     });
 
     expect(result).toMatchObject({
       entries: expect.arrayContaining([
         expect.objectContaining({
-          groups: ["conflict"],
           path: "conflict.ts",
           status: "conflicted",
         }),
         expect.objectContaining({
-          groups: ["staged"],
           path: "staged-deleted.ts",
           status: "deleted",
         }),
         expect.objectContaining({
-          groups: ["unstaged"],
           path: "worktree-deleted.ts",
           status: "deleted",
         }),
@@ -844,15 +733,11 @@ describe("GitReviewIndexReader", () => {
 
     await expect(
       reader.read({
-        query: { groups: ["unstaged", "staged"], kind: "uncommitted" },
         scope,
       })
     ).resolves.toMatchObject({
       entries: [
         expect.objectContaining({
-          additions: null,
-          deletions: null,
-          groups: ["conflict"],
           path: "conflict.ts",
         }),
       ],
@@ -861,7 +746,7 @@ describe("GitReviewIndexReader", () => {
     });
   });
 
-  it("只对 C-locale 官方 rename-limit advisory 生成 typed warning", async () => {
+  it("不把 rename-limit advisory 暴露成产品数量提示", async () => {
     const execGitRaw = createRecordExec((args) => ({
       records: args.includes("status") ? [] : [],
       stderr: args.includes("status")
@@ -875,12 +760,11 @@ describe("GitReviewIndexReader", () => {
 
     await expect(
       reader.read({
-        query: { groups: ["unstaged"], kind: "uncommitted" },
         scope,
       })
     ).resolves.toMatchObject({
       kind: "ok",
-      warnings: [{ code: "renameDetectionLimited", limit: 2000 }],
+      warnings: [],
     });
   });
 
@@ -902,7 +786,6 @@ describe("GitReviewIndexReader", () => {
     const reader = new GitReviewIndexReader();
 
     const result = await reader.read({
-      query: { groups: ["unstaged", "staged"], kind: "uncommitted" },
       scope: { contextId: "worktree:real", gitRootPath: root },
     });
 
@@ -913,21 +796,15 @@ describe("GitReviewIndexReader", () => {
     expect(result.entries).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          additions: null,
-          groups: ["unstaged"],
           path: "-untracked.ts",
           status: "added",
         }),
         expect.objectContaining({
-          groups: ["staged"],
           oldPaths: ["rename-old.ts"],
           path: renamedPath,
           status: "renamed",
         }),
         expect.objectContaining({
-          additions: 2,
-          deletions: 1,
-          groups: ["unstaged", "staged"],
           path: "tracked.ts",
         }),
       ])
@@ -943,7 +820,6 @@ describe("GitReviewIndexReader", () => {
     await execGit(["add", "-N", "--", "c.ts"], { cwd: root });
 
     const resolution = await new GitReviewIndexReader().resolve({
-      query: { groups: ["unstaged", "staged"], kind: "uncommitted" },
       scope: { contextId: "worktree:rename-chain", gitRootPath: root },
     });
 
@@ -961,7 +837,6 @@ describe("GitReviewIndexReader", () => {
       result: {
         entries: [
           expect.objectContaining({
-            groups: ["unstaged", "staged"],
             oldPaths: ["b.ts", "a.ts"],
             path: "c.ts",
           }),
@@ -987,16 +862,12 @@ describe("GitReviewIndexReader", () => {
     await execGit(["config", "submodule.sub.ignore", "all"], { cwd: root });
 
     const result = await new GitReviewIndexReader().read({
-      query: { groups: ["unstaged"], kind: "uncommitted" },
       scope: { contextId: "worktree:submodule", gitRootPath: root },
     });
 
     expect(result).toMatchObject({
       entries: [
         expect.objectContaining({
-          additions: null,
-          deletions: null,
-          groups: ["unstaged"],
           path: "sub",
         }),
       ],
@@ -1017,118 +888,12 @@ describe("GitReviewIndexReader", () => {
     await execGit(["add", "--", "staged.ts"], { cwd: root });
 
     const result = await new GitReviewIndexReader().read({
-      query: { groups: ["staged"], kind: "uncommitted" },
       scope: { contextId: "worktree:sha256", gitRootPath: root },
     });
 
     expect(result).toMatchObject({
       entries: [expect.objectContaining({ path: "staged.ts" })],
       kind: "ok",
-      query: { headOid: null, kind: "uncommitted" },
-    });
-  });
-
-  it("commit/branch 索引各自固定为两条机器协议命令和解析后的 OID 范围", async () => {
-    const execGitRaw = createRecordExec((args) => ({
-      records: args.includes("--raw")
-        ? [
-            Buffer.from(`:100644 100644 ${sha1} ${sha1New} M`),
-            Buffer.from("file.ts"),
-          ]
-        : [Buffer.from("1\t1\tfile.ts")],
-    }));
-    const identityResolver = fakeIdentityResolver();
-    const reader = new GitReviewIndexReader({ execGitRaw, identityResolver });
-
-    await expect(
-      reader.read({ query: { kind: "commit", oid: "HEAD" }, scope })
-    ).resolves.toMatchObject({ kind: "ok" });
-    await expect(
-      reader.read({
-        query: { kind: "branch", targetRef: "refs/heads/main" },
-        scope,
-      })
-    ).resolves.toMatchObject({ kind: "ok" });
-
-    expect(execGitRaw).toHaveBeenCalledTimes(4);
-    const calls = vi.mocked(execGitRaw).mock.calls.map(([args]) => args);
-    expect(
-      calls.every((args) => args.includes("--ignore-submodules=none"))
-    ).toBe(true);
-    const machineArgs = [
-      "--no-ext-diff",
-      "--no-textconv",
-      "--no-color",
-      "--ignore-submodules=none",
-      "--find-renames=50%",
-      "--find-copies=50%",
-      "-l2000",
-    ];
-    expect(calls[0]).toEqual([
-      "--literal-pathspecs",
-      "diff",
-      ...machineArgs,
-      "--no-abbrev",
-      "--raw",
-      "-z",
-      "2".repeat(40),
-      "3".repeat(40),
-      "--",
-    ]);
-    expect(calls[1]).toEqual([
-      "--literal-pathspecs",
-      "diff",
-      ...machineArgs,
-      "--numstat",
-      "-z",
-      "2".repeat(40),
-      "3".repeat(40),
-      "--",
-    ]);
-    expect(calls[2]).toEqual([
-      "--literal-pathspecs",
-      "diff",
-      ...machineArgs,
-      "--no-abbrev",
-      "--raw",
-      "-z",
-      "2".repeat(40),
-      sha1,
-      "--",
-    ]);
-    expect(calls[3]).toEqual([
-      "--literal-pathspecs",
-      "diff",
-      ...machineArgs,
-      "--numstat",
-      "-z",
-      "2".repeat(40),
-      sha1,
-      "--",
-    ]);
-    expect(
-      vi
-        .mocked(execGitRaw)
-        .mock.calls.every(
-          ([, options]) =>
-            options.mode === "stream" &&
-            options.maxRecords === GIT_REVIEW_INDEX_RANGE_MAX_NUL_RECORDS
-        )
-    ).toBe(true);
-  });
-
-  it("不存在的 commit 在 index 边界映射为不可重试 invalidSource", async () => {
-    const root = await createRepository();
-
-    await expect(
-      new GitReviewIndexReader().read({
-        query: { kind: "commit", oid: "HEAD" },
-        scope: { contextId: "worktree:unborn", gitRootPath: root },
-      })
-    ).resolves.toMatchObject({
-      kind: "error",
-      reason: "invalidSource",
-      retryable: false,
     });
   });
 
@@ -1138,7 +903,6 @@ describe("GitReviewIndexReader", () => {
 
     await expect(
       new GitReviewIndexReader().read({
-        query: { groups: ["unstaged"], kind: "uncommitted" },
         scope: { contextId: "worktree:not-repo", gitRootPath: root },
       })
     ).resolves.toMatchObject({
@@ -1158,25 +922,6 @@ describe("GitReviewIndexReader", () => {
     expect(failure.message).not.toContain("�");
   });
 
-  it("只把请求边界校验失败归因为 invalidSource", async () => {
-    const reader = new GitReviewIndexReader({
-      execGitRaw: createRecordExec(() => ({ records: [] })),
-      identityResolver: fakeIdentityResolver(),
-    });
-    const invalidQuery = {
-      kind: "commit",
-      oid: "-not-a-safe-revision",
-    } as unknown as GitReviewQuery;
-
-    await expect(
-      reader.read({ query: invalidQuery, scope })
-    ).resolves.toMatchObject({
-      kind: "error",
-      reason: "invalidSource",
-      retryable: false,
-    });
-  });
-
   it("内部结果契约回归归因为 internal，不伪装成用户输入错误", async () => {
     const reader = new GitReviewIndexReader({
       execGitRaw: createRecordExec((args) => ({
@@ -1190,51 +935,12 @@ describe("GitReviewIndexReader", () => {
 
     await expect(
       reader.read({
-        query: { groups: ["unstaged"], kind: "uncommitted" },
         scope,
       })
     ).resolves.toMatchObject({
       kind: "error",
       reason: "internal",
       retryable: false,
-    });
-  });
-
-  it("真实 root commit 和 branch 均使用唯一语义 group", async () => {
-    const root = await createRepository();
-    await writeFile(join(root, "root.ts"), "root\n", "utf8");
-    const base = await commitAll(root, "root");
-    await execGit(["branch", "review-base", base], { cwd: root });
-    await writeFile(join(root, "root.ts"), "head\n", "utf8");
-    await writeFile(join(root, "head.ts"), "head\n", "utf8");
-    await commitAll(root, "head");
-    const reader = new GitReviewIndexReader();
-    const commonScope = { contextId: "worktree:real", gitRootPath: root };
-
-    const rootCommit = await reader.read({
-      query: { kind: "commit", oid: base },
-      scope: commonScope,
-    });
-    const branch = await reader.read({
-      query: { kind: "branch", targetRef: "refs/heads/review-base" },
-      scope: commonScope,
-    });
-
-    expect(rootCommit).toMatchObject({
-      entries: [expect.objectContaining({ groups: ["commit"] })],
-      kind: "ok",
-      query: { baseOid: null, kind: "commit", root: true },
-    });
-    expect(branch).toMatchObject({
-      entries: expect.arrayContaining([
-        expect.objectContaining({ groups: ["branch"], path: "head.ts" }),
-      ]),
-      kind: "ok",
-      query: {
-        headOid: expect.any(String),
-        kind: "branch",
-        mergeBaseOid: base,
-      },
     });
   });
 });

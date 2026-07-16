@@ -54,6 +54,7 @@ function renderItem() {
   const node = item.render({
     context: undefined,
     cwd: null,
+    getGroupId: () => null,
     panelId: PANEL_ID,
     title: null,
   });

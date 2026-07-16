@@ -1,5 +1,5 @@
 const SCROLLBAR_POLICY_SELECTOR =
-  '[data-scrollbar]:not([data-scrollbar="none"]), [data-flat-scroll]';
+  '[data-scrollbar]:not([data-scrollbar="none"]), [data-flat-scroll], .cv-scrollbar';
 
 export const AUTO_HIDE_SCROLLBAR_IDLE_MS = 900;
 

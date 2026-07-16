@@ -1,6 +1,5 @@
 import {
   GIT_REVIEW_DEADLINE_MS,
-  GIT_REVIEW_MAX_FILES,
   GIT_REVIEW_MAX_OUTPUT_BYTES,
   GitReviewBudget,
 } from "@main/services/git-review/git-review-budget.ts";
@@ -32,10 +31,7 @@ describe("GitReviewBudget", () => {
     expect(budget.consumeOutputBytes(1)).toBe("ok");
     expect(budget.consumeOutputBytes(1)).toBe("output-limit");
     expect(budget.signal.aborted).toBe(true);
-    expect(budget.snapshot()).toMatchObject({
-      outputBytes: GIT_REVIEW_MAX_OUTPUT_BYTES + 1,
-      reason: "output-limit",
-    });
+    expect(budget.failureReason()).toBe("output-limit");
   });
 
   it("累计输出超出安全整数时饱和到 MAX_SAFE 并稳定终止", () => {
@@ -45,25 +41,8 @@ describe("GitReviewBudget", () => {
     expect(budget.consumeOutputBytes(Number.MAX_SAFE_INTEGER)).toBe(
       "output-limit"
     );
-    expect(budget.snapshot()).toMatchObject({
-      outputBytes: Number.MAX_SAFE_INTEGER,
-      reason: "output-limit",
-    });
-    expect(Number.isSafeInteger(budget.snapshot().outputBytes)).toBe(true);
-  });
-
-  it("文件预算只累计最终逻辑条目并在第 2001 项返回截断", () => {
-    const budget = new GitReviewBudget();
-
-    expect(budget.tryConsumeFiles(GIT_REVIEW_MAX_FILES)).toBe(true);
-    expect(budget.tryConsumeFiles()).toBe(false);
-    expect(budget.signal.aborted).toBe(false);
-    expect(budget.snapshot()).toMatchObject({
-      fileLimitReached: true,
-      files: GIT_REVIEW_MAX_FILES,
-      reason: null,
-    });
-    budget.dispose();
+    expect(budget.failureReason()).toBe("output-limit");
+    expect(budget.consumeOutputBytes(0)).toBe("output-limit");
   });
 
   it("期限包含排队时间且到点同步冻结为 timeout", () => {
@@ -106,13 +85,6 @@ describe("GitReviewBudget", () => {
   });
 
   it("拒绝会破坏计数不变量的参数", () => {
-    expect(() => new GitReviewBudget({ maxFiles: 0 })).toThrow(RangeError);
-    expect(
-      () => new GitReviewBudget({ maxFiles: GIT_REVIEW_MAX_FILES + 1 })
-    ).toThrow(RangeError);
-    expect(
-      () => new GitReviewBudget({ maxFiles: Number.MAX_SAFE_INTEGER })
-    ).toThrow(RangeError);
     expect(
       () =>
         new GitReviewBudget({
@@ -124,7 +96,6 @@ describe("GitReviewBudget", () => {
     ).toThrow(RangeError);
     const budget = new GitReviewBudget();
     expect(() => budget.consumeOutputBytes(-1)).toThrow(RangeError);
-    expect(() => budget.tryConsumeFiles(Number.NaN)).toThrow(RangeError);
     budget.dispose();
     expect(
       () => new GitReviewBudget({ deadlineAtMs: Number.POSITIVE_INFINITY })

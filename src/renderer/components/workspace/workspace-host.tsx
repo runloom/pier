@@ -36,7 +36,6 @@ import {
 } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
-import { updatePanelResourceSnapshot } from "@/stores/panel-resource.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
 import {
   requestTerminalFocusIntent,
@@ -116,17 +115,6 @@ function buildTerminalWorkspacePresentationState(
   };
 }
 
-function syncPanelResourceSnapshot(api: DockviewReadyEvent["api"]): void {
-  updatePanelResourceSnapshot({
-    activePanelId: api.activePanel?.id ?? null,
-    panels: api.panels.map((panel) => ({
-      dockviewActive: panel.api.isActive,
-      dockviewVisible: panel.api.isVisible,
-      id: panel.id,
-    })),
-  });
-}
-
 function reconcileTerminalPanels(api: DockviewReadyEvent["api"]): void {
   const terminalPanelIds = api.panels
     .filter((panel) => panel.view.contentComponent === "terminal")
@@ -139,7 +127,6 @@ function syncTerminalPresentation(
   flushReason: TerminalLayoutFlushReason
 ): void {
   useWorkspaceStore.getState().syncTabShortcutHints();
-  syncPanelResourceSnapshot(api);
   updateTerminalPresentationWorkspace(
     buildTerminalWorkspacePresentationState(api),
     flushReason
@@ -208,7 +195,6 @@ export function WorkspaceHost() {
       setApi(null);
       setWorkspaceHasMaximizedGroup(false);
       syncActivePanelScope(null);
-      updatePanelResourceSnapshot({ activePanelId: null, panels: [] });
       markWorkspaceLayoutPersistenceUnavailable();
     };
   }, [setApi, setWorkspaceHasMaximizedGroup]);

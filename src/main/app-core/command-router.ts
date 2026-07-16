@@ -22,6 +22,7 @@ import { PluginSettingsServiceError } from "../services/plugin-settings-service.
 import { WorktreeServiceError } from "../services/worktree-service.ts";
 import { executeAiCommand } from "./ai-commands.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
+import type { CommandExecutionContext } from "./command-execution-context.ts";
 import {
   commandFailure as failure,
   commandSuccess as success,
@@ -30,6 +31,7 @@ import type { PierCoreServices } from "./command-router-services.ts";
 import { executeEnvironmentCommand } from "./environment-commands.ts";
 import { executeFileCommand } from "./file-commands.ts";
 import { executeGitCommand } from "./git-commands.ts";
+import { executeGitReviewCommand } from "./git-review-commands.ts";
 import {
   executePanelFocusCommand,
   executePanelListCommand,
@@ -53,6 +55,7 @@ import {
 import { orderedWindows } from "./window-routing.ts";
 import { executeWorktreeCommand } from "./worktree-commands.ts";
 
+export type { CommandExecutionContext } from "./command-execution-context.ts";
 export type { PierCoreServices } from "./command-router-services.ts";
 
 export interface CommandRouter {
@@ -67,11 +70,6 @@ export interface CreateCommandRouterArgs {
   onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void;
   onWorktreeCreateProgress?: (progress: WorktreeCreateProgress) => void;
   services: PierCoreServices;
-}
-
-export interface CommandExecutionContext {
-  clientEnv?: Record<string, string> | undefined;
-  windowRecordId?: string | undefined;
 }
 
 function requestIdOf(rawEnvelope: unknown): string {
@@ -408,6 +406,8 @@ async function executeCommandByDomain(
         onWorktreeCreateProgress
       ),
     (cmd: PierCommand) => executeFileCommand(requestId, cmd, services, context),
+    (cmd: PierCommand) =>
+      executeGitReviewCommand(requestId, cmd, services, context),
     (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeRunCommand(requestId, cmd, services, context),
     (cmd: PierCommand) =>
@@ -467,6 +467,7 @@ export function createCommandRouter({
 }: CreateCommandRouterArgs): CommandRouter {
   return {
     async execute(rawEnvelope, trustedContext = {}) {
+      const requestStartedAtMs = Date.now();
       const requestId = requestIdOf(rawEnvelope);
       const parsed = pierCommandEnvelopeSchema.safeParse(rawEnvelope);
       if (!parsed.success) {
@@ -489,7 +490,7 @@ export function createCommandRouter({
         command,
         clients,
         services,
-        { ...trustedContext, clientEnv },
+        { ...trustedContext, clientEnv, clientId, requestStartedAtMs },
         onEnvironmentsChanged,
         onWorktreeCreateProgress
       );

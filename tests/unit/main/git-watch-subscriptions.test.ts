@@ -7,8 +7,8 @@ describe("createGitWatchSubscriptions", () => {
     const dispose = vi.fn();
     const subscribe = vi.fn(() => dispose);
 
-    subs.start(1, "/repo", subscribe);
-    subs.start(1, "/repo", subscribe);
+    expect(subs.start(1, "/repo", subscribe)).toBe(true);
+    expect(subs.start(1, "/repo", subscribe)).toBe(true);
 
     expect(subscribe).toHaveBeenCalledTimes(1);
 
@@ -17,6 +17,25 @@ describe("createGitWatchSubscriptions", () => {
 
     subs.stop(1, "/repo");
     expect(dispose).toHaveBeenCalledTimes(1);
+  });
+
+  it("限制每窗口根、全局根和同根引用，拒绝时不建立底层订阅", () => {
+    const subs = createGitWatchSubscriptions({
+      maxActiveRoots: 2,
+      maxReferencesPerRoot: 2,
+      maxRootsPerWebContents: 2,
+    });
+    const subscribe = vi.fn(() => vi.fn());
+
+    expect(subs.start(1, "/repo-a", subscribe)).toBe(true);
+    expect(subs.start(1, "/repo-a", subscribe)).toBe(true);
+    expect(subs.start(1, "/repo-a", subscribe)).toBe(false);
+    expect(subs.start(1, "/repo-b", subscribe)).toBe(true);
+    expect(subs.start(1, "/repo-c", subscribe)).toBe(false);
+    expect(subs.start(2, "/repo-c", subscribe)).toBe(false);
+    expect(subs.start(2, "/repo-a", subscribe)).toBe(true);
+
+    expect(subscribe).toHaveBeenCalledTimes(3);
   });
 
   it("未 start 过的 stop → 不抛错、dispose 不被调用", () => {
@@ -94,5 +113,24 @@ describe("createGitWatchSubscriptions", () => {
 
     subs.start(1, "/repo", subscribe);
     expect(subscribe).toHaveBeenCalledTimes(2);
+  });
+
+  it("一个 disposer 抛错时仍释放其余 root，且 STOP 保持幂等", () => {
+    const subs = createGitWatchSubscriptions();
+    const disposeA = vi.fn(() => {
+      throw new Error("dispose failed");
+    });
+    const disposeB = vi.fn();
+
+    expect(subs.start(1, "/repo-a", () => disposeA)).toBe(true);
+    expect(subs.start(1, "/repo-b", () => disposeB)).toBe(true);
+    expect(() => subs.dropAll(1)).not.toThrow();
+    expect(disposeA).toHaveBeenCalledOnce();
+    expect(disposeB).toHaveBeenCalledOnce();
+    expect(subs.stop(1, "/repo-a")).toBe(false);
+
+    expect(subs.start(2, "/repo-a", () => disposeA)).toBe(true);
+    expect(subs.stop(2, "/repo-a")).toBe(true);
+    expect(subs.stop(2, "/repo-a")).toBe(false);
   });
 });

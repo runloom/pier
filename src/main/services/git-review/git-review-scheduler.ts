@@ -1,91 +1,110 @@
 import { GitReviewSharedExecutionBudget } from "./git-review-execution-budget.ts";
 import {
-  GIT_REVIEW_DEFAULT_FAILURE_REASON,
   type GitReviewCancellationReason,
   type GitReviewOperationLease,
-  type GitReviewOperationTransition,
   type GitReviewScheduleRequest,
   type GitReviewScheduler,
   GitReviewSchedulerError,
-  type GitReviewSchedulerOptions,
 } from "./git-review-scheduler-contract.ts";
 import {
   canRunGitReviewJob,
   createDeferredLease,
-  createRejectedOperationLease,
   GitReviewActiveLeaseRegistry,
   type GitReviewDeferredLease,
   GitReviewSchedulerQueue,
-  GitReviewSchedulerReservations,
   type GitReviewSharedJob,
-  type GitReviewTransitionDeliveryContext,
   gitReviewOwnerToString,
   gitReviewScheduleKeyToString,
-  gitReviewWatchLaneToString,
+  gitReviewSourcePermitKey,
 } from "./git-review-scheduler-internal.ts";
-import { GitReviewSchedulerObserverBridge } from "./git-review-scheduler-observer.ts";
 import {
+  GIT_REVIEW_SCHEDULER_GLOBAL_DETACHED,
   GIT_REVIEW_SCHEDULER_GLOBAL_PENDING,
+  GIT_REVIEW_SCHEDULER_REPOSITORY_DETACHED,
   GIT_REVIEW_SCHEDULER_REPOSITORY_PENDING,
 } from "./git-review-scheduler-policy.ts";
 
 export type {
   GitReviewCancellationReason,
-  GitReviewContentRequirement,
+  GitReviewExecutionBudget,
   GitReviewOperationLease,
   GitReviewOperationOwner,
-  GitReviewOperationState,
   GitReviewRunContext,
-  GitReviewScheduleIntent,
   GitReviewScheduleKey,
   GitReviewScheduleRequest,
   GitReviewScheduler,
-  GitReviewSchedulerOptions,
-  GitReviewSchedulerSnapshot,
 } from "./git-review-scheduler-contract.ts";
 export { GitReviewSchedulerError } from "./git-review-scheduler-contract.ts";
 
-export function createGitReviewScheduler(
-  options: GitReviewSchedulerOptions = {}
-): GitReviewScheduler {
-  const now = options.now ?? Date.now;
+export function createGitReviewScheduler(): GitReviewScheduler {
   const activeLeases = new GitReviewActiveLeaseRegistry();
+  const detachedByJob = new Map<GitReviewSharedJob, Set<Promise<unknown>>>();
+  const detachedByRepository = new Map<string, number>();
+  const detachedBySource = new Map<string, number>();
   const jobsByKey = new Map<string, GitReviewSharedJob>();
-  const queueState = new GitReviewSchedulerQueue(now);
-  const reservations = new GitReviewSchedulerReservations();
-  const observerBridge = new GitReviewSchedulerObserverBridge(options, now);
+  const queueState = new GitReviewSchedulerQueue();
+
+  function trackDetachedOperation(
+    job: GitReviewSharedJob,
+    operation: Promise<unknown>
+  ): void {
+    let operations = detachedByJob.get(job);
+    if (operations?.has(operation)) {
+      return;
+    }
+    if (operations === undefined) {
+      operations = new Set();
+      detachedByJob.set(job, operations);
+      incrementCounter(detachedByRepository, job.key.repositoryKey);
+      incrementCounter(detachedBySource, gitReviewSourcePermitKey(job.key));
+    }
+    operations.add(operation);
+    const release = (): void => {
+      const current = detachedByJob.get(job);
+      if (current === undefined || !current.delete(operation)) {
+        return;
+      }
+      if (current.size > 0) {
+        return;
+      }
+      detachedByJob.delete(job);
+      decrementCounter(detachedByRepository, job.key.repositoryKey);
+      decrementCounter(detachedBySource, gitReviewSourcePermitKey(job.key));
+      dispatch();
+    };
+    operation.then(release, release);
+  }
+
+  function detachedAdmissionBlocked(key: GitReviewSharedJob["key"]): boolean {
+    return (
+      (detachedBySource.get(gitReviewSourcePermitKey(key)) ?? 0) > 0 ||
+      (detachedByRepository.get(key.repositoryKey) ?? 0) >=
+        GIT_REVIEW_SCHEDULER_REPOSITORY_DETACHED ||
+      detachedByJob.size >= GIT_REVIEW_SCHEDULER_GLOBAL_DETACHED
+    );
+  }
+
+  function hasDetachedCapacityFor(job: GitReviewSharedJob): boolean {
+    return (
+      detachedByJob.size + queueState.runningJobs <
+        GIT_REVIEW_SCHEDULER_GLOBAL_DETACHED &&
+      (detachedByRepository.get(job.key.repositoryKey) ?? 0) +
+        queueState.repositoryRunning(job.key.repositoryKey) <
+        GIT_REVIEW_SCHEDULER_REPOSITORY_DETACHED
+    );
+  }
 
   function rejectRequest<T>(
     request: GitReviewScheduleRequest<T>,
-    error: GitReviewSchedulerError,
-    deduplicated: boolean,
-    terminalState: "cancelled" | "settled"
+    error: GitReviewSchedulerError
   ): GitReviewOperationLease<T> {
-    reservations.reserveOperation(request.operationId);
     request.budget.dispose();
-    try {
-      observerBridge.immediate(
-        request,
-        error,
-        deduplicated,
-        terminalState,
-        () => reservations.releaseOperation(request.operationId)
-      );
-    } finally {
-      reservations.releaseOperation(request.operationId);
-    }
-    return createRejectedOperationLease(request.operationId, error);
+    const promise = Promise.reject<T>(error);
+    promise.catch(() => undefined);
+    return { promise };
   }
 
-  function terminalLease(
-    lease: GitReviewDeferredLease,
-    state: "cancelled" | "settled",
-    reason: NonNullable<GitReviewOperationTransition["terminalReason"]>,
-    outcome?:
-      | { error: unknown; kind: "failure" }
-      | { kind: "success"; value: unknown },
-    deliveryContext?: GitReviewTransitionDeliveryContext
-  ): void {
+  function terminalLease(lease: GitReviewDeferredLease): void {
     if (lease.terminal) {
       return;
     }
@@ -93,19 +112,6 @@ export function createGitReviewScheduler(
     lease.budget.signal.removeEventListener("abort", lease.abortListener);
     lease.budget.dispose();
     activeLeases.delete(lease);
-    reservations.reserveOperation(lease.operationId);
-    try {
-      observerBridge.terminal(
-        lease,
-        state,
-        reason,
-        outcome,
-        () => reservations.releaseOperation(lease.operationId),
-        deliveryContext
-      );
-    } finally {
-      reservations.releaseOperation(lease.operationId);
-    }
   }
 
   function removeQueuedJob(job: GitReviewSharedJob): void {
@@ -121,8 +127,7 @@ export function createGitReviewScheduler(
 
   function cancelLease(
     operationId: string,
-    reason: GitReviewCancellationReason = "caller",
-    deliveryContext?: GitReviewTransitionDeliveryContext
+    reason: GitReviewCancellationReason = "caller"
   ): boolean {
     const record = activeLeases.get(operationId);
     if (record === undefined) {
@@ -140,26 +145,29 @@ export function createGitReviewScheduler(
         if (jobsByKey.get(job.keyString) === job) {
           jobsByKey.delete(job.keyString);
         }
+        if (job.runPromise !== undefined) {
+          trackDetachedOperation(job, job.runPromise);
+        }
         job.controller.abort(reason);
       }
     }
     lease.reject(
       new GitReviewSchedulerError(reason, `Git Review operation ${reason}`)
     );
-    terminalLease(lease, "cancelled", reason, undefined, deliveryContext);
+    terminalLease(lease);
     dispatch();
     return true;
   }
 
   function attachLease(
     job: GitReviewSharedJob,
-    request: GitReviewScheduleRequest<unknown>,
-    deduplicated: boolean
+    request: GitReviewScheduleRequest<unknown>
   ): GitReviewDeferredLease | GitReviewSchedulerError {
     if (job.executionBudget === undefined) {
       job.executionBudget = new GitReviewSharedExecutionBudget(
         job,
-        cancelLease
+        cancelLease,
+        (operation) => trackDetachedOperation(job, operation)
       );
     }
     const admission = job.executionBudget.admitLateLease(request.budget);
@@ -172,16 +180,6 @@ export function createGitReviewScheduler(
     }
     const lease = createDeferredLease({
       budget: request.budget,
-      deduplicated,
-      intent: request.intent,
-      observeError:
-        request.observation?.classifyError ??
-        (() => ({
-          failureReason: GIT_REVIEW_DEFAULT_FAILURE_REASON,
-          result: "failure",
-        })),
-      observeResult:
-        request.observation?.classifyResult ?? (() => ({ result: "success" })),
       operationId: request.operationId,
       owner: request.owner,
     });
@@ -192,42 +190,28 @@ export function createGitReviewScheduler(
       once: true,
     });
     job.leases.set(lease.operationId, lease);
-    if (job.state === "queued" && request.intent === "manual-read") {
-      job.intent = "manual-read";
-    }
     activeLeases.add(job, lease);
-    observerBridge.queued(request, deduplicated, lease);
-    if (job.state === "running" && !lease.terminal) {
-      observerBridge.running(lease);
-    }
     return lease;
   }
 
   function finishJob(job: GitReviewSharedJob): void {
+    if (job.state === "settled") {
+      return;
+    }
+    const wasRunning = job.state === "running" || job.state === "settling";
     job.state = "settled";
-    queueState.finish(job);
+    if (wasRunning) {
+      queueState.finish(job);
+    }
     if (jobsByKey.get(job.keyString) === job) {
       jobsByKey.delete(job.keyString);
     }
     dispatch();
   }
 
-  function beginSettlingJob(job: GitReviewSharedJob): void {
-    job.state = "settling";
-    if (jobsByKey.get(job.keyString) === job) {
-      jobsByKey.delete(job.keyString);
-    }
-  }
-
   function startJob(job: GitReviewSharedJob): void {
     job.state = "running";
     queueState.start(job);
-    const leasesAtStart = [...job.leases.values()];
-    for (const lease of leasesAtStart) {
-      if (!lease.terminal && job.leases.get(lease.operationId) === lease) {
-        observerBridge.running(lease);
-      }
-    }
     if (!canRunGitReviewJob(job)) {
       finishJob(job);
       return;
@@ -236,44 +220,79 @@ export function createGitReviewScheduler(
     if (executionBudget === undefined) {
       throw new Error("Git Review job missing execution budget");
     }
-    Promise.resolve()
-      .then(() =>
-        canRunGitReviewJob(job)
-          ? job.run({ budget: executionBudget, signal: job.controller.signal })
-          : undefined
-      )
+
+    const runPromise = Promise.resolve().then(() =>
+      job.run({ budget: executionBudget, signal: job.controller.signal })
+    );
+    job.runPromise = runPromise;
+    let runSettled = false;
+    runPromise.then(
+      () => {
+        runSettled = true;
+      },
+      () => {
+        runSettled = true;
+      }
+    );
+    // 某些平台文件系统调用不支持原生 AbortSignal。调度器必须在 owner
+    // 释放或超时后立即归还许可，不能等待底层 Promise 自行结算。
+    let removeAbortListener = (): void => undefined;
+    const abortPromise = new Promise<never>((_resolve, reject) => {
+      const rejectAborted = (): void => {
+        const reason = cancellationReason(job.controller.signal.reason);
+        reject(
+          new GitReviewSchedulerError(reason, `Git Review operation ${reason}`)
+        );
+      };
+      if (job.controller.signal.aborted) {
+        rejectAborted();
+        return;
+      }
+      job.controller.signal.addEventListener("abort", rejectAborted, {
+        once: true,
+      });
+      removeAbortListener = () =>
+        job.controller.signal.removeEventListener("abort", rejectAborted);
+    });
+
+    Promise.race([runPromise, abortPromise])
       .then(
         (value) => {
-          beginSettlingJob(job);
+          job.state = "settling";
           for (const lease of [...job.leases.values()]) {
             job.leases.delete(lease.operationId);
             lease.resolve(value);
-            terminalLease(lease, "settled", "success", {
-              kind: "success",
-              value,
-            });
+            terminalLease(lease);
           }
         },
         (error: unknown) => {
-          beginSettlingJob(job);
+          job.state = "settling";
           for (const lease of [...job.leases.values()]) {
             job.leases.delete(lease.operationId);
             lease.reject(error);
-            terminalLease(lease, "settled", "failed", {
-              error,
-              kind: "failure",
-            });
+            terminalLease(lease);
           }
         }
       )
       .finally(() => {
+        removeAbortListener();
+        if (!runSettled && job.controller.signal.aborted) {
+          trackDetachedOperation(job, runPromise);
+        }
         finishJob(job);
       });
+    // Promise.race 已决定请求生命周期；吞掉取消后底层迟到的拒绝，防止
+    // 不支持取消的系统调用制造 unhandled rejection。
+    runPromise.catch(() => undefined);
   }
 
   function dispatch(): void {
     while (true) {
-      const job = queueState.takeNext();
+      const job = queueState.takeNext(
+        (candidate) =>
+          !detachedAdmissionBlocked(candidate.key) &&
+          hasDetachedCapacityFor(candidate)
+      );
       if (job === undefined) {
         return;
       }
@@ -281,41 +300,15 @@ export function createGitReviewScheduler(
     }
   }
 
-  function supersedeTrailingWatch(laneKey: string): void {
-    const existing = queueState.findQueuedWatch(laneKey);
-    if (existing === undefined) {
-      return;
-    }
-    removeQueuedJob(existing);
-    for (const lease of [...existing.leases.values()]) {
-      cancelLease(lease.operationId, "superseded");
-    }
-  }
-
   function schedule<T>(
     request: GitReviewScheduleRequest<T>
   ): GitReviewOperationLease<T> {
-    if (
-      activeLeases.has(request.operationId) ||
-      reservations.isOperationReserved(request.operationId)
-    ) {
-      request.budget.dispose();
-      return createRejectedOperationLease(
-        request.operationId,
+    if (activeLeases.has(request.operationId)) {
+      return rejectRequest(
+        request,
         new GitReviewSchedulerError(
           "duplicate-operation",
           `Duplicate Git Review operation ${request.operationId}`
-        )
-      );
-    }
-    const ownerKey = gitReviewOwnerToString(request.owner);
-    if (reservations.isOwnerReserved(ownerKey)) {
-      request.budget.dispose();
-      return createRejectedOperationLease(
-        request.operationId,
-        new GitReviewSchedulerError(
-          "owner-disposed",
-          "Git Review operation owner is being released"
         )
       );
     }
@@ -323,171 +316,120 @@ export function createGitReviewScheduler(
       const reason = request.budget.failureReason() ?? "timeout";
       return rejectRequest(
         request,
-        new GitReviewSchedulerError(reason, `Git Review operation ${reason}`),
-        false,
-        "cancelled"
+        new GitReviewSchedulerError(reason, `Git Review operation ${reason}`)
       );
     }
     const keyString = gitReviewScheduleKeyToString(request.key);
-    const laneKey = gitReviewWatchLaneToString(request.key);
-    const watchLaneVersion =
-      request.intent === "watch"
-        ? reservations.claimWatchLane(laneKey)
-        : undefined;
-    try {
-      if (watchLaneVersion !== undefined) {
-        supersedeTrailingWatch(laneKey);
-        if (!reservations.isWatchLaneCurrent(laneKey, watchLaneVersion)) {
-          return rejectRequest(
-            request,
-            new GitReviewSchedulerError(
-              "superseded",
-              "Git Review watch was superseded during scheduling"
-            ),
-            false,
-            "cancelled"
-          );
-        }
-      }
-      const existing = jobsByKey.get(keyString);
-      if (
-        existing !== undefined &&
-        (existing.state === "queued" || existing.state === "running") &&
-        !existing.controller.signal.aborted &&
-        request.intent !== "write" &&
-        existing.intent !== "write"
-      ) {
-        if (activeLeases.capacityReached(request.owner, existing)) {
-          return rejectRequest(
-            request,
-            new GitReviewSchedulerError(
-              "busy",
-              "Git Review lease capacity reached"
-            ),
-            true,
-            "settled"
-          );
-        }
-        const attached = attachLease(
-          existing,
-          request as GitReviewScheduleRequest<unknown>,
-          true
-        );
-        if (attached instanceof GitReviewSchedulerError) {
-          return rejectRequest(
-            request,
-            attached,
-            true,
-            attached.reason === "file-limit" ||
-              attached.reason === "output-limit" ||
-              attached.reason === "timeout"
-              ? "cancelled"
-              : "settled"
-          );
-        }
-        return {
-          cancel: (reason) => {
-            cancelLease(request.operationId, reason);
-          },
-          operationId: request.operationId,
-          promise: attached.promise as Promise<T>,
-        };
-      }
-      if (activeLeases.capacityReached(request.owner)) {
+    const existing = jobsByKey.get(keyString);
+    if (
+      existing !== undefined &&
+      (existing.state === "queued" || existing.state === "running") &&
+      !existing.controller.signal.aborted
+    ) {
+      if (activeLeases.capacityReached(request.owner, existing)) {
         return rejectRequest(
           request,
           new GitReviewSchedulerError(
             "busy",
             "Git Review lease capacity reached"
-          ),
-          false,
-          "settled"
+          )
         );
       }
-      const repositoryPending = queueState.repositoryPending(
-        request.key.repositoryKey
-      );
-      if (
-        queueState.pendingJobs >= GIT_REVIEW_SCHEDULER_GLOBAL_PENDING ||
-        repositoryPending >= GIT_REVIEW_SCHEDULER_REPOSITORY_PENDING
-      ) {
-        return rejectRequest(
-          request,
-          new GitReviewSchedulerError("busy", "Git Review scheduler is busy"),
-          false,
-          "settled"
-        );
-      }
-
-      const job: GitReviewSharedJob = {
-        controller: new AbortController(),
-        intent: request.intent,
-        key: request.key,
-        keyString,
-        laneKey,
-        leases: new Map(),
-        queuedAtMs: now(),
-        run: request.run,
-        state: "queued",
-      };
-      jobsByKey.set(keyString, job);
-      queueState.enqueue(job);
       const attached = attachLease(
-        job,
-        request as GitReviewScheduleRequest<unknown>,
-        false
+        existing,
+        request as GitReviewScheduleRequest<unknown>
       );
       if (attached instanceof GitReviewSchedulerError) {
-        removeQueuedJob(job);
-        return rejectRequest(
-          request,
-          attached,
-          false,
-          attached.reason === "file-limit" ||
-            attached.reason === "output-limit" ||
-            attached.reason === "timeout"
-            ? "cancelled"
-            : "settled"
-        );
-      }
-      if (job.state === "queued" && job.leases.size > 0) {
-        dispatch();
+        return rejectRequest(request, attached);
       }
       return {
-        cancel: (reason) => {
-          cancelLease(request.operationId, reason);
-        },
-        operationId: request.operationId,
         promise: attached.promise as Promise<T>,
       };
-    } finally {
-      if (watchLaneVersion !== undefined) {
-        reservations.releaseWatchLane(laneKey, watchLaneVersion);
-      }
     }
+    if (activeLeases.capacityReached(request.owner)) {
+      return rejectRequest(
+        request,
+        new GitReviewSchedulerError("busy", "Git Review lease capacity reached")
+      );
+    }
+    if (
+      queueState.pendingJobs >= GIT_REVIEW_SCHEDULER_GLOBAL_PENDING ||
+      queueState.repositoryPending(request.key.repositoryKey) >=
+        GIT_REVIEW_SCHEDULER_REPOSITORY_PENDING
+    ) {
+      return rejectRequest(
+        request,
+        new GitReviewSchedulerError("busy", "Git Review scheduler is busy")
+      );
+    }
+
+    const job: GitReviewSharedJob = {
+      controller: new AbortController(),
+      key: request.key,
+      keyString,
+      leases: new Map(),
+      run: request.run,
+      state: "queued",
+    };
+    jobsByKey.set(keyString, job);
+    queueState.enqueue(job);
+    const attached = attachLease(
+      job,
+      request as GitReviewScheduleRequest<unknown>
+    );
+    if (attached instanceof GitReviewSchedulerError) {
+      removeQueuedJob(job);
+      return rejectRequest(request, attached);
+    }
+    dispatch();
+    return {
+      promise: attached.promise as Promise<T>,
+    };
   }
 
   return {
-    cancel: cancelLease,
+    cancelOwned(operationId, owner, reason = "caller") {
+      const record = activeLeases.get(operationId);
+      if (
+        record !== undefined &&
+        gitReviewOwnerToString(record.lease.owner) ===
+          gitReviewOwnerToString(owner)
+      ) {
+        cancelLease(operationId, reason);
+      }
+    },
     releaseOwner(owner, reason = "owner-disposed") {
       const ownerKey = gitReviewOwnerToString(owner);
-      const operations = activeLeases.operationsForOwner(ownerKey);
-      const deliveryContext = reservations.ownerDeliveryContext(ownerKey);
-      reservations.reserveOwner(ownerKey);
-      try {
-        for (const operationId of operations) {
-          cancelLease(operationId, reason, deliveryContext);
-        }
-      } finally {
-        reservations.releaseOwner(ownerKey);
+      for (const operationId of activeLeases.operationsForOwner(ownerKey)) {
+        cancelLease(operationId, reason);
       }
-      return operations.length;
     },
     schedule,
-    snapshot: () => ({
-      activeLeases: activeLeases.size,
-      pendingJobs: queueState.pendingJobs,
-      runningJobs: queueState.runningJobs,
-    }),
   };
+}
+
+function cancellationReason(reason: unknown): GitReviewCancellationReason {
+  if (
+    reason === "caller" ||
+    reason === "output-limit" ||
+    reason === "owner-disposed" ||
+    reason === "shutdown" ||
+    reason === "timeout"
+  ) {
+    return reason;
+  }
+  return "caller";
+}
+
+function incrementCounter(counter: Map<string, number>, key: string): void {
+  counter.set(key, (counter.get(key) ?? 0) + 1);
+}
+
+function decrementCounter(counter: Map<string, number>, key: string): void {
+  const next = (counter.get(key) ?? 1) - 1;
+  if (next <= 0) {
+    counter.delete(key);
+    return;
+  }
+  counter.set(key, next);
 }

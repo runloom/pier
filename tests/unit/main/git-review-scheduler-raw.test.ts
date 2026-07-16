@@ -38,7 +38,6 @@ class FakeChild extends EventEmitter {
 const owner = { clientId: "renderer", generation: 1, windowRecordId: "w1" };
 const scheduleKey = {
   canonicalRequestKey: "request",
-  contentRequirement: "full" as const,
   operationKind: "document" as const,
   repositoryKey: "repo",
   sourceKey: "source",
@@ -72,7 +71,6 @@ describe("GitReviewScheduler → raw budget integration", () => {
       });
     const first = scheduler.schedule({
       budget: new GitReviewBudget({ deadlineAtMs: Date.now() + 50 }),
-      intent: "manual-read",
       key: scheduleKey,
       operationId: "first",
       owner,
@@ -84,7 +82,6 @@ describe("GitReviewScheduler → raw budget integration", () => {
 
     const second = scheduler.schedule({
       budget: new GitReviewBudget({ deadlineAtMs: Date.now() + 500 }),
-      intent: "manual-read",
       key: scheduleKey,
       operationId: "second",
       owner,
@@ -115,7 +112,6 @@ describe("GitReviewScheduler → raw budget integration", () => {
     let rawError: unknown;
     const lease = scheduler.schedule({
       budget: new GitReviewBudget({ maxOutputBytes: 1 }),
-      intent: "manual-read",
       key: scheduleKey,
       operationId: "output-limit",
       owner,
@@ -156,7 +152,6 @@ describe("GitReviewScheduler → raw budget integration", () => {
     const scheduler = createGitReviewScheduler();
     const lease = scheduler.schedule({
       budget: new GitReviewBudget(),
-      intent: "manual-read",
       key: scheduleKey,
       operationId: "budgeted-command-over-16-mib",
       owner,
@@ -197,7 +192,6 @@ describe("GitReviewScheduler → raw budget integration", () => {
     let rawError: unknown;
     const lease = scheduler.schedule({
       budget: new GitReviewBudget(),
-      intent: "manual-read",
       key: scheduleKey,
       operationId: "aggregate-output-limit",
       owner,

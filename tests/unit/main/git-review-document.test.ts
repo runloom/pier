@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import {
   chmod,
   copyFile,
+  mkdir,
   mkdtemp,
   rename,
   rm,
@@ -16,14 +17,15 @@ import {
   execGitRaw,
 } from "@main/services/git-exec.ts";
 import { GitReviewBudget } from "@main/services/git-review/git-review-budget.ts";
+import { GitReviewIdentityResolver } from "@main/services/git-review/git-review-identity.ts";
 import { GitReviewIndexReader } from "@main/services/git-review/git-review-index.ts";
-import { GitReviewService } from "@main/services/git-review/git-review-service.ts";
 import type {
-  GitDiffPanelSource,
   GitReviewFileDocumentRequest,
   GitReviewFileDocumentResult,
+  GitReviewFileSource,
 } from "@shared/contracts/git-review.ts";
 import { afterEach, describe, expect, it } from "vitest";
+import { TestGitReviewService as GitReviewService } from "./git-review-test-fixtures.ts";
 
 const roots: string[] = [];
 
@@ -50,13 +52,8 @@ async function commitAll(root: string, message: string): Promise<string> {
   return (await execGit(["rev-parse", "HEAD"], { cwd: root })).trim();
 }
 
-function request(
-  source: GitDiffPanelSource,
-  options: { clientHasDocument?: boolean; ifRevision?: string | null } = {}
-): GitReviewFileDocumentRequest {
+function request(source: GitReviewFileSource): GitReviewFileDocumentRequest {
   return {
-    clientHasDocument: options.clientHasDocument ?? false,
-    ifRevision: options.ifRevision ?? null,
     operationId: randomUUID(),
     source,
   };
@@ -65,16 +62,13 @@ function request(
 function source(
   root: string,
   path: string,
-  query: GitDiffPanelSource["query"] = {
-    groups: ["unstaged", "staged"],
-    kind: "uncommitted",
-  }
-): GitDiffPanelSource {
+  oldPaths: readonly string[] = []
+): GitReviewFileSource {
   return {
     contextId: "worktree:test",
     gitRootPath: root,
+    oldPaths: [...oldPaths],
     path,
-    query,
   };
 }
 
@@ -85,7 +79,7 @@ function expectOk(
 }
 
 describe("GitReviewService document", () => {
-  it("以未暂存→已暂存顺序返回两个 patch section，并支持条件命中", async () => {
+  it("以未暂存→已暂存顺序返回两个 patch section", async () => {
     const root = await createRepository();
     await writeFile(join(root, "file.ts"), "base\n", "utf8");
     await commitAll(root, "base");
@@ -98,37 +92,17 @@ describe("GitReviewService document", () => {
     const result = await service.getFileDocument(request(documentSource));
 
     expectOk(result);
+    expect(Object.isFrozen(result)).toBe(true);
+    expect(Object.isFrozen(result.sections)).toBe(true);
+    expect(Object.isFrozen(result.sections[0])).toBe(true);
     expect(result.sections).toHaveLength(2);
-    expect(result.sections.map((section) => section.group)).toEqual([
-      "unstaged",
-      "staged",
+    expect(result.sections.map((section) => section.kind)).toEqual([
+      "patch",
+      "patch",
     ]);
-    expect(result.sections).toEqual([
-      expect.objectContaining({
-        additions: 1,
-        deletions: 0,
-        kind: "patch",
-        path: "file.ts",
-      }),
-      expect.objectContaining({
-        additions: 1,
-        deletions: 1,
-        kind: "patch",
-        path: "file.ts",
-      }),
-    ]);
-    await expect(
-      service.getFileDocument(
-        request(documentSource, {
-          clientHasDocument: true,
-          ifRevision: result.revision,
-        })
-      )
-    ).resolves.toEqual({
-      kind: "notModified",
-      revision: result.revision,
-      source: result.source,
-    });
+    const [unstaged, staged] = result.sections;
+    expect(unstaged?.kind === "patch" && unstaged.patch).toContain("+worktree");
+    expect(staged?.kind === "patch" && staged.patch).toContain("+staged");
   });
 
   it("链式 a→b→c 为每个 group 使用自己的 old/target path", async () => {
@@ -140,22 +114,17 @@ describe("GitReviewService document", () => {
     await execGit(["add", "-N", "--", "c.ts"], { cwd: root });
 
     const result = await new GitReviewService().getFileDocument(
-      request(source(root, "c.ts"))
+      request(source(root, "c.ts", ["a.ts", "b.ts"]))
     );
 
     expectOk(result);
-    expect(result.sections).toEqual([
-      expect.objectContaining({
-        group: "unstaged",
-        oldPath: "b.ts",
-        path: "c.ts",
-      }),
-      expect.objectContaining({
-        group: "staged",
-        oldPath: "a.ts",
-        path: "b.ts",
-      }),
-    ]);
+    const [unstaged, staged] = result.sections;
+    expect(unstaged?.kind === "patch" && unstaged.patch).toContain(
+      "diff --git a/b.ts b/c.ts"
+    );
+    expect(staged?.kind === "patch" && staged.patch).toContain(
+      "diff --git a/a.ts b/b.ts"
+    );
   });
 
   it("副本源在同一范围修改时只返回副本条目 patch", async () => {
@@ -167,22 +136,12 @@ describe("GitReviewService document", () => {
     await execGit(["add", "-A", "--"], { cwd: root });
 
     const result = await new GitReviewService().getFileDocument(
-      request(
-        source(root, "copy.ts", {
-          groups: ["staged"],
-          kind: "uncommitted",
-        })
-      )
+      request(source(root, "copy.ts", ["source.ts"]))
     );
 
     expectOk(result);
     expect(result.sections).toEqual([
-      expect.objectContaining({
-        group: "staged",
-        kind: "patch",
-        oldPath: "source.ts",
-        path: "copy.ts",
-      }),
+      expect.objectContaining({ kind: "patch" }),
     ]);
     const section = result.sections[0];
     expect(section?.kind).toBe("patch");
@@ -192,13 +151,39 @@ describe("GitReviewService document", () => {
     }
   });
 
+  it("副本源产生超预算无关 patch 时在 Git 层只传输目标 section", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "source.ts"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await copyFile(join(root, "source.ts"), join(root, "copy.ts"));
+    await writeFile(
+      join(root, "source.ts"),
+      `${"x".repeat(2 * 1024 * 1024)}\n`,
+      "utf8"
+    );
+    await execGit(["add", "-A", "--"], { cwd: root });
+
+    const result = await new GitReviewService().getFileDocument(
+      request(source(root, "copy.ts", ["source.ts"])),
+      { budget: new GitReviewBudget({ maxOutputBytes: 1024 * 1024 }) }
+    );
+
+    expectOk(result);
+    const section = result.sections[0];
+    expect(section?.kind).toBe("patch");
+    if (section?.kind === "patch") {
+      expect(section.patch.match(/^diff --git /gmu)).toHaveLength(1);
+      expect(section.patch).toContain("copy from source.ts");
+    }
+  });
+
   it("在 POSIX 上把反斜杠当作 Git 路径字面字符", async (ctx) => {
     if (process.platform === "win32") {
       ctx.skip();
       return;
     }
     const root = await createRepository();
-    const paths = ["\\notes.txt", "dir\\..\\file"];
+    const paths = ["\\notes.txt", "dir\\..\\file", "界*?[]\\\t\n.txt"];
     for (const path of paths) {
       await writeFile(join(root, path), "base\n", "utf8");
     }
@@ -209,40 +194,105 @@ describe("GitReviewService document", () => {
 
     const service = new GitReviewService();
     for (const path of paths) {
-      const result = await service.getFileDocument(
-        request(
-          source(root, path, {
-            groups: ["unstaged"],
-            kind: "uncommitted",
-          })
-        )
-      );
+      const result = await service.getFileDocument(request(source(root, path)));
       expectOk(result);
       expect(result.sections).toEqual([
-        expect.objectContaining({ kind: "patch", path }),
+        expect.objectContaining({ kind: "patch" }),
       ]);
     }
   });
 
-  it("两次 document 索引探测共用请求文件预算", async () => {
+  it("document 索引与正文探测共用输出字节预算", async () => {
     const root = await createRepository();
     await writeFile(join(root, "file.ts"), "base\n", "utf8");
     await commitAll(root, "base");
     await writeFile(join(root, "file.ts"), "changed\n", "utf8");
-    const budget = new GitReviewBudget({ maxFiles: 2 });
+    const budget = new GitReviewBudget({ maxOutputBytes: 1 });
 
     const result = await new GitReviewService().getFileDocument(
-      request(
-        source(root, "file.ts", {
-          groups: ["unstaged"],
-          kind: "uncommitted",
-        })
-      ),
+      request(source(root, "file.ts")),
       { budget }
     );
 
+    expect(result).toMatchObject({ kind: "error", reason: "outputLimit" });
+  });
+
+  it("文件与目录同名时精确探测不会遍历目录后代", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "a"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await rm(join(root, "a"));
+    await execGit(["add", "-u", "--", "a"], { cwd: root });
+    await mkdir(join(root, "a"));
+    await Promise.all(
+      Array.from({ length: 1000 }, (_, index) =>
+        writeFile(join(root, "a", `${index}.txt`), `${index}\n`, "utf8")
+      )
+    );
+
+    const result = await new GitReviewService().getFileDocument(
+      request(source(root, "a"))
+    );
+
     expectOk(result);
-    expect(budget.snapshot().files).toBe(2);
+    expect(result.sections).toEqual([
+      expect.objectContaining({ kind: "patch" }),
+    ]);
+  });
+
+  it("祖先路径 rename 保留单一事实且不纳入后代噪声", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "a"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await rm(join(root, "a"));
+    await mkdir(join(root, "a"));
+    await writeFile(join(root, "a", "b"), "base\n", "utf8");
+    await Promise.all(
+      Array.from({ length: 1000 }, (_, index) =>
+        writeFile(join(root, "a", `noise-${index}.txt`), `${index}\n`, "utf8")
+      )
+    );
+    await execGit(["add", "-A", "--"], { cwd: root });
+
+    const result = await new GitReviewService().getFileDocument(
+      request(source(root, "a/b", ["a"]))
+    );
+
+    expectOk(result);
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0]).toMatchObject({ kind: "patch" });
+    if (result.sections[0]?.kind === "patch") {
+      expect(result.sections[0].patch).toContain("rename from a");
+      expect(result.sections[0].patch).toContain("rename to a/b");
+      expect(result.sections[0].patch).not.toContain("noise-");
+    }
+  });
+
+  it("同目录分量前缀冲突时使用有界 movement 兜底", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "a"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await rename(join(root, "a"), join(root, "ab"));
+    await mkdir(join(root, "a"));
+    await Promise.all(
+      Array.from({ length: 1000 }, (_, index) =>
+        writeFile(join(root, "a", `noise-${index}.txt`), `${index}\n`, "utf8")
+      )
+    );
+    await execGit(["add", "-A", "--"], { cwd: root });
+
+    const result = await new GitReviewService().getFileDocument(
+      request(source(root, "ab", ["a"]))
+    );
+
+    expectOk(result);
+    expect(result.sections).toHaveLength(1);
+    expect(result.sections[0]).toMatchObject({ kind: "patch" });
+    if (result.sections[0]?.kind === "patch") {
+      expect(result.sections[0].patch).toContain("rename from a");
+      expect(result.sections[0].patch).toContain("rename to ab");
+      expect(result.sections[0].patch).not.toContain("noise-");
+    }
   });
 
   it("untracked patch 只写临时 index/ODB，真实仓库保持不变", async () => {
@@ -260,18 +310,13 @@ describe("GitReviewService document", () => {
     });
 
     const result = await new GitReviewService().getFileDocument(
-      request(source(root, path, { groups: ["unstaged"], kind: "uncommitted" }))
+      request(source(root, path))
     );
 
     expectOk(result);
     expect(result.sections).toEqual([
       expect.objectContaining({
-        additions: 1,
-        deletions: 0,
         kind: "patch",
-        oldPath: null,
-        path,
-        status: "added",
       }),
     ]);
     expect(
@@ -285,119 +330,230 @@ describe("GitReviewService document", () => {
     );
   });
 
+  it("显式 git dir 末尾 CR 作为路径字节保留", async (ctx) => {
+    if (process.platform === "win32") {
+      ctx.skip();
+      return;
+    }
+    const parent = await mkdtemp(join(tmpdir(), "pier-review-separate-git-"));
+    roots.push(parent);
+    const root = join(parent, "worktree");
+    const gitDirectory = join(parent, "metadata\r");
+    await mkdir(root);
+    await execGit(["init", "--bare", gitDirectory], { cwd: parent });
+    const repositoryEnv = {
+      GIT_DIR: gitDirectory,
+      GIT_WORK_TREE: root,
+    };
+    await execGit(["config", "core.bare", "false"], {
+      cwd: root,
+      env: repositoryEnv,
+    });
+    await execGit(["config", "user.name", "Pier Test"], {
+      cwd: root,
+      env: repositoryEnv,
+    });
+    await execGit(["config", "user.email", "pier@example.invalid"], {
+      cwd: root,
+      env: repositoryEnv,
+    });
+    await writeFile(join(root, "tracked.ts"), "base\n", "utf8");
+    await execGit(["add", "-A", "--"], { cwd: root, env: repositoryEnv });
+    await execGit(["commit", "-m", "base"], {
+      cwd: root,
+      env: repositoryEnv,
+    });
+    await writeFile(join(root, "untracked.ts"), "new\n", "utf8");
+    const wrappedExec: ExecGitRaw = (args, options) =>
+      execGitRaw(args, {
+        ...options,
+        env: { ...repositoryEnv, ...options.env },
+      });
+    const indexReader = new GitReviewIndexReader({
+      execGitRaw: wrappedExec,
+      identityResolver: new GitReviewIdentityResolver({
+        execGitRaw: wrappedExec,
+      }),
+    });
+
+    const result = await new GitReviewService({
+      execGitRaw: wrappedExec,
+      indexReader,
+    }).getFileDocument(request(source(root, "untracked.ts")));
+
+    expectOk(result);
+    expect(result.sections).toEqual([
+      expect.objectContaining({ kind: "patch" }),
+    ]);
+  });
+
   it("二进制与非法 UTF-8 untracked 文件返回类型化 state", async () => {
     const root = await createRepository();
     await writeFile(join(root, "base.ts"), "base\n", "utf8");
     await commitAll(root, "base");
     await writeFile(join(root, "binary.dat"), Buffer.from([0, 1, 2]));
     await writeFile(join(root, "invalid.txt"), Buffer.from([0xc3, 0x28]));
+    await writeFile(join(root, "mixed.dat"), Buffer.from([0, 0xff]));
     const service = new GitReviewService();
 
     const binary = await service.getFileDocument(
-      request(
-        source(root, "binary.dat", {
-          groups: ["unstaged"],
-          kind: "uncommitted",
-        })
-      )
+      request(source(root, "binary.dat"))
     );
     const invalid = await service.getFileDocument(
-      request(
-        source(root, "invalid.txt", {
-          groups: ["unstaged"],
-          kind: "uncommitted",
-        })
-      )
+      request(source(root, "invalid.txt"))
+    );
+    const mixedUntracked = await service.getFileDocument(
+      request(source(root, "mixed.dat"))
+    );
+    await execGit(["add", "--", "mixed.dat"], { cwd: root });
+    const mixedStaged = await service.getFileDocument(
+      request(source(root, "mixed.dat"))
     );
 
     expectOk(binary);
     expectOk(invalid);
     expect(binary.sections).toEqual([
-      expect.objectContaining({ kind: "state", reason: "binary" }),
+      expect.objectContaining({
+        kind: "state",
+        oldPath: null,
+        reason: "binary",
+        status: "added",
+        targetPath: "binary.dat",
+      }),
     ]);
     expect(invalid.sections).toEqual([
       expect.objectContaining({ kind: "state", reason: "invalidEncoding" }),
     ]);
-  });
-
-  it("根提交产生单文件 patch", async () => {
-    const root = await createRepository();
-    await writeFile(join(root, "root.ts"), "root\n", "utf8");
-    const rootOid = await commitAll(root, "root");
-    const service = new GitReviewService();
-
-    const commit = await service.getFileDocument(
-      request(source(root, "root.ts", { kind: "commit", oid: rootOid }))
-    );
-
-    expectOk(commit);
-    expect(commit.sections).toEqual([
-      expect.objectContaining({ group: "commit", kind: "patch" }),
+    expectOk(mixedUntracked);
+    expectOk(mixedStaged);
+    expect(mixedUntracked.sections).toEqual([
+      expect.objectContaining({ kind: "state", reason: "binary" }),
+    ]);
+    expect(mixedStaged.sections).toEqual([
+      expect.objectContaining({ kind: "state", reason: "binary" }),
     ]);
   });
 
-  it("branch 固定范围产生单文件 patch", async () => {
+  it("二进制 staged rename 与 unstaged modify 保留各 section 事实", async () => {
     const root = await createRepository();
-    await writeFile(join(root, "root.ts"), "root\n", "utf8");
-    await commitAll(root, "root");
-    await execGit(["branch", "base"], { cwd: root });
-    await writeFile(join(root, "root.ts"), "head\n", "utf8");
-    await commitAll(root, "head");
-    const service = new GitReviewService();
+    const base = Buffer.alloc(100);
+    await writeFile(join(root, "old.dat"), base);
+    await commitAll(root, "base");
+    await rename(join(root, "old.dat"), join(root, "current.dat"));
+    const staged = Buffer.from(base);
+    staged[99] = 1;
+    await writeFile(join(root, "current.dat"), staged);
+    await execGit(["add", "-A", "--"], { cwd: root });
+    const worktree = Buffer.from(staged);
+    worktree[99] = 2;
+    await writeFile(join(root, "current.dat"), worktree);
 
-    const branch = await service.getFileDocument(
-      request(
-        source(root, "root.ts", {
-          kind: "branch",
-          targetRef: "refs/heads/base",
-        })
-      )
+    const result = await new GitReviewService().getFileDocument(
+      request(source(root, "current.dat", ["old.dat"]))
     );
 
-    expectOk(branch);
-    expect(branch.sections).toEqual([
-      expect.objectContaining({ group: "branch", kind: "patch" }),
+    expectOk(result);
+    expect(result.sections).toEqual([
+      expect.objectContaining({
+        kind: "state",
+        oldPath: null,
+        reason: "binary",
+        status: "modified",
+      }),
+      expect.objectContaining({
+        kind: "state",
+        oldPath: "old.dat",
+        reason: "binary",
+        status: "renamed",
+      }),
     ]);
   });
 
-  it("deleted、symlink 与超大正文分别返回 patch 或类型化 state", async () => {
+  it("二进制链式重命名保留各 section 的目标路径", async () => {
+    const root = await createRepository();
+    const base = Buffer.alloc(100);
+    await writeFile(join(root, "a.dat"), base);
+    await commitAll(root, "base");
+    await rename(join(root, "a.dat"), join(root, "b.dat"));
+    const staged = Buffer.from(base);
+    staged[99] = 1;
+    await writeFile(join(root, "b.dat"), staged);
+    await execGit(["add", "-A", "--"], { cwd: root });
+    await rename(join(root, "b.dat"), join(root, "c.dat"));
+    const worktree = Buffer.from(staged);
+    worktree[99] = 2;
+    await writeFile(join(root, "c.dat"), worktree);
+    await execGit(["add", "-N", "--", "c.dat"], { cwd: root });
+
+    const result = await new GitReviewService().getFileDocument(
+      request(source(root, "c.dat", ["a.dat", "b.dat"]))
+    );
+
+    expectOk(result);
+    expect(result.sections).toEqual([
+      expect.objectContaining({
+        kind: "state",
+        oldPath: "b.dat",
+        reason: "binary",
+        status: "renamed",
+        targetPath: "c.dat",
+      }),
+      expect.objectContaining({
+        kind: "state",
+        oldPath: "a.dat",
+        reason: "binary",
+        status: "renamed",
+        targetPath: "b.dat",
+      }),
+    ]);
+  });
+
+  it("deleted 文件返回 patch", async () => {
     const root = await createRepository();
     await writeFile(join(root, "deleted.ts"), "deleted\n", "utf8");
-    await writeFile(join(root, "link.ts"), "regular\n", "utf8");
     await commitAll(root, "base");
     await rm(join(root, "deleted.ts"));
+    const service = new GitReviewService();
+    const deleted = await service.getFileDocument(
+      request(source(root, "deleted.ts"))
+    );
+
+    expectOk(deleted);
+    expect(deleted.sections).toEqual([
+      expect.objectContaining({ kind: "patch" }),
+    ]);
+  });
+
+  it("symlink 返回类型化 state", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "link.ts"), "regular\n", "utf8");
+    await commitAll(root, "base");
     await rm(join(root, "link.ts"));
-    await symlink("deleted.ts", join(root, "link.ts"));
+    await symlink("target.ts", join(root, "link.ts"));
+    const service = new GitReviewService();
+    const link = await service.getFileDocument(
+      request(source(root, "link.ts"))
+    );
+
+    expectOk(link);
+    expect(link.sections).toEqual([
+      expect.objectContaining({ kind: "state", reason: "symlink" }),
+    ]);
+  });
+
+  it("超大正文返回类型化 state", async () => {
+    const root = await createRepository();
     await writeFile(
       join(root, "large.txt"),
       `${"x".repeat(1024)}\n`.repeat(800),
       "utf8"
     );
     const service = new GitReviewService();
-    const unstaged = {
-      groups: ["unstaged"] as ["unstaged"],
-      kind: "uncommitted" as const,
-    };
-
-    const deleted = await service.getFileDocument(
-      request(source(root, "deleted.ts", unstaged))
-    );
-    const link = await service.getFileDocument(
-      request(source(root, "link.ts", unstaged))
-    );
     const large = await service.getFileDocument(
-      request(source(root, "large.txt", unstaged))
+      request(source(root, "large.txt"))
     );
 
-    expectOk(deleted);
-    expectOk(link);
     expectOk(large);
-    expect(deleted.sections).toEqual([
-      expect.objectContaining({ kind: "patch", status: "deleted" }),
-    ]);
-    expect(link.sections).toEqual([
-      expect.objectContaining({ kind: "state", reason: "symlink" }),
-    ]);
     expect(large.sections).toEqual([
       expect.objectContaining({ kind: "state", reason: "tooLarge" }),
     ]);
@@ -424,14 +580,7 @@ describe("GitReviewService document", () => {
 
     const result = await new GitReviewService({
       execGitRaw: wrappedExec,
-    }).getFileDocument(
-      request(
-        source(root, "file.txt", {
-          groups: ["unstaged"],
-          kind: "uncommitted",
-        })
-      )
-    );
+    }).getFileDocument(request(source(root, "file.txt")));
 
     expectOk(result);
     expect(mutated).toBe(true);
@@ -447,14 +596,53 @@ describe("GitReviewService document", () => {
     ).toContain("+second");
   });
 
-  it("持续变化的 canonical index 在三次尝试后返回 staleRevision", async () => {
+  it("staged-only 的 index A→B→A 竞态不会返回 B patch", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "file.txt"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await writeFile(join(root, "file.txt"), "A\n", "utf8");
+    await execGit(["add", "--", "file.txt"], { cwd: root });
+    let patchCalls = 0;
+    const wrappedExec: ExecGitRaw = async (args, options) => {
+      if (
+        patchCalls === 0 &&
+        args.includes("--patch-with-raw") &&
+        args.includes("--cached")
+      ) {
+        patchCalls += 1;
+        await writeFile(join(root, "file.txt"), "B\n", "utf8");
+        await execGit(["add", "--", "file.txt"], { cwd: root });
+        const result = await execGitRaw(args, options);
+        await writeFile(join(root, "file.txt"), "A\n", "utf8");
+        await execGit(["add", "--", "file.txt"], { cwd: root });
+        return result;
+      }
+      if (args.includes("--patch-with-raw") && args.includes("--cached")) {
+        patchCalls += 1;
+      }
+      return execGitRaw(args, options);
+    };
+
+    const result = await new GitReviewService({
+      execGitRaw: wrappedExec,
+    }).getFileDocument(request(source(root, "file.txt")));
+
+    expectOk(result);
+    expect(patchCalls).toBeGreaterThanOrEqual(2);
+    const section = result.sections[0];
+    expect(section?.kind === "patch" && section.patch).toContain("+A");
+    expect(section?.kind === "patch" && section.patch).not.toContain("+B");
+  });
+
+  it("无关文件持续变化不会让单文件 document 失效", async () => {
     const root = await createRepository();
     await writeFile(join(root, "file.ts"), "base\n", "utf8");
     await commitAll(root, "base");
     await writeFile(join(root, "file.ts"), "changed\n", "utf8");
     const delegate = new GitReviewIndexReader();
     let generation = 0;
-    const indexReader: Pick<GitReviewIndexReader, "resolve"> = {
+    const indexReader: Pick<GitReviewIndexReader, "read" | "resolve"> = {
+      read: delegate.read.bind(delegate),
       resolve: async (indexRequest, options) => {
         const result = await delegate.resolve(indexRequest, options);
         await writeFile(
@@ -467,21 +655,12 @@ describe("GitReviewService document", () => {
       },
     };
 
-    await expect(
-      new GitReviewService({ indexReader }).getFileDocument(
-        request(
-          source(root, "file.ts", {
-            groups: ["unstaged"],
-            kind: "uncommitted",
-          })
-        )
-      )
-    ).resolves.toMatchObject({
-      kind: "error",
-      reason: "staleRevision",
-      retryable: true,
-    });
-    expect(generation).toBe(6);
+    const result = await new GitReviewService({ indexReader }).getFileDocument(
+      request(source(root, "file.ts"))
+    );
+
+    expectOk(result);
+    expect(generation).toBe(2);
   });
 
   it("conflict 不伪造文本统计", async () => {
@@ -507,9 +686,6 @@ describe("GitReviewService document", () => {
     expectOk(conflict);
     expect(conflict.sections).toEqual([
       expect.objectContaining({
-        additions: null,
-        deletions: null,
-        group: "conflict",
         kind: "state",
         reason: "conflict",
       }),
@@ -536,18 +712,11 @@ describe("GitReviewService document", () => {
     await commitAll(join(parent, "sub"), "child next");
 
     const submodule = await new GitReviewService().getFileDocument(
-      request(
-        source(parent, "sub", {
-          groups: ["unstaged"],
-          kind: "uncommitted",
-        })
-      )
+      request(source(parent, "sub"))
     );
     expectOk(submodule);
     expect(submodule.sections).toEqual([
       expect.objectContaining({
-        additions: null,
-        deletions: null,
         kind: "state",
         reason: "submodule",
       }),

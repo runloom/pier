@@ -113,6 +113,7 @@ function emptyEnvironmentState() {
 function cliClientServices(): PierCoreServices {
   return {
     agentDetection: {} as never,
+    gitReview: {} as never,
     agentUsage: {
       flush: async () => undefined,
       read: async () => ({ entries: [], version: 1 }),

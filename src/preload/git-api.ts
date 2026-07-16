@@ -20,6 +20,14 @@ import type {
   GitStatus,
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
+import type {
+  GitReviewCancelRequest,
+  GitReviewFileDocumentRequest,
+  GitReviewFileDocumentResult,
+  GitReviewIndexRequest,
+  GitReviewIndexResult,
+} from "@shared/contracts/git-review.ts";
+import { gitWatchLeaseSchema } from "@shared/contracts/git-watch.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 import { invokePierCommand } from "./ipc-envelope.ts";
@@ -70,6 +78,7 @@ export interface PierGitAPI {
   abortMerge: (cwd: string) => Promise<GitMergeAbortResult>;
   abortRebase: (cwd: string) => Promise<GitRebaseAbortResult>;
   applyStash: (cwd: string, index?: number) => Promise<GitStashApplyResult>;
+  cancelReviewRequest: (request: GitReviewCancelRequest) => Promise<void>;
   checkoutBranch: (cwd: string, name: string) => Promise<boolean>;
   continueRebase: (cwd: string) => Promise<GitRebaseContinueResult>;
   discardChanges: (cwd: string, paths: string[]) => Promise<boolean>;
@@ -92,6 +101,12 @@ export interface PierGitAPI {
   ) => Promise<string>;
   getLog: (cwd: string, options?: GitLogOptionsValue) => Promise<GitCommit[]>;
   getRepoInfo: (cwd: string) => Promise<GitRepoInfo>;
+  getReviewFileDocument: (
+    request: GitReviewFileDocumentRequest
+  ) => Promise<GitReviewFileDocumentResult>;
+  getReviewIndex: (
+    request: GitReviewIndexRequest
+  ) => Promise<GitReviewIndexResult>;
   getStatus: (cwd: string) => Promise<GitStatus>;
   isWorkingTreeClean: (cwd: string) => Promise<boolean>;
   listBranches: (
@@ -124,17 +139,34 @@ export interface PierGitAPI {
   /** 订阅 gitRoot 的 git 变化。返回 unsubscribe。多次 watch 同一 gitRoot 各自独立。 */
   watch: (
     gitRoot: string,
-    listener: (event: GitChangeEvent) => void
+    listener: (event: GitChangeEvent) => void,
+    onStartFailure?: (error: Error) => void,
+    onReady?: () => void
   ) => () => void;
 }
 
 export const gitApi: PierGitAPI = {
+  cancelReviewRequest: (request) =>
+    invokePierCommand<void>({
+      request,
+      type: "git.cancelReviewRequest",
+    }),
   getStatus: (cwd) =>
     invokePierCommand<GitStatus>({ cwd, type: "git.getStatus" }),
   listIgnored: (cwd) =>
     invokePierCommand<string[]>({ cwd, type: "git.listIgnored" }),
   getRepoInfo: (cwd) =>
     invokePierCommand<GitRepoInfo>({ cwd, type: "git.getRepoInfo" }),
+  getReviewIndex: (request) =>
+    invokePierCommand<GitReviewIndexResult>({
+      request,
+      type: "git.getReviewIndex",
+    }),
+  getReviewFileDocument: (request) =>
+    invokePierCommand<GitReviewFileDocumentResult>({
+      request,
+      type: "git.getReviewFileDocument",
+    }),
   isWorkingTreeClean: (cwd) =>
     invokePierCommand<boolean>({ cwd, type: "git.isWorkingTreeClean" }),
   getDiffText: (cwd, options) =>
@@ -280,24 +312,64 @@ export const gitApi: PierGitAPI = {
       cwd,
       type: "git.undoLastCommit",
     }),
-  watch: (gitRoot, listener) => {
+  watch: (gitRoot, listener, onStartFailure, onReady) => {
+    let disposed = false;
+    let acceptedGitRoot: string | null = null;
     const filtered = (_event: unknown, payload: GitChangeEvent): void => {
-      if (payload.gitRoot === gitRoot) {
+      if (payload.gitRoot === acceptedGitRoot) {
         listener(payload);
+      }
+    };
+    const reportStartFailure = (error: unknown): void => {
+      if (disposed) {
+        return;
+      }
+      ipcRenderer.off(PIER_BROADCAST.GIT_CHANGED, filtered);
+      try {
+        onStartFailure?.(
+          error instanceof Error ? error : new Error(String(error))
+        );
+      } catch {
+        // renderer 回调不得改变 START/STOP 引用计数协议
       }
     };
     ipcRenderer.on(PIER_BROADCAST.GIT_CHANGED, filtered);
     // main 侧按 (wc, gitRoot) 引用计数;START 失败(权限/窗口未注册)时不得发 STOP,
     // 否则会错误递减其他消费方共享的计数。then 链保证 STOP 严格晚于 START 送达。
-    const started = ipcRenderer
-      .invoke(PIER.GIT_WATCH_START, gitRoot)
-      .then((ok: unknown) => ok === true)
-      .catch(() => false);
+    const started = ipcRenderer.invoke(PIER.GIT_WATCH_START, gitRoot).then(
+      (value: unknown) => {
+        const lease = gitWatchLeaseSchema.safeParse(value);
+        if (!lease.success) {
+          reportStartFailure(
+            new Error(`Git watch subscription was rejected: ${gitRoot}`)
+          );
+          return null;
+        }
+        acceptedGitRoot = lease.data.gitRoot;
+        if (!disposed) {
+          try {
+            onReady?.();
+          } catch {
+            // renderer 回调不得改变 START/STOP 引用计数协议
+          }
+        }
+        return lease.data;
+      },
+      (error: unknown) => {
+        reportStartFailure(error);
+        return null;
+      }
+    );
     return () => {
+      disposed = true;
       ipcRenderer.off(PIER_BROADCAST.GIT_CHANGED, filtered);
       started
-        .then((ok) =>
-          ok ? ipcRenderer.invoke(PIER.GIT_WATCH_STOP, gitRoot) : undefined
+        .then((lease) =>
+          lease
+            ? ipcRenderer.invoke(PIER.GIT_WATCH_STOP, {
+                leaseId: lease.leaseId,
+              })
+            : undefined
         )
         .catch(() => undefined);
     };

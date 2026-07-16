@@ -99,6 +99,10 @@ export async function runGitStatusDropdownAction({
     return;
   }
 
+  if (actionId === "viewChanges") {
+    return;
+  }
+
   const exhaustive: never = actionId;
   return exhaustive;
 }

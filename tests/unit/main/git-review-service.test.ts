@@ -2,23 +2,29 @@ import { randomUUID } from "node:crypto";
 import type { ExecGitRaw } from "@main/services/git-exec.ts";
 import { GitReviewBudget } from "@main/services/git-review/git-review-budget.ts";
 import type { GitReviewIndexResolution } from "@main/services/git-review/git-review-index.ts";
-import { GitReviewService } from "@main/services/git-review/git-review-service.ts";
+import {
+  type GitReviewRequestOptions,
+  GitReviewService,
+  type GitReviewSourceResolver,
+} from "@main/services/git-review/git-review-service.ts";
 import {
   type GitReviewFileDocumentRequest,
   gitReviewIndexOkSchema,
 } from "@shared/contracts/git-review.ts";
 import { describe, expect, it, vi } from "vitest";
+import {
+  gitReviewRequestOptions,
+  TEST_GIT_REVIEW_OWNER,
+} from "./git-review-test-fixtures.ts";
 
 function request(): GitReviewFileDocumentRequest {
   return {
-    clientHasDocument: false,
-    ifRevision: null,
     operationId: randomUUID(),
     source: {
       contextId: "worktree:test",
       gitRootPath: "/repo",
+      oldPaths: [],
       path: "missing.ts",
-      query: { groups: ["unstaged"], kind: "uncommitted" },
     },
   };
 }
@@ -29,7 +35,10 @@ describe("GitReviewService boundary", () => {
     const invalid = { ...request(), operationId: "not-a-uuid" };
 
     await expect(
-      service.getFileDocument(invalid as GitReviewFileDocumentRequest)
+      service.getFileDocument(
+        invalid as GitReviewFileDocumentRequest,
+        gitReviewRequestOptions()
+      )
     ).resolves.toEqual({
       kind: "error",
       message: "Git Review document 请求非法",
@@ -38,38 +47,49 @@ describe("GitReviewService boundary", () => {
     });
   });
 
-  it("预先取消与已到期预算保持 aborted/timeout，不误报 stale", async () => {
-    const controller = new AbortController();
-    controller.abort();
+  it("已到期预算在授权器执行前返回 timeout", async () => {
     const now = () => 100;
     const expired = new GitReviewBudget({ deadlineAtMs: 100, now });
-    const service = new GitReviewService({ now });
+    const options = gitReviewRequestOptions(expired);
+    const resolveSourceCalled = vi.fn();
+    const resolveSource: GitReviewSourceResolver = async (source) => {
+      resolveSourceCalled();
+      return { kind: "ok", value: source };
+    };
 
     await expect(
-      service.getFileDocument(request(), { signal: controller.signal })
-    ).resolves.toMatchObject({ kind: "error", reason: "aborted" });
-    await expect(
-      service.getFileDocument(request(), { budget: expired })
+      new GitReviewService().getFileDocument(request(), {
+        ...options,
+        resolveSource,
+      })
     ).resolves.toMatchObject({ kind: "error", reason: "timeout" });
+    expect(resolveSourceCalled).not.toHaveBeenCalled();
   });
 
-  it("canonicalize await 期间取消后不进入调度或索引", async () => {
-    const controller = new AbortController();
-    let releaseCanonicalize: (value: string) => void = () => undefined;
-    const canonicalized = new Promise<string>((resolve) => {
-      releaseCanonicalize = resolve;
-    });
+  it("授权器尚未完成时取消，旧请求不会进入索引", async () => {
     const resolve = vi.fn();
     const service = new GitReviewService({
-      canonicalizeRoot: () => canonicalized,
-      indexReader: { resolve },
+      indexReader: { read: vi.fn(), resolve },
     });
+    let markStarted: () => void = () => undefined;
+    const started = new Promise<void>((resolveStarted) => {
+      markStarted = resolveStarted;
+    });
+    const input = request();
+    const options: GitReviewRequestOptions = {
+      ...gitReviewRequestOptions(),
+      resolveSource: async () => {
+        markStarted();
+        return new Promise(() => undefined);
+      },
+    };
 
-    const result = service.getFileDocument(request(), {
-      signal: controller.signal,
-    });
-    controller.abort();
-    releaseCanonicalize("/repo");
+    const result = service.getFileDocument(input, options);
+    await started;
+    service.cancelReviewRequest(
+      { operationId: input.operationId },
+      TEST_GIT_REVIEW_OWNER
+    );
 
     await expect(result).resolves.toMatchObject({
       kind: "error",
@@ -78,77 +98,93 @@ describe("GitReviewService boundary", () => {
     expect(resolve).not.toHaveBeenCalled();
   });
 
-  it("canonicalize 永不完成时仍受完整请求 deadline 约束", async () => {
+  it("授权器永不完成仍受请求 deadline 约束", async () => {
     const budget = new GitReviewBudget({ deadlineAtMs: Date.now() + 20 });
-    const service = new GitReviewService({
-      canonicalizeRoot: () => new Promise<string>(() => undefined),
-    });
 
     await expect(
-      service.getFileDocument(request(), { budget })
+      new GitReviewService().getFileDocument(request(), {
+        ...gitReviewRequestOptions(budget),
+        resolveSource: async () => new Promise(() => undefined),
+      })
     ).resolves.toMatchObject({ kind: "error", reason: "timeout" });
   });
 
-  it("索引已截断且目标不在发布窗口时返回 outputLimit，不暗示 unchanged", async () => {
+  it("授权结果仍须通过同一请求 schema", async () => {
+    const resolve = vi.fn();
+    const service = new GitReviewService({
+      indexReader: { read: vi.fn(), resolve },
+    });
+    const options = gitReviewRequestOptions();
+
+    await expect(
+      service.getFileDocument(request(), {
+        ...options,
+        resolveSource: async (source) => ({
+          kind: "ok",
+          value: { ...source, gitRootPath: "relative/repository" },
+        }),
+      })
+    ).resolves.toMatchObject({
+      kind: "error",
+      reason: "invalidSource",
+      retryable: false,
+    });
+    expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it("路径深度警告不会把已不存在的目标误报为输出上限", async () => {
     const result = gitReviewIndexOkSchema.parse({
-      durationMs: 0,
       entries: [],
-      gitRootPath: "/repo",
       kind: "ok",
-      query: {
-        groups: ["unstaged"],
-        headOid: null,
-        indexToken: "index",
-        kind: "uncommitted",
-      },
-      revision: "revision",
-      sourceQuery: { groups: ["unstaged"], kind: "uncommitted" },
-      warnings: [{ code: "filesTruncated", limit: 2000, omitted: null }],
+      warnings: [{ code: "pathDepthExceeded", skipped: 1 }],
     });
     const resolution: GitReviewIndexResolution = {
       kind: "ok",
+      metadata: {
+        canonicalRoot: "/repo",
+        headOid: null,
+        indexRevision: "revision",
+      },
       resolvedEntries: [],
       result,
     };
     const service = new GitReviewService({
-      indexReader: { resolve: async () => resolution },
+      indexReader: { read: vi.fn(), resolve: async () => resolution },
     });
 
-    await expect(service.getFileDocument(request())).resolves.toMatchObject({
-      kind: "error",
-      reason: "outputLimit",
-      retryable: true,
-    });
+    await expect(
+      service.getFileDocument(request(), gitReviewRequestOptions())
+    ).resolves.toEqual({ kind: "unchanged" });
   });
 
-  it("确定性 patch 协议错误只执行一次，并返回不可重试 internal", async () => {
+  it("确定性 patch 协议错误只执行一次", async () => {
     const entry = {
-      additions: 0,
-      deletions: 1,
       entryKey: "entry",
-      groups: ["unstaged"],
-      groupStatuses: { unstaged: "deleted" },
       oldPaths: [],
       path: "missing.ts",
+      renderSlots: [
+        {
+          group: "staged",
+          oldPath: null,
+          sectionKey: "section:missing",
+          status: "deleted",
+          targetPath: "missing.ts",
+        },
+      ],
       status: "deleted",
     } as const;
     const result = gitReviewIndexOkSchema.parse({
-      durationMs: 0,
       entries: [entry],
-      gitRootPath: "/repo",
       kind: "ok",
-      query: {
-        groups: ["unstaged"],
-        headOid: "1".repeat(40),
-        indexToken: "index",
-        kind: "uncommitted",
-      },
-      revision: "revision",
-      sourceQuery: { groups: ["unstaged"], kind: "uncommitted" },
       warnings: [],
     });
     const resolution: GitReviewIndexResolution = {
       kind: "ok",
+      metadata: {
+        canonicalRoot: "/repo",
+        headOid: "1".repeat(40),
+        indexRevision: "revision",
+      },
       resolvedEntries: [
         {
           groupFacts: {
@@ -156,8 +192,10 @@ describe("GitReviewService boundary", () => {
               movement: null,
               oldPath: null,
               origin: "tracked",
+              sourceOid: null,
               statsExpected: true,
               status: "deleted",
+              targetOid: null,
               targetPath: "missing.ts",
             },
           },
@@ -175,10 +213,12 @@ describe("GitReviewService boundary", () => {
     })) satisfies ExecGitRaw;
     const service = new GitReviewService({
       execGitRaw: exec,
-      indexReader: { resolve: async () => resolution },
+      indexReader: { read: vi.fn(), resolve: async () => resolution },
     });
 
-    await expect(service.getFileDocument(request())).resolves.toMatchObject({
+    await expect(
+      service.getFileDocument(request(), gitReviewRequestOptions())
+    ).resolves.toMatchObject({
       kind: "error",
       reason: "internal",
       retryable: false,

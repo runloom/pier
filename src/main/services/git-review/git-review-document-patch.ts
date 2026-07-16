@@ -1,25 +1,30 @@
 import { isUtf8 } from "node:buffer";
 import { createHash } from "node:crypto";
-import { mkdir, mkdtemp, realpath, rm } from "node:fs/promises";
-import { tmpdir } from "node:os";
+import { mkdir, realpath } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import {
   type ExecGitRaw,
   GIT_EXEC_DIAGNOSTIC_TAIL_BYTES,
   type GitExecRawResult,
 } from "../git-exec.ts";
+import { parseGitSinglePathOutput } from "../git-path-output.ts";
 import {
   createGitReviewPatchState,
   materialFromGitReviewPatchEnvelope,
 } from "./git-review-document-envelope.ts";
 import {
-  GIT_REVIEW_DEFAULT_CONTEXT_LINES,
+  type GitReviewPatchEnvelope,
+  GitReviewPatchEnvelopeSelector,
+  selectGitReviewPatchEnvelope,
+} from "./git-review-document-envelope-selector.ts";
+import {
   GIT_REVIEW_PATCH_MAX_BYTES,
   GitReviewDocumentProtocolError,
   GitReviewDocumentStaleError,
   type GitReviewPatchMaterial,
   type ReadGitReviewPatchOptions,
 } from "./git-review-document-patch-contract.ts";
+import { raceGitReviewIdentityBoundary } from "./git-review-identity-boundary.ts";
 import {
   type GitReviewIndexExecutionBudget,
   GitReviewIndexExecutionError,
@@ -31,15 +36,24 @@ import {
   readGitReviewFileFingerprint,
   readGitReviewFileSnapshot,
 } from "./git-review-path-guard.ts";
+import {
+  createGitReviewExactPathspecs,
+  hasGitReviewExactPathspecConflict,
+} from "./git-review-pathspec.ts";
+import { createGitReviewTemporaryRoot } from "./git-review-temporary-root.ts";
+import {
+  cleanupGitReviewTemporaryRoot,
+  cleanupLateGitReviewTemporaryRoot,
+} from "./git-review-temporary-root-cleanup.ts";
 
 export {
-  GIT_REVIEW_DEFAULT_CONTEXT_LINES,
   GitReviewDocumentProtocolError,
   GitReviewDocumentStaleError,
   type GitReviewPatchMaterial,
   type GitReviewRenderableGroup,
 } from "./git-review-document-patch-contract.ts";
 
+const GIT_REVIEW_DEFAULT_CONTEXT_LINES = 20;
 const GIT_REVIEW_PATCH_ENVELOPE_MAX_BYTES =
   GIT_REVIEW_PATCH_MAX_BYTES + GIT_EXEC_DIAGNOSTIC_TAIL_BYTES;
 
@@ -51,7 +65,7 @@ const PATCH_MACHINE_ARGS = [
   "--ignore-submodules=none",
   "--find-renames=50%",
   "--find-copies=50%",
-  "-l2000",
+  "-l0",
   "--binary",
   "--full-index",
   "--no-abbrev",
@@ -87,14 +101,8 @@ export async function readGitReviewPatch(
     }
     before = snapshot.snapshot;
   }
-  const result = await collectGit(
-    options.execGitRaw,
-    createTrackedPatchArgs(options),
-    options.gitRootPath,
-    options.budget,
-    options.signal
-  );
-  const material = materialFromGitReviewPatchEnvelope(result.stdout, options);
+  const envelope = await collectSelectedPatch(options);
+  const material = materialFromGitReviewPatchEnvelope(envelope, options);
   if (before !== null) {
     const after = await tryReadFingerprint(options);
     if (after.kind === "state") {
@@ -114,6 +122,42 @@ export async function readGitReviewPatch(
   return material;
 }
 
+async function collectSelectedPatch(
+  options: ReadGitReviewPatchOptions
+): Promise<GitReviewPatchEnvelope> {
+  const selector = new GitReviewPatchEnvelopeSelector(options.fact);
+  let selectorError: unknown;
+  let result: GitExecRawResult;
+  try {
+    result = await options.execGitRaw(createTrackedPatchArgs(options), {
+      budget: options.budget,
+      cwd: options.gitRootPath,
+      env: { GIT_DIFF_OPTS: "" },
+      mode: "chunks",
+      onStdoutChunk: (chunk) => {
+        try {
+          selector.push(chunk);
+        } catch (error) {
+          selectorError = error;
+          throw error;
+        }
+      },
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+    });
+  } catch (error) {
+    if (selectorError !== undefined) {
+      throw selectorError;
+    }
+    throw error;
+  }
+  if (result.kind !== "consumed") {
+    throw new GitReviewDocumentProtocolError(
+      "Git Review patch 命令返回了非 consume 结果"
+    );
+  }
+  return selector.finish();
+}
+
 async function readUntrackedPatch(
   options: ReadGitReviewPatchOptions
 ): Promise<GitReviewPatchMaterial> {
@@ -121,35 +165,30 @@ async function readUntrackedPatch(
   if (before.kind === "state") {
     return before;
   }
-  if (!isUtf8(before.snapshot.bytes)) {
-    return createGitReviewPatchState(
-      "invalidEncoding",
-      before.snapshot.digest,
-      before.snapshot.size,
-      null,
-      null
-    );
-  }
   if (before.snapshot.bytes.includes(0)) {
-    return createGitReviewPatchState(
-      "binary",
-      before.snapshot.digest,
-      before.snapshot.size,
-      null,
-      null
-    );
+    return createGitReviewPatchState("binary", before.snapshot.digest);
   }
-  const temporaryRoot = await (
-    options.createTemporaryRoot ??
-    (() => mkdtemp(join(tmpdir(), "pier-git-review-")))
-  )();
+  if (!isUtf8(before.snapshot.bytes)) {
+    return createGitReviewPatchState("invalidEncoding", before.snapshot.digest);
+  }
+  const temporaryRootPromise = createGitReviewTemporaryRoot();
+  let temporaryRoot: string;
+  try {
+    temporaryRoot = await raceFilesystemOperation(
+      options,
+      () => temporaryRootPromise
+    );
+  } catch (error) {
+    cleanupLateGitReviewTemporaryRoot(temporaryRootPromise, options.budget);
+    throw error;
+  }
   let cleanupError: unknown;
   let material: GitReviewPatchMaterial | undefined;
   let primaryError: unknown;
   try {
     const objectDirectory = join(temporaryRoot, "objects");
     const indexPath = join(temporaryRoot, "index");
-    await mkdir(objectDirectory);
+    await raceFilesystemOperation(options, () => mkdir(objectDirectory));
     const alternateObjectDirectory = await resolveObjectDirectory(options);
     const env = {
       GIT_ALTERNATE_OBJECT_DIRECTORIES: JSON.stringify(
@@ -189,7 +228,10 @@ async function readUntrackedPatch(
       options.signal,
       env
     );
-    material = materialFromGitReviewPatchEnvelope(result.stdout, options);
+    material = materialFromGitReviewPatchEnvelope(
+      selectGitReviewPatchEnvelope(result.stdout, options.fact),
+      options
+    );
     const after = await tryReadFingerprint(options);
     if (
       after.kind === "state" ||
@@ -204,7 +246,9 @@ async function readUntrackedPatch(
     primaryError = error;
   } finally {
     try {
-      await rm(temporaryRoot, { force: true, recursive: true });
+      // cleanup 不能复用已经取消的请求 signal，否则目录会被直接遗留；同时
+      // 以本地上限避免异常文件系统永久占用调度许可。
+      await cleanupGitReviewTemporaryRoot(temporaryRoot, options.budget);
     } catch (error) {
       cleanupError = error;
     }
@@ -238,8 +282,10 @@ async function resolveObjectDirectory(
       "Git Review 无法解码 Git common directory"
     );
   }
-  const commonDirectory = removeOneLineEnding(result.stdout.toString("utf8"));
-  if (commonDirectory.length === 0) {
+  const commonDirectory = parseGitSinglePathOutput(
+    result.stdout.toString("utf8")
+  );
+  if (commonDirectory === null) {
     throw new GitReviewDocumentProtocolError(
       "Git Review 未解析到 Git common directory"
     );
@@ -247,7 +293,9 @@ async function resolveObjectDirectory(
   const absoluteCommonDirectory = isAbsolute(commonDirectory)
     ? commonDirectory
     : resolve(options.gitRootPath, commonDirectory);
-  return realpath(join(absoluteCommonDirectory, "objects"));
+  return raceFilesystemOperation(options, () =>
+    realpath(join(absoluteCommonDirectory, "objects"))
+  );
 }
 
 async function hashObject(
@@ -265,7 +313,7 @@ async function hashObject(
     env,
     stdin
   );
-  const oid = removeOneLineEnding(result.stdout.toString("ascii"));
+  const oid = removeScalarLineEnding(result.stdout.toString("ascii"));
   if (!/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u.test(oid)) {
     throw new GitReviewDocumentProtocolError(
       "Git Review hash-object 返回了非法 OID"
@@ -278,71 +326,46 @@ function createTrackedPatchArgs(
   options: ReadGitReviewPatchOptions
 ): readonly string[] {
   const paths = uniquePaths(options.fact.oldPath, options.fact.targetPath);
+  const pathspecConflict = hasGitReviewExactPathspecConflict(paths);
+  const pathspecs = pathspecConflict
+    ? paths.map((path) => `:(top,literal)${path}`)
+    : createGitReviewExactPathspecs(paths);
+  const movementFilter =
+    options.fact.movement === null
+      ? []
+      : [`--diff-filter=${options.fact.movement === "copy" ? "C" : "R"}`];
   if (options.group === "unstaged") {
     return [
-      "--literal-pathspecs",
       "diff",
       ...PATCH_MACHINE_ARGS,
+      ...movementFilter,
       "--",
-      ...paths,
+      ...pathspecs,
     ];
   }
   if (options.group === "staged") {
-    if (options.query.kind !== "uncommitted") {
-      throw new GitReviewDocumentProtocolError("staged section 查询类型不匹配");
-    }
     return [
-      "--literal-pathspecs",
       "diff",
       ...PATCH_MACHINE_ARGS,
       "--cached",
-      ...(options.query.headOid === null ? [] : [options.query.headOid]),
+      ...(options.headOid === null ? [] : [options.headOid]),
+      ...movementFilter,
       "--",
-      ...paths,
+      ...pathspecs,
     ];
   }
-  if (options.group === "commit") {
-    if (options.query.kind !== "commit") {
-      throw new GitReviewDocumentProtocolError("commit section 查询类型不匹配");
-    }
-    if (options.query.root) {
-      return [
-        "--literal-pathspecs",
-        "diff-tree",
-        "--root",
-        "--no-commit-id",
-        "-r",
-        ...PATCH_MACHINE_ARGS,
-        options.query.commitOid,
-        "--",
-        ...paths,
-      ];
-    }
-    if (options.query.baseOid === null) {
-      throw new GitReviewDocumentProtocolError("commit section 缺少 base OID");
-    }
-    return [
-      "--literal-pathspecs",
-      "diff",
-      ...PATCH_MACHINE_ARGS,
-      options.query.baseOid,
-      options.query.commitOid,
-      "--",
-      ...paths,
-    ];
-  }
-  if (options.query.kind !== "branch") {
-    throw new GitReviewDocumentProtocolError("branch section 查询类型不匹配");
-  }
-  return [
-    "--literal-pathspecs",
-    "diff",
-    ...PATCH_MACHINE_ARGS,
-    options.query.mergeBaseOid,
-    options.query.headOid,
-    "--",
-    ...paths,
-  ];
+  const exhaustive: never = options.group;
+  return exhaustive;
+}
+
+function raceFilesystemOperation<T>(
+  options: ReadGitReviewPatchOptions,
+  operation: () => Promise<T>
+): Promise<T> {
+  return raceGitReviewIdentityBoundary(operation, {
+    budget: options.budget,
+    ...(options.signal === undefined ? {} : { signal: options.signal }),
+  });
 }
 
 async function tryReadSnapshot(
@@ -355,6 +378,7 @@ async function tryReadSnapshot(
     return {
       kind: "snapshot",
       snapshot: await readGitReviewFileSnapshot({
+        budget: options.budget,
         gitRootPath: options.gitRootPath,
         path: options.fact.targetPath,
         ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -375,6 +399,7 @@ async function tryReadFingerprint(
     return {
       kind: "snapshot",
       snapshot: await readGitReviewFileFingerprint({
+        budget: options.budget,
         gitRootPath: options.gitRootPath,
         path: options.fact.targetPath,
         ...(options.signal === undefined ? {} : { signal: options.signal }),
@@ -416,10 +441,7 @@ function pathErrorToSnapshotResult(
   }
   return createGitReviewPatchState(
     reason,
-    createHash("sha256").update(error.message).digest("hex"),
-    null,
-    null,
-    error.message
+    createHash("sha256").update(error.message).digest("hex")
   );
 }
 
@@ -455,7 +477,7 @@ function uniquePaths(oldPath: string | null, targetPath: string): string[] {
     : [oldPath, targetPath];
 }
 
-function removeOneLineEnding(value: string): string {
+function removeScalarLineEnding(value: string): string {
   if (value.endsWith("\r\n")) {
     return value.slice(0, -2);
   }

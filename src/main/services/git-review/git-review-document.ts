@@ -1,69 +1,59 @@
 import { createHash } from "node:crypto";
 import {
   GIT_REVIEW_GROUP_ORDER,
-  type GitDiffPanelSource,
   type GitReviewFileDocumentOk,
   type GitReviewFileSection,
+  type GitReviewFileSource,
   type GitReviewGroup,
-  type GitReviewIndexEntry,
-  type GitReviewIndexOk,
   gitReviewFileDocumentOkSchema,
 } from "../../../shared/contracts/git-review.ts";
 import type { ExecGitRaw } from "../git-exec.ts";
 import {
-  GIT_REVIEW_DEFAULT_CONTEXT_LINES,
   GitReviewDocumentStaleError,
   type GitReviewPatchMaterial,
   type GitReviewRenderableGroup,
   readGitReviewPatch,
 } from "./git-review-document-patch.ts";
+import type { GitReviewIndexMetadata } from "./git-review-index.ts";
 import type { GitReviewIndexResolvedEntry } from "./git-review-index-assembler.ts";
 import type { GitReviewIndexExecutionBudget } from "./git-review-index-contract.ts";
+import { createGitReviewSectionKey } from "./git-review-section-key.ts";
 
-export interface BuildGitReviewDocumentOptions {
+interface BuildGitReviewDocumentOptions {
   readonly budget: GitReviewIndexExecutionBudget;
-  readonly entry: GitReviewIndexEntry;
   readonly execGitRaw: ExecGitRaw;
-  readonly index: GitReviewIndexOk;
-  readonly now?: () => number;
+  readonly metadata: GitReviewIndexMetadata;
   readonly resolvedEntry: GitReviewIndexResolvedEntry;
   readonly signal?: AbortSignal;
-  readonly source: GitDiffPanelSource;
-  readonly startedAt: number;
+  readonly source: GitReviewFileSource;
 }
 
 export async function buildGitReviewDocument(
   options: BuildGitReviewDocumentOptions
 ): Promise<GitReviewFileDocumentOk> {
   const sections: GitReviewFileSection[] = [];
-  let stagedIndexOid: string | null = null;
-  let unstagedIndexOid: string | null = null;
-  for (const group of orderedEntryGroups(options.entry.groups)) {
+  const sectionRevisions: string[] = [];
+  for (const group of GIT_REVIEW_GROUP_ORDER) {
     const fact = options.resolvedEntry.groupFacts[group];
     if (fact === undefined) {
-      throw new Error(`Git Review resolved entry 缺少 ${group} fact`);
+      continue;
     }
     if (group === "conflict") {
       const sourceRevision = hashParts([
         "pier.git-review.conflict.v1",
-        options.index.revision,
+        options.metadata.indexRevision,
         options.source.path,
       ]);
+      const key = createGitReviewSectionKey(group, null, fact.targetPath);
       sections.push({
-        additions: null,
-        byteSize: null,
-        deletions: null,
-        group,
         kind: "state",
-        lineCount: null,
-        message: null,
-        oldPath: null,
-        path: fact.targetPath,
+        oldPath: fact.oldPath,
         reason: "conflict",
-        sectionKey: sectionKey(group, null, fact.targetPath),
-        sourceRevision,
-        status: "conflicted",
+        sectionKey: key,
+        status: fact.status,
+        targetPath: fact.targetPath,
       });
+      sectionRevisions.push(sourceRevision);
       continue;
     }
     if (!(isRenderableGroup(group) && isRenderableFact(fact))) {
@@ -73,44 +63,65 @@ export async function buildGitReviewDocument(
       budget: options.budget,
       execGitRaw: options.execGitRaw,
       fact,
-      gitRootPath: options.index.gitRootPath,
+      gitRootPath: options.metadata.canonicalRoot,
       group,
-      query: options.index.query,
+      headOid: options.metadata.headOid,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
-    if (group === "staged") {
-      stagedIndexOid = material.targetOid;
-    } else if (group === "unstaged") {
-      unstagedIndexOid = material.sourceOid;
-    }
-    sections.push(sectionFromMaterial(group, fact, material));
+    assertMaterialMatchesIndexFact(group, fact, material);
+    const section = sectionFromMaterial(group, fact, material);
+    sections.push(section);
+    sectionRevisions.push(material.sourceRevision);
   }
+  const revision = createGitReviewDocumentRevision(
+    options.metadata.indexRevision,
+    options.source,
+    sections,
+    sectionRevisions
+  );
+  return deepFreezeJson(
+    gitReviewFileDocumentOkSchema.parse({
+      kind: "ok",
+      revision,
+      sections,
+    })
+  );
+}
+
+function assertMaterialMatchesIndexFact(
+  group: GitReviewRenderableGroup,
+  fact: RenderableGitReviewIndexFact,
+  material: GitReviewPatchMaterial
+): void {
   if (
-    stagedIndexOid !== null &&
-    unstagedIndexOid !== null &&
-    stagedIndexOid !== unstagedIndexOid
+    (fact.sourceOid !== null &&
+      (material.sourceOid !== null || group === "staged") &&
+      material.sourceOid !== fact.sourceOid) ||
+    (fact.targetOid !== null &&
+      (material.targetOid !== null || group === "staged") &&
+      material.targetOid !== fact.targetOid)
   ) {
     throw new GitReviewDocumentStaleError(
-      "Git Review staged/unstaged section 的 index blob 不一致"
+      "Git Review patch 对象与 index 事实不一致"
     );
   }
-  const revision = hashParts([
+}
+
+function createGitReviewDocumentRevision(
+  indexRevision: string,
+  source: GitReviewFileSource,
+  sections: readonly GitReviewFileSection[],
+  sectionRevisions: readonly string[]
+): string {
+  return hashParts([
     "pier.git-review.document.v1",
-    options.index.revision,
-    JSON.stringify(options.source),
-    ...sections.flatMap((section) => [
+    indexRevision,
+    JSON.stringify(source),
+    ...sections.flatMap((section, index) => [
       section.sectionKey,
-      section.sourceRevision,
+      sectionRevisions[index] ?? "",
     ]),
   ]);
-  return gitReviewFileDocumentOkSchema.parse({
-    durationMs: Math.max(0, (options.now ?? Date.now)() - options.startedAt),
-    kind: "ok",
-    resolvedQuery: options.index.query,
-    revision,
-    sections,
-    source: options.source,
-  });
 }
 
 function sectionFromMaterial(
@@ -118,35 +129,25 @@ function sectionFromMaterial(
   fact: RenderableGitReviewIndexFact,
   material: GitReviewPatchMaterial
 ): GitReviewFileSection {
-  const base = {
+  const sectionKey = createGitReviewSectionKey(
     group,
-    oldPath: fact.oldPath,
-    path: fact.targetPath,
-    sectionKey: sectionKey(group, fact.oldPath, fact.targetPath),
-    sourceRevision: material.sourceRevision,
-    status: fact.status,
-  } as const;
+    fact.oldPath,
+    fact.targetPath
+  );
   if (material.kind === "state") {
     return {
-      ...base,
-      additions: null,
-      byteSize: material.byteSize,
-      deletions: null,
       kind: "state",
-      lineCount: material.lineCount,
-      message: material.message,
+      oldPath: fact.oldPath,
       reason: material.reason,
+      sectionKey,
+      status: fact.status,
+      targetPath: fact.targetPath,
     };
   }
   return {
-    ...base,
-    additions: material.additions,
-    byteSize: material.byteSize,
-    contextLines: GIT_REVIEW_DEFAULT_CONTEXT_LINES,
-    deletions: material.deletions,
     kind: "patch",
-    lineCount: material.lineCount,
     patch: material.patch,
+    sectionKey,
   };
 }
 
@@ -164,35 +165,10 @@ function isRenderableFact(
   return fact.status !== "conflicted";
 }
 
-function orderedEntryGroups(
-  groups: readonly GitReviewGroup[]
-): GitReviewGroup[] {
-  const selected = new Set(groups);
-  return GIT_REVIEW_GROUP_ORDER.filter((group) => selected.has(group));
-}
-
 function isRenderableGroup(
   group: GitReviewGroup
 ): group is GitReviewRenderableGroup {
-  return (
-    group === "unstaged" ||
-    group === "staged" ||
-    group === "commit" ||
-    group === "branch"
-  );
-}
-
-function sectionKey(
-  group: GitReviewGroup,
-  oldPath: string | null,
-  targetPath: string
-): string {
-  return hashParts([
-    "pier.git-review.section-key.v1",
-    group,
-    oldPath ?? "",
-    targetPath,
-  ]);
+  return group === "unstaged" || group === "staged";
 }
 
 function hashParts(parts: readonly string[]): string {
@@ -202,4 +178,23 @@ function hashParts(parts: readonly string[]): string {
     digest.update("\0", "utf8");
   }
   return `sha256:${digest.digest("hex")}`;
+}
+
+function deepFreezeJson<T>(value: T): T {
+  const seen = new WeakSet<object>();
+  const work: unknown[] = [value];
+  while (work.length > 0) {
+    const current = work.pop();
+    if (typeof current !== "object" || current === null || seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
+    if (Array.isArray(current)) {
+      work.push(...current);
+    } else {
+      work.push(...Object.values(current));
+    }
+    Object.freeze(current);
+  }
+  return value;
 }

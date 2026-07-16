@@ -1,5 +1,4 @@
 import { isUtf8 } from "node:buffer";
-import { createHash } from "node:crypto";
 import {
   type ExecGitRaw,
   GitExecRawError,
@@ -13,10 +12,6 @@ import {
   GitReviewIndexProtocolError,
 } from "./git-review-index-contract.ts";
 
-const RENAME_WARNING_MARKERS = [
-  "exhaustive rename detection was skipped",
-  "inexact rename detection was skipped",
-] as const;
 const GIT_REVIEW_FAILURE_MESSAGE_MAX_BYTES = 4096;
 
 export async function runGitReviewIndexParser(
@@ -25,14 +20,13 @@ export async function runGitReviewIndexParser(
   cwd: string,
   budget: GitReviewIndexExecutionBudget,
   signal: AbortSignal | undefined,
-  maxRecords: number,
   onRecord: (record: Buffer) => "continue" | "stop"
 ): Promise<GitExecRawResult> {
   let protocolError: unknown;
   const result = await execGitRaw(args, {
     budget,
     cwd,
-    maxRecords,
+    maxRecords: null,
     mode: "stream",
     onRecord: (record) => {
       try {
@@ -50,42 +44,11 @@ export async function runGitReviewIndexParser(
   return result;
 }
 
-export function createGitReviewIndexToken(indexDigest: string | null): string {
-  if (indexDigest === null) {
-    throw new GitReviewIndexProtocolError(
-      "uncommitted index 缺少 index digest"
-    );
-  }
-  return `sha256:${createHash("sha256")
-    .update("pier.git-review.index-token.fence.v1\0", "utf8")
-    .update(indexDigest, "utf8")
-    .digest("hex")}`;
-}
-
 export function gitReviewIdentityExecutionOptions(
   budget: GitReviewIndexExecutionBudget,
   signal: AbortSignal | undefined
 ): { budget: GitReviewIndexExecutionBudget; signal?: AbortSignal } {
   return { budget, ...(signal === undefined ? {} : { signal }) };
-}
-
-export function assertGitReviewIndexTruncation(
-  result: GitExecRawResult,
-  parserTruncated: boolean
-): void {
-  if (result.kind === "collected") {
-    throw new GitReviewIndexProtocolError("index parser 收到了 collect 结果");
-  }
-  if ((result.kind === "truncated") !== parserTruncated) {
-    throw new GitReviewIndexProtocolError(
-      "Git transport 与逻辑索引截断状态不一致"
-    );
-  }
-}
-
-export function hasGitRenameLimitWarning(result: GitExecRawResult): boolean {
-  const text = result.stderrTail.toString("ascii");
-  return RENAME_WARNING_MARKERS.some((marker) => text.includes(marker));
 }
 
 export function assertGitReviewIndexExecutionActive(
@@ -157,18 +120,6 @@ export function toGitReviewIndexFailure(error: unknown): {
     }
     if (error.kind === "aborted") {
       return { kind: "error", message, reason: "aborted", retryable: true };
-    }
-    if (
-      error.kind === "invalidReference" ||
-      error.kind === "noMergeBase" ||
-      error.kind === "unbornHead"
-    ) {
-      return {
-        kind: "error",
-        message,
-        reason: "invalidSource",
-        retryable: false,
-      };
     }
   }
   if (error instanceof GitReviewIndexProtocolError) {

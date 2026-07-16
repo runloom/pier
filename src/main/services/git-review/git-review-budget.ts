@@ -2,22 +2,11 @@ import type { GitExecExecutionBudget } from "../git-exec-raw-contract.ts";
 
 export const GIT_REVIEW_DEADLINE_MS = 15_000;
 export const GIT_REVIEW_MAX_OUTPUT_BYTES = 64 * 1024 * 1024;
-export const GIT_REVIEW_MAX_FILES = 2000;
 
 type GitReviewFatalBudgetReason = "output-limit" | "timeout";
 
-export interface GitReviewBudgetSnapshot {
-  deadlineAtMs: number;
-  fileLimitReached: boolean;
-  files: number;
-  outputBytes: number;
-  reason: GitReviewFatalBudgetReason | null;
-  remainingTimeMs: number;
-}
-
 export interface CreateGitReviewBudgetOptions {
   deadlineAtMs?: number;
-  maxFiles?: number;
   maxOutputBytes?: number;
   now?: () => number;
 }
@@ -29,11 +18,8 @@ export interface CreateGitReviewBudgetOptions {
 export class GitReviewBudget implements GitExecExecutionBudget {
   readonly #controller = new AbortController();
   readonly #deadlineAtMs: number;
-  readonly #maxFiles: number;
   readonly #maxOutputBytes: number;
   readonly #now: () => number;
-  #fileLimitReached = false;
-  #files = 0;
   #outputBytes = 0;
   #reason: GitReviewFatalBudgetReason | null = null;
   #timer: NodeJS.Timeout | undefined;
@@ -46,14 +32,9 @@ export class GitReviewBudget implements GitExecExecutionBudget {
     }
     this.#deadlineAtMs =
       options.deadlineAtMs ?? createdAtMs + GIT_REVIEW_DEADLINE_MS;
-    this.#maxFiles = options.maxFiles ?? GIT_REVIEW_MAX_FILES;
     this.#maxOutputBytes =
       options.maxOutputBytes ?? GIT_REVIEW_MAX_OUTPUT_BYTES;
-    assertPositiveSafeInteger(this.#maxFiles, "maxFiles");
     assertPositiveSafeInteger(this.#maxOutputBytes, "maxOutputBytes");
-    if (this.#maxFiles > GIT_REVIEW_MAX_FILES) {
-      throw new RangeError(`maxFiles must not exceed ${GIT_REVIEW_MAX_FILES}`);
-    }
     if (this.#maxOutputBytes > GIT_REVIEW_MAX_OUTPUT_BYTES) {
       throw new RangeError(
         `maxOutputBytes must not exceed ${GIT_REVIEW_MAX_OUTPUT_BYTES}`
@@ -123,37 +104,6 @@ export class GitReviewBudget implements GitExecExecutionBudget {
       return 0;
     }
     return Math.max(0, this.#deadlineAtMs - this.#now());
-  }
-
-  remainingFiles(): number {
-    return Math.max(0, this.#maxFiles - this.#files);
-  }
-
-  snapshot(): GitReviewBudgetSnapshot {
-    const reason = this.#refreshTimeout();
-    return {
-      deadlineAtMs: this.#deadlineAtMs,
-      fileLimitReached: this.#fileLimitReached,
-      files: this.#files,
-      outputBytes: this.#outputBytes,
-      reason,
-      remainingTimeMs:
-        reason === null ? Math.max(0, this.#deadlineAtMs - this.#now()) : 0,
-    };
-  }
-
-  /** 文件预算按最终逻辑条目扣减，不按底层 NUL record 数量扣减。 */
-  tryConsumeFiles(delta = 1): boolean {
-    assertNonNegativeSafeInteger(delta, "file delta");
-    if (this.#refreshTimeout() !== null) {
-      return false;
-    }
-    if (this.#files + delta > this.#maxFiles) {
-      this.#fileLimitReached = true;
-      return false;
-    }
-    this.#files += delta;
-    return true;
   }
 
   #fail(reason: GitReviewFatalBudgetReason): void {

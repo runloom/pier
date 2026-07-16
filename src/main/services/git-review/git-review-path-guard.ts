@@ -1,20 +1,15 @@
 import { createHash } from "node:crypto";
-import { constants } from "node:fs";
-import {
-  type FileHandle,
-  lstat as fsLstat,
-  open as fsOpen,
-  realpath as fsRealpath,
-} from "node:fs/promises";
+import { type FileHandle, lstat, realpath } from "node:fs/promises";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import {
   gitReviewRelativePathSchema,
   gitReviewRootPathSchema,
 } from "../../../shared/contracts/git-review.ts";
+import type { GitExecExecutionBudget } from "../git-exec-raw-contract.ts";
 import { GitReviewPathError } from "./git-review-path-contract.ts";
+import { openGitReviewFileNoSymlinks } from "./git-review-path-open.ts";
 import {
   assertGitReviewPathActive,
-  closeGitReviewFileHandleInBackground,
   raceGitReviewPathOperation,
   settleGitReviewPathOperationInBackground,
 } from "./git-review-path-operation.ts";
@@ -25,10 +20,6 @@ export {
 } from "./git-review-path-contract.ts";
 
 export const GIT_REVIEW_SNAPSHOT_MAX_BYTES = 8 * 1024 * 1024;
-
-// macOS 的 O_NOFOLLOW_ANY 会让内核拒绝路径任意层级的符号链接。
-// Node 尚未暴露该常量，数值来自 macOS SDK sys/fcntl.h。
-const DARWIN_O_NOFOLLOW_ANY = 0x20_00_00_00;
 
 export interface GitReviewFileSnapshot {
   readonly bytes: Buffer;
@@ -41,16 +32,11 @@ export interface GitReviewFileSnapshot {
 export type GitReviewFileFingerprint = Omit<GitReviewFileSnapshot, "bytes">;
 
 export interface ReadGitReviewFileSnapshotOptions {
+  readonly budget?: GitExecExecutionBudget;
   readonly gitRootPath: string;
   readonly maxBytes?: number;
   readonly path: string;
   readonly signal?: AbortSignal;
-}
-
-interface GitReviewPathGuardDependencies {
-  readonly lstat: typeof fsLstat;
-  readonly open: typeof fsOpen;
-  readonly realpath: typeof fsRealpath;
 }
 
 interface GitReviewAncestorIdentity {
@@ -59,17 +45,10 @@ interface GitReviewAncestorIdentity {
   readonly token: string;
 }
 
-const DEFAULT_DEPENDENCIES: GitReviewPathGuardDependencies = {
-  lstat: fsLstat,
-  open: fsOpen,
-  realpath: fsRealpath,
-};
-
 export async function readGitReviewFileSnapshot(
-  options: ReadGitReviewFileSnapshotOptions,
-  dependencies: GitReviewPathGuardDependencies = DEFAULT_DEPENDENCIES
+  options: ReadGitReviewFileSnapshotOptions
 ): Promise<GitReviewFileSnapshot> {
-  const result = await readGitReviewFile(options, dependencies, true);
+  const result = await readGitReviewFile(options, true);
   if (result.bytes === undefined) {
     throw new Error("Git Review snapshot 缺少正文");
   }
@@ -78,12 +57,10 @@ export async function readGitReviewFileSnapshot(
 
 /** tracked fence 只流式计算摘要，不把最多 8 MiB 正文保留在内存。 */
 export async function readGitReviewFileFingerprint(
-  options: ReadGitReviewFileSnapshotOptions,
-  dependencies: GitReviewPathGuardDependencies = DEFAULT_DEPENDENCIES
+  options: ReadGitReviewFileSnapshotOptions
 ): Promise<GitReviewFileFingerprint> {
   const { bytes: _bytes, ...fingerprint } = await readGitReviewFile(
     options,
-    dependencies,
     false
   );
   return fingerprint;
@@ -91,7 +68,6 @@ export async function readGitReviewFileFingerprint(
 
 async function readGitReviewFile(
   options: ReadGitReviewFileSnapshotOptions,
-  dependencies: GitReviewPathGuardDependencies,
   retainBytes: boolean
 ): Promise<GitReviewFileFingerprint & { readonly bytes?: Buffer }> {
   assertGitReviewPathActive(options.signal);
@@ -113,8 +89,8 @@ async function readGitReviewFile(
 
   const canonicalRoot = await resolveCanonicalRoot(
     parsedRoot.data,
-    dependencies,
-    options.signal
+    options.signal,
+    options.budget
   );
   const target = resolve(canonicalRoot, parsedPath.data);
   assertContained(canonicalRoot, target);
@@ -125,28 +101,29 @@ async function readGitReviewFile(
   const ancestors = await inspectAncestors(
     canonicalRoot,
     segments,
-    dependencies,
-    options.signal
+    options.signal,
+    options.budget
   );
   let handle: FileHandle | undefined;
+  let failed = false;
+  let failure: unknown;
+  let result:
+    | (GitReviewFileFingerprint & { readonly bytes?: Buffer })
+    | undefined;
   try {
-    const openedHandle = await raceGitReviewPathOperation(
-      () =>
-        dependencies.open(
-          target,
-          constants.O_RDONLY +
-            constants.O_NONBLOCK +
-            (process.platform === "darwin"
-              ? DARWIN_O_NOFOLLOW_ANY
-              : constants.O_NOFOLLOW)
-        ),
-      options.signal,
-      closeGitReviewFileHandleInBackground
-    );
+    const openedHandle = await openGitReviewFileNoSymlinks({
+      canonicalRoot,
+      ...(options.budget === undefined ? {} : { budget: options.budget }),
+      segments,
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      target,
+    });
     handle = openedHandle;
     const before = await raceGitReviewPathOperation(
       () => openedHandle.stat({ bigint: true }),
-      options.signal
+      options.signal,
+      undefined,
+      options.budget
     );
     if (!before.isFile()) {
       throw new GitReviewPathError(
@@ -169,7 +146,9 @@ async function readGitReviewFile(
     );
     const after = await raceGitReviewPathOperation(
       () => openedHandle.stat({ bigint: true }),
-      options.signal
+      options.signal,
+      undefined,
+      options.budget
     );
     if (statToken(before) !== statToken(after)) {
       throw new GitReviewPathError(
@@ -180,10 +159,10 @@ async function readGitReviewFile(
     await revalidateAncestors(
       canonicalRoot,
       ancestors,
-      dependencies,
-      options.signal
+      options.signal,
+      options.budget
     );
-    return Object.freeze({
+    result = Object.freeze({
       ...(content.bytes === undefined ? {} : { bytes: content.bytes }),
       digest: `sha256:${content.digest}`,
       executable: hasExecuteBit(Number(before.mode)),
@@ -191,20 +170,53 @@ async function readGitReviewFile(
       size,
     });
   } catch (error) {
-    if (error instanceof GitReviewPathError) {
-      throw error;
-    }
-    throw mapFileSystemError(error, options.signal);
-  } finally {
-    if (handle !== undefined) {
-      const close = handle.close().catch(() => undefined);
+    failed = true;
+    failure =
+      error instanceof GitReviewPathError
+        ? error
+        : mapFileSystemError(error, options.signal);
+  }
+  let closeAborted = false;
+  let closeFailure: GitReviewPathError | undefined;
+  if (handle !== undefined) {
+    try {
+      const close = handle.close();
       if (options.signal?.aborted) {
-        settleGitReviewPathOperationInBackground(close);
+        closeAborted = true;
+        settleGitReviewPathOperationInBackground(close, options.budget);
       } else {
-        await close;
+        await raceGitReviewPathOperation(
+          () => close,
+          options.signal,
+          undefined,
+          options.budget
+        );
+      }
+    } catch (error) {
+      const mapped =
+        error instanceof GitReviewPathError
+          ? error
+          : mapFileSystemError(error, options.signal);
+      if (mapped.reason === "aborted") {
+        closeAborted = true;
+      } else {
+        closeFailure = mapped;
       }
     }
   }
+  if (failed) {
+    throw failure;
+  }
+  if (closeFailure !== undefined) {
+    throw closeFailure;
+  }
+  if (closeAborted) {
+    assertGitReviewPathActive(options.signal);
+  }
+  if (result === undefined) {
+    throw new Error("Git Review 文件读取未产生结果");
+  }
+  return result;
 }
 
 function assertContained(root: string, target: string): void {
@@ -225,8 +237,8 @@ function assertContained(root: string, target: string): void {
 async function inspectAncestors(
   root: string,
   segments: readonly string[],
-  dependencies: GitReviewPathGuardDependencies,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  budget: GitExecExecutionBudget | undefined
 ): Promise<readonly GitReviewAncestorIdentity[]> {
   const ancestors: GitReviewAncestorIdentity[] = [];
   let current = root;
@@ -236,8 +248,10 @@ async function inspectAncestors(
     }
     try {
       const info = await raceGitReviewPathOperation(
-        () => dependencies.lstat(current, { bigint: true }),
-        signal
+        () => lstat(current, { bigint: true }),
+        signal,
+        undefined,
+        budget
       );
       if (info.isSymbolicLink()) {
         throw new GitReviewPathError("symlink", "Git Review 路径包含符号链接");
@@ -249,8 +263,10 @@ async function inspectAncestors(
         );
       }
       const canonicalPath = await raceGitReviewPathOperation(
-        () => dependencies.realpath(current),
-        signal
+        () => realpath(current),
+        signal,
+        undefined,
+        budget
       );
       assertAncestorContained(root, canonicalPath);
       ancestors.push({
@@ -271,18 +287,22 @@ async function inspectAncestors(
 async function revalidateAncestors(
   root: string,
   ancestors: readonly GitReviewAncestorIdentity[],
-  dependencies: GitReviewPathGuardDependencies,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  budget: GitExecExecutionBudget | undefined
 ): Promise<void> {
   for (const ancestor of ancestors) {
     try {
       const info = await raceGitReviewPathOperation(
-        () => dependencies.lstat(ancestor.path, { bigint: true }),
-        signal
+        () => lstat(ancestor.path, { bigint: true }),
+        signal,
+        undefined,
+        budget
       );
       const canonicalPath = await raceGitReviewPathOperation(
-        () => dependencies.realpath(ancestor.path),
-        signal
+        () => realpath(ancestor.path),
+        signal,
+        undefined,
+        budget
       );
       if (
         info.isSymbolicLink() ||
@@ -381,17 +401,21 @@ async function readAndHash(
 
 async function resolveCanonicalRoot(
   root: string,
-  dependencies: GitReviewPathGuardDependencies,
-  signal: AbortSignal | undefined
+  signal: AbortSignal | undefined,
+  budget: GitExecExecutionBudget | undefined
 ): Promise<string> {
   try {
     const canonical = await raceGitReviewPathOperation(
-      () => dependencies.realpath(resolve(root)),
-      signal
+      () => realpath(resolve(root)),
+      signal,
+      undefined,
+      budget
     );
     const info = await raceGitReviewPathOperation(
-      () => dependencies.lstat(canonical),
-      signal
+      () => lstat(canonical),
+      signal,
+      undefined,
+      budget
     );
     if (info.isSymbolicLink() || !info.isDirectory()) {
       throw new GitReviewPathError("outsideRoot", "Git Review 仓库根目录非法");

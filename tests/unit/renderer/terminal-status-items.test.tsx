@@ -60,6 +60,7 @@ function renderBar() {
     <TerminalStatusBar
       context={context}
       cwd={context.cwd ?? null}
+      getGroupId={() => null}
       panelId="terminal-1"
       title={null}
     />
@@ -216,6 +217,7 @@ describe("terminal status bar grouped rendering", () => {
       <TerminalStatusBar
         context={context}
         cwd={context.cwd ?? null}
+        getGroupId={() => null}
         panelId="terminal-1"
         title={null}
       />
@@ -248,6 +250,7 @@ describe("hasVisibleTerminalStatusItems", () => {
     const statusContext = {
       context,
       cwd: context.cwd ?? null,
+      getGroupId: () => null,
       panelId: "terminal-1",
       title: null,
     };
@@ -282,6 +285,7 @@ describe("shouldMountTerminalStatusBar(F4:ä¸Ž terminal-panel.tsx hasStatusBar å¿
   const statusContext = {
     context,
     cwd: context.cwd ?? null,
+    getGroupId: () => null,
     panelId: "terminal-1",
     title: null,
   };

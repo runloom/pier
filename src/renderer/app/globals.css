@@ -335,7 +335,8 @@
  */
 :where(
   [data-scrollbar],
-  [data-flat-scroll]
+  [data-flat-scroll],
+  .cv-scrollbar
 ) {
   overscroll-behavior: contain;
   scrollbar-color: transparent var(--shell-scrollbar-track);
@@ -345,13 +346,15 @@
 :where(
   [data-scrollbar][data-scrollbar-scrolling="true"],
   [data-flat-scroll][data-scrollbar-scrolling="true"],
+  .cv-scrollbar[data-scrollbar-scrolling="true"],
   [data-scrollbar][data-scrollbar-hovering="true"],
-  [data-flat-scroll][data-scrollbar-hovering="true"]
+  [data-flat-scroll][data-scrollbar-hovering="true"],
+  .cv-scrollbar[data-scrollbar-hovering="true"]
 ) {
   scrollbar-color: var(--shell-scrollbar-thumb) var(--shell-scrollbar-track);
 }
 
-:where([data-scrollbar="stable"], [data-flat-scroll]) {
+:where([data-scrollbar="stable"], [data-flat-scroll], .cv-scrollbar) {
   scrollbar-gutter: stable;
 }
 
@@ -368,7 +371,8 @@
 @supports selector(::-webkit-scrollbar) {
   :where(
     [data-scrollbar],
-    [data-flat-scroll]
+    [data-flat-scroll],
+    .cv-scrollbar
   )::-webkit-scrollbar {
     width: var(--shell-scrollbar-width-legacy);
     height: var(--shell-scrollbar-width-legacy);
@@ -376,7 +380,8 @@
 
   :where(
     [data-scrollbar],
-    [data-flat-scroll]
+    [data-flat-scroll],
+    .cv-scrollbar
   )::-webkit-scrollbar-thumb {
     background: transparent;
     background-clip: content-box;
@@ -388,8 +393,10 @@
   :where(
     [data-scrollbar][data-scrollbar-scrolling="true"],
     [data-flat-scroll][data-scrollbar-scrolling="true"],
+    .cv-scrollbar[data-scrollbar-scrolling="true"],
     [data-scrollbar][data-scrollbar-hovering="true"],
-    [data-flat-scroll][data-scrollbar-hovering="true"]
+    [data-flat-scroll][data-scrollbar-hovering="true"],
+    .cv-scrollbar[data-scrollbar-hovering="true"]
   )::-webkit-scrollbar-thumb {
     background: var(--shell-scrollbar-thumb);
     background-clip: content-box;
@@ -397,7 +404,8 @@
 
   :where(
     [data-scrollbar],
-    [data-flat-scroll]
+    [data-flat-scroll],
+    .cv-scrollbar
   )::-webkit-scrollbar-thumb:active {
     background: var(--shell-scrollbar-thumb-active);
     background-clip: content-box;
@@ -405,14 +413,16 @@
 
   :where(
     [data-scrollbar],
-    [data-flat-scroll]
+    [data-flat-scroll],
+    .cv-scrollbar
   )::-webkit-scrollbar-track {
     background: var(--shell-scrollbar-track);
   }
 
   :where(
     [data-scrollbar],
-    [data-flat-scroll]
+    [data-flat-scroll],
+    .cv-scrollbar
   )::-webkit-scrollbar-corner {
     background: var(--shell-scrollbar-corner);
   }

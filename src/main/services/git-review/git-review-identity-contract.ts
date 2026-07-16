@@ -11,21 +11,7 @@ export interface GitReviewRepositoryBaseIdentity {
 
 export interface GitReviewRepositoryIdentity
   extends GitReviewRepositoryBaseIdentity {
-  readonly emptyTreeOid: string;
   readonly headOid: string | null;
-}
-
-export interface GitReviewCommitIdentity {
-  readonly firstParentOid: string | null;
-  readonly oid: string;
-  readonly parentOids: readonly string[];
-}
-
-export interface GitReviewBranchIdentity {
-  readonly headOid: string;
-  readonly mergeBaseOid: string;
-  readonly targetOid: string;
-  readonly targetRef: string;
 }
 
 export interface GitReviewIdentityExecutionOptions {
@@ -33,6 +19,8 @@ export interface GitReviewIdentityExecutionOptions {
   deadlineAtMs?: number;
   signal?: AbortSignal;
   timeoutMs?: number;
+  /** 独立于已取消预算的底层迟到操作归属。 */
+  trackDetachedOperation?: (operation: Promise<unknown>) => void;
 }
 
 export interface CreateGitReviewIdentityResolverOptions {
@@ -45,12 +33,9 @@ export class GitReviewIdentityError extends Error {
     | "aborted"
     | "configuration"
     | "invalidOutput"
-    | "invalidReference"
-    | "noMergeBase"
     | "notRepository"
     | "outputLimit"
     | "timeout"
-    | "unbornHead"
     | "unsupportedObjectFormat";
 
   constructor(

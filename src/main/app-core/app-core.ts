@@ -30,6 +30,7 @@ import { createCommandPaletteMruService } from "../services/command-palette-serv
 import { createFileDraftsService } from "../services/file-drafts-service.ts";
 import { createFileService } from "../services/file-service.ts";
 import { createFileWatchService } from "../services/file-watch-service.ts";
+import { GitReviewService } from "../services/git-review/git-review-service.ts";
 import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
 import { createLocalEnvironmentService } from "../services/local-environments-service.ts";
@@ -460,6 +461,7 @@ function createPierAppCore(): PierAppCore {
       });
       return {
         git,
+        gitReview: new GitReviewService(),
         gitWatch: createGitWatchService({
           getStatus: (gitRoot, prefetched) =>
             git.getStatus(gitRoot, prefetched),

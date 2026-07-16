@@ -1,111 +1,76 @@
 import { z } from "zod";
-import {
-  gitDiffPanelSourceSchema,
-  gitReviewResolvedQuerySchema,
-} from "./base.ts";
+import { gitReviewFileSourceSchema } from "./base.ts";
 import {
   GIT_REVIEW_MAX_SECTIONS,
-  gitReviewCountSchema,
   gitReviewFailureSchema,
   gitReviewFileStatusSchema,
-  gitReviewGroupSchema,
   gitReviewOperationIdSchema,
   gitReviewRelativePathSchema,
-  gitReviewRenderableGroupSchema,
   gitReviewRevisionSchema,
   gitReviewSectionKeySchema,
-  isGitReviewParserMetricsAdmitted,
-  measureGitReviewParserText,
 } from "./primitives.ts";
 
-const sectionBaseShape = {
-  additions: gitReviewCountSchema,
-  byteSize: gitReviewCountSchema,
-  deletions: gitReviewCountSchema,
-  group: gitReviewGroupSchema,
-  lineCount: gitReviewCountSchema,
-  oldPath: gitReviewRelativePathSchema.nullable(),
-  path: gitReviewRelativePathSchema,
+const gitReviewSectionBaseShape = {
   sectionKey: gitReviewSectionKeySchema,
-  sourceRevision: gitReviewRevisionSchema,
+};
+
+const patchSectionSchema = z.strictObject({
+  ...gitReviewSectionBaseShape,
+  kind: z.literal("patch"),
+  patch: z.string().min(1),
+});
+
+const gitReviewStateSectionSchema = z.strictObject({
+  ...gitReviewSectionBaseShape,
+  kind: z.literal("state"),
+  oldPath: gitReviewRelativePathSchema.nullable(),
+  reason: z.enum([
+    "binary",
+    "conflict",
+    "symlink",
+    "submodule",
+    "invalidEncoding",
+    "tooLarge",
+    "readError",
+  ]),
   status: gitReviewFileStatusSchema,
-};
+  targetPath: gitReviewRelativePathSchema,
+});
 
-const renderableSectionBaseShape = {
-  ...sectionBaseShape,
-  byteSize: z.number().int().safe().nonnegative(),
-  group: gitReviewRenderableGroupSchema,
-  lineCount: z.number().int().safe().nonnegative(),
-  status: z.enum(["added", "modified", "deleted", "renamed"]),
-};
-
-const patchSectionSchema = z
-  .strictObject({
-    ...renderableSectionBaseShape,
-    contextLines: z.number().int().nonnegative().max(1000),
-    kind: z.literal("patch"),
-    patch: z.string().min(1),
-  })
+export const gitReviewFileSectionSchema = z
+  .discriminatedUnion("kind", [patchSectionSchema, gitReviewStateSectionSchema])
   .superRefine((section, context) => {
-    const metrics = measureGitReviewParserText(section.patch);
-    if (!isGitReviewParserMetricsAdmitted(metrics)) {
+    if (section.kind !== "state") {
+      return;
+    }
+    const conflict = section.reason === "conflict";
+    if (conflict !== (section.status === "conflicted")) {
       context.addIssue({
         code: "custom",
-        message: "Patch exceeds the synchronous parser admission budget",
+        message: "Conflict reason and conflicted status must match",
       });
     }
-    if (
-      section.byteSize !== metrics.byteSize ||
-      section.lineCount !== metrics.lineCount
-    ) {
+    if (conflict && section.oldPath !== null) {
       context.addIssue({
         code: "custom",
-        message:
-          "Patch byteSize and lineCount must describe the admitted patch",
+        message: "Conflict state must not carry an old path",
+      });
+    } else if (section.status === "renamed" && section.oldPath === null) {
+      context.addIssue({
+        code: "custom",
+        message: "Renamed state requires an old path",
+      });
+    } else if (section.status !== "renamed" && section.oldPath !== null) {
+      context.addIssue({
+        code: "custom",
+        message: "Only renamed state may carry an old path",
       });
     }
   });
-
-const stateSectionSchema = z
-  .strictObject({
-    ...sectionBaseShape,
-    kind: z.literal("state"),
-    message: z.string().max(4096).nullable(),
-    reason: z.enum([
-      "binary",
-      "conflict",
-      "symlink",
-      "submodule",
-      "invalidEncoding",
-      "tooLarge",
-      "readError",
-    ]),
-  })
-  .superRefine((section, context) => {
-    const conflictFieldsMatch =
-      section.group === "conflict" &&
-      section.reason === "conflict" &&
-      section.status === "conflicted";
-    const hasConflictField =
-      section.group === "conflict" ||
-      section.reason === "conflict" ||
-      section.status === "conflicted";
-    if (hasConflictField && !conflictFieldsMatch) {
-      context.addIssue({
-        code: "custom",
-        message: "Conflict state requires matching group, reason, and status",
-      });
-    }
-  });
-
-export const gitReviewFileSectionSchema = z.discriminatedUnion("kind", [
-  patchSectionSchema,
-  stateSectionSchema,
-]);
 export type GitReviewFileSection = z.infer<typeof gitReviewFileSectionSchema>;
 
 const gitReviewDocumentSectionsSchema = z
-  .array(z.union([patchSectionSchema, stateSectionSchema]))
+  .array(gitReviewFileSectionSchema)
   .min(1)
   .max(GIT_REVIEW_MAX_SECTIONS)
   .refine(
@@ -115,28 +80,18 @@ const gitReviewDocumentSectionsSchema = z
     "Section keys must be unique"
   );
 
-export const gitReviewFileDocumentRequestSchema = z
-  .strictObject({
-    clientHasDocument: z.boolean(),
-    ifRevision: gitReviewRevisionSchema.nullable(),
-    operationId: gitReviewOperationIdSchema,
-    source: gitDiffPanelSourceSchema,
-  })
-  .refine(
-    (request) => !request.clientHasDocument || request.ifRevision !== null,
-    "clientHasDocument requires ifRevision"
-  );
+export const gitReviewFileDocumentRequestSchema = z.strictObject({
+  operationId: gitReviewOperationIdSchema,
+  source: gitReviewFileSourceSchema,
+});
 export type GitReviewFileDocumentRequest = z.infer<
   typeof gitReviewFileDocumentRequestSchema
 >;
 
 export const gitReviewFileDocumentOkSchema = z.strictObject({
-  durationMs: z.number().nonnegative(),
   kind: z.literal("ok"),
-  resolvedQuery: gitReviewResolvedQuerySchema,
   revision: gitReviewRevisionSchema,
   sections: gitReviewDocumentSectionsSchema,
-  source: gitDiffPanelSourceSchema,
 });
 export type GitReviewFileDocumentOk = z.infer<
   typeof gitReviewFileDocumentOkSchema
@@ -145,13 +100,7 @@ export type GitReviewFileDocumentOk = z.infer<
 export const gitReviewFileDocumentResultSchema = z.union([
   gitReviewFileDocumentOkSchema,
   z.strictObject({
-    kind: z.literal("notModified"),
-    revision: gitReviewRevisionSchema,
-    source: gitDiffPanelSourceSchema,
-  }),
-  z.strictObject({
     kind: z.literal("unchanged"),
-    source: gitDiffPanelSourceSchema,
   }),
   gitReviewFailureSchema,
 ]);

@@ -3,7 +3,10 @@ import { join } from "node:path";
 import { TerminalOverlayContext } from "@pier/ui/use-terminal-overlay.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
-import { GIT_PLUGIN_ID } from "@plugins/builtin/git/manifest.ts";
+import {
+  GIT_CHANGES_PANEL_ID,
+  GIT_PLUGIN_ID,
+} from "@plugins/builtin/git/manifest.ts";
 import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
 import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
@@ -211,6 +214,8 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       "command:register",
       "git:read",
       "git:write",
+      "panel:open",
+      "panel:register",
     ],
     enabled,
     manifest: {
@@ -399,7 +404,14 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         },
       },
       name: "Git",
-      panels: [],
+      panels: [
+        {
+          component: GIT_CHANGES_PANEL_ID,
+          id: GIT_CHANGES_PANEL_ID,
+          permissions: ["git:read"],
+          title: "Changes",
+        },
+      ],
       permissions: [
         "worktree:read",
         "worktree:write",
@@ -407,6 +419,8 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         "command:register",
         "git:read",
         "git:write",
+        "panel:open",
+        "panel:register",
       ],
       source: { kind: "builtin" },
       terminalStatusItems: [
@@ -808,10 +822,14 @@ describe("git builtin plugin", () => {
     ).toBe(true);
   });
 
-  it("禁用旧 Git Changes 面板和打开变更命令", () => {
+  it("只注册稳定的 Changes Review 面板，但不恢复旧打开命令", () => {
     dispose = activateWorktreePlugin();
 
-    expect(getPluginPanelRegistrations().has("pier.git.changes")).toBe(false);
+    expect(getPluginPanelRegistrations().has(GIT_CHANGES_PANEL_ID)).toBe(true);
+    expect(
+      getPluginPanelRegistrations().get(GIT_CHANGES_PANEL_ID)?.resourcePolicy
+    ).toBe("unmountWhenHidden");
+    expect(getPluginPanelRegistrations().has("pier.git.diff")).toBe(false);
     expect(actionRegistry.get("pier.git.changes.open")).toBeUndefined();
   });
 
@@ -1965,6 +1983,7 @@ describe("git builtin plugin", () => {
           worktreeRoot: "/Users/xyz/ABC/pier-feature",
         },
         cwd: "/Users/xyz/ABC/pier-feature/src",
+        getGroupId: () => null,
         panelId: "terminal-feature",
         title: null,
       })
@@ -2016,6 +2035,7 @@ describe("git builtin plugin", () => {
       statusItem.render({
         context: { ...context, branch: "feature/gone-branch" },
         cwd: context.cwd ?? null,
+        getGroupId: () => null,
         panelId: "terminal-1",
         title: null,
       })
@@ -2055,6 +2075,7 @@ describe("git builtin plugin", () => {
       statusItem.render({
         context: { ...context, branch: "feature/no-upstream" },
         cwd: context.cwd ?? null,
+        getGroupId: () => null,
         panelId: "terminal-1",
         title: null,
       })
@@ -2107,6 +2128,7 @@ describe("git builtin plugin", () => {
       statusItem.render({
         context: { ...context, branch: "feature/done" },
         cwd: context.cwd ?? null,
+        getGroupId: () => null,
         panelId: "terminal-1",
         title: null,
       })
@@ -2150,6 +2172,7 @@ describe("git builtin plugin", () => {
       statusItem.render({
         context: { ...context, branch: "feature/dirty" },
         cwd: context.cwd ?? null,
+        getGroupId: () => null,
         panelId: "terminal-1",
         title: null,
       })
@@ -2200,6 +2223,7 @@ describe("git builtin plugin", () => {
       statusItem.render({
         context: { ...context, branch: "feature/sync" },
         cwd: context.cwd ?? null,
+        getGroupId: () => null,
         panelId: "terminal-1",
         title: null,
       })
@@ -2245,6 +2269,7 @@ describe("git builtin plugin", () => {
       statusItem.render({
         context: contextWithoutBranch,
         cwd: context.cwd ?? null,
+        getGroupId: () => null,
         panelId: "terminal-1",
         title: null,
       })
@@ -2286,6 +2311,7 @@ describe("git builtin plugin", () => {
       statusItem.render({
         context: { ...context, branch: longBranch },
         cwd: context.cwd ?? null,
+        getGroupId: () => null,
         panelId: "terminal-1",
         title: null,
       })
@@ -2316,6 +2342,7 @@ describe("git builtin plugin", () => {
           updatedAt: now,
         },
         cwd: "/Users/xyz",
+        getGroupId: () => null,
         panelId: "terminal-home",
         title: null,
       })

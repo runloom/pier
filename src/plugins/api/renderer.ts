@@ -4,19 +4,15 @@ import type {
   AiGenerateTextResult,
   AiStatusResult,
 } from "@shared/contracts/ai.ts";
-import type {
-  IDockviewPanelProps,
-  PierDockviewGroupHandle,
-} from "@shared/contracts/dockview.ts";
 import type { ExternalNavigationResult } from "@shared/contracts/external-navigation.ts";
 import type {
   FilePreviewTicketIssueResult,
   FilePreviewTicketLocator,
 } from "@shared/contracts/file-preview-ticket.ts";
-import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { TerminalSelectionTextResult } from "@shared/contracts/terminal.ts";
 import type { LucideIcon } from "lucide-react";
-import type { FunctionComponent, ReactNode } from "react";
+import type { ReactNode } from "react";
 import type { PluginConfigurationApi } from "./configuration.ts";
 import type {
   RendererPluginAppearance,
@@ -28,6 +24,13 @@ import type {
   RendererPluginGitFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
+import type {
+  PluginGroupContentClaim,
+  PluginPanelInstanceOpenResult,
+  PluginPanelInstanceOptions,
+  PluginPanelInstanceSnapshot,
+  PluginPanelRegistration,
+} from "./renderer-panels.ts";
 import type { RendererWorkbenchWidgetRegistration } from "./workbench.ts";
 
 export type {
@@ -40,6 +43,14 @@ export type {
   RendererPluginGitFacade,
   RendererPluginWorktreesFacade,
 } from "./renderer-facades.ts";
+export type {
+  PluginGroupContentClaim,
+  PluginPanelGroupId,
+  PluginPanelInstanceOpenResult,
+  PluginPanelInstanceOptions,
+  PluginPanelInstanceSnapshot,
+  PluginPanelRegistration,
+} from "./renderer-panels.ts";
 export type {
   RendererWorkbenchWidgetAction,
   RendererWorkbenchWidgetRegistration,
@@ -140,6 +151,8 @@ export interface RendererPluginQuickPick {
 export interface RendererTerminalStatusItemContext {
   context: PanelContext | undefined;
   cwd: string | null;
+  /** 交互发生时读取面板当前所属分组，避免使用渲染时快照打开到旧分组。 */
+  getGroupId: () => string | null;
   panelId: string;
   title: string | null;
 }
@@ -149,70 +162,6 @@ export interface RendererTerminalStatusItem {
   isVisible?: (context: RendererTerminalStatusItemContext) => boolean;
   order?: number;
   render: (context: RendererTerminalStatusItemContext) => ReactNode;
-}
-
-export interface PluginGroupContentClaim {
-  group: PierDockviewGroupHandle;
-  id: string;
-  ownerId: symbol;
-  render: () => ReactNode;
-  visible: (group: PierDockviewGroupHandle) => boolean;
-}
-
-export type PluginPanelGroupId = string;
-
-export interface PluginPanelInstanceSnapshot {
-  readonly componentId: string;
-  readonly groupId: PluginPanelGroupId | null;
-  readonly id: string;
-  readonly params?: Readonly<Record<string, unknown>>;
-  readonly title: string;
-}
-
-export interface PluginPanelInstanceOptions {
-  componentId: string;
-  context?: PanelContext;
-  /**
-   * true 表示打开前替换目标 group 内同 componentId 的未固定 preview。
-   * 未传 targetGroupId 时只回退当前 active group；没有 active group 时跳过关闭。
-   */
-  dropUnpinnedInstances?: boolean;
-  instanceId: string;
-  params?: Record<string, unknown>;
-  /**
-   * 指定目标 dockview group。传入后,宿主只在该 group 内执行 preview 替换和
-   * 已有 instanceId 复用。若 group 不存在,宿主不得关闭任何 preview,也不得
-   * 更新或激活目标 group 外的已有 instance。
-   */
-  targetGroupId?: PluginPanelGroupId;
-  title?: string;
-}
-
-export interface PluginPanelRegistration {
-  component: FunctionComponent<IDockviewPanelProps>;
-  /**
-   * 可选 thunk:open 时计算 dockview addPanel 的 params,组件经 props.params 读。
-   * 用于把已 i18n 化的字符串等运行时数据传给 panel 组件 —— 插件不能直接 import
-   * renderer 的 i18n hook,这是把宿主 i18n 结果带入组件的标准通道。
-   */
-  getParams?: () => Record<string, unknown>;
-  icon: LucideIcon;
-  /**
-   * Panel 标识。本字段同时充当 dockview 的 component 名与 panel 单例 id,
-   * 三者必须一致(panels.open 据此查 component、addPanel 据此当 id)。
-   */
-  id: string;
-  kind: "terminal" | "web";
-  /**
-   * 从 panel params 同步派生宿主 tab 呈现。宿主在新建、参数更新和布局恢复时
-   * 调用；返回 undefined 时使用注册级 icon/title。
-   */
-  resolveTab?: (input: {
-    params: Readonly<Record<string, unknown>>;
-    title: string;
-  }) => PanelTabChrome | undefined;
-  /** 可选 tab 标题。传 thunk 让 locale 切换时实时生效;省略则 fallback 到 id。 */
-  title?: (() => string) | string;
 }
 
 /** loading 通知句柄:后续更新/收尾都作用在同一条 toast 上。 */
@@ -456,7 +405,9 @@ export interface RendererPluginContext {
      * 不支持打开其它插件贡献的 panel(权限/所有权对称约束)。
      */
     open(panelId: string, options?: { context?: PanelContext }): void;
-    openInstance(options: PluginPanelInstanceOptions): void;
+    openInstance(
+      options: PluginPanelInstanceOptions
+    ): PluginPanelInstanceOpenResult;
     register(registration: PluginPanelRegistration): () => void;
     /**
      * 注册关闭前守卫。仅可为本插件声明的 componentId 注册；返回 false 可否决关闭。

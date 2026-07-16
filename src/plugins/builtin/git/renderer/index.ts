@@ -2,9 +2,10 @@ import type {
   RendererPluginContext,
   RendererPluginModule,
 } from "@plugins/api/renderer.ts";
-import { GitBranch } from "lucide-react";
-import { GIT_PLUGIN_ID } from "../manifest.ts";
+import { Files, GitBranch } from "lucide-react";
+import { GIT_CHANGES_PANEL_ID, GIT_PLUGIN_ID } from "../manifest.ts";
 import { registerGitActions } from "./git-actions.ts";
+import { createGitChangesPanel } from "./git-changes-panel.tsx";
 import { registerGitStatusItem } from "./git-status-item.tsx";
 import { registerWorktreeActions } from "./worktree-list-action.ts";
 
@@ -12,6 +13,15 @@ export function registerGitPluginContributions(
   context: RendererPluginContext
 ): () => void {
   const disposers = [
+    context.panels.register({
+      component: createGitChangesPanel(context),
+      icon: Files,
+      id: GIT_CHANGES_PANEL_ID,
+      kind: "web",
+      resourcePolicy: "unmountWhenHidden",
+      title: () =>
+        context.i18n.t("ui.reviewChangesTitle", undefined, "Changes"),
+    }),
     registerWorktreeActions(context),
     registerGitActions(context),
     registerGitStatusItem(context),

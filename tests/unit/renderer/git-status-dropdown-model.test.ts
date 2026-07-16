@@ -110,6 +110,7 @@ describe("deriveGitStatusDropdownModel", () => {
 
     expect(model.variant).toBe("dirty");
     expect(model.actions.map((action) => action.id)).toEqual([
+      "viewChanges",
       "switchWorktree",
     ]);
     expect(summaryText(model)).toContain("7 changed");
@@ -217,7 +218,7 @@ describe("deriveGitStatusDropdownModel", () => {
           counts: { conflict: 0, modified: 2, staged: 1, untracked: 2 },
         })
       )
-    ).toEqual(["switchWorktree"]);
+    ).toEqual(["viewChanges", "switchWorktree"]);
     expect(
       actionIds(
         makeStatus({
@@ -233,7 +234,7 @@ describe("deriveGitStatusDropdownModel", () => {
           counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
         })
       )
-    ).toEqual(["switchWorktree"]);
+    ).toEqual(["viewChanges", "switchWorktree"]);
   });
 
   it("does not offer sync operations without a usable upstream", () => {
@@ -289,6 +290,7 @@ describe("deriveGitStatusDropdownModel", () => {
 
     expect(model.variant).toBe("active");
     expect(model.actions.map((action) => action.id)).toEqual([
+      "viewChanges",
       "switchWorktree",
     ]);
     expect(summaryText(model)).toContain("Rebase paused");
@@ -329,7 +331,7 @@ describe("deriveGitStatusDropdownModel", () => {
           repoState: { conflictCount: 2, kind: "cherry-picking" },
         })
       )
-    ).toEqual(["switchWorktree"]);
+    ).toEqual(["viewChanges", "switchWorktree"]);
   });
 
   it("models clean merged upstream-gone branch without prune", () => {

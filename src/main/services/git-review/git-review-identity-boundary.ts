@@ -39,22 +39,6 @@ export function assertGitReviewIdentityExecutionOptions(
   }
 }
 
-export function forwardGitReviewIdentityAbort(
-  signal: AbortSignal | undefined,
-  controller: AbortController
-): () => void {
-  if (signal === undefined) {
-    return () => undefined;
-  }
-  const abort = (): void => controller.abort(signal.reason);
-  if (signal.aborted) {
-    abort();
-    return () => undefined;
-  }
-  signal.addEventListener("abort", abort, { once: true });
-  return () => signal.removeEventListener("abort", abort);
-}
-
 export async function raceGitReviewIdentityBoundary<T>(
   operation: () => Promise<T>,
   options: GitReviewIdentityExecutionOptions
@@ -79,6 +63,8 @@ export async function raceGitReviewIdentityBoundary<T>(
   return new Promise<T>((resolve, reject) => {
     let timer: NodeJS.Timeout | undefined;
     let settled = false;
+    let operationSettled = false;
+    let pendingOperation: Promise<T> | undefined;
     const cleanup = (): void => {
       for (const signal of signals) {
         signal.removeEventListener("abort", abort);
@@ -90,6 +76,13 @@ export async function raceGitReviewIdentityBoundary<T>(
     const settleReject = (error: unknown): void => {
       if (settled) {
         return;
+      }
+      if (!operationSettled && pendingOperation !== undefined) {
+        if (options.trackDetachedOperation === undefined) {
+          options.budget?.trackDetachedOperation?.(pendingOperation);
+        } else {
+          options.trackDetachedOperation(pendingOperation);
+        }
       }
       settled = true;
       cleanup();
@@ -113,9 +106,8 @@ export async function raceGitReviewIdentityBoundary<T>(
       settleReject(failureAfterListening);
       return;
     }
-    let promise: Promise<T>;
     try {
-      promise = operation();
+      pendingOperation = operation();
     } catch (error) {
       settleReject(error);
       return;
@@ -150,8 +142,9 @@ export async function raceGitReviewIdentityBoundary<T>(
       timer.unref?.();
     };
     scheduleTimeout();
-    promise.then(
+    pendingOperation.then(
       (value) => {
+        operationSettled = true;
         if (settled) {
           return;
         }
@@ -160,6 +153,7 @@ export async function raceGitReviewIdentityBoundary<T>(
         resolve(value);
       },
       (error: unknown) => {
+        operationSettled = true;
         settleReject(error);
       }
     );

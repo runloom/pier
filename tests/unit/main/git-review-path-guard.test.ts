@@ -1,12 +1,10 @@
 import { spawnSync } from "node:child_process";
 import {
   chmod,
-  lstat,
   mkdir,
   mkdtemp,
   open,
   realpath,
-  rename,
   rm,
   symlink,
   writeFile,
@@ -18,18 +16,65 @@ import {
   GitReviewPathError,
   readGitReviewFileSnapshot,
 } from "@main/services/git-review/git-review-path-guard.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { raceGitReviewPathOperation } from "@main/services/git-review/git-review-path-operation.ts";
+import { afterEach, describe, expect, it, vi } from "vitest";
+
+const { mockPathOpen } = vi.hoisted(() => ({
+  mockPathOpen:
+    vi.fn<
+      typeof import("@main/services/git-review/git-review-path-open.ts").openGitReviewFileNoSymlinks
+    >(),
+}));
+
+vi.mock(
+  "@main/services/git-review/git-review-path-open.ts",
+  async (importOriginal) => {
+    const actual =
+      await importOriginal<
+        typeof import("@main/services/git-review/git-review-path-open.ts")
+      >();
+    mockPathOpen.mockImplementation(actual.openGitReviewFileNoSymlinks);
+    return { ...actual, openGitReviewFileNoSymlinks: mockPathOpen };
+  }
+);
 
 const roots: string[] = [];
 const servers: Server[] = [];
 
 afterEach(async () => {
+  mockPathOpen.mockClear();
   for (const server of servers.splice(0)) {
     await new Promise<void>((resolve) => server.close(() => resolve()));
   }
   await Promise.all(
     roots.splice(0).map((root) => rm(root, { force: true, recursive: true }))
   );
+});
+
+it("取消文件系统调用时登记仍未结算的底层 Promise", async () => {
+  const controller = new AbortController();
+  let settle: (value: string) => void = () => undefined;
+  const pending = new Promise<string>((resolve) => {
+    settle = resolve;
+  });
+  const trackDetachedOperation = vi.fn();
+  const read = raceGitReviewPathOperation(
+    () => pending,
+    controller.signal,
+    undefined,
+    {
+      consumeOutputBytes: () => "ok",
+      failureReason: () => null,
+      remainingTimeMs: () => 1000,
+      signal: controller.signal,
+      trackDetachedOperation,
+    }
+  );
+
+  controller.abort("caller");
+  await expect(read).rejects.toMatchObject({ reason: "aborted" });
+  expect(trackDetachedOperation).toHaveBeenCalledWith(pending);
+  settle("late");
 });
 
 async function createRoot(): Promise<string> {
@@ -125,17 +170,6 @@ describe("Git Review path guard", () => {
         readGitReviewFileSnapshot({ gitRootPath: root, path: "socket" }),
         "readFailed"
       ),
-      expectPathReason(
-        readGitReviewFileSnapshot(
-          { gitRootPath: root, path: "device" },
-          {
-            lstat,
-            open: async () => open("/dev/null", "r"),
-            realpath,
-          }
-        ),
-        "notRegular"
-      ),
     ]);
     await expect(
       Promise.race([
@@ -159,101 +193,83 @@ describe("Git Review path guard", () => {
     );
   });
 
-  it("取消时不等待卡住的文件打开操作", async () => {
-    const root = await createRoot();
-    await writeFile(join(root, "slow.txt"), "content\n", "utf8");
-    const controller = new AbortController();
-    let releaseOpen: () => void = () => undefined;
-    let markOpenStarted: () => void = () => undefined;
-    const openStarted = new Promise<void>((resolve) => {
-      markOpenStarted = resolve;
-    });
-    const openGate = new Promise<void>((resolve) => {
-      releaseOpen = resolve;
-    });
-    const reading = readGitReviewFileSnapshot(
-      {
-        gitRootPath: root,
-        path: "slow.txt",
-        signal: controller.signal,
-      },
-      {
-        lstat,
-        open: async (...args) => {
-          markOpenStarted();
-          await openGate;
-          return open(...args);
-        },
-        realpath,
-      }
-    );
-    await openStarted;
-
-    controller.abort("caller");
-    await expectPathReason(reading, "aborted");
-    releaseOpen();
-    await new Promise<void>((resolve) => setImmediate(resolve));
-  });
-
-  it("打开文件后父目录身份变化会返回 changed", async () => {
-    const root = await createRoot();
-    const parent = join(root, "src");
-    await mkdir(parent);
-    await writeFile(join(parent, "a.ts"), "before\n", "utf8");
-
-    await expectPathReason(
-      readGitReviewFileSnapshot(
-        { gitRootPath: root, path: "src/a.ts" },
-        {
-          lstat,
-          open: async (...args) => {
-            const handle = await open(...args);
-            await rename(parent, `${parent}-old`);
-            await mkdir(parent);
-            await writeFile(join(parent, "a.ts"), "after\n", "utf8");
-            return handle;
-          },
-          realpath,
-        }
-      ),
-      "changed"
-    );
-  });
-
-  it("打开瞬间祖先被替换为外部符号链接时绝不返回外部正文", async (ctx) => {
+  it("正文读取成功后 close 拒绝会返回 readFailed", async (ctx) => {
     if (process.platform !== "darwin") {
       ctx.skip();
       return;
     }
     const root = await createRoot();
-    const outside = await createRoot();
-    const ancestor = join(root, "src");
-    await mkdir(join(ancestor, "nested"), { recursive: true });
-    await mkdir(join(outside, "nested"));
-    await writeFile(join(ancestor, "nested", "a.ts"), "inside\n", "utf8");
-    await writeFile(
-      join(outside, "nested", "a.ts"),
-      "outside-secret\n",
-      "utf8"
-    );
+    await writeFile(join(root, "close.txt"), "content\n", "utf8");
+    const handle = await open(join(root, "close.txt"), "r");
+    const realClose = handle.close;
+    const close = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(
+        Object.assign(new Error("close failed"), { code: "EIO" })
+      );
+    handle.close = close;
+    mockPathOpen.mockResolvedValueOnce(handle);
 
-    const result = readGitReviewFileSnapshot(
-      { gitRootPath: root, path: "src/nested/a.ts" },
-      {
-        lstat,
-        open: async (...args) => {
-          await rename(ancestor, `${ancestor}-original`);
-          await symlink(outside, ancestor);
-          return open(...args);
-        },
-        realpath,
-      }
+    await expectPathReason(
+      readGitReviewFileSnapshot({ gitRootPath: root, path: "close.txt" }),
+      "readFailed"
     );
+    expect(close).toHaveBeenCalledTimes(1);
+    handle.close = realClose;
+    await handle.close();
+  });
 
-    const error = await result.catch((value: unknown) => value);
-    expect(error).toBeInstanceOf(GitReviewPathError);
-    expect((error as GitReviewPathError).reason).toMatch(
-      /^(?:changed|symlink)$/u
+  it("正文读取成功后 close 同步异常会返回 readFailed", async (ctx) => {
+    if (process.platform !== "darwin") {
+      ctx.skip();
+      return;
+    }
+    const root = await createRoot();
+    await writeFile(join(root, "close.txt"), "content\n", "utf8");
+    const handle = await open(join(root, "close.txt"), "r");
+    const realClose = handle.close;
+    const close = vi.fn<() => Promise<void>>().mockImplementation(() => {
+      throw Object.assign(new Error("close threw"), { code: "EIO" });
+    });
+    handle.close = close;
+    mockPathOpen.mockResolvedValueOnce(handle);
+
+    await expectPathReason(
+      readGitReviewFileSnapshot({ gitRootPath: root, path: "close.txt" }),
+      "readFailed"
     );
+    expect(close).toHaveBeenCalledTimes(1);
+    handle.close = realClose;
+    await handle.close();
+  });
+
+  it("正文已失败时保留原错误，不被 close 异常覆盖", async (ctx) => {
+    if (process.platform !== "darwin") {
+      ctx.skip();
+      return;
+    }
+    const root = await createRoot();
+    await writeFile(join(root, "large.txt"), "12345", "utf8");
+    const handle = await open(join(root, "large.txt"), "r");
+    const realClose = handle.close;
+    const close = vi
+      .fn<() => Promise<void>>()
+      .mockRejectedValue(
+        Object.assign(new Error("close failed"), { code: "EIO" })
+      );
+    handle.close = close;
+    mockPathOpen.mockResolvedValueOnce(handle);
+
+    await expectPathReason(
+      readGitReviewFileSnapshot({
+        gitRootPath: root,
+        maxBytes: 4,
+        path: "large.txt",
+      }),
+      "tooLarge"
+    );
+    expect(close).toHaveBeenCalledTimes(1);
+    handle.close = realClose;
+    await handle.close();
   });
 });

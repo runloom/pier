@@ -638,12 +638,21 @@ describe("Files file-panel", () => {
     const segments = ["pier", "src", "file.ts"];
     const { container, rerender } = render(
       <FilePanelBreadcrumb
+        ariaLabel="File location"
         onSegmentClick={() => undefined}
         segments={segments}
       />
     );
     const breadcrumb = container.firstElementChild;
     expect(breadcrumb).toBeInstanceOf(HTMLElement);
+    expect(
+      screen.getByRole("navigation", { name: "File location" })
+    ).toContainElement(screen.getByRole("list"));
+    expect(screen.getAllByRole("listitem")).toHaveLength(segments.length);
+    expect(screen.getByRole("button", { name: "file.ts" })).toHaveAttribute(
+      "aria-current",
+      "page"
+    );
     Object.defineProperty(breadcrumb, "scrollWidth", {
       configurable: true,
       value: 480,
@@ -652,6 +661,7 @@ describe("Files file-panel", () => {
 
     rerender(
       <FilePanelBreadcrumb
+        ariaLabel="File location"
         onSegmentClick={() => undefined}
         segments={[...segments]}
       />
@@ -660,6 +670,7 @@ describe("Files file-panel", () => {
 
     rerender(
       <FilePanelBreadcrumb
+        ariaLabel="File location"
         onSegmentClick={() => undefined}
         segments={["pier", "packages", "file.ts"]}
       />
@@ -2134,6 +2145,7 @@ describe("Files file-panel", () => {
           params: options.params,
           title: options.title ?? options.instanceId,
         });
+        return { kind: "opened" };
       }
     );
     const context = createMockContext({ list, listInstances, openInstance });
@@ -3942,12 +3954,15 @@ describe("Files file-panel", () => {
     });
     fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
 
-    expect(
-      container.querySelector('[data-slot="markdown-preview"]')
-    ).toHaveAttribute("data-scrollbar", "stable");
+    const markdownPreview = container.querySelector(
+      '[data-slot="markdown-preview"]'
+    );
+    expect(markdownPreview).toHaveAttribute("data-scrollbar", "stable");
     const table = await screen.findByRole("table");
     expect(table).toBeVisible();
-    expect(screen.getByRole("list")).toBeVisible();
+    expect(
+      within(markdownPreview as HTMLElement).getByRole("list")
+    ).toBeVisible();
     expect(screen.getByText("const value = 1;")).toBeVisible();
     expect(container.querySelector("pre")).toHaveAttribute(
       "data-scrollbar",

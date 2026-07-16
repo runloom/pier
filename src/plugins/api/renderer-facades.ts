@@ -67,6 +67,13 @@ import type {
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
 import type {
+  GitReviewCancelRequest,
+  GitReviewFileDocumentRequest,
+  GitReviewFileDocumentResult,
+  GitReviewIndexRequest,
+  GitReviewIndexResult,
+} from "@shared/contracts/git-review.ts";
+import type {
   WorktreeCheckRequest,
   WorktreeCheckResult,
   WorktreeCreateProgress,
@@ -153,6 +160,7 @@ export interface RendererPluginGitFacade {
   abortMerge(cwd: string): Promise<GitMergeAbortResult>;
   abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
   applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
+  cancelReviewRequest(request: GitReviewCancelRequest): Promise<void>;
   checkoutBranch(cwd: string, name: string): Promise<boolean>;
   continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
   discardChanges(cwd: string, paths: string[]): Promise<boolean>;
@@ -172,6 +180,10 @@ export interface RendererPluginGitFacade {
     options: { path: string; ref?: string }
   ): Promise<string>;
   getRepoInfo(cwd: string): Promise<GitRepoInfo>;
+  getReviewFileDocument(
+    request: GitReviewFileDocumentRequest
+  ): Promise<GitReviewFileDocumentResult>;
+  getReviewIndex(request: GitReviewIndexRequest): Promise<GitReviewIndexResult>;
   getStatus(cwd: string): Promise<GitStatus>;
   listBranches(
     cwd: string,
@@ -202,7 +214,12 @@ export interface RendererPluginGitFacade {
   sync(cwd: string): Promise<GitRemoteOperationResult>;
   undoLastCommit(cwd: string): Promise<GitUndoCommitResult>;
   unstage(cwd: string, paths: string[]): Promise<boolean>;
-  watch(gitRoot: string, listener: (event: GitChangeEvent) => void): () => void;
+  watch(
+    gitRoot: string,
+    listener: (event: GitChangeEvent) => void,
+    onStartFailure?: (error: Error) => void,
+    onReady?: () => void
+  ): () => void;
 }
 
 export interface RendererPluginWorktreesFacade {

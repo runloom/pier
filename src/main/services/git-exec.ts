@@ -82,11 +82,13 @@ export class GitExecError extends Error {
 }
 
 export interface GitExecOptions {
+  budget?: import("./git-exec-raw-contract.ts").GitExecExecutionBudget;
   cwd: string;
   env?: Readonly<Record<string, string>>;
   /** stdout + stderr 累计字节上限（默认 16 MiB）。 */
   maxOutputBytes?: number;
   onSuccessStderr?: (stderr: string) => void;
+  signal?: AbortSignal;
   timeoutMs?: number;
 }
 
@@ -110,11 +112,13 @@ export function createExecGit({
     let result: GitExecRawResult;
     try {
       result = await execRaw(args, {
+        ...(options.budget === undefined ? {} : { budget: options.budget }),
         cwd: options.cwd,
         ...(options.env === undefined ? {} : { env: options.env }),
         maxOutputBytes:
           options.maxOutputBytes ?? GIT_EXEC_DEFAULT_MAX_OUTPUT_BYTES,
         mode: "collect",
+        ...(options.signal === undefined ? {} : { signal: options.signal }),
         ...(options.timeoutMs === undefined
           ? {}
           : { timeoutMs: options.timeoutMs }),

@@ -11,7 +11,8 @@ export type GitStatusDropdownActionId =
   | "push"
   | "switchBranch"
   | "switchWorktree"
-  | "syncChanges";
+  | "syncChanges"
+  | "viewChanges";
 
 export type GitStatusDropdownVariant =
   | "active"
@@ -112,6 +113,9 @@ const ACTIONS = {
   },
   syncChanges: {
     id: "syncChanges",
+  },
+  viewChanges: {
+    id: "viewChanges",
   },
 } as const satisfies Record<GitStatusDropdownActionId, GitStatusDropdownAction>;
 
@@ -386,7 +390,7 @@ export function deriveGitStatusDropdownModel(
     const statusGroups = activeStatusGroups(status.repoState, counts, text);
     return {
       ...base,
-      actions: [action("switchWorktree")],
+      actions: [action("viewChanges"), action("switchWorktree")],
       statusGroups,
       variant: "active",
     };
@@ -397,7 +401,11 @@ export function deriveGitStatusDropdownModel(
     const syncAction = remoteSyncAction(status, counts);
     return {
       ...base,
-      actions: [...(syncAction ? [syncAction] : []), action("switchWorktree")],
+      actions: [
+        action("viewChanges"),
+        ...(syncAction ? [syncAction] : []),
+        action("switchWorktree"),
+      ],
       statusGroups,
       variant: "dirty",
     };

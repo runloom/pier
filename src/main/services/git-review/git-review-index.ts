@@ -1,18 +1,16 @@
+import { createHash } from "node:crypto";
 import {
   type GitReviewFailure,
   type GitReviewGroup,
   type GitReviewIndexResult,
-  type GitReviewPanelQuery,
-  type GitReviewQuery,
-  type GitReviewResolvedQuery,
   type GitReviewScope,
   gitReviewFailureSchema,
   gitReviewIndexOkSchema,
-  gitReviewQuerySchema,
+  gitReviewRelativePathSchema,
+  gitReviewRootPathSchema,
   gitReviewScopeSchema,
 } from "../../../shared/contracts/git-review.ts";
 import { type ExecGitRaw, execGitRaw } from "../git-exec.ts";
-import { GitReviewBudget } from "./git-review-budget.ts";
 import {
   GitReviewIdentityResolver,
   type GitReviewRepositoryIdentity,
@@ -23,25 +21,28 @@ import {
   type GitReviewIndexResolvedEntry,
 } from "./git-review-index-assembler.ts";
 import {
-  GIT_REVIEW_INDEX_MAX_NUL_RECORDS,
-  GIT_REVIEW_INDEX_RANGE_MAX_NUL_RECORDS,
-  GIT_REVIEW_RENAME_LIMIT,
   type GitReviewIndexExecutionBudget,
   GitReviewIndexInputError,
+  type GitReviewIndexPrimaryParseResult,
   type GitReviewIndexStatParseResult,
 } from "./git-review-index-contract.ts";
 import {
   assertGitReviewIndexExecutionActive,
-  assertGitReviewIndexTruncation,
-  createGitReviewIndexToken,
   gitReviewIdentityExecutionOptions,
-  hasGitRenameLimitWarning,
   runGitReviewIndexParser,
   toGitReviewIndexFailure,
 } from "./git-review-index-execution.ts";
 import { GitReviewNumstatParser } from "./git-review-index-numstat-parser.ts";
 import { GitReviewPorcelainV2Parser } from "./git-review-index-primary-parser.ts";
-import { GitReviewRawDiffParser } from "./git-review-index-raw-parser.ts";
+import {
+  applyScopedMovements,
+  GitReviewScopedMovementParser,
+  mergeScopedPrimaryReads,
+} from "./git-review-index-scoped.ts";
+import {
+  createGitReviewExactPathspecs,
+  hasGitReviewExactPathspecConflict,
+} from "./git-review-pathspec.ts";
 
 const DIFF_MACHINE_ARGS = [
   "--no-ext-diff",
@@ -50,37 +51,39 @@ const DIFF_MACHINE_ARGS = [
   "--ignore-submodules=none",
   "--find-renames=50%",
   "--find-copies=50%",
-  `-l${GIT_REVIEW_RENAME_LIMIT}`,
+  "-l0",
 ] as const;
 
 export interface ReadGitReviewIndexRequest {
-  readonly query: GitReviewQuery;
+  /** main-only 单文件探测；公开 index 请求不设置。 */
+  readonly paths?: readonly string[];
   readonly scope: GitReviewScope;
 }
 
 export interface ReadGitReviewIndexOptions {
-  budget?: GitReviewIndexExecutionBudget;
-  signal?: AbortSignal;
+  budget: GitReviewIndexExecutionBudget;
+  signal: AbortSignal;
 }
 
-export interface CreateGitReviewIndexReaderOptions {
+interface CreateGitReviewIndexReaderOptions {
   execGitRaw?: ExecGitRaw;
-  identityResolver?: Pick<
-    GitReviewIdentityResolver,
-    | "resolveBranchInRepository"
-    | "resolveCommitInRepository"
-    | "resolveRepository"
-  >;
-  now?: () => number;
+  identityResolver?: Pick<GitReviewIdentityResolver, "resolveRepository">;
 }
 
 export type GitReviewIndexResolution =
   | GitReviewFailure
   | {
       readonly kind: "ok";
+      readonly metadata: GitReviewIndexMetadata;
       readonly resolvedEntries: readonly GitReviewIndexResolvedEntry[];
       readonly result: Extract<GitReviewIndexResult, { kind: "ok" }>;
     };
+
+export interface GitReviewIndexMetadata {
+  readonly canonicalRoot: string;
+  readonly headOid: string | null;
+  readonly indexRevision: string;
+}
 
 /**
  * 只负责从已允许的 scope 中构建索引；contextId 授权由上层 service 完成。
@@ -89,22 +92,18 @@ export class GitReviewIndexReader {
   readonly #execGitRaw: ExecGitRaw;
   readonly #identityResolver: Pick<
     GitReviewIdentityResolver,
-    | "resolveBranchInRepository"
-    | "resolveCommitInRepository"
-    | "resolveRepository"
+    "resolveRepository"
   >;
-  readonly #now: () => number;
 
   constructor(options: CreateGitReviewIndexReaderOptions = {}) {
     this.#execGitRaw = options.execGitRaw ?? execGitRaw;
     this.#identityResolver =
       options.identityResolver ?? new GitReviewIdentityResolver();
-    this.#now = options.now ?? Date.now;
   }
 
   async read(
     request: ReadGitReviewIndexRequest,
-    options: ReadGitReviewIndexOptions = {}
+    options: ReadGitReviewIndexOptions
   ): Promise<GitReviewIndexResult> {
     const resolution = await this.resolve(request, options);
     return resolution.kind === "ok" ? resolution.result : resolution;
@@ -113,275 +112,167 @@ export class GitReviewIndexReader {
   /** main-only 解析结果；T4 文档服务用它取得与同一 revision 绑定的 group 路径。 */
   async resolve(
     request: ReadGitReviewIndexRequest,
-    options: ReadGitReviewIndexOptions = {}
+    options: ReadGitReviewIndexOptions
   ): Promise<GitReviewIndexResolution> {
-    const startedAt = this.#now();
-    let createdBudget: GitReviewBudget | undefined;
-    let budget = options.budget;
-    if (budget === undefined) {
-      createdBudget = new GitReviewBudget({ now: this.#now });
-      budget = createdBudget;
-    }
+    const { budget, signal } = options;
     try {
-      const { query, scope } = parseGitReviewIndexRequest(request);
+      const { paths, scope } = parseGitReviewIndexRequest(request);
       const identity = await this.#identityResolver.resolveRepository(
         scope.gitRootPath,
-        gitReviewIdentityExecutionOptions(budget, options.signal)
+        gitReviewIdentityExecutionOptions(budget, signal)
       );
-      const read = await this.#readResolved(
-        identity,
-        query,
+      const canonicalRoot = gitReviewRootPathSchema.parse(
+        identity.canonicalRoot
+      );
+      const read = await this.#readUncommitted(
+        { ...identity, canonicalRoot },
         budget,
-        options.signal
+        signal,
+        paths
       );
       const result = gitReviewIndexOkSchema.parse({
-        durationMs: Math.max(0, this.#now() - startedAt),
         entries: read.assembled.entries,
-        gitRootPath: identity.canonicalRoot,
         kind: "ok",
-        query: read.resolvedQuery,
-        revision: read.assembled.revision,
-        sourceQuery: read.sourceQuery,
         warnings: read.assembled.warnings,
       });
-      assertGitReviewIndexExecutionActive(budget, options.signal);
+      assertGitReviewIndexExecutionActive(budget, signal);
       return Object.freeze({
         kind: "ok" as const,
+        metadata: Object.freeze({
+          canonicalRoot,
+          headOid: identity.headOid,
+          indexRevision: bindGitReviewIndexRevision(
+            read.assembled.revision,
+            identity.headOid
+          ),
+        }),
         resolvedEntries: read.assembled.resolvedEntries,
         result,
       });
     } catch (error) {
       return gitReviewFailureSchema.parse(toGitReviewIndexFailure(error));
-    } finally {
-      createdBudget?.dispose();
     }
-  }
-
-  async #readResolved(
-    identity: GitReviewRepositoryIdentity,
-    query: GitReviewQuery,
-    budget: GitReviewIndexExecutionBudget,
-    signal: AbortSignal | undefined
-  ): Promise<{
-    assembled: AssembledGitReviewIndex;
-    resolvedQuery: GitReviewResolvedQuery;
-    sourceQuery: GitReviewPanelQuery;
-  }> {
-    if (query.kind === "uncommitted") {
-      return this.#readUncommitted(identity, query, budget, signal);
-    }
-    if (query.kind === "commit") {
-      const commit = await this.#identityResolver.resolveCommitInRepository(
-        identity,
-        query.oid,
-        gitReviewIdentityExecutionOptions(budget, signal)
-      );
-      const resolvedQuery: GitReviewResolvedQuery = {
-        baseOid: commit.firstParentOid,
-        commitOid: commit.oid,
-        kind: "commit",
-        root: commit.firstParentOid === null,
-      };
-      return this.#readFixedRange(
-        identity,
-        resolvedQuery,
-        { kind: "commit", oid: commit.oid },
-        commit.firstParentOid ?? identity.emptyTreeOid,
-        commit.oid,
-        "commit",
-        budget,
-        signal
-      );
-    }
-    const branch = await this.#identityResolver.resolveBranchInRepository(
-      identity,
-      query.targetRef,
-      identity.headOid,
-      gitReviewIdentityExecutionOptions(budget, signal)
-    );
-    const resolvedQuery: GitReviewResolvedQuery = {
-      headOid: branch.headOid,
-      kind: "branch",
-      mergeBaseOid: branch.mergeBaseOid,
-      targetOid: branch.targetOid,
-      targetRef: branch.targetRef,
-    };
-    return this.#readFixedRange(
-      identity,
-      resolvedQuery,
-      { kind: "branch", targetRef: branch.targetRef },
-      branch.mergeBaseOid,
-      branch.headOid,
-      "branch",
-      budget,
-      signal
-    );
   }
 
   async #readUncommitted(
     identity: GitReviewRepositoryIdentity,
-    query: Extract<GitReviewQuery, { kind: "uncommitted" }>,
     budget: GitReviewIndexExecutionBudget,
-    signal: AbortSignal | undefined
+    signal: AbortSignal | undefined,
+    paths: readonly string[] | undefined
   ): Promise<{
     assembled: AssembledGitReviewIndex;
-    resolvedQuery: GitReviewResolvedQuery;
-    sourceQuery: GitReviewPanelQuery;
   }> {
-    const primaryParser = new GitReviewPorcelainV2Parser();
-    const primaryResult = await runGitReviewIndexParser(
-      this.#execGitRaw,
-      [
-        "-c",
-        "status.renames=copies",
-        "-c",
-        `status.renameLimit=${GIT_REVIEW_RENAME_LIMIT}`,
-        "--literal-pathspecs",
-        "status",
-        "--porcelain=v2",
-        "-z",
-        "--ignore-submodules=none",
-        "--untracked-files=all",
-      ],
-      identity.canonicalRoot,
-      budget,
-      signal,
-      GIT_REVIEW_INDEX_MAX_NUL_RECORDS,
-      (record) => primaryParser.push(record)
-    );
-    const primary = primaryParser.finish();
-    assertGitReviewIndexTruncation(primaryResult, primary.truncated);
-    const resolvedQuery: GitReviewResolvedQuery = {
-      groups: query.groups,
-      headOid: identity.headOid,
-      indexToken: createGitReviewIndexToken(primary.indexDigest),
-      kind: "uncommitted",
+    const readPrimary = async (
+      selectedPaths: readonly string[] | undefined
+    ): Promise<GitReviewIndexPrimaryParseResult> => {
+      const primaryParser = new GitReviewPorcelainV2Parser();
+      await runGitReviewIndexParser(
+        this.#execGitRaw,
+        [
+          "-c",
+          "status.renames=copies",
+          "-c",
+          "status.renameLimit=0",
+          ...(selectedPaths === undefined ? ["--literal-pathspecs"] : []),
+          "status",
+          "--porcelain=v2",
+          "-z",
+          "--ignore-submodules=none",
+          "--untracked-files=all",
+          ...(selectedPaths === undefined
+            ? []
+            : ["--", ...createGitReviewExactPathspecs(selectedPaths)]),
+        ],
+        identity.canonicalRoot,
+        budget,
+        signal,
+        (record) => primaryParser.push(record)
+      );
+      return primaryParser.finish();
     };
+    const pathspecConflict =
+      paths !== undefined && hasGitReviewExactPathspecConflict(paths);
+    let primary: GitReviewIndexPrimaryParseResult;
+    if (paths === undefined || !pathspecConflict) {
+      primary = await readPrimary(paths);
+    } else {
+      const reads: GitReviewIndexPrimaryParseResult[] = [];
+      for (const path of paths) {
+        reads.push(await readPrimary([path]));
+      }
+      primary = mergeScopedPrimaryReads(reads);
+      for (const group of ["unstaged", "staged"] as const) {
+        const parser = new GitReviewScopedMovementParser(group);
+        await runGitReviewIndexParser(
+          this.#execGitRaw,
+          [
+            "--literal-pathspecs",
+            "diff",
+            ...DIFF_MACHINE_ARGS,
+            ...(group === "staged" ? ["--cached"] : []),
+            "--raw",
+            "--no-abbrev",
+            "--diff-filter=RC",
+            "-z",
+            "--",
+            ...paths,
+          ],
+          identity.canonicalRoot,
+          budget,
+          signal,
+          (record) => parser.push(record)
+        );
+        const parsed = parser.finish();
+        primary = applyScopedMovements(primary, group, parsed, paths);
+      }
+    }
+    const rangePaths =
+      paths === undefined ? [] : scopedRangePaths(primary, paths);
+    const rangePathspecConflict =
+      paths !== undefined && hasGitReviewExactPathspecConflict(rangePaths);
+    const rangePathspecs =
+      paths === undefined || rangePathspecConflict
+        ? []
+        : createGitReviewExactPathspecs(rangePaths);
     const statsByGroup: Partial<
       Record<GitReviewGroup, GitReviewIndexStatParseResult>
     > = {};
-    let renameDetectionLimited = hasGitRenameLimitWarning(primaryResult);
-    for (const group of query.groups) {
+    for (const group of rangePathspecConflict
+      ? []
+      : (["unstaged", "staged"] as const)) {
       const parser = new GitReviewNumstatParser(group);
-      const result = await runGitReviewIndexParser(
+      await runGitReviewIndexParser(
         this.#execGitRaw,
         [
-          "--literal-pathspecs",
+          ...(paths === undefined ? ["--literal-pathspecs"] : []),
           "diff",
           ...DIFF_MACHINE_ARGS,
           ...(group === "staged" ? ["--cached"] : []),
           "--numstat",
           "-z",
           "--",
+          ...rangePathspecs,
         ],
         identity.canonicalRoot,
         budget,
         signal,
-        GIT_REVIEW_INDEX_RANGE_MAX_NUL_RECORDS,
         (record) => parser.push(record)
       );
       const parsed = parser.finish();
-      assertGitReviewIndexTruncation(result, parsed.truncated);
       statsByGroup[group] = parsed;
-      renameDetectionLimited ||= hasGitRenameLimitWarning(result);
     }
     assertGitReviewIndexExecutionActive(budget, signal);
     const assembled = assembleGitReviewIndex({
-      budget,
       primary,
-      query: resolvedQuery,
-      renameDetectionLimited,
       statsByGroup,
     });
     assertGitReviewIndexExecutionActive(budget, signal);
-    return {
-      assembled,
-      resolvedQuery,
-      sourceQuery: query,
-    };
-  }
-
-  async #readFixedRange(
-    identity: GitReviewRepositoryIdentity,
-    resolvedQuery: Extract<
-      GitReviewResolvedQuery,
-      { kind: "commit" | "branch" }
-    >,
-    sourceQuery: GitReviewPanelQuery,
-    baseOid: string,
-    targetOid: string,
-    group: "commit" | "branch",
-    budget: GitReviewIndexExecutionBudget,
-    signal: AbortSignal | undefined
-  ): Promise<{
-    assembled: AssembledGitReviewIndex;
-    resolvedQuery: GitReviewResolvedQuery;
-    sourceQuery: GitReviewPanelQuery;
-  }> {
-    const primaryParser = new GitReviewRawDiffParser(group);
-    const rawResult = await runGitReviewIndexParser(
-      this.#execGitRaw,
-      [
-        "--literal-pathspecs",
-        "diff",
-        ...DIFF_MACHINE_ARGS,
-        "--no-abbrev",
-        "--raw",
-        "-z",
-        baseOid,
-        targetOid,
-        "--",
-      ],
-      identity.canonicalRoot,
-      budget,
-      signal,
-      GIT_REVIEW_INDEX_RANGE_MAX_NUL_RECORDS,
-      (record) => primaryParser.push(record)
-    );
-    const primary = primaryParser.finish();
-    assertGitReviewIndexTruncation(rawResult, primary.truncated);
-    const numstatParser = new GitReviewNumstatParser(group);
-    const numstatResult = await runGitReviewIndexParser(
-      this.#execGitRaw,
-      [
-        "--literal-pathspecs",
-        "diff",
-        ...DIFF_MACHINE_ARGS,
-        "--numstat",
-        "-z",
-        baseOid,
-        targetOid,
-        "--",
-      ],
-      identity.canonicalRoot,
-      budget,
-      signal,
-      GIT_REVIEW_INDEX_RANGE_MAX_NUL_RECORDS,
-      (record) => numstatParser.push(record)
-    );
-    const stats = numstatParser.finish();
-    assertGitReviewIndexTruncation(numstatResult, stats.truncated);
-    assertGitReviewIndexExecutionActive(budget, signal);
-    const assembled = assembleGitReviewIndex({
-      budget,
-      primary,
-      query: resolvedQuery,
-      renameDetectionLimited:
-        hasGitRenameLimitWarning(rawResult) ||
-        hasGitRenameLimitWarning(numstatResult),
-      statsByGroup: { [group]: stats },
-    });
-    assertGitReviewIndexExecutionActive(budget, signal);
-    return {
-      assembled,
-      resolvedQuery,
-      sourceQuery,
-    };
+    return { assembled };
   }
 }
 
 function parseGitReviewIndexRequest(request: ReadGitReviewIndexRequest): {
-  query: GitReviewQuery;
+  paths: readonly string[] | undefined;
   scope: GitReviewScope;
 } {
   const scope = gitReviewScopeSchema.safeParse(request.scope);
@@ -390,11 +281,60 @@ function parseGitReviewIndexRequest(request: ReadGitReviewIndexRequest): {
       cause: scope.error,
     });
   }
-  const query = gitReviewQuerySchema.safeParse(request.query);
-  if (!query.success) {
-    throw new GitReviewIndexInputError("Git Review query 非法", {
-      cause: query.error,
-    });
+  let paths: readonly string[] | undefined;
+  if (request.paths !== undefined) {
+    const parsedPaths = gitReviewRelativePathSchema
+      .array()
+      .min(1)
+      .max(4)
+      .safeParse(request.paths);
+    if (!parsedPaths.success) {
+      throw new GitReviewIndexInputError("Git Review paths 非法", {
+        cause: parsedPaths.error,
+      });
+    }
+    paths = [...new Set(parsedPaths.data)];
   }
-  return { query: query.data, scope: scope.data };
+  return {
+    paths,
+    scope: scope.data,
+  };
+}
+
+function bindGitReviewIndexRevision(
+  contentRevision: string,
+  headOid: string | null
+): string {
+  const digest = createHash("sha256");
+  for (const part of [
+    "pier.git-review.index-revision.v1",
+    contentRevision,
+    headOid ?? "unborn",
+  ]) {
+    digest.update(part, "utf8");
+    digest.update("\0", "utf8");
+  }
+  return `sha256:${digest.digest("hex")}`;
+}
+
+function scopedRangePaths(
+  primary: GitReviewIndexPrimaryParseResult,
+  requestedPaths: readonly string[]
+): string[] {
+  const paths = new Set(requestedPaths);
+  for (const entry of primary.entries) {
+    if (!paths.has(entry.path)) {
+      continue;
+    }
+    paths.add(entry.path);
+    for (const fact of Object.values(entry.groupFacts)) {
+      if (fact?.oldPath !== null && fact?.oldPath !== undefined) {
+        paths.add(fact.oldPath);
+      }
+      if (fact !== undefined) {
+        paths.add(fact.targetPath);
+      }
+    }
+  }
+  return [...paths];
 }

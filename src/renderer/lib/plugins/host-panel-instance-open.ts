@@ -1,4 +1,5 @@
 import type {
+  PluginPanelInstanceOpenResult,
   PluginPanelInstanceOptions,
   PluginPanelRegistration,
 } from "@plugins/api/renderer.ts";
@@ -234,9 +235,16 @@ function addNewPanelInstance(input: {
 
 export function openPluginPanelInstance(
   options: PluginPanelInstanceOptions
-): void {
+): PluginPanelInstanceOpenResult {
   const api = useWorkspaceStore.getState().api;
   const registration = registeredPanelInstance(options.componentId);
+  if (
+    !api ||
+    (options.targetGroupId !== undefined &&
+      groupById(api, options.targetGroupId) === null)
+  ) {
+    return { kind: "targetGroupMissing" };
+  }
   const descriptorStore = usePanelDescriptorStore.getState();
   const context =
     options.context ?? descriptorStore.descriptors[options.instanceId]?.context;
@@ -245,9 +253,6 @@ export function openPluginPanelInstance(
     resolveRegistrationTitle(registration, options.componentId);
   const existing = api?.panels.find((panel) => panel.id === options.instanceId);
   assertPanelInstanceComponent(options, existing);
-  if (!api) {
-    return;
-  }
   const { addPanelTargetGroup, previewReplacementGroup } =
     resolvePanelInstanceTargetGroups(api, existing, options);
   const panelParams = panelInstanceParams(registration, options, context);
@@ -262,7 +267,7 @@ export function openPluginPanelInstance(
       registration,
       title: resolvedTitle,
     });
-    return;
+    return { kind: "opened" };
   }
   addNewPanelInstance({
     addPanelTargetGroup,
@@ -279,4 +284,5 @@ export function openPluginPanelInstance(
     registration,
     title: resolvedTitle,
   });
+  return { kind: "opened" };
 }
