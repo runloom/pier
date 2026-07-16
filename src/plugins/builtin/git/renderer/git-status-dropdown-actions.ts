@@ -1,6 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitRemoteOperationResult } from "@shared/contracts/git.ts";
-import type { PanelContext } from "@shared/contracts/panel.ts";
 import { openSwitchBranchPick } from "./git-branch-actions.ts";
 import { pluginText } from "./git-plugin-text.ts";
 import type {
@@ -62,20 +61,13 @@ async function runRemoteAction(
 
 export async function runGitStatusDropdownAction({
   actionId,
-  context,
   model,
   pluginContext,
 }: {
   actionId: GitStatusDropdownActionId;
-  context: PanelContext;
   model: GitStatusDropdownModel;
   pluginContext: RendererPluginContext;
 }): Promise<void> {
-  if (actionId === "openChanges") {
-    pluginContext.panels.open("pier.git.changes", { context });
-    return;
-  }
-
   if (actionId === "push") {
     await runRemoteAction(pluginContext, actionId, () =>
       pluginContext.git.push(model.worktreePath)
@@ -102,5 +94,15 @@ export async function runGitStatusDropdownAction({
     return;
   }
 
-  await openWorktreeListQuickPick(pluginContext, model.worktreePath);
+  if (actionId === "switchWorktree") {
+    await openWorktreeListQuickPick(pluginContext, model.worktreePath);
+    return;
+  }
+
+  if (actionId === "viewChanges") {
+    return;
+  }
+
+  const exhaustive: never = actionId;
+  return exhaustive;
 }

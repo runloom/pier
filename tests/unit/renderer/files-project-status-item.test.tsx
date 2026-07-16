@@ -6,6 +6,7 @@ function makeStatusContext(panelContext?: PanelContext) {
   return {
     context: panelContext,
     cwd: panelContext?.cwd ?? null,
+    getGroupId: () => null,
     panelId: "terminal-1",
     title: "Terminal",
   };

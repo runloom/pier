@@ -1,10 +1,5 @@
 {
   "commands": {
-    "pier.git.changes.open": {
-      "aliases": ["变更", "打开变更面板", "biangeng"],
-      "category": "Git",
-      "title": "Git: 打开变更面板"
-    },
     "pier.git.merge": {
       "aliases": ["合并分支", "git merge", "he bing fen zhi"],
       "category": "Git",
@@ -154,8 +149,58 @@
     "ui.statusOpenTooltip": "点击切换工作树",
     "ui.statusDropdownOpenLabel": "打开 {{name}} 的 Git 状态",
     "ui.statusDropdownOpenTooltip": "点击打开 Git 状态",
+    "ui.statusDropdownViewChanges": "查看变更",
+    "ui.reviewChangesTitle": "变更",
+    "ui.reviewTargetGroupMissing": "当前面板分组已不可用。",
+    "ui.reviewOpenFailed": "打开变更失败",
+    "ui.reviewLoading": "正在加载变更",
+    "ui.reviewCollapseDiff": "折叠差异",
+    "ui.reviewExpandDiff": "展开差异",
+    "ui.reviewDetails": "详情",
+    "ui.reviewInvalidSource": "Git 来源无效",
+    "ui.reviewLoadFailed": "加载变更失败",
+    "ui.reviewNavigationFailed": "定位文件失败",
+    "ui.reviewRefreshFailed": "刷新变更失败",
+    "ui.reviewRefreshStale": "刷新期间又有文件发生变化，暂时保留上一次差异，等待下一次 Git 更新。",
+    "ui.reviewFailureAborted": "请求已取消。",
+    "ui.reviewFailureBusy": "Git 变更审查正忙，请重试。",
+    "ui.reviewFailureCommandFailed": "Git 无法读取此变更。",
+    "ui.reviewFailureDuplicateOperation": "此变更审查请求已在执行。",
+    "ui.reviewFailureInternal": "读取变更时发生内部错误。",
+    "ui.reviewFailureInvalidSource": "Git 变更来源已失效。",
+    "ui.reviewFailureNotRepository": "此目录已不是 Git 仓库。",
+    "ui.reviewFailureOutputLimit": "此变更超出审查大小限制。",
+    "ui.reviewFailureStaleRevision": "变更持续更新，请重试。",
+    "ui.reviewFailureTimeout": "读取变更超时。",
+    "ui.reviewRenderFailed": "渲染差异失败",
+    "ui.reviewRetry": "重试",
+    "ui.reviewEmptyTitle": "没有变更",
+    "ui.reviewEmptyDescription": "工作树中没有已暂存或未暂存的变更。",
+    "ui.reviewFilePathCollision": "文件变更 · {{name}}",
+    "ui.reviewAdditionalIssues": "还有部分变更无法显示。",
+    "ui.reviewPartialTitle": "结果不完整",
+    "ui.reviewWarningPathDepthExceeded": "已跳过 {{skipped}} 个超过目录深度边界的路径。",
+    "ui.reviewWarningInvalidPathEncoding": "{{skipped}} 个路径无法解码，已跳过。",
+    "ui.reviewTreeLabel": "变更文件",
+    "ui.reviewBreadcrumbLabel": "变更位置",
+    "ui.reviewTreeCollapse": "收起变更文件",
+    "ui.reviewTreeExpand": "展开变更文件",
+    "ui.reviewTreeSearch": "在变更文件中查找",
+    "ui.reviewTreeSearchClose": "关闭",
+    "ui.reviewTreeSearchNext": "下一个匹配项",
+    "ui.reviewTreeSearchOpen": "打开所选变更",
+    "ui.reviewTreeSearchPrevious": "上一个匹配项",
+    "ui.reviewTreeSearchMatchAnnouncement": "匹配的变更：{{count}}",
+    "ui.reviewTreeNoSearchResultsTitle": "没有匹配的变更",
+    "ui.reviewTreeNoSearchResultsDescription": "请尝试其他文件名或路径。",
+    "ui.reviewStateBinary": "二进制文件",
+    "ui.reviewStateConflict": "合并冲突",
+    "ui.reviewStateInvalidEncoding": "不支持的文本编码",
+    "ui.reviewStateReadError": "无法读取文件",
+    "ui.reviewStateSubmodule": "子模块变更",
+    "ui.reviewStateSymlink": "符号链接",
+    "ui.reviewStateTooLarge": "文件过大",
     "ui.gitStatusLabel": "Git 状态",
-    "ui.statusDropdownOpenChanges": "打开 Git 变更",
     "ui.statusDropdownPull": "拉取更改",
     "ui.statusDropdownPulling": "正在拉取更改…",
     "ui.statusDropdownPullSuccess": "更改已拉取",
@@ -213,17 +258,6 @@
     "ui.srDeletions": "行删除",
     "ui.largeChange": "变更过大",
     "ui.gitUnsupported": "当前目录不是 Git 仓库",
-    "ui.changes.binaryFile": "二进制文件不可预览",
-    "ui.changes.diffErrorFallback": "差异加载失败",
-    "ui.changes.diffErrorTitle": "无法加载差异",
-    "ui.changes.diffLoading": "正在加载差异…",
-    "ui.changes.loadErrorFallback": "Git 状态加载失败",
-    "ui.changes.loadErrorTitle": "无法加载 Git 变更",
-    "ui.changes.loading": "正在加载变更…",
-    "ui.changes.noChanges": "无可展示的变更",
-    "ui.changes.selectFile": "选择文件以预览变更",
-    "ui.panelHint.gitChangesClean": "工作区没有未提交的变更",
-    "ui.panelTitle.gitChanges": "Git 变更",
     "ui.branchDefault": "默认",
     "ui.branchGraph": "提交图",
     "ui.branchGraphCaveatTitle": "仅表示提交图差异；squash/rebase 合并后，已应用内容仍可能显示为分支独有提交。",
@@ -245,7 +279,6 @@
     "ui.pruneConfirmButton": "清理",
     "ui.worktreePruneSuccess": "已清理失效工作树",
     "ui.gitErrorUnavailable": "Git 操作失败",
-    "ui.gitConflictOpenReview": "打开 Review",
     "ui.gitLoadingBranches": "正在加载分支...",
     "ui.gitLoadingMerge": "正在合并...",
     "ui.gitLoadingSwitchBranch": "正在切换分支...",
@@ -351,12 +384,6 @@
     "ui.worktreeCreate.title": "新建工作树",
     "ui.worktreeCreate.unavailable": "工作树不可用: {{message}}"
   },
-  "panels": {
-    "pier.git.changes": {
-      "description": "Git 变更预览的占位面板,正式实现稍后到来。",
-      "title": "Git 变更"
-    }
-  },
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {
       "label": "显示变更指示",
@@ -372,6 +399,11 @@
     "pier.worktree.status": {
       "description": "在终端面板中显示当前 Git 工作树。",
       "title": "工作树状态"
+    }
+  },
+  "panels": {
+    "pier.git.changes": {
+      "title": "变更"
     }
   },
   "name": "Git"

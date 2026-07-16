@@ -94,6 +94,7 @@ describe("ForegroundActivityBridge terminal status registration", () => {
             updatedAt: 1,
           }}
           cwd="/repo"
+          getGroupId={() => null}
           panelId="terminal-1"
           title={null}
         />
@@ -228,6 +229,7 @@ describe("ForegroundActivityBridge terminal status registration", () => {
         <TerminalStatusBar
           context={undefined}
           cwd="/repo"
+          getGroupId={() => null}
           panelId="terminal-1"
           title={null}
         />

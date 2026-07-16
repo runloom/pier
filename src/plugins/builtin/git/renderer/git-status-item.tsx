@@ -13,6 +13,7 @@ import type {
 import type React from "react";
 import { useEffect, useState } from "react";
 import { pluginText } from "./git-plugin-text.ts";
+import { openGitChangesPanel } from "./git-review-open.ts";
 import { GitStatusDropdown } from "./git-status-dropdown.tsx";
 import {
   deriveGitStatusDropdownModel,
@@ -32,6 +33,7 @@ import {
   WorkingTreeCounts,
   WorktreeBadge,
 } from "./git-status-parts.tsx";
+import { useGitStatus } from "./git-status-state.ts";
 
 const PATH_SEPARATOR_RE = /[\\/]/;
 
@@ -92,63 +94,6 @@ function remoteSyncLine(
   );
 }
 
-/**
- * 实时 git status 钩子。订阅 git.watch 广播，初值走 git.getStatus。
- * monotonic seq 拒收旧响应，防止快速触发时的乱序覆盖。
- * broadcast 携带 status snapshot 时走 fast path，跳过 IPC。
- */
-function useGitStatus(
-  pluginContext: RendererPluginContext,
-  gitRoot: string | undefined
-): GitStatusLoadState {
-  const [state, setState] = useState<GitStatusLoadState>({ kind: "loading" });
-
-  useEffect(() => {
-    if (!gitRoot) {
-      setState({ kind: "loading" });
-      return;
-    }
-    setState({ kind: "loading" });
-    let seq = 0;
-    let alive = true;
-    const apply = (next: GitStatus): void => {
-      if (alive) {
-        setState({ kind: "loaded", status: next });
-      }
-    };
-    const refetch = (): void => {
-      const mySeq = ++seq;
-      pluginContext.git
-        .getStatus(gitRoot)
-        .then((next) => {
-          if (mySeq === seq) {
-            apply(next);
-          }
-        })
-        .catch((error: unknown) => {
-          if (alive && mySeq === seq) {
-            setState({ kind: "error", message: gitErrorMessage(error) });
-          }
-        });
-    };
-    refetch();
-    const unsubscribe = pluginContext.git.watch(gitRoot, (event) => {
-      if (event.status) {
-        seq += 1;
-        apply(event.status);
-      } else {
-        refetch();
-      }
-    });
-    return () => {
-      alive = false;
-      unsubscribe();
-    };
-  }, [pluginContext, gitRoot]);
-
-  return state;
-}
-
 /** 试点设置消费：经 context.configuration 读生效值并 onDidChange 实时响应。 */
 function useShowDirtyIndicator(pluginContext: RendererPluginContext): boolean {
   const [value, setValue] = useState<boolean>(() =>
@@ -169,7 +114,6 @@ function useShowDirtyIndicator(pluginContext: RendererPluginContext): boolean {
 }
 
 /**
- * 大规模变更预警阈值。AI burst 场景下一次动百个文件是常态，超过任一阈值都算"值得警惕"。
  * v1 硬编码；如需可调，走 preferences（Phase C）而不是环境变量或 remote config。
  */
 const LARGE_CHANGE_FILE_THRESHOLD = 100;
@@ -189,15 +133,6 @@ interface StatusFlags {
   isDistinctWorktree: boolean;
   repoState: GitRepoState;
   stashCount: number;
-}
-
-type GitStatusLoadState =
-  | { kind: "error"; message: string }
-  | { kind: "loaded"; status: GitStatus }
-  | { kind: "loading" };
-
-function gitErrorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
 }
 
 function deriveStatusFlags(
@@ -264,7 +199,7 @@ function pendingDropdownModel({
           "Git status unavailable"
         );
   return {
-    actions: [{ id: "openChanges" }, { id: "switchWorktree" }],
+    actions: [{ id: "switchWorktree" }],
     branchLabel,
     contextLine: worktreeName,
     statusGroups: [
@@ -363,6 +298,7 @@ function StatusBody({
 function WorktreeStatusItem({
   context,
   cwd,
+  getGroupId,
   pluginContext,
 }: RendererTerminalStatusItemContext & {
   pluginContext: RendererPluginContext;
@@ -416,6 +352,7 @@ function WorktreeStatusItem({
       )}
       className="h-5 min-w-0 max-w-full gap-1 px-2 font-normal text-xs"
       data-testid="worktree-status-trigger"
+      onClick={statusState.kind === "error" ? statusState.retry : undefined}
       size="xs"
       title={[tooltipHint, tooltipDetail, syncLine].filter(Boolean).join("\n")}
       type="button"
@@ -434,8 +371,14 @@ function WorktreeStatusItem({
 
   return (
     <GitStatusDropdown
-      context={panelContext}
       model={dropdownModel}
+      onViewChanges={() =>
+        openGitChangesPanel({
+          getGroupId,
+          panelContext,
+          pluginContext,
+        })
+      }
       pluginContext={pluginContext}
     >
       {trigger}

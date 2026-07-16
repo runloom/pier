@@ -7,6 +7,75 @@ import type { IpcMain } from "electron";
 import { appCore } from "../app-core/app-core.ts";
 import { findWindowContext } from "../windows/window-identity.ts";
 import { windowManager } from "../windows/window-manager.ts";
+import { isTrustedMainFrame } from "./trusted-main-frame.ts";
+
+interface GitReviewSenderState {
+  clientId: string;
+  generation: number;
+  recordId: string;
+}
+
+const gitReviewSenderStates = new Map<number, GitReviewSenderState>();
+const gitReviewSenderListeners = new Set<number>();
+
+function gitReviewOwner(
+  senderId: number,
+  state: GitReviewSenderState
+): {
+  clientId: string;
+  generation: number;
+  windowRecordId: string;
+} {
+  return {
+    clientId: state.clientId,
+    generation: state.generation,
+    windowRecordId: `${state.recordId}:webContents:${senderId}`,
+  };
+}
+
+function releaseGitReviewSender(senderId: number): void {
+  const state = gitReviewSenderStates.get(senderId);
+  if (state !== undefined) {
+    appCore.services.gitReview.releaseOwner(gitReviewOwner(senderId, state));
+  }
+}
+
+function trackGitReviewSender(
+  sender: Electron.WebContents,
+  identity: { clientId: string; recordId: string }
+): number {
+  let state = gitReviewSenderStates.get(sender.id);
+  if (state === undefined) {
+    state = { ...identity, generation: 0 };
+    gitReviewSenderStates.set(sender.id, state);
+  } else {
+    state.clientId = identity.clientId;
+    state.recordId = identity.recordId;
+  }
+  if (!gitReviewSenderListeners.has(sender.id)) {
+    gitReviewSenderListeners.add(sender.id);
+    sender.on("did-navigate", () => {
+      const current = gitReviewSenderStates.get(sender.id);
+      if (current !== undefined) {
+        releaseGitReviewSender(sender.id);
+        current.generation += 1;
+      }
+    });
+    sender.on("render-process-gone", () => {
+      const current = gitReviewSenderStates.get(sender.id);
+      if (current !== undefined) {
+        releaseGitReviewSender(sender.id);
+        current.generation += 1;
+      }
+    });
+    sender.once("destroyed", () => {
+      releaseGitReviewSender(sender.id);
+      gitReviewSenderStates.delete(sender.id);
+      gitReviewSenderListeners.delete(sender.id);
+    });
+  }
+  return state.generation;
+}
 
 function ensureDesktopRendererClient(windowId: string): string {
   const clientId = `desktop-renderer:${windowId}`;
@@ -60,20 +129,32 @@ function commandForSender(command: PierCommand, windowId: string): PierCommand {
 
 export function registerCommandIpc(ipcMain: IpcMain): void {
   ipcMain.handle(PIER.COMMAND_EXECUTE, async (event, rawCommand: unknown) => {
+    if (!isTrustedMainFrame(event)) {
+      throw new Error("command sender is not the main frame");
+    }
     const parsed = pierCommandSchema.safeParse(rawCommand);
     if (!parsed.success) {
       throw new Error("invalid command");
     }
     const command: PierCommand = parsed.data;
     const { recordId, windowId } = senderWindowContext(event.sender);
+    const clientId = ensureDesktopRendererClient(windowId);
+    const navigationGeneration = trackGitReviewSender(event.sender, {
+      clientId,
+      recordId,
+    });
     return await appCore.commandRouter.execute(
       {
-        clientId: ensureDesktopRendererClient(windowId),
+        clientId,
         command: commandForSender(command, windowId),
         protocolVersion: 1,
         requestId: randomUUID(),
       },
-      { windowRecordId: recordId }
+      {
+        navigationGeneration,
+        webContentsId: event.sender.id,
+        windowRecordId: recordId,
+      }
     );
   });
 }

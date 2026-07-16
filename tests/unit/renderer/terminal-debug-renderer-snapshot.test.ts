@@ -38,9 +38,6 @@ describe("terminal debug renderer snapshot", () => {
 
   it("adds renderer panels and native-missing diagnostics to debug snapshots", async () => {
     const { useWorkspaceStore } = await import("@/stores/workspace.store.ts");
-    const { updatePanelResourceSnapshot } = await import(
-      "@/stores/panel-resource.store.ts"
-    );
     const { buildRendererDebugSnapshot } = await import(
       "@/lib/terminal-debug/renderer-snapshot.ts"
     );
@@ -66,16 +63,6 @@ describe("terminal debug renderer snapshot", () => {
       hasMaximizedGroup: vi.fn(() => false),
       panels: [panel],
     } as never);
-    updatePanelResourceSnapshot({
-      activePanelId: "terminal-1",
-      panels: [
-        {
-          dockviewActive: true,
-          dockviewVisible: true,
-          id: "terminal-1",
-        },
-      ],
-    });
 
     const renderer = buildRendererDebugSnapshot();
     const issues = buildTerminalDebugIssues(renderer, {

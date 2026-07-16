@@ -4,6 +4,13 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { execGit } from "@main/services/git-exec.ts";
 import {
+  applyRefsSnapshotTable,
+  isGitMetadataTreeEvent,
+  isNoiseTreeEvent,
+  isPathInsideWatchRoot,
+  normalizeWatchEventPath,
+} from "@main/services/git-watch-internals.ts";
+import {
   createGitWatchService,
   type GitWatchService,
 } from "@main/services/git-watch-service.ts";
@@ -90,6 +97,7 @@ function bindRecorder(rec: Recorder) {
       rec.worktreeSigCalls += 1;
       return Promise.resolve(rec.worktreeSig);
     },
+    resolveRepoAnchors: () => Promise.resolve(null),
   };
 }
 
@@ -100,6 +108,19 @@ describe("createGitWatchService", () => {
 
   afterEach(() => {
     vi.useRealTimers();
+  });
+
+  it("仅 Windows 把反斜杠解释为分隔符，POSIX 合法文件名不会被过滤", () => {
+    expect(normalizeWatchEventPath("node_modules\\file.ts", "darwin")).toBe(
+      "node_modules\\file.ts"
+    );
+    expect(normalizeWatchEventPath("node_modules\\file.ts", "win32")).toBe(
+      "node_modules/file.ts"
+    );
+    expect(isNoiseTreeEvent("node_modules\\file.ts", "darwin")).toBe(false);
+    expect(isNoiseTreeEvent("node_modules\\file.ts", "win32")).toBe(true);
+    expect(isGitMetadataTreeEvent(".git\\notes.ts", "darwin")).toBe(false);
+    expect(isGitMetadataTreeEvent(".git\\HEAD", "win32")).toBe(true);
   });
 
   it("文件事件触发 debounce 重算签名;变化时通知 listener", async () => {
@@ -163,6 +184,56 @@ describe("createGitWatchService", () => {
 
     expect(events).toEqual([]);
     await service.dispose();
+  });
+
+  it("不可靠基线不广播，连续失败保守广播，恢复后重新正常去重", async () => {
+    vi.useRealTimers();
+    const root = await mkdtemp(join(tmpdir(), "pier-watch-unreliable-"));
+    const fakeWatcher = new FakeWatcher();
+    const anchorsResolved = vi.fn(async () => null);
+    const computeHeadSignature = vi.fn(async () => "head");
+    const events: GitChangeEvent[] = [];
+    const service = createGitWatchService({
+      computeHeadSignature,
+      computeRefsSignature: async () => "refs",
+      computeRepoStateSignature: async () => "state",
+      fsWatch: () => fakeWatcher,
+      pollMs: 60_000,
+      resolveRepoAnchors: anchorsResolved,
+    });
+    try {
+      service.watch(root, (event) => events.push(event));
+      await vi.waitFor(() => expect(anchorsResolved).toHaveBeenCalledOnce());
+      expect(events).toEqual([]);
+
+      service.pulse(root);
+      await vi.waitFor(() => {
+        expect(computeHeadSignature).toHaveBeenCalledTimes(2);
+        expect(events).toHaveLength(1);
+      });
+      service.pulse(root);
+      await vi.waitFor(() => {
+        expect(computeHeadSignature).toHaveBeenCalledTimes(3);
+        expect(events).toHaveLength(2);
+      });
+
+      await execGit(["init", "-q", "-b", "main"], { cwd: root });
+      service.pulse(root);
+      await vi.waitFor(() => {
+        expect(computeHeadSignature).toHaveBeenCalledTimes(4);
+        expect(events).toHaveLength(3);
+      });
+
+      service.pulse(root);
+      await vi.waitFor(() =>
+        expect(computeHeadSignature).toHaveBeenCalledTimes(5)
+      );
+      expect(events).toHaveLength(3);
+      await service.dispose();
+    } finally {
+      await service.dispose();
+      await rm(root, { recursive: true, force: true });
+    }
   });
 
   it("两个 listener 共用同一 fsWatcher(引用计数)", async () => {
@@ -234,8 +305,8 @@ describe("createGitWatchService", () => {
     await service.dispose();
   });
 
-  // A3: 初始 baseline 采集未完成时,fs 事件不应触发误报
-  it("baseline 完成前的 fs 事件不会误报 changeKind=both", async () => {
+  // A3: baseline 期间不与空签名比较，但完成后必须补一次消费者重读信号。
+  it("baseline 完成前的 fs 事件在完成后收敛为 worktree 重读", async () => {
     const fakeWatcher = new FakeWatcher();
     let resolveBaseline: () => void = () => undefined;
     const baselineGate = new Promise<void>((res) => {
@@ -257,20 +328,120 @@ describe("createGitWatchService", () => {
         return rec.worktreeSig;
       },
       fsWatch: () => fakeWatcher,
+      resolveRepoAnchors: async () => null,
     });
     const events: GitChangeEvent[] = [];
     service.watch("/repo", (e) => events.push(e));
 
     // baseline 未完成时,fs 事件不应导致误报
-    fakeWatcher.emit("change");
+    fakeWatcher.emit("change", "modify", ".git/index");
     await vi.advanceTimersByTimeAsync(400);
     expect(events).toEqual([]);
 
     // 释放 baseline gate
     resolveBaseline();
     await vi.runOnlyPendingTimersAsync();
+    await Promise.resolve();
 
+    expect(events).toEqual([{ changeKind: "worktree", gitRoot: "/repo" }]);
+    await service.dispose();
+  });
+
+  it("旧订阅 baseline 晚到时不能把同路径的新订阅提前标记完成", async () => {
+    const watchers = [new FakeWatcher(), new FakeWatcher()];
+    let watcherIndex = 0;
+    let resolveFirst: () => void = () => undefined;
+    let resolveSecond: () => void = () => undefined;
+    const firstGate = new Promise<void>((resolve) => {
+      resolveFirst = resolve;
+    });
+    const secondGate = new Promise<void>((resolve) => {
+      resolveSecond = resolve;
+    });
+    let worktreeCalls = 0;
+    const service = createGitWatchService({
+      computeHeadSignature: async () => "head",
+      computeRefsSignature: async () => "refs",
+      computeRepoStateSignature: async () => "state",
+      computeWorktreeSignature: async () => {
+        worktreeCalls += 1;
+        await (worktreeCalls === 1 ? firstGate : secondGate);
+        return `worktree:${worktreeCalls}`;
+      },
+      fsWatch: () => watchers[watcherIndex++] as FakeWatcher,
+      resolveRepoAnchors: async () => null,
+    });
+    const unsubscribeFirst = service.watch("/repo", () => undefined);
+    unsubscribeFirst();
+    const events: GitChangeEvent[] = [];
+    service.watch("/repo", (event) => events.push(event));
+
+    watchers[1]?.emit("change", "modify", "src/new.ts");
+    await vi.advanceTimersByTimeAsync(400);
+    resolveFirst();
+    await Promise.resolve();
+    await Promise.resolve();
     expect(events).toEqual([]);
+
+    resolveSecond();
+    await vi.waitFor(() =>
+      expect(events).toEqual([{ changeKind: "worktree", gitRoot: "/repo" }])
+    );
+    await service.dispose();
+  });
+
+  it("baseline 失败时保持未就绪，并在 poll 重试成功后补发夹缝事件", async () => {
+    const fakeWatcher = new FakeWatcher();
+    let worktreeCalls = 0;
+    const service = createGitWatchService({
+      computeHeadSignature: async () => "head",
+      computeRefsSignature: async () => "refs",
+      computeRepoStateSignature: async () => "state",
+      computeWorktreeSignature: async () => {
+        worktreeCalls += 1;
+        if (worktreeCalls === 1) {
+          throw new Error("baseline unavailable");
+        }
+        return "worktree";
+      },
+      fsWatch: () => fakeWatcher,
+      pollMs: 5000,
+      resolveRepoAnchors: async () => null,
+    });
+    const events: GitChangeEvent[] = [];
+    service.watch("/repo", (event) => events.push(event));
+    await Promise.resolve();
+    await Promise.resolve();
+
+    fakeWatcher.emit("change", "modify", "src/a.ts");
+    await vi.advanceTimersByTimeAsync(400);
+    expect(events).toEqual([]);
+    await vi.advanceTimersByTimeAsync(4600);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(worktreeCalls).toBe(2);
+    expect(events).toEqual([{ changeKind: "worktree", gitRoot: "/repo" }]);
+    await service.dispose();
+  });
+
+  it("standalone 模式在 baseline 后立即消费 .git/index 事件", async () => {
+    const fakeWatcher = new FakeWatcher();
+    const rec = makeRecorder();
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch: () => fakeWatcher,
+      resolveRepoAnchors: async () => null,
+    });
+    const events: GitChangeEvent[] = [];
+    service.watch("/repo", (event) => events.push(event));
+    await vi.runOnlyPendingTimersAsync();
+
+    rec.worktreeSig = "w1";
+    fakeWatcher.emit("change", "modify", ".git/index");
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(events).toEqual([{ changeKind: "worktree", gitRoot: "/repo" }]);
     await service.dispose();
   });
 
@@ -321,7 +492,7 @@ describe("createGitWatchService", () => {
     expect(events).toEqual([
       { changeKind: "worktree", gitRoot: "/repo", status: snapshot },
     ]);
-    // 注入的签名替身不填充 lastRawByRoot，故 prefetched 为 undefined（A7）
+    // 注入的签名替身不返回原始 worktree 快照，故 prefetched 为 undefined（A7）
     expect(getStatus).toHaveBeenCalledExactlyOnceWith("/repo", undefined);
     await service.dispose();
   });
@@ -507,6 +678,233 @@ describe("createGitWatchService", () => {
     await service.dispose();
   });
 
+  it("pulse 接受仓库内路径并使用最长前缀命中的订阅根刷新", async () => {
+    const rec = makeRecorder();
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch: () => new FakeWatcher(),
+      resolveRepoAnchors: async () => null,
+    });
+    const events: GitChangeEvent[] = [];
+    service.watch("/repo", (event) => events.push(event));
+    await vi.runOnlyPendingTimersAsync();
+
+    rec.worktreeSig = "w1";
+    service.pulse("/repo/src/nested");
+    await vi.waitFor(() => {
+      expect(events).toEqual([{ changeKind: "worktree", gitRoot: "/repo" }]);
+    });
+
+    await service.dispose();
+  });
+
+  it("Windows 路径按 win32 边界识别仓库后代而不误收同名前缀", () => {
+    expect(
+      isPathInsideWatchRoot("C:\\repo", "C:\\repo\\packages\\app", "win32")
+    ).toBe(true);
+    expect(
+      isPathInsideWatchRoot("C:\\repo", "C:\\repository\\app", "win32")
+    ).toBe(false);
+    expect(isPathInsideWatchRoot("C:\\repo", "D:\\repo\\app", "win32")).toBe(
+      false
+    );
+  });
+
+  it("父 watcher 的嵌套 worktree 事件路由到最具体订阅根", async () => {
+    const watchers: FakeWatcher[] = [];
+    const worktreeSignatures = new Map([
+      ["/repo", "parent:0"],
+      ["/repo/.worktrees/feat", "nested:0"],
+    ]);
+    const service = createGitWatchService({
+      computeHeadSignature: async () => "head",
+      computeRefsSignature: async () => "refs",
+      computeRepoStateSignature: async () => "state",
+      computeWorktreeSignature: async (root) =>
+        worktreeSignatures.get(root) ?? "missing",
+      fsWatch: () => {
+        const watcher = new FakeWatcher();
+        watchers.push(watcher);
+        return watcher;
+      },
+      resolveRepoAnchors: async () => null,
+    });
+    const parentEvents: GitChangeEvent[] = [];
+    const nestedEvents: GitChangeEvent[] = [];
+    service.watch("/repo", (event) => parentEvents.push(event));
+    service.watch("/repo/.worktrees/feat", (event) => nestedEvents.push(event));
+    await vi.runOnlyPendingTimersAsync();
+
+    worktreeSignatures.set("/repo/.worktrees/feat", "nested:1");
+    watchers[0]?.emit("change", "change", ".worktrees/feat/a.txt");
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(parentEvents).toEqual([]);
+    expect(nestedEvents).toEqual([
+      { changeKind: "worktree", gitRoot: "/repo/.worktrees/feat" },
+    ]);
+    await service.dispose();
+  });
+
+  it("嵌套 Git 根事件同时刷新父仓与最具体子仓", async () => {
+    const watchers: FakeWatcher[] = [];
+    const worktreeSignatures = new Map([
+      ["/repo", "parent:0"],
+      ["/repo/submodule", "nested:0"],
+    ]);
+    const service = createGitWatchService({
+      computeHeadSignature: async () => "head",
+      computeRefsSignature: async () => "refs",
+      computeRepoStateSignature: async () => "state",
+      computeWorktreeSignature: async (root) =>
+        worktreeSignatures.get(root) ?? "missing",
+      fsWatch: () => {
+        const watcher = new FakeWatcher();
+        watchers.push(watcher);
+        return watcher;
+      },
+      resolveRepoAnchors: async () => null,
+    });
+    const parentEvents: GitChangeEvent[] = [];
+    const nestedEvents: GitChangeEvent[] = [];
+    service.watch("/repo", (event) => parentEvents.push(event));
+    service.watch("/repo/submodule", (event) => nestedEvents.push(event));
+    await vi.runOnlyPendingTimersAsync();
+
+    worktreeSignatures.set("/repo", "parent:1");
+    worktreeSignatures.set("/repo/submodule", "nested:1");
+    watchers[0]?.emit("change", "change", "submodule/a.txt");
+    await vi.advanceTimersByTimeAsync(400);
+
+    expect(parentEvents).toEqual([
+      { changeKind: "worktree", gitRoot: "/repo" },
+    ]);
+    expect(nestedEvents).toEqual([
+      { changeKind: "worktree", gitRoot: "/repo/submodule" },
+    ]);
+    await service.dispose();
+  });
+
+  it("agent watcher 重建失败不外逸并按冷却窗口受控重试", async () => {
+    const rec = makeRecorder();
+    const watcher = new FakeWatcher();
+    const fsWatch = vi
+      .fn()
+      .mockReturnValueOnce(watcher)
+      .mockImplementation(() => {
+        throw new Error("recreate failed");
+      });
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch,
+      resolveRepoAnchors: async () => null,
+    });
+    service.watch("/repo", () => undefined);
+    await vi.runOnlyPendingTimersAsync();
+
+    expect(() =>
+      watcher.emit("error", new Error("watcher failed"))
+    ).not.toThrow();
+    expect(fsWatch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fsWatch).toHaveBeenCalledTimes(3);
+
+    await service.dispose();
+  });
+
+  it("agent watcher 首次创建失败仍注册订阅并按冷却窗口恢复", async () => {
+    const recoveredWatcher = new FakeWatcher();
+    const fsWatch = vi
+      .fn()
+      .mockImplementationOnce(() => {
+        throw new Error("EMFILE");
+      })
+      .mockReturnValue(recoveredWatcher);
+    const service = createGitWatchService({
+      ...bindRecorder(makeRecorder()),
+      fsWatch,
+      resolveRepoAnchors: async () => null,
+    });
+
+    expect(() => service.watch("/repo", () => undefined)).not.toThrow();
+    expect(service.activeRoots()).toEqual(["/repo"]);
+    expect(fsWatch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(4999);
+    expect(fsWatch).toHaveBeenCalledTimes(1);
+    await vi.advanceTimersByTimeAsync(1);
+    expect(fsWatch).toHaveBeenCalledTimes(2);
+
+    await service.dispose();
+  });
+
+  it("agent watcher 重建成功后立即再失败仍受冷却窗口限制", async () => {
+    const rec = makeRecorder();
+    const watchers: FakeWatcher[] = [];
+    const fsWatch = vi.fn(() => {
+      const watcher = new FakeWatcher();
+      watchers.push(watcher);
+      return watcher;
+    });
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch,
+      resolveRepoAnchors: async () => null,
+    });
+    service.watch("/repo", () => undefined);
+    await vi.runOnlyPendingTimersAsync();
+
+    watchers[0]?.emit("error", new Error("first watcher failed"));
+    expect(fsWatch).toHaveBeenCalledTimes(2);
+    watchers[1]?.emit("error", new Error("replacement failed immediately"));
+    expect(fsWatch).toHaveBeenCalledTimes(2);
+
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fsWatch).toHaveBeenCalledTimes(3);
+    await service.dispose();
+  });
+
+  it("dispose 等待在飞刷新且旧代完成后不再广播", async () => {
+    const watcher = new FakeWatcher();
+    const rec = makeRecorder();
+    let worktreeCalls = 0;
+    let releaseRefresh: () => void = () => undefined;
+    const refreshGate = new Promise<void>((resolve) => {
+      releaseRefresh = resolve;
+    });
+    const events: GitChangeEvent[] = [];
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      computeWorktreeSignature: async () => {
+        worktreeCalls += 1;
+        if (worktreeCalls > 1) {
+          await refreshGate;
+        }
+        return `worktree:${worktreeCalls}`;
+      },
+      fsWatch: () => watcher,
+      resolveRepoAnchors: async () => null,
+    });
+    service.watch("/repo", (event) => events.push(event));
+    for (let index = 0; index < 8; index += 1) {
+      await Promise.resolve();
+    }
+    expect(worktreeCalls).toBe(1);
+
+    watcher.emit("change", "modify", "src/a.ts");
+    await vi.advanceTimersByTimeAsync(400);
+    expect(worktreeCalls).toBe(2);
+    let disposed = false;
+    const disposal = service.dispose().then(() => {
+      disposed = true;
+    });
+    await Promise.resolve();
+    expect(disposed).toBe(false);
+
+    releaseRefresh();
+    await disposal;
+    expect(events).toEqual([]);
+  });
+
   it("pulse 对 baseline 未完成的 gitRoot 是 no-op", async () => {
     const fakeWatcher = new FakeWatcher();
     let resolveBaseline: () => void = () => undefined;
@@ -532,6 +930,7 @@ describe("createGitWatchService", () => {
         return rec.worktreeSig;
       },
       fsWatch: () => fakeWatcher,
+      resolveRepoAnchors: async () => null,
     });
     const events: GitChangeEvent[] = [];
     service.watch("/repo", (e) => events.push(e));
@@ -628,6 +1027,7 @@ describe("createGitWatchService", () => {
       computeWorktreeSignature,
       fsWatch: () => fakeWatcher,
       pollMs: 60_000,
+      resolveRepoAnchors: async () => null,
     });
     const events: GitChangeEvent[] = [];
     service.watch("/repo", (e) => events.push(e));
@@ -659,6 +1059,42 @@ describe("createGitWatchService", () => {
     // 广播顺序与签名轮次一致：两轮都是 worktree 变化
     expect(events.map((e) => e.changeKind)).toEqual(["worktree", "worktree"]);
     await service.dispose();
+  });
+
+  it("dispose 不等待忽略 signal 的签名替身，并中止当前代际", async () => {
+    const fakeWatcher = new FakeWatcher();
+    let round = 0;
+    const stalledSignal: { current: AbortSignal | null } = { current: null };
+    const service = createGitWatchService({
+      computeHeadSignature: async () => "h",
+      computeRefsSignature: async () => "f",
+      computeRepoStateSignature: async (_root, context) => {
+        round += 1;
+        if (round === 1) {
+          return "s0";
+        }
+        stalledSignal.current = context?.signal ?? null;
+        return await new Promise<string>(() => undefined);
+      },
+      computeWorktreeSignature: async () => "w0",
+      fsWatch: () => fakeWatcher,
+      pollMs: 60_000,
+      resolveRepoAnchors: async () => null,
+    });
+    service.watch("/repo", () => undefined);
+    for (let index = 0; index < 8; index += 1) {
+      await Promise.resolve();
+    }
+    expect(round).toBe(1);
+
+    fakeWatcher.emit("change", "modify", "file.ts");
+    vi.advanceTimersByTime(400);
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(round).toBe(2);
+
+    await service.dispose();
+    expect(stalledSignal.current?.aborted).toBe(true);
   });
 
   // Task 2 spec 缺口③:已 modify 文件继续编辑时,porcelain v2 输出不变但 numstat 变化
@@ -713,6 +1149,9 @@ async function watchRealRepoUntilBaseline(
   });
   const unsubscribe = service.watch(gitRoot, listener);
   await promise;
+  // resolveRepoAnchors 的屏障先于 attachToHub 余下同步步骤恢复；让 continuation 完成。
+  await Promise.resolve();
+  await Promise.resolve();
   return { service, unsubscribe };
 }
 describe("createGitWatchService — 真实仓库 refs 验证", () => {
@@ -827,6 +1266,126 @@ describe("createGitWatchService — 真实仓库 refs 验证", () => {
 });
 
 describe("createGitWatchService — repo hub（真实仓库两级拓扑）", () => {
+  it("hub 快照降级时清除旧 refs 表，工作树轮次才允许保留", () => {
+    const oldTable = { entries: [], signature: "old" };
+    const state = { lastRefsTable: oldTable };
+
+    applyRefsSnapshotTable(state, undefined);
+    expect(state.lastRefsTable).toBe(oldTable);
+    applyRefsSnapshotTable(state, null);
+    expect(state.lastRefsTable).toBeNull();
+  });
+
+  it("hub refs 快照失败时由 agent 自算而不是复用旧 refs", async () => {
+    let refsCalls = 0;
+    const fsWatch = vi.fn(() => new FakeWatcher());
+    const events: GitChangeEvent[] = [];
+    const service = createGitWatchService({
+      computeHeadSignature: async () => "head",
+      computeRefsSignature: async () => {
+        refsCalls += 1;
+        if (refsCalls === 2) {
+          throw new Error("temporary refs failure");
+        }
+        return refsCalls === 1 ? "refs:old" : "refs:new";
+      },
+      computeRepoStateSignature: async () => "state",
+      computeWorktreeSignature: async () => "worktree",
+      fsWatch,
+      pollMs: 60_000,
+      resolveRepoAnchors: async () => ({
+        commonDir: "/common",
+        gitDir: "/common/worktrees/repo",
+      }),
+    });
+    service.watch("/repo", (event) => events.push(event));
+    await vi.waitFor(() => expect(fsWatch).toHaveBeenCalledTimes(2));
+
+    service.pulse("/repo");
+    await vi.waitFor(() => {
+      expect(events).toEqual([{ changeKind: "refs", gitRoot: "/repo" }]);
+    });
+    expect(refsCalls).toBe(3);
+
+    await service.dispose();
+  });
+
+  it("dispose 等待 hub 在飞 refs 快照结束", async () => {
+    let refsCalls = 0;
+    let releaseSnapshot: () => void = () => undefined;
+    const snapshotGate = new Promise<void>((resolve) => {
+      releaseSnapshot = resolve;
+    });
+    const fsWatch = vi.fn(() => new FakeWatcher());
+    const service = createGitWatchService({
+      computeHeadSignature: async () => "head",
+      computeRefsSignature: async () => {
+        refsCalls += 1;
+        if (refsCalls > 1) {
+          await snapshotGate;
+        }
+        return `refs:${refsCalls}`;
+      },
+      computeRepoStateSignature: async () => "state",
+      computeWorktreeSignature: async () => "worktree",
+      fsWatch,
+      pollMs: 60_000,
+      resolveRepoAnchors: async () => ({
+        commonDir: "/common",
+        gitDir: "/common/worktrees/repo",
+      }),
+    });
+    service.watch("/repo", () => undefined);
+    await vi.waitFor(() => expect(fsWatch).toHaveBeenCalledTimes(2));
+
+    service.pulse("/repo");
+    await vi.waitFor(() => expect(refsCalls).toBe(2));
+    let disposed = false;
+    const disposal = service.dispose().then(() => {
+      disposed = true;
+    });
+    await Promise.resolve();
+    expect(disposed).toBe(false);
+
+    releaseSnapshot();
+    await disposal;
+    expect(disposed).toBe(true);
+  });
+
+  it("hub watcher 重建失败不从 error listener 外逸", async () => {
+    vi.useFakeTimers();
+    const watchers = [new FakeWatcher(), new FakeWatcher()];
+    const fsWatch = vi
+      .fn()
+      .mockImplementationOnce(() => watchers[0])
+      .mockImplementationOnce(() => watchers[1])
+      .mockImplementation(() => {
+        throw new Error("hub recreate failed");
+      });
+    const rec = makeRecorder();
+    const service = createGitWatchService({
+      ...bindRecorder(rec),
+      fsWatch,
+      pollMs: 60_000,
+      resolveRepoAnchors: async () => ({
+        commonDir: "/common",
+        gitDir: "/common/worktrees/repo",
+      }),
+    });
+    service.watch("/repo", () => undefined);
+    await vi.waitFor(() => expect(fsWatch).toHaveBeenCalledTimes(2));
+
+    expect(() =>
+      watchers[1]?.emit("error", new Error("hub watcher failed"))
+    ).not.toThrow();
+    expect(fsWatch).toHaveBeenCalledTimes(2);
+    await vi.advanceTimersByTimeAsync(5000);
+    expect(fsWatch).toHaveBeenCalledTimes(3);
+
+    await service.dispose();
+    vi.useRealTimers();
+  });
+
   it("linked worktree：元数据只落在主仓 .git 下的 commit 也能广播到 worktree 订阅者", async () => {
     const base = await mkdtemp(join(tmpdir(), "pier-hub-wt-"));
     try {

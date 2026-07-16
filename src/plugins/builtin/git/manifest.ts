@@ -4,6 +4,7 @@ import { GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY } from "./settings.ts";
 // 插件 id 属于插件包自身(与 files 插件对称);宿主侧经 registry entry 的
 // manifest.id 消费,不再从 shared 契约取常量。
 export const GIT_PLUGIN_ID = "pier.git";
+export const GIT_CHANGES_PANEL_ID = "pier.git.changes";
 
 export const GIT_PLUGIN_MANIFEST: PluginManifest = {
   apiVersion: 1,
@@ -36,12 +37,6 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       id: "pier.worktree.prune",
       permissions: ["worktree:read", "worktree:write"],
       title: "Prune Stale Worktrees",
-    },
-    {
-      category: "Git",
-      id: "pier.git.changes.open",
-      permissions: ["panel:open"],
-      title: "Git: Open Changes",
     },
     {
       category: "Git",
@@ -155,9 +150,10 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
   name: "Git",
   panels: [
     {
-      id: "pier.git.changes",
-      permissions: ["panel:register", "panel:open"],
-      title: "Git Changes",
+      component: GIT_CHANGES_PANEL_ID,
+      id: GIT_CHANGES_PANEL_ID,
+      permissions: ["git:read"],
+      title: "Changes",
     },
   ],
   permissions: [
@@ -166,10 +162,10 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     "worktree:write",
     "environment:read",
     "workspace:open",
-    "panel:register",
-    "panel:open",
     "git:read",
     "git:write",
+    "panel:open",
+    "panel:register",
     "ai:invoke",
   ],
   publisher: "Pier",

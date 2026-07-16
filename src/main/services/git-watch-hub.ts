@@ -1,5 +1,7 @@
 import type { FSWatcher } from "node:fs";
+import { resolve } from "node:path";
 import type { RefsTable } from "./git-refs-table.ts";
+import { normalizeWatchEventPath } from "./git-watch-internals.ts";
 
 /**
  * repo 级监听中枢（v3 拓扑）。每个物理仓库（canonical gitCommonDir）恰好一个：
@@ -16,18 +18,25 @@ export interface RefsSnapshot {
   table?: RefsTable;
 }
 
+type HubRefreshRequest =
+  | { readonly kind: "repository"; readonly snapshot: RefsSnapshot | null }
+  | { readonly kind: "worktree" };
+
 /** watch service 侧的 agent 句柄。hub 只认这三样，不触碰 entry 内部。 */
 export interface HubAgent {
   gitDir: string;
   gitRoot: string;
-  /** 触发一轮 agent refresh；refsSnap 提供时跳过 agent 自己的 refs 计算。 */
-  requestRefresh(refsSnap?: RefsSnapshot): void;
+  /** 仓库刷新携带共享快照或显式 fallback；工作树刷新复用既有 refs。 */
+  requestRefresh(request: HubRefreshRequest): void;
 }
 
-export interface CreateRepoHubOptions {
+interface CreateRepoHubOptions {
   commonDir: string;
   /** 计算本仓库 refs 快照；cwd 用任一注册 agent 的 gitRoot。 */
-  computeRefsSnapshot(cwd: string): Promise<RefsSnapshot>;
+  computeRefsSnapshot(
+    cwd: string,
+    context: { readonly signal: AbortSignal }
+  ): Promise<RefsSnapshot>;
   debounceMs: number;
   fsWatch(path: string, options?: { recursive?: boolean }): FSWatcher;
   isPollActive(): boolean;
@@ -42,6 +51,8 @@ export interface RepoHub {
   detach(agent: HubAgent): void;
   /** repo-wide 刷新：refs 快照算一次 + fan-out 全部 agent（pulse / poll / refs 事件）。 */
   refreshAll(): void;
+  /** 等待当前快照与已合并的尾随轮次结束。 */
+  whenIdle(): Promise<void>;
 }
 
 const WATCHER_RECREATE_COOLDOWN_MS = 5000;
@@ -73,12 +84,15 @@ export function createRepoHub({
 }: CreateRepoHubOptions): RepoHub {
   const agents = new Set<HubAgent>();
   let watcher: FSWatcher | null = null;
+  let recreateTimer: NodeJS.Timeout | null = null;
   let recreateCoolingUntil = 0;
   let debounceTimer: NodeJS.Timeout | null = null;
   let firstEventAt: number | null = null;
   let refreshing = false;
   let rerunRequested = false;
   let disposed = false;
+  let activeRefresh: Promise<void> | null = null;
+  let activeAbortController: AbortController | null = null;
 
   const pollTimer = setInterval(() => {
     if (isPollActive()) {
@@ -95,14 +109,37 @@ export function createRepoHub({
     if (anchor === undefined) {
       return;
     }
-    let snap: RefsSnapshot | undefined;
+    const abortController = new AbortController();
+    activeAbortController = abortController;
+    let snapshot: RefsSnapshot | null = null;
     try {
-      snap = await computeRefsSnapshot(anchor.gitRoot);
+      const pending = computeRefsSnapshot(anchor.gitRoot, {
+        signal: abortController.signal,
+      });
+      let removeAbortListener = (): void => undefined;
+      const aborted = new Promise<never>((_resolve, reject) => {
+        const abort = () => reject(new Error("Git refs refresh aborted"));
+        abortController.signal.addEventListener("abort", abort, { once: true });
+        removeAbortListener = () =>
+          abortController.signal.removeEventListener("abort", abort);
+      });
+      try {
+        snapshot = await Promise.race([pending, aborted]);
+      } finally {
+        removeAbortListener();
+      }
     } catch {
       // refs 快照失败（瞬时 git 故障）：agent 各自降级为自算 refs
+    } finally {
+      if (activeAbortController === abortController) {
+        activeAbortController = null;
+      }
+    }
+    if (disposed) {
+      return;
     }
     for (const agent of agents) {
-      agent.requestRefresh(snap);
+      agent.requestRefresh({ kind: "repository", snapshot });
     }
   }
 
@@ -115,7 +152,7 @@ export function createRepoHub({
       return;
     }
     refreshing = true;
-    runRefreshAllOnce()
+    const operation = runRefreshAllOnce()
       .catch(() => undefined)
       .finally(() => {
         refreshing = false;
@@ -123,7 +160,17 @@ export function createRepoHub({
           rerunRequested = false;
           runRefreshAll();
         }
+        if (activeRefresh === operation) {
+          activeRefresh = null;
+        }
       });
+    activeRefresh = operation;
+  }
+
+  async function whenIdle(): Promise<void> {
+    while (activeRefresh !== null) {
+      await activeRefresh;
+    }
   }
 
   /** 与 agent 侧同参的 debounce + max-wait：突发元数据事件合并为一轮 refreshAll。 */
@@ -156,10 +203,10 @@ export function createRepoHub({
     if (inner.length > 0 && isNoiseEvent(inner)) {
       return;
     }
-    const gitDir = `${commonDir}/worktrees/${name}`;
+    const gitDir = resolve(commonDir, "worktrees", name);
     for (const agent of agents) {
       if (agent.gitDir === gitDir) {
-        agent.requestRefresh();
+        agent.requestRefresh({ kind: "worktree" });
         return;
       }
     }
@@ -177,7 +224,7 @@ export function createRepoHub({
       scheduleRefreshAll();
       return;
     }
-    const relPath = rawPath.split("\\").join("/");
+    const relPath = normalizeWatchEventPath(rawPath);
     if (isNoiseEvent(relPath)) {
       return;
     }
@@ -188,23 +235,47 @@ export function createRepoHub({
     scheduleRefreshAll();
   }
 
+  function scheduleWatcherRecreate(): void {
+    if (disposed || recreateTimer !== null) {
+      return;
+    }
+    const delay = Math.max(0, recreateCoolingUntil - Date.now());
+    recreateTimer = setTimeout(() => {
+      recreateTimer = null;
+      attachWatcher();
+    }, delay);
+  }
+
   function attachWatcher(): void {
-    watcher = fsWatch(commonDir, { recursive: true });
-    watcher.on("change", (_event, filename) => {
+    if (disposed) {
+      return;
+    }
+    let nextWatcher: FSWatcher;
+    try {
+      nextWatcher = fsWatch(commonDir, { recursive: true });
+    } catch {
+      watcher = null;
+      recreateCoolingUntil = Date.now() + WATCHER_RECREATE_COOLDOWN_MS;
+      scheduleWatcherRecreate();
+      return;
+    }
+    watcher = nextWatcher;
+    recreateCoolingUntil = 0;
+    nextWatcher.on("change", (_event, filename) => {
       routeEvent(typeof filename === "string" ? filename : null);
     });
-    watcher.on("error", () => {
-      const now = Date.now();
-      if (now < recreateCoolingUntil) {
-        return; // 冷却期内不重建；靠 poll 兜底
+    nextWatcher.on("error", () => {
+      if (watcher !== nextWatcher) {
+        return;
       }
-      recreateCoolingUntil = now + WATCHER_RECREATE_COOLDOWN_MS;
       try {
-        watcher?.close();
+        nextWatcher.close();
       } catch {
         // watcher 已 dead
       }
-      attachWatcher();
+      watcher = null;
+      recreateCoolingUntil = Date.now() + WATCHER_RECREATE_COOLDOWN_MS;
+      scheduleWatcherRecreate();
     });
   }
 
@@ -220,7 +291,10 @@ export function createRepoHub({
         return;
       }
       disposed = true;
+      activeAbortController?.abort();
+      activeAbortController = null;
       clearTimeout(debounceTimer ?? undefined);
+      clearTimeout(recreateTimer ?? undefined);
       clearInterval(pollTimer);
       try {
         watcher?.close();
@@ -230,5 +304,6 @@ export function createRepoHub({
       onDispose();
     },
     refreshAll: runRefreshAll,
+    whenIdle,
   };
 }

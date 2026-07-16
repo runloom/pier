@@ -126,6 +126,7 @@ describe("MarkdownPreview", () => {
         runtime={runtime}
         searchLabels={{
           close: "Close",
+          matchAnnouncement: "Matches: {{count}}",
           next: "Next match",
           noMatches: "No matches",
           placeholder: "Find",
@@ -143,6 +144,7 @@ describe("MarkdownPreview", () => {
         runtime={runtime}
         searchLabels={{
           close: "Close",
+          matchAnnouncement: "Matches: {{count}}",
           next: "Next match",
           noMatches: "No matches",
           placeholder: "Find",

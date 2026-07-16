@@ -213,6 +213,14 @@ export function CodeMirrorEditor({
             selectAll: searchLabels?.selectAll ?? "Select all matches",
             wholeWord: searchLabels?.wholeWord ?? "Whole word",
           }}
+          matchAnnouncement={
+            searchState.total <= 0
+              ? (searchLabels?.noMatches ?? "No matches")
+              : (searchLabels?.matchAnnouncement.replace(
+                  "{{count}}",
+                  matchText
+                ) ?? `Matches: ${matchText}`)
+          }
           matchText={matchText}
           onChange={handleSearchChange}
           onClose={closeSearch}

@@ -63,7 +63,6 @@ const INSTANCE_ID_COLLISION_RE = /instance id collision/;
 const PANEL_REGISTER_CAPABILITY_RE = /panel:register/;
 const PANEL_NOT_DECLARED_RE = /not declared:.*panel:terminal/i;
 const TARGET_GROUP_B_MISMATCH_RE = /target group.*group-b/i;
-const TARGET_GROUP_MISSING_RE = /target group.*missing-group/i;
 const ADD_PANEL_FAILED_RE = /addPanel failed/i;
 
 const terminalPanelContext: PanelContext = {
@@ -421,12 +420,13 @@ describe("plugin panel instances", () => {
     const context = createRendererPluginContext(entryWithPanel());
     context.panels.register(testPanelRegistration);
 
-    context.panels.openInstance({
+    const result = context.panels.openInstance({
       componentId: "pier.files.filePanel",
       instanceId: "pier.files.untitled:1",
       title: "Untitled-1.md",
     });
 
+    expect(result).toEqual({ kind: "opened" });
     expect(api.addPanel).toHaveBeenCalledWith(
       expect.not.objectContaining({ position: expect.anything() })
     );
@@ -768,7 +768,7 @@ describe("plugin panel instances", () => {
     const context = createRendererPluginContext(entryWithPanel());
     context.panels.register(testPanelRegistration);
 
-    context.panels.openInstance({
+    const result = context.panels.openInstance({
       componentId: "pier.files.filePanel",
       dropUnpinnedInstances: true,
       instanceId: "new-preview",
@@ -777,16 +777,12 @@ describe("plugin panel instances", () => {
       title: "New.md",
     });
 
+    expect(result).toEqual({ kind: "targetGroupMissing" });
     expect(previewA.api.close).not.toHaveBeenCalled();
     expect(previewB.api.close).not.toHaveBeenCalled();
-    expect(groups[0]?.panels.map((panel) => panel.id)).toEqual([
-      "preview-a",
-      "new-preview",
-    ]);
+    expect(groups[0]?.panels.map((panel) => panel.id)).toEqual(["preview-a"]);
     expect(groups[1]?.panels.map((panel) => panel.id)).toEqual(["preview-b"]);
-    expect(api.addPanel).toHaveBeenCalledWith(
-      expect.not.objectContaining({ position: expect.anything() })
-    );
+    expect(api.addPanel).not.toHaveBeenCalled();
   });
 
   it("does not drop previews globally when no active group exists", () => {
@@ -876,7 +872,7 @@ describe("plugin panel instances", () => {
     const context = createRendererPluginContext(entryWithPanel());
     context.panels.register(testPanelRegistration);
 
-    expect(() =>
+    expect(
       context.panels.openInstance({
         componentId: "pier.files.filePanel",
         instanceId: "shared-file-instance",
@@ -884,7 +880,7 @@ describe("plugin panel instances", () => {
         targetGroupId: "missing-group",
         title: "Should not apply",
       })
-    ).toThrow(TARGET_GROUP_MISSING_RE);
+    ).toEqual({ kind: "targetGroupMissing" });
 
     expect(existing.api.updateParameters).not.toHaveBeenCalled();
     expect(existing.api.setTitle).not.toHaveBeenCalled();

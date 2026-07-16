@@ -6,7 +6,6 @@ import {
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { readTerminalPanelLifecycleDebug } from "@/panel-kits/terminal/terminal-lifecycle-debug.ts";
 import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-viewport.ts";
-import { usePanelResourceStore } from "@/stores/panel-resource.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {
@@ -20,7 +19,6 @@ export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {
     };
   }
   const activePanelId = api.activePanel?.id ?? null;
-  const panelResources = usePanelResourceStore.getState().panels;
   return {
     activePanelId,
     desiredHostSnapshot: getLastTerminalHostSnapshot() ?? undefined,
@@ -34,7 +32,7 @@ export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {
       hasAnchor: hasRegisteredTerminalAnchor(panel.id),
       isActivePanel: panel.id === activePanelId,
       panelId: panel.id,
-      resourceMode: panelResources[panel.id]?.mode,
+      resourceMode: panel.api.isVisible ? "visible" : "warmHidden",
       terminalLifecycle: readTerminalPanelLifecycleDebug(panel.id),
     })),
     viewportFrame: readTerminalViewportFrame(),

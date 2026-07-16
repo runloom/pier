@@ -40,7 +40,7 @@
     "test": "vitest",
     "test:unit": "vitest run tests/unit",
     "test:component": "vitest run tests/component",
-    "test:integration": "vitest run tests/integration",
+    "test:integration": "vitest run tests/integration --no-file-parallelism",
     "test:native": "swift test --package-path native",
     "pretest:e2e": "pnpm plugin:codex:pack",
     "test:e2e": "playwright test --config playwright.config.ts",

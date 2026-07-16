@@ -158,11 +158,7 @@ export interface TerminalDebugRendererPanelSnapshot {
   hasAnchor: boolean;
   isActivePanel: boolean;
   panelId: string;
-  resourceMode?:
-    | "coldSuspendedCandidate"
-    | "visible"
-    | "warmHidden"
-    | undefined;
+  resourceMode?: "visible" | "warmHidden" | undefined;
   terminalLifecycle?:
     | TerminalDebugRendererTerminalLifecycleSnapshot
     | undefined;

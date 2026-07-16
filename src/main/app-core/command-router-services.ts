@@ -18,10 +18,12 @@ import type { AppUpdateService } from "../services/app-updates/app-update-servic
 import type { FileDraftsService } from "../services/file-drafts-service.ts";
 import type { FileService } from "../services/file-service.ts";
 import type { FileWatchService } from "../services/file-watch-service.ts";
+import type { GitReviewService } from "../services/git-review/git-review-service.ts";
 import type { GitService } from "../services/git-service.ts";
 import type { GitWatchService } from "../services/git-watch-service.ts";
 import type { LocalEnvironmentService } from "../services/local-environments-service.ts";
 import type { ManagedPluginInstallService } from "../services/managed-plugins/install-service.ts";
+import type { PanelContextResolutionControl } from "../services/panel-context-resolver.ts";
 import type { PluginService } from "../services/plugin-service.ts";
 import type { PluginSettingsService } from "../services/plugin-settings-service.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
@@ -47,13 +49,17 @@ export interface PierCoreServices {
   files?: FileService;
   fileWatch?: FileWatchService;
   git: GitService;
+  gitReview: GitReviewService;
   gitWatch: GitWatchService;
   localEnvironments: LocalEnvironmentService;
   managedPlugins: ManagedPluginInstallService;
   panelContexts: {
     listRecent(): Promise<PanelContext[]>;
     recordRecent(context: PanelContext): Promise<void>;
-    resolveForPath(path: string): Promise<PanelContext>;
+    resolveForPath(
+      path: string,
+      control?: PanelContextResolutionControl
+    ): Promise<PanelContext>;
   };
   pluginDisableTransitions: PluginDisableTransitionCoordinator;
   pluginSettings: PluginSettingsService;

@@ -18,9 +18,9 @@ import {
 import {
   activeCwdOrMessage,
   commandTitle,
-  confirmOpenReview,
   disabledReasonForActiveGit,
   enabledForActiveGit,
+  showConflictDetails,
   showError,
   showInfo,
   showLoading,
@@ -342,7 +342,7 @@ async function runMerge(
     );
   } else if (result.kind === "conflict") {
     loading.dismiss();
-    await confirmOpenReview(
+    await showConflictDetails(
       context,
       pluginText(context, "gitMergeConflictTitle", "Merge Conflicts"),
       pluginText(
@@ -398,7 +398,7 @@ async function runRebase(
     );
   } else if (result.kind === "conflict") {
     loading.dismiss();
-    await confirmOpenReview(
+    await showConflictDetails(
       context,
       pluginText(context, "gitRebaseConflictTitle", "Rebase Conflicts"),
       pluginText(

@@ -16,8 +16,10 @@ import {
 } from "@main/app-core/command-router.ts";
 import { PluginDisableTransitionCoordinator } from "@main/app-core/plugin-disable-transition.ts";
 import { execGit } from "@main/services/git-exec.ts";
+import { GitReviewService } from "@main/services/git-review/git-review-service.ts";
 import { createGitService } from "@main/services/git-service.ts";
 import { createGitWatchService } from "@main/services/git-watch-service.ts";
+import { createPanelContextService } from "@main/services/panel-context-service.ts";
 import { createWorktreeService } from "@main/services/worktree-service.ts";
 import type { PierCommand } from "@shared/contracts/commands.ts";
 import {
@@ -25,7 +27,7 @@ import {
   type PierCapability,
   type PierClientKind,
 } from "@shared/contracts/permissions.ts";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 
 const NOTHING_TO_COMMIT_RE = /clean|nothing/;
 const SAFE_BRANCH_NAME_RE = /must not start with/;
@@ -66,6 +68,7 @@ function makeServices(): PierCoreServices {
     ai: trap as never,
     commandPaletteMru: trap as never,
     git: createGitService(),
+    gitReview: trap as never,
     gitWatch: createGitWatchService(),
     panelContexts: trap as never,
     localEnvironments: trap as never,
@@ -191,6 +194,63 @@ describe("git IPC 端到端(命令路由 + capability 守门)", () => {
     if (!result.ok) {
       expect(result.error.code).toBe("permission_denied");
     }
+  });
+
+  it("非桌面客户端即使有 git:read 也不能进入 Git Review 路由", async () => {
+    const clients = createClientRegistry();
+    clients.register(clientOf("mcp-local"));
+    const router = createCommandRouter({ clients, services: makeServices() });
+
+    const result = await router.execute(
+      envelope("mcp-local-1", {
+        request: {
+          operationId: "c4883f41-047b-4f05-b858-9207eb0617d0",
+          source: { contextId: "context-1", gitRootPath: "/repo" },
+        },
+        type: "git.getReviewIndex",
+      })
+    );
+
+    expect(result.ok).toBe(false);
+    if (!result.ok) {
+      expect(result.error.code).toBe("permission_denied");
+    }
+  });
+
+  it("Git Review 经 router 与 service 复核 canonical context，跨 context 请求不读取索引", async () => {
+    const repo = await makeRepo();
+    const clients = createClientRegistry();
+    clients.register(clientOf("desktop-renderer"));
+    const read = vi.fn();
+    const services = {
+      ...makeServices(),
+      gitReview: new GitReviewService({
+        indexReader: { read, resolve: vi.fn() },
+      }),
+      panelContexts: createPanelContextService(),
+    };
+    const router = createCommandRouter({ clients, services });
+
+    const result = await router.execute(
+      envelope("desktop-renderer-1", {
+        request: {
+          operationId: "c4883f41-047b-4f05-b858-9207eb0617d0",
+          source: { contextId: "context:forged", gitRootPath: repo },
+        },
+        type: "git.getReviewIndex",
+      }),
+      {
+        navigationGeneration: 0,
+        webContentsId: 7,
+        windowRecordId: "record-1",
+      }
+    );
+
+    expect(result).toMatchObject({
+      data: { kind: "error", reason: "invalidSource", retryable: false },
+      ok: true,
+    });
+    expect(read).not.toHaveBeenCalled();
   });
 
   it("git CLI 失败(空仓库无变更 commit)经 GitExecError → git_error 错误码 + stderr 透传", async () => {

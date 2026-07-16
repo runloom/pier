@@ -1,44 +1,113 @@
 import { createHash } from "node:crypto";
-import { access, lstat, readFile, realpath } from "node:fs/promises";
+import { lstat } from "node:fs/promises";
 import { join } from "node:path";
 import { execGit } from "./git-exec.ts";
 import { parseGitStatus } from "./git-parsers.ts";
+import { parseGitSinglePathOutput } from "./git-path-output.ts";
 import { fetchRefsTable } from "./git-refs-table.ts";
+import {
+  runChangedFileStatBatch,
+  runChangedFileStatProbe,
+  watchAccess,
+  watchLstat,
+  watchReadText,
+  watchRealpath,
+} from "./git-watch-file-system.ts";
 import type { RefsSnapshot } from "./git-watch-hub.ts";
+import { GitWatchPathCache } from "./git-watch-path-cache.ts";
 
 /**
  * numstat 瞬时失败（如 index.lock）时写入签名的哨兵段。
- * 与任何真实 numstat 输出（含空串）都不同：从成功态进入失败态会广播一次，
- * 恢复成功后再广播一次真实值；连续失败之间签名一致不重复广播。
+ * 与任何真实 numstat 输出（含空串）都不同；快照同时标为不可靠，
+ * 因此每次非基线刷新都会保守广播，恢复成功后再回到正常签名去重。
  */
 const NUMSTAT_ERROR_SENTINEL = "numstat-unavailable";
 
-/** 变更文件 stat 信号的文件数上限：超大脏树截断，保每轮签名成本有界。 */
-const CONTENT_SIGNAL_MAX_FILES = 5000;
+/** 文件系统探测不得耗尽 libuv 队列；迟到操作也最多保留这一批。 */
+const CONTENT_SIGNAL_STAT_CONCURRENCY = 16;
+/** 网络盘或故障文件系统不能无限阻塞 watcher 刷新与 dispose。 */
+const CONTENT_SIGNAL_STAT_TIMEOUT_MS = 1500;
+const STAT_SIGNAL_UNAVAILABLE = "stat-signal-unavailable";
+const GIT_WATCH_COMMAND_TIMEOUT_MS = 5000;
+
+interface GitWatchComputationContext {
+  readonly signal: AbortSignal;
+}
+
+interface ChangedFilesStatSignalOptions {
+  readonly signal?: AbortSignal;
+  readonly stat?: (
+    path: string
+  ) => Promise<{ readonly mtimeMs: number; readonly size: number }>;
+  readonly timeoutMs?: number;
+}
 
 /**
  * 变更文件的内容变化信号。status/numstat 文本对"同一文件再次改写且增删行数
  * 不变"不敏感（porcelain 不含工作树内容 hash），单靠它们会漏播 diff 内容变化，
  * 选中文件的 diff 预览就会陈旧。按 status 报告的路径逐个 lstat，取 mtimeMs+size；
- * stat 失败（已删除/瞬时竞态）记确定性哨兵，下一轮自然收敛。
+ * 单文件 stat 失败（已删除/瞬时竞态）记路径级哨兵；整批超时或容量不可用时
+ * 返回全局哨兵，并由快照标记为不可靠。
  * porcelain 路径相对 repo 顶层，而 gitRoot 即订阅的顶层路径，可直接 join。
  */
-async function changedFilesStatSignal(
+export async function changedFilesStatSignal(
   gitRoot: string,
-  statusOut: string
+  statusOut: string,
+  options: ChangedFilesStatSignalOptions = {}
 ): Promise<string> {
   const { files } = parseGitStatus(statusOut);
-  const capped = files.slice(0, CONTENT_SIGNAL_MAX_FILES);
-  const parts = await Promise.all(
-    capped.map(async (file) => {
-      try {
-        const stat = await lstat(join(gitRoot, file.path));
-        return `${file.path}\u0001${stat.mtimeMs}\u0001${stat.size}`;
-      } catch {
-        return `${file.path}\u0001missing`;
-      }
-    })
+  if (files.length === 0) {
+    return "";
+  }
+  const parts = new Array<string>(files.length);
+  const stat = options.stat ?? lstat;
+  let cursor = 0;
+  let stopped = options.signal?.aborted === true;
+  const outcome = await runChangedFileStatBatch(
+    gitRoot,
+    stat,
+    async () => {
+      await Promise.all(
+        Array.from(
+          {
+            length: Math.min(CONTENT_SIGNAL_STAT_CONCURRENCY, files.length),
+          },
+          async () => {
+            while (!stopped) {
+              const index = cursor;
+              cursor += 1;
+              const file = files[index];
+              if (!file) {
+                return;
+              }
+              const probe = runChangedFileStatProbe(() =>
+                stat(join(gitRoot, file.path))
+              );
+              if (!probe) {
+                stopped = true;
+                throw new Error(STAT_SIGNAL_UNAVAILABLE);
+              }
+              try {
+                const fileStat = await probe;
+                parts[index] =
+                  `${file.path}\u0001${fileStat.mtimeMs}\u0001${fileStat.size}`;
+              } catch {
+                parts[index] = `${file.path}\u0001missing`;
+              }
+            }
+          }
+        )
+      );
+    },
+    {
+      ...(options.signal === undefined ? {} : { signal: options.signal }),
+      timeoutMs: options.timeoutMs ?? CONTENT_SIGNAL_STAT_TIMEOUT_MS,
+    }
   );
+  if (outcome === "unavailable") {
+    stopped = true;
+    return STAT_SIGNAL_UNAVAILABLE;
+  }
   return parts.join("\u0002");
 }
 
@@ -49,27 +118,15 @@ export interface RawWorktreeSnapshot {
   unstagedNumstat: string;
 }
 
-/**
- * 默认 defaultWorktreeSignature 路径每轮把原始输出写这里，供 refresh 传给 getStatus 复用，
- * 消除"一次变化重复 spawn status/numstat"。仅默认实现填充；注入替身时为空。
- * 模块级：同一 gitRoot 只有一个默认签名计算路径在跑（refresh 已串行化，A6）。
- */
-const lastRawByRoot = new Map<string, RawWorktreeSnapshot>();
-
-/** refresh 取用后消费掉快照，避免陈旧数据被后续（非本轮）getStatus 误用。 */
-export function takeRawWorktreeSnapshot(
-  gitRoot: string
-): RawWorktreeSnapshot | undefined {
-  const snapshot = lastRawByRoot.get(gitRoot);
-  if (snapshot !== undefined) {
-    lastRawByRoot.delete(gitRoot);
-  }
-  return snapshot;
+export interface WorktreeSnapshot {
+  readonly raw?: RawWorktreeSnapshot;
+  readonly reliable: boolean;
+  readonly signature: string;
 }
 
 type WorktreeExecGit = (
   args: readonly string[],
-  options: { cwd: string }
+  options: { cwd: string; signal?: AbortSignal; timeoutMs?: number }
 ) => Promise<string>;
 
 /**
@@ -77,59 +134,79 @@ type WorktreeExecGit = (
  * 变更文件 stat 信号(mtimeMs+size)拼接后 hash。stat 信号补齐 porcelain 的内容盲区
  *（原 spec 缺口③）：已修改文件继续编辑但增删行数不变时，status/numstat 全文不变，
  * 唯 mtime/size 变——否则 diff 预览漏更新。
- * status 失败仍整体返回 ""(保持旧语义)；numstat 瞬时失败写哨兵段(A4)——失败与任何真实输出
- * 都不同，从成功态进入失败态广播一次、恢复后再广播真实值，连续失败之间不重复广播。
+ * status、任一 numstat 或整批 stat 信号不可用时，快照标记 `reliable=false`。
+ * 基线只记录该结果；后续每次刷新都保守广播，避免固定哨兵让更新永久静默。
+ * 恢复成功后重新使用真实签名去重。
  *
- * status 带 --branch(A7)：输出成为 getStatus 所需严格超集，原始三段写入 lastRawByRoot
- * 供本轮 getStatus 复用(仅默认 exec 路径填充；注入 exec 时不写)。
+ * status 带 --branch(A7)：输出成为 getStatus 所需严格超集；签名和原始三段由同一
+ * 返回值绑定，避免同一 gitRoot 退订后立即重订时跨代共享邮箱串线。
  */
-export async function defaultWorktreeSignature(
+export async function defaultWorktreeSnapshot(
   gitRoot: string,
-  exec: WorktreeExecGit = execGit
-): Promise<string> {
-  const isDefaultExec = exec === execGit;
+  exec: WorktreeExecGit = execGit,
+  context?: GitWatchComputationContext
+): Promise<WorktreeSnapshot> {
   let statusOut: string;
   try {
     statusOut = await exec(["status", "--porcelain=v2", "--branch", "-z"], {
       cwd: gitRoot,
+      timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+      ...(context === undefined ? {} : { signal: context.signal }),
     });
   } catch {
-    lastRawByRoot.delete(gitRoot);
-    return "";
+    return { reliable: false, signature: "" };
   }
   let unstagedFailed = false;
   let stagedFailed = false;
   const [unstaged, staged, statSignal] = await Promise.all([
-    exec(["diff", "--numstat", "-z", "--no-renames"], { cwd: gitRoot }).catch(
-      () => {
-        unstagedFailed = true;
-        return NUMSTAT_ERROR_SENTINEL;
-      }
-    ),
+    exec(["diff", "--numstat", "-z", "--no-renames"], {
+      cwd: gitRoot,
+      timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+      ...(context === undefined ? {} : { signal: context.signal }),
+    }).catch(() => {
+      unstagedFailed = true;
+      return NUMSTAT_ERROR_SENTINEL;
+    }),
     exec(["diff", "--cached", "--numstat", "-z", "--no-renames"], {
       cwd: gitRoot,
+      timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+      ...(context === undefined ? {} : { signal: context.signal }),
     }).catch(() => {
       stagedFailed = true;
       return NUMSTAT_ERROR_SENTINEL;
     }),
-    // 解析/stat 失败不阻塞签名：写确定性哨兵，退化为旧行为（仅 status/numstat 信号）
-    changedFilesStatSignal(gitRoot, statusOut).catch(
-      () => "stat-signal-unavailable"
-    ),
+    // 解析/整批 stat 失败不阻塞签名：写哨兵并把快照标为不可靠。
+    changedFilesStatSignal(gitRoot, statusOut, {
+      ...(context === undefined ? {} : { signal: context.signal }),
+    }).catch(() => STAT_SIGNAL_UNAVAILABLE),
   ]);
-  // 只有默认 exec 路径、且三段都是真实输出时，缓存原始快照供 getStatus 复用。
-  if (isDefaultExec && !(unstagedFailed || stagedFailed)) {
-    lastRawByRoot.set(gitRoot, {
-      stagedNumstat: staged,
-      statusOut,
-      unstagedNumstat: unstaged,
-    });
-  } else {
-    lastRawByRoot.delete(gitRoot);
-  }
-  return createHash("sha256")
-    .update(`${statusOut}\0${unstaged}\0${staged}\0${statSignal}`)
-    .digest("hex");
+  const raw =
+    unstagedFailed || stagedFailed
+      ? undefined
+      : {
+          stagedNumstat: staged,
+          statusOut,
+          unstagedNumstat: unstaged,
+        };
+  return {
+    reliable:
+      !(unstagedFailed || stagedFailed) &&
+      statSignal !== STAT_SIGNAL_UNAVAILABLE,
+    ...(raw === undefined ? {} : { raw }),
+    signature: createHash("sha256")
+      .update(`${statusOut}\0${unstaged}\0${staged}\0${statSignal}`)
+      .digest("hex"),
+  };
+}
+
+export async function defaultWorktreeSignature(
+  gitRoot: string,
+  execOrContext: WorktreeExecGit | GitWatchComputationContext = execGit
+): Promise<string> {
+  const exec = typeof execOrContext === "function" ? execOrContext : execGit;
+  const context =
+    typeof execOrContext === "function" ? undefined : execOrContext;
+  return (await defaultWorktreeSnapshot(gitRoot, exec, context)).signature;
 }
 
 /**
@@ -138,9 +215,17 @@ export async function defaultWorktreeSignature(
  * 覆盖 fetch/push/prune/stash 纯 ref 操作、分支增删、upstream 配置与
  * gone 状态变化、refs/remotes/*​/HEAD 符号指向变化（A3）。
  */
-export async function defaultRefsSignature(gitRoot: string): Promise<string> {
+export async function defaultRefsSignature(
+  gitRoot: string,
+  context?: GitWatchComputationContext
+): Promise<string> {
   const table = await fetchRefsTable(
-    (args, cwd) => execGit(args, { cwd }),
+    (args, cwd) =>
+      execGit(args, {
+        cwd,
+        timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+        ...(context === undefined ? {} : { signal: context.signal }),
+      }),
     gitRoot
   );
   return table === null ? "" : table.signature;
@@ -151,10 +236,16 @@ export async function defaultRefsSignature(gitRoot: string): Promise<string> {
  * （表供 upstreamGone / 默认分支解析 / merged 判定消费，消除重复 spawn）。
  */
 export async function defaultRefsSnapshot(
-  gitRoot: string
+  gitRoot: string,
+  context?: GitWatchComputationContext
 ): Promise<RefsSnapshot> {
   const table = await fetchRefsTable(
-    (args, cwd) => execGit(args, { cwd }),
+    (args, cwd) =>
+      execGit(args, {
+        cwd,
+        timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+        ...(context === undefined ? {} : { signal: context.signal }),
+      }),
     gitRoot
   );
   return table === null
@@ -162,58 +253,133 @@ export async function defaultRefsSnapshot(
     : { signature: table.signature, table };
 }
 
-export async function defaultHeadSignature(gitRoot: string): Promise<string> {
+export async function defaultHeadSignature(
+  gitRoot: string,
+  context?: GitWatchComputationContext
+): Promise<string> {
   let head = "";
   let ref = "";
   try {
-    head = await execGit(["rev-parse", "HEAD"], { cwd: gitRoot });
+    head = await execGit(["rev-parse", "HEAD"], {
+      cwd: gitRoot,
+      timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+      ...(context === undefined ? {} : { signal: context.signal }),
+    });
   } catch {
     // 空仓库无 HEAD
   }
   try {
-    ref = await execGit(["symbolic-ref", "-q", "HEAD"], { cwd: gitRoot });
+    ref = await execGit(["symbolic-ref", "-q", "HEAD"], {
+      cwd: gitRoot,
+      timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+      ...(context === undefined ? {} : { signal: context.signal }),
+    });
   } catch {
     // detached HEAD
   }
   return createHash("sha256").update(`${head}\n${ref}`).digest("hex");
 }
 
-async function fileExistsMark(path: string, mark: string): Promise<string> {
+async function fileExistsMark(
+  path: string,
+  mark: string,
+  context?: GitWatchComputationContext
+): Promise<string> {
   try {
-    await access(path);
+    await watchAccess(path, context);
     return mark;
   } catch {
     return "";
   }
 }
 
-async function readFileTrim(path: string): Promise<string> {
+async function readFileTrim(
+  path: string,
+  context?: GitWatchComputationContext
+): Promise<string> {
   try {
-    return (await readFile(path, "utf8")).trim();
+    return (await watchReadText(path, context)).trim();
   } catch {
     return "";
   }
 }
 
-/**
- * gitDir 解析缓存。gitDir 在 worktree 生命周期内稳定，缓存一次即可。
- * 缓存在模块作用域是有意的：同一 gitRoot 可能被多个 WatchService 实例监听。
- */
-const gitDirCache = new Map<string, string>();
+const PATH_CACHE_MAX_ENTRIES = 128;
 
-async function resolveGitDir(gitRoot: string): Promise<string | null> {
-  const cached = gitDirCache.get(gitRoot);
+const gitDirCache = new GitWatchPathCache<string>(PATH_CACHE_MAX_ENTRIES);
+
+async function gitMarker(
+  gitRoot: string,
+  context?: GitWatchComputationContext
+): Promise<string | null> {
+  try {
+    const stat = await watchLstat(join(gitRoot, ".git"), context);
+    return `${stat.dev}:${stat.ino}:${stat.mtimeMs}:${stat.size}`;
+  } catch {
+    return null;
+  }
+}
+
+async function readPathCache<T>(
+  cache: GitWatchPathCache<T>,
+  gitRoot: string,
+  context?: GitWatchComputationContext
+): Promise<T | undefined> {
+  if (!cache.has(gitRoot)) {
+    return;
+  }
+  const currentMarker = await gitMarker(gitRoot, context);
+  if (currentMarker === null) {
+    cache.delete(gitRoot);
+    return;
+  }
+  return cache.get(gitRoot, currentMarker);
+}
+
+async function writePathCache<T>(
+  cache: GitWatchPathCache<T>,
+  gitRoot: string,
+  value: T,
+  context?: GitWatchComputationContext
+): Promise<void> {
+  const marker = await gitMarker(gitRoot, context);
+  if (marker === null) {
+    return;
+  }
+  cache.set(gitRoot, marker, value);
+}
+
+/** 最后一个 watcher 释放时清除路径身份，避免同路径重建仓库复用旧锚点。 */
+export function invalidateGitWatchSignatureCaches(gitRoot?: string): void {
+  if (gitRoot === undefined) {
+    gitDirCache.clear();
+    repoAnchorsCache.clear();
+    return;
+  }
+  gitDirCache.delete(gitRoot);
+  repoAnchorsCache.delete(gitRoot);
+}
+
+async function resolveGitDir(
+  gitRoot: string,
+  context?: GitWatchComputationContext
+): Promise<string | null> {
+  const cached = await readPathCache(gitDirCache, gitRoot, context);
   if (cached !== undefined) {
     return cached;
   }
   try {
     const out = await execGit(
       ["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
-      { cwd: gitRoot }
+      {
+        cwd: gitRoot,
+        timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+        ...(context === undefined ? {} : { signal: context.signal }),
+      }
     );
-    const gitDir = out.trim();
-    if (gitDir.length > 0) {
-      gitDirCache.set(gitRoot, gitDir);
+    const gitDir = parseGitSinglePathOutput(out);
+    if (gitDir !== null) {
+      await writePathCache(gitDirCache, gitRoot, gitDir, context);
       return gitDir;
     }
     return null;
@@ -223,20 +389,21 @@ async function resolveGitDir(gitRoot: string): Promise<string | null> {
 }
 
 export async function defaultRepoStateSignature(
-  gitRoot: string
+  gitRoot: string,
+  context?: GitWatchComputationContext
 ): Promise<string> {
-  const gitDir = await resolveGitDir(gitRoot);
+  const gitDir = await resolveGitDir(gitRoot, context);
   if (gitDir === null) {
     return "";
   }
   const [merge, cherry, revert, bisect, rebaseMergeStep, rebaseApply] =
     await Promise.all([
-      fileExistsMark(join(gitDir, "MERGE_HEAD"), "M"),
-      fileExistsMark(join(gitDir, "CHERRY_PICK_HEAD"), "C"),
-      fileExistsMark(join(gitDir, "REVERT_HEAD"), "R"),
-      fileExistsMark(join(gitDir, "BISECT_START"), "B"),
-      readFileTrim(join(gitDir, "rebase-merge", "msgnum")),
-      fileExistsMark(join(gitDir, "rebase-apply"), "A"),
+      fileExistsMark(join(gitDir, "MERGE_HEAD"), "M", context),
+      fileExistsMark(join(gitDir, "CHERRY_PICK_HEAD"), "C", context),
+      fileExistsMark(join(gitDir, "REVERT_HEAD"), "R", context),
+      fileExistsMark(join(gitDir, "BISECT_START"), "B", context),
+      readFileTrim(join(gitDir, "rebase-merge", "msgnum"), context),
+      fileExistsMark(join(gitDir, "rebase-apply"), "A", context),
     ]);
   // 用 hash 保签名短小；rebase 步进（msgnum 内容）折进 hash 让每步都触发广播
   return createHash("sha256")
@@ -255,51 +422,58 @@ export interface RepoAnchors {
 }
 
 /** 锚点缓存（worktree 生命周期内稳定）。失败不缓存：瞬时故障下一次重试。 */
-const repoAnchorsCache = new Map<string, RepoAnchors>();
+const repoAnchorsCache = new GitWatchPathCache<RepoAnchors>(
+  PATH_CACHE_MAX_ENTRIES
+);
 
 export async function resolveRepoAnchors(
-  gitRoot: string
+  gitRoot: string,
+  context?: GitWatchComputationContext
 ): Promise<RepoAnchors | null> {
-  const cached = repoAnchorsCache.get(gitRoot);
+  const cached = await readPathCache(repoAnchorsCache, gitRoot, context);
   if (cached !== undefined) {
     return cached;
   }
-  let lines: string[];
+  let rawGitDir: string | null;
+  let rawCommonDir: string | null;
   try {
-    const out = await execGit(
-      [
-        "rev-parse",
-        "--path-format=absolute",
-        "--absolute-git-dir",
-        "--git-common-dir",
-      ],
-      { cwd: gitRoot }
-    );
-    lines = out
-      .split("\n")
-      .map((line) => line.trim())
-      .filter((line) => line.length > 0);
+    const options = {
+      cwd: gitRoot,
+      timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+      ...(context === undefined ? {} : { signal: context.signal }),
+    };
+    const [gitDirOutput, commonDirOutput] = await Promise.all([
+      execGit(
+        ["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
+        options
+      ),
+      execGit(
+        ["rev-parse", "--path-format=absolute", "--git-common-dir"],
+        options
+      ),
+    ]);
+    rawGitDir = parseGitSinglePathOutput(gitDirOutput);
+    rawCommonDir = parseGitSinglePathOutput(commonDirOutput);
   } catch {
     return null;
   }
-  const rawGitDir = lines[0] ?? "";
-  if (rawGitDir.length === 0) {
+  if (rawGitDir === null) {
     return null;
   }
-  const rawCommonDir = lines[1] ?? rawGitDir;
+  rawCommonDir ??= rawGitDir;
   // realpath 归一：macOS /var → /private/var 等 symlink 会破坏
   // gitDir 与 commonDir 的字符串前缀关系（hub 事件路由依赖它）
   let gitDir = rawGitDir;
   let commonDir = rawCommonDir;
   try {
     [gitDir, commonDir] = await Promise.all([
-      realpath(rawGitDir),
-      realpath(rawCommonDir),
+      watchRealpath(rawGitDir, context),
+      watchRealpath(rawCommonDir, context),
     ]);
   } catch {
     // realpath 失败（路径消失等）：退回原始绝对路径
   }
   const anchors: RepoAnchors = { commonDir, gitDir };
-  repoAnchorsCache.set(gitRoot, anchors);
+  await writePathCache(repoAnchorsCache, gitRoot, anchors, context);
   return anchors;
 }

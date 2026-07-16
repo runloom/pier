@@ -24,6 +24,10 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:write");
       return window.pier.git.checkoutBranch(cwd, name);
     },
+    cancelReviewRequest: (request) => {
+      assertPluginCapability(entry, "git:read");
+      return window.pier.git.cancelReviewRequest(request);
+    },
     createAndSwitchBranch: (cwd, name) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.createAndSwitchBranch(cwd, name);
@@ -51,6 +55,14 @@ export function createPluginGitContext(
     getRepoInfo: (cwd) => {
       assertPluginCapability(entry, "git:read");
       return window.pier.git.getRepoInfo(cwd);
+    },
+    getReviewFileDocument: (request) => {
+      assertPluginCapability(entry, "git:read");
+      return window.pier.git.getReviewFileDocument(request);
+    },
+    getReviewIndex: (request) => {
+      assertPluginCapability(entry, "git:read");
+      return window.pier.git.getReviewIndex(request);
     },
     getStatus: (cwd) => {
       assertPluginCapability(entry, "git:read");
@@ -120,9 +132,9 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:write");
       return window.pier.git.unstage(cwd, paths);
     },
-    watch: (gitRoot, listener) => {
+    watch: (gitRoot, listener, onStartFailure, onReady) => {
       assertPluginCapability(entry, "git:read");
-      return window.pier.git.watch(gitRoot, listener);
+      return window.pier.git.watch(gitRoot, listener, onStartFailure, onReady);
     },
   };
 }

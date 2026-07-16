@@ -10,10 +10,8 @@ import {
 } from "@pier/ui/dropdown-menu.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   Download,
-  FileDiff,
   FolderGit,
   GitBranch,
   GitCommitHorizontal,
@@ -24,6 +22,7 @@ import {
   GitPullRequestClosed,
   type LucideIcon,
   RefreshCw,
+  SquareSplitHorizontal,
   Upload,
 } from "lucide-react";
 import type React from "react";
@@ -44,22 +43,18 @@ import type {
 } from "./git-status-dropdown-model.ts";
 
 const ACTION_ICONS: Record<GitStatusDropdownActionId, LucideIcon> = {
-  openChanges: FileDiff,
   pull: Download,
   push: Upload,
   switchBranch: GitBranch,
   switchWorktree: FolderGit,
   syncChanges: RefreshCw,
+  viewChanges: SquareSplitHorizontal,
 };
 
 const ACTION_LABELS: Record<
   GitStatusDropdownActionId,
   { fallback: string; key: string }
 > = {
-  openChanges: {
-    fallback: "Open Git Changes",
-    key: "statusDropdownOpenChanges",
-  },
   pull: {
     fallback: "Pull Changes",
     key: "statusDropdownPull",
@@ -79,6 +74,10 @@ const ACTION_LABELS: Record<
   syncChanges: {
     fallback: "Sync Changes",
     key: "statusDropdownSync",
+  },
+  viewChanges: {
+    fallback: "View Changes",
+    key: "statusDropdownViewChanges",
   },
 };
 
@@ -222,13 +221,13 @@ function SummaryLine({
 
 export function GitStatusDropdown({
   children,
-  context,
   model,
+  onViewChanges,
   pluginContext,
 }: {
   children: React.ReactElement;
-  context: PanelContext;
   model: GitStatusDropdownModel;
+  onViewChanges: () => void;
   pluginContext: RendererPluginContext;
 }): React.ReactElement {
   const [open, setOpen] = useState(false);
@@ -237,9 +236,12 @@ export function GitStatusDropdown({
   const variantLabel = STATUS_LABELS[model.variant];
   const onRun = (actionId: GitStatusDropdownActionId): void => {
     setOpen(false);
+    if (actionId === "viewChanges") {
+      onViewChanges();
+      return;
+    }
     runGitStatusDropdownAction({
       actionId,
-      context,
       model,
       pluginContext,
     }).catch((err: unknown) => {

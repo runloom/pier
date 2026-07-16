@@ -437,6 +437,11 @@ export function ResolvedFilePanel({
           readOnly={document.readOnly || document.loadState === "loading"}
           searchLabels={{
             close: t("filePanel.search.close", "Close"),
+            matchAnnouncement: t(
+              "filePanel.search.matchAnnouncement",
+              "Matches: {{count}}",
+              { count: "{{count}}" }
+            ),
             matchCase: t("filePanel.search.matchCase", "Match case"),
             next: t("filePanel.search.next", "Next match"),
             noMatches: t("filePanel.search.noMatches", "No matches"),

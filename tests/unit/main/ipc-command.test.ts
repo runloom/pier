@@ -10,6 +10,7 @@ const executeMock = vi.hoisted(() =>
 );
 const heartbeatMock = vi.hoisted(() => vi.fn(() => null));
 const registerMock = vi.hoisted(() => vi.fn());
+const releaseOwnerMock = vi.hoisted(() => vi.fn());
 
 vi.mock("@main/app-core/app-core.ts", () => ({
   appCore: {
@@ -19,6 +20,9 @@ vi.mock("@main/app-core/app-core.ts", () => ({
     },
     commandRouter: {
       execute: executeMock,
+    },
+    services: {
+      gitReview: { releaseOwner: releaseOwnerMock },
     },
   },
 }));
@@ -34,8 +38,26 @@ vi.mock("@main/windows/window-identity.ts", () => ({
   findWindowContext: vi.fn(() => ({ recordId: "record-main" })),
 }));
 
+const senderOnListeners = new Map<string, () => void>();
+const senderOnceListeners = new Map<string, () => void>();
+const testMainFrame = {};
+const testSender = {
+  id: 101,
+  mainFrame: testMainFrame,
+  on: vi.fn((event: string, listener: () => void) => {
+    senderOnListeners.set(event, listener);
+  }),
+  once: vi.fn((event: string, listener: () => void) => {
+    senderOnceListeners.set(event, listener);
+  }),
+};
+
+function testEvent(senderFrame: object | null = testMainFrame) {
+  return { sender: testSender, senderFrame };
+}
+
 type CommandHandler = (
-  event: { sender: { id: string } },
+  event: ReturnType<typeof testEvent>,
   command: unknown
 ) => Promise<unknown>;
 
@@ -64,6 +86,7 @@ describe("registerCommandIpc", () => {
     executeMock.mockClear();
     heartbeatMock.mockClear();
     registerMock.mockClear();
+    releaseOwnerMock.mockClear();
   });
 
   it("把 renderer 命令包装成 desktop-renderer 客户端信封后交给 command router", async () => {
@@ -87,10 +110,7 @@ describe("registerCommandIpc", () => {
       throw new Error("expected command handler");
     }
 
-    await handler(
-      { sender: { id: "web-contents" } },
-      { path: "/repo", type: "worktree.check" }
-    );
+    await handler(testEvent(), { path: "/repo", type: "worktree.check" });
 
     expect(registerMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -105,8 +125,63 @@ describe("registerCommandIpc", () => {
         protocolVersion: 1,
         requestId: expect.any(String),
       }),
-      { windowRecordId: "record-main" }
+      {
+        navigationGeneration: 0,
+        webContentsId: testSender.id,
+        windowRecordId: "record-main",
+      }
     );
+  });
+
+  it("在解析或注册客户端前拒绝子 frame 与空 senderFrame", async () => {
+    const handler = await registerTestCommandHandler();
+    const command = { path: "/repo", type: "worktree.check" };
+
+    await expect(handler(testEvent({}), command)).rejects.toThrow(
+      "command sender is not the main frame"
+    );
+    await expect(handler(testEvent(null), command)).rejects.toThrow(
+      "command sender is not the main frame"
+    );
+
+    expect(registerMock).not.toHaveBeenCalled();
+    expect(executeMock).not.toHaveBeenCalled();
+  });
+
+  it("导航、renderer 崩溃和销毁会按 generation 释放该 sender 的 Review 租约", async () => {
+    const handler = await registerTestCommandHandler();
+    await handler(testEvent(), { path: "/repo", type: "worktree.check" });
+
+    senderOnListeners.get("did-navigate")?.();
+    expect(releaseOwnerMock).toHaveBeenLastCalledWith({
+      clientId: "desktop-renderer:main",
+      generation: 0,
+      windowRecordId: "record-main:webContents:101",
+    });
+    await handler(testEvent(), { path: "/repo", type: "worktree.check" });
+    expect(executeMock).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ navigationGeneration: 1 })
+    );
+
+    senderOnListeners.get("render-process-gone")?.();
+    expect(releaseOwnerMock).toHaveBeenLastCalledWith({
+      clientId: "desktop-renderer:main",
+      generation: 1,
+      windowRecordId: "record-main:webContents:101",
+    });
+    await handler(testEvent(), { path: "/repo", type: "worktree.check" });
+    expect(executeMock).toHaveBeenLastCalledWith(
+      expect.any(Object),
+      expect.objectContaining({ navigationGeneration: 2 })
+    );
+
+    senderOnceListeners.get("destroyed")?.();
+    expect(releaseOwnerMock).toHaveBeenLastCalledWith({
+      clientId: "desktop-renderer:main",
+      generation: 2,
+      windowRecordId: "record-main:webContents:101",
+    });
   });
 
   it("给 renderer run.spawn 注入 sender windowId", async () => {
@@ -130,15 +205,12 @@ describe("registerCommandIpc", () => {
       throw new Error("expected command handler");
     }
 
-    await handler(
-      { sender: { id: "web-contents" } },
-      {
-        projectRootPath: "/repo",
-        taskId: "package-script:test",
-        type: "run.spawn",
-        windowId: "secondary",
-      }
-    );
+    await handler(testEvent(), {
+      projectRootPath: "/repo",
+      taskId: "package-script:test",
+      type: "run.spawn",
+      windowId: "secondary",
+    });
 
     expect(executeMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -149,7 +221,7 @@ describe("registerCommandIpc", () => {
           windowId: "main",
         },
       }),
-      { windowRecordId: "record-main" }
+      expect.objectContaining({ windowRecordId: "record-main" })
     );
   });
 
@@ -175,16 +247,10 @@ describe("registerCommandIpc", () => {
     }
 
     await expect(
-      handler(
-        { sender: { id: "web-contents" } },
-        { runId: "run-1", type: "run.status" }
-      )
+      handler(testEvent(), { runId: "run-1", type: "run.status" })
     ).resolves.toMatchObject({ ok: true });
     await expect(
-      handler(
-        { sender: { id: "web-contents" } },
-        { runId: "run-1", type: "run.cancel" }
-      )
+      handler(testEvent(), { runId: "run-1", type: "run.cancel" })
     ).resolves.toMatchObject({ ok: true });
   });
 
@@ -210,14 +276,11 @@ describe("registerCommandIpc", () => {
     }
 
     await expect(
-      handler(
-        { sender: { id: "web-contents" } },
-        {
-          cwd: "/repo",
-          options: { limit: 50, query: "" },
-          type: "git.searchBranches",
-        }
-      )
+      handler(testEvent(), {
+        cwd: "/repo",
+        options: { limit: 50, query: "" },
+        type: "git.searchBranches",
+      })
     ).resolves.toMatchObject({ ok: true });
     expect(executeMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -227,7 +290,7 @@ describe("registerCommandIpc", () => {
           type: "git.searchBranches",
         },
       }),
-      { windowRecordId: "record-main" }
+      expect.objectContaining({ windowRecordId: "record-main" })
     );
   });
 
@@ -259,25 +322,20 @@ describe("registerCommandIpc", () => {
     }
 
     await expect(
-      handler({ sender: { id: "web-contents" } }, { type: "preferences.read" })
+      handler(testEvent(), { type: "preferences.read" })
     ).resolves.toMatchObject({ ok: true });
     await expect(
-      handler(
-        { sender: { id: "web-contents" } },
-        { type: "window.close", windowId: "main" }
-      )
+      handler(testEvent(), { type: "window.close", windowId: "main" })
     ).resolves.toMatchObject({ ok: true });
     await expect(
-      handler(
-        { sender: { id: "web-contents" } },
-        { path: "/repo", type: "worktree.creationDefaults" }
-      )
+      handler(testEvent(), { path: "/repo", type: "worktree.creationDefaults" })
     ).resolves.toMatchObject({ ok: true });
     await expect(
-      handler(
-        { sender: { id: "web-contents" } },
-        { path: "/repo", type: "worktree.openTerminal", windowId: "secondary" }
-      )
+      handler(testEvent(), {
+        path: "/repo",
+        type: "worktree.openTerminal",
+        windowId: "secondary",
+      })
     ).resolves.toMatchObject({ ok: true });
     expect(executeMock).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -287,7 +345,7 @@ describe("registerCommandIpc", () => {
           windowId: "main",
         },
       }),
-      { windowRecordId: "record-main" }
+      expect.objectContaining({ windowRecordId: "record-main" })
     );
   });
 
@@ -312,15 +370,15 @@ describe("registerCommandIpc", () => {
     ];
 
     for (const command of commands) {
-      await expect(
-        handler({ sender: { id: "web-contents" } }, command)
-      ).resolves.toMatchObject({ ok: true });
+      await expect(handler(testEvent(), command)).resolves.toMatchObject({
+        ok: true,
+      });
     }
 
     for (const command of commands) {
       expect(executeMock).toHaveBeenCalledWith(
         expect.objectContaining({ command }),
-        { windowRecordId: "record-main" }
+        expect.objectContaining({ windowRecordId: "record-main" })
       );
     }
   });
@@ -329,15 +387,12 @@ describe("registerCommandIpc", () => {
     const handler = await registerTestCommandHandler();
 
     await expect(
-      handler(
-        { sender: { id: "web-contents" } },
-        {
-          branch: "feature/a",
-          name: "feature-a",
-          path: "/repo",
-          type: "worktree.create",
-        }
-      )
+      handler(testEvent(), {
+        branch: "feature/a",
+        name: "feature-a",
+        path: "/repo",
+        type: "worktree.create",
+      })
     ).resolves.toMatchObject({ ok: true });
 
     expect(executeMock).toHaveBeenCalledWith(
@@ -349,7 +404,7 @@ describe("registerCommandIpc", () => {
           type: "worktree.create",
         },
       }),
-      { windowRecordId: "record-main" }
+      expect.objectContaining({ windowRecordId: "record-main" })
     );
   });
 
@@ -375,10 +430,7 @@ describe("registerCommandIpc", () => {
     }
 
     await expect(
-      handler(
-        { sender: { id: "web-contents" } },
-        { path: "/repo", type: "not.a.real.command" }
-      )
+      handler(testEvent(), { path: "/repo", type: "not.a.real.command" })
     ).rejects.toThrow("invalid command");
     expect(executeMock).not.toHaveBeenCalled();
   });

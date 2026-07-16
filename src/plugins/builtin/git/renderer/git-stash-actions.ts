@@ -15,9 +15,9 @@ import {
   activeCwdOrMessage,
   commandTitle,
   confirmDialog,
-  confirmOpenReview,
   disabledReasonForActiveGit,
   enabledForActiveGit,
+  showConflictDetails,
   showError,
   showInfo,
   showLoading,
@@ -147,7 +147,7 @@ async function runPopStash(
     );
   } else if (result.kind === "conflict") {
     loading.dismiss();
-    await confirmOpenReview(
+    await showConflictDetails(
       context,
       pluginText(context, "gitStashConflictTitle", "Stash Conflicts"),
       pluginText(
@@ -194,7 +194,7 @@ async function runApplyStash(
     );
   } else if (result.kind === "conflict") {
     loading.dismiss();
-    await confirmOpenReview(
+    await showConflictDetails(
       context,
       pluginText(context, "gitStashConflictTitle", "Stash Conflicts"),
       pluginText(

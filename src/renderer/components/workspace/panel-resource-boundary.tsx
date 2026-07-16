@@ -4,7 +4,9 @@ import {
   Activity,
   type FunctionComponent,
   type ReactNode,
+  useCallback,
   useMemo,
+  useSyncExternalStore,
 } from "react";
 import { usePanelDescriptor } from "@/hooks/use-panel-descriptor.ts";
 import {
@@ -12,23 +14,18 @@ import {
   pluginPanelDescriptor,
   resolveRegistrationTitle,
 } from "@/lib/plugins/host-panel-descriptors.ts";
-import { usePanelResourceMode } from "@/stores/panel-resource.store.ts";
 
 interface PanelResourceBoundaryProps {
+  api: IDockviewPanelProps["api"];
   children: ReactNode;
-  panelId: string;
 }
 
 export function PanelResourceBoundary({
+  api,
   children,
-  panelId,
 }: PanelResourceBoundaryProps) {
-  const mode = usePanelResourceMode(panelId);
-  return (
-    <Activity mode={mode === "visible" ? "visible" : "hidden"}>
-      {children}
-    </Activity>
-  );
+  const visible = useDockviewPanelVisible(api);
+  return <Activity mode={visible ? "visible" : "hidden"}>{children}</Activity>;
 }
 
 export function withPanelResourceBoundary(
@@ -36,7 +33,7 @@ export function withPanelResourceBoundary(
 ): FunctionComponent<IDockviewPanelProps> {
   function ResourceBoundPanel(props: IDockviewPanelProps) {
     return (
-      <PanelResourceBoundary panelId={props.api.id}>
+      <PanelResourceBoundary api={props.api}>
         <Component {...props} />
       </PanelResourceBoundary>
     );
@@ -46,6 +43,28 @@ export function withPanelResourceBoundary(
     Component.displayName || Component.name || "Panel"
   })`;
   return ResourceBoundPanel;
+}
+
+function useDockviewPanelVisible(api: IDockviewPanelProps["api"]): boolean {
+  const subscribe = useCallback(
+    (listener: () => void) => {
+      const visible = api.onDidVisibilityChange(listener);
+      return () => visible.dispose();
+    },
+    [api]
+  );
+  const getSnapshot = useCallback(() => api.isVisible, [api]);
+  return useSyncExternalStore(subscribe, getSnapshot, () => false);
+}
+
+function UnmountWhenHiddenPanel({
+  api,
+  children,
+}: {
+  api: IDockviewPanelProps["api"];
+  children: ReactNode;
+}): ReactNode {
+  return useDockviewPanelVisible(api) ? children : null;
 }
 
 export function withPluginPanelHostBoundary(
@@ -73,8 +92,15 @@ export function withPluginPanelHostBoundary(
     if (registration.kind === "terminal") {
       return <Component {...props} />;
     }
+    if (registration.resourcePolicy === "unmountWhenHidden") {
+      return (
+        <UnmountWhenHiddenPanel api={props.api}>
+          <Component {...props} />
+        </UnmountWhenHiddenPanel>
+      );
+    }
     return (
-      <PanelResourceBoundary panelId={props.api.id}>
+      <PanelResourceBoundary api={props.api}>
         <Component {...props} />
       </PanelResourceBoundary>
     );

@@ -111,6 +111,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const [terminalRetryNonce, setTerminalRetryNonce] = useState(0);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchFocusRequest, setSearchFocusRequest] = useState(0);
+  const getGroupId = useCallback(() => api.group?.id ?? null, [api]);
   const floatingLayoutRevision = useTerminalFloatingLayoutRevision(api);
   const floatingLayout = useMemo(
     () => panelFloatingLayoutFromParams(props.params),
@@ -202,6 +203,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const statusContext = {
     context: effectiveContext,
     cwd: effectiveCwd,
+    getGroupId,
     panelId,
     title: effectiveTitle,
   };
@@ -434,12 +436,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             : []
         }
       />
-      <TerminalStatusBar
-        context={effectiveContext}
-        cwd={effectiveCwd}
-        panelId={panelId}
-        title={effectiveTitle}
-      />
+      <TerminalStatusBar {...statusContext} />
     </div>
   );
 }

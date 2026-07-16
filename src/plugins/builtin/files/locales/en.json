@@ -6,6 +6,7 @@
   },
   "messages": {
     "filePanel.title": "File",
+    "filePanel.breadcrumbLabel": "File location",
     "filePanel.empty.title": "No file selected",
     "filePanel.empty.withTree.description": "Select a file from the project tree to open it in this tab.",
     "filePanel.empty.noTree.description": "Open a file or a terminal Markdown preview to start editing.",
@@ -172,6 +173,7 @@
     "filePanel.tree.search": "Find in tree",
     "filePanel.tree.action.search": "Find in File Tree",
     "filePanel.search.close": "Close search",
+    "filePanel.search.matchAnnouncement": "Matches: {{count}}",
     "filePanel.search.matchCase": "Match case",
     "filePanel.search.next": "Next match",
     "filePanel.search.noMatches": "No matches",

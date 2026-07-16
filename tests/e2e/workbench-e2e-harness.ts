@@ -67,28 +67,62 @@ export async function setWindowSize(
   width: number,
   height: number
 ): Promise<void> {
-  const windowId = await app.evaluate(
-    ({ BaseWindow }, size) => {
+  // CI macOS 虚拟屏常夹高度（请求 800 → 实际 ~684），且 content size 与
+  // page.inner* 可能短暂不一致。只保证可用下限，不硬等请求尺寸。
+  const minWidth = Math.min(width, 1024);
+  const minHeight = Math.min(height, 600);
+  const applied = await app.evaluate(
+    ({ BaseWindow, screen }, size) => {
       const targetWindow = BaseWindow.getAllWindows()[0];
       if (!targetWindow) {
         throw new Error("Expected Pier BaseWindow before resizing");
       }
-      targetWindow.setSize(size.width, size.height);
-      return targetWindow.id;
+      const display = screen.getDisplayMatching(targetWindow.getBounds());
+      const work = display.workArea;
+      targetWindow.setPosition(work.x, work.y);
+      const nextWidth = Math.min(size.width, Math.max(320, work.width));
+      const nextHeight = Math.min(size.height, Math.max(240, work.height));
+      targetWindow.setContentSize(nextWidth, nextHeight);
+      let [contentWidth = nextWidth, contentHeight = nextHeight] =
+        targetWindow.getContentSize();
+      if (contentWidth < nextWidth || contentHeight < nextHeight) {
+        targetWindow.setSize(nextWidth, nextHeight);
+        [contentWidth = nextWidth, contentHeight = nextHeight] =
+          targetWindow.getContentSize();
+      }
+      return {
+        height: contentHeight,
+        id: targetWindow.id,
+        width: contentWidth,
+      };
     },
     { height, width }
   );
-  expect(windowId).toBeGreaterThan(0);
+  expect(applied.id).toBeGreaterThan(0);
   await expect
     .poll(
-      () =>
-        win.evaluate(() => ({
+      async () => {
+        const metrics = await win.evaluate(() => ({
           height: window.innerHeight,
           width: window.innerWidth,
-        })),
-      { timeout: 5000 }
+        }));
+        if (metrics.width < minWidth || metrics.height < minHeight) {
+          await app.evaluate(
+            ({ BaseWindow }, size) => {
+              const targetWindow = BaseWindow.getAllWindows()[0];
+              targetWindow?.setContentSize(size.width, size.height);
+            },
+            {
+              height: Math.max(applied.height, minHeight),
+              width: Math.max(applied.width, minWidth),
+            }
+          );
+        }
+        return metrics.width >= minWidth && metrics.height >= minHeight;
+      },
+      { timeout: 8000 }
     )
-    .toEqual({ height, width });
+    .toBe(true);
 }
 
 async function openPaletteAction(win: Page, name: RegExp): Promise<void> {
@@ -118,8 +152,13 @@ export async function selectTheme(
   if (theme.id === "light") {
     await expect(root).toHaveClass(/light/);
   } else {
-    await expect(root).not.toHaveClass(/light/);
+    await expect(root).toHaveClass(/dark/);
   }
+  await expect
+    .poll(() => win.evaluate(() => window.pier.preferences.read()), {
+      timeout: 10_000,
+    })
+    .toMatchObject({ theme: theme.id });
 }
 
 export async function installCodexPlugin(context: AppContext): Promise<void> {

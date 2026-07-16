@@ -81,7 +81,7 @@ jobs:
       - run: pnpm build:electron
       - run: >-
           pnpm exec playwright test --config playwright.config.ts
-          tests/e2e/native-terminal-render.spec.ts
+          tests/e2e/native-terminal-render.spec.ts tests/e2e/git-review.spec.ts
 
   check:
     if: always()

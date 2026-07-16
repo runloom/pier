@@ -251,6 +251,7 @@ function createMockContext(): RendererPluginContext {
     git: {
       abortMerge: unimplemented("git.abortMerge"),
       abortRebase: unimplemented("git.abortRebase"),
+      cancelReviewRequest: unimplemented("git.cancelReviewRequest"),
       checkoutBranch: unimplemented("git.checkoutBranch"),
       createAndSwitchBranch: unimplemented("git.createAndSwitchBranch"),
       continueRebase: unimplemented("git.continueRebase"),
@@ -258,6 +259,8 @@ function createMockContext(): RendererPluginContext {
       getDiffPatch: unimplemented("git.getDiffPatch"),
       getFileContent: unimplemented("git.getFileContent"),
       getRepoInfo: unimplemented("git.getRepoInfo"),
+      getReviewFileDocument: unimplemented("git.getReviewFileDocument"),
+      getReviewIndex: unimplemented("git.getReviewIndex"),
       getStatus: unimplemented("git.getStatus"),
       listIgnored: unimplemented("git.listIgnored"),
       listBranches: unimplemented("git.listBranches"),

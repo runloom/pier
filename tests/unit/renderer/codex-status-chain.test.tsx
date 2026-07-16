@@ -83,6 +83,7 @@ describe("Codex transcript → aggregator → store → status DOM", () => {
       <TerminalStatusBar
         context={undefined}
         cwd="/repo"
+        getGroupId={() => null}
         panelId="panel-1"
         title={null}
       />

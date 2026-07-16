@@ -14,7 +14,6 @@ import {
   readRegisteredTerminalAnchorFrame,
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { resetTerminalPresentationReconcilerForTests } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
-import { usePanelResourceStore } from "@/stores/panel-resource.store.ts";
 import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
@@ -225,7 +224,6 @@ describe("WorkspaceHost", () => {
     resetTerminalLaunchConfirmationsForTest();
     installPierWindowApi();
     vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue(null);
-    usePanelResourceStore.setState({ panels: {} });
     useWorkspaceStore.setState({ api: null, hasMaximizedGroup: false });
     vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
       cb(performance.now());
@@ -238,7 +236,6 @@ describe("WorkspaceHost", () => {
     Reflect.deleteProperty(window, "pier");
     vi.unstubAllGlobals();
     vi.clearAllMocks();
-    usePanelResourceStore.setState({ panels: {} });
     useWorkspaceStore.setState({ api: null, hasMaximizedGroup: false });
   });
 
@@ -309,17 +306,29 @@ describe("WorkspaceHost", () => {
 
     render(<WorkspaceHost />);
     const props = vi.mocked(DockviewReact).mock.lastCall?.[0];
-    props?.onReady?.({ api: dockview.api });
-    dockview.emitLayoutChange();
+    await act(async () => {
+      props?.onReady?.({ api: dockview.api });
+      dockview.emitLayoutChange();
+      await Promise.resolve();
+    });
 
     const WrappedWelcome = props?.components?.welcome;
     if (!WrappedWelcome) {
       throw new Error("welcome component missing");
     }
 
+    let visible = false;
+    let visibilityListener: (() => void) | undefined;
     const hiddenWelcomeProps = {
       api: {
+        get isVisible() {
+          return visible;
+        },
         id: "welcome-hidden",
+        onDidVisibilityChange: (listener: () => void) => {
+          visibilityListener = listener;
+          return { dispose: vi.fn() };
+        },
         setTitle: vi.fn(),
       },
     } as unknown as ComponentProps<typeof WrappedWelcome>;
@@ -327,6 +336,11 @@ describe("WorkspaceHost", () => {
     render(<WrappedWelcome {...hiddenWelcomeProps} />);
 
     expect(await screen.findByText("Pier")).not.toBeVisible();
+    act(() => {
+      visible = true;
+      visibilityListener?.();
+    });
+    expect(screen.getByText("Pier")).toBeVisible();
   });
 
   it("does not wrap terminal panel components in a React Activity boundary", () => {

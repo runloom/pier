@@ -153,7 +153,7 @@ export function createPluginPanelsContext(
     openInstance: (options) => {
       assertDeclaredContribution(entry, "panel", options.componentId);
       assertPluginCapability(entry, "panel:open");
-      openPluginPanelInstance(options);
+      return openPluginPanelInstance(options);
     },
     register: (registration: PluginPanelRegistration) => {
       assertDeclaredContribution(entry, "panel", registration.id);

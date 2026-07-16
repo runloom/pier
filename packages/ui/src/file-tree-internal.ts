@@ -12,25 +12,34 @@ import type {
 } from "./file-tree-types.ts";
 
 export interface FileTreeRefs {
-  decorationsByPath: ReadonlyMap<string, React.ReactNode>;
-  directoryLoadStatesByPath: ReadonlyMap<string, PierDirectoryLoadState>;
-  directoryPaths: ReadonlyMap<string, string>;
-  itemsByPath: ReadonlyMap<string, PierFileTreeItem>;
-  loadableDirectoryPaths: ReadonlyMap<string, string>;
-  onLoadDirectory: ((path: string) => Promise<void> | void) | undefined;
-  onModelPathsRemoved: ((paths: readonly string[]) => void) | undefined;
-  onMovePaths: ((moves: readonly PierFileTreeMove[]) => void) | undefined;
-  onOpenItemContextMenu:
+  readonly decorationsByPath: ReadonlyMap<string, React.ReactNode>;
+  readonly directoryLoadStatesByPath: ReadonlyMap<
+    string,
+    PierDirectoryLoadState
+  >;
+  readonly directoryPaths: ReadonlyMap<string, string>;
+  readonly itemsByPath: ReadonlyMap<string, PierFileTreeItem>;
+  readonly loadableDirectoryPaths: ReadonlyMap<string, string>;
+  readonly onLoadDirectory:
+    | ((path: string) => Promise<void> | void)
+    | undefined;
+  readonly onModelPathsRemoved:
+    | ((paths: readonly string[]) => void)
+    | undefined;
+  readonly onMovePaths:
+    | ((moves: readonly PierFileTreeMove[]) => void)
+    | undefined;
+  readonly onOpenItemContextMenu:
     | ((
         item: { kind: "directory" | "file"; path: string },
         point: { x: number; y: number }
       ) => void)
     | undefined;
-  onOpenPath: ((path: string) => void) | undefined;
-  onRenamePath:
+  readonly onOpenPath: ((path: string) => void) | undefined;
+  readonly onRenamePath:
     | ((move: PierFileTreeMove & { isFolder: boolean }) => void)
     | undefined;
-  onSelectPaths: ((paths: string[]) => void) | undefined;
+  readonly onSelectPaths: ((paths: string[]) => void) | undefined;
 }
 
 export const EMPTY_REFS: FileTreeRefs = {

@@ -109,6 +109,23 @@ describe("resolvePanelContextForPath", () => {
     });
   });
 
+  it("保留仓库根中的尾空格、Tab、CR 和 LF", async () => {
+    const parent = await makeTempDir("pier-panel-context-special-");
+    const repo = join(parent, "repo \t\r\n");
+    await mkdir(repo);
+    await git(repo, ["init"]);
+
+    await expect(
+      resolvePanelContextForPath(repo, { now: () => NOW })
+    ).resolves.toMatchObject({
+      cwd: repo,
+      gitRoot: repo,
+      projectRootPath: repo,
+      worktreeRoot: repo,
+      worktreeKey: repo,
+    });
+  });
+
   it("falls back to a path-scoped project context outside git", async () => {
     const project = await makeTempDir("pier-panel-context-plain-");
 
@@ -153,10 +170,10 @@ describe("resolvePanelContextForPath", () => {
       execGit: (args) => {
         const command = args.join(" ");
         if (command === "rev-parse --show-toplevel") {
-          return Promise.resolve(project);
+          return Promise.resolve(`${project}\n`);
         }
         if (command === "rev-parse --path-format=absolute --git-common-dir") {
-          return Promise.resolve(project);
+          return Promise.resolve(`${project}\n`);
         }
         if (command === "branch --show-current") {
           return Promise.resolve("main");

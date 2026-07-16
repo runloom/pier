@@ -18,6 +18,7 @@ export type PierFileTreeStyle = React.CSSProperties & {
   "--trees-git-renamed-color-override"?: string;
   "--trees-git-untracked-color-override"?: string;
   "--trees-input-bg-override"?: string;
+  "--trees-padding-inline-override"?: string;
   "--trees-scrollbar-gutter-override"?: string;
   "--trees-scrollbar-thumb-override"?: string;
   "--trees-search-bg-override"?: string;
@@ -86,6 +87,7 @@ export function pierFileTreeStyle(
     "--trees-fg-muted-override": "var(--muted-foreground)",
     "--trees-bg-muted-override": "var(--interactive-hover)",
     "--trees-input-bg-override": "var(--muted)",
+    "--trees-padding-inline-override": "4px",
     "--trees-border-color-override": "var(--sidebar-border)",
     "--trees-focus-ring-color-override": "var(--ring)",
     "--trees-accent-override": "var(--primary)",

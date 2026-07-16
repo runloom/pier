@@ -10,18 +10,10 @@ import {
 } from "@shared/contracts/panel.ts";
 import type { WorktreeCreateProgress } from "@shared/contracts/worktree.ts";
 import { applyAgentStatusHooksPreference } from "../services/agents/integrations/registry.ts";
-import { FileServiceError } from "../services/file-service.ts";
-import { GitExecError } from "../services/git-exec.ts";
-import {
-  isLocalEnvironmentScriptError,
-  LocalEnvironmentScriptError,
-} from "../services/local-environment-scripts.ts";
-import { LocalEnvironmentServiceError } from "../services/local-environments-service.ts";
-import { PluginServiceError } from "../services/plugin-service.ts";
-import { PluginSettingsServiceError } from "../services/plugin-settings-service.ts";
-import { WorktreeServiceError } from "../services/worktree-service.ts";
 import { executeAiCommand } from "./ai-commands.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
+import { mapCommandError } from "./command-error-mapping.ts";
+import type { CommandExecutionContext } from "./command-execution-context.ts";
 import {
   commandFailure as failure,
   commandSuccess as success,
@@ -30,6 +22,7 @@ import type { PierCoreServices } from "./command-router-services.ts";
 import { executeEnvironmentCommand } from "./environment-commands.ts";
 import { executeFileCommand } from "./file-commands.ts";
 import { executeGitCommand } from "./git-commands.ts";
+import { executeGitReviewCommand } from "./git-review-commands.ts";
 import {
   executePanelFocusCommand,
   executePanelListCommand,
@@ -53,6 +46,7 @@ import {
 import { orderedWindows } from "./window-routing.ts";
 import { executeWorktreeCommand } from "./worktree-commands.ts";
 
+export type { CommandExecutionContext } from "./command-execution-context.ts";
 export type { PierCoreServices } from "./command-router-services.ts";
 
 export interface CommandRouter {
@@ -67,11 +61,6 @@ export interface CreateCommandRouterArgs {
   onEnvironmentsChanged?: (snapshot: LocalEnvironmentState) => void;
   onWorktreeCreateProgress?: (progress: WorktreeCreateProgress) => void;
   services: PierCoreServices;
-}
-
-export interface CommandExecutionContext {
-  clientEnv?: Record<string, string> | undefined;
-  windowRecordId?: string | undefined;
 }
 
 function requestIdOf(rawEnvelope: unknown): string {
@@ -331,58 +320,6 @@ async function executeTerminalCommand(
   }
 }
 
-function mapCommandError(requestId: string, err: unknown): PierCommandResult {
-  if (
-    err instanceof Error &&
-    "code" in err &&
-    (err as NodeJS.ErrnoException).code === "ENOENT"
-  ) {
-    return failure(requestId, "not_found", err.message);
-  }
-  if (err instanceof WorktreeServiceError) {
-    return failure(requestId, err.reason, err.message);
-  }
-  if (err instanceof LocalEnvironmentServiceError) {
-    return failure(requestId, "not_found", `${err.reason}: ${err.message}`);
-  }
-  if (
-    err instanceof LocalEnvironmentScriptError ||
-    isLocalEnvironmentScriptError(err)
-  ) {
-    return failure(requestId, "environment_script_failed", err.message);
-  }
-  if (err instanceof FileServiceError) {
-    return failure(requestId, "invalid_command", err.message);
-  }
-  if (err instanceof PluginServiceError) {
-    const code = err.code === "invalid_manifest" ? "invalid_command" : err.code;
-    return failure(requestId, code, err.message);
-  }
-  if (err instanceof PluginSettingsServiceError) {
-    return failure(requestId, err.code, err.message);
-  }
-  if (err instanceof GitExecError) {
-    const rawSummary = err.stderr.trim() || err.stdout.trim();
-    const summary = rawSummary.split("\n").slice(0, 3).join(" | ");
-    const detail = summary.length > 0 ? ` -- ${summary}` : "";
-    // hook 被外部信号杀 → 换成专用 code，让 UI 走"重试建议"提示。
-    // 详见 PierCommandErrorCode.git_hook_signal_killed 注释。
-    if (err.hookSignal) {
-      return failure(
-        requestId,
-        "git_hook_signal_killed",
-        `git hook ${err.hookSignal.hookPath} died of signal ${err.hookSignal.signal}${detail}`
-      );
-    }
-    return failure(requestId, "git_error", `${err.message}${detail}`);
-  }
-  return failure(
-    requestId,
-    "internal_error",
-    err instanceof Error ? err.message : String(err)
-  );
-}
-
 async function executeCommandByDomain(
   requestId: string,
   command: PierCommand,
@@ -410,6 +347,8 @@ async function executeCommandByDomain(
         onWorktreeCreateProgress
       ),
     (cmd: PierCommand) => executeFileCommand(requestId, cmd, services, context),
+    (cmd: PierCommand) =>
+      executeGitReviewCommand(requestId, cmd, services, context),
     (cmd: PierCommand) => executeGitCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeRunCommand(requestId, cmd, services, context),
     (cmd: PierCommand) =>
@@ -469,6 +408,7 @@ export function createCommandRouter({
 }: CreateCommandRouterArgs): CommandRouter {
   return {
     async execute(rawEnvelope, trustedContext = {}) {
+      const requestStartedAtMs = Date.now();
       const requestId = requestIdOf(rawEnvelope);
       const parsed = pierCommandEnvelopeSchema.safeParse(rawEnvelope);
       if (!parsed.success) {
@@ -491,7 +431,7 @@ export function createCommandRouter({
         command,
         clients,
         services,
-        { ...trustedContext, clientEnv },
+        { ...trustedContext, clientEnv, clientId, requestStartedAtMs },
         onEnvironmentsChanged,
         onWorktreeCreateProgress
       );

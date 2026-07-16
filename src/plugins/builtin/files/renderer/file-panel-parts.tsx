@@ -9,29 +9,24 @@ import {
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
 import {
-  ResizableHandle,
-  ResizablePanel,
-  ResizablePanelGroup,
-} from "@pier/ui/resizable.tsx";
-import { cn } from "@pier/ui/utils.ts";
+  FilePanelLayout,
+  FilePanelSidebarToggleButton,
+  FilePanelSearchButton as SharedFilePanelSearchButton,
+} from "@pier/ui/file-panel-layout.tsx";
 import {
   ArrowLeft,
   ArrowRight,
-  ChevronRight,
   FileQuestion,
   FileX,
-  FolderTree,
   MousePointerClick,
-  PanelLeftClose,
-  Search,
 } from "lucide-react";
-import {
-  type ReactNode,
-  useLayoutEffect,
-  useRef,
-  type WheelEvent,
-} from "react";
+import type { ReactNode } from "react";
 import type { FilesTranslate } from "./files-i18n.ts";
+
+export {
+  FilePanelBreadcrumb,
+  FilePanelHeader as FilePanelChrome,
+} from "@pier/ui/file-panel-layout.tsx";
 
 export function ReadOnlyErrorState({
   message,
@@ -151,235 +146,33 @@ export function EmptyFileState({
   );
 }
 
-// 面板整体分为「顶部 chrome + 主体（sidebar + editor）」。sidebar 收缩按钮
-// 上移到 chrome；sidebar 隐藏时仍保留面包屑、状态和视图切换，布局无缝。
 const TREE_WIDTH_STORAGE_KEY = "pier.files.filePanel.treeWidthPx";
-const TREE_DEFAULT_WIDTH_PX = 256;
-const TREE_MIN_WIDTH_PX = 170;
 
-function readTreeWidthPx(): number {
-  try {
-    const raw = globalThis.localStorage?.getItem(TREE_WIDTH_STORAGE_KEY);
-    const parsed = raw == null ? Number.NaN : Number.parseInt(raw, 10);
-    if (Number.isFinite(parsed) && parsed >= TREE_MIN_WIDTH_PX) {
-      return parsed;
-    }
-  } catch {
-    // localStorage 不可用(测试环境)时用默认宽。
-  }
-  return TREE_DEFAULT_WIDTH_PX;
-}
-
-function writeTreeWidthPx(px: number): void {
-  try {
-    globalThis.localStorage?.setItem(
-      TREE_WIDTH_STORAGE_KEY,
-      String(Math.round(px))
-    );
-  } catch {
-    // 忽略持久化失败。
-  }
-}
-
-// 对齐目标布局:chrome 一条横跨整个面板(树 + 编辑器之上),树在 chrome 下方。
-// 树列宽可拖拽(shadcn resizable),像素宽持久化,面板缩放时保持像素宽。
 export function FilePanelShell({
   children,
   header,
+  onSidebarAutoCollapse,
   sidebar,
 }: {
   children: ReactNode;
   header: ReactNode;
+  onSidebarAutoCollapse: () => void;
   sidebar: ReactNode;
 }) {
-  if (!sidebar) {
-    return (
-      <div className="flex h-full min-h-0 flex-col bg-background">
-        {header}
-        <div className="flex min-h-0 flex-1">
-          <section className="flex min-w-0 flex-1 flex-col">{children}</section>
-        </div>
-      </div>
-    );
-  }
   return (
-    <div className="flex h-full min-h-0 flex-col bg-background">
-      {header}
-      <ResizablePanelGroup className="min-h-0 flex-1" orientation="horizontal">
-        <ResizablePanel
-          className="min-h-0"
-          defaultSize={`${readTreeWidthPx()}px`}
-          groupResizeBehavior="preserve-pixel-size"
-          id="files-tree"
-          maxSize="50%"
-          minSize={`${TREE_MIN_WIDTH_PX}px`}
-          onResize={(panelSize) => {
-            writeTreeWidthPx(panelSize.inPixels);
-          }}
-        >
-          {sidebar}
-        </ResizablePanel>
-        <ResizableHandle className="data-[resize-handle-state=drag]:bg-primary data-[resize-handle-state=hover]:bg-primary/60" />
-        <ResizablePanel className="min-h-0" id="files-content">
-          <section className="flex h-full min-w-0 flex-col">{children}</section>
-        </ResizablePanel>
-      </ResizablePanelGroup>
-    </div>
-  );
-}
-
-// 顶部 chrome 左侧是 sidebar toggle、搜索/前进后退与 breadcrumb，右侧是状态、
-// 语言/格式和视图切换。breadcrumb 用 flex-1 min-w-0 截断，右侧 shrink-0；
-// chrome 横跨整个面板并与终端标题栏高度对齐（约 40px）。
-export function FilePanelChrome({
-  center,
-  leading,
-  trailing,
-}: {
-  center: ReactNode;
-  leading?: ReactNode;
-  trailing?: ReactNode;
-}) {
-  return (
-    <header className="flex h-10 shrink-0 items-center gap-2 border-border border-b bg-background px-2">
-      {leading ? (
-        <div className="flex shrink-0 items-center">{leading}</div>
-      ) : null}
-      <div className="flex min-w-0 flex-1 items-center overflow-hidden">
-        {center}
-      </div>
-      {trailing ? (
-        <div className="flex shrink-0 items-center gap-1">{trailing}</div>
-      ) : null}
-    </header>
-  );
-}
-
-// Cursor 参考:面包屑用 chevron 分隔,末段(文件名)加粗,前段 muted 且悬停高亮。
-// segments 数组由调用方按项目根拆分,不含 leading/trailing 空段。
-export function FilePanelBreadcrumb({
-  onSegmentClick,
-  segments,
-  status,
-}: {
-  /** 点击段(index 为 segments 下标)。未传 = 纯展示。 */
-  onSegmentClick?: (index: number) => void;
-  segments: readonly string[];
-  status?: ReactNode;
-}) {
-  const breadcrumbRef = useRef<HTMLDivElement | null>(null);
-  const previousSegmentsRef = useRef<readonly string[]>([]);
-  useLayoutEffect(() => {
-    const previousSegments = previousSegmentsRef.current;
-    let segmentsChanged = previousSegments.length !== segments.length;
-    for (
-      let index = 0;
-      !segmentsChanged && index < segments.length;
-      index += 1
-    ) {
-      segmentsChanged = previousSegments[index] !== segments[index];
-    }
-    previousSegmentsRef.current = segments;
-    const breadcrumb = breadcrumbRef.current;
-    if (segmentsChanged && breadcrumb) {
-      breadcrumb.scrollLeft = breadcrumb.scrollWidth;
-    }
-  });
-  useLayoutEffect(() => {
-    const breadcrumb = breadcrumbRef.current;
-    if (!breadcrumb || typeof ResizeObserver === "undefined") {
-      return;
-    }
-    const observer = new ResizeObserver(() => {
-      breadcrumb.scrollLeft = breadcrumb.scrollWidth;
-    });
-    observer.observe(breadcrumb);
-    return () => observer.disconnect();
-  }, []);
-
-  const handleWheel = (event: WheelEvent<HTMLDivElement>) => {
-    if (Math.abs(event.deltaY) <= Math.abs(event.deltaX)) {
-      return;
-    }
-    const breadcrumb = event.currentTarget;
-    const previousScrollLeft = breadcrumb.scrollLeft;
-    breadcrumb.scrollLeft += event.deltaY;
-    if (breadcrumb.scrollLeft !== previousScrollLeft) {
-      event.preventDefault();
-    }
-  };
-
-  if (segments.length === 0) {
-    return <span className="text-muted-foreground text-xs">—</span>;
-  }
-  const last = segments.length - 1;
-  return (
-    <div
-      className="flex min-w-0 flex-1 items-center overflow-x-auto overflow-y-hidden font-mono text-xs"
-      data-scrollbar="none"
-      onWheel={handleWheel}
-      ref={breadcrumbRef}
+    <FilePanelLayout
+      contentPanelId="files-content"
+      header={header}
+      onSidebarAutoCollapse={onSidebarAutoCollapse}
+      sidebar={sidebar}
+      sidebarPanelId="files-tree"
+      sidebarWidthStorageKey={TREE_WIDTH_STORAGE_KEY}
     >
-      {segments.map((segment, index) => {
-        const isLast = index === last;
-        // 面包屑 key 用 index+segment:同级同名段极罕见,但前缀 index 保证唯一。
-        const key = `${index}:${segment}`;
-        if (onSegmentClick) {
-          return (
-            <span
-              className="flex min-w-0 max-w-[80%] shrink-0 items-center"
-              key={key}
-            >
-              {index > 0 ? (
-                <ChevronRight
-                  aria-hidden="true"
-                  className="mx-0.5 size-3 shrink-0 text-muted-foreground/60"
-                />
-              ) : null}
-              <Button
-                aria-current={isLast ? "page" : undefined}
-                className="min-w-0 max-w-full shrink truncate px-1"
-                onClick={() => onSegmentClick(index)}
-                size="xs"
-                title={segment}
-                type="button"
-                variant="ghost"
-              >
-                {segment}
-              </Button>
-            </span>
-          );
-        }
-        return (
-          <span
-            className="flex min-w-0 max-w-[80%] shrink-0 items-center"
-            key={key}
-          >
-            {index > 0 ? (
-              <ChevronRight
-                aria-hidden="true"
-                className="mx-0.5 size-3 shrink-0 text-muted-foreground/60"
-              />
-            ) : null}
-            <span
-              className={cn(
-                "min-w-0 max-w-full shrink truncate",
-                isLast
-                  ? "font-semibold text-foreground"
-                  : "text-muted-foreground"
-              )}
-            >
-              {segment}
-            </span>
-          </span>
-        );
-      })}
-      {status ? <span className="ml-1 shrink-0">{status}</span> : null}
-    </div>
+      {children}
+    </FilePanelLayout>
   );
 }
 
-// Cursor 顶部 sidebar 折叠按钮。root=null 时(无项目上下文)不渲染。
 export function SidebarToggleButton({
   collapsed,
   hidden,
@@ -391,27 +184,14 @@ export function SidebarToggleButton({
   onToggle: () => void;
   t: FilesTranslate;
 }) {
-  if (hidden) {
-    return null;
-  }
-  const label = collapsed
-    ? t("filePanel.tree.expand", "Expand file tree")
-    : t("filePanel.tree.collapse", "Collapse file tree");
   return (
-    <Button
-      aria-label={label}
-      onClick={onToggle}
-      size="xs"
-      type="button"
-      variant="ghost"
-    >
-      {collapsed ? (
-        <FolderTree aria-hidden="true" data-icon="inline-start" />
-      ) : (
-        <PanelLeftClose aria-hidden="true" data-icon="inline-start" />
-      )}
-      <span className="sr-only">{label}</span>
-    </Button>
+    <FilePanelSidebarToggleButton
+      collapsed={collapsed}
+      collapseLabel={t("filePanel.tree.collapse", "Collapse file tree")}
+      expandLabel={t("filePanel.tree.expand", "Expand file tree")}
+      hidden={hidden}
+      onToggle={onToggle}
+    />
   );
 }
 
@@ -475,15 +255,9 @@ export function FilePanelSearchButton({
 }) {
   const resolvedLabel = label ?? t("filePanel.search", "Find in file");
   return (
-    <Button
-      aria-label={resolvedLabel}
-      onClick={onOpenSearch}
-      size="xs"
-      type="button"
-      variant="ghost"
-    >
-      <Search aria-hidden="true" data-icon="inline-start" />
-      <span className="sr-only">{resolvedLabel}</span>
-    </Button>
+    <SharedFilePanelSearchButton
+      label={resolvedLabel}
+      onOpenSearch={onOpenSearch}
+    />
   );
 }

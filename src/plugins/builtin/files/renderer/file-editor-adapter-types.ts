@@ -16,6 +16,7 @@ export interface FileEditorAdapterLabels {
 
 export interface FilesEditorSearchLabels {
   close: string;
+  matchAnnouncement: string;
   matchCase?: string;
   next: string;
   noMatches: string;
