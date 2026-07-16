@@ -868,6 +868,17 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       join(repository, "src", "script.py"),
       "def answer():\n    return 4\n"
     );
+    // 等 index 刷新落地后，用换选强制打开最新正文（已加载条目不会原地 refetch）。
+    await expect
+      .poll(
+        async () =>
+          (await page.locator('[aria-busy="true"]').count()) === 0 &&
+          (await page.getByRole("treeitem", { name: /script\.py/u }).count()) >
+            0,
+        { timeout: 30_000 }
+      )
+      .toBe(true);
+    await page.getByRole("treeitem", { name: /app\.tsx/u }).click();
     await page.getByRole("treeitem", { name: /script\.py/u }).click();
     await expect
       .poll(
@@ -1259,11 +1270,31 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         /Failed to refresh changes|刷新变更失败/u
       );
       await expect(refreshFailure).toBeVisible({ timeout: 30_000 });
-      // 再点已选中文件：应重新定位保留正文（不依赖 selection change）。
-      await target.click();
+      // 刷新失败不得丢掉已加载正文；不依赖“再点已选中行”的 selection 语义。
+      await expect
+        .poll(
+          () =>
+            page
+              .locator("diffs-container")
+              .evaluateAll((containers) =>
+                containers.some((host) =>
+                  (host.shadowRoot?.textContent ?? "").includes("value2000")
+                )
+              ),
+          { timeout: 10_000 }
+        )
+        .toBe(true);
+      await page.evaluate(() => {
+        for (const host of document.querySelectorAll("diffs-container")) {
+          if ((host.shadowRoot?.textContent ?? "").includes("value2000")) {
+            host.scrollIntoView({ block: "center" });
+            return;
+          }
+        }
+      });
       await expect
         .poll(() => isDiffTextInViewport(page, "value2000"), {
-          timeout: 15_000,
+          timeout: 10_000,
         })
         .toBe(true);
 

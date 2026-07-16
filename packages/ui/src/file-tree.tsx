@@ -134,9 +134,8 @@ export function PierFileTree({
     );
   const handleHostClickCapture = React.useCallback(
     (event: React.MouseEvent<HTMLDivElement>) => {
-      // Pierre trees 对已选中行再点不会 bump selectionVersion，
-      // 因此 onSelectionChange/onOpenPath 不会重入。Review 等需要
-      // 再点同一文件时重新定位正文。
+      // Pierre trees 对已选中行再点不会 bump selectionVersion。
+      // 捕获阶段对文件行统一补一次 onOpenPath，覆盖 re-click 重新定位。
       if (event.button !== 0) {
         return;
       }
@@ -156,9 +155,7 @@ export function PierFileTree({
       if (item?.kind !== "file") {
         return;
       }
-      if (lastOpenedPathRef.current !== item.path) {
-        return;
-      }
+      lastOpenedPathRef.current = item.path;
       readRefs().onOpenPath?.(item.path);
     },
     [readRefs]
