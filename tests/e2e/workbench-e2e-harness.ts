@@ -67,19 +67,35 @@ export async function setWindowSize(
   width: number,
   height: number
 ): Promise<void> {
-  // 目标是 content size（window.inner*）。outer setSize 在 macOS 会扣掉 title bar。
-  const windowId = await app.evaluate(
-    ({ BaseWindow }, size) => {
+  // CI macOS 虚拟屏可能夹住高度（例如请求 800 只剩 ~684）。
+  // 这里设 content size，再以 Electron 实际 content size 对齐 window.inner*，
+  // 不把「请求值」当硬断言，避免 title bar / 屏高夹持导致全套 e2e 起不来。
+  const applied = await app.evaluate(
+    ({ BaseWindow, screen }, size) => {
       const targetWindow = BaseWindow.getAllWindows()[0];
       if (!targetWindow) {
         throw new Error("Expected Pier BaseWindow before resizing");
       }
-      targetWindow.setContentSize(size.width, size.height);
-      return targetWindow.id;
+      const display = screen.getDisplayMatching(targetWindow.getBounds());
+      const work = display.workArea;
+      // 先挪到 workArea 左上，减少被屏外裁切的概率。
+      targetWindow.setPosition(work.x, work.y);
+      const maxWidth = Math.max(320, work.width);
+      const maxHeight = Math.max(240, work.height);
+      const nextWidth = Math.min(size.width, maxWidth);
+      const nextHeight = Math.min(size.height, maxHeight);
+      targetWindow.setContentSize(nextWidth, nextHeight);
+      const [contentWidth = nextWidth, contentHeight = nextHeight] =
+        targetWindow.getContentSize();
+      return {
+        height: contentHeight,
+        id: targetWindow.id,
+        width: contentWidth,
+      };
     },
     { height, width }
   );
-  expect(windowId).toBeGreaterThan(0);
+  expect(applied.id).toBeGreaterThan(0);
   await expect
     .poll(
       () =>
@@ -89,7 +105,10 @@ export async function setWindowSize(
         })),
       { timeout: 5000 }
     )
-    .toEqual({ height, width });
+    .toEqual({ height: applied.height, width: applied.width });
+  // 仍保证有可用工作区，避免夹到不可用的极小窗。
+  expect(applied.width).toBeGreaterThanOrEqual(Math.min(width, 1024));
+  expect(applied.height).toBeGreaterThanOrEqual(Math.min(height, 600));
 }
 
 async function openPaletteAction(win: Page, name: RegExp): Promise<void> {
