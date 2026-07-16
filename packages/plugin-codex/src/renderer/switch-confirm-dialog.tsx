@@ -1,3 +1,4 @@
+import { partitionPeerTargets } from "@pier/plugin-api/peer-sync";
 import type {
   ExternalRendererPluginContext,
   RendererPluginContentDialogRenderProps,
@@ -8,6 +9,9 @@ import { type JSX, useState } from "react";
 import {
   ALL_SYNC_TARGETS,
   type CrossToolSyncTarget,
+  EMPTY_PEER_AVAILABILITY,
+  type PeerAvailability,
+  type PeerSyncTarget,
 } from "../shared/accounts.ts";
 import type { Translate } from "./usage-meter.tsx";
 
@@ -18,17 +22,49 @@ export interface SwitchConfirmResult {
   syncTargets: CrossToolSyncTarget[];
 }
 
+function isPeerAvailability(value: unknown): value is PeerAvailability {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.omp === "boolean" &&
+    typeof record.opencode === "boolean" &&
+    typeof record.pi === "boolean"
+  );
+}
+
+export async function loadPeerAvailability(
+  context: ExternalRendererPluginContext
+): Promise<PeerAvailability> {
+  try {
+    const result = await context.rpc.invoke<unknown>(
+      "accounts.peerAvailability",
+      null
+    );
+    // Fail closed on missing/malformed probes (tests often stub unknown RPCs as null).
+    return isPeerAvailability(result) ? result : EMPTY_PEER_AVAILABILITY;
+  } catch {
+    // Fail closed: do not default-select peers we could not probe.
+    return EMPTY_PEER_AVAILABILITY;
+  }
+}
+
 function SwitchConfirmContent({
+  availability,
   mode,
   t,
   close,
 }: {
+  availability: PeerAvailability;
   mode: PeerSyncDialogMode;
   t: Translate;
   close: RendererPluginContentDialogRenderProps<SwitchConfirmResult>["close"];
 }): JSX.Element {
+  const { available } = partitionPeerTargets(ALL_SYNC_TARGETS, availability);
+  const showSyncSection = available.length > 0;
   const [syncTargets, setSyncTargets] = useState<Set<CrossToolSyncTarget>>(
-    () => new Set(ALL_SYNC_TARGETS)
+    () => new Set(available)
   );
 
   function toggleTarget(target: CrossToolSyncTarget): void {
@@ -40,7 +76,7 @@ function SwitchConfirmContent({
     });
   }
 
-  const targetLabel: Record<Exclude<CrossToolSyncTarget, "codex">, string> = {
+  const targetLabel: Record<PeerSyncTarget, string> = {
     opencode: t("pier.codex.switch.syncTarget.opencode", "OpenCode"),
     pi: t("pier.codex.switch.syncTarget.pi", "Pi"),
     omp: t("pier.codex.switch.syncTarget.omp", "OMP"),
@@ -63,30 +99,32 @@ function SwitchConfirmContent({
 
   return (
     <div className="flex flex-col gap-4" data-pier-codex-scope="">
-      <div className="flex flex-col gap-3">
-        <p className="font-medium text-sm">{sectionLabel}</p>
-        <div className="flex flex-col gap-2">
-          {ALL_SYNC_TARGETS.map((target) => {
-            const checked = syncTargets.has(target);
-            return (
-              <label
-                className="flex items-center gap-2 text-sm"
-                htmlFor={`sync-target-${target}`}
-                key={target}
-              >
-                <Checkbox
-                  checked={checked}
-                  id={`sync-target-${target}`}
-                  onCheckedChange={() => {
-                    toggleTarget(target);
-                  }}
-                />
-                <span>{targetLabel[target]}</span>
-              </label>
-            );
-          })}
+      {showSyncSection ? (
+        <div className="flex flex-col gap-3">
+          <p className="font-medium text-sm">{sectionLabel}</p>
+          <div className="flex flex-col gap-2">
+            {available.map((target) => {
+              const checked = syncTargets.has(target);
+              return (
+                <label
+                  className="flex items-center gap-2 text-sm"
+                  htmlFor={`sync-target-${target}`}
+                  key={target}
+                >
+                  <Checkbox
+                    checked={checked}
+                    id={`sync-target-${target}`}
+                    onCheckedChange={() => {
+                      toggleTarget(target);
+                    }}
+                  />
+                  <span>{targetLabel[target]}</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : null}
       <div className="flex flex-wrap justify-end gap-2">
         <Button
           onClick={() => close({ confirmed: false, syncTargets: [] })}
@@ -116,6 +154,15 @@ export async function openSwitchConfirmDialog(options: {
 }): Promise<SwitchConfirmResult> {
   const mode = options.mode ?? "switch";
   const { context, t } = options;
+  const availability = await loadPeerAvailability(context);
+  const { available } = partitionPeerTargets(ALL_SYNC_TARGETS, availability);
+
+  // Dedicated sync entry with no installed peers should not open an empty dialog.
+  // The settings Share button is hidden in that case; keep this as a silent guard.
+  if (mode === "sync" && available.length === 0) {
+    return { confirmed: false, syncTargets: [] };
+  }
+
   const title =
     mode === "sync"
       ? t(
@@ -143,7 +190,12 @@ export async function openSwitchConfirmDialog(options: {
     description,
     size: "sm",
     content: (props) => (
-      <SwitchConfirmContent close={props.close} mode={mode} t={t} />
+      <SwitchConfirmContent
+        availability={availability}
+        close={props.close}
+        mode={mode}
+        t={t}
+      />
     ),
   });
   const result = await handle.result;

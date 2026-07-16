@@ -89,6 +89,18 @@ export const ALL_SYNC_TARGETS: readonly Exclude<
 
 export type PeerSyncTarget = (typeof ALL_SYNC_TARGETS)[number];
 
+export interface PeerAvailability {
+  omp: boolean;
+  opencode: boolean;
+  pi: boolean;
+}
+
+export const EMPTY_PEER_AVAILABILITY: PeerAvailability = {
+  omp: false,
+  opencode: false,
+  pi: false,
+};
+
 export interface SelectAccountPayload {
   accountId: string;
   /** Optional peer tools to mirror credentials into. Defaults to none. */

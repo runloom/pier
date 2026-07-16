@@ -11,7 +11,7 @@ import { defineConfig } from "vite";
  *   resolves them at runtime.
  * - `@pier/plugin-api` / `@pier/plugin-api/main` are types-only entry points
  *   and stay external. Runtime helpers under `@pier/plugin-api/*` (e.g.
- *   `account-usage`) must be **inlined** — installed packages have no
+ *   `account-usage`, `peer-sync/main`) must be **inlined** — installed packages have no
  *   node_modules, and package validation rejects unresolved main imports.
  */
 export default defineConfig({

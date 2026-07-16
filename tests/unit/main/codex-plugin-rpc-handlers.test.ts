@@ -162,4 +162,29 @@ describe("Codex plugin RPC handlers", () => {
       force: true,
     });
   });
+
+  it("exposes accounts.peerAvailability from shared peer-sync probes", async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
+    const service = serviceStub();
+    registerCodexRpcHandlers({
+      acquireUsagePolling: vi.fn(async () => undefined),
+      releaseUsagePolling: vi.fn(),
+      rpc: {
+        handle: (method, handler) => {
+          handlers.set(method, handler);
+        },
+      },
+      service,
+    });
+
+    expect(handlers.has("accounts.peerAvailability")).toBe(true);
+    const snapshot = await handlers.get("accounts.peerAvailability")?.(null);
+    expect(snapshot).toEqual(
+      expect.objectContaining({
+        omp: expect.any(Boolean),
+        opencode: expect.any(Boolean),
+        pi: expect.any(Boolean),
+      })
+    );
+  });
 });

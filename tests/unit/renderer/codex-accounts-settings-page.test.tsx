@@ -6,6 +6,7 @@ import {
   fireEvent,
   render,
   screen,
+  waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { AppContentDialogHost } from "@/components/common/app-content-dialog-host.tsx";
@@ -85,7 +86,13 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
     payload?: unknown
   ): Promise<T> => {
     invokeCalls.push({ method, payload });
-    return (method === "accounts.snapshot" ? snapshot : null) as T;
+    if (method === "accounts.snapshot") {
+      return snapshot as T;
+    }
+    if (method === "accounts.peerAvailability") {
+      return { omp: true, opencode: true, pi: true } as T;
+    }
+    return null as T;
   };
   return {
     context: {
@@ -637,6 +644,45 @@ describe("AccountsSettingsPage", () => {
     });
   });
 
+  it("hides the sync-to-peers button when no peer tools are available", async () => {
+    const snap = snapshotWithAccount({
+      accounts: [
+        {
+          id: "acc-1",
+          label: "active@codex.dev",
+          status: "active",
+          error: null,
+        },
+      ],
+    });
+    const { context } = contextWithSnapshot(snap);
+    context.rpc.invoke = async <T,>(
+      method: string,
+      _payload?: unknown
+    ): Promise<T> => {
+      if (method === "accounts.snapshot") {
+        return snap as T;
+      }
+      if (method === "accounts.peerAvailability") {
+        return { omp: false, opencode: false, pi: false } as T;
+      }
+      return null as T;
+    };
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
+
+    await screen.findByText("active@codex.dev");
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Sync to other tools" })
+      ).toBeNull();
+    });
+  });
+
   it("syncs the current account credentials to peer tools without selecting", async () => {
     const snap = snapshotWithAccount({
       accounts: [
@@ -658,7 +704,7 @@ describe("AccountsSettingsPage", () => {
 
     await screen.findByText("active@codex.dev");
     fireEvent.click(
-      screen.getByRole("button", { name: "Sync to other tools" })
+      await screen.findByRole("button", { name: "Sync to other tools" })
     );
 
     expect(
@@ -708,7 +754,7 @@ describe("AccountsSettingsPage", () => {
 
     await screen.findByText("active@codex.dev");
     fireEvent.click(
-      screen.getByRole("button", { name: "Sync to other tools" })
+      await screen.findByRole("button", { name: "Sync to other tools" })
     );
     const cancelButton = await screen.findByRole("button", { name: "Cancel" });
     await act(async () => {

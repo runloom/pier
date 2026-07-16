@@ -1,3 +1,4 @@
+import { partitionPeerTargets } from "@pier/plugin-api/peer-sync";
 import type {
   ExternalRendererPluginContext,
   RendererPluginContentDialogRenderProps,
@@ -8,6 +9,9 @@ import { type JSX, useState } from "react";
 import {
   ALL_SYNC_TARGETS,
   type CrossToolSyncTarget,
+  EMPTY_PEER_AVAILABILITY,
+  type PeerAvailability,
+  type PeerSyncTarget,
 } from "../shared/accounts.ts";
 import type { Translate } from "./format-account-error.ts";
 
@@ -18,24 +22,63 @@ export interface SwitchConfirmResult {
   syncTargets: CrossToolSyncTarget[];
 }
 
+function isPeerAvailability(value: unknown): value is PeerAvailability {
+  if (typeof value !== "object" || value === null) {
+    return false;
+  }
+  const record = value as Record<string, unknown>;
+  return (
+    typeof record.omp === "boolean" &&
+    typeof record.opencode === "boolean" &&
+    typeof record.pi === "boolean"
+  );
+}
+
+export async function loadPeerAvailability(
+  context: ExternalRendererPluginContext
+): Promise<PeerAvailability> {
+  try {
+    const result = await context.rpc.invoke<unknown>(
+      "accounts.peerAvailability",
+      null
+    );
+    // Fail closed on missing/malformed probes (tests often stub unknown RPCs as null).
+    return isPeerAvailability(result) ? result : EMPTY_PEER_AVAILABILITY;
+  } catch {
+    // Fail closed: do not default-select peers we could not probe.
+    return EMPTY_PEER_AVAILABILITY;
+  }
+}
+
+export function protocolTargetsFor(
+  accountKind: "api_key" | "oidc"
+): readonly PeerSyncTarget[] {
+  // pi has no xAI OAuth support, so OIDC accounts never offer it as a peer target.
+  return accountKind === "api_key"
+    ? ALL_SYNC_TARGETS
+    : ALL_SYNC_TARGETS.filter((target) => target !== "pi");
+}
+
 function SwitchConfirmContent({
   accountKind,
+  availability,
   mode,
   t,
   close,
 }: {
   accountKind: "api_key" | "oidc";
+  availability: PeerAvailability;
   mode: PeerSyncDialogMode;
   t: Translate;
   close: RendererPluginContentDialogRenderProps<SwitchConfirmResult>["close"];
 }): JSX.Element {
-  // pi has no xAI OAuth support, so OIDC accounts never offer it as a peer target.
-  const availableTargets =
-    accountKind === "api_key"
-      ? ALL_SYNC_TARGETS
-      : ALL_SYNC_TARGETS.filter((target) => target !== "pi");
+  const { available } = partitionPeerTargets(
+    protocolTargetsFor(accountKind),
+    availability
+  );
+  const showSyncSection = available.length > 0;
   const [syncTargets, setSyncTargets] = useState<Set<CrossToolSyncTarget>>(
-    () => new Set(availableTargets)
+    () => new Set(available)
   );
 
   function toggleTarget(target: CrossToolSyncTarget): void {
@@ -50,7 +93,7 @@ function SwitchConfirmContent({
     });
   }
 
-  const targetLabel: Record<Exclude<CrossToolSyncTarget, "grok">, string> = {
+  const targetLabel: Record<PeerSyncTarget, string> = {
     opencode: t("pier.grok.switch.syncTarget.opencode", "OpenCode"),
     pi: t("pier.grok.switch.syncTarget.pi", "Pi"),
     omp: t("pier.grok.switch.syncTarget.omp", "OMP"),
@@ -73,30 +116,32 @@ function SwitchConfirmContent({
 
   return (
     <div className="flex flex-col gap-4" data-pier-grok-scope="">
-      <div className="flex flex-col gap-3">
-        <p className="font-medium text-sm">{sectionLabel}</p>
-        <div className="flex flex-col gap-2">
-          {availableTargets.map((target) => {
-            const checked = syncTargets.has(target);
-            return (
-              <label
-                className="flex items-center gap-2 text-sm"
-                htmlFor={`sync-target-${target}`}
-                key={target}
-              >
-                <Checkbox
-                  checked={checked}
-                  id={`sync-target-${target}`}
-                  onCheckedChange={() => {
-                    toggleTarget(target);
-                  }}
-                />
-                <span>{targetLabel[target]}</span>
-              </label>
-            );
-          })}
+      {showSyncSection ? (
+        <div className="flex flex-col gap-3">
+          <p className="font-medium text-sm">{sectionLabel}</p>
+          <div className="flex flex-col gap-2">
+            {available.map((target) => {
+              const checked = syncTargets.has(target);
+              return (
+                <label
+                  className="flex items-center gap-2 text-sm"
+                  htmlFor={`sync-target-${target}`}
+                  key={target}
+                >
+                  <Checkbox
+                    checked={checked}
+                    id={`sync-target-${target}`}
+                    onCheckedChange={() => {
+                      toggleTarget(target);
+                    }}
+                  />
+                  <span>{targetLabel[target]}</span>
+                </label>
+              );
+            })}
+          </div>
         </div>
-      </div>
+      ) : null}
       <div className="flex flex-wrap justify-end gap-2">
         <Button
           onClick={() => close({ confirmed: false, syncTargets: [] })}
@@ -127,6 +172,18 @@ export async function openSwitchConfirmDialog(options: {
 }): Promise<SwitchConfirmResult> {
   const mode = options.mode ?? "switch";
   const { accountKind, context, t } = options;
+  const availability = await loadPeerAvailability(context);
+  const { available } = partitionPeerTargets(
+    protocolTargetsFor(accountKind),
+    availability
+  );
+
+  // Dedicated sync entry with no installed peers should not open an empty dialog.
+  // The settings Share button is hidden in that case; keep this as a silent guard.
+  if (mode === "sync" && available.length === 0) {
+    return { confirmed: false, syncTargets: [] };
+  }
+
   const title =
     mode === "sync"
       ? t(
@@ -156,6 +213,7 @@ export async function openSwitchConfirmDialog(options: {
     content: (props) => (
       <SwitchConfirmContent
         accountKind={accountKind}
+        availability={availability}
         close={props.close}
         mode={mode}
         t={t}

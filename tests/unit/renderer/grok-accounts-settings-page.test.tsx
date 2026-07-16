@@ -67,6 +67,9 @@ function contextWithSnapshot(snapshot: GrokAccountsSnapshot): {
     if (method === "accounts.snapshot") {
       return snapshot as T;
     }
+    if (method === "accounts.peerAvailability") {
+      return { omp: true, opencode: true, pi: true } as T;
+    }
     return null as T;
   };
   return {
@@ -140,6 +143,32 @@ afterEach(() => {
 });
 
 describe("Grok accounts settings page", () => {
+  it("hides the sync-to-peers button when no peer tools are available", async () => {
+    const snap = snapshotWithAccounts();
+    const { context } = contextWithSnapshot(snap);
+    context.rpc.invoke = async <T,>(method: string): Promise<T> => {
+      if (method === "accounts.snapshot") {
+        return snap as T;
+      }
+      if (method === "accounts.peerAvailability") {
+        return { omp: false, opencode: false, pi: false } as T;
+      }
+      return null as T;
+    };
+    render(
+      <>
+        <AppContentDialogHost />
+        <AccountsSettingsPage context={context} />
+      </>
+    );
+    await screen.findByText("active@example.com");
+    await waitFor(() => {
+      expect(
+        screen.queryByRole("button", { name: "Sync to other tools" })
+      ).toBeNull();
+    });
+  });
+
   it("shows empty state when no accounts", async () => {
     const { context } = contextWithSnapshot(emptySnapshot());
     await act(async () => {

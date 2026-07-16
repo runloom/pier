@@ -75,6 +75,18 @@ export const ALL_SYNC_TARGETS: readonly Exclude<CrossToolSyncTarget, "grok">[] =
 
 export type PeerSyncTarget = (typeof ALL_SYNC_TARGETS)[number];
 
+export interface PeerAvailability {
+  omp: boolean;
+  opencode: boolean;
+  pi: boolean;
+}
+
+export const EMPTY_PEER_AVAILABILITY: PeerAvailability = {
+  omp: false,
+  opencode: false,
+  pi: false,
+};
+
 export interface SyncToPeersPayload {
   accountId?: string | undefined;
   syncTargets: readonly PeerSyncTarget[];

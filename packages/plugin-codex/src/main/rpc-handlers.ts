@@ -1,4 +1,5 @@
 import type { MainPluginContext } from "@pier/plugin-api/main";
+import { detectPeerAvailability } from "@pier/plugin-api/peer-sync/main";
 import { z } from "zod/mini";
 import {
   addAccountPayloadSchema,
@@ -45,6 +46,10 @@ export function registerCodexRpcHandlers(options: {
   rpc.handle("accounts.syncToPeers", async (payload) => {
     await service.syncToPeers(syncToPeersPayloadSchema.parse(payload));
     return null;
+  });
+  rpc.handle("accounts.peerAvailability", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    return detectPeerAvailability();
   });
   rpc.handle("accounts.remove", async (payload) => {
     await service.remove(removeAccountPayloadSchema.parse(payload));
