@@ -114,7 +114,13 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
     payload?: unknown
   ): Promise<T> => {
     invokeCalls.push({ method, payload });
-    return (method === "accounts.snapshot" ? snapshot : null) as T;
+    if (method === "accounts.snapshot") {
+      return snapshot as T;
+    }
+    if (method === "accounts.peerAvailability") {
+      return { omp: true, opencode: true, pi: true } as T;
+    }
+    return null as T;
   };
   return {
     context: {

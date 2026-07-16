@@ -1,3 +1,4 @@
+import { partitionPeerTargets } from "@pier/plugin-api/peer-sync";
 import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Badge } from "@pier/ui/badge.tsx";
@@ -36,15 +37,23 @@ import {
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { CircleUserRound, RefreshCw, Share2 } from "lucide-react";
-import { Fragment, type JSX, useState } from "react";
-import type { PeerSyncTarget } from "../shared/accounts.ts";
+import { Fragment, type JSX, useEffect, useState } from "react";
+import {
+  ALL_SYNC_TARGETS,
+  EMPTY_PEER_AVAILABILITY,
+  type PeerAvailability,
+  type PeerSyncTarget,
+} from "../shared/accounts.ts";
 import {
   AccountAvatar,
   OtherAccount,
   QuotaGroup,
   resetCredits,
 } from "./account-display.tsx";
-import { openSwitchConfirmDialog } from "./account-switch.ts";
+import {
+  loadPeerAvailability,
+  openSwitchConfirmDialog,
+} from "./account-switch.ts";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
 import { formatAccountError } from "./format-account-error.ts";
 import type { Translate } from "./usage-meter.tsx";
@@ -54,6 +63,17 @@ import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
 
 export interface AccountsSettingsPageProps {
   context: ExternalRendererPluginContext;
+}
+
+function samePeerAvailability(
+  left: PeerAvailability,
+  right: PeerAvailability
+): boolean {
+  return (
+    left.omp === right.omp &&
+    left.opencode === right.opencode &&
+    left.pi === right.pi
+  );
 }
 
 const SETTINGS_LAYOUT_CLASS =
@@ -80,6 +100,41 @@ export function AccountsSettingsPage({
   useUsagePollingLease(context, "settings:accounts", true);
   const t: Translate = (key, fallback) => context.i18n.t(key, fallback);
   const [, setBusyAccountId] = useState<string | null>(null);
+  const [peerAvailability, setPeerAvailability] = useState<PeerAvailability>(
+    EMPTY_PEER_AVAILABILITY
+  );
+  useEffect(() => {
+    // Share only appears for the active account. Skip probing on empty pages so
+    // a late availability resolve cannot remount Add Account dialog callbacks.
+    const activeAccountId = snapshot?.activeAccountId ?? null;
+    if (!activeAccountId) {
+      setPeerAvailability((prev) =>
+        samePeerAvailability(prev, EMPTY_PEER_AVAILABILITY)
+          ? prev
+          : EMPTY_PEER_AVAILABILITY
+      );
+      return;
+    }
+    let cancelled = false;
+    loadPeerAvailability(context)
+      .then((availability) => {
+        if (cancelled) return;
+        setPeerAvailability((prev) =>
+          samePeerAvailability(prev, availability) ? prev : availability
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPeerAvailability((prev) =>
+          samePeerAvailability(prev, EMPTY_PEER_AVAILABILITY)
+            ? prev
+            : EMPTY_PEER_AVAILABILITY
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [context, snapshot?.activeAccountId]);
   const reportError = (err: unknown): void => {
     context.dialogs
       .alert({
@@ -230,28 +285,31 @@ export function AccountsSettingsPage({
             </CardTitle>
             <CardAction className="flex items-center gap-2">
               <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      aria-label={t(
+                {partitionPeerTargets(ALL_SYNC_TARGETS, peerAvailability)
+                  .available.length > 0 ? (
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        aria-label={t(
+                          "pier.codex.accounts.settings.syncPeers",
+                          "Sync to other tools"
+                        )}
+                        onClick={() => handleSyncPeers(active.id)}
+                        size="icon-sm"
+                        type="button"
+                        variant="ghost"
+                      >
+                        <Share2 data-icon="inline-start" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent data-pier-codex-scope="">
+                      {t(
                         "pier.codex.accounts.settings.syncPeers",
                         "Sync to other tools"
                       )}
-                      onClick={() => handleSyncPeers(active.id)}
-                      size="icon-sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Share2 data-icon="inline-start" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent data-pier-codex-scope="">
-                    {t(
-                      "pier.codex.accounts.settings.syncPeers",
-                      "Sync to other tools"
-                    )}
-                  </TooltipContent>
-                </Tooltip>
+                    </TooltipContent>
+                  </Tooltip>
+                ) : null}
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
