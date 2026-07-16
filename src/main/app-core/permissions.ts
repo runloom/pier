@@ -129,6 +129,7 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   // Git 读写分开授权:读命令 git:read, 写命令 git:write。
   "git.checkoutBranch": { capabilities: ["git:write"] },
   "git.commit": { capabilities: ["git:write"] },
+  "git.createAndSwitchBranch": { capabilities: ["git:write"] },
   "git.createBranch": { capabilities: ["git:write"] },
   "git.deleteBranch": { capabilities: ["git:write"] },
   "git.discardChanges": { capabilities: ["git:write"] },

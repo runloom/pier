@@ -9,6 +9,19 @@ import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
 const AGENT_ID: AgentKind = "opencode";
 
+/** Host-side evidence table for S1 gates (mirrors plugin mapPierEvent). */
+export const OPENCODE_PERMISSION_NATIVE_EVENTS = [
+  "permission.updated",
+] as const;
+
+export function mapOpenCodeNativeEventToPier(
+  nativeType: string
+): string | null {
+  if (nativeType === "permission.updated") return "PermissionRequest";
+  if (nativeType === "permission.replied") return "processing";
+  return null;
+}
+
 /**
  * 插件文件名。部署进 opencode 的**自动发现目录**（<configRoot>/plugins/）——
  * 实证发现 config `plugin` 数组的绝对路径注册在当前 opencode 版本不生效

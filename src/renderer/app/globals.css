@@ -39,13 +39,14 @@
   --muted-foreground: oklch(0.65 0 0);
   --accent: oklch(0.25 0 0);
   --accent-foreground: oklch(0.985 0 0);
-  /* 稳定语义色板：不随编辑器 / 终端主题漂移。原始值只在本文件维护。 */
-  --destructive: #f87171;
+  /* 稳定语义色板：不随编辑器 / 终端主题漂移。原始值只在本文件维护。
+     soft status 表面对齐 Ant Design map token（colorXxxBg / Border / colorXxx）。 */
+  --destructive: #ff4d4f;
   --destructive-foreground: oklch(0.145 0 0);
-  --warning: #fbbf24;
+  --warning: #d89614;
   --warning-foreground: oklch(0.145 0 0);
-  --success: #34d399;
-  --info: #60a5fa;
+  --success: #49aa19;
+  --info: #1668dc;
   --done: #c084fc;
   /* 文件树与文件标签共享的文件类型图标调色板。类型映射由 packages/ui 持有。 */
   --pier-file-icon-gray: #adadb1;
@@ -93,38 +94,23 @@
     var(--muted-foreground) 20%,
     transparent
   );
-  --status-info-bg: color-mix(in oklab, var(--info) 14%, transparent);
-  --status-info-fg: color-mix(in oklab, var(--info) 82%, var(--foreground));
-  --status-info-border: color-mix(in oklab, var(--info) 24%, transparent);
-  --status-success-bg: color-mix(in oklab, var(--success) 14%, transparent);
-  --status-success-fg: color-mix(
-    in oklab,
-    var(--success) 82%,
-    var(--foreground)
-  );
-  --status-success-border: color-mix(in oklab, var(--success) 24%, transparent);
-  --status-warning-bg: color-mix(in oklab, var(--warning) 16%, transparent);
-  --status-warning-fg: color-mix(
-    in oklab,
-    var(--warning) 78%,
-    var(--foreground)
-  );
-  --status-warning-border: color-mix(in oklab, var(--warning) 28%, transparent);
-  --status-danger-bg: color-mix(in oklab, var(--destructive) 14%, transparent);
-  --status-danger-fg: color-mix(
-    in oklab,
-    var(--destructive) 86%,
-    var(--foreground)
-  );
-  --status-danger-border: color-mix(
-    in oklab,
-    var(--destructive) 24%,
-    transparent
-  );
+  /* Ant Design dark algorithm: colorXxxBg / colorXxxBorder / colorXxx */
+  --status-info-bg: #111a2c;
+  --status-info-fg: #1668dc;
+  --status-info-border: #15325b;
+  --status-success-bg: #162312;
+  --status-success-fg: #49aa19;
+  --status-success-border: #274916;
+  --status-warning-bg: #2b2111;
+  --status-warning-fg: #d89614;
+  --status-warning-border: #594214;
+  --status-danger-bg: #2c1618;
+  --status-danger-fg: #dc4446;
+  --status-danger-border: #5b2526;
   --status-done-bg: color-mix(in oklab, var(--done) 14%, transparent);
   --status-done-fg: color-mix(in oklab, var(--done) 82%, var(--foreground));
   --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
-  --status-solid-foreground: oklch(0.145 0 0);
+  --status-solid-foreground: oklch(0.985 0 0);
   --action-accent: var(--primary);
   --action-accent-foreground: var(--primary-foreground);
   --action-danger: var(--destructive);
@@ -220,14 +206,27 @@
   --muted-foreground: oklch(0.55 0 0);
   --accent: oklch(0.97 0 0);
   --accent-foreground: oklch(0.205 0 0);
-  --destructive: #dc2626;
+  --destructive: #ff4d4f;
   --destructive-foreground: oklch(0.985 0 0);
-  --warning: #b45309;
+  --warning: #faad14;
   --warning-foreground: oklch(0.985 0 0);
-  --success: #047857;
-  --info: #2563eb;
+  --success: #52c41a;
+  --info: #1677ff;
   --done: #7e22ce;
   --status-solid-foreground: oklch(0.985 0 0);
+  /* Ant Design default algorithm soft surfaces */
+  --status-info-bg: #e6f4ff;
+  --status-info-fg: #1677ff;
+  --status-info-border: #91caff;
+  --status-success-bg: #f6ffed;
+  --status-success-fg: #52c41a;
+  --status-success-border: #b7eb8f;
+  --status-warning-bg: #fffbe6;
+  --status-warning-fg: #faad14;
+  --status-warning-border: #ffe58f;
+  --status-danger-bg: #fff2f0;
+  --status-danger-fg: #ff4d4f;
+  --status-danger-border: #ffccc7;
   --chart-1: var(--info);
   --chart-2: var(--success);
   --chart-3: var(--warning);
@@ -637,6 +636,9 @@ body {
 .dv-tab-ghost-drag .dv-default-tab {
   box-sizing: border-box;
   gap: 6px;
+  /* 与拖拽 ghost 一致：限制 tab 最大宽度，ellipsis 才能生效（否则 tab 随文案撑开） */
+  max-width: 180px;
+  min-width: 0;
   padding-inline: 8px 4px;
 }
 
@@ -648,6 +650,7 @@ body {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
@@ -867,6 +870,8 @@ body {
 }
 
 .dv-tab {
+  max-width: 180px;
+  min-width: 0;
   padding-left: 0;
   padding-right: 0;
 }
@@ -945,6 +950,9 @@ body {
    长错误走 showAppAlert。 */
 [data-sonner-toaster] {
   font-family: var(--pier-ui-font-family);
+  /* 保证落在终端 NSView 之上的命中层语义清晰；实际命中靠 webOverlayRects。 */
+  pointer-events: auto;
+  z-index: 100;
 }
 
 /* 轨道居中后，短胶囊用 left/right + margin auto 在轨道内再居中；
@@ -975,6 +983,8 @@ body {
   overflow-wrap: normal !important;
   word-break: keep-all !important;
   white-space: nowrap !important;
+  pointer-events: auto !important;
+  -webkit-app-region: no-drag;
 }
 
 [data-sonner-toast].pier-toast [data-content] {
@@ -1013,4 +1023,7 @@ body {
   color: var(--toast-foreground) !important;
   margin-left: 4px !important;
   flex-shrink: 0 !important;
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  -webkit-app-region: no-drag;
 }

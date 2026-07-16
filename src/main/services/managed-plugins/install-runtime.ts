@@ -130,7 +130,12 @@ export async function materializeRuntimeSource(
       ...(sourceRevision ? { sourceRevision } : {}),
       version: effective.version,
     };
-  } catch {
+  } catch (error) {
+    // Silent null previously made "installed but not loaded" undiagnosable.
+    console.error(
+      `[managed-plugins] materialize failed for ${pluginId}@${effective.version} (${effective.sourceKind}):`,
+      error instanceof Error ? error.message : error
+    );
     return null;
   }
 }

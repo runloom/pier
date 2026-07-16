@@ -6,6 +6,10 @@ import {
   agentKindSchema,
   agentPermissionModePreferenceSchema,
 } from "./agent.ts";
+import {
+  agentAttentionSettingsSchema,
+  DEFAULT_AGENT_ATTENTION_SETTINGS,
+} from "./agent-attention.ts";
 
 export const themePreferenceSchema = z.enum(["light", "dark", "system"]);
 export const resolvedThemeSchema = z.enum(["light", "dark"]);
@@ -121,6 +125,9 @@ export const projectPreferencesSchema = z.object({
   worktreeRootPath: z.string().max(1024).default(""),
   /** 是否向已安装 agent 的官方 hook 配置里注入 Pier agent 状态 hook (opt-out, 默认开; 关闭即卸载)。 */
   agentStatusHooks: z.boolean().default(true),
+  agentAttention: agentAttentionSettingsSchema.default(
+    DEFAULT_AGENT_ATTENTION_SETTINGS
+  ),
   gitAutoFetchEnabled: z.boolean().default(DEFAULT_GIT_AUTO_FETCH_ENABLED),
   gitAutoFetchIntervalMinutes: z
     .number()

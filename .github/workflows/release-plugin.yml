@@ -15,11 +15,12 @@ on:
         description: 'Version to release'
         required: true
 
-# A plugin package version change merged to `main` automatically builds
-# `packages/plugin-<tail>`, publishes the tgz under
-# `plugin-<tail>-v<version>`, then regenerates `plugins/index.v1.json`.
-# `workflow_dispatch` remains available for recovery. Each automatic run must
-# contain exactly one plugin package version change so releases stay atomic.
+# Plugin package version changes merged to `main` automatically build every
+# changed releasable `packages/plugin-<tail>` (must have `plugin.json`),
+# publish each tgz under `plugin-<tail>-v<version>` (serially, sorted by
+# tail), then regenerate `plugins/index.v1.json` once. Shared packages such
+# as `plugin-api` are ignored. `workflow_dispatch` remains available for
+# single-plugin recovery.
 
 permissions:
   contents: write
@@ -34,107 +35,176 @@ jobs:
           # We need write access to commit the regenerated index back to main.
           token: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Resolve plugin release
+      - name: Resolve plugin release targets
         id: parse
         run: |
+          set -euo pipefail
+          TARGETS='[]'
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then
             TAIL="${{ github.event.inputs.plugin }}"
             VERSION="${{ github.event.inputs.version }}"
+            PACKAGE_JSON="packages/plugin-${TAIL}/package.json"
+            PLUGIN_JSON="packages/plugin-${TAIL}/plugin.json"
+            if [ ! -f "$PLUGIN_JSON" ]; then
+              echo "packages/plugin-${TAIL} is not a releasable plugin (missing plugin.json)" >&2
+              exit 1
+            fi
+            ACTUAL_VERSION=$(node -p "require('./${PACKAGE_JSON}').version")
+            if [ "$ACTUAL_VERSION" != "$VERSION" ]; then
+              echo "requested ${TAIL}@${VERSION}, but ${PACKAGE_JSON} declares ${ACTUAL_VERSION}" >&2
+              exit 1
+            fi
+            TARGETS=$(node -e '
+              const t = process.argv[1];
+              const v = process.argv[2];
+              console.log(JSON.stringify([{
+                tail: t,
+                version: v,
+                tag: `plugin-${t}-v${v}`,
+                package: `@pier/plugin-${t}`,
+                packageJson: `packages/plugin-${t}/package.json`,
+              }]));
+            ' "$TAIL" "$VERSION")
           else
-            CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- 'packages/plugin-*/package.json')
+            CHANGED=$(git diff --name-only "${{ github.event.before }}" "${{ github.sha }}" -- 'packages/plugin-*/package.json' || true)
             COUNT=$(printf '%s\n' "$CHANGED" | awk 'NF { count++ } END { print count + 0 }')
-            if [ "$COUNT" -ne 1 ]; then
-              echo "expected exactly one changed plugin package.json, found $COUNT" >&2
+            if [ "$COUNT" -lt 1 ]; then
+              echo "expected at least one changed plugin package.json, found $COUNT" >&2
               printf '%s\n' "$CHANGED" >&2
               exit 1
             fi
-            PACKAGE_JSON="$CHANGED"
-            REST="${PACKAGE_JSON#packages/plugin-}"
-            TAIL="${REST%/package.json}"
-            VERSION=$(node -p "require('./${PACKAGE_JSON}').version")
+            # Resolve releasable targets only (must have plugin.json), sorted by tail.
+            # Shared packages like plugin-api change package.json but are not released.
+            TARGETS=$(printf '%s\n' "$CHANGED" | node -e '
+              const fs = require("node:fs");
+              const paths = fs.readFileSync(0, "utf8").split(/\r?\n/).filter(Boolean);
+              const targets = [];
+              for (const packageJson of paths) {
+                if (!/^packages\/plugin-[^/]+\/package\.json$/.test(packageJson)) {
+                  throw new Error(`unexpected package path: ${packageJson}`);
+                }
+                const tail = packageJson.slice(
+                  "packages/plugin-".length,
+                  -"/package.json".length
+                );
+                const pluginJson = `packages/plugin-${tail}/plugin.json`;
+                if (!fs.existsSync(pluginJson)) {
+                  console.error(`skipping non-releasable package (no plugin.json): ${packageJson}`);
+                  continue;
+                }
+                const version = JSON.parse(fs.readFileSync(packageJson, "utf8")).version;
+                if (typeof version !== "string" || version.length === 0) {
+                  throw new Error(`missing version in ${packageJson}`);
+                }
+                targets.push({
+                  tail,
+                  version,
+                  tag: `plugin-${tail}-v${version}`,
+                  package: `@pier/plugin-${tail}`,
+                  packageJson,
+                });
+              }
+              targets.sort((a, b) => a.tail.localeCompare(b.tail));
+              console.log(JSON.stringify(targets));
+            ')
           fi
-          PACKAGE_JSON="packages/plugin-${TAIL}/package.json"
-          ACTUAL_VERSION=$(node -p "require('./${PACKAGE_JSON}').version")
-          if [ "$ACTUAL_VERSION" != "$VERSION" ]; then
-            echo "requested ${TAIL}@${VERSION}, but ${PACKAGE_JSON} declares ${ACTUAL_VERSION}" >&2
-            exit 1
+          TARGET_COUNT=$(echo "$TARGETS" | node -e 'const t=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(String(t.length));')
+          if [ "$TARGET_COUNT" -eq 0 ]; then
+            echo "no releasable plugin package.json changes (plugin.json required); skipping release"
+            {
+              echo "should_release=false"
+              echo "release_targets=[]"
+              echo "release_tags="
+            } >> "$GITHUB_OUTPUT"
+            exit 0
           fi
-          TAG="plugin-${TAIL}-v${VERSION}"
-          echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "tail=$TAIL" >> "$GITHUB_OUTPUT"
-          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
-          echo "package=@pier/plugin-$TAIL" >> "$GITHUB_OUTPUT"
+          {
+            echo "should_release=true"
+            echo "release_targets<<EOF"
+            echo "$TARGETS"
+            echo "EOF"
+          } >> "$GITHUB_OUTPUT"
+          echo "Resolved release targets (sorted by tail):"
+          echo "$TARGETS" | node -e 'const t=JSON.parse(require("fs").readFileSync(0,"utf8")); for (const x of t) console.log(`- ${x.tag}`);'
+          TAGS=$(echo "$TARGETS" | node -e 'const t=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(t.map((x)=>x.tag).join(", "));')
+          echo "release_tags=$TAGS" >> "$GITHUB_OUTPUT"
 
       - uses: pnpm/action-setup@v4
+        if: steps.parse.outputs.should_release == 'true'
 
       - uses: actions/setup-node@v4
+        if: steps.parse.outputs.should_release == 'true'
         with:
           node-version: 24
           cache: 'pnpm'
 
-      - run: pnpm install --frozen-lockfile
+      - if: steps.parse.outputs.should_release == 'true'
+        run: pnpm install --frozen-lockfile
 
-      - name: Build + pack plugin
-        run: pnpm --filter "${{ steps.parse.outputs.package }}" run build:package
-
-      - name: Locate tgz
-        id: locate
-        run: |
-          DIST="packages/plugin-${{ steps.parse.outputs.tail }}/dist-pkg"
-          TGZ=$(ls "$DIST"/*.tgz | head -1)
-          SHA=$(cat "$TGZ.sha256" | awk '{print $1}')
-          SIZE=$(stat -f%z "$TGZ")
-          echo "tgz=$TGZ" >> "$GITHUB_OUTPUT"
-          echo "sha256=$SHA" >> "$GITHUB_OUTPUT"
-          echo "size=$SIZE" >> "$GITHUB_OUTPUT"
-
-      - name: Check existing release
-        id: existing
+      - name: Build, verify, and publish each plugin release
+        if: steps.parse.outputs.should_release == 'true'
         env:
           GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.parse.outputs.tag }}
+          RELEASE_TARGETS: ${{ steps.parse.outputs.release_targets }}
         run: |
-          if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
-            echo "exists=true" >> "$GITHUB_OUTPUT"
-          else
-            echo "exists=false" >> "$GITHUB_OUTPUT"
-          fi
+          set -euo pipefail
+          echo "$RELEASE_TARGETS" | node -e '
+            const fs = require("node:fs");
+            const targets = JSON.parse(fs.readFileSync(0, "utf8"));
+            if (!Array.isArray(targets) || targets.length === 0) {
+              throw new Error("release_targets must be a non-empty array");
+            }
+            fs.writeFileSync("release-targets.json", JSON.stringify(targets, null, 2));
+          '
 
-      - name: Verify existing release asset is immutable
-        if: steps.existing.outputs.exists == 'true'
-        env:
-          GH_TOKEN: ${{ github.token }}
-          TAG: ${{ steps.parse.outputs.tag }}
-          TGZ: ${{ steps.locate.outputs.tgz }}
-          SHA256: ${{ steps.locate.outputs.sha256 }}
-        run: |
-          mkdir -p "$RUNNER_TEMP/existing-plugin-release"
-          gh release download "$TAG" \
-            --repo "$GITHUB_REPOSITORY" \
-            --pattern "$(basename "$TGZ")" \
-            --dir "$RUNNER_TEMP/existing-plugin-release"
-          EXISTING_SHA=$(shasum -a 256 "$RUNNER_TEMP/existing-plugin-release/$(basename "$TGZ")" | awk '{print $1}')
-          if [ "$EXISTING_SHA" != "$SHA256" ]; then
-            echo "same-version hash drift for $TAG: release=$EXISTING_SHA local=$SHA256" >&2
-            exit 1
-          fi
+          while IFS= read -r target; do
+            TAIL=$(printf '%s' "$target" | node -e 'const t=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(t.tail)')
+            TAG=$(printf '%s' "$target" | node -e 'const t=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(t.tag)')
+            PACKAGE=$(printf '%s' "$target" | node -e 'const t=JSON.parse(require("fs").readFileSync(0,"utf8")); process.stdout.write(t.package)')
 
-      - name: Publish GitHub Release
-        if: steps.existing.outputs.exists == 'false'
-        uses: softprops/action-gh-release@v2
-        with:
-          tag_name: ${{ steps.parse.outputs.tag }}
-          name: ${{ steps.parse.outputs.tag }}
-          body: |
-            Automated plugin release.
+            echo "::group::Release $TAG"
+            pnpm --filter "$PACKAGE" run build:package
 
-            - sha256: `${{ steps.locate.outputs.sha256 }}`
-            - size: `${{ steps.locate.outputs.size }}`
-          files: |
-            ${{ steps.locate.outputs.tgz }}
-            ${{ steps.locate.outputs.tgz }}.sha256
+            DIST="packages/plugin-${TAIL}/dist-pkg"
+            TGZ=$(ls "$DIST"/*.tgz | head -1)
+            SHA=$(awk '{print $1}' <"$TGZ.sha256")
+            SIZE=$(stat -f%z "$TGZ")
+            BASENAME=$(basename "$TGZ")
+
+            # Check existing release
+            if gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              # Verify existing release asset is immutable
+              echo "Release $TAG already exists; verifying immutable asset"
+              WORK="$RUNNER_TEMP/existing-plugin-release-$TAIL"
+              rm -rf "$WORK"
+              mkdir -p "$WORK"
+              gh release download "$TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --pattern "$BASENAME" \
+                --dir "$WORK"
+              EXISTING_SHA=$(shasum -a 256 "$WORK/$BASENAME" | awk '{print $1}')
+              if [ "$EXISTING_SHA" != "$SHA" ]; then
+                echo "same-version hash drift for $TAG: release=$EXISTING_SHA local=$SHA" >&2
+                exit 1
+              fi
+              echo "Immutable asset verified for $TAG"
+            else
+              echo "Creating release $TAG"
+              gh release create "$TAG" \
+                --repo "$GITHUB_REPOSITORY" \
+                --title "$TAG" \
+                --notes "$(printf 'Automated plugin release.\n\n- sha256: `%s`\n- size: `%s`\n' "$SHA" "$SIZE")" \
+                "$TGZ" \
+                "$TGZ.sha256"
+            fi
+            echo "::endgroup::"
+          done < <(node -e '
+            const targets = JSON.parse(require("node:fs").readFileSync("release-targets.json", "utf8"));
+            for (const t of targets) process.stdout.write(JSON.stringify(t) + "\n");
+          ')
 
       - name: Regenerate plugin index
+        if: steps.parse.outputs.should_release == 'true'
         env:
           PIER_PLUGIN_INDEX_REQUIRE_SIGNATURE: "1"
           PIER_PLUGIN_INDEX_SIGNING_KEY_ID: ${{ secrets.PIER_PLUGIN_INDEX_SIGNING_KEY_ID }}
@@ -142,7 +212,11 @@ jobs:
         run: pnpm plugins:index
 
       - name: Commit index update
+        if: steps.parse.outputs.should_release == 'true'
+        env:
+          RELEASE_TAGS: ${{ steps.parse.outputs.release_tags }}
         run: |
+          set -euo pipefail
           if git diff --quiet plugins/index.v1.json; then
             echo "index unchanged; skipping commit"
             exit 0
@@ -152,5 +226,5 @@ jobs:
           git checkout main
           git pull --rebase origin main
           git add plugins/index.v1.json
-          git commit -m "chore(plugins): update index for ${{ steps.parse.outputs.tag }}"
+          git commit -m "chore(plugins): update index for ${RELEASE_TAGS}"
           git push origin main

@@ -8,10 +8,14 @@ describe("plugin command routing", () => {
   it("routes plugin.checkUpdates to the managed refresh operation", async () => {
     const refreshedSnapshot: ManagedPluginCatalogSnapshot = {
       checkedAt: 2,
+      officialMutationsAllowed: true,
+      pluginMode: "release",
       plugins: [],
     };
     const staleSnapshot: ManagedPluginCatalogSnapshot = {
       checkedAt: 1,
+      officialMutationsAllowed: true,
+      pluginMode: "release",
       plugins: [],
     };
     const checkUpdates = vi.fn(async () => refreshedSnapshot);

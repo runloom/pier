@@ -10,6 +10,7 @@ import {
   installTerminalInputRoutingPointerDownListener,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { installBundledFontFaces } from "./app/fonts.ts";
+import { AppContentDialogHost } from "./components/common/app-content-dialog-host.tsx";
 import { AppDialogHost } from "./components/common/app-dialog-host.tsx";
 import {
   StartupErrorScreen,
@@ -18,6 +19,7 @@ import {
 import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
 import { installWorkspaceRendererCommandListener } from "./components/workspace/workspace-renderer-command-listener.ts";
 import { initI18n } from "./i18n/index.ts";
+import { registerAgentRuntimeActions } from "./lib/actions/agent-runtime-actions.ts";
 import { registerAgentStartActions } from "./lib/actions/agent-start-actions.ts";
 import { registerCommandPaletteAction } from "./lib/actions/command-palette-action.ts";
 import { registerCommandPaletteMruAction } from "./lib/actions/command-palette-mru-action.ts";
@@ -33,6 +35,8 @@ import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { bootstrapBuiltinPlugins } from "./lib/plugins/bootstrap.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
+import { registerTerminalPanelCloseGuard } from "./panel-kits/terminal/register-close-guard.ts";
+import { initAgentAttentionPreferences } from "./stores/agent-attention-preferences.store.ts";
 import { initAgentDetection } from "./stores/agent-detect.store.ts";
 import { initAgentPreferences } from "./stores/agent-preferences.store.ts";
 import { initAppQuitPreferences } from "./stores/app-quit-preferences.store.ts";
@@ -94,6 +98,7 @@ async function bootstrap() {
   root.render(
     <>
       <AppDialogHost />
+      <AppContentDialogHost />
       <RendererBootSignal key="startup" />
       <StartupScreen />
     </>
@@ -114,6 +119,7 @@ async function bootstrap() {
       initTerminalPreferences(),
       initAppQuitPreferences(),
       initAgentPreferences(),
+      initAgentAttentionPreferences(),
       initTerminalStatusBarPrefs(),
       initTaskRunsStore(),
       initWorktreePreferences(),
@@ -137,6 +143,7 @@ async function bootstrap() {
   registerConfigActions();
   registerCommandPaletteAction();
   registerNewAgentAction();
+  registerAgentRuntimeActions();
   registerAgentStartActions();
   registerRunActions();
   registerPanelActions();
@@ -145,6 +152,7 @@ async function bootstrap() {
   registerCommandPaletteMruAction();
   registerTerminalDebugActions();
   registerTerminalActions();
+  registerTerminalPanelCloseGuard();
   await initPluginSettingsStore();
   const pluginBootstrap = await bootstrapBuiltinPlugins();
   keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
@@ -171,6 +179,7 @@ bootstrap().catch((err) => {
     getApplicationRoot().render(
       <>
         <AppDialogHost />
+        <AppContentDialogHost />
         <RendererBootSignal key="startup-error" />
         <StartupErrorScreen error={err} />
       </>

@@ -230,6 +230,14 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
+  it("keeps the focus-waiting agent zero-select shortcut", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.agents.focusWaiting",
+      keys: "Mod+Shift+KeyY",
+      scope: "global",
+    });
+  });
+
   it("resolves the rerun task shortcut from DEFAULT_KEYMAP", () => {
     keybindingRegistry.loadUserKeymap([]);
     keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);

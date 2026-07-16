@@ -3,7 +3,7 @@ import type {
   GitBranchTipTreeInCurrentHistory,
   GitDiffBranchOption,
 } from "@shared/contracts/git.ts";
-import { GitBranch } from "lucide-react";
+import { CircleAlert, GitBranch, GitBranchPlus } from "lucide-react";
 import { formatRelativeTime } from "./format-relative-time.ts";
 
 /** Badge 默认尺寸偏大,统一压缩到行内 4px 网格;色彩语义交给 variant。 */
@@ -155,6 +155,43 @@ export function GitBranchQuickPickRow({
           {relativeTime}
         </span>
       ) : null}
+    </span>
+  );
+}
+
+export function GitBranchQueryQuickPickRow({
+  detail,
+  kind,
+  label,
+}: {
+  detail?: string;
+  kind: "create" | "current" | "existing" | "invalid";
+  label: string;
+}) {
+  let Icon = GitBranch;
+  if (kind === "create") {
+    Icon = GitBranchPlus;
+  } else if (kind === "invalid") {
+    Icon = CircleAlert;
+  }
+  return (
+    <span
+      className="flex min-w-0 flex-1 items-center gap-2.5 py-0.5"
+      data-branch-query-kind={kind}
+      data-branch-query-picker-row
+    >
+      <Icon
+        aria-hidden="true"
+        className="size-4 shrink-0 text-muted-foreground"
+      />
+      <span className="flex min-w-0 flex-1 flex-col gap-0.5">
+        <span className="truncate font-medium text-sm/tight">{label}</span>
+        {detail ? (
+          <span className="truncate text-muted-foreground text-xs/tight">
+            {detail}
+          </span>
+        ) : null}
+      </span>
     </span>
   );
 }

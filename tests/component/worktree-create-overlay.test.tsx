@@ -253,6 +253,7 @@ function createMockContext(): RendererPluginContext {
       abortRebase: unimplemented("git.abortRebase"),
       cancelReviewRequest: unimplemented("git.cancelReviewRequest"),
       checkoutBranch: unimplemented("git.checkoutBranch"),
+      createAndSwitchBranch: unimplemented("git.createAndSwitchBranch"),
       continueRebase: unimplemented("git.continueRebase"),
       discardChanges: unimplemented("git.discardChanges"),
       getDiffPatch: unimplemented("git.getDiffPatch"),

@@ -1,4 +1,3 @@
-import { panelContextSchema } from "@shared/contracts/panel.ts";
 import type {
   TaskOutputPanelParams,
   TaskRunControlEntry,
@@ -8,6 +7,7 @@ import {
   nextTaskOutputBinding,
   openTaskOutputPanel,
   rebindTaskOutputPanel,
+  resolveTaskOutputContextId,
   taskOutputPanelsForRun,
 } from "@/components/workspace/open-task-output-panel.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
@@ -89,30 +89,14 @@ function taskOutputViewIdentity(
   projectRootPath: string,
   run?: TaskRunControlEntry
 ): { contextId: string } {
-  const candidatePanelIds = run
-    ? [
-        run.originPanelId,
-        run.nodes[run.rootTaskId]?.panelId,
-        ...Object.values(run.nodes).map((node) => node.panelId),
-      ]
-    : [];
-  for (const panelId of candidatePanelIds) {
-    if (!panelId) {
-      continue;
-    }
-    const panel = api.panels.find((candidate) => candidate.id === panelId);
-    const params = panel?.params;
-    if (!(params && typeof params === "object" && "context" in params)) {
-      continue;
-    }
-    const context = panelContextSchema.safeParse(params.context);
-    if (context.success) {
-      return { contextId: context.data.contextId };
-    }
-  }
-  // CLI/旧布局可能没有可追溯的 PanelContext；路径锚点只作为兼容身份，
-  // 一旦从带 context 的 panel 打开或重绑就会写入真实 contextId。
-  return { contextId: `path:${projectRootPath}` };
+  return {
+    contextId: resolveTaskOutputContextId(
+      api,
+      projectRootPath,
+      run?.rootTaskId ?? "",
+      run
+    ),
+  };
 }
 
 export async function rebindRestartedTaskOutput(args: {

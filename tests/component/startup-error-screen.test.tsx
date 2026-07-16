@@ -16,7 +16,7 @@ describe("startup screens", () => {
   it("shows fatal details and retries exactly once", () => {
     document.documentElement.lang = "en";
     const retry = vi.fn();
-    render(
+    const { container } = render(
       <StartupErrorScreen
         error={new Error("preload unavailable")}
         onRetry={retry}
@@ -27,9 +27,26 @@ describe("startup screens", () => {
       screen.getByRole("heading", { name: "Pier failed to start" })
     ).toBeVisible();
     expect(screen.getByText(/preload unavailable/)).toBeVisible();
+    expect(container.querySelector('[data-slot="alert"]')).toBeNull();
+    expect(container.querySelector('[data-scrollbar="stable"]')).not.toBeNull();
 
     fireEvent.click(screen.getByRole("button", { name: "Reload" }));
     expect(retry).toHaveBeenCalledOnce();
+  });
+
+  it("prefers pier.app.relaunch over location.reload for the default retry", () => {
+    document.documentElement.lang = "en";
+    const relaunch = vi.fn(async () => undefined);
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: { app: { relaunch } },
+    });
+
+    render(<StartupErrorScreen error={new Error("boot failed")} />);
+    fireEvent.click(screen.getByRole("button", { name: "Reload" }));
+
+    expect(relaunch).toHaveBeenCalledOnce();
+    Reflect.deleteProperty(window, "pier");
   });
 
   it("includes nested AggregateError details", () => {

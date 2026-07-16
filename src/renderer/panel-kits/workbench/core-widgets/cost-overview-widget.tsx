@@ -3,8 +3,8 @@ import {
   type ChartConfig,
   ChartContainer,
   ChartTooltip,
-  ChartTooltipContent,
 } from "@pier/ui/chart.tsx";
+import { ChartTooltipPortalContent } from "@pier/ui/chart-tooltip-portal.tsx";
 import {
   formatCompactNumber,
   formatCurrency,
@@ -26,8 +26,8 @@ import type {
 } from "@shared/contracts/usage-data.ts";
 import i18next, { type TFunction } from "i18next";
 import { DollarSign, RefreshCw } from "lucide-react";
-import { useMemo } from "react";
-import { Bar, BarChart, XAxis, YAxis } from "recharts";
+import { useMemo, useRef } from "react";
+import { Bar, BarChart, BarStack, XAxis, YAxis } from "recharts";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import {
@@ -174,6 +174,7 @@ export function CostOverviewWidget({
 }: WorkbenchWidgetComponentProps) {
   const t = useT();
   const locale = i18next.language || "en";
+  const chartAnchorRef = useRef<HTMLDivElement>(null);
 
   // 面板不可见时不订阅 store，恢复可见时重新订阅并立刻取值。
   const snapshot = useUsageDataStore((state) =>
@@ -277,6 +278,7 @@ export function CostOverviewWidget({
         <div
           className="flex min-h-8 flex-1 flex-col"
           data-testid="cost-overview-chart"
+          ref={chartAnchorRef}
         >
           <ChartContainer
             className="aspect-auto min-h-8 w-full flex-1"
@@ -290,21 +292,22 @@ export function CostOverviewWidget({
                   正确计算 bar 位置和 tooltip x 命中,只是不渲染 tick label。*/}
               <XAxis dataKey="date" hide />
               <YAxis hide />
-              <ChartTooltip content={<ChartTooltipContent />} />
-              {metas.map((meta, index) => (
-                <Bar
-                  dataKey={meta.dataKey}
-                  fill={`var(--color-${meta.dataKey})`}
-                  isAnimationActive={false}
-                  key={meta.dataKey}
-                  name={meta.label}
-                  // 只有 stack 顶层 bar 加顶部圆角:栈内部圆角会破坏堆叠连续
-                  // 感,顶层圆角单独一处让整个 bar 看起来是"一根圆角柱"。
-                  // 栈顶 = metas 数组最后一项(recharts 按声明顺序自底向上堆)。
-                  radius={index === metas.length - 1 ? [2, 2, 0, 0] : 0}
-                  stackId="cost"
-                />
-              ))}
+              <ChartTooltip
+                content={
+                  <ChartTooltipPortalContent anchorRef={chartAnchorRef} />
+                }
+              />
+              <BarStack radius={[2, 2, 0, 0]} stackId="cost">
+                {metas.map((meta) => (
+                  <Bar
+                    dataKey={meta.dataKey}
+                    fill={`var(--color-${meta.dataKey})`}
+                    isAnimationActive={false}
+                    key={meta.dataKey}
+                    name={meta.label}
+                  />
+                ))}
+              </BarStack>
             </BarChart>
           </ChartContainer>
         </div>

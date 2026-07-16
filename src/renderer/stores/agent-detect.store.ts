@@ -65,6 +65,7 @@ export const useAgentDetectStore = create<AgentDetectState>((set, get) => ({
       }
     } catch (err) {
       console.error("[agent-detect.store] refresh failed:", err);
+      throw err;
     } finally {
       set({ isDetecting: false, isRefreshing: false });
     }

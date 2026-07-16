@@ -4,13 +4,33 @@ import { AlertDialog as AlertDialogPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 import { Button } from "./button.tsx";
+import { isTopmostModalContent } from "./modal-layer.ts";
+import { useDeferredDialogOpen } from "./use-deferred-dialog-open.ts";
 import { useTerminalOverlayRegistration } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
 function AlertDialog({
+  open,
+  onAbandonOpen,
   ...props
-}: React.ComponentProps<typeof AlertDialogPrimitive.Root>) {
-  return <AlertDialogPrimitive.Root data-slot="alert-dialog" {...props} />;
+}: React.ComponentProps<typeof AlertDialogPrimitive.Root> & {
+  /**
+   * Called when a deferred open is abandoned because a menu/body lock never
+   * cleared. Host shells may use this to drop staged modal state.
+   */
+  onAbandonOpen?: () => void;
+}) {
+  const deferredOpen = useDeferredDialogOpen(
+    open,
+    onAbandonOpen === undefined ? {} : { onAbandon: onAbandonOpen }
+  );
+  return (
+    <AlertDialogPrimitive.Root
+      data-slot="alert-dialog"
+      {...props}
+      {...(deferredOpen === undefined ? {} : { open: deferredOpen })}
+    />
+  );
 }
 
 function AlertDialogTrigger({
@@ -55,6 +75,7 @@ function AlertDialogContent({
   className,
   size = "default",
   terminalOverlayId,
+  onEscapeKeyDown,
   ...props
 }: React.ComponentProps<typeof AlertDialogPrimitive.Content> & {
   size?: "default" | "sm";
@@ -67,11 +88,18 @@ function AlertDialogContent({
       />
       <AlertDialogPrimitive.Content
         className={cn(
-          "app-no-drag group/alert-dialog-content data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 fixed top-[calc(var(--app-titlebar-height)+(100vh-var(--app-titlebar-height))/2)] left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[min(var(--radius-4xl),24px)] bg-popover p-6 text-popover-foreground shadow-xl outline-none ring-1 ring-foreground/5 duration-100 data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-closed:animate-out data-open:animate-in data-[size=default]:sm:max-w-md dark:ring-foreground/10",
+          "app-no-drag group/alert-dialog-content data-open:fade-in-0 data-open:zoom-in-95 data-closed:fade-out-0 data-closed:zoom-out-95 pointer-events-auto fixed top-[calc(var(--app-titlebar-height)+(100vh-var(--app-titlebar-height))/2)] left-1/2 z-50 grid w-full -translate-x-1/2 -translate-y-1/2 gap-6 rounded-[min(var(--radius-4xl),24px)] bg-popover p-6 text-popover-foreground shadow-xl outline-none ring-1 ring-foreground/5 duration-100 data-[size=default]:max-w-xs data-[size=sm]:max-w-xs data-closed:animate-out data-open:animate-in data-[size=default]:sm:max-w-md dark:ring-foreground/10",
           className
         )}
         data-size={size}
         data-slot="alert-dialog-content"
+        onEscapeKeyDown={(event) => {
+          if (!isTopmostModalContent(event.currentTarget)) {
+            event.preventDefault();
+            return;
+          }
+          onEscapeKeyDown?.(event);
+        }}
         {...props}
       />
     </AlertDialogPortal>
@@ -96,12 +124,19 @@ function AlertDialogHeader({
 
 function AlertDialogFooter({
   className,
+  singleAction = false,
   ...props
-}: React.ComponentProps<"div">) {
+}: React.ComponentProps<"div"> & {
+  /** One primary button only (alert). Center instead of sm 2-col grid. */
+  singleAction?: boolean;
+}) {
   return (
     <div
       className={cn(
-        "flex flex-col-reverse gap-2 group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2 sm:flex-row sm:justify-end",
+        "flex flex-col-reverse gap-2 sm:flex-row sm:justify-end",
+        singleAction
+          ? "grid-cols-1 sm:justify-center"
+          : "group-data-[size=sm]/alert-dialog-content:grid group-data-[size=sm]/alert-dialog-content:grid-cols-2",
         className
       )}
       data-slot="alert-dialog-footer"

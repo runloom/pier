@@ -51,6 +51,8 @@ const GEMINI_SPEC: NestedJsonIntegrationSpec = {
   timeoutSeconds: 10_000,
 };
 
+export const GEMINI_HOOK_EVENTS = GEMINI_SPEC.events;
+
 export const geminiIntegration = createNestedJsonIntegration(GEMINI_SPEC);
 
 /** 兼容导出（沿袭 claude 集成的既有纪律；语义与工厂一致）。 */

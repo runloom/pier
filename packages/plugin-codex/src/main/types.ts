@@ -15,6 +15,12 @@ export interface AgentAccountProvider {
   moveCredential?(fromHomeDir: string, toHomeDir: string): Promise<void>;
   readCurrentIdentity(): Promise<AccountIdentity | null>;
   readIdentity(homeDir: string): Promise<AccountIdentity | null>;
+  /**
+   * Read the managed auth.json content for an account. Returns the raw
+   * JSON string (the same content that `materialize` writes to
+   * `~/.codex/auth.json`). Used by cross-tool sync to extract tokens.
+   */
+  readManagedAuthContent(accountHomeDir: string): Promise<string>;
   syncBack(
     accountHomeDir: string,
     expectedProviderAccountId: string | undefined

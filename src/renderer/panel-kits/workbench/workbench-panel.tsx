@@ -103,6 +103,10 @@ export function WorkbenchPanel(props: IDockviewPanelProps) {
   });
   const visible = usePanelVisible(props.api);
   const gridWrapperRef = useRef<HTMLElement>(null);
+  // open / 量宽 / 列数变化时先关掉 RGL 过渡，避免卡片从 fallback 尺寸滑入。
+  // 落定后再恢复，拖拽松手后的归位动画仍可用。
+  const [layoutTransitionsReady, setLayoutTransitionsReady] = useState(false);
+  const layoutSettleTimerRef = useRef<number | null>(null);
 
   const widgetRegistrations = useMemo(
     () =>
@@ -155,6 +159,29 @@ export function WorkbenchPanel(props: IDockviewPanelProps) {
   });
 
   const cols = resolveResponsiveGridCols(viewport.width);
+
+  useEffect(() => {
+    // 宽度未就绪时保持 settling，避免用 0 宽布局误开过渡。
+    if (viewport.width <= 0) {
+      setLayoutTransitionsReady(false);
+      return;
+    }
+    setLayoutTransitionsReady(false);
+    if (layoutSettleTimerRef.current !== null) {
+      window.clearTimeout(layoutSettleTimerRef.current);
+    }
+    layoutSettleTimerRef.current = window.setTimeout(() => {
+      setLayoutTransitionsReady(true);
+      layoutSettleTimerRef.current = null;
+    }, 50);
+    return () => {
+      if (layoutSettleTimerRef.current !== null) {
+        window.clearTimeout(layoutSettleTimerRef.current);
+        layoutSettleTimerRef.current = null;
+      }
+    };
+  }, [viewport.width]);
+
   const declarationsByInstanceId = useMemo(
     () =>
       new Map(
@@ -279,13 +306,17 @@ export function WorkbenchPanel(props: IDockviewPanelProps) {
     <div
       className={[
         "flex h-full min-h-0 min-w-0 flex-col bg-surface-canvas",
-        "[&_.react-grid-item.react-draggable-dragging]:transition-none [&_.react-grid-item.resizing]:transition-none [&_.react-grid-item]:transition-[transform,width,height] [&_.react-grid-item]:duration-150",
+        "[&_.react-grid-item.react-draggable-dragging]:transition-none [&_.react-grid-item.resizing]:transition-none",
+        layoutTransitionsReady
+          ? "[&_.react-grid-item]:transition-[transform,width,height] [&_.react-grid-item]:duration-150"
+          : "[&_.react-grid-item]:transition-none!",
         "[&_.react-grid-placeholder]:rounded-xl! [&_.react-grid-placeholder]:bg-primary/10! [&_.react-grid-placeholder]:opacity-100!",
         "[&_.react-grid-item.react-draggable-dragging]:z-30",
         "[&_.react-grid-item.react-draggable-dragging_[data-slot=card]]:shadow-lg",
         "[&_.react-grid-item.resizing_[data-slot=card]]:ring-2 [&_.react-grid-item.resizing_[data-slot=card]]:ring-ring/50",
         "[&_[data-highlighted=true]_[data-slot=card]]:ring-2 [&_[data-highlighted=true]_[data-slot=card]]:ring-primary/50",
       ].join(" ")}
+      data-layout-transitions={layoutTransitionsReady ? "ready" : "settling"}
     >
       <div
         className="h-full min-h-0 min-w-0 overflow-y-auto overflow-x-hidden p-3 [scrollbar-gutter:stable]"
@@ -348,7 +379,11 @@ export function WorkbenchPanel(props: IDockviewPanelProps) {
                     key={widget.instanceId}
                   >
                     <div
-                      className="relative h-full transition-transform duration-150"
+                      className={
+                        layoutTransitionsReady
+                          ? "relative h-full transition-transform duration-150"
+                          : "relative h-full"
+                      }
                       data-workbench-preview-instance-id={widget.instanceId}
                       style={workbenchPreviewTransform(
                         dragPreviewOffsets.get(widget.instanceId)
@@ -394,7 +429,11 @@ export function WorkbenchPanel(props: IDockviewPanelProps) {
               })}
               <div className="h-full" key={ADD_TILE_ID}>
                 <div
-                  className="h-full transition-transform duration-150"
+                  className={
+                    layoutTransitionsReady
+                      ? "h-full transition-transform duration-150"
+                      : "h-full"
+                  }
                   data-workbench-preview-instance-id={ADD_TILE_ID}
                   style={workbenchPreviewTransform(
                     dragPreviewOffsets.get(ADD_TILE_ID)

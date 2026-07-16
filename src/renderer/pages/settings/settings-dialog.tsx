@@ -30,6 +30,7 @@ import { AppUpdateSection } from "@/pages/settings/components/app-update-section
 import { AppearanceSection } from "@/pages/settings/components/appearance-section.tsx";
 import { EnvironmentSection } from "@/pages/settings/components/environment-section.tsx";
 import { KeybindingsSection } from "@/pages/settings/components/keybindings-section.tsx";
+import { NotificationsSection } from "@/pages/settings/components/notifications-section.tsx";
 import { PluginConfigurationSection } from "@/pages/settings/components/plugin-configuration-section.tsx";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
 import { TerminalSection } from "@/pages/settings/components/terminal-section.tsx";
@@ -205,6 +206,9 @@ export function SettingsDialog() {
             {activeSection === "plugins" ? <PluginsSection /> : null}
             {activeSection === "environment" ? <EnvironmentSection /> : null}
             {activeSection === "agents" ? <AgentsSection /> : null}
+            {activeSection === "notifications" ? (
+              <NotificationsSection />
+            ) : null}
             {activePluginId ? (
               <PluginSettingsSection pluginId={activePluginId} />
             ) : null}

@@ -16,7 +16,13 @@ import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 vi.mock("@/components/workspace/open-task-output-panel.ts", () => ({
+  maintainTaskOutputPanels: vi.fn(async () => undefined),
+  nextTaskOutputBinding: vi.fn(),
   openTaskOutputPanel: vi.fn(() => ({ ok: true })),
+  rebindTaskOutputPanel: vi.fn(() => ({ ok: true })),
+  resolveTaskOutputContextId: vi.fn(() => "ctx-repo"),
+  taskOutputFromPanel: vi.fn(() => null),
+  taskOutputPanelsForRun: vi.fn(() => []),
 }));
 
 vi.mock("@/stores/app-dialog.store.ts", () => ({
@@ -75,22 +81,15 @@ function installTasks(tasks: Record<string, unknown>): void {
 function renderControl({
   current,
   now = 3000,
-  onDismissRun = vi.fn(),
   runs = [current],
 }: {
   current: TaskRunControlEntry;
   now?: number;
-  onDismissRun?: (runId: string) => void;
   runs?: readonly TaskRunControlEntry[];
 }) {
   const view: ReactElement = (
     <TooltipProvider>
-      <TerminalRuntimeControl
-        now={now}
-        onDismissRun={onDismissRun}
-        panelId="terminal-task"
-        runs={runs}
-      />
+      <TerminalRuntimeControl now={now} panelId="terminal-task" runs={runs} />
     </TooltipProvider>
   );
   return render(view);
@@ -148,11 +147,14 @@ describe("terminal runtime control", () => {
 
     const stop = screen.getByRole("button", { name: "Stop task" });
     expect(stop).toBeEnabled();
-    expect(stop).toHaveAttribute("data-variant", "ghost");
+    expect(stop).toHaveAttribute("data-variant", "destructive");
     expect(stop.querySelector("svg")).toHaveClass("lucide-square");
     expect(screen.queryByRole("button", { name: "Restart task" })).toBeNull();
     expect(
       screen.queryByRole("button", { name: "Reveal task terminal" })
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Dismiss task result" })
     ).toBeNull();
     expect(
       screen.queryByTestId("terminal-runtime-control-more")
@@ -170,8 +172,14 @@ describe("terminal runtime control", () => {
     const reveal = screen.getByRole("button", {
       name: "Reveal task terminal",
     });
+    expect(stop).toHaveAttribute("data-variant", "destructive");
+    expect(restart).toHaveClass("text-action-accent");
+    expect(reveal).toHaveAttribute("data-tone", "muted");
     expectBefore(stop, restart);
     expectBefore(restart, reveal);
+    expect(
+      screen.queryByRole("button", { name: "Dismiss task result" })
+    ).toBeNull();
     expect(
       screen.queryByTestId("terminal-runtime-control-more")
     ).not.toBeInTheDocument();
@@ -185,8 +193,13 @@ describe("terminal runtime control", () => {
 
     const stop = screen.getByRole("button", { name: "Stop task" });
     const output = screen.getByRole("button", { name: "Open task output" });
+    expect(stop).toHaveAttribute("data-variant", "destructive");
+    expect(output).toHaveAttribute("data-tone", "muted");
     expectBefore(stop, output);
     expect(screen.queryByRole("button", { name: "Restart task" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Dismiss task result" })
+    ).toBeNull();
     expect(
       screen.queryByTestId("terminal-runtime-control-more")
     ).not.toBeInTheDocument();
@@ -203,6 +216,9 @@ describe("terminal runtime control", () => {
     const output = screen.getByRole("button", { name: "Open task output" });
     expectBefore(stop, restart);
     expectBefore(restart, output);
+    expect(
+      screen.queryByRole("button", { name: "Dismiss task result" })
+    ).toBeNull();
     expect(
       screen.queryByTestId("terminal-runtime-control-more")
     ).not.toBeInTheDocument();
@@ -289,109 +305,49 @@ describe("terminal runtime control", () => {
   it.each([
     "succeeded",
     "cancelled",
-  ] as const)("keeps a direct terminal close action for %s", (status) => {
+    "failed",
+    "blocked",
+  ] as const)("shows restart and reveal for finished terminal %s", (status) => {
     const current = run(status);
-    const onDismissRun = vi.fn();
     installTasks({});
 
-    renderControl({ current, onDismissRun });
+    renderControl({ current });
 
     const restart = screen.getByRole("button", { name: "Restart task" });
     const reveal = screen.getByRole("button", {
       name: "Reveal task terminal",
     });
-    const dismiss = screen.getByRole("button", {
-      name: "Dismiss task result",
-    });
     expectBefore(restart, reveal);
-    expectBefore(reveal, dismiss);
     expect(screen.queryByRole("button", { name: "Stop task" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Dismiss task result" })
+    ).toBeNull();
     expect(
       screen.queryByTestId("terminal-runtime-control-more")
     ).not.toBeInTheDocument();
-    fireEvent.click(dismiss);
-    expect(onDismissRun).toHaveBeenCalledWith("run-1");
   });
 
   it.each([
     "succeeded",
     "cancelled",
-  ] as const)("keeps a direct background close action for %s", (status) => {
+    "failed",
+    "blocked",
+  ] as const)("shows restart and output for finished background %s", (status) => {
     const current = run(status, { mode: "background" });
-    const onDismissRun = vi.fn();
     installTasks({});
 
-    renderControl({ current, onDismissRun });
+    renderControl({ current });
 
     const restart = screen.getByRole("button", { name: "Restart task" });
     const output = screen.getByRole("button", { name: "Open task output" });
-    const dismiss = screen.getByRole("button", {
-      name: "Dismiss task result",
-    });
     expectBefore(restart, output);
-    expectBefore(output, dismiss);
     expect(screen.queryByRole("button", { name: "Stop task" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Dismiss task result" })
+    ).toBeNull();
     expect(
       screen.queryByTestId("terminal-runtime-control-more")
     ).not.toBeInTheDocument();
-    fireEvent.click(dismiss);
-    expect(onDismissRun).toHaveBeenCalledWith("run-1");
-  });
-
-  it.each([
-    ["failed", false],
-    ["blocked", false],
-    ["cancelled", true],
-  ] as const)("keeps a direct close action for persistent %s results", (status, force) => {
-    const current = run(status, { force });
-    const onDismissRun = vi.fn();
-    installTasks({});
-
-    renderControl({ current, onDismissRun });
-
-    const restart = screen.getByRole("button", { name: "Restart task" });
-    const reveal = screen.getByRole("button", {
-      name: "Reveal task terminal",
-    });
-    const dismiss = screen.getByRole("button", {
-      name: "Dismiss task result",
-    });
-    expectBefore(restart, reveal);
-    expectBefore(reveal, dismiss);
-    expect(screen.queryByRole("button", { name: "Stop task" })).toBeNull();
-    expect(
-      screen.queryByTestId("terminal-runtime-control-more")
-    ).not.toBeInTheDocument();
-    fireEvent.click(dismiss);
-    expect(onDismissRun).toHaveBeenCalledTimes(1);
-    expect(onDismissRun).toHaveBeenCalledWith("run-1");
-  });
-
-  it.each([
-    ["failed", false],
-    ["blocked", false],
-    ["cancelled", true],
-  ] as const)("keeps the background result entry and close action direct for %s", (status, force) => {
-    const current = run(status, { force, mode: "background" });
-    const onDismissRun = vi.fn();
-    installTasks({});
-
-    renderControl({ current, onDismissRun });
-
-    const restart = screen.getByRole("button", { name: "Restart task" });
-    const output = screen.getByRole("button", { name: "Open task output" });
-    const dismiss = screen.getByRole("button", {
-      name: "Dismiss task result",
-    });
-    expectBefore(restart, output);
-    expectBefore(output, dismiss);
-    expect(screen.queryByRole("button", { name: "Stop task" })).toBeNull();
-    expect(
-      screen.queryByTestId("terminal-runtime-control-more")
-    ).not.toBeInTheDocument();
-    fireEvent.click(dismiss);
-    expect(onDismissRun).toHaveBeenCalledTimes(1);
-    expect(onDismissRun).toHaveBeenCalledWith("run-1");
   });
 
   it("restarts a running task once and disables every direct control while pending", async () => {
@@ -455,10 +411,9 @@ describe("terminal runtime control", () => {
     await waitFor(() => expect(selector).toBeEnabled());
   });
 
-  it("opens background output without spawning and dismisses only after success", async () => {
+  it("opens background output without spawning", async () => {
     const current = run("failed", { mode: "background" });
     const spawn = vi.fn();
-    const onDismissRun = vi.fn();
     const api = workspaceApiWithTerminal();
     vi.mocked(openTaskOutputPanel)
       .mockResolvedValueOnce({
@@ -470,12 +425,11 @@ describe("terminal runtime control", () => {
     installTasks({ spawn });
     useWorkspaceStore.setState({ api: api as never });
 
-    renderControl({ current, onDismissRun });
+    renderControl({ current });
     const output = screen.getByRole("button", { name: "Open task output" });
     fireEvent.click(output);
     await waitFor(() => expect(openTaskOutputPanel).toHaveBeenCalledTimes(1));
     expect(spawn).not.toHaveBeenCalled();
-    expect(onDismissRun).not.toHaveBeenCalled();
 
     fireEvent.click(output);
     await waitFor(() => {
@@ -488,36 +442,31 @@ describe("terminal runtime control", () => {
         taskId: "test",
         version: 2,
       });
-      expect(onDismissRun).toHaveBeenCalledWith("run-1");
     });
     expect(spawn).not.toHaveBeenCalled();
   });
 
-  it("dismisses a persistent terminal result after reveal succeeds, not after failure", async () => {
+  it("reveals a finished terminal result", async () => {
     const current = run("failed");
-    const onDismissRun = vi.fn();
     installTasks({});
 
-    renderControl({ current, onDismissRun });
+    renderControl({ current });
     const reveal = screen.getByRole("button", {
       name: "Reveal task terminal",
     });
     fireEvent.click(reveal);
     await waitFor(() => expect(showAppAlert).toHaveBeenCalled());
-    expect(onDismissRun).not.toHaveBeenCalled();
 
     const api = workspaceApiWithTerminal();
     useWorkspaceStore.setState({ api: api as never });
     fireEvent.click(reveal);
     await waitFor(() => {
       expect(api.panels[0]?.api.setActive).toHaveBeenCalled();
-      expect(onDismissRun).toHaveBeenCalledWith("run-1");
     });
   });
 
-  it("dismisses a persistent result after restart succeeds, not after failure", async () => {
+  it("restarts a finished result", async () => {
     const current = run("failed");
-    const onDismissRun = vi.fn();
     const spawn = vi
       .fn()
       .mockResolvedValueOnce({ message: "unsupported", status: "unsupported" })
@@ -529,16 +478,14 @@ describe("terminal runtime control", () => {
       });
     installTasks({ spawn });
 
-    renderControl({ current, onDismissRun });
+    renderControl({ current });
     const restart = screen.getByRole("button", { name: "Restart task" });
     fireEvent.click(restart);
     await waitFor(() => expect(spawn).toHaveBeenCalledTimes(1));
-    expect(onDismissRun).not.toHaveBeenCalled();
 
     fireEvent.click(restart);
     await waitFor(() => {
       expect(spawn).toHaveBeenCalledTimes(2);
-      expect(onDismissRun).toHaveBeenCalledWith("run-1");
     });
   });
 
@@ -611,7 +558,6 @@ describe("terminal runtime control", () => {
       <TooltipProvider>
         <TerminalRuntimeControl
           now={3000}
-          onDismissRun={vi.fn()}
           panelId="terminal-task"
           runs={[active, failed]}
         />

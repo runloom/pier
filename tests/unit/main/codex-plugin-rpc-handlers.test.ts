@@ -5,6 +5,7 @@ import { registerCodexRpcHandlers } from "../../../packages/plugin-codex/src/mai
 function serviceStub(): CodexAccountsService {
   return {
     add: vi.fn(),
+    adoptCurrent: vi.fn(),
     cancelLogin: vi.fn(),
     dispose: vi.fn(),
     flush: vi.fn(),
@@ -20,6 +21,7 @@ function serviceStub(): CodexAccountsService {
       revision: 1,
       schemaVersion: 1,
     })),
+    syncToPeers: vi.fn(),
   };
 }
 
@@ -40,12 +42,18 @@ describe("Codex plugin RPC handlers", () => {
       service,
     });
 
-    await handlers.get("accounts.refreshUsage")?.({ accountId: "account-1" });
+    await handlers.get("accounts.refreshUsage")?.({
+      accountId: "account-1",
+      force: true,
+    });
 
     expect(service.refreshUsage).toHaveBeenCalledWith({
       accountId: "account-1",
       force: true,
     });
+
+    await handlers.get("accounts.refreshAllUsage")?.(null);
+    expect(service.refreshAllUsage).toHaveBeenCalledWith({ force: true });
   });
 
   it("no longer exposes usage.refreshCost — cost refresh is host-owned", () => {
@@ -90,5 +98,93 @@ describe("Codex plugin RPC handlers", () => {
 
     expect(acquireUsagePolling).toHaveBeenCalledWith("widget:account-1");
     expect(releaseUsagePolling).toHaveBeenCalledWith("widget:account-1");
+  });
+
+  it("routes accounts.syncToPeers to the service", async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
+    const service = serviceStub();
+    registerCodexRpcHandlers({
+      acquireUsagePolling: vi.fn(async () => undefined),
+      releaseUsagePolling: vi.fn(),
+      rpc: {
+        handle: (method, handler) => {
+          handlers.set(method, handler);
+        },
+      },
+      service,
+    });
+
+    await handlers.get("accounts.syncToPeers")?.({
+      syncTargets: ["omp", "opencode"],
+    });
+
+    expect(service.syncToPeers).toHaveBeenCalledWith({
+      syncTargets: ["omp", "opencode"],
+    });
+  });
+
+  it("routes accounts.adoptCurrent to the service", async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
+    const service = serviceStub();
+    registerCodexRpcHandlers({
+      acquireUsagePolling: vi.fn(async () => undefined),
+      releaseUsagePolling: vi.fn(),
+      rpc: {
+        handle: (method, handler) => {
+          handlers.set(method, handler);
+        },
+      },
+      service,
+    });
+
+    expect(handlers.has("accounts.adoptCurrent")).toBe(true);
+    await handlers.get("accounts.adoptCurrent")?.(null);
+    expect(service.adoptCurrent).toHaveBeenCalledOnce();
+  });
+
+  it("defaults accounts.refreshUsage force to true when omitted", async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
+    const service = serviceStub();
+    registerCodexRpcHandlers({
+      acquireUsagePolling: vi.fn(async () => undefined),
+      releaseUsagePolling: vi.fn(),
+      rpc: {
+        handle: (method, handler) => {
+          handlers.set(method, handler);
+        },
+      },
+      service,
+    });
+
+    await handlers.get("accounts.refreshUsage")?.({ accountId: "account-1" });
+    expect(service.refreshUsage).toHaveBeenCalledWith({
+      accountId: "account-1",
+      force: true,
+    });
+  });
+
+  it("exposes accounts.peerAvailability from shared peer-sync probes", async () => {
+    const handlers = new Map<string, (payload: unknown) => Promise<unknown>>();
+    const service = serviceStub();
+    registerCodexRpcHandlers({
+      acquireUsagePolling: vi.fn(async () => undefined),
+      releaseUsagePolling: vi.fn(),
+      rpc: {
+        handle: (method, handler) => {
+          handlers.set(method, handler);
+        },
+      },
+      service,
+    });
+
+    expect(handlers.has("accounts.peerAvailability")).toBe(true);
+    const snapshot = await handlers.get("accounts.peerAvailability")?.(null);
+    expect(snapshot).toEqual(
+      expect.objectContaining({
+        omp: expect.any(Boolean),
+        opencode: expect.any(Boolean),
+        pi: expect.any(Boolean),
+      })
+    );
   });
 });

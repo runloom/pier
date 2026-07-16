@@ -144,7 +144,7 @@ describe("SettingsDialog — custom plugin settings page", () => {
     useSettingsDialogStore.setState(DIALOG_INITIAL_STATE);
   });
 
-  it("renders a registered custom page instead of PluginConfigurationSection", () => {
+  it("renders a registered custom page instead of PluginConfigurationSection", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.demo")],
@@ -162,12 +162,12 @@ describe("SettingsDialog — custom plugin settings page", () => {
     render(<SettingsDialog />);
 
     expect(
-      screen.getByTestId("custom-plugin-settings-page")
+      await screen.findByTestId("custom-plugin-settings-page")
     ).toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   });
 
-  it("re-renders when a custom page registers after the dialog is open", () => {
+  it("re-renders when a custom page registers after the dialog is open", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.demo")],
@@ -177,7 +177,7 @@ describe("SettingsDialog — custom plugin settings page", () => {
     });
     render(<SettingsDialog />);
 
-    expect(screen.getByRole("switch")).toBeInTheDocument();
+    expect(await screen.findByRole("switch")).toBeInTheDocument();
 
     act(() => {
       registerPluginSettingsPage("pier.demo", {
@@ -189,7 +189,7 @@ describe("SettingsDialog — custom plugin settings page", () => {
     });
 
     expect(
-      screen.getByTestId("custom-plugin-settings-page")
+      await screen.findByTestId("custom-plugin-settings-page")
     ).toBeInTheDocument();
     expect(screen.queryByRole("switch")).not.toBeInTheDocument();
   });
@@ -214,7 +214,7 @@ describe("SettingsDialog — custom plugin settings page", () => {
 
     render(<SettingsDialog />);
 
-    expect(screen.getByText("Show excluded files")).toBeVisible();
+    expect(await screen.findByText("Show excluded files")).toBeVisible();
     expect(screen.getByText("Exclude patterns")).toBeVisible();
     expect(screen.getByText("Show Git-ignored files")).toBeVisible();
     expect(

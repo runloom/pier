@@ -7,11 +7,15 @@
     ".": "./src/index.ts",
     "./main": "./src/main.ts",
     "./renderer": "./src/renderer.ts",
+    "./account-usage": "./src/account-usage/index.ts",
+    "./account-usage/renderer": "./src/account-usage/renderer.ts",
+    "./peer-sync": "./src/peer-sync/index.ts",
     "./react": "./src/react.ts",
     "./jsx-runtime": "./src/jsx-runtime.ts",
     "./jsx-dev-runtime": "./src/jsx-dev-runtime.ts",
     "./react-dom-client": "./src/react-dom-client.ts",
-    "./build-preset": "./src/build-preset.ts"
+    "./build-preset": "./src/build-preset.ts",
+    "./peer-sync/main": "./src/peer-sync/main.ts"
   },
   "peerDependencies": {
     "react": "19.2.7",

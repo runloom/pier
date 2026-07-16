@@ -70,4 +70,6 @@ const GROK_SPEC: NestedJsonIntegrationSpec = {
   ],
 };
 
+export const GROK_HOOK_EVENTS = GROK_SPEC.events;
+
 export const grokIntegration = createNestedJsonIntegration(GROK_SPEC);

@@ -29,9 +29,14 @@ export async function performSetDevOverride(
   try {
     const parsed = JSON.parse(
       await readFile(join(path, "plugin.json"), "utf8")
-    ) as { version?: string };
+    ) as { id?: string; version?: string };
     if (typeof parsed.version !== "string") {
       throw new Error("plugin.json missing string version");
+    }
+    if (typeof parsed.id === "string" && parsed.id !== id) {
+      throw new Error(
+        `plugin.json id "${parsed.id}" does not match override id "${id}"`
+      );
     }
     devVersion = parsed.version;
     await validateManagedPluginPackage({
@@ -54,21 +59,35 @@ export async function performSetDevOverride(
   }
   const entry = ctx.store.get().plugins[id];
   const registeredAt = ctx.now();
+  // Path-only custom plugins may have no prior install entry. Seed a synthetic
+  // activeVersion so workspace mode can load them without a bundled tgz.
+  const activeVersion = entry?.activeVersion ?? devVersion;
+  const installedVersions = { ...(entry?.installedVersions ?? {}) };
+  if (!installedVersions[activeVersion]) {
+    installedVersions[activeVersion] = {
+      contentHash: `workspace-seed:${id}@${activeVersion}`,
+      installedAt: registeredAt,
+      packageUrl: `workspace://${id}/${activeVersion}`,
+      sha256: `workspace-seed:${id}@${activeVersion}`,
+    };
+  }
   ctx.store.mutate((state) => ({
     ...state,
     plugins: {
       ...state.plugins,
       [id]: {
-        activeVersion: entry?.activeVersion ?? null,
+        activeVersion,
         devOverride: { path, registeredAt, version: devVersion },
         effectiveAtStartup: entry?.effectiveAtStartup ?? null,
         enabled: entry?.enabled ?? true,
         id,
-        installedVersions: entry?.installedVersions ?? {},
+        installedVersions,
         lastKnownGoodVersion: entry?.lastKnownGoodVersion ?? null,
         pendingRestart: { kind: "devOverride" },
         pendingUpdate: entry?.pendingUpdate ?? null,
         source: entry?.source ?? { kind: "devOverride" },
+        // Clear uninstall tombstone so workspace re-pin can revive the plugin.
+        uninstalledAt: undefined,
       },
     },
   }));

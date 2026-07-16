@@ -8,7 +8,7 @@
 - [2026-07-05-dashboard-kit-and-codex-accounts-design.md](2026-07-05-dashboard-kit-and-codex-accounts-design.md)（早期「账号 UI 仅在大盘」产品决定，**本规格修订**）
 - [2026-07-07-managed-external-plugins-and-codex-migration-design.md](2026-07-07-managed-external-plugins-and-codex-migration-design.md)（账号域已迁入 `pier.codex`）
 
-**参考 UI**：Orca Codex 设置页（图 1）、Orca Codex 用量/账户 popover（图 2）
+**参考 UI**：Orca Codex 设置页（图 1）、Orca Codex 用量/账号 popover（图 2）
 
 ## 1. 背景与问题
 
@@ -23,8 +23,8 @@
 
 ### 目标
 
-- 设置页对齐图 1：说明文案、系统默认卡、受管账号列表、添加账户、空态虚线框、`confirmSwitch`。
-- 物料对齐图 2（子集）：会话/每周剩余进度条、相对更新时间、当前账户选择器、「管理账户…」跳转设置。
+- 设置页对齐图 1：说明文案、系统默认卡、受管账号列表、添加账号、空态虚线框、`confirmSwitch`。
+- 物料对齐图 2（子集）：会话/每周剩余进度条、相对更新时间、当前账号选择器、「管理账号…」跳转设置。
 - 宿主新增可复用的 **自定义设置页贡献点**（`settingsPages`），`pier.codex` 经此注册，不特判插件 id。
 - `activeAccountId === null` 表示系统默认（本机 `~/.codex`）。
 - 从 `plugin.json` 删除三条 commands；renderer 不注册对应 actions。
@@ -43,10 +43,10 @@
 | 面 | 职责 |
 |----|------|
 | 设置页 | 唯一账号 CRUD：添加、删除、切回系统默认、取消登录；`confirmSwitch` |
-| 物料 | 用量展示 + 快速切换账号 + 「管理账户…」打开设置 |
+| 物料 | 用量展示 + 快速切换账号 + 「管理账号…」打开设置 |
 | 命令面板 | 无 Codex 账号操作项 |
 
-次要动作：**「接管当前登录」(`accounts.adoptCurrent`)** 保留为设置页次要入口（不抢「添加账户」主 CTA），例如空态旁或溢出菜单。
+次要动作：**「接管当前登录」(`accounts.adoptCurrent`)** 保留为设置页次要入口（不抢「添加账号」主 CTA），例如空态旁或溢出菜单。
 
 ## 4. 数据模型与 RPC
 
@@ -166,7 +166,7 @@ dialogs.confirm(options: {
 
 ### 5.4 打开设置
 
-物料「管理账户…」调用 `context.app.openSettings({ section: "plugin:pier.codex" })`，内部映射到 `useSettingsDialogStore.openSection(...)`。
+物料「管理账号…」调用 `context.app.openSettings({ section: "plugin:pier.codex" })`，内部映射到 `useSettingsDialogStore.openSection(...)`。
 
 ## 6. 设置页 UI（图 1）
 
@@ -175,13 +175,13 @@ dialogs.confirm(options: {
 结构：
 
 1. **页头**：Codex 图标 + 标题；两段说明（可选；本机登录上下文保留在此设备）。
-2. **「账户」区头**：副标题（正在显示此设备的账户…）+ 右侧「+ 添加账户」。
+2. **「账号」区头**：副标题（正在显示此设备的账号…）+ 右侧「+ 添加账号」。
 3. **系统默认卡**（实线）：标题「系统默认」；`activeAccountId === null` 时「当前」Badge；描述使用本机 Codex 登录；非当前时可切换回来（走 confirm）。
 4. **受管账号列表**：实线卡；label、状态、当前 Badge；非当前：切换 / 删除（删除 `intent: "destructive"`）。
 5. **空态**：无受管账号时虚线框说明文案（Orca 风格）。
 6. **登录中**：Alert +「取消登录」；添加禁用。
 7. **confirmSwitch**：同页开关。
-8. **adoptCurrent**：次要按钮/菜单项，不与「添加账户」并列抢主视觉。
+8. **adoptCurrent**：次要按钮/菜单项，不与「添加账号」并列抢主视觉。
 
 视觉：走现有 shadcn / token；实线 vs 虚线边框区分「实体卡」与「空态提示」；深浅色均可验收。
 
@@ -195,9 +195,9 @@ dialogs.confirm(options: {
 
 1. **头**：图标 +「Codex」；`Updated {relative}`（`usage.fetchedAt`）。
 2. **会话** / **每周**：进度条（剩余 %）+ `Resets in …`；无数据时 empty/error 态。
-3. **Codex 账户**：
+3. **Codex 账号**：
    - 当前标签（系统默认或账号 label）+ chevron → 选择器（系统默认 + 受管列表）。
-   - 「管理账户…」→ `openSettings`。
+   - 「管理账号…」→ `openSettings`。
 4. 遵守物料红线：`WidgetSkeleton` / `WidgetEmpty` / `WidgetError`；消费宿主 `visible` / `refreshToken`（`visible=false` 不触发额外 refresh；`refreshToken` 变化时 `accounts.refreshUsage`）。
 5. manifest：可标 `refreshable: true`；调整 `defaultSize` 以适配纵向仪表盘（实现时按视觉微调，建议约 `w: 3–4, h: 5–6`）。
 
@@ -221,7 +221,7 @@ renderer `activate` 不调用 `context.actions.register`。相关单测若断言
 ## 10. 测试
 
 - 单元：`selectSystemDefault`（含从受管 syncBack 后清空 active）；系统默认下 `refreshUsage` 写入 `__system__` 缓存；usage DTO 解析。
-- 组件：设置页渲染系统默认 + 空态 + 添加/删除调用 RPC；物料渲染双进度条与账户选择；「管理账户」触发 `openSettings`。
+- 组件：设置页渲染系统默认 + 空态 + 添加/删除调用 RPC；物料渲染双进度条与账号选择；「管理账号」触发 `openSettings`。
 - 宿主：settingsPage 未声明即 register → assert；有 settingsPage 时侧栏出现且优先于自动 configuration 表单；无 settingsPage 仅有 configuration 时行为不变。
 - 回归：manifest 无上述三条 commands。
 

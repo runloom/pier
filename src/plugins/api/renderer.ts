@@ -138,6 +138,8 @@ export interface RendererPluginQuickPickSection {
 }
 
 export interface RendererPluginQuickPick {
+  /** 根据当前输入生成一个置顶候选；必须同步且无副作用。 */
+  getQueryItem?(query: string): RendererPluginQuickPickItem | null;
   readonly items?: readonly RendererPluginQuickPickItem[];
   onAccept(item: RendererPluginQuickPickItem): Promise<void> | void;
   onChangeSelection?(item: RendererPluginQuickPickItem): void;

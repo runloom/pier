@@ -493,6 +493,42 @@ describe("TerminalPanel lifecycle", () => {
     });
   });
 
+  it("keeps a task output panel open when its surface requests close", async () => {
+    const taskOutput = {
+      label: "Build",
+      runId: "run-1",
+      taskId: "build",
+    };
+
+    render(
+      <TerminalPanel
+        {...createPanelProps({
+          params: {
+            tab: { title: taskOutput.label },
+            taskOutput,
+          },
+        })}
+      />
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          panelId: "terminal-1",
+          taskOutput,
+        })
+      );
+    });
+
+    act(() => {
+      for (const listener of surfaceCloseListeners) {
+        listener.cb({ panelId: "terminal-1" });
+      }
+    });
+
+    expect(useWorkspaceStore.getState().closePanel).not.toHaveBeenCalled();
+  });
+
   it("creates a task output surface without mounting runtime controls", async () => {
     const taskOutput = {
       label: "Build",

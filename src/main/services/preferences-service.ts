@@ -28,6 +28,7 @@ export interface CreatePreferencesServiceArgs {
 
 /** 白名单键——patch 里 undefined 的字段不下传 (zod 会替代为默认值)。 */
 const PATCHABLE_KEYS = [
+  "agentAttention",
   "agentCommandOverrides",
   "agentDefaultArgs",
   "agentDefaultEnv",

@@ -10,6 +10,10 @@ import {
   installAgentHooksEmitScript,
 } from "../services/agents/agent-hooks-install.ts";
 import {
+  isAgentStatusHooksIngestEnabled,
+  setAgentStatusHooksIngestEnabled,
+} from "../services/agents/agent-status-hooks-gate.ts";
+import {
   getAgentHookIntegration,
   installAllAgentHooks,
   uninstallAllAgentHooks,
@@ -112,6 +116,21 @@ function sendToWindow(
  * tab 状态点/icon/title 全部由 renderer 从该广播（+挂载时 snapshot pull）
  * 单源渲染。
  */
+const publishListeners = new Set<(b: ForegroundActivityBroadcast) => void>();
+
+/**
+ * FA 每次向各窗推送本窗 publication 之后的副作用钩子（如 Agent Runtime Index
+ * 全机快照 fan-out）。不改变 FA 按窗过滤语义。
+ */
+export function onForegroundActivityPublished(
+  listener: (b: ForegroundActivityBroadcast) => void
+): () => void {
+  publishListeners.add(listener);
+  return () => {
+    publishListeners.delete(listener);
+  };
+}
+
 function handleBroadcast(b: ForegroundActivityBroadcast): void {
   const liveWindowIds = listAppWindowIds();
   log.debug("publish", {
@@ -124,6 +143,9 @@ function handleBroadcast(b: ForegroundActivityBroadcast): void {
     liveWindowIds
   )) {
     sendToWindow(publication.windowId, publication.payload);
+  }
+  for (const listener of publishListeners) {
+    listener(b);
   }
 }
 
@@ -193,8 +215,6 @@ export const foregroundActivityService = {
     windowId: string,
     args: {
       runId: string;
-      status: "success" | "failure" | "cancelled";
-      exitCode?: number;
     }
   ): void {
     const win = findAppWindowByInternalId(windowId);
@@ -253,6 +273,9 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   jsonlObserver = createJsonlObserver({
     filePath: eventsJsonlPath(app.getPath("userData")),
     onAgentEvent: (event) => {
+      if (!isAgentStatusHooksIngestEnabled()) {
+        return;
+      }
       const accepted = foregroundActivityAggregator.ingestAgentEvent(event, {
         stopAuthority:
           getAgentHookIntegration(event.agent)?.runtime.stopAuthority ?? "none",
@@ -306,9 +329,12 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   // 启动时按偏好双向对齐 hook 安装状态（幂等）：开→装, 关→卸。
   // 关闭态必须主动卸载, 防止旧版本/外部同步写回的 hook 静默复活。
   readPreferences()
-    .then((prefs) =>
-      prefs.agentStatusHooks ? installAllAgentHooks() : uninstallAllAgentHooks()
-    )
+    .then((prefs) => {
+      setAgentStatusHooksIngestEnabled(prefs.agentStatusHooks);
+      return prefs.agentStatusHooks
+        ? installAllAgentHooks()
+        : uninstallAllAgentHooks();
+    })
     .catch((err) => {
       log.error("startup hook install failed", { err });
     });

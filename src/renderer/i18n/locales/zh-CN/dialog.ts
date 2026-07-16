@@ -13,8 +13,17 @@ export const dialog = {
     multipleActivityDetail:
       "{{activities}}仍在运行。\n退出 Pier 会终止这些进程。",
     quit: "退出",
+    shellFallback: "Shell 命令",
     singleActivityDetail: "{{activity}}仍在运行。\n退出 Pier 会终止该进程。",
     title: "退出 Pier？",
+  },
+  panelClose: {
+    cancel: "取消",
+    close: "关闭面板",
+    multipleActivityDetail:
+      "{{activities}}仍在运行。\n关闭此面板会终止这些进程。",
+    singleActivityDetail: "{{activity}}仍在运行。\n关闭此面板会终止该进程。",
+    title: "关闭面板？",
   },
   cancel: "取消",
   close: "关闭",

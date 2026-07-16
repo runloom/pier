@@ -1,6 +1,6 @@
 export const USAGE_REFRESH_CONCURRENCY = 2;
 
-interface UsageRefreshSchedulerOptions {
+export interface UsageRefreshSchedulerOptions {
   concurrency: number;
   getAccountIds: () => string[];
   refreshAccount: (
@@ -9,6 +9,10 @@ interface UsageRefreshSchedulerOptions {
   ) => Promise<void>;
 }
 
+/**
+ * Serialize refresh-all cycles while allowing limited per-cycle concurrency
+ * across accounts. A failed cycle must not block later polls or manual refresh.
+ */
 export function createUsageRefreshScheduler({
   concurrency,
   getAccountIds,
@@ -39,7 +43,7 @@ export function createUsageRefreshScheduler({
   return (options = {}) => {
     const cycle = tail
       .catch(() => {
-        // A failed cycle must not prevent later polling or manual refreshes.
+        /* keep the chain alive after a failed cycle */
       })
       .then(() => run(options));
     tail = cycle;

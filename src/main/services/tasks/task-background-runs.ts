@@ -1,16 +1,15 @@
 import type {
-  TaskBackgroundRunSnapshot,
-  TaskBackgroundSnapshot,
   TaskLaunchPlan,
   TaskOutputUpdate,
   TaskRunSnapshot,
 } from "@shared/contracts/tasks.ts";
-import type { ProcessEnvironmentService } from "../process-environment-service.ts";
+import { TASK_STOP_GRACE_MS } from "@shared/contracts/tasks.ts";
 import {
-  backgroundPanelId,
-  isBackgroundPanelId,
-  panelRefKey,
-} from "./task-background-panel-id.ts";
+  forgetBackgroundTaskProcess,
+  rememberBackgroundTaskProcess,
+} from "../../state/background-task-process-ledger.ts";
+import type { ProcessEnvironmentService } from "../process-environment-service.ts";
+import { backgroundPanelId, panelRefKey } from "./task-background-panel-id.ts";
 import type {
   BackgroundTaskProcess,
   SpawnBackgroundTask,
@@ -53,17 +52,13 @@ export interface CreateTaskBackgroundRunsOptions {
 }
 
 /**
- * 后台任务运行域：无终端面板的任务进程 spawn / 生命周期快照 / 取消清理。
- * 只依赖注入的 coordinator 回调，不 import task-service（单向依赖）。
+ * 后台任务运行域：无终端面板的任务进程 spawn / 生命周期 / 输出缓冲。
+ * 活体状态只写 TaskRuns；本模块不维护第二份 status 镜像。
  */
 export function createTaskBackgroundRuns(
   options: CreateTaskBackgroundRunsOptions
 ): TaskBackgroundRuns {
   const { now } = options;
-  const runsByProject = new Map<
-    string,
-    Map<string, TaskBackgroundRunSnapshot>
-  >();
   const processes = new Map<
     string,
     {
@@ -84,94 +79,31 @@ export function createTaskBackgroundRuns(
       ? { onChanged: options.onTaskOutputChanged }
       : {}),
   });
-  let version = 0;
 
-  function snapshot(): TaskBackgroundSnapshot {
-    return {
-      runs: Object.fromEntries(
-        [...runsByProject.entries()].map(([projectRootPath, runs]) => [
-          projectRootPath,
-          Object.fromEntries(runs.entries()),
-        ])
-      ),
-      version,
-    };
-  }
-
-  function publishSnapshot(): void {
-    version += 1;
-  }
-
-  function setRun(
-    projectRootPath: string,
-    taskId: string,
-    run: TaskBackgroundRunSnapshot
-  ): void {
-    const projectRuns =
-      runsByProject.get(projectRootPath) ??
-      new Map<string, TaskBackgroundRunSnapshot>();
-    projectRuns.set(taskId, run);
-    runsByProject.set(projectRootPath, projectRuns);
-    publishSnapshot();
-  }
-
-  function updateRun(
-    projectRootPath: string,
-    taskId: string,
-    patch: Partial<TaskBackgroundRunSnapshot>
-  ): void {
-    const current = runsByProject.get(projectRootPath)?.get(taskId);
-    if (!current) {
-      return;
-    }
-    setRun(projectRootPath, taskId, {
-      ...current,
-      ...patch,
-      updatedAt: now(),
+  function forgetProcess(runId: string): void {
+    forgetBackgroundTaskProcess(runId).catch((error: unknown) => {
+      console.error("[tasks] forget background process ledger failed:", error);
     });
   }
 
-  function findRunPeer(
-    projectRootPath: string,
-    runId: string
-  ): TaskBackgroundRunSnapshot | undefined {
-    const projectRuns = runsByProject.get(projectRootPath);
-    if (!projectRuns) {
-      return;
-    }
-    return [...projectRuns.values()].find((run) => run.runId === runId);
-  }
-
-  function setNodeFromSnapshot(
-    projectRootPath: string,
+  function rememberProcess(
     runId: string,
-    node: TaskRunSnapshot["nodes"][string]
+    process: BackgroundTaskProcess,
+    command: string
   ): void {
-    const current = runsByProject.get(projectRootPath)?.get(node.taskId);
-    const peer = current ?? findRunPeer(projectRootPath, runId);
-    const hasBackgroundPanel = node.panelId
-      ? isBackgroundPanelId(node.panelId)
-      : false;
-    const shouldPublish =
-      Boolean(current) ||
-      hasBackgroundPanel ||
-      (Boolean(peer) && isTerminalRunStatus(node.status));
-    if (!shouldPublish) {
+    if (typeof process.pid !== "number" || process.pid <= 0) {
       return;
     }
-    const timestamp = now();
-    const nodeWindowId = node.windowId ?? current?.windowId ?? peer?.windowId;
-    setRun(projectRootPath, node.taskId, {
-      label: node.label,
-      projectRootPath,
+    rememberBackgroundTaskProcess({
+      command,
+      pid: process.pid,
       runId,
-      startedAt: current?.startedAt ?? peer?.startedAt ?? timestamp,
-      status: node.status,
-      taskId: node.taskId,
-      updatedAt: timestamp,
-      ...(node.exitCode === undefined ? {} : { exitCode: node.exitCode }),
-      ...(isTerminalRunStatus(node.status) ? { finishedAt: timestamp } : {}),
-      ...(nodeWindowId ? { windowId: nodeWindowId } : {}),
+      startedAt: now(),
+    }).catch((error: unknown) => {
+      console.error(
+        "[tasks] remember background process ledger failed:",
+        error
+      );
     });
   }
 
@@ -182,14 +114,14 @@ export function createTaskBackgroundRuns(
   ): Promise<TaskRunSnapshot | null> {
     const processKey = panelRefKey(panelId, windowId);
     const processRecord = processes.get(processKey);
+    if (processRecord) {
+      forgetProcess(processRecord.runId);
+    }
     processes.delete(processKey);
     try {
       const result = await options.completePanel(panelId, exitCode, windowId);
       if (!result) {
         return null;
-      }
-      for (const node of Object.values(result.nodes)) {
-        setNodeFromSnapshot(result.projectRootPath, result.runId, node);
       }
       if (isTerminalRunStatus(result.status)) {
         options.onRunTerminal(result);
@@ -197,13 +129,6 @@ export function createTaskBackgroundRuns(
       return result;
     } catch (err) {
       console.error("[tasks] background task completion failed:", err);
-      if (processRecord) {
-        updateRun(processRecord.projectRootPath, processRecord.taskId, {
-          exitCode,
-          finishedAt: now(),
-          status: exitCode === 0 ? "succeeded" : "failed",
-        });
-      }
       return null;
     }
   }
@@ -219,11 +144,9 @@ export function createTaskBackgroundRuns(
     processes.delete(processKey);
     cancelledProcessKeys.add(processKey);
     if (processRecord) {
-      processRecord.process?.kill();
-      updateRun(processRecord.projectRootPath, processRecord.taskId, {
-        finishedAt: now(),
-        status: "cancelled",
-      });
+      forgetProcess(processRecord.runId);
+      // Quit/dispose：先 TERM 再由 shutdownForQuit 升级；单次 cancel 仍发 TERM。
+      signalBackgroundTaskProcess(processRecord.process, false);
     }
     options.markPanelClosed(panelId, windowId);
     options.forgetRunningPanel(panelId, windowId);
@@ -254,9 +177,6 @@ export function createTaskBackgroundRuns(
     if (!accepted) {
       return { message: "background process rejected interrupt", ok: false };
     }
-    updateRun(processRecord.projectRootPath, processRecord.taskId, {
-      status: "stopping",
-    });
     return { ok: true };
   }
 
@@ -288,10 +208,10 @@ export function createTaskBackgroundRuns(
     if (!accepted) {
       return { message: "background process rejected force stop", ok: false };
     }
+    forgetProcess(processRecord.runId);
     outputs.flush(processRecord.runId, processRecord.outputTaskId);
-    updateRun(processRecord.projectRootPath, processRecord.taskId, {
-      finishedAt: now(),
-      status: "cancelled",
+    finishPanel(panelId, 137, windowId).catch((error: unknown) => {
+      console.error("[tasks] background force stop completion failed:", error);
     });
     return { ok: true };
   }
@@ -357,6 +277,7 @@ export function createTaskBackgroundRuns(
       });
       if (!completedSynchronously) {
         processes.set(processKey, { ...processRecord, process });
+        rememberProcess(processRecord.runId, process, launch.rawCommand);
       }
     }, 0);
     spawnTimers.set(processKey, spawnTimer);
@@ -399,16 +320,6 @@ export function createTaskBackgroundRuns(
           ...(clientEnv ? { clientEnv } : {}),
           ...(launch.env ? { explicitEnv: launch.env } : {}),
         });
-        setRun(launch.projectRootPath, launch.taskId, {
-          label: launch.label,
-          projectRootPath: launch.projectRootPath,
-          runId,
-          startedAt: now(),
-          status: "running",
-          taskId: launch.taskId,
-          updatedAt: now(),
-          ...(windowId ? { windowId } : {}),
-        });
         outputs.start({
           runId,
           taskId: rootTaskId,
@@ -442,6 +353,34 @@ export function createTaskBackgroundRuns(
     });
   }
 
+  async function shutdownForQuit(graceMs = TASK_STOP_GRACE_MS): Promise<void> {
+    for (const spawnTimer of spawnTimers.values()) {
+      clearTimeout(spawnTimer);
+    }
+    spawnTimers.clear();
+
+    const live = [...processes.values()];
+    for (const record of live) {
+      signalBackgroundTaskProcess(record.process, false);
+    }
+    if (live.length > 0 && graceMs > 0) {
+      const deadline = now() + graceMs;
+      while (processes.size > 0 && now() < deadline) {
+        await new Promise<void>((resolve) => {
+          setTimeout(resolve, 50);
+        });
+      }
+    }
+    for (const record of [...processes.values()]) {
+      signalBackgroundTaskProcess(record.process, true);
+      forgetProcess(record.runId);
+      processes.delete(panelRefKey(record.panelId, record.windowId));
+      options.markPanelClosed(record.panelId, record.windowId);
+      options.forgetRunningPanel(record.panelId, record.windowId);
+    }
+    cancelledProcessKeys.clear();
+  }
+
   function dispose(): void {
     for (const spawnTimer of spawnTimers.values()) {
       clearTimeout(spawnTimer);
@@ -454,6 +393,11 @@ export function createTaskBackgroundRuns(
     for (const ref of panelRefs) {
       cancelPanel(ref.panelId, ref.windowId);
     }
+    for (const record of [...processes.values()]) {
+      signalBackgroundTaskProcess(record.process, true);
+      forgetProcess(record.runId);
+    }
+    processes.clear();
     cancelledProcessKeys.clear();
     outputs.dispose();
   }
@@ -464,8 +408,7 @@ export function createTaskBackgroundRuns(
     finishPanel,
     forceStopPanel,
     output: (runId, taskId) => outputs.snapshot(runId, taskId),
-    setNodeFromSnapshot,
-    snapshot,
+    shutdownForQuit,
     start,
     stopPanel,
   };

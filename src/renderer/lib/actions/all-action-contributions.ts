@@ -1,4 +1,5 @@
 import { TERMINAL_ACTION_CONTRIBUTIONS } from "@/panel-kits/terminal/register-actions.ts";
+import { AGENT_RUNTIME_ACTION_CONTRIBUTIONS } from "./agent-runtime-actions.ts";
 import { COMMAND_PALETTE_ACTION_CONTRIBUTIONS } from "./command-palette-action.ts";
 import { COMMAND_PALETTE_MRU_ACTION_CONTRIBUTIONS } from "./command-palette-mru-action.ts";
 import { CONFIG_ACTION_CONTRIBUTIONS } from "./config-actions.ts";
@@ -15,6 +16,7 @@ export const ALL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   ...COMMAND_PALETTE_MRU_ACTION_CONTRIBUTIONS,
   ...CONFIG_ACTION_CONTRIBUTIONS,
   ...NEW_AGENT_ACTION_CONTRIBUTIONS,
+  ...AGENT_RUNTIME_ACTION_CONTRIBUTIONS,
   ...PANEL_ACTION_CONTRIBUTIONS,
   ...RUN_ACTION_CONTRIBUTIONS,
   ...SETTINGS_ACTION_CONTRIBUTIONS,

@@ -11,11 +11,14 @@ export type CommandPaletteSurface = "command-palette" | (string & {});
 export interface QuickPickItemBadge {
   readonly label: string;
   readonly variant?:
+    | "danger"
     | "default"
     | "destructive"
     | "ghost"
+    | "info"
     | "outline"
-    | "secondary";
+    | "secondary"
+    | "warning";
 }
 
 export interface QuickPickItem {
@@ -41,6 +44,8 @@ export interface QuickPickSection {
 }
 
 export interface QuickPick {
+  /** 根据当前输入生成一个置顶候选；必须同步且无副作用。 */
+  getQueryItem?(query: string): QuickPickItem | null;
   /** 文本输入模式的初始值；仅与 onAcceptQuery 配合使用。 */
   readonly initialQuery?: string;
   readonly items?: readonly QuickPickItem[];

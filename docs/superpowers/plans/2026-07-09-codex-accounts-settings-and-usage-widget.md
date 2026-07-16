@@ -452,7 +452,7 @@ component: (props) => (
 
 旧「Add account」测试删除。新测试：
 1. 有 `activeUsage.session/weekly` 时渲染剩余 % 与 resets 文案。
-2. 点账户行打开选择；选受管 → `accounts.select`；选系统默认 → `accounts.selectSystemDefault`。
+2. 点账号行打开选择；选受管 → `accounts.select`；选系统默认 → `accounts.selectSystemDefault`。
 3. 点「Manage accounts…」→ `app.openSettings({ section: "plugin:pier.codex" })`。
 4. `refreshToken` 从 0→1 时调用 `accounts.refreshUsage`。
 5. loading 用 `data-slot="widget-skeleton"`；error 用 WidgetError。
@@ -463,7 +463,7 @@ component: (props) => (
 
 - Header：Codex + `formatRelativeTime(fetchedAt, now, locale)`（locale 可用 `"en"` 或 `navigator.language`；external i18n 无 locale API 时用 en）
 - `UsageMeter`：`Progress` value = remainingPercent；左剩余 %，右 Resets in
-- 账户区：`DropdownMenu` / `Popover` 列表（系统默认 + accounts）；Manage accounts 按钮
+- 账号区：`DropdownMenu` / `Popover` 列表（系统默认 + accounts）；Manage accounts 按钮
 - `confirmSwitch` 在 select 前生效
 - **无**添加/删除/速率重置
 
@@ -496,8 +496,8 @@ pnpm test:unit -- tests/unit/shared/plugin-manifest-settings-pages.test.ts tests
 - [ ] **Step 3: Manual smoke（开发者）**
 
 1. `pnpm setup:worktree`（若需要）+ `pnpm dev`
-2. 设置 → Codex：见系统默认 + 添加账户
-3. 工作台加 Codex 物料：见双进度条；管理账户跳转设置
+2. 设置 → Codex：见系统默认 + 添加账号
+3. 工作台加 Codex 物料：见双进度条；管理账号跳转设置
 4. 命令面板搜索「Codex: Add」应无结果
 
 ---
@@ -508,7 +508,7 @@ pnpm test:unit -- tests/unit/shared/plugin-manifest-settings-pages.test.ts tests
 |-----------|------|
 | settingsPages 贡献点 | 1–3 |
 | 设置页图 1 CRUD + 系统默认 | 4, 6 |
-| 物料图 2 用量 + 快切 + 管理账户 | 7 |
+| 物料图 2 用量 + 快切 + 管理账号 | 7 |
 | 删命令面板 commands | 6/8 |
 | selectSystemDefault + 系统默认用量 | 4 |
 | 结构化 usage DTO | 4–5 |

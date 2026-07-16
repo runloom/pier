@@ -1,14 +1,8 @@
-import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
+import type {
+  ExternalRendererPluginContext,
+  RendererPluginContentDialogRenderProps,
+} from "@pier/plugin-api/renderer";
 import { Button } from "@pier/ui/button.tsx";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-  DialogTrigger,
-} from "@pier/ui/dialog.tsx";
 import {
   Item,
   ItemContent,
@@ -16,9 +10,11 @@ import {
   ItemMedia,
 } from "@pier/ui/item.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
-import { ExternalLink, ShieldCheck, UserPlus } from "lucide-react";
-import { type JSX, useEffect, useRef, useState } from "react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
+import { ExternalLink, HardDrive, ShieldCheck, UserPlus } from "lucide-react";
+import { type JSX, useCallback, useEffect, useRef, useState } from "react";
 import type { CodexLoginState } from "../shared/accounts.ts";
+import { AddAccountWaiting } from "./add-account-waiting.tsx";
 import type { Translate } from "./usage-meter.tsx";
 
 function isLoginCancellation(error: unknown): boolean {
@@ -28,47 +24,84 @@ function isLoginCancellation(error: unknown): boolean {
   );
 }
 
-export function AddAccountDialog({
+type AddTab = "account" | "local";
+const ADD_DIALOG_ID = "accounts.add";
+
+function AddAccountContent({
   context,
   login,
   onError,
   t,
-}: {
+  close,
+  setDismissible,
+  setTitle,
+  setDescription,
+  initialLogin,
+}: RendererPluginContentDialogRenderProps & {
   context: ExternalRendererPluginContext;
   login: CodexLoginState | null;
   onError: (error: unknown) => void;
   t: Translate;
+  initialLogin: CodexLoginState | null;
 }): JSX.Element {
-  const [open, setOpen] = useState(false);
+  const [tab, setTab] = useState<AddTab>("account");
   const [presentation, setPresentation] = useState<"authorize" | "waiting">(
-    "authorize"
+    initialLogin ? "waiting" : "authorize"
   );
   const [starting, setStarting] = useState(false);
   const [pendingAction, setPendingAction] = useState<
     "cancel" | "restart" | null
   >(null);
   const operationId = useRef(0);
-  const previousLogin = useRef<CodexLoginState | null>(null);
+  const previousLogin = useRef<CodexLoginState | null>(initialLogin);
   const waiting = login !== null || starting;
 
   useEffect(() => {
     if (login) {
       setPresentation("waiting");
-      setOpen(true);
+      setDismissible(false);
+      setTitle(
+        t(
+          "pier.codex.accounts.settings.addDialogWaitingTitle",
+          "Waiting for browser authorization"
+        )
+      );
+      setDescription(
+        t(
+          "pier.codex.accounts.settings.addDialogWaitingDescription",
+          "Complete Codex login in your browser. This dialog closes automatically after authorization."
+        )
+      );
     } else if (previousLogin.current) {
-      setOpen(false);
+      setPresentation("authorize");
+      setStarting(false);
+      setDismissible(true);
+      close(null);
     }
     previousLogin.current = login;
-  }, [login]);
+  }, [close, login, setDescription, setDismissible, setTitle, t]);
 
   const startLogin = (): void => {
     const currentOperation = ++operationId.current;
     setPresentation("waiting");
     setStarting(true);
+    setDismissible(false);
+    setTitle(
+      t(
+        "pier.codex.accounts.settings.addDialogWaitingTitle",
+        "Waiting for browser authorization"
+      )
+    );
+    setDescription(
+      t(
+        "pier.codex.accounts.settings.addDialogWaitingDescription",
+        "Complete Codex login in your browser. This dialog closes automatically after authorization."
+      )
+    );
     context.rpc
       .invoke("accounts.add", {})
       .then(() => {
-        if (operationId.current === currentOperation) setOpen(false);
+        if (operationId.current === currentOperation) close(null);
       })
       .catch((error: unknown) => {
         if (
@@ -83,6 +116,22 @@ export function AddAccountDialog({
       });
   };
 
+  const adoptLocal = (): void => {
+    const currentOperation = ++operationId.current;
+    setStarting(true);
+    context.rpc
+      .invoke("accounts.adoptCurrent", null)
+      .then(() => {
+        if (operationId.current === currentOperation) close(null);
+      })
+      .catch((error: unknown) => {
+        if (operationId.current === currentOperation) onError(error);
+      })
+      .finally(() => {
+        if (operationId.current === currentOperation) setStarting(false);
+      });
+  };
+
   const cancelLogin = (): void => {
     setPendingAction("cancel");
     context.rpc
@@ -90,7 +139,9 @@ export function AddAccountDialog({
       .then(() => {
         operationId.current += 1;
         setStarting(false);
-        setOpen(false);
+        setPresentation("authorize");
+        setDismissible(true);
+        close(null);
       })
       .catch((error: unknown) => {
         onError(error);
@@ -116,140 +167,196 @@ export function AddAccountDialog({
       });
   };
 
+  if (presentation === "waiting") {
+    return (
+      <AddAccountWaiting
+        loginActive={login !== null}
+        onCancel={cancelLogin}
+        onRestart={restartLogin}
+        pendingAction={pendingAction}
+        t={t}
+      />
+    );
+  }
+
   return (
-    <Dialog
-      onOpenChange={(nextOpen) => {
-        if (nextOpen) {
-          if (!waiting) {
-            setPresentation("authorize");
-            setOpen(true);
+    <div className="flex flex-col gap-4" data-pier-codex-scope="">
+      <Item size="sm" variant="muted">
+        <ItemMedia variant="icon">
+          <ShieldCheck aria-hidden />
+        </ItemMedia>
+        <ItemContent>
+          <ItemDescription>
+            {t(
+              "pier.codex.accounts.settings.addDialogLocalCredential",
+              "Credentials are stored only on this device"
+            )}
+          </ItemDescription>
+        </ItemContent>
+      </Item>
+
+      <Tabs
+        onValueChange={(value) => {
+          if (value === "account" || value === "local") {
+            setTab(value);
           }
-          return;
-        }
-        if (!waiting) {
-          setOpen(false);
-        }
-      }}
-      open={open}
-    >
-      <DialogTrigger asChild>
-        <Button type="button">
-          <UserPlus data-icon="inline-start" />
-          {t("pier.codex.accounts.settings.addAccount", "Add account")}
-        </Button>
-      </DialogTrigger>
-      <DialogContent
-        data-pier-codex-scope=""
-        initialFocus="firstFocusable"
-        onEscapeKeyDown={(event) => {
-          if (waiting) event.preventDefault();
         }}
-        showCloseButton={false}
+        value={tab}
       >
-        <DialogHeader>
-          <DialogTitle>
-            {presentation === "waiting"
-              ? t(
-                  "pier.codex.accounts.settings.addDialogWaitingTitle",
-                  "Waiting for browser authorization"
-                )
-              : t(
-                  "pier.codex.accounts.settings.addDialogTitle",
-                  "Add Codex account"
-                )}
-          </DialogTitle>
-          <DialogDescription>
-            {presentation === "waiting"
-              ? t(
-                  "pier.codex.accounts.settings.addDialogWaitingDescription",
-                  "Complete Codex login in your browser. This dialog closes automatically after authorization."
-                )
-              : t(
-                  "pier.codex.accounts.settings.addDialogDescription",
-                  "Pier will open Codex login in your browser. The account appears here automatically after authorization."
-                )}
-          </DialogDescription>
-        </DialogHeader>
-        {presentation === "waiting" ? (
-          <Item size="sm" variant="muted">
-            <ItemMedia variant="icon">
-              <Spinner />
-            </ItemMedia>
-            <ItemContent>
-              <ItemDescription>
-                {t(
-                  "pier.codex.accounts.settings.addDialogWaitingStatus",
-                  "Waiting for Codex authorization…"
-                )}
-              </ItemDescription>
-            </ItemContent>
-          </Item>
+        <TabsList className="w-full">
+          <TabsTrigger className="flex-1" value="account">
+            {t(
+              "pier.codex.accounts.settings.addDialogTabAccount",
+              "Account login"
+            )}
+          </TabsTrigger>
+          <TabsTrigger className="flex-1" value="local">
+            {t(
+              "pier.codex.accounts.settings.addDialogTabLocal",
+              "Local import"
+            )}
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent className="mt-3" value="account">
+          <p className="text-muted-foreground text-sm">
+            {t(
+              "pier.codex.accounts.settings.addDialogAccountDescription",
+              "Continue in your browser to sign in with the Codex CLI. The account appears here after authorization."
+            )}
+          </p>
+        </TabsContent>
+        <TabsContent className="mt-3" value="local">
+          <p className="text-muted-foreground text-sm">
+            {t(
+              "pier.codex.accounts.settings.addDialogLocalDescription",
+              "Import the account already signed in on this device (~/.codex/auth.json). It becomes the active Pier account."
+            )}
+          </p>
+        </TabsContent>
+      </Tabs>
+
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button
+          disabled={waiting}
+          onClick={() => close(null)}
+          type="button"
+          variant="outline"
+        >
+          {t("pier.codex.accounts.settings.cancel", "Cancel")}
+        </Button>
+        {tab === "local" ? (
+          <Button
+            aria-busy={starting || undefined}
+            disabled={starting}
+            onClick={adoptLocal}
+            type="button"
+          >
+            {starting ? (
+              <Spinner data-icon="inline-start" />
+            ) : (
+              <HardDrive data-icon="inline-start" />
+            )}
+            {t(
+              "pier.codex.accounts.settings.addDialogLocalSubmit",
+              "Import local account"
+            )}
+          </Button>
         ) : (
-          <Item size="sm" variant="muted">
-            <ItemMedia variant="icon">
-              <ShieldCheck aria-hidden />
-            </ItemMedia>
-            <ItemContent>
-              <ItemDescription>
-                {t(
-                  "pier.codex.accounts.settings.addDialogLocalCredential",
-                  "Credentials are stored only on this device"
-                )}
-              </ItemDescription>
-            </ItemContent>
-          </Item>
+          <Button
+            aria-busy={starting || undefined}
+            disabled={starting}
+            onClick={startLogin}
+            type="button"
+          >
+            {starting ? <Spinner data-icon="inline-start" /> : null}
+            {t(
+              "pier.codex.accounts.settings.addDialogContinue",
+              "Continue in browser"
+            )}
+            <ExternalLink data-icon="inline-end" />
+          </Button>
         )}
-        <DialogFooter>
-          {presentation === "waiting" ? (
-            <>
-              <Button
-                aria-busy={pendingAction === "cancel" || undefined}
-                disabled={pendingAction !== null || login === null}
-                onClick={cancelLogin}
-                type="button"
-                variant="outline"
-              >
-                {pendingAction === "cancel" ? (
-                  <Spinner data-icon="inline-start" />
-                ) : null}
-                {t("pier.codex.accounts.settings.cancelLogin", "Cancel login")}
-              </Button>
-              <Button
-                aria-busy={pendingAction === "restart" || undefined}
-                disabled={pendingAction !== null || login === null}
-                onClick={restartLogin}
-                type="button"
-                variant="secondary"
-              >
-                {pendingAction === "restart" ? (
-                  <Spinner data-icon="inline-start" />
-                ) : null}
-                {t(
-                  "pier.codex.accounts.settings.addDialogReopenBrowser",
-                  "Reopen browser"
-                )}
-              </Button>
-            </>
-          ) : (
-            <>
-              <Button
-                onClick={() => setOpen(false)}
-                type="button"
-                variant="outline"
-              >
-                {t("pier.codex.accounts.settings.cancel", "Cancel")}
-              </Button>
-              <Button onClick={startLogin} type="button">
-                {t(
-                  "pier.codex.accounts.settings.addDialogContinue",
-                  "Continue in browser"
-                )}
-                <ExternalLink data-icon="inline-end" />
-              </Button>
-            </>
-          )}
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+      </div>
+    </div>
+  );
+}
+
+export function AddAccountDialog({
+  context,
+  login,
+  onError,
+  t,
+}: {
+  context: ExternalRendererPluginContext;
+  login: CodexLoginState | null;
+  onError: (error: unknown) => void;
+  t: Translate;
+}): JSX.Element {
+  const openHandleId = useRef<string | null>(null);
+
+  const openAddDialog = useCallback((): void => {
+    const handle = context.dialogs.open({
+      id: ADD_DIALOG_ID,
+      title: t(
+        "pier.codex.accounts.settings.addDialogTitle",
+        "Add Codex account"
+      ),
+      description: t(
+        "pier.codex.accounts.settings.addDialogDescription",
+        "Choose how to add a Codex account. Browser login opens Codex CLI authorization; local import uses ~/.codex/auth.json on this device."
+      ),
+      size: "default",
+      dismissible: login === null,
+      content: (props) => (
+        <AddAccountContent
+          {...props}
+          context={context}
+          initialLogin={login}
+          login={login}
+          onError={onError}
+          t={t}
+        />
+      ),
+    });
+    openHandleId.current = handle.id;
+    handle.result
+      .catch(() => undefined)
+      .finally(() => {
+        if (openHandleId.current === handle.id) {
+          openHandleId.current = null;
+        }
+      });
+  }, [context, login, onError, t]);
+
+  useEffect(() => {
+    if (!login) {
+      if (openHandleId.current) {
+        context.dialogs.close(openHandleId.current, null);
+        openHandleId.current = null;
+      }
+      return;
+    }
+    if (openHandleId.current) {
+      context.dialogs.update(ADD_DIALOG_ID, {
+        dismissible: false,
+        title: t(
+          "pier.codex.accounts.settings.addDialogWaitingTitle",
+          "Waiting for browser authorization"
+        ),
+        description: t(
+          "pier.codex.accounts.settings.addDialogWaitingDescription",
+          "Complete Codex login in your browser. This dialog closes automatically after authorization."
+        ),
+      });
+      return;
+    }
+    openAddDialog();
+  }, [context, login, openAddDialog, t]);
+
+  return (
+    <Button onClick={openAddDialog} type="button">
+      <UserPlus data-icon="inline-start" />
+      {t("pier.codex.accounts.settings.addAccount", "Add account")}
+    </Button>
   );
 }

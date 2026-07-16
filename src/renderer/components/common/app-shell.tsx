@@ -1,3 +1,6 @@
+import { AgentIndexChromeBar } from "@/components/common/agent-index-chrome-bar.tsx";
+import { AgentRuntimeIndexBridge } from "@/components/common/agent-runtime-index-bridge.tsx";
+import { AppContentDialogHost } from "@/components/common/app-content-dialog-host.tsx";
 import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
 import { AppQuitDialogBridge } from "@/components/common/app-quit-dialog-bridge.tsx";
 import { CommandPalette } from "@/components/common/command-palette.tsx";
@@ -5,6 +8,7 @@ import { DocumentTitle } from "@/components/common/document-title.tsx";
 import { ForegroundActivityBridge } from "@/components/common/foreground-activity-bridge.tsx";
 import { PluginOverlayHost } from "@/components/common/plugin-overlay-host.tsx";
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
+import { TaskOutputSyncBridge } from "@/components/common/task-output-sync-bridge.tsx";
 import { TaskRunsErrorBridge } from "@/components/common/task-runs-error-bridge.tsx";
 import { TerminalDebugSnapshotBridge } from "@/components/common/terminal-debug-snapshot-bridge.tsx";
 import { TitleBar } from "@/components/common/title-bar.tsx";
@@ -19,7 +23,7 @@ export function AppShell() {
   return (
     <div className="flex h-full flex-col overflow-hidden">
       <DocumentTitle />
-      {IS_MAC && <TitleBar />}
+      {IS_MAC ? <TitleBar /> : <AgentIndexChromeBar />}
       <div className="min-h-0 flex-1 overflow-hidden">
         <WorkspaceHost />
       </div>
@@ -28,11 +32,14 @@ export function AppShell() {
       <SettingsDialog />
       <AppQuitDialogBridge />
       <AppDialogHost />
+      <AppContentDialogHost />
       <PluginOverlayHost />
       <TerminalDebugSnapshotBridge />
       <ForegroundActivityBridge />
+      <AgentRuntimeIndexBridge />
       <UsageDataBridge />
       <TaskRunsErrorBridge />
+      <TaskOutputSyncBridge />
       <Toaster />
     </div>
   );

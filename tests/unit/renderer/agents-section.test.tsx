@@ -21,6 +21,7 @@ const appDialogMocks = vi.hoisted(() => ({
 
 const toastMocks = vi.hoisted(() => ({
   info: vi.fn(),
+  success: vi.fn(),
 }));
 
 vi.mock("sonner", () => ({ toast: toastMocks }));
@@ -77,6 +78,7 @@ describe("AgentsSection", () => {
     await initI18n();
     appDialogMocks.showAppAlert.mockClear();
     toastMocks.info.mockClear();
+    toastMocks.success.mockClear();
 
     useAgentDetectStore.setState({
       detectedIds: [],
@@ -362,13 +364,15 @@ describe("AgentsSection", () => {
     expect(appDialogMocks.showAppAlert).not.toHaveBeenCalled();
   });
 
-  it("Refresh button calls refresh() and reflects isRefreshing", async () => {
-    const refreshSpy = vi.fn(() => {
-      // While in flight, the store flips isRefreshing on (mirrors the real
-      // store). Assert the spinner role appears during the pending window.
-      useAgentDetectStore.setState({ isRefreshing: true });
-      return Promise.resolve();
-    });
+  it("Refresh button spins the refresh icon and toasts on success", async () => {
+    let resolveRefresh: (() => void) | undefined;
+    const refreshSpy = vi.fn(
+      () =>
+        new Promise<void>((resolve) => {
+          resolveRefresh = resolve;
+          useAgentDetectStore.setState({ isRefreshing: true });
+        })
+    );
     useAgentDetectStore.setState({ refresh: refreshSpy } as never);
 
     render(<AgentsSection />);
@@ -377,12 +381,38 @@ describe("AgentsSection", () => {
 
     expect(refreshSpy).toHaveBeenCalledTimes(1);
     await waitFor(() => {
-      // isRefreshing=true → spinner (role="status") swaps in and the button
-      // (now reachable via the spinner's closest button) is disabled.
-      const spinner = screen.getByRole("status");
-      expect(spinner).toBeInTheDocument();
-      expect(spinner.closest("button")).toBeDisabled();
+      expect(refreshBtn).toBeDisabled();
     });
+    const icon = refreshBtn.querySelector("svg");
+    expect(icon).not.toBeNull();
+    expect(icon).toHaveClass("animate-spin");
+    expect(screen.queryByRole("status")).not.toBeInTheDocument();
+
+    useAgentDetectStore.setState({ isRefreshing: false });
+    resolveRefresh?.();
+
+    await waitFor(() => {
+      expect(toastMocks.success).toHaveBeenCalledWith("Agent list refreshed");
+    });
+    expect(appDialogMocks.showAppAlert).not.toHaveBeenCalled();
+  });
+
+  it("Refresh failure surfaces a detailed app alert", async () => {
+    const refreshSpy = vi.fn(async () => {
+      throw new Error("detect service down");
+    });
+    useAgentDetectStore.setState({ refresh: refreshSpy } as never);
+
+    render(<AgentsSection />);
+    fireEvent.click(screen.getByRole("button", { name: "Refresh" }));
+
+    await waitFor(() => {
+      expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
+        body: "detect service down",
+        title: "Failed to refresh agent list",
+      });
+    });
+    expect(toastMocks.success).not.toHaveBeenCalled();
   });
 
   it("PermissionModeRow shows the manual select value by default", () => {

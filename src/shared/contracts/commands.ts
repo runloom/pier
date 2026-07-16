@@ -344,6 +344,11 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     cwd: z.string().min(1),
     type: z.literal("git.createBranch"),
   }),
+  z.object({
+    cwd: z.string().min(1),
+    name: z.string().min(1),
+    type: z.literal("git.createAndSwitchBranch"),
+  }),
   gitDeleteBranchOptionsSchema.extend({
     cwd: z.string().min(1),
     type: z.literal("git.deleteBranch"),
@@ -461,6 +466,7 @@ export type PierCommandEnvelope = z.infer<typeof pierCommandEnvelopeSchema>;
 
 export type PierCommandErrorCode =
   | "invalid_command"
+  | "cancelled"
   | "permission_denied"
   | "not_found"
   | "platform_unavailable"

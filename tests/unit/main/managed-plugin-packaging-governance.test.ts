@@ -11,6 +11,13 @@ const APPROVED_BUNDLED_WIDGET_SIZE_POLICIES = [
     pluginId: "pier.codex",
     widgetId: "pier.codex.accounts",
   },
+  {
+    defaultSize: { h: 3, w: 4 },
+    maxSize: { h: 4, w: 8 },
+    minSize: { h: 3, w: 2 },
+    pluginId: "pier.grok",
+    widgetId: "pier.grok.accounts",
+  },
   // v1.2: `pier.codex.cost` widget 已由宿主 `core.cost-overview` 替代，不再打包。
 ] as const;
 
@@ -59,7 +66,7 @@ describe("managed plugin packaging governance", () => {
     expect(builderConfig).toContain("*.tgz");
     expect(builderConfig).toContain("*.tgz.sha256");
     expect(builderConfig).toContain("plugin.json");
-    expect(buildDistScript).toContain("pnpm plugin:codex:pack");
+    expect(buildDistScript).toContain("pnpm plugins:pack");
   });
 
   it("requires Ed25519 signing when the release workflow regenerates the official index", () => {
@@ -70,19 +77,33 @@ describe("managed plugin packaging governance", () => {
     expect(releaseWorkflow).toContain("PIER_PLUGIN_INDEX_SIGNING_KEY_ID");
   });
 
-  it("automatically publishes an immutable plugin release after one version change lands on main", () => {
+  it("automatically publishes immutable plugin releases for every package.json change on main", () => {
     expect(releaseWorkflow).toMatch(
       /push:\s+branches:\s+- main\s+paths:\s+- 'packages\/plugin-\*\/package\.json'/
     );
     expect(releaseWorkflow).toContain(
+      "expected at least one changed plugin package.json"
+    );
+    expect(releaseWorkflow).not.toContain(
       "expected exactly one changed plugin package.json"
     );
-    expect(releaseWorkflow).toContain('if [ "$ACTUAL_VERSION" != "$VERSION" ]');
+    expect(releaseWorkflow).toContain("release_targets");
+    expect(releaseWorkflow).toContain("sorted by tail");
+    expect(releaseWorkflow).toContain("must have plugin.json");
+    expect(releaseWorkflow).toContain(
+      "skipping non-releasable package (no plugin.json)"
+    );
+    expect(releaseWorkflow).toContain("should_release");
+    expect(releaseWorkflow).toContain(
+      "no releasable plugin package.json changes (plugin.json required)"
+    );
+    expect(releaseWorkflow).toContain("same-version hash drift");
     expect(releaseWorkflow).toContain("Check existing release");
     expect(releaseWorkflow).toContain(
       "Verify existing release asset is immutable"
     );
-    expect(releaseWorkflow).toContain("same-version hash drift");
+    expect(releaseWorkflow).toContain("pnpm plugins:index");
+    expect(releaseWorkflow).toContain("chore(plugins): update index for");
   });
 
   it("does not commit an unsigned official index", () => {

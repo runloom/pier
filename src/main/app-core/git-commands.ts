@@ -13,6 +13,7 @@ import type { PierCoreServices } from "./command-router.ts";
 const GIT_WRITE_COMMANDS: Record<string, true> = {
   "git.checkoutBranch": true,
   "git.commit": true,
+  "git.createAndSwitchBranch": true,
   "git.createBranch": true,
   "git.deleteBranch": true,
   "git.discardChanges": true,
@@ -157,6 +158,9 @@ async function dispatchGitCommand(
           startPoint: command.startPoint,
         }),
       });
+      return success(requestId, true);
+    case "git.createAndSwitchBranch":
+      await services.git.createAndSwitchBranch(command.cwd, command.name);
       return success(requestId, true);
     case "git.deleteBranch":
       await services.git.deleteBranch(command.cwd, {

@@ -21,6 +21,7 @@ import { registerPluginRpcIpc } from "../plugins/plugin-rpc-ipc.ts";
 import { createPluginSecretsFacade } from "../plugins/plugin-secrets.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
 import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
+import { createAgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
 import { createAgentUsageService } from "../services/agents/agent-usage-service.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
@@ -43,6 +44,11 @@ import {
 } from "../services/managed-plugins/install-service.ts";
 import { createManagedPluginOperationLog } from "../services/managed-plugins/operation-log.ts";
 import { createManagedPluginPaths } from "../services/managed-plugins/paths.ts";
+import {
+  getPierPluginMode,
+  listConfiguredWorkspaceRoots,
+} from "../services/managed-plugins/plugin-mode.ts";
+import { bootWorkspacePluginMode } from "../services/managed-plugins/workspace-boot.ts";
 import { createPanelContextService } from "../services/panel-context-service.ts";
 import { createPluginService } from "../services/plugin-service.ts";
 import { createPluginSettingsService } from "../services/plugin-settings-service.ts";
@@ -67,7 +73,10 @@ import { showNativeWindowCloseFailure } from "../windows/native-window-close-fai
 import { windowManager } from "../windows/window-manager.ts";
 import { requireAppCoreInitialization } from "./app-core-readiness.ts";
 import { createAppCoreUsageData } from "./app-core-usage-data.ts";
-import { readBundledPlugin } from "./bundled-plugin-reader.ts";
+import {
+  collectBundledPluginRegistrations,
+  OFFICIAL_BUNDLED_PLUGIN_SPECS,
+} from "./bundled-official-plugins.ts";
 import {
   createClientRegistry,
   type PierClientRegistry,
@@ -79,10 +88,7 @@ import {
 } from "./command-router.ts";
 import { createPierEventBus, type PierEventBus } from "./event-bus.ts";
 import { createLazyAppCore } from "./lazy-app-core.ts";
-import {
-  type ManagedPluginDevRuntimeWatch,
-  startManagedPluginDevRuntimeWatch,
-} from "./managed-plugin-dev-runtime-watch.ts";
+import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
@@ -121,14 +127,8 @@ function createPierAppCore(): PierAppCore {
   const managedPluginOpLog = createManagedPluginOperationLog(
     managedPluginPaths.operationLogFile
   );
-  const codexBundle = readBundledPlugin({
-    devPackageDir: "packages/plugin-codex",
-    fallbackId: "pier.codex",
-    fallbackName: "Codex",
-    fallbackVersion: "1.0.0",
-    prodPluginDirName: "pier.codex",
-  });
-  const codexSeedAvailable = codexBundle !== null;
+  const { registrations: bundledPluginRegistrations } =
+    collectBundledPluginRegistrations();
   let pluginHostRef: MainPluginHostApi | null = null;
   const httpIndex = createHttpOfficialIndexProvider({
     cachePath: managedPluginPaths.officialIndexCacheFile,
@@ -143,28 +143,32 @@ function createPierAppCore(): PierAppCore {
   let externalMainRuntimeReconciler: ReturnType<
     typeof createManagedPluginRuntimeReconciler
   > | null = null;
-  let managedPluginDevRuntimeWatch: ManagedPluginDevRuntimeWatch | null = null;
+  const managedPluginDevRuntimeWatches =
+    createManagedPluginDevRuntimeWatchRegistry();
+  const pluginMode = getPierPluginMode(process.cwd());
+  const workspaceDevPluginSpecs = [
+    ...OFFICIAL_BUNDLED_PLUGIN_SPECS.map((s) => ({
+      devPackageDir: s.devPackageDir,
+      id: s.id,
+    })),
+    ...listConfiguredWorkspaceRoots(process.cwd()).map((r) => ({
+      devPackageDir: r.path,
+      id: r.id,
+    })),
+  ];
+  // Custom roots override first-party when id collides.
+  const workspaceSpecById = new Map<
+    string,
+    { devPackageDir: string; id: string }
+  >();
+  for (const spec of workspaceDevPluginSpecs)
+    workspaceSpecById.set(spec.id, spec);
+  const dedupedSpecs = [...workspaceSpecById.values()];
   const managedPlugins: ManagedPluginInstallService =
     createManagedPluginInstallService({
       appendOperationLog: (record) => managedPluginOpLog.append(record),
       assetFetcher,
-      bundledPlugins: codexBundle
-        ? [
-            {
-              archivePath: codexBundle.archivePath,
-              contributionCounts: codexBundle.contributionCounts,
-              displayName: codexBundle.name,
-              id: "pier.codex",
-              sha256: codexBundle.sha256,
-              version: codexBundle.version,
-              ...(codexBundle.description
-                ? { description: codexBundle.description }
-                : {}),
-              ...(codexBundle.locales ? { locales: codexBundle.locales } : {}),
-              ...(codexBundle.size ? { size: codexBundle.size } : {}),
-            },
-          ]
-        : [],
+      bundledPlugins: bundledPluginRegistrations,
       officialIndexProvider: () => httpIndex.snapshot(),
       officialIndexRefresh: async (refreshOptions) => {
         await httpIndex.refresh(refreshOptions);
@@ -181,8 +185,10 @@ function createPierAppCore(): PierAppCore {
       expectedRendererWindowIds: () =>
         windowManager.list().map((item) => item.id),
       pierVersion: "0.1.0",
+      pluginMode,
       runtimeMode: isDevRuntime() ? "development" : "production",
       store: managedPluginIndexStore,
+      workspaceDevPluginSpecs: pluginMode === "workspace" ? dedupedSpecs : [],
     });
   registerPluginActivationIpc(managedPlugins);
   const basePlugins = createPluginService({
@@ -253,6 +259,7 @@ function createPierAppCore(): PierAppCore {
         },
         processEnv: {
           CODEX_HOME: process.env.CODEX_HOME,
+          GROK_HOME: process.env.GROK_HOME,
           HOME: process.env.HOME,
           PATH: process.env.PATH,
         },
@@ -289,26 +296,20 @@ function createPierAppCore(): PierAppCore {
       httpIndex.refresh().catch((err: unknown) => {
         console.error("[managed-plugins] official-index refresh failed:", err);
       });
-      // Dev-only: an installed bundled plugin always runs from the source package.
-      // The dev override owns its own manifest version, so a version bump must not
-      // strand the runtime on the previously installed immutable version.
-      if (isDevRuntime() && codexSeedAvailable) {
-        const codexDevPackageDir = join(process.cwd(), "packages/plugin-codex");
-        const index = managedPlugins.getIndex();
-        const codex = index.plugins["pier.codex"];
-        if (codex?.activeVersion && !codex.uninstalledAt) {
-          await managedPlugins
-            .setDevOverride("pier.codex", codexDevPackageDir)
-            .then(() => managedPlugins.simulateRestartForTests())
-            .catch((err: unknown) => {
-              console.error("[managed-plugins] dev override sync failed:", err);
-            });
-          managedPluginDevRuntimeWatch ??= startManagedPluginDevRuntimeWatch({
-            logger: createLogger("managed-plugins"),
-            packageDir: codexDevPackageDir,
-            refreshRuntimeSources: () => managedPlugins.refreshRuntimeSources(),
-          });
-        }
+      // Workspace mode: pin runtime to local package dirs (first-party + custom roots).
+      if (pluginMode === "workspace") {
+        await bootWorkspacePluginMode(dedupedSpecs, {
+          managedPlugins,
+          managedPluginIndexStore,
+          managedPluginDevRuntimeWatches,
+          officialBundledPluginIds: OFFICIAL_BUNDLED_PLUGIN_SPECS.map(
+            (s) => s.id
+          ),
+        });
+      } else {
+        createLogger("managed-plugins").info(
+          "[managed-plugins] plugin mode: release"
+        );
       }
     });
   const processEnvironment = createProcessEnvironmentService();
@@ -321,8 +322,13 @@ function createPierAppCore(): PierAppCore {
   const agentUsage = createAgentUsageService({
     userDataDir: app.getPath("userData"),
   });
+  const agentRuntimeIndex = createAgentRuntimeIndexService({
+    snapshot: () => foregroundActivityService.snapshot(),
+    rendererCommand,
+  });
   const services: PierCoreServices = {
     agentDetection,
+    agentRuntimeIndex,
     agentUsage,
     ai: createAiService({
       detectAgents: async () => (await agentDetection.detect()).detectedIds,
@@ -371,10 +377,10 @@ function createPierAppCore(): PierAppCore {
           }
           foregroundActivityService.taskLaunched(panelId, windowId, task);
         },
-        onFinished: (panelId, windowId, args) => {
+        onCleared: (panelId, windowId, args) => {
           if (!windowId) {
             console.warn(
-              "[task-activity] missing windowId on finish, activity skipped:",
+              "[task-activity] missing windowId on clear, activity skipped:",
               panelId
             );
             return;
@@ -481,8 +487,7 @@ function createPierAppCore(): PierAppCore {
     }),
     eventBus,
     disposeManagedPluginDevRuntimeWatch: () => {
-      managedPluginDevRuntimeWatch?.dispose();
-      managedPluginDevRuntimeWatch = null;
+      managedPluginDevRuntimeWatches.dispose();
     },
     flushExternalPluginsBeforeQuit: () =>
       externalMainRuntime.flushAllBeforeQuit(),

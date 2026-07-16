@@ -2,6 +2,7 @@
 import pierreDark from "@pierre/theme/pierre-dark";
 import pierreLight from "@pierre/theme/pierre-light";
 import {
+  adjustOklchForContrasts,
   chromaOf,
   contrast,
   mix,
@@ -48,8 +49,9 @@ const FALLBACKS = {
   greenLight: "#059669",
   yellowDark: "#e5e510",
   yellowLight: "#949800",
-  blueDark: "#3b82f6",
-  blueLight: "#2563eb",
+  // Ant Design / common brand blue: vivid enough for CTAs, still near AA white text.
+  blueDark: "#1677ff",
+  blueLight: "#1677ff",
   magenta: "#bc3fbc",
 } as const;
 
@@ -112,31 +114,35 @@ function pickSaturated(
   return fallback;
 }
 
-function pickSaturatedOpaque(
-  get: ColorGetter,
-  keys: readonly string[],
-  fallback: string,
-  bg: string
-): string {
-  for (const key of keys) {
-    const v = get(key);
-    if (!v) {
-      continue;
-    }
-    const opaque = opaqueOn(v, bg);
-    if (chromaOf(opaque) >= 0.1) {
-      return opaque;
-    }
-  }
-  return opaqueOn(fallback, bg);
+function isUsablePrimarySource(hex: string): boolean {
+  // Primary is a filled brand surface. Skip grayish editor accents that only
+  // barely clear the generic chroma floor used by charts/ANSI fallbacks.
+  return chromaOf(hex) >= 0.22;
 }
 
-function readableFilledPrimary(surface: string): string {
-  const foreground = readableOnFilled(surface);
-  if (contrast(surface, foreground) >= 4.5) {
-    return surface;
+/**
+ * Filled brand CTA contrast policy:
+ * - Prefer white labels (industry default for primary buttons).
+ * - Target ~4.0:1 on white — stricter than WCAG large-text 3:1, looser than
+ *   body-text 4.5:1 — so blues stay vivid (Ant `#1677ff` ≈ 4.1) instead of
+ *   being crushed to muddy navy just to clear 4.5.
+ */
+const FILLED_PRIMARY_ON_CONTRAST = 4;
+const FILLED_PRIMARY_BG_CONTRAST = 3;
+
+function makeFilledPrimary(bg: string, source: string): string | null {
+  if (
+    contrast(bg, source) >= FILLED_PRIMARY_BG_CONTRAST &&
+    contrast(source, "#ffffff") >= FILLED_PRIMARY_ON_CONTRAST
+  ) {
+    return source;
   }
-  return visibleColor(foreground, surface, 4.5);
+  return adjustOklchForContrasts(
+    source,
+    bg,
+    FILLED_PRIMARY_BG_CONTRAST,
+    FILLED_PRIMARY_ON_CONTRAST
+  );
 }
 
 function derivePrimaryColor(
@@ -144,29 +150,67 @@ function derivePrimaryColor(
   bg: string,
   mode: "light" | "dark"
 ): string {
-  const source = pickSaturatedOpaque(
-    get,
-    [
-      "button.background",
-      "activityBar.activeBorder",
-      "focusBorder",
-      "charts.blue",
-      "terminal.ansiBlue",
-      "terminal.ansiBrightBlue",
-    ],
+  // Prefer real UI accent candidates; terminal ANSI is last-resort only.
+  const keys = [
+    "button.background",
+    "activityBar.badge.background",
+    "activityBar.activeBorder",
+    "tab.activeBorderTop",
+    "focusBorder",
+    "charts.blue",
+    "terminal.ansiBlue",
+    "terminal.ansiBrightBlue",
+  ] as const;
+
+  const fallback = opaqueOn(
     mode === "dark" ? FALLBACKS.blueDark : FALLBACKS.blueLight,
     bg
   );
-  let primary = visibleColor(bg, source, 3);
-  if (chromaOf(primary) < 0.1) {
-    primary = visibleColor(
-      bg,
-      opaqueOn(mode === "dark" ? FALLBACKS.blueDark : FALLBACKS.blueLight, bg),
-      3
-    );
+  let blackOnFallback: string | null = null;
+
+  for (const key of keys) {
+    const raw = get(key);
+    if (!raw) {
+      continue;
+    }
+    const source = opaqueOn(raw, bg);
+    if (!isUsablePrimarySource(source)) {
+      continue;
+    }
+    const primary = makeFilledPrimary(bg, source);
+    if (!(primary && isUsablePrimarySource(primary))) {
+      continue;
+    }
+    if (contrast(primary, "#ffffff") >= FILLED_PRIMARY_ON_CONTRAST) {
+      return primary;
+    }
+    blackOnFallback ??= primary;
   }
-  primary = readableFilledPrimary(primary);
-  return contrast(bg, primary) >= 3 ? primary : visibleColor(bg, primary, 3);
+
+  const fallbackStrict = makeFilledPrimary(bg, fallback);
+  if (
+    fallbackStrict &&
+    isUsablePrimarySource(fallbackStrict) &&
+    contrast(fallbackStrict, "#ffffff") >= FILLED_PRIMARY_ON_CONTRAST
+  ) {
+    return fallbackStrict;
+  }
+  const fallbackRelaxed = adjustOklchForContrasts(
+    fallback,
+    bg,
+    2.6,
+    FILLED_PRIMARY_ON_CONTRAST
+  );
+  if (
+    fallbackRelaxed &&
+    isUsablePrimarySource(fallbackRelaxed) &&
+    contrast(fallbackRelaxed, "#ffffff") >= FILLED_PRIMARY_ON_CONTRAST &&
+    contrast(bg, fallbackRelaxed) >= 2.6
+  ) {
+    return fallbackRelaxed;
+  }
+
+  return blackOnFallback ?? fallbackStrict ?? visibleColor(bg, fallback, 3);
 }
 
 function deriveChartColors(

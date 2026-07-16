@@ -3,6 +3,7 @@ import type {
   CodexAccountsSnapshot,
   RemoveAccountPayload,
   SelectAccountPayload,
+  SyncToPeersPayload,
 } from "../shared/accounts.ts";
 import type { CodexLegacyMigrationAdapter } from "./legacy-migration.ts";
 import type { CodexAccountsStateStore } from "./state.ts";
@@ -12,6 +13,10 @@ export interface CodexAccountsServiceOpts {
   ensureUsageEnv?: () => Promise<void>;
   hasVisibleTarget?: () => boolean;
   legacyMigration?: CodexLegacyMigrationAdapter;
+  logger?: {
+    warn(message: string, meta?: unknown): void;
+    info(message: string, meta?: unknown): void;
+  };
   managedBaseDir: string;
   onChanged: (snapshot: CodexAccountsSnapshot) => void;
   provider: AgentAccountProvider;
@@ -20,6 +25,8 @@ export interface CodexAccountsServiceOpts {
 
 export interface CodexAccountsService {
   add(payload: AddAccountPayload): Promise<void>;
+  /** Import the current local CLI login into managed accounts and activate it. */
+  adoptCurrent(): Promise<void>;
   cancelLogin(): Promise<void>;
   dispose(): void;
   flush(): Promise<void>;
@@ -32,4 +39,6 @@ export interface CodexAccountsService {
   remove(payload: RemoveAccountPayload): Promise<void>;
   select(payload: SelectAccountPayload): Promise<void>;
   snapshot(): CodexAccountsSnapshot;
+  /** Mirror the managed account credential into peer tools without switching Codex. */
+  syncToPeers(payload: SyncToPeersPayload): Promise<void>;
 }

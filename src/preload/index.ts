@@ -12,6 +12,8 @@ import type {
   MenuTemplate,
 } from "@shared/contracts/menu.ts";
 import type {
+  OpenSystemNotificationSettingsResult,
+  SystemNotificationPermissionSnapshot,
   SystemNotificationRequest,
   SystemNotificationResult,
 } from "@shared/contracts/notification.ts";
@@ -36,6 +38,10 @@ import type {
 import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
+import {
+  agentRuntimeIndexApi,
+  type PierAgentRuntimeIndexAPI,
+} from "./agent-runtime-index-api.ts";
 import { aiApi, type PierAiAPI } from "./ai-api.ts";
 import {
   environmentsApi,
@@ -106,6 +112,12 @@ export interface PierAgentsAPI {
 }
 
 export interface PierNotificationsAPI {
+  getPermissionStatus: () => Promise<SystemNotificationPermissionSnapshot>;
+  onPermissionChanged: (
+    cb: (snapshot: SystemNotificationPermissionSnapshot) => void
+  ) => () => void;
+  openSystemSettings: () => Promise<OpenSystemNotificationSettingsResult>;
+  sendTest: () => Promise<SystemNotificationResult>;
   system: (
     request: SystemNotificationRequest
   ) => Promise<SystemNotificationResult>;
@@ -207,6 +219,7 @@ export interface PierEnvAPI {
 }
 
 export interface PierWindowAPI {
+  agentRuntimeIndex: PierAgentRuntimeIndexAPI;
   agents: PierAgentsAPI;
   ai: PierAiAPI;
   app: AppPreloadApi;
@@ -272,6 +285,29 @@ const preferencesApi: PierPreferencesAPI = {
 };
 
 const notificationsApi: PierNotificationsAPI = {
+  getPermissionStatus: () =>
+    ipcRenderer.invoke(PIER.SYSTEM_NOTIFICATION_PERMISSION),
+  onPermissionChanged: (cb) => {
+    const listener = (
+      _event: unknown,
+      payload: SystemNotificationPermissionSnapshot
+    ): void => {
+      cb(payload);
+    };
+    ipcRenderer.on(
+      PIER_BROADCAST.SYSTEM_NOTIFICATION_PERMISSION_CHANGED,
+      listener
+    );
+    return () => {
+      ipcRenderer.off(
+        PIER_BROADCAST.SYSTEM_NOTIFICATION_PERMISSION_CHANGED,
+        listener
+      );
+    };
+  },
+  openSystemSettings: () =>
+    ipcRenderer.invoke(PIER.SYSTEM_NOTIFICATION_OPEN_SETTINGS),
+  sendTest: () => ipcRenderer.invoke(PIER.SYSTEM_NOTIFICATION_TEST),
   system: (request) => ipcRenderer.invoke("pier:notification:system", request),
 };
 
@@ -388,6 +424,7 @@ const keybindingApi: PierKeybindingAPI = {
 const api: PierWindowAPI = {
   agents: agentsApi,
   appQuit: appQuitApi,
+  agentRuntimeIndex: agentRuntimeIndexApi,
   foregroundActivity: foregroundActivityApi,
   ai: aiApi,
   closeWindow: (windowId) =>

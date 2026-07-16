@@ -239,6 +239,7 @@ function services(
   return {
     agentDetection: {} as never,
     gitReview: {} as never,
+    agentRuntimeIndex: {} as never,
     agentUsage: {
       flush: async () => undefined,
       read: async () => ({ entries: [], version: 1 }),

@@ -163,6 +163,7 @@ export interface RendererPluginGitFacade {
   cancelReviewRequest(request: GitReviewCancelRequest): Promise<void>;
   checkoutBranch(cwd: string, name: string): Promise<boolean>;
   continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
+  createAndSwitchBranch(cwd: string, name: string): Promise<boolean>;
   discardChanges(cwd: string, paths: string[]): Promise<boolean>;
   dropStash(cwd: string, index?: number): Promise<GitStashDropResult>;
   getDiffPatch(

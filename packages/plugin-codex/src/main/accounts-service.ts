@@ -2,6 +2,10 @@ import { randomUUID } from "node:crypto";
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  createUsageRefreshScheduler,
+  USAGE_REFRESH_CONCURRENCY,
+} from "@pier/plugin-api/account-usage";
 import writeFileAtomic from "write-file-atomic";
 import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
 import { LOGIN_TIMEOUT_MS } from "../shared/constants.ts";
@@ -9,18 +13,20 @@ import {
   buildAccountRecord,
   mergeIdentityIntoAccount,
 } from "./accounts-records.ts";
+import {
+  selectManagedAccount,
+  syncManagedAccountPeers,
+} from "./accounts-select.ts";
 import type {
   CodexAccountsService,
   CodexAccountsServiceOpts,
 } from "./accounts-service-contract.ts";
 import { buildAccountsSnapshot } from "./accounts-snapshot.ts";
 import {
-  activeUsageCacheKey,
-  createUsageCacheEntry,
-  USAGE_MIN_REFETCH_MS,
   USAGE_POLL_INTERVAL_MS,
   type UsageCacheEntry,
 } from "./accounts-usage.ts";
+import { createCodexUsageRefreshRunner } from "./accounts-usage-refresh.ts";
 import { PIER_MANAGED_HOME_MARKER } from "./codex-provider.ts";
 import { migrateLegacyAccountsToState } from "./legacy-migration.ts";
 import { classifyLoginError } from "./login-error.ts";
@@ -30,16 +36,11 @@ import {
 } from "./managed-account-home.ts";
 import { reconcileManagedCredentials } from "./managed-credential-reconciliation.ts";
 import { createSerialMutationQueue } from "./serial-mutation-queue.ts";
-import type { AccountUsageResult } from "./types.ts";
-import {
-  createUsageRefreshScheduler,
-  USAGE_REFRESH_CONCURRENCY,
-} from "./usage-refresh-scheduler.ts";
 
 const WATCH_SUPPRESS_MS = 1500;
 
+export { USAGE_REFRESH_CONCURRENCY } from "@pier/plugin-api/account-usage";
 export { SYSTEM_USAGE_CACHE_KEY } from "./accounts-usage.ts";
-export { USAGE_REFRESH_CONCURRENCY } from "./usage-refresh-scheduler.ts";
 
 export function createCodexAccountsService(
   opts: CodexAccountsServiceOpts
@@ -47,6 +48,7 @@ export function createCodexAccountsService(
   const { managedBaseDir, provider, stateStore, onChanged } = opts;
   const hasVisibleTarget = opts.hasVisibleTarget ?? (() => true);
   const ensureUsageEnv = opts.ensureUsageEnv ?? (() => Promise.resolve());
+  const logger = opts.logger;
 
   let broadcastSeq = 0;
   let loginAbort: AbortController | null = null;
@@ -58,6 +60,8 @@ export function createCodexAccountsService(
   let suppressWatchUntil = 0;
 
   const enqueueMutation = createSerialMutationQueue();
+  let runUsageRefresh: ReturnType<typeof createCodexUsageRefreshRunner> | null =
+    null;
   const refreshAllUsage = createUsageRefreshScheduler({
     concurrency: USAGE_REFRESH_CONCURRENCY,
     getAccountIds: () => stateStore.get().accounts.map((account) => account.id),
@@ -131,6 +135,7 @@ export function createCodexAccountsService(
     }
     await stateStore.flush();
     emitSnapshot();
+    doRefreshUsage({ force: true }).catch(() => undefined);
   }
 
   async function migrateLegacyAccountsIfNeeded(): Promise<boolean> {
@@ -180,6 +185,7 @@ export function createCodexAccountsService(
     let failure: Error | null = null;
     const previousState = stateStore.get();
     let stateMutated = false;
+    let existingId: string | null = null;
     try {
       await provider.login(dir, abort.signal);
       const identity = await provider.readIdentity(dir);
@@ -193,6 +199,7 @@ export function createCodexAccountsService(
           )
         : null;
       if (existing) {
+        existingId = existing.id;
         const existingDir = accountHomeDir(existing.id);
         if (provider.moveCredential) {
           await provider.moveCredential(dir, existingDir);
@@ -264,46 +271,54 @@ export function createCodexAccountsService(
     if (failure) {
       throw failure;
     }
+    // Refresh usage for the added (or merged) account so the UI does not stay
+    // skeleton. If the account was not activated, this still fills the cache.
+    const refreshId = existingId ?? id;
+    doRefreshUsage({ accountId: refreshId, force: true }).catch(
+      () => undefined
+    );
   }
 
-  async function doSelect(accountId: string): Promise<void> {
-    const state = stateStore.get();
-    const target = state.accounts.find((a) => a.id === accountId);
-    if (!target) {
-      throw new Error(`Account not found: ${accountId}`);
-    }
-    if (state.activeAccountId === accountId) {
-      return;
-    }
+  async function doSelect(
+    accountId: string,
+    syncTargets?: Parameters<typeof selectManagedAccount>[2]
+  ): Promise<void> {
+    await selectManagedAccount(
+      {
+        accountHomeDir,
+        handleDrift,
+        ...(logger ? { logger } : {}),
+        now,
+        onSelected: (selectedId) => {
+          emitSnapshot();
+          doRefreshUsage({ accountId: selectedId, force: true }).catch(() => {
+            // 用量 error 经 snapshot 传播；此 catch 仅防 unhandled rejection。
+          });
+        },
+        provider,
+        setSuppressWatchUntil: (until) => {
+          suppressWatchUntil = until;
+        },
+        stateStore,
+        watchSuppressMs: WATCH_SUPPRESS_MS,
+      },
+      accountId,
+      syncTargets
+    );
+  }
 
-    if (state.activeAccountId) {
-      const activeAccount = state.accounts.find(
-        (a) => a.id === state.activeAccountId
-      );
-      suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-      const syncResult = await provider.syncBack(
-        accountHomeDir(state.activeAccountId),
-        activeAccount?.providerAccountId
-      );
-      suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-      if (syncResult === "identity-mismatch") {
-        await handleDrift();
-      }
-    }
-    suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-    await provider.materialize(accountHomeDir(accountId));
-    suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-
-    stateStore.mutate((s) => ({
-      ...s,
-      activeAccountId: accountId,
-      revision: s.revision + 1,
-    }));
-    await stateStore.flush();
-    emitSnapshot();
-    doRefreshUsage({ accountId, force: true }).catch(() => {
-      /* fire-and-forget */
-    });
+  async function doSyncToPeers(
+    payload: Parameters<typeof syncManagedAccountPeers>[1]
+  ): Promise<void> {
+    await syncManagedAccountPeers(
+      {
+        accountHomeDir,
+        ...(logger ? { logger } : {}),
+        provider,
+        stateStore,
+      },
+      payload
+    );
   }
 
   async function doRemove(accountId: string): Promise<void> {
@@ -351,32 +366,20 @@ export function createCodexAccountsService(
     ) {
       throw new Error(`Account not found: ${targetId}`);
     }
-    const cacheKey = activeUsageCacheKey(targetId);
-    const cached = usageCache[cacheKey];
-    if (
-      !options.force &&
-      cached &&
-      now() - cached.fetchedAt < USAGE_MIN_REFETCH_MS
-    ) {
-      return;
+    if (!runUsageRefresh) {
+      runUsageRefresh = createCodexUsageRefreshRunner({
+        accountHomeDir,
+        emitSnapshot,
+        ensureUsageEnv,
+        now,
+        provider,
+        usageCache,
+      });
     }
-    await ensureUsageEnv();
-    const abort = new AbortController();
-    let result: AccountUsageResult;
-    try {
-      result = await provider.fetchUsage(
-        targetId ? accountHomeDir(targetId) : undefined,
-        abort.signal
-      );
-    } catch (error) {
-      result = {
-        error: error instanceof Error ? error.message : String(error),
-        status: "error" as const,
-        windows: [],
-      };
-    }
-    usageCache[cacheKey] = createUsageCacheEntry(result, cached, now());
-    emitSnapshot();
+    await runUsageRefresh({
+      ...(targetId ? { accountId: targetId } : {}),
+      ...(options.force ? { force: true } : {}),
+    });
   }
 
   async function handleDrift(): Promise<void> {
@@ -452,12 +455,13 @@ export function createCodexAccountsService(
           return;
         }
         refreshAllUsage().catch(() => {
-          /* fire-and-forget */
+          // 用量 error 已通过 doRefreshUsage → usageCache → emitSnapshot 传播到 UI；
+          // 此 catch 仅防 unhandled rejection，不面向用户。
         });
       }, USAGE_POLL_INTERVAL_MS);
       if (hasVisibleTarget()) {
         refreshAllUsage().catch(() => {
-          /* fire-and-forget */
+          // 同上：用量 error 经 snapshot 传播，此 catch 仅防 unhandled rejection。
         });
       }
     },
@@ -471,6 +475,7 @@ export function createCodexAccountsService(
     flush: () => stateStore.flush(),
     snapshot: () => buildSnapshot(),
     add: (_payload) => enqueueMutation(doAdd),
+    adoptCurrent: () => enqueueMutation(doAdoptCurrent),
     cancelLogin: () => {
       loginAbort?.abort();
       return enqueueMutation(() => {
@@ -480,7 +485,9 @@ export function createCodexAccountsService(
         return Promise.resolve();
       });
     },
-    select: (payload) => enqueueMutation(() => doSelect(payload.accountId)),
+    select: (payload) =>
+      enqueueMutation(() => doSelect(payload.accountId, payload.syncTargets)),
+    syncToPeers: (payload) => enqueueMutation(() => doSyncToPeers(payload)),
     remove: (payload) => enqueueMutation(() => doRemove(payload.accountId)),
     refreshUsage: (options) => doRefreshUsage(options),
     refreshAllUsage,

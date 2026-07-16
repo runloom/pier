@@ -327,6 +327,30 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/plugin-grok:
+    dependencies:
+      '@pier/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+      '@pier/ui':
+        specifier: workspace:*
+        version: link:../ui
+      lucide-react:
+        specifier: 1.24.0
+        version: 1.24.0(react@19.2.7)
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
+      write-file-atomic:
+        specifier: ^8.0.0
+        version: 8.0.0
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+
   packages/ui:
     dependencies:
       '@pierre/diffs':

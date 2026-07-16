@@ -135,6 +135,7 @@ const INVALID_GIT_REF_CHARACTERS = new Set([
 export function isValidGitBranchName(value: string): boolean {
   if (
     value.length === 0 ||
+    value === "HEAD" ||
     value.startsWith("-") ||
     value.startsWith("/") ||
     value.endsWith("/") ||

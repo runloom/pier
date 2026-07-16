@@ -8,6 +8,8 @@ export const CORE_COST_OVERVIEW_WIDGET_ID = "core.cost-overview";
 
 export const CORE_RESERVED_ACTION_IDS = [
   "pier.agent.new",
+  "pier.agents.focusWaiting",
+  "pier.agents.list",
   "pier.commandPalette.clearRecent",
   "pier.commandPalette.toggle",
   "pier.config.locale",

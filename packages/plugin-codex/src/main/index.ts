@@ -25,11 +25,15 @@ export const plugin: MainPluginModule = {
       join(context.paths.workDir, "accounts.json"),
       context.plugin.version
     );
-    const provider = createCodexProvider({ credentials: context.secrets });
+    const provider = createCodexProvider({
+      credentials: context.secrets,
+      logger: context.logger,
+    });
     const managedBaseDir = join(context.paths.workDir, "runtime-homes");
     const usagePollingConsumers = new Set<string>();
     const service = createCodexAccountsService({
       hasVisibleTarget: () => usagePollingConsumers.size > 0,
+      logger: context.logger,
       managedBaseDir,
       provider,
       stateStore,

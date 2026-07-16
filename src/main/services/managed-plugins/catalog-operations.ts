@@ -131,7 +131,14 @@ export async function performListCatalogSnapshot(
       update: { version: bundled.version },
     });
   }
-  return { checkedAt: ctx.now(), plugins };
+  const pluginMode = ctx.pluginMode ?? "release";
+  const officialMutationsAllowed = pluginMode === "release";
+  return {
+    checkedAt: ctx.now(),
+    officialMutationsAllowed,
+    pluginMode,
+    plugins,
+  };
 }
 
 export function computeSimulateRestartMutation(

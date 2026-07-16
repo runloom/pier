@@ -695,6 +695,7 @@ describe("git builtin plugin", () => {
             kind: "ok" as const,
             message: "",
           })),
+          createAndSwitchBranch: vi.fn(async () => true),
           createBranch: vi.fn(async () => true),
           deleteBranch: vi.fn(async () => true),
           discardChanges: vi.fn(async () => true),
@@ -1228,7 +1229,7 @@ describe("git builtin plugin", () => {
 
     const quickPick = useCommandPaletteController.getState().quickPick;
     expect(quickPick).toMatchObject({
-      placeholder: "Select a branch to switch to",
+      placeholder: "Enter a branch name to switch or create",
       title: "Git: Switch Branch...",
     });
     expect(quickPick?.items?.map((item) => item.id)).toEqual([
@@ -1251,6 +1252,138 @@ describe("git builtin plugin", () => {
     expect(toastMocks.success).toHaveBeenCalledWith(
       "Switched to branch feature/local",
       { id: "git-loading-toast" }
+    );
+  });
+
+  it("Git 切换分支输入有效新名称时显示明确候选并原子新建切换", async () => {
+    vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
+      currentBranch: "main",
+      durationMs: 4,
+      items: [
+        branchOption({
+          current: true,
+          kind: "local",
+          name: "main",
+          refName: "refs/heads/main",
+        }),
+        branchOption({
+          kind: "local",
+          name: "feature/existing",
+          refName: "refs/heads/feature/existing",
+        }),
+      ],
+      message: null,
+      status: "ok",
+    });
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.switchBranch")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const createItem = quickPick?.getQueryItem?.("feature/new");
+    expect(createItem).toMatchObject({
+      data: { kind: "create", name: "feature/new" },
+      detail: "Create from the current HEAD",
+      label: "Create branch “feature/new”",
+    });
+    expect(quickPick?.getQueryItem?.("feature/existing")).toBeNull();
+    expect(quickPick?.getQueryItem?.("main")).toMatchObject({
+      data: { kind: "current", name: "main" },
+      detail: "Current branch",
+      disabled: true,
+    });
+    expect(quickPick?.getQueryItem?.("feature bad")).toMatchObject({
+      data: { kind: "invalid", name: "feature bad" },
+      detail: "Invalid Git branch name",
+      disabled: true,
+    });
+    expect(quickPick?.getQueryItem?.("HEAD")).toMatchObject({
+      data: { kind: "invalid", name: "HEAD" },
+      detail: "Invalid Git branch name",
+      disabled: true,
+    });
+    if (!(quickPick && createItem)) {
+      throw new Error("expected create-and-switch quick-pick item");
+    }
+
+    await quickPick.onAccept(createItem);
+
+    expect(window.pier.git.createAndSwitchBranch).toHaveBeenCalledWith(
+      "/Users/xyz/ABC/pier",
+      "feature/new"
+    );
+    expect(window.pier.git.checkoutBranch).not.toHaveBeenCalled();
+    expect(toastMocks.loading).toHaveBeenCalledWith(
+      "Creating and switching branch..."
+    );
+    expect(toastMocks.success).toHaveBeenCalledWith(
+      "Created and switched to branch feature/new",
+      { id: "git-loading-toast" }
+    );
+  });
+
+  it("Git 搜索结果截断时仍把完整列表中的现有分支作为切换候选", async () => {
+    vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
+      currentBranch: "main",
+      durationMs: 4,
+      items: [],
+      message: null,
+      status: "ok",
+    });
+    vi.mocked(window.pier.git.listBranches).mockResolvedValueOnce([
+      {
+        isCurrent: false,
+        kind: "local",
+        lastCommit: "abc123",
+        name: "feature/omitted",
+        upstream: null,
+      },
+    ]);
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.switchBranch")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    const existingItem = quickPick?.getQueryItem?.("feature/omitted");
+    expect(existingItem).toMatchObject({
+      data: { kind: "existing", name: "feature/omitted" },
+      detail: "Local branch",
+      label: "feature/omitted",
+    });
+    if (!(quickPick && existingItem)) {
+      throw new Error("expected omitted existing branch quick-pick item");
+    }
+
+    await quickPick.onAccept(existingItem);
+
+    expect(window.pier.git.checkoutBranch).toHaveBeenCalledWith(
+      "/Users/xyz/ABC/pier",
+      "feature/omitted"
+    );
+    expect(window.pier.git.createAndSwitchBranch).not.toHaveBeenCalled();
+  });
+
+  it("Git 只有当前分支时仍打开选择器供用户新建", async () => {
+    vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
+      currentBranch: "main",
+      durationMs: 2,
+      items: [],
+      message: null,
+      status: "ok",
+    });
+    dispose = activateWorktreePlugin();
+
+    await actionRegistry.get("pier.git.switchBranch")?.handler();
+
+    const quickPick = useCommandPaletteController.getState().quickPick;
+    expect(quickPick).not.toBeNull();
+    expect(quickPick?.items).toEqual([]);
+    expect(quickPick?.getQueryItem?.("feature/first")).toMatchObject({
+      data: { kind: "create", name: "feature/first" },
+    });
+    expect(toastMocks.info).not.toHaveBeenCalledWith(
+      "No other branches found",
+      undefined
     );
   });
 

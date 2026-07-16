@@ -61,6 +61,7 @@ function makeServices(): PierCoreServices {
   );
   return {
     agentDetection: trap as never,
+    agentRuntimeIndex: trap as never,
     agentUsage: trap as never,
     managedPlugins: trap as never,
     appUpdates: trap as never,
@@ -154,6 +155,25 @@ describe("git IPC 端到端(命令路由 + capability 守门)", () => {
 
     expect(stageResult.ok).toBe(true);
     expect(commitResult.ok).toBe(true);
+  });
+
+  it("desktop-renderer 能通过命令路由原子新建并切换分支", async () => {
+    const repo = await makeRepo();
+    const clients = createClientRegistry();
+    clients.register(clientOf("desktop-renderer"));
+    const router = createCommandRouter({ clients, services: makeServices() });
+
+    const result = await router.execute(
+      envelope("desktop-renderer-1", {
+        cwd: repo,
+        name: "feature/ipc-atomic",
+        type: "git.createAndSwitchBranch",
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    const status = await createGitService().getStatus(repo);
+    expect(status.branch.branch).toBe("feature/ipc-atomic");
   });
 
   it("mcp-local 只有 git:read,git.commit 被 permission_denied 拦截", async () => {

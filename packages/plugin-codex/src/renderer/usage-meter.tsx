@@ -5,7 +5,6 @@ import {
   formatPercent,
 } from "@pier/ui/format.tsx";
 import { Progress } from "@pier/ui/progress.tsx";
-import { Separator } from "@pier/ui/separator.tsx";
 import { cn } from "@pier/ui/utils";
 import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
 import type { JSX } from "react";
@@ -19,11 +18,8 @@ import {
 export type Translate = (key: string, fallback: string) => string;
 
 export interface UsageProgressProps {
-  kind?: "additional" | "primary";
   label: string;
   language: string;
-  position?: number;
-  showLabel?: boolean;
   t: Translate;
   window: CodexUsageWindow;
 }
@@ -94,11 +90,8 @@ function riskLabel(risk: UsageRisk, t: Translate): string {
 }
 
 export function UsageProgress({
-  kind,
   label,
   language,
-  position,
-  showLabel = true,
   t,
   window,
 }: UsageProgressProps): JSX.Element {
@@ -109,18 +102,15 @@ export function UsageProgress({
 
   return (
     <div
-      className="flex min-w-0 flex-col gap-1.5"
-      data-position={position}
+      className="flex w-full min-w-0 flex-col gap-1.5"
+      data-limit-id={window.limitId}
       data-risk={risk}
       data-slot="codex-usage-progress"
-      data-window-kind={kind}
     >
       <div className="flex items-center justify-between gap-3">
-        {showLabel ? (
-          <span className="min-w-0 truncate font-medium text-xs" title={label}>
-            {label}
-          </span>
-        ) : null}
+        <span className="min-w-0 truncate font-medium text-xs" title={label}>
+          {label}
+        </span>
         <span className="shrink-0 font-semibold text-lg tabular-nums tracking-tight">
           {remainingLabel}
         </span>
@@ -203,56 +193,32 @@ export function UsageMeter({
   }
 
   const sorted = sortUsageWindows(windows);
-  const primaryLimitId = sorted[0]?.limitId;
-  const primary = sorted.filter((window) => window.limitId === primaryLimitId);
-  const additional = sorted.filter(
-    (window) => window.limitId !== primaryLimitId
-  );
-
-  const renderGroup = (
-    group: CodexUsageWindow[],
-    kind: "additional" | "primary"
-  ): JSX.Element => (
-    <div
-      className={cn(
-        "grid min-w-0 @[22rem]:grid-cols-2 grid-cols-1 @[34rem]:gap-4 gap-3",
-        kind === "additional" && "@[34rem]:grid hidden"
-      )}
-      data-window-group={kind}
-    >
-      {kind === "additional" ? (
-        <div className="col-span-full flex items-center gap-2">
-          <p className="shrink-0 text-muted-foreground text-xs">
-            {t("pier.codex.widget.modelQuotas", "Model-specific quotas")}
-          </p>
-          <Separator className="flex-1" />
-        </div>
-      ) : null}
-      {group.map((window, position) => (
-        <UsageProgress
-          key={window.id}
-          kind={kind}
-          label={usageWindowLabel(window, language, t)}
-          language={language}
-          position={position}
-          t={t}
-          window={window}
-        />
-      ))}
-    </div>
-  );
+  const single = sorted.length === 1;
 
   return (
     <div
       className={cn(
-        "flex min-w-0 flex-col gap-4",
+        "w-full min-w-0 content-start",
+        "[--codex-quota-item-min-width:18rem]",
+        single
+          ? "flex flex-col gap-3"
+          : "grid grid-cols-[repeat(auto-fit,minmax(min(100%,var(--codex-quota-item-min-width)),1fr))] gap-3",
         "pier-codex-usage-meter",
         className
       )}
+      data-count={sorted.length}
+      data-layout={single ? "single" : "auto-fit"}
       data-slot="codex-usage-meter"
     >
-      {renderGroup(primary, "primary")}
-      {additional.length > 0 ? renderGroup(additional, "additional") : null}
+      {sorted.map((window) => (
+        <UsageProgress
+          key={window.id}
+          label={usageWindowLabel(window, language, t)}
+          language={language}
+          t={t}
+          window={window}
+        />
+      ))}
     </div>
   );
 }

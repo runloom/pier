@@ -19,6 +19,11 @@ import { KeyRound, type LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
 import { toast } from "sonner";
 import { actionRegistry } from "@/lib/actions/registry.ts";
+import {
+  closeAppContentDialog,
+  openAppContentDialog,
+  updateAppContentDialog,
+} from "@/stores/app-content-dialog.store.ts";
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
@@ -219,6 +224,21 @@ export function createExternalRendererPluginContext(
         if (options.body !== undefined) args.body = options.body;
         return showAppConfirm(args);
       },
+      open: (request) =>
+        openAppContentDialog({
+          ...request,
+          namespace: pluginId,
+        }),
+      update: (id, patch) =>
+        updateAppContentDialog(
+          id.includes(":") ? id : `${pluginId}:${id}`,
+          patch
+        ),
+      close: (id, result) =>
+        closeAppContentDialog(
+          id.includes(":") ? id : `${pluginId}:${id}`,
+          result
+        ),
     },
     i18n: {
       language: () => i18next.language || "en",

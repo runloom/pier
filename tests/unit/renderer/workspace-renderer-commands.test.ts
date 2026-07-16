@@ -148,7 +148,7 @@ describe("workspace renderer commands", () => {
     });
   });
 
-  it("returns a renderer error when closing the last panel fails", async () => {
+  it("closes the last panel by closing the window without removing the panel", async () => {
     closeCurrentWindowMock.mockRejectedValueOnce(new Error("close failed"));
     const terminal = terminalPanel("terminal-1");
     const api = createApi([terminal]);
@@ -160,12 +160,12 @@ describe("workspace renderer commands", () => {
     });
 
     expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1");
+    expect(closeCurrentWindowMock).toHaveBeenCalledOnce();
     expect(api.removePanel).not.toHaveBeenCalled();
+    // 关窗失败只记日志，不把 panel.close 命令打成失败（避免 renderer 命令卡死）。
     expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
-      error: {
-        message: "close failed",
-      },
-      ok: false,
+      data: null,
+      ok: true,
       requestId: "renderer-close-last-failed",
     });
   });

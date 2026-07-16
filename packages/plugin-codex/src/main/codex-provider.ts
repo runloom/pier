@@ -25,6 +25,8 @@ export interface CreateCodexProviderOpts {
   };
   /** 可注入的用量读取实现（单测验证临时凭据写回）。 */
   fetchUsageImpl?: typeof fetchCodexUsage;
+  /** 可选日志器（watchExternalAuth 失败时记录原因，便于诊断漂移检测失效）。 */
+  logger?: { warn(message: string, ...args: unknown[]): void };
   /** ~/.codex 真实路径（默认 `$HOME/.codex`）。 */
   realCodexHome: string;
   /** 可注入的 login spawn 替身（单测用）。 */
@@ -77,6 +79,7 @@ export function createCodexProvider(
   const spawnLogin = opts?.spawnLogin ?? defaultSpawnLogin;
   const fetchUsageImpl = opts?.fetchUsageImpl ?? fetchCodexUsage;
   const credentials = opts?.credentials;
+  const logger = opts?.logger;
   const credentialTails = new Map<string, Promise<void>>();
 
   async function withCredentialLock<T>(
@@ -234,6 +237,11 @@ export function createCodexProvider(
         await writeFileAtomic(dest, content, { mode: 0o600 });
       });
     },
+    async readManagedAuthContent(accountHomeDir: string): Promise<string> {
+      return await withCredentialLock(accountHomeDir, () =>
+        readManagedAuth(accountHomeDir)
+      );
+    },
 
     async syncBack(
       accountHomeDir: string,
@@ -284,8 +292,12 @@ export function createCodexProvider(
           }
           debounceTimer = setTimeout(cb, 500);
         });
-      } catch {
-        // 目录不存在或无权限——静默，后续有变更时用户手动刷新
+      } catch (error) {
+        // 目录不存在或无权限——漂移检测将失效直到重启，记录原因便于诊断。
+        logger?.warn(
+          "[pier.codex] watchExternalAuth failed, auth drift detection disabled until restart",
+          error
+        );
       }
 
       return () => {

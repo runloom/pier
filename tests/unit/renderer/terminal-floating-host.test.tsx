@@ -128,8 +128,11 @@ describe("terminal panel floating host", () => {
       "border-border",
       "bg-popover",
       "shadow-background/40",
-      "shadow-lg"
+      "shadow-lg",
+      "w-max",
+      "max-w-full"
     );
+    expect(shell).not.toHaveClass("w-full");
     expect(shell).not.toHaveClass("ring-1", "ring-foreground/5");
 
     const handle = screen.getByRole("button", { name: "Move run controls" });

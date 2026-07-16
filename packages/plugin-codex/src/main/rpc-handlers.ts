@@ -1,4 +1,5 @@
 import type { MainPluginContext } from "@pier/plugin-api/main";
+import { detectPeerAvailability } from "@pier/plugin-api/peer-sync/main";
 import { z } from "zod/mini";
 import {
   addAccountPayloadSchema,
@@ -6,6 +7,7 @@ import {
   refreshUsagePayloadSchema,
   removeAccountPayloadSchema,
   selectAccountPayloadSchema,
+  syncToPeersPayloadSchema,
 } from "../shared/accounts.ts";
 import type { CodexAccountsService } from "./accounts-service-contract.ts";
 
@@ -27,6 +29,11 @@ export function registerCodexRpcHandlers(options: {
     await service.add(addAccountPayloadSchema.parse(payload));
     return null;
   });
+  rpc.handle("accounts.adoptCurrent", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    await service.adoptCurrent();
+    return null;
+  });
   rpc.handle("accounts.cancelLogin", async (payload) => {
     emptyRpcPayloadSchema.parse(payload);
     await service.cancelLogin();
@@ -36,6 +43,14 @@ export function registerCodexRpcHandlers(options: {
     await service.select(selectAccountPayloadSchema.parse(payload));
     return null;
   });
+  rpc.handle("accounts.syncToPeers", async (payload) => {
+    await service.syncToPeers(syncToPeersPayloadSchema.parse(payload));
+    return null;
+  });
+  rpc.handle("accounts.peerAvailability", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    return detectPeerAvailability();
+  });
   rpc.handle("accounts.remove", async (payload) => {
     await service.remove(removeAccountPayloadSchema.parse(payload));
     return null;
@@ -44,8 +59,13 @@ export function registerCodexRpcHandlers(options: {
     const request = refreshUsagePayloadSchema.parse(payload ?? {});
     await service.refreshUsage({
       ...(request.accountId ? { accountId: request.accountId } : {}),
-      force: true,
+      force: request.force ?? true,
     });
+    return null;
+  });
+  rpc.handle("accounts.refreshAllUsage", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    await service.refreshAllUsage({ force: true });
     return null;
   });
   rpc.handle("accounts.usagePolling.acquire", async (payload) => {

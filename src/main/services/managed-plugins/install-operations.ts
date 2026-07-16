@@ -64,6 +64,11 @@ export interface OperationsContext {
   }) => Promise<void>;
   readonly paths: ManagedPluginPaths;
   readonly pierVersion: string;
+  /**
+   * `workspace` = local package isolation; `release` = production-like installs.
+   * Defaults to release when omitted (tests / production).
+   */
+  readonly pluginMode?: "workspace" | "release";
   readonly refreshRuntimeSnapshot: () => Promise<void>;
   readonly store: ManagedPluginIndexStore;
 }
@@ -184,7 +189,12 @@ export async function performInstall(
       ...s.plugins,
       [id]: {
         activeVersion: source.version,
-        devOverride: null,
+        // Workspace mode keeps an existing override across reinstall so
+        // "Install" cannot pin runtime back to a release snapshot.
+        devOverride:
+          ctx.pluginMode === "workspace"
+            ? (existing?.devOverride ?? null)
+            : null,
         effectiveAtStartup: existing?.effectiveAtStartup ?? {
           enabled: true,
           sourceKind: "official",

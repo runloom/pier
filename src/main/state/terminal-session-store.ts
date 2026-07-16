@@ -55,3 +55,30 @@ export async function ensureTerminalSessionStore(): Promise<
 export function emptyWindowSession(): TerminalSessionState["windows"][string] {
   return { panels: {} };
 }
+
+/** 已 init 则返回 store；未创建或未 init 返回 null（不读盘）。 */
+export function tryGetTerminalSessionStore(): DebouncedJsonStore<TerminalSessionState> | null {
+  if (!store) {
+    return null;
+  }
+  try {
+    store.get();
+    return store;
+  } catch {
+    return null;
+  }
+}
+
+export function peekTerminalPanelContext(
+  windowId: string,
+  panelId: string
+): TerminalSessionState["windows"][string]["panels"][string]["context"] | null {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return null;
+  }
+  const s = tryGetTerminalSessionStore();
+  if (!s) {
+    return null;
+  }
+  return s.get().windows[windowId]?.panels[panelId]?.context ?? null;
+}

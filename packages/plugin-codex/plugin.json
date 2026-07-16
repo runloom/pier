@@ -1,10 +1,15 @@
 {
   "apiVersion": 1,
   "dataSchemas": {
-    "codex.accounts": { "read": ">=1 <=1", "write": 1 }
+    "codex.accounts": {
+      "read": ">=1 <=1",
+      "write": 1
+    }
   },
   "description": "Codex account management and usage monitoring for Pier.",
-  "engines": { "pier": ">=0.1.0 <0.2.0" },
+  "engines": {
+    "pier": ">=0.1.0 <0.2.0"
+  },
   "id": "pier.codex",
   "locales": {
     "en": {
@@ -29,7 +34,7 @@
         "pier.codex.accounts.settings.actions": "Actions",
         "pier.codex.accounts.settings.addAccount": "Add account",
         "pier.codex.accounts.settings.addDialogTitle": "Add Codex account",
-        "pier.codex.accounts.settings.addDialogDescription": "Pier will open Codex login in your browser. The account appears here automatically after authorization.",
+        "pier.codex.accounts.settings.addDialogDescription": "Choose how to add a Codex account. Browser login opens Codex CLI authorization; local import uses ~/.codex/auth.json on this device.",
         "pier.codex.accounts.settings.addDialogLocalCredential": "Credentials are stored only on this device",
         "pier.codex.accounts.settings.addDialogContinue": "Continue in browser",
         "pier.codex.accounts.settings.addDialogWaitingTitle": "Waiting for browser authorization",
@@ -43,6 +48,19 @@
         "pier.codex.accounts.settings.switch": "Switch",
         "pier.codex.accounts.settings.switchConfirmTitle": "Switch Codex account?",
         "pier.codex.accounts.settings.switchConfirmBody": "New Codex sessions will use this account. Restart any Codex sessions that are already running for the change to take effect.",
+        "pier.codex.accounts.settings.switchConfirmAction": "Confirm",
+        "pier.codex.accounts.settings.syncPeers": "Sync to other tools",
+        "pier.codex.accounts.settings.syncPeersTitle": "Sync OpenAI account to other tools?",
+        "pier.codex.accounts.settings.syncPeersBody": "Write this Codex account's OpenAI credentials into the selected tools. Already-running sessions in those tools may need a restart.",
+        "pier.codex.accounts.settings.syncPeersSectionLabel": "Sync the OpenAI account to:",
+        "pier.codex.accounts.settings.syncPeersAction": "Sync",
+        "pier.codex.accounts.settings.syncPeersSuccess": "Synced credentials to selected tools",
+        "pier.codex.accounts.settings.syncPeersFailed": "Couldn't sync credentials to the selected tools. Try again after opening those tools once.",
+        "pier.codex.accounts.settings.syncPeersFailedOmp": "Couldn't sync credentials to OMP. Make sure OMP is installed and has been opened at least once on this device.",
+        "pier.codex.accounts.settings.syncPeersFailedOpencode": "Couldn't sync credentials to OpenCode. Make sure OpenCode is installed on this device.",
+        "pier.codex.accounts.settings.syncPeersFailedPi": "Couldn't sync credentials to Pi. Make sure Pi is installed on this device.",
+        "pier.codex.accounts.settings.syncPeersFailedNoActive": "Select a managed Codex account first, then try syncing again.",
+        "pier.codex.accounts.settings.syncPeersFailedNoTargets": "Select at least one tool to sync.",
         "pier.codex.accounts.settings.refreshUsage": "Refresh usage",
         "pier.codex.accounts.settings.actionFailed": "Account action failed",
         "pier.codex.accounts.settings.removeConfirmTitle": "Remove account?",
@@ -83,11 +101,23 @@
         "pier.codex.widget.actionFailed": "Account action failed",
         "pier.codex.widget.refreshFailed": "Could not refresh Codex usage",
         "pier.codex.widget.refreshing": "Refreshing",
-        "pier.codex.widget.modelQuotas": "Model-specific quotas"
+        "pier.codex.widget.modelQuotas": "Model-specific quotas",
+        "pier.codex.switch.syncSectionLabel": "Also switch the OpenAI account in:",
+        "pier.codex.switch.syncTarget.opencode": "OpenCode",
+        "pier.codex.switch.syncTarget.pi": "Pi",
+        "pier.codex.switch.syncTarget.omp": "OMP",
+        "pier.codex.accounts.settings.refreshAllUsage": "Refresh all usage",
+        "pier.codex.accounts.settings.usageRefreshAllSuccess": "All account usage refreshed",
+        "pier.codex.accounts.settings.addDialogTabAccount": "Account login",
+        "pier.codex.accounts.settings.addDialogTabLocal": "Local import",
+        "pier.codex.accounts.settings.addDialogAccountDescription": "Continue in your browser to sign in with the Codex CLI. The account appears here after authorization.",
+        "pier.codex.accounts.settings.addDialogLocalDescription": "Import the account already signed in on this device (~/.codex/auth.json). It becomes the active Pier account.",
+        "pier.codex.accounts.settings.addDialogLocalSubmit": "Import local account",
+        "pier.codex.errors.noLocalLogin": "No valid local Codex login found. Sign in with the Codex CLI first."
       }
     },
     "zh-CN": {
-      "name": "Codex 账户管理",
+      "name": "Codex 账号管理",
       "description": "管理 Codex 账号，登录、切换、观测用量。",
       "settingsPages": {
         "pier.codex.accounts": {
@@ -108,7 +138,7 @@
         "pier.codex.accounts.settings.actions": "操作",
         "pier.codex.accounts.settings.addAccount": "添加账号",
         "pier.codex.accounts.settings.addDialogTitle": "添加 Codex 账号",
-        "pier.codex.accounts.settings.addDialogDescription": "将在浏览器中打开 Codex 登录。完成授权后，此账号会自动出现在 Pier 中。",
+        "pier.codex.accounts.settings.addDialogDescription": "选择添加方式。浏览器登录走 Codex CLI 授权；本地导入使用本机 ~/.codex/auth.json。",
         "pier.codex.accounts.settings.addDialogLocalCredential": "凭据仅保存在这台设备上",
         "pier.codex.accounts.settings.addDialogContinue": "在浏览器中继续",
         "pier.codex.accounts.settings.addDialogWaitingTitle": "等待浏览器授权",
@@ -122,6 +152,19 @@
         "pier.codex.accounts.settings.switch": "切换",
         "pier.codex.accounts.settings.switchConfirmTitle": "切换 Codex 账号？",
         "pier.codex.accounts.settings.switchConfirmBody": "新启动的 Codex 会话将使用此账号。当前运行中的会话需重新启动后生效。",
+        "pier.codex.accounts.settings.switchConfirmAction": "确认",
+        "pier.codex.accounts.settings.syncPeers": "同步到其他工具",
+        "pier.codex.accounts.settings.syncPeersTitle": "同步 OpenAI 账号到其他工具？",
+        "pier.codex.accounts.settings.syncPeersBody": "将当前 Codex 账号的 OpenAI 凭证写入所选工具。这些工具里已在运行的会话可能需要重启后生效。",
+        "pier.codex.accounts.settings.syncPeersSectionLabel": "同步 OpenAI 账号到：",
+        "pier.codex.accounts.settings.syncPeersAction": "同步",
+        "pier.codex.accounts.settings.syncPeersSuccess": "已同步凭证到所选工具",
+        "pier.codex.accounts.settings.syncPeersFailed": "无法同步凭证到所选工具。请先打开这些工具一次后再试。",
+        "pier.codex.accounts.settings.syncPeersFailedOmp": "无法同步凭证到 OMP。请确认本机已安装 OMP，并至少打开过一次。",
+        "pier.codex.accounts.settings.syncPeersFailedOpencode": "无法同步凭证到 OpenCode。请确认本机已安装 OpenCode。",
+        "pier.codex.accounts.settings.syncPeersFailedPi": "无法同步凭证到 Pi。请确认本机已安装 Pi。",
+        "pier.codex.accounts.settings.syncPeersFailedNoActive": "请先选择一个受管 Codex 账号，再尝试同步。",
+        "pier.codex.accounts.settings.syncPeersFailedNoTargets": "请至少选择一个要同步的工具。",
         "pier.codex.accounts.settings.refreshUsage": "刷新配额",
         "pier.codex.accounts.settings.actionFailed": "账号操作失败",
         "pier.codex.accounts.settings.removeConfirmBody": "该账号将从 Pier 中移除，不影响本设备上的 Codex 登录。",
@@ -162,7 +205,19 @@
         "pier.codex.widget.actionFailed": "账号操作失败",
         "pier.codex.widget.refreshFailed": "无法刷新 Codex 用量",
         "pier.codex.widget.refreshing": "正在刷新",
-        "pier.codex.widget.modelQuotas": "模型专属配额"
+        "pier.codex.widget.modelQuotas": "模型专属配额",
+        "pier.codex.switch.syncSectionLabel": "同时切换以下工具的 OpenAI 账号：",
+        "pier.codex.switch.syncTarget.opencode": "OpenCode",
+        "pier.codex.switch.syncTarget.pi": "Pi",
+        "pier.codex.switch.syncTarget.omp": "OMP",
+        "pier.codex.accounts.settings.refreshAllUsage": "刷新全部用量",
+        "pier.codex.accounts.settings.usageRefreshAllSuccess": "已刷新全部账号用量",
+        "pier.codex.accounts.settings.addDialogTabAccount": "账号登录",
+        "pier.codex.accounts.settings.addDialogTabLocal": "本地导入",
+        "pier.codex.accounts.settings.addDialogAccountDescription": "通过 Codex CLI 在浏览器中登录。授权完成后，账号会自动出现在这里。",
+        "pier.codex.accounts.settings.addDialogLocalDescription": "导入本机已登录的账号（~/.codex/auth.json），并设为 Pier 当前账号。",
+        "pier.codex.accounts.settings.addDialogLocalSubmit": "导入本地账号",
+        "pier.codex.errors.noLocalLogin": "本机未找到有效的 Codex 登录。请先用 Codex CLI 登录。"
       }
     }
   },
@@ -170,11 +225,20 @@
   "workbenchWidgets": [
     {
       "category": "agent",
-      "defaultSize": { "w": 4, "h": 3 },
+      "defaultSize": {
+        "w": 4,
+        "h": 3
+      },
       "description": "Switch the active Codex account and monitor its quota.",
       "id": "pier.codex.accounts",
-      "maxSize": { "w": 8, "h": 4 },
-      "minSize": { "w": 2, "h": 3 },
+      "maxSize": {
+        "w": 8,
+        "h": 4
+      },
+      "minSize": {
+        "w": 2,
+        "h": 3
+      },
       "refreshable": false,
       "searchTerms": ["codex", "account", "quota", "账号", "配额"],
       "title": "Codex Account & Quota"
@@ -185,7 +249,11 @@
   "permissions": ["plugin:read", "secret:read", "secret:write"],
   "publisher": "Pier",
   "renderer": "dist/renderer.js",
-  "settingsPages": [{ "id": "pier.codex.accounts" }],
+  "settingsPages": [
+    {
+      "id": "pier.codex.accounts"
+    }
+  ],
   "terminalStatusItems": [],
-  "version": "1.3.0"
+  "version": "1.3.1"
 }

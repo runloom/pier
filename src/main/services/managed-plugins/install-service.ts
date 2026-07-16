@@ -38,15 +38,9 @@ import { computePackageContentHash } from "./package-content-hash.ts";
 import { validateManagedPluginPackage } from "./package-validation.ts";
 import type { ManagedPluginPaths } from "./paths.ts";
 import { performUpdate } from "./update-operations.ts";
+import { syncWorkspaceDevPluginOverrides } from "./workspace-dev-plugins.ts";
 
-/**
- * Managed plugin install service (design §6, plan Task 3).
- *
- * Coordinates a single mutation queue across install index writes, operation
- * log appends, and staging/installed cleanup. Delegates the individual
- * operations to `./install-operations.ts` and runtime-source materialization
- * to `./install-runtime.ts` so this file stays under the file-size hard cap.
- */
+/** Managed plugin install service (design §6). Coordinates mutation queue, operation log, and staging cleanup. */
 
 export type RuntimeMode = "development" | "production" | "test";
 
@@ -81,8 +75,18 @@ export interface CreateManagedPluginInstallServiceOptions {
   ) => Promise<void>;
   readonly paths: ManagedPluginPaths;
   readonly pierVersion: string;
+  /** Host plugin mode; defaults from env/config when omitted. */
+  readonly pluginMode?: "workspace" | "release";
   readonly runtimeMode: RuntimeMode;
   readonly store: ManagedPluginIndexStore;
+  /**
+   * First-party + custom workspace packages to pin via devOverride in
+   * workspace mode (e.g. packages/plugin-codex, ../my-plugin).
+   */
+  readonly workspaceDevPluginSpecs?: readonly {
+    readonly devPackageDir: string;
+    readonly id: string;
+  }[];
 }
 
 interface ActivationTracker {
@@ -176,6 +180,8 @@ export function createManagedPluginInstallService(
   }
 
   const bundledPlugins = options.bundledPlugins ?? [];
+  const pluginMode =
+    options.pluginMode ?? (isDevRuntime ? "workspace" : "release");
   const ctx: OperationsContext = {
     appendOperationLog,
     bundledPlugins,
@@ -185,6 +191,7 @@ export function createManagedPluginInstallService(
     officialIndexProvider,
     paths,
     pierVersion,
+    pluginMode,
     refreshRuntimeSnapshot,
     store,
     ...(options.assetFetcher ? { assetFetcher: options.assetFetcher } : {}),
@@ -413,7 +420,38 @@ export function createManagedPluginInstallService(
     clearDevOverride: (id) => enqueue(() => performClearDevOverride(ctx, id)),
     disable: (id) => enqueue(() => setEnabledFlag(ctx, id, false)),
     enable: (id) => enqueue(() => setEnabledFlag(ctx, id, true)),
-    install: (id) => enqueue(() => performInstall(ctx, id)),
+    install: (id) =>
+      enqueue(async () => {
+        const result = await performInstall(ctx, id);
+        // Workspace mode: re-assert packages/* (or custom roots) as runtime source.
+        // Must not call enqueue()-based APIs here (already inside the queue).
+        const workspaceSpecs = options.workspaceDevPluginSpecs ?? [];
+        if (
+          result.ok &&
+          pluginMode === "workspace" &&
+          workspaceSpecs.length > 0
+        ) {
+          await syncWorkspaceDevPluginOverrides({
+            applyEffective: async () => {
+              const next = computeSimulateRestartMutation(
+                store.get(),
+                isDevRuntime
+              );
+              store.mutate(() => next);
+              await store.flush();
+              await refreshRuntimeSnapshot();
+            },
+            cwd: process.cwd(),
+            getIndex: () => store.get(),
+            setDevOverride: (pluginId, path) =>
+              performSetDevOverride(ctx, pluginId, path),
+            specs: workspaceSpecs.filter((spec) => spec.id === id),
+          }).catch(() => {
+            /* boot path logs failures; install result already succeeded */
+          });
+        }
+        return result;
+      }),
     getIndex: () => store.get(),
     async init(): Promise<void> {
       await mkdir(paths.pluginsDir, { recursive: true });

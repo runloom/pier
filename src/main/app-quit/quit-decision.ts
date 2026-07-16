@@ -1,6 +1,8 @@
 import type { QuitActivitySummary } from "@shared/contracts/app-quit.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import type { AppQuitConfirmationMode } from "@shared/contracts/preferences.ts";
+import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
+import { quitSummariesFromActiveTaskRuns } from "@shared/task-activity-sources.ts";
 
 export type { QuitActivitySummary } from "@shared/contracts/app-quit.ts";
 
@@ -10,7 +12,7 @@ export function isDangerousQuitActivity(activity: ForegroundActivity): boolean {
     case "shell":
       return true;
     case "task":
-      return activity.status === "running";
+      return true;
     case "idle":
       return false;
     default: {
@@ -42,9 +44,6 @@ export function summarizeQuitActivity(
         windowId: activity.windowId,
       };
     case "task":
-      if (activity.status !== "running") {
-        return null;
-      }
       return {
         kind: "task",
         label: activity.label,
@@ -61,12 +60,20 @@ export function summarizeQuitActivity(
 }
 
 export function summarizeDangerousQuitActivities(
-  activities: readonly ForegroundActivity[]
+  activities: readonly ForegroundActivity[],
+  taskRuns?: TaskRunsSnapshot
 ): QuitActivitySummary[] {
-  return activities.flatMap((activity) => {
+  const fromForeground = activities.flatMap((activity) => {
     const summary = summarizeQuitActivity(activity);
     return summary ? [summary] : [];
   });
+  if (!taskRuns) {
+    return fromForeground;
+  }
+  return [
+    ...fromForeground,
+    ...quitSummariesFromActiveTaskRuns(taskRuns, activities),
+  ];
 }
 
 export function shouldConfirmBeforeQuit(

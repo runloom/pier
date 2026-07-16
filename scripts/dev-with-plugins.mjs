@@ -62,4 +62,14 @@ start("plugin-codex renderer watch", "pnpm", [
   "@pier/plugin-codex",
   "dev:renderer",
 ]);
+start("plugin-grok main watch", "pnpm", [
+  "--filter",
+  "@pier/plugin-grok",
+  "dev:main",
+]);
+start("plugin-grok renderer watch", "pnpm", [
+  "--filter",
+  "@pier/plugin-grok",
+  "dev:renderer",
+]);
 start("electron dev", "node", ["./scripts/dev-profile.mjs", "electron-dev"]);

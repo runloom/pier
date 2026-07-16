@@ -193,6 +193,41 @@ describe("task run operations", () => {
     });
   });
 
+  it("does not bind a finished task panel to a background run that only shares origin", () => {
+    const panel = taskPanel("terminal-task", "run-panel");
+    const finishedPanelRun = {
+      ...taskRun("run-panel", "terminal-task"),
+      status: "succeeded" as const,
+      updatedAt: 100,
+    };
+    finishedPanelRun.nodes.test!.status = "succeeded";
+    const backgroundRun = {
+      ...taskRun("run-background", "background-task", "background"),
+      originPanelId: "terminal-task",
+      updatedAt: 300,
+    };
+    installApi(panel, [panel]);
+    useTaskRunsStore.setState({
+      error: null,
+      initialized: true,
+      snapshot: {
+        runs: {
+          [backgroundRun.runId]: backgroundRun,
+          [finishedPanelRun.runId]: finishedPanelRun,
+        },
+        version: 4,
+      },
+    });
+
+    expect(resolveTaskRunActionTarget()).toMatchObject({
+      mode: "terminal-tab",
+      panelId: "terminal-task",
+      runId: "terminal-task",
+      taskId: "test",
+    });
+    expect(resolveTaskRunActionTarget()?.run).toBeUndefined();
+  });
+
   it("uses the runtime-control selection when another owned run still looks active", () => {
     const panel = taskPanel("terminal-task", "run-cancelled");
     const cancelledRun = taskRun("run-cancelled", "terminal-task");
@@ -510,7 +545,7 @@ describe("task run operations", () => {
       .quickPick?.onAcceptQuery?.("staging");
 
     await expect(restart).resolves.toEqual({
-      panelRebound: true,
+      panelRebound: false,
       runId: "run-input",
     });
     expect(window.pier.tasks.spawn).toHaveBeenNthCalledWith(
@@ -583,11 +618,11 @@ describe("task run operations", () => {
       status: "started",
     });
     await expect(first).resolves.toEqual({
-      panelRebound: true,
+      panelRebound: false,
       runId: "run-next",
     });
     await expect(second).resolves.toEqual({
-      panelRebound: true,
+      panelRebound: false,
       runId: "run-next",
     });
   });

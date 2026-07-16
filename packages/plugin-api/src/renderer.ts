@@ -120,6 +120,38 @@ export interface RendererSettingsPageRegistration {
   id: string;
 }
 
+export type RendererPluginContentDialogSize = "sm" | "default" | "lg";
+
+export interface RendererPluginContentDialogRenderProps<TResult = unknown> {
+  close: (result?: TResult | null) => void;
+  id: string;
+  setDescription: (description?: string) => void;
+  setDismissible: (dismissible: boolean) => void;
+  setTitle: (title: string) => void;
+}
+
+export interface RendererPluginContentDialogOpenRequest<TResult = unknown> {
+  closeOnOverlayClick?: boolean;
+  content: ComponentType<RendererPluginContentDialogRenderProps<TResult>>;
+  description?: string;
+  dismissible?: boolean;
+  id: string;
+  size?: RendererPluginContentDialogSize;
+  title: string;
+}
+
+export interface RendererPluginContentDialogHandle<TResult = unknown> {
+  close(result?: TResult | null): void;
+  id: string;
+  result: Promise<TResult | null>;
+  update(patch: {
+    title?: string;
+    description?: string;
+    dismissible?: boolean;
+    closeOnOverlayClick?: boolean;
+  }): void;
+}
+
 export interface ExternalRendererPluginContext {
   actions: {
     register(action: RendererPluginAction): () => void;
@@ -142,6 +174,19 @@ export interface ExternalRendererPluginContext {
       title: string;
       intent?: "default" | "destructive";
     }): Promise<boolean>;
+    open<TResult = unknown>(
+      request: RendererPluginContentDialogOpenRequest<TResult>
+    ): RendererPluginContentDialogHandle<TResult>;
+    update(
+      id: string,
+      patch: {
+        title?: string;
+        description?: string;
+        dismissible?: boolean;
+        closeOnOverlayClick?: boolean;
+      }
+    ): void;
+    close(id: string, result?: unknown): void;
   };
   i18n: {
     language(): string;
