@@ -220,6 +220,10 @@
       "description": "最后一次编辑一秒后自动保存未保存的文件。遇到外部变更时仍会打开覆盖或对比弹窗。",
       "label": "自动保存"
     },
+    "pier.files.editor.minimap": {
+      "description": "在源码编辑器右侧显示文档缩略图。",
+      "label": "缩略图"
+    },
     "pier.files.tree.showExcludedFiles": {
       "description": "显示被下方排除规则命中的路径。",
       "label": "显示排除项"

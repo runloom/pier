@@ -1,6 +1,7 @@
 import type { PluginManifest } from "@shared/contracts/plugin.ts";
 import {
   FILES_AUTO_SAVE_SETTING_KEY,
+  FILES_EDITOR_MINIMAP_SETTING_KEY,
   FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
   FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
   FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
@@ -152,6 +153,13 @@ export const FILES_PLUGIN_MANIFEST = {
         description:
           "Automatically save dirty files one second after the last edit. Conflicts with external changes still go through the overwrite/compare dialog.",
         order: 10,
+        type: "boolean",
+      },
+      [FILES_EDITOR_MINIMAP_SETTING_KEY]: {
+        default: true,
+        description:
+          "Show a minimap overview on the right side of the source editor.",
+        order: 15,
         type: "boolean",
       },
       [FILES_TREE_SHOW_EXCLUDED_SETTING_KEY]: {

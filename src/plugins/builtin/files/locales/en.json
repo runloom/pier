@@ -220,6 +220,10 @@
       "description": "Automatically save dirty files one second after the last edit. Conflicts with external changes still open the overwrite or compare dialog.",
       "label": "Auto save"
     },
+    "pier.files.editor.minimap": {
+      "description": "Show a minimap overview on the right side of the source editor.",
+      "label": "Minimap"
+    },
     "pier.files.tree.showExcludedFiles": {
       "description": "Show paths matched by the exclusion patterns below.",
       "label": "Show excluded files"

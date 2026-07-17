@@ -123,4 +123,26 @@ export const EDITOR_THEME = EditorView.theme({
     marginLeft: "-0.5rem",
     paddingLeft: "0.5rem",
   },
+  // minimap（@replit/codemirror-minimap）：库默认 overlay/box-shadow 用了硬编码
+  // rgb/hex，这里用语义 token 覆盖，对齐产品颜色治理。
+  ".cm-minimap-gutter": {
+    backgroundColor: "var(--background)",
+    borderLeft: "1px solid var(--border)",
+  },
+  ".cm-minimap-overlay-container .cm-minimap-overlay": {
+    backgroundColor: "color-mix(in oklab, var(--foreground) 20%, transparent)",
+    opacity: "1",
+  },
+  ".cm-minimap-overlay-container .cm-minimap-overlay:hover": {
+    backgroundColor: "color-mix(in oklab, var(--foreground) 30%, transparent)",
+  },
+  ".cm-minimap-overlay-container.cm-minimap-overlay-active .cm-minimap-overlay":
+    {
+      backgroundColor:
+        "color-mix(in oklab, var(--foreground) 40%, transparent)",
+    },
+  ".cm-minimap-box-shadow": {
+    boxShadow:
+      "12px 0 20px 5px color-mix(in oklab, var(--foreground) 18%, transparent)",
+  },
 });

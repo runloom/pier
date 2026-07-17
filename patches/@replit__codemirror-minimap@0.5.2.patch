@@ -1,0 +1,26 @@
+diff --git a/dist/index.cjs b/dist/index.cjs
+index 3f0c98aba65c44b0ff033dd299649985cfc7951c..4dfe7469185bdfff3f9b6e35d81ec78577670c70 100644
+--- a/dist/index.cjs
++++ b/dist/index.cjs
+@@ -52,7 +52,7 @@ const Scale = {
+     // Downscale the editor contents by this ratio
+     SizeRatio: 4,
+     // Maximum width of the minimap in pixels
+-    MaxWidth: 120,
++    MaxWidth: 72,
+ };
+ 
+ const Theme$1 = view.EditorView.theme({
+diff --git a/dist/index.js b/dist/index.js
+index c7c9a0406e1cfa2277ab6324fe47f70dd577e7c1..071247a9b8f05078cda4d49986dc8edf13ceb0c5 100644
+--- a/dist/index.js
++++ b/dist/index.js
+@@ -44,7 +44,7 @@ const Scale = {
+     // Downscale the editor contents by this ratio
+     SizeRatio: 4,
+     // Maximum width of the minimap in pixels
+-    MaxWidth: 120,
++    MaxWidth: 72,
+ };
+ 
+ const Theme$1 = /*@__PURE__*/EditorView.theme({

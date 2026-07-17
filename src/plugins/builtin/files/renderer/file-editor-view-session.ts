@@ -38,6 +38,7 @@ import {
   setGitGutterMarkers,
 } from "./files-editor-git-gutter.ts";
 import type { GitGutterLineMarker } from "./files-editor-git-markers.ts";
+import { createMinimapExtension } from "./files-editor-minimap.ts";
 
 export type { FileEditorCommand } from "./file-editor-view-operations.ts";
 
@@ -59,6 +60,8 @@ export class FileEditorViewSession {
   readonly #ariaCompartment = new Compartment();
   readonly #editableCompartment = new Compartment();
   readonly #languageCompartment = new Compartment();
+  readonly #minimapCompartment = new Compartment();
+  #minimapEnabled: boolean;
   readonly #onChange: (documentId: string, contents: string) => void;
   #presentation: FileEditorViewPresentation;
   #configuredLanguage: FilesDocumentLanguage | null = null;
@@ -74,11 +77,13 @@ export class FileEditorViewSession {
   constructor(input: {
     documentId: string;
     editorSessionId: string;
+    minimapEnabled: boolean;
     onChange: (documentId: string, contents: string) => void;
     presentation: FileEditorViewPresentation;
   }) {
     this.documentId = input.documentId;
     this.editorSessionId = input.editorSessionId;
+    this.#minimapEnabled = input.minimapEnabled;
     this.#onChange = input.onChange;
     this.#presentation = input.presentation;
   }
@@ -257,6 +262,22 @@ export class FileEditorViewSession {
     }
   }
 
+  setMinimapEnabled(enabled: boolean): void {
+    if (this.#minimapEnabled === enabled) {
+      return;
+    }
+    this.#minimapEnabled = enabled;
+    const view = this.#view;
+    if (!view) {
+      return;
+    }
+    view.dispatch({
+      effects: this.#minimapCompartment.reconfigure(
+        enabled ? createMinimapExtension() : []
+      ),
+    });
+  }
+
   #extensions(document: FilesDocument) {
     const language = document.language;
     const path =
@@ -297,6 +318,9 @@ export class FileEditorViewSession {
       ),
       EditorView.editorAttributes.of({ class: "h-full" }),
       EDITOR_THEME,
+      this.#minimapCompartment.of(
+        this.#minimapEnabled ? createMinimapExtension() : []
+      ),
       syntaxHighlighting(filesSyntaxHighlightStyle),
       EditorView.updateListener.of((update) => {
         if (!update.docChanged) {

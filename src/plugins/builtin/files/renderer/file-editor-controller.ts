@@ -1,4 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { FILES_EDITOR_MINIMAP_SETTING_KEY } from "../settings.ts";
 import type {
   EditorSearchOptions,
   EditorSearchState,
@@ -51,6 +52,8 @@ export class FileEditorController {
   readonly #saveCoordinator: FileEditorSaveCoordinator;
   readonly #views = new FileEditorViewCoordinator();
   #editingSuspended = false;
+  #minimapConfigDispose: (() => void) | null = null;
+  #minimapEnabled: boolean;
 
   constructor(context: RendererPluginContext, watchHub: FilesWatchHub) {
     this.#context = context;
@@ -88,6 +91,21 @@ export class FileEditorController {
       getPanelDocumentId: (panelId) =>
         this.#documents.getPanelDocumentId(panelId),
       saveCommands,
+    });
+    this.#minimapEnabled =
+      context.configuration.get<boolean>(FILES_EDITOR_MINIMAP_SETTING_KEY) !==
+      false;
+    this.#minimapConfigDispose = context.configuration.onDidChange((event) => {
+      if (!event.affectsConfiguration(FILES_EDITOR_MINIMAP_SETTING_KEY)) {
+        return;
+      }
+      const enabled =
+        context.configuration.get<boolean>(FILES_EDITOR_MINIMAP_SETTING_KEY) !==
+        false;
+      this.#minimapEnabled = enabled;
+      for (const session of this.#views.values()) {
+        session.setMinimapEnabled(enabled);
+      }
     });
   }
 
@@ -261,6 +279,7 @@ export class FileEditorController {
     this.#views.attach({
       document,
       editorSessionId: input.editorSessionId,
+      minimapEnabled: this.#minimapEnabled,
       parent: input.parent,
       presentation: input.presentation,
     });
@@ -431,6 +450,8 @@ export class FileEditorController {
   }
 
   dispose(options: { clearDocuments?: boolean } = {}): void {
+    this.#minimapConfigDispose?.();
+    this.#minimapConfigDispose = null;
     this.#gitGutter.dispose();
     this.#documents.dispose(options);
     this.#views.dispose();
