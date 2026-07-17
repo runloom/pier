@@ -32,7 +32,8 @@ export const EDITOR_THEME = EditorView.theme({
     // 内容会从下层穿过,gutters 背景透明就会看到内容盖住行号。用编辑器
     // 主体背景色遮挡,与右侧内容视觉无缝。
     backgroundColor: "var(--background)",
-    borderRightColor: "var(--border)",
+    // 无右边框：让变更行 gutter 底色与 content 行底色无缝连贯（CM 官方 styling 做法）。
+    borderRight: "none",
     color: "color-mix(in oklab, var(--muted-foreground) 70%, transparent)",
     fontFamily: "var(--font-mono)",
     fontSize: "0.8125rem",
@@ -79,5 +80,69 @@ export const EDITOR_THEME = EditorView.theme({
     color: "var(--popover-foreground)",
     border: "1px solid var(--border)",
     borderRadius: "0.5rem",
+  },
+  // git 变更（官方 + 业界）：
+  // 1. gutterLineClass 给该行所有 gutter 槽（行号+fold）铺同色浅底
+  // 2. 仅最左 gutter 列（行号）左缘一条实色条（VS Code editorGutter.* 单条强调）
+  // 3. content 行 Decoration.line 同色铺底，与 gutter 无缝连贯
+  // color-mix 仅允许在此文件（治理白名单）。
+  ".cm-gutters .cm-gutterElement.cm-gitRow-added": {
+    backgroundColor:
+      "color-mix(in oklch, var(--status-success-bg) 90%, transparent)",
+  },
+  ".cm-gutters .cm-gutterElement.cm-gitRow-modified": {
+    backgroundColor:
+      "color-mix(in oklch, var(--status-info-bg) 90%, transparent)",
+  },
+  ".cm-gutters .cm-gutterElement.cm-gitRow-deleted": {
+    backgroundColor:
+      "color-mix(in oklch, var(--status-danger-bg) 90%, transparent)",
+  },
+  // 单条强调：只在最左 gutter 列（lineNumbers，basicSetup 中第一个）画 inset 实色条。
+  // fold 列只铺浅底，避免出现第二条竖条。
+  ".cm-gutters .cm-gutter:first-child .cm-gutterElement.cm-gitRow-added": {
+    boxShadow: "inset 3px 0 var(--status-success-fg)",
+  },
+  ".cm-gutters .cm-gutter:first-child .cm-gutterElement.cm-gitRow-modified": {
+    boxShadow: "inset 3px 0 var(--status-info-fg)",
+  },
+  ".cm-gutters .cm-gutter:first-child .cm-gutterElement.cm-gitRow-deleted": {
+    boxShadow: "inset 3px 0 var(--status-danger-fg)",
+  },
+  ".cm-gitLine-added": {
+    backgroundColor:
+      "color-mix(in oklch, var(--status-success-bg) 90%, transparent)",
+    // 负左 margin 让背景延伸覆盖 content 左 padding（0.5rem），紧贴 gutter 右缘，
+    // padding-left 保持文字原位。行底色与 gutter 行槽同色连贯。
+    marginLeft: "-0.5rem",
+    paddingLeft: "0.5rem",
+  },
+  ".cm-gitLine-modified": {
+    backgroundColor:
+      "color-mix(in oklch, var(--status-info-bg) 90%, transparent)",
+    marginLeft: "-0.5rem",
+    paddingLeft: "0.5rem",
+  },
+  // minimap（@replit/codemirror-minimap）：库默认 overlay/box-shadow 用了硬编码
+  // rgb/hex，这里用语义 token 覆盖，对齐产品颜色治理。
+  ".cm-minimap-gutter": {
+    backgroundColor: "var(--background)",
+    borderLeft: "1px solid var(--border)",
+  },
+  ".cm-minimap-overlay-container .cm-minimap-overlay": {
+    backgroundColor: "color-mix(in oklab, var(--foreground) 20%, transparent)",
+    opacity: "1",
+  },
+  ".cm-minimap-overlay-container .cm-minimap-overlay:hover": {
+    backgroundColor: "color-mix(in oklab, var(--foreground) 30%, transparent)",
+  },
+  ".cm-minimap-overlay-container.cm-minimap-overlay-active .cm-minimap-overlay":
+    {
+      backgroundColor:
+        "color-mix(in oklab, var(--foreground) 40%, transparent)",
+    },
+  ".cm-minimap-box-shadow": {
+    boxShadow:
+      "12px 0 20px 5px color-mix(in oklab, var(--foreground) 18%, transparent)",
   },
 });

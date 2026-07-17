@@ -57,14 +57,16 @@ function useDockviewPanelVisible(api: IDockviewPanelProps["api"]): boolean {
   return useSyncExternalStore(subscribe, getSnapshot, () => false);
 }
 
+/**
+ * 不使用 Activity。子组件始终挂载于 panel 存活期，自行按 isVisible
+ * 卸载重资源；这样才能在 panel 真正关闭时仍收到 shell cleanup 并回收 session。
+ */
 function UnmountWhenHiddenPanel({
-  api,
   children,
 }: {
-  api: IDockviewPanelProps["api"];
   children: ReactNode;
 }): ReactNode {
-  return useDockviewPanelVisible(api) ? children : null;
+  return children;
 }
 
 export function withPluginPanelHostBoundary(
@@ -94,7 +96,7 @@ export function withPluginPanelHostBoundary(
     }
     if (registration.resourcePolicy === "unmountWhenHidden") {
       return (
-        <UnmountWhenHiddenPanel api={props.api}>
+        <UnmountWhenHiddenPanel>
           <Component {...props} />
         </UnmountWhenHiddenPanel>
       );

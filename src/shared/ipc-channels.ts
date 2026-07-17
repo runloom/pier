@@ -63,6 +63,8 @@ export const PIER_BROADCAST = {
   WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
   // 终端工作目录变更广播 (main → renderer).
   TERMINAL_CWD_CHANGED: "pier://terminal:cwd-changed",
+  // 终端超链接激活广播 (main → renderer).
+  TERMINAL_OPEN_URL: "pier://terminal:open-url",
   // 终端标题变更广播 (main → renderer).
   TERMINAL_TITLE_CHANGED: "pier://terminal:title-changed",
   // Ghostty 在已退出进程的 surface 上收到用户关闭确认。

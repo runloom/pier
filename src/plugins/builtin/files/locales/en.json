@@ -198,7 +198,10 @@
     "filePanel.saveOnClose.cancelLabel": "Cancel",
     "files.projectStatus.openLabel": "Open project files",
     "files.projectStatus.openTooltip": "Open project files",
-    "files.projectStatus.openFailed": "Unable to open project files"
+    "files.projectStatus.openFailed": "Unable to open project files",
+    "files.notifications.terminalOpenUrl.relativeWithoutCwd": "Cannot resolve a relative path without a terminal working directory.",
+    "files.notifications.terminalOpenUrl.invalid": "Cannot open this path.",
+    "files.notifications.terminalOpenUrl.openFailed": "Unable to open path."
   },
   "terminalStatusItems": {
     "pier.files.project": {
@@ -216,6 +219,10 @@
     "pier.files.autoSave": {
       "description": "Automatically save dirty files one second after the last edit. Conflicts with external changes still open the overwrite or compare dialog.",
       "label": "Auto save"
+    },
+    "pier.files.editor.minimap": {
+      "description": "Show a minimap overview on the right side of the source editor.",
+      "label": "Minimap"
     },
     "pier.files.tree.showExcludedFiles": {
       "description": "Show paths matched by the exclusion patterns below.",

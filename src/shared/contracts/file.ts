@@ -146,6 +146,20 @@ export type FileCopyRequest = z.infer<typeof fileCopyRequestSchema>;
 export const fileRevealRequestSchema = fileReadTextRequestSchema;
 export type FileRevealRequest = z.infer<typeof fileRevealRequestSchema>;
 
+export const fileOpenPathRequestSchema = z.object({
+  path: z.string().min(1).max(16_384),
+});
+export type FileOpenPathRequest = z.infer<typeof fileOpenPathRequestSchema>;
+
+export const fileOpenPathResultSchema = z.discriminatedUnion("opened", [
+  z.object({ opened: z.literal(true) }),
+  z.object({
+    opened: z.literal(false),
+    reason: z.enum(["invalid-path", "open-failed"]),
+  }),
+]);
+export type FileOpenPathResult = z.infer<typeof fileOpenPathResultSchema>;
+
 export const fileDraftsSetRequestSchema = z.object({
   generation: z.number().int().nonnegative(),
   key: z.string().min(1),

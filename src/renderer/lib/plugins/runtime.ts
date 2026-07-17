@@ -42,6 +42,7 @@ import {
   type ActiveRendererPlugin,
   suspendAndDisposeOwnedRendererPlugin,
 } from "./runtime-plugin-disposal.ts";
+import { installTerminalOpenUrlHost } from "./terminal-open-url-host.ts";
 
 export class RendererPluginRuntime {
   private readonly active = new Map<string, ActiveRendererPlugin>();
@@ -368,6 +369,9 @@ export class RendererPluginRuntime {
     if (!this.isCurrentRefresh(generation)) {
       return;
     }
+    // Install before builtin activation so files handlers have a live subscriber
+    // even when no external plugins start.
+    installTerminalOpenUrlHost();
     this.externalPanelPlaceholders.sync(desired);
     const failures: unknown[] = [];
     for (const [pluginId, active] of [...this.active]) {

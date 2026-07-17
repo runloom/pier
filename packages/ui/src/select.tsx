@@ -2,6 +2,7 @@ import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { Select as SelectPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
+import { useFreezeFloatingOnClose } from "./freeze-floating-on-close.ts";
 import {
   CONTROL_HEIGHT_CLASS,
   MENU_ITEM_DENSITY_CLASS,
@@ -83,7 +84,8 @@ function SelectContent({
   ...props
 }: React.ComponentProps<typeof SelectPrimitive.Content>) {
   const overlayRef = useTerminalOverlay();
-  const composedRef = useComposedRefs(props.ref, overlayRef);
+  const freezeRef = useFreezeFloatingOnClose();
+  const composedRef = useComposedRefs(props.ref, overlayRef, freezeRef);
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content

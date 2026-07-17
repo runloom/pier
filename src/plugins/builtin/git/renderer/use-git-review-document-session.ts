@@ -42,6 +42,10 @@ import {
   nextDemandPrefetchEntryKeys,
   sameStringSet,
 } from "./git-review-materialization.ts";
+import {
+  patchReviewSession,
+  readReviewSession,
+} from "./git-review-session-cache.ts";
 
 // 与 content 中 generationCallbacksRef 形状对齐；回调实现保留在 content。
 export interface GitReviewGenerationCallbacks {
@@ -141,9 +145,11 @@ export function useGitReviewDocumentSession(options: {
       indexGeneration + 1
     );
     documentGenerationRef.current = generation;
+    const sourceKey = JSON.stringify(scope);
     const scopeKey = JSON.stringify([scope.contextId, scope.gitRootPath]);
     const retainPrevious = scopeKeyRef.current === scopeKey;
     scopeKeyRef.current = scopeKey;
+    const session = readReviewSession(sourceKey);
     const entryKeysInOrder = entries.map((entry) => entry.entryKey);
     const currentEntryKeys = new Set(entryKeysInOrder);
     const seedEntryKeys = gitReviewSeedEntryKeys(entryKeysInOrder);
@@ -154,7 +160,9 @@ export function useGitReviewDocumentSession(options: {
       visibleEntryKeys: [],
     };
     const selectedEntryKey = generationCallbacksRef.current.beginGeneration(
-      retainPrevious ? currentEntryKeys : new Set(),
+      retainPrevious || session?.selectedEntryKey
+        ? currentEntryKeys
+        : new Set(),
       generation
     );
     const previousSnapshot = previousSnapshotRef.current;
@@ -171,7 +179,7 @@ export function useGitReviewDocumentSession(options: {
         )
         .map((resource) => [resource.entry.entryKey, resource])
     );
-    const previousByEntryKey = new Map(
+    let previousByEntryKey = new Map(
       (retainPrevious ? previousSnapshot.retainedEntryKeys : []).flatMap(
         (entryKey) => {
           const resource = previousResources.get(entryKey);
@@ -181,14 +189,35 @@ export function useGitReviewDocumentSession(options: {
         }
       )
     );
-    const anchor =
+    if (!retainPrevious && session?.loadedByEntryKey) {
+      previousByEntryKey = new Map(
+        [...session.loadedByEntryKey.entries()].flatMap(
+          ([entryKey, resource]) =>
+            currentEntryKeys.has(entryKey)
+              ? ([[entryKey, resource]] as const)
+              : []
+        )
+      );
+    }
+    const liveAnchor =
       retainPrevious && !generationCallbacksRef.current.hasPendingNavigation()
         ? diffHandleRef.current?.captureTopAnchor()
         : null;
+    const sessionAnchor =
+      !retainPrevious &&
+      session?.anchor &&
+      !generationCallbacksRef.current.hasPendingNavigation()
+        ? session.anchor
+        : null;
+    const anchor = liveAnchor ?? sessionAnchor;
     pendingAnchorRef.current = anchor
       ? {
           anchor,
-          entryKey: entryKeyBySectionIdRef.current.get(anchor.id) ?? null,
+          entryKey:
+            entryKeyBySectionIdRef.current.get(anchor.id) ??
+            (sessionAnchor && session?.selectedEntryKey
+              ? session.selectedEntryKey
+              : null),
           generation,
           previousItemIds: itemIdsRef.current,
           restored: false,
@@ -214,6 +243,9 @@ export function useGitReviewDocumentSession(options: {
           },
         }),
     });
+    if (!retainPrevious && session && session.loadedByEntryKey.size > 0) {
+      loader.hydrateLoaded(session.loadedByEntryKey);
+    }
     loaderRef.current = loader;
     const controller = new GitReviewDocumentGeneration({
       current: loader.getSnapshot(),
@@ -394,9 +426,26 @@ export function useGitReviewDocumentSession(options: {
     currentDemandRef.current = finalDemand;
     loader.setWindowDemand(finalDemand);
     return () => {
-      previousSnapshotRef.current = controller.snapshot(
-        loader.getRetainedEntryKeys()
+      const snap = controller.snapshot(loader.getRetainedEntryKeys());
+      previousSnapshotRef.current = snap;
+      const loaded = new Map(
+        snap.resources
+          .filter(
+            (
+              resource
+            ): resource is Extract<
+              GitReviewDocumentResource,
+              { kind: "loaded" }
+            > => resource.kind === "loaded"
+          )
+          .map((resource) => [resource.entry.entryKey, resource])
       );
+      patchReviewSession(sourceKey, {
+        loadedByEntryKey: loaded,
+        retainedEntryKeys: loader.getRetainedEntryKeys(),
+        selectedEntryKey: generationCallbacksRef.current.getSelectedEntryKey(),
+        anchor: diffHandleRef.current?.captureTopAnchor() ?? null,
+      });
       unsubscribe();
       loader.dispose();
       if (documentControllerRef.current === controller) {

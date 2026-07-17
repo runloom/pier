@@ -87,6 +87,10 @@ export function createPluginFilesContext(
       assertPluginCapability(entry, "file:write");
       return window.pier.files.move(request);
     },
+    openPath: (request) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.files.openPath(request);
+    },
     pickSaveTarget: (request) => {
       assertPluginCapability(entry, "file:write");
       return window.pier.files.pickSaveTarget(request);

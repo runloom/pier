@@ -59,6 +59,8 @@ extern "C" {
     // 签名 (browserWindowId, panelId UTF-8, cwd UTF-8). 与 keyboard forward 同模式.
     typedef void (*PwdForwardFn)(long browserWindowId, const char* panelId, const char* cwd);
     void ghostty_bridge_set_pwd_forward_callback(PwdForwardFn cb);
+    typedef void (*OpenUrlForwardFn)(long browserWindowId, const char* panelId, const char* url, const char* kind);
+    void ghostty_bridge_set_open_url_forward_callback(OpenUrlForwardFn cb);
     typedef void (*SearchForwardFn)(long browserWindowId, const char* panelId, long total, long selected);
     void ghostty_bridge_set_search_forward_callback(SearchForwardFn cb);
     // Title forward: swift TerminalSurfaceTitleDelegate 收到 OSC 0/2 → 此 trampoline → JS.
@@ -513,6 +515,31 @@ static Napi::Value JsSetTerminalFocusRequestCallback(const Napi::CallbackInfo& i
                                 &g_terminalFocusRequestTrampoline);
 }
 
+// ---- Open URL forward (Ghostty OPEN_URL → renderer / main policy) ----
+struct OpenUrlForwardPayload {
+    long windowId;
+    std::string panelId;
+    std::string url;
+    std::string kind;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::String::New(env, url),
+            Napi::String::New(env, kind),
+        });
+    }
+};
+static ForwardChannel<OpenUrlForwardPayload> g_openUrlChannel("PierOpenUrlForward");
+static void g_openUrlForwardTrampoline(long windowId, const char* panelId, const char* url, const char* kind) {
+    g_openUrlChannel.emit({ windowId, std::string(panelId), std::string(url), std::string(kind) });
+}
+static Napi::Value JsSetOpenUrlForwardCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_openUrlChannel,
+                                ghostty_bridge_set_open_url_forward_callback,
+                                &g_openUrlForwardTrampoline);
+}
+
 // ---- PWD forward (OSC 7 cwd → renderer panel descriptor) ----
 struct PwdForwardPayload {
     long windowId;
@@ -886,6 +913,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
     exports.Set("setModifierForwardCallback", Napi::Function::New(env, JsSetModifierForwardCallback));
     exports.Set("setAppShortcutKeys", Napi::Function::New(env, JsSetAppShortcutKeys));
+    exports.Set("setOpenUrlForwardCallback", Napi::Function::New(env, JsSetOpenUrlForwardCallback));
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));
     exports.Set("setSearchForwardCallback", Napi::Function::New(env, JsSetSearchForwardCallback));
     exports.Set("setTitleForwardCallback", Napi::Function::New(env, JsSetTitleForwardCallback));

@@ -421,4 +421,47 @@ describe("Git diff renderer governance", () => {
       expect(consumers).toEqual(operation.consumers);
     }
   });
+
+  it("锁定 Changes unmountWhenHidden 与 session keep-alive 接线", async () => {
+    const [
+      indexSource,
+      workerSource,
+      appShellSource,
+      diffWorkerHostSource,
+      sessionCacheSource,
+      documentLoaderSource,
+      documentSessionSource,
+      changesPanelSource,
+    ] = await Promise.all(
+      [
+        "src/plugins/builtin/git/renderer/index.ts",
+        "packages/ui/src/diff-view-worker.tsx",
+        "src/renderer/components/common/app-shell.tsx",
+        "src/renderer/components/common/diff-worker-host.tsx",
+        "src/plugins/builtin/git/renderer/git-review-session-cache.ts",
+        "src/plugins/builtin/git/renderer/git-review-document-loader.ts",
+        "src/plugins/builtin/git/renderer/use-git-review-document-session.ts",
+        "src/plugins/builtin/git/renderer/git-changes-panel.tsx",
+      ].map((file) => readFile(join(ROOT, file), "utf8"))
+    );
+
+    expect(indexSource).toContain('resourcePolicy: "unmountWhenHidden"');
+    expect(workerSource).toContain("export function PierDiffWorkerHost");
+    expect(workerSource).toContain("const existingPool = useWorkerPool()");
+    expect(diffWorkerHostSource).toContain("PierDiffWorkerHost");
+    expect(appShellSource).toContain("<DiffWorkerHost>");
+    expect(sessionCacheSource).toContain("export function readReviewSession");
+    expect(sessionCacheSource).toContain("export function writeReviewSession");
+    expect(sessionCacheSource).toContain("export function patchReviewSession");
+    expect(sessionCacheSource).toContain("export function clearReviewSession");
+    expect(documentLoaderSource).toContain("hydrateLoaded(");
+    expect(documentSessionSource).toContain("readReviewSession");
+    expect(documentSessionSource).toContain("loader.hydrateLoaded");
+    expect(changesPanelSource).toContain("readReviewSession");
+    expect(changesPanelSource).toContain("patchReviewSession");
+    expect(changesPanelSource).toContain("clearReviewSession");
+    expect(changesPanelSource).not.toMatch(
+      /setBoundState\(\{\s*snapshot:\s*\{\s*kind:\s*"loading"/u
+    );
+  });
 });

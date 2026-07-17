@@ -32,6 +32,7 @@ import { clearFilesNavHistory } from "./files-nav-history.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
 import { filesPanelTabChrome } from "./files-panel-tab.ts";
 import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
+import { registerFilesTerminalOpenUrlHandler } from "./files-terminal-open-url-handler.ts";
 import {
   clearFileTreeSidebarCache,
   openFilesTreeSearch,
@@ -375,6 +376,7 @@ export const filesRendererPlugin: RendererPluginModule = {
         )
       ),
       registerFilesProjectStatusItem(context),
+      registerFilesTerminalOpenUrlHandler(context),
     ];
 
     return () => {

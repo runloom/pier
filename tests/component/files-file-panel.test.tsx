@@ -1457,17 +1457,33 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "" });
     });
-    fireEvent.click(
-      within(getFileTree(container)).getByRole("treeitem", { name: "src" })
-    );
-
+    const tree = getFileTree(container);
+    // Empty-directory chains may render as a single flattened row
+    // ("src / generated") after the first child list resolves.
+    const srcRow = within(tree).queryByRole("treeitem", { name: "src" });
+    if (srcRow) {
+      fireEvent.click(srcRow);
+    }
+    await waitFor(() => {
+      expect(
+        within(tree).getByRole("treeitem", {
+          name: /generated|index\.ts/u,
+        })
+      ).toBeVisible();
+    });
+    const chainRow = within(tree).queryByRole("treeitem", {
+      name: /generated/u,
+    });
+    if (chainRow?.getAttribute("aria-expanded") === "false") {
+      fireEvent.click(chainRow);
+    }
     await waitFor(() => {
       expect(list).toHaveBeenCalledWith(PROJECT_ROOT, {
         path: "src/generated",
       });
       expect(
-        within(getFileTree(container)).getByRole("treeitem", {
-          name: "index.ts",
+        within(tree).getByRole("treeitem", {
+          name: /index\.ts/u,
         })
       ).toBeVisible();
     });

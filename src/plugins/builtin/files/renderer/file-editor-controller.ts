@@ -1,4 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { FILES_EDITOR_MINIMAP_SETTING_KEY } from "../settings.ts";
 import type {
   EditorSearchOptions,
   EditorSearchState,
@@ -29,6 +30,7 @@ import type {
   FilesDocumentPanelSource,
   FileViewMode,
 } from "./files-document-types.ts";
+import { FilesEditorGitGutterController } from "./files-editor-git-gutter-controller.ts";
 import { FilesMutationGate } from "./files-mutation-gate.ts";
 import { moveFilesNavPath } from "./files-nav-history.ts";
 import { preserveDocumentsAsUntitledAndRebind } from "./files-preserve-as-untitled.ts";
@@ -41,6 +43,7 @@ export type { FileDocumentSettleResult } from "./file-save-outcome.ts";
 export class FileEditorController {
   readonly #context: RendererPluginContext;
   readonly #documents: FileDocumentLifecycle;
+  readonly #gitGutter: FilesEditorGitGutterController;
   readonly #modeHandlers = new Map<string, (mode: FileViewMode) => void>();
   readonly #mutationGate = new FilesMutationGate();
   readonly #pathMutationGuards: FilePathMutationGuardCoordinator;
@@ -49,9 +52,12 @@ export class FileEditorController {
   readonly #saveCoordinator: FileEditorSaveCoordinator;
   readonly #views = new FileEditorViewCoordinator();
   #editingSuspended = false;
+  #minimapConfigDispose: (() => void) | null = null;
+  #minimapEnabled: boolean;
 
   constructor(context: RendererPluginContext, watchHub: FilesWatchHub) {
     this.#context = context;
+    this.#gitGutter = new FilesEditorGitGutterController(context);
     this.#pathMutationGuards = new FilePathMutationGuardCoordinator({
       context,
       isEditingSuspended: () => this.#editingSuspended,
@@ -85,6 +91,21 @@ export class FileEditorController {
       getPanelDocumentId: (panelId) =>
         this.#documents.getPanelDocumentId(panelId),
       saveCommands,
+    });
+    this.#minimapEnabled =
+      context.configuration.get<boolean>(FILES_EDITOR_MINIMAP_SETTING_KEY) !==
+      false;
+    this.#minimapConfigDispose = context.configuration.onDidChange((event) => {
+      if (!event.affectsConfiguration(FILES_EDITOR_MINIMAP_SETTING_KEY)) {
+        return;
+      }
+      const enabled =
+        context.configuration.get<boolean>(FILES_EDITOR_MINIMAP_SETTING_KEY) !==
+        false;
+      this.#minimapEnabled = enabled;
+      for (const session of this.#views.values()) {
+        session.setMinimapEnabled(enabled);
+      }
     });
   }
 
@@ -258,9 +279,14 @@ export class FileEditorController {
     this.#views.attach({
       document,
       editorSessionId: input.editorSessionId,
+      minimapEnabled: this.#minimapEnabled,
       parent: input.parent,
       presentation: input.presentation,
     });
+    const session = this.#views.getSession(input.editorSessionId);
+    if (session) {
+      this.#gitGutter.attach(input.editorSessionId, document, session);
+    }
     this.#pathMutationGuards.syncSessions();
   }
 
@@ -272,6 +298,7 @@ export class FileEditorController {
   }
 
   detachView(editorSessionId: string): void {
+    this.#gitGutter.detach(editorSessionId);
     this.#views.detach(editorSessionId);
   }
 
@@ -334,11 +361,15 @@ export class FileEditorController {
     panelId?: string,
     feedback: FileSaveFeedback = "all"
   ): Promise<FileSaveOutcome> {
-    return await this.#saveCoordinator.saveDocument(
+    const outcome = await this.#saveCoordinator.saveDocument(
       documentId,
       panelId,
       feedback
     );
+    if (outcome === "saved") {
+      this.#gitGutter.refreshByDocument(documentId);
+    }
+    return outcome;
   }
 
   async saveAsPanel(
@@ -353,11 +384,15 @@ export class FileEditorController {
     panelId?: string,
     feedback: FileSaveFeedback = "all"
   ): Promise<FileDocumentSettleResult> {
-    return await this.#saveCoordinator.settleDocument(
+    const result = await this.#saveCoordinator.settleDocument(
       documentId,
       panelId,
       feedback
     );
+    if (result.outcome === "saved") {
+      this.#gitGutter.refreshByDocument(documentId);
+    }
+    return result;
   }
 
   async confirmDocumentDurability(
@@ -406,7 +441,18 @@ export class FileEditorController {
     return await this.#pathMutations.preserveAsUntitled(documents);
   }
 
+  clearGitGutter(editorSessionId: string): void {
+    this.#gitGutter.clearSession(editorSessionId);
+  }
+
+  refreshGitGutterByDocument(documentId: string): void {
+    this.#gitGutter.refreshByDocument(documentId);
+  }
+
   dispose(options: { clearDocuments?: boolean } = {}): void {
+    this.#minimapConfigDispose?.();
+    this.#minimapConfigDispose = null;
+    this.#gitGutter.dispose();
     this.#documents.dispose(options);
     this.#views.dispose();
     this.#modeHandlers.clear();

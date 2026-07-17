@@ -6,6 +6,7 @@ import {
 import { act, render } from "@testing-library/react";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { FileTree } from "../../packages/ui/node_modules/@pierre/trees";
+import { pathSetMutation } from "../../packages/ui/src/file-tree-model.ts";
 
 const batchSpy = vi.spyOn(FileTree.prototype, "batch");
 const resetPathsSpy = vi.spyOn(FileTree.prototype, "resetPaths");
@@ -205,7 +206,7 @@ describe("PierFileTree path synchronization", () => {
     ]);
   });
 
-  it("falls back to resetPaths for multiple path changes and preserves expanded directories", async () => {
+  it("batches multiple path removals instead of resetting", async () => {
     const { rerender } = await renderMountedTree([
       directory("src"),
       file("src/one.ts"),
@@ -221,11 +222,12 @@ describe("PierFileTree path synchronization", () => {
     );
     await flushEffects();
 
-    expect(batchSpy).not.toHaveBeenCalled();
-    expect(resetPathsSpy).toHaveBeenCalledTimes(1);
-    expect(resetPathsSpy).toHaveBeenCalledWith(["src/", "README.md"], {
-      initialExpandedPaths: ["src"],
-    });
+    expect(resetPathsSpy).not.toHaveBeenCalled();
+    expect(batchSpy).toHaveBeenCalledTimes(1);
+    expect(batchSpy).toHaveBeenCalledWith([
+      { path: "src/one.ts", type: "remove" },
+      { path: "src/two.ts", type: "remove" },
+    ]);
   });
 
   it("does not reopen a collapsed directory when a different directory loads", async () => {
@@ -245,6 +247,9 @@ describe("PierFileTree path synchronization", () => {
     expect(src).toHaveAttribute("aria-expanded", "false");
     expect(docs).toHaveAttribute("aria-expanded", "true");
 
+    batchSpy.mockClear();
+    resetPathsSpy.mockClear();
+
     rerender(
       <PierFileTree
         items={[...initialItems, file("docs/guide.md"), file("docs/notes.md")]}
@@ -253,14 +258,109 @@ describe("PierFileTree path synchronization", () => {
     );
     await flushEffects();
 
-    const resetCall = resetPathsSpy.mock.calls.at(-1) as unknown as
-      | [readonly string[], { initialExpandedPaths?: readonly string[] }]
-      | undefined;
-    const resetOptions = resetCall?.[1];
-    expect(resetOptions?.initialExpandedPaths).toContain("docs");
-    expect(resetOptions?.initialExpandedPaths).not.toContain("src");
+    expect(resetPathsSpy).not.toHaveBeenCalled();
+    expect(batchSpy).toHaveBeenCalledTimes(1);
+    expect(batchSpy).toHaveBeenCalledWith([
+      { path: "docs/guide.md", type: "add" },
+      { path: "docs/notes.md", type: "add" },
+    ]);
+    expect(getTreeItem(container, "src/")).toHaveAttribute(
+      "aria-expanded",
+      "false"
+    );
+    expect(getTreeItem(container, "docs/")).toHaveAttribute(
+      "aria-expanded",
+      "true"
+    );
+    expect(getTreeItem(container, "docs/guide.md")).toBeTruthy();
+    expect(getTreeItem(container, "docs/notes.md")).toBeTruthy();
   });
 
+  it("batches multiple path additions for directory load without resetPaths", async () => {
+    const { rerender } = await renderMountedTree([
+      directory("docs"),
+      file("README.md"),
+    ]);
+
+    rerender(
+      <PierFileTree
+        items={[
+          directory("docs"),
+          file("docs/a.ts"),
+          file("docs/b.ts"),
+          file("docs/c.ts"),
+          file("README.md"),
+        ]}
+        label="Project files"
+      />
+    );
+    await flushEffects();
+
+    expect(resetPathsSpy).not.toHaveBeenCalled();
+    expect(batchSpy).toHaveBeenCalledTimes(1);
+    expect(batchSpy).toHaveBeenCalledWith([
+      { path: "docs/a.ts", type: "add" },
+      { path: "docs/b.ts", type: "add" },
+      { path: "docs/c.ts", type: "add" },
+    ]);
+  });
+
+  it("keeps scroll anchor stable across multi-add batch", async () => {
+    const { container, rerender } = await renderMountedTree([
+      file("src/above.ts"),
+      file("src/anchor.ts"),
+      file("src/below.ts"),
+    ]);
+
+    const frameCallbacks: FrameRequestCallback[] = [];
+    vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation(
+      (callback) => {
+        frameCallbacks.push(callback);
+        return frameCallbacks.length;
+      }
+    );
+
+    const scrollElementBefore = getFileTreeScrollElement(container);
+    mockRect(scrollElementBefore, 0, 120);
+    mockFileTreeRows(container, "src/above.ts", -32, -8);
+    mockFileTreeRows(container, "src/anchor.ts", 24, 48);
+    scrollElementBefore.scrollTop = 200;
+
+    rerender(
+      <PierFileTree
+        items={[
+          file("src/inserted-a.ts"),
+          file("src/inserted-b.ts"),
+          file("src/above.ts"),
+          file("src/anchor.ts"),
+          file("src/below.ts"),
+        ]}
+        label="Project files"
+      />
+    );
+    await flushEffects();
+
+    // Path-sync schedules multi-frame restore after batch. Re-query DOM (batch may
+    // replace nodes), lock the pre-restore scroll base, then shift the anchor.
+    const scrollElement = getFileTreeScrollElement(container);
+    scrollElement.scrollTop = 200;
+    mockRect(scrollElement, 0, 120);
+    mockFileTreeRows(container, "src/anchor.ts", 72, 96);
+
+    const pendingFrames = [...frameCallbacks];
+    frameCallbacks.length = 0;
+    for (const callback of pendingFrames) {
+      callback(performance.now());
+    }
+
+    expect(resetPathsSpy).not.toHaveBeenCalled();
+    expect(batchSpy).toHaveBeenCalledWith([
+      { path: "src/inserted-a.ts", type: "add" },
+      { path: "src/inserted-b.ts", type: "add" },
+    ]);
+    // anchor moved down by 48px (24 → 72); scrollTop should increase by 48.
+    expect(scrollElement.scrollTop).toBe(248);
+  });
   it("restores by anchor row when inserted rows change the raw scroll offset", async () => {
     const scrollControllerRef = {
       current: null as PierFileTreeScrollController | null,
@@ -338,5 +438,38 @@ describe("PierFileTree path synchronization", () => {
     frameCallbacks[0]?.(performance.now());
 
     expect(scrollElement.scrollTop).toBe(300);
+  });
+});
+
+describe("pathSetMutation", () => {
+  it("returns multi-add ops for multiple new paths", () => {
+    expect(pathSetMutation(["a.ts"], ["a.ts", "b.ts", "c.ts"])).toEqual([
+      { path: "b.ts", type: "add" },
+      { path: "c.ts", type: "add" },
+    ]);
+  });
+
+  it("returns multi-remove ops for multiple deleted paths", () => {
+    expect(pathSetMutation(["a.ts", "b.ts", "c.ts"], ["a.ts"])).toEqual([
+      { path: "b.ts", type: "remove" },
+      { path: "c.ts", type: "remove" },
+    ]);
+  });
+
+  it("returns a move for a single same-parent rename", () => {
+    expect(pathSetMutation(["src/old.ts"], ["src/new.ts"])).toEqual([
+      { from: "src/old.ts", to: "src/new.ts", type: "move" },
+    ]);
+  });
+
+  it("returns remove+add when parents differ", () => {
+    expect(pathSetMutation(["src/old.ts"], ["lib/new.ts"])).toEqual([
+      { path: "src/old.ts", type: "remove" },
+      { path: "lib/new.ts", type: "add" },
+    ]);
+  });
+
+  it("returns null when the path set is unchanged", () => {
+    expect(pathSetMutation(["b.ts", "a.ts"], ["a.ts", "b.ts"])).toBeNull();
   });
 });

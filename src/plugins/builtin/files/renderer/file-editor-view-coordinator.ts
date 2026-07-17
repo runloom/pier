@@ -19,9 +19,14 @@ export class FileEditorViewCoordinator {
     return this.#sessions.values();
   }
 
+  getSession(editorSessionId: string): FileEditorViewSession | undefined {
+    return this.#sessions.get(editorSessionId);
+  }
+
   attach(input: {
     document: FilesDocument;
     editorSessionId: string;
+    minimapEnabled: boolean;
     parent: HTMLElement;
     presentation: FileEditorViewPresentation;
   }): void {
@@ -33,10 +38,12 @@ export class FileEditorViewCoordinator {
     }
     if (session) {
       session.updatePresentation(input.presentation);
+      session.setMinimapEnabled(input.minimapEnabled);
     } else {
       session = new FileEditorViewSession({
         documentId: input.document.id,
         editorSessionId: input.editorSessionId,
+        minimapEnabled: input.minimapEnabled,
         onChange: (documentId, contents) => {
           const latest = getDocument(documentId);
           if (latest && !latest.readOnly) {

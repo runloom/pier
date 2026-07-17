@@ -1,3 +1,4 @@
+import { z } from "zod";
 import type { AgentKind } from "./agent.ts";
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
 import type { TaskOutputPanelParams, TaskPanelMetadata } from "./tasks.ts";
@@ -214,6 +215,16 @@ export interface TerminalTitleEvent {
   title: string;
 }
 
+export const terminalOpenUrlKindSchema = z.enum(["text", "html", "unknown"]);
+export type TerminalOpenUrlKind = z.infer<typeof terminalOpenUrlKindSchema>;
+
+export const terminalOpenUrlEventSchema = z.object({
+  kind: terminalOpenUrlKindSchema,
+  panelId: z.string().min(1),
+  url: z.string().min(1).max(16_384),
+});
+export type TerminalOpenUrlEvent = z.infer<typeof terminalOpenUrlEventSchema>;
+
 export interface TerminalPanelSessionSnapshot {
   agent?: TerminalAgentPanelMetadata | undefined;
   context?: PanelContext | undefined;
@@ -333,6 +344,7 @@ export interface TerminalAPI {
   ) => () => void;
   /** native terminal 内容区收到左键聚焦意图时, 通知 renderer 激活对应 dockview tab. */
   onFocusRequest: (cb: (req: TerminalFocusRequest) => void) => () => void;
+  onOpenUrl(cb: (event: TerminalOpenUrlEvent) => void): () => void;
   /** renderer 下发的 presentation 已被 native 同步应用, 用于 resize 撤占位的精确握手. */
   onPresentationApplied(
     cb: (payload: { rendererSequence: number }) => void

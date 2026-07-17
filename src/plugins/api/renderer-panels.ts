@@ -51,7 +51,11 @@ export interface PluginPanelRegistration {
     params: Readonly<Record<string, unknown>>;
     title: string;
   }) => PanelTabChrome | undefined;
-  /** 重资源 panel 隐藏时卸载；默认由 React Activity 保留状态。 */
+  /**
+   * 重资源 panel 不使用 React Activity 保活。
+   * 宿主始终挂载 shell；panel 自行按 isVisible 卸载重内容，
+   * 并在真正关闭（onDidRemovePanel）时回收会话等缓存。
+   */
   resourcePolicy?: "unmountWhenHidden";
   title?: (() => string) | string;
 }

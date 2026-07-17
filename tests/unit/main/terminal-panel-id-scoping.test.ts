@@ -53,6 +53,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
+      setOpenUrlForwardCallback: vi.fn(),
       setupWindow: vi.fn(),
     };
     const win = {
@@ -157,6 +158,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
+      setOpenUrlForwardCallback: vi.fn(),
       setupWindow: vi.fn(),
     };
     const makeWin = (id: number) => ({

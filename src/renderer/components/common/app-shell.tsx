@@ -4,6 +4,7 @@ import { AppContentDialogHost } from "@/components/common/app-content-dialog-hos
 import { AppDialogHost } from "@/components/common/app-dialog-host.tsx";
 import { AppQuitDialogBridge } from "@/components/common/app-quit-dialog-bridge.tsx";
 import { CommandPalette } from "@/components/common/command-palette.tsx";
+import { DiffWorkerHost } from "@/components/common/diff-worker-host.tsx";
 import { DocumentTitle } from "@/components/common/document-title.tsx";
 import { ForegroundActivityBridge } from "@/components/common/foreground-activity-bridge.tsx";
 import { PluginOverlayHost } from "@/components/common/plugin-overlay-host.tsx";
@@ -25,7 +26,9 @@ export function AppShell() {
       <DocumentTitle />
       {IS_MAC ? <TitleBar /> : <AgentIndexChromeBar />}
       <div className="min-h-0 flex-1 overflow-hidden">
-        <WorkspaceHost />
+        <DiffWorkerHost>
+          <WorkspaceHost />
+        </DiffWorkerHost>
       </div>
       <ShellKeybindings />
       <CommandPalette />

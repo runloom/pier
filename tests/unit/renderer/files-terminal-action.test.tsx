@@ -288,6 +288,8 @@ function createMockContext(overrides?: {
     },
     terminal: {
       activePanelId: vi.fn(() => overrides?.activePanelId ?? "terminal-active"),
+      getPanelContext: vi.fn(() => null),
+      onOpenUrl: vi.fn(() => vi.fn()),
       readSelectionText:
         overrides?.readSelectionText ??
         vi.fn(async () => ({

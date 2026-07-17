@@ -1,4 +1,5 @@
 export const FILES_AUTO_SAVE_SETTING_KEY = "pier.files.autoSave";
+export const FILES_EDITOR_MINIMAP_SETTING_KEY = "pier.files.editor.minimap";
 export const FILES_AUTO_SAVE_DELAY_MS = 1000;
 export const FILES_TREE_SHOW_EXCLUDED_SETTING_KEY =
   "pier.files.tree.showExcludedFiles";

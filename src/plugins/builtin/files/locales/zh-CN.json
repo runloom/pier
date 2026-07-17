@@ -198,7 +198,10 @@
     "filePanel.saveOnClose.cancelLabel": "取消",
     "files.projectStatus.openLabel": "打开项目文件",
     "files.projectStatus.openTooltip": "打开项目文件",
-    "files.projectStatus.openFailed": "无法打开项目文件"
+    "files.projectStatus.openFailed": "无法打开项目文件",
+    "files.notifications.terminalOpenUrl.relativeWithoutCwd": "终端没有工作目录，无法解析相对路径。",
+    "files.notifications.terminalOpenUrl.invalid": "无法打开该路径。",
+    "files.notifications.terminalOpenUrl.openFailed": "无法打开路径。"
   },
   "terminalStatusItems": {
     "pier.files.project": {
@@ -216,6 +219,10 @@
     "pier.files.autoSave": {
       "description": "最后一次编辑一秒后自动保存未保存的文件。遇到外部变更时仍会打开覆盖或对比弹窗。",
       "label": "自动保存"
+    },
+    "pier.files.editor.minimap": {
+      "description": "在源码编辑器右侧显示文档缩略图。",
+      "label": "缩略图"
     },
     "pier.files.tree.showExcludedFiles": {
       "description": "显示被下方排除规则命中的路径。",

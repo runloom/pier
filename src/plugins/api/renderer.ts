@@ -10,7 +10,10 @@ import type {
   FilePreviewTicketLocator,
 } from "@shared/contracts/file-preview-ticket.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import type { TerminalSelectionTextResult } from "@shared/contracts/terminal.ts";
+import type {
+  TerminalOpenUrlEvent,
+  TerminalSelectionTextResult,
+} from "@shared/contracts/terminal.ts";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import type { PluginConfigurationApi } from "./configuration.ts";
@@ -190,6 +193,8 @@ export type RendererPluginAgentSelection = AgentSelectionResult;
 
 export interface RendererPluginTerminalContext {
   activePanelId(): string | null;
+  getPanelContext(panelId: string): PanelContext | null;
+  onOpenUrl(cb: (event: TerminalOpenUrlEvent) => void): () => void;
   readSelectionText(panelId?: string): Promise<TerminalSelectionTextResult>;
 }
 
