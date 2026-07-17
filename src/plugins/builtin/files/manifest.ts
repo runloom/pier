@@ -28,6 +28,8 @@ export const FILES_SAVE_ALL_COMMAND_ID = "pier.files.saveAll";
 export const FILES_REVEAL_COMMAND_ID = "pier.files.revealInFinder";
 export const FILES_DUPLICATE_COMMAND_ID = "pier.files.duplicate";
 export const FILES_TREE_SEARCH_COMMAND_ID = "pier.files.treeSearch";
+export const FILES_QUICK_OPEN_COMMAND_ID = "pier.files.quickOpen";
+
 export const FILES_EDITOR_CUT_COMMAND_ID = "pier.files.editor.cut";
 export const FILES_EDITOR_COPY_COMMAND_ID = "pier.files.editor.copy";
 export const FILES_EDITOR_PASTE_COMMAND_ID = "pier.files.editor.paste";
@@ -121,6 +123,13 @@ export const FILES_PLUGIN_MANIFEST = {
       permissions: [],
       title: "Find in File Tree",
     },
+    {
+      category: "file",
+      id: FILES_QUICK_OPEN_COMMAND_ID,
+      permissions: ["file:read", "panel:open"],
+      title: "Go to File",
+    },
+
     {
       category: "file",
       id: FILES_EDITOR_CUT_COMMAND_ID,

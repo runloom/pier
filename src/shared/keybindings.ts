@@ -67,6 +67,12 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
+    commandId: "pier.files.quickOpen",
+    keys: "Mod+KeyP",
+    scope: "global",
+  },
+
+  {
     commandId: "pier.panel.toggleMaximized",
     keys: "Mod+Shift+Enter",
     scope: "global",

@@ -172,6 +172,12 @@
     "filePanel.tree.undo": "撤销",
     "filePanel.tree.search": "在树中查找",
     "filePanel.tree.action.search": "在文件树中查找",
+    "filePanel.quickOpen.title": "转到文件",
+    "filePanel.quickOpen.placeholder": "按路径搜索文件",
+    "filePanel.quickOpen.noProject": "请先打开项目再搜索文件。",
+    "filePanel.quickOpen.queryFailed": "无法搜索文件",
+    "filePanel.quickOpen.truncated": "结果已截断为前若干匹配项",
+
     "filePanel.search.close": "关闭搜索",
     "filePanel.search.matchAnnouncement": "匹配项：{{count}}",
     "filePanel.search.matchCase": "区分大小写",

@@ -172,6 +172,12 @@
     "filePanel.tree.undo": "Undo",
     "filePanel.tree.search": "Find in tree",
     "filePanel.tree.action.search": "Find in File Tree",
+    "filePanel.quickOpen.title": "Go to File",
+    "filePanel.quickOpen.placeholder": "Search files by path",
+    "filePanel.quickOpen.noProject": "Open a project to search files.",
+    "filePanel.quickOpen.queryFailed": "Unable to search files",
+    "filePanel.quickOpen.truncated": "Results truncated to top matches",
+
     "filePanel.search.close": "Close search",
     "filePanel.search.matchAnnouncement": "Matches: {{count}}",
     "filePanel.search.matchCase": "Match case",
