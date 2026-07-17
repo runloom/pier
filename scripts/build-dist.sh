@@ -93,9 +93,10 @@ if [ "$(uname -s)" = "Darwin" ]; then
         DEVELOPER_ID_TEAM="$(printf '%s\n' "$DEVELOPER_ID_NAME" | sed -n 's/.*(\([A-Z0-9]\{10\}\))$/\1/p')"
         echo "[build:dist] signing identity: $DEVELOPER_ID_NAME"
 
-        # 未显式指定时钉死 Developer ID，避免误选 Development 证书。
+        # 未显式指定时钉死 Developer ID。electron-builder 禁止带
+        # "Developer ID Application:" 前缀，只传 qualifier 段。
         if [ -z "${CSC_NAME:-}" ]; then
-            export CSC_NAME="$DEVELOPER_ID_NAME"
+            export CSC_NAME="${DEVELOPER_ID_NAME#Developer ID Application: }"
             echo "[build:dist] CSC_NAME=$CSC_NAME"
         else
             echo "[build:dist] CSC_NAME(from env)=$CSC_NAME"
