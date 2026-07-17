@@ -259,7 +259,7 @@ describe("ManagedPluginsSection", () => {
     expect(alert?.querySelector("svg")).not.toBeNull();
   });
 
-  it("renders release plugin mode banner as info with icon", async () => {
+  it("hides release plugin mode banner in production-like catalog", async () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -285,11 +285,8 @@ describe("ManagedPluginsSection", () => {
       />
     );
 
-    const alert = (await screen.findByText("Release plugin mode")).closest(
-      '[data-slot="alert"]'
-    );
-    expect(alert).toHaveAttribute("data-variant", "info");
-    expect(alert?.querySelector("svg")).not.toBeNull();
+    await screen.findByRole("tab", { name: "Installed" });
+    expect(screen.queryByText("Release plugin mode")).not.toBeInTheDocument();
   });
 
   it("renders plugin tabs without counts and keeps check updates as an icon button on the tab row", async () => {

@@ -347,18 +347,14 @@ export function ManagedPluginsSection({
 
   return (
     <div className="flex flex-col gap-2">
-      {catalog ? (
+      {catalog && pluginMode === "workspace" ? (
         <div className="mx-(--card-spacing) -mt-2 mb-2">
-          <Alert variant={pluginMode === "workspace" ? "warning" : "info"}>
+          <Alert variant="warning">
             <AlertTitle>
-              {pluginMode === "workspace"
-                ? t("settings.plugins.pluginMode.workspaceTitle")
-                : t("settings.plugins.pluginMode.releaseTitle")}
+              {t("settings.plugins.pluginMode.workspaceTitle")}
             </AlertTitle>
             <AlertDescription>
-              {pluginMode === "workspace"
-                ? t("settings.plugins.pluginMode.workspaceBody")
-                : t("settings.plugins.pluginMode.releaseBody")}
+              {t("settings.plugins.pluginMode.workspaceBody")}
             </AlertDescription>
           </Alert>
         </div>
