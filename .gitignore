@@ -77,3 +77,6 @@ playwright-report/
 # Plugin build outputs
 /packages/plugin-*/dist/
 /packages/plugin-*/dist-pkg/
+
+# Local code-signing material (CSR/private key)
+.signing/
