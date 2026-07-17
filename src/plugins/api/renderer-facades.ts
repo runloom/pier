@@ -44,6 +44,10 @@ import type {
   FileWriteTextResult,
 } from "@shared/contracts/file.ts";
 import type {
+  FilePathQueryStart,
+  FileQueryEvent,
+} from "@shared/contracts/file-query.ts";
+import type {
   FileSaveTargetRequest,
   FileSaveTargetResult,
 } from "@shared/contracts/file-save-target.ts";
@@ -124,8 +128,18 @@ export interface RendererPluginFilesFacade {
   ): Promise<FileListResult>;
   mkdir(request: FileMkdirRequest): Promise<FileMkdirResult>;
   move(request: FileMoveRequest): Promise<FileMoveResult>;
+  /** Subscribe to path query events (started/batch/done/error) for this document. */
+  onPathQueryEvent(listener: (event: FileQueryEvent) => void): () => void;
   openPath(request: FileOpenPathRequest): Promise<FileOpenPathResult>;
   pickSaveTarget(request: FileSaveTargetRequest): Promise<FileSaveTargetResult>;
+  /**
+   * Start a cancellable path query against the main-process file query service.
+   * `queryId` is generated if omitted so the returned handle is available
+   * synchronously (design §4.1).
+   */
+  queryPaths(
+    request: Omit<FilePathQueryStart, "queryId"> & { queryId?: string }
+  ): { cancel(): void; queryId: string };
   readDocument(
     request: FileReadDocumentRequest
   ): Promise<FileDocumentReadResult>;

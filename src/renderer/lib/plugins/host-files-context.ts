@@ -95,6 +95,25 @@ export function createPluginFilesContext(
       assertPluginCapability(entry, "file:write");
       return window.pier.files.pickSaveTarget(request);
     },
+    onPathQueryEvent: (listener) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.fileQuery.onEvent(listener);
+    },
+    queryPaths: (request) => {
+      assertPluginCapability(entry, "file:read");
+      const queryId = request.queryId ?? crypto.randomUUID();
+      // Fire-and-forget; the query lifecycle is observed via
+      // `onPathQueryEvent` (error/done arrive on the same channel).
+      window.pier.fileQuery
+        .start({ ...request, queryId })
+        .catch(() => undefined);
+      return {
+        cancel: () => {
+          window.pier.fileQuery.cancel(queryId).catch(() => undefined);
+        },
+        queryId,
+      };
+    },
     readDocument: (request) => {
       assertPluginCapability(entry, "file:read");
       return window.pier.files.readDocument(request);
