@@ -82,17 +82,21 @@
 输入：`GitDiffFilePatch.hunks`（unified diff 语义：`add` / `del` / `context`）。
 输出：当前**磁盘新文件**侧 1-based 行号 → `{ kind, count }`。同一行多规则时优先级：`modified` > `added` > `deleted`。
 
-算法要点（实现须与单测锁定）：
+终态算法（对齐 VS Code SCM **line range mapping** + 行内容 LCS；实现与单测锁定）：
 
-1. 按 hunk 遍历，维护 `newLine` / `oldLine` 游标（对齐 hunk header 的 `newStart` / `oldStart`）。
-2. `context`：两侧行号各 +1，不标记。
-3. 连续 `del` 后接 `add` 的配对区视为 **modified**（启发式近似，非精确逐行替换）：在对应 new 行标 `modified`，count=1；纯 `add` 标 `added`，count=1。
-4. 纯 `del` 块（其后无配对 `add`，`pureDel = delCount - 配对数`）：锚在**删除块结束后的下一行 new 位置**（删除发生在该行上方），`count = pureDel`；渲染时红条按 count 向上覆盖被删区间。若删除直达文末（无后续 new 行）：文档仍有内容时锚在**最后一行**；文档为空（0 行）时锚在 `hunk.newStart`。若锚行已有更高优先级标记，删除标记不覆盖。
-5. 多 hunk 独立应用后合并 map。
+1. 按 hunk 遍历，维护 `newLine` 游标（对齐 hunk header 的 `newStart`）。
+2. `context`：new 行号 +1，不标记。
+3. **纯 add 块**（前面无配对 del）：每行 `added`，count=1。
+4. **纯 del 块**（后面无配对 add）：`deleted` 锚在**删除块结束后的下一 new 行**（删除发生在该行上方），`count = pureDel`；渲染时红条按 count 向上覆盖。若删除直达文末：锚在最后出现过的 new 行；整 hunk 无 new 侧行：锚在 `hunk.newStart`。锚行已有更高优先级标记时，删除标记不覆盖。
+5. **替换 range**（连续 del 后紧随连续 add，且两侧均非空）—— VS Code 语义：
+   - 对 del/add 行文本做 LCS；LCS 命中的**相等行不标记**；
+   - 其余每一 new 行标 `modified`（count=1），**即使 new 比 old 更长也不再拆成 green remainder**；
+   - **禁止**在存活邻行上画 `deleted`（缩减替换不得污染下一行 context/new）。
+6. 多 hunk 独立应用后合并 map。
 
-删除红条按 count × `view.defaultLineHeight` 绝对定位向上撑高，覆盖被删行对应的 gutter 空隙；非删除标记单行高 100%。
-
+删除红条按 count × `view.defaultLineHeight` 绝对定位向上撑高；非删除标记单行高 100%。
 不在本轮做「删除行文本悬浮 / hover 预览」。
+
 
 ### 4.3 CodeMirror 接入
 

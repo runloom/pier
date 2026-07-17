@@ -25,26 +25,88 @@ function setMarker(
   }
 }
 
-function isKind(
-  lines: readonly { kind: string }[],
-  index: number,
-  kind: "add" | "del"
-): boolean {
-  return lines[index]?.kind === kind;
+/**
+ * 行文本 LCS 布尔掩码：oldMask[i]/newMask[j] 为 true 表示该行在 LCS 中（内容未改）。
+ * Hunk 规模通常很小，O(n*m) 可接受。
+ */
+function lineLcsMasks(
+  oldTexts: readonly string[],
+  newTexts: readonly string[]
+): { readonly oldMask: boolean[]; readonly newMask: boolean[] } {
+  const n = oldTexts.length;
+  const m = newTexts.length;
+  const dp: number[][] = Array.from({ length: n + 1 }, () =>
+    Array.from({ length: m + 1 }, () => 0)
+  );
+  for (let i = n - 1; i >= 0; i -= 1) {
+    for (let j = m - 1; j >= 0; j -= 1) {
+      if (oldTexts[i] === newTexts[j]) {
+        dp[i]![j] = (dp[i + 1]![j + 1] ?? 0) + 1;
+      } else {
+        dp[i]![j] = Math.max(dp[i + 1]![j] ?? 0, dp[i]![j + 1] ?? 0);
+      }
+    }
+  }
+  const oldMask = Array.from({ length: n }, () => false);
+  const newMask = Array.from({ length: m }, () => false);
+  let i = 0;
+  let j = 0;
+  while (i < n && j < m) {
+    if (oldTexts[i] === newTexts[j]) {
+      oldMask[i] = true;
+      newMask[j] = true;
+      i += 1;
+      j += 1;
+    } else if ((dp[i + 1]![j] ?? 0) >= (dp[i]![j + 1] ?? 0)) {
+      i += 1;
+    } else {
+      j += 1;
+    }
+  }
+  return { newMask, oldMask };
+}
+
+function applyPureDeletion(
+  markers: Map<number, GitGutterLineMarker>,
+  pureDel: number,
+  options: {
+    readonly hasFollowingHunkLine: boolean;
+    readonly hunkNewStart: number;
+    readonly lastNewLine: number;
+    readonly newLine: number;
+    readonly sawNewLine: boolean;
+  }
+): void {
+  if (pureDel <= 0) {
+    return;
+  }
+  let anchor: number;
+  if (options.hasFollowingHunkLine) {
+    // 后续还有 context/new：删除发生在该 new 行上方。
+    anchor = options.newLine;
+  } else if (options.sawNewLine) {
+    anchor = options.lastNewLine;
+  } else {
+    anchor = options.hunkNewStart;
+  }
+  const existing = markers.get(anchor);
+  if (!existing || PRIORITY.deleted >= PRIORITY[existing.kind]) {
+    markers.set(anchor, { count: pureDel, kind: "deleted" });
+  }
 }
 
 /**
  * 把单个 GitDiffFilePatch 的 hunks 映射成「磁盘新文件侧 1-based 行号 → gutter 标记」。
  *
- * 规则：
- * - 连续 del 后接连续 add：前 min(del,add) 个 add 行标 modified，余下 add 标 added。
- * - 纯 del 溢出（pureDel 行）：锚在删除块结束后的下一行 new 位置（删除发生在该行上方），
- *   count = pureDel；若删除直达 hunk 末尾无后续 new 行，锚在最后一个出现过的 new 行；
- *   若整 hunk 无任何 new 侧行，锚在 hunk.newStart。渲染时红条按 count 向上覆盖被删区间。
- * - 同行多规则优先级：modified > added > deleted。
- * - patch 为 null 或 binary：返回空 Map。
- *
- * 注：del+add 配对是否视为「修改」是 unified diff 的启发式近似，非精确逐行替换。
+ * 终态规则（对齐 VS Code SCM line range mapping + 行内容 LCS）：
+ * 1. 纯 add 块 → 每行 `added`。
+ * 2. 纯 del 块 → `deleted` 锚在删除后的下一 new 行（或末行 / newStart），count=被删行数。
+ * 3. 非空 old + 非空 new 的替换块：
+ *    - 行文本 LCS 相等行不标记；
+ *    - 其余 new 行一律 `modified`（即使 new 比 old 长，也不再拆成 green remainder）；
+ *    - **不在** 存活邻行上画 red（缩减替换不再污染下一行）。
+ * 4. 同行多规则优先级：modified > added > deleted。
+ * 5. patch 为 null 或 binary：空 Map。
  */
 export function markersFromDiffPatch(
   patch: GitDiffFilePatch | null
@@ -73,7 +135,7 @@ export function markersFromDiffPatch(
       }
       if (line.kind === "add") {
         let j = i;
-        while (isKind(lines, j, "add")) j += 1;
+        while (lines[j]?.kind === "add") j += 1;
         const addCount = j - i;
         for (let k = 0; k < addCount; k += 1) {
           setMarker(markers, newLine, { count: 1, kind: "added" });
@@ -84,47 +146,39 @@ export function markersFromDiffPatch(
         i = j;
         continue;
       }
-      // del 块：尝试与紧随其后的 add 块配对
+      // del 块：与紧随 add 块组成一次 change range（VS Code line mapping）。
       let j = i;
-      while (isKind(lines, j, "del")) j += 1;
-      const delCount = j - i;
-      let addCount = 0;
+      while (lines[j]?.kind === "del") j += 1;
+      const delLines = lines.slice(i, j);
+      const delCount = delLines.length;
       let k = j;
-      while (isKind(lines, k, "add")) {
-        addCount += 1;
-        k += 1;
+      while (lines[k]?.kind === "add") k += 1;
+      const addLines = lines.slice(j, k);
+      const addCount = addLines.length;
+
+      if (addCount === 0) {
+        applyPureDeletion(markers, delCount, {
+          hasFollowingHunkLine: k < lines.length,
+          hunkNewStart: hunk.newStart,
+          lastNewLine,
+          newLine,
+          sawNewLine,
+        });
+        i = k;
+        continue;
       }
-      const modifiedCount = Math.min(delCount, addCount);
-      for (let m = 0; m < modifiedCount; m += 1) {
-        setMarker(markers, newLine, { count: 1, kind: "modified" });
+
+      // 替换 range：LCS 去掉未改动行，其余 new 行全部 modified（无 green remainder、无邻行 red）。
+      const oldTexts = delLines.map((entry) => entry.text);
+      const newTexts = addLines.map((entry) => entry.text);
+      const { newMask } = lineLcsMasks(oldTexts, newTexts);
+      for (let offset = 0; offset < addCount; offset += 1) {
+        if (!newMask[offset]) {
+          setMarker(markers, newLine, { count: 1, kind: "modified" });
+        }
         lastNewLine = newLine;
         sawNewLine = true;
         newLine += 1;
-      }
-      const addedRemainder = addCount - modifiedCount;
-      for (let m = 0; m < addedRemainder; m += 1) {
-        setMarker(markers, newLine, { count: 1, kind: "added" });
-        lastNewLine = newLine;
-        sawNewLine = true;
-        newLine += 1;
-      }
-      const pureDel = delCount - modifiedCount;
-      if (pureDel > 0) {
-        let anchor: number;
-        if (k < lines.length) {
-          // 后续还有行：锚在 newLine（删除发生在该行上方），newLine 不前进
-          anchor = newLine;
-        } else if (sawNewLine) {
-          anchor = lastNewLine;
-        } else {
-          anchor = hunk.newStart;
-        }
-        const existing = markers.get(anchor);
-        // 若锚行已有 added/modified 标记，删除标记不应覆盖更高优先级；
-        // 此时把删除计数并入同锚行的 deleted（优先级低，仅当锚行无更高标记时生效）。
-        if (!existing || PRIORITY.deleted >= PRIORITY[existing.kind]) {
-          markers.set(anchor, { count: pureDel, kind: "deleted" });
-        }
       }
       i = k;
     }

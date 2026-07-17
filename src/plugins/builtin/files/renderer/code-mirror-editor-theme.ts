@@ -81,45 +81,40 @@ export const EDITOR_THEME = EditorView.theme({
     border: "1px solid var(--border)",
     borderRadius: "0.5rem",
   },
-  // git 变更（官方 + 业界）：
+  // git 变更：颜色对齐 Git Review / Pierre CodeView（--diff-*），避免 status-* badge 色偏。
   // 1. gutterLineClass 给该行所有 gutter 槽（行号+fold）铺同色浅底
-  // 2. 仅最左 gutter 列（行号）左缘一条实色条（VS Code editorGutter.* 单条强调）
+  // 2. 仅最左 gutter 列（行号）左缘一条实色条
   // 3. content 行 Decoration.line 同色铺底，与 gutter 无缝连贯
-  // color-mix 仅允许在此文件（治理白名单）。
+  // color-mix 仅允许在此文件（治理白名单）；底色 token 已在 globals 预混合。
   ".cm-gutters .cm-gutterElement.cm-gitRow-added": {
-    backgroundColor:
-      "color-mix(in oklch, var(--status-success-bg) 90%, transparent)",
+    backgroundColor: "var(--diff-addition-bg)",
   },
   ".cm-gutters .cm-gutterElement.cm-gitRow-modified": {
-    backgroundColor:
-      "color-mix(in oklch, var(--status-info-bg) 90%, transparent)",
+    backgroundColor: "var(--diff-modification-bg)",
   },
   ".cm-gutters .cm-gutterElement.cm-gitRow-deleted": {
-    backgroundColor:
-      "color-mix(in oklch, var(--status-danger-bg) 90%, transparent)",
+    backgroundColor: "var(--diff-deletion-bg)",
   },
   // 单条强调：只在最左 gutter 列（lineNumbers，basicSetup 中第一个）画 inset 实色条。
   // fold 列只铺浅底，避免出现第二条竖条。
   ".cm-gutters .cm-gutter:first-child .cm-gutterElement.cm-gitRow-added": {
-    boxShadow: "inset 3px 0 var(--status-success-fg)",
+    boxShadow: "inset 3px 0 var(--diff-addition-fg)",
   },
   ".cm-gutters .cm-gutter:first-child .cm-gutterElement.cm-gitRow-modified": {
-    boxShadow: "inset 3px 0 var(--status-info-fg)",
+    boxShadow: "inset 3px 0 var(--diff-modification-fg)",
   },
   ".cm-gutters .cm-gutter:first-child .cm-gutterElement.cm-gitRow-deleted": {
-    boxShadow: "inset 3px 0 var(--status-danger-fg)",
+    boxShadow: "inset 3px 0 var(--diff-deletion-fg)",
   },
   ".cm-gitLine-added": {
-    backgroundColor:
-      "color-mix(in oklch, var(--status-success-bg) 90%, transparent)",
+    backgroundColor: "var(--diff-addition-bg)",
     // 负左 margin 让背景延伸覆盖 content 左 padding（0.5rem），紧贴 gutter 右缘，
     // padding-left 保持文字原位。行底色与 gutter 行槽同色连贯。
     marginLeft: "-0.5rem",
     paddingLeft: "0.5rem",
   },
   ".cm-gitLine-modified": {
-    backgroundColor:
-      "color-mix(in oklch, var(--status-info-bg) 90%, transparent)",
+    backgroundColor: "var(--diff-modification-bg)",
     marginLeft: "-0.5rem",
     paddingLeft: "0.5rem",
   },

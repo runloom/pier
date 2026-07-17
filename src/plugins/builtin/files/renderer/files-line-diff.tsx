@@ -159,8 +159,8 @@ export function FilesLineDiff({
           {rows.map((row, index) => (
             <tr
               className={cn(
-                row.kind === "added" && "bg-success/10",
-                row.kind === "removed" && "bg-destructive/10"
+                row.kind === "added" && "bg-[var(--diff-addition-bg)]",
+                row.kind === "removed" && "bg-[var(--diff-deletion-bg)]"
               )}
               // biome-ignore lint/suspicious/noArrayIndexKey: 行序即身份,列表只读且整体重建。
               key={index}

@@ -215,6 +215,14 @@ describe("color token governance", () => {
     expect(cssVariable(dark, "status-info-bg")).toBe("#111a2c");
     expect(cssVariable(dark, "status-success-bg")).toBe("#162312");
     expect(cssVariable(dark, "status-danger-bg")).toBe("#2c1618");
+
+    // Code/diff markers share Pierre/Git Review hues (not badge status seeds).
+    expect(cssVariable(light, "diff-addition-fg")).toBe("#0dbe4e");
+    expect(cssVariable(light, "diff-deletion-fg")).toBe("#ff2e3f");
+    expect(cssVariable(light, "diff-modification-fg")).toBe("#009fff");
+    expect(cssVariable(dark, "diff-addition-fg")).toBe("#5ecc71");
+    expect(cssVariable(dark, "diff-deletion-fg")).toBe("#ff6762");
+    expect(cssVariable(dark, "diff-modification-fg")).toBe("#69b1ff");
   });
 
   // ── Tier 3: design decision — solid status seeds vs white glyphs ────
