@@ -17,13 +17,13 @@ import {
   FILES_QUICK_OPEN_COMMAND_ID,
 } from "../manifest.ts";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
+import { sourceTitle } from "./file-panel-source.ts";
+import { basename } from "./file-tree-action-utils.ts";
+import { filePanelProjectRoot } from "./file-tree-preferences.ts";
 import {
   parseFilesDocumentPanelSource,
   sameFilesDocumentPanelSource,
 } from "./files-document-types.ts";
-import { basename } from "./file-tree-action-utils.ts";
-import { filePanelProjectRoot } from "./file-tree-preferences.ts";
-import { sourceTitle } from "./file-panel-source.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
 import {
   createFilesPathQueryClient,
@@ -102,9 +102,8 @@ function openDiskPathInGroup(input: {
     ...(!existingInstance && input.panelContext
       ? { context: input.panelContext }
       : {}),
-    dropUnpinnedInstances: existingInstance ? false : true,
-    instanceId:
-      existingInstance?.id ?? createFileFilePanelInstanceId(source),
+    dropUnpinnedInstances: !existingInstance,
+    instanceId: existingInstance?.id ?? createFileFilePanelInstanceId(source),
     params,
     ...(input.groupId ? { targetGroupId: input.groupId } : {}),
     title: sourceTitle(existingSource ?? source),
