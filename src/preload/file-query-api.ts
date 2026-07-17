@@ -11,7 +11,7 @@
  * (per queryId) is a renderer concern.
  */
 import type {
-  FilePathQueryStart,
+  FilePathQueryStartInput,
   FileQueryEvent,
 } from "@shared/contracts/file-query.ts";
 import { PIER } from "@shared/ipc-channels.ts";
@@ -20,7 +20,7 @@ import { type IpcRendererEvent, ipcRenderer } from "electron";
 export interface PierFileQueryAPI {
   cancel(queryId: string): Promise<boolean>;
   onEvent(listener: (event: FileQueryEvent) => void): () => void;
-  start(request: FilePathQueryStart): Promise<boolean>;
+  start(request: FilePathQueryStartInput): Promise<boolean>;
 }
 
 const listeners = new Set<(event: FileQueryEvent) => void>();

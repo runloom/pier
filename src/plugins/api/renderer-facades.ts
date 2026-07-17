@@ -44,7 +44,7 @@ import type {
   FileWriteTextResult,
 } from "@shared/contracts/file.ts";
 import type {
-  FilePathQueryStart,
+  FilePathQueryStartInput,
   FileQueryEvent,
 } from "@shared/contracts/file-query.ts";
 import type {
@@ -140,7 +140,7 @@ export interface RendererPluginFilesFacade {
    * loading must await it after subscribing to events.
    */
   queryPaths(
-    request: Omit<FilePathQueryStart, "queryId"> & { queryId?: string }
+    request: Omit<FilePathQueryStartInput, "queryId"> & { queryId?: string }
   ): { cancel(): void; queryId: string; started: Promise<boolean> };
   readDocument(
     request: FileReadDocumentRequest

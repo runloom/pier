@@ -55,6 +55,8 @@ export const filePathQueryStartSchema = z
   })
   .strict();
 export type FilePathQueryStart = z.infer<typeof filePathQueryStartSchema>;
+/** Wire/input shape — `limit` optional thanks to schema default. */
+export type FilePathQueryStartInput = z.input<typeof filePathQueryStartSchema>;
 
 export const filePathQueryCancelSchema = z
   .object({
