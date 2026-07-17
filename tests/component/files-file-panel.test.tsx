@@ -3417,7 +3417,10 @@ describe("Files file-panel", () => {
       expect(screen.getByTestId("files-tree-search-results")).toBeVisible();
       expect(screen.getByText("code-mirror-editor-theme.ts")).toBeVisible();
     });
-    // Tree hide-non-matches is not used; tree content is replaced by result layer.
+    // Result layer covers the tree; PierFileTree stays mounted for revealPath.
+    expect(
+      document.querySelector('[data-slot="pier-file-tree"]')
+    ).not.toBeNull();
     expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
 
     fireEvent.keyDown(searchInput, { key: "ArrowDown" });

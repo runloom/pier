@@ -411,14 +411,13 @@ export function FileTreeSidebar({
   if (treeSearch.loading && treeSearch.matchCount === 0) {
     treeSearchMatchAnnouncement = t("filePanel.tree.searching", "Searching…");
   } else if (treeSearch.matchCount > 0) {
+    const count = treeSearch.truncated
+      ? `${treeSearch.matchCount}+`
+      : treeSearch.matchCount;
     treeSearchMatchAnnouncement = t(
       "filePanel.search.matchAnnouncement",
       "Matches: {{count}}",
-      {
-        count: treeSearch.truncated
-          ? `${treeSearch.matchCount}+`
-          : treeSearch.matchCount,
-      }
+      { count }
     );
   }
   const searchActionsDisabled = treeSearch.matchCount === 0;
@@ -431,8 +430,6 @@ export function FileTreeSidebar({
       onContextMenu={handleTreeBackgroundContextMenu}
       onDoubleClick={handleTreeDoubleClick}
     >
-      {/* 树头行已按目标布局移除（项目名在面包屑首段）；搜索条按需出现，
-          文件新鲜度统一由 watcher 维护，不提供手动刷新入口。 */}
       {treeSearch.open ? (
         <div className="shrink-0 px-2 pb-1.5">
           <FilesSearchBar
@@ -462,6 +459,16 @@ export function FileTreeSidebar({
         </div>
       ) : null}
       <div className="relative flex min-h-0 flex-1">
+        <div
+          aria-hidden={showSearchResults || undefined}
+          className={
+            showSearchResults
+              ? "pointer-events-none invisible absolute inset-0 flex min-h-0 flex-1"
+              : "flex min-h-0 flex-1"
+          }
+        >
+          {content}
+        </div>
         {showSearchResults ? (
           <FilesTreeSearchResults
             emptyDescription={t(
@@ -486,9 +493,7 @@ export function FileTreeSidebar({
               "Results truncated to top matches"
             )}
           />
-        ) : (
-          content
-        )}
+        ) : null}
       </div>
     </aside>
   );
