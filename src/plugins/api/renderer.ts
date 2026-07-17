@@ -141,12 +141,22 @@ export interface RendererPluginQuickPickSection {
 }
 
 export interface RendererPluginQuickPick {
+  /** 异步搜索的错误提示；渲染在候选列表上方。 */
+  readonly errorText?: string;
   /** 根据当前输入生成一个置顶候选；必须同步且无副作用。 */
   getQueryItem?(query: string): RendererPluginQuickPickItem | null;
   readonly items?: readonly RendererPluginQuickPickItem[];
+  /** true = 保留当前 items 但禁用交互, 提示后端正在拉数据。 */
+  readonly loading?: boolean;
   onAccept(item: RendererPluginQuickPickItem): Promise<void> | void;
   onChangeSelection?(item: RendererPluginQuickPickItem): void;
   onDismiss?(): void;
+  /**
+   * 输入变化 (及打开时的初始值) 触发, 同一 session 内后续调用会 abort 上一次的
+   * signal, 宿主关闭面板时也 abort。插件在回调里做异步搜索然后通过
+   * commandPalette.updateQuickPick 合并 items/loading/errorText。
+   */
+  onQueryChange?(query: string, signal: AbortSignal): Promise<void> | void;
   readonly placeholder?: string;
   renderItem?(item: RendererPluginQuickPickItem): ReactNode;
   readonly sections?: readonly RendererPluginQuickPickSection[];
@@ -254,6 +264,11 @@ export interface RendererPluginContext {
   };
   commandPalette: {
     openQuickPick(quickPick: RendererPluginQuickPick): void;
+    /**
+     * 合并式补丁当前 quickPick (items/loading/errorText 等)。用于 onQueryChange
+     * 拉到数据后回填, 不重置 query/selection/focus, 也不 push 回退栈。
+     */
+    updateQuickPick(patch: Partial<RendererPluginQuickPick>): void;
   };
   configuration: PluginConfigurationApi;
   /**

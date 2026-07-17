@@ -218,6 +218,7 @@ function createMockContext(): RendererPluginContext {
     },
     commandPalette: {
       openQuickPick: unimplemented("commandPalette.openQuickPick"),
+      updateQuickPick: unimplemented("commandPalette.updateQuickPick"),
     },
     contextMenu: {
       popup: unimplemented("contextMenu.popup"),

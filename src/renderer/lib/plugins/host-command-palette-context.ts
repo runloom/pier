@@ -38,69 +38,134 @@ function adaptQuickPickSection(
   };
 }
 
-function indexPluginQuickPickItems(
+// 一次 openQuickPick 起一个 session：随后的 updateQuickPick 合并进
+// pluginQuickPick 并同步刷新 pluginItemsById, 让宿主侧回调 (onAccept,
+// getQueryItem 等) 始终读到最新的插件对象。hostOnAccept 作为身份 marker
+// 判断当前 controller.quickPick 是不是本 session。
+interface AdaptedQuickPickSession {
+  hostOnAccept: QuickPick["onAccept"] | null;
+  pluginItemsById: Map<string, RendererPluginQuickPickItem>;
+  pluginQuickPick: RendererPluginQuickPick;
+}
+
+let currentSession: AdaptedQuickPickSession | null = null;
+
+function collectPluginItems(
   quickPick: RendererPluginQuickPick
-): ReadonlyMap<string, RendererPluginQuickPickItem> {
-  const items = [
+): readonly RendererPluginQuickPickItem[] {
+  return [
     ...(quickPick.items ?? []),
     ...(quickPick.sections?.flatMap((section) => section.items) ?? []),
   ];
-  return new Map(items.map((item) => [item.id, item]));
 }
 
-function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
-  // Mutable so query-derived items can be registered when first generated.
-  const pluginItemsById = new Map(indexPluginQuickPickItems(quickPick));
+function adaptQuickPick(session: AdaptedQuickPickSession): QuickPick {
   const pluginItemFor = (item: QuickPickItem): RendererPluginQuickPickItem => {
-    const pluginItem = pluginItemsById.get(item.id);
+    const pluginItem = session.pluginItemsById.get(item.id);
     if (!pluginItem) {
       throw new Error(`unknown plugin quick pick item: ${item.id}`);
     }
     return pluginItem;
   };
+  const initial = session.pluginQuickPick;
   return {
-    ...(quickPick.getQueryItem
+    ...(initial.errorText ? { errorText: initial.errorText } : {}),
+    ...(initial.getQueryItem
       ? {
           getQueryItem: (query: string) => {
-            const item = quickPick.getQueryItem?.(query);
+            const item = session.pluginQuickPick.getQueryItem?.(query);
             if (!item) {
               return null;
             }
-            pluginItemsById.set(item.id, item);
+            session.pluginItemsById.set(item.id, item);
             return adaptQuickPickItem(item);
           },
         }
       : {}),
-    onAccept: (item) => quickPick.onAccept(pluginItemFor(item)),
-    ...(quickPick.items
-      ? { items: quickPick.items.map(adaptQuickPickItem) }
-      : {}),
-    ...(quickPick.onChangeSelection
+    ...(initial.items ? { items: initial.items.map(adaptQuickPickItem) } : {}),
+    ...(initial.loading == null ? {} : { loading: initial.loading }),
+    onAccept: (item) => session.pluginQuickPick.onAccept(pluginItemFor(item)),
+    ...(initial.onChangeSelection
       ? {
           onChangeSelection: (item: QuickPickItem) =>
-            quickPick.onChangeSelection?.(pluginItemFor(item)),
+            session.pluginQuickPick.onChangeSelection?.(pluginItemFor(item)),
         }
       : {}),
-    ...(quickPick.onDismiss ? { onDismiss: quickPick.onDismiss } : {}),
-    ...(quickPick.placeholder ? { placeholder: quickPick.placeholder } : {}),
-    ...(quickPick.renderItem
+    ...(initial.onDismiss
+      ? { onDismiss: () => session.pluginQuickPick.onDismiss?.() }
+      : {}),
+    ...(initial.onQueryChange
+      ? {
+          onQueryChange: (query: string, signal: AbortSignal) =>
+            session.pluginQuickPick.onQueryChange?.(query, signal),
+        }
+      : {}),
+    ...(initial.placeholder ? { placeholder: initial.placeholder } : {}),
+    ...(initial.renderItem
       ? {
           renderItem: (item: QuickPickItem) =>
-            quickPick.renderItem?.(pluginItemFor(item)),
+            session.pluginQuickPick.renderItem?.(pluginItemFor(item)),
         }
       : {}),
-    ...(quickPick.sections
-      ? { sections: quickPick.sections.map(adaptQuickPickSection) }
+    ...(initial.sections
+      ? { sections: initial.sections.map(adaptQuickPickSection) }
       : {}),
-    title: quickPick.title,
+    title: initial.title,
   };
 }
 
 export function createPluginCommandPaletteContext(): RendererPluginContext["commandPalette"] {
   return {
-    openQuickPick: (quickPick) =>
-      useCommandPaletteController
-        .getState()
-        .openQuickPick(adaptQuickPick(quickPick)),
+    openQuickPick: (pluginQuickPick) => {
+      const session: AdaptedQuickPickSession = {
+        hostOnAccept: null,
+        pluginItemsById: new Map(
+          collectPluginItems(pluginQuickPick).map((item) => [item.id, item])
+        ),
+        pluginQuickPick,
+      };
+      const hostQuickPick = adaptQuickPick(session);
+      session.hostOnAccept = hostQuickPick.onAccept;
+      currentSession = session;
+      useCommandPaletteController.getState().openQuickPick(hostQuickPick);
+    },
+    updateQuickPick: (patch) => {
+      const session = currentSession;
+      if (!session) {
+        return;
+      }
+      const controllerState = useCommandPaletteController.getState();
+      // 顶层 picker 已不属于本 session (被别的 openQuickPick 顶掉) → 静默丢弃。
+      if (controllerState.quickPick?.onAccept !== session.hostOnAccept) {
+        return;
+      }
+      session.pluginQuickPick = { ...session.pluginQuickPick, ...patch };
+      if ("items" in patch || "sections" in patch) {
+        session.pluginItemsById.clear();
+        for (const item of collectPluginItems(session.pluginQuickPick)) {
+          session.pluginItemsById.set(item.id, item);
+        }
+      }
+      const hostPatch: { -readonly [K in keyof QuickPick]?: QuickPick[K] } = {};
+      if ("errorText" in patch) {
+        hostPatch.errorText = patch.errorText;
+      }
+      if ("loading" in patch) {
+        hostPatch.loading = patch.loading;
+      }
+      if ("placeholder" in patch) {
+        hostPatch.placeholder = patch.placeholder;
+      }
+      if ("title" in patch && patch.title !== undefined) {
+        hostPatch.title = patch.title;
+      }
+      if ("items" in patch) {
+        hostPatch.items = patch.items?.map(adaptQuickPickItem);
+      }
+      if ("sections" in patch) {
+        hostPatch.sections = patch.sections?.map(adaptQuickPickSection);
+      }
+      controllerState.updateQuickPick(hostPatch);
+    },
   };
 }
