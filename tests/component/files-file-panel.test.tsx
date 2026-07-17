@@ -181,6 +181,48 @@ interface FilesPanelParams {
   source?: FilesDocumentPanelSource | Record<string, unknown>;
 }
 
+type PathQueryListener = (
+  event: import("@shared/contracts/file-query").FileQueryEvent
+) => void;
+
+function createPathQueryMock() {
+  const listeners = new Set<PathQueryListener>();
+  const starts: import("@shared/contracts/file-query").FilePathQueryStart[] =
+    [];
+  let nextId = 0;
+  return {
+    starts,
+    emit(event: import("@shared/contracts/file-query").FileQueryEvent) {
+      for (const listener of Array.from(listeners)) {
+        listener(event);
+      }
+    },
+    onPathQueryEvent(listener: PathQueryListener) {
+      listeners.add(listener);
+      return () => {
+        listeners.delete(listener);
+      };
+    },
+    queryPaths(
+      request: Omit<
+        import("@shared/contracts/file-query").FilePathQueryStart,
+        "queryId"
+      > & { queryId?: string }
+    ) {
+      nextId += 1;
+      const queryId = request.queryId ?? `panel-q${nextId}`;
+      starts.push({
+        ...request,
+        queryId,
+      } as import("@shared/contracts/file-query").FilePathQueryStart);
+      return {
+        cancel: vi.fn(),
+        queryId,
+      };
+    },
+  };
+}
+
 function createMockContext(overrides?: {
   configurationGet?: RendererPluginContext["configuration"]["get"];
   configurationOnDidChange?: RendererPluginContext["configuration"]["onDidChange"];
@@ -191,7 +233,9 @@ function createMockContext(overrides?: {
   listIgnored?: RendererPluginContext["git"]["listIgnored"];
   listInstances?: RendererPluginContext["panels"]["listInstances"];
   notifyInfo?: RendererPluginContext["notifications"]["info"];
+  onPathQueryEvent?: RendererPluginContext["files"]["onPathQueryEvent"];
   openExternal?: RendererPluginContext["externalNavigation"]["open"];
+  queryPaths?: RendererPluginContext["files"]["queryPaths"];
   releasePreview?: RendererPluginContext["filePreviews"]["release"];
   openInstance?: RendererPluginContext["panels"]["openInstance"];
   pickSaveTarget?: RendererPluginContext["files"]["pickSaveTarget"];
@@ -362,6 +406,14 @@ function createMockContext(overrides?: {
         root: request.root,
       })),
       list: overrides?.list ?? vi.fn(async () => []),
+      onPathQueryEvent:
+        overrides?.onPathQueryEvent ?? vi.fn(() => () => undefined),
+      queryPaths:
+        overrides?.queryPaths ??
+        vi.fn(() => ({
+          cancel: vi.fn(),
+          queryId: "unused-query",
+        })),
       mkdir: vi.fn(async (request) => ({
         created: true,
         path: request.path,
@@ -3228,44 +3280,74 @@ describe("Files file-panel", () => {
     ).toBeNull();
   });
 
-  it("searches partial paths in lazy directories and leaves zero results empty", async () => {
+  it("searches via path query without recursive list and opens ranked theme hit", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     const onOpenFile = vi.fn();
+    const pathQuery = createPathQueryMock();
+    const listed: string[] = [];
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
-      async (requestOrRoot, options) => {
-        const path =
-          typeof requestOrRoot === "string"
-            ? (options?.path ?? "")
-            : requestOrRoot.path;
-        const entriesByPath: Readonly<Record<string, readonly FileEntry[]>> = {
-          "": [
+      async (_requestOrRoot, options) => {
+        const path = options?.path ?? "";
+        listed.push(path);
+        if (path === "") {
+          return [
             { kind: "file", path: "README.md", root: PROJECT_ROOT },
             { kind: "directory", path: "src", root: PROJECT_ROOT },
-          ],
-          src: [
-            { kind: "file", path: "src/app.tsx", root: PROJECT_ROOT },
+          ];
+        }
+        if (path === "src") {
+          return [
             {
               kind: "directory",
-              path: "src/styles",
+              path: "src/plugins",
               root: PROJECT_ROOT,
             },
-          ],
-          "src/styles": [
+          ];
+        }
+        if (path === "src/plugins") {
+          return [
+            {
+              kind: "directory",
+              path: "src/plugins/builtin",
+              root: PROJECT_ROOT,
+            },
+          ];
+        }
+        if (path === "src/plugins/builtin") {
+          return [
+            {
+              kind: "directory",
+              path: "src/plugins/builtin/files",
+              root: PROJECT_ROOT,
+            },
+          ];
+        }
+        if (path === "src/plugins/builtin/files") {
+          return [
+            {
+              kind: "directory",
+              path: "src/plugins/builtin/files/renderer",
+              root: PROJECT_ROOT,
+            },
+          ];
+        }
+        if (path === "src/plugins/builtin/files/renderer") {
+          return [
             {
               kind: "file",
-              path: "src/styles/app.css",
+              path: "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
               root: PROJECT_ROOT,
             },
-            {
-              kind: "file",
-              path: "src/styles/theme.CSS",
-              root: PROJECT_ROOT,
-            },
-          ],
-        };
-        return [...(entriesByPath[path] ?? [])];
+          ];
+        }
+        return [];
       }
     );
-    const context = createMockContext({ list });
+    const context = createMockContext({
+      list,
+      onPathQueryEvent: pathQuery.onPathQueryEvent.bind(pathQuery),
+      queryPaths: pathQuery.queryPaths.bind(pathQuery),
+    });
     const { container } = render(
       <FileTreeSidebar
         context={context}
@@ -3283,6 +3365,7 @@ describe("Files file-panel", () => {
         })
       ).toBeVisible();
     });
+    const listCallsBeforeSearch = list.mock.calls.length;
 
     act(() => {
       expect(openFilesTreeSearch({ instanceId: "tree-search-lazy" })).toBe(
@@ -3304,54 +3387,68 @@ describe("Files file-panel", () => {
     expect(
       within(searchBar).getByRole("button", { name: "Open selected file" })
     ).toBeVisible();
-    fireEvent.change(searchInput, { target: { value: ".css" } });
+
+    fireEvent.change(searchInput, { target: { value: "theme.ts" } });
+    await act(async () => {
+      vi.advanceTimersByTime(80);
+    });
+    expect(pathQuery.starts.length).toBeGreaterThan(0);
+    expect(pathQuery.starts.at(-1)?.query).toBe("theme.ts");
+    // Must not recurse list for search indexing.
+    expect(list.mock.calls.length).toBe(listCallsBeforeSearch);
+
+    const queryId = pathQuery.starts.at(-1)?.queryId ?? "";
+    act(() => {
+      pathQuery.emit({
+        kind: "batch",
+        queryId,
+        items: [
+          {
+            path: "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
+            score: 100,
+          },
+          { path: "src/theme.ts", score: 10 },
+        ],
+      });
+    });
 
     await waitFor(() => {
       expect(within(searchBar).getByText("2")).toBeVisible();
-      const tree = getFileTree(container);
-      expect(
-        within(tree).getByRole("treeitem", { name: "app.css" })
-      ).toBeVisible();
-      expect(
-        within(tree).getByRole("treeitem", { name: "theme.CSS" })
-      ).toBeVisible();
-      expect(
-        within(tree).queryByRole("treeitem", { name: "README.md" })
-      ).toBeNull();
+      expect(screen.getByTestId("files-tree-search-results")).toBeVisible();
+      expect(screen.getByText("code-mirror-editor-theme.ts")).toBeVisible();
     });
-    expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "src" });
-    expect(list).toHaveBeenCalledWith(PROJECT_ROOT, { path: "src/styles" });
+    // Tree hide-non-matches is not used; tree content is replaced by result layer.
+    expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
 
     fireEvent.keyDown(searchInput, { key: "ArrowDown" });
     fireEvent.keyDown(searchInput, { key: "Enter" });
-    expect(onOpenFile).toHaveBeenCalledWith(
-      expect.objectContaining({ path: "src/styles/theme.CSS" }),
-      undefined
-    );
-    expect(searchInput).toHaveValue(".css");
-    expect(
-      within(getFileTree(container)).queryByRole("treeitem", {
-        name: "README.md",
-      })
-    ).toBeNull();
-
-    fireEvent.click(
-      within(getFileTree(container)).getByRole("treeitem", { name: "app.css" })
-    );
-    expect(searchInput).toHaveValue(".css");
-    expect(within(searchBar).getByText("2")).toBeVisible();
-    expect(
-      within(getFileTree(container)).queryByRole("treeitem", {
-        name: "README.md",
-      })
-    ).toBeNull();
+    await waitFor(() => {
+      expect(onOpenFile).toHaveBeenCalledWith(
+        expect.objectContaining({
+          path: "src/theme.ts",
+        }),
+        undefined
+      );
+    });
+    expect(searchInput).toHaveValue("theme.ts");
 
     fireEvent.change(searchInput, { target: { value: ".missing" } });
+    await act(async () => {
+      vi.advanceTimersByTime(80);
+    });
+    const missingId = pathQuery.starts.at(-1)?.queryId ?? "";
+    act(() => {
+      pathQuery.emit({
+        kind: "done",
+        queryId: missingId,
+        reason: "completed",
+        truncated: false,
+        scanned: 0,
+        elapsedMs: 1,
+      });
+    });
     await waitFor(() => {
       expect(within(searchBar).getByText("0")).toBeVisible();
-      expect(
-        within(getFileTree(container)).queryAllByRole("treeitem")
-      ).toHaveLength(0);
       expect(screen.getByTestId("files-tree-search-empty")).toHaveTextContent(
         "No matching files"
       );
@@ -3361,26 +3458,29 @@ describe("Files file-panel", () => {
     });
 
     fireEvent.change(searchInput, { target: { value: "" } });
-    await waitFor(() => {
-      expect(
-        within(getFileTree(container)).getByRole("treeitem", {
-          name: "README.md",
-        })
-      ).toBeVisible();
-      expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
+    await act(async () => {
+      vi.advanceTimersByTime(80);
     });
+    // Empty query still uses result layer (MRU / walk), not the tree filter.
+    expect(screen.getByTestId("files-tree-search-results")).toBeTruthy();
+    vi.useRealTimers();
   });
 
-  it("replays a search entered before the tree API mounts", async () => {
-    const rootLoad = Promise.withResolvers<FileEntry[]>();
+  it("shows progressive batches before done and never empty while loading", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
+    const pathQuery = createPathQueryMock();
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
-      async (_requestOrRoot, options) =>
-        options?.path === "" || options?.path === undefined
-          ? rootLoad.promise
-          : []
+      async () =>
+        [
+          { kind: "file", path: "README.md", root: PROJECT_ROOT },
+        ] satisfies FileEntry[]
     );
-    const context = createMockContext({ list });
-    const { container } = render(
+    const context = createMockContext({
+      list,
+      onPathQueryEvent: pathQuery.onPathQueryEvent.bind(pathQuery),
+      queryPaths: pathQuery.queryPaths.bind(pathQuery),
+    });
+    render(
       <FileTreeSidebar
         context={context}
         controller={filesRuntimeFor(context).controller}
@@ -3400,46 +3500,70 @@ describe("Files file-panel", () => {
     const searchInput = within(searchBar).getByRole("textbox", {
       name: "Find in tree",
     });
-    fireEvent.change(searchInput, { target: { value: ".css" } });
-
+    fireEvent.change(searchInput, { target: { value: "theme" } });
     await act(async () => {
-      rootLoad.resolve([
-        { kind: "file", path: "README.md", root: PROJECT_ROOT },
-        { kind: "file", path: "styles.css", root: PROJECT_ROOT },
-      ]);
-      await rootLoad.promise;
+      vi.advanceTimersByTime(80);
+    });
+    const queryId = pathQuery.starts.at(-1)?.queryId ?? "";
+
+    expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
+
+    act(() => {
+      pathQuery.emit({
+        kind: "batch",
+        queryId,
+        items: [
+          {
+            path: "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
+            score: 50,
+          },
+        ],
+      });
     });
     await waitFor(() => {
       expect(within(searchBar).getByText("1")).toBeVisible();
-      expect(
-        within(getFileTree(container)).getByRole("treeitem", {
-          name: "styles.css",
-        })
-      ).toBeVisible();
-      expect(
-        within(getFileTree(container)).queryByRole("treeitem", {
-          name: "README.md",
-        })
-      ).toBeNull();
+      expect(screen.getByText("code-mirror-editor-theme.ts")).toBeVisible();
       expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
     });
+
+    act(() => {
+      pathQuery.emit({
+        kind: "done",
+        queryId,
+        reason: "completed",
+        truncated: true,
+        scanned: 9000,
+        elapsedMs: 12,
+      });
+    });
+    await waitFor(() => {
+      expect(within(searchBar).getByText("1+")).toBeVisible();
+      expect(screen.getByTestId("files-tree-search-truncated")).toBeVisible();
+    });
+    vi.useRealTimers();
   });
 
-  it("disables opening when the focused search match is a directory", async () => {
+  it("opens the focused path-query result with Enter", async () => {
+    vi.useFakeTimers({ shouldAdvanceTime: true });
     const onOpenFile = vi.fn();
+    const pathQuery = createPathQueryMock();
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       async (_requestOrRoot, options) =>
         options?.path
           ? []
           : [
               {
-                kind: "directory",
-                path: "empty-folder",
+                kind: "file",
+                path: "README.md",
                 root: PROJECT_ROOT,
               },
             ]
     );
-    const context = createMockContext({ list });
+    const context = createMockContext({
+      list,
+      onPathQueryEvent: pathQuery.onPathQueryEvent.bind(pathQuery),
+      queryPaths: pathQuery.queryPaths.bind(pathQuery),
+    });
     const { container } = render(
       <FileTreeSidebar
         context={context}
@@ -3453,7 +3577,7 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(
         within(getFileTree(container)).getByRole("treeitem", {
-          name: "empty-folder",
+          name: "README.md",
         })
       ).toBeVisible();
     });
@@ -3470,15 +3594,40 @@ describe("Files file-panel", () => {
     const openButton = within(searchBar).getByRole("button", {
       name: "Open selected file",
     });
-    fireEvent.change(searchInput, { target: { value: "empty-folder" } });
+    fireEvent.change(searchInput, { target: { value: "readme" } });
+    await act(async () => {
+      vi.advanceTimersByTime(80);
+    });
+    const queryId = pathQuery.starts.at(-1)?.queryId ?? "";
+    act(() => {
+      pathQuery.emit({
+        kind: "batch",
+        queryId,
+        items: [{ path: "README.md", score: 10 }],
+      });
+      pathQuery.emit({
+        kind: "done",
+        queryId,
+        reason: "completed",
+        truncated: false,
+        scanned: 1,
+        elapsedMs: 1,
+      });
+    });
 
     await waitFor(() => {
       expect(within(searchBar).getByText("1")).toBeVisible();
-      expect(openButton).toBeDisabled();
+      expect(openButton).not.toBeDisabled();
     });
     fireEvent.keyDown(searchInput, { key: "Enter" });
-    expect(onOpenFile).not.toHaveBeenCalled();
+    await waitFor(() => {
+      expect(onOpenFile).toHaveBeenCalledWith(
+        expect.objectContaining({ path: "README.md", kind: "file" }),
+        undefined
+      );
+    });
     expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
+    vi.useRealTimers();
   });
 
   it("does not fall back to another same-root tree when a target tree instance is missing", async () => {

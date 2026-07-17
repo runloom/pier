@@ -3,7 +3,6 @@ import {
   Empty,
   EmptyDescription,
   EmptyHeader,
-  EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
 import {
@@ -15,7 +14,6 @@ import {
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitStatus } from "@shared/contracts/git.ts";
-import { SearchX } from "lucide-react";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -52,6 +50,7 @@ import {
   peekPendingCreate,
   registerFilesTreeInstance,
 } from "./files-tree-registry.ts";
+import { FilesTreeSearchResults } from "./files-tree-search-results.tsx";
 import {
   loadFilesTreeDirectory,
   moveFilesTreeEntry,
@@ -157,11 +156,13 @@ export function FileTreeSidebar({
   const treeSearch = useFilesTreeSearch({
     context,
     fallbackError: t("panel.loadError.fallback", "Failed to load files"),
+    instanceId,
     list: treeVisibility.list,
+    onOpenFile,
     root,
     searchFailedTitle: t(
       "filePanel.tree.searchFailed",
-      "Unable to search all folders"
+      "Unable to search files"
     ),
     treeApiRef,
   });
@@ -402,32 +403,26 @@ export function FileTreeSidebar({
     );
   }
 
-  let treeSearchMatchText = "";
-  if (treeSearch.value.trim().length > 0) {
-    treeSearchMatchText = treeSearch.loading
-      ? t("filePanel.tree.searching", "Searching…")
-      : String(treeSearch.matchCount);
-  }
+  const treeSearchMatchText = treeSearch.open
+    ? treeSearch.matchText ||
+      (treeSearch.loading ? t("filePanel.tree.searching", "Searching…") : "")
+    : "";
   let treeSearchMatchAnnouncement = "";
-  if (treeSearch.loading) {
-    treeSearchMatchAnnouncement = treeSearchMatchText;
+  if (treeSearch.loading && treeSearch.matchCount === 0) {
+    treeSearchMatchAnnouncement = t("filePanel.tree.searching", "Searching…");
   } else if (treeSearch.matchCount > 0) {
     treeSearchMatchAnnouncement = t(
       "filePanel.search.matchAnnouncement",
       "Matches: {{count}}",
-      { count: treeSearch.matchCount }
+      {
+        count: treeSearch.truncated
+          ? `${treeSearch.matchCount}+`
+          : treeSearch.matchCount,
+      }
     );
   }
-  const searchHasNoResults =
-    snapshot.rootLoaded &&
-    !snapshot.rootError &&
-    treeSearch.open &&
-    treeSearch.value.trim().length > 0 &&
-    !treeSearch.loading &&
-    treeSearch.queryApplied &&
-    treeSearch.matchCount === 0;
-  const searchActionsDisabled =
-    treeSearch.loading || treeSearch.matchCount === 0;
+  const searchActionsDisabled = treeSearch.matchCount === 0;
+  const showSearchResults = treeSearch.showResultLayer;
 
   return (
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: contextmenu bubbles from tree children; aside just captures.
@@ -467,30 +462,33 @@ export function FileTreeSidebar({
         </div>
       ) : null}
       <div className="relative flex min-h-0 flex-1">
-        {content}
-        {searchHasNoResults ? (
-          <Empty
-            aria-live="polite"
-            className="absolute inset-0 z-10 min-h-0 rounded-none border-0 bg-sidebar/95 p-4"
-            data-testid="files-tree-search-empty"
-            role="status"
-          >
-            <EmptyHeader className="gap-1.5">
-              <EmptyMedia className="mb-1" variant="icon">
-                <SearchX />
-              </EmptyMedia>
-              <EmptyTitle className="text-sm">
-                {t("filePanel.tree.noSearchResults.title", "No matching files")}
-              </EmptyTitle>
-              <EmptyDescription className="text-xs">
-                {t(
-                  "filePanel.tree.noSearchResults.description",
-                  "Try another file name or path."
-                )}
-              </EmptyDescription>
-            </EmptyHeader>
-          </Empty>
-        ) : null}
+        {showSearchResults ? (
+          <FilesTreeSearchResults
+            emptyDescription={t(
+              "filePanel.tree.noSearchResults.description",
+              "Try another file name or path."
+            )}
+            emptyTitle={t(
+              "filePanel.tree.noSearchResults.title",
+              "No matching files"
+            )}
+            focusedIndex={treeSearch.focusedIndex}
+            hasNoResults={treeSearch.hasNoResults}
+            items={treeSearch.items}
+            loading={treeSearch.loading}
+            onOpenPath={(path) => {
+              treeSearch.openPathResult(path).catch(() => undefined);
+            }}
+            onSelectIndex={treeSearch.selectIndex}
+            truncated={treeSearch.truncated}
+            truncatedHint={t(
+              "filePanel.tree.searchTruncated",
+              "Results truncated to top matches"
+            )}
+          />
+        ) : (
+          content
+        )}
       </div>
     </aside>
   );
