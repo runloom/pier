@@ -65,6 +65,7 @@ describe("terminal native debug IPC", () => {
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
+      setOpenUrlForwardCallback: vi.fn(),
       setupWindow: vi.fn(() => true),
     };
     const win = {

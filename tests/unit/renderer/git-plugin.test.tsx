@@ -760,6 +760,7 @@ describe("git builtin plugin", () => {
         },
         terminal: {
           applyHostSnapshot: vi.fn(),
+          onOpenUrl: vi.fn(() => vi.fn()),
         },
         preferences: {
           read: vi.fn(async () => ({})),

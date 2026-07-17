@@ -61,8 +61,14 @@ export function installTerminalOpenUrlHost(): () => void {
   if (hostInstalled) {
     return () => undefined;
   }
+  const onOpenUrl = window.pier?.terminal?.onOpenUrl;
+  if (typeof onOpenUrl !== "function") {
+    // Unit harnesses often mock a partial `window.pier`; skip host install until
+    // a full terminal API is present (real app always provides onOpenUrl).
+    return () => undefined;
+  }
   hostInstalled = true;
-  unsubscribe = window.pier.terminal.onOpenUrl((event) => {
+  unsubscribe = onOpenUrl((event) => {
     dispatch(event).catch((error: unknown) => {
       console.error("[terminal-open-url-host] dispatch failed:", error);
     });

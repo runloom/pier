@@ -42,6 +42,7 @@ describe("terminal focus restoration", () => {
       setPwdForwardCallback: vi.fn(),
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
+      setOpenUrlForwardCallback: vi.fn(),
       setupWindow: vi.fn(() => true),
     };
     const createFakeWindow = (focused = true) => ({

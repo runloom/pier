@@ -38,6 +38,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
+      setOpenUrlForwardCallback: vi.fn(),
       setupWindow: vi.fn(),
     };
     const win = {

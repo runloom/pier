@@ -32,6 +32,7 @@ describe("terminal selection text IPC", () => {
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
+      setOpenUrlForwardCallback: vi.fn(),
       setupWindow: vi.fn(),
     };
     const winA = {

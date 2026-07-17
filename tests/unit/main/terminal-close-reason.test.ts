@@ -45,6 +45,7 @@ describe("terminal close IPC reason semantics", () => {
       setTerminalFocusRequestCallback: vi.fn(),
       setTerminalFont: vi.fn(),
       setTitleForwardCallback: vi.fn(),
+      setOpenUrlForwardCallback: vi.fn(),
       setupWindow: vi.fn(),
     };
     const win = {
