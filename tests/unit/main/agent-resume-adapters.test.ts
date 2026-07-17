@@ -51,6 +51,27 @@ describe("agent resume adapters", () => {
     });
   });
 
+  it("builds an omp resume launch from persisted hook session id", () => {
+    const resolved = resolveAgentResumeLaunch({
+      agent: runningAgent({
+        agentId: "omp",
+        launch: {
+          agentId: "omp",
+          command: "omp",
+          cwd: "/repo",
+        },
+      }),
+      cwd: "/repo",
+    });
+
+    expect(resolved.resumed).toBe(true);
+    expect(resolved.launch).toEqual({
+      agentId: "omp",
+      command: "omp --resume session-123",
+      cwd: "/repo",
+    });
+  });
+
   it("builds a Codex resume launch without replaying a prompt", () => {
     const resolved = resolveAgentResumeLaunch({
       agent: runningAgent({

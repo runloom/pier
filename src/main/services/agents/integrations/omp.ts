@@ -154,6 +154,27 @@ function pierSessionIdFrom(values) {
 				if (typeof session[key] === "string" && session[key]) return session[key];
 			}
 		}
+		// omp/pi extension ctx carries session identity on sessionManager,
+		// not on the event payload (session_start is just { type }).
+		const manager = value.sessionManager;
+		if (manager && typeof manager === "object") {
+			if (typeof manager.getSessionId === "function") {
+				try {
+					const id = manager.getSessionId();
+					if (typeof id === "string" && id) return id;
+				} catch {}
+			}
+			if (typeof manager.getSessionFile === "function") {
+				try {
+					const file = manager.getSessionFile();
+					if (typeof file === "string" && file) {
+						const base = file.split(/[\\\\/]/).pop() || "";
+						const match = base.match(/_([0-9a-fA-F-]{8,})\\.jsonl$/);
+						if (match?.[1]) return match[1];
+					}
+				} catch {}
+			}
+		}
 	}
 	return undefined;
 }

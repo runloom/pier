@@ -9,13 +9,15 @@ import { isDevRuntime } from "./runtime-mode.ts";
  *   - 'unsafe-inline' + 'unsafe-eval' (react-refresh + vite client 需要)
  *
  * Prod mode (file:// 加载):
- *   - 严格 'self'
+ *   - 严格 'self'，禁止 'unsafe-eval'
+ *   - 允许 'wasm-unsafe-eval'：Pierre / Shiki oniguruma WASM 高亮需要
+ *     WebAssembly.compile / instantiate（dev 的 'unsafe-eval' 已覆盖）
  */
 export function buildCspPolicy(isDev: boolean): string {
   return isDev
     ? [
         "default-src 'self' http://localhost:* ws://localhost:*",
-        "script-src 'self' 'unsafe-inline' 'unsafe-eval' http://localhost:* pier-plugin:",
+        "script-src 'self' 'unsafe-inline' 'unsafe-eval' 'wasm-unsafe-eval' http://localhost:* pier-plugin:",
         "style-src 'self' 'unsafe-inline' pier-plugin:",
         "connect-src 'self' http://localhost:* ws://localhost:*",
         "img-src 'self' data: blob: pier-plugin: pier-file-preview:",
@@ -23,7 +25,7 @@ export function buildCspPolicy(isDev: boolean): string {
       ].join("; ")
     : [
         "default-src 'self'",
-        "script-src 'self' pier-plugin:",
+        "script-src 'self' 'wasm-unsafe-eval' pier-plugin:",
         "style-src 'self' 'unsafe-inline' pier-plugin:",
         "connect-src 'self'",
         "img-src 'self' data: pier-plugin: pier-file-preview:",
