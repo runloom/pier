@@ -2,6 +2,7 @@ import { Tooltip as TooltipPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import * as React from "react";
 
+import { useFreezeFloatingOnClose } from "./freeze-floating-on-close.ts";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
@@ -203,7 +204,8 @@ function TooltipContent({
   ...props
 }: React.ComponentProps<typeof TooltipPrimitive.Content>) {
   const overlayRef = useTerminalOverlay();
-  const composedRef = useComposedRefs(props.ref, overlayRef);
+  const freezeRef = useFreezeFloatingOnClose();
+  const composedRef = useComposedRefs(props.ref, overlayRef, freezeRef);
   const showArrow = side === "top" || side === "bottom";
   return (
     <TooltipPrimitive.Portal>

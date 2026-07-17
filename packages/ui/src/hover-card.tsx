@@ -4,6 +4,7 @@ import { HoverCard as HoverCardPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 
+import { useFreezeFloatingOnClose } from "./freeze-floating-on-close.ts";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
@@ -28,7 +29,8 @@ function HoverCardContent({
   ...props
 }: React.ComponentProps<typeof HoverCardPrimitive.Content>) {
   const overlayRef = useTerminalOverlay();
-  const composedRef = useComposedRefs(props.ref, overlayRef);
+  const freezeRef = useFreezeFloatingOnClose();
+  const composedRef = useComposedRefs(props.ref, overlayRef, freezeRef);
   return (
     <HoverCardPrimitive.Portal data-slot="hover-card-portal">
       <HoverCardPrimitive.Content

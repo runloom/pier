@@ -12,4 +12,14 @@ describe("DropdownMenu primitive states", () => {
     expect(source).toContain("data-highlighted:bg-accent");
     expect(source).toContain("data-highlighted:text-accent-foreground");
   });
+
+  it("freezes popper geometry while content is closed for exit animation", () => {
+    const source = readFileSync(
+      join(process.cwd(), "packages/ui/src/dropdown-menu.tsx"),
+      "utf8"
+    );
+
+    expect(source).toContain("useFreezeFloatingOnClose");
+    expect(source).toContain("freezeRef");
+  });
 });

@@ -2,6 +2,7 @@ import { CheckIcon, ChevronRightIcon } from "lucide-react";
 import { Menubar as MenubarPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
+import { useFreezeFloatingOnClose } from "./freeze-floating-on-close.ts";
 import {
   CONTROL_HEIGHT_CLASS,
   MENU_ITEM_DENSITY_CLASS,
@@ -76,7 +77,8 @@ function MenubarContent({
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.Content>) {
   const overlayRef = useTerminalOverlay();
-  const composedRef = useComposedRefs(props.ref, overlayRef);
+  const freezeRef = useFreezeFloatingOnClose();
+  const composedRef = useComposedRefs(props.ref, overlayRef, freezeRef);
   return (
     <MenubarPortal>
       <MenubarPrimitive.Content
@@ -264,7 +266,8 @@ function MenubarSubContent({
   ...props
 }: React.ComponentProps<typeof MenubarPrimitive.SubContent>) {
   const overlayRef = useTerminalOverlay();
-  const composedRef = useComposedRefs(props.ref, overlayRef);
+  const freezeRef = useFreezeFloatingOnClose();
+  const composedRef = useComposedRefs(props.ref, overlayRef, freezeRef);
   return (
     <MenubarPrimitive.SubContent
       className={cn(

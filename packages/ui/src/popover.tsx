@@ -4,6 +4,7 @@ import { Popover as PopoverPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
 import type * as React from "react";
 
+import { useFreezeFloatingOnClose } from "./freeze-floating-on-close.ts";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
 
@@ -26,7 +27,8 @@ function PopoverContent({
   ...props
 }: React.ComponentProps<typeof PopoverPrimitive.Content>) {
   const overlayRef = useTerminalOverlay();
-  const composedRef = useComposedRefs(props.ref, overlayRef);
+  const freezeRef = useFreezeFloatingOnClose();
+  const composedRef = useComposedRefs(props.ref, overlayRef, freezeRef);
   return (
     <PopoverPrimitive.Portal>
       <PopoverPrimitive.Content
