@@ -44,6 +44,7 @@ function createFakeFacade() {
             cancels.push(queryId);
           },
           queryId,
+          started: Promise.resolve(true),
         };
       },
     },
@@ -328,5 +329,111 @@ describe("files path query client", () => {
     expect(env.starts).toHaveLength(0);
     vi.advanceTimersByTime(100);
     expect(env.starts).toHaveLength(1);
+  });
+
+  it("forwards excludePatterns into the path query options", () => {
+    const env = createFakeFacade();
+    const client = createFilesPathQueryClient(env.facade);
+    client.search({
+      excludePatterns: "**/dist\n**/*.generated",
+      onUpdate: vi.fn(),
+      owner: "own",
+      query: "q",
+      root: "/repo",
+    });
+    vi.advanceTimersByTime(80);
+    expect(env.starts[0]?.options).toMatchObject({
+      applyExcludePatterns: true,
+      applyGitIgnore: true,
+      excludePatterns: "**/dist\n**/*.generated",
+    });
+  });
+
+  it("surfaces started===false as an error snapshot so loading cannot hang", async () => {
+    const env = createFakeFacade();
+    env.facade.queryPaths = (
+      request: Omit<FilePathQueryStart, "queryId"> & { queryId?: string }
+    ) => {
+      const queryId = request.queryId ?? "q-fail";
+      env.starts.push({ ...request, queryId } as FilePathQueryStart);
+      return {
+        cancel: () => {
+          env.cancels.push(queryId);
+        },
+        queryId,
+        started: Promise.resolve(false),
+      };
+    };
+
+    const client = createFilesPathQueryClient(env.facade);
+    const onUpdate = vi.fn();
+    client.search({ onUpdate, owner: "own", query: "q", root: "/repo" });
+    await vi.advanceTimersByTimeAsync(80);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onUpdate).toHaveBeenLastCalledWith({
+      errorMessage: expect.any(String),
+      items: [],
+      status: "error",
+      truncated: false,
+    });
+    expect(env.listeners.size).toBe(0);
+  });
+
+  it("surfaces started rejection as an error snapshot", async () => {
+    const env = createFakeFacade();
+    env.facade.queryPaths = (
+      request: Omit<FilePathQueryStart, "queryId"> & { queryId?: string }
+    ) => {
+      const queryId = request.queryId ?? "q-reject";
+      env.starts.push({ ...request, queryId } as FilePathQueryStart);
+      return {
+        cancel: () => {
+          env.cancels.push(queryId);
+        },
+        queryId,
+        started: Promise.reject(new Error("ipc down")),
+      };
+    };
+
+    const client = createFilesPathQueryClient(env.facade);
+    const onUpdate = vi.fn();
+    client.search({ onUpdate, owner: "own", query: "q", root: "/repo" });
+    await vi.advanceTimersByTimeAsync(80);
+    await Promise.resolve();
+    await Promise.resolve();
+
+    expect(onUpdate).toHaveBeenLastCalledWith({
+      errorMessage: "ipc down",
+      items: [],
+      status: "error",
+      truncated: false,
+    });
+  });
+
+  it("subscribes to path query events before calling queryPaths", () => {
+    const env = createFakeFacade();
+    const order: string[] = [];
+    const originalOn = env.facade.onPathQueryEvent.bind(env.facade);
+    const originalQuery = env.facade.queryPaths.bind(env.facade);
+    env.facade.onPathQueryEvent = (listener) => {
+      order.push("subscribe");
+      return originalOn(listener);
+    };
+    env.facade.queryPaths = (request) => {
+      order.push("queryPaths");
+      return originalQuery(request);
+    };
+
+    const client = createFilesPathQueryClient(env.facade);
+    client.search({
+      onUpdate: vi.fn(),
+      owner: "own",
+      query: "q",
+      root: "/repo",
+    });
+    vi.advanceTimersByTime(80);
+    expect(order).toEqual(["subscribe", "queryPaths"]);
   });
 });

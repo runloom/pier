@@ -11,6 +11,10 @@ import {
   useState,
 } from "react";
 import {
+  FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
+  FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
+} from "../settings.ts";
+import {
   createFilesPathQueryClient,
   type PathQuerySnapshot,
 } from "./files-path-query-client.ts";
@@ -148,7 +152,16 @@ export function useFilesTreeSearch({
 
     stopSearch();
     setSelectedIndex(0);
+    const excludeValue = context.configuration?.get?.<unknown>(
+      FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY
+    );
+    const excludePatterns =
+      typeof excludeValue === "string"
+        ? excludeValue
+        : FILES_TREE_DEFAULT_EXCLUDE_PATTERNS;
+
     disposeSearchRef.current = clientRef.current.search({
+      excludePatterns,
       onUpdate: (next) => {
         setSnapshot(next);
         setSelectedIndex((current) => {
@@ -177,6 +190,7 @@ export function useFilesTreeSearch({
       stopSearch();
     };
   }, [
+    context.configuration,
     context.dialogs,
     fallbackError,
     open,

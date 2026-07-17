@@ -203,4 +203,74 @@ describe("createFileQueryService", () => {
       expect(p.startsWith(".git/")).toBe(false);
     }
   });
+
+  it("uses provided excludePatterns as the full source without re-merging defaults", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-file-query-"));
+    roots.push(root);
+    await mkdir(join(root, ".git", "objects"), { recursive: true });
+    await writeFile(join(root, ".git", "objects", "pack"), "");
+    await mkdir(join(root, "dist"), { recursive: true });
+    await writeFile(join(root, "dist", "bundle.js"), "");
+    await writeFile(join(root, "keep.ts"), "");
+
+    const service = createFileQueryService({});
+    const rec = recorder();
+    service.start(
+      1,
+      {
+        limit: 200,
+        mruPaths: [],
+        options: {
+          applyExcludePatterns: true,
+          // User removed **/.git from their tree setting — provided value is
+          // the full exclude source, not merged with built-in defaults.
+          excludePatterns: "**/dist",
+        },
+        owner: "quick-open:s1",
+        query: "",
+        queryId: "q-exclude",
+        root,
+      },
+      rec.emit
+    );
+    await rec.done;
+
+    const batch = rec.events.find((event) => event.kind === "batch");
+    if (batch?.kind !== "batch") throw new Error("expected batch");
+    const paths = batch.items.map((item) => item.path);
+    expect(paths).toContain("keep.ts");
+    expect(paths).toContain(".git/objects/pack");
+    expect(paths.some((path) => path.startsWith("dist/"))).toBe(false);
+  });
+
+  it("falls back to defaults when excludePatterns is omitted", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-file-query-"));
+    roots.push(root);
+    await mkdir(join(root, ".git", "objects"), { recursive: true });
+    await writeFile(join(root, ".git", "objects", "pack"), "");
+    await writeFile(join(root, "keep.ts"), "");
+
+    const service = createFileQueryService({});
+    const rec = recorder();
+    service.start(
+      1,
+      {
+        limit: 200,
+        mruPaths: [],
+        options: { applyExcludePatterns: true },
+        owner: "quick-open:s1",
+        query: "",
+        queryId: "q-defaults",
+        root,
+      },
+      rec.emit
+    );
+    await rec.done;
+
+    const batch = rec.events.find((event) => event.kind === "batch");
+    if (batch?.kind !== "batch") throw new Error("expected batch");
+    const paths = batch.items.map((item) => item.path);
+    expect(paths).toContain("keep.ts");
+    expect(paths.some((path) => path.startsWith(".git/"))).toBe(false);
+  });
 });

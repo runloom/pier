@@ -101,6 +101,9 @@ function adaptQuickPick(session: AdaptedQuickPickSession): QuickPick {
         }
       : {}),
     ...(initial.placeholder ? { placeholder: initial.placeholder } : {}),
+    ...(initial.preserveItemOrder == null
+      ? {}
+      : { preserveItemOrder: initial.preserveItemOrder }),
     ...(initial.renderItem
       ? {
           renderItem: (item: QuickPickItem) =>
@@ -155,6 +158,9 @@ export function createPluginCommandPaletteContext(): RendererPluginContext["comm
       }
       if ("placeholder" in patch) {
         hostPatch.placeholder = patch.placeholder;
+      }
+      if ("preserveItemOrder" in patch) {
+        hostPatch.preserveItemOrder = patch.preserveItemOrder;
       }
       if ("title" in patch && patch.title !== undefined) {
         hostPatch.title = patch.title;

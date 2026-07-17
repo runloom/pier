@@ -66,6 +66,11 @@ export interface QuickPick {
    */
   onQueryChange?(query: string, signal: AbortSignal): void | Promise<void>;
   readonly placeholder?: string;
+  /**
+   * true = skip client-side quickPickResults re-ranking and keep the supplied
+   * item order (e.g. main-process path-query top-K already ranked).
+   */
+  readonly preserveItemOrder?: boolean;
   renderItem?(item: QuickPickItem): ReactNode;
   readonly sections?: readonly QuickPickSection[];
   readonly title: string;

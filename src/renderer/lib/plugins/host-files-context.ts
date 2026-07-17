@@ -102,16 +102,16 @@ export function createPluginFilesContext(
     queryPaths: (request) => {
       assertPluginCapability(entry, "file:read");
       const queryId = request.queryId ?? crypto.randomUUID();
-      // Fire-and-forget; the query lifecycle is observed via
-      // `onPathQueryEvent` (error/done arrive on the same channel).
-      window.pier.fileQuery
-        .start({ ...request, queryId })
-        .catch(() => undefined);
+      // Subscribe-before-start is the caller's responsibility when they need
+      // to observe events that race the IPC round-trip. Surface the start
+      // result so a false/reject can exit loading instead of hanging.
+      const started = window.pier.fileQuery.start({ ...request, queryId });
       return {
         cancel: () => {
           window.pier.fileQuery.cancel(queryId).catch(() => undefined);
         },
         queryId,
+        started,
       };
     },
     readDocument: (request) => {

@@ -135,11 +135,13 @@ export interface RendererPluginFilesFacade {
   /**
    * Start a cancellable path query against the main-process file query service.
    * `queryId` is generated if omitted so the returned handle is available
-   * synchronously (design §4.1).
+   * synchronously (design §4.1). `started` resolves to the IPC start result
+   * (`false` when main rejects the start); callers that care about hang-free
+   * loading must await it after subscribing to events.
    */
   queryPaths(
     request: Omit<FilePathQueryStart, "queryId"> & { queryId?: string }
-  ): { cancel(): void; queryId: string };
+  ): { cancel(): void; queryId: string; started: Promise<boolean> };
   readDocument(
     request: FileReadDocumentRequest
   ): Promise<FileDocumentReadResult>;

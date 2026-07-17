@@ -16,6 +16,10 @@ import {
   FILES_FILE_PANEL_ID,
   FILES_QUICK_OPEN_COMMAND_ID,
 } from "../manifest.ts";
+import {
+  FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
+  FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
+} from "../settings.ts";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
 import { sourceTitle } from "./file-panel-source.ts";
 import { basename } from "./file-tree-action-utils.ts";
@@ -140,6 +144,15 @@ function openAsyncQuickPick(
   const groupId = resolveActiveGroupId(context);
   let disposeSearch: (() => void) | null = null;
 
+  const excludePatterns = (() => {
+    const value = context.configuration?.get?.<unknown>(
+      FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY
+    );
+    return typeof value === "string"
+      ? value
+      : FILES_TREE_DEFAULT_EXCLUDE_PATTERNS;
+  })();
+
   const applySnapshot = (snap: PathQuerySnapshot): void => {
     if (snap.status === "error") {
       context.commandPalette.updateQuickPick({
@@ -196,6 +209,7 @@ function openAsyncQuickPick(
     onQueryChange: (query, signal) => {
       disposeSearch?.();
       disposeSearch = client.search({
+        excludePatterns,
         onUpdate: applySnapshot,
         owner,
         query,
@@ -212,6 +226,8 @@ function openAsyncQuickPick(
       signal.addEventListener("abort", abort, { once: true });
     },
     placeholder: t("filePanel.quickOpen.placeholder", "Search files by path"),
+    // Main already ranks top-K; do not re-sort with quickPickResults.
+    preserveItemOrder: true,
     title: t("filePanel.quickOpen.title", "Go to File"),
   });
 }

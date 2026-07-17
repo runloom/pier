@@ -56,6 +56,7 @@ function createFakeQueryFacade() {
           cancels.push(queryId);
         },
         queryId,
+        started: Promise.resolve(true),
       };
     },
     starts,
@@ -86,6 +87,15 @@ function createMockContext(input: {
     commandPalette: {
       openQuickPick,
       updateQuickPick,
+    },
+    configuration: {
+      get: vi.fn((key: string) => {
+        if (key === "pier.files.tree.excludePatterns") {
+          return "**/custom-dist";
+        }
+        return;
+      }),
+      onDidChange: vi.fn(() => () => undefined),
     },
     files: {
       onPathQueryEvent: input.query.onPathQueryEvent.bind(input.query),
@@ -366,5 +376,46 @@ describe("files quick open", () => {
 
     controller.abort();
     expect(query.cancels).toContain(queryId);
+  });
+
+  it("passes the tree excludePatterns setting into the path query", async () => {
+    const query = createFakeQueryFacade();
+    const { context, openQuickPick } = createMockContext({
+      activeContext: {
+        contextId: "ctx:1",
+        projectRootPath: "/repo",
+        updatedAt: 1,
+      },
+      query,
+    });
+
+    const action = createFilesQuickOpenAction(context);
+    await action.handler();
+    const pick = lastQuickPick(openQuickPick);
+    const onQueryChange = pick.onQueryChange;
+    if (!onQueryChange) {
+      throw new Error("expected onQueryChange");
+    }
+    await onQueryChange("theme", new AbortController().signal);
+    await vi.advanceTimersByTimeAsync(80);
+
+    expect(query.starts[0]?.options?.excludePatterns).toBe("**/custom-dist");
+  });
+
+  it("opens with preserveItemOrder so main ranking is not re-sorted", async () => {
+    const query = createFakeQueryFacade();
+    const { context, openQuickPick } = createMockContext({
+      activeContext: {
+        contextId: "ctx:1",
+        projectRootPath: "/repo",
+        updatedAt: 1,
+      },
+      query,
+    });
+
+    const action = createFilesQuickOpenAction(context);
+    await action.handler();
+    const pick = lastQuickPick(openQuickPick);
+    expect(pick.preserveItemOrder).toBe(true);
   });
 });

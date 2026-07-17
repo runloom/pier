@@ -218,6 +218,7 @@ function createPathQueryMock() {
       return {
         cancel: vi.fn(),
         queryId,
+        started: Promise.resolve(true),
       };
     },
   };
@@ -413,6 +414,7 @@ function createMockContext(overrides?: {
         vi.fn(() => ({
           cancel: vi.fn(),
           queryId: "unused-query",
+          started: Promise.resolve(true),
         })),
       mkdir: vi.fn(async (request) => ({
         created: true,

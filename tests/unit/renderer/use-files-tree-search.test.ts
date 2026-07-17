@@ -54,6 +54,7 @@ function createFakeQueryFacade() {
           cancels.push(queryId);
         },
         queryId,
+        started: Promise.resolve(true),
       };
     },
   };
@@ -72,6 +73,15 @@ function createContext(
   list: RendererPluginContext["files"]["list"]
 ): RendererPluginContext {
   return {
+    configuration: {
+      get: vi.fn((key: string) => {
+        if (key === "pier.files.tree.excludePatterns") {
+          return "**/custom-build";
+        }
+        return;
+      }),
+      onDidChange: vi.fn(() => () => undefined),
+    },
     dialogs: {
       alert: vi.fn(async () => undefined),
       choice: vi.fn(async () => "confirm" as const),
@@ -460,5 +470,39 @@ describe("useFilesTreeSearch path query", () => {
     expect(query.starts).toHaveLength(1);
     expect(query.starts[0]?.query).toBe("");
     expect(query.starts[0]?.mruPaths).toEqual(["src/a.ts"]);
+  });
+
+  it("passes pier.files.tree.excludePatterns into the path query", async () => {
+    const query = createFakeQueryFacade();
+    const list = vi.fn(async () => [] as FileEntry[]);
+    const context = createContext(query, list);
+    const treeApiRef = createRef<PierFileTreeApi | null>();
+    treeApiRef.current = {
+      setSearch: vi.fn(),
+      revealPath: vi.fn(),
+    } as unknown as PierFileTreeApi;
+
+    const { result } = renderHook(() =>
+      useFilesTreeSearch({
+        context,
+        fallbackError: "Failed",
+        instanceId: "tree-5",
+        list,
+        onOpenFile: vi.fn(),
+        root: ROOT,
+        searchFailedTitle: "Unable to search",
+        treeApiRef,
+      })
+    );
+
+    act(() => {
+      result.current.openSearch();
+      result.current.changeSearch("theme");
+    });
+    await act(async () => {
+      vi.advanceTimersByTime(80);
+    });
+
+    expect(query.starts[0]?.options?.excludePatterns).toBe("**/custom-build");
   });
 });

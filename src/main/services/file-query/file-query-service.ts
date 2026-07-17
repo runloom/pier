@@ -163,9 +163,12 @@ function resolveExcludePatterns(
 ): string {
   const applyExcludes = options?.applyExcludePatterns ?? true;
   if (!applyExcludes) return "";
-  const extra = options?.excludePatterns?.trim();
-  if (!extra) return defaults;
-  return `${defaults}\n${extra}`;
+  // When the client supplies excludePatterns (tree setting), treat it as the
+  // full source so a user who deleted a default does not get it re-merged.
+  if (options?.excludePatterns !== undefined) {
+    return options.excludePatterns;
+  }
+  return defaults;
 }
 
 interface RunQueryArgs {

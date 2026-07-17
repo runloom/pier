@@ -158,6 +158,11 @@ export interface RendererPluginQuickPick {
    */
   onQueryChange?(query: string, signal: AbortSignal): Promise<void> | void;
   readonly placeholder?: string;
+  /**
+   * true = 跳过宿主 quickPickResults 重排, 保留插件/主进程给出的顺序
+   * (如 path query top-K 排名)。
+   */
+  readonly preserveItemOrder?: boolean;
   renderItem?(item: RendererPluginQuickPickItem): ReactNode;
   readonly sections?: readonly RendererPluginQuickPickSection[];
   readonly title: string;

@@ -30,6 +30,8 @@ export interface PathQuerySnapshot {
 
 export interface FilesPathQuerySearchInput {
   debounceMs?: number;
+  /** Full multiline exclude source (tree setting). Omitted → main defaults. */
+  excludePatterns?: string;
   onUpdate: (snap: PathQuerySnapshot) => void;
   owner: string;
   query: string;
@@ -84,20 +86,61 @@ export function createFilesPathQueryClient(
       {
         limit: 200,
         mruPaths: [...listFilesPathMru(input.root)],
-        options: { applyExcludePatterns: true, applyGitIgnore: true },
+        options: {
+          applyExcludePatterns: true,
+          applyGitIgnore: true,
+          ...(input.excludePatterns === undefined
+            ? {}
+            : { excludePatterns: input.excludePatterns }),
+        },
         owner: input.owner,
         query: input.query,
         root: input.root,
       };
 
+    // Subscribe before start so a fast main-process started/batch cannot race
+    // past the listener install (especially once started is awaited).
+    session.unsubscribe = files.onPathQueryEvent((event) => {
+      onEvent(session, event);
+    });
     const handle = files.queryPaths(request);
     session.queryId = handle.queryId;
     session.cancelHandle = () => {
       handle.cancel();
     };
-    session.unsubscribe = files.onPathQueryEvent((event) => {
-      onEvent(session, event);
-    });
+
+    handle.started
+      .then((ok) => {
+        if (session.disposed || session.queryId !== handle.queryId) {
+          return;
+        }
+        if (ok === false) {
+          session.cancelHandle = null;
+          teardown(session);
+          session.onUpdate({
+            errorMessage: "Unable to start file path query",
+            items: [],
+            status: "error",
+            truncated: false,
+          });
+        }
+      })
+      .catch((error: unknown) => {
+        if (session.disposed || session.queryId !== handle.queryId) {
+          return;
+        }
+        session.cancelHandle = null;
+        teardown(session);
+        session.onUpdate({
+          errorMessage:
+            error instanceof Error
+              ? error.message
+              : "Unable to start file path query",
+          items: [],
+          status: "error",
+          truncated: false,
+        });
+      });
   }
 
   function onEvent(session: ActiveSession, event: FileQueryEvent): void {
