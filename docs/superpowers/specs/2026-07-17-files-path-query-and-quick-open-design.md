@@ -1,7 +1,7 @@
 # Files 路径查询、树搜索与快速打开设计
 
 Date: 2026-07-17  
-Status: draft for review  
+Status: accepted / implemented（2026-07-18，Tasks 1–8 on `docs/open-source-license`）  
 Scope: **path query only**（路径枚举 + 模糊排序）。**不做**内容搜索 `Cmd+Shift+F` / search panel。
 
 ## 1. 问题
