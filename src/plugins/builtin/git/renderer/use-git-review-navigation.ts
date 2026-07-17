@@ -16,6 +16,7 @@ interface UseGitReviewNavigationOptions {
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
   readonly documentGenerationRef: RefObject<number>;
   readonly firstSectionIdByEntryKeyRef: RefObject<ReadonlyMap<string, string>>;
+  readonly initialSelectedEntryKey?: string | null;
   readonly itemCacheKeysRef: RefObject<ReadonlyMap<string, string>>;
   readonly itemIndexByIdRef: RefObject<ReadonlyMap<string, number>>;
   readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
@@ -30,6 +31,7 @@ export function useGitReviewNavigation({
   firstSectionIdByEntryKeyRef,
   itemCacheKeysRef,
   itemIndexByIdRef,
+  initialSelectedEntryKey = null,
   loaderRef,
   pendingAnchorRef,
   renderedGenerationRef,
@@ -61,7 +63,7 @@ export function useGitReviewNavigation({
     readonly revision: number;
   } | null>(null);
   const projectionRevisionRef = useRef(0);
-  const selectedEntryKeyRef = useRef<string | null>(null);
+  const selectedEntryKeyRef = useRef<string | null>(initialSelectedEntryKey);
   const [navigationError, setNavigationError] = useState<Error | null>(null);
   const [navigationPending, setNavigationPending] = useState(false);
 

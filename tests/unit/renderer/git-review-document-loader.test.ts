@@ -6,6 +6,7 @@ import type {
 } from "@shared/contracts/git-review.ts";
 import { describe, expect, it, vi } from "vitest";
 import { GitReviewDocumentLoader } from "../../../src/plugins/builtin/git/renderer/git-review-document-loader.ts";
+import type { GitReviewDocumentResource } from "../../../src/plugins/builtin/git/renderer/git-review-document-resource.ts";
 
 function entry(
   index: number,
@@ -590,5 +591,75 @@ describe("GitReviewDocumentLoader", () => {
       resources: [],
       settled: true,
     });
+  });
+
+  it("hydrateLoaded restores retained docs without calling load", async () => {
+    const entries = [entry(0), entry(1)];
+    const load = vi.fn(async (item: GitReviewIndexEntry) => documentFor(item));
+    const first = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries,
+      load,
+    });
+    first.setWindowDemand({
+      bufferedEntryKeys: [],
+      visibleEntryKeys: ["entry:0"],
+    });
+    await flush();
+    const loaded = first.getResource("entry:0");
+    expect(loaded?.kind).toBe("loaded");
+    if (loaded?.kind !== "loaded") {
+      throw new Error("expected loaded");
+    }
+    const hydratedMap = new Map([["entry:0", loaded]]);
+    first.dispose();
+
+    const second = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries,
+      load,
+    });
+    const callsBefore = load.mock.calls.length;
+    second.hydrateLoaded(hydratedMap);
+    expect(second.getResource("entry:0")?.kind).toBe("loaded");
+    expect(second.getRetainedEntryKeys()).toEqual(["entry:0"]);
+    second.setWindowDemand({
+      bufferedEntryKeys: [],
+      visibleEntryKeys: ["entry:0"],
+    });
+    await flush();
+    expect(load.mock.calls.length).toBe(callsBefore);
+    second.dispose();
+  });
+
+  it("hydrateLoaded skips entries whose slots no longer match", () => {
+    const original = entry(0);
+    const changed: GitReviewIndexEntry = {
+      ...original,
+      renderSlots: [
+        {
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: "section:changed",
+          status: "modified",
+          targetPath: original.path,
+        },
+      ],
+    };
+    const load = vi.fn(async (item: GitReviewIndexEntry) => documentFor(item));
+    const loader = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries: [changed],
+      load,
+    });
+    const stale: Extract<GitReviewDocumentResource, { kind: "loaded" }> = {
+      document: documentFor(original),
+      entry: original,
+      kind: "loaded",
+    };
+    loader.hydrateLoaded(new Map([[original.entryKey, stale]]));
+    expect(loader.getResource(original.entryKey)?.kind).toBe("idle");
+    expect(load).not.toHaveBeenCalled();
+    loader.dispose();
   });
 });

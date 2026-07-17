@@ -1622,3 +1622,83 @@ test("opens POSIX backslash paths through the real tree keyboard flow", async ()
     rmSync(repository, { force: true, recursive: true });
   }
 });
+
+test("same-group tab switch restores Changes tree and diff immediately", async () => {
+  test.setTimeout(120_000);
+  const userDataDir = createTemporaryDirectory(
+    "pier-git-review-keepalive-e2e-"
+  );
+  const repository = createTemporaryDirectory(
+    "pier-git-review-keepalive-repo-"
+  );
+  await createReviewRepository(repository);
+  const application = await electron.launch({
+    args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    cwd: PROJECT_ROOT,
+    env: { ...process.env, CODEX_HOME: join(userDataDir, "codex-home") },
+  });
+  const child = application.process();
+
+  try {
+    const page = await application.firstWindow();
+    await page.waitForLoadState("domcontentloaded");
+    await page
+      .locator(
+        '[data-testid="workspace-host-root"][data-workspace-ready="true"]'
+      )
+      .waitFor({ state: "visible", timeout: 30_000 });
+    await expect(async () => {
+      await setWindowSize(application, page, 1400, 800);
+    }).toPass({ timeout: 10_000 });
+
+    const opened = await openTerminalWhenReady(userDataDir, repository);
+    const terminalId = opened.data?.panelId ?? "";
+    expect(terminalId).not.toBe("");
+    await openReviewFromTerminal(page, terminalId);
+
+    const reviewIds = await reviewPanelIds(page);
+    expect(reviewIds.length).toBeGreaterThan(0);
+    const reviewId = reviewIds[0] as string;
+    expect(await panelSharesGroup(page, terminalId, reviewId)).toBe(true);
+
+    await expect(page.getByRole("treeitem", { name: /app\.tsx/u })).toBeVisible(
+      { timeout: 20_000 }
+    );
+    await page.getByRole("treeitem", { name: /script\.py/u }).click();
+    await expect
+      .poll(() => isDiffTextInViewport(page, "return 2"), { timeout: 30_000 })
+      .toBe(true);
+
+    // 同组切到终端再切回 Changes：树立即在，正文 1s 内仍在，无 Loading changes 主导。
+    await page.locator(`[data-panel-tab-id="${terminalId}"]`).click();
+    await page.locator(`[data-panel-tab-id="${reviewId}"]`).click();
+
+    await expect(page.getByRole("treeitem", { name: /app\.tsx/u })).toBeVisible(
+      { timeout: 1000 }
+    );
+    await expect
+      .poll(() => isDiffTextInViewport(page, "return 2"), { timeout: 1000 })
+      .toBe(true);
+    await expect(
+      page.getByRole("status", { name: /Loading changes|加载变更/u })
+    ).toHaveCount(0);
+
+    await page.getByRole("treeitem", { name: /app\.tsx/u }).click();
+    await expect
+      .poll(() => isDiffTextInViewport(page, "value = 3"), { timeout: 30_000 })
+      .toBe(true);
+
+    // 跨组失焦：正文仍可见。
+    const secondTerminal = await openTerminal(userDataDir, repository);
+    expect(secondTerminal.ok).toBe(true);
+    const secondTerminalId = secondTerminal.data?.panelId ?? "";
+    expect(secondTerminalId).not.toBe("");
+    await page.locator(`[data-panel-tab-id="${reviewId}"]`).click();
+    await expect(page.getByTestId("pierre-diff-root")).toBeVisible();
+  } finally {
+    await application.close().catch(() => undefined);
+    await forceClose(child);
+    rmSync(userDataDir, { force: true, recursive: true });
+    rmSync(repository, { force: true, recursive: true });
+  }
+});

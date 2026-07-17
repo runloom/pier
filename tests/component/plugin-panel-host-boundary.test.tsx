@@ -2,7 +2,7 @@ import type { PluginPanelRegistration } from "@plugins/api/renderer.ts";
 import { act, render, waitFor } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import { FileText } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useState, useSyncExternalStore } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   withPanelResourceBoundary,
@@ -196,12 +196,22 @@ describe("plugin panel host boundary", () => {
     );
   });
 
-  it("unmounts only panels that opt into the hidden resource policy", () => {
+  it("lets unmountWhenHidden panels stay mounted so they can own hide/close lifecycle", () => {
     let active = true;
     let visible = false;
     let visibilityListener: (() => void) | undefined;
     const registration: PluginPanelRegistration = {
-      component: () => <output data-testid="heavy-panel" />,
+      component: (props) => {
+        const isVisible = useSyncExternalStore(
+          (onStoreChange) => {
+            const disposable = props.api.onDidVisibilityChange(onStoreChange);
+            return () => disposable.dispose();
+          },
+          () => props.api.isVisible,
+          () => false
+        );
+        return isVisible ? <output data-testid="heavy-panel" /> : null;
+      },
       icon: FileText,
       id: "pier.test.heavy",
       kind: "web",
@@ -231,6 +241,7 @@ describe("plugin panel host boundary", () => {
     } as unknown as IDockviewPanelProps;
     const view = render(<Panel {...props} />);
 
+    // host 不再代卸载：panel 自己按 isVisible 决定 body。
     expect(view.queryByTestId("heavy-panel")).not.toBeInTheDocument();
     active = false;
     expect(view.queryByTestId("heavy-panel")).not.toBeInTheDocument();

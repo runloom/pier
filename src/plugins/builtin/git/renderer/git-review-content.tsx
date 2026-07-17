@@ -156,6 +156,7 @@ function ReviewDocumentsComponent({
     firstSectionIdByEntryKeyRef,
     itemCacheKeysRef,
     itemIndexByIdRef,
+    initialSelectedEntryKey: selectedEntryKey,
     loaderRef,
     pendingAnchorRef,
     renderedGenerationRef,

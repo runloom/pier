@@ -148,15 +148,24 @@ function WorkerFailureSync({
   return null;
 }
 
-export function PierDiffWorkerProvider({
+function defaultWorkerError(error: Error): void {
+  console.error(error);
+}
+
+function noopWorkerUnavailable(): void {
+  // App host has no consumer-level fallback; panel consumers still pass their own handlers.
+}
+
+/** App 级长寿 worker pool；unmount 才释放 Pierre 单例引用计数。 */
+export function PierDiffWorkerHost({
   children,
-  onError,
-  onUnavailable,
+  onError = defaultWorkerError,
+  onUnavailable = noopWorkerUnavailable,
   theme,
 }: {
-  readonly children: ReactNode;
-  readonly onError: (error: Error) => void;
-  readonly onUnavailable: () => void;
+  readonly children?: ReactNode;
+  readonly onError?: (error: Error) => void;
+  readonly onUnavailable?: () => void;
   readonly theme: string;
 }): React.JSX.Element {
   const highlighterOptions = useMemo(
@@ -181,5 +190,45 @@ export function PierDiffWorkerProvider({
       <WorkerFailureSync onUnavailable={onUnavailable} />
       {children}
     </WorkerPoolContextProvider>
+  );
+}
+
+/**
+ * Diff 视图 consumer：若外层已有 App 级 pool 则复用；
+ * 否则 fallback 自建 host（单测 / 无 App host）。
+ */
+export function PierDiffWorkerProvider({
+  children,
+  onError,
+  onUnavailable,
+  theme,
+}: {
+  readonly children: ReactNode;
+  readonly onError: (error: Error) => void;
+  readonly onUnavailable: () => void;
+  readonly theme: string;
+}): React.JSX.Element {
+  const existingPool = useWorkerPool();
+  if (existingPool) {
+    return (
+      <>
+        <WorkerThemeSync
+          onError={onError}
+          onUnavailable={onUnavailable}
+          theme={theme}
+        />
+        <WorkerFailureSync onUnavailable={onUnavailable} />
+        {children}
+      </>
+    );
+  }
+  return (
+    <PierDiffWorkerHost
+      onError={onError}
+      onUnavailable={onUnavailable}
+      theme={theme}
+    >
+      {children}
+    </PierDiffWorkerHost>
   );
 }

@@ -9,6 +9,7 @@ import type {
 } from "@plugins/api/renderer.ts";
 import {
   Component,
+  type LazyExoticComponent,
   lazy,
   type ReactNode,
   Suspense,
@@ -58,6 +59,30 @@ export interface ReviewRenderFeedback {
 }
 
 export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
+  // 模块级 lazy：panel unmount remount 不重新 suspend 到整区 Loading。
+  let sharedView: LazyExoticComponent<
+    (props: {
+      appearance: {
+        baseFontSize: string;
+        codeFontFamily: string;
+        codeTheme: string;
+        colorMode: "dark" | "light";
+      };
+      items: readonly PierDiffViewItem[];
+      labels: { collapseDiff: string; expandDiff: string };
+      onError: (error: Error) => void;
+      onItemError?: (id: string, error: Error | null) => void;
+      onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
+      onScroll: () => void;
+      ref: (handle: PierDiffViewHandle | null) => void;
+    }) => React.JSX.Element | null
+  > | null = null;
+  const getSharedView = () => {
+    if (!sharedView) {
+      sharedView = lazy(load);
+    }
+    return sharedView;
+  };
   return function ReviewCodeView({
     appearance,
     context,
@@ -80,14 +105,16 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     const [runtimeError, setRuntimeError] = useState<Error | null>(null);
     const [attempt, setAttempt] = useState(() => ({
       id: 0,
-      View: lazy(load),
+      View: getSharedView(),
     }));
     const LazyPierDiffView = attempt.View;
     const retry = useCallback(() => {
       setRuntimeError(null);
+      // 失败重试仍换新 lazy 实例；成功路径继续共享模块级 View。
+      sharedView = lazy(load);
       setAttempt((current) => ({
         id: current.id + 1,
-        View: lazy(load),
+        View: sharedView as NonNullable<typeof sharedView>,
       }));
     }, []);
     useEffect(() => {

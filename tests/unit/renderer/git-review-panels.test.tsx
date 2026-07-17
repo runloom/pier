@@ -14,6 +14,10 @@ import {
   reconcileReviewDocumentSnapshot,
   resolveReviewAnchor,
 } from "@plugins/builtin/git/renderer/git-review-document-projection.ts";
+import {
+  clearAllReviewSessionsForTests,
+  readReviewSession,
+} from "@plugins/builtin/git/renderer/git-review-session-cache.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
   GitReviewFileDocumentOk,
@@ -231,24 +235,73 @@ async function waitForRefreshWindow(): Promise<void> {
 }
 
 function createPanelHarness(initialGroupId = "group-a") {
-  return {
-    api: {
-      group: { id: initialGroupId },
-      isActive: true,
-      isVisible: true,
-      onDidActiveChange: vi.fn(() => ({ dispose: vi.fn() })),
-      onDidGroupChange: vi.fn(() => ({ dispose: vi.fn() })),
-      onDidVisibilityChange: vi.fn(() => ({ dispose: vi.fn() })),
+  const visibilityListeners = new Set<() => void>();
+  const removeListeners = new Set<(panel: { id?: string }) => void>();
+  let isVisible = true;
+  const panelId = `panel-${initialGroupId}`;
+  const api = {
+    group: { id: initialGroupId },
+    id: panelId,
+    isActive: true,
+    get isVisible() {
+      return isVisible;
+    },
+    onDidActiveChange: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidGroupChange: vi.fn(() => ({ dispose: vi.fn() })),
+    onDidVisibilityChange: vi.fn((listener: () => void) => {
+      visibilityListeners.add(listener);
+      return {
+        dispose: () => {
+          visibilityListeners.delete(listener);
+        },
+      };
+    }),
+    setVisible(next: boolean) {
+      if (isVisible === next) {
+        return;
+      }
+      isVisible = next;
+      for (const listener of visibilityListeners) {
+        listener();
+      }
     },
   };
+  const containerApi = {
+    onDidRemovePanel: vi.fn((listener: (panel: { id?: string }) => void) => {
+      removeListeners.add(listener);
+      return {
+        dispose: () => {
+          removeListeners.delete(listener);
+        },
+      };
+    }),
+    removePanel() {
+      for (const listener of [...removeListeners]) {
+        listener({ id: panelId });
+      }
+    },
+  };
+  return { api, containerApi };
 }
 
 function panelProps(
-  api: ReturnType<typeof createPanelHarness>["api"]
+  input:
+    | ReturnType<typeof createPanelHarness>
+    | ReturnType<typeof createPanelHarness>["api"]
 ): IDockviewPanelProps {
+  const harness =
+    "containerApi" in input
+      ? input
+      : {
+          api: input,
+          containerApi: {
+            onDidRemovePanel: vi.fn(() => ({ dispose: vi.fn() })),
+            removePanel: vi.fn(),
+          },
+        };
   return {
-    api,
-    containerApi: {},
+    api: harness.api,
+    containerApi: harness.containerApi,
     params: { context: panelContext, source: scope },
   } as unknown as IDockviewPanelProps;
 }
@@ -343,6 +396,8 @@ afterEach(() => {
   scrollToItem.mockReset();
   scrollToItem.mockReturnValue(true);
   cleanup();
+  // cleanup unmount 会写 session；必须在其后清空。
+  clearAllReviewSessionsForTests();
 });
 
 describe("Git review panel", () => {
@@ -2255,5 +2310,121 @@ describe("Git review panel", () => {
     act(() => nextDocument.resolve(documentResult(2)));
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:2"));
     expect(restoreAnchor).not.toHaveBeenCalled();
+  });
+
+  it("同组 hide/show 立即恢复树、选中与已加载正文", async () => {
+    const entries = [entry(0), entry(1)];
+    const file1Patch =
+      "diff --git a/src/file-1.ts b/src/file-1.ts\n@@ -1 +1 @@\n-old\n+file-1-body\n";
+    const getReviewIndex = vi.fn(async () => indexResult(entries));
+    const getReviewFileDocument = vi.fn(async (request) => {
+      if (request.source.path.endsWith("file-1.ts")) {
+        return documentResult(1, [
+          {
+            kind: "patch",
+            patch: file1Patch,
+            sectionKey: "section:1",
+          },
+        ]);
+      }
+      return documentResult(0);
+    });
+    const context = pluginContext({ getReviewFileDocument, getReviewIndex });
+    const Panel = createGitChangesPanel(context);
+    const harness = createPanelHarness();
+    const view = render(<Panel {...panelProps(harness)} />);
+
+    await waitFor(() => expect(view.getByTestId("pierre-diff")).toBeVisible());
+    fireEvent.click(findTreeItem(view.container, "file-1.ts"));
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveTextContent("file-1-body")
+    );
+    const sourceKey = JSON.stringify(scope);
+    await waitFor(() =>
+      expect(readReviewSession(sourceKey)?.index.kind).toBe("loaded")
+    );
+    const file1CallsBefore = getReviewFileDocument.mock.calls.filter((call) =>
+      String(call[0]?.source?.path ?? "").endsWith("file-1.ts")
+    ).length;
+    const indexCallsBeforeHide = getReviewIndex.mock.calls.length;
+
+    // 同组切 tab = hide，不是 close：session 必须保留。
+    act(() => {
+      harness.api.setVisible(false);
+    });
+    expect(view.queryByTestId("pierre-diff")).toBeNull();
+    expect(readReviewSession(sourceKey)?.index.kind).toBe("loaded");
+    expect(readReviewSession(sourceKey)?.loadedByEntryKey.size).toBeGreaterThan(
+      0
+    );
+
+    act(() => {
+      harness.api.setVisible(true);
+    });
+    // 树与正文立即从 session 恢复。
+    expect(fileTree(view.container).textContent).toContain("file-0.ts");
+    expect(fileTree(view.container).textContent).toContain("file-1.ts");
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveTextContent("file-1-body")
+    );
+    expect(
+      getReviewFileDocument.mock.calls.filter((call) =>
+        String(call[0]?.source?.path ?? "").endsWith("file-1.ts")
+      )
+    ).toHaveLength(file1CallsBefore);
+
+    const header = view.container.querySelector(
+      '[data-slot="file-panel-header"]'
+    );
+    expect(header).toBeInstanceOf(HTMLElement);
+    expect(
+      within(header as HTMLElement).queryByText("file-1.ts") ??
+        findTreeItem(view.container, "file-1.ts").getAttribute("aria-selected")
+    ).toBeTruthy();
+
+    fireEvent.click(findTreeItem(view.container, "file-0.ts"));
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveTextContent(
+        "diff --git a/src/file-0.ts"
+      )
+    );
+    expect(getReviewIndex.mock.calls.length).toBeGreaterThanOrEqual(
+      indexCallsBeforeHide
+    );
+  });
+
+  it("关闭 panel 后回收 session，再打开冷启动", async () => {
+    const entries = [entry(0), entry(1)];
+    const getReviewIndex = vi.fn(async () => indexResult(entries));
+    const getReviewFileDocument = vi.fn(async (request) =>
+      documentResult(request.source.path.endsWith("file-1.ts") ? 1 : 0)
+    );
+    const context = pluginContext({ getReviewFileDocument, getReviewIndex });
+    const Panel = createGitChangesPanel(context);
+    const harness = createPanelHarness();
+    const first = render(<Panel {...panelProps(harness)} />);
+
+    await waitFor(() => expect(first.getByTestId("pierre-diff")).toBeVisible());
+    fireEvent.click(findTreeItem(first.container, "file-1.ts"));
+    await waitFor(() =>
+      expect(first.getByTestId("pierre-diff")).toHaveTextContent(
+        "diff --git a/src/file-1.ts"
+      )
+    );
+    const sourceKey = JSON.stringify(scope);
+    expect(readReviewSession(sourceKey)?.index.kind).toBe("loaded");
+
+    // dockview 关闭：先 removePanel 事件，再 unmount。
+    act(() => {
+      harness.containerApi.removePanel();
+    });
+    expect(readReviewSession(sourceKey)).toBeNull();
+    first.unmount();
+
+    const second = render(<Panel {...panelProps(createPanelHarness())} />);
+    await waitFor(() =>
+      expect(fileTree(second.container).textContent).toContain("file-0.ts")
+    );
+    expect(getReviewIndex.mock.calls.length).toBeGreaterThan(1);
   });
 });

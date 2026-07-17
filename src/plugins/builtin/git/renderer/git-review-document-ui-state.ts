@@ -16,6 +16,10 @@ import {
 } from "react";
 import type { ReviewDocumentProjection } from "./git-review-document-projection.ts";
 import type { GitReviewDocumentLoaderSnapshot } from "./git-review-document-resource.ts";
+import {
+  patchReviewSession,
+  readReviewSession,
+} from "./git-review-session-cache.ts";
 import type { gitReviewTreeModel } from "./git-review-tree.tsx";
 
 export const EMPTY_REVIEW_PROJECTION: ReviewDocumentProjection = {
@@ -47,7 +51,7 @@ export function useReviewAppearance(
 }
 
 export function useReviewSelection(
-  scope: Pick<GitReviewScope, "contextId" | "gitRootPath">,
+  scope: GitReviewScope,
   treeModel: ReturnType<typeof gitReviewTreeModel>
 ): {
   readonly selectedEntryKey: string | null;
@@ -57,15 +61,32 @@ export function useReviewSelection(
   } | null;
   readonly setSelectedEntryKey: Dispatch<SetStateAction<string | null>>;
 } {
-  const [selectedEntryKey, setSelectedEntryKey] = useState<string | null>(null);
-  const scopeKey = JSON.stringify([scope.contextId, scope.gitRootPath]);
-  const scopeKeyRef = useRef(scopeKey);
+  const sourceKey = JSON.stringify(scope);
+  const [selectedEntryKey, setSelectedEntryKeyState] = useState<string | null>(
+    () => readReviewSession(sourceKey)?.selectedEntryKey ?? null
+  );
+  const scopeKeyRef = useRef(sourceKey);
   useEffect(() => {
-    if (scopeKeyRef.current !== scopeKey) {
-      scopeKeyRef.current = scopeKey;
-      setSelectedEntryKey(null);
+    if (scopeKeyRef.current !== sourceKey) {
+      scopeKeyRef.current = sourceKey;
+      setSelectedEntryKeyState(null);
     }
-  }, [scopeKey]);
+  }, [sourceKey]);
+  const setSelectedEntryKey = useMemo(() => {
+    const setWithSession: Dispatch<SetStateAction<string | null>> = (value) => {
+      setSelectedEntryKeyState((previous) => {
+        const next =
+          typeof value === "function"
+            ? (value as (prev: string | null) => string | null)(previous)
+            : value;
+        if (next !== previous) {
+          patchReviewSession(sourceKey, { selectedEntryKey: next });
+        }
+        return next;
+      });
+    };
+    return setWithSession;
+  }, [sourceKey]);
   const selectedTreeEntry = useMemo(() => {
     if (!selectedEntryKey) {
       return null;
@@ -81,6 +102,6 @@ export function useReviewSelection(
     if (selectedEntryKey && !selectedTreeEntry) {
       setSelectedEntryKey(null);
     }
-  }, [selectedEntryKey, selectedTreeEntry]);
+  }, [selectedEntryKey, selectedTreeEntry, setSelectedEntryKey]);
   return { selectedEntryKey, selectedTreeEntry, setSelectedEntryKey };
 }

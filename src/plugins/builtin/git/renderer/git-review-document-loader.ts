@@ -11,7 +11,12 @@ import {
   type GitReviewRetentionLimits,
 } from "./git-review-document-limits.ts";
 import {
-  documentMatchesSlots,
+  DEFAULT_MAX_CONCURRENT_DOCUMENTS,
+  type GitReviewDocumentLoaderOptions,
+} from "./git-review-document-loader-options.ts";
+import {
+  collectHydrateCandidates,
+  resourceFromDocumentResult,
   sameEntries,
   validateReviewDocumentDemand,
 } from "./git-review-document-loader-utils.ts";
@@ -22,21 +27,7 @@ import type {
 } from "./git-review-document-resource.ts";
 import { GitReviewDocumentRetention } from "./git-review-document-retention.ts";
 
-interface GitReviewDocumentLoaderOptions {
-  readonly cancel: (operationId: string) => Promise<void>;
-  readonly createOperationId?: () => string;
-  readonly entries: readonly GitReviewIndexEntry[];
-  readonly load: (
-    entry: GitReviewIndexEntry,
-    operationId: string
-  ) => Promise<GitReviewFileDocumentResult>;
-  readonly maxConcurrent?: number;
-  readonly maxRetainedBytes?: number;
-  readonly maxRetainedLines?: number;
-}
-
 type Listener = (change: GitReviewDocumentLoaderChange) => void;
-const DEFAULT_MAX_CONCURRENT_DOCUMENTS = 2;
 
 export class GitReviewDocumentLoader {
   readonly #cancel: GitReviewDocumentLoaderOptions["cancel"];
@@ -105,6 +96,28 @@ export class GitReviewDocumentLoader {
     return this.#disposed || this.#isSettled();
   }
 
+  /**
+   * 从 session 缓存灌入已 loaded 正文；仅当 entry 仍在 loader 且 slots 匹配时保留。
+   * 不发网络；结束只 #emit 一次。
+   */
+  hydrateLoaded(
+    loaded: ReadonlyMap<
+      string,
+      Extract<GitReviewDocumentResource, { kind: "loaded" }>
+    >
+  ): void {
+    if (this.#disposed || loaded.size === 0) {
+      return;
+    }
+    for (const candidate of collectHydrateCandidates(this.#resources, loaded)) {
+      this.#retainDocument(
+        candidate.entryKey,
+        candidate.entry,
+        candidate.document
+      );
+    }
+    this.#emit();
+  }
   retry(entryKey: string): void {
     if (this.#disposed) {
       return;
@@ -439,30 +452,11 @@ export class GitReviewDocumentLoader {
       this.#emit();
       return;
     }
-    if (result.kind === "ok" && documentMatchesSlots(resource.entry, result)) {
-      this.#retainDocument(entryKey, resource.entry, result);
-    } else if (result.kind === "ok") {
-      this.#setResource(entryKey, {
-        entry: resource.entry,
-        failure: {
-          kind: "error",
-          message: "Git Review document sections do not match the index slots.",
-          reason: "internal",
-          retryable: true,
-        },
-        kind: "error",
-      });
-    } else if (result.kind === "unchanged") {
-      this.#setResource(entryKey, {
-        entry: resource.entry,
-        kind: "unchanged",
-      });
+    const next = resourceFromDocumentResult(resource.entry, result);
+    if (next.kind === "retain") {
+      this.#retainDocument(entryKey, resource.entry, next.document);
     } else {
-      this.#setResource(entryKey, {
-        entry: resource.entry,
-        failure: result,
-        kind: "error",
-      });
+      this.#setResource(entryKey, next);
     }
     this.#pump(false);
     this.#emit();
