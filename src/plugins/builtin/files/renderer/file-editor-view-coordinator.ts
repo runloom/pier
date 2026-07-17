@@ -19,6 +19,10 @@ export class FileEditorViewCoordinator {
     return this.#sessions.values();
   }
 
+  getSession(editorSessionId: string): FileEditorViewSession | undefined {
+    return this.#sessions.get(editorSessionId);
+  }
+
   attach(input: {
     document: FilesDocument;
     editorSessionId: string;
