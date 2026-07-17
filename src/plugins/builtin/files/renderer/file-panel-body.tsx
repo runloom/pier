@@ -4,7 +4,7 @@ import { formatBytes } from "@pier/ui/format.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { FolderSearch } from "lucide-react";
-import { type ReactNode, useCallback, useRef } from "react";
+import { type ReactNode, useCallback, useEffect, useRef } from "react";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { FileEditorAdapter } from "./file-editor-adapter.tsx";
 import type { FileEditorController } from "./file-editor-controller.ts";
@@ -63,6 +63,23 @@ export function ResolvedFilePanel({
   const editorOwnerId = panelId ?? inlineEditorOwnerIdRef.current;
   const editorSessionId = document ? createEditorSessionId(editorOwnerId) : "";
   const externalUrlInFlightRef = useRef<string | null>(null);
+
+  // Git 变更条：仅 source + disk 模式渲染。非源码模式清空；切回 source 时刷新。
+  // attach 在 controller.attachView 时已发生，故此 effect 仅做清空/刷新。
+  useEffect(() => {
+    if (!editorSessionId) {
+      return;
+    }
+    if (mode !== "source") {
+      controller.clearGitGutter(editorSessionId);
+      return;
+    }
+    if (document?.source.kind === "disk") {
+      controller.refreshGitGutterByDocument(document.id);
+    } else {
+      controller.clearGitGutter(editorSessionId);
+    }
+  }, [controller, document?.id, document?.source.kind, editorSessionId, mode]);
 
   // 编辑器右键 → 走宿主 contextMenu.popup, source 塞进 metadata。source 层
   // (files/editor) 与 tree (files/tree-item) 分开,权限声明和菜单顺序也各自

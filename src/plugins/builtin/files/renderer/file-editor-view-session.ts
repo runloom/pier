@@ -32,6 +32,12 @@ import type {
   FilesDocument,
   FilesDocumentLanguage,
 } from "./files-document-types.ts";
+import {
+  clearGitGutterMarkers,
+  createGitGutterExtension,
+  setGitGutterMarkers,
+} from "./files-editor-git-gutter.ts";
+import type { GitGutterLineMarker } from "./files-editor-git-markers.ts";
 
 export type { FileEditorCommand } from "./file-editor-view-operations.ts";
 
@@ -237,6 +243,20 @@ export class FileEditorViewSession {
     await executeEditorViewCommand(this.#view, command);
   }
 
+  setGitGutterMarkers(markers: ReadonlyMap<number, GitGutterLineMarker>): void {
+    const view = this.#view;
+    if (view) {
+      setGitGutterMarkers(view, markers);
+    }
+  }
+
+  clearGitGutterMarkers(): void {
+    const view = this.#view;
+    if (view) {
+      clearGitGutterMarkers(view);
+    }
+  }
+
   #extensions(document: FilesDocument) {
     const language = document.language;
     const path =
@@ -250,6 +270,7 @@ export class FileEditorViewSession {
     this.#configuredPath = path;
     this.#configuredReadOnly = readOnly;
     return [
+      createGitGutterExtension(),
       Prec.highest(
         EditorView.domEventHandlers({
           keydown: (event) => {
