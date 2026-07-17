@@ -1,0 +1,47 @@
+Pier Notice
+===========
+
+Copyright (C) 2026 Pier contributors.
+
+Pier source code is licensed under the GNU Affero General Public License,
+version 3 only (AGPL-3.0-only), unless a file or directory explicitly states a
+different license.
+
+Commercial licenses are available only under a separate written agreement with
+Pier's copyright holder. A commercial license is intended for organizations
+that need terms different from AGPLv3, such as closed-source redistribution,
+white-label distribution, proprietary integrations, warranty, support, or hosted
+enterprise use.
+
+Third-party software and assets
+-------------------------------
+
+This repository depends on third-party packages that remain under their own
+licenses. The main direct dependencies are permissively licensed packages such
+as MIT, Apache-2.0, BSD-style, or ISC licensed packages. Their notices remain in
+`node_modules` when installed and in the package metadata published by their
+upstream maintainers.
+
+Important bundled assets:
+
+- `resources/fonts/JetBrainsMonoNerdFontMono-*.ttf` is built from JetBrains Mono
+  (SIL Open Font License 1.1) with Nerd Fonts glyphs. See
+  `resources/fonts/JetBrainsMono-OFL.txt`.
+- `resources/fonts/HarmonyOS_Sans_SC_*.ttf` bundles unmodified HarmonyOS Sans SC
+  font files with this software. HarmonyOS Sans Fonts are copyright 2021 Huawei
+  Device Co., Ltd. and licensed under the HarmonyOS Sans Fonts License
+  Agreement. See `resources/fonts/HarmonyOS-Sans-SC-LICENSE.txt`.
+
+First-party packages
+--------------------
+
+Workspace packages under `packages/` (`@pier/ui`, `@pier/plugin-api`,
+`@pier/plugin-codex`, `@pier/plugin-grok`, and related packages) are part of this
+repository and are licensed under the same terms as Pier unless a package
+explicitly states otherwise.
+
+Trademark and branding
+----------------------
+
+The Pier name, logos, icons, and brand assets are not licensed under AGPLv3
+unless explicitly stated. See `TRADEMARKS.md`.
