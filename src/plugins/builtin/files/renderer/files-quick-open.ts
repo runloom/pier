@@ -17,8 +17,13 @@ import {
   FILES_QUICK_OPEN_COMMAND_ID,
 } from "../manifest.ts";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
+import {
+  parseFilesDocumentPanelSource,
+  sameFilesDocumentPanelSource,
+} from "./files-document-types.ts";
 import { basename } from "./file-tree-action-utils.ts";
 import { filePanelProjectRoot } from "./file-tree-preferences.ts";
+import { sourceTitle } from "./file-panel-source.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
 import {
   createFilesPathQueryClient,
@@ -69,17 +74,40 @@ function openDiskPathInGroup(input: {
     path: input.path,
     root: input.root,
   };
+  const existingInstance = input.groupId
+    ? input.context.panels
+        .listInstances(FILES_FILE_PANEL_ID)
+        .find(
+          (instance) =>
+            instance.groupId === input.groupId &&
+            sameFilesDocumentPanelSource(
+              parseFilesDocumentPanelSource(instance.params),
+              source
+            )
+        )
+    : undefined;
+  const existingSource = parseFilesDocumentPanelSource(
+    existingInstance?.params
+  );
+  const existingParams = existingInstance?.params
+    ? { ...existingInstance.params }
+    : null;
+  const params = existingParams ?? {
+    pinned: false,
+    source,
+  };
+
   input.context.panels.openInstance({
     componentId: FILES_FILE_PANEL_ID,
-    ...(input.panelContext ? { context: input.panelContext } : {}),
-    dropUnpinnedInstances: true,
-    instanceId: createFileFilePanelInstanceId(source),
-    params: {
-      pinned: false,
-      source,
-    },
+    ...(!existingInstance && input.panelContext
+      ? { context: input.panelContext }
+      : {}),
+    dropUnpinnedInstances: existingInstance ? false : true,
+    instanceId:
+      existingInstance?.id ?? createFileFilePanelInstanceId(source),
+    params,
     ...(input.groupId ? { targetGroupId: input.groupId } : {}),
-    title: basename(input.path),
+    title: sourceTitle(existingSource ?? source),
   });
 }
 

@@ -286,6 +286,58 @@ describe("files quick open", () => {
     expect(listFilesPathMru(root)).toEqual([relativePath]);
   });
 
+  it("reuses the same-source tab in the active group instead of recreating", async () => {
+    const query = createFakeQueryFacade();
+    const root = "/repo";
+    const relativePath = "src/main/ipc/theme.ts";
+    const panelContext: PanelContext = {
+      contextId: "ctx:1",
+      projectRootPath: root,
+      updatedAt: 1,
+    };
+    const { context, openInstance, openQuickPick } = createMockContext({
+      activeContext: panelContext,
+      activePanelId: "panel-1",
+      instances: [
+        {
+          groupId: "group-1",
+          id: "existing-file-tab",
+          params: {
+            pinned: true,
+            source: { kind: "disk", path: relativePath, root },
+          },
+        },
+        { groupId: "group-1", id: "panel-1" },
+      ],
+      query,
+    });
+
+    const action = createFilesQuickOpenAction(context);
+    await action.handler();
+    const pick = lastQuickPick(openQuickPick);
+
+    await pick.onAccept({
+      data: relativePath,
+      description: relativePath,
+      id: relativePath,
+      label: "theme.ts",
+    });
+
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentId: FILES_FILE_PANEL_ID,
+        dropUnpinnedInstances: false,
+        instanceId: "existing-file-tab",
+        params: {
+          pinned: true,
+          source: { kind: "disk", path: relativePath, root },
+        },
+        targetGroupId: "group-1",
+      })
+    );
+    expect(openInstance.mock.calls[0]?.[0]).not.toHaveProperty("context");
+  });
+
   it("cancels the in-flight path query when the AbortSignal aborts", async () => {
     const query = createFakeQueryFacade();
     const { context, openQuickPick } = createMockContext({
