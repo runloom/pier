@@ -19,6 +19,8 @@ export interface CodexAccountRecord {
   planType?: string | undefined;
   provider: AgentAccountProviderId;
   providerAccountId?: string | undefined;
+  /** ChatGPT subscription period end (ms epoch). */
+  subscriptionExpiresAt?: number | undefined;
   updatedAt: number;
 }
 
@@ -46,6 +48,7 @@ const accountRecordSchema = z.strictObject({
   planType: z.optional(z.string()),
   provider: z.literal("codex"),
   providerAccountId: z.optional(z.string()),
+  subscriptionExpiresAt: z.optional(z.number()),
   updatedAt: z.number(),
 });
 

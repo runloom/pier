@@ -9,12 +9,8 @@ import {
   itemsToGitStatusEntries,
 } from "./file-tree-internal.ts";
 import {
-  cloneCompositionForRedraw,
   collectExpandedDirectoryPaths,
-  collectPreservedExpandedDirectoryPaths,
   isDirectoryHandle,
-  samePaths,
-  singlePathMutation,
   stripTrailingSlash,
   toOfficialDecoration,
   toOfficialPath,
@@ -30,6 +26,7 @@ import {
   fileTreeRenamingConfig,
 } from "./file-tree-write-options.ts";
 import { useFileTreeContextMenuComposition } from "./use-file-tree-context-menu.ts";
+import { useFileTreePathSync } from "./use-file-tree-path-sync.ts";
 import { useFileTreeRefs } from "./use-file-tree-refs.ts";
 import { cn } from "./utils.ts";
 
@@ -72,14 +69,11 @@ export function PierFileTree({
   const containerRef = React.useRef<HTMLDivElement>(null);
   const expandedDirectoriesRef = React.useRef(new Map<string, boolean>());
   const requestedLoadDirectoriesRef = React.useRef(new Set<string>());
-  const didMountRef = React.useRef(false);
   const paths = React.useMemo(() => items.map(toOfficialPath), [items]);
-  const previousPathsRef = React.useRef<readonly string[]>(paths);
   const renderSignature = React.useMemo(
     () => treeRenderSignature(items, directoryStates),
     [directoryStates, items]
   );
-  const previousRenderSignatureRef = React.useRef(renderSignature);
   const gitStatus = React.useMemo<GitStatusEntry[]>(
     () => itemsToGitStatusEntries(items),
     [items]
@@ -395,79 +389,24 @@ export function PierFileTree({
     });
   }, [model, syncDirectoryExpansionState]);
 
-  React.useEffect(() => {
-    if (!didMountRef.current) {
-      didMountRef.current = true;
-      previousPathsRef.current = paths;
-      previousRenderSignatureRef.current = renderSignature;
-      return;
-    }
+  const { captureSnapshot, restoreSnapshotSoon } =
+    usePierFileTreeScrollController({
+      containerRef,
+      onScrollSnapshotChange,
+      scrollControllerRef,
+    });
 
-    const previousPaths = previousPathsRef.current;
-    if (samePaths(previousPaths, paths)) {
-      if (previousRenderSignatureRef.current !== renderSignature) {
-        model.setComposition(cloneCompositionForRedraw(model.getComposition()));
-      }
-      previousPathsRef.current = paths;
-      previousRenderSignatureRef.current = renderSignature;
-      return;
-    }
-
-    const localMutation = singlePathMutation(previousPaths, paths);
-    if (localMutation) {
-      const aheadMoves = modelAheadMovesRef.current;
-      const alreadyAppliedByModel =
-        localMutation.length === 1 &&
-        localMutation[0]?.type === "move" &&
-        aheadMoves.get(stripTrailingSlash(localMutation[0].from)) ===
-          stripTrailingSlash(localMutation[0].to);
-      if (alreadyAppliedByModel && localMutation[0]?.type === "move") {
-        aheadMoves.delete(stripTrailingSlash(localMutation[0].from));
-      } else {
-        model.batch(localMutation);
-        for (const [from, to] of aheadMoves) {
-          if (
-            localMutation.some(
-              (op) =>
-                op.type === "move" &&
-                stripTrailingSlash(op.from) === from &&
-                stripTrailingSlash(op.to) === to
-            )
-          ) {
-            aheadMoves.delete(from);
-          }
-        }
-      }
-      previousPathsRef.current = paths;
-      previousRenderSignatureRef.current = renderSignature;
-      return;
-    }
-
-    const expandedPaths = collectPreservedExpandedDirectoryPaths(
-      items,
-      expandedDirectoriesRef.current,
-      directoryStates
-    );
-
-    // resetPaths 重建内部 store,但控制器的搜索派生投影(匹配集/可见集/
-    // 展开快照)不会随之重建 —— 激活中的搜索先清掉,重建后重放,否则
-    // 之后清空搜索会还原到脱节状态(树滞留过滤态甚至空白)。
-    const activeSearch = activeSearchRef.current;
-    if (activeSearch != null) {
-      model.setSearch(null);
-    }
-    model.resetPaths(paths, { initialExpandedPaths: expandedPaths });
-    if (activeSearch != null) {
-      model.setSearch(activeSearch);
-    }
-    previousPathsRef.current = paths;
-    previousRenderSignatureRef.current = renderSignature;
-  }, [directoryStates, items, model, paths, renderSignature]);
-
-  usePierFileTreeScrollController({
-    containerRef,
-    onScrollSnapshotChange,
-    scrollControllerRef,
+  useFileTreePathSync({
+    activeSearchRef,
+    captureSnapshot,
+    directoryStates,
+    expandedDirectoriesRef,
+    items,
+    model,
+    modelAheadMovesRef,
+    paths,
+    renderSignature,
+    restoreSnapshotSoon,
   });
 
   return (

@@ -273,7 +273,7 @@ export function samePaths(
   );
 }
 
-export function singlePathMutation(
+export function pathSetMutation(
   previousPaths: readonly string[],
   nextPaths: readonly string[]
 ): FileTreeBatchOperation[] | null {
@@ -282,33 +282,34 @@ export function singlePathMutation(
   const removedPaths = previousPaths.filter((path) => !nextPathSet.has(path));
   const addedPaths = nextPaths.filter((path) => !previousPathSet.has(path));
 
+  if (removedPaths.length === 0 && addedPaths.length === 0) {
+    return null;
+  }
+
   const addedPath = addedPaths[0];
   const removedPath = removedPaths[0];
-
-  if (
-    removedPaths.length === 0 &&
-    addedPaths.length === 1 &&
-    addedPath !== undefined
-  ) {
-    return [{ path: addedPath, type: "add" }];
-  }
-
-  if (
-    removedPaths.length === 1 &&
-    addedPaths.length === 0 &&
-    removedPath !== undefined
-  ) {
-    return [{ path: removedPath, type: "remove" }];
-  }
-
   if (
     removedPaths.length === 1 &&
     addedPaths.length === 1 &&
     removedPath !== undefined &&
     addedPath !== undefined
   ) {
-    return [{ from: removedPath, to: addedPath, type: "move" }];
+    const parentOf = (path: string) => {
+      const normalized = stripTrailingSlash(path);
+      const slash = normalized.lastIndexOf("/");
+      return slash === -1 ? "" : normalized.slice(0, slash);
+    };
+    if (parentOf(removedPath) === parentOf(addedPath)) {
+      return [{ from: removedPath, to: addedPath, type: "move" }];
+    }
   }
 
-  return null;
+  return [
+    ...removedPaths.map(
+      (path): FileTreeBatchOperation => ({ path, type: "remove" })
+    ),
+    ...addedPaths.map(
+      (path): FileTreeBatchOperation => ({ path, type: "add" })
+    ),
+  ];
 }

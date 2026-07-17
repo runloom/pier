@@ -4,9 +4,8 @@ import {
   captureFileTreeScrollSnapshot,
   fileTreeHost,
   fileTreeScrollElement,
-  getAnimationFrameScheduler,
   restoreFileTreeScrollSnapshot,
-  scrollRestoreFrameCount,
+  restoreFileTreeScrollSnapshotSoon,
 } from "./file-tree-scroll.ts";
 import type {
   PierFileTreeScrollController,
@@ -59,31 +58,24 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
 
       const restoreRun = restoreRunRef.current + 1;
       restoreRunRef.current = restoreRun;
-      const frameCount = scrollRestoreFrameCount(options);
       const lock = options.lock === true;
-      let remainingFrames = frameCount;
-      const schedule = getAnimationFrameScheduler();
-      const restoreNextFrame = () => {
-        if (restoreRunRef.current !== restoreRun) {
-          return;
-        }
-        const restoredScrollTop = applySnapshot(snapshot);
-        if (lock && restoredScrollTop !== null) {
-          lockedScrollTopRef.current = restoredScrollTop;
-        }
-        if (remainingFrames <= 0) {
+
+      restoreFileTreeScrollSnapshotSoon(getHost(), snapshot, {
+        ...(options.frames === undefined ? {} : { frames: options.frames }),
+        onFinished: () => {
           if (restoreRunRef.current === restoreRun) {
             lockedScrollTopRef.current = null;
           }
-          return;
-        }
-        remainingFrames -= 1;
-        schedule(restoreNextFrame);
-      };
-
-      restoreNextFrame();
+        },
+        onRestored: (restoredScrollTop) => {
+          if (lock && restoredScrollTop !== null) {
+            lockedScrollTopRef.current = restoredScrollTop;
+          }
+        },
+        shouldContinue: () => restoreRunRef.current === restoreRun,
+      });
     },
-    [applySnapshot]
+    [getHost]
   );
 
   React.useImperativeHandle(
@@ -159,4 +151,6 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
       scrollElement?.removeEventListener("scroll", publishSnapshot);
     };
   }, [getHost, onScrollSnapshotChange]);
+
+  return { captureSnapshot, restoreSnapshotSoon };
 }

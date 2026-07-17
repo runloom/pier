@@ -440,9 +440,9 @@ describe("PierFileTree", () => {
     expect(treeApi.current?.activateFocusedSearchMatch()).toBe(false);
   });
 
-  it("restores the full tree after items grew (resetPaths) during an active search", async () => {
+  it("restores the full tree after items grew during an active search", async () => {
     // 真实场景:搜索展开匹配祖先 → 懒加载完成 → items 批量增长 →
-    // PierFileTree 路径同步走 resetPaths。清空搜索必须还原完整投影。
+    // PierFileTree 路径同步走 batch。清空搜索必须还原完整投影。
     const treeApi = { current: null as PierFileTreeApi | null };
     const initialItems: PierFileTreeItem[] = [
       { hasChildren: "unknown", kind: "directory", path: "src" },
@@ -473,7 +473,7 @@ describe("PierFileTree", () => {
     act(() => {
       treeApi.current?.setSearch("app");
     });
-    // 搜索激活期间 items 批量增长(>1 路径变化 → resetPaths)。
+    // 搜索激活期间 items 批量增长(>1 路径变化 → batch, 不清搜索)。
     rerender(
       <PierFileTree
         items={grownItems}

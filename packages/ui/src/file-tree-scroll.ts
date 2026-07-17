@@ -140,3 +140,41 @@ export function scrollRestoreFrameCount(
 ): number {
   return options.frames ?? 2;
 }
+
+export function restoreFileTreeScrollSnapshotSoon(
+  host: HTMLElement | null,
+  snapshot: PierFileTreeScrollSnapshot | null,
+  options: PierFileTreeScrollRestoreOptions & {
+    onFinished?: () => void;
+    onRestored?: (scrollTop: number | null) => void;
+    shouldContinue?: () => boolean;
+  } = {}
+): void {
+  if (snapshot === null) {
+    return;
+  }
+
+  const frameCount = scrollRestoreFrameCount(options);
+  const schedule = getAnimationFrameScheduler();
+  let remainingFrames = frameCount;
+  const restoreNextFrame = () => {
+    if (options.shouldContinue && !options.shouldContinue()) {
+      return;
+    }
+
+    const restoredScrollTop = host
+      ? restoreFileTreeScrollSnapshot(host, snapshot)
+      : null;
+    options.onRestored?.(restoredScrollTop);
+
+    if (remainingFrames <= 0) {
+      options.onFinished?.();
+      return;
+    }
+
+    remainingFrames -= 1;
+    schedule(restoreNextFrame);
+  };
+
+  restoreNextFrame();
+}

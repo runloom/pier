@@ -63,6 +63,40 @@ describe("Codex accounts data schema", () => {
     await expect(readFile(statePath, "utf8")).resolves.toBe(unsupported);
   });
 
+  it("accepts optional subscriptionExpiresAt written by newer account metadata", async () => {
+    await writeFile(
+      statePath,
+      JSON.stringify({
+        accounts: [
+          {
+            createdAt: 1,
+            email: "user@example.com",
+            id: "acc-1",
+            planType: "plus",
+            provider: "codex",
+            subscriptionExpiresAt: 1_800_000_000_000,
+            updatedAt: 2,
+          },
+        ],
+        activeAccountId: "acc-1",
+        revision: 3,
+        schemaVersion: 1,
+      })
+    );
+    const store = createCodexAccountsStateStore(statePath, "1.0.3");
+
+    await expect(store.init()).resolves.toMatchObject({
+      accounts: [
+        {
+          id: "acc-1",
+          subscriptionExpiresAt: 1_800_000_000_000,
+        },
+      ],
+      activeAccountId: "acc-1",
+      revision: 3,
+    });
+  });
+
   it("fails closed when the host-readable schema marker is malformed", async () => {
     await writeFile(markerPath, '{"version":1,"schemas":{"unknown":{}}}');
     const store = createCodexAccountsStateStore(statePath, "1.0.3");
