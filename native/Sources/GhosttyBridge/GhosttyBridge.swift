@@ -479,6 +479,7 @@ final class EventRouterView: NSView {
 /// 生命周期 (terminalView.delegate 是 weak — 没 strong owner 会立即 nil).
 @MainActor
 final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
+    TerminalSurfaceOpenURLDelegate,
     TerminalSurfaceFocusDelegate,
     TerminalSurfaceSearchDelegate,
     TerminalSurfaceTitleDelegate,
@@ -498,6 +499,10 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     /// 全局 callback: 收到 OSC 7 path 时调用, 把 (browserWindowId, panelId, path)
     /// 转给 main process.
     static var forwardPwdCallback: ((Int, String, String) -> Void)?
+
+    /// 全局 callback: 用户激活终端超链接时调用, 把 (browserWindowId, panelId, url, kind)
+    /// 转给 main process.
+    static var forwardOpenUrlCallback: ((Int, String, String, String) -> Void)?
 
     /// 全局 callback: 收到 OSC 0/2 title 时调用, 把 (browserWindowId, panelId, title)
     /// 转给 main process. TUI 应用 (claude / vim / aider) 主动通过 OSC 0/2 写自定义
@@ -528,6 +533,21 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
 
     func terminalDidChangeWorkingDirectory(_ path: String) {
         TerminalEventDelegate.forwardPwdCallback?(browserWindowId, panelId, path)
+    }
+
+    func terminalDidRequestOpenURL(_ url: String, kind: TerminalOpenURLKind) {
+        let kindRaw: String
+        switch kind {
+        case .text: kindRaw = "text"
+        case .html: kindRaw = "html"
+        case .unknown: kindRaw = "unknown"
+        }
+        TerminalEventDelegate.forwardOpenUrlCallback?(
+            browserWindowId,
+            panelId,
+            url,
+            kindRaw
+        )
     }
 
     func terminalDidChangeTitle(_ title: String) {
@@ -1946,6 +1966,7 @@ public typealias ModifierForwardCallback = @convention(c) (Int, UInt) -> Void
 public typealias MouseForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Double, Double) -> Void
 public typealias TerminalFocusRequestCallback = @convention(c) (Int, UnsafePointer<CChar>) -> Void
 public typealias PwdForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
+public typealias OpenUrlForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias SearchForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, Int, Int) -> Void
 public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias CommandFinishedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, Int, UInt64) -> Void
@@ -2017,6 +2038,25 @@ public func ghosttyBridgeSetTerminalFocusRequestCallback(_ cb: TerminalFocusRequ
             }
         } else {
             TerminalContainerView.forwardFocusRequestCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_open_url_forward_callback")
+public func ghosttyBridgeSetOpenUrlForwardCallback(_ cb: OpenUrlForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalEventDelegate.forwardOpenUrlCallback = { wid, panelId, url, kind in
+                panelId.withCString { pidPtr in
+                    url.withCString { urlPtr in
+                        kind.withCString { kindPtr in
+                            cb(wid, pidPtr, urlPtr, kindPtr)
+                        }
+                    }
+                }
+            }
+        } else {
+            TerminalEventDelegate.forwardOpenUrlCallback = nil
         }
     }
 }

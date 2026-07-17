@@ -32,6 +32,7 @@ export const terminalApi: TerminalAPI = {
   onContextMenuRequest: (cb) =>
     subscribeIpc("pier:terminal:request-context-menu", cb),
   onCwdChange: (cb) => subscribeIpc(PIER_BROADCAST.TERMINAL_CWD_CHANGED, cb),
+  onOpenUrl: (cb) => subscribeIpc(PIER_BROADCAST.TERMINAL_OPEN_URL, cb),
   onDebugRendererSnapshotRequest: (cb) => {
     const listener = async (
       _event: unknown,

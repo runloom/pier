@@ -104,6 +104,21 @@ export interface NativeAddon {
         ) => void)
       | null
   ): void;
+  /**
+   * 注册 PWD forward callback. swift TerminalSurfacePwdDelegate 收到 OSC 7 后调用,
+   * 传 (browserWindowId, panelId, cwd). 用 windowId 路由到对应 BrowserWindow 的
+   * renderer (多窗口下避免广播污染). 传 null 解绑.
+   */
+  setOpenUrlForwardCallback(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          url: string,
+          kind: string
+        ) => void)
+      | null
+  ): void;
   setProcessClosedForwardCallback?(
     cb:
       | ((
@@ -114,11 +129,6 @@ export interface NativeAddon {
         ) => void)
       | null
   ): void;
-  /**
-   * 注册 PWD forward callback. swift TerminalSurfacePwdDelegate 收到 OSC 7 后调用,
-   * 传 (browserWindowId, panelId, cwd). 用 windowId 路由到对应 BrowserWindow 的
-   * renderer (多窗口下避免广播污染). 传 null 解绑.
-   */
   setPwdForwardCallback(
     cb: ((browserWindowId: number, panelId: string, cwd: string) => void) | null
   ): void;

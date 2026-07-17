@@ -30,6 +30,8 @@ import type {
   FileMkdirResult,
   FileMoveRequest,
   FileMoveResult,
+  FileOpenPathRequest,
+  FileOpenPathResult,
   FilePathImpact,
   FileReadDocumentRequest,
   FileReadTextRequest,
@@ -53,6 +55,7 @@ import {
   readFileDocument,
 } from "./file-document-reader.ts";
 import { movePathNoReplace } from "./file-move-no-replace.ts";
+import { openPathViaElectronShell } from "./file-open-path.ts";
 import { resolveExistingFileIdentity } from "./file-path-identity.ts";
 import { FilePathTransactionLock } from "./file-path-transaction-lock.ts";
 import {
@@ -174,6 +177,7 @@ export interface FileService {
   list(request: FileListRequest): Promise<FileListResult>;
   mkdir(request: FileMkdirRequest): Promise<FileMkdirResult>;
   move(request: FileMoveRequest): Promise<FileMoveResult>;
+  openPath(request: FileOpenPathRequest): Promise<FileOpenPathResult>;
   readDocument(
     request: FileReadDocumentRequest
   ): Promise<FileDocumentReadResult>;
@@ -191,6 +195,7 @@ export interface FileServiceOptions {
   // 测试注入点:vitest 单测环境没有 electron runtime,也无法稳定制造
   // 跨设备文件系统,注入 fake 才能覆盖 trash 与 move 的降级分支。
   moveLinkFile?: (source: string, target: string) => Promise<void>;
+  openPathItem?: (path: string) => Promise<FileOpenPathResult>;
   renameFile?: (source: string, target: string) => Promise<void>;
   revealItem?: (path: string) => void;
   safeWriter?: FileSafeWriter;
@@ -205,7 +210,6 @@ async function trashViaElectronShell(path: string): Promise<void> {
   const { shell } = await import("electron");
   await shell.trashItem(path);
 }
-
 function revealViaElectronShell(path: string): void {
   import("electron")
     .then(({ shell }) => {
@@ -213,7 +217,6 @@ function revealViaElectronShell(path: string): void {
     })
     .catch(() => undefined);
 }
-
 export function createFileService(
   options: FileServiceOptions = {}
 ): FileService {
@@ -407,6 +410,8 @@ export function createFileService(
         };
       });
     },
+    openPath: (request) =>
+      (options.openPathItem ?? openPathViaElectronShell)(request.path),
     async reveal(request) {
       const target = await resolveExistingScopedPath(
         request.root,

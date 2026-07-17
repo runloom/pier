@@ -140,6 +140,11 @@ export async function executeFileCommand(
         return failure(requestId, "internal_error", "file service unavailable");
       }
       return success(requestId, await services.files.copy(command));
+    case "file.openPath":
+      if (!services.files) {
+        return failure(requestId, "internal_error", "file service unavailable");
+      }
+      return success(requestId, await services.files.openPath(command));
     case "file.reveal":
       if (!services.files) {
         return failure(requestId, "internal_error", "file service unavailable");

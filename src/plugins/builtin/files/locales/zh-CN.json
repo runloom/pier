@@ -198,7 +198,10 @@
     "filePanel.saveOnClose.cancelLabel": "取消",
     "files.projectStatus.openLabel": "打开项目文件",
     "files.projectStatus.openTooltip": "打开项目文件",
-    "files.projectStatus.openFailed": "无法打开项目文件"
+    "files.projectStatus.openFailed": "无法打开项目文件",
+    "files.notifications.terminalOpenUrl.relativeWithoutCwd": "终端没有工作目录，无法解析相对路径。",
+    "files.notifications.terminalOpenUrl.invalid": "无法打开该路径。",
+    "files.notifications.terminalOpenUrl.openFailed": "无法打开路径。"
   },
   "terminalStatusItems": {
     "pier.files.project": {

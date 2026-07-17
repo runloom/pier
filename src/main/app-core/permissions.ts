@@ -119,6 +119,7 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "file.exists": { capabilities: ["file:read"] },
   "file.stat": { capabilities: ["file:read"] },
   "file.copy": { capabilities: ["file:write"] },
+  "file.openPath": { capabilities: ["file:read"] },
   "file.reveal": { capabilities: ["file:read"] },
   "file.drafts.listKeys": { capabilities: ["file:read"] },
   "file.drafts.listDiagnostics": { capabilities: ["file:read"] },

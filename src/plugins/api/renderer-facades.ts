@@ -27,6 +27,8 @@ import type {
   FileMkdirResult,
   FileMoveRequest,
   FileMoveResult,
+  FileOpenPathRequest,
+  FileOpenPathResult,
   FilePathImpact,
   FileReadDocumentRequest,
   FileReadTextRequest,
@@ -122,6 +124,7 @@ export interface RendererPluginFilesFacade {
   ): Promise<FileListResult>;
   mkdir(request: FileMkdirRequest): Promise<FileMkdirResult>;
   move(request: FileMoveRequest): Promise<FileMoveResult>;
+  openPath(request: FileOpenPathRequest): Promise<FileOpenPathResult>;
   pickSaveTarget(request: FileSaveTargetRequest): Promise<FileSaveTargetResult>;
   readDocument(
     request: FileReadDocumentRequest

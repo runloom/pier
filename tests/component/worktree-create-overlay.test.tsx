@@ -297,6 +297,7 @@ function createMockContext(): RendererPluginContext {
       list: unimplemented("files.list"),
       mkdir: unimplemented("files.mkdir"),
       move: unimplemented("files.move"),
+      openPath: unimplemented("files.openPath"),
       pickSaveTarget: unimplemented("files.pickSaveTarget"),
       readDocument: unimplemented("files.readDocument"),
       readText: unimplemented("files.readText"),
@@ -344,6 +345,8 @@ function createMockContext(): RendererPluginContext {
     },
     terminal: {
       activePanelId: unimplemented("terminal.activePanelId"),
+      getPanelContext: unimplemented("terminal.getPanelContext"),
+      onOpenUrl: unimplemented("terminal.onOpenUrl"),
       readSelectionText: unimplemented("terminal.readSelectionText"),
     },
     settings: {

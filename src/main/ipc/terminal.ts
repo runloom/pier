@@ -40,6 +40,7 @@ import {
 } from "./terminal-initial-input-gate.ts";
 import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward.ts";
 import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
+import { handleTerminalOpenUrl } from "./terminal-open-url-forwarding.ts";
 import {
   performTerminalOperation,
   readTerminalSelectionText,
@@ -160,6 +161,30 @@ export function registerTerminalIpc(
       { panelId: intent.panelId },
       "pier-terminal-focus-request"
     );
+  });
+  addon?.setOpenUrlForwardCallback((id, panelId, url, kind) => {
+    const rawPanelId = fromNativePanelKey(panelId);
+    recordNativeTerminalRoute(id, "open-url", panelId, { kind, url });
+    handleTerminalOpenUrl({
+      broadcast: (event) => {
+        forwardToWindow(
+          id,
+          PIER_BROADCAST.TERMINAL_OPEN_URL,
+          event,
+          "pier-open-url-forward"
+        );
+      },
+      kind: kind === "html" || kind === "text" ? kind : "unknown",
+      openExternal: async (target) => {
+        const { shell } = await import("electron");
+        await shell.openExternal(target);
+      },
+      panelId: rawPanelId,
+      url,
+      windowId: id,
+    }).catch((err) => {
+      console.error("[pier-open-url] failed:", err);
+    });
   });
   addon?.setPwdForwardCallback((id, panelId, cwd) => {
     recordNativeTerminalRoute(id, "cwd", panelId, { cwd });

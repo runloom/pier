@@ -12,6 +12,7 @@ import {
   fileListRequestSchema,
   fileMkdirRequestSchema,
   fileMoveRequestSchema,
+  fileOpenPathRequestSchema,
   fileReadDocumentRequestSchema,
   fileReadTextRequestSchema,
   fileRevealRequestSchema,
@@ -63,6 +64,9 @@ export const fileCommandSchemas = [
   }),
   fileCopyRequestSchema.extend({
     type: z.literal("file.copy"),
+  }),
+  fileOpenPathRequestSchema.extend({
+    type: z.literal("file.openPath"),
   }),
   fileRevealRequestSchema.extend({
     type: z.literal("file.reveal"),

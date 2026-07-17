@@ -396,6 +396,7 @@ describe("TerminalPanel lifecycle", () => {
           hide: vi.fn(),
           navigateSearch: vi.fn(async () => ({ ok: true })),
           onContextMenuRequest: vi.fn(() => vi.fn()),
+          onOpenUrl: vi.fn(() => vi.fn()),
           onCwdChange: vi.fn((cb) => {
             const listener = { cb };
             cwdChangeListeners.push(listener);

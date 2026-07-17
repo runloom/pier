@@ -24,6 +24,8 @@ import type {
   FileMkdirResult,
   FileMoveRequest,
   FileMoveResult,
+  FileOpenPathRequest,
+  FileOpenPathResult,
   FilePathImpact,
   FileReadDocumentRequest,
   FileReadTextRequest,
@@ -85,6 +87,7 @@ export interface PierFilesAPI extends PierFileSaveTargetAPI {
   list: (request: FileListRequest) => Promise<FileListResult>;
   mkdir: (request: FileMkdirRequest) => Promise<FileMkdirResult>;
   move: (request: FileMoveRequest) => Promise<FileMoveResult>;
+  openPath: (request: FileOpenPathRequest) => Promise<FileOpenPathResult>;
   readDocument: (
     request: FileReadDocumentRequest
   ) => Promise<FileDocumentReadResult>;
@@ -220,6 +223,11 @@ export const filesApi: PierFilesAPI = {
       path: request.path,
       root: request.root,
       type: "file.readText",
+    }),
+  openPath: (request) =>
+    invokePierCommand<FileOpenPathResult>({
+      path: request.path,
+      type: "file.openPath",
     }),
   reveal: (request) =>
     invokePierCommand<FileRevealResult>({
