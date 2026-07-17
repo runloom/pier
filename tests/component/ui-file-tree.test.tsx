@@ -260,6 +260,39 @@ describe("PierFileTree", () => {
     ).toBeNull();
   });
 
+  it("uses one trailing ellipsis for flattened compact-chain paths", () => {
+    const { container } = render(
+      <PierFileTree
+        items={[
+          {
+            kind: "directory",
+            path: "renderer/pages/settings/components",
+          },
+        ]}
+        label="Project files"
+      />
+    );
+
+    const tree = getFileTree(container);
+    const row = within(tree).getByRole("treeitem", {
+      name: "renderer / pages / settings / components",
+    });
+    const content = row.querySelector('[data-item-section="content"]');
+    expect(
+      content?.querySelector(
+        '[data-item-flattened-subitems="true"], [data-item-flattened-subitems]'
+      )
+    ).toBeInstanceOf(HTMLElement);
+    expect(
+      content?.querySelectorAll('[data-truncate-container="truncate"]')
+    ).toHaveLength(1);
+    expect(
+      content?.querySelectorAll(
+        '[data-truncate-container="truncate"] [data-item-flattened-subitem]'
+      ).length
+    ).toBeGreaterThan(1);
+  });
+
   it("lets item names consume space left by an empty decoration lane", () => {
     expect(TREE_SCROLLBAR_CSS).toContain(
       '[data-item-section="content"] {\n  flex: 1 1 auto;'

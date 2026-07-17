@@ -213,6 +213,9 @@ export function TerminalRuntimeControl({
       <div className="flex shrink-0 items-center gap-0.5 px-1">
         {active ? (
           <ActionButton
+            className={cn(
+              "text-action-danger hover:bg-action-danger/10 hover:text-action-danger"
+            )}
             disabled={
               pendingAction !== null || (run.status === "stopping" && !force)
             }
@@ -227,7 +230,6 @@ export function TerminalRuntimeControl({
             }
             onClick={stop}
             testId="terminal-runtime-control-stop"
-            variant="destructive"
           />
         ) : null}
         {!active || run.status === "running" ? (
