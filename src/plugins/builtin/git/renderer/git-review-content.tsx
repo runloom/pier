@@ -18,10 +18,6 @@ import {
   useRef,
   useState,
 } from "react";
-import {
-  registerSelectionSelectAllProvider,
-  registerSelectionTextProvider,
-} from "@/lib/context-menu/selection-text.ts";
 import type { ReviewRenderFeedback } from "./git-review-code-view.tsx";
 import type { ReviewDocumentDemand } from "./git-review-document-demand.ts";
 import type { GitReviewDocumentGeneration } from "./git-review-document-generation.ts";
@@ -329,19 +325,20 @@ function ReviewDocumentsComponent({
   useEffect(() => cancelVerification, [cancelVerification]);
 
   useEffect(() => {
-    const disposeText = registerSelectionTextProvider(
+    const disposeText = context.contextMenu.registerSelectionTextProvider(
       panelId,
       () => diffHandleRef.current?.getSelectedText() ?? ""
     );
-    const disposeSelectAll = registerSelectionSelectAllProvider(
-      panelId,
-      () => diffHandleRef.current?.selectAll() ?? false
-    );
+    const disposeSelectAll =
+      context.contextMenu.registerSelectionSelectAllProvider(
+        panelId,
+        () => diffHandleRef.current?.selectAll() ?? false
+      );
     return () => {
       disposeText();
       disposeSelectAll();
     };
-  }, [panelId]);
+  }, [context, panelId]);
 
   const openPath = useCallback(
     (path: string) => {

@@ -303,6 +303,21 @@ export interface RendererPluginContext {
         sourcePanelId?: string;
       }
     ): Promise<void>;
+    /**
+     * 注册面板级选区文本提供者（如 Diff 行选区）。
+     * panelId 必须是 dockview panel id；返回 disposer。
+     */
+    registerSelectionTextProvider(
+      panelId: string,
+      provider: () => string
+    ): () => void;
+    /**
+     * 注册面板级「全选」实现。panelId 必须是 dockview panel id。
+     */
+    registerSelectionSelectAllProvider(
+      panelId: string,
+      provider: () => boolean
+    ): () => void;
   };
   /**
    * 宿主级模态弹窗。渲染、blocking overlay、终端输入路由与 keybinding scope

@@ -222,6 +222,8 @@ function createMockContext(): RendererPluginContext {
     },
     contextMenu: {
       popup: unimplemented("contextMenu.popup"),
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
     },
     configuration: {
       get: <T,>() => "" as T,

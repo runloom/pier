@@ -330,6 +330,11 @@ function pluginContext(input: {
       current: () => appearance,
       onDidChange: input.appearanceOnDidChange ?? (() => () => undefined),
     },
+    contextMenu: {
+      popup: vi.fn(async () => undefined),
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
+    },
     dialogs: { alert: vi.fn(async () => undefined) },
     git: {
       cancelReviewRequest:

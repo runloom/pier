@@ -1595,7 +1595,11 @@ describe("Files file-panel", () => {
       }
     );
     const context = createMockContext({ list });
-    context.contextMenu = { popup };
+    context.contextMenu = {
+      popup,
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
+    };
     const Panel = createFilePanel(context);
     const { container } = render(
       <Panel {...makeProps({ context: panelContext })} />
@@ -1632,7 +1636,11 @@ describe("Files file-panel", () => {
       async () => undefined
     );
     const context = createMockContext({ list });
-    context.contextMenu = { popup };
+    context.contextMenu = {
+      popup,
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
+    };
     const { container } = renderFilePanel({ context: panelContext }, context);
 
     await waitFor(() => {
@@ -1671,7 +1679,11 @@ describe("Files file-panel", () => {
       async () => undefined
     );
     const context = createMockContext({ list });
-    context.contextMenu = { popup };
+    context.contextMenu = {
+      popup,
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
+    };
     const Panel = createFilePanel(context);
     const { container } = render(
       <Panel {...makeProps({ context: panelContext })} />
@@ -1709,7 +1721,11 @@ describe("Files file-panel", () => {
     const context = createMockContext({
       readText: vi.fn(async () => "line-1\nline-2\nline-3\n"),
     });
-    context.contextMenu = { popup };
+    context.contextMenu = {
+      popup,
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
+    };
     const Panel = createFilePanel(context);
     const { container } = render(
       <Panel
@@ -1796,7 +1812,11 @@ describe("Files file-panel", () => {
       const context = createMockContext({
         readText: vi.fn(async () => contents),
       });
-      context.contextMenu = { popup };
+      context.contextMenu = {
+        popup,
+        registerSelectionSelectAllProvider: () => () => undefined,
+        registerSelectionTextProvider: () => () => undefined,
+      };
       const Panel = createFilePanel(context);
       const left = render(
         <Panel
@@ -1901,7 +1921,11 @@ describe("Files file-panel", () => {
       const context = createMockContext({
         readText: vi.fn(async () => contents),
       });
-      context.contextMenu = { popup };
+      context.contextMenu = {
+        popup,
+        registerSelectionSelectAllProvider: () => () => undefined,
+        registerSelectionTextProvider: () => () => undefined,
+      };
       const Panel = createFilePanel(context);
       const groupA = createFakeGroup("same-file-group-a");
       const groupB = createFakeGroup("same-file-group-b");
@@ -2020,7 +2044,11 @@ describe("Files file-panel", () => {
       const context = createMockContext({
         readText: vi.fn(async () => "alpha\n"),
       });
-      context.contextMenu = { popup };
+      context.contextMenu = {
+        popup,
+        registerSelectionSelectAllProvider: () => () => undefined,
+        registerSelectionTextProvider: () => () => undefined,
+      };
       const Panel = createFilePanel(context);
       const { container } = render(
         <Panel

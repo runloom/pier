@@ -29,6 +29,10 @@ import {
 import { useSettingsDialogStore } from "../../stores/settings-dialog.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
 import type { Action, ActionMetadata } from "../actions/types.ts";
+import {
+  registerSelectionSelectAllProvider,
+  registerSelectionTextProvider,
+} from "../context-menu/selection-text.ts";
 import { popupContextMenuAt } from "../context-menu/use-context-menu.ts";
 import { cssPointToContentViewPoint } from "../window-zoom/coordinates.ts";
 import {
@@ -360,6 +364,10 @@ export function createRendererPluginContext(
         const contentPoint = cssPointToContentViewPoint(coords, zoomLevel);
         return popupContextMenuAt(surface, contentPoint, invocation);
       },
+      registerSelectionSelectAllProvider: (panelId, provider) =>
+        registerSelectionSelectAllProvider(panelId, provider),
+      registerSelectionTextProvider: (panelId, provider) =>
+        registerSelectionTextProvider(panelId, provider),
     },
     configuration: createPluginConfiguration(entry),
     dialogs: {
