@@ -21,6 +21,20 @@ const PLUGIN_TAG_RE = /^plugin-/i;
 const HOST_TAG_RE = /^v\d+\.\d+\.\d+/;
 
 /**
+ * @param {Record<string, unknown>} record
+ * @returns {string}
+ */
+function readTagName(record) {
+  if (typeof record.tag_name === "string") {
+    return record.tag_name;
+  }
+  if (typeof record.tagName === "string") {
+    return record.tagName;
+  }
+  return "";
+}
+
+/**
  * @param {unknown} latest
  * @param {{ expectVersion?: string }} [opts]
  * @returns {string[]}
@@ -32,18 +46,15 @@ export function validateLatestRelease(latest, opts = {}) {
     return errors;
   }
   const record = /** @type {Record<string, unknown>} */ (latest);
-  const tag =
-    typeof record.tag_name === "string"
-      ? record.tag_name
-      : typeof record.tagName === "string"
-        ? record.tagName
-        : "";
+  const tag = readTagName(record);
   const draft = Boolean(record.draft);
   const prerelease = Boolean(record.prerelease);
   const assetsRaw = Array.isArray(record.assets) ? record.assets : [];
   const assetNames = assetsRaw
     .map((a) => {
-      if (!a || typeof a !== "object") return "";
+      if (!a || typeof a !== "object") {
+        return "";
+      }
       const name = /** @type {Record<string, unknown>} */ (a).name;
       return typeof name === "string" ? name : "";
     })
@@ -80,9 +91,7 @@ export function validateLatestRelease(latest, opts = {}) {
       ? opts.expectVersion
       : `v${opts.expectVersion}`;
     if (tag !== expectedTag) {
-      errors.push(
-        `latest tag is ${tag || "(none)"}, expected ${expectedTag}`
-      );
+      errors.push(`latest tag is ${tag || "(none)"}, expected ${expectedTag}`);
     }
     const version = expectedTag.slice(1);
     const hasZip = assetNames.some(
@@ -118,7 +127,6 @@ export function validatePluginReleaseIsolation(release, tag) {
   const record = /** @type {Record<string, unknown>} */ (release);
   const draft = Boolean(record.draft);
   const prerelease = Boolean(record.prerelease);
-  // GitHub JSON uses prerelease; some gh --json fields differ.
   if (draft) {
     errors.push(`plugin release ${tag} is draft`);
   }
@@ -134,16 +142,20 @@ export function validatePluginReleaseIsolation(release, tag) {
  * @param {string[]} args
  */
 export function parseArgs(args) {
-  /** @type {{ repo?: string, expectVersion?: string, pluginTags: string[] }} */
+  /** @type {{ repo?: string, expectVersion?: string, pluginTags: string[], help?: boolean }} */
   const out = { pluginTags: [] };
-  for (let i = 0; i < args.length; i += 1) {
+  let i = 0;
+  while (i < args.length) {
     const a = args[i];
     if (a === "--repo") {
-      out.repo = args[++i];
+      i += 1;
+      out.repo = args[i];
     } else if (a === "--expect-version") {
-      out.expectVersion = args[++i];
+      i += 1;
+      out.expectVersion = args[i];
     } else if (a === "--plugin-tags") {
-      const raw = args[++i] ?? "";
+      i += 1;
+      const raw = args[i] ?? "";
       out.pluginTags = raw
         .split(",")
         .map((s) => s.trim())
@@ -151,10 +163,14 @@ export function parseArgs(args) {
     } else if (a === "--help" || a === "-h") {
       out.help = true;
     }
+    i += 1;
   }
   return out;
 }
 
+/**
+ * @param {string[]} args
+ */
 function ghJson(args) {
   const result = spawnSync("gh", args, {
     encoding: "utf8",
@@ -167,10 +183,15 @@ function ghJson(args) {
   return JSON.parse(result.stdout);
 }
 
+/**
+ * @param {string[]} [argv]
+ */
 function main(argv = process.argv.slice(2)) {
   const opts = parseArgs(argv);
   if (opts.help) {
-    console.log(`Usage: verify-github-latest-isolation.mjs [--repo o/n] [--expect-version X.Y.Z] [--plugin-tags t1,t2]`);
+    console.log(
+      "Usage: verify-github-latest-isolation.mjs [--repo o/n] [--expect-version X.Y.Z] [--plugin-tags t1,t2]"
+    );
     process.exit(0);
   }
   const repo = opts.repo || process.env.GITHUB_REPOSITORY;
@@ -182,10 +203,7 @@ function main(argv = process.argv.slice(2)) {
   }
 
   const errors = [];
-  const latest = ghJson([
-    "api",
-    `repos/${repo}/releases/latest`,
-  ]);
+  const latest = ghJson(["api", `repos/${repo}/releases/latest`]);
   errors.push(
     ...validateLatestRelease(latest, {
       ...(opts.expectVersion ? { expectVersion: opts.expectVersion } : {}),
@@ -213,7 +231,7 @@ function main(argv = process.argv.slice(2)) {
     }
     process.exit(1);
   }
-  const tag = latest.tag_name ?? latest.tagName;
+  const tag = readTagName(/** @type {Record<string, unknown>} */ (latest));
   console.log(
     `[verify-github-latest-isolation] ok: latest=${tag} (host channel isolated)`
   );
