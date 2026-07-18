@@ -205,6 +205,17 @@ export async function openSwitchConfirmDialog(options: {
           "New Grok sessions will use this account. Restart any Grok sessions that are already running for the change to take effect."
         );
 
+  // No peer checkboxes → plain confirm. Custom content is only for multi-select.
+  if (available.length === 0) {
+    const confirmed = await context.dialogs.confirm({
+      body: description,
+      intent: "default",
+      size: "sm",
+      title,
+    });
+    return { confirmed, syncTargets: [] };
+  }
+
   const handle = context.dialogs.open<SwitchConfirmResult>({
     id: mode === "sync" ? "accounts.sync-confirm" : "accounts.switch-confirm",
     title,

@@ -115,12 +115,14 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
       },
       dialogs: {
         alert: vi.fn(async () => undefined),
+        choice: vi.fn(async () => "cancel" as const),
         confirm: vi.fn(async () => true),
         open: (request) =>
           openAppContentDialog({
             ...request,
             namespace: "pier.codex",
           }),
+        prompt: vi.fn(async () => null),
         update: (id, patch) =>
           updateAppContentDialog(
             id.includes(":") ? id : `pier.codex:${id}`,

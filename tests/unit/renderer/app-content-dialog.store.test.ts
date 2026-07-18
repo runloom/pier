@@ -1,6 +1,7 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import {
   closeAppContentDialog,
+  closeContentDialogsForPlugin,
   openAppContentDialog,
   resetAppContentDialogForTests,
   updateAppContentDialog,
@@ -76,5 +77,37 @@ describe("app content dialog store", () => {
     const layer = useAppContentDialogStore.getState().stack[0];
     expect(layer?.dismissible).toBe(false);
     expect(layer?.title).toBe("Waiting");
+  });
+
+  it("closeContentDialogsForPlugin drops only namespaced layers", async () => {
+    const owned = openAppContentDialog({
+      id: "worktree-create",
+      namespace: "pier.git",
+      title: "Owned",
+      content: Dummy,
+    });
+    const other = openAppContentDialog({
+      id: "accounts.add",
+      namespace: "pier.codex",
+      title: "Other",
+      content: Dummy,
+    });
+    const host = openAppContentDialog({
+      id: "host.shell",
+      title: "Host",
+      content: Dummy,
+    });
+
+    closeContentDialogsForPlugin("pier.git");
+
+    await expect(owned.result).resolves.toBeNull();
+    expect(useAppContentDialogStore.getState().stack.map((l) => l.id)).toEqual([
+      "pier.codex:accounts.add",
+      "host.shell",
+    ]);
+    closeAppContentDialog("pier.codex:accounts.add");
+    closeAppContentDialog("host.shell");
+    await expect(other.result).resolves.toBeNull();
+    await expect(host.result).resolves.toBeNull();
   });
 });

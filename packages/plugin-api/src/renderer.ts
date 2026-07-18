@@ -120,6 +120,9 @@ export interface RendererSettingsPageRegistration {
   id: string;
 }
 
+export type RendererPluginDialogIntent = "default" | "destructive";
+export type RendererPluginDialogSize = "default" | "sm";
+
 export type RendererPluginContentDialogSize = "sm" | "default" | "lg";
 
 export interface RendererPluginContentDialogRenderProps<TResult = unknown> {
@@ -168,15 +171,44 @@ export interface ExternalRendererPluginContext {
     set(key: string, value: unknown): Promise<void>;
   };
   dialogs: {
-    alert(options: { body?: string; title: string }): Promise<void>;
+    alert(options: {
+      body?: string;
+      confirmLabel?: string;
+      intent?: RendererPluginDialogIntent;
+      size?: RendererPluginDialogSize;
+      title: string;
+    }): Promise<void>;
+    choice(options: {
+      altLabel: string;
+      body?: string;
+      cancelLabel?: string;
+      confirmLabel: string;
+      intent: RendererPluginDialogIntent;
+      size: RendererPluginDialogSize;
+      title: string;
+    }): Promise<"alt" | "cancel" | "confirm">;
     confirm(options: {
       body?: string;
+      cancelLabel?: string;
+      confirmLabel?: string;
+      intent: RendererPluginDialogIntent;
+      size: RendererPluginDialogSize;
       title: string;
-      intent?: "default" | "destructive";
     }): Promise<boolean>;
     open<TResult = unknown>(
       request: RendererPluginContentDialogOpenRequest<TResult>
     ): RendererPluginContentDialogHandle<TResult>;
+    prompt(options: {
+      body?: string;
+      cancelLabel?: string;
+      confirmLabel?: string;
+      initialValue?: string;
+      intent: RendererPluginDialogIntent;
+      placeholder?: string;
+      size: RendererPluginDialogSize;
+      title: string;
+      validate?: (value: string) => Promise<string | null> | string | null;
+    }): Promise<string | null>;
     update(
       id: string,
       patch: {

@@ -16,6 +16,11 @@ import { toast } from "sonner";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { terminalStatusItemRegistry } from "../../panel-kits/terminal/terminal-status-bar.tsx";
 import {
+  closeAppContentDialog,
+  openAppContentDialog,
+  updateAppContentDialog,
+} from "../../stores/app-content-dialog.store.ts";
+import {
   showAppAlert,
   showAppChoice,
   showAppConfirm,
@@ -56,7 +61,6 @@ import { createPluginPanelsContext } from "./host-panels-context.ts";
 import { createPluginTerminalContext } from "./host-terminal-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
 import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
-import { createPluginOverlaysApi } from "./plugin-overlay-api.ts";
 import {
   assertPluginWorkbenchWidgetRegistration,
   registerPluginWorkbenchWidget,
@@ -373,8 +377,23 @@ export function createRendererPluginContext(
     dialogs: {
       alert: (options) => showAppAlert(options),
       choice: (options) => showAppChoice(options),
+      close: (id, result) =>
+        closeAppContentDialog(
+          entry && !id.includes(":") ? `${entry.manifest.id}:${id}` : id,
+          result
+        ),
       confirm: (options) => showAppConfirm(options),
+      open: (request) =>
+        openAppContentDialog({
+          ...request,
+          ...(entry ? { namespace: entry.manifest.id } : {}),
+        }),
       prompt: (options) => showAppPrompt(options),
+      update: (id, patch) =>
+        updateAppContentDialog(
+          entry && !id.includes(":") ? `${entry.manifest.id}:${id}` : id,
+          patch
+        ),
     },
     i18n: createPluginI18n(entry),
     lifecycle: {
@@ -412,7 +431,6 @@ export function createRendererPluginContext(
       },
       system: (options) => window.pier.notifications.system(options),
     },
-    overlays: createPluginOverlaysApi(entry),
     panels: createPluginPanelsContext(
       entry,
       assertDeclaredContribution,

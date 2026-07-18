@@ -24,7 +24,12 @@ import {
   openAppContentDialog,
   updateAppContentDialog,
 } from "@/stores/app-content-dialog.store.ts";
-import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
+import {
+  showAppAlert,
+  showAppChoice,
+  showAppConfirm,
+  showAppPrompt,
+} from "@/stores/app-dialog.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { resolvePluginMessage } from "./display.ts";
@@ -203,25 +208,45 @@ export function createExternalRendererPluginContext(
     },
     dialogs: {
       alert: (options) => {
-        const args: { body?: string; size: "sm"; title: string } = {
-          size: "sm",
+        const args: {
+          body?: string;
+          confirmLabel?: string;
+          intent?: "default" | "destructive";
+          size?: "default" | "sm";
+          title: string;
+        } = {
           title: options.title,
+          // Long error bodies need default width; callers may opt into sm.
+          size: options.size ?? "default",
         };
         if (options.body !== undefined) args.body = options.body;
+        if (options.confirmLabel !== undefined) {
+          args.confirmLabel = options.confirmLabel;
+        }
+        if (options.intent !== undefined) args.intent = options.intent;
         return showAppAlert(args);
       },
+      choice: (options) => showAppChoice(options),
       confirm: (options) => {
         const args: {
           body?: string;
+          cancelLabel?: string;
+          confirmLabel?: string;
           intent: "default" | "destructive";
-          size: "sm";
+          size: "default" | "sm";
           title: string;
         } = {
-          intent: options.intent ?? "default",
-          size: "sm",
+          intent: options.intent,
+          size: options.size,
           title: options.title,
         };
         if (options.body !== undefined) args.body = options.body;
+        if (options.cancelLabel !== undefined) {
+          args.cancelLabel = options.cancelLabel;
+        }
+        if (options.confirmLabel !== undefined) {
+          args.confirmLabel = options.confirmLabel;
+        }
         return showAppConfirm(args);
       },
       open: (request) =>
@@ -229,6 +254,7 @@ export function createExternalRendererPluginContext(
           ...request,
           namespace: pluginId,
         }),
+      prompt: (options) => showAppPrompt(options),
       update: (id, patch) =>
         updateAppContentDialog(
           id.includes(":") ? id : `${pluginId}:${id}`,

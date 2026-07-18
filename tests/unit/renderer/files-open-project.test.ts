@@ -40,7 +40,6 @@ function makePlugin(overrides?: {
       success: vi.fn(),
       warning: vi.fn(),
     },
-    overlays: { open: vi.fn() },
     panels: {
       getActiveContext: vi.fn(),
       getActiveInstanceId: vi.fn(),

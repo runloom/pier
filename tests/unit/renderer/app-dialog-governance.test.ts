@@ -52,6 +52,12 @@ describe("app dialog usage governance", () => {
     expect(agentContext).toContain(
       '破坏性确认必须显式传 `intent: "destructive"`'
     );
+    expect(agentContext).toContain(
+      '若破坏动作落在 `choice.confirm`（如覆盖），`intent` 仍必须 `"default"`'
+    );
+    expect(agentContext).toContain(
+      "builtin 与 external 插件的简单弹窗 API **同构**"
+    );
   });
 
   it("keeps shadcn AlertDialog primitive behind AppDialogHost", () => {
@@ -88,13 +94,13 @@ describe("app dialog usage governance", () => {
       join(ROOT, "src", "renderer", "stores", "app-dialog.store.ts"),
       "utf8"
     );
-    const pluginRendererApi = readFileSync(
-      join(ROOT, "src", "plugins", "api", "renderer.ts"),
+    const pluginDialogsApi = readFileSync(
+      join(ROOT, "src", "plugins", "api", "renderer-dialogs.ts"),
       "utf8"
     );
 
     expect(appDialogStore).toMatch(REQUIRED_APP_CONFIRM_OPTIONS_RE);
-    expect(pluginRendererApi).toMatch(REQUIRED_PLUGIN_CONFIRM_OPTIONS_RE);
+    expect(pluginDialogsApi).toMatch(REQUIRED_PLUGIN_CONFIRM_OPTIONS_RE);
   });
 
   it("requires prompt dialog request to declare size + intent explicitly", () => {
@@ -102,15 +108,15 @@ describe("app dialog usage governance", () => {
       join(ROOT, "src", "renderer", "stores", "app-dialog.store.ts"),
       "utf8"
     );
-    const pluginRendererApi = readFileSync(
-      join(ROOT, "src", "plugins", "api", "renderer.ts"),
+    const pluginDialogsApi = readFileSync(
+      join(ROOT, "src", "plugins", "api", "renderer-dialogs.ts"),
       "utf8"
     );
 
     // 与 confirm 对齐:size 与 intent 强制,避免 prompt 无声继承 default 尺寸
     // 导致长内容溢出、或误用 destructive 语义。
     expect(appDialogStore).toMatch(REQUIRED_APP_PROMPT_OPTIONS_RE);
-    expect(pluginRendererApi).toMatch(REQUIRED_PLUGIN_PROMPT_OPTIONS_RE);
+    expect(pluginDialogsApi).toMatch(REQUIRED_PLUGIN_PROMPT_OPTIONS_RE);
   });
 
   it("keeps choice dialogs on default width in production sources", () => {

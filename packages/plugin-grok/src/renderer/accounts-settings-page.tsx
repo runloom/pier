@@ -156,7 +156,9 @@ export function AccountsSettingsPage({
         "pier.grok.accounts.settings.removeConfirmBody",
         "This account will be removed from Pier. Credentials stored for this account are deleted."
       ),
+      confirmLabel: t("pier.grok.accounts.settings.remove", "Remove"),
       intent: "destructive",
+      size: "sm",
       title: t(
         "pier.grok.accounts.settings.removeConfirmTitle",
         "Remove Grok account?"

@@ -21,6 +21,7 @@ import type {
   RendererPluginAppearance,
   RendererPluginMermaidResult,
 } from "./renderer-appearance.ts";
+import type { RendererPluginDialogsFacade } from "./renderer-dialogs.ts";
 import type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
@@ -40,6 +41,15 @@ export type {
   RendererPluginAppearance,
   RendererPluginMermaidResult,
 } from "./renderer-appearance.ts";
+export type {
+  RendererPluginContentDialogHandle,
+  RendererPluginContentDialogOpenRequest,
+  RendererPluginContentDialogRenderProps,
+  RendererPluginContentDialogSize,
+  RendererPluginDialogIntent,
+  RendererPluginDialogSize,
+  RendererPluginDialogsFacade,
+} from "./renderer-dialogs.ts";
 export type {
   RendererPluginEnvironmentsFacade,
   RendererPluginFilesFacade,
@@ -206,9 +216,6 @@ export interface RendererPluginNotificationOptions {
   };
 }
 
-export type RendererPluginDialogIntent = "default" | "destructive";
-export type RendererPluginDialogSize = "default" | "sm";
-
 export type RendererPluginAgentSelection = AgentSelectionResult;
 
 export interface RendererPluginTerminalContext {
@@ -320,54 +327,10 @@ export interface RendererPluginContext {
     ): () => void;
   };
   /**
-   * 宿主级模态弹窗。渲染、blocking overlay、终端输入路由与 keybinding scope
-   * 均由宿主统一处理;全局单例,新弹窗会顶替未决的旧弹窗(旧的按取消 resolve)。
-   * confirmLabel/cancelLabel 省略时用宿主 i18n 的默认文案(OK/Cancel)。
+   * 宿主级模态弹窗。简单决策走 alert/confirm/choice/prompt（AppDialogHost）；
+   * 多控件/多步/等待态走 open/update/close（AppContentDialogHost）。
    */
-  dialogs: {
-    alert(options: {
-      body?: string;
-      confirmLabel?: string;
-      intent?: RendererPluginDialogIntent;
-      size?: RendererPluginDialogSize;
-      title: string;
-    }): Promise<void>;
-    confirm(options: {
-      body?: string;
-      cancelLabel?: string;
-      confirmLabel?: string;
-      intent: RendererPluginDialogIntent;
-      size: RendererPluginDialogSize;
-      title: string;
-    }): Promise<boolean>;
-    /**
-     * 三选弹窗(如 保存/放弃/取消)。confirm → "confirm",altLabel 按钮 →
-     * "alt",取消/Esc → "cancel"。intent 作用于 alt 按钮(破坏性放弃)。
-     */
-    choice(options: {
-      altLabel: string;
-      body?: string;
-      cancelLabel?: string;
-      confirmLabel: string;
-      intent: RendererPluginDialogIntent;
-      size: RendererPluginDialogSize;
-      title: string;
-    }): Promise<"alt" | "cancel" | "confirm">;
-    // 文本输入弹窗。resolve:submit → 返回 trim 后的字符串;cancel → null。
-    // validate 在 submit 前跑一次,返回非空 = 校验失败(在弹窗内展示,不 resolve),
-    // 返回 null/undefined 才放行。keybinding scope + terminal focus 与 host 统一处理。
-    prompt(options: {
-      body?: string;
-      cancelLabel?: string;
-      confirmLabel?: string;
-      initialValue?: string;
-      intent: RendererPluginDialogIntent;
-      placeholder?: string;
-      size: RendererPluginDialogSize;
-      title: string;
-      validate?: (value: string) => Promise<string | null> | string | null;
-    }): Promise<string | null>;
-  };
+  dialogs: RendererPluginDialogsFacade;
   /**
    * Local environment facade. Reads require `environment:read`; writes require
    * `environment:write`.
@@ -421,19 +384,6 @@ export interface RendererPluginContext {
       body?: string;
       title: string;
     }): Promise<{ shown: boolean }>;
-  };
-  /**
-   * 宿主级模态 overlay。渲染、blocking overlay、终端输入路由与 keybinding
-   * scope 均由宿主统一处理;全局单例,新 overlay 会顶替当前未决的旧 overlay。
-   * 不设 manifest 权限;插件 deactivate 时宿主自动关闭其残留 overlay。
-   */
-  overlays: {
-    close(id: string): void;
-    open(overlay: {
-      id: string;
-      /** Bind `open` to the controlled modal primitive; `close` settles host state immediately. */
-      render: (controls: { close: () => void; open: boolean }) => ReactNode;
-    }): void;
   };
   panels: {
     /**

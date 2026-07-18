@@ -7,7 +7,9 @@ const SOURCE_FILE_RE = /\.(ts|tsx)$/;
 const PLUGIN_RENDERER_ROOTS = [
   join(ROOT, "packages", "plugin-codex", "src", "renderer"),
   join(ROOT, "packages", "plugin-grok", "src", "renderer"),
+  join(ROOT, "src", "plugins", "builtin"),
 ];
+
 const FORBIDDEN_IMPORT_RE =
   /from\s+["']@pier\/ui\/(?:dialog|alert-dialog)(?:\.tsx)?["']/;
 
@@ -48,5 +50,10 @@ describe("plugin product dialog governance", () => {
     expect(agents).toMatch(
       /plugins must not mount|插件.*不得.*@pier\/ui\/dialog|禁止.*插件.*Dialog/i
     );
+    expect(agents).toContain(
+      "无自定义控件的纯确认/提示，禁止塞进 content dialog"
+    );
+    expect(agents).toMatch(/context\.overlays.*已删除|overlays.*已删除/);
+    expect(agents).toContain("决策树");
   });
 });

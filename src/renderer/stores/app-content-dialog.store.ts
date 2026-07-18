@@ -137,6 +137,23 @@ export function closeAppContentDialog(id: string, result?: unknown): void {
   layer.resolve(result ?? null);
 }
 
+/** Close every content-dialog layer owned by a plugin namespace prefix. */
+export function closeContentDialogsForPlugin(pluginId: string): void {
+  const prefix = `${pluginId}:`;
+  const layers = useAppContentDialogStore
+    .getState()
+    .stack.filter((layer) => layer.id.startsWith(prefix));
+  if (layers.length === 0) {
+    return;
+  }
+  useAppContentDialogStore.setState((state) => ({
+    stack: state.stack.filter((layer) => !layer.id.startsWith(prefix)),
+  }));
+  for (const layer of layers) {
+    layer.resolve(null);
+  }
+}
+
 export function resetAppContentDialogForTests(): void {
   for (const layer of useAppContentDialogStore.getState().stack) {
     layer.resolve(null);

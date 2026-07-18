@@ -29,17 +29,17 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { BUILTIN_RENDERER_PLUGIN_MODULES } from "@/lib/plugins/builtin-catalog.ts";
 import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
-import {
-  clearPluginPanelsForTests,
-  getPluginPanelRegistrations,
-} from "@/lib/plugins/plugin-panel-registry.ts";
+import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
 import { RendererPluginRuntime } from "@/lib/plugins/runtime.ts";
 import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
+import {
+  resetAppContentDialogForTests,
+  useAppContentDialogStore,
+} from "@/stores/app-content-dialog.store.ts";
 import { resetAppDialogForTests } from "@/stores/app-dialog.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
-import { usePluginOverlayStore } from "@/stores/plugin-overlay.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import {
@@ -795,10 +795,9 @@ describe("git builtin plugin", () => {
     dispose = null;
     await rendererPluginRuntime.dispose();
     terminalStatusItemRegistry.clearForTests();
-    clearPluginPanelsForTests();
+    resetAppContentDialogForTests();
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     useWorkspaceStore.setState({ api: null });
-    usePluginOverlayStore.setState({ current: null });
     resetTerminalInputRoutingForTests();
     useKeybindingScope.setState({
       activePanelComponent: null,
@@ -1039,12 +1038,12 @@ describe("git builtin plugin", () => {
     ).toBeTruthy();
   });
 
-  it("Worktree 创建命令打开创建面板 overlay", async () => {
+  it("Worktree 创建命令打开 content dialog", async () => {
     dispose = activateWorktreePlugin();
 
     await actionRegistry.get("pier.worktree.create")?.handler();
     await vi.waitFor(() => {
-      expect(usePluginOverlayStore.getState().current).not.toBeNull();
+      expect(useAppContentDialogStore.getState().stack).not.toHaveLength(0);
     });
 
     expect(window.pier.worktrees.list).toHaveBeenCalledWith({
@@ -1057,9 +1056,8 @@ describe("git builtin plugin", () => {
       "/Users/xyz/ABC/pier",
       { kind: "all" }
     );
-    expect(usePluginOverlayStore.getState().current).toMatchObject({
-      id: "worktree-create",
-      pluginId: GIT_PLUGIN_ID,
+    expect(useAppContentDialogStore.getState().stack[0]).toMatchObject({
+      id: `${GIT_PLUGIN_ID}:worktree-create`,
     });
   });
 
@@ -1725,7 +1723,7 @@ describe("git builtin plugin", () => {
 
     const handlerPromise = actionRegistry.get("pier.git.stashPop")?.handler();
 
-    expect(await screen.findByText("Git operation failed")).toBeVisible();
+    expect(await screen.findByText("Git: Pop Stash...")).toBeVisible();
     expect(screen.getByText("fatal: not a git repository")).toBeVisible();
     expect(getLastTerminalHostSnapshot()).toEqual(
       expect.objectContaining({

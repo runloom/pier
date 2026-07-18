@@ -11,7 +11,9 @@ import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 vi.mock("@/stores/app-dialog.store.ts", () => ({
   showAppAlert: vi.fn(async () => undefined),
+  showAppChoice: vi.fn(async () => "cancel"),
   showAppConfirm: vi.fn(async () => true),
+  showAppPrompt: vi.fn(async () => null),
 }));
 
 function demoEntry(
@@ -123,7 +125,7 @@ describe("createExternalRendererPluginContext settingsPages", () => {
     );
   });
 
-  it("confirm forwards intent to showAppConfirm", async () => {
+  it("confirm forwards intent and size to showAppConfirm", async () => {
     const context = createExternalRendererPluginContext(
       demoEntry(),
       bridge,
@@ -132,6 +134,7 @@ describe("createExternalRendererPluginContext settingsPages", () => {
     await context.dialogs.confirm({
       title: "Delete",
       intent: "destructive",
+      size: "sm",
     });
     expect(showAppConfirm).toHaveBeenCalledWith({
       intent: "destructive",
