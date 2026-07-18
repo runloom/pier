@@ -135,6 +135,7 @@ export type TerminalDebugRendererTerminalPhase =
   | "error"
   | "mounted"
   | "ready"
+  | "skipped_restored_result"
   | "waiting_for_session"
   | "waiting_for_anchor";
 

@@ -33,11 +33,10 @@ afterEach(async () => {
   }
 });
 
-/**
- * @param {string} version
- * @param {{ withBlockmaps?: boolean, omit?: string[] }} [opts]
- */
-async function makeArtifactDir(version, opts = {}) {
+async function makeArtifactDir(
+  version: string,
+  opts: { omit?: string[]; withBlockmaps?: boolean } = {}
+): Promise<string> {
   const dir = await mkdtemp(join(tmpdir(), "pier-mac-release-"));
   tempDirs.push(dir);
   const names = requiredMacReleaseAssetNames(version).filter(

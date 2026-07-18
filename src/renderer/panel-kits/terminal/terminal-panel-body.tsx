@@ -86,7 +86,7 @@ export function TerminalPanelBody({
         className={terminalContentClassName}
         fontFamily={fontFamily}
         fontSize={effectiveMonoFontSize}
-        onRestart={onRestartAgent}
+        {...(onRestartAgent ? { onRestart: onRestartAgent } : {})}
       />
     );
   }

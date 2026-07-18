@@ -395,7 +395,9 @@ describe("pier.codex accounts service", () => {
     ).resolves.toBe(legacyAuthById["legacy-secondary"]);
     // migrate validates each account once; usage refresh re-reads identity to
     // backfill subscriptionExpiresAt/plan fields.
-    expect(provider.readIdentity.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(
+      vi.mocked(provider.readIdentity).mock.calls.length
+    ).toBeGreaterThanOrEqual(2);
     expect(provider.readCurrentIdentity).not.toHaveBeenCalled();
   });
 
