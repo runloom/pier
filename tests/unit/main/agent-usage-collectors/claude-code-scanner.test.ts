@@ -3,6 +3,10 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, describe, expect, it } from "vitest";
 import { createClaudeCodeUsageScanner } from "../../../../src/main/services/agents/usage-collectors/claude-code-scanner.ts";
+import {
+  readLocalUsageCache,
+  writeLocalUsageCache,
+} from "../../../../src/main/services/agents/usage-collectors/file-cache.ts";
 
 /**
  * Claude Code scanner smoke tests。覆盖：
@@ -224,6 +228,65 @@ describe("Claude Code usage scanner", () => {
     expect(second.diagnostics.reusedFiles).toBe(1);
     expect(second.diagnostics.parsedFiles).toBe(0);
     expect(second.input.observations).toHaveLength(1);
+  });
+
+  it("drops cached observations that fall outside the current coverage window", async () => {
+    const { cachePath, claudeProjectsRoot, projectDir } = await fixture();
+    const date = today();
+    const sessionPath = join(projectDir, "session-stale-window.jsonl");
+    await writeFile(
+      sessionPath,
+      assistantLine({
+        messageId: "msg_current",
+        sessionId: "session-stale-window",
+        timestamp: `${date}T10:00:00.000Z`,
+        usage: { input_tokens: 100, output_tokens: 200 },
+      }),
+      "utf8"
+    );
+    const scanner = createClaudeCodeUsageScanner({
+      cachePath,
+      claudeProjectsRoot,
+    });
+
+    await scanner.scan();
+
+    const cache = await readLocalUsageCache(cachePath);
+    const entry = cache.entries[sessionPath];
+    expect(entry).toBeDefined();
+    if (!entry) {
+      throw new Error("expected cached session entry");
+    }
+    entry.observations.push({
+      fingerprint: "stale-window",
+      usage: {
+        cachedInputTokens: 0,
+        date: "2000-01-01",
+        inputTokens: 999,
+        modelId: "claude-sonnet-4-5",
+        outputTokens: 999,
+        reasoningTokens: 0,
+        serviceTier: null,
+      },
+    });
+    await writeLocalUsageCache(cachePath, cache.entries);
+
+    const second = await scanner.scan();
+    expect(second.diagnostics.reusedFiles).toBe(1);
+    expect(second.diagnostics.uniqueEvents).toBe(1);
+    expect(second.input.observations).toEqual([
+      expect.objectContaining({
+        date,
+        inputTokens: 100,
+        outputTokens: 200,
+      }),
+    ]);
+    expect(second.input.coverage.from <= date).toBe(true);
+    expect(second.input.coverage.to >= date).toBe(true);
+    for (const observation of second.input.observations) {
+      expect(observation.date >= second.input.coverage.from).toBe(true);
+      expect(observation.date <= second.input.coverage.to).toBe(true);
+    }
   });
 
   it("returns empty coverage cleanly when projects root is missing", async () => {

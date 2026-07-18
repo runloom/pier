@@ -100,6 +100,10 @@ export function parseRateLimitsResult(result: unknown): AccountUsageResult {
     ? (rateLimits as Record<string, unknown>)
     : {};
   const out: AccountUsageResult = { status: "ok", windows: [] };
+  const planTypeCandidate = rl.planType ?? obj.planType;
+  if (typeof planTypeCandidate === "string" && planTypeCandidate.length > 0) {
+    out.planType = planTypeCandidate;
+  }
   const resetCredits = rl.rateLimitResetCredits ?? obj.rateLimitResetCredits;
   if (resetCredits && typeof resetCredits === "object") {
     const available = (resetCredits as Record<string, unknown>).availableCount;

@@ -1,5 +1,6 @@
 /**
  * 共享日期区间工具。UTC 语义：所有 collector 都以 `YYYY-MM-DD` UTC 日为桶。
+ * publish 前必须用当前 coverage 再裁一次——缓存复用会带回滑动窗口外的旧观测。
  */
 
 export function dateDaysAgo(days: number): string {
@@ -21,4 +22,12 @@ export function datesInRange(from: string, to: string): string[] {
     current.setUTCDate(current.getUTCDate() + 1);
   }
   return dates;
+}
+
+export function filterByCoverageDate<T extends { date: string }>(
+  items: readonly T[],
+  from: string,
+  to: string
+): T[] {
+  return items.filter((item) => item.date >= from && item.date <= to);
 }

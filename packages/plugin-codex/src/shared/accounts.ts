@@ -36,6 +36,8 @@ export interface CodexAccountSummary {
   label: string;
   planType?: string;
   status: CodexAccountStatus;
+  /** ChatGPT subscription period end (ms). Absent for free/unknown. */
+  subscriptionExpiresAt?: number;
   /** null 表示尚未完成首次用量请求；对象表示请求已完成（包括空结果或错误）。 */
   usage?: CodexUsageSnapshot | null;
 }

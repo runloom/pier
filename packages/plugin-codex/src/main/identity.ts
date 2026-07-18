@@ -5,6 +5,8 @@ export interface AccountIdentity {
   email: string;
   planType?: string;
   providerAccountId?: string;
+  /** ChatGPT subscription period end from id_token auth claims (ms). */
+  subscriptionExpiresAt?: number;
 }
 
 const OPENAI_AUTH_NS = "https://api.openai.com/auth";
@@ -33,18 +35,24 @@ export function parseIdTokenClaims(idToken: string): AccountIdentity | null {
     const authNs =
       typeof payload[OPENAI_AUTH_NS] === "object" &&
       payload[OPENAI_AUTH_NS] !== null
-        ? payload[OPENAI_AUTH_NS]
+        ? (payload[OPENAI_AUTH_NS] as Record<string, unknown>)
         : undefined;
+    let subscriptionExpiresAt: number | undefined;
+    if (typeof authNs?.chatgpt_subscription_active_until === "string") {
+      const ms = Date.parse(authNs.chatgpt_subscription_active_until);
+      if (Number.isFinite(ms)) {
+        subscriptionExpiresAt = ms;
+      }
+    }
     return {
       email,
-      planType:
-        typeof authNs?.chatgpt_plan_type === "string"
-          ? authNs.chatgpt_plan_type
-          : undefined,
-      providerAccountId:
-        typeof authNs?.chatgpt_account_id === "string"
-          ? authNs.chatgpt_account_id
-          : undefined,
+      ...(typeof authNs?.chatgpt_plan_type === "string"
+        ? { planType: authNs.chatgpt_plan_type }
+        : {}),
+      ...(typeof authNs?.chatgpt_account_id === "string"
+        ? { providerAccountId: authNs.chatgpt_account_id }
+        : {}),
+      ...(subscriptionExpiresAt === undefined ? {} : { subscriptionExpiresAt }),
     };
   } catch {
     return null;

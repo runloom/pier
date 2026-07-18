@@ -1,4 +1,5 @@
 import { describe, expect, it, vi } from "vitest";
+import { createUsageCacheEntry } from "../../../packages/plugin-grok/src/main/accounts-usage.ts";
 import {
   ACCESS_DENIED_ERROR,
   API_KEY_QUOTA_ERROR,
@@ -278,8 +279,8 @@ describe("fetchGrokUsage", () => {
     });
 
     expect(result.status).toBe("ok");
-    // credits timeout + credits retry + cash
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    // credits timeout + credits retry + cash + soft subscription
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
       GROK_BILLING_CREDITS_URL,
@@ -290,6 +291,7 @@ describe("fetchGrokUsage", () => {
       GROK_BILLING_URL,
       expect.any(Object)
     );
+    expect(fetchImpl.mock.calls[3]?.[0]).toContain("/rest/subscriptions");
   });
 
   it("surfaces a stable timeout error when every hop times out (incl. silent retry)", async () => {
@@ -570,5 +572,187 @@ describe("fetchGrokUsage", () => {
 
     expect(result.status).toBe("error");
     expect(result.error).toMatch(/re-?login|session expired/i);
+  });
+});
+
+describe("fetchGrokUsage subscription soft-attach", () => {
+  it("attaches parsed membership without failing usage on subscription errors", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/rest/subscriptions")) {
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              subscriptions: [
+                {
+                  tier: "SUBSCRIPTION_TIER_GROK_PRO",
+                  status: "SUBSCRIPTION_STATUS_ACTIVE",
+                  billingPeriodEnd: "2026-07-21T05:50:54.252Z",
+                  cancelAtPeriodEnd: false,
+                  activeOffer: {
+                    type: "ACTIVE_OFFER_FREE_TRIAL",
+                    offerEnd: "2026-07-21T05:50:57.308566Z",
+                  },
+                },
+              ],
+            }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            config: {
+              creditUsagePercent: 12,
+              currentPeriod: {
+                end: "2026-07-21T00:00:00.000Z",
+                start: "2026-07-14T00:00:00.000Z",
+                type: "USAGE_PERIOD_TYPE_WEEKLY",
+              },
+            },
+          }),
+      };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.windows[0]?.usedPercent).toBe(12);
+    expect(result.subscription).toEqual({
+      planType: "pro",
+      status: "active",
+      expiresAt: Date.parse("2026-07-21T05:50:54.252Z"),
+      cancelAtPeriodEnd: false,
+      trialEndsAt: Date.parse("2026-07-21T05:50:57.308566Z"),
+    });
+    expect(fetchImpl).toHaveBeenCalledWith(
+      expect.stringContaining("/rest/subscriptions"),
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer session-token-abc",
+        }),
+      })
+    );
+  });
+
+  it("keeps usage ok when subscription endpoint fails", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("/rest/subscriptions")) {
+        return {
+          ok: false,
+          status: 403,
+          text: async () => "Forbidden",
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            config: {
+              creditUsagePercent: 8,
+              currentPeriod: {
+                end: "2026-07-21T00:00:00.000Z",
+                start: "2026-07-14T00:00:00.000Z",
+                type: "USAGE_PERIOD_TYPE_WEEKLY",
+              },
+            },
+          }),
+      };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(result.windows[0]?.usedPercent).toBe(8);
+    expect(result.subscription).toBeUndefined();
+  });
+});
+
+describe("createUsageCacheEntry subscription retention", () => {
+  it("drops previous membership when ok result omits subscription", () => {
+    const cached = createUsageCacheEntry(
+      {
+        status: "ok",
+        windows: [
+          {
+            id: "grok:period",
+            limitId: "period",
+            usedPercent: 10,
+          },
+        ],
+        subscription: {
+          planType: "pro",
+          status: "active",
+          expiresAt: 1,
+        },
+      },
+      undefined,
+      100
+    );
+    const next = createUsageCacheEntry(
+      {
+        status: "ok",
+        windows: [
+          {
+            id: "grok:period",
+            limitId: "period",
+            usedPercent: 20,
+          },
+        ],
+      },
+      cached,
+      200
+    );
+    expect(next.subscription).toBeUndefined();
+    expect(next.windows[0]?.usedPercent).toBe(20);
+  });
+
+  it("retains previous membership when usage itself errors", () => {
+    const cached = createUsageCacheEntry(
+      {
+        status: "ok",
+        windows: [
+          {
+            id: "grok:period",
+            limitId: "period",
+            usedPercent: 10,
+          },
+        ],
+        subscription: {
+          planType: "pro",
+          status: "active",
+          expiresAt: 1,
+        },
+      },
+      undefined,
+      100
+    );
+    const next = createUsageCacheEntry(
+      {
+        status: "error",
+        error: "timeout",
+        windows: [],
+      },
+      cached,
+      200
+    );
+    expect(next.subscription).toEqual({
+      planType: "pro",
+      status: "active",
+      expiresAt: 1,
+    });
   });
 });

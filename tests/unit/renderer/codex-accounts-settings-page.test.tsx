@@ -312,7 +312,7 @@ describe("AccountsSettingsPage", () => {
     expect(usageRenderer).not.toMatch(/5-hour|Weekly|Session/);
   });
 
-  it("renders the active account once with a system-default badge", async () => {
+  it("renders the active account without a redundant status badge", async () => {
     const { context } = contextWithSnapshot(snapshotWithAccount());
     render(
       <>
@@ -322,7 +322,7 @@ describe("AccountsSettingsPage", () => {
     );
 
     expect(await screen.findByText("test@codex.dev")).toBeDefined();
-    expect(screen.getAllByText("System default")).toHaveLength(1);
+    expect(screen.queryByText("System default")).toBeNull();
     expect(screen.queryByText("Current")).toBeNull();
     expect(screen.queryByText("Active")).toBeNull();
   });

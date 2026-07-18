@@ -2,7 +2,7 @@ import type {
   UsageDataPublishInput,
   UsageTokenObservation,
 } from "@pier/plugin-api/main";
-import { dateDaysAgo, todayDate } from "./date-range.ts";
+import { dateDaysAgo, filterByCoverageDate, todayDate } from "./date-range.ts";
 import { openSqliteReader, type SqliteReader } from "./sqlite-reader.ts";
 
 /**
@@ -175,7 +175,7 @@ function scanCore({
       continue;
     }
     const date = new Date(row.time_created).toISOString().slice(0, 10);
-    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < from) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || date < from || date > to) continue;
     observations.set(extract.fingerprint, {
       cachedInputTokens: extract.cachedInputTokens,
       date,
@@ -186,7 +186,8 @@ function scanCore({
       reasoningTokens: extract.reasoningTokens,
     });
   }
-  diagnostics.uniqueEvents = observations.size;
+  const filtered = filterByCoverageDate([...observations.values()], from, to);
+  diagnostics.uniqueEvents = filtered.length;
   return {
     diagnostics,
     input: {
@@ -195,7 +196,7 @@ function scanCore({
         from,
         to,
       },
-      observations: [...observations.values()],
+      observations: filtered,
       observedAt: Date.now(),
       scope: { kind: "machine" },
       sourceId: OPENCODE_SQLITE_USAGE_SOURCE_ID,

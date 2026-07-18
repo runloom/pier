@@ -1,7 +1,11 @@
 import { Avatar, AvatarFallback } from "@pier/ui/avatar.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { Empty, EmptyDescription, EmptyHeader } from "@pier/ui/empty.tsx";
-import { formatDurationShort, formatPercent } from "@pier/ui/format.tsx";
+import {
+  formatDurationShort,
+  formatPercent,
+  formatRelativeTime,
+} from "@pier/ui/format.tsx";
 import {
   Item,
   ItemActions,
@@ -18,6 +22,7 @@ import { RefreshCw, Trash2 } from "lucide-react";
 import type { JSX } from "react";
 import type {
   GrokAccountSummary,
+  GrokSubscriptionSummary,
   GrokUsageWindow,
 } from "../shared/accounts.ts";
 import { remainingPercent, usageRisk } from "../shared/usage.ts";
@@ -32,6 +37,49 @@ export function accountDisplayLabel(account: {
   if (account.email && account.email.length > 0) return account.email;
   if (account.label && account.label.length > 0) return account.label;
   return account.id;
+}
+
+/** Compact membership + auth-kind line for settings/widget/picker. */
+export function accountMembershipSummary(
+  account: {
+    kind: GrokAccountSummary["kind"];
+    subscription?: GrokSubscriptionSummary | undefined;
+  },
+  language: string,
+  t: Translate,
+  now = Date.now()
+): string {
+  const kindLabel = account.kind === "api_key" ? "API key" : "OIDC";
+  const subscription = account.subscription;
+  if (!subscription) return kindLabel;
+
+  const plan = subscription.planType.toUpperCase();
+  const parts: string[] = [plan];
+  if (subscription.trialEndsAt !== undefined) {
+    parts.push(
+      t("pier.grok.accounts.settings.trialEnds", "Trial ends").concat(
+        " ",
+        formatRelativeTime(subscription.trialEndsAt, now, language)
+      )
+    );
+  } else if (subscription.expiresAt !== undefined) {
+    parts.push(
+      t("pier.grok.accounts.settings.expires", "Expires").concat(
+        " ",
+        formatRelativeTime(subscription.expiresAt, now, language)
+      )
+    );
+  }
+  if (subscription.cancelAtPeriodEnd) {
+    parts.push(
+      t(
+        "pier.grok.accounts.settings.cancelAtPeriodEnd",
+        "Cancels at period end"
+      )
+    );
+  }
+  parts.push(kindLabel);
+  return parts.join(" · ");
 }
 
 export function AccountAvatar({
@@ -225,7 +273,7 @@ export function OtherAccount({
         <ItemContent className="w-60 min-w-0 flex-none max-[48rem]:w-auto max-[48rem]:flex-1">
           <ItemTitle title={label}>{label}</ItemTitle>
           <ItemDescription>
-            {account.kind === "api_key" ? "API key" : "OIDC"}
+            {accountMembershipSummary(account, language, t)}
           </ItemDescription>
         </ItemContent>
         <QuotaGroup

@@ -35,7 +35,12 @@ beforeEach(async () => {
 });
 
 afterEach(async () => {
-  await rm(dir, { force: true, recursive: true });
+  await rm(dir, {
+    force: true,
+    recursive: true,
+    maxRetries: 10,
+    retryDelay: 20,
+  });
 });
 
 function createProvider(
@@ -298,7 +303,27 @@ describe("pier.codex accounts service", () => {
     const stateStore = createCodexAccountsStateStore(
       join(dir, "accounts.json")
     );
-    const provider = createProvider();
+    const provider = createProvider({
+      readIdentity: vi.fn(async (homeDir: string) => {
+        if (homeDir.endsWith("legacy-active")) {
+          return {
+            email: "active@example.com",
+            planType: "plus",
+            providerAccountId: "provider-active",
+          };
+        }
+        if (homeDir.endsWith("legacy-secondary")) {
+          return {
+            email: "secondary@example.com",
+            providerAccountId: "provider-secondary",
+          };
+        }
+        return {
+          email: "current@example.com",
+          providerAccountId: "current-provider",
+        };
+      }),
+    });
     const legacyAuthById: Record<string, string> = {
       "legacy-active": '{"tokens":{"id_token":"active"}}',
       "legacy-secondary": '{"tokens":{"id_token":"secondary"}}',
@@ -342,6 +367,8 @@ describe("pier.codex accounts service", () => {
     });
 
     await service.init();
+    // init fire-and-forgets refreshAllUsage; settle before dispose/cleanup.
+    await service.refreshAllUsage({ force: true });
     service.dispose();
 
     const snapshot = service.snapshot();
@@ -366,7 +393,9 @@ describe("pier.codex accounts service", () => {
         "utf8"
       )
     ).resolves.toBe(legacyAuthById["legacy-secondary"]);
-    expect(provider.readIdentity).toHaveBeenCalledTimes(2);
+    // migrate validates each account once; usage refresh re-reads identity to
+    // backfill subscriptionExpiresAt/plan fields.
+    expect(provider.readIdentity.mock.calls.length).toBeGreaterThanOrEqual(2);
     expect(provider.readCurrentIdentity).not.toHaveBeenCalled();
   });
 
@@ -536,6 +565,175 @@ describe("pier.codex accounts service", () => {
     expect(
       snapshot.accounts.find((account) => account.id === "account-2")?.planType
     ).toBe("pro");
+    service.dispose();
+  });
+
+  it("backfills subscriptionExpiresAt from managed identity on refreshUsage", async () => {
+    const stateFile = join(dir, "accounts.json");
+    const managedBaseDir = join(dir, "managed");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        activeAccountId: "account-1",
+        accounts: [
+          {
+            createdAt: 1,
+            email: "legacy@example.com",
+            id: "account-1",
+            planType: "pro",
+            provider: "codex",
+            providerAccountId: "provider-1",
+            updatedAt: 1,
+          },
+        ],
+        revision: 1,
+        schemaVersion: 1,
+      }),
+      "utf8"
+    );
+    const expiresAt = Date.parse("2026-08-10T14:03:28+00:00");
+    const provider = createProvider({
+      fetchUsage: vi.fn(async () => ({
+        status: "ok" as const,
+        windows: [usageWindow(11)],
+      })),
+      readIdentity: vi.fn(async () => ({
+        email: "legacy@example.com",
+        planType: "pro",
+        providerAccountId: "provider-1",
+        subscriptionExpiresAt: expiresAt,
+      })),
+    });
+    const service = createCodexAccountsService({
+      managedBaseDir,
+      onChanged: vi.fn(),
+      provider,
+      stateStore: createCodexAccountsStateStore(stateFile),
+    });
+    await service.init();
+    expect(
+      service.snapshot().accounts.find((account) => account.id === "account-1")
+        ?.subscriptionExpiresAt
+    ).toBeUndefined();
+
+    await service.refreshUsage({ accountId: "account-1", force: true });
+
+    expect(
+      service.snapshot().accounts.find((account) => account.id === "account-1")
+        ?.subscriptionExpiresAt
+    ).toBe(expiresAt);
+    service.dispose();
+  });
+
+  it("downgrades stale pro identity to free on refreshUsage", async () => {
+    const stateFile = join(dir, "accounts.json");
+    const managedBaseDir = join(dir, "managed");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        activeAccountId: "account-1",
+        accounts: [
+          {
+            createdAt: 1,
+            email: "downgraded@example.com",
+            id: "account-1",
+            planType: "pro",
+            provider: "codex",
+            providerAccountId: "provider-1",
+            subscriptionExpiresAt: Date.parse("2026-08-10T14:03:28+00:00"),
+            updatedAt: 1,
+          },
+        ],
+        revision: 1,
+        schemaVersion: 1,
+      }),
+      "utf8"
+    );
+    const provider = createProvider({
+      fetchUsage: vi.fn(async () => ({
+        planType: "free",
+        status: "ok" as const,
+        windows: [usageWindow(5)],
+      })),
+      readIdentity: vi.fn(async () => ({
+        email: "downgraded@example.com",
+        planType: "free",
+        providerAccountId: "provider-1",
+      })),
+    });
+    const service = createCodexAccountsService({
+      managedBaseDir,
+      onChanged: vi.fn(),
+      provider,
+      stateStore: createCodexAccountsStateStore(stateFile),
+    });
+    await service.init();
+
+    await service.refreshUsage({ accountId: "account-1", force: true });
+
+    const account = service
+      .snapshot()
+      .accounts.find((entry) => entry.id === "account-1");
+    expect(account?.planType).toBe("free");
+    expect(account?.subscriptionExpiresAt).toBeUndefined();
+    service.dispose();
+  });
+
+  it("prefers live rateLimits planType over stale JWT pro claims", async () => {
+    const stateFile = join(dir, "accounts.json");
+    const managedBaseDir = join(dir, "managed");
+    await mkdir(dir, { recursive: true });
+    await writeFile(
+      stateFile,
+      JSON.stringify({
+        activeAccountId: "account-1",
+        accounts: [
+          {
+            createdAt: 1,
+            email: "stale-jwt@example.com",
+            id: "account-1",
+            planType: "pro",
+            provider: "codex",
+            providerAccountId: "provider-1",
+            subscriptionExpiresAt: Date.parse("2026-08-10T14:03:28+00:00"),
+            updatedAt: 1,
+          },
+        ],
+        revision: 1,
+        schemaVersion: 1,
+      }),
+      "utf8"
+    );
+    const provider = createProvider({
+      fetchUsage: vi.fn(async () => ({
+        planType: "free",
+        status: "ok" as const,
+        windows: [usageWindow(8)],
+      })),
+      readIdentity: vi.fn(async () => ({
+        email: "stale-jwt@example.com",
+        planType: "pro",
+        providerAccountId: "provider-1",
+        subscriptionExpiresAt: Date.parse("2026-08-10T14:03:28+00:00"),
+      })),
+    });
+    const service = createCodexAccountsService({
+      managedBaseDir,
+      onChanged: vi.fn(),
+      provider,
+      stateStore: createCodexAccountsStateStore(stateFile),
+    });
+    await service.init();
+
+    await service.refreshUsage({ accountId: "account-1", force: true });
+
+    const account = service
+      .snapshot()
+      .accounts.find((entry) => entry.id === "account-1");
+    expect(account?.planType).toBe("free");
+    expect(account?.subscriptionExpiresAt).toBeUndefined();
     service.dispose();
   });
 

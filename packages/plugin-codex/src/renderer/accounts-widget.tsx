@@ -18,7 +18,11 @@ import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import { RefreshCw } from "lucide-react";
 import type { JSX } from "react";
-import { AccountAvatar, resetCredits } from "./account-display.tsx";
+import {
+  AccountAvatar,
+  accountPlanSummary,
+  resetCredits,
+} from "./account-display.tsx";
 import { AccountPicker } from "./account-picker.tsx";
 import { UsageMeter } from "./usage-meter.tsx";
 import { useCodexAccountsSnapshot } from "./use-accounts-snapshot.ts";
@@ -118,7 +122,9 @@ export function AccountsWidget({
           </ItemTitle>
           <ItemDescription>
             <span>
-              {activeAccount?.planType?.toUpperCase() ??
+              {(activeAccount
+                ? accountPlanSummary(activeAccount, context.i18n.language(), t)
+                : null) ??
                 t(
                   "pier.codex.widget.accountUnavailable",
                   "Account unavailable"

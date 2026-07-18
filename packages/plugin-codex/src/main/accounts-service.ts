@@ -373,6 +373,7 @@ export function createCodexAccountsService(
         ensureUsageEnv,
         now,
         provider,
+        stateStore,
         usageCache,
       });
     }

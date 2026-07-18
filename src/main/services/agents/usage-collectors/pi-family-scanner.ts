@@ -5,7 +5,7 @@ import type {
   UsageDataPublishInput,
   UsageTokenObservation,
 } from "@pier/plugin-api/main";
-import { dateDaysAgo, todayDate } from "./date-range.ts";
+import { dateDaysAgo, filterByCoverageDate, todayDate } from "./date-range.ts";
 import {
   type CachedTokenUsage,
   type FileUsage,
@@ -164,7 +164,12 @@ async function scanPiFamilyUsage(
       }
     }
   }
-  diagnostics.uniqueEvents = uniqueEvents.size;
+  const observations = filterByCoverageDate(
+    [...uniqueEvents.values()],
+    from,
+    to
+  );
+  diagnostics.uniqueEvents = observations.length;
   await writeLocalUsageCache(cachePath, entries);
   return {
     diagnostics,
@@ -177,7 +182,7 @@ async function scanPiFamilyUsage(
         from,
         to,
       },
-      observations: [...uniqueEvents.values()].map(
+      observations: observations.map(
         (observation): UsageTokenObservation => ({
           cachedInputTokens: observation.cachedInputTokens,
           date: observation.date,

@@ -10,6 +10,7 @@ import {
   refreshOidcSession,
   selectOidcAuthEntry,
 } from "./oidc-session.ts";
+import { fetchGrokSubscriptionSoft } from "./subscription-fetch.ts";
 import type { AccountUsageResult } from "./types.ts";
 import {
   BILLING_HOP_TIMEOUT_MS,
@@ -50,6 +51,30 @@ export const SESSION_EXPIRED_RELOGIN_ERROR =
 export const ACCESS_DENIED_ERROR =
   "Grok account cannot access billing for this product";
 
+async function withSoftSubscription(
+  result: AccountUsageResult,
+  options: {
+    caller: AbortSignal;
+    fetchImpl: FetchImpl;
+    overall: AbortSignal | null;
+    sessionKey: string;
+  }
+): Promise<AccountUsageResult> {
+  if (result.status !== "ok" || result.windows.length === 0) {
+    return result;
+  }
+  if (options.caller.aborted || options.overall?.aborted) {
+    return result;
+  }
+  const subscription = await fetchGrokSubscriptionSoft({
+    fetchImpl: options.fetchImpl,
+    overall: options.overall,
+    sessionKey: options.sessionKey,
+    signal: options.caller,
+  });
+  if (!subscription) return result;
+  return { ...result, subscription };
+}
 function throwIfCallerOrOverallAborted(
   caller: AbortSignal,
   overall: AbortSignal | null
@@ -302,7 +327,12 @@ async function fetchGrokUsageAttempt(options: {
     // credits are exhausted. Retry credits once on transport/timeout before cash.
     let credits = await requestWithOptionalRefresh(GROK_BILLING_CREDITS_URL);
     if (credits.status === "ok" && credits.windows.length > 0) {
-      return credits;
+      return await withSoftSubscription(credits, {
+        caller,
+        fetchImpl,
+        overall,
+        sessionKey,
+      });
     }
     if (
       credits.status === "error" &&
@@ -328,7 +358,12 @@ async function fetchGrokUsageAttempt(options: {
         GROK_BILLING_CREDITS_URL
       );
       if (creditsRetry.status === "ok" && creditsRetry.windows.length > 0) {
-        return creditsRetry;
+        return await withSoftSubscription(creditsRetry, {
+          caller,
+          fetchImpl,
+          overall,
+          sessionKey,
+        });
       }
       if (
         creditsRetry.status === "error" &&
@@ -346,7 +381,12 @@ async function fetchGrokUsageAttempt(options: {
     // Last resort: cash monthly spend (labeled "Monthly spend" in parser).
     const fallback = await requestWithOptionalRefresh(GROK_BILLING_URL);
     if (fallback.status === "ok" && fallback.windows.length > 0) {
-      return fallback;
+      return await withSoftSubscription(fallback, {
+        caller,
+        fetchImpl,
+        overall,
+        sessionKey,
+      });
     }
     return credits.status === "error" ? credits : fallback;
   } catch (error) {

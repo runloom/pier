@@ -38,4 +38,45 @@ describe("OpenCode collector merge", () => {
       "message-c",
     ]);
   });
+
+  it("drops observations outside the intersected coverage window", () => {
+    const primary = input([
+      {
+        ...observation("message-a"),
+        date: "2026-07-13",
+      },
+      {
+        ...observation("message-old"),
+        date: "2026-07-01",
+      },
+    ]);
+    primary.coverage = { complete: true, from: "2026-07-10", to: "2026-07-17" };
+    const secondary = input([
+      {
+        ...observation("message-b"),
+        date: "2026-07-15",
+      },
+      {
+        ...observation("message-future"),
+        date: "2026-07-20",
+      },
+    ]);
+    secondary.coverage = {
+      complete: true,
+      from: "2026-07-12",
+      to: "2026-07-16",
+    };
+
+    const merged = mergeOpenCodeInputs(primary, secondary);
+
+    expect(merged?.coverage).toEqual({
+      complete: true,
+      from: "2026-07-12",
+      to: "2026-07-16",
+    });
+    expect(merged?.observations.map((row) => row.eventId)).toEqual([
+      "message-a",
+      "message-b",
+    ]);
+  });
 });

@@ -6,7 +6,7 @@ import type {
   UsageTokenObservation,
 } from "@pier/plugin-api/main";
 import { scanClaudeCodeUsageFile } from "./claude-code-parser.ts";
-import { dateDaysAgo, todayDate } from "./date-range.ts";
+import { dateDaysAgo, filterByCoverageDate, todayDate } from "./date-range.ts";
 import {
   type CachedTokenUsage,
   type FileUsage,
@@ -166,7 +166,12 @@ async function scanClaudeCodeUsage(
       }
     }
   }
-  diagnostics.uniqueEvents = uniqueEvents.size;
+  const observations = filterByCoverageDate(
+    [...uniqueEvents.values()],
+    from,
+    to
+  );
+  diagnostics.uniqueEvents = observations.length;
   await writeLocalUsageCache(cachePath, entries);
   return {
     diagnostics,
@@ -179,7 +184,7 @@ async function scanClaudeCodeUsage(
         from,
         to,
       },
-      observations: [...uniqueEvents.values()].map(
+      observations: observations.map(
         (observation): UsageTokenObservation => ({
           cachedInputTokens: observation.cachedInputTokens,
           date: observation.date,

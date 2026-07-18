@@ -20,7 +20,6 @@ import {
 import { formatRelativeTime } from "@pier/ui/format.tsx";
 import {
   Item,
-  ItemActions,
   ItemContent,
   ItemDescription,
   ItemGroup,
@@ -46,6 +45,7 @@ import {
 import {
   AccountAvatar,
   accountDisplayLabel,
+  accountMembershipSummary,
   OtherAccount,
   QuotaGroup,
 } from "./account-display.tsx";
@@ -310,25 +310,6 @@ export function AccountsSettingsPage({
         </div>
       </header>
 
-      {snapshot.login ? (
-        <Alert>
-          <AlertTitle>
-            {t("pier.grok.accounts.settings.loginPending", "Login pending")}
-          </AlertTitle>
-          <AlertDescription>
-            {snapshot.login.mode === "device"
-              ? t(
-                  "pier.grok.accounts.settings.addDialogDeviceDescription",
-                  "Use device-code login when browser OAuth is unavailable."
-                )
-              : t(
-                  "pier.grok.accounts.settings.addDialogOauthDescription",
-                  "Open Grok login in your browser. The account appears here automatically after authorization."
-                )}
-          </AlertDescription>
-        </Alert>
-      ) : null}
-
       {active ? (
         <Card data-testid="grok-active-account" size="sm">
           <CardHeader className="items-center">
@@ -411,7 +392,7 @@ export function AccountsSettingsPage({
                 </ItemTitle>
                 <ItemDescription>
                   {[
-                    active.kind === "api_key" ? "API key" : "OIDC",
+                    accountMembershipSummary(active, language, t),
                     activeUsage
                       ? `${t("pier.grok.accounts.settings.updated", "Updated")} ${formatRelativeTime(activeUsage.fetchedAt, Date.now(), language)}`
                       : null,
@@ -420,11 +401,6 @@ export function AccountsSettingsPage({
                     .join(" · ")}
                 </ItemDescription>
               </ItemContent>
-              <ItemActions>
-                <Badge variant="secondary">
-                  {t("pier.grok.accounts.settings.account", "Account")}
-                </Badge>
-              </ItemActions>
             </Item>
             <ItemSeparator className="my-0" />
             <QuotaGroup

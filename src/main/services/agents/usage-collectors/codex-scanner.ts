@@ -6,7 +6,12 @@ import type {
   UsageTokenObservation,
 } from "@pier/plugin-api/main";
 import { scanCodexUsageFile } from "./codex-parser.ts";
-import { dateDaysAgo, datesInRange, todayDate } from "./date-range.ts";
+import {
+  dateDaysAgo,
+  datesInRange,
+  filterByCoverageDate,
+  todayDate,
+} from "./date-range.ts";
 import {
   type CachedTokenUsage,
   type FileUsage,
@@ -239,7 +244,12 @@ async function scanCodexUsage(
       }
     }
   }
-  diagnostics.uniqueEvents = uniqueEvents.size;
+  const observations = filterByCoverageDate(
+    [...uniqueEvents.values()],
+    from,
+    to
+  );
+  diagnostics.uniqueEvents = observations.length;
   await writeLocalUsageCache(cachePath, entries);
   return {
     diagnostics,
@@ -252,7 +262,7 @@ async function scanCodexUsage(
         from,
         to,
       },
-      observations: [...uniqueEvents.values()].map(
+      observations: observations.map(
         (observation): UsageTokenObservation => ({
           cachedInputTokens: observation.cachedInputTokens,
           date: observation.date,
