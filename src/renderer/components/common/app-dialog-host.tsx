@@ -35,7 +35,7 @@ function DialogCopy({
   showDangerMark = false,
   title,
 }: {
-  body?: string;
+  body?: string | undefined;
   showDangerMark?: boolean;
   title: string;
 }): ReactNode {

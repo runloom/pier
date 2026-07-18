@@ -225,14 +225,18 @@ describe("terminal content context menu actions", () => {
   it("adds terminal editing actions to the top of terminal/content", async () => {
     await registerActions();
 
-    const entries = buildMenuEntries("terminal/content");
+    // 传 invocation.surface 模拟真实右键：terminal/content 有本地 copy/selectAll，
+    // panel 通用 copySelection/selectAll menuHidden=true 不出现，避免 sortOrder
+    // 碰撞后依赖 localeCompare（CI en.UTF-8 与本地 zh.UTF-8 中文排序不同）。
+    const entries = buildMenuEntries("terminal/content", {
+      sourcePanelId: "terminal-1",
+      surface: "terminal/content",
+    });
     const ids = collectActionIds(entries);
 
     expect(ids).toEqual(
       expect.arrayContaining([
-        "pier.panel.copySelection",
         "pier.terminal.copy",
-        "pier.panel.selectAll",
         "pier.terminal.paste",
         "pier.terminal.selectAll",
         "pier.terminal.search",
@@ -241,19 +245,21 @@ describe("terminal content context menu actions", () => {
         "pier.panel.focusRight",
       ])
     );
+    expect(ids).not.toContain("pier.panel.copySelection");
+    expect(ids).not.toContain("pier.panel.selectAll");
     expect(ids.slice(0, 5)).toEqual([
-      "pier.panel.copySelection",
       "pier.terminal.copy",
-      "pier.panel.selectAll",
       "pier.terminal.paste",
       "pier.terminal.selectAll",
+      "pier.terminal.search",
+      "pier.terminal.clearScreen",
     ]);
     expect(topLevelActionLabels(entries).slice(0, 5)).toEqual([
       "复制",
-      "复制",
-      "全选",
       "粘贴",
       "全选",
+      "查找",
+      "清屏",
     ]);
   });
 
