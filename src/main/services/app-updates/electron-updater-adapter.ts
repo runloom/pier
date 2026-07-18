@@ -6,7 +6,10 @@ export function createElectronAppUpdaterAdapter(): AppUpdaterAdapter {
   // electron app 信息——必须推迟到工厂调用时（仅 production 走到这里），
   // 否则任何 import 链在测试环境都会因 app 未就绪而崩。
   const { autoUpdater } = electronUpdater;
+  // Service owns post-check download (single-flight + progress mapping).
+  // Keep autoDownload false so checkForUpdates does not start a second download.
   autoUpdater.autoDownload = false;
+  autoUpdater.autoInstallOnAppQuit = true;
   return {
     checkForUpdates: () => autoUpdater.checkForUpdates(),
     downloadUpdate: () => autoUpdater.downloadUpdate(),

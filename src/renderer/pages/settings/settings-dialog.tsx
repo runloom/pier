@@ -41,6 +41,10 @@ import {
   pluginIdFromSectionId,
   pluginNavItems,
 } from "@/pages/settings/data/appearance-nav.ts";
+import {
+  appUpdateNeedsAttention,
+  useAppUpdateStore,
+} from "@/stores/app-update.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
@@ -55,12 +59,14 @@ function NavButton({
   icon: Icon,
   label,
   onSelect,
+  showDot,
   testId,
 }: {
   active: boolean;
   icon: (typeof NAV_ITEMS)[number]["icon"];
   label: string;
   onSelect: () => void;
+  showDot?: boolean;
   testId: string;
 }) {
   return (
@@ -73,7 +79,16 @@ function NavButton({
         type="button"
       >
         <Icon />
-        <span>{label}</span>
+        <span className="flex min-w-0 flex-1 items-center gap-1.5">
+          <span className="truncate">{label}</span>
+          {showDot ? (
+            <span
+              aria-hidden
+              className="size-1.5 shrink-0 rounded-full bg-action-accent"
+              data-testid={`${testId}-dot`}
+            />
+          ) : null}
+        </span>
       </SidebarMenuButton>
     </SidebarMenuItem>
   );
@@ -94,6 +109,8 @@ export function SettingsDialog() {
   const onOpenChange = useSettingsDialogStore((s) => s.setOpen);
   const activeSection = useSettingsDialogStore((s) => s.activeSection);
   const setActiveSection = useSettingsDialogStore((s) => s.setActiveSection);
+  const updateSnapshot = useAppUpdateStore((s) => s.snapshot);
+  const updatesNeedAttention = appUpdateNeedsAttention(updateSnapshot);
   const plugins = usePluginRegistryStore((s) => s.plugins);
   const pluginItems: PluginNavItem[] = pluginNavItems(
     plugins,
@@ -165,6 +182,7 @@ export function SettingsDialog() {
                       key={item.id}
                       label={t(`settings.nav.${item.id}`)}
                       onSelect={() => setActiveSection(item.id)}
+                      showDot={item.id === "updates" && updatesNeedAttention}
                       testId={`settings-nav-${item.id}`}
                     />
                   ))}

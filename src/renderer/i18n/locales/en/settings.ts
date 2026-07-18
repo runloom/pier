@@ -90,6 +90,15 @@ export const settings = {
       checkFailed: "Failed to check for updates",
       downloadFailed: "Failed to download update",
       installFailed: "Failed to install update",
+      ready: "Pier {{version}} is ready to install.",
+    },
+    titleBar: {
+      update: "Update",
+      updateAvailable: "v{{version}}",
+      availableAria: "Pier {{version}} is available",
+      downloadingAria: "Downloading update {{percent}} percent",
+      restartAria: "Restart and install Pier {{version}}",
+      errorAria: "App update failed. Open update settings.",
     },
   },
   statusBar: {
