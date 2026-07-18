@@ -192,18 +192,17 @@ describe("PierFileTree", () => {
       getFileTreeHost(container).shadowRoot?.querySelector(
         "style[data-file-tree-unsafe-css]"
       )?.textContent ?? "";
-    expect(shadowCss).toContain("--trees-scrollbar-thumb-current: transparent");
-    expect(shadowCss).toContain('[data-scrollbar-scrolling="true"]');
+    expect(shadowCss).toContain("var(--shell-scrollbar-thumb)");
     expect(shadowCss).toContain("var(--shell-scrollbar-thumb-active)");
-    expect(shadowCss).toContain("var(--shell-scrollbar-radius)");
-    expect(shadowCss).toContain("var(--shell-scrollbar-track)");
+    expect(shadowCss).toContain("var(--shell-scrollbar-track");
+    expect(shadowCss).toContain("var(--shell-scrollbar-width-legacy");
     expect(shadowCss).toContain(
-      "scrollbar-width: var(--shell-scrollbar-width)"
+      '[data-file-tree-virtualized-scroll="true"]::-webkit-scrollbar'
     );
-    expect(shadowCss).toContain('[data-file-tree-scrollbar-measure="true"]');
-    expect(shadowCss).not.toContain(
-      '[data-file-tree-virtualized-scroll="true"]:hover {'
+    expect(shadowCss).toContain(
+      '[data-file-tree-virtualized-scroll="true"][data-scrollbar-scrolling="true"]'
     );
+    expect(shadowCss).toContain("data-file-tree-scrollbar-measure");
   });
 
   it("reveals the shadow scrollbar only while scrolling is active", async () => {
@@ -220,7 +219,6 @@ describe("PierFileTree", () => {
       expect(scroller).toHaveAttribute("data-scrollbar-scrolling", "true");
     });
   });
-
   it("renders directory and file rows from path-first items", () => {
     const { container } = render(
       <PierFileTree items={items} label="Project files" />

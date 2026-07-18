@@ -42,7 +42,7 @@ export function ReadOnlyErrorState({
       <h1 className="font-semibold text-foreground text-sm">{title}</h1>
       <Alert variant="destructive">
         <AlertTitle>
-          {t("filePanel.errors.restore.title", "Unable to restore file panel")}
+          {t("filePanel.errors.restore.title", "Unable to restore file tab")}
         </AlertTitle>
         <AlertDescription>{message}</AlertDescription>
       </Alert>

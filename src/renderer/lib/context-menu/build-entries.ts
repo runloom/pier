@@ -14,8 +14,33 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action, ActionInvocation } from "@/lib/actions/types.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import type { KeyChord } from "@/lib/keybindings/types.ts";
+import {
+  captureDomSelectionText,
+  selectedTextFromInvocation,
+} from "./selection-text.ts";
 
 const DEFAULT_GROUP = "9_other";
+
+/** 所有面板内容区共享的布局菜单 surface（拆分/聚焦/均分）。 */
+export const PANEL_CONTENT_SURFACE = "panel/content";
+
+const SURFACES_WITHOUT_SHARED_PANEL_CONTENT: Readonly<Record<string, true>> = {
+  "command-palette": true,
+  "create-menu": true,
+  "dockview-tab": true,
+  [PANEL_CONTENT_SURFACE]: true,
+};
+
+/**
+ * 内容区菜单自动并入共享布局 actions；tab / 命令面板 / create-menu 不继承。
+ * 这样 terminal/files/workbench 等本地 surface 不必各自声明均分/拆分/聚焦。
+ */
+export function expandContextMenuSurfaces(surface: string): readonly string[] {
+  if (SURFACES_WITHOUT_SHARED_PANEL_CONTENT[surface]) {
+    return [surface];
+  }
+  return [surface, PANEL_CONTENT_SURFACE];
+}
 
 const CODE_TO_ELECTRON: Readonly<Record<string, string>> = {
   ArrowDown: "Down",
@@ -89,12 +114,18 @@ function actionToMenuItem(a: Action, invocation?: ActionInvocation): MenuItem {
     ? toElectronAccelerator(binding.chord)
     : undefined;
   const enabled = a.enabled?.(invocation) ?? true;
+  // 复制选区：把弹菜单瞬间的文本钉到菜单项，main click 时直接写剪贴板。
+  const clipboardText =
+    a.id === "pier.panel.copySelection"
+      ? selectedTextFromInvocation(invocation) || captureDomSelectionText()
+      : "";
   return {
     type: "action",
     id: a.id,
     label: a.title(invocation),
     enabled,
     ...(accelerator !== undefined && { accelerator }),
+    ...(clipboardText.length > 0 ? { clipboardText } : {}),
   };
 }
 
@@ -145,9 +176,20 @@ export function buildMenuEntries(
   invocation?: ActionInvocation
 ): MenuTemplate {
   // menuHidden = 整行移除 (如任务面板隐藏"新建终端"); enabled=false 仅置灰。
-  const actions = actionRegistry
-    .list(surface)
-    .filter((a) => a.metadata?.menuHidden?.(invocation) !== true);
+  const seen = new Set<string>();
+  const actions: Action[] = [];
+  for (const candidate of expandContextMenuSurfaces(surface)) {
+    for (const action of actionRegistry.list(candidate)) {
+      if (seen.has(action.id)) {
+        continue;
+      }
+      seen.add(action.id);
+      if (action.metadata?.menuHidden?.(invocation) === true) {
+        continue;
+      }
+      actions.push(action);
+    }
+  }
   if (actions.length === 0) {
     return [];
   }

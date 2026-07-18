@@ -7,6 +7,13 @@ import {
   useLayoutEffect,
   useRef,
 } from "react";
+import { actionRegistry } from "@/lib/actions/registry.ts";
+import type { ActionInvocation } from "@/lib/actions/types.ts";
+import {
+  buildMenuEntries,
+  PANEL_CONTENT_SURFACE,
+} from "@/lib/context-menu/build-entries.ts";
+import { captureDomSelectionText } from "@/lib/context-menu/selection-text.ts";
 import { popupMenuTemplateAt } from "@/lib/context-menu/use-context-menu.ts";
 import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
@@ -18,13 +25,25 @@ const MENU_ACTION = {
 } as const;
 
 interface WorkbenchContextMenuState {
+  activatePanel?: () => void;
   hasWidgets: boolean;
   onAddWidget: () => void;
   onRefreshAll: () => void;
 }
 
-function buildTemplate(state: WorkbenchContextMenuState): MenuTemplate {
-  return [
+function selectionInvocation(): ActionInvocation {
+  const selectedText = captureDomSelectionText();
+  return {
+    metadata: selectedText.length > 0 ? { selectedText } : {},
+    surface: PANEL_CONTENT_SURFACE,
+  };
+}
+
+function buildTemplate(
+  state: WorkbenchContextMenuState,
+  invocation: ActionInvocation
+): MenuTemplate {
+  const local: MenuTemplate = [
     {
       id: MENU_ACTION.addWidget,
       label: i18next.t("workbench.addWidget"),
@@ -37,12 +56,19 @@ function buildTemplate(state: WorkbenchContextMenuState): MenuTemplate {
       type: "action",
     },
   ];
+  // 工作台自管菜单并 stopPropagation，不经内容区 shell；显式并入共享布局项。
+  const shared = buildMenuEntries(PANEL_CONTENT_SURFACE, invocation);
+  if (shared.length === 0) {
+    return local;
+  }
+  return [...local, { type: "separator" }, ...shared];
 }
 
-function dispatchAction(
+async function dispatchAction(
   state: WorkbenchContextMenuState,
-  actionId: string
-): void {
+  actionId: string,
+  invocation: ActionInvocation
+): Promise<void> {
   if (actionId === MENU_ACTION.addWidget) {
     state.onAddWidget();
     return;
@@ -53,6 +79,14 @@ function dispatchAction(
     }
     return;
   }
+  const action = actionRegistry.get(actionId);
+  if (!action) {
+    return;
+  }
+  if (action.enabled?.(invocation) === false) {
+    return;
+  }
+  await Promise.resolve(action.handler(invocation));
 }
 
 export function useWorkbenchContextMenu(state: WorkbenchContextMenuState): {
@@ -66,13 +100,18 @@ export function useWorkbenchContextMenu(state: WorkbenchContextMenuState): {
 
   const openAt = useCallback((point: { x: number; y: number }) => {
     const snapshot = latestRef.current;
+    const invocation = selectionInvocation();
     const coords = cssPointToContentViewPoint(
       point,
       useZoomStore.getState().windowZoomLevel
     );
-    popupMenuTemplateAt(buildTemplate(snapshot), coords, (actionId) => {
-      dispatchAction(latestRef.current, actionId);
-    }).catch((error: unknown) => {
+    popupMenuTemplateAt(
+      buildTemplate(snapshot, invocation),
+      coords,
+      async (actionId) => {
+        await dispatchAction(latestRef.current, actionId, invocation);
+      }
+    ).catch((error: unknown) => {
       showAppAlert({
         body: error instanceof Error ? error.message : String(error),
         title: i18next.t("workbench.context.menuFailed"),
@@ -92,6 +131,7 @@ export function useWorkbenchContextMenu(state: WorkbenchContextMenuState): {
       }
       event.preventDefault();
       event.stopPropagation();
+      latestRef.current.activatePanel?.();
       openAt({ x: event.clientX, y: event.clientY });
     },
     [openAt]
@@ -108,6 +148,7 @@ export function useWorkbenchContextMenu(state: WorkbenchContextMenuState): {
       }
       event.preventDefault();
       event.stopPropagation();
+      latestRef.current.activatePanel?.();
       const rect = event.currentTarget.getBoundingClientRect();
       const inset = 8;
       openAt({

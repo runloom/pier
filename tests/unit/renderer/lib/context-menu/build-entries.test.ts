@@ -5,7 +5,11 @@
 // 测试间 register 残留不互相影响.
 import { beforeEach, describe, expect, it } from "vitest";
 import { actionRegistry } from "@/lib/actions/registry.ts";
-import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
+import {
+  buildMenuEntries,
+  expandContextMenuSurfaces,
+  PANEL_CONTENT_SURFACE,
+} from "@/lib/context-menu/build-entries.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 
 describe("buildMenuEntries", () => {
@@ -168,5 +172,63 @@ describe("buildMenuEntries", () => {
       first?.type === "action" ? first.accelerator : undefined;
 
     expect(accelerator).toBe("CmdOrCtrl+W");
+  });
+
+  it("内容区 surface 自动并入 panel/content 布局 actions", () => {
+    actionRegistry.register({
+      category: "T",
+      handler: () => undefined,
+      id: "t.local",
+      metadata: { group: "0_edit", sortOrder: 1 },
+      surfaces: ["test/content-merge"],
+      title: () => "local",
+    });
+    actionRegistry.register({
+      category: "T",
+      handler: () => undefined,
+      id: "t.shared-layout",
+      metadata: { group: "4_layout", sortOrder: 1 },
+      surfaces: [PANEL_CONTENT_SURFACE],
+      title: () => "shared",
+    });
+
+    expect(expandContextMenuSurfaces("test/content-merge")).toEqual([
+      "test/content-merge",
+      PANEL_CONTENT_SURFACE,
+    ]);
+    expect(
+      buildMenuEntries("test/content-merge").map((e) =>
+        e.type === "action" ? e.id : e.type
+      )
+    ).toEqual(["t.local", "separator", "t.shared-layout"]);
+  });
+
+  it("dockview-tab / command-palette 不继承 panel/content", () => {
+    actionRegistry.register({
+      category: "T",
+      handler: () => undefined,
+      id: "t.tab-only",
+      metadata: { group: "9_close", sortOrder: 1 },
+      surfaces: ["dockview-tab"],
+      title: () => "close",
+    });
+    actionRegistry.register({
+      category: "T",
+      handler: () => undefined,
+      id: "t.layout",
+      metadata: { group: "4_layout", sortOrder: 1 },
+      surfaces: [PANEL_CONTENT_SURFACE],
+      title: () => "layout",
+    });
+
+    expect(expandContextMenuSurfaces("dockview-tab")).toEqual(["dockview-tab"]);
+    expect(expandContextMenuSurfaces("command-palette")).toEqual([
+      "command-palette",
+    ]);
+    expect(
+      buildMenuEntries("dockview-tab").map((e) =>
+        e.type === "action" ? e.id : e.type
+      )
+    ).toEqual(["t.tab-only"]);
   });
 });

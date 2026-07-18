@@ -121,6 +121,7 @@ export function ResolvedFilePanel({
             },
             sourcePanelComponent: FILES_FILE_PANEL_ID,
             ...(panelContext ? { sourcePanelContext: panelContext } : {}),
+            ...(panelId ? { sourcePanelId: panelId } : {}),
           }
         )
         .catch((err: unknown) => {
@@ -135,7 +136,7 @@ export function ResolvedFilePanel({
             .catch(() => undefined);
         });
     },
-    [context, document, editorSessionId, panelContext, t]
+    [context, document, editorSessionId, panelContext, panelId, t]
   );
 
   const handleReveal = useCallback(async () => {
@@ -279,7 +280,7 @@ export function ResolvedFilePanel({
       <ReadOnlyErrorState
         message={t(
           "filePanel.errors.diskDocumentMissing",
-          "This disk file document could not be restored."
+          "This saved file could not be restored."
         )}
         t={t}
         title={source.path.split("/").filter(Boolean).at(-1) ?? source.path}

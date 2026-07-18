@@ -29,6 +29,7 @@ import type { gitReviewTreeModel } from "./git-review-tree.tsx";
 interface GitReviewDocumentViewProps {
   readonly appearance: RendererPluginAppearance;
   readonly context: RendererPluginContext;
+  readonly contextId: string;
   readonly diffRef: (handle: PierDiffViewHandle | null) => void;
   readonly failureSummary: ReviewFailureSummary;
   readonly gitRootPath: string;
@@ -58,6 +59,7 @@ export function GitReviewDocumentView({
   context,
   diffRef,
   failureSummary,
+  contextId,
   gitRootPath,
   indexFailure,
   navigationError,
@@ -92,6 +94,7 @@ export function GitReviewDocumentView({
   return (
     <GitReviewPanelLayout
       context={context}
+      contextId={contextId}
       gitRootPath={gitRootPath}
       onOpenPath={onOpenPath}
       selectedFilePath={selectedFilePath}

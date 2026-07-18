@@ -153,6 +153,9 @@ export function WorkbenchPanel(props: IDockviewPanelProps) {
   const settingsWidget =
     resolved.find((widget) => widget.instanceId === settingsInstanceId) ?? null;
   const nativeMenu = useWorkbenchContextMenu({
+    activatePanel: () => {
+      props.api.setActive();
+    },
     hasWidgets: resolved.length > 0,
     onAddWidget: () => setLibraryOpen(true),
     onRefreshAll: state.refreshAll,

@@ -203,6 +203,10 @@ export interface PierMenuAPI {
   ) => Promise<MenuPopupResult>;
 }
 
+export interface PierClipboardAPI {
+  writeText: (text: string) => Promise<void>;
+}
+
 export interface PierSettingsAPI {
   onOpenRequest: (cb: () => void) => () => void;
 }
@@ -227,6 +231,7 @@ export interface PierWindowAPI {
   app: AppPreloadApi;
   appQuit: PierAppQuitAPI;
   appUpdate: AppUpdatePreloadApi;
+  clipboard: PierClipboardAPI;
   closeWindow: (windowId: string) => Promise<void>;
   commandPalette: PierCommandPaletteAPI;
   commandPaletteMru: PierCommandPaletteMruAPI;
@@ -415,6 +420,10 @@ const menuApi: PierMenuAPI = {
     ipcRenderer.invoke("pier:menu:popup", template, options),
 };
 
+const clipboardApi: PierClipboardAPI = {
+  writeText: (text) => ipcRenderer.invoke("pier:clipboard:writeText", text),
+};
+
 const settingsApi: PierSettingsAPI = {
   onOpenRequest: (cb) => subscribeIpc(PIER_BROADCAST.SETTINGS_OPEN_REQUEST, cb),
 };
@@ -450,6 +459,7 @@ const api: PierWindowAPI = {
   keybinding: keybindingApi,
   listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
   menu: menuApi,
+  clipboard: clipboardApi,
   notifications: notificationsApi,
   plugins: pluginsApi,
   pluginSettings: pluginSettingsApi,

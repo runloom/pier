@@ -51,6 +51,7 @@ import {
   peekPendingCreate,
   registerFilesTreeInstance,
 } from "./files-tree-registry.ts";
+import { handleFilesTreeSearchKeyDown } from "./files-tree-search-keydown.ts";
 import {
   loadFilesTreeDirectory,
   moveFilesTreeEntry,
@@ -171,9 +172,10 @@ export function FileTreeSidebar({
       getApi: () => treeApiRef.current,
       openSearch: treeSearch.openSearch,
       root,
+      toggleSearch: treeSearch.toggleSearch,
     };
     return registerFilesTreeInstance(instanceId, entry);
-  }, [instanceId, root, treeSearch.openSearch]);
+  }, [instanceId, root, treeSearch.openSearch, treeSearch.toggleSearch]);
   const selectedPathsRef = useRef<readonly string[]>([]);
   const handleSelectPaths = useCallback((paths: string[]) => {
     selectedPathsRef.current = paths;
@@ -430,14 +432,24 @@ export function FileTreeSidebar({
     treeSearch.matchCount === 0;
 
   return (
-    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: contextmenu bubbles from tree children; aside just captures.
+    // biome-ignore lint/a11y/noNoninteractiveElementInteractions: contextmenu + search keyboard bubble from tree children; aside just captures.
     <aside
       className="flex h-full min-h-0 w-full flex-col bg-sidebar"
       onContextMenu={handleTreeBackgroundContextMenu}
       onDoubleClick={handleTreeDoubleClick}
+      onKeyDown={(event) => {
+        handleFilesTreeSearchKeyDown(event, {
+          closeSearch: treeSearch.closeSearch,
+          focusedMatchOpenable: treeSearch.focusedMatchOpenable,
+          navigateSearch: treeSearch.navigateSearch,
+          open: treeSearch.open,
+          openFocusedMatch: treeSearch.openFocusedMatch,
+          searchActionsDisabled,
+        });
+      }}
     >
       {treeSearch.open ? (
-        <div className="shrink-0 px-2 pb-1.5">
+        <div className="shrink-0 px-2 py-1">
           <FilesSearchBar
             className="w-full"
             focusSignal={treeSearch.focusSignal}

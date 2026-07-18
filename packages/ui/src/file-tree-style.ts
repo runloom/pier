@@ -1,5 +1,6 @@
 import type * as React from "react";
 import { PIER_FILE_TREE_ICON_COLOR_OVERRIDES } from "./file-icon-theme.ts";
+import { SCROLLBAR_SYSTEM_CSS } from "./scrollbar-system.ts";
 
 export type PierFileTreeStyle = React.CSSProperties & {
   [key: `--trees-file-icon-color-${string}`]: string | undefined;
@@ -27,8 +28,11 @@ export type PierFileTreeStyle = React.CSSProperties & {
   "--trees-selected-fg-override"?: string;
 };
 
-// @pierre/trees 在 Shadow DOM 内自行绘制滚动条和行布局。
-// 通过其官方 unsafeCSS 入口补齐 Pier 的滚动条视觉，并让空装饰列不抢占文件名宽度。
+/**
+ * trees Shadow unsafeCSS：
+ * 1) 布局空列
+ * 2) SCROLLBAR_SYSTEM_CSS（与 globals 同 token）
+ */
 export const TREE_SCROLLBAR_CSS = `
 [data-item-section="content"] {
   flex: 1 1 auto;
@@ -47,34 +51,7 @@ export const TREE_SCROLLBAR_CSS = `
   display: none;
 }
 
-[data-file-tree-virtualized-scroll="true"],
-[data-file-tree-scrollbar-measure="true"] {
-  --trees-scrollbar-thumb-current: transparent;
-  scrollbar-color: var(--trees-scrollbar-thumb-current) var(--shell-scrollbar-track);
-  scrollbar-width: var(--shell-scrollbar-width);
-}
-
-[data-file-tree-virtualized-scroll="true"][data-scrollbar-scrolling="true"],
-[data-file-tree-virtualized-scroll="true"][data-scrollbar-hovering="true"] {
-  --trees-scrollbar-thumb-current: var(--shell-scrollbar-thumb);
-}
-
-[data-file-tree-virtualized-scroll="true"]::-webkit-scrollbar-thumb {
-  border-radius: var(--shell-scrollbar-radius);
-  transition: background-color 160ms ease-out;
-}
-
-[data-file-tree-virtualized-scroll="true"]::-webkit-scrollbar-thumb:active {
-  background-color: var(--shell-scrollbar-thumb-active);
-}
-
-[data-file-tree-virtualized-scroll="true"]::-webkit-scrollbar-track {
-  background: var(--shell-scrollbar-track);
-}
-
-[data-file-tree-virtualized-scroll="true"]::-webkit-scrollbar-corner {
-  background: var(--shell-scrollbar-corner);
-}
+${SCROLLBAR_SYSTEM_CSS}
 `;
 
 export function pierFileTreeStyle(

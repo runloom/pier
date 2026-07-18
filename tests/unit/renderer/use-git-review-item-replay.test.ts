@@ -19,9 +19,11 @@ function diffHandle(
 ): PierDiffViewHandle {
   return {
     captureTopAnchor: () => null,
+    getSelectedText: () => "",
     isItemVisible: () => true,
     restoreAnchor: () => true,
     scrollToItem: () => true,
+    selectAll: () => false,
     updateItems,
   };
 }

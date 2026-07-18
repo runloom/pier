@@ -393,7 +393,7 @@ export async function flushFilesDraftWrites(
     state.status === "failed" ? [`${key}: ${state.message}`] : []
   );
   if (failures.length > 0) {
-    throw new Error(`Draft protection failed: ${failures.join("; ")}`);
+    throw new Error(`Unable to auto-save draft: ${failures.join("; ")}`);
   }
 }
 

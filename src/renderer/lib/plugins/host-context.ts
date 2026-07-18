@@ -136,6 +136,9 @@ function adaptActionMetadata(
   if (metadata?.iconComponent) {
     adapted.iconComponent = metadata.iconComponent;
   }
+  if (metadata?.menuHidden) {
+    adapted.menuHidden = metadata.menuHidden;
+  }
   if (metadata?.sortOrder != null) {
     adapted.sortOrder = metadata.sortOrder;
   }

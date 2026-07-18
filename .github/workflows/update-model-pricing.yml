@@ -1,11 +1,11 @@
 name: Update model pricing
 
-# 每周一 UTC 03:00 自动跑，跟 LiteLLM canonical 目录同步。也可以手动触发。
-# 有价格变化时开 PR（title `chore(pricing): weekly refresh`），reviewer 检查
-# `pricing-diff.md` 里的涨跌明细 → merge。
+# 每天 UTC 03:00 自动跑，跟 LiteLLM / OpenRouter 同步。也可以手动触发。
+# 仅当 pricing-catalog.json 有 diff 时才跑护栏测试并开/更新 PR；
+# 无变化则 Detect changes → changed=false，后续 step 全部跳过（不 commit、不开 PR）。
 on:
   schedule:
-    - cron: "0 3 * * MON"
+    - cron: "0 3 * * *"
   workflow_dispatch:
 
 permissions:
@@ -39,8 +39,11 @@ jobs:
         run: |
           if git diff --quiet src/main/services/usage-data/pricing-catalog.json; then
             echo "changed=false" >> "$GITHUB_OUTPUT"
+            echo "No catalog changes; skipping tests and PR."
           else
             echo "changed=true" >> "$GITHUB_OUTPUT"
+            echo "Catalog changed; will run guardrails and open/update PR."
+            git --no-pager diff --stat src/main/services/usage-data/pricing-catalog.json
           fi
 
       - name: Install dependencies
@@ -55,8 +58,8 @@ jobs:
         if: steps.diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
-          commit-message: "chore(pricing): weekly LiteLLM refresh"
-          title: "chore(pricing): weekly LiteLLM refresh"
+          commit-message: "chore(pricing): daily LiteLLM refresh"
+          title: "chore(pricing): daily LiteLLM refresh"
           body-path: pricing-diff.md
           branch: chore/pricing-refresh
           delete-branch: true

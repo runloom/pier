@@ -374,8 +374,8 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       />
     );
 
-    expect(screen.getByText("MERGING · 1 conflict")).toBeInTheDocument();
-    expect(screen.queryByText("MERGING · 1 conflicts")).toBeNull();
+    expect(screen.getByText("Merging · 1 conflict")).toBeInTheDocument();
+    expect(screen.queryByText("Merging · 1 conflicts")).toBeNull();
   });
 
   it.each([

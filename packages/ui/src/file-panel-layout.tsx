@@ -1,4 +1,4 @@
-import { FolderTree, PanelLeftClose, Search } from "lucide-react";
+import { FolderTree, Search } from "lucide-react";
 import { type ReactNode, useLayoutEffect } from "react";
 import { usePanelRef } from "react-resizable-panels";
 import { Button } from "./button.tsx";
@@ -201,11 +201,7 @@ export function FilePanelSidebarToggleButton({
       type="button"
       variant="ghost"
     >
-      {collapsed ? (
-        <FolderTree aria-hidden="true" data-icon="inline-start" />
-      ) : (
-        <PanelLeftClose aria-hidden="true" data-icon="inline-start" />
-      )}
+      <FolderTree aria-hidden="true" data-icon="inline-start" />
       <span className="sr-only">{label}</span>
     </Button>
   );

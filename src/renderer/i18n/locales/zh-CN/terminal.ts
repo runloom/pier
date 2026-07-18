@@ -36,7 +36,7 @@ export const terminal = {
     forceStopConfirm: "强制停止",
     forceStopTitle: "强制停止任务？",
     inputResolutionFailed: "任务仍有未完成的输入项",
-    missingRunIdentity: "任务已经启动，但没有返回可绑定的运行标识。",
+    missingRunIdentity: "任务已启动，但无法关联运行状态。",
     move: "移动运行控制浮层",
     openOutput: "打开任务输出",
     openOutputFailed: "打开任务输出失败",
@@ -62,7 +62,7 @@ export const terminal = {
   statusBar: {
     item: {
       agentStatus: {
-        title: "Agent 状态",
+        title: "智能体状态",
       },
     },
     manage: "管理状态栏…",

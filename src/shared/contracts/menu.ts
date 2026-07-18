@@ -39,6 +39,12 @@ export interface MenuItemRole {
 export interface MenuItemAction {
   /** Electron accelerator 格式 (例: "CmdOrCtrl+Shift+P"). 仅显示, 不绑定快捷键. */
   accelerator?: string;
+  /**
+   * 点击时由 main 直接写入系统剪贴板。
+   * 用于「复制选区」：原生菜单会抢焦点，renderer 再读选区常已空；
+   * 在弹菜单前把文本钉到菜单项上，click 时立刻 writeText。
+   */
+  clipboardText?: string;
   enabled?: boolean;
   /** actionRegistry.get(id) 查 handler, click 回传时用. */
   id: string;
@@ -90,6 +96,7 @@ export interface MenuPopupResult {
  *   - 每层 ≤ 50 项
  *   - label / id ≤ 256 字符
  *   - accelerator ≤ 64 字符
+ *   - clipboardText ≤ 1_048_576 字符
  */
 export const MENU_LIMITS = {
   topLevelMax: 50,
@@ -98,4 +105,5 @@ export const MENU_LIMITS = {
   labelMaxLength: 256,
   idMaxLength: 256,
   acceleratorMaxLength: 64,
+  clipboardTextMaxLength: 1_048_576,
 } as const;

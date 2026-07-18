@@ -157,12 +157,11 @@
   --radius: 0.625rem;
 
   /* === scrollbar system ===
-     标准 `scrollbar-width` 负责 Firefox / 现代 Chromium 的真实沟槽尺寸；
-     `::-webkit-scrollbar` 负责 Electron / Safari 的精确绘制，两条路径必须同步。
-     颜色从 semantic token 派生并自动跟随深浅主题；组件只声明
-     data-scrollbar policy，不在局部硬编码 scrollbar 视觉。 */
+     全应用一套外观。调粗细只改 --shell-scrollbar-width-legacy。
+     唯一例外：data-scrollbar="none" 隐藏。
+     Shadow（trees / diffs）全局穿不进，经 packages/ui/scrollbar-system.ts 同 token。 */
   --shell-scrollbar-width: thin;
-  --shell-scrollbar-width-legacy: 6px;
+  --shell-scrollbar-width-legacy: 4px;
   --shell-scrollbar-radius: 999px;
   --shell-scrollbar-thumb: color-mix(
     in oklab,
@@ -363,109 +362,64 @@
 }
 
 /*
- * scrollbar policy 系统.
- *
- * 组件声明方式:
- *   <div data-scrollbar="stable">  // scrollbar-gutter: stable (推荐 panel 内容区, 避免抖动)
- *   <div data-scrollbar="overlay"> // scrollbar-gutter: auto (悬浮覆盖, 空间紧)
- *   <div data-scrollbar="none">    // 完全隐藏 (modal/dialog 内部容器)
- * 所有滚动容器显式声明策略；滑块平时透明，滚动中或直接指向滑块时显示。
+ * 系统滚动条：默认全局统一；仅 data-scrollbar="none" 可隐藏。
+ * 槽位 6px（--shell-scrollbar-width-legacy）；拇指 1px 透明边 + content-box，
+ * 视觉约 4px（对齐 loomdesk）。
  */
-:where(
-  [data-scrollbar],
-  [data-flat-scroll],
-  .cv-scrollbar
-) {
-  overscroll-behavior: contain;
-  scrollbar-color: transparent var(--shell-scrollbar-track);
+* {
+  scrollbar-color: var(--shell-scrollbar-thumb) var(--shell-scrollbar-track);
   scrollbar-width: var(--shell-scrollbar-width);
 }
 
-:where(
-  [data-scrollbar][data-scrollbar-scrolling="true"],
-  [data-flat-scroll][data-scrollbar-scrolling="true"],
-  .cv-scrollbar[data-scrollbar-scrolling="true"],
-  [data-scrollbar][data-scrollbar-hovering="true"],
-  [data-flat-scroll][data-scrollbar-hovering="true"],
-  .cv-scrollbar[data-scrollbar-hovering="true"]
-) {
-  scrollbar-color: var(--shell-scrollbar-thumb) var(--shell-scrollbar-track);
-}
-
-:where([data-scrollbar="stable"], [data-flat-scroll], .cv-scrollbar) {
-  scrollbar-gutter: stable;
-}
-
-:where([data-scrollbar="overlay"]) {
-  scrollbar-gutter: auto;
-}
-
-:where([data-scrollbar="none"]) {
+[data-scrollbar="none"] {
   scrollbar-width: none;
 }
 
-/* Electron / Safari 用 WebKit 伪元素精确绘制；现代 Chromium 仍会同时使用
-   上方 `scrollbar-width` 计算 stable gutter，不能只设置其中一条路径。 */
 @supports selector(::-webkit-scrollbar) {
-  :where(
-    [data-scrollbar],
-    [data-flat-scroll],
-    .cv-scrollbar
-  )::-webkit-scrollbar {
+  *::-webkit-scrollbar {
+    -webkit-appearance: none;
     width: var(--shell-scrollbar-width-legacy);
     height: var(--shell-scrollbar-width-legacy);
   }
 
-  :where(
-    [data-scrollbar],
-    [data-flat-scroll],
-    .cv-scrollbar
-  )::-webkit-scrollbar-thumb {
-    background: transparent;
-    background-clip: content-box;
-    border: 1px solid transparent;
-    border-radius: var(--shell-scrollbar-radius);
-    transition: background-color 160ms ease-out;
+  *::-webkit-scrollbar:vertical {
+    width: var(--shell-scrollbar-width-legacy);
   }
 
-  :where(
-    [data-scrollbar][data-scrollbar-scrolling="true"],
-    [data-flat-scroll][data-scrollbar-scrolling="true"],
-    .cv-scrollbar[data-scrollbar-scrolling="true"],
-    [data-scrollbar][data-scrollbar-hovering="true"],
-    [data-flat-scroll][data-scrollbar-hovering="true"],
-    .cv-scrollbar[data-scrollbar-hovering="true"]
-  )::-webkit-scrollbar-thumb {
+  *::-webkit-scrollbar:horizontal {
+    height: var(--shell-scrollbar-width-legacy);
+  }
+
+  *::-webkit-scrollbar-thumb {
+    border: 1px solid transparent;
+    border-radius: var(--shell-scrollbar-radius);
+    background: transparent;
+    background-clip: content-box;
+  }
+
+  *[data-scrollbar-scrolling="true"]::-webkit-scrollbar-thumb,
+  *[data-scrollbar-hovering="true"]::-webkit-scrollbar-thumb {
     background: var(--shell-scrollbar-thumb);
     background-clip: content-box;
   }
 
-  :where(
-    [data-scrollbar],
-    [data-flat-scroll],
-    .cv-scrollbar
-  )::-webkit-scrollbar-thumb:active {
+  *::-webkit-scrollbar-thumb:active {
     background: var(--shell-scrollbar-thumb-active);
     background-clip: content-box;
   }
 
-  :where(
-    [data-scrollbar],
-    [data-flat-scroll],
-    .cv-scrollbar
-  )::-webkit-scrollbar-track {
+  *::-webkit-scrollbar-track,
+  *::-webkit-scrollbar-corner {
     background: var(--shell-scrollbar-track);
   }
 
-  :where(
-    [data-scrollbar],
-    [data-flat-scroll],
-    .cv-scrollbar
-  )::-webkit-scrollbar-corner {
-    background: var(--shell-scrollbar-corner);
+  [data-scrollbar="none"],
+  [data-scrollbar="none"] * {
+    scrollbar-width: none;
   }
 
-  :where([data-scrollbar="none"])::-webkit-scrollbar {
+  [data-scrollbar="none"]::-webkit-scrollbar,
+  [data-scrollbar="none"] *::-webkit-scrollbar {
     display: none;
     width: 0;
     height: 0;
@@ -473,13 +427,15 @@
 }
 
 @media (forced-colors: active) {
-  :where(
-    [data-scrollbar]:not([data-scrollbar="none"]),
-    [data-flat-scroll]
-  ) {
+  * {
     forced-color-adjust: auto;
     scrollbar-color: auto;
     scrollbar-width: auto;
+  }
+
+  [data-scrollbar="none"],
+  [data-scrollbar="none"] * {
+    scrollbar-width: none;
   }
 }
 
@@ -675,10 +631,13 @@ body {
 .dv-tab-ghost-drag .dv-default-tab {
   box-sizing: border-box;
   gap: 6px;
-  /* 与拖拽 ghost 一致：限制 tab 最大宽度，ellipsis 才能生效（否则 tab 随文案撑开） */
+  /* 默认 tab 限宽以 ellipsis OSC/长标题；文件 tab 见 data-pier-tab-kind=file 例外 */
   max-width: 180px;
   min-width: 0;
   padding-inline: 8px 4px;
+  &[data-pier-tab-kind="file"] {
+    max-width: none;
+  }
 }
 
 .dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-content,
@@ -690,6 +649,20 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.dockview-theme-pier
+  .dv-tab
+  .dv-default-tab[data-pier-tab-kind="file"]
+  .dv-default-tab-content,
+.dv-tab.dv-tab-dragging
+  .dv-default-tab[data-pier-tab-kind="file"]
+  .dv-default-tab-content,
+.dv-tab-ghost-drag
+  .dv-default-tab[data-pier-tab-kind="file"]
+  .dv-default-tab-content {
+  overflow: visible;
+  text-overflow: clip;
 }
 
 .dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
@@ -710,10 +683,69 @@ body {
 .dockview-theme-pier .pier-panel-tab-icon,
 .dv-tab.dv-tab-dragging .pier-panel-tab-icon,
 .dv-tab-ghost-drag .pier-panel-tab-icon {
-  color: currentColor;
+  /* 不强制 currentColor：文件图标保留 token 彩色，Lucide/品牌色走各自 fill。 */
+  flex-shrink: 0;
   height: 14px;
   opacity: 0.92;
   width: 14px;
+}
+
+/* 默认 panel 图标语义配色（文件/Agent 图标不走此选择器路径）。 */
+.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="terminal"],
+.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="terminal"],
+.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="terminal"] {
+  color: var(--status-info-fg);
+}
+
+.dockview-theme-pier
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
+.dv-tab.dv-tab-dragging
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
+.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"] {
+  color: var(--status-warning-fg);
+}
+
+.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="workbench"],
+.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="workbench"],
+.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="workbench"] {
+  color: var(--pier-file-icon-indigo);
+}
+
+.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="welcome"],
+.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="welcome"],
+.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="welcome"] {
+  color: var(--pier-file-icon-orange);
+}
+
+.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="pier.task"],
+.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="pier.task"],
+.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="pier.task"] {
+  color: var(--status-done-fg);
+}
+
+/* 关闭叉始终可见；hover 背景为圆形（覆盖 dockview 默认 2px 圆角）。 */
+.dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-action,
+.dv-tab.dv-tab-dragging .dv-default-tab .dv-default-tab-action,
+.dv-tab-ghost-drag .dv-default-tab .dv-default-tab-action {
+  border-radius: 999px;
+  box-sizing: border-box;
+  display: inline-flex;
+  flex-shrink: 0;
+  height: 18px;
+  padding: 0;
+  visibility: visible;
+  width: 18px;
+}
+
+.dockview-theme-pier .dv-tab.dv-inactive-tab .dv-default-tab .dv-default-tab-action {
+  visibility: visible;
+}
+
+.dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-action:hover,
+.dv-tab.dv-tab-dragging .dv-default-tab .dv-default-tab-action:hover,
+.dv-tab-ghost-drag .dv-default-tab .dv-default-tab-action:hover {
+  background-color: var(--dv-icon-hover-background-color);
+  border-radius: 999px;
 }
 
 .dockview-theme-pier .pier-panel-tab-index-hint,
@@ -908,17 +940,6 @@ body {
   border-bottom: none;
 }
 
-.dv-tab {
-  max-width: 180px;
-  min-width: 0;
-  padding-left: 0;
-  padding-right: 0;
-}
-
-.dv-tab .dv-default-tab .dv-default-tab-action:hover {
-  border-radius: 12px;
-}
-
 /*
  * Agent 状态 shimmer —— loomdesk/OMP classic 扫带的逐字符移植。
  * 组件（agent-shimmer-text.tsx）以 rAF 更新每字符 data-shimmer-tier，
@@ -927,8 +948,8 @@ body {
  * 深浅主题都从 foreground 派生，避免组件状态色与主题分叉。
  */
 [data-agent-status-text][data-agent-status-kind="running"] {
-  --shimmer-low: color-mix(in oklch, var(--foreground) 58%, transparent);
-  --shimmer-mid: color-mix(in oklch, var(--foreground) 75%, transparent);
+  --shimmer-low: color-mix(in oklch, var(--foreground) 48%, transparent);
+  --shimmer-mid: color-mix(in oklch, var(--foreground) 72%, transparent);
   --shimmer-high: var(--pier-agent-status-color, var(--status-info-fg));
 
   color: var(--shimmer-low);
@@ -957,7 +978,7 @@ body {
 [data-agent-status-text][data-agent-status-kind="running"]
   [data-shimmer-glyph] {
   grid-area: stack;
-  font-weight: 400;
+  font-weight: 500;
   color: var(--shimmer-low);
 }
 
@@ -965,6 +986,7 @@ body {
   [data-shimmer-tier="mid"]
   > [data-shimmer-glyph] {
   color: var(--shimmer-mid);
+  font-weight: 600;
 }
 
 [data-agent-status-text][data-agent-status-kind="running"]

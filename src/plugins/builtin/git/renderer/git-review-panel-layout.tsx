@@ -20,6 +20,7 @@ import { SearchX } from "lucide-react";
 import { memo, type ReactNode, useMemo } from "react";
 import { pluginText } from "./git-plugin-text.ts";
 import type { gitReviewTreeModel } from "./git-review-tree.tsx";
+import { useGitReviewTreeContextMenu } from "./git-review-tree-context-menu.ts";
 
 const REVIEW_TREE_WIDTH_STORAGE_KEY = "pier.git.review.treeWidthPx";
 
@@ -29,17 +30,29 @@ function projectNameFromRoot(root: string): string {
 
 function GitReviewTreeSidebarComponent({
   context,
+  contextId,
+  gitRootPath,
   onOpenPath,
   revealPath,
+  sourcePanelId,
   treeSearch,
   treeModel,
 }: {
   context: RendererPluginContext;
+  contextId: string;
+  gitRootPath: string;
   onOpenPath: (path: string) => void;
   revealPath: string | null;
+  sourcePanelId?: string;
   treeSearch: ReturnType<typeof useFileTreeSearch>;
   treeModel: ReturnType<typeof gitReviewTreeModel>;
 }) {
+  const openItemContextMenu = useGitReviewTreeContextMenu({
+    context,
+    contextId,
+    gitRootPath,
+    ...(sourcePanelId ? { sourcePanelId } : {}),
+  });
   const hasQuery = treeSearch.value.trim().length > 0;
   const searchHasNoResults =
     treeSearch.open &&
@@ -51,7 +64,7 @@ function GitReviewTreeSidebarComponent({
   return (
     <aside className="flex h-full min-h-0 w-full flex-col bg-sidebar">
       {treeSearch.open ? (
-        <div className="shrink-0 px-2 pb-1.5">
+        <div className="shrink-0 px-2 py-1">
           <FileSearchBar
             className="w-full"
             focusSignal={treeSearch.focusSignal}
@@ -104,6 +117,7 @@ function GitReviewTreeSidebarComponent({
           className="min-h-0 w-full flex-1"
           items={treeModel.items}
           label={pluginText(context, "reviewTreeLabel", "Changed files")}
+          onOpenItemContextMenu={openItemContextMenu}
           onOpenPath={onOpenPath}
           onSearchMatchStateChange={treeSearch.updateMatchState}
           revealPath={revealPath}
@@ -148,22 +162,26 @@ const GitReviewTreeSidebar = memo(GitReviewTreeSidebarComponent);
 export function GitReviewPanelLayout({
   children,
   context,
+  contextId,
   gitRootPath,
   onOpenPath,
   selectedFilePath,
   selectedTreePath,
   setSidebarCollapsed,
   sidebarCollapsed,
+  sourcePanelId,
   treeModel,
 }: {
   children: ReactNode;
   context: RendererPluginContext;
+  contextId?: string | null;
   gitRootPath: string | null;
   onOpenPath?: (path: string) => void;
   selectedFilePath?: string | null;
   selectedTreePath?: string | null;
   setSidebarCollapsed: (collapsed: boolean) => void;
   sidebarCollapsed: boolean;
+  sourcePanelId?: string;
   treeModel?: ReturnType<typeof gitReviewTreeModel> | null;
 }) {
   const treeSearch = useFileTreeSearch();
@@ -180,25 +198,35 @@ export function GitReviewPanelLayout({
       : [projectName];
   }, [context, gitRootPath, projectName, selectedFilePath]);
 
-  const openSearch = () => {
+  const toggleSearch = () => {
     if (!hasTree) {
       return;
     }
     if (sidebarCollapsed) {
       setSidebarCollapsed(false);
+      treeSearch.openSearch();
+      return;
     }
-    treeSearch.openSearch();
+    treeSearch.toggleSearch();
   };
   const collapseSidebar = () => {
     treeSearch.closeSearch();
     setSidebarCollapsed(true);
   };
   const sidebar =
-    hasTree && !sidebarCollapsed && treeModel && onOpenPath ? (
+    hasTree &&
+    !sidebarCollapsed &&
+    treeModel &&
+    onOpenPath &&
+    gitRootPath &&
+    contextId ? (
       <GitReviewTreeSidebar
         context={context}
+        contextId={contextId}
+        gitRootPath={gitRootPath}
         onOpenPath={onOpenPath}
         revealPath={selectedTreePath ?? null}
+        {...(sourcePanelId ? { sourcePanelId } : {})}
         treeModel={treeModel}
         treeSearch={treeSearch}
       />
@@ -248,7 +276,7 @@ export function GitReviewPanelLayout({
                     "reviewTreeSearch",
                     "Find in changed files"
                   )}
-                  onOpenSearch={openSearch}
+                  onOpenSearch={toggleSearch}
                 />
               </>
             ) : null

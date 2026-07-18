@@ -79,6 +79,7 @@ import type {
   GitReviewIndexRequest,
   GitReviewIndexResult,
 } from "@shared/contracts/git-review.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type {
   WorktreeCheckRequest,
   WorktreeCheckResult,
@@ -130,6 +131,16 @@ export interface RendererPluginFilesFacade {
   move(request: FileMoveRequest): Promise<FileMoveResult>;
   /** Subscribe to path query events (started/batch/done/error) for this document. */
   onPathQueryEvent(listener: (event: FileQueryEvent) => void): () => void;
+  /**
+   * 在 files 面板内打开磁盘文件（宿主跨插件入口）。
+   * files 插件未启用/未注册时返回 false，不抛。
+   */
+  openInEditor(request: {
+    context?: PanelContext;
+    path: string;
+    root: string;
+    title?: string;
+  }): boolean;
   openPath(request: FileOpenPathRequest): Promise<FileOpenPathResult>;
   pickSaveTarget(request: FileSaveTargetRequest): Promise<FileSaveTargetResult>;
   /**

@@ -340,7 +340,7 @@ export async function saveDocumentAs(input: {
         title: committed
           ? t(
               "filePanel.saveAs.rebindFailed",
-              "File written, but the editor could not switch to it"
+              "File saved, but it could not be opened in the editor"
             )
           : t("filePanel.saveAs.failed", "Unable to save as"),
       });
@@ -409,7 +409,7 @@ export async function recoverDocumentSaveAs(input: {
         title: input.context.i18n.t(
           "filePanel.saveAs.rebindFailed",
           undefined,
-          "File written, but the editor could not switch to it"
+          "File saved, but it could not be opened in the editor"
         ),
       });
       return false;

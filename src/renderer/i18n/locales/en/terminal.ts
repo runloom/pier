@@ -36,7 +36,8 @@ export const terminal = {
     forceStopConfirm: "Force stop",
     forceStopTitle: "Force stop task?",
     inputResolutionFailed: "The task still requires unresolved input",
-    missingRunIdentity: "The task started without a run identity.",
+    missingRunIdentity:
+      "The task started, but its running state could not be linked.",
     move: "Move run controls",
     openOutput: "Open task output",
     openOutputFailed: "Failed to open task output",

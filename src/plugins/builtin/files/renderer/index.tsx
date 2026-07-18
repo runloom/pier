@@ -75,7 +75,7 @@ function createOpenSelectionAsMarkdownAction(
         context.notifications.info(
           t(
             "files.notifications.noTerminalSelection",
-            "No terminal selection to open."
+            "Select some text in the terminal first."
           )
         );
         return;
@@ -86,7 +86,7 @@ function createOpenSelectionAsMarkdownAction(
         context.notifications.info(
           t(
             "files.notifications.noTerminalSelection",
-            "No terminal selection to open."
+            "Select some text in the terminal first."
           )
         );
         return;
@@ -127,7 +127,7 @@ function createOpenSelectionAsMarkdownAction(
     metadata: { group: "0_edit", sortOrder: 6 },
     surfaces: ["terminal/content"],
     title: () =>
-      t("files.actions.openSelectionAsMarkdown.title", "Markdown Preview"),
+      t("files.actions.openSelectionAsMarkdown.title", "Preview Selected Text"),
   };
 }
 

@@ -2783,10 +2783,16 @@ describe("Files file-panel", () => {
     });
 
     // 目标 group 建立共享视图并渲染出文件内容(不空白)。
+    // 回归：旧组延迟 unmount 不得拆掉已 reparent 的 CodeMirror。
     await waitFor(() => {
       const viewB = containerB?.querySelector(FILES_GROUP_VIEW_SELECTOR);
       expect(viewB).toBeInstanceOf(HTMLElement);
       expect((viewB as HTMLElement).textContent).toContain("README.md");
+      expect(
+        (viewB as HTMLElement).querySelector(
+          '[data-testid="files-code-mirror-editor"] .cm-content'
+        )
+      ).toBeInstanceOf(HTMLElement);
     });
 
     // 源 group 的注入视图在 owner 清零后延迟 GC(真实 1s 定时器)。
@@ -2797,6 +2803,14 @@ describe("Files file-panel", () => {
       { timeout: 2500 }
     );
 
+    // GC 后目标 group 编辑器仍在（不能被旧组 unmount 拆掉）。
+    const viewBAfterGc = containerB?.querySelector(FILES_GROUP_VIEW_SELECTOR);
+    expect(viewBAfterGc).toBeInstanceOf(HTMLElement);
+    expect(
+      (viewBAfterGc as HTMLElement).querySelector(
+        '[data-testid="files-code-mirror-editor"] .cm-content'
+      )
+    ).toBeInstanceOf(HTMLElement);
     groupA.element.remove();
     groupB.element.remove();
   });
@@ -5162,7 +5176,7 @@ describe("Files file-panel", () => {
 
     expect(findCodeMirrorView(container).scrollDOM).toHaveAttribute(
       "data-scrollbar",
-      "stable"
+      "overlay"
     );
   });
 

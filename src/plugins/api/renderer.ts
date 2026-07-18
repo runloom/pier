@@ -81,6 +81,11 @@ export interface RendererPluginActionMetadata {
   excludeFromMru?: boolean;
   group?: string;
   iconComponent?: LucideIcon;
+  /**
+   * 返回 true 时该 action 从右键菜单整行移除（非置灰）。
+   * 仅 context menu 投影读取；命令面板/快捷键路径不读此字段。
+   */
+  menuHidden?: (invocation?: RendererPluginActionInvocation) => boolean;
   sortOrder?: number;
   submenu?: () => string;
 }

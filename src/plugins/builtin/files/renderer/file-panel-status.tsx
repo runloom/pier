@@ -110,19 +110,16 @@ function statusTextForDocument(
   t: FilesTranslate
 ): string {
   if (protection.status === "protecting") {
-    return t("filePanel.status.protecting", "Protecting…");
+    return t("filePanel.status.protecting", "Saving draft…");
   }
   if (protection.status === "failed") {
-    return t("filePanel.status.protectionFailed", "Not protected");
+    return t("filePanel.status.protectionFailed", "Draft not saved");
   }
   if (protection.status === "protected" && document.dirty) {
-    return t("filePanel.status.protected", "Protected");
+    return t("filePanel.status.protected", "Draft saved");
   }
   if (document.durabilityUnknown) {
-    return t(
-      "filePanel.status.durabilityUnknown",
-      "Written; durability unknown"
-    );
+    return t("filePanel.status.durabilityUnknown", "Written; confirming save…");
   }
   if (document.deletedOnDisk) {
     return t("filePanel.status.deletedOnDisk", "Deleted on disk");
@@ -153,19 +150,19 @@ function statusToneForDocument(
 ): { label: string; tone: string } {
   if (protection.status === "failed") {
     return {
-      label: t("filePanel.status.protectionFailed", "Not protected"),
+      label: t("filePanel.status.protectionFailed", "Draft not saved"),
       tone: "bg-destructive",
     };
   }
   if (protection.status === "protecting") {
     return {
-      label: t("filePanel.status.protecting", "Protecting…"),
+      label: t("filePanel.status.protecting", "Saving draft…"),
       tone: "bg-info animate-pulse",
     };
   }
   if (protection.status === "protected" && document.dirty) {
     return {
-      label: t("filePanel.status.protected", "Protected"),
+      label: t("filePanel.status.protected", "Draft saved"),
       tone: "bg-success",
     };
   }
@@ -173,7 +170,7 @@ function statusToneForDocument(
     return {
       label: t(
         "filePanel.status.durabilityUnknown",
-        "Written; durability unknown"
+        "Written; confirming save…"
       ),
       tone: "bg-warning",
     };

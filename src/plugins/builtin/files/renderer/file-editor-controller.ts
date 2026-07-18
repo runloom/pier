@@ -297,9 +297,11 @@ export class FileEditorController {
     this.#views.updatePresentation(editorSessionId, presentation);
   }
 
-  detachView(editorSessionId: string): void {
-    this.#gitGutter.detach(editorSessionId);
-    this.#views.detach(editorSessionId);
+  detachView(editorSessionId: string, parent?: HTMLElement): void {
+    const detached = this.#views.detach(editorSessionId, parent);
+    if (detached) {
+      this.#gitGutter.detach(editorSessionId);
+    }
   }
 
   applySearchQuery(
@@ -416,7 +418,7 @@ export class FileEditorController {
       title: this.#context.i18n.t(
         "files.draftProtection.failed",
         undefined,
-        "Draft protection failed"
+        "Unable to auto-save draft"
       ),
     });
   }

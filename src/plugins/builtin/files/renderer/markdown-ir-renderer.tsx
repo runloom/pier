@@ -154,7 +154,10 @@ function renderBlock(
         : "p";
       return createElement(
         tag,
-        { className: "my-3 leading-7" },
+        {
+          className:
+            "my-3 text-[0.9375rem] leading-7 text-foreground/95 [&:first-child]:mt-0",
+        },
         renderInlines(block.children, context)
       );
     }
@@ -186,7 +189,7 @@ function renderBlock(
       return <MarkdownMath displayMode value={block.value} />;
     case "blockquote":
       return (
-        <blockquote className="my-4 border-l-2 pl-4 text-muted-foreground">
+        <blockquote className="my-4 border-border border-l-2 pl-4 text-muted-foreground [&>p]:my-2">
           {renderBlocks(block.blocks, context)}
         </blockquote>
       );
@@ -221,8 +224,8 @@ function renderBlock(
         block.ordered ? "ol" : "ul",
         {
           className: block.ordered
-            ? "my-3 grid list-decimal gap-1 pl-6"
-            : "my-3 grid list-disc gap-1 pl-6",
+            ? "my-3 grid list-decimal gap-1.5 pl-6 marker:text-muted-foreground"
+            : "my-3 grid list-disc gap-1.5 pl-6 marker:text-muted-foreground",
           start: block.ordered ? (block.start ?? undefined) : undefined,
         },
         listChildren
@@ -360,7 +363,7 @@ function renderInline(
       );
     case "inlineCode":
       return (
-        <code className="rounded bg-muted px-1 py-0.5 font-mono text-sm">
+        <code className="rounded-md border border-border/60 bg-muted/70 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground">
           <MarkdownSearchText
             activeMatchId={context.activeSearchMatchId}
             matches={searchMatchesFor(context, "inlineCode", inline.range)}
@@ -437,11 +440,16 @@ function renderInline(
 }
 
 function headingClassName(depth: number): string {
-  if (depth === 1)
-    return "mt-8 mb-4 font-semibold text-3xl tracking-tight first:mt-0";
-  if (depth === 2) return "mt-7 mb-3 font-semibold text-2xl tracking-tight";
-  if (depth === 3) return "mt-6 mb-2 font-semibold text-xl";
-  return "mt-5 mb-2 font-semibold text-base";
+  if (depth === 1) {
+    return "mt-8 mb-3 border-b border-border/70 pb-2 font-semibold text-3xl tracking-tight first:mt-0";
+  }
+  if (depth === 2) {
+    return "mt-7 mb-2.5 border-b border-border/50 pb-1.5 font-semibold text-2xl tracking-tight";
+  }
+  if (depth === 3) {
+    return "mt-6 mb-2 font-semibold text-xl tracking-tight";
+  }
+  return "mt-5 mb-2 font-semibold text-base tracking-tight";
 }
 
 function tableAlignment(

@@ -1,6 +1,3 @@
-const SCROLLBAR_POLICY_SELECTOR =
-  '[data-scrollbar]:not([data-scrollbar="none"]), [data-flat-scroll], .cv-scrollbar';
-
 export const AUTO_HIDE_SCROLLBAR_IDLE_MS = 900;
 
 const hideTimers = new WeakMap<HTMLElement, ReturnType<typeof setTimeout>>();
@@ -45,40 +42,48 @@ function cssScrollbarWidth(style: CSSStyleDeclaration): number {
   return Number.isFinite(parsed) ? parsed : 0;
 }
 
+function overflowAllowsScroll(value: string): boolean {
+  return value === "auto" || value === "scroll" || value === "overlay";
+}
+
+/** 可滚动容器：非 none，且 overflow 允许滚动。 */
+export function isAutoHideScrollContainer(element: HTMLElement): boolean {
+  if (element.closest('[data-scrollbar="none"]')) {
+    return false;
+  }
+  const style = getComputedStyle(element);
+  return (
+    overflowAllowsScroll(style.overflowX) ||
+    overflowAllowsScroll(style.overflowY)
+  );
+}
+
 function pointerHitsScrollbar(
   element: HTMLElement,
   pointer: PointerPosition
 ): boolean {
   const rect = element.getBoundingClientRect();
   const computedStyle = getComputedStyle(element);
-  const fallbackWidth = cssScrollbarWidth(computedStyle);
-  const verticalGutter = Math.max(
-    element.offsetWidth - element.clientWidth,
-    fallbackWidth
-  );
-  const horizontalGutter = Math.max(
-    element.offsetHeight - element.clientHeight,
-    fallbackWidth
-  );
-  const hasVerticalScrollbar = element.scrollHeight > element.clientHeight;
-  const hasHorizontalScrollbar = element.scrollWidth > element.clientWidth;
-  const verticalStart =
-    computedStyle.direction === "rtl" ? rect.left : rect.right - verticalGutter;
-  const verticalEnd =
-    computedStyle.direction === "rtl" ? rect.left + verticalGutter : rect.right;
-  const hitsVertical =
-    hasVerticalScrollbar &&
-    pointer.clientX >= verticalStart &&
-    pointer.clientX <= verticalEnd &&
+  const bar = cssScrollbarWidth(computedStyle);
+  if (bar <= 0) {
+    return false;
+  }
+
+  const canScrollY = element.scrollHeight > element.clientHeight + 1;
+  const canScrollX = element.scrollWidth > element.clientWidth + 1;
+  const inY =
+    canScrollY &&
+    pointer.clientX >= rect.right - bar &&
+    pointer.clientX <= rect.right &&
     pointer.clientY >= rect.top &&
     pointer.clientY <= rect.bottom;
-  const hitsHorizontal =
-    hasHorizontalScrollbar &&
-    pointer.clientY >= rect.bottom - horizontalGutter &&
+  const inX =
+    canScrollX &&
+    pointer.clientY >= rect.bottom - bar &&
     pointer.clientY <= rect.bottom &&
     pointer.clientX >= rect.left &&
     pointer.clientX <= rect.right;
-  return hitsVertical || hitsHorizontal;
+  return inY || inX;
 }
 
 export function updateAutoScrollbarHover(
@@ -87,17 +92,17 @@ export function updateAutoScrollbarHover(
 ): void {
   if (pointerHitsScrollbar(element, pointer)) {
     element.dataset.scrollbarHovering = "true";
-  } else {
-    hideAutoScrollbarHover(element);
+    return;
   }
+  hideAutoScrollbarHover(element);
 }
 
 function scrollbarTarget(event: Event): HTMLElement | null {
   for (const target of event.composedPath()) {
-    if (
-      target instanceof HTMLElement &&
-      target.matches(SCROLLBAR_POLICY_SELECTOR)
-    ) {
+    if (!(target instanceof HTMLElement)) {
+      continue;
+    }
+    if (isAutoHideScrollContainer(target)) {
       return target;
     }
   }

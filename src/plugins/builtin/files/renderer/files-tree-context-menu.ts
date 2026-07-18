@@ -5,6 +5,7 @@ import type {
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
 import { type MouseEvent as ReactMouseEvent, useCallback } from "react";
+import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { extractItemPathFromEvent } from "./file-tree-sidebar-helpers.ts";
 import type { FilesTranslate } from "./files-i18n.ts";
 
@@ -56,6 +57,7 @@ export function useFilesTreeContextMenus({
         selection.length > 1 && selection.includes(entry.path)
           ? [...selection]
           : undefined;
+      // sourcePanelId 让宿主 popup 路径在弹菜单前激活对应 panel（布局动作依赖 activePanel）。
       context.contextMenu
         .popup("files/tree-item", point, {
           metadata: {
@@ -65,6 +67,8 @@ export function useFilesTreeContextMenus({
             treeId: instanceId,
             ...(selectedPaths ? { selectedPaths } : {}),
           },
+          sourcePanelComponent: FILES_FILE_PANEL_ID,
+          sourcePanelId: instanceId,
         })
         .catch(reportFailure);
     },
@@ -85,7 +89,11 @@ export function useFilesTreeContextMenus({
         .popup(
           "files/tree-background",
           { x: event.clientX, y: event.clientY },
-          { metadata: { root, treeId: instanceId } }
+          {
+            metadata: { root, treeId: instanceId },
+            sourcePanelComponent: FILES_FILE_PANEL_ID,
+            sourcePanelId: instanceId,
+          }
         )
         .catch(reportFailure);
     },

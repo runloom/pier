@@ -31,6 +31,7 @@ const actionSchema = z.object({
   id: idSchema,
   label: labelSchema,
   accelerator: acceleratorSchema,
+  clipboardText: z.string().max(MENU_LIMITS.clipboardTextMaxLength).optional(),
   enabled: z.boolean().optional(),
 });
 

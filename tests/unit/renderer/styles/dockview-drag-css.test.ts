@@ -77,4 +77,59 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain("height: 14px;");
     expect(css).toMatch(TAB_HINT_MIN_WIDTH_RE);
   });
+
+  it("keeps tab close actions always visible with circular hover", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+
+    expect(css).toContain(
+      ".dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-action"
+    );
+    expect(css).toContain(
+      ".dockview-theme-pier .dv-tab.dv-inactive-tab .dv-default-tab .dv-default-tab-action"
+    );
+    expect(css).toContain("visibility: visible");
+    expect(css).toContain("border-radius: 999px");
+    expect(css).toContain(
+      ".dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-action:hover"
+    );
+  });
+
+  it("does not force panel tab icons to monochrome currentColor", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const iconRuleStart = css.indexOf(
+      ".dockview-theme-pier .pier-panel-tab-icon,"
+    );
+    expect(iconRuleStart).toBeGreaterThanOrEqual(0);
+    const iconRule = css.slice(iconRuleStart, iconRuleStart + 280);
+
+    expect(iconRule).toContain("height: 14px");
+    expect(iconRule).toContain("width: 14px");
+    expect(iconRule).not.toContain("color: currentColor");
+  });
+
+  it("colors default panel tab icons with semantic tokens", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+
+    expect(css).toContain(
+      '.pier-panel-tab-icon[data-panel-tab-icon="terminal"]'
+    );
+    expect(css).toContain("color: var(--status-info-fg)");
+    expect(css).toContain(
+      '.pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"]'
+    );
+    expect(css).toContain("color: var(--status-warning-fg)");
+    expect(css).toContain(
+      '.pier-panel-tab-icon[data-panel-tab-icon="workbench"]'
+    );
+    expect(css).toContain("color: var(--pier-file-icon-indigo)");
+  });
 });

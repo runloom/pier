@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import {
   app,
@@ -33,6 +33,7 @@ import {
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { registerAgentRuntimeHostIpc } from "./ipc/agent-runtime-host.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
+import { registerClipboardIpc } from "./ipc/clipboard.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import { registerExternalNavigationIpc } from "./ipc/external-navigation.ts";
 import { registerFilePreviewTicketIpc } from "./ipc/file-preview-ticket.ts";
@@ -53,6 +54,12 @@ import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerUsageDataIpc } from "./ipc/usage-data.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
+import {
+  openTerminalFromMenu,
+  openTerminalSearchFromMenu,
+  prepareQuitDialogWindow,
+  toggleCommandPaletteFromMenu,
+} from "./menu/menu-window-actions.ts";
 import {
   handlePluginAssetProtocol,
   registerPluginAssetScheme,
@@ -134,62 +141,6 @@ function createFreshWindowFromMenu(): void {
   appCore.services.window.create({ mode: "fresh" }).catch((error) => {
     windowLog.error("failed to create new window", { error });
   });
-}
-
-function openTerminalFromMenu(target: AppWindow | null): void {
-  if (!target || target.isDestroyed() || target.webContents.isDestroyed()) {
-    return;
-  }
-  if (target.isMinimized()) {
-    target.restore();
-  }
-  if (isMac) {
-    app.focus({ steal: true });
-  }
-  target.focus();
-  target.webContents.focus();
-  target.webContents.send(PIER_BROADCAST.NEW_TERMINAL_REQUEST);
-}
-
-function openTerminalSearchFromMenu(target: AppWindow | null): void {
-  if (!target || target.isDestroyed() || target.webContents.isDestroyed()) {
-    return;
-  }
-  if (target.isMinimized()) {
-    target.restore();
-  }
-  if (isMac) {
-    app.focus({ steal: true });
-  }
-  target.focus();
-  target.webContents.focus();
-  target.webContents.send(PIER_BROADCAST.TERMINAL_SEARCH_OPEN_REQUEST);
-}
-
-function toggleCommandPaletteFromMenu(target: AppWindow | null): void {
-  if (!target || target.isDestroyed() || target.webContents.isDestroyed()) {
-    return;
-  }
-  if (target.isMinimized()) {
-    target.restore();
-  }
-  if (isMac) {
-    app.focus({ steal: true });
-  }
-  target.focus();
-  target.webContents.focus();
-  target.webContents.send(PIER_BROADCAST.COMMAND_PALETTE_TOGGLE_REQUEST);
-}
-
-function prepareQuitDialogWindow(target: AppWindow): void {
-  if (target.isMinimized()) {
-    target.restore();
-  }
-  if (isMac) {
-    app.focus({ steal: true });
-  }
-  target.focus();
-  target.webContents.focus();
 }
 
 function formatQuitFailure(error: unknown): string {
@@ -384,6 +335,7 @@ if (gotTheLock) {
       registerFileSaveTargetIpc(ipcMain);
       registerFilePreviewTicketIpc();
       registerMenuIpc(ipcMain);
+      registerClipboardIpc(ipcMain);
       registerAgentsIpc(ipcMain);
       registerForegroundActivityIpc(ipcMain);
       registerAgentRuntimeHostIpc(ipcMain, {

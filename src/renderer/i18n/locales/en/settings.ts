@@ -145,7 +145,7 @@ export const settings = {
       "Leave empty to use a {project}.worktree directory next to the main project.",
     worktreeRootPathPlaceholder: "~/Projects/pier.worktree",
     defaultAgent: "Default Agent",
-    defaultAgentDesc: "CLI launched by the Start Default Agent action",
+    defaultAgentDesc: "Agent launched by the Start Default Agent action",
     agentPermissionMode: "Permission Mode",
     agentPermissionModeDesc: "Toggle skipping agent permission prompts in bulk",
   },
@@ -232,15 +232,15 @@ export const settings = {
   plugins: {
     title: "Plugins",
     description:
-      "Built-in plugins can be enabled or disabled here. Local plugins are manifest-only in this version.",
+      "Built-in plugins can be enabled or disabled here. Local plugins are info-only in this version.",
     status: {
       enabled: "Enabled",
       disabled: "Disabled",
-      manifestOnly: "Manifest preview",
+      manifestOnly: "Info only",
       runtimeUnavailable: "Not loaded",
     },
     runtimeUnavailableDescription:
-      "This plugin is installed but did not enter the current runtime. Restart Pier; if the issue persists, reinstall the plugin.",
+      "This plugin is installed but is not loaded right now. Restart Pier; if the issue persists, reinstall the plugin.",
     contributionSummary: {
       command: "{{count}} command",
       commands: "{{count}} commands",
@@ -280,18 +280,18 @@ export const settings = {
     trustNotice:
       "Official plugins are managed trusted code and are not sandboxed.",
     pluginMode: {
-      workspaceTitle: "Workspace plugin mode",
+      workspaceTitle: "Local development loading",
       workspaceBody:
         "Loading plugins from local package directories. Official updates are disabled so release assets cannot overwrite local work.",
-      releaseTitle: "Release plugin mode",
+      releaseTitle: "Managed install",
       releaseBody:
-        "Plugins follow managed install/update, like a production build. Use PIER_PLUGIN_MODE=workspace for local package development.",
+        "Plugins follow the managed install and update flow, like a production build. Use local development loading for package work.",
     },
     checkUpdates: "Check for Updates",
     restartNow: "Restart Pier Now",
     restartNotice: "Restart Pier to use the installed plugin version.",
     restartDevNotice:
-      "Dev mode: renderer reloaded. Plugin main runtime unload needs a full `pnpm dev` restart.",
+      "In development mode only the UI reloads. Fully unloading the plugin main process requires quitting and re-running `pnpm dev`.",
     updateAvailable: "Update available",
     restartRequired: "Restart required",
     action: {
@@ -375,7 +375,7 @@ export const settings = {
     },
     list: {
       title: "Agent CLIs",
-      description: "Supported and detected agent CLIs",
+      description: "Installed and detected agents",
       refresh: "Refresh",
       refreshSuccess: "Agent list refreshed",
       refreshFailed: "Failed to refresh agent list",
@@ -408,10 +408,10 @@ export const settings = {
       envDesc: "Environment variables applied to this agent",
     },
     statusHooks: {
-      label: "Agent status awareness",
+      label: "Agent status alerts",
       description:
-        "Show live agent run/wait status in panels via status hooks. Turning off uninstalls Pier hooks and stops reinstall; Needs-you system notifications will not appear. Running sessions may still report until reopened.",
-      failed: "Could not update agent status hooks",
+        "Show live agent run or wait status in panels. Turning this off stops automatic status reporting and “Needs you” system notifications. Running sessions may still report until reopened.",
+      failed: "Could not update agent status alerts",
     },
   },
   notifications: {
@@ -447,16 +447,16 @@ export const settings = {
     openSettingsManual:
       "Open your OS notification settings manually and allow Pier, then send a test notification.",
     saveFailed: "Could not save notification settings",
-    hooksOffTitle: "Agent status hooks are off",
+    hooksOffTitle: "Agent status alerts are off",
     hooksOffBody:
-      "Needs-you system notifications will not appear until status hooks are enabled. Running agent sessions may still report until reopened.",
+      "“Needs you” system notifications will not appear until agent status alerts are enabled. Running agent sessions may still report until reopened.",
     permission: {
       deniedTitle: "System notifications are blocked",
       deniedBody:
         "Allow notifications for Pier in system settings, then send a test notification to verify.",
       unsupportedTitle: "System notifications are unavailable",
       unsupportedBody:
-        "This environment cannot show OS notifications. Use the title bar Needs you count and agent list instead.",
+        "This environment cannot show OS notifications. Use the title bar “Needs you” count and the agent list instead.",
       unknownTitle: "Notification permission not verified yet",
       unknownBody:
         "Send a test notification to check whether Pier can deliver OS alerts.",

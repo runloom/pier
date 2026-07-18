@@ -17,8 +17,10 @@ import { type MouseEvent, useCallback } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { ActionInvocation } from "@/lib/actions/types.ts";
 import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { buildMenuEntries } from "./build-entries.ts";
+import { captureDomSelectionText } from "./selection-text.ts";
 
 /**
  * useContextMenu options. IMPORTANT: 调用方若传入 options 对象, 必须用 useMemo
@@ -97,7 +99,29 @@ async function popupAndDispatch(
   coords: { x: number; y: number },
   invocation?: Omit<ActionInvocation, "surface">
 ): Promise<void> {
-  const actionInvocation = { ...invocation, surface };
+  // 先抓选区。内容区菜单不要为了 layout actions 强行 setActive，
+  // 否则 git diff 等行选区会在弹菜单前被冲掉。
+  const selectedText =
+    typeof invocation?.metadata?.selectedText === "string"
+      ? invocation.metadata.selectedText
+      : captureDomSelectionText();
+  // dockview-tab 等仍可能依赖 activePanel；仅当调用方未带 selectedText 且
+  // surface 不是 panel/content 时才激活。
+  const sourcePanelId = invocation?.sourcePanelId;
+  if (sourcePanelId && surface !== "panel/content") {
+    const panel = useWorkspaceStore
+      .getState()
+      .api?.panels.find((candidate) => candidate.id === sourcePanelId);
+    panel?.api?.setActive();
+  }
+  const actionInvocation = {
+    ...invocation,
+    metadata: {
+      ...(invocation?.metadata ?? {}),
+      ...(selectedText.length > 0 ? { selectedText } : {}),
+    },
+    surface,
+  };
   const template = buildMenuEntries(surface, actionInvocation);
   await popupMenuTemplateAt(template, coords, async (actionId) => {
     const action = actionRegistry.get(actionId);

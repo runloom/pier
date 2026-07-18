@@ -385,7 +385,7 @@ function FilePanelContent({
         <ReadOnlyErrorState
           message={t(
             "filePanel.errors.outsideWorkspace",
-            "This file source is outside the restored workspace context."
+            "This file is outside the current workspace and cannot be restored."
           )}
           t={t}
           title={sourceTitle(selectedSource)}

@@ -43,7 +43,7 @@ export const FILES_PLUGIN_MANIFEST = {
       category: "file",
       id: FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
       permissions: ["terminal:read", "panel:open"],
-      title: "Markdown Preview",
+      title: "Preview Selected Text",
     },
     {
       category: "file",
@@ -85,7 +85,7 @@ export const FILES_PLUGIN_MANIFEST = {
       category: "file",
       id: FILES_COPY_PATH_WITH_RANGE_COMMAND_ID,
       permissions: [],
-      title: "Copy Path with Range",
+      title: "Copy Path and Selected Lines",
     },
     {
       category: "file",

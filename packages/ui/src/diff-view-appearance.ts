@@ -1,6 +1,26 @@
 import type { CSSProperties } from "react";
+import { SCROLLBAR_SYSTEM_CSS } from "./scrollbar-system.ts";
 
+/**
+ * CodeView unsafeCSS：系统滚动条 + Diff 产品壳。
+ * 尺寸只来自 SCROLLBAR_SYSTEM_CSS。
+ */
 export const CODE_VIEW_CUSTOM_CSS = `
+${SCROLLBAR_SYSTEM_CSS}
+
+  /*
+   * 产品选区只有 Pierre 行选（data-selected-line）。
+   * 禁止 pre/正文原生文字选区，避免截图里「行高亮 + 蓝选」两套并存。
+   * 行号栏官方已是 user-select:none；这里补正文与 pre。
+   */
+  pre,
+  [data-code],
+  [data-line],
+  [data-content] {
+    -webkit-user-select: none;
+    user-select: none;
+  }
+
   [data-diffs-header] {
     container-type: scroll-state;
     container-name: sticky-header;
@@ -18,18 +38,16 @@ export const CODE_VIEW_CUSTOM_CSS = `
     }
   }
 
-  /* Pierre 默认会把空 hunk 汇总成 -0/+0。宿主接管 header 统计后隐藏官方节点，
-     只通过 header-metadata 插槽渲染真实非零计数，避免懒加载占位误导。 */
   [data-metadata] > [data-deletions-count],
   [data-metadata] > [data-additions-count] {
     display: none;
   }
 `;
-
 export interface DiffTypographyStyle extends CSSProperties {
   "--diffs-font-family": string;
   "--diffs-font-size": string;
   "--diffs-line-height": string;
+  "--diffs-scrollbar-gutter-override": string;
   "--diffshub-annotation-border": string;
   "--diffshub-diff-separator": string;
 }

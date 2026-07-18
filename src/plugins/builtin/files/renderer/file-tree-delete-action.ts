@@ -49,7 +49,7 @@ async function protectOpenDocumentsBeforeTrash(input: {
     confirmLabel: t("filePanel.tree.delete.saveAndTrash", "Save and Delete"),
     intent: "default",
     size: "sm",
-    title: t("filePanel.tree.delete.protectedTitle", "Protected changes"),
+    title: t("filePanel.tree.delete.protectedTitle", "Unsaved changes"),
   });
   if (choice === "cancel") {
     return "cancel";

@@ -6,7 +6,7 @@ export const commandPalette = {
   searchResults: "Results",
   agents: {
     launchFailed: "Failed to Start Agent",
-    noAgentDetected: "No agent CLI detected",
+    noAgentDetected: "No available agent detected",
     unavailable: "Agent is no longer available",
   },
   placeholder: {
@@ -68,7 +68,7 @@ export const commandPalette = {
     noTerminals: "No terminals available",
     noTerminalsDetail: "New terminals will appear here",
     noTaskContext: "No active project",
-    noTaskContextDetail: "Focus a project-backed panel before running a task",
+    noTaskContextDetail: "Open a panel inside a project, then run a task",
     loadFailed: "Failed to load tasks",
     loadingTasks: "Finding tasks...",
     loadingTasksDetail: "Scanning supported task sources in the active project",

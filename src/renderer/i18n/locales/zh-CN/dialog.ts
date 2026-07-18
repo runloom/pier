@@ -1,7 +1,7 @@
 export const dialog = {
   appQuit: {
     activityKind: {
-      agent: "Agent",
+      agent: "智能体",
       shell: "终端",
       task: "任务",
     },

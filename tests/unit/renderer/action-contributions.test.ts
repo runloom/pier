@@ -67,12 +67,70 @@ describe("action contributions", () => {
     const closeAction = dockviewTabActions.find(
       (action) => action.id === "pier.panel.close"
     );
+    const contentLayoutActions = PANEL_LAYOUT_ACTION_CONTRIBUTIONS.filter(
+      (action) => action.surfaces.includes("panel/content")
+    );
 
     expect(dockviewTabActions.map((action) => action.id)).toEqual([
       "pier.panel.close",
       "pier.panel.closeOthers",
     ]);
     expect(closeAction?.shortcutSourceId).toBe("pier.panel.closeActive");
+    expect(contentLayoutActions.map((action) => action.id)).toEqual([
+      "pier.panel.copySelection",
+      "pier.panel.selectAll",
+      "pier.panel.equalizeSplits",
+      "pier.panel.focusRight",
+      "pier.panel.focusDown",
+      "pier.panel.focusLeft",
+      "pier.panel.focusUp",
+    ]);
+    const terminalSplitActions = PANEL_LAYOUT_ACTION_CONTRIBUTIONS.filter(
+      (action) => action.surfaces.includes("terminal/content")
+    );
+    expect(terminalSplitActions.map((action) => action.id)).toEqual([
+      "pier.panel.splitRight",
+      "pier.panel.splitDown",
+      "pier.panel.splitLeft",
+      "pier.panel.splitUp",
+    ]);
+  });
+
+  it("gates split actions to an active terminal panel", () => {
+    const splitActions = PANEL_LAYOUT_ACTION_CONTRIBUTIONS.filter((action) =>
+      action.id.startsWith("pier.panel.split")
+    );
+    expect(splitActions.map((action) => action.when)).toEqual([
+      "terminal.hasActivePanel",
+      "terminal.hasActivePanel",
+      "terminal.hasActivePanel",
+      "terminal.hasActivePanel",
+    ]);
+
+    const terminalRuntime = runtime(1, false);
+    const nonTerminalRuntime: typeof terminalRuntime = {
+      ...terminalRuntime,
+      getContext: () => ({
+        ...terminalRuntime.getContext(),
+        terminal: {
+          activeIsTaskPanel: false,
+          hasActivePanel: false,
+        },
+      }),
+    };
+
+    for (const contribution of splitActions) {
+      const enabled = createActionFromContribution(
+        contribution,
+        terminalRuntime
+      );
+      const disabled = createActionFromContribution(
+        contribution,
+        nonTerminalRuntime
+      );
+      expect(enabled.enabled?.()).toBe(true);
+      expect(disabled.enabled?.()).toBe(false);
+    }
   });
 
   it("builds runtime actions from contribution metadata and aliases", () => {

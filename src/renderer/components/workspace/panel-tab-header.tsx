@@ -432,6 +432,9 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
       className="dv-default-tab relative"
       data-panel-tab-id={props.api.id}
+      data-pier-tab-kind={
+        props.api.component === FILE_PANEL_COMPONENT_ID ? "file" : undefined
+      }
       data-pier-tab-preview={isPreview ? "true" : undefined}
       data-tab-state-label={tab?.state?.label}
       data-tab-status={status}

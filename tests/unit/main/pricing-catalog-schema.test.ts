@@ -49,6 +49,7 @@ describe("pricing catalog schema", () => {
       "gemini-2.5-pro",
       "deepseek-chat",
       "grok-4",
+      "grok-4.5",
     ]) {
       expect(models[required], `catalog missing ${required}`).toBeDefined();
     }

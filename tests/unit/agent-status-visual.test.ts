@@ -44,7 +44,7 @@ describe("shouldShimmer (loomdesk SHIMMERING_AGENT_STATUSES)", () => {
 describe("statusColorVar (loomdesk AGENT_STATUS_PULSE + 长跑覆盖)", () => {
   it.each([
     ["processing", null, "--status-info-fg"],
-    ["tool", null, "--status-info-fg"],
+    ["tool", null, "--status-done-fg"],
     ["waiting", null, "--status-warning-fg"],
     ["ready", null, "--foreground"],
     ["error", null, "--status-danger-fg"],
@@ -78,15 +78,16 @@ describe("shimmerTiers (OMP classic 扫带逐字符 tier)", () => {
   });
 
   it("扫带中心对准首字符时该字符为 high", () => {
-    // "Thinking" len=8: scale=8/12, padding=10*8/12=20/3, period=8+40/3=64/3
-    // naturalCycle=(64/3)/30*1000≈711ms → cycle=max(1000, 711)=1000ms
-    // pos=padding 需 elapsed = padding/period*cycle = (20/3)/(64/3)*1000 = 312.5ms
-    const tiers = shimmerTiers("Thinking", 312.5);
+    // "Thinking" len=8: scale=min(1,8/10)=0.8
+    // padding=8*0.8=6.4, period=8+12.8=20.8
+    // naturalCycle=20.8/22*1000≈945ms → cycle=max(1200,945)=1200ms
+    // pos=padding 需 elapsed = 6.4/20.8*1200 = 369.230...ms
+    const tiers = shimmerTiers("Thinking", (6.4 / 20.8) * 1200);
     expect(tiers[0]).toBe("high");
   });
 
   it("周期结束回卷（elapsed=cycle 与 elapsed=0 相同）", () => {
-    expect(shimmerTiers("Thinking", 1000)).toEqual(shimmerTiers("Thinking", 0));
+    expect(shimmerTiers("Thinking", 1200)).toEqual(shimmerTiers("Thinking", 0));
   });
 
   it("负 elapsed 按 0 处理", () => {

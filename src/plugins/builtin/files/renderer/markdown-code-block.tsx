@@ -80,7 +80,7 @@ export function MarkdownCodeBlock({
 
   return (
     <div
-      className="my-4 overflow-hidden rounded-md border"
+      className="my-4 overflow-hidden rounded-md border bg-muted/20"
       data-slot="markdown-code-block"
     >
       <div className="flex h-8 items-center gap-2 border-b bg-muted/40 px-2">
@@ -105,8 +105,31 @@ export function MarkdownCodeBlock({
         ) : null}
       </div>
       <pre
-        className="overflow-x-auto p-3 font-mono text-sm"
+        className="max-h-[min(28rem,70vh)] overflow-auto overscroll-y-auto p-3 font-mono text-[13px] leading-6 [overscroll-behavior:auto]"
         data-scrollbar="overlay"
+        onWheel={(event) => {
+          // data-scrollbar 默认 overscroll-behavior:contain 会吃掉边界外滚动。
+          // 到边界时把纵向 delta 转发给页面预览容器。
+          const el = event.currentTarget;
+          const { deltaY } = event;
+          if (deltaY === 0) {
+            return;
+          }
+          const atTop = el.scrollTop <= 0;
+          const atBottom =
+            el.scrollTop + el.clientHeight >= el.scrollHeight - 1;
+          if ((deltaY < 0 && !atTop) || (deltaY > 0 && !atBottom)) {
+            return;
+          }
+          const page = el.closest<HTMLElement>(
+            '[data-slot="markdown-preview"]'
+          );
+          if (!page) {
+            return;
+          }
+          page.scrollTop += deltaY;
+          event.preventDefault();
+        }}
         style={
           highlight.status === "highlighted"
             ? {
