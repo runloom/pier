@@ -104,6 +104,8 @@ describe("managed plugin packaging governance", () => {
     );
     expect(releaseWorkflow).toContain("pnpm plugins:index");
     expect(releaseWorkflow).toContain("chore(plugins): update index for");
+    expect(releaseWorkflow).toContain("--latest=false");
+    expect(releaseWorkflow).toContain("--prerelease");
   });
 
   it("does not commit an unsigned official index", () => {

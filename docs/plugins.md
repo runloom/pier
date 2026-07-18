@@ -143,7 +143,7 @@ Pier 安装官方插件时依次执行：
 2. 在本地运行对应构建、打包和测试。
 3. 可在同一合入中变更多个 `packages/plugin-*/package.json`；release workflow 会按插件 id tail 排序串行发布。
 4. 只有带有 `plugin.json` 的包会进入发布队列；像 `packages/plugin-api` 这类共享包即使改了 `package.json` 也会被跳过。
-5. `.github/workflows/release-plugin.yml` 为每个可发布变更插件构建并创建/校验 `plugin-<id>-v<version>` GitHub Release。
+5. `.github/workflows/release-plugin.yml` 为每个可发布变更插件构建并创建/校验 `plugin-<id>-v<version>` GitHub Release；插件 release 必须使用 `--latest=false --prerelease`，不得占用仓库 `Latest`（避免 electron-updater 去插件 tag 找 `latest-mac.yml`）。
 6. 全部插件发布成功后，同一工作流只重新生成、签名并提交一次 `plugins/index.v1.json`。
 7. 索引提交触发 `.github/workflows/publish-index.yml` 发布官方索引。
 

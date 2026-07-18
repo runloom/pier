@@ -4,6 +4,17 @@
 
 Pier 提供 dockview panel 布局、终端、代码变更预览、文件查看和多 agent 状态可见性，让 AI 编程从会话走向项目连续性。
 
+## 授权
+
+Pier 采用 **AGPLv3 + 商业授权**：
+
+- 开源版源码按 [`AGPL-3.0-only`](LICENSE) 发布。
+- 需要闭源分发、白标、企业支持或 AGPLv3 之外权利的使用方，可通过单独商业协议授权。
+- 商标和品牌资产不随 AGPLv3 授权，见 [`TRADEMARKS.md`](TRADEMARKS.md)。
+- 第三方依赖和字体资产保留各自许可证，见 [`NOTICE`](NOTICE) 和 [`docs/legal/licensing.md`](docs/legal/licensing.md)。
+
+贡献规则见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。非平凡外部贡献需要先完成贡献者授权流程，避免阻塞后续商业授权。
+
 ## 技术栈
 
 - Electron 43 · React 19 · TypeScript · pnpm

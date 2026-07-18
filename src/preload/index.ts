@@ -56,6 +56,7 @@ import {
   createFilePreviewApi,
   type PierFilePreviewApi,
 } from "./file-preview-api.ts";
+import { fileQueryApi, type PierFileQueryAPI } from "./file-query-api.ts";
 import {
   foregroundActivityApi,
   type PierForegroundActivityAPI,
@@ -175,6 +176,7 @@ export interface PierPluginsAPI {
 
 export type { PierAiAPI } from "./ai-api.ts";
 export type { PierFilesAPI } from "./file-api.ts";
+export type { PierFileQueryAPI } from "./file-query-api.ts";
 export type { PierFileSaveTargetAPI } from "./file-save-target-api.ts";
 export type { PierGitAPI } from "./git-api.ts";
 export type { PierPluginSettingsAPI } from "./plugin-settings-api.ts";
@@ -233,6 +235,7 @@ export interface PierWindowAPI {
   environments: PierEnvironmentsAPI;
   externalNavigation: PierExternalNavigationApi;
   filePreviews: PierFilePreviewApi;
+  fileQuery: PierFileQueryAPI;
   files: PierFilesAPI;
   focusWindow: (windowId: string) => Promise<void>;
   foregroundActivity: PierForegroundActivityAPI;
@@ -439,6 +442,7 @@ const api: PierWindowAPI = {
   focusWindow: (windowId) =>
     invokePierCommand<void>({ type: "window.focus", windowId }),
   files: filesApi,
+  fileQuery: fileQueryApi,
   environments: environmentsApi,
   externalNavigation: externalNavigationApi,
   filePreviews: filePreviewApi,

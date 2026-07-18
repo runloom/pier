@@ -36,6 +36,7 @@ import { registerAgentsIpc } from "./ipc/agents.ts";
 import { registerCommandIpc } from "./ipc/command.ts";
 import { registerExternalNavigationIpc } from "./ipc/external-navigation.ts";
 import { registerFilePreviewTicketIpc } from "./ipc/file-preview-ticket.ts";
+import { registerFileQueryIpc } from "./ipc/file-query.ts";
 import { registerFileSaveTargetIpc } from "./ipc/file-save-target.ts";
 import { registerFileWatchIpc } from "./ipc/file-watch.ts";
 import {
@@ -423,10 +424,10 @@ if (gotTheLock) {
       registerThemeIpc(ipcMain);
       registerGitWatchIpc();
       registerFileWatchIpc();
+      registerFileQueryIpc();
       localControlRegistration.start();
-      // 孤儿 task 清算必须先于窗口恢复：renderer readSession 读到的磁盘状态
-      // 从此不说谎（上进程遗留的 running 一律 cancelled）。
-      // background OS 进程回收在 UI sweep 之前：只杀本 app 登记过的 pid。
+      // 孤儿 task 清算必须先于窗口恢复(renderer readSession 磁盘状态不再说谎:
+      // 上进程 running 一律 cancelled), 并在 UI sweep 前只回收本 app 登记的 pid.
       await reconcileOrphanedBackgroundProcesses().catch((error: unknown) => {
         terminalSessionLog.error("orphan background process sweep failed", {
           error,

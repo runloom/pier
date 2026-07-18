@@ -8,11 +8,4 @@ export const FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY =
 export const FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY =
   "pier.files.tree.showGitIgnoredFiles";
 
-export const FILES_TREE_DEFAULT_EXCLUDE_PATTERNS = [
-  "**/.git",
-  "**/.hg",
-  "**/.svn",
-  "**/CVS",
-  "**/.DS_Store",
-  "**/Thumbs.db",
-].join("\n");
+export { FILES_TREE_DEFAULT_EXCLUDE_PATTERNS } from "@shared/contracts/files-tree-exclude.ts";

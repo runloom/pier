@@ -102,6 +102,139 @@ describe("buildPiExtensionSource", () => {
   });
 });
 
+describe("生成源码行为（动态加载 + 假 pi 触发）", () => {
+  const ORIG = {
+    log: process.env.PIER_AGENT_EVENT_LOG,
+    panelId: process.env.PIER_PANEL_ID,
+    windowId: process.env.PIER_WINDOW_ID,
+  };
+
+  afterEach(() => {
+    restoreEnv("PIER_AGENT_EVENT_LOG", ORIG.log);
+    restoreEnv("PIER_PANEL_ID", ORIG.panelId);
+    restoreEnv("PIER_WINDOW_ID", ORIG.windowId);
+  });
+
+  function restoreEnv(key: string, value: string | undefined): void {
+    if (value === undefined) {
+      delete process.env[key];
+    } else {
+      process.env[key] = value;
+    }
+  }
+
+  interface PiEventCtx {
+    sessionManager?: {
+      getSessionFile?: () => string | undefined;
+      getSessionId?: () => string;
+    };
+  }
+  type PiHandler = (event: unknown, ctx: PiEventCtx) => void;
+  type PiExtensionFactory = (pi: {
+    on: (name: string, handler: PiHandler) => void;
+  }) => void;
+
+  function createFakePi() {
+    const handlers = new Map<string, PiHandler[]>();
+    return {
+      pi: {
+        on(name: string, handler: PiHandler): void {
+          const list = handlers.get(name);
+          if (list) {
+            list.push(handler);
+          } else {
+            handlers.set(name, [handler]);
+          }
+        },
+      },
+      fire(name: string, ctx: PiEventCtx, event: unknown = {}): void {
+        for (const handler of handlers.get(name) ?? []) {
+          handler(event, ctx);
+        }
+      },
+    };
+  }
+
+  async function loadFreshExtension(): Promise<{
+    factory: PiExtensionFactory;
+    logPath: string;
+  }> {
+    const source = buildPiExtensionSource();
+    const exportTokenCount =
+      source.match(/export default function/g)?.length ?? 0;
+    if (exportTokenCount !== 1) {
+      throw new Error(
+        `生成源码应恰含一处 export default function, 实际 ${exportTokenCount} 处`
+      );
+    }
+    const cjsSource = source.replace(
+      "export default function",
+      "module.exports = function"
+    );
+    const moduleShim: { exports: PiExtensionFactory | undefined } = {
+      exports: undefined,
+    };
+    const evaluate = new Function("module", cjsSource) as (
+      shim: typeof moduleShim
+    ) => void;
+    evaluate(moduleShim);
+    if (typeof moduleShim.exports !== "function") {
+      throw new Error("生成源码未导出扩展工厂函数");
+    }
+    const dir = await mkdtemp(join(tmpdir(), "pier-pi-ext-"));
+    const logPath = join(dir, "events.jsonl");
+    process.env.PIER_AGENT_EVENT_LOG = logPath;
+    process.env.PIER_PANEL_ID = "panel-1";
+    process.env.PIER_WINDOW_ID = "window-1";
+    return { factory: moduleShim.exports, logPath };
+  }
+
+  async function readEmittedRecords(
+    logPath: string
+  ): Promise<Record<string, unknown>[]> {
+    const raw = await readFile(logPath, "utf8");
+    return raw
+      .split("\n")
+      .filter((line) => line.length > 0)
+      .map((line) => JSON.parse(line) as Record<string, unknown>);
+  }
+
+  it("从 ctx.sessionManager.getSessionId 写入 sessionId 供重启 resume", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const sessionId = "019f7021-45c3-7000-aa01-d23a7bd03bc0";
+    const ctx: PiEventCtx = {
+      sessionManager: {
+        getSessionFile: () =>
+          `/tmp/sessions/2026-07-17T12-50-56-579Z_${sessionId}.jsonl`,
+        getSessionId: () => sessionId,
+      },
+    };
+    main.fire("session_start", ctx, { type: "session_start" });
+    main.fire("agent_start", ctx, { type: "agent_start" });
+    const records = await readEmittedRecords(logPath);
+    // load-time synthetic SessionStart has no ctx, so no sessionId; subsequent
+    // real events must carry the manager-provided id.
+    expect(records[0]).toMatchObject({
+      event: "SessionStart",
+      nativeEvent: "pier.synthetic.session_start",
+    });
+    expect(records[0]).not.toHaveProperty("sessionId");
+    expect(records.slice(1)).toEqual([
+      expect.objectContaining({
+        event: "SessionStart",
+        nativeEvent: "session_start",
+        sessionId,
+      }),
+      expect.objectContaining({
+        event: "PromptSubmit",
+        sessionId,
+      }),
+    ]);
+  });
+});
+
 describe("piHome", () => {
   const ORIG = process.env.PI_CODING_AGENT_DIR;
   afterEach(() => {

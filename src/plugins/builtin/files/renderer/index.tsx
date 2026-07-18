@@ -32,6 +32,7 @@ import { clearFilesNavHistory } from "./files-nav-history.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
 import { filesPanelTabChrome } from "./files-panel-tab.ts";
 import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
+import { createFilesQuickOpenAction } from "./files-quick-open.ts";
 import { registerFilesTerminalOpenUrlHandler } from "./files-terminal-open-url-handler.ts";
 import {
   clearFileTreeSidebarCache,
@@ -362,6 +363,7 @@ export const filesRendererPlugin: RendererPluginModule = {
           editorController
         )
       ),
+      context.actions.register(createFilesQuickOpenAction(context)),
       context.actions.register(
         withFilesMutationGate(createTreeSearchAction(context), editorController)
       ),

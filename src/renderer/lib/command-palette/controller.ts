@@ -36,6 +36,11 @@ interface ControllerState extends SessionState {
   setOpen: (open: boolean) => void;
   stack: readonly SessionState[];
   toggle: () => void;
+  /**
+   * 合并式更新当前 quickPick (通常是异步搜索的 loading/items/errorText 补丁)。
+   * 不 bump requestId, 不动栈, 输入焦点/query/selection 不重置。
+   */
+  updateQuickPick: (patch: Partial<QuickPick>) => void;
 }
 
 const INITIAL: SessionState = {
@@ -138,6 +143,14 @@ export const useCommandPaletteController = create<ControllerState>(
           mode: "quick-pick",
           quickPick: qp,
         });
+      },
+
+      updateQuickPick: (patch) => {
+        const state = get();
+        if (!state.open || state.mode !== "quick-pick" || !state.quickPick) {
+          return;
+        }
+        set({ quickPick: { ...state.quickPick, ...patch } });
       },
 
       goBack: () => {

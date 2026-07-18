@@ -132,6 +132,10 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
 
   interface OmpEventCtx {
     hasUI: boolean;
+    sessionManager?: {
+      getSessionFile?: () => string | undefined;
+      getSessionId?: () => string;
+    };
   }
   type OmpHandler = (event: unknown, ctx: OmpEventCtx) => void;
   type OmpExtensionFactory = (pi: {
@@ -152,9 +156,9 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
           }
         },
       },
-      fire(name: string, ctx: OmpEventCtx): void {
+      fire(name: string, ctx: OmpEventCtx, event: unknown = {}): void {
         for (const handler of handlers.get(name) ?? []) {
-          handler({}, ctx);
+          handler(event, ctx);
         }
       },
     };
@@ -260,6 +264,35 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       nativeEvent: "session_start",
     });
     expect(typeof records[0]?.ts).toBe("number");
+  });
+
+  it("从 ctx.sessionManager.getSessionId 写入 sessionId 供重启 resume", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const sessionId = "019f7021-45c3-7000-aa01-d23a7bd03bc0";
+    const ctx: OmpEventCtx = {
+      hasUI: true,
+      sessionManager: {
+        getSessionFile: () =>
+          `/Users/xyz/.omp/agent/sessions/-ABC-pier/2026-07-17T12-50-56-579Z_${sessionId}.jsonl`,
+        getSessionId: () => sessionId,
+      },
+    };
+    // omp 宿主 session_start 载荷只有 type，sessionId 在 ctx.sessionManager。
+    main.fire("session_start", ctx, { type: "session_start" });
+    main.fire("agent_start", ctx, { type: "agent_start" });
+    const records = await readEmittedRecords(logPath);
+    expect(records).toEqual([
+      expect.objectContaining({
+        event: "SessionStart",
+        sessionId,
+      }),
+      expect.objectContaining({
+        event: "PromptSubmit",
+        sessionId,
+      }),
+    ]);
   });
 
   it("task subagent(非首实例且 hasUI=false)：交错序列中只追加 Subagent 计数事件", async () => {

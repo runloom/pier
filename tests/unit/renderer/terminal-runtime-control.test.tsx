@@ -147,7 +147,8 @@ describe("terminal runtime control", () => {
 
     const stop = screen.getByRole("button", { name: "Stop task" });
     expect(stop).toBeEnabled();
-    expect(stop).toHaveAttribute("data-variant", "destructive");
+    expect(stop).toHaveAttribute("data-variant", "ghost");
+    expect(stop).toHaveClass("text-action-danger");
     expect(stop.querySelector("svg")).toHaveClass("lucide-square");
     expect(screen.queryByRole("button", { name: "Restart task" })).toBeNull();
     expect(
@@ -172,7 +173,8 @@ describe("terminal runtime control", () => {
     const reveal = screen.getByRole("button", {
       name: "Reveal task terminal",
     });
-    expect(stop).toHaveAttribute("data-variant", "destructive");
+    expect(stop).toHaveAttribute("data-variant", "ghost");
+    expect(stop).toHaveClass("text-action-danger");
     expect(restart).toHaveClass("text-action-accent");
     expect(reveal).toHaveAttribute("data-tone", "muted");
     expectBefore(stop, restart);
@@ -193,7 +195,8 @@ describe("terminal runtime control", () => {
 
     const stop = screen.getByRole("button", { name: "Stop task" });
     const output = screen.getByRole("button", { name: "Open task output" });
-    expect(stop).toHaveAttribute("data-variant", "destructive");
+    expect(stop).toHaveAttribute("data-variant", "ghost");
+    expect(stop).toHaveClass("text-action-danger");
     expect(output).toHaveAttribute("data-tone", "muted");
     expectBefore(stop, output);
     expect(screen.queryByRole("button", { name: "Restart task" })).toBeNull();
@@ -274,7 +277,8 @@ describe("terminal runtime control", () => {
 
     renderControl({ current, now: 1000 + TASK_STOP_GRACE_MS });
     const forceStop = screen.getByRole("button", { name: "Force stop" });
-    expect(forceStop).toHaveAttribute("data-variant", "destructive");
+    expect(forceStop).toHaveAttribute("data-variant", "ghost");
+    expect(forceStop).toHaveClass("text-action-danger");
     expect(forceStop.querySelector("svg")).toHaveClass("lucide-octagon-x");
     fireEvent.click(forceStop);
 
@@ -294,7 +298,8 @@ describe("terminal runtime control", () => {
 
     const forceStop = screen.getByRole("button", { name: "Force stop" });
     const output = screen.getByRole("button", { name: "Open task output" });
-    expect(forceStop).toHaveAttribute("data-variant", "destructive");
+    expect(forceStop).toHaveAttribute("data-variant", "ghost");
+    expect(forceStop).toHaveClass("text-action-danger");
     expectBefore(forceStop, output);
     expect(screen.queryByRole("button", { name: "Restart task" })).toBeNull();
     expect(

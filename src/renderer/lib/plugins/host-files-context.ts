@@ -95,6 +95,25 @@ export function createPluginFilesContext(
       assertPluginCapability(entry, "file:write");
       return window.pier.files.pickSaveTarget(request);
     },
+    onPathQueryEvent: (listener) => {
+      assertPluginCapability(entry, "file:read");
+      return window.pier.fileQuery.onEvent(listener);
+    },
+    queryPaths: (request) => {
+      assertPluginCapability(entry, "file:read");
+      const queryId = request.queryId ?? crypto.randomUUID();
+      // Subscribe-before-start is the caller's responsibility when they need
+      // to observe events that race the IPC round-trip. Surface the start
+      // result so a false/reject can exit loading instead of hanging.
+      const started = window.pier.fileQuery.start({ ...request, queryId });
+      return {
+        cancel: () => {
+          window.pier.fileQuery.cancel(queryId).catch(() => undefined);
+        },
+        queryId,
+        started,
+      };
+    },
     readDocument: (request) => {
       assertPluginCapability(entry, "file:read");
       return window.pier.files.readDocument(request);

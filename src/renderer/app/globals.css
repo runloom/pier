@@ -110,6 +110,26 @@
   --status-done-bg: color-mix(in oklab, var(--done) 14%, transparent);
   --status-done-fg: color-mix(in oklab, var(--done) 82%, var(--foreground));
   --status-done-border: color-mix(in oklab, var(--done) 24%, transparent);
+  /* Code/diff 变更色：对齐 @pierre/diffs 默认（Git Review CodeView），
+     供 Files 编辑器 git gutter / 行底与 review 视觉一致。状态 badge 仍用 status-*。 */
+  --diff-addition-fg: #5ecc71;
+  --diff-deletion-fg: #ff6762;
+  --diff-modification-fg: #69b1ff;
+  --diff-addition-bg: color-mix(
+    in oklab,
+    var(--background) 80%,
+    var(--diff-addition-fg)
+  );
+  --diff-deletion-bg: color-mix(
+    in oklab,
+    var(--background) 80%,
+    var(--diff-deletion-fg)
+  );
+  --diff-modification-bg: color-mix(
+    in oklab,
+    var(--background) 80%,
+    var(--diff-modification-fg)
+  );
   --status-solid-foreground: oklch(0.985 0 0);
   --action-accent: var(--primary);
   --action-accent-foreground: var(--primary-foreground);
@@ -227,6 +247,25 @@
   --status-danger-bg: #fff2f0;
   --status-danger-fg: #ff4d4f;
   --status-danger-border: #ffccc7;
+  /* Code/diff 变更色：对齐 Pierre light defaults。 */
+  --diff-addition-fg: #0dbe4e;
+  --diff-deletion-fg: #ff2e3f;
+  --diff-modification-fg: #009fff;
+  --diff-addition-bg: color-mix(
+    in oklab,
+    var(--background) 88%,
+    var(--diff-addition-fg)
+  );
+  --diff-deletion-bg: color-mix(
+    in oklab,
+    var(--background) 88%,
+    var(--diff-deletion-fg)
+  );
+  --diff-modification-bg: color-mix(
+    in oklab,
+    var(--background) 88%,
+    var(--diff-modification-fg)
+  );
   --chart-1: var(--info);
   --chart-2: var(--success);
   --chart-3: var(--warning);

@@ -190,9 +190,15 @@ jobs:
               echo "Immutable asset verified for $TAG"
             else
               echo "Creating release $TAG"
+              # Plugin tags must never become the repository "Latest" release.
+              # electron-updater resolves GitHub /releases/latest for app updates
+              # and expects latest-mac.yml / latest.yml there. Keep plugin assets as
+              # prereleases with --latest=false so they never own /releases/latest.
               gh release create "$TAG" \
                 --repo "$GITHUB_REPOSITORY" \
                 --title "$TAG" \
+                --latest=false \
+                --prerelease \
                 --notes "$(printf 'Automated plugin release.\n\n- sha256: `%s`\n- size: `%s`\n' "$SHA" "$SIZE")" \
                 "$TGZ" \
                 "$TGZ.sha256"

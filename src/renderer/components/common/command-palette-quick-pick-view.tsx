@@ -32,7 +32,7 @@ export function quickPickPresentedItems(
 ): readonly QuickPickItem[] {
   const queryItem = quickPickQueryItem(quickPick, query);
   let items: readonly QuickPickItem[];
-  if (quickPick.loading) {
+  if (quickPick.loading || quickPick.preserveItemOrder === true) {
     items = quickPickItems(quickPick);
   } else if (quickPick.sections && quickPick.sections.length > 0) {
     items = quickPick.sections.flatMap((section) =>
@@ -158,7 +158,7 @@ export function QuickPickView({
           ) : null}
           {quickPick.sections.map((section) => {
             const items =
-              quickPick.loading === true
+              quickPick.loading === true || quickPick.preserveItemOrder === true
                 ? section.items
                 : quickPickResults(section.items, query, section.heading);
             // shouldFilter={false} 下 cmdk 不感知手动过滤, 不会自动藏空组,
@@ -177,7 +177,8 @@ export function QuickPickView({
         <CommandGroup>
           {[
             ...(queryItem ? [queryItem] : []),
-            ...(quickPick.loading === true
+            ...(quickPick.loading === true ||
+            quickPick.preserveItemOrder === true
               ? (quickPick.items ?? [])
               : quickPickResults(quickPick.items ?? [], query)),
           ].map(renderItem)}

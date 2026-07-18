@@ -50,6 +50,7 @@ import {
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
 import type { QuickPickItem } from "@/lib/command-palette/types.ts";
+import { useQuickPickQueryChange } from "@/lib/command-palette/use-quick-pick-query-change.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import {
   getKeybindingRegistryVersion,
@@ -231,12 +232,16 @@ export function CommandPalette() {
     setSelectedValue(next?.id ?? "");
   }, [isOpen, mode, normalizedQuery, quickPick, requestId, selectedValue]);
 
-  // 输入变化后将高亮重置到当前展示的第一项；动态候选因此能成为明确的
-  // Enter 默认动作，而不是在无可见提示时隐式提交文本。
+  // 仅用户输入变化时把高亮重置到第一项；updateQuickPick 换 items 不得抢键盘选中。
+  const lastQueryForSelectionRef = useRef(normalizedQuery);
   useEffect(() => {
     if (!isOpen || mode !== "quick-pick" || !quickPick) {
       return;
     }
+    if (lastQueryForSelectionRef.current === normalizedQuery) {
+      return;
+    }
+    lastQueryForSelectionRef.current = normalizedQuery;
     const queryItem = quickPickQueryItem(quickPick, normalizedQuery);
     if (queryItem) {
       setSelectedValue(queryItem.id);
@@ -249,6 +254,14 @@ export function CommandPalette() {
       ) ?? items.find((item) => isQuickPickItemSelectable(quickPick, item));
     setSelectedValue(next?.id ?? "");
   }, [isOpen, mode, normalizedQuery, quickPick]);
+
+  useQuickPickQueryChange({
+    handler: quickPick?.onQueryChange,
+    isOpen,
+    mode,
+    query: normalizedQuery,
+    requestId,
+  });
 
   // 关闭 (Esc 已走 goBack 路径或点击遮罩) 时, 若 quick-pick 未 accept 调 onDismiss。
   // goBack() 内联调过 onDismiss, 但 close() 路径 (点击遮罩) 没调, 这里补。
@@ -463,6 +476,14 @@ export function CommandPalette() {
           placeholder={dialogPlaceholder}
           value={query}
         />
+        {presentedMode === "quick-pick" && presentedQuickPick?.errorText ? (
+          <div
+            className="border-b px-3 py-2 text-destructive text-xs"
+            role="alert"
+          >
+            {presentedQuickPick.errorText}
+          </div>
+        ) : null}
         {quickPick?.onAcceptQuery ? null : (
           <CommandList className="max-h-[min(60vh,520px)]">
             <CommandEmpty>

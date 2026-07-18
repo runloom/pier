@@ -38,69 +38,180 @@ function adaptQuickPickSection(
   };
 }
 
-function indexPluginQuickPickItems(
+/**
+ * One openQuickPick → one session. Each onQueryChange bumps queryGeneration and
+ * stamps the AbortSignal. updateQuickPick(patch, { signal }) only applies when
+ * signal is the latest query's signal and not aborted — so a slow query A cannot
+ * overwrite query B after A was superseded.
+ */
+interface AdaptedQuickPickSession {
+  hostOnAccept: QuickPick["onAccept"] | null;
+  lastQuerySignal: AbortSignal | null;
+  pluginItemsById: Map<string, RendererPluginQuickPickItem>;
+  pluginQuickPick: RendererPluginQuickPick;
+  queryGeneration: number;
+  signalGeneration: WeakMap<AbortSignal, number>;
+}
+
+let currentSession: AdaptedQuickPickSession | null = null;
+
+function collectPluginItems(
   quickPick: RendererPluginQuickPick
-): ReadonlyMap<string, RendererPluginQuickPickItem> {
-  const items = [
+): readonly RendererPluginQuickPickItem[] {
+  return [
     ...(quickPick.items ?? []),
     ...(quickPick.sections?.flatMap((section) => section.items) ?? []),
   ];
-  return new Map(items.map((item) => [item.id, item]));
 }
 
-function adaptQuickPick(quickPick: RendererPluginQuickPick): QuickPick {
-  // Mutable so query-derived items can be registered when first generated.
-  const pluginItemsById = new Map(indexPluginQuickPickItems(quickPick));
+function applyHostPatch(
+  session: AdaptedQuickPickSession,
+  patch: Partial<RendererPluginQuickPick>
+): void {
+  const controllerState = useCommandPaletteController.getState();
+  if (controllerState.quickPick?.onAccept !== session.hostOnAccept) {
+    return;
+  }
+  session.pluginQuickPick = { ...session.pluginQuickPick, ...patch };
+  if ("items" in patch || "sections" in patch) {
+    session.pluginItemsById.clear();
+    for (const item of collectPluginItems(session.pluginQuickPick)) {
+      session.pluginItemsById.set(item.id, item);
+    }
+  }
+  const hostPatch: { -readonly [K in keyof QuickPick]?: QuickPick[K] } = {};
+  if ("errorText" in patch) {
+    hostPatch.errorText = patch.errorText;
+  }
+  if ("loading" in patch) {
+    hostPatch.loading = patch.loading;
+  }
+  if ("placeholder" in patch) {
+    hostPatch.placeholder = patch.placeholder;
+  }
+  if ("preserveItemOrder" in patch) {
+    hostPatch.preserveItemOrder = patch.preserveItemOrder;
+  }
+  if ("title" in patch && patch.title !== undefined) {
+    hostPatch.title = patch.title;
+  }
+  if ("items" in patch) {
+    hostPatch.items = patch.items?.map(adaptQuickPickItem);
+  }
+  if ("sections" in patch) {
+    hostPatch.sections = patch.sections?.map(adaptQuickPickSection);
+  }
+  controllerState.updateQuickPick(hostPatch);
+}
+
+function adaptQuickPick(session: AdaptedQuickPickSession): QuickPick {
   const pluginItemFor = (item: QuickPickItem): RendererPluginQuickPickItem => {
-    const pluginItem = pluginItemsById.get(item.id);
+    const pluginItem = session.pluginItemsById.get(item.id);
     if (!pluginItem) {
       throw new Error(`unknown plugin quick pick item: ${item.id}`);
     }
     return pluginItem;
   };
+  const initial = session.pluginQuickPick;
   return {
-    ...(quickPick.getQueryItem
+    ...(initial.errorText ? { errorText: initial.errorText } : {}),
+    ...(initial.getQueryItem
       ? {
           getQueryItem: (query: string) => {
-            const item = quickPick.getQueryItem?.(query);
+            const item = session.pluginQuickPick.getQueryItem?.(query);
             if (!item) {
               return null;
             }
-            pluginItemsById.set(item.id, item);
+            session.pluginItemsById.set(item.id, item);
             return adaptQuickPickItem(item);
           },
         }
       : {}),
-    onAccept: (item) => quickPick.onAccept(pluginItemFor(item)),
-    ...(quickPick.items
-      ? { items: quickPick.items.map(adaptQuickPickItem) }
-      : {}),
-    ...(quickPick.onChangeSelection
+    ...(initial.items ? { items: initial.items.map(adaptQuickPickItem) } : {}),
+    ...(initial.loading == null ? {} : { loading: initial.loading }),
+    onAccept: (item) => session.pluginQuickPick.onAccept(pluginItemFor(item)),
+    ...(initial.onChangeSelection
       ? {
           onChangeSelection: (item: QuickPickItem) =>
-            quickPick.onChangeSelection?.(pluginItemFor(item)),
+            session.pluginQuickPick.onChangeSelection?.(pluginItemFor(item)),
         }
       : {}),
-    ...(quickPick.onDismiss ? { onDismiss: quickPick.onDismiss } : {}),
-    ...(quickPick.placeholder ? { placeholder: quickPick.placeholder } : {}),
-    ...(quickPick.renderItem
+    ...(initial.onDismiss
+      ? { onDismiss: () => session.pluginQuickPick.onDismiss?.() }
+      : {}),
+    ...(initial.onQueryChange
+      ? {
+          onQueryChange: (query: string, signal: AbortSignal) => {
+            session.queryGeneration += 1;
+            session.lastQuerySignal = signal;
+            session.signalGeneration.set(signal, session.queryGeneration);
+            return session.pluginQuickPick.onQueryChange?.(query, signal);
+          },
+        }
+      : {}),
+    ...(initial.placeholder ? { placeholder: initial.placeholder } : {}),
+    ...(initial.preserveItemOrder == null
+      ? {}
+      : { preserveItemOrder: initial.preserveItemOrder }),
+    ...(initial.renderItem
       ? {
           renderItem: (item: QuickPickItem) =>
-            quickPick.renderItem?.(pluginItemFor(item)),
+            session.pluginQuickPick.renderItem?.(pluginItemFor(item)),
         }
       : {}),
-    ...(quickPick.sections
-      ? { sections: quickPick.sections.map(adaptQuickPickSection) }
+    ...(initial.sections
+      ? { sections: initial.sections.map(adaptQuickPickSection) }
       : {}),
-    title: quickPick.title,
+    title: initial.title,
   };
+}
+
+interface PluginQuickPickUpdateOptions {
+  /** When set, drop the patch if this signal aborted or is not the latest query. */
+  readonly signal?: AbortSignal;
 }
 
 export function createPluginCommandPaletteContext(): RendererPluginContext["commandPalette"] {
   return {
-    openQuickPick: (quickPick) =>
-      useCommandPaletteController
-        .getState()
-        .openQuickPick(adaptQuickPick(quickPick)),
+    openQuickPick: (pluginQuickPick) => {
+      const session: AdaptedQuickPickSession = {
+        hostOnAccept: null,
+        lastQuerySignal: null,
+        pluginItemsById: new Map(
+          collectPluginItems(pluginQuickPick).map((item) => [item.id, item])
+        ),
+        pluginQuickPick,
+        queryGeneration: 0,
+        signalGeneration: new WeakMap(),
+      };
+      const hostQuickPick = adaptQuickPick(session);
+      session.hostOnAccept = hostQuickPick.onAccept;
+      currentSession = session;
+      useCommandPaletteController.getState().openQuickPick(hostQuickPick);
+    },
+    updateQuickPick: (patch, options?: PluginQuickPickUpdateOptions) => {
+      const session = currentSession;
+      if (!session) {
+        return;
+      }
+      const signal = options?.signal;
+      if (signal) {
+        if (signal.aborted) {
+          return;
+        }
+        const generation = session.signalGeneration.get(signal);
+        if (
+          generation === undefined ||
+          generation !== session.queryGeneration
+        ) {
+          return;
+        }
+      } else if (session.queryGeneration > 0) {
+        // Async query session without a signal stamp: reject to prevent stale
+        // writes. Callers must pass the onQueryChange AbortSignal.
+        return;
+      }
+      applyHostPatch(session, patch);
+    },
   };
 }
