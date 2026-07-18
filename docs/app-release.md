@@ -1,5 +1,8 @@
 # Pier 宿主应用发布
 
+> 双通道总览（宿主 + 插件）见 [`docs/release.md`](./release.md)。
+
+
 生产自动更新依赖公开 GitHub Release 的 **Latest** 资产（`latest-mac.yml` + mac zip）。插件 release 必须保持 prerelease，不得占用 Latest。
 
 ## 常规发布
