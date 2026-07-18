@@ -112,6 +112,14 @@ export function useFilesTreeSearch({
     treeSearch.closeSearch();
   }, [stopSearch, treeSearch]);
 
+  const toggleSearch = useCallback(() => {
+    if (treeSearch.open) {
+      closeSearch();
+      return;
+    }
+    openSearch();
+  }, [closeSearch, openSearch, treeSearch.open]);
+
   const changeSearch = treeSearch.changeSearch;
 
   useEffect(() => {
@@ -225,6 +233,7 @@ export function useFilesTreeSearch({
       open: treeSearch.open,
       openFocusedMatch: treeSearch.openFocusedMatch,
       openSearch,
+      toggleSearch,
       queryApplied: treeSearch.queryApplied,
       truncated,
       updateMatchState: treeSearch.updateMatchState,
@@ -236,6 +245,7 @@ export function useFilesTreeSearch({
       matchCount,
       matchText,
       openSearch,
+      toggleSearch,
       queryLoading,
       treeSearch.attachTreeApi,
       treeSearch.focusSignal,

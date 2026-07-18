@@ -5,6 +5,7 @@ import type {
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileEntry } from "@shared/contracts/file.ts";
 import { type MouseEvent as ReactMouseEvent, useCallback } from "react";
+import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { extractItemPathFromEvent } from "./file-tree-sidebar-helpers.ts";
 import type { FilesTranslate } from "./files-i18n.ts";
 
@@ -14,6 +15,8 @@ interface FilesTreeContextMenuOptions {
   instanceId: string;
   root: string;
   selectedPathsRef: { readonly current: readonly string[] };
+  /** dockview panel id；group 共享树时与 instanceId(groupId) 不同。 */
+  sourcePanelId?: string;
   t: FilesTranslate;
 }
 
@@ -22,6 +25,7 @@ export function useFilesTreeContextMenus({
   entriesByPath,
   instanceId,
   root,
+  sourcePanelId,
   selectedPathsRef,
   t,
 }: FilesTreeContextMenuOptions) {
@@ -56,6 +60,7 @@ export function useFilesTreeContextMenus({
         selection.length > 1 && selection.includes(entry.path)
           ? [...selection]
           : undefined;
+      // sourcePanelId 必须是 dockview panel id，不能用 tree registry key(groupId)。
       context.contextMenu
         .popup("files/tree-item", point, {
           metadata: {
@@ -65,10 +70,19 @@ export function useFilesTreeContextMenus({
             treeId: instanceId,
             ...(selectedPaths ? { selectedPaths } : {}),
           },
+          sourcePanelComponent: FILES_FILE_PANEL_ID,
+          ...(sourcePanelId ? { sourcePanelId } : {}),
         })
         .catch(reportFailure);
     },
-    [context, entriesByPath, instanceId, reportFailure, selectedPathsRef]
+    [
+      context,
+      entriesByPath,
+      instanceId,
+      reportFailure,
+      selectedPathsRef,
+      sourcePanelId,
+    ]
   );
 
   const openBackgroundContextMenu = useCallback(
@@ -85,11 +99,15 @@ export function useFilesTreeContextMenus({
         .popup(
           "files/tree-background",
           { x: event.clientX, y: event.clientY },
-          { metadata: { root, treeId: instanceId } }
+          {
+            metadata: { root, treeId: instanceId },
+            sourcePanelComponent: FILES_FILE_PANEL_ID,
+            ...(sourcePanelId ? { sourcePanelId } : {}),
+          }
         )
         .catch(reportFailure);
     },
-    [context, instanceId, reportFailure, root]
+    [context, instanceId, reportFailure, root, sourcePanelId]
   );
 
   return { openBackgroundContextMenu, openItemContextMenu };

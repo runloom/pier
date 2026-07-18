@@ -246,10 +246,10 @@ function createMockContext(overrides?: {
         overrides?.translate ??
         vi.fn((key: string, _values?: unknown, fallback?: string) => {
           if (key === "files.actions.openSelectionAsMarkdown.title") {
-            return "Markdown 内容预览";
+            return "预览选中文本";
           }
           if (key === "files.notifications.noTerminalSelection") {
-            return "没有可打开的终端选区";
+            return "请先在终端中选中文本。";
           }
           return fallback ?? key;
         }),
@@ -419,7 +419,7 @@ describe("files terminal selection action", () => {
     const action = findOpenSelectionAction(context);
     expect(action.surfaces).toEqual(["terminal/content"]);
     expect(action.metadata).toMatchObject({ group: "0_edit", sortOrder: 6 });
-    expect(action.title()).toBe("Markdown 内容预览");
+    expect(action.title()).toBe("预览选中文本");
   });
 
   it("opens the source terminal selection as an untitled Markdown file-panel", async () => {
@@ -513,7 +513,7 @@ describe("files terminal selection action", () => {
     }
     expect(context.panels.openInstance).not.toHaveBeenCalled();
     expect(context.notifications.info).toHaveBeenCalledWith(
-      "没有可打开的终端选区"
+      "请先在终端中选中文本。"
     );
   });
 

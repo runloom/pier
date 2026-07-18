@@ -110,6 +110,12 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       permissions: ["git:write"],
       title: "Git: Undo Last Commit",
     },
+    {
+      category: "Git",
+      id: "pier.git.review.openFile",
+      permissions: ["file:read", "panel:open"],
+      title: "Git: Open File",
+    },
   ],
   configuration: {
     properties: {
@@ -164,6 +170,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     "workspace:open",
     "git:read",
     "git:write",
+    "file:read",
     "panel:open",
     "panel:register",
     "ai:invoke",

@@ -64,8 +64,8 @@ export class FileEditorViewCoordinator {
     this.#sessions.get(editorSessionId)?.updatePresentation(presentation);
   }
 
-  detach(editorSessionId: string): void {
-    this.#sessions.get(editorSessionId)?.detach();
+  detach(editorSessionId: string, parent?: HTMLElement): boolean {
+    return this.#sessions.get(editorSessionId)?.detach(parent) ?? false;
   }
 
   applySearchQuery(

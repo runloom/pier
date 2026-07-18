@@ -110,6 +110,7 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
       props.ref,
       () => ({
         captureTopAnchor,
+        getSelectedText: () => "",
         isItemVisible,
         restoreAnchor,
         scrollToItem(id) {
@@ -124,6 +125,7 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
           }
           return result;
         },
+        selectAll: () => false,
         updateItems(items) {
           const currentIds = new Set(
             renderedItemsRef.current.map((item) => item.id)
@@ -133,6 +135,7 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
               .filter((item) => !currentIds.has(item.id))
               .map((item) => item.id)
           );
+          // 增量合并：只替换传入 id，保留其余已渲染项（对齐生产 DiffView）。
           const updates = new Map(items.map((item) => [item.id, item]));
           const next = renderedItemsRef.current.map(
             (item) => updates.get(item.id) ?? item
@@ -332,6 +335,11 @@ function pluginContext(input: {
       current: () => appearance,
       onDidChange: input.appearanceOnDidChange ?? (() => () => undefined),
     },
+    contextMenu: {
+      popup: vi.fn(async () => undefined),
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
+    },
     dialogs: { alert: vi.fn(async () => undefined) },
     git: {
       cancelReviewRequest:
@@ -493,6 +501,18 @@ describe("Git review panel", () => {
       expect(view.queryByTestId("git-review-tree-search-bar")).toBeNull();
       expect(fileTree(view.container).textContent).toContain("file-0.ts");
       expect(fileTree(view.container).textContent).toContain("file-1.ts");
+    });
+    fireEvent.click(
+      view.getByRole("button", { name: "Find in changed files" })
+    );
+    await expect(
+      view.findByTestId("git-review-tree-search-bar")
+    ).resolves.toBeVisible();
+    fireEvent.click(
+      view.getByRole("button", { name: "Find in changed files" })
+    );
+    await waitFor(() => {
+      expect(view.queryByTestId("git-review-tree-search-bar")).toBeNull();
     });
     fireEvent.click(
       view.getByRole("button", { name: "Collapse changed files" })

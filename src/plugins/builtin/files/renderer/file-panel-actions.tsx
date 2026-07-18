@@ -1,6 +1,5 @@
 import { Button } from "@pier/ui/button.tsx";
-import { ToggleGroup, ToggleGroupItem } from "@pier/ui/toggle-group.tsx";
-import { ShieldCheck } from "lucide-react";
+import { Code2, Eye, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import type { FileEditorController } from "./file-editor-controller.ts";
 import {
@@ -85,31 +84,39 @@ export function ResolvedFilePanelActions({
       />
       <LanguageBadge document={document} t={t} />
       <DocumentFormatBadge document={document} />
-      {isMarkdown || showDiffToggle ? (
-        <ToggleGroup
+      {isMarkdown ? (
+        <Button
+          aria-label={
+            mode === "preview"
+              ? t("filePanel.view.switchToSource", "Switch to source")
+              : t("filePanel.view.switchToPreview", "Switch to preview")
+          }
           className="ml-1"
-          onValueChange={(value) => {
-            if (value) onModeChange(value as FileViewMode);
-          }}
-          size="sm"
-          type="single"
-          value={mode}
-          variant="outline"
+          onClick={() =>
+            onModeChange(mode === "preview" ? "source" : "preview")
+          }
+          size="icon-xs"
+          type="button"
+          variant="ghost"
         >
-          <ToggleGroupItem value="source">
-            {t("filePanel.view.source", "Source")}
-          </ToggleGroupItem>
-          {isMarkdown ? (
-            <ToggleGroupItem value="preview">
-              {t("filePanel.view.preview", "Preview")}
-            </ToggleGroupItem>
-          ) : null}
-          {showDiffToggle ? (
-            <ToggleGroupItem value="diff">
-              {t("filePanel.view.diff", "Diff")}
-            </ToggleGroupItem>
-          ) : null}
-        </ToggleGroup>
+          {mode === "preview" ? (
+            <Code2 data-icon="inline-start" />
+          ) : (
+            <Eye data-icon="inline-start" />
+          )}
+        </Button>
+      ) : null}
+      {showDiffToggle ? (
+        <Button
+          aria-label={t("filePanel.view.diff", "Diff")}
+          className="ml-1"
+          onClick={() => onModeChange(mode === "diff" ? "source" : "diff")}
+          size="xs"
+          type="button"
+          variant={mode === "diff" ? "secondary" : "ghost"}
+        >
+          {t("filePanel.view.diff", "Diff")}
+        </Button>
       ) : null}
       {document.source.kind === "disk" && document.durabilityUnknown ? (
         <Button
@@ -119,7 +126,7 @@ export function ResolvedFilePanelActions({
           variant="outline"
         >
           <ShieldCheck data-icon="inline-start" />
-          {t("filePanel.durability.confirm", "Confirm write")}
+          {t("filePanel.durability.confirm", "Confirm saved")}
         </Button>
       ) : null}
     </>

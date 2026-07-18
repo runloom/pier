@@ -120,6 +120,32 @@ describe("pricing catalog", () => {
     expect(cost).toBe(300);
   });
 
+  it("prices grok-4.5 and its common aliases", () => {
+    const expected = Math.round(1000 * 2 + 100 * 6);
+    for (const modelId of [
+      "grok-4.5",
+      "grok-4.5-latest",
+      "xai/grok-4.5",
+      "x-ai/grok-4.5",
+    ]) {
+      expect(
+        estimateObservationCostMicrousd(observation({ modelId })),
+        modelId
+      ).toBe(expected);
+    }
+  });
+
+  it("does not let the grok-4 hyphen wildcard swallow dotted 4.x ids", () => {
+    const grok4 = estimateObservationCostMicrousd(
+      observation({ modelId: "grok-4" })
+    );
+    const grok45 = estimateObservationCostMicrousd(
+      observation({ modelId: "grok-4.5" })
+    );
+    expect(grok4).toBe(Math.round(1000 * 5 + 100 * 15));
+    expect(grok45).toBe(Math.round(1000 * 2 + 100 * 6));
+    expect(grok45).not.toBe(grok4);
+  });
   it("returns null for models the catalog has not learned about", () => {
     expect(
       estimateObservationCostMicrousd(

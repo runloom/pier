@@ -47,6 +47,8 @@ describe("auto-hide scrollbar behavior", () => {
     vi.useFakeTimers();
     const uninstall = installDocumentAutoHideScrollbars(document);
     const scroller = document.createElement("div");
+    scroller.style.overflowX = "auto";
+    scroller.style.overflowY = "auto";
     scroller.dataset.scrollbar = "stable";
     const child = document.createElement("div");
     scroller.append(child);
@@ -56,6 +58,8 @@ describe("auto-hide scrollbar behavior", () => {
     expect(scroller).toHaveAttribute("data-scrollbar-scrolling", "true");
 
     const hidden = document.createElement("div");
+    hidden.style.overflowX = "auto";
+    hidden.style.overflowY = "auto";
     hidden.dataset.scrollbar = "none";
     document.body.append(hidden);
     hidden.dispatchEvent(new Event("scroll"));
@@ -67,6 +71,8 @@ describe("auto-hide scrollbar behavior", () => {
     expect(scroller).not.toHaveAttribute("data-scrollbar-scrolling");
 
     const afterUninstall = document.createElement("div");
+    afterUninstall.style.overflowX = "auto";
+    afterUninstall.style.overflowY = "auto";
     afterUninstall.dataset.scrollbar = "stable";
     document.body.append(afterUninstall);
     afterUninstall.dispatchEvent(new WheelEvent("wheel", { bubbles: true }));
@@ -75,6 +81,9 @@ describe("auto-hide scrollbar behavior", () => {
 
   it("reveals only when the pointer enters the scrollbar gutter", () => {
     const scroller = document.createElement("div");
+    scroller.style.overflowX = "auto";
+    scroller.style.overflowY = "auto";
+    scroller.style.setProperty("--shell-scrollbar-width-legacy", "11px");
     Object.defineProperties(scroller, {
       clientHeight: { configurable: true, value: 100 },
       clientWidth: { configurable: true, value: 189 },

@@ -11,7 +11,7 @@ export const workspace = {
       "The plugin is still loading. This panel will appear here when it is ready.",
     loadingTitle: "Loading plugin panel",
     missingRendererDescription:
-      "This plugin does not provide a renderer component for the panel.",
+      "This plugin does not provide a displayable panel UI.",
     unavailableTitle: "Plugin panel unavailable",
   },
   startupError: {

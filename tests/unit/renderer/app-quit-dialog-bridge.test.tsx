@@ -41,7 +41,7 @@ const QUIT_TERMINATES_IT_TEXT_RE = /Quitting Pier will terminate it\./;
 const STILL_RUNNING_TEXT_RE = /still running/;
 const OLD_SERVER_TEXT_RE = /old server \(terminal\)/;
 const NEW_AGENT_TEXT_RE = /new agent \(agent\)/;
-const ZH_SINGLE_AGENT_TEXT_RE = /claude（Agent）仍在运行。/;
+const ZH_SINGLE_AGENT_TEXT_RE = /claude（智能体）仍在运行。/;
 const ZH_TERMINATE_SINGLE_TEXT_RE = /退出 Pier 会终止该进程。/;
 const OLD_AGENT_SUMMARY_TEXT_RE = /agent: claude/;
 

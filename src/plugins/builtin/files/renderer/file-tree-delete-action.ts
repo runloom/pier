@@ -48,8 +48,8 @@ async function protectOpenDocumentsBeforeTrash(input: {
     cancelLabel: t("filePanel.tree.delete.cancelLabel", "Cancel"),
     confirmLabel: t("filePanel.tree.delete.saveAndTrash", "Save and Delete"),
     intent: "default",
-    size: "sm",
-    title: t("filePanel.tree.delete.protectedTitle", "Protected changes"),
+    size: "default",
+    title: t("filePanel.tree.delete.protectedTitle", "Unsaved changes"),
   });
   if (choice === "cancel") {
     return "cancel";
@@ -84,7 +84,7 @@ async function protectOpenDocumentsBeforeTrash(input: {
     cancelLabel: t("filePanel.tree.delete.cancelLabel", "Cancel"),
     confirmLabel: t("filePanel.tree.delete.keepUntitled", "Keep as Untitled"),
     intent: "destructive",
-    size: "sm",
+    size: "default",
     title: t("filePanel.tree.delete.otherOptions", "Other options"),
   });
   if (fallback === "cancel") {

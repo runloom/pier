@@ -24,11 +24,18 @@ import {
   type PierDiffViewItem,
   toCodeViewItems,
 } from "./diff-view-items.ts";
+import {
+  clearBrowserTextSelection,
+  type DiffPointerLineHit,
+  resolveDiffPointerLineHit,
+  selectionFromPointerDrag,
+} from "./diff-view-pointer-selection.ts";
 import { useDiffRenderWatchdog } from "./diff-view-render-watchdog.ts";
 import {
   type PierDiffViewRenderWindow,
   useDiffRenderWindowReport,
 } from "./diff-view-render-window.ts";
+import { selectedLinesTextFromCodeViewItem } from "./diff-view-selection-text.ts";
 import { PierDiffWorkerProvider } from "./diff-view-worker.tsx";
 import {
   type DiffViewCollapsedItemState,
@@ -51,6 +58,10 @@ export type {
   PierDiffViewItem,
 } from "./diff-view-items.ts";
 export type { PierDiffViewRenderWindow } from "./diff-view-render-window.ts";
+export {
+  fullSelectionRangeForCodeViewItem,
+  selectedLinesTextFromCodeViewItem,
+} from "./diff-view-selection-text.ts";
 export type {
   PierDiffViewAnchor,
   PierDiffViewHandle,
@@ -97,6 +108,9 @@ export function PierDiffView({
   } | null>(null);
   const [inlineRenderFailed, setInlineRenderFailed] = useState(false);
   const [workerUnavailable, setWorkerUnavailable] = useState(false);
+  // 菜单打开瞬间的 live 选区文本快照（非受控选区源；Pierre 内部才是真相）。
+  const selectedTextRef = useRef("");
+  const contentDragAnchorRef = useRef<DiffPointerLineHit | null>(null);
   const disableWorkerPool = useCallback(() => {
     setWorkerUnavailable(true);
   }, []);
@@ -142,7 +156,9 @@ export function PierDiffView({
     [appearance.baseFontSize]
   );
   const renderMode = workerUnavailable ? "inline" : "worker";
-  const codeViewKey = `${renderMode}\0${topologyKey}`;
+  // selection=uncontrolled 钉进 key：避免 HMR 从旧受控实例切过来时
+  // CodeView 拒绝 controlled→uncontrolled 并卡死选区。
+  const codeViewKey = `${renderMode}\0selection=uncontrolled\0${topologyKey}`;
   const renderEnvironment = useMemo(
     () =>
       `${renderMode}\0${appearance.codeTheme}\0${appearance.colorMode}\0${metrics.diffHeaderHeight}\0${metrics.lineHeight}`,
@@ -172,6 +188,93 @@ export function PierDiffView({
     getContainer,
     getRenderedItems,
     onRenderWindowChange
+  );
+  const snapshotSelectedText = useCallback(() => {
+    const selection = codeViewRef.current?.getSelectedLines();
+    if (!selection) {
+      return;
+    }
+    const item =
+      codeViewRef.current?.getItem(selection.id) ??
+      appliedItemsRef.current?.items.get(selection.id) ??
+      parsedItemsRef.current.get(selection.id)?.item;
+    const text = selectedLinesTextFromCodeViewItem(item, selection.range);
+    if (text.length > 0) {
+      selectedTextRef.current = text;
+    }
+  }, []);
+
+  const handlePointerDownCapture = useCallback(
+    (event: React.PointerEvent<HTMLDivElement>) => {
+      const viewer = codeViewRef.current;
+      if (!viewer) {
+        return;
+      }
+
+      // 右键：只快照 live 行选区，绝不触发 onScroll。
+      if (event.button === 2) {
+        snapshotSelectedText();
+        return;
+      }
+      if (event.button !== 0) {
+        return;
+      }
+
+      const hit = resolveDiffPointerLineHit(event.nativeEvent, viewer);
+      if (!hit) {
+        return;
+      }
+
+      // 行号栏交给 Pierre 原生 line selection；正文拖必须映射到同一套行选，
+      // 并阻断浏览器蓝选（截图里第 8 行高亮 vs 11-17 蓝选两套并存）。
+      clearBrowserTextSelection();
+      if (hit.fromNumberColumn) {
+        return;
+      }
+
+      event.preventDefault();
+      contentDragAnchorRef.current = hit;
+      viewer.setSelectedLines({
+        id: hit.id,
+        range: {
+          end: hit.lineNumber,
+          side: hit.side,
+          start: hit.lineNumber,
+        },
+      });
+      snapshotSelectedText();
+
+      const handleMove = (moveEvent: PointerEvent) => {
+        const anchor = contentDragAnchorRef.current;
+        const currentViewer = codeViewRef.current;
+        if (!(anchor && currentViewer)) {
+          return;
+        }
+        moveEvent.preventDefault();
+        clearBrowserTextSelection();
+        const current = resolveDiffPointerLineHit(moveEvent, currentViewer);
+        if (!current) {
+          return;
+        }
+        const next = selectionFromPointerDrag(anchor, current);
+        if (!next) {
+          return;
+        }
+        currentViewer.setSelectedLines(next);
+      };
+      const handleUp = () => {
+        contentDragAnchorRef.current = null;
+        snapshotSelectedText();
+        clearBrowserTextSelection();
+        window.removeEventListener("pointermove", handleMove, true);
+        window.removeEventListener("pointerup", handleUp, true);
+        window.removeEventListener("pointercancel", handleUp, true);
+      };
+      window.addEventListener("pointermove", handleMove, true);
+      window.addEventListener("pointerup", handleUp, true);
+      window.addEventListener("pointercancel", handleUp, true);
+    },
+    [snapshotSelectedText]
   );
   const options = useMemo<CodeViewOptions<undefined>>(
     () => ({
@@ -215,6 +318,8 @@ export function PierDiffView({
       "--diffs-font-family": appearance.codeFontFamily,
       "--diffs-font-size": "0.8125rem",
       "--diffs-line-height": "1.75",
+      "--diffs-scrollbar-gutter-override":
+        "var(--shell-scrollbar-width-legacy)",
       height: "100%",
     }),
     [appearance.codeFontFamily]
@@ -296,6 +401,7 @@ export function PierDiffView({
     ref,
     renderItemIdentitiesRef,
     scheduleRenderWindowReport,
+    selectedTextRef,
     setItemCollapsed,
   });
 
@@ -318,11 +424,10 @@ export function PierDiffView({
   if (inlineRenderFailed) {
     return null;
   }
-
   const codeView = (
     <CodeView
-      className="cv-scrollbar relative h-full min-h-0 w-full min-w-0 flex-1 overflow-auto overscroll-contain border-border border-b [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-x-visible [&_diffs-container]:shadow-[0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque)),0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))] [&_diffs-container]:[contain:layout_paint_style]"
-      data-scrollbar="stable"
+      className="cv-scrollbar relative h-full min-h-0 w-full min-w-0 flex-1 overflow-auto overscroll-contain border-border border-b [contain:strict] [overflow-anchor:none] [scrollbar-gutter:auto] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-x-visible [&_diffs-container]:shadow-[0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque)),0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))] [&_diffs-container]:[contain:layout_paint_style]"
+      data-scrollbar="overlay"
       disableWorkerPool={workerUnavailable}
       initialItems={codeViewItems}
       key={codeViewKey}
@@ -340,7 +445,7 @@ export function PierDiffView({
       className="h-full"
       data-testid="pierre-diff-root"
       onKeyDownCapture={handleUserScrollKey}
-      onPointerDownCapture={onScroll}
+      onPointerDownCapture={handlePointerDownCapture}
       onTouchStartCapture={onScroll}
       onWheelCapture={onScroll}
     >

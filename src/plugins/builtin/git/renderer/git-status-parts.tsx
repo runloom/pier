@@ -137,7 +137,7 @@ export function BranchLabel({
         <GitCommitHorizontal aria-hidden="true" className="h-3 w-3" />
         <span className="tabular-nums">{head}</span>
         <Pill variant="neutral">
-          {pluginText(pluginContext, "detachedShort", "DETACHED")}
+          {pluginText(pluginContext, "detachedShort", "Detached")}
         </Pill>
       </span>
     );
@@ -181,7 +181,7 @@ export function UpstreamPill({
   if (branch.upstream === null) {
     return (
       <Pill testId="no-upstream-pill" variant="muted">
-        {pluginText(pluginContext, "noUpstream", "no upstream")}
+        {pluginText(pluginContext, "noUpstream", "no upstream branch")}
       </Pill>
     );
   }
@@ -221,31 +221,31 @@ const OP_CONFIG: Record<
   "cherry-picking": {
     icon: GitCommitHorizontal,
     iconId: "git-commit-horizontal",
-    labelFallback: "CHERRY-PICK",
+    labelFallback: "Cherry-pick",
     labelKey: "cherryPicking",
   },
   bisecting: {
     icon: GitCompareArrows,
     iconId: "git-compare-arrows",
-    labelFallback: "BISECT",
+    labelFallback: "Bisect",
     labelKey: "bisecting",
   },
   merging: {
     icon: GitMerge,
     iconId: "git-merge",
-    labelFallback: "MERGING",
+    labelFallback: "Merging",
     labelKey: "merging",
   },
   rebasing: {
     icon: GitPullRequestArrow,
     iconId: "git-pull-request-arrow",
-    labelFallback: "REBASING",
+    labelFallback: "Rebasing",
     labelKey: "rebasing",
   },
   reverting: {
     icon: GitCommitHorizontal,
     iconId: "git-commit-horizontal",
-    labelFallback: "REVERTING",
+    labelFallback: "Reverting",
     labelKey: "reverting",
   },
 };

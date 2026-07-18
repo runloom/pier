@@ -32,10 +32,10 @@ export const settings = {
     addFailed: "添加失败",
     back: "返回",
     cleanupCommand: "清理命令",
-    cleanupHint: "移除 worktree 时执行。",
+    cleanupHint: "移除工作树时执行。",
     copyPatterns: {
       addPattern: "添加模式",
-      hint: "匹配主 worktree 里被 gitignore 忽略的文件；符合的文件会在新 worktree 创建时复制过去。",
+      hint: "匹配主工作树里被 gitignore 忽略的文件；符合的文件会在新工作树创建时复制过去。",
       patternLabel: "文件匹配模式",
       placeholder: ".env*",
       remove: "删除",
@@ -43,7 +43,7 @@ export const settings = {
     },
     deleteConfirmBody: "删除 “{{name}}” 的环境设置？",
     deleteConfirmBoundBody:
-      "删除 “{{name}}” 的环境设置？当前有 {{count}} 个 worktree 绑定到该项目，删除后它们的清理脚本将不再运行。",
+      "删除 “{{name}}” 的环境设置？当前有 {{count}} 个工作树绑定到该项目，删除后它们的清理脚本将不再运行。",
     deleteConfirmTitle: "删除环境设置？",
     deleteProject: "删除此环境设置",
     deleteFailed: "删除失败",
@@ -52,7 +52,7 @@ export const settings = {
     saveFailed: "保存失败",
     saveSuccess: "已保存",
     emptyDescription:
-      "为项目添加环境设置，可以在 worktree 创建 / 移除时执行脚本，并向终端注入环境变量。",
+      "为项目添加环境设置，可以在工作树创建 / 移除时执行脚本，并向终端注入环境变量。",
     emptyTitle: "还没有环境设置",
     envVars: {
       addVariable: "添加变量",
@@ -63,7 +63,7 @@ export const settings = {
     },
     save: "保存",
     setupCommand: "启动命令",
-    setupHint: "创建 worktree 时执行。",
+    setupHint: "创建工作树时执行。",
   },
   appUpdate: {
     title: "应用更新",
@@ -139,9 +139,9 @@ export const settings = {
     worktreeRootPathDesc: "留空时使用与主项目同级的 {项目名}.worktree 目录。",
     worktreeRootPathPlaceholder: "~/Projects/pier.worktree",
     defaultAgent: "默认智能体",
-    defaultAgentDesc: "“启动默认智能体”动作启动的 CLI",
+    defaultAgentDesc: "“启动默认智能体”动作启动的默认智能体程序",
     agentPermissionMode: "权限确认方式",
-    agentPermissionModeDesc: "新建 agent 时，统一设置是否自动跳过权限确认",
+    agentPermissionModeDesc: "新建智能体时，统一设置是否自动跳过权限确认",
   },
   terminal: {
     cursorStyle: {
@@ -226,15 +226,15 @@ export const settings = {
   plugins: {
     title: "插件",
     description:
-      "内置插件可以在这里启用或停用。本地插件在当前版本只读取插件清单，不执行第三方代码。",
+      "内置插件可以在这里启用或停用。本地插件在当前版本只显示信息，不执行第三方代码。",
     status: {
       enabled: "已启用",
       disabled: "已停用",
-      manifestOnly: "仅清单预览",
+      manifestOnly: "仅显示信息",
       runtimeUnavailable: "未加载",
     },
     runtimeUnavailableDescription:
-      "插件已安装，但未进入当前运行态。请重启 Pier；如问题持续，请重新安装插件。",
+      "插件已安装，但当前未加载。请重启 Pier；如问题持续，请重新安装插件。",
     action: {
       enable: "启用",
       disable: "停用",
@@ -284,18 +284,18 @@ export const settings = {
     },
     trustNotice: "官方插件按可信代码运行，不设沙箱隔离。",
     pluginMode: {
-      workspaceTitle: "工作区插件模式",
+      workspaceTitle: "本地开发加载",
       workspaceBody:
         "正在从本地包目录加载插件，并已禁用官方更新，避免覆盖本地改动。",
-      releaseTitle: "发布插件模式",
+      releaseTitle: "正式安装",
       releaseBody:
-        "插件走受管理安装/更新，行为接近生产包。本地开发请用 PIER_PLUGIN_MODE=workspace。",
+        "插件走正式安装与更新流程，行为接近生产包。本地开发请设置 `PIER_PLUGIN_MODE=workspace`（本地开发加载）。",
     },
     checkUpdates: "检查更新",
     restartNow: "立即重启",
     restartNotice: "重启 Pier 以使新版本生效。",
     restartDevNotice:
-      "Dev 模式:仅重载渲染进程,插件 main runtime 卸载需退出重跑 `pnpm dev`。",
+      "开发模式下仅重载界面；要完全卸载插件主进程，请退出并重新运行 `pnpm dev`。",
     updateAvailable: "有可用更新",
     restartRequired: "需重启",
     emptyInstalledTitle: "没有已安装的插件",
@@ -367,7 +367,7 @@ export const settings = {
     },
     list: {
       title: "智能体列表",
-      description: "支持和检测到的 CLI agent",
+      description: "已安装并检测到的智能体",
       refresh: "刷新",
       refreshSuccess: "智能体列表已刷新",
       refreshFailed: "刷新智能体列表失败",
@@ -393,17 +393,17 @@ export const settings = {
       detectCmd: "探测命令",
       expectedProcess: "进程名",
       commandOverride: "命令覆盖",
-      commandOverrideDesc: "覆盖 agent 可执行路径",
+      commandOverrideDesc: "覆盖智能体可执行路径",
       args: "启动参数",
       argsDesc: "追加到启动命令的参数",
       env: "启动环境变量",
-      envDesc: "启动此 agent 时附加的环境变量",
+      envDesc: "启动此智能体时附加的环境变量",
     },
     statusHooks: {
-      label: "Agent 状态感知",
+      label: "智能体状态提示",
       description:
-        "面板实时显示 agent 运行/等待状态（经状态上报 hook）。关闭将卸载 Pier hook 并停止重装；不会出现 Needs you 系统通知。已在运行的会话可能仍上报，重开后完全生效",
-      failed: "无法更新 Agent 状态感知",
+        "面板实时显示智能体运行或等待状态。关闭后不再自动安装状态上报，也不会发送“需要你处理”的系统通知。已在运行的会话可能仍会上报，重开后完全生效。",
+      failed: "无法更新智能体状态提示",
     },
   },
   notifications: {
@@ -434,15 +434,15 @@ export const settings = {
     openSettingsManual:
       "请手动打开系统通知设置并为 Pier 开启允许，然后发送测试通知验证。",
     saveFailed: "无法保存通知设置",
-    hooksOffTitle: "Agent 状态感知已关闭",
+    hooksOffTitle: "智能体状态提示已关闭",
     hooksOffBody:
-      "关闭后不会出现 Needs you 系统通知。已在运行的智能体会话可能仍会上报，重开会话后完全生效。",
+      "关闭后不会发送“需要你处理”的系统通知。已在运行的智能体会话可能仍会上报，重开会话后完全生效。",
     permission: {
       deniedTitle: "系统通知未授权",
       deniedBody: "请在系统设置中为 Pier 开启通知，然后发送测试通知验证。",
       unsupportedTitle: "系统不支持通知",
       unsupportedBody:
-        "当前环境无法展示系统通知。请使用标题栏 Needs you 计数与智能体列表。",
+        "当前环境无法展示系统通知。请使用标题栏“需要你处理”计数与智能体列表。",
       unknownTitle: "尚未确认通知权限",
       unknownBody: "发送测试通知以检查 Pier 能否投递系统提醒。",
     },

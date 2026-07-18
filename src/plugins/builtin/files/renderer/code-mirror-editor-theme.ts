@@ -64,9 +64,7 @@ export const EDITOR_THEME = EditorView.theme({
     },
   ".cm-scroller": {
     fontFamily: "var(--font-mono)",
-    // 双轴 auto。CM base theme 只声明 overflowX:auto,浏览器 shorthand 规则
-    // 会把 overflowY:visible 补成 auto,但 Chromium 里嵌套 flex 会偶发失效;
-    // 显式声明双轴避免 dock view 尺寸变化后 codeMirror 卡在无滚动状态。
+    // 双轴 auto；粗细由 scrollbar-system（document 注入）统一负责。
     overflowX: "auto",
     overflowY: "auto",
   },
@@ -81,22 +79,7 @@ export const EDITOR_THEME = EditorView.theme({
     border: "1px solid var(--border)",
     borderRadius: "0.5rem",
   },
-  // git 变更：颜色对齐 Git Review / Pierre CodeView（--diff-*），避免 status-* badge 色偏。
-  // 1. gutterLineClass 给该行所有 gutter 槽（行号+fold）铺同色浅底
-  // 2. 仅最左 gutter 列（行号）左缘一条实色条
-  // 3. content 行 Decoration.line 同色铺底，与 gutter 无缝连贯
-  // color-mix 仅允许在此文件（治理白名单）；底色 token 已在 globals 预混合。
-  ".cm-gutters .cm-gutterElement.cm-gitRow-added": {
-    backgroundColor: "var(--diff-addition-bg)",
-  },
-  ".cm-gutters .cm-gutterElement.cm-gitRow-modified": {
-    backgroundColor: "var(--diff-modification-bg)",
-  },
-  ".cm-gutters .cm-gutterElement.cm-gitRow-deleted": {
-    backgroundColor: "var(--diff-deletion-bg)",
-  },
-  // 单条强调：只在最左 gutter 列（lineNumbers，basicSetup 中第一个）画 inset 实色条。
-  // fold 列只铺浅底，避免出现第二条竖条。
+  // git 变更：Files 插件只画最左 gutter 边条，不铺行背景 / gutter 槽底色。
   ".cm-gutters .cm-gutter:first-child .cm-gutterElement.cm-gitRow-added": {
     boxShadow: "inset 3px 0 var(--diff-addition-fg)",
   },
@@ -105,18 +88,6 @@ export const EDITOR_THEME = EditorView.theme({
   },
   ".cm-gutters .cm-gutter:first-child .cm-gutterElement.cm-gitRow-deleted": {
     boxShadow: "inset 3px 0 var(--diff-deletion-fg)",
-  },
-  ".cm-gitLine-added": {
-    backgroundColor: "var(--diff-addition-bg)",
-    // 负左 margin 让背景延伸覆盖 content 左 padding（0.5rem），紧贴 gutter 右缘，
-    // padding-left 保持文字原位。行底色与 gutter 行槽同色连贯。
-    marginLeft: "-0.5rem",
-    paddingLeft: "0.5rem",
-  },
-  ".cm-gitLine-modified": {
-    backgroundColor: "var(--diff-modification-bg)",
-    marginLeft: "-0.5rem",
-    paddingLeft: "0.5rem",
   },
   // minimap（@replit/codemirror-minimap）：库默认 overlay/box-shadow 用了硬编码
   // rgb/hex，这里用语义 token 覆盖，对齐产品颜色治理。

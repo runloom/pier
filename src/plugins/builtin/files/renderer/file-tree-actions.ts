@@ -273,7 +273,10 @@ function createCopyPathWithRangeAction(
     metadata: { group: "6_copypath", sortOrder: 3 },
     surfaces: ["files/editor"],
     title: () =>
-      t("filePanel.editor.action.copyPathWithRange", "Copy Path with Range"),
+      t(
+        "filePanel.editor.action.copyPathWithRange",
+        "Copy Path and Selected Lines"
+      ),
     handler: async (invocation) => {
       const target = parseEditorMetadata(invocation);
       if (!target) {

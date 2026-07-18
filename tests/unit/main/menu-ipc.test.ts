@@ -28,6 +28,7 @@ const electronMock = vi.hoisted(() => {
 
 vi.mock("electron", () => ({
   Menu: { buildFromTemplate: electronMock.buildFromTemplate },
+  clipboard: { writeText: vi.fn() },
 }));
 
 vi.mock("@main/windows/window-manager.ts", () => ({
@@ -120,6 +121,34 @@ describe("menu popup IPC", () => {
 
     await expect(result).resolves.toEqual({
       actionId: "pier.run.rerunTask",
+    });
+  });
+
+  it("writes clipboardText on action click before resolving", async () => {
+    const { clipboard } = await import("electron");
+    const handler = harness();
+    const result = handler(
+      { sender: {} },
+      [
+        {
+          clipboardText: "selected-diff-line",
+          enabled: true,
+          id: "pier.panel.copySelection",
+          label: "Copy",
+          type: "action",
+        },
+      ],
+      { x: 10, y: 20 }
+    );
+
+    electronMock
+      .item()
+      ?.click?.(undefined as never, undefined as never, undefined as never);
+    electronMock.close();
+
+    expect(clipboard.writeText).toHaveBeenCalledWith("selected-diff-line");
+    await expect(result).resolves.toEqual({
+      actionId: "pier.panel.copySelection",
     });
   });
 });

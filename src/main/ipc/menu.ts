@@ -19,6 +19,7 @@ import type {
 } from "@shared/contracts/menu.ts";
 import {
   type BaseWindow,
+  clipboard,
   type IpcMain,
   Menu,
   type MenuItem,
@@ -66,6 +67,13 @@ function toMenuItem(
     ...(item.accelerator !== undefined && { accelerator: item.accelerator }),
     enabled: item.enabled ?? true,
     click: (_menuItem: MenuItem) => {
+      // 先写系统剪贴板，再回传 actionId。原生菜单 click 时 renderer 选区常已空。
+      if (
+        typeof item.clipboardText === "string" &&
+        item.clipboardText.length > 0
+      ) {
+        clipboard.writeText(item.clipboardText);
+      }
       onPicked(item.id);
     },
   };

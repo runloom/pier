@@ -83,7 +83,37 @@ const SKIP_PREFIXES = [
 const UNPREFIX_MAP = [
   { prefix: "volcengine/", replacement: "" },
   { prefix: "novita/baichuan/", replacement: "baichuan-" },
+  // xAI only ships as `xai/grok-*` in LiteLLM; peel to canonical `grok-*`.
+  { prefix: "xai/", replacement: "" },
 ];
+
+// OpenRouter fill-missing：只信这些 provider 的 chat 模型，避免 marketplace
+// 短别名（`gpt` / `grok`）污染目录。
+const OPENROUTER_FILL_PROVIDERS = new Set([
+  "anthropic",
+  "deepseek",
+  "google",
+  "meta-llama",
+  "minimax",
+  "mistralai",
+  "moonshotai",
+  "openai",
+  "qwen",
+  "x-ai",
+  "z-ai",
+]);
+
+export function canFillFromOpenRouter(openRouterId, canonical) {
+  const provider = openRouterId.split("/")[0] ?? "";
+  if (!OPENROUTER_FILL_PROVIDERS.has(provider)) return false;
+  // 要求至少一位数字（版本/尺寸），拒绝 `gpt` / `claude-sonnet` 这类裸名。
+  if (!/\d/.test(canonical)) return false;
+  if (shouldInclude(canonical, { mode: "chat" })) return true;
+  for (const prefix of CHAT_KEY_PREFIXES) {
+    if (canonical.startsWith(prefix)) return true;
+  }
+  return false;
+}
 
 function tryUnprefix(rawKey) {
   for (const rule of UNPREFIX_MAP) {
@@ -149,7 +179,7 @@ const CHAT_KEY_PREFIXES = [
   "llama-4",
 ];
 
-function shouldInclude(modelKey, entry) {
+export function shouldInclude(modelKey, entry) {
   if (!ALLOWED_MODES.has(entry.mode)) return false;
   // UNPREFIX_MAP 命中的 vendor-only 前缀直接放行（比 skip-prefix 优先）。
   if (UNPREFIX_MAP.some((rule) => modelKey.startsWith(rule.prefix))) {
@@ -232,6 +262,29 @@ function normalizeEntry(entry) {
     };
   }
   return normalized;
+}
+
+/**
+ * OpenRouter `/v1/models` → catalog entry. Used only to fill models LiteLLM
+ * missed (or our filter dropped). Returns null when pricing is incomplete.
+ */
+export function openRouterModelToEntry(model) {
+  const pricing = model?.pricing;
+  if (!pricing || typeof pricing !== "object") return null;
+  const input = toMicrousd(Number.parseFloat(String(pricing.prompt)));
+  const output = toMicrousd(Number.parseFloat(String(pricing.completion)));
+  if (input === null || output === null) return null;
+  const cachedRaw = pricing.input_cache_read ?? pricing.input_cache_read_price;
+  const cachedInput =
+    cachedRaw === undefined || cachedRaw === null
+      ? fallbackCachedInput(input)
+      : (toMicrousd(Number.parseFloat(String(cachedRaw))) ??
+        fallbackCachedInput(input));
+  return {
+    cachedInputMicrousd: cachedInput,
+    inputMicrousd: input,
+    outputMicrousd: output,
+  };
 }
 
 async function fetchJson(url) {
@@ -428,21 +481,44 @@ async function main() {
     }
   }
 
-  // OpenRouter 交叉验证：只用作 alias 补充。凡是 LiteLLM canonical key 在
-  // OpenRouter 里以 `provider/canonical-key` 形式出现的，把 OpenRouter 的完整
-  // id 补进 aliases。避免重复。
+  // OpenRouter：
+  // 1) 给已有 canonical 补 `provider/id` alias；
+  // 2) LiteLLM 未入库的 chat 模型用 OR 价 fill-missing（不覆盖已有价）。
+  let openRouterFilled = 0;
   if (Array.isArray(openrouter?.data)) {
     for (const model of openrouter.data) {
       const id = model.id;
       if (!id?.includes("/")) continue;
       const suffix = id.split("/").slice(1).join("/");
-      const canonical = suffix.split(":")[0]; // strip variant suffix
+      const canonical = stripLatestSuffix(suffix.split(":")[0]);
+      if (!canonical) continue;
       const target = nextModels[canonical];
-      if (!target) continue;
-      const aliases = new Set(target.aliases ?? []);
-      aliases.add(id);
-      target.aliases = [...aliases].sort();
+      if (target) {
+        const aliases = new Set(target.aliases ?? []);
+        aliases.add(id);
+        target.aliases = [...aliases].sort();
+        continue;
+      }
+      // fill-missing：LiteLLM 无此 canonical 时，仅对可信 provider + 带版本号 id 写入。
+      if (!canFillFromOpenRouter(id, canonical)) {
+        continue;
+      }
+      const entry = openRouterModelToEntry(model);
+      if (!entry) continue;
+      nextModels[canonical] = {
+        ...entry,
+        aliases: [id],
+      };
+      added.push(
+        `${summariseChange(canonical, null, entry)} _(openrouter fill-missing)_`
+      );
+      openRouterFilled += 1;
     }
+  }
+  if (openRouterFilled > 0) {
+    console.error(
+      `[pricing] OpenRouter fill-missing entries: ${openRouterFilled}`
+    );
   }
 
   const sortedModels = sortObjectKeys(nextModels);

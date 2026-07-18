@@ -7,7 +7,7 @@ export const workspace = {
   pluginPanel: {
     loadingDescription: "插件仍在加载；准备完成后，此处会显示面板内容。",
     loadingTitle: "正在加载插件面板",
-    missingRendererDescription: "该插件没有为此面板提供 renderer 组件。",
+    missingRendererDescription: "该插件没有提供可显示的面板界面。",
     unavailableTitle: "插件面板不可用",
   },
   startupError: {

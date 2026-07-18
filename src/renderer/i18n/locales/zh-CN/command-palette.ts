@@ -6,7 +6,7 @@ export const commandPalette = {
   searchResults: "搜索结果",
   agents: {
     launchFailed: "启动智能体失败",
-    noAgentDetected: "未检测到可用 agent",
+    noAgentDetected: "未检测到可用智能体",
     unavailable: "智能体当前不可用",
   },
   placeholder: {
@@ -68,7 +68,7 @@ export const commandPalette = {
     noTerminals: "没有可切换的终端",
     noTerminalsDetail: "新建终端后会显示在这里",
     noTaskContext: "没有活跃项目",
-    noTaskContextDetail: "先聚焦带项目上下文的面板，再运行任务",
+    noTaskContextDetail: "先点开某个项目里的面板，再运行任务",
     loadFailed: "任务加载失败",
     loadingTasks: "正在查找任务...",
     loadingTasksDetail: "正在扫描当前项目支持的任务源",

@@ -304,7 +304,7 @@ describe("FileEditorController", () => {
     expect(harness.dialogs.alert).toHaveBeenCalledWith({
       body: "A protected draft was isolated",
       size: "default",
-      title: "Unable to restore protected drafts",
+      title: "Unable to restore saved drafts",
     });
     harness.controller.dispose();
     harness.watchHub.dispose();

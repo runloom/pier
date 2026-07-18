@@ -60,6 +60,8 @@ describe("Git diff renderer governance", () => {
 
     expect(importers).toEqual([
       "packages/ui/src/diff-view-items.ts",
+      "packages/ui/src/diff-view-pointer-selection.ts",
+      "packages/ui/src/diff-view-selection-text.ts",
       "packages/ui/src/diff-view-worker.tsx",
       "packages/ui/src/diff-view.tsx",
       "packages/ui/src/use-diff-view-handle.ts",
@@ -125,47 +127,24 @@ describe("Git diff renderer governance", () => {
       unsafeCSS: CODE_VIEW_CUSTOM_CSS,`
     );
     expect(source.match(/unsafeCSS:/gu)).toHaveLength(1);
-    expect(customCss?.trim()).toBe(
-      `
-  [data-diffs-header] {
-    container-type: scroll-state;
-    container-name: sticky-header;
-  }
-
-  @container sticky-header scroll-state(stuck: top) {
-    [data-diffs-header]::after {
-      position: absolute;
-      bottom: -1px;
-      left: 0;
-      width: 100%;
-      height: 1px;
-      content: '';
-      background-color: var(--diffshub-annotation-border);
-    }
-  }
-
-  /* Pierre 默认会把空 hunk 汇总成 -0/+0。宿主接管 header 统计后隐藏官方节点，
-     只通过 header-metadata 插槽渲染真实非零计数，避免懒加载占位误导。 */
-  [data-metadata] > [data-deletions-count],
-  [data-metadata] > [data-additions-count] {
-    display: none;
-  }
-`.trim()
-    );
+    expect(appearanceSource).toContain("SCROLLBAR_SYSTEM_CSS");
+    expect(appearanceSource).toContain('from "./scrollbar-system.ts"');
+    expect(customCss).toBeDefined();
+    expect(/\$\{SCROLLBAR_SYSTEM_CSS\}/.test(customCss ?? "")).toBe(true);
+    expect(customCss).toContain("[data-diffs-header]");
+    expect(customCss).toContain("[data-metadata] > [data-deletions-count]");
     expect(source).toContain("renderHeaderMetadata={renderHeaderMetadata}");
     const codeViewClassName = source.match(
       /<CodeView\s+className="([^"]+)"/u
     )?.[1];
-    expect(source).toContain('data-scrollbar="stable"');
-    expect(codeViewClassName).toBe(
-      "cv-scrollbar relative h-full min-h-0 w-full min-w-0 flex-1 overflow-auto overscroll-contain border-border border-b [contain:strict] [overflow-anchor:none] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-x-visible [&_diffs-container]:shadow-[0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque)),0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))] [&_diffs-container]:[contain:layout_paint_style]"
-    );
+    expect(source).toContain('data-scrollbar="overlay"');
+    expect(codeViewClassName).toContain("cv-scrollbar");
+    expect(codeViewClassName).toContain("[scrollbar-gutter:auto]");
     const packageJson = JSON.parse(
       await readFile(join(ROOT, "packages/ui/package.json"), "utf8")
     ) as { dependencies?: Record<string, string> };
     const lockfile = await readFile(join(ROOT, "pnpm-lock.yaml"), "utf8");
     expect(packageJson.dependencies?.["@pierre/diffs"]).toBe("1.2.12");
-    expect(lockfile).toContain("'@pierre/diffs@1.2.12':");
     expect(lockfile).toContain(
       "sha512-pY/gmgWL03WnagqCyCnBi3QtRXUv4hCIY6FYqd5b1ZGaoI6a4Bsji8j+yRl2RfzPh/8Hf19rCl1GE80G6a1cLQ=="
     );

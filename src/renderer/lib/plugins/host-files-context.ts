@@ -2,6 +2,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { FileListRequest } from "@shared/contracts/file.ts";
 import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import { openFilesDiskPath } from "../files/open-disk-file-panel.ts";
 
 type AssertPluginCapability = (
   entry: PluginRegistryEntry | undefined,
@@ -86,6 +87,15 @@ export function createPluginFilesContext(
     move: (request) => {
       assertPluginCapability(entry, "file:write");
       return window.pier.files.move(request);
+    },
+    openInEditor: (request) => {
+      assertPluginCapability(entry, "file:read");
+      return openFilesDiskPath({
+        path: request.path,
+        root: request.root,
+        ...(request.context ? { context: request.context } : {}),
+        ...(request.title ? { title: request.title } : {}),
+      });
     },
     openPath: (request) => {
       assertPluginCapability(entry, "file:read");

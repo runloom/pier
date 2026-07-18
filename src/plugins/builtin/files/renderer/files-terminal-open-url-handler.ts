@@ -98,7 +98,7 @@ export async function handleFilesTerminalOpenUrl(
       context.notifications.error(
         t(
           "files.notifications.terminalOpenUrl.relativeWithoutCwd",
-          "Cannot resolve a relative path without a terminal working directory."
+          "This terminal has no working directory, so the relative path cannot be opened."
         )
       );
     } else {

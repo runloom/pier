@@ -55,7 +55,10 @@ interface WorkspaceState {
   closeOthers: (panelId: string) => Promise<void>;
   closePanel: (panelId: string) => Promise<boolean>;
   equalizeSplits: () => void;
-  focusGroup: (direction: "right" | "down" | "left" | "up") => void;
+  focusGroup: (
+    direction: "right" | "down" | "left" | "up",
+    sourcePanelId?: string
+  ) => void;
   hasMaximizedGroup: boolean;
   resetLayout: () => Promise<void>;
   setApi: (api: DockviewApi | null) => void;
@@ -398,10 +401,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     }
   },
 
-  focusGroup: (direction) => {
+  focusGroup: (direction, sourcePanelId) => {
     const api = get().api;
     if (api) {
-      focusWorkspaceGroup(api, direction);
+      focusWorkspaceGroup(api, direction, sourcePanelId);
     }
   },
 

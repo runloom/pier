@@ -57,7 +57,7 @@ export function parseSourceState(
       kind: "invalid",
       message: t(
         "filePanel.errors.invalidParams",
-        "The saved panel parameters are invalid."
+        "This file tab could not be restored."
       ),
       title: t("filePanel.title", "File"),
     };

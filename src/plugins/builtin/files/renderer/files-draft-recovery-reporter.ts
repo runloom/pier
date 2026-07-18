@@ -23,7 +23,7 @@ export class FilesDraftRecoveryReporter {
       title: context.i18n.t(
         "files.draftRecovery.failed",
         undefined,
-        "Unable to restore protected drafts"
+        "Unable to restore saved drafts"
       ),
     });
   }

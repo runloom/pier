@@ -6,6 +6,10 @@ import {
   toCodeViewItem,
 } from "./diff-view-items.ts";
 import { isRenderedItemVisible } from "./diff-view-render-watchdog.ts";
+import {
+  fullSelectionRangeForCodeViewItem,
+  selectedLinesTextFromCodeViewItem,
+} from "./diff-view-selection-text.ts";
 
 export interface PierDiffViewAnchor {
   readonly id: string;
@@ -14,9 +18,13 @@ export interface PierDiffViewAnchor {
 
 export interface PierDiffViewHandle {
   captureTopAnchor(): PierDiffViewAnchor | null;
+  /** Pierre 行选区文本；无选区时返回空串。 */
+  getSelectedText(): string;
   isItemVisible(id: string, cacheKey?: string): boolean;
   restoreAnchor(anchor: PierDiffViewAnchor): boolean;
   scrollToItem(id: string): boolean;
+  /** 全选当前（或最近）diff/file item 的全部行。 */
+  selectAll(): boolean;
   updateItems(
     items: readonly PierDiffViewItem[],
     options?: PierDiffViewUpdateOptions
@@ -67,6 +75,8 @@ interface UseDiffViewHandleOptions {
     Map<string, DiffViewRenderItemIdentity>
   >;
   readonly scheduleRenderWindowReport: () => void;
+  /** 右键前可能已清空 live selection；优先返回最近一次有效行选区文本。 */
+  readonly selectedTextRef: RefObject<string>;
   readonly setItemCollapsed: (
     id: string,
     collapsed: boolean,
@@ -88,6 +98,7 @@ export function useDiffViewHandle({
   ref,
   renderItemIdentitiesRef,
   scheduleRenderWindowReport,
+  selectedTextRef,
   setItemCollapsed,
 }: UseDiffViewHandleOptions): void {
   const handle = useMemo(
@@ -105,6 +116,7 @@ export function useDiffViewHandle({
         parsedItemsRef,
         renderItemIdentitiesRef,
         scheduleRenderWindowReport,
+        selectedTextRef,
         setItemCollapsed,
       }),
     [
@@ -120,6 +132,7 @@ export function useDiffViewHandle({
       parsedItemsRef,
       renderItemIdentitiesRef,
       scheduleRenderWindowReport,
+      selectedTextRef,
       setItemCollapsed,
     ]
   );
@@ -139,6 +152,7 @@ function createDiffViewHandle({
   parsedItemsRef,
   renderItemIdentitiesRef,
   scheduleRenderWindowReport,
+  selectedTextRef,
   setItemCollapsed,
 }: Omit<UseDiffViewHandleOptions, "ref">): PierDiffViewHandle {
   const captureTopAnchor = (): PierDiffViewAnchor | null => {
@@ -183,6 +197,25 @@ function createDiffViewHandle({
     captureTopAnchor(): PierDiffViewAnchor | null {
       return captureTopAnchor();
     },
+    getSelectedText(): string {
+      const viewer = codeViewRef.current;
+      const selection = viewer?.getSelectedLines();
+      if (!selection) {
+        // live 选区已空：清掉粘性快照，避免幽灵剪贴板串到其它面板。
+        selectedTextRef.current = "";
+        return "";
+      }
+      const item =
+        viewer?.getItem(selection.id) ??
+        appliedItemsRef.current?.items.get(selection.id) ??
+        parsedItemsRef.current.get(selection.id)?.item;
+      const fromModel = selectedLinesTextFromCodeViewItem(
+        item,
+        selection.range
+      );
+      selectedTextRef.current = fromModel;
+      return fromModel;
+    },
     isItemVisible(id: string, cacheKey?: string): boolean {
       const viewer = codeViewRef.current?.getInstance();
       const identity = renderItemIdentitiesRef.current.get(id);
@@ -215,6 +248,44 @@ function createDiffViewHandle({
         type: "item",
       });
       return true;
+    },
+    selectAll(): boolean {
+      const viewer = codeViewRef.current;
+      if (!viewer) {
+        return false;
+      }
+      const current = viewer.getSelectedLines();
+      const candidateIds: string[] = [];
+      if (current?.id) {
+        candidateIds.push(current.id);
+      }
+      for (const rendered of viewer.getInstance()?.getRenderedItems() ?? []) {
+        if (!candidateIds.includes(rendered.id)) {
+          candidateIds.push(rendered.id);
+        }
+      }
+      for (const item of parsedItemListRef.current) {
+        if (!candidateIds.includes(item.id)) {
+          candidateIds.push(item.id);
+        }
+      }
+      for (const id of candidateIds) {
+        const item =
+          viewer.getItem(id) ??
+          appliedItemsRef.current?.items.get(id) ??
+          parsedItemsRef.current.get(id)?.item;
+        const range = fullSelectionRangeForCodeViewItem(item);
+        if (!(item && range)) {
+          continue;
+        }
+        viewer.setSelectedLines({ id, range });
+        const text = selectedLinesTextFromCodeViewItem(item, range);
+        if (text.length > 0) {
+          selectedTextRef.current = text;
+        }
+        return true;
+      }
+      return false;
     },
     updateItems(
       items: readonly PierDiffViewItem[],

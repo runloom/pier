@@ -276,6 +276,7 @@ describe("inline create commit/cancel", () => {
         }) as never,
       openSearch: () => undefined,
       root: ROOT,
+      toggleSearch: () => undefined,
     });
     const { context, files, notifications } = makeContext({
       existsPaths: new Set(["src/taken.ts"]),
@@ -340,6 +341,7 @@ describe("inline create commit/cancel", () => {
         }) as never,
       openSearch: () => undefined,
       root: ROOT,
+      toggleSearch: () => undefined,
     });
     const { context, files } = makeContext();
     vi.mocked(files.writeText).mockRejectedValueOnce(new Error("disk full"));
@@ -380,6 +382,7 @@ describe("beginInlineCreate", () => {
       getApi: () => null,
       openSearch: () => undefined,
       root: ROOT,
+      toggleSearch: () => undefined,
     });
     await expect(
       beginInlineCreate({

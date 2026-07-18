@@ -29,6 +29,7 @@ import type { gitReviewTreeModel } from "./git-review-tree.tsx";
 interface GitReviewDocumentViewProps {
   readonly appearance: RendererPluginAppearance;
   readonly context: RendererPluginContext;
+  readonly contextId: string;
   readonly diffRef: (handle: PierDiffViewHandle | null) => void;
   readonly failureSummary: ReviewFailureSummary;
   readonly gitRootPath: string;
@@ -48,6 +49,7 @@ interface GitReviewDocumentViewProps {
   readonly selectedTreePath: string | null;
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
+  readonly sourcePanelId?: string;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly viewState: ReviewDocumentViewState;
   readonly warnings: GitReviewIndexOk["warnings"];
@@ -58,6 +60,7 @@ export function GitReviewDocumentView({
   context,
   diffRef,
   failureSummary,
+  contextId,
   gitRootPath,
   indexFailure,
   navigationError,
@@ -73,6 +76,7 @@ export function GitReviewDocumentView({
   renderFeedback,
   selectedFilePath,
   selectedTreePath,
+  sourcePanelId,
   setSidebarCollapsed,
   sidebarCollapsed,
   treeModel,
@@ -92,12 +96,14 @@ export function GitReviewDocumentView({
   return (
     <GitReviewPanelLayout
       context={context}
+      contextId={contextId}
       gitRootPath={gitRootPath}
       onOpenPath={onOpenPath}
       selectedFilePath={selectedFilePath}
       selectedTreePath={selectedTreePath}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
+      {...(sourcePanelId ? { sourcePanelId } : {})}
       treeModel={treeModel}
     >
       <div className="flex h-full min-w-0 flex-col bg-background">

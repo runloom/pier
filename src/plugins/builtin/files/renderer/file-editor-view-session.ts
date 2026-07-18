@@ -90,6 +90,11 @@ export class FileEditorViewSession {
 
   mount(parent: HTMLElement, document: FilesDocument): void {
     if (this.#view) {
+      // 跨 group 拖拽时新旧共享视图可能共用同一 editorSessionId。
+      // 已挂载则把 CM DOM 迁到新 parent，避免旧组延迟 unmount 把新组内容拆掉。
+      if (this.#view.dom.parentElement !== parent) {
+        parent.appendChild(this.#view.dom);
+      }
       this.syncDocument(document);
       return;
     }
@@ -101,7 +106,7 @@ export class FileEditorViewSession {
         extensions: this.#extensions(document),
       });
     this.#view = new EditorView({ parent, state });
-    this.#view.scrollDOM.dataset.scrollbar = "stable";
+    this.#view.scrollDOM.dataset.scrollbar = "overlay";
     this.syncDocument(document);
     this.#restoreScroll();
   }
@@ -189,10 +194,18 @@ export class FileEditorViewSession {
     }
   }
 
-  detach(): void {
+  /**
+   * 卸载视图。传 parent 时仅当当前 view 仍挂在该 parent 下才销毁，
+   * 避免旧 group 共享视图的 cleanup 误拆已 reparent 到新 group 的编辑器。
+   * @returns 是否真正销毁了 view
+   */
+  detach(parent?: HTMLElement): boolean {
     const view = this.#view;
     if (!view) {
-      return;
+      return false;
+    }
+    if (parent && view.dom.parentElement !== parent) {
+      return false;
     }
     resetEditorSearch(view);
     this.#savedState = view.state;
@@ -202,6 +215,7 @@ export class FileEditorViewSession {
     };
     view.destroy();
     this.#view = null;
+    return true;
   }
 
   dispose(): void {

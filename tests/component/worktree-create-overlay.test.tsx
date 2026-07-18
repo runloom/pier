@@ -222,6 +222,8 @@ function createMockContext(): RendererPluginContext {
     },
     contextMenu: {
       popup: unimplemented("contextMenu.popup"),
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
     },
     configuration: {
       get: <T,>() => "" as T,
@@ -298,6 +300,7 @@ function createMockContext(): RendererPluginContext {
       list: unimplemented("files.list"),
       mkdir: unimplemented("files.mkdir"),
       move: unimplemented("files.move"),
+      openInEditor: unimplemented("files.openInEditor"),
       openPath: unimplemented("files.openPath"),
       onPathQueryEvent: unimplemented("files.onPathQueryEvent"),
       queryPaths: unimplemented("files.queryPaths"),

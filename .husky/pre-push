@@ -1,1 +1,1 @@
-pnpm typecheck && pnpm lint && pnpm check:file-size && pnpm check:plugin-index
+pnpm check:static && pnpm check:plugin-index

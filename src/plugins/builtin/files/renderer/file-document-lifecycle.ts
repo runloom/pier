@@ -339,7 +339,7 @@ export class FileDocumentLifecycle {
         ? this.#context.i18n.t(
             "filePanel.durability.revisionMismatch",
             undefined,
-            "The file changed before durability could be confirmed."
+            "The file changed again after it was written. Please check it."
           )
         : result.message;
     markDocumentDurabilityError(document.id, message);
@@ -385,7 +385,7 @@ export class FileDocumentLifecycle {
       title: this.#context.i18n.t(
         "filePanel.durability.confirmFailed",
         undefined,
-        "Unable to confirm saved file"
+        "Unable to confirm that the file was saved"
       ),
     });
   }

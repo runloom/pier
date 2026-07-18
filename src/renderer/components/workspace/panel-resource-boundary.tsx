@@ -14,6 +14,7 @@ import {
   pluginPanelDescriptor,
   resolveRegistrationTitle,
 } from "@/lib/plugins/host-panel-descriptors.ts";
+import { PanelContentContextShell } from "./panel-content-context-shell.tsx";
 
 interface PanelResourceBoundaryProps {
   api: IDockviewPanelProps["api"];
@@ -34,7 +35,12 @@ export function withPanelResourceBoundary(
   function ResourceBoundPanel(props: IDockviewPanelProps) {
     return (
       <PanelResourceBoundary api={props.api}>
-        <Component {...props} />
+        <PanelContentContextShell
+          api={props.api}
+          component={props.api.component}
+        >
+          <Component {...props} />
+        </PanelContentContextShell>
       </PanelResourceBoundary>
     );
   }
@@ -97,13 +103,17 @@ export function withPluginPanelHostBoundary(
     if (registration.resourcePolicy === "unmountWhenHidden") {
       return (
         <UnmountWhenHiddenPanel>
-          <Component {...props} />
+          <PanelContentContextShell api={props.api} component={registration.id}>
+            <Component {...props} />
+          </PanelContentContextShell>
         </UnmountWhenHiddenPanel>
       );
     }
     return (
       <PanelResourceBoundary api={props.api}>
-        <Component {...props} />
+        <PanelContentContextShell api={props.api} component={registration.id}>
+          <Component {...props} />
+        </PanelContentContextShell>
       </PanelResourceBoundary>
     );
   }

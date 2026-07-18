@@ -353,14 +353,33 @@ export function createUsageDataService(options: {
     input: UsageDataPublishInput
   ): UsageDataSnapshot {
     assertPublishInput(input);
-    const snapshot = buildSnapshot(pluginId, input);
-    store.mutate((state) => ({
-      ...state,
-      snapshots: {
-        ...state.snapshots,
-        [snapshotKey(pluginId, input.sourceId, input.scope)]: snapshot,
-      },
-    }));
+    // Host owns Codex CLI session scanning. Older pier.codex builds still
+    // publish the same `codex-local-sessions` stream under pier.codex — fold
+    // those writes onto the host key so aggregate never double-counts.
+    const effectivePluginId =
+      pluginId === LEGACY_CODEX_PLUGIN_ID &&
+      input.sourceId === CODEX_LOCAL_USAGE_SOURCE_ID
+        ? HOST_BUILTIN_PLUGIN_ID
+        : pluginId;
+    const snapshot = buildSnapshot(effectivePluginId, input);
+    store.mutate((state) => {
+      const snapshots = { ...state.snapshots };
+      if (
+        effectivePluginId === HOST_BUILTIN_PLUGIN_ID &&
+        input.sourceId === CODEX_LOCAL_USAGE_SOURCE_ID
+      ) {
+        delete snapshots[
+          snapshotKey(
+            LEGACY_CODEX_PLUGIN_ID,
+            CODEX_LOCAL_USAGE_SOURCE_ID,
+            input.scope
+          )
+        ];
+      }
+      snapshots[snapshotKey(effectivePluginId, input.sourceId, input.scope)] =
+        snapshot;
+      return { ...state, snapshots };
+    });
     notify();
     return snapshot;
   }

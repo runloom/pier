@@ -50,12 +50,25 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 宿主级确认/提示弹窗统一走 `src/renderer/components/common/app-dialog-host.tsx`：
 
-- 业务代码不要直接 import `@pier/ui/alert-dialog.tsx`；宿主 renderer 使用 `showAppConfirm` / `showAppAlert`，插件使用 `RendererPluginContext.dialogs`。
-- 短确认弹窗必须显式传 `size: "sm"`，例如退出确认、打开 Review、删除/撤销/丢弃类确认。
-- 只有需要承载较长说明、错误详情或复杂内容的弹窗才显式传 `size: "default"`。
-- 破坏性确认必须显式传 `intent: "destructive"`，普通确认显式传 `intent: "default"`；不要在 `AppDialogHost` 里按标题、按钮文案或业务字符串猜测危险程度。
-- `showAppAlert` 可保持默认尺寸，用于错误详情时避免把长输出塞进小弹窗；短 alert 如需小尺寸应由调用方显式传 `size: "sm"`。
-- 检查点在 `tests/unit/renderer/app-dialog-governance.test.ts`：锁定文档存在、禁止绕过 `AppDialogHost` 直接使用 shadcn `AlertDialog` primitive，并要求 confirm API 的 `size` / `intent` 保持必填。
+- 业务代码不要直接 import `@pier/ui/alert-dialog.tsx`；宿主 renderer 使用 `showAppConfirm` / `showAppAlert` / `showAppChoice` / `showAppPrompt`，插件使用 `RendererPluginContext.dialogs`。
+- 布局（路线 B：桌面工具对话框；macOS 优先，全平台同一套壳）：
+  - 文案一律左齐；`size` 只控制宽度，不再切换居中营销卡
+  - 密度：`p-5` + `gap-4`、标题 `text-base`、footer **右簇**（禁止 sm 两列等宽铺满）
+  - destructive `confirm`：侧标必须用共享 `@pier/ui/status-icon`（与 toast / Alert 同套，`kind="error"`），禁止手写 Lucide 大圆/方底
+  - `choice` / 普通 confirm / prompt：**无**侧标；危险只靠按钮色
+  - `alert`：单主按钮（右簇）
+  - `confirm` / `prompt`：`取消 | 主按钮`（主按钮最右）
+  - `choice`：`alt | 取消 | confirm`（例：不保存 | 取消 | 保存）；横排三键
+- `size`：
+  - `sm`：仅两键短确认 / 短 prompt（退出、删除、关 panel）
+  - `default`：三键 `choice`、较长说明、错误详情；`choice` 调用方必须传 `default`，host 渲染也强制 default 宽
+- `intent`：调用方必填，不要在 `AppDialogHost` 里按标题或文案猜测危险程度
+  - 破坏性确认必须显式传 `intent: "destructive"`，普通确认显式传 `intent: "default"`
+  - `confirm` / `prompt`：作用在**主按钮**
+  - `choice`：作用在 **alt**（不保存/丢弃）；confirm 始终 default 样式
+- 取消按钮一律 `outline`（含 destructive 场景）；Esc / 点遮罩 = 取消
+- `showAppAlert` 可省略 size（默认 default）；短 alert 如需小尺寸由调用方显式传 `size: "sm"`
+- 检查点在 `tests/unit/renderer/app-dialog-governance.test.ts` 与 `tests/component/app-dialog-host.test.tsx`
 
 复杂内容弹窗（表单、多步、等待态、带自定义 body）统一走宿主 `AppContentDialogHost`：
 
@@ -89,6 +102,35 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 遇到"有明显 UI 变化 + 又加了 toast"的双反馈 → minor finding，建议删掉冗余 toast。
 - 遇到内联 toast 文案字符串（未走 i18n） → finding。
 - 遇到 `toast.*(…, { description })` → finding，详情应走 `showAppAlert`。
+
+### 用户可见文案规范
+
+面向用户的 toast、空态、错误、状态栏、确认弹窗和设置说明必须让非实现者读得懂，并尽量给出下一步动作。文案进 locale（宿主 `src/renderer/i18n/locales/**`，插件 `src/plugins/builtin/*/locales/**`），禁止在业务代码里内联中文/英文用户串。
+
+写作规则：
+
+- **说用户动作，不说内部概念。** 反例：「没有可打开的终端选区」；正例：「请先在终端中选中文本。」
+- **失败与空态要带下一步。** 反例：「无项目上下文」；正例：「未打开项目」+「请先打开项目文件夹以浏览文件。」
+- **产品词全产品统一。** 当前约定：智能体（不要混用 Agent/agent）、工作树（中文界面不要写 worktree）、工作台「组件」（不要写物料）、需要你处理（中文不要直出 Needs you）。
+- **实现词禁止进入前台主路径文案。** 包括但不限于：选区、上下文、面板参数、耐久性、绑定、运行标识、运行态、renderer、清单预览、hook（首次可写「钩子（hook）」）、tip tree、upstream（应写「上游分支」）。
+- **中文界面少夹英文状态码。** Git 状态用「分离头指针 / 合并中 / 变基中」等，不要用 DETACHED / MERGING 全大写码。
+- **fallback 英文与 en locale 同步可读**；改中文时必须核对英文是否同样术语化。
+
+严格度分层：
+
+- Toast / 空态 / 确认弹窗标题：最严，禁实现词，优先给动作。
+- 状态栏短标签：严，统一产品词。
+- 设置说明：中，可保留 Git 等领域词，仍要白话。
+- 插件权限列表、开发模式提示：可偏技术，但不得污染前台主路径。
+- 路径占位与代码标识符（如 `{项目名}.worktree`、命令 id）不受禁词约束。
+
+**代码审查检查点**：
+
+- 新增用户文案能否回答「用户看懂吗 / 下一步做什么 / 和现有产品词一致吗」。
+- 中文界面出现 Agent、worktree、选区、上下文、耐久性、Needs you、DETACHED 等 → finding。
+- 业务代码 `toast.*("…")` / `showAppAlert({ title: "…" })` 内联用户串未走 i18n → finding。
+
+检查点在 `tests/unit/renderer/user-copy-governance.test.ts`：锁定本节存在，并扫描中英 locale 字符串值中的禁用实现词。
 
 ### 交互控件密度规范
 

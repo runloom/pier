@@ -129,7 +129,7 @@ describe("AppDialogHost", () => {
     expect(screen.queryByText("Rebase Branch")).not.toBeInTheDocument();
   });
 
-  it("危险确认弹窗使用小尺寸媒体样式和危险按钮", async () => {
+  it("危险确认弹窗使用共享 StatusIcon 与 destructive 主按钮", async () => {
     renderHost();
 
     let result: Promise<boolean> | undefined;
@@ -145,12 +145,26 @@ describe("AppDialogHost", () => {
 
     const dialog = await screen.findByRole("alertdialog");
     expect(dialog).toHaveAttribute("data-size", "sm");
+    const statusIcon = dialog.querySelector('[data-slot="status-icon"]');
+    expect(statusIcon).toBeInTheDocument();
+    expect(statusIcon).toHaveAttribute("data-kind", "error");
     expect(
       dialog.querySelector('[data-slot="alert-dialog-media"]')
-    ).toBeInTheDocument();
+    ).not.toBeInTheDocument();
+    const header = dialog.querySelector('[data-slot="alert-dialog-header"]');
+    expect(header?.className ?? "").toContain("text-left");
+    expect(header?.className ?? "").not.toContain("text-center");
+    // icon 与 title 在同一 flex 行，items-center 保证垂直居中。
+    const titleRow = header?.querySelector(
+      ':scope > div:has(> [data-slot="status-icon"])'
+    );
+    expect(titleRow?.className ?? "").toContain("items-center");
+    const footer = dialog.querySelector('[data-slot="alert-dialog-footer"]');
+    expect(footer?.className ?? "").toContain("sm:justify-end");
+    expect(footer?.className ?? "").not.toContain("grid-cols-2");
     expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute(
       "data-variant",
-      "ghost"
+      "outline"
     );
     expect(screen.getByRole("button", { name: "Quit" })).toHaveAttribute(
       "data-variant",
@@ -198,6 +212,29 @@ describe("AppDialogHost", () => {
 
     expect(await screen.findByText("Save changes?")).toBeVisible();
     const dialog = screen.getByRole("alertdialog");
+    // 调用方即使传 sm，choice 也强制 default 宽，且无危险侧标。
+    expect(dialog).toHaveAttribute("data-size", "default");
+    expect(
+      dialog.querySelector('[data-slot="alert-dialog-media"]')
+    ).not.toBeInTheDocument();
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "Discard",
+      "Cancel",
+      "Save",
+    ]);
+    expect(screen.getByRole("button", { name: "Discard" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
+    expect(screen.getByRole("button", { name: "Cancel" })).toHaveAttribute(
+      "data-variant",
+      "outline"
+    );
+    expect(screen.getByRole("button", { name: "Save" })).toHaveAttribute(
+      "data-variant",
+      "default"
+    );
     fireEvent.click(screen.getByRole("button", { name: "Discard" }));
 
     expect(dialog).toHaveAttribute("data-state", "closed");

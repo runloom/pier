@@ -172,7 +172,7 @@ describe("Settings plugins section", () => {
     expect(screen.queryByText("Built-in")).not.toBeInTheDocument();
     expect(screen.getByText("Local Example")).toBeVisible();
     expect(screen.queryByText("Local")).not.toBeInTheDocument();
-    expect(screen.getByText("Manifest preview")).toBeVisible();
+    expect(screen.getByText("Info only")).toBeVisible();
     expect(screen.queryByText("pier.worktree")).not.toBeInTheDocument();
     expect(screen.queryByText("pier.worktree.list")).not.toBeInTheDocument();
     expect(screen.queryByText("plugin:read")).not.toBeInTheDocument();
@@ -315,7 +315,7 @@ describe("Settings plugins section", () => {
     expect(screen.getByText("本地示例插件")).toBeVisible();
     expect(screen.queryByText("pier.worktree.list")).not.toBeInTheDocument();
     expect(screen.getByRole("button", { name: "停用工作树" })).toBeVisible();
-    expect(screen.getByText("仅清单预览")).toBeVisible();
+    expect(screen.getByText("仅显示信息")).toBeVisible();
     expect(
       screen.queryByRole("button", { name: "显示工作树详情" })
     ).not.toBeInTheDocument();

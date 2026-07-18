@@ -126,20 +126,15 @@ export function FileSearchBar({
                 } else {
                   onNavigate(event.shiftKey ? "previous" : "next");
                 }
-              } else if (
-                onSubmit &&
-                !navigationDisabled &&
-                event.key === "ArrowDown"
-              ) {
+              } else if (event.key === "ArrowDown" && !navigationDisabled) {
                 event.preventDefault();
                 onNavigate("next");
-              } else if (
-                onSubmit &&
-                !navigationDisabled &&
-                event.key === "ArrowUp"
-              ) {
+              } else if (event.key === "ArrowUp" && !navigationDisabled) {
                 event.preventDefault();
                 onNavigate("previous");
+              } else if (event.key === "F3" && !navigationDisabled) {
+                event.preventDefault();
+                onNavigate(event.shiftKey ? "previous" : "next");
               } else if (event.key === "Escape") {
                 event.preventDefault();
                 onClose();

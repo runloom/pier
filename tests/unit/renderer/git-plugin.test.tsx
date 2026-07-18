@@ -204,6 +204,11 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       permissions: ["git:write"],
       title: "Git: Undo Last Commit",
     },
+    {
+      id: "pier.git.review.openFile",
+      permissions: ["file:read", "panel:open"],
+      title: "Git: Open File",
+    },
   ];
   return {
     effectivePermissions: [
@@ -214,6 +219,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       "command:register",
       "git:read",
       "git:write",
+      "file:read",
       "panel:open",
       "panel:register",
     ],
@@ -399,7 +405,7 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "ui.selectPlaceholder": "选择工作树…",
             "ui.statusOpenLabel": "打开 {{name}} 的工作树列表",
             "ui.title": "工作树",
-            "ui.unsupported": "当前目录不支持 Git worktree",
+            "ui.unsupported": "当前目录不支持 Git 工作树",
           },
         },
       },
@@ -2216,7 +2222,7 @@ describe("git builtin plugin", () => {
     );
 
     const pill = await screen.findByTestId("no-upstream-pill");
-    expect(within(pill).getByText("no upstream")).toBeVisible();
+    expect(within(pill).getByText("no upstream branch")).toBeVisible();
 
     const trigger = screen.getByTestId("worktree-status-trigger");
     expect(
@@ -2409,7 +2415,7 @@ describe("git builtin plugin", () => {
       })
     );
 
-    const pill = await screen.findByText("DETACHED");
+    const pill = await screen.findByText("Detached");
     expect(pill.className).toContain("text-foreground");
   });
 

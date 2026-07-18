@@ -243,7 +243,7 @@ test.describe("Startup stability e2e", () => {
       await page.keyboard.press("Meta+End");
       await page.keyboard.type("\n ");
       await expect(
-        page.getByRole("status", { name: /Protected|已保护/ })
+        page.getByRole("status", { name: /Draft saved|草稿已保存/ })
       ).toBeAttached({ timeout: 30_000 });
 
       const { recordId } = await page.evaluate(() =>
@@ -258,7 +258,7 @@ test.describe("Startup stability e2e", () => {
       await editor.click();
       await page.keyboard.type(" ");
       await expect(
-        page.getByRole("button", { name: /Not protected|未保护/ })
+        page.getByRole("button", { name: /Draft not saved|草稿未保存/ })
       ).toBeVisible({ timeout: 30_000 });
       await page.evaluate(() => window.pier.window.closeCurrent());
 
@@ -282,7 +282,7 @@ test.describe("Startup stability e2e", () => {
       await editor.click();
       await page.keyboard.type(" ");
       await expect(
-        page.getByRole("status", { name: /Protected|已保护/ })
+        page.getByRole("status", { name: /Draft saved|草稿已保存/ })
       ).toBeAttached({ timeout: 30_000 });
       await page.evaluate(() => window.pier.window.closeCurrent());
       await expect.poll(() => application?.windows().length ?? 0).toBe(0);

@@ -67,7 +67,8 @@ export function statusColorVar(
     if (level === "warn") {
       return "--status-warning-fg";
     }
-    return "--status-info-fg";
+    // processing=思考中用 info；tool=执行工具用 done，扫带高档色可辨。
+    return status === "tool" ? "--status-done-fg" : "--status-info-fg";
   }
   if (status === "waiting") {
     return "--status-warning-fg";
@@ -80,13 +81,13 @@ export function statusColorVar(
 
 export type ShimmerTier = "high" | "low" | "mid";
 
-// OMP classic 扫带常量（loomdesk shimmering-status-text.svelte 同值）。
-const SHIMMER_SPEED_CELLS_PER_S = 30;
-const CLASSIC_PADDING = 10;
-const CLASSIC_BAND_HALF_WIDTH = 6;
-const TIER_HIGH = 0.65;
-const TIER_MID = 0.22;
-export const SHIMMER_MIN_CYCLE_MS = 1000;
+// OMP classic 扫带：略放慢速度、加宽亮带，短中文状态词也能看出完整扫过。
+const SHIMMER_SPEED_CELLS_PER_S = 22;
+const CLASSIC_PADDING = 8;
+const CLASSIC_BAND_HALF_WIDTH = 5;
+const TIER_HIGH = 0.55;
+const TIER_MID = 0.18;
+export const SHIMMER_MIN_CYCLE_MS = 1200;
 export const SHIMMER_FRAME_INTERVAL_MS = 1000 / 30;
 
 /**

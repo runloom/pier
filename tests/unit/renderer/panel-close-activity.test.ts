@@ -30,8 +30,8 @@ describe("dangerousActivitySummariesForPanel", () => {
     ).toEqual([]);
   });
 
-  it("summarizes a running agent on the panel", () => {
-    const activities: Record<string, ForegroundActivity> = {
+  it("summarizes only active agent statuses", () => {
+    const processing: Record<string, ForegroundActivity> = {
       "terminal-1": {
         agentId: "codex",
         kind: "agent",
@@ -47,7 +47,7 @@ describe("dangerousActivitySummariesForPanel", () => {
     expect(
       dangerousActivitySummariesForPanel(
         "terminal-1",
-        activities,
+        processing,
         emptyTaskRuns()
       )
     ).toEqual([
@@ -58,10 +58,36 @@ describe("dangerousActivitySummariesForPanel", () => {
         windowId: "win-1",
       },
     ]);
+
+    const ready: Record<string, ForegroundActivity> = {
+      "terminal-1": {
+        agentId: "codex",
+        kind: "agent",
+        panelId: "terminal-1",
+        source: "hook",
+        spawnedAt: 1,
+        status: "ready",
+        subagentCount: 0,
+        updatedAt: 2,
+        windowId: "win-1",
+      },
+    };
+    expect(
+      dangerousActivitySummariesForPanel("terminal-1", ready, emptyTaskRuns())
+    ).toEqual([]);
   });
 
-  it("includes background tasks bound to the origin panel", () => {
-    const activities: Record<string, ForegroundActivity> = {};
+  it("ignores shell and background tasks on panel close", () => {
+    const activities: Record<string, ForegroundActivity> = {
+      "terminal-1": {
+        commandLine: "npm test",
+        kind: "shell",
+        panelId: "terminal-1",
+        spawnedAt: 1,
+        updatedAt: 2,
+        windowId: "win-1",
+      },
+    };
     const taskRuns: TaskRunsSnapshot = {
       runs: {
         "run-1": {
@@ -87,13 +113,9 @@ describe("dangerousActivitySummariesForPanel", () => {
     };
     expect(
       dangerousActivitySummariesForPanel("terminal-1", activities, taskRuns)
-    ).toEqual([
-      {
-        kind: "task",
-        label: "build",
-        panelId: "terminal-1",
-        windowId: "win-1",
-      },
-    ]);
+    ).toEqual([]);
+    expect(
+      dangerousActivitySummariesForPanel("terminal-1", {}, taskRuns)
+    ).toEqual([]);
   });
 });

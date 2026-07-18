@@ -900,6 +900,12 @@
       "outputMicrousd": 15,
       "aliases": ["grok-4-*"]
     },
+    "grok-4.5": {
+      "inputMicrousd": 2,
+      "cachedInputMicrousd": 0.5,
+      "outputMicrousd": 6,
+      "aliases": ["grok-4.5-*", "xai/grok-4.5", "x-ai/grok-4.5"]
+    },
     "grok-code": {
       "inputMicrousd": 0.2,
       "cachedInputMicrousd": 0.05,

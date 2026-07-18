@@ -4,6 +4,7 @@ export interface FilesTreeRegistryEntry {
   getApi: () => PierFileTreeApi | null;
   openSearch: () => void;
   root: string;
+  toggleSearch: () => void;
 }
 
 export type FilesPendingCreateKind = "file" | "folder";
@@ -81,6 +82,18 @@ export function openFilesTreeSearch(target: {
     return false;
   }
   entry.openSearch();
+  return true;
+}
+
+export function toggleFilesTreeSearch(target: {
+  instanceId?: string | undefined;
+  root?: string | undefined;
+}): boolean {
+  const entry = findTreeEntry(target);
+  if (!entry) {
+    return false;
+  }
+  entry.toggleSearch();
   return true;
 }
 

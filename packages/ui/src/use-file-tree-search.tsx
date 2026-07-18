@@ -64,6 +64,14 @@ export function useFileTreeSearch({
     setAppliedSearch(null);
   }, [resolvedTreeApiRef]);
 
+  const toggleSearch = useCallback(() => {
+    if (open) {
+      closeSearch();
+      return;
+    }
+    openSearch();
+  }, [closeSearch, open, openSearch]);
+
   const changeSearch = useCallback(
     (nextValue: string) => {
       setValue(nextValue);
@@ -114,6 +122,7 @@ export function useFileTreeSearch({
     open,
     openFocusedMatch,
     openSearch,
+    toggleSearch,
     queryApplied:
       resolvedTreeApiRef.current != null &&
       appliedSearch === modelSearchValue(value),

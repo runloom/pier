@@ -28,6 +28,7 @@ export function CodeMirrorEditor({
   const contextMenuRef = useRef(onEditorContextMenu);
   const handledSearchRequestRef = useRef(searchRequest);
   const labelRef = useRef(labels?.sourceEditor ?? "Source editor");
+  const lastHostRef = useRef<HTMLDivElement | null>(null);
   const openSearchRef = useRef<() => void>(() => undefined);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
@@ -76,15 +77,19 @@ export function CodeMirrorEditor({
   const bindEditorHost = useCallback(
     (parent: HTMLDivElement | null) => {
       if (parent) {
+        lastHostRef.current = parent;
         controller.attachView({
           documentId,
           editorSessionId,
           parent,
           presentation: presentation(),
         });
-      } else {
-        controller.detachView(editorSessionId);
+        return;
       }
+      // 仅当 view 仍挂在本 host 时销毁；已 reparent 到新 group 的 view 跳过。
+      const host = lastHostRef.current;
+      lastHostRef.current = null;
+      controller.detachView(editorSessionId, host ?? undefined);
     },
     [controller, documentId, editorSessionId, presentation]
   );

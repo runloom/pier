@@ -39,7 +39,7 @@ describe("panel maximize action", () => {
     useWorkspaceStore.getState().setApi(null);
   });
 
-  it("registers a shortcut-only action that toggles the active panel maximize state", async () => {
+  it("registers maximize on the command palette only, not context menus", async () => {
     const { registerPanelActions } = await import(
       "@/lib/actions/panel-actions.ts"
     );
@@ -53,7 +53,7 @@ describe("panel maximize action", () => {
       const action = actionRegistry.get("pier.panel.toggleMaximized");
 
       expect(action).toBeDefined();
-      expect(action?.surfaces).toEqual([]);
+      expect(action?.surfaces).toEqual(["command-palette"]);
       expect(action?.enabled?.()).toBe(true);
 
       action?.handler();
@@ -87,7 +87,7 @@ describe("panel maximize action", () => {
       const action = actionRegistry.get("pier.panel.equalizeSplits");
 
       expect(action).toBeDefined();
-      expect(action?.surfaces).toEqual(["terminal/content", "command-palette"]);
+      expect(action?.surfaces).toEqual(["panel/content", "command-palette"]);
       expect(action?.enabled?.()).toBe(true);
 
       action?.handler();

@@ -50,6 +50,7 @@ function ReviewDocumentsComponent({
   indexGeneration,
   indexRefreshFailure,
   onRetryIndex,
+  panelId,
   scope,
   setSidebarCollapsed,
   sidebarCollapsed,
@@ -61,6 +62,7 @@ function ReviewDocumentsComponent({
   readonly indexGeneration: number;
   readonly indexRefreshFailure: GitReviewFailure | null;
   readonly onRetryIndex: () => void;
+  readonly panelId: string;
   readonly scope: GitReviewScope;
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
@@ -322,6 +324,22 @@ function ReviewDocumentsComponent({
 
   useEffect(() => cancelVerification, [cancelVerification]);
 
+  useEffect(() => {
+    const disposeText = context.contextMenu.registerSelectionTextProvider(
+      panelId,
+      () => diffHandleRef.current?.getSelectedText() ?? ""
+    );
+    const disposeSelectAll =
+      context.contextMenu.registerSelectionSelectAllProvider(
+        panelId,
+        () => diffHandleRef.current?.selectAll() ?? false
+      );
+    return () => {
+      disposeText();
+      disposeSelectAll();
+    };
+  }, [context, panelId]);
+
   const openPath = useCallback(
     (path: string) => {
       const entry = treeModel.entryByPath.get(path);
@@ -353,6 +371,7 @@ function ReviewDocumentsComponent({
     <GitReviewDocumentView
       appearance={appearance}
       context={context}
+      contextId={scope.contextId}
       diffRef={setDiffHandle}
       failureSummary={failureSummary}
       gitRootPath={scope.gitRootPath}
@@ -382,6 +401,7 @@ function ReviewDocumentsComponent({
       selectedTreePath={selectedTreeEntry?.path ?? null}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
+      sourcePanelId={panelId}
       treeModel={treeModel}
       viewState={viewState}
       warnings={warnings}

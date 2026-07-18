@@ -52,6 +52,7 @@ import {
 import {
   openFilesTreeSearch,
   revealFilesTreePath,
+  toggleFilesTreeSearch,
 } from "./files-tree-registry.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
 
@@ -138,7 +139,7 @@ export function FilesGroupView({
         kind: "invalid",
         message: t(
           "filePanel.errors.invalidParams",
-          "The saved panel parameters are invalid."
+          "This file tab could not be restored."
         ),
         title: t("filePanel.title", "File"),
       };
@@ -260,7 +261,7 @@ export function FilesGroupView({
     [openSourceInGroup]
   );
 
-  // chrome 🔍:树可用时打开树内搜索(折叠先展开,等挂载再聚焦);
+  // chrome 🔍:树可用时切换树内搜索(折叠先展开,等挂载再聚焦);
   // 无项目树(如终端 Markdown 草稿)退回编辑器内查找。
   const handleOpenSearch = useCallback(() => {
     if (!root) {
@@ -274,7 +275,7 @@ export function FilesGroupView({
       }, 80);
       return;
     }
-    openFilesTreeSearch({ instanceId: groupId, root });
+    toggleFilesTreeSearch({ instanceId: groupId, root });
   }, [groupId, root, setTreeCollapsed, treeCollapsed]);
 
   const activeFilePath =
@@ -291,6 +292,7 @@ export function FilesGroupView({
         instanceId={groupId}
         onOpenFile={handleOpenFileFromTree}
         root={root}
+        {...(activeTab?.panelId ? { sourcePanelId: activeTab.panelId } : {})}
         watchHub={watchHub}
       />
     ) : null;
@@ -341,7 +343,7 @@ export function FilesGroupView({
       <ReadOnlyErrorState
         message={t(
           "filePanel.errors.outsideWorkspace",
-          "This file source is outside the restored workspace context."
+          "This file is outside the current workspace and cannot be restored."
         )}
         t={t}
         title={sourceTitle(selectedSource)}
