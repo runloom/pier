@@ -243,7 +243,9 @@ fi
 
 
 # ---------- 构建 ----------
-echo "[build:dist] [1/3] universal native (arm64 + x86_64)"
+# 先本地打齐双架构产物并硬校验，再按需 publish。避免 electron-builder 中途
+# 上传残缺资产后失败，把只有 zip、缺 arm64 dmg 的包挂到 Latest。
+echo "[build:dist] [1/4] universal native (arm64 + x86_64)"
 NATIVE_ARCHS="arm64 x86_64" pnpm build:native
 
 echo "[build:dist] [2/4] package bundled plugins"
@@ -254,8 +256,21 @@ pnpm build:electron
 
 # macOS 系统 bash 3.2 对空数组 "${arr[@]}" 在 set -u 下会报 unbound，
 # 用 ${arr[@]+"${arr[@]}"} 惯用法兜住。
-echo "[build:dist] [4/4] electron-builder --mac --arm64 --x64 --publish $PUBLISH_POLICY"
-pnpm exec electron-builder --mac --arm64 --x64 --publish "$PUBLISH_POLICY" ${EB_EXTRA_ARGS[@]+"${EB_EXTRA_ARGS[@]}"}
+echo "[build:dist] [4/4] electron-builder --mac --arm64 --x64 --publish never"
+pnpm exec electron-builder --mac --arm64 --x64 --publish never ${EB_EXTRA_ARGS[@]+"${EB_EXTRA_ARGS[@]}"}
+
+APP_VERSION="$(node -p "require('./package.json').version")"
+echo "[build:dist] verify dual-arch mac artifacts for ${APP_VERSION}"
+node ./scripts/verify-mac-release-artifacts.mjs --dir dist-builder --version "$APP_VERSION"
+
+if [ "$PUBLISH_POLICY" != "never" ]; then
+    echo "[build:dist] publish verified artifacts (policy=$PUBLISH_POLICY)"
+    # 不用 `electron-builder publish` CLI：它上传失败时常 return null 且 exit 0。
+    node ./scripts/publish-mac-release-artifacts.mjs \
+        --dir dist-builder \
+        --version "$APP_VERSION" \
+        --policy "$PUBLISH_POLICY"
+fi
 
 echo "[build:dist] done → dist-builder/"
 ls -lh dist-builder/*.dmg dist-builder/*.zip dist-builder/latest*.yml 2>/dev/null || true

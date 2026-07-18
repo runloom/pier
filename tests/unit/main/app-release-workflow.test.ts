@@ -16,6 +16,7 @@ describe("app release workflow", () => {
     expect(source).toContain("pnpm build:dist --publish=always");
     expect(source).toContain("contents: write");
     expect(source).toContain("latest-mac.yml");
+    expect(source).toContain("verify-mac-release-artifacts.mjs");
     expect(source).toContain("PIER_DIST_ALLOW_CSC_LINK_PUBLISH");
     expect(source).toMatch(
       /ref:\s*\$\{\{\s*steps\.version\.outputs\.tag\s*\}\}/

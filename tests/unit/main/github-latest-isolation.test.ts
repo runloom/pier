@@ -7,7 +7,7 @@ import {
 } from "../../../scripts/verify-github-latest-isolation.mjs";
 
 describe("GitHub Latest isolation", () => {
-  it("accepts a host latest release with latest-mac.yml", () => {
+  it("accepts a host latest release with full dual-arch mac assets", () => {
     expect(
       validateLatestRelease(
         {
@@ -17,11 +17,32 @@ describe("GitHub Latest isolation", () => {
           assets: [
             { name: "latest-mac.yml" },
             { name: "Pier-0.1.1-arm64-mac.zip" },
+            { name: "Pier-0.1.1-mac.zip" },
+            { name: "Pier-0.1.1-arm64.dmg" },
+            { name: "Pier-0.1.1.dmg" },
           ],
         },
         { expectVersion: "0.1.1" }
       )
     ).toEqual([]);
+  });
+
+  it("rejects host latest missing arm64 dmg", () => {
+    const errors = validateLatestRelease(
+      {
+        tag_name: "v0.1.1",
+        draft: false,
+        prerelease: false,
+        assets: [
+          { name: "latest-mac.yml" },
+          { name: "Pier-0.1.1-arm64-mac.zip" },
+          { name: "Pier-0.1.1-mac.zip" },
+          { name: "Pier-0.1.1.dmg" },
+        ],
+      },
+      { expectVersion: "0.1.1" }
+    );
+    expect(errors.join("\n")).toMatch(/arm64\.dmg/i);
   });
 
   it("rejects plugin tag owning latest", () => {

@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 /**
- * Hard gate: GitHub /releases/latest must stay the host app channel.
+ * Hard gate: GitHub /releases/latest must stay the host app channel with a
+ * complete dual-arch mac asset set.
  *
  * Plugin releases use tags like plugin-codex-v1.3.1 and must never become
  * Latest — electron-updater only reads /releases/latest for latest-mac.yml.
@@ -16,6 +17,11 @@
 import { spawnSync } from "node:child_process";
 import { resolve } from "node:path";
 import { fileURLToPath } from "node:url";
+import {
+  normalizeReleaseVersion,
+  validateMacReleaseAssetNames,
+} from "./mac-release-assets.mjs";
+
 
 const PLUGIN_TAG_RE = /^plugin-/i;
 const HOST_TAG_RE = /^v\d+\.\d+\.\d+/;
@@ -81,11 +87,9 @@ export function validateLatestRelease(latest, opts = {}) {
       `latest release ${tag || "(unknown)"} is prerelease; host channel must be a full release`
     );
   }
-  if (!assetNames.includes("latest-mac.yml")) {
-    errors.push(
-      `latest release ${tag || "(unknown)"} missing latest-mac.yml (assets: ${assetNames.join(", ") || "none"})`
-    );
-  }
+
+  /** @type {string | undefined} */
+  let expectedVersion;
   if (opts.expectVersion) {
     const expectedTag = opts.expectVersion.startsWith("v")
       ? opts.expectVersion
@@ -93,19 +97,28 @@ export function validateLatestRelease(latest, opts = {}) {
     if (tag !== expectedTag) {
       errors.push(`latest tag is ${tag || "(none)"}, expected ${expectedTag}`);
     }
-    const version = expectedTag.slice(1);
-    const hasZip = assetNames.some(
-      (name) =>
-        name.includes(version) &&
-        name.endsWith(".zip") &&
-        name.toLowerCase().includes("mac")
-    );
-    if (!hasZip) {
+    expectedVersion = normalizeReleaseVersion(expectedTag);
+  } else if (tag && HOST_TAG_RE.test(tag) && !PLUGIN_TAG_RE.test(tag)) {
+    expectedVersion = normalizeReleaseVersion(tag);
+  }
+
+  if (expectedVersion) {
+    const assetErrors = validateMacReleaseAssetNames(assetNames, expectedVersion);
+    if (assetErrors.length > 0) {
       errors.push(
-        `latest release missing mac zip for ${version} (assets: ${assetNames.join(", ") || "none"})`
+        ...assetErrors.map(
+          (e) =>
+            `${e} on latest ${tag || "(unknown)"} (assets: ${assetNames.join(", ") || "none"})`
+        )
       );
     }
+  } else if (!assetNames.includes("latest-mac.yml")) {
+    // Fallback when tag is unusable: still require updater metadata.
+    errors.push(
+      `latest release ${tag || "(unknown)"} missing latest-mac.yml (assets: ${assetNames.join(", ") || "none"})`
+    );
   }
+
   return errors;
 }
 
