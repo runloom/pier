@@ -6,14 +6,14 @@ import {
   AlertDialogDescription,
   AlertDialogFooter,
   AlertDialogHeader,
-  AlertDialogMedia,
   AlertDialogTitle,
 } from "@pier/ui/alert-dialog.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { Field, FieldError, FieldLabel } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
-import { LogOutIcon } from "lucide-react";
+import { StatusIcon } from "@pier/ui/status-icon.tsx";
 import {
+  type ReactNode,
   type SyntheticEvent,
   useCallback,
   useEffect,
@@ -29,6 +29,34 @@ import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
 
 const APP_DIALOG_OVERLAY_ID = "app-dialog";
+
+function DialogCopy({
+  body,
+  showDangerMark = false,
+  title,
+}: {
+  body?: string;
+  showDangerMark?: boolean;
+  title: string;
+}): ReactNode {
+  return (
+    <AlertDialogHeader>
+      {showDangerMark ? (
+        <div className="flex items-center gap-2.5">
+          <StatusIcon className="shrink-0" kind="error" />
+          <AlertDialogTitle>{title}</AlertDialogTitle>
+        </div>
+      ) : (
+        <AlertDialogTitle>{title}</AlertDialogTitle>
+      )}
+      {body ? (
+        <AlertDialogDescription className="whitespace-pre-wrap">
+          {body}
+        </AlertDialogDescription>
+      ) : null}
+    </AlertDialogHeader>
+  );
+}
 
 function isCurrentDialog(dialog: AppDialogRequest): boolean {
   return useAppDialogStore.getState().current === dialog;
@@ -96,9 +124,8 @@ function ActiveAppDialog({
     );
   }
 
-  // 三选(保存/不保存/取消):macOS sheet 语义 —— 主按钮(保存)整行置顶,
-  // 次按钮(不保存)与取消同宽次行,全部纵向排布。sm 弹窗的 2 列 grid footer
-  // 放不下三键(第三键换行左对齐,视觉破碎),显式覆盖为单列。
+  // 三选(保存/不保存/取消):macOS 桌面横排 —— alt | 取消 | confirm。
+  // choice 一律 default 宽:三键 + 带文件名标题放不进 sm。
   if (dialog.kind === "choice") {
     return (
       <AlertDialog
@@ -110,34 +137,24 @@ function ActiveAppDialog({
         open={open}
       >
         <AlertDialogContent
-          size={size}
+          size="default"
           terminalOverlayId={APP_DIALOG_OVERLAY_ID}
         >
-          <AlertDialogHeader>
-            <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
-            {dialog.body ? (
-              <AlertDialogDescription className="whitespace-pre-wrap">
-                {dialog.body}
-              </AlertDialogDescription>
-            ) : null}
-          </AlertDialogHeader>
-          <AlertDialogFooter className="flex-col-reverse! grid-cols-1! sm:flex-col-reverse!">
-            <AlertDialogCancel
-              className="w-full"
-              onClick={() => dialog.resolve("cancel")}
-              variant="ghost"
-            >
-              {dialog.cancelLabel ?? t("dialog.cancel")}
-            </AlertDialogCancel>
+          <DialogCopy body={dialog.body} title={dialog.title} />
+          <AlertDialogFooter>
             <AlertDialogAction
-              className="w-full"
               onClick={() => dialog.resolve("alt")}
               variant={isDestructive ? "destructive" : "outline"}
             >
               {dialog.altLabel}
             </AlertDialogAction>
+            <AlertDialogCancel
+              onClick={() => dialog.resolve("cancel")}
+              variant="outline"
+            >
+              {dialog.cancelLabel ?? t("dialog.cancel")}
+            </AlertDialogCancel>
             <AlertDialogAction
-              className="w-full"
               onClick={() => dialog.resolve("confirm")}
               variant="default"
             >
@@ -159,24 +176,16 @@ function ActiveAppDialog({
       open={open}
     >
       <AlertDialogContent size={size} terminalOverlayId={APP_DIALOG_OVERLAY_ID}>
-        <AlertDialogHeader>
-          {isDestructive ? (
-            <AlertDialogMedia className="bg-destructive/10 text-destructive">
-              <LogOutIcon aria-hidden="true" />
-            </AlertDialogMedia>
-          ) : null}
-          <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
-          {dialog.body ? (
-            <AlertDialogDescription className="whitespace-pre-wrap">
-              {dialog.body}
-            </AlertDialogDescription>
-          ) : null}
-        </AlertDialogHeader>
+        <DialogCopy
+          body={dialog.body}
+          showDangerMark={isDestructive && dialog.kind === "confirm"}
+          title={dialog.title}
+        />
         <AlertDialogFooter singleAction={dialog.kind === "alert"}>
           {dialog.kind === "confirm" ? (
             <AlertDialogCancel
               onClick={() => dialog.resolve(false)}
-              variant={isDestructive ? "ghost" : "outline"}
+              variant="outline"
             >
               {dialog.cancelLabel ?? t("dialog.cancel")}
             </AlertDialogCancel>
@@ -257,43 +266,34 @@ function PromptDialog({
       open={open}
     >
       <AlertDialogContent size={size} terminalOverlayId={APP_DIALOG_OVERLAY_ID}>
-        <form onSubmit={handleSubmit}>
-          <AlertDialogHeader>
-            <AlertDialogTitle>{dialog.title}</AlertDialogTitle>
-            {dialog.body ? (
-              <AlertDialogDescription className="whitespace-pre-wrap">
-                {dialog.body}
-              </AlertDialogDescription>
-            ) : null}
-          </AlertDialogHeader>
-          <div className="px-6 pt-2 pb-4">
-            <Field data-invalid={Boolean(error)}>
-              <FieldLabel className="sr-only" htmlFor="app-dialog-prompt">
-                {dialog.title}
-              </FieldLabel>
-              <Input
-                aria-invalid={Boolean(error)}
-                autoFocus
-                id="app-dialog-prompt"
-                onChange={(event) => {
-                  setValue(event.target.value);
-                  if (error) {
-                    setError(null);
-                  }
-                }}
-                placeholder={dialog.placeholder}
-                value={value}
-              />
-              {error ? <FieldError>{error}</FieldError> : null}
-            </Field>
-          </div>
+        <form className="grid gap-4" onSubmit={handleSubmit}>
+          <DialogCopy body={dialog.body} title={dialog.title} />
+          <Field data-invalid={Boolean(error)}>
+            <FieldLabel className="sr-only" htmlFor="app-dialog-prompt">
+              {dialog.title}
+            </FieldLabel>
+            <Input
+              aria-invalid={Boolean(error)}
+              autoFocus
+              id="app-dialog-prompt"
+              onChange={(event) => {
+                setValue(event.target.value);
+                if (error) {
+                  setError(null);
+                }
+              }}
+              placeholder={dialog.placeholder}
+              value={value}
+            />
+            {error ? <FieldError>{error}</FieldError> : null}
+          </Field>
           <AlertDialogFooter>
             <AlertDialogCancel
               onClick={(event) => {
                 event.preventDefault();
                 dialog.resolve(null);
               }}
-              variant={isDestructive ? "ghost" : "outline"}
+              variant="outline"
             >
               {dialog.cancelLabel ?? t("dialog.cancel")}
             </AlertDialogCancel>
