@@ -157,15 +157,24 @@ function openAsyncQuickPick(
       : FILES_TREE_DEFAULT_EXCLUDE_PATTERNS;
   })();
 
-  const applySnapshot = (snap: PathQuerySnapshot): void => {
+  const applySnapshot = (
+    snap: PathQuerySnapshot,
+    signal: AbortSignal
+  ): void => {
+    if (signal.aborted) {
+      return;
+    }
     if (snap.status === "error") {
-      context.commandPalette.updateQuickPick({
-        errorText:
-          snap.errorMessage ??
-          t("filePanel.quickOpen.queryFailed", "Unable to search files"),
-        items: [],
-        loading: false,
-      });
+      context.commandPalette.updateQuickPick(
+        {
+          errorText:
+            snap.errorMessage ??
+            t("filePanel.quickOpen.queryFailed", "Unable to search files"),
+          items: [],
+          loading: false,
+        },
+        { signal }
+      );
       return;
     }
 
@@ -175,11 +184,14 @@ function openAsyncQuickPick(
         ? t("filePanel.quickOpen.truncated", "Results truncated to top matches")
         : null;
 
-    context.commandPalette.updateQuickPick({
-      errorText: truncatedHint ?? "",
-      items,
-      loading: snap.status === "loading",
-    });
+    context.commandPalette.updateQuickPick(
+      {
+        errorText: truncatedHint ?? "",
+        items,
+        loading: snap.status === "loading",
+      },
+      { signal }
+    );
   };
 
   context.commandPalette.openQuickPick({
@@ -214,7 +226,9 @@ function openAsyncQuickPick(
       disposeSearch?.();
       disposeSearch = client.search({
         excludePatterns,
-        onUpdate: applySnapshot,
+        onUpdate: (snap) => {
+          applySnapshot(snap, signal);
+        },
         owner,
         query,
         root,

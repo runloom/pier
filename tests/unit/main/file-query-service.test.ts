@@ -301,4 +301,53 @@ describe("createFileQueryService", () => {
     expect(err.code).toBe("walk-failed");
     expect(err.message).toContain("simulated walk crash");
   });
+
+  it("sets truncated when ranking top-K is smaller than matched paths", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-file-query-rank-"));
+    roots.push(root);
+    for (let i = 0; i < 30; i += 1) {
+      await writeFile(join(root, `file-${i}.ts`), "");
+    }
+    const service = createFileQueryService({});
+    const rec = recorder();
+    service.start(
+      1,
+      {
+        limit: 10,
+        mruPaths: [],
+        owner: "quick-open:s1",
+        query: ".ts",
+        queryId: "q-rank-trunc",
+        root,
+      },
+      rec.emit
+    );
+    await rec.done;
+    const batch = rec.events.find((e) => e.kind === "batch");
+    if (batch?.kind !== "batch") throw new Error("expected batch");
+    expect(batch.items.length).toBe(10);
+    const done = rec.events.find((e) => e.kind === "done");
+    if (done?.kind !== "done") throw new Error("expected done");
+    expect(done.truncated).toBe(true);
+  });
+
+  it("errors when project root cannot be read", async () => {
+    const service = createFileQueryService({});
+    const rec = recorder();
+    service.start(
+      1,
+      {
+        limit: 200,
+        mruPaths: [],
+        owner: "quick-open:s1",
+        query: "",
+        queryId: "q-bad-root",
+        root: "/this/path/definitely/does/not/exist-pier-file-query-2",
+      },
+      rec.emit
+    );
+    await rec.done;
+    expect(rec.events.some((e) => e.kind === "error")).toBe(true);
+    expect(rec.events.some((e) => e.kind === "done")).toBe(false);
+  });
 });

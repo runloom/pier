@@ -214,17 +214,18 @@ async function runQuery(args: RunQueryArgs): Promise<void> {
       request.mruPaths ?? [],
       request.limit
     );
+    const rankingTruncated = ranked.totalMatched > ranked.items.length;
 
     session.emit({
       kind: "batch",
       queryId: request.queryId,
-      items: ranked.map(({ path, score }) => ({ path, score })),
+      items: ranked.items.map(({ path, score }) => ({ path, score })),
     });
     session.emit({
       kind: "done",
       queryId: request.queryId,
       reason: "completed",
-      truncated: walk.truncated,
+      truncated: walk.truncated || rankingTruncated,
       scanned: walk.scanned,
       elapsedMs: Math.max(0, performance.now() - started),
     });

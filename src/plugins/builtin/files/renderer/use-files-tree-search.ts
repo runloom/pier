@@ -152,15 +152,31 @@ export function useFilesTreeSearch({
           root,
           signal: materializeAbort.signal,
         })
-          .then(() => {
+          .then((result) => {
             if (materializeAbort.signal.aborted) {
               return;
             }
             const current = valueRef.current;
             const query = current.trim().length > 0 ? current : null;
             treeApiRef.current?.setSearch(query);
+            // Soft-fail: do not invent ghost nodes; empty match UI is fine if
+            // materialize could not surface hits. Log only for diagnostics.
+            if (
+              result.failedDirectories.length > 0 ||
+              result.missingPaths.length > 0
+            ) {
+              console.warn("[files-tree-search] materialize incomplete", {
+                failedDirectories: result.failedDirectories,
+                missingPaths: result.missingPaths,
+              });
+            }
           })
-          .catch(() => undefined);
+          .catch((error: unknown) => {
+            if (materializeAbort.signal.aborted) {
+              return;
+            }
+            console.warn("[files-tree-search] materialize failed", error);
+          });
       },
       owner: ownerRef.current,
       query: treeSearch.value,

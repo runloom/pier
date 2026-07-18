@@ -5,7 +5,6 @@
  * Design: docs/superpowers/specs/2026-07-18-files-tree-search-path-query-keep-tree-ui-design.md
  */
 import {
-  addFilesTreeEntry,
   ensureAncestorDirectoryEntries,
   getFilesTreeSnapshot,
   loadFilesTreeDirectory,
@@ -75,29 +74,36 @@ async function mapPool<T>(
   await Promise.all(workers);
 }
 
+export interface MaterializePathQueryHitsResult {
+  readonly failedDirectories: readonly string[];
+  readonly missingPaths: readonly string[];
+}
+
 /**
  * Ensure hit paths exist in the tree store via ancestor directory loads only.
- * Does not BFS the whole repository.
+ * Does not BFS the whole repository. Never invents file entries that list failed
+ * to produce — missing hits are reported, not injected as ghosts.
  */
 export async function materializePathQueryHits(input: {
   list: FilesTreeList;
   paths: readonly string[];
   root: string;
   signal?: AbortSignal;
-}): Promise<void> {
+}): Promise<MaterializePathQueryHitsResult> {
   const { list, paths, root, signal } = input;
   if (paths.length === 0 || signal?.aborted) {
-    return;
+    return { failedDirectories: [], missingPaths: [] };
   }
 
   for (const path of paths) {
     if (signal?.aborted) {
-      return;
+      return { failedDirectories: [], missingPaths: [...paths] };
     }
     ensureAncestorDirectoryEntries(root, path);
   }
 
   const ancestors = collectAncestorDirectories(paths);
+  const failedDirectories: string[] = [];
   await mapPool(
     ancestors,
     DIRECTORY_LOAD_CONCURRENCY,
@@ -105,28 +111,23 @@ export async function materializePathQueryHits(input: {
       if (signal?.aborted) {
         return;
       }
-      await loadFilesTreeDirectory(root, directoryPath, list);
+      const result = await loadFilesTreeDirectory(root, directoryPath, list);
+      if (!result.ok) {
+        failedDirectories.push(directoryPath);
+      }
     },
     signal
   );
 
   if (signal?.aborted) {
-    return;
+    return { failedDirectories, missingPaths: [...paths] };
   }
 
-  // Parent list should have added file entries; inject any still-missing hits.
+  // Root-level hits rely on an already-loaded root snapshot (sidebar load).
+  // Do not invent entries when list fails — report missingPaths instead.
   const snapshot = getFilesTreeSnapshot(root);
-  for (const path of paths) {
-    if (signal?.aborted) {
-      return;
-    }
-    if (snapshot.entriesByPath.has(path)) {
-      continue;
-    }
-    addFilesTreeEntry(root, {
-      kind: "file",
-      path,
-      root,
-    });
-  }
+  const missingPaths = paths.filter(
+    (path) => !snapshot.entriesByPath.has(path)
+  );
+  return { failedDirectories, missingPaths };
 }

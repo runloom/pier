@@ -68,6 +68,12 @@ export interface RankedFilePath {
   score: number;
 }
 
+export interface SelectTopFilePathsResult {
+  readonly items: RankedFilePath[];
+  /** Number of paths that matched before top-K clamp (for truncated UI). */
+  readonly totalMatched: number;
+}
+
 /**
  * Rank paths against `query`, clamp to `limit`, and return the top-K.
  *
@@ -79,7 +85,7 @@ export function selectTopFilePaths(
   query: string,
   mruPaths: readonly string[],
   limit: number
-): RankedFilePath[] {
+): SelectTopFilePathsResult {
   const clampedLimit = Number.isFinite(limit)
     ? Math.min(Math.max(Math.trunc(limit), 1), FILE_PATH_QUERY_LIMIT_MAX)
     : FILE_PATH_QUERY_LIMIT_DEFAULT;
@@ -114,5 +120,5 @@ export function selectTopFilePaths(
     if (entry === undefined) continue;
     out.push({ path: entry.path, score: entry.score });
   }
-  return out;
+  return { items: out, totalMatched: scored.length };
 }

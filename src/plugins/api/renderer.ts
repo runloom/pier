@@ -273,7 +273,10 @@ export interface RendererPluginContext {
      * 合并式补丁当前 quickPick (items/loading/errorText 等)。用于 onQueryChange
      * 拉到数据后回填, 不重置 query/selection/focus, 也不 push 回退栈。
      */
-    updateQuickPick(patch: Partial<RendererPluginQuickPick>): void;
+    updateQuickPick(
+      patch: Partial<RendererPluginQuickPick>,
+      options?: { signal?: AbortSignal }
+    ): void;
   };
   configuration: PluginConfigurationApi;
   /**

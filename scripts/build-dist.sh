@@ -113,16 +113,26 @@ if [ "$(uname -s)" = "Darwin" ]; then
         fi
     elif [ -n "${CSC_LINK:-}" ]; then
         # CI / 无 keychain 身份时可用 p12（CSC_LINK + CSC_KEY_PASSWORD）。
+        # 必须显式 CSC_NAME 且不能是 Apple Development；publish 默认禁止以免
+        # Development p12 被当成可分发产物上传。
         echo "[build:dist] 未在 keychain 找到 Developer ID Application"
         echo "[build:dist] 将使用 CSC_LINK 签名（electron-builder 读取 p12）"
-        if [ -n "${CSC_NAME:-}" ]; then
-            case "${CSC_NAME}" in
-                *"Apple Development"*|*"Apple Development:"*)
-                    echo "[build:dist] ERROR: CSC_NAME 指向 Apple Development，不可用于分发" >&2
-                    exit 1
-                    ;;
-            esac
-            echo "[build:dist] CSC_NAME(from env)=$CSC_NAME"
+        if [ -z "${CSC_NAME:-}" ]; then
+            echo "[build:dist] ERROR: 使用 CSC_LINK 时必须设置 CSC_NAME（Developer ID Application 显示名）" >&2
+            echo "[build:dist] 例: CSC_NAME='Your Name (TEAMID)'" >&2
+            exit 1
+        fi
+        case "${CSC_NAME}" in
+            *"Apple Development"*|*"Apple Development:"*)
+                echo "[build:dist] ERROR: CSC_NAME 指向 Apple Development，不可用于分发" >&2
+                exit 1
+                ;;
+        esac
+        echo "[build:dist] CSC_NAME(from env)=$CSC_NAME"
+        if [ "$PUBLISH_POLICY" != "never" ] && [ "${PIER_DIST_ALLOW_CSC_LINK_PUBLISH:-}" != "1" ]; then
+            echo "[build:dist] ERROR: CSC_LINK 签名默认禁止 publish（当前: $PUBLISH_POLICY）" >&2
+            echo "[build:dist] 确认 p12 为 Developer ID 后可设 PIER_DIST_ALLOW_CSC_LINK_PUBLISH=1" >&2
+            exit 1
         fi
     elif [ "$ALLOW_DEV_SIGN" -eq 1 ]; then
         echo "[build:dist] WARNING: 未找到 Developer ID Application，已启用 --allow-dev-sign"

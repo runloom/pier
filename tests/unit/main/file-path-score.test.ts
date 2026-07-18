@@ -19,7 +19,7 @@ describe("selectTopFilePaths", () => {
 
   it("matches theme.ts inside code-mirror-editor-theme.ts", () => {
     const top = selectTopFilePaths(paths, "theme.ts", [], 200);
-    expect(top.map((x) => x.path)).toContain(
+    expect(top.items.map((x) => x.path)).toContain(
       "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts"
     );
   });
@@ -36,7 +36,7 @@ describe("selectTopFilePaths", () => {
       ["src/main/ipc/theme.ts"],
       2
     );
-    expect(ranked[0]?.path).toBe("src/main/ipc/theme.ts");
+    expect(ranked.items[0]?.path).toBe("src/main/ipc/theme.ts");
   });
 
   it("does not bake walk input index into the returned score", () => {
@@ -47,9 +47,9 @@ describe("selectTopFilePaths", () => {
     );
     many.push("src/theme.ts");
     const top = selectTopFilePaths(many, "theme.ts", [], 5);
-    expect(top[0]?.path).toBe("src/theme.ts");
+    expect(top.items[0]?.path).toBe("src/theme.ts");
     // Pure score: basename (+1000) + shallow depth, not reduced by input index.
-    expect(top[0]?.score).toBeGreaterThan(900);
+    expect(top.items[0]?.score).toBeGreaterThan(900);
   });
 
   it("returns empty-query shallow/MRU ordering without dumping everything unbounded", () => {
@@ -59,7 +59,7 @@ describe("selectTopFilePaths", () => {
       ["packages/ui/src/file-icon-theme.ts"],
       2
     );
-    expect(top).toHaveLength(2);
-    expect(top[0]?.path).toBe("packages/ui/src/file-icon-theme.ts");
+    expect(top.items).toHaveLength(2);
+    expect(top.items[0]?.path).toBe("packages/ui/src/file-icon-theme.ts");
   });
 });

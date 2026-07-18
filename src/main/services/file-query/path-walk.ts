@@ -107,7 +107,13 @@ export async function walkFiles(options: WalkOptions): Promise<WalkResult> {
   const matchers = parseExcludePatternSource(excludePatternSource);
   const ignored = ignoredPaths ?? new Set<string>();
 
-  const rootReal = await realpath(root).catch(() => root);
+  let rootReal: string;
+  try {
+    rootReal = await realpath(root);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+    throw new Error(`file walk root inaccessible: ${root}: ${message}`);
+  }
   const visitedReal = new Set<string>([rootReal]);
   const queue: Array<{ absolute: string; relative: string }> = [
     { absolute: root, relative: "" },
@@ -123,9 +129,12 @@ export async function walkFiles(options: WalkOptions): Promise<WalkResult> {
     let entries: Dirent[] | undefined;
     try {
       entries = await readdir(dir.absolute, { withFileTypes: true });
-    } catch {
-      // Directory disappeared, permission denied, etc. Skip silently — the
-      // walk keeps making progress on the rest of the tree.
+    } catch (error) {
+      // Root access failure is fatal; nested dirs may vanish mid-walk.
+      if (dir.relative === "") {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(`file walk root inaccessible: ${root}: ${message}`);
+      }
       continue;
     }
     for (const entry of entries) {
