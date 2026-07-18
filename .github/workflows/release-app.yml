@@ -81,15 +81,13 @@ jobs:
           ls -lh dist-builder/latest-mac.yml dist-builder/*.zip
           test -f dist-builder/latest-mac.yml
 
-      - name: Verify GitHub Latest release assets
+      - name: Verify GitHub Latest is host channel
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
         run: |
           set -euo pipefail
-          VERSION="${{ steps.version.outputs.version }}"
-          # electron-updater reads /releases/latest for public repos.
-          ASSETS="$(gh release view --repo "$GITHUB_REPOSITORY" --json assets --jq '.assets[].name')"
-          echo "$ASSETS"
-          echo "$ASSETS" | grep -qx 'latest-mac.yml'
-          # Accept either arch naming used by electron-builder.
-          echo "$ASSETS" | grep -E -q "Pier-${VERSION}.*mac\.zip|${VERSION}.*-mac\.zip"
+          # Hard gate: /releases/latest must be this host version with latest-mac.yml.
+          # Plugin prereleases must never own Latest (electron-updater reads only Latest).
+          node ./scripts/verify-github-latest-isolation.mjs \
+            --expect-version "${{ steps.version.outputs.version }}"

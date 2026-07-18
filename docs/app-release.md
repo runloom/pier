@@ -10,6 +10,7 @@
 - 关键步骤：`verify-app-release-version.mjs`（tag 去 `v` == `package.json` version）→ `pnpm build:dist --publish=always`
 - `electron-builder.yml`：`publish.releaseType: release`（禁止 draft，否则无 Latest）
 - 使用 `CSC_LINK` 时 workflow 设置 `PIER_DIST_ALLOW_CSC_LINK_PUBLISH=1`（`build-dist.sh` 默认禁 CSC_LINK publish）
+- 发布后强制门禁：`scripts/verify-github-latest-isolation.mjs --expect-version <ver>`（Latest 必须是本宿主版且含 `latest-mac.yml`）
 
 ## Secrets
 

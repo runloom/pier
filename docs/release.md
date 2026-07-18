@@ -29,7 +29,7 @@ flowchart LR
   end
 ```
 
-**硬边界：** 插件 release 不得成为 Latest，否则宿主 updater 会去插件 tag 找 `latest-mac.yml`。
+**硬边界（强制门禁）：** 插件 release 不得成为 Latest。`Release Plugin` / `Release App` 结束后跑 `scripts/verify-github-latest-isolation.mjs`：Latest 必须是宿主 `v*` + `latest-mac.yml`；本次插件 tag 必须为 prerelease。失败则 workflow 红。
 
 ---
 

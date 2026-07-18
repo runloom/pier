@@ -20,7 +20,7 @@ describe("app release workflow", () => {
     expect(source).toMatch(
       /ref:\s*\$\{\{\s*steps\.version\.outputs\.tag\s*\}\}/
     );
-    expect(source).toContain("gh release view");
+    expect(source).toContain("verify-github-latest-isolation.mjs");
   });
 
   it("keeps plugin releases off GitHub Latest", async () => {

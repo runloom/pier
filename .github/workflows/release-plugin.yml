@@ -209,6 +209,23 @@ jobs:
             for (const t of targets) process.stdout.write(JSON.stringify(t) + "\n");
           ')
 
+      - name: Verify GitHub Latest still host-owned
+        if: steps.parse.outputs.should_release == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
+          RELEASE_TAGS: ${{ steps.parse.outputs.release_tags }}
+        run: |
+          set -euo pipefail
+          # After every plugin publish: Latest must remain a host v* release with
+          # latest-mac.yml; each plugin tag this job touched must stay prerelease.
+          TAGS_CSV="$(printf '%s' "${RELEASE_TAGS:-}" | tr ' ' ',' | sed 's/,,*/,/g; s/^,//; s/,$//')"
+          if [ -n "$TAGS_CSV" ]; then
+            node ./scripts/verify-github-latest-isolation.mjs --plugin-tags "$TAGS_CSV"
+          else
+            node ./scripts/verify-github-latest-isolation.mjs
+          fi
+
       - name: Regenerate plugin index
         if: steps.parse.outputs.should_release == 'true'
         env:
