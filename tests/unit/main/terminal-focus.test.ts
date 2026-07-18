@@ -99,6 +99,7 @@ describe("terminal focus restoration", () => {
       patchTerminalPanelTab: vi.fn(async () => undefined),
       patchTerminalPanelTaskStatus: vi.fn(async () => undefined),
       removeTerminalPanelSession: vi.fn(async () => undefined),
+      retainTerminalPanelSessions: vi.fn(async () => undefined),
       updateTerminalPanelAgent: vi.fn(
         async (
           _windowId: number,
