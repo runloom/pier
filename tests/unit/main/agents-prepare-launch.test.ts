@@ -150,6 +150,81 @@ describe("pier:agents:prepareLaunch", () => {
   });
 });
 
+describe("pier:agents:prepareLaunchFromSpec", () => {
+  it("registers the provided command without prefs override", async () => {
+    fakePreferences.read.mockResolvedValueOnce({
+      agentCommandOverrides: {
+        claude: "claude --from-prefs",
+      },
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      agentPermissionMode: "manual",
+    });
+
+    const ipcMain = makeIpcMain();
+    registerAgentsIpc(ipcMain as never);
+
+    const result = (await ipcMain.invoke("pier:agents:prepareLaunchFromSpec", {
+      agentId: "claude" as AgentKind,
+      command: "claude --dangerously-skip-permissions",
+      cwd: "/tmp/project",
+    })) as { launchId: string | null };
+
+    expect(result.launchId).toBe("launch-abc");
+    expect(registerSpy).toHaveBeenCalledTimes(1);
+    expect(registerSpy).toHaveBeenCalledWith({
+      agentId: "claude",
+      command: "claude --dangerously-skip-permissions",
+      cwd: "/tmp/project",
+    });
+  });
+
+  it("falls back to resolved launch command when command is omitted", async () => {
+    fakePreferences.read.mockResolvedValueOnce({
+      agentCommandOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      agentPermissionMode: "manual",
+    });
+
+    const ipcMain = makeIpcMain();
+    registerAgentsIpc(ipcMain as never);
+
+    const result = (await ipcMain.invoke("pier:agents:prepareLaunchFromSpec", {
+      agentId: "claude" as AgentKind,
+      cwd: "/tmp/project",
+    })) as { launchId: string | null };
+
+    expect(result.launchId).toBe("launch-abc");
+    expect(registerSpy).toHaveBeenCalledWith({
+      agentId: "claude",
+      command: expect.stringContaining("claude"),
+      cwd: "/tmp/project",
+    });
+  });
+
+  it("disabled agent → launchId null", async () => {
+    fakePreferences.read.mockResolvedValueOnce({
+      agentCommandOverrides: {},
+      agentDefaultArgs: {},
+      agentDefaultEnv: {},
+      agentPermissionMode: "manual",
+      disabledAgentIds: ["claude"],
+    });
+
+    const ipcMain = makeIpcMain();
+    registerAgentsIpc(ipcMain as never);
+
+    await expect(
+      ipcMain.invoke("pier:agents:prepareLaunchFromSpec", {
+        agentId: "claude" as AgentKind,
+        command: "claude",
+      })
+    ).resolves.toEqual({ launchId: null });
+    expect(registerSpy).not.toHaveBeenCalled();
+  });
+});
+
 describe("pier:agents:selection", () => {
   it("默认项优先，其余按 agent 使用历史排序", async () => {
     detectAgents.mockResolvedValueOnce({

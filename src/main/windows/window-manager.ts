@@ -30,6 +30,12 @@ import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import { getTerminalAddon } from "../ipc/terminal.ts";
 import { terminalFocusCoordinator } from "../ipc/terminal-focus-coordinator.ts";
 import { isDevRuntime } from "../runtime-mode.ts";
+import {
+  armDetaching,
+  isWindowDetaching,
+  scheduleDisarmDetaching,
+} from "../services/agents/window-detaching-guard.ts";
+import { detachAgentsForWindowSync } from "../state/terminal-session-state.ts";
 import { type AppWindow, createAppWindow } from "./app-window.ts";
 import { installMacAppViewGeometry } from "./mac-app-view-geometry.ts";
 import {
@@ -276,6 +282,24 @@ class WindowManager {
         event.preventDefault();
         return;
       }
+      const detachingKeys =
+        context == null
+          ? null
+          : {
+              electronWindowId:
+                context.electronWindowId ?? String(electronWindowId),
+              // session store / windowRecordIdFor 用 runtime windowId，不是 record UUID
+              recordId: context.windowId,
+            };
+      if (
+        detachingKeys &&
+        !(
+          isWindowDetaching(detachingKeys.electronWindowId) ||
+          isWindowDetaching(detachingKeys.recordId)
+        )
+      ) {
+        armDetaching(detachingKeys);
+      }
       terminalFocusCoordinator.clearWindow(electronWindowId);
       try {
         getTerminalAddon()?.detachWindow(window.getNativeWindowHandle());
@@ -295,6 +319,13 @@ class WindowManager {
         window.webContents.close();
       }
       const context = findWindowContext(window);
+      if (context) {
+        scheduleDisarmDetaching({
+          electronWindowId:
+            context.electronWindowId ?? String(electronWindowId),
+          recordId: context.windowId,
+        });
+      }
       forgetAppWindow(window);
       this.windows.delete(id);
       this.closeCoordinator.resolve(id, "closed");
@@ -397,6 +428,18 @@ class WindowManager {
     this.isDestroyingAllForQuit = true;
     for (const window of this.windows.values()) {
       if (!window.isDestroyed()) {
+        const context = findWindowContext(window);
+        const detachingKeys =
+          context == null
+            ? null
+            : {
+                electronWindowId: context.electronWindowId ?? String(window.id),
+                recordId: context.windowId,
+              };
+        if (detachingKeys) {
+          armDetaching(detachingKeys);
+          detachAgentsForWindowSync(detachingKeys.recordId);
+        }
         try {
           getTerminalAddon()?.detachWindow(window.getNativeWindowHandle());
         } catch {
@@ -406,6 +449,9 @@ class WindowManager {
           window.webContents.close();
         }
         window.destroy();
+        if (detachingKeys) {
+          scheduleDisarmDetaching(detachingKeys);
+        }
       }
     }
   }

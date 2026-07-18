@@ -388,6 +388,11 @@ describe("TerminalPanel lifecycle", () => {
             return vi.fn();
           }
         ),
+        agents: {
+          prepareLaunchFromSpec: vi.fn(async () => ({
+            launchId: "launch-from-spec",
+          })),
+        },
         terminal: {
           applyHostSnapshot: vi.fn(),
           close: vi.fn(),
@@ -1521,13 +1526,140 @@ describe("TerminalPanel lifecycle", () => {
 
     const result = await screen.findByTestId("terminal-agent-result");
     expect(result).toHaveAttribute("data-scrollbar", "stable");
-    expect(result).toHaveTextContent("[pier] restored agent");
+    expect(result).toHaveTextContent("Agent ended");
+    expect(result).toHaveTextContent(
+      "The previous session has exited. You can start it again."
+    );
     expect(result).toHaveTextContent("AgentClaude");
     expect(result).toHaveTextContent("Statusexited");
     expect(result).toHaveTextContent(
       "Commandclaude --dangerously-skip-permissions"
     );
+    expect(
+      screen.getByRole("button", { name: "Restart agent" })
+    ).toBeInTheDocument();
     expect(window.pier.terminal.create).not.toHaveBeenCalled();
+  });
+
+  it("skips native create for exited agent even when an anchor would be available", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      agent: {
+        agentId: "claude",
+        exitCode: 1,
+        finishedAt: 1_772_000_001_000,
+        launch: {
+          agentId: "claude",
+          command: "claude",
+          cwd: "/Users/xyz/ABC/pier",
+        },
+        startedAt: 1_772_000_000_000,
+        status: "exited",
+      },
+      context,
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    } as TerminalPanelSessionSnapshot);
+
+    const { container } = render(
+      <TerminalPanel {...createPanelProps({ params: { context } })} />
+    );
+
+    await screen.findByTestId("terminal-agent-result");
+    await new Promise((resolve) => setTimeout(resolve, 20));
+
+    expect(container.querySelector(".terminal-anchor")).toBeNull();
+    expect(window.pier.terminal.create).not.toHaveBeenCalled();
+  });
+
+  it("restarts an exited agent from the saved launch via relaunch store", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      agent: {
+        agentId: "claude",
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        launch: {
+          agentId: "claude",
+          command: "claude --dangerously-skip-permissions",
+          cwd: "/Users/xyz/ABC/pier",
+        },
+        startedAt: 1_772_000_000_000,
+        status: "exited",
+      },
+      context,
+      tab: {
+        icon: { id: "agent:claude" },
+        title: "Claude",
+      },
+      title: "Claude",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    } as TerminalPanelSessionSnapshot);
+    vi.mocked(window.pier.terminal.close).mockResolvedValue(undefined);
+
+    render(<TerminalPanel {...createPanelProps({ params: { context } })} />);
+
+    const restartButton = await screen.findByRole("button", {
+      name: "Restart agent",
+    });
+    await act(async () => {
+      fireEvent.click(restartButton);
+    });
+
+    await waitFor(() => {
+      expect(window.pier.agents.prepareLaunchFromSpec).toHaveBeenCalledWith({
+        agentId: "claude",
+        command: "claude --dangerously-skip-permissions",
+        cwd: "/Users/xyz/ABC/pier",
+      });
+    });
+    await waitFor(() => {
+      expect(window.pier.terminal.close).toHaveBeenCalledWith("terminal-1", {
+        reason: "relaunch",
+      });
+    });
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          launchId: "launch-from-spec",
+          panelId: "terminal-1",
+          context: expect.objectContaining({
+            cwd: "/Users/xyz/ABC/pier",
+          }),
+        })
+      );
+    });
+  });
+
+  it("creates a native terminal for running agent session without resume id", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      agent: {
+        agentId: "claude",
+        launch: {
+          agentId: "claude",
+          command: "claude",
+          cwd: "/Users/xyz/ABC/pier",
+        },
+        startedAt: 1_772_000_000_000,
+        status: "running",
+      },
+      context,
+      tab: {
+        icon: { id: "agent:claude" },
+        title: "Claude",
+      },
+      title: "Claude",
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    } as TerminalPanelSessionSnapshot);
+
+    const { container } = render(
+      <TerminalPanel {...createPanelProps({ params: { context } })} />
+    );
+
+    await waitFor(() => {
+      expect(window.pier.terminal.create).toHaveBeenCalledWith(
+        expect.objectContaining({ panelId: "terminal-1" })
+      );
+    });
+    expect(screen.queryByTestId("terminal-agent-result")).toBeNull();
+    expect(container.querySelector(".terminal-anchor")).not.toBeNull();
   });
 
   it("does not restart native terminal creation when context params trigger rerenders", async () => {

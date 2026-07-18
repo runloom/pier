@@ -71,11 +71,14 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       clearTerminalPanelAgent: vi.fn(async () => undefined),
+      detachAgentsForWindow: vi.fn(async () => undefined),
+      detachAgentsForWindowSync: vi.fn(() => undefined),
       patchTerminalPanelAgentStatus: vi.fn(async () => false),
       patchTerminalPanelTab: vi.fn(async () => undefined),
       patchTerminalPanelTaskStatus: vi.fn(async () => true),
       readTerminalPanelSession: vi.fn(async () => opts.savedSession ?? null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
+      retainTerminalPanelSessions: vi.fn(async () => undefined),
       updateTerminalPanelAgent: vi.fn(async () => undefined),
       updateTerminalPanelAgentResume: vi.fn(async () => true),
       updateTerminalPanelContext: vi.fn(async () => undefined),
@@ -305,6 +308,74 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     );
 
     expect(recordAgentLaunch).not.toHaveBeenCalled();
+  });
+
+  it("keeps restored agent metadata when native create returns false", async () => {
+    const { fakeAddon, invokeHandlers, win } = await setupHarness({
+      savedSession: {
+        agent: {
+          agentId: "claude",
+          launch: {
+            agentId: "claude",
+            command: "claude --dangerously-skip-permissions",
+            cwd: "/repo",
+          },
+          resume: {
+            capturedAt: 1_772_000_001_000,
+            sessionId: "session-123",
+            source: "hook",
+          },
+          startedAt: 1_772_000_000_000,
+          status: "running",
+        },
+        updatedAt: "2026-07-10T00:00:00.000Z",
+      },
+    });
+    const sessionState = await import("@main/state/terminal-session-state.ts");
+    fakeAddon.createTerminal.mockReturnValueOnce(false);
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: win.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { height: 400, width: 600, x: 0, y: 0 },
+        panelId: "restored-agent-terminal",
+      }
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: "createTerminal returned false",
+    });
+    expect(fakeAddon.createTerminal).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.anything(),
+      expect.objectContaining({
+        command: "claude --dangerously-skip-permissions --resume session-123",
+      }),
+      ""
+    );
+    expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
+      "main",
+      "restored-agent-terminal",
+      expect.objectContaining({
+        launch: {
+          agentId: "claude",
+          command: "claude --dangerously-skip-permissions",
+          cwd: "/repo",
+        },
+        resume: {
+          capturedAt: 1_772_000_001_000,
+          sessionId: "session-123",
+          source: "hook",
+        },
+        startedAt: 1_772_000_000_000,
+      })
+    );
+    expect(sessionState.clearTerminalPanelAgent).not.toHaveBeenCalled();
   });
 
   it("maps terminal operation IPC to allowlisted Ghostty binding actions", async () => {

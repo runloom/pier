@@ -174,6 +174,11 @@ export interface TerminalAgentPanelMetadata {
   exitCode?: number | undefined;
   finishedAt?: number | undefined;
   launch: TerminalAgentRestoreLaunchOptions;
+  restore?:
+    | {
+        detachedAt?: number | undefined;
+      }
+    | undefined;
   resume?: TerminalAgentResumeMetadata | undefined;
   startedAt: number;
   status: "exited" | "running";

@@ -506,7 +506,110 @@ describe("terminal focus restoration", () => {
           sessionId: "session-123",
           source: "hook",
         },
+        startedAt: 1_772_000_000_000,
       })
+    );
+    const persistedAgent =
+      sessionState.updateTerminalPanelAgent.mock.calls.at(-1)?.[2];
+    expect(persistedAgent?.launch?.command).not.toContain("--resume");
+  });
+
+  it("keeps restored agent metadata when native create returns false", async () => {
+    const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =
+      await setupTerminalFocusHarness({
+        savedSession: {
+          agent: {
+            agentId: "claude",
+            launch: {
+              agentId: "claude",
+              command: "claude --dangerously-skip-permissions",
+              cwd: "/repo",
+            },
+            resume: {
+              capturedAt: 1_772_000_001_000,
+              sessionId: "session-123",
+              source: "hook",
+            },
+            startedAt: 1_772_000_000_000,
+            status: "running",
+          },
+          context: {
+            contextId: "ctx:/repo",
+            cwd: "/repo",
+            projectRootPath: "/repo",
+            source: "panel",
+            updatedAt: 1,
+          },
+          updatedAt: "2026-07-06T00:00:00.000Z",
+        },
+      });
+    fakeAddon.createTerminal.mockReturnValueOnce(false);
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: ipcWindow.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 1, y: 2, width: 300, height: 200 },
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: "createTerminal returned false",
+    });
+    expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
+      "main",
+      "terminal-1",
+      expect.objectContaining({
+        agentId: "claude",
+        launch: {
+          agentId: "claude",
+          command: "claude --dangerously-skip-permissions",
+          cwd: "/repo",
+        },
+        resume: {
+          capturedAt: 1_772_000_001_000,
+          sessionId: "session-123",
+          source: "hook",
+        },
+        startedAt: 1_772_000_000_000,
+        status: "running",
+      })
+    );
+    expect(sessionState.clearTerminalPanelAgent).not.toHaveBeenCalled();
+  });
+
+  it("clears agent metadata when a fresh launch create returns false", async () => {
+    const { fakeAddon, invokeHandlers, ipcWindow, sessionState } =
+      await setupTerminalFocusHarness({
+        launch: {
+          agentId: "claude",
+          command: "claude",
+          cwd: "/repo",
+        },
+        savedSession: null,
+      });
+    fakeAddon.createTerminal.mockReturnValueOnce(false);
+
+    const result = await invokeHandlers.get("pier:terminal:create")?.(
+      { sender: ipcWindow.webContents },
+      {
+        font: { family: "Menlo", size: 13 },
+        frame: { x: 1, y: 2, width: 300, height: 200 },
+        launchId: "launch-agent",
+        panelId: "terminal-1",
+      }
+    );
+
+    expect(result).toEqual({
+      ok: false,
+      error: "createTerminal returned false",
+    });
+    expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalled();
+    expect(sessionState.clearTerminalPanelAgent).toHaveBeenCalledWith(
+      "main",
+      "terminal-1"
     );
   });
 

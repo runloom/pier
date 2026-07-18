@@ -42,6 +42,7 @@ interface UseTerminalNativeLifecycleArgs {
   sessionLoaded: boolean;
   setCreateError: (error: string) => void;
   setNativeTerminalReady: (ready: boolean) => void;
+  skipNativeCreate: boolean;
 }
 
 function waitForRealSize(
@@ -80,6 +81,7 @@ export function useTerminalNativeLifecycle({
   monoFontFamily,
   panelId,
   retryNonce,
+  skipNativeCreate,
   sessionLoaded,
   setCreateError,
   setNativeTerminalReady,
@@ -141,6 +143,17 @@ export function useTerminalNativeLifecycle({
       markLifecycle({
         createPending: false,
         phase: "waiting_for_session",
+      });
+      return () => {
+        disposed = true;
+        disposeTerminalPanelLifecycleDebug(panelId);
+      };
+    }
+
+    if (skipNativeCreate) {
+      markLifecycle({
+        createPending: false,
+        phase: "skipped_restored_result",
       });
       return () => {
         disposed = true;
@@ -358,6 +371,7 @@ export function useTerminalNativeLifecycle({
     panelId,
     retryNonce,
     sessionLoaded,
+    skipNativeCreate,
     setCreateError,
     setNativeTerminalReady,
   ]);

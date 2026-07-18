@@ -63,6 +63,7 @@ import {
   taskOutputTabChromeOverlay,
   taskRunTabChromeOverlay,
 } from "./terminal-tab-chrome.ts";
+import { useRestartRestoredAgent } from "./use-restart-restored-agent.ts";
 import { useTerminalFloatingLayoutRevision } from "./use-terminal-floating-layout-revision.ts";
 import { useTerminalNativeLifecycle } from "./use-terminal-native-lifecycle.ts";
 import { useTerminalPanelDescriptor } from "./use-terminal-panel-descriptor.ts";
@@ -156,6 +157,14 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const sessionLoaded = savedSession !== undefined;
   const restoredTaskResult = restoredTaskResultFromSession(savedSession);
   const restoredAgentResult = restoredAgentResultFromSession(savedSession);
+
+  const restartRestoredAgent = useRestartRestoredAgent({
+    activeLaunch,
+    panelId,
+    restoredAgentResult,
+    savedSession,
+  });
+
   const effectiveContext =
     runtimeContext ?? savedSession?.context ?? activeLaunch.context;
   const effectiveCwd = effectiveContext?.cwd ?? null;
@@ -305,6 +314,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     panelId,
     retryNonce: terminalRetryNonce,
     sessionLoaded,
+    skipNativeCreate: Boolean(restoredAgentResult),
     setCreateError: showRetryableTerminalError,
     setNativeTerminalReady,
   });
@@ -379,6 +389,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         monoFontFamily={monoFontFamily}
         nativeTerminalReady={nativeTerminalReady}
         onContextMenu={openTaskResultContextMenu}
+        onRestartAgent={restartRestoredAgent}
         onRetry={retryTerminalCreate}
         resizePlaceholderVisible={resizePlaceholderVisible}
         restoredAgentResult={restoredAgentResult}

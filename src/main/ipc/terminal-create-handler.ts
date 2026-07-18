@@ -122,6 +122,7 @@ export async function handleTerminalCreate(args: {
     }
   }
   const sessionScope = windowRecordIdFor(win);
+  let restoredAgentLaunch = false;
   try {
     const handle = win.getNativeWindowHandle();
     const saved = await readTerminalPanelSession(
@@ -137,6 +138,7 @@ export async function handleTerminalCreate(args: {
         )
       : false;
     const launch = resolveCreateTerminalLaunch(createArgs, saved, { taskLive });
+    restoredAgentLaunch = Boolean(launch.restoredAgentLaunch);
     const lifecycleId = launch.task?.runId ?? "";
     taskLifecycle.resetPanel(
       createArgs.panelId,
@@ -172,7 +174,11 @@ export async function handleTerminalCreate(args: {
       createArgs.panelId,
       launch.launchAgentId,
       launch.restoredAgent?.launch ?? launchForNative,
-      { resume: launch.restoredAgent?.resume }
+      {
+        existing: launch.restoredAgent,
+        resume: launch.restoredAgent?.resume,
+        restoredAgentLaunch: launch.restoredAgentLaunch,
+      }
     );
     const nativePanelId = toNativePanelKey(win, createArgs.panelId);
     const ok = addon.createTerminal(
@@ -191,7 +197,9 @@ export async function handleTerminalCreate(args: {
     );
     if (!ok) {
       foregroundActivityService.panelClosed(createArgs.panelId, String(win.id));
-      await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
+      if (!restoredAgentLaunch) {
+        await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
+      }
       return { ok: false, error: "createTerminal returned false" };
     }
     sendInitialTerminalInput({
@@ -230,7 +238,9 @@ export async function handleTerminalCreate(args: {
     return { ok: true };
   } catch (err) {
     foregroundActivityService.panelClosed(createArgs.panelId, String(win.id));
-    await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
+    if (!restoredAgentLaunch) {
+      await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
+    }
     return {
       ok: false,
       error: err instanceof Error ? err.message : String(err),

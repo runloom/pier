@@ -35,7 +35,8 @@ export function useTerminalRelaunch({
     sessionReadVersionRef.current += 1;
     clearTerminalError();
     setNativeTerminalReady(false);
-    setSavedSession(null);
+    // 先装上新 launch，再清 savedSession，避免 skipNativeCreate 提前关掉
+    // 导致无 launchId 的 plain create 抢跑。
     window.pier.terminal
       .close(panelId, { reason: "relaunch" })
       .then(() => {
@@ -55,6 +56,7 @@ export function useTerminalRelaunch({
           task: relaunchRequest.task,
           taskOutput: undefined,
         });
+        setSavedSession(null);
         if (relaunchRequest.task) {
           syncTaskPanelParams(panelId, {
             ...(relaunchRequest.tab ? { tab: relaunchRequest.tab } : {}),

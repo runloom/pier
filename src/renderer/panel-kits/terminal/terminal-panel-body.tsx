@@ -24,6 +24,7 @@ interface TerminalPanelBodyProps {
   monoFontFamily: string;
   nativeTerminalReady: boolean;
   onContextMenu: (event: ReactMouseEvent<HTMLDivElement>) => void;
+  onRestartAgent?: (() => void | Promise<void>) | undefined;
   onRetry: () => void;
   resizePlaceholderVisible: boolean;
   restoredAgentResult: TerminalAgentPanelMetadata | undefined;
@@ -41,6 +42,7 @@ export function TerminalPanelBody({
   monoFontFamily,
   nativeTerminalReady,
   onContextMenu,
+  onRestartAgent,
   onRetry,
   resizePlaceholderVisible,
   restoredAgentResult,
@@ -84,6 +86,7 @@ export function TerminalPanelBody({
         className={terminalContentClassName}
         fontFamily={fontFamily}
         fontSize={effectiveMonoFontSize}
+        onRestart={onRestartAgent}
       />
     );
   }

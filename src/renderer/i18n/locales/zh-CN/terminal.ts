@@ -1,5 +1,13 @@
 export const terminal = {
   closeFailed: "关闭终端失败",
+  agentSession: {
+    coldStart: "未能恢复上次会话，已重新打开智能体。",
+    endedBody: "上次会话已退出。可以重新启动。",
+    endedTitle: "智能体已结束",
+    restart: "重新启动智能体",
+    restartFailed: "重新启动智能体失败",
+    unsupported: "该智能体不支持恢复上次会话，已重新打开智能体。",
+  },
   agentStatus: {
     error: "错误",
     processing: "思考中",

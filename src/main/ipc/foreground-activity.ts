@@ -22,6 +22,7 @@ import {
   type AgentTerminalReconciler,
   createAgentTerminalReconciler,
 } from "../services/agents/integrations/terminal-reconciliation.ts";
+import { isWindowDetaching } from "../services/agents/window-detaching-guard.ts";
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
 import { SUSPENDED_JOB_EXIT_CODES } from "../services/foreground-activity/entry.ts";
 import {
@@ -56,6 +57,12 @@ function markAgentSessionExited(args: {
 }): void {
   const win = findAppWindowByElectronId(Number(args.windowId));
   if (!win || win.isDestroyed()) {
+    return;
+  }
+  if (
+    isWindowDetaching(args.windowId) ||
+    isWindowDetaching(windowRecordIdFor(win))
+  ) {
     return;
   }
   patchTerminalPanelAgentStatus(windowRecordIdFor(win), args.panelId, {

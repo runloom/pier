@@ -1,5 +1,7 @@
 import { matchAgentCommand } from "@shared/agent-command-detection.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
+import { isWindowDetaching } from "../services/agents/window-detaching-guard.ts";
+import { isSuspendedJobExitCode } from "../services/foreground-activity/entry.ts";
 import {
   patchTerminalPanelAgentStatus,
   patchTerminalPanelTab,
@@ -113,7 +115,10 @@ export function registerTerminalTaskLifecycleForwarding(
         !lifecycleId &&
         targetWindow &&
         !targetWindow.isDestroyed() &&
-        exitCode >= 0
+        exitCode >= 0 &&
+        !isSuspendedJobExitCode(exitCode) &&
+        !isWindowDetaching(windowRecordIdFor(targetWindow)) &&
+        !isWindowDetaching(String(id))
       ) {
         patchTerminalPanelAgentStatus(
           windowRecordIdFor(targetWindow),
@@ -221,7 +226,9 @@ export function registerTerminalTaskLifecycleForwarding(
         !lifecycleId &&
         targetWindow &&
         !targetWindow.isDestroyed() &&
-        processAlive === false
+        processAlive === false &&
+        !isWindowDetaching(windowRecordIdFor(targetWindow)) &&
+        !isWindowDetaching(String(id))
       ) {
         patchTerminalPanelAgentStatus(
           windowRecordIdFor(targetWindow),

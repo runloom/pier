@@ -2,6 +2,10 @@ import {
   registerTerminalTaskLifecycleForwarding,
   suppressNextTerminalSurfaceClose,
 } from "@main/ipc/terminal-task-lifecycle-wiring.ts";
+import {
+  armDetaching,
+  disarmDetaching,
+} from "@main/services/agents/window-detaching-guard.ts";
 import { TASK_EXIT_TITLE_PREFIX } from "@shared/contracts/tasks.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
@@ -96,6 +100,7 @@ describe("terminal task lifecycle wiring", () => {
     patchTerminalPanelAgentStatusMock.mockReset();
     patchTerminalPanelAgentStatusMock.mockResolvedValue(false);
     updateTerminalPanelTitleMock.mockReset();
+    disarmDetaching({ electronWindowId: "42", recordId: "session-main" });
   });
 
   it("forwards native process-close callbacks into lifecycle finalization", () => {
@@ -185,6 +190,47 @@ describe("terminal task lifecycle wiring", () => {
       expect.objectContaining({ exitCode: 0, status: "exited" })
     );
     expect(recordExitCodeHintMock).not.toHaveBeenCalled();
+  });
+
+  it("does not patch agent exited for suspended job exit codes", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromExitCodeHintMock.mockResolvedValue(true);
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
+
+    callbacks.commandFinished?.(42, "native::terminal-1", "", 145);
+
+    expect(patchTerminalPanelAgentStatusMock).not.toHaveBeenCalled();
+    expect(completeFromExitCodeHintMock).toHaveBeenCalledWith({
+      browserWindowId: 42,
+      code: 145,
+      lifecycleId: "",
+      panelId: "terminal-1",
+      source: "shell-command-finished",
+      windowId: "window-main",
+    });
+  });
+
+  it("does not patch agent exited while window is detaching on command_finished", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromExitCodeHintMock.mockResolvedValue(true);
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
+    armDetaching({ electronWindowId: "42", recordId: "session-main" });
+
+    callbacks.commandFinished?.(42, "native::terminal-1", "", 0);
+
+    expect(patchTerminalPanelAgentStatusMock).not.toHaveBeenCalled();
+  });
+
+  it("does not patch agent exited while window is detaching on process-closed", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromNativeProcessCloseMock.mockResolvedValue(true);
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));
+    armDetaching({ electronWindowId: "42", recordId: "session-main" });
+
+    callbacks.processClosed?.(42, "native::terminal-1", "", false);
+
+    expect(patchTerminalPanelAgentStatusMock).not.toHaveBeenCalled();
+    expect(completeFromNativeProcessCloseMock).toHaveBeenCalled();
   });
 
   it("completes task-exit title markers without waiting for terminal close", () => {
