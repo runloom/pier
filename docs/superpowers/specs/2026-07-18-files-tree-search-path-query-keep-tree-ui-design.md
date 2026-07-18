@@ -1,7 +1,7 @@
 # 文件树搜索：路径查询物化进现有树 UI
 
 Date: 2026-07-18  
-Status: draft for review  
+Status: accepted（实现中 / 与 path-query 分支一并交付）  
 Scope: 修正 `2026-07-17-files-path-query-and-quick-open` 中 **侧栏树搜索展示** 的实现偏差。  
 前置：主进程路径查询、IPC、client、Cmd+P 快速打开仍有效；本 spec 只改树搜索接法。
 

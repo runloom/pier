@@ -111,6 +111,18 @@ function createContext(
   } as unknown as RendererPluginContext;
 }
 
+function mockTreeApi(setSearch = vi.fn()) {
+  const treeApiRef = createRef<PierFileTreeApi | null>();
+  treeApiRef.current = {
+    activateFocusedSearchMatch: vi.fn(() => true),
+    focusSearchMatch: vi.fn(),
+    getSearchMatchCount: vi.fn(() => 0),
+    revealPath: vi.fn(),
+    setSearch,
+  } as unknown as PierFileTreeApi;
+  return { setSearch, treeApiRef };
+}
+
 describe("useFilesTreeSearch path query", () => {
   beforeEach(() => {
     vi.useFakeTimers();
@@ -124,16 +136,18 @@ describe("useFilesTreeSearch path query", () => {
     vi.restoreAllMocks();
   });
 
-  it("does not recurse files.list for search and ranks theme.ts via path query", async () => {
+  it("path-queries theme.ts, materializes ancestors, and re-applies setSearch", async () => {
     const query = createFakeQueryFacade();
+    const listedPaths: string[] = [];
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       async (_requestOrRoot, options) => {
         const path = options?.path ?? "";
+        listedPaths.push(path);
         if (path === "") {
           return [directory("src"), file("README.md")];
         }
         if (path === "src") {
-          return [directory("src/plugins")];
+          return [directory("src/plugins"), directory("src/other")];
         }
         if (path === "src/plugins") {
           return [directory("src/plugins/builtin")];
@@ -149,23 +163,16 @@ describe("useFilesTreeSearch path query", () => {
             file(
               "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts"
             ),
-            file("src/plugins/builtin/files/renderer/other.ts"),
           ];
         }
         return [];
       }
     );
     const context = createContext(query, list);
-    const treeApiRef = createRef<PierFileTreeApi | null>();
-    const setSearch = vi.fn();
-    treeApiRef.current = {
-      setSearch,
-      revealPath: vi.fn(),
-    } as unknown as PierFileTreeApi;
-    const onOpenFile = vi.fn();
+    const { setSearch, treeApiRef } = mockTreeApi();
 
     await loadFilesTreeRoot(ROOT, list, "Failed to load files");
-    const listCallsAfterRoot = list.mock.calls.length;
+    listedPaths.length = 0;
 
     const { result } = renderHook(() =>
       useFilesTreeSearch({
@@ -173,7 +180,6 @@ describe("useFilesTreeSearch path query", () => {
         fallbackError: "Failed to load files",
         instanceId: "tree-1",
         list,
-        onOpenFile,
         root: ROOT,
         searchFailedTitle: "Unable to search",
         treeApiRef,
@@ -185,11 +191,8 @@ describe("useFilesTreeSearch path query", () => {
       result.current.changeSearch("theme.ts");
     });
 
-    // Clear Pierre setSearch as primary matcher.
-    expect(setSearch).toHaveBeenCalledWith(null);
-
     expect(result.current.loading).toBe(true);
-    expect(result.current.showResultLayer).toBe(true);
+    expect(result.current).not.toHaveProperty("showResultLayer");
 
     await act(async () => {
       vi.advanceTimersByTime(80);
@@ -198,11 +201,9 @@ describe("useFilesTreeSearch path query", () => {
     expect(query.starts).toHaveLength(1);
     expect(query.starts[0]?.query).toBe("theme.ts");
     expect(query.starts[0]?.owner.startsWith("tree-search:")).toBe(true);
-    // Search must not walk the tree via list.
-    expect(list.mock.calls.length).toBe(listCallsAfterRoot);
 
     const queryId = query.starts[0]?.queryId ?? "";
-    act(() => {
+    await act(async () => {
       query.emit({
         kind: "batch",
         queryId,
@@ -214,17 +215,6 @@ describe("useFilesTreeSearch path query", () => {
           { path: "src/theme.ts", score: 10 },
         ],
       });
-    });
-
-    expect(result.current.loading).toBe(true);
-    expect(result.current.items.map((item) => item.path)).toEqual([
-      "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
-      "src/theme.ts",
-    ]);
-    expect(result.current.matchCount).toBe(2);
-    expect(result.current.matchText).toBe("2");
-
-    act(() => {
       query.emit({
         kind: "done",
         queryId,
@@ -233,24 +223,34 @@ describe("useFilesTreeSearch path query", () => {
         scanned: 40,
         elapsedMs: 5,
       });
+      await Promise.resolve();
+      await Promise.resolve();
     });
 
     expect(result.current.loading).toBe(false);
-    expect(result.current.status).toBe("done");
-    expect(result.current.items[0]?.path).toBe(
-      "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts"
+    expect(result.current.matchCount).toBe(2);
+    expect(result.current.matchText).toBe("2");
+    expect(listedPaths).not.toContain("src/other");
+    expect(listedPaths).toEqual(
+      expect.arrayContaining([
+        "src",
+        "src/plugins",
+        "src/plugins/builtin",
+        "src/plugins/builtin/files",
+        "src/plugins/builtin/files/renderer",
+      ])
     );
+    expect(setSearch).toHaveBeenCalledWith("theme.ts");
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.entriesByPath.has("src")).toBe(true);
+    expect(snapshot.entriesByPath.has("src/plugins")).toBe(true);
   });
 
-  it("shows empty only after done with zero items and surfaces truncated 200+", async () => {
+  it("keeps matchCount 0 until done empty, and shows 200+ when truncated", async () => {
     const query = createFakeQueryFacade();
     const list = vi.fn(async () => [] as FileEntry[]);
     const context = createContext(query, list);
-    const treeApiRef = createRef<PierFileTreeApi | null>();
-    treeApiRef.current = {
-      setSearch: vi.fn(),
-      revealPath: vi.fn(),
-    } as unknown as PierFileTreeApi;
+    const { treeApiRef } = mockTreeApi();
 
     const { result } = renderHook(() =>
       useFilesTreeSearch({
@@ -258,7 +258,6 @@ describe("useFilesTreeSearch path query", () => {
         fallbackError: "Failed",
         instanceId: "tree-2",
         list,
-        onOpenFile: vi.fn(),
         root: ROOT,
         searchFailedTitle: "Unable to search",
         treeApiRef,
@@ -269,16 +268,15 @@ describe("useFilesTreeSearch path query", () => {
       result.current.openSearch();
       result.current.changeSearch("zzz");
     });
-
-    expect(result.current.hasNoResults).toBe(false);
     expect(result.current.loading).toBe(true);
+    expect(result.current.matchCount).toBe(0);
 
     await act(async () => {
       vi.advanceTimersByTime(80);
     });
     const queryId = query.starts[0]?.queryId ?? "";
 
-    act(() => {
+    await act(async () => {
       query.emit({
         kind: "done",
         queryId,
@@ -287,15 +285,15 @@ describe("useFilesTreeSearch path query", () => {
         scanned: 0,
         elapsedMs: 1,
       });
+      await Promise.resolve();
     });
-    expect(result.current.hasNoResults).toBe(true);
+    expect(result.current.loading).toBe(false);
+    expect(result.current.matchCount).toBe(0);
     expect(result.current.matchText).toBe("0");
 
     act(() => {
       result.current.changeSearch("theme");
     });
-    expect(result.current.hasNoResults).toBe(false);
-
     await act(async () => {
       vi.advanceTimersByTime(80);
     });
@@ -304,7 +302,7 @@ describe("useFilesTreeSearch path query", () => {
       path: `file-${index}.ts`,
       score: 200 - index,
     }));
-    act(() => {
+    await act(async () => {
       query.emit({ kind: "batch", queryId: secondId, items: many });
       query.emit({
         kind: "done",
@@ -314,136 +312,19 @@ describe("useFilesTreeSearch path query", () => {
         scanned: 5000,
         elapsedMs: 12,
       });
+      await Promise.resolve();
     });
 
     expect(result.current.truncated).toBe(true);
     expect(result.current.matchCount).toBe(200);
     expect(result.current.matchText).toBe("200+");
-    expect(result.current.hasNoResults).toBe(false);
-  });
-
-  it("opens focused result and loads only ancestor directories", async () => {
-    const query = createFakeQueryFacade();
-    const listedPaths: string[] = [];
-    const list = vi.fn<RendererPluginContext["files"]["list"]>(
-      async (_requestOrRoot, options) => {
-        const path = options?.path ?? "";
-        listedPaths.push(path);
-        if (path === "") {
-          return [directory("src")];
-        }
-        if (path === "src") {
-          return [directory("src/plugins")];
-        }
-        if (path === "src/plugins") {
-          return [
-            file(
-              "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts"
-            ),
-          ];
-        }
-        return [];
-      }
-    );
-    const context = createContext(query, list);
-    const treeApiRef = createRef<PierFileTreeApi | null>();
-    const revealPath = vi.fn();
-    treeApiRef.current = {
-      setSearch: vi.fn(),
-      revealPath,
-    } as unknown as PierFileTreeApi;
-    const onOpenFile = vi.fn();
-
-    await loadFilesTreeRoot(ROOT, list, "Failed");
-    listedPaths.length = 0;
-
-    const { result } = renderHook(() =>
-      useFilesTreeSearch({
-        context,
-        fallbackError: "Failed",
-        instanceId: "tree-3",
-        list,
-        onOpenFile,
-        root: ROOT,
-        searchFailedTitle: "Unable to search",
-        treeApiRef,
-      })
-    );
-
-    act(() => {
-      result.current.openSearch();
-      result.current.changeSearch("theme");
-    });
-    await act(async () => {
-      vi.advanceTimersByTime(80);
-    });
-    const queryId = query.starts[0]?.queryId ?? "";
-    act(() => {
-      query.emit({
-        kind: "batch",
-        queryId,
-        items: [
-          {
-            path: "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
-            score: 99,
-          },
-        ],
-      });
-      query.emit({
-        kind: "done",
-        queryId,
-        reason: "completed",
-        truncated: false,
-        scanned: 10,
-        elapsedMs: 2,
-      });
-    });
-
-    await act(async () => {
-      await result.current.openFocusedMatch();
-    });
-
-    expect(onOpenFile).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: "file",
-        path: "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
-        root: ROOT,
-      }),
-      undefined
-    );
-    // Ancestors only — never a recursive whole-tree walk of siblings.
-    expect(listedPaths.every((path) => path !== "")).toBe(true);
-    expect(listedPaths).toEqual(
-      expect.arrayContaining([
-        "src",
-        "src/plugins",
-        "src/plugins/builtin",
-        "src/plugins/builtin/files",
-        "src/plugins/builtin/files/renderer",
-      ])
-    );
-    expect(listedPaths).not.toContain("src/plugins/other-sibling");
-    expect(revealPath).toHaveBeenCalledWith(
-      "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts"
-    );
-    // Ancestor-only loads: never recursive sibling discovery.
-    expect(listedPaths.filter((path) => path.startsWith("src")).length).toBe(
-      listedPaths.length
-    );
-    const snapshot = getFilesTreeSnapshot(ROOT);
-    expect(snapshot.entriesByPath.has("src")).toBe(true);
-    expect(snapshot.entriesByPath.has("src/plugins")).toBe(true);
   });
 
   it("forwards MRU hints for empty query while search is open", async () => {
     const query = createFakeQueryFacade();
     const list = vi.fn(async () => [] as FileEntry[]);
     const context = createContext(query, list);
-    const treeApiRef = createRef<PierFileTreeApi | null>();
-    treeApiRef.current = {
-      setSearch: vi.fn(),
-      revealPath: vi.fn(),
-    } as unknown as PierFileTreeApi;
+    const { treeApiRef } = mockTreeApi();
 
     recordFilesPathMru(ROOT, "src/a.ts");
 
@@ -453,7 +334,6 @@ describe("useFilesTreeSearch path query", () => {
         fallbackError: "Failed",
         instanceId: "tree-4",
         list,
-        onOpenFile: vi.fn(),
         root: ROOT,
         searchFailedTitle: "Unable to search",
         treeApiRef,
@@ -476,11 +356,7 @@ describe("useFilesTreeSearch path query", () => {
     const query = createFakeQueryFacade();
     const list = vi.fn(async () => [] as FileEntry[]);
     const context = createContext(query, list);
-    const treeApiRef = createRef<PierFileTreeApi | null>();
-    treeApiRef.current = {
-      setSearch: vi.fn(),
-      revealPath: vi.fn(),
-    } as unknown as PierFileTreeApi;
+    const { treeApiRef } = mockTreeApi();
 
     const { result } = renderHook(() =>
       useFilesTreeSearch({
@@ -488,7 +364,6 @@ describe("useFilesTreeSearch path query", () => {
         fallbackError: "Failed",
         instanceId: "tree-5",
         list,
-        onOpenFile: vi.fn(),
         root: ROOT,
         searchFailedTitle: "Unable to search",
         treeApiRef,

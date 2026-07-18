@@ -3304,6 +3304,20 @@ describe("Files file-panel", () => {
               path: "src/plugins",
               root: PROJECT_ROOT,
             },
+            {
+              kind: "directory",
+              path: "src/other",
+              root: PROJECT_ROOT,
+            },
+          ];
+        }
+        if (path === "src/other") {
+          return [
+            {
+              kind: "file",
+              path: "src/other/noise.ts",
+              root: PROJECT_ROOT,
+            },
           ];
         }
         if (path === "src/plugins") {
@@ -3396,9 +3410,8 @@ describe("Files file-panel", () => {
     });
     expect(pathQuery.starts.length).toBeGreaterThan(0);
     expect(pathQuery.starts.at(-1)?.query).toBe("theme.ts");
-    // Must not recurse list for search indexing.
-    expect(list.mock.calls.length).toBe(listCallsBeforeSearch);
-
+    // Path query may materialize ancestors via list, but must not whole-tree BFS
+    // before results arrive. After emit, only ancestor loads of hits are OK.
     const queryId = pathQuery.starts.at(-1)?.queryId ?? "";
     act(() => {
       pathQuery.emit({
@@ -3412,30 +3425,27 @@ describe("Files file-panel", () => {
           { path: "src/theme.ts", score: 10 },
         ],
       });
+      pathQuery.emit({
+        kind: "done",
+        queryId,
+        reason: "completed",
+        truncated: false,
+        scanned: 40,
+        elapsedMs: 5,
+      });
     });
 
     await waitFor(() => {
       expect(within(searchBar).getByText("2")).toBeVisible();
-      expect(screen.getByTestId("files-tree-search-results")).toBeVisible();
-      expect(screen.getByText("code-mirror-editor-theme.ts")).toBeVisible();
     });
-    // Result layer covers the tree; PierFileTree stays mounted for revealPath.
+    // Keep PierFileTree UI — no independent result-list layer.
+    expect(screen.queryByTestId("files-tree-search-results")).toBeNull();
     expect(
       document.querySelector('[data-slot="pier-file-tree"]')
     ).not.toBeNull();
     expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
-
-    fireEvent.keyDown(searchInput, { key: "ArrowDown" });
-    fireEvent.keyDown(searchInput, { key: "Enter" });
-    await waitFor(() => {
-      expect(onOpenFile).toHaveBeenCalledWith(
-        expect.objectContaining({
-          path: "src/theme.ts",
-        }),
-        undefined
-      );
-    });
-    expect(searchInput).toHaveValue("theme.ts");
+    // Ancestor materialize only — never list unrelated branches as a search index.
+    expect(listed.every((path) => path !== "src/other")).toBe(true);
 
     fireEvent.change(searchInput, { target: { value: ".missing" } });
     await act(async () => {
@@ -3457,17 +3467,17 @@ describe("Files file-panel", () => {
       expect(screen.getByTestId("files-tree-search-empty")).toHaveTextContent(
         "No matching files"
       );
-      expect(screen.getByTestId("files-tree-search-empty")).toHaveTextContent(
-        "Try another file name or path."
-      );
     });
 
     fireEvent.change(searchInput, { target: { value: "" } });
     await act(async () => {
       vi.advanceTimersByTime(80);
     });
-    // Empty query still uses result layer (MRU / walk), not the tree filter.
-    expect(screen.getByTestId("files-tree-search-results")).toBeTruthy();
+    // Empty query keeps the tree shell (no result-list layer).
+    expect(screen.queryByTestId("files-tree-search-results")).toBeNull();
+    expect(
+      document.querySelector('[data-slot="pier-file-tree"]')
+    ).not.toBeNull();
     vi.useRealTimers();
   });
 
@@ -3527,8 +3537,11 @@ describe("Files file-panel", () => {
     });
     await waitFor(() => {
       expect(within(searchBar).getByText("1")).toBeVisible();
-      expect(screen.getByText("code-mirror-editor-theme.ts")).toBeVisible();
       expect(screen.queryByTestId("files-tree-search-empty")).toBeNull();
+      expect(screen.queryByTestId("files-tree-search-results")).toBeNull();
+      expect(
+        document.querySelector('[data-slot="pier-file-tree"]')
+      ).not.toBeNull();
     });
 
     act(() => {
@@ -3543,7 +3556,6 @@ describe("Files file-panel", () => {
     });
     await waitFor(() => {
       expect(within(searchBar).getByText("1+")).toBeVisible();
-      expect(screen.getByTestId("files-tree-search-truncated")).toBeVisible();
     });
     vi.useRealTimers();
   });

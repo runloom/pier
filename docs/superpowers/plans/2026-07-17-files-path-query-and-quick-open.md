@@ -2,6 +2,8 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **树搜索 UI 修正（2026-07-18）**：Task 7 原「独立结果列表」已作废；以 `docs/superpowers/specs/2026-07-18-files-tree-search-path-query-keep-tree-ui-design.md` 为准（path query 物化进 `PierFileTree` + `setSearch`）。
+
 **Goal:** Deliver main-process path query, `Cmd+P` quick open, and tree search that share the same top-K path ranking—so `theme.ts` stably finds `code-mirror-editor-theme.ts` without flooding the tree store.
 
 **Architecture:** Main walks the project root (BFS), applies exclude/gitignore, scores paths, returns ≤200 items via directed IPC events. Renderer owns MRU hints and two consumers (async command-palette quick pick + tree result list). Selecting a result opens the file and reveals only the ancestor chain.

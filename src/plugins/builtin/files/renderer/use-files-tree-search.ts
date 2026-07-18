@@ -1,7 +1,12 @@
+/**
+ * Sidebar tree search: path query discovery + materialize into PierFileTree.
+ * Keeps FilesSearchBar + setSearch / hide-non-matches UI (no result-list layer).
+ *
+ * Design: docs/superpowers/specs/2026-07-18-files-tree-search-path-query-keep-tree-ui-design.md
+ */
 import type { PierFileTreeApi } from "@pier/ui/file-tree.tsx";
+import { useFileTreeSearch } from "@pier/ui/use-file-tree-search.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { FileEntry } from "@shared/contracts/file.ts";
-import type { FilePathQueryItem } from "@shared/contracts/file-query.ts";
 import {
   type RefObject,
   useCallback,
@@ -18,12 +23,7 @@ import {
   createFilesPathQueryClient,
   type PathQuerySnapshot,
 } from "./files-path-query-client.ts";
-import { recordFilesPathMru } from "./files-quick-open-mru.ts";
-import { revealFilesTreePath } from "./files-tree-registry.ts";
-import {
-  ensureAncestorDirectoryEntries,
-  loadFilesTreeDirectory,
-} from "./files-tree-store.ts";
+import { materializePathQueryHits } from "./files-path-query-materialize.ts";
 import type { FilesTreeList } from "./files-tree-visibility.ts";
 
 const EMPTY_SNAPSHOT: PathQuerySnapshot = {
@@ -37,29 +37,9 @@ interface UseFilesTreeSearchOptions {
   fallbackError: string;
   instanceId: string;
   list: FilesTreeList;
-  onOpenFile: (entry: FileEntry, options?: { pinned?: boolean }) => void;
   root: string;
   searchFailedTitle: string;
   treeApiRef: RefObject<PierFileTreeApi | null>;
-}
-
-let ownerCounter = 0;
-
-function nextOwner(): string {
-  ownerCounter += 1;
-  return `tree-search:${ownerCounter}`;
-}
-
-function ancestorDirectoryPaths(path: string): string[] {
-  const segments = path.split("/").filter(Boolean);
-  if (segments.length <= 1) {
-    return [];
-  }
-  const ancestors: string[] = [];
-  for (let index = 1; index < segments.length; index += 1) {
-    ancestors.push(segments.slice(0, index).join("/"));
-  }
-  return ancestors;
 }
 
 function matchTextFor(
@@ -79,97 +59,76 @@ function matchTextFor(
   return String(itemCount);
 }
 
+function readExcludePatterns(context: RendererPluginContext): string {
+  const value = context.configuration?.get?.<unknown>(
+    FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY
+  );
+  // Empty string is intentional (no excludes); only non-string falls back.
+  return typeof value === "string"
+    ? value
+    : FILES_TREE_DEFAULT_EXCLUDE_PATTERNS;
+}
+
 export function useFilesTreeSearch({
   context,
   fallbackError,
   instanceId,
   list,
-  onOpenFile,
   root,
   searchFailedTitle,
   treeApiRef,
 }: UseFilesTreeSearchOptions) {
-  const [open, setOpen] = useState(false);
-  const [value, setValue] = useState("");
-  const [focusSignal, setFocusSignal] = useState(0);
+  const treeSearch = useFileTreeSearch({ treeApiRef });
   const [snapshot, setSnapshot] = useState<PathQuerySnapshot>(EMPTY_SNAPSHOT);
-  const [selectedIndex, setSelectedIndex] = useState(0);
-  const ownerRef = useRef(nextOwner());
   const clientRef = useRef(createFilesPathQueryClient(context.files));
   const disposeSearchRef = useRef<(() => void) | null>(null);
+  const materializeAbortRef = useRef<AbortController | null>(null);
+  const ownerRef = useRef(`tree-search:${instanceId}`);
   const listRef = useRef(list);
+  const valueRef = useRef(treeSearch.value);
   listRef.current = list;
-  const onOpenFileRef = useRef(onOpenFile);
-  onOpenFileRef.current = onOpenFile;
+  valueRef.current = treeSearch.value;
 
-  // Keep Pierre setSearch cleared so hide-non-matches is not the primary engine.
-  const attachTreeApi = useCallback(
-    (api: PierFileTreeApi | null) => {
-      treeApiRef.current = api;
-      api?.setSearch(null);
-    },
-    [treeApiRef]
-  );
-
-  const stopSearch = useCallback(() => {
-    disposeSearchRef.current?.();
-    disposeSearchRef.current = null;
-  }, []);
-
-  const openSearch = useCallback(() => {
-    setOpen(true);
-    setFocusSignal((signal) => signal + 1);
-  }, []);
-
-  const closeSearch = useCallback(() => {
-    setOpen(false);
-    setValue("");
-    setSnapshot(EMPTY_SNAPSHOT);
-    setSelectedIndex(0);
-    stopSearch();
-    treeApiRef.current?.setSearch(null);
-  }, [stopSearch, treeApiRef]);
-
-  const changeSearch = useCallback(
-    (nextValue: string) => {
-      setValue(nextValue);
-      treeApiRef.current?.setSearch(null);
-    },
-    [treeApiRef]
-  );
+  useEffect(() => {
+    ownerRef.current = `tree-search:${instanceId}`;
+  }, [instanceId]);
 
   useEffect(() => {
     clientRef.current = createFilesPathQueryClient(context.files);
   }, [context.files]);
 
+  const stopSearch = useCallback(() => {
+    disposeSearchRef.current?.();
+    disposeSearchRef.current = null;
+    materializeAbortRef.current?.abort();
+    materializeAbortRef.current = null;
+  }, []);
+
+  const openSearch = treeSearch.openSearch;
+
+  const closeSearch = useCallback(() => {
+    stopSearch();
+    setSnapshot(EMPTY_SNAPSHOT);
+    treeSearch.closeSearch();
+  }, [stopSearch, treeSearch]);
+
+  const changeSearch = treeSearch.changeSearch;
+
   useEffect(() => {
-    if (!open) {
+    if (!treeSearch.open) {
       stopSearch();
       setSnapshot(EMPTY_SNAPSHOT);
-      setSelectedIndex(0);
       return;
     }
 
     stopSearch();
-    setSelectedIndex(0);
-    const excludeValue = context.configuration?.get?.<unknown>(
-      FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY
-    );
-    const excludePatterns =
-      typeof excludeValue === "string"
-        ? excludeValue
-        : FILES_TREE_DEFAULT_EXCLUDE_PATTERNS;
+    const materializeAbort = new AbortController();
+    materializeAbortRef.current = materializeAbort;
 
     disposeSearchRef.current = clientRef.current.search({
-      excludePatterns,
+      excludePatterns: readExcludePatterns(context),
       onUpdate: (next) => {
         setSnapshot(next);
-        setSelectedIndex((current) => {
-          if (next.items.length === 0) {
-            return 0;
-          }
-          return Math.min(current, next.items.length - 1);
-        });
         if (next.status === "error") {
           const body = next.errorMessage ?? fallbackError;
           context.dialogs
@@ -179,10 +138,32 @@ export function useFilesTreeSearch({
               title: searchFailedTitle,
             })
             .catch(() => undefined);
+          return;
         }
+
+        if (next.status !== "loading" && next.status !== "done") {
+          return;
+        }
+
+        const paths = next.items.map((item) => item.path);
+        materializePathQueryHits({
+          list: listRef.current,
+          paths,
+          root,
+          signal: materializeAbort.signal,
+        })
+          .then(() => {
+            if (materializeAbort.signal.aborted) {
+              return;
+            }
+            const current = valueRef.current;
+            const query = current.trim().length > 0 ? current : null;
+            treeApiRef.current?.setSearch(query);
+          })
+          .catch(() => undefined);
       },
       owner: ownerRef.current,
-      query: value,
+      query: treeSearch.value,
       root,
     });
 
@@ -190,142 +171,66 @@ export function useFilesTreeSearch({
       stopSearch();
     };
   }, [
-    context.configuration,
-    context.dialogs,
+    context,
     fallbackError,
-    open,
     root,
     searchFailedTitle,
     stopSearch,
-    value,
+    treeApiRef,
+    treeSearch.open,
+    treeSearch.value,
   ]);
 
-  const items = snapshot.items;
-  const loading = open && snapshot.status === "loading";
-  const showResultLayer = open;
-  const hasNoResults = open && snapshot.status === "done" && items.length === 0;
+  const queryLoading = treeSearch.open && snapshot.status === "loading";
+  const matchCount =
+    treeSearch.open && treeSearch.value.trim().length > 0
+      ? snapshot.items.length
+      : treeSearch.matchCount;
   const truncated = snapshot.truncated && snapshot.status === "done";
-  const matchCount = items.length;
-  const focusedItem: FilePathQueryItem | null =
-    items[selectedIndex] ?? items[0] ?? null;
-  const focusedMatchOpenable = focusedItem != null;
-  const queryApplied = open;
-
-  const matchText = open
-    ? matchTextFor(snapshot.status, matchCount, truncated)
+  const matchText = treeSearch.open
+    ? matchTextFor(
+        snapshot.status === "idle" ? "idle" : snapshot.status,
+        matchCount,
+        truncated
+      )
     : "";
-
-  const navigateSearch = useCallback(
-    (direction: "next" | "previous") => {
-      if (items.length === 0) {
-        return;
-      }
-      setSelectedIndex((current) => {
-        if (direction === "next") {
-          return (current + 1) % items.length;
-        }
-        return (current - 1 + items.length) % items.length;
-      });
-    },
-    [items.length]
-  );
-
-  const selectIndex = useCallback(
-    (index: number) => {
-      if (index < 0 || index >= items.length) {
-        return;
-      }
-      setSelectedIndex(index);
-    },
-    [items.length]
-  );
-
-  const openPathResult = useCallback(
-    async (path: string) => {
-      if (path.length === 0) {
-        return false;
-      }
-      const currentList = listRef.current;
-      ensureAncestorDirectoryEntries(root, path);
-      for (const ancestor of ancestorDirectoryPaths(path)) {
-        await loadFilesTreeDirectory(root, ancestor, currentList);
-      }
-      onOpenFileRef.current({ kind: "file", path, root }, undefined);
-      recordFilesPathMru(root, path);
-      treeApiRef.current?.revealPath(path);
-      revealFilesTreePath({ instanceId, path, root });
-      return true;
-    },
-    [instanceId, root, treeApiRef]
-  );
-
-  const openFocusedMatch = useCallback(async () => {
-    if (!focusedItem) {
-      return false;
-    }
-    return await openPathResult(focusedItem.path);
-  }, [focusedItem, openPathResult]);
-
-  // updateMatchState kept for PierFileTree prop compatibility (no-op).
-  const updateMatchState = useCallback(
-    (_next: { focusedMatchOpenable: boolean; matchCount: number }) => {
-      // Path query owns match state; Pierre hide-non-matches is unused.
-    },
-    []
-  );
 
   return useMemo(
     () => ({
-      attachTreeApi,
+      attachTreeApi: treeSearch.attachTreeApi,
       changeSearch,
       closeSearch,
-      focusSignal,
-      focusedIndex: selectedIndex,
-      focusedItem,
-      focusedMatchOpenable,
-      hasNoResults,
-      items,
-      loading,
+      focusSignal: treeSearch.focusSignal,
+      focusedMatchOpenable: treeSearch.focusedMatchOpenable,
+      loading: queryLoading,
       matchCount,
       matchText,
-      navigateSearch,
-      open,
-      openFocusedMatch,
-      openPathResult,
+      navigateSearch: treeSearch.navigateSearch,
+      open: treeSearch.open,
+      openFocusedMatch: treeSearch.openFocusedMatch,
       openSearch,
-      queryApplied,
-      selectIndex,
-      showResultLayer,
-      status: snapshot.status,
+      queryApplied: treeSearch.queryApplied,
       truncated,
-      updateMatchState,
-      value,
+      updateMatchState: treeSearch.updateMatchState,
+      value: treeSearch.value,
     }),
     [
-      attachTreeApi,
       changeSearch,
       closeSearch,
-      focusSignal,
-      focusedItem,
-      focusedMatchOpenable,
-      hasNoResults,
-      items,
-      loading,
       matchCount,
       matchText,
-      navigateSearch,
-      open,
-      openFocusedMatch,
-      openPathResult,
       openSearch,
-      queryApplied,
-      selectIndex,
-      selectedIndex,
-      showResultLayer,
-      snapshot.status,
+      queryLoading,
+      treeSearch.attachTreeApi,
+      treeSearch.focusSignal,
+      treeSearch.focusedMatchOpenable,
+      treeSearch.navigateSearch,
+      treeSearch.open,
+      treeSearch.openFocusedMatch,
+      treeSearch.queryApplied,
+      treeSearch.updateMatchState,
+      treeSearch.value,
       truncated,
-      updateMatchState,
-      value,
     ]
   );
 }

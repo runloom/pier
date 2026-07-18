@@ -35,6 +35,7 @@ import {
 } from "./files-double-click.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
 import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
+import { recordFilesPathMru } from "./files-quick-open-mru.ts";
 import { FilesSearchBar } from "./files-search-bar.tsx";
 import { useFilesTreeContextMenus } from "./files-tree-context-menu.ts";
 import { cancelInlineCreate, commitInlineCreate } from "./files-tree-create.ts";
@@ -50,7 +51,6 @@ import {
   peekPendingCreate,
   registerFilesTreeInstance,
 } from "./files-tree-registry.ts";
-import { FilesTreeSearchResults } from "./files-tree-search-results.tsx";
 import {
   loadFilesTreeDirectory,
   moveFilesTreeEntry,
@@ -158,7 +158,6 @@ export function FileTreeSidebar({
     fallbackError: t("panel.loadError.fallback", "Failed to load files"),
     instanceId,
     list: treeVisibility.list,
-    onOpenFile,
     root,
     searchFailedTitle: t(
       "filePanel.tree.searchFailed",
@@ -310,6 +309,7 @@ export function FileTreeSidebar({
         TREE_DOUBLE_CLICK_WINDOW_MS
       );
       lastOpenRef.current = nextTrack;
+      recordFilesPathMru(root, path);
       onOpenFile(entry, isDouble ? { pinned: true } : undefined);
     },
     [onOpenFile, root, snapshot.entriesByPath]
@@ -420,8 +420,14 @@ export function FileTreeSidebar({
       { count }
     );
   }
+  // 有 batch 命中后即可导航；勿因 path query 仍 loading 锁死上下键/Enter。
   const searchActionsDisabled = treeSearch.matchCount === 0;
-  const showSearchResults = treeSearch.showResultLayer;
+  const hasNoResults =
+    treeSearch.open &&
+    treeSearch.value.trim().length > 0 &&
+    !treeSearch.loading &&
+    treeSearch.queryApplied &&
+    treeSearch.matchCount === 0;
 
   return (
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: contextmenu bubbles from tree children; aside just captures.
@@ -458,43 +464,15 @@ export function FileTreeSidebar({
           />
         </div>
       ) : null}
-      <div className="relative flex min-h-0 flex-1">
+      {hasNoResults ? (
         <div
-          aria-hidden={showSearchResults || undefined}
-          className={
-            showSearchResults
-              ? "pointer-events-none invisible absolute inset-0 flex min-h-0 flex-1"
-              : "flex min-h-0 flex-1"
-          }
+          className="px-3 py-2 text-muted-foreground text-xs"
+          data-testid="files-tree-search-empty"
         >
-          {content}
+          {t("filePanel.tree.noSearchResults.title", "No matching files")}
         </div>
-        {showSearchResults ? (
-          <FilesTreeSearchResults
-            emptyDescription={t(
-              "filePanel.tree.noSearchResults.description",
-              "Try another file name or path."
-            )}
-            emptyTitle={t(
-              "filePanel.tree.noSearchResults.title",
-              "No matching files"
-            )}
-            focusedIndex={treeSearch.focusedIndex}
-            hasNoResults={treeSearch.hasNoResults}
-            items={treeSearch.items}
-            loading={treeSearch.loading}
-            onOpenPath={(path) => {
-              treeSearch.openPathResult(path).catch(() => undefined);
-            }}
-            onSelectIndex={treeSearch.selectIndex}
-            truncated={treeSearch.truncated}
-            truncatedHint={t(
-              "filePanel.tree.searchTruncated",
-              "Results truncated to top matches"
-            )}
-          />
-        ) : null}
-      </div>
+      ) : null}
+      <div className="flex min-h-0 flex-1">{content}</div>
     </aside>
   );
 }
