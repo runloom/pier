@@ -115,7 +115,6 @@ export function canFillFromOpenRouter(openRouterId, canonical) {
   return false;
 }
 
-
 function tryUnprefix(rawKey) {
   for (const rule of UNPREFIX_MAP) {
     if (rawKey.startsWith(rule.prefix)) {
@@ -287,7 +286,6 @@ export function openRouterModelToEntry(model) {
     outputMicrousd: output,
   };
 }
-
 
 async function fetchJson(url) {
   const res = await fetch(url, {
@@ -512,7 +510,7 @@ async function main() {
         aliases: [id],
       };
       added.push(
-        summariseChange(canonical, null, entry) + " _(openrouter fill-missing)_"
+        `${summariseChange(canonical, null, entry)} _(openrouter fill-missing)_`
       );
       openRouterFilled += 1;
     }
