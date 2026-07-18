@@ -129,7 +129,8 @@ describe("Git diff renderer governance", () => {
     expect(source.match(/unsafeCSS:/gu)).toHaveLength(1);
     expect(appearanceSource).toContain("SCROLLBAR_SYSTEM_CSS");
     expect(appearanceSource).toContain('from "./scrollbar-system.ts"');
-    expect(/\$\{SCROLLBAR_SYSTEM_CSS\}/.test(customCss)).toBe(true);
+    expect(customCss).toBeDefined();
+    expect(/\$\{SCROLLBAR_SYSTEM_CSS\}/.test(customCss ?? "")).toBe(true);
     expect(customCss).toContain("[data-diffs-header]");
     expect(customCss).toContain("[data-metadata] > [data-deletions-count]");
     expect(source).toContain("renderHeaderMetadata={renderHeaderMetadata}");
