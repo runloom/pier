@@ -182,7 +182,7 @@
     "ui.reviewTreeNoSearchResultsTitle": "No matching changes",
     "ui.reviewTreeNoSearchResultsDescription": "Try another file name or path.",
     "ui.reviewTreeOpenFile": "Open File",
-    "ui.reviewTreeOpenFileUnavailable": "Files panel is unavailable",
+    "ui.reviewTreeOpenFileFailed": "Unable to open file",
     "ui.reviewTreeContextMenuFailed": "Unable to open menu",
     "ui.reviewStateBinary": "Binary file",
     "ui.reviewStateConflict": "Merge conflict",

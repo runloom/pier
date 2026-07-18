@@ -29,12 +29,14 @@ interface WorkbenchContextMenuState {
   hasWidgets: boolean;
   onAddWidget: () => void;
   onRefreshAll: () => void;
+  panelId?: string;
 }
 
-function selectionInvocation(): ActionInvocation {
-  const selectedText = captureDomSelectionText();
+function selectionInvocation(sourcePanelId?: string): ActionInvocation {
+  const selectedText = captureDomSelectionText(sourcePanelId);
   return {
     metadata: selectedText.length > 0 ? { selectedText } : {},
+    ...(sourcePanelId ? { sourcePanelId } : {}),
     surface: PANEL_CONTENT_SURFACE,
   };
 }
@@ -100,7 +102,7 @@ export function useWorkbenchContextMenu(state: WorkbenchContextMenuState): {
 
   const openAt = useCallback((point: { x: number; y: number }) => {
     const snapshot = latestRef.current;
-    const invocation = selectionInvocation();
+    const invocation = selectionInvocation(snapshot.panelId);
     const coords = cssPointToContentViewPoint(
       point,
       useZoomStore.getState().windowZoomLevel

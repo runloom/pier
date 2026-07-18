@@ -15,6 +15,8 @@ interface FilesTreeContextMenuOptions {
   instanceId: string;
   root: string;
   selectedPathsRef: { readonly current: readonly string[] };
+  /** dockview panel id；group 共享树时与 instanceId(groupId) 不同。 */
+  sourcePanelId?: string;
   t: FilesTranslate;
 }
 
@@ -23,6 +25,7 @@ export function useFilesTreeContextMenus({
   entriesByPath,
   instanceId,
   root,
+  sourcePanelId,
   selectedPathsRef,
   t,
 }: FilesTreeContextMenuOptions) {
@@ -57,7 +60,7 @@ export function useFilesTreeContextMenus({
         selection.length > 1 && selection.includes(entry.path)
           ? [...selection]
           : undefined;
-      // sourcePanelId 让宿主 popup 路径在弹菜单前激活对应 panel（布局动作依赖 activePanel）。
+      // sourcePanelId 必须是 dockview panel id，不能用 tree registry key(groupId)。
       context.contextMenu
         .popup("files/tree-item", point, {
           metadata: {
@@ -68,11 +71,18 @@ export function useFilesTreeContextMenus({
             ...(selectedPaths ? { selectedPaths } : {}),
           },
           sourcePanelComponent: FILES_FILE_PANEL_ID,
-          sourcePanelId: instanceId,
+          ...(sourcePanelId ? { sourcePanelId } : {}),
         })
         .catch(reportFailure);
     },
-    [context, entriesByPath, instanceId, reportFailure, selectedPathsRef]
+    [
+      context,
+      entriesByPath,
+      instanceId,
+      reportFailure,
+      selectedPathsRef,
+      sourcePanelId,
+    ]
   );
 
   const openBackgroundContextMenu = useCallback(
@@ -92,12 +102,12 @@ export function useFilesTreeContextMenus({
           {
             metadata: { root, treeId: instanceId },
             sourcePanelComponent: FILES_FILE_PANEL_ID,
-            sourcePanelId: instanceId,
+            ...(sourcePanelId ? { sourcePanelId } : {}),
           }
         )
         .catch(reportFailure);
     },
-    [context, instanceId, reportFailure, root]
+    [context, instanceId, reportFailure, root, sourcePanelId]
   );
 
   return { openBackgroundContextMenu, openItemContextMenu };

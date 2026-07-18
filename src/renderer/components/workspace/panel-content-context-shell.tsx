@@ -34,7 +34,7 @@ export function PanelContentContextShell({
       }
       // 先抓选区再 preventDefault。不要在弹菜单前 setActive：
       // 激活切换会冲掉 Pierre 行选区高亮。
-      const selectedText = captureDomSelectionText();
+      const selectedText = captureDomSelectionText(panelId);
       event.preventDefault();
       event.stopPropagation();
       const descriptor =

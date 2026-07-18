@@ -68,6 +68,7 @@ export function FileTreeSidebar({
   instanceId,
   onOpenFile,
   root,
+  sourcePanelId,
   watchHub,
 }: FileTreeSidebarProps) {
   const t = useMemo(() => createFilesTranslate(context), [context]);
@@ -343,6 +344,7 @@ export function FileTreeSidebar({
     instanceId,
     root,
     selectedPathsRef,
+    ...(sourcePanelId ? { sourcePanelId } : {}),
     t,
   });
 

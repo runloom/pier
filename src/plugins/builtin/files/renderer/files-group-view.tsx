@@ -292,6 +292,7 @@ export function FilesGroupView({
         instanceId={groupId}
         onOpenFile={handleOpenFileFromTree}
         root={root}
+        {...(activeTab?.panelId ? { sourcePanelId: activeTab.panelId } : {})}
         watchHub={watchHub}
       />
     ) : null;

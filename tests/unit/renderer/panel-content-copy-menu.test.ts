@@ -100,25 +100,35 @@ describe("panel/content copy selection menu", () => {
 
   it("captureDomSelectionText prefers a registered live provider", () => {
     const dispose = registerSelectionTextProvider(
+      "git-1",
       () => "concurrency:\n  group: update"
     );
-    expect(captureDomSelectionText()).toBe("concurrency:\n  group: update");
+    expect(captureDomSelectionText("git-1")).toBe(
+      "concurrency:\n  group: update"
+    );
     dispose();
   });
 
   it("selectAll action runs a registered provider", async () => {
     const selectAll = vi.fn(() => true);
-    const dispose = registerSelectionSelectAllProvider(selectAll);
+    const dispose = registerSelectionSelectAllProvider("git-1", selectAll);
     const action = actionRegistry.get("pier.panel.selectAll");
     expect(action).toBeDefined();
-    await action?.handler({ surface: "panel/content" });
+    await action?.handler({ sourcePanelId: "git-1", surface: "panel/content" });
     expect(selectAll).toHaveBeenCalledTimes(1);
     dispose();
   });
 
   it("popupContextMenuAt pins live provider text onto Copy menu item", async () => {
-    const dispose = registerSelectionTextProvider(() => "jobs:\n  refresh:");
-    await popupContextMenuAt("panel/content", { x: 12, y: 24 });
+    const dispose = registerSelectionTextProvider(
+      "git-1",
+      () => "jobs:\n  refresh:"
+    );
+    await popupContextMenuAt(
+      "panel/content",
+      { x: 12, y: 24 },
+      { sourcePanelId: "git-1" }
+    );
     dispose();
     expect(popup).toHaveBeenCalled();
     const calls = popup.mock.calls as unknown as [MenuTemplate, unknown?][];
@@ -140,10 +150,13 @@ describe("panel/content copy selection menu", () => {
   });
 
   it("copy handler writes live provider text via pier.clipboard", async () => {
-    const dispose = registerSelectionTextProvider(() => "selected-diff-line");
+    const dispose = registerSelectionTextProvider(
+      "git-1",
+      () => "selected-diff-line"
+    );
     const action = actionRegistry.get("pier.panel.copySelection");
     expect(action).toBeDefined();
-    await action?.handler({ surface: "panel/content" });
+    await action?.handler({ sourcePanelId: "git-1", surface: "panel/content" });
     dispose();
     expect(writeText).toHaveBeenCalledWith("selected-diff-line");
   });

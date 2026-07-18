@@ -101,13 +101,13 @@ async function popupAndDispatch(
 ): Promise<void> {
   // 先抓选区。内容区菜单不要为了 layout actions 强行 setActive，
   // 否则 git diff 等行选区会在弹菜单前被冲掉。
+  const sourcePanelId = invocation?.sourcePanelId;
   const selectedText =
     typeof invocation?.metadata?.selectedText === "string"
       ? invocation.metadata.selectedText
-      : captureDomSelectionText();
+      : captureDomSelectionText(sourcePanelId);
   // dockview-tab 等仍可能依赖 activePanel；仅当调用方未带 selectedText 且
   // surface 不是 panel/content 时才激活。
-  const sourcePanelId = invocation?.sourcePanelId;
   if (sourcePanelId && surface !== "panel/content") {
     const panel = useWorkspaceStore
       .getState()

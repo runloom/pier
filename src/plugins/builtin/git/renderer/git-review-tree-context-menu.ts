@@ -3,6 +3,7 @@ import type {
   PierFileTreeContextMenuPoint,
 } from "@pier/ui/file-tree.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { GitReviewIndexEntry } from "@shared/contracts/git-review.ts";
 import { useCallback } from "react";
 import { GIT_CHANGES_PANEL_ID } from "../manifest.ts";
 import { pluginText } from "./git-plugin-text.ts";
@@ -11,6 +12,7 @@ import { GIT_REVIEW_TREE_ITEM_SURFACE } from "./git-review-tree-actions.ts";
 interface GitReviewTreeContextMenuOptions {
   context: RendererPluginContext;
   contextId: string;
+  entryByPath: ReadonlyMap<string, GitReviewIndexEntry>;
   gitRootPath: string;
   sourcePanelId?: string;
 }
@@ -18,6 +20,7 @@ interface GitReviewTreeContextMenuOptions {
 export function useGitReviewTreeContextMenu({
   context,
   contextId,
+  entryByPath,
   gitRootPath,
   sourcePanelId,
 }: GitReviewTreeContextMenuOptions) {
@@ -26,6 +29,10 @@ export function useGitReviewTreeContextMenu({
       item: PierFileTreeContextMenuItem,
       point: PierFileTreeContextMenuPoint
     ) => {
+      // displayPath 可能是碰撞合成路径；Open File 必须用真实 entry.path。
+      const entry = entryByPath.get(item.path);
+      const path =
+        item.kind === "file" ? (entry?.path ?? item.path) : item.path;
       // 目录也弹 surface，阻断冒泡到 panel/content 的复制/全选；Open File 仅对文件有意义。
       context.contextMenu
         .popup(GIT_REVIEW_TREE_ITEM_SURFACE, point, {
@@ -33,7 +40,7 @@ export function useGitReviewTreeContextMenu({
             contextId,
             gitRootPath,
             kind: item.kind,
-            path: item.path,
+            path,
           },
           sourcePanelComponent: GIT_CHANGES_PANEL_ID,
           ...(sourcePanelId ? { sourcePanelId } : {}),
@@ -53,6 +60,6 @@ export function useGitReviewTreeContextMenu({
           context.notifications.error(title);
         });
     },
-    [context, contextId, gitRootPath, sourcePanelId]
+    [context, contextId, entryByPath, gitRootPath, sourcePanelId]
   );
 }

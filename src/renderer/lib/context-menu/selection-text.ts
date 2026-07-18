@@ -3,39 +3,58 @@ import type { ActionInvocation } from "@/lib/actions/types.ts";
 export type SelectionTextProvider = () => string;
 export type SelectionSelectAllProvider = () => boolean;
 
-const selectionTextProviders = new Set<SelectionTextProvider>();
-const selectionSelectAllProviders = new Set<SelectionSelectAllProvider>();
+interface SelectionTextRegistration {
+  panelId: string;
+  provider: SelectionTextProvider;
+}
+
+interface SelectionSelectAllRegistration {
+  panelId: string;
+  provider: SelectionSelectAllProvider;
+}
+
+const selectionTextProviders = new Set<SelectionTextRegistration>();
+const selectionSelectAllProviders = new Set<SelectionSelectAllRegistration>();
 
 /**
- * 注册非 DOM 选区提供者（如 Pierre Diff 行选区）。
- * 返回 disposer；popup 前会按注册顺序取第一个非空文本。
+ * 注册非 DOM 选区提供者（如 Pierre Diff 行选区），按 panelId 作用域隔离。
+ * 返回 disposer；popup 前只取匹配 panelId 的第一个非空文本。
  */
 export function registerSelectionTextProvider(
+  panelId: string,
   provider: SelectionTextProvider
 ): () => void {
-  selectionTextProviders.add(provider);
+  const registration = { panelId, provider };
+  selectionTextProviders.add(registration);
   return () => {
-    selectionTextProviders.delete(provider);
+    selectionTextProviders.delete(registration);
   };
 }
 
 /**
- * 注册面板级「全选」实现（如 Pierre Diff selectAll）。
- * 返回 disposer；菜单点击时取第一个返回 true 的 provider。
+ * 注册面板级「全选」实现（如 Pierre Diff selectAll），按 panelId 作用域隔离。
  */
 export function registerSelectionSelectAllProvider(
+  panelId: string,
   provider: SelectionSelectAllProvider
 ): () => void {
-  selectionSelectAllProviders.add(provider);
+  const registration = { panelId, provider };
+  selectionSelectAllProviders.add(registration);
   return () => {
-    selectionSelectAllProviders.delete(provider);
+    selectionSelectAllProviders.delete(registration);
   };
 }
 
-function captureProviderSelectionText(): string {
-  for (const provider of selectionTextProviders) {
+function captureProviderSelectionText(panelId: string | undefined): string {
+  if (!panelId) {
+    return "";
+  }
+  for (const registration of selectionTextProviders) {
+    if (registration.panelId !== panelId) {
+      continue;
+    }
     try {
-      const text = provider().replace(/\u00a0/g, " ");
+      const text = registration.provider().replace(/\u00a0/g, " ");
       if (text.length > 0) {
         return text;
       }
@@ -48,11 +67,10 @@ function captureProviderSelectionText(): string {
 
 /**
  * 右键打开菜单瞬间的选区文本。
- * 优先 provider（Pierre live getSelectedText）→ DOM 选区。
- * 不再读全局 memory：选区真相在 Pierre / 打开菜单时的快照。
+ * 有 panelId 时优先该面板 provider → DOM 选区。
  */
-export function captureDomSelectionText(): string {
-  const fromProvider = captureProviderSelectionText();
+export function captureDomSelectionText(panelId?: string): string {
+  const fromProvider = captureProviderSelectionText(panelId);
   if (fromProvider.length > 0) {
     return fromProvider;
   }
@@ -66,17 +84,48 @@ export function captureDomSelectionText(): string {
   return "";
 }
 
-export function runSelectionSelectAll(): boolean {
-  for (const provider of selectionSelectAllProviders) {
-    try {
-      if (provider()) {
-        return true;
-      }
-    } catch {
-      // 单个 provider 失败不阻断其它路径
+function runDomSelectAll(): boolean {
+  const active = document.activeElement;
+  if (
+    active instanceof HTMLInputElement ||
+    active instanceof HTMLTextAreaElement
+  ) {
+    if (active.disabled || active.readOnly) {
+      return false;
     }
+    active.select();
+    return true;
+  }
+  if (active instanceof HTMLElement && active.isContentEditable) {
+    const selection = window.getSelection();
+    if (!selection) {
+      return false;
+    }
+    const range = document.createRange();
+    range.selectNodeContents(active);
+    selection.removeAllRanges();
+    selection.addRange(range);
+    return true;
   }
   return false;
+}
+
+export function runSelectionSelectAll(panelId?: string): boolean {
+  if (panelId) {
+    for (const registration of selectionSelectAllProviders) {
+      if (registration.panelId !== panelId) {
+        continue;
+      }
+      try {
+        if (registration.provider()) {
+          return true;
+        }
+      } catch {
+        // 单个 provider 失败不阻断其它路径
+      }
+    }
+  }
+  return runDomSelectAll();
 }
 
 export function selectedTextFromInvocation(

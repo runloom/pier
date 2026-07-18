@@ -35,6 +35,8 @@ export interface FileTreeSidebarProps {
   instanceId: string;
   onOpenFile: (entry: FileEntry, options?: { pinned?: boolean }) => void;
   root: string;
+  /** dockview panel id，供右键布局动作定位来源面板。 */
+  sourcePanelId?: string;
   watchHub: FilesWatchHub;
 }
 

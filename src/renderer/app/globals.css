@@ -161,7 +161,7 @@
      唯一例外：data-scrollbar="none" 隐藏。
      Shadow（trees / diffs）全局穿不进，经 packages/ui/scrollbar-system.ts 同 token。 */
   --shell-scrollbar-width: thin;
-  --shell-scrollbar-width-legacy: 4px;
+  --shell-scrollbar-width-legacy: 6px;
   --shell-scrollbar-radius: 999px;
   --shell-scrollbar-thumb: color-mix(
     in oklab,
@@ -365,10 +365,19 @@
  * 系统滚动条：默认全局统一；仅 data-scrollbar="none" 可隐藏。
  * 槽位 6px（--shell-scrollbar-width-legacy）；拇指 1px 透明边 + content-box，
  * 视觉约 4px（对齐 loomdesk）。
+ * data-scrollbar="stable"/"overlay" 保留 gutter，避免首次溢出布局跳动。
  */
 * {
   scrollbar-color: var(--shell-scrollbar-thumb) var(--shell-scrollbar-track);
   scrollbar-width: var(--shell-scrollbar-width);
+}
+
+:where([data-scrollbar="stable"], [data-flat-scroll], .cv-scrollbar) {
+  scrollbar-gutter: stable;
+}
+
+:where([data-scrollbar="overlay"]) {
+  scrollbar-gutter: auto;
 }
 
 [data-scrollbar="none"] {

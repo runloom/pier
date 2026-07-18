@@ -114,6 +114,7 @@ export function createGitChangesPanel(context: RendererPluginContext) {
     return (
       <GitChangesPanelBody
         context={context}
+        panelId={panelId}
         source={source}
         sourceKey={sourceKey}
       />
@@ -123,10 +124,12 @@ export function createGitChangesPanel(context: RendererPluginContext) {
 
 function GitChangesPanelBody({
   context,
+  panelId,
   source,
   sourceKey,
 }: {
   readonly context: RendererPluginContext;
+  readonly panelId: string;
   readonly source: GitReviewScope | null;
   readonly sourceKey: string | null;
 }) {
@@ -300,6 +303,7 @@ function GitChangesPanelBody({
           indexGeneration={state.generation}
           indexRefreshFailure={state.refreshFailure}
           onRetryIndex={() => indexLoaderRef.current?.retry()}
+          panelId={panelId}
           scope={source}
           setSidebarCollapsed={setSidebarCollapsed}
           sidebarCollapsed={sidebarCollapsed}

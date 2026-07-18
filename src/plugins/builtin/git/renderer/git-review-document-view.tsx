@@ -49,6 +49,7 @@ interface GitReviewDocumentViewProps {
   readonly selectedTreePath: string | null;
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
+  readonly sourcePanelId?: string;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly viewState: ReviewDocumentViewState;
   readonly warnings: GitReviewIndexOk["warnings"];
@@ -75,6 +76,7 @@ export function GitReviewDocumentView({
   renderFeedback,
   selectedFilePath,
   selectedTreePath,
+  sourcePanelId,
   setSidebarCollapsed,
   sidebarCollapsed,
   treeModel,
@@ -101,6 +103,7 @@ export function GitReviewDocumentView({
       selectedTreePath={selectedTreePath}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
+      {...(sourcePanelId ? { sourcePanelId } : {})}
       treeModel={treeModel}
     >
       <div className="flex h-full min-w-0 flex-col bg-background">

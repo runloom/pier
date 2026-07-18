@@ -285,7 +285,7 @@ export const settings = {
         "Loading plugins from local package directories. Official updates are disabled so release assets cannot overwrite local work.",
       releaseTitle: "Managed install",
       releaseBody:
-        "Plugins follow the managed install and update flow, like a production build. Use local development loading for package work.",
+        "Plugins follow the managed install and update flow, like a production build. For package work set `PIER_PLUGIN_MODE=workspace` (local development loading).",
     },
     checkUpdates: "Check for Updates",
     restartNow: "Restart Pier Now",

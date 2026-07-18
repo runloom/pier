@@ -289,7 +289,7 @@ export const settings = {
         "正在从本地包目录加载插件，并已禁用官方更新，避免覆盖本地改动。",
       releaseTitle: "正式安装",
       releaseBody:
-        "插件走正式安装与更新流程，行为接近生产包。本地开发请改用本地开发加载。",
+        "插件走正式安装与更新流程，行为接近生产包。本地开发请设置 `PIER_PLUGIN_MODE=workspace`（本地开发加载）。",
     },
     checkUpdates: "检查更新",
     restartNow: "立即重启",

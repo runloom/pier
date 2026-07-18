@@ -54,6 +54,7 @@ function ReviewDocumentsComponent({
   indexGeneration,
   indexRefreshFailure,
   onRetryIndex,
+  panelId,
   scope,
   setSidebarCollapsed,
   sidebarCollapsed,
@@ -65,6 +66,7 @@ function ReviewDocumentsComponent({
   readonly indexGeneration: number;
   readonly indexRefreshFailure: GitReviewFailure | null;
   readonly onRetryIndex: () => void;
+  readonly panelId: string;
   readonly scope: GitReviewScope;
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
@@ -328,16 +330,18 @@ function ReviewDocumentsComponent({
 
   useEffect(() => {
     const disposeText = registerSelectionTextProvider(
+      panelId,
       () => diffHandleRef.current?.getSelectedText() ?? ""
     );
     const disposeSelectAll = registerSelectionSelectAllProvider(
+      panelId,
       () => diffHandleRef.current?.selectAll() ?? false
     );
     return () => {
       disposeText();
       disposeSelectAll();
     };
-  }, []);
+  }, [panelId]);
 
   const openPath = useCallback(
     (path: string) => {
@@ -400,6 +404,7 @@ function ReviewDocumentsComponent({
       selectedTreePath={selectedTreeEntry?.path ?? null}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
+      sourcePanelId={panelId}
       treeModel={treeModel}
       viewState={viewState}
       warnings={warnings}

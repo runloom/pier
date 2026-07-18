@@ -200,7 +200,7 @@
     "ui.reviewTreeNoSearchResultsTitle": "没有匹配的变更",
     "ui.reviewTreeNoSearchResultsDescription": "请尝试其他文件名或路径。",
     "ui.reviewTreeOpenFile": "打开文件",
-    "ui.reviewTreeOpenFileUnavailable": "文件面板不可用",
+    "ui.reviewTreeOpenFileFailed": "无法打开文件",
     "ui.reviewTreeContextMenuFailed": "无法打开菜单",
     "ui.reviewStateBinary": "二进制文件",
     "ui.reviewStateConflict": "合并冲突",

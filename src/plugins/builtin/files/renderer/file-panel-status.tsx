@@ -119,7 +119,10 @@ function statusTextForDocument(
     return t("filePanel.status.protected", "Draft saved");
   }
   if (document.durabilityUnknown) {
-    return t("filePanel.status.durabilityUnknown", "Written; confirming save…");
+    return t(
+      "filePanel.status.durabilityUnknown",
+      "Written; save not confirmed yet"
+    );
   }
   if (document.deletedOnDisk) {
     return t("filePanel.status.deletedOnDisk", "Deleted on disk");
@@ -170,7 +173,7 @@ function statusToneForDocument(
     return {
       label: t(
         "filePanel.status.durabilityUnknown",
-        "Written; confirming save…"
+        "Written; save not confirmed yet"
       ),
       tone: "bg-warning",
     };

@@ -50,6 +50,7 @@ function GitReviewTreeSidebarComponent({
   const openItemContextMenu = useGitReviewTreeContextMenu({
     context,
     contextId,
+    entryByPath: treeModel.entryByPath,
     gitRootPath,
     ...(sourcePanelId ? { sourcePanelId } : {}),
   });

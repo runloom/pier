@@ -25,11 +25,15 @@ describe("selection-text", () => {
       isCollapsed: true,
       toString: () => "",
     } as Selection);
-    const dispose = registerSelectionTextProvider(() => "diff lines");
+    const dispose = registerSelectionTextProvider(
+      "panel-a",
+      () => "diff lines"
+    );
 
-    expect(captureDomSelectionText()).toBe("diff lines");
+    expect(captureDomSelectionText("panel-a")).toBe("diff lines");
+    expect(captureDomSelectionText("panel-b")).toBe("");
     dispose();
-    expect(captureDomSelectionText()).toBe("");
+    expect(captureDomSelectionText("panel-a")).toBe("");
   });
 
   it("returns empty string for collapsed selection without providers", () => {

@@ -1,3 +1,4 @@
+import { MENU_LIMITS } from "@shared/contracts/menu.ts";
 import { clipboard, type IpcMain } from "electron";
 
 /**
@@ -9,6 +10,11 @@ export function registerClipboardIpc(ipcMain: IpcMain): void {
   ipcMain.handle("pier:clipboard:writeText", (_event, text: unknown) => {
     if (typeof text !== "string") {
       throw new Error("clipboard text must be a string");
+    }
+    if (text.length > MENU_LIMITS.clipboardTextMaxLength) {
+      throw new Error(
+        `clipboard text exceeds ${MENU_LIMITS.clipboardTextMaxLength} characters`
+      );
     }
     clipboard.writeText(text);
   });

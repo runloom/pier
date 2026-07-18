@@ -143,9 +143,10 @@ function sideBounds(
   fileDiff: FileDiffMetadata,
   side: SelectionSide
 ): { end: number; start: number } | null {
+  // Pierre InteractionManager 只能画一段连续 range。
+  // 多 hunk 时只取第一个有内容的 hunk，避免跨空隙高亮未选中的上下文行；
+  // 复制文本仍由 selectedLinesTextFromFileDiff 按实际 hunk 行过滤。
   if (fileDiff.hunks.length > 0) {
-    let start = Number.POSITIVE_INFINITY;
-    let end = 0;
     for (const hunk of fileDiff.hunks) {
       const hunkStart =
         side === "deletions" ? hunk.deletionStart : hunk.additionStart;
@@ -154,11 +155,7 @@ function sideBounds(
       if (hunkCount <= 0) {
         continue;
       }
-      start = Math.min(start, hunkStart);
-      end = Math.max(end, hunkStart + hunkCount - 1);
-    }
-    if (Number.isFinite(start) && end >= start) {
-      return { end, start };
+      return { end: hunkStart + hunkCount - 1, start: hunkStart };
     }
   }
   const lines =

@@ -94,4 +94,12 @@ describe("openFilesDiskPath", () => {
       })
     );
   });
+
+  it("rejects absolute or parent-relative paths", () => {
+    expect(openFilesDiskPath({ path: "/abs/a.ts", root: "/repo" })).toBe(false);
+    expect(openFilesDiskPath({ path: "../escape.ts", root: "/repo" })).toBe(
+      false
+    );
+    expect(openInstance).not.toHaveBeenCalled();
+  });
 });

@@ -64,11 +64,7 @@ export function registerGitReviewTreeActions(
       });
       if (!opened) {
         context.notifications.error(
-          pluginText(
-            context,
-            "reviewTreeOpenFileUnavailable",
-            "Files panel is unavailable"
-          )
+          pluginText(context, "reviewTreeOpenFileFailed", "Unable to open file")
         );
       }
     },

@@ -1,3 +1,4 @@
+import { nonEmptyFileRootRelativePathSchema } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { openPluginPanelInstance } from "../plugins/host-panel-instance-open.ts";
@@ -73,7 +74,7 @@ function cloneParamsRecord(params: unknown): Record<string, unknown> | null {
 
 /**
  * 宿主跨插件打开 files 磁盘文档面板。
- * files 未注册时返回 false；已打开同 source 时复用实例。
+ * files 未注册 / path 非法时返回 false；已打开同 source 时复用实例。
  */
 export function openFilesDiskPath(input: {
   context?: PanelContext;
@@ -81,9 +82,12 @@ export function openFilesDiskPath(input: {
   root: string;
   title?: string;
 }): boolean {
+  const pathParsed = nonEmptyFileRootRelativePathSchema.safeParse(input.path);
   if (
-    !getPluginPanelRegistrations().has(FILES_FILE_PANEL_COMPONENT_ID) ||
-    input.path.length === 0 ||
+    !(
+      getPluginPanelRegistrations().has(FILES_FILE_PANEL_COMPONENT_ID) &&
+      pathParsed.success
+    ) ||
     input.root.length === 0
   ) {
     return false;
@@ -91,7 +95,7 @@ export function openFilesDiskPath(input: {
 
   const source = {
     kind: "disk" as const,
-    path: input.path,
+    path: pathParsed.data,
     root: input.root,
   };
   const api = useWorkspaceStore.getState().api;

@@ -33,7 +33,8 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
         // 主路径：菜单项 clipboardText 已在 main click 时写入系统剪贴板。
         // 这里再写一次作为兜底（快捷键/命令面板等不经菜单的入口）。
         const text =
-          selectedTextFromInvocation(invocation) || captureDomSelectionText();
+          selectedTextFromInvocation(invocation) ||
+          captureDomSelectionText(invocation?.sourcePanelId);
         if (text.length === 0) {
           return;
         }
@@ -52,6 +53,12 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       },
       id: "pier.panel.copySelection",
       // 终端/文件编辑器自带复制，不在那些 surface 重复。
+      enabled: (invocation) => {
+        const text =
+          selectedTextFromInvocation(invocation) ||
+          captureDomSelectionText(invocation?.sourcePanelId);
+        return text.length > 0;
+      },
       menuHidden: (invocation) =>
         surfaceHasLocalCopyAction(invocation?.surface),
       sortOrder: 0,
@@ -61,8 +68,8 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       group: "0_edit",
-      handler: async () => {
-        runSelectionSelectAll();
+      handler: async (invocation) => {
+        runSelectionSelectAll(invocation?.sourcePanelId);
       },
       id: "pier.panel.selectAll",
       menuHidden: (invocation) =>
@@ -211,7 +218,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       categoryKey: "panel",
       excludeFromMru: true,
       group: "3_focus",
-      handler: () => useWorkspaceStore.getState().focusGroup("right"),
+      handler: (invocation) =>
+        useWorkspaceStore
+          .getState()
+          .focusGroup("right", invocation?.sourcePanelId),
       iconComponent: ArrowRight,
       id: "pier.panel.focusRight",
       sortOrder: 1,
@@ -224,7 +234,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       categoryKey: "panel",
       excludeFromMru: true,
       group: "3_focus",
-      handler: () => useWorkspaceStore.getState().focusGroup("down"),
+      handler: (invocation) =>
+        useWorkspaceStore
+          .getState()
+          .focusGroup("down", invocation?.sourcePanelId),
       iconComponent: ArrowDown,
       id: "pier.panel.focusDown",
       sortOrder: 2,
@@ -237,7 +250,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       categoryKey: "panel",
       excludeFromMru: true,
       group: "3_focus",
-      handler: () => useWorkspaceStore.getState().focusGroup("left"),
+      handler: (invocation) =>
+        useWorkspaceStore
+          .getState()
+          .focusGroup("left", invocation?.sourcePanelId),
       iconComponent: ArrowLeft,
       id: "pier.panel.focusLeft",
       sortOrder: 3,
@@ -250,7 +266,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       categoryKey: "panel",
       excludeFromMru: true,
       group: "3_focus",
-      handler: () => useWorkspaceStore.getState().focusGroup("up"),
+      handler: (invocation) =>
+        useWorkspaceStore
+          .getState()
+          .focusGroup("up", invocation?.sourcePanelId),
       iconComponent: ArrowUp,
       id: "pier.panel.focusUp",
       sortOrder: 4,

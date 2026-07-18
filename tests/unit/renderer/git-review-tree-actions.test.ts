@@ -113,6 +113,6 @@ describe("git review tree actions", () => {
       },
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
-    expect(error).toHaveBeenCalledWith("Files panel is unavailable");
+    expect(error).toHaveBeenCalledWith("Unable to open file");
   });
 });

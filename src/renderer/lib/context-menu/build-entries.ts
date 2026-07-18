@@ -117,7 +117,8 @@ function actionToMenuItem(a: Action, invocation?: ActionInvocation): MenuItem {
   // 复制选区：把弹菜单瞬间的文本钉到菜单项，main click 时直接写剪贴板。
   const clipboardText =
     a.id === "pier.panel.copySelection"
-      ? selectedTextFromInvocation(invocation) || captureDomSelectionText()
+      ? selectedTextFromInvocation(invocation) ||
+        captureDomSelectionText(invocation?.sourcePanelId)
       : "";
   return {
     type: "action",

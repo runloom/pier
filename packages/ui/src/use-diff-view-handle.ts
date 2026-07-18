@@ -200,22 +200,21 @@ function createDiffViewHandle({
     getSelectedText(): string {
       const viewer = codeViewRef.current;
       const selection = viewer?.getSelectedLines();
-      if (selection) {
-        const item =
-          viewer?.getItem(selection.id) ??
-          appliedItemsRef.current?.items.get(selection.id) ??
-          parsedItemsRef.current.get(selection.id)?.item;
-        const fromModel = selectedLinesTextFromCodeViewItem(
-          item,
-          selection.range
-        );
-        if (fromModel.length > 0) {
-          selectedTextRef.current = fromModel;
-          return fromModel;
-        }
+      if (!selection) {
+        // live 选区已空：清掉粘性快照，避免幽灵剪贴板串到其它面板。
+        selectedTextRef.current = "";
+        return "";
       }
-      // 菜单已打开后若 Pierre live 被清，回退右键瞬间快照。
-      return selectedTextRef.current;
+      const item =
+        viewer?.getItem(selection.id) ??
+        appliedItemsRef.current?.items.get(selection.id) ??
+        parsedItemsRef.current.get(selection.id)?.item;
+      const fromModel = selectedLinesTextFromCodeViewItem(
+        item,
+        selection.range
+      );
+      selectedTextRef.current = fromModel;
+      return fromModel;
     },
     isItemVisible(id: string, cacheKey?: string): boolean {
       const viewer = codeViewRef.current?.getInstance();

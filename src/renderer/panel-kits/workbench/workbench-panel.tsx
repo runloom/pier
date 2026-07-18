@@ -159,6 +159,7 @@ export function WorkbenchPanel(props: IDockviewPanelProps) {
     hasWidgets: resolved.length > 0,
     onAddWidget: () => setLibraryOpen(true),
     onRefreshAll: state.refreshAll,
+    panelId: props.api.id,
   });
 
   const cols = resolveResponsiveGridCols(viewport.width);

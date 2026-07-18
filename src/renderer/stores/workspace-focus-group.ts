@@ -13,28 +13,48 @@ function getGroupElement(g: unknown): HTMLElement | null {
   return el instanceof HTMLElement ? el : null;
 }
 
+function groupForPanel(
+  api: DockviewApi,
+  panelId: string | undefined
+): DockviewApi["groups"][number] | null {
+  if (!panelId) {
+    return null;
+  }
+  for (const group of api.groups) {
+    if (group.panels.some((panel) => panel.id === panelId)) {
+      return group;
+    }
+  }
+  return null;
+}
+
 export function focusWorkspaceGroup(
   api: DockviewApi,
-  direction: "right" | "down" | "left" | "up"
+  direction: "right" | "down" | "left" | "up",
+  sourcePanelId?: string
 ): void {
-  const active = api.activeGroup;
-  if (!active || api.groups.length < 2) {
+  if (api.groups.length < 2) {
+    return;
+  }
+  const sourceGroup =
+    groupForPanel(api, sourcePanelId) ?? api.activeGroup ?? null;
+  if (!sourceGroup) {
     return;
   }
 
-  const activeEl = getGroupElement(active);
-  if (!activeEl) {
+  const sourceEl = getGroupElement(sourceGroup);
+  if (!sourceEl) {
     return;
   }
-  const activeRect = activeEl.getBoundingClientRect();
+  const sourceRect = sourceEl.getBoundingClientRect();
 
   const candidates = api.groups.map((g) => ({
     id: g.id,
-    isActive: g.id === active.id,
+    isActive: g.id === sourceGroup.id,
     rect: getGroupElement(g)?.getBoundingClientRect() ?? null,
   }));
   const targetIdx = pickFocusTarget(
-    activeRect,
+    sourceRect,
     candidates,
     direction,
     FOCUS_TOL_PX
