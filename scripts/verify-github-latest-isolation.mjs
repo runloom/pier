@@ -22,7 +22,6 @@ import {
   validateMacReleaseAssetNames,
 } from "./mac-release-assets.mjs";
 
-
 const PLUGIN_TAG_RE = /^plugin-/i;
 const HOST_TAG_RE = /^v\d+\.\d+\.\d+/;
 
@@ -103,7 +102,10 @@ export function validateLatestRelease(latest, opts = {}) {
   }
 
   if (expectedVersion) {
-    const assetErrors = validateMacReleaseAssetNames(assetNames, expectedVersion);
+    const assetErrors = validateMacReleaseAssetNames(
+      assetNames,
+      expectedVersion
+    );
     if (assetErrors.length > 0) {
       errors.push(
         ...assetErrors.map(

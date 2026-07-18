@@ -52,13 +52,9 @@ export function parseArgs(args) {
  */
 export function validateMacReleaseArtifacts(input) {
   const version = normalizeReleaseVersion(input.version);
-  const errors = [
-    ...validateMacReleaseAssetNames(input.assetNames, version),
-  ];
+  const errors = [...validateMacReleaseAssetNames(input.assetNames, version)];
   if (input.latestMacYmlText != null) {
-    errors.push(
-      ...validateLatestMacYmlFiles(input.latestMacYmlText, version)
-    );
+    errors.push(...validateLatestMacYmlFiles(input.latestMacYmlText, version));
   }
   return errors;
 }
@@ -104,10 +100,8 @@ async function main(argv = process.argv.slice(2)) {
     console.error("[verify-mac-release-artifacts] --version is required");
     process.exit(2);
   }
-  if (!opts.dir && !opts.assets) {
-    console.error(
-      "[verify-mac-release-artifacts] provide --dir or --assets"
-    );
+  if (!(opts.dir || opts.assets)) {
+    console.error("[verify-mac-release-artifacts] provide --dir or --assets");
     process.exit(2);
   }
 

@@ -124,12 +124,12 @@ export function fetchRemoteReleaseAssetNames(opts) {
     throw new Error("remote release payload missing");
   }
   const record = /** @type {Record<string, unknown>} */ (release);
-  const tagName =
-    typeof record.tag_name === "string"
-      ? record.tag_name
-      : typeof record.tagName === "string"
-        ? record.tagName
-        : "";
+  let tagName = "";
+  if (typeof record.tag_name === "string") {
+    tagName = record.tag_name;
+  } else if (typeof record.tagName === "string") {
+    tagName = record.tagName;
+  }
   if (tagName && tagName !== tag) {
     throw new Error(
       `remote release tag is ${tagName}, expected ${tag} (refusing to accept wrong release)`
@@ -216,7 +216,7 @@ export async function publishMacReleaseArtifacts(opts) {
     process.env.GITHUB_REPOSITORY ||
     process.env.npm_package_repository ||
     "";
-  if (!repo || !repo.includes("/")) {
+  if (!repo?.includes("/")) {
     throw new Error(
       "cannot verify remote assets: set --repo owner/name or GITHUB_REPOSITORY"
     );
@@ -260,7 +260,7 @@ async function main(argv = process.argv.slice(2)) {
     );
     process.exit(0);
   }
-  if (!opts.dir || !opts.version) {
+  if (!(opts.dir && opts.version)) {
     console.error(
       "[publish-mac-release-artifacts] --dir and --version are required"
     );
