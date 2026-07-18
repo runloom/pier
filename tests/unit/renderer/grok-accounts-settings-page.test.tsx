@@ -89,12 +89,14 @@ function contextWithSnapshot(snapshot: GrokAccountsSnapshot): {
       },
       dialogs: {
         alert: vi.fn(async () => undefined),
+        choice: vi.fn(async () => "cancel" as const),
         confirm: vi.fn(async () => true),
         open: (request) =>
           openAppContentDialog({
             ...request,
             namespace: "pier.grok",
           }),
+        prompt: vi.fn(async () => null),
         update: (id, patch) =>
           updateAppContentDialog(
             id.includes(":") ? id : `pier.grok:${id}`,

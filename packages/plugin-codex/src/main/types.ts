@@ -30,6 +30,8 @@ export interface AgentAccountProvider {
 
 export interface AccountUsageResult {
   error?: string;
+  /** Live ChatGPT plan from account/rateLimits/read (authoritative over JWT). */
+  planType?: string;
   resetCreditsAvailable?: number;
   status: "error" | "ok";
   windows: Array<{

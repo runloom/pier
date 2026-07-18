@@ -108,6 +108,11 @@ export interface PierPreferencesAPI {
 export interface PierAgentsAPI {
   detect: () => Promise<DetectAgentsResult>;
   prepareLaunch: (agentId: AgentKind) => Promise<{ launchId: string | null }>;
+  prepareLaunchFromSpec: (spec: {
+    agentId: AgentKind;
+    command?: string;
+    cwd?: string;
+  }) => Promise<{ launchId: string | null }>;
   refresh: () => Promise<DetectAgentsResult>;
   selection: () => Promise<AgentSelectionResult>;
 }
@@ -271,6 +276,8 @@ const agentsApi: PierAgentsAPI = {
   detect: () => ipcRenderer.invoke("pier:agents:detect"),
   prepareLaunch: (agentId: AgentKind) =>
     ipcRenderer.invoke("pier:agents:prepareLaunch", agentId),
+  prepareLaunchFromSpec: (spec) =>
+    ipcRenderer.invoke("pier:agents:prepareLaunchFromSpec", spec),
   refresh: () => ipcRenderer.invoke("pier:agents:refresh"),
   selection: () => ipcRenderer.invoke("pier:agents:selection"),
 };

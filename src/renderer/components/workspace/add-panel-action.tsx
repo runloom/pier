@@ -322,7 +322,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
     // 外部点击。终端是原生 NSView, 点击默认被 native 消费, web 收不到 →
     // 弹层不会关。挂一个全屏 web overlay rect, 让弹层打开期间所有点击 (包括
     // 落在终端 NSView 之上的) 都路由到 web, dismissable-layer 才能触发。
-    // 见 app-dialog-host.tsx / plugin-overlay-host.tsx 同款模式。
+    // 见 app-dialog-host.tsx / app-content-dialog-host.tsx 同款模式。
     const releaseOverlayRoute =
       registerTerminalFullscreenWebOverlay(CREATE_MENU_SCOPE);
     return () => {

@@ -19,6 +19,7 @@ import { ArrowLeftRight, Settings } from "lucide-react";
 import type { JSX } from "react";
 import { useState } from "react";
 import type { CodexAccountSummary } from "../shared/accounts.ts";
+import { accountPlanSummary } from "./account-display.tsx";
 import { openSwitchConfirmDialog } from "./account-switch.ts";
 import { formatAccountError } from "./format-account-error.ts";
 
@@ -110,25 +111,32 @@ export function AccountPicker({
         }}
       >
         <DropdownMenuGroup>
-          {accounts.map((account) => (
-            <DropdownMenuItem
-              key={account.id}
-              onSelect={() => {
-                handleSelectAccount(account.id).catch(() => undefined);
-              }}
-            >
-              <span className="min-w-0">
-                <span className="block whitespace-normal break-words">
-                  {account.label}
-                </span>
-                {account.planType ? (
-                  <span className="block text-muted-foreground text-xs">
-                    {account.planType.toUpperCase()}
+          {accounts.map((account) => {
+            const planSummary = accountPlanSummary(
+              account,
+              context.i18n.language(),
+              t
+            );
+            return (
+              <DropdownMenuItem
+                key={account.id}
+                onSelect={() => {
+                  handleSelectAccount(account.id).catch(() => undefined);
+                }}
+              >
+                <span className="min-w-0">
+                  <span className="block whitespace-normal break-words">
+                    {account.label}
                   </span>
-                ) : null}
-              </span>
-            </DropdownMenuItem>
-          ))}
+                  {planSummary ? (
+                    <span className="block text-muted-foreground text-xs">
+                      {planSummary}
+                    </span>
+                  ) : null}
+                </span>
+              </DropdownMenuItem>
+            );
+          })}
         </DropdownMenuGroup>
 
         <DropdownMenuSeparator />

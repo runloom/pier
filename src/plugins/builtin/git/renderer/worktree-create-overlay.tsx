@@ -1,13 +1,5 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@pier/ui/button.tsx";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@pier/ui/dialog.tsx";
 import { Field, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
 import {
   Select,
@@ -20,6 +12,7 @@ import {
 import { Tabs, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
 import type {
   RendererPluginAgentSelection,
+  RendererPluginContentDialogRenderProps,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
@@ -49,10 +42,9 @@ import {
 export type { WorktreeCreateOverlayData } from "./worktree-create-form.tsx";
 
 interface WorktreeCreateOverlayProps {
-  close: () => void;
+  close: RendererPluginContentDialogRenderProps["close"];
   context: RendererPluginContext;
   data: WorktreeCreateOverlayData;
-  open: boolean;
   targetGroupId?: string;
 }
 
@@ -84,7 +76,6 @@ function WorktreeCreateOverlay({
   close,
   context,
   data,
-  open,
   targetGroupId,
 }: WorktreeCreateOverlayProps) {
   const [agentSelection, setAgentSelection] =
@@ -358,122 +349,90 @@ function WorktreeCreateOverlay({
   }
 
   return (
-    <Dialog
-      onOpenChange={(open) => {
-        if (!open) {
-          closeOverlay();
-        }
-      }}
-      open={open}
+    <form
+      className="flex flex-col gap-6"
+      onSubmit={form.handleSubmit(onSubmit)}
     >
-      <DialogContent
-        closeLabel={text("close", undefined, "Close")}
-        onOpenAutoFocus={(event) => {
-          event.preventDefault();
-          focusActiveModeInput(mode);
-        }}
-        showCloseButton
-      >
-        <DialogHeader>
-          <DialogTitle>{text("title", undefined, "New Worktree")}</DialogTitle>
-          <DialogDescription>
-            {text(
-              "description",
-              undefined,
-              "Create an isolated worktree for this task"
-            )}
-          </DialogDescription>
-        </DialogHeader>
-
-        <form
-          className="flex flex-col gap-6"
-          onSubmit={form.handleSubmit(onSubmit)}
+      <FieldGroup className="gap-4">
+        <Tabs
+          onValueChange={(value) => {
+            form.setValue("mode", value as CreateMode);
+            form.clearErrors();
+          }}
+          value={mode}
         >
-          <FieldGroup className="gap-4">
-            <Tabs
-              onValueChange={(value) => {
-                form.setValue("mode", value as CreateMode);
-                form.clearErrors();
-              }}
-              value={mode}
-            >
-              <TabsList className="w-full">
-                <TabsTrigger value="ai">
-                  {text("modeAi", undefined, "Smart generation")}
-                </TabsTrigger>
-                <TabsTrigger value="custom">
-                  {text("modeCustom", undefined, "Manual naming")}
-                </TabsTrigger>
-              </TabsList>
-            </Tabs>
+          <TabsList className="w-full">
+            <TabsTrigger value="ai">
+              {text("modeAi", undefined, "Smart generation")}
+            </TabsTrigger>
+            <TabsTrigger value="custom">
+              {text("modeCustom", undefined, "Manual naming")}
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
 
-            {mode === "ai" ? (
-              <AiModeFields
-                agentSelection={agentSelection}
-                agentSelectionLoaded={agentSelectionLoaded}
-                form={form}
-                onSubmit={onSubmit}
-                rootPath={data.defaults.rootPath}
-                text={text}
-              />
-            ) : (
-              <CustomModeField
-                customDraft={customDraft}
-                form={form}
-                rootPath={data.defaults.rootPath}
-                text={text}
-              />
+        {mode === "ai" ? (
+          <AiModeFields
+            agentSelection={agentSelection}
+            agentSelectionLoaded={agentSelectionLoaded}
+            form={form}
+            onSubmit={onSubmit}
+            rootPath={data.defaults.rootPath}
+            text={text}
+          />
+        ) : (
+          <CustomModeField
+            customDraft={customDraft}
+            form={form}
+            rootPath={data.defaults.rootPath}
+            text={text}
+          />
+        )}
+
+        <Field>
+          <FieldLabel htmlFor="worktree-create-base">
+            {text("baseLabel", undefined, "Base")}
+          </FieldLabel>
+          <Controller
+            control={form.control}
+            name="base"
+            render={({ field }) => (
+              <Select onValueChange={field.onChange} value={field.value}>
+                <SelectTrigger className="font-mono" id="worktree-create-base">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectGroup>
+                    <SelectItem value={HEAD_SENTINEL}>
+                      {text("baseHead", undefined, "Current HEAD")}
+                    </SelectItem>
+                    {data.branches.map((ref) => (
+                      <SelectItem
+                        key={`${ref.kind}:${ref.name}`}
+                        value={ref.name}
+                      >
+                        {ref.name}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                </SelectContent>
+              </Select>
             )}
+          />
+        </Field>
 
-            <Field>
-              <FieldLabel htmlFor="worktree-create-base">
-                {text("baseLabel", undefined, "Base")}
-              </FieldLabel>
-              <Controller
-                control={form.control}
-                name="base"
-                render={({ field }) => (
-                  <Select onValueChange={field.onChange} value={field.value}>
-                    <SelectTrigger
-                      className="font-mono"
-                      id="worktree-create-base"
-                    >
-                      <SelectValue />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectGroup>
-                        <SelectItem value={HEAD_SENTINEL}>
-                          {text("baseHead", undefined, "Current HEAD")}
-                        </SelectItem>
-                        {data.branches.map((ref) => (
-                          <SelectItem
-                            key={`${ref.kind}:${ref.name}`}
-                            value={ref.name}
-                          >
-                            {ref.name}
-                          </SelectItem>
-                        ))}
-                      </SelectGroup>
-                    </SelectContent>
-                  </Select>
-                )}
-              />
-            </Field>
+        <PrepareBadges defaults={data.defaults} text={text} />
+      </FieldGroup>
 
-            <PrepareBadges defaults={data.defaults} text={text} />
-          </FieldGroup>
-
-          <DialogFooter>
-            <Button onClick={closeOverlay} type="button" variant="secondary">
-              {context.i18n.t("ui.cancel", undefined, "Cancel")}
-            </Button>
-            <Button type="submit" variant="default">
-              {text("confirm", undefined, "Create")}
-            </Button>
-          </DialogFooter>
-        </form>
-      </DialogContent>
-    </Dialog>
+      <div className="flex flex-wrap justify-end gap-2">
+        <Button onClick={closeOverlay} type="button" variant="outline">
+          {context.i18n.t("ui.cancel", undefined, "Cancel")}
+        </Button>
+        <Button type="submit" variant="default">
+          {text("confirm", undefined, "Create")}
+        </Button>
+      </div>
+    </form>
   );
 }
 
@@ -482,14 +441,20 @@ export function openWorktreeCreateOverlay(
   data: WorktreeCreateOverlayData,
   targetGroupId?: string
 ): void {
-  context.overlays.open({
+  context.dialogs.open({
     id: "worktree-create",
-    render: ({ close, open }) => (
+    size: "lg",
+    title: context.i18n.t("ui.worktreeCreate.title", undefined, "New Worktree"),
+    description: context.i18n.t(
+      "ui.worktreeCreate.description",
+      undefined,
+      "Create an isolated worktree for this task"
+    ),
+    content: ({ close }) => (
       <WorktreeCreateOverlay
         close={close}
         context={context}
         data={data}
-        open={open}
         {...(targetGroupId ? { targetGroupId } : {})}
       />
     ),

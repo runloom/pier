@@ -28,8 +28,6 @@
       },
       "messages": {
         "pier.grok.accounts.settings.title": "Grok Accounts",
-        "pier.grok.accounts.settings.account": "Account",
-        "pier.grok.accounts.settings.actions": "Actions",
         "pier.grok.accounts.settings.addAccount": "Add account",
         "pier.grok.accounts.settings.addDialogTitle": "Add Grok account",
         "pier.grok.accounts.settings.addDialogDescription": "Choose how to add a Grok account. Browser login and device code use the Grok CLI; API keys and local import use credentials already on this device.",
@@ -60,7 +58,6 @@
         "pier.grok.accounts.settings.empty": "No managed accounts",
         "pier.grok.accounts.settings.emptyTitle": "No managed accounts",
         "pier.grok.accounts.settings.emptyDesc": "Add a Grok account to get started.",
-        "pier.grok.accounts.settings.loginPending": "Login pending",
         "pier.grok.accounts.settings.actionFailed": "Account action failed",
         "pier.grok.accounts.settings.loadFailed": "Could not load Grok accounts",
         "pier.grok.accounts.settings.status.login-pending": "Login pending",
@@ -81,6 +78,9 @@
         "pier.grok.accounts.settings.usageRefreshSuccess": "Usage refreshed",
         "pier.grok.accounts.settings.usageFailed": "Usage update failed",
         "pier.grok.accounts.settings.updated": "Updated",
+        "pier.grok.accounts.settings.trialEnds": "Trial ends",
+        "pier.grok.accounts.settings.expires": "Expires",
+        "pier.grok.accounts.settings.cancelAtPeriodEnd": "Cancels at period end",
         "pier.grok.accounts.settings.noUsage": "No usage data",
         "pier.grok.widget.remaining": "remaining",
         "pier.grok.widget.resetsIn": "Resets in",
@@ -154,8 +154,6 @@
       },
       "messages": {
         "pier.grok.accounts.settings.title": "Grok 账号",
-        "pier.grok.accounts.settings.account": "账号",
-        "pier.grok.accounts.settings.actions": "操作",
         "pier.grok.accounts.settings.addAccount": "添加账号",
         "pier.grok.accounts.settings.addDialogTitle": "添加 Grok 账号",
         "pier.grok.accounts.settings.addDialogDescription": "选择添加方式。浏览器登录与设备码走 Grok CLI；API key 与本地导入使用本机已有凭据。",
@@ -186,7 +184,6 @@
         "pier.grok.accounts.settings.empty": "暂无受管账号",
         "pier.grok.accounts.settings.emptyTitle": "暂无受管账号",
         "pier.grok.accounts.settings.emptyDesc": "添加一个 Grok 账号以开始使用。",
-        "pier.grok.accounts.settings.loginPending": "登录中",
         "pier.grok.accounts.settings.actionFailed": "账号操作失败",
         "pier.grok.accounts.settings.loadFailed": "无法加载 Grok 账号",
         "pier.grok.accounts.settings.status.login-pending": "登录中",
@@ -207,6 +204,9 @@
         "pier.grok.accounts.settings.usageRefreshSuccess": "用量刷新成功",
         "pier.grok.accounts.settings.usageFailed": "用量更新失败",
         "pier.grok.accounts.settings.updated": "更新于",
+        "pier.grok.accounts.settings.trialEnds": "试用结束",
+        "pier.grok.accounts.settings.expires": "到期",
+        "pier.grok.accounts.settings.cancelAtPeriodEnd": "到期后取消续费",
         "pier.grok.accounts.settings.noUsage": "暂无用量",
         "pier.grok.widget.remaining": "剩余",
         "pier.grok.widget.resetsIn": "重置于",
@@ -299,5 +299,5 @@
     }
   ],
   "terminalStatusItems": [],
-  "version": "1.0.1"
+  "version": "1.0.2"
 }

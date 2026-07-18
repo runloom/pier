@@ -1,6 +1,6 @@
 import type { RendererPluginModule } from "@plugins/api/renderer.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import { closeOverlaysForPlugin } from "../../stores/plugin-overlay.store.ts";
+import { closeContentDialogsForPlugin } from "../../stores/app-content-dialog.store.ts";
 import { createRendererPluginContext } from "./host-context.ts";
 import { clearHostGroupContentForPlugin } from "./host-group-content-context.tsx";
 
@@ -11,7 +11,7 @@ export function activateBuiltinRendererPlugin(
 ): () => void {
   const cleanupHostViews = () => {
     clearHostGroupContentForPlugin(entry.manifest.id);
-    closeOverlaysForPlugin(entry.manifest.id);
+    closeContentDialogsForPlugin(entry.manifest.id);
   };
   let dispose: () => void;
   try {

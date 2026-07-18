@@ -61,11 +61,16 @@ const committedOfficialIndex = JSON.parse(
 ) as { signature?: { alg?: string } };
 
 describe("managed plugin packaging governance", () => {
-  it("ships bundled plugin metadata beside packaged archives", () => {
-    expect(builderConfig).toMatch(/to:\s*plugin-packages/);
+  it("ships each bundled plugin into an isolated plugin-packages subdir", () => {
+    expect(builderConfig).toContain("from: packages/plugin-codex/dist-pkg");
+    expect(builderConfig).toContain("to: plugin-packages/pier.codex");
+    expect(builderConfig).toContain("from: packages/plugin-grok/dist-pkg");
+    expect(builderConfig).toContain("to: plugin-packages/pier.grok");
     expect(builderConfig).toContain("*.tgz");
     expect(builderConfig).toContain("*.tgz.sha256");
     expect(builderConfig).toContain("plugin.json");
+    // Flat shared plugin-packages root collides on plugin.json across plugins.
+    expect(builderConfig).not.toMatch(/to:\s*plugin-packages\s*$/m);
     expect(buildDistScript).toContain("pnpm plugins:pack");
   });
 

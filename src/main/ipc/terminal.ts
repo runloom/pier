@@ -15,6 +15,7 @@ import type { TaskService } from "../services/tasks/task-service.ts";
 import {
   readTerminalPanelSession,
   removeTerminalPanelSession,
+  retainTerminalPanelSessions,
 } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import {
@@ -402,6 +403,15 @@ export function registerTerminalIpc(
       count: activeIds.length,
     });
     foregroundActivityService.retainPanels(String(win.id), activeIds);
+    // 仅在有明确 active 集合时 GC session。空数组常见于 layout 应用前/中，
+    // 此时删 running+resume 会毁掉可恢复会话；单 panel 关闭已走 removeSession。
+    if (activeIds.length > 0) {
+      retainTerminalPanelSessions(windowRecordIdFor(win), activeIds).catch(
+        (err) => {
+          console.error("[pier-terminal-session-gc] failed:", err);
+        }
+      );
+    }
     try {
       const activeNativeIds = activeIds.map((id) => toNativePanelKey(win, id));
       taskOutputBindings?.retainWindow(win.id, activeNativeIds);

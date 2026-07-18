@@ -23,13 +23,13 @@ extraResources:
   - from: resources/fonts
     to: fonts
   - from: packages/plugin-codex/dist-pkg
-    to: plugin-packages
+    to: plugin-packages/pier.codex
     filter:
       - '*.tgz'
       - '*.tgz.sha256'
       - 'plugin.json'
   - from: packages/plugin-grok/dist-pkg
-    to: plugin-packages
+    to: plugin-packages/pier.grok
     filter:
       - '*.tgz'
       - '*.tgz.sha256'

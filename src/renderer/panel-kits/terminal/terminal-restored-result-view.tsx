@@ -1,3 +1,4 @@
+import { Button } from "@pier/ui/button.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
@@ -5,7 +6,9 @@ import type {
   TerminalAgentPanelMetadata,
   TerminalPanelSessionSnapshot,
 } from "@shared/contracts/terminal.ts";
+import i18next from "i18next";
 import type { MouseEventHandler } from "react";
+import { useState } from "react";
 
 export function RestoredTaskResultView({
   className,
@@ -63,13 +66,16 @@ export function RestoredAgentResultView({
   className,
   fontFamily,
   fontSize,
+  onRestart,
 }: {
   agent: TerminalAgentPanelMetadata;
   className: string;
   fontFamily: string;
   fontSize: number;
+  onRestart?: () => void | Promise<void>;
 }) {
   const entry = getAgentCatalogEntry(agent.agentId);
+  const [restarting, setRestarting] = useState(false);
   const rows: Array<readonly [string, string]> = [
     ["Agent", entry?.label ?? agent.agentId],
     ["Status", agent.status],
@@ -89,8 +95,13 @@ export function RestoredAgentResultView({
       data-testid="terminal-agent-result"
       style={{ fontFamily, fontSize }}
     >
-      <p className="mb-1 text-muted-foreground">[pier] restored agent</p>
-      <dl className="grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1">
+      <p className="mb-1 text-muted-foreground">
+        {i18next.t("terminal.agentSession.endedTitle")}
+      </p>
+      <p className="mb-2 text-muted-foreground">
+        {i18next.t("terminal.agentSession.endedBody")}
+      </p>
+      <dl className="mb-3 grid grid-cols-[max-content_minmax(0,1fr)] gap-x-3 gap-y-1">
         {rows.map(([label, value]) => (
           <div className="contents" key={label}>
             <dt className="text-muted-foreground">{label}</dt>
@@ -104,6 +115,26 @@ export function RestoredAgentResultView({
           </div>
         )}
       </dl>
+      {onRestart ? (
+        <Button
+          aria-busy={restarting || undefined}
+          data-testid="terminal-agent-restart"
+          disabled={restarting}
+          onClick={() => {
+            if (restarting) {
+              return;
+            }
+            setRestarting(true);
+            Promise.resolve(onRestart()).finally(() => {
+              setRestarting(false);
+            });
+          }}
+          size="sm"
+          type="button"
+        >
+          {i18next.t("terminal.agentSession.restart")}
+        </Button>
+      ) : null}
     </div>
   );
 }

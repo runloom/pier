@@ -22,11 +22,20 @@ export interface GrokUsageWindow {
   windowMinutes?: number | undefined;
 }
 
+export interface GrokSubscriptionSummary {
+  cancelAtPeriodEnd?: boolean | undefined;
+  expiresAt?: number | undefined;
+  planType: string;
+  status: "active" | "canceled" | "expired" | "none" | "unknown";
+  trialEndsAt?: number | undefined;
+}
+
 export interface GrokUsageSnapshot {
   error?: string | undefined;
   fetchedAt: number;
   raw?: unknown;
   status: "ok" | "error";
+  subscription?: GrokSubscriptionSummary | undefined;
   windows: GrokUsageWindow[];
 }
 
@@ -37,6 +46,8 @@ export interface GrokAccountSummary {
   kind: GrokAccountKind;
   label: string;
   status: GrokAccountStatus;
+  /** Soft-fetched membership (OIDC). Absent when unknown / API key. */
+  subscription?: GrokSubscriptionSummary | undefined;
   teamId?: string | undefined;
   /** null = first usage request not finished; object = completed (ok or error). */
   usage?: GrokUsageSnapshot | null | undefined;

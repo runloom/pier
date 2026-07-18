@@ -5,6 +5,7 @@ import {
   formatCount,
   formatDurationShort,
   formatPercent,
+  formatRelativeTime,
 } from "@pier/ui/format.tsx";
 import {
   Item,
@@ -207,6 +208,30 @@ export function resetCredits(
   ).replace("{count}", formatCount(value, language));
 }
 
+/** Plan label + optional ChatGPT subscription expiry for settings/widget/picker. */
+export function accountPlanSummary(
+  account: Pick<CodexAccountSummary, "planType" | "subscriptionExpiresAt">,
+  language: string,
+  t: Translate,
+  now = Date.now()
+): string | null {
+  const plan = account.planType?.toUpperCase();
+  // Free / none accounts can still carry a leftover paid-period claim from a
+  // stale JWT; never surface "Expires …" for non-paid labels.
+  const isUnpaidPlan = plan === "FREE" || plan === "NONE";
+  const showExpiry =
+    account.subscriptionExpiresAt !== undefined && !isUnpaidPlan;
+  if (!(plan || showExpiry)) return null;
+  const parts: string[] = [];
+  if (plan) parts.push(plan);
+  if (showExpiry && account.subscriptionExpiresAt !== undefined) {
+    parts.push(
+      `${t("pier.codex.accounts.settings.expires", "Expires")} ${formatRelativeTime(account.subscriptionExpiresAt, now, language)}`
+    );
+  }
+  return parts.join(" · ");
+}
+
 function IconAction({
   disabled = false,
   icon: Icon,
@@ -276,7 +301,7 @@ export function OtherAccount({
           <ItemTitle title={account.label}>{account.label}</ItemTitle>
           <ItemDescription>
             {[
-              account.planType?.toUpperCase(),
+              accountPlanSummary(account, language, t),
               resetCredits(account, language, t),
             ]
               .filter(Boolean)

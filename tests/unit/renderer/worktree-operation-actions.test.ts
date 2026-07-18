@@ -85,7 +85,12 @@ function createMockContext(): {
     },
     dialogs: {
       alert: alertMock,
+      choice: unimplemented("dialogs.choice"),
+      close: unimplemented("dialogs.close"),
       confirm: unimplemented("dialogs.confirm"),
+      open: unimplemented("dialogs.open"),
+      prompt: unimplemented("dialogs.prompt"),
+      update: unimplemented("dialogs.update"),
     },
     environments: {
       worktreeBinding: worktreeBindingMock,
@@ -140,10 +145,6 @@ function createMockContext(): {
       loading: unimplemented("notifications.loading"),
       success: unimplemented("notifications.success"),
       system: unimplemented("notifications.system"),
-    },
-    overlays: {
-      close: unimplemented("overlays.close"),
-      open: unimplemented("overlays.open"),
     },
     panels: {
       getActiveContext: () => ({
@@ -256,16 +257,17 @@ describe("worktree operation actions", () => {
       copyPatterns: [],
       rootPath: "/repo.worktree",
     }));
-    const openOverlay = vi.fn();
-    context.overlays.open = openOverlay;
+    const openDialog = vi.fn();
+    context.dialogs.open = openDialog;
     registerWorktreeOperationActions(context);
 
     await createAction(actions).handler({
       sourcePanelGroupId: "source-group",
     });
 
-    const registration = openOverlay.mock.calls[0]?.[0];
-    expect(registration?.render({ close: vi.fn() })).toMatchObject({
+    const registration = openDialog.mock.calls[0]?.[0];
+    expect(registration?.id).toBe("worktree-create");
+    expect(registration?.content({ close: vi.fn() })).toMatchObject({
       props: { targetGroupId: "source-group" },
     });
   });

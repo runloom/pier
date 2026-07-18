@@ -82,6 +82,10 @@ export const SUSPENDED_JOB_EXIT_CODES: ReadonlySet<number> = new Set([
   145, 146, 147, 148,
 ]);
 
+export function isSuspendedJobExitCode(code: number | undefined): boolean {
+  return code !== undefined && SUSPENDED_JOB_EXIT_CODES.has(code);
+}
+
 export interface HookScopeIdentity {
   isolated: boolean;
   key: string;

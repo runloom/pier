@@ -69,4 +69,45 @@ export function registerAgentsIpc(ipcMain: IpcMain): void {
       return { launchId };
     }
   );
+
+  ipcMain.handle(
+    "pier:agents:prepareLaunchFromSpec",
+    async (
+      _e,
+      spec: {
+        agentId: AgentKind;
+        command?: string;
+        cwd?: string;
+      }
+    ): Promise<{ launchId: string | null }> => {
+      const prefs = await appCore.services.preferences.read();
+      if (prefs.disabledAgentIds?.includes(spec.agentId)) {
+        return { launchId: null };
+      }
+
+      const command =
+        typeof spec.command === "string" && spec.command.trim().length > 0
+          ? spec.command
+          : resolveAgentLaunch({
+              agentId: spec.agentId,
+              override: prefs.agentCommandOverrides?.[spec.agentId],
+              agentDefaultArgs: prefs.agentDefaultArgs,
+              agentDefaultEnv: prefs.agentDefaultEnv,
+              agentPermissionMode: prefs.agentPermissionMode,
+            })?.command;
+
+      if (!command) {
+        return { launchId: null };
+      }
+
+      const launchId = terminalLaunchRegistry.register({
+        agentId: spec.agentId,
+        command,
+        ...(typeof spec.cwd === "string" && spec.cwd.trim().length > 0
+          ? { cwd: spec.cwd }
+          : {}),
+      });
+      return { launchId };
+    }
+  );
 }

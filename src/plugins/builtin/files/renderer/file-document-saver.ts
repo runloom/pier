@@ -267,7 +267,7 @@ export class FileDocumentSaver {
       ),
       cancelLabel: this.#t("filePanel.conflict.cancelLabel", "Cancel"),
       confirmLabel: this.#t("filePanel.conflict.confirmLabel", "Overwrite"),
-      intent: "destructive",
+      intent: "default",
       size: "default",
       title: this.#t("filePanel.conflict.title", "File changed on disk"),
     });

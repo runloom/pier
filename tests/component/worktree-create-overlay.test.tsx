@@ -1,6 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { GIT_PLUGIN_LOCALES } from "@plugins/builtin/git/locales/index.ts";
-import { GIT_PLUGIN_ID } from "@plugins/builtin/git/manifest.ts";
 import {
   openWorktreeCreateOverlay,
   type WorktreeCreateOverlayData,
@@ -22,13 +21,14 @@ import type {
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { PluginOverlayHost } from "@/components/common/plugin-overlay-host.tsx";
-import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
+import { AppContentDialogHost } from "@/components/common/app-content-dialog-host.tsx";
 import {
-  closeOverlaysForPlugin,
-  closePluginOverlay,
-  openPluginOverlay,
-} from "@/stores/plugin-overlay.store.ts";
+  closeAppContentDialog,
+  openAppContentDialog,
+  resetAppContentDialogForTests,
+  updateAppContentDialog,
+} from "@/stores/app-content-dialog.store.ts";
+import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 const TASK_LABEL = "Task";
@@ -242,8 +242,11 @@ function createMockContext(): RendererPluginContext {
     dialogs: {
       alert: dialogAlertMock,
       choice: unimplemented("dialogs.choice"),
+      close: (id, result) => closeAppContentDialog(id, result),
       confirm: unimplemented("dialogs.confirm"),
+      open: (request) => openAppContentDialog(request),
       prompt: unimplemented("dialogs.prompt"),
+      update: (id, patch) => updateAppContentDialog(id, patch),
     },
     environments: {
       projectSnapshot: unimplemented("environments.projectSnapshot"),
@@ -334,10 +337,6 @@ function createMockContext(): RendererPluginContext {
       success: unimplemented("notifications.success"),
       system: unimplemented("notifications.system"),
     },
-    overlays: {
-      close: (id) => closePluginOverlay(GIT_PLUGIN_ID, id),
-      open: (overlay) => openPluginOverlay(GIT_PLUGIN_ID, overlay),
-    },
     panels: {
       flushLayout: unimplemented("panels.flushLayout"),
       getActiveContext: unimplemented("panels.getActiveContext"),
@@ -400,13 +399,12 @@ function installSelectPolyfills(): void {
     Element.prototype.scrollIntoView = () => undefined;
   }
 }
-
 async function openOverlay(
   context: RendererPluginContext,
   data = overlayData(),
   targetGroupId?: string
 ): Promise<void> {
-  render(<PluginOverlayHost />);
+  render(<AppContentDialogHost />);
   act(() => {
     openWorktreeCreateOverlay(context, data, targetGroupId);
   });
@@ -466,10 +464,9 @@ describe("WorktreeCreateOverlay", () => {
       isOpen: false,
     });
   });
-
   afterEach(() => {
     act(() => {
-      closeOverlaysForPlugin(GIT_PLUGIN_ID);
+      resetAppContentDialogForTests();
     });
     cleanup();
     useKeybindingScope.setState({

@@ -8,9 +8,18 @@
 - 触发：`push` tags `v*`；或 `workflow_dispatch`（输入已有 tag）
 - `workflow_dispatch` 会 **checkout 该 tag**，不用默认分支 HEAD
 - 关键步骤：`verify-app-release-version.mjs`（tag 去 `v` == `package.json` version）→ `pnpm build:dist --publish=always`
+- `build:dist`：**先** `electron-builder --publish never` 打齐双架构 → `verify-mac-release-artifacts.mjs` 硬校验 → 通过后才 `publish-mac-release-artifacts.mjs` 上传
+- 必需资产（electron-builder 默认命名，x64 无 arch 后缀）：
+  - `latest-mac.yml`
+  - `Pier-<ver>-arm64-mac.zip` / `Pier-<ver>-mac.zip`
+  - `Pier-<ver>-arm64.dmg` / `Pier-<ver>.dmg`
+- `publish-mac-release-artifacts.mjs` 会强制 `EP_GH_IGNORE_TIME=true`（覆盖 >2h 旧 release 的静默 skip），并在上传后再查 GitHub 远端资产；缺 arm64 dmg 等会硬失败
 - `electron-builder.yml`：`publish.releaseType: release`（禁止 draft，否则无 Latest）
 - 使用 `CSC_LINK` 时 workflow 设置 `PIER_DIST_ALLOW_CSC_LINK_PUBLISH=1`（`build-dist.sh` 默认禁 CSC_LINK publish）
-- 发布后强制门禁：`scripts/verify-github-latest-isolation.mjs --expect-version <ver>`（Latest 必须是本宿主版且含 `latest-mac.yml`）
+- 发布后门禁：
+  - 本地：`verify-mac-release-artifacts.mjs --dir dist-builder --version <ver>`
+  - 上传后远端：publish wrapper 内嵌 dual-arch 校验
+  - GitHub Latest：`verify-github-latest-isolation.mjs --expect-version <ver>`
 
 ## Secrets
 

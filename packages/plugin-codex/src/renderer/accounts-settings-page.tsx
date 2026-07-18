@@ -20,7 +20,6 @@ import {
 import { formatRelativeTime } from "@pier/ui/format.tsx";
 import {
   Item,
-  ItemActions,
   ItemContent,
   ItemDescription,
   ItemGroup,
@@ -46,6 +45,7 @@ import {
 } from "../shared/accounts.ts";
 import {
   AccountAvatar,
+  accountPlanSummary,
   OtherAccount,
   QuotaGroup,
   resetCredits,
@@ -161,7 +161,9 @@ export function AccountsSettingsPage({
         "pier.codex.accounts.settings.removeConfirmBody",
         "This account will be removed from Pier."
       ),
+      confirmLabel: t("pier.codex.accounts.settings.remove", "Remove"),
       intent: "destructive",
+      size: "sm",
       title: t(
         "pier.codex.accounts.settings.removeConfirmTitle",
         "Remove account?"
@@ -356,7 +358,7 @@ export function AccountsSettingsPage({
                 <ItemTitle title={active.label}>{active.label}</ItemTitle>
                 <ItemDescription>
                   {[
-                    active.planType?.toUpperCase(),
+                    accountPlanSummary(active, language, t),
                     resetCredits(active, language, t),
                     active.usage
                       ? `${t("pier.codex.accounts.settings.updated", "Updated")} ${formatRelativeTime(active.usage.fetchedAt, Date.now(), language)}`
@@ -366,14 +368,6 @@ export function AccountsSettingsPage({
                     .join(" · ")}
                 </ItemDescription>
               </ItemContent>
-              <ItemActions>
-                <Badge variant="secondary">
-                  {t(
-                    "pier.codex.accounts.settings.systemDefault",
-                    "System default"
-                  )}
-                </Badge>
-              </ItemActions>
             </Item>
             <ItemSeparator className="my-0" />
             <QuotaGroup

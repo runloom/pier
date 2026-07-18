@@ -33,6 +33,21 @@ describe("Codex App Server usage parsing", () => {
     });
   });
 
+  it("preserves live planType from the rateLimits payload", () => {
+    expect(
+      parseRateLimitsResult({
+        rateLimits: {
+          limitId: "codex",
+          planType: "free",
+          primary: { usedPercent: 12, windowDurationMins: 300 },
+        },
+      })
+    ).toMatchObject({
+      planType: "free",
+      status: "ok",
+    });
+  });
+
   it.each([
     [15, "codex:primary"],
     [300, "codex:primary"],

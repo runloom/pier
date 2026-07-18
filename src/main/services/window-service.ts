@@ -7,7 +7,10 @@ import type {
 import { flushPanelContextState } from "../state/panel-context-state.ts";
 import { flushPluginSettings } from "../state/plugin-settings.ts";
 import { flushPluginState } from "../state/plugin-state.ts";
-import { flushTerminalSessionState } from "../state/terminal-session-state.ts";
+import {
+  detachAgentsForWindow,
+  flushTerminalSessionState,
+} from "../state/terminal-session-state.ts";
 import { flushTerminalStatusBarPrefs } from "../state/terminal-status-bar-prefs.ts";
 import {
   createWindowRecord,
@@ -24,6 +27,7 @@ import {
   type WindowCloseResult,
   windowManager,
 } from "../windows/window-manager.ts";
+import { armDetaching } from "./agents/window-detaching-guard.ts";
 
 export interface WindowService {
   close(windowId: string): Promise<WindowCloseResult>;
@@ -127,6 +131,21 @@ async function flushAllStoresSettled(): Promise<void> {
     }
   }
 }
+async function armAndDetachAgentsBeforeClose(windowId: string): Promise<void> {
+  const window = windowManager.get(windowId);
+  if (!window || window.isDestroyed()) {
+    return;
+  }
+  const context = findWindowContext(window);
+  if (!context) {
+    return;
+  }
+  // terminal session store 键是 runtime windowId（main / w-N），不是 layout record UUID。
+  const electronWindowId = context.electronWindowId ?? String(window.id);
+  const sessionScope = context.windowId;
+  armDetaching({ electronWindowId, recordId: sessionScope });
+  await detachAgentsForWindow(sessionScope);
+}
 
 async function prepareWindowBeforeCloseCore(
   windowId: string
@@ -181,6 +200,7 @@ async function prepareWindowBeforeCloseCore(
     await reportCloseFailure(windowId, err);
     return "veto";
   }
+  await armAndDetachAgentsBeforeClose(windowId);
   await flushAllStoresSettled();
   return "allow";
 }
@@ -345,10 +365,18 @@ export function createWindowService(
             }
           }
         }
-        await flushAllStoresSettled();
         if (failures.length > 0) {
+          // abort：不 arm detaching（避免永久卡住），仍 flush 既有关键状态
+          await flushAllStoresSettled();
           throw new AggregateError(failures, "window close preparation failed");
         }
+        // 仅在确定会销毁窗口时 arm+detach
+        await Promise.allSettled(
+          windows.map((windowInfo) =>
+            armAndDetachAgentsBeforeClose(windowInfo.id)
+          )
+        );
+        await flushAllStoresSettled();
         quitSealed = true;
       }),
     flushWindow: flushWindowBeforeClose,

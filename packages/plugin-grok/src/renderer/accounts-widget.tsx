@@ -16,10 +16,10 @@ import {
 import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import { RefreshCw } from "lucide-react";
 import type { JSX } from "react";
-import type { GrokAccountKind } from "../shared/accounts.ts";
 import {
   AccountAvatar,
   accountDisplayLabel,
+  accountMembershipSummary,
   QuotaGroup,
 } from "./account-display.tsx";
 import { AccountPicker } from "./account-picker.tsx";
@@ -29,11 +29,6 @@ import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
 
 export interface AccountsWidgetProps extends WorkbenchWidgetComponentProps {
   context: ExternalRendererPluginContext;
-}
-
-function accountKindLabel(kind: GrokAccountKind): string {
-  if (kind === "api_key") return "API key";
-  return "OIDC";
 }
 
 export function AccountsWidget({
@@ -120,7 +115,11 @@ export function AccountsWidget({
           <ItemDescription>
             <span>
               {activeAccount
-                ? accountKindLabel(activeAccount.kind)
+                ? accountMembershipSummary(
+                    activeAccount,
+                    context.i18n.language(),
+                    t
+                  )
                 : t("pier.grok.widget.noActiveAccount", "No active account")}
             </span>
             {fetchedLabel && size.w >= 4 ? (

@@ -1,5 +1,14 @@
 export const terminal = {
   closeFailed: "Failed to close terminal",
+  agentSession: {
+    coldStart: "Couldn’t resume the previous session. Started a fresh agent.",
+    endedBody: "The previous session has exited. You can start it again.",
+    endedTitle: "Agent ended",
+    restart: "Restart agent",
+    restartFailed: "Couldn’t restart agent",
+    unsupported:
+      "This agent can’t resume the previous session. Started a fresh agent.",
+  },
   agentStatus: {
     error: "Error",
     processing: "Thinking",

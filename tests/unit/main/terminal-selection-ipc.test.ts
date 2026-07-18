@@ -84,6 +84,7 @@ describe("terminal selection text IPC", () => {
       patchTerminalPanelTaskStatus: vi.fn(async () => true),
       readTerminalPanelSession: vi.fn(async () => null),
       removeTerminalPanelSession: vi.fn(async () => undefined),
+      retainTerminalPanelSessions: vi.fn(async () => undefined),
       updateTerminalPanelAgent: vi.fn(async () => undefined),
       updateTerminalPanelAgentResume: vi.fn(async () => true),
       updateTerminalPanelContext: vi.fn(async () => undefined),

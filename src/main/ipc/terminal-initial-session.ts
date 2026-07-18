@@ -1,6 +1,7 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   CreateTerminalArgs,
+  TerminalAgentPanelMetadata,
   TerminalAgentResumeMetadata,
 } from "@shared/contracts/terminal.ts";
 import type {
@@ -43,27 +44,50 @@ export async function persistInitialTerminalTask(
   }
 }
 
+function toRestoreLaunch(
+  launch: ResolvedTerminalLaunchOptions
+): TerminalAgentRestoreLaunchOptions {
+  return {
+    ...(launch.agentId && { agentId: launch.agentId }),
+    ...(launch.command && { command: launch.command }),
+    ...(launch.cwd && { cwd: launch.cwd }),
+  };
+}
+
 export async function persistInitialTerminalAgent(
   sessionScope: string,
   panelId: string,
   agentId: AgentKind | undefined,
   launch: ResolvedTerminalLaunchOptions | undefined,
-  options: { resume?: TerminalAgentResumeMetadata | undefined } = {}
+  options: {
+    existing?: TerminalAgentPanelMetadata | null | undefined;
+    resume?: TerminalAgentResumeMetadata | undefined;
+    restoredAgentLaunch?: boolean | undefined;
+  } = {}
 ): Promise<void> {
   if (!(agentId && launch)) {
     return;
   }
-  const restoreLaunch: TerminalAgentRestoreLaunchOptions = {
-    ...(launch.agentId && { agentId: launch.agentId }),
-    ...(launch.command && { command: launch.command }),
-    ...(launch.cwd && { cwd: launch.cwd }),
-  };
+  const existing = options.existing ?? null;
+  const restoreLaunch =
+    options.restoredAgentLaunch && existing?.launch
+      ? existing.launch
+      : toRestoreLaunch(launch);
+  const resume = options.restoredAgentLaunch
+    ? (existing?.resume ?? options.resume)
+    : options.resume;
+  const startedAt = options.restoredAgentLaunch
+    ? (existing?.startedAt ?? Date.now())
+    : Date.now();
   try {
     await updateTerminalPanelAgent(sessionScope, panelId, {
       agentId,
       launch: restoreLaunch,
-      ...(options.resume && { resume: options.resume }),
-      startedAt: Date.now(),
+      ...(resume && { resume }),
+      ...(options.restoredAgentLaunch && existing?.restore
+        ? { restore: existing.restore }
+        : {}),
+      startedAt,
       status: "running",
     });
   } catch (err) {

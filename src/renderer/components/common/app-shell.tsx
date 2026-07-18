@@ -8,7 +8,6 @@ import { CommandPalette } from "@/components/common/command-palette.tsx";
 import { DiffWorkerHost } from "@/components/common/diff-worker-host.tsx";
 import { DocumentTitle } from "@/components/common/document-title.tsx";
 import { ForegroundActivityBridge } from "@/components/common/foreground-activity-bridge.tsx";
-import { PluginOverlayHost } from "@/components/common/plugin-overlay-host.tsx";
 import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
 import { TaskOutputSyncBridge } from "@/components/common/task-output-sync-bridge.tsx";
 import { TaskRunsErrorBridge } from "@/components/common/task-runs-error-bridge.tsx";
@@ -37,7 +36,6 @@ export function AppShell() {
       <AppQuitDialogBridge />
       <AppDialogHost />
       <AppContentDialogHost />
-      <PluginOverlayHost />
       <TerminalDebugSnapshotBridge />
       <ForegroundActivityBridge />
       <AppUpdateBridge />

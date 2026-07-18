@@ -47,6 +47,7 @@ export function buildAccountsSnapshot({
       status,
       ...(record.email ? { email: record.email } : {}),
       ...(record.teamId ? { teamId: record.teamId } : {}),
+      ...(usage?.subscription ? { subscription: usage.subscription } : {}),
       error: lastLoginError && !loginPending ? lastLoginError.message : null,
       usage: usage ? toUsageSnapshot(usage) : null,
     };

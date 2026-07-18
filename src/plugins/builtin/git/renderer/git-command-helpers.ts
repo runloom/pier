@@ -4,7 +4,6 @@ import type {
   RendererPluginDialogSize,
   RendererPluginLoadingNotification,
 } from "@plugins/api/renderer.ts";
-import { pluginText } from "./git-plugin-text.ts";
 import { activeGitTarget } from "./git-target.ts";
 
 export function commandTitle(
@@ -58,12 +57,13 @@ export function showError(
 
 export function showUnavailable(
   context: RendererPluginContext,
-  _title: string,
+  title: string,
   detail?: string
 ): Promise<void> {
   return context.dialogs.alert({
     ...(detail ? { body: detail } : {}),
-    title: pluginText(context, "gitErrorUnavailable", "Git operation failed"),
+    size: "default",
+    title,
   });
 }
 

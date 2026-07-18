@@ -31,6 +31,11 @@ export const terminalAgentPanelMetadataSchema = z.object({
       source: z.literal("hook"),
     })
     .optional(),
+  restore: z
+    .object({
+      detachedAt: z.number().int().nonnegative().optional(),
+    })
+    .optional(),
   startedAt: z.number().int().nonnegative(),
   status: z.enum(["exited", "running"]),
 });

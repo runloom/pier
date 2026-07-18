@@ -75,11 +75,14 @@ jobs:
           PIER_DIST_ALLOW_CSC_LINK_PUBLISH: "1"
         run: pnpm build:dist --publish=always
 
-      - name: Verify Latest update metadata exists locally
+      - name: Verify dual-arch mac artifacts exist locally
         run: |
           set -euo pipefail
-          ls -lh dist-builder/latest-mac.yml dist-builder/*.zip
-          test -f dist-builder/latest-mac.yml
+          VERSION="${{ steps.version.outputs.version }}"
+          ls -lh dist-builder/latest-mac.yml dist-builder/*.zip dist-builder/*.dmg
+          node ./scripts/verify-mac-release-artifacts.mjs \
+            --dir dist-builder \
+            --version "$VERSION"
 
       - name: Verify GitHub Latest is host channel
         env:

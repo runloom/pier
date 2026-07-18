@@ -21,16 +21,33 @@ const mocks = vi.hoisted(() => {
         windowId: string;
       }) => Promise<"allow" | "veto"> | "allow" | "veto")
     | null = null;
-  const liveWindowContexts: Array<{ recordId: string }> = [];
+  const liveWindowContexts: Array<{
+    electronId: number;
+    recordId: string;
+    windowId: string;
+  }> = [];
   return {
     close: vi.fn(),
-    create: vi.fn((options?: { recordId?: string; showInactive?: boolean }) => {
-      liveWindowContexts.push({ recordId: options?.recordId ?? "unknown" });
-      return "w-1";
-    }),
+    create: vi.fn(
+      (options?: {
+        id?: string;
+        recordId?: string;
+        showInactive?: boolean;
+      }) => {
+        liveWindowContexts.push({
+          electronId: liveWindowContexts.length + 1,
+          recordId: options?.recordId ?? "unknown",
+          // Track the runtime id the service requested so get(windowId) works.
+          windowId: options?.id ?? `w-${liveWindowContexts.length + 1}`,
+        });
+        // Historical mock return: service tests assert "w-1" as the create result.
+        return "w-1";
+      }
+    ),
     createWindowRecord: vi.fn(async () => ({ id: "record-new" })),
     flushPluginSettings: vi.fn(async () => undefined),
     flushPluginState: vi.fn(async () => undefined),
+    detachAgentsForWindow: vi.fn(async () => undefined),
     flushTerminalSessionState: vi.fn(async () => undefined),
     flushTerminalStatusBarPrefs: vi.fn(async () => undefined),
     flushWindowRecordState: vi.fn(async () => undefined),
@@ -39,10 +56,28 @@ const mocks = vi.hoisted(() => {
     getCloseCallback: () => closeCallback,
     getFocusCallback: () => focusCallback,
     getBeforeCloseCallback: () => beforeCloseCallback,
+    get: vi.fn((windowId: string) => {
+      const match = liveWindowContexts.find(
+        (context) => context.windowId === windowId
+      );
+      if (!match) {
+        return;
+      }
+      return {
+        id: match.electronId,
+        isDestroyed: () => false,
+        __recordId: match.recordId,
+        __electronWindowId: String(match.electronId),
+        __windowId: match.windowId,
+      };
+    }),
     getAll: vi.fn(() =>
       liveWindowContexts.map((context) => ({
+        id: context.electronId,
         isDestroyed: () => false,
         __recordId: context.recordId,
+        __electronWindowId: String(context.electronId),
+        __windowId: context.windowId,
       }))
     ),
     list: vi.fn(
@@ -79,7 +114,13 @@ const mocks = vi.hoisted(() => {
     },
     setLiveWindowRecords: (recordIds: string[]) => {
       liveWindowContexts.length = 0;
-      liveWindowContexts.push(...recordIds.map((recordId) => ({ recordId })));
+      liveWindowContexts.push(
+        ...recordIds.map((recordId, index) => ({
+          electronId: index + 1,
+          recordId,
+          windowId: index === 0 ? "main" : `w-${index}`,
+        }))
+      );
     },
   };
 });
@@ -96,7 +137,12 @@ vi.mock("@main/state/window-record-state.ts", () => ({
 }));
 
 vi.mock("@main/state/terminal-session-state.ts", () => ({
+  detachAgentsForWindow: mocks.detachAgentsForWindow,
   flushTerminalSessionState: mocks.flushTerminalSessionState,
+}));
+
+vi.mock("@main/services/agents/window-detaching-guard.ts", () => ({
+  armDetaching: vi.fn(),
 }));
 
 vi.mock("@main/state/plugin-state.ts", () => ({
@@ -120,6 +166,7 @@ vi.mock("@main/windows/window-manager.ts", () => ({
     close: mocks.close,
     create: mocks.create,
     focus: mocks.focus,
+    get: mocks.get,
     getAll: mocks.getAll,
     list: mocks.list,
     onBeforeClose: mocks.onBeforeClose,
@@ -129,13 +176,17 @@ vi.mock("@main/windows/window-manager.ts", () => ({
 }));
 
 vi.mock("@main/windows/window-identity.ts", () => ({
-  findWindowContext: (window: { __recordId?: string }) =>
+  findWindowContext: (window: {
+    __electronWindowId?: string;
+    __recordId?: string;
+    __windowId?: string;
+  }) =>
     window.__recordId
       ? {
-          mode: "restore",
+          electronWindowId: window.__electronWindowId ?? "1",
+          mode: "restore" as const,
           recordId: window.__recordId,
-          sessionId: window.__recordId,
-          windowId: "main",
+          windowId: window.__windowId ?? "main",
         }
       : null,
 }));
@@ -246,11 +297,15 @@ describe("WindowService", () => {
 
   it("flushes renderer layout and debounced main state before a user close completes", async () => {
     const prepareRendererClose = vi.fn(async () => undefined);
+    const { armDetaching } = await import(
+      "@main/services/agents/window-detaching-guard.ts"
+    );
     const { createWindowService } = await import(
       "@main/services/window-service.ts"
     );
 
     createWindowService({ prepareRendererClose });
+    mocks.setLiveWindowRecords(["record-1"]);
     const decision = await mocks.getBeforeCloseCallback()?.({
       recordId: "record-1",
       windowId: "main",
@@ -262,6 +317,11 @@ describe("WindowService", () => {
       "window-close",
       expect.stringMatching(/^window-close:main:/)
     );
+    expect(armDetaching).toHaveBeenCalledWith({
+      electronWindowId: "1",
+      recordId: "main",
+    });
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("main");
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
@@ -272,10 +332,14 @@ describe("WindowService", () => {
 
   it("flushes every live window before Cmd+Q destroys windows", async () => {
     const prepareRendererClose = vi.fn(async () => undefined);
+    mocks.setLiveWindowRecords(["record-main", "record-w-1"]);
     mocks.list.mockReturnValueOnce([
       { focused: true, id: "main", recordId: "record-main" },
       { focused: false, id: "w-1", recordId: "record-w-1" },
     ]);
+    const { armDetaching } = await import(
+      "@main/services/agents/window-detaching-guard.ts"
+    );
     const { createWindowService } = await import(
       "@main/services/window-service.ts"
     );
@@ -293,6 +357,16 @@ describe("WindowService", () => {
       "app-quit",
       expect.stringMatching(/^app-quit:/)
     );
+    expect(armDetaching).toHaveBeenCalledWith({
+      electronWindowId: "1",
+      recordId: "main",
+    });
+    expect(armDetaching).toHaveBeenCalledWith({
+      electronWindowId: "2",
+      recordId: "w-1",
+    });
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("main");
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("w-1");
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
@@ -434,6 +508,9 @@ describe("WindowService", () => {
       { focused: true, id: "main", recordId: "record-main" },
       { focused: false, id: "w-1", recordId: "record-w-1" },
     ]);
+    const { armDetaching } = await import(
+      "@main/services/agents/window-detaching-guard.ts"
+    );
     const { createWindowService } = await import(
       "@main/services/window-service.ts"
     );
@@ -449,6 +526,8 @@ describe("WindowService", () => {
     expect(prepareRendererClose).toHaveBeenCalledTimes(2);
     expect(flushCriticalState).toHaveBeenCalledOnce();
     expect(mocks.flushWindowRecordState).toHaveBeenCalledOnce();
+    expect(armDetaching).not.toHaveBeenCalled();
+    expect(mocks.detachAgentsForWindow).not.toHaveBeenCalled();
   });
 
   it("restores the last user-closed window when the app is activated with no live windows", async () => {

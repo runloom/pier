@@ -50,7 +50,8 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 宿主级确认/提示弹窗统一走 `src/renderer/components/common/app-dialog-host.tsx`：
 
-- 业务代码不要直接 import `@pier/ui/alert-dialog.tsx`；宿主 renderer 使用 `showAppConfirm` / `showAppAlert` / `showAppChoice` / `showAppPrompt`，插件使用 `RendererPluginContext.dialogs`。
+- 业务代码不要直接 import `@pier/ui/alert-dialog.tsx`；宿主 renderer 使用 `showAppConfirm` / `showAppAlert` / `showAppChoice` / `showAppPrompt`，插件使用 `RendererPluginContext.dialogs` / `ExternalRendererPluginContext.dialogs`。
+- builtin 与 external 插件的简单弹窗 API **同构**：`alert` / `confirm` / `choice` / `prompt`；复杂内容另加 `open` / `update` / `close`。
 - 布局（路线 B：桌面工具对话框；macOS 优先，全平台同一套壳）：
   - 文案一律左齐；`size` 只控制宽度，不再切换居中营销卡
   - 密度：`p-5` + `gap-4`、标题 `text-base`、footer **右簇**（禁止 sm 两列等宽铺满）
@@ -62,10 +63,12 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - `size`：
   - `sm`：仅两键短确认 / 短 prompt（退出、删除、关 panel）
   - `default`：三键 `choice`、较长说明、错误详情；`choice` 调用方必须传 `default`，host 渲染也强制 default 宽
+  - 长错误 `alert` 默认 `default`；短告知才显式 `sm`
 - `intent`：调用方必填，不要在 `AppDialogHost` 里按标题或文案猜测危险程度
   - 破坏性确认必须显式传 `intent: "destructive"`，普通确认显式传 `intent: "default"`
   - `confirm` / `prompt`：作用在**主按钮**
   - `choice`：作用在 **alt**（不保存/丢弃）；confirm 始终 default 样式
+  - 若破坏动作落在 `choice.confirm`（如覆盖），`intent` 仍必须 `"default"`，不能为了“看起来危险”去染 alt
 - 取消按钮一律 `outline`（含 destructive 场景）；Esc / 点遮罩 = 取消
 - `showAppAlert` 可省略 size（默认 default）；短 alert 如需小尺寸由调用方显式传 `size: "sm"`
 - 检查点在 `tests/unit/renderer/app-dialog-governance.test.ts` 与 `tests/component/app-dialog-host.test.tsx`
@@ -74,7 +77,18 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 - 宿主业务使用 `openAppContentDialog` / `updateAppContentDialog` / `closeAppContentDialog`；插件使用 `context.dialogs.open` / `update` / `close`（不要再挂自己的 `@pier/ui/dialog` 产品壳）。
 - 插件 renderer 禁止 import `@pier/ui/dialog` 或 `@pier/ui/alert-dialog`；嵌套插件 Dialog（Settings 内再开插件 Dialog）一律禁止。
-- 短确认/破坏性确认仍走 `dialogs.confirm` / `showAppConfirm`，不要把纯确认塞进 content dialog。
+- **决策树**（必须按此选型，禁止“图省事全走 content dialog”）：
+  1. 短成功 / 弱反馈 → toast
+  2. 只告知、无决策 → `alert`（长错误 `default`，短告知可 `sm`）
+  3. 取消 | 确认 → `confirm`
+  4. alt | 取消 | 确认 → `choice`
+  5. 单行输入 + 校验 → `prompt`
+  6. 多控件 / 多步 / 等待态 / 结构化结果 → `dialogs.open`（content dialog）
+  7. 全页产品壳（设置、物料库）→ 宿主自有 `Dialog`（非插件）
+- **无自定义控件的纯确认/提示，禁止塞进 content dialog**（含“title/description + 两个按钮”）。
+- 短确认/破坏性确认仍走 `dialogs.confirm` / `showAppConfirm`。
+- 模态层级约定：content dialog 栈 > `AppDialogHost` 单槽 > Settings 等宿主产品壳；`AppDialogHost` 新请求会顶替未决简单弹窗，content 栈独立。
+- `context.overlays` **已删除**：历史“插件自挂 Dialog 壳”通道不再存在；新代码与存量一律 `dialogs.open`。
 - 检查点在 `tests/unit/renderer/plugin-product-dialog-governance.test.ts` 与 content dialog 单测。
 
 ### 浮层后打开 Dialog / 设置

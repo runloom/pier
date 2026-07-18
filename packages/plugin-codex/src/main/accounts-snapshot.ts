@@ -34,6 +34,9 @@ export function buildAccountsSnapshot({
       id: record.id,
       label: record.email ?? record.id,
       ...(record.planType ? { planType: record.planType } : {}),
+      ...(record.subscriptionExpiresAt === undefined
+        ? {}
+        : { subscriptionExpiresAt: record.subscriptionExpiresAt }),
       status: record.id === state.activeAccountId ? "active" : "available",
       usage: usage ? toUsageSnapshot(usage) : null,
       error:

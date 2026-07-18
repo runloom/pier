@@ -19,7 +19,10 @@ import { ArrowLeftRight, Settings } from "lucide-react";
 import type { JSX } from "react";
 import { useState } from "react";
 import type { GrokAccountSummary } from "../shared/accounts.ts";
-import { accountDisplayLabel } from "./account-display.tsx";
+import {
+  accountDisplayLabel,
+  accountMembershipSummary,
+} from "./account-display.tsx";
 import { openSwitchConfirmDialog } from "./account-switch.ts";
 import { formatAccountError, type Translate } from "./format-account-error.ts";
 
@@ -126,7 +129,11 @@ export function AccountPicker({
                   {accountDisplayLabel(account)}
                 </span>
                 <span className="block text-muted-foreground text-xs">
-                  {account.kind === "api_key" ? "API key" : "OIDC"}
+                  {accountMembershipSummary(
+                    account,
+                    context.i18n.language(),
+                    t
+                  )}
                 </span>
               </span>
             </DropdownMenuItem>

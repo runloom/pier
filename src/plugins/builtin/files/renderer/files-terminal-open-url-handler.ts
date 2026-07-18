@@ -4,7 +4,11 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { TerminalOpenUrlEvent } from "@shared/contracts/terminal.ts";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
-import { basename } from "./file-tree-action-utils.ts";
+import { sourceTitle } from "./file-panel-source.ts";
+import {
+  parseFilesDocumentPanelSource,
+  sameFilesDocumentPanelSource,
+} from "./files-document-types.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
 import { openProjectFiles } from "./files-open-project.ts";
 import {
@@ -13,6 +17,14 @@ import {
 } from "./files-terminal-open-url-anchors.ts";
 import { parseTerminalOpenUrl } from "./files-terminal-open-url-resolve.ts";
 import { revealFilesTreePath } from "./files-tree-registry.ts";
+
+type SystemOpenFallbackReason =
+  | "binary-or-unsupported"
+  | "missing-panel-context"
+  | "missing-path"
+  | "open-instance-failed"
+  | "open-project-failed"
+  | "outside-anchor";
 
 const inflight = new Set<string>();
 
@@ -41,8 +53,13 @@ function withTerminalAnchor(
 
 async function openAbsoluteWithSystem(
   context: RendererPluginContext,
-  absolutePath: string
+  absolutePath: string,
+  reason: SystemOpenFallbackReason
 ): Promise<boolean> {
+  console.info("[files-terminal-open-url] system open fallback", {
+    path: absolutePath,
+    reason,
+  });
   const result = await context.files.openPath({ path: absolutePath });
   if (!result.opened) {
     const t = createFilesTranslate(context);
@@ -67,16 +84,34 @@ function openDiskFile(
     path: relativePath,
     root,
   };
+  // Align with Cmd+P: activate an already-open same-source tab instead of
+  // minting a fresh nonce instance id on every terminal path click.
+  const existingInstance = context.panels
+    .listInstances(FILES_FILE_PANEL_ID)
+    .find((instance) =>
+      sameFilesDocumentPanelSource(
+        parseFilesDocumentPanelSource(instance.params),
+        source
+      )
+    );
+  const existingSource = parseFilesDocumentPanelSource(
+    existingInstance?.params
+  );
+  const existingParams = existingInstance?.params
+    ? { ...existingInstance.params }
+    : null;
+  const params = existingParams ?? {
+    pinned: true,
+    source,
+  };
+
   context.panels.openInstance({
     componentId: FILES_FILE_PANEL_ID,
-    context: panelContext,
+    ...(existingInstance ? {} : { context: panelContext }),
     dropUnpinnedInstances: false,
-    instanceId: createFileFilePanelInstanceId(source),
-    params: {
-      pinned: true,
-      source,
-    },
-    title: basename(relativePath),
+    instanceId: existingInstance?.id ?? createFileFilePanelInstanceId(source),
+    params,
+    title: sourceTitle(existingSource ?? source),
   });
 }
 
@@ -119,18 +154,30 @@ export async function handleFilesTerminalOpenUrl(
   inflight.add(absolutePath);
   try {
     if (!panelContext) {
-      return await openAbsoluteWithSystem(context, absolutePath);
+      return await openAbsoluteWithSystem(
+        context,
+        absolutePath,
+        "missing-panel-context"
+      );
     }
 
     const anchors = terminalOpenUrlAnchors(panelContext);
     const anchor = longestCoveringAnchor(absolutePath, anchors);
     if (!anchor) {
-      return await openAbsoluteWithSystem(context, absolutePath);
+      return await openAbsoluteWithSystem(
+        context,
+        absolutePath,
+        "outside-anchor"
+      );
     }
 
     const relativePath = toRootRelative(anchor, absolutePath);
     if (relativePath === null) {
-      return await openAbsoluteWithSystem(context, absolutePath);
+      return await openAbsoluteWithSystem(
+        context,
+        absolutePath,
+        "outside-anchor"
+      );
     }
 
     const openContext = withTerminalAnchor(panelContext, anchor);
@@ -138,7 +185,11 @@ export async function handleFilesTerminalOpenUrl(
     if (relativePath === "") {
       const opened = openProjectFiles(context, openContext);
       if (!opened.ok) {
-        return await openAbsoluteWithSystem(context, absolutePath);
+        return await openAbsoluteWithSystem(
+          context,
+          absolutePath,
+          "open-project-failed"
+        );
       }
       globalThis.setTimeout(() => {
         revealFilesTreePath({ path: "", root: anchor });
@@ -152,13 +203,21 @@ export async function handleFilesTerminalOpenUrl(
     });
 
     if (!stat.exists) {
-      return await openAbsoluteWithSystem(context, absolutePath);
+      return await openAbsoluteWithSystem(
+        context,
+        absolutePath,
+        "missing-path"
+      );
     }
 
     if (stat.isDirectory) {
       const opened = openProjectFiles(context, openContext);
       if (!opened.ok) {
-        return await openAbsoluteWithSystem(context, absolutePath);
+        return await openAbsoluteWithSystem(
+          context,
+          absolutePath,
+          "open-project-failed"
+        );
       }
       globalThis.setTimeout(() => {
         revealFilesTreePath({
@@ -179,14 +238,22 @@ export async function handleFilesTerminalOpenUrl(
       document.kind === "unsupported-encoding" ||
       document.kind === "unsupported-file"
     ) {
-      return await openAbsoluteWithSystem(context, absolutePath);
+      return await openAbsoluteWithSystem(
+        context,
+        absolutePath,
+        "binary-or-unsupported"
+      );
     }
 
     try {
       openDiskFile(context, openContext, anchor, relativePath);
       return true;
     } catch {
-      return await openAbsoluteWithSystem(context, absolutePath);
+      return await openAbsoluteWithSystem(
+        context,
+        absolutePath,
+        "open-instance-failed"
+      );
     }
   } finally {
     inflight.delete(absolutePath);

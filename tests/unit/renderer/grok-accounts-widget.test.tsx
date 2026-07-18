@@ -116,6 +116,7 @@ function contextWithSnapshot(snapshot: GrokAccountsSnapshot): {
       },
       dialogs: {
         alert: vi.fn(async () => undefined),
+        choice: vi.fn(async () => "cancel" as const),
         confirm: vi.fn(async () => true),
         open: vi.fn(() => ({
           id: "pier.grok:test",
@@ -123,6 +124,7 @@ function contextWithSnapshot(snapshot: GrokAccountsSnapshot): {
           close: vi.fn(),
           update: vi.fn(),
         })),
+        prompt: vi.fn(async () => null),
         update: vi.fn(),
         close: vi.fn(),
       },

@@ -1,4 +1,4 @@
-import { closeOverlaysForPlugin } from "@/stores/plugin-overlay.store.ts";
+import { closeContentDialogsForPlugin } from "@/stores/app-content-dialog.store.ts";
 import type { ExternalTransitionAuthorization } from "./external-transition-gate.ts";
 import { clearHostGroupContentForPlugin } from "./host-group-content-context.tsx";
 import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
@@ -125,7 +125,7 @@ export async function suspendAndDisposeRendererPlugin(input: {
     onDisposeFailed?.();
     console.error("[renderer-plugin-runtime] dispose failed:", error);
     clearHostGroupContentForPlugin(pluginId);
-    closeOverlaysForPlugin(pluginId);
+    closeContentDialogsForPlugin(pluginId);
     throw error;
   }
   pluginLifecycleBarriers.consumeCommitted(
@@ -136,5 +136,5 @@ export async function suspendAndDisposeRendererPlugin(input: {
   onDisposed();
   pluginLifecycleBarriers.clear(pluginId);
   clearHostGroupContentForPlugin(pluginId);
-  closeOverlaysForPlugin(pluginId);
+  closeContentDialogsForPlugin(pluginId);
 }

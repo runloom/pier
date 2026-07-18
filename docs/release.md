@@ -7,7 +7,7 @@
 | | 宿主应用 | 官方插件 |
 |---|---|---|
 | 触发 | tag `v*` / Actions **Release App** | `main` 上 `packages/plugin-*/package.json` 变更 / **Release Plugin** 恢复 |
-| 产物 | dmg、mac zip、`latest-mac.yml` | `pier.<id>-<ver>.tgz` + 签名 `plugins/index.v1.json` |
+| 产物 | arm64+x64 dmg/zip、`latest-mac.yml` | `pier.<id>-<ver>.tgz` + 签名 `plugins/index.v1.json` |
 | GitHub Release | **Latest**，正式 release | **prerelease**，tag `plugin-<tail>-v<ver>`，禁止 Latest |
 | 客户端 | `electron-updater` → `/releases/latest` | 官方索引 → 按条目下 tgz |
 | 专文 | [`app-release.md`](./app-release.md) | [`plugins.md`](./plugins.md)（开发/校验）；发布步骤见下文 |
@@ -16,7 +16,7 @@
 flowchart LR
   subgraph host [宿主]
     A["tag vX.Y.Z"] --> B["Release App"]
-    B --> C["GitHub Latest\nlatest-mac.yml + zip"]
+    B --> C["GitHub Latest\nlatest-mac.yml + arm64/x64 zip+dmg"]
     C --> D["electron-updater"]
   end
   subgraph plugin [官方插件]
@@ -29,7 +29,7 @@ flowchart LR
   end
 ```
 
-**硬边界（强制门禁）：** 插件 release 不得成为 Latest。`Release Plugin` / `Release App` 结束后跑 `scripts/verify-github-latest-isolation.mjs`：Latest 必须是宿主 `v*` + `latest-mac.yml`；本次插件 tag 必须为 prerelease。失败则 workflow 红。
+**硬边界（强制门禁）：** 插件 release 不得成为 Latest。`Release Plugin` / `Release App` 结束后跑 `scripts/verify-github-latest-isolation.mjs`：Latest 必须是宿主 `v*` + 完整双架构 mac 资产（`latest-mac.yml`、arm64/x64 zip、arm64/x64 dmg）。`build:dist` 在 publish 前还跑 `verify-mac-release-artifacts.mjs`。失败则 workflow 红。
 
 ---
 
@@ -41,7 +41,7 @@ flowchart TD
   B --> C["Release App"]
   C --> D["校验 tag == version"]
   D --> E["签名 + 公证 + publish"]
-  E --> F{"Latest 非 draft\n且有 yml + zip?"}
+  E --> F{"Latest 非 draft\n且双架构 yml+zip+dmg?"}
   F -->|是| G["用户端可检查更新"]
   F -->|否| H["失败：修 secrets/draft 后重跑"]
 ```
@@ -53,8 +53,8 @@ git tag v0.1.2 && git push origin v0.1.2
 
 验收：
 
-```bash
 gh api repos/runloom/pier/releases/latest --jq '{tag:.tag_name,assets:[.assets[].name]}'
+# 期望含: latest-mac.yml, Pier-*-arm64-mac.zip, Pier-*-mac.zip, Pier-*-arm64.dmg, Pier-*.dmg
 curl -fsSL https://github.com/runloom/pier/releases/latest/download/latest-mac.yml
 ```
 

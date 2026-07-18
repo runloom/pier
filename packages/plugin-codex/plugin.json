@@ -43,7 +43,6 @@
         "pier.codex.accounts.settings.addDialogReopenBrowser": "Reopen browser",
         "pier.codex.accounts.settings.cancel": "Cancel",
         "pier.codex.accounts.settings.cancelLogin": "Cancel login",
-        "pier.codex.accounts.settings.systemDefault": "System default",
         "pier.codex.accounts.settings.currentAccount": "Current account",
         "pier.codex.accounts.settings.switch": "Switch",
         "pier.codex.accounts.settings.switchConfirmTitle": "Switch Codex account?",
@@ -74,6 +73,7 @@
         "pier.codex.accounts.settings.updated": "Updated",
         "pier.codex.accounts.settings.noUsage": "No usage data",
         "pier.codex.accounts.settings.resetCredits": "{count} quota resets available",
+        "pier.codex.accounts.settings.expires": "Expires",
         "pier.codex.accounts.settings.otherAccounts": "Other accounts",
         "pier.codex.accounts.settings.usageRefreshSuccess": "Usage refreshed",
         "pier.codex.accounts.settings.usageFailed": "Usage update failed",
@@ -147,7 +147,6 @@
         "pier.codex.accounts.settings.addDialogReopenBrowser": "重新打开浏览器",
         "pier.codex.accounts.settings.cancel": "取消",
         "pier.codex.accounts.settings.cancelLogin": "取消登录",
-        "pier.codex.accounts.settings.systemDefault": "系统默认",
         "pier.codex.accounts.settings.currentAccount": "当前账号",
         "pier.codex.accounts.settings.switch": "切换",
         "pier.codex.accounts.settings.switchConfirmTitle": "切换 Codex 账号？",
@@ -178,6 +177,7 @@
         "pier.codex.accounts.settings.updated": "更新于",
         "pier.codex.accounts.settings.noUsage": "暂无用量",
         "pier.codex.accounts.settings.resetCredits": "可用额度重置 {count} 次",
+        "pier.codex.accounts.settings.expires": "到期",
         "pier.codex.accounts.settings.otherAccounts": "其他账号",
         "pier.codex.accounts.settings.usageRefreshSuccess": "用量刷新成功",
         "pier.codex.accounts.settings.usageFailed": "用量更新失败",
@@ -255,5 +255,5 @@
     }
   ],
   "terminalStatusItems": [],
-  "version": "1.3.1"
+  "version": "1.3.2"
 }

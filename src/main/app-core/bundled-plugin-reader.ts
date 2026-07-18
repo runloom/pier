@@ -1,13 +1,14 @@
 import { existsSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
-import { isDevRuntime } from "../runtime-mode.ts";
+import { isDevRuntime as defaultIsDevRuntime } from "../runtime-mode.ts";
 
 /**
  * Reads a bundled plugin's manifest + tgz metadata for `BundledPluginRegistration`.
  *
  * Dev: sources live at `packages/plugin-<id>/{plugin.json, dist-pkg/*.tgz}`.
- * Prod: from `<Resources>/plugin-packages/` alongside the tgz produced by
- * `scripts/pack-plugin.mjs`.
+ * Prod: each official plugin is isolated under
+ * `<Resources>/plugin-packages/<prodPluginDirName>/` so multiple plugins cannot
+ * clobber a shared `plugin.json`.
  *
  * Returns null when the tgz + `.sha256` pair is missing (fresh checkout
  * before `pnpm plugins:pack`) so app-core can skip registration.
@@ -25,9 +26,9 @@ export interface BundledPluginBundle {
   readonly archivePath: string;
   readonly contributionCounts: {
     readonly commands: number;
-    readonly workbenchWidgets: number;
     readonly panels: number;
     readonly terminalStatusItems: number;
+    readonly workbenchWidgets: number;
   };
   readonly description?: string;
   readonly locales?: Record<string, { name?: string; description?: string }>;
@@ -35,6 +36,12 @@ export interface BundledPluginBundle {
   readonly sha256: string;
   readonly size?: number;
   readonly version: string;
+}
+
+export interface ReadBundledPluginRuntime {
+  readonly cwd?: string;
+  readonly isDevRuntime?: () => boolean;
+  readonly resourcesPath?: string;
 }
 
 function pickLocalesSubset(
@@ -52,14 +59,18 @@ function pickLocalesSubset(
 }
 
 export function readBundledPlugin(
-  options: ReadBundledPluginOptions
+  options: ReadBundledPluginOptions,
+  runtime: ReadBundledPluginRuntime = {}
 ): BundledPluginBundle | null {
-  const bundleRoot = isDevRuntime()
-    ? join(process.cwd(), options.devPackageDir, "dist-pkg")
-    : join(process.resourcesPath ?? "", "plugin-packages");
-  const manifestSrcDir = isDevRuntime()
-    ? join(process.cwd(), options.devPackageDir)
-    : bundleRoot;
+  const isDev = (runtime.isDevRuntime ?? defaultIsDevRuntime)();
+  const cwd = runtime.cwd ?? process.cwd();
+  const resourcesPath = runtime.resourcesPath ?? process.resourcesPath ?? "";
+  const bundleRoot = isDev
+    ? join(cwd, options.devPackageDir, "dist-pkg")
+    : join(resourcesPath, "plugin-packages", options.prodPluginDirName);
+  // Dev keeps the editable source manifest at package root; prod packs a copy
+  // of plugin.json next to the tgz under the per-plugin resource dir.
+  const manifestSrcDir = isDev ? join(cwd, options.devPackageDir) : bundleRoot;
   const manifestPath = join(manifestSrcDir, "plugin.json");
   if (!existsSync(manifestPath)) {
     return null;
@@ -79,6 +90,9 @@ export function readBundledPlugin(
     };
     const version = parsed.version ?? options.fallbackVersion;
     const id = parsed.id ?? options.fallbackId;
+    if (id !== options.fallbackId) {
+      return null;
+    }
     const archivePath = join(bundleRoot, `${id}-${version}.tgz`);
     const shaPath = `${archivePath}.sha256`;
     if (!(existsSync(archivePath) && existsSync(shaPath))) {
