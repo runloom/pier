@@ -1,5 +1,6 @@
 import { useEffect } from "react";
 import { AgentIndexCountsControl } from "@/components/common/agent-index-counts-control.tsx";
+import { AppUpdateControl } from "@/components/common/app-update-control.tsx";
 import { resolveLong } from "@/components/common/document-title.tsx";
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
 
@@ -35,8 +36,9 @@ export function TitleBar() {
       <span className="select-none font-medium text-muted-foreground text-xs">
         {text}
       </span>
-      <div className="absolute right-3">
+      <div className="absolute right-3 flex items-center gap-1">
         <AgentIndexCountsControl />
+        <AppUpdateControl />
       </div>
     </div>
   );

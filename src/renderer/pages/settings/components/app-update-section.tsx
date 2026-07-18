@@ -7,65 +7,17 @@ import {
   CardHeader,
   CardTitle,
 } from "@pier/ui/card.tsx";
-import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import { Download, RefreshCw, RotateCw } from "lucide-react";
-import { useEffect, useState } from "react";
-import { useCommittedValue } from "@/hooks/use-committed-ref.ts";
 import { useT } from "@/i18n/use-t.ts";
-import { showAppAlert } from "@/stores/app-dialog.store.ts";
-
-interface AppUpdateApi {
-  check(): Promise<AppUpdateSnapshot>;
-  download(): Promise<AppUpdateSnapshot>;
-  onChanged(cb: (snapshot: AppUpdateSnapshot) => void): () => void;
-  quitAndInstall(): Promise<AppUpdateSnapshot>;
-  status(): Promise<AppUpdateSnapshot>;
-}
-
-function appUpdateApi(): AppUpdateApi | undefined {
-  return (window as unknown as { pier?: { appUpdate?: AppUpdateApi } }).pier
-    ?.appUpdate;
-}
+import { useAppUpdateStore } from "@/stores/app-update.store.ts";
 
 export function AppUpdateSection() {
   const t = useT();
-  const readT = useCommittedValue(t);
-  const [snapshot, setSnapshot] = useState<AppUpdateSnapshot | null>(null);
-  const [pending, setPending] = useState(false);
-
-  useEffect(() => {
-    const api = appUpdateApi();
-    const unsubscribe = api?.onChanged(setSnapshot);
-    api
-      ?.status()
-      .then(setSnapshot)
-      .catch((err: unknown) => {
-        showAppAlert({
-          title: readT()("settings.appUpdate.toast.statusFailed"),
-          body: err instanceof Error ? err.message : String(err),
-        });
-      });
-    return () => {
-      unsubscribe?.();
-    };
-  }, [readT]);
-
-  async function run(
-    action: () => Promise<AppUpdateSnapshot>,
-    failureKey: string
-  ): Promise<void> {
-    setPending(true);
-    try {
-      setSnapshot(await action());
-    } catch (err) {
-      await showAppAlert({
-        title: t(failureKey),
-        body: err instanceof Error ? err.message : String(err),
-      });
-    } finally {
-      setPending(false);
-    }
-  }
+  const snapshot = useAppUpdateStore((s) => s.snapshot);
+  const pending = useAppUpdateStore((s) => s.pending);
+  const check = useAppUpdateStore((s) => s.check);
+  const download = useAppUpdateStore((s) => s.download);
+  const quitAndInstall = useAppUpdateStore((s) => s.quitAndInstall);
 
   const state = snapshot?.state ?? "idle";
   const availableVersion = snapshot?.availableVersion;
@@ -103,13 +55,9 @@ export function AppUpdateSection() {
           <div className="flex flex-wrap gap-2">
             <Button
               disabled={pending || state === "disabled"}
-              onClick={() =>
-                run(
-                  () =>
-                    appUpdateApi()?.check() ?? Promise.reject("missing API"),
-                  "settings.appUpdate.toast.checkFailed"
-                )
-              }
+              onClick={() => {
+                check().catch(() => undefined);
+              }}
               size="sm"
               type="button"
               variant="outline"
@@ -118,14 +66,10 @@ export function AppUpdateSection() {
               {t("settings.appUpdate.action.check")}
             </Button>
             <Button
-              disabled={pending || state !== "available"}
-              onClick={() =>
-                run(
-                  () =>
-                    appUpdateApi()?.download() ?? Promise.reject("missing API"),
-                  "settings.appUpdate.toast.downloadFailed"
-                )
-              }
+              disabled={pending || (state !== "available" && state !== "error")}
+              onClick={() => {
+                download().catch(() => undefined);
+              }}
               size="sm"
               type="button"
               variant="outline"
@@ -135,14 +79,9 @@ export function AppUpdateSection() {
             </Button>
             <Button
               disabled={pending || state !== "downloaded"}
-              onClick={() =>
-                run(
-                  () =>
-                    appUpdateApi()?.quitAndInstall() ??
-                    Promise.reject("missing API"),
-                  "settings.appUpdate.toast.installFailed"
-                )
-              }
+              onClick={() => {
+                quitAndInstall().catch(() => undefined);
+              }}
               size="sm"
               type="button"
               variant="default"

@@ -1,6 +1,7 @@
 # Pier 官方插件开发与发布指南
 
-本文只描述 Pier 当前支持的插件范围和真实可用的官方发布流程。
+发布通道总览与流程图：[`release.md`](./release.md)。本文侧重范围、开发、打包与运行时校验。
+
 
 ## 当前支持范围
 
@@ -139,17 +140,9 @@ Pier 安装官方插件时依次执行：
 
 ## 发布官方插件
 
-1. 更新 `packages/plugin-<id>/package.json` 和 `plugin.json` 中的版本。
-2. 在本地运行对应构建、打包和测试。
-3. 可在同一合入中变更多个 `packages/plugin-*/package.json`；release workflow 会按插件 id tail 排序串行发布。
-4. 只有带有 `plugin.json` 的包会进入发布队列；像 `packages/plugin-api` 这类共享包即使改了 `package.json` 也会被跳过。
-5. `.github/workflows/release-plugin.yml` 为每个可发布变更插件构建并创建/校验 `plugin-<id>-v<version>` GitHub Release；插件 release 必须使用 `--latest=false --prerelease`，不得占用仓库 `Latest`（避免 electron-updater 去插件 tag 找 `latest-mac.yml`）。
-6. 全部插件发布成功后，同一工作流只重新生成、签名并提交一次 `plugins/index.v1.json`。
-7. 索引提交触发 `.github/workflows/publish-index.yml` 发布官方索引。
+步骤、prerelease 规则、索引 Pages 与维护者命令见 [`release.md`](./release.md)「官方插件」。
 
-`workflow_dispatch` 只用于指定官方插件和版本的恢复发布，不是常规发布入口。
-
-发布前至少验证：
+合入前建议：
 
 ~~~bash
 pnpm plugin:<id>:pack
@@ -157,7 +150,9 @@ pnpm plugins:index
 pnpm check:plugin-index
 ~~~
 
-发布命令只适用于有官方发布权限的维护者，不是第三方上架入口。
+- `package.json` 与 `plugin.json` 的 version 必须一致。
+- 仅含 `plugin.json` 的包会进发布队列；`plugin-api` 等共享包不会。
+- 发布权限仅限官方维护者，不是第三方上架入口。
 
 ## 安装、更新与回滚
 

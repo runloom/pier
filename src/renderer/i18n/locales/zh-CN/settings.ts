@@ -90,6 +90,15 @@ export const settings = {
       checkFailed: "检查更新失败",
       downloadFailed: "下载更新失败",
       installFailed: "安装更新失败",
+      ready: "Pier {{version}} 已就绪，可安装。",
+    },
+    titleBar: {
+      update: "更新",
+      updateAvailable: "v{{version}}",
+      availableAria: "Pier {{version}} 可用",
+      downloadingAria: "正在下载更新 {{percent}}%",
+      restartAria: "重启并安装 Pier {{version}}",
+      errorAria: "应用更新失败，打开更新设置。",
     },
   },
   statusBar: {

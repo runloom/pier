@@ -66,6 +66,7 @@ import {
 } from "./plugins/plugin-asset-protocol.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
+import { createAppUpdateScheduler } from "./services/app-updates/app-update-scheduler.ts";
 import { createExternalNavigationService } from "./services/external-navigation.ts";
 import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
 import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
@@ -304,14 +305,21 @@ if (gotTheLock) {
         },
       });
       gitAutofetch.start();
+      const appUpdateScheduler = createAppUpdateScheduler({
+        check: () => appCore.services.appUpdates.check(),
+        enabled: !isDev,
+      });
+      appUpdateScheduler.start();
       app.on("browser-window-focus", () => {
         gitAutofetch.onFocusGained();
+        appUpdateScheduler.onFocusGained();
         // 聚焦时重算活跃仓库签名，补回后台门控跳过的 poll。
         for (const root of appCore.services.gitWatch.activeRoots()) {
           appCore.services.gitWatch.pulse(root);
         }
       });
       app.on("will-quit", () => {
+        appUpdateScheduler.stop();
         gitAutofetch.dispose();
       });
 

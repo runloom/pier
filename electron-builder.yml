@@ -59,6 +59,7 @@ publish:
   provider: github
   owner: runloom
   repo: pier
+  releaseType: release
 
 dmg:
   contents:
