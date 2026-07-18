@@ -106,7 +106,7 @@ describe("Files draft lifecycle barrier", () => {
 
     await expect(
       prepareFilesDraftSuspend(new AbortController().signal)
-    ).rejects.toThrow("Draft protection failed");
+    ).rejects.toThrow("Unable to auto-save draft");
   });
 
   it("honors cancellation while a backend write is still pending", async () => {

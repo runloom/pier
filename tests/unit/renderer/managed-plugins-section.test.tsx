@@ -252,9 +252,9 @@ describe("ManagedPluginsSection", () => {
       />
     );
 
-    const alert = (await screen.findByText("Workspace plugin mode")).closest(
-      '[data-slot="alert"]'
-    );
+    const alert = (
+      await screen.findByText("Local development loading")
+    ).closest('[data-slot="alert"]');
     expect(alert).toHaveAttribute("data-variant", "warning");
     expect(alert?.querySelector("svg")).not.toBeNull();
   });

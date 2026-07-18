@@ -114,6 +114,7 @@ export function makeProps(
   return {
     api: {
       id: "workbench-test",
+      setActive: vi.fn(),
       setTitle: vi.fn(),
       updateParameters,
     },

@@ -135,7 +135,7 @@ vi.mock(
   }
 );
 
-const OUTSIDE_WORKSPACE_PATTERN = /outside the restored workspace/i;
+const OUTSIDE_WORKSPACE_PATTERN = /outside the current workspace/i;
 const PROJECT_ROOT = "/workspace/pier";
 const CLASS_H_FULL = /\bh-full\b/;
 const CLASS_FLEX = /\bflex\b/;
@@ -753,8 +753,8 @@ describe("Files file-panel", () => {
       ["filePanel.empty.withTree.description", "[从项目树选择文件]"],
       ["filePanel.status.temporary", "[临时]"],
       ["filePanel.tree.collapse", "[收起树]"],
-      ["filePanel.view.preview", "[预览]"],
-      ["filePanel.view.source", "[源码]"],
+      ["filePanel.view.switchToPreview", "[切换到预览]"],
+      ["filePanel.view.switchToSource", "[切换到源码]"],
     ]);
     const translate = vi.fn<RendererPluginContext["i18n"]["t"]>(
       (key: string, _values?: unknown, fallback?: string) =>
@@ -780,8 +780,7 @@ describe("Files file-panel", () => {
     );
 
     expect(await screen.findByText("[临时]")).toBeVisible();
-    expect(screen.getByRole("radio", { name: "[源码]" })).toBeVisible();
-    expect(screen.getByRole("radio", { name: "[预览]" })).toBeVisible();
+    expect(screen.getByRole("button", { name: "[切换到预览]" })).toBeVisible();
     expect(screen.getByLabelText("[源码编辑器]")).toBeVisible();
     expect(translate).toHaveBeenCalledWith(
       "filePanel.status.temporary",
@@ -869,7 +868,9 @@ describe("Files file-panel", () => {
     });
     expect(zoomMenu).toHaveAttribute("data-variant", "secondary");
     expect(screen.queryByText("Saved")).toBeNull();
-    expect(screen.queryByRole("radio", { name: "Source" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Switch to preview" })
+    ).toBeNull();
 
     fireEvent.keyDown(zoomMenu, { key: "Enter" });
     const actualSizeItem = await screen.findByRole("menuitemradio", {
@@ -3987,10 +3988,9 @@ describe("Files file-panel", () => {
     expect(screen.queryByRole("button", { name: "Save" })).toBeNull();
     expect(screen.queryByRole("button", { name: "Save As…" })).toBeNull();
     expect(container.querySelector(".cm-editor")).toBeInstanceOf(HTMLElement);
-    expect(screen.getByRole("radio", { name: "Source" })).toHaveAttribute(
-      "aria-checked",
-      "true"
-    );
+    expect(
+      screen.getByRole("button", { name: "Switch to preview" })
+    ).toBeVisible();
   });
 
   it("saves an untitled document to a selected target and rebinds the panel", async () => {
@@ -4152,7 +4152,7 @@ describe("Files file-panel", () => {
       createMockContext({ list })
     );
 
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
 
     expect(
       await screen.findByRole("heading", { name: "Standalone note" })
@@ -4174,7 +4174,7 @@ describe("Files file-panel", () => {
       context: panelContext,
       source: { id: document.id, kind: "untitled", name: document.name },
     });
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
 
     const markdownPreview = container.querySelector(
       '[data-slot="markdown-preview"]'
@@ -4209,11 +4209,11 @@ describe("Files file-panel", () => {
       editedView.scrollDOM.scrollLeft = 17;
       editedView.scrollDOM.scrollTop = 143;
     });
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
     expect(await screen.findByRole("heading", { name: "After" })).toBeVisible();
     expect(screen.getByText("kept through preview")).toBeVisible();
 
-    fireEvent.click(screen.getByRole("radio", { name: "Source" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to source" }));
 
     const restoredView = findCodeMirrorView(container);
     expect(restoredView.state.doc.toString()).toBe(
@@ -4292,7 +4292,7 @@ describe("Files file-panel", () => {
       },
       context
     );
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
 
     expect(container.querySelector("#raw-html")).toBeNull();
     const safeLink = await screen.findByRole("link", { name: "safe" });
@@ -4325,7 +4325,7 @@ describe("Files file-panel", () => {
       },
       context
     );
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
 
     fireEvent.click(await screen.findByRole("link", { name: "safe" }));
     await waitFor(() => {
@@ -4356,7 +4356,7 @@ describe("Files file-panel", () => {
       },
       context
     );
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
 
     fireEvent.click(await screen.findByRole("link", { name: "safe" }));
     await waitFor(() => {
@@ -4386,7 +4386,7 @@ describe("Files file-panel", () => {
       },
       context
     );
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
 
     const link = await screen.findByRole("link", { name: "safe" });
     fireEvent.click(link);
@@ -4432,7 +4432,7 @@ describe("Files file-panel", () => {
         })}
       />
     );
-    expect(screen.getByText("Unable to restore file panel")).toBeVisible();
+    expect(screen.getByText("Unable to restore file tab")).toBeVisible();
     expect(readText).not.toHaveBeenCalled();
     expect(writeText).not.toHaveBeenCalled();
   });
@@ -4490,7 +4490,7 @@ describe("Files file-panel", () => {
       createMockContext({ readText, writeText })
     );
 
-    expect(screen.getByText("Unable to restore file panel")).toBeVisible();
+    expect(screen.getByText("Unable to restore file tab")).toBeVisible();
     expect(screen.getByText(OUTSIDE_WORKSPACE_PATTERN)).toBeVisible();
     expect(readText).not.toHaveBeenCalled();
     expect(writeText).not.toHaveBeenCalled();
@@ -4507,7 +4507,7 @@ describe("Files file-panel", () => {
 
     clearFilesDocumentStore({ persisted: false });
     renderFilePanel(params);
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
 
     expect(
       await screen.findByRole("heading", { name: "Restored after force quit" })
@@ -4549,7 +4549,7 @@ describe("Files file-panel", () => {
     replaceEditorText(container, "# After\n");
 
     expect(getDocument(document.id)?.currentContents).toBe("# After\n");
-    expect(await screen.findByText("Protected")).toBeVisible();
+    expect(await screen.findByText("Draft saved")).toBeVisible();
   });
 
   it("saves dirty disk documents through writeText", async () => {
@@ -4943,8 +4943,12 @@ describe("Files file-panel", () => {
     );
 
     await screen.findByText("TypeScript");
-    expect(screen.queryByRole("button", { name: "Source" })).toBeNull();
-    expect(screen.queryByRole("button", { name: "Preview" })).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Switch to preview" })
+    ).toBeNull();
+    expect(
+      screen.queryByRole("button", { name: "Switch to source" })
+    ).toBeNull();
   });
 
   it("does not render a restoration error while acquiring a disk document", () => {
@@ -5090,8 +5094,8 @@ describe("Files file-panel", () => {
       true
     );
 
-    fireEvent.click(screen.getByRole("radio", { name: "Preview" }));
-    fireEvent.click(screen.getByRole("radio", { name: "Source" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to preview" }));
+    fireEvent.click(screen.getByRole("button", { name: "Switch to source" }));
 
     await waitFor(() => {
       expect(container.querySelector(".cm-editor")).toBeInstanceOf(HTMLElement);

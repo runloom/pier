@@ -135,8 +135,13 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
               .filter((item) => !currentIds.has(item.id))
               .map((item) => item.id)
           );
-          renderedItemsRef.current = items.slice();
-          setRenderedItems(items.slice());
+          // 增量合并：只替换传入 id，保留其余已渲染项（对齐生产 DiffView）。
+          const updates = new Map(items.map((item) => [item.id, item]));
+          const next = renderedItemsRef.current.map(
+            (item) => updates.get(item.id) ?? item
+          );
+          renderedItemsRef.current = next;
+          setRenderedItems(next);
           return true;
         },
       }),

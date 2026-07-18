@@ -260,7 +260,7 @@ describe("run actions", () => {
       quickPick: {
         items: [
           {
-            detail: "Focus a project-backed panel before running a task",
+            detail: "Open a panel inside a project, then run a task",
             disabled: true,
             id: "task-no-context",
             label: "No active project",

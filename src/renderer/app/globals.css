@@ -957,8 +957,8 @@ body {
  * 深浅主题都从 foreground 派生，避免组件状态色与主题分叉。
  */
 [data-agent-status-text][data-agent-status-kind="running"] {
-  --shimmer-low: color-mix(in oklch, var(--foreground) 48%, transparent);
-  --shimmer-mid: color-mix(in oklch, var(--foreground) 72%, transparent);
+  --shimmer-low: color-mix(in oklch, var(--foreground) 58%, transparent);
+  --shimmer-mid: color-mix(in oklch, var(--foreground) 75%, transparent);
   --shimmer-high: var(--pier-agent-status-color, var(--status-info-fg));
 
   color: var(--shimmer-low);

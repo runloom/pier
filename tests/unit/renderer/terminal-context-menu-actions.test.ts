@@ -230,7 +230,9 @@ describe("terminal content context menu actions", () => {
 
     expect(ids).toEqual(
       expect.arrayContaining([
+        "pier.panel.copySelection",
         "pier.terminal.copy",
+        "pier.panel.selectAll",
         "pier.terminal.paste",
         "pier.terminal.selectAll",
         "pier.terminal.search",
@@ -240,18 +242,18 @@ describe("terminal content context menu actions", () => {
       ])
     );
     expect(ids.slice(0, 5)).toEqual([
+      "pier.panel.copySelection",
       "pier.terminal.copy",
+      "pier.panel.selectAll",
       "pier.terminal.paste",
       "pier.terminal.selectAll",
-      "pier.terminal.search",
-      "pier.terminal.clearScreen",
     ]);
     expect(topLevelActionLabels(entries).slice(0, 5)).toEqual([
       "复制",
+      "复制",
+      "全选",
       "粘贴",
       "全选",
-      "查找",
-      "清屏",
     ]);
   });
 
