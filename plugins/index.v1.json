@@ -1,11 +1,11 @@
 {
-  "generatedAt": 1784078931034,
+  "generatedAt": 1784402554108,
   "plugins": {
     "pier.codex": {
       "description": "Codex account management and usage monitoring for Pier.",
       "displayName": "Codex Account Management",
       "id": "pier.codex",
-      "latest": "1.3.1",
+      "latest": "1.3.2",
       "locales": {
         "en": {
           "name": "Codex Account Management",
@@ -17,11 +17,11 @@
         }
       },
       "versions": {
-        "1.3.1": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.3.1/pier.codex-1.3.1.tgz",
+        "1.3.2": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.3.2/pier.codex-1.3.2.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "d6245c5b029761a9327c7dd49e04ab1ce7ef8e711675a65b6707d3366835649f",
-          "size": 550975
+          "sha256": "acfac720a4ddb97710c8335a117cc12c9fac05a76ed337e288de3b435956a78f",
+          "size": 588351
         }
       }
     },
@@ -29,7 +29,7 @@
       "description": "Manage Grok accounts, login, and switch for Pier.",
       "displayName": "Grok Account Management",
       "id": "pier.grok",
-      "latest": "1.0.0",
+      "latest": "1.0.2",
       "locales": {
         "en": {
           "name": "Grok Account Management",
@@ -41,20 +41,20 @@
         }
       },
       "versions": {
-        "1.0.0": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.0.0/pier.grok-1.0.0.tgz",
+        "1.0.2": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.0.2/pier.grok-1.0.2.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "dd8c891ba8618bcfca120475588b8669f87d57a3d72c364ba7a7c3e484fcd90a",
-          "size": 581695
+          "sha256": "d58105226ee49310474ce4218344536052204088f365c8b0e0459edcc574e7f2",
+          "size": 625732
         }
       }
     }
   },
-  "sequence": 7,
+  "sequence": 8,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "CAIF5nCJJw2jiXlSKJzGc0gWZzm7faaBLMQ7SmoKFtjtnAzH5+NAaXoacorudQae1GlylPf59I4KuQg4vD1zAg=="
+    "value": "wzBOM7/b3+WYDLUrWaNKkcI9MwZa2LaT+CSyJo9LA7+cRFc4o/f2/KGUGX9uTKmyjVW1T12YReG28JoebKrICw=="
   }
 }
