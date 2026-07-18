@@ -3381,8 +3381,6 @@ describe("Files file-panel", () => {
         })
       ).toBeVisible();
     });
-    const listCallsBeforeSearch = list.mock.calls.length;
-
     act(() => {
       expect(openFilesTreeSearch({ instanceId: "tree-search-lazy" })).toBe(
         true
