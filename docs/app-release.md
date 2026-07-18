@@ -13,11 +13,13 @@
   - `latest-mac.yml`
   - `Pier-<ver>-arm64-mac.zip` / `Pier-<ver>-mac.zip`
   - `Pier-<ver>-arm64.dmg` / `Pier-<ver>.dmg`
+- `publish-mac-release-artifacts.mjs` 会强制 `EP_GH_IGNORE_TIME=true`（覆盖 >2h 旧 release 的静默 skip），并在上传后再查 GitHub 远端资产；缺 arm64 dmg 等会硬失败
 - `electron-builder.yml`：`publish.releaseType: release`（禁止 draft，否则无 Latest）
 - 使用 `CSC_LINK` 时 workflow 设置 `PIER_DIST_ALLOW_CSC_LINK_PUBLISH=1`（`build-dist.sh` 默认禁 CSC_LINK publish）
 - 发布后门禁：
   - 本地：`verify-mac-release-artifacts.mjs --dir dist-builder --version <ver>`
-  - GitHub：`verify-github-latest-isolation.mjs --expect-version <ver>`（Latest 必须是本宿主版且含完整双架构资产）
+  - 上传后远端：publish wrapper 内嵌 dual-arch 校验
+  - GitHub Latest：`verify-github-latest-isolation.mjs --expect-version <ver>`
 
 ## Secrets
 
