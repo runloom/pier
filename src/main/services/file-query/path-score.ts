@@ -7,12 +7,11 @@
  * Rules (locked in tests/unit/main/file-path-score.test.ts):
  * - `normalizeFilePathQuery`: trim, `\`→`/`, lower-case.
  * - Non-empty query: path must contain the normalized query (case-insensitive).
- * - Score components (higher is better):
  *   - basename-contains-query: +1000
  *   - shallow-path: `-depth * 2` (segments above the file)
- *   - earlier-input-index: `-index` (tiny tie-breaker, preserves caller order)
  *   - MRU hit: `(100 - mruIndex) * 10` (max +1000 for freshest)
- * - Sort: score desc, then path asc; slice to clamped `limit` (1..200, default 200).
+ *   - earlier-input-index: sort-only tie-break (never baked into score)
+ * - Sort: score desc, then path asc, then input index asc; slice to clamped `limit` (1..200).
  */
 import {
   FILE_PATH_QUERY_LIMIT_DEFAULT,
@@ -98,8 +97,8 @@ export function selectTopFilePaths(
     const mru = mruIndex.get(path);
     const base = scoreFilePath(path, query, mru === undefined ? null : mru);
     if (base === null) continue;
-    // Earlier-input-index tie-breaker: preserves caller order for equal-score paths.
-    scored.push({ inputIndex: i, path, score: base - i });
+    // Keep pure score for callers; inputIndex is sort-only tie-break.
+    scored.push({ inputIndex: i, path, score: base });
   }
 
   scored.sort((a, b) => {

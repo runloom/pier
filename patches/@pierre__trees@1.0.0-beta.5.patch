@@ -59,7 +59,7 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..b33729caf4e65417119cc9c70e3756c1
  import { computeFileTreeLayout, computeStickyRows } from "../model/layout.js";
  import { GIT_STATUS_DESCENDANT_TITLE, GIT_STATUS_LABEL, GIT_STATUS_TITLE } from "../utils/gitStatusPresentation.js";
  import { shouldBumpControllerRevision } from "./controllerSnapshotSubscription.js";
-@@ -21,17 +21,19 @@ function formatFlattenedSegments(row, renameInput = null, dragTargetFlattenedSeg
+@@ -21,17 +21,21 @@ function formatFlattenedSegments(row, renameInput = null, dragTargetFlattenedSeg
  	"use no memo";
  	const segments = row.flattenedSegments;
  	if (segments == null || segments.length === 0) return renameInput ?? row.name;
@@ -77,7 +77,9 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..b33729caf4e65417119cc9c70e3756c1
  		})
  	});
 +	if (renameInput != null) return content;
-+	return /* @__PURE__ */ jsx(Truncate, { children: content });
++	// Truncate measures 1lh overflow via word-break; feed plain text, not inline-flex children.
++	const plainLabel = segments.map((segment) => segment.name).join(" / ");
++	return /* @__PURE__ */ jsx(Truncate, { children: plainLabel });
  }
  function getFileTreeRowPath(row) {
  	return row.isFlattened ? row.flattenedSegments?.findLast((segment) => segment.isTerminal)?.path ?? row.path : row.path;

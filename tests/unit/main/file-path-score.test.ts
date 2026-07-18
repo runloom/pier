@@ -25,13 +25,31 @@ describe("selectTopFilePaths", () => {
   });
 
   it("prefers basename hits and MRU", () => {
-    const top = selectTopFilePaths(
-      paths,
+    // basename-only competitor that would win without MRU on a deeper basename path
+    const ranked = selectTopFilePaths(
+      [
+        "deeply/nested/path/to/theme.ts",
+        "src/main/ipc/theme.ts",
+        "other/theme.ts-utils/readme.md",
+      ],
       "theme.ts",
       ["src/main/ipc/theme.ts"],
-      3
+      2
     );
-    expect(top[0]?.path).toBe("src/main/ipc/theme.ts");
+    expect(ranked[0]?.path).toBe("src/main/ipc/theme.ts");
+  });
+
+  it("does not bake walk input index into the returned score", () => {
+    // Late basename hit must still beat early path-only hit on large indices.
+    const many = Array.from(
+      { length: 1200 },
+      (_, i) => `packages/pkg-${i}/theme.ts-utils/lib/index.js`
+    );
+    many.push("src/theme.ts");
+    const top = selectTopFilePaths(many, "theme.ts", [], 5);
+    expect(top[0]?.path).toBe("src/theme.ts");
+    // Pure score: basename (+1000) + shallow depth, not reduced by input index.
+    expect(top[0]?.score).toBeGreaterThan(900);
   });
 
   it("returns empty-query shallow/MRU ordering without dumping everything unbounded", () => {

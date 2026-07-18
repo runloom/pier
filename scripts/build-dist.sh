@@ -99,15 +99,39 @@ if [ "$(uname -s)" = "Darwin" ]; then
             export CSC_NAME="${DEVELOPER_ID_NAME#Developer ID Application: }"
             echo "[build:dist] CSC_NAME=$CSC_NAME"
         else
+            case "${CSC_NAME}" in
+                *"Apple Development"*|*"Apple Development:"*)
+                    echo "[build:dist] ERROR: CSC_NAME 指向 Apple Development，不可用于分发" >&2
+                    exit 1
+                    ;;
+            esac
             echo "[build:dist] CSC_NAME(from env)=$CSC_NAME"
         fi
         if [ -z "${APPLE_TEAM_ID:-}" ] && [ -n "$DEVELOPER_ID_TEAM" ]; then
             export APPLE_TEAM_ID="$DEVELOPER_ID_TEAM"
             echo "[build:dist] APPLE_TEAM_ID=$APPLE_TEAM_ID"
         fi
+    elif [ -n "${CSC_LINK:-}" ]; then
+        # CI / 无 keychain 身份时可用 p12（CSC_LINK + CSC_KEY_PASSWORD）。
+        echo "[build:dist] 未在 keychain 找到 Developer ID Application"
+        echo "[build:dist] 将使用 CSC_LINK 签名（electron-builder 读取 p12）"
+        if [ -n "${CSC_NAME:-}" ]; then
+            case "${CSC_NAME}" in
+                *"Apple Development"*|*"Apple Development:"*)
+                    echo "[build:dist] ERROR: CSC_NAME 指向 Apple Development，不可用于分发" >&2
+                    exit 1
+                    ;;
+            esac
+            echo "[build:dist] CSC_NAME(from env)=$CSC_NAME"
+        fi
     elif [ "$ALLOW_DEV_SIGN" -eq 1 ]; then
         echo "[build:dist] WARNING: 未找到 Developer ID Application，已启用 --allow-dev-sign"
         echo "[build:dist] 将使用 Apple Development / 可用身份，产物不可对外分发"
+        if [ "$PUBLISH_POLICY" != "never" ]; then
+            echo "[build:dist] ERROR: --allow-dev-sign 禁止 publish（当前: $PUBLISH_POLICY）" >&2
+            echo "[build:dist] 请去掉 --publish / PIER_DIST_PUBLISH，或改用 Developer ID 正式签名" >&2
+            exit 1
+        fi
         if [ "$NO_NOTARIZE" -eq 0 ]; then
             echo "[build:dist] dev-sign 模式强制关闭 notarize"
             NO_NOTARIZE=1
@@ -122,7 +146,8 @@ if [ "$(uname -s)" = "Darwin" ]; then
         echo "  1) Apple Developer → Certificates → Developer ID Application（或从已有机器导出 .p12）" >&2
         echo "  2) 双击导入 login keychain，确认私钥存在（Keychain Access 显示证书有下拉 key）" >&2
         echo "  3) 验证: security find-identity -v -p codesigning | grep 'Developer ID Application'" >&2
-        echo "  4) 写入 electron-builder.env（见 electron-builder.env.example）后重跑 pnpm build:dist" >&2
+        echo "  4) 或设置 CSC_LINK / CSC_KEY_PASSWORD 指向 Developer ID .p12" >&2
+        echo "  5) 写入 electron-builder.env（见 electron-builder.env.example）后重跑 pnpm build:dist" >&2
         echo >&2
         echo "仅本机调试可: pnpm build:dist --allow-dev-sign --no-notarize" >&2
         exit 1

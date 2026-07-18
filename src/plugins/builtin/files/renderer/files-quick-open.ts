@@ -56,14 +56,17 @@ function snapshotToItems(
 function resolveActiveGroupId(
   context: RendererPluginContext
 ): string | undefined {
+  const instances = context.panels.listInstances(FILES_FILE_PANEL_ID);
   const activePanelId = context.panels.getActiveInstanceId(FILES_FILE_PANEL_ID);
-  if (!activePanelId) {
-    return;
+  if (activePanelId) {
+    return (
+      instances.find((instance) => instance.id === activePanelId)?.groupId ??
+      undefined
+    );
   }
-  const groupId = context.panels
-    .listInstances(FILES_FILE_PANEL_ID)
-    .find((instance) => instance.id === activePanelId)?.groupId;
-  return groupId ?? undefined;
+  // 非 files 面板聚焦时不猜 group；新建落到 dockview 当前 active group。
+  // 同源 tab 复用见 openDiskPathInGroup（可跨 group 查找已打开实例）。
+  return;
 }
 
 function openDiskPathInGroup(input: {
@@ -78,18 +81,19 @@ function openDiskPathInGroup(input: {
     path: input.path,
     root: input.root,
   };
-  const existingInstance = input.groupId
-    ? input.context.panels
-        .listInstances(FILES_FILE_PANEL_ID)
-        .find(
-          (instance) =>
-            instance.groupId === input.groupId &&
-            sameFilesDocumentPanelSource(
-              parseFilesDocumentPanelSource(instance.params),
-              source
-            )
-        )
-    : undefined;
+  // Prefer same group when known; otherwise reuse any same-source files tab so
+  // Cmd+P from a terminal still activates an already-open file.
+  const existingInstance = input.context.panels
+    .listInstances(FILES_FILE_PANEL_ID)
+    .find((instance) => {
+      if (input.groupId !== undefined && instance.groupId !== input.groupId) {
+        return false;
+      }
+      return sameFilesDocumentPanelSource(
+        parseFilesDocumentPanelSource(instance.params),
+        source
+      );
+    });
   const existingSource = parseFilesDocumentPanelSource(
     existingInstance?.params
   );

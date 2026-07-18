@@ -39,11 +39,12 @@ function adaptQuickPickSection(
 }
 
 // 一次 openQuickPick 起一个 session：随后的 updateQuickPick 合并进
-// pluginQuickPick 并同步刷新 pluginItemsById, 让宿主侧回调 (onAccept,
-// getQueryItem 等) 始终读到最新的插件对象。hostOnAccept 作为身份 marker
-// 判断当前 controller.quickPick 是不是本 session。
+// pluginQuickPick 并同步刷新 pluginItemsById。hostOnAccept 作为身份 marker。
+// lastQuerySignal：每次 onQueryChange 挂上当前 AbortSignal；若已 abort，
+// updateQuickPick 丢弃补丁，挡住忽略 signal 的慢请求覆盖新结果。
 interface AdaptedQuickPickSession {
   hostOnAccept: QuickPick["onAccept"] | null;
+  lastQuerySignal: AbortSignal | null;
   pluginItemsById: Map<string, RendererPluginQuickPickItem>;
   pluginQuickPick: RendererPluginQuickPick;
 }
@@ -96,8 +97,10 @@ function adaptQuickPick(session: AdaptedQuickPickSession): QuickPick {
       : {}),
     ...(initial.onQueryChange
       ? {
-          onQueryChange: (query: string, signal: AbortSignal) =>
-            session.pluginQuickPick.onQueryChange?.(query, signal),
+          onQueryChange: (query: string, signal: AbortSignal) => {
+            session.lastQuerySignal = signal;
+            return session.pluginQuickPick.onQueryChange?.(query, signal);
+          },
         }
       : {}),
     ...(initial.placeholder ? { placeholder: initial.placeholder } : {}),
@@ -122,6 +125,7 @@ export function createPluginCommandPaletteContext(): RendererPluginContext["comm
     openQuickPick: (pluginQuickPick) => {
       const session: AdaptedQuickPickSession = {
         hostOnAccept: null,
+        lastQuerySignal: null,
         pluginItemsById: new Map(
           collectPluginItems(pluginQuickPick).map((item) => [item.id, item])
         ),
@@ -140,6 +144,10 @@ export function createPluginCommandPaletteContext(): RendererPluginContext["comm
       const controllerState = useCommandPaletteController.getState();
       // 顶层 picker 已不属于本 session (被别的 openQuickPick 顶掉) → 静默丢弃。
       if (controllerState.quickPick?.onAccept !== session.hostOnAccept) {
+        return;
+      }
+      // 上一次 onQueryChange 已被 abort：丢弃过期异步补丁。
+      if (session.lastQuerySignal?.aborted) {
         return;
       }
       session.pluginQuickPick = { ...session.pluginQuickPick, ...patch };

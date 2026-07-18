@@ -25,8 +25,9 @@ upstream maintainers.
 Important bundled assets:
 
 - `resources/fonts/JetBrainsMonoNerdFontMono-*.ttf` is built from JetBrains Mono
-  (SIL Open Font License 1.1) with Nerd Fonts glyphs. See
-  `resources/fonts/JetBrainsMono-OFL.txt`.
+  (SIL Open Font License 1.1) with Nerd Fonts glyphs (MIT License, copyright
+  Ryan L. McIntyre / Nerd Fonts). See `resources/fonts/JetBrainsMono-OFL.txt`
+  and upstream Nerd Fonts license notices.
 - `resources/fonts/HarmonyOS_Sans_SC_*.ttf` bundles unmodified HarmonyOS Sans SC
   font files with this software. HarmonyOS Sans Fonts are copyright 2021 Huawei
   Device Co., Ltd. and licensed under the HarmonyOS Sans Fonts License

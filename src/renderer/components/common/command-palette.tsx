@@ -232,12 +232,16 @@ export function CommandPalette() {
     setSelectedValue(next?.id ?? "");
   }, [isOpen, mode, normalizedQuery, quickPick, requestId, selectedValue]);
 
-  // 输入变化后将高亮重置到当前展示的第一项；动态候选因此能成为明确的
-  // Enter 默认动作，而不是在无可见提示时隐式提交文本。
+  // 仅用户输入变化时把高亮重置到第一项；updateQuickPick 换 items 不得抢键盘选中。
+  const lastQueryForSelectionRef = useRef(normalizedQuery);
   useEffect(() => {
     if (!isOpen || mode !== "quick-pick" || !quickPick) {
       return;
     }
+    if (lastQueryForSelectionRef.current === normalizedQuery) {
+      return;
+    }
+    lastQueryForSelectionRef.current = normalizedQuery;
     const queryItem = quickPickQueryItem(quickPick, normalizedQuery);
     if (queryItem) {
       setSelectedValue(queryItem.id);

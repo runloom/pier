@@ -1,18 +1,19 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it, vi } from "vitest";
 import { createFileQueryService } from "../../../src/main/services/file-query/file-query-service.ts";
+import * as pathWalk from "../../../src/main/services/file-query/path-walk.ts";
 import type { FileQueryEvent } from "../../../src/shared/contracts/file-query.ts";
 
 const roots: string[] = [];
 
 afterEach(async () => {
+  vi.restoreAllMocks();
   await Promise.all(
     roots.splice(0).map((root) => rm(root, { force: true, recursive: true }))
   );
 });
-
 async function makeFixtureRoot(): Promise<string> {
   const root = await mkdtemp(join(tmpdir(), "pier-file-query-"));
   roots.push(root);
@@ -54,7 +55,7 @@ function recorder(): Recorder {
     done: promise,
     emit(event) {
       events.push(event);
-      if (event.kind === "done") resolve();
+      if (event.kind === "done" || event.kind === "error") resolve();
     },
   };
 }
@@ -272,5 +273,32 @@ describe("createFileQueryService", () => {
     const paths = batch.items.map((item) => item.path);
     expect(paths).toContain("keep.ts");
     expect(paths.some((path) => path.startsWith(".git/"))).toBe(false);
+  });
+  it("emits only error (no trailing done) when walkFiles throws", async () => {
+    const root = await makeFixtureRoot();
+    vi.spyOn(pathWalk, "walkFiles").mockRejectedValueOnce(
+      new Error("simulated walk crash")
+    );
+    const service = createFileQueryService({});
+    const rec = recorder();
+    service.start(
+      1,
+      {
+        limit: 200,
+        mruPaths: [],
+        owner: "quick-open:s1",
+        query: "theme",
+        queryId: "q-walk-crash",
+        root,
+      },
+      rec.emit
+    );
+    await rec.done;
+    expect(rec.events.some((e) => e.kind === "error")).toBe(true);
+    expect(rec.events.some((e) => e.kind === "done")).toBe(false);
+    const err = rec.events.find((e) => e.kind === "error");
+    if (err?.kind !== "error") throw new Error("expected error");
+    expect(err.code).toBe("walk-failed");
+    expect(err.message).toContain("simulated walk crash");
   });
 });

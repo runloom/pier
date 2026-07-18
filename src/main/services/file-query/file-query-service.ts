@@ -241,14 +241,6 @@ async function runQuery(args: RunQueryArgs): Promise<void> {
         code: "walk-failed",
         message: error instanceof Error ? error.message : String(error),
       });
-      emit({
-        kind: "done",
-        queryId: request.queryId,
-        reason: "completed",
-        truncated: false,
-        scanned: 0,
-        elapsedMs: Math.max(0, performance.now() - started),
-      });
     }
   } finally {
     args.onFinished();
