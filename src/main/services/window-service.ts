@@ -4,34 +4,52 @@ import type {
   WindowCreateOptions,
   WindowCreateResult,
 } from "@shared/contracts/window.ts";
-import { flushPanelContextState } from "../state/panel-context-state.ts";
-import { flushPluginSettings } from "../state/plugin-settings.ts";
-import { flushPluginState } from "../state/plugin-state.ts";
-import {
-  detachAgentsForWindow,
-  flushTerminalSessionState,
-} from "../state/terminal-session-state.ts";
-import { flushTerminalStatusBarPrefs } from "../state/terminal-status-bar-prefs.ts";
 import {
   createWindowRecord,
   flushWindowRecordState,
   markWindowRecordClosed,
-  markWindowRecordFocused,
   markWindowRecordOpen,
   readMostRecentClosedWindowRecordId,
   readPreferredOpenWindowRecordIds,
 } from "../state/window-record-state.ts";
 import { findWindowContext } from "../windows/window-identity.ts";
 import {
-  type WindowCloseDecision,
+  type WindowBounds,
   type WindowCloseResult,
   windowManager,
 } from "../windows/window-manager.ts";
-import { armDetaching } from "./agents/window-detaching-guard.ts";
+import {
+  armAndDetachAgentsBeforeClose,
+  currentFinalizeRendererClose,
+  currentFlushCriticalState,
+  currentPrepareRendererClose,
+  currentSettlePanelTransferBeforeClose,
+  currentSignalPanelTransferClosing,
+  ensureCloseHandler,
+  flushAllStoresSettled,
+  flushWindowBeforeClose,
+  setWindowCloseHooks,
+  type WindowTransitionLease,
+  windowTransitionState,
+} from "./window-close-preparation.ts";
+
+export type { WindowTransitionLease } from "./window-close-preparation.ts";
 
 export interface WindowService {
   close(windowId: string): Promise<WindowCloseResult>;
+  closeAfterTransfer(
+    lease: WindowTransitionLease,
+    windowId: string,
+    transferId: string
+  ): Promise<void>;
   create(options?: WindowCreateOptions): Promise<WindowCreateResult>;
+  createForTransfer(
+    lease: WindowTransitionLease,
+    input: {
+      bounds: WindowBounds;
+      transferId: string;
+    }
+  ): Promise<WindowCreateResult>;
   flushOpenWindows(
     additionalCriticalFlush?: () => Promise<void>
   ): Promise<void>;
@@ -40,6 +58,9 @@ export interface WindowService {
   list(): WindowInfo[];
   restoreMostRecentClosed(): Promise<WindowCreateResult | null>;
   restoreOpenWindows(): Promise<WindowCreateResult[]>;
+  runExclusive<T>(
+    operation: (lease: WindowTransitionLease) => Promise<T>
+  ): Promise<T>;
 }
 
 export interface CreateWindowServiceArgs {
@@ -61,177 +82,21 @@ export interface CreateWindowServiceArgs {
     windowId: string;
   }) => Promise<void> | void;
   runWhenPluginTransitionsIdle?: <T>(operation: () => Promise<T>) => Promise<T>;
+  settlePanelTransferBeforeClose?: (
+    lease: WindowTransitionLease,
+    windowId: string,
+    reason: "app-quit" | "window-close"
+  ) => Promise<void>;
+  signalPanelTransferClosing?: (
+    windowId: string,
+    reason: "app-quit" | "window-close"
+  ) => void;
 }
 
-let didRegisterCloseHandler = false;
-let currentFinalizeRendererClose: (
-  windowId: string,
-  transitionId: string,
-  outcome: "abort" | "commit"
-) => Promise<void> = async () => undefined;
-let currentFlushCriticalState: () => Promise<void> = async () => undefined;
-let currentPrepareRendererClose: (
-  windowId: string,
-  reason: "app-quit" | "window-close",
-  transitionId: string
-) => Promise<void> = async () => undefined;
-let currentRunWindowTransition: <T>(operation: () => Promise<T>) => Promise<T> =
-  async <T>(operation: () => Promise<T>): Promise<T> => await operation();
-let currentReportCloseFailure: (
-  windowId: string,
-  error: unknown
-) => Promise<void> = async () => undefined;
-let currentReportCloseFailureFallback: NonNullable<
-  CreateWindowServiceArgs["reportCloseFailureFallback"]
-> = () => undefined;
-
-async function reportCloseFailure(
-  windowId: string,
-  closeError: unknown
-): Promise<void> {
-  try {
-    await currentReportCloseFailure(windowId, closeError);
-  } catch (feedbackError) {
-    console.error("[window-close-feedback] failed:", feedbackError);
-    try {
-      await currentReportCloseFailureFallback({
-        closeError,
-        feedbackError,
-        windowId,
-      });
-    } catch (fallbackError) {
-      console.error("[window-close-native-feedback] failed:", fallbackError);
-    }
+function assertTransitionLease(lease: WindowTransitionLease): void {
+  if (windowTransitionState.activeLease !== lease) {
+    throw new Error("window transition lease required");
   }
-}
-
-/**
- * 并发 flush 6 个 debounced store。任何一路失败不能吞其他成功——用 allSettled
- * 保证全部尝试写盘并把 rejection 分别 log，避免旧 Promise.all 语义下靠前 fail
- * 掩盖后面的成功/失败。
- */
-async function flushAllStoresSettled(): Promise<void> {
-  const flushes: [string, () => Promise<void>][] = [
-    ["plugin-state", flushPluginState],
-    ["plugin-settings", flushPluginSettings],
-    ["panel-context-state", flushPanelContextState],
-    ["terminal-session-state", flushTerminalSessionState],
-    ["terminal-status-bar-prefs", flushTerminalStatusBarPrefs],
-    ["window-record-state", flushWindowRecordState],
-  ];
-  const results = await Promise.allSettled(flushes.map(([, fn]) => fn()));
-  for (const [i, result] of results.entries()) {
-    if (result.status === "rejected") {
-      const label = flushes[i]?.[0] ?? "unknown";
-      const err = result.reason;
-      console.error(
-        `[${label}] flush failed:`,
-        err instanceof Error ? err.message : String(err)
-      );
-    }
-  }
-}
-async function armAndDetachAgentsBeforeClose(windowId: string): Promise<void> {
-  const window = windowManager.get(windowId);
-  if (!window || window.isDestroyed()) {
-    return;
-  }
-  const context = findWindowContext(window);
-  if (!context) {
-    return;
-  }
-  // terminal session store 键是 runtime windowId（main / w-N），不是 layout record UUID。
-  const electronWindowId = context.electronWindowId ?? String(window.id);
-  const sessionScope = context.windowId;
-  armDetaching({ electronWindowId, recordId: sessionScope });
-  await detachAgentsForWindow(sessionScope);
-}
-
-async function prepareWindowBeforeCloseCore(
-  windowId: string
-): Promise<WindowCloseDecision> {
-  const transitionId = `window-close:${windowId}:${randomUUID()}`;
-  try {
-    await currentPrepareRendererClose(windowId, "window-close", transitionId);
-  } catch (err) {
-    await currentFinalizeRendererClose(windowId, transitionId, "abort").catch(
-      (finalizeError: unknown) => {
-        console.error(
-          "[window-close-abort] failed:",
-          finalizeError instanceof Error
-            ? finalizeError.message
-            : String(finalizeError)
-        );
-      }
-    );
-    console.error(
-      "[window-close-prepare] failed:",
-      err instanceof Error ? err.message : String(err)
-    );
-    await reportCloseFailure(windowId, err);
-    return "veto";
-  }
-  try {
-    await currentFlushCriticalState();
-  } catch (err) {
-    await currentFinalizeRendererClose(windowId, transitionId, "abort").catch(
-      () => undefined
-    );
-    await reportCloseFailure(windowId, err);
-    return "veto";
-  }
-  try {
-    await currentFinalizeRendererClose(windowId, transitionId, "commit");
-  } catch (err) {
-    await currentFinalizeRendererClose(windowId, transitionId, "abort").catch(
-      (finalizeError: unknown) => {
-        console.error(
-          "[window-close-abort-after-commit-failure] failed:",
-          finalizeError instanceof Error
-            ? finalizeError.message
-            : String(finalizeError)
-        );
-      }
-    );
-    console.error(
-      "[window-close-commit] failed:",
-      err instanceof Error ? err.message : String(err)
-    );
-    await reportCloseFailure(windowId, err);
-    return "veto";
-  }
-  await armAndDetachAgentsBeforeClose(windowId);
-  await flushAllStoresSettled();
-  return "allow";
-}
-
-async function flushWindowBeforeClose(windowId: string): Promise<void> {
-  const decision = await currentRunWindowTransition(() =>
-    prepareWindowBeforeCloseCore(windowId)
-  );
-  if (decision === "veto") {
-    throw new Error(`window close preparation was vetoed: ${windowId}`);
-  }
-}
-
-function ensureCloseHandler(): void {
-  if (didRegisterCloseHandler) {
-    return;
-  }
-  didRegisterCloseHandler = true;
-  windowManager.onBeforeClose(({ windowId }) =>
-    currentRunWindowTransition(() => prepareWindowBeforeCloseCore(windowId))
-  );
-  windowManager.onClose(({ recordId }) => {
-    markWindowRecordClosed(recordId).catch((err) => {
-      console.error("[window-record-close] failed:", err);
-    });
-  });
-  windowManager.onFocus(({ recordId }) => {
-    markWindowRecordFocused(recordId).catch((err) => {
-      console.error("[window-record-focus] failed:", err);
-    });
-  });
 }
 
 function nextRuntimeWindowId(): string | undefined {
@@ -247,31 +112,60 @@ function isWindowRecordOpenInLiveWindow(recordId: string): boolean {
 export function createWindowService(
   args: CreateWindowServiceArgs = {}
 ): WindowService {
-  currentFlushCriticalState =
-    args.flushCriticalState ?? (async () => undefined);
-  currentFinalizeRendererClose =
-    args.finalizeRendererClose ?? (async () => undefined);
-  currentPrepareRendererClose =
-    args.prepareRendererClose ?? (async () => undefined);
-  currentReportCloseFailure =
-    args.reportCloseFailure ?? (async () => undefined);
-  currentReportCloseFailureFallback =
-    args.reportCloseFailureFallback ?? (() => undefined);
+  setWindowCloseHooks({
+    finalizeRendererClose:
+      args.finalizeRendererClose ?? (async () => undefined),
+    flushCriticalState: args.flushCriticalState ?? (async () => undefined),
+    prepareRendererClose: args.prepareRendererClose ?? (async () => undefined),
+    reportCloseFailure: args.reportCloseFailure ?? (async () => undefined),
+    reportCloseFailureFallback:
+      args.reportCloseFailureFallback ?? (() => undefined),
+    settlePanelTransferBeforeClose:
+      args.settlePanelTransferBeforeClose ?? (async () => undefined),
+    signalPanelTransferClosing:
+      args.signalPanelTransferClosing ?? (() => undefined),
+  });
+
   const runWhenPluginTransitionsIdle =
     args.runWhenPluginTransitionsIdle ??
     (async <T>(operation: () => Promise<T>): Promise<T> => await operation());
   let transitionTail: Promise<void> = Promise.resolve();
   let quitSealed = false;
+
   const runWindowTransition = <T>(operation: () => Promise<T>): Promise<T> => {
-    const result = transitionTail.then(operation, operation);
+    const runWithLease = async (): Promise<T> => {
+      const lease: WindowTransitionLease = {
+        token: Symbol("window-transition-lease"),
+      };
+      windowTransitionState.activeLease = lease;
+      try {
+        return await operation();
+      } finally {
+        if (windowTransitionState.activeLease === lease) {
+          windowTransitionState.activeLease = null;
+        }
+      }
+    };
+    const result = transitionTail.then(runWithLease, runWithLease);
     transitionTail = result.then(
       () => undefined,
       () => undefined
     );
     return result;
   };
-  currentRunWindowTransition = runWindowTransition;
+  setWindowCloseHooks({ runWindowTransition });
   ensureCloseHandler();
+
+  const runExclusive = <T>(
+    operation: (lease: WindowTransitionLease) => Promise<T>
+  ): Promise<T> =>
+    runWindowTransition(async () => {
+      const lease = windowTransitionState.activeLease;
+      if (!lease) {
+        throw new Error("window transition lease missing");
+      }
+      return await operation(lease);
+    });
 
   async function create(
     options: WindowCreateOptions = {}
@@ -282,40 +176,105 @@ export function createWindowService(
   }
 
   async function createFromRecord(options: {
+    bounds?: WindowBounds;
     mode: "fresh" | "restore";
     recordId: string;
     showInactive?: boolean;
+    startup?: { kind: "panel-transfer"; transferId: string };
+    underLease?: boolean;
   }): Promise<WindowCreateResult> {
-    return await runWhenPluginTransitionsIdle(() =>
-      runWindowTransition(async () => {
-        if (quitSealed) {
-          throw new Error("window creation is sealed for app quit");
-        }
-        const { mode, recordId, showInactive } = options;
-        if (isWindowRecordOpenInLiveWindow(recordId)) {
-          throw new Error(`window record already open: ${recordId}`);
-        }
-        const runtimeWindowId = nextRuntimeWindowId();
-        const windowId = windowManager.create({
-          ...(runtimeWindowId ? { id: runtimeWindowId } : {}),
-          mode,
-          recordId,
-          ...(showInactive ? { showInactive: true } : {}),
-        });
-        await markWindowRecordOpen(recordId);
-        return { recordId, windowId };
-      })
-    );
+    const run = async (): Promise<WindowCreateResult> => {
+      if (quitSealed) {
+        throw new Error("window creation is sealed for app quit");
+      }
+      const { bounds, mode, recordId, showInactive, startup } = options;
+      if (isWindowRecordOpenInLiveWindow(recordId)) {
+        throw new Error(`window record already open: ${recordId}`);
+      }
+      const runtimeWindowId = nextRuntimeWindowId();
+      const windowId = windowManager.create({
+        ...(runtimeWindowId ? { id: runtimeWindowId } : {}),
+        ...(bounds ? { bounds } : {}),
+        mode,
+        recordId,
+        ...(showInactive ? { showInactive: true } : {}),
+        ...(startup ? { startup } : {}),
+      });
+      await markWindowRecordOpen(recordId);
+      return { recordId, windowId };
+    };
+    if (options.underLease) {
+      return await run();
+    }
+    return await runWhenPluginTransitionsIdle(() => runWindowTransition(run));
+  }
+
+  async function createForTransfer(
+    lease: WindowTransitionLease,
+    input: {
+      bounds: WindowBounds;
+      transferId: string;
+    }
+  ): Promise<WindowCreateResult> {
+    assertTransitionLease(lease);
+    if (quitSealed) {
+      throw new Error("window creation is sealed for app quit");
+    }
+    const recordId = (await createWindowRecord()).id;
+    return await createFromRecord({
+      bounds: input.bounds,
+      mode: "fresh",
+      recordId,
+      showInactive: true,
+      startup: { kind: "panel-transfer", transferId: input.transferId },
+      underLease: true,
+    });
+  }
+
+  async function closeAfterTransfer(
+    lease: WindowTransitionLease,
+    windowId: string,
+    transferId: string
+  ): Promise<void> {
+    assertTransitionLease(lease);
+    const window = windowManager.get(windowId);
+    if (!window || window.isDestroyed()) {
+      return;
+    }
+    const context = findWindowContext(window);
+    if (!context) {
+      throw new Error(`window context missing for transfer close: ${windowId}`);
+    }
+    await markWindowRecordClosed(context.recordId);
+    await flushWindowRecordState();
+    await windowManager.destroyForTransfer(windowId, transferId);
   }
 
   return {
     close: (windowId) => windowManager.close(windowId),
+    closeAfterTransfer,
     create,
+    createForTransfer,
     focus: (windowId) => windowManager.focus(windowId),
     flushOpenWindows: async (additionalCriticalFlush) =>
       await runWindowTransition(async () => {
         quitSealed = false;
         const windows = windowManager.list();
+        for (const windowInfo of windows) {
+          currentSignalPanelTransferClosing(windowInfo.id, "app-quit");
+        }
+        const lease = windowTransitionState.activeLease;
+        if (lease) {
+          await Promise.allSettled(
+            windows.map((windowInfo) =>
+              currentSettlePanelTransferBeforeClose(
+                lease,
+                windowInfo.id,
+                "app-quit"
+              )
+            )
+          );
+        }
         const transitionId = `app-quit:${randomUUID()}`;
         const rendererResults = await Promise.allSettled(
           windows.map((windowInfo) =>
@@ -354,23 +313,16 @@ export function createWindowService(
           }
         }
         if (outcome === "commit" && failedFinalizeWindowIds.length > 0) {
-          const recoveryResults = await Promise.allSettled(
+          await Promise.allSettled(
             windows.map(({ id: windowId }) =>
               currentFinalizeRendererClose(windowId, transitionId, "abort")
             )
           );
-          for (const result of recoveryResults) {
-            if (result.status === "rejected") {
-              failures.push(result.reason);
-            }
-          }
         }
         if (failures.length > 0) {
-          // abort：不 arm detaching（避免永久卡住），仍 flush 既有关键状态
           await flushAllStoresSettled();
           throw new AggregateError(failures, "window close preparation failed");
         }
-        // 仅在确定会销毁窗口时 arm+detach
         await Promise.allSettled(
           windows.map((windowInfo) =>
             armAndDetachAgentsBeforeClose(windowInfo.id)
@@ -402,5 +354,6 @@ export function createWindowService(
       }
       return results;
     },
+    runExclusive,
   };
 }

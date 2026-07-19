@@ -11,12 +11,12 @@ export interface RendererCommandHost {
     envelope: RendererCommandEnvelope,
     windowId?: string,
     options?: { focus?: boolean }
-  ): boolean;
+  ): number | null;
 }
 
 export interface RendererCommandService {
   execute(command: RendererCommand): Promise<RendererCommandResult>;
-  resolve(result: RendererCommandResult): void;
+  resolve(result: RendererCommandResult, senderWebContentsId: number): void;
 }
 
 export interface CreateRendererCommandServiceArgs {
@@ -26,6 +26,7 @@ export interface CreateRendererCommandServiceArgs {
 }
 
 interface PendingRequest {
+  expectedWebContentsId: number;
   rejectTimer: ReturnType<typeof setTimeout>;
   resolve(result: RendererCommandResult): void;
 }
@@ -87,11 +88,14 @@ export function createRendererCommandService({
     execute(command) {
       const requestId = createRequestId();
       const envelope: RendererCommandEnvelope = { command, requestId };
-      if (
-        !host.send(envelope, rendererCommandTargetWindowId(command), {
+      const webContentsId = host.send(
+        envelope,
+        rendererCommandTargetWindowId(command),
+        {
           focus: shouldFocusRendererWindow(command),
-        })
-      ) {
+        }
+      );
+      if (webContentsId === null) {
         return Promise.resolve(
           failure(
             requestId,
@@ -102,23 +106,31 @@ export function createRendererCommandService({
           )
         );
       }
-      return new Promise((resolve) => {
-        const rejectTimer = setTimeout(() => {
-          pending.delete(requestId);
-          resolve(
-            failure(
-              requestId,
-              "renderer command timed out",
-              "platform_unavailable"
-            )
-          );
-        }, timeoutMs);
-        pending.set(requestId, { rejectTimer, resolve });
+      const { promise, resolve } =
+        Promise.withResolvers<RendererCommandResult>();
+      const rejectTimer = setTimeout(() => {
+        pending.delete(requestId);
+        resolve(
+          failure(
+            requestId,
+            "renderer command timed out",
+            "platform_unavailable"
+          )
+        );
+      }, timeoutMs);
+      pending.set(requestId, {
+        expectedWebContentsId: webContentsId,
+        rejectTimer,
+        resolve,
       });
+      return promise;
     },
-    resolve(result) {
+    resolve(result, senderWebContentsId) {
       const request = pending.get(result.requestId);
       if (!request) {
+        return;
+      }
+      if (request.expectedWebContentsId !== senderWebContentsId) {
         return;
       }
       clearTimeout(request.rejectTimer);

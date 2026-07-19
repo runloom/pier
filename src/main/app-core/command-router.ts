@@ -29,6 +29,7 @@ import {
   executePanelOpenCommand,
   executeTerminalOpenCommand,
 } from "./panel-commands.ts";
+import { executePanelTransferCommand } from "./panel-transfer-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
 import { executePluginCommand } from "./plugin-commands.ts";
 import {
@@ -358,6 +359,8 @@ async function executeCommandByDomain(
     (cmd: PierCommand) =>
       executeWindowWorkspaceCommand(requestId, cmd, services),
     (cmd: PierCommand) => executePanelCommand(requestId, cmd, services),
+    (cmd: PierCommand) =>
+      executePanelTransferCommand(requestId, cmd, services, context),
   ];
   for (const executor of executors) {
     const result = await executor(command);

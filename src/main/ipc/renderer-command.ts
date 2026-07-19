@@ -6,8 +6,8 @@ import { appCore } from "../app-core/app-core.ts";
 export function registerRendererCommandIpc(ipcMain: IpcMain): void {
   ipcMain.on(
     RENDERER_COMMAND_RESULT_CHANNEL,
-    (_event, result: RendererCommandResult) => {
-      appCore.services.rendererCommand.resolve(result);
+    (event, result: RendererCommandResult) => {
+      appCore.services.rendererCommand.resolve(result, event.sender.id);
     }
   );
 }

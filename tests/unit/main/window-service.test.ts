@@ -620,4 +620,50 @@ describe("WindowService", () => {
       "record-focused"
     );
   });
+
+  it("runExclusive provides a transition lease", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    const service = createWindowService();
+    const seen: symbol[] = [];
+    await service.runExclusive(async (lease) => {
+      seen.push(lease.token);
+      return "ok";
+    });
+    expect(seen).toHaveLength(1);
+  });
+
+  it("createForTransfer and closeAfterTransfer require the active lease", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    mocks.create.mockImplementationOnce(() => "w-transfer");
+    // ensure destroyForTransfer exists on mock
+    const service = createWindowService();
+    const fakeLease = { token: Symbol("foreign") };
+    await expect(
+      service.createForTransfer(fakeLease, {
+        bounds: { height: 800, width: 1200, x: 10, y: 10 },
+        transferId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      })
+    ).rejects.toThrow(/lease required/);
+
+    await service.runExclusive(async (lease) => {
+      const created = await service.createForTransfer(lease, {
+        bounds: { height: 800, width: 1200, x: 10, y: 10 },
+        transferId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      });
+      expect(created.windowId).toBeTruthy();
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          showInactive: true,
+          startup: {
+            kind: "panel-transfer",
+            transferId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          },
+        })
+      );
+    });
+  });
 });

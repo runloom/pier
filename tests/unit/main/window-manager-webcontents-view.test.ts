@@ -853,5 +853,30 @@ describeMockedMacOSWindowManager(
       );
       expect(electronMock.webContents.reload).not.toHaveBeenCalled();
     });
+
+    describe("destroyForTransfer", () => {
+      it("destroys the window and marks transfer destroy on close callbacks", async () => {
+        vi.resetModules();
+        const { windowManager } = await import(
+          "@main/windows/window-manager.ts"
+        );
+        const closed: Record<string, unknown>[] = [];
+        windowManager.onClose((payload) => {
+          closed.push(payload as never);
+        });
+        windowManager.create({ id: "main", recordId: "record-main" });
+        await windowManager.destroyForTransfer(
+          "main",
+          "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+        );
+        electronMock.hostListeners.get("closed")?.();
+        expect(electronMock.baseWindow.destroy).toHaveBeenCalled();
+        expect(closed[0]).toMatchObject({
+          recordId: "record-main",
+          transferDestroy: true,
+          windowId: "main",
+        });
+      });
+    });
   }
 );

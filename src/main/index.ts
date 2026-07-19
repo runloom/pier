@@ -386,6 +386,12 @@ if (gotTheLock) {
       registerFileWatchIpc();
       registerFileQueryIpc();
       localControlRegistration.start();
+      // Panel transfer journal must converge before orphan reconcile + window restore.
+      await appCore.services.panelTransfer
+        ?.recoverPending()
+        .catch((error: unknown) => {
+          terminalSessionLog.error("panel transfer recovery failed", { error });
+        });
       // 孤儿 task 清算必须先于窗口恢复(renderer readSession 磁盘状态不再说谎:
       // 上进程 running 一律 cancelled), 并在 UI sweep 前只回收本 app 登记的 pid.
       await reconcileOrphanedBackgroundProcesses().catch((error: unknown) => {

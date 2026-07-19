@@ -23,7 +23,7 @@ describe("createRendererCommandService", () => {
         send(envelope, _windowId, options) {
           sent = envelope;
           focus = options?.focus;
-          return true;
+          return 42;
         },
       },
       timeoutMs: 1000,
@@ -41,11 +41,14 @@ describe("createRendererCommandService", () => {
       requestId: "renderer-req-1",
     });
     expect(focus).toBe(true);
-    service.resolve({
-      data: { panelId: "terminal-1" },
-      ok: true,
-      requestId: "renderer-req-1",
-    });
+    service.resolve(
+      {
+        data: { panelId: "terminal-1" },
+        ok: true,
+        requestId: "renderer-req-1",
+      },
+      42
+    );
 
     await expect(promise).resolves.toEqual({
       data: { panelId: "terminal-1" },
@@ -61,7 +64,7 @@ describe("createRendererCommandService", () => {
       host: {
         send(_envelope, _windowId, options) {
           focus = options?.focus;
-          return true;
+          return 42;
         },
       },
       timeoutMs: 1000,
@@ -69,11 +72,14 @@ describe("createRendererCommandService", () => {
 
     const promise = service.execute({ type: "panel.list" });
     expect(focus).toBe(false);
-    service.resolve({
-      data: [],
-      ok: true,
-      requestId: "renderer-req-list",
-    });
+    service.resolve(
+      {
+        data: [],
+        ok: true,
+        requestId: "renderer-req-list",
+      },
+      42
+    );
 
     await expect(promise).resolves.toEqual({
       data: [],
@@ -89,7 +95,7 @@ describe("createRendererCommandService", () => {
       host: {
         send(_envelope, _windowId, options) {
           focus = options?.focus;
-          return true;
+          return 42;
         },
       },
       timeoutMs: 1000,
@@ -100,11 +106,14 @@ describe("createRendererCommandService", () => {
       type: "panel.close",
     });
     expect(focus).toBe(false);
-    service.resolve({
-      data: null,
-      ok: true,
-      requestId: "renderer-req-close",
-    });
+    service.resolve(
+      {
+        data: null,
+        ok: true,
+        requestId: "renderer-req-close",
+      },
+      42
+    );
 
     await expect(promise).resolves.toEqual({
       data: null,
@@ -120,7 +129,7 @@ describe("createRendererCommandService", () => {
       host: {
         send(_envelope, _windowId, options) {
           focus = options?.focus;
-          return true;
+          return 42;
         },
       },
       timeoutMs: 1000,
@@ -131,11 +140,14 @@ describe("createRendererCommandService", () => {
       windowId: "main",
     });
     expect(focus).toBe(false);
-    service.resolve({
-      data: null,
-      ok: true,
-      requestId: "renderer-req-flush",
-    });
+    service.resolve(
+      {
+        data: null,
+        ok: true,
+        requestId: "renderer-req-flush",
+      },
+      42
+    );
 
     await expect(promise).resolves.toEqual({
       data: null,
@@ -171,7 +183,7 @@ describe("createRendererCommandService", () => {
       host: {
         send(_envelope, _windowId, options) {
           focus = options?.focus;
-          return true;
+          return 42;
         },
       },
       timeoutMs: 1000,
@@ -179,7 +191,7 @@ describe("createRendererCommandService", () => {
 
     const promise = service.execute(command);
     expect(focus).toBe(false);
-    service.resolve({ data: null, ok: true, requestId });
+    service.resolve({ data: null, ok: true, requestId }, 42);
 
     await expect(promise).resolves.toEqual({
       data: null,
@@ -195,7 +207,7 @@ describe("createRendererCommandService", () => {
       host: {
         send(_envelope, _windowId, options) {
           focus = options?.focus;
-          return true;
+          return 42;
         },
       },
       timeoutMs: 1000,
@@ -207,11 +219,14 @@ describe("createRendererCommandService", () => {
       type: "panel.open",
     });
     expect(focus).toBe(false);
-    service.resolve({
-      data: { panelId: "terminal-1" },
-      ok: true,
-      requestId: "renderer-req-background",
-    });
+    service.resolve(
+      {
+        data: { panelId: "terminal-1" },
+        ok: true,
+        requestId: "renderer-req-background",
+      },
+      42
+    );
 
     await expect(promise).resolves.toEqual({
       data: { panelId: "terminal-1" },
@@ -227,7 +242,7 @@ describe("createRendererCommandService", () => {
       host: {
         send(_envelope, _windowId, options) {
           focusValues.push(options?.focus);
-          return true;
+          return 42;
         },
       },
       timeoutMs: 1000,
@@ -238,11 +253,14 @@ describe("createRendererCommandService", () => {
       launchId: "launch-foreground",
       type: "terminal.open",
     });
-    service.resolve({
-      data: { panelId: "terminal-foreground" },
-      ok: true,
-      requestId: "renderer-req-terminal-1",
-    });
+    service.resolve(
+      {
+        data: { panelId: "terminal-foreground" },
+        ok: true,
+        requestId: "renderer-req-terminal-1",
+      },
+      42
+    );
     await expect(foreground).resolves.toEqual({
       data: { panelId: "terminal-foreground" },
       ok: true,
@@ -255,11 +273,14 @@ describe("createRendererCommandService", () => {
       launchId: "launch-background",
       type: "terminal.open",
     });
-    service.resolve({
-      data: { panelId: "terminal-background" },
-      ok: true,
-      requestId: "renderer-req-terminal-2",
-    });
+    service.resolve(
+      {
+        data: { panelId: "terminal-background" },
+        ok: true,
+        requestId: "renderer-req-terminal-2",
+      },
+      42
+    );
     await expect(background).resolves.toEqual({
       data: { panelId: "terminal-background" },
       ok: true,
@@ -272,7 +293,7 @@ describe("createRendererCommandService", () => {
   it("无可用 renderer 窗口时返回失败", async () => {
     const service = createRendererCommandService({
       createRequestId: () => "renderer-req-2",
-      host: { send: () => false },
+      host: { send: () => null },
       timeoutMs: 1000,
     });
 
@@ -292,7 +313,7 @@ describe("createRendererCommandService", () => {
     vi.useFakeTimers();
     const service = createRendererCommandService({
       createRequestId: () => "renderer-req-3",
-      host: { send: () => true },
+      host: { send: () => 42 },
       timeoutMs: 1000,
     });
 
@@ -313,21 +334,56 @@ describe("createRendererCommandService", () => {
   it("透传 renderer 失败结果", async () => {
     const service = createRendererCommandService({
       createRequestId: () => "renderer-req-4",
-      host: { send: () => true },
+      host: { send: () => 42 },
       timeoutMs: 1000,
     });
 
     const promise = service.execute({ context, type: "panel.open" });
-    service.resolve({
-      error: { message: "workspace api not ready" },
-      ok: false,
-      requestId: "renderer-req-4",
-    });
+    service.resolve(
+      {
+        error: { message: "workspace api not ready" },
+        ok: false,
+        requestId: "renderer-req-4",
+      },
+      42
+    );
 
     await expect(promise).resolves.toEqual({
       error: { message: "workspace api not ready" },
       ok: false,
       requestId: "renderer-req-4",
+    });
+  });
+
+  it("忽略 webContents 不匹配的 renderer 回复", async () => {
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-mismatch",
+      host: { send: () => 7 },
+      timeoutMs: 1000,
+    });
+
+    const promise = service.execute({ context, type: "panel.open" });
+    service.resolve(
+      {
+        data: { panelId: "wrong" },
+        ok: true,
+        requestId: "renderer-req-mismatch",
+      },
+      99
+    );
+    service.resolve(
+      {
+        data: { panelId: "terminal-ok" },
+        ok: true,
+        requestId: "renderer-req-mismatch",
+      },
+      7
+    );
+
+    await expect(promise).resolves.toEqual({
+      data: { panelId: "terminal-ok" },
+      ok: true,
+      requestId: "renderer-req-mismatch",
     });
   });
 });

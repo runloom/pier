@@ -7,6 +7,8 @@ const RENDERER_BOOT_TIMEOUT_MS = 15_000;
 
 export interface RendererShowGate {
   cancel(): void;
+  holdUntilReleased(reason: string): void;
+  releaseHold(reason: string): void;
   retry(): void;
   setReadyTimeoutHandler(handler: () => void): void;
 }
@@ -21,6 +23,8 @@ export function createRendererShowGate(input: {
   let bootChallenge: string | null = null;
   let bootTimer: ReturnType<typeof setTimeout> | null = null;
   let didShow = false;
+  let pendingShow = false;
+  const holds = new Set<string>();
   let onReadyTimeout: () => void = () => undefined;
 
   const trace = (event: string, extra: Record<string, unknown> = {}) => {
@@ -37,9 +41,10 @@ export function createRendererShowGate(input: {
     bootTimer = null;
     clearListeners();
   };
-  const showOnce = () => {
+  const performShow = () => {
     if (didShow) return;
     didShow = true;
+    pendingShow = false;
     cancel();
     if (window.isDestroyed()) return;
     window.webContents.setBackgroundThrottling(true);
@@ -52,6 +57,15 @@ export function createRendererShowGate(input: {
       window.focus();
       window.webContents.focus();
     }
+  };
+  const showOnce = () => {
+    if (didShow) return;
+    if (holds.size > 0) {
+      pendingShow = true;
+      trace("show-held", { holds: [...holds] });
+      return;
+    }
+    performShow();
   };
   function handleRendererReady(
     event: Electron.IpcMainEvent,
@@ -91,12 +105,17 @@ export function createRendererShowGate(input: {
   const startBootDeadline = () => {
     bootTimer = setTimeout(() => {
       const payload = {
+        holds: [...holds],
         recordId,
         showMode: showInactive ? "inactive" : "active",
         windowId,
       };
       console.error("[window-startup] renderer boot timed out", payload);
       trace("boot-timeout", payload);
+      // Hold period: warn only, do not show while transfer still owns visibility.
+      if (holds.size > 0) {
+        return;
+      }
       cancel();
       onReadyTimeout();
     }, RENDERER_BOOT_TIMEOUT_MS);
@@ -108,6 +127,19 @@ export function createRendererShowGate(input: {
   startBootDeadline();
   return {
     cancel,
+    holdUntilReleased: (reason) => {
+      holds.add(reason);
+      trace("hold", { reason, holds: [...holds] });
+    },
+    releaseHold: (reason) => {
+      if (!holds.delete(reason)) {
+        return;
+      }
+      trace("release-hold", { reason, holds: [...holds] });
+      if (pendingShow && holds.size === 0) {
+        performShow();
+      }
+    },
     retry: () => {
       if (!didShow) {
         cancel();
