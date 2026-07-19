@@ -8,6 +8,7 @@ import type {
   CreateTerminalResult,
 } from "@shared/contracts/terminal.ts";
 import { resolveAgentResumeLaunch } from "../services/agents/agent-resume-adapters.ts";
+import { getTerminalPanelTransfer } from "../services/panel-transfer/terminal-panel-transfer.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import type { TaskService } from "../services/tasks/task-service-types.ts";
 import {
@@ -181,6 +182,25 @@ export async function handleTerminalCreate(args: {
       }
     );
     const nativePanelId = toNativePanelKey(win, createArgs.panelId);
+    const transfer = getTerminalPanelTransfer();
+    const runtimeWindowId = findInternalWindowId(win) ?? undefined;
+    if (
+      transfer &&
+      runtimeWindowId &&
+      transfer.shouldSkipTargetCreate(runtimeWindowId, createArgs.panelId)
+    ) {
+      // Target is inert during lease — do not create a competing surface.
+      return { ok: true };
+    }
+    if (
+      transfer &&
+      runtimeWindowId &&
+      transfer.shouldAdoptMovedSurface(runtimeWindowId, createArgs.panelId)
+    ) {
+      // Surface already moved under this native key — register focus only.
+      terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
+      return { ok: true };
+    }
     const ok = addon.createTerminal(
       handle,
       nativePanelId,

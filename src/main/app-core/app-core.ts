@@ -4,6 +4,11 @@ import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import {
+  getTerminalTaskLifecycleForTransfer,
+  getTerminalTaskOutputBindingsForTransfer,
+  getTerminalTaskServiceForTransfer,
+} from "../ipc/terminal.ts";
+import {
   createExternalMainPluginRuntime,
   type ExternalMainPluginContext,
   type ExternalMainPluginRuntime,
@@ -332,6 +337,9 @@ function createPierAppCore(): PierAppCore {
     wireAppCoreWindowAndPanelTransfer({
       fileDrafts,
       fileDraftsFlush: () => fileDrafts.flush(),
+      getTaskLifecycle: () => getTerminalTaskLifecycleForTransfer(),
+      getTaskOutputBindings: () => getTerminalTaskOutputBindingsForTransfer(),
+      getTaskService: () => getTerminalTaskServiceForTransfer(),
       pluginDisableTransitions,
       rendererCommand,
       reportCloseFailureFallback: showNativeWindowCloseFailure,
