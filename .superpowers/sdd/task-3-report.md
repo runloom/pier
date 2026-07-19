@@ -141,7 +141,7 @@ New/adjusted coverage:
 
 ## Review residual fixes (fix2)
 **Status:** DONE  
-**Commit:** _(filled after commit)_
+**Commit:** `9f77a224` — `fix(panel-transfer): match bootstrap by recordId and close cold internal records`
 
 Addressed two residual Important findings from re-review:
 
