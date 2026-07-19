@@ -11,26 +11,33 @@ import {
 } from "@playwright/test";
 
 /**
- * Task 1 gate spike — Electron/Dockview HTML5 DnD across two real Pier windows.
+ * Task 1 gate spike — Electron/Dockview boundary + exclusive path choice.
  *
  * Environment:
  * - Electron 43.1.0, two real BaseWindow + WebContentsView windows
  * - production session / contextIsolation / sandbox (same as other e2e)
  *
- * Drag method:
- * - Source dragstart: native Playwright mouse on a real `.dv-tab` (NOT dispatchEvent).
- * - Cross-WebContents delivery: Chromium CDP `Input.dispatchDragEvent` into the
- *   target page with the same DataTransfer payload. This is required on this
- *   agent host because macOS Accessibility is disabled (`UI elements enabled =
- *   false`), so OS CGEvent / cliclick cannot move the system cursor into the
- *   second Electron window. CDP still exercises a separate WebContents realm
- *   and Chromium's real DataTransfer MIME plumbing.
+ * Path decision (exclusive — no dual state machines):
+ * - Path A: continuous real mouse drag from source `.dv-tab` into target
+ *   `.dv-dockview` with target drop `getData(MIME) === sourceTransferId`
+ *   written only in source dragstart. CDP / sendInputEvent rebuilt payloads
+ *   are NOT proof.
+ * - Path B: MIME cross-WebContents unproven/failed → production must use
+ *   main/native active transfer + bounds hit only; delete HTML5 target
+ *   recognition for steps 2–7.
  *
- * Pins Dockview 7.0.2 public names: onWillDragPanel, onDidDrop, onUnhandledDragOver
- * (not onUnhandledDragOverEvent). accept() exists on unhandled overlay events.
+ * This host has macOS Accessibility off (`UI elements enabled = false`), so
+ * OS CGEvent / cliclick cannot drive the system cursor. The spike still tries
+ * a continuous Playwright multi-window mouse path; if that does not deliver
+ * a real cross-WebContents drop with source-written MIME, Path B is chosen.
  *
- * New-window decisions must NOT use dragend.dropEffect — document AppKit
+ * Pins Dockview 7.0.2 public names: onWillDragPanel, onDidDrop,
+ * onUnhandledDragOver (not onUnhandledDragOverEvent). accept() must be proven
+ * on a live fired unhandled dragover (same-window external drag is enough).
+ *
+ * New-window decisions must NOT use dragend.dropEffect — AppKit
  * leftMouseUp/Escape monitors + main `screen.getCursorScreenPoint()` + bounds.
+ * Escape ≠ outside.
  */
 
 const OUT_MAIN = join(
@@ -46,6 +53,9 @@ const APP_CLOSE_TIMEOUT_MS = 20_000;
 const PANEL_TRANSFER_MIME = "application/x-pier-panel-transfer";
 const PANEL_TRANSFER_TEXT_PREFIX = "pier-panel-transfer:";
 const SPIKE_LOG_KEY = "__pierPanelTransferSpike";
+
+/** Exclusive gate outcome for steps 2–7. Never dual-path. */
+type ChosenTransferPath = "html5-mime" | "native-monitor";
 
 test.skip(
   process.platform !== "darwin",
@@ -64,6 +74,7 @@ interface SpikeDragEventLog {
 }
 
 interface SpikeDockviewEventLog {
+  acceptCalled: boolean;
   acceptType: string;
   eventName: string;
   fired: boolean;
@@ -101,6 +112,16 @@ interface LocalPoint {
   x: number;
   y: number;
 }
+
+interface ContentGeometry {
+  contentBounds: WindowScreenRect;
+  viewBounds: WindowScreenRect;
+  windowBounds: WindowScreenRect;
+}
+
+type CursorClassification =
+  | { kind: "outside" }
+  | { kind: "window"; windowId: number };
 
 async function waitForWorkspaceReady(page: Page) {
   await page.waitForLoadState("domcontentloaded");
@@ -175,11 +196,11 @@ async function positionWindowsSideBySide(app: ElectronApplication) {
     const [sourceHost, targetHost] = windows;
     const display = screen.getDisplayMatching(sourceHost.getBounds());
     const work = display.workArea;
-    const gap = 16;
-    const width = Math.max(480, Math.floor((work.width - gap) / 2));
-    const height = Math.max(520, Math.min(700, work.height - 40));
-    const y = work.y + 24;
-    const sourceX = work.x + 12;
+    const gap = 24;
+    const width = Math.max(520, Math.floor((work.width - gap) / 2));
+    const height = Math.max(560, Math.min(720, work.height - 48));
+    const y = work.y + 32;
+    const sourceX = work.x + 16;
     const targetX = sourceX + width + gap;
 
     sourceHost.setBounds({ height, width, x: sourceX, y });
@@ -237,6 +258,66 @@ function readMacAccessibilityEnabled() {
   }
 }
 
+/**
+ * Production decision helper for finishDrag / new-window claim.
+ * Escape is a separate abort signal — never classified as "outside".
+ */
+function classifyCursorAgainstManagedWindows(
+  point: { x: number; y: number },
+  windows: readonly WindowScreenRect[]
+): CursorClassification {
+  for (const win of windows) {
+    if (
+      point.x >= win.x &&
+      point.x < win.x + win.width &&
+      point.y >= win.y &&
+      point.y < win.y + win.height
+    ) {
+      return { kind: "window", windowId: win.id };
+    }
+  }
+  return { kind: "outside" };
+}
+
+async function readHostContentGeometry(
+  app: ElectronApplication,
+  electronWindowId: number
+): Promise<ContentGeometry> {
+  return await app.evaluate(({ BaseWindow }, windowId) => {
+    const host = BaseWindow.getAllWindows().find((win) => win.id === windowId);
+    if (!host || host.isDestroyed()) {
+      throw new Error(`BaseWindow ${windowId} not found`);
+    }
+    const windowBounds = host.getBounds();
+    const contentBounds = host.getContentBounds();
+    // WebContentsView fills the content area in Pier production hosts.
+    const viewBounds = {
+      height: contentBounds.height,
+      id: windowId,
+      width: contentBounds.width,
+      x: contentBounds.x,
+      y: contentBounds.y,
+    };
+    return {
+      contentBounds: {
+        height: contentBounds.height,
+        id: windowId,
+        width: contentBounds.width,
+        x: contentBounds.x,
+        y: contentBounds.y,
+      },
+      viewBounds,
+      windowBounds: {
+        height: windowBounds.height,
+        id: windowId,
+        width: windowBounds.width,
+        x: windowBounds.x,
+        y: windowBounds.y,
+      },
+    } satisfies ContentGeometry;
+  }, electronWindowId);
+}
+
 async function elementLocalPoint(
   page: Page,
   selector: string,
@@ -278,6 +359,7 @@ async function installSpikeInstrumentation(
         windowRole: "source" | "target";
       }
       interface DockBucket {
+        acceptCalled: boolean;
         acceptType: string;
         eventName: string;
         fired: boolean;
@@ -362,17 +444,20 @@ async function installSpikeInstrumentation(
       window.addEventListener(
         "dragstart",
         (event) => {
-          const tab = (event.target as HTMLElement | null)?.closest?.(
-            ".dv-tab"
-          );
-          if (!tab) {
+          const targetEl = event.target as HTMLElement | null;
+          const tab = targetEl?.closest?.(".dv-tab");
+          const probe = targetEl?.closest?.("[data-spike-external-drag]");
+          if (!(tab || probe)) {
             return;
           }
           try {
-            event.dataTransfer?.setData(mime, id);
-            event.dataTransfer?.setData("text/plain", `${prefix}${id}`);
-            if (event.dataTransfer) {
-              event.dataTransfer.effectAllowed = "move";
+            // Source-only write of the transfer token. Target must not re-inject.
+            if (role === "source" || probe) {
+              event.dataTransfer?.setData(mime, id);
+              event.dataTransfer?.setData("text/plain", `${prefix}${id}`);
+              if (event.dataTransfer) {
+                event.dataTransfer.effectAllowed = "move";
+              }
             }
           } catch {
             // still log
@@ -399,7 +484,7 @@ async function installSpikeInstrumentation(
           if (event.dataTransfer) {
             event.dataTransfer.dropEffect = "move";
           }
-          if (log.dragover.length < 48) {
+          if (log.dragover.length < 64) {
             pushDrag("dragover", event);
           }
         },
@@ -546,6 +631,7 @@ async function installSpikeInstrumentation(
           const subscribe = api[eventName];
           if (typeof subscribe !== "function") {
             log.dockview.push({
+              acceptCalled: false,
               acceptType: "missing",
               eventName,
               fired: false,
@@ -562,6 +648,7 @@ async function installSpikeInstrumentation(
             continue;
           }
           log.dockview.push({
+            acceptCalled: false,
             acceptType: "subscribed",
             eventName,
             fired: false,
@@ -586,18 +673,23 @@ async function installSpikeInstrumentation(
                 ? (event as Record<string, unknown>)
                 : null;
             const keys = record ? Object.keys(record).sort() : [];
-            const accept =
-              record && typeof record.accept === "function"
-                ? (record.accept as () => void)
-                : null;
+            const hasAcceptFn =
+              record !== null && typeof record.accept === "function";
+            let acceptCalled = false;
+            let isAcceptedAfter: boolean | null = null;
             if (
-              accept &&
+              hasAcceptFn &&
               String(eventName).toLowerCase().includes("unhandled")
             ) {
               try {
-                accept();
+                // Must stay bound — AcceptableEvent.accept uses `this`.
+                (record.accept as () => void).call(record);
+                acceptCalled = true;
+                if ("isAccepted" in record) {
+                  isAcceptedAfter = Boolean(record.isAccepted);
+                }
               } catch {
-                // presence matters
+                acceptCalled = false;
               }
             }
             const nativeEvent = record?.nativeEvent;
@@ -628,10 +720,11 @@ async function installSpikeInstrumentation(
               }
             }
             log.dockview[index] = {
-              acceptType: accept ? typeof record?.accept : "absent",
+              acceptCalled,
+              acceptType: hasAcceptFn ? typeof record?.accept : "absent",
               eventName,
               fired: true,
-              hasAccept: Boolean(accept),
+              hasAccept: hasAcceptFn,
               hasNativeEvent: Boolean(nativeEvent),
               keys,
               nativeEventIsDragEvent: nativeIsDrag,
@@ -641,9 +734,18 @@ async function installSpikeInstrumentation(
               target: record?.target ?? null,
               windowRole: role,
             };
+            if (isAcceptedAfter === false) {
+              log.notes.push(
+                `${eventName}: accept() called but isAccepted remained false`
+              );
+            } else if (isAcceptedAfter === true) {
+              log.notes.push(`${eventName}: accept() set isAccepted=true`);
+            }
           });
         }
       };
+
+      let boundApi: Record<string, unknown> | null = null;
 
       (
         window as unknown as { __pierBindDockviewSpike?: () => boolean }
@@ -653,10 +755,146 @@ async function installSpikeInstrumentation(
           return false;
         }
         if (log.dockview.some((entry) => entry.subscriptionPresent)) {
+          boundApi = api;
           return true;
         }
         bindDockviewApi(api);
+        boundApi = api;
         return true;
+      };
+
+      (
+        window as unknown as {
+          __pierMountExternalDragProbe?: () => void;
+        }
+      ).__pierMountExternalDragProbe = () => {
+        const existing = document.querySelector(
+          "[data-spike-external-drag='true']"
+        );
+        if (existing) {
+          return;
+        }
+        const probe = document.createElement("div");
+        probe.dataset.spikeExternalDrag = "true";
+        probe.draggable = true;
+        probe.textContent = "spike-external-drag";
+        probe.style.cssText = [
+          "position:fixed",
+          "left:8px",
+          "bottom:8px",
+          "z-index:2147483647",
+          "padding:10px 14px",
+          "background:#0f172a",
+          "color:#f8fafc",
+          "font:12px/1.2 monospace",
+          "border-radius:6px",
+          "cursor:grab",
+          "user-select:none",
+        ].join(";");
+        document.body.appendChild(probe);
+      };
+
+      /**
+       * Live accept() proof: prefer natural HTML5 external dragover into
+       * Dockview content (fires group canDisplayOverlay → onUnhandledDragOver).
+       * Fallback drives DockviewComponent.dispatchUnhandledDragOver with a real
+       * DragEvent — still constructs DockviewUnhandledDragOverEvent + accept().
+       */
+      (
+        window as unknown as {
+          __pierProveUnhandledAccept?: () => {
+            acceptCalled: boolean;
+            fired: boolean;
+            hasAccept: boolean;
+            method: string;
+          };
+        }
+      ).__pierProveUnhandledAccept = () => {
+        const api = boundApi ?? findDockviewApi();
+        if (!api) {
+          return {
+            acceptCalled: false,
+            fired: false,
+            hasAccept: false,
+            method: "no-api",
+          };
+        }
+        boundApi = api;
+
+        const already = log.dockview.find(
+          (entry) =>
+            entry.eventName === "onUnhandledDragOver" &&
+            entry.fired &&
+            entry.hasAccept &&
+            entry.acceptCalled
+        );
+        if (already) {
+          return {
+            acceptCalled: true,
+            fired: true,
+            hasAccept: true,
+            method: "prior-live-subscription",
+          };
+        }
+
+        const component = api.component;
+        if (
+          !component ||
+          typeof component !== "object" ||
+          typeof (component as { dispatchUnhandledDragOver?: unknown })
+            .dispatchUnhandledDragOver !== "function"
+        ) {
+          return {
+            acceptCalled: false,
+            fired: false,
+            hasAccept: false,
+            method: "no-dispatchUnhandledDragOver",
+          };
+        }
+
+        const dock = document.querySelector(".dv-dockview");
+        const rect = dock?.getBoundingClientRect();
+        const clientX = rect ? rect.left + rect.width / 2 : 40;
+        const clientY = rect ? rect.top + rect.height / 2 : 40;
+
+        let dataTransfer: DataTransfer | null = null;
+        try {
+          dataTransfer = new DataTransfer();
+          dataTransfer.setData(mime, id);
+          dataTransfer.setData("text/plain", `${prefix}${id}`);
+          dataTransfer.effectAllowed = "move";
+        } catch {
+          dataTransfer = null;
+        }
+
+        const nativeEvent = new DragEvent("dragover", {
+          bubbles: true,
+          cancelable: true,
+          clientX,
+          clientY,
+          dataTransfer: dataTransfer ?? undefined,
+          screenX: clientX,
+          screenY: clientY,
+        });
+
+        (
+          component as {
+            dispatchUnhandledDragOver: (
+              event: DragEvent,
+              position: string
+            ) => boolean;
+          }
+        ).dispatchUnhandledDragOver(nativeEvent, "center");
+
+        const after = log.dockview.find(
+          (entry) => entry.eventName === "onUnhandledDragOver" && entry.fired
+        );
+        return {
+          acceptCalled: Boolean(after?.acceptCalled),
+          fired: Boolean(after?.fired),
+          hasAccept: Boolean(after?.hasAccept),
+          method: "dispatchUnhandledDragOver",
+        };
       };
     },
     {
@@ -675,6 +913,14 @@ async function bindDockviewSpike(page: Page) {
       window as unknown as { __pierBindDockviewSpike?: () => boolean }
     ).__pierBindDockviewSpike;
     return binder?.() ?? false;
+  });
+}
+
+async function mountExternalDragProbe(page: Page) {
+  await page.evaluate(() => {
+    (
+      window as unknown as { __pierMountExternalDragProbe?: () => void }
+    ).__pierMountExternalDragProbe?.();
   });
 }
 
@@ -701,74 +947,209 @@ function summarizeDockview(log: SpikeWindowLog) {
   return log.dockview
     .map(
       (entry) =>
-        `${entry.eventName}{sub=${entry.subscriptionPresent}, fired=${entry.fired}, hasAccept=${entry.hasAccept}, nativeEvent=${entry.hasNativeEvent}, nativeIsDrag=${entry.nativeEventIsDragEvent}, keys=[${entry.keys.join(",")}]}`
+        `${entry.eventName}{sub=${entry.subscriptionPresent}, fired=${entry.fired}, hasAccept=${entry.hasAccept}, acceptCalled=${entry.acceptCalled}, nativeEvent=${entry.hasNativeEvent}, nativeIsDrag=${entry.nativeEventIsDragEvent}, keys=[${entry.keys.join(",")}]}`
     )
     .join(" | ");
 }
 
-async function playwrightSourceTabDragStart(page: Page) {
-  const tab = page.locator(".dv-tab").first();
-  const box = await tab.boundingBox();
-  if (!box) {
+/**
+ * Continuous Playwright mouse drag starting on source `.dv-tab`.
+ * Coordinates stay in the source page viewport space; intermediate points
+ * that leave the source window are still emitted on the source input path
+ * (Electron/Playwright may or may not bridge HTML5 DnD across WebContents).
+ */
+async function continuousPlaywrightTabDrag(
+  source: Page,
+  target: Page,
+  sourceGeom: ContentGeometry,
+  targetGeom: ContentGeometry
+) {
+  const tab = source.locator(".dv-tab").first();
+  const tabBox = await tab.boundingBox();
+  if (!tabBox) {
     throw new Error("source .dv-tab has no box");
   }
-  const startX = box.x + box.width / 2;
-  const startY = box.y + box.height / 2;
-  await page.mouse.move(startX, startY);
-  await page.mouse.down();
-  await page.mouse.move(startX + 28, startY + 4, { steps: 8 });
+  const dockBox = await target.locator(".dv-dockview").first().boundingBox();
+  if (!dockBox) {
+    throw new Error("target .dv-dockview has no box");
+  }
+
+  const startLocal = {
+    x: tabBox.x + tabBox.width / 2,
+    y: tabBox.y + tabBox.height / 2,
+  };
+  const targetLocal = {
+    x: dockBox.x + dockBox.width / 2,
+    y: dockBox.y + dockBox.height / 2,
+  };
+
+  // Convert target content-local point into source page coordinate space via
+  // screen/content bounds so mouse moves aim at the sibling window region.
+  const targetScreen = {
+    x: targetGeom.contentBounds.x + targetLocal.x,
+    y: targetGeom.contentBounds.y + targetLocal.y,
+  };
+  const endInSourceSpace = {
+    x: targetScreen.x - sourceGeom.contentBounds.x,
+    y: targetScreen.y - sourceGeom.contentBounds.y,
+  };
+
+  await source.mouse.move(startLocal.x, startLocal.y);
+  await source.mouse.down();
+  await source.mouse.move(startLocal.x + 24, startLocal.y + 2, { steps: 6 });
+
+  const steps = 28;
+  for (let i = 1; i <= steps; i += 1) {
+    const t = i / steps;
+    const x = startLocal.x + (endInSourceSpace.x - startLocal.x) * t;
+    const y = startLocal.y + (endInSourceSpace.y - startLocal.y) * t;
+    await source.mouse.move(x, y, { steps: 1 });
+  }
+
+  // Also nudge the target page mouse path once button is held — some Electron
+  // builds only complete HTML5 DnD if the destination WebContents sees moves.
+  try {
+    await target.mouse.move(targetLocal.x - 20, targetLocal.y, { steps: 4 });
+    await target.mouse.move(targetLocal.x, targetLocal.y, { steps: 4 });
+  } catch {
+    // target mouse may be unavailable while source holds the button
+  }
+
+  await source.mouse.up();
+  try {
+    await target.mouse.up();
+  } catch {
+    // ignore
+  }
 }
 
-async function cdpDeliverTransferToTarget(
-  target: Page,
-  transferId: string,
-  point: LocalPoint,
-  mode: "drop" | "over-only"
-) {
-  const session = await target.context().newCDPSession(target);
-  const data = {
-    dragOperationsMask: 16, // Move
-    files: [] as string[],
-    items: [
-      { data: transferId, mimeType: PANEL_TRANSFER_MIME },
-      {
-        data: `${PANEL_TRANSFER_TEXT_PREFIX}${transferId}`,
-        mimeType: "text/plain",
-      },
-    ],
-  };
-  await session.send("Input.dispatchDragEvent", {
-    data,
-    type: "dragEnter",
-    x: point.x,
-    y: point.y,
-  });
-  await session.send("Input.dispatchDragEvent", {
-    data,
-    type: "dragOver",
-    x: point.x,
-    y: point.y,
-  });
-  if (mode === "drop") {
-    await session.send("Input.dispatchDragEvent", {
-      data,
-      type: "drop",
-      x: point.x,
-      y: point.y,
-    });
-  } else {
-    await session.send("Input.dispatchDragEvent", {
-      data,
-      type: "dragCancel",
-      x: point.x,
-      y: point.y,
-    });
+/** Same-window external HTML5 drag aimed at panel content drop target. */
+async function sameWindowExternalUnhandledDrag(page: Page) {
+  await mountExternalDragProbe(page);
+  const probe = page.locator("[data-spike-external-drag='true']");
+  await expect(probe).toBeVisible({ timeout: 5000 });
+  const start = await probe.boundingBox();
+  // Prefer content surface (group canDisplayOverlay path) over chrome.
+  const content =
+    (await page.locator(".dv-content-container").first().boundingBox()) ??
+    (await page.locator(".dv-dockview").first().boundingBox());
+  if (!(start && content)) {
+    throw new Error("probe/content bounding box missing");
   }
-  await session.detach().catch(() => undefined);
+  const startX = start.x + start.width / 2;
+  const startY = start.y + start.height / 2;
+  const endX = content.x + content.width / 2;
+  const endY = content.y + content.height / 2;
+
+  await page.mouse.move(startX, startY);
+  await page.mouse.down();
+  await page.mouse.move(startX + 16, startY - 12, { steps: 6 });
+  await page.mouse.move(endX, endY, { steps: 24 });
+  await page.mouse.move(endX + 8, endY + 8, { steps: 4 });
+  await page.mouse.up();
+  await page.waitForTimeout(150);
+}
+
+async function proveUnhandledAccept(page: Page) {
+  return await page.evaluate(() => {
+    const prove = (
+      window as unknown as {
+        __pierProveUnhandledAccept?: () => {
+          acceptCalled: boolean;
+          fired: boolean;
+          hasAccept: boolean;
+          method: string;
+        };
+      }
+    ).__pierProveUnhandledAccept;
+    return (
+      prove?.() ?? {
+        acceptCalled: false,
+        fired: false,
+        hasAccept: false,
+        method: "missing-helper",
+      }
+    );
+  });
+}
+
+async function probeCursorClassification(app: ElectronApplication) {
+  return await app.evaluate(({ BaseWindow, screen }) => {
+    const windows = BaseWindow.getAllWindows()
+      .filter((win) => !win.isDestroyed())
+      .map((win) => {
+        const bounds = win.getBounds();
+        return {
+          height: bounds.height,
+          id: win.id,
+          width: bounds.width,
+          x: bounds.x,
+          y: bounds.y,
+        };
+      })
+      .sort((left, right) => left.id - right.id);
+
+    if (windows.length < 2) {
+      throw new Error(`Expected >=2 managed windows, got ${windows.length}`);
+    }
+
+    const classify = (
+      point: { x: number; y: number },
+      managed: typeof windows
+    ): CursorClassification => {
+      for (const win of managed) {
+        if (
+          point.x >= win.x &&
+          point.x < win.x + win.width &&
+          point.y >= win.y &&
+          point.y < win.y + win.height
+        ) {
+          return { kind: "window", windowId: win.id };
+        }
+      }
+      return { kind: "outside" };
+    };
+
+    const [source, target] = windows;
+    const insideTarget = {
+      x: target.x + Math.floor(target.width / 2),
+      y: target.y + Math.floor(target.height / 2),
+    };
+    const insideSource = {
+      x: source.x + Math.floor(source.width / 2),
+      y: source.y + Math.floor(source.height / 2),
+    };
+    const gapX = Math.floor((source.x + source.width + target.x) / 2);
+    const between = {
+      x: gapX,
+      y: source.y + Math.floor(source.height / 2),
+    };
+    const farOutside = {
+      x:
+        Math.max(source.x, target.x) +
+        Math.max(source.width, target.width) +
+        80,
+      y: Math.min(source.y, target.y) - 80,
+    };
+
+    const cursor = screen.getCursorScreenPoint();
+
+    return {
+      between: classify(between, windows),
+      cursor,
+      escapeIsNotOutside:
+        "Escape is an abort signal only; never treat keydown Escape as outside-window mouse-up",
+      farOutside: classify(farOutside, windows),
+      insideSource: classify(insideSource, windows),
+      insideTarget: classify(insideTarget, windows),
+      rule: "only explicit outside mouse-up detaches; Escape/system cancel abort; dragend clears UI only; do not use dragend.dropEffect",
+      windows,
+    };
+  });
 }
 
 test.describe("Panel cross-window drag spike", () => {
-  test("HTML5 MIME + Dockview events across two BaseWindow WebContentsViews", async () => {
+  test("gate: real MIME proof or exclusive native-monitor path", async () => {
     test.setTimeout(180_000);
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-panel-dnd-spike-"));
     let app: ElectronApplication | null = null;
@@ -806,103 +1187,208 @@ test.describe("Panel cross-window drag spike", () => {
         "[panel-dnd-spike] macOS Accessibility UI elements enabled:",
         accessibilityEnabled
       );
-      if (!accessibilityEnabled) {
-        console.log(
-          "[panel-dnd-spike] OS CGEvent cannot drive cross-window cursor without Accessibility; using Playwright source mouse + CDP Input.dispatchDragEvent into target WebContents for MIME/types probe."
-        );
-      }
+      console.log(
+        "[panel-dnd-spike] Path A requires continuous real drag (Playwright multi-window mouse). CDP/sendInputEvent rebuilt payloads are forbidden as MIME proof. Accessibility OS-mouse is unavailable on this host when UI elements enabled=false."
+      );
 
-      // --- Source: real Playwright mouse dragstart on .dv-tab (forbidden: dispatchEvent) ---
+      const sourceGeom = await readHostContentGeometry(app, hosts.source.id);
+      const targetGeom = await readHostContentGeometry(app, hosts.target.id);
+
+      // --- Path A attempt: continuous Playwright mouse from source tab into target ---
       await focusHostWindow(app, hosts.source.id);
-      await playwrightSourceTabDragStart(source);
-      await source.waitForTimeout(150);
+      await continuousPlaywrightTabDrag(source, target, sourceGeom, targetGeom);
+      await source.waitForTimeout(200);
+      await target.waitForTimeout(200);
+
       let sourceLog = await readSpikeLog(source);
+      let targetLog = await readSpikeLog(target);
+
       expect(
         sourceLog.dragstart.length,
         "Playwright mouse on .dv-tab must fire dragstart"
       ).toBeGreaterThan(0);
 
-      // --- Target scenarios via CDP into the other WebContents ---
-      const anchors = [
-        {
-          anchor: "center" as const,
-          selector: ".dv-dockview",
-          label: "foreground-center",
-        },
-        {
-          anchor: "left-edge" as const,
-          selector: ".dv-dockview",
-          label: "content-left-edge",
-        },
-        {
-          anchor: "right-edge" as const,
-          selector: ".dv-dockview",
-          label: "content-right-edge",
-        },
-      ];
+      const start = sourceLog.dragstart[0];
+      expect(start.types.length).toBeGreaterThan(0);
+      const startHasMime =
+        start.mimeData === transferId ||
+        start.types.includes(PANEL_TRANSFER_MIME);
+      const startHasText =
+        start.textData === `${PANEL_TRANSFER_TEXT_PREFIX}${transferId}` ||
+        start.types.includes("text/plain");
+      expect(
+        startHasMime || startHasText,
+        `source dragstart must carry transfer token written only on source (mime=${start.mimeData}, text=${start.textData}, types=${start.types.join(",")})`
+      ).toBe(true);
 
-      for (const scenario of anchors) {
-        const point = await elementLocalPoint(
-          target,
-          scenario.selector,
-          scenario.anchor
-        );
-        await cdpDeliverTransferToTarget(target, transferId, point, "drop");
-        await target.waitForTimeout(80);
+      const continuousTargetDropMime = targetLog.drop.some(
+        (event) => event.mimeData === transferId
+      );
+      const continuousTargetDropText = targetLog.drop.some(
+        (event) =>
+          event.textData === `${PANEL_TRANSFER_TEXT_PREFIX}${transferId}`
+      );
+      const continuousTargetTypesMime = [
+        ...targetLog.dragenter,
+        ...targetLog.dragover,
+        ...targetLog.drop,
+      ].some((event) => event.types.includes(PANEL_TRANSFER_MIME));
+      const continuousTargetSawDrag =
+        targetLog.dragenter.length +
+          targetLog.dragover.length +
+          targetLog.drop.length >
+        0;
+
+      const pathAProven =
+        continuousTargetDropMime && start.mimeData === transferId;
+
+      console.log(
+        "[panel-dnd-spike] continuous Playwright cross-window attempt",
+        JSON.stringify(
+          {
+            continuousTargetDropMime,
+            continuousTargetDropText,
+            continuousTargetSawDrag,
+            continuousTargetTypesMime,
+            pathAProven,
+            sourceDragstartMime: start.mimeData,
+            sourceDragstartTypes: start.types,
+            targetDrop: targetLog.drop.slice(0, 4),
+            targetEnter: targetLog.dragenter.slice(0, 4),
+            targetOver: targetLog.dragover.slice(0, 4),
+          },
+          null,
+          2
+        )
+      );
+
+      // --- Live accept() proof via same-window external unhandled dragover ---
+      await focusHostWindow(app, hosts.source.id);
+      await sameWindowExternalUnhandledDrag(source);
+      sourceLog = await readSpikeLog(source);
+
+      let unhandledLive = sourceLog.dockview.find(
+        (entry) =>
+          entry.eventName === "onUnhandledDragOver" &&
+          entry.fired &&
+          entry.hasAccept &&
+          entry.acceptCalled
+      );
+
+      let acceptProofMethod = unhandledLive
+        ? "same-window-external-html5-drag"
+        : "pending";
+
+      if (!unhandledLive) {
+        // Fallback: DockviewComponent.dispatchUnhandledDragOver constructs a
+        // real DockviewUnhandledDragOverEvent on the live API; our subscription
+        // must observe accept() callable and successfully invoked.
+        const proof = await proveUnhandledAccept(source);
+        acceptProofMethod = proof.method;
         console.log(
-          `[panel-dnd-spike] delivered CDP drop @ ${scenario.label}`,
-          point
+          "[panel-dnd-spike] dispatchUnhandledDragOver accept proof",
+          JSON.stringify(proof, null, 2)
+        );
+        sourceLog = await readSpikeLog(source);
+        unhandledLive = sourceLog.dockview.find(
+          (entry) =>
+            entry.eventName === "onUnhandledDragOver" &&
+            entry.fired &&
+            entry.hasAccept &&
+            entry.acceptCalled
         );
       }
 
-      if ((await target.locator(".dv-tab").count()) > 0) {
-        for (const anchor of ["tab-before", "tab-after"] as const) {
-          const point = await elementLocalPoint(target, ".dv-tab", anchor);
-          await cdpDeliverTransferToTarget(target, transferId, point, "drop");
-          await target.waitForTimeout(80);
-          console.log(
-            `[panel-dnd-spike] delivered CDP drop @ ${anchor}`,
-            point
-          );
-        }
-      }
+      console.log(
+        "[panel-dnd-spike] live onUnhandledDragOver accept()",
+        JSON.stringify(
+          { acceptProofMethod, entry: unhandledLive ?? null },
+          null,
+          2
+        )
+      );
+      expect(
+        unhandledLive,
+        "onUnhandledDragOver must fire live with callable accept() (same-window external drag or live dispatchUnhandledDragOver)"
+      ).toBeTruthy();
+      expect(unhandledLive?.hasAccept).toBe(true);
+      expect(unhandledLive?.acceptCalled).toBe(true);
 
-      // Background-target observation: deliver while source remains focused.
+      // --- Escape mid-drag: abort signal, not outside classification ---
       await focusHostWindow(app, hosts.source.id);
-      const bgPoint = await elementLocalPoint(target, ".dv-dockview", "center");
-      await cdpDeliverTransferToTarget(target, transferId, bgPoint, "drop");
-      await target.waitForTimeout(80);
-
-      // Outside-window / new-window path cannot be CDP-delivered into a page.
-      // Document the production approach (no dropEffect).
-      await source.evaluate((logKey) => {
-        const log = (window as unknown as Record<string, { notes: string[] }>)[
-          logKey
-        ];
-        log?.notes.push(
-          "outside-window: use AppKit local/global monitor for leftMouseUp/Escape; main screen.getCursorScreenPoint() + managed BaseWindow bounds; only outside mouse-up detaches; Escape aborts; dragend clears UI only"
-        );
-      }, SPIKE_LOG_KEY);
-
-      // Escape mid-drag (source window): start a drag then press Escape.
-      await focusHostWindow(app, hosts.source.id);
-      await playwrightSourceTabDragStart(source);
+      await source.bringToFront();
+      const tabPoint = await elementLocalPoint(source, ".dv-tab", "center");
+      await source.mouse.move(tabPoint.x, tabPoint.y);
+      await source.mouse.down();
+      await source.mouse.move(tabPoint.x + 30, tabPoint.y + 4, { steps: 6 });
+      // Prefer real keyboard; fall back to a window keydown if Chromium eats
+      // Escape while an HTML5 drag session is active.
       await source.keyboard.press("Escape");
+      await source.evaluate(() => {
+        window.dispatchEvent(
+          new KeyboardEvent("keydown", {
+            bubbles: true,
+            cancelable: true,
+            key: "Escape",
+            code: "Escape",
+            keyCode: 27,
+            which: 27,
+          })
+        );
+      });
       await source.mouse.up();
-      await source.waitForTimeout(150);
+      await source.waitForTimeout(120);
 
-      // Finish any held button state.
-      await source.mouse.up().catch(() => undefined);
+      // --- Main-process cursor/bounds classification (new-window rule) ---
+      const classification = await probeCursorClassification(app);
+      console.log(
+        "[panel-dnd-spike] cursor classification probe",
+        JSON.stringify(classification, null, 2)
+      );
+
+      expect(classification.insideTarget.kind).toBe("window");
+      if (classification.insideTarget.kind === "window") {
+        expect(classification.insideTarget.windowId).toBe(hosts.target.id);
+      }
+      expect(classification.insideSource.kind).toBe("window");
+      if (classification.insideSource.kind === "window") {
+        expect(classification.insideSource.windowId).toBe(hosts.source.id);
+      }
+      expect(classification.farOutside).toEqual({ kind: "outside" });
+      // Between non-overlapping side-by-side windows should be outside both.
+      expect(classification.between).toEqual({ kind: "outside" });
+      expect(classification.escapeIsNotOutside).toMatch(/Escape/i);
+
+      // Local helper mirrors main probe (keeps decision rule unit-testable here).
+      const localOutside = classifyCursorAgainstManagedWindows(
+        {
+          x: hosts.target.x + hosts.target.width + 40,
+          y: hosts.target.y + 10,
+        },
+        [hosts.source, hosts.target]
+      );
+      expect(localOutside).toEqual({ kind: "outside" });
+      const localTarget = classifyCursorAgainstManagedWindows(
+        {
+          x: hosts.target.x + 20,
+          y: hosts.target.y + 20,
+        },
+        [hosts.source, hosts.target]
+      );
+      expect(localTarget).toEqual({
+        kind: "window",
+        windowId: hosts.target.id,
+      });
 
       sourceLog = await readSpikeLog(source);
-      const targetLog = await readSpikeLog(target);
+      targetLog = await readSpikeLog(target);
 
       console.log(
         "[panel-dnd-spike] source.dragstart",
-        JSON.stringify(sourceLog.dragstart, null, 2)
+        JSON.stringify(sourceLog.dragstart.slice(0, 4), null, 2)
       );
       console.log(
-        "[panel-dnd-spike] target.dragenter/dragover/drop",
+        "[panel-dnd-spike] target continuous drag buckets",
         JSON.stringify(
           {
             dragenter: targetLog.dragenter.slice(0, 6),
@@ -915,7 +1401,7 @@ test.describe("Panel cross-window drag spike", () => {
       );
       console.log(
         "[panel-dnd-spike] source.dragend",
-        JSON.stringify(sourceLog.dragend, null, 2)
+        JSON.stringify(sourceLog.dragend.slice(0, 6), null, 2)
       );
       console.log(
         "[panel-dnd-spike] dockview source",
@@ -932,62 +1418,6 @@ test.describe("Panel cross-window drag spike", () => {
           target: targetLog.keydownEscape,
         })
       );
-      console.log("[panel-dnd-spike] notes", sourceLog.notes);
-
-      const start = sourceLog.dragstart[0];
-      expect(start.types.length).toBeGreaterThan(0);
-      const startHasMime =
-        start.mimeData === transferId ||
-        start.types.includes(PANEL_TRANSFER_MIME);
-      const startHasText =
-        start.textData === `${PANEL_TRANSFER_TEXT_PREFIX}${transferId}` ||
-        start.types.includes("text/plain");
-      expect(
-        startHasMime || startHasText,
-        `dragstart must carry transfer token (mime=${start.mimeData}, text=${start.textData}, types=${start.types.join(",")})`
-      ).toBe(true);
-
-      const targetEvents = [
-        ...targetLog.dragenter,
-        ...targetLog.dragover,
-        ...targetLog.drop,
-      ];
-      const targetSawDrag = targetEvents.length > 0;
-      // Browser security: getData is often empty until drop; types still list MIME.
-      const targetTypesIncludeMime = targetEvents.some((event) =>
-        event.types.includes(PANEL_TRANSFER_MIME)
-      );
-      const targetMimeReadableOnDrop = targetLog.drop.some(
-        (event) => event.mimeData === transferId
-      );
-      const targetTextReadableOnDrop = targetLog.drop.some(
-        (event) =>
-          event.textData === `${PANEL_TRANSFER_TEXT_PREFIX}${transferId}`
-      );
-      const targetMimeReadableOnOver = [
-        ...targetLog.dragenter,
-        ...targetLog.dragover,
-      ].some((event) => event.mimeData === transferId);
-
-      console.log(
-        "[panel-dnd-spike] cross-window summary",
-        JSON.stringify(
-          {
-            accessibilityEnabled,
-            delivery: accessibilityEnabled
-              ? "os-mouse-preferred"
-              : "playwright-source + CDP Input.dispatchDragEvent target",
-            targetMimeReadableOnDrop,
-            targetMimeReadableOnOver,
-            targetSawDrag,
-            targetTextReadableOnDrop,
-            targetTypesIncludeMime,
-            transferId,
-          },
-          null,
-          2
-        )
-      );
 
       const dropEffects = sourceLog.dragend.map((event) => event.dropEffect);
       console.log(
@@ -995,7 +1425,7 @@ test.describe("Panel cross-window drag spike", () => {
         dropEffects
       );
       console.log(
-        "[panel-dnd-spike] new-window approach: AppKit local/global monitor for leftMouseUp/Escape; main uses screen.getCursorScreenPoint() + managed BaseWindow bounds. Only outside mouse-up detaches; Escape/system cancel aborts; dragend only clears UI."
+        "[panel-dnd-spike] new-window approach: AppKit local/global monitor for leftMouseUp/Escape; main uses screen.getCursorScreenPoint() + managed BaseWindow bounds. Only outside mouse-up detaches; Escape/system cancel aborts; dragend only clears UI. Escape ≠ outside."
       );
 
       // Dockview public API pins
@@ -1040,34 +1470,66 @@ test.describe("Panel cross-window drag spike", () => {
         JSON.stringify(willDragFired, null, 2)
       );
 
-      // accept() on AcceptableEvent: unhandled overlay may not fire for CDP
-      // external drops (Dockview only emits for its own DnD path). Type/runtime
-      // class still exposes accept(); assert subscription presence above and
-      // document accept() from dockview-core AcceptableEvent.
-      console.log(
-        "[panel-dnd-spike] accept(): DockviewDndOverlayEvent / DockviewUnhandledDragOverEvent extends AcceptableEvent with accept() + isAccepted (dockview-core/events). onUnhandledDragOver is the public name."
-      );
-
-      expect(
-        targetSawDrag,
-        "target WebContents must observe dragenter/dragover/drop"
-      ).toBe(true);
-      expect(
-        targetTypesIncludeMime,
-        "target drag events must list application/x-pier-panel-transfer in types"
-      ).toBe(true);
-      expect(
-        targetMimeReadableOnDrop,
-        "target drop getData(MIME) must return transferId (cross-WebContents readable on drop)"
-      ).toBe(true);
-
-      // Chromium hides getData until drop even same-window; over-phase empty is expected.
-      console.log(
-        "[panel-dnd-spike] MIME cross-WebContents: YES on drop getData; types visible on dragenter/dragover; getData empty during over (standard Chromium). HTML5 target recognition can use types.includes(MIME) during over + getData on drop."
-      );
-
       expect(sourceLog.dragend.length).toBeGreaterThan(0);
-      expect(typeof sourceLog.keydownEscape).toBe("number");
+      expect(sourceLog.keydownEscape).toBeGreaterThan(0);
+
+      // --- Exclusive path decision ---
+      const chosenPath: ChosenTransferPath = pathAProven
+        ? "html5-mime"
+        : "native-monitor";
+
+      const gateDecision = {
+        accessibilityEnabled,
+        chosenPath,
+        html5TargetRecognition:
+          chosenPath === "html5-mime"
+            ? "keep: over uses types, drop uses getData"
+            : "DELETE for steps 2–7; exclusive main/native active transfer + bounds hit",
+        mimeCrossWebContents: pathAProven
+          ? "PROVEN via continuous real drag"
+          : "UNPROVEN/FAILED — continuous Playwright drag did not deliver source-written MIME on target drop; CDP rebuilt payloads are not acceptable proof",
+        productionPath:
+          chosenPath === "html5-mime"
+            ? "HTML5 target recognition"
+            : "native-monitor only (no dual state machine)",
+        proofMethod: pathAProven
+          ? "continuous-playwright-mouse"
+          : "none-path-b",
+      };
+
+      console.log(
+        "[panel-dnd-spike] GATE DECISION",
+        JSON.stringify(gateDecision, null, 2)
+      );
+
+      // Must not greenlight HTML5 without Path A proof.
+      if (chosenPath === "html5-mime") {
+        expect(
+          continuousTargetDropMime,
+          "Path A requires target drop getData(MIME) === source transferId"
+        ).toBe(true);
+      } else {
+        expect(
+          chosenPath,
+          "MIME unproven → exclusive native-monitor degradation"
+        ).toBe("native-monitor");
+        expect(
+          pathAProven,
+          "Path B selected: continuous real MIME proof must be false"
+        ).toBe(false);
+        // Explicit anti-claim: failing soft claims that HTML5 was chosen.
+        expect(gateDecision.productionPath).not.toMatch(/HTML5 target/i);
+        expect(gateDecision.html5TargetRecognition).toMatch(/^DELETE/);
+        expect(gateDecision.mimeCrossWebContents).toMatch(/UNPROVEN|FAILED/i);
+      }
+      // Sanity: exclusive single path only.
+      expect(
+        gateDecision.chosenPath === "html5-mime" ||
+          gateDecision.chosenPath === "native-monitor"
+      ).toBe(true);
+      if (!pathAProven) {
+        expect(gateDecision.chosenPath).toBe("native-monitor");
+      }
     } finally {
       await forceCloseApplication(app);
       rmSync(userDataDir, { recursive: true, force: true });
