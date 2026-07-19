@@ -3,6 +3,7 @@ import {
   clearPersistedDiskDrafts,
   clearPersistedUntitledDocuments,
   configureFilesDraftBackend as configureDraftBackend,
+  diskDraftHasRecoverableState,
   diskDraftStorageKey,
   type FilesDraftBackend,
   flushFilesDraftWrites,
@@ -21,24 +22,21 @@ import {
 import {
   createDiskDocumentRecord,
   createUntitledMarkdownRecord,
-  renameDiskDocumentRecord,
   restoreUntitledMarkdownRecord,
 } from "./files-document-factory.ts";
 import {
   applyHydratedDraftsToOpenDocuments,
   type PendingUntitledRestoreSource,
 } from "./files-document-hydration.ts";
-import {
-  diskDocumentId,
-  isSamePathOrDescendant,
-  rewriteDescendantPath,
-} from "./files-document-paths.ts";
+import { createFilesDocumentPathMutationActions } from "./files-document-path-mutations.ts";
+import { diskDocumentId } from "./files-document-paths.ts";
 import { createFilesDocumentSaveAsActions } from "./files-document-save-as.ts";
 import { createFilesDocumentStateActions } from "./files-document-state-actions.ts";
-import type {
-  FilesDocument,
-  FilesDocumentOrigin,
-  FilesDocumentPanelSource,
+import {
+  type FilesDocument,
+  type FilesDocumentOrigin,
+  type FilesDocumentPanelSource,
+  resolveDiskDocumentId,
 } from "./files-document-types.ts";
 import {
   nextUntitledIdentity as allocateUntitledIdentity,
@@ -80,7 +78,7 @@ export async function claimLegacyDraftForPanelSource(
   const key =
     source.kind === "untitled"
       ? untitledDraftStorageKey(source.id)
-      : diskDraftStorageKey(source.root, source.path);
+      : diskDraftStorageKey(resolveDiskDocumentId(source));
   if (!(await claimLegacyDraft(key))) {
     return false;
   }
@@ -133,46 +131,16 @@ function removeDocumentAliasesFor(documentId: string): void {
 
 function findDiskDocumentEntry(
   root: string,
-  path: string
+  path: string,
+  documentId?: string | undefined
 ): { document: FilesDocument; id: string } | null {
-  const directId = resolveDocumentId(diskDocumentId(root, path));
+  const directId = resolveDocumentId(documentId ?? diskDocumentId(root, path));
   const directDocument = documents.get(directId);
-  if (
-    directDocument?.source.kind === "disk" &&
-    directDocument.source.root === root &&
-    directDocument.source.path === path
-  ) {
+  if (directDocument?.source.kind === "disk") {
     return { document: directDocument, id: directId };
   }
 
-  for (const [id, document] of documents) {
-    if (
-      document.source.kind === "disk" &&
-      document.source.root === root &&
-      document.source.path === path
-    ) {
-      return { document, id };
-    }
-  }
-
   return null;
-}
-
-function listDiskDocumentsUnder(
-  root: string,
-  path: string
-): Array<{ document: FilesDocument; id: string }> {
-  const matches: Array<{ document: FilesDocument; id: string }> = [];
-  for (const [id, document] of documents) {
-    if (
-      document.source.kind === "disk" &&
-      document.source.root === root &&
-      isSamePathOrDescendant(document.source.path, path)
-    ) {
-      matches.push({ document, id });
-    }
-  }
-  return matches;
 }
 
 function replaceDocument(
@@ -193,13 +161,13 @@ function replaceDocument(
   documents.set(resolvedDocumentId, nextDocument);
   persistUntitledDocument(nextDocument);
   if (nextDocument.source.kind === "disk") {
-    if (nextDocument.dirty || nextDocument.durabilityUnknown) {
+    if (diskDraftHasRecoverableState(nextDocument)) {
       persistDiskDraft(nextDocument);
     } else {
-      removePersistedDiskDraft(
-        nextDocument.source.root,
-        nextDocument.source.path
-      );
+      removePersistedDiskDraft(nextDocument.id, {
+        path: nextDocument.source.path,
+        root: nextDocument.source.root,
+      });
     }
   }
   notify();
@@ -321,17 +289,21 @@ export function restoreUntitledDocumentFromPanelSource(
 }
 
 export function ensureDiskDocument(input: {
-  name?: string;
+  documentId?: string | undefined;
+  name?: string | undefined;
   path: string;
   root: string;
 }): FilesDocument {
-  const existingEntry = findDiskDocumentEntry(input.root, input.path);
+  const id = resolveDiskDocumentId(input);
+  const existingEntry = findDiskDocumentEntry(input.root, input.path, id);
   if (existingEntry) {
     return existingEntry.document;
   }
 
-  const id = diskDocumentId(input.root, input.path);
-  const draft = readPersistedDiskDraft(input.root, input.path);
+  const draft = readPersistedDiskDraft(id, {
+    path: input.path,
+    root: input.root,
+  });
   const document = createDiskDocumentRecord({
     draft,
     id,
@@ -341,7 +313,7 @@ export function ensureDiskDocument(input: {
   });
 
   documents.set(id, document);
-  if (document.dirty) {
+  if (diskDraftHasRecoverableState(document)) {
     persistDiskDraft(document);
   }
   notify();
@@ -358,7 +330,7 @@ export function getDocumentForPanelSource(
   if (source.kind === "untitled") {
     return getDocument(source.id);
   }
-  return getDocument(diskDocumentId(source.root, source.path));
+  return getDocument(resolveDiskDocumentId(source));
 }
 
 export function listOpenDiskDocuments(): FilesDocument[] {
@@ -367,80 +339,13 @@ export function listOpenDiskDocuments(): FilesDocument[] {
   );
 }
 
-export async function moveDiskDocumentSource(
-  root: string,
-  oldPath: string,
-  newPath: string
-): Promise<void> {
-  if (oldPath === newPath) {
-    return;
-  }
-
-  const entries = listDiskDocumentsUnder(root, oldPath);
-  if (entries.length === 0) {
-    return;
-  }
-
-  const previousDraftPaths: string[] = [];
-  for (const entry of entries) {
-    if (entry.document.source.kind !== "disk") {
-      continue;
-    }
-    const previousPath = entry.document.source.path;
-    const nextPath = rewriteDescendantPath(previousPath, oldPath, newPath);
-    const nextId = diskDocumentId(root, nextPath);
-    const nextDocument = renameDiskDocumentRecord(entry.document, {
-      id: nextId,
-      path: nextPath,
-      root,
-    });
-
-    if (entry.id !== nextId) {
-      documents.delete(entry.id);
-      documentAliases.set(entry.id, nextId);
-    }
-    documentAliases.set(diskDocumentId(root, previousPath), nextId);
-    documents.set(nextId, nextDocument);
-    if (nextDocument.dirty || nextDocument.durabilityUnknown) {
-      persistDiskDraft(nextDocument);
-      previousDraftPaths.push(previousPath);
-    } else {
-      removePersistedDiskDraft(root, previousPath);
-    }
-  }
-  notify();
-  if (previousDraftPaths.length > 0) {
-    await flushFilesDraftWrites();
-    for (const previousPath of previousDraftPaths) {
-      removePersistedDiskDraft(root, previousPath);
-    }
-    await flushFilesDraftWrites();
-  }
-}
-
-export function removeDiskDocumentForPath(root: string, path: string): void {
-  const entries = listDiskDocumentsUnder(root, path);
-  if (entries.length === 0) {
-    return;
-  }
-
-  for (const entry of entries) {
-    if (entry.document.source.kind === "disk") {
-      removePersistedDiskDraft(root, entry.document.source.path);
-    }
-    documents.delete(entry.id);
-    removeDocumentAliasesFor(entry.id);
-    removeDocumentAliasesFor(
-      diskDocumentId(
-        root,
-        entry.document.source.kind === "disk"
-          ? entry.document.source.path
-          : path
-      )
-    );
-  }
-  notify();
-}
+export const { moveDiskDocumentSource, removeDiskDocumentForPath } =
+  createFilesDocumentPathMutationActions({
+    documentAliases,
+    documents,
+    notify,
+    removeDocumentAliasesFor,
+  });
 
 export const { adoptDocumentSaveAsTarget } = createFilesDocumentSaveAsActions({
   getDocument,
@@ -462,7 +367,10 @@ export function removeDocument(documentId: string): void {
     removePersistedUntitledDocument(resolvedDocumentId);
   }
   if (document?.source.kind === "disk") {
-    removePersistedDiskDraft(document.source.root, document.source.path);
+    removePersistedDiskDraft(document.id, {
+      path: document.source.path,
+      root: document.source.root,
+    });
   }
   if (!documents.delete(resolvedDocumentId)) {
     return;

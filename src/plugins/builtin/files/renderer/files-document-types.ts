@@ -6,6 +6,7 @@ import {
 } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { z } from "zod";
+import { diskDocumentId } from "./files-document-paths.ts";
 
 export type FilesDocumentLanguage =
   | "cpp"
@@ -46,6 +47,7 @@ export type FilesDocumentSource =
 
 export const filesDocumentPanelSourceSchema = z.discriminatedUnion("kind", [
   z.object({
+    documentId: z.string().min(1).optional(),
     kind: z.literal("disk"),
     path: nonEmptyFileRootRelativePathSchema,
     root: z.string().min(1),
@@ -60,6 +62,14 @@ export const filesDocumentPanelSourceSchema = z.discriminatedUnion("kind", [
 export type FilesDocumentPanelSource = z.infer<
   typeof filesDocumentPanelSourceSchema
 >;
+
+export function resolveDiskDocumentId(source: {
+  documentId?: string | undefined;
+  path: string;
+  root: string;
+}): string {
+  return source.documentId ?? diskDocumentId(source.root, source.path);
+}
 
 export function parseFilesDocumentPanelSource(
   params: unknown
@@ -82,7 +92,7 @@ export function sameFilesDocumentPanelSource(
     return left.id === right.id;
   }
   if (left.kind === "disk" && right.kind === "disk") {
-    return left.root === right.root && left.path === right.path;
+    return resolveDiskDocumentId(left) === resolveDiskDocumentId(right);
   }
   return false;
 }

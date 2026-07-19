@@ -13,6 +13,8 @@ import { stableFileIdentityHash } from "./files-stable-hash.ts";
 export const UNTITLED_DOCUMENT_ID_PREFIX = "pier.files.untitled:";
 export const UNTITLED_DRAFT_STORAGE_PREFIX = "pier.files.untitledDraft:";
 export const DISK_DRAFT_STORAGE_PREFIX = "pier.files.diskDraft:";
+export const TRANSFER_STAGING_DRAFT_STORAGE_PREFIX =
+  "pier.files.transferStaging:";
 export const SAVE_AS_OPERATION_STORAGE_PREFIX = "pier.files.saveAsOperation:";
 export const CORRUPT_DOCUMENT_DRAFT_STORAGE_PREFIX =
   "pier.files.corruptDocumentDraft:";
@@ -29,8 +31,11 @@ export interface PersistedUntitledDocument {
 export interface PersistedDiskDraft {
   baseMtimeMs: number | null;
   canonicalPath?: string | null;
+  conflictDiskContents?: string | null;
   currentContents: string;
+  deletedOnDisk?: boolean;
   dirty?: boolean;
+  diskConflict?: boolean;
   durabilityUnknown?: boolean;
   eol?: FileDocumentEol | null;
   format?: FileDocumentFormat | null;
@@ -47,12 +52,33 @@ export function untitledDraftStorageKey(documentId: string): string {
   return `${UNTITLED_DRAFT_STORAGE_PREFIX}${documentId}`;
 }
 
-export function diskDraftStorageKey(root: string, path: string): string {
+export function diskDraftStorageKey(documentId: string): string {
+  return `${DISK_DRAFT_STORAGE_PREFIX}${documentId}`;
+}
+
+export function legacyDiskDraftStorageKey(root: string, path: string): string {
   return `${DISK_DRAFT_STORAGE_PREFIX}${stableFileIdentityHash(`${root}\0${path}`)}`;
+}
+
+export function transferStagingDraftKey(
+  transferId: string,
+  originalDraftKey: string
+): string {
+  return `${TRANSFER_STAGING_DRAFT_STORAGE_PREFIX}${transferId}:${originalDraftKey}`;
 }
 
 export function isUntitledDocumentId(documentId: string): boolean {
   return documentId.startsWith(UNTITLED_DOCUMENT_ID_PREFIX);
+}
+
+export function diskDraftHasRecoverableState(document: FilesDocument): boolean {
+  return (
+    document.dirty ||
+    document.durabilityUnknown ||
+    document.diskConflict ||
+    document.deletedOnDisk ||
+    document.conflictDiskContents !== null
+  );
 }
 
 function isFilesDocumentOrigin(value: unknown): value is FilesDocumentOrigin {
@@ -99,7 +125,14 @@ function isPersistedDiskDraft(value: unknown): value is PersistedDiskDraft {
     (record.canonicalPath === undefined ||
       record.canonicalPath === null ||
       typeof record.canonicalPath === "string") &&
+    (record.conflictDiskContents === undefined ||
+      record.conflictDiskContents === null ||
+      typeof record.conflictDiskContents === "string") &&
+    (record.deletedOnDisk === undefined ||
+      typeof record.deletedOnDisk === "boolean") &&
     (record.dirty === undefined || typeof record.dirty === "boolean") &&
+    (record.diskConflict === undefined ||
+      typeof record.diskConflict === "boolean") &&
     (record.durabilityUnknown === undefined ||
       typeof record.durabilityUnknown === "boolean") &&
     (record.eol === undefined ||
@@ -162,15 +195,18 @@ export function serializeUntitledDocument(
 export function serializeDiskDraft(document: FilesDocument): string | null {
   if (
     document.source.kind !== "disk" ||
-    !(document.dirty || document.durabilityUnknown)
+    !diskDraftHasRecoverableState(document)
   ) {
     return null;
   }
   const persisted: PersistedDiskDraft = {
     baseMtimeMs: document.baseMtimeMs,
     canonicalPath: document.canonicalPath,
+    conflictDiskContents: document.conflictDiskContents,
     currentContents: document.currentContents,
+    deletedOnDisk: document.deletedOnDisk,
     dirty: document.dirty,
+    diskConflict: document.diskConflict,
     durabilityUnknown: document.durabilityUnknown,
     eol: document.eol,
     format: document.format,

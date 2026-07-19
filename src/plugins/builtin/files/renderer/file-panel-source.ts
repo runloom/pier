@@ -1,4 +1,5 @@
 import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
+import { diskDocumentId } from "./files-document-paths.ts";
 import {
   type FilesDocument,
   type FilesDocumentPanelSource,
@@ -17,9 +18,23 @@ export function panelSourceForDocument(
   if (!document) {
     return null;
   }
-  return document.source.kind === "disk"
-    ? document.source
-    : { id: document.source.id, kind: "untitled", name: document.name };
+  if (document.source.kind === "untitled") {
+    return { id: document.source.id, kind: "untitled", name: document.name };
+  }
+  const defaultId = diskDocumentId(document.source.root, document.source.path);
+  if (document.id !== defaultId) {
+    return {
+      documentId: document.id,
+      kind: "disk",
+      path: document.source.path,
+      root: document.source.root,
+    };
+  }
+  return {
+    kind: "disk",
+    path: document.source.path,
+    root: document.source.root,
+  };
 }
 
 export function sourceTitle(source: FilesDocumentPanelSource): string {

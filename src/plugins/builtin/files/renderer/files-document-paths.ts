@@ -4,6 +4,10 @@ export function diskDocumentId(root: string, path: string): string {
   return `pier.files.file:${stableFileIdentityHash(`${root}\0${path}`)}`;
 }
 
+export function allocateExplicitDiskDocumentId(): string {
+  return `pier.files.file:${crypto.randomUUID()}`;
+}
+
 export function isSamePathOrDescendant(
   entryPath: string,
   path: string

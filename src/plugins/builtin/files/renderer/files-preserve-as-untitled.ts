@@ -12,6 +12,7 @@ import {
 import {
   type FilesDocument,
   parseFilesDocumentPanelSource,
+  sameFilesDocumentPanelSource,
 } from "./files-document-types.ts";
 
 export async function preserveDocumentsAsUntitledAndRebind(input: {
@@ -25,12 +26,12 @@ export async function preserveDocumentsAsUntitledAndRebind(input: {
   const instanceIdsByDocumentId = new Map<string, string[]>();
   for (const document of diskDocuments) {
     if (document.source.kind !== "disk") continue;
-    const diskSource = document.source;
     const ids = instances.flatMap((instance) => {
       const source = parseFilesDocumentPanelSource(instance.params);
-      return source?.kind === "disk" &&
-        source.root === diskSource.root &&
-        source.path === diskSource.path
+      return sameFilesDocumentPanelSource(
+        source,
+        panelSourceForDocument(document)
+      )
         ? [instance.id]
         : [];
     });
@@ -115,7 +116,10 @@ export async function preserveDocumentsAsUntitledAndRebind(input: {
   }
   for (const { original } of bindings) {
     if (original.source.kind === "disk") {
-      removePersistedDiskDraft(original.source.root, original.source.path);
+      removePersistedDiskDraft(original.id, {
+        path: original.source.path,
+        root: original.source.root,
+      });
     }
   }
   await flushFilesDraftWrites();

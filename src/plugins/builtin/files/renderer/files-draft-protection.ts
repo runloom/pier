@@ -12,6 +12,6 @@ export function filesDraftProtectionForDocument(
   const key =
     document.source.kind === "untitled"
       ? untitledDraftStorageKey(document.id)
-      : diskDraftStorageKey(document.source.root, document.source.path);
+      : diskDraftStorageKey(document.id);
   return filesDraftProtectionState(key);
 }
