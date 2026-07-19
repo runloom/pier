@@ -76,11 +76,7 @@ export function AppUpdateControl(): ReactNode {
   return (
     <Button
       aria-label={ariaLabel}
-      className={
-        downloaded
-          ? "app-no-drag h-auto gap-1.5 bg-action-accent px-1.5 py-0.5 text-action-accent-foreground text-xs hover:bg-action-accent/90"
-          : "app-no-drag h-auto gap-1.5 px-1.5 py-0.5 text-xs"
-      }
+      className="app-no-drag"
       data-testid="titlebar-app-update"
       disabled={pending && downloaded}
       onClick={() => {
@@ -100,9 +96,7 @@ export function AppUpdateControl(): ReactNode {
         <Download aria-hidden data-icon="inline-start" />
       )}
       <span
-        className={
-          errored ? "font-medium text-status-warning-fg" : "tabular-nums"
-        }
+        className={errored ? "font-medium text-status-warning-fg" : undefined}
       >
         {label}
       </span>
