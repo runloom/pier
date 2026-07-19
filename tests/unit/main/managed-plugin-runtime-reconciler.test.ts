@@ -19,8 +19,6 @@ function source(
     manifest: {
       apiVersion: 1,
       commands: [],
-      workbenchWidgets: [],
-      settingsPages: [],
       engines: { pier: ">=0.1.0" },
       id: "pier.codex",
       main: "dist/main.js",
@@ -28,8 +26,10 @@ function source(
       panels: [],
       permissions: [],
       renderer: "dist/renderer.js",
+      settingsPages: [],
       terminalStatusItems: [],
       version,
+      workbenchWidgets: [],
     },
     rendererEntryUrl: `pier-plugin://pier.codex/${version}/dist/renderer.js`,
     version,
@@ -80,5 +80,28 @@ describe("managed plugin runtime reconciler", () => {
     expect(runtimeSourceActivationKey(stable)).not.toBe(
       runtimeSourceActivationKey(revised)
     );
+  });
+
+  it("awaits ensurePath before first activate and reload", async () => {
+    const order: string[] = [];
+    const externalRuntime = runtime();
+    externalRuntime.activate = vi.fn(async () => {
+      order.push("activate");
+    });
+    externalRuntime.reload = vi.fn(async () => {
+      order.push("reload");
+    });
+    const ensurePath = vi.fn(async () => {
+      order.push("ensurePath");
+    });
+    const reconciler = createManagedPluginRuntimeReconciler(externalRuntime, {
+      ensurePath,
+    });
+
+    await reconciler.reconcile([source("1.0.0")]);
+    await reconciler.reconcile([source("1.0.1")]);
+
+    expect(ensurePath).toHaveBeenCalledTimes(2);
+    expect(order).toEqual(["ensurePath", "activate", "ensurePath", "reload"]);
   });
 });

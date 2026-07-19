@@ -18,10 +18,20 @@ export interface ManagedPluginRuntimeReconciler {
   reconcile(sources: readonly ManagedPluginRuntimeSource[]): Promise<void>;
 }
 
+export interface CreateManagedPluginRuntimeReconcilerOptions {
+  /**
+   * GUI-launched Electron often lacks login-shell PATH entries
+   * (e.g. ~/.grok/bin). Await this before activating plugins that spawn CLIs.
+   */
+  ensurePath?: () => Promise<void>;
+}
+
 export function createManagedPluginRuntimeReconciler(
-  runtime: ExternalMainPluginRuntime
+  runtime: ExternalMainPluginRuntime,
+  options: CreateManagedPluginRuntimeReconcilerOptions = {}
 ): ManagedPluginRuntimeReconciler {
   const activeKeys = new Map<string, string>();
+  const ensurePath = options.ensurePath;
 
   return {
     async reconcile(sources): Promise<void> {
@@ -40,11 +50,17 @@ export function createManagedPluginRuntimeReconciler(
         const nextKey = runtimeSourceActivationKey(source);
         const currentKey = activeKeys.get(source.id);
         if (!currentKey) {
+          if (ensurePath) {
+            await ensurePath();
+          }
           await runtime.activate(source);
           activeKeys.set(source.id, nextKey);
           continue;
         }
         if (currentKey !== nextKey) {
+          if (ensurePath) {
+            await ensurePath();
+          }
           await runtime.reload(source);
           activeKeys.set(source.id, nextKey);
         }

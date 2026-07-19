@@ -63,6 +63,21 @@ describe("agent detection", () => {
     expect(result.detectedIds).toContain("claude");
   });
 
+  it("ensurePath 幂等水合，不重复 hydratePath", async () => {
+    let hydrateCount = 0;
+    const service = createAgentDetectionService({
+      hydratePath: () => {
+        hydrateCount += 1;
+        return Promise.resolve(["/new/bin"]);
+      },
+      probe: () => Promise.resolve(false),
+    });
+
+    await service.ensurePath();
+    await service.ensurePath();
+    expect(hydrateCount).toBe(1);
+  });
+
   it("detect 复用探测快照，只有 refresh 才重新 probe", async () => {
     let probeCount = 0;
     const service = createAgentDetectionService({

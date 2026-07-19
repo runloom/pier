@@ -8,6 +8,7 @@ import {
   type ExternalMainPluginContext,
   type ExternalMainPluginRuntime,
 } from "../plugins/external-main-runtime.ts";
+import { createExternalPluginProcessEnv } from "../plugins/external-plugin-process-env.ts";
 import {
   createMainPluginHostApi,
   type MainPluginHostApi,
@@ -236,6 +237,9 @@ function createPierAppCore(): PierAppCore {
       }
     },
   });
+  // PATH hydrate must exist before external plugins activate — GUI Electron
+  // lacks login-shell bins (e.g. ~/.grok/bin). ensurePath is memoized.
+  const agentDetection = createAgentDetectionService();
   registerPluginRpcIpc(pluginRpcBus);
   const externalMainRuntime: ExternalMainPluginRuntime =
     createExternalMainPluginRuntime({
@@ -257,12 +261,7 @@ function createPierAppCore(): PierAppCore {
           dataDir: managedPluginPaths.workDir,
           workDir: join(managedPluginPaths.workDir, source.id),
         },
-        processEnv: {
-          CODEX_HOME: process.env.CODEX_HOME,
-          GROK_HOME: process.env.GROK_HOME,
-          HOME: process.env.HOME,
-          PATH: process.env.PATH,
-        },
+        processEnv: createExternalPluginProcessEnv(),
         plugin: { id: source.id, version: source.version },
         rpc: {
           handle: (method, handler) =>
@@ -281,8 +280,10 @@ function createPierAppCore(): PierAppCore {
         managedPlugins.recordActivationResult(input),
       rpcBus: pluginRpcBus,
     });
-  externalMainRuntimeReconciler =
-    createManagedPluginRuntimeReconciler(externalMainRuntime);
+  externalMainRuntimeReconciler = createManagedPluginRuntimeReconciler(
+    externalMainRuntime,
+    { ensurePath: agentDetection.ensurePath }
+  );
   pluginHostRef = pluginHost;
   const managedPluginsReady = usageDataReady
     .then(() =>
@@ -317,8 +318,6 @@ function createPierAppCore(): PierAppCore {
     userDataDir: app.getPath("userData"),
   });
   const runtimeMode = isDevRuntime() ? "development" : "production";
-  // AI 复用本机 CLI agent:探测走 agents 检测服务,选择遵循 defaultAgentId
-  const agentDetection = createAgentDetectionService();
   const agentUsage = createAgentUsageService({
     userDataDir: app.getPath("userData"),
   });
