@@ -395,6 +395,7 @@ export function createWindowService(
         quitSealed = true;
       }),
     flushWindow: flushWindowBeforeClose,
+    focus: (windowId) => windowManager.focus(windowId),
     list: () => windowManager.list(),
     restoreMostRecentClosed: async () => {
       const recordId = await readMostRecentClosedWindowRecordId();

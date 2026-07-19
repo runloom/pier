@@ -386,4 +386,110 @@ describe("createRendererCommandService", () => {
       requestId: "renderer-req-mismatch",
     });
   });
+
+  it("routes panelTransfer commands only via execute options windowId", async () => {
+    const sent: Array<{
+      commandType: string;
+      windowId: string | undefined;
+      focus: boolean | undefined;
+    }> = [];
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-transfer",
+      host: {
+        send(envelope, windowId, options) {
+          sent.push({
+            commandType: envelope.command.type,
+            focus: options?.focus,
+            windowId,
+          });
+          if (windowId === "source-win") {
+            return 11;
+          }
+          if (windowId === "target-win") {
+            return 22;
+          }
+          return null;
+        },
+      },
+      timeoutMs: 1000,
+    });
+
+    const prepare = service.execute(
+      {
+        sourcePanelId: "panel-1",
+        transferId: "11111111-1111-4111-8111-111111111111",
+        type: "panelTransfer.prepareSource",
+      },
+      { windowId: "source-win" }
+    );
+    service.resolve(
+      { data: { panel: {} }, ok: true, requestId: "renderer-req-transfer" },
+      11
+    );
+    await expect(prepare).resolves.toMatchObject({ ok: true });
+
+    const stage = service.execute(
+      {
+        panel: {
+          componentId: "files",
+          panelId: "panel-1",
+          title: "a",
+        },
+        placement: { kind: "root" },
+        prepared: {},
+        targetPanelId: "panel-1",
+        transferId: "11111111-1111-4111-8111-111111111111",
+        type: "panelTransfer.stageTarget",
+      },
+      { windowId: "target-win" }
+    );
+    service.resolve(
+      { data: null, ok: true, requestId: "renderer-req-transfer" },
+      22
+    );
+    await expect(stage).resolves.toMatchObject({ ok: true });
+
+    expect(sent).toEqual([
+      {
+        commandType: "panelTransfer.prepareSource",
+        focus: false,
+        windowId: "source-win",
+      },
+      {
+        commandType: "panelTransfer.stageTarget",
+        focus: false,
+        windowId: "target-win",
+      },
+    ]);
+  });
+
+  it("rejects panelTransfer commands without explicit windowId (no focused fallback)", async () => {
+    let sendCalled = false;
+    const service = createRendererCommandService({
+      createRequestId: () => "renderer-req-transfer-missing",
+      host: {
+        send() {
+          sendCalled = true;
+          return 1;
+        },
+      },
+      timeoutMs: 1000,
+    });
+
+    await expect(
+      service.execute({
+        sourcePanelId: "panel-1",
+        transferId: "11111111-1111-4111-8111-111111111111",
+        type: "panelTransfer.prepareSource",
+      })
+    ).resolves.toEqual({
+      error: {
+        code: "not_found",
+        message: "panel transfer renderer command requires windowId",
+      },
+      ok: false,
+      requestId: "renderer-req-transfer-missing",
+    });
+    expect(sendCalled).toBe(false);
+  });
 });

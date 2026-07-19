@@ -625,6 +625,15 @@ describe("WindowService", () => {
     );
   });
 
+  it("focus delegates to windowManager.focus", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    const service = createWindowService();
+    service.focus("w-focus-target");
+    expect(mocks.focus).toHaveBeenCalledExactlyOnceWith("w-focus-target");
+  });
+
   it("runExclusive provides a transition lease", async () => {
     const { createWindowService } = await import(
       "@main/services/window-service.ts"

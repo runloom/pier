@@ -95,40 +95,48 @@ export function createPanelTransferRendererPort(
 ): PanelTransferRendererPort {
   return {
     async finalize(input) {
-      return await rendererCommand.execute({
-        outcome: input.outcome,
-        role: input.role,
-        transferId: input.transferId,
-        type: "panelTransfer.finalize",
-        windowId: input.windowId,
-      });
+      return await rendererCommand.execute(
+        {
+          outcome: input.outcome,
+          role: input.role,
+          transferId: input.transferId,
+          type: "panelTransfer.finalize",
+        },
+        { windowId: input.windowId }
+      );
     },
     async prepareSource(input) {
-      return await rendererCommand.execute({
-        sourcePanelId: input.sourcePanelId,
-        transferId: input.transferId,
-        type: "panelTransfer.prepareSource",
-        windowId: input.windowId,
-      });
+      return await rendererCommand.execute(
+        {
+          sourcePanelId: input.sourcePanelId,
+          transferId: input.transferId,
+          type: "panelTransfer.prepareSource",
+        },
+        { windowId: input.windowId }
+      );
     },
     async releaseSource(input) {
-      return await rendererCommand.execute({
-        sourcePanelId: input.sourcePanelId,
-        transferId: input.transferId,
-        type: "panelTransfer.releaseSource",
-        windowId: input.windowId,
-      });
+      return await rendererCommand.execute(
+        {
+          sourcePanelId: input.sourcePanelId,
+          transferId: input.transferId,
+          type: "panelTransfer.releaseSource",
+        },
+        { windowId: input.windowId }
+      );
     },
     async stageTarget(input) {
-      return await rendererCommand.execute({
-        panel: input.panel,
-        placement: input.placement,
-        prepared: input.prepared,
-        targetPanelId: input.targetPanelId,
-        transferId: input.transferId,
-        type: "panelTransfer.stageTarget",
-        windowId: input.windowId,
-      });
+      return await rendererCommand.execute(
+        {
+          panel: input.panel,
+          placement: input.placement,
+          prepared: input.prepared,
+          targetPanelId: input.targetPanelId,
+          transferId: input.transferId,
+          type: "panelTransfer.stageTarget",
+        },
+        { windowId: input.windowId }
+      );
     },
   };
 }

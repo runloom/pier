@@ -246,6 +246,62 @@ describe("PanelTransferService", () => {
     expect(pluginMutation).toHaveBeenCalled();
   });
 
+  it("routes prepareSource to source window and stageTarget to target window", async () => {
+    const service = createService(async () => undefined);
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.drop(target, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+
+    const routed = rendererExecute.mock.calls.map((call) => {
+      const command = call[0];
+      const options = call[1];
+      const type =
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        typeof command.type === "string"
+          ? command.type
+          : "";
+      const windowId =
+        options &&
+        typeof options === "object" &&
+        "windowId" in options &&
+        typeof options.windowId === "string"
+          ? options.windowId
+          : undefined;
+      return { type, windowId };
+    });
+    expect(routed).toContainEqual({
+      type: "panelTransfer.prepareSource",
+      windowId: "main",
+    });
+    expect(routed).toContainEqual({
+      type: "panelTransfer.stageTarget",
+      windowId: "w-1",
+    });
+    expect(routed).toContainEqual({
+      type: "panelTransfer.releaseSource",
+      windowId: "main",
+    });
+    expect(routed).toContainEqual({
+      type: "panelTransfer.finalize",
+      windowId: "main",
+    });
+    expect(routed).toContainEqual({
+      type: "panelTransfer.finalize",
+      windowId: "w-1",
+    });
+    for (const call of rendererExecute.mock.calls) {
+      expect(call[0]).not.toHaveProperty("windowId");
+    }
+  });
+
   it("rolls back before runtime-moved and roll-forwards after", async () => {
     const service = createService(async () => undefined);
     const source = caller("main", "record-main", 1);
@@ -505,17 +561,20 @@ describe("PanelTransferService", () => {
     expect(ready).toMatchObject({ ok: true, targetPanelId: "panel-1" });
 
     const finalizeCalls = rendererExecute.mock.calls
-      .map((call) => call[0] as { type: string; windowId?: string })
-      .filter((command) => command.type === "panelTransfer.finalize");
+      .map((call) => ({
+        command: call[0] as { type: string },
+        options: call[1] as { windowId?: string } | undefined,
+      }))
+      .filter((entry) => entry.command.type === "panelTransfer.finalize");
     expect(finalizeCalls).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
-          type: "panelTransfer.finalize",
-          windowId: "main",
+          command: expect.objectContaining({ type: "panelTransfer.finalize" }),
+          options: { windowId: "main" },
         }),
         expect.objectContaining({
-          type: "panelTransfer.finalize",
-          windowId: "w-restored",
+          command: expect.objectContaining({ type: "panelTransfer.finalize" }),
+          options: { windowId: "w-restored" },
         }),
       ])
     );

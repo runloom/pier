@@ -14,8 +14,16 @@ export interface RendererCommandHost {
   ): number | null;
 }
 
+export interface RendererCommandExecuteOptions {
+  /** Explicit target window; required for panelTransfer.* (no focused fallback). */
+  windowId?: string;
+}
+
 export interface RendererCommandService {
-  execute(command: RendererCommand): Promise<RendererCommandResult>;
+  execute(
+    command: RendererCommand,
+    options?: RendererCommandExecuteOptions
+  ): Promise<RendererCommandResult>;
   resolve(result: RendererCommandResult, senderWebContentsId: number): void;
 }
 
@@ -44,9 +52,25 @@ function failure(
 }
 
 function rendererCommandTargetWindowId(
-  command: RendererCommand
+  command: RendererCommand,
+  options?: RendererCommandExecuteOptions
 ): string | undefined {
+  if (options?.windowId) {
+    return options.windowId;
+  }
   return "windowId" in command ? command.windowId : undefined;
+}
+
+function isPanelTransferRendererCommand(command: RendererCommand): boolean {
+  switch (command.type) {
+    case "panelTransfer.finalize":
+    case "panelTransfer.prepareSource":
+    case "panelTransfer.releaseSource":
+    case "panelTransfer.stageTarget":
+      return true;
+    default:
+      return false;
+  }
 }
 
 function shouldFocusRendererWindow(command: RendererCommand): boolean {
@@ -85,24 +109,28 @@ export function createRendererCommandService({
   const pending = new Map<string, PendingRequest>();
 
   return {
-    execute(command) {
+    execute(command, options) {
       const requestId = createRequestId();
       const envelope: RendererCommandEnvelope = { command, requestId };
-      const webContentsId = host.send(
-        envelope,
-        rendererCommandTargetWindowId(command),
-        {
-          focus: shouldFocusRendererWindow(command),
-        }
-      );
+      const targetWindowId = rendererCommandTargetWindowId(command, options);
+      if (isPanelTransferRendererCommand(command) && !targetWindowId) {
+        return Promise.resolve(
+          failure(
+            requestId,
+            "panel transfer renderer command requires windowId",
+            "not_found"
+          )
+        );
+      }
+      const webContentsId = host.send(envelope, targetWindowId, {
+        focus: shouldFocusRendererWindow(command),
+      });
       if (webContentsId === null) {
         return Promise.resolve(
           failure(
             requestId,
             "no renderer window available",
-            rendererCommandTargetWindowId(command)
-              ? "not_found"
-              : "platform_unavailable"
+            targetWindowId ? "not_found" : "platform_unavailable"
           )
         );
       }
