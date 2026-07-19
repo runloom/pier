@@ -42,6 +42,12 @@ function failure(
   };
 }
 
+function rendererCommandTargetWindowId(
+  command: RendererCommand
+): string | undefined {
+  return "windowId" in command ? command.windowId : undefined;
+}
+
 function shouldFocusRendererWindow(command: RendererCommand): boolean {
   switch (command.type) {
     case "panel.focus":
@@ -50,6 +56,10 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
       return command.focus ?? true;
     case "panel.close":
     case "panel.list":
+    case "panelTransfer.finalize":
+    case "panelTransfer.prepareSource":
+    case "panelTransfer.releaseSource":
+    case "panelTransfer.stageTarget":
     case "plugin.finalizeDisable":
     case "plugin.finalizeReload":
     case "plugin.prepareDisable":
@@ -78,7 +88,7 @@ export function createRendererCommandService({
       const requestId = createRequestId();
       const envelope: RendererCommandEnvelope = { command, requestId };
       if (
-        !host.send(envelope, command.windowId, {
+        !host.send(envelope, rendererCommandTargetWindowId(command), {
           focus: shouldFocusRendererWindow(command),
         })
       ) {
@@ -86,7 +96,9 @@ export function createRendererCommandService({
           failure(
             requestId,
             "no renderer window available",
-            command.windowId ? "not_found" : "platform_unavailable"
+            rendererCommandTargetWindowId(command)
+              ? "not_found"
+              : "platform_unavailable"
           )
         );
       }

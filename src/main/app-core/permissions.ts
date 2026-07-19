@@ -214,6 +214,30 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["window:control"],
   },
+  "panelTransfer.offer": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.drop": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.finishDrag": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.cancel": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.bootstrap": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.ready": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
 };
 
 function terminalOpenCapabilities(

@@ -64,6 +64,10 @@ import {
 import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import {
+  createPanelTransferApi,
+  type PierPanelTransferAPI,
+} from "./panel-transfer-api.ts";
+import {
   type AppPreloadApi,
   type AppUpdatePreloadApi,
   createAppPreloadApi,
@@ -78,9 +82,6 @@ import {
   pluginSettingsApi,
 } from "./plugin-settings-api.ts";
 import { installRendererBootHandshake } from "./renderer-boot-handshake.ts";
-
-const signalRendererBoot = installRendererBootHandshake(ipcRenderer);
-
 import { type PierSystemStatsAPI, systemStatsApi } from "./system-stats-api.ts";
 import { type PierTasksAPI, tasksApi } from "./task-api.ts";
 import { terminalApi } from "./terminal-api.ts";
@@ -91,8 +92,9 @@ import {
 import { type PierUsageDataAPI, usageDataApi } from "./usage-data-api.ts";
 import { type PierWorktreesAPI, worktreesApi } from "./worktree-api.ts";
 
-export type WindowInfo = SharedWindowInfo;
+const signalRendererBoot = installRendererBootHandshake(ipcRenderer);
 
+export type WindowInfo = SharedWindowInfo;
 export type PreferencesSnapshot = ProjectPreferences;
 
 export interface PierPreferencesAPI {
@@ -255,6 +257,7 @@ export interface PierWindowAPI {
   managedPlugins: ManagedPluginsPreloadApi;
   menu: PierMenuAPI;
   notifications: PierNotificationsAPI;
+  panelTransfer: PierPanelTransferAPI;
   pluginRpc: PluginRpcPreloadApi;
   pluginSettings: PierPluginSettingsAPI;
   plugins: PierPluginsAPI;
@@ -469,6 +472,7 @@ const api: PierWindowAPI = {
   clipboard: clipboardApi,
   notifications: notificationsApi,
   plugins: pluginsApi,
+  panelTransfer: createPanelTransferApi(),
   pluginSettings: pluginSettingsApi,
   preferences: preferencesApi,
   rendererCommand: rendererCommandApi,

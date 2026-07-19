@@ -275,6 +275,14 @@ async function runWorkspaceRendererCommandAsync(
       case "plugin.finalizeReload": {
         throw new Error("plugin.finalizeReload requires workspace api context");
       }
+      case "panelTransfer.prepareSource":
+      case "panelTransfer.stageTarget":
+      case "panelTransfer.releaseSource":
+      case "panelTransfer.finalize": {
+        throw new Error(
+          `${envelope.command.type} requires workspace panel-transfer context`
+        );
+      }
       default: {
         const _exhaustive: never = envelope.command;
         throw new Error(`unsupported renderer command: ${String(_exhaustive)}`);

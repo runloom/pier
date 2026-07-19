@@ -8,6 +8,12 @@ import {
   panelContextSchema,
   panelTabChromeSchema,
 } from "./panel.ts";
+import {
+  panelTransferFinalizeCommandSchema,
+  panelTransferPrepareSourceCommandSchema,
+  panelTransferReleaseSourceCommandSchema,
+  panelTransferStageTargetCommandSchema,
+} from "./panel-transfer.ts";
 import { taskPanelMetadataSchema } from "./tasks.ts";
 
 export const rendererCommandSchema = z.discriminatedUnion("type", [
@@ -100,6 +106,10 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("plugin.finalizeReload"),
     windowId: z.string().min(1).optional(),
   }),
+  panelTransferPrepareSourceCommandSchema,
+  panelTransferStageTargetCommandSchema,
+  panelTransferReleaseSourceCommandSchema,
+  panelTransferFinalizeCommandSchema,
 ]);
 
 export type RendererCommand = z.infer<typeof rendererCommandSchema>;
