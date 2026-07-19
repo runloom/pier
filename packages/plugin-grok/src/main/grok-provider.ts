@@ -266,6 +266,9 @@ export function createGrokProvider(
         env: {
           ...process.env,
           ...processEnv,
+          // Keep login-shell PATH hydration (GUI Electron starts thin).
+          // processEnv may freeze activate-time PATH without ~/.grok/bin.
+          ...(process.env.PATH === undefined ? {} : { PATH: process.env.PATH }),
           GROK_HOME: homeDir,
         },
         signal,

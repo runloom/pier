@@ -20,11 +20,8 @@ import { revealFilesTreePath } from "./files-tree-registry.ts";
 
 type SystemOpenFallbackReason =
   | "binary-or-unsupported"
-  | "missing-panel-context"
-  | "missing-path"
   | "open-instance-failed"
-  | "open-project-failed"
-  | "outside-anchor";
+  | "open-project-failed";
 
 const inflight = new Set<string>();
 
@@ -41,10 +38,32 @@ function toRootRelative(anchor: string, absolutePath: string): string | null {
   return to.slice(prefix.length);
 }
 
+function splitAbsoluteDiskTarget(absolutePath: string): {
+  path: string;
+  root: string;
+} {
+  const normalized =
+    absolutePath.replace(/\\/g, "/").replace(/\/+$/, "") || "/";
+  if (normalized === "/") {
+    return { path: "", root: "/" };
+  }
+  const slash = normalized.lastIndexOf("/");
+  if (slash <= 0) {
+    return { path: normalized.slice(1), root: "/" };
+  }
+  return {
+    path: normalized.slice(slash + 1),
+    root: normalized.slice(0, slash),
+  };
+}
+
 function withTerminalAnchor(
-  context: PanelContext,
+  context: PanelContext | null,
   anchor: string
-): PanelContext {
+): PanelContext | null {
+  if (!context) {
+    return null;
+  }
   return {
     ...context,
     projectRootPath: anchor,
@@ -75,7 +94,7 @@ async function openAbsoluteWithSystem(
 
 function openDiskFile(
   context: RendererPluginContext,
-  panelContext: PanelContext,
+  panelContext: PanelContext | null,
   root: string,
   relativePath: string
 ): void {
@@ -107,12 +126,116 @@ function openDiskFile(
 
   context.panels.openInstance({
     componentId: FILES_FILE_PANEL_ID,
-    ...(existingInstance ? {} : { context: panelContext }),
+    ...(existingInstance || !panelContext ? {} : { context: panelContext }),
     dropUnpinnedInstances: false,
     instanceId: existingInstance?.id ?? createFileFilePanelInstanceId(source),
     params,
     title: sourceTitle(existingSource ?? source),
   });
+}
+
+async function openReadableDiskTarget(
+  context: RendererPluginContext,
+  panelContext: PanelContext | null,
+  root: string,
+  relativePath: string,
+  absolutePath: string
+): Promise<boolean> {
+  const openContext = withTerminalAnchor(panelContext, root);
+
+  if (relativePath === "") {
+    if (!openContext) {
+      context.notifications.error(
+        createFilesTranslate(context)(
+          "files.notifications.terminalOpenUrl.invalid",
+          "Cannot open this path."
+        )
+      );
+      return true;
+    }
+    const opened = openProjectFiles(context, openContext);
+    if (!opened.ok) {
+      return await openAbsoluteWithSystem(
+        context,
+        absolutePath,
+        "open-project-failed"
+      );
+    }
+    globalThis.setTimeout(() => {
+      revealFilesTreePath({ path: "", root });
+    }, 80);
+    return true;
+  }
+
+  const stat = await context.files.stat({
+    path: relativePath,
+    root,
+  });
+
+  if (!stat.exists) {
+    context.notifications.error(
+      createFilesTranslate(context)(
+        "files.notifications.terminalOpenUrl.invalid",
+        "Cannot open this path."
+      )
+    );
+    return true;
+  }
+
+  if (stat.isDirectory) {
+    if (!openContext) {
+      context.notifications.error(
+        createFilesTranslate(context)(
+          "files.notifications.terminalOpenUrl.invalid",
+          "Cannot open this path."
+        )
+      );
+      return true;
+    }
+    const opened = openProjectFiles(context, openContext);
+    if (!opened.ok) {
+      return await openAbsoluteWithSystem(
+        context,
+        absolutePath,
+        "open-project-failed"
+      );
+    }
+    globalThis.setTimeout(() => {
+      revealFilesTreePath({
+        path: relativePath,
+        root,
+      });
+    }, 80);
+    return true;
+  }
+
+  const document = await context.files.readDocument({
+    path: relativePath,
+    root,
+  });
+  if (
+    document.kind === "binary" ||
+    document.kind === "too-large" ||
+    document.kind === "unsupported-encoding" ||
+    document.kind === "unsupported-file"
+  ) {
+    return await openAbsoluteWithSystem(
+      context,
+      absolutePath,
+      "binary-or-unsupported"
+    );
+  }
+
+  try {
+    openDiskFile(context, openContext, root, relativePath);
+    return true;
+  } catch {
+    return await openAbsoluteWithSystem(
+      context,
+      absolutePath,
+      "open-instance-failed"
+    );
+  }
 }
 
 export async function handleFilesTerminalOpenUrl(
@@ -136,6 +259,13 @@ export async function handleFilesTerminalOpenUrl(
           "This terminal has no working directory, so the relative path cannot be opened."
         )
       );
+    } else if (parsed.reason === "unsupported-scheme") {
+      context.notifications.error(
+        t(
+          "files.notifications.terminalOpenUrl.unsupportedScheme",
+          "Cannot open this link in Pier."
+        )
+      );
     } else {
       context.notifications.error(
         t(
@@ -153,108 +283,29 @@ export async function handleFilesTerminalOpenUrl(
   }
   inflight.add(absolutePath);
   try {
-    if (!panelContext) {
-      return await openAbsoluteWithSystem(
-        context,
-        absolutePath,
-        "missing-panel-context"
-      );
-    }
-
     const anchors = terminalOpenUrlAnchors(panelContext);
     const anchor = longestCoveringAnchor(absolutePath, anchors);
-    if (!anchor) {
-      return await openAbsoluteWithSystem(
-        context,
-        absolutePath,
-        "outside-anchor"
-      );
-    }
-
-    const relativePath = toRootRelative(anchor, absolutePath);
-    if (relativePath === null) {
-      return await openAbsoluteWithSystem(
-        context,
-        absolutePath,
-        "outside-anchor"
-      );
-    }
-
-    const openContext = withTerminalAnchor(panelContext, anchor);
-
-    if (relativePath === "") {
-      const opened = openProjectFiles(context, openContext);
-      if (!opened.ok) {
-        return await openAbsoluteWithSystem(
+    if (anchor) {
+      const relativePath = toRootRelative(anchor, absolutePath);
+      if (relativePath !== null) {
+        return await openReadableDiskTarget(
           context,
-          absolutePath,
-          "open-project-failed"
+          panelContext,
+          anchor,
+          relativePath,
+          absolutePath
         );
       }
-      globalThis.setTimeout(() => {
-        revealFilesTreePath({ path: "", root: anchor });
-      }, 80);
-      return true;
     }
 
-    const stat = await context.files.stat({
-      path: relativePath,
-      root: anchor,
-    });
-
-    if (!stat.exists) {
-      return await openAbsoluteWithSystem(
-        context,
-        absolutePath,
-        "missing-path"
-      );
-    }
-
-    if (stat.isDirectory) {
-      const opened = openProjectFiles(context, openContext);
-      if (!opened.ok) {
-        return await openAbsoluteWithSystem(
-          context,
-          absolutePath,
-          "open-project-failed"
-        );
-      }
-      globalThis.setTimeout(() => {
-        revealFilesTreePath({
-          path: relativePath,
-          root: anchor,
-        });
-      }, 80);
-      return true;
-    }
-
-    const document = await context.files.readDocument({
-      path: relativePath,
-      root: anchor,
-    });
-    if (
-      document.kind === "binary" ||
-      document.kind === "too-large" ||
-      document.kind === "unsupported-encoding" ||
-      document.kind === "unsupported-file"
-    ) {
-      return await openAbsoluteWithSystem(
-        context,
-        absolutePath,
-        "binary-or-unsupported"
-      );
-    }
-
-    try {
-      openDiskFile(context, openContext, anchor, relativePath);
-      return true;
-    } catch {
-      return await openAbsoluteWithSystem(
-        context,
-        absolutePath,
-        "open-instance-failed"
-      );
-    }
+    const fallback = splitAbsoluteDiskTarget(absolutePath);
+    return await openReadableDiskTarget(
+      context,
+      panelContext,
+      fallback.root,
+      fallback.path,
+      absolutePath
+    );
   } finally {
     inflight.delete(absolutePath);
   }

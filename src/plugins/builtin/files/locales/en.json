@@ -210,6 +210,7 @@
     "files.projectStatus.openFailed": "Unable to open project files",
     "files.notifications.terminalOpenUrl.relativeWithoutCwd": "This terminal has no working directory, so the relative path cannot be opened.",
     "files.notifications.terminalOpenUrl.invalid": "Cannot open this path.",
+    "files.notifications.terminalOpenUrl.unsupportedScheme": "Cannot open this link in Pier.",
     "files.notifications.terminalOpenUrl.openFailed": "Unable to open path."
   },
   "terminalStatusItems": {

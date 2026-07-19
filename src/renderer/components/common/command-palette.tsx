@@ -1,12 +1,4 @@
-/**
- * 命令面板 UI:
- *   - state machine 由 controller 管, 这里只渲染 + 路由用户事件回 controller。
- *   - capture-phase keydown 拦 Esc → controller.goBack() (栈非空回退, 栈空关闭),
- *     早于 Radix DismissibleLayer 的 Esc 默认行为。
- *   - 关闭时若 quick-pick 未 accept, dismiss effect 调 onDismiss 还原 preview。
- *   - selectedValue 控制高亮项, 切 quick-pick 时初始化为 checked item, 触发
- *     debounced onChangeSelection (preview 去重)。
- */
+/** 命令面板 UI：controller 管状态；组件负责渲染并路由关闭、回退和选择事件。 */
 
 import {
   Command,
@@ -50,6 +42,7 @@ import {
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
 import type { QuickPickItem } from "@/lib/command-palette/types.ts";
+import { useCommandPaletteScroll } from "@/lib/command-palette/use-command-palette-scroll.ts";
 import { useQuickPickQueryChange } from "@/lib/command-palette/use-quick-pick-query-change.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import {
@@ -151,6 +144,12 @@ export function CommandPalette() {
   const quickPick = controller.quickPick;
   const isOpen = controller.open;
   const requestId = controller.requestId;
+  const listRef = useCommandPaletteScroll({
+    isOpen,
+    query: normalizedQuery,
+    requestId,
+    selectedValue,
+  });
   const [retainedPresentation, setRetainedPresentation] = useState({
     mode,
     quickPick,
@@ -485,7 +484,7 @@ export function CommandPalette() {
           </div>
         ) : null}
         {quickPick?.onAcceptQuery ? null : (
-          <CommandList className="max-h-[min(60vh,520px)]">
+          <CommandList className="max-h-[min(60vh,520px)]" ref={listRef}>
             <CommandEmpty>
               {presentedMode === "quick-pick"
                 ? t("commandPalette.emptyQuickPick")

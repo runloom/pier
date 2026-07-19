@@ -210,6 +210,7 @@
     "files.projectStatus.openFailed": "无法打开项目文件",
     "files.notifications.terminalOpenUrl.relativeWithoutCwd": "当前终端没有工作目录，无法打开这个相对路径。",
     "files.notifications.terminalOpenUrl.invalid": "无法打开该路径。",
+    "files.notifications.terminalOpenUrl.unsupportedScheme": "Pier 无法打开该链接。",
     "files.notifications.terminalOpenUrl.openFailed": "无法打开路径。"
   },
   "terminalStatusItems": {

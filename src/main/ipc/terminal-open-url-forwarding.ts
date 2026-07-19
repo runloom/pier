@@ -4,20 +4,23 @@ import type {
 } from "@shared/contracts/terminal.ts";
 import { terminalOpenUrlEventSchema } from "@shared/contracts/terminal.ts";
 
+const EXTERNAL_SCHEMES = new Set(["http", "https", "mailto"]);
+
 export function classifyTerminalOpenUrlForMain(
   url: string
-): "remote" | "local-candidate" {
+): "remote" | "filesystem" | "app-internal" {
   const trimmed = url.trim();
   if (!trimmed) {
-    return "local-candidate";
+    return "filesystem";
   }
-  if (
-    /^[a-z][a-z0-9+.-]*:/i.test(trimmed) &&
-    !trimmed.toLowerCase().startsWith("file:")
-  ) {
+  const protocol = /^([a-z][a-z0-9+.-]*):/i.exec(trimmed)?.[1]?.toLowerCase();
+  if (!protocol || protocol === "file") {
+    return "filesystem";
+  }
+  if (EXTERNAL_SCHEMES.has(protocol)) {
     return "remote";
   }
-  return "local-candidate";
+  return "app-internal";
 }
 
 export async function handleTerminalOpenUrl(input: {

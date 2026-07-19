@@ -89,7 +89,7 @@ describe("handleFilesTerminalOpenUrl", () => {
     expect(openPath).not.toHaveBeenCalled();
   });
 
-  it("openPaths outside anchors", async () => {
+  it("opens readable text files outside anchors via Files", async () => {
     await expect(
       handleFilesTerminalOpenUrl(context, {
         kind: "text",
@@ -97,7 +97,37 @@ describe("handleFilesTerminalOpenUrl", () => {
         url: "/tmp/outside.md",
       })
     ).resolves.toBe(true);
-    expect(openPath).toHaveBeenCalledWith({ path: "/tmp/outside.md" });
+    expect(stat).toHaveBeenCalledWith({
+      path: "outside.md",
+      root: "/tmp",
+    });
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          source: {
+            kind: "disk",
+            path: "outside.md",
+            root: "/tmp",
+          },
+        }),
+        title: "outside.md",
+      })
+    );
+    expect(openPath).not.toHaveBeenCalled();
+  });
+
+  it("reports unsupported schemes without system open", async () => {
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: "local://drag-tab-cross-window-plan.md",
+      })
+    ).resolves.toBe(true);
+    expect(notificationsError).toHaveBeenCalledWith(
+      "Cannot open this link in Pier."
+    );
+    expect(openPath).not.toHaveBeenCalled();
     expect(openInstance).not.toHaveBeenCalled();
   });
 
@@ -170,6 +200,40 @@ describe("handleFilesTerminalOpenUrl", () => {
     expect(openPath).not.toHaveBeenCalled();
   });
 
+  it("reuses an open tab when absolute path matches under a different root split", async () => {
+    const existingId = "pier.files.filePanel:disk:abs-split:tab-1";
+    listInstances.mockReturnValue([
+      {
+        groupId: "g1",
+        id: existingId,
+        params: {
+          pinned: false,
+          source: {
+            kind: "disk",
+            path: "src/README.md",
+            root: "/repo",
+          },
+        },
+      },
+    ]);
+
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: "/repo/src/README.md",
+      })
+    ).resolves.toBe(true);
+
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        dropUnpinnedInstances: false,
+        instanceId: existingId,
+      })
+    );
+    expect(openPath).not.toHaveBeenCalled();
+  });
+
   it("falls back for binary documents", async () => {
     readDocument.mockResolvedValue({ kind: "binary", mime: null });
     await expect(
@@ -183,24 +247,25 @@ describe("handleFilesTerminalOpenUrl", () => {
     expect(openInstance).not.toHaveBeenCalled();
   });
 
-  it("logs why system open fallback is used", async () => {
+  it("logs why system open fallback is used for unsupported files", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
+    readDocument.mockResolvedValue({ kind: "binary", mime: null });
     try {
       await expect(
         handleFilesTerminalOpenUrl(context, {
           kind: "text",
           panelId: "t1",
-          url: "/tmp/outside.md",
+          url: "/tmp/outside.bin",
         })
       ).resolves.toBe(true);
       expect(info).toHaveBeenCalledWith(
         "[files-terminal-open-url] system open fallback",
         expect.objectContaining({
-          path: "/tmp/outside.md",
-          reason: "outside-anchor",
+          path: "/tmp/outside.bin",
+          reason: "binary-or-unsupported",
         })
       );
-      expect(openPath).toHaveBeenCalledWith({ path: "/tmp/outside.md" });
+      expect(openPath).toHaveBeenCalledWith({ path: "/tmp/outside.bin" });
     } finally {
       info.mockRestore();
     }

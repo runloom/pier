@@ -4,6 +4,22 @@ export function diskDocumentId(root: string, path: string): string {
   return `pier.files.file:${stableFileIdentityHash(`${root}\0${path}`)}`;
 }
 
+/** Join disk panel source root+path into a comparable absolute path identity. */
+export function absoluteDiskSourcePath(root: string, path: string): string {
+  const normalizedRoot = root.replaceAll("\\", "/").replace(/\/+$/, "") || "/";
+  const normalizedPath = path
+    .replaceAll("\\", "/")
+    .replace(/^\/+/, "")
+    .replace(/\/+$/, "");
+  if (!normalizedPath) {
+    return normalizedRoot;
+  }
+  if (normalizedRoot === "/") {
+    return `/${normalizedPath}`;
+  }
+  return `${normalizedRoot}/${normalizedPath}`;
+}
+
 export function isSamePathOrDescendant(
   entryPath: string,
   path: string

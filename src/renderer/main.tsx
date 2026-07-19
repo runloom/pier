@@ -12,6 +12,7 @@ import {
 import { installBundledFontFaces } from "./app/fonts.ts";
 import { AppContentDialogHost } from "./components/common/app-content-dialog-host.tsx";
 import { AppDialogHost } from "./components/common/app-dialog-host.tsx";
+import { AppRuntimeErrorBoundary } from "./components/common/app-runtime-error-boundary.tsx";
 import {
   StartupErrorScreen,
   StartupScreen,
@@ -165,7 +166,9 @@ async function bootstrap() {
   root.render(
     <>
       <RendererBootSignal key="application" />
-      <App />
+      <AppRuntimeErrorBoundary>
+        <App />
+      </AppRuntimeErrorBoundary>
     </>
   );
   requestAnimationFrame(() => {

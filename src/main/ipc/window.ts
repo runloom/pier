@@ -7,12 +7,46 @@
  * 已迁至 command router: close/create/focus/list
  */
 
+import { parseRendererRuntimeFailureReport } from "@shared/contracts/renderer-runtime-failure.ts";
 import { PIER } from "@shared/ipc-channels.ts";
+import { createLogger } from "@shared/logger.ts";
 import type { IpcMain } from "electron";
 import { findWindowContext } from "../windows/window-identity.ts";
 import { windowManager } from "../windows/window-manager.ts";
 
+const rendererRuntimeLog = createLogger("renderer-runtime");
+
 export function registerWindowIpc(ipcMain: IpcMain): void {
+  ipcMain.on(PIER.WINDOW_RENDERER_RUNTIME_FAILURE, (event, rawFailure) => {
+    const win = windowManager.fromWebContents(event.sender);
+    if (!win) {
+      rendererRuntimeLog.warn(
+        "Dropped renderer runtime failure: unknown window",
+        {
+          senderId: event.sender.id,
+        }
+      );
+      return;
+    }
+    const failure = parseRendererRuntimeFailureReport(rawFailure);
+    if (!failure) {
+      rendererRuntimeLog.warn(
+        "Dropped renderer runtime failure: invalid payload",
+        {
+          senderId: event.sender.id,
+        }
+      );
+      return;
+    }
+    const context = findWindowContext(win);
+    rendererRuntimeLog.error("React root failed", {
+      ...failure,
+      ...(context
+        ? { recordId: context.recordId, windowId: context.windowId }
+        : {}),
+    });
+  });
+
   ipcMain.handle(PIER.WINDOW_CONTEXT, (event) => {
     const win = windowManager.fromWebContents(event.sender);
     if (!win) {

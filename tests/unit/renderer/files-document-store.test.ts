@@ -354,6 +354,18 @@ describe("files-document-store", () => {
     ).toBe(false);
     expect(
       sameFilesDocumentPanelSource(
+        { kind: "disk", path: "src/README.md", root: "/repo" },
+        { kind: "disk", path: "README.md", root: "/repo/src" }
+      )
+    ).toBe(true);
+    expect(
+      sameFilesDocumentPanelSource(
+        { kind: "disk", path: "README.md", root: "/repo/" },
+        { kind: "disk", path: "README.md", root: "/repo" }
+      )
+    ).toBe(true);
+    expect(
+      sameFilesDocumentPanelSource(
         { id: "pier.files.untitled:1", kind: "untitled", name: "Draft.md" },
         { id: "pier.files.untitled:1", kind: "untitled", name: "Renamed.md" }
       )

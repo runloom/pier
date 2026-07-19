@@ -40,6 +40,12 @@ describe("renderer startup ordering", () => {
     );
   });
 
+  it("keeps the application tree inside the runtime recovery boundary", () => {
+    expect(source).toMatch(
+      /<AppRuntimeErrorBoundary>\s*<App \/>\s*<\/AppRuntimeErrorBoundary>/
+    );
+  });
+
   it("renders a visible fatal state when bootstrap rejects", () => {
     expect(source).toContain("<StartupErrorScreen error={err} />");
     expect(source).toContain("window.pier?.window?.readyToShow?.()");

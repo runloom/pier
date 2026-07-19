@@ -26,7 +26,9 @@ describe("startup screens", () => {
     expect(
       screen.getByRole("heading", { name: "Pier failed to start" })
     ).toBeVisible();
+    expect(screen.getByText("Reload to try again.")).toBeVisible();
     expect(screen.getByText(/preload unavailable/)).toBeVisible();
+    expect(container.querySelector('[data-slot="empty"]')).not.toBeNull();
     expect(container.querySelector('[data-slot="alert"]')).toBeNull();
     expect(container.querySelector('[data-scrollbar="stable"]')).not.toBeNull();
 

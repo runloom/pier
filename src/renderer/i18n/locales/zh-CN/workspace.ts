@@ -11,11 +11,14 @@ export const workspace = {
     unavailableTitle: "插件面板不可用",
   },
   startupError: {
-    description:
-      "Pier 无法完成核心初始化。请重试；如果问题持续存在，请保留下面的错误详情。",
-    details: "错误详情",
+    description: "请重新加载后再试。",
     retry: "重新加载",
     title: "Pier 启动失败",
+  },
+  runtimeError: {
+    description: "终端会话已保留，请重新加载。",
+    retry: "重新加载",
+    title: "界面出现错误",
   },
   tab: {
     unsaved: "未保存的更改",
