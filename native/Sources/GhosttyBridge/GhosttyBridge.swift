@@ -488,7 +488,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     TerminalSurfaceCloseDelegate,
     TerminalSurfaceScrollbarDelegate
 {
-    let panelId: String
+    var panelId: String
     var browserWindowId: Int
     let lifecycleId: String
     weak var scrollbarSink: TerminalScrollbarStateSink?
@@ -1373,11 +1373,7 @@ final class GhosttyBridgeImpl {
         return true
     }
 
-    // MARK: - Test-only window transfer (spike)
-    //
-    // Minimal same-surface reparent for Task 1 gate. Formal production API
-    // converges in step 6 (scoped keys + journaled ownership move). Do not call
-    // from product paths.
+    // MARK: - Terminal window move (production)
 
     struct TerminalIdentityForTests {
         let browserWindowId: Int
@@ -1408,34 +1404,32 @@ final class GhosttyBridgeImpl {
         eventRouters[ObjectIdentifier(window)]?.targets[panelId] != nil
     }
 
-    /// Reparent an existing terminal container/view to another NSWindow without
-    /// rebuilding the Ghostty surface or restarting the PTY.
+    /// Production same-surface reparent with scoped native panel keys
+    /// (`${browserWindowId}::${panelId}`). Keeps container/view/controller/surface
+    /// identity; rekeys `terminals` + layout; stays hidden until target presentation.
     ///
     /// Critical: `TerminalView.controller` must keep the **same object**. Assigning
     /// a different `TerminalController` tears down and rebuilds the surface.
     @discardableResult
-    func transferTerminalForTests(
-        panelId: String,
+    func moveTerminal(
+        fromNativePanelId: String,
+        toNativePanelId: String,
         to targetWindow: NSWindow,
-        toBrowserWindowId: Int,
-        viewport: NSRect
+        toBrowserWindowId: Int
     ) -> Bool {
-        guard var term = terminals[panelId],
-              let sourceContent = term.parentWindow.contentView,
+        guard var term = terminals[fromNativePanelId],
               let targetContent = targetWindow.contentView,
               eventRouters[ObjectIdentifier(targetWindow)] != nil
         else {
             return false
         }
 
-        let sourceWindow = term.parentWindow
-        guard sourceWindow !== targetWindow else { return true }
-
-        // Target must not already own this panelId (stable IDs; conflict = fail).
-        if let existing = terminals[panelId], existing.parentWindow === targetWindow {
+        // Destination key must be free unless this is an in-place same-key move.
+        if fromNativePanelId != toNativePanelId, terminals[toNativePanelId] != nil {
             return false
         }
 
+        let sourceWindow = term.parentWindow
         let sourceWindowId = ObjectIdentifier(sourceWindow)
         let targetWindowId = ObjectIdentifier(targetWindow)
 
@@ -1446,11 +1440,17 @@ final class GhosttyBridgeImpl {
         let previousAlpha = term.containerView.alphaValue
         let previousParent = term.parentWindow
         let previousBrowserId = term.eventDelegate.browserWindowId
+        let previousPanelId = term.eventDelegate.panelId
         let previousController = term.terminalView.controller
         let previousSourceController = controllers[sourceWindowId]
         let previousTargetController = controllers[targetWindowId]
-        let previousSourceTarget = eventRouters[sourceWindowId]?.targets[panelId]
-        let previousLayout = terminalLayouts[panelId]
+        let previousSourceTarget = eventRouters[sourceWindowId]?.targets[fromNativePanelId]
+        let previousLayout = terminalLayouts[fromNativePanelId]
+        let previousToLayout = terminalLayouts[toNativePanelId]
+        let hadFromTerminal = terminals[fromNativePanelId] != nil
+        let previousToTerminal = fromNativePanelId == toNativePanelId
+            ? nil
+            : terminals[toNativePanelId]
 
         func restore() {
             term.containerView.removeFromSuperview()
@@ -1466,7 +1466,9 @@ final class GhosttyBridgeImpl {
             term.containerView.alphaValue = previousAlpha
             term.parentWindow = previousParent
             term.eventDelegate.browserWindowId = previousBrowserId
+            term.eventDelegate.panelId = previousPanelId
             term.containerView.updateBrowserWindowId(previousBrowserId)
+            term.containerView.updatePanelId(previousPanelId)
             // Keep controller object identical to avoid surface rebuild.
             if term.terminalView.controller !== previousController {
                 term.terminalView.controller = previousController
@@ -1478,29 +1480,42 @@ final class GhosttyBridgeImpl {
                 controllers.removeValue(forKey: targetWindowId)
             }
             if let previousSourceTarget {
-                eventRouters[sourceWindowId]?.targets[panelId] = previousSourceTarget
+                eventRouters[sourceWindowId]?.targets[fromNativePanelId] = previousSourceTarget
             } else {
-                eventRouters[sourceWindowId]?.targets.removeValue(forKey: panelId)
+                eventRouters[sourceWindowId]?.targets.removeValue(forKey: fromNativePanelId)
             }
-            eventRouters[targetWindowId]?.targets.removeValue(forKey: panelId)
-            terminalLayouts[panelId] = previousLayout
-            terminals[panelId] = term
+            eventRouters[targetWindowId]?.targets.removeValue(forKey: toNativePanelId)
+            if fromNativePanelId != toNativePanelId {
+                terminals.removeValue(forKey: toNativePanelId)
+                if let previousToLayout {
+                    terminalLayouts[toNativePanelId] = previousToLayout
+                } else {
+                    terminalLayouts.removeValue(forKey: toNativePanelId)
+                }
+            }
+            if hadFromTerminal {
+                terminals[fromNativePanelId] = term
+            }
+            terminalLayouts[fromNativePanelId] = previousLayout
+            if let previousToTerminal {
+                terminals[toNativePanelId] = previousToTerminal
+            }
         }
 
         // 1) Drop source router target first so hits stop routing to the old window.
-        eventRouters[sourceWindowId]?.targets.removeValue(forKey: panelId)
+        eventRouters[sourceWindowId]?.targets.removeValue(forKey: fromNativePanelId)
 
         // 2) Move per-window controller ownership to the target WITHOUT changing
         //    the TerminalView.controller object identity.
         let movingController = term.terminalView.controller
             ?? controllers[sourceWindowId]
-        if let movingController {
+        if sourceWindowId != targetWindowId, let movingController {
             // Target must not already host a different controller with live terminals.
             if let existingTargetController = controllers[targetWindowId],
                existingTargetController !== movingController
             {
                 let targetHasOtherTerminals = terminals.contains {
-                    $0.key != panelId
+                    $0.key != fromNativePanelId
                         && ObjectIdentifier($0.value.parentWindow) == targetWindowId
                 }
                 if targetHasOtherTerminals {
@@ -1518,64 +1533,72 @@ final class GhosttyBridgeImpl {
             }
         }
 
-        // 3) Reparent the same container/view under target contentView (bottom).
-        let targetFrame = computeFrame(in: targetContent, viewport: viewport)
+        // 3) Reparent the same container/view under target contentView (bottom),
+        //    hidden + offscreen until target presentation.
+        let offscreenWidth = max(term.containerView.frame.width, 1)
+        let offscreenHeight = max(term.containerView.frame.height, 1)
         term.containerView.removeFromSuperview()
         term.containerView.isHidden = true
         term.containerView.alphaValue = 0
         term.containerView.frame = NSRect(
             x: -99999,
             y: -99999,
-            width: targetFrame.width,
-            height: targetFrame.height
+            width: offscreenWidth,
+            height: offscreenHeight
         )
         targetContent.addSubview(term.containerView, positioned: .below, relativeTo: nil)
 
-        // 4) Update ownership + browser ids on delegate/container.
+        // 4) Update ownership + browser/panel ids on delegate/container.
         term.parentWindow = targetWindow
         term.eventDelegate.browserWindowId = toBrowserWindowId
+        term.eventDelegate.panelId = toNativePanelId
         term.containerView.updateBrowserWindowId(toBrowserWindowId)
+        term.containerView.updatePanelId(toNativePanelId)
         windowToBrowserWindowId[targetWindowId] = toBrowserWindowId
 
-        // 5) Remember layout + install target router hit target.
-        rememberLayout(
-            panelId: panelId,
-            contentView: targetContent,
-            nativeFrame: targetFrame
-        )
-        eventRouters[targetWindowId]?.targets[panelId] = EventRouterView.Target(
-            rect: Self.terminalTargetRect(viewport: viewport),
-            view: term.containerView
-        )
-
-        // 6) Present on target with the same surface (unhide).
-        term.containerView.applyHostFrame(targetFrame)
-        CATransaction.begin()
-        CATransaction.setDisableActions(true)
-        term.containerView.alphaValue = 1
-        term.containerView.isHidden = false
-        CATransaction.commit()
-
-        // Ensure surface stays marked visible after move.
-        if !term.surfaceVisible {
-            term.terminalView.setSurfaceVisible(true)
-            term.surfaceVisible = true
+        // 5) Rekey terminals + layout owner. Do not install target router hits or
+        //    unhide — applyWindowState on the target presents later.
+        if fromNativePanelId != toNativePanelId {
+            terminals.removeValue(forKey: fromNativePanelId)
+            if let previousLayout {
+                terminalLayouts.removeValue(forKey: fromNativePanelId)
+                terminalLayouts[toNativePanelId] = previousLayout
+            } else {
+                terminalLayouts.removeValue(forKey: fromNativePanelId)
+            }
         }
+        terminals[toNativePanelId] = term
 
-        terminals[panelId] = term
-
+        let expectedController = movingController
         // Basic integrity: still attached to target, controller object unchanged.
         if term.containerView.superview !== targetContent
-            || term.terminalView.controller !== movingController
-            && movingController != nil
+            || (expectedController != nil && term.terminalView.controller !== expectedController)
+            || terminals[toNativePanelId] == nil
+            || (fromNativePanelId != toNativePanelId && terminals[fromNativePanelId] != nil)
         {
             restore()
             return false
         }
 
-        // Silence unused source content warning in optimized builds.
-        _ = sourceContent
         return true
+    }
+
+    /// Spike-era thin wrapper: same-key move for compatibility. Prefer `moveTerminal`
+    /// with scoped keys from product paths. Leaves the view hidden like production.
+    @discardableResult
+    func transferTerminalForTests(
+        panelId: String,
+        to targetWindow: NSWindow,
+        toBrowserWindowId: Int,
+        viewport: NSRect
+    ) -> Bool {
+        _ = viewport
+        return moveTerminal(
+            fromNativePanelId: panelId,
+            toNativePanelId: panelId,
+            to: targetWindow,
+            toBrowserWindowId: toBrowserWindowId
+        )
     }
 
     func performBindingAction(panelId: String, action: String) -> Bool {
@@ -2064,6 +2087,25 @@ public func ghosttyBridgeSetTerminalConfig(
     }
 }
 
+
+
+@_cdecl("ghostty_bridge_move_terminal")
+public func ghosttyBridgeMoveTerminal(
+    _ fromNativePanelIdPtr: UnsafePointer<CChar>,
+    _ toNativePanelIdPtr: UnsafePointer<CChar>,
+    _ toNsWindowPtr: UnsafeMutableRawPointer,
+    _ toBrowserWindowId: Int
+) -> Bool {
+    MainActor.assumeIsolated {
+        let targetWindow = Unmanaged<NSWindow>.fromOpaque(toNsWindowPtr).takeUnretainedValue()
+        return GhosttyBridgeImpl.shared.moveTerminal(
+            fromNativePanelId: String(cString: fromNativePanelIdPtr),
+            toNativePanelId: String(cString: toNativePanelIdPtr),
+            to: targetWindow,
+            toBrowserWindowId: toBrowserWindowId
+        )
+    }
+}
 
 @_cdecl("ghostty_bridge_close")
 public func ghosttyBridgeClose(_ panelId: UnsafePointer<CChar>) -> Bool {

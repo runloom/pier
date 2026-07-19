@@ -19,7 +19,7 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     let terminalView: TerminalView
     private let terminalScrollView: AppTerminalScrollView
     private(set) var browserWindowId: Int
-    private let panelId: String
+    private(set) var panelId: String
     private var capturedTerminalMouseButton: TerminalMouseButton?
 
     var backgroundColor: NSColor = .black {
@@ -71,6 +71,10 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
 
     func updateBrowserWindowId(_ browserWindowId: Int) {
         self.browserWindowId = browserWindowId
+    }
+
+    func updatePanelId(_ panelId: String) {
+        self.panelId = panelId
     }
 
     private func synchronizeChildFrames() {

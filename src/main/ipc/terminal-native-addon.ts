@@ -47,6 +47,17 @@ export interface NativeAddon {
     exitCode: number,
     runtimeMilliseconds: number
   ): boolean;
+  /**
+   * Same-surface reparent across BrowserWindows using scoped native panel keys
+   * (`${browserWindowId}::${panelId}`). Does not create a new TerminalView/surface
+   * or restart the shell. Stays hidden until target applyTerminalWindowState.
+   */
+  moveTerminal(input: {
+    fromNativePanelId: string;
+    toNativePanelId: string;
+    toParentHandle: Buffer;
+    toBrowserWindowId: number;
+  }): boolean;
   performTerminalBindingAction(panelId: string, action: string): boolean;
   readSelectionText(panelId: string): string | null;
   /**

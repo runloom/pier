@@ -6,6 +6,10 @@ import XCTest
 final class TerminalWindowTransferTests: XCTestCase {
     private let impl = GhosttyBridgeImpl.shared
 
+    private func scopedKey(browserWindowId: Int, panelId: String) -> String {
+        "\(browserWindowId)::\(panelId)"
+    }
+
     private func makeWindow(
         browserWindowId: Int,
         origin: NSPoint = NSPoint(x: 40, y: 40)
@@ -65,13 +69,62 @@ final class TerminalWindowTransferTests: XCTestCase {
         kill(pid, 0) == 0
     }
 
-    func testTransferTerminalKeepsSurfaceSessionPidAndSurvivesSourceDetach() async throws {
+    private func showStateJSON(
+        nativePanelId: String,
+        viewport: NSRect,
+        reason: String,
+        sequence: Int
+    ) -> String {
+        """
+        {
+          "keyboardTarget": { "kind": "terminal", "panelId": "\(nativePanelId)" },
+          "nativeApplySequence": \(sequence),
+          "reason": "\(reason)",
+          "rendererSequence": \(sequence),
+          "terminals": [
+            {
+              "focused": true,
+              "frame": {
+                "height": \(viewport.height),
+                "width": \(viewport.width),
+                "x": \(viewport.minX),
+                "y": \(viewport.minY)
+              },
+              "panelId": "\(nativePanelId)",
+              "visible": true
+            }
+          ],
+          "webOverlayRects": [],
+          "windowFocused": true
+        }
+        """
+    }
+
+    func testMoveTerminalKeepsSurfaceSessionPidAndSurvivesSourceDetach() async throws {
         let pidPath = NSTemporaryDirectory()
             + "pier-terminal-transfer-\(UUID().uuidString).pid"
         defer { try? FileManager.default.removeItem(atPath: pidPath) }
 
-        let source = makeWindow(browserWindowId: 9101, origin: NSPoint(x: 20, y: 40))
-        let target = makeWindow(browserWindowId: 9102, origin: NSPoint(x: 860, y: 40))
+        let sourceBrowserWindowId = 9101
+        let targetBrowserWindowId = 9102
+        let rawPanelId = "transfer-terminal-1"
+        let fromNativePanelId = scopedKey(
+            browserWindowId: sourceBrowserWindowId,
+            panelId: rawPanelId
+        )
+        let toNativePanelId = scopedKey(
+            browserWindowId: targetBrowserWindowId,
+            panelId: rawPanelId
+        )
+
+        let source = makeWindow(
+            browserWindowId: sourceBrowserWindowId,
+            origin: NSPoint(x: 20, y: 40)
+        )
+        let target = makeWindow(
+            browserWindowId: targetBrowserWindowId,
+            origin: NSPoint(x: 860, y: 40)
+        )
         defer {
             impl.detachWindow(parent: target)
             // Source may already be detached by the assertion path.
@@ -83,12 +136,11 @@ final class TerminalWindowTransferTests: XCTestCase {
         let midSource = insertMidWebCompositor(in: source)
         let midTarget = insertMidWebCompositor(in: target)
 
-        let panelId = "transfer-terminal-1"
         let viewport = NSRect(x: 12, y: 24, width: 420, height: 280)
         XCTAssertTrue(
             impl.createTerminal(
                 parent: source,
-                panelId: panelId,
+                panelId: fromNativePanelId,
                 viewport: viewport,
                 fontFamily: "Menlo",
                 fontSize: 13,
@@ -101,40 +153,29 @@ final class TerminalWindowTransferTests: XCTestCase {
         )
 
         // Make the surface visible so the exec PTY actually starts.
-        let showState = """
-        {
-          "keyboardTarget": { "kind": "terminal", "panelId": "\(panelId)" },
-          "nativeApplySequence": 1,
-          "reason": "spike-transfer-show",
-          "rendererSequence": 1,
-          "terminals": [
-            {
-              "focused": true,
-              "frame": {
-                "height": \(viewport.height),
-                "width": \(viewport.width),
-                "x": \(viewport.minX),
-                "y": \(viewport.minY)
-              },
-              "panelId": "\(panelId)",
-              "visible": true
-            }
-          ],
-          "webOverlayRects": [],
-          "windowFocused": true
-        }
-        """
-        XCTAssertEqual(impl.applyWindowState(parent: source, json: showState), .applied)
+        XCTAssertEqual(
+            impl.applyWindowState(
+                parent: source,
+                json: showStateJSON(
+                    nativePanelId: fromNativePanelId,
+                    viewport: viewport,
+                    reason: "move-terminal-source-show",
+                    sequence: 1
+                )
+            ),
+            .applied
+        )
 
         let pidText = try await waitForFileContents(pidPath)
         let pid = try XCTUnwrap(Int32(pidText))
         XCTAssertGreaterThan(pid, 1)
         XCTAssertTrue(processIsAlive(pid))
 
-        let before = try XCTUnwrap(impl.terminalIdentityForTests(panelId: panelId))
+        let before = try XCTUnwrap(impl.terminalIdentityForTests(panelId: fromNativePanelId))
         XCTAssertTrue(before.containerView.superview === source.contentView)
         XCTAssertTrue(before.parentWindow === source)
-        XCTAssertEqual(before.browserWindowId, 9101)
+        XCTAssertEqual(before.browserWindowId, sourceBrowserWindowId)
+        XCTAssertEqual(before.containerView.panelId, fromNativePanelId)
         XCTAssertTrue(before.controller === impl.controllerForTests(window: source))
 
         // Layer order on source: terminal bottom, mid compositor, EventRouter top.
@@ -152,28 +193,58 @@ final class TerminalWindowTransferTests: XCTestCase {
 
         let targetViewport = NSRect(x: 30, y: 40, width: 440, height: 300)
         XCTAssertTrue(
-            impl.transferTerminalForTests(
-                panelId: panelId,
+            impl.moveTerminal(
+                fromNativePanelId: fromNativePanelId,
+                toNativePanelId: toNativePanelId,
                 to: target,
-                toBrowserWindowId: 9102,
-                viewport: targetViewport
+                toBrowserWindowId: targetBrowserWindowId
             ),
-            "minimal same-surface reparent entry must succeed"
+            "production scoped-key moveTerminal must succeed"
         )
 
-        let after = try XCTUnwrap(impl.terminalIdentityForTests(panelId: panelId))
-        XCTAssertTrue(after.containerView === before.containerView)
-        XCTAssertTrue(after.terminalView === before.terminalView)
-        XCTAssertEqual(after.surfaceGeneration, before.surfaceGeneration)
-        XCTAssertTrue(after.controller === before.controller)
-        XCTAssertTrue(after.parentWindow === target)
-        XCTAssertEqual(after.browserWindowId, 9102)
-        XCTAssertTrue(after.containerView.superview === target.contentView)
+        XCTAssertNil(impl.terminalIdentityForTests(panelId: fromNativePanelId))
+        let afterMove = try XCTUnwrap(impl.terminalIdentityForTests(panelId: toNativePanelId))
+        XCTAssertTrue(afterMove.containerView === before.containerView)
+        XCTAssertTrue(afterMove.terminalView === before.terminalView)
+        XCTAssertEqual(afterMove.surfaceGeneration, before.surfaceGeneration)
+        XCTAssertTrue(afterMove.controller === before.controller)
+        XCTAssertTrue(afterMove.parentWindow === target)
+        XCTAssertEqual(afterMove.browserWindowId, targetBrowserWindowId)
+        XCTAssertEqual(afterMove.containerView.panelId, toNativePanelId)
+        XCTAssertTrue(afterMove.containerView.superview === target.contentView)
+        XCTAssertTrue(afterMove.containerView.isHidden, "move keeps hidden until presentation")
         XCTAssertNil(source.contentView?.subviews.first(where: {
             $0 === before.containerView
         }))
-        XCTAssertTrue(after.controller === impl.controllerForTests(window: target))
+        XCTAssertTrue(afterMove.controller === impl.controllerForTests(window: target))
         XCTAssertNil(impl.controllerForTests(window: source))
+
+        // Source router must drop the old key; target must not route until presentation.
+        XCTAssertFalse(
+            impl.routerHasTargetForTests(window: source, panelId: fromNativePanelId)
+        )
+        XCTAssertFalse(
+            impl.routerHasTargetForTests(window: target, panelId: toNativePanelId)
+        )
+
+        // Present on target — production path uses applyWindowState, not moveTerminal.
+        XCTAssertEqual(
+            impl.applyWindowState(
+                parent: target,
+                json: showStateJSON(
+                    nativePanelId: toNativePanelId,
+                    viewport: targetViewport,
+                    reason: "move-terminal-target-show",
+                    sequence: 1
+                )
+            ),
+            .applied
+        )
+
+        let after = try XCTUnwrap(impl.terminalIdentityForTests(panelId: toNativePanelId))
+        XCTAssertFalse(after.containerView.isHidden)
+        XCTAssertTrue(after.controller === before.controller)
+        XCTAssertTrue(impl.routerHasTargetForTests(window: target, panelId: toNativePanelId))
 
         // Target layer order still has terminal under mid compositor / EventRouter.
         let targetSubs = try XCTUnwrap(target.contentView?.subviews)
@@ -187,10 +258,6 @@ final class TerminalWindowTransferTests: XCTestCase {
         XCTAssertLessThan(targetTerminalIndex, targetMidIndex)
         XCTAssertLessThan(targetMidIndex, targetRouterIndex)
 
-        // Source router must not keep the moved panel target; target router must.
-        XCTAssertFalse(impl.routerHasTargetForTests(window: source, panelId: panelId))
-        XCTAssertTrue(impl.routerHasTargetForTests(window: target, panelId: panelId))
-
         XCTAssertTrue(processIsAlive(pid), "PTY pid must survive reparent")
         let pidAfterTransfer = try await waitForFileContents(pidPath)
         XCTAssertEqual(pidAfterTransfer, pidText)
@@ -201,13 +268,14 @@ final class TerminalWindowTransferTests: XCTestCase {
             processIsAlive(pid),
             "detachWindow(source) must not kill the transferred terminal PTY"
         )
-        let stillThere = try XCTUnwrap(impl.terminalIdentityForTests(panelId: panelId))
+        let stillThere = try XCTUnwrap(impl.terminalIdentityForTests(panelId: toNativePanelId))
         XCTAssertTrue(stillThere.terminalView === before.terminalView)
         XCTAssertEqual(stillThere.surfaceGeneration, before.surfaceGeneration)
         XCTAssertTrue(stillThere.parentWindow === target)
+        XCTAssertTrue(stillThere.controller === before.controller)
         XCTAssertTrue(processIsAlive(pid))
 
         // IO still works after source detach: send a no-op-ish text write.
-        XCTAssertTrue(impl.sendText(panelId: panelId, text: "echo transfer-ok\n"))
+        XCTAssertTrue(impl.sendText(panelId: toNativePanelId, text: "echo transfer-ok\n"))
     }
 }
