@@ -67,7 +67,7 @@ async function recoverPostCommit(
 
   const liveWindows = deps.windows.list();
   const sourceStillOpen = liveWindows.some(
-    (windowInfo) => windowInfo.id === record.source.runtimeWindowId
+    (windowInfo) => windowInfo.recordId === record.source.windowRecordId
   );
 
   if (sourceStillOpen && record.phase === "runtime-moved") {

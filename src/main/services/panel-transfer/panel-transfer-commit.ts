@@ -179,15 +179,26 @@ export async function rollbackBeforeCommit(input: {
     PANEL_TRANSFER_SHOW_HOLD_REASON
   );
 
-  if (target.kind === "internal" && input.lease) {
-    try {
-      await deps.windows.destroyForTransfer(
-        input.lease,
-        target.runtimeWindowId,
-        transferId
-      );
-    } catch {
-      // best effort — do not block abort result on destroy failure
+  if (target.kind === "internal") {
+    const pendingPlaceholder = target.windowRecordId.startsWith("pending:");
+    if (!pendingPlaceholder && input.lease) {
+      try {
+        await deps.windows.destroyForTransfer(
+          input.lease,
+          target.runtimeWindowId,
+          transferId
+        );
+      } catch {
+        // best effort — do not block abort result on destroy failure
+      }
+    } else if (!pendingPlaceholder) {
+      // Cold pre-commit abort: createForTransfer may have opened the record
+      // before crash, but destroyForTransfer needs a live lease/window.
+      try {
+        await deps.windows.closeOpenWindowRecord(target.windowRecordId);
+      } catch {
+        // best effort
+      }
     }
   }
 

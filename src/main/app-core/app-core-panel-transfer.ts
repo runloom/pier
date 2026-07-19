@@ -116,6 +116,8 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
     windows: {
       closeAfterTransfer: (lease, windowId, transferId) =>
         windowService.closeAfterTransfer(lease, windowId, transferId),
+      closeOpenWindowRecord: (recordId) =>
+        windowService.closeOpenWindowRecord(recordId),
       createForTransfer: (lease, createInput) =>
         windowService.createForTransfer(lease, createInput),
       destroyForTransfer: (lease, windowId, transferId) =>

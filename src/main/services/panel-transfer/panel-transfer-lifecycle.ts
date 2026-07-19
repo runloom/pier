@@ -79,10 +79,11 @@ export function createPanelTransferLifecycleMethods(
       for (const record of journal.list()) {
         if (!(record.snapshot && BOOTSTRAP_MIN_PHASE.has(record.phase)))
           continue;
-        const isSource =
-          record.source.runtimeWindowId === caller.runtimeWindowId;
+        // Durable attachment key is windowRecordId. Runtime ids are
+        // process-local and reassigned after restoreOpenWindows().
+        const isSource = record.source.windowRecordId === caller.windowRecordId;
         const isTarget =
-          record.target?.runtimeWindowId === caller.runtimeWindowId;
+          record.target?.windowRecordId === caller.windowRecordId;
         if (!(isSource || isTarget)) continue;
         pending.push({
           inert: isTarget && !isPostCommitPhase(record.phase),
@@ -118,7 +119,7 @@ export function createPanelTransferLifecycleMethods(
       if (!record) return null;
       if (
         !record.target ||
-        record.target.runtimeWindowId !== caller.runtimeWindowId
+        record.target.windowRecordId !== caller.windowRecordId
       ) {
         return null;
       }
@@ -129,15 +130,45 @@ export function createPanelTransferLifecycleMethods(
         return null;
       }
       if (isPostCommitPhase(record.phase)) {
+        // Refresh process-local runtime ids from the live caller / window list
+        // so roll-forward addresses the restored WebContents, not stale main/w-N.
+        const liveWindows = windows.list();
+        const liveSource = liveWindows.find(
+          (windowInfo) => windowInfo.recordId === record.source.windowRecordId
+        );
+        const source: PanelTransferCaller = liveSource
+          ? {
+              ...record.source,
+              runtimeWindowId: liveSource.id,
+            }
+          : record.source;
+        const target = {
+          ...record.target,
+          runtimeWindowId: caller.runtimeWindowId,
+        };
+        let liveRecord = record;
+        if (
+          source.runtimeWindowId !== record.source.runtimeWindowId ||
+          target.runtimeWindowId !== record.target.runtimeWindowId
+        ) {
+          liveRecord = {
+            ...record,
+            source,
+            target,
+            updatedAt: Date.now(),
+          };
+          await journal.upsert(liveRecord);
+        }
         const result = await pluginMutation(() =>
           windows.runExclusive(async (lease) =>
             rollForwardAfterRuntimeMoved({
               deps,
               lease,
-              record,
-              source: record.source,
-              target: record.target!,
-              targetPanelId: record.targetPanelId ?? record.offer.panel.panelId,
+              record: liveRecord,
+              source,
+              target,
+              targetPanelId:
+                liveRecord.targetPanelId ?? liveRecord.offer.panel.panelId,
             })
           )
         );

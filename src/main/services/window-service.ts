@@ -43,6 +43,7 @@ export interface WindowService {
     windowId: string,
     transferId: string
   ): Promise<void>;
+  closeOpenWindowRecord(recordId: string): Promise<void>;
   create(options?: WindowCreateOptions): Promise<WindowCreateResult>;
   createForTransfer(
     lease: WindowTransitionLease,
@@ -303,13 +304,21 @@ export function createWindowService(
     await windowManager.destroyForTransfer(windowId, transferId);
   }
 
+  async function closeOpenWindowRecord(recordId: string): Promise<void> {
+    if (recordId.trim().length === 0 || recordId.startsWith("pending:")) {
+      return;
+    }
+    await markWindowRecordClosed(recordId);
+    await flushWindowRecordState();
+  }
+
   return {
     close: (windowId) => windowManager.close(windowId),
     closeAfterTransfer,
+    closeOpenWindowRecord,
     create,
     createForTransfer,
     destroyForTransfer,
-    focus: (windowId) => windowManager.focus(windowId),
     flushOpenWindows: async (additionalCriticalFlush) =>
       await runWindowTransition(async () => {
         quitSealed = false;

@@ -73,6 +73,7 @@ describe("PanelTransferService", () => {
     pluginMutation = vi.fn(async (operation) => operation());
     windows = {
       closeAfterTransfer: vi.fn(async () => undefined),
+      closeOpenWindowRecord: vi.fn(async () => undefined),
       createForTransfer,
       destroyForTransfer: vi.fn(async () => undefined),
       holdRendererShow: vi.fn(),
@@ -450,6 +451,108 @@ describe("PanelTransferService", () => {
       TRANSFER_B,
     ]);
     expect(rendererExecute).not.toHaveBeenCalled();
+  });
+
+  it("bootstrap and ready match pending by windowRecordId after runtime id change", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    // Post-commit journal still holds pre-restart runtime ids.
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_B),
+      phase: "runtime-moved",
+      placement: { kind: "root" },
+      snapshot: {
+        panel: movableOffer(TRANSFER_B).panel,
+        prepared: {},
+        runtime: { kind: "web" },
+      },
+      source: {
+        ...source,
+        runtimeWindowId: "old-main",
+      },
+      target: {
+        kind: "managed",
+        runtimeWindowId: "old-w-1",
+        windowRecordId: "record-w1",
+      },
+      targetPanelId: "panel-1",
+      transferId: TRANSFER_B,
+      updatedAt: 2,
+    });
+
+    // After restoreOpenWindows(), runtime ids are reassigned but recordIds stay.
+    windows.list = vi.fn(() => [
+      { focused: true, id: "main", recordId: "record-main" },
+      { focused: false, id: "w-restored", recordId: "record-w1" },
+    ]);
+    const restoredTarget = caller("w-restored", "record-w1", 9);
+
+    const boot = await service.bootstrap(restoredTarget);
+    expect(boot.pending).toEqual([
+      expect.objectContaining({
+        role: "target",
+        transferId: TRANSFER_B,
+      }),
+    ]);
+
+    rendererExecute.mockImplementation(async () => ({
+      data: null,
+      ok: true,
+      requestId: "r1",
+    }));
+    const ready = await service.ready(restoredTarget, TRANSFER_B);
+    expect(ready).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+
+    const finalizeCalls = rendererExecute.mock.calls
+      .map((call) => call[0] as { type: string; windowId?: string })
+      .filter((command) => command.type === "panelTransfer.finalize");
+    expect(finalizeCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          type: "panelTransfer.finalize",
+          windowId: "main",
+        }),
+        expect.objectContaining({
+          type: "panelTransfer.finalize",
+          windowId: "w-restored",
+        }),
+      ])
+    );
+    expect(journal.list()).toEqual([]);
+  });
+
+  it("recoverPending cold pre-commit abort closes internal open-record", async () => {
+    windows.list = vi.fn(() => []);
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_A),
+      phase: "target-durable",
+      snapshot: {
+        panel: movableOffer(TRANSFER_A).panel,
+        prepared: {},
+        runtime: { kind: "web" },
+      },
+      source,
+      target: {
+        kind: "internal",
+        runtimeWindowId: "w-gone",
+        windowRecordId: "record-orphan-internal",
+      },
+      targetPanelId: "panel-1",
+      transferId: TRANSFER_A,
+      updatedAt: 1,
+    });
+
+    await service.recoverPending();
+
+    expect(journal.list()).toEqual([]);
+    expect(windows.closeOpenWindowRecord).toHaveBeenCalledWith(
+      "record-orphan-internal"
+    );
+    expect(windows.destroyForTransfer).not.toHaveBeenCalled();
   });
 
   it("rollback destroys internal target window created for transfer", async () => {

@@ -122,6 +122,12 @@ export interface PanelTransferWindowPort {
     windowId: string,
     transferId: string
   ): Promise<void>;
+  /**
+   * Cold-path open-record cleanup when an internal transfer target was
+   * markWindowRecordOpen'd but no live BaseWindow/lease remains (e.g.
+   * recoverPending pre-commit abort). Must flush durable open-window state.
+   */
+  closeOpenWindowRecord(recordId: string): Promise<void>;
   createForTransfer(
     lease: WindowTransitionLease,
     input: { bounds: WindowBounds; transferId: string }

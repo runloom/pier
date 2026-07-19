@@ -711,4 +711,20 @@ describe("WindowService", () => {
       "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
     );
   });
+
+  it("closeOpenWindowRecord marks record closed and flushes without lease", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    const service = createWindowService();
+    await service.closeOpenWindowRecord("record-orphan-internal");
+    expect(mocks.markWindowRecordClosed).toHaveBeenCalledWith(
+      "record-orphan-internal"
+    );
+    expect(mocks.flushWindowRecordState).toHaveBeenCalled();
+    expect(mocks.destroyForTransfer).not.toHaveBeenCalled();
+
+    await service.closeOpenWindowRecord("pending:transfer-id");
+    expect(mocks.markWindowRecordClosed).toHaveBeenCalledTimes(1);
+  });
 });
