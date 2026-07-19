@@ -5,16 +5,7 @@ import type {
 import { render } from "@testing-library/react";
 import i18next from "i18next";
 import { isValidElement } from "react";
-import {
-  afterAll,
-  afterEach,
-  beforeAll,
-  beforeEach,
-  describe,
-  expect,
-  it,
-  vi,
-} from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { registerAgentStatusItem } from "@/panel-kits/terminal/agent-status-item.tsx";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
@@ -77,18 +68,7 @@ describe("AgentStatusItem 渲染契约", () => {
   });
 
   beforeEach(() => {
-    // jsdom 无 matchMedia(仿 settings-plugins.test.tsx);matches:true 走
-    // prefers-reduced-motion 静态分支,避免测试期 rAF 动画循环。
-    vi.stubGlobal("matchMedia", () => ({
-      addEventListener: vi.fn(),
-      matches: true,
-      removeEventListener: vi.fn(),
-    }));
     useForegroundActivityStore.setState({ activities: {}, ts: 0 });
-  });
-
-  afterEach(() => {
-    vi.unstubAllGlobals();
   });
 
   it("activity 缺席时渲染 null", () => {
@@ -128,7 +108,7 @@ describe("AgentStatusItem 渲染契约", () => {
     expect(badge?.querySelector("[data-activity-badge-text]")).not.toBeNull();
   });
 
-  it("processing → shimmer 分支(AgentShimmerText 逐字符渲染)", () => {
+  it("processing → shimmer 分支(AgentShimmerText 扫光文本)", () => {
     useForegroundActivityStore
       .getState()
       .apply(agentBroadcast({ stateStartedAt: 1, status: "processing" }));
@@ -141,8 +121,9 @@ describe("AgentStatusItem 渲染契约", () => {
       "[data-activity-badge] [data-agent-status-text]"
     );
     expect(shimmer).not.toBeNull();
-    expect(
-      shimmer?.querySelectorAll("[data-shimmer-char]").length
-    ).toBeGreaterThan(0);
+    expect(shimmer?.getAttribute("data-agent-status-kind")).toBe("running");
+    expect(shimmer?.textContent).toBe(
+      i18next.t("terminal.agentStatus.processing")
+    );
   });
 });

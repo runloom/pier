@@ -5,7 +5,8 @@ import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
  * - 五态文案 key（ready 可见 = "等待输入"）
  * - shimmer 门控（仅 processing/tool, loomdesk SHIMMERING_AGENT_STATUSES）
  * - 状态色 CSS 变量（loomdesk AGENT_STATUS_PULSE + 长跑覆盖仅 running）
- * - OMP classic 扫带的逐字符 tier 计算（loomdesk shimmering-status-text 同源算法）
+ * shimmer 动画本体是纯 CSS 渐变扫光（globals.css [data-agent-status-text] 段）,
+ * 此处只输出门控与颜色语义。
  */
 
 const FIVE_MINUTES_MS = 5 * 60 * 1000;
@@ -77,47 +78,4 @@ export function statusColorVar(
     return "--status-danger-fg";
   }
   return "--foreground";
-}
-
-export type ShimmerTier = "high" | "low" | "mid";
-
-// OMP classic 扫带：略放慢速度、加宽亮带，短中文状态词也能看出完整扫过。
-const SHIMMER_SPEED_CELLS_PER_S = 22;
-const CLASSIC_PADDING = 8;
-const CLASSIC_BAND_HALF_WIDTH = 5;
-const TIER_HIGH = 0.55;
-const TIER_MID = 0.18;
-export const SHIMMER_MIN_CYCLE_MS = 1200;
-export const SHIMMER_FRAME_INTERVAL_MS = 1000 / 30;
-
-/**
- * 逐字符 tier：余弦亮带从左到右扫过（带 padding 让亮带完整滑入滑出），
- * intensity >=0.65 high（状态色+加粗）、>=0.22 mid、否则 low。
- */
-export function shimmerTiers(text: string, elapsedMs: number): ShimmerTier[] {
-  const chars = Array.from(text);
-  const len = chars.length;
-  if (len === 0) {
-    return [];
-  }
-  const scale = Math.min(1, len / (2 * CLASSIC_BAND_HALF_WIDTH));
-  const halfWidth = CLASSIC_BAND_HALF_WIDTH * scale;
-  const padding = CLASSIC_PADDING * scale;
-  const period = len + 2 * padding;
-  const naturalCycleMs = (period * 1000) / SHIMMER_SPEED_CELLS_PER_S;
-  const cycleMs = Math.max(SHIMMER_MIN_CYCLE_MS, naturalCycleMs);
-  const elapsed = Math.max(0, elapsedMs);
-  const pos = ((elapsed / cycleMs) * period) % period;
-  return chars.map((_char, index) => {
-    const dist = Math.abs(index + padding - pos);
-    const intensity =
-      dist < halfWidth ? 0.5 * (1 + Math.cos((Math.PI * dist) / halfWidth)) : 0;
-    if (intensity >= TIER_HIGH) {
-      return "high";
-    }
-    if (intensity >= TIER_MID) {
-      return "mid";
-    }
-    return "low";
-  });
 }
