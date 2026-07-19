@@ -31,6 +31,14 @@ export interface TaskOutputTerminalBindings {
   }): { error?: string; ok: boolean };
   detach(nativePanelId: string): void;
   dispose(): void;
+  /** True when a binding is protected by an active transfer lease. */
+  isNativeKeyLeased?(nativePanelId: string): boolean;
+  moveNativeKey(input: {
+    browserWindowId: number;
+    fromNativePanelId: string;
+    ownerWindowId?: string | undefined;
+    toNativePanelId: string;
+  }): { error?: string; ok: boolean };
   rebind(args: {
     nativePanelId: string;
     ownerWindowId?: string | undefined;
@@ -43,7 +51,11 @@ export interface TaskOutputTerminalBindings {
   };
   retainWindow(
     browserWindowId: number,
-    nativePanelIds: readonly string[]
+    nativePanelIds: readonly string[],
+    options?: { isLeased?: ((nativePanelId: string) => boolean) | undefined }
+  ): void;
+  setLeasePredicate?(
+    predicate: ((nativePanelId: string) => boolean) | null
   ): void;
 }
 
@@ -98,6 +110,7 @@ export function createTaskOutputTerminalBindings(args: {
 }): TaskOutputTerminalBindings {
   const { addon, onSurfaceReset, taskService } = args;
   const bindings = new Map<string, OutputBinding>();
+  let leasePredicate: ((nativePanelId: string) => boolean) | null = null;
 
   const resetSurface = (
     browserWindowId: number,
@@ -361,12 +374,48 @@ export function createTaskOutputTerminalBindings(args: {
       }
       return { ok: false, error: "native terminal rejected task output" };
     },
-    retainWindow(browserWindowId, nativePanelIds) {
+    isNativeKeyLeased(nativePanelId) {
+      return leasePredicate?.(nativePanelId) === true;
+    },
+    moveNativeKey({
+      browserWindowId,
+      fromNativePanelId,
+      ownerWindowId,
+      toNativePanelId,
+    }) {
+      const existing = bindings.get(fromNativePanelId);
+      if (!existing) {
+        return { ok: true };
+      }
+      if (
+        fromNativePanelId !== toNativePanelId &&
+        bindings.has(toNativePanelId)
+      ) {
+        return { ok: false, error: "target native key already bound" };
+      }
+      bindings.delete(fromNativePanelId);
+      const moved: OutputBinding = {
+        ...existing,
+        browserWindowId,
+        nativePanelId: toNativePanelId,
+        ...(ownerWindowId || existing.ownerWindowId
+          ? { ownerWindowId: ownerWindowId ?? existing.ownerWindowId }
+          : {}),
+      };
+      bindings.set(toNativePanelId, moved);
+      return { ok: true };
+    },
+    setLeasePredicate(predicate) {
+      leasePredicate = predicate;
+    },
+    retainWindow(browserWindowId, nativePanelIds, options) {
       const retained = new Set(nativePanelIds);
+      const isLeased = options?.isLeased ?? leasePredicate ?? undefined;
       for (const binding of bindings.values()) {
         if (
           binding.browserWindowId === browserWindowId &&
-          !retained.has(binding.nativePanelId)
+          !retained.has(binding.nativePanelId) &&
+          !isLeased?.(binding.nativePanelId)
         ) {
           bindings.delete(binding.nativePanelId);
         }

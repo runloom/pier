@@ -269,6 +269,29 @@ export function createTerminalTaskLifecycle(deps: TerminalTaskLifecycleDeps) {
       clearPanelLifecycleState(panelId, windowId);
       currentLifecycleIds.delete(panelKey(panelId, windowId));
     },
+    getCurrentLifecycleId(
+      panelId: string,
+      windowId?: string | undefined
+    ): string | undefined {
+      return currentLifecycleIds.get(panelKey(panelId, windowId));
+    },
+    moveOwner(input: {
+      lifecycleId?: string | undefined;
+      panelId: string;
+      sourceWindowId: string;
+      targetWindowId: string;
+    }): void {
+      const { panelId, sourceWindowId, targetWindowId } = input;
+      const sourceKey = panelKey(panelId, sourceWindowId);
+      const targetKey = panelKey(panelId, targetWindowId);
+      const lifecycleId =
+        input.lifecycleId ?? currentLifecycleIds.get(sourceKey) ?? "";
+      // Move lifecycle bookkeeping to the target owner window.
+      clearPanelLifecycleState(panelId, sourceWindowId);
+      currentLifecycleIds.delete(sourceKey);
+      clearPanelLifecycleState(panelId, targetWindowId);
+      currentLifecycleIds.set(targetKey, lifecycleId);
+    },
     /**
      * relaunch close 前置臂旗标, 由下一个 processAlive=true 的 native
      * process-close 消费。resetPanel 后旧 pane 事件会由 lifecycleId 守卫拒绝，

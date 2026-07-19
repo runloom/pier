@@ -29,6 +29,7 @@ import {
   createJsonlObserver,
   type JsonlObserver,
 } from "../services/foreground-activity/jsonl-observer.ts";
+import { resolveOwner } from "../services/panel-transfer/terminal-hook-owner-routing.ts";
 import { readPreferences } from "../state/preferences.ts";
 import {
   patchTerminalPanelAgentStatus,
@@ -47,6 +48,26 @@ import { windowRecordIdFor } from "./terminal-window-scope.ts";
 const log = createLogger("foreground-activity.ipc");
 
 const foregroundActivityAggregator = createForegroundActivityAggregator();
+let foregroundSerialChain: Promise<void> = Promise.resolve();
+
+function runForegroundSerial<T>(operation: () => Promise<T> | T): Promise<T> {
+  const run = foregroundSerialChain.then(() => operation());
+  foregroundSerialChain = run.then(
+    () => undefined,
+    () => undefined
+  );
+  return run;
+}
+
+function withResolvedOwner<T extends { panelId: string; windowId: string }>(
+  event: T
+): T {
+  const owner = resolveOwner(event.windowId, event.panelId);
+  if (owner.windowId === event.windowId && owner.panelId === event.panelId) {
+    return event;
+  }
+  return { ...event, panelId: owner.panelId, windowId: owner.windowId };
+}
 let jsonlObserver: JsonlObserver | null = null;
 let agentTerminalReconciler: AgentTerminalReconciler | null = null;
 
@@ -243,6 +264,19 @@ export const foregroundActivityService = {
     agentTerminalReconciler?.retainPanels(windowId, activePanelIds);
     foregroundActivityAggregator.retainPanels(windowId, activePanelIds);
   },
+  transferPanelOwnership(input: {
+    panelId: string;
+    sourceWindowId: string;
+    targetWindowId: string;
+  }): Promise<void> {
+    return runForegroundSerial(() => {
+      foregroundActivityAggregator.transferPanelOwnership(input);
+      agentTerminalReconciler?.transferPanelOwnership(input);
+    });
+  },
+  runSerial<T>(operation: () => Promise<T> | T): Promise<T> {
+    return runForegroundSerial(operation);
+  },
   windowClosed(windowId: string): void {
     agentTerminalReconciler?.releaseWindow(windowId);
     foregroundActivityAggregator.windowClosed(windowId);
@@ -283,40 +317,45 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
       if (!isAgentStatusHooksIngestEnabled()) {
         return;
       }
-      const accepted = foregroundActivityAggregator.ingestAgentEvent(event, {
+      const routed = withResolvedOwner(event);
+      const accepted = foregroundActivityAggregator.ingestAgentEvent(routed, {
         stopAuthority:
-          getAgentHookIntegration(event.agent)?.runtime.stopAuthority ?? "none",
+          getAgentHookIntegration(routed.agent)?.runtime.stopAuthority ??
+          "none",
       });
       if (!accepted) {
         return;
       }
-      const effects = effectsForAcceptedAgentEvent(event);
+      const effects = effectsForAcceptedAgentEvent(routed);
       if (effects.observeTranscript) {
-        agentTerminalReconciler?.observe(event).catch((err) => {
+        agentTerminalReconciler?.observe(routed).catch((err) => {
           log.warn("agent terminal reconciliation failed", { err });
         });
       }
       if (effects.persistResume) {
         recordAgentResumeSession({
-          agentId: event.agent,
-          panelId: event.panelId,
-          sessionId: event.sessionId,
-          windowId: event.windowId,
+          agentId: routed.agent,
+          panelId: routed.panelId,
+          sessionId: routed.sessionId,
+          windowId: routed.windowId,
         });
       }
       if (effects.markPanelExited) {
         markAgentSessionExited({
-          panelId: event.panelId,
-          windowId: event.windowId,
+          panelId: routed.panelId,
+          windowId: routed.windowId,
         });
       }
     },
     onCommandFinished: (event) => {
-      agentTerminalReconciler?.releasePanel(event.panelId, event.windowId);
-      foregroundActivityAggregator.ingestCommandFinishedHook(event);
+      const routed = withResolvedOwner(event);
+      agentTerminalReconciler?.releasePanel(routed.panelId, routed.windowId);
+      foregroundActivityAggregator.ingestCommandFinishedHook(routed);
     },
     onCommandStart: (event) =>
-      foregroundActivityAggregator.ingestCommandStartHook(event),
+      foregroundActivityAggregator.ingestCommandStartHook(
+        withResolvedOwner(event)
+      ),
     onError: (err) => {
       // Per-line JSONL corruption is recoverable; warn keeps diagnostics visible
       // without treating one bad hook line as a foreground-activity outage.

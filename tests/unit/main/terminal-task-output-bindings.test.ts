@@ -421,4 +421,48 @@ describe("task output terminal bindings", () => {
     expect(writes.join("")).toContain("Task output is no longer available");
     expect(finishTerminalOutput).toHaveBeenCalledWith("7::output", 1, 0);
   });
+  it("moveNativeKey rekeys a binding and lease blocks retain GC", () => {
+    const addon = {
+      finishTerminalOutput: vi.fn(() => true),
+      resetTerminalOutput: vi.fn(() => true),
+      writeTerminalOutput: vi.fn(() => true),
+    } as unknown as NativeAddon;
+    const taskService = {
+      output: vi.fn(() => null),
+      runsSnapshot: vi.fn(() => ({ runs: {}, version: 0 })),
+      subscribeOutput: vi.fn(() => vi.fn()),
+      subscribeRuns: vi.fn(() => vi.fn()),
+    } as unknown as TaskService;
+    const bindings = createTaskOutputTerminalBindings({ addon, taskService });
+
+    expect(
+      bindings.attach({
+        browserWindowId: 1,
+        nativePanelId: "1::panel-a",
+        ownerWindowId: "main",
+        params: { label: "Build", runId: "run-1", taskId: "build" },
+      })
+    ).toEqual({ ok: true });
+
+    expect(
+      bindings.moveNativeKey({
+        browserWindowId: 2,
+        fromNativePanelId: "1::panel-a",
+        ownerWindowId: "w-2",
+        toNativePanelId: "2::panel-a",
+      })
+    ).toEqual({ ok: true });
+
+    bindings.setLeasePredicate?.(
+      (nativePanelId) => nativePanelId === "2::panel-a"
+    );
+    bindings.retainWindow(2, []);
+    // Leased binding must survive empty retain — rebind finds it.
+    expect(
+      bindings.rebind({
+        nativePanelId: "2::panel-a",
+        params: { label: "Build", runId: "run-1", taskId: "build" },
+      })
+    ).toMatchObject({ ok: true });
+  });
 });

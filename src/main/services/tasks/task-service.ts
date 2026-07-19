@@ -352,6 +352,9 @@ export function createTaskService({
       });
       markPanelActuallyClosed(panelId, windowId);
     },
+    moveRunningOwnerWindow(input) {
+      taskRuns.moveRunningOwnerWindow(input);
+    },
     output: (runId, taskId) => backgroundRuns.output(runId, taskId),
     async prepareSpawn({
       forceRestart = true,
