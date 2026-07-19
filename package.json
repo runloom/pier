@@ -1,6 +1,6 @@
 {
   "name": "pier",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Pier — 本地 AI 开发工作台（dockview panel 布局 + 终端 + 代码变更预览 + 多 agent 状态可见性）",
   "type": "module",
   "main": "out/main/index.js",
