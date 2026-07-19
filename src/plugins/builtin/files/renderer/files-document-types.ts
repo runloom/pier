@@ -6,6 +6,7 @@ import {
 } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { z } from "zod";
+import { absoluteDiskSourcePath } from "./files-document-paths.ts";
 
 export type FilesDocumentLanguage =
   | "cpp"
@@ -82,7 +83,10 @@ export function sameFilesDocumentPanelSource(
     return left.id === right.id;
   }
   if (left.kind === "disk" && right.kind === "disk") {
-    return left.root === right.root && left.path === right.path;
+    return (
+      absoluteDiskSourcePath(left.root, left.path) ===
+      absoluteDiskSourcePath(right.root, right.path)
+    );
   }
   return false;
 }

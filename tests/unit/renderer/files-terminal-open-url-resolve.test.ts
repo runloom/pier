@@ -15,6 +15,16 @@ describe("parseTerminalOpenUrl", () => {
       url: "mailto:a@b.com",
     });
   });
+  it("keeps unsupported schemes inside the app", () => {
+    expect(parseTerminalOpenUrl("local://notes.md", "/repo")).toEqual({
+      kind: "unresolved",
+      reason: "unsupported-scheme",
+    });
+    expect(parseTerminalOpenUrl("zed://file/repo/a.ts", "/repo")).toEqual({
+      kind: "unresolved",
+      reason: "unsupported-scheme",
+    });
+  });
 
   it("decodes file:// URLs", () => {
     expect(

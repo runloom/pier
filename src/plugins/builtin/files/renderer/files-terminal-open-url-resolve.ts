@@ -1,7 +1,12 @@
 export type ParsedTerminalOpenUrl =
   | { kind: "remote"; url: string }
   | { kind: "local-path"; path: string }
-  | { kind: "unresolved"; reason: "relative-without-cwd" | "invalid" };
+  | {
+      kind: "unresolved";
+      reason: "relative-without-cwd" | "unsupported-scheme" | "invalid";
+    };
+
+const EXTERNAL_SCHEMES = new Set(["http:", "https:", "mailto:"]);
 
 function isAbsolutePath(path: string): boolean {
   return path.startsWith("/") || /^[A-Za-z]:[\\/]/.test(path);
@@ -45,10 +50,9 @@ function fileUrlToPath(raw: string): string | null {
   }
 }
 
-function hasRemoteScheme(raw: string): boolean {
-  return (
-    /^[a-z][a-z0-9+.-]*:/i.test(raw) && !raw.toLowerCase().startsWith("file:")
-  );
+function schemeOf(raw: string): string | null {
+  const match = /^([a-z][a-z0-9+.-]*:)/i.exec(raw);
+  return match?.[1]?.toLowerCase() ?? null;
 }
 
 export function parseTerminalOpenUrl(
@@ -59,15 +63,19 @@ export function parseTerminalOpenUrl(
   if (!raw) {
     return { kind: "unresolved", reason: "invalid" };
   }
-  if (hasRemoteScheme(raw)) {
-    return { kind: "remote", url: raw };
-  }
-  if (raw.toLowerCase().startsWith("file:")) {
-    const path = fileUrlToPath(raw);
-    if (!path) {
-      return { kind: "unresolved", reason: "invalid" };
+  const scheme = schemeOf(raw);
+  if (scheme) {
+    if (EXTERNAL_SCHEMES.has(scheme)) {
+      return { kind: "remote", url: raw };
     }
-    return { kind: "local-path", path };
+    if (scheme === "file:") {
+      const path = fileUrlToPath(raw);
+      if (!path) {
+        return { kind: "unresolved", reason: "invalid" };
+      }
+      return { kind: "local-path", path };
+    }
+    return { kind: "unresolved", reason: "unsupported-scheme" };
   }
   if (isAbsolutePath(raw)) {
     return { kind: "local-path", path: raw };

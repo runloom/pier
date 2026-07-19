@@ -11,12 +11,19 @@ describe("classifyTerminalOpenUrlForMain", () => {
     expect(classifyTerminalOpenUrlForMain("mailto:a@b.c")).toBe("remote");
   });
 
-  it("treats file and bare paths as local-candidate", () => {
-    expect(classifyTerminalOpenUrlForMain("file:///tmp/a")).toBe(
-      "local-candidate"
+  it("treats file and bare paths as filesystem candidates", () => {
+    expect(classifyTerminalOpenUrlForMain("file:///tmp/a")).toBe("filesystem");
+    expect(classifyTerminalOpenUrlForMain("/tmp/a")).toBe("filesystem");
+    expect(classifyTerminalOpenUrlForMain("docs/a.md")).toBe("filesystem");
+  });
+
+  it("keeps unknown schemes inside the app", () => {
+    expect(classifyTerminalOpenUrlForMain("local://notes.md")).toBe(
+      "app-internal"
     );
-    expect(classifyTerminalOpenUrlForMain("/tmp/a")).toBe("local-candidate");
-    expect(classifyTerminalOpenUrlForMain("docs/a.md")).toBe("local-candidate");
+    expect(classifyTerminalOpenUrlForMain("zed://file/repo/a.ts")).toBe(
+      "app-internal"
+    );
   });
 });
 
@@ -36,7 +43,7 @@ describe("handleTerminalOpenUrl", () => {
     expect(broadcast).not.toHaveBeenCalled();
   });
 
-  it("broadcasts local candidates", async () => {
+  it("broadcasts filesystem candidates", async () => {
     const openExternal = vi.fn(async () => undefined);
     const broadcast = vi.fn();
     await handleTerminalOpenUrl({
@@ -52,6 +59,25 @@ describe("handleTerminalOpenUrl", () => {
       kind: "text",
       panelId: "t1",
       url: "/repo/a.md",
+    });
+  });
+
+  it("never opens unknown schemes externally", async () => {
+    const openExternal = vi.fn(async () => undefined);
+    const broadcast = vi.fn();
+    await handleTerminalOpenUrl({
+      broadcast,
+      kind: "text",
+      openExternal,
+      panelId: "t1",
+      url: "local://drag-tab-cross-window-plan.md",
+      windowId: 7,
+    });
+    expect(openExternal).not.toHaveBeenCalled();
+    expect(broadcast).toHaveBeenCalledWith({
+      kind: "text",
+      panelId: "t1",
+      url: "local://drag-tab-cross-window-plan.md",
     });
   });
 });
