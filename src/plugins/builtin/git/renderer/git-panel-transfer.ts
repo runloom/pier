@@ -99,7 +99,7 @@ function sourceKeyOf(scope: GitReviewScope): ReviewSessionSourceKey {
 
 /**
  * Build the `kind: "custom"` transfer registration for the Git changes panel.
- * Registered from `index.ts` via `registerCorePanelTransfer`.
+ * Registered from `index.ts` via `context.panels.register({ transfer })`.
  */
 export function createGitPanelTransferRegistration(): PanelTransferRegistration {
   return {

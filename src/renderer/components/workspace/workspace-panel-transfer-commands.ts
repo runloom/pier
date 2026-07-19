@@ -286,9 +286,8 @@ function computeAdapterRevision(): number {
   // fast instead of staging against a stale adapter. Core panel registrations
   // are static (set at module load) and don't bump the plugin registry, which
   // is fine: core `kind: "params"` / `kind: "terminal"` have no adapter state
-  // to drift. Core `kind: "custom"` (Git/Files) register via
-  // `registerCorePanelTransfer` at plugin activation, which also bumps the
-  // plugin panel registry because activation registers the panel too.
+  // to drift. Plugin `kind: "custom"` (Git/Files) declare `transfer` on
+  // `panels.register`, so enable/disable/hot-reload bumps this revision.
   return getPluginPanelRevision();
 }
 

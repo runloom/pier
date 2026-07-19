@@ -4,7 +4,6 @@ import type {
   RendererPluginModule,
 } from "@plugins/api/renderer.ts";
 import { FileText, FolderTree } from "lucide-react";
-import { registerCorePanelTransfer } from "@/components/workspace/panel-transfer-adapters.ts";
 import {
   FILES_FILE_PANEL_ID,
   FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
@@ -349,10 +348,7 @@ export const filesRendererPlugin: RendererPluginModule = {
         kind: "web",
         resolveTab: ({ params }) => filesPanelTabChrome(params),
         title: () => t("filePanel.title", "File"),
-      }),
-      registerCorePanelTransfer(
-        FILES_FILE_PANEL_ID,
-        (() => {
+        transfer: (() => {
           const transfer = editorController.createTransferSupport();
           return createFilesPanelTransferRegistration({
             captureViewSnapshot: (input) =>
@@ -373,8 +369,8 @@ export const filesRendererPlugin: RendererPluginModule = {
             suspendTransferMutations: (scope, signal) =>
               transfer.suspendTransferMutations(scope, signal),
           });
-        })()
-      ),
+        })(),
+      }),
       registerDirtyCloseGuard(context, editorController),
       context.actions.register(
         withFilesMutationGate(
