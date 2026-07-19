@@ -1,6 +1,7 @@
 import type {
   AddAccountPayload,
   CodexAccountsSnapshot,
+  PeerSyncResult,
   RemoveAccountPayload,
   SelectAccountPayload,
   SyncToPeersPayload,
@@ -37,7 +38,8 @@ export interface CodexAccountsService {
     force?: boolean;
   }): Promise<void>;
   remove(payload: RemoveAccountPayload): Promise<void>;
-  select(payload: SelectAccountPayload): Promise<void>;
+  /** Resolves with per-target peer sync results (empty when none requested). */
+  select(payload: SelectAccountPayload): Promise<PeerSyncResult[]>;
   snapshot(): CodexAccountsSnapshot;
   /** Mirror the managed account credential into peer tools without switching Codex. */
   syncToPeers(payload: SyncToPeersPayload): Promise<void>;

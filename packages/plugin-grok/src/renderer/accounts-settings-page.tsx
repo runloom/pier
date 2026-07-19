@@ -36,7 +36,7 @@ import {
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { CircleUserRound, RefreshCw, Share2 } from "lucide-react";
-import { Fragment, type JSX, useEffect, useState } from "react";
+import { Fragment, type JSX, useCallback, useEffect, useState } from "react";
 import {
   EMPTY_PEER_AVAILABILITY,
   type PeerAvailability,
@@ -51,6 +51,7 @@ import {
 } from "./account-display.tsx";
 import {
   loadPeerAvailability,
+  notifyPeerSyncFailures,
   openSwitchConfirmDialog,
   protocolTargetsFor,
 } from "./account-switch.ts";
@@ -93,7 +94,12 @@ export function AccountsSettingsPage({
 }: AccountsSettingsPageProps): JSX.Element {
   const { error: loadError, snapshot } = useGrokAccountsSnapshot(context);
   useUsagePollingLease(context, "settings:accounts", true);
-  const t: Translate = (key, fallback) => context.i18n.t(key, fallback);
+  // Stable identity: `t` feeds AddAccountDialog's effects; a per-render arrow
+  // would re-run them (and re-send dialogs.update) on every render.
+  const t: Translate = useCallback(
+    (key, fallback) => context.i18n.t(key, fallback),
+    [context]
+  );
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
   const [peerAvailability, setPeerAvailability] = useState<PeerAvailability>(
     EMPTY_PEER_AVAILABILITY
@@ -131,17 +137,22 @@ export function AccountsSettingsPage({
     };
   }, [context, snapshot?.activeAccountId]);
 
-  const reportError = (err: unknown): void => {
-    context.dialogs
-      .alert({
-        body: formatAccountError(err, t),
-        title: t(
-          "pier.grok.accounts.settings.actionFailed",
-          "Account action failed"
-        ),
-      })
-      .catch(() => undefined);
-  };
+  // Stable identity: feeds AddAccountDialog's openAddDialog callback; a
+  // per-render arrow would re-run its dialog-lifecycle effect every render.
+  const reportError = useCallback(
+    (err: unknown): void => {
+      context.dialogs
+        .alert({
+          body: formatAccountError(err, t),
+          title: t(
+            "pier.grok.accounts.settings.actionFailed",
+            "Account action failed"
+          ),
+        })
+        .catch(() => undefined);
+    },
+    [context, t]
+  );
 
   const { refreshAllUsage, refreshUsage, refreshingAccountIds, refreshingAll } =
     useAccountsRefresh({
@@ -187,21 +198,28 @@ export function AccountsSettingsPage({
       context,
       mode: "switch",
       t,
-    }).then((result) => {
-      if (!result.confirmed) {
-        return;
-      }
-      setBusyAccountId(accountId);
-      context.rpc
-        .invoke("accounts.select", {
-          accountId,
-          syncTargets: result.syncTargets.filter((target) => target !== "grok"),
-        })
-        .catch(reportError)
-        .finally(() => {
-          setBusyAccountId(null);
-        });
-    });
+    })
+      .then((result) => {
+        if (!result.confirmed) {
+          return;
+        }
+        setBusyAccountId(accountId);
+        context.rpc
+          .invoke("accounts.select", {
+            accountId,
+            syncTargets: result.syncTargets.filter(
+              (target) => target !== "grok"
+            ),
+          })
+          .then((selectResult) => {
+            notifyPeerSyncFailures(context, t, selectResult);
+          })
+          .catch(reportError)
+          .finally(() => {
+            setBusyAccountId(null);
+          });
+      })
+      .catch(reportError);
   };
 
   const handleSyncPeers = (accountId: string): void => {
@@ -214,31 +232,33 @@ export function AccountsSettingsPage({
       context,
       mode: "sync",
       t,
-    }).then((result) => {
-      if (!result.confirmed) {
-        return;
-      }
-      const peers = result.syncTargets.filter(
-        (target): target is PeerSyncTarget => target !== "grok"
-      );
-      if (peers.length === 0) {
-        return;
-      }
-      context.rpc
-        .invoke("accounts.syncToPeers", {
-          accountId,
-          syncTargets: peers,
-        })
-        .then(() => {
-          context.notifications.success(
-            t(
-              "pier.grok.accounts.settings.syncPeersSuccess",
-              "Synced credentials to selected tools"
-            )
-          );
-        })
-        .catch(reportError);
-    });
+    })
+      .then((result) => {
+        if (!result.confirmed) {
+          return;
+        }
+        const peers = result.syncTargets.filter(
+          (target): target is PeerSyncTarget => target !== "grok"
+        );
+        if (peers.length === 0) {
+          return;
+        }
+        context.rpc
+          .invoke("accounts.syncToPeers", {
+            accountId,
+            syncTargets: peers,
+          })
+          .then(() => {
+            context.notifications.success(
+              t(
+                "pier.grok.accounts.settings.syncPeersSuccess",
+                "Synced credentials to selected tools"
+              )
+            );
+          })
+          .catch(reportError);
+      })
+      .catch(reportError);
   };
 
   if (loadError) {

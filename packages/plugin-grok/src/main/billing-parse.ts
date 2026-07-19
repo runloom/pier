@@ -129,9 +129,18 @@ export function parseGrokBillingResult(payload: unknown): AccountUsageResult {
     : [];
   const hasPeriodWindow = windows.some((window) => window.id === "grok:period");
   if (productUsage.length > 1 || !hasPeriodWindow) {
+    // Duplicate product names must still yield unique window ids — the
+    // renderer uses ids as React keys.
+    const seenProducts = new Map<string, number>();
     for (const productRow of productUsage) {
+      const seen = seenProducts.get(productRow.product) ?? 0;
+      seenProducts.set(productRow.product, seen + 1);
+      const id =
+        seen === 0
+          ? `grok:product:${productRow.product}`
+          : `grok:product:${productRow.product}#${seen + 1}`;
       windows.push({
-        id: `grok:product:${productRow.product}`,
+        id,
         limitId: "product",
         limitName: productLabel(productRow.product),
         usedPercent: productRow.usedPercent,

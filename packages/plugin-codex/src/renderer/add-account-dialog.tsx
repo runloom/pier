@@ -16,6 +16,7 @@ import { type JSX, useCallback, useEffect, useRef, useState } from "react";
 import type { CodexLoginState } from "../shared/accounts.ts";
 import { AddAccountWaiting } from "./add-account-waiting.tsx";
 import type { Translate } from "./usage-meter.tsx";
+import { useCodexAccountsSnapshot } from "./use-accounts-snapshot.ts";
 
 function isLoginCancellation(error: unknown): boolean {
   return (
@@ -29,7 +30,6 @@ const ADD_DIALOG_ID = "accounts.add";
 
 function AddAccountContent({
   context,
-  login,
   onError,
   t,
   close,
@@ -39,11 +39,17 @@ function AddAccountContent({
   initialLogin,
 }: RendererPluginContentDialogRenderProps & {
   context: ExternalRendererPluginContext;
-  login: CodexLoginState | null;
   onError: (error: unknown) => void;
   t: Translate;
   initialLogin: CodexLoginState | null;
 }): JSX.Element {
+  // Read login state live from the snapshot store: the dialog host freezes
+  // content props at open time, so a `login` prop would go permanently stale —
+  // leaving the waiting screen's Cancel/Reopen buttons disabled while the
+  // dialog is non-dismissible. Until the first snapshot arrives, fall back to
+  // the open-time value so the missing data is not mistaken for "login ended".
+  const { snapshot } = useCodexAccountsSnapshot(context);
+  const login = snapshot ? (snapshot.login ?? null) : initialLogin;
   const [tab, setTab] = useState<AddTab>("account");
   const [presentation, setPresentation] = useState<"authorize" | "waiting">(
     initialLogin ? "waiting" : "authorize"
@@ -170,7 +176,7 @@ function AddAccountContent({
   if (presentation === "waiting") {
     return (
       <AddAccountWaiting
-        loginActive={login !== null}
+        loginActive={login !== null || starting}
         onCancel={cancelLogin}
         onRestart={restartLogin}
         pendingAction={pendingAction}
@@ -293,6 +299,7 @@ export function AddAccountDialog({
   t: Translate;
 }): JSX.Element {
   const openHandleId = useRef<string | null>(null);
+  const previousLoginRef = useRef<CodexLoginState | null>(login);
 
   const openAddDialog = useCallback((): void => {
     const handle = context.dialogs.open({
@@ -312,7 +319,6 @@ export function AddAccountDialog({
           {...props}
           context={context}
           initialLogin={login}
-          login={login}
           onError={onError}
           t={t}
         />
@@ -329,8 +335,14 @@ export function AddAccountDialog({
   }, [context, login, onError, t]);
 
   useEffect(() => {
+    const previousLogin = previousLoginRef.current;
+    previousLoginRef.current = login;
     if (!login) {
-      if (openHandleId.current) {
+      // Close only when a login actually *ended* (non-null → null). The
+      // effect also re-runs on unrelated re-renders (e.g. a usage refresh
+      // updating the snapshot) — those must not close a dialog the user
+      // just opened manually.
+      if (previousLogin && openHandleId.current) {
         context.dialogs.close(openHandleId.current, null);
         openHandleId.current = null;
       }

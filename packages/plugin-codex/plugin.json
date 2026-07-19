@@ -113,7 +113,8 @@
         "pier.codex.accounts.settings.addDialogAccountDescription": "Continue in your browser to sign in with the Codex CLI. The account appears here after authorization.",
         "pier.codex.accounts.settings.addDialogLocalDescription": "Import the account already signed in on this device (~/.codex/auth.json). It becomes the active Pier account.",
         "pier.codex.accounts.settings.addDialogLocalSubmit": "Import local account",
-        "pier.codex.errors.noLocalLogin": "No valid local Codex login found. Sign in with the Codex CLI first."
+        "pier.codex.errors.noLocalLogin": "No valid local Codex login found. Sign in with the Codex CLI first.",
+        "pier.codex.errors.cliNotFound": "Codex CLI not found on PATH"
       }
     },
     "zh-CN": {
@@ -217,7 +218,8 @@
         "pier.codex.accounts.settings.addDialogAccountDescription": "通过 Codex CLI 在浏览器中登录。授权完成后，账号会自动出现在这里。",
         "pier.codex.accounts.settings.addDialogLocalDescription": "导入本机已登录的账号（~/.codex/auth.json），并设为 Pier 当前账号。",
         "pier.codex.accounts.settings.addDialogLocalSubmit": "导入本地账号",
-        "pier.codex.errors.noLocalLogin": "本机未找到有效的 Codex 登录。请先用 Codex CLI 登录。"
+        "pier.codex.errors.noLocalLogin": "本机未找到有效的 Codex 登录。请先用 Codex CLI 登录。",
+        "pier.codex.errors.cliNotFound": "未在 PATH 中找到 Codex CLI"
       }
     }
   },

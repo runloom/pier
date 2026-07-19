@@ -124,7 +124,7 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
   };
   return {
     context: {
-      app: { openSettings: vi.fn() },
+      app: { openExternal: vi.fn(async () => true), openSettings: vi.fn() },
       actions: { register: vi.fn(() => () => undefined) },
       configuration: {
         get: vi.fn(
@@ -292,7 +292,15 @@ describe("AccountsWidget (usage)", () => {
       fireEvent.click(otherOption);
     });
 
-    // The switch confirmation dialog opens with sync checkboxes.
+    // The switch confirmation dialog opens with sync checkboxes. Peers are
+    // unchecked by default (overwriting other tools' credentials is opt-in);
+    // check one explicitly before confirming.
+    const opencodeCheckbox = await screen.findByRole("checkbox", {
+      name: "OpenCode",
+    });
+    await act(async () => {
+      fireEvent.click(opencodeCheckbox);
+    });
     const switchButton = await screen.findByRole("button", {
       name: /Confirm$/,
     });
@@ -304,7 +312,7 @@ describe("AccountsWidget (usage)", () => {
         method: "accounts.select",
         payload: {
           accountId: "acc-2",
-          syncTargets: ["opencode", "pi", "omp"],
+          syncTargets: ["opencode"],
         },
       });
     });

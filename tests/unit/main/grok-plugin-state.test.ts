@@ -3,14 +3,14 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
-import { createCodexAccountsStateStore } from "../../../packages/plugin-codex/src/main/state.ts";
+import { createGrokAccountsStateStore } from "../../../packages/plugin-grok/src/main/state.ts";
 
 let dir = "";
 let statePath = "";
 let markerPath = "";
 
 beforeEach(async () => {
-  dir = await mkdtemp(join(tmpdir(), "pier-codex-state-"));
+  dir = await mkdtemp(join(tmpdir(), "pier-grok-state-"));
   statePath = join(dir, "accounts.json");
   markerPath = join(dir, ".pier-plugin-data-schemas.json");
 });
@@ -19,36 +19,7 @@ afterEach(async () => {
   await rm(dir, { force: true, recursive: true });
 });
 
-describe("Codex accounts data schema", () => {
-  it("validates metadata and atomically repairs a missing host marker", async () => {
-    await writeFile(
-      statePath,
-      JSON.stringify({
-        accounts: [],
-        activeAccountId: null,
-        revision: 2,
-        schemaVersion: 1,
-      })
-    );
-    const store = createCodexAccountsStateStore(statePath, "1.0.3");
-
-    await expect(store.init()).resolves.toMatchObject({ revision: 2 });
-    expect(existsSync(markerPath)).toBe(false);
-    await store.ensureSchemaMarker();
-    expect(existsSync(markerPath)).toBe(true);
-    await expect(readFile(markerPath, "utf8")).resolves.toBe(
-      JSON.stringify({
-        schemas: {
-          "codex.accounts": {
-            updatedByPluginVersion: "1.0.3",
-            version: 1,
-          },
-        },
-        version: 1,
-      })
-    );
-  });
-
+describe("Grok accounts data schema", () => {
   it("quarantines unsupported account schemas and starts fresh without losing the original file", async () => {
     const unsupported = JSON.stringify({
       accounts: [],
@@ -57,7 +28,7 @@ describe("Codex accounts data schema", () => {
       schemaVersion: 2,
     });
     await writeFile(statePath, unsupported);
-    const store = createCodexAccountsStateStore(statePath, "1.0.3");
+    const store = createGrokAccountsStateStore(statePath, "1.0.3");
 
     // A bad file must not brick activation forever: init falls back to
     // defaults while the original bytes are preserved in a quarantine file.
@@ -86,7 +57,7 @@ describe("Codex accounts data schema", () => {
         schemaVersion: 1,
       })
     );
-    const store = createCodexAccountsStateStore(statePath, "1.0.3");
+    const store = createGrokAccountsStateStore(statePath, "1.0.3");
 
     await expect(store.init()).resolves.toMatchObject({
       activeAccountId: null,
@@ -98,7 +69,8 @@ describe("Codex accounts data schema", () => {
       createdAt: 1,
       email: "user@example.com",
       id: "acc-1",
-      provider: "codex",
+      kind: "oidc",
+      provider: "grok",
       updatedAt: 2,
     };
     await writeFile(
@@ -110,50 +82,16 @@ describe("Codex accounts data schema", () => {
         schemaVersion: 1,
       })
     );
-    const store = createCodexAccountsStateStore(statePath, "1.0.3");
+    const store = createGrokAccountsStateStore(statePath, "1.0.3");
 
     const state = await store.init();
     expect(state.accounts).toHaveLength(1);
     expect(state.activeAccountId).toBe("acc-1");
   });
 
-  it("accepts optional subscriptionExpiresAt written by newer account metadata", async () => {
-    await writeFile(
-      statePath,
-      JSON.stringify({
-        accounts: [
-          {
-            createdAt: 1,
-            email: "user@example.com",
-            id: "acc-1",
-            planType: "plus",
-            provider: "codex",
-            subscriptionExpiresAt: 1_800_000_000_000,
-            updatedAt: 2,
-          },
-        ],
-        activeAccountId: "acc-1",
-        revision: 3,
-        schemaVersion: 1,
-      })
-    );
-    const store = createCodexAccountsStateStore(statePath, "1.0.3");
-
-    await expect(store.init()).resolves.toMatchObject({
-      accounts: [
-        {
-          id: "acc-1",
-          subscriptionExpiresAt: 1_800_000_000_000,
-        },
-      ],
-      activeAccountId: "acc-1",
-      revision: 3,
-    });
-  });
-
   it("quarantines a malformed host-readable schema marker instead of failing activation", async () => {
     await writeFile(markerPath, '{"version":1,"schemas":{"unknown":{}}}');
-    const store = createCodexAccountsStateStore(statePath, "1.0.3");
+    const store = createGrokAccountsStateStore(statePath, "1.0.3");
 
     await expect(store.init()).resolves.toBeTruthy();
     // The bad marker is moved aside; ensureSchemaMarker rewrites a valid one.
@@ -163,7 +101,7 @@ describe("Codex accounts data schema", () => {
   });
 
   it("persists a mutation that arrives while an earlier flush is in flight", async () => {
-    const store = createCodexAccountsStateStore(statePath, "1.0.3");
+    const store = createGrokAccountsStateStore(statePath, "1.0.3");
     await store.init();
     store.mutate((state) => ({ ...state, revision: 1 }));
     const firstFlush = store.flush();

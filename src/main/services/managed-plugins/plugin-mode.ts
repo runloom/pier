@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, resolve } from "node:path";
 import {
+  isDevShellPackagedOverride,
+  PIER_DEV_ELECTRON_SHELL_ENV,
   PIER_PLUGIN_MODE_ENV,
   type PierPluginMode,
   type PluginWorkspaceConfigFile,
@@ -74,11 +76,19 @@ export function resolveWorkspaceRootAbsolute(
 
 export function getPierPluginMode(cwd: string = process.cwd()): PierPluginMode {
   const config = readPluginWorkspaceConfigFile(cwd);
+  const devRuntime = isDevRuntime();
+  // See isDevShellPackagedOverride: the renamed PierDev dev shell reports
+  // isPackaged=true and must not force release mode under `pnpm dev`.
+  const devShellOverride = isDevShellPackagedOverride({
+    devShellMarker: process.env[PIER_DEV_ELECTRON_SHELL_ENV],
+    isDevRuntime: devRuntime,
+    isPackagedApp: app.isPackaged,
+  });
   return resolvePierPluginMode({
     configMode: config?.mode ?? null,
     envMode: process.env[PIER_PLUGIN_MODE_ENV] ?? null,
-    isDevRuntime: isDevRuntime(),
-    isPackagedApp: app.isPackaged,
+    isDevRuntime: devRuntime,
+    isPackagedApp: app.isPackaged && !devShellOverride,
   });
 }
 

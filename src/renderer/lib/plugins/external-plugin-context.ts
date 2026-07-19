@@ -138,6 +138,15 @@ export function createExternalRendererPluginContext(
 
   const context: ExternalRendererPluginContext = {
     app: {
+      openExternal: async (url) => {
+        if (!entry.manifest.permissions.includes("external:open")) {
+          throw new Error(
+            `plugin capability not granted: ${pluginId}:external:open`
+          );
+        }
+        const result = await window.pier.externalNavigation.open(url);
+        return result.opened;
+      },
       openSettings: (options) => {
         useSettingsDialogStore
           .getState()

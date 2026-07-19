@@ -4,6 +4,11 @@
  */
 
 export {
+  notifyPeerSyncFailures,
+  type PeerSyncFailureNotifier,
+  type PeerSyncTranslate,
+} from "./notify-failures.ts";
+export {
   ALL_PEER_SYNC_TARGETS,
   isPeerTargetAvailable,
   type PeerAvailability,

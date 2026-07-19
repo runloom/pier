@@ -1,4 +1,5 @@
 import type { CrossToolSyncTarget } from "../shared/accounts.ts";
+import type { SyncTargetResult } from "./cross-tool-sync.ts";
 import type { GrokAccountProvider } from "./grok-provider.ts";
 import { syncManagedAccountToPeers } from "./peer-credential-sync.ts";
 import type { GrokAccountsStateStore } from "./state.ts";
@@ -24,14 +25,14 @@ export async function selectManagedAccount(
   deps: AccountsSelectDeps,
   accountId: string,
   syncTargets?: readonly CrossToolSyncTarget[]
-): Promise<void> {
+): Promise<SyncTargetResult[]> {
   const state = deps.stateStore.get();
   const target = state.accounts.find((account) => account.id === accountId);
   if (!target) {
     throw new Error(`Account not found: ${accountId}`);
   }
   if (state.activeAccountId === accountId) {
-    return;
+    return [];
   }
 
   if (state.activeAccountId) {
@@ -59,9 +60,11 @@ export async function selectManagedAccount(
   }
   deps.setSuppressWatchUntil(deps.now() + deps.watchSuppressMs);
 
-  // Switch keeps peer sync best-effort so a peer failure never rolls back Grok.
+  // Switch keeps peer sync best-effort so a peer failure never rolls back
+  // Grok; per-target results are returned so the UI can surface failures.
+  let peerResults: SyncTargetResult[] = [];
   if (syncTargets && syncTargets.length > 0) {
-    await syncManagedAccountToPeers({
+    peerResults = await syncManagedAccountToPeers({
       accountHomeDir: deps.accountHomeDir(accountId),
       accountId,
       kind: target.kind,
@@ -79,6 +82,7 @@ export async function selectManagedAccount(
   }));
   await deps.stateStore.flush();
   deps.onSelected(accountId);
+  return peerResults;
 }
 
 export async function syncManagedAccountPeers(

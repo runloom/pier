@@ -6,7 +6,7 @@ import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { fetchCodexUsage } from "./codex-usage.ts";
 import type { AccountIdentity } from "./identity.ts";
-import { readCodexIdentity } from "./identity.ts";
+import { parseCodexAuthJson, readCodexIdentity } from "./identity.ts";
 import type { AccountUsageResult, AgentAccountProvider } from "./types.ts";
 
 export const PIER_MANAGED_HOME_MARKER = ".pier-managed-home";
@@ -47,23 +47,43 @@ function defaultSpawnLogin(
   opts: { env: Record<string, string | undefined>; signal: AbortSignal }
 ): Promise<void> {
   return new Promise<void>((resolve, reject) => {
+    // Abort may already have fired (cancel raced ahead of the spawn); the
+    // "abort" event will never fire again, so check before spawning.
+    if (opts.signal.aborted) {
+      reject(new Error("Login cancelled"));
+      return;
+    }
     const child = spawn(cmd, args, {
       env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
+      // `signal` kills the child on abort even when abort fires between the
+      // aborted-check above and listener registration below.
+      signal: opts.signal,
       stdio: "inherit",
     });
 
     opts.signal.addEventListener(
       "abort",
       () => {
-        child.kill();
         reject(new Error("Login cancelled"));
       },
       { once: true }
     );
 
-    child.on("error", reject);
+    child.on("error", (error: NodeJS.ErrnoException) => {
+      if (error.name === "AbortError") {
+        reject(new Error("Login cancelled"));
+        return;
+      }
+      if (error.code === "ENOENT") {
+        reject(new Error("Codex CLI not found on PATH"));
+        return;
+      }
+      reject(error);
+    });
     child.on("close", (code) => {
-      if (code === 0) {
+      if (opts.signal.aborted) {
+        reject(new Error("Login cancelled"));
+      } else if (code === 0) {
         resolve();
       } else {
         reject(new Error(`codex login exited with code ${code}`));
@@ -210,16 +230,27 @@ export function createCodexProvider(
         const authPath = join(homeDir, "auth.json");
         if (existsSync(authPath)) {
           const content = await readFile(authPath, "utf-8");
-          await credentials.set(credentialKey(homeDir), content);
-          try {
-            return await readCodexIdentity(homeDir);
-          } finally {
+          // Validate before persisting: a corrupt stray file must not
+          // overwrite a previously stored good credential.
+          const identity = parseCodexAuthJson(content);
+          if (identity) {
+            await credentials.set(credentialKey(homeDir), content);
             await rm(authPath, { force: true });
+            return identity;
           }
         }
-        return await withManagedAuthUnlocked(homeDir, () =>
-          readCodexIdentity(homeDir)
-        );
+        try {
+          return await withManagedAuthUnlocked(homeDir, () =>
+            readCodexIdentity(homeDir)
+          );
+        } catch (error) {
+          // No stored credential and no legacy file: treat as "no identity"
+          // instead of bubbling a raw ENOENT that would brick activation.
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            return null;
+          }
+          throw error;
+        }
       });
     },
 
@@ -250,14 +281,15 @@ export function createCodexProvider(
       return await withCredentialLock(accountHomeDir, async () => {
         const src = join(realCodexHome, "auth.json");
         if (!existsSync(src)) return "ok";
-        // 身份校验：expected 不为 undefined 时比对真实 auth 的 providerAccountId
+        // 读一次、用同一份内容做身份校验——分两次读会让外部写入者有机会在
+        // 校验与捕获之间换掉文件（TOCTOU），把别的账号的 token 绑到本账号。
+        const content = await readFile(src, "utf-8");
         if (expectedProviderAccountId !== undefined) {
-          const identity = await readCodexIdentity(realCodexHome);
+          const identity = parseCodexAuthJson(content);
           if (identity?.providerAccountId !== expectedProviderAccountId) {
             return "identity-mismatch";
           }
         }
-        const content = await readFile(src, "utf-8");
         if (credentials) {
           await credentials.set(credentialKey(accountHomeDir), content);
           await rm(join(accountHomeDir, "auth.json"), { force: true });

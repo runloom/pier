@@ -38,8 +38,9 @@ export function registerGrokRpcHandlers(options: {
     return null;
   });
   rpc.handle("accounts.select", async (payload) => {
-    await service.select(selectAccountPayloadSchema.parse(payload));
-    return null;
+    // Returns per-target peer sync results so the renderer can surface
+    // partial failures instead of silently dropping them.
+    return await service.select(selectAccountPayloadSchema.parse(payload));
   });
   rpc.handle("accounts.syncToPeers", async (payload) => {
     await service.syncToPeers(syncToPeersPayloadSchema.parse(payload));

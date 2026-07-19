@@ -74,7 +74,7 @@ function contextWithSnapshot(snapshot: GrokAccountsSnapshot): {
   };
   return {
     context: {
-      app: { openSettings: vi.fn() },
+      app: { openExternal: vi.fn(async () => true), openSettings: vi.fn() },
       actions: { register: vi.fn(() => () => undefined) },
       configuration: {
         get: vi.fn(
@@ -282,8 +282,10 @@ describe("Grok accounts settings page", () => {
     });
   });
 
-  it("starts browser OAuth from the account login footer", async () => {
-    const { context, invokeCalls } = contextWithSnapshot(emptySnapshot());
+  it("does not offer browser OAuth in the account login footer", async () => {
+    // Browser OAuth was removed from the dialog on purpose — device code is
+    // the only CLI-based login path offered.
+    const { context } = contextWithSnapshot(emptySnapshot());
     await act(async () => {
       render(
         <>
@@ -298,27 +300,12 @@ describe("Grok accounts settings page", () => {
     expect(
       await screen.findByRole("tab", { name: "Account login" })
     ).toBeTruthy();
-    await act(async () => {
-      fireEvent.click(
-        screen.getByRole("button", { name: "Continue in browser" })
-      );
-    });
-    await waitFor(() => {
-      expect(
-        invokeCalls.some(
-          (call) =>
-            call.method === "accounts.add" &&
-            Boolean(
-              call.payload &&
-                typeof call.payload === "object" &&
-                "kind" in call.payload &&
-                call.payload.kind === "oidc" &&
-                "mode" in call.payload &&
-                call.payload.mode === "oauth"
-            )
-        )
-      ).toBe(true);
-    });
+    expect(
+      screen.queryByRole("button", { name: "Continue in browser" })
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "Use device code" })
+    ).toBeTruthy();
   });
 
   it("starts device code login from the account login footer", async () => {

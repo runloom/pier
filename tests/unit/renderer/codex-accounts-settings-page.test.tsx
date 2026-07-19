@@ -97,6 +97,7 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
   return {
     context: {
       app: {
+        openExternal: vi.fn(async () => true),
         openSettings: vi.fn(),
       },
       actions: {
@@ -628,7 +629,15 @@ describe("AccountsSettingsPage", () => {
       screen.getByRole("button", { name: "Switch: other@codex.dev" })
     );
 
-    // The switch confirmation dialog opens with sync checkboxes.
+    // The switch confirmation dialog opens with sync checkboxes. Peers are
+    // unchecked by default (overwriting other tools' credentials is opt-in);
+    // check one explicitly before confirming.
+    const opencodeCheckbox = await screen.findByRole("checkbox", {
+      name: "OpenCode",
+    });
+    await act(async () => {
+      fireEvent.click(opencodeCheckbox);
+    });
     const switchButton = await screen.findByRole("button", {
       name: /Confirm$/,
     });
@@ -640,7 +649,7 @@ describe("AccountsSettingsPage", () => {
         method: "accounts.select",
         payload: {
           accountId: "acc-2",
-          syncTargets: ["opencode", "pi", "omp"],
+          syncTargets: ["opencode"],
         },
       });
     });
@@ -905,6 +914,43 @@ describe("AccountsSettingsPage", () => {
     });
   });
 
+  it("keeps a manually opened add dialog open across unrelated re-renders", async () => {
+    // Regression: a usage refresh completing re-renders the page while
+    // login stays null; the dialog-lifecycle effect must only close the
+    // dialog when a login actually ended, not on every re-render.
+    const { context } = contextWithSnapshot(emptySnapshot());
+    const t = (_key: string, fallback: string): string => fallback;
+    const { rerender } = render(
+      <>
+        <AppContentDialogHost />
+        <AddAccountDialog
+          context={context}
+          login={null}
+          onError={vi.fn()}
+          t={t}
+        />
+      </>
+    );
+
+    fireEvent.click(screen.getByRole("button", { name: "Add account" }));
+    expect(await screen.findByRole("dialog")).toBeDefined();
+
+    // Unrelated re-render with fresh callback identities, login still null.
+    rerender(
+      <>
+        <AppContentDialogHost />
+        <AddAccountDialog
+          context={context}
+          login={null}
+          onError={vi.fn()}
+          t={(_key: string, fallback: string): string => fallback}
+        />
+      </>
+    );
+
+    expect(screen.getByRole("dialog")).toBeDefined();
+  });
+
   it("renders the waiting dialog with cancel when login is pending", async () => {
     const snap = snapshotWithAccount({
       login: { provider: "codex", startedAt: Date.now() },
@@ -925,7 +971,12 @@ describe("AccountsSettingsPage", () => {
   });
 
   it("retains the waiting presentation while authorization closes", async () => {
-    const { context } = contextWithSnapshot(emptySnapshot());
+    // Dialog content reads login state live from the snapshot store, so the
+    // stubbed snapshot must agree with the login prop passed to the dialog.
+    const { context } = contextWithSnapshot({
+      ...emptySnapshot(),
+      login: { provider: "codex", startedAt: Date.now() },
+    });
     const t = (_key: string, fallback: string): string => fallback;
     const { rerender } = render(
       <>
