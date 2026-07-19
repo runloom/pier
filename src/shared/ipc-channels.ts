@@ -31,6 +31,7 @@ export const PIER = {
   WINDOW_RENDERER_BOOT_CHALLENGE: "pier://window:renderer-boot-challenge",
   WINDOW_RENDERER_BOOT_REQUEST: "pier://window:renderer-boot-request",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
+  WINDOW_RENDERER_RUNTIME_FAILURE: "pier://window:renderer-runtime-failure",
   // renderer → main plugin RPC invoke channel. Separate from PIER.COMMAND_EXECUTE
   // so plugin RPC is NEVER reachable from CLI local-control or capability-only
   // command authorization (design §7.0 / §7.3).

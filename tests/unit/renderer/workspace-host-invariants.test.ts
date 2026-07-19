@@ -70,7 +70,7 @@ const WORKSPACE_READY_WHEN_USER_TOUCHED_RE =
 const BOOT_SIGNAL_AFTER_COMPONENT_MOUNT_RE =
   /function RendererBootSignal\(\)[\s\S]{0,180}?useEffect\(\(\) => \{\s*window\.pier\?\.window\?\.readyToShow\?\.\(\)/;
 const FINAL_APP_RETAINS_BOOT_SIGNAL_RE =
-  /root\.render\(\s*<>\s*<RendererBootSignal key="application" \/>\s*<App \/>/;
+  /root\.render\(\s*<>\s*<RendererBootSignal key="application" \/>\s*<AppRuntimeErrorBoundary>\s*<App \/>\s*<\/AppRuntimeErrorBoundary>/;
 
 describe("workspace-host invariants (#17 #19)", () => {
   it("declares userTouched flag and uses it to gate fromJSON (防 user 操作被 saved layout 覆盖)", () => {

@@ -30,6 +30,7 @@ import {
   RENDERER_COMMAND_CHANNEL,
   RENDERER_COMMAND_RESULT_CHANNEL,
 } from "@shared/contracts/renderer-command-channels.ts";
+import type { RendererRuntimeFailureReport } from "@shared/contracts/renderer-runtime-failure.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import type {
   WindowContext,
@@ -222,6 +223,7 @@ export interface PierWindowNsAPI {
   getContext: () => Promise<WindowContext>;
   onLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
   readyToShow: () => void;
+  reportRuntimeFailure: (failure: RendererRuntimeFailureReport) => void;
 }
 
 /** env 子命名空间 — 运行时环境信息. */
@@ -488,6 +490,8 @@ const api: PierWindowAPI = {
     getContext: () => ipcRenderer.invoke("pier://window:context"),
     onLayoutPulse: (cb) => subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
     readyToShow: signalRendererBoot,
+    reportRuntimeFailure: (failure) =>
+      ipcRenderer.send(PIER.WINDOW_RENDERER_RUNTIME_FAILURE, failure),
   },
   workspace: workspaceApi,
   worktrees: worktreesApi,

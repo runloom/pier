@@ -15,11 +15,14 @@ export const workspace = {
     unavailableTitle: "Plugin panel unavailable",
   },
   startupError: {
-    description:
-      "Pier could not finish core initialization. Retry, and keep the error details below if the problem continues.",
-    details: "Error details",
+    description: "Reload to try again.",
     retry: "Reload",
     title: "Pier failed to start",
+  },
+  runtimeError: {
+    description: "Terminal sessions are preserved. Reload to continue.",
+    retry: "Reload",
+    title: "Interface error",
   },
   tab: {
     unsaved: "Unsaved changes",

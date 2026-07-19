@@ -1,11 +1,12 @@
 import { Button } from "@pier/ui/button.tsx";
 import {
-  Card,
-  CardContent,
-  CardFooter,
-  CardHeader,
-  CardTitle,
-} from "@pier/ui/card.tsx";
+  Empty,
+  EmptyContent,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@pier/ui/empty.tsx";
 import { Spinner } from "@pier/ui/spinner.tsx";
 import { StatusIcon } from "@pier/ui/status-icon.tsx";
 import i18next from "i18next";
@@ -13,6 +14,7 @@ import { RotateCcw } from "lucide-react";
 
 export interface StartupErrorScreenProps {
   error: unknown;
+  kind?: "runtime" | "startup";
   onRetry?: () => void;
 }
 
@@ -48,41 +50,48 @@ export function StartupScreen() {
   );
 }
 
-function fallbackCopy() {
+function fallbackCopy(kind: "runtime" | "startup") {
   const isChinese = document.documentElement.lang.startsWith("zh");
+  if (kind === "runtime") {
+    return isChinese
+      ? {
+          description: "终端会话已保留，请重新加载。",
+          retry: "重新加载",
+          title: "界面出现错误",
+        }
+      : {
+          description: "Terminal sessions are preserved. Reload to continue.",
+          retry: "Reload",
+          title: "Interface error",
+        };
+  }
   return isChinese
     ? {
-        description:
-          "Pier 无法完成核心初始化。请重试；如果问题持续存在，请保留下面的错误详情。",
-        details: "错误详情",
+        description: "请重新加载后再试。",
         retry: "重新加载",
         title: "Pier 启动失败",
       }
     : {
-        description:
-          "Pier could not finish core initialization. Retry, and keep the error details below if the problem continues.",
-        details: "Error details",
+        description: "Reload to try again.",
         retry: "Reload",
         title: "Pier failed to start",
       };
 }
 
-function translatedCopy() {
-  const fallback = fallbackCopy();
+function translatedCopy(kind: "runtime" | "startup") {
+  const fallback = fallbackCopy(kind);
   if (!i18next.isInitialized) {
     return fallback;
   }
+  const key = kind === "runtime" ? "runtimeError" : "startupError";
   return {
-    description: i18next.t("workspace.startupError.description", {
+    description: i18next.t(`workspace.${key}.description`, {
       defaultValue: fallback.description,
     }),
-    details: i18next.t("workspace.startupError.details", {
-      defaultValue: fallback.details,
-    }),
-    retry: i18next.t("workspace.startupError.retry", {
+    retry: i18next.t(`workspace.${key}.retry`, {
       defaultValue: fallback.retry,
     }),
-    title: i18next.t("workspace.startupError.title", {
+    title: i18next.t(`workspace.${key}.title`, {
       defaultValue: fallback.title,
     }),
   };
@@ -105,47 +114,37 @@ function retryStartup(): void {
 
 export function StartupErrorScreen({
   error,
+  kind = "startup",
   onRetry = retryStartup,
 }: StartupErrorScreenProps) {
-  const copy = translatedCopy();
+  const copy = translatedCopy(kind);
   const detail = formatStartupError(error);
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-background p-6 text-foreground">
-      <Card className="flex max-h-[min(80vh,36rem)] w-full max-w-xl">
-        <CardHeader className="shrink-0">
-          <div className="flex items-start gap-3">
-            <StatusIcon className="mt-0.5" kind="error" />
-            <div className="min-w-0 flex-1">
-              <CardTitle>
-                <h1>{copy.title}</h1>
-              </CardTitle>
-              <p className="mt-2 text-muted-foreground text-sm leading-6">
-                {copy.description}
-              </p>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent
-          className="min-h-0 flex-1 overflow-y-auto px-0"
-          data-scrollbar="stable"
-        >
-          <div className="px-(--card-spacing)">
-            <div className="font-medium text-foreground text-sm">
-              {copy.details}
-            </div>
-            <pre className="mt-2 whitespace-pre-wrap break-words font-mono text-muted-foreground text-xs leading-5">
-              {detail}
-            </pre>
-          </div>
-        </CardContent>
-        <CardFooter className="shrink-0 justify-end">
+    <main className="flex min-h-screen bg-background text-foreground">
+      <Empty className="rounded-none p-6">
+        <EmptyHeader>
+          <EmptyMedia>
+            <StatusIcon kind="error" />
+          </EmptyMedia>
+          <EmptyTitle>
+            <h1>{copy.title}</h1>
+          </EmptyTitle>
+          <EmptyDescription>{copy.description}</EmptyDescription>
+        </EmptyHeader>
+        <EmptyContent className="max-w-xl">
+          <pre
+            className="max-h-[min(50vh,20rem)] w-full overflow-y-auto whitespace-pre-wrap break-words rounded-md bg-muted p-3 text-left font-mono text-muted-foreground text-xs leading-5"
+            data-scrollbar="stable"
+          >
+            {detail}
+          </pre>
           <Button onClick={onRetry} size="sm" type="button">
             <RotateCcw aria-hidden data-icon="inline-start" />
             {copy.retry}
           </Button>
-        </CardFooter>
-      </Card>
+        </EmptyContent>
+      </Empty>
     </main>
   );
 }
