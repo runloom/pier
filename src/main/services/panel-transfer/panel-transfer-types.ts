@@ -126,6 +126,11 @@ export interface PanelTransferWindowPort {
     lease: WindowTransitionLease,
     input: { bounds: WindowBounds; transferId: string }
   ): Promise<{ recordId: string; windowId: string }>;
+  destroyForTransfer(
+    lease: WindowTransitionLease,
+    windowId: string,
+    transferId: string
+  ): Promise<void>;
   holdRendererShow(windowId: string, reason: string): void;
   list(): Array<{
     focused: boolean;

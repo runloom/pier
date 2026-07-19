@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => {
         return "w-1";
       }
     ),
+    destroyForTransfer: vi.fn(async () => undefined),
     createWindowRecord: vi.fn(async () => ({ id: "record-new" })),
     flushPluginSettings: vi.fn(async () => undefined),
     flushPluginState: vi.fn(async () => undefined),
@@ -109,6 +110,7 @@ const mocks = vi.hoisted(() => {
     readMostRecentClosedWindowRecordId: vi.fn(async () => "record-closed"),
     readOpenWindowRecordIds: vi.fn(async () => ["record-open-1"]),
     readPreferredOpenWindowRecordIds: vi.fn(async () => ["record-open-1"]),
+    readWindowRecordLayout: vi.fn(async () => null as unknown),
     resetLiveWindowCount: () => {
       liveWindowContexts.length = 0;
     },
@@ -134,6 +136,7 @@ vi.mock("@main/state/window-record-state.ts", () => ({
   readMostRecentClosedWindowRecordId: mocks.readMostRecentClosedWindowRecordId,
   readOpenWindowRecordIds: mocks.readOpenWindowRecordIds,
   readPreferredOpenWindowRecordIds: mocks.readPreferredOpenWindowRecordIds,
+  readWindowRecordLayout: mocks.readWindowRecordLayout,
 }));
 
 vi.mock("@main/state/terminal-session-state.ts", () => ({
@@ -165,6 +168,7 @@ vi.mock("@main/windows/window-manager.ts", () => ({
   windowManager: {
     close: mocks.close,
     create: mocks.create,
+    destroyForTransfer: mocks.destroyForTransfer,
     focus: mocks.focus,
     get: mocks.get,
     getAll: mocks.getAll,
@@ -665,5 +669,46 @@ describe("WindowService", () => {
         })
       );
     });
+  });
+
+  it("closeAfterTransfer no-ops when source layout still has panels", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    mocks.setLiveWindowRecords(["record-source"]);
+    mocks.readWindowRecordLayout.mockResolvedValueOnce({
+      panels: { "panel-keep": { id: "panel-keep" } },
+    });
+    const service = createWindowService();
+    await service.runExclusive(async (lease) => {
+      await service.closeAfterTransfer(
+        lease,
+        "main",
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      );
+    });
+    expect(mocks.markWindowRecordClosed).not.toHaveBeenCalled();
+    expect(mocks.destroyForTransfer).not.toHaveBeenCalled();
+  });
+
+  it("closeAfterTransfer destroys only when source layout is empty", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    mocks.setLiveWindowRecords(["record-source"]);
+    mocks.readWindowRecordLayout.mockResolvedValueOnce({ panels: {} });
+    const service = createWindowService();
+    await service.runExclusive(async (lease) => {
+      await service.closeAfterTransfer(
+        lease,
+        "main",
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+      );
+    });
+    expect(mocks.markWindowRecordClosed).toHaveBeenCalledWith("record-source");
+    expect(mocks.destroyForTransfer).toHaveBeenCalledWith(
+      "main",
+      "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    );
   });
 });

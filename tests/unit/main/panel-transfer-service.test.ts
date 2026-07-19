@@ -1,4 +1,4 @@
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { createPanelTransferService } from "@main/services/panel-transfer/panel-transfer-service.ts";
@@ -74,6 +74,7 @@ describe("PanelTransferService", () => {
     windows = {
       closeAfterTransfer: vi.fn(async () => undefined),
       createForTransfer,
+      destroyForTransfer: vi.fn(async () => undefined),
       holdRendererShow: vi.fn(),
       list: vi.fn(() => [
         { focused: true, id: "main", recordId: "record-main" },
@@ -418,5 +419,134 @@ describe("PanelTransferService", () => {
       })
     ).resolves.toMatchObject({ code: "target_conflict", ok: false });
     expect(rendererExecute).not.toHaveBeenCalled();
+  });
+
+  it("recoverPending retains post-commit journal when no live windows", async () => {
+    windows.list = vi.fn(() => []);
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_B),
+      phase: "runtime-moved",
+      snapshot: {
+        panel: movableOffer(TRANSFER_B).panel,
+        prepared: {},
+        runtime: { kind: "web" },
+      },
+      source,
+      target: {
+        kind: "managed",
+        runtimeWindowId: "w-1",
+        windowRecordId: "record-w1",
+      },
+      targetPanelId: "panel-1",
+      transferId: TRANSFER_B,
+      updatedAt: 2,
+    });
+
+    await service.recoverPending();
+    expect(journal.list().map((entry) => entry.transferId)).toEqual([
+      TRANSFER_B,
+    ]);
+    expect(rendererExecute).not.toHaveBeenCalled();
+  });
+
+  it("rollback destroys internal target window created for transfer", async () => {
+    cursor = { x: 5000, y: 5000 };
+    const service = createService(async () => undefined);
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.stageTarget") {
+        return {
+          error: { message: "stage failed" },
+          ok: false,
+          requestId: "r1",
+        };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toMatchObject(
+      {
+        code: "transfer_failed",
+        ok: false,
+      }
+    );
+    expect(createForTransfer).toHaveBeenCalledOnce();
+    expect(windows.destroyForTransfer).toHaveBeenCalledWith(
+      lease,
+      "w-new",
+      TRANSFER_A
+    );
+    expect(windows.releaseRendererShow).toHaveBeenCalledWith(
+      "w-new",
+      "panel-transfer"
+    );
+  });
+
+  it("recoverPending reports journal parse failure via hook", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-pts-bad-"));
+    await writeFile(join(dir, "panel-transfers.json"), "{not-json", "utf8");
+    const reportJournalParseFailure = vi.fn();
+    const badJournal = new PanelTransferJournal(dir);
+    const service = createPanelTransferService({
+      files,
+      geometry,
+      journal: badJournal,
+      now: () => now,
+      pluginMutation,
+      rendererCommand: {
+        execute: rendererExecute,
+        resolve: () => undefined,
+      },
+      reportJournalParseFailure,
+      sleep: async () => undefined,
+      terminal,
+      userDataDir: dir,
+      windows,
+      workspace,
+    });
+
+    await service.recoverPending();
+    expect(reportJournalParseFailure).toHaveBeenCalledOnce();
+    expect(reportJournalParseFailure.mock.calls[0]?.[0]).toContain(
+      "panel-transfers.json"
+    );
+  });
+
+  it("roll-forward calls closeAfterTransfer after source-durable", async () => {
+    const service = createService(async () => undefined);
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.drop(target, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(windows.closeAfterTransfer).toHaveBeenCalledWith(
+      lease,
+      "main",
+      TRANSFER_A
+    );
   });
 });

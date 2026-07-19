@@ -56,16 +56,19 @@ async function recoverPostCommit(
   deps: PanelTransferTransactionDeps,
   record: PanelTransferJournalRecord
 ): Promise<void> {
-  // Keep journal entry with snapshot so target bootstrap can restore.
-  // Attempt source-side durable cleanup when source window is still live.
+  // Keep journal entry with snapshot so target bootstrap can restore after
+  // restoreOpenWindows(). recoverPending runs BEFORE windows are restored, so
+  // an empty live window list must never mean "target gone — drop journal".
   if (!(record.snapshot && record.target)) {
+    // Truly unrecoverable: no snapshot to hand to target bootstrap.
     await deps.journal.remove(record.transferId);
     return;
   }
 
-  const sourceStillOpen = deps.windows
-    .list()
-    .some((windowInfo) => windowInfo.id === record.source.runtimeWindowId);
+  const liveWindows = deps.windows.list();
+  const sourceStillOpen = liveWindows.some(
+    (windowInfo) => windowInfo.id === record.source.runtimeWindowId
+  );
 
   if (sourceStillOpen && record.phase === "runtime-moved") {
     try {
@@ -88,14 +91,7 @@ async function recoverPostCommit(
   }
 
   // Do not force target finalize here — target renderer must bootstrap→restore→ready.
-  // If target window is gone entirely, consume journal with placeholder semantics.
-  const targetStillOpen = deps.windows
-    .list()
-    .some((windowInfo) => windowInfo.id === record.target?.runtimeWindowId);
-  if (!targetStillOpen && record.target.kind === "managed") {
-    // Managed target vanished mid-flight after commit: drop journal to avoid sticky pending.
-    await deps.journal.remove(record.transferId);
-  }
+  // Retain journal until that path (or an explicit unrecoverable condition) consumes it.
 }
 
 export async function rollForwardWithLease(input: {

@@ -200,6 +200,7 @@ export async function runClaimedTransfer(
     return await rollbackBeforeCommit({
       deps,
       error,
+      lease,
       record,
       source,
       target,

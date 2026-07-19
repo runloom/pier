@@ -11,6 +11,7 @@ import {
   markWindowRecordOpen,
   readMostRecentClosedWindowRecordId,
   readPreferredOpenWindowRecordIds,
+  readWindowRecordLayout,
 } from "../state/window-record-state.ts";
 import { findWindowContext } from "../windows/window-identity.ts";
 import {
@@ -50,6 +51,11 @@ export interface WindowService {
       transferId: string;
     }
   ): Promise<WindowCreateResult>;
+  destroyForTransfer(
+    lease: WindowTransitionLease,
+    windowId: string,
+    transferId: string
+  ): Promise<void>;
   flushOpenWindows(
     additionalCriticalFlush?: () => Promise<void>
   ): Promise<void>;
@@ -97,6 +103,30 @@ function assertTransitionLease(lease: WindowTransitionLease): void {
   if (windowTransitionState.activeLease !== lease) {
     throw new Error("window transition lease required");
   }
+}
+
+/** True when durable dockview layout has no remaining panels. */
+export function isTransferSourceLayoutEmpty(layout: unknown): boolean {
+  if (layout == null) {
+    return true;
+  }
+  if (typeof layout !== "object") {
+    return false;
+  }
+  if (!("panels" in layout)) {
+    return true;
+  }
+  const panels = layout.panels;
+  if (panels == null) {
+    return true;
+  }
+  if (Array.isArray(panels)) {
+    return panels.length === 0;
+  }
+  if (typeof panels === "object") {
+    return Object.keys(panels).length === 0;
+  }
+  return false;
 }
 
 function nextRuntimeWindowId(): string | undefined {
@@ -245,8 +275,31 @@ export function createWindowService(
     if (!context) {
       throw new Error(`window context missing for transfer close: ${windowId}`);
     }
+    // Only last-tab sources may be destroyed. Multi-tab sources keep the window.
+    const layout = await readWindowRecordLayout(context.recordId);
+    if (!isTransferSourceLayoutEmpty(layout)) {
+      return;
+    }
     await markWindowRecordClosed(context.recordId);
     await flushWindowRecordState();
+    await windowManager.destroyForTransfer(windowId, transferId);
+  }
+
+  async function destroyForTransfer(
+    lease: WindowTransitionLease,
+    windowId: string,
+    transferId: string
+  ): Promise<void> {
+    assertTransitionLease(lease);
+    const window = windowManager.get(windowId);
+    if (!window || window.isDestroyed()) {
+      return;
+    }
+    const context = findWindowContext(window);
+    if (context) {
+      await markWindowRecordClosed(context.recordId);
+      await flushWindowRecordState();
+    }
     await windowManager.destroyForTransfer(windowId, transferId);
   }
 
@@ -255,6 +308,7 @@ export function createWindowService(
     closeAfterTransfer,
     create,
     createForTransfer,
+    destroyForTransfer,
     focus: (windowId) => windowManager.focus(windowId),
     flushOpenWindows: async (additionalCriticalFlush) =>
       await runWindowTransition(async () => {

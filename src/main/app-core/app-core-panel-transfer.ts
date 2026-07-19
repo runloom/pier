@@ -1,4 +1,4 @@
-import { app, screen } from "electron";
+import { app, dialog, screen } from "electron";
 import { createPanelTransferService } from "../services/panel-transfer/panel-transfer-service.ts";
 import type { PanelTransferService } from "../services/panel-transfer/panel-transfer-types.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
@@ -96,9 +96,20 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
       input.pluginDisableTransitions.runPluginMutation(operation),
     rendererCommand: input.rendererCommand,
     reportJournalParseFailure: (journalPath, error) => {
-      console.error(
-        `[panel-transfer] journal unreadable at ${journalPath}:`,
-        error
+      let detail = "unknown error";
+      if (error instanceof Error) {
+        detail = error.message;
+      } else if (typeof error === "string") {
+        detail = error;
+      }
+      const isChinese = app.getLocale().toLowerCase().startsWith("zh");
+      dialog.showErrorBox(
+        isChinese
+          ? "面板迁移日志无法读取"
+          : "Panel transfer journal unreadable",
+        isChinese
+          ? `路径：${journalPath}\n\n${detail}\n\n文件未被清除。请修复或备份后重启 Pier。`
+          : `Path: ${journalPath}\n\n${detail}\n\nThe file was not wiped. Fix or back it up, then restart Pier.`
       );
     },
     userDataDir: app.getPath("userData"),
@@ -107,6 +118,8 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
         windowService.closeAfterTransfer(lease, windowId, transferId),
       createForTransfer: (lease, createInput) =>
         windowService.createForTransfer(lease, createInput),
+      destroyForTransfer: (lease, windowId, transferId) =>
+        windowService.destroyForTransfer(lease, windowId, transferId),
       holdRendererShow: (windowId, reason) => {
         windowManager.holdRendererShow(windowId, reason);
       },

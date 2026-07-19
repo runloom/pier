@@ -121,6 +121,7 @@ export async function rollForwardAfterRuntimeMoved(input: {
 export async function rollbackBeforeCommit(input: {
   deps: PanelTransferTransactionDeps;
   error: unknown;
+  lease?: WindowTransitionLease;
   record: PanelTransferJournalRecord;
   source: PanelTransferCaller;
   target: PanelTransferTargetRef;
@@ -177,6 +178,18 @@ export async function rollbackBeforeCommit(input: {
     target.runtimeWindowId,
     PANEL_TRANSFER_SHOW_HOLD_REASON
   );
+
+  if (target.kind === "internal" && input.lease) {
+    try {
+      await deps.windows.destroyForTransfer(
+        input.lease,
+        target.runtimeWindowId,
+        transferId
+      );
+    } catch {
+      // best effort — do not block abort result on destroy failure
+    }
+  }
 
   try {
     record = await writePhase(deps.journal, record, "aborted");
