@@ -97,9 +97,9 @@ describe("groupRank", () => {
     const actions = [baseAction("a", "settings")];
     const r = groupRank(actions, new Map());
     expect(r.tier).toBe("fallback");
-    // Settings.order = 7 (见 command-palette CATEGORY_META, git 分类插入后顺延)
+    // Settings.order = 8 (terminal 分类加入后顺延)
     if (r.tier === "fallback") {
-      expect(r.order).toBe(7);
+      expect(r.order).toBe(8);
     }
   });
 });

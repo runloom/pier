@@ -14,7 +14,7 @@ describe("development entrypoint governance", () => {
       "utf8"
     );
 
-    expect(packageJson.scripts.predev).toContain("plugin:codex:pack");
+    expect(packageJson.scripts.predev).toContain("plugins:pack");
     expect(packageJson.scripts.dev).toBe("node ./scripts/dev-with-plugins.mjs");
     expect(packageJson.scripts["electron:dev"]).toBe("pnpm dev");
     expect(packageJson.scripts["dev:host"]).toBe(

@@ -1,5 +1,5 @@
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import {
   PIER_PLUGIN_MODE_ENV,
   type PierPluginMode,
@@ -72,13 +72,56 @@ export function resolveWorkspaceRootAbsolute(
   return isAbsolute(rootPath) ? rootPath : resolve(cwd, rootPath);
 }
 
+interface WorktreeDevElectronRuntimeInput {
+  actualExecPath: string;
+  cwd: string;
+  devProfile: string | undefined;
+  devRuntime: boolean;
+  electronExecPath: string | undefined;
+}
+
+export function isWorktreeDevElectronRuntime({
+  actualExecPath,
+  cwd,
+  devProfile,
+  devRuntime,
+  electronExecPath,
+}: WorktreeDevElectronRuntimeInput): boolean {
+  if (!(devRuntime && devProfile && electronExecPath)) {
+    return false;
+  }
+  if (resolve(actualExecPath) !== resolve(electronExecPath)) {
+    return false;
+  }
+
+  const runtimeRoot = resolve(cwd, ".pier-dev", "electron-runtime");
+  const relativeExecPath = relative(runtimeRoot, resolve(actualExecPath));
+  return (
+    relativeExecPath !== "" &&
+    !relativeExecPath.startsWith("..") &&
+    !isAbsolute(relativeExecPath)
+  );
+}
+
 export function getPierPluginMode(cwd: string = process.cwd()): PierPluginMode {
   const config = readPluginWorkspaceConfigFile(cwd);
+  const devRuntime = isDevRuntime();
+  // The macOS dev profile copies and renames Electron.app under
+  // `.pier-dev/electron-runtime`. Electron reports that copy as packaged even
+  // though electron-vite is running the current worktree. Normalize only this
+  // exact profile-owned runtime; real packaged distributions remain release.
+  const isWorktreeDevRuntime = isWorktreeDevElectronRuntime({
+    actualExecPath: process.execPath,
+    cwd,
+    devProfile: process.env.PIER_DEV_PROFILE,
+    devRuntime,
+    electronExecPath: process.env.ELECTRON_EXEC_PATH,
+  });
   return resolvePierPluginMode({
     configMode: config?.mode ?? null,
     envMode: process.env[PIER_PLUGIN_MODE_ENV] ?? null,
-    isDevRuntime: isDevRuntime(),
-    isPackagedApp: app.isPackaged,
+    isDevRuntime: devRuntime,
+    isPackagedApp: app.isPackaged && !isWorktreeDevRuntime,
   });
 }
 

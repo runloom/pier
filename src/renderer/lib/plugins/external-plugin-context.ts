@@ -1,11 +1,13 @@
 import type {
   RendererPluginAction as ExternalPluginAction,
   RendererPluginPanelRegistration as ExternalPluginPanelRegistration,
+  RendererPluginQuickPick as ExternalPluginQuickPick,
   ExternalRendererPluginContext,
   RendererSettingsPageRegistration as ExternalSettingsPageRegistration,
   RendererWorkbenchWidgetRegistration as ExternalWorkbenchWidgetRegistration,
 } from "@pier/plugin-api/renderer";
 import type {
+  RendererPluginQuickPick as HostPluginQuickPick,
   WorkbenchWidgetComponentProps as HostWorkbenchWidgetComponentProps,
   WorkbenchWidgetSettingsProps as HostWorkbenchWidgetSettingsProps,
 } from "@plugins/api/renderer.ts";
@@ -34,6 +36,7 @@ import { usePluginSettingsStore } from "@/stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { resolvePluginMessage } from "./display.ts";
 import type { ExternalRendererActivationScope } from "./external-activation-scope.ts";
+import { createPluginCommandPaletteContext } from "./host-command-palette-context.ts";
 import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
 import {
   getPluginSettingsPage,
@@ -101,6 +104,7 @@ export function createExternalRendererPluginContext(
   const pluginId = entry.manifest.id;
   const track = (dispose: () => void): (() => void) =>
     scope?.add(dispose) ?? dispose;
+  const hostCommandPalette = createPluginCommandPaletteContext();
   const workbenchWidgets: ExternalRendererPluginContext["workbenchWidgets"] = {
     register: (registration: ExternalWorkbenchWidgetRegistration) => {
       assertPluginWorkbenchWidgetRegistration(entry, registration);
@@ -138,6 +142,9 @@ export function createExternalRendererPluginContext(
 
   const context: ExternalRendererPluginContext = {
     app: {
+      closeSettings: () => {
+        useSettingsDialogStore.getState().close();
+      },
       openSettings: (options) => {
         useSettingsDialogStore
           .getState()
@@ -151,12 +158,15 @@ export function createExternalRendererPluginContext(
           actionRegistry.register({
             category: action.category ?? "run",
             id: action.id,
+            // 外部插件动作的入口就是命令面板；不带 surface 会被
+            // actionRegistry.list("command-palette") 过滤而不可见。
+            surfaces: ["command-palette"],
             title: () => resolveTitle(action.title),
-            handler: () => {
+            handler: () =>
               Promise.resolve(action.invoke()).catch((err: unknown) => {
                 console.error(`[${pluginId}] action ${action.id} failed:`, err);
-              });
-            },
+                throw err;
+              }),
           })
         );
       },
@@ -192,6 +202,19 @@ export function createExternalRendererPluginContext(
         assertOwnedKey(entry, key);
         // Plugin settings store's value type is JsonValue; runtime coerces via schema.
         await usePluginSettingsStore.getState().set(key, value as never);
+      },
+    },
+    commandPalette: {
+      openQuickPick: (quickPick: ExternalPluginQuickPick) => {
+        hostCommandPalette.openQuickPick(
+          quickPick as unknown as HostPluginQuickPick
+        );
+      },
+      updateQuickPick: (patch, options) => {
+        hostCommandPalette.updateQuickPick(
+          patch as Partial<HostPluginQuickPick>,
+          options
+        );
       },
     },
     workbenchWidgets,
@@ -284,6 +307,23 @@ export function createExternalRendererPluginContext(
     notifications: {
       error: (message) => toast.error(message),
       info: (message) => toast.info(message),
+      loading: (message) => {
+        const id = toast.loading(message);
+        return {
+          dismiss: () => {
+            toast.dismiss(id);
+          },
+          info: (update) => {
+            toast.info(update, { id });
+          },
+          success: (update) => {
+            toast.success(update, { id });
+          },
+          update: (update) => {
+            toast.loading(update, { id });
+          },
+        };
+      },
       success: (message) => toast.success(message),
     },
     panels: {
@@ -304,6 +344,17 @@ export function createExternalRendererPluginContext(
         }
         return track(registerPanel(registration));
       },
+    },
+    terminals: {
+      open: (request) =>
+        Promise.resolve().then(() => {
+          if (!entry.effectivePermissions.includes("terminal:control")) {
+            throw new Error(
+              `plugin capability not granted: ${pluginId}:terminal:control`
+            );
+          }
+          return window.pier.terminals.open(request ?? {});
+        }),
     },
     rpc: {
       invoke: async <T>(method: string, payload?: unknown): Promise<T> => {

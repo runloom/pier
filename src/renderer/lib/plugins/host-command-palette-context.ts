@@ -53,8 +53,6 @@ interface AdaptedQuickPickSession {
   signalGeneration: WeakMap<AbortSignal, number>;
 }
 
-let currentSession: AdaptedQuickPickSession | null = null;
-
 function collectPluginItems(
   quickPick: RendererPluginQuickPick
 ): readonly RendererPluginQuickPickItem[] {
@@ -172,6 +170,7 @@ interface PluginQuickPickUpdateOptions {
 }
 
 export function createPluginCommandPaletteContext(): RendererPluginContext["commandPalette"] {
+  let currentSession: AdaptedQuickPickSession | null = null;
   return {
     openQuickPick: (pluginQuickPick) => {
       const session: AdaptedQuickPickSession = {

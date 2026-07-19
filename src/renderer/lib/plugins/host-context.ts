@@ -59,6 +59,7 @@ import { createPluginGitContext } from "./host-git-context.ts";
 import { createHostGroupContentContext } from "./host-group-content-context.tsx";
 import { createPluginPanelsContext } from "./host-panels-context.ts";
 import { createPluginTerminalContext } from "./host-terminal-context.ts";
+import { createPluginTerminalsContext } from "./host-terminals-context.ts";
 import { createPluginWorktreesContext } from "./host-worktree-context.ts";
 import { pluginLifecycleBarriers } from "./plugin-lifecycle-barriers.ts";
 import {
@@ -490,6 +491,7 @@ export function createRendererPluginContext(
     },
     files: createPluginFilesContext(entry, assertPluginCapability),
     terminal: createPluginTerminalContext(entry, assertPluginCapability),
+    terminals: createPluginTerminalsContext(entry, assertPluginCapability),
     worktrees: createPluginWorktreesContext(entry, assertPluginCapability),
     git: createPluginGitContext(entry, assertPluginCapability),
     ai: createPluginAiContext(entry, assertPluginCapability),

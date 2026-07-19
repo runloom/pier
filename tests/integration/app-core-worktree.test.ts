@@ -85,6 +85,7 @@ function mockElectron(userDataDir: string): void {
 }
 
 afterEach(async () => {
+  vi.unstubAllEnvs();
   vi.doUnmock("electron");
   vi.resetModules();
   await Promise.all(
@@ -97,6 +98,9 @@ describe("createPierAppCore worktree service graph", () => {
     const userDataDir = await makeTempDir("pier-app-core-userdata-");
     const repo = await initRepo();
     const configuredRoot = await makeTempDir("pier-configured-worktree-root-");
+    // This test exercises the worktree service graph, not local workspace
+    // plugins. Keep per-worktree developer configuration out of its runtime.
+    vi.stubEnv("PIER_PLUGIN_MODE", "release");
     mockElectron(userDataDir);
 
     // 惰性 app core 首次属性访问才构造，因此先安装每例独立的 Electron mock。

@@ -1,0 +1,7 @@
+@reference "tailwindcss/theme.css";
+@reference "@pier/ui/tailwind-theme.css";
+@source "./";
+
+@scope ([data-pier-ssh-scope]) {
+  @tailwind utilities source(none);
+}

@@ -20,10 +20,11 @@ export const CATEGORY_META: Record<
   worktree: { order: 2, labelKey: "worktree" },
   git: { order: 3, labelKey: "git" },
   run: { order: 4, labelKey: "run" },
-  panel: { order: 5, labelKey: "panel" },
-  window: { order: 6, labelKey: "window" },
-  settings: { order: 7, labelKey: "settings" },
-  file: { order: 8, labelKey: "file" },
+  terminal: { order: 5, labelKey: "terminal" },
+  panel: { order: 6, labelKey: "panel" },
+  window: { order: 7, labelKey: "window" },
+  settings: { order: 8, labelKey: "settings" },
+  file: { order: 9, labelKey: "file" },
 };
 
 export const UNKNOWN_ORDER = Object.keys(CATEGORY_META).length;

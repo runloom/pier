@@ -61,11 +61,17 @@ const committedOfficialIndex = JSON.parse(
 ) as { signature?: { alg?: string } };
 
 describe("managed plugin packaging governance", () => {
+  it("builds every workspace plugin before starting the dev host", () => {
+    expect(packageJson.scripts?.predev).toContain("pnpm plugins:pack");
+  });
+
   it("ships each bundled plugin into an isolated plugin-packages subdir", () => {
     expect(builderConfig).toContain("from: packages/plugin-codex/dist-pkg");
     expect(builderConfig).toContain("to: plugin-packages/pier.codex");
     expect(builderConfig).toContain("from: packages/plugin-grok/dist-pkg");
     expect(builderConfig).toContain("to: plugin-packages/pier.grok");
+    expect(builderConfig).toContain("from: packages/plugin-ssh/dist-pkg");
+    expect(builderConfig).toContain("to: plugin-packages/pier.ssh");
     expect(builderConfig).toContain("*.tgz");
     expect(builderConfig).toContain("*.tgz.sha256");
     expect(builderConfig).toContain("plugin.json");

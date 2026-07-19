@@ -12,12 +12,6 @@ import type {
   MenuTemplate,
 } from "@shared/contracts/menu.ts";
 import type {
-  OpenSystemNotificationSettingsResult,
-  SystemNotificationPermissionSnapshot,
-  SystemNotificationRequest,
-  SystemNotificationResult,
-} from "@shared/contracts/notification.ts";
-import type {
   PluginRegistryEntry,
   PluginRegistryListResult,
 } from "@shared/contracts/plugin.ts";
@@ -65,6 +59,10 @@ import {
 import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import {
+  notificationsApi,
+  type PierNotificationsAPI,
+} from "./notifications-api.ts";
+import {
   type AppPreloadApi,
   type AppUpdatePreloadApi,
   createAppPreloadApi,
@@ -89,6 +87,7 @@ import {
   type PierTerminalStatusBarPrefsAPI,
   terminalStatusBarPrefsApi,
 } from "./terminal-status-bar-api.ts";
+import { type PierTerminalsAPI, terminalsApi } from "./terminals-api.ts";
 import { type PierUsageDataAPI, usageDataApi } from "./usage-data-api.ts";
 import { type PierWorktreesAPI, worktreesApi } from "./worktree-api.ts";
 
@@ -116,18 +115,6 @@ export interface PierAgentsAPI {
   }) => Promise<{ launchId: string | null }>;
   refresh: () => Promise<DetectAgentsResult>;
   selection: () => Promise<AgentSelectionResult>;
-}
-
-export interface PierNotificationsAPI {
-  getPermissionStatus: () => Promise<SystemNotificationPermissionSnapshot>;
-  onPermissionChanged: (
-    cb: (snapshot: SystemNotificationPermissionSnapshot) => void
-  ) => () => void;
-  openSystemSettings: () => Promise<OpenSystemNotificationSettingsResult>;
-  sendTest: () => Promise<SystemNotificationResult>;
-  system: (
-    request: SystemNotificationRequest
-  ) => Promise<SystemNotificationResult>;
 }
 
 export interface PierThemeAPI {
@@ -185,8 +172,14 @@ export type { PierFilesAPI } from "./file-api.ts";
 export type { PierFileQueryAPI } from "./file-query-api.ts";
 export type { PierFileSaveTargetAPI } from "./file-save-target-api.ts";
 export type { PierGitAPI } from "./git-api.ts";
+export type { PierNotificationsAPI } from "./notifications-api.ts";
 export type { PierPluginSettingsAPI } from "./plugin-settings-api.ts";
 export type { PierTerminalStatusBarPrefsAPI } from "./terminal-status-bar-api.ts";
+export type {
+  PierTerminalsAPI,
+  TerminalOpenPanelRequest,
+  TerminalOpenPanelResult,
+} from "./terminals-api.ts";
 export type { PierWorktreesAPI } from "./worktree-api.ts";
 
 /**
@@ -267,6 +260,7 @@ export interface PierWindowAPI {
   tasks: PierTasksAPI;
   terminal: TerminalAPI;
   terminalStatusBarPrefs: PierTerminalStatusBarPrefsAPI;
+  terminals: PierTerminalsAPI;
   theme: PierThemeAPI;
   usageData: PierUsageDataAPI;
   window: PierWindowNsAPI;
@@ -299,33 +293,6 @@ const preferencesApi: PierPreferencesAPI = {
       patch,
       type: "preferences.update",
     }),
-};
-
-const notificationsApi: PierNotificationsAPI = {
-  getPermissionStatus: () =>
-    ipcRenderer.invoke(PIER.SYSTEM_NOTIFICATION_PERMISSION),
-  onPermissionChanged: (cb) => {
-    const listener = (
-      _event: unknown,
-      payload: SystemNotificationPermissionSnapshot
-    ): void => {
-      cb(payload);
-    };
-    ipcRenderer.on(
-      PIER_BROADCAST.SYSTEM_NOTIFICATION_PERMISSION_CHANGED,
-      listener
-    );
-    return () => {
-      ipcRenderer.off(
-        PIER_BROADCAST.SYSTEM_NOTIFICATION_PERMISSION_CHANGED,
-        listener
-      );
-    };
-  },
-  openSystemSettings: () =>
-    ipcRenderer.invoke(PIER.SYSTEM_NOTIFICATION_OPEN_SETTINGS),
-  sendTest: () => ipcRenderer.invoke(PIER.SYSTEM_NOTIFICATION_TEST),
-  system: (request) => ipcRenderer.invoke("pier:notification:system", request),
 };
 
 const themeApi: PierThemeAPI = {
@@ -478,6 +445,7 @@ const api: PierWindowAPI = {
   systemStats: systemStatsApi,
   tasks: tasksApi,
   terminal: terminalApi,
+  terminals: terminalsApi,
   terminalStatusBarPrefs: terminalStatusBarPrefsApi,
   usageData: usageDataApi,
   managedPlugins: createManagedPluginsPreloadApi(),

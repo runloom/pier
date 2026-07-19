@@ -14,6 +14,7 @@ import type {
   TerminalOpenUrlEvent,
   TerminalSelectionTextResult,
 } from "@shared/contracts/terminal.ts";
+import type { TerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type { LucideIcon } from "lucide-react";
 import type { ReactNode } from "react";
 import type { PluginConfigurationApi } from "./configuration.ts";
@@ -225,6 +226,32 @@ export interface RendererPluginTerminalContext {
   readSelectionText(panelId?: string): Promise<TerminalSelectionTextResult>;
 }
 
+export interface RendererPluginTerminalOpenRequest {
+  focus?: boolean;
+  launch?: TerminalLaunchOptions;
+  placement?:
+    | "active-tab"
+    | "split-above"
+    | "split-below"
+    | "split-left"
+    | "split-right";
+}
+
+export interface RendererPluginTerminalOpenResult {
+  panelId: string;
+  windowId: string;
+}
+
+/**
+ * 打开宿主终端 panel 的高层入口（区别于单数 `terminal`：读选区/事件）。
+ * 带 launch 参数需要 `terminal:control`；main 侧命令层同规则二次校验。
+ */
+export interface RendererPluginTerminalsContext {
+  open(
+    request?: RendererPluginTerminalOpenRequest
+  ): Promise<RendererPluginTerminalOpenResult>;
+}
+
 export type RendererPluginSuspendReason =
   | "app-quit"
   | "plugin-disable"
@@ -429,6 +456,7 @@ export interface RendererPluginContext {
   terminalStatusItems: {
     register(item: RendererTerminalStatusItem): () => void;
   };
+  terminals: RendererPluginTerminalsContext;
   workbenchWidgets: {
     register(registration: RendererWorkbenchWidgetRegistration): () => void;
   };
