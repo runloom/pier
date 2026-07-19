@@ -489,7 +489,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     TerminalSurfaceScrollbarDelegate
 {
     let panelId: String
-    let browserWindowId: Int
+    var browserWindowId: Int
     let lifecycleId: String
     weak var scrollbarSink: TerminalScrollbarStateSink?
     private(set) var isSurfaceFocused = false
@@ -618,7 +618,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
 private struct Terminal {
     let containerView: TerminalContainerView
     let terminalView: TerminalView
-    let parentWindow: NSWindow
+    var parentWindow: NSWindow
     let outputSession: InMemoryTerminalSession?
     /// EventDelegate adapter (strong-hold — terminalView.delegate 是 weak).
     /// 同时实现 PwdDelegate + TitleDelegate. 随 Terminal 一起释放, terminalView
@@ -1370,6 +1370,211 @@ final class GhosttyBridgeImpl {
         let windowId = ObjectIdentifier(parent)
         eventRouters[windowId]?.targets.removeValue(forKey: panelId)
 
+        return true
+    }
+
+    // MARK: - Test-only window transfer (spike)
+    //
+    // Minimal same-surface reparent for Task 1 gate. Formal production API
+    // converges in step 6 (scoped keys + journaled ownership move). Do not call
+    // from product paths.
+
+    struct TerminalIdentityForTests {
+        let browserWindowId: Int
+        let containerView: TerminalContainerView
+        let controller: TerminalController?
+        let parentWindow: NSWindow
+        let surfaceGeneration: UInt64
+        let terminalView: TerminalView
+    }
+
+    func terminalIdentityForTests(panelId: String) -> TerminalIdentityForTests? {
+        guard let term = terminals[panelId] else { return nil }
+        return TerminalIdentityForTests(
+            browserWindowId: term.eventDelegate.browserWindowId,
+            containerView: term.containerView,
+            controller: term.terminalView.controller,
+            parentWindow: term.parentWindow,
+            surfaceGeneration: term.terminalView.pierRenderDiagnostics.surfaceGeneration,
+            terminalView: term.terminalView
+        )
+    }
+
+    func controllerForTests(window: NSWindow) -> TerminalController? {
+        controllers[ObjectIdentifier(window)]
+    }
+
+    func routerHasTargetForTests(window: NSWindow, panelId: String) -> Bool {
+        eventRouters[ObjectIdentifier(window)]?.targets[panelId] != nil
+    }
+
+    /// Reparent an existing terminal container/view to another NSWindow without
+    /// rebuilding the Ghostty surface or restarting the PTY.
+    ///
+    /// Critical: `TerminalView.controller` must keep the **same object**. Assigning
+    /// a different `TerminalController` tears down and rebuilds the surface.
+    @discardableResult
+    func transferTerminalForTests(
+        panelId: String,
+        to targetWindow: NSWindow,
+        toBrowserWindowId: Int,
+        viewport: NSRect
+    ) -> Bool {
+        guard var term = terminals[panelId],
+              let sourceContent = term.parentWindow.contentView,
+              let targetContent = targetWindow.contentView,
+              eventRouters[ObjectIdentifier(targetWindow)] != nil
+        else {
+            return false
+        }
+
+        let sourceWindow = term.parentWindow
+        guard sourceWindow !== targetWindow else { return true }
+
+        // Target must not already own this panelId (stable IDs; conflict = fail).
+        if let existing = terminals[panelId], existing.parentWindow === targetWindow {
+            return false
+        }
+
+        let sourceWindowId = ObjectIdentifier(sourceWindow)
+        let targetWindowId = ObjectIdentifier(targetWindow)
+
+        // Snapshot for rollback.
+        let previousSuperview = term.containerView.superview
+        let previousFrame = term.containerView.frame
+        let previousHidden = term.containerView.isHidden
+        let previousAlpha = term.containerView.alphaValue
+        let previousParent = term.parentWindow
+        let previousBrowserId = term.eventDelegate.browserWindowId
+        let previousController = term.terminalView.controller
+        let previousSourceController = controllers[sourceWindowId]
+        let previousTargetController = controllers[targetWindowId]
+        let previousSourceTarget = eventRouters[sourceWindowId]?.targets[panelId]
+        let previousLayout = terminalLayouts[panelId]
+
+        func restore() {
+            term.containerView.removeFromSuperview()
+            if let previousSuperview {
+                previousSuperview.addSubview(
+                    term.containerView,
+                    positioned: .below,
+                    relativeTo: nil
+                )
+            }
+            term.containerView.frame = previousFrame
+            term.containerView.isHidden = previousHidden
+            term.containerView.alphaValue = previousAlpha
+            term.parentWindow = previousParent
+            term.eventDelegate.browserWindowId = previousBrowserId
+            term.containerView.updateBrowserWindowId(previousBrowserId)
+            // Keep controller object identical to avoid surface rebuild.
+            if term.terminalView.controller !== previousController {
+                term.terminalView.controller = previousController
+            }
+            controllers[sourceWindowId] = previousSourceController
+            if let previousTargetController {
+                controllers[targetWindowId] = previousTargetController
+            } else {
+                controllers.removeValue(forKey: targetWindowId)
+            }
+            if let previousSourceTarget {
+                eventRouters[sourceWindowId]?.targets[panelId] = previousSourceTarget
+            } else {
+                eventRouters[sourceWindowId]?.targets.removeValue(forKey: panelId)
+            }
+            eventRouters[targetWindowId]?.targets.removeValue(forKey: panelId)
+            terminalLayouts[panelId] = previousLayout
+            terminals[panelId] = term
+        }
+
+        // 1) Drop source router target first so hits stop routing to the old window.
+        eventRouters[sourceWindowId]?.targets.removeValue(forKey: panelId)
+
+        // 2) Move per-window controller ownership to the target WITHOUT changing
+        //    the TerminalView.controller object identity.
+        let movingController = term.terminalView.controller
+            ?? controllers[sourceWindowId]
+        if let movingController {
+            // Target must not already host a different controller with live terminals.
+            if let existingTargetController = controllers[targetWindowId],
+               existingTargetController !== movingController
+            {
+                let targetHasOtherTerminals = terminals.contains {
+                    $0.key != panelId
+                        && ObjectIdentifier($0.value.parentWindow) == targetWindowId
+                }
+                if targetHasOtherTerminals {
+                    restore()
+                    return false
+                }
+            }
+            controllers[targetWindowId] = movingController
+            if controllers[sourceWindowId] === movingController {
+                controllers.removeValue(forKey: sourceWindowId)
+            }
+            // Only assign if different — assignment rebuilds surface.
+            if term.terminalView.controller !== movingController {
+                term.terminalView.controller = movingController
+            }
+        }
+
+        // 3) Reparent the same container/view under target contentView (bottom).
+        let targetFrame = computeFrame(in: targetContent, viewport: viewport)
+        term.containerView.removeFromSuperview()
+        term.containerView.isHidden = true
+        term.containerView.alphaValue = 0
+        term.containerView.frame = NSRect(
+            x: -99999,
+            y: -99999,
+            width: targetFrame.width,
+            height: targetFrame.height
+        )
+        targetContent.addSubview(term.containerView, positioned: .below, relativeTo: nil)
+
+        // 4) Update ownership + browser ids on delegate/container.
+        term.parentWindow = targetWindow
+        term.eventDelegate.browserWindowId = toBrowserWindowId
+        term.containerView.updateBrowserWindowId(toBrowserWindowId)
+        windowToBrowserWindowId[targetWindowId] = toBrowserWindowId
+
+        // 5) Remember layout + install target router hit target.
+        rememberLayout(
+            panelId: panelId,
+            contentView: targetContent,
+            nativeFrame: targetFrame
+        )
+        eventRouters[targetWindowId]?.targets[panelId] = EventRouterView.Target(
+            rect: Self.terminalTargetRect(viewport: viewport),
+            view: term.containerView
+        )
+
+        // 6) Present on target with the same surface (unhide).
+        term.containerView.applyHostFrame(targetFrame)
+        CATransaction.begin()
+        CATransaction.setDisableActions(true)
+        term.containerView.alphaValue = 1
+        term.containerView.isHidden = false
+        CATransaction.commit()
+
+        // Ensure surface stays marked visible after move.
+        if !term.surfaceVisible {
+            term.terminalView.setSurfaceVisible(true)
+            term.surfaceVisible = true
+        }
+
+        terminals[panelId] = term
+
+        // Basic integrity: still attached to target, controller object unchanged.
+        if term.containerView.superview !== targetContent
+            || term.terminalView.controller !== movingController
+            && movingController != nil
+        {
+            restore()
+            return false
+        }
+
+        // Silence unused source content warning in optimized builds.
+        _ = sourceContent
         return true
     }
 

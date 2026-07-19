@@ -18,7 +18,7 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
 
     let terminalView: TerminalView
     private let terminalScrollView: AppTerminalScrollView
-    private let browserWindowId: Int
+    private(set) var browserWindowId: Int
     private let panelId: String
     private var capturedTerminalMouseButton: TerminalMouseButton?
 
@@ -67,6 +67,10 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
         synchronizeChildFrames()
         terminalView.flushHostResizeFrame()
         CATransaction.commit()
+    }
+
+    func updateBrowserWindowId(_ browserWindowId: Int) {
+        self.browserWindowId = browserWindowId
     }
 
     private func synchronizeChildFrames() {
