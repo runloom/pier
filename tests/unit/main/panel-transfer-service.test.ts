@@ -74,7 +74,7 @@ describe("PanelTransferService", () => {
     windows = {
       closeAfterTransfer: vi.fn(async () => undefined),
       closeOpenWindowRecord: vi.fn(async () => undefined),
-      createForTransfer,
+      createForTransfer: createForTransfer as never,
       destroyForTransfer: vi.fn(async () => undefined),
       holdRendererShow: vi.fn(),
       list: vi.fn(() => [
@@ -82,7 +82,7 @@ describe("PanelTransferService", () => {
         { focused: false, id: "w-1", recordId: "record-w1" },
       ]),
       releaseRendererShow: vi.fn(),
-      runExclusive,
+      runExclusive: runExclusive as never,
     };
     geometry = {
       getCursorScreenPoint: () => cursor,
@@ -137,9 +137,9 @@ describe("PanelTransferService", () => {
       geometry,
       journal,
       now: () => now,
-      pluginMutation,
+      pluginMutation: pluginMutation as never,
       rendererCommand: {
-        execute: rendererExecute,
+        execute: rendererExecute as never,
         resolve: () => undefined,
       },
       sleep: sleepImpl ?? (async () => undefined),
@@ -674,9 +674,9 @@ describe("PanelTransferService", () => {
       geometry,
       journal: badJournal,
       now: () => now,
-      pluginMutation,
+      pluginMutation: pluginMutation as never,
       rendererCommand: {
-        execute: rendererExecute,
+        execute: rendererExecute as never,
         resolve: () => undefined,
       },
       reportJournalParseFailure,

@@ -16,7 +16,7 @@ export interface RecoverPendingInput {
   /**
    * Optional dialog hook for unreadable journals. Production wires native dialog.
    */
-  reportParseFailure?: (path: string, error: unknown) => void;
+  reportParseFailure?: ((path: string, error: unknown) => void) | undefined;
 }
 
 /**

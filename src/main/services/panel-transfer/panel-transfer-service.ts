@@ -68,7 +68,9 @@ export interface CreatePanelTransferServiceArgs {
   now?: () => number;
   pluginMutation: <T>(operation: () => Promise<T>) => Promise<T>;
   rendererCommand: RendererCommandService;
-  reportJournalParseFailure?: (path: string, error: unknown) => void;
+  reportJournalParseFailure?:
+    | ((path: string, error: unknown) => void)
+    | undefined;
   sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   terminal?: PanelTransferTerminalPort;
   userDataDir: string;
@@ -456,7 +458,6 @@ export function createPanelTransferService(
             return panelTransferFailure("expired", "transfer cancelled");
           }
         }
-        if (live.claim?.kind === "managed") return null;
         live.abort.abort(
           new DOMException("unclaimed managed hover", "AbortError")
         );

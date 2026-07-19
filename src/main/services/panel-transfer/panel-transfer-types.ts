@@ -29,11 +29,11 @@ export interface PanelTransferJournalRecord {
   createdAt: number;
   offer: Extract<PanelTransferOffer, { capability: "movable" }>;
   phase: PanelTransferPhase;
-  placement?: PanelTransferPlacement;
-  snapshot?: PanelTransferSourceSnapshot;
+  placement?: PanelTransferPlacement | undefined;
+  snapshot?: PanelTransferSourceSnapshot | undefined;
   source: PanelTransferCaller;
-  target?: PanelTransferTargetRef;
-  targetPanelId?: string;
+  target?: PanelTransferTargetRef | undefined;
+  targetPanelId?: string | undefined;
   transferId: string;
   updatedAt: number;
 }

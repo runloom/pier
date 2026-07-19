@@ -71,7 +71,8 @@ describe("TerminalPanelTransfer", () => {
     targetWin: AppWindow;
     lifecycleId?: string;
   }) {
-    const moveTerminal = args.moveTerminal ?? vi.fn(() => true);
+    const moveTerminal =
+      args.moveTerminal ?? vi.fn((..._args: unknown[]) => true);
     const moveOwner = vi.fn();
     const moveNativeKey = vi.fn(() => ({ ok: true as const }));
     const moveTaskOwner = vi.fn();
@@ -212,7 +213,7 @@ describe("TerminalPanelTransfer", () => {
 
   it("reverses completed substeps on pre-commit failure", async () => {
     const { createTerminalPanelTransfer } = await load();
-    const moveTerminal = vi.fn(() => true);
+    const moveTerminal = vi.fn((..._args: unknown[]) => true);
     transferSession.mockRejectedValueOnce(new Error("session cas failed"));
     const { transfer } = baseDeps({
       createTerminalPanelTransfer,
@@ -249,7 +250,7 @@ describe("TerminalPanelTransfer", () => {
 
   it("rollback after commitMove still reverses before journal commit point", async () => {
     const { createTerminalPanelTransfer, resolveOwner } = await load();
-    const moveTerminal = vi.fn(() => true);
+    const moveTerminal = vi.fn((..._args: unknown[]) => true);
     const { transfer } = baseDeps({
       createTerminalPanelTransfer,
       moveTerminal,

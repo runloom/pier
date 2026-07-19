@@ -30,9 +30,9 @@ export interface UnhandledDragOverEventLike {
 }
 
 export interface DidDropEventLike {
-  group?: DockviewGroup;
+  group?: DockviewGroup | undefined;
   nativeEvent: DragEvent | PointerEvent;
-  position?: string;
+  position?: string | undefined;
 }
 
 export function pierPanelTransfer() {

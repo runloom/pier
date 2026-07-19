@@ -149,7 +149,7 @@ describe("panel transfer recovery matrix", () => {
     windows = {
       closeAfterTransfer: vi.fn(async () => undefined),
       closeOpenWindowRecord: vi.fn(async () => undefined),
-      createForTransfer,
+      createForTransfer: createForTransfer as never,
       destroyForTransfer: vi.fn(async () => undefined),
       holdRendererShow: vi.fn(),
       list: vi.fn(() => [
@@ -157,7 +157,7 @@ describe("panel transfer recovery matrix", () => {
         { focused: false, id: "w-1", recordId: "record-w1" },
       ]),
       releaseRendererShow: vi.fn(),
-      runExclusive,
+      runExclusive: runExclusive as never,
     };
     geometry = {
       getCursorScreenPoint: () => ({ x: 5000, y: 5000 }),
@@ -204,9 +204,9 @@ describe("panel transfer recovery matrix", () => {
       geometry,
       journal,
       now: () => now,
-      pluginMutation,
+      pluginMutation: pluginMutation as never,
       rendererCommand: {
-        execute: rendererExecute,
+        execute: rendererExecute as never,
         resolve: () => undefined,
       },
       sleep: async () => undefined,

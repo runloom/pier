@@ -40,7 +40,9 @@ export interface PanelTransferLifecycleArgs {
   pluginMutation: <T>(operation: () => Promise<T>) => Promise<T>;
   pruneTombstones(): void;
   rememberTombstone(transferId: string, result: PanelTransferResult): void;
-  reportJournalParseFailure?: (path: string, error: unknown) => void;
+  reportJournalParseFailure?:
+    | ((path: string, error: unknown) => void)
+    | undefined;
   tombstones: Map<string, { expiresAt: number; result: PanelTransferResult }>;
   windowAbort: Map<string, AbortController>;
   windows: PanelTransferTransactionDeps["windows"];

@@ -4,6 +4,8 @@ import { join } from "node:path";
 import { _electron as electron, expect, test } from "@playwright/test";
 import {
   OUT_MAIN,
+  type RunSpawnData,
+  type RunStatusData,
   runPierCliJson,
   SLOW_TASK_ID,
   spawnSlowTaskUntilRunning,

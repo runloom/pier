@@ -151,7 +151,8 @@ async function positionWindowsSideBySide(
     if (windows.length < 2) {
       throw new Error(`Expected >=2 BaseWindows, got ${windows.length}`);
     }
-    const [sourceHost, targetHost] = windows;
+    const sourceHost = windows[0]!;
+    const targetHost = windows[1]!;
     const display = screen.getDisplayMatching(sourceHost.getBounds());
     const work = display.workArea;
     const gap = 24;

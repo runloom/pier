@@ -193,7 +193,8 @@ async function positionWindowsSideBySide(app: ElectronApplication) {
     if (windows.length < 2) {
       throw new Error(`Expected 2 BaseWindows, got ${windows.length}`);
     }
-    const [sourceHost, targetHost] = windows;
+    const sourceHost = windows[0]!;
+    const targetHost = windows[1]!;
     const display = screen.getDisplayMatching(sourceHost.getBounds());
     const work = display.workArea;
     const gap = 24;
@@ -349,11 +350,11 @@ async function installSpikeInstrumentation(
   await page.evaluate(
     ({ mime, prefix, role, transferId: id, logKey }) => {
       interface DragBucket {
-        dropEffect?: string;
-        effectAllowed?: string;
+        dropEffect?: string | undefined;
+        effectAllowed?: string | undefined;
         mimeData: string | null;
-        screenX?: number;
-        screenY?: number;
+        screenX?: number | undefined;
+        screenY?: number | undefined;
         textData: string | null;
         types: string[];
         windowRole: "source" | "target";
@@ -872,7 +873,7 @@ async function installSpikeInstrumentation(
           cancelable: true,
           clientX,
           clientY,
-          dataTransfer: dataTransfer ?? undefined,
+          dataTransfer,
           screenX: clientX,
           screenY: clientY,
         });
@@ -1110,7 +1111,8 @@ async function probeCursorClassification(app: ElectronApplication) {
       return { kind: "outside" };
     };
 
-    const [source, target] = windows;
+    const source = windows[0]!;
+    const target = windows[1]!;
     const insideTarget = {
       x: target.x + Math.floor(target.width / 2),
       y: target.y + Math.floor(target.height / 2),
@@ -1208,7 +1210,7 @@ test.describe("Panel cross-window drag spike", () => {
         "Playwright mouse on .dv-tab must fire dragstart"
       ).toBeGreaterThan(0);
 
-      const start = sourceLog.dragstart[0];
+      const start = sourceLog.dragstart[0]!;
       expect(start.types.length).toBeGreaterThan(0);
       const startHasMime =
         start.mimeData === transferId ||

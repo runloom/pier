@@ -690,7 +690,10 @@ describe("workspace panel transfer", () => {
       });
       expect(rewritten.rewritten).toBe(true);
       const placeholder = (
-        rewritten.layout.panels as Record<string, Record<string, unknown>>
+        rewritten.layout.panels as unknown as Record<
+          string,
+          Record<string, unknown>
+        >
       )["missing-1"];
       expect(placeholder?.contentComponent).toBe("panel-transfer-unavailable");
       expect(placeholder?.params).toMatchObject({
@@ -708,7 +711,10 @@ describe("workspace panel transfer", () => {
       );
       expect(restored.restored).toBe(true);
       const panelState = (
-        restored.layout.panels as Record<string, Record<string, unknown>>
+        restored.layout.panels as unknown as Record<
+          string,
+          Record<string, unknown>
+        >
       )["missing-1"];
       expect(panelState?.contentComponent).toBe("pier.missing.plugin");
       expect(panelState?.params).toEqual({ path: "/tmp/a" });

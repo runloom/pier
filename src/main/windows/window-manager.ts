@@ -210,7 +210,7 @@ class WindowManager {
       additionalArguments: [`--window-id=${id}`],
     };
     const baseOpts = buildBaseWindowOptions({
-      bounds: opts.bounds,
+      ...(opts.bounds === undefined ? {} : { bounds: opts.bounds }),
       resolved,
     });
     const devIcon = resolveDevIcon();
