@@ -3,6 +3,8 @@ import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
+  CODEX_FA_ERROR_REACHABILITY,
+  CODEX_HOOK_EVENTS,
   codexHomeDir,
   installCodexHooks,
   uninstallCodexHooks,
@@ -70,6 +72,18 @@ describe("withPierCodexHooks", () => {
     const hooks = next.hooks as Record<string, unknown>;
     expect(hooks.SessionEnd).toBeUndefined();
     expect("SessionEnd" in hooks).toBe(false);
+  });
+
+  it("Ev5: FA error unsupported — hook map has no error pierEvent", () => {
+    expect(CODEX_FA_ERROR_REACHABILITY).toBe("unsupported");
+    expect(CODEX_HOOK_EVENTS.some((e) => e.pierEvent === "error")).toBe(false);
+    expect(CODEX_HOOK_EVENTS.some((e) => e.nativeEvent === "StopFailure")).toBe(
+      false
+    );
+    // Stop remains Stop; must not map user abort / Stop to error.
+    expect(
+      CODEX_HOOK_EVENTS.find((e) => e.nativeEvent === "Stop")?.pierEvent
+    ).toBe("Stop");
   });
 
   it("幂等：重复安装不产生重复条目", () => {

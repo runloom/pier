@@ -48,6 +48,9 @@ interface CodexTranscriptReconcilerOpts {
  * `event_msg/turn_aborted`。这里仅消费 task_complete / turn_aborted 两种终态，
  * 不把 transcript 当工具或过程状态的权威源。格式变化时静默失效，hook 与
  * PTY 退出兜底仍然有效。
+ *
+ * Ev5：`turn_aborted`（含 reason=`interrupted`）只映 `TurnInterrupted`→ready，
+ * **不得**映 FA `error`——用户中断不是回合失败。无独立失败终态可映射。
  */
 export function createCodexTranscriptReconciler(
   opts: CodexTranscriptReconcilerOpts

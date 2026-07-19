@@ -195,6 +195,7 @@ describeMockedMacOSWindowManager(
         expect.objectContaining({
           webPreferences: expect.objectContaining({
             additionalArguments: ["--window-id=main"],
+            autoplayPolicy: "no-user-gesture-required",
             backgroundThrottling: false,
             contextIsolation: true,
             nodeIntegration: false,

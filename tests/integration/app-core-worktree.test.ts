@@ -5,7 +5,7 @@ import { join } from "node:path";
 import { promisify } from "node:util";
 import type { PierClient } from "@shared/contracts/permissions.ts";
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
-import { afterEach, describe, expect, it, vi } from "vitest";
+import { afterAll, afterEach, describe, expect, it, vi } from "vitest";
 
 const execFileAsync = promisify(execFile);
 const tempDirs: string[] = [];
@@ -83,6 +83,21 @@ function mockElectron(userDataDir: string): void {
     WebContentsView: MockWindow,
   }));
 }
+
+// 钉死 release 插件模式：本测试只关心 worktree 服务图。dev 默认的 workspace
+// 模式会在 boot 时真装本地 dist-pkg 并动态 import 带 ?rev= 的 file URL——
+// vitest 模块加载器不支持，且是否触发取决于机器上是否存在 gitignored 的
+// packages/*/dist-pkg（CI 无、跑过 pnpm dev 的机器有），导致结果不确定。
+const priorPluginMode = process.env.PIER_PLUGIN_MODE;
+process.env.PIER_PLUGIN_MODE = "release";
+
+afterAll(() => {
+  if (priorPluginMode === undefined) {
+    delete process.env.PIER_PLUGIN_MODE;
+  } else {
+    process.env.PIER_PLUGIN_MODE = priorPluginMode;
+  }
+});
 
 afterEach(async () => {
   vi.doUnmock("electron");

@@ -54,6 +54,8 @@ export const PIER = {
   SYSTEM_NOTIFICATION_PERMISSION: "pier://notification:permission",
   SYSTEM_NOTIFICATION_TEST: "pier://notification:test",
   SYSTEM_NOTIFICATION_OPEN_SETTINGS: "pier://notification:open-settings",
+  // renderer 直发系统通知（历史 wire 值，改值会破坏滚动升级期的 preload/main 配对）
+  SYSTEM_NOTIFICATION_SHOW: "pier:notification:system",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -123,6 +125,8 @@ export const PIER_BROADCAST = {
   // 系统通知权限探针快照变化；payload SystemNotificationPermissionSnapshot
   SYSTEM_NOTIFICATION_PERMISSION_CHANGED:
     "pier://notification:permission-changed",
+  // Attention 内置提示音：单窗播放指令；payload { soundId }
+  ATTENTION_SOUND_PLAY: "pier://attention-sound:play",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

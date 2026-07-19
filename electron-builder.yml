@@ -22,6 +22,8 @@ extraResources:
     to: bin/pier
   - from: resources/fonts
     to: fonts
+  - from: resources/notification-sounds
+    to: notification-sounds
   - from: packages/plugin-codex/dist-pkg
     to: plugin-packages/pier.codex
     filter:

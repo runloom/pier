@@ -105,7 +105,7 @@ flowchart LR
 | claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PermissionRequest→PermissionRequest`；`PermissionDenied/PreCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop→同名`；`SessionEnd→SessionEnd` | `advisory` |
 | cline | 可执行 hook 文件 | `full` | `TaskStart→SessionStart`；`TaskResume→running`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`TaskCancel/TaskComplete→Stop`；`PreCompact→processing` | `authoritative` |
 | codebuddy | Claude 兼容嵌套 JSON hook | `full` | 与 claude 相同 | `advisory` |
-| codex | Codex `hooks.json` | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PermissionRequest→PermissionRequest`；`PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop→同名`；`Stop→Stop`；内部对账另补 `TurnCompleted/TurnInterrupted` | `advisory` |
+| codex | Codex `hooks.json` | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PermissionRequest→PermissionRequest`；`PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop→同名`；`Stop→Stop`；内部对账另补 `TurnCompleted/TurnInterrupted`；**`error: unsupported`**（hooks 无 `StopFailure`；`turn_aborted` 仅→`TurnInterrupted`，禁止当失败） | `advisory` |
 | command-code | 嵌套 JSON hook | `coarse` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop` | `advisory` |
 | copilot | Copilot hook 配置 | `full` | `sessionStart→SessionStart`；`sessionEnd→SessionEnd`；`userPromptSubmitted→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse→ToolComplete`；`agentStop→Stop`；`permissionRequest→PermissionRequest`；`subagentStart/subagentStop→同名`；`errorOccurred→error` | `advisory` |
 | crush | 主配置内扁平 hook | `coarse` | `PreToolUse→ToolStart`；没有可信终态 | `none` |
@@ -121,7 +121,7 @@ flowchart LR
 | kiro | Kiro 扁平 hook 配置 | `full` | `agentSpawn→SessionStart`；`userPromptSubmit→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse→ToolComplete`；`stop→Stop` | `advisory` |
 | mimo-code | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.idle→Stop`；`session.error→error`；`session.deleted→SessionEnd`；`session.status busy/retry→running`、`idle→Stop`；`tui.command.execute(prompt.submit)→PromptSubmit`；`permission.updated→PermissionRequest`；`permission.replied→processing`；`tool.execute.before/after→ToolStart/ToolComplete` | `authoritative` |
 | mistral-vibe | 实验性 TOML hook | `coarse` | `before_tool→ToolStart`；`after_tool→ToolComplete`；`post_agent_turn→Stop` | `authoritative` |
-| omp | JavaScript 扩展 | `full` | `session_start→SessionStart`；主代理 `agent_start→PromptSubmit`、`agent_end→Stop`；子代理 `agent_start/agent_end→SubagentStart/SubagentStop`；`tool_call→ToolStart`；`tool_result→ToolComplete`；`tool_approval_requested→PermissionRequest`；`tool_approval_resolved→ToolStart`；`session_shutdown→SessionEnd` | `authoritative` |
+| omp | JavaScript 扩展 | `full` | `session_start→SessionStart`；主代理 `agent_start→PromptSubmit`、`agent_end→Stop`；子代理 `agent_start/agent_end→SubagentStart/SubagentStop`；`tool_call→ToolStart`；`tool_result→ToolComplete`；`tool_approval_requested→PermissionRequest`；`tool_approval_resolved→ToolStart`；`session_shutdown→SessionEnd`；**`error: unsupported`**（2026-07-05 probe：abort/ESC 仍 `agent_end→Stop`，无独立失败事件） | `authoritative` |
 | opencode | JavaScript 插件事件总线 | `full` | 与 mimo-code 相同 | `authoritative` |
 | openclaude | Claude 兼容嵌套 JSON hook | `full` | 与 claude 相同 | `advisory` |
 | pi | JavaScript 扩展 | `coarse` | `session_start→SessionStart`；`agent_start→PromptSubmit`；`agent_end→Stop`；`session_shutdown→SessionEnd` | `authoritative` |
@@ -137,6 +137,18 @@ flowchart LR
 | continue | 同上 | 同上 | 同上 |
 | rovo | 同上 | 同上 | 同上 |
 | openclaw | 同上 | 同上 | 同上 |
+
+## FA `error` 可达性（Ev5 / 2026-07-19）
+
+通知「出错时」依赖 FA 进入 `error`。下列结论禁止假绿：无原生失败语义时不得把 `Stop` / `agent_end` / `TurnInterrupted` / 用户 abort 映射为 `error`。
+
+| Provider | 结论 | 证据 | 代码锁 |
+|---|---|---|---|
+| omp | **B — `error: unsupported`** | 2026-07-05 probe：abort/ESC 仍发 `agent_end`；`OMP_EVENTS` 无独立失败事件；`agent_end→Stop` | `OMP_FA_ERROR_REACHABILITY`；`omp.test.ts` 断言映射表不含 `error` |
+| codex | **B — `error: unsupported`** | 发布版 hooks 全集无 `StopFailure`；transcript 对账仅 `task_complete→TurnCompleted`、`turn_aborted→TurnInterrupted` | `CODEX_FA_ERROR_REACHABILITY`；`codex.test.ts` 断言 hook 映射不含 `error` |
+| claude（对照） | **A — `StopFailure→error`** | 官方 hooks：`StopFailure` = 回合因 API 错误终止 | `claude.ts` 映射保持不变 |
+
+`enableErrorAttention` 对 omp/codex **无 FA 入口**属预期；对仍有真实 `error` 映射的 Top A（如 claude）继续有效。
 
 ## 兼容输入边界
 

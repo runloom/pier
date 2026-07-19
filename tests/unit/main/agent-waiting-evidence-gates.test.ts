@@ -136,6 +136,7 @@ describe("S1 top A waiting evidence", () => {
     const showNotification = vi.fn(async () => ({ shown: true }));
     const service = createAgentAttentionService({
       isTargetPanelFocused: () => false,
+      isOwnerWindowFocused: () => false,
       showNotification,
     });
     await service.observe(null, { activities: [activity], ts: 1 });

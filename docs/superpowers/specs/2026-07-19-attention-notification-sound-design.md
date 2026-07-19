@@ -6,6 +6,8 @@
 > 参照：Orca（Electron：自定义音时静音系统通知 + preload `HTMLAudioElement`）；Vibe Kanban（开关 + 内置音色 + 试听；触发挂在 notify 成功路径）  
 > 审查：2026-07-19 产品 / Electron 架构 / 竞品 / 无障碍·可靠性 四方并行审查 → **approve-with-changes**；本修订吸收全部 P0 与约定 P1  
 > 范围：仅「需要你处理」注意力提示音；**不含**完成音、终端响铃、音量滑条、自定义音频文件、通知历史
+>
+> **废止说明（2026-07-19）**：其中「不含完成音 / 完成音另开产品」已被 [`2026-07-19-agent-notification-events-design.md`](./2026-07-19-agent-notification-events-design.md) 废止并覆盖；本文件其余提示音管线（防双响、单窗、跟随 shown）仍然有效。
 
 ## 1. 目标与完成标准
 

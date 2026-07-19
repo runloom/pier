@@ -13,9 +13,11 @@ export function formatAttentionNotificationCopy(
 ): { body: string; title: string } {
   const agentLabel =
     getAgentCatalogEntry(activity.agentId)?.label ?? activity.agentId;
-  // 调用方已保证进入 waiting/error；其它状态不应走到通知文案。
+  // 调用方已保证进入 waiting/ready/error；其它状态不应走到通知文案。
   const status =
-    activity.status === "error" || activity.status === "waiting"
+    activity.status === "error" ||
+    activity.status === "waiting" ||
+    activity.status === "ready"
       ? activity.status
       : "waiting";
   return formatShared({ agentLabel, status }, locale);

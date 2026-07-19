@@ -1,5 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
+import { formatAttentionTestNotificationCopy } from "@shared/agent-attention-copy.ts";
 import { AGENT_ATTENTION_TEST_KIND } from "@shared/contracts/agent-attention.ts";
 import type {
   OpenSystemNotificationSettingsResult,
@@ -48,6 +49,10 @@ export interface ShowSystemNotificationOptions {
   ) => void;
   /** 通知未能展示（含粘性拒绝）时回调，供 Attention 提示用户看标题栏。 */
   onUnavailable?: (reason: SystemNotificationUnavailableReason) => void;
+  /** 缺省 false */
+  silent?: boolean;
+  /** darwin system 路径传 "default" */
+  sound?: string;
 }
 
 export function resetSystemNotificationPermissionStateForTests(): void {
@@ -163,7 +168,8 @@ export async function showSystemNotification(
   const isTestKind = request.kind === AGENT_ATTENTION_TEST_KIND;
   const notification = new Notification({
     title: request.title,
-    silent: false,
+    silent: options.silent ?? false,
+    ...(options.sound ? { sound: options.sound } : {}),
     ...(request.body ? { body: request.body } : {}),
     ...(isTestKind && process.platform === "darwin"
       ? { subtitle: "Pier" }
@@ -266,19 +272,27 @@ export async function showSystemNotification(
   return outcome;
 }
 
-/** 设置页「发送测试通知」：forceProbe，不携带业务 agentRef。 */
+/**
+ * 设置页「发送测试通知」：forceProbe，不携带业务 agentRef。
+ * copy 由调用方按界面语言解析（formatAttentionTestNotificationCopy）；
+ * 缺省英文，保证无 locale 上下文的调用路径仍可用。
+ */
 export async function showTestSystemNotification(
-  options: Omit<ShowSystemNotificationOptions, "forceProbe"> = {}
+  options: Omit<ShowSystemNotificationOptions, "forceProbe"> & {
+    copy?: { body: string; title: string };
+  } = {}
 ): Promise<SystemNotificationResult> {
+  const { copy, ...showOptions } = options;
+  const resolved = copy ?? formatAttentionTestNotificationCopy("en");
   return showSystemNotification(
     {
-      body: "If you see this banner or Notification Center item, delivery works.",
+      body: resolved.body,
       kind: AGENT_ATTENTION_TEST_KIND,
       tag: `${AGENT_ATTENTION_TEST_KIND}:${Date.now()}`,
-      title: "Pier test notification",
+      title: resolved.title,
     },
     {
-      ...options,
+      ...showOptions,
       forceProbe: true,
     }
   );

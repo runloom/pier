@@ -117,6 +117,9 @@ export interface PierAgentsAPI {
 
 export interface PierNotificationsAPI {
   getPermissionStatus: () => Promise<SystemNotificationPermissionSnapshot>;
+  onAttentionSoundPlay: (
+    cb: (payload: { soundId: string }) => void
+  ) => () => void;
   onPermissionChanged: (
     cb: (snapshot: SystemNotificationPermissionSnapshot) => void
   ) => () => void;
@@ -292,6 +295,8 @@ const preferencesApi: PierPreferencesAPI = {
 const notificationsApi: PierNotificationsAPI = {
   getPermissionStatus: () =>
     ipcRenderer.invoke(PIER.SYSTEM_NOTIFICATION_PERMISSION),
+  onAttentionSoundPlay: (cb) =>
+    subscribeIpc<{ soundId: string }>(PIER_BROADCAST.ATTENTION_SOUND_PLAY, cb),
   onPermissionChanged: (cb) => {
     const listener = (
       _event: unknown,
@@ -313,7 +318,8 @@ const notificationsApi: PierNotificationsAPI = {
   openSystemSettings: () =>
     ipcRenderer.invoke(PIER.SYSTEM_NOTIFICATION_OPEN_SETTINGS),
   sendTest: () => ipcRenderer.invoke(PIER.SYSTEM_NOTIFICATION_TEST),
-  system: (request) => ipcRenderer.invoke("pier:notification:system", request),
+  system: (request) =>
+    ipcRenderer.invoke(PIER.SYSTEM_NOTIFICATION_SHOW, request),
 };
 
 const themeApi: PierThemeAPI = {

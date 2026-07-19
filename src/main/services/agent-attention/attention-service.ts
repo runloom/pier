@@ -15,15 +15,28 @@ import type {
 } from "@shared/contracts/notification.ts";
 import { createLogger } from "@shared/logger.ts";
 import {
+  decideNotificationAudio,
+  type NotificationAudioDecision,
+  toShowAudio,
+} from "./notification-audio.ts";
+import {
   type AttentionUiLocale,
   formatAttentionNotificationCopy,
 } from "./notification-copy.ts";
+import {
+  type AgentNotificationEventKind,
+  classifyAgentNotificationEvent,
+  shouldSuppressAgentNotification,
+} from "./notification-event.ts";
 
 const log = createLogger("agent-attention");
 
 export interface AgentAttentionService {
-  /** 测试 / 诊断：某 agentRef 最近一次尝试通知的时刻。 */
-  lastNotifiedAt(agentRef: string): number | undefined;
+  /** 测试 / 诊断：某 agentRef 某类事件最近一次成功通知的时刻。 */
+  lastNotifiedAt(
+    agentRef: string,
+    kind: AgentNotificationEventKind
+  ): number | undefined;
   observe(
     previous: ForegroundActivityBroadcast | null,
     next: ForegroundActivityBroadcast
@@ -31,13 +44,21 @@ export interface AgentAttentionService {
 }
 
 export interface CreateAgentAttentionServiceArgs {
+  /** 拥有该智能体面板的 BrowserWindow 是否聚焦（ready / unfocused 模式）。 */
+  isOwnerWindowFocused(electronWindowId: string): boolean;
   isTargetPanelFocused(electronWindowId: string, panelId: string): boolean;
   now?(): number;
+  /**
+   * shown:true 后调用。默认 maybePlayAfterShown（业务 force:false）。
+   * 单测可注入以断言播音决策，不依赖 windowManager。
+   */
+  playAttentionSound?: (decision: NotificationAudioDecision) => void;
   resolveLocale?(): AttentionUiLocale | Promise<AttentionUiLocale>;
   /** 同步读取当前策略（main 缓存）；禁止在此做异步 IO。 */
   settings?(): AgentAttentionSettings;
   showNotification(
-    request: SystemNotificationRequest
+    request: SystemNotificationRequest,
+    audio?: Pick<NotificationAudioDecision, "silent" | "sound">
   ): SystemNotificationResult | Promise<SystemNotificationResult>;
 }
 
@@ -56,52 +77,48 @@ function agentStatusMap(
   return map;
 }
 
-/** 触发集 T：waiting 恒在；error 仅当 enableErrorAttention。 */
-function inTriggerSet(
-  status: ActivityStatus | undefined,
-  settings: AgentAttentionSettings
-): boolean {
-  if (status === "waiting") {
-    return true;
-  }
-  return settings.enableErrorAttention && status === "error";
-}
-
-/**
- * 仅当 previous ∉ T 且 next ∈ T 时进入候选（非 previous !== next）。
- * waiting↔error 同属 T 时不重复通知。
- */
-function enteredAttention(
-  previous: ActivityStatus | undefined,
-  next: ActivityStatus | undefined,
-  settings: AgentAttentionSettings
-): boolean {
-  return !inTriggerSet(previous, settings) && inTriggerSet(next, settings);
-}
-
 export function createAgentAttentionService({
   isTargetPanelFocused,
+  isOwnerWindowFocused,
   now = () => Date.now(),
   resolveLocale = () => "en" as AttentionUiLocale,
   settings = () => DEFAULT_AGENT_ATTENTION_SETTINGS,
   showNotification,
+  playAttentionSound = (_decision) => {
+    // 默认无播音端口：生产由 registerAgentAttention 注入 sendToWindow 单播。
+    // 未注入时静默 no-op，避免单测/集成路径误以为已播。
+  },
 }: CreateAgentAttentionServiceArgs): AgentAttentionService {
+  // 冷却按 (kind, agentRef) 分开记：waiting 通知不得吞掉随后的回合完成，
+  // 连续短回合的 ready 之间才互相受 cooldownMs 约束。
   const lastNotified = new Map<string, number>();
+  const cooldownKey = (
+    agentRef: string,
+    kind: AgentNotificationEventKind
+  ): string => `${kind}:${agentRef}`;
 
   return {
-    lastNotifiedAt(agentRef) {
-      return lastNotified.get(agentRef);
+    lastNotifiedAt(agentRef, kind) {
+      return lastNotified.get(cooldownKey(agentRef, kind));
     },
     async observe(previous, next) {
       const prefs = settings();
-      if (!prefs.enabled) {
-        return;
-      }
+      // 禁止整次 observe 因 enabled=false 短路：ready / error 可独立于 enabled。
 
       const prevMap = previous
         ? agentStatusMap(previous.activities)
         : new Map<string, ActivityStatus | undefined>();
       const locale = await resolveLocale();
+
+      // 冷却回收：面板消失（关闭 / 会话结束）即清理，防长跑进程只增不减。
+      // 重开面板视为新会话，重新计冷却。
+      const liveRefs = agentStatusMap(next.activities);
+      for (const key of lastNotified.keys()) {
+        const agentRef = key.slice(key.indexOf(":") + 1);
+        if (!liveRefs.has(agentRef)) {
+          lastNotified.delete(key);
+        }
+      }
 
       for (const activity of next.activities) {
         if (activity.kind !== "agent") {
@@ -109,38 +126,56 @@ export function createAgentAttentionService({
         }
         const agentRef = makeAgentRef(activity.windowId, activity.panelId);
         const prevStatus = prevMap.get(agentRef);
-        if (!enteredAttention(prevStatus, activity.status, prefs)) {
+        const kind = classifyAgentNotificationEvent({
+          previous: prevStatus,
+          next: activity.status,
+          settings: prefs,
+        });
+        if (kind == null) {
           continue;
         }
 
         if (
-          prefs.suppressWhenFocused &&
-          isTargetPanelFocused(activity.windowId, activity.panelId)
+          shouldSuppressAgentNotification({
+            kind,
+            settings: prefs,
+            isTargetPanelFocused: isTargetPanelFocused(
+              activity.windowId,
+              activity.panelId
+            ),
+            isOwnerWindowFocused: isOwnerWindowFocused(activity.windowId),
+          })
         ) {
-          log.debug("skip notify: target panel focused", { agentRef });
+          log.debug("skip notify: suppressed by focus", { agentRef, kind });
           continue;
         }
 
-        const lastAt = lastNotified.get(agentRef);
+        const lastAt = lastNotified.get(cooldownKey(agentRef, kind));
         const ts = now();
         if (lastAt !== undefined && ts - lastAt < prefs.cooldownMs) {
-          log.debug("skip notify: cooldown", { agentRef });
+          log.debug("skip notify: cooldown", { agentRef, kind });
           continue;
         }
 
         const copy = formatAttentionNotificationCopy(activity, locale);
         const tag = `${AGENT_ATTENTION_KIND}:${agentRef}`;
-        const result = await showNotification({
-          agentRef,
-          body: copy.body,
-          kind: AGENT_ATTENTION_KIND,
-          tag,
-          title: copy.title,
-        });
+        const decision = decideNotificationAudio(prefs);
+        const audio = toShowAudio(decision);
+        const result = await showNotification(
+          {
+            agentRef,
+            body: copy.body,
+            kind: AGENT_ATTENTION_KIND,
+            tag,
+            title: copy.title,
+          },
+          audio
+        );
 
         // 仅在真正展示后记冷却；shown:false 不得冒充已通知。
         if (result.shown) {
-          lastNotified.set(agentRef, ts);
+          lastNotified.set(cooldownKey(agentRef, kind), ts);
+          playAttentionSound(decision);
         } else {
           log.debug("notification not shown", {
             agentRef,

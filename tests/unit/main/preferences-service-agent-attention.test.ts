@@ -20,6 +20,9 @@ describe("preferences-service agentAttention whitelist", () => {
       enableErrorAttention: false,
       suppressWhenFocused: true,
       cooldownMs: 60_000,
+      soundEnabled: true,
+      soundId: "system",
+      turnNotifyMode: "unfocused",
     };
     const current = basePreferences();
     const updatePreferences = vi.fn(

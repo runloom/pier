@@ -110,3 +110,21 @@ export function broadcastSystemNotificationPermissionChanged(
     snapshot
   );
 }
+
+/**
+ * 向单一 renderer 下发内置 Attention 播音。
+ * 优先 focused 窗，否则第一个存活窗；禁止 all-windows 各播一次。
+ */
+export function sendAttentionSoundPlayToOneWindow(payload: {
+  soundId: string;
+}): boolean {
+  const win = windowManager.getFocused() ?? windowManager.getAll()[0] ?? null;
+  if (!win || win.isDestroyed()) {
+    return false;
+  }
+  if (win.webContents.isDestroyed()) {
+    return false;
+  }
+  win.webContents.send(PIER_BROADCAST.ATTENTION_SOUND_PLAY, payload);
+  return true;
+}

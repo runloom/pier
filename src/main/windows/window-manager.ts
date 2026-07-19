@@ -173,6 +173,8 @@ class WindowManager {
       contextIsolation: true,
       nodeIntegration: false,
       backgroundThrottling: false,
+      // attention HTMLAudio without gesture
+      autoplayPolicy: "no-user-gesture-required",
       additionalArguments: [`--window-id=${id}`],
     };
     const baseOpts: Electron.BaseWindowConstructorOptions = {
