@@ -82,7 +82,7 @@ type FinalizeCommand = Extract<
 
 async function handlePrepareSource(
   command: PrepareSourceCommand
-): Promise<void> {
+): Promise<PanelTransferRendererSourceSnapshot> {
   const { transferId, sourcePanelId } = command;
   const api = requireApi();
   const panel = findPanel(api, sourcePanelId);
@@ -115,6 +115,7 @@ async function handlePrepareSource(
   const snapshot = buildRendererSourceSnapshot(panel, component, prepared);
   setFrozenSourceSnapshot(transferId, snapshot, revision);
   setPanelRelocationSuppressed(true);
+  return snapshot;
 }
 
 async function handleStageTarget(command: StageTargetCommand): Promise<void> {
@@ -317,8 +318,9 @@ export async function bootstrapPendingTransfers(): Promise<
 
 /**
  * Run a `panelTransfer.*` renderer command envelope. Resolves the renderer
- * command channel with the result (data null on success, error on failure).
- * Returns true if the command type was a panelTransfer command.
+ * command channel with the result (`prepareSource` returns the snapshot;
+ * other commands resolve `data: null` on success). Returns true if the
+ * command type was a panelTransfer command.
  */
 export async function runPanelTransferRendererCommand(
   envelope: RendererCommandEnvelope
@@ -336,10 +338,11 @@ export async function runPanelTransferRendererCommand(
   };
   try {
     switch (envelope.command.type) {
-      case "panelTransfer.prepareSource":
-        await handlePrepareSource(envelope.command);
-        resolve({ data: null, ok: true });
+      case "panelTransfer.prepareSource": {
+        const snapshot = await handlePrepareSource(envelope.command);
+        resolve({ data: snapshot, ok: true });
         return true;
+      }
       case "panelTransfer.stageTarget":
         await handleStageTarget(envelope.command);
         resolve({ data: null, ok: true });

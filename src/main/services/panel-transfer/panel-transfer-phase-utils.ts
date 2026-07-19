@@ -26,7 +26,8 @@ export function requireOk(
 export function snapshotFromPrepare(
   result: Extract<RendererCommandResult, { ok: true }>,
   panelId: string,
-  componentId: string
+  componentId: string,
+  terminalLifecycleId = ""
 ): PanelTransferSourceSnapshot {
   const data = result.data;
   if (!data || typeof data !== "object") {
@@ -34,7 +35,6 @@ export function snapshotFromPrepare(
   }
   const record = data as Record<string, unknown>;
   const panel = record.panel;
-  const runtime = record.runtime;
   const prepared = record.prepared;
   if (!panel || typeof panel !== "object") {
     throw new Error("prepareSource missing panel");
@@ -46,12 +46,23 @@ export function snapshotFromPrepare(
   ) {
     throw new Error("prepareSource panel identity mismatch");
   }
+
+  // Renderer returns PanelTransferRendererSourceSnapshot (`runtimeKind`).
+  // Main journals PanelTransferSourceSnapshot (`runtime`), filling terminal
+  // lifecycleId from session/lifecycle storage (never forged by renderer).
+  let runtime: PanelTransferSourceSnapshot["runtime"];
+  if (record.runtime && typeof record.runtime === "object") {
+    runtime = record.runtime as PanelTransferSourceSnapshot["runtime"];
+  } else if (record.runtimeKind === "terminal") {
+    runtime = { kind: "terminal", lifecycleId: terminalLifecycleId };
+  } else {
+    runtime = { kind: "web" };
+  }
+
   return {
     panel: panel as PanelTransferSourceSnapshot["panel"],
     prepared: (prepared ?? {}) as PanelTransferSourceSnapshot["prepared"],
-    runtime: (runtime ?? {
-      kind: "web",
-    }) as PanelTransferSourceSnapshot["runtime"],
+    runtime,
   };
 }
 

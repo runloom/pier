@@ -458,7 +458,16 @@ describe("workspace panel transfer", () => {
       });
       expect(isPanelRelocationSuppressed()).toBe(true);
       expect(pier.resolve).toHaveBeenCalledWith({
-        data: null,
+        data: {
+          panel: {
+            componentId: "welcome",
+            panelId: "welcome-1",
+            params: { note: "hi" },
+            title: "welcome-1",
+          },
+          prepared: { drafts: [] },
+          runtimeKind: "web",
+        },
         ok: true,
         requestId: "prepare-1",
       });
