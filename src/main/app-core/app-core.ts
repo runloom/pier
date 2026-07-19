@@ -330,6 +330,7 @@ function createPierAppCore(): PierAppCore {
   const workspaceService = createWorkspaceService();
   const { panelTransfer: panelTransferRef, window: windowService } =
     wireAppCoreWindowAndPanelTransfer({
+      fileDrafts,
       fileDraftsFlush: () => fileDrafts.flush(),
       pluginDisableTransitions,
       rendererCommand,

@@ -1,4 +1,6 @@
 import { app, dialog, screen } from "electron";
+import type { FileDraftsService } from "../services/file-drafts-types.ts";
+import { createPanelTransferFilesPort } from "../services/panel-transfer/file-drafts-panel-transfer-port.ts";
 import { createPanelTransferService } from "../services/panel-transfer/panel-transfer-service.ts";
 import type { PanelTransferService } from "../services/panel-transfer/panel-transfer-types.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
@@ -11,6 +13,7 @@ import { windowManager } from "../windows/window-manager.ts";
 import type { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
 
 export function wireAppCoreWindowAndPanelTransfer(input: {
+  fileDrafts: FileDraftsService;
   fileDraftsFlush: () => Promise<void>;
   pluginDisableTransitions: PluginDisableTransitionCoordinator;
   rendererCommand: RendererCommandService;
@@ -74,6 +77,7 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
   });
 
   panelTransferRef = createPanelTransferService({
+    files: createPanelTransferFilesPort(input.fileDrafts),
     geometry: {
       getCursorScreenPoint: () => screen.getCursorScreenPoint(),
       getDisplayWorkAreaNear: (point) =>
