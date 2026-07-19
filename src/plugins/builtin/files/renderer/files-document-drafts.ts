@@ -36,6 +36,10 @@ export {
   UNTITLED_DOCUMENT_ID_PREFIX,
   untitledDraftStorageKey,
 } from "./files-document-draft-records.ts";
+export {
+  claimLegacyDraft,
+  hydrateFilesDraftRecordFromBackend,
+} from "./files-draft-backend-ops.ts";
 export * from "./files-draft-client-store.ts";
 
 export function readPersistedUntitledDocument(

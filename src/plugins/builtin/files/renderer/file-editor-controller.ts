@@ -5,9 +5,11 @@ import type {
   EditorSearchState,
 } from "./code-mirror-search-state.ts";
 import { FileDocumentLifecycle } from "./file-document-lifecycle.ts";
+import { showFileEditorDiffMode } from "./file-editor-mode-handlers.ts";
 import { FileEditorPathMutations } from "./file-editor-path-mutations.ts";
 import { FileEditorSaveCommands } from "./file-editor-save-commands.ts";
 import { FileEditorSaveCoordinator } from "./file-editor-save-coordinator.ts";
+import { createFileEditorTransferSupport } from "./file-editor-transfer-support.ts";
 import { FileEditorViewCoordinator } from "./file-editor-view-coordinator.ts";
 import type {
   FileEditorCommand,
@@ -32,13 +34,13 @@ import type {
 } from "./files-document-types.ts";
 import { FilesEditorGitGutterController } from "./files-editor-git-gutter-controller.ts";
 import { FilesMutationGate } from "./files-mutation-gate.ts";
+import { FilesMutationSuspendCoordinator } from "./files-mutation-suspend-coordinator.ts";
 import { moveFilesNavPath } from "./files-nav-history.ts";
 import { preserveDocumentsAsUntitledAndRebind } from "./files-preserve-as-untitled.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
 
 export type { FilePathMutationGuard } from "./file-path-mutation-guard.ts";
 export type { FileDocumentSettleResult } from "./file-save-outcome.ts";
-
 /** file 插件中文档与 CodeMirror 生命周期的唯一公开入口。 */
 export class FileEditorController {
   readonly #context: RendererPluginContext;
@@ -46,6 +48,9 @@ export class FileEditorController {
   readonly #gitGutter: FilesEditorGitGutterController;
   readonly #modeHandlers = new Map<string, (mode: FileViewMode) => void>();
   readonly #mutationGate = new FilesMutationGate();
+  readonly #mutationSuspend = new FilesMutationSuspendCoordinator(
+    this.#mutationGate
+  );
   readonly #pathMutationGuards: FilePathMutationGuardCoordinator;
   readonly #pathMutations: FileEditorPathMutations;
   readonly #pendingModes = new Map<string, FileViewMode>();
@@ -113,23 +118,40 @@ export class FileEditorController {
     await this.#documents.initialize();
   }
 
-  async runMutation<T>(operation: () => Promise<T> | T): Promise<T> {
-    return await this.#mutationGate.run(operation);
+  async runMutation<T>(
+    operation: () => Promise<T> | T,
+    scope?: { documentId?: string; panelId?: string }
+  ): Promise<T> {
+    return await this.#mutationSuspend.run(operation, scope);
   }
 
   async suspendMutations(signal: AbortSignal): Promise<void> {
-    await this.#mutationGate.suspend(signal);
+    await this.#mutationSuspend.suspend({ kind: "all" }, signal);
     try {
       await this.#documents.prepareSuspend(signal);
     } catch (error) {
-      this.#mutationGate.resume();
+      this.#mutationSuspend.resume({ kind: "all" });
       throw error;
     }
   }
 
   resumeMutations(): void {
     this.#documents.resumeAfterSuspend();
-    this.#mutationGate.resume();
+    this.#mutationSuspend.resume({ kind: "all" });
+  }
+
+  createTransferSupport() {
+    return createFileEditorTransferSupport({
+      mutationSuspend: this.#mutationSuspend,
+      views: this.#views,
+    });
+  }
+
+  applyViewSnapshot(
+    editorSessionId: string,
+    snapshot: Parameters<FileEditorViewCoordinator["applySnapshot"]>[1]
+  ): void {
+    this.#views.applySnapshot(editorSessionId, snapshot);
   }
 
   documentId(source: FilesDocumentPanelSource): string {
@@ -452,6 +474,7 @@ export class FileEditorController {
   }
 
   dispose(options: { clearDocuments?: boolean } = {}): void {
+    this.#mutationSuspend.resumeAll();
     this.#minimapConfigDispose?.();
     this.#minimapConfigDispose = null;
     this.#gitGutter.dispose();
@@ -464,23 +487,12 @@ export class FileEditorController {
   }
 
   #showDiff(documentId: string, preferredPanelId?: string): void {
-    if (preferredPanelId) {
-      const preferred = this.#modeHandlers.get(preferredPanelId);
-      if (preferred) {
-        preferred("diff");
-        return;
-      }
-      this.#pendingModes.set(preferredPanelId, "diff");
-      return;
-    }
-    for (const [panelId, handler] of this.#modeHandlers) {
-      if (
-        getDocument(this.#documents.getPanelDocumentId(panelId) ?? "")?.id ===
-        getDocument(documentId)?.id
-      ) {
-        handler("diff");
-        return;
-      }
-    }
+    showFileEditorDiffMode({
+      documentId,
+      getPanelDocumentId: (id) => this.#documents.getPanelDocumentId(id),
+      modeHandlers: this.#modeHandlers,
+      pendingModes: this.#pendingModes,
+      ...(preferredPanelId ? { preferredPanelId } : {}),
+    });
   }
 }

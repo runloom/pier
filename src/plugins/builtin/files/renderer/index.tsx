@@ -4,6 +4,7 @@ import type {
   RendererPluginModule,
 } from "@plugins/api/renderer.ts";
 import { FileText, FolderTree } from "lucide-react";
+import { registerCorePanelTransfer } from "@/components/workspace/panel-transfer-adapters.ts";
 import {
   FILES_FILE_PANEL_ID,
   FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
@@ -21,16 +22,27 @@ import { filePanelProjectRoot } from "./file-tree-preferences.ts";
 import {
   abortFilesDraftSuspend,
   commitFilesDraftSuspend,
+  flushFilesDraftWrites,
+  hydrateFilesDraftRecordFromBackend,
+  persistFilesDraftRecord,
   prepareFilesDraftSuspend,
   releaseFilesDraftSuspendAfterDispose,
+  removeFilesDraftRecord,
 } from "./files-document-drafts.ts";
-import { getDocumentForPanelSource } from "./files-document-store.ts";
+import {
+  ensureDiskDocument,
+  getDocument,
+  getDocumentForPanelSource,
+  restoreUntitledDocumentFromPanelSource,
+} from "./files-document-store.ts";
 import { parseFilesDocumentPanelSource } from "./files-document-types.ts";
 import { createFilesEditorActions } from "./files-editor-actions.ts";
 import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
 import { clearFilesNavHistory } from "./files-nav-history.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
 import { filesPanelTabChrome } from "./files-panel-tab.ts";
+import { createFilesPanelTransferRegistration } from "./files-panel-transfer.ts";
+import { readFilesPanelViewMode } from "./files-panel-transfer-state.ts";
 import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
 import { createFilesQuickOpenAction } from "./files-quick-open.ts";
 import { registerFilesTerminalOpenUrlHandler } from "./files-terminal-open-url-handler.ts";
@@ -338,6 +350,31 @@ export const filesRendererPlugin: RendererPluginModule = {
         resolveTab: ({ params }) => filesPanelTabChrome(params),
         title: () => t("filePanel.title", "File"),
       }),
+      registerCorePanelTransfer(
+        FILES_FILE_PANEL_ID,
+        (() => {
+          const transfer = editorController.createTransferSupport();
+          return createFilesPanelTransferRegistration({
+            captureViewSnapshot: (input) =>
+              transfer.captureViewSnapshot(input.documentId),
+            discardDocument: (documentId) =>
+              editorController.discardDocument(documentId),
+            ensureDiskDocument,
+            flushFilesDraftWrites,
+            getDocument,
+            getDocumentForPanelSource,
+            hydrateDraftKey: hydrateFilesDraftRecordFromBackend,
+            persistFilesDraftRecord,
+            readFilesPanelViewMode,
+            removeFilesDraftRecord,
+            restoreUntitledDocumentFromPanelSource,
+            resumeTransferMutations: (scope) =>
+              transfer.resumeTransferMutations(scope),
+            suspendTransferMutations: (scope, signal) =>
+              transfer.suspendTransferMutations(scope, signal),
+          });
+        })()
+      ),
       registerDirtyCloseGuard(context, editorController),
       context.actions.register(
         withFilesMutationGate(
