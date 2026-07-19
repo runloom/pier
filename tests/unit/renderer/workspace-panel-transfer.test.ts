@@ -331,6 +331,99 @@ describe("workspace panel transfer", () => {
       expect(dataTransfer.dropEffect).toBe("move");
       expect(accept).toHaveBeenCalled();
     });
+
+    it("skips unhandled dragover accept when local activeDrag is set", () => {
+      const handlers = createWorkspacePanelTransferHandlers(() => null);
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "welcome",
+        panelId: "welcome-1",
+        transferId: TRANSFER_ID,
+      });
+      const dataTransfer = new FakeDataTransfer();
+      dataTransfer.setData(PANEL_TRANSFER_MIME, "{}");
+      const native = new FakeDragEvent("dragover", { dataTransfer });
+      const accept = vi.fn();
+      const preventSpy = vi.spyOn(native, "preventDefault");
+
+      handlers.onUnhandledDragOver({
+        accept,
+        nativeEvent: native as unknown as DragEvent,
+      });
+
+      expect(preventSpy).not.toHaveBeenCalled();
+      expect(accept).not.toHaveBeenCalled();
+    });
+
+    it("same-window onDidDrop does not call panelTransfer.drop", async () => {
+      const pier = installPier();
+      const welcome = panel({ component: "welcome", id: "welcome-1" });
+      const api = {
+        panels: [welcome],
+        removePanel: vi.fn(),
+        totalPanels: 1,
+      };
+      const handlers = createWorkspacePanelTransferHandlers(() => api as never);
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "welcome",
+        panelId: "welcome-1",
+        transferId: TRANSFER_ID,
+      });
+
+      const dataTransfer = new FakeDataTransfer();
+      dataTransfer.setData(
+        PANEL_TRANSFER_MIME,
+        JSON.stringify({ transferId: TRANSFER_ID })
+      );
+      const native = new FakeDragEvent("drop", { dataTransfer });
+
+      handlers.onDidDrop({
+        group: { id: "group-1", panels: [welcome] } as never,
+        nativeEvent: native as unknown as DragEvent,
+        position: "center",
+      });
+
+      await Promise.resolve();
+      expect(pier.drop).not.toHaveBeenCalled();
+    });
+
+    it("foreign onDidDrop parses MIME transferId and reports placement", async () => {
+      const pier = installPier();
+      const welcome = panel({ component: "welcome", id: "welcome-1" });
+      const api = {
+        panels: [welcome],
+        removePanel: vi.fn(),
+        totalPanels: 1,
+      };
+      const handlers = createWorkspacePanelTransferHandlers(() => api as never);
+      expect(__panelTransferInternals.getActiveDrag()).toBeNull();
+
+      const foreignId = "foreign-transfer-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+      const dataTransfer = new FakeDataTransfer();
+      dataTransfer.setData(
+        PANEL_TRANSFER_MIME,
+        JSON.stringify({ transferId: foreignId })
+      );
+      dataTransfer.setData(
+        "text/plain",
+        `${PANEL_TRANSFER_TEXT_PREFIX}${foreignId}`
+      );
+      const native = new FakeDragEvent("drop", { dataTransfer });
+
+      handlers.onDidDrop({
+        group: { id: "group-1", panels: [welcome] } as never,
+        nativeEvent: native as unknown as DragEvent,
+        position: "center",
+      });
+
+      await vi.waitFor(() =>
+        expect(pier.drop).toHaveBeenCalledWith({
+          placement: { groupId: "group-1", index: 1, kind: "tab" },
+          transferId: foreignId,
+        })
+      );
+    });
   });
 
   describe("renderer commands", () => {
@@ -539,6 +632,34 @@ describe("workspace panel transfer", () => {
       expect(isWorkspaceBootstrapGateActive()).toBe(true);
       releaseWorkspaceBootstrapGate();
       expect(isWorkspaceBootstrapGateActive()).toBe(false);
+    });
+
+    it("short-circuits workspace store add/close mutations while gate active", async () => {
+      const welcome = panel({ component: "welcome", id: "welcome-1" });
+      const api = {
+        activePanel: welcome,
+        addPanel: vi.fn(),
+        panels: [welcome],
+        removePanel: vi.fn(),
+        totalPanels: 1,
+      };
+      useWorkspaceStore.getState().setApi(api as never);
+      setWorkspaceBootstrapGate(TRANSFER_ID, "pending-transfer-restore");
+
+      useWorkspaceStore.getState().addPanel({
+        component: "welcome",
+        id: "welcome-blocked",
+        title: "Blocked",
+      });
+      expect(useWorkspaceStore.getState().addTerminal()).toBeNull();
+      expect(await useWorkspaceStore.getState().closePanel("welcome-1")).toBe(
+        false
+      );
+      expect(await useWorkspaceStore.getState().closeActivePanel()).toBe(false);
+      expect(api.addPanel).not.toHaveBeenCalled();
+      expect(api.removePanel).not.toHaveBeenCalled();
+
+      releaseWorkspaceBootstrapGate();
     });
 
     it("rewrites missing components to placeholders and restores when known again", () => {

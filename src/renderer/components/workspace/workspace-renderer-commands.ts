@@ -10,6 +10,7 @@ import { requestTerminalRelaunch } from "@/stores/terminal-relaunch.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { referenceGroupById } from "@/stores/workspace-panel-helpers.ts";
 import { panelKindOf } from "./panel-registry.ts";
+import { isWorkspaceBootstrapGateActive } from "./workspace-bootstrap-gate.ts";
 import { buildWorkspacePanelSnapshots } from "./workspace-panel-snapshots.ts";
 
 class RendererCommandExecutionError extends Error {
@@ -57,7 +58,17 @@ function focusPanel(panelId: string, expectedKind?: "terminal" | "web"): void {
   }
 }
 
+function assertUserMutationAllowed(): void {
+  if (isWorkspaceBootstrapGateActive()) {
+    throw new RendererCommandExecutionError(
+      "cancelled",
+      "workspace bootstrap gate is active"
+    );
+  }
+}
+
 async function closePanelForCommand(panelId: string): Promise<void> {
+  assertUserMutationAllowed();
   const state = useWorkspaceStore.getState();
   const api = state.api;
   if (!api) {
@@ -82,6 +93,7 @@ async function closePanelForCommand(panelId: string): Promise<void> {
 function addPanelForCommand(
   command: Extract<RendererCommandEnvelope["command"], { type: "panel.open" }>
 ): string {
+  assertUserMutationAllowed();
   const panelId = useWorkspaceStore.getState().addTerminal({
     context: command.context,
     ...(command.placement && {
@@ -100,6 +112,7 @@ async function addTerminalForCommand(
     { type: "terminal.open" }
   >
 ): Promise<string> {
+  assertUserMutationAllowed();
   const launchConfirmation = waitForTerminalLaunch(command.launchId);
   let panelId: string | undefined;
   try {

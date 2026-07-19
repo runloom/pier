@@ -13,6 +13,7 @@ import {
   panelJsonParamsOf,
   panelTitleOf,
   pierPanelTransfer,
+  readPanelTransferId,
   showPanelTransferFailure,
   stampMovableDataTransfer,
   type TabDragEventLike,
@@ -108,6 +109,10 @@ export function createWorkspacePanelTransferHandlers(
     },
 
     onUnhandledDragOver(event) {
+      // Same-window active drag: let Dockview own reorder/split UX.
+      if (getActiveDrag()) {
+        return;
+      }
       const native = event.nativeEvent;
       if (!(native instanceof DragEvent && native.dataTransfer)) {
         return;
@@ -130,21 +135,27 @@ export function createWorkspacePanelTransferHandlers(
       if (!(native instanceof DragEvent && native.dataTransfer)) {
         return;
       }
-      const drag = getActiveDrag();
-      if (!drag) {
-        // Foreign-window drop — main routes the placement back via stageTarget.
+      // Same-window: never hijack Dockview reorder/split into a Pier transfer.
+      // finishDrag on dragend silently aborts the local offer.
+      if (getActiveDrag()) {
+        return;
+      }
+      // Foreign/cross-window: parse transferId from MIME and report placement
+      // to main (Path B: claim via native bounds; placement via drop API).
+      const transferId = readPanelTransferId(native.dataTransfer);
+      if (!transferId) {
         return;
       }
       const api = getApi();
       if (!api) {
         return;
       }
-      const placement = computePlacementFromDrop(event, drag.panelId, api);
+      const placement = computePlacementFromDrop(event, "", api);
       if (!placement) {
         return;
       }
       pierPanelTransfer()
-        .drop({ transferId: drag.transferId, placement })
+        .drop({ transferId, placement })
         .catch((err) => {
           console.error("[panelTransfer] drop failed:", err);
         });

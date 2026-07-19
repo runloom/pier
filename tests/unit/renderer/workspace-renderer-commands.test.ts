@@ -7,6 +7,11 @@ vi.mock("@/lib/ipc/window-ipc.ts", () => ({
   closeCurrentWindow: closeCurrentWindowMock,
 }));
 
+import {
+  releaseWorkspaceBootstrapGate,
+  resetPanelTransferRuntimeForTests,
+  setWorkspaceBootstrapGate,
+} from "@/components/workspace/panel-transfer-runtime.ts";
 import { runWorkspaceRendererCommand } from "@/components/workspace/workspace-renderer-commands.ts";
 import {
   confirmTerminalLaunch,
@@ -69,6 +74,7 @@ describe("workspace renderer commands", () => {
     });
     useWorkspaceStore.getState().setApi(null);
     resetTerminalLaunchConfirmationsForTest();
+    resetPanelTransferRuntimeForTests();
   });
 
   it("closes an existing panel and resolves the renderer command", async () => {
@@ -281,6 +287,55 @@ describe("workspace renderer commands", () => {
       ok: false,
       requestId: "renderer-open-missing-group",
     });
+  });
+
+  it("cancels panel.close / panel.open while bootstrap gate is active", async () => {
+    const terminal = terminalPanel("terminal-1");
+    const welcome = webPanel("welcome-1");
+    const api = createApi([terminal, welcome]);
+    useWorkspaceStore.getState().setApi(api as never);
+    setWorkspaceBootstrapGate(
+      "9af45a46-24f2-4ac0-9371-fbe78ca295dc",
+      "pending-transfer-restore"
+    );
+
+    await runWorkspaceRendererCommand({
+      command: { panelId: "terminal-1", type: "panel.close" },
+      requestId: "gated-close",
+    });
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      error: {
+        code: "cancelled",
+        message: "workspace bootstrap gate is active",
+      },
+      ok: false,
+      requestId: "gated-close",
+    });
+    expect(api.removePanel).not.toHaveBeenCalled();
+
+    await runWorkspaceRendererCommand({
+      command: {
+        context: {
+          contextId: "ctx-gated",
+          cwd: "/tmp",
+          projectRootPath: "/tmp",
+          updatedAt: 1,
+        },
+        type: "panel.open",
+      },
+      requestId: "gated-open",
+    });
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      error: {
+        code: "cancelled",
+        message: "workspace bootstrap gate is active",
+      },
+      ok: false,
+      requestId: "gated-open",
+    });
+    expect(api.addPanel).not.toHaveBeenCalled();
+
+    releaseWorkspaceBootstrapGate();
   });
 
   it("refuses panelTransfer.* commands that bypass the transfer listener", async () => {

@@ -4,6 +4,7 @@ import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type { DockviewApi } from "dockview-react";
 import { create } from "zustand";
 import { equalizeDockviewSplits } from "@/components/workspace/dockview-equalize.ts";
+import { isWorkspaceBootstrapGateActive } from "@/components/workspace/workspace-bootstrap-gate.ts";
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { runPanelCloseGuards } from "@/lib/workspace/panel-close-guards.ts";
@@ -95,6 +96,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     });
   },
   addPanel: (opts) => {
+    if (isWorkspaceBootstrapGateActive()) {
+      return;
+    }
     const api = get().api;
     if (!api) {
       return;
@@ -130,6 +134,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     scheduleRevealDockviewTabByPanelId(id);
   },
   addTerminal(opts) {
+    if (isWorkspaceBootstrapGateActive()) {
+      return null;
+    }
     const api = get().api;
     if (!api) {
       return null;
@@ -209,6 +216,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     return id;
   },
   closeActivePanel: async () => {
+    if (isWorkspaceBootstrapGateActive()) {
+      return false;
+    }
     const api = get().api;
     if (!api) {
       return false;
@@ -245,6 +255,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     return true;
   },
   closePanel: async (panelId) => {
+    if (isWorkspaceBootstrapGateActive()) {
+      return false;
+    }
     const api = get().api;
     if (!api) {
       return false;
@@ -280,6 +293,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   closeOthers: async (panelId) => {
+    if (isWorkspaceBootstrapGateActive()) {
+      return;
+    }
     const api = get().api;
     if (!api) {
       return;
@@ -310,6 +326,9 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   },
 
   closeAll: async () => {
+    if (isWorkspaceBootstrapGateActive()) {
+      return;
+    }
     const api = get().api;
     if (!api) {
       return;

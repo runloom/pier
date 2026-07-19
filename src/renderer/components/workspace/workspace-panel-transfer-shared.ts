@@ -100,6 +100,35 @@ export function stampMovableDataTransfer(
   dataTransfer.effectAllowed = "move";
 }
 
+/** Parse a Pier panel-transfer id from MIME JSON or text/plain prefix. */
+export function readPanelTransferId(
+  dataTransfer: DataTransfer | null
+): string | null {
+  if (!dataTransfer) {
+    return null;
+  }
+  const mime = dataTransfer.getData(PANEL_TRANSFER_MIME);
+  if (mime) {
+    try {
+      const parsed = JSON.parse(mime) as { transferId?: unknown };
+      if (
+        typeof parsed.transferId === "string" &&
+        parsed.transferId.length > 0
+      ) {
+        return parsed.transferId;
+      }
+    } catch {
+      // fall through to text/plain
+    }
+  }
+  const text = dataTransfer.getData("text/plain");
+  if (text.startsWith(PANEL_TRANSFER_TEXT_PREFIX)) {
+    const id = text.slice(PANEL_TRANSFER_TEXT_PREFIX.length);
+    return id.length > 0 ? id : null;
+  }
+  return null;
+}
+
 export async function showPanelTransferFailure(
   result: Extract<PanelTransferResult, { ok: false }>
 ): Promise<void> {

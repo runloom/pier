@@ -143,6 +143,16 @@ describe("workspace panel transfer (component)", () => {
     );
     expect(isWorkspaceBootstrapGateActive()).toBe(true);
 
+    // User mutation paths are gated while transfer stage still works.
+    const addCallsBefore = api.addPanel.mock.calls.length;
+    useWorkspaceStore.getState().addPanel({
+      component: "welcome",
+      id: "user-blocked",
+      title: "Blocked",
+    });
+    expect(useWorkspaceStore.getState().addTerminal()).toBeNull();
+    expect(api.addPanel.mock.calls.length).toBe(addCallsBefore);
+
     releaseWorkspaceBootstrapGate();
     expect(isWorkspaceBootstrapGateActive()).toBe(false);
   });
@@ -292,7 +302,7 @@ describe("workspace panel transfer (component)", () => {
     expect(view.queryByTestId("real-content")).toBeNull();
   });
 
-  it("same-window active drag still routes onDidDrop placement to pier.drop", async () => {
+  it("same-window active drag leaves onDidDrop to Dockview (no pier.drop)", async () => {
     const drop = vi.fn(async () => undefined);
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -321,7 +331,51 @@ describe("workspace panel transfer (component)", () => {
     });
 
     const dataTransfer = new FakeDataTransfer();
-    dataTransfer.setData(PANEL_TRANSFER_MIME, "{}");
+    dataTransfer.setData(
+      PANEL_TRANSFER_MIME,
+      JSON.stringify({ transferId: TRANSFER_ID })
+    );
+    const native = new FakeDragEvent("drop", { dataTransfer });
+
+    handlers.onDidDrop({
+      group: { id: "group-1", panels: [welcome] } as never,
+      nativeEvent: native as unknown as DragEvent,
+      position: "center",
+    });
+
+    await Promise.resolve();
+    expect(drop).not.toHaveBeenCalled();
+  });
+
+  it("foreign onDidDrop parses MIME and calls pier.drop with placement", async () => {
+    const drop = vi.fn(async () => undefined);
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        panelTransfer: {
+          cancel: vi.fn(),
+          drop,
+          finishDrag: vi.fn(async () => null),
+          offer: vi.fn(),
+        },
+      },
+    });
+
+    const welcome = panel({ component: "welcome", id: "welcome-1" });
+    const api = {
+      panels: [welcome],
+      removePanel: vi.fn(),
+      totalPanels: 1,
+    };
+    const handlers = createWorkspacePanelTransferHandlers(() => api as never);
+    __panelTransferInternals.setActiveDrag(null);
+
+    const foreignId = "foreign-bbbbbbbb-cccc-dddd-eeee-ffffffffffff";
+    const dataTransfer = new FakeDataTransfer();
+    dataTransfer.setData(
+      PANEL_TRANSFER_MIME,
+      JSON.stringify({ transferId: foreignId })
+    );
     const native = new FakeDragEvent("drop", { dataTransfer });
 
     handlers.onDidDrop({
@@ -333,8 +387,73 @@ describe("workspace panel transfer (component)", () => {
     await vi.waitFor(() =>
       expect(drop).toHaveBeenCalledWith({
         placement: { groupId: "group-1", index: 1, kind: "tab" },
-        transferId: TRANSFER_ID,
+        transferId: foreignId,
       })
     );
+  });
+
+  it("usePanelTransferTabDrop skips intercept when local activeDrag is set", () => {
+    const dropTransferOnce = vi.fn();
+    __panelTransferInternals.setActiveDrag({
+      capability: "movable",
+      componentId: "welcome",
+      panelId: "a",
+      transferId: TRANSFER_ID,
+    });
+    const hoveredApi = {
+      group: {
+        id: "group-1",
+        panels: [{ id: "a" }, { id: "b" }],
+      },
+      id: "b",
+    };
+
+    const { result } = renderHook(() =>
+      usePanelTransferTabDrop({
+        api: hoveredApi,
+        dropTransferOnce,
+      })
+    );
+
+    const dataTransfer = new FakeDataTransfer();
+    dataTransfer.setData(
+      PANEL_TRANSFER_MIME,
+      JSON.stringify({ transferId: TRANSFER_ID })
+    );
+    const target = document.createElement("div");
+    Object.defineProperty(target, "getBoundingClientRect", {
+      value: () => ({
+        bottom: 40,
+        height: 40,
+        left: 0,
+        right: 100,
+        top: 0,
+        width: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => ({}),
+      }),
+    });
+    const native = new FakeDragEvent("drop", { clientX: 80, dataTransfer });
+    const stopImmediate = vi.fn();
+    Object.defineProperty(native, "stopImmediatePropagation", {
+      value: stopImmediate,
+    });
+    const reactEvent = {
+      clientX: 80,
+      currentTarget: target,
+      dataTransfer,
+      nativeEvent: native,
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+    };
+
+    act(() => {
+      result.current.onDropCapture(reactEvent as never);
+    });
+
+    expect(reactEvent.preventDefault).not.toHaveBeenCalled();
+    expect(stopImmediate).not.toHaveBeenCalled();
+    expect(dropTransferOnce).not.toHaveBeenCalled();
   });
 });

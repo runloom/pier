@@ -21,10 +21,11 @@
 
 import {
   PANEL_TRANSFER_MIME,
-  PANEL_TRANSFER_TEXT_PREFIX,
   type PanelTransferPlacement,
 } from "@shared/contracts/panel-transfer.ts";
 import { useCallback } from "react";
+import { getActiveDrag } from "./workspace-panel-transfer-dnd.ts";
+import { readPanelTransferId } from "./workspace-panel-transfer-shared.ts";
 
 interface PanelTabHeaderApiLike {
   group?: {
@@ -54,30 +55,6 @@ function defaultDropTransferOnce(
   api.drop({ transferId, placement }).catch((err: unknown) => {
     console.error("[panelTransfer] tab drop failed:", err);
   });
-}
-
-function readTransferId(dataTransfer: DataTransfer | null): string | null {
-  if (!dataTransfer) {
-    return null;
-  }
-  // MIME first (cross-window); fall back to text/plain prefix (same-window
-  // diagnostics / older sources).
-  const mime = dataTransfer.getData(PANEL_TRANSFER_MIME);
-  if (mime) {
-    try {
-      const parsed = JSON.parse(mime) as { transferId?: unknown };
-      if (typeof parsed.transferId === "string") {
-        return parsed.transferId;
-      }
-    } catch {
-      // fall through
-    }
-  }
-  const text = dataTransfer.getData("text/plain");
-  if (text.startsWith(PANEL_TRANSFER_TEXT_PREFIX)) {
-    return text.slice(PANEL_TRANSFER_TEXT_PREFIX.length);
-  }
-  return null;
 }
 
 function hasPanelTransferType(dataTransfer: DataTransfer | null): boolean {
@@ -117,10 +94,14 @@ export function usePanelTransferTabDrop(input: UsePanelTransferTabDropInput): {
 
   const handleDragOver = useCallback(
     (event: React.DragEvent) => {
+      // Same-window local drag: let Dockview reorder tabs.
+      if (getActiveDrag()) {
+        return;
+      }
       if (!hasPanelTransferType(event.nativeEvent.dataTransfer)) {
         return;
       }
-      const transferId = readTransferId(event.nativeEvent.dataTransfer);
+      const transferId = readPanelTransferId(event.nativeEvent.dataTransfer);
       if (!transferId) {
         return;
       }
@@ -140,10 +121,14 @@ export function usePanelTransferTabDrop(input: UsePanelTransferTabDropInput): {
 
   const handleDrop = useCallback(
     (event: React.DragEvent) => {
+      // Same-window local drag: do not stopImmediatePropagation / drop.
+      if (getActiveDrag()) {
+        return;
+      }
       if (!hasPanelTransferType(event.nativeEvent.dataTransfer)) {
         return;
       }
-      const transferId = readTransferId(event.nativeEvent.dataTransfer);
+      const transferId = readPanelTransferId(event.nativeEvent.dataTransfer);
       if (!transferId) {
         return;
       }
