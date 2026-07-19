@@ -64,15 +64,21 @@ export function sideEffectKey(
 /** Files draft stage/copy port — Task 5 fills production. */
 export interface PanelTransferFilesPort {
   commitDrafts(input: {
-    drafts: PanelTransferPreparedSource["drafts"];
+    drafts: NonNullable<PanelTransferPreparedSource["drafts"]>;
+    sourceOwner: string;
+    targetOwner: string;
     transferId: string;
   }): Promise<void>;
   rollbackDrafts(input: {
-    drafts: PanelTransferPreparedSource["drafts"];
+    drafts: NonNullable<PanelTransferPreparedSource["drafts"]>;
+    sourceOwner: string;
+    targetOwner: string;
     transferId: string;
   }): Promise<void>;
   stageDrafts(input: {
-    drafts: PanelTransferPreparedSource["drafts"];
+    drafts: NonNullable<PanelTransferPreparedSource["drafts"]>;
+    sourceOwner: string;
+    targetOwner: string;
     transferId: string;
   }): Promise<void>;
 }

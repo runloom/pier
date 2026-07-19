@@ -16,6 +16,7 @@ import {
   createFileDraftsService,
   LEGACY_DRAFT_OWNER,
 } from "@main/services/file-drafts-service.ts";
+import { createPanelTransferFilesPort } from "@main/services/panel-transfer/file-drafts-panel-transfer-port.ts";
 import { describe, expect, it } from "vitest";
 
 const OWNER = "window-01HZZY8YSP7H2QWQZ1GBNQ1G3X";
@@ -363,5 +364,236 @@ describe("createFileDraftsService", () => {
     await expect(reopened.listKeys(OWNER)).resolves.toEqual(["healthy"]);
     await expect(reopened.listDiagnostics(OWNER)).resolves.toHaveLength(1);
     await expect(readFile(outsidePath, "utf8")).resolves.toBe("outside");
+  });
+});
+
+describe("FileDraftsService transfer staging", () => {
+  const SOURCE = "window-01HZZY8YSP7H2QWQZ1GBNQ1G3X";
+  const TARGET = "window-02HZZY8YSP7H2QWQZ1GBNQ1G3Y";
+
+  async function createService(
+    options: { maxDraftValueBytes?: number; maxTotalBytes?: number } = {}
+  ) {
+    const userDataDir = await mkdtemp(
+      join(tmpdir(), "pier-file-drafts-transfer-")
+    );
+    return createFileDraftsService({ userDataDir, ...options });
+  }
+
+  it("stageTransfer copies staging to target and keeps source staging until commit", async () => {
+    const service = await createService();
+    const stagingKey = "transfer:t1:doc-a";
+    const targetKey = "doc-target-a";
+    await service.set(SOURCE, stagingKey, 3, "staged-body");
+
+    await service.stageTransfer({
+      drafts: [{ sourceKey: stagingKey, targetKey }],
+      sourceOwner: SOURCE,
+      targetOwner: TARGET,
+      transferId: "t1",
+    });
+
+    await expect(service.get(SOURCE, stagingKey)).resolves.toMatchObject({
+      generation: 3,
+      value: "staged-body",
+    });
+    await expect(service.get(TARGET, targetKey)).resolves.toMatchObject({
+      generation: 3,
+      value: "staged-body",
+    });
+
+    await service.commitTransfer({
+      drafts: [{ sourceKey: stagingKey, targetKey }],
+      sourceOwner: SOURCE,
+      targetOwner: TARGET,
+      transferId: "t1",
+    });
+
+    await expect(service.get(SOURCE, stagingKey)).resolves.toBeNull();
+    await expect(service.get(TARGET, targetKey)).resolves.toMatchObject({
+      generation: 3,
+      value: "staged-body",
+    });
+  });
+
+  it("rollbackTransfer removes matching target copy and staging keys", async () => {
+    const service = await createService();
+    const stagingKey = "transfer:t2:doc-a";
+    const targetKey = "doc-target-a";
+    await service.set(SOURCE, stagingKey, 1, "rollback-me");
+    await service.stageTransfer({
+      drafts: [{ sourceKey: stagingKey, targetKey }],
+      sourceOwner: SOURCE,
+      targetOwner: TARGET,
+      transferId: "t2",
+    });
+
+    await service.rollbackTransfer({
+      drafts: [{ sourceKey: stagingKey, targetKey }],
+      sourceOwner: SOURCE,
+      targetOwner: TARGET,
+      transferId: "t2",
+    });
+
+    await expect(service.get(SOURCE, stagingKey)).resolves.toBeNull();
+    await expect(service.get(TARGET, targetKey)).resolves.toBeNull();
+  });
+
+  it("commitTransfer unlocks the target so later writes succeed", async () => {
+    const service = await createService();
+    const stagingKey = "transfer:t3:doc-a";
+    const targetKey = "doc-target-a";
+    await service.set(SOURCE, stagingKey, 2, "commit-me");
+    await service.stageTransfer({
+      drafts: [{ sourceKey: stagingKey, targetKey }],
+      sourceOwner: SOURCE,
+      targetOwner: TARGET,
+      transferId: "t3",
+    });
+
+    await expect(
+      service.set(TARGET, targetKey, 3, "blocked")
+    ).resolves.toMatchObject({ kind: "failed" });
+
+    await service.commitTransfer({
+      drafts: [{ sourceKey: stagingKey, targetKey }],
+      sourceOwner: SOURCE,
+      targetOwner: TARGET,
+      transferId: "t3",
+    });
+
+    await expect(service.get(SOURCE, stagingKey)).resolves.toBeNull();
+    await expect(
+      service.set(TARGET, targetKey, 3, "after-commit")
+    ).resolves.toMatchObject({ kind: "stored" });
+    await expect(service.get(TARGET, targetKey)).resolves.toMatchObject({
+      generation: 3,
+      value: "after-commit",
+    });
+  });
+
+  it("stageTransfer fails when the target key already exists", async () => {
+    const service = await createService();
+    const stagingKey = "transfer:t4:doc-a";
+    const targetKey = "doc-target-a";
+    await service.set(SOURCE, stagingKey, 1, "source");
+    await service.set(TARGET, targetKey, 1, "existing");
+
+    await expect(
+      service.stageTransfer({
+        drafts: [{ sourceKey: stagingKey, targetKey }],
+        sourceOwner: SOURCE,
+        targetOwner: TARGET,
+        transferId: "t4",
+      })
+    ).rejects.toThrow(/already exists/);
+
+    await expect(service.get(SOURCE, stagingKey)).resolves.toMatchObject({
+      value: "source",
+    });
+    await expect(service.get(TARGET, targetKey)).resolves.toMatchObject({
+      value: "existing",
+    });
+  });
+
+  it("stageTransfer fails when quota would be exceeded", async () => {
+    const service = await createService({ maxTotalBytes: 10 });
+    const stagingKey = "transfer:t5:doc-a";
+    const targetKey = "doc-target-a";
+    await service.set(SOURCE, stagingKey, 1, "123456");
+    await service.set(TARGET, "other", 1, "1234");
+
+    await expect(
+      service.stageTransfer({
+        drafts: [{ sourceKey: stagingKey, targetKey }],
+        sourceOwner: SOURCE,
+        targetOwner: TARGET,
+        transferId: "t5",
+      })
+    ).rejects.toThrow(/quota/i);
+
+    await expect(service.get(TARGET, targetKey)).resolves.toBeNull();
+    await expect(service.get(SOURCE, stagingKey)).resolves.toMatchObject({
+      value: "123456",
+    });
+  });
+
+  it("stageTransfer fails when the staging source draft is missing", async () => {
+    const service = await createService();
+    await expect(
+      service.stageTransfer({
+        drafts: [{ sourceKey: "missing-staging", targetKey: "doc-target-a" }],
+        sourceOwner: SOURCE,
+        targetOwner: TARGET,
+        transferId: "t-missing",
+      })
+    ).rejects.toThrow(/missing/i);
+  });
+
+  it("locked target keys reject unrelated set and delete until rollback", async () => {
+    const service = await createService();
+    const stagingKey = "transfer:t6:doc-a";
+    const targetKey = "doc-target-a";
+    await service.set(SOURCE, stagingKey, 1, "locked-body");
+    await service.stageTransfer({
+      drafts: [{ sourceKey: stagingKey, targetKey }],
+      sourceOwner: SOURCE,
+      targetOwner: TARGET,
+      transferId: "t6",
+    });
+
+    await expect(
+      service.set(TARGET, targetKey, 2, "hijack")
+    ).resolves.toMatchObject({
+      kind: "failed",
+      message: expect.stringMatching(/locked/i),
+    });
+    await expect(service.delete(TARGET, targetKey)).rejects.toThrow(/locked/i);
+    await expect(service.get(TARGET, targetKey)).resolves.toMatchObject({
+      value: "locked-body",
+    });
+
+    await service.rollbackTransfer({
+      drafts: [{ sourceKey: stagingKey, targetKey }],
+      sourceOwner: SOURCE,
+      targetOwner: TARGET,
+      transferId: "t6",
+    });
+
+    await expect(service.get(TARGET, targetKey)).resolves.toBeNull();
+  });
+});
+
+describe("createPanelTransferFilesPort", () => {
+  it("delegates stage/commit/rollback to FileDraftsService transfer methods", async () => {
+    const userDataDir = await mkdtemp(join(tmpdir(), "pier-file-drafts-port-"));
+    const service = createFileDraftsService({ userDataDir });
+    const port = createPanelTransferFilesPort(service);
+    const sourceOwner = "window-01HZZY8YSP7H2QWQZ1GBNQ1G3X";
+    const targetOwner = "window-02HZZY8YSP7H2QWQZ1GBNQ1G3Y";
+    const stagingKey = "transfer:port:doc";
+    const targetKey = "doc-port-target";
+    await service.set(sourceOwner, stagingKey, 1, "via-port");
+
+    await port.stageDrafts({
+      drafts: [{ sourceKey: stagingKey, targetKey }],
+      sourceOwner,
+      targetOwner,
+      transferId: "port-1",
+    });
+    await expect(service.get(targetOwner, targetKey)).resolves.toMatchObject({
+      value: "via-port",
+    });
+
+    await port.commitDrafts({
+      drafts: [{ sourceKey: stagingKey, targetKey }],
+      sourceOwner,
+      targetOwner,
+      transferId: "port-1",
+    });
+    await expect(service.get(sourceOwner, stagingKey)).resolves.toBeNull();
+    await expect(service.get(targetOwner, targetKey)).resolves.toMatchObject({
+      value: "via-port",
+    });
   });
 });

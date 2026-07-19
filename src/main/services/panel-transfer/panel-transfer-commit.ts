@@ -142,10 +142,16 @@ export async function rollbackBeforeCommit(input: {
   } catch {
     // best effort
   }
-  if (snapshot?.prepared.drafts && snapshot.prepared.drafts.length > 0) {
+  if (
+    snapshot?.prepared.drafts &&
+    snapshot.prepared.drafts.length > 0 &&
+    record.target
+  ) {
     try {
       await deps.files.rollbackDrafts({
         drafts: snapshot.prepared.drafts,
+        sourceOwner: record.source.windowRecordId,
+        targetOwner: record.target.windowRecordId,
         transferId,
       });
     } catch {

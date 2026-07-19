@@ -118,8 +118,13 @@ export async function runClaimedTransfer(
 
     throwIfAborted(abortSignal);
     if (snapshot.prepared.drafts && snapshot.prepared.drafts.length > 0) {
+      if (!record.target) {
+        throw new Error("Panel transfer target is required to stage drafts");
+      }
       await deps.files.stageDrafts({
         drafts: snapshot.prepared.drafts,
+        sourceOwner: record.source.windowRecordId,
+        targetOwner: record.target.windowRecordId,
         transferId,
       });
     }
@@ -169,8 +174,13 @@ export async function runClaimedTransfer(
       });
     }
     if (snapshot.prepared.drafts && snapshot.prepared.drafts.length > 0) {
+      if (!record.target) {
+        throw new Error("Panel transfer target is required to commit drafts");
+      }
       await deps.files.commitDrafts({
         drafts: snapshot.prepared.drafts,
+        sourceOwner: record.source.windowRecordId,
+        targetOwner: record.target.windowRecordId,
         transferId,
       });
     }
