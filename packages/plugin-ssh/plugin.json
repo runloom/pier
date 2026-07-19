@@ -1,0 +1,142 @@
+{
+  "apiVersion": 1,
+  "commands": [
+    {
+      "category": "terminal",
+      "description": "Pick a saved SSH host and open a terminal connected to it.",
+      "id": "pier.ssh.openTerminal",
+      "title": "Open SSH Terminal"
+    }
+  ],
+  "description": "Manage SSH hosts and open SSH terminals from Pier.",
+  "engines": {
+    "pier": ">=0.1.0 <0.2.0"
+  },
+  "id": "pier.ssh",
+  "locales": {
+    "en": {
+      "name": "SSH Hosts",
+      "description": "Manage SSH hosts and open SSH terminals from Pier.",
+      "commands": {
+        "pier.ssh.openTerminal": {
+          "title": "Open SSH Terminal",
+          "description": "Pick a saved SSH host and open a terminal connected to it."
+        }
+      },
+      "settingsPages": {
+        "pier.ssh.hosts": {
+          "title": "SSH Hosts"
+        }
+      },
+      "messages": {
+        "pier.ssh.openTerminal.title": "Open SSH Terminal",
+        "pier.ssh.hosts.settings.title": "SSH Hosts",
+        "pier.ssh.hosts.settings.addHost": "Add host",
+        "pier.ssh.hosts.settings.import": "Import from ssh config",
+        "pier.ssh.hosts.settings.emptyTitle": "No SSH hosts yet",
+        "pier.ssh.hosts.settings.emptyDesc": "Add a host or import entries from your ssh config to open SSH terminals in one click.",
+        "pier.ssh.hosts.settings.openTerminal": "Open terminal",
+        "pier.ssh.hosts.settings.edit": "Edit",
+        "pier.ssh.hosts.settings.remove": "Remove",
+        "pier.ssh.hosts.settings.removeConfirmTitle": "Remove SSH host?",
+        "pier.ssh.hosts.settings.removeConfirmBody": "The host is removed from Pier only. Nothing changes on the remote machine or in your ssh config.",
+        "pier.ssh.hosts.settings.cancel": "Cancel",
+        "pier.ssh.hosts.settings.save": "Save",
+        "pier.ssh.hosts.settings.testConnection": "Test connection",
+        "pier.ssh.hosts.settings.testSuccess": "Connection successful",
+        "pier.ssh.hosts.settings.testFailedTitle": "Connection failed",
+        "pier.ssh.hosts.settings.loadFailed": "Could not load SSH hosts",
+        "pier.ssh.hosts.settings.actionFailed": "SSH host action failed",
+        "pier.ssh.form.addTitle": "Add SSH host",
+        "pier.ssh.form.editTitle": "Edit SSH host",
+        "pier.ssh.form.name": "Display name",
+        "pier.ssh.form.host": "Host",
+        "pier.ssh.form.hostDescription": "Hostname, IP address, or an alias from your ssh config.",
+        "pier.ssh.form.user": "User (optional)",
+        "pier.ssh.form.port": "Port (optional)",
+        "pier.ssh.form.identityFile": "Identity file (optional)",
+        "pier.ssh.form.identityFilePlaceholder": "~/.ssh/id_ed25519",
+        "pier.ssh.form.hostRequired": "Enter a hostname, IP address, or ssh config alias.",
+        "pier.ssh.form.portInvalid": "Enter a port between 1 and 65535.",
+        "pier.ssh.import.title": "Import SSH hosts",
+        "pier.ssh.import.description": "Hosts found in ~/.ssh/config. Imported entries connect through your ssh config, so jump hosts and identity files keep working.",
+        "pier.ssh.import.confirm": "Import selected",
+        "pier.ssh.import.none": "No new hosts found in ~/.ssh/config.",
+        "pier.ssh.picker.title": "Open SSH terminal",
+        "pier.ssh.picker.description": "Choose a host to connect to.",
+        "pier.ssh.picker.noHosts": "No SSH hosts yet. Add one in Settings first.",
+        "pier.ssh.terminal.opening": "Opening SSH terminal…",
+        "pier.ssh.terminal.opened": "SSH terminal opened"
+      }
+    },
+    "zh-CN": {
+      "name": "SSH 主机",
+      "description": "在 Pier 中管理 SSH 主机并打开 SSH 终端。",
+      "commands": {
+        "pier.ssh.openTerminal": {
+          "title": "打开 SSH 终端",
+          "description": "选择一台已保存的远程主机，并打开连接到它的终端。"
+        }
+      },
+      "settingsPages": {
+        "pier.ssh.hosts": {
+          "title": "SSH 主机"
+        }
+      },
+      "messages": {
+        "pier.ssh.openTerminal.title": "打开 SSH 终端",
+        "pier.ssh.hosts.settings.title": "SSH 主机",
+        "pier.ssh.hosts.settings.addHost": "添加主机",
+        "pier.ssh.hosts.settings.import": "从 ssh 配置导入",
+        "pier.ssh.hosts.settings.emptyTitle": "还没有 SSH 主机",
+        "pier.ssh.hosts.settings.emptyDesc": "添加主机或从 ssh 配置导入后，即可一键打开 SSH 终端。",
+        "pier.ssh.hosts.settings.openTerminal": "打开终端",
+        "pier.ssh.hosts.settings.edit": "编辑",
+        "pier.ssh.hosts.settings.remove": "移除",
+        "pier.ssh.hosts.settings.removeConfirmTitle": "移除 SSH 主机？",
+        "pier.ssh.hosts.settings.removeConfirmBody": "只会从 Pier 中移除该主机，不会改动远程机器或你的 ssh 配置。",
+        "pier.ssh.hosts.settings.cancel": "取消",
+        "pier.ssh.hosts.settings.save": "保存",
+        "pier.ssh.hosts.settings.testConnection": "测试连接",
+        "pier.ssh.hosts.settings.testSuccess": "连接成功",
+        "pier.ssh.hosts.settings.testFailedTitle": "连接失败",
+        "pier.ssh.hosts.settings.loadFailed": "无法加载 SSH 主机",
+        "pier.ssh.hosts.settings.actionFailed": "主机操作失败",
+        "pier.ssh.form.addTitle": "添加 SSH 主机",
+        "pier.ssh.form.editTitle": "编辑 SSH 主机",
+        "pier.ssh.form.name": "显示名称",
+        "pier.ssh.form.host": "主机",
+        "pier.ssh.form.hostDescription": "主机名、IP 地址，或 ssh 配置中的别名。",
+        "pier.ssh.form.user": "用户名（可选）",
+        "pier.ssh.form.port": "端口（可选）",
+        "pier.ssh.form.identityFile": "私钥文件（可选）",
+        "pier.ssh.form.identityFilePlaceholder": "~/.ssh/id_ed25519",
+        "pier.ssh.form.hostRequired": "请输入主机名、IP 地址或 ssh 配置别名。",
+        "pier.ssh.form.portInvalid": "请输入 1 到 65535 之间的端口。",
+        "pier.ssh.import.title": "导入 SSH 主机",
+        "pier.ssh.import.description": "以下主机来自 ~/.ssh/config。导入后仍通过你的 ssh 配置连接，跳板机和私钥设置继续生效。",
+        "pier.ssh.import.confirm": "导入所选",
+        "pier.ssh.import.none": "未在 ~/.ssh/config 中发现新的主机。",
+        "pier.ssh.picker.title": "打开 SSH 终端",
+        "pier.ssh.picker.description": "选择要连接的主机。",
+        "pier.ssh.picker.noHosts": "还没有 SSH 主机。请先在设置中添加。",
+        "pier.ssh.terminal.opening": "正在打开 SSH 终端…",
+        "pier.ssh.terminal.opened": "SSH 终端已打开"
+      }
+    }
+  },
+  "main": "dist/main.js",
+  "name": "SSH Hosts",
+  "panels": [],
+  "permissions": ["terminal:control"],
+  "publisher": "Pier",
+  "renderer": "dist/renderer.js",
+  "settingsPages": [
+    {
+      "id": "pier.ssh.hosts"
+    }
+  ],
+  "terminalStatusItems": [],
+  "version": "1.0.0",
+  "workbenchWidgets": []
+}

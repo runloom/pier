@@ -361,6 +361,31 @@ importers:
         specifier: 4.4.3
         version: 4.4.3
 
+  packages/plugin-ssh:
+    dependencies:
+      '@pier/plugin-api':
+        specifier: workspace:*
+        version: link:../plugin-api
+      '@pier/ui':
+        specifier: workspace:*
+        version: link:../ui
+      lucide-react:
+        specifier: 1.24.0
+        version: 1.24.0(react@19.2.7)
+      react:
+        specifier: 19.2.7
+        version: 19.2.7
+      react-dom:
+        specifier: 19.2.7
+        version: 19.2.7(react@19.2.7)
+      zod:
+        specifier: 4.4.3
+        version: 4.4.3
+    devDependencies:
+      '@types/node':
+        specifier: 24.13.3
+        version: 24.13.3
+
   packages/ui:
     dependencies:
       '@pierre/diffs':

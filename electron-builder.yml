@@ -36,6 +36,12 @@ extraResources:
       - '*.tgz'
       - '*.tgz.sha256'
       - 'plugin.json'
+  - from: packages/plugin-ssh/dist-pkg
+    to: plugin-packages/pier.ssh
+    filter:
+      - '*.tgz'
+      - '*.tgz.sha256'
+      - 'plugin.json'
 
 asar: true
 asarUnpack:

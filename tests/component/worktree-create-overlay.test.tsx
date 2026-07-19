@@ -354,6 +354,9 @@ function createMockContext(): RendererPluginContext {
       onOpenUrl: unimplemented("terminal.onOpenUrl"),
       readSelectionText: unimplemented("terminal.readSelectionText"),
     },
+    terminals: {
+      open: unimplemented("terminals.open"),
+    },
     settings: {
       openSection: (section) =>
         useSettingsDialogStore.getState().openSection(section),
