@@ -1,24 +1,40 @@
 import type { ManagedPluginInstallService } from "../services/managed-plugins/install-service.ts";
 
-let intentionalRelaunchArmed = false;
+export type IntentionalQuitAction = "quitAndInstall" | "relaunch";
 
-/** True while a deliberate app.relaunch is in flight (skip quit confirm). */
+let intentionalQuitAction: IntentionalQuitAction | null = null;
+
+/** True while a deliberate relaunch / quitAndInstall is in flight (skip quit confirm). */
 export function isIntentionalRelaunchArmed(): boolean {
-  return intentionalRelaunchArmed;
+  return intentionalQuitAction !== null;
 }
 
 export function armIntentionalRelaunch(): void {
-  intentionalRelaunchArmed = true;
+  intentionalQuitAction = "relaunch";
 }
 
-/** Clear after a failed relaunch quit so ordinary quit keeps confirmation. */
+export function armIntentionalQuitAndInstall(): void {
+  intentionalQuitAction = "quitAndInstall";
+}
+
+/** Clear after a failed relaunch/install quit so ordinary quit keeps confirmation. */
 export function disarmIntentionalRelaunch(): void {
-  intentionalRelaunchArmed = false;
+  intentionalQuitAction = null;
 }
 
 /** Test-only reset. */
 export function resetIntentionalRelaunchForTests(): void {
-  intentionalRelaunchArmed = false;
+  intentionalQuitAction = null;
+}
+
+/**
+ * Read and clear the armed intentional quit action.
+ * Called from proceedToQuit after flush succeeds so layout is durable first.
+ */
+export function consumeIntentionalQuitAction(): IntentionalQuitAction | null {
+  const action = intentionalQuitAction;
+  intentionalQuitAction = null;
+  return action;
 }
 
 /**
@@ -60,5 +76,19 @@ export async function performDevSoftRelaunch(
 export async function performProdRelaunch(): Promise<void> {
   const { app } = await import("electron");
   armIntentionalRelaunch();
+  app.quit();
+}
+
+/**
+ * Prod-mode update install.
+ *
+ * 与 relaunch 同路径：先 arm + `app.quit()`，让 `before-quit` 跑
+ * `prepareClose` / `flushLayout` / window-record 落盘；真正的
+ * `autoUpdater.quitAndInstall()` 只在 flush 成功后的 proceed 里调用。
+ * 直接调 updater 会跳过布局 flush，更新后工作区回到默认布局。
+ */
+export async function performProdQuitAndInstall(): Promise<void> {
+  const { app } = await import("electron");
+  armIntentionalQuitAndInstall();
   app.quit();
 }

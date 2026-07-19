@@ -13,6 +13,7 @@ import { createLocalControlRegistrationOwner } from "./adapters/cli/local-contro
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
 import { appCore } from "./app-core/app-core.ts";
 import {
+  consumeIntentionalQuitAction,
   disarmIntentionalRelaunch,
   isIntentionalRelaunchArmed,
 } from "./app-core/app-relaunch.ts";
@@ -222,8 +223,16 @@ const appQuitController = createAppQuitController({
     );
   },
   proceedToQuit: () => {
-    // flush 成功后才排队 OS relaunch，避免失败后下次普通退出误重启。
-    if (isIntentionalRelaunchArmed()) {
+    // flush 成功后才执行 intentional relaunch / quitAndInstall，避免
+    // 更新安装跳过 prepareClose 导致布局与 window-record 未落盘。
+    const action = consumeIntentionalQuitAction();
+    if (action === "quitAndInstall") {
+      appCore.services.appUpdates.quitAndInstall();
+      // updater 在 state 竞态下可能 no-op；仍退出，避免卡在 quitting。
+      app.quit();
+      return;
+    }
+    if (action === "relaunch") {
       app.relaunch();
     }
     app.quit();

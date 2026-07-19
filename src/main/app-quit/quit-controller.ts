@@ -26,7 +26,7 @@ export interface AppQuitControllerDeps {
   getActivities: () => readonly ForegroundActivity[];
   getDialogParent: () => AppWindow | null;
   getTaskRuns?: () => TaskRunsSnapshot;
-  /** Armed by app.relaunch / quitAndInstall — skip activity confirmation. */
+  /** Armed by app.relaunch / appUpdate.quitAndInstall — skip activity confirmation. */
   isIntentionalRelaunch?: () => boolean;
   logFailure: (error: unknown) => void;
   proceedToQuit: () => void;

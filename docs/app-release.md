@@ -51,5 +51,5 @@ pnpm build:dist --publish=always
 ## 客户端（production）
 
 - 启动约 30s 首次检查，默认每 24h；回前台且间隔已满会补检
-- 发现更新后后台下载；安装需用户确认或退出时 `autoInstallOnAppQuit`
+- 发现更新后后台下载；「重启安装」与普通退出一样先 flush 布局，再 `quitAndInstall`；或退出时 `autoInstallOnAppQuit`
 - dev / `pnpm dev` 为 `disabled`，不打更新网
