@@ -12,6 +12,10 @@ import {
 import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control-registration.ts";
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
 import { appCore } from "./app-core/app-core.ts";
+import {
+  disarmIntentionalRelaunch,
+  isIntentionalRelaunchArmed,
+} from "./app-core/app-relaunch.ts";
 import { configureMainAppIdentity } from "./app-identity.ts";
 import { installAppMenu } from "./app-menu.ts";
 import { showAppQuitConfirmation } from "./app-quit/quit-confirmation.ts";
@@ -217,11 +221,19 @@ const appQuitController = createAppQuitController({
       formatQuitFailure(error)
     );
   },
-  proceedToQuit: () => app.quit(),
+  proceedToQuit: () => {
+    // flush 成功后才排队 OS relaunch，避免失败后下次普通退出误重启。
+    if (isIntentionalRelaunchArmed()) {
+      app.relaunch();
+    }
+    app.quit();
+  },
   readConfirmationMode: async () => {
     const preferences = await appCore.services.preferences.read();
     return preferences.confirmOnQuit;
   },
+  disarmIntentionalRelaunch,
+  isIntentionalRelaunch: isIntentionalRelaunchArmed,
   shouldBypassQuitConfirmationForTests,
 });
 

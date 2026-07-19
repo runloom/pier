@@ -302,9 +302,10 @@ function createDiffViewHandle({
       for (const input of items) {
         const itemIndex = parsedItemIndexesRef.current.get(input.id);
         if (itemIndex === undefined) {
-          throw new Error(
-            `Pierre diff item topology does not contain ${input.id}`
-          );
+          // 拓扑换代 / Pierre 尚未接受新 initialItems 时，latest-map 可能短暂
+          // 含有未知 id。跳过并返回 false，让上层下一帧重试，绝不能 throw 拖垮整树。
+          allAccepted = false;
+          continue;
         }
         const previous = parsedItemsRef.current.get(input.id);
         if (previous?.cacheKey === input.cacheKey) {

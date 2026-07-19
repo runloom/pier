@@ -30,13 +30,8 @@ import {
   RENDERER_COMMAND_CHANNEL,
   RENDERER_COMMAND_RESULT_CHANNEL,
 } from "@shared/contracts/renderer-command-channels.ts";
-import type { RendererRuntimeFailureReport } from "@shared/contracts/renderer-runtime-failure.ts";
 import type { TerminalAPI } from "@shared/contracts/terminal.ts";
-import type {
-  WindowContext,
-  WindowCreateResult,
-} from "@shared/contracts/window.ts";
-import type { WindowLayoutPulse } from "@shared/contracts/window-layout.ts";
+import type { WindowCreateResult } from "@shared/contracts/window.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
 import {
@@ -79,9 +74,6 @@ import {
   pluginSettingsApi,
 } from "./plugin-settings-api.ts";
 import { installRendererBootHandshake } from "./renderer-boot-handshake.ts";
-
-const signalRendererBoot = installRendererBootHandshake(ipcRenderer);
-
 import { type PierSystemStatsAPI, systemStatsApi } from "./system-stats-api.ts";
 import { type PierTasksAPI, tasksApi } from "./task-api.ts";
 import { terminalApi } from "./terminal-api.ts";
@@ -90,7 +82,12 @@ import {
   terminalStatusBarPrefsApi,
 } from "./terminal-status-bar-api.ts";
 import { type PierUsageDataAPI, usageDataApi } from "./usage-data-api.ts";
+import { createWindowApi, type PierWindowNsAPI } from "./window-api.ts";
 import { type PierWorktreesAPI, worktreesApi } from "./worktree-api.ts";
+
+const signalRendererBoot = installRendererBootHandshake(ipcRenderer);
+
+export type { PierWindowNsAPI } from "./window-api.ts";
 
 export type WindowInfo = SharedWindowInfo;
 
@@ -215,15 +212,6 @@ export interface PierClipboardAPI {
 
 export interface PierSettingsAPI {
   onOpenRequest: (cb: () => void) => () => void;
-}
-
-/** window 子命名空间 — 窗口生命周期与布局事件. */
-export interface PierWindowNsAPI {
-  closeCurrent: () => Promise<void>;
-  getContext: () => Promise<WindowContext>;
-  onLayoutPulse: (cb: (pulse: WindowLayoutPulse) => void) => () => void;
-  readyToShow: () => void;
-  reportRuntimeFailure: (failure: RendererRuntimeFailureReport) => void;
 }
 
 /** env 子命名空间 — 运行时环境信息. */
@@ -485,14 +473,7 @@ const api: PierWindowAPI = {
   app: createAppPreloadApi(),
   appUpdate: createAppUpdatePreloadApi(),
   theme: themeApi,
-  window: {
-    closeCurrent: () => ipcRenderer.invoke("pier://window:close-current"),
-    getContext: () => ipcRenderer.invoke("pier://window:context"),
-    onLayoutPulse: (cb) => subscribeIpc(PIER_BROADCAST.WINDOW_LAYOUT_PULSE, cb),
-    readyToShow: signalRendererBoot,
-    reportRuntimeFailure: (failure) =>
-      ipcRenderer.send(PIER.WINDOW_RENDERER_RUNTIME_FAILURE, failure),
-  },
+  window: createWindowApi(signalRendererBoot),
   workspace: workspaceApi,
   worktrees: worktreesApi,
 };

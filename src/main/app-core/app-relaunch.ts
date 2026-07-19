@@ -1,5 +1,26 @@
 import type { ManagedPluginInstallService } from "../services/managed-plugins/install-service.ts";
 
+let intentionalRelaunchArmed = false;
+
+/** True while a deliberate app.relaunch is in flight (skip quit confirm). */
+export function isIntentionalRelaunchArmed(): boolean {
+  return intentionalRelaunchArmed;
+}
+
+export function armIntentionalRelaunch(): void {
+  intentionalRelaunchArmed = true;
+}
+
+/** Clear after a failed relaunch quit so ordinary quit keeps confirmation. */
+export function disarmIntentionalRelaunch(): void {
+  intentionalRelaunchArmed = false;
+}
+
+/** Test-only reset. */
+export function resetIntentionalRelaunchForTests(): void {
+  intentionalRelaunchArmed = false;
+}
+
 /**
  * Dev-mode `app.relaunch` = **soft restart**:
  *   1. Advance the managed-plugin restart state
@@ -29,9 +50,15 @@ export async function performDevSoftRelaunch(
   }
 }
 
-/** Prod-mode `app.relaunch` = actual OS-level app relaunch. */
+/**
+ * Prod-mode `app.relaunch`.
+ *
+ * 只 arm 退出确认旁路并请求退出；真正的 `app.relaunch()` 由 quit
+ * proceed 路径在 flush 成功后调用（见 main `proceedToQuit`），避免
+ * flush 失败后仍排队重启、或旁路标志永久粘住。
+ */
 export async function performProdRelaunch(): Promise<void> {
   const { app } = await import("electron");
-  app.relaunch();
+  armIntentionalRelaunch();
   app.quit();
 }

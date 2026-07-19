@@ -69,4 +69,15 @@ export function registerWindowIpc(ipcMain: IpcMain): void {
       windowManager.close(internalId);
     }
   });
+
+  // 错误恢复 / 软重启：直接 reload 发起方 WebContents，不走 app.relaunch。
+  // BaseWindow + WebContentsView 下 location.reload() 不可靠；也不能在
+  // windowManager 查不到时静默成功，否则错误页 Reload 会“点了没反应”。
+  ipcMain.handle(PIER.WINDOW_RELOAD, (event) => {
+    const contents = event.sender;
+    if (contents.isDestroyed()) {
+      throw new Error("window webContents destroyed");
+    }
+    contents.reload();
+  });
 }

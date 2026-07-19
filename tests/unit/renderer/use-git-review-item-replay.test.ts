@@ -204,4 +204,67 @@ describe("useGitReviewItemReplay", () => {
     expect(sparseUpdateItems).toHaveBeenCalledTimes(2002);
     expect(sparseUpdateItems.mock.calls.at(-1)?.[0]).toHaveLength(2001);
   });
+
+  it("回放时只提交当前拓扑内的 latest-map 条目", async () => {
+    const updateItems = vi
+      .fn<PierDiffViewHandle["updateItems"]>()
+      .mockReturnValue(true);
+    const { handle, hook } = renderReplayHook(updateItems);
+    const known = item("section:known", 1);
+    const stale = item(
+      "sha256:89975872776f66d3cab99439a8d0be7970987bdfb858f46fe7b36bb9a44fdf64",
+      1
+    );
+
+    act(() => {
+      hook.result.current.recordLatestItemUpdates([known, stale]);
+    });
+
+    act(() => {
+      expect(
+        hook.result.current.replayLatestItemUpdates(handle, 1, [
+          "section:known",
+        ])
+      ).toBe(true);
+    });
+
+    expect(updateItems).toHaveBeenCalledTimes(1);
+    expect(updateItems.mock.calls[0]?.[0]).toEqual([known]);
+  });
+
+  it("用户重试沿用上次回放的拓扑 allowedIds", async () => {
+    const updateItems = vi
+      .fn<PierDiffViewHandle["updateItems"]>()
+      .mockReturnValue(false);
+    const { handle, hook } = renderReplayHook(updateItems);
+    const known = item("section:known", 1);
+    const stale = item(
+      "sha256:89975872776f66d3cab99439a8d0be7970987bdfb858f46fe7b36bb9a44fdf64",
+      1
+    );
+
+    act(() => {
+      hook.result.current.recordLatestItemUpdates([known, stale]);
+    });
+    act(() => {
+      expect(
+        hook.result.current.replayLatestItemUpdates(handle, 1, [
+          "section:known",
+        ])
+      ).toBe(false);
+    });
+    expect(updateItems.mock.calls.at(-1)?.[0]).toEqual([known]);
+
+    // 失败后 stale 又写回 latest-map；重试仍必须按 allowedIds 过滤。
+    act(() => {
+      hook.result.current.recordLatestItemUpdates([stale]);
+    });
+    updateItems.mockClear();
+    updateItems.mockReturnValue(true);
+    act(() => {
+      hook.result.current.retryLatestItemUpdates();
+    });
+    expect(updateItems).toHaveBeenCalledTimes(1);
+    expect(updateItems.mock.calls[0]?.[0]).toEqual([known]);
+  });
 });

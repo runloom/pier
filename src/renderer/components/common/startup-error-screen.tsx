@@ -98,11 +98,19 @@ function translatedCopy(kind: "runtime" | "startup") {
 }
 
 function retryStartup(): void {
+  const reload = window.pier?.window?.reload;
+  if (reload) {
+    // Pier 窗口是 BaseWindow + WebContentsView。恢复路径必须走 main 侧
+    // webContents.reload()；location.reload() 在这条路径上不可靠。
+    // 不要用 app.relaunch：生产包会触发 before-quit 确认，点了像没反应。
+    reload().catch((error: unknown) => {
+      console.error("[pier] startup reload failed:", error);
+      window.location.reload();
+    });
+    return;
+  }
   const relaunch = window.pier?.app?.relaunch;
   if (relaunch) {
-    // Pier 窗口是 BaseWindow + WebContentsView。dev 下真正的 soft restart
-    // 走 main 侧 webContents.reload()（见 performDevSoftRelaunch）；
-    // location.reload() 在这条路径上不可靠，会出现“点了没反应”。
     relaunch().catch((error: unknown) => {
       console.error("[pier] startup relaunch failed:", error);
       window.location.reload();

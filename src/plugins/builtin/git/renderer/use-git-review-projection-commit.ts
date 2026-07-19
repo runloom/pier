@@ -46,7 +46,8 @@ export function useGitReviewProjectionCommit({
   readonly renderedGenerationRef: RefObject<number>;
   readonly replayLatestItemUpdates: (
     handle: PierDiffViewHandle,
-    generation: number
+    generation: number,
+    allowedIds?: readonly string[]
   ) => boolean;
   readonly resumeSelectedNavigation: () => void;
   readonly tryPendingNavigation: () => void;
@@ -77,7 +78,11 @@ export function useGitReviewProjectionCommit({
     }
     const handle = diffHandleRef.current;
     if (handle) {
-      replayLatestItemUpdates(handle, projectionGeneration);
+      replayLatestItemUpdates(
+        handle,
+        projectionGeneration,
+        projectionIndex.itemIds
+      );
     }
     renderedGenerationRef.current = projectionGeneration;
     notifyProjectionChanged();

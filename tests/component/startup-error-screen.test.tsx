@@ -36,18 +36,23 @@ describe("startup screens", () => {
     expect(retry).toHaveBeenCalledOnce();
   });
 
-  it("prefers pier.app.relaunch over location.reload for the default retry", () => {
+  it("prefers window.reload soft restart over app.relaunch for the default retry", () => {
     document.documentElement.lang = "en";
+    const reload = vi.fn(async () => undefined);
     const relaunch = vi.fn(async () => undefined);
     Object.defineProperty(window, "pier", {
       configurable: true,
-      value: { app: { relaunch } },
+      value: {
+        app: { relaunch },
+        window: { reload },
+      },
     });
 
     render(<StartupErrorScreen error={new Error("boot failed")} />);
     fireEvent.click(screen.getByRole("button", { name: "Reload" }));
 
-    expect(relaunch).toHaveBeenCalledOnce();
+    expect(reload).toHaveBeenCalledOnce();
+    expect(relaunch).not.toHaveBeenCalled();
     Reflect.deleteProperty(window, "pier");
   });
 

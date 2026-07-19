@@ -987,6 +987,47 @@ describe("PierDiffView", () => {
     expect(onError).not.toHaveBeenCalled();
   });
 
+  it("稀疏 updateItems 遇到未知拓扑 id 时跳过并返回 false，不抛错拖垮整树", async () => {
+    const ref = createRef<PierDiffViewHandle>();
+    const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
+    const onError = vi.fn();
+    render(
+      <PierDiffView
+        appearance={appearance}
+        items={items}
+        labels={labels}
+        onError={onError}
+        ref={ref}
+      />
+    );
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    updateItem.mockClear();
+
+    let accepted: boolean | undefined;
+    expect(() => {
+      act(() => {
+        accepted = ref.current?.updateItems([
+          {
+            cacheKey: "document:file.ts",
+            id: "file.ts",
+            patch: items[0].patch.replace("+new", "+known"),
+          },
+          {
+            cacheKey: "document:missing.ts",
+            id: "sha256:89975872776f66d3cab99439a8d0be7970987bdfb858f46fe7b36bb9a44fdf64",
+            patch:
+              "diff --git a/missing.ts b/missing.ts\n--- a/missing.ts\n+++ b/missing.ts\n@@ -1 +1 @@\n-old\n+new\n",
+          },
+        ]);
+      });
+    }).not.toThrow();
+
+    expect(accepted).toBe(false);
+    expect(updateItem).toHaveBeenCalledTimes(1);
+    expect(updateItem.mock.calls[0]?.[0].id).toBe("file.ts");
+    expect(onError).not.toHaveBeenCalled();
+  });
+
   it("单项解析失败保留完整拓扑，并且不触发全局运行时错误", async () => {
     const onError = vi.fn();
     const onItemError = vi.fn();

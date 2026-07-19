@@ -28,6 +28,7 @@ export const PIER = {
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
+  WINDOW_RELOAD: "pier://window:reload",
   WINDOW_RENDERER_BOOT_CHALLENGE: "pier://window:renderer-boot-challenge",
   WINDOW_RENDERER_BOOT_REQUEST: "pier://window:renderer-boot-request",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
