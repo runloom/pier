@@ -4,6 +4,7 @@ import type {
 } from "@shared/contracts/dockview.ts";
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { FunctionComponent, ReactNode } from "react";
+import type { PanelTransferRegistration } from "./panel-transfer-registration.ts";
 
 export interface PluginGroupContentClaim {
   group: PierDockviewGroupHandle;
@@ -58,4 +59,9 @@ export interface PluginPanelRegistration {
    */
   resourcePolicy?: "unmountWhenHidden";
   title?: (() => string) | string;
+  /**
+   * 跨窗口拖拽注册（可选）。未声明 → 同窗可拖、跨窗 unsupported。
+   * 外部插件不得声明 `kind: "terminal"`；宿主会拒绝。
+   */
+  transfer?: PanelTransferRegistration;
 }

@@ -37,6 +37,7 @@ import type {
 } from "./renderer-panels.ts";
 import type { RendererWorkbenchWidgetRegistration } from "./workbench.ts";
 
+export type { PanelTransferRegistration } from "./panel-transfer-registration.ts";
 export type {
   RendererPluginAppearance,
   RendererPluginMermaidResult,

@@ -282,4 +282,24 @@ describe("workspace renderer commands", () => {
       requestId: "renderer-open-missing-group",
     });
   });
+
+  it("refuses panelTransfer.* commands that bypass the transfer listener", async () => {
+    await runWorkspaceRendererCommand({
+      command: {
+        sourcePanelId: "welcome-1",
+        transferId: "9af45a46-24f2-4ac0-9371-fbe78ca295dc",
+        type: "panelTransfer.prepareSource",
+      },
+      requestId: "panel-transfer-bypass",
+    });
+
+    expect(window.pier.rendererCommand.resolve).toHaveBeenCalledWith({
+      error: {
+        message:
+          "panelTransfer.prepareSource must be routed by the panel-transfer listener",
+      },
+      ok: false,
+      requestId: "panel-transfer-bypass",
+    });
+  });
 });

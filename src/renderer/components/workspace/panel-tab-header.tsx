@@ -16,12 +16,7 @@
 
 import { fileNameFromTabIconId, PierFileIcon } from "@pier/ui/file-icon.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
-import { cn } from "@pier/ui/utils.ts";
 import { agentKindFromTabIconId } from "@shared/contracts/agent-session.ts";
-import type {
-  PanelTabStatus,
-  PanelTabTooltip,
-} from "@shared/contracts/panel.ts";
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { X } from "lucide-react";
 import {
@@ -36,10 +31,6 @@ import {
   useState,
 } from "react";
 import { AgentIcon } from "@/components/agent-icons/index.tsx";
-import {
-  runtimeStatusLabel,
-  runtimeStatusVisual,
-} from "@/components/common/runtime-status-visual.ts";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
@@ -47,137 +38,15 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/terminal.store.ts";
 import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
 import { resolvePanelTabIcon } from "./panel-tab-icon-registry.ts";
+import {
+  PANEL_TAB_TOOLTIP_DELAY_MS,
+  tabAriaLabel,
+  tabStatusIndicator,
+  tabTooltipText,
+} from "./panel-tab-tooltip.tsx";
+import { usePanelTransferTabDrop } from "./use-panel-transfer-tab-drop.ts";
 
-export const PANEL_TAB_TOOLTIP_DELAY_MS = 1000;
-
-function localizedTooltipLabel(
-  label: string,
-  t: ReturnType<typeof useT>
-): string {
-  switch (label) {
-    case "Command":
-      return t("commandPalette.run.taskTab.tooltip.command");
-    case "CWD":
-      return t("commandPalette.run.taskTab.tooltip.cwd");
-    case "Source":
-      return t("commandPalette.run.taskTab.tooltip.source");
-    default:
-      return label;
-  }
-}
-
-function localizedTooltipValue(
-  label: string,
-  value: string,
-  t: ReturnType<typeof useT>
-): string {
-  if (label !== "Source") {
-    return value;
-  }
-  switch (value) {
-    case "Cargo":
-      return t("commandPalette.run.taskTab.source.cargo");
-    case "Composer":
-      return t("commandPalette.run.taskTab.source.composer");
-    case "Deno":
-      return t("commandPalette.run.taskTab.source.deno");
-    case "Recently Run":
-      return t("commandPalette.run.taskTab.source.history");
-    case "Justfile":
-      return t("commandPalette.run.taskTab.source.just");
-    case "Makefile":
-      return t("commandPalette.run.taskTab.source.make");
-    case "mise":
-      return t("commandPalette.run.taskTab.source.mise");
-    case "package.json":
-      return t("commandPalette.run.taskTab.source.packageScript");
-    case "pyproject.toml":
-      return t("commandPalette.run.taskTab.source.pyproject");
-    case "Taskfile":
-      return t("commandPalette.run.taskTab.source.taskfile");
-    case "VS Code":
-      return t("commandPalette.run.taskTab.source.vscode");
-    case "Zed":
-      return t("commandPalette.run.taskTab.source.zed");
-    default:
-      return value;
-  }
-}
-
-function localizedTooltipLine(
-  line: { label: string; value: string },
-  t: ReturnType<typeof useT>
-): string {
-  return t("commandPalette.run.taskTab.tooltip.line", {
-    label: localizedTooltipLabel(line.label, t),
-    value: localizedTooltipValue(line.label, line.value, t),
-  });
-}
-
-function tabTooltipText(
-  tooltip: PanelTabTooltip | undefined,
-  fallback: string | undefined,
-  stateLabel: string | undefined,
-  t: ReturnType<typeof useT>
-): string | null {
-  if (!tooltip) {
-    const lines = [fallback, stateLabel].filter((line): line is string =>
-      Boolean(line)
-    );
-    return lines.length > 0 ? lines.join("\n") : null;
-  }
-  const lines = [
-    tooltip.title,
-    stateLabel,
-    ...(tooltip.lines ?? []).map((line) => localizedTooltipLine(line, t)),
-  ].filter((line): line is string => Boolean(line));
-  return lines.length > 0 ? lines.join("\n") : (fallback ?? null);
-}
-
-function tabAriaLabel(
-  explicit: string | undefined,
-  title: string,
-  stateLabel: string | undefined
-): string | undefined {
-  if (explicit) {
-    return explicit;
-  }
-  if (!stateLabel) {
-    return;
-  }
-  return [title, stateLabel].filter(Boolean).join(", ");
-}
-
-function tabStatusIndicator(
-  status: PanelTabStatus,
-  label: string | undefined
-): ReactNode {
-  if (status === "idle") {
-    return null;
-  }
-  const displayLabel = label ?? runtimeStatusLabel(status);
-  const visual = runtimeStatusVisual(status);
-  const Icon = visual.Icon;
-  return (
-    <span
-      aria-label={displayLabel}
-      className={cn(
-        "inline-flex size-4 shrink-0 items-center justify-center",
-        visual.textClassName
-      )}
-      data-panel-tab-state-indicator={status}
-      data-tab-status={status}
-      role="img"
-      title={displayLabel}
-    >
-      <Icon
-        aria-hidden="true"
-        className={cn("size-3 shrink-0", visual.iconClassName)}
-        data-panel-tab-state-icon={status}
-      />
-    </span>
-  );
-}
+export { PANEL_TAB_TOOLTIP_DELAY_MS } from "./panel-tab-tooltip.tsx";
 
 const FILE_PANEL_COMPONENT_ID = "pier.files.filePanel";
 
@@ -427,6 +296,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   // biome a11y noStaticElementInteractions / noNoninteractiveElementInteractions 要求
   // onContextMenu div 有 role. dockview 外层 .dv-tab 已有 tabIndex=0, 两层重叠影响有限:
   // 外层是 dockview 自己渲染的 DOM, 不受此 React 树控制.
+  const tabDropHandlers = usePanelTransferTabDrop({ api: props.api });
   const tabContent = (
     <div
       aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
@@ -441,6 +311,8 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       onClick={onClick}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
+      onDragOverCapture={tabDropHandlers.onDragOverCapture}
+      onDropCapture={tabDropHandlers.onDropCapture}
       onKeyDown={onKeyDown}
       onPointerDownCapture={onPointerDownCapture}
       role="tab"

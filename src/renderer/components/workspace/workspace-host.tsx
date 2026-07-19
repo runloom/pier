@@ -42,9 +42,9 @@ import {
   setTerminalBasePanel,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { attachWorkspacePanelTransfer } from "./attach-workspace-panel-transfer.ts";
 import { getPanelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
-import { sanitizeSavedLayout } from "./sanitize-saved-layout.ts";
 import { applyDefaultLayout } from "./workspace-default-layout.ts";
 import {
   WorkspaceHeaderActions,
@@ -54,6 +54,12 @@ import {
   createWorkspaceLayoutSaveScheduler,
   subscribeWorkspacePanelParameterChanges,
 } from "./workspace-layout-persistence.ts";
+import {
+  enterPendingTransferBootstrapGate,
+  loadWorkspaceLayoutWithPendingTransfers,
+  restoreAndSanitizeTransferLayout,
+  settlePendingTransferBootstrap,
+} from "./workspace-panel-transfer-host.ts";
 import {
   createPluginPanelCloserForWorkspace,
   createPluginPanelTitleUpdaterForWorkspace,
@@ -268,6 +274,8 @@ export function WorkspaceHost() {
       workspaceLayoutFlushDisposeRef.current();
       workspaceLayoutFlushDisposeRef.current =
         registerWorkspaceLayoutFlusher(persistCurrentLayout);
+      // 跨窗口 panel transfer: Dockview drag 事件 + dragend/Escape。
+      const panelTransferDispose = attachWorkspacePanelTransfer(event.api);
 
       const syncDockviewMaximizedState = (): void => {
         const nextHasMaximizedGroup = event.api.hasMaximizedGroup();
@@ -381,20 +389,16 @@ export function WorkspaceHost() {
           useWorkspaceStore.getState().addTerminal();
         }) ?? (() => undefined);
 
-      // 异步恢复持久化 layout — 仅在 user 未触碰时应用. 失败或无持久化 layout 时
-      // 用 default. 注意: applyDefaultLayout / fromJSON 都包在 isApplyingPersistedLayout
-      // gate 里, 同样防 save-loop.
+      // 异步恢复持久化 layout — 仅在 user 未触碰时应用; pending transfer bootstrap
+      // 见 workspace-panel-transfer-host.ts。applyDefaultLayout / fromJSON 都包在
+      // isApplyingPersistedLayout gate 里防 save-loop。
       let disposed = false;
       (async () => {
-        let saved: unknown = null;
-        try {
-          const windowContext = await windowContextPromise;
-          saved = await window.pier.workspace.loadLayout(
-            windowContext.recordId
+        const windowContext = await windowContextPromise.catch(() => null);
+        const { saved, pendingTransfers } =
+          await loadWorkspaceLayoutWithPendingTransfers(
+            windowContext?.recordId
           );
-        } catch (err) {
-          console.error("[workspace] loadLayout failed:", err);
-        }
         if (disposed) {
           return;
         }
@@ -403,21 +407,16 @@ export function WorkspaceHost() {
           notifyWorkspaceReady();
           return;
         }
+        const hasPendingTransfers =
+          enterPendingTransferBootstrapGate(pendingTransfers);
         isApplyingPersistedLayout = true;
         try {
-          if (saved && typeof saved === "object") {
-            // 剔除引用未注册 component 的 panel(如禁用插件后旧 layout 残留
-            // pier.git.changes) —— 直接 fromJSON 会抛错让整个 layout 回退 default,
-            // 把用户的终端等也丢了。先 sanitize 保住其它 panel。
-            const sanitized = sanitizeSavedLayout(
-              saved,
-              new Set(Object.keys(readPanelComponents()))
-            );
-            if (sanitized) {
-              event.api.fromJSON(sanitized);
-            } else {
-              applyDefaultLayout(event.api);
-            }
+          const sanitized = restoreAndSanitizeTransferLayout(
+            saved,
+            new Set(Object.keys(readPanelComponents()))
+          );
+          if (sanitized) {
+            event.api.fromJSON(sanitized);
           } else {
             applyDefaultLayout(event.api);
           }
@@ -432,12 +431,14 @@ export function WorkspaceHost() {
           syncTerminalPresentation(event.api, "restore");
         }
 
-        // C 方案 reload 零销毁的孤儿兜底:layout 应用后报告当前还活着的 terminal
-        // panelId 集合, swift 把 reload 前 layout 里有、新 layout 里没有的 NSView
-        // 清掉. 首次启动 / layout 未变 时是 noop (swift terminals 字典空 / 集合一致),
-        // 只有 reload 后 layout 收缩时才真正回收孤儿. fire-and-forget.
+        // C 方案 reload 零销毁的孤儿兜底: layout 应用后报告仍存活的 terminal
+        // panelId；swift 回收 reload 前有、新 layout 没有的 NSView。
         reconcileTerminalPanels(event.api);
         notifyWorkspaceReady();
+
+        if (hasPendingTransfers) {
+          await settlePendingTransferBootstrap(pendingTransfers);
+        }
 
         // 给 dockview 一帧时间 flush layout-change 事件, 再放 save gate
         requestAnimationFrame(() => {
@@ -456,6 +457,7 @@ export function WorkspaceHost() {
         activePanelSubscription?.dispose();
         terminalFocusDispose();
         newTerminalDispose();
+        panelTransferDispose();
         window.removeEventListener("beforeunload", handleBeforeUnload);
       };
     },
@@ -475,6 +477,7 @@ export function WorkspaceHost() {
           components={panelComponents}
           defaultTabComponent={PanelTabHeader}
           disableTabsOverflowList={true}
+          dndStrategy="html5"
           leftHeaderActionsComponent={WorkspaceHeaderActions}
           onReady={handleReady}
           rightHeaderActionsComponent={WorkspaceHeaderRightActions}

@@ -275,12 +275,16 @@ async function runWorkspaceRendererCommandAsync(
       case "plugin.finalizeReload": {
         throw new Error("plugin.finalizeReload requires workspace api context");
       }
+      // panelTransfer.* commands are routed earlier by the workspace renderer
+      // command listener (installWorkspaceRendererCommandListener) and never
+      // reach this switch. They are listed here only so the `never`
+      // exhaustiveness check stays satisfied; the cases are unreachable.
       case "panelTransfer.prepareSource":
       case "panelTransfer.stageTarget":
       case "panelTransfer.releaseSource":
       case "panelTransfer.finalize": {
         throw new Error(
-          `${envelope.command.type} requires workspace panel-transfer context`
+          `${envelope.command.type} must be routed by the panel-transfer listener`
         );
       }
       default: {
