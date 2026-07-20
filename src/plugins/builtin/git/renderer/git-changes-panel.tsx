@@ -1,4 +1,3 @@
-import { Alert, AlertTitle } from "@pier/ui/alert.tsx";
 import {
   Empty,
   EmptyDescription,
@@ -9,8 +8,10 @@ import { usePanelSidebarCollapsed } from "@pier/ui/use-panel-sidebar-preference.
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import {
+  GIT_REVIEW_STATUS_PRIORITY,
   type GitReviewIndexEntry,
   type GitReviewScope,
+  type GitReviewTarget,
   gitReviewScopeSchema,
 } from "@shared/contracts/git-review.ts";
 import {
@@ -21,15 +22,26 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { GitCommitForm } from "./git-commit-form.tsx";
 import { pluginText } from "./git-plugin-text.ts";
 import { preloadReviewCodeView } from "./git-review-code-view.tsx";
 import { ReviewDocuments } from "./git-review-content.tsx";
-import { ReviewFeedback, ReviewLoading } from "./git-review-feedback.tsx";
+import {
+  ReviewErrorEmpty,
+  ReviewFailureEmpty,
+  ReviewFeedback,
+  ReviewLoading,
+} from "./git-review-feedback.tsx";
 import {
   GitReviewIndexLoader,
   type GitReviewIndexLoaderSnapshot,
 } from "./git-review-index-loader.ts";
 import { GitReviewPanelLayout } from "./git-review-panel-layout.tsx";
+import {
+  DEFAULT_UNCOMMITTED_FILTER,
+  GitReviewScopeSwitcher,
+  type GitReviewUncommittedFilter,
+} from "./git-review-scope-switcher.tsx";
 import {
   clearReviewSession,
   patchReviewSession,
@@ -39,6 +51,50 @@ import { gitReviewTreeModel } from "./git-review-tree.tsx";
 
 const EMPTY_REVIEW_ENTRIES: readonly GitReviewIndexEntry[] = [];
 const REVIEW_TREE_COLLAPSED_STORAGE_PREFIX = "pier.git.review.treeCollapsed:";
+
+/** loading/error/空态下侧栏树为空,打开路径无目标可导航。 */
+function noopOpenPath(_path: string): void {
+  // 空树没有可打开的条目
+}
+
+/**
+ * uncommitted scope 的未暂存/已暂存过滤(对齐 loomdesk includeUnstaged/
+ * includeStaged):纯 renderer 投影过滤,conflict 分组不受过滤影响。
+ */
+function filterUncommittedEntries(
+  entries: readonly GitReviewIndexEntry[],
+  filter: GitReviewUncommittedFilter
+): readonly GitReviewIndexEntry[] {
+  if (filter.staged && filter.unstaged) {
+    return entries;
+  }
+  const filtered: GitReviewIndexEntry[] = [];
+  for (const entry of entries) {
+    const renderSlots = entry.renderSlots.filter((slot) => {
+      if (slot.group === "staged") {
+        return filter.staged;
+      }
+      if (slot.group === "unstaged") {
+        return filter.unstaged;
+      }
+      return true;
+    });
+    if (renderSlots.length === 0) {
+      continue;
+    }
+    if (renderSlots.length === entry.renderSlots.length) {
+      filtered.push(entry);
+      continue;
+    }
+    // 契约不变式:entry.status 必须等于剩余 slot 的最高优先级状态。
+    const status =
+      GIT_REVIEW_STATUS_PRIORITY.find((candidate) =>
+        renderSlots.some((slot) => slot.status === candidate)
+      ) ?? entry.status;
+    filtered.push({ ...entry, renderSlots, status });
+  }
+  return filtered;
+}
 
 function readSource(params: unknown): GitReviewScope | null {
   if (!(params && typeof params === "object" && "source" in params)) {
@@ -114,6 +170,14 @@ export function createGitChangesPanel(context: RendererPluginContext) {
     return (
       <GitChangesPanelBody
         context={context}
+        onSelectTarget={(target) => {
+          if (!source) {
+            return;
+          }
+          props.api.updateParameters({
+            source: { ...source, target } satisfies GitReviewScope,
+          });
+        }}
         panelId={panelId}
         source={source}
         sourceKey={sourceKey}
@@ -124,11 +188,13 @@ export function createGitChangesPanel(context: RendererPluginContext) {
 
 function GitChangesPanelBody({
   context,
+  onSelectTarget,
   panelId,
   source,
   sourceKey,
 }: {
   readonly context: RendererPluginContext;
+  readonly onSelectTarget: (target: GitReviewTarget) => void;
   readonly panelId: string;
   readonly source: GitReviewScope | null;
   readonly sourceKey: string | null;
@@ -168,6 +234,16 @@ function GitChangesPanelBody({
   })();
   const entries =
     state.kind === "loaded" ? state.result.entries : EMPTY_REVIEW_ENTRIES;
+  const [uncommittedFilter, setUncommittedFilter] = useState(
+    DEFAULT_UNCOMMITTED_FILTER
+  );
+  const visibleEntries = useMemo(
+    () =>
+      source?.target.kind === "uncommitted"
+        ? filterUncommittedEntries(entries, uncommittedFilter)
+        : entries,
+    [entries, source?.target.kind, uncommittedFilter]
+  );
   const language = context.i18n.language();
   // language 驱动文案；context 在 panel 生命周期内稳定。
   // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable for the factory instance
@@ -184,8 +260,8 @@ function GitChangesPanelBody({
     };
   }, [language]);
   const treeModel = useMemo(
-    () => gitReviewTreeModel(entries, collidingFileLabel),
-    [collidingFileLabel, entries]
+    () => gitReviewTreeModel(visibleEntries, collidingFileLabel),
+    [collidingFileLabel, visibleEntries]
   );
 
   // index loader 只随 source 重建；git facade 随 context 稳定。
@@ -243,6 +319,31 @@ function GitChangesPanelBody({
     };
   }, [source, sourceKey]);
 
+  const scopeSwitcher = source ? (
+    <GitReviewScopeSwitcher
+      context={context}
+      gitRootPath={source.gitRootPath}
+      onSelectTarget={onSelectTarget}
+      onUncommittedFilterChange={setUncommittedFilter}
+      target={source.target}
+      uncommittedFilter={uncommittedFilter}
+    />
+  ) : undefined;
+  const stagedCount =
+    source?.target.kind === "uncommitted"
+      ? entries.filter((entry) =>
+          entry.renderSlots.some((slot) => slot.group === "staged")
+        ).length
+      : 0;
+  const commitForm =
+    source && stagedCount > 0 ? (
+      <GitCommitForm
+        context={context}
+        cwd={source.gitRootPath}
+        stagedCount={stagedCount}
+      />
+    ) : undefined;
+
   if (!source) {
     return (
       <GitReviewPanelLayout
@@ -251,11 +352,14 @@ function GitChangesPanelBody({
         setSidebarCollapsed={setSidebarCollapsed}
         sidebarCollapsed={sidebarCollapsed}
       >
-        <Alert className="m-3" variant="destructive">
-          <AlertTitle>
-            {pluginText(context, "reviewInvalidSource", "Invalid Git source")}
-          </AlertTitle>
-        </Alert>
+        <ReviewErrorEmpty
+          context={context}
+          title={pluginText(
+            context,
+            "reviewInvalidSource",
+            "Invalid Git source"
+          )}
+        />
       </GitReviewPanelLayout>
     );
   }
@@ -263,9 +367,13 @@ function GitChangesPanelBody({
     return (
       <GitReviewPanelLayout
         context={context}
+        contextId={source.contextId}
         gitRootPath={source.gitRootPath}
+        headerLeading={scopeSwitcher}
+        onOpenPath={noopOpenPath}
         setSidebarCollapsed={setSidebarCollapsed}
         sidebarCollapsed={sidebarCollapsed}
+        treeModel={treeModel}
       >
         <ReviewLoading context={context} />
       </GitReviewPanelLayout>
@@ -275,38 +383,43 @@ function GitChangesPanelBody({
     return (
       <GitReviewPanelLayout
         context={context}
+        contextId={source.contextId}
         gitRootPath={source.gitRootPath}
+        headerLeading={scopeSwitcher}
+        onOpenPath={noopOpenPath}
         setSidebarCollapsed={setSidebarCollapsed}
         sidebarCollapsed={sidebarCollapsed}
+        treeModel={treeModel}
       >
-        <ReviewFeedback
+        <ReviewFailureEmpty
           context={context}
-          failures={[]}
-          indexFailure={state.failure}
-          indexFailureTitle={pluginText(
+          failure={state.failure}
+          onRetry={() => indexLoaderRef.current?.retry()}
+          title={pluginText(
             context,
             "reviewLoadFailed",
             "Failed to load changes"
           )}
-          onRetryIndex={() => indexLoaderRef.current?.retry()}
-          runtimeError={null}
         />
       </GitReviewPanelLayout>
     );
   }
-  if (state.result.entries.length > 0) {
+  if (visibleEntries.length > 0) {
     return (
       <div aria-busy={state.refreshing || undefined} className="h-full min-h-0">
         <ReviewDocuments
           context={context}
-          entries={state.result.entries}
+          entries={visibleEntries}
+          headerLeading={scopeSwitcher}
           indexGeneration={state.generation}
           indexRefreshFailure={state.refreshFailure}
+          indexRefreshing={state.refreshing}
           onRetryIndex={() => indexLoaderRef.current?.retry()}
           panelId={panelId}
           scope={source}
           setSidebarCollapsed={setSidebarCollapsed}
           sidebarCollapsed={sidebarCollapsed}
+          sidebarFooter={commitForm}
           treeModel={treeModel}
           warnings={state.result.warnings}
         />
@@ -316,9 +429,13 @@ function GitChangesPanelBody({
   return (
     <GitReviewPanelLayout
       context={context}
+      contextId={source.contextId}
       gitRootPath={source.gitRootPath}
+      headerLeading={scopeSwitcher}
+      onOpenPath={noopOpenPath}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
+      treeModel={treeModel}
     >
       <div
         aria-busy={state.refreshing || undefined}
@@ -329,7 +446,6 @@ function GitChangesPanelBody({
           failures={[]}
           indexFailure={state.refreshFailure}
           onRetryIndex={() => indexLoaderRef.current?.retry()}
-          runtimeError={null}
         />
         <Empty className="h-full">
           <EmptyHeader>
@@ -337,15 +453,43 @@ function GitChangesPanelBody({
               {pluginText(context, "reviewEmptyTitle", "No changes")}
             </EmptyTitle>
             <EmptyDescription>
-              {pluginText(
-                context,
-                "reviewEmptyDescription",
-                "The working tree has no staged or unstaged changes."
-              )}
+              {entries.length > 0
+                ? pluginText(
+                    context,
+                    "reviewEmptyDescriptionFiltered",
+                    "All changes are hidden by the current filter."
+                  )
+                : emptyDescription(context, source.target)}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>
       </div>
     </GitReviewPanelLayout>
+  );
+}
+
+function emptyDescription(
+  context: RendererPluginContext,
+  target: GitReviewTarget
+): string {
+  if (target.kind === "commit") {
+    return pluginText(
+      context,
+      "reviewEmptyDescriptionCommit",
+      "The selected commit has no file changes."
+    );
+  }
+  if (target.kind === "branch") {
+    return pluginText(
+      context,
+      "reviewEmptyDescriptionBranch",
+      "The current branch has no changes relative to {{branch}}.",
+      { branch: target.ref }
+    );
+  }
+  return pluginText(
+    context,
+    "reviewEmptyDescription",
+    "The working tree has no staged or unstaged changes."
   );
 }

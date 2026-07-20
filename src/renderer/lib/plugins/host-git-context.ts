@@ -12,6 +12,10 @@ export function createPluginGitContext(
   assertPluginCapability: AssertPluginCapability
 ): RendererPluginContext["git"] {
   return {
+    abortCherryPick: (cwd) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.abortCherryPick(cwd);
+    },
     abortMerge: (cwd) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.abortMerge(cwd);
@@ -20,9 +24,33 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:write");
       return window.pier.git.abortRebase(cwd);
     },
+    abortRevert: (cwd) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.abortRevert(cwd);
+    },
+    cherryPick: (cwd, oid) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.cherryPick(cwd, oid);
+    },
+    continueCherryPick: (cwd) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.continueCherryPick(cwd);
+    },
+    continueRevert: (cwd) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.continueRevert(cwd);
+    },
+    revert: (cwd, oid) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.revert(cwd, oid);
+    },
     checkoutBranch: (cwd, name) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.checkoutBranch(cwd, name);
+    },
+    commit: (cwd, options) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.commit(cwd, options);
     },
     cancelReviewRequest: (request) => {
       assertPluginCapability(entry, "git:read");
@@ -111,6 +139,10 @@ export function createPluginGitContext(
     searchBranches: (cwd, options) => {
       assertPluginCapability(entry, "git:read");
       return window.pier.git.searchBranches(cwd, options);
+    },
+    searchCommits: (cwd, options) => {
+      assertPluginCapability(entry, "git:read");
+      return window.pier.git.searchCommits(cwd, options);
     },
     stage: (cwd, paths) => {
       assertPluginCapability(entry, "git:write");

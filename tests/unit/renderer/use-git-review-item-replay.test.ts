@@ -24,6 +24,7 @@ function diffHandle(
     restoreAnchor: () => true,
     scrollToItem: () => true,
     selectAll: () => false,
+    setAllCollapsed: () => undefined,
     updateItems,
   };
 }

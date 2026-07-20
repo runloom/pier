@@ -1,10 +1,10 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import {
   Empty,
   EmptyDescription,
   EmptyHeader,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import {
   PierFileTree,
   type PierFileTreeApi,
@@ -351,12 +351,11 @@ export function FileTreeSidebar({
   let content: ReactNode = null;
   if (snapshot.rootError) {
     content = (
-      <Alert className="m-3" variant="destructive">
-        <AlertTitle>
-          {t("panel.loadError.title", "Unable to load files")}
-        </AlertTitle>
-        <AlertDescription>{snapshot.rootError}</AlertDescription>
-      </Alert>
+      <ErrorEmpty
+        className="min-h-0 flex-1 rounded-none border-0 p-4"
+        description={snapshot.rootError}
+        title={t("panel.loadError.title", "Unable to load files")}
+      />
     );
   } else if (!snapshot.rootLoaded) {
     content = (

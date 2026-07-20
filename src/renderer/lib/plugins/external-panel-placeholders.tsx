@@ -1,5 +1,13 @@
 import type { RendererPluginPanelRegistration as ExternalPluginPanelRegistration } from "@pier/plugin-api/renderer";
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyMedia,
+  EmptyTitle,
+} from "@pier/ui/empty.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
+import { Spinner } from "@pier/ui/spinner.tsx";
 import type { PluginPanelRegistration } from "@plugins/api/renderer.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
@@ -122,30 +130,29 @@ function ExternalPluginPanelSlot({
   const failure = diagnostics.find(
     (item) => item.pluginId === snapshot.pluginId
   );
-  const unavailable = failure || !snapshot.hasRendererEntry;
+  if (failure || !snapshot.hasRendererEntry) {
+    return (
+      <ErrorEmpty
+        description={
+          failure?.message ??
+          t("workspace.pluginPanel.missingRendererDescription")
+        }
+        title={t("workspace.pluginPanel.unavailableTitle")}
+      />
+    );
+  }
   return (
-    <div className="flex h-full items-center justify-center p-6 text-foreground">
-      <Alert
-        className="max-w-md"
-        variant={unavailable ? "destructive" : "info"}
-      >
-        <AlertTitle>
-          {t(
-            unavailable
-              ? "workspace.pluginPanel.unavailableTitle"
-              : "workspace.pluginPanel.loadingTitle"
-          )}
-        </AlertTitle>
-        <AlertDescription>
-          {failure?.message ??
-            t(
-              snapshot.hasRendererEntry
-                ? "workspace.pluginPanel.loadingDescription"
-                : "workspace.pluginPanel.missingRendererDescription"
-            )}
-        </AlertDescription>
-      </Alert>
-    </div>
+    <Empty className="h-full" role="status">
+      <EmptyHeader>
+        <EmptyMedia variant="icon">
+          <Spinner />
+        </EmptyMedia>
+        <EmptyTitle>{t("workspace.pluginPanel.loadingTitle")}</EmptyTitle>
+        <EmptyDescription>
+          {t("workspace.pluginPanel.loadingDescription")}
+        </EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }
 

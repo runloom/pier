@@ -375,11 +375,33 @@ export function createWorktreeService({
       );
     }
 
+    // 分支删除只走安全模式(-d):未合并分支失败并回传原因,不使用 -D。
+    let branchDeletion: WorktreeRemoveResult["branchDeletion"] = null;
+    if (request.deleteBranch && target.branch) {
+      try {
+        await execGit(["branch", "-d", target.branch], before.mainPath, {
+          timeoutMs: 60_000,
+        });
+        branchDeletion = {
+          branch: target.branch,
+          deleted: true,
+          message: null,
+        };
+      } catch (err) {
+        branchDeletion = {
+          branch: target.branch,
+          deleted: false,
+          message: err instanceof Error ? err.message : String(err),
+        };
+      }
+    }
+
     const after = await list({ path: before.mainPath });
     if (after.status === "unavailable") {
       serviceError(after.reason, "removed worktree but list failed");
     }
     return {
+      branchDeletion,
       removedPath: target.path,
       worktrees: after.worktrees,
     };

@@ -100,9 +100,11 @@ describe("Git diff renderer governance", () => {
     );
     expect(workerSource).toContain("worker/worker.js");
     expect(source).toContain('preferredHighlighter: "shiki-wasm"');
+    // diffStyle/overflow 由 PierDiffViewPresentation 驱动(split/unified、wrap),
+    // 缺省仍是 split + scroll;其余配置保持锁定。
     expect(codeViewOptions?.trim()).toBe(
       `diffIndicators: "bars",
-      diffStyle: "split",
+      diffStyle,
       disableBackground: false,
       disableLineNumbers: false,
       enableGutterUtility: false,
@@ -119,12 +121,18 @@ describe("Git diff renderer governance", () => {
         }
         scheduleRenderWindowReport();
       },
-      overflow: "scroll",
+      overflow,
       preferredHighlighter: "shiki-wasm",
       stickyHeaders: true,
       theme: appearance.codeTheme,
       themeType: appearance.colorMode,
       unsafeCSS: CODE_VIEW_CUSTOM_CSS,`
+    );
+    expect(source).toContain(
+      'const diffStyle = presentation?.diffStyle ?? "split";'
+    );
+    expect(source).toContain(
+      'const overflow = presentation?.wrapLines === true ? "wrap" : "scroll";'
     );
     expect(source.match(/unsafeCSS:/gu)).toHaveLength(1);
     expect(appearanceSource).toContain("SCROLLBAR_SYSTEM_CSS");

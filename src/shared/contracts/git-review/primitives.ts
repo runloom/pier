@@ -4,10 +4,15 @@ export const gitReviewOperationIdSchema = z.string().uuid();
 export const gitReviewRevisionSchema = z.string().min(1).max(256);
 export const gitReviewSectionKeySchema = z.string().min(1).max(512);
 export const GIT_REVIEW_MAX_SECTIONS = 3;
+/**
+ * unstaged/staged/conflict 属于 uncommitted scope;committed 是 commit/branch
+ * scope 的单一分组(range diff),两类分组不会出现在同一个 index 里。
+ */
 export const GIT_REVIEW_GROUP_ORDER = [
   "unstaged",
   "staged",
   "conflict",
+  "committed",
 ] as const;
 export type GitReviewGroup = (typeof GIT_REVIEW_GROUP_ORDER)[number];
 

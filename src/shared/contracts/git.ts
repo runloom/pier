@@ -257,6 +257,29 @@ export const gitDiffSearchBranchesOptionsSchema = z.object({
   query: z.string().max(512).optional(),
 });
 
+/**
+ * commit 搜索选项。query 支持结构化语法（与 branch 搜索同为服务端过滤）：
+ * - 裸 4-64 位十六进制 → 按 hash 精确查（未命中退化为消息搜索；`#` 前缀强制精确查）
+ * - `@name` → --author（可多个；固定字符串匹配）
+ * - `:path` → 限定路径（可多个）
+ * - `~text` → -S pickaxe（git 限制仅支持一个；后续 ~token 按消息词处理）
+ * - `since:<date>` / `until:<date>` → --since/--until
+ * - `all:` 整条查询前缀 → --all（默认仅当前 HEAD 可达历史）
+ * - 其余词 → --grep 提交信息（fixed-strings、忽略大小写）
+ */
+export const gitSearchCommitsOptionsSchema = z.object({
+  limit: z.number().int().min(1).max(200).optional(),
+  query: z.string().max(512).optional(),
+});
+
+export const gitCommitSearchResultSchema = z.object({
+  durationMs: z.number().nonnegative(),
+  items: z.array(gitCommitSchema),
+  message: z.string().nullable(),
+  status: z.enum(["ok", "timeout", "error"]),
+});
+export type GitCommitSearchResult = z.infer<typeof gitCommitSearchResultSchema>;
+
 export const getFileContentOptionsSchema = z.object({
   path: z.string(),
   ref: z.string().optional(),
@@ -386,6 +409,42 @@ export const gitRebaseContinueResultSchema = z.discriminatedUnion("kind", [
 export type GitRebaseContinueResult = z.infer<
   typeof gitRebaseContinueResultSchema
 >;
+
+/** cherry-pick / revert 的目标 revision:拒绝选项注入与控制字符。 */
+export const gitSequencerOptionsSchema = z.object({
+  oid: z
+    .string()
+    .min(1)
+    .max(512)
+    .refine(
+      (oid) =>
+        !(
+          oid.startsWith("-") ||
+          oid.includes("\0") ||
+          oid.includes("\n") ||
+          oid.includes("\r")
+        ),
+      "Expected a safe Git revision"
+    ),
+});
+
+/** cherry-pick / revert 共用结果形状(与 rebase 对齐)。 */
+export const gitSequencerResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok"), message: z.string() }),
+  z.object({ kind: z.literal("conflict"), message: z.string() }),
+  gitUnavailableResultSchema,
+]);
+export type GitSequencerResult = z.infer<typeof gitSequencerResultSchema>;
+
+export const gitSequencerAbortResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok") }),
+  gitUnavailableResultSchema,
+]);
+export type GitSequencerAbortResult = z.infer<
+  typeof gitSequencerAbortResultSchema
+>;
+
+export type GitSequencerContinueResult = GitSequencerResult;
 
 export const gitUndoCommitResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ok") }),

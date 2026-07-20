@@ -648,7 +648,11 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     ).toBeLessThanOrEqual(storedTreeWidth + 2);
     await reviewTreeSearch.fill("script.py");
     await reviewTreeSearch.press("Enter");
-    await expect(reviewHeader.getByText("script.py")).toBeVisible();
+    // header 不再展示路径面包屑(改为左侧 scope 切换器);导航结果由下方
+    // treeitem selected 断言与 scope 切换器可见性共同验证。
+    await expect(
+      reviewHeader.getByTestId("git-review-scope-switcher")
+    ).toBeVisible();
     await reviewTreeSearch.press("Escape");
     await expect(page.getByTestId("git-review-tree-search-bar")).toHaveCount(0);
     await expect(
@@ -680,9 +684,6 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       })
       .toBe(true);
     await changesTab.click();
-    await page
-      .getByRole("treeitem", { name: /binary-6\\special\.bin/u })
-      .click();
     await expect
       .poll(
         () =>

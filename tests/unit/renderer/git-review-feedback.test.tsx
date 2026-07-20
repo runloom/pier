@@ -1,6 +1,8 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { ReviewFailedResource } from "@plugins/builtin/git/renderer/git-review-document-generation.ts";
 import {
+  ReviewErrorEmpty,
+  ReviewFailureEmpty,
   ReviewFeedback,
   ReviewLoading,
 } from "@plugins/builtin/git/renderer/git-review-feedback.tsx";
@@ -61,6 +63,54 @@ describe("Git Review feedback", () => {
     expect(
       screen.getByRole("status", { name: "Loading changes" })
     ).toBeVisible();
+  });
+
+  it("错误主体状态用 Empty 呈现,技术详情走 Details 对话框", () => {
+    const onRetry = vi.fn();
+    render(
+      <ReviewErrorEmpty
+        context={context}
+        description="short summary"
+        detail="raw diagnostic"
+        onRetry={onRetry}
+        title="Failed to load changes"
+      />
+    );
+
+    const empty = screen
+      .getByText("Failed to load changes")
+      .closest('[data-slot="error-empty"]');
+    expect(empty).toBeVisible();
+    expect(screen.getByText("short summary")).toBeVisible();
+    expect(screen.queryByText("raw diagnostic")).toBeNull();
+    expect(screen.queryByRole("alert")).toBeNull();
+    fireEvent.click(screen.getByRole("button", { name: "Retry" }));
+    expect(onRetry).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "Details" }));
+    expect(context.dialogs.alert).toHaveBeenCalledWith({
+      body: "raw diagnostic",
+      size: "default",
+      title: "Failed to load changes",
+    });
+  });
+
+  it("不可重试的失败 Empty 不渲染 Retry 按钮", () => {
+    render(
+      <ReviewFailureEmpty
+        context={context}
+        failure={{
+          kind: "error",
+          message: "fatal detail",
+          reason: "commandFailed",
+          retryable: false,
+        }}
+        onRetry={vi.fn()}
+        title="Failed to load changes"
+      />
+    );
+
+    expect(screen.queryByRole("button", { name: "Retry" })).toBeNull();
+    expect(screen.getByRole("button", { name: "Details" })).toBeVisible();
   });
 
   it("文件加载失败最多显示五项，技术详情不内联并保留高度边界", () => {

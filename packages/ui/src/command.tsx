@@ -164,7 +164,9 @@ function CommandItem({
     <CommandPrimitive.Item
       className={cn(
         MENU_ITEM_DENSITY_CLASS,
-        "group/command-item relative flex select-none items-center gap-2 in-data-[slot=dialog-content]:rounded-2xl rounded-xl px-2 outline-hidden data-[disabled=true]:pointer-events-none data-selected:bg-accent data-selected:text-accent-foreground data-[disabled=true]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 data-selected:*:[svg]:text-accent-foreground",
+        // cmdk 1.1 对未选中项也渲染 data-selected="false",必须用值选择器,
+        // 否则所有行常态高亮、hover 无反馈。
+        "group/command-item relative flex select-none items-center gap-2 in-data-[slot=dialog-content]:rounded-2xl rounded-xl px-2 outline-hidden data-[disabled=true]:pointer-events-none data-[selected=true]:bg-accent data-[selected=true]:text-accent-foreground data-[disabled=true]:opacity-50 [&_svg:not([class*='size-'])]:size-4 [&_svg]:pointer-events-none [&_svg]:shrink-0 data-[selected=true]:*:[svg]:text-accent-foreground",
         className
       )}
       data-slot="command-item"
@@ -183,7 +185,7 @@ function CommandShortcut({
   return (
     <span
       className={cn(
-        "ml-auto text-muted-foreground text-xs tracking-widest group-data-selected/command-item:text-accent-foreground",
+        "ml-auto text-muted-foreground text-xs tracking-widest group-data-[selected=true]/command-item:text-accent-foreground",
         className
       )}
       data-slot="command-shortcut"

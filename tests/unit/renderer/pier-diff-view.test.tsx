@@ -333,7 +333,13 @@ describe("PierDiffView", () => {
     });
     fireEvent.click(collapse);
     const collapsedItem = updateItem.mock.calls.at(-1)?.[0];
-    expect(collapsedItem).toBe(documentItem);
+    // 折叠必须克隆而非就地改写共享缓存条目:就地 +1 会把折叠中的占位符
+    // 顶到与稍后到达的正文相同的版本号,CodeView 按 version 去重时丢弃正文。
+    expect(collapsedItem).not.toBe(documentItem);
+    if (!(collapsedItem?.type === "diff" && documentItem?.type === "diff")) {
+      throw new Error("expected official diff items");
+    }
+    expect(collapsedItem.fileDiff).toBe(documentItem.fileDiff);
     expect(collapsedItem?.collapsed).toBe(true);
     expect(collapsedItem?.version).toBe(Number(documentVersion) + 1);
 

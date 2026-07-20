@@ -106,6 +106,42 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "Git",
+      id: "pier.git.cherryPick",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Cherry-pick Commit...",
+    },
+    {
+      category: "Git",
+      id: "pier.git.cherryPickAbort",
+      permissions: ["git:write"],
+      title: "Git: Abort Cherry-pick",
+    },
+    {
+      category: "Git",
+      id: "pier.git.cherryPickContinue",
+      permissions: ["git:write"],
+      title: "Git: Continue Cherry-pick",
+    },
+    {
+      category: "Git",
+      id: "pier.git.revert",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Revert Commit...",
+    },
+    {
+      category: "Git",
+      id: "pier.git.revertAbort",
+      permissions: ["git:write"],
+      title: "Git: Abort Revert",
+    },
+    {
+      category: "Git",
+      id: "pier.git.revertContinue",
+      permissions: ["git:write"],
+      title: "Git: Continue Revert",
+    },
+    {
+      category: "Git",
       id: "pier.git.undoLastCommit",
       permissions: ["git:write"],
       title: "Git: Undo Last Commit",
@@ -115,6 +151,24 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       id: "pier.git.review.openFile",
       permissions: ["file:read", "panel:open"],
       title: "Git: Open File",
+    },
+    {
+      category: "Git",
+      id: "pier.git.review.stageFile",
+      permissions: ["git:write"],
+      title: "Git: Stage Changes",
+    },
+    {
+      category: "Git",
+      id: "pier.git.review.unstageFile",
+      permissions: ["git:write"],
+      title: "Git: Unstage Changes",
+    },
+    {
+      category: "Git",
+      id: "pier.git.review.discardFile",
+      permissions: ["git:write"],
+      title: "Git: Discard Changes",
     },
   ],
   configuration: {

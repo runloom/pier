@@ -365,11 +365,30 @@ export function useGitReviewNavigation({
     ) {
       return;
     }
+    // 目标当前就可见时只推进 settled 水位,不发起导航事务。
+    // resume 的唯一目的就是保持目标可见;此时仍走完整事务会让排他 demand
+    // 反复取消其它在飞加载,被取消项的占位重投影又推动 revision 变化,
+    // 形成「resume→取消→重载→revision 变→再 resume」的活锁,
+    // 表现为目标之后的文件正文永远加载不出来。
+    const target = currentLoadedTarget(navigation);
+    if (
+      target !== null &&
+      diffHandleRef.current?.isItemVisible(target.sectionId, target.cacheKey)
+    ) {
+      settledProjectionRef.current = { navigationKey, revision };
+      return;
+    }
     pendingNavigationRef.current = navigation;
     // 与 beginNavigation 一致：resume 时同步排他 demand，不依赖 pending 边沿 effect。
     applyNavigationDemand(selected);
     setNavigationPending(true);
-  }, [applyNavigationDemand, currentProjectionRevision, documentGenerationRef]);
+  }, [
+    applyNavigationDemand,
+    currentLoadedTarget,
+    currentProjectionRevision,
+    diffHandleRef,
+    documentGenerationRef,
+  ]);
 
   const clearForUserIntent = useCallback(() => {
     selectedEntryKeyRef.current = null;

@@ -6,9 +6,6 @@ import type {
 import { CircleAlert, GitBranch, GitBranchPlus } from "lucide-react";
 import { formatRelativeTime } from "./format-relative-time.ts";
 
-/** Badge 默认尺寸偏大,统一压缩到行内 4px 网格;色彩语义交给 variant。 */
-const ROW_BADGE_CLASS = "h-4 rounded-sm px-1.5 text-[10px]";
-
 interface GitBranchQuickPickRowProps {
   branch: GitDiffBranchOption;
   defaultLabel: string;
@@ -94,8 +91,8 @@ export function GitBranchQuickPickRow({
           ) : null}
           {tipTreeInHistory ? (
             <Badge
-              className={ROW_BADGE_CLASS}
               data-branch-picker-row-tip-tree-in-history
+              size="xs"
               title={tipTreeInHistoryTitle(tipTreeInHistory)}
               variant="secondary"
             >
@@ -104,9 +101,9 @@ export function GitBranchQuickPickRow({
           ) : null}
           {branch.pinReason ? (
             <Badge
-              className={ROW_BADGE_CLASS}
               data-branch-picker-row-pin
               data-pin-reason={branch.pinReason}
+              size="xs"
             >
               {defaultLabel}
             </Badge>
@@ -119,8 +116,8 @@ export function GitBranchQuickPickRow({
           >
             {branch.kind === "remote" ? (
               <Badge
-                className={ROW_BADGE_CLASS}
                 data-branch-picker-row-remote
+                size="xs"
                 variant="secondary"
               >
                 {remoteLabel}

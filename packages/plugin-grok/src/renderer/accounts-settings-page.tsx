@@ -1,6 +1,5 @@
 import { partitionPeerTargets } from "@pier/plugin-api/peer-sync";
 import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
@@ -17,6 +16,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { formatRelativeTime } from "@pier/ui/format.tsx";
 import {
   Item,
@@ -244,15 +244,13 @@ export function AccountsSettingsPage({
   if (loadError) {
     return (
       <div className={SETTINGS_LAYOUT_CLASS}>
-        <Alert variant="destructive">
-          <AlertTitle>
-            {t(
-              "pier.grok.accounts.settings.loadFailed",
-              "Could not load Grok accounts"
-            )}
-          </AlertTitle>
-          <AlertDescription>{loadError}</AlertDescription>
-        </Alert>
+        <ErrorEmpty
+          description={loadError}
+          title={t(
+            "pier.grok.accounts.settings.loadFailed",
+            "Could not load Grok accounts"
+          )}
+        />
       </div>
     );
   }

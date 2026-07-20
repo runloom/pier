@@ -25,6 +25,8 @@ export interface PierDiffViewHandle {
   scrollToItem(id: string): boolean;
   /** 全选当前（或最近）diff/file item 的全部行。 */
   selectAll(): boolean;
+  /** 折叠/展开当前拓扑内的全部 diff item。 */
+  setAllCollapsed(collapsed: boolean): void;
   updateItems(
     items: readonly PierDiffViewItem[],
     options?: PierDiffViewUpdateOptions
@@ -49,7 +51,18 @@ export function acceptDiffViewItem(
   handle: CodeViewHandle<undefined>,
   item: CodeViewItem
 ): boolean {
-  return handle.getItem(item.id) === item || handle.updateItem(item);
+  const current = handle.getItem(item.id);
+  if (current === item) {
+    return true;
+  }
+  // version 是「内容版本 + 折叠修订」的单调计数:同 id 同 version 意味着
+  // CodeView 已持有等价记录(常见于折叠后重投影产生的新克隆)。
+  // CodeView.updateItem 对同版本更新返回 false,不能把它当作拒绝,
+  // 否则 apply/replay 层重试耗尽后会误报「渲染差异失败」。
+  if (current !== undefined && (current.version ?? 0) === (item.version ?? 0)) {
+    return true;
+  }
+  return handle.updateItem(item);
 }
 
 interface UseDiffViewHandleOptions {
@@ -222,12 +235,13 @@ function createDiffViewHandle({
       if (!identity || (cacheKey && identity.cacheKey !== cacheKey)) {
         return false;
       }
-      return isRenderedItemVisible(
+      const visible = isRenderedItemVisible(
         viewer?.getContainerElement(),
         viewer?.getRenderedItems() ?? [],
         id,
         identity.version
       );
+      return visible;
     },
     restoreAnchor(anchor: PierDiffViewAnchor): boolean {
       return restoreAnchor(anchor);
@@ -248,6 +262,13 @@ function createDiffViewHandle({
         type: "item",
       });
       return true;
+    },
+    setAllCollapsed(collapsed: boolean): void {
+      for (const item of parsedItemListRef.current) {
+        setItemCollapsed(item.id, collapsed, false);
+      }
+      auditVisibleItems();
+      scheduleRenderWindowReport();
     },
     selectAll(): boolean {
       const viewer = codeViewRef.current;

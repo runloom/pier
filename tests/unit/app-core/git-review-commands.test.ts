@@ -54,7 +54,11 @@ describe("executeGitReviewCommand", () => {
       {
         request: {
           operationId: OPERATION_ID,
-          source: { contextId: "context-1", gitRootPath: "/alias/repo" },
+          source: {
+            contextId: "context-1",
+            gitRootPath: "/alias/repo",
+            target: { kind: "uncommitted" },
+          },
         },
         type: "git.getReviewIndex",
       },
@@ -68,6 +72,7 @@ describe("executeGitReviewCommand", () => {
         source: {
           contextId: "context-1",
           gitRootPath: "/alias/repo",
+          target: { kind: "uncommitted" },
         },
       }),
       expect.objectContaining({
@@ -96,7 +101,11 @@ describe("executeGitReviewCommand", () => {
       {
         request: {
           operationId: OPERATION_ID,
-          source: { contextId: "context-1", gitRootPath: "/repo" },
+          source: {
+            contextId: "context-1",
+            gitRootPath: "/repo",
+            target: { kind: "uncommitted" },
+          },
         },
         type: "git.getReviewIndex",
       },
@@ -140,7 +149,11 @@ describe("executeGitReviewCommand", () => {
       {
         request: {
           operationId: OPERATION_ID,
-          source: { contextId: "context-1", gitRootPath: "/repo" },
+          source: {
+            contextId: "context-1",
+            gitRootPath: "/repo",
+            target: { kind: "uncommitted" },
+          },
         },
         type: "git.getReviewIndex",
       },

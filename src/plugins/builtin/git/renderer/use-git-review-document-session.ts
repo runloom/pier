@@ -146,7 +146,12 @@ export function useGitReviewDocumentSession(options: {
     );
     documentGenerationRef.current = generation;
     const sourceKey = JSON.stringify(scope);
-    const scopeKey = JSON.stringify([scope.contextId, scope.gitRootPath]);
+    // target 变化必须整代重建：entryKey 只含路径，跨 target 的正文不可复用。
+    const scopeKey = JSON.stringify([
+      scope.contextId,
+      scope.gitRootPath,
+      scope.target,
+    ]);
     const retainPrevious = scopeKeyRef.current === scopeKey;
     scopeKeyRef.current = scopeKey;
     const session = readReviewSession(sourceKey);

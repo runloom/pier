@@ -1,160 +1,21 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type {
-  WorktreeItem,
-  WorktreeUnavailableReason,
-} from "@shared/contracts/worktree.ts";
+import type { WorktreeItem } from "@shared/contracts/worktree.ts";
 import { BrushCleaning, FolderGit2, GitBranch, Trash2 } from "lucide-react";
 import { openWorktreeCreateOverlay } from "./worktree-create-overlay.tsx";
-
-const PATH_SEPARATOR_RE = /[\\/]/;
-
-const WORKTREE_UNAVAILABLE_MESSAGES = {
-  git_unavailable: {
-    fallback: "Git is unavailable",
-    key: "worktreeUnavailable.gitUnavailable",
-  },
-  invalid_name: {
-    fallback: "The worktree name is invalid",
-    key: "worktreeUnavailable.invalidName",
-  },
-  invalid_path: {
-    fallback: "The worktree path is invalid",
-    key: "worktreeUnavailable.invalidPath",
-  },
-  not_git_repo: {
-    fallback: "The current directory is not a Git repository",
-    key: "worktreeUnavailable.notGitRepository",
-  },
-} satisfies Record<
-  WorktreeUnavailableReason,
-  { fallback: string; key: string }
->;
-
-function basename(path: string): string {
-  const parts = path.split(PATH_SEPARATOR_RE).filter(Boolean);
-  return parts.at(-1) ?? path;
-}
-
-function pluginText(
-  context: RendererPluginContext,
-  key: string,
-  fallback: string,
-  values?: Record<string, number | string>
-): string {
-  return context.i18n.t(`ui.${key}`, values, fallback);
-}
-
-function unsupportedReason(context: RendererPluginContext): string {
-  return pluginText(
-    context,
-    "unsupported",
-    "Current directory does not support Git worktrees"
-  );
-}
-
-function operationFailedReason(context: RendererPluginContext): string {
-  return pluginText(
-    context,
-    "worktreeOperationFailed",
-    "Worktree operation failed"
-  );
-}
-
-function activeWorktreeTarget(
-  context: RendererPluginContext
-):
-  | { enabled: true; path: string }
-  | { enabled: false; path: null | string; reason: string } {
-  const panelContext = context.panels.getActiveContext();
-  const path =
-    panelContext?.worktreeRoot ??
-    panelContext?.gitRoot ??
-    panelContext?.projectRootPath ??
-    panelContext?.cwd ??
-    null;
-  if (!(path && (panelContext?.worktreeRoot || panelContext?.gitRoot))) {
-    return { enabled: false, path, reason: unsupportedReason(context) };
-  }
-  if (panelContext.worktreeSupported === false) {
-    return { enabled: false, path, reason: unsupportedReason(context) };
-  }
-  return { enabled: true, path };
-}
-
-function itemLabel(worktree: WorktreeItem): string {
-  return worktree.branch ?? basename(worktree.path);
-}
-
-function worktreeSearchTerms(worktree: WorktreeItem): readonly string[] {
-  return [
-    worktree.path,
-    basename(worktree.path),
-    worktree.branch ?? "",
-    worktree.head ?? "",
-  ].filter(Boolean);
-}
-
-function openUnavailablePick(
-  context: RendererPluginContext,
-  reason: string
-): void {
-  context.commandPalette.openQuickPick({
-    items: [{ disabled: true, id: "worktree-unavailable", label: reason }],
-    onAccept: () => undefined,
-    placeholder: reason,
-    title: pluginText(context, "title", "Worktrees"),
-  });
-}
-
-function showWorktreeMessage(
-  context: RendererPluginContext,
-  title: string,
-  message: string,
-  detail?: string
-): void {
-  context.commandPalette.openQuickPick({
-    items: [
-      {
-        ...(detail ? { detail } : {}),
-        disabled: true,
-        id: "worktree-message",
-        label: message,
-      },
-    ],
-    onAccept: () => undefined,
-    placeholder: message,
-    title,
-  });
-}
-
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : String(error);
-}
-
-async function confirmQuickPick(
-  context: RendererPluginContext,
-  title: string,
-  message: string,
-  confirmLabel: string
-): Promise<boolean> {
-  return await new Promise((resolve) => {
-    context.commandPalette.openQuickPick({
-      items: [
-        { id: "cancel", label: pluginText(context, "cancel", "Cancel") },
-        // 两个调用方 (删除/清理 worktree) 都是破坏性操作, 确认项统一警示色。
-        { id: "confirm", label: confirmLabel, variant: "destructive" },
-      ],
-      onAccept: (item) => {
-        resolve(item.id === "confirm");
-      },
-      onDismiss: () => {
-        resolve(false);
-      },
-      placeholder: message,
-      title,
-    });
-  });
-}
+import {
+  activeWorktreeTarget,
+  basename,
+  confirmQuickPick,
+  errorMessage,
+  itemLabel,
+  openUnavailablePick,
+  operationFailedReason,
+  pluginText,
+  showWorktreeMessage,
+  unsupportedReason,
+  WORKTREE_UNAVAILABLE_MESSAGES,
+  worktreeSearchTerms,
+} from "./worktree-operation-helpers.ts";
 
 function registerWorktreeCreateAction(
   context: RendererPluginContext
@@ -305,6 +166,63 @@ function registerWorktreeDeleteAction(
   });
 }
 
+type WorktreeDeleteChoice = "cancel" | "delete" | "deleteWithBranch";
+
+/** 删除确认;worktree 挂着本地分支时额外提供「同时安全删除分支」选项。 */
+async function confirmWorktreeDelete(
+  context: RendererPluginContext,
+  title: string,
+  message: string,
+  branch: string | null
+): Promise<WorktreeDeleteChoice> {
+  return await new Promise((resolve) => {
+    context.commandPalette.openQuickPick({
+      items: [
+        { id: "cancel", label: pluginText(context, "cancel", "Cancel") },
+        {
+          // 与既有确认流保持同一 id("confirm"),下方分支删除项为增量选项。
+          id: "confirm",
+          label: pluginText(context, "deleteConfirmButton", "Delete"),
+          variant: "destructive",
+        },
+        ...(branch
+          ? [
+              {
+                detail: pluginText(
+                  context,
+                  "deleteBranchSafeDetail",
+                  "Runs git branch -d; fails if the branch is not merged."
+                ),
+                id: "delete-with-branch",
+                label: pluginText(
+                  context,
+                  "deleteWithBranchButton",
+                  "Delete and remove branch {{branch}}",
+                  { branch }
+                ),
+                variant: "destructive" as const,
+              },
+            ]
+          : []),
+      ],
+      onAccept: (item) => {
+        if (item.id === "confirm") {
+          resolve("delete");
+        } else if (item.id === "delete-with-branch") {
+          resolve("deleteWithBranch");
+        } else {
+          resolve("cancel");
+        }
+      },
+      onDismiss: () => {
+        resolve("cancel");
+      },
+      placeholder: message,
+      title,
+    });
+  });
+}
+
 async function deleteSelectedWorktree(
   context: RendererPluginContext,
   title: string,
@@ -333,24 +251,46 @@ async function deleteSelectedWorktree(
       );
   }
 
-  const confirmed = await confirmQuickPick(
+  const choice = await confirmWorktreeDelete(
     context,
     title,
     confirmMessage,
-    pluginText(context, "deleteConfirmButton", "Delete")
+    worktree.branch
   );
-  if (!confirmed) {
+  if (choice === "cancel") {
     return;
   }
   try {
-    await context.worktrees.remove({
+    const result = await context.worktrees.remove({
       currentPath: currentPath ?? targetPath,
+      ...(choice === "deleteWithBranch" ? { deleteBranch: true } : {}),
       path: worktree.path,
     });
+    if (result.branchDeletion && !result.branchDeletion.deleted) {
+      showWorktreeMessage(
+        context,
+        title,
+        pluginText(
+          context,
+          "worktreeDeleteBranchFailed",
+          "Worktree deleted, but branch {{branch}} could not be removed",
+          { branch: result.branchDeletion.branch }
+        ),
+        result.branchDeletion.message ?? undefined
+      );
+      return;
+    }
     showWorktreeMessage(
       context,
       title,
-      pluginText(context, "worktreeDeleteSuccess", "Worktree deleted"),
+      result.branchDeletion?.deleted
+        ? pluginText(
+            context,
+            "worktreeDeleteWithBranchSuccess",
+            "Worktree and branch {{branch}} deleted",
+            { branch: result.branchDeletion.branch }
+          )
+        : pluginText(context, "worktreeDeleteSuccess", "Worktree deleted"),
       worktree.path
     );
   } catch (err) {

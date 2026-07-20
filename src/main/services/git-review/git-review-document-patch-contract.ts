@@ -3,10 +3,11 @@ import type {
   GitReviewIndexExecutionBudget,
   GitReviewIndexGroupFact,
 } from "./git-review-index-contract.ts";
+import type { GitReviewRangeBounds } from "./git-review-index-range.ts";
 
 export const GIT_REVIEW_PATCH_MAX_BYTES = 8 * 1024 * 1024;
 
-export type GitReviewRenderableGroup = "staged" | "unstaged";
+export type GitReviewRenderableGroup = "committed" | "staged" | "unstaged";
 
 export type GitReviewPatchStateReason =
   | "binary"
@@ -39,6 +40,8 @@ export interface ReadGitReviewPatchOptions {
   readonly gitRootPath: string;
   readonly group: GitReviewRenderableGroup;
   readonly headOid: string | null;
+  /** committed 分组必需的 range 边界；其他分组为 null。 */
+  readonly rangeBounds?: GitReviewRangeBounds | null;
   readonly signal?: AbortSignal;
 }
 

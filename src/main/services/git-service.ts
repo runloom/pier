@@ -2,6 +2,7 @@ import type { z } from "zod";
 import type {
   GitBranchRef,
   GitCommit,
+  GitCommitSearchResult,
   GitDiffBranchesResult,
   GitDiffPatch,
   GitDiffSummary,
@@ -12,6 +13,9 @@ import type {
   GitRebaseResult,
   GitRemoteOperationResult,
   GitRepoInfo,
+  GitSequencerAbortResult,
+  GitSequencerContinueResult,
+  GitSequencerResult,
   GitStashApplyResult,
   GitStashDropResult,
   GitStashListResult,
@@ -23,30 +27,30 @@ import type {
   gitCommitOptionsSchema,
   gitCreateBranchOptionsSchema,
   gitDeleteBranchOptionsSchema,
-  gitDiffOptionsSchema,
   gitDiffSearchBranchesOptionsSchema,
-  gitLogOptionsSchema,
   gitPathsSchema,
+  gitSearchCommitsOptionsSchema,
   listBranchesOptionsSchema,
 } from "../../shared/contracts/git.ts";
 import { listBranches as listGitBranches } from "./git-branch-list.ts";
 import { searchBranches as searchGitBranches } from "./git-branch-search.ts";
 import { assertSafeBranchName, switchBranch } from "./git-branch-switch.ts";
-import { execGit } from "./git-exec.ts";
+import { searchCommits as searchGitCommits } from "./git-commit-search.ts";
 import { listIgnoredPaths } from "./git-ignored.ts";
 import {
+  abortCherryPick,
   abortMerge,
   abortRebase,
-  applyStash,
+  abortRevert,
+  cherryPickCommit,
+  continueCherryPick,
   continueRebase,
-  dropStash,
-  listStashes,
+  continueRevert,
   mergeBranch,
-  popStash,
   pullFastForward,
   pushBranch,
   rebaseBranch,
-  stashChanges,
+  revertCommit,
   syncBranch,
   undoLastCommit,
 } from "./git-operations.ts";
@@ -58,19 +62,39 @@ import {
   splitNonEmptyLines,
 } from "./git-parsers.ts";
 import {
+  defaultExecGit,
+  diffRangeArgs,
+  GIT_LOG_FORMAT,
+  type GitDiffOptions,
+  type GitLogOptions,
+  type GitServiceExec,
+  logArgs,
+  readDefaultBranch,
+  readHeadOid,
+  safeGitRevision,
+  withResolvedEnvironment,
+} from "./git-service-support.ts";
+import {
+  applyStash,
+  dropStash,
+  listStashes,
+  popStash,
+  stashChanges,
+} from "./git-stash-operations.ts";
+import {
   assembleGitStatus,
   type PrefetchedStatus,
 } from "./git-status-assembler.ts";
 
-const GIT_LOG_FORMAT = "%H%x1f%an%x1f%aI%x1f%s%x1e";
-const ORIGIN_HEAD_RE = /^refs\/remotes\/origin\/(.+)$/;
+export type { GitDiffOptions, GitLogOptions } from "./git-service-support.ts";
 
 /** 从 contracts schema 派生的 IPC 兼容 option 类型,避免 exactOptionalPropertyTypes 冲突。 */
-export type GitDiffOptions = z.infer<typeof gitDiffOptionsSchema>;
-export type GitLogOptions = z.infer<typeof gitLogOptionsSchema>;
 export type ListBranchesOptions = z.infer<typeof listBranchesOptionsSchema>;
 export type GitDiffSearchBranchesOptions = z.infer<
   typeof gitDiffSearchBranchesOptionsSchema
+>;
+export type GitSearchCommitsOptions = z.infer<
+  typeof gitSearchCommitsOptionsSchema
 >;
 export type GetFileContentOptions = z.infer<typeof getFileContentOptionsSchema>;
 export type GitPathsRequest = z.infer<typeof gitPathsSchema>;
@@ -86,12 +110,17 @@ export type GitDeleteBranchOptions = z.infer<
 const WRITE_TIMEOUT_MS = 60_000;
 
 export interface GitService {
+  abortCherryPick(cwd: string): Promise<GitSequencerAbortResult>;
   abortMerge(cwd: string): Promise<GitMergeAbortResult>;
   abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
+  abortRevert(cwd: string): Promise<GitSequencerAbortResult>;
   applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
   checkoutBranch(cwd: string, name: string): Promise<void>;
+  cherryPick(cwd: string, oid: string): Promise<GitSequencerResult>;
   commit(cwd: string, options: GitCommitOptions): Promise<void>;
+  continueCherryPick(cwd: string): Promise<GitSequencerContinueResult>;
   continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
+  continueRevert(cwd: string): Promise<GitSequencerContinueResult>;
   createAndSwitchBranch(cwd: string, name: string): Promise<void>;
   createBranch(cwd: string, options: GitCreateBranchOptions): Promise<void>;
   deleteBranch(cwd: string, options: GitDeleteBranchOptions): Promise<void>;
@@ -125,10 +154,16 @@ export interface GitService {
   push(cwd: string): Promise<GitRemoteOperationResult>;
   rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
   resolveRef(cwd: string, ref: string): Promise<string>;
+  revert(cwd: string, oid: string): Promise<GitSequencerResult>;
   searchBranches(
     cwd: string,
     options?: GitDiffSearchBranchesOptions
   ): Promise<GitDiffBranchesResult>;
+  /** 结构化 commit 搜索(供 commit picker;语法见 contracts/git.ts)。 */
+  searchCommits(
+    cwd: string,
+    options?: GitSearchCommitsOptions
+  ): Promise<GitCommitSearchResult>;
   // —— 写(需 git:write capability) ——
   stage(cwd: string, request: GitPathsRequest): Promise<void>;
   stash(
@@ -141,132 +176,11 @@ export interface GitService {
   validateBranchName(cwd: string, name: string): Promise<boolean>;
 }
 
-interface GitServiceExecOptions {
-  env?: Readonly<Record<string, string>>;
-  onSuccessStderr?: (stderr: string) => void;
-  timeoutMs?: number;
-}
-
-type GitServiceExec = (
-  args: readonly string[],
-  cwd: string,
-  options?: GitServiceExecOptions
-) => Promise<string>;
-
 export interface CreateGitServiceOptions {
   execGit?: GitServiceExec;
   resolveEnvironment?: (
     cwd: string
   ) => Promise<Readonly<Record<string, string>>>;
-}
-
-function diffRangeArgs(options: GitDiffOptions): string[] {
-  const args: string[] = [];
-  if (options.staged) {
-    args.push("--cached");
-  }
-  if (options.from && options.to) {
-    args.push(
-      `${safeGitRevision(options.from, "diff from")}..${safeGitRevision(
-        options.to,
-        "diff to"
-      )}`
-    );
-  } else if (options.from) {
-    args.push(safeGitRevision(options.from, "diff from"));
-  }
-  if (options.paths && options.paths.length > 0) {
-    args.push("--", ...options.paths);
-  }
-  return args;
-}
-
-function safeGitRevision(value: string, label: string): string {
-  if (value.startsWith("-")) {
-    throw new Error(`${label} must not start with "-"`);
-  }
-  return value;
-}
-
-function logArgs(options: GitLogOptions): string[] {
-  const maxCount = options.maxCount ?? 50;
-  const args: string[] = [
-    "log",
-    `--format=${GIT_LOG_FORMAT}`,
-    `--max-count=${maxCount}`,
-  ];
-  if (options.author) {
-    args.push(`--author=${options.author}`);
-  }
-  if (options.grep) {
-    args.push(`--grep=${options.grep}`);
-  }
-  if (options.since) {
-    args.push(`--since=${options.since}`);
-  }
-  if (options.until) {
-    args.push(`--until=${options.until}`);
-  }
-  if (options.path) {
-    args.push("--", options.path);
-  }
-  return args;
-}
-
-function defaultExecGit(
-  args: readonly string[],
-  cwd: string,
-  options?: GitServiceExecOptions
-): Promise<string> {
-  return execGit(args, { cwd, ...options });
-}
-
-function withResolvedEnvironment(
-  exec: GitServiceExec,
-  resolveEnvironment:
-    | ((cwd: string) => Promise<Readonly<Record<string, string>>>)
-    | undefined
-): GitServiceExec {
-  if (!resolveEnvironment) {
-    return exec;
-  }
-  return async (args, cwd, options) => {
-    let env: Readonly<Record<string, string>>;
-    try {
-      env = await resolveEnvironment(cwd);
-    } catch {
-      env = {};
-    }
-    return exec(args, cwd, {
-      ...options,
-      env: { ...env, ...(options?.env ?? {}) },
-    });
-  };
-}
-
-async function readHeadOid(
-  cwd: string,
-  exec: (args: readonly string[], cwd: string) => Promise<string>
-): Promise<string | null> {
-  try {
-    return (await exec(["rev-parse", "--verify", "HEAD"], cwd)).trim();
-  } catch {
-    return null;
-  }
-}
-
-async function readDefaultBranch(
-  cwd: string,
-  exec: (args: readonly string[], cwd: string) => Promise<string>
-): Promise<string | null> {
-  try {
-    const out = (
-      await exec(["symbolic-ref", "refs/remotes/origin/HEAD"], cwd)
-    ).trim();
-    return ORIGIN_HEAD_RE.exec(out)?.[1] ?? null;
-  } catch {
-    return null;
-  }
 }
 
 /**
@@ -279,9 +193,15 @@ export function createGitService({
 }: CreateGitServiceOptions = {}): GitService {
   const runGit = withResolvedEnvironment(execGit, resolveEnvironment);
   return {
+    abortCherryPick: (cwd) => abortCherryPick(runGit, cwd),
     abortMerge: (cwd) => abortMerge(runGit, cwd),
     abortRebase: (cwd) => abortRebase(runGit, cwd),
+    abortRevert: (cwd) => abortRevert(runGit, cwd),
+    cherryPick: (cwd, oid) => cherryPickCommit(runGit, cwd, oid),
+    continueCherryPick: (cwd) => continueCherryPick(runGit, cwd),
     continueRebase: (cwd) => continueRebase(runGit, cwd),
+    continueRevert: (cwd) => continueRevert(runGit, cwd),
+    revert: (cwd, oid) => revertCommit(runGit, cwd, oid),
     getCommit: async (cwd, oid) => {
       const output = await runGit(
         [
@@ -395,6 +315,8 @@ export function createGitService({
     listBranches: (cwd, options) => listGitBranches(runGit, cwd, options),
     searchBranches: (cwd, options = {}) =>
       searchGitBranches(runGit, cwd, options),
+    searchCommits: (cwd, options = {}) =>
+      searchGitCommits(runGit, cwd, options),
     listIgnored: (cwd) => listIgnoredPaths(runGit, cwd),
     listStashes: (cwd) => listStashes(runGit, cwd),
     listTags: async (cwd) => {
