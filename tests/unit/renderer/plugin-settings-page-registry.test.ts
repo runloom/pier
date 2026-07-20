@@ -113,6 +113,31 @@ describe("createExternalRendererPluginContext settingsPages", () => {
     expect(useSettingsDialogStore.getState().activeSection).toBe("appearance");
   });
 
+  it("openExternal requires the external:open permission", async () => {
+    const context = createExternalRendererPluginContext(
+      demoEntry(),
+      bridge,
+      () => []
+    );
+    await expect(context.app.openExternal("https://x.ai")).rejects.toThrow(
+      /external:open/
+    );
+  });
+
+  it("openExternal routes through window.pier.externalNavigation when granted", async () => {
+    const open = vi.fn(async () => ({ opened: true as const }));
+    (window as unknown as { pier: unknown }).pier = {
+      externalNavigation: { open },
+    };
+    const entry = demoEntry();
+    entry.manifest.permissions = ["external:open"];
+    const context = createExternalRendererPluginContext(entry, bridge, () => [
+      entry,
+    ]);
+    await expect(context.app.openExternal("https://x.ai")).resolves.toBe(true);
+    expect(open).toHaveBeenCalledWith("https://x.ai");
+  });
+
   it("openSettings accepts a plugin section id", () => {
     const context = createExternalRendererPluginContext(
       demoEntry(),

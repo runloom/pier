@@ -7,6 +7,7 @@ const ROOT = process.cwd();
 const SOURCE_ROOTS = [
   join(ROOT, "src", "renderer"),
   join(ROOT, "src", "plugins", "builtin"),
+  join(ROOT, "packages", "plugin-claude", "src", "renderer"),
   join(ROOT, "packages", "plugin-codex", "src", "renderer"),
 ];
 const RAW_BUTTON_OWNERS = new Set([

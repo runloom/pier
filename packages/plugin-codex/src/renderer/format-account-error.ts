@@ -16,6 +16,12 @@ export function formatAccountError(err: unknown, t: Translate): string {
     );
   }
   if (
+    lower.includes("codex cli not found") ||
+    (lower.includes("enoent") && lower.includes("codex"))
+  ) {
+    return t("pier.codex.errors.cliNotFound", "Codex CLI not found on PATH");
+  }
+  if (
     lower.includes("unknown named parameter") ||
     lower.includes("omp database not found") ||
     /(^|;\s*)omp:/.test(raw)

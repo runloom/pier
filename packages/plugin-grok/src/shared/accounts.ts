@@ -54,9 +54,19 @@ export interface GrokAccountSummary {
 }
 
 export interface GrokLoginState {
+  /** Device-code flow: user code parsed from CLI output, shown in the dialog. */
+  deviceCode?: string | undefined;
+  /** Device-code flow: verification URL parsed from CLI output. */
+  deviceVerificationUrl?: string | undefined;
   mode: "oauth" | "device";
   provider: "grok";
   startedAt: number;
+}
+
+export interface PeerSyncResult {
+  error?: string | undefined;
+  ok: boolean;
+  target: CrossToolSyncTarget;
 }
 
 export interface GrokAccountsSnapshot {

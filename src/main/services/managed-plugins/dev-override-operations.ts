@@ -61,6 +61,9 @@ export async function performSetDevOverride(
   const registeredAt = ctx.now();
   // Path-only custom plugins may have no prior install entry. Seed a synthetic
   // activeVersion so workspace mode can load them without a bundled tgz.
+  // Keep an existing activeVersion so clearing the override can fall back to
+  // the last official install; the live package version is tracked on
+  // `devOverride.version` and becomes effectiveAtStartup after apply.
   const activeVersion = entry?.activeVersion ?? devVersion;
   const installedVersions = { ...(entry?.installedVersions ?? {}) };
   if (!installedVersions[activeVersion]) {

@@ -24,10 +24,14 @@ const CONTAINER_QUERY_HIDDEN_PATTERN =
 const WIDGET_SOURCES = [
   "packages/plugin-codex/src/renderer/accounts-widget.tsx",
   "packages/plugin-codex/src/renderer/usage-meter.tsx",
+  "packages/plugin-claude/src/renderer/accounts-widget.tsx",
+  "packages/plugin-claude/src/renderer/usage-meter.tsx",
 ] as const;
 
 /** Settings + widget quota grids that must force single-window full width. */
 const QUOTA_LAYOUT_SOURCES = [
+  "packages/plugin-claude/src/renderer/account-display.tsx",
+  "packages/plugin-claude/src/renderer/usage-meter.tsx",
   "packages/plugin-codex/src/renderer/account-display.tsx",
   "packages/plugin-codex/src/renderer/usage-meter.tsx",
   "packages/plugin-grok/src/renderer/account-display.tsx",

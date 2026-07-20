@@ -1,18 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
-import { readFile, rm } from "node:fs/promises";
-import { join } from "node:path";
 import {
   createUsageRefreshScheduler,
+  startSuppressedDriftWatch,
   USAGE_REFRESH_CONCURRENCY,
 } from "@pier/plugin-api/account-usage";
-import writeFileAtomic from "write-file-atomic";
-import type { CodexAccountsSnapshot } from "../shared/accounts.ts";
-import { LOGIN_TIMEOUT_MS } from "../shared/constants.ts";
+import type {
+  CodexAccountsSnapshot,
+  PeerSyncResult,
+} from "../shared/accounts.ts";
+import { addCodexAccount } from "./accounts-add.ts";
 import {
   buildAccountRecord,
   mergeIdentityIntoAccount,
 } from "./accounts-records.ts";
+import { removeManagedAccount } from "./accounts-remove.ts";
 import {
   selectManagedAccount,
   syncManagedAccountPeers,
@@ -27,9 +28,8 @@ import {
   type UsageCacheEntry,
 } from "./accounts-usage.ts";
 import { createCodexUsageRefreshRunner } from "./accounts-usage-refresh.ts";
-import { PIER_MANAGED_HOME_MARKER } from "./codex-provider.ts";
 import { migrateLegacyAccountsToState } from "./legacy-migration.ts";
-import { classifyLoginError } from "./login-error.ts";
+import { loginCancelledError } from "./login-error.ts";
 import {
   codexAccountHomeDir,
   ensureManagedAccountDir,
@@ -50,14 +50,21 @@ export function createCodexAccountsService(
   const ensureUsageEnv = opts.ensureUsageEnv ?? (() => Promise.resolve());
   const logger = opts.logger;
 
+  let disposed = false;
   let broadcastSeq = 0;
   let loginAbort: AbortController | null = null;
   let loginPending: "codex" | null = null;
+  let loginStartedAt: number | null = null;
+  let cancelGeneration = 0;
   let watchDispose: (() => void) | null = null;
+  const credentialErrors = new Map<string, string>();
   const usageCache: Record<string, UsageCacheEntry> = {};
   let usagePollTimer: ReturnType<typeof setInterval> | null = null;
   let lastLoginError: { at: number; message: string } | null = null;
   let suppressWatchUntil = 0;
+  // Service-level abort so dispose() can cancel in-flight usage fetches
+  // instead of letting them write caches / emit events after deactivation.
+  const usageAbort = new AbortController();
 
   const enqueueMutation = createSerialMutationQueue();
   let runUsageRefresh: ReturnType<typeof createCodexUsageRefreshRunner> | null =
@@ -80,8 +87,10 @@ export function createCodexAccountsService(
   function buildSnapshot(): CodexAccountsSnapshot {
     broadcastSeq += 1;
     return buildAccountsSnapshot({
+      credentialErrors,
       lastLoginError,
       loginPending,
+      loginStartedAt,
       now: now(),
       revision: broadcastSeq,
       state: stateStore.get(),
@@ -90,11 +99,23 @@ export function createCodexAccountsService(
   }
 
   function emitSnapshot(): void {
+    // A disposed instance must not broadcast: its (still counting) revision
+    // sequence would make the renderer store reject the successor instance's
+    // fresh snapshots.
+    if (disposed) return;
     onChanged(buildSnapshot());
   }
 
   async function ensureManagedDir(accountId: string): Promise<string> {
     return await ensureManagedAccountDir(managedBaseDir, accountId);
+  }
+
+  /** Skip queued work that starts after the service was disposed. */
+  function enqueueGuarded(operation: () => Promise<void>): Promise<void> {
+    return enqueueMutation(() => {
+      if (disposed) return Promise.resolve();
+      return operation();
+    });
   }
 
   async function doAdoptCurrent(): Promise<void> {
@@ -110,7 +131,10 @@ export function createCodexAccountsService(
       : null;
     if (existing) {
       const dir = await ensureManagedDir(existing.id);
-      await provider.syncBack(dir, undefined);
+      // Pass the fingerprint parsed from the same file so an auth.json swap
+      // between the identity read and the capture cannot bind the wrong
+      // account's credentials.
+      await provider.syncBack(dir, identity.providerAccountId);
       stateStore.mutate((s) => ({
         ...s,
         accounts: s.accounts.map((a) =>
@@ -124,7 +148,7 @@ export function createCodexAccountsService(
     } else {
       const id = randomUUID();
       const dir = await ensureManagedDir(id);
-      await provider.syncBack(dir, undefined);
+      await provider.syncBack(dir, identity.providerAccountId);
       const account = buildAccountRecord(identity, id, now());
       stateStore.mutate((s) => ({
         ...s,
@@ -150,14 +174,25 @@ export function createCodexAccountsService(
       return false;
     }
     for (const account of stateStore.get().accounts) {
-      const identity = await provider.readIdentity(accountHomeDir(account.id));
+      const identity = await provider
+        .readIdentity(accountHomeDir(account.id))
+        .catch(() => null);
       if (!identity) {
-        throw new Error(
-          `Migrated Codex credential is invalid for account ${account.id}`
+        // One broken migrated credential must not brick activation; mark
+        // the account so the snapshot can surface it as errored.
+        credentialErrors.set(
+          account.id,
+          "Migrated Codex credential is invalid"
+        );
+        logger?.warn(
+          `[pier.codex] migrated credential is invalid for account ${account.id}`
         );
       }
     }
-    if (result.activeAccountId) {
+    if (
+      result.activeAccountId &&
+      !credentialErrors.has(result.activeAccountId)
+    ) {
       suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
       await provider.materialize(accountHomeDir(result.activeAccountId));
       suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
@@ -167,123 +202,42 @@ export function createCodexAccountsService(
     return true;
   }
 
-  async function doAdd(): Promise<void> {
-    const id = randomUUID();
-    const dir = await ensureManagedDir(id);
-    lastLoginError = null;
-    loginPending = "codex";
-    emitSnapshot();
-
-    const abort = new AbortController();
-    loginAbort = abort;
-    let timedOut = false;
-    const loginTimeout = setTimeout(() => {
-      timedOut = true;
-      abort.abort();
-    }, LOGIN_TIMEOUT_MS);
-
-    let failure: Error | null = null;
-    const previousState = stateStore.get();
-    let stateMutated = false;
-    let existingId: string | null = null;
-    try {
-      await provider.login(dir, abort.signal);
-      const identity = await provider.readIdentity(dir);
-      if (!identity) {
-        throw new Error("Login completed but no identity found");
-      }
-      const state = previousState;
-      const existing = identity.providerAccountId
-        ? state.accounts.find(
-            (a) => a.providerAccountId === identity.providerAccountId
-          )
-        : null;
-      if (existing) {
-        existingId = existing.id;
-        const existingDir = accountHomeDir(existing.id);
-        if (provider.moveCredential) {
-          await provider.moveCredential(dir, existingDir);
-        } else {
-          const freshAuth = await readFile(join(dir, "auth.json"), "utf-8");
-          await writeFileAtomic(join(existingDir, "auth.json"), freshAuth, {
-            mode: 0o600,
-          });
-        }
-        await rm(dir, { recursive: true, force: true });
-        if (stateStore.get().activeAccountId === existing.id) {
-          suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-          await provider.materialize(existingDir);
-          suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-        }
-        stateStore.mutate((s) => ({
-          ...s,
-          accounts: s.accounts.map((a) =>
-            a.id === existing.id
-              ? mergeIdentityIntoAccount(a, identity, now(), now())
-              : a
-          ),
-          revision: s.revision + 1,
-        }));
-        stateMutated = true;
-      } else {
-        const account = buildAccountRecord(identity, id, now(), now());
-        stateStore.mutate((s) => ({
-          ...s,
-          accounts: [...s.accounts, account],
-          revision: s.revision + 1,
-        }));
-        stateMutated = true;
-      }
-      await stateStore.flush();
-      lastLoginError = null;
-    } catch (err) {
-      let rollbackError: unknown = null;
-      if (stateMutated) {
-        stateStore.mutate(() => previousState);
-        try {
-          await stateStore.flush();
-        } catch (error) {
-          rollbackError = error;
-        }
-      }
-      await provider.deleteCredential?.(dir);
-      await rm(dir, { recursive: true, force: true }).catch(() => {
-        /* fire-and-forget */
-      });
-      const classified = classifyLoginError(err, {
-        aborted: abort.signal.aborted,
-        at: now(),
-        timedOut,
-      });
-      lastLoginError = classified.errorState;
-      failure = rollbackError
-        ? new AggregateError(
-            [classified.failure, rollbackError],
-            "Codex account add and metadata rollback failed"
-          )
-        : classified.failure;
-    } finally {
-      clearTimeout(loginTimeout);
-      loginAbort = null;
-      loginPending = null;
-      emitSnapshot();
-    }
-    if (failure) {
-      throw failure;
-    }
-    // Refresh usage for the added (or merged) account so the UI does not stay
-    // skeleton. If the account was not activated, this still fills the cache.
-    const refreshId = existingId ?? id;
-    doRefreshUsage({ accountId: refreshId, force: true }).catch(
-      () => undefined
+  async function doAdd(abort: AbortController): Promise<void> {
+    await addCodexAccount(
+      {
+        accountHomeDir,
+        doRefreshUsage,
+        emitSnapshot,
+        ensureManagedDir,
+        now,
+        provider,
+        setLastLoginError: (error) => {
+          lastLoginError = error;
+        },
+        setLoginAbort: (nextAbort) => {
+          loginAbort = nextAbort;
+        },
+        setLoginPending: (pending) => {
+          loginPending = pending;
+        },
+        setLoginStartedAt: (startedAt) => {
+          loginStartedAt = startedAt;
+        },
+        setSuppressWatchUntil: (ts) => {
+          suppressWatchUntil = ts;
+        },
+        stateStore,
+        watchSuppressMs: WATCH_SUPPRESS_MS,
+      },
+      abort
     );
   }
 
   async function doSelect(
     accountId: string,
     syncTargets?: Parameters<typeof selectManagedAccount>[2]
-  ): Promise<void> {
-    await selectManagedAccount(
+  ): Promise<PeerSyncResult[]> {
+    return await selectManagedAccount(
       {
         accountHomeDir,
         handleDrift,
@@ -322,37 +276,20 @@ export function createCodexAccountsService(
   }
 
   async function doRemove(accountId: string): Promise<void> {
-    const state = stateStore.get();
-    if (state.activeAccountId === accountId) {
-      throw new Error("Cannot remove active account — select another first");
-    }
-    stateStore.mutate((s) => ({
-      ...s,
-      accounts: s.accounts.filter((a) => a.id !== accountId),
-      revision: s.revision + 1,
-    }));
-    try {
-      await stateStore.flush();
-    } catch (error) {
-      stateStore.mutate(() => state);
-      try {
-        await stateStore.flush();
-      } catch (rollbackError) {
-        throw new AggregateError(
-          [error, rollbackError],
-          "Codex account remove and metadata rollback failed"
-        );
-      }
-      throw error;
-    }
-    const dir = accountHomeDir(accountId);
-    const markerPath = join(dir, PIER_MANAGED_HOME_MARKER);
-    if (existsSync(markerPath)) {
-      await provider.deleteCredential?.(dir);
-      await rm(dir, { recursive: true, force: true });
-    }
-    delete usageCache[accountId];
-    emitSnapshot();
+    await removeManagedAccount(
+      {
+        accountHomeDir,
+        ...(logger ? { logger } : {}),
+        onRemoved: (removedId) => {
+          credentialErrors.delete(removedId);
+          delete usageCache[removedId];
+          emitSnapshot();
+        },
+        provider,
+        stateStore,
+      },
+      accountId
+    );
   }
 
   async function doRefreshUsage(
@@ -364,7 +301,9 @@ export function createCodexAccountsService(
       targetId &&
       !state.accounts.some((account) => account.id === targetId)
     ) {
-      throw new Error(`Account not found: ${targetId}`);
+      // Removal race (refresh-all cycle vs remove): a vanished account is a
+      // silent no-op, not an error that aborts the rest of the cycle.
+      return;
     }
     if (!runUsageRefresh) {
       runUsageRefresh = createCodexUsageRefreshRunner({
@@ -373,6 +312,7 @@ export function createCodexAccountsService(
         ensureUsageEnv,
         now,
         provider,
+        signal: usageAbort.signal,
         stateStore,
         usageCache,
       });
@@ -415,18 +355,13 @@ export function createCodexAccountsService(
   }
 
   function setupWatch(): void {
-    watchDispose = provider.watchExternalAuth(() => {
-      if (now() < suppressWatchUntil) {
-        return;
-      }
-      enqueueMutation(async () => {
-        if (now() < suppressWatchUntil) {
-          return;
-        }
-        await handleDrift();
-      }).catch(() => {
-        /* fire-and-forget */
-      });
+    watchDispose = startSuppressedDriftWatch({
+      enqueueDriftCheck: enqueueGuarded,
+      getSuppressUntil: () => suppressWatchUntil,
+      handleDrift,
+      isDisposed: () => disposed,
+      now,
+      watchExternalAuth: (callback) => provider.watchExternalAuth(callback),
     });
   }
 
@@ -435,18 +370,43 @@ export function createCodexAccountsService(
       await stateStore.init();
       const state = stateStore.get();
       if (state.accounts.length === 0) {
-        const migrated = await enqueueMutation(migrateLegacyAccountsIfNeeded);
-        if (!migrated && (await provider.readCurrentIdentity())) {
-          await enqueueMutation(doAdoptCurrent);
+        // Best-effort: neither a failed migration nor a failed adoption may
+        // brick activation (B1) — the accounts UI must stay reachable.
+        const migrated = await enqueueMutation(
+          migrateLegacyAccountsIfNeeded
+        ).catch((error: unknown) => {
+          logger?.warn("[pier.codex] legacy migration failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+          return false;
+        });
+        if (
+          !migrated &&
+          (await provider.readCurrentIdentity().catch(() => null))
+        ) {
+          await enqueueGuarded(doAdoptCurrent).catch((error: unknown) => {
+            logger?.warn("[pier.codex] initial adoption failed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
         }
       } else {
-        await reconcileManagedCredentials({
+        const errors = await reconcileManagedCredentials({
           accounts: state.accounts,
           ensureManagedDir,
+          ...(logger ? { logger } : {}),
           managedBaseDir,
           provider,
         });
-        await enqueueMutation(handleDrift);
+        credentialErrors.clear();
+        for (const [accountId, message] of errors) {
+          credentialErrors.set(accountId, message);
+        }
+        await enqueueGuarded(handleDrift).catch((error: unknown) => {
+          logger?.warn("[pier.codex] initial drift check failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
       }
       await stateStore.flush();
       await stateStore.ensureSchemaMarker();
@@ -467,29 +427,52 @@ export function createCodexAccountsService(
       }
     },
     dispose(): void {
+      disposed = true;
+      // Also clears the suppressed-recheck timer inside the drift watch.
       watchDispose?.();
       watchDispose = null;
       clearInterval(usagePollTimer ?? undefined);
       usagePollTimer = null;
       loginAbort?.abort();
+      usageAbort.abort();
     },
     flush: () => stateStore.flush(),
     snapshot: () => buildSnapshot(),
-    add: (_payload) => enqueueMutation(doAdd),
-    adoptCurrent: () => enqueueMutation(doAdoptCurrent),
+    add: (_payload) => {
+      // Created at enqueue time (not when the queued op starts) so a cancel
+      // issued while the login is still queued is not lost.
+      const abort = new AbortController();
+      const generation = cancelGeneration;
+      return enqueueMutation(() => {
+        if (disposed || cancelGeneration !== generation) {
+          throw loginCancelledError();
+        }
+        return doAdd(abort);
+      });
+    },
+    adoptCurrent: () => enqueueGuarded(doAdoptCurrent),
     cancelLogin: () => {
+      // Generation bump cancels the running login AND every queued add —
+      // deliberate: cancel expresses "no pending login should proceed". A
+      // queued add from another window is also cancelled (its renderer
+      // treats the AbortError as expected cancellation).
+      cancelGeneration += 1;
       loginAbort?.abort();
       return enqueueMutation(() => {
         loginAbort = null;
         loginPending = null;
+        loginStartedAt = null;
         emitSnapshot();
         return Promise.resolve();
       });
     },
     select: (payload) =>
-      enqueueMutation(() => doSelect(payload.accountId, payload.syncTargets)),
-    syncToPeers: (payload) => enqueueMutation(() => doSyncToPeers(payload)),
-    remove: (payload) => enqueueMutation(() => doRemove(payload.accountId)),
+      enqueueMutation(() => {
+        if (disposed) return Promise.resolve([]);
+        return doSelect(payload.accountId, payload.syncTargets);
+      }),
+    syncToPeers: (payload) => enqueueGuarded(() => doSyncToPeers(payload)),
+    remove: (payload) => enqueueGuarded(() => doRemove(payload.accountId)),
     refreshUsage: (options) => doRefreshUsage(options),
     refreshAllUsage,
   };

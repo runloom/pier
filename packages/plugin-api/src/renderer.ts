@@ -242,6 +242,14 @@ export interface ExternalRendererPluginContext {
   app: {
     /** Close the host settings dialog, e.g. before opening a panel it would cover. */
     closeSettings(): void;
+    /**
+     * Open a URL in the user's default browser via the host. Requires the
+     * `external:open` permission in plugin.json. The host denies renderer
+     * `window.open` / navigation outright, so plain `<a target="_blank">`
+     * links are dead — always route external links through this API.
+     * Resolves `true` when the URL was handed to the OS.
+     */
+    openExternal(url: string): Promise<boolean>;
     openSettings(options?: { section?: string }): void;
   };
   commandPalette: {

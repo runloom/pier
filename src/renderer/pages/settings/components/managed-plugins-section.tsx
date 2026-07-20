@@ -18,6 +18,7 @@ import {
 import { cn } from "@pier/ui/utils.ts";
 import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import i18next from "i18next";
 import { Puzzle, RefreshCw } from "lucide-react";
 import {
   Fragment,
@@ -38,6 +39,7 @@ import {
   rejectFailedManagedPluginOperation,
   UnavailableManagedRow,
 } from "./managed-plugin-rows.tsx";
+import { sortUnifiedRows, type UnifiedRow } from "./plugin-list-order.ts";
 import { PluginRow, PluginsLoadingState } from "./plugin-row.tsx";
 
 /**
@@ -102,23 +104,6 @@ function useCatalog(): {
 
   return { catalog, refresh, checkUpdates, checkingUpdates, error, win };
 }
-
-type UnifiedRow =
-  | {
-      kind: "entry";
-      /** Registry entry (built-in or installed managed). */
-      entry: PluginRegistryEntry;
-      /** Set only when this entry is also a managed catalog row. */
-      managedRow: CatalogRow | null;
-    }
-  | {
-      kind: "available";
-      row: CatalogRow;
-    }
-  | {
-      kind: "unavailable";
-      row: CatalogRow;
-    };
 
 function EmptyList({
   emptyKey,
@@ -276,7 +261,7 @@ export function ManagedPluginsSection({
   // the catalog first and the registry a beat later. Hide any managed entry
   // the catalog no longer reports as installed — it'll surface in Not Installed.
   const runtimeIds = new Set(builtinEntries.map((entry) => entry.manifest.id));
-  const installedRows: UnifiedRow[] = builtinEntries
+  const unsortedInstalledRows: UnifiedRow[] = builtinEntries
     .filter((entry) => {
       const managedRow = managedById.get(entry.manifest.id);
       return !managedRow || managedRow.installed;
@@ -286,19 +271,28 @@ export function ManagedPluginsSection({
       entry,
       managedRow: managedById.get(entry.manifest.id) ?? null,
     }));
-  installedRows.push(
+  unsortedInstalledRows.push(
     ...(catalog?.plugins ?? [])
       .filter((row) => row.installed && !runtimeIds.has(row.id))
       .map((row): UnifiedRow => ({ kind: "unavailable", row }))
+  );
+  // Deterministic order (VS Code / JetBrains convention): restart-pending
+  // rows first, then locale-aware alphabetical — never first-install order.
+  const installedRows = sortUnifiedRows(
+    unsortedInstalledRows,
+    i18next.language
   );
   const installedIds = new Set(
     installedRows.flatMap((r) =>
       r.kind === "entry" ? [r.entry.manifest.id] : []
     )
   );
-  const availableRows: UnifiedRow[] = (catalog?.plugins ?? [])
-    .filter((p) => !(p.installed || installedIds.has(p.id)))
-    .map((row) => ({ kind: "available", row }));
+  const availableRows: UnifiedRow[] = sortUnifiedRows(
+    (catalog?.plugins ?? [])
+      .filter((p) => !(p.installed || installedIds.has(p.id)))
+      .map((row) => ({ kind: "available", row })),
+    i18next.language
+  );
   const anyPendingRestart = catalog?.plugins.some(
     (p) => p.pendingRestart !== null
   );

@@ -26,25 +26,23 @@ function asRecord(value: unknown): Record<string, unknown> | null {
   return value as Record<string, unknown>;
 }
 
-function entryCreateTime(entry: OidcAuthEntry): number {
-  if (typeof entry.create_time === "string") {
-    const parsed = Date.parse(entry.create_time);
+function entryTime(value: unknown): number {
+  if (typeof value === "string" && value.length > 0) {
+    const parsed = Date.parse(value);
     if (Number.isFinite(parsed)) return parsed;
   }
   return Number.NEGATIVE_INFINITY;
 }
 
 function isUsableOidcEntry(entry: OidcAuthEntry): boolean {
-  const key = entry.key;
-  if (typeof key !== "string" || key.length === 0) return false;
-  return (
-    entry.auth_mode === "oidc" ||
-    (typeof entry.refresh_token === "string" &&
-      entry.refresh_token.length > 0) ||
-    key.length > 0
-  );
+  return typeof entry.key === "string" && entry.key.length > 0;
 }
 
+/**
+ * Pick the newest usable entry by create_time, then expires_at.
+ * Must match `identity.ts`'s selection so the session key and the parsed
+ * identity always come from the same entry.
+ */
 export function selectOidcAuthEntry(raw: string): SelectedAuthEntry | null {
   let data: unknown;
   try {
@@ -59,13 +57,19 @@ export function selectOidcAuthEntry(raw: string): SelectedAuthEntry | null {
     createTime: number;
     entry: OidcAuthEntry;
     entryKey: string;
+    expiresAt: number;
   } | null = null;
   for (const [entryKey, value] of Object.entries(root)) {
     const entry = asRecord(value) as OidcAuthEntry | null;
     if (!(entry && isUsableOidcEntry(entry))) continue;
-    const createTime = entryCreateTime(entry);
-    if (!best || createTime > best.createTime) {
-      best = { createTime, entry, entryKey };
+    const createTime = entryTime(entry.create_time);
+    const expiresAt = entryTime(entry.expires_at);
+    if (
+      !best ||
+      createTime > best.createTime ||
+      (createTime === best.createTime && expiresAt > best.expiresAt)
+    ) {
+      best = { createTime, entry, entryKey, expiresAt };
     }
   }
   return best

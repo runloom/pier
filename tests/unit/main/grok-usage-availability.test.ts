@@ -146,23 +146,16 @@ describe("grok usage availability contract", () => {
   });
 
   it("account plugins wire shared inflight coalescing for usage refresh", () => {
-    const grokService = readFileSync(
-      join(process.cwd(), "packages/plugin-grok/src/main/accounts-service.ts"),
-      "utf8"
-    );
-    expect(grokService).toContain("createInflightCoalescer");
-    expect(grokService).toContain("usageRefreshInflight");
-    expect(grokService).toContain("@pier/plugin-api/account-usage");
-
-    const codexRefresh = readFileSync(
-      join(
-        process.cwd(),
-        "packages/plugin-codex/src/main/accounts-usage-refresh.ts"
-      ),
-      "utf8"
-    );
-    expect(codexRefresh).toContain("createInflightCoalescer");
-    expect(codexRefresh).toContain("@pier/plugin-api/account-usage");
+    // Both plugins host their refresh body in accounts-usage-refresh.ts and
+    // must use the shared coalescer from @pier/plugin-api.
+    for (const rel of [
+      "packages/plugin-grok/src/main/accounts-usage-refresh.ts",
+      "packages/plugin-codex/src/main/accounts-usage-refresh.ts",
+    ]) {
+      const refresh = readFileSync(join(process.cwd(), rel), "utf8");
+      expect(refresh).toContain("createInflightCoalescer");
+      expect(refresh).toContain("@pier/plugin-api/account-usage");
+    }
   });
 
   it("does not keep per-plugin copies of scheduler/inflight primitives", () => {

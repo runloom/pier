@@ -1,6 +1,7 @@
 import type {
   AddAccountPayload,
   GrokAccountsSnapshot,
+  PeerSyncResult,
   RemoveAccountPayload,
   SelectAccountPayload,
   SyncToPeersPayload,
@@ -34,7 +35,8 @@ export interface GrokAccountsService {
     force?: boolean;
   }): Promise<void>;
   remove(payload: RemoveAccountPayload): Promise<void>;
-  select(payload: SelectAccountPayload): Promise<void>;
+  /** Resolves with per-target peer sync results (empty when none requested). */
+  select(payload: SelectAccountPayload): Promise<PeerSyncResult[]>;
   snapshot(): GrokAccountsSnapshot;
   /** Mirror the managed account credential into peer tools without switching Grok. */
   syncToPeers(payload: SyncToPeersPayload): Promise<void>;

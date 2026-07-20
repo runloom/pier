@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 const ROOT = process.cwd();
 const SOURCE_FILE_RE = /\.(ts|tsx)$/;
 const PLUGIN_RENDERER_ROOTS = [
+  join(ROOT, "packages", "plugin-claude", "src", "renderer"),
   join(ROOT, "packages", "plugin-codex", "src", "renderer"),
   join(ROOT, "packages", "plugin-grok", "src", "renderer"),
   join(ROOT, "src", "plugins", "builtin"),

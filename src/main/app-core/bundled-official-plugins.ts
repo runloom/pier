@@ -39,6 +39,14 @@ export const OFFICIAL_BUNDLED_PLUGIN_SPECS: readonly OfficialBundledPluginSpec[]
       id: "pier.ssh",
       prodPluginDirName: "pier.ssh",
     },
+    {
+      devPackageDir: "packages/plugin-claude",
+      fallbackId: "pier.claude",
+      fallbackName: "Claude",
+      fallbackVersion: "1.0.0",
+      id: "pier.claude",
+      prodPluginDirName: "pier.claude",
+    },
   ];
 
 export function toBundledPluginRegistration(

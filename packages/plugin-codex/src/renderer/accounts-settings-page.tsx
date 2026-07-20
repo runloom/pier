@@ -35,8 +35,8 @@ import {
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { CircleUserRound, RefreshCw, Share2 } from "lucide-react";
-import { Fragment, type JSX, useEffect, useState } from "react";
+import { CircleUserRound, RefreshCw, Share2, Trash2 } from "lucide-react";
+import { Fragment, type JSX, useCallback, useEffect, useState } from "react";
 import {
   ALL_SYNC_TARGETS,
   EMPTY_PEER_AVAILABILITY,
@@ -52,6 +52,7 @@ import {
 } from "./account-display.tsx";
 import {
   loadPeerAvailability,
+  notifyPeerSyncFailures,
   openSwitchConfirmDialog,
 } from "./account-switch.ts";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
@@ -98,8 +99,12 @@ export function AccountsSettingsPage({
 }: AccountsSettingsPageProps): JSX.Element {
   const { error: loadError, snapshot } = useCodexAccountsSnapshot(context);
   useUsagePollingLease(context, "settings:accounts", true);
-  const t: Translate = (key, fallback) => context.i18n.t(key, fallback);
-  const [, setBusyAccountId] = useState<string | null>(null);
+  // Stable identity: `t` feeds AddAccountDialog's effects; a per-render arrow
+  // would re-run them (and re-send dialogs.update) on every render.
+  const t: Translate = useCallback(
+    (key, fallback) => context.i18n.t(key, fallback),
+    [context]
+  );
   const [peerAvailability, setPeerAvailability] = useState<PeerAvailability>(
     EMPTY_PEER_AVAILABILITY
   );
@@ -135,17 +140,22 @@ export function AccountsSettingsPage({
       cancelled = true;
     };
   }, [context, snapshot?.activeAccountId]);
-  const reportError = (err: unknown): void => {
-    context.dialogs
-      .alert({
-        body: errorMessage(err, t),
-        title: t(
-          "pier.codex.accounts.settings.actionFailed",
-          "Account action failed"
-        ),
-      })
-      .catch(() => undefined);
-  };
+  // Stable identity: feeds AddAccountDialog's openAddDialog callback; a
+  // per-render arrow would re-run its dialog-lifecycle effect every render.
+  const reportError = useCallback(
+    (err: unknown): void => {
+      context.dialogs
+        .alert({
+          body: errorMessage(err, t),
+          title: t(
+            "pier.codex.accounts.settings.actionFailed",
+            "Account action failed"
+          ),
+        })
+        .catch(() => undefined);
+    },
+    [context, t]
+  );
   const invoke = (method: string, payload: unknown = null): void => {
     context.rpc.invoke(method, payload).catch(reportError);
   };
@@ -155,12 +165,20 @@ export function AccountsSettingsPage({
       onAccountError: reportError,
       t,
     });
-  const handleRemove = async (accountId: string): Promise<void> => {
+  const handleRemove = async (
+    accountId: string,
+    isActive = false
+  ): Promise<void> => {
     const ok = await context.dialogs.confirm({
-      body: t(
-        "pier.codex.accounts.settings.removeConfirmBody",
-        "This account will be removed from Pier."
-      ),
+      body: isActive
+        ? t(
+            "pier.codex.accounts.settings.removeActiveConfirmBody",
+            "Pier will stop managing this account and clear the current selection. Your Codex login on this device is not affected. If you stay signed in with the CLI, Pier may import this account again automatically."
+          )
+        : t(
+            "pier.codex.accounts.settings.removeConfirmBody",
+            "This account will be removed from Pier. Your Codex login on this device is not affected."
+          ),
       confirmLabel: t("pier.codex.accounts.settings.remove", "Remove"),
       intent: "destructive",
       size: "sm",
@@ -175,7 +193,6 @@ export function AccountsSettingsPage({
     openSwitchConfirmDialog({ context, mode: "switch", t })
       .then((result) => {
         if (!result.confirmed) return;
-        setBusyAccountId(accountId);
         context.rpc
           .invoke("accounts.select", {
             accountId,
@@ -183,10 +200,10 @@ export function AccountsSettingsPage({
               (target) => target !== "codex"
             ),
           })
-          .catch(reportError)
-          .finally(() => {
-            setBusyAccountId(null);
-          });
+          .then((selectResult) => {
+            notifyPeerSyncFailures(context, t, selectResult);
+          })
+          .catch(reportError);
       })
       .catch(reportError);
   };
@@ -342,6 +359,24 @@ export function AccountsSettingsPage({
                       "pier.codex.accounts.settings.refreshUsage",
                       "Refresh usage"
                     )}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      aria-label={`${t("pier.codex.accounts.settings.remove", "Remove")}: ${active.label}`}
+                      onClick={() => {
+                        handleRemove(active.id, true).catch(() => undefined);
+                      }}
+                      size="icon-sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Trash2 data-icon="inline-start" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent data-pier-codex-scope="">
+                    {t("pier.codex.accounts.settings.remove", "Remove")}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

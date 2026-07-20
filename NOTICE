@@ -41,9 +41,9 @@ First-party packages
 --------------------
 
 Workspace packages under `packages/` (`@pier/ui`, `@pier/plugin-api`,
-`@pier/plugin-codex`, `@pier/plugin-grok`, and related packages) are part of this
-repository and are licensed under the same terms as Pier unless a package
-explicitly states otherwise.
+`@pier/plugin-claude`, `@pier/plugin-codex`, `@pier/plugin-grok`, and related
+packages) are part of this repository and are licensed under the same terms as
+Pier unless a package explicitly states otherwise.
 
 Trademark and branding
 ----------------------

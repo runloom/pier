@@ -6,6 +6,13 @@ export interface ClassifiedLoginError {
   failure: Error;
 }
 
+/** Cancellation error matching the renderer's `isLoginCancellation` check. */
+export function loginCancelledError(): Error {
+  const error = new Error("Login cancelled");
+  error.name = "AbortError";
+  return error;
+}
+
 /**
  * Login error classification:
  * - timeout (aborted + timedOut) → error state + throw

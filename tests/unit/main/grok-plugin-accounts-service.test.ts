@@ -26,6 +26,14 @@ const OIDC_IDENTITY: AccountIdentity = {
   teamId: "team-1",
 };
 
+function deferred<T>() {
+  let resolve!: (value: T) => void;
+  const promise = new Promise<T>((resolvePromise) => {
+    resolve = resolvePromise;
+  });
+  return { promise, resolve };
+}
+
 function createProvider(
   overrides: Partial<GrokAccountProvider> = {}
 ): GrokAccountProvider {
@@ -173,7 +181,7 @@ describe("pier.grok accounts service", () => {
     expect(auth).toContain("user@example.com");
   });
 
-  it("rejects removing the active account", async () => {
+  it("removes the active account and clears the selection", async () => {
     const stateFile = join(dir, "accounts.json");
     await writeFile(
       stateFile,
@@ -195,19 +203,23 @@ describe("pier.grok accounts service", () => {
       }),
       "utf8"
     );
+    const provider = createProvider({
+      readCurrentIdentity: vi.fn(async () => OIDC_IDENTITY),
+      readIdentity: vi.fn(async () => OIDC_IDENTITY),
+    });
     const service = createGrokAccountsService({
       managedBaseDir: join(dir, "managed"),
       onChanged: vi.fn(),
-      provider: createProvider({
-        readCurrentIdentity: vi.fn(async () => OIDC_IDENTITY),
-        readIdentity: vi.fn(async () => OIDC_IDENTITY),
-      }),
+      provider,
       stateStore: createGrokAccountsStateStore(stateFile),
     });
     await service.init();
-    await expect(service.remove({ accountId: "active-1" })).rejects.toThrow(
-      "Cannot remove active account — select another first"
-    );
+    await service.remove({ accountId: "active-1" });
+    const snapshot = service.snapshot();
+    expect(snapshot.accounts).toHaveLength(0);
+    expect(snapshot.activeAccountId).toBeNull();
+    // The CLI's live auth.json is never touched by a remove.
+    expect(provider.writeCurrentAuthContent).not.toHaveBeenCalled();
   });
 
   it("adopts current real-home identity when state is empty", async () => {
@@ -224,5 +236,73 @@ describe("pier.grok accounts service", () => {
     expect(snapshot.accounts).toHaveLength(1);
     expect(snapshot.activeAccountId).toBe(snapshot.accounts[0]?.id);
     expect(snapshot.accounts[0]?.email).toBe("user@example.com");
+  });
+
+  it("cancelLogin also cancels adds that are still queued", async () => {
+    const firstLoginGate = deferred<void>();
+    const firstLoginStarted = deferred<void>();
+    let loginCalls = 0;
+    const login = vi.fn((_home: string, _signal: AbortSignal) => {
+      loginCalls += 1;
+      if (loginCalls === 1) {
+        firstLoginStarted.resolve();
+        return firstLoginGate.promise;
+      }
+      return Promise.resolve();
+    });
+    const provider = createProvider({ login });
+    const service = createGrokAccountsService({
+      managedBaseDir: join(dir, "managed"),
+      onChanged: vi.fn(),
+      provider,
+      stateStore: createGrokAccountsStateStore(join(dir, "accounts.json")),
+    });
+    await service.init();
+
+    const first = service.add({ kind: "oidc", mode: "device" });
+    const second = service.add({ kind: "oidc", mode: "device" });
+    await firstLoginStarted.promise;
+    const cancelled = service.cancelLogin();
+    firstLoginGate.resolve();
+
+    await expect(first).rejects.toMatchObject({ name: "AbortError" });
+    // The queued add never ran its login: it was invalidated by the cancel
+    // generation bump before starting.
+    await expect(second).rejects.toMatchObject({ name: "AbortError" });
+    await cancelled;
+    expect(login).toHaveBeenCalledTimes(1);
+    expect(service.snapshot().accounts).toHaveLength(0);
+  });
+
+  it("does not wipe an external login when adoption fails during API key activation", async () => {
+    let externalLoginPresent = false;
+    const provider = createProvider({
+      readCurrentIdentity: vi.fn(async () =>
+        externalLoginPresent ? OIDC_IDENTITY : null
+      ),
+      // Adoption path fails (e.g. credential capture IO error).
+      syncBack: vi.fn(async () => {
+        throw new Error("syncBack IO error");
+      }),
+    });
+    const service = createGrokAccountsService({
+      managedBaseDir: join(dir, "managed"),
+      onChanged: vi.fn(),
+      provider,
+      stateStore: createGrokAccountsStateStore(join(dir, "accounts.json")),
+    });
+    await service.init();
+    // External login appears after init (drift not yet adopted).
+    externalLoginPresent = true;
+
+    await service.add({ apiKey: "xai-key", kind: "api_key" });
+
+    // The API key account exists but was NOT activated: activating would
+    // write "{}" over the real auth.json and destroy the external login
+    // that adoption just failed to capture.
+    expect(provider.materializeEmptyAuth).not.toHaveBeenCalled();
+    const snapshot = service.snapshot();
+    expect(snapshot.accounts).toHaveLength(1);
+    expect(snapshot.activeAccountId).toBeNull();
   });
 });

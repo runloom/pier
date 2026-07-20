@@ -1,6 +1,7 @@
 import type {
   GrokAccountSummary,
   GrokAccountsSnapshot,
+  GrokLoginState,
 } from "../shared/accounts.ts";
 import { accountLabel } from "./accounts-records.ts";
 import {
@@ -11,9 +12,16 @@ import {
 import type { GrokAccountsFileState } from "./state.ts";
 
 interface BuildAccountsSnapshotInput {
+  /** Per-account credential problems detected at activation (B1). */
+  credentialErrors?: ReadonlyMap<string, string> | undefined;
   lastLoginError: { at: number; message: string } | null;
+  loginDeviceInfo: {
+    deviceCode?: string | undefined;
+    deviceVerificationUrl?: string | undefined;
+  } | null;
   loginMode: "oauth" | "device" | null;
   loginPending: boolean;
+  loginStartedAt: number | null;
   now: number;
   revision: number;
   state: GrokAccountsFileState;
@@ -21,9 +29,12 @@ interface BuildAccountsSnapshotInput {
 }
 
 export function buildAccountsSnapshot({
+  credentialErrors,
   lastLoginError,
+  loginDeviceInfo,
   loginMode,
   loginPending,
+  loginStartedAt,
   now,
   revision,
   state,
@@ -32,11 +43,13 @@ export function buildAccountsSnapshot({
   const toSummary = (
     record: GrokAccountsFileState["accounts"][number]
   ): GrokAccountSummary => {
+    // A pending login is about a *new* account; it must not restamp every
+    // existing account's status. Only real per-account credential problems
+    // surface as "error".
+    const credentialError = credentialErrors?.get(record.id) ?? null;
     let status: GrokAccountSummary["status"] =
       record.id === state.activeAccountId ? "active" : "available";
-    if (loginPending) {
-      status = "login-pending";
-    } else if (lastLoginError && record.id === state.activeAccountId) {
+    if (credentialError) {
       status = "error";
     }
     const usage = usageCache[record.id];
@@ -48,7 +61,7 @@ export function buildAccountsSnapshot({
       ...(record.email ? { email: record.email } : {}),
       ...(record.teamId ? { teamId: record.teamId } : {}),
       ...(usage?.subscription ? { subscription: usage.subscription } : {}),
-      error: lastLoginError && !loginPending ? lastLoginError.message : null,
+      error: credentialError,
       usage: usage ? toUsageSnapshot(usage) : null,
     };
   };
@@ -56,15 +69,27 @@ export function buildAccountsSnapshot({
   const activeUsageEntry =
     usageCache[activeUsageCacheKey(state.activeAccountId)];
 
+  let login: GrokLoginState | null = null;
+  if (loginPending && loginMode) {
+    login = {
+      mode: loginMode,
+      provider: "grok",
+      startedAt: loginStartedAt ?? now,
+      ...(loginDeviceInfo?.deviceCode
+        ? { deviceCode: loginDeviceInfo.deviceCode }
+        : {}),
+      ...(loginDeviceInfo?.deviceVerificationUrl
+        ? { deviceVerificationUrl: loginDeviceInfo.deviceVerificationUrl }
+        : {}),
+    };
+  }
+
   return {
     accounts: state.accounts.map(toSummary),
     activeAccountId: state.activeAccountId,
     activeUsage: activeUsageEntry ? toUsageSnapshot(activeUsageEntry) : null,
     lastLoginError,
-    login:
-      loginPending && loginMode
-        ? { mode: loginMode, provider: "grok", startedAt: now }
-        : null,
+    login,
     revision,
     schemaVersion: 1,
   };

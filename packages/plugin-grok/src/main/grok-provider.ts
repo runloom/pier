@@ -1,4 +1,3 @@
-import { spawn } from "node:child_process";
 import { existsSync, type FSWatcher, mkdirSync, watch } from "node:fs";
 import { mkdir, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
@@ -6,14 +5,11 @@ import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { type FetchImpl, fetchGrokUsage } from "./grok-usage.ts";
 import type { AccountIdentity } from "./identity.ts";
-import { readGrokIdentity } from "./identity.ts";
+import { parseGrokAuthJson, readGrokIdentity } from "./identity.ts";
+import { defaultSpawnLogin, type SpawnLoginFn } from "./login-spawn.ts";
 import type { AccountUsageResult } from "./types.ts";
 
-export type SpawnLoginFn = (
-  cmd: string,
-  args: string[],
-  opts: { env: Record<string, string | undefined>; signal: AbortSignal }
-) => Promise<void>;
+export { type SpawnLoginFn, stripAnsi } from "./login-spawn.ts";
 
 export interface CreateGrokProviderOpts {
   credentials: {
@@ -34,13 +30,20 @@ export interface GrokAccountProvider {
   fetchUsage(options: {
     accountHomeDir?: string | undefined;
     kind: "api_key" | "oidc";
+    /**
+     * Fires after a refreshed OIDC session has been persisted to the managed
+     * credential store, with the new auth.json content. Lets the service
+     * mirror rotated tokens into the real Grok home for the active account.
+     */
+    onSessionRefreshed?: ((authJson: string) => Promise<void>) | undefined;
     signal: AbortSignal;
   }): Promise<AccountUsageResult>;
   readonly id: "grok";
   login(
     homeDir: string,
     signal: AbortSignal,
-    mode: "oauth" | "device"
+    mode: "oauth" | "device",
+    onOutput?: (chunk: string) => void
   ): Promise<void>;
   materializeApiKey(accountId: string): Promise<void>;
   materializeEmptyAuth(): Promise<void>;
@@ -74,43 +77,6 @@ function defaultRealGrokHome(
   return (
     processEnv?.GROK_HOME ?? process.env.GROK_HOME ?? join(homedir(), ".grok")
   );
-}
-
-function defaultSpawnLogin(
-  cmd: string,
-  args: string[],
-  opts: { env: Record<string, string | undefined>; signal: AbortSignal }
-): Promise<void> {
-  return new Promise<void>((resolve, reject) => {
-    const child = spawn(cmd, args, {
-      env: { ...process.env, ...opts.env } as NodeJS.ProcessEnv,
-      stdio: "inherit",
-    });
-
-    opts.signal.addEventListener(
-      "abort",
-      () => {
-        child.kill();
-        reject(new Error("Login cancelled"));
-      },
-      { once: true }
-    );
-
-    child.on("error", (error: NodeJS.ErrnoException) => {
-      if (error.code === "ENOENT") {
-        reject(new Error("Grok CLI not found on PATH"));
-        return;
-      }
-      reject(error);
-    });
-    child.on("close", (code) => {
-      if (code === 0) {
-        resolve();
-      } else {
-        reject(new Error(`Grok login exited with code ${code}`));
-      }
-    });
-  });
 }
 
 export function createGrokProvider(
@@ -258,7 +224,8 @@ export function createGrokProvider(
     async login(
       homeDir: string,
       signal: AbortSignal,
-      mode: "oauth" | "device"
+      mode: "oauth" | "device",
+      onOutput?: (chunk: string) => void
     ): Promise<void> {
       const args =
         mode === "device" ? ["login", "--device-auth"] : ["login", "--oauth"];
@@ -271,6 +238,7 @@ export function createGrokProvider(
           ...(process.env.PATH === undefined ? {} : { PATH: process.env.PATH }),
           GROK_HOME: homeDir,
         },
+        ...(onOutput ? { onOutput } : {}),
         signal,
       });
     },
@@ -285,16 +253,27 @@ export function createGrokProvider(
         const authPath = join(homeDir, "auth.json");
         if (existsSync(authPath)) {
           const content = await readFile(authPath, "utf-8");
-          await credentials.set(credentialKey(homeDir), content);
-          try {
-            return await readGrokIdentity(homeDir);
-          } finally {
+          // Validate before persisting: a corrupt stray file must not
+          // overwrite a previously stored good credential.
+          const identity = parseGrokAuthJson(content);
+          if (identity) {
+            await credentials.set(credentialKey(homeDir), content);
             await rm(authPath, { force: true });
+            return identity;
           }
         }
-        return await withManagedAuthUnlocked(homeDir, () =>
-          readGrokIdentity(homeDir)
-        );
+        try {
+          return await withManagedAuthUnlocked(homeDir, () =>
+            readGrokIdentity(homeDir)
+          );
+        } catch (error) {
+          // No stored credential and no legacy file: treat as "no identity"
+          // instead of bubbling a raw ENOENT that would brick activation.
+          if ((error as NodeJS.ErrnoException).code === "ENOENT") {
+            return null;
+          }
+          throw error;
+        }
       });
     },
 
@@ -349,6 +328,7 @@ export function createGrokProvider(
     async fetchUsage(options: {
       accountHomeDir?: string | undefined;
       kind: "api_key" | "oidc";
+      onSessionRefreshed?: ((authJson: string) => Promise<void>) | undefined;
       signal: AbortSignal;
     }): Promise<AccountUsageResult> {
       if (options.kind === "api_key") {
@@ -380,6 +360,10 @@ export function createGrokProvider(
             await credentials.set(credentialKey(accountHomeDir), nextAuthJson);
             await rm(join(accountHomeDir, "auth.json"), { force: true });
           });
+          // Mirror rotated tokens into the real Grok home when the caller
+          // owns the active account; a single-use rotated refresh token that
+          // only lives in the plugin store would strand the CLI's own copy.
+          await options.onSessionRefreshed?.(nextAuthJson);
         },
         ...(fetchImpl ? { fetchImpl } : {}),
       });
@@ -410,13 +394,16 @@ export function createGrokProvider(
         async () => {
           const src = join(realGrokHome, "auth.json");
           if (!existsSync(src)) return "ok";
+          // Read once and validate the identity from that same content —
+          // a second read would let an external writer swap the file between
+          // the check and the capture (TOCTOU).
+          const content = await readFile(src, "utf-8");
           if (expectedProviderAccountId !== undefined) {
-            const identity = await readGrokIdentity(realGrokHome);
+            const identity = parseGrokAuthJson(content);
             if (identity?.providerAccountId !== expectedProviderAccountId) {
               return "identity-mismatch";
             }
           }
-          const content = await readFile(src, "utf-8");
           await credentials.set(credentialKey(accountHomeDir), content);
           await rm(join(accountHomeDir, "auth.json"), { force: true });
           return "ok";
@@ -447,8 +434,8 @@ export function createGrokProvider(
       }
 
       return () => {
-        if (debounceTimer) {
-          if (debounceTimer !== null) clearTimeout(debounceTimer);
+        if (debounceTimer !== null) {
+          clearTimeout(debounceTimer);
           debounceTimer = null;
         }
         watcher?.close();

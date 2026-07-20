@@ -101,7 +101,11 @@ function contextWithSnapshot(snapshot: GrokAccountsSnapshot): {
   };
   return {
     context: {
-      app: { closeSettings: vi.fn(), openSettings },
+      app: {
+        closeSettings: vi.fn(),
+        openExternal: vi.fn(async () => true),
+        openSettings,
+      },
       actions: { register: vi.fn(() => () => undefined) },
       commandPalette: {
         openQuickPick: vi.fn(),

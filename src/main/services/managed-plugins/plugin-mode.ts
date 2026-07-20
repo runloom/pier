@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
 import { isAbsolute, join, relative, resolve } from "node:path";
 import {
+  isDevShellPackagedOverride,
+  PIER_DEV_ELECTRON_SHELL_ENV,
   PIER_PLUGIN_MODE_ENV,
   type PierPluginMode,
   type PluginWorkspaceConfigFile,
@@ -107,21 +109,29 @@ export function getPierPluginMode(cwd: string = process.cwd()): PierPluginMode {
   const config = readPluginWorkspaceConfigFile(cwd);
   const devRuntime = isDevRuntime();
   // The macOS dev profile copies and renames Electron.app under
-  // `.pier-dev/electron-runtime`. Electron reports that copy as packaged even
-  // though electron-vite is running the current worktree. Normalize only this
-  // exact profile-owned runtime; real packaged distributions remain release.
-  const isWorktreeDevRuntime = isWorktreeDevElectronRuntime({
-    actualExecPath: process.execPath,
-    cwd,
-    devProfile: process.env.PIER_DEV_PROFILE,
-    devRuntime,
-    electronExecPath: process.env.ELECTRON_EXEC_PATH,
-  });
+  // `.pier-dev/electron-runtime`; the renamed shell reports isPackaged=true
+  // (derived from the executable name) and must not force release mode under
+  // `pnpm dev`. Recognize the dev shell by the explicit marker set by
+  // dev-profile.mjs or by the profile-owned runtime path; real packaged
+  // distributions remain release.
+  const devShellOverride =
+    isDevShellPackagedOverride({
+      devShellMarker: process.env[PIER_DEV_ELECTRON_SHELL_ENV],
+      isDevRuntime: devRuntime,
+      isPackagedApp: app.isPackaged,
+    }) ||
+    isWorktreeDevElectronRuntime({
+      actualExecPath: process.execPath,
+      cwd,
+      devProfile: process.env.PIER_DEV_PROFILE,
+      devRuntime,
+      electronExecPath: process.env.ELECTRON_EXEC_PATH,
+    });
   return resolvePierPluginMode({
     configMode: config?.mode ?? null,
     envMode: process.env[PIER_PLUGIN_MODE_ENV] ?? null,
     isDevRuntime: devRuntime,
-    isPackagedApp: app.isPackaged && !isWorktreeDevRuntime,
+    isPackagedApp: app.isPackaged && !devShellOverride,
   });
 }
 

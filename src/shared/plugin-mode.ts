@@ -56,3 +56,30 @@ export function resolvePierPluginMode(options: {
 export function isWorkspacePluginMode(mode: PierPluginMode): boolean {
   return mode === "workspace";
 }
+
+/**
+ * The macOS dev shell (Electron runtime copied and renamed to PierDev.app,
+ * see scripts/dev-profile.mjs `prepareMacDevElectronRuntime`) reports
+ * `app.isPackaged === true` because Electron derives isPackaged from the
+ * executable name — renaming `Electron` → `PierDev` flips it. Treating that
+ * shell as a production package would force `release` mode unconditionally,
+ * so workspace plugin loading could never activate under `pnpm dev`.
+ *
+ * dev-profile.mjs sets `PIER_DEV_ELECTRON_SHELL=1` when it launches through
+ * the renamed shell, so recognition does not depend on the executable name
+ * staying in sync between scripts/ and src/. The dev-runtime env check keeps
+ * a production package from being flipped by setting the marker alone.
+ */
+export const PIER_DEV_ELECTRON_SHELL_ENV = "PIER_DEV_ELECTRON_SHELL";
+
+export function isDevShellPackagedOverride(options: {
+  readonly devShellMarker: string | undefined;
+  readonly isDevRuntime: boolean;
+  readonly isPackagedApp: boolean;
+}): boolean {
+  return (
+    options.isPackagedApp &&
+    options.isDevRuntime &&
+    options.devShellMarker === "1"
+  );
+}

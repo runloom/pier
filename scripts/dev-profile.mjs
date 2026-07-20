@@ -825,6 +825,11 @@ async function electronDev() {
   const electronExecPath = prepareMacDevElectronRuntime(profile, env);
   if (electronExecPath) {
     env.ELECTRON_EXEC_PATH = electronExecPath;
+    // The renamed PierDev.app shell makes Electron report isPackaged=true
+    // (isPackaged is derived from the executable name). This explicit marker
+    // lets the main process (plugin-mode resolution) recognize the dev shell
+    // without hardcoding the executable name in src/.
+    env.PIER_DEV_ELECTRON_SHELL = "1";
   }
   console.log(`[dev-profile] ${profile.profile}: ${profile.rendererUrl}`);
   console.log(`[dev-profile] userData: ${profile.electronUserDataDir}`);

@@ -14,7 +14,6 @@ import {
 import { Spinner } from "@pier/ui/spinner.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
 import {
-  ExternalLink,
   HardDrive,
   MonitorSmartphone,
   ShieldCheck,
@@ -31,6 +30,7 @@ import {
 import type { GrokLoginState } from "../shared/accounts.ts";
 import { AddAccountWaiting } from "./add-account-waiting.tsx";
 import type { Translate } from "./format-account-error.ts";
+import { useGrokAccountsSnapshot } from "./use-accounts-snapshot.ts";
 
 function isLoginCancellation(error: unknown): boolean {
   return (
@@ -40,18 +40,15 @@ function isLoginCancellation(error: unknown): boolean {
 }
 
 type AddTab = "account" | "api_key" | "local";
-type OidcMode = "oauth" | "device";
 const ADD_DIALOG_ID = "accounts.add";
 type AddAccountContentProps = RendererPluginContentDialogRenderProps & {
   context: ExternalRendererPluginContext;
   initialLogin: GrokLoginState | null;
-  login: GrokLoginState | null;
   onError: (error: unknown) => void;
   t: Translate;
 };
 function AddAccountContent({
   context,
-  login,
   onError,
   t,
   close,
@@ -60,8 +57,14 @@ function AddAccountContent({
   setDescription,
   initialLogin,
 }: AddAccountContentProps): JSX.Element {
+  // Read login state live from the snapshot store: the dialog host freezes
+  // content props at open time, so a `login` prop would go permanently stale
+  // and leave the waiting screen showing outdated device-code state. Until
+  // the first snapshot arrives, fall back to the open-time value so the
+  // missing data is not mistaken for "login ended".
+  const { snapshot } = useGrokAccountsSnapshot(context);
+  const login = snapshot ? (snapshot.login ?? null) : initialLogin;
   const [tab, setTab] = useState<AddTab>("account");
-  const [oidcMode, setOidcMode] = useState<OidcMode>("oauth");
   const [presentation, setPresentation] = useState<"choose" | "waiting">(
     initialLogin ? "waiting" : "choose"
   );
@@ -101,9 +104,8 @@ function AddAccountContent({
     previousLogin.current = login;
   }, [close, login, setDescription, setDismissible, setTitle, t]);
 
-  const startOidc = (nextMode: OidcMode): void => {
+  const startDeviceLogin = (): void => {
     const currentOperation = ++operationId.current;
-    setOidcMode(nextMode);
     setPresentation("waiting");
     setStarting(true);
     setDismissible(false);
@@ -120,7 +122,7 @@ function AddAccountContent({
       )
     );
     context.rpc
-      .invoke("accounts.add", { kind: "oidc", mode: nextMode })
+      .invoke("accounts.add", { kind: "oidc", mode: "device" })
       .then(() => {
         if (operationId.current === currentOperation) {
           close(null);
@@ -215,7 +217,7 @@ function AddAccountContent({
       .invoke("accounts.cancelLogin", null)
       .then(() => {
         setPendingAction(null);
-        startOidc(oidcMode);
+        startDeviceLogin();
       })
       .catch((error: unknown) => {
         onError(error);
@@ -227,7 +229,13 @@ function AddAccountContent({
   if (presentation === "waiting") {
     return (
       <AddAccountWaiting
+        deviceCode={login?.deviceCode}
+        deviceVerificationUrl={login?.deviceVerificationUrl}
+        loginActive={login !== null || starting}
         onCancel={cancelLogin}
+        onOpenVerificationUrl={(url) => {
+          context.app.openExternal(url).catch(onError);
+        }}
         onRestart={restartLogin}
         pendingAction={pendingAction}
         t={t}
@@ -269,35 +277,14 @@ function AddAccountContent({
     );
   } else {
     actionButtons = (
-      <>
-        <Button
-          disabled={starting}
-          onClick={() => startOidc("device")}
-          type="button"
-          variant="outline"
-        >
-          {starting && oidcMode === "device" ? (
-            <Spinner data-icon="inline-start" />
-          ) : (
-            <MonitorSmartphone data-icon="inline-start" />
-          )}
-          {t("pier.grok.accounts.settings.addDialogDevice", "Use device code")}
-        </Button>
-        <Button
-          disabled={starting}
-          onClick={() => startOidc("oauth")}
-          type="button"
-        >
-          {starting && oidcMode === "oauth" ? (
-            <Spinner data-icon="inline-start" />
-          ) : null}
-          {t(
-            "pier.grok.accounts.settings.addDialogContinue",
-            "Continue in browser"
-          )}
-          <ExternalLink data-icon="inline-end" />
-        </Button>
-      </>
+      <Button disabled={starting} onClick={startDeviceLogin} type="button">
+        {starting ? (
+          <Spinner data-icon="inline-start" />
+        ) : (
+          <MonitorSmartphone data-icon="inline-start" />
+        )}
+        {t("pier.grok.accounts.settings.addDialogDevice", "Use device code")}
+      </Button>
     );
   }
 
@@ -344,7 +331,7 @@ function AddAccountContent({
           <p className="text-muted-foreground text-sm">
             {t(
               "pier.grok.accounts.settings.addDialogAccountDescription",
-              "Recommended: continue in your browser to sign in with the Grok CLI. Use device code only when a browser is unavailable. The account appears here after authorization."
+              "Sign in with a device code from the Grok CLI. The verification link and code appear here; the account is added automatically after authorization."
             )}
           </p>
         </TabsContent>
@@ -428,6 +415,7 @@ export function AddAccountDialog({
   t: Translate;
 }): JSX.Element {
   const openHandleId = useRef<string | null>(null);
+  const previousLoginRef = useRef<GrokLoginState | null>(login);
 
   const openAddDialog = useCallback((): void => {
     const handle = context.dialogs.open({
@@ -438,7 +426,7 @@ export function AddAccountDialog({
       ),
       description: t(
         "pier.grok.accounts.settings.addDialogDescription",
-        "Choose how to add a Grok account. Browser login and device code use the Grok CLI; API keys and local import use credentials already on this device."
+        "Choose how to add a Grok account. Device-code login uses the Grok CLI; API keys and local import use credentials already on this device."
       ),
       size: "default",
       dismissible: login === null,
@@ -447,7 +435,6 @@ export function AddAccountDialog({
           {...props}
           context={context}
           initialLogin={login}
-          login={login}
           onError={onError}
           t={t}
         />
@@ -464,8 +451,14 @@ export function AddAccountDialog({
   }, [context, login, onError, t]);
 
   useEffect(() => {
+    const previousLogin = previousLoginRef.current;
+    previousLoginRef.current = login;
     if (!login) {
-      if (openHandleId.current) {
+      // Close only when a login actually *ended* (non-null → null). The
+      // effect also re-runs on unrelated re-renders (e.g. a usage refresh
+      // updating the snapshot) — those must not close a dialog the user
+      // just opened manually.
+      if (previousLogin && openHandleId.current) {
         context.dialogs.close(openHandleId.current, null);
         openHandleId.current = null;
       }

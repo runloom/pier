@@ -42,6 +42,12 @@ extraResources:
       - '*.tgz'
       - '*.tgz.sha256'
       - 'plugin.json'
+  - from: packages/plugin-claude/dist-pkg
+    to: plugin-packages/pier.claude
+    filter:
+      - '*.tgz'
+      - '*.tgz.sha256'
+      - 'plugin.json'
 
 asar: true
 asarUnpack:

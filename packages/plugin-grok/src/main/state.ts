@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile } from "node:fs/promises";
+import { mkdir, readFile, rename } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { z } from "zod/mini";
@@ -83,12 +83,62 @@ export interface GrokAccountsStateStore {
 
 export function createGrokAccountsStateStore(
   filePath: string,
-  pluginVersion = "0.0.0"
+  pluginVersion = "0.0.0",
+  logger?: { warn(message: string, meta?: unknown): void }
 ): GrokAccountsStateStore {
   let state: GrokAccountsFileState = DEFAULTS;
   let dirty = false;
   let flushInFlight: Promise<void> | null = null;
   const markerPath = join(dirname(filePath), ".pier-plugin-data-schemas.json");
+
+  /**
+   * A corrupt state file must not brick plugin activation forever. Move it
+   * aside (never delete — managed credential dirs still exist, so accounts
+   * can be re-adopted or the file restored manually) and start from defaults.
+   */
+  async function quarantineCorruptFile(
+    path: string,
+    error: unknown
+  ): Promise<void> {
+    const quarantinePath = `${path}.corrupt-${Date.now()}`;
+    logger?.warn(
+      "[pier.grok] state file is corrupt, moving aside and starting fresh",
+      {
+        error: error instanceof Error ? error.message : String(error),
+        from: path,
+        to: quarantinePath,
+      }
+    );
+    await rename(path, quarantinePath).catch(() => undefined);
+  }
+
+  /** Repair recoverable inconsistencies instead of failing activation. */
+  function repairState(loaded: GrokAccountsFileState): GrokAccountsFileState {
+    let repaired = loaded;
+    const seen = new Set<string>();
+    const deduped = repaired.accounts.filter((account) => {
+      if (seen.has(account.id)) return false;
+      seen.add(account.id);
+      return true;
+    });
+    if (deduped.length !== repaired.accounts.length) {
+      logger?.warn("[pier.grok] removed duplicate account ids from state");
+      repaired = { ...repaired, accounts: deduped };
+      dirty = true;
+    }
+    if (
+      repaired.activeAccountId !== null &&
+      !repaired.accounts.some((a) => a.id === repaired.activeAccountId)
+    ) {
+      logger?.warn(
+        "[pier.grok] active account missing from metadata, clearing selection",
+        { activeAccountId: repaired.activeAccountId }
+      );
+      repaired = { ...repaired, activeAccountId: null };
+      dirty = true;
+    }
+    return repaired;
+  }
 
   async function persistMarker(): Promise<void> {
     const marker = dataSchemaMarkerSchema.parse({
@@ -132,27 +182,22 @@ export function createGrokAccountsStateStore(
     get: () => state,
     async init(): Promise<GrokAccountsFileState> {
       if (existsSync(filePath)) {
-        const raw = await readFile(filePath, "utf8");
-        state = accountsStateSchema.parse(JSON.parse(raw));
-      }
-      if (
-        state.activeAccountId !== null &&
-        !state.accounts.some((account) => account.id === state.activeAccountId)
-      ) {
-        throw new Error(
-          "active Grok account is missing from accounts metadata"
-        );
-      }
-      const ids = new Set<string>();
-      for (const account of state.accounts) {
-        if (ids.has(account.id)) {
-          throw new Error(`duplicate Grok account id: ${account.id}`);
+        try {
+          const raw = await readFile(filePath, "utf8");
+          state = repairState(accountsStateSchema.parse(JSON.parse(raw)));
+        } catch (error) {
+          await quarantineCorruptFile(filePath, error);
+          state = DEFAULTS;
         }
-        ids.add(account.id);
       }
       if (existsSync(markerPath)) {
-        const markerRaw = await readFile(markerPath, "utf8");
-        dataSchemaMarkerSchema.parse(JSON.parse(markerRaw));
+        try {
+          const markerRaw = await readFile(markerPath, "utf8");
+          dataSchemaMarkerSchema.parse(JSON.parse(markerRaw));
+        } catch (error) {
+          // ensureSchemaMarker rewrites a valid marker later in init.
+          await quarantineCorruptFile(markerPath, error);
+        }
       }
       return state;
     },

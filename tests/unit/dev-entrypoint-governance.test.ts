@@ -20,8 +20,12 @@ describe("development entrypoint governance", () => {
     expect(packageJson.scripts["dev:host"]).toBe(
       "node ./scripts/dev-profile.mjs electron-dev"
     );
+    expect(devOrchestrator).toContain('start("plugin-claude main watch"');
+    expect(devOrchestrator).toContain('start("plugin-claude renderer watch"');
     expect(devOrchestrator).toContain('start("plugin-codex main watch"');
     expect(devOrchestrator).toContain('start("plugin-codex renderer watch"');
+    expect(devOrchestrator).toContain('start("plugin-grok main watch"');
+    expect(devOrchestrator).toContain('start("plugin-grok renderer watch"');
     expect(devOrchestrator).toContain('start("electron dev"');
   });
 });

@@ -8,7 +8,7 @@
 Pier 当前只接受两类插件：
 
 - 内置插件：位于 `src/plugins/builtin/*`，随 Pier 一起构建。
-- 官方受管理外部插件：位于 `packages/plugin-*`，通过签名官方索引、包校验、不可变版本目录和启动时运行态快照加载，例如 `pier.codex`。
+- 官方受管理外部插件：位于 `packages/plugin-*`，通过签名官方索引、包校验、不可变版本目录和启动时运行态快照加载，例如 `pier.claude`、`pier.codex`、`pier.grok`。
 
 当前不支持第三方插件、任意 local / git / registry 来源、自建索引或 marketplace。源码中的预留枚举不等于产品已经开放对应安装路径。
 
@@ -70,15 +70,19 @@ packages/
 - main bundle 只允许 Node 内置模块和 `@pier/plugin-api` 作为外部依赖；其它纯 JavaScript 依赖必须内联。
 - renderer bundle 只允许 `@pier/plugin-api/*` 作为外部依赖。
 - 插件只能注册 manifest 已声明的贡献点和权限。
-- 完整官方样例见 `packages/plugin-codex/`。
+- 完整官方样例见 `packages/plugin-codex/`；Claude / Grok 同结构样例见 `packages/plugin-claude/`、`packages/plugin-grok/`。
 
 ## 本地开发
 
 常用命令：
 
 ~~~bash
+pnpm plugin:claude:build  # 构建 Claude 官方插件
+pnpm plugin:claude:pack   # 构建并生成 tgz 与 sha256
 pnpm plugin:codex:build   # 构建 Codex 官方插件
 pnpm plugin:codex:pack    # 构建并生成 tgz 与 sha256
+pnpm plugin:grok:build    # 构建 Grok 官方插件
+pnpm plugin:grok:pack     # 构建并生成 tgz 与 sha256
 pnpm plugins:pack         # 依次打包所有官方插件
 pnpm plugins:index        # 重新生成 plugins/index.v1.json
 pnpm dev                  # 启动 Pier 开发环境
