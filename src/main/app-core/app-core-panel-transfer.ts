@@ -1,7 +1,9 @@
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { app, dialog, screen } from "electron";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import { getTerminalAddon } from "../ipc/terminal.ts";
 import { terminalFocusCoordinator } from "../ipc/terminal-focus-coordinator.ts";
+import { forwardToWindow } from "../ipc/terminal-forwarding.ts";
 import type { FileDraftsService } from "../services/file-drafts-types.ts";
 import { createPanelTransferFilesPort } from "../services/panel-transfer/file-drafts-panel-transfer-port.ts";
 import { createPanelTransferService } from "../services/panel-transfer/panel-transfer-service.ts";
@@ -120,6 +122,31 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
     getTaskLifecycle: () => input.getTaskLifecycle?.() ?? null,
     getTaskOutputBindings: () => input.getTaskOutputBindings?.() ?? null,
     getTaskService: () => input.getTaskService?.() ?? null,
+    replayMovedSession: ({
+      context,
+      panelId,
+      targetElectronWindowId,
+      title,
+    }) => {
+      // Same channels the OSC cwd/title pipeline uses; the freshly mounted
+      // target panel treats them as its runtime context/title source.
+      if (context) {
+        forwardToWindow(
+          targetElectronWindowId,
+          PIER_BROADCAST.TERMINAL_CWD_CHANGED,
+          { context, panelId },
+          "pier-transfer-context-replay"
+        );
+      }
+      if (title && title.length > 0) {
+        forwardToWindow(
+          targetElectronWindowId,
+          PIER_BROADCAST.TERMINAL_TITLE_CHANGED,
+          { panelId, title },
+          "pier-transfer-title-replay"
+        );
+      }
+    },
     resolveWindow: (runtimeWindowId) => {
       const win = windowManager.get(runtimeWindowId);
       if (!win || win.isDestroyed()) {
@@ -154,6 +181,72 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
           x: bounds.x,
           y: bounds.y,
         };
+      },
+      getWindowContentBounds: (windowId) => {
+        const win = windowManager.get(windowId);
+        if (!win || win.isDestroyed()) {
+          return null;
+        }
+        // BaseWindow content bounds are DIP screen coords for the web view area.
+        const bounds = win.host.getContentBounds();
+        return {
+          height: bounds.height,
+          width: bounds.width,
+          x: bounds.x,
+          y: bounds.y,
+        };
+      },
+      isLeftMouseButtonDown: () => {
+        const addon = getTerminalAddon();
+        if (!addon || typeof addon.isLeftMouseButtonDown !== "function") {
+          // Non-macOS / addon unavailable: treat as released so outside
+          // finishDrag still creates a window (cross-window is macOS-only).
+          return false;
+        }
+        try {
+          return addon.isLeftMouseButtonDown();
+        } catch {
+          return false;
+        }
+      },
+      getWindowZOrderTopFirst: () => {
+        const addon = getTerminalAddon();
+        if (
+          !addon ||
+          typeof addon.orderedWindowNumbers !== "function" ||
+          typeof addon.windowNumberFor !== "function"
+        ) {
+          return null;
+        }
+        try {
+          const ordered = addon.orderedWindowNumbers();
+          if (ordered.length === 0) {
+            return null;
+          }
+          const rankByNumber = new Map(
+            ordered.map((num, index) => [num, index])
+          );
+          const ranked: Array<{ id: string; rank: number }> = [];
+          for (const info of windowManager.list()) {
+            const win = windowManager.get(info.id);
+            if (!win || win.isDestroyed()) {
+              continue;
+            }
+            const num = addon.windowNumberFor(win.getNativeWindowHandle());
+            const rank = rankByNumber.get(num);
+            if (rank === undefined) {
+              continue;
+            }
+            ranked.push({ id: info.id, rank });
+          }
+          if (ranked.length === 0) {
+            return null;
+          }
+          ranked.sort((a, b) => a.rank - b.rank);
+          return ranked.map((entry) => entry.id);
+        } catch {
+          return null;
+        }
       },
     },
     pluginMutation: (operation) =>

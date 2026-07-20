@@ -11,7 +11,9 @@ import {
 import {
   panelTransferFinalizeCommandSchema,
   panelTransferPrepareSourceCommandSchema,
+  panelTransferProbeWorkspaceCommandSchema,
   panelTransferReleaseSourceCommandSchema,
+  panelTransferResolvePlacementCommandSchema,
   panelTransferStageTargetCommandSchema,
 } from "./panel-transfer.ts";
 import { taskPanelMetadataSchema } from "./tasks.ts";
@@ -110,6 +112,8 @@ export const rendererCommandSchema = z.discriminatedUnion("type", [
   panelTransferStageTargetCommandSchema,
   panelTransferReleaseSourceCommandSchema,
   panelTransferFinalizeCommandSchema,
+  panelTransferResolvePlacementCommandSchema,
+  panelTransferProbeWorkspaceCommandSchema,
 ]);
 
 export type RendererCommand = z.infer<typeof rendererCommandSchema>;

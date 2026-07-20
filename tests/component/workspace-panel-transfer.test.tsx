@@ -1,8 +1,5 @@
-import {
-  PANEL_TRANSFER_MIME,
-  PANEL_TRANSFER_TEXT_PREFIX,
-} from "@shared/contracts/panel-transfer.ts";
-import { act, render, renderHook } from "@testing-library/react";
+import { PANEL_TRANSFER_MIME } from "@shared/contracts/panel-transfer.ts";
+import { render } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { clearCorePanelTransferForTests } from "@/components/workspace/panel-transfer-adapters.ts";
 import {
@@ -11,7 +8,6 @@ import {
   resetPanelTransferRuntimeForTests,
   setWorkspaceBootstrapGate,
 } from "@/components/workspace/panel-transfer-runtime.ts";
-import { usePanelTransferTabDrop } from "@/components/workspace/use-panel-transfer-tab-drop.ts";
 import {
   __panelTransferInternals,
   createWorkspacePanelTransferHandlers,
@@ -174,81 +170,6 @@ describe("workspace panel transfer (component)", () => {
     expect(ready).toHaveBeenCalledWith(TRANSFER_ID);
   });
 
-  it("usePanelTransferTabDrop claims half-region index and stops propagation", () => {
-    const dropTransferOnce = vi.fn();
-    const hoveredApi = {
-      group: {
-        id: "group-1",
-        panels: [{ id: "a" }, { id: "b" }],
-      },
-      id: "b",
-    };
-
-    const { result } = renderHook(() =>
-      usePanelTransferTabDrop({
-        api: hoveredApi,
-        dropTransferOnce,
-      })
-    );
-
-    const dataTransfer = new FakeDataTransfer();
-    dataTransfer.setData(
-      PANEL_TRANSFER_MIME,
-      JSON.stringify({ transferId: TRANSFER_ID })
-    );
-    dataTransfer.setData(
-      "text/plain",
-      `${PANEL_TRANSFER_TEXT_PREFIX}${TRANSFER_ID}`
-    );
-
-    const target = document.createElement("div");
-    Object.defineProperty(target, "getBoundingClientRect", {
-      value: () => ({
-        bottom: 40,
-        height: 40,
-        left: 0,
-        right: 100,
-        top: 0,
-        width: 100,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      }),
-    });
-
-    const native = new FakeDragEvent("drop", {
-      clientX: 80,
-      dataTransfer,
-    });
-    const stopImmediate = vi.fn();
-    Object.defineProperty(native, "stopImmediatePropagation", {
-      value: stopImmediate,
-    });
-
-    const reactEvent = {
-      clientX: 80,
-      currentTarget: target,
-      dataTransfer,
-      nativeEvent: native,
-      preventDefault: vi.fn(),
-      stopPropagation: vi.fn(),
-    };
-
-    act(() => {
-      result.current.onDropCapture(reactEvent as never);
-    });
-
-    expect(reactEvent.preventDefault).toHaveBeenCalled();
-    expect(reactEvent.stopPropagation).toHaveBeenCalled();
-    expect(stopImmediate).toHaveBeenCalled();
-    // Hovered tab `b` is index 1; right half → insert after → 2.
-    expect(dropTransferOnce).toHaveBeenCalledWith(TRANSFER_ID, {
-      groupId: "group-1",
-      index: 2,
-      kind: "tab",
-    });
-  });
-
   it("inert staged panel options keep inactive:true (no real content flash)", async () => {
     const resolve = vi.fn();
     Object.defineProperty(window, "pier", {
@@ -302,158 +223,56 @@ describe("workspace panel transfer (component)", () => {
     expect(view.queryByTestId("real-content")).toBeNull();
   });
 
-  it("same-window active drag leaves onDidDrop to Dockview (no pier.drop)", async () => {
-    const drop = vi.fn(async () => undefined);
+  it("dual-channel handlers: dragend finishes, foreign drop claims, local drop skips", async () => {
+    const finishDrag = vi.fn(async () => null);
+    const drop = vi.fn(async () => ({ ok: true, targetPanelId: "p" }));
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
         panelTransfer: {
           cancel: vi.fn(),
           drop,
-          finishDrag: vi.fn(async () => null),
+          finishDrag,
           offer: vi.fn(),
         },
       },
     });
 
-    const welcome = panel({ component: "welcome", id: "welcome-1" });
-    const api = {
-      panels: [welcome],
-      removePanel: vi.fn(),
-      totalPanels: 1,
-    };
-    const handlers = createWorkspacePanelTransferHandlers(() => api as never);
+    const handlers = createWorkspacePanelTransferHandlers(() => null);
+    expect(handlers).toHaveProperty("onWillDragPanel");
+    expect(handlers).toHaveProperty("onDragEnd");
+    expect(handlers).toHaveProperty("onDidDrop");
+    expect(handlers).toHaveProperty("onUnhandledDragOver");
+
     __panelTransferInternals.setActiveDrag({
       capability: "movable",
       componentId: "welcome",
       panelId: "welcome-1",
       transferId: TRANSFER_ID,
     });
-
-    const dataTransfer = new FakeDataTransfer();
-    dataTransfer.setData(
-      PANEL_TRANSFER_MIME,
-      JSON.stringify({ transferId: TRANSFER_ID })
-    );
-    const native = new FakeDragEvent("drop", { dataTransfer });
-
-    handlers.onDidDrop({
-      group: { id: "group-1", panels: [welcome] } as never,
-      nativeEvent: native as unknown as DragEvent,
-      position: "center",
-    });
-
-    await Promise.resolve();
-    expect(drop).not.toHaveBeenCalled();
-  });
-
-  it("foreign onDidDrop parses MIME and calls pier.drop with placement", async () => {
-    const drop = vi.fn(async () => undefined);
-    Object.defineProperty(window, "pier", {
-      configurable: true,
-      value: {
-        panelTransfer: {
-          cancel: vi.fn(),
-          drop,
-          finishDrag: vi.fn(async () => null),
-          offer: vi.fn(),
-        },
-      },
-    });
-
-    const welcome = panel({ component: "welcome", id: "welcome-1" });
-    const api = {
-      panels: [welcome],
-      removePanel: vi.fn(),
-      totalPanels: 1,
-    };
-    const handlers = createWorkspacePanelTransferHandlers(() => api as never);
-    __panelTransferInternals.setActiveDrag(null);
-
-    const foreignId = "foreign-bbbbbbbb-cccc-dddd-eeee-ffffffffffff";
-    const dataTransfer = new FakeDataTransfer();
-    dataTransfer.setData(
-      PANEL_TRANSFER_MIME,
-      JSON.stringify({ transferId: foreignId })
-    );
-    const native = new FakeDragEvent("drop", { dataTransfer });
-
-    handlers.onDidDrop({
-      group: { id: "group-1", panels: [welcome] } as never,
-      nativeEvent: native as unknown as DragEvent,
-      position: "center",
-    });
-
+    handlers.onDragEnd(TRANSFER_ID);
     await vi.waitFor(() =>
-      expect(drop).toHaveBeenCalledWith({
-        placement: { groupId: "group-1", index: 1, kind: "tab" },
-        transferId: foreignId,
-      })
+      expect(finishDrag).toHaveBeenCalledWith(TRANSFER_ID)
     );
-  });
 
-  it("usePanelTransferTabDrop skips intercept when local activeDrag is set", () => {
-    const dropTransferOnce = vi.fn();
+    // Local drag active → foreign drop path must not claim.
     __panelTransferInternals.setActiveDrag({
       capability: "movable",
       componentId: "welcome",
-      panelId: "a",
+      panelId: "welcome-1",
       transferId: TRANSFER_ID,
     });
-    const hoveredApi = {
-      group: {
-        id: "group-1",
-        panels: [{ id: "a" }, { id: "b" }],
-      },
-      id: "b",
-    };
-
-    const { result } = renderHook(() =>
-      usePanelTransferTabDrop({
-        api: hoveredApi,
-        dropTransferOnce,
-      })
-    );
-
-    const dataTransfer = new FakeDataTransfer();
-    dataTransfer.setData(
+    const localTransfer = new FakeDataTransfer();
+    localTransfer.setData(
       PANEL_TRANSFER_MIME,
       JSON.stringify({ transferId: TRANSFER_ID })
     );
-    const target = document.createElement("div");
-    Object.defineProperty(target, "getBoundingClientRect", {
-      value: () => ({
-        bottom: 40,
-        height: 40,
-        left: 0,
-        right: 100,
-        top: 0,
-        width: 100,
-        x: 0,
-        y: 0,
-        toJSON: () => ({}),
-      }),
-    });
-    const native = new FakeDragEvent("drop", { clientX: 80, dataTransfer });
-    const stopImmediate = vi.fn();
-    Object.defineProperty(native, "stopImmediatePropagation", {
-      value: stopImmediate,
-    });
-    const reactEvent = {
-      clientX: 80,
-      currentTarget: target,
-      dataTransfer,
-      nativeEvent: native,
-      preventDefault: vi.fn(),
-      stopPropagation: vi.fn(),
-    };
-
-    act(() => {
-      result.current.onDropCapture(reactEvent as never);
-    });
-
-    expect(reactEvent.preventDefault).not.toHaveBeenCalled();
-    expect(stopImmediate).not.toHaveBeenCalled();
-    expect(dropTransferOnce).not.toHaveBeenCalled();
+    handlers.onDidDrop({
+      nativeEvent: new FakeDragEvent("drop", {
+        dataTransfer: localTransfer,
+      }) as unknown as DragEvent,
+    } as never);
+    await Promise.resolve();
+    expect(drop).not.toHaveBeenCalled();
   });
 });

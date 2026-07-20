@@ -88,6 +88,7 @@ describe("terminal close IPC reason semantics", () => {
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       clearTerminalPanelAgent: vi.fn(async () => undefined),
+      ensureTerminalPanelSession: vi.fn(async () => undefined),
       patchTerminalPanelAgentStatus: vi.fn(async () => false),
       patchTerminalPanelTab: vi.fn(async () => true),
       patchTerminalPanelTaskStatus: vi.fn(async () => true),
@@ -131,6 +132,12 @@ describe("terminal close IPC reason semantics", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => win),
       findInternalWindowId: vi.fn(() => "window-main"),
+      findWindowContext: vi.fn(() => ({
+        electronWindowId: String(win.id),
+        mode: "restore" as const,
+        recordId: "window-main",
+        windowId: "window-main",
+      })),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");

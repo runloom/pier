@@ -295,7 +295,9 @@ async function runWorkspaceRendererCommandAsync(
       case "panelTransfer.prepareSource":
       case "panelTransfer.stageTarget":
       case "panelTransfer.releaseSource":
-      case "panelTransfer.finalize": {
+      case "panelTransfer.finalize":
+      case "panelTransfer.resolvePlacement":
+      case "panelTransfer.probeWorkspace": {
         throw new Error(
           `${envelope.command.type} must be routed by the panel-transfer listener`
         );

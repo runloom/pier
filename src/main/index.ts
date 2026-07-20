@@ -71,7 +71,9 @@ import { createExternalNavigationService } from "./services/external-navigation.
 import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
 import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
 import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
+import { migrateTerminalSessionScopesToRecordIds } from "./state/terminal-session-scope-migration.ts";
 import { reconcileOrphanedRunningTasks } from "./state/terminal-session-state.ts";
+import { readPreferredOpenWindowRecordIds } from "./state/window-record-state.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/window-manager.ts";
 import { createWindowZoomController } from "./windows/window-zoom.ts";
@@ -386,6 +388,19 @@ if (gotTheLock) {
       registerFileWatchIpc();
       registerFileQueryIpc();
       localControlRegistration.start();
+      // Legacy terminal session keys (runtime window ids) → record UUIDs.
+      // Must run before transfer recovery / task reconcile / window restore,
+      // which all address the session store by record id. Failure must abort
+      // boot: readers now use record UUIDs; continuing on a half-migrated
+      // store would silently lose cwd/title/task session metadata.
+      try {
+        await migrateTerminalSessionScopesToRecordIds(
+          await readPreferredOpenWindowRecordIds()
+        );
+      } catch (error: unknown) {
+        terminalSessionLog.error("session scope migration failed", { error });
+        throw error;
+      }
       // Panel transfer journal must converge before orphan reconcile + window restore.
       await appCore.services.panelTransfer
         ?.recoverPending()

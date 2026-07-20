@@ -21,9 +21,12 @@ import {
   killAndWait,
   makeTempUserDataDir,
   OUT_MAIN,
+  PID_LOOP_TASK_ID,
   PROJECT_ROOT,
   removeDirectory,
   runPierCliJson,
+  spawnTaskUntilRunning,
+  writePidLoopProject,
 } from "./terminal-e2e-harness.ts";
 import { openWorkbench, setWindowSize } from "./workbench-e2e-harness.ts";
 
@@ -70,14 +73,6 @@ interface DockviewApiLike {
   addPanel: (opts: Record<string, unknown>) => unknown;
   onDidDrop?: unknown;
   panels?: unknown;
-}
-
-function shellQuote(value: string): string {
-  return `'${value.replaceAll("'", "'\\''")}'`;
-}
-
-function appleScriptString(value: string): string {
-  return `"${value.replaceAll("\\", "\\\\").replaceAll('"', '\\"')}"`;
 }
 
 async function waitForWorkspaceReady(page: Page): Promise<void> {
@@ -198,13 +193,56 @@ async function moveWindowsAwayFromCursor(
   });
 }
 
-/** Ensure the OS cursor is classified as "source" by clicking the page center. */
-async function focusCursorOnPage(page: Page): Promise<void> {
-  const box = await page.locator(".dv-dockview").first().boundingBox();
-  if (!box) {
-    throw new Error("dockview has no bounding box");
-  }
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+/**
+ * Deterministically classify the OS cursor as inside a specific BaseWindow by
+ * moving that window's bounds around the current physical cursor position.
+ * (Playwright's page.mouse does NOT move the OS cursor, so classification
+ * must be arranged by window geometry, not synthetic clicks.)
+ */
+async function surroundCursorWithWindow(
+  app: ElectronApplication,
+  windowIndex: number
+): Promise<void> {
+  await app.evaluate(({ BaseWindow, screen }, index) => {
+    const cursor = screen.getCursorScreenPoint();
+    const display = screen.getDisplayNearestPoint(cursor);
+    const work = display.workArea;
+    const windows = BaseWindow.getAllWindows()
+      .filter((win) => !win.isDestroyed())
+      .sort((left, right) => left.id - right.id);
+    const target = windows[index];
+    if (!target) {
+      throw new Error(`no BaseWindow at index ${index}`);
+    }
+    const width = 600;
+    const height = 480;
+    const x = Math.min(
+      Math.max(cursor.x - Math.floor(width / 2), work.x),
+      work.x + work.width - width
+    );
+    const y = Math.min(
+      Math.max(cursor.y - Math.floor(height / 2), work.y),
+      work.y + work.height - height
+    );
+    target.setBounds({ height, width, x, y });
+    target.show();
+    // Park every other window away from the cursor.
+    const parkX =
+      cursor.x < work.x + work.width / 2
+        ? work.x + work.width - 420
+        : work.x + 16;
+    const parkY =
+      cursor.y < work.y + work.height / 2
+        ? work.y + work.height - 360
+        : work.y + 32;
+    for (const [i, win] of windows.entries()) {
+      if (i === index) {
+        continue;
+      }
+      win.setBounds({ height: 320, width: 400, x: parkX, y: parkY });
+      win.show();
+    }
+  }, windowIndex);
 }
 
 /**
@@ -399,6 +437,9 @@ async function openGitChanges(
   userDataDir: string,
   repoPath: string
 ): Promise<string> {
+  // The status dropdown only offers 查看变更/View Changes in dirty/active
+  // variants — a clean repo renders the clean menu without that action.
+  writeFileSync(join(repoPath, "notes.txt"), "dirty for changes panel\n");
   const opened = await runPierCliJson<{ panelId: string }>(userDataDir, [
     "terminal",
     "open",
@@ -437,11 +478,22 @@ async function makeTempGitRepo(prefix: string): Promise<string> {
   return root;
 }
 
+/** Runtime window ids as main sees them (CLI `--window` routing key). */
+async function listWindowIds(userDataDir: string): Promise<string[]> {
+  const result = await runPierCliJson<Array<{ id: string }>>(userDataDir, [
+    "windows",
+    "list",
+  ]);
+  expect(result.ok).toBe(true);
+  return (result.data ?? []).map((info) => info.id);
+}
+
 async function openFileViaTree(
   page: Page,
   userDataDir: string,
   repoPath: string,
-  fileName: string
+  fileName: string,
+  windowId?: string
 ): Promise<string> {
   await expect
     .poll(
@@ -451,6 +503,9 @@ async function openFileViaTree(
           "open",
           "--cwd",
           repoPath,
+          // Route to an explicit window — the focused-window fallback races OS
+          // focus in multi-window tests and can land the terminal elsewhere.
+          ...(windowId ? ["--window", windowId] : []),
         ]);
         return opened.ok === true;
       },
@@ -560,6 +615,18 @@ async function expectPanelOn(page: Page, panelId: string): Promise<void> {
   });
 }
 
+/**
+ * Presentation-layer assertion: the moved panel must land ACTIVE in the
+ * target (VS Code targetGroup.focus() semantics). Guards against the
+ * "window opens but renders blank" class of defects that data-layer
+ * assertions cannot see.
+ */
+async function expectPanelActiveOn(page: Page, panelId: string): Promise<void> {
+  await expect(
+    page.locator(`.dv-tab.dv-active-tab [data-panel-tab-id="${panelId}"]`)
+  ).toBeVisible({ timeout: 20_000 });
+}
+
 async function expectPanelGone(page: Page, panelId: string): Promise<void> {
   await expect(page.locator(`[data-panel-tab-id="${panelId}"]`)).toHaveCount(
     0,
@@ -573,81 +640,6 @@ async function firstTerminalPanelId(page: Page): Promise<string> {
   const id = await tab.getAttribute("data-panel-tab-id");
   expect(id).toBeTruthy();
   return id!;
-}
-
-async function pasteTextIntoFocusedApp(text: string): Promise<void> {
-  await execFileAsync("osascript", [
-    "-e",
-    "set previousClipboard to missing value",
-    "-e",
-    "try",
-    "-e",
-    "set previousClipboard to the clipboard",
-    "-e",
-    "end try",
-    "-e",
-    "try",
-    "-e",
-    `set the clipboard to ${appleScriptString(text)}`,
-    "-e",
-    'tell application "System Events" to keystroke "u" using control down',
-    "-e",
-    "delay 0.05",
-    "-e",
-    'tell application "System Events" to keystroke "v" using command down',
-    "-e",
-    "delay 0.1",
-    "-e",
-    'tell application "System Events" to key code 36',
-    "-e",
-    "delay 0.1",
-    "-e",
-    "on error errorMessage number errorNumber",
-    "-e",
-    "if previousClipboard is not missing value then set the clipboard to previousClipboard",
-    "-e",
-    "error errorMessage number errorNumber",
-    "-e",
-    "end try",
-    "-e",
-    "if previousClipboard is not missing value then set the clipboard to previousClipboard",
-  ]);
-}
-
-async function focusElectronApp(app: ElectronApplication): Promise<void> {
-  await app.evaluate(({ app: electronApp, BrowserWindow }) => {
-    electronApp.focus({ steal: true });
-    BrowserWindow.getAllWindows()[0]?.focus();
-  });
-}
-
-async function startTerminalPidLoop(
-  app: ElectronApplication,
-  page: Page,
-  pidFile: string
-): Promise<void> {
-  const tab = page.locator('[data-panel-tab-id^="terminal-"]').first();
-  await tab.click();
-  const anchor = page.locator(".terminal-anchor").first();
-  await expect(anchor).toBeVisible({ timeout: 10_000 });
-  const box = await anchor.boundingBox();
-  if (!box) {
-    throw new Error("terminal anchor has no box");
-  }
-  await page.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
-  await page.waitForTimeout(300);
-  await focusElectronApp(app);
-  const command = [
-    `PID_FILE=${shellQuote(pidFile)}`,
-    'printf "%s" "$$" > "$PID_FILE"',
-    'while true; do date >> "$PID_FILE.dates"; sleep 1; done',
-  ].join("; ");
-  await pasteTextIntoFocusedApp(command);
-  await expect
-    .poll(() => (existsSync(pidFile) ? readFileSync(pidFile, "utf8") : ""), {
-      timeout: 15_000,
-    })
-    .toMatch(/^\d+$/);
 }
 
 async function reorderTabsSameWindow(page: Page): Promise<void> {
@@ -877,6 +869,7 @@ test.describe("Panel cross-window drag (Path B)", () => {
         await waitForWorkspaceReady(created);
         await expectPanelGone(source, welcomeId);
         await expectPanelOn(created, welcomeId);
+        await expectPanelActiveOn(created, welcomeId);
       } finally {
         await forceClose(ctx.app);
         removeDirectory(ctx.userDataDir);
@@ -924,11 +917,12 @@ test.describe("Panel cross-window drag (Path B)", () => {
       try {
         const source = await ctx.app.firstWindow();
         await waitForWorkspaceReady(source);
-        await setWindowSize(ctx.app, source, 1000, 700);
         const welcomeId = await openWelcome(source);
         const welcome = await readPanelInfo(source, welcomeId);
 
-        await focusCursorOnPage(source);
+        // Wrap the source window around the physical cursor so the bounds
+        // classifier reports "source" deterministically.
+        await surroundCursorWithWindow(ctx.app, 0);
 
         const transferId = await offerOnly(source, {
           panelId: welcome.panelId,
@@ -943,6 +937,103 @@ test.describe("Panel cross-window drag (Path B)", () => {
         expect(result).toBeNull();
         await expectPanelOn(source, welcomeId);
         expect(ctx.app.windows()).toHaveLength(1);
+      } finally {
+        await forceClose(ctx.app);
+        removeDirectory(ctx.userDataDir);
+      }
+    });
+  });
+
+  test.describe("finishDrag managed → existing window", () => {
+    test("finishDrag with cursor over another window claims it (user drag path)", async () => {
+      test.setTimeout(DEFAULT_TEST_TIMEOUT_MS);
+      const ctx = await launchApp();
+      try {
+        const source = await ctx.app.firstWindow();
+        await waitForWorkspaceReady(source);
+        const welcomeId = await openWelcome(source);
+        const welcome = await readPanelInfo(source, welcomeId);
+
+        const target = await createSecondWindow(ctx.app, source);
+
+        // Wrap the TARGET window around the physical cursor: finishDrag must
+        // classify "managed", ask the target for placement, and claim it.
+        await surroundCursorWithWindow(ctx.app, 1);
+
+        const transferId = await offerOnly(source, {
+          panelId: welcome.panelId,
+          componentId: welcome.componentId || "welcome",
+          title: welcome.title || "Welcome",
+        });
+
+        const result = await source.evaluate(
+          async (id) => window.pier.panelTransfer.finishDrag(id),
+          transferId
+        );
+        expect(result, JSON.stringify(result)).toMatchObject({
+          ok: true,
+          targetPanelId: welcomeId,
+        });
+        await expectPanelGone(source, welcomeId);
+        await expectPanelOn(target, welcomeId);
+        await expectPanelActiveOn(target, welcomeId);
+        expect(ctx.app.windows()).toHaveLength(2);
+      } finally {
+        await forceClose(ctx.app);
+        removeDirectory(ctx.userDataDir);
+      }
+    });
+
+    test("moving the source's last tab out closes the source window", async () => {
+      test.setTimeout(DEFAULT_TEST_TIMEOUT_MS);
+      const ctx = await launchApp();
+      try {
+        const source = await ctx.app.firstWindow();
+        await waitForWorkspaceReady(source);
+        // Give the source a uniquely-id'd Welcome tab, then drop the default
+        // terminal so Welcome is the sole survivor. A unique id avoids the
+        // stable-id `target_conflict` with the target's own default terminal.
+        const welcomeId = await openWelcome(source);
+        const welcome = await readPanelInfo(source, welcomeId);
+        const defaultTerminalId = await firstTerminalPanelId(source);
+        // Close the default terminal via its tab close button so Welcome
+        // (unique id, no stable-id conflict with the target) is the last tab.
+        await source
+          .locator(
+            `[data-panel-tab-id="${defaultTerminalId}"] [aria-label="Close tab"]`
+          )
+          .click();
+        await expectPanelGone(source, defaultTerminalId);
+        await expect(source.locator("[data-panel-tab-id]")).toHaveCount(1);
+
+        const target = await createSecondWindow(ctx.app, source);
+        await surroundCursorWithWindow(ctx.app, 1); // target on top of cursor
+        const transferId = await offerOnly(source, {
+          panelId: welcome.panelId,
+          componentId: welcome.componentId || "welcome",
+          title: welcome.title || "Welcome",
+        });
+        // The successful transfer closes the source window; the evaluate
+        // promise may reject with "target closed" as a side effect of its own
+        // success. Treat page-closed as the expected outcome and assert on the
+        // observable result (panel on target + source window gone).
+        await source
+          .evaluate(
+            async (id) => window.pier.panelTransfer.finishDrag(id),
+            transferId
+          )
+          .catch((err: unknown) => {
+            const message = err instanceof Error ? err.message : String(err);
+            if (!/closed/i.test(message)) {
+              throw err;
+            }
+          });
+        await expectPanelOn(target, welcomeId);
+        await expectPanelActiveOn(target, welcomeId);
+        // Source had only Welcome → moving it out closes the source window.
+        await expect
+          .poll(() => ctx.app.windows().length, { timeout: 30_000 })
+          .toBe(1);
       } finally {
         await forceClose(ctx.app);
         removeDirectory(ctx.userDataDir);
@@ -1065,13 +1156,19 @@ test.describe("Panel cross-window drag (Path B)", () => {
         );
         await editEditorDirty(source, "source-dirty");
 
+        const windowIdsBefore = await listWindowIds(ctx.userDataDir);
         const target = await createSecondWindow(ctx.app, source);
         await positionWindowsSideBySide(ctx.app);
+        const targetWindowId = (await listWindowIds(ctx.userDataDir)).find(
+          (id) => !windowIdsBefore.includes(id)
+        );
+        expect(targetWindowId).toBeTruthy();
         const targetFileId = await openFileViaTree(
           target,
           ctx.userDataDir,
           repo,
-          "notes.txt"
+          "notes.txt",
+          targetWindowId
         );
         await editEditorDirty(target, "target-dirty");
         expect(targetFileId).toBeTruthy();
@@ -1096,6 +1193,18 @@ test.describe("Panel cross-window drag (Path B)", () => {
         await expect(
           target.locator('[data-pier-tab-dirty="true"]')
         ).not.toHaveCount(0);
+
+        // The adapter rewrites params.source but must keep params.context —
+        // dropping it lands the moved panel in the outside-workspace error.
+        await target.locator(`[data-panel-tab-id="${sourceFileId}"]`).click();
+        await expect(
+          target.getByText(/不属于当前工作区|outside the current workspace/u)
+        ).toHaveCount(0);
+        await expect(
+          target
+            .locator('[data-testid="files-code-mirror-editor"] .cm-content')
+            .first()
+        ).toBeVisible({ timeout: 15_000 });
       } finally {
         await forceClose(ctx.app);
         removeDirectory(ctx.userDataDir);
@@ -1157,19 +1266,71 @@ test.describe("Panel cross-window drag (Path B)", () => {
         tmpdir(),
         `pier-panel-xfer-pid-${crypto.randomUUID()}`
       );
+      const projectRoot = makeTempUserDataDir("pier-panel-xfer-pid-proj-");
+      writePidLoopProject(projectRoot, pidFile);
       try {
         const source = await ctx.app.firstWindow();
         await waitForWorkspaceReady(source);
-        const terminalId = await firstTerminalPanelId(source);
-        await startTerminalPidLoop(ctx.app, source, pidFile);
+
+        // Task-based PID loop (no osascript keystrokes — Accessibility-free).
+        const { panelId: terminalId } = await spawnTaskUntilRunning(
+          ctx.userDataDir,
+          projectRoot,
+          PID_LOOP_TASK_ID
+        );
+        await expectPanelOn(source, terminalId);
+        await expect
+          .poll(() =>
+            existsSync(pidFile) ? readFileSync(pidFile, "utf8").trim() : ""
+          )
+          .toMatch(/^\d+$/);
         const pidBefore = readFileSync(pidFile, "utf8").trim();
-        expect(pidBefore).toMatch(/^\d+$/);
+
+        const sessionScopeOf = (): string | null => {
+          const statePath = join(
+            ctx.userDataDir,
+            "terminal-session-state.json"
+          );
+          if (!existsSync(statePath)) {
+            return null;
+          }
+          const parsed = JSON.parse(readFileSync(statePath, "utf8")) as {
+            windows?: Record<
+              string,
+              { panels?: Record<string, unknown> } | undefined
+            >;
+          };
+          for (const [scope, windowState] of Object.entries(
+            parsed.windows ?? {}
+          )) {
+            if (windowState?.panels?.[terminalId]) {
+              return scope;
+            }
+          }
+          return null;
+        };
+        // Real key space: live terminal must own a record-scoped session entry.
+        await expect.poll(sessionScopeOf).not.toBeNull();
+        const scopeBefore = sessionScopeOf();
 
         const target = await createSecondWindow(ctx.app, source);
         await positionWindowsSideBySide(ctx.app);
         const targetTerminalId = await firstTerminalPanelId(target);
         const targetGroupId = await readPanelGroupId(target, targetTerminalId);
         const terminalInfo = await readPanelInfo(source, terminalId);
+
+        // Commit must replay the moved session context to the target renderer
+        // (its mount-time readSession races the session CAS; without replay
+        // the status bar would fall back to stale creation-time params).
+        await target.evaluate(() => {
+          const sink: unknown[] = [];
+          (
+            window as unknown as { __pierCwdReplay: unknown[] }
+          ).__pierCwdReplay = sink;
+          window.pier.terminal.onCwdChange((event) => {
+            sink.push(event);
+          });
+        });
 
         const result = await transferPanel(source, target, {
           panelId: terminalInfo.panelId,
@@ -1184,9 +1345,35 @@ test.describe("Panel cross-window drag (Path B)", () => {
         expect(result, JSON.stringify(result)).toMatchObject({ ok: true });
         await expectPanelGone(source, terminalId);
         await expectPanelOn(target, terminalId);
+        await expectPanelActiveOn(target, terminalId);
+
+        await expect
+          .poll(
+            () =>
+              target.evaluate(
+                (movedPanelId) =>
+                  (
+                    window as unknown as {
+                      __pierCwdReplay?: Array<{
+                        context?: { cwd?: string };
+                        panelId: string;
+                      }>;
+                    }
+                  ).__pierCwdReplay?.find(
+                    (event) => event.panelId === movedPanelId
+                  )?.context?.cwd ?? null,
+                terminalId
+              ),
+            { timeout: 10_000 }
+          )
+          .toBe(realpathSync(projectRoot));
 
         const pidAfter = readFileSync(pidFile, "utf8").trim();
         expect(pidAfter).toBe(pidBefore);
+
+        // Session ownership moved to the target window record.
+        await expect.poll(sessionScopeOf).not.toBe(scopeBefore);
+        await expect.poll(sessionScopeOf).not.toBeNull();
 
         const datesFile = `${pidFile}.dates`;
         const sizeBefore = existsSync(datesFile)
@@ -1200,6 +1387,7 @@ test.describe("Panel cross-window drag (Path B)", () => {
       } finally {
         await forceClose(ctx.app);
         removeDirectory(ctx.userDataDir);
+        removeDirectory(projectRoot);
         for (const filePath of [pidFile, `${pidFile}.dates`]) {
           try {
             unlinkSync(filePath);

@@ -92,6 +92,15 @@ export interface PanelTransferTerminalPort {
     targetWindowId: string;
     transferId: string;
   }): Promise<void>;
+  /**
+   * Canonical current lifecycle for a terminal panel (task run id; shells
+   * return ""). Main fills the transfer snapshot from here — renderers never
+   * forge lifecycle identity.
+   */
+  getCurrentLifecycleId(input: {
+    panelId: string;
+    sourceWindowId: string;
+  }): string;
   rollback(input: { transferId: string }): Promise<void>;
   stageLease(input: {
     lifecycleId: string;
@@ -120,6 +129,24 @@ export interface PanelTransferGeometryPort {
     y: number;
   };
   getWindowBounds(windowId: string): WindowBounds | null;
+  /**
+   * Content area in screen DIP coordinates (excludes title bar / traffic
+   * lights). Used to convert screen cursor → renderer clientX/clientY for
+   * resolvePlacement. Falls back to outer bounds when unavailable.
+   */
+  getWindowContentBounds(windowId: string): WindowBounds | null;
+  /**
+   * Runtime window ids in true z-order (front → back), or null when the
+   * platform cannot report it. Overlapping windows resolve cursor hits by
+   * what the user visually sees on top.
+   */
+  getWindowZOrderTopFirst(): string[] | null;
+  /**
+   * True while the primary mouse button is pressed. Used by finishDrag to
+   * distinguish Escape/system cancel from a real release. When unavailable
+   * (non-macOS / addon missing), callers treat as released.
+   */
+  isLeftMouseButtonDown(): boolean;
 }
 
 export interface PanelTransferWindowPort {
@@ -147,6 +174,8 @@ export interface PanelTransferWindowPort {
   list(): Array<{
     focused: boolean;
     id: string;
+    /** Monotonic focus sequence — higher means more recently focused. */
+    lastFocusedAt?: number | undefined;
     recordId: string;
   }>;
   releaseRendererShow(windowId: string, reason: string): void;
@@ -188,8 +217,14 @@ export interface PanelTransferService {
 }
 
 export const PANEL_TRANSFER_OFFER_TTL_MS = 120_000;
+/** Max wait for a late offer registration when drop/finishDrag races offer IPC. */
 export const PANEL_TRANSFER_DROP_WAIT_MS = 2000;
-export const PANEL_TRANSFER_FINISH_DROP_WINDOW_MS = 500;
+/** finishDrag waits this long for the async offer() IPC to land. */
+export const PANEL_TRANSFER_FINISH_OFFER_WAIT_MS = 1000;
+/** Wait for a newly created transfer target's Dockview api before stageTarget. */
+export const PANEL_TRANSFER_TARGET_READY_WAIT_MS = 20_000;
+export const PANEL_TRANSFER_TARGET_READY_POLL_MS = 50;
+export const PANEL_TRANSFER_PROBE_TIMEOUT_MS = 500;
 export const PANEL_TRANSFER_CLAIM_TOTAL_MS = 45_000;
 export const PANEL_TRANSFER_TOMBSTONE_TTL_MS = 10 * 60_000;
 export const PANEL_TRANSFER_NEW_WINDOW_CURSOR_OFFSET = 48;

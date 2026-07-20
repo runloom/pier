@@ -367,9 +367,28 @@ export const panelTransferFinalizeCommandSchema = z
   })
   .strict();
 
+/** Path B: main asks target renderer for drop placement from client coordinates. */
+export const panelTransferResolvePlacementCommandSchema = z
+  .object({
+    type: z.literal("panelTransfer.resolvePlacement"),
+    transferId: transferIdSchema,
+    clientX: z.number().finite(),
+    clientY: z.number().finite(),
+  })
+  .strict();
+
+/** Lightweight readiness probe — returns quickly whether Dockview api is set. */
+export const panelTransferProbeWorkspaceCommandSchema = z
+  .object({
+    type: z.literal("panelTransfer.probeWorkspace"),
+  })
+  .strict();
+
 export const panelTransferRendererCommandSchemas = [
   panelTransferPrepareSourceCommandSchema,
   panelTransferStageTargetCommandSchema,
   panelTransferReleaseSourceCommandSchema,
   panelTransferFinalizeCommandSchema,
+  panelTransferResolvePlacementCommandSchema,
+  panelTransferProbeWorkspaceCommandSchema,
 ] as const;

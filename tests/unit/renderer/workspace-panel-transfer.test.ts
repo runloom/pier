@@ -41,6 +41,7 @@ import {
 import {
   __panelTransferInternals,
   createWorkspacePanelTransferHandlers,
+  resolvePlacementFromClientPoint,
   runPanelTransferRendererCommand,
 } from "@/components/workspace/workspace-panel-transfer.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -67,12 +68,21 @@ class FakeDataTransfer {
 
 class FakeDragEvent extends Event {
   dataTransfer: FakeDataTransfer | null;
+  clientX: number;
+  clientY: number;
   constructor(
     type: string,
-    init?: { dataTransfer?: FakeDataTransfer | null; cancelable?: boolean }
+    init?: {
+      dataTransfer?: FakeDataTransfer | null;
+      cancelable?: boolean;
+      clientX?: number;
+      clientY?: number;
+    }
   ) {
     super(type, { bubbles: true, cancelable: init?.cancelable ?? true });
     this.dataTransfer = init?.dataTransfer ?? new FakeDataTransfer();
+    this.clientX = init?.clientX ?? 0;
+    this.clientY = init?.clientY ?? 0;
   }
 }
 
@@ -94,6 +104,7 @@ function panel(opts: {
   params?: Record<string, unknown>;
 }) {
   return {
+    api: { setActive: vi.fn() },
     id: opts.id,
     title: opts.title ?? opts.id,
     params: opts.params ?? {},
@@ -232,60 +243,157 @@ describe("workspace panel transfer", () => {
   });
 
   describe("placement mapping", () => {
-    it("maps center+group → tab end, edge → split, no group → root", () => {
-      const api = createApi([
-        panel({ component: "welcome", id: "welcome-1" }),
-        panel({ component: "welcome", id: "welcome-2" }),
-      ]);
-      const group = {
-        id: "group-1",
-        panels: api.panels,
-      };
+    it("resolvePlacementFromDidDrop consumes dockview drop state verbatim", () => {
+      const groupPanels = [{ id: "p1" }, { id: "p2" }];
+      const group = { id: "group-1", panels: groupPanels };
+      const drop = (
+        overrides: Partial<{
+          group: typeof group | undefined;
+          panel: { id: string } | undefined;
+          position: string | undefined;
+        }>
+      ) =>
+        __panelTransferInternals.resolvePlacementFromDidDrop({
+          group,
+          ...overrides,
+        });
 
-      expect(
-        __panelTransferInternals.computePlacementFromDrop(
-          {
-            group: group as never,
-            nativeEvent: new FakeDragEvent("drop") as unknown as DragEvent,
-            position: "center",
-          },
-          "welcome-1",
-          api as never
-        )
-      ).toEqual({ groupId: "group-1", index: 2, kind: "tab" });
+      // Content center → append tab.
+      expect(drop({ position: "center" })).toEqual({
+        groupId: "group-1",
+        index: 2,
+        kind: "tab",
+      });
 
-      expect(
-        __panelTransferInternals.computePlacementFromDrop(
-          {
-            group: group as never,
-            nativeEvent: new FakeDragEvent("drop") as unknown as DragEvent,
-            position: "left",
-          },
-          "welcome-1",
-          api as never
-        )
-      ).toEqual({
+      // Content edge quadrant → split against that group (the quadrant is
+      // exactly the overlay dockview showed — no geometry re-derivation).
+      expect(drop({ position: "left" })).toEqual({
         direction: "left",
         kind: "split",
         referenceGroupId: "group-1",
       });
+      expect(drop({ position: "bottom" })).toEqual({
+        direction: "below",
+        kind: "split",
+        referenceGroupId: "group-1",
+      });
 
-      expect(
-        __panelTransferInternals.computePlacementFromDrop(
+      // Header drop: dockview reports center + the tab at the insertion
+      // index (left/right tab-half → index already resolved upstream).
+      expect(drop({ panel: { id: "p2" }, position: "center" })).toEqual({
+        groupId: "group-1",
+        index: 1,
+        kind: "tab",
+      });
+
+      // Root drop target: edge positions split the whole grid.
+      expect(drop({ group: undefined, position: "center" })).toEqual({
+        kind: "root",
+      });
+      expect(drop({ group: undefined, position: "right" })).toEqual({
+        direction: "right",
+        kind: "split",
+      });
+    });
+
+    it("resolvePlacementFromClientPoint mirrors dockview overlay activation", () => {
+      const rect = (r: {
+        left: number;
+        top: number;
+        right: number;
+        bottom: number;
+      }) => ({
+        ...r,
+        height: r.bottom - r.top,
+        width: r.right - r.left,
+        x: r.left,
+        y: r.top,
+      });
+      const tabEl = document.createElement("div");
+      tabEl.className = "dv-tab";
+      Object.defineProperty(tabEl, "getBoundingClientRect", {
+        value: () => rect({ bottom: 40, left: 10, right: 110, top: 12 }),
+      });
+      const tabsRoot = document.createElement("div");
+      tabsRoot.className = "dv-tabs-and-actions-container";
+      tabsRoot.append(tabEl);
+      Object.defineProperty(tabsRoot, "getBoundingClientRect", {
+        value: () => rect({ bottom: 40, left: 0, right: 400, top: 12 }),
+      });
+      const contentEl = document.createElement("div");
+      contentEl.className = "dv-content-container";
+      Object.defineProperty(contentEl, "getBoundingClientRect", {
+        value: () => rect({ bottom: 500, left: 0, right: 400, top: 40 }),
+      });
+      const groupEl = document.createElement("div");
+      groupEl.append(tabsRoot, contentEl);
+      Object.defineProperty(groupEl, "getBoundingClientRect", {
+        value: () => rect({ bottom: 500, left: 0, right: 400, top: 0 }),
+      });
+
+      const api = {
+        groups: [
           {
-            group: undefined,
-            nativeEvent: new FakeDragEvent("drop") as unknown as DragEvent,
-            position: "center",
+            element: groupEl,
+            id: "group-1",
+            panels: [{ id: "p1" }, { id: "p2" }],
           },
-          "welcome-1",
-          api as never
-        )
-      ).toEqual({ kind: "root" });
+        ],
+      };
+
+      expect(resolvePlacementFromClientPoint(api as never, 30, 20)).toEqual({
+        groupId: "group-1",
+        index: 0,
+        kind: "tab",
+      });
+      expect(resolvePlacementFromClientPoint(api as never, 90, 20)).toEqual({
+        groupId: "group-1",
+        index: 1,
+        kind: "tab",
+      });
+
+      // Content center (inner 60% per axis) → append tab.
+      expect(resolvePlacementFromClientPoint(api as never, 200, 250)).toEqual({
+        groupId: "group-1",
+        index: 2,
+        kind: "tab",
+      });
+
+      // 20%-per-axis quadrants over the content element (400×460 starting
+      // at y=40), matching dockview's DEFAULT_ACTIVATION_SIZE. x=60 is 15%
+      // of the width — inside the overlay's split zone but outside the old
+      // 48px band (the WYSIWYG regression this mirrors).
+      expect(resolvePlacementFromClientPoint(api as never, 60, 250)).toEqual({
+        direction: "left",
+        kind: "split",
+        referenceGroupId: "group-1",
+      });
+      expect(resolvePlacementFromClientPoint(api as never, 390, 250)).toEqual({
+        direction: "right",
+        kind: "split",
+        referenceGroupId: "group-1",
+      });
+      // y=60 is 4% of the content height (measured from the content top,
+      // not the group top which includes the tab strip).
+      expect(resolvePlacementFromClientPoint(api as never, 200, 60)).toEqual({
+        direction: "above",
+        kind: "split",
+        referenceGroupId: "group-1",
+      });
+      expect(resolvePlacementFromClientPoint(api as never, 200, 480)).toEqual({
+        direction: "below",
+        kind: "split",
+        referenceGroupId: "group-1",
+      });
+
+      expect(resolvePlacementFromClientPoint(api as never, 900, 900)).toEqual({
+        kind: "root",
+      });
     });
   });
 
   describe("drag lifecycle", () => {
-    it("calls finishDrag on dragend and cancel on Escape", async () => {
+    it("calls finishDrag on dragend", async () => {
       const pier = installPier();
       const handlers = createWorkspacePanelTransferHandlers(() => null);
       __panelTransferInternals.setActiveDrag({
@@ -300,69 +408,136 @@ describe("workspace panel transfer", () => {
         expect(pier.finishDrag).toHaveBeenCalledWith(TRANSFER_ID)
       );
       expect(__panelTransferInternals.getActiveDrag()).toBeNull();
-
-      __panelTransferInternals.setActiveDrag({
-        capability: "movable",
-        componentId: "welcome",
-        panelId: "welcome-1",
-        transferId: TRANSFER_ID,
-      });
-      handlers.onEscape(TRANSFER_ID);
-      await vi.waitFor(() =>
-        expect(pier.cancel).toHaveBeenCalledWith(TRANSFER_ID)
-      );
-      expect(__panelTransferInternals.getActiveDrag()).toBeNull();
     });
 
-    it("accepts unhandled dragover when MIME types are present", () => {
+    it("onWillDrop suppresses dockview's stale dragend commit only for outside releases", () => {
+      installPier();
       const handlers = createWorkspacePanelTransferHandlers(() => null);
-      const dataTransfer = new FakeDataTransfer();
-      dataTransfer.setData(PANEL_TRANSFER_MIME, "{}");
-      const native = new FakeDragEvent("dragover", { dataTransfer });
-      const accept = vi.fn();
-      const preventSpy = vi.spyOn(native, "preventDefault");
 
-      handlers.onUnhandledDragOver({
-        accept,
-        nativeEvent: native as unknown as DragEvent,
+      // Release outside the viewport (desktop / another window): the sticky
+      // overlay armed by dndOverlayMounting "absolute" must not commit an
+      // in-window move — the bounds channel owns the outcome.
+      const outside = new FakeDragEvent("dragend", {
+        clientX: -40,
+        clientY: 200,
       });
+      const outsidePrevent = vi.fn();
+      handlers.onWillDrop({
+        nativeEvent: outside as unknown as DragEvent,
+        preventDefault: outsidePrevent,
+      });
+      expect(outsidePrevent).toHaveBeenCalledTimes(1);
 
-      expect(preventSpy).toHaveBeenCalled();
-      expect(dataTransfer.dropEffect).toBe("move");
-      expect(accept).toHaveBeenCalled();
+      // Release beyond the far edge is outside too.
+      const farOutside = new FakeDragEvent("dragend", {
+        clientX: window.innerWidth + 60,
+        clientY: 10,
+      });
+      const farPrevent = vi.fn();
+      handlers.onWillDrop({
+        nativeEvent: farOutside as unknown as DragEvent,
+        preventDefault: farPrevent,
+      });
+      expect(farPrevent).toHaveBeenCalledTimes(1);
+
+      // In-window release keeps dockview's sticky-overlay dragend commit.
+      const inside = new FakeDragEvent("dragend", {
+        clientX: 100,
+        clientY: 100,
+      });
+      const insidePrevent = vi.fn();
+      handlers.onWillDrop({
+        nativeEvent: inside as unknown as DragEvent,
+        preventDefault: insidePrevent,
+      });
+      expect(insidePrevent).not.toHaveBeenCalled();
+
+      // Real drop events are never suppressed regardless of coordinates.
+      const realDrop = new FakeDragEvent("drop", {
+        clientX: -40,
+        clientY: -40,
+      });
+      const dropPrevent = vi.fn();
+      handlers.onWillDrop({
+        nativeEvent: realDrop as unknown as DragEvent,
+        preventDefault: dropPrevent,
+      });
+      expect(dropPrevent).not.toHaveBeenCalled();
     });
 
-    it("skips unhandled dragover accept when local activeDrag is set", () => {
-      const handlers = createWorkspacePanelTransferHandlers(() => null);
-      __panelTransferInternals.setActiveDrag({
-        capability: "movable",
-        componentId: "welcome",
-        panelId: "welcome-1",
-        transferId: TRANSFER_ID,
-      });
-      const dataTransfer = new FakeDataTransfer();
-      dataTransfer.setData(PANEL_TRANSFER_MIME, "{}");
-      const native = new FakeDragEvent("dragover", { dataTransfer });
-      const accept = vi.fn();
-      const preventSpy = vi.spyOn(native, "preventDefault");
-
-      handlers.onUnhandledDragOver({
-        accept,
-        nativeEvent: native as unknown as DragEvent,
-      });
-
-      expect(preventSpy).not.toHaveBeenCalled();
-      expect(accept).not.toHaveBeenCalled();
-    });
-
-    it("same-window onDidDrop does not call panelTransfer.drop", async () => {
-      const pier = installPier();
+    it("onWillDragPanel returns transferId after stamping MIME", () => {
+      installPier();
       const welcome = panel({ component: "welcome", id: "welcome-1" });
-      const api = {
-        panels: [welcome],
-        removePanel: vi.fn(),
-        totalPanels: 1,
-      };
+      const api = createApi([welcome]);
+      const handlers = createWorkspacePanelTransferHandlers(() => api as never);
+      const dataTransfer = new FakeDataTransfer();
+      const native = new FakeDragEvent("dragstart", { dataTransfer });
+
+      const transferId = handlers.onWillDragPanel({
+        nativeEvent: native as unknown as DragEvent,
+        panel: welcome as never,
+      });
+
+      expect(transferId).toEqual(expect.any(String));
+      expect(dataTransfer.getData("text/plain")).toBe(
+        `${PANEL_TRANSFER_TEXT_PREFIX}${transferId}`
+      );
+      expect(__panelTransferInternals.getActiveDrag()?.transferId).toBe(
+        transferId
+      );
+    });
+
+    it("foreign onDidDrop claims via pier.drop with dockview's drop state", async () => {
+      const pier = installPier();
+      const api = createApi([panel({ component: "welcome", id: "welcome-1" })]);
+      const handlers = createWorkspacePanelTransferHandlers(() => api as never);
+      expect(__panelTransferInternals.getActiveDrag()).toBeNull();
+
+      const foreignId = "9af45a46-24f2-4ac0-9371-fbe78ca295dd";
+      const dataTransfer = new FakeDataTransfer();
+      dataTransfer.setData(
+        PANEL_TRANSFER_MIME,
+        JSON.stringify({ transferId: foreignId })
+      );
+
+      // Edge-quadrant drop on a group → split claim (the overlay quadrant
+      // dockview reported is consumed verbatim — cross-window split).
+      handlers.onDidDrop({
+        group: { id: "group-1", panels: api.panels },
+        nativeEvent: new FakeDragEvent("drop", {
+          dataTransfer,
+        }) as unknown as DragEvent,
+        position: "left",
+      } as never);
+      await vi.waitFor(() =>
+        expect(pier.drop).toHaveBeenCalledWith({
+          placement: {
+            direction: "left",
+            kind: "split",
+            referenceGroupId: "group-1",
+          },
+          transferId: foreignId,
+        })
+      );
+
+      // Group-less drop (root drop target, empty-grid center) → root.
+      pier.drop.mockClear();
+      handlers.onDidDrop({
+        nativeEvent: new FakeDragEvent("drop", {
+          dataTransfer,
+        }) as unknown as DragEvent,
+      } as never);
+      await vi.waitFor(() =>
+        expect(pier.drop).toHaveBeenCalledWith({
+          placement: { kind: "root" },
+          transferId: foreignId,
+        })
+      );
+    });
+
+    it("same-window active drag never claims via onDidDrop", async () => {
+      const pier = installPier();
+      const api = createApi([panel({ component: "welcome", id: "welcome-1" })]);
       const handlers = createWorkspacePanelTransferHandlers(() => api as never);
       __panelTransferInternals.setActiveDrag({
         capability: "movable",
@@ -376,53 +551,49 @@ describe("workspace panel transfer", () => {
         PANEL_TRANSFER_MIME,
         JSON.stringify({ transferId: TRANSFER_ID })
       );
-      const native = new FakeDragEvent("drop", { dataTransfer });
-
       handlers.onDidDrop({
-        group: { id: "group-1", panels: [welcome] } as never,
-        nativeEvent: native as unknown as DragEvent,
-        position: "center",
-      });
+        nativeEvent: new FakeDragEvent("drop", {
+          dataTransfer,
+        }) as unknown as DragEvent,
+      } as never);
 
       await Promise.resolve();
       expect(pier.drop).not.toHaveBeenCalled();
     });
 
-    it("foreign onDidDrop parses MIME transferId and reports placement", async () => {
-      const pier = installPier();
-      const welcome = panel({ component: "welcome", id: "welcome-1" });
-      const api = {
-        panels: [welcome],
-        removePanel: vi.fn(),
-        totalPanels: 1,
-      };
-      const handlers = createWorkspacePanelTransferHandlers(() => api as never);
-      expect(__panelTransferInternals.getActiveDrag()).toBeNull();
-
-      const foreignId = "foreign-transfer-aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+    it("accepts foreign unhandled dragover so Dockview can show its overlay", () => {
+      installPier();
+      const handlers = createWorkspacePanelTransferHandlers(() => null);
       const dataTransfer = new FakeDataTransfer();
-      dataTransfer.setData(
-        PANEL_TRANSFER_MIME,
-        JSON.stringify({ transferId: foreignId })
-      );
-      dataTransfer.setData(
-        "text/plain",
-        `${PANEL_TRANSFER_TEXT_PREFIX}${foreignId}`
-      );
-      const native = new FakeDragEvent("drop", { dataTransfer });
+      dataTransfer.setData(PANEL_TRANSFER_MIME, "{}");
+      const native = new FakeDragEvent("dragover", { dataTransfer });
+      const accept = vi.fn();
+      const preventSpy = vi.spyOn(native, "preventDefault");
 
-      handlers.onDidDrop({
-        group: { id: "group-1", panels: [welcome] } as never,
+      handlers.onUnhandledDragOver({
+        accept,
         nativeEvent: native as unknown as DragEvent,
-        position: "center",
-      });
+      } as never);
 
-      await vi.waitFor(() =>
-        expect(pier.drop).toHaveBeenCalledWith({
-          placement: { groupId: "group-1", index: 1, kind: "tab" },
-          transferId: foreignId,
-        })
-      );
+      expect(preventSpy).toHaveBeenCalled();
+      expect(dataTransfer.dropEffect).toBe("move");
+      expect(accept).toHaveBeenCalled();
+
+      // Local drags stay with Dockview.
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "welcome",
+        panelId: "welcome-1",
+        transferId: TRANSFER_ID,
+      });
+      const acceptLocal = vi.fn();
+      handlers.onUnhandledDragOver({
+        accept: acceptLocal,
+        nativeEvent: new FakeDragEvent("dragover", {
+          dataTransfer,
+        }) as unknown as DragEvent,
+      } as never);
+      expect(acceptLocal).not.toHaveBeenCalled();
     });
   });
 
@@ -515,6 +686,54 @@ describe("workspace panel transfer", () => {
         ok: true,
         requestId: "stage-1",
       });
+    });
+
+    it("finalize(target, commit) activates the staged panel and blocks late gate sets", async () => {
+      const pier = installPier();
+      const existing = panel({ component: "welcome", id: "welcome-keep" });
+      const api = createApi([existing]);
+      useWorkspaceStore.getState().setApi(api as never);
+
+      await runPanelTransferRendererCommand({
+        command: {
+          panel: {
+            componentId: "welcome",
+            panelId: "welcome-moved",
+            title: "Welcome",
+          },
+          placement: { kind: "root" },
+          prepared: { drafts: [] },
+          targetPanelId: "welcome-moved",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.stageTarget",
+        },
+        requestId: "stage-activate",
+      });
+
+      await runPanelTransferRendererCommand({
+        command: {
+          outcome: "commit",
+          role: "target",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.finalize",
+        },
+        requestId: "finalize-activate",
+      });
+
+      const staged = api.panels.find((p) => p.id === "welcome-moved");
+      // Moved panels land active — the sole panel of a fresh transfer window
+      // must not stay inactive/blank.
+      expect(staged?.api.setActive).toHaveBeenCalled();
+      expect(pier.resolve).toHaveBeenCalledWith({
+        data: null,
+        ok: true,
+        requestId: "finalize-activate",
+      });
+
+      // Race guard: the transfer-startup boot path setting the gate AFTER
+      // finalize already released it must be a no-op (tombstoned).
+      setWorkspaceBootstrapGate(TRANSFER_ID, "awaiting-stage-target");
+      expect(isWorkspaceBootstrapGateActive()).toBe(false);
     });
 
     it("releaseSource removes under suppression and clears layout when last panel", async () => {
@@ -765,6 +984,56 @@ describe("workspace panel transfer", () => {
         drafts: [{ sourceKey: "a", targetKey: "b" }],
         state: { marker: true },
       });
+    });
+
+    it("stageTarget merges custom adapter params over offered source params", async () => {
+      installPier();
+      registerCorePanelTransfer("pier.test.custom-stage", {
+        finalize: vi.fn(async () => undefined),
+        kind: "custom",
+        prepareSource: vi.fn(async () => ({ drafts: [] })),
+        restore: vi.fn(async () => undefined),
+        stageTarget: vi.fn(async () => ({
+          params: { source: { id: "rewritten" } },
+        })),
+      });
+      const api = createApi([]);
+      useWorkspaceStore.getState().setApi(api as never);
+
+      const offeredContext = { contextId: "ctx:a", cwd: "/repo" };
+      await runPanelTransferRendererCommand({
+        command: {
+          panel: {
+            componentId: "pier.test.custom-stage",
+            panelId: "custom-stage-1",
+            params: {
+              context: offeredContext,
+              pinned: true,
+              source: { id: "original" },
+            },
+            title: "Doc",
+          },
+          placement: { kind: "root" },
+          prepared: { drafts: [] },
+          targetPanelId: "custom-stage-1",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.stageTarget",
+        },
+        requestId: "stage-custom-merge",
+      } as RendererCommandEnvelope);
+
+      // Adapter output patches (source rewritten) but must not drop shared
+      // params like the workspace context anchor or pinned state.
+      expect(api.addPanel).toHaveBeenCalledWith(
+        expect.objectContaining({
+          id: "custom-stage-1",
+          params: {
+            context: offeredContext,
+            pinned: true,
+            source: { id: "rewritten" },
+          },
+        })
+      );
     });
   });
 });

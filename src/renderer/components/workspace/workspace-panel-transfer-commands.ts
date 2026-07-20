@@ -11,9 +11,11 @@ import type {
 import type { RendererCommandEnvelope } from "@shared/contracts/renderer-command.ts";
 import type { DockviewApi } from "dockview-react";
 import { getPluginPanelRevision } from "@/lib/plugins/plugin-panel-registry.ts";
+import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { flushWorkspaceLayout } from "@/lib/workspace/workspace-layout-persistence.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { clearCurrentWindowLayout } from "@/stores/workspace-panel-helpers.ts";
+import { panelKindOf } from "./panel-registry.ts";
 import { panelTransferRegistrationOf } from "./panel-transfer-adapters.ts";
 import {
   clearFinalizeRecord,
@@ -22,9 +24,14 @@ import {
   getFrozenSourceSnapshotRevision,
   isFinalizeRecorded,
   recordFinalize,
+  recordFinalizedGateTombstone,
+  releaseWorkspaceBootstrapGate,
   setFrozenSourceSnapshot,
   setPanelRelocationSuppressed,
+  setStagedTargetPanel,
+  takeStagedTargetPanel,
 } from "./panel-transfer-runtime.ts";
+import { resolvePlacementFromClientPoint } from "./workspace-panel-transfer-placement.ts";
 import {
   type DockviewPanel,
   panelComponentOf,
@@ -78,6 +85,10 @@ type ReleaseSourceCommand = Extract<
 type FinalizeCommand = Extract<
   RendererCommandEnvelope["command"],
   { type: "panelTransfer.finalize" }
+>;
+type ResolvePlacementCommand = Extract<
+  RendererCommandEnvelope["command"],
+  { type: "panelTransfer.resolvePlacement" }
 >;
 
 async function handlePrepareSource(
@@ -144,7 +155,11 @@ async function handleStageTarget(command: StageTargetCommand): Promise<void> {
       transferId,
     });
     if (stageResult?.params) {
-      stageParams = stageResult.params;
+      // Adapter params are a patch over the offered source params, not a
+      // replacement — shared params like `context` (workspace anchor) and
+      // `pinned` must survive the move or the target panel loses its
+      // workspace identity (e.g. Files' outside-workspace guard).
+      stageParams = { ...(panel.params ?? {}), ...stageResult.params };
     }
   }
   const addPanelOptions: {
@@ -187,6 +202,8 @@ async function handleStageTarget(command: StageTargetCommand): Promise<void> {
     }
   }
   api.addPanel(addPanelOptions as Parameters<DockviewApi["addPanel"]>[0]);
+  // Remember for finalize(target, commit): a moved panel must land active.
+  setStagedTargetPanel(transferId, targetPanelId);
   await flushWorkspaceLayout();
 }
 
@@ -274,9 +291,24 @@ async function handleFinalize(command: FinalizeCommand): Promise<void> {
       });
     }
   }
+  const stagedPanelId = takeStagedTargetPanel(transferId);
+  if (role === "target" && outcome === "commit" && stagedPanelId && api) {
+    // Moved panels land active (VS Code targetGroup.focus() semantics).
+    // Without this, the sole panel of a fresh transfer window stays
+    // inactive and the window renders blank.
+    activateWorkspacePanel(api, stagedPanelId, {
+      kindOfComponent: panelKindOf,
+      reveal: "always",
+    });
+  }
   clearFrozenSourceSnapshot(transferId);
   setPanelRelocationSuppressed(false);
   clearFinalizeRecord(transferId);
+  // Guard the async transfer-startup boot path: a late gate set for this
+  // transfer must not resurrect after release.
+  recordFinalizedGateTombstone(transferId);
+  // Live transfer + cold bootstrap both may hold the mutation gate.
+  releaseWorkspaceBootstrapGate();
 }
 
 function computeAdapterRevision(): number {
@@ -354,6 +386,24 @@ export async function runPanelTransferRendererCommand(
         await handleFinalize(envelope.command);
         resolve({ data: null, ok: true });
         return true;
+      case "panelTransfer.resolvePlacement": {
+        const command = envelope.command as ResolvePlacementCommand;
+        const api = requireApi();
+        const placement = resolvePlacementFromClientPoint(
+          api,
+          command.clientX,
+          command.clientY
+        );
+        resolve({ data: placement, ok: true });
+        return true;
+      }
+      case "panelTransfer.probeWorkspace": {
+        resolve({
+          data: { ready: useWorkspaceStore.getState().api !== null },
+          ok: true,
+        });
+        return true;
+      }
       default:
         return false;
     }

@@ -96,6 +96,17 @@ describe("PanelTransferService", () => {
         }
         return null;
       },
+      getWindowContentBounds: (windowId) => {
+        if (windowId === "main") {
+          return { height: 760, width: 1200, x: 0, y: 40 };
+        }
+        if (windowId === "w-1") {
+          return { height: 760, width: 1200, x: 1300, y: 40 };
+        }
+        return null;
+      },
+      getWindowZOrderTopFirst: () => null,
+      isLeftMouseButtonDown: () => false,
     };
     workspace = {
       clearLayout: vi.fn(async () => undefined),
@@ -108,6 +119,7 @@ describe("PanelTransferService", () => {
     };
     terminal = {
       commitMove: vi.fn(async () => undefined),
+      getCurrentLifecycleId: vi.fn(() => ""),
       rollback: vi.fn(async () => undefined),
       stageLease: vi.fn(async () => undefined),
     };
@@ -127,11 +139,14 @@ describe("PanelTransferService", () => {
           requestId: "r1",
         };
       }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
       return { data: null, ok: true, requestId: "r1" };
     });
   });
 
-  function createService(sleepImpl?: (ms: number) => Promise<void>) {
+  function createService() {
     return createPanelTransferService({
       files,
       geometry,
@@ -142,7 +157,6 @@ describe("PanelTransferService", () => {
         execute: rendererExecute as never,
         resolve: () => undefined,
       },
-      sleep: sleepImpl ?? (async () => undefined),
       terminal,
       userDataDir,
       windows,
@@ -220,7 +234,7 @@ describe("PanelTransferService", () => {
       await dropGate;
       return operation(lease);
     });
-    const service = createService(async () => undefined);
+    const service = createService();
     const source = caller("main", "record-main", 1);
     const target = caller("w-1", "record-w1", 2);
     await service.offer(source, movableOffer(TRANSFER_A));
@@ -234,9 +248,191 @@ describe("PanelTransferService", () => {
     await dropPromise;
   });
 
+  it("finishDrag returns null when HTML5 claims during resolvePlacement await", async () => {
+    cursor = { x: 1500, y: 400 }; // inside w-1
+    let releaseResolve!: () => void;
+    const resolveGate = new Promise<void>((resolve) => {
+      releaseResolve = resolve;
+    });
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.resolvePlacement") {
+        await resolveGate;
+        return {
+          data: { kind: "root" },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+    let releaseDrop!: () => void;
+    const dropGate = new Promise<void>((resolve) => {
+      releaseDrop = resolve;
+    });
+    runExclusive.mockImplementationOnce(async (operation) => {
+      await dropGate;
+      return operation(lease);
+    });
+
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+
+    const finishPromise = service.finishDrag(source, TRANSFER_A);
+    await Promise.resolve();
+    // finishDrag is blocked in resolvePlacement; HTML5 drop claims first.
+    const dropPromise = service.drop(target, {
+      placement: { kind: "tab", groupId: "g1", index: 0 },
+      transferId: TRANSFER_A,
+    });
+    await Promise.resolve();
+    releaseResolve();
+    await expect(finishPromise).resolves.toBeNull();
+    releaseDrop();
+    await expect(dropPromise).resolves.toMatchObject({
+      ok: true,
+      targetPanelId: "panel-1",
+    });
+  });
+
+  it("finishDrag aborts silently when primary mouse button is still down", async () => {
+    geometry = {
+      ...geometry,
+      isLeftMouseButtonDown: () => true,
+    };
+    cursor = { x: 5000, y: 5000 };
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toBeNull();
+    expect(createForTransfer).not.toHaveBeenCalled();
+  });
+
+  it("finishDrag managed cursor claims via resolvePlacement (root fallback)", async () => {
+    cursor = { x: 1500, y: 400 }; // inside w-1
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    const result = await service.finishDrag(source, TRANSFER_A);
+    expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(createForTransfer).not.toHaveBeenCalled();
+    const resolveCall = rendererExecute.mock.calls.find((call) => {
+      const command = call[0];
+      return (
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        command.type === "panelTransfer.resolvePlacement"
+      );
+    });
+    expect(resolveCall).toBeDefined();
+    expect(resolveCall?.[0]).toMatchObject({
+      clientX: 200, // 1500 - 1300
+      clientY: 360, // 400 - 40
+      transferId: TRANSFER_A,
+      type: "panelTransfer.resolvePlacement",
+    });
+    expect(resolveCall?.[1]).toEqual({ windowId: "w-1" });
+  });
+
+  it("finishDrag managed uses placement from resolvePlacement response", async () => {
+    cursor = { x: 1500, y: 400 };
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.resolvePlacement") {
+        return {
+          data: {
+            direction: "right",
+            kind: "split",
+            referenceGroupId: "g-target",
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toMatchObject(
+      {
+        ok: true,
+        targetPanelId: "panel-1",
+      }
+    );
+    const stageCall = rendererExecute.mock.calls.find((call) => {
+      const command = call[0];
+      return (
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        command.type === "panelTransfer.stageTarget"
+      );
+    });
+    expect(stageCall?.[0]).toMatchObject({
+      placement: {
+        direction: "right",
+        kind: "split",
+        referenceGroupId: "g-target",
+      },
+      type: "panelTransfer.stageTarget",
+    });
+  });
+
+  it("finishDrag waits briefly for late offer registration", async () => {
+    cursor = { x: 5000, y: 5000 };
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const finishPromise = service.finishDrag(source, TRANSFER_A);
+    await Promise.resolve();
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(finishPromise).resolves.toMatchObject({
+      ok: true,
+      targetPanelId: "panel-1",
+    });
+    expect(createForTransfer).toHaveBeenCalledOnce();
+  });
+
   it("finishDrag outside cursor creates transfer window via createForTransfer", async () => {
     cursor = { x: 5000, y: 5000 }; // outside both windows
-    const service = createService(async () => undefined);
+    const service = createService();
     const source = caller("main", "record-main", 1);
     await service.offer(source, movableOffer(TRANSFER_A));
     const result = await service.finishDrag(source, TRANSFER_A);
@@ -246,8 +442,97 @@ describe("PanelTransferService", () => {
     expect(pluginMutation).toHaveBeenCalled();
   });
 
+  it("finishDrag missing offer returns expired failure", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toEqual({
+      code: "expired",
+      message: "offer not found",
+      ok: false,
+    });
+  });
+
+  it("classify honors true z-order when target overlaps above the source", async () => {
+    // Cursor point inside BOTH windows; z-order says w-1 is on top.
+    geometry = {
+      ...geometry,
+      getWindowBounds: (windowId) => {
+        if (windowId === "main") {
+          return { height: 800, width: 1200, x: 0, y: 0 };
+        }
+        if (windowId === "w-1") {
+          return { height: 800, width: 1200, x: 600, y: 0 };
+        }
+        return null;
+      },
+      getWindowZOrderTopFirst: () => ["w-1", "main"],
+    };
+    cursor = { x: 700, y: 400 }; // overlap region
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    const result = await service.finishDrag(source, TRANSFER_A);
+    expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(createForTransfer).not.toHaveBeenCalled();
+    const stageCall = rendererExecute.mock.calls.find((call) => {
+      const command = call[0];
+      return (
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        command.type === "panelTransfer.stageTarget"
+      );
+    });
+    expect(stageCall?.[1]).toEqual({ windowId: "w-1" });
+  });
+
+  it("classify keeps source when source is on top of the overlap", async () => {
+    geometry = {
+      ...geometry,
+      getWindowBounds: (windowId) => {
+        if (windowId === "main") {
+          return { height: 800, width: 1200, x: 0, y: 0 };
+        }
+        if (windowId === "w-1") {
+          return { height: 800, width: 1200, x: 600, y: 0 };
+        }
+        return null;
+      },
+      getWindowZOrderTopFirst: () => ["main", "w-1"],
+    };
+    cursor = { x: 700, y: 400 };
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toBeNull();
+    expect(createForTransfer).not.toHaveBeenCalled();
+  });
+
+  it("round-trips a panel across two sequential transfers", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const other = caller("w-1", "record-w1", 2);
+
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.drop(other, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+
+    // Back: same panel, new transferId, reversed roles.
+    await service.offer(other, movableOffer(TRANSFER_B));
+    await expect(
+      service.drop(source, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_B,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(journal.list()).toEqual([]);
+  });
   it("routes prepareSource to source window and stageTarget to target window", async () => {
-    const service = createService(async () => undefined);
+    const service = createService();
     const source = caller("main", "record-main", 1);
     const target = caller("w-1", "record-w1", 2);
     await service.offer(source, movableOffer(TRANSFER_A));
@@ -303,7 +588,7 @@ describe("PanelTransferService", () => {
   });
 
   it("rolls back before runtime-moved and roll-forwards after", async () => {
-    const service = createService(async () => undefined);
+    const service = createService();
     const source = caller("main", "record-main", 1);
     const target = caller("w-1", "record-w1", 2);
     await service.offer(source, movableOffer(TRANSFER_A));
@@ -323,6 +608,9 @@ describe("PanelTransferService", () => {
           ok: true,
           requestId: "r1",
         };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
       }
       if (command.type === "panelTransfer.stageTarget") {
         return {
@@ -452,7 +740,7 @@ describe("PanelTransferService", () => {
   });
 
   it("createForTransfer/closeAfterTransfer require active lease via window port", async () => {
-    const service = createService(async () => undefined);
+    const service = createService();
     const source = caller("main", "record-main", 1);
     cursor = { x: 5000, y: 5000 };
     await service.offer(source, movableOffer(TRANSFER_A));
@@ -465,7 +753,7 @@ describe("PanelTransferService", () => {
 
   it("target_conflict fails without side effects when panel id exists", async () => {
     workspace.hasPanelId = vi.fn(async () => true);
-    const service = createService(async () => undefined);
+    const service = createService();
     const source = caller("main", "record-main", 1);
     const target = caller("w-1", "record-w1", 2);
     await service.offer(source, movableOffer(TRANSFER_A));
@@ -616,7 +904,7 @@ describe("PanelTransferService", () => {
 
   it("rollback destroys internal target window created for transfer", async () => {
     cursor = { x: 5000, y: 5000 };
-    const service = createService(async () => undefined);
+    const service = createService();
     const source = caller("main", "record-main", 1);
     await service.offer(source, movableOffer(TRANSFER_A));
 
@@ -635,6 +923,9 @@ describe("PanelTransferService", () => {
           ok: true,
           requestId: "r1",
         };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
       }
       if (command.type === "panelTransfer.stageTarget") {
         return {
@@ -680,7 +971,6 @@ describe("PanelTransferService", () => {
         resolve: () => undefined,
       },
       reportJournalParseFailure,
-      sleep: async () => undefined,
       terminal,
       userDataDir: dir,
       windows,
@@ -695,7 +985,7 @@ describe("PanelTransferService", () => {
   });
 
   it("roll-forward calls closeAfterTransfer after source-durable", async () => {
-    const service = createService(async () => undefined);
+    const service = createService();
     const source = caller("main", "record-main", 1);
     const target = caller("w-1", "record-w1", 2);
     await service.offer(source, movableOffer(TRANSFER_A));

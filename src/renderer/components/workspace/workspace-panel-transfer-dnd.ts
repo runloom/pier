@@ -1,11 +1,29 @@
 /**
- * Drag-and-drop handlers and drop placement for cross-window panel transfer.
+ * Drag-and-drop handlers for cross-window panel transfer.
+ *
+ * Dual-trigger claim design (belt and suspenders):
+ *
+ * - HTML5 channel (primary when the OS delivers cross-window drag events —
+ *   VS Code relies on exactly this for cross-main-window tab drags): the
+ *   TARGET window accepts foreign dragover (Dockview then shows its native
+ *   drop overlay) and claims via `pier.panelTransfer.drop` with the
+ *   placement Dockview itself resolved for that drop (`event.position` is
+ *   the overlay quadrant the user saw — never re-derive it from geometry).
+ * - Bounds channel (fallback, Path B): the SOURCE window's dragend calls
+ *   `finishDrag`; main classifies the cursor against window bounds and
+ *   claims managed/internal targets itself, resolving placement in the
+ *   target renderer via `resolvePlacementFromClientPoint` (a mirror of
+ *   Dockview's overlay activation model).
+ *
+ * `tryClaim` in main is single-claimant: whichever channel arrives first
+ * wins, the other resolves against the existing claim (drop returns
+ * `already_claimed`, finishDrag returns the claim's result or null).
  */
 
-import type { PanelTransferPlacement } from "@shared/contracts/panel-transfer.ts";
 import { PANEL_TRANSFER_MIME } from "@shared/contracts/panel-transfer.ts";
 import type { DockviewApi } from "dockview-react";
 import { isPanelTransferMovable } from "./panel-transfer-adapters.ts";
+import { resolvePlacementFromDidDrop } from "./workspace-panel-transfer-placement.ts";
 import {
   type DidDropEventLike,
   isRealDragEvent,
@@ -18,14 +36,15 @@ import {
   stampMovableDataTransfer,
   type TabDragEventLike,
   type UnhandledDragOverEventLike,
+  type WillDropEventLike,
 } from "./workspace-panel-transfer-shared.ts";
 
 export interface WorkspacePanelTransferHandlers {
   onDidDrop(event: DidDropEventLike): void;
   onDragEnd(transferId: string | null): void;
-  onEscape(transferId: string | null): void;
   onUnhandledDragOver(event: UnhandledDragOverEventLike): void;
-  onWillDragPanel(event: TabDragEventLike): void;
+  onWillDragPanel(event: TabDragEventLike): string | null;
+  onWillDrop(event: WillDropEventLike): void;
 }
 
 interface TransferDragState {
@@ -45,6 +64,11 @@ export function getActiveDrag(): TransferDragState | null {
   return activeDrag;
 }
 
+function hasPanelTransferType(dataTransfer: DataTransfer): boolean {
+  const types = dataTransfer.types;
+  return types.includes(PANEL_TRANSFER_MIME) || types.includes("text/plain");
+}
+
 export function createWorkspacePanelTransferHandlers(
   getApi: () => DockviewApi | null
 ): WorkspacePanelTransferHandlers {
@@ -52,12 +76,12 @@ export function createWorkspacePanelTransferHandlers(
     onWillDragPanel(event) {
       const native = event.nativeEvent;
       if (!isRealDragEvent(native)) {
-        return;
+        return null;
       }
       const panel = event.panel;
       const component = panelComponentOf(panel);
       if (!component) {
-        return;
+        return null;
       }
       const transferId = crypto.randomUUID();
       const movable = isPanelTransferMovable(component);
@@ -106,10 +130,11 @@ export function createWorkspacePanelTransferHandlers(
         .catch((err) => {
           console.error("[panelTransfer] offer failed:", err);
         });
+      return transferId;
     },
 
     onUnhandledDragOver(event) {
-      // Same-window active drag: let Dockview own reorder/split UX.
+      // Same-window active drag: Dockview owns reorder/split UX.
       if (getActiveDrag()) {
         return;
       }
@@ -117,12 +142,11 @@ export function createWorkspacePanelTransferHandlers(
       if (!(native instanceof DragEvent && native.dataTransfer)) {
         return;
       }
-      const types = native.dataTransfer.types;
-      if (
-        !(types.includes(PANEL_TRANSFER_MIME) || types.includes("text/plain"))
-      ) {
+      if (!hasPanelTransferType(native.dataTransfer)) {
         return;
       }
+      // Foreign Pier drag: accept so Dockview renders its drop overlay and
+      // the OS reports a valid drop target.
       native.preventDefault();
       native.dataTransfer.dropEffect = "move";
       if (typeof event.accept === "function") {
@@ -131,34 +155,70 @@ export function createWorkspacePanelTransferHandlers(
     },
 
     onDidDrop(event) {
+      // Same-window: never hijack Dockview reorder/split into a transfer.
+      if (getActiveDrag()) {
+        return;
+      }
       const native = event.nativeEvent;
       if (!(native instanceof DragEvent && native.dataTransfer)) {
         return;
       }
-      // Same-window: never hijack Dockview reorder/split into a Pier transfer.
-      // finishDrag on dragend silently aborts the local offer.
-      if (getActiveDrag()) {
-        return;
-      }
-      // Foreign/cross-window: parse transferId from MIME and report placement
-      // to main (Path B: claim via native bounds; placement via drop API).
       const transferId = readPanelTransferId(native.dataTransfer);
       if (!transferId) {
         return;
       }
-      const api = getApi();
-      if (!api) {
+      if (!getApi()) {
         return;
       }
-      const placement = computePlacementFromDrop(event, "", api);
-      if (!placement) {
-        return;
-      }
+      // WYSIWYG: Dockview already resolved which overlay it showed for this
+      // drop; consuming the event state guarantees the claim matches it.
+      const placement = resolvePlacementFromDidDrop(event);
+      // Channel diagnostics: shows which claim path fired on real drags.
+      console.info(
+        "[panelTransfer] channel=html5-drop transfer=%s placement=%s",
+        transferId,
+        placement.kind
+      );
       pierPanelTransfer()
-        .drop({ transferId, placement })
+        .drop({ placement, transferId })
+        .then((result) => {
+          if (!result || result.ok) {
+            return;
+          }
+          if (result.code === "already_claimed") {
+            // Bounds channel won the race — same outcome, stay silent.
+            return;
+          }
+          showPanelTransferFailure(result).catch(() => undefined);
+        })
         .catch((err) => {
           console.error("[panelTransfer] drop failed:", err);
         });
+    },
+
+    onWillDrop(event) {
+      // dndOverlayMounting "absolute" arms a sticky overlay: dragleave keeps
+      // the droptarget state, and dockview commits it when dragend reaches
+      // the droptarget's element (root edge ring sits on the tab's ancestor
+      // chain, so rip-out gestures that last crossed it hit this path). A
+      // release OUTSIDE this window must not commit that stale in-window
+      // move — the bounds channel (finishDrag) owns the outcome there
+      // (another window or a new window). In-window releases keep dockview's
+      // sticky-overlay drop.
+      const native = event.nativeEvent;
+      if (!(native instanceof DragEvent) || native.type !== "dragend") {
+        return;
+      }
+      const { clientX, clientY } = native;
+      const inside =
+        clientX >= 0 &&
+        clientY >= 0 &&
+        clientX <= window.innerWidth &&
+        clientY <= window.innerHeight;
+      if (inside) {
+        return;
+      }
+      event.preventDefault();
     },
 
     onDragEnd(transferId) {
@@ -170,7 +230,18 @@ export function createWorkspacePanelTransferHandlers(
       pierPanelTransfer()
         .finishDrag(id)
         .then((result) => {
+          if (result) {
+            console.info(
+              "[panelTransfer] channel=bounds-finishDrag transfer=%s ok=%s",
+              id,
+              String(result.ok)
+            );
+          }
           if (result && !result.ok) {
+            if (result.code === "already_claimed") {
+              // HTML5 drop won during resolvePlacement await — same outcome.
+              return;
+            }
             showPanelTransferFailure(result).catch(() => undefined);
           }
         })
@@ -178,74 +249,5 @@ export function createWorkspacePanelTransferHandlers(
           console.error("[panelTransfer] finishDrag failed:", err);
         });
     },
-
-    onEscape(transferId) {
-      const id = transferId ?? getActiveDrag()?.transferId ?? null;
-      setActiveDrag(null);
-      if (!id) {
-        return;
-      }
-      pierPanelTransfer()
-        .cancel(id)
-        .catch((err) => {
-          console.error("[panelTransfer] cancel failed:", err);
-        });
-    },
   };
-}
-
-export function computePlacementFromDrop(
-  event: DidDropEventLike,
-  _sourcePanelId: string,
-  _api: DockviewApi
-): PanelTransferPlacement | null {
-  const group = event.group;
-  const position = event.position;
-  if (!group) {
-    return { kind: "root" };
-  }
-  if (position === "center") {
-    return {
-      groupId: group.id,
-      index: group.panels.length,
-      kind: "tab",
-    };
-  }
-  const direction = positionToDirection(position);
-  if (!direction) {
-    return {
-      groupId: group.id,
-      index: group.panels.length,
-      kind: "tab",
-    };
-  }
-  // The placement contract carries only `referenceGroupId` (not
-  // `referencePanel`); dockview's addPanel position takes either, but the
-  // transfer placement is main-mediated and main only needs the target group.
-  // Same-group split (source panel in the drop group) is a same-window
-  // Dockview operation that never reaches the cross-window drop path.
-  return {
-    direction,
-    referenceGroupId: group.id,
-    kind: "split",
-  };
-}
-
-export function positionToDirection(
-  position: string | undefined
-): "left" | "right" | "above" | "below" | null {
-  switch (position) {
-    case "left":
-      return "left";
-    case "right":
-      return "right";
-    case "top":
-    case "above":
-      return "above";
-    case "bottom":
-    case "below":
-      return "below";
-    default:
-      return null;
-  }
 }

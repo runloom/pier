@@ -24,16 +24,8 @@ import {
   markWorkspaceLayoutPersistenceUnavailable,
   registerWorkspaceLayoutFlusher,
 } from "@/lib/workspace/workspace-layout-persistence.ts";
-import {
-  flushTerminalLayoutFramesTrailing,
-  setTerminalLayoutPresentationScheduler,
-  type TerminalLayoutFlushReason,
-} from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
-import {
-  requestTerminalPresentation,
-  type TerminalPresentationWorkspaceState,
-  updateTerminalPresentationWorkspace,
-} from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
+import { setTerminalLayoutPresentationScheduler } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
+import { requestTerminalPresentation } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
@@ -45,11 +37,13 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { attachWorkspacePanelTransfer } from "./attach-workspace-panel-transfer.ts";
 import { getPanelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
+import { setWorkspaceBootstrapGate } from "./workspace-bootstrap-gate.ts";
 import { applyDefaultLayout } from "./workspace-default-layout.ts";
 import {
   WorkspaceHeaderActions,
   WorkspaceHeaderRightActions,
 } from "./workspace-header-actions.tsx";
+import { syncTerminalPresentation } from "./workspace-host-terminal-presentation.ts";
 import {
   createWorkspaceLayoutSaveScheduler,
   subscribeWorkspacePanelParameterChanges,
@@ -98,47 +92,6 @@ function syncActivePanelScope(panel: WorkspacePanel | null | undefined): void {
   } else {
     setTerminalBasePanel({ kind: "web" });
   }
-}
-
-function buildTerminalWorkspacePresentationState(
-  api: DockviewReadyEvent["api"]
-): TerminalPresentationWorkspaceState {
-  const activePanel = api.activePanel;
-  const activePanelKind = activePanel
-    ? panelKindOf(activePanel.view.contentComponent)
-    : "web";
-  return {
-    activePanelId: activePanel?.id ?? null,
-    activeTerminalPanelId:
-      activePanelKind === "terminal" ? (activePanel?.id ?? null) : null,
-    hasMaximizedGroup: api.hasMaximizedGroup(),
-    panels: api.panels.map((panel) => ({
-      component: panel.view.contentComponent,
-      dockviewActive: panel.api.isActive,
-      dockviewVisible: panel.api.isVisible,
-      id: panel.id,
-    })),
-  };
-}
-
-function reconcileTerminalPanels(api: DockviewReadyEvent["api"]): void {
-  const terminalPanelIds = api.panels
-    .filter((panel) => panel.view.contentComponent === "terminal")
-    .map((panel) => panel.id);
-  window.pier?.terminal?.reconcile?.(terminalPanelIds);
-}
-
-function syncTerminalPresentation(
-  api: DockviewReadyEvent["api"],
-  flushReason: TerminalLayoutFlushReason
-): void {
-  useWorkspaceStore.getState().syncTabShortcutHints();
-  updateTerminalPresentationWorkspace(
-    buildTerminalWorkspacePresentationState(api),
-    flushReason
-  );
-  flushTerminalLayoutFramesTrailing(flushReason);
-  reconcileTerminalPanels(api);
 }
 
 export function WorkspaceHost() {
@@ -395,6 +348,8 @@ export function WorkspaceHost() {
       let disposed = false;
       (async () => {
         const windowContext = await windowContextPromise.catch(() => null);
+        const isTransferStartup =
+          windowContext?.startup?.kind === "panel-transfer";
         const { saved, pendingTransfers } =
           await loadWorkspaceLayoutWithPendingTransfers(
             windowContext?.recordId
@@ -409,6 +364,14 @@ export function WorkspaceHost() {
         }
         const hasPendingTransfers =
           enterPendingTransferBootstrapGate(pendingTransfers);
+        // Transfer target window: leave Dockview empty for stageTarget to add
+        // the inert panel. Default welcome/terminal would race and flash.
+        if (isTransferStartup && !hasPendingTransfers) {
+          setWorkspaceBootstrapGate(
+            windowContext?.startup?.transferId ?? "panel-transfer",
+            "awaiting-stage-target"
+          );
+        }
         isApplyingPersistedLayout = true;
         try {
           const sanitized = restoreAndSanitizeTransferLayout(
@@ -417,7 +380,7 @@ export function WorkspaceHost() {
           );
           if (sanitized) {
             event.api.fromJSON(sanitized);
-          } else {
+          } else if (!(isTransferStartup || hasPendingTransfers)) {
             applyDefaultLayout(event.api);
           }
           syncDockviewMaximizedState();
@@ -425,15 +388,16 @@ export function WorkspaceHost() {
           syncTerminalPresentation(event.api, "restore");
         } catch (err) {
           console.error("[workspace] fromJSON failed, fallback default:", err);
-          applyDefaultLayout(event.api);
+          if (!(isTransferStartup || hasPendingTransfers)) {
+            applyDefaultLayout(event.api);
+          }
           syncDockviewMaximizedState();
           syncActivePanelScope(event.api.activePanel);
           syncTerminalPresentation(event.api, "restore");
         }
 
-        // C 方案 reload 零销毁的孤儿兜底: layout 应用后报告仍存活的 terminal
-        // panelId；swift 回收 reload 前有、新 layout 没有的 NSView。
-        reconcileTerminalPanels(event.api);
+        // syncTerminalPresentation already reconciles terminal panels (C 方案
+        // reload 零销毁的孤儿兜底).
         notifyWorkspaceReady();
 
         if (hasPendingTransfers) {

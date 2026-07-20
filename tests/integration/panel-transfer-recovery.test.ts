@@ -176,6 +176,17 @@ describe("panel transfer recovery matrix", () => {
         }
         return null;
       },
+      getWindowContentBounds: (windowId) => {
+        if (windowId === "main") {
+          return { height: 760, width: 1200, x: 0, y: 40 };
+        }
+        if (windowId === "w-1") {
+          return { height: 760, width: 1200, x: 1300, y: 40 };
+        }
+        return null;
+      },
+      getWindowZOrderTopFirst: () => null,
+      isLeftMouseButtonDown: () => false,
     };
     workspace = {
       clearLayout: vi.fn(async () => undefined),
@@ -188,6 +199,7 @@ describe("panel transfer recovery matrix", () => {
     };
     terminal = {
       commitMove: vi.fn(async () => undefined),
+      getCurrentLifecycleId: vi.fn(() => ""),
       rollback: vi.fn(async () => undefined),
       stageLease: vi.fn(async () => undefined),
     };
@@ -209,7 +221,6 @@ describe("panel transfer recovery matrix", () => {
         execute: rendererExecute as never,
         resolve: () => undefined,
       },
-      sleep: async () => undefined,
       terminal,
       userDataDir,
       windows,

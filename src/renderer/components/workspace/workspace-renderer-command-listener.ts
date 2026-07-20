@@ -10,7 +10,9 @@ function isPanelTransferCommand(type: string): boolean {
     type === "panelTransfer.prepareSource" ||
     type === "panelTransfer.stageTarget" ||
     type === "panelTransfer.releaseSource" ||
-    type === "panelTransfer.finalize"
+    type === "panelTransfer.finalize" ||
+    type === "panelTransfer.resolvePlacement" ||
+    type === "panelTransfer.probeWorkspace"
   );
 }
 

@@ -3,11 +3,13 @@
  * ownership move across Pier windows without killing the PTY.
  */
 
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { TerminalFocusCoordinator } from "../../ipc/terminal-focus-coordinator.ts";
 import type { NativeAddon } from "../../ipc/terminal-native-addon.ts";
 import { toNativePanelKey } from "../../ipc/terminal-panel-id.ts";
 import type { RegisteredTerminalTaskLifecycle } from "../../ipc/terminal-task-lifecycle-wiring.ts";
 import type { TaskOutputTerminalBindings } from "../../ipc/terminal-task-output-bindings.ts";
+import { ensureTerminalPanelSession } from "../../state/terminal-session-state.ts";
 import {
   getTransferSession,
   transferPanelOwnership as transferSessionPanelOwnership,
@@ -45,6 +47,21 @@ export interface TerminalPanelTransferDeps {
   getTaskLifecycle: () => RegisteredTerminalTaskLifecycle | null;
   getTaskOutputBindings: () => TaskOutputTerminalBindings | null;
   getTaskService: () => TaskService | null;
+  /**
+   * Replay the moved panel's persisted context/title to the target window
+   * renderer. The target panel mounts during stage — before the session entry
+   * moves under the target record — so its mount-time readSession misses and
+   * it would otherwise fall back to creation-time params until the next OSC
+   * cwd/title event (idle shells: never).
+   */
+  replayMovedSession?:
+    | ((input: {
+        context?: PanelContext | undefined;
+        panelId: string;
+        targetElectronWindowId: number;
+        title?: string | undefined;
+      }) => void)
+    | undefined;
   resolveWindow: (runtimeWindowId: string) => {
     recordId: string;
     win: AppWindow;
@@ -127,6 +144,14 @@ export function createTerminalPanelTransfer(
   );
 
   const api: TerminalPanelTransfer = {
+    getCurrentLifecycleId(input) {
+      return (
+        deps
+          .getTaskLifecycle()
+          ?.getCurrentLifecycleId(input.panelId, input.sourceWindowId) ?? ""
+      );
+    },
+
     async stageLease(input) {
       const source = deps.resolveWindow(input.sourceWindowId);
       const target = deps.resolveWindow(input.targetWindowId);
@@ -161,6 +186,12 @@ export function createTerminalPanelTransfer(
         throw new Error(
           `session lifecycle mismatch: expected ${input.lifecycleId}, got ${sourceSession.lifecycleId}`
         );
+      }
+      if (!sourceSession) {
+        // Metadata-less legacy terminal (created before the ensure-on-create
+        // invariant). Materialize the entry so commit CAS has something to
+        // move; absence of optional metadata must not veto the transfer.
+        await ensureTerminalPanelSession(source.recordId, input.panelId);
       }
 
       const staged: StagedTransfer = {
@@ -298,6 +329,27 @@ export function createTerminalPanelTransfer(
           transferId: staged.transferId,
         });
         staged.completed.push("broadcast");
+
+        if (deps.replayMovedSession) {
+          try {
+            const movedSession = await getTransferSession(
+              staged.targetRecordId,
+              staged.panelId
+            );
+            const context = movedSession?.session.context;
+            const title = movedSession?.session.title;
+            if (context || (title && title.length > 0)) {
+              deps.replayMovedSession({
+                context,
+                panelId: staged.panelId,
+                targetElectronWindowId: target.win.id,
+                title,
+              });
+            }
+          } catch {
+            // Replay is best-effort UI freshness; never fail a committed move.
+          }
+        }
 
         staged.phase = "moved";
       } catch (error) {

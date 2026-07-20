@@ -321,11 +321,12 @@ describe("WindowService", () => {
       "window-close",
       expect.stringMatching(/^window-close:main:/)
     );
+    // Session/detach scope = window record id (store keyed by record UUID).
     expect(armDetaching).toHaveBeenCalledWith({
       electronWindowId: "1",
-      recordId: "main",
+      recordId: "record-1",
     });
-    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("main");
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-1");
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
@@ -363,14 +364,14 @@ describe("WindowService", () => {
     );
     expect(armDetaching).toHaveBeenCalledWith({
       electronWindowId: "1",
-      recordId: "main",
+      recordId: "record-main",
     });
     expect(armDetaching).toHaveBeenCalledWith({
       electronWindowId: "2",
-      recordId: "w-1",
+      recordId: "record-w-1",
     });
-    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("main");
-    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("w-1");
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-main");
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-w-1");
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();

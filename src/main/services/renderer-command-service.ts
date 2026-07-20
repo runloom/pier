@@ -15,6 +15,8 @@ export interface RendererCommandHost {
 }
 
 export interface RendererCommandExecuteOptions {
+  /** Override default 15s wait for this one command. */
+  timeoutMs?: number;
   /** Explicit target window; required for panelTransfer.* (no focused fallback). */
   windowId?: string;
 }
@@ -65,7 +67,9 @@ function isPanelTransferRendererCommand(command: RendererCommand): boolean {
   switch (command.type) {
     case "panelTransfer.finalize":
     case "panelTransfer.prepareSource":
+    case "panelTransfer.probeWorkspace":
     case "panelTransfer.releaseSource":
+    case "panelTransfer.resolvePlacement":
     case "panelTransfer.stageTarget":
       return true;
     default:
@@ -83,7 +87,9 @@ function shouldFocusRendererWindow(command: RendererCommand): boolean {
     case "panel.list":
     case "panelTransfer.finalize":
     case "panelTransfer.prepareSource":
+    case "panelTransfer.probeWorkspace":
     case "panelTransfer.releaseSource":
+    case "panelTransfer.resolvePlacement":
     case "panelTransfer.stageTarget":
     case "plugin.finalizeDisable":
     case "plugin.finalizeReload":
@@ -145,7 +151,7 @@ export function createRendererCommandService({
             "platform_unavailable"
           )
         );
-      }, timeoutMs);
+      }, options?.timeoutMs ?? timeoutMs);
       pending.set(requestId, {
         expectedWebContentsId: webContentsId,
         rejectTimer,

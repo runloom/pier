@@ -124,15 +124,16 @@ export function writeQuickTaskProject(projectRoot: string): void {
 
 export const SLOW_TASK_ID = "package-script:slow";
 
-/** Spawns the slow task and polls until it is running with a panel attached. */
-export async function spawnSlowTaskUntilRunning(
+/** Spawns a package-script task and polls until it runs with a panel attached. */
+export async function spawnTaskUntilRunning(
   userDataDir: string,
-  projectRoot: string
+  projectRoot: string,
+  taskId: string
 ): Promise<{ panelId: string; runId: string }> {
   const spawn = await runPierCliJson<RunSpawnData>(userDataDir, [
     "tasks",
     "run",
-    SLOW_TASK_ID,
+    taskId,
     "--path",
     projectRoot,
   ]);
@@ -149,7 +150,7 @@ export async function spawnSlowTaskUntilRunning(
           "status",
           runId,
         ]);
-        const node = status.data?.nodes[SLOW_TASK_ID];
+        const node = status.data?.nodes[taskId];
         panelId = node?.panelId ?? panelId;
         return { hasPanelId: panelId !== "", nodeStatus: node?.status };
       },
@@ -158,6 +159,47 @@ export async function spawnSlowTaskUntilRunning(
     .toEqual({ hasPanelId: true, nodeStatus: "running" });
 
   return { panelId, runId };
+}
+
+/** Spawns the slow task and polls until it is running with a panel attached. */
+export async function spawnSlowTaskUntilRunning(
+  userDataDir: string,
+  projectRoot: string
+): Promise<{ panelId: string; runId: string }> {
+  return await spawnTaskUntilRunning(userDataDir, projectRoot, SLOW_TASK_ID);
+}
+
+export const PID_LOOP_TASK_ID = "package-script:pid-loop";
+
+/**
+ * Project whose `pid-loop` script records its own PID then appends dates
+ * forever. Gives cross-window transfer e2e a live PTY + stable PID without
+ * osascript keystroke injection (blocked on hosts without Accessibility).
+ */
+export function writePidLoopProject(
+  projectRoot: string,
+  pidFile: string
+): void {
+  const script = [
+    `fs.writeFileSync(${JSON.stringify(pidFile)}, String(process.pid));`,
+    "setInterval(() => {",
+    `  fs.appendFileSync(${JSON.stringify(`${pidFile}.dates`)}, Date.now() + "\\n");`,
+    "}, 250);",
+  ].join(" ");
+  writeFileSync(
+    join(projectRoot, "package.json"),
+    JSON.stringify(
+      {
+        name: "pier-panel-transfer-pid-e2e",
+        private: true,
+        scripts: {
+          "pid-loop": `node -e 'const fs = require("node:fs"); ${script}'`,
+        },
+      },
+      null,
+      2
+    )
+  );
 }
 
 export function makeTempUserDataDir(prefix = "pier-e2e-"): string {

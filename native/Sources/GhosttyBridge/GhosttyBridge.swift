@@ -776,13 +776,36 @@ final class GhosttyBridgeImpl {
         }
     }
 
+    /// Controllers that drive terminal surfaces parented to `window`.
+    /// After cross-window move coexistence, immigrated terminals may still
+    /// hold their source controller object — theme/font/config must reach
+    /// every such controller, not only `controllers[windowId]`.
+    private func controllersHosting(window: NSWindow) -> [TerminalController] {
+        var ordered: [TerminalController] = []
+        var seen = Set<ObjectIdentifier>()
+        func append(_ controller: TerminalController) {
+            let id = ObjectIdentifier(controller)
+            guard !seen.contains(id) else { return }
+            seen.insert(id)
+            ordered.append(controller)
+        }
+        append(controller(for: window))
+        for term in terminals.values where term.parentWindow === window {
+            if let hosted = term.terminalView.controller {
+                append(hosted)
+            }
+        }
+        return ordered
+    }
+
     private func applyTerminalRuntimeConfiguration(window: NSWindow) {
         let windowId = ObjectIdentifier(window)
-        controller(for: window).setTerminalConfiguration(
-            Self.terminalConfiguration(
-                from: terminalRuntimePreferences[windowId] ?? TerminalRuntimePreferences()
-            )
+        let configuration = Self.terminalConfiguration(
+            from: terminalRuntimePreferences[windowId] ?? TerminalRuntimePreferences()
         )
+        for hosted in controllersHosting(window: window) {
+            hosted.setTerminalConfiguration(configuration)
+        }
     }
 
     private func mutateTerminalRuntimePreferences(
@@ -1505,31 +1528,54 @@ final class GhosttyBridgeImpl {
         // 1) Drop source router target first so hits stop routing to the old window.
         eventRouters[sourceWindowId]?.targets.removeValue(forKey: fromNativePanelId)
 
-        // 2) Move per-window controller ownership to the target WITHOUT changing
-        //    the TerminalView.controller object identity.
+        // 2) Controller ownership. The moved TerminalView must keep the SAME
+        //    controller object (assignment rebuilds the surface), so there are
+        //    two cases:
+        //    - Target already hosts a different controller with live terminals
+        //      (drop into a window that has its own terminals): coexist. Maps
+        //      stay untouched; the moved view keeps its controller. Theme /
+        //      font / config fan out via controllersHosting(_:) so subsequent
+        //      window-scoped applies reach immigrated surfaces too. Sync the
+        //      target's current runtime prefs onto the moving controller now
+        //      so font/cursor/scrollback match immediately.
+        //    - Otherwise (fresh transfer window / empty target): the target
+        //      slot adopts the moving controller. Clear the source slot only
+        //      when no other source terminal still relies on it — otherwise
+        //      remaining source terminals would lazily get a NEW controller
+        //      and stop receiving theme/font updates.
         let movingController = term.terminalView.controller
             ?? controllers[sourceWindowId]
         if sourceWindowId != targetWindowId, let movingController {
-            // Target must not already host a different controller with live terminals.
-            if let existingTargetController = controllers[targetWindowId],
-               existingTargetController !== movingController
-            {
-                let targetHasOtherTerminals = terminals.contains {
+            let existingTargetController = controllers[targetWindowId]
+            let targetHasLiveController =
+                existingTargetController != nil
+                && existingTargetController !== movingController
+                && terminals.contains {
                     $0.key != fromNativePanelId
                         && ObjectIdentifier($0.value.parentWindow) == targetWindowId
                 }
-                if targetHasOtherTerminals {
-                    restore()
-                    return false
+            if targetHasLiveController {
+                let prefs =
+                    terminalRuntimePreferences[targetWindowId]
+                    ?? TerminalRuntimePreferences()
+                movingController.setTerminalConfiguration(
+                    Self.terminalConfiguration(from: prefs)
+                )
+            } else {
+                controllers[targetWindowId] = movingController
+                let sourceHasOtherTerminals = terminals.contains {
+                    $0.key != fromNativePanelId
+                        && ObjectIdentifier($0.value.parentWindow) == sourceWindowId
                 }
-            }
-            controllers[targetWindowId] = movingController
-            if controllers[sourceWindowId] === movingController {
-                controllers.removeValue(forKey: sourceWindowId)
-            }
-            // Only assign if different — assignment rebuilds surface.
-            if term.terminalView.controller !== movingController {
-                term.terminalView.controller = movingController
+                if controllers[sourceWindowId] === movingController,
+                   !sourceHasOtherTerminals
+                {
+                    controllers.removeValue(forKey: sourceWindowId)
+                }
+                // Only assign if different — assignment rebuilds surface.
+                if term.terminalView.controller !== movingController {
+                    term.terminalView.controller = movingController
+                }
             }
         }
 
@@ -1673,9 +1719,10 @@ final class GhosttyBridgeImpl {
 
     // MARK: - Theme apply
 
-    /// 把 Pier 主题派生的终端配色应用到该 window 下的 Ghostty controller. 走库的
-    /// `controller.setTheme(...)` 路径, 内部 reconfigure 并 push 到 ghostty app, shell
-    /// 进程不重启. 一个 controller 服务 window 下所有 terminal panel.
+    /// 把 Pier 主题派生的终端配色应用到该 window 下所有托管 Ghostty controller.
+    /// 走库的 `controller.setTheme(...)` 路径, 内部 reconfigure 并 push 到
+    /// ghostty app, shell 进程不重启. 同窗多 controller（跨窗 move 共存）时
+    /// 必须 fan-out，否则 immigrated surface 会永久停在旧主题.
     ///
     /// controller(for:) 是 lazy 创建 — 即使 applyTheme 在 createTerminal 之前调
     /// (主题 hydrate 顺序在前), 也会 cache 主题; 后续 createTerminal 拿到的是已经
@@ -1689,7 +1736,6 @@ final class GhosttyBridgeImpl {
         selectionForeground: String?,
         palette: [Int: String]
     ) {
-        let controller = controller(for: window)
         let definition = GhosttyThemeDefinition(
             name: "pier-runtime",
             background: background,
@@ -1700,7 +1746,10 @@ final class GhosttyBridgeImpl {
             selectionForeground: selectionForeground,
             palette: palette
         )
-        controller.setTheme(definition.toTerminalTheme())
+        let theme = definition.toTerminalTheme()
+        for hosted in controllersHosting(window: window) {
+            hosted.setTheme(theme)
+        }
         if let backgroundColor = Self.terminalBackgroundColor(from: background) {
             let windowId = ObjectIdentifier(window)
             terminalBackgrounds[windowId] = backgroundColor
@@ -1710,7 +1759,7 @@ final class GhosttyBridgeImpl {
         }
     }
 
-    /// 把字体配置写入 window 下的 TerminalController. 走 setTerminalConfiguration
+    /// 把字体配置写入 window 下所有托管 TerminalController. 走 setTerminalConfiguration
     /// → ghostty_app_update_config + ghostty_surface_update_config (hot-reload),
     /// 不重建 surface 不杀 shell. controller 是 lazy 创建 — 即使 setFont 在 createTerminal
     /// 之前调 (字体 hydrate 顺序在前), 后续 createTerminal 拿到的 controller 已带字体配置.

@@ -157,7 +157,7 @@ export async function armAndDetachAgentsBeforeClose(
     return;
   }
   const electronWindowId = context.electronWindowId ?? String(window.id);
-  const sessionScope = context.windowId;
+  const sessionScope = context.recordId;
   armDetaching({ electronWindowId, recordId: sessionScope });
   await detachAgentsForWindow(sessionScope);
 }

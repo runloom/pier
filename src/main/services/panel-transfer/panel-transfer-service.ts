@@ -5,13 +5,12 @@ import type {
 } from "@shared/contracts/panel-transfer.ts";
 import { PanelTransferJournal } from "../../state/panel-transfer-journal.ts";
 import type { RendererCommandService } from "../renderer-command-service.ts";
+import { finishPanelTransferDrag } from "./panel-transfer-finish-drag.ts";
 import {
-  classifyTransferCursor,
   computeTransferNewWindowBounds,
   createNoopPanelTransferFilesPort,
   createNoopPanelTransferTerminalPort,
   createPanelTransferRendererPort,
-  defaultPanelTransferSleep,
   panelTransferFailure,
   samePanelTransferCaller,
 } from "./panel-transfer-helpers.ts";
@@ -23,7 +22,6 @@ import {
 import {
   PANEL_TRANSFER_CLAIM_TOTAL_MS,
   PANEL_TRANSFER_DROP_WAIT_MS,
-  PANEL_TRANSFER_FINISH_DROP_WINDOW_MS,
   PANEL_TRANSFER_OFFER_TTL_MS,
   PANEL_TRANSFER_SHOW_HOLD_REASON,
   PANEL_TRANSFER_TOMBSTONE_TTL_MS,
@@ -71,7 +69,6 @@ export interface CreatePanelTransferServiceArgs {
   reportJournalParseFailure?:
     | ((path: string, error: unknown) => void)
     | undefined;
-  sleep?: (ms: number, signal?: AbortSignal) => Promise<void>;
   terminal?: PanelTransferTerminalPort;
   userDataDir: string;
   windows: PanelTransferWindowPort;
@@ -82,7 +79,6 @@ export function createPanelTransferService(
   args: CreatePanelTransferServiceArgs
 ): PanelTransferService {
   const now = args.now ?? Date.now;
-  const sleep = args.sleep ?? defaultPanelTransferSleep;
   const journal = args.journal ?? new PanelTransferJournal(args.userDataDir);
   const files = args.files ?? createNoopPanelTransferFilesPort();
   const terminal = args.terminal ?? createNoopPanelTransferTerminalPort();
@@ -398,81 +394,24 @@ export function createPanelTransferService(
     },
 
     async finishDrag(caller, transferId) {
-      pruneTombstones();
       const tombstone = tombstones.get(transferId);
-      if (tombstone) return tombstone.result;
-      const live = offers.get(transferId);
-      if (!live) return null;
-      if (
-        !samePanelTransferCaller(live.source, caller) &&
-        live.source.runtimeWindowId !== caller.runtimeWindowId
-      ) {
-        return panelTransferFailure(
-          "invalid_offer",
-          "finishDrag requires source window"
-        );
+      if (tombstone) {
+        return tombstone.result;
       }
-      if (live.unsupported || live.capability === "unsupported") {
-        clearOffer(transferId);
-        const result = panelTransferFailure(
-          "not_supported",
-          "panel transfer not supported"
-        );
-        rememberTombstone(transferId, result);
-        return result;
-      }
-
-      try {
-        await sleep(PANEL_TRANSFER_FINISH_DROP_WINDOW_MS, live.abort.signal);
-      } catch {
-        clearOffer(transferId);
-        return panelTransferFailure("expired", "transfer cancelled");
-      }
-
-      if (live.claim) {
-        if (live.claim.kind === "managed") return null;
-        return await live.claim.deferred.promise;
-      }
-
-      const classification = classifyTransferCursor(
-        args.geometry,
-        args.windows,
-        live.source.runtimeWindowId
-      );
-      if (classification.kind === "source") {
-        live.abort.abort(new DOMException("same-window abort", "AbortError"));
-        clearOffer(transferId);
-        return null;
-      }
-
-      if (classification.kind === "managed") {
-        const remaining = Math.max(
-          PANEL_TRANSFER_DROP_WAIT_MS - PANEL_TRANSFER_FINISH_DROP_WINDOW_MS,
-          0
-        );
-        if (remaining > 0) {
-          try {
-            await sleep(remaining, live.abort.signal);
-          } catch {
-            clearOffer(transferId);
-            return panelTransferFailure("expired", "transfer cancelled");
-          }
-        }
-        live.abort.abort(
-          new DOMException("unclaimed managed hover", "AbortError")
-        );
-        clearOffer(transferId);
-        return null;
-      }
-
-      return await tryClaim(
-        live,
+      return await finishPanelTransferDrag(
         {
-          kind: "internal",
-          runtimeWindowId: `pending:${transferId}`,
-          windowRecordId: `pending:${transferId}`,
+          clearOffer,
+          geometry: args.geometry,
+          getOffer: (id) => offers.get(id),
+          pruneTombstones,
+          rememberTombstone,
+          renderer,
+          tryClaim,
+          waitForOffer,
+          windows: args.windows,
         },
-        { kind: "root" }
+        caller,
+        transferId
       );
     },
   };

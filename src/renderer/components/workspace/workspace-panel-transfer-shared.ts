@@ -32,7 +32,14 @@ export interface UnhandledDragOverEventLike {
 export interface DidDropEventLike {
   group?: DockviewGroup | undefined;
   nativeEvent: DragEvent | PointerEvent;
+  /** Header drops: the tab at the insertion index (undefined = append). */
+  panel?: { id: string } | undefined;
   position?: string | undefined;
+}
+
+export interface WillDropEventLike {
+  nativeEvent: DragEvent | PointerEvent;
+  preventDefault(): void;
 }
 
 export function pierPanelTransfer() {
@@ -133,10 +140,15 @@ export async function showPanelTransferFailure(
   result: Extract<PanelTransferResult, { ok: false }>
 ): Promise<void> {
   const t = i18next.getFixedT(i18next.language);
-  const title = t("workspace.panelTransfer.dropFailedTitle", {
-    defaultValue: "Couldn’t move the tab",
-  });
-  const body =
+  const title =
+    result.code === "not_supported"
+      ? t("workspace.panelTransfer.unsupportedTitle", {
+          defaultValue: "This tab can’t move to another window",
+        })
+      : t("workspace.panelTransfer.dropFailedTitle", {
+          defaultValue: "Couldn’t move the tab",
+        });
+  const genericBody =
     result.code === "not_supported"
       ? t("workspace.panelTransfer.unsupportedBody", {
           defaultValue: "This kind of tab doesn’t support cross-window moves.",
@@ -144,5 +156,11 @@ export async function showPanelTransferFailure(
       : t("workspace.panelTransfer.dropFailedBody", {
           defaultValue: "The tab couldn’t be moved to that window.",
         });
+  // Surface technical detail so silent race/timeout failures are diagnosable.
+  const detail = result.message.trim();
+  const body =
+    detail.length > 0 && result.code !== "not_supported"
+      ? `${genericBody}\n\n${detail}`
+      : genericBody;
   await showAppAlert({ body, size: "default", title });
 }

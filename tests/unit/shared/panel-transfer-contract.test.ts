@@ -461,7 +461,7 @@ describe("panel transfer commands", () => {
     ).toBe(false);
   });
 
-  it("registers the four renderer-side panelTransfer commands", () => {
+  it("registers the five renderer-side panelTransfer commands", () => {
     expect(
       rendererCommandSchema.parse({
         type: "panelTransfer.prepareSource",
@@ -494,6 +494,18 @@ describe("panel transfer commands", () => {
         outcome: "commit",
       })
     ).toMatchObject({ type: "panelTransfer.finalize" });
+    expect(
+      rendererCommandSchema.parse({
+        type: "panelTransfer.resolvePlacement",
+        transferId: TRANSFER_ID,
+        clientX: 120.5,
+        clientY: 48,
+      })
+    ).toMatchObject({
+      clientX: 120.5,
+      clientY: 48,
+      type: "panelTransfer.resolvePlacement",
+    });
   });
 
   it("rejects illegal renderer panelTransfer payloads", () => {

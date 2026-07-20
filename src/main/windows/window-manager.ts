@@ -313,8 +313,8 @@ class WindowManager {
           : {
               electronWindowId:
                 context.electronWindowId ?? String(electronWindowId),
-              // session store / windowRecordIdFor 用 runtime windowId，不是 record UUID
-              recordId: context.windowId,
+              // session store / windowRecordIdFor 统一用 record UUID
+              recordId: context.recordId,
             };
       if (
         detachingKeys &&
@@ -352,7 +352,7 @@ class WindowManager {
         scheduleDisarmDetaching({
           electronWindowId:
             context.electronWindowId ?? String(electronWindowId),
-          recordId: context.windowId,
+          recordId: context.recordId,
         });
       }
       forgetAppWindow(window);
@@ -441,7 +441,7 @@ class WindowManager {
             ? null
             : {
                 electronWindowId: context.electronWindowId ?? String(window.id),
-                recordId: context.windowId,
+                recordId: context.recordId,
               };
         if (detachingKeys) {
           armDetaching(detachingKeys);

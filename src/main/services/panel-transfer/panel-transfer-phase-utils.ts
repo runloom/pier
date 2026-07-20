@@ -19,7 +19,11 @@ export function requireOk(
   message: string
 ): asserts result is Extract<RendererCommandResult, { ok: true }> {
   if (!result.ok) {
-    throw new Error(result.error.message || message);
+    // Keep the step context — renderer errors like "workspace api not ready"
+    // are useless for diagnosis without knowing which step produced them.
+    throw new Error(
+      result.error.message ? `${message}: ${result.error.message}` : message
+    );
   }
 }
 

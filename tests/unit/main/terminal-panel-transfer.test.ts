@@ -23,6 +23,7 @@ function fakeWin(id: number): AppWindow {
 const transferSession = vi.fn();
 const rollbackSession = vi.fn();
 const getTransferSession = vi.fn();
+const ensureSession = vi.fn();
 
 vi.mock("../../../src/main/state/terminal-session-transfer.ts", () => ({
   getTransferSession: (...args: unknown[]) => getTransferSession(...args),
@@ -31,13 +32,19 @@ vi.mock("../../../src/main/state/terminal-session-transfer.ts", () => ({
   transferPanelOwnership: (...args: unknown[]) => transferSession(...args),
 }));
 
+vi.mock("../../../src/main/state/terminal-session-state.ts", () => ({
+  ensureTerminalPanelSession: (...args: unknown[]) => ensureSession(...args),
+}));
+
 describe("TerminalPanelTransfer", () => {
   beforeEach(() => {
     vi.resetModules();
     transferSession.mockReset();
     rollbackSession.mockReset();
     getTransferSession.mockReset();
+    ensureSession.mockReset();
     getTransferSession.mockResolvedValue(null);
+    ensureSession.mockResolvedValue(undefined);
     transferSession.mockResolvedValue({
       panelId: "panel-1",
       sourceRecordId: "source-record",
@@ -79,6 +86,7 @@ describe("TerminalPanelTransfer", () => {
     const transferScopes = vi.fn();
     const surfaceWillClose = vi.fn();
     const surfaceCreated = vi.fn();
+    const replayMovedSession = vi.fn();
     const lifecycleId = args.lifecycleId ?? "";
     const transfer = args.createTerminalPanelTransfer({
       focusCoordinator: { surfaceCreated, surfaceWillClose } as never,
@@ -95,6 +103,7 @@ describe("TerminalPanelTransfer", () => {
       getTaskOutputBindings: () => ({ moveNativeKey }) as never,
       getTaskService: () =>
         ({ moveRunningOwnerWindow: moveTaskOwner }) as never,
+      replayMovedSession,
       resolveWindow: (runtimeWindowId) => {
         if (runtimeWindowId === "source") {
           return { recordId: "source-record", win: args.sourceWin };
@@ -110,6 +119,7 @@ describe("TerminalPanelTransfer", () => {
       moveOwner,
       moveTaskOwner,
       moveTerminal,
+      replayMovedSession,
       surfaceCreated,
       surfaceWillClose,
       transfer,
@@ -246,6 +256,96 @@ describe("TerminalPanelTransfer", () => {
       toBrowserWindowId: 3,
     });
     expect(transfer.isPanelLeased("source", "panel-1")).toBe(false);
+  });
+
+  it("commitMove replays moved session context/title to the target window", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    const { replayMovedSession, transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      sourceWin: fakeWin(7),
+      targetWin: fakeWin(8),
+    });
+
+    await transfer.stageLease({
+      lifecycleId: "",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-5",
+    });
+    const movedContext = {
+      contextId: "ctx:abc",
+      cwd: "/Users/me/loomdesk",
+      projectRootPath: "/Users/me/loomdesk",
+      source: "panel",
+      updatedAt: 1,
+      worktreeKey: "/Users/me/loomdesk",
+    };
+    getTransferSession.mockImplementation(async (recordId: unknown) =>
+      recordId === "target-record"
+        ? {
+            lifecycleId: "",
+            panelId: "panel-1",
+            recordId,
+            session: {
+              context: movedContext,
+              title: "zsh",
+              updatedAt: "2026-01-01T00:00:00.000Z",
+            },
+          }
+        : null
+    );
+    await transfer.commitMove({
+      lifecycleId: "",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-5",
+    });
+
+    expect(replayMovedSession).toHaveBeenCalledTimes(1);
+    expect(replayMovedSession).toHaveBeenCalledWith({
+      context: movedContext,
+      panelId: "panel-1",
+      targetElectronWindowId: 8,
+      title: "zsh",
+    });
+  });
+
+  it("commitMove skips replay when moved session has no context or title", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    const { replayMovedSession, transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      sourceWin: fakeWin(9),
+      targetWin: fakeWin(10),
+    });
+
+    await transfer.stageLease({
+      lifecycleId: "",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-6",
+    });
+    getTransferSession.mockImplementation(async (recordId: unknown) =>
+      recordId === "target-record"
+        ? {
+            lifecycleId: "",
+            panelId: "panel-1",
+            recordId,
+            session: { updatedAt: "2026-01-01T00:00:00.000Z" },
+          }
+        : null
+    );
+    await transfer.commitMove({
+      lifecycleId: "",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-6",
+    });
+
+    expect(replayMovedSession).not.toHaveBeenCalled();
   });
 
   it("rollback after commitMove still reverses before journal commit point", async () => {

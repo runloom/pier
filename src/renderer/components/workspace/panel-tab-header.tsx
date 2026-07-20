@@ -44,7 +44,6 @@ import {
   tabStatusIndicator,
   tabTooltipText,
 } from "./panel-tab-tooltip.tsx";
-import { usePanelTransferTabDrop } from "./use-panel-transfer-tab-drop.ts";
 
 export { PANEL_TAB_TOOLTIP_DELAY_MS } from "./panel-tab-tooltip.tsx";
 
@@ -296,7 +295,6 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   // biome a11y noStaticElementInteractions / noNoninteractiveElementInteractions 要求
   // onContextMenu div 有 role. dockview 外层 .dv-tab 已有 tabIndex=0, 两层重叠影响有限:
   // 外层是 dockview 自己渲染的 DOM, 不受此 React 树控制.
-  const tabDropHandlers = usePanelTransferTabDrop({ api: props.api });
   const tabContent = (
     <div
       aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
@@ -311,8 +309,6 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       onClick={onClick}
       onContextMenu={onContextMenu}
       onDoubleClick={onDoubleClick}
-      onDragOverCapture={tabDropHandlers.onDragOverCapture}
-      onDropCapture={tabDropHandlers.onDropCapture}
       onKeyDown={onKeyDown}
       onPointerDownCapture={onPointerDownCapture}
       role="tab"

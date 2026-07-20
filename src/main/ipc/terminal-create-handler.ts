@@ -13,6 +13,7 @@ import type { ProcessEnvironmentService } from "../services/process-environment-
 import type { TaskService } from "../services/tasks/task-service-types.ts";
 import {
   clearTerminalPanelAgent,
+  ensureTerminalPanelSession,
   readTerminalPanelSession,
 } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
@@ -244,6 +245,9 @@ export async function handleTerminalCreate(args: {
       }
     }
     consumeCreateLaunch(createArgs);
+    // Invariant: live terminal ⇒ session entry exists (transfer CAS relies on
+    // it). Context/tab writers below only add metadata onto this entry.
+    await ensureTerminalPanelSession(sessionScope, createArgs.panelId);
     await persistInitialTerminalContext(
       sessionScope,
       createArgs.panelId,

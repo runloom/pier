@@ -16,8 +16,15 @@ export interface PanelTransferRendererPort {
     transferId: string;
     windowId: string;
   }): Promise<RendererCommandResult>;
+  probeWorkspace(input: { windowId: string }): Promise<RendererCommandResult>;
   releaseSource(input: {
     sourcePanelId: string;
+    transferId: string;
+    windowId: string;
+  }): Promise<RendererCommandResult>;
+  resolvePlacement(input: {
+    clientX: number;
+    clientY: number;
     transferId: string;
     windowId: string;
   }): Promise<RendererCommandResult>;

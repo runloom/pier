@@ -9,6 +9,7 @@ import {
   rollbackBeforeCommit,
   rollForwardAfterRuntimeMoved,
 } from "./panel-transfer-commit.ts";
+import { waitForTargetWorkspaceReady } from "./panel-transfer-helpers.ts";
 import {
   requireOk,
   snapshotFromPrepare,
@@ -106,10 +107,17 @@ export async function runClaimedTransfer(
       windowId: source.runtimeWindowId,
     });
     requireOk(prepareResult, "prepareSource failed");
+    // Terminal lifecycle identity comes from main's canonical registry —
+    // renderer snapshots carry only runtimeKind and never forge lifecycle.
+    const terminalLifecycleId = deps.terminal.getCurrentLifecycleId({
+      panelId,
+      sourceWindowId: source.runtimeWindowId,
+    });
     const snapshot = snapshotFromPrepare(
       prepareResult,
       panelId,
-      record.offer.panel.componentId
+      record.offer.panel.componentId,
+      terminalLifecycleId
     );
     record = await writePhase(deps.journal, record, "source-prepared", {
       snapshot,
@@ -144,6 +152,13 @@ export async function runClaimedTransfer(
         PANEL_TRANSFER_SHOW_HOLD_REASON
       );
     }
+
+    // New windows (and slow managed targets) may not have Dockview api yet.
+    await waitForTargetWorkspaceReady(
+      deps.renderer,
+      target.runtimeWindowId,
+      abortSignal
+    );
 
     const stageResult = await deps.renderer.stageTarget({
       panel: snapshot.panel,

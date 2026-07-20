@@ -993,4 +993,37 @@ describe("terminal session state", () => {
       readTerminalPanelSession("target-record", "shell-1")
     ).resolves.toMatchObject({ context: pier });
   });
+
+  it("ensureTerminalPanelSession materializes an entry without clobbering metadata", async () => {
+    const {
+      ensureTerminalPanelSession,
+      readTerminalPanelSession,
+      transferPanelOwnership,
+      updateTerminalPanelContext,
+    } = await loadTerminalSessionState();
+
+    // Bare entry: metadata-less live terminal becomes transferable.
+    await ensureTerminalPanelSession("record-a", "shell-bare");
+    await expect(
+      readTerminalPanelSession("record-a", "shell-bare")
+    ).resolves.toMatchObject({ updatedAt: expect.any(String) });
+
+    await transferPanelOwnership({
+      expectedLifecycleId: "",
+      panelId: "shell-bare",
+      sourceRecordId: "record-a",
+      targetRecordId: "record-b",
+    });
+    await expect(
+      readTerminalPanelSession("record-b", "shell-bare")
+    ).resolves.not.toBeNull();
+
+    // Ensure after metadata write is a no-op.
+    const pier = context("/Users/xyz/ABC/pier");
+    await updateTerminalPanelContext("record-a", "shell-keep", pier);
+    await ensureTerminalPanelSession("record-a", "shell-keep");
+    await expect(
+      readTerminalPanelSession("record-a", "shell-keep")
+    ).resolves.toMatchObject({ context: pier });
+  });
 });

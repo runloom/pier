@@ -127,6 +127,26 @@ export function clearFinalizeRecord(transferId: string): void {
 }
 
 /**
+ * Staged target panels keyed by transferId. Written by stageTarget so
+ * finalize(target, commit) can activate the panel it staged (VS Code
+ * `targetGroup.focus()` semantics — a moved panel lands active).
+ */
+const stagedTargetPanels = new Map<string, string>();
+
+export function setStagedTargetPanel(
+  transferId: string,
+  panelId: string
+): void {
+  stagedTargetPanels.set(transferId, panelId);
+}
+
+export function takeStagedTargetPanel(transferId: string): string | null {
+  const panelId = stagedTargetPanels.get(transferId) ?? null;
+  stagedTargetPanels.delete(transferId);
+  return panelId;
+}
+
+/**
  * Bootstrap gate: when a pending transfer is being restored into this window,
  * block workspace mutations (shortcuts, plugin add-close, user scheduler) but
  * allow transfer commands (stageTarget / releaseSource / finalize + explicit
@@ -137,6 +157,19 @@ let bootstrapGate: {
   transferId: string;
   reason: string;
 } | null = null;
+
+/**
+ * Transfers whose finalize already ran in this window. A transfer-startup
+ * window sets its gate from an async boot path; when the whole transaction
+ * outruns that boot path, the release (in finalize) would happen BEFORE the
+ * set — leaving a permanent gate. Late set attempts for finalized transfers
+ * must be no-ops.
+ */
+const finalizedGateTombstones = new Set<string>();
+
+export function recordFinalizedGateTombstone(transferId: string): void {
+  finalizedGateTombstones.add(transferId);
+}
 
 export function isWorkspaceBootstrapGateActive(): boolean {
   return bootstrapGate !== null;
@@ -153,6 +186,9 @@ export function setWorkspaceBootstrapGate(
   transferId: string,
   reason: string
 ): void {
+  if (finalizedGateTombstones.has(transferId)) {
+    return;
+  }
   bootstrapGate = { transferId, reason };
 }
 
@@ -167,5 +203,7 @@ export function resetPanelTransferRuntimeForTests(): void {
   relocationSuppressed = false;
   frozenSourceSnapshots.clear();
   finalizeRecords.clear();
+  stagedTargetPanels.clear();
+  finalizedGateTombstones.clear();
   bootstrapGate = null;
 }

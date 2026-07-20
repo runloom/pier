@@ -912,6 +912,42 @@ static Napi::Object TerminalWindowStateResult(
     return result;
 }
 
+// Synchronous mouse-button state for Path B panel-transfer finishDrag.
+// HTML5 drag sessions suppress keydown / mouse-up delivery into the source
+// WebContents; NSEvent.pressedMouseButtons is a process-wide query that does
+// not depend on event delivery, so dragend can distinguish Escape/cancel
+// (button still down) from a real release (button up).
+static Napi::Value JsIsLeftMouseButtonDown(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    const NSUInteger buttons = [NSEvent pressedMouseButtons];
+    const bool down = (buttons & (1ULL << 0)) != 0;
+    return Napi::Boolean::New(env, down);
+}
+
+// True window z-order (front → back) for panel-transfer cursor classification.
+// Electron exposes no z-order API; overlapping windows must resolve drop
+// ownership by what the user actually sees on top.
+static Napi::Value JsOrderedWindowNumbers(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    NSArray<NSWindow*>* ordered = [NSApp orderedWindows];
+    Napi::Array result = Napi::Array::New(env, ordered.count);
+    for (NSUInteger i = 0; i < ordered.count; i++) {
+        result.Set(static_cast<uint32_t>(i),
+                   Napi::Number::New(env, static_cast<double>(ordered[i].windowNumber)));
+    }
+    return result;
+}
+
+static Napi::Value JsWindowNumberFor(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 1 || !info[0].IsBuffer()) {
+        return Napi::Number::New(env, -1);
+    }
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return Napi::Number::New(env, -1);
+    return Napi::Number::New(env, static_cast<double>(win.windowNumber));
+}
+
 static Napi::Value JsApplyTerminalWindowState(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     NSWindow* win = WindowFromHandle(info[0]);
@@ -979,6 +1015,9 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setTerminalFont", Napi::Function::New(env, JsSetFontConfig));
     exports.Set("setTerminalConfig", Napi::Function::New(env, JsSetTerminalConfig));
     exports.Set("registerFonts", Napi::Function::New(env, JsRegisterFonts));
+    exports.Set("isLeftMouseButtonDown", Napi::Function::New(env, JsIsLeftMouseButtonDown));
+    exports.Set("orderedWindowNumbers", Napi::Function::New(env, JsOrderedWindowNumbers));
+    exports.Set("windowNumberFor", Napi::Function::New(env, JsWindowNumberFor));
     return exports;
 }
 
