@@ -124,12 +124,23 @@ function contextWithSnapshot(snapshot: ClaudeAccountsSnapshot): {
       notifications: {
         error: vi.fn(),
         info: vi.fn(),
+        loading: vi.fn(() => ({
+          dismiss: vi.fn(),
+          info: vi.fn(),
+          success: vi.fn(),
+          update: vi.fn(),
+        })),
         success: vi.fn(),
       },
       panels: { register: vi.fn(() => () => undefined) },
       rpc: {
         invoke,
         on: vi.fn(() => () => undefined),
+      },
+      terminals: {
+        open: vi.fn(() =>
+          Promise.resolve({ panelId: "terminal-1", windowId: "main" })
+        ),
       },
       settingsPages: {
         register: vi.fn(() => () => undefined),
