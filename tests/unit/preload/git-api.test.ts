@@ -14,7 +14,11 @@ vi.mock("electron", () => ({
 import { gitApi } from "@preload/git-api.ts";
 
 const operationId = "00000000-0000-4000-8000-000000000001";
-const source = { contextId: "ctx-1", gitRootPath: "/repo" };
+const source = {
+  contextId: "ctx-1",
+  gitRootPath: "/repo",
+  target: { kind: "uncommitted" as const },
+};
 
 function deferred<T>() {
   let resolve!: (value: T) => void;

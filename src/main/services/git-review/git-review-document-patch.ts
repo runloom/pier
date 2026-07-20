@@ -1,5 +1,4 @@
 import { isUtf8 } from "node:buffer";
-import { createHash } from "node:crypto";
 import { mkdir, realpath } from "node:fs/promises";
 import { isAbsolute, join, resolve } from "node:path";
 import {
@@ -24,18 +23,13 @@ import {
   type GitReviewPatchMaterial,
   type ReadGitReviewPatchOptions,
 } from "./git-review-document-patch-contract.ts";
-import { raceGitReviewIdentityBoundary } from "./git-review-identity-boundary.ts";
 import {
-  type GitReviewIndexExecutionBudget,
-  GitReviewIndexExecutionError,
-} from "./git-review-index-contract.ts";
-import {
-  type GitReviewFileFingerprint,
-  type GitReviewFileSnapshot,
-  GitReviewPathError,
-  readGitReviewFileFingerprint,
-  readGitReviewFileSnapshot,
-} from "./git-review-path-guard.ts";
+  raceFilesystemOperation,
+  tryReadFingerprint,
+  tryReadSnapshot,
+} from "./git-review-document-patch-snapshot.ts";
+import type { GitReviewIndexExecutionBudget } from "./git-review-index-contract.ts";
+import type { GitReviewFileFingerprint } from "./git-review-path-guard.ts";
 import {
   createGitReviewExactPathspecs,
   hasGitReviewExactPathspecConflict,
@@ -354,95 +348,25 @@ function createTrackedPatchArgs(
       ...pathspecs,
     ];
   }
-  const exhaustive: never = options.group;
-  return exhaustive;
-}
-
-function raceFilesystemOperation<T>(
-  options: ReadGitReviewPatchOptions,
-  operation: () => Promise<T>
-): Promise<T> {
-  return raceGitReviewIdentityBoundary(operation, {
-    budget: options.budget,
-    ...(options.signal === undefined ? {} : { signal: options.signal }),
-  });
-}
-
-async function tryReadSnapshot(
-  options: ReadGitReviewPatchOptions
-): Promise<
-  | { readonly kind: "snapshot"; readonly snapshot: GitReviewFileSnapshot }
-  | Extract<GitReviewPatchMaterial, { kind: "state" }>
-> {
-  try {
-    return {
-      kind: "snapshot",
-      snapshot: await readGitReviewFileSnapshot({
-        budget: options.budget,
-        gitRootPath: options.gitRootPath,
-        path: options.fact.targetPath,
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-      }),
-    };
-  } catch (error) {
-    return pathErrorToSnapshotResult(error, options);
-  }
-}
-
-async function tryReadFingerprint(
-  options: ReadGitReviewPatchOptions
-): Promise<
-  | { readonly kind: "snapshot"; readonly snapshot: GitReviewFileFingerprint }
-  | Extract<GitReviewPatchMaterial, { kind: "state" }>
-> {
-  try {
-    return {
-      kind: "snapshot",
-      snapshot: await readGitReviewFileFingerprint({
-        budget: options.budget,
-        gitRootPath: options.gitRootPath,
-        path: options.fact.targetPath,
-        ...(options.signal === undefined ? {} : { signal: options.signal }),
-      }),
-    };
-  } catch (error) {
-    return pathErrorToSnapshotResult(error, options);
-  }
-}
-
-function pathErrorToSnapshotResult(
-  error: unknown,
-  options: ReadGitReviewPatchOptions
-): Extract<GitReviewPatchMaterial, { kind: "state" }> {
-  if (!(error instanceof GitReviewPathError)) {
-    throw error;
-  }
-  if (error.reason === "changed" || error.reason === "missing") {
-    throw new GitReviewDocumentStaleError(error.message, { cause: error });
-  }
-  if (error.reason === "aborted") {
-    const budgetFailure = options.budget.failureReason();
-    if (budgetFailure !== null) {
-      throw new GitReviewIndexExecutionError(
-        budgetFailure,
-        `Git Review 文件读取 ${budgetFailure}`
+  if (options.group === "committed") {
+    const bounds = options.rangeBounds;
+    if (!bounds) {
+      throw new GitReviewDocumentProtocolError(
+        "committed section 缺少 range 边界"
       );
     }
-    throw new GitReviewIndexExecutionError(
-      "aborted",
-      "Git Review 文件读取已取消"
-    );
+    return [
+      "diff",
+      ...PATCH_MACHINE_ARGS,
+      ...movementFilter,
+      bounds.baseOid,
+      bounds.headOid,
+      "--",
+      ...pathspecs,
+    ];
   }
-  let reason: "readError" | "symlink" | "tooLarge" = "readError";
-  if (error.reason === "symlink") {
-    reason = "symlink";
-  } else if (error.reason === "tooLarge") {
-    reason = "tooLarge";
-  }
-  return createGitReviewPatchState(
-    reason,
-    createHash("sha256").update(error.message).digest("hex")
-  );
+  const exhaustive: never = options.group;
+  return exhaustive;
 }
 
 async function collectGit(

@@ -1,4 +1,3 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Empty,
@@ -8,6 +7,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import {
   FilePanelLayout,
   FilePanelSidebarToggleButton,
@@ -40,12 +40,13 @@ export function ReadOnlyErrorState({
   return (
     <div className="flex h-full flex-col gap-3 bg-background p-4">
       <h1 className="font-semibold text-foreground text-sm">{title}</h1>
-      <Alert variant="destructive">
-        <AlertTitle>
-          {t("filePanel.errors.restore.title", "Unable to restore file tab")}
-        </AlertTitle>
-        <AlertDescription>{message}</AlertDescription>
-      </Alert>
+      <ErrorEmpty
+        description={message}
+        title={t(
+          "filePanel.errors.restore.title",
+          "Unable to restore file tab"
+        )}
+      />
     </div>
   );
 }

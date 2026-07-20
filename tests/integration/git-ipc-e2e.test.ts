@@ -205,7 +205,11 @@ describe("git IPC 端到端(命令路由 + capability 守门)", () => {
       envelope("mcp-local-1", {
         request: {
           operationId: "c4883f41-047b-4f05-b858-9207eb0617d0",
-          source: { contextId: "context-1", gitRootPath: "/repo" },
+          source: {
+            contextId: "context-1",
+            gitRootPath: "/repo",
+            target: { kind: "uncommitted" },
+          },
         },
         type: "git.getReviewIndex",
       })
@@ -235,7 +239,11 @@ describe("git IPC 端到端(命令路由 + capability 守门)", () => {
       envelope("desktop-renderer-1", {
         request: {
           operationId: "c4883f41-047b-4f05-b858-9207eb0617d0",
-          source: { contextId: "context:forged", gitRootPath: repo },
+          source: {
+            contextId: "context:forged",
+            gitRootPath: repo,
+            target: { kind: "uncommitted" },
+          },
         },
         type: "git.getReviewIndex",
       }),

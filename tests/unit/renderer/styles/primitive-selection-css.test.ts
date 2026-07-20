@@ -9,8 +9,13 @@ describe("Pier primitive selection CSS", () => {
       "utf8"
     );
 
-    expect(commandSource).toContain("data-selected:bg-accent");
-    expect(commandSource).toContain("data-selected:text-accent-foreground");
-    expect(commandSource).not.toContain("data-selected:bg-muted");
+    // cmdk 1.1 对未选中项渲染 data-selected="false",选中样式必须用值选择器
+    // (裸 data-selected 是 presence 匹配,会让所有行常态高亮、hover 无反馈)。
+    expect(commandSource).toContain("data-[selected=true]:bg-accent");
+    expect(commandSource).toContain(
+      "data-[selected=true]:text-accent-foreground"
+    );
+    expect(commandSource).not.toContain("data-selected:bg-accent");
+    expect(commandSource).not.toContain("data-[selected=true]:bg-muted");
   });
 });

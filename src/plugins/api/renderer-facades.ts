@@ -55,6 +55,7 @@ import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
 import type {
   GitBranchRef,
   GitChangeEvent,
+  GitCommitSearchResult,
   GitDiffBranchesResult,
   GitDiffPatch,
   GitMergeAbortResult,
@@ -64,6 +65,9 @@ import type {
   GitRebaseResult,
   GitRemoteOperationResult,
   GitRepoInfo,
+  GitSequencerAbortResult,
+  GitSequencerContinueResult,
+  GitSequencerResult,
   GitStashApplyResult,
   GitStashDropResult,
   GitStashListResult,
@@ -187,12 +191,21 @@ export interface RendererPluginEnvironmentsFacade {
 }
 
 export interface RendererPluginGitFacade {
+  abortCherryPick(cwd: string): Promise<GitSequencerAbortResult>;
   abortMerge(cwd: string): Promise<GitMergeAbortResult>;
   abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
+  abortRevert(cwd: string): Promise<GitSequencerAbortResult>;
   applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
   cancelReviewRequest(request: GitReviewCancelRequest): Promise<void>;
   checkoutBranch(cwd: string, name: string): Promise<boolean>;
+  cherryPick(cwd: string, oid: string): Promise<GitSequencerResult>;
+  commit(
+    cwd: string,
+    options: { allowEmpty?: boolean; message: string; signoff?: boolean }
+  ): Promise<boolean>;
+  continueCherryPick(cwd: string): Promise<GitSequencerContinueResult>;
   continueRebase(cwd: string): Promise<GitRebaseContinueResult>;
+  continueRevert(cwd: string): Promise<GitSequencerContinueResult>;
   createAndSwitchBranch(cwd: string, name: string): Promise<boolean>;
   discardChanges(cwd: string, paths: string[]): Promise<boolean>;
   dropStash(cwd: string, index?: number): Promise<GitStashDropResult>;
@@ -228,6 +241,7 @@ export interface RendererPluginGitFacade {
   pullFastForward(cwd: string): Promise<GitRemoteOperationResult>;
   push(cwd: string): Promise<GitRemoteOperationResult>;
   rebase(cwd: string, branch: string): Promise<GitRebaseResult>;
+  revert(cwd: string, oid: string): Promise<GitSequencerResult>;
   searchBranches(
     cwd: string,
     options?: {
@@ -237,6 +251,11 @@ export interface RendererPluginGitFacade {
       query?: string;
     }
   ): Promise<GitDiffBranchesResult>;
+  /** 结构化 commit 搜索(hash/@author/:path/~pickaxe/since:/until:/all:)。 */
+  searchCommits(
+    cwd: string,
+    options?: { limit?: number; query?: string }
+  ): Promise<GitCommitSearchResult>;
   stage(cwd: string, paths: string[]): Promise<boolean>;
   stash(
     cwd: string,

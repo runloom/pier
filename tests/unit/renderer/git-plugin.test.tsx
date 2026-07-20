@@ -200,6 +200,36 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       title: "Git: Continue Rebase",
     },
     {
+      id: "pier.git.cherryPick",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Cherry-pick Commit...",
+    },
+    {
+      id: "pier.git.cherryPickAbort",
+      permissions: ["git:write"],
+      title: "Git: Abort Cherry-pick",
+    },
+    {
+      id: "pier.git.cherryPickContinue",
+      permissions: ["git:write"],
+      title: "Git: Continue Cherry-pick",
+    },
+    {
+      id: "pier.git.revert",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Revert Commit...",
+    },
+    {
+      id: "pier.git.revertAbort",
+      permissions: ["git:write"],
+      title: "Git: Abort Revert",
+    },
+    {
+      id: "pier.git.revertContinue",
+      permissions: ["git:write"],
+      title: "Git: Continue Revert",
+    },
+    {
       id: "pier.git.undoLastCommit",
       permissions: ["git:write"],
       title: "Git: Undo Last Commit",
@@ -208,6 +238,21 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       id: "pier.git.review.openFile",
       permissions: ["file:read", "panel:open"],
       title: "Git: Open File",
+    },
+    {
+      id: "pier.git.review.stageFile",
+      permissions: ["git:write"],
+      title: "Git: Stage Changes",
+    },
+    {
+      id: "pier.git.review.unstageFile",
+      permissions: ["git:write"],
+      title: "Git: Unstage Changes",
+    },
+    {
+      id: "pier.git.review.discardFile",
+      permissions: ["git:write"],
+      title: "Git: Discard Changes",
     },
   ];
   return {
@@ -2807,6 +2852,7 @@ describe("git builtin plugin", () => {
       "src/plugins/builtin/git/renderer/git-actions.ts",
       "src/plugins/builtin/git/renderer/git-branch-actions.ts",
       "src/plugins/builtin/git/renderer/git-command-helpers.ts",
+      "src/plugins/builtin/git/renderer/git-merge-rebase-actions.ts",
       "src/plugins/builtin/git/renderer/git-sequencer-actions.ts",
       "src/plugins/builtin/git/renderer/git-stash-actions.ts",
       "src/plugins/builtin/git/renderer/git-status-item.tsx",

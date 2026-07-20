@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import type {
   PierDiffViewHandle,
+  PierDiffViewPresentation,
   PierDiffViewRenderWindow,
 } from "@pier/ui/diff-view.tsx";
 import type {
@@ -33,6 +34,8 @@ interface GitReviewDocumentViewProps {
   readonly diffRef: (handle: PierDiffViewHandle | null) => void;
   readonly failureSummary: ReviewFailureSummary;
   readonly gitRootPath: string;
+  readonly headerLeading?: React.ReactNode;
+  readonly headerTrailing?: React.ReactNode;
   readonly indexFailure: GitReviewFailure | null;
   readonly navigationError: Error | null;
   readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
@@ -43,12 +46,13 @@ interface GitReviewDocumentViewProps {
   readonly onRetryIndex: () => void;
   readonly onRetryNavigation: () => void;
   readonly onScroll: () => void;
+  readonly presentation?: PierDiffViewPresentation;
   readonly projection: ReviewDocumentProjection;
   readonly renderFeedback: ReviewRenderFeedback | null;
-  readonly selectedFilePath: string | null;
   readonly selectedTreePath: string | null;
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
+  readonly sidebarFooter?: React.ReactNode;
   readonly sourcePanelId?: string;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly viewState: ReviewDocumentViewState;
@@ -62,6 +66,8 @@ export function GitReviewDocumentView({
   failureSummary,
   contextId,
   gitRootPath,
+  headerLeading,
+  headerTrailing,
   indexFailure,
   navigationError,
   onItemError,
@@ -72,13 +78,14 @@ export function GitReviewDocumentView({
   onRetryIndex,
   onRetryNavigation,
   onScroll,
+  presentation,
   projection,
   renderFeedback,
-  selectedFilePath,
   selectedTreePath,
   sourcePanelId,
   setSidebarCollapsed,
   sidebarCollapsed,
+  sidebarFooter,
   treeModel,
   viewState,
   warnings,
@@ -91,6 +98,7 @@ export function GitReviewDocumentView({
     onFeedbackChange,
     onRenderWindowChange,
     onScroll,
+    ...(presentation === undefined ? {} : { presentation }),
     projection,
   });
   return (
@@ -98,11 +106,13 @@ export function GitReviewDocumentView({
       context={context}
       contextId={contextId}
       gitRootPath={gitRootPath}
+      {...(headerLeading === undefined ? {} : { headerLeading })}
+      {...(headerTrailing === undefined ? {} : { headerTrailing })}
       onOpenPath={onOpenPath}
-      selectedFilePath={selectedFilePath}
       selectedTreePath={selectedTreePath}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
+      {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
       {...(sourcePanelId ? { sourcePanelId } : {})}
       treeModel={treeModel}
     >
@@ -148,6 +158,7 @@ function documentContent(options: {
   readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
   readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
   readonly onScroll: () => void;
+  readonly presentation?: PierDiffViewPresentation;
   readonly projection: ReviewDocumentProjection;
 }): React.JSX.Element {
   if (options.projection.items.length > 0) {
@@ -162,6 +173,9 @@ function documentContent(options: {
           onItemError={options.onItemError}
           onRenderWindowChange={options.onRenderWindowChange}
           onScroll={options.onScroll}
+          {...(options.presentation === undefined
+            ? {}
+            : { presentation: options.presentation })}
         />
       </div>
     );

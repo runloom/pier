@@ -25,6 +25,7 @@ function request(): GitReviewFileDocumentRequest {
       gitRootPath: "/repo",
       oldPaths: [],
       path: "missing.ts",
+      target: { kind: "uncommitted" },
     },
   };
 }
@@ -144,6 +145,7 @@ describe("GitReviewService boundary", () => {
         canonicalRoot: "/repo",
         headOid: null,
         indexRevision: "revision",
+        rangeBounds: null,
       },
       resolvedEntries: [],
       result,
@@ -184,6 +186,7 @@ describe("GitReviewService boundary", () => {
         canonicalRoot: "/repo",
         headOid: "1".repeat(40),
         indexRevision: "revision",
+        rangeBounds: null,
       },
       resolvedEntries: [
         {

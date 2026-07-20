@@ -91,6 +91,7 @@ export class GitReviewService {
     const requestIdentity = JSON.stringify([
       request.source.contextId,
       request.source.gitRootPath,
+      request.source.target,
     ]);
     const lease = this.#scheduler.schedule<GitReviewIndexResult>({
       budget: options.budget,
@@ -154,6 +155,7 @@ export class GitReviewService {
         repositoryKey: request.source.contextId,
         sourceKey: JSON.stringify([
           request.source.contextId,
+          request.source.target,
           request.source.path,
         ]),
       },

@@ -2,16 +2,35 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PluginPanelInstanceOpenResult } from "@plugins/api/renderer-panels.ts";
 import {
   type GitReviewScope,
+  type GitReviewTarget,
   gitReviewScopeSchema,
 } from "@shared/contracts/git-review.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { GIT_CHANGES_PANEL_ID } from "../manifest.ts";
 import { pluginText } from "./git-plugin-text.ts";
 
+function reviewTargetKey(target: GitReviewTarget): string {
+  if (target.kind === "commit") {
+    return `commit:${target.oid}`;
+  }
+  if (target.kind === "branch") {
+    return `branch:${target.ref}`;
+  }
+  return "uncommitted";
+}
+
+function sameReviewTarget(
+  left: GitReviewTarget,
+  right: GitReviewTarget
+): boolean {
+  return reviewTargetKey(left) === reviewTargetKey(right);
+}
+
 export function openGitChangesPanel(input: {
   getGroupId: () => string | null;
   panelContext: PanelContext;
   pluginContext: RendererPluginContext;
+  target?: GitReviewTarget;
 }): void {
   const gitRootPath = input.panelContext.gitRoot;
   if (!gitRootPath) {
@@ -27,6 +46,7 @@ export function openGitChangesPanel(input: {
   const source: GitReviewScope = {
     contextId: input.panelContext.contextId,
     gitRootPath,
+    target: input.target ?? { kind: "uncommitted" },
   };
   try {
     openInCurrentGroup({
@@ -39,7 +59,7 @@ export function openGitChangesPanel(input: {
             instance.groupId === targetGroupId &&
             sameReviewSource(instance.params?.source, source)
         );
-        const canonicalId = `${GIT_CHANGES_PANEL_ID}:${targetGroupId}:${source.contextId}`;
+        const canonicalId = `${GIT_CHANGES_PANEL_ID}:${targetGroupId}:${source.contextId}:${reviewTargetKey(source.target)}`;
         const instanceId =
           existingInTarget?.id ??
           (instances.some((instance) => instance.id === canonicalId)
@@ -80,7 +100,8 @@ function sameReviewSource(input: unknown, expected: GitReviewScope): boolean {
   return (
     parsed.success &&
     parsed.data.contextId === expected.contextId &&
-    parsed.data.gitRootPath === expected.gitRootPath
+    parsed.data.gitRootPath === expected.gitRootPath &&
+    sameReviewTarget(parsed.data.target, expected.target)
   );
 }
 

@@ -12,6 +12,9 @@ import type { PierCoreServices } from "./command-router.ts";
  */
 const GIT_WRITE_COMMANDS: Record<string, true> = {
   "git.checkoutBranch": true,
+  "git.cherryPick": true,
+  "git.cherryPickAbort": true,
+  "git.cherryPickContinue": true,
   "git.commit": true,
   "git.createAndSwitchBranch": true,
   "git.createBranch": true,
@@ -24,6 +27,9 @@ const GIT_WRITE_COMMANDS: Record<string, true> = {
   "git.rebase": true,
   "git.rebaseAbort": true,
   "git.rebaseContinue": true,
+  "git.revert": true,
+  "git.revertAbort": true,
+  "git.revertContinue": true,
   "git.stage": true,
   "git.stash": true,
   "git.stashApply": true,
@@ -117,6 +123,11 @@ async function dispatchGitCommand(
       return success(
         requestId,
         await services.git.searchBranches(command.cwd, command.options)
+      );
+    case "git.searchCommits":
+      return success(
+        requestId,
+        await services.git.searchCommits(command.cwd, command.options)
       );
     case "git.listTags":
       return success(requestId, await services.git.listTags(command.cwd));
@@ -223,6 +234,30 @@ async function dispatchGitCommand(
       return success(requestId, await services.git.abortRebase(command.cwd));
     case "git.rebaseContinue":
       return success(requestId, await services.git.continueRebase(command.cwd));
+    case "git.cherryPick":
+      return success(
+        requestId,
+        await services.git.cherryPick(command.cwd, command.oid)
+      );
+    case "git.cherryPickAbort":
+      return success(
+        requestId,
+        await services.git.abortCherryPick(command.cwd)
+      );
+    case "git.cherryPickContinue":
+      return success(
+        requestId,
+        await services.git.continueCherryPick(command.cwd)
+      );
+    case "git.revert":
+      return success(
+        requestId,
+        await services.git.revert(command.cwd, command.oid)
+      );
+    case "git.revertAbort":
+      return success(requestId, await services.git.abortRevert(command.cwd));
+    case "git.revertContinue":
+      return success(requestId, await services.git.continueRevert(command.cwd));
     case "git.undoLastCommit":
       return success(requestId, await services.git.undoLastCommit(command.cwd));
     default:

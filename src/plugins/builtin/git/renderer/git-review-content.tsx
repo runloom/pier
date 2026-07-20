@@ -32,9 +32,11 @@ import {
   EMPTY_REVIEW_PROJECTION,
   useReviewAppearance,
   useReviewSelection,
+  useReviewViewOptions,
 } from "./git-review-document-ui-state.ts";
 import { GitReviewDocumentView } from "./git-review-document-view.tsx";
 import { useReviewFailureSummary } from "./git-review-failure-state.ts";
+import { GitReviewToolbar } from "./git-review-toolbar.tsx";
 import type { gitReviewTreeModel } from "./git-review-tree.tsx";
 import { useGitReviewDocumentDemand } from "./use-git-review-document-demand.ts";
 import { useGitReviewDocumentSession } from "./use-git-review-document-session.ts";
@@ -47,25 +49,31 @@ import { useGitReviewRetentionSync } from "./use-git-review-retention-sync.ts";
 function ReviewDocumentsComponent({
   context,
   entries,
+  headerLeading,
   indexGeneration,
   indexRefreshFailure,
+  indexRefreshing = false,
   onRetryIndex,
   panelId,
   scope,
   setSidebarCollapsed,
   sidebarCollapsed,
+  sidebarFooter,
   treeModel,
   warnings,
 }: {
   readonly context: RendererPluginContext;
   readonly entries: readonly GitReviewIndexEntry[];
+  readonly headerLeading?: React.ReactNode;
   readonly indexGeneration: number;
   readonly indexRefreshFailure: GitReviewFailure | null;
+  readonly indexRefreshing?: boolean;
   readonly onRetryIndex: () => void;
   readonly panelId: string;
   readonly scope: GitReviewScope;
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
+  readonly sidebarFooter?: React.ReactNode;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly warnings: GitReviewIndexOk["warnings"];
 }): React.JSX.Element {
@@ -103,8 +111,6 @@ function ReviewDocumentsComponent({
   const [projection, setProjection] = useState(EMPTY_REVIEW_PROJECTION);
   const [projectionGeneration, setProjectionGeneration] = useState(0);
   const [demandPrefetchVersion, setDemandPrefetchVersion] = useState(0);
-  const [renderFeedback, setRenderFeedback] =
-    useState<ReviewRenderFeedback | null>(null);
   const { selectedEntryKey, selectedTreeEntry, setSelectedEntryKey } =
     useReviewSelection(scope, treeModel);
   const {
@@ -120,8 +126,9 @@ function ReviewDocumentsComponent({
   useLayoutEffect(() => {
     projectionLocaleRef.current = appearance.locale;
   }, [appearance.locale]);
+  // 渲染层崩溃由 ReviewCodeView 自身以 Empty 呈现,这里无需再镜像状态。
   const updateRenderFeedback = useCallback(
-    (feedback: ReviewRenderFeedback | null) => setRenderFeedback(feedback),
+    (_feedback: ReviewRenderFeedback | null) => undefined,
     []
   );
   const { cancelRetentionSync, syncRetentionLimits } =
@@ -366,6 +373,25 @@ function ReviewDocumentsComponent({
     },
     [updateRenderItemError, viewState.generation]
   );
+  const { options: viewOptions, setOptions: setViewOptions } =
+    useReviewViewOptions();
+  const collapseAll = useCallback(() => {
+    diffHandleRef.current?.setAllCollapsed(true);
+  }, []);
+  const expandAll = useCallback(() => {
+    diffHandleRef.current?.setAllCollapsed(false);
+  }, []);
+  const toolbar = (
+    <GitReviewToolbar
+      context={context}
+      onCollapseAll={collapseAll}
+      onExpandAll={expandAll}
+      onRefresh={onRetryIndex}
+      refreshing={indexRefreshing}
+      setViewOptions={setViewOptions}
+      viewOptions={viewOptions}
+    />
+  );
 
   return (
     <GitReviewDocumentView
@@ -375,6 +401,8 @@ function ReviewDocumentsComponent({
       diffRef={setDiffHandle}
       failureSummary={failureSummary}
       gitRootPath={scope.gitRootPath}
+      {...(headerLeading === undefined ? {} : { headerLeading })}
+      headerTrailing={toolbar}
       indexFailure={indexRefreshFailure}
       navigationError={navigationError}
       onFeedbackChange={updateRenderFeedback}
@@ -390,17 +418,22 @@ function ReviewDocumentsComponent({
           pendingAnchorRef.current = null;
         }
       }}
+      presentation={{
+        diffStyle: viewOptions.diffStyle,
+        wrapLines: viewOptions.wrapLines,
+      }}
       projection={projection}
+      // 渲染层崩溃(renderFeedback)由 ReviewCodeView 自身以 Empty 呈现;
+      // 这里只把「正文仍可见但最新更新被拒」的 replay 失败交给横条。
       renderFeedback={
-        renderFeedback ??
-        (replayFailure
+        replayFailure
           ? { error: replayFailure, retry: retryLatestItemUpdates }
-          : null)
+          : null
       }
-      selectedFilePath={selectedTreeEntry?.entry.path ?? null}
       selectedTreePath={selectedTreeEntry?.path ?? null}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
+      {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
       sourcePanelId={panelId}
       treeModel={treeModel}
       viewState={viewState}

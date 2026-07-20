@@ -102,23 +102,31 @@ export function useDiffViewHeaders(options: {
         itemTop !== undefined &&
         itemTop !== null &&
         itemTop < viewer.getScrollTop();
-      item.collapsed = collapsed;
-      item.version = (typeof item.version === "number" ? item.version : 0) + 1;
-      if (!handle.updateItem(item)) {
+      const nextRevision =
+        (collapsedItemsRef.current.get(id)?.revision ?? 0) + 1;
+      // 克隆而非就地改写:CodeView 里可能持有 parsed cache 的原始 item 引用,
+      // 就地 +1 会把缓存条目的内容版本一并顶高,与「内容版本 + 折叠修订」的
+      // 统一公式撞号 —— 折叠中的占位符会与稍后到达的真实正文同号,
+      // CodeView 按 version 去重时把正文当作无变化丢弃(表现为导航后空正文)。
+      const nextItem = {
+        ...parsedItem.item,
+        collapsed,
+        version: parsedItem.version + nextRevision,
+      };
+      if (!handle.updateItem(nextItem)) {
         return false;
       }
-      const previous = collapsedItemsRef.current.get(id);
       collapsedItemsRef.current.set(id, {
         collapsed,
-        revision: (previous?.revision ?? 0) + 1,
+        revision: nextRevision,
       });
-      parsedItemListRef.current[itemIndex] = item;
+      parsedItemListRef.current[itemIndex] = nextItem;
       renderItemIdentitiesRef.current.set(id, {
         cacheKey: parsedItem.cacheKey,
-        version: item.version ?? 0,
+        version: nextItem.version,
       });
-      appliedItemsRef.current?.items.set(id, item);
-      expectItemRender(id, item.version);
+      appliedItemsRef.current?.items.set(id, nextItem);
+      expectItemRender(id, nextItem.version);
       if (shouldAnchor) {
         handle.scrollTo({
           align: "start",

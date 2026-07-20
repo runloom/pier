@@ -67,6 +67,11 @@ export type {
   PierDiffViewHandle,
   PierDiffViewUpdateOptions,
 } from "./use-diff-view-handle.ts";
+export interface PierDiffViewPresentation {
+  readonly diffStyle: "split" | "unified";
+  readonly wrapLines: boolean;
+}
+
 export interface PierDiffViewProps {
   readonly appearance: PierDiffViewAppearance;
   readonly items: readonly PierDiffViewItem[];
@@ -75,6 +80,8 @@ export interface PierDiffViewProps {
   readonly onItemError?: (id: string, error: Error | null) => void;
   readonly onRenderWindowChange?: (window: PierDiffViewRenderWindow) => void;
   readonly onScroll?: () => void;
+  /** 缺省 split + 不换行(既有行为)。变更会强制 CodeView 重建。 */
+  readonly presentation?: PierDiffViewPresentation;
   readonly ref?: Ref<PierDiffViewHandle>;
 }
 
@@ -87,8 +94,11 @@ export function PierDiffView({
   onItemError,
   onRenderWindowChange,
   onScroll,
+  presentation,
   ref,
 }: PierDiffViewProps): React.JSX.Element | null {
+  const diffStyle = presentation?.diffStyle ?? "split";
+  const overflow = presentation?.wrapLines === true ? "wrap" : "scroll";
   const codeViewRef = useRef<CodeViewHandle<undefined>>(null);
   const parsedItemsRef = useRef(new Map<string, ParsedItemCacheEntry>());
   const renderItemIdentitiesRef = useRef(
@@ -158,15 +168,18 @@ export function PierDiffView({
   const renderMode = workerUnavailable ? "inline" : "worker";
   // selection=uncontrolled 钉进 key：避免 HMR 从旧受控实例切过来时
   // CodeView 拒绝 controlled→uncontrolled 并卡死选区。
-  const codeViewKey = `${renderMode}\0selection=uncontrolled\0${topologyKey}`;
+  // diffStyle/overflow 影响行高与布局缓存，切换时强制重建实例。
+  const codeViewKey = `${renderMode}\0selection=uncontrolled\0${diffStyle}\0${overflow}\0${topologyKey}`;
   const renderEnvironment = useMemo(
     () =>
-      `${renderMode}\0${appearance.codeTheme}\0${appearance.colorMode}\0${metrics.diffHeaderHeight}\0${metrics.lineHeight}`,
+      `${renderMode}\0${appearance.codeTheme}\0${appearance.colorMode}\0${metrics.diffHeaderHeight}\0${metrics.lineHeight}\0${diffStyle}\0${overflow}`,
     [
       appearance.codeTheme,
       appearance.colorMode,
+      diffStyle,
       metrics.diffHeaderHeight,
       metrics.lineHeight,
+      overflow,
       renderMode,
     ]
   );
@@ -279,7 +292,7 @@ export function PierDiffView({
   const options = useMemo<CodeViewOptions<undefined>>(
     () => ({
       diffIndicators: "bars",
-      diffStyle: "split",
+      diffStyle,
       disableBackground: false,
       disableLineNumbers: false,
       enableGutterUtility: false,
@@ -296,7 +309,7 @@ export function PierDiffView({
         }
         scheduleRenderWindowReport();
       },
-      overflow: "scroll",
+      overflow,
       preferredHighlighter: "shiki-wasm",
       stickyHeaders: true,
       theme: appearance.codeTheme,
@@ -306,8 +319,10 @@ export function PierDiffView({
     [
       appearance.codeTheme,
       appearance.colorMode,
+      diffStyle,
       markRendered,
       metrics,
+      overflow,
       scheduleRenderWindowReport,
     ]
   );

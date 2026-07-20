@@ -2,6 +2,7 @@ import type {
   GitBranchRef,
   GitChangeEvent,
   GitCommit,
+  GitCommitSearchResult,
   GitDiffBranchesResult,
   GitDiffPatch,
   GitDiffSummary,
@@ -12,6 +13,9 @@ import type {
   GitRebaseResult,
   GitRemoteOperationResult,
   GitRepoInfo,
+  GitSequencerAbortResult,
+  GitSequencerContinueResult,
+  GitSequencerResult,
   GitStashApplyResult,
   GitStashDropResult,
   GitStashListResult,
@@ -32,9 +36,9 @@ import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 import { invokePierCommand } from "./ipc-envelope.ts";
 
-// 注意:commit / branch 增删仍保留在 main 命令表,服务 CLI 与未来表面,
-// 但不经 preload 暴露。renderer 仅暴露当前 UI 已消费的 checkoutBranch 与
-// createAndSwitchBranch 窄口,避免闲置写入口扩大攻击面。
+// 注意:branch 单独增删(createBranch/deleteBranch)仍保留在 main 命令表,
+// 服务 CLI 与未来表面,但不经 preload 暴露。renderer 仅暴露当前 UI 已消费的
+// 窄口(checkoutBranch / createAndSwitchBranch / commit),避免闲置写入口扩大攻击面。
 
 /** diff 范围/路径选项(IPC 层用值类型;详细 zod 在 contracts/git.ts) */
 export interface GitDiffOptionsValue {
@@ -69,18 +73,35 @@ export interface GitDiffSearchBranchesOptionsValue {
   query?: string;
 }
 
+export interface GitCommitOptionsValue {
+  allowEmpty?: boolean;
+  message: string;
+  signoff?: boolean;
+}
+
+export interface GitSearchCommitsOptionsValue {
+  limit?: number;
+  query?: string;
+}
+
 export interface GitStashOptionsValue {
   includeUntracked?: boolean;
   message?: string;
 }
 
 export interface PierGitAPI {
+  abortCherryPick: (cwd: string) => Promise<GitSequencerAbortResult>;
   abortMerge: (cwd: string) => Promise<GitMergeAbortResult>;
   abortRebase: (cwd: string) => Promise<GitRebaseAbortResult>;
+  abortRevert: (cwd: string) => Promise<GitSequencerAbortResult>;
   applyStash: (cwd: string, index?: number) => Promise<GitStashApplyResult>;
   cancelReviewRequest: (request: GitReviewCancelRequest) => Promise<void>;
   checkoutBranch: (cwd: string, name: string) => Promise<boolean>;
+  cherryPick: (cwd: string, oid: string) => Promise<GitSequencerResult>;
+  commit: (cwd: string, options: GitCommitOptionsValue) => Promise<boolean>;
+  continueCherryPick: (cwd: string) => Promise<GitSequencerContinueResult>;
   continueRebase: (cwd: string) => Promise<GitRebaseContinueResult>;
+  continueRevert: (cwd: string) => Promise<GitSequencerContinueResult>;
   createAndSwitchBranch: (cwd: string, name: string) => Promise<boolean>;
   discardChanges: (cwd: string, paths: string[]) => Promise<boolean>;
   dropStash: (cwd: string, index?: number) => Promise<GitStashDropResult>;
@@ -123,10 +144,15 @@ export interface PierGitAPI {
   push: (cwd: string) => Promise<GitRemoteOperationResult>;
   rebase: (cwd: string, branch: string) => Promise<GitRebaseResult>;
   resolveRef: (cwd: string, ref: string) => Promise<string>;
+  revert: (cwd: string, oid: string) => Promise<GitSequencerResult>;
   searchBranches: (
     cwd: string,
     options?: GitDiffSearchBranchesOptionsValue
   ) => Promise<GitDiffBranchesResult>;
+  searchCommits: (
+    cwd: string,
+    options?: GitSearchCommitsOptionsValue
+  ) => Promise<GitCommitSearchResult>;
   // 写(git:write;默认 desktop-renderer 已给,与 worktree:write 同等待遇;二次确认由插件 UI 负责)
   stage: (cwd: string, paths: string[]) => Promise<boolean>;
   stash: (
@@ -220,6 +246,12 @@ export const gitApi: PierGitAPI = {
       ...(options !== undefined && { options }),
       type: "git.searchBranches",
     }),
+  searchCommits: (cwd, options) =>
+    invokePierCommand<GitCommitSearchResult>({
+      cwd,
+      ...(options !== undefined && { options }),
+      type: "git.searchCommits",
+    }),
   listTags: (cwd) => invokePierCommand<string[]>({ cwd, type: "git.listTags" }),
   resolveRef: (cwd, ref) =>
     invokePierCommand<string>({ cwd, ref, type: "git.resolveRef" }),
@@ -236,6 +268,16 @@ export const gitApi: PierGitAPI = {
       cwd,
       name,
       type: "git.checkoutBranch",
+    }),
+  commit: (cwd, options) =>
+    invokePierCommand<boolean>({
+      ...(options.allowEmpty !== undefined && {
+        allowEmpty: options.allowEmpty,
+      }),
+      ...(options.signoff !== undefined && { signoff: options.signoff }),
+      cwd,
+      message: options.message,
+      type: "git.commit",
     }),
   createAndSwitchBranch: (cwd, name) =>
     invokePierCommand<boolean>({
@@ -313,6 +355,38 @@ export const gitApi: PierGitAPI = {
     invokePierCommand<GitRebaseContinueResult>({
       cwd,
       type: "git.rebaseContinue",
+    }),
+  cherryPick: (cwd, oid) =>
+    invokePierCommand<GitSequencerResult>({
+      cwd,
+      oid,
+      type: "git.cherryPick",
+    }),
+  abortCherryPick: (cwd) =>
+    invokePierCommand<GitSequencerAbortResult>({
+      cwd,
+      type: "git.cherryPickAbort",
+    }),
+  continueCherryPick: (cwd) =>
+    invokePierCommand<GitSequencerContinueResult>({
+      cwd,
+      type: "git.cherryPickContinue",
+    }),
+  revert: (cwd, oid) =>
+    invokePierCommand<GitSequencerResult>({
+      cwd,
+      oid,
+      type: "git.revert",
+    }),
+  abortRevert: (cwd) =>
+    invokePierCommand<GitSequencerAbortResult>({
+      cwd,
+      type: "git.revertAbort",
+    }),
+  continueRevert: (cwd) =>
+    invokePierCommand<GitSequencerContinueResult>({
+      cwd,
+      type: "git.revertContinue",
     }),
   undoLastCommit: (cwd) =>
     invokePierCommand<GitUndoCommitResult>({

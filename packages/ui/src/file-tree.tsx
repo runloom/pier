@@ -28,6 +28,7 @@ import {
 import { useFileTreeContextMenuComposition } from "./use-file-tree-context-menu.ts";
 import { useFileTreePathSync } from "./use-file-tree-path-sync.ts";
 import { useFileTreeRefs } from "./use-file-tree-refs.ts";
+import { useFileTreeRowClickSalvage } from "./use-file-tree-row-click-salvage.ts";
 import { cn } from "./utils.ts";
 
 export type {
@@ -126,35 +127,6 @@ export function PierFileTree({
       },
       [readRefs]
     );
-  const handleHostClickCapture = React.useCallback(
-    (event: React.MouseEvent<HTMLDivElement>) => {
-      // Pierre trees 对已选中行再点不会 bump selectionVersion。
-      // 捕获阶段对文件行统一补一次 onOpenPath，覆盖 re-click 重新定位。
-      if (event.button !== 0) {
-        return;
-      }
-      const target = event.target;
-      if (!(target instanceof Element)) {
-        return;
-      }
-      const row = target.closest<HTMLElement>("[data-item-path]");
-      if (!row || row.dataset.itemType === "folder") {
-        return;
-      }
-      const officialPath = row.dataset.itemPath;
-      if (!officialPath) {
-        return;
-      }
-      const item = readRefs().itemsByPath.get(officialPath);
-      if (item?.kind !== "file") {
-        return;
-      }
-      lastOpenedPathRef.current = item.path;
-      readRefs().onOpenPath?.(item.path);
-    },
-    [readRefs]
-  );
-
   const modelAheadMovesRef = React.useRef(new Map<string, string>());
   const renameSession = React.useMemo(() => new FileTreeRenameSession(), []);
 
@@ -186,6 +158,13 @@ export function PierFileTree({
       toOfficialDecoration(readRefs().decorationsByPath.get(item.path)),
     ...(stickyFolders ? { stickyFolders: true } : {}),
   });
+  const rowClickSalvage = useFileTreeRowClickSalvage({
+    containerRef,
+    lastOpenedPathRef,
+    model,
+    readRefs,
+  });
+
   React.useEffect(() => () => renameSession.dispose(), [renameSession]);
   useFileTreeContextMenuComposition(model, onOpenItemContextMenu != null, refs);
   treeSearch.useSearchMatchState(model, nextRefs, onSearchMatchStateChange);
@@ -413,7 +392,9 @@ export function PierFileTree({
     <div
       className={cn("h-full min-h-0 w-full", className)}
       data-slot="pier-file-tree-bridge"
-      onClickCapture={handleHostClickCapture}
+      onClickCapture={rowClickSalvage.onClickCapture}
+      onPointerDownCapture={rowClickSalvage.onPointerDownCapture}
+      onPointerUpCapture={rowClickSalvage.onPointerUpCapture}
       ref={containerRef}
     >
       <PierreFileTree

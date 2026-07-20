@@ -117,6 +117,7 @@ export class GitReviewDocumentReader {
         scope: {
           contextId: request.source.contextId,
           gitRootPath: request.source.gitRootPath,
+          target: request.source.target,
         },
       },
       { budget, signal }

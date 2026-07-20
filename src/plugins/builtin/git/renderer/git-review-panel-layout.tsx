@@ -6,7 +6,6 @@ import {
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
 import {
-  FilePanelBreadcrumb,
   FilePanelHeader,
   FilePanelLayout,
   FilePanelSearchButton,
@@ -17,20 +16,17 @@ import { PierFileTree } from "@pier/ui/file-tree.tsx";
 import { useFileTreeSearch } from "@pier/ui/use-file-tree-search.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { SearchX } from "lucide-react";
-import { memo, type ReactNode, useMemo } from "react";
+import { memo, type ReactNode } from "react";
 import { pluginText } from "./git-plugin-text.ts";
 import type { gitReviewTreeModel } from "./git-review-tree.tsx";
 import { useGitReviewTreeContextMenu } from "./git-review-tree-context-menu.ts";
 
 const REVIEW_TREE_WIDTH_STORAGE_KEY = "pier.git.review.treeWidthPx";
 
-function projectNameFromRoot(root: string): string {
-  return root.split("/").filter(Boolean).at(-1) ?? root;
-}
-
 function GitReviewTreeSidebarComponent({
   context,
   contextId,
+  footer,
   gitRootPath,
   onOpenPath,
   revealPath,
@@ -40,6 +36,7 @@ function GitReviewTreeSidebarComponent({
 }: {
   context: RendererPluginContext;
   contextId: string;
+  footer?: ReactNode;
   gitRootPath: string;
   onOpenPath: (path: string) => void;
   revealPath: string | null;
@@ -136,14 +133,14 @@ function GitReviewTreeSidebarComponent({
               <EmptyMedia className="mb-1" variant="icon">
                 <SearchX />
               </EmptyMedia>
-              <EmptyTitle className="text-sm">
+              <EmptyTitle>
                 {pluginText(
                   context,
                   "reviewTreeNoSearchResultsTitle",
                   "No matching changes"
                 )}
               </EmptyTitle>
-              <EmptyDescription className="text-xs">
+              <EmptyDescription>
                 {pluginText(
                   context,
                   "reviewTreeNoSearchResultsDescription",
@@ -154,6 +151,7 @@ function GitReviewTreeSidebarComponent({
           </Empty>
         ) : null}
       </div>
+      {footer}
     </aside>
   );
 }
@@ -165,11 +163,13 @@ export function GitReviewPanelLayout({
   context,
   contextId,
   gitRootPath,
+  headerLeading,
+  headerTrailing,
   onOpenPath,
-  selectedFilePath,
   selectedTreePath,
   setSidebarCollapsed,
   sidebarCollapsed,
+  sidebarFooter,
   sourcePanelId,
   treeModel,
 }: {
@@ -177,27 +177,18 @@ export function GitReviewPanelLayout({
   context: RendererPluginContext;
   contextId?: string | null;
   gitRootPath: string | null;
+  headerLeading?: ReactNode;
+  headerTrailing?: ReactNode;
   onOpenPath?: (path: string) => void;
-  selectedFilePath?: string | null;
   selectedTreePath?: string | null;
   setSidebarCollapsed: (collapsed: boolean) => void;
   sidebarCollapsed: boolean;
+  sidebarFooter?: ReactNode;
   sourcePanelId?: string;
   treeModel?: ReturnType<typeof gitReviewTreeModel> | null;
 }) {
   const treeSearch = useFileTreeSearch();
   const hasTree = Boolean(treeModel && onOpenPath);
-  const projectName = gitRootPath
-    ? projectNameFromRoot(gitRootPath)
-    : pluginText(context, "reviewChangesTitle", "Changes");
-  const breadcrumbSegments = useMemo(() => {
-    if (selectedFilePath) {
-      return [projectName, ...selectedFilePath.split("/").filter(Boolean)];
-    }
-    return gitRootPath
-      ? [projectName, pluginText(context, "reviewChangesTitle", "Changes")]
-      : [projectName];
-  }, [context, gitRootPath, projectName, selectedFilePath]);
 
   const toggleSearch = () => {
     if (!hasTree) {
@@ -224,6 +215,7 @@ export function GitReviewPanelLayout({
       <GitReviewTreeSidebar
         context={context}
         contextId={contextId}
+        {...(sidebarFooter === undefined ? {} : { footer: sidebarFooter })}
         gitRootPath={gitRootPath}
         onOpenPath={onOpenPath}
         revealPath={selectedTreePath ?? null}
@@ -238,49 +230,42 @@ export function GitReviewPanelLayout({
       contentPanelId="git-review-diff"
       header={
         <FilePanelHeader
-          center={
-            <FilePanelBreadcrumb
-              ariaLabel={pluginText(
-                context,
-                "reviewBreadcrumbLabel",
-                "Review location"
-              )}
-              segments={breadcrumbSegments}
-            />
-          }
+          center={null}
+          {...(headerTrailing === undefined
+            ? {}
+            : { trailing: headerTrailing })}
           leading={
-            hasTree ? (
-              <>
-                <FilePanelSidebarToggleButton
-                  collapsed={sidebarCollapsed}
-                  collapseLabel={pluginText(
-                    context,
-                    "reviewTreeCollapse",
-                    "Collapse changed files"
-                  )}
-                  expandLabel={pluginText(
-                    context,
-                    "reviewTreeExpand",
-                    "Expand changed files"
-                  )}
-                  onToggle={() => {
-                    if (sidebarCollapsed) {
-                      setSidebarCollapsed(false);
-                    } else {
-                      collapseSidebar();
-                    }
-                  }}
-                />
-                <FilePanelSearchButton
-                  label={pluginText(
-                    context,
-                    "reviewTreeSearch",
-                    "Find in changed files"
-                  )}
-                  onOpenSearch={toggleSearch}
-                />
-              </>
-            ) : null
+            <>
+              <FilePanelSidebarToggleButton
+                collapsed={sidebarCollapsed}
+                collapseLabel={pluginText(
+                  context,
+                  "reviewTreeCollapse",
+                  "Collapse changed files"
+                )}
+                expandLabel={pluginText(
+                  context,
+                  "reviewTreeExpand",
+                  "Expand changed files"
+                )}
+                onToggle={() => {
+                  if (sidebarCollapsed) {
+                    setSidebarCollapsed(false);
+                  } else {
+                    collapseSidebar();
+                  }
+                }}
+              />
+              <FilePanelSearchButton
+                label={pluginText(
+                  context,
+                  "reviewTreeSearch",
+                  "Find in changed files"
+                )}
+                onOpenSearch={toggleSearch}
+              />
+              {headerLeading}
+            </>
           }
         />
       }

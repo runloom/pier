@@ -18,7 +18,11 @@ const roots: string[] = [];
 const sha1 = "1".repeat(40);
 const sha1New = "2".repeat(40);
 const zeroSha1 = "0".repeat(40);
-const scope = { contextId: "worktree:test", gitRootPath: "/repo" } as const;
+const scope = {
+  contextId: "worktree:test",
+  gitRootPath: "/repo",
+  target: { kind: "uncommitted" },
+} as const;
 
 afterEach(async () => {
   await Promise.all(
@@ -786,7 +790,11 @@ describe("GitReviewIndexReader", () => {
     const reader = new GitReviewIndexReader();
 
     const result = await reader.read({
-      scope: { contextId: "worktree:real", gitRootPath: root },
+      scope: {
+        contextId: "worktree:real",
+        gitRootPath: root,
+        target: { kind: "uncommitted" },
+      },
     });
 
     expect(result.kind).toBe("ok");
@@ -820,7 +828,11 @@ describe("GitReviewIndexReader", () => {
     await execGit(["add", "-N", "--", "c.ts"], { cwd: root });
 
     const resolution = await new GitReviewIndexReader().resolve({
-      scope: { contextId: "worktree:rename-chain", gitRootPath: root },
+      scope: {
+        contextId: "worktree:rename-chain",
+        gitRootPath: root,
+        target: { kind: "uncommitted" },
+      },
     });
 
     expect(resolution).toMatchObject({
@@ -862,7 +874,11 @@ describe("GitReviewIndexReader", () => {
     await execGit(["config", "submodule.sub.ignore", "all"], { cwd: root });
 
     const result = await new GitReviewIndexReader().read({
-      scope: { contextId: "worktree:submodule", gitRootPath: root },
+      scope: {
+        contextId: "worktree:submodule",
+        gitRootPath: root,
+        target: { kind: "uncommitted" },
+      },
     });
 
     expect(result).toMatchObject({
@@ -888,12 +904,115 @@ describe("GitReviewIndexReader", () => {
     await execGit(["add", "--", "staged.ts"], { cwd: root });
 
     const result = await new GitReviewIndexReader().read({
-      scope: { contextId: "worktree:sha256", gitRootPath: root },
+      scope: {
+        contextId: "worktree:sha256",
+        gitRootPath: root,
+        target: { kind: "uncommitted" },
+      },
     });
 
     expect(result).toMatchObject({
       entries: [expect.objectContaining({ path: "staged.ts" })],
       kind: "ok",
+    });
+  });
+
+  it("commit 目标返回该提交相对首父的 committed 分组(根提交相对空树)", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "base.ts"), "base\n", "utf8");
+    const rootCommit = await commitAll(root, "base");
+    await writeFile(join(root, "base.ts"), "changed\n", "utf8");
+    await writeFile(join(root, "added.ts"), "new\n", "utf8");
+    const secondCommit = await commitAll(root, "second");
+    // 工作区脏文件不得进入 commit 目标的 index
+    await writeFile(join(root, "dirty.ts"), "dirty\n", "utf8");
+    const reader = new GitReviewIndexReader();
+
+    const second = await reader.read({
+      scope: {
+        contextId: "worktree:commit-target",
+        gitRootPath: root,
+        target: { kind: "commit", oid: secondCommit },
+      },
+    });
+    expect(second).toMatchObject({
+      entries: [
+        expect.objectContaining({
+          path: "added.ts",
+          renderSlots: [expect.objectContaining({ group: "committed" })],
+          status: "added",
+        }),
+        expect.objectContaining({ path: "base.ts", status: "modified" }),
+      ],
+      kind: "ok",
+      warnings: [],
+    });
+
+    const first = await reader.read({
+      scope: {
+        contextId: "worktree:commit-target",
+        gitRootPath: root,
+        target: { kind: "commit", oid: rootCommit },
+      },
+    });
+    expect(first).toMatchObject({
+      entries: [expect.objectContaining({ path: "base.ts", status: "added" })],
+      kind: "ok",
+    });
+  });
+
+  it("branch 目标返回 merge-base..HEAD 的 committed 分组", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "shared.ts"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await execGit(["branch", "main-line"], { cwd: root });
+    await execGit(["switch", "-c", "feature"], { cwd: root });
+    await writeFile(join(root, "feature.ts"), "feature\n", "utf8");
+    await commitAll(root, "feature work");
+    // 目标分支自身的推进不应出现在对比结果里(三方点语义)
+    await execGit(["switch", "main-line"], { cwd: root });
+    await writeFile(join(root, "main-only.ts"), "main\n", "utf8");
+    await commitAll(root, "main only");
+    await execGit(["switch", "feature"], { cwd: root });
+
+    const result = await new GitReviewIndexReader().read({
+      scope: {
+        contextId: "worktree:branch-target",
+        gitRootPath: root,
+        target: { kind: "branch", ref: "main-line" },
+      },
+    });
+
+    expect(result).toMatchObject({
+      entries: [
+        expect.objectContaining({
+          path: "feature.ts",
+          renderSlots: [expect.objectContaining({ group: "committed" })],
+          status: "added",
+        }),
+      ],
+      kind: "ok",
+      warnings: [],
+    });
+  });
+
+  it("commit 目标 revision 不存在时返回不可重试 invalidSource", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "base.ts"), "base\n", "utf8");
+    await commitAll(root, "base");
+
+    await expect(
+      new GitReviewIndexReader().read({
+        scope: {
+          contextId: "worktree:missing-commit",
+          gitRootPath: root,
+          target: { kind: "commit", oid: "f".repeat(40) },
+        },
+      })
+    ).resolves.toMatchObject({
+      kind: "error",
+      reason: "invalidSource",
+      retryable: false,
     });
   });
 
@@ -903,7 +1022,11 @@ describe("GitReviewIndexReader", () => {
 
     await expect(
       new GitReviewIndexReader().read({
-        scope: { contextId: "worktree:not-repo", gitRootPath: root },
+        scope: {
+          contextId: "worktree:not-repo",
+          gitRootPath: root,
+          target: { kind: "uncommitted" },
+        },
       })
     ).resolves.toMatchObject({
       kind: "error",

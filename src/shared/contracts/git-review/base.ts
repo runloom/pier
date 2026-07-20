@@ -11,9 +11,44 @@ import {
   gitReviewWarningSchema,
 } from "./primitives.ts";
 
+const gitReviewCommitOidSchema = z
+  .string()
+  .regex(/^(?:[0-9a-f]{40}|[0-9a-f]{64})$/u, "Expected a full commit OID");
+
+/** 分支/ref 输入的窄校验：拒绝选项注入与控制字符；真实存在性由 main rev-parse 决定。 */
+const gitReviewBranchRefSchema = z
+  .string()
+  .min(1)
+  .max(512)
+  .refine(
+    (ref) =>
+      !(
+        ref.startsWith("-") ||
+        ref.includes("\0") ||
+        ref.includes("\n") ||
+        ref.includes("\r")
+      ),
+    "Expected a safe Git ref"
+  );
+
+/**
+ * Review 目标：
+ * - uncommitted: 工作区未提交变更(unstaged/staged/conflict 分组)
+ * - commit: 单个 commit 相对首父(根提交相对空树)的 range diff(committed 分组)
+ * - branch: merge-base(HEAD, ref)..HEAD 的 range diff(committed 分组)
+ */
+export const gitReviewTargetSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("uncommitted") }),
+  z.strictObject({ kind: z.literal("commit"), oid: gitReviewCommitOidSchema }),
+  z.strictObject({ kind: z.literal("branch"), ref: gitReviewBranchRefSchema }),
+]);
+export type GitReviewTarget = z.infer<typeof gitReviewTargetSchema>;
+
 export const gitReviewScopeSchema = z.strictObject({
   contextId: z.string().min(1).max(256),
   gitRootPath: gitReviewRootPathSchema,
+  /** 缺省按 uncommitted 解析，兼容既有面板持久化的 source 参数。 */
+  target: gitReviewTargetSchema.default({ kind: "uncommitted" }),
 });
 export type GitReviewScope = z.infer<typeof gitReviewScopeSchema>;
 
@@ -26,6 +61,7 @@ export type GitReviewFileSource = z.infer<typeof gitReviewFileSourceSchema>;
 type GitReviewFileSourceIdentityTuple = readonly [
   contextId: string,
   gitRootPath: string,
+  target: GitReviewTarget,
   path: string,
   oldPaths: readonly string[],
 ];
@@ -38,7 +74,13 @@ function getGitReviewFileSourceIdentityTuple(
   input: GitReviewFileSource
 ): GitReviewFileSourceIdentityTuple {
   const source = gitReviewFileSourceSchema.parse(input);
-  return [source.contextId, source.gitRootPath, source.path, source.oldPaths];
+  return [
+    source.contextId,
+    source.gitRootPath,
+    source.target,
+    source.path,
+    source.oldPaths,
+  ];
 }
 
 export function getGitReviewFileSourceIdentity(

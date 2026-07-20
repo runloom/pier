@@ -18,7 +18,6 @@ const MAX_BRANCH_LIMIT = 1000;
 const ORIGIN_HEAD_RE = /^refs\/remotes\/[^/]+\/(.+)$/;
 const REMOTE_HEAD_RE = /\/HEAD$/;
 const SPLIT_WS_RE = /\s+/;
-const TIMEOUT_RE = /timeout|timed out|超时/i;
 const TREE_HISTORY_SCAN_MAX = 2000;
 const TREE_HISTORY_TIMEOUT_MS = 2000;
 const TREE_OID_RE = /^[0-9a-f]{40,64}$/i;
@@ -70,7 +69,9 @@ function errorMessage(error: unknown): string {
 }
 
 function errorStatus(error: unknown): "error" | "timeout" {
-  return TIMEOUT_RE.test(errorMessage(error)) ? "timeout" : "error";
+  return error instanceof GitExecError && error.causeKind === "timeout"
+    ? "timeout"
+    : "error";
 }
 
 function normalizeLimit(limit: number | undefined): number {

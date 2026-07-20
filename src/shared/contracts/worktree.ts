@@ -92,6 +92,8 @@ export type WorktreeOpenRequest = z.infer<typeof worktreeOpenRequestSchema>;
 
 export const worktreeRemoveRequestSchema = z.object({
   currentPath: z.string().min(1).optional(),
+  /** true = 移除后对其 checkout 的本地分支执行安全删除(git branch -d)。 */
+  deleteBranch: z.boolean().optional(),
   path: z.string().min(1),
 });
 export type WorktreeRemoveRequest = z.infer<typeof worktreeRemoveRequestSchema>;
@@ -148,6 +150,18 @@ export const worktreeCreateResultSchema = z.object({
 export type WorktreeCreateResult = z.infer<typeof worktreeCreateResultSchema>;
 
 export const worktreeRemoveResultSchema = z.object({
+  /**
+   * 请求了 deleteBranch 时的分支删除结果;未请求或该 worktree 无分支为 null。
+   * 分支未合并等安全删除失败不影响 worktree 移除本身,只回传原因。
+   */
+  branchDeletion: z
+    .object({
+      branch: z.string().min(1),
+      deleted: z.boolean(),
+      message: z.string().nullable(),
+    })
+    .nullable()
+    .optional(),
   removedPath: z.string().min(1),
   worktrees: z.array(worktreeItemSchema),
 });

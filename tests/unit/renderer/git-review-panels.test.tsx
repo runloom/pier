@@ -126,6 +126,7 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
           return result;
         },
         selectAll: () => false,
+        setAllCollapsed: () => undefined,
         updateItems(items) {
           const currentIds = new Set(
             renderedItemsRef.current.map((item) => item.id)
@@ -178,7 +179,11 @@ const panelContext = {
   projectRootPath: ROOT,
   updatedAt: 1,
 } satisfies PanelContext;
-const scope = { contextId: panelContext.contextId, gitRootPath: ROOT } as const;
+const scope = {
+  contextId: panelContext.contextId,
+  gitRootPath: ROOT,
+  target: { kind: "uncommitted" },
+} as const;
 
 function entry(
   index: number,
@@ -425,17 +430,17 @@ describe("Git review panel", () => {
     );
     expect(header).toBeInstanceOf(HTMLElement);
     expect(header).toHaveClass("h-10", "border-b", "px-2");
-    expect(within(header as HTMLElement).getByText("pier")).toBeVisible();
-    expect(within(header as HTMLElement).getByText("Changes")).toBeVisible();
-    const breadcrumb = within(header as HTMLElement).getByRole("navigation", {
-      name: "Review location",
-    });
-    expect(within(breadcrumb).getByRole("list")).toBeVisible();
-    expect(within(breadcrumb).getAllByRole("listitem")).toHaveLength(2);
-    expect(within(breadcrumb).getByText("Changes")).toHaveAttribute(
-      "aria-current",
-      "page"
+    // header 左侧是 scope 切换器(不再展示路径面包屑)。
+    const scopeSwitcher = within(header as HTMLElement).getByTestId(
+      "git-review-scope-switcher"
     );
+    expect(scopeSwitcher).toBeVisible();
+    expect(within(scopeSwitcher).getByText("Uncommitted")).toBeVisible();
+    expect(
+      within(header as HTMLElement).queryByRole("navigation", {
+        name: "Review location",
+      })
+    ).toBeNull();
     expect(
       view.getByRole("button", { name: "Collapse changed files" })
     ).toHaveAttribute("aria-expanded", "true");
@@ -490,7 +495,6 @@ describe("Git review panel", () => {
     });
     fireEvent.keyDown(searchInput, { key: "Enter" });
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:1"));
-    expect(within(header as HTMLElement).getByText("file-1.ts")).toBeVisible();
 
     fireEvent.change(searchInput, { target: { value: "not-present" } });
     await expect(
@@ -559,11 +563,13 @@ describe("Git review panel", () => {
     await expect(
       view.findByText("Git could not read this change.")
     ).resolves.toBeVisible();
+    // 初次加载失败没有正文可看:错误是主体状态,用 Empty 呈现而非 Alert 横条。
     expect(
       view
         .getByText("Failed to load changes")
-        .closest('[data-slot="scroll-area"]')
-    ).toHaveClass("max-h-[40%]");
+        .closest('[data-slot="error-empty"]')
+    ).toBeVisible();
+    expect(view.queryByRole("alert")).toBeNull();
     expect(view.queryByText("initial index failed")).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Retry" }));
     expect(view.queryByRole("button", { name: "Retry" })).toBeNull();
@@ -635,6 +641,7 @@ describe("Git review panel", () => {
     const nextSource = {
       contextId: "ctx-other",
       gitRootPath: "/workspace/other",
+      target: { kind: "uncommitted" },
     };
     view.rerender(
       <Panel
@@ -681,6 +688,7 @@ describe("Git review panel", () => {
     const nextSource = {
       contextId: "ctx-other-with-same-entry",
       gitRootPath: "/workspace/other-with-same-entry",
+      target: { kind: "uncommitted" },
     };
     view.rerender(
       <Panel

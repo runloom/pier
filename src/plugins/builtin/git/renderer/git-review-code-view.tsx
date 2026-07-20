@@ -1,6 +1,7 @@
 import type {
   PierDiffViewHandle,
   PierDiffViewItem,
+  PierDiffViewPresentation,
   PierDiffViewRenderWindow,
 } from "@pier/ui/diff-view.tsx";
 import type {
@@ -18,7 +19,7 @@ import {
   useState,
 } from "react";
 import { pluginText } from "./git-plugin-text.ts";
-import { ReviewLoading } from "./git-review-feedback.tsx";
+import { ReviewErrorEmpty, ReviewLoading } from "./git-review-feedback.tsx";
 
 const loadPierDiffView = () =>
   import("@pier/ui/diff-view.tsx").then((module) => ({
@@ -74,6 +75,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       onItemError?: (id: string, error: Error | null) => void;
       onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
       onScroll: () => void;
+      presentation?: PierDiffViewPresentation;
       ref: (handle: PierDiffViewHandle | null) => void;
     }) => React.JSX.Element | null
   > | null = null;
@@ -92,6 +94,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     onItemError,
     onRenderWindowChange,
     onScroll,
+    presentation,
   }: {
     readonly appearance: RendererPluginAppearance;
     readonly context: RendererPluginContext;
@@ -101,6 +104,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     readonly onItemError?: (id: string, error: Error | null) => void;
     readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
     readonly onScroll: () => void;
+    readonly presentation?: PierDiffViewPresentation;
   }): React.JSX.Element {
     const [runtimeError, setRuntimeError] = useState<Error | null>(null);
     const [attempt, setAttempt] = useState(() => ({
@@ -125,7 +129,19 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     }, [onFeedbackChange, retry, runtimeError]);
     return (
       <div className="h-full min-h-0">
-        {runtimeError ? null : (
+        {runtimeError ? (
+          // 渲染层崩溃时正文全空白:错误就是内容本身,用 Empty 全区呈现。
+          <ReviewErrorEmpty
+            context={context}
+            detail={runtimeError.message}
+            onRetry={retry}
+            title={pluginText(
+              context,
+              "reviewRenderFailed",
+              "Failed to render diff"
+            )}
+          />
+        ) : (
           <ReviewCodeViewLoadBoundary
             key={attempt.id}
             onError={setRuntimeError}
@@ -155,6 +171,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                 {...(onItemError === undefined ? {} : { onItemError })}
                 onRenderWindowChange={onRenderWindowChange}
                 onScroll={onScroll}
+                {...(presentation === undefined ? {} : { presentation })}
                 ref={diffRef}
               />
             </Suspense>

@@ -46,6 +46,7 @@ function source(root: string): GitReviewFileSource {
     gitRootPath: root,
     oldPaths: [],
     path: "file.ts",
+    target: { kind: "uncommitted" },
   };
 }
 
