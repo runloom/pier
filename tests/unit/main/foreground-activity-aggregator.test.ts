@@ -261,6 +261,37 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
+  it.each([
+    "TurnCompleted",
+    "TurnInterrupted",
+  ])("advisory 集成经安装期分发送达的 %s 仍是可信终态（cursor stop.status 路径）", (terminalEvent) => {
+    const agg = createForegroundActivityAggregator({ now });
+    const cursorEvent = (
+      event: string,
+      toolUseId?: string
+    ): AgentHookEventPayload => ({
+      ...agentHookEvent({ event, toolUseId }),
+      agent: "cursor",
+    });
+    agg.ingestAgentEvent(cursorEvent("PromptSubmit"), {
+      stopAuthority: "advisory",
+    });
+    // preToolUse/postToolUse 带真实 tool_use_id（shell/MCP 闸门事件不装）
+    agg.ingestAgentEvent(cursorEvent("ToolStart", "tool-1"), {
+      stopAuthority: "advisory",
+    });
+    agg.ingestAgentEvent(cursorEvent("ToolComplete", "tool-1"), {
+      stopAuthority: "advisory",
+    });
+    agg.ingestAgentEvent(cursorEvent(terminalEvent), {
+      stopAuthority: "advisory",
+    });
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
   it("生命周期诊断区分 candidate/trusted/ready 且不记录正文", () => {
     const records: LogRecord[] = [];
     setDefaultLogSink((record) => records.push(record));

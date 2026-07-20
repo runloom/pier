@@ -38,11 +38,8 @@ export function pierHookCommand(
   );
 }
 
-export function pierHookCommandWithStdinSessionId(
-  agentId: AgentKind,
-  pierEvent: string,
-  nativeEvent: string = pierEvent
-): string {
+/** stdin 身份提取前奏（各 stdin 系构造器共用）。 */
+function stdinIdentityExtractionLines(): string[] {
   const nodeExecutable = shellDoubleQuote(process.execPath);
   return [
     "_pier_payload=$(cat 2>/dev/null | head -c 65536)",
@@ -54,18 +51,71 @@ export function pierHookCommandWithStdinSessionId(
     `_pier_agent_id=$(printf '%s' "$_pier_payload" | sed -n 's/.*"agent_id"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
     `_pier_agent_type=$(printf '%s' "$_pier_payload" | sed -n 's/.*"agent_type"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
     `_pier_transcript_path=$(printf '%s' "$_pier_payload" | sed -n 's/.*"transcript_path"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
+  ];
+}
+
+const STDIN_IDENTITY_PAYLOAD_ARGS = [
+  "$_pier_session_id",
+  "$_pier_turn_id",
+  "$_pier_tool_use_id",
+  "$_pier_tool_name",
+  "$_pier_agent_id",
+  "$_pier_agent_type",
+  "$_pier_transcript_path",
+  "$_pier_metadata_b64",
+] as const;
+
+export function pierHookCommandWithStdinSessionId(
+  agentId: AgentKind,
+  pierEvent: string,
+  nativeEvent: string = pierEvent
+): string {
+  return [
+    ...stdinIdentityExtractionLines(),
     pierHookCommand(
       agentId,
       pierEvent,
       nativeEvent,
-      "$_pier_session_id",
-      "$_pier_turn_id",
-      "$_pier_tool_use_id",
-      "$_pier_tool_name",
-      "$_pier_agent_id",
-      "$_pier_agent_type",
-      "$_pier_transcript_path",
-      "$_pier_metadata_b64"
+      ...STDIN_IDENTITY_PAYLOAD_ARGS
+    ),
+  ].join("; ");
+}
+
+export interface StdinStatusDispatchCase {
+  /** stdin payload 顶层 `status` 字段的原生取值。 */
+  nativeStatus: string;
+  /** 命中该取值时上报的 pier 规范事件名。 */
+  pierEvent: string;
+}
+
+/**
+ * 按 stdin payload 的 `status` 字段在安装期命令内分发 pier 事件名
+ * （事件映射仍在安装时完成——mapping 逻辑写进 hook 命令本身, 接收端保持
+ * agent 无关）。未命中任何 case 或 payload 无 status 时回落 fallbackPierEvent,
+ * 由集成的 stopAuthority 语义兜底——provider 未来改 payload 只会退化为
+ * 现状, 不会伪造终态。
+ */
+export function pierHookCommandWithStdinStatusDispatch(
+  agentId: AgentKind,
+  fallbackPierEvent: string,
+  nativeEvent: string,
+  cases: readonly StdinStatusDispatchCase[]
+): string {
+  const arms = cases
+    .map(
+      (entry) => `${entry.nativeStatus}) _pier_event="${entry.pierEvent}" ;;`
+    )
+    .concat(`*) _pier_event="${fallbackPierEvent}" ;;`)
+    .join(" ");
+  return [
+    ...stdinIdentityExtractionLines(),
+    `_pier_status=$(printf '%s' "$_pier_payload" | sed -n 's/.*"status"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
+    `case "$_pier_status" in ${arms} esac`,
+    pierHookCommand(
+      agentId,
+      "$_pier_event",
+      nativeEvent,
+      ...STDIN_IDENTITY_PAYLOAD_ARGS
     ),
   ].join("; ");
 }

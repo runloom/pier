@@ -438,7 +438,8 @@ denied + sticky
 | 级 | 初值代表 | 备注 |
 | --- | --- | --- |
 | A 候选 | Claude、Codex、Copilot、OpenCode、Qwen、… | S1 四家硬门禁 |
-| B 已审保留 | Grok/Gemini/Droid Notification；Cursor shell/MCP before | 2026-07-16 审查：均为授权/确认邻接信号，保留并单测锁定 |
+| B 已审保留 | Grok/Gemini/Droid Notification | 2026-07-16 审查：授权/确认邻接信号，保留并单测锁定 |
+| B 已审删除 | Cursor shell/MCP before*/after* 四闸门事件不装 | 2026-07-20 复审推翻 07-16 结论：before* 是执行前闸门，自动放行命令同样触发（events.jsonl 实测与自动执行成对），假 waiting 噪声淹没真实审批；且闸门 payload 无 tool_use_id，改映 ToolStart 在拒绝执行时会滞留匿名计数。工具生命周期由带 id 的 preToolUse/postToolUse(-Failure) 覆盖，按 §6.5 规则 3 删除。单测锁定于 `agent-waiting-evidence-gates.test.ts` |
 | C | Kiro 等 | 无 waiting |
 | D | ante、codebuff、continue、rovo、openclaw | 仅 launch |
 
