@@ -19,6 +19,13 @@ export const terminal = {
     tool: "Running tool",
     waiting: "Awaiting confirmation",
   },
+  composer: {
+    keyHint: "⏎ send · ⇧⏎ newline · Esc interrupt",
+    label: "Agent composer",
+    placeholder: "Type anything",
+    send: "Send",
+    sendFailed: "Failed to send to terminal",
+  },
   search: {
     close: "Close search",
     label: "Find in terminal",

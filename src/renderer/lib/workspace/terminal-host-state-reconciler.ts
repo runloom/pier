@@ -7,13 +7,18 @@ import type {
 
 export interface TerminalHostInputFacts {
   basePanel: TerminalKeyboardFocusTarget;
+  focusDisabledPanelIds: string[];
   webOverlayRects: TerminalWebOverlayRect[];
   webRequestCount: number;
 }
 
 type TerminalHostPresentationFacts = Omit<
   TerminalHostSnapshot,
-  "basePanel" | "rendererSequence" | "webOverlayRects" | "webRequestCount"
+  | "basePanel"
+  | "focusDisabledPanelIds"
+  | "rendererSequence"
+  | "webOverlayRects"
+  | "webRequestCount"
 >;
 
 let inputFacts: TerminalHostInputFacts | null = null;
@@ -49,6 +54,7 @@ function publish(
     activePanelId,
     activeTerminalPanelId,
     basePanel,
+    focusDisabledPanelIds: nextInputFacts.focusDisabledPanelIds,
     hasMaximizedGroup: nextPresentationFacts.hasMaximizedGroup,
     reason,
     rendererSequence,
@@ -89,6 +95,7 @@ export function updateTerminalHostPresentationFacts(
     basePanel: facts.activeTerminalPanelId
       ? { kind: "terminal", panelId: facts.activeTerminalPanelId }
       : { kind: "web" },
+    focusDisabledPanelIds: [],
     webOverlayRects: [],
     webRequestCount: 0,
   };

@@ -1,0 +1,153 @@
+diff --git a/include/ghostty.h b/include/ghostty.h
+index 5f03e2ac4..7a356f51a 100644
+--- a/include/ghostty.h
++++ b/include/ghostty.h
+@@ -1111,6 +1111,7 @@ void ghostty_surface_refresh(ghostty_surface_t);
+ void ghostty_surface_draw(ghostty_surface_t);
+ void ghostty_surface_set_content_scale(ghostty_surface_t, double, double);
+ void ghostty_surface_set_focus(ghostty_surface_t, bool);
++void ghostty_surface_set_cursor_suppress(ghostty_surface_t, bool);
+ void ghostty_surface_set_occlusion(ghostty_surface_t, bool);
+ void ghostty_surface_set_size(ghostty_surface_t, uint32_t, uint32_t);
+ ghostty_surface_size_s ghostty_surface_size(ghostty_surface_t);
+diff --git a/src/Surface.zig b/src/Surface.zig
+index 111c5f0ff..45172d923 100644
+--- a/src/Surface.zig
++++ b/src/Surface.zig
+@@ -3280,6 +3280,20 @@ pub fn occlusionCallback(self: *Surface, visible: bool) !void {
+     try self.queueRender();
+ }
+ 
++/// Callback to set host-forced cursor suppression. When suppressed the
++/// renderer never draws the cursor glyph regardless of terminal mode or
++/// focus. Used by embedders whose own input UI overlays the terminal.
++pub fn hostCursorSuppressCallback(self: *Surface, suppressed: bool) !void {
++    // Crash metadata in case we crash in here
++    crash.sentry.thread_state = self.crashThreadState();
++    defer crash.sentry.thread_state = null;
++
++    _ = self.renderer_thread.mailbox.push(.{
++        .host_cursor_suppress = suppressed,
++    }, .{ .forever = {} });
++    try self.queueRender();
++}
++
+ pub fn focusCallback(self: *Surface, focused: bool) !void {
+     // Crash metadata in case we crash in here
+     crash.sentry.thread_state = self.crashThreadState();
+diff --git a/src/apprt/embedded.zig b/src/apprt/embedded.zig
+index a94b3688c..767776e79 100644
+--- a/src/apprt/embedded.zig
++++ b/src/apprt/embedded.zig
+@@ -963,6 +963,13 @@ pub const Surface = struct {
+         };
+     }
+ 
++    pub fn hostCursorSuppressCallback(self: *Surface, suppressed: bool) void {
++        self.core_surface.hostCursorSuppressCallback(suppressed) catch |err| {
++            log.err("error in host cursor suppress callback err={}", .{err});
++            return;
++        };
++    }
++
+     pub fn occlusionCallback(self: *Surface, visible: bool) void {
+         self.core_surface.occlusionCallback(visible) catch |err| {
+             log.err("error in occlusion callback err={}", .{err});
+@@ -1811,6 +1818,13 @@ pub const CAPI = struct {
+         surface.focusCallback(focused);
+     }
+ 
++    /// Set host-forced cursor suppression: when true the renderer never
++    /// draws the cursor glyph for this surface, regardless of terminal
++    /// mode (DECTCEM) or focus state.
++    export fn ghostty_surface_set_cursor_suppress(surface: *Surface, suppressed: bool) void {
++        surface.hostCursorSuppressCallback(suppressed);
++    }
++
+     /// Update the occlusion state of a surface.
+     export fn ghostty_surface_set_occlusion(surface: *Surface, visible: bool) void {
+         surface.occlusionCallback(visible);
+diff --git a/src/renderer/Thread.zig b/src/renderer/Thread.zig
+index 508721379..1314abee5 100644
+--- a/src/renderer/Thread.zig
++++ b/src/renderer/Thread.zig
+@@ -423,6 +423,10 @@ fn drainMailbox(self: *Thread) !void {
+                 }
+             },
+ 
++            .host_cursor_suppress => |v| {
++                try self.renderer.setHostCursorSuppress(v);
++            },
++
+             .reset_cursor_blink => {
+                 self.flags.cursor_blink_visible = true;
+                 if (self.cursor_c.state() == .active) {
+diff --git a/src/renderer/generic.zig b/src/renderer/generic.zig
+index ff632f64a..f24e6d98f 100644
+--- a/src/renderer/generic.zig
++++ b/src/renderer/generic.zig
+@@ -115,6 +115,11 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
+         /// True if the window is focused
+         focused: bool,
+ 
++        /// True when the embedder asked us to never draw the cursor,
++        /// regardless of terminal mode (DECTCEM) or focus. Set via the
++        /// `host_cursor_suppress` renderer message.
++        host_cursor_suppress: bool = false,
++
+         /// Flag to indicate that our focus state changed for custom
+         /// shaders to update their state.
+         custom_shader_focused_changed: bool = false,
+@@ -1023,6 +1028,15 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
+             return display_link.isRunning();
+         }
+ 
++        /// Set whether the embedder wants the cursor suppressed entirely
++        /// (never drawn). Unlike focus this has no side effects on timers
++        /// or display links; it only gates cursor glyph generation.
++        ///
++        /// Must be called on the render thread.
++        pub fn setHostCursorSuppress(self: *Self, v: bool) !void {
++            self.host_cursor_suppress = v;
++        }
++
+         /// Callback when the focus changes for the terminal this is rendering.
+         ///
+         /// Must be called on the render thread.
+@@ -1363,11 +1377,14 @@ pub fn Renderer(comptime GraphicsAPI: type) type {
+                 // Build our GPU cells
+                 self.rebuildCells(
+                     critical.preedit,
+-                    renderer.cursorStyle(&self.terminal_state, .{
+-                        .preedit = critical.preedit != null,
+-                        .focused = self.focused,
+-                        .blink_visible = cursor_blink_visible,
+-                    }),
++                    if (self.host_cursor_suppress)
++                        null
++                    else
++                        renderer.cursorStyle(&self.terminal_state, .{
++                            .preedit = critical.preedit != null,
++                            .focused = self.focused,
++                            .blink_visible = cursor_blink_visible,
++                        }),
+                     &critical.links,
+                 ) catch |err| {
+                     // This means we weren't able to allocate our buffer
+diff --git a/src/renderer/message.zig b/src/renderer/message.zig
+index a47b96080..70a9004e7 100644
+--- a/src/renderer/message.zig
++++ b/src/renderer/message.zig
+@@ -17,6 +17,12 @@ pub const Message = union(enum) {
+     /// the renderer is expected to handle all of these.
+     focus: bool,
+ 
++    /// A change in the host-forced cursor suppression state. When true
++    /// the renderer never draws the cursor glyph regardless of terminal
++    /// mode (DECTCEM) or focus state. Used by embedders whose own input
++    /// UI overlays the terminal (any drawn cursor reads as a second caret).
++    host_cursor_suppress: bool,
++
+     /// A change in the view occlusion state. This can be used to determine
+     /// if the window is visible or not. A window can be not visible (occluded)
+     /// and still have focus.

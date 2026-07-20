@@ -278,7 +278,9 @@ export class TerminalFocusCoordinator {
       record.windowFocused &&
       record.readyPanelIds.has(requestedTarget.panelId) &&
       requestedTerminal?.visible === true &&
-      requestedTerminal.frame !== null;
+      requestedTerminal.frame !== null &&
+      // 原生聚焦开关关闭（composer 接管）的终端不具备键盘资格。
+      !desired.focusDisabledPanelIds.includes(requestedTarget.panelId);
     const rawKeyboardTarget: TerminalKeyboardFocusTarget = terminalEligible
       ? requestedTarget
       : { kind: "web" };
@@ -289,8 +291,12 @@ export class TerminalFocusCoordinator {
             panelId: toNativePanelKey(record.win, rawKeyboardTarget.panelId),
           }
         : rawKeyboardTarget;
+    const focusDisabledPanelIds = desired.focusDisabledPanelIds.map((panelId) =>
+      toNativePanelKey(record.win, panelId)
+    );
     const nativeApplySequence = this.nextNativeApplySequence++;
     const candidate: TerminalNativeWindowState = {
+      focusDisabledPanelIds,
       keyboardTarget,
       nativeApplySequence,
       reason,

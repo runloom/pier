@@ -45,6 +45,7 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/terminal.store.ts";
+import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
 import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
 import { resolvePanelTabIcon } from "./panel-tab-icon-registry.ts";
 
@@ -365,9 +366,14 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     [baseOnContextMenu, props.api]
   );
   const publishTerminalFocusIntent = useCallback(() => {
-    if (props.api.component === "terminal") {
-      requestTerminalFocusIntent(props.api.id);
+    if (props.api.component !== "terminal") {
+      return;
     }
+    // Agent Composer 接管期间：点已激活 tab 也要回到输入框，不能只把键盘交回 native。
+    if (terminalComposerTakeoverFocus(props.api.id)) {
+      return;
+    }
+    requestTerminalFocusIntent(props.api.id);
   }, [props.api.component, props.api.id]);
   const onClick = useCallback(() => {
     const shouldReplay = wasActiveOnPointerDownRef.current;

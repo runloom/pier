@@ -31,6 +31,7 @@ extern "C" {
     bool ghostty_bridge_close(const char* panelId);
     bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
     bool ghostty_bridge_send_text(const char* panelId, const char* text);
+    bool ghostty_bridge_send_key_press(const char* panelId, uint32_t keycode, uint32_t mods);
     char* ghostty_bridge_read_selection_text(const char* panelId);
     void ghostty_bridge_close_all(void* nsWindow);
     // 孤儿清理:关该 window 下不在 activeIds 中的 NSView. C 方案 reload 零销毁
@@ -280,6 +281,16 @@ static Napi::Value JsSendText(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
     std::string text = info[1].As<Napi::String>().Utf8Value();
     bool ok = ghostty_bridge_send_text(panelId.c_str(), text.c_str());
+    return Napi::Boolean::New(info.Env(), ok);
+}
+
+static Napi::Value JsSendKeyPress(const Napi::CallbackInfo& info) {
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    uint32_t keycode = info[1].As<Napi::Number>().Uint32Value();
+    uint32_t mods = info.Length() > 2 && info[2].IsNumber()
+                        ? info[2].As<Napi::Number>().Uint32Value()
+                        : 0;
+    bool ok = ghostty_bridge_send_key_press(panelId.c_str(), keycode, mods);
     return Napi::Boolean::New(info.Env(), ok);
 }
 
@@ -902,6 +913,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
     exports.Set("performTerminalBindingAction", Napi::Function::New(env, JsPerformBindingAction));
     exports.Set("sendText", Napi::Function::New(env, JsSendText));
+    exports.Set("sendKeyPress", Napi::Function::New(env, JsSendKeyPress));
     exports.Set("writeTerminalOutput", Napi::Function::New(env, JsWriteTerminalOutput));
     exports.Set("finishTerminalOutput", Napi::Function::New(env, JsFinishTerminalOutput));
     exports.Set("resetTerminalOutput", Napi::Function::New(env, JsResetTerminalOutput));

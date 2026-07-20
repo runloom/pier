@@ -46,6 +46,8 @@ export function beginTerminalPanelWebDragCapture(
 
 const webOverlayRects = new Map<string, TerminalFrame>();
 const webRequestIds = new Set<string>();
+/** composer 等 web 输入组件接管的面板：native 不得聚焦、硬件光标隐藏。 */
+const focusDisabledPanelIds = new Set<string>();
 const TRANSIENT_WEB_CLICK_FOCUS_ID = "pier.click";
 
 let basePanel: TerminalKeyboardFocusTarget = { kind: "web" };
@@ -75,6 +77,7 @@ function applyTerminalInputRouting(): void {
   updateTerminalHostInputFacts(
     {
       basePanel,
+      focusDisabledPanelIds: Array.from(focusDisabledPanelIds),
       webOverlayRects: Array.from(webOverlayRects, ([id, frame]) => ({
         frame,
         id,
@@ -83,6 +86,27 @@ function applyTerminalInputRouting(): void {
     },
     "input-routing"
   );
+}
+
+/**
+ * 声明某终端面板的原生聚焦开关（Agent Composer 挂载即关闭原生聚焦）。
+ * 关闭期间：main 不会把键盘交给该终端，native 隐藏其硬件光标；
+ * 开关恢复后回到常规路由。
+ */
+export function setTerminalNativeFocusDisabled(
+  panelId: string,
+  disabled: boolean
+): void {
+  const had = focusDisabledPanelIds.has(panelId);
+  if (disabled === had) {
+    return;
+  }
+  if (disabled) {
+    focusDisabledPanelIds.add(panelId);
+  } else {
+    focusDisabledPanelIds.delete(panelId);
+  }
+  applyTerminalInputRouting();
 }
 
 function setWebOverlayRect(id: string, frame: TerminalFrame | null): void {
@@ -463,6 +487,7 @@ export function installTerminalInputRoutingDragWatcher(): void {
 export function resetTerminalInputRoutingForTests(): void {
   webOverlayRects.clear();
   webRequestIds.clear();
+  focusDisabledPanelIds.clear();
   basePanel = { kind: "web" };
   resetTerminalHostStateForTests();
   lastEffectiveKeyboardKind = "web";

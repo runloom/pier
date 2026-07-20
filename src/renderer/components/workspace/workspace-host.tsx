@@ -37,6 +37,7 @@ import {
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
+import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
 import {
   requestTerminalFocusIntent,
   setTerminalBasePanel,
@@ -88,7 +89,15 @@ function syncActivePanelScope(panel: WorkspacePanel | null | undefined): void {
   const kind = panelKindOf(component);
   useKeybindingScope.getState().setActivePanel(kind, component, panel.id);
   if (kind === "terminal") {
-    requestTerminalFocusIntent(panel.id);
+    // basePanel 永远反映「前台是哪个终端」，无论键盘归 composer / 搜索还是 native。
+    // 缺失这一步时 basePanel 停在初始 web，宿主无法定位需要藏 hardware cursor 的
+    // 那个终端（webRequestCount>0 但没有 anchor panel）。
+    setTerminalBasePanel({ kind: "terminal", panelId: panel.id });
+    // Agent Composer 接管期间：激活终端面板时焦点重定向到输入卡片；
+    // 未接管则走原生焦点归还路径。
+    if (!terminalComposerTakeoverFocus(panel.id)) {
+      requestTerminalFocusIntent(panel.id);
+    }
   } else {
     setTerminalBasePanel({ kind: "web" });
   }
@@ -368,6 +377,11 @@ export function WorkspaceHost() {
             }
           );
           if (result.ok) {
+            // Agent Composer 接管期间：点击终端重定向聚焦输入卡片，键盘不回 native。
+            if (terminalComposerTakeoverFocus(req.panelId)) {
+              syncTerminalPresentation(event.api, "dockview-active-panel");
+              return;
+            }
             // 终端焦点意图：让任何活跃的共存浮层（如搜索栏）让出键盘但保持可见，
             // effective 随 basePanel=terminal 转向终端。
             useTerminalStore.getState().yieldToTerminal();

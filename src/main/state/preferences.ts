@@ -2,6 +2,7 @@ import { join } from "node:path";
 import { resolvePermissionMode } from "@shared/contracts/agent.ts";
 import { DEFAULT_AGENT_ATTENTION_SETTINGS } from "@shared/contracts/agent-attention.ts";
 import {
+  DEFAULT_AGENT_COMPOSER_ENABLED,
   DEFAULT_APP_QUIT_CONFIRMATION_MODE,
   DEFAULT_GIT_AUTO_FETCH_ENABLED,
   DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
@@ -47,6 +48,7 @@ const DEFAULTS: ProjectPreferences = {
   agentDefaultArgs: {},
   agentDefaultEnv: {},
   agentCommandOverrides: {},
+  agentComposerEnabled: DEFAULT_AGENT_COMPOSER_ENABLED,
   worktreeRootPath: "",
   agentStatusHooks: true,
   agentAttention: { ...DEFAULT_AGENT_ATTENTION_SETTINGS },

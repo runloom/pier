@@ -30,6 +30,7 @@ describe("terminal host state reconciler", () => {
     const snapshot = updateTerminalHostInputFacts(
       {
         basePanel: { kind: "terminal", panelId: "terminal-1" },
+        focusDisabledPanelIds: [],
         webOverlayRects: [],
         webRequestCount: 0,
       },
@@ -50,6 +51,7 @@ describe("terminal host state reconciler", () => {
     updateTerminalHostInputFacts(
       {
         basePanel: { kind: "terminal", panelId: "terminal-1" },
+        focusDisabledPanelIds: [],
         webOverlayRects: [],
         webRequestCount: 0,
       },
@@ -86,6 +88,7 @@ describe("terminal host state reconciler", () => {
     const snapshot = updateTerminalHostInputFacts(
       {
         basePanel: { kind: "terminal", panelId: "terminal-1" },
+        focusDisabledPanelIds: [],
         webOverlayRects: [
           {
             frame: { height: 30, width: 80, x: 0, y: 0 },
@@ -112,7 +115,12 @@ describe("terminal host state reconciler", () => {
     });
 
     const snapshot = updateTerminalHostInputFacts(
-      { basePanel: { kind: "web" }, webOverlayRects: [], webRequestCount: 0 },
+      {
+        basePanel: { kind: "web" },
+        focusDisabledPanelIds: [],
+        webOverlayRects: [],
+        webRequestCount: 0,
+      },
       "input-routing"
     );
 

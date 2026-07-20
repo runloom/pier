@@ -30,6 +30,7 @@ export interface CreatePreferencesServiceArgs {
 const PATCHABLE_KEYS = [
   "agentAttention",
   "agentCommandOverrides",
+  "agentComposerEnabled",
   "agentDefaultArgs",
   "agentDefaultEnv",
   "agentPermissionMode",

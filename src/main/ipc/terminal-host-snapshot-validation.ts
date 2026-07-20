@@ -106,6 +106,8 @@ export function isTerminalHostSnapshot(
     snapshot.rendererSequence < 0 ||
     !Array.isArray(snapshot.terminals) ||
     snapshot.terminals.length > MAX_TERMINALS ||
+    !Array.isArray(snapshot.focusDisabledPanelIds) ||
+    snapshot.focusDisabledPanelIds.length > MAX_TERMINALS ||
     !Array.isArray(snapshot.webOverlayRects) ||
     snapshot.webOverlayRects.length > MAX_OVERLAY_RECTS ||
     typeof snapshot.webRequestCount !== "number" ||
@@ -138,6 +140,14 @@ export function isTerminalHostSnapshot(
       return false;
     }
     overlayIds.add(rect.id);
+  }
+
+  const focusDisabledIds = new Set<string>();
+  for (const panelId of snapshot.focusDisabledPanelIds) {
+    if (!isPanelId(panelId) || focusDisabledIds.has(panelId)) {
+      return false;
+    }
+    focusDisabledIds.add(panelId);
   }
 
   const activeTerminalPanelId = snapshot.activeTerminalPanelId as string | null;

@@ -64,6 +64,11 @@ export interface TerminalHostSnapshot {
   activePanelId: string | null;
   activeTerminalPanelId: string | null;
   basePanel: TerminalKeyboardFocusTarget;
+  /**
+   * 原生聚焦开关关闭的面板（Agent Composer 等 web 输入组件接管期间）。
+   * 名单内终端不得成为原生键盘目标，native 隐藏其硬件光标。renderer panelId。
+   */
+  focusDisabledPanelIds: string[];
   hasMaximizedGroup: boolean;
   reason: TerminalHostReason;
   rendererSequence: number;
@@ -73,6 +78,11 @@ export interface TerminalHostSnapshot {
 }
 
 export interface TerminalNativeWindowState {
+  /**
+   * 原生聚焦开关关闭的面板（native panelId，含窗口前缀）：
+   * 不做 first responder，硬件光标强制隐藏。
+   */
+  focusDisabledPanelIds: string[];
   keyboardTarget: TerminalKeyboardFocusTarget;
   nativeApplySequence: number;
   reason: TerminalHostReason;
@@ -251,6 +261,29 @@ export type TerminalOperation = "copy" | "paste" | "selectAll" | "clearScreen";
 export interface TerminalOperationResult {
   error?: string | undefined;
   ok: boolean;
+  /**
+   * submit 路径：文本已 paste 进 PTY，但随后的 Return 键失败。
+   * 调用方应清空草稿（避免重试重复粘贴），并提示用户用空 Enter 再提交。
+   */
+  textDelivered?: boolean | undefined;
+}
+
+export interface TerminalSendTextArgs {
+  panelId: string;
+  /**
+   * true：先 paste 文本，再注入真实 Return 键提交。
+   * 不能把 `\r` 拼进同一次 sendText——bracketed paste 下末尾回车不会提交。
+   */
+  submit?: boolean | undefined;
+  text: string;
+}
+
+/** 合成按键（Esc / Ctrl+C / 方向键等）。绕过 bracketed paste。 */
+export interface TerminalSendKeyPressArgs {
+  keycode: number;
+  /** ghostty_input_mods 位掩码；缺省 0。 */
+  mods?: number | undefined;
+  panelId: string;
 }
 
 export type TerminalSelectionTextResult =
@@ -393,6 +426,20 @@ export interface TerminalAPI {
    */
   reconcile(activeIds: string[]): void;
   search(panelId: string, query: string): Promise<TerminalOperationResult>;
+  /**
+   * 注入一次 AppKit 虚拟键码的 press+release（绕过 bracketed paste）。
+   * Composer 控制键透传与 submit 后的 Return 都走这条路径。
+   */
+  sendKeyPress(
+    args: TerminalSendKeyPressArgs
+  ): Promise<TerminalOperationResult>;
+  /**
+   * 向已存在 terminal panel 的 PTY 直写 UTF-8 文本（绕过按键翻译）。
+   * shell 开启 bracketed paste (mode 2004) 时 libghostty 自动包裹粘贴标记。
+   * surface 未就绪返回 { ok: false }——调用方负责反馈，不做重试。
+   * 控制键（Esc / Ctrl+C / 方向键）不要走这里，用 {@link sendKeyPress}。
+   */
+  sendText(args: TerminalSendTextArgs): Promise<TerminalOperationResult>;
   setAppShortcutKeys(keys: string[]): void;
   setConfig(config: TerminalRuntimeConfig): void;
   /**

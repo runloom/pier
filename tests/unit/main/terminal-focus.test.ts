@@ -174,6 +174,7 @@ describe("terminal focus restoration", () => {
       activePanelId: panelId,
       activeTerminalPanelId: panelId,
       basePanel: { kind: "terminal" as const, panelId },
+      focusDisabledPanelIds: [],
       hasMaximizedGroup: false,
       reason: "dockview-active-panel" as const,
       rendererSequence,

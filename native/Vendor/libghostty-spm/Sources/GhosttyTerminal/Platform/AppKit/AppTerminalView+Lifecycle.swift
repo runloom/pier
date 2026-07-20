@@ -43,7 +43,10 @@
 
         override open func resignFirstResponder() -> Bool {
             let result = super.resignFirstResponder()
-            applySurfaceFocus(false)
+            // 不硬 apply false：让 synchronizeHostFocusState 走统一派生，
+            // 允许 hostCursorHidden（web 浮层接管键盘时）仍保持 Ghostty focused=true，
+            // 避免出现空心块光标。
+            synchronizeHostFocusState()
             return result
         }
 
@@ -165,9 +168,13 @@
         }
 
         public func synchronizeHostFocusState() {
-            let focused = hostKeyboardActive
-                && window?.isKeyWindow == true
-                && window?.firstResponder === self
+            // 键盘路由仍走 hostKeyboardActive（见 AppTerminalView+Input.swift 各处 guard）。
+            // Ghostty focus 只影响光标样式（focused=solid，unfocused=hollow）；
+            // 我们希望即便被 web 浮层「接管」的那一刻也别画 hollow 出现「双光标」，
+            // 所以只要窗口是 key + (是 FR 或 hostCursorHidden) 就报告 focused=true。
+            // 配合 setHostCursorHidden 发出的 DECTCEM ?25l，能同时挡住 hollow 与 solid。
+            let focused = window?.isKeyWindow == true
+                && (window?.firstResponder === self || hostCursorHidden)
             applySurfaceFocus(focused)
         }
 

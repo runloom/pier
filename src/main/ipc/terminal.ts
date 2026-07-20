@@ -5,7 +5,6 @@ import type {
   TerminalCloseOptions,
   TerminalColors,
   TerminalFont,
-  TerminalSelectionTextResult,
 } from "@shared/contracts/terminal.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import type { IpcMain, WebContents } from "electron";
@@ -39,13 +38,10 @@ import {
   cancelPromptReady,
   signalPromptReady,
 } from "./terminal-initial-input-gate.ts";
+import { registerTerminalInputIpc } from "./terminal-input-ipc.ts";
 import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward.ts";
 import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
 import { handleTerminalOpenUrl } from "./terminal-open-url-forwarding.ts";
-import {
-  performTerminalOperation,
-  readTerminalSelectionText,
-} from "./terminal-operations.ts";
 import { fromNativePanelKey, toNativePanelKey } from "./terminal-panel-id.ts";
 import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
 import { registerTerminalSearchIpc } from "./terminal-search.ts";
@@ -225,53 +221,12 @@ export function registerTerminalIpc(
     }
   });
 
-  ipcMain.handle(
-    "pier:terminal:perform-operation",
-    (event, panelId: unknown, operation: unknown) =>
-      performTerminalOperation({
-        addon,
-        loadError,
-        operation,
-        panelId,
-        win: windowFromWebContents(event.sender),
-      })
-  );
-
-  ipcMain.handle(
-    "pier:terminal:read-selection-text",
-    (event, panelId: unknown) =>
-      Promise.resolve().then(() => {
-        const trimmedPanelId =
-          typeof panelId === "string" ? panelId.trim() : "";
-        if (!trimmedPanelId) {
-          return { kind: "empty" } satisfies TerminalSelectionTextResult;
-        }
-        const win = windowFromWebContents(event.sender);
-        if (!win) {
-          return {
-            kind: "error",
-            message: "Terminal window is not available.",
-          } satisfies TerminalSelectionTextResult;
-        }
-        try {
-          const text = readTerminalSelectionText({
-            addon,
-            loadError,
-            panelId: trimmedPanelId,
-            win,
-          });
-          if (!text) {
-            return { kind: "empty" } satisfies TerminalSelectionTextResult;
-          }
-          return { kind: "ok", text } satisfies TerminalSelectionTextResult;
-        } catch (err) {
-          return {
-            kind: "error",
-            message: err instanceof Error ? err.message : String(err),
-          } satisfies TerminalSelectionTextResult;
-        }
-      })
-  );
+  registerTerminalInputIpc({
+    addon,
+    ipcMain,
+    loadError,
+    windowFromWebContents,
+  });
 
   ipcMain.handle("pier:terminal:create", (event, args: CreateTerminalArgs) =>
     handleTerminalCreate({

@@ -77,6 +77,9 @@ export const terminalApi: TerminalAPI = {
     ipcRenderer.invoke("pier:terminal:rebind-task-output", panelId, params),
   search: (panelId, query) =>
     ipcRenderer.invoke("pier:terminal:search", panelId, query),
+  sendText: (args) => ipcRenderer.invoke("pier:terminal:send-text", args),
+  sendKeyPress: (args) =>
+    ipcRenderer.invoke("pier:terminal:send-key-press", args),
   setAppShortcutKeys: (keys) =>
     ipcRenderer.send("pier:terminal:set-app-shortcut-keys", keys),
   setConfig: (config) => ipcRenderer.send("pier:terminal:set-config", config),

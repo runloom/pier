@@ -25,6 +25,7 @@ import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 
 const PERMISSION_MODE_OPTIONS: Array<{
   value: "yolo" | "manual";
@@ -164,6 +165,27 @@ function AgentStatusHooksRow() {
   );
 }
 
+function AgentComposerRow() {
+  const t = useT();
+  const agentComposerEnabled = useTerminalPreferencesStore(
+    (s) => s.agentComposerEnabled
+  );
+  const setAgentComposerEnabled = useTerminalPreferencesStore(
+    (s) => s.setAgentComposerEnabled
+  );
+  return (
+    <SwitchRow
+      checked={agentComposerEnabled}
+      description={t("settings.row.agentComposerDesc")}
+      id="settings-agent-composer"
+      label={t("settings.row.agentComposer")}
+      onCheckedChange={(next) => {
+        setAgentComposerEnabled(next).catch(() => undefined);
+      }}
+    />
+  );
+}
+
 function AgentListCard() {
   const t = useT();
   const detectedIds = useAgentDetectStore((s) => s.detectedIds);
@@ -250,6 +272,8 @@ export function AgentsSection() {
               <PermissionModeRow />
               <FieldSeparator />
               <AgentStatusHooksRow />
+              <FieldSeparator />
+              <AgentComposerRow />
             </FieldSet>
           </CardContent>
         </Card>

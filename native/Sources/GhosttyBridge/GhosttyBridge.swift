@@ -694,6 +694,8 @@ private struct TerminalKeyboardTargetEnvelope: Codable {
 }
 
 private struct TerminalWindowStateEnvelope: Codable {
+    /// 原生聚焦开关关闭的面板：不做 first responder、硬件光标隐藏。
+    let focusDisabledPanelIds: [String]?
     let keyboardTarget: TerminalKeyboardTargetEnvelope
     let nativeApplySequence: Int
     let reason: String
@@ -701,6 +703,10 @@ private struct TerminalWindowStateEnvelope: Codable {
     let terminals: [TerminalWindowEntry]
     let webOverlayRects: [TerminalWebOverlayRectEntry]
     let windowFocused: Bool
+
+    var focusDisabledSet: Set<String> {
+        Set(focusDisabledPanelIds ?? [])
+    }
 }
 
 enum NativeApplyResult: Int32 {
@@ -943,8 +949,12 @@ final class GhosttyBridgeImpl {
             if let applied = appliedWindowStates[windowId] {
                 applyFirstResponder(
                     for: parent,
-                    targetPanelId: applied.keyboardTarget.terminalPanelId,
+                    targetPanelId: eligibleFirstResponderTarget(applied),
                     windowFocused: applied.windowFocused
+                )
+                applyHostCursorVisibility(
+                    for: parent,
+                    focusDisabledPanelIds: applied.focusDisabledSet
                 )
             }
             return .unchanged
@@ -1010,10 +1020,38 @@ final class GhosttyBridgeImpl {
         windowApplyStates[windowId] = applyState
         applyFirstResponder(
             for: parent,
-            targetPanelId: state.keyboardTarget.terminalPanelId,
+            targetPanelId: eligibleFirstResponderTarget(state),
             windowFocused: state.windowFocused
         )
+        applyHostCursorVisibility(
+            for: parent,
+            focusDisabledPanelIds: state.focusDisabledSet
+        )
         return .applied
+    }
+
+    /// 防御性 guard：main 已保证 keyboardTarget 不会指向聚焦开关关闭的面板，
+    /// 这里再排除一次，避免竞态 snapshot 把 first responder 交回被接管的终端。
+    private func eligibleFirstResponderTarget(
+        _ state: TerminalWindowStateEnvelope
+    ) -> String? {
+        guard let panelId = state.keyboardTarget.terminalPanelId else { return nil }
+        return state.focusDisabledSet.contains(panelId) ? nil : panelId
+    }
+
+    private func applyHostCursorVisibility(
+        for window: NSWindow,
+        focusDisabledPanelIds: Set<String>
+    ) {
+        let windowId = ObjectIdentifier(window)
+        for (panelId, term) in terminals
+            where ObjectIdentifier(term.parentWindow) == windowId
+        {
+            let hidden = focusDisabledPanelIds.contains(panelId)
+            // force=true：智能体 TUI（Claude Code / Codex）可能重发 CSI ?25h
+            // 让光标可见。宿主每次 apply 都重放 hide 与其抢占。
+            term.terminalView.setHostCursorHidden(hidden, force: hidden)
+        }
     }
 
     private static func isValidWindowState(_ state: TerminalWindowStateEnvelope) -> Bool {
@@ -1021,6 +1059,7 @@ final class GhosttyBridgeImpl {
         let terminalIds = state.terminals.map(\.panelId)
         guard terminalIds.allSatisfy({ !$0.isEmpty }),
               Set(terminalIds).count == terminalIds.count,
+              (state.focusDisabledPanelIds ?? []).allSatisfy({ !$0.isEmpty }),
               state.webOverlayRects.allSatisfy({ !$0.id.isEmpty }),
               Set(state.webOverlayRects.map(\.id)).count == state.webOverlayRects.count,
               state.terminals.allSatisfy({ entry in
@@ -1386,6 +1425,13 @@ final class GhosttyBridgeImpl {
     func sendText(panelId: String, text: String) -> Bool {
         guard let term = terminals[panelId] else { return false }
         return term.terminalView.sendText(text)
+    }
+
+    /// AppKit virtual keycode press+release (e.g. 0x24 = Return). Used after
+    /// paste-style `sendText` so Enter actually submits under bracketed paste.
+    func sendKeyPress(panelId: String, keycode: UInt32, mods: UInt32) -> Bool {
+        guard let term = terminals[panelId] else { return false }
+        return term.terminalView.sendKeyPress(keycode: keycode, mods: mods)
     }
 
     /// 孤儿清理:关掉该 window 下不在 activeIds 集合中的 terminal NSView. 配合
@@ -1889,6 +1935,21 @@ public func ghosttyBridgeSendText(
         GhosttyBridgeImpl.shared.sendText(
             panelId: String(cString: panelId),
             text: String(cString: text)
+        )
+    }
+}
+
+@_cdecl("ghostty_bridge_send_key_press")
+public func ghosttyBridgeSendKeyPress(
+    _ panelId: UnsafePointer<CChar>,
+    _ keycode: UInt32,
+    _ mods: UInt32
+) -> Bool {
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.sendKeyPress(
+            panelId: String(cString: panelId),
+            keycode: keycode,
+            mods: mods
         )
     }
 }

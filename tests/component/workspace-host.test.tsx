@@ -1,3 +1,4 @@
+import type { TerminalFocusRequest } from "@shared/contracts/terminal.ts";
 import { act, render, screen } from "@testing-library/react";
 import { DockviewReact, type DockviewReadyEvent } from "dockview-react";
 import type { ComponentProps, ReactNode } from "react";
@@ -14,7 +15,20 @@ import {
   readRegisteredTerminalAnchorFrame,
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { resetTerminalPresentationReconcilerForTests } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
-import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
+import {
+  resetTerminalOverlayFocusForTests,
+  useTerminalStore,
+} from "@/stores/terminal.store.ts";
+import {
+  registerTerminalComposerTakeover,
+  resetTerminalComposerTakeoverForTests,
+} from "@/stores/terminal-composer-takeover.ts";
+import {
+  requestTerminalFocusIntent,
+  requestTerminalWebFocus,
+  resetTerminalInputRoutingForTests,
+  setTerminalBasePanel,
+} from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 vi.mock("dockview-react", async (importOriginal) => {
@@ -237,6 +251,9 @@ describe("WorkspaceHost", () => {
     vi.unstubAllGlobals();
     vi.clearAllMocks();
     useWorkspaceStore.setState({ api: null, hasMaximizedGroup: false });
+    resetTerminalComposerTakeoverForTests();
+    resetTerminalInputRoutingForTests();
+    resetTerminalOverlayFocusForTests();
   });
 
   it("disables dockview overflow and uses the workspace shadcn header actions", () => {
@@ -408,6 +425,101 @@ describe("WorkspaceHost", () => {
     terminal.api.isActive = true;
     dockview.emitActivePanelChange(terminal);
 
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        activePanelId: "terminal-2",
+        activeTerminalPanelId: "terminal-2",
+        basePanel: { kind: "terminal", panelId: "terminal-2" },
+      })
+    );
+  });
+
+  it("redirects a newly active terminal panel's focus to an agent composer takeover instead of the native terminal", () => {
+    resetTerminalInputRoutingForTests();
+    const web = createPanel({
+      component: "welcome",
+      id: "welcome-1",
+      isActive: true,
+      isVisible: true,
+    });
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-2",
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([web, terminal], web);
+    vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue({
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    });
+    render(<WorkspaceHost />);
+    vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({
+      api: dockview.api,
+    });
+    // 建立已知基线（basePanel=web）：inputFacts 若从未初始化，reconciler 会
+    // 从 activeTerminalPanelId 兜底合成 basePanel，干扰下面的断言。
+    // setTerminalBasePanel 对相同 target 是 no-op，先用 requestTerminalFocusIntent
+    // 换一个不同的 target 强制写一次，再切回 web。
+    requestTerminalFocusIntent("seed-panel");
+    setTerminalBasePanel({ kind: "web" });
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+    const takeoverFocus = vi.fn(() => true);
+    registerTerminalComposerTakeover("terminal-2", takeoverFocus);
+
+    web.api.isActive = false;
+    terminal.api.isActive = true;
+    dockview.emitActivePanelChange(terminal);
+
+    expect(takeoverFocus).toHaveBeenCalledOnce();
+    // takeover 命中时也把 basePanel 翻向该终端面板：宿主需要 anchor panel 才能
+    // 定位「哪个终端要藏 hardware cursor」（web 浮层占用键盘期间）。
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        activePanelId: "terminal-2",
+        activeTerminalPanelId: "terminal-2",
+        basePanel: { kind: "terminal", panelId: "terminal-2" },
+      })
+    );
+  });
+
+  it("falls back to requestTerminalFocusIntent when the registered takeover fails to focus (e.g. composer disabled)", () => {
+    resetTerminalInputRoutingForTests();
+    const web = createPanel({
+      component: "welcome",
+      id: "welcome-1",
+      isActive: true,
+      isVisible: true,
+    });
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-2",
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([web, terminal], web);
+    vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue({
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    });
+    render(<WorkspaceHost />);
+    vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({
+      api: dockview.api,
+    });
+    requestTerminalFocusIntent("seed-panel");
+    setTerminalBasePanel({ kind: "web" });
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+    const takeoverFocus = vi.fn(() => false);
+    registerTerminalComposerTakeover("terminal-2", takeoverFocus);
+
+    web.api.isActive = false;
+    terminal.api.isActive = true;
+    dockview.emitActivePanelChange(terminal);
+
+    expect(takeoverFocus).toHaveBeenCalledOnce();
+    // 接管失败：requestTerminalFocusIntent 走原生路径，basePanel 翻向该终端面板。
     expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({
         activePanelId: "terminal-2",
@@ -1064,6 +1176,94 @@ describe("WorkspaceHost", () => {
 
     await waitMs(600);
     expect(window.pier.workspace.saveLayout).toHaveBeenCalledTimes(1);
+  });
+
+  it("redirects a terminal focus request to an agent composer takeover instead of yielding to the native terminal", () => {
+    resetTerminalInputRoutingForTests();
+    let focusRequestListener: ((req: TerminalFocusRequest) => void) | undefined;
+    vi.mocked(window.pier.terminal.onFocusRequest).mockImplementation((cb) => {
+      focusRequestListener = cb;
+      return vi.fn();
+    });
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-3",
+      isActive: true,
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([terminal], terminal);
+    vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue({
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    });
+    render(<WorkspaceHost />);
+    vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({
+      api: dockview.api,
+    });
+    // 建立已知基线（basePanel=web），理由同上。
+    requestTerminalFocusIntent("seed-panel");
+    setTerminalBasePanel({ kind: "web" });
+    useTerminalStore.getState().activateOverlay("test-overlay");
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+    const takeoverFocus = vi.fn(() => true);
+    registerTerminalComposerTakeover("terminal-3", takeoverFocus);
+
+    focusRequestListener?.({ panelId: "terminal-3", reason: "mouse-down" });
+
+    expect(takeoverFocus).toHaveBeenCalledOnce();
+    // yieldToTerminal 被跳过：共存浮层的 overlay 焦点没被清空。
+    expect(useTerminalStore.getState().activeOverlayId).toBe("test-overlay");
+    // requestTerminalFocusIntent 被跳过：basePanel 没有翻向该终端面板。
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({ basePanel: { kind: "web" } })
+    );
+  });
+
+  it("falls back to yieldToTerminal + requestTerminalFocusIntent when the registered takeover fails to focus (e.g. composer disabled)", () => {
+    resetTerminalInputRoutingForTests();
+    let focusRequestListener: ((req: TerminalFocusRequest) => void) | undefined;
+    vi.mocked(window.pier.terminal.onFocusRequest).mockImplementation((cb) => {
+      focusRequestListener = cb;
+      return vi.fn();
+    });
+    const terminal = createPanel({
+      component: "terminal",
+      id: "terminal-3",
+      isActive: true,
+      isVisible: true,
+    });
+    const dockview = createDockviewApi([terminal], terminal);
+    vi.mocked(readRegisteredTerminalAnchorFrame).mockReturnValue({
+      height: 100,
+      width: 200,
+      x: 0,
+      y: 0,
+    });
+    render(<WorkspaceHost />);
+    vi.mocked(DockviewReact).mock.lastCall?.[0]?.onReady?.({
+      api: dockview.api,
+    });
+    // 建立已知基线（basePanel=web），理由同上。
+    requestTerminalFocusIntent("seed-panel");
+    setTerminalBasePanel({ kind: "web" });
+    useTerminalStore.getState().activateOverlay("test-overlay");
+    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+    const takeoverFocus = vi.fn(() => false);
+    registerTerminalComposerTakeover("terminal-3", takeoverFocus);
+
+    focusRequestListener?.({ panelId: "terminal-3", reason: "mouse-down" });
+
+    expect(takeoverFocus).toHaveBeenCalledOnce();
+    // 接管失败：yieldToTerminal 生效，共存浮层的 overlay 焦点被清空。
+    expect(useTerminalStore.getState().activeOverlayId).toBeNull();
+    // 接管失败：requestTerminalFocusIntent 走原生路径，basePanel 翻向该终端面板。
+    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        basePanel: { kind: "terminal", panelId: "terminal-3" },
+      })
+    );
   });
 
   it("disposes pending layout and IPC subscriptions on unmount", async () => {

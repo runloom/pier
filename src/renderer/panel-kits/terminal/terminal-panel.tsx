@@ -7,6 +7,7 @@ import { effectiveTerminalFontSize } from "@shared/zoom.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { SquareTerminal } from "lucide-react";
 import {
+  type CSSProperties,
   type MouseEvent as ReactMouseEvent,
   useCallback,
   useEffect,
@@ -36,6 +37,7 @@ import {
 } from "@/stores/terminal-panel-session-hints.store.ts";
 import { useTerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
+import { TerminalComposer } from "./terminal-composer.tsx";
 import { TerminalPanelBody } from "./terminal-panel-body.tsx";
 import { TerminalPanelFloatingHost } from "./terminal-panel-floating-host.tsx";
 import {
@@ -63,6 +65,7 @@ import {
   taskOutputTabChromeOverlay,
   taskRunTabChromeOverlay,
 } from "./terminal-tab-chrome.ts";
+import { useAgentComposer } from "./use-agent-composer.ts";
 import { useRestartRestoredAgent } from "./use-restart-restored-agent.ts";
 import { useTerminalFloatingLayoutRevision } from "./use-terminal-floating-layout-revision.ts";
 import { useTerminalNativeLifecycle } from "./use-terminal-native-lifecycle.ts";
@@ -223,6 +226,18 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     statusContext,
     pluginRegistryEntries
   );
+  const {
+    composerMounted,
+    onComposerHeightChange,
+    statusInsetPx,
+    terminalContentBottomPx,
+  } = useAgentComposer({
+    activityKind: activity?.kind,
+    api,
+    hasStatusBar,
+    panelId,
+    restored: Boolean(restoredAgentResult || restoredTaskResult),
+  });
   const openTaskResultContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
       event.preventDefault();
@@ -370,14 +385,18 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     };
   }, [panelId, api, effectiveContext]);
 
-  const terminalContentClassName = hasStatusBar
-    ? "absolute inset-x-0 top-0 bottom-6"
-    : "absolute inset-0";
+  const terminalContentClassName =
+    "absolute inset-x-0 top-0 bottom-[var(--terminal-content-bottom)]";
   return (
     <div
       className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
       data-testid="terminal-panel-root"
       ref={panelRootRef}
+      style={
+        {
+          "--terminal-content-bottom": `${terminalContentBottomPx}px`,
+        } as CSSProperties
+      }
     >
       <TerminalPanelBody
         activeTask={activeLaunch.task}
@@ -447,6 +466,15 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             : []
         }
       />
+      {composerMounted ? (
+        <TerminalComposer
+          bottomOffsetPx={statusInsetPx}
+          disabled={!nativeTerminalReady || Boolean(error)}
+          isActive={api.isActive}
+          onHeightChange={onComposerHeightChange}
+          panelId={panelId}
+        />
+      ) : null}
       <TerminalStatusBar {...statusContext} />
     </div>
   );

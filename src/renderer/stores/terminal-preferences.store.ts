@@ -9,6 +9,7 @@ const DEFAULT_TERMINAL_SCROLLBACK_MB = 64;
 const MB_BYTES = 1_000_000;
 
 interface TerminalPreferenceSnapshot {
+  agentComposerEnabled: boolean;
   terminalCursorBlink: boolean;
   terminalCursorStyle: TerminalCursorStyle;
   terminalNewCwdPolicy: TerminalNewCwdPolicy;
@@ -18,6 +19,7 @@ interface TerminalPreferenceSnapshot {
 
 interface TerminalPreferencesState extends TerminalPreferenceSnapshot {
   _hydrate: (snapshot: TerminalPreferenceSnapshot) => void;
+  setAgentComposerEnabled: (next: boolean) => Promise<void>;
   setTerminalCursorBlink: (next: boolean) => Promise<void>;
   setTerminalCursorStyle: (next: TerminalCursorStyle) => Promise<void>;
   setTerminalNewCwdPolicy: (next: TerminalNewCwdPolicy) => Promise<void>;
@@ -53,6 +55,7 @@ function normalizeScrollbackMb(value: number): number {
 
 export const useTerminalPreferencesStore = create<TerminalPreferencesState>(
   (set) => ({
+    agentComposerEnabled: true,
     terminalCursorStyle: "block",
     terminalCursorBlink: true,
     terminalScrollbackMb: DEFAULT_TERMINAL_SCROLLBACK_MB,
@@ -68,6 +71,20 @@ export const useTerminalPreferencesStore = create<TerminalPreferencesState>(
       };
       applyRuntimeConfig(next);
       set(next);
+    },
+
+    async setAgentComposerEnabled(next) {
+      try {
+        const merged = await window.pier.preferences.update({
+          agentComposerEnabled: next,
+        });
+        useTerminalPreferencesStore.getState()._hydrate(merged);
+      } catch (err) {
+        console.error(
+          "[terminal-preferences.store] setAgentComposerEnabled failed:",
+          err
+        );
+      }
     },
 
     async setTerminalCursorStyle(next) {
@@ -151,6 +168,7 @@ function attachPreferencesListener(): void {
   }
   const detach = window.pier?.preferences?.onChanged?.((next) => {
     useTerminalPreferencesStore.getState()._hydrate({
+      agentComposerEnabled: next.agentComposerEnabled,
       terminalCursorStyle: next.terminalCursorStyle as TerminalCursorStyle,
       terminalCursorBlink: next.terminalCursorBlink,
       terminalScrollbackMb: next.terminalScrollbackMb,
@@ -176,6 +194,7 @@ export async function initTerminalPreferences(): Promise<void> {
   try {
     const snapshot = await window.pier.preferences.read();
     useTerminalPreferencesStore.getState()._hydrate({
+      agentComposerEnabled: snapshot.agentComposerEnabled,
       terminalCursorStyle: snapshot.terminalCursorStyle as TerminalCursorStyle,
       terminalCursorBlink: snapshot.terminalCursorBlink,
       terminalScrollbackMb: snapshot.terminalScrollbackMb,

@@ -158,6 +158,9 @@ export const settings = {
     defaultAgentDesc: "Agent launched by the Start Default Agent action",
     agentPermissionMode: "Permission Mode",
     agentPermissionModeDesc: "Toggle skipping agent permission prompts in bulk",
+    agentComposer: "Agent composer",
+    agentComposerDesc:
+      "While an agent is running, show an input box at the bottom of the terminal for chat-style editing. Enter sends, Shift+Enter adds a newline.",
   },
   terminal: {
     cursorStyle: {

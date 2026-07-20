@@ -18,6 +18,13 @@ export const terminal = {
     tool: "执行工具中",
     waiting: "等待确认",
   },
+  composer: {
+    keyHint: "⏎ 发送 · ⇧⏎ 换行 · Esc 打断",
+    label: "智能体输入框",
+    placeholder: "随心输入",
+    send: "发送",
+    sendFailed: "发送到终端失败",
+  },
   search: {
     close: "关闭查找",
     label: "在终端中查找",

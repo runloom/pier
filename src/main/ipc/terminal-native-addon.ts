@@ -59,6 +59,11 @@ export interface NativeAddon {
   registerFonts(paths: string[]): void;
   /** 重建同一 panelId 的 host-managed surface，保留 dockview 几何和可见性。 */
   resetTerminalOutput(panelId: string): boolean;
+  /**
+   * 注入一次 AppKit 虚拟键码的 press+release（绕过 bracketed paste）。
+   * `keycode` 例：0x24 = Return；`mods` 为 ghostty_input_mods 位掩码，默认 0。
+   */
+  sendKeyPress(panelId: string, keycode: number, mods?: number): boolean;
   sendText(panelId: string, text: string): boolean;
   setAppShortcutKeys(keys: string[]): void;
   setCommandFinishedForwardCallback?(

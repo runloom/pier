@@ -144,6 +144,7 @@ describe("terminal native debug IPC", () => {
         activePanelId: "terminal-1",
         activeTerminalPanelId: "terminal-1",
         basePanel: { kind: "terminal", panelId: "terminal-1" },
+        focusDisabledPanelIds: [],
         hasMaximizedGroup: false,
         reason: "dockview-active-panel",
         rendererSequence: 1,

@@ -52,6 +52,7 @@ function terminalSnapshot(
     activePanelId: "terminal-1",
     activeTerminalPanelId: "terminal-1",
     basePanel: { kind: "terminal", panelId: "terminal-1" },
+    focusDisabledPanelIds: [],
     hasMaximizedGroup: false,
     reason: "dockview-active-panel",
     rendererSequence,
@@ -97,6 +98,14 @@ describe("isTerminalHostSnapshot", () => {
     ],
     ["inconsistent active terminal", { activePanelId: "web-1" }],
     ["web base with active terminal", { basePanel: { kind: "web" } }],
+    [
+      "duplicate focus-disabled ids",
+      { focusDisabledPanelIds: ["terminal-1", "terminal-1"] },
+    ],
+    [
+      "non-array focus-disabled ids",
+      { focusDisabledPanelIds: "terminal-1" as unknown as string[] },
+    ],
   ])("rejects %s", (_name, overrides) => {
     expect(
       isTerminalHostSnapshot({ ...terminalSnapshot(), ...overrides })
@@ -176,6 +185,43 @@ describe("TerminalFocusCoordinator", () => {
       kind: "terminal",
       panelId: "1::terminal-1",
     });
+  });
+
+  it("forces web keyboard and marks focus-disabled panels for native cursor hide", () => {
+    const { win } = createWindow();
+    const { addon, applyTerminalWindowState } = createAddon();
+    coordinator.configureNativeAddon(addon);
+    coordinator.surfaceCreated(win, "terminal-1");
+
+    coordinator.acceptRendererSnapshot(
+      win,
+      terminalSnapshot(1, { focusDisabledPanelIds: ["terminal-1"] })
+    );
+
+    expect(applyTerminalWindowState).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        focusDisabledPanelIds: ["1::terminal-1"],
+        keyboardTarget: { kind: "web" },
+      })
+    );
+
+    applyTerminalWindowState.mockClear();
+    coordinator.acceptRendererSnapshot(
+      win,
+      terminalSnapshot(2, { focusDisabledPanelIds: [] })
+    );
+
+    expect(applyTerminalWindowState).toHaveBeenCalledWith(
+      expect.any(Buffer),
+      expect.objectContaining({
+        focusDisabledPanelIds: [],
+        keyboardTarget: {
+          kind: "terminal",
+          panelId: "1::terminal-1",
+        },
+      })
+    );
   });
 
   it("requires visibility and frame before honoring a ready terminal", () => {
