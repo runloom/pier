@@ -35,7 +35,7 @@ import {
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { CircleUserRound, RefreshCw, Share2 } from "lucide-react";
+import { CircleUserRound, RefreshCw, Share2, Trash2 } from "lucide-react";
 import { Fragment, type JSX, useCallback, useEffect, useState } from "react";
 import {
   ALL_SYNC_TARGETS,
@@ -165,12 +165,20 @@ export function AccountsSettingsPage({
       onAccountError: reportError,
       t,
     });
-  const handleRemove = async (accountId: string): Promise<void> => {
+  const handleRemove = async (
+    accountId: string,
+    isActive = false
+  ): Promise<void> => {
     const ok = await context.dialogs.confirm({
-      body: t(
-        "pier.codex.accounts.settings.removeConfirmBody",
-        "This account will be removed from Pier."
-      ),
+      body: isActive
+        ? t(
+            "pier.codex.accounts.settings.removeActiveConfirmBody",
+            "Pier will stop managing this account and clear the current selection. Your Codex login on this device is not affected. If you stay signed in with the CLI, Pier may import this account again automatically."
+          )
+        : t(
+            "pier.codex.accounts.settings.removeConfirmBody",
+            "This account will be removed from Pier. Your Codex login on this device is not affected."
+          ),
       confirmLabel: t("pier.codex.accounts.settings.remove", "Remove"),
       intent: "destructive",
       size: "sm",
@@ -353,6 +361,24 @@ export function AccountsSettingsPage({
                       "pier.codex.accounts.settings.refreshUsage",
                       "Refresh usage"
                     )}
+                  </TooltipContent>
+                </Tooltip>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      aria-label={`${t("pier.codex.accounts.settings.remove", "Remove")}: ${active.label}`}
+                      onClick={() => {
+                        handleRemove(active.id, true).catch(() => undefined);
+                      }}
+                      size="icon-sm"
+                      type="button"
+                      variant="ghost"
+                    >
+                      <Trash2 data-icon="inline-start" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent data-pier-codex-scope="">
+                    {t("pier.codex.accounts.settings.remove", "Remove")}
                   </TooltipContent>
                 </Tooltip>
               </TooltipProvider>

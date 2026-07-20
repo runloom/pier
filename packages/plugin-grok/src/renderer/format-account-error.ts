@@ -52,12 +52,6 @@ export function formatAccountError(err: unknown, t: Translate): string {
       "API key accounts cannot report Grok quota — switch to an OIDC account"
     );
   }
-  if (lower.includes("cannot remove active account")) {
-    return t(
-      "pier.grok.errors.removeActiveBlocked",
-      "Cannot remove the active account — select another first"
-    );
-  }
   if (
     lower.includes("session expired") ||
     lower.includes("re-login required") ||

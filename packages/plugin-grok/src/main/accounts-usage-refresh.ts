@@ -51,7 +51,9 @@ export function createGrokUsageRefreshRunner(options: {
       targetId &&
       !state.accounts.some((account) => account.id === targetId)
     ) {
-      throw new Error(`Account not found: ${targetId}`);
+      // Removal race (refresh-all cycle vs remove): a vanished account is a
+      // silent no-op, not an error that aborts the rest of the cycle.
+      return;
     }
     const cacheKey = activeUsageCacheKey(targetId);
     const cached = usageCache[cacheKey];
@@ -112,6 +114,14 @@ export function createGrokUsageRefreshRunner(options: {
       }
 
       if (isDisposed()) return;
+      // The account may have been removed while the fetch was in flight;
+      // writing would resurrect the cache entry doRemove just deleted.
+      if (
+        targetId &&
+        !stateStore.get().accounts.some((entry) => entry.id === targetId)
+      ) {
+        return;
+      }
       usageCache[cacheKey] = createUsageCacheEntry(
         result,
         usageCache[cacheKey],

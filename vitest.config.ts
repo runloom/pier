@@ -27,11 +27,25 @@ export default defineConfig({
       reporter: ["text", "html", "json"],
       include: [
         "src/**/*.{ts,tsx}",
-        "packages/{plugin-api,plugin-codex,ui}/src/**/*.{ts,tsx}",
+        "packages/{plugin-api,plugin-claude,plugin-codex,plugin-grok,ui}/src/**/*.{ts,tsx}",
       ],
       exclude: ["**/*.{test,spec}.{ts,tsx}", "**/*.d.ts", "src/**/index.html"],
       thresholds: {
+        "packages/plugin-claude/src/main/{accounts-service,claude-provider,state}.ts":
+          {
+            branches: 20,
+            functions: 30,
+            lines: 25,
+            statements: 25,
+          },
         "packages/plugin-codex/src/main/{accounts-service,codex-provider,state}.ts":
+          {
+            branches: 20,
+            functions: 30,
+            lines: 25,
+            statements: 25,
+          },
+        "packages/plugin-grok/src/main/{accounts-service,grok-provider,state}.ts":
           {
             branches: 20,
             functions: 30,

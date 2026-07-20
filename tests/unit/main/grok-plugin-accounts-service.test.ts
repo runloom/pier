@@ -181,7 +181,7 @@ describe("pier.grok accounts service", () => {
     expect(auth).toContain("user@example.com");
   });
 
-  it("rejects removing the active account", async () => {
+  it("removes the active account and clears the selection", async () => {
     const stateFile = join(dir, "accounts.json");
     await writeFile(
       stateFile,
@@ -203,19 +203,23 @@ describe("pier.grok accounts service", () => {
       }),
       "utf8"
     );
+    const provider = createProvider({
+      readCurrentIdentity: vi.fn(async () => OIDC_IDENTITY),
+      readIdentity: vi.fn(async () => OIDC_IDENTITY),
+    });
     const service = createGrokAccountsService({
       managedBaseDir: join(dir, "managed"),
       onChanged: vi.fn(),
-      provider: createProvider({
-        readCurrentIdentity: vi.fn(async () => OIDC_IDENTITY),
-        readIdentity: vi.fn(async () => OIDC_IDENTITY),
-      }),
+      provider,
       stateStore: createGrokAccountsStateStore(stateFile),
     });
     await service.init();
-    await expect(service.remove({ accountId: "active-1" })).rejects.toThrow(
-      "Cannot remove active account — select another first"
-    );
+    await service.remove({ accountId: "active-1" });
+    const snapshot = service.snapshot();
+    expect(snapshot.accounts).toHaveLength(0);
+    expect(snapshot.activeAccountId).toBeNull();
+    // The CLI's live auth.json is never touched by a remove.
+    expect(provider.writeCurrentAuthContent).not.toHaveBeenCalled();
   });
 
   it("adopts current real-home identity when state is empty", async () => {

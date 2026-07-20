@@ -301,7 +301,9 @@ export function createCodexAccountsService(
       targetId &&
       !state.accounts.some((account) => account.id === targetId)
     ) {
-      throw new Error(`Account not found: ${targetId}`);
+      // Removal race (refresh-all cycle vs remove): a vanished account is a
+      // silent no-op, not an error that aborts the rest of the cycle.
+      return;
     }
     if (!runUsageRefresh) {
       runUsageRefresh = createCodexUsageRefreshRunner({

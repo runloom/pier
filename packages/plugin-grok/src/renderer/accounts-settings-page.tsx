@@ -28,14 +28,8 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { CircleUserRound, RefreshCw, Share2 } from "lucide-react";
+import { CircleUserRound, RefreshCw } from "lucide-react";
 import { Fragment, type JSX, useCallback, useEffect, useState } from "react";
 import {
   EMPTY_PEER_AVAILABILITY,
@@ -55,6 +49,7 @@ import {
   openSwitchConfirmDialog,
   protocolTargetsFor,
 } from "./account-switch.ts";
+import { ActiveCardActions } from "./active-card-actions.tsx";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
 import { formatAccountError, type Translate } from "./format-account-error.ts";
 import { useAccountsRefresh } from "./use-accounts-refresh.ts";
@@ -161,12 +156,20 @@ export function AccountsSettingsPage({
       t,
     });
 
-  const handleRemove = async (accountId: string): Promise<void> => {
+  const handleRemove = async (
+    accountId: string,
+    isActive = false
+  ): Promise<void> => {
     const ok = await context.dialogs.confirm({
-      body: t(
-        "pier.grok.accounts.settings.removeConfirmBody",
-        "This account will be removed from Pier. Credentials stored for this account are deleted."
-      ),
+      body: isActive
+        ? t(
+            "pier.grok.accounts.settings.removeActiveConfirmBody",
+            "Pier will stop managing this account and clear the current selection. Your Grok login on this device is not affected. If you stay signed in with the CLI, Pier may import this account again automatically."
+          )
+        : t(
+            "pier.grok.accounts.settings.removeConfirmBody",
+            "This account will be removed from Pier. Credentials stored for this account are deleted."
+          ),
       confirmLabel: t("pier.grok.accounts.settings.remove", "Remove"),
       intent: "destructive",
       size: "sm",
@@ -342,65 +345,23 @@ export function AccountsSettingsPage({
               )}
             </CardTitle>
             <CardAction className="flex items-center gap-2">
-              <TooltipProvider delayDuration={200}>
-                {partitionPeerTargets(
-                  protocolTargetsFor(active.kind),
-                  peerAvailability
-                ).available.length > 0 ? (
-                  <Tooltip>
-                    <TooltipTrigger asChild>
-                      <Button
-                        aria-label={t(
-                          "pier.grok.accounts.settings.syncPeers",
-                          "Sync to other tools"
-                        )}
-                        onClick={() => handleSyncPeers(active.id)}
-                        size="icon-sm"
-                        type="button"
-                        variant="ghost"
-                      >
-                        <Share2 data-icon="inline-start" />
-                      </Button>
-                    </TooltipTrigger>
-                    <TooltipContent data-pier-grok-scope="">
-                      {t(
-                        "pier.grok.accounts.settings.syncPeers",
-                        "Sync to other tools"
-                      )}
-                    </TooltipContent>
-                  </Tooltip>
-                ) : null}
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      aria-busy={refreshingAll || activeRefreshing || undefined}
-                      aria-label={t(
-                        "pier.grok.accounts.settings.refreshUsage",
-                        "Refresh usage"
-                      )}
-                      disabled={refreshingAll || activeRefreshing}
-                      onClick={() => refreshUsage(active.id)}
-                      size="icon-sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <RefreshCw
-                        className={cn(
-                          (refreshingAll || activeRefreshing) &&
-                            "animate-spin motion-reduce:animate-none"
-                        )}
-                        data-icon="inline-start"
-                      />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent data-pier-grok-scope="">
-                    {t(
-                      "pier.grok.accounts.settings.refreshUsage",
-                      "Refresh usage"
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <ActiveCardActions
+                activeLabel={accountDisplayLabel(active)}
+                onRefresh={() => refreshUsage(active.id)}
+                onRemove={() => {
+                  handleRemove(active.id, true).catch(() => undefined);
+                }}
+                onSyncPeers={() => handleSyncPeers(active.id)}
+                refreshing={refreshingAll || activeRefreshing}
+                removeDisabled={busyAccountId === active.id}
+                showSyncPeers={
+                  partitionPeerTargets(
+                    protocolTargetsFor(active.kind),
+                    peerAvailability
+                  ).available.length > 0
+                }
+                t={t}
+              />
             </CardAction>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">

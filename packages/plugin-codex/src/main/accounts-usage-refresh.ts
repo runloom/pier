@@ -101,6 +101,14 @@ export function createCodexUsageRefreshRunner(options: {
         };
       }
       if (signal?.aborted) return;
+      // The account may have been removed while the fetch was in flight;
+      // writing would resurrect the cache entry doRemove just deleted.
+      if (
+        targetId &&
+        !stateStore.get().accounts.some((entry) => entry.id === targetId)
+      ) {
+        return;
+      }
       if (
         targetId &&
         result.status === "ok" &&

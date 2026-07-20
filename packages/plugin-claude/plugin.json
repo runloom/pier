@@ -1,0 +1,240 @@
+{
+  "apiVersion": 1,
+  "dataSchemas": {
+    "claude.accounts": {
+      "read": ">=1 <=1",
+      "write": 1
+    }
+  },
+  "description": "Manage Claude accounts and switch the active login for Pier.",
+  "engines": {
+    "pier": ">=0.1.0 <0.2.0"
+  },
+  "id": "pier.claude",
+  "locales": {
+    "en": {
+      "name": "Claude Account Management",
+      "description": "Manage Claude accounts and switch the active login for Pier.",
+      "settingsPages": {
+        "pier.claude.accounts": {
+          "title": "Claude Accounts"
+        }
+      },
+      "workbenchWidgets": {
+        "pier.claude.accounts": {
+          "title": "Claude Account",
+          "description": "Switch the active Claude account."
+        }
+      },
+      "messages": {
+        "pier.claude.accounts.settings.title": "Claude Accounts",
+        "pier.claude.accounts.settings.currentAccount": "Current account",
+        "pier.claude.accounts.settings.otherAccounts": "Other accounts",
+        "pier.claude.accounts.settings.addAccount": "Add account",
+        "pier.claude.accounts.settings.addDialogTitle": "Add Claude account",
+        "pier.claude.accounts.settings.addDialogDescription": "Sign in with the browser, or import the account already signed in with the Claude CLI.",
+        "pier.claude.accounts.settings.addDialogLocalCredential": "Credentials are stored only on this device",
+        "pier.claude.accounts.settings.addDialogLocalDescription": "Import the account already signed in on this device. It becomes the active Pier account.",
+        "pier.claude.accounts.settings.addDialogLocalSubmit": "Import current login",
+        "pier.claude.accounts.settings.addDialogTabOauth": "Browser login",
+        "pier.claude.accounts.settings.addDialogTabLocal": "Local import",
+        "pier.claude.accounts.settings.addDialogOauthDescription": "Sign in with your Claude account in the browser, then paste the authorization code shown on the callback page.",
+        "pier.claude.accounts.settings.addDialogOauthSubmit": "Sign in with browser",
+        "pier.claude.accounts.settings.addDialogOauthStep": "Authorize in the browser, then paste the code shown on the callback page below.",
+        "pier.claude.accounts.settings.addDialogOpenBrowser": "Open the Claude authorization page",
+        "pier.claude.accounts.settings.addDialogCode": "Authorization code",
+        "pier.claude.accounts.settings.addDialogCodePlaceholder": "Paste the code from the callback page",
+        "pier.claude.accounts.settings.addDialogComplete": "Complete login",
+        "pier.claude.accounts.settings.addDialogRestart": "Start over",
+        "pier.claude.accounts.settings.addDialogWaitingTitle": "Waiting for authorization",
+        "pier.claude.accounts.settings.addDialogWaitingDescription": "Authorize in the browser, then paste the code from the callback page.",
+        "pier.claude.accounts.settings.cancelLogin": "Cancel login",
+        "pier.claude.accounts.settings.refreshUsage": "Refresh usage",
+        "pier.claude.accounts.settings.refreshAllUsage": "Refresh all usage",
+        "pier.claude.accounts.settings.noUsage": "No usage data",
+        "pier.claude.accounts.settings.usageRefreshSuccess": "Usage refreshed",
+        "pier.claude.accounts.settings.usageRefreshAllSuccess": "All account usage refreshed",
+        "pier.claude.accounts.settings.usageFailed": "Usage update failed",
+        "pier.claude.accounts.settings.cancel": "Cancel",
+        "pier.claude.accounts.settings.switch": "Switch",
+        "pier.claude.accounts.settings.switchConfirmTitle": "Switch Claude account?",
+        "pier.claude.accounts.settings.switchConfirmBody": "New Claude sessions will use this account. Restart any Claude sessions that are already running for the change to take effect.",
+        "pier.claude.accounts.settings.switchConfirmAction": "Confirm",
+        "pier.claude.accounts.settings.remove": "Remove",
+        "pier.claude.accounts.settings.removeConfirmTitle": "Remove account?",
+        "pier.claude.accounts.settings.removeConfirmBody": "This account will be removed from Pier. Your Claude login on this device is not affected.",
+        "pier.claude.accounts.settings.removeActiveConfirmBody": "Pier will stop managing this account and clear the current selection. Your Claude login on this device is not affected. If you stay signed in with the CLI, Pier may import this account again automatically.",
+        "pier.claude.accounts.settings.apiKeyModeTitle": "API key mode detected",
+        "pier.claude.accounts.settings.apiKeyModeBody": "This device is configured with an Anthropic API key (ANTHROPIC_API_KEY); Claude sessions may use it instead of a managed account.",
+        "pier.claude.accounts.settings.actionFailed": "Account action failed",
+        "pier.claude.accounts.settings.loadFailed": "Could not load Claude accounts",
+        "pier.claude.accounts.settings.emptyTitle": "No managed accounts",
+        "pier.claude.accounts.settings.emptyDesc": "Sign in with your browser, or import the Claude CLI login to get started.",
+        "pier.claude.accounts.settings.updated": "Updated",
+        "pier.claude.accounts.settings.subscriptionUnknown": "Claude",
+        "pier.claude.widget.noActiveAccount": "No active account",
+        "pier.claude.widget.accountUnavailable": "Account unavailable — open Manage accounts to fix",
+        "pier.claude.widget.switchAccount": "Switch account",
+        "pier.claude.widget.switchingAccount": "Switching account…",
+        "pier.claude.widget.manageAccounts": "Manage accounts...",
+        "pier.claude.widget.actionFailed": "Account action failed",
+        "pier.claude.widget.loadFailed": "Could not load Claude accounts",
+        "pier.claude.widget.refreshFailed": "Could not refresh Claude usage",
+        "pier.claude.widget.remaining": "remaining",
+        "pier.claude.widget.resetsIn": "Resets in {duration}",
+        "pier.claude.widget.noUsage": "No usage data available yet.",
+        "pier.claude.usage.session": "Current session (5h)",
+        "pier.claude.usage.weekly": "Weekly limit",
+        "pier.claude.usage.weeklyScoped": "Weekly",
+        "pier.claude.usage.risk.critical": "Critical",
+        "pier.claude.usage.risk.warning": "Warning",
+        "pier.claude.usage.risk.normal": "Normal",
+        "pier.claude.errors.noLocalLogin": "No valid local Claude login found. Sign in with the Claude CLI first.",
+        "pier.claude.errors.captureFailed": "Couldn't capture the current Claude login. Try signing in again with the Claude CLI.",
+        "pier.claude.errors.credentialMissing": "This account's stored credential is missing — remove it and import again.",
+        "pier.claude.errors.pluginNotReady": "Claude plugin is still starting — try again in a moment",
+        "pier.claude.errors.loginCancelled": "Login cancelled",
+        "pier.claude.errors.noLoginInProgress": "The login expired — start again from Add account",
+        "pier.claude.errors.emptyCode": "Paste the authorization code from the browser first",
+        "pier.claude.errors.codeExchangeFailed": "Could not verify the authorization code — copy it again and retry",
+        "pier.claude.errors.sessionExpired": "Claude session expired — sign in again",
+        "pier.claude.errors.usageRateLimited": "Claude usage is rate limited — try again later",
+        "pier.claude.errors.usageTimeout": "Claude usage request timed out",
+        "pier.claude.errors.noActiveAccount": "No active account — add or switch to a Claude account first",
+        "pier.claude.errors.reAuthorize": "Claude login could not be completed — open the authorization page again and paste the new code"
+      }
+    },
+    "zh-CN": {
+      "name": "Claude 账号管理",
+      "description": "在 Pier 中管理 Claude 账号并切换当前登录。",
+      "settingsPages": {
+        "pier.claude.accounts": {
+          "title": "Claude 账号"
+        }
+      },
+      "workbenchWidgets": {
+        "pier.claude.accounts": {
+          "title": "Claude 账号",
+          "description": "切换当前 Claude 账号。"
+        }
+      },
+      "messages": {
+        "pier.claude.accounts.settings.title": "Claude 账号",
+        "pier.claude.accounts.settings.currentAccount": "当前账号",
+        "pier.claude.accounts.settings.otherAccounts": "其他账号",
+        "pier.claude.accounts.settings.addAccount": "添加账号",
+        "pier.claude.accounts.settings.addDialogTitle": "添加 Claude 账号",
+        "pier.claude.accounts.settings.addDialogDescription": "使用浏览器登录，或导入本机已用 Claude CLI 登录的账号。",
+        "pier.claude.accounts.settings.addDialogLocalCredential": "凭据仅保存在这台设备上",
+        "pier.claude.accounts.settings.addDialogLocalDescription": "导入本机已登录的账号，并设为 Pier 当前账号。",
+        "pier.claude.accounts.settings.addDialogLocalSubmit": "导入当前登录",
+        "pier.claude.accounts.settings.addDialogTabOauth": "浏览器登录",
+        "pier.claude.accounts.settings.addDialogTabLocal": "本机导入",
+        "pier.claude.accounts.settings.addDialogOauthDescription": "在浏览器中登录 Claude 账号，然后把回调页面显示的授权码粘贴到这里。",
+        "pier.claude.accounts.settings.addDialogOauthSubmit": "用浏览器登录",
+        "pier.claude.accounts.settings.addDialogOauthStep": "先在浏览器中完成授权，再把回调页面显示的授权码粘贴到下方。",
+        "pier.claude.accounts.settings.addDialogOpenBrowser": "打开 Claude 授权页面",
+        "pier.claude.accounts.settings.addDialogCode": "授权码",
+        "pier.claude.accounts.settings.addDialogCodePlaceholder": "粘贴回调页面显示的授权码",
+        "pier.claude.accounts.settings.addDialogComplete": "完成登录",
+        "pier.claude.accounts.settings.addDialogRestart": "重新开始",
+        "pier.claude.accounts.settings.addDialogWaitingTitle": "等待授权",
+        "pier.claude.accounts.settings.addDialogWaitingDescription": "先在浏览器中完成授权，再把回调页面显示的授权码粘贴到这里。",
+        "pier.claude.accounts.settings.cancelLogin": "取消登录",
+        "pier.claude.accounts.settings.refreshUsage": "刷新用量",
+        "pier.claude.accounts.settings.refreshAllUsage": "刷新全部用量",
+        "pier.claude.accounts.settings.noUsage": "暂无用量数据",
+        "pier.claude.accounts.settings.usageRefreshSuccess": "用量已刷新",
+        "pier.claude.accounts.settings.usageRefreshAllSuccess": "所有账号用量已刷新",
+        "pier.claude.accounts.settings.usageFailed": "用量更新失败",
+        "pier.claude.accounts.settings.cancel": "取消",
+        "pier.claude.accounts.settings.switch": "切换",
+        "pier.claude.accounts.settings.switchConfirmTitle": "切换 Claude 账号？",
+        "pier.claude.accounts.settings.switchConfirmBody": "新启动的 Claude 会话将使用此账号。当前运行中的会话需重新启动后生效。",
+        "pier.claude.accounts.settings.switchConfirmAction": "确认",
+        "pier.claude.accounts.settings.remove": "移除",
+        "pier.claude.accounts.settings.removeConfirmTitle": "移除账号？",
+        "pier.claude.accounts.settings.removeConfirmBody": "该账号将从 Pier 中移除，不影响本设备上的 Claude 登录。",
+        "pier.claude.accounts.settings.removeActiveConfirmBody": "Pier 将不再管理该账号并清除当前选择，不影响本设备上的 Claude 登录。若该账号仍在本机 CLI 登录，Pier 可能会再次自动导入。",
+        "pier.claude.accounts.settings.apiKeyModeTitle": "检测到 API Key 模式",
+        "pier.claude.accounts.settings.apiKeyModeBody": "本设备配置了 Anthropic API Key（ANTHROPIC_API_KEY），Claude 会话可能使用它而非受管账号。",
+        "pier.claude.accounts.settings.actionFailed": "账号操作失败",
+        "pier.claude.accounts.settings.loadFailed": "无法加载 Claude 账号",
+        "pier.claude.accounts.settings.emptyTitle": "暂无受管账号",
+        "pier.claude.accounts.settings.emptyDesc": "用浏览器登录，或导入 Claude CLI 的本地登录以开始使用。",
+        "pier.claude.accounts.settings.updated": "更新于",
+        "pier.claude.accounts.settings.subscriptionUnknown": "Claude",
+        "pier.claude.widget.noActiveAccount": "暂无活跃账号",
+        "pier.claude.widget.accountUnavailable": "账号不可用 — 请打开「管理账号」修复",
+        "pier.claude.widget.switchAccount": "切换账号",
+        "pier.claude.widget.switchingAccount": "正在切换账号…",
+        "pier.claude.widget.manageAccounts": "管理账号...",
+        "pier.claude.widget.actionFailed": "账号操作失败",
+        "pier.claude.widget.loadFailed": "无法加载 Claude 账号",
+        "pier.claude.widget.refreshFailed": "无法刷新 Claude 用量",
+        "pier.claude.widget.remaining": "剩余",
+        "pier.claude.widget.resetsIn": "{duration}后重置",
+        "pier.claude.widget.noUsage": "暂无用量数据。",
+        "pier.claude.usage.session": "当前会话（5 小时）",
+        "pier.claude.usage.weekly": "每周额度",
+        "pier.claude.usage.weeklyScoped": "每周",
+        "pier.claude.usage.risk.critical": "告急",
+        "pier.claude.usage.risk.warning": "偏高",
+        "pier.claude.usage.risk.normal": "正常",
+        "pier.claude.errors.noLocalLogin": "本机未找到有效的 Claude 登录。请先用 Claude CLI 登录。",
+        "pier.claude.errors.captureFailed": "无法捕获当前 Claude 登录。请重新用 Claude CLI 登录后再试。",
+        "pier.claude.errors.credentialMissing": "该账号保存的凭据已丢失 — 请移除后重新导入。",
+        "pier.claude.errors.pluginNotReady": "Claude 插件仍在启动，请稍后再试",
+        "pier.claude.errors.loginCancelled": "已取消登录",
+        "pier.claude.errors.noLoginInProgress": "登录已过期 — 请从「添加账号」重新开始",
+        "pier.claude.errors.emptyCode": "请先粘贴浏览器中显示的授权码",
+        "pier.claude.errors.codeExchangeFailed": "授权码校验失败 — 请重新复制后再试",
+        "pier.claude.errors.sessionExpired": "Claude 登录已过期 — 请重新登录",
+        "pier.claude.errors.usageRateLimited": "Claude 用量接口触发限流 — 请稍后再试",
+        "pier.claude.errors.usageTimeout": "Claude 用量请求超时",
+        "pier.claude.errors.noActiveAccount": "暂无活跃账号 — 请先添加或切换 Claude 账号",
+        "pier.claude.errors.reAuthorize": "Claude 登录未能完成 — 请重新打开授权页面并粘贴新的授权码"
+      }
+    }
+  },
+  "main": "dist/main.js",
+  "workbenchWidgets": [
+    {
+      "category": "agent",
+      "defaultSize": {
+        "w": 4,
+        "h": 3
+      },
+      "description": "Switch the active Claude account and monitor usage.",
+      "id": "pier.claude.accounts",
+      "maxSize": {
+        "w": 8,
+        "h": 4
+      },
+      "minSize": {
+        "w": 2,
+        "h": 3
+      },
+      "refreshable": false,
+      "searchTerms": ["claude", "anthropic", "account", "usage", "账号"],
+      "title": "Claude Account"
+    }
+  ],
+  "name": "Claude Account Management",
+  "panels": [],
+  "permissions": [
+    "plugin:read",
+    "secret:read",
+    "secret:write",
+    "external:open"
+  ],
+  "publisher": "Pier",
+  "renderer": "dist/renderer.js",
+  "settingsPages": [
+    {
+      "id": "pier.claude.accounts"
+    }
+  ],
+  "terminalStatusItems": [],
+  "version": "1.3.0"
+}
