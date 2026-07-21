@@ -31,7 +31,10 @@ import {
 import { TERMINAL_COMPOSER_GAP_PX } from "@/panel-kits/terminal/terminal-composer.tsx";
 import { hasRegisteredTerminalAnchor } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
-import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
+import {
+  TERMINAL_STATUS_BAR_HEIGHT_PX,
+  terminalStatusItemRegistry,
+} from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
@@ -2592,7 +2595,7 @@ describe("TerminalPanel lifecycle", () => {
 
       await waitFor(() => {
         expect(contentBottom()).toBe(
-          `${24 + composerHeightPx + TERMINAL_COMPOSER_GAP_PX * 2}px`
+          `${TERMINAL_STATUS_BAR_HEIGHT_PX + composerHeightPx + TERMINAL_COMPOSER_GAP_PX * 2}px`
         );
       });
     });

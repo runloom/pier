@@ -684,6 +684,11 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       })
       .toBe(true);
     await changesTab.click();
+    // Demand-loaded review may not keep binary sections mounted after viewing
+    // another file — navigate via the tree so the binary state patch is loaded.
+    await page
+      .getByRole("treeitem", { name: /binary-6\\special\.bin/u })
+      .click();
     await expect
       .poll(
         () =>

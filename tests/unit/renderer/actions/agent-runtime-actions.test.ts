@@ -65,7 +65,7 @@ describe("buildAgentIndexQuickPick", () => {
     expect(waiting?.searchTerms).toContain("Awaiting confirmation");
     expect(waiting?.detail).toContain("This window");
     expect(model.sections?.[1]?.items[0]?.searchTerms).toContain("Thinking");
-    expect(model.sections?.[2]?.heading).toMatch(/no notification/i);
+    expect(model.sections?.[2]?.heading).toMatch(/awaiting input/i);
   });
 
   it("shows projectRootPath in detail when projected", () => {

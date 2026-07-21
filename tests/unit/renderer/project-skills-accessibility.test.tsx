@@ -145,7 +145,10 @@ describe("project skills accessibility", () => {
       screen.getByRole("button", { name: "Reload and return" })
     ).toBeEnabled();
     expect(
-      screen.getByRole("button", { name: "Back to skills" })
+      screen.getAllByRole("button", { name: "Back to skills" }).length
+    ).toBeGreaterThan(0);
+    expect(
+      screen.getAllByRole("button", { name: "Back to skills" })[0]
     ).toBeEnabled();
     fireEvent.click(screen.getByRole("button", { name: "Reload and return" }));
     expect(onResolveConflict).toHaveBeenCalledOnce();

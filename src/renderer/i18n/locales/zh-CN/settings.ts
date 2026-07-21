@@ -1,3 +1,4 @@
+import { settingsNotifications } from "./settings-notifications.ts";
 import { settingsPlugins } from "./settings-plugins.ts";
 import { settingsSkills } from "./settings-skills.ts";
 
@@ -362,45 +363,5 @@ export const settings = {
       failed: "无法更新智能体状态提示",
     },
   },
-  notifications: {
-    enabled: "启用系统通知",
-    enabledDesc:
-      "智能体需要你时通过本机系统通知提醒（关闭后标题栏计数仍更新）。",
-    waitingHint: "需要确认（waiting）：跟随上方总开关。",
-    error: "出错时通知",
-    errorDesc: "智能体进入错误状态时也发送系统通知。默认关闭。",
-    suppress: "专注时抑制",
-    suppressDesc: "目标智能体面板已聚焦时不发送系统通知。",
-    cooldownLabel: "同一智能体冷却",
-    cooldownDesc: "同一智能体面板两次系统通知之间的最短间隔。",
-    cooldown: {
-      "60000": "1 分钟",
-      "180000": "3 分钟",
-      "600000": "10 分钟",
-    },
-    sendTest: "发送测试通知",
-    openSystemSettings: "打开系统设置",
-    testSent: "测试已发送",
-    testFailed: "测试失败",
-    testFailedShort: "无法展示测试通知",
-    testFailedDetail:
-      "无法投递系统通知（{{reason}}）。请到「系统设置 → 通知」允许本应用，然后重试。",
-    testHint: "成功表示已交给系统。前台可能看不到横幅，可到通知中心确认。",
-    openSettingsFailed: "无法打开系统设置",
-    openSettingsManual:
-      "请手动打开系统通知设置并为 Pier 开启允许，然后发送测试通知验证。",
-    saveFailed: "无法保存通知设置",
-    hooksOffTitle: "智能体状态提示已关闭",
-    hooksOffBody:
-      "关闭后不会发送“需要你处理”的系统通知。已在运行的智能体会话可能仍会上报，重开会话后完全生效。",
-    permission: {
-      deniedTitle: "系统通知未授权",
-      deniedBody: "请在系统设置中为 Pier 开启通知，然后发送测试通知验证。",
-      unsupportedTitle: "系统不支持通知",
-      unsupportedBody:
-        "当前环境无法展示系统通知。请使用标题栏“需要你处理”计数与智能体列表。",
-      unknownTitle: "尚未确认通知权限",
-      unknownBody: "发送测试通知以检查 Pier 能否投递系统提醒。",
-    },
-  },
+  notifications: settingsNotifications,
 } as const;

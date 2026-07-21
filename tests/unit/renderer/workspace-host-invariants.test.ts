@@ -53,6 +53,16 @@ const OLD_ACTIVE_PANEL_PRIMITIVE_RE = new RegExp(
 
 const RECONCILE_CALL_RE =
   /window\.pier\?\.terminal\?\.reconcile\?\.\(terminalPanelIds\)/;
+const RECONCILE_VIA_PRESENTATION_HELPER_RE =
+  /syncTerminalPresentation\(event\.api,\s*"(?:restore|dockview-layout|dockview-maximize|dockview-active-panel)"\)/;
+const PRESENTATION_HELPER_PATH = resolve(
+  import.meta.dirname,
+  "../../../src/renderer/components/workspace/workspace-host-terminal-presentation.ts"
+);
+const PRESENTATION_HELPER_SOURCE = readFileSync(
+  PRESENTATION_HELPER_PATH,
+  "utf8"
+);
 const READS_WINDOW_CONTEXT_RE = /window\.pier\.window\.getContext\(\)/;
 const SAVES_LAYOUT_BY_WINDOW_RECORD_RE =
   /const windowContext = await windowContextPromise[\s\S]{0,500}?\.saveLayout\(\s*json,\s*windowContext\.recordId\s*\)/;
@@ -75,7 +85,7 @@ const AWAITS_WINDOW_CONTEXT_FOR_SAVE_RE =
 const FLUSH_EMPTY_LAYOUT_CLEARS_RECORD_RE =
   /if \(event\.api\.totalPanels === 0\)[\s\S]{0,160}?\.clearLayout\(windowContext\.recordId\)/;
 const WORKSPACE_READY_AFTER_LAYOUT_RE =
-  /reconcileTerminalPanels\(event\.api\);\s*notifyWorkspaceReady\(\);/;
+  /syncTerminalPresentation\(event\.api,\s*"restore"\);\s*[\s\S]{0,200}?notifyWorkspaceReady\(\);/;
 const WORKSPACE_READY_WHEN_USER_TOUCHED_RE =
   /if \(userTouched\) \{[\s\S]{0,120}?notifyWorkspaceReady\(\);[\s\S]{0,80}?return;/;
 const BOOT_SIGNAL_AFTER_COMPONENT_MOUNT_RE =
@@ -116,7 +126,9 @@ describe("workspace-host invariants (#17 #19)", () => {
   it("calls reconcile after layout restore to clean up orphan native NSViews", () => {
     // C 方案 reload 零销毁:layout 应用后报告"我现在还需要这些 panelId", swift 把
     // 不在集合的孤儿清掉. 缺这条 reload 后旧 NSView 永久挂在 contentView.subviews.
-    expect(SOURCE).toMatch(RECONCILE_CALL_RE);
+    // reconcile 落在 presentation helper（syncTerminalPresentation → reconcile）。
+    expect(PRESENTATION_HELPER_SOURCE).toMatch(RECONCILE_CALL_RE);
+    expect(SOURCE).toMatch(RECONCILE_VIA_PRESENTATION_HELPER_RE);
   });
 
   it("loads persisted layout from the current durable window record", () => {

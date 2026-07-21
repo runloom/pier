@@ -191,7 +191,7 @@ export function TerminalComposerView({
             size="icon-sm"
             variant="default"
           >
-            <ArrowUp />
+            <ArrowUp data-icon />
           </Button>
         ) : (
           <div className="flex shrink-0 items-center gap-1 px-1 pt-0.5 pb-1">

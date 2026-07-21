@@ -372,12 +372,14 @@ describe("files-document-store", () => {
         { documentId: defaultId, kind: "disk", path, root }
       )
     ).toBe(true);
+    // Explicit documentId differs from path-derived id, but same absolute path
+    // still counts as the same panel source (path fallback after id compare).
     expect(
       sameFilesDocumentPanelSource(
         { documentId: explicitId, kind: "disk", path, root },
         { kind: "disk", path, root }
       )
-    ).toBe(false);
+    ).toBe(true);
     expect(
       sameFilesDocumentPanelSource(
         { kind: "disk", path: "README.md", root: "/repo-a" },

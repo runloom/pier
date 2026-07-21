@@ -132,8 +132,8 @@ function AttachmentTile({
         {preview && isImage ? (
           <span
             className={cn(
-              // Opaque badge — no backdrop-blur. Blur samples native/sash under
-              // the translucent composer and leaves stale “history” frames.
+              // Opaque badge — avoid translucent blur overlays. Blur samples
+              // native/sash under the composer and leaves stale “history” frames.
               "pointer-events-none absolute bottom-1 left-1 rounded bg-primary/10 px-1",
               "font-mono font-semibold text-[9px] text-primary leading-none"
             )}
@@ -152,7 +152,6 @@ function AttachmentTile({
           "focus-visible:opacity-100 group-hover/att:opacity-100",
           "hover:bg-muted hover:text-foreground"
         )}
-        data-icon
         data-testid={`terminal-composer-attachment-remove-${ordinal}`}
         disabled={disabled}
         onClick={(e) => {
@@ -162,7 +161,7 @@ function AttachmentTile({
         size="icon-xs"
         variant="ghost"
       >
-        <X aria-hidden="true" className="size-2.5" />
+        <X aria-hidden="true" data-icon />
       </Button>
     </div>
   );
