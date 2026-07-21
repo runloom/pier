@@ -145,7 +145,7 @@ export const HEALTH_ISSUE_MAPPINGS: readonly HealthIssueMapping[] = [
     severity: "error",
     blockingScopes: ["enable", "projection", "launch"],
     // Integrity issues are settings-only (Use current files / delete / re-import).
-    // Launch may open settings; do not offer content-risk “launch anyway”.
+    // Launch may open settings; do not offer “launch anyway”.
     degradePolicy: "denied",
     repairable: false,
   },

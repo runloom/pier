@@ -27,14 +27,10 @@ import { drive } from "./repair-reconcile.ts";
 function worstDegradePolicy(
   issues: readonly ProjectSkillsIssue[]
 ): DegradePolicy {
-  let worst: DegradePolicy = "allowed";
   for (const issue of issues) {
     if (issue.degradePolicy === "denied") return "denied";
-    if (issue.degradePolicy === "requires-content-risk-confirmation") {
-      worst = "requires-content-risk-confirmation";
-    }
   }
-  return worst;
+  return "allowed";
 }
 
 export interface EnsureReadyDeps {

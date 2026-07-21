@@ -1,8 +1,5 @@
 import { Badge } from "@pier/ui/badge.tsx";
-import type {
-  GitBranchTipTreeInCurrentHistory,
-  GitDiffBranchOption,
-} from "@shared/contracts/git.ts";
+import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
 import { CircleAlert, GitBranch, GitBranchPlus } from "lucide-react";
 import { formatRelativeTime } from "./format-relative-time.ts";
 
@@ -12,8 +9,6 @@ interface GitBranchQuickPickRowProps {
   graphCaveatTitle: string;
   graphLabel: string;
   remoteLabel: string;
-  tipTreeInHistoryLabel: string;
-  tipTreeInHistoryTitle: (match: GitBranchTipTreeInCurrentHistory) => string;
 }
 
 export function GitBranchQuickPickRow({
@@ -22,13 +17,10 @@ export function GitBranchQuickPickRow({
   graphCaveatTitle,
   graphLabel,
   remoteLabel,
-  tipTreeInHistoryLabel,
-  tipTreeInHistoryTitle,
 }: GitBranchQuickPickRowProps) {
   const relativeTime = formatRelativeTime(branch.committerDate);
   const hasMeta = Boolean(branch.authorName || branch.commit || branch.subject);
   const aheadBehind = branchAheadBehind(branch);
-  const tipTreeInHistory = branch.tipTreeInCurrentHistory;
 
   return (
     <span
@@ -88,16 +80,6 @@ export function GitBranchQuickPickRow({
                 {aheadBehind.ahead}↑
               </span>
             </span>
-          ) : null}
-          {tipTreeInHistory ? (
-            <Badge
-              data-branch-picker-row-tip-tree-in-history
-              size="xs"
-              title={tipTreeInHistoryTitle(tipTreeInHistory)}
-              variant="secondary"
-            >
-              {tipTreeInHistoryLabel}
-            </Badge>
           ) : null}
           {branch.pinReason ? (
             <Badge

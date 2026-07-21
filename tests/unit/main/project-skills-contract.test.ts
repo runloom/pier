@@ -135,9 +135,7 @@ describe("project-skills contract", () => {
   });
 
   it("enumerates degradePolicy exhaustively", () => {
-    expect([...DEGRADE_POLICIES].sort()).toEqual(
-      ["allowed", "denied", "requires-content-risk-confirmation"].sort()
-    );
+    expect([...DEGRADE_POLICIES].sort()).toEqual(["allowed", "denied"].sort());
     for (const policy of DEGRADE_POLICIES) {
       expect(degradePolicySchema.parse(policy)).toBe(policy);
     }

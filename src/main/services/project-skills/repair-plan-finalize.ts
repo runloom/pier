@@ -58,11 +58,7 @@ export function finalizePlan(args: {
     actionable.every(
       (op) => op.kind === "create-symlink" || op.kind === "delete-symlink"
     ) &&
-    !args.blockingIssues.some(
-      (i) =>
-        i.degradePolicy === "denied" ||
-        i.degradePolicy === "requires-content-risk-confirmation"
-    );
+    !args.blockingIssues.some((i) => i.degradePolicy === "denied");
 
   const plan: ProjectSkillsRepairPlan = {
     observedRevision: args.observedRevision,

@@ -88,8 +88,7 @@ export async function confirmSkillsLaunchBlock(args: {
     ...(body ? { body } : {}),
     cancelLabel: t("settings.skills.launchCancel"),
     confirmLabel: t("settings.skills.launchOpenSettings"),
-    intent:
-      blocked.degradePolicySummary === "allowed" ? "default" : "destructive",
+    intent: "default",
     size: "default",
     title: t("settings.skills.launchBlockedTitle"),
   });
@@ -163,16 +162,6 @@ export async function resolveSkillsLaunchBlock(args: {
       .launchContinue({
         launchAttemptId: blocked.launchAttemptId,
         decision: "degrade",
-        ...(blocked.contentRiskRequirementId
-          ? {
-              acknowledgements: [
-                {
-                  requirementId: blocked.contentRiskRequirementId,
-                  nonce: crypto.randomUUID(),
-                },
-              ],
-            }
-          : {}),
       })
       .catch(() => null);
 

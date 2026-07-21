@@ -47,7 +47,6 @@ export interface PierProjectSkillsAPI {
   launchContinue(request: {
     launchAttemptId: string;
     decision: LaunchGateDecision;
-    acknowledgements?: readonly ProjectSkillsAcknowledgement[];
   }): Promise<SkillsLaunchContinueResult>;
   onInvalidated(cb: (event: ProjectSkillsInvalidatedEvent) => void): () => void;
   operationStatus(
@@ -133,9 +132,6 @@ export const projectSkillsApi: PierProjectSkillsAPI = {
     invokePierCommand<SkillsLaunchContinueResult>({
       launchAttemptId: request.launchAttemptId,
       decision: request.decision,
-      ...(request.acknowledgements === undefined
-        ? {}
-        : { acknowledgements: [...request.acknowledgements] }),
       type: "agent.launch.continue",
     }),
   onInvalidated: (cb) =>

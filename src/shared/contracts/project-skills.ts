@@ -417,6 +417,5 @@ export const agentLaunchContinueRequestSchema = z
   .object({
     launchAttemptId: z.string().min(1),
     decision: launchGateDecisionSchema,
-    acknowledgements: z.array(projectSkillsAcknowledgementSchema).optional(),
   })
   .strict();

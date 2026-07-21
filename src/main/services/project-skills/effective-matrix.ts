@@ -46,7 +46,8 @@ export interface EffectiveMatrixResult {
   managedEffects: Map<string, SkillEffectiveCell[]>;
   /**
    * Managed skills whose projection is shadowed by a same-named user-global
-   * skill for a `user-shadows-project` agent → `shadowed-by-user-skill` notice.
+   * skill for a `user-shadows-project` agent. Surfaced via effect state
+   * `shadowed-by-user` (not a duplicate health issue).
    */
   shadowedManaged: Array<{
     skillId: string;

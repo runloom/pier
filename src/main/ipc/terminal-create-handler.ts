@@ -342,11 +342,6 @@ export async function handleTerminalCreate(args: {
                   }),
               degradePolicySummary: gate.degradePolicySummary,
               expiresAt: gate.expiresAt,
-              ...(gate.contentRiskRequirementId === undefined
-                ? {}
-                : {
-                    contentRiskRequirementId: gate.contentRiskRequirementId,
-                  }),
               ...(gate.projectRootPath === undefined
                 ? {}
                 : { projectRootPath: gate.projectRootPath }),

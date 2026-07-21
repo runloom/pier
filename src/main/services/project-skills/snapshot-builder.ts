@@ -1,7 +1,6 @@
 import { createHash } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { AgentKind } from "../../../shared/contracts/agent.ts";
 import {
   type ProjectRootRef as ContractProjectRootRef,
   type ProjectSkillsManifest,
@@ -24,11 +23,7 @@ import {
   enumerateUserGlobalSkills,
 } from "./enumeration.ts";
 import { peekSkillMetadata } from "./frontmatter.ts";
-import {
-  buildProjectSkillsIssue,
-  type ProjectSkillsHealthService,
-  type SnapshotHealth,
-} from "./health.ts";
+import type { ProjectSkillsHealthService, SnapshotHealth } from "./health.ts";
 import {
   type ProjectRootRef as MainProjectRootRef,
   resolveStableProjectIdentity,
@@ -207,19 +202,8 @@ export async function buildProjectSnapshot(
     ...(installedAgents === undefined ? {} : { installedAgents }),
   });
 
-  // Layer-3 shadowing notices (never blocking).
-  for (const shadow of matrix.shadowedManaged) {
-    health.issues.push(
-      buildProjectSkillsIssue({
-        code: "shadowed-by-user-skill",
-        scope: "skill",
-        skillId: shadow.skillId,
-        adapterKind: shadow.agentKind as AgentKind,
-        checkedAt,
-        evidence: { userRoot: shadow.userRoot },
-      })
-    );
-  }
+  // Layer-3 shadowing is shown via effect matrix (`shadowed-by-user`), not a
+  // duplicate health issue.
 
   const skills: ProjectSkillView[] = [];
   for (const entry of manifestEntries) {

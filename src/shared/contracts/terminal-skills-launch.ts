@@ -1,10 +1,6 @@
 /** 启动门阻断的结构化载荷（design v8 §5.2 / §7.8）。 */
 export interface SkillsLaunchBlockedInfo {
-  contentRiskRequirementId?: string | undefined;
-  degradePolicySummary:
-    | "allowed"
-    | "requires-content-risk-confirmation"
-    | "denied";
+  degradePolicySummary: "allowed" | "denied";
   expiresAt: number;
   focusIssueIds?: string[] | undefined;
   issueSummary: string[];

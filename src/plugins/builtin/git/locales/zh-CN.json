@@ -364,8 +364,6 @@
     "ui.branchGraph": "提交图",
     "ui.branchGraphCaveatTitle": "只统计提交图差异。经 squash 或 rebase 合并后，已应用过的内容仍可能显示为分支独有提交。",
     "ui.branchRemote": "远端",
-    "ui.branchTipTreeInHistory": "内容已出现",
-    "ui.branchTipTreeInHistoryTitle": "候选分支最新内容与当前历史中的 {{commit}} 一致；当前分支之后还有 {{count}} 个新提交。",
     "ui.createNamePrompt": "新工作树名称",
     "ui.createBranchPrompt": "新分支名称",
     "ui.worktreeCreateSuccess": "工作树已创建",

@@ -311,18 +311,29 @@ export function SyncCounts({
   ahead,
   behind,
   pluginContext,
+  syncCaveat,
 }: {
   ahead: number;
   behind: number;
   pluginContext: RendererPluginContext;
+  /** Fetch freshness / auth caveat — annotate primary counts in-place. */
+  syncCaveat?: string | null;
 }): React.ReactElement | null {
   if (ahead === 0 && behind === 0) {
     return null;
   }
   const aheadLabel = pluginText(pluginContext, "srAhead", "ahead");
   const behindLabel = pluginText(pluginContext, "srBehind", "behind");
+  const muted = Boolean(syncCaveat);
   return (
-    <span className="inline-flex items-center gap-1 text-muted-foreground tabular-nums">
+    <span
+      className={
+        muted
+          ? "inline-flex items-center gap-1 text-muted-foreground/60 tabular-nums"
+          : "inline-flex items-center gap-1 text-muted-foreground tabular-nums"
+      }
+      title={syncCaveat ?? undefined}
+    >
       {ahead > 0 && (
         <span className="inline-flex items-center gap-0.5">
           <GitPullRequestArrow

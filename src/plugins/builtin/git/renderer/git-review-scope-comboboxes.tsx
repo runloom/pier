@@ -234,11 +234,6 @@ export function GitReviewBranchCombobox({
     ),
     graphLabel: pluginText(context, "branchGraph", "graph"),
     remoteLabel: pluginText(context, "branchRemote", "remote"),
-    tipTreeInHistoryLabel: pluginText(
-      context,
-      "branchTipTreeInHistory",
-      "seen in history"
-    ),
   };
   return (
     <Popover onOpenChange={setOpen} open={open}>
@@ -293,15 +288,6 @@ export function GitReviewBranchCombobox({
                     graphCaveatTitle={rowText.graphCaveatTitle}
                     graphLabel={rowText.graphLabel}
                     remoteLabel={rowText.remoteLabel}
-                    tipTreeInHistoryLabel={rowText.tipTreeInHistoryLabel}
-                    tipTreeInHistoryTitle={(match) =>
-                      pluginText(
-                        context,
-                        "branchTipTreeInHistoryTitle",
-                        "Branch tip tree matches {{commit}} in the current history; current branch has {{count}} newer commit(s).",
-                        { commit: match.commit, count: match.commitsSince }
-                      )
-                    }
                   />
                 </CommandItem>
               ))}

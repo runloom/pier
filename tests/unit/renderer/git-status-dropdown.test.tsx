@@ -395,7 +395,6 @@ describe("GitStatusDropdown", () => {
           pinReason: null,
           refName: "refs/heads/main",
           subject: null,
-          tipTreeInCurrentHistory: null,
         },
       ],
       message: null,

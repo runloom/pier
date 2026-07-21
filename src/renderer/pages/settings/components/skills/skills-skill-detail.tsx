@@ -228,11 +228,6 @@ export function SkillsSkillDetail({
                 {sourceLabel(skill, t)}
               </Badge>
             )}
-            {drifted ? (
-              <Badge className="ml-2" variant="destructive">
-                {t("settings.skills.driftBadge")}
-              </Badge>
-            ) : null}
           </h2>
           <span className="truncate font-mono text-muted-foreground text-xs">
             {libraryPath}
@@ -329,15 +324,13 @@ export function SkillsSkillDetail({
             </Button>
           </div>
           {hasRisk ? (
-            <div className="flex flex-col gap-0.5">
-              <p className="flex items-center gap-1 text-status-warning-fg text-xs">
-                <TriangleAlert aria-hidden className="size-3.5 shrink-0" />
-                {riskLine}
-              </p>
-              <p className="text-muted-foreground text-xs">
-                {t("settings.skills.riskDisclaimer")}
-              </p>
-            </div>
+            <p
+              className="flex items-center gap-1 text-status-warning-fg text-xs"
+              title={t("settings.skills.riskDisclaimer")}
+            >
+              <TriangleAlert aria-hidden className="size-3.5 shrink-0" />
+              {riskLine}
+            </p>
           ) : null}
         </CardContent>
       </Card>

@@ -117,7 +117,6 @@ function branchOption(
     label: overrides.name,
     pinReason: null,
     subject: null,
-    tipTreeInCurrentHistory: null,
     ...overrides,
   };
 }
@@ -1502,11 +1501,6 @@ describe("git builtin plugin", () => {
           pinReason: "default",
           refName: "refs/heads/main",
           subject: "main subject",
-          tipTreeInCurrentHistory: {
-            commit: "eb9c60a2",
-            commitsSince: 6,
-            subject: "squash merge commit",
-          },
         }),
         branchOption({
           commit: "bbb2222222",
@@ -1563,7 +1557,6 @@ describe("git builtin plugin", () => {
     expect(branchRow.getByText("graph")).toBeVisible();
     expect(branchRow.getByText("3↑")).toBeVisible();
     expect(branchRow.getByText("5↓")).toBeVisible();
-    expect(branchRow.getByText("seen in history")).toBeVisible();
     expect(
       branchRow.container.querySelector("[data-branch-picker-row-ahead-behind]")
         ?.textContent
@@ -1574,22 +1567,10 @@ describe("git builtin plugin", () => {
       "title",
       "Commit graph counts only. Squash or rebase merges may show already-applied commits as branch-only."
     );
-    expect(
-      branchRow.container.querySelector(
-        "[data-branch-picker-row-tip-tree-in-history]"
-      )
-    ).toHaveAttribute(
-      "title",
-      "Branch tip tree matches eb9c60a2 in the current history; current branch has 6 newer commit(s)."
-    );
     // ahead/behind 用主题语义 token,badge 用 shadcn Badge,不硬编码调色板色
     expect(branchRow.getByText("3↑")).toHaveClass("text-success");
     expect(branchRow.getByText("5↓")).toHaveClass("text-warning");
     expect(branchRow.getByText("default")).toHaveAttribute(
-      "data-slot",
-      "badge"
-    );
-    expect(branchRow.getByText("seen in history")).toHaveAttribute(
       "data-slot",
       "badge"
     );

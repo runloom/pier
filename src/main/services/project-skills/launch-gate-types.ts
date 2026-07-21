@@ -3,7 +3,6 @@ import type { AgentKind } from "../../../shared/contracts/agent.ts";
 import type {
   ProjectRootRef as ContractProjectRootRef,
   DegradePolicy,
-  ProjectSkillsAcknowledgement,
 } from "../../../shared/contracts/project-skills.ts";
 import type { SkillDiscoveryAdapterRegistry } from "./adapters.ts";
 import type { ProjectSkillsIssue } from "./health.ts";
@@ -66,7 +65,6 @@ export type LaunchGateResult =
       status: "blocked";
       launchAttemptId: string;
       issueSummary: string[];
-      contentRiskRequirementId?: string;
       degradePolicySummary: DegradePolicy;
       expiresAt: number;
       issues?: ProjectSkillsIssue[];
@@ -95,8 +93,7 @@ export type LaunchContinueResult =
         | "expired"
         | "already-consumed"
         | "spawn-intent-no-replay"
-        | "denied"
-        | "acknowledgement-required";
+        | "denied";
       message: string;
       gate?: LaunchGateResult;
     }
@@ -140,7 +137,6 @@ export interface ManagedAgentLaunchGate {
   continueLaunch(args: {
     launchAttemptId: string;
     decision: LaunchContinueDecision;
-    acknowledgements?: readonly ProjectSkillsAcknowledgement[];
   }): Promise<LaunchContinueResult>;
   ensureReady(args: LaunchGateEnsureArgs): Promise<LaunchGateResult>;
   /** Test/diag: inspect in-memory attempt phase when present. */
@@ -173,16 +169,6 @@ export function issueLines(
   });
 }
 
-export function hasContentRiskAck(
-  acknowledgements: readonly ProjectSkillsAcknowledgement[] | undefined,
-  expectedRequirementId: string
-): boolean {
-  if (!acknowledgements || acknowledgements.length === 0) return false;
-  return acknowledgements.some(
-    (ack) => ack.requirementId === expectedRequirementId
-  );
-}
-
 function canonicalize(value: unknown): unknown {
   if (Array.isArray(value)) {
     return value.map(canonicalize);
@@ -195,37 +181,6 @@ function canonicalize(value: unknown): unknown {
     sorted[key] = canonicalize((value as Record<string, unknown>)[key]);
   }
   return sorted;
-}
-
-/**
- * Binds a launch acknowledgement to the risk-relevant issue facts. Timestamps
- * and presentation text are intentionally excluded; content/risk digests live
- * in evidence and therefore invalidate an acknowledgement when they change.
- */
-export function contentRiskIssueFingerprint(
-  issues: readonly ProjectSkillsIssue[]
-): string {
-  const facts = issues
-    .map((issue) =>
-      canonicalize({
-        adapterKind: issue.adapterKind ?? null,
-        blockingScopes: [...issue.blockingScopes].sort(),
-        code: issue.code,
-        degradePolicy: issue.degradePolicy,
-        evidence: issue.evidence,
-        id: issue.id,
-        relativeTarget: issue.relativeTarget ?? null,
-        scope: issue.scope,
-        skillId: issue.skillId ?? null,
-      })
-    )
-    .sort((left, right) =>
-      JSON.stringify(left).localeCompare(JSON.stringify(right))
-    );
-  return `sha256:${createHash("sha256")
-    .update("project-skills-launch-content-risk-v1\0", "utf8")
-    .update(JSON.stringify(facts), "utf8")
-    .digest("hex")}`;
 }
 
 /**
@@ -284,7 +239,6 @@ export interface PendingLaunchAttempt {
   degraded: boolean;
   degradePolicySummary: DegradePolicy;
   expiresAt: number;
-  healthRevision: string;
   issueCodes: string[];
   issueSummary: string[];
   launchAttemptId: string;

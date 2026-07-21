@@ -41,42 +41,37 @@ describe("project skills replacement launch gate", () => {
     dialogMocks.showAppConfirm.mockResolvedValue(true);
   });
 
-  it("presents a replacement gate before continuing", async () => {
+  it("presents a denied replacement gate before opening settings", async () => {
     const launchContinue = vi
       .fn<
         (request: {
           launchAttemptId: string;
           decision: "open-settings" | "degrade" | "cancel";
-          acknowledgements?: readonly {
-            requirementId: string;
-            nonce: string;
-          }[];
         }) => Promise<SkillsLaunchContinueResult>
       >()
       .mockResolvedValueOnce({
         status: "rejected",
         launchAttemptId: "attempt-1",
-        reason: "acknowledgement-required",
-        message: "replacement required",
+        reason: "denied",
+        message: "current health denies degraded launch",
         gate: {
           status: "blocked",
           launchAttemptId: "attempt-1",
-          issueSummary: ["library-drift skill=review-guide"],
+          issueSummary: ["ledger-corrupt"],
           issues: [
             {
-              id: "library-drift-2",
-              code: "library-drift",
-              skillId: "review-guide",
+              id: "ledger-corrupt-1",
+              code: "ledger-corrupt",
             },
           ],
-          degradePolicySummary: "requires-content-risk-confirmation",
+          degradePolicySummary: "denied",
           expiresAt: Date.now() + 60_000,
         },
       })
       .mockResolvedValueOnce({
-        status: "ready",
+        status: "cancelled",
         launchAttemptId: "attempt-1",
-        degraded: true,
+        decision: "open-settings",
       });
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -93,11 +88,16 @@ describe("project skills replacement launch gate", () => {
       t: ((key: string) => key) as never,
     });
 
-    expect(continuation).toBe("attempt-1");
-    expect(dialogMocks.showAppChoice).toHaveBeenCalledTimes(2);
-    expect(launchContinue).toHaveBeenNthCalledWith(2, {
+    expect(continuation).toBeNull();
+    expect(dialogMocks.showAppChoice).toHaveBeenCalledTimes(1);
+    expect(dialogMocks.showAppConfirm).toHaveBeenCalledTimes(1);
+    expect(launchContinue).toHaveBeenNthCalledWith(1, {
       launchAttemptId: "attempt-1",
       decision: "degrade",
+    });
+    expect(launchContinue).toHaveBeenNthCalledWith(2, {
+      launchAttemptId: "attempt-1",
+      decision: "open-settings",
     });
   });
 

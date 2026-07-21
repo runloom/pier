@@ -346,8 +346,6 @@
     "ui.branchGraph": "graph",
     "ui.branchGraphCaveatTitle": "Commit graph counts only. Squash or rebase merges may show already-applied commits as branch-only.",
     "ui.branchRemote": "remote",
-    "ui.branchTipTreeInHistory": "seen in history",
-    "ui.branchTipTreeInHistoryTitle": "This branch’s latest content matches {{commit}} in the current history; the current branch has {{count}} newer commit(s).",
     "ui.createNamePrompt": "New worktree name",
     "ui.createBranchPrompt": "New branch name",
     "ui.worktreeCreateSuccess": "Worktree created",

@@ -144,9 +144,9 @@ describe("ManagedAgentLaunchGate", () => {
     expect(cont.reason).toBe("denied");
   });
 
-  it("requires acknowledgement for content-risk degrade", async () => {
+  it("allows degrade without acknowledgement when policy is allowed", async () => {
     const { gate } = await setup(async ({ launchAttemptId }) => ({
-      ...blocked("requires-content-risk-confirmation", "library-drift"),
+      ...blocked("allowed", "projection-missing"),
       launchAttemptId,
     }));
     const blockedResult = (await gate.ensureReady({
@@ -154,52 +154,13 @@ describe("ManagedAgentLaunchGate", () => {
       projectRootPath: process.cwd(),
     })) as Extract<LaunchGateResult, { status: "blocked" }>;
 
-    const withoutAck = await gate.continueLaunch({
-      launchAttemptId: blockedResult.launchAttemptId,
-      decision: "degrade",
-    });
-    expect(withoutAck.status).toBe("rejected");
-    if (withoutAck.status !== "rejected") throw new Error("expected rejected");
-    expect(withoutAck.reason).toBe("acknowledgement-required");
-
-    const withUnrelatedAck = await gate.continueLaunch({
-      launchAttemptId: blockedResult.launchAttemptId,
-      decision: "degrade",
-      acknowledgements: [{ requirementId: "unrelated", nonce: "nonce-1" }],
-    });
-    expect(withUnrelatedAck.status).toBe("rejected");
-    if (withUnrelatedAck.status !== "rejected")
-      throw new Error("expected rejected");
-    expect(withUnrelatedAck.reason).toBe("acknowledgement-required");
-
-    const withSpoofAck = await gate.continueLaunch({
-      launchAttemptId: blockedResult.launchAttemptId,
-      decision: "degrade",
-      acknowledgements: [
-        { requirementId: "launch-degrade:allowed", nonce: "nonce-1" },
-        { requirementId: "not-really-content-risk-here", nonce: "nonce-2" },
-      ],
-    });
-    expect(withSpoofAck.status).toBe("rejected");
-    if (withSpoofAck.status !== "rejected")
-      throw new Error("expected rejected");
-    expect(withSpoofAck.reason).toBe("acknowledgement-required");
-
     const withAck = await gate.continueLaunch({
       launchAttemptId: blockedResult.launchAttemptId,
       decision: "degrade",
-      acknowledgements: [
-        {
-          requirementId:
-            blockedResult.contentRiskRequirementId ??
-            (() => {
-              throw new Error("missing bound content-risk requirement");
-            })(),
-          nonce: "nonce-1",
-        },
-      ],
     });
     expect(withAck.status).toBe("ready");
+    if (withAck.status !== "ready") throw new Error("expected ready");
+    expect(withAck.degraded).toBe(true);
   });
 
   it("does not mark a launch degraded when the readiness recheck converges", async () => {
@@ -223,24 +184,14 @@ describe("ManagedAgentLaunchGate", () => {
     expect(continued).toMatchObject({ status: "ready", degraded: false });
   });
 
-  it("rejects a content-risk acknowledgement after digest and risk evidence change", async () => {
+  it("rejects degrade when recheck health flips to denied", async () => {
     let callCount = 0;
     const { gate } = await setup(async ({ launchAttemptId }) => {
       callCount += 1;
-      const result = blocked("requires-content-risk-confirmation");
-      const contentRiskIssue = result.issueSummary[0];
-      if (!contentRiskIssue) throw new Error("expected content-risk issue");
-      contentRiskIssue.evidence =
-        callCount === 1
-          ? {
-              contentDigest: "sha256:content-a",
-              riskFingerprint: "sha256:risk-a",
-            }
-          : {
-              contentDigest: "sha256:content-b",
-              riskFingerprint: "sha256:risk-b",
-            };
-      return { ...result, launchAttemptId };
+      if (callCount === 1) {
+        return { ...blocked("allowed", "projection-missing"), launchAttemptId };
+      }
+      return { ...blocked("denied", "ledger-corrupt"), launchAttemptId };
     });
     const initial = await gate.ensureReady({
       agentId: "claude",
@@ -250,21 +201,23 @@ describe("ManagedAgentLaunchGate", () => {
     const continued = await gate.continueLaunch({
       launchAttemptId: initial.launchAttemptId,
       decision: "degrade",
-      acknowledgements: [
-        {
-          requirementId:
-            initial.contentRiskRequirementId ??
-            (() => {
-              throw new Error("missing bound requirement");
-            })(),
-          nonce: "nonce",
-        },
-      ],
     });
     expect(continued).toMatchObject({
       status: "rejected",
-      reason: "acknowledgement-required",
+      reason: "denied",
     });
+    if (
+      continued.status !== "rejected" ||
+      continued.gate?.status !== "blocked"
+    ) {
+      throw new Error("expected denied replacement gate");
+    }
+    expect(continued.gate.degradePolicySummary).toBe("denied");
+    expect(
+      continued.gate.issueSummary.some((line) =>
+        line.includes("ledger-corrupt")
+      )
+    ).toBe(true);
   });
 
   it("does not auto-replay after SPAWN_INTENT", async () => {
@@ -450,65 +403,6 @@ describe("ManagedAgentLaunchGate", () => {
     await expect(
       gate.authorizeSpawn(initial.launchAttemptId, facts)
     ).resolves.toMatchObject({ ok: true });
-  });
-
-  it("persists and accepts only the replacement content-risk requirement", async () => {
-    let callCount = 0;
-    const { gate } = await setup(async ({ launchAttemptId }) => {
-      callCount += 1;
-      const result = blocked(
-        "requires-content-risk-confirmation",
-        "library-drift"
-      );
-      const firstIssue = result.issueSummary[0];
-      if (!firstIssue) throw new Error("expected issue");
-      firstIssue.evidence = {
-        contentDigest:
-          callCount === 1 ? "sha256:content-a" : "sha256:content-b",
-      };
-      return { ...result, launchAttemptId };
-    });
-    const initial = await gate.ensureReady({
-      agentId: "claude",
-      projectRootPath: process.cwd(),
-    });
-    if (initial.status !== "blocked") throw new Error("expected blocked");
-
-    const replacement = await gate.continueLaunch({
-      launchAttemptId: initial.launchAttemptId,
-      decision: "degrade",
-      acknowledgements: [
-        {
-          requirementId: initial.contentRiskRequirementId ?? "",
-          nonce: "initial-ack",
-        },
-      ],
-    });
-    expect(replacement).toMatchObject({
-      status: "rejected",
-      reason: "acknowledgement-required",
-    });
-    if (
-      replacement.status !== "rejected" ||
-      replacement.gate?.status !== "blocked"
-    ) {
-      throw new Error("expected replacement gate");
-    }
-    expect(replacement.gate.contentRiskRequirementId).not.toBe(
-      initial.contentRiskRequirementId
-    );
-
-    const continued = await gate.continueLaunch({
-      launchAttemptId: initial.launchAttemptId,
-      decision: "degrade",
-      acknowledgements: [
-        {
-          requirementId: replacement.gate.contentRiskRequirementId ?? "",
-          nonce: "replacement-ack",
-        },
-      ],
-    });
-    expect(continued).toMatchObject({ status: "ready", degraded: true });
   });
 
   it("cancel clears attempt without spawn", async () => {

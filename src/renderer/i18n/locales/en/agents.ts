@@ -21,7 +21,7 @@ export const agents = {
   },
   section: {
     needsYou: "Needs you",
-    readyHint: "Awaiting input (no notification)",
+    readyHint: "Awaiting input",
     running: "Running",
   },
   titleBar: {

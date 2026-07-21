@@ -1,11 +1,8 @@
-import type { ProjectSkillsAcknowledgement } from "../../../shared/contracts/project-skills.ts";
 import {
   EnsureReadyTimeout,
   withTimeout,
 } from "./launch-gate-attempt-store.ts";
 import {
-  contentRiskIssueFingerprint,
-  hasContentRiskAck,
   issueLines,
   type LaunchContinueDecision,
   type LaunchContinueResult,
@@ -42,7 +39,6 @@ export async function continueLaunch(
   args: {
     launchAttemptId: string;
     decision: LaunchContinueDecision;
-    acknowledgements?: readonly ProjectSkillsAcknowledgement[];
   }
 ): Promise<LaunchContinueResult> {
   deps.sweepMemory();
@@ -146,31 +142,6 @@ export async function continueLaunch(
     };
   }
 
-  if (
-    record.degradePolicySummary === "requires-content-risk-confirmation" &&
-    !hasContentRiskAck(
-      args.acknowledgements,
-      `launch-degrade-content-risk:${record.launchAttemptId}:${record.healthRevision}`
-    )
-  ) {
-    return {
-      status: "rejected",
-      launchAttemptId: args.launchAttemptId,
-      reason: "acknowledgement-required",
-      message:
-        "content-risk confirmation acknowledgement required before degrade launch",
-      gate: {
-        status: "blocked",
-        launchAttemptId: record.launchAttemptId,
-        issueSummary: record.issueSummary,
-        degradePolicySummary: "requires-content-risk-confirmation",
-        expiresAt: record.expiresAt,
-        projectRootPath: record.projectRef.realPath,
-        contentRiskRequirementId: `launch-degrade-content-risk:${record.launchAttemptId}:${record.healthRevision}`,
-      },
-    };
-  }
-
   // Re-check readiness fingerprint for state drift (same 10s bound).
   let recheck: EnsureReadyResult;
   try {
@@ -206,7 +177,6 @@ export async function continueLaunch(
       issueSummary: issueLines(recheck.issueSummary),
       issueCodes: recheck.issueSummary.map((i) => i.code),
       degradePolicySummary: nextPolicy,
-      healthRevision: contentRiskIssueFingerprint(recheck.issueSummary),
       expiresAt: recheck.expiresAt,
     };
     record = updated;
@@ -218,25 +188,6 @@ export async function continueLaunch(
         launchAttemptId: args.launchAttemptId,
         reason: "denied",
         message: "current health denies degraded launch",
-        gate: deps.blockedFromEnsure(
-          recheck,
-          args.launchAttemptId,
-          record.projectRef.realPath
-        ),
-      };
-    }
-    if (
-      nextPolicy === "requires-content-risk-confirmation" &&
-      !hasContentRiskAck(
-        args.acknowledgements,
-        `launch-degrade-content-risk:${record.launchAttemptId}:${record.healthRevision}`
-      )
-    ) {
-      return {
-        status: "rejected",
-        launchAttemptId: args.launchAttemptId,
-        reason: "acknowledgement-required",
-        message: "content-risk confirmation required after state change",
         gate: deps.blockedFromEnsure(
           recheck,
           args.launchAttemptId,

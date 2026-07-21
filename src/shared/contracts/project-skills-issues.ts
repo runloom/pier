@@ -43,11 +43,7 @@ export type ProjectSkillsIssueCode = z.infer<
   typeof projectSkillsIssueCodeSchema
 >;
 
-export const DEGRADE_POLICIES = [
-  "allowed",
-  "requires-content-risk-confirmation",
-  "denied",
-] as const;
+export const DEGRADE_POLICIES = ["allowed", "denied"] as const;
 
 export const degradePolicySchema = z.enum(DEGRADE_POLICIES);
 export type DegradePolicy = z.infer<typeof degradePolicySchema>;

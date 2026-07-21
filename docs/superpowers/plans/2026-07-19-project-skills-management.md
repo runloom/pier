@@ -271,11 +271,7 @@ export const projectSkillsIssueCodeSchema = z.enum([
   "duplicate-discovery","agent-version-unsupported","unknown-agent-behavior",
 ]);
 
-export const degradePolicySchema = z.enum([
-  "allowed",
-  "requires-content-risk-confirmation",
-  "denied",
-]);
+export const degradePolicySchema = z.enum(["allowed", "denied"]);
 
 export const applyResultSchema = z.discriminatedUnion("status", [
   z.object({ status: z.literal("converged"), /* operationId, revisions, snapshot */ }).strict(),
@@ -628,7 +624,7 @@ export type LaunchGateResult =
       launchAttemptId: string;
       challenge: string;
       issueSummary: string[];
-      degradePolicySummary: "allowed"|"requires-content-risk-confirmation"|"denied";
+      degradePolicySummary: "allowed"|"denied";
       expiresAt: number;
     };
 
@@ -636,14 +632,13 @@ continueLaunch(args: {
   launchAttemptId: string;
   challenge: string;
   decision: "open-settings" | "degrade" | "cancel";
-  acknowledgements?: Acknowledgement[];
 }): Promise<LaunchContinueResult>;
 ```
 
 接线规则：
 1. 终端：在 `addon.createTerminal(...)` **之前**调用 gate；项目身份从 main launch record / panel session / main resolve 得到，**不信任** renderer `createArgs.context` 作为最终权威
 2. AI one-shot：在 `runOneShot` 前 gate；blocked 返回 structured unavailable，禁止静默
-3. degrade：`denied` 拒绝；`requires-content-risk-confirmation` 必须 acknowledgement；`SPAWN_INTENT` 先耐久再 spawn，不自动重放
+3. degrade：`denied` 拒绝；`allowed` 可「仍要启动」；`SPAWN_INTENT` 先耐久再 spawn，不自动重放
 4. 架构测试：grep/枚举 `resolveAgentLaunch` / `runOneShot` / `terminal.open` launch 路径都经 gate
 
 - [ ] **Step 1: 红测（阻断、降级策略、一次性 CLI、重放拒绝、架构枚举）**

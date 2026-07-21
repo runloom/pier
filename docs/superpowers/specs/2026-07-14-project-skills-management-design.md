@@ -299,7 +299,7 @@ v7 的 `skills.project.pick` 删除；「添加项目」走环境域既有命令
 - `skills.repair.plan({ projectRef, observedRevision, continuationOf? })`；
 - `skills.repair({ projectRef, observedRevision, operationId, repairPlanDigest, acknowledgements, continuationOf? })`；
 - `skills.operation.status({ projectRef, operationId })`；
-- `agent.launch.continue({ launchAttemptId, decision, acknowledgements? })`，`decision ∈ open-settings / degrade / cancel`。
+- `agent.launch.continue({ launchAttemptId, decision })`，`decision ∈ open-settings / degrade / cancel`。
 
 计划的每个 `confirmationRequirement` 都包含稳定 id、kind（内容删除 / Git 已跟踪投影删除 / 漂移采用等完整性操作）、精确相对目标或实际树摘要，以及计划摘要。`acknowledgements` 必须逐项精确匹配 main 要求，并记录宿主确认交互生成的高熵 nonce；计划变化使全部确认失效。它是可信客户端的可审计操作意图，不是技能正文授权，也不是对恶意 renderer 的安全证明。
 

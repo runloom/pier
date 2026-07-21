@@ -19,7 +19,7 @@ export const agents = {
   },
   section: {
     needsYou: "需要你",
-    readyHint: "等待输入（不会通知）",
+    readyHint: "等待输入",
     running: "运行中",
   },
   titleBar: {

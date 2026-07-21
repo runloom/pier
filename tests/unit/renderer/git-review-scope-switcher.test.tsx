@@ -44,7 +44,6 @@ function branchOption(name: string, current = false): GitDiffBranchOption {
     pinReason: null,
     refName: `refs/heads/${name}`,
     subject: null,
-    tipTreeInCurrentHistory: null,
   };
 }
 

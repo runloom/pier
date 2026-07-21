@@ -156,15 +156,6 @@ export const gitBranchRefSchema = z.object({
 });
 export type GitBranchRef = z.infer<typeof gitBranchRefSchema>;
 
-export const gitBranchTipTreeInCurrentHistorySchema = z.object({
-  commit: z.string().min(1),
-  commitsSince: z.number().int().nonnegative(),
-  subject: z.string().nullable(),
-});
-export type GitBranchTipTreeInCurrentHistory = z.infer<
-  typeof gitBranchTipTreeInCurrentHistorySchema
->;
-
 export const gitDiffBranchOptionSchema = z.object({
   aheadFromCurrent: z.number().int().nonnegative().nullable(),
   authorName: z.string().nullable(),
@@ -179,12 +170,6 @@ export const gitDiffBranchOptionSchema = z.object({
   pinReason: z.enum(["default"]).nullable(),
   refName: z.string(),
   subject: z.string().nullable(),
-  /**
-   * 候选分支 tip tree 与当前 HEAD 可达历史中的某个 commit tree 完全一致。
-   * 这是本地 Git 证据：内容曾以该树形态出现在当前历史里；它不等同于 PR/MR
-   * 元数据里的“已合并”，但能解释 squash/rebase 后提交图仍分叉的场景。
-   */
-  tipTreeInCurrentHistory: gitBranchTipTreeInCurrentHistorySchema.nullable(),
 });
 export type GitDiffBranchOption = z.infer<typeof gitDiffBranchOptionSchema>;
 

@@ -1,9 +1,6 @@
 import { randomUUID } from "node:crypto";
 import type { AgentKind } from "../../../shared/contracts/agent.ts";
-import type {
-  ProjectRootRef as ContractProjectRootRef,
-  ProjectSkillsAcknowledgement,
-} from "../../../shared/contracts/project-skills.ts";
+import type { ProjectRootRef as ContractProjectRootRef } from "../../../shared/contracts/project-skills.ts";
 import { createSkillDiscoveryAdapterRegistry } from "./adapters.ts";
 import { buildProjectSkillsIssue } from "./health.ts";
 import {
@@ -48,7 +45,6 @@ export type {
 
 import {
   type CreateManagedAgentLaunchGateOptions,
-  contentRiskIssueFingerprint,
   issueLines,
   type LaunchContinueDecision,
   type LaunchContinueResult,
@@ -138,7 +134,6 @@ export function createManagedAgentLaunchGate(
     launchAttemptId: string,
     projectRootPath: string
   ): LaunchGateResult {
-    const healthRevision = contentRiskIssueFingerprint(result.issueSummary);
     return {
       status: "blocked",
       launchAttemptId,
@@ -147,11 +142,6 @@ export function createManagedAgentLaunchGate(
       expiresAt: result.expiresAt,
       issues: [...result.issueSummary],
       projectRootPath,
-      ...(result.degradePolicySummary === "requires-content-risk-confirmation"
-        ? {
-            contentRiskRequirementId: `launch-degrade-content-risk:${launchAttemptId}:${healthRevision}`,
-          }
-        : {}),
     };
   }
 
@@ -261,7 +251,6 @@ export function createManagedAgentLaunchGate(
       issueSummary: issueLines(ensure.issueSummary),
       issueCodes: ensure.issueSummary.map((i) => i.code),
       degradePolicySummary: ensure.degradePolicySummary,
-      healthRevision: contentRiskIssueFingerprint(ensure.issueSummary),
       launchSpecificationFingerprint: launchSpecificationFingerprint(
         args.launchSpecification
       ),
@@ -283,7 +272,6 @@ export function createManagedAgentLaunchGate(
   async function continueLaunch(args: {
     launchAttemptId: string;
     decision: LaunchContinueDecision;
-    acknowledgements?: readonly ProjectSkillsAcknowledgement[];
   }): Promise<LaunchContinueResult> {
     return await continueLaunchImpl(
       {

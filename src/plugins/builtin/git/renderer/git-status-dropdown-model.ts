@@ -59,6 +59,8 @@ export interface GitStatusDropdownSummaryPart {
 
 export interface GitStatusDropdownSummaryGroup {
   parts: GitStatusDropdownSummaryPart[];
+  /** Fetch freshness caveat when ahead/behind may be stale. */
+  title?: string;
 }
 
 export interface GitStatusDropdownModel {
@@ -197,7 +199,8 @@ function formatDeltaGroup(
 
 function formatSyncGroup(
   status: GitStatus,
-  text: GitStatusDropdownText
+  text: GitStatusDropdownText,
+  remoteSyncLabel?: null | string
 ): GitStatusDropdownSummaryGroup | null {
   const ahead = status.branch.ahead;
   const behind = status.branch.behind;
@@ -221,7 +224,14 @@ function formatSyncGroup(
       tone: "muted",
     });
   }
-  return summaryGroup(...parts);
+  const uncertain =
+    status.remoteSync?.state === "authRequired" ||
+    status.remoteSync?.lastSuccessAt === null;
+  const group = summaryGroup(...parts);
+  if (uncertain && remoteSyncLabel) {
+    return { ...group, title: remoteSyncLabel };
+  }
+  return group;
 }
 
 function canUseUpstream(status: GitStatus): boolean {
@@ -313,7 +323,8 @@ function activeStatusGroups(
 
 function dirtySummaryGroups(
   status: GitStatus,
-  text: GitStatusDropdownText
+  text: GitStatusDropdownText,
+  remoteSyncLabel?: null | string
 ): GitStatusDropdownSummaryGroup[] {
   const pieces = [
     summaryGroup({
@@ -323,7 +334,7 @@ function dirtySummaryGroups(
     }),
   ];
   const delta = formatDeltaGroup(status.delta, text);
-  const sync = formatSyncGroup(status, text);
+  const sync = formatSyncGroup(status, text, remoteSyncLabel);
   if (delta) {
     pieces.push(delta);
   }
@@ -335,7 +346,8 @@ function dirtySummaryGroups(
 
 function cleanStatusGroups(
   status: GitStatus,
-  text: GitStatusDropdownText
+  text: GitStatusDropdownText,
+  remoteSyncLabel?: null | string
 ): GitStatusDropdownSummaryGroup[] {
   const parts = [
     summaryGroup({
@@ -344,7 +356,7 @@ function cleanStatusGroups(
       tone: "default",
     }),
   ];
-  const sync = formatSyncGroup(status, text);
+  const sync = formatSyncGroup(status, text, remoteSyncLabel);
   if (sync) {
     parts.push(sync);
   }
@@ -365,10 +377,18 @@ function cleanStatusGroups(
   return parts;
 }
 
-function contextLine(options: GitStatusDropdownModelOptions): string {
-  return [options.fallbackWorktreeName, options.remoteSyncLabel]
-    .filter(Boolean)
-    .join(" · ");
+function contextLine(
+  options: GitStatusDropdownModelOptions,
+  status: GitStatus
+): string {
+  const uncertain =
+    status.remoteSync?.state === "authRequired" ||
+    status.remoteSync?.lastSuccessAt === null;
+  const hasSyncCounts = status.branch.ahead > 0 || status.branch.behind > 0;
+  // When ↑/↓ already carry the fetch caveat as a title, don't repeat it here.
+  const syncLabel =
+    uncertain && hasSyncCounts ? null : (options.remoteSyncLabel ?? null);
+  return [options.fallbackWorktreeName, syncLabel].filter(Boolean).join(" · ");
 }
 
 export function deriveGitStatusDropdownModel(
@@ -380,9 +400,10 @@ export function deriveGitStatusDropdownModel(
   const text = options.text ?? DEFAULT_TEXT;
   const branchLabel =
     status.branch.branch ?? context.branch ?? options.fallbackWorktreeName;
+  const remoteSyncLabel = options.remoteSyncLabel ?? null;
   const base = {
     branchLabel,
-    contextLine: contextLine(options),
+    contextLine: contextLine(options, status),
     worktreePath: options.worktreePath,
   };
 
@@ -397,7 +418,7 @@ export function deriveGitStatusDropdownModel(
   }
 
   if (totalChanges(counts) > 0 || hasLineDelta(status.delta)) {
-    const statusGroups = dirtySummaryGroups(status, text);
+    const statusGroups = dirtySummaryGroups(status, text, remoteSyncLabel);
     const syncAction = remoteSyncAction(status, counts);
     return {
       ...base,
@@ -414,7 +435,7 @@ export function deriveGitStatusDropdownModel(
   const completed =
     status.branch.mergedIntoDefault === true || status.branch.upstreamGone;
   if (completed) {
-    const statusGroups = cleanStatusGroups(status, text);
+    const statusGroups = cleanStatusGroups(status, text, remoteSyncLabel);
     const syncAction = remoteSyncAction(status, counts);
     return {
       ...base,
@@ -426,7 +447,7 @@ export function deriveGitStatusDropdownModel(
     };
   }
 
-  const statusGroups = cleanStatusGroups(status, text);
+  const statusGroups = cleanStatusGroups(status, text, remoteSyncLabel);
   const syncAction = remoteSyncAction(status, counts);
   return {
     ...base,

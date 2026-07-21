@@ -241,9 +241,6 @@ export async function executeProjectSkillsCommand(
           await gate.continueLaunch({
             launchAttemptId: request.launchAttemptId,
             decision: request.decision,
-            ...(request.acknowledgements
-              ? { acknowledgements: request.acknowledgements }
-              : {}),
           })
         );
       }
