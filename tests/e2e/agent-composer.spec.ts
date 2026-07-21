@@ -21,10 +21,9 @@ const OUT_MAIN = join(
 test.skip(process.platform !== "darwin", "native terminal is macOS-only");
 
 /**
- * 验证 agent 态 Composer 的端到端挂载 / 键盘接管 / 发送闭环 —— CI 无真实
- * agent 可跑，手段是从 main 进程补发 `pier://foreground-activity:changed`
- * 广播（与既有 terminal-overlay-coexistence spec 里补发 focus-request 的
- * 注入思路同款）模拟 aggregator 已判定该面板为 agent/idle 态。
+ * On-demand Rich Input e2e: agent activity alone never mounts; open via
+ * `pier:terminal:open-composer`; Esc/send close; idle eligibility loss
+ * unmounts. sendText IPC stays independent of UI mount.
  */
 
 interface DebugCoordinator {
@@ -113,18 +112,6 @@ async function simulateTerminalFocusIntent(
 /**
  * 补发 `pier://foreground-activity:changed` 广播，模拟 unified aggregator
  * 判定该面板进入 agent / idle 态。
- *
- * 实测确认的三点（前置阅读，见 task-m5-brief 步骤 1-4）：
- * - 通道名: `PIER_BROADCAST.FOREGROUND_ACTIVITY_CHANGED` =
- *   `"pier://foreground-activity:changed"`（src/shared/ipc-channels.ts）。
- * - 无 envelope 包装：preload `foregroundActivityApi.onChanged` 直接把
- *   `ipcRenderer.on` 的第二个参数原样转给回调（src/preload/foreground-activity-api.ts），
- *   payload 就是裸的 `ForegroundActivityBroadcast { activities, ts }`。
- * - windowId 不参与过滤：`useForegroundActivityStore.apply` 只按 `ts` 单调
- *   守卫拒收乱序广播，随后无差别把 `activities` 整体按 panelId 建索引
- *   （src/renderer/stores/foreground-activity.store.ts）；`TerminalPanel`
- *   也只用 `activities[panelId]`，不比对 windowId。因此这里的 windowId 用
- *   任意满足 schema（`min(1).max(32)`）的字符串即可，不必等于真实窗口 id。
  */
 async function broadcastActivity(
   app: ElectronApplication,
@@ -164,8 +151,19 @@ async function broadcastActivity(
   );
 }
 
+/** Open on-demand Rich Input for a panel (mirrors action / shortcut). */
+async function openComposer(win: Page, panelId: string): Promise<void> {
+  await win.evaluate((id) => {
+    window.dispatchEvent(
+      new CustomEvent("pier:terminal:open-composer", {
+        detail: { panelId: id },
+      })
+    );
+  }, panelId);
+}
+
 test.describe("Agent composer e2e", () => {
-  test("composer mounts on agent activity and takes keyboard ownership", async () => {
+  test("on-demand open mounts composer; agent alone does not", async () => {
     const userDataDir = mkdtempSync(join(tmpdir(), "pier-composer-e2e-"));
     const app = await electron.launch({
       args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
@@ -179,39 +177,60 @@ test.describe("Agent composer e2e", () => {
       const composer = win.locator('[data-testid="terminal-composer"]');
       const input = win.locator('[data-testid="terminal-composer-input"]');
 
-      // 1. 初始无 composer。
+      // 1. Initial: no composer.
       await expect(composer).not.toBeAttached();
 
-      // 2. 补发 agent 态广播 → composer 挂载。ts 起点取自真实当前值 + 1，
-      //    避免被 store 的单调守卫拒收（见 currentForegroundActivityTs 注释）。
+      // 2. Agent activity alone still does not mount (on-demand).
       let seq = (await currentForegroundActivityTs(win)) + 1;
       await broadcastActivity(app, { kind: "agent", panelId, seq: seq++ });
+      await win.waitForTimeout(400);
+      await expect(composer).not.toBeAttached();
+
+      // 3. Dispatch open → mounts + keyboard ownership.
+      await openComposer(win, panelId);
       await expect(composer).toBeAttached({ timeout: 5000 });
-
-      // 3. 挂载即接管键盘：auto-focus 触发 activateOverlay，webRequestCount>=1。
       await expect
         .poll(async () => webRequestCount(await readSnapshot(win)), {
           timeout: 8000,
         })
         .toBeGreaterThanOrEqual(1);
 
-      // 4. 模拟「点终端」焦点意图：composer 的 takeover 注册重定向回输入框，
-      //    键盘不应回终端（webRequestCount 仍 >=1，composer 仍挂载）。
+      // 4. Terminal click takeover closes composer and returns focus to TUI.
       await simulateTerminalFocusIntent(app, panelId);
-      await win.waitForTimeout(500);
+      await expect(composer).not.toBeAttached({ timeout: 5000 });
       await expect
         .poll(async () => webRequestCount(await readSnapshot(win)), {
           timeout: 8000,
         })
-        .toBeGreaterThanOrEqual(1);
-      await expect(composer).toBeAttached();
+        .toBe(0);
 
-      // 5. 通过 composer 发送文本：成功后清空输入框。
+      // 5. Esc closes (draft retained in memory; DOM unmounts).
+      await openComposer(win, panelId);
+      await expect(composer).toBeAttached({ timeout: 5000 });
+      await input.focus();
+      await input.press("Escape");
+      await expect(composer).not.toBeAttached({ timeout: 5000 });
+      await expect
+        .poll(async () => webRequestCount(await readSnapshot(win)), {
+          timeout: 8000,
+        })
+        .toBe(0);
+
+      // 6. Reopen; send succeeds → closes.
+      await openComposer(win, panelId);
+      await expect(composer).toBeAttached({ timeout: 5000 });
       await input.fill("echo pier-agent-composer-e2e");
       await input.press("Enter");
-      await expect.poll(() => input.inputValue()).toBe("");
+      await expect(composer).not.toBeAttached({ timeout: 5000 });
+      await expect
+        .poll(async () => webRequestCount(await readSnapshot(win)), {
+          timeout: 8000,
+        })
+        .toBe(0);
 
-      // 6. 补发 idle 态广播 → composer 卸载，键盘归还终端。
+      // 7. Open again then idle broadcast → eligibility loss unmounts.
+      await openComposer(win, panelId);
+      await expect(composer).toBeAttached({ timeout: 5000 });
       await broadcastActivity(app, { kind: "idle", panelId, seq: seq++ });
       await expect(composer).not.toBeAttached({ timeout: 5000 });
       await expect

@@ -3,7 +3,10 @@ import { APPKIT_KEYCODE, GHOSTTY_MODS } from "@shared/terminal-appkit-keys.ts";
 import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
-import { TerminalComposer } from "@/panel-kits/terminal/terminal-composer.tsx";
+import {
+  resetTerminalComposerDraftsForTests,
+  TerminalComposer,
+} from "@/panel-kits/terminal/terminal-composer.tsx";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
   resetTerminalStoreForTests,
@@ -55,6 +58,7 @@ beforeEach(async () => {
   sendKeyPress.mockClear();
   sendKeyPress.mockResolvedValue({ ok: true });
   vi.mocked(showAppAlert).mockClear();
+  resetTerminalComposerDraftsForTests();
 });
 
 afterEach(() => {
@@ -63,6 +67,7 @@ afterEach(() => {
   vi.unstubAllGlobals();
   resetTerminalStoreForTests();
   resetTerminalComposerTakeoverForTests();
+  resetTerminalComposerDraftsForTests();
   Reflect.deleteProperty(window, "pier");
 });
 
@@ -70,22 +75,27 @@ function renderComposer(
   overrides: Partial<{
     bottomOffsetPx: number;
     disabled: boolean;
+    focusRequest: number;
     isActive: boolean;
+    onClose: () => void;
     onHeightChange: (heightPx: number) => void;
     panelId: string;
   }> = {}
 ) {
+  const onClose = overrides.onClose ?? vi.fn();
   const onHeightChange = overrides.onHeightChange ?? vi.fn();
   const view = render(
     <TerminalComposer
       bottomOffsetPx={overrides.bottomOffsetPx ?? 0}
       disabled={overrides.disabled ?? false}
+      focusRequest={overrides.focusRequest ?? 0}
       isActive={overrides.isActive ?? true}
+      onClose={onClose}
       onHeightChange={onHeightChange}
       panelId={overrides.panelId ?? "t-1"}
     />
   );
-  return { onHeightChange, view };
+  return { onClose, onHeightChange, view };
 }
 
 describe("TerminalComposer", () => {
@@ -98,8 +108,32 @@ describe("TerminalComposer", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("sends the typed text on Enter and clears the textarea on success", async () => {
-    renderComposer();
+  it("Esc closes with draft and never sendKeyPress Escape; remount restores draft", () => {
+    const onClose = vi.fn();
+    const { view } = renderComposer({ onClose, panelId: "t-draft" });
+
+    const textarea = screen.getByTestId(
+      "terminal-composer-input"
+    ) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "keep me" } });
+    fireEvent.keyDown(textarea, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(sendKeyPress).not.toHaveBeenCalled();
+    expect(sendText).not.toHaveBeenCalled();
+
+    view.unmount();
+    renderComposer({ panelId: "t-draft" });
+
+    expect(
+      (screen.getByTestId("terminal-composer-input") as HTMLTextAreaElement)
+        .value
+    ).toBe("keep me");
+  });
+
+  it("sends typed text on Enter, clears textarea, and calls onClose on success", async () => {
+    const onClose = vi.fn();
+    renderComposer({ onClose });
 
     const textarea = screen.getByTestId(
       "terminal-composer-input"
@@ -115,6 +149,7 @@ describe("TerminalComposer", () => {
 
     await vi.waitFor(() => {
       expect(textarea.value).toBe("");
+      expect(onClose).toHaveBeenCalledTimes(1);
     });
   });
 
@@ -131,9 +166,10 @@ describe("TerminalComposer", () => {
     expect(sendKeyPress).not.toHaveBeenCalled();
   });
 
-  it("shows an alert and keeps the text when sendText resolves ok:false", async () => {
+  it("keeps open with text and alerts when sendText resolves ok:false without delivery", async () => {
+    const onClose = vi.fn();
     sendText.mockResolvedValueOnce({ error: "boom", ok: false });
-    renderComposer();
+    renderComposer({ onClose });
 
     const textarea = screen.getByTestId(
       "terminal-composer-input"
@@ -150,15 +186,17 @@ describe("TerminalComposer", () => {
       );
     });
     expect(textarea.value).toBe("fix bug");
+    expect(onClose).not.toHaveBeenCalled();
   });
 
-  it("clears the draft when text was delivered but Return failed", async () => {
+  it("clears draft, alerts, and closes when textDelivered but Return failed", async () => {
+    const onClose = vi.fn();
     sendText.mockResolvedValueOnce({
       error: "terminal surface not ready",
       ok: false,
       textDelivered: true,
     });
-    renderComposer();
+    renderComposer({ onClose, panelId: "t-delivered" });
 
     const textarea = screen.getByTestId(
       "terminal-composer-input"
@@ -169,32 +207,35 @@ describe("TerminalComposer", () => {
     await vi.waitFor(() => {
       expect(textarea.value).toBe("");
       expect(showAppAlert).toHaveBeenCalled();
+      expect(onClose).toHaveBeenCalledTimes(1);
     });
+
+    cleanup();
+    renderComposer({ panelId: "t-delivered" });
+    expect(
+      (screen.getByTestId("terminal-composer-input") as HTMLTextAreaElement)
+        .value
+    ).toBe("");
   });
 
-  it("passes through control keys via sendKeyPress, not sendText", async () => {
+  it("does not sendKeyPress empty navigation keys; only Ctrl+C passthroughs", async () => {
     renderComposer();
 
     const textarea = screen.getByTestId(
       "terminal-composer-input"
     ) as HTMLTextAreaElement;
 
-    fireEvent.keyDown(textarea, { key: "ArrowDown" });
-    await vi.waitFor(() => {
-      expect(sendKeyPress).toHaveBeenCalledWith({
-        keycode: APPKIT_KEYCODE.arrowDown,
-        panelId: "t-1",
-      });
-    });
+    for (const key of [
+      "ArrowUp",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowRight",
+      "Tab",
+    ]) {
+      fireEvent.keyDown(textarea, { key });
+    }
+    expect(sendKeyPress).not.toHaveBeenCalled();
     expect(sendText).not.toHaveBeenCalled();
-
-    fireEvent.keyDown(textarea, { key: "Escape" });
-    await vi.waitFor(() => {
-      expect(sendKeyPress).toHaveBeenCalledWith({
-        keycode: APPKIT_KEYCODE.escape,
-        panelId: "t-1",
-      });
-    });
 
     fireEvent.keyDown(textarea, { ctrlKey: true, key: "c" });
     await vi.waitFor(() => {
@@ -208,7 +249,15 @@ describe("TerminalComposer", () => {
     sendKeyPress.mockClear();
     fireEvent.change(textarea, { target: { value: "fix bug" } });
     fireEvent.keyDown(textarea, { key: "ArrowDown" });
-    expect(sendKeyPress).not.toHaveBeenCalled();
+    fireEvent.keyDown(textarea, { ctrlKey: true, key: "c" });
+    await vi.waitFor(() => {
+      expect(sendKeyPress).toHaveBeenCalledTimes(1);
+      expect(sendKeyPress).toHaveBeenCalledWith({
+        keycode: APPKIT_KEYCODE.c,
+        mods: GHOSTTY_MODS.ctrl,
+        panelId: "t-1",
+      });
+    });
   });
 
   it("activates the overlay on focus and reports height 0 after unmount", () => {
@@ -226,16 +275,19 @@ describe("TerminalComposer", () => {
   });
 
   it("ignores Enter and does not pass through control keys while an IME composition is in progress", () => {
-    renderComposer();
+    const onClose = vi.fn();
+    renderComposer({ onClose });
 
     const textarea = screen.getByTestId(
       "terminal-composer-input"
     ) as HTMLTextAreaElement;
     fireEvent.change(textarea, { target: { value: "fix bug" } });
     fireEvent.keyDown(textarea, { isComposing: true, key: "Enter" });
+    fireEvent.keyDown(textarea, { isComposing: true, key: "Escape" });
 
     expect(sendText).not.toHaveBeenCalled();
     expect(sendKeyPress).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("disables the textarea and the send button when disabled", () => {
@@ -246,7 +298,7 @@ describe("TerminalComposer", () => {
   });
 
   it("releases the composer overlay when it becomes disabled while focused", () => {
-    const { onHeightChange, view } = renderComposer();
+    const { onClose, onHeightChange, view } = renderComposer();
     const textarea = screen.getByTestId("terminal-composer-input");
 
     fireEvent.focus(textarea);
@@ -259,6 +311,7 @@ describe("TerminalComposer", () => {
         bottomOffsetPx={0}
         disabled
         isActive
+        onClose={onClose}
         onHeightChange={onHeightChange}
         panelId="t-1"
       />
@@ -268,7 +321,7 @@ describe("TerminalComposer", () => {
   });
 
   it("preserves another overlay when the unfocused composer becomes disabled", () => {
-    const { onHeightChange, view } = renderComposer();
+    const { onClose, onHeightChange, view } = renderComposer();
 
     useTerminalStore.getState().activateOverlay("other");
     view.rerender(
@@ -276,6 +329,7 @@ describe("TerminalComposer", () => {
         bottomOffsetPx={0}
         disabled
         isActive
+        onClose={onClose}
         onHeightChange={onHeightChange}
         panelId="t-1"
       />
@@ -284,25 +338,58 @@ describe("TerminalComposer", () => {
     expect(useTerminalStore.getState().activeOverlayId).toBe("other");
   });
 
-  it("registers a keyboard takeover that focuses the textarea and claims overlay", () => {
-    renderComposer();
+  it("surface takeover persists draft, calls onClose, returns false, and does not focus textarea", () => {
+    const onClose = vi.fn();
+    const { view } = renderComposer({ onClose, panelId: "t-takeover" });
 
     const textarea = screen.getByTestId(
       "terminal-composer-input"
     ) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "drafted" } });
     textarea.blur();
-    useTerminalStore.getState().deactivateOverlay("terminal-composer:t-1");
+    useTerminalStore
+      .getState()
+      .deactivateOverlay("terminal-composer:t-takeover");
     expect(document.activeElement).not.toBe(textarea);
 
-    expect(terminalComposerTakeoverFocus("t-1")).toBe(true);
-    expect(document.activeElement).toBe(textarea);
-    expect(useTerminalStore.getState().activeOverlayId).toBe(
-      "terminal-composer:t-1"
-    );
+    expect(terminalComposerTakeoverFocus("t-takeover", "surface")).toBe(false);
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(document.activeElement).not.toBe(textarea);
+
+    view.unmount();
+    renderComposer({ panelId: "t-takeover" });
+    expect(
+      (screen.getByTestId("terminal-composer-input") as HTMLTextAreaElement)
+        .value
+    ).toBe("drafted");
   });
 
-  it("takeover callback returns false and does not focus the textarea when disabled", () => {
-    renderComposer({ disabled: true });
+  it("activate takeover refocuses the textarea and does not close", () => {
+    const onClose = vi.fn();
+    renderComposer({ onClose, panelId: "t-activate" });
+
+    const textarea = screen.getByTestId(
+      "terminal-composer-input"
+    ) as HTMLTextAreaElement;
+    fireEvent.change(textarea, { target: { value: "keep open" } });
+    textarea.blur();
+    useTerminalStore
+      .getState()
+      .deactivateOverlay("terminal-composer:t-activate");
+    expect(document.activeElement).not.toBe(textarea);
+
+    expect(terminalComposerTakeoverFocus("t-activate", "activate")).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+    expect(document.activeElement).toBe(textarea);
+    expect(useTerminalStore.getState().activeOverlayId).toBe(
+      "terminal-composer:t-activate"
+    );
+    expect(textarea.value).toBe("keep open");
+  });
+
+  it("surface takeover still returns false when disabled and closes for TUI click-through", () => {
+    const onClose = vi.fn();
+    renderComposer({ disabled: true, onClose });
 
     const textarea = screen.getByTestId(
       "terminal-composer-input"
@@ -311,26 +398,21 @@ describe("TerminalComposer", () => {
     textarea.blur();
     expect(document.activeElement).not.toBe(textarea);
 
-    expect(terminalComposerTakeoverFocus("t-1")).toBe(false);
+    expect(terminalComposerTakeoverFocus("t-1", "surface")).toBe(false);
     expect(document.activeElement).not.toBe(textarea);
+    expect(onClose).toHaveBeenCalledTimes(1);
   });
 
-  it("takeover callback returns true and focuses the textarea when not disabled", () => {
-    renderComposer({ disabled: false });
+  it("activate takeover returns false when disabled and does not close", () => {
+    const onClose = vi.fn();
+    renderComposer({ disabled: true, onClose });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    expect(textarea.disabled).toBe(false);
-    textarea.blur();
-    expect(document.activeElement).not.toBe(textarea);
-
-    expect(terminalComposerTakeoverFocus("t-1")).toBe(true);
-    expect(document.activeElement).toBe(textarea);
+    expect(terminalComposerTakeoverFocus("t-1", "activate")).toBe(false);
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("releases the composer overlay when the panel becomes inactive", () => {
-    const { onHeightChange, view } = renderComposer();
+    const { onClose, onHeightChange, view } = renderComposer();
     const textarea = screen.getByTestId("terminal-composer-input");
     fireEvent.focus(textarea);
     expect(useTerminalStore.getState().activeOverlayId).toBe(
@@ -342,11 +424,45 @@ describe("TerminalComposer", () => {
         bottomOffsetPx={0}
         disabled={false}
         isActive={false}
+        onClose={onClose}
         onHeightChange={onHeightChange}
         panelId="t-1"
       />
     );
 
     expect(useTerminalStore.getState().activeOverlayId).toBeNull();
+  });
+
+  it("bumped focusRequest refocuses an already-open composer", async () => {
+    const onClose = vi.fn();
+    const onHeightChange = vi.fn();
+    const { view } = renderComposer({ onClose, onHeightChange });
+
+    const textarea = screen.getByTestId(
+      "terminal-composer-input"
+    ) as HTMLTextAreaElement;
+    textarea.blur();
+    useTerminalStore.getState().deactivateOverlay("terminal-composer:t-1");
+    expect(document.activeElement).not.toBe(textarea);
+
+    view.rerender(
+      <TerminalComposer
+        bottomOffsetPx={0}
+        disabled={false}
+        focusRequest={1}
+        isActive
+        onClose={onClose}
+        onHeightChange={onHeightChange}
+        panelId="t-1"
+      />
+    );
+
+    await vi.waitFor(() => {
+      expect(document.activeElement).toBe(textarea);
+    });
+    expect(useTerminalStore.getState().activeOverlayId).toBe(
+      "terminal-composer:t-1"
+    );
+    expect(onClose).not.toHaveBeenCalled();
   });
 });

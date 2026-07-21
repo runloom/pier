@@ -237,8 +237,8 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     if (props.api.component !== "terminal") {
       return;
     }
-    // Agent Composer 接管期间：点已激活 tab 也要回到输入框，不能只把键盘交回 native。
-    if (terminalComposerTakeoverFocus(props.api.id)) {
+    // Rich Input 打开时：点已激活 tab 应 refocus 输入框，不能只把键盘交回 native。
+    if (terminalComposerTakeoverFocus(props.api.id, "activate")) {
       return;
     }
     requestTerminalFocusIntent(props.api.id);

@@ -68,7 +68,6 @@ export const DEFAULT_TERMINAL_CURSOR_STYLE = "block";
 export const DEFAULT_TERMINAL_CURSOR_BLINK = true;
 export const DEFAULT_TERMINAL_SCROLLBACK_MB = 64;
 export const DEFAULT_TERMINAL_PASTE_PROTECTION = true;
-export const DEFAULT_AGENT_COMPOSER_ENABLED = true;
 export const DEFAULT_TERMINAL_NEW_CWD_POLICY = "activeTerminal";
 export const DEFAULT_APP_QUIT_CONFIRMATION_MODE = "hasActivity";
 export const DEFAULT_WINDOW_ZOOM_LEVEL = 0;
@@ -123,7 +122,6 @@ export const projectPreferencesSchema = z.object({
   agentCommandOverrides: z
     .partialRecord(agentKindSchema, z.string())
     .default({}),
-  agentComposerEnabled: z.boolean().default(DEFAULT_AGENT_COMPOSER_ENABLED),
   worktreeRootPath: z.string().max(1024).default(""),
   /** 是否向已安装 agent 的官方 hook 配置里注入 Pier agent 状态 hook (opt-out, 默认开; 关闭即卸载)。 */
   agentStatusHooks: z.boolean().default(true),

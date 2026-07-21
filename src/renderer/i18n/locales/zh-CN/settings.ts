@@ -152,9 +152,6 @@ export const settings = {
     defaultAgentDesc: "“启动默认智能体”动作启动的默认智能体程序",
     agentPermissionMode: "权限确认方式",
     agentPermissionModeDesc: "新建智能体时，统一设置是否自动跳过权限确认",
-    agentComposer: "智能体输入框",
-    agentComposerDesc:
-      "智能体运行时，在终端底部显示输入框，像聊天一样编辑整句再发送。回车发送，Shift+回车换行。",
   },
   terminal: {
     cursorStyle: {

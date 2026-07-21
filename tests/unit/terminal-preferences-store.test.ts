@@ -18,7 +18,6 @@ describe("terminal-preferences.store", () => {
       terminalCursorBlink: true,
       terminalScrollbackMb: 64,
       terminalPasteProtection: true,
-      agentComposerEnabled: true,
       terminalNewCwdPolicy: "activeTerminal",
       ...snapshot,
     }));
@@ -83,23 +82,6 @@ describe("terminal-preferences.store", () => {
       scrollbackLimitBytes: 64_000_000,
       pasteProtection: true,
     });
-  });
-
-  it("setAgentComposerEnabled 走 preferences.update 并回写快照", async () => {
-    const pier = installPierApi();
-    const { initTerminalPreferences, useTerminalPreferencesStore } =
-      await import("@/stores/terminal-preferences.store.ts");
-
-    await initTerminalPreferences();
-
-    await useTerminalPreferencesStore.getState().setAgentComposerEnabled(false);
-
-    expect(pier.update).toHaveBeenCalledWith({
-      agentComposerEnabled: false,
-    });
-    expect(useTerminalPreferencesStore.getState().agentComposerEnabled).toBe(
-      false
-    );
   });
 
   it("订阅跨窗口偏好变化并应用运行时配置", async () => {

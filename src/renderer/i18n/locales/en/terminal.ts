@@ -20,9 +20,9 @@ export const terminal = {
     waiting: "Awaiting confirmation",
   },
   composer: {
-    keyHint: "⏎ send · ⇧⏎ newline · Esc interrupt",
-    label: "Agent composer",
-    placeholder: "Type anything",
+    keyHint: "⏎ send · ⇧⏎ newline · Esc close",
+    label: "Rich Input",
+    placeholder: "Type here; sends into the terminal session",
     send: "Send",
     sendFailed: "Failed to send to terminal",
   },

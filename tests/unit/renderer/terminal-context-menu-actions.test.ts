@@ -17,6 +17,7 @@ import { registerRunActions } from "@/lib/actions/run-actions.ts";
 import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
 import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
 import { registerTerminalActions } from "@/panel-kits/terminal/register-actions.ts";
+import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { useTaskRunSelectionStore } from "@/stores/task-run-selection.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -192,6 +193,7 @@ describe("terminal content context menu actions", () => {
     spawnTask.mockClear();
     dispatchEventSpy.mockClear();
     searchOpenRequestHandler = null;
+    useForegroundActivityStore.setState({ activities: {}, ts: 0 });
     useTaskRunSelectionStore.setState({ selectedRunIdsByPanel: {} });
     useWorkspaceStore
       .getState()
@@ -207,6 +209,7 @@ describe("terminal content context menu actions", () => {
     for (const dispose of disposers.splice(0)) {
       dispose();
     }
+    useForegroundActivityStore.setState({ activities: {}, ts: 0 });
     useWorkspaceStore.getState().setApi(null);
     useTaskRunSelectionStore.setState({ selectedRunIdsByPanel: {} });
     useTaskRunsStore.setState({
@@ -561,6 +564,87 @@ describe("terminal content context menu actions", () => {
       })
     );
     expect(performOperation).not.toHaveBeenCalled();
+  });
+
+  it("hides open rich input when the active panel is not agent-eligible", async () => {
+    await registerActions();
+
+    const entries = buildMenuEntries("terminal/content", {
+      sourcePanelId: "terminal-1",
+      surface: "terminal/content",
+    });
+    const action = actionRegistry.get("pier.terminal.openAgentComposer");
+    if (!action) {
+      throw new Error("missing pier.terminal.openAgentComposer action");
+    }
+
+    expect(collectActionIds(entries)).not.toContain(
+      "pier.terminal.openAgentComposer"
+    );
+    expect(action.enabled?.()).toBe(false);
+  });
+
+  it("shows and dispatches open rich input for agent-eligible panels", async () => {
+    useForegroundActivityStore.setState({
+      activities: {
+        "terminal-1": {
+          agentId: "codex",
+          kind: "agent",
+          panelId: "terminal-1",
+          source: "hook",
+          spawnedAt: 1,
+          status: "processing",
+          subagentCount: 0,
+          updatedAt: 2,
+          windowId: "win-1",
+        },
+      },
+      ts: 1,
+    });
+    await registerActions();
+
+    const entries = buildMenuEntries("terminal/content", {
+      sourcePanelId: "terminal-1",
+      surface: "terminal/content",
+    });
+    const action = actionRegistry.get("pier.terminal.openAgentComposer");
+    if (!action) {
+      throw new Error("missing pier.terminal.openAgentComposer action");
+    }
+
+    const ids = collectActionIds(entries);
+    expect(ids).toEqual(
+      expect.arrayContaining([
+        "pier.terminal.search",
+        "pier.terminal.openAgentComposer",
+        "pier.terminal.clearScreen",
+      ])
+    );
+    const search = actionRegistry.get("pier.terminal.search");
+    const clear = actionRegistry.get("pier.terminal.clearScreen");
+    // Find(4) → Clear(5) → Preview Selected Text(6, files plugin) → Rich Input(7)
+    expect(search?.metadata?.sortOrder).toBe(4);
+    expect(clear?.metadata?.sortOrder).toBe(5);
+    expect(action.metadata?.sortOrder).toBe(7);
+    expect(ids.indexOf("pier.terminal.clearScreen")).toBe(
+      ids.indexOf("pier.terminal.search") + 1
+    );
+    expect(ids.indexOf("pier.terminal.openAgentComposer")).toBeGreaterThan(
+      ids.indexOf("pier.terminal.clearScreen")
+    );
+    expect(findAction(entries, "pier.terminal.openAgentComposer")?.label).toBe(
+      "打开增强输入"
+    );
+    expect(action.enabled?.()).toBe(true);
+
+    await action.handler();
+
+    expect(dispatchEventSpy).toHaveBeenCalledWith(
+      expect.objectContaining({
+        detail: { panelId: "terminal-1" },
+        type: "pier:terminal:open-composer",
+      })
+    );
   });
 
   it("opens terminal search from the application menu request", async () => {

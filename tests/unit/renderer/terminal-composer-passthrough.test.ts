@@ -12,13 +12,7 @@ const base = {
 };
 
 describe("passthroughKeyPressForKey", () => {
-  it("Esc / Ctrl+C 任何时候透传为真实按键（无论 empty）", () => {
-    expect(
-      passthroughKeyPressForKey({ ...base, empty: false, key: "Escape" })
-    ).toEqual({ keycode: APPKIT_KEYCODE.escape });
-    expect(
-      passthroughKeyPressForKey({ ...base, empty: true, key: "Escape" })
-    ).toEqual({ keycode: APPKIT_KEYCODE.escape });
+  it("only Ctrl+C passthroughs as a real keypress (empty or not)", () => {
     expect(
       passthroughKeyPressForKey({
         ...base,
@@ -37,43 +31,22 @@ describe("passthroughKeyPressForKey", () => {
     ).toEqual({ keycode: APPKIT_KEYCODE.c, mods: GHOSTTY_MODS.ctrl });
   });
 
-  it("Ctrl + 非 c 键不透传", () => {
+  it("does not passthrough Escape (composer closes instead)", () => {
+    expect(
+      passthroughKeyPressForKey({ ...base, empty: false, key: "Escape" })
+    ).toBeNull();
+    expect(
+      passthroughKeyPressForKey({ ...base, empty: true, key: "Escape" })
+    ).toBeNull();
+  });
+
+  it("Ctrl + non-c does not passthrough", () => {
     expect(
       passthroughKeyPressForKey({ ...base, ctrlKey: true, key: "a" })
     ).toBeNull();
   });
 
-  it("空输入时方向键 / Tab / Shift+Tab / Enter 透传为按键", () => {
-    expect(passthroughKeyPressForKey({ ...base, key: "ArrowUp" })).toEqual({
-      keycode: APPKIT_KEYCODE.arrowUp,
-    });
-    expect(passthroughKeyPressForKey({ ...base, key: "ArrowDown" })).toEqual({
-      keycode: APPKIT_KEYCODE.arrowDown,
-    });
-    expect(passthroughKeyPressForKey({ ...base, key: "ArrowRight" })).toEqual({
-      keycode: APPKIT_KEYCODE.arrowRight,
-    });
-    expect(passthroughKeyPressForKey({ ...base, key: "ArrowLeft" })).toEqual({
-      keycode: APPKIT_KEYCODE.arrowLeft,
-    });
-    expect(passthroughKeyPressForKey({ ...base, key: "Tab" })).toEqual({
-      keycode: APPKIT_KEYCODE.tab,
-    });
-    expect(
-      passthroughKeyPressForKey({ ...base, key: "Tab", shiftKey: true })
-    ).toEqual({
-      keycode: APPKIT_KEYCODE.tab,
-      mods: GHOSTTY_MODS.shift,
-    });
-    expect(passthroughKeyPressForKey({ ...base, key: "Enter" })).toEqual({
-      keycode: APPKIT_KEYCODE.return,
-    });
-    expect(
-      passthroughKeyPressForKey({ ...base, key: "Enter", shiftKey: true })
-    ).toBeNull();
-  });
-
-  it("非空输入时编辑键不透传（Enter 归发送路径）", () => {
+  it("does not bridge empty-draft navigation keys", () => {
     for (const key of [
       "ArrowUp",
       "ArrowDown",
@@ -82,13 +55,33 @@ describe("passthroughKeyPressForKey", () => {
       "Tab",
       "Enter",
     ]) {
+      expect(passthroughKeyPressForKey({ ...base, key })).toBeNull();
+    }
+    expect(
+      passthroughKeyPressForKey({ ...base, key: "Tab", shiftKey: true })
+    ).toBeNull();
+    expect(
+      passthroughKeyPressForKey({ ...base, key: "Enter", shiftKey: true })
+    ).toBeNull();
+  });
+
+  it("does not passthrough edit keys when draft is non-empty", () => {
+    for (const key of [
+      "ArrowUp",
+      "ArrowDown",
+      "ArrowLeft",
+      "ArrowRight",
+      "Tab",
+      "Enter",
+      "Escape",
+    ]) {
       expect(
         passthroughKeyPressForKey({ ...base, empty: false, key })
       ).toBeNull();
     }
   });
 
-  it("普通字符 / meta 组合不透传", () => {
+  it("does not passthrough plain chars or meta combos", () => {
     expect(passthroughKeyPressForKey({ ...base, key: "a" })).toBeNull();
     expect(
       passthroughKeyPressForKey({
@@ -100,6 +93,14 @@ describe("passthroughKeyPressForKey", () => {
     ).toBeNull();
     expect(
       passthroughKeyPressForKey({ ...base, key: "Escape", metaKey: true })
+    ).toBeNull();
+    expect(
+      passthroughKeyPressForKey({
+        ...base,
+        ctrlKey: true,
+        key: "c",
+        metaKey: true,
+      })
     ).toBeNull();
   });
 });

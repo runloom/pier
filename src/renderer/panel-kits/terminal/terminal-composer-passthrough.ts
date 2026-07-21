@@ -1,9 +1,9 @@
 import { APPKIT_KEYCODE, GHOSTTY_MODS } from "@shared/terminal-appkit-keys.ts";
 
 /**
- * Composer 接管键盘期间仍要送达 agent TUI 的控制键 → 真实按键事件。
- * 不得走 sendText（clipboard-paste）：Esc / Ctrl+C / CSI 会被破坏或 BP 包裹。
- * 返回 null = composer 自己消费（正常编辑 / 发送路径）。
+ * Composer 打开期间仍要送达 agent TUI 的控制键 → 真实按键事件。
+ * 仅 Ctrl+C 中断透传；Esc 由组件关闭路径处理；方向键/Tab/Enter 不再空草稿桥接。
+ * 返回 null = composer 自己消费（正常编辑 / 发送 / 关闭路径）。
  */
 export interface ComposerPassthroughKeyPress {
   keycode: number;
@@ -18,36 +18,11 @@ export function passthroughKeyPressForKey(input: {
   metaKey: boolean;
   shiftKey: boolean;
 }): ComposerPassthroughKeyPress | null {
-  if (input.metaKey) {
+  if (input.metaKey || input.altKey) {
     return null;
   }
-  if (input.ctrlKey) {
-    return input.key.toLowerCase() === "c"
-      ? { keycode: APPKIT_KEYCODE.c, mods: GHOSTTY_MODS.ctrl }
-      : null;
+  if (input.ctrlKey && input.key.toLowerCase() === "c") {
+    return { keycode: APPKIT_KEYCODE.c, mods: GHOSTTY_MODS.ctrl };
   }
-  if (input.key === "Escape") {
-    return { keycode: APPKIT_KEYCODE.escape };
-  }
-  if (!input.empty) {
-    return null;
-  }
-  switch (input.key) {
-    case "ArrowUp":
-      return { keycode: APPKIT_KEYCODE.arrowUp };
-    case "ArrowDown":
-      return { keycode: APPKIT_KEYCODE.arrowDown };
-    case "ArrowRight":
-      return { keycode: APPKIT_KEYCODE.arrowRight };
-    case "ArrowLeft":
-      return { keycode: APPKIT_KEYCODE.arrowLeft };
-    case "Tab":
-      return input.shiftKey
-        ? { keycode: APPKIT_KEYCODE.tab, mods: GHOSTTY_MODS.shift }
-        : { keycode: APPKIT_KEYCODE.tab };
-    case "Enter":
-      return input.shiftKey ? null : { keycode: APPKIT_KEYCODE.return };
-    default:
-      return null;
-  }
+  return null;
 }

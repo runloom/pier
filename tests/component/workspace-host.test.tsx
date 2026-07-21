@@ -175,7 +175,7 @@ function createDockviewApi(
     },
     addPanel: vi.fn(),
     fromJSON: vi.fn(),
-    hasMaximizedGroup: vi.fn(() => true),
+    hasMaximizedGroup: vi.fn((_reason?: string) => true),
     onDidActivePanelChange: vi.fn(
       (
         cb: (change: {
@@ -469,7 +469,7 @@ describe("WorkspaceHost", () => {
     requestTerminalFocusIntent("seed-panel");
     setTerminalBasePanel({ kind: "web" });
     vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
-    const takeoverFocus = vi.fn(() => true);
+    const takeoverFocus = vi.fn((_reason?: string) => true);
     registerTerminalComposerTakeover("terminal-2", takeoverFocus);
 
     web.api.isActive = false;
@@ -477,6 +477,7 @@ describe("WorkspaceHost", () => {
     dockview.emitActivePanelChange(terminal);
 
     expect(takeoverFocus).toHaveBeenCalledOnce();
+    expect(takeoverFocus).toHaveBeenCalledWith("activate");
     // takeover 命中时也把 basePanel 翻向该终端面板：宿主需要 anchor panel 才能
     // 定位「哪个终端要藏 hardware cursor」（web 浮层占用键盘期间）。
     expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
@@ -515,7 +516,7 @@ describe("WorkspaceHost", () => {
     requestTerminalFocusIntent("seed-panel");
     setTerminalBasePanel({ kind: "web" });
     vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
-    const takeoverFocus = vi.fn(() => false);
+    const takeoverFocus = vi.fn((_reason?: string) => false);
     registerTerminalComposerTakeover("terminal-2", takeoverFocus);
 
     web.api.isActive = false;
@@ -523,6 +524,7 @@ describe("WorkspaceHost", () => {
     dockview.emitActivePanelChange(terminal);
 
     expect(takeoverFocus).toHaveBeenCalledOnce();
+    expect(takeoverFocus).toHaveBeenCalledWith("activate");
     // 接管失败：requestTerminalFocusIntent 走原生路径，basePanel 翻向该终端面板。
     expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
       expect.objectContaining({
@@ -1219,12 +1221,13 @@ describe("WorkspaceHost", () => {
     setTerminalBasePanel({ kind: "web" });
     useTerminalStore.getState().activateOverlay("test-overlay");
     vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
-    const takeoverFocus = vi.fn(() => true);
+    const takeoverFocus = vi.fn((_reason?: string) => true);
     registerTerminalComposerTakeover("terminal-3", takeoverFocus);
 
     focusRequestListener?.({ panelId: "terminal-3", reason: "mouse-down" });
 
     expect(takeoverFocus).toHaveBeenCalledOnce();
+    expect(takeoverFocus).toHaveBeenCalledWith("surface");
     // yieldToTerminal 被跳过：共存浮层的 overlay 焦点没被清空。
     expect(useTerminalStore.getState().activeOverlayId).toBe("test-overlay");
     // requestTerminalFocusIntent 被跳过：basePanel 没有翻向该终端面板。
@@ -1262,12 +1265,13 @@ describe("WorkspaceHost", () => {
     setTerminalBasePanel({ kind: "web" });
     useTerminalStore.getState().activateOverlay("test-overlay");
     vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
-    const takeoverFocus = vi.fn(() => false);
+    const takeoverFocus = vi.fn((_reason?: string) => false);
     registerTerminalComposerTakeover("terminal-3", takeoverFocus);
 
     focusRequestListener?.({ panelId: "terminal-3", reason: "mouse-down" });
 
     expect(takeoverFocus).toHaveBeenCalledOnce();
+    expect(takeoverFocus).toHaveBeenCalledWith("surface");
     // 接管失败：yieldToTerminal 生效，共存浮层的 overlay 焦点被清空。
     expect(useTerminalStore.getState().activeOverlayId).toBeNull();
     // 接管失败：requestTerminalFocusIntent 走原生路径，basePanel 翻向该终端面板。

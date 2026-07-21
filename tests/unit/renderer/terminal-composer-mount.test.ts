@@ -1,48 +1,88 @@
 import { describe, expect, it } from "vitest";
-import { shouldMountAgentComposer } from "../../../src/renderer/panel-kits/terminal/terminal-composer-mount.ts";
+import {
+  canUseAgentComposer,
+  shouldMountAgentComposer,
+} from "../../../src/renderer/panel-kits/terminal/terminal-composer-mount.ts";
 
-describe("shouldMountAgentComposer", () => {
-  it("仅在开关开启 + agent 活动 + 非恢复态面板时挂载", () => {
+describe("canUseAgentComposer", () => {
+  it("is true only for agent activity on a non-restored panel", () => {
     expect(
-      shouldMountAgentComposer({
+      canUseAgentComposer({
         activityKind: "agent",
-        enabled: true,
         restored: false,
       })
     ).toBe(true);
+  });
+
+  it("is false for shell, task, undefined activity, or restored panels", () => {
+    expect(
+      canUseAgentComposer({
+        activityKind: "shell",
+        restored: false,
+      })
+    ).toBe(false);
+    expect(
+      canUseAgentComposer({
+        activityKind: "task",
+        restored: false,
+      })
+    ).toBe(false);
+    expect(
+      canUseAgentComposer({
+        activityKind: undefined,
+        restored: false,
+      })
+    ).toBe(false);
+    expect(
+      canUseAgentComposer({
+        activityKind: "agent",
+        restored: true,
+      })
+    ).toBe(false);
+  });
+});
+
+describe("shouldMountAgentComposer", () => {
+  it("mounts only when open and eligible", () => {
+    expect(
+      shouldMountAgentComposer({
+        activityKind: "agent",
+        open: true,
+        restored: false,
+      })
+    ).toBe(true);
+  });
+
+  it("does not mount when open is false even if eligible", () => {
+    expect(
+      shouldMountAgentComposer({
+        activityKind: "agent",
+        open: false,
+        restored: false,
+      })
+    ).toBe(false);
+  });
+
+  it("does not mount when ineligible even if open", () => {
     expect(
       shouldMountAgentComposer({
         activityKind: "shell",
-        enabled: true,
+        open: true,
         restored: false,
       })
     ).toBe(false);
     expect(
       shouldMountAgentComposer({
-        activityKind: "task",
-        enabled: true,
-        restored: false,
+        activityKind: "agent",
+        open: true,
+        restored: true,
       })
     ).toBe(false);
     expect(
       shouldMountAgentComposer({
         activityKind: undefined,
-        enabled: true,
+        open: true,
         restored: false,
-      })
-    ).toBe(false);
-    expect(
-      shouldMountAgentComposer({
-        activityKind: "agent",
-        enabled: false,
-        restored: false,
-      })
-    ).toBe(false);
-    expect(
-      shouldMountAgentComposer({
-        activityKind: "agent",
-        enabled: true,
-        restored: true,
       })
     ).toBe(false);
   });

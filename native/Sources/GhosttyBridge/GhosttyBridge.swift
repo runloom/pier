@@ -136,6 +136,7 @@ final class EventRouterView: NSView {
         "Mod+Shift+Equal",
         "Mod+Shift+KeyD",
         "Mod+Shift+KeyP",
+        "Mod+Shift+KeyI",
         "Mod+Shift+KeyA",
     ]
 

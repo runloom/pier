@@ -93,9 +93,9 @@ function syncActivePanelScope(panel: WorkspacePanel | null | undefined): void {
     // 缺失这一步时 basePanel 停在初始 web，宿主无法定位需要藏 hardware cursor 的
     // 那个终端（webRequestCount>0 但没有 anchor panel）。
     setTerminalBasePanel({ kind: "terminal", panelId: panel.id });
-    // Agent Composer 接管期间：激活终端面板时焦点重定向到输入卡片；
+    // Rich Input 打开时：激活终端面板应 refocus 输入框（reason=activate）；
     // 未接管则走原生焦点归还路径。
-    if (!terminalComposerTakeoverFocus(panel.id)) {
+    if (!terminalComposerTakeoverFocus(panel.id, "activate")) {
       requestTerminalFocusIntent(panel.id);
     }
   } else {
@@ -338,8 +338,9 @@ export function WorkspaceHost() {
             }
           );
           if (result.ok) {
-            // Agent Composer 接管期间：点击终端重定向聚焦输入卡片，键盘不回 native。
-            if (terminalComposerTakeoverFocus(req.panelId)) {
+            // 点终端内容：Rich Input 应关闭并归还 TUI（reason=surface）。
+            // 若 handler 返回 true 表示仍接管（兼容旧行为）；false 则走原生归还。
+            if (terminalComposerTakeoverFocus(req.panelId, "surface")) {
               syncTerminalPresentation(event.api, "dockview-active-panel");
               return;
             }

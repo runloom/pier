@@ -219,7 +219,6 @@ describe("projectPreferencesSchema — agent preferences", () => {
     expect(parsed.disabledAgentIds).toEqual([]);
     expect(parsed.agentDefaultArgs).toEqual({});
     expect(parsed.agentDefaultEnv).toEqual({});
-    expect(parsed.agentComposerEnabled).toBe(true);
   });
 
   it("接受 agent 偏好值", () => {

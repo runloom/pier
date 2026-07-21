@@ -13,7 +13,6 @@ import { AgentsSection } from "@/pages/settings/components/agents-section.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import type * as AppDialogStoreModule from "@/stores/app-dialog.store.ts";
-import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 import { makeFakePreferences } from "../../setup/preferences-fixture.ts";
 
 const appDialogMocks = vi.hoisted(() => ({
@@ -88,7 +87,6 @@ describe("AgentsSection", () => {
       isRefreshing: false,
     });
     useAgentPreferencesStore.setState(DEFAULT_PREFERENCES);
-    useTerminalPreferencesStore.setState({ agentComposerEnabled: true });
 
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -451,28 +449,6 @@ describe("AgentsSection", () => {
     const combobox = screen.getByRole("combobox", { name: "Permission Mode" });
     expect(combobox).toHaveTextContent("Manual");
     expect(screen.queryByText("Mixed")).not.toBeInTheDocument();
-  });
-
-  it("renders the agent composer switch enabled by default", () => {
-    render(<AgentsSection />);
-
-    const composerSwitch = screen.getByRole("switch", {
-      name: "Agent composer",
-    });
-    expect(composerSwitch).toHaveAttribute("id", "settings-agent-composer");
-    expect(composerSwitch).toHaveAttribute("aria-checked", "true");
-  });
-
-  it("persists disabling the agent composer", async () => {
-    render(<AgentsSection />);
-
-    fireEvent.click(screen.getByRole("switch", { name: "Agent composer" }));
-
-    await waitFor(() => {
-      expect(window.pier.preferences.update).toHaveBeenCalledWith({
-        agentComposerEnabled: false,
-      });
-    });
   });
 
   it("insets agent list dividers to the card content gutter", async () => {

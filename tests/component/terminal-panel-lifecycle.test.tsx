@@ -28,10 +28,7 @@ import {
   resetTerminalLaunchConfirmationsForTest,
   waitForTerminalLaunch,
 } from "@/lib/workspace/terminal-launch-confirmation.ts";
-import {
-  TERMINAL_COMPOSER_GAP_PX,
-  TERMINAL_COMPOSER_RESERVE_HEIGHT_PX,
-} from "@/panel-kits/terminal/terminal-composer.tsx";
+import { TERMINAL_COMPOSER_GAP_PX } from "@/panel-kits/terminal/terminal-composer.tsx";
 import { hasRegisteredTerminalAnchor } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
@@ -52,7 +49,6 @@ import {
   resetFreshTerminalPanelsForTests,
   setFreshTerminalInitialInput,
 } from "@/stores/terminal-panel-session-hints.store.ts";
-import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 
@@ -365,13 +361,6 @@ describe("TerminalPanel lifecycle", () => {
       uiFontFamily: "",
     });
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
-    // composer 偏好显式复位为 store 的真实默认值（enabled=true），让本文件
-    // 覆盖 TerminalPanel 里 composerMounted 挂载门 + 像素公式的集成路径；这里
-    // 必须显式设置而非依赖 store 初始值，因为 zustand store 是模块级单例，
-    // 会在用例间残留上一个用例写入的值。极少数用例与 composer 的
-    // ResizeObserver / 自动聚焦行为冲突，那些用例单独在各自的 describe 里
-    // 关掉，而不是在此处整体禁用。
-    useTerminalPreferencesStore.setState({ agentComposerEnabled: true });
     // M4: composerMounted 现在还要求本面板前台活动是 agent；默认无活动，
     // 需要挂载 composer 的用例显式注入（见 agentActivityFor）。
     useForegroundActivityStore.setState({ activities: {}, ts: 0 });
@@ -2312,7 +2301,15 @@ describe("TerminalPanel lifecycle", () => {
   });
 
   describe("composer integration (mount gate + pixel formula)", () => {
-    it("mounts the composer when enabled with an agent activity and no restored result, and unmounts it once the preference flips off", async () => {
+    const openComposer = (panelId = "terminal-1") => {
+      window.dispatchEvent(
+        new CustomEvent("pier:terminal:open-composer", {
+          detail: { panelId },
+        })
+      );
+    };
+
+    it("does not mount the composer for agent activity alone until opened", async () => {
       useForegroundActivityStore.setState({
         activities: { "terminal-1": agentActivityFor("terminal-1") },
         ts: 1,
@@ -2321,21 +2318,22 @@ describe("TerminalPanel lifecycle", () => {
       render(<TerminalPanel {...createPanelProps()} />);
 
       await waitFor(() => {
-        expect(screen.getByTestId("terminal-composer")).toBeInTheDocument();
+        expect(window.pier.terminal.create).toHaveBeenCalledWith(
+          expect.objectContaining({ panelId: "terminal-1" })
+        );
       });
+      expect(screen.queryByTestId("terminal-composer")).toBeNull();
 
       act(() => {
-        useTerminalPreferencesStore.setState({
-          agentComposerEnabled: false,
-        });
+        openComposer();
       });
 
       await waitFor(() => {
-        expect(screen.queryByTestId("terminal-composer")).toBeNull();
+        expect(screen.getByTestId("terminal-composer")).toBeInTheDocument();
       });
     });
 
-    it("does not mount the composer when enabled and no restored result but the panel has no agent activity", async () => {
+    it("does not mount the composer when opened without an agent activity", async () => {
       render(<TerminalPanel {...createPanelProps()} />);
 
       await waitFor(() => {
@@ -2343,10 +2341,15 @@ describe("TerminalPanel lifecycle", () => {
           expect.objectContaining({ panelId: "terminal-1" })
         );
       });
+
+      act(() => {
+        openComposer();
+      });
+
       expect(screen.queryByTestId("terminal-composer")).toBeNull();
     });
 
-    it("does not mount the composer when enabled but the panel's foreground activity is a shell, not an agent", async () => {
+    it("does not mount the composer when opened on a shell activity", async () => {
       useForegroundActivityStore.setState({
         activities: {
           "terminal-1": {
@@ -2367,6 +2370,11 @@ describe("TerminalPanel lifecycle", () => {
           expect.objectContaining({ panelId: "terminal-1" })
         );
       });
+
+      act(() => {
+        openComposer();
+      });
+
       expect(screen.queryByTestId("terminal-composer")).toBeNull();
     });
 
@@ -2378,6 +2386,10 @@ describe("TerminalPanel lifecycle", () => {
       const props = createPanelProps({ isActive: true });
 
       render(<TerminalPanel {...props} />);
+
+      act(() => {
+        openComposer();
+      });
 
       await waitFor(() => {
         expect(screen.getByTestId("terminal-composer")).toBeInTheDocument();
@@ -2418,6 +2430,10 @@ describe("TerminalPanel lifecycle", () => {
 
       render(<TerminalPanel {...props} />);
 
+      act(() => {
+        openComposer();
+      });
+
       await waitFor(() => {
         expect(screen.getByTestId("terminal-composer")).toBeInTheDocument();
       });
@@ -2440,7 +2456,7 @@ describe("TerminalPanel lifecycle", () => {
       );
     });
 
-    it("does not mount the composer for a restored (exited) agent session even with a matching agent activity", async () => {
+    it("does not mount the composer for a restored (exited) agent session even when opened", async () => {
       useForegroundActivityStore.setState({
         activities: { "terminal-1": agentActivityFor("terminal-1") },
         ts: 1,
@@ -2467,10 +2483,15 @@ describe("TerminalPanel lifecycle", () => {
       render(<TerminalPanel {...createPanelProps({ params: { context } })} />);
 
       await screen.findByTestId("terminal-agent-result");
+
+      act(() => {
+        openComposer();
+      });
+
       expect(screen.queryByTestId("terminal-composer")).toBeNull();
     });
 
-    it("does not mount the composer for a restored (completed) task session even with a matching agent activity", async () => {
+    it("does not mount the composer for a restored (completed) task session even when opened", async () => {
       useForegroundActivityStore.setState({
         activities: { "terminal-1": agentActivityFor("terminal-1") },
         ts: 1,
@@ -2497,10 +2518,15 @@ describe("TerminalPanel lifecycle", () => {
       );
 
       await screen.findByTestId("terminal-task-result");
+
+      act(() => {
+        openComposer();
+      });
+
       expect(screen.queryByTestId("terminal-composer")).toBeNull();
     });
 
-    it("derives --terminal-content-bottom from the composer's measured height, falling back to the status inset alone", async () => {
+    it("derives --terminal-content-bottom from the composer's measured height", async () => {
       useForegroundActivityStore.setState({
         activities: { "terminal-1": agentActivityFor("terminal-1") },
         ts: 1,
@@ -2511,12 +2537,11 @@ describe("TerminalPanel lifecycle", () => {
         "terminal-composer";
       const previousGetBoundingClientRect =
         HTMLElement.prototype.getBoundingClientRect;
-      let stubbedComposerHeight: number | null = composerHeightPx;
       HTMLElement.prototype.getBoundingClientRect = function () {
-        if (isComposerRoot(this) && stubbedComposerHeight !== null) {
+        if (isComposerRoot(this)) {
           return {
-            bottom: stubbedComposerHeight,
-            height: stubbedComposerHeight,
+            bottom: composerHeightPx,
+            height: composerHeightPx,
             left: 0,
             right: 0,
             top: 0,
@@ -2530,6 +2555,11 @@ describe("TerminalPanel lifecycle", () => {
       };
 
       const { container } = render(<TerminalPanel {...createPanelProps()} />);
+
+      act(() => {
+        openComposer();
+      });
+
       const contentBottom = () =>
         (
           container.querySelector(
@@ -2540,31 +2570,6 @@ describe("TerminalPanel lifecycle", () => {
       await waitFor(() => {
         expect(contentBottom()).toBe(
           `${24 + composerHeightPx + TERMINAL_COMPOSER_GAP_PX * 2}px`
-        );
-      });
-
-      act(() => {
-        useTerminalPreferencesStore.setState({
-          agentComposerEnabled: false,
-        });
-      });
-      await waitFor(() => {
-        expect(screen.queryByTestId("terminal-composer")).toBeNull();
-        expect(contentBottom()).toBe("24px");
-      });
-
-      // jsdom 默认高度为 0：composer 重新挂载但尚未测得实高时，用预留高度缩排
-      // native，避免卡片叠在未打洞区域上点不中。
-      stubbedComposerHeight = null;
-      act(() => {
-        useTerminalPreferencesStore.setState({
-          agentComposerEnabled: true,
-        });
-      });
-      await waitFor(() => {
-        expect(screen.getByTestId("terminal-composer")).toBeInTheDocument();
-        expect(contentBottom()).toBe(
-          `${24 + TERMINAL_COMPOSER_RESERVE_HEIGHT_PX + TERMINAL_COMPOSER_GAP_PX * 2}px`
         );
       });
     });

@@ -35,11 +35,22 @@ export const TERMINAL_COMPOSER_RESERVE_HEIGHT_PX = 44;
 /** textarea 实测高度超过该值视为多行态（单行 36px + 容差）。 */
 const MULTILINE_THRESHOLD_PX = 44;
 
+/** Per-panel draft retained across on-demand open/close. */
+const drafts = new Map<string, string>();
+
+export function resetTerminalComposerDraftsForTests(): void {
+  drafts.clear();
+}
+
 interface TerminalComposerProps {
   bottomOffsetPx: number;
   disabled: boolean;
+  /** Bumped on every Open Rich Input request so already-open composer refocuses. */
+  focusRequest?: number;
   /** 面板是否为当前激活 tab；切回时补聚焦。 */
   isActive: boolean;
+  /** Panel-owned close: Esc / send success / terminal click takeover. */
+  onClose: () => void;
   onHeightChange: (heightPx: number) => void;
   panelId: string;
 }
@@ -66,7 +77,9 @@ function focusComposerInput(
 export function TerminalComposer({
   bottomOffsetPx,
   disabled,
+  focusRequest = 0,
   isActive,
+  onClose,
   onHeightChange,
   panelId,
 }: TerminalComposerProps) {
@@ -74,7 +87,7 @@ export function TerminalComposer({
   const overlayId = `terminal-composer:${panelId}`;
   const rootRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [value, setValue] = useState("");
+  const [value, setValue] = useState(() => drafts.get(panelId) ?? "");
   // 胶囊 ↔ 卡片形态：单行是 rounded-full 胶囊，内容撑高后切换为
   // 圆角卡片 + 快捷键提示行。由 textarea 实测高度驱动（field-sizing 自动增高）。
   const [multiline, setMultiline] = useState(false);
@@ -85,6 +98,10 @@ export function TerminalComposer({
   const hitOverlay = useTerminalOverlayRegistration(
     `terminal-composer-hit:${panelId}`
   );
+  const valueRef = useRef(value);
+  valueRef.current = value;
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
 
   // 实测高度上报：field-sizing 自动增高经此驱动内容区 inset；卸载归零。
   useLayoutEffect(() => {
@@ -111,12 +128,16 @@ export function TerminalComposer({
     };
   }, [hitOverlay, onHeightChange]);
 
-  // 接管注册：workspace-host「焦点归还终端」路径先询问这里，重定向到输入框。
-  // 返回值取自元素自身的 disabled（而非闭包捕获的 props.disabled），
-  // 避免回调在下一次渲染前被调用时读到陈旧值。
+  // activate：面板激活 / 点 tab → 仍打开则 refocus 输入框。
+  // surface：点终端内容 → 存草稿关闭，返回 false 让 host 归还 TUI。
   useEffect(
     () =>
-      registerTerminalComposerTakeover(panelId, () => {
+      registerTerminalComposerTakeover(panelId, (reason) => {
+        if (reason === "surface") {
+          drafts.set(panelId, valueRef.current);
+          onCloseRef.current();
+          return false;
+        }
         const el = textareaRef.current;
         if (!el || el.disabled) {
           return false;
@@ -126,13 +147,18 @@ export function TerminalComposer({
     [overlayId, panelId]
   );
 
-  // 挂载 / 启用 / 切回激活面板：接管键盘（agent 态的主输入）。
-  // rAF 再补一次，覆盖「点 tab 抢焦点」发生在 takeover 之后的竞态。
+  // 挂载 / 启用 / 切回激活面板 / 再次 Open：接管键盘。
+  // focusRequest 有意列入依赖：已打开时再触发打开仍会 refocus（对齐搜索栏）。
+  // rAF 再补一次，覆盖「点 tab 抢焦点」发生在 focus 之后的竞态。
   useEffect(() => {
     if (disabled || !isActive) {
       return;
     }
+    const request = focusRequest;
     const focusNow = () => {
+      if (request !== focusRequest) {
+        return;
+      }
       const el = textareaRef.current;
       if (!el || el.disabled) {
         return;
@@ -144,7 +170,7 @@ export function TerminalComposer({
     return () => {
       cancelAnimationFrame(raf);
     };
-  }, [disabled, isActive, overlayId]);
+  }, [disabled, focusRequest, isActive, overlayId]);
 
   // 其它浮层（搜索栏等）抢走键盘时 blur 保持视觉一致；卡片保持可见。
   // 仅在「另一个」overlay 激活时 blur——activeOverlayId === null 时不要抢跑，
@@ -204,12 +230,16 @@ export function TerminalComposer({
       .sendText({ panelId, submit: true, text })
       .then((result) => {
         if (result.ok) {
+          drafts.delete(panelId);
           setValue("");
+          onCloseRef.current();
           return;
         }
-        // 文本已进 agent 草稿区：清空避免重试重复粘贴；空 Enter 可再提交。
+        // 文本已进 agent 草稿区：清空避免重试重复粘贴并关闭。
         if (result.textDelivered) {
+          drafts.delete(panelId);
           setValue("");
+          onCloseRef.current();
         }
         reportSendFailure(t, result.error ?? "");
       })
@@ -220,6 +250,12 @@ export function TerminalComposer({
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLTextAreaElement>) => {
     if (event.nativeEvent.isComposing) {
+      return;
+    }
+    if (event.key === "Escape") {
+      event.preventDefault();
+      drafts.set(panelId, valueRef.current);
+      onCloseRef.current();
       return;
     }
     const keyPress = passthroughKeyPressForKey({

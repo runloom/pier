@@ -226,7 +226,10 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     statusContext,
     pluginRegistryEntries
   );
+  const restored = Boolean(restoredAgentResult || restoredTaskResult);
   const {
+    closeComposer,
+    composerFocusRequest,
     composerMounted,
     onComposerHeightChange,
     statusInsetPx,
@@ -236,7 +239,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     api,
     hasStatusBar,
     panelId,
-    restored: Boolean(restoredAgentResult || restoredTaskResult),
+    restored,
   });
   const openTaskResultContextMenu = useCallback(
     (event: ReactMouseEvent<HTMLDivElement>) => {
@@ -470,7 +473,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
         <TerminalComposer
           bottomOffsetPx={statusInsetPx}
           disabled={!nativeTerminalReady || Boolean(error)}
+          focusRequest={composerFocusRequest}
           isActive={api.isActive}
+          onClose={closeComposer}
           onHeightChange={onComposerHeightChange}
           panelId={panelId}
         />
