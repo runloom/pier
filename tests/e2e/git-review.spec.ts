@@ -726,7 +726,22 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       .getByTestId("pierre-diff-root")
       .evaluate((root) => root.getBoundingClientRect().height);
     expect(shortDiffHeight).toBeGreaterThan(0);
+    // Tree may virtualize after binary navigation — search before clicking.
+    await page
+      .getByRole("button", {
+        name: /Find in changed files|在变更文件中查找/u,
+      })
+      .click();
+    const appTreeSearch = page.getByRole("textbox", {
+      name: /Find in changed files|在变更文件中查找/u,
+    });
+    await appTreeSearch.fill("app.tsx");
+    await appTreeSearch.press("Enter");
+    await expect(page.getByRole("treeitem", { name: /app\.tsx/u })).toBeVisible(
+      { timeout: 10_000 }
+    );
     await page.getByRole("treeitem", { name: /app\.tsx/u }).click();
+    await appTreeSearch.press("Escape").catch(() => undefined);
 
     const diffContainers = page.locator("diffs-container");
     await expect
