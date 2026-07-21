@@ -4,11 +4,7 @@
 // Output: /tmp/pier-projects-ui/shots/*.png + manifest.json
 
 import { execFileSync } from "node:child_process";
-import {
-  mkdirSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { mkdirSync, rmSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { _electron as electron } from "playwright";
 
@@ -167,9 +163,12 @@ async function main() {
   await win.waitForTimeout(500);
 
   await activateTab(win, /环境|Environment/);
-  await win.getByText(/Setup command|Setup 命令|启动命令/).waitFor({
-    timeout: 8_000,
-  }).catch(() => undefined);
+  await win
+    .getByText(/Setup command|Setup 命令|启动命令/)
+    .waitFor({
+      timeout: 8000,
+    })
+    .catch(() => undefined);
   await shot(win, "detail-environment", "详情 · 环境 Tab（line tabs）");
 
   await activateTab(win, /技能|Skills/);
@@ -177,9 +176,13 @@ async function main() {
   await shot(win, "detail-skills", "详情 · 技能 Tab");
 
   await activateTab(win, /常规|General/);
-  await win.getByText("发现路径").or(win.getByText("Discovery paths")).first().waitFor({
-    timeout: 10_000,
-  });
+  await win
+    .getByText("发现路径")
+    .or(win.getByText("Discovery paths"))
+    .first()
+    .waitFor({
+      timeout: 10_000,
+    });
   await shot(win, "detail-general", "详情 · 常规 Tab（发现路径 + 删除）");
 
   await activateTab(win, /技能|Skills/);
