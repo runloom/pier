@@ -1,5 +1,6 @@
 import type { IDockviewPanelProps } from "dockview-react";
 import type { LucideIcon } from "lucide-react";
+import { AlertTriangle } from "lucide-react";
 import type { FunctionComponent } from "react";
 import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
 import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
@@ -8,6 +9,7 @@ import {
   withPanelResourceBoundary,
   withPluginPanelHostBoundary,
 } from "./panel-resource-boundary.tsx";
+import { PanelTransferUnavailablePanel } from "./panel-transfer-unavailable-panel.tsx";
 import { welcomePanelKit } from "./welcome-panel.tsx";
 
 type PanelKind = "terminal" | "web";
@@ -27,6 +29,11 @@ export const panelKits = {
   workbench: workbenchPanelKit,
   terminal: terminalPanelKit,
   welcome: welcomePanelKit,
+  "panel-transfer-unavailable": {
+    component: PanelTransferUnavailablePanel,
+    icon: AlertTriangle,
+    kind: "web",
+  },
 } satisfies Record<string, PanelKitMetadata>;
 
 const corePanelKitByComponent: Readonly<Record<string, PanelKitMetadata>> =

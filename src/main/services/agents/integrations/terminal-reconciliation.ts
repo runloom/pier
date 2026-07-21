@@ -14,6 +14,11 @@ export interface AgentTerminalReconciler {
   releasePanel(panelId: string, windowId?: string): void;
   releaseWindow(windowId: string): void;
   retainPanels(windowId: string, activePanelIds: readonly string[]): void;
+  transferPanelOwnership(input: {
+    panelId: string;
+    sourceWindowId: string;
+    targetWindowId: string;
+  }): void;
 }
 
 export function createAgentTerminalReconciler(args: {
@@ -49,6 +54,11 @@ export function createAgentTerminalReconciler(args: {
     },
     releaseWindow: (windowId) => {
       for (const reconciler of reconcilers) reconciler.releaseWindow(windowId);
+    },
+    transferPanelOwnership: (input) => {
+      for (const reconciler of reconcilers) {
+        reconciler.transferPanelOwnership(input);
+      }
     },
   };
 }

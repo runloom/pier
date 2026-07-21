@@ -8,19 +8,11 @@ import {
 } from "./environment.ts";
 import { fileCommandSchemas } from "./file-commands.ts";
 import { gitCommandSchemas } from "./git-commands.ts";
+import { panelTransferPierCommandSchemas } from "./panel-transfer.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
-import {
-  appRelaunchCommandSchema,
-  pluginCatalogListCommandSchema,
-  pluginCheckUpdatesCommandSchema,
-  pluginDevOverrideClearCommandSchema,
-  pluginDevOverrideSetCommandSchema,
-  pluginInstallCommandSchema,
-  pluginRollbackCommandSchema,
-  pluginUninstallCommandSchema,
-  pluginUpdateCommandSchema,
-} from "./plugin-commands.ts";
+import { managedPluginCommandSchemas } from "./plugin-commands.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
+import { projectPreferencesPatchSchema } from "./preferences-patch.ts";
 import { taskSpawnModeSchema } from "./tasks.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
@@ -44,8 +36,6 @@ import {
 } from "./worktree.ts";
 export const pierProtocolVersionSchema = z.literal(1);
 export type PierProtocolVersion = z.infer<typeof pierProtocolVersionSchema>;
-
-import { projectPreferencesPatchSchema } from "./preferences-patch.ts";
 
 export const pierCommandPlacementSchema = z.enum([
   "active-tab",
@@ -266,15 +256,8 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   aiGenerateTextRequestSchema.extend({
     type: z.literal("ai.generateText"),
   }),
-  pluginCatalogListCommandSchema,
-  pluginCheckUpdatesCommandSchema,
-  pluginInstallCommandSchema,
-  pluginUpdateCommandSchema,
-  pluginRollbackCommandSchema,
-  pluginUninstallCommandSchema,
-  pluginDevOverrideSetCommandSchema,
-  pluginDevOverrideClearCommandSchema,
-  appRelaunchCommandSchema,
+  ...managedPluginCommandSchemas,
+  ...panelTransferPierCommandSchemas,
 ]);
 
 export type PierCommand = z.infer<typeof pierCommandSchema>;

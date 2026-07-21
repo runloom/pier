@@ -14,21 +14,25 @@ function focusRendererTarget(win: AppWindow): void {
   win.webContents.focus();
 }
 
+/**
+ * Deliver a renderer command envelope.
+ * Returns the target webContents.id on success, or null when no usable window.
+ */
 export function sendRendererCommand(
   envelope: unknown,
   windowId?: string,
   options: { focus?: boolean } = {}
-): boolean {
+): number | null {
   if (windowId) {
     const target = windowManager.get(windowId);
     if (!target || target.isDestroyed()) {
-      return false;
+      return null;
     }
     if (options.focus) {
       focusRendererTarget(target);
     }
     target.webContents.send(RENDERER_COMMAND_CHANNEL, envelope);
-    return true;
+    return target.webContents.id;
   }
 
   const focused =
@@ -36,11 +40,11 @@ export function sendRendererCommand(
     windowManager.getAll().find((win) => !win.isDestroyed()) ??
     null;
   if (!focused || focused.isDestroyed()) {
-    return false;
+    return null;
   }
   if (options.focus) {
     focusRendererTarget(focused);
   }
   focused.webContents.send(RENDERER_COMMAND_CHANNEL, envelope);
-  return true;
+  return focused.webContents.id;
 }

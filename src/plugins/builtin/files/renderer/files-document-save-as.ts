@@ -84,7 +84,10 @@ export function createFilesDocumentSaveAsActions(input: {
       if (nextDocument.dirty || nextDocument.durabilityUnknown) {
         persistDiskDraft(nextDocument);
       } else {
-        removePersistedDiskDraft(request.target.root, request.target.path);
+        removePersistedDiskDraft(targetId, {
+          path: request.target.path,
+          root: request.target.root,
+        });
       }
       input.notify();
       return nextDocument;

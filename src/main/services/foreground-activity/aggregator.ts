@@ -10,6 +10,7 @@ import {
   isInCooldown,
 } from "./aggregator-hook-scopes.ts";
 import { keysForPanel, panelKey } from "./aggregator-panel-key.ts";
+import { transferPanelOwnership as rekeyPanelOwnership } from "./aggregator-panel-transfer.ts";
 import {
   logAgentEventDropped,
   logClearForeignHook,
@@ -100,7 +101,6 @@ export function createForegroundActivityAggregator(
     }
     return slot;
   }
-
   function dropSlotIfEmpty(key: string): void {
     const slot = slots.get(key);
     if (slot && !slot.command && !slot.hook) {
@@ -457,6 +457,12 @@ export function createForegroundActivityAggregator(
         scheduleEmit();
       }
       pruneExpiredCooldowns();
+    },
+    transferPanelOwnership(input) {
+      rekeyPanelOwnership(
+        { hookCooldownUntil, panelCooldownUntil, scheduleEmit, slots },
+        input
+      );
     },
 
     onChange(cb) {

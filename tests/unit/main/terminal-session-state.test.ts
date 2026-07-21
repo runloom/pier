@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type * as TerminalSessionStateModule from "@main/state/terminal-session-state.ts";
+import type * as TerminalSessionTransferModule from "@main/state/terminal-session-transfer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -36,10 +37,12 @@ function context(root: string, updatedAt = 1_772_000_000_000): PanelContext {
 }
 
 async function loadTerminalSessionState(): Promise<
-  typeof TerminalSessionStateModule
+  typeof TerminalSessionStateModule & typeof TerminalSessionTransferModule
 > {
   // Dynamic import is required because each test resets modules and mocks electron app.getPath before this state module resolves userData.
-  return await import("@main/state/terminal-session-state.ts");
+  const state = await import("@main/state/terminal-session-state.ts");
+  const transfer = await import("@main/state/terminal-session-transfer.ts");
+  return { ...state, ...transfer };
 }
 
 describe("terminal session state", () => {
@@ -886,5 +889,141 @@ describe("terminal session state", () => {
     const { reconcileOrphanedRunningTasks } = await loadTerminalSessionState();
 
     await expect(reconcileOrphanedRunningTasks()).resolves.toBe(0);
+  });
+  it("transferPanelOwnership CAS moves panel between window records and flushes", async () => {
+    const {
+      getTransferSession,
+      readTerminalPanelSession,
+      rollbackTransferPanelOwnership,
+      transferPanelOwnership,
+      updateTerminalPanelContext,
+      updateTerminalPanelTask,
+    } = await loadTerminalSessionState();
+
+    const pier = context("/Users/xyz/ABC/pier");
+    await updateTerminalPanelContext("source-record", "terminal-1", pier);
+    await updateTerminalPanelTask(
+      "source-record",
+      "terminal-1",
+      taskMetadata({ runId: "run-1", status: "running" })
+    );
+
+    const view = await getTransferSession("source-record", "terminal-1");
+    expect(view).toMatchObject({
+      lifecycleId: "run-1",
+      panelId: "terminal-1",
+      recordId: "source-record",
+    });
+
+    const token = await transferPanelOwnership({
+      expectedLifecycleId: "run-1",
+      panelId: "terminal-1",
+      sourceRecordId: "source-record",
+      targetRecordId: "target-record",
+    });
+
+    await expect(
+      readTerminalPanelSession("source-record", "terminal-1")
+    ).resolves.toBeNull();
+    await expect(
+      readTerminalPanelSession("target-record", "terminal-1")
+    ).resolves.toMatchObject({
+      context: pier,
+      task: { runId: "run-1", status: "running" },
+    });
+
+    await rollbackTransferPanelOwnership(token);
+    await expect(
+      readTerminalPanelSession("source-record", "terminal-1")
+    ).resolves.toMatchObject({ task: { runId: "run-1" } });
+    await expect(
+      readTerminalPanelSession("target-record", "terminal-1")
+    ).resolves.toBeNull();
+  });
+
+  it("transferPanelOwnership rejects lifecycle mismatch and target conflicts", async () => {
+    const mod = await loadTerminalSessionState();
+    const pier = context("/Users/xyz/ABC/pier");
+    await mod.updateTerminalPanelContext("source-record", "terminal-1", pier);
+    await mod.updateTerminalPanelTask(
+      "source-record",
+      "terminal-1",
+      taskMetadata({ runId: "run-1", status: "running" })
+    );
+    await mod.updateTerminalPanelContext("target-record", "terminal-1", pier);
+
+    await expect(
+      mod.transferPanelOwnership({
+        expectedLifecycleId: "other-run",
+        panelId: "terminal-1",
+        sourceRecordId: "source-record",
+        targetRecordId: "target-record",
+      })
+    ).rejects.toMatchObject({ code: "lifecycle_mismatch" });
+
+    await expect(
+      mod.transferPanelOwnership({
+        panelId: "terminal-1",
+        sourceRecordId: "source-record",
+        targetRecordId: "target-record",
+      })
+    ).rejects.toMatchObject({ code: "target_conflict" });
+
+    expect(mod.TerminalPanelOwnershipConflictError).toBeTypeOf("function");
+  });
+
+  it("allows empty lifecycleId for shell sessions during ownership transfer", async () => {
+    const {
+      readTerminalPanelSession,
+      transferPanelOwnership,
+      updateTerminalPanelContext,
+    } = await loadTerminalSessionState();
+
+    const pier = context("/Users/xyz/ABC/pier");
+    await updateTerminalPanelContext("source-record", "shell-1", pier);
+
+    await transferPanelOwnership({
+      expectedLifecycleId: "",
+      panelId: "shell-1",
+      sourceRecordId: "source-record",
+      targetRecordId: "target-record",
+    });
+
+    await expect(
+      readTerminalPanelSession("target-record", "shell-1")
+    ).resolves.toMatchObject({ context: pier });
+  });
+
+  it("ensureTerminalPanelSession materializes an entry without clobbering metadata", async () => {
+    const {
+      ensureTerminalPanelSession,
+      readTerminalPanelSession,
+      transferPanelOwnership,
+      updateTerminalPanelContext,
+    } = await loadTerminalSessionState();
+
+    // Bare entry: metadata-less live terminal becomes transferable.
+    await ensureTerminalPanelSession("record-a", "shell-bare");
+    await expect(
+      readTerminalPanelSession("record-a", "shell-bare")
+    ).resolves.toMatchObject({ updatedAt: expect.any(String) });
+
+    await transferPanelOwnership({
+      expectedLifecycleId: "",
+      panelId: "shell-bare",
+      sourceRecordId: "record-a",
+      targetRecordId: "record-b",
+    });
+    await expect(
+      readTerminalPanelSession("record-b", "shell-bare")
+    ).resolves.not.toBeNull();
+
+    // Ensure after metadata write is a no-op.
+    const pier = context("/Users/xyz/ABC/pier");
+    await updateTerminalPanelContext("record-a", "shell-keep", pier);
+    await ensureTerminalPanelSession("record-a", "shell-keep");
+    await expect(
+      readTerminalPanelSession("record-a", "shell-keep")
+    ).resolves.toMatchObject({ context: pier });
   });
 });

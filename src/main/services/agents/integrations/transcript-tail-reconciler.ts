@@ -41,6 +41,12 @@ export interface TranscriptTailReconciler {
     predicate: (panelId: string, windowId: string) => boolean
   ): void;
   releaseWindow(windowId: string): void;
+  /** 跨窗口拖拽后把 panel 作用域迁到目标窗口（保留 pending / owner / 回合上下文）。 */
+  transferPanelOwnership(input: {
+    panelId: string;
+    sourceWindowId: string;
+    targetWindowId: string;
+  }): void;
 }
 
 export interface TranscriptTailReconcilerConfig {
@@ -413,6 +419,40 @@ export function createTranscriptTailReconciler(
         }
       }
       for (const panelId of panelIds) releaseScope(panelId, windowId);
+    },
+    transferPanelOwnership({ panelId, sourceWindowId, targetWindowId }) {
+      if (
+        panelId.trim().length === 0 ||
+        sourceWindowId.trim().length === 0 ||
+        targetWindowId.trim().length === 0 ||
+        sourceWindowId === targetWindowId
+      ) {
+        return;
+      }
+      const sourceKey = `${sourceWindowId}\0${panelId}`;
+      const targetKey = `${targetWindowId}\0${panelId}`;
+      const pending = pendingScopeTokens.get(sourceKey);
+      if (pending) {
+        pendingScopeTokens.delete(sourceKey);
+        pendingScopeTokens.set(targetKey, pending);
+      }
+      for (const entry of entries.values()) {
+        const owner = entry.owners.get(sourceKey);
+        if (!owner) {
+          continue;
+        }
+        entry.owners.delete(sourceKey);
+        const moved = { ...owner, windowId: targetWindowId };
+        entry.owners.set(targetKey, moved);
+        for (const [turnId, context] of entry.contextsByTurnId) {
+          if (scopeKey(context) === sourceKey) {
+            entry.contextsByTurnId.set(turnId, {
+              ...context,
+              windowId: targetWindowId,
+            });
+          }
+        }
+      }
     },
   };
 }

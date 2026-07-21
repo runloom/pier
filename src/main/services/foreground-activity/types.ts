@@ -93,6 +93,15 @@ export interface ForegroundActivityAggregator {
     windowId: string,
     task: { taskId: string; label: string; runId: string }
   ): void;
+  /**
+   * Move panel activity slot from source electron window id to target.
+   * Does not invent ownerWindowId; keys stay `${windowId}\0${panelId}`.
+   */
+  transferPanelOwnership(input: {
+    panelId: string;
+    sourceWindowId: string;
+    targetWindowId: string;
+  }): void;
   /** 窗口销毁：清该窗口全部活动（含定时器）+ 冷却记录。 */
   windowClosed(windowId: string): void;
 }

@@ -169,4 +169,35 @@ describe("retainTerminalPanelSessions", () => {
       readTerminalPanelSession("record-main", "term-b")
     ).resolves.toBeNull();
   });
+  it("respects lease predicate and does not drop leased panels", async () => {
+    const {
+      readTerminalPanelSession,
+      retainTerminalPanelSessions,
+      updateTerminalPanelAgent,
+    } = await loadTerminalSessionState();
+
+    await updateTerminalPanelAgent(
+      "record-main",
+      "term-leased",
+      runningAgent()
+    );
+    await updateTerminalPanelAgent(
+      "record-main",
+      "term-drop",
+      runningAgent({
+        resume: { capturedAt: 1, sessionId: "x", source: "hook" },
+      })
+    );
+
+    await retainTerminalPanelSessions("record-main", [], {
+      isLeased: (panelId) => panelId === "term-leased",
+    });
+
+    await expect(
+      readTerminalPanelSession("record-main", "term-leased")
+    ).resolves.not.toBeNull();
+    await expect(
+      readTerminalPanelSession("record-main", "term-drop")
+    ).resolves.toBeNull();
+  });
 });

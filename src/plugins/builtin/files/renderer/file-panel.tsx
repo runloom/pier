@@ -42,7 +42,6 @@ import {
 import { FileTreeSidebar } from "./file-tree-sidebar.tsx";
 import {
   type FilesDocumentPanelSource,
-  type FileViewMode,
   isDiskSourceRootAllowed,
   sameFilesDocumentPanelSource,
 } from "./files-document-types.ts";
@@ -55,9 +54,9 @@ import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts
 import type { FilesWatchHub } from "./files-watch-hub.ts";
 import { useFilePanelSaveAs } from "./use-file-panel-save-as.ts";
 import { useFilesDocument } from "./use-files-document.ts";
+import { useFilesPanelTransferView } from "./use-files-panel-transfer-view.ts";
 
 let nextInlinePanelSessionId = 1;
-
 function FilePanelContent({
   runtimeController,
   runtimeContext,
@@ -85,27 +84,29 @@ function FilePanelContent({
     stableSourceRef.current = null;
   }
   const stableSource = stableSourceRef.current;
-  const [mode, setMode] = useState<FileViewMode>("source");
   const [searchRequest, setSearchRequest] = useState(0);
   const root = filePanelProjectRoot(props.params?.context);
   const [treeCollapsed, setTreeCollapsed] = useProjectFileTreeCollapsed(root);
   const projectName = root ? projectNameFromRoot(root) : null;
   const panelSessionIdRef = useRef<string | null>(null);
-  if (panelSessionIdRef.current === null) {
-    panelSessionIdRef.current = `inline-panel:${nextInlinePanelSessionId}`;
-    nextInlinePanelSessionId += 1;
-  }
+  panelSessionIdRef.current ??= `inline-panel:${nextInlinePanelSessionId++}`;
   const panelSessionId = props.api?.id ?? panelSessionIdRef.current;
   const sourceAllowed =
     stableSource?.kind === "untitled" ||
     (stableSource?.kind === "disk" &&
       isDiskSourceRootAllowed(stableSource.root, props.params?.context));
+  const { mode, setMode } = useFilesPanelTransferView({
+    controller,
+    panelSessionId,
+    stableSource,
+  });
   useLayoutEffect(() => {
     if (!(stableSource && sourceAllowed)) {
       return;
     }
     return controller.acquirePanel(panelSessionId, stableSource);
   }, [controller, panelSessionId, sourceAllowed, stableSource]);
+
   // group 绑定必须是「活的」:dockview 拖拽跨组不 remount 组件,只 reparent
   // 内容 DOM。render 期快照会指向旧 group(薄壳空白 + 旧组视图泄漏),
   // 所以经 onDidGroupChange 把 groupId 提升为 state,变化时靠下方 effect 的

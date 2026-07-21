@@ -32,4 +32,18 @@ export const workspace = {
     trigger: "在此面板组中新建",
     startAgentFailed: "无法启动智能体",
   },
+  panelTransfer: {
+    dropFailedTitle: "无法移动该标签",
+    dropFailedBody: "该标签无法移动到目标窗口，原标签仍保留在原窗口。",
+    dropFailedUnknownComponentBody:
+      "该标签无法移动到另一个窗口，原标签仍保留在原窗口。",
+    unsupportedTitle: "该标签不能移动到其他窗口",
+    unsupportedBody: "这类标签暂不支持跨窗口移动，它仍保留在原窗口中。",
+    unavailableSourceTitle: "标签在此窗口已不可用",
+    unavailableSourceBody:
+      "标签已移动到另一个窗口，但原窗口未能移除它。如有需要，请手动关闭。",
+    unavailableTargetTitle: "标签无法恢复",
+    unavailableTargetBody:
+      "标签已移动到本窗口，但其来源在此窗口不可用。请重新启用相关扩展并重载以恢复。",
+  },
 } as const;

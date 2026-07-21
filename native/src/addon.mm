@@ -28,6 +28,10 @@ extern "C" {
     void ghostty_bridge_set_terminal_config(void* nsWindow, const char* cursorStyle,
                                             bool cursorBlink, double scrollbackLimitBytes,
                                             bool pasteProtection);
+    bool ghostty_bridge_move_terminal(const char* fromNativePanelId,
+                                     const char* toNativePanelId,
+                                     void* toNsWindow,
+                                     long toBrowserWindowId);
     bool ghostty_bridge_close(const char* panelId);
     bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
     bool ghostty_bridge_send_text(const char* panelId, const char* text);
@@ -263,6 +267,53 @@ static Napi::Value JsResetTerminalOutput(const Napi::CallbackInfo& info) {
     );
 }
 
+
+
+static Napi::Value JsMoveTerminal(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    std::string fromNativePanelId;
+    std::string toNativePanelId;
+    Napi::Value parentHandle;
+    long toBrowserWindowId = -1;
+
+    if (info.Length() >= 1 && info[0].IsObject() && !info[0].IsBuffer()) {
+        Napi::Object input = info[0].As<Napi::Object>();
+        Napi::Value fromValue = input.Get("fromNativePanelId");
+        Napi::Value toValue = input.Get("toNativePanelId");
+        parentHandle = input.Get("toParentHandle");
+        Napi::Value browserValue = input.Get("toBrowserWindowId");
+        if (!fromValue.IsString() || !toValue.IsString() || !browserValue.IsNumber()) {
+            return Napi::Boolean::New(env, false);
+        }
+        fromNativePanelId = fromValue.As<Napi::String>().Utf8Value();
+        toNativePanelId = toValue.As<Napi::String>().Utf8Value();
+        toBrowserWindowId = static_cast<long>(browserValue.As<Napi::Number>().Int64Value());
+    } else if (info.Length() >= 4) {
+        if (!info[0].IsString() || !info[1].IsString() || !info[3].IsNumber()) {
+            return Napi::Boolean::New(env, false);
+        }
+        fromNativePanelId = info[0].As<Napi::String>().Utf8Value();
+        toNativePanelId = info[1].As<Napi::String>().Utf8Value();
+        parentHandle = info[2];
+        toBrowserWindowId = static_cast<long>(info[3].As<Napi::Number>().Int64Value());
+    } else {
+        return Napi::Boolean::New(env, false);
+    }
+
+    if (parentHandle.IsEmpty() || parentHandle.IsNull() || parentHandle.IsUndefined()
+        || !parentHandle.IsBuffer()) {
+        return Napi::Boolean::New(env, false);
+    }
+    NSWindow* win = WindowFromHandle(parentHandle);
+    if (!win) return Napi::Boolean::New(env, false);
+    bool ok = ghostty_bridge_move_terminal(
+        fromNativePanelId.c_str(),
+        toNativePanelId.c_str(),
+        (__bridge void*)win,
+        toBrowserWindowId
+    );
+    return Napi::Boolean::New(env, ok);
+}
 
 static Napi::Value JsClose(const Napi::CallbackInfo& info) {
     std::string panelId = info[0].As<Napi::String>().Utf8Value();
@@ -872,6 +923,42 @@ static Napi::Object TerminalWindowStateResult(
     return result;
 }
 
+// Synchronous mouse-button state for Path B panel-transfer finishDrag.
+// HTML5 drag sessions suppress keydown / mouse-up delivery into the source
+// WebContents; NSEvent.pressedMouseButtons is a process-wide query that does
+// not depend on event delivery, so dragend can distinguish Escape/cancel
+// (button still down) from a real release (button up).
+static Napi::Value JsIsLeftMouseButtonDown(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    const NSUInteger buttons = [NSEvent pressedMouseButtons];
+    const bool down = (buttons & (1ULL << 0)) != 0;
+    return Napi::Boolean::New(env, down);
+}
+
+// True window z-order (front → back) for panel-transfer cursor classification.
+// Electron exposes no z-order API; overlapping windows must resolve drop
+// ownership by what the user actually sees on top.
+static Napi::Value JsOrderedWindowNumbers(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    NSArray<NSWindow*>* ordered = [NSApp orderedWindows];
+    Napi::Array result = Napi::Array::New(env, ordered.count);
+    for (NSUInteger i = 0; i < ordered.count; i++) {
+        result.Set(static_cast<uint32_t>(i),
+                   Napi::Number::New(env, static_cast<double>(ordered[i].windowNumber)));
+    }
+    return result;
+}
+
+static Napi::Value JsWindowNumberFor(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 1 || !info[0].IsBuffer()) {
+        return Napi::Number::New(env, -1);
+    }
+    NSWindow* win = WindowFromHandle(info[0]);
+    if (!win) return Napi::Number::New(env, -1);
+    return Napi::Number::New(env, static_cast<double>(win.windowNumber));
+}
+
 static Napi::Value JsApplyTerminalWindowState(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     NSWindow* win = WindowFromHandle(info[0]);
@@ -910,6 +997,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setupWindow",     Napi::Function::New(env, JsSetupWindow));
     exports.Set("createTerminal",  Napi::Function::New(env, JsCreateTerminal));
     exports.Set("createOutputTerminal", Napi::Function::New(env, JsCreateOutputTerminal));
+    exports.Set("moveTerminal", Napi::Function::New(env, JsMoveTerminal));
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
     exports.Set("performTerminalBindingAction", Napi::Function::New(env, JsPerformBindingAction));
     exports.Set("sendText", Napi::Function::New(env, JsSendText));
@@ -939,6 +1027,9 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setTerminalFont", Napi::Function::New(env, JsSetFontConfig));
     exports.Set("setTerminalConfig", Napi::Function::New(env, JsSetTerminalConfig));
     exports.Set("registerFonts", Napi::Function::New(env, JsRegisterFonts));
+    exports.Set("isLeftMouseButtonDown", Napi::Function::New(env, JsIsLeftMouseButtonDown));
+    exports.Set("orderedWindowNumbers", Napi::Function::New(env, JsOrderedWindowNumbers));
+    exports.Set("windowNumberFor", Napi::Function::New(env, JsWindowNumberFor));
     return exports;
 }
 

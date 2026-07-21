@@ -1,42 +1,22 @@
-import { type ChildProcess, execFile } from "node:child_process";
-import {
-  chmodSync,
-  existsSync,
-  mkdtempSync,
-  rmSync,
-  writeFileSync,
-} from "node:fs";
+import { chmodSync, existsSync, mkdtempSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { promisify } from "node:util";
 import {
   _electron as electron,
   expect,
   type Page,
   test,
 } from "@playwright/test";
+import {
+  type CliResult,
+  killAndWait,
+  OUT_MAIN,
+  removeDirectory,
+  runPierCliJson,
+} from "./terminal-e2e-harness.ts";
 
-const OUT_MAIN = join(
-  import.meta.dirname,
-  "..",
-  "..",
-  "out",
-  "main",
-  "index.js"
-);
-const PROJECT_ROOT = join(import.meta.dirname, "..", "..");
-const PIER_CLI = join(PROJECT_ROOT, "bin", "pier.mjs");
 const SCREENSHOT_PATH = "/tmp/pier-native-terminal-render.png";
-const execFileAsync = promisify(execFile);
-const APP_CLOSE_TIMEOUT_MS = 5000;
 const COMMAND_COMPLETION_TIMEOUT_MS = 30_000;
-const DIRECTORY_REMOVE_RETRIES = 10;
-const DIRECTORY_REMOVE_RETRY_DELAY_MS = 100;
-
-interface CliResult<T> {
-  data?: T;
-  ok: boolean;
-}
 
 interface TerminalOpenData {
   panelId: string;
@@ -61,54 +41,11 @@ interface RenderDebugSnapshot {
   };
 }
 
-async function runPierCliJson<T>(
-  userDataDir: string,
-  args: string[]
-): Promise<CliResult<T>> {
-  const { stdout } = await execFileAsync(
-    process.execPath,
-    [PIER_CLI, ...args, "--json"],
-    {
-      cwd: PROJECT_ROOT,
-      env: { ...process.env, PIER_USER_DATA_DIR: userDataDir },
-    }
-  );
-  return JSON.parse(stdout) as CliResult<T>;
-}
-
 async function renderSnapshot(win: Page): Promise<RenderDebugSnapshot> {
   return await win.evaluate(
     async () =>
       (await window.pier.terminal.debugSnapshot({})) as RenderDebugSnapshot
   );
-}
-
-async function killAndWait(child: ChildProcess): Promise<void> {
-  if (child.exitCode !== null || child.signalCode !== null) return;
-  const exited = new Promise<void>((resolve) => {
-    child.once("exit", () => resolve());
-  });
-  child.kill("SIGKILL");
-  let timer: ReturnType<typeof setTimeout> | undefined;
-  try {
-    await Promise.race([
-      exited,
-      new Promise<void>((resolve) => {
-        timer = setTimeout(resolve, APP_CLOSE_TIMEOUT_MS);
-      }),
-    ]);
-  } finally {
-    if (timer) clearTimeout(timer);
-  }
-}
-
-function removeDirectory(path: string): void {
-  rmSync(path, {
-    force: true,
-    maxRetries: DIRECTORY_REMOVE_RETRIES,
-    recursive: true,
-    retryDelay: DIRECTORY_REMOVE_RETRY_DELAY_MS,
-  });
 }
 
 function surfaceByPanelId(

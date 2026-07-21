@@ -14,6 +14,7 @@ import { peekTerminalPanelContext } from "../../state/terminal-session-state.ts"
 import {
   findAppWindowByElectronId,
   findInternalWindowId,
+  findWindowContext,
 } from "../../windows/window-identity.ts";
 import type { RendererCommandService } from "../renderer-command-service.ts";
 import { focusAgentByRef } from "./focus.ts";
@@ -31,6 +32,8 @@ export interface AgentRuntimeIndexService {
 export interface CreateAgentRuntimeIndexServiceArgs {
   rendererCommand: RendererCommandService;
   resolveInternalWindowId?(electronWindowId: string): string | null;
+  /** Session store scope (record UUID) — separate from the runtime window id. */
+  resolveSessionScope?(electronWindowId: string): string | null;
   snapshot(): ForegroundActivityBroadcast;
 }
 
@@ -48,10 +51,24 @@ function defaultResolveInternalWindowId(
   return findInternalWindowId(win);
 }
 
+/** Terminal session store scope (window record UUID), not the runtime id. */
+function defaultResolveSessionScope(electronWindowId: string): string | null {
+  const electronId = Number(electronWindowId);
+  if (!Number.isFinite(electronId)) {
+    return null;
+  }
+  const win = findAppWindowByElectronId(electronId);
+  if (!win || win.isDestroyed()) {
+    return null;
+  }
+  return findWindowContext(win)?.recordId ?? null;
+}
+
 export function createAgentRuntimeIndexService({
   snapshot,
   rendererCommand,
   resolveInternalWindowId = defaultResolveInternalWindowId,
+  resolveSessionScope = defaultResolveSessionScope,
 }: CreateAgentRuntimeIndexServiceArgs): AgentRuntimeIndexService {
   const listMachine = (
     options?: SortAgentIndexEntriesOptions
@@ -60,11 +77,11 @@ export function createAgentRuntimeIndexService({
     const entries = sortAgentIndexEntries(
       projectAgentActivities(broadcast.activities, {
         resolveContext: (electronWindowId, panelId) => {
-          const internalWindowId = resolveInternalWindowId(electronWindowId);
-          if (!internalWindowId) {
+          const sessionScope = resolveSessionScope(electronWindowId);
+          if (!sessionScope) {
             return null;
           }
-          const context = peekTerminalPanelContext(internalWindowId, panelId);
+          const context = peekTerminalPanelContext(sessionScope, panelId);
           if (!context) {
             return null;
           }

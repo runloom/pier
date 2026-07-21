@@ -1447,4 +1447,22 @@ describe("ForegroundActivityAggregator", () => {
       agg.dispose();
     });
   });
+  it("transferPanelOwnership moves slot to target window id", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.agentLaunched("1", "panel-a", "claude");
+    advance(250);
+    expect(agg.snapshot("1").activities).toHaveLength(1);
+
+    agg.transferPanelOwnership({
+      panelId: "panel-a",
+      sourceWindowId: "1",
+      targetWindowId: "2",
+    });
+    advance(100);
+
+    expect(agg.snapshot("1").activities).toHaveLength(0);
+    expect(agg.snapshot("2").activities).toHaveLength(1);
+    expect(agg.snapshot("2").activities[0]?.panelId).toBe("panel-a");
+    agg.dispose();
+  });
 });

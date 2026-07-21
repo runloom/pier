@@ -20,6 +20,10 @@ export function absoluteDiskSourcePath(root: string, path: string): string {
   return `${normalizedRoot}/${normalizedPath}`;
 }
 
+export function allocateExplicitDiskDocumentId(): string {
+  return `pier.files.file:${crypto.randomUUID()}`;
+}
+
 export function isSamePathOrDescendant(
   entryPath: string,
   path: string

@@ -53,6 +53,7 @@ function createService(args: {
   activities: ForegroundActivity[];
   ts?: number;
   resolveInternalWindowId?: (electronWindowId: string) => string | null;
+  resolveSessionScope?: (electronWindowId: string) => string | null;
   execute?: (command: RendererCommand) => Promise<RendererCommandResult>;
 }) {
   const execute =
@@ -79,6 +80,9 @@ function createService(args: {
       resolveInternalWindowId:
         args.resolveInternalWindowId ??
         ((electronWindowId) => `internal-${electronWindowId}`),
+      resolveSessionScope:
+        args.resolveSessionScope ??
+        ((electronWindowId) => `record-${electronWindowId}`),
     }),
   };
 }
@@ -124,9 +128,9 @@ describe("agent runtime index service", () => {
     ).toEqual(["p-other", "p-local"]);
   });
 
-  it("listMachine joins panel context via internal windowId", () => {
-    peekContext.mockImplementation((windowId: string, panelId: string) => {
-      expect(windowId).toBe("internal-11");
+  it("listMachine joins panel context via session scope (record id)", () => {
+    peekContext.mockImplementation((scope: string, panelId: string) => {
+      expect(scope).toBe("record-11");
       expect(panelId).toBe("panel-a");
       return { projectRootPath: "/tmp/pier", cwd: "/tmp/pier/src" };
     });
@@ -138,14 +142,14 @@ describe("agent runtime index service", () => {
           windowId: "11",
         }),
       ],
-      resolveInternalWindowId: () => "internal-11",
+      resolveSessionScope: () => "record-11",
     });
     const [entry] = service.listMachine().entries;
     expect(entry).toMatchObject({
       cwd: "/tmp/pier/src",
       projectRootPath: "/tmp/pier",
     });
-    expect(peekContext).toHaveBeenCalledWith("internal-11", "panel-a");
+    expect(peekContext).toHaveBeenCalledWith("record-11", "panel-a");
   });
 
   it("focus sends panel.focus with internal windowId", async () => {

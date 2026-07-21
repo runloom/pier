@@ -47,6 +47,25 @@ export interface NativeAddon {
     exitCode: number,
     runtimeMilliseconds: number
   ): boolean;
+  /**
+   * Path B panel-transfer: true when the primary (left) mouse button is
+   * currently pressed. Queried at dragend to distinguish Escape/system cancel
+   * from a real mouse-up. Optional — absent / non-macOS → treat as released.
+   */
+  isLeftMouseButtonDown?(): boolean;
+  /**
+   * Same-surface reparent across BrowserWindows using scoped native panel keys
+   * (`${browserWindowId}::${panelId}`). Does not create a new TerminalView/surface
+   * or restart the shell. Stays hidden until target applyTerminalWindowState.
+   */
+  moveTerminal(input: {
+    fromNativePanelId: string;
+    toNativePanelId: string;
+    toParentHandle: Buffer;
+    toBrowserWindowId: number;
+  }): boolean;
+  /** NSApp.orderedWindows windowNumbers, front → back. Optional. */
+  orderedWindowNumbers?(): number[];
   performTerminalBindingAction(panelId: string, action: string): boolean;
   readSelectionText(panelId: string): string | null;
   /**
@@ -173,6 +192,8 @@ export interface NativeAddon {
       | null
   ): void;
   setupWindow(parentHandle: Buffer, browserWindowId: number): boolean;
+  /** NSWindow.windowNumber for an Electron native window handle. Optional. */
+  windowNumberFor?(parentHandle: Buffer): number;
   writeTerminalOutput(panelId: string, data: Buffer): boolean;
 }
 

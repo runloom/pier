@@ -1,3 +1,8 @@
+// Note: the `transfer?` field on PluginPanelRegistration is plumbed through
+// the type (see @plugins/api/renderer-panels.ts) and consumed by the workspace
+// panel-transfer resolver (panel-transfer-adapters.ts). This boundary only
+// renders the panel component and its descriptor; it does not need to read
+// `transfer?` — the resolver reads it from the registration map directly.
 import type { PluginPanelRegistration } from "@plugins/api/renderer.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import {

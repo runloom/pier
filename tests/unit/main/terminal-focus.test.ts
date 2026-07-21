@@ -78,6 +78,7 @@ describe("terminal focus restoration", () => {
     }));
     const sessionState = {
       clearTerminalPanelAgent: vi.fn(async () => undefined),
+      ensureTerminalPanelSession: vi.fn(async () => undefined),
       readTerminalPanelSession: vi.fn(async () =>
         "savedSession" in opts
           ? opts.savedSession
@@ -143,6 +144,12 @@ describe("terminal focus restoration", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => ipcWindow),
       findInternalWindowId: vi.fn(() => "main"),
+      findWindowContext: vi.fn(() => ({
+        electronWindowId: String(ipcWindow.id),
+        mode: "restore" as const,
+        recordId: "main",
+        windowId: "main",
+      })),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");

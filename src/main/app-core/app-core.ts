@@ -4,6 +4,11 @@ import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import {
+  getTerminalTaskLifecycleForTransfer,
+  getTerminalTaskOutputBindingsForTransfer,
+  getTerminalTaskServiceForTransfer,
+} from "../ipc/terminal.ts";
+import {
   createExternalMainPluginRuntime,
   type ExternalMainPluginContext,
   type ExternalMainPluginRuntime,
@@ -59,7 +64,6 @@ import { createProcessEnvironmentService } from "../services/process-environment
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createTaskService } from "../services/tasks/task-service.ts";
 import { createTerminalProfileService } from "../services/terminal-profile-service.ts";
-import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createWorktreeService } from "../services/worktree-service.ts";
 import { createSecretsStore } from "../state/secrets-store.ts";
@@ -72,6 +76,7 @@ import {
 } from "../state/terminal-status-bar-prefs.ts";
 import { showNativeWindowCloseFailure } from "../windows/native-window-close-failure.ts";
 import { windowManager } from "../windows/window-manager.ts";
+import { wireAppCoreWindowAndPanelTransfer } from "./app-core-panel-transfer.ts";
 import { requireAppCoreInitialization } from "./app-core-readiness.ts";
 import { createAppCoreUsageData } from "./app-core-usage-data.ts";
 import {
@@ -325,6 +330,21 @@ function createPierAppCore(): PierAppCore {
     snapshot: () => foregroundActivityService.snapshot(),
     rendererCommand,
   });
+
+  const workspaceService = createWorkspaceService();
+  const { panelTransfer: panelTransferRef, window: windowService } =
+    wireAppCoreWindowAndPanelTransfer({
+      fileDrafts,
+      fileDraftsFlush: () => fileDrafts.flush(),
+      getTaskLifecycle: () => getTerminalTaskLifecycleForTransfer(),
+      getTaskOutputBindings: () => getTerminalTaskOutputBindingsForTransfer(),
+      getTaskService: () => getTerminalTaskServiceForTransfer(),
+      pluginDisableTransitions,
+      rendererCommand,
+      reportCloseFailureFallback: showNativeWindowCloseFailure,
+      workspace: workspaceService,
+    });
+
   const services: PierCoreServices = {
     agentDetection,
     agentRuntimeIndex,
@@ -415,45 +435,9 @@ function createPierAppCore(): PierAppCore {
       },
     },
     terminalLaunches: terminalLaunchRegistry,
-    window: createWindowService({
-      finalizeRendererClose: async (windowId, transitionId, outcome) => {
-        const result = await rendererCommand.execute({
-          outcome,
-          transitionId,
-          type: "workspace.finalizeClose",
-          windowId,
-        });
-        if (!result.ok) {
-          throw new Error(result.error.message);
-        }
-      },
-      flushCriticalState: () => fileDrafts.flush(),
-      prepareRendererClose: async (windowId, reason, transitionId) => {
-        const result = await rendererCommand.execute({
-          reason,
-          transitionId,
-          type: "workspace.prepareClose",
-          windowId,
-        });
-        if (!result.ok) {
-          throw new Error(result.error.message);
-        }
-      },
-      reportCloseFailure: async (windowId, error) => {
-        const result = await rendererCommand.execute({
-          body: error instanceof Error ? error.message : String(error),
-          type: "workspace.reportCloseFailure",
-          windowId,
-        });
-        if (!result.ok) {
-          throw new Error(result.error.message);
-        }
-      },
-      reportCloseFailureFallback: showNativeWindowCloseFailure,
-      runWhenPluginTransitionsIdle: (operation) =>
-        pluginDisableTransitions.runWindowCreation(operation),
-    }),
-    workspace: createWorkspaceService(),
+    window: windowService,
+    panelTransfer: panelTransferRef,
+    workspace: workspaceService,
     worktrees: createWorktreeService({
       readPreferences: () => preferences.read(),
     }),

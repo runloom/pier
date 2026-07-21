@@ -21,6 +21,7 @@ import { configureMainAppIdentity } from "./app-identity.ts";
 import { installAppMenu } from "./app-menu.ts";
 import { showAppQuitConfirmation } from "./app-quit/quit-confirmation.ts";
 import { createAppQuitController } from "./app-quit/quit-controller.ts";
+import { formatQuitFailure } from "./app-quit/quit-failure-format.ts";
 import { createAppQuitRendererTransport } from "./app-quit/quit-renderer-transport.ts";
 import { shouldBypassQuitConfirmationForTests } from "./app-quit/quit-test-runtime.ts";
 import { handleMainStartupFailure } from "./app-startup-failure.ts";
@@ -76,7 +77,9 @@ import { createExternalNavigationService } from "./services/external-navigation.
 import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
 import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
 import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
+import { migrateTerminalSessionScopesToRecordIds } from "./state/terminal-session-scope-migration.ts";
 import { reconcileOrphanedRunningTasks } from "./state/terminal-session-state.ts";
+import { readPreferredOpenWindowRecordIds } from "./state/window-record-state.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/window-manager.ts";
 import { createWindowZoomController } from "./windows/window-zoom.ts";
@@ -147,22 +150,6 @@ function createFreshWindowFromMenu(): void {
   appCore.services.window.create({ mode: "fresh" }).catch((error) => {
     windowLog.error("failed to create new window", { error });
   });
-}
-
-function formatQuitFailure(error: unknown): string {
-  const isChinese = app.getLocale().toLowerCase().startsWith("zh");
-  if (!(error instanceof Error)) return String(error);
-  let summary = error.message;
-  if (summary === "window close preparation failed") {
-    summary = isChinese
-      ? "窗口关闭准备失败"
-      : "Window close preparation failed";
-  }
-  if (!(error instanceof AggregateError)) return summary;
-  const details = error.errors.map((item) =>
-    item instanceof Error ? item.message : String(item)
-  );
-  return [summary, ...details].join("\n");
 }
 
 async function flushBeforeQuitConfirmed(): Promise<void> {
@@ -407,6 +394,25 @@ if (gotTheLock) {
       registerFileWatchIpc();
       registerFileQueryIpc();
       localControlRegistration.start();
+      // Legacy terminal session keys (runtime window ids) → record UUIDs.
+      // Must run before transfer recovery / task reconcile / window restore,
+      // which all address the session store by record id. Failure must abort
+      // boot: readers now use record UUIDs; continuing on a half-migrated
+      // store would silently lose cwd/title/task session metadata.
+      try {
+        await migrateTerminalSessionScopesToRecordIds(
+          await readPreferredOpenWindowRecordIds()
+        );
+      } catch (error: unknown) {
+        terminalSessionLog.error("session scope migration failed", { error });
+        throw error;
+      }
+      // Panel transfer journal must converge before orphan reconcile + window restore.
+      await appCore.services.panelTransfer
+        ?.recoverPending()
+        .catch((error: unknown) => {
+          terminalSessionLog.error("panel transfer recovery failed", { error });
+        });
       // 孤儿 task 清算必须先于窗口恢复(renderer readSession 磁盘状态不再说谎:
       // 上进程 running 一律 cancelled), 并在 UI sweep 前只回收本 app 登记的 pid.
       await reconcileOrphanedBackgroundProcesses().catch((error: unknown) => {

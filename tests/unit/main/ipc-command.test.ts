@@ -127,6 +127,7 @@ describe("registerCommandIpc", () => {
       }),
       {
         navigationGeneration: 0,
+        runtimeWindowId: "main",
         webContentsId: testSender.id,
         windowRecordId: "record-main",
       }

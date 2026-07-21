@@ -152,6 +152,7 @@ export function registerCommandIpc(ipcMain: IpcMain): void {
       },
       {
         navigationGeneration,
+        runtimeWindowId: windowId,
         webContentsId: event.sender.id,
         windowRecordId: recordId,
       }

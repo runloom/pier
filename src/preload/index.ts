@@ -58,6 +58,10 @@ import {
   type PierNotificationsAPI,
 } from "./notifications-api.ts";
 import {
+  createPanelTransferApi,
+  type PierPanelTransferAPI,
+} from "./panel-transfer-api.ts";
+import {
   type AppPreloadApi,
   type AppUpdatePreloadApi,
   createAppPreloadApi,
@@ -89,7 +93,6 @@ const signalRendererBoot = installRendererBootHandshake(ipcRenderer);
 export type { PierWindowNsAPI } from "./window-api.ts";
 
 export type WindowInfo = SharedWindowInfo;
-
 export type PreferencesSnapshot = ProjectPreferences;
 
 export interface PierPreferencesAPI {
@@ -238,6 +241,7 @@ export interface PierWindowAPI {
   managedPlugins: ManagedPluginsPreloadApi;
   menu: PierMenuAPI;
   notifications: PierNotificationsAPI;
+  panelTransfer: PierPanelTransferAPI;
   pluginRpc: PluginRpcPreloadApi;
   pluginSettings: PierPluginSettingsAPI;
   plugins: PierPluginsAPI;
@@ -426,6 +430,7 @@ const api: PierWindowAPI = {
   clipboard: clipboardApi,
   notifications: notificationsApi,
   plugins: pluginsApi,
+  panelTransfer: createPanelTransferApi(),
   pluginSettings: pluginSettingsApi,
   preferences: preferencesApi,
   rendererCommand: rendererCommandApi,

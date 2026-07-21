@@ -23,6 +23,13 @@ const LIFECYCLE_SOURCE = readFileSync(
   ),
   "utf8"
 );
+const TRANSFER_HOST_SOURCE = readFileSync(
+  resolve(
+    import.meta.dirname,
+    "../../../src/renderer/components/workspace/workspace-panel-transfer-host.ts"
+  ),
+  "utf8"
+);
 
 const USER_TOUCHED_FLAG_RE = /let userTouched = false/;
 const USER_TOUCHED_SET_TRUE_RE = /userTouched = true/;
@@ -49,8 +56,12 @@ const RECONCILE_CALL_RE =
 const READS_WINDOW_CONTEXT_RE = /window\.pier\.window\.getContext\(\)/;
 const SAVES_LAYOUT_BY_WINDOW_RECORD_RE =
   /const windowContext = await windowContextPromise[\s\S]{0,500}?\.saveLayout\(\s*json,\s*windowContext\.recordId\s*\)/;
+// Load is delegated to the transfer-aware helper: host must forward the
+// durable recordId, and the helper must be the one calling loadLayout with it.
 const LOADS_LAYOUT_BY_WINDOW_RECORD_RE =
-  /window\.pier\.workspace\.loadLayout\(\s*windowContext\.recordId\s*\)/;
+  /await loadWorkspaceLayoutWithPendingTransfers\(\s*windowContext\?\.recordId\s*\)/;
+const HELPER_LOADS_LAYOUT_BY_RECORD_RE =
+  /window\.pier\.workspace\.loadLayout\(recordId\)/;
 const FRESH_MODE_SKIP_RE = /windowContext\.mode !== "fresh"/;
 const FLUSH_LAYOUT_COMMAND_RE =
   /envelope\.command\.type === "workspace\.flushLayout"/;
@@ -113,6 +124,7 @@ describe("workspace-host invariants (#17 #19)", () => {
     // 仍必须能读回自己的 layout, 不能用 fresh mode 永久跳过恢复.
     expect(SOURCE).toMatch(READS_WINDOW_CONTEXT_RE);
     expect(SOURCE).toMatch(LOADS_LAYOUT_BY_WINDOW_RECORD_RE);
+    expect(TRANSFER_HOST_SOURCE).toMatch(HELPER_LOADS_LAYOUT_BY_RECORD_RE);
     expect(SOURCE).not.toMatch(FRESH_MODE_SKIP_RE);
   });
 
@@ -121,6 +133,7 @@ describe("workspace-host invariants (#17 #19)", () => {
     // 因此读写都必须带 window record scope, 不能再写全局 workspace-layout.json.
     expect(SOURCE).toMatch(SAVES_LAYOUT_BY_WINDOW_RECORD_RE);
     expect(SOURCE).toMatch(LOADS_LAYOUT_BY_WINDOW_RECORD_RE);
+    expect(TRANSFER_HOST_SOURCE).toMatch(HELPER_LOADS_LAYOUT_BY_RECORD_RE);
   });
 
   it("does not use main as a writable fallback before window context resolves", () => {

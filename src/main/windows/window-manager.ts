@@ -14,30 +14,18 @@
  */
 import { join } from "node:path";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
-import {
-  NATIVE_CHROME_FALLBACK,
-  TRANSPARENT_NATIVE_BACKGROUND,
-} from "@shared/theme-colors.ts";
-import {
-  app,
-  BaseWindow,
-  BrowserWindow,
-  nativeTheme,
-  WebContentsView,
-} from "electron";
+import { app, nativeTheme } from "electron";
 import { installDetachedDevToolsHandlers } from "../devtools.ts";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import { getTerminalAddon } from "../ipc/terminal.ts";
 import { terminalFocusCoordinator } from "../ipc/terminal-focus-coordinator.ts";
-import { isDevRuntime } from "../runtime-mode.ts";
 import {
   armDetaching,
   isWindowDetaching,
   scheduleDisarmDetaching,
 } from "../services/agents/window-detaching-guard.ts";
 import { detachAgentsForWindowSync } from "../state/terminal-session-state.ts";
-import { type AppWindow, createAppWindow } from "./app-window.ts";
-import { installMacAppViewGeometry } from "./mac-app-view-geometry.ts";
+import type { AppWindow } from "./app-window.ts";
 import {
   installRendererFailureRecovery,
   reportRendererLoadError,
@@ -48,6 +36,14 @@ import {
   type WindowCloseDecision,
   type WindowCloseResult,
 } from "./window-close-coordinator.ts";
+import {
+  buildBaseWindowOptions,
+  createManagedBrowserWindow,
+  createManagedMacWindow,
+  isDev,
+  isMac,
+  resolveDevIcon,
+} from "./window-factory.ts";
 import { WindowIdAllocator } from "./window-id-allocator.ts";
 import {
   findAppWindowByWebContents,
@@ -72,6 +68,7 @@ export interface CreateWindowOptions {
   mode?: WindowOpenMode;
   recordId?: string;
   showInactive?: boolean;
+  startup?: { kind: "panel-transfer"; transferId: string };
 }
 
 export interface WindowInfo {
@@ -81,25 +78,27 @@ export interface WindowInfo {
   recordId: string;
 }
 
-const isDev = isDevRuntime();
-const isMac = process.platform === "darwin";
-
 export type {
   WindowCloseDecision,
   WindowCloseResult,
 } from "./window-close-coordinator.ts";
-
-function resolveDevIcon(): string | undefined {
-  return isDev ? join(import.meta.dirname, "../../build/icon.png") : undefined;
-}
 
 class WindowManager {
   private readonly windows = new Map<string, AppWindow>();
   private readonly allocator = new WindowIdAllocator();
   private readonly closeCoordinator = new WindowCloseCoordinator();
   private readonly onCloseCallbacks: Array<
-    (payload: { recordId: string; windowId: string }) => void
+    (payload: {
+      recordId: string;
+      transferDestroy?: boolean;
+      windowId: string;
+    }) => void
   > = [];
+  private readonly rendererShowGates = new Map<
+    string,
+    ReturnType<typeof createRendererShowGate>
+  >();
+  private readonly transferDestroyIds = new Set<string>();
   private readonly onFocusCallbacks: Array<
     (payload: { recordId: string; windowId: string }) => void
   > = [];
@@ -117,9 +116,44 @@ class WindowManager {
   }
 
   onClose(
-    callback: (payload: { recordId: string; windowId: string }) => void
+    callback: (payload: {
+      recordId: string;
+      transferDestroy?: boolean;
+      windowId: string;
+    }) => void
   ): void {
     this.onCloseCallbacks.push(callback);
+  }
+
+  holdRendererShow(windowId: string, reason: string): void {
+    this.rendererShowGates.get(windowId)?.holdUntilReleased(reason);
+  }
+
+  releaseRendererShow(windowId: string, reason: string): void {
+    this.rendererShowGates.get(windowId)?.releaseHold(reason);
+  }
+
+  async destroyForTransfer(
+    windowId: string,
+    _transferId: string
+  ): Promise<void> {
+    const window = this.windows.get(windowId);
+    if (!window || window.isDestroyed()) {
+      return;
+    }
+    this.transferDestroyIds.add(windowId);
+    const electronWindowId = window.id;
+    terminalFocusCoordinator.clearWindow(electronWindowId);
+    foregroundActivityService.windowClosed(String(electronWindowId));
+    try {
+      getTerminalAddon()?.detachWindow(window.getNativeWindowHandle());
+    } catch {
+      // handle may already be invalid
+    }
+    if (window.appView && !window.webContents.isDestroyed()) {
+      window.webContents.close();
+    }
+    window.destroy();
   }
 
   onCreate(
@@ -177,34 +211,21 @@ class WindowManager {
       autoplayPolicy: "no-user-gesture-required",
       additionalArguments: [`--window-id=${id}`],
     };
-    const baseOpts: Electron.BaseWindowConstructorOptions = {
-      width: opts.bounds?.width ?? 1280,
-      height: opts.bounds?.height ?? 800,
-      show: false,
-      autoHideMenuBar: true,
-      backgroundColor: NATIVE_CHROME_FALLBACK[resolved],
-      ...(isMac && {
-        opacity: 0,
-        titleBarStyle: "hiddenInset" as const,
-        trafficLightPosition: { x: 12, y: 12 },
-      }),
-    };
-    if (opts.bounds?.x !== undefined) {
-      baseOpts.x = opts.bounds.x;
-    }
-    if (opts.bounds?.y !== undefined) {
-      baseOpts.y = opts.bounds.y;
-    }
+    const baseOpts = buildBaseWindowOptions({
+      ...(opts.bounds === undefined ? {} : { bounds: opts.bounds }),
+      resolved,
+    });
     const devIcon = resolveDevIcon();
     const window = isMac
-      ? this.createMacWindow(baseOpts, webPreferences)
-      : this.createBrowserWindow(baseOpts, webPreferences, devIcon);
+      ? createManagedMacWindow(baseOpts, webPreferences)
+      : createManagedBrowserWindow(baseOpts, webPreferences, devIcon);
     const electronWindowId = window.id;
     rememberAppWindow(window, {
       mode,
       recordId: opts.recordId ?? id,
       windowId: id,
       electronWindowId: String(electronWindowId),
+      ...(opts.startup ? { startup: opts.startup } : {}),
     });
 
     const rendererShowGate = createRendererShowGate({
@@ -213,6 +234,10 @@ class WindowManager {
       window,
       windowId: id,
     });
+    this.rendererShowGates.set(id, rendererShowGate);
+    if (opts.startup?.kind === "panel-transfer") {
+      rendererShowGate.holdUntilReleased("panel-transfer");
+    }
     const rendererFailure = installRendererFailureRecovery({
       beforeLoadFailure: rendererShowGate.cancel,
       beforeRendererGone: () => {
@@ -290,8 +315,8 @@ class WindowManager {
           : {
               electronWindowId:
                 context.electronWindowId ?? String(electronWindowId),
-              // session store / windowRecordIdFor 用 runtime windowId，不是 record UUID
-              recordId: context.windowId,
+              // session store / windowRecordIdFor 统一用 record UUID
+              recordId: context.recordId,
             };
       if (
         detachingKeys &&
@@ -312,11 +337,15 @@ class WindowManager {
 
     window.host.on("closed", () => {
       rendererShowGate.cancel();
+      this.rendererShowGates.delete(id);
+      const transferDestroy = this.transferDestroyIds.delete(id);
       terminalFocusCoordinator.clearWindow(electronWindowId);
       // 整窗关闭绕过 renderer 逐 panel 关闭 IPC——在此兜底清理 agent 会话,
       // 否则条目永久残留（幽灵 TitleBar 计数）。BaseWindow 不触发
       // app "browser-window-created"/BrowserWindow 事件, 只能挂在这里。
-      foregroundActivityService.windowClosed(String(electronWindowId));
+      if (!transferDestroy) {
+        foregroundActivityService.windowClosed(String(electronWindowId));
+      }
       if (window.appView && !window.webContents.isDestroyed()) {
         window.webContents.close();
       }
@@ -325,7 +354,7 @@ class WindowManager {
         scheduleDisarmDetaching({
           electronWindowId:
             context.electronWindowId ?? String(electronWindowId),
-          recordId: context.windowId,
+          recordId: context.recordId,
         });
       }
       forgetAppWindow(window);
@@ -335,7 +364,11 @@ class WindowManager {
       this.allocator.release(id);
       if (!this.isDestroyingAllForQuit && context) {
         for (const cb of this.onCloseCallbacks) {
-          cb({ recordId: context.recordId, windowId: id });
+          cb({
+            recordId: context.recordId,
+            windowId: id,
+            ...(transferDestroy ? { transferDestroy: true } : {}),
+          });
         }
       }
     });
@@ -362,32 +395,6 @@ class WindowManager {
       });
     }
     return id;
-  }
-
-  private createMacWindow(
-    baseOpts: Electron.BaseWindowConstructorOptions,
-    webPreferences: Electron.WebPreferences
-  ): AppWindow {
-    const host = new BaseWindow(baseOpts);
-    const appView = new WebContentsView({ webPreferences });
-    appView.setBackgroundColor(TRANSPARENT_NATIVE_BACKGROUND);
-    host.contentView.addChildView(appView);
-    installMacAppViewGeometry(host, appView);
-    return createAppWindow(host, appView.webContents, appView);
-  }
-
-  private createBrowserWindow(
-    baseOpts: Electron.BaseWindowConstructorOptions,
-    webPreferences: Electron.WebPreferences,
-    devIcon: string | undefined
-  ): AppWindow {
-    const browserOpts: Electron.BrowserWindowConstructorOptions = {
-      ...baseOpts,
-      ...(devIcon ? { icon: devIcon } : {}),
-      webPreferences,
-    };
-    const host = new BrowserWindow(browserOpts);
-    return createAppWindow(host, host.webContents, null);
   }
 
   list(): WindowInfo[] {
@@ -436,7 +443,7 @@ class WindowManager {
             ? null
             : {
                 electronWindowId: context.electronWindowId ?? String(window.id),
-                recordId: context.windowId,
+                recordId: context.recordId,
               };
         if (detachingKeys) {
           armDetaching(detachingKeys);

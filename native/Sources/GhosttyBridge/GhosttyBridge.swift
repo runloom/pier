@@ -488,8 +488,8 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     TerminalSurfaceCloseDelegate,
     TerminalSurfaceScrollbarDelegate
 {
-    let panelId: String
-    let browserWindowId: Int
+    var panelId: String
+    var browserWindowId: Int
     let lifecycleId: String
     weak var scrollbarSink: TerminalScrollbarStateSink?
     private(set) var isSurfaceFocused = false
@@ -618,7 +618,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
 private struct Terminal {
     let containerView: TerminalContainerView
     let terminalView: TerminalView
-    let parentWindow: NSWindow
+    var parentWindow: NSWindow
     let outputSession: InMemoryTerminalSession?
     /// EventDelegate adapter (strong-hold — terminalView.delegate 是 weak).
     /// 同时实现 PwdDelegate + TitleDelegate. 随 Terminal 一起释放, terminalView
@@ -782,13 +782,36 @@ final class GhosttyBridgeImpl {
         }
     }
 
+    /// Controllers that drive terminal surfaces parented to `window`.
+    /// After cross-window move coexistence, immigrated terminals may still
+    /// hold their source controller object — theme/font/config must reach
+    /// every such controller, not only `controllers[windowId]`.
+    private func controllersHosting(window: NSWindow) -> [TerminalController] {
+        var ordered: [TerminalController] = []
+        var seen = Set<ObjectIdentifier>()
+        func append(_ controller: TerminalController) {
+            let id = ObjectIdentifier(controller)
+            guard !seen.contains(id) else { return }
+            seen.insert(id)
+            ordered.append(controller)
+        }
+        append(controller(for: window))
+        for term in terminals.values where term.parentWindow === window {
+            if let hosted = term.terminalView.controller {
+                append(hosted)
+            }
+        }
+        return ordered
+    }
+
     private func applyTerminalRuntimeConfiguration(window: NSWindow) {
         let windowId = ObjectIdentifier(window)
-        controller(for: window).setTerminalConfiguration(
-            Self.terminalConfiguration(
-                from: terminalRuntimePreferences[windowId] ?? TerminalRuntimePreferences()
-            )
+        let configuration = Self.terminalConfiguration(
+            from: terminalRuntimePreferences[windowId] ?? TerminalRuntimePreferences()
         )
+        for hosted in controllersHosting(window: window) {
+            hosted.setTerminalConfiguration(configuration)
+        }
     }
 
     private func mutateTerminalRuntimePreferences(
@@ -1412,6 +1435,257 @@ final class GhosttyBridgeImpl {
         return true
     }
 
+    // MARK: - Terminal window move (production)
+
+    struct TerminalIdentityForTests {
+        let browserWindowId: Int
+        let containerView: TerminalContainerView
+        let controller: TerminalController?
+        let parentWindow: NSWindow
+        let surfaceGeneration: UInt64
+        let terminalView: TerminalView
+    }
+
+    func terminalIdentityForTests(panelId: String) -> TerminalIdentityForTests? {
+        guard let term = terminals[panelId] else { return nil }
+        return TerminalIdentityForTests(
+            browserWindowId: term.eventDelegate.browserWindowId,
+            containerView: term.containerView,
+            controller: term.terminalView.controller,
+            parentWindow: term.parentWindow,
+            surfaceGeneration: term.terminalView.pierRenderDiagnostics.surfaceGeneration,
+            terminalView: term.terminalView
+        )
+    }
+
+    func controllerForTests(window: NSWindow) -> TerminalController? {
+        controllers[ObjectIdentifier(window)]
+    }
+
+    func routerHasTargetForTests(window: NSWindow, panelId: String) -> Bool {
+        eventRouters[ObjectIdentifier(window)]?.targets[panelId] != nil
+    }
+
+    /// Production same-surface reparent with scoped native panel keys
+    /// (`${browserWindowId}::${panelId}`). Keeps container/view/controller/surface
+    /// identity; rekeys `terminals` + layout; stays hidden until target presentation.
+    ///
+    /// Critical: `TerminalView.controller` must keep the **same object**. Assigning
+    /// a different `TerminalController` tears down and rebuilds the surface.
+    @discardableResult
+    func moveTerminal(
+        fromNativePanelId: String,
+        toNativePanelId: String,
+        to targetWindow: NSWindow,
+        toBrowserWindowId: Int
+    ) -> Bool {
+        guard var term = terminals[fromNativePanelId],
+              let targetContent = targetWindow.contentView,
+              eventRouters[ObjectIdentifier(targetWindow)] != nil
+        else {
+            return false
+        }
+
+        // Destination key must be free unless this is an in-place same-key move.
+        if fromNativePanelId != toNativePanelId, terminals[toNativePanelId] != nil {
+            return false
+        }
+
+        let sourceWindow = term.parentWindow
+        let sourceWindowId = ObjectIdentifier(sourceWindow)
+        let targetWindowId = ObjectIdentifier(targetWindow)
+
+        // Snapshot for rollback.
+        let previousSuperview = term.containerView.superview
+        let previousFrame = term.containerView.frame
+        let previousHidden = term.containerView.isHidden
+        let previousAlpha = term.containerView.alphaValue
+        let previousParent = term.parentWindow
+        let previousBrowserId = term.eventDelegate.browserWindowId
+        let previousPanelId = term.eventDelegate.panelId
+        let previousController = term.terminalView.controller
+        let previousSourceController = controllers[sourceWindowId]
+        let previousTargetController = controllers[targetWindowId]
+        let previousSourceTarget = eventRouters[sourceWindowId]?.targets[fromNativePanelId]
+        let previousLayout = terminalLayouts[fromNativePanelId]
+        let previousToLayout = terminalLayouts[toNativePanelId]
+        let hadFromTerminal = terminals[fromNativePanelId] != nil
+        let previousToTerminal = fromNativePanelId == toNativePanelId
+            ? nil
+            : terminals[toNativePanelId]
+
+        func restore() {
+            term.containerView.removeFromSuperview()
+            if let previousSuperview {
+                previousSuperview.addSubview(
+                    term.containerView,
+                    positioned: .below,
+                    relativeTo: nil
+                )
+            }
+            term.containerView.frame = previousFrame
+            term.containerView.isHidden = previousHidden
+            term.containerView.alphaValue = previousAlpha
+            term.parentWindow = previousParent
+            term.eventDelegate.browserWindowId = previousBrowserId
+            term.eventDelegate.panelId = previousPanelId
+            term.containerView.updateBrowserWindowId(previousBrowserId)
+            term.containerView.updatePanelId(previousPanelId)
+            // Keep controller object identical to avoid surface rebuild.
+            if term.terminalView.controller !== previousController {
+                term.terminalView.controller = previousController
+            }
+            controllers[sourceWindowId] = previousSourceController
+            if let previousTargetController {
+                controllers[targetWindowId] = previousTargetController
+            } else {
+                controllers.removeValue(forKey: targetWindowId)
+            }
+            if let previousSourceTarget {
+                eventRouters[sourceWindowId]?.targets[fromNativePanelId] = previousSourceTarget
+            } else {
+                eventRouters[sourceWindowId]?.targets.removeValue(forKey: fromNativePanelId)
+            }
+            eventRouters[targetWindowId]?.targets.removeValue(forKey: toNativePanelId)
+            if fromNativePanelId != toNativePanelId {
+                terminals.removeValue(forKey: toNativePanelId)
+                if let previousToLayout {
+                    terminalLayouts[toNativePanelId] = previousToLayout
+                } else {
+                    terminalLayouts.removeValue(forKey: toNativePanelId)
+                }
+            }
+            if hadFromTerminal {
+                terminals[fromNativePanelId] = term
+            }
+            terminalLayouts[fromNativePanelId] = previousLayout
+            if let previousToTerminal {
+                terminals[toNativePanelId] = previousToTerminal
+            }
+        }
+
+        // 1) Drop source router target first so hits stop routing to the old window.
+        eventRouters[sourceWindowId]?.targets.removeValue(forKey: fromNativePanelId)
+
+        // 2) Controller ownership. The moved TerminalView must keep the SAME
+        //    controller object (assignment rebuilds the surface), so there are
+        //    two cases:
+        //    - Target already hosts a different controller with live terminals
+        //      (drop into a window that has its own terminals): coexist. Maps
+        //      stay untouched; the moved view keeps its controller. Theme /
+        //      font / config fan out via controllersHosting(_:) so subsequent
+        //      window-scoped applies reach immigrated surfaces too. Sync the
+        //      target's current runtime prefs onto the moving controller now
+        //      so font/cursor/scrollback match immediately.
+        //    - Otherwise (fresh transfer window / empty target): the target
+        //      slot adopts the moving controller. Clear the source slot only
+        //      when no other source terminal still relies on it — otherwise
+        //      remaining source terminals would lazily get a NEW controller
+        //      and stop receiving theme/font updates.
+        let movingController = term.terminalView.controller
+            ?? controllers[sourceWindowId]
+        if sourceWindowId != targetWindowId, let movingController {
+            let existingTargetController = controllers[targetWindowId]
+            let targetHasLiveController =
+                existingTargetController != nil
+                && existingTargetController !== movingController
+                && terminals.contains {
+                    $0.key != fromNativePanelId
+                        && ObjectIdentifier($0.value.parentWindow) == targetWindowId
+                }
+            if targetHasLiveController {
+                let prefs =
+                    terminalRuntimePreferences[targetWindowId]
+                    ?? TerminalRuntimePreferences()
+                movingController.setTerminalConfiguration(
+                    Self.terminalConfiguration(from: prefs)
+                )
+            } else {
+                controllers[targetWindowId] = movingController
+                let sourceHasOtherTerminals = terminals.contains {
+                    $0.key != fromNativePanelId
+                        && ObjectIdentifier($0.value.parentWindow) == sourceWindowId
+                }
+                if controllers[sourceWindowId] === movingController,
+                   !sourceHasOtherTerminals
+                {
+                    controllers.removeValue(forKey: sourceWindowId)
+                }
+                // Only assign if different — assignment rebuilds surface.
+                if term.terminalView.controller !== movingController {
+                    term.terminalView.controller = movingController
+                }
+            }
+        }
+
+        // 3) Reparent the same container/view under target contentView (bottom),
+        //    hidden + offscreen until target presentation.
+        let offscreenWidth = max(term.containerView.frame.width, 1)
+        let offscreenHeight = max(term.containerView.frame.height, 1)
+        term.containerView.removeFromSuperview()
+        term.containerView.isHidden = true
+        term.containerView.alphaValue = 0
+        term.containerView.frame = NSRect(
+            x: -99999,
+            y: -99999,
+            width: offscreenWidth,
+            height: offscreenHeight
+        )
+        targetContent.addSubview(term.containerView, positioned: .below, relativeTo: nil)
+
+        // 4) Update ownership + browser/panel ids on delegate/container.
+        term.parentWindow = targetWindow
+        term.eventDelegate.browserWindowId = toBrowserWindowId
+        term.eventDelegate.panelId = toNativePanelId
+        term.containerView.updateBrowserWindowId(toBrowserWindowId)
+        term.containerView.updatePanelId(toNativePanelId)
+        windowToBrowserWindowId[targetWindowId] = toBrowserWindowId
+
+        // 5) Rekey terminals + layout owner. Do not install target router hits or
+        //    unhide — applyWindowState on the target presents later.
+        if fromNativePanelId != toNativePanelId {
+            terminals.removeValue(forKey: fromNativePanelId)
+            if let previousLayout {
+                terminalLayouts.removeValue(forKey: fromNativePanelId)
+                terminalLayouts[toNativePanelId] = previousLayout
+            } else {
+                terminalLayouts.removeValue(forKey: fromNativePanelId)
+            }
+        }
+        terminals[toNativePanelId] = term
+
+        let expectedController = movingController
+        // Basic integrity: still attached to target, controller object unchanged.
+        if term.containerView.superview !== targetContent
+            || (expectedController != nil && term.terminalView.controller !== expectedController)
+            || terminals[toNativePanelId] == nil
+            || (fromNativePanelId != toNativePanelId && terminals[fromNativePanelId] != nil)
+        {
+            restore()
+            return false
+        }
+
+        return true
+    }
+
+    /// Spike-era thin wrapper: same-key move for compatibility. Prefer `moveTerminal`
+    /// with scoped keys from product paths. Leaves the view hidden like production.
+    @discardableResult
+    func transferTerminalForTests(
+        panelId: String,
+        to targetWindow: NSWindow,
+        toBrowserWindowId: Int,
+        viewport: NSRect
+    ) -> Bool {
+        _ = viewport
+        return moveTerminal(
+            fromNativePanelId: panelId,
+            toNativePanelId: panelId,
+            to: targetWindow,
+            toBrowserWindowId: toBrowserWindowId
+        )
+    }
+
     func performBindingAction(panelId: String, action: String) -> Bool {
         guard let term = terminals[panelId] else { return false }
         return term.terminalView.performBindingAction(action)
@@ -1491,9 +1765,10 @@ final class GhosttyBridgeImpl {
 
     // MARK: - Theme apply
 
-    /// 把 Pier 主题派生的终端配色应用到该 window 下的 Ghostty controller. 走库的
-    /// `controller.setTheme(...)` 路径, 内部 reconfigure 并 push 到 ghostty app, shell
-    /// 进程不重启. 一个 controller 服务 window 下所有 terminal panel.
+    /// 把 Pier 主题派生的终端配色应用到该 window 下所有托管 Ghostty controller.
+    /// 走库的 `controller.setTheme(...)` 路径, 内部 reconfigure 并 push 到
+    /// ghostty app, shell 进程不重启. 同窗多 controller（跨窗 move 共存）时
+    /// 必须 fan-out，否则 immigrated surface 会永久停在旧主题.
     ///
     /// controller(for:) 是 lazy 创建 — 即使 applyTheme 在 createTerminal 之前调
     /// (主题 hydrate 顺序在前), 也会 cache 主题; 后续 createTerminal 拿到的是已经
@@ -1507,7 +1782,6 @@ final class GhosttyBridgeImpl {
         selectionForeground: String?,
         palette: [Int: String]
     ) {
-        let controller = controller(for: window)
         let definition = GhosttyThemeDefinition(
             name: "pier-runtime",
             background: background,
@@ -1518,7 +1792,10 @@ final class GhosttyBridgeImpl {
             selectionForeground: selectionForeground,
             palette: palette
         )
-        controller.setTheme(definition.toTerminalTheme())
+        let theme = definition.toTerminalTheme()
+        for hosted in controllersHosting(window: window) {
+            hosted.setTheme(theme)
+        }
         if let backgroundColor = Self.terminalBackgroundColor(from: background) {
             let windowId = ObjectIdentifier(window)
             terminalBackgrounds[windowId] = backgroundColor
@@ -1528,7 +1805,7 @@ final class GhosttyBridgeImpl {
         }
     }
 
-    /// 把字体配置写入 window 下的 TerminalController. 走 setTerminalConfiguration
+    /// 把字体配置写入 window 下所有托管 TerminalController. 走 setTerminalConfiguration
     /// → ghostty_app_update_config + ghostty_surface_update_config (hot-reload),
     /// 不重建 surface 不杀 shell. controller 是 lazy 创建 — 即使 setFont 在 createTerminal
     /// 之前调 (字体 hydrate 顺序在前), 后续 createTerminal 拿到的 controller 已带字体配置.
@@ -1905,6 +2182,25 @@ public func ghosttyBridgeSetTerminalConfig(
     }
 }
 
+
+
+@_cdecl("ghostty_bridge_move_terminal")
+public func ghosttyBridgeMoveTerminal(
+    _ fromNativePanelIdPtr: UnsafePointer<CChar>,
+    _ toNativePanelIdPtr: UnsafePointer<CChar>,
+    _ toNsWindowPtr: UnsafeMutableRawPointer,
+    _ toBrowserWindowId: Int
+) -> Bool {
+    MainActor.assumeIsolated {
+        let targetWindow = Unmanaged<NSWindow>.fromOpaque(toNsWindowPtr).takeUnretainedValue()
+        return GhosttyBridgeImpl.shared.moveTerminal(
+            fromNativePanelId: String(cString: fromNativePanelIdPtr),
+            toNativePanelId: String(cString: toNativePanelIdPtr),
+            to: targetWindow,
+            toBrowserWindowId: toBrowserWindowId
+        )
+    }
+}
 
 @_cdecl("ghostty_bridge_close")
 public func ghosttyBridgeClose(_ panelId: UnsafePointer<CChar>) -> Bool {

@@ -26,10 +26,10 @@ export function applyHydratedDraftsToOpenDocuments(input: {
     if (document.source.kind !== "disk" || document.dirty) {
       continue;
     }
-    const draft = readPersistedDiskDraft(
-      document.source.root,
-      document.source.path
-    );
+    const draft = readPersistedDiskDraft(document.id, {
+      path: document.source.path,
+      root: document.source.root,
+    });
     if (!draft) {
       continue;
     }

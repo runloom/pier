@@ -139,20 +139,21 @@ export function createDiskDocumentRecord(input: {
   root: string;
 }): FilesDocument {
   if (input.draft) {
+    const deletedOnDisk = input.draft.deletedOnDisk ?? false;
     return {
       baseMtimeMs: input.draft.baseMtimeMs,
       canonicalPath: input.draft.canonicalPath ?? null,
       capabilities: DISK_TEXT_CAPABILITIES,
       currentContents: input.draft.currentContents,
-      deletedOnDisk: false,
+      deletedOnDisk,
       dirty: input.draft.dirty ?? true,
       durabilityUnknown: input.draft.durabilityUnknown ?? false,
-      conflictDiskContents: null,
-      diskConflict: false,
+      conflictDiskContents: input.draft.conflictDiskContents ?? null,
+      diskConflict: input.draft.diskConflict ?? false,
       error: null,
       eol: input.draft.eol ?? null,
       format: input.draft.format ?? null,
-      hasBackingStore: true,
+      hasBackingStore: !deletedOnDisk,
       id: input.id,
       language: languageForPath(input.path),
       loadState: "idle",

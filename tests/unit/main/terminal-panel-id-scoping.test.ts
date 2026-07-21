@@ -86,6 +86,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       clearTerminalPanelAgent: vi.fn(async () => undefined),
+      ensureTerminalPanelSession: vi.fn(async () => undefined),
       patchTerminalPanelAgentStatus: vi.fn(async () => false),
       patchTerminalPanelTab: vi.fn(async () => undefined),
       patchTerminalPanelTaskStatus: vi.fn(async () => true),
@@ -125,6 +126,12 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => win),
       findInternalWindowId: vi.fn(() => `w${winId}`),
+      findWindowContext: vi.fn(() => ({
+        electronWindowId: String(win.id),
+        mode: "restore" as const,
+        recordId: `w${winId}`,
+        windowId: `w${winId}`,
+      })),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
@@ -192,6 +199,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       clearTerminalPanelAgent: vi.fn(async () => undefined),
+      ensureTerminalPanelSession: vi.fn(async () => undefined),
       patchTerminalPanelAgentStatus: vi.fn(async () => false),
       patchTerminalPanelTab: vi.fn(async () => undefined),
       patchTerminalPanelTaskStatus: vi.fn(async () => true),
@@ -222,6 +230,11 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       // 按 webContents 反查:每个 sender 是不同 webContents 对象, 路由对应 window.
       findAppWindowByWebContents: vi.fn((wc: unknown) => wcMap.get(wc) ?? null),
       findInternalWindowId: vi.fn(() => "main"),
+      findWindowContext: vi.fn(() => ({
+        mode: "restore" as const,
+        recordId: "main",
+        windowId: "main",
+      })),
     }));
 
     const fakeIpcMain = {

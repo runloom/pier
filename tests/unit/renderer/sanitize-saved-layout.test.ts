@@ -407,4 +407,54 @@ describe("sanitizeSavedLayout", () => {
     expect(sanitizeSavedLayout({}, known)).toBeNull();
     expect(sanitizeSavedLayout({ panels: "no" }, known)).toBeNull();
   });
+
+  it("treats panel-transfer-unavailable placeholders as known components", () => {
+    const withPlaceholder = new Set([...known, "panel-transfer-unavailable"]);
+    const result = sanitizeSavedLayout(
+      layout({
+        leaves: [
+          {
+            groupId: "1",
+            views: ["placeholder-1", "terminal-1"],
+          },
+        ],
+        panels: [
+          {
+            contentComponent: "panel-transfer-unavailable",
+            id: "placeholder-1",
+          },
+          { contentComponent: "terminal", id: "terminal-1" },
+          { contentComponent: "pier.git.changes", id: "git-changes" },
+        ],
+      }),
+      withPlaceholder
+    );
+    expect(result).not.toBeNull();
+    expect(Object.keys(result?.panels ?? {}).sort()).toEqual([
+      "placeholder-1",
+      "terminal-1",
+    ]);
+  });
+
+  it("keeps a sole placeholder panel instead of nulling to the default layout", () => {
+    const withPlaceholder = new Set(["panel-transfer-unavailable"]);
+    const result = sanitizeSavedLayout(
+      layout({
+        leaves: [{ groupId: "1", views: ["placeholder-only"] }],
+        panels: [
+          {
+            contentComponent: "panel-transfer-unavailable",
+            id: "placeholder-only",
+          },
+        ],
+      }),
+      withPlaceholder
+    );
+    expect(result).not.toBeNull();
+    expect(result?.panels).toMatchObject({
+      "placeholder-only": {
+        contentComponent: "panel-transfer-unavailable",
+      },
+    });
+  });
 });
