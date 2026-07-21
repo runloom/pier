@@ -107,35 +107,47 @@ async function verifyLocalAsset(id, version, entry) {
 }
 
 async function verifyReleaseAsset(id, version, entry) {
-  let response;
-  try {
-    response = await fetch(entry.assetUrl, {
-      redirect: "follow",
-      signal: AbortSignal.timeout(60_000),
-    });
-  } catch (err) {
-    fail(
-      `could not download ${id}@${version}: ${err instanceof Error ? err.message : String(err)}`
-    );
-  }
-  if (!(response.ok && response.body)) {
-    fail(
-      `could not download ${id}@${version}: HTTP ${response.status} ${response.statusText}`
-    );
-  }
+  const { mkdtemp, rm } = await import("node:fs/promises");
+  const { tmpdir } = await import("node:os");
+  const { basename } = await import("node:path");
+  const { spawnSync } = await import("node:child_process");
 
-  const digest = createHash("sha256");
-  let actualSize = 0;
-  for await (const chunk of response.body) {
-    actualSize += chunk.byteLength;
-    if (actualSize > entry.size) {
+  const work = await mkdtemp(join(tmpdir(), "pier-verify-plugin-"));
+  const tag = releaseTag(id, version);
+  const pattern = basename(entry.assetUrl);
+  try {
+    const result = spawnSync(
+      "gh",
+      [
+        "release",
+        "download",
+        tag,
+        "--repo",
+        "runloom/pier",
+        "--pattern",
+        pattern,
+        "--dir",
+        work,
+      ],
+      { encoding: "utf8" }
+    );
+    if (result.status !== 0) {
       fail(
-        `${id}@${version} size mismatch: expected ${entry.size}, got more than ${entry.size}`
+        `could not download ${id}@${version} via gh: ${(result.stderr || result.stdout || "unknown error").trim()}`
       );
     }
-    digest.update(chunk);
+    const assetPath = join(work, pattern);
+    const assetStat = await stat(assetPath).catch(() => null);
+    if (!assetStat) {
+      fail(
+        `could not download ${id}@${version}: missing ${pattern} after gh download`
+      );
+    }
+    const actualSha = await sha256File(assetPath);
+    assertAssetDigest(id, version, entry, assetStat.size, actualSha);
+  } finally {
+    await rm(work, { force: true, recursive: true });
   }
-  assertAssetDigest(id, version, entry, actualSize, digest.digest("hex"));
 }
 
 async function verifyIndex() {
