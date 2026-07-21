@@ -152,6 +152,8 @@ const PLUGIN_SETTINGS_INITIAL_STATE = {
 const DIALOG_INITIAL_STATE = {
   activeSection: "appearance",
   isOpen: false,
+  projectsFocusPath: null,
+  projectsTab: "environment" as const,
 };
 
 // ---------------------------------------------------------------------------
@@ -254,7 +256,8 @@ function openEnvironmentSettings(): void {
   });
   act(() => {
     useSettingsDialogStore.setState({
-      activeSection: "environment",
+      activeSection: "projects",
+      projectsTab: "environment",
       isOpen: true,
     });
   });
@@ -346,12 +349,13 @@ describe("SettingsDialog — Environment section", () => {
     openEnvironmentSettings();
 
     expect(
-      screen.getByRole("heading", { name: "Environment" })
+      screen.getByRole("heading", { name: "Projects" })
     ).toBeInTheDocument();
-    expect(screen.getByText("No environment settings")).toBeInTheDocument();
-    expect(
-      screen.getByRole("button", { name: "Add environment setting" })
-    ).toHaveAttribute("data-size", "default");
+    expect(screen.getByText("No projects yet")).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Add project" })).toHaveAttribute(
+      "data-size",
+      "default"
+    );
     expect(screen.queryByRole("textbox", { name: "Setup command" })).toBeNull();
   });
 
@@ -448,9 +452,7 @@ describe("SettingsDialog — Environment section", () => {
 
     openEnvironmentSettings();
 
-    fireEvent.click(
-      screen.getByRole("button", { name: "Add environment setting" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Add project" }));
 
     await waitFor(() => {
       expect(
@@ -543,7 +545,7 @@ describe("SettingsDialog — Environment section", () => {
     fireEvent.change(setupInput, { target: { value: "dirty" } });
 
     appDialogMocks.showAppConfirm.mockResolvedValueOnce(false);
-    fireEvent.click(screen.getByRole("button", { name: "Back" }));
+    fireEvent.click(screen.getByRole("button", { name: "Back to projects" }));
 
     await waitFor(() => {
       expect(appDialogMocks.showAppConfirm).toHaveBeenCalledWith(
@@ -582,15 +584,26 @@ describe("SettingsDialog — Environment section", () => {
 
     openEnvironmentSettings();
 
+    // Radix Tabs switches on mousedown; click alone is not enough.
+    const generalTab = screen.getByRole("tab", { name: "General" });
+    fireEvent.mouseDown(generalTab, { button: 0 });
+    fireEvent.click(generalTab);
+
+    await waitFor(() => {
+      expect(
+        screen.getByRole("button", { name: "Remove this project" })
+      ).toBeInTheDocument();
+    });
+
     fireEvent.click(
-      screen.getByRole("button", { name: "Delete this environment setting" })
+      screen.getByRole("button", { name: "Remove this project" })
     );
 
     await waitFor(() => {
       expect(appDialogMocks.showAppConfirm).toHaveBeenCalledWith(
         expect.objectContaining({
           intent: "destructive",
-          size: "sm",
+          size: "default",
         })
       );
     });
@@ -600,7 +613,7 @@ describe("SettingsDialog — Environment section", () => {
       });
     });
     await waitFor(() => {
-      expect(screen.getByText("No environment settings")).toBeInTheDocument();
+      expect(screen.getByText("No projects yet")).toBeInTheDocument();
     });
   });
 });

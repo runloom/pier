@@ -36,6 +36,7 @@ import {
   pluginUpdateCommandSchema,
 } from "./plugin-commands.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
+import { projectSkillsCommandSchemas } from "./project-skills-commands.ts";
 import { taskSpawnModeSchema } from "./tasks.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
@@ -445,6 +446,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   pluginDevOverrideSetCommandSchema,
   pluginDevOverrideClearCommandSchema,
   appRelaunchCommandSchema,
+  ...projectSkillsCommandSchemas,
 ]);
 
 export type PierCommand = z.infer<typeof pierCommandSchema>;

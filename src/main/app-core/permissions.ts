@@ -210,6 +210,72 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["plugin:write"],
   },
+  "skills.projects.snapshot": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:read"],
+  },
+  "skills.snapshot": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["skills:read"],
+  },
+  // Read one discovered skill's SKILL.md (read-only detail / editor prefill).
+  "skills.skill.read": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["skills:read"],
+  },
+  "skills.import.prepare": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.import.prepareFromDiscovery": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.import.prepareTemplate": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.import.prepareContentUpdate": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.import.prepareDriftAcceptance": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.import.discard": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.plan": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:read"],
+  },
+  "skills.apply": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.repair.plan": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:read"],
+  },
+  "skills.repair": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.doctor": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["skills:read"],
+  },
+  "skills.operation.status": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["skills:read"],
+  },
+  // Reuses terminal/agent launch write surface, not skills:read (design §4.1).
+  "agent.launch.continue": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["workspace:open", "terminal:control"],
+  },
   "app.relaunch": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["window:control"],

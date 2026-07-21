@@ -15,6 +15,7 @@ import type {
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import { createLogger } from "@shared/logger.ts";
 import { resolveOneShotInvocation } from "../agents/agent-launch.ts";
+import type { ManagedAgentLaunchGate } from "../project-skills/launch-gate.ts";
 import { supportsOneShot } from "./agent-one-shot.ts";
 
 export interface AiService {
@@ -38,6 +39,11 @@ export interface CreateAiServiceOptions {
   /** 已安装 agent id 列表(注入 agent-detection 的探测结果)。 */
   detectAgents: () => Promise<readonly AgentKind[]>;
   failureCooldownMs?: number;
+  /**
+   * Optional project-skills launch gate. When provided and request has
+   * projectRootPath, generateText runs ensureReady before spawning CLI.
+   */
+  launchGate?: ManagedAgentLaunchGate;
   now?: () => number;
   readAgentUsage?: () => Promise<AgentUsageState>;
   readPreferences: () => Promise<ProjectPreferences>;
@@ -193,6 +199,7 @@ function failureResult(
 export function createAiService({
   detectAgents,
   failureCooldownMs = DEFAULT_FAILURE_COOLDOWN_MS,
+  launchGate,
   now = Date.now,
   readAgentUsage = async () => EMPTY_AGENT_USAGE_STATE,
   readPreferences,
@@ -292,6 +299,27 @@ export function createAiService({
           continue;
         }
         try {
+          if (launchGate && request.projectRootPath?.trim()) {
+            const gate = await launchGate.ensureReady({
+              agentId: agent,
+              projectRootPath: request.projectRootPath,
+              surface: { kind: "one-shot" },
+            });
+            if (gate.status === "blocked") {
+              // Design v8 §5.2: a blocked one-shot returns a structured
+              // failure to the calling business UI. Falling through to the
+              // next agent would silently bypass the gate — forbidden.
+              generateTextLog.warn("launch gate blocked one-shot", {
+                agentId: agent,
+                issues: gate.issueSummary,
+              });
+              return {
+                message: `project skills not ready: ${gate.issueSummary.join("; ") || gate.degradePolicySummary}`,
+                reason: "request_failed",
+                status: "unavailable",
+              };
+            }
+          }
           const text = await runOneShot(invocation.binary, invocation.args, {
             cwd,
             timeoutMs: oneShotTimeout(agent, timeoutMs),

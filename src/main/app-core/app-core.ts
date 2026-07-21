@@ -30,6 +30,7 @@ import { createAppUpdateService } from "../services/app-updates/app-update-servi
 import { createElectronAppUpdaterAdapter } from "../services/app-updates/electron-updater-adapter.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createFileDraftsService } from "../services/file-drafts-service.ts";
+import { FilePathTransactionLock } from "../services/file-path-transaction-lock.ts";
 import { createFileService } from "../services/file-service.ts";
 import { createFileWatchService } from "../services/file-watch-service.ts";
 import { GitReviewService } from "../services/git-review/git-review-service.ts";
@@ -92,17 +93,19 @@ import { createLazyAppCore } from "./lazy-app-core.ts";
 import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
+import { wireProjectSkills } from "./project-skills-wiring.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
+import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
 import {
   broadcastAppUpdateChanged,
   broadcastEnvironmentsChanged,
   broadcastMruState,
   broadcastPluginRegistryChanged,
+  broadcastProjectSkillsInvalidated,
   broadcastTaskRunsSnapshot,
   broadcastTerminalStatusBarPrefs,
   broadcastWorktreeCreateProgress,
 } from "./window-broadcasts.ts";
-
 export interface PierAppCore {
   clients: PierClientRegistry;
   commandRouter: CommandRouter;
@@ -325,14 +328,36 @@ function createPierAppCore(): PierAppCore {
     snapshot: () => foregroundActivityService.snapshot(),
     rendererCommand,
   });
+  const filePathTransactionLock = new FilePathTransactionLock();
+  const files = createFileService({
+    transactionLock: filePathTransactionLock,
+  });
+  const localEnvironments = createLocalEnvironmentService({
+    processEnvironment,
+  });
+  const panelContexts = createPanelContextService();
+  const { projectSkills, agentLaunchGate } = wireProjectSkills({
+    userData: app.getPath("userData"),
+    isProduction: runtimeMode === "production",
+    transactionLock: filePathTransactionLock,
+    panelContexts,
+    localEnvironments,
+    listInstalledAgents: async () =>
+      (await agentDetection.detect()).detectedIds,
+    onInvalidated: (event) => {
+      broadcastProjectSkillsInvalidated(event);
+    },
+  });
   const services: PierCoreServices = {
     agentDetection,
     agentRuntimeIndex,
     agentUsage,
+    agentLaunchGate,
     ai: createAiService({
       detectAgents: async () => (await agentDetection.detect()).detectedIds,
       readAgentUsage: () => agentUsage.read(),
       readPreferences: () => preferences.read(),
+      launchGate: agentLaunchGate,
     }),
     appUpdates: createAppUpdateService({
       currentVersion: app.getVersion(),
@@ -346,47 +371,23 @@ function createPierAppCore(): PierAppCore {
       broadcast: broadcastMruState,
     }),
     fileDrafts,
-    files: createFileService(),
+    files,
     fileWatch: createFileWatchService(),
     preferences,
+    projectSkills,
     secrets,
     usageData,
     processEnvironment,
-    localEnvironments: createLocalEnvironmentService({ processEnvironment }),
+    localEnvironments,
     plugins: pluginHost.plugins,
     managedPlugins,
     pluginDisableTransitions,
     pluginSettings,
-    panelContexts: createPanelContextService(),
+    panelContexts,
     rendererCommand,
     tasks: createTaskService({
       onTaskRunsChanged: broadcastTaskRunsSnapshot,
-      onTaskActivity: {
-        onLaunched: (panelId, windowId, task) => {
-          if (!windowId) {
-            // windowId 缺失的 activity 永远路由不到任何 renderer（广播按
-            // electron id 定向），入聚合器只会留一个不可见 slot——拒收并留痕。
-            // 生产 openTerminalForLaunch 无 windowId 会直接 throw, 此处仅防
-            // 类型层面的 undefined。
-            console.warn(
-              "[task-activity] missing windowId, activity skipped:",
-              panelId
-            );
-            return;
-          }
-          foregroundActivityService.taskLaunched(panelId, windowId, task);
-        },
-        onCleared: (panelId, windowId, args) => {
-          if (!windowId) {
-            console.warn(
-              "[task-activity] missing windowId on clear, activity skipped:",
-              panelId
-            );
-            return;
-          }
-          foregroundActivityService.taskFinished(panelId, windowId, args);
-        },
-      },
+      onTaskActivity: createTaskActivityHandlers(foregroundActivityService),
       processEnvironment,
     }),
     terminalProfiles: createTerminalProfileService(),

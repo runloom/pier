@@ -122,6 +122,8 @@ export const PIER_BROADCAST = {
   // 系统通知权限探针快照变化；payload SystemNotificationPermissionSnapshot
   SYSTEM_NOTIFICATION_PERMISSION_CHANGED:
     "pier://notification:permission-changed",
+  // 项目技能状态失效 (main → 所有 renderer, payload { projectIdentity, observedRevision })
+  PROJECT_SKILLS_INVALIDATED: "pier://project-skills:invalidated",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

@@ -31,6 +31,7 @@ import {
 } from "./panel-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
 import { executePluginCommand } from "./plugin-commands.ts";
+import { executeProjectSkillsCommand } from "./project-skills-commands.ts";
 import {
   executeRunCancelCommand,
   executeRunListCommand,
@@ -358,6 +359,7 @@ async function executeCommandByDomain(
     (cmd: PierCommand) =>
       executeWindowWorkspaceCommand(requestId, cmd, services),
     (cmd: PierCommand) => executePanelCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeProjectSkillsCommand(requestId, cmd, services),
   ];
   for (const executor of executors) {
     const result = await executor(command);

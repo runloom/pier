@@ -1,10 +1,13 @@
-import { pluginPermissions } from "./plugin-permissions.ts";
+import { settingsPlugins } from "./settings-plugins.ts";
+import { settingsSkills } from "./settings-skills.ts";
 
 export const settings = {
   title: "Settings",
   description: "Manage application preferences",
   nav: {
     appearance: "Appearance",
+    projects: "Projects",
+    skills: "Skills",
     environment: "Environment",
     keybindings: "Keyboard",
     plugins: "Plugins",
@@ -17,6 +20,8 @@ export const settings = {
   },
   section: {
     appearance: "Appearance",
+    projects: "Projects",
+    skills: "Skills",
     environment: "Environment",
     font: "Font",
     keybindings: "Keyboard Shortcuts",
@@ -27,6 +32,45 @@ export const settings = {
     agents: "Agents",
     notifications: "Notifications",
   },
+  projects: {
+    addProject: "Add project",
+    back: "Back to projects",
+    description:
+      "Environment setup and agent skills for each project. Pick a project, then configure Environment, Skills, or General.",
+    emptyDescription:
+      "Add a project to manage its environment scripts, variables, and skills.",
+    emptyTitle: "No projects yet",
+    general: {
+      dangerDescription:
+        "Removes this project from Pier’s shared index. Worktree folders and skill files on disk are not deleted.",
+      dangerTitle: "Remove from Pier",
+      deleteHint: "You can add the project again later.",
+      deleteProject: "Remove this project",
+      deleteConfirmBody:
+        'Remove "{{name}}" from Pier? Environment scripts will no longer run for its worktrees.',
+      deleteConfirmBoundBody:
+        'Remove "{{name}}" from Pier? {{count}} worktree(s) are bound; their cleanup scripts will no longer run on removal.',
+      deleteConfirmTitle: "Remove project from Pier?",
+      deliveryDescription:
+        "Choose which discovery folders should include skills that are on. If none are selected, agents will not find these skills.",
+      deliveryTitle: "Discovery paths",
+      deliveryAgents: "Project shared path (.agents/skills)",
+      deliveryAgentsHint:
+        "Used by Codex, Cursor, and other agents that scan this folder.",
+      deliveryClaude: "Claude Code (.claude/skills)",
+      deliveryClaudeHint:
+        "Claude Code only looks here. Turn on if Claude Code should see these skills.",
+      gitIgnoreTitle: "Suggested Git ignore",
+      gitIgnoreDescription:
+        "Pier recommends not committing discovery links. Copy these lines into .gitignore if you want.",
+      gitIgnoreCopy: "Copy ignore lines",
+      gitIgnoreCopied: "Copied",
+    },
+    tabEnvironment: "Environment",
+    tabGeneral: "General",
+    tabSkills: "Skills",
+  },
+  skills: settingsSkills,
   environment: {
     addEnvironment: "Add environment setting",
     addFailed: "Add failed",
@@ -86,11 +130,11 @@ export const settings = {
       restart: "Restart and Install",
     },
     toast: {
-      statusFailed: "Failed to read update status",
-      checkFailed: "Failed to check for updates",
-      downloadFailed: "Failed to download update",
-      installFailed: "Failed to install update",
-      ready: "Pier {{version}} is ready to install.",
+      statusFailed: "Couldn't read update status",
+      checkFailed: "Couldn't check for updates",
+      downloadFailed: "Couldn't download update",
+      installFailed: "Couldn't install update",
+      ready: "Pier {{version}} ready to install",
     },
     titleBar: {
       update: "Update",
@@ -229,113 +273,16 @@ export const settings = {
         resetLayout: "Clear and restore the default workspace layout.",
       },
     },
-    errorConflict: 'Already used by "{{command}}".',
-    errorNeedsModifier: "Shortcut must include at least one modifier.",
-    errorUnknown: "Unable to save shortcut.",
+    errorConflict: 'Already used by "{{command}}"',
+    errorNeedsModifier: "Add a modifier key",
+    errorUnknown: "Couldn't save shortcut",
     record: "Record",
     recording: "Press keys...",
     reset: "Reset",
     resetAll: "Reset All",
     unassigned: "Unassigned",
   },
-  plugins: {
-    title: "Plugins",
-    description:
-      "Built-in plugins can be enabled or disabled here. Local plugins are info-only in this version.",
-    status: {
-      enabled: "Enabled",
-      disabled: "Disabled",
-      manifestOnly: "Info only",
-      runtimeUnavailable: "Not loaded",
-    },
-    runtimeUnavailableDescription:
-      "This plugin is installed but is not loaded right now. Restart Pier; if the issue persists, reinstall the plugin.",
-    contributionSummary: {
-      command: "{{count}} command",
-      commands: "{{count}} commands",
-      workbenchWidget: "{{count}} Workbench widget",
-      workbenchWidgets: "{{count}} Workbench widgets",
-      none: "No contributions",
-      panel: "{{count}} panel",
-      panels: "{{count}} panels",
-      terminalStatusItem: "{{count}} terminal status item",
-      terminalStatusItems: "{{count}} terminal status items",
-    },
-    permissionLabels: pluginPermissions,
-    loadingTitle: "Loading plugins",
-    loadingDescription: "Reading plugin manifests...",
-    emptyTitle: "No plugins found",
-    emptyDescription: "Built-in and local plugins will appear here.",
-    diagnostics: {
-      invalidManifest: "Plugin manifest could not be read",
-      runtime: "Plugin failed to load",
-      unsupported: "Plugin is not supported",
-    },
-    errorTitle: "Unable to load plugins",
-    openSettings: "Settings",
-    openSettingsPlugin: "Open {{name}} settings",
-    source: {
-      builtin: "Built-in",
-      local: "Local",
-      git: "Git",
-      registry: "Registry",
-      official: "Official",
-      devOverride: "Dev Override",
-    },
-    tabs: {
-      installed: "Installed",
-      available: "Not Installed",
-    },
-    trustNotice:
-      "Official plugins are managed trusted code and are not sandboxed.",
-    pluginMode: {
-      workspaceTitle: "Local development loading",
-      workspaceBody:
-        "Loading plugins from local package directories. Official updates are disabled so release assets cannot overwrite local work.",
-      releaseTitle: "Managed install",
-      releaseBody:
-        "Plugins follow the managed install and update flow, like a production build. For package work set `PIER_PLUGIN_MODE=workspace` (local development loading).",
-    },
-    checkUpdates: "Check for Updates",
-    restartNow: "Restart Pier Now",
-    restartNotice: "Restart Pier to use the installed plugin version.",
-    restartDevNotice:
-      "In development mode only the UI reloads. Fully unloading the plugin main process requires quitting and re-running `pnpm dev`.",
-    updateAvailable: "Update available",
-    restartRequired: "Restart required",
-    action: {
-      enable: "Enable",
-      disable: "Disable",
-      enablePlugin: "Enable {{name}}",
-      disablePlugin: "Disable {{name}}",
-      install: "Install",
-      update: "Update",
-      uninstall: "Uninstall",
-      rollback: "Roll Back to {{version}}",
-      restoreBundled: "Restore Bundled Version",
-    },
-    emptyInstalledTitle: "No plugins installed",
-    emptyInstalledDescription:
-      "Built-in and official plugins will appear here.",
-    emptyAvailableTitle: "No uninstalled plugins",
-    emptyAvailableDescription: "Everything available is already installed.",
-    toast: {
-      installing: "Installing {{name}}…",
-      installed: "{{name}} installed · v{{version}}",
-      installFailed: "Failed to install {{name}}",
-      uninstalling: "Uninstalling {{name}}…",
-      uninstalled: "{{name}} uninstalled (takes effect next launch)",
-      uninstallFailed: "Failed to uninstall {{name}}",
-      updating: "Updating {{name}}…",
-      updated: "{{name}} updated to v{{version}}",
-      updateFailed: "Failed to update {{name}}",
-      checkUpdatesSuccess: "Plugin updates checked",
-      checkUpdatesFailed: "Failed to check plugin updates",
-      rollingBack: "Rolling back {{name}}…",
-      rolledBack: "{{name}} rolled back to v{{version}}",
-      rollbackFailed: "Failed to roll back {{name}}",
-    },
-  },
+  plugins: settingsPlugins,
   pluginConfiguration: {
     modified: "Modified",
     resetToDefault: "Reset to default",
@@ -386,8 +333,8 @@ export const settings = {
       title: "Agent CLIs",
       description: "Installed and detected agents",
       refresh: "Refresh",
-      refreshSuccess: "Agent list refreshed",
-      refreshFailed: "Failed to refresh agent list",
+      refreshSuccess: "List refreshed",
+      refreshFailed: "Couldn't refresh list",
     },
     status: {
       detected: "Detected",
@@ -401,7 +348,7 @@ export const settings = {
       isDefault: "Default",
       expand: "Details",
       website: "Website",
-      websiteOpenBusy: "Another external link is already opening.",
+      websiteOpenBusy: "Another link is already opening",
       websiteOpenFailedDescription: "The agent website could not be opened.",
       websiteOpenFailedTitle: "Unable to open website",
     },
@@ -445,9 +392,9 @@ export const settings = {
     },
     sendTest: "Send test notification",
     openSystemSettings: "Open system settings",
-    testSent: "Test notification sent",
-    testFailed: "Test notification failed",
-    testFailedShort: "Could not show test notification",
+    testSent: "Test sent",
+    testFailed: "Test failed",
+    testFailedShort: "Couldn't show test notification",
     testFailedDetail:
       "Could not deliver a system notification ({{reason}}). Allow this app in System Settings → Notifications, then try again.",
     testHint:

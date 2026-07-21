@@ -147,15 +147,69 @@ export interface CreateTerminalArgs {
   initialInput?: string | undefined;
   launchId?: string | undefined;
   panelId: string;
+  /**
+   * 受管启动重试握手（design v8 §5.2.7）：携带处于 SPAWN_INTENT 授权窗口内的
+   * attempt id 时，跳过重新校正直接放行；窗口外拒绝且不 replay。
+   */
+  skillsLaunchContinuation?: string | undefined;
   tab?: PanelTabChrome | undefined;
   task?: TaskPanelMetadata | undefined;
   /** 后台任务的只读 Ghostty 输出会话；存在时不创建 shell/PTY。 */
   taskOutput?: TaskOutputPanelParams | undefined;
 }
 
+/** 启动门阻断的结构化载荷（design v8 §5.2 / §7.8）。 */
+export interface SkillsLaunchBlockedInfo {
+  contentRiskRequirementId?: string | undefined;
+  degradePolicySummary:
+    | "allowed"
+    | "requires-content-risk-confirmation"
+    | "denied";
+  expiresAt: number;
+  focusIssueIds?: string[] | undefined;
+  issueSummary: string[];
+  issues?:
+    | Array<{
+        adapterKind?: string | undefined;
+        code: string;
+        id: string;
+        relativeTarget?: string | undefined;
+        skillId?: string | undefined;
+      }>
+    | undefined;
+  launchAttemptId: string;
+  projectRootPath?: string | undefined;
+}
+
+export type SkillsLaunchContinueResult =
+  | {
+      status: "ready";
+      launchAttemptId: string;
+      degraded: boolean;
+    }
+  | {
+      status: "cancelled";
+      launchAttemptId: string;
+      decision: "open-settings" | "cancel";
+    }
+  | {
+      status: "rejected";
+      launchAttemptId: string;
+      reason: string;
+      message: string;
+      gate?: ({ status: "blocked" } & SkillsLaunchBlockedInfo) | undefined;
+    }
+  | {
+      status: "indeterminate";
+      launchAttemptId: string;
+      message: string;
+    };
+
 export interface CreateTerminalResult {
   error?: string;
   ok: boolean;
+  /** 受管启动被技能门阻断时的结构化信息（renderer 弹三选）。 */
+  skillsLaunchBlocked?: SkillsLaunchBlockedInfo | undefined;
 }
 
 export interface RebindTaskOutputResult extends CreateTerminalResult {

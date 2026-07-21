@@ -23,9 +23,12 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/panel-kits/workbench/workbench-library-dialog.tsx",
   // 环境列表按钮由 Item asChild 提供视觉和交互原语。
   "src/renderer/pages/settings/components/environment-section.tsx",
+  // 技能项目列表同上。
+  "src/renderer/pages/settings/components/skills/skills-project-list.tsx",
 ]);
 const ITEM_AS_CHILD_BUTTON_OWNERS = new Set([
   "src/renderer/pages/settings/components/environment-section.tsx",
+  "src/renderer/pages/settings/components/skills/skills-project-list.tsx",
 ]);
 const DETACHED_ITEM_HELPERS = new Map([
   [

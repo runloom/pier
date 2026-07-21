@@ -9,6 +9,7 @@ import type {
 } from "@shared/contracts/terminal.ts";
 import { resolveAgentResumeLaunch } from "../services/agents/agent-resume-adapters.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
+import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-gate.ts";
 import type { TaskService } from "../services/tasks/task-service-types.ts";
 import {
   clearTerminalPanelAgent,
@@ -38,10 +39,19 @@ import type { RegisteredTerminalTaskLifecycle } from "./terminal-task-lifecycle-
 import type { TaskOutputTerminalBindings } from "./terminal-task-output-bindings.ts";
 import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.values(value).every((entry) => typeof entry === "string")
+  );
+}
+
 export async function handleTerminalCreate(args: {
   addon: NativeAddon | null;
   createArgs: CreateTerminalArgs;
   loadError: string | null;
+  launchGate?: ManagedAgentLaunchGate | null | undefined;
   processEnvironment: ProcessEnvironmentService;
   recordAgentLaunch?:
     | ((agentId: AgentKind) => Promise<unknown> | unknown)
@@ -55,6 +65,7 @@ export async function handleTerminalCreate(args: {
     addon,
     createArgs,
     loadError,
+    launchGate,
     processEnvironment,
     recordAgentLaunch,
     taskLifecycle,
@@ -181,20 +192,148 @@ export async function handleTerminalCreate(args: {
       }
     );
     const nativePanelId = toNativePanelKey(win, createArgs.panelId);
-    const ok = addon.createTerminal(
-      handle,
-      nativePanelId,
-      createArgs.frame,
-      createArgs.font.family,
-      createArgs.font.size,
-      withPanelStatusEnv(
-        launchForNative,
-        createArgs.panelId,
-        String(win.id),
-        foregroundActivityService.hookEnv()
-      ),
-      lifecycleId
-    );
+    // Managed agent launches must pass project-skills gate before native spawn.
+    // Project identity comes from the main-resolved native launch cwd —
+    // never treat renderer createArgs.context as final authority (v8 §5.2).
+    let spawnedUnderAttemptId: string | null = null;
+    if (launchGate && launch.launchAgentId) {
+      const launchSurface = {
+        kind: "terminal" as const,
+        panelId: createArgs.panelId,
+        ...(windowId === undefined ? {} : { windowId }),
+      };
+      const launchEnvironmentCandidate =
+        launchForNative && "env" in launchForNative
+          ? launchForNative.env
+          : undefined;
+      const launchEnvironment = isStringRecord(launchEnvironmentCandidate)
+        ? launchEnvironmentCandidate
+        : undefined;
+      const launchSpecification = {
+        ...(launchForNative?.command === undefined
+          ? {}
+          : { command: launchForNative.command }),
+        ...(launchForNative?.cwd === undefined
+          ? {}
+          : { cwd: launchForNative.cwd }),
+        ...(launchEnvironment === undefined ? {} : { env: launchEnvironment }),
+        ...(createArgs.initialInput === undefined
+          ? {}
+          : { initialInput: createArgs.initialInput }),
+      };
+      const projectRootPath = launchForNative?.cwd;
+      if (createArgs.skillsLaunchContinuation) {
+        // Continuation handshake (design v8 §5.2.7): admit exactly while the
+        // attempt sits in the durable SPAWN_INTENT window; no re-gating, no
+        // new attempt, no replay after consumption.
+        const authorization = await launchGate.authorizeSpawn(
+          createArgs.skillsLaunchContinuation,
+          {
+            agentId: launch.launchAgentId,
+            launchSpecification,
+            ...(projectRootPath === undefined ? {} : { projectRootPath }),
+            surface: launchSurface,
+          }
+        );
+        if (!authorization.ok) {
+          if (!restoredAgentLaunch) {
+            await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
+          }
+          foregroundActivityService.panelClosed(
+            createArgs.panelId,
+            String(win.id)
+          );
+          return {
+            ok: false,
+            error: `launch continuation rejected: ${authorization.message}`,
+          };
+        }
+        spawnedUnderAttemptId = createArgs.skillsLaunchContinuation;
+      } else {
+        const gate = await launchGate.ensureReady({
+          agentId: launch.launchAgentId,
+          launchSpecification,
+          ...(projectRootPath === undefined ? {} : { projectRootPath }),
+          surface: launchSurface,
+        });
+        if (gate.status === "blocked") {
+          if (!restoredAgentLaunch) {
+            await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
+          }
+          foregroundActivityService.panelClosed(
+            createArgs.panelId,
+            String(win.id)
+          );
+          return {
+            ok: false,
+            error: "skills-launch-blocked",
+            skillsLaunchBlocked: {
+              launchAttemptId: gate.launchAttemptId,
+              issueSummary: gate.issueSummary,
+              ...(gate.issues === undefined
+                ? {}
+                : {
+                    focusIssueIds: gate.issues.map((issue) => issue.id),
+                    issues: gate.issues.map((issue) => ({
+                      id: issue.id,
+                      code: issue.code,
+                      ...(issue.skillId === undefined
+                        ? {}
+                        : { skillId: issue.skillId }),
+                      ...(issue.adapterKind === undefined
+                        ? {}
+                        : { adapterKind: issue.adapterKind }),
+                      ...(issue.relativeTarget === undefined
+                        ? {}
+                        : { relativeTarget: issue.relativeTarget }),
+                    })),
+                  }),
+              degradePolicySummary: gate.degradePolicySummary,
+              expiresAt: gate.expiresAt,
+              ...(gate.contentRiskRequirementId === undefined
+                ? {}
+                : {
+                    contentRiskRequirementId: gate.contentRiskRequirementId,
+                  }),
+              ...(gate.projectRootPath === undefined
+                ? {}
+                : { projectRootPath: gate.projectRootPath }),
+            },
+          };
+        }
+      }
+    }
+    let ok: boolean;
+    try {
+      ok = addon.createTerminal(
+        handle,
+        nativePanelId,
+        createArgs.frame,
+        createArgs.font.family,
+        createArgs.font.size,
+        withPanelStatusEnv(
+          launchForNative,
+          createArgs.panelId,
+          String(win.id),
+          foregroundActivityService.hookEnv()
+        ),
+        lifecycleId
+      );
+    } catch (error) {
+      if (spawnedUnderAttemptId && launchGate) {
+        await launchGate
+          .recordSpawnResult(spawnedUnderAttemptId, false)
+          .catch(() => undefined);
+      }
+      throw error;
+    }
+    if (spawnedUnderAttemptId && launchGate) {
+      // Durable SPAWN_ACCEPTED / SPAWN_FAILED after the actual spawn attempt;
+      // any replay of the same attempt is rejected from here on.
+      await launchGate
+        .recordSpawnResult(spawnedUnderAttemptId, ok)
+        .catch(() => undefined);
+    }
     if (!ok) {
       foregroundActivityService.panelClosed(createArgs.panelId, String(win.id));
       if (!restoredAgentLaunch) {
