@@ -43,6 +43,14 @@ describe("project-skills launch architecture", () => {
     expect(gateIdx).toBeGreaterThan(0);
     expect(createIdx).toBeGreaterThan(gateIdx);
 
+    // Transfer disposition is re-checked after skills-gate awaits so a
+    // mid-flight lease cannot still spawn a competing surface.
+    expect(terminalHandler).toContain("resolveTerminalTransferCreateAction");
+    const transferAfterGateIdx = terminalHandler.indexOf("transferAfterGate");
+    expect(transferAfterGateIdx).toBeGreaterThan(gateIdx);
+    expect(createIdx).toBeGreaterThan(transferAfterGateIdx);
+    expect(terminalHandler).toContain("abandonAuthorizedSpawnAttempt");
+
     expect(terminalIpc).toContain("launchGate");
     expect(index).toContain("launchGate: appCore.services.agentLaunchGate");
 

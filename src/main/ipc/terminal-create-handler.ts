@@ -49,6 +49,40 @@ function isStringRecord(value: unknown): value is Record<string, string> {
   );
 }
 
+type TerminalTransferCreateAction = "proceed" | "skip" | "adopt";
+
+/**
+ * Panel-transfer create disposition for this window/panel.
+ * Call again after any await (skills gate) — lease state can change mid-flight.
+ */
+function resolveTerminalTransferCreateAction(
+  transfer: ReturnType<typeof getTerminalPanelTransfer>,
+  runtimeWindowId: string | undefined,
+  panelId: string
+): TerminalTransferCreateAction {
+  if (!(transfer && runtimeWindowId)) {
+    return "proceed";
+  }
+  if (transfer.shouldSkipTargetCreate(runtimeWindowId, panelId)) {
+    return "skip";
+  }
+  if (transfer.shouldAdoptMovedSurface(runtimeWindowId, panelId)) {
+    return "adopt";
+  }
+  return "proceed";
+}
+
+async function abandonAuthorizedSpawnAttempt(args: {
+  attemptId: string | null;
+  launchGate: ManagedAgentLaunchGate | null | undefined;
+}): Promise<void> {
+  const { attemptId, launchGate } = args;
+  if (!(attemptId && launchGate)) {
+    return;
+  }
+  await launchGate.recordSpawnResult(attemptId, false).catch(() => undefined);
+}
+
 export async function handleTerminalCreate(args: {
   addon: NativeAddon | null;
   createArgs: CreateTerminalArgs;
@@ -196,19 +230,16 @@ export async function handleTerminalCreate(args: {
     const nativePanelId = toNativePanelKey(win, createArgs.panelId);
     const transfer = getTerminalPanelTransfer();
     const runtimeWindowId = findInternalWindowId(win) ?? undefined;
-    if (
-      transfer &&
-      runtimeWindowId &&
-      transfer.shouldSkipTargetCreate(runtimeWindowId, createArgs.panelId)
-    ) {
+    const transferBeforeGate = resolveTerminalTransferCreateAction(
+      transfer,
+      runtimeWindowId,
+      createArgs.panelId
+    );
+    if (transferBeforeGate === "skip") {
       // Target is inert during lease — do not create a competing surface.
       return { ok: true };
     }
-    if (
-      transfer &&
-      runtimeWindowId &&
-      transfer.shouldAdoptMovedSurface(runtimeWindowId, createArgs.panelId)
-    ) {
+    if (transferBeforeGate === "adopt") {
       // Surface already moved under this native key — register focus only.
       terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
       return { ok: true };
@@ -324,6 +355,28 @@ export async function handleTerminalCreate(args: {
         }
       }
     }
+    // Re-check after skills-gate awaits: a cross-window drag may have entered
+    // leased/moving while ensureReady/authorizeSpawn was in flight.
+    const transferAfterGate = resolveTerminalTransferCreateAction(
+      transfer,
+      runtimeWindowId,
+      createArgs.panelId
+    );
+    if (transferAfterGate === "skip") {
+      await abandonAuthorizedSpawnAttempt({
+        attemptId: spawnedUnderAttemptId,
+        launchGate,
+      });
+      return { ok: true };
+    }
+    if (transferAfterGate === "adopt") {
+      await abandonAuthorizedSpawnAttempt({
+        attemptId: spawnedUnderAttemptId,
+        launchGate,
+      });
+      terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
+      return { ok: true };
+    }
     let ok: boolean;
     try {
       ok = addon.createTerminal(
@@ -341,11 +394,10 @@ export async function handleTerminalCreate(args: {
         lifecycleId
       );
     } catch (error) {
-      if (spawnedUnderAttemptId && launchGate) {
-        await launchGate
-          .recordSpawnResult(spawnedUnderAttemptId, false)
-          .catch(() => undefined);
-      }
+      await abandonAuthorizedSpawnAttempt({
+        attemptId: spawnedUnderAttemptId,
+        launchGate,
+      });
       throw error;
     }
     if (spawnedUnderAttemptId && launchGate) {

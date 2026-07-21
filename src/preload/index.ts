@@ -95,6 +95,7 @@ export type {
   PierEnvAPI,
   PierKeybindingAPI,
   PierMenuAPI,
+  PierNotificationsAPI,
   PierPluginsAPI,
   PierPreferencesAPI,
   PierRendererCommandAPI,
@@ -104,7 +105,6 @@ export type {
   PierWorkspaceAPI,
   PreferencesSnapshot,
 } from "./api-types.ts";
-export type { PierNotificationsAPI } from "./notifications-api.ts";
 
 import type {
   PierAgentsAPI,
@@ -120,9 +120,9 @@ import type {
   PierRendererCommandAPI,
   PierSettingsAPI,
   PierThemeAPI,
-  PierWindowNsAPI,
   PierWorkspaceAPI,
 } from "./api-types.ts";
+import type { PierWindowNsAPI } from "./window-api.ts";
 
 export interface PierWindowAPI {
   agentRuntimeIndex: PierAgentRuntimeIndexAPI;
