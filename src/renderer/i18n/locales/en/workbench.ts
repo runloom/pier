@@ -11,7 +11,7 @@ export const workbench = {
   removeConfirmTitle: "Remove widget?",
   removeConfirmBody:
     "This removes the widget from Workbench. You can add it again from the library.",
-  refreshAllSuccess: "Widgets refreshed",
+  refreshAllSuccess: "Refreshed",
   library: {
     added: "Added",
     addedCount: "Added {{count}}",
@@ -66,7 +66,7 @@ export const workbench = {
         "Start a supported AI CLI to see spending here. Reads local sessions from: {{sources}}.",
       period: "Last 31 days cost",
       periodTokens: "Last 31 days tokens",
-      refreshSuccess: "Cost data refreshed",
+      refreshSuccess: "Cost refreshed",
       sourceName: {
         claudeCode: "Claude Code",
         codex: "Codex",

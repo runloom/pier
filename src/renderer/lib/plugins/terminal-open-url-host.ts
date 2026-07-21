@@ -3,6 +3,7 @@ import {
   resetTerminalOpenUrlHandlersForTests as resetHandlers,
 } from "@plugins/api/terminal-open-url-handlers.ts";
 import type { TerminalOpenUrlEvent } from "@shared/contracts/terminal.ts";
+import i18next from "i18next";
 import { toast } from "sonner";
 
 let hostInstalled = false;
@@ -53,7 +54,7 @@ async function dispatch(event: TerminalOpenUrlEvent): Promise<void> {
   }
   const result = await window.pier.files.openPath({ path: absolutePath });
   if (!result.opened) {
-    toast.error("Unable to open path.");
+    toast.error(i18next.t("terminal.openPathFailed"));
   }
 }
 

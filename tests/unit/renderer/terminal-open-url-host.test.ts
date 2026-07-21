@@ -6,6 +6,13 @@ import {
   resetTerminalOpenUrlHostForTests,
 } from "../../../src/renderer/lib/plugins/terminal-open-url-host.ts";
 
+vi.mock("i18next", () => ({
+  default: {
+    t: (key: string) =>
+      key === "terminal.openPathFailed" ? "Couldn't open path" : key,
+  },
+}));
+
 describe("terminal-open-url-host", () => {
   let openPath: ReturnType<typeof vi.fn>;
   let emit: ((url: string) => void) | null;
@@ -65,7 +72,7 @@ describe("terminal-open-url-host", () => {
     emit?.("/tmp/missing.md");
     await vi.waitFor(() => {
       expect(openPath).toHaveBeenCalledWith({ path: "/tmp/missing.md" });
-      expect(errorSpy).toHaveBeenCalledWith("Unable to open path.");
+      expect(errorSpy).toHaveBeenCalledWith("Couldn't open path");
     });
     errorSpy.mockRestore();
   });
