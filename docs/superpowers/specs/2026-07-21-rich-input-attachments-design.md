@@ -1,7 +1,7 @@
 # 增强输入附件设计
 
 日期：2026-07-21  
-状态：待实现  
+状态：待实现（已按设计审查修订）  
 范围：按需增强输入（Rich Input）上的任意文件附件：选择、粘贴、拖拽；发送时把绝对路径交给智能体自行处理。
 
 ## 1. 背景与目标
@@ -20,7 +20,7 @@
 - contenteditable / ProseMirror / 真·行内 DOM chip。
 - 缩略图灯箱、上传进度条、复制进项目目录。
 - 模式/模型快捷按钮、发送历史上键（可另案）。
-- 大小/数量硬顶（仅异常兜底）。
+- 附件个数/单文件体积的产品硬顶（仍受现网 `sendText` 总长 64 000 字符上限约束，见 §2、§6）。
 - `@` 路径语法、相对路径、多模态 API。
 
 ## 2. 已锁定决策
@@ -29,60 +29,64 @@
 |---|---|
 | 文件类型 | 任意 |
 | 交给智能体 | 只注入绝对路径文本 |
-| 限额 | 不设硬顶；读盘/权限失败再报错 |
-| 本地已有文件 | 直接使用原绝对路径，不复制 |
-| 无路径位图 | 写入系统临时目录后再作为附件 |
+| 产品硬顶 | 不设附件个数/单文件字节顶；**发送载荷**受现网 `MAX_SEND_TEXT_LENGTH = 64_000` 约束 |
+| 本地已有文件 | 直接使用原绝对路径，**不复制**到临时目录 |
+| 无路径位图 | 写入 `os.tmpdir()/pier-terminal-pastes/` 后再作为附件 |
 | 粘贴 | 附件与文本都收 |
 | 展示 | 上轨 chip + 正文可选 `[#n]` + 发送时展开路径 |
-| 实现基线 | 扩展现有未合入 attachments 草稿骨架（方案 A） |
+| 发送 IPC | **一次** `sendText`：路径行 + 展开正文，`submit: true`（禁止空 `text`） |
+| 同 path | 按绝对路径去重；已存在则不重复添加、不插入第二个 token |
+| 实现基线 | **以本规格重写**契约与 main/renderer API。工作树未合入草稿仅可借鉴临时目录与清理思路；**不得**保留仅图片 filter、选文件后 copy 本地文件、history/mode/model 入口 |
 
 ## 3. 架构与数据流
 
 ```text
-[回形针] ── showOpenDialog(多选, 不限类型) ──► main 校验可读 ──► Attachment[]
-[拖拽]   ── File.path ───────────────────────► main 校验可读 ──► Attachment[]
-[粘贴]   ─┬─ 文件路径列表 ───────────────────► main 校验可读 ──► Attachment[]
-         ├─ 仅图片字节 ──► pier-terminal-pastes 临时文件 ──► Attachment[]
-         └─ 文本 ────────────────────────────► 插入 textarea 草稿
-[发送]   路径按序逐行 sendText(path+"\n", submit:false)
-         → 正文（[#n] 展开为绝对路径）sendText(submit:false)（若展开后非空）
-         → submit / Return
+[回形针] ── showOpenDialog(多选, 不限类型) ──► main resolvePaths ──► 成功子集 Attachment[]
+[拖拽]   ── 收集 File.path（无 path 见 §5.3）──► main resolvePaths ──► 成功子集
+[粘贴]   ─┬─ 文件：File.path 列表 ───────────► main resolvePaths ──► 成功子集
+         ├─ 无 path 的 image/* ──► materializeClipboard/ImageBytes ──► Attachment
+         └─ 文本 ────────────────────────────► 插入 textarea（与附件并行）
+[发送]   一次 sendText({
+           text: paths.join("\n") + (body ? "\n" + expandedBody : ""),
+           submit: true
+         })
+         // text 必须非空且 ≤ 64000
 ```
 
 | 层 | 职责 |
 |---|---|
-| main `terminal-composer-attachments` | 选文件对话框；路径可读校验；剪贴板位图落盘；返回附件结果 |
-| shared 契约 | `TerminalComposerAttachment`、IPC 入参/出参 |
-| renderer controller | 附件列表与正文草稿；paste/drop/pick；发送序列化；与开闭协作 |
-| UI | 附件轨 + textarea + 回形针；拖放命中区为增强输入卡片 |
-
-路径策略：
-
-- 选择 / 拖拽 / 剪贴板文件列表 → **原绝对路径**。
-- 仅剪贴板位图 → `os.tmpdir()/pier-terminal-pastes/<uuid>.ext`。
-- 注入终端的字符串永远是绝对路径。
+| main | 选文件对话框；`resolvePaths`；位图/字节落盘；不读入大文件内容到 renderer |
+| shared | `TerminalComposerAttachment`、结果类型、IPC 形状 |
+| renderer controller | 附件列表 + 与现有 `drafts` 共用正文；paste/drop/pick；`[#n]` 改写；单次发送序列化 |
+| UI | 附件轨 + textarea + 回形针；拖放命中 = 增强输入卡片 |
 
 ## 4. 数据模型
 
 ```ts
 type Attachment = {
-  id: string; // uuid，稳定，用于删除与列表 key
-  path: string; // 绝对路径
-  name: string; // basename，用于 chip 文案
+  id: string; // uuid，稳定
+  path: string; // 绝对路径，去重键
+  name: string; // basename
   kind: "image" | "file";
 };
 
-// 每个终端面板一份（内存 Map；文本草稿与现有 drafts Map 合并为同一套 panel 草稿，
-// 不要并行维护两份正文状态）
+// panelId → 附件列表（内存）
 attachmentsByPanel: Map<string, Attachment[]>
-// 正文仍走现有 drafts.get/set(panelId)，可含 [#n]
+// 正文继续用 terminal-composer 现有 drafts Map，可含 [#n]
 ```
 
-展示序号 `#n` = 数组下标 + 1，**不**写入 attachment 字段。数组顺序 = 展示顺序 = 发送路径顺序。
+- 展示序号 `#n` = 下标 + 1，不写入字段。
+- 数组顺序 = chip 顺序 = 发送路径顺序。
+- **`kind` 判定（v1）：** 扩展名属于 `png|jpe?g|gif|webp|bmp|svg`（大小写不敏感）→ `image`，否则 `file`。不探 mime、不读文件头。
+- **缩略图（v1）：** 仅 `kind === "image"` 且 path 在临时目录 `pier-terminal-pastes` 下时，可用 `file://` 或主进程只读字节生成预览；其它本地路径**默认只显示图标**（避免 CSP/权限/大图问题）。预览失败一律降级图标，不阻断添加。
 
-正文占位语法：`[#n]`（n ≥ 1，十进制，无空格）。
+正文占位：`[#n]`，n ≥ 1 的十进制数字，无空格。词法锁定：
 
-## 5. 展示与交互（金标准）
+```ts
+const ATT_TOKEN = /\[#(\d+)\]/g; // 全局；数字为完整序号
+```
+
+## 5. 展示与交互
 
 ```text
 ┌──────────────────────────────────────────────┐
@@ -95,70 +99,110 @@ attachmentsByPanel: Map<string, Attachment[]>
 
 ### 5.1 附件轨
 
-- 位置：输入卡片顶部（`block-start`）。
-- 每项：序号徽章、类型图标（图片 / 通用文件）、截断文件名、移除按钮。
-- 图片：有可读预览源时显示小缩略，失败则降级为图标；非图片只用类型图标。缩略为增强，不是发送前提。
+- 顶部 `block-start`；序号徽章、类型图标、截断文件名、×。
+- 无「清除全部」入口（v1 YAGNI；逐个 × 即可）。
 - 无附件时不占位。
 
 ### 5.2 正文与 `[#n]`
 
-- 仍为纯文本 `textarea`（保持 IME 与终端焦点模型简单）。
-- **添加附件时**：在光标处插入 ` [#n]`（自动补两侧空格，避免粘词）。
-- 用户可编辑或删除这些字符；也可不写 `[#n]`，只依赖附件轨（与 Claude 式「只挂附件」兼容）。
-- **高亮（推荐轻量）**：合法 `[#n]`（n ∈ 1..length）用底层 mirror 或同类技法着色；越界 `[#n]` 用警告色。v1 若工期紧，等宽字面量可先不上色，但语法与改写规则必须落地。
-- **明确不做** contenteditable 原子 chip。
+- 纯文本 textarea。
+- **每次成功追加 1 个附件后**：在**当前光标**插入 ` [#n]`（n 为追加后的新序号；左右空格按需去重，避免 `词[#1]` 粘连）。
+- **一次多选/多文件 drop：** 按添加顺序依次插入多个 token，光标随每次插入后移。
+- 用户可删改 token 字符；也可不写 token，只挂 chip。
+- 高亮：合法序号可着色，越界警告色；v1 可先不做着色，但词法与改写必须落地。
+- 不做 contenteditable 原子 chip。
 
-### 5.3 添加入口
+### 5.3 添加入口与路径采集
 
-| 入口 | 行为 |
-|---|---|
-| 回形针 | 系统多选，不限类型 → 校验 → append → 按添加顺序在光标插入 `[#n]` |
-| 拖拽到卡片 | 同上；`dragover` 需 `preventDefault` |
-| 粘贴 | 有文件/图片则加入附件并插入 token；同时有文本则文本仍插入光标。仅当成功处理了文件/图片时 `preventDefault`，避免图片被粘成乱码；纯文本走默认插入 |
+| 入口 | renderer 采集 | main |
+|---|---|---|
+| 回形针 | 调 `pickFiles` → 得 path[] | dialog + resolve |
+| 拖拽 | `dataTransfer.files`：有 `File.path` 的进 path 列表；**无 path 且 `type` 为 image/\*** 读 `arrayBuffer` 走字节落盘；无 path 非图片 → 不添加，短错误提示「无法读取该文件路径」 | resolve / materialize |
+| 粘贴 | 同上看 `clipboardData.files`；**另：** 若 files 为空仅有位图，走 `materializeClipboardImage`；文本始终按浏览器默认或手动插入光标（与文件并行时：先处理文件再插文本，或 preventDefault 后手动插文本，须保证两者都在） | 同上 |
 
-### 5.4 删除
+所有 path 列表（含 pick 结果）在 append 前统一：
 
-**仅 chip 的 ×（或「清除全部」）删除附件**，一次事务：
+1. 过滤已在列表中的相同绝对路径（去重，静默跳过）。
+2. `resolvePaths(paths)` → **成功子集**仍添加；失败项汇总一条 alert/toast（见 §7），不阻断成功子集。
+3. 每成功一项：append + 插入对应 `[#n]`。
 
-1. 从数组移除该 `id` 项（记原序号 k）。
-2. 正文单次改写：
-   - 去掉所有 `[#k]`（并收敛邻接多余空格，避免双空格脏文案即可，不必完美）。
-   - 对所有 m > k：`[#m]` → `[#m-1]`。
-3. 芯片序号随数组自动更新。
+### 5.4 删除改写算法
 
-**Backspace 在 textarea 内删掉 `[#n]` 字符：只改文案，不删附件。**  
-避免误伤；附件生命周期与 chip 绑定。这是相对 contenteditable 原子 token 的刻意简化。
+仅 chip × 删除附件。记被删项原序号为 k（1-based）：
+
+1. 从数组移除该 id。
+2. 正文改写（**必须**用 `ATT_TOKEN` 全局匹配，禁止朴素 `replaceAll("[#1]", …)`）：
+   - 收集所有 match 的 n。
+   - 去掉 n === k 的 token（邻接双空格可收成单空格，尽力即可）。
+   - 对 n > k：改为 `[#(n-1)]`。
+   - **从大 n 到小 n 应用替换**（或先解析成段再序列化），避免 `[#10]` 被 `[#1]` 规则误伤。
+3. chip 序号随数组更新。
+
+textarea 内 Backspace 删掉 `[#n]` 字符：**只改文案，不删附件。**
 
 ### 5.5 开闭与草稿
 
-| 动作 | 文本草稿 | 附件列表 |
+| 动作 | 文本 drafts | 附件 Map |
 |---|---|---|
-| Esc / 点终端 surface 关闭 | 按 panel 记忆 | 按 panel 记忆 |
-| 再次打开同 panel | 恢复 | 恢复 |
-| 发送成功 / textDelivered | 清空 | 清空 |
-| 发送失败且未投递 | 保留 | 保留 |
-| 智能体资格失效卸载 | 记忆保留 | 记忆保留 |
+| Esc / surface 关闭 | 记忆 | 记忆 |
+| 再打开同 panel | 恢复 | 恢复 |
+| 发送成功 | 清空 | 清空 |
+| 发送失败且**未投递** | 保留 | 保留 |
+| 发送已投递但结果失败（见 §6） | 清空 | 清空 |
+| 资格失效卸载 | 记忆 | 记忆 |
 
-`canSend` = 正文 `trim` 非空 **或** 附件非空。
+`canSend` = `expandedPayload.length > 0`（见 §6），即至少有一个附件或 trim 后正文非空，且通过 64k 与 token 校验前的「有内容」判断；真正发送前再跑完整校验。
 
-再次「打开增强输入」仍走既有 `focusRequest` 聚焦。
+## 6. 发送序列化（钉死）
 
-## 6. 发送序列化
+### 6.1 组装载荷
 
-严格顺序：
+```ts
+function buildSendText(attachments: Attachment[], draft: string): string {
+  const paths = attachments.map((a) => a.path);
+  const expandedBody = expandTokens(draft, attachments); // 合法 [#n] → path
+  const parts = [...paths];
+  if (expandedBody.trim() !== "") {
+    parts.push(expandedBody);
+  }
+  return parts.join("\n");
+}
+```
 
-1. `disabled` 或（无附件且正文为空）→ return。
-2. 发送前校验：正文中若存在越界 `[#n]`（n < 1 或 n > length）→ `showAppAlert`，中止，不发送。
-3. 对每个 attachment（数组序）：`sendText({ text: path + "\n", submit: false })`。
-4. 若展开后正文非空：`sendText({ text: expandedBody, submit: false })`。  
-   - 展开：合法 `[#n]` → 对应 `path`；无 token 则正文原样。
-5. 最后一次带 submit 的发送（与当前增强输入 `submit: true` 等价，复用既有 IPC）。
-6. 全成功 → 清文本 + 清附件 + `onClose`。
-7. 任一步失败：
-   - 已有 `textDelivered` → 清并关 + 失败详情 alert（避免重复粘贴路径进智能体草稿区）。
-   - 否则保持打开，附件与正文不动 + alert。
+- **禁止** `sendText({ text: "", … })`（现网 `parseSendTextArgs` 拒绝空串）。
+- **仅附件：** `text = path1 + "\n" + path2 + …`（最后一项后无强制多余换行；`join("\n")` 即可），`submit: true`。
+- **仅正文：** 与现网一致，展开后正文（无路径前缀），`submit: true`。
+- **附件 + 正文：** 路径块与展开正文之间一个 `\n`。
 
-发给智能体的形态示例：
+### 6.2 发送前校验（失败则中止，不调用 sendText）
+
+1. 用 `ATT_TOKEN` 扫正文：若存在 n < 1 或 n > attachments.length → alert「存在无效的附件引用 [#n]」，中止。
+2. `payload = buildSendText(...)`；若 `payload.length === 0` → return（按钮应已 disabled）。
+3. 若 `payload.length > 64_000` → alert 说明内容过长（可提示减少附件或正文），中止。
+
+### 6.3 单次 IPC
+
+```ts
+const result = await window.pier.terminal.sendText({
+  panelId,
+  text: payload,
+  submit: true,
+});
+```
+
+**一次调用**，消除多段 paste 半成功窗口。
+
+### 6.4 结果处理
+
+| 结果 | 行为 |
+|---|---|
+| `ok: true` | 清 drafts + 清附件 + `onClose` |
+| `ok: false` 且 `textDelivered: true` | 同上清空关闭 + `showAppAlert` 详情（路径/正文已进智能体草稿，禁止重试重复贴） |
+| `ok: false` 且未投递 | **保持打开**，附件与正文不动 + alert |
+
+（单次 IPC 下「中途半成功」不再适用；若未来改回多段，必须把「任一次 paste 成功」视同已投递并清空关闭。）
+
+### 6.5 发给智能体的形态示例
 
 ```text
 /abs/path/to/shot.png
@@ -166,68 +210,88 @@ attachmentsByPanel: Map<string, Attachment[]>
 分析 /abs/path/to/shot.png 里的报错，对照 /abs/path/to/note.pdf 第三节
 ```
 
-路径列表在前，便于只扫路径的智能体；正文内展开路径，便于叙述性指令。不把 `[#n]` 原文丢进 TUI。
-
-路径含空格时**不加引号**（按字面写入智能体输入区；加引号会变成模型看到的字符）。若未来某智能体需要 shell 引号，另案处理。
+路径含空格**不加引号**。
 
 ## 7. main 侧行为
 
-- `pickTerminalComposerFiles`：多选，filter 为全部文件；取消 → ok 且空列表。
-- `resolveTerminalComposerPaths(paths: string[])`：逐个 `stat`；必须是文件且可读；目录与不可读计入错误信息；成功的返回 attachment 元数据。
-- `materializeTerminalClipboardImage`：位图空则跳过；写出临时文件；保留现有 24h 清理思路（可选，实现时沿用草稿）。
-- 不设字节/数量硬顶；异常消息面向用户可理解（权限、不存在、不是文件）。
+### 7.1 API 形状（逻辑名，实现时对齐 preload）
 
-IPC 命名与契约放在 `src/shared/contracts/terminal.ts`，与现有 `sendText` 并列；具体命令名实现阶段与 preload 对齐。
+- `pickComposerFiles(): Promise<{ ok: true; paths: string[] } | { ok: false; error: string }>`  
+  - 取消 → `ok: true, paths: []`（非错误）。
+- `resolveComposerPaths(paths: string[]): Promise<{
+    attachments: TerminalComposerAttachment[]; // 成功子集
+    failures: { path: string; reason: string }[];
+  }>`
+- `materializeComposerImageBytes(data: { bytes: Uint8Array|number[]; mime?: string; name?: string }): Promise<…单附件或 error>`
+- `materializeComposerClipboardImage(): Promise<…>`（无图 → 空成功）
 
-## 8. 与按需增强输入的集成点
+### 7.2 resolve 规则
 
-- 仍仅在 `open && agent && !restored` 时挂载。
-- controller 挂在 `TerminalComposer` 内或并列 hook；附件状态不得依赖「常驻挂载」。
-- surface takeover 关闭前：已 persist 文本；附件 Map 同步写入。
-- 不改变 activate refocus / `focusRequest` / Ctrl+C 透传 / Esc 关闭（Esc 仍关增强输入并记草稿，不向 TUI 透传 Esc）。
+- `stat`：必须是文件、可读；目录 / ENOENT / EACCES → 写入 `failures`，不进 `attachments`。
+- **部分失败：** 返回成功子集 + failures；renderer 添加子集并插入 token，并对 failures 一次 `showAppAlert` 或 `toast.error`（多条 reason 合并文案）。
+- **整批 path 皆失败：** 不改附件列表；只报错。
+- 不设单文件字节顶；不把文件内容读进 renderer（除 image 字节落盘路径）。
 
-## 9. i18n（用户文案）
+### 7.3 临时目录
 
-新增/调整键（中英都要）：
+- 仅服务无路径位图/图片字节。
+- 可选：启动时清理超过 24h 的 `pier-terminal-pastes` 文件（借鉴草稿即可）。
+
+## 8. 与按需增强输入的集成
+
+- 挂载门：`open && activityKind === "agent" && !restored`。
+- 附件 Map 与 drafts 均按 `panelId`；不依赖常驻挂载。
+- surface 关闭：persist 正文 + 附件已在 Map 中。
+- activate / `focusRequest` / Ctrl+C / Esc 关闭语义不变。
+
+## 9. i18n
 
 - 添加文件 / Add file  
 - 移除附件 / Remove attachment  
-- 添加失败 / 发送失败详情走既有 alert 模式  
-- 占位可保持「在此输入，发送到终端中的会话」；有附件时不必改 placeholder  
+- 无法读取文件路径 / Couldn’t read that file path  
+- 部分文件无法添加（带汇总 reason）  
+- 无效附件引用 / 内容过长无法发送  
+- 发送失败详情仍走 `showAppAlert`  
 
-禁止用户可见「富文本」；产品名保持增强输入 / Rich Input。
+禁止用户可见「富文本」；产品名：增强输入 / Rich Input。
 
 ## 10. 测试
 
-- main：路径校验、目录拒绝、位图落盘、选文件取消。
-- 正文改写：删中间附件后 `[#n]` 重编号；越界 token 发送被拒。
-- 发送顺序：mock `sendText` 调用序列（路径行 → 展开正文 → submit）。
-- 粘贴：文件 + 文本同时；仅文本不 preventDefault 文件逻辑误伤。
-- 组件：chip 移除、canSend 仅附件也可发送。
-- 回归：无附件时增强输入行为与现网一致（Esc/发送关闭、surface/activate）。
+**必须覆盖：**
+
+- main：resolve 成功/目录/不可读；部分失败子集；选文件取消；位图落盘。
+- `ATT_TOKEN` 改写：删中间项；`[#10]` 不被 `[#1]` 误伤；从大到小重编号。
+- 发送：`buildSendText` 仅附件 / 仅正文 / 混合；展开；越界 token 拒发；>64k 拒发。
+- 单次 `sendText` mock：一次调用，`submit: true`，text 非空。
+- `ok` / `textDelivered` / 未投递 三种结果对草稿与附件的清理。
+- 去重：同 path 第二次添加不增 chip、不插 token。
+- 粘贴：files+text；无 path 图片字节；无 path 非图片提示。
+- 关闭再打开：正文 + 附件恢复；发送成功后皆空。
+- 回归：无附件时 Esc/发送/surface/activate 与现网一致。
 
 ## 11. 风险与缓解
 
 | 风险 | 缓解 |
 |---|---|
-| textarea 与高亮层 scroll 不同步 | v1 可先无高亮；有高亮必须绑 scroll 事件 |
-| 自动插入 `[#n]` 打扰只想挂文件的用户 | 插入可撤销；用户删字符即可；不删附件 |
-| 大文件无硬顶导致卡顿 | 仅校验可读，不读入 renderer 全量；位图才写临时盘 |
-| Electron `File.path` 非标 | 仅 desktop；无 path 时图片走字节落盘，其它提示无法添加 |
-| 与未合入 attachments 草稿命名冲突 | 实现时统一「文件」语义，去掉仅图片 filter |
+| 64k 上限 | 发送前校验；文案提示 |
+| File.path 缺失 | 图片走字节；其它明确错误 |
+| 高亮层 scroll | v1 可无高亮 |
+| 未合入草稿误导 | §2 写死重写边界 |
+| 自动插入 token 打扰 | 可手删字符；不删附件 |
 
-## 12. 实现顺序建议
+## 12. 实现顺序
 
-1. shared 契约 + main 校验/选文件/位图落盘 + 单测  
-2. controller：附件 Map、`[#n]` 插入与删除改写、发送序列化  
-3. UI：附件轨 + 回形针 + paste/drop  
-4. 接到 `TerminalComposer` 与草稿/开闭  
+1. shared 契约 + main pick/resolve/materialize + 单测（含部分失败）  
+2. 纯函数：`ATT_TOKEN` 展开/删除重编号/`buildSendText` + 单测  
+3. controller：Map、去重、pick/paste/drop、单次发送与结果分支  
+4. UI 附件轨 + 回形针 + 接到 `TerminalComposer` 草稿/开闭  
 5. i18n + 组件/e2e 回归  
 
 ## 13. 验收要点
 
-- 任意类型多选、拖拽、粘贴可加附件。  
-- 上方 chip 序号与正文 `[#n]` 在删除后保持一致。  
-- 发送后智能体侧先见绝对路径，正文中的 `[#n]` 已展开为路径。  
-- 无附件时增强输入行为不回退。  
-- 关闭再打开同面板，文本与附件草稿仍在（发送成功后清空）。
+- 任意类型多选、拖拽、粘贴可加附件；同 path 不重复。  
+- 删 chip 后 `[#n]` 与序号一致，`[#10]` 安全。  
+- 仅附件也可发送成功（非空 path 载荷 + submit）。  
+- 智能体侧一次收到路径（及展开正文）；无裸 `[#n]`。  
+- 超 64k / 越界 token 发送前拦截。  
+- 无附件时增强输入行为不回退；关开同面板草稿（文+附件）可恢复。
