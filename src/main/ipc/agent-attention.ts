@@ -1,19 +1,20 @@
 import type { PierEventBus } from "@main/app-core/event-bus.ts";
+import { resolveAttentionLocale } from "@main/services/agent-attention/attention-locale.ts";
 import type { AgentAttentionService } from "@main/services/agent-attention/attention-service.ts";
 import { createAgentAttentionService } from "@main/services/agent-attention/attention-service.ts";
+import { maybePlayAfterShown } from "@main/services/agent-attention/notification-audio.ts";
 import { focusAgentFromNotificationClick } from "@main/services/agent-attention/notification-click-focus.ts";
-import type { AttentionUiLocale } from "@main/services/agent-attention/notification-copy.ts";
-import type { AgentRuntimeIndexService } from "@main/services/agent-runtime-index/index.ts";
 import {
-  type AgentAttentionSettings,
-  DEFAULT_AGENT_ATTENTION_SETTINGS,
-} from "@shared/contracts/agent-attention.ts";
+  getAgentAttentionSettingsCached,
+  initAgentAttentionSettingsCache,
+} from "@main/services/agent-attention/settings-cache.ts";
+import type { AgentRuntimeIndexService } from "@main/services/agent-runtime-index/index.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
 import { createLogger } from "@shared/logger.ts";
-import { app } from "electron";
 import {
   broadcastAgentAttentionDegraded,
   broadcastSystemNotificationPermissionChanged,
+  sendAttentionSoundPlayToOneWindow,
 } from "../app-core/window-broadcasts.ts";
 import { showSystemNotification } from "../services/system-notification.ts";
 import { readPreferences } from "../state/preferences.ts";
@@ -42,23 +43,12 @@ function isTargetPanelFocused(
   return terminalFocusCoordinator.activePanelId(focused) === panelId;
 }
 
-function localeFromSystem(): AttentionUiLocale {
-  return app.getLocale().toLowerCase().startsWith("zh") ? "zh-CN" : "en";
-}
-
-async function resolveAttentionLocale(): Promise<AttentionUiLocale> {
-  try {
-    const prefs = await readPreferences();
-    if (prefs.language === "zh-CN") {
-      return "zh-CN";
-    }
-    if (prefs.language === "en") {
-      return "en";
-    }
-  } catch (err) {
-    log.debug("read preferences for attention locale failed", { err });
-  }
-  return localeFromSystem();
+/** 拥有该智能体面板的 BrowserWindow 是否聚焦（ready / unfocused）。 */
+function isOwnerWindowFocused(electronWindowId: string): boolean {
+  const win = windowManager
+    .getAll()
+    .find((w) => String(w.id) === electronWindowId);
+  return Boolean(win && !win.isDestroyed() && win.isFocused());
 }
 
 /**
@@ -70,50 +60,34 @@ export function registerAgentAttention(
   args: RegisterAgentAttentionArgs
 ): AgentAttentionService {
   let degradedBroadcasted = false;
-  let settingsReady = false;
-  let cachedSettings: AgentAttentionSettings = {
-    ...DEFAULT_AGENT_ATTENTION_SETTINGS,
-    // 偏好读完前保守：不发系统通知（标题栏 Index 仍可更新）。
-    enabled: false,
-  };
 
-  readPreferences()
-    .then((prefs) => {
-      cachedSettings = { ...prefs.agentAttention };
-      settingsReady = true;
-    })
-    .catch((err: unknown) => {
+  initAgentAttentionSettingsCache({
+    ...(args.eventBus ? { eventBus: args.eventBus } : {}),
+    readPreferences,
+    onBootReadError: (err) => {
       log.debug("boot attention settings read failed; using product defaults", {
         err,
       });
-      cachedSettings = { ...DEFAULT_AGENT_ATTENTION_SETTINGS };
-      settingsReady = true;
-    });
-
-  args.eventBus?.subscribe((event) => {
-    if (event.type !== "preferences.changed") {
-      return;
-    }
-    if (!event.changedKeys.includes("agentAttention")) {
-      return;
-    }
-    cachedSettings = { ...event.snapshot.agentAttention };
-    settingsReady = true;
+    },
   });
 
   const attention = createAgentAttentionService({
     isTargetPanelFocused,
+    isOwnerWindowFocused,
     resolveLocale: resolveAttentionLocale,
-    settings: () => {
-      if (!settingsReady) {
-        return { ...cachedSettings, enabled: false };
-      }
-      return cachedSettings;
-    },
-    showNotification: (request) =>
+    settings: () => getAgentAttentionSettingsCached(),
+    showNotification: (request, audio) =>
       showSystemNotification(request, {
+        ...(audio?.silent === undefined ? {} : { silent: audio.silent }),
+        ...(audio?.sound === undefined ? {} : { sound: audio.sound }),
         onClick: (shown) => focusAgentFromNotificationClick(args.index, shown),
-        onPermissionChanged: broadcastSystemNotificationPermissionChanged,
+        onPermissionChanged: (snapshot) => {
+          // 权限恢复后复位 latch：再次降级时用户仍能收到一次提示。
+          if (snapshot.status === "authorized") {
+            degradedBroadcasted = false;
+          }
+          broadcastSystemNotificationPermissionChanged(snapshot);
+        },
         onUnavailable: (reason) => {
           if (reason !== "denied" && reason !== "unsupported") {
             return;
@@ -125,6 +99,13 @@ export function registerAgentAttention(
           broadcastAgentAttentionDegraded({ reason });
         },
       }),
+    playAttentionSound: (decision) => {
+      maybePlayAfterShown({
+        decision,
+        force: false,
+        sendToWindow: sendAttentionSoundPlayToOneWindow,
+      });
+    },
   });
 
   let previous: ForegroundActivityBroadcast | null = null;

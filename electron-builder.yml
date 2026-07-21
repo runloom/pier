@@ -22,6 +22,8 @@ extraResources:
     to: bin/pier
   - from: resources/fonts
     to: fonts
+  - from: resources/notification-sounds
+    to: notification-sounds
   - from: packages/plugin-codex/dist-pkg
     to: plugin-packages/pier.codex
     filter:
@@ -30,6 +32,18 @@ extraResources:
       - 'plugin.json'
   - from: packages/plugin-grok/dist-pkg
     to: plugin-packages/pier.grok
+    filter:
+      - '*.tgz'
+      - '*.tgz.sha256'
+      - 'plugin.json'
+  - from: packages/plugin-ssh/dist-pkg
+    to: plugin-packages/pier.ssh
+    filter:
+      - '*.tgz'
+      - '*.tgz.sha256'
+      - 'plugin.json'
+  - from: packages/plugin-claude/dist-pkg
+    to: plugin-packages/pier.claude
     filter:
       - '*.tgz'
       - '*.tgz.sha256'

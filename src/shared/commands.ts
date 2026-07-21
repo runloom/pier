@@ -10,6 +10,7 @@ export const APP_HANDLED_NATIVE_TERMINAL_COMMANDS = [
   "pier.panel.toggleMaximized",
   "pier.terminal.openDebugWindow",
   "pier.terminal.search",
+  "pier.terminal.openAgentComposer",
   "pier.settings.open",
   "pier.view.zoomIn",
   "pier.view.zoomOut",

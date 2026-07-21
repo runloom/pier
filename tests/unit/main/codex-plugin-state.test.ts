@@ -1,5 +1,5 @@
 import { existsSync } from "node:fs";
-import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { mkdtemp, readdir, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -49,7 +49,7 @@ describe("Codex accounts data schema", () => {
     );
   });
 
-  it("fails closed for unsupported account schemas instead of resetting data", async () => {
+  it("quarantines unsupported account schemas and starts fresh without losing the original file", async () => {
     const unsupported = JSON.stringify({
       accounts: [],
       activeAccountId: null,
@@ -59,8 +59,62 @@ describe("Codex accounts data schema", () => {
     await writeFile(statePath, unsupported);
     const store = createCodexAccountsStateStore(statePath, "1.0.3");
 
-    await expect(store.init()).rejects.toThrow();
-    await expect(readFile(statePath, "utf8")).resolves.toBe(unsupported);
+    // A bad file must not brick activation forever: init falls back to
+    // defaults while the original bytes are preserved in a quarantine file.
+    await expect(store.init()).resolves.toMatchObject({
+      accounts: [],
+      revision: 0,
+    });
+    expect(existsSync(statePath)).toBe(false);
+    const entries = await readdir(dir);
+    const quarantined = entries.find((name) =>
+      name.startsWith("accounts.json.corrupt-")
+    );
+    expect(quarantined).toBeTruthy();
+    await expect(readFile(join(dir, quarantined ?? ""), "utf8")).resolves.toBe(
+      unsupported
+    );
+  });
+
+  it("repairs a dangling active account id instead of failing activation", async () => {
+    await writeFile(
+      statePath,
+      JSON.stringify({
+        accounts: [],
+        activeAccountId: "ghost",
+        revision: 3,
+        schemaVersion: 1,
+      })
+    );
+    const store = createCodexAccountsStateStore(statePath, "1.0.3");
+
+    await expect(store.init()).resolves.toMatchObject({
+      activeAccountId: null,
+    });
+  });
+
+  it("dedupes duplicate account ids on load", async () => {
+    const record = {
+      createdAt: 1,
+      email: "user@example.com",
+      id: "acc-1",
+      provider: "codex",
+      updatedAt: 2,
+    };
+    await writeFile(
+      statePath,
+      JSON.stringify({
+        accounts: [record, record],
+        activeAccountId: "acc-1",
+        revision: 3,
+        schemaVersion: 1,
+      })
+    );
+    const store = createCodexAccountsStateStore(statePath, "1.0.3");
+
+    const state = await store.init();
+    expect(state.accounts).toHaveLength(1);
+    expect(state.activeAccountId).toBe("acc-1");
   });
 
   it("accepts optional subscriptionExpiresAt written by newer account metadata", async () => {
@@ -97,11 +151,15 @@ describe("Codex accounts data schema", () => {
     });
   });
 
-  it("fails closed when the host-readable schema marker is malformed", async () => {
+  it("quarantines a malformed host-readable schema marker instead of failing activation", async () => {
     await writeFile(markerPath, '{"version":1,"schemas":{"unknown":{}}}');
     const store = createCodexAccountsStateStore(statePath, "1.0.3");
 
-    await expect(store.init()).rejects.toThrow();
+    await expect(store.init()).resolves.toBeTruthy();
+    // The bad marker is moved aside; ensureSchemaMarker rewrites a valid one.
+    expect(existsSync(markerPath)).toBe(false);
+    await store.ensureSchemaMarker();
+    expect(existsSync(markerPath)).toBe(true);
   });
 
   it("persists a mutation that arrives while an earlier flush is in flight", async () => {

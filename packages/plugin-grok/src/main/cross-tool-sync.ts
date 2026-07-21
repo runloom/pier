@@ -352,10 +352,19 @@ export function extractOauthFromGrokAuth(
     throw new Error("Invalid Grok auth.json");
   }
 
+  const parseEntryTime = (value: unknown): number => {
+    if (typeof value === "string" && value.length > 0) {
+      const parsed = Date.parse(value);
+      if (Number.isFinite(parsed)) return parsed;
+    }
+    return Number.NEGATIVE_INFINITY;
+  };
+
   let best: {
     createTime: number;
     entry: Record<string, unknown>;
     entryKey: string;
+    expiresAt: number;
   } | null = null;
 
   for (const [entryKey, value] of Object.entries(data)) {
@@ -365,15 +374,14 @@ export function extractOauthFromGrokAuth(
     const entry = value as Record<string, unknown>;
     const key = entry.key;
     if (typeof key !== "string" || key.length === 0) continue;
-    const createTime =
-      typeof entry.create_time === "string"
-        ? Date.parse(entry.create_time)
-        : Number.NEGATIVE_INFINITY;
-    const ts = Number.isFinite(createTime)
-      ? createTime
-      : Number.NEGATIVE_INFINITY;
-    if (!best || ts > best.createTime) {
-      best = { createTime: ts, entry, entryKey };
+    const createTime = parseEntryTime(entry.create_time);
+    const expiresAt = parseEntryTime(entry.expires_at);
+    if (
+      !best ||
+      createTime > best.createTime ||
+      (createTime === best.createTime && expiresAt > best.expiresAt)
+    ) {
+      best = { createTime, entry, entryKey, expiresAt };
     }
   }
   if (!best) {
@@ -381,11 +389,17 @@ export function extractOauthFromGrokAuth(
   }
 
   const accessToken = String(best.entry.key);
-  const refreshToken =
-    typeof best.entry.refresh_token === "string" &&
-    best.entry.refresh_token.length > 0
-      ? best.entry.refresh_token
-      : accessToken;
+  if (
+    typeof best.entry.refresh_token !== "string" ||
+    best.entry.refresh_token.length === 0
+  ) {
+    // Peers would try to refresh with whatever sits in `refresh`; writing the
+    // access token there just produces confusing downstream auth failures.
+    throw new Error(
+      "Grok login has no refresh token; re-login before syncing to other tools"
+    );
+  }
+  const refreshToken = best.entry.refresh_token;
   let accountId = best.entryKey;
   if (typeof best.entry.user_id === "string" && best.entry.user_id.length > 0) {
     accountId = best.entry.user_id;

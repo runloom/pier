@@ -13,7 +13,7 @@ import {
   pathExists,
   syncDirectory,
   writeDurableJson,
-} from "./file-drafts-durable-io.ts";
+} from "../state/durable-json-io.ts";
 
 const STORE_VERSION = 2;
 const ENTRY_VERSION = 1;

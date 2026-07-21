@@ -26,7 +26,11 @@ export interface TerminalPresentationWorkspaceState {
 
 export type TerminalPresentationFacts = Omit<
   TerminalHostSnapshot,
-  "basePanel" | "rendererSequence" | "webOverlayRects" | "webRequestCount"
+  | "basePanel"
+  | "focusDisabledPanelIds"
+  | "rendererSequence"
+  | "webOverlayRects"
+  | "webRequestCount"
 >;
 
 export interface BuildTerminalPresentationFactsArgs {

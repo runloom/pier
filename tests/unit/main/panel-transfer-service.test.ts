@@ -1,0 +1,1004 @@
+import { mkdtemp, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { createPanelTransferService } from "@main/services/panel-transfer/panel-transfer-service.ts";
+import type {
+  PanelTransferCaller,
+  PanelTransferFilesPort,
+  PanelTransferGeometryPort,
+  PanelTransferTerminalPort,
+  PanelTransferWindowPort,
+  PanelTransferWorkspacePort,
+} from "@main/services/panel-transfer/panel-transfer-types.ts";
+import type { WindowTransitionLease } from "@main/services/window-service.ts";
+import { PanelTransferJournal } from "@main/state/panel-transfer-journal.ts";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+
+const TRANSFER_A = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";
+const TRANSFER_B = "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";
+
+function caller(
+  windowId: string,
+  recordId: string,
+  webContentsId: number
+): PanelTransferCaller {
+  return {
+    navigationGeneration: 1,
+    runtimeWindowId: windowId,
+    webContentsId,
+    windowRecordId: recordId,
+  };
+}
+
+function movableOffer(transferId: string, panelId = "panel-1") {
+  return {
+    capability: "movable" as const,
+    panel: {
+      componentId: "welcome",
+      panelId,
+      title: "Welcome",
+    },
+    transferId,
+    version: 1 as const,
+  };
+}
+
+describe("PanelTransferService", () => {
+  let userDataDir: string;
+  let journal: PanelTransferJournal;
+  let lease: WindowTransitionLease;
+  let windows: PanelTransferWindowPort;
+  let geometry: PanelTransferGeometryPort;
+  let workspace: PanelTransferWorkspacePort;
+  let files: PanelTransferFilesPort;
+  let terminal: PanelTransferTerminalPort;
+  let rendererExecute: ReturnType<typeof vi.fn>;
+  let createForTransfer: ReturnType<typeof vi.fn>;
+  let runExclusive: ReturnType<typeof vi.fn>;
+  let pluginMutation: ReturnType<typeof vi.fn>;
+  let now: number;
+  let cursor: { x: number; y: number };
+
+  beforeEach(async () => {
+    userDataDir = await mkdtemp(join(tmpdir(), "pier-pts-"));
+    journal = new PanelTransferJournal(userDataDir);
+    lease = { token: Symbol("lease") };
+    now = 1000;
+    cursor = { x: 5000, y: 5000 };
+    createForTransfer = vi.fn(async () => ({
+      recordId: "record-new",
+      windowId: "w-new",
+    }));
+    runExclusive = vi.fn(async (operation) => operation(lease));
+    pluginMutation = vi.fn(async (operation) => operation());
+    windows = {
+      closeAfterTransfer: vi.fn(async () => undefined),
+      closeOpenWindowRecord: vi.fn(async () => undefined),
+      createForTransfer: createForTransfer as never,
+      destroyForTransfer: vi.fn(async () => undefined),
+      holdRendererShow: vi.fn(),
+      list: vi.fn(() => [
+        { focused: true, id: "main", recordId: "record-main" },
+        { focused: false, id: "w-1", recordId: "record-w1" },
+      ]),
+      releaseRendererShow: vi.fn(),
+      runExclusive: runExclusive as never,
+    };
+    geometry = {
+      getCursorScreenPoint: () => cursor,
+      getDisplayWorkAreaNear: () => ({ height: 1000, width: 1600, x: 0, y: 0 }),
+      getWindowBounds: (windowId) => {
+        if (windowId === "main") {
+          return { height: 800, width: 1200, x: 0, y: 0 };
+        }
+        if (windowId === "w-1") {
+          return { height: 800, width: 1200, x: 1300, y: 0 };
+        }
+        return null;
+      },
+      getWindowContentBounds: (windowId) => {
+        if (windowId === "main") {
+          return { height: 760, width: 1200, x: 0, y: 40 };
+        }
+        if (windowId === "w-1") {
+          return { height: 760, width: 1200, x: 1300, y: 40 };
+        }
+        return null;
+      },
+      getWindowZOrderTopFirst: () => null,
+      isLeftMouseButtonDown: () => false,
+    };
+    workspace = {
+      clearLayout: vi.fn(async () => undefined),
+      hasPanelId: vi.fn(async () => false),
+    };
+    files = {
+      commitDrafts: vi.fn(async () => undefined),
+      rollbackDrafts: vi.fn(async () => undefined),
+      stageDrafts: vi.fn(async () => undefined),
+    };
+    terminal = {
+      commitMove: vi.fn(async () => undefined),
+      getCurrentLifecycleId: vi.fn(() => ""),
+      rollback: vi.fn(async () => undefined),
+      stageLease: vi.fn(async () => undefined),
+    };
+    rendererExecute = vi.fn(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+  });
+
+  function createService() {
+    return createPanelTransferService({
+      files,
+      geometry,
+      journal,
+      now: () => now,
+      pluginMutation: pluginMutation as never,
+      rendererCommand: {
+        execute: rendererExecute as never,
+        resolve: () => undefined,
+      },
+      terminal,
+      userDataDir,
+      windows,
+      workspace,
+    });
+  }
+
+  it("accepts movable offers and rejects unsupported without journal", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await expect(
+      service.offer(source, movableOffer(TRANSFER_A))
+    ).resolves.toEqual({ accepted: true });
+    await expect(
+      service.offer(source, {
+        capability: "unsupported",
+        panel: { componentId: "x", panelId: "p", title: "t" },
+        transferId: TRANSFER_B,
+        version: 1,
+      })
+    ).resolves.toEqual({ accepted: false });
+    expect(journal.list()).toEqual([]);
+  });
+
+  it("tryClaim is unique; second different claim is already_claimed", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const targetA = caller("w-1", "record-w1", 2);
+    const targetB = caller("w-2", "record-w2", 3);
+    await service.offer(source, movableOffer(TRANSFER_A));
+
+    const first = service.drop(targetA, {
+      placement: { kind: "root" },
+      transferId: TRANSFER_A,
+    });
+    const second = await service.drop(targetB, {
+      placement: { kind: "root" },
+      transferId: TRANSFER_A,
+    });
+    expect(second).toEqual({
+      code: "already_claimed",
+      message: "transfer already claimed",
+      ok: false,
+    });
+    await expect(first).resolves.toMatchObject({
+      ok: true,
+      targetPanelId: "panel-1",
+    });
+  });
+
+  it("unsupported finishDrag returns not_supported and never creates window", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, {
+      capability: "unsupported",
+      panel: { componentId: "x", panelId: "p", title: "t" },
+      transferId: TRANSFER_A,
+      version: 1,
+    });
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toEqual({
+      code: "not_supported",
+      message: "panel transfer not supported",
+      ok: false,
+    });
+    expect(createForTransfer).not.toHaveBeenCalled();
+  });
+
+  it("finishDrag returns null when managed drop already claimed", async () => {
+    let releaseDrop!: () => void;
+    const dropGate = new Promise<void>((resolve) => {
+      releaseDrop = resolve;
+    });
+    // Keep runner blocked so claim stays live during finishDrag.
+    runExclusive.mockImplementationOnce(async (operation) => {
+      await dropGate;
+      return operation(lease);
+    });
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    const dropPromise = service.drop(target, {
+      placement: { kind: "root" },
+      transferId: TRANSFER_A,
+    });
+    await Promise.resolve();
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toBeNull();
+    releaseDrop();
+    await dropPromise;
+  });
+
+  it("finishDrag returns null when HTML5 claims during resolvePlacement await", async () => {
+    cursor = { x: 1500, y: 400 }; // inside w-1
+    let releaseResolve!: () => void;
+    const resolveGate = new Promise<void>((resolve) => {
+      releaseResolve = resolve;
+    });
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.resolvePlacement") {
+        await resolveGate;
+        return {
+          data: { kind: "root" },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+    let releaseDrop!: () => void;
+    const dropGate = new Promise<void>((resolve) => {
+      releaseDrop = resolve;
+    });
+    runExclusive.mockImplementationOnce(async (operation) => {
+      await dropGate;
+      return operation(lease);
+    });
+
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+
+    const finishPromise = service.finishDrag(source, TRANSFER_A);
+    await Promise.resolve();
+    // finishDrag is blocked in resolvePlacement; HTML5 drop claims first.
+    const dropPromise = service.drop(target, {
+      placement: { kind: "tab", groupId: "g1", index: 0 },
+      transferId: TRANSFER_A,
+    });
+    await Promise.resolve();
+    releaseResolve();
+    await expect(finishPromise).resolves.toBeNull();
+    releaseDrop();
+    await expect(dropPromise).resolves.toMatchObject({
+      ok: true,
+      targetPanelId: "panel-1",
+    });
+  });
+
+  it("finishDrag aborts silently when primary mouse button is still down", async () => {
+    geometry = {
+      ...geometry,
+      isLeftMouseButtonDown: () => true,
+    };
+    cursor = { x: 5000, y: 5000 };
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toBeNull();
+    expect(createForTransfer).not.toHaveBeenCalled();
+  });
+
+  it("finishDrag managed cursor claims via resolvePlacement (root fallback)", async () => {
+    cursor = { x: 1500, y: 400 }; // inside w-1
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    const result = await service.finishDrag(source, TRANSFER_A);
+    expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(createForTransfer).not.toHaveBeenCalled();
+    const resolveCall = rendererExecute.mock.calls.find((call) => {
+      const command = call[0];
+      return (
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        command.type === "panelTransfer.resolvePlacement"
+      );
+    });
+    expect(resolveCall).toBeDefined();
+    expect(resolveCall?.[0]).toMatchObject({
+      clientX: 200, // 1500 - 1300
+      clientY: 360, // 400 - 40
+      transferId: TRANSFER_A,
+      type: "panelTransfer.resolvePlacement",
+    });
+    expect(resolveCall?.[1]).toEqual({ windowId: "w-1" });
+  });
+
+  it("finishDrag managed uses placement from resolvePlacement response", async () => {
+    cursor = { x: 1500, y: 400 };
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.resolvePlacement") {
+        return {
+          data: {
+            direction: "right",
+            kind: "split",
+            referenceGroupId: "g-target",
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toMatchObject(
+      {
+        ok: true,
+        targetPanelId: "panel-1",
+      }
+    );
+    const stageCall = rendererExecute.mock.calls.find((call) => {
+      const command = call[0];
+      return (
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        command.type === "panelTransfer.stageTarget"
+      );
+    });
+    expect(stageCall?.[0]).toMatchObject({
+      placement: {
+        direction: "right",
+        kind: "split",
+        referenceGroupId: "g-target",
+      },
+      type: "panelTransfer.stageTarget",
+    });
+  });
+
+  it("finishDrag waits briefly for late offer registration", async () => {
+    cursor = { x: 5000, y: 5000 };
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const finishPromise = service.finishDrag(source, TRANSFER_A);
+    await Promise.resolve();
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(finishPromise).resolves.toMatchObject({
+      ok: true,
+      targetPanelId: "panel-1",
+    });
+    expect(createForTransfer).toHaveBeenCalledOnce();
+  });
+
+  it("finishDrag outside cursor creates transfer window via createForTransfer", async () => {
+    cursor = { x: 5000, y: 5000 }; // outside both windows
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    const result = await service.finishDrag(source, TRANSFER_A);
+    expect(createForTransfer).toHaveBeenCalledOnce();
+    expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(runExclusive).toHaveBeenCalled();
+    expect(pluginMutation).toHaveBeenCalled();
+  });
+
+  it("finishDrag missing offer returns expired failure", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toEqual({
+      code: "expired",
+      message: "offer not found",
+      ok: false,
+    });
+  });
+
+  it("classify honors true z-order when target overlaps above the source", async () => {
+    // Cursor point inside BOTH windows; z-order says w-1 is on top.
+    geometry = {
+      ...geometry,
+      getWindowBounds: (windowId) => {
+        if (windowId === "main") {
+          return { height: 800, width: 1200, x: 0, y: 0 };
+        }
+        if (windowId === "w-1") {
+          return { height: 800, width: 1200, x: 600, y: 0 };
+        }
+        return null;
+      },
+      getWindowZOrderTopFirst: () => ["w-1", "main"],
+    };
+    cursor = { x: 700, y: 400 }; // overlap region
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    const result = await service.finishDrag(source, TRANSFER_A);
+    expect(result).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(createForTransfer).not.toHaveBeenCalled();
+    const stageCall = rendererExecute.mock.calls.find((call) => {
+      const command = call[0];
+      return (
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        command.type === "panelTransfer.stageTarget"
+      );
+    });
+    expect(stageCall?.[1]).toEqual({ windowId: "w-1" });
+  });
+
+  it("classify keeps source when source is on top of the overlap", async () => {
+    geometry = {
+      ...geometry,
+      getWindowBounds: (windowId) => {
+        if (windowId === "main") {
+          return { height: 800, width: 1200, x: 0, y: 0 };
+        }
+        if (windowId === "w-1") {
+          return { height: 800, width: 1200, x: 600, y: 0 };
+        }
+        return null;
+      },
+      getWindowZOrderTopFirst: () => ["main", "w-1"],
+    };
+    cursor = { x: 700, y: 400 };
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toBeNull();
+    expect(createForTransfer).not.toHaveBeenCalled();
+  });
+
+  it("round-trips a panel across two sequential transfers", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const other = caller("w-1", "record-w1", 2);
+
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.drop(other, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+
+    // Back: same panel, new transferId, reversed roles.
+    await service.offer(other, movableOffer(TRANSFER_B));
+    await expect(
+      service.drop(source, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_B,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(journal.list()).toEqual([]);
+  });
+  it("routes prepareSource to source window and stageTarget to target window", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.drop(target, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+
+    const routed = rendererExecute.mock.calls.map((call) => {
+      const command = call[0];
+      const options = call[1];
+      const type =
+        command &&
+        typeof command === "object" &&
+        "type" in command &&
+        typeof command.type === "string"
+          ? command.type
+          : "";
+      const windowId =
+        options &&
+        typeof options === "object" &&
+        "windowId" in options &&
+        typeof options.windowId === "string"
+          ? options.windowId
+          : undefined;
+      return { type, windowId };
+    });
+    expect(routed).toContainEqual({
+      type: "panelTransfer.prepareSource",
+      windowId: "main",
+    });
+    expect(routed).toContainEqual({
+      type: "panelTransfer.stageTarget",
+      windowId: "w-1",
+    });
+    expect(routed).toContainEqual({
+      type: "panelTransfer.releaseSource",
+      windowId: "main",
+    });
+    expect(routed).toContainEqual({
+      type: "panelTransfer.finalize",
+      windowId: "main",
+    });
+    expect(routed).toContainEqual({
+      type: "panelTransfer.finalize",
+      windowId: "w-1",
+    });
+    for (const call of rendererExecute.mock.calls) {
+      expect(call[0]).not.toHaveProperty("windowId");
+    }
+  });
+
+  it("rolls back before runtime-moved and roll-forwards after", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      if (command.type === "panelTransfer.stageTarget") {
+        return {
+          error: { message: "stage failed" },
+          ok: false,
+          requestId: "r1",
+        };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+
+    await expect(
+      service.drop(target, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: false, code: "transfer_failed" });
+    expect(journal.list()).toEqual([]);
+
+    // post-commit recovery path via ready
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_B),
+      phase: "runtime-moved",
+      placement: { kind: "root" },
+      snapshot: {
+        panel: movableOffer(TRANSFER_B).panel,
+        prepared: {},
+        runtime: { kind: "web" },
+      },
+      source,
+      target: {
+        kind: "managed",
+        runtimeWindowId: "w-1",
+        windowRecordId: "record-w1",
+      },
+      targetPanelId: "panel-1",
+      transferId: TRANSFER_B,
+      updatedAt: 2,
+    });
+    rendererExecute.mockImplementation(async () => ({
+      data: null,
+      ok: true,
+      requestId: "r1",
+    }));
+    const ready = await service.ready(target, TRANSFER_B);
+    expect(ready).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+  });
+
+  it("bootstrap only includes source-prepared+ with snapshot", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_A),
+      phase: "claimed",
+      source,
+      transferId: TRANSFER_A,
+      updatedAt: 1,
+    });
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_B),
+      phase: "source-prepared",
+      snapshot: {
+        panel: movableOffer(TRANSFER_B).panel,
+        prepared: {},
+        runtime: { kind: "web" },
+      },
+      source,
+      target: {
+        kind: "managed",
+        runtimeWindowId: "w-1",
+        windowRecordId: "record-w1",
+      },
+      transferId: TRANSFER_B,
+      updatedAt: 2,
+    });
+    const boot = await service.bootstrap(source);
+    expect(boot.pending.map((item) => item.transferId)).toEqual([TRANSFER_B]);
+  });
+
+  it("recoverPending aborts pre-commit and keeps post-commit snapshot pending", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_A),
+      phase: "target-durable",
+      snapshot: {
+        panel: movableOffer(TRANSFER_A).panel,
+        prepared: {},
+        runtime: { kind: "web" },
+      },
+      source,
+      target: {
+        kind: "managed",
+        runtimeWindowId: "w-1",
+        windowRecordId: "record-w1",
+      },
+      transferId: TRANSFER_A,
+      updatedAt: 1,
+    });
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_B),
+      phase: "runtime-moved",
+      snapshot: {
+        panel: movableOffer(TRANSFER_B).panel,
+        prepared: {},
+        runtime: { kind: "web" },
+      },
+      source,
+      target: {
+        kind: "managed",
+        runtimeWindowId: "w-1",
+        windowRecordId: "record-w1",
+      },
+      transferId: TRANSFER_B,
+      updatedAt: 2,
+    });
+
+    await service.recoverPending();
+    const remaining = journal.list().map((entry) => entry.transferId);
+    expect(remaining).toContain(TRANSFER_B);
+    expect(remaining).not.toContain(TRANSFER_A);
+  });
+
+  it("createForTransfer/closeAfterTransfer require active lease via window port", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    cursor = { x: 5000, y: 5000 };
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await service.finishDrag(source, TRANSFER_A);
+    expect(createForTransfer).toHaveBeenCalledWith(
+      lease,
+      expect.objectContaining({ transferId: TRANSFER_A })
+    );
+  });
+
+  it("target_conflict fails without side effects when panel id exists", async () => {
+    workspace.hasPanelId = vi.fn(async () => true);
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.drop(target, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ code: "target_conflict", ok: false });
+    expect(rendererExecute).not.toHaveBeenCalled();
+  });
+
+  it("recoverPending retains post-commit journal when no live windows", async () => {
+    windows.list = vi.fn(() => []);
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_B),
+      phase: "runtime-moved",
+      snapshot: {
+        panel: movableOffer(TRANSFER_B).panel,
+        prepared: {},
+        runtime: { kind: "web" },
+      },
+      source,
+      target: {
+        kind: "managed",
+        runtimeWindowId: "w-1",
+        windowRecordId: "record-w1",
+      },
+      targetPanelId: "panel-1",
+      transferId: TRANSFER_B,
+      updatedAt: 2,
+    });
+
+    await service.recoverPending();
+    expect(journal.list().map((entry) => entry.transferId)).toEqual([
+      TRANSFER_B,
+    ]);
+    expect(rendererExecute).not.toHaveBeenCalled();
+  });
+
+  it("bootstrap and ready match pending by windowRecordId after runtime id change", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    // Post-commit journal still holds pre-restart runtime ids.
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_B),
+      phase: "runtime-moved",
+      placement: { kind: "root" },
+      snapshot: {
+        panel: movableOffer(TRANSFER_B).panel,
+        prepared: {},
+        runtime: { kind: "web" },
+      },
+      source: {
+        ...source,
+        runtimeWindowId: "old-main",
+      },
+      target: {
+        kind: "managed",
+        runtimeWindowId: "old-w-1",
+        windowRecordId: "record-w1",
+      },
+      targetPanelId: "panel-1",
+      transferId: TRANSFER_B,
+      updatedAt: 2,
+    });
+
+    // After restoreOpenWindows(), runtime ids are reassigned but recordIds stay.
+    windows.list = vi.fn(() => [
+      { focused: true, id: "main", recordId: "record-main" },
+      { focused: false, id: "w-restored", recordId: "record-w1" },
+    ]);
+    const restoredTarget = caller("w-restored", "record-w1", 9);
+
+    const boot = await service.bootstrap(restoredTarget);
+    expect(boot.pending).toEqual([
+      expect.objectContaining({
+        role: "target",
+        transferId: TRANSFER_B,
+      }),
+    ]);
+
+    rendererExecute.mockImplementation(async () => ({
+      data: null,
+      ok: true,
+      requestId: "r1",
+    }));
+    const ready = await service.ready(restoredTarget, TRANSFER_B);
+    expect(ready).toMatchObject({ ok: true, targetPanelId: "panel-1" });
+
+    const finalizeCalls = rendererExecute.mock.calls
+      .map((call) => ({
+        command: call[0] as { type: string },
+        options: call[1] as { windowId?: string } | undefined,
+      }))
+      .filter((entry) => entry.command.type === "panelTransfer.finalize");
+    expect(finalizeCalls).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          command: expect.objectContaining({ type: "panelTransfer.finalize" }),
+          options: { windowId: "main" },
+        }),
+        expect.objectContaining({
+          command: expect.objectContaining({ type: "panelTransfer.finalize" }),
+          options: { windowId: "w-restored" },
+        }),
+      ])
+    );
+    expect(journal.list()).toEqual([]);
+  });
+
+  it("recoverPending cold pre-commit abort closes internal open-record", async () => {
+    windows.list = vi.fn(() => []);
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await journal.upsert({
+      createdAt: 1,
+      offer: movableOffer(TRANSFER_A),
+      phase: "target-durable",
+      snapshot: {
+        panel: movableOffer(TRANSFER_A).panel,
+        prepared: {},
+        runtime: { kind: "web" },
+      },
+      source,
+      target: {
+        kind: "internal",
+        runtimeWindowId: "w-gone",
+        windowRecordId: "record-orphan-internal",
+      },
+      targetPanelId: "panel-1",
+      transferId: TRANSFER_A,
+      updatedAt: 1,
+    });
+
+    await service.recoverPending();
+
+    expect(journal.list()).toEqual([]);
+    expect(windows.closeOpenWindowRecord).toHaveBeenCalledWith(
+      "record-orphan-internal"
+    );
+    expect(windows.destroyForTransfer).not.toHaveBeenCalled();
+  });
+
+  it("rollback destroys internal target window created for transfer", async () => {
+    cursor = { x: 5000, y: 5000 };
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    await service.offer(source, movableOffer(TRANSFER_A));
+
+    rendererExecute.mockImplementation(async (command: { type: string }) => {
+      if (command.type === "panelTransfer.prepareSource") {
+        return {
+          data: {
+            panel: {
+              componentId: "welcome",
+              panelId: "panel-1",
+              title: "Welcome",
+            },
+            prepared: {},
+            runtime: { kind: "web" },
+          },
+          ok: true,
+          requestId: "r1",
+        };
+      }
+      if (command.type === "panelTransfer.probeWorkspace") {
+        return { data: { ready: true }, ok: true, requestId: "r1" };
+      }
+      if (command.type === "panelTransfer.stageTarget") {
+        return {
+          error: { message: "stage failed" },
+          ok: false,
+          requestId: "r1",
+        };
+      }
+      return { data: null, ok: true, requestId: "r1" };
+    });
+
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toMatchObject(
+      {
+        code: "transfer_failed",
+        ok: false,
+      }
+    );
+    expect(createForTransfer).toHaveBeenCalledOnce();
+    expect(windows.destroyForTransfer).toHaveBeenCalledWith(
+      lease,
+      "w-new",
+      TRANSFER_A
+    );
+    expect(windows.releaseRendererShow).toHaveBeenCalledWith(
+      "w-new",
+      "panel-transfer"
+    );
+  });
+
+  it("recoverPending reports journal parse failure via hook", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-pts-bad-"));
+    await writeFile(join(dir, "panel-transfers.json"), "{not-json", "utf8");
+    const reportJournalParseFailure = vi.fn();
+    const badJournal = new PanelTransferJournal(dir);
+    const service = createPanelTransferService({
+      files,
+      geometry,
+      journal: badJournal,
+      now: () => now,
+      pluginMutation: pluginMutation as never,
+      rendererCommand: {
+        execute: rendererExecute as never,
+        resolve: () => undefined,
+      },
+      reportJournalParseFailure,
+      terminal,
+      userDataDir: dir,
+      windows,
+      workspace,
+    });
+
+    await service.recoverPending();
+    expect(reportJournalParseFailure).toHaveBeenCalledOnce();
+    expect(reportJournalParseFailure.mock.calls[0]?.[0]).toContain(
+      "panel-transfers.json"
+    );
+  });
+
+  it("roll-forward calls closeAfterTransfer after source-durable", async () => {
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    await expect(
+      service.drop(target, {
+        placement: { kind: "root" },
+        transferId: TRANSFER_A,
+      })
+    ).resolves.toMatchObject({ ok: true, targetPanelId: "panel-1" });
+    expect(windows.closeAfterTransfer).toHaveBeenCalledWith(
+      lease,
+      "main",
+      TRANSFER_A
+    );
+  });
+});

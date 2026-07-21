@@ -129,6 +129,9 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "file.drafts.claimLegacy": { capabilities: ["file:write"] },
   // Git 读写分开授权:读命令 git:read, 写命令 git:write。
   "git.checkoutBranch": { capabilities: ["git:write"] },
+  "git.cherryPick": { capabilities: ["git:write"] },
+  "git.cherryPickAbort": { capabilities: ["git:write"] },
+  "git.cherryPickContinue": { capabilities: ["git:write"] },
   "git.commit": { capabilities: ["git:write"] },
   "git.createAndSwitchBranch": { capabilities: ["git:write"] },
   "git.createBranch": { capabilities: ["git:write"] },
@@ -167,7 +170,11 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.rebaseAbort": { capabilities: ["git:write"] },
   "git.rebaseContinue": { capabilities: ["git:write"] },
   "git.resolveRef": { capabilities: ["git:read"] },
+  "git.revert": { capabilities: ["git:write"] },
+  "git.revertAbort": { capabilities: ["git:write"] },
+  "git.revertContinue": { capabilities: ["git:write"] },
   "git.searchBranches": { capabilities: ["git:read"] },
+  "git.searchCommits": { capabilities: ["git:read"] },
   "git.stage": { capabilities: ["git:write"] },
   "git.stash": { capabilities: ["git:write"] },
   "git.stashApply": { capabilities: ["git:write"] },
@@ -210,7 +217,97 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["plugin:write"],
   },
+  "skills.projects.snapshot": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:read"],
+  },
+  "skills.snapshot": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["skills:read"],
+  },
+  // Read one discovered skill's SKILL.md (read-only detail / editor prefill).
+  "skills.skill.read": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["skills:read"],
+  },
+  "skills.import.prepare": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.import.prepareFromDiscovery": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.import.prepareTemplate": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.import.prepareContentUpdate": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.import.prepareDriftAcceptance": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.import.discard": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.plan": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:read"],
+  },
+  "skills.apply": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.repair.plan": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:read"],
+  },
+  "skills.repair": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["skills:write"],
+  },
+  "skills.doctor": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["skills:read"],
+  },
+  "skills.operation.status": {
+    allowedClientKinds: ["desktop-renderer", "cli-local"],
+    capabilities: ["skills:read"],
+  },
+  // Reuses terminal/agent launch write surface, not skills:read (design §4.1).
+  "agent.launch.continue": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["workspace:open", "terminal:control"],
+  },
   "app.relaunch": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.offer": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.drop": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.finishDrag": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.cancel": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.bootstrap": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["window:control"],
+  },
+  "panelTransfer.ready": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["window:control"],
   },

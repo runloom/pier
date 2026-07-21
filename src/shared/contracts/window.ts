@@ -18,5 +18,11 @@ export interface WindowContext {
   electronWindowId?: string;
   mode: WindowOpenMode;
   recordId: string;
+  /**
+   * Main-written, renderer-read startup intent.
+   * Used when a window is created to host an in-flight panel transfer target.
+   * Not exposed via WindowCreateOptions / command / CLI.
+   */
+  startup?: { kind: "panel-transfer"; transferId: string };
   windowId: string;
 }

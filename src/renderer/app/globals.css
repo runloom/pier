@@ -950,65 +950,74 @@ body {
 }
 
 /*
- * Agent 状态 shimmer —— loomdesk/OMP classic 扫带的逐字符移植。
- * 组件（agent-shimmer-text.tsx）以 rAF 更新每字符 data-shimmer-tier，
- * CSS 只负责 tier → 颜色/字重映射。高档色来自内联 --pier-agent-status-color
- * （状态色变量, running 长跑时被覆盖为 warning/danger）。
- * 深浅主题都从 foreground 派生，避免组件状态色与主题分叉。
+ * Agent 状态 shimmer —— 渐变裁剪扫光（ChatGPT "Thinking…" 同款模式）。
+ * 单节点文本、固定字重：渐变作背景裁剪到字形（background-clip: text），
+ * 动画只推 background-position——零 JS 帧循环、字形静止无抖动。
+ *
+ * 亮度负责"动"、色相负责"是什么状态"：状态色（内联 --pier-agent-status-color,
+ * running 长跑时被覆盖为 warning/danger）不能直接当亮带——暗色主题下
+ * --status-info-fg(#1668dc) 比基色更暗, 扫过去是暗斑不是光泽。因此亮带 =
+ * 状态色 80% 向 foreground 混：暗色主题必然更亮、浅色主题必然更深（墨带），
+ * 方向自动正确；基色压到 35% 保证亮带反差与色相都清晰可辨。混色用 oklab
+ * （直角坐标）——oklch 极坐标向近无彩色混合会发生色相漂移（绿混成土黄）。
  */
 [data-agent-status-text][data-agent-status-kind="running"] {
-  --shimmer-low: color-mix(in oklch, var(--foreground) 58%, transparent);
-  --shimmer-mid: color-mix(in oklch, var(--foreground) 75%, transparent);
-  --shimmer-high: var(--pier-agent-status-color, var(--status-info-fg));
+  --shimmer-base: color-mix(in oklab, var(--foreground) 35%, transparent);
+  --shimmer-highlight: color-mix(
+    in oklab,
+    var(--pier-agent-status-color, var(--status-info-fg)) 80%,
+    var(--foreground)
+  );
 
-  color: var(--shimmer-low);
+  font-weight: 500;
+  color: transparent;
+  /* 45%–55% 为全饱和平台：纯三角渐变只有峰值一点是实色, 肉眼着色区太窄 */
+  background-image: linear-gradient(
+    90deg,
+    var(--shimmer-base) 0%,
+    var(--shimmer-base) 35%,
+    var(--shimmer-highlight) 45%,
+    var(--shimmer-highlight) 55%,
+    var(--shimmer-base) 65%,
+    var(--shimmer-base) 100%
+  );
+  background-size: 300% 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  animation: pier-agent-shimmer-sweep 1.1s linear infinite;
 }
 
 /*
- * 宽度稳定：高档字重 700 会加宽字符 advance，扫带经过时整体宽度"呼吸"。
- * 用 inline-grid 叠一个隐藏的粗体 ghost 钉住单元格宽度（loomdesk 同款）。
+ * bg 宽 300% + position 100%→0%：亮带（30% 段 ≈ 0.9 倍文本宽）从左缘滑入、
+ * 右缘滑出, 循环衔接处亮带恰好整体在文本外（仅 ~5% 周期）——无可见跳变；
+ * 渐变任意时刻盖满文本（no-repeat 下不会露出透明字）。状态栏动画不设
+ * 停顿：静止的状态词会读作"卡住了"。
  */
-[data-agent-status-text][data-agent-status-kind="running"] [data-shimmer-char] {
-  display: inline-grid;
-  grid-template-areas: "stack";
-  justify-items: center;
+@keyframes pier-agent-shimmer-sweep {
+  from {
+    background-position: 100% 0;
+  }
+
+  to {
+    background-position: 0% 0;
+  }
 }
 
-[data-agent-status-text][data-agent-status-kind="running"]
-  [data-shimmer-char]::before {
-  content: attr(data-char);
-  grid-area: stack;
-  font-weight: 700;
-  visibility: hidden;
-  pointer-events: none;
-  user-select: none;
-}
-
-[data-agent-status-text][data-agent-status-kind="running"]
-  [data-shimmer-glyph] {
-  grid-area: stack;
-  font-weight: 500;
-  color: var(--shimmer-low);
-}
-
-[data-agent-status-text][data-agent-status-kind="running"]
-  [data-shimmer-tier="mid"]
-  > [data-shimmer-glyph] {
-  color: var(--shimmer-mid);
-  font-weight: 600;
-}
-
-[data-agent-status-text][data-agent-status-kind="running"]
-  [data-shimmer-tier="high"]
-  > [data-shimmer-glyph] {
-  color: var(--shimmer-high);
-  font-weight: 700;
+@media (prefers-reduced-motion: reduce) {
+  [data-agent-status-text][data-agent-status-kind="running"] {
+    animation: none;
+    background: none;
+    color: color-mix(in oklab, var(--foreground) 75%, transparent);
+  }
 }
 
 @media (forced-colors: active) {
-  [data-agent-status-text][data-agent-status-kind="running"],
-  [data-agent-status-text][data-agent-status-kind="running"]
-    [data-shimmer-char] {
+  [data-agent-status-text][data-agent-status-kind="running"] {
+    animation: none;
+    background: none;
+    -webkit-background-clip: initial;
+    background-clip: initial;
     color: currentcolor;
     font-weight: inherit;
   }

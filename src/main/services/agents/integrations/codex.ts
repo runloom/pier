@@ -57,6 +57,11 @@ const codexConfigPath = () => join(codexHomeDir(), "hooks.json");
  * 也是死条目（不会被触发）。Pier 用进程退出时自身的 `command_finished`
  * 驱动状态兜底复位, 覆盖同样的"会话结束"语义转换, 不依赖不存在的 hook。
  *
+ * Ev5 / FA `error`：hooks 表无 `StopFailure`（或等价失败 hook）；transcript
+ * 对账仅补 `task_complete→TurnCompleted` 与 `turn_aborted→TurnInterrupted`
+ * （用户中断 ≠ 出错）。禁止把 `Stop`/`TurnInterrupted` 假装成 `error`。
+ * 结论见 `CODEX_FA_ERROR_REACHABILITY`。
+ *
  * 所有事件均不写 matcher 字段（工厂默认行为：event.matcher 为
  * undefined 时不写入, 此处所有条目均不传 matcher）。
  */
@@ -85,6 +90,12 @@ const CODEX_SPEC: NestedJsonIntegrationSpec = {
 };
 
 export const CODEX_HOOK_EVENTS = CODEX_SPEC.events;
+
+/**
+ * Ev5 诚实结论：codex hooks + transcript 对账均无原生回合失败 → FA `error`。
+ * 证据：发布版 hooks 无 StopFailure；对账只产 TurnCompleted/TurnInterrupted。
+ */
+export const CODEX_FA_ERROR_REACHABILITY = "unsupported" as const;
 
 export const codexIntegration = createNestedJsonIntegration(CODEX_SPEC);
 

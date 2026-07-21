@@ -33,5 +33,22 @@ export const dialog = {
   error: {
     invalid: "Invalid input",
   },
+  imagePreview: {
+    actualSize: "Actual size",
+    controlsLabel: "Image controls",
+    fit: "Fit to window",
+    loadFailedDescription:
+      "The image could not be loaded or changed after it was opened.",
+    loadFailedTitle: "Unable to display image",
+    loading: "Loading image",
+    title: "Image preview",
+    viewerLabel: "Image preview",
+    zoomIn: "Zoom in",
+    zoomLevel: "Zoom level",
+    zoomOut: "Zoom out",
+  },
+  contentPreview: {
+    title: "Preview",
+  },
   ok: "OK",
 } as const;

@@ -648,7 +648,11 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     ).toBeLessThanOrEqual(storedTreeWidth + 2);
     await reviewTreeSearch.fill("script.py");
     await reviewTreeSearch.press("Enter");
-    await expect(reviewHeader.getByText("script.py")).toBeVisible();
+    // header 不再展示路径面包屑(改为左侧 scope 切换器);导航结果由下方
+    // treeitem selected 断言与 scope 切换器可见性共同验证。
+    await expect(
+      reviewHeader.getByTestId("git-review-scope-switcher")
+    ).toBeVisible();
     await reviewTreeSearch.press("Escape");
     await expect(page.getByTestId("git-review-tree-search-bar")).toHaveCount(0);
     await expect(
@@ -680,6 +684,8 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       })
       .toBe(true);
     await changesTab.click();
+    // Demand-loaded review may not keep binary sections mounted after viewing
+    // another file — navigate via the tree so the binary state patch is loaded.
     await page
       .getByRole("treeitem", { name: /binary-6\\special\.bin/u })
       .click();
@@ -720,7 +726,22 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       .getByTestId("pierre-diff-root")
       .evaluate((root) => root.getBoundingClientRect().height);
     expect(shortDiffHeight).toBeGreaterThan(0);
+    // Tree may virtualize after binary navigation — search before clicking.
+    await page
+      .getByRole("button", {
+        name: /Find in changed files|在变更文件中查找/u,
+      })
+      .click();
+    const appTreeSearch = page.getByRole("textbox", {
+      name: /Find in changed files|在变更文件中查找/u,
+    });
+    await appTreeSearch.fill("app.tsx");
+    await appTreeSearch.press("Enter");
+    await expect(page.getByRole("treeitem", { name: /app\.tsx/u })).toBeVisible(
+      { timeout: 10_000 }
+    );
     await page.getByRole("treeitem", { name: /app\.tsx/u }).click();
+    await appTreeSearch.press("Escape").catch(() => undefined);
 
     const diffContainers = page.locator("diffs-container");
     await expect

@@ -14,14 +14,18 @@ describe("development entrypoint governance", () => {
       "utf8"
     );
 
-    expect(packageJson.scripts.predev).toContain("plugin:codex:pack");
+    expect(packageJson.scripts.predev).toContain("plugins:pack");
     expect(packageJson.scripts.dev).toBe("node ./scripts/dev-with-plugins.mjs");
     expect(packageJson.scripts["electron:dev"]).toBe("pnpm dev");
     expect(packageJson.scripts["dev:host"]).toBe(
       "node ./scripts/dev-profile.mjs electron-dev"
     );
+    expect(devOrchestrator).toContain('start("plugin-claude main watch"');
+    expect(devOrchestrator).toContain('start("plugin-claude renderer watch"');
     expect(devOrchestrator).toContain('start("plugin-codex main watch"');
     expect(devOrchestrator).toContain('start("plugin-codex renderer watch"');
+    expect(devOrchestrator).toContain('start("plugin-grok main watch"');
+    expect(devOrchestrator).toContain('start("plugin-grok renderer watch"');
     expect(devOrchestrator).toContain('start("electron dev"');
   });
 });

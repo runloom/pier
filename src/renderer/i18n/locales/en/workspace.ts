@@ -36,4 +36,20 @@ export const workspace = {
     trigger: "Create in this panel group",
     startAgentFailed: "Couldn’t start agent",
   },
+  panelTransfer: {
+    dropFailedTitle: "Couldn’t move the tab",
+    dropFailedBody:
+      "The tab couldn’t be moved to that window. The original tab is still open.",
+    dropFailedUnknownComponentBody:
+      "That tab couldn’t be moved to the other window. The original tab is still open.",
+    unsupportedTitle: "This tab can’t be moved to another window",
+    unsupportedBody:
+      "This kind of tab doesn’t support cross-window moves. It’s still open in its original window.",
+    unavailableSourceTitle: "Tab no longer available here",
+    unavailableSourceBody:
+      "The tab was moved to another window, but the original couldn’t be removed from this window. Close it manually if needed.",
+    unavailableTargetTitle: "Tab couldn’t be restored",
+    unavailableTargetBody:
+      "The tab was moved to this window, but its source isn’t available here. Re-enable the related extension and reload to restore it.",
+  },
 } as const;

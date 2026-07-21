@@ -60,10 +60,34 @@ function hasOwnRecordKey(value: unknown, key: string): boolean {
   return typeof value === "object" && value !== null && key in value;
 }
 
+function logAttentionSoundIdFallback(
+  raw: unknown,
+  parsed: ProjectPreferences
+): void {
+  if (typeof raw !== "object" || raw === null) {
+    return;
+  }
+  const attention = (raw as Record<string, unknown>).agentAttention;
+  if (typeof attention !== "object" || attention === null) {
+    return;
+  }
+  const rawSoundId = (attention as Record<string, unknown>).soundId;
+  if (
+    typeof rawSoundId === "string" &&
+    rawSoundId !== parsed.agentAttention.soundId
+  ) {
+    // schema 的 catch 静默回落；这里补一条痕迹，便于排查「音色被重置」。
+    console.warn(
+      `[preferences] unknown agentAttention.soundId "${rawSoundId}" fell back to "${parsed.agentAttention.soundId}"`
+    );
+  }
+}
+
 function normalizeParsedPreferences(
   raw: unknown,
   parsed: ProjectPreferences
 ): ProjectPreferences {
+  logAttentionSoundIdFallback(raw, parsed);
   if (hasOwnRecordKey(raw, "agentPermissionMode")) {
     return parsed;
   }

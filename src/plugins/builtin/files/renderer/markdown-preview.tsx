@@ -1,4 +1,4 @@
-import { Alert, AlertDescription } from "@pier/ui/alert.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { useDeferredValue, useEffect, useMemo, useRef, useState } from "react";
@@ -254,11 +254,7 @@ export function MarkdownPreview({
             <Skeleton className="h-28 w-full rounded-md" />
           </div>
         ) : null}
-        {state.status === "error" ? (
-          <Alert variant="destructive">
-            <AlertDescription>{errorLabel}</AlertDescription>
-          </Alert>
-        ) : null}
+        {state.status === "error" ? <ErrorEmpty title={errorLabel} /> : null}
         {state.status === "ready" ? (
           <MarkdownIrRenderer
             activeSearchMatchId={activeSearchMatch?.id}

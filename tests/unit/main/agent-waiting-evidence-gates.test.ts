@@ -136,6 +136,7 @@ describe("S1 top A waiting evidence", () => {
     const showNotification = vi.fn(async () => ({ shown: true }));
     const service = createAgentAttentionService({
       isTargetPanelFocused: () => false,
+      isOwnerWindowFocused: () => false,
       showNotification,
     });
     await service.observe(null, { activities: [activity], ts: 1 });
@@ -200,12 +201,17 @@ describe("B-tier permission-adjacent mappings retained after review", () => {
     expect(hasPermissionMapping(DROID_HOOK_EVENTS, "Notification")).toBe(true);
   });
 
-  it("Cursor shell/MCP before → PermissionRequest", () => {
-    expect(hasPermissionMapping(CURSOR_EVENTS, "beforeShellExecution")).toBe(
-      true
-    );
-    expect(hasPermissionMapping(CURSOR_EVENTS, "beforeMCPExecution")).toBe(
-      true
-    );
+  it("Cursor shell/MCP 闸门事件不装——自动放行也触发（假 waiting）且无 tool_use_id（无法配对）", () => {
+    for (const nativeEvent of [
+      "beforeShellExecution",
+      "beforeMCPExecution",
+      "afterShellExecution",
+      "afterMCPExecution",
+    ]) {
+      expect(
+        CURSOR_EVENTS.some((event) => event.nativeEvent === nativeEvent),
+        nativeEvent
+      ).toBe(false);
+    }
   });
 });

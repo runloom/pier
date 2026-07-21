@@ -16,14 +16,18 @@ export interface PreventableQuitEvent {
 
 export interface AppQuitControllerDeps {
   confirmQuit: (args: {
-    parent: AppWindow | null;
+    parent: AppWindow;
     summaries: readonly QuitActivitySummary[];
   }) => Promise<boolean>;
+  /** Clear intentional relaunch arm when quit aborts/fails. */
+  disarmIntentionalRelaunch?: () => void;
   finalCleanup: () => void;
   flushBeforeQuit: () => Promise<void>;
   getActivities: () => readonly ForegroundActivity[];
   getDialogParent: () => AppWindow | null;
   getTaskRuns?: () => TaskRunsSnapshot;
+  /** Armed by app.relaunch / appUpdate.quitAndInstall — skip activity confirmation. */
+  isIntentionalRelaunch?: () => boolean;
   logFailure: (error: unknown) => void;
   proceedToQuit: () => void;
   readConfirmationMode: () => Promise<AppQuitConfirmationMode>;
@@ -49,13 +53,14 @@ export function createAppQuitController(
 
   async function runQuitFlow(): Promise<void> {
     try {
+      const intentional = deps.isIntentionalRelaunch?.() === true;
       const mode = await deps.readConfirmationMode();
       const summaries = summarizeDangerousQuitActivities(
         deps.getActivities(),
         deps.getTaskRuns?.()
       );
       const shouldConfirm =
-        !deps.shouldBypassQuitConfirmationForTests?.() &&
+        !(intentional || deps.shouldBypassQuitConfirmationForTests?.()) &&
         shouldConfirmBeforeQuit(mode, summaries.length);
       if (shouldConfirm) {
         const parent = deps.getDialogParent();
@@ -65,6 +70,7 @@ export function createAppQuitController(
             summaries,
           });
           if (!confirmed) {
+            deps.disarmIntentionalRelaunch?.();
             phase = "idle";
             return;
           }
@@ -76,6 +82,7 @@ export function createAppQuitController(
       phase = "quitting";
       deps.proceedToQuit();
     } catch (error) {
+      deps.disarmIntentionalRelaunch?.();
       deps.logFailure(error);
       deps.reportFailure?.(error);
       phase = "idle";
@@ -102,6 +109,7 @@ export function createAppQuitController(
 
       phase = "confirming";
       runQuitFlow().catch((error) => {
+        deps.disarmIntentionalRelaunch?.();
         deps.logFailure(error);
         phase = "idle";
       });

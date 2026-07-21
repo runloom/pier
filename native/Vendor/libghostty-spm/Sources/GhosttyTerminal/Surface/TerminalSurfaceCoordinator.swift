@@ -65,6 +65,7 @@ final class TerminalSurfaceCoordinator {
     private var isDisplayVisible = true
     private var isApplicationActive = true
     private var isSurfaceFocused = false
+    private var isCursorSuppressed = false
     private var surfaceGeneration: UInt64 = 0
     private var refreshPending = false
     private var refreshScheduled = false
@@ -176,6 +177,11 @@ final class TerminalSurfaceCoordinator {
         // the host-owned state so an inactive terminal created before its
         // surface exists does not render an active cursor.
         newSurface.setFocus(isSurfaceFocused)
+        // Same for host-forced cursor suppression (Pier patch 0103): the
+        // rebuilt surface defaults to "not suppressed".
+        if isCursorSuppressed {
+            newSurface.setCursorSuppress(true)
+        }
         TerminalDebugLog.log(.lifecycle, "surface rebuild succeeded")
         (delegate as? any TerminalSurfaceLifecycleDelegate)?
             .terminalDidAttachSurface(newSurface)
@@ -328,6 +334,13 @@ final class TerminalSurfaceCoordinator {
         )
         (delegate as? any TerminalSurfaceFocusDelegate)?
             .terminalDidChangeFocus(focused)
+    }
+
+    /// Host-forced cursor suppression (Pier patch 0103)。缓存到 coordinator，
+    /// surface 重建时由 rebuild 路径重放。
+    func setCursorSuppress(_ suppressed: Bool) {
+        isCursorSuppressed = suppressed
+        surface?.setCursorSuppress(suppressed)
     }
 
     // MARK: - Cleanup

@@ -24,36 +24,37 @@ import {
   markWorkspaceLayoutPersistenceUnavailable,
   registerWorkspaceLayoutFlusher,
 } from "@/lib/workspace/workspace-layout-persistence.ts";
-import {
-  flushTerminalLayoutFramesTrailing,
-  setTerminalLayoutPresentationScheduler,
-  type TerminalLayoutFlushReason,
-} from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
-import {
-  requestTerminalPresentation,
-  type TerminalPresentationWorkspaceState,
-  updateTerminalPresentationWorkspace,
-} from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
+import { setTerminalLayoutPresentationScheduler } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
+import { requestTerminalPresentation } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
+import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
 import {
   requestTerminalFocusIntent,
   setTerminalBasePanel,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { attachWorkspacePanelTransfer } from "./attach-workspace-panel-transfer.ts";
 import { getPanelComponents, panelKindOf } from "./panel-registry.ts";
 import { PanelTabHeader } from "./panel-tab-header.tsx";
-import { sanitizeSavedLayout } from "./sanitize-saved-layout.ts";
+import { setWorkspaceBootstrapGate } from "./workspace-bootstrap-gate.ts";
 import { applyDefaultLayout } from "./workspace-default-layout.ts";
 import {
   WorkspaceHeaderActions,
   WorkspaceHeaderRightActions,
 } from "./workspace-header-actions.tsx";
+import { syncTerminalPresentation } from "./workspace-host-terminal-presentation.ts";
 import {
   createWorkspaceLayoutSaveScheduler,
   subscribeWorkspacePanelParameterChanges,
 } from "./workspace-layout-persistence.ts";
+import {
+  enterPendingTransferBootstrapGate,
+  loadWorkspaceLayoutWithPendingTransfers,
+  restoreAndSanitizeTransferLayout,
+  settlePendingTransferBootstrap,
+} from "./workspace-panel-transfer-host.ts";
 import {
   createPluginPanelCloserForWorkspace,
   createPluginPanelTitleUpdaterForWorkspace,
@@ -88,51 +89,18 @@ function syncActivePanelScope(panel: WorkspacePanel | null | undefined): void {
   const kind = panelKindOf(component);
   useKeybindingScope.getState().setActivePanel(kind, component, panel.id);
   if (kind === "terminal") {
-    requestTerminalFocusIntent(panel.id);
+    // basePanel 永远反映「前台是哪个终端」，无论键盘归 composer / 搜索还是 native。
+    // 缺失这一步时 basePanel 停在初始 web，宿主无法定位需要藏 hardware cursor 的
+    // 那个终端（webRequestCount>0 但没有 anchor panel）。
+    setTerminalBasePanel({ kind: "terminal", panelId: panel.id });
+    // Rich Input 打开时：激活终端面板应 refocus 输入框（reason=activate）；
+    // 未接管则走原生焦点归还路径。
+    if (!terminalComposerTakeoverFocus(panel.id, "activate")) {
+      requestTerminalFocusIntent(panel.id);
+    }
   } else {
     setTerminalBasePanel({ kind: "web" });
   }
-}
-
-function buildTerminalWorkspacePresentationState(
-  api: DockviewReadyEvent["api"]
-): TerminalPresentationWorkspaceState {
-  const activePanel = api.activePanel;
-  const activePanelKind = activePanel
-    ? panelKindOf(activePanel.view.contentComponent)
-    : "web";
-  return {
-    activePanelId: activePanel?.id ?? null,
-    activeTerminalPanelId:
-      activePanelKind === "terminal" ? (activePanel?.id ?? null) : null,
-    hasMaximizedGroup: api.hasMaximizedGroup(),
-    panels: api.panels.map((panel) => ({
-      component: panel.view.contentComponent,
-      dockviewActive: panel.api.isActive,
-      dockviewVisible: panel.api.isVisible,
-      id: panel.id,
-    })),
-  };
-}
-
-function reconcileTerminalPanels(api: DockviewReadyEvent["api"]): void {
-  const terminalPanelIds = api.panels
-    .filter((panel) => panel.view.contentComponent === "terminal")
-    .map((panel) => panel.id);
-  window.pier?.terminal?.reconcile?.(terminalPanelIds);
-}
-
-function syncTerminalPresentation(
-  api: DockviewReadyEvent["api"],
-  flushReason: TerminalLayoutFlushReason
-): void {
-  useWorkspaceStore.getState().syncTabShortcutHints();
-  updateTerminalPresentationWorkspace(
-    buildTerminalWorkspacePresentationState(api),
-    flushReason
-  );
-  flushTerminalLayoutFramesTrailing(flushReason);
-  reconcileTerminalPanels(api);
 }
 
 export function WorkspaceHost() {
@@ -268,6 +236,8 @@ export function WorkspaceHost() {
       workspaceLayoutFlushDisposeRef.current();
       workspaceLayoutFlushDisposeRef.current =
         registerWorkspaceLayoutFlusher(persistCurrentLayout);
+      // 跨窗口 panel transfer: Dockview drag 事件 + dragend/Escape。
+      const panelTransferDispose = attachWorkspacePanelTransfer(event.api);
 
       const syncDockviewMaximizedState = (): void => {
         const nextHasMaximizedGroup = event.api.hasMaximizedGroup();
@@ -368,6 +338,12 @@ export function WorkspaceHost() {
             }
           );
           if (result.ok) {
+            // 点终端内容：Rich Input 应关闭并归还 TUI（reason=surface）。
+            // 若 handler 返回 true 表示仍接管（兼容旧行为）；false 则走原生归还。
+            if (terminalComposerTakeoverFocus(req.panelId, "surface")) {
+              syncTerminalPresentation(event.api, "dockview-active-panel");
+              return;
+            }
             // 终端焦点意图：让任何活跃的共存浮层（如搜索栏）让出键盘但保持可见，
             // effective 随 basePanel=terminal 转向终端。
             useTerminalStore.getState().yieldToTerminal();
@@ -381,20 +357,18 @@ export function WorkspaceHost() {
           useWorkspaceStore.getState().addTerminal();
         }) ?? (() => undefined);
 
-      // 异步恢复持久化 layout — 仅在 user 未触碰时应用. 失败或无持久化 layout 时
-      // 用 default. 注意: applyDefaultLayout / fromJSON 都包在 isApplyingPersistedLayout
-      // gate 里, 同样防 save-loop.
+      // 异步恢复持久化 layout — 仅在 user 未触碰时应用; pending transfer bootstrap
+      // 见 workspace-panel-transfer-host.ts。applyDefaultLayout / fromJSON 都包在
+      // isApplyingPersistedLayout gate 里防 save-loop。
       let disposed = false;
       (async () => {
-        let saved: unknown = null;
-        try {
-          const windowContext = await windowContextPromise;
-          saved = await window.pier.workspace.loadLayout(
-            windowContext.recordId
+        const windowContext = await windowContextPromise.catch(() => null);
+        const isTransferStartup =
+          windowContext?.startup?.kind === "panel-transfer";
+        const { saved, pendingTransfers } =
+          await loadWorkspaceLayoutWithPendingTransfers(
+            windowContext?.recordId
           );
-        } catch (err) {
-          console.error("[workspace] loadLayout failed:", err);
-        }
         if (disposed) {
           return;
         }
@@ -403,22 +377,25 @@ export function WorkspaceHost() {
           notifyWorkspaceReady();
           return;
         }
+        const hasPendingTransfers =
+          enterPendingTransferBootstrapGate(pendingTransfers);
+        // Transfer target window: leave Dockview empty for stageTarget to add
+        // the inert panel. Default welcome/terminal would race and flash.
+        if (isTransferStartup && !hasPendingTransfers) {
+          setWorkspaceBootstrapGate(
+            windowContext?.startup?.transferId ?? "panel-transfer",
+            "awaiting-stage-target"
+          );
+        }
         isApplyingPersistedLayout = true;
         try {
-          if (saved && typeof saved === "object") {
-            // 剔除引用未注册 component 的 panel(如禁用插件后旧 layout 残留
-            // pier.git.changes) —— 直接 fromJSON 会抛错让整个 layout 回退 default,
-            // 把用户的终端等也丢了。先 sanitize 保住其它 panel。
-            const sanitized = sanitizeSavedLayout(
-              saved,
-              new Set(Object.keys(readPanelComponents()))
-            );
-            if (sanitized) {
-              event.api.fromJSON(sanitized);
-            } else {
-              applyDefaultLayout(event.api);
-            }
-          } else {
+          const sanitized = restoreAndSanitizeTransferLayout(
+            saved,
+            new Set(Object.keys(readPanelComponents()))
+          );
+          if (sanitized) {
+            event.api.fromJSON(sanitized);
+          } else if (!(isTransferStartup || hasPendingTransfers)) {
             applyDefaultLayout(event.api);
           }
           syncDockviewMaximizedState();
@@ -426,18 +403,21 @@ export function WorkspaceHost() {
           syncTerminalPresentation(event.api, "restore");
         } catch (err) {
           console.error("[workspace] fromJSON failed, fallback default:", err);
-          applyDefaultLayout(event.api);
+          if (!(isTransferStartup || hasPendingTransfers)) {
+            applyDefaultLayout(event.api);
+          }
           syncDockviewMaximizedState();
           syncActivePanelScope(event.api.activePanel);
           syncTerminalPresentation(event.api, "restore");
         }
 
-        // C 方案 reload 零销毁的孤儿兜底:layout 应用后报告当前还活着的 terminal
-        // panelId 集合, swift 把 reload 前 layout 里有、新 layout 里没有的 NSView
-        // 清掉. 首次启动 / layout 未变 时是 noop (swift terminals 字典空 / 集合一致),
-        // 只有 reload 后 layout 收缩时才真正回收孤儿. fire-and-forget.
-        reconcileTerminalPanels(event.api);
+        // syncTerminalPresentation already reconciles terminal panels (C 方案
+        // reload 零销毁的孤儿兜底).
         notifyWorkspaceReady();
+
+        if (hasPendingTransfers) {
+          await settlePendingTransferBootstrap(pendingTransfers);
+        }
 
         // 给 dockview 一帧时间 flush layout-change 事件, 再放 save gate
         requestAnimationFrame(() => {
@@ -456,6 +436,7 @@ export function WorkspaceHost() {
         activePanelSubscription?.dispose();
         terminalFocusDispose();
         newTerminalDispose();
+        panelTransferDispose();
         window.removeEventListener("beforeunload", handleBeforeUnload);
       };
     },
@@ -475,6 +456,7 @@ export function WorkspaceHost() {
           components={panelComponents}
           defaultTabComponent={PanelTabHeader}
           disableTabsOverflowList={true}
+          dndStrategy="html5"
           leftHeaderActionsComponent={WorkspaceHeaderActions}
           onReady={handleReady}
           rightHeaderActionsComponent={WorkspaceHeaderRightActions}

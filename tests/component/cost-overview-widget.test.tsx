@@ -272,7 +272,7 @@ describe("CostOverviewWidget", () => {
       updateParams: vi.fn(),
     });
     expect(refreshAll).toHaveBeenCalledTimes(1);
-    expect(toast.success).toHaveBeenCalledWith("Cost data refreshed");
+    expect(toast.success).toHaveBeenCalledWith("Cost refreshed");
   });
 
   it("does not read the store while the panel is hidden", () => {

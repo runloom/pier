@@ -73,6 +73,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       clearTerminalPanelAgent: vi.fn(async () => undefined),
       detachAgentsForWindow: vi.fn(async () => undefined),
       detachAgentsForWindowSync: vi.fn(() => undefined),
+      ensureTerminalPanelSession: vi.fn(async () => undefined),
       patchTerminalPanelAgentStatus: vi.fn(async () => false),
       patchTerminalPanelTab: vi.fn(async () => undefined),
       patchTerminalPanelTaskStatus: vi.fn(async () => true),
@@ -104,6 +105,14 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => win),
       findInternalWindowId: vi.fn(() => "main"),
+      // Session scope = record id. Tests use "main" as the record value so
+      // existing scope assertions stay meaningful.
+      findWindowContext: vi.fn(() => ({
+        electronWindowId: String(win.id),
+        mode: "restore" as const,
+        recordId: "main",
+        windowId: "main",
+      })),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
@@ -130,6 +139,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
           visible: true,
         },
       ],
+      focusDisabledPanelIds: [],
       webOverlayRects: [],
       webRequestCount: 0,
     };
@@ -144,6 +154,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
         activePanelId: "web-1",
         activeTerminalPanelId: null,
         basePanel: { kind: "web" },
+        focusDisabledPanelIds: [],
         hasMaximizedGroup: false,
         reason: "input-routing",
         rendererSequence: 1,
@@ -506,6 +517,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       activePanelId: "web-1",
       activeTerminalPanelId: null,
       basePanel: { kind: "web" },
+      focusDisabledPanelIds: [],
       hasMaximizedGroup: false,
       reason: "input-routing",
       rendererSequence: 1,
@@ -547,6 +559,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
         activePanelId: "web-1",
         activeTerminalPanelId: null,
         basePanel: { kind: "web" },
+        focusDisabledPanelIds: [],
         hasMaximizedGroup: false,
         reason: "input-routing",
         rendererSequence: 1,

@@ -156,15 +156,6 @@ export const gitBranchRefSchema = z.object({
 });
 export type GitBranchRef = z.infer<typeof gitBranchRefSchema>;
 
-export const gitBranchTipTreeInCurrentHistorySchema = z.object({
-  commit: z.string().min(1),
-  commitsSince: z.number().int().nonnegative(),
-  subject: z.string().nullable(),
-});
-export type GitBranchTipTreeInCurrentHistory = z.infer<
-  typeof gitBranchTipTreeInCurrentHistorySchema
->;
-
 export const gitDiffBranchOptionSchema = z.object({
   aheadFromCurrent: z.number().int().nonnegative().nullable(),
   authorName: z.string().nullable(),
@@ -179,12 +170,6 @@ export const gitDiffBranchOptionSchema = z.object({
   pinReason: z.enum(["default"]).nullable(),
   refName: z.string(),
   subject: z.string().nullable(),
-  /**
-   * 候选分支 tip tree 与当前 HEAD 可达历史中的某个 commit tree 完全一致。
-   * 这是本地 Git 证据：内容曾以该树形态出现在当前历史里；它不等同于 PR/MR
-   * 元数据里的“已合并”，但能解释 squash/rebase 后提交图仍分叉的场景。
-   */
-  tipTreeInCurrentHistory: gitBranchTipTreeInCurrentHistorySchema.nullable(),
 });
 export type GitDiffBranchOption = z.infer<typeof gitDiffBranchOptionSchema>;
 
@@ -256,6 +241,29 @@ export const gitDiffSearchBranchesOptionsSchema = z.object({
   limit: z.number().int().min(1).max(1000).optional(),
   query: z.string().max(512).optional(),
 });
+
+/**
+ * commit 搜索选项。query 支持结构化语法（与 branch 搜索同为服务端过滤）：
+ * - 裸 4-64 位十六进制 → 按 hash 精确查（未命中退化为消息搜索；`#` 前缀强制精确查）
+ * - `@name` → --author（可多个；固定字符串匹配）
+ * - `:path` → 限定路径（可多个）
+ * - `~text` → -S pickaxe（git 限制仅支持一个；后续 ~token 按消息词处理）
+ * - `since:<date>` / `until:<date>` → --since/--until
+ * - `all:` 整条查询前缀 → --all（默认仅当前 HEAD 可达历史）
+ * - 其余词 → --grep 提交信息（fixed-strings、忽略大小写）
+ */
+export const gitSearchCommitsOptionsSchema = z.object({
+  limit: z.number().int().min(1).max(200).optional(),
+  query: z.string().max(512).optional(),
+});
+
+export const gitCommitSearchResultSchema = z.object({
+  durationMs: z.number().nonnegative(),
+  items: z.array(gitCommitSchema),
+  message: z.string().nullable(),
+  status: z.enum(["ok", "timeout", "error"]),
+});
+export type GitCommitSearchResult = z.infer<typeof gitCommitSearchResultSchema>;
 
 export const getFileContentOptionsSchema = z.object({
   path: z.string(),
@@ -386,6 +394,42 @@ export const gitRebaseContinueResultSchema = z.discriminatedUnion("kind", [
 export type GitRebaseContinueResult = z.infer<
   typeof gitRebaseContinueResultSchema
 >;
+
+/** cherry-pick / revert 的目标 revision:拒绝选项注入与控制字符。 */
+export const gitSequencerOptionsSchema = z.object({
+  oid: z
+    .string()
+    .min(1)
+    .max(512)
+    .refine(
+      (oid) =>
+        !(
+          oid.startsWith("-") ||
+          oid.includes("\0") ||
+          oid.includes("\n") ||
+          oid.includes("\r")
+        ),
+      "Expected a safe Git revision"
+    ),
+});
+
+/** cherry-pick / revert 共用结果形状(与 rebase 对齐)。 */
+export const gitSequencerResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok"), message: z.string() }),
+  z.object({ kind: z.literal("conflict"), message: z.string() }),
+  gitUnavailableResultSchema,
+]);
+export type GitSequencerResult = z.infer<typeof gitSequencerResultSchema>;
+
+export const gitSequencerAbortResultSchema = z.discriminatedUnion("kind", [
+  z.object({ kind: z.literal("ok") }),
+  gitUnavailableResultSchema,
+]);
+export type GitSequencerAbortResult = z.infer<
+  typeof gitSequencerAbortResultSchema
+>;
+
+export type GitSequencerContinueResult = GitSequencerResult;
 
 export const gitUndoCommitResultSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("ok") }),

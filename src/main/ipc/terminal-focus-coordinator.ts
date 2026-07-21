@@ -132,6 +132,12 @@ export class TerminalFocusCoordinator {
     if (!entry.visible || entry.frame === null) {
       return { ok: false, reason: "hidden" };
     }
+    // Web overlay (e.g. Rich Input composer) is holding keyboard ownership —
+    // reject native focus intent so the terminal click stays with the web layer.
+    const webRequestCount = record.desired?.webRequestCount ?? 0;
+    if (webRequestCount > 0) {
+      return { ok: false, reason: "web-overlay-active" };
+    }
     return { ok: true, panelId: rawPanelId };
   }
 
@@ -278,7 +284,9 @@ export class TerminalFocusCoordinator {
       record.windowFocused &&
       record.readyPanelIds.has(requestedTarget.panelId) &&
       requestedTerminal?.visible === true &&
-      requestedTerminal.frame !== null;
+      requestedTerminal.frame !== null &&
+      // 原生聚焦开关关闭（composer 接管）的终端不具备键盘资格。
+      !desired.focusDisabledPanelIds.includes(requestedTarget.panelId);
     const rawKeyboardTarget: TerminalKeyboardFocusTarget = terminalEligible
       ? requestedTarget
       : { kind: "web" };
@@ -289,8 +297,12 @@ export class TerminalFocusCoordinator {
             panelId: toNativePanelKey(record.win, rawKeyboardTarget.panelId),
           }
         : rawKeyboardTarget;
+    const focusDisabledPanelIds = desired.focusDisabledPanelIds.map((panelId) =>
+      toNativePanelKey(record.win, panelId)
+    );
     const nativeApplySequence = this.nextNativeApplySequence++;
     const candidate: TerminalNativeWindowState = {
+      focusDisabledPanelIds,
       keyboardTarget,
       nativeApplySequence,
       reason,

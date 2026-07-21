@@ -11,6 +11,7 @@ function desiredHostSnapshot(
     activePanelId: "terminal-1",
     activeTerminalPanelId: terminalPanelId,
     basePanel,
+    focusDisabledPanelIds: [],
     hasMaximizedGroup: false,
     reason: "input-routing" as const,
     rendererSequence,
@@ -35,6 +36,7 @@ function blurredCoordinatorDebug(rendererSequence: number) {
     desired,
     dirty: false,
     effective: {
+      focusDisabledPanelIds: [],
       keyboardTarget: { kind: "web" as const },
       nativeApplySequence: 6,
       reason: "window-blur" as const,

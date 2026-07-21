@@ -2,6 +2,7 @@ import {
   CORRUPT_DOCUMENT_DRAFT_STORAGE_PREFIX,
   DISK_DRAFT_STORAGE_PREFIX,
   diskDraftStorageKey,
+  legacyDiskDraftStorageKey,
   type PersistedDiskDraft,
   type PersistedUntitledDocument,
   parsePersistedDiskDraft,
@@ -11,6 +12,7 @@ import {
   UNTITLED_DRAFT_STORAGE_PREFIX,
   untitledDraftStorageKey,
 } from "./files-document-draft-records.ts";
+import { diskDocumentId } from "./files-document-paths.ts";
 import type { FilesDocument } from "./files-document-types.ts";
 import {
   flushFilesDraftWrites,
@@ -24,13 +26,20 @@ import {
 let recoveryDiagnostics: string[] = [];
 
 export {
+  diskDraftHasRecoverableState,
   diskDraftStorageKey,
   isUntitledDocumentId,
+  legacyDiskDraftStorageKey,
   type PersistedDiskDraft,
   type PersistedUntitledDocument,
+  transferStagingDraftKey,
   UNTITLED_DOCUMENT_ID_PREFIX,
   untitledDraftStorageKey,
 } from "./files-document-draft-records.ts";
+export {
+  claimLegacyDraft,
+  hydrateFilesDraftRecordFromBackend,
+} from "./files-draft-backend-ops.ts";
 export * from "./files-draft-client-store.ts";
 
 export function readPersistedUntitledDocument(
@@ -62,22 +71,48 @@ export function persistDiskDraft(document: FilesDocument): void {
   if (value === null || document.source.kind !== "disk") {
     return;
   }
-  persistFilesDraftRecord(
-    diskDraftStorageKey(document.source.root, document.source.path),
-    value
-  );
+  const key = diskDraftStorageKey(document.id);
+  persistFilesDraftRecord(key, value);
+  if (
+    document.id === diskDocumentId(document.source.root, document.source.path)
+  ) {
+    const legacyKey = legacyDiskDraftStorageKey(
+      document.source.root,
+      document.source.path
+    );
+    if (legacyKey !== key) {
+      removeFilesDraftRecord(legacyKey);
+    }
+  }
 }
 
-export function removePersistedDiskDraft(root: string, path: string): void {
-  removeFilesDraftRecord(diskDraftStorageKey(root, path));
+export function removePersistedDiskDraft(
+  documentId: string,
+  locator?: { path: string; root: string }
+): void {
+  removeFilesDraftRecord(diskDraftStorageKey(documentId));
+  if (locator && documentId === diskDocumentId(locator.root, locator.path)) {
+    removeFilesDraftRecord(
+      legacyDiskDraftStorageKey(locator.root, locator.path)
+    );
+  }
 }
 
 export function readPersistedDiskDraft(
-  root: string,
-  path: string
+  documentId: string,
+  locator?: { path: string; root: string }
 ): PersistedDiskDraft | null {
-  const rawValue = readFilesDraftRecord(diskDraftStorageKey(root, path));
-  return rawValue ? parsePersistedDiskDraft(rawValue) : null;
+  const rawValue = readFilesDraftRecord(diskDraftStorageKey(documentId));
+  if (rawValue) {
+    return parsePersistedDiskDraft(rawValue);
+  }
+  if (locator && documentId === diskDocumentId(locator.root, locator.path)) {
+    const legacyRaw = readFilesDraftRecord(
+      legacyDiskDraftStorageKey(locator.root, locator.path)
+    );
+    return legacyRaw ? parsePersistedDiskDraft(legacyRaw) : null;
+  }
+  return null;
 }
 
 export function clearPersistedDiskDrafts(): void {

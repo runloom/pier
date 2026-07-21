@@ -183,6 +183,15 @@ function pruneFloatingGroups(
  *
  * 输入若结构异常或没有 panel 能保留,返回 null —— 调用方走 default fallback。
  */
+// Note: the `panel-transfer-unavailable` placeholder is registered in
+// `panelKits` (panel-registry.ts), so `getPanelComponents()` includes it and
+// workspace-host passes it in `knownComponents`. Sanitizer therefore treats
+// the placeholder as a known component and keeps it. A layout whose only
+// surviving panel is a placeholder has `keepPanelIds.size === 1`, so sanitize
+// returns it (not null) — satisfying the "unique panel forbids null/default"
+// rule. The restoreEmbeddedTransferPanels step (run before sanitize in
+// workspace-host) rewrites a placeholder back to its original component when
+// that component is registered again.
 export function sanitizeSavedLayout(
   saved: unknown,
   knownComponents: ReadonlySet<string>

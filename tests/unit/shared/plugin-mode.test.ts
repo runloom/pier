@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  isDevShellPackagedOverride,
   parsePluginMode,
   resolvePierPluginMode,
 } from "../../../src/shared/plugin-mode.ts";
@@ -64,5 +65,47 @@ describe("resolvePierPluginMode", () => {
         isPackagedApp: false,
       })
     ).toBe("release");
+  });
+});
+
+describe("isDevShellPackagedOverride", () => {
+  it("recognizes the renamed PierDev dev shell (isPackaged + dev env + marker)", () => {
+    expect(
+      isDevShellPackagedOverride({
+        devShellMarker: "1",
+        isDevRuntime: true,
+        isPackagedApp: true,
+      })
+    ).toBe(true);
+  });
+
+  it("never overrides a production package without the dev runtime env", () => {
+    expect(
+      isDevShellPackagedOverride({
+        devShellMarker: "1",
+        isDevRuntime: false,
+        isPackagedApp: true,
+      })
+    ).toBe(false);
+  });
+
+  it("requires the explicit dev-shell marker", () => {
+    expect(
+      isDevShellPackagedOverride({
+        devShellMarker: undefined,
+        isDevRuntime: true,
+        isPackagedApp: true,
+      })
+    ).toBe(false);
+  });
+
+  it("is irrelevant for unpackaged runtimes", () => {
+    expect(
+      isDevShellPackagedOverride({
+        devShellMarker: "1",
+        isDevRuntime: true,
+        isPackagedApp: false,
+      })
+    ).toBe(false);
   });
 });

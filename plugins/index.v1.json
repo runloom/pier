@@ -1,11 +1,35 @@
 {
-  "generatedAt": 1784438557101,
+  "generatedAt": 1784519910861,
   "plugins": {
+    "pier.claude": {
+      "description": "Manage Claude accounts and switch the active login for Pier.",
+      "displayName": "Claude Account Management",
+      "id": "pier.claude",
+      "latest": "1.3.0",
+      "locales": {
+        "en": {
+          "name": "Claude Account Management",
+          "description": "Manage Claude accounts and switch the active login for Pier."
+        },
+        "zh-CN": {
+          "name": "Claude 账号管理",
+          "description": "在 Pier 中管理 Claude 账号并切换当前登录。"
+        }
+      },
+      "versions": {
+        "1.3.0": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.0/pier.claude-1.3.0.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "edfaca76f2437ca4170a224c3b3df5c5e53557a1eefac66f6d83ed489e8c7605",
+          "size": 571967
+        }
+      }
+    },
     "pier.codex": {
       "description": "Codex account management and usage monitoring for Pier.",
       "displayName": "Codex Account Management",
       "id": "pier.codex",
-      "latest": "1.3.2",
+      "latest": "1.4.0",
       "locales": {
         "en": {
           "name": "Codex Account Management",
@@ -17,11 +41,11 @@
         }
       },
       "versions": {
-        "1.3.2": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.3.2/pier.codex-1.3.2.tgz",
+        "1.4.0": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.0/pier.codex-1.4.0.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "acfac720a4ddb97710c8335a117cc12c9fac05a76ed337e288de3b435956a78f",
-          "size": 588351
+          "sha256": "52927b504288713f97de982704c9b608029ab8dccead94e11f682a78b083480f",
+          "size": 602180
         }
       }
     },
@@ -29,7 +53,7 @@
       "description": "Manage Grok accounts, login, and switch for Pier.",
       "displayName": "Grok Account Management",
       "id": "pier.grok",
-      "latest": "1.0.3",
+      "latest": "1.1.0",
       "locales": {
         "en": {
           "name": "Grok Account Management",
@@ -41,20 +65,20 @@
         }
       },
       "versions": {
-        "1.0.3": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.0.3/pier.grok-1.0.3.tgz",
+        "1.1.0": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.0/pier.grok-1.1.0.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "5e896459df33fd2133605e8546cb9192c76cc3c1855f9d861d82637f203afaec",
-          "size": 625732
+          "sha256": "318949d1f1c3deb77a13be55e87f426043f4d3e761049a9a38d2016671fbdbf4",
+          "size": 646212
         }
       }
     }
   },
-  "sequence": 9,
+  "sequence": 17,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "arxGlSaEh0UblC1dmsFZ9TG4n623H07rQe37ejQuj1g1F377P3V2E3RLxgS9pf+T10ZFyLtIItWdlTsdbd4OCA=="
+    "value": "wSmxFPgNn2H1FkydIhkKsexaa0ijSzpr8Ge5rMOe0wf324fQI84i7RSfdxmGEGl1HHRsm3e4WGpEL20nk78VBw=="
   }
 }

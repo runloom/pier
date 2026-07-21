@@ -6,6 +6,7 @@ import {
   buildOmpExtensionSource,
   installOmpExtension,
   OMP_EVENT_MAP,
+  OMP_FA_ERROR_REACHABILITY,
   OMP_MARKER,
   OMP_SUBAGENT_EVENT_MAP,
   ompDetect,
@@ -88,6 +89,18 @@ describe("buildOmpExtensionSource", () => {
     }
     expect(src).not.toContain('pi.on("turn_start"');
     expect(src).not.toContain('pi.on("turn_end"');
+  });
+
+  it("Ev5: FA error unsupported — mapping table has no error pierEvent", () => {
+    expect(OMP_FA_ERROR_REACHABILITY).toBe("unsupported");
+    expect(OMP_EVENT_MAP.some((e) => e.pierEvent === "error")).toBe(false);
+    expect(OMP_SUBAGENT_EVENT_MAP.some((e) => e.pierEvent === "error")).toBe(
+      false
+    );
+    // abort/ESC still agent_end→Stop; must not fake-green as error.
+    expect(
+      OMP_EVENT_MAP.find((e) => e.nativeEvent === "agent_end")?.pierEvent
+    ).toBe("Stop");
   });
 
   it("agent 字段为 omp", () => {

@@ -226,6 +226,13 @@ describe("pier.codex accounts service", () => {
     expect(JSON.parse(await readFile(stateFile, "utf8"))).toMatchObject({
       accounts: [{ id: "account-2" }],
     });
+    // Removing the ACTIVE account is allowed: clears the selection while the
+    // real ~/.codex login stays untouched.
+    await service.remove({ accountId: "account-2" });
+    expect(JSON.parse(await readFile(stateFile, "utf8"))).toMatchObject({
+      accounts: [],
+      activeAccountId: null,
+    });
     service.dispose();
   });
 

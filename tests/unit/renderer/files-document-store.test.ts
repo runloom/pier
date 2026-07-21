@@ -2,7 +2,12 @@ import {
   createFileFilePanelInstanceId,
   fileFilePanelIdentityKey,
 } from "@plugins/builtin/files/renderer/file-panel-id.ts";
-import { CORRUPT_DOCUMENT_DRAFT_STORAGE_PREFIX } from "@plugins/builtin/files/renderer/files-document-draft-records.ts";
+import { panelSourceForDocument } from "@plugins/builtin/files/renderer/file-panel-source.ts";
+import {
+  CORRUPT_DOCUMENT_DRAFT_STORAGE_PREFIX,
+  diskDraftStorageKey,
+  legacyDiskDraftStorageKey,
+} from "@plugins/builtin/files/renderer/files-document-draft-records.ts";
 import {
   consumeFilesDraftRecoveryDiagnostics,
   type FilesDraftBackend,
@@ -12,6 +17,10 @@ import {
   readFilesDraftRecord,
 } from "@plugins/builtin/files/renderer/files-document-drafts.ts";
 import {
+  allocateExplicitDiskDocumentId,
+  diskDocumentId,
+} from "@plugins/builtin/files/renderer/files-document-paths.ts";
+import {
   claimLegacyDraftForPanelSource,
   clearFilesDocumentStore,
   configureFilesDraftBackend,
@@ -20,6 +29,7 @@ import {
   getDocument,
   getDocumentForPanelSource,
   markDocumentDeletedOnDisk,
+  markDocumentDiskConflict,
   markDocumentLoaded,
   markDocumentLoading,
   markDocumentReadResult,
@@ -31,14 +41,15 @@ import {
   removeDocument,
   resetFilesDraftBackendForTests,
   restoreUntitledDocumentFromPanelSource,
+  setDocumentConflictContents,
   subscribeFilesDocumentStore,
   updateDocumentContents,
 } from "@plugins/builtin/files/renderer/files-document-store.ts";
 import {
   parseFilesDocumentPanelSource,
+  resolveDiskDocumentId,
   sameFilesDocumentPanelSource,
 } from "@plugins/builtin/files/renderer/files-document-types.ts";
-import { stableFileIdentityHash } from "@plugins/builtin/files/renderer/files-stable-hash.ts";
 import { afterEach, describe, expect, it } from "vitest";
 
 const FILE_DOCUMENT_ID_PATTERN = /^pier\.files\.file:[a-z0-9]+$/;
@@ -58,8 +69,12 @@ function deferred<T>() {
   return { promise, reject, resolve };
 }
 
-function diskDraftKey(root: string, path: string): string {
-  return `pier.files.diskDraft:${stableFileIdentityHash(`${root}\0${path}`)}`;
+function diskDraftKey(documentId: string): string {
+  return diskDraftStorageKey(documentId);
+}
+
+function legacyDiskDraftKey(root: string, path: string): string {
+  return legacyDiskDraftStorageKey(root, path);
 }
 
 function untitledDraftKey(documentId: string): string {
@@ -186,13 +201,14 @@ describe("files-document-store", () => {
   });
 
   it("isolates invalid document draft content without blocking healthy drafts", async () => {
+    const brokenId = diskDocumentId("/repo", "broken.md");
     const drafts = new Map<string, string>([
-      [diskDraftKey("/repo", "broken.md"), "{invalid"],
+      [diskDraftKey(brokenId), "{invalid"],
     ]);
 
     await configureFilesDraftBackend(draftBackendFromMap(drafts));
 
-    expect(drafts.has(diskDraftKey("/repo", "broken.md"))).toBe(false);
+    expect(drafts.has(diskDraftKey(brokenId))).toBe(false);
     const quarantineKeys = listFilesDraftRecords(
       CORRUPT_DOCUMENT_DRAFT_STORAGE_PREFIX
     );
@@ -213,10 +229,10 @@ describe("files-document-store", () => {
   ] as const)("restores healthy drafts when corrupt-content %s fails", async (_label, failure) => {
     const root = "/repo";
     const healthy = ensureDiskDocument({ path: "healthy.md", root });
-    const brokenKey = diskDraftKey(root, "broken.md");
+    const brokenKey = diskDraftKey(diskDocumentId(root, "broken.md"));
     const values = new Map<string, string>([
       [
-        diskDraftKey(root, "healthy.md"),
+        diskDraftKey(healthy.id),
         JSON.stringify({
           baseMtimeMs: 1,
           currentContents: "healthy protected contents",
@@ -340,10 +356,28 @@ describe("files-document-store", () => {
   });
 
   it("compares file panel sources by document identity", () => {
+    const root = "/repo";
+    const path = "README.md";
+    const defaultId = diskDocumentId(root, path);
+    const explicitId = allocateExplicitDiskDocumentId();
     expect(
       sameFilesDocumentPanelSource(
-        { kind: "disk", path: "README.md", root: "/repo" },
-        { kind: "disk", path: "README.md", root: "/repo" }
+        { kind: "disk", path, root },
+        { kind: "disk", path, root }
+      )
+    ).toBe(true);
+    expect(
+      sameFilesDocumentPanelSource(
+        { kind: "disk", path, root },
+        { documentId: defaultId, kind: "disk", path, root }
+      )
+    ).toBe(true);
+    // Explicit documentId differs from path-derived id, but same absolute path
+    // still counts as the same panel source (path fallback after id compare).
+    expect(
+      sameFilesDocumentPanelSource(
+        { documentId: explicitId, kind: "disk", path, root },
+        { kind: "disk", path, root }
       )
     ).toBe(true);
     expect(
@@ -376,6 +410,178 @@ describe("files-document-store", () => {
         { id: "pier.files.untitled:2", kind: "untitled", name: "Draft.md" }
       )
     ).toBe(false);
+    expect(resolveDiskDocumentId({ path, root })).toBe(defaultId);
+    expect(resolveDiskDocumentId({ documentId: explicitId, path, root })).toBe(
+      explicitId
+    );
+  });
+
+  it("accepts optional documentId on disk panel sources", () => {
+    const documentId = allocateExplicitDiskDocumentId();
+    const parsed = parseFilesDocumentPanelSource({
+      source: {
+        documentId,
+        kind: "disk",
+        path: "README.md",
+        root: "/repo",
+      },
+    });
+    expect(parsed).toEqual({
+      documentId,
+      kind: "disk",
+      path: "README.md",
+      root: "/repo",
+    });
+  });
+
+  it("keeps dual dirty documents for the same path with distinct identities", () => {
+    const root = "/repo";
+    const path = "shared.md";
+    const defaultDocument = ensureDiskDocument({ path, root });
+    const explicitId = allocateExplicitDiskDocumentId();
+    const migrated = ensureDiskDocument({
+      documentId: explicitId,
+      path,
+      root,
+    });
+
+    updateDocumentContents(defaultDocument.id, "# default dirty");
+    updateDocumentContents(migrated.id, "# migrated dirty");
+
+    expect(defaultDocument.id).not.toBe(migrated.id);
+    expect(getDocument(defaultDocument.id)?.currentContents).toBe(
+      "# default dirty"
+    );
+    expect(getDocument(migrated.id)?.currentContents).toBe("# migrated dirty");
+    expect(diskDraftKey(defaultDocument.id)).not.toBe(
+      diskDraftKey(migrated.id)
+    );
+    expect(panelSourceForDocument(defaultDocument)).toEqual({
+      kind: "disk",
+      path,
+      root,
+    });
+    expect(panelSourceForDocument(migrated)).toEqual({
+      documentId: explicitId,
+      kind: "disk",
+      path,
+      root,
+    });
+  });
+
+  it("does not use same-path first-match after deleting the default identity", () => {
+    const root = "/repo";
+    const path = "shared.md";
+    const defaultDocument = ensureDiskDocument({ path, root });
+    const explicitId = allocateExplicitDiskDocumentId();
+    const migrated = ensureDiskDocument({
+      documentId: explicitId,
+      path,
+      root,
+    });
+    updateDocumentContents(migrated.id, "# only migrated");
+
+    removeDocument(defaultDocument.id);
+
+    const reopened = ensureDiskDocument({ path, root });
+    expect(reopened.id).not.toBe(migrated.id);
+    expect(reopened.currentContents).toBe("");
+    expect(getDocument(migrated.id)?.currentContents).toBe("# only migrated");
+    expect(getDocumentForPanelSource({ kind: "disk", path, root })?.id).toBe(
+      reopened.id
+    );
+    expect(
+      getDocumentForPanelSource({
+        documentId: explicitId,
+        kind: "disk",
+        path,
+        root,
+      })?.id
+    ).toBe(explicitId);
+  });
+
+  it("does not hit a transfer-style migrated copy when opening without documentId", () => {
+    const root = "/repo";
+    const path = "transferred.md";
+    const migrated = ensureDiskDocument({
+      documentId: allocateExplicitDiskDocumentId(),
+      path,
+      root,
+    });
+    updateDocumentContents(migrated.id, "# migrated body");
+
+    const ordinary = ensureDiskDocument({ path, root });
+    expect(ordinary.id).toBe(diskDocumentId(root, path));
+    expect(ordinary).not.toBe(migrated);
+    expect(ordinary.currentContents).not.toBe("# migrated body");
+  });
+
+  it("reads legacy path-hash draft keys for default document identities", async () => {
+    const root = "/repo";
+    const path = "legacy-key.md";
+    const documentId = diskDocumentId(root, path);
+    const drafts = new Map<string, string>([
+      [
+        legacyDiskDraftKey(root, path),
+        JSON.stringify({
+          baseMtimeMs: 10,
+          currentContents: "# legacy path key",
+          dirty: true,
+          id: documentId,
+          path,
+          root,
+          savedContents: "# disk",
+        }),
+      ],
+    ]);
+    await configureFilesDraftBackend(draftBackendFromMap(drafts));
+    const restored = ensureDiskDocument({ path, root });
+    expect(restored.id).toBe(documentId);
+    expect(restored.currentContents).toBe("# legacy path key");
+    expect(restored.dirty).toBe(true);
+  });
+
+  it("persists and restores diskConflict conflictDiskContents deletedOnDisk and durabilityUnknown", async () => {
+    const drafts = new Map<string, string>();
+    await configureFilesDraftBackend(draftBackendFromMap(drafts));
+    const root = "/repo";
+    const path = "recovery.md";
+    const document = ensureDiskDocument({ path, root });
+    markDocumentLoaded(document.id, "# baseline", 1);
+    updateDocumentContents(document.id, "# dirty recovery");
+    markDocumentWritten(document.id, "# dirty recovery", {
+      canonicalPath: path,
+      committed: true,
+      durability: "unknown",
+      kind: "written",
+      mode: 0o644,
+      mtimeMs: 2,
+      revision: "r-recovery",
+      size: 16,
+    });
+    markDocumentDiskConflict(document.id);
+    setDocumentConflictContents(document.id, "# conflict snapshot");
+    markDocumentDeletedOnDisk(document.id);
+    await flushFilesDraftWrites();
+
+    expect(drafts.has(diskDraftKey(document.id))).toBe(true);
+    const raw = drafts.get(diskDraftKey(document.id));
+    expect(raw).toContain('"diskConflict":true');
+    expect(raw).toContain('"deletedOnDisk":true');
+    expect(raw).toContain('"conflictDiskContents":"# conflict snapshot"');
+    expect(raw).toContain('"durabilityUnknown":true');
+
+    clearFilesDocumentStore({ persisted: false });
+    const restored = ensureDiskDocument({ path, root });
+    expect(restored).toMatchObject({
+      conflictDiskContents: "# conflict snapshot",
+      currentContents: "# dirty recovery",
+      deletedOnDisk: true,
+      dirty: true,
+      diskConflict: true,
+      durabilityUnknown: true,
+      hasBackingStore: false,
+    });
   });
 
   it("moves a dirty disk document to the new canonical path while keeping old aliases readable", async () => {
@@ -440,11 +646,15 @@ describe("files-document-store", () => {
 
     await moveDiskDocumentSource(root, oldPath, newPath);
 
-    expect(drafts.has(diskDraftKey(root, oldPath))).toBe(false);
-    expect(drafts.has(diskDraftKey(root, newPath))).toBe(true);
-    expect(
-      getDocumentForPanelSource({ kind: "disk", path: newPath, root })
-    ).toMatchObject({ dirty: false, durabilityUnknown: true });
+    expect(drafts.has(diskDraftKey(document.id))).toBe(false);
+    const moved = getDocumentForPanelSource({
+      kind: "disk",
+      path: newPath,
+      root,
+    });
+    expect(moved).not.toBeNull();
+    expect(drafts.has(diskDraftKey(moved!.id))).toBe(true);
+    expect(moved).toMatchObject({ dirty: false, durabilityUnknown: true });
   });
 
   it("restores the latest untitled Markdown draft from local persisted state", () => {
@@ -484,7 +694,7 @@ describe("files-document-store", () => {
     expect(missingUntitled).toBeNull();
 
     pendingDrafts.resolve({
-      [diskDraftKey(root, path)]: JSON.stringify({
+      [diskDraftKey(diskDocument.id)]: JSON.stringify({
         baseMtimeMs: 123,
         currentContents: "# backend disk draft",
         id: diskDocument.id,
@@ -579,7 +789,7 @@ describe("files-document-store", () => {
     const document = ensureDiskDocument({ path, root });
     markDocumentLoading(document.id);
     pendingDrafts.resolve({
-      [diskDraftKey(root, path)]: JSON.stringify({
+      [diskDraftKey(document.id)]: JSON.stringify({
         baseMtimeMs: 123,
         currentContents: "# draft should win",
         id: document.id,
@@ -605,7 +815,7 @@ describe("files-document-store", () => {
     const document = ensureDiskDocument({ path, root });
     await configureFilesDraftBackend(
       draftBackendFromLoader(async () => ({
-        [diskDraftKey(root, path)]: JSON.stringify({
+        [diskDraftKey(document.id)]: JSON.stringify({
           baseMtimeMs: null,
           currentContents: "# local draft",
           dirty: true,

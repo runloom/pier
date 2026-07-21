@@ -278,7 +278,15 @@ function createMockContext(): RendererPluginContext {
       applyStash: unimplemented("git.applyStash"),
       dropStash: unimplemented("git.dropStash"),
       rebase: unimplemented("git.rebase"),
+      abortCherryPick: unimplemented("git.cherryPickAbort"),
+      abortRevert: unimplemented("git.revertAbort"),
+      cherryPick: unimplemented("git.cherryPick"),
+      commit: unimplemented("git.commit"),
+      continueCherryPick: unimplemented("git.cherryPickContinue"),
+      continueRevert: unimplemented("git.revertContinue"),
+      revert: unimplemented("git.revert"),
       searchBranches: unimplemented("git.searchBranches"),
+      searchCommits: unimplemented("git.searchCommits"),
       stage: unimplemented("git.stage"),
       stash: unimplemented("git.stash"),
       sync: unimplemented("git.sync"),
@@ -353,6 +361,9 @@ function createMockContext(): RendererPluginContext {
       getPanelContext: unimplemented("terminal.getPanelContext"),
       onOpenUrl: unimplemented("terminal.onOpenUrl"),
       readSelectionText: unimplemented("terminal.readSelectionText"),
+    },
+    terminals: {
+      open: unimplemented("terminals.open"),
     },
     settings: {
       openSection: (section) =>

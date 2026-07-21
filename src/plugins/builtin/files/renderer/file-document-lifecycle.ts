@@ -9,10 +9,7 @@ import { FileDocumentPanelRegistry } from "./file-document-panel-registry.ts";
 import { FileDocumentSaver } from "./file-document-saver.ts";
 import type { FileSaveFeedback } from "./file-save-feedback.ts";
 import type { FileSaveOutcome } from "./file-save-outcome.ts";
-import {
-  diskDocumentId,
-  isSamePathOrDescendant,
-} from "./files-document-paths.ts";
+import { isSamePathOrDescendant } from "./files-document-paths.ts";
 import {
   claimLegacyDraftForPanelSource,
   clearFilesDocumentStore,
@@ -31,10 +28,11 @@ import {
   restoreUntitledDocumentFromPanelSource,
   subscribeFilesDocumentStore,
 } from "./files-document-store.ts";
-import type {
-  FilesDocument,
-  FilesDocumentOrigin,
-  FilesDocumentPanelSource,
+import {
+  type FilesDocument,
+  type FilesDocumentOrigin,
+  type FilesDocumentPanelSource,
+  resolveDiskDocumentId,
 } from "./files-document-types.ts";
 import { FilesDraftRecoveryReporter } from "./files-draft-recovery-reporter.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
@@ -143,7 +141,7 @@ export class FileDocumentLifecycle {
   documentId(source: FilesDocumentPanelSource): string {
     return source.kind === "untitled"
       ? source.id
-      : diskDocumentId(source.root, source.path);
+      : resolveDiskDocumentId(source);
   }
 
   ensureDocument(source: FilesDocumentPanelSource): FilesDocument | null {
@@ -157,6 +155,7 @@ export class FileDocumentLifecycle {
       return document;
     }
     const document = ensureDiskDocument({
+      ...(source.documentId ? { documentId: source.documentId } : {}),
       path: source.path,
       root: source.root,
     });

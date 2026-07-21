@@ -66,6 +66,7 @@ export async function buildGitReviewDocument(
       gitRootPath: options.metadata.canonicalRoot,
       group,
       headOid: options.metadata.headOid,
+      rangeBounds: options.metadata.rangeBounds,
       ...(options.signal === undefined ? {} : { signal: options.signal }),
     });
     assertMaterialMatchesIndexFact(group, fact, material);
@@ -168,7 +169,7 @@ function isRenderableFact(
 function isRenderableGroup(
   group: GitReviewGroup
 ): group is GitReviewRenderableGroup {
-  return group === "unstaged" || group === "staged";
+  return group === "unstaged" || group === "staged" || group === "committed";
 }
 
 function hashParts(parts: readonly string[]): string {

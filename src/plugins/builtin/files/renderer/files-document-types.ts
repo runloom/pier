@@ -6,7 +6,10 @@ import {
 } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { z } from "zod";
-import { absoluteDiskSourcePath } from "./files-document-paths.ts";
+import {
+  absoluteDiskSourcePath,
+  diskDocumentId,
+} from "./files-document-paths.ts";
 
 export type FilesDocumentLanguage =
   | "cpp"
@@ -47,6 +50,7 @@ export type FilesDocumentSource =
 
 export const filesDocumentPanelSourceSchema = z.discriminatedUnion("kind", [
   z.object({
+    documentId: z.string().min(1).optional(),
     kind: z.literal("disk"),
     path: nonEmptyFileRootRelativePathSchema,
     root: z.string().min(1),
@@ -61,6 +65,14 @@ export const filesDocumentPanelSourceSchema = z.discriminatedUnion("kind", [
 export type FilesDocumentPanelSource = z.infer<
   typeof filesDocumentPanelSourceSchema
 >;
+
+export function resolveDiskDocumentId(source: {
+  documentId?: string | undefined;
+  path: string;
+  root: string;
+}): string {
+  return source.documentId ?? diskDocumentId(source.root, source.path);
+}
 
 export function parseFilesDocumentPanelSource(
   params: unknown
@@ -83,6 +95,11 @@ export function sameFilesDocumentPanelSource(
     return left.id === right.id;
   }
   if (left.kind === "disk" && right.kind === "disk") {
+    // 迁移面板带显式 documentId：同 id 即同文档；否则回退到规范化绝对路径
+    // （同文件不同 root/path 切分也判同源）。
+    if (resolveDiskDocumentId(left) === resolveDiskDocumentId(right)) {
+      return true;
+    }
     return (
       absoluteDiskSourcePath(left.root, left.path) ===
       absoluteDiskSourcePath(right.root, right.path)

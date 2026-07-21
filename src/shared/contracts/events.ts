@@ -1,6 +1,7 @@
 import type { PanelContext, PanelSnapshot } from "./panel.ts";
 import type { PierClientKind } from "./permissions.ts";
 import type { ProjectPreferences } from "./preferences.ts";
+import type { ProjectSkillsInvalidatedEvent } from "./project-skills.ts";
 
 export type { PanelSnapshot } from "./panel.ts";
 
@@ -24,4 +25,5 @@ export type PierEvent =
   | { context: PanelContext; panelId: string; type: "terminal.cwd.changed" }
   | { panelId: string; title: string; type: "terminal.title.changed" }
   | { clientId: string; kind: PierClientKind; type: "client.connected" }
-  | { clientId: string; type: "client.disconnected" };
+  | { clientId: string; type: "client.disconnected" }
+  | ProjectSkillsInvalidatedEvent;

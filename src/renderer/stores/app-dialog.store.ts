@@ -122,7 +122,7 @@ function openAlertConfirm(
         }
         resolvePromise(confirmed);
       },
-      size: options.size ?? "default",
+      size: options.size ?? "sm",
       title: options.title,
       ...(options.body ? { body: options.body } : {}),
       ...("cancelLabel" in options && options.cancelLabel

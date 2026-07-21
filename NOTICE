@@ -32,14 +32,18 @@ Important bundled assets:
   font files with this software. HarmonyOS Sans Fonts are copyright 2021 Huawei
   Device Co., Ltd. and licensed under the HarmonyOS Sans Fonts License
   Agreement. See `resources/fonts/HarmonyOS-Sans-SC-LICENSE.txt`.
+- `resources/notification-sounds/*.wav` are unmodified copies of
+  `assets/sounds/*.wav` from the vibe-kanban project
+  (https://github.com/BloopAI/vibe-kanban), copyright Bloop AI, licensed under
+  the Apache License 2.0 (https://www.apache.org/licenses/LICENSE-2.0).
 
 First-party packages
 --------------------
 
 Workspace packages under `packages/` (`@pier/ui`, `@pier/plugin-api`,
-`@pier/plugin-codex`, `@pier/plugin-grok`, and related packages) are part of this
-repository and are licensed under the same terms as Pier unless a package
-explicitly states otherwise.
+`@pier/plugin-claude`, `@pier/plugin-codex`, `@pier/plugin-grok`, and related
+packages) are part of this repository and are licensed under the same terms as
+Pier unless a package explicitly states otherwise.
 
 Trademark and branding
 ----------------------

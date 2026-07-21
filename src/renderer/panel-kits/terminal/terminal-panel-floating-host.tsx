@@ -25,10 +25,10 @@ import {
   resolveFloatingObstacles,
 } from "./terminal-floating-geometry.ts";
 import { TerminalFloatingStaticItem } from "./terminal-floating-static-item.tsx";
+import { TERMINAL_STATUS_BAR_HEIGHT_PX } from "./terminal-status-bar.tsx";
 import { useTerminalPanelFloatingDrag } from "./use-terminal-panel-floating-drag.ts";
 
 const SAFE_INSET = 8;
-const STATUS_BAR_RESERVED = 28;
 
 interface FloatingPrimaryItem {
   content: ReactNode;
@@ -162,7 +162,7 @@ function DraggablePrimaryItem({
       return resolveFloatingObstacles(
         desired,
         {
-          bottomReserved: STATUS_BAR_RESERVED,
+          bottomReserved: TERMINAL_STATUS_BAR_HEIGHT_PX,
           height: rootRect.height,
           inset: SAFE_INSET,
           width: rootRect.width,
@@ -187,7 +187,7 @@ function DraggablePrimaryItem({
         pointFromNormalizedPosition(
           normalizedRef.current,
           {
-            bottomReserved: STATUS_BAR_RESERVED,
+            bottomReserved: TERMINAL_STATUS_BAR_HEIGHT_PX,
             height: rootRect.height,
             inset: SAFE_INSET,
             width: rootRect.width,
@@ -241,7 +241,7 @@ function DraggablePrimaryItem({
       const position = normalizedPositionFromPoint(
         next,
         {
-          bottomReserved: STATUS_BAR_RESERVED,
+          bottomReserved: TERMINAL_STATUS_BAR_HEIGHT_PX,
           height: rootRect.height,
           inset: SAFE_INSET,
           width: rootRect.width,

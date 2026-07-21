@@ -191,7 +191,6 @@ function ActiveAppDialog({
             </AlertDialogCancel>
           ) : null}
           <AlertDialogAction
-            className={dialog.kind === "alert" ? "min-w-24" : undefined}
             onClick={() => dialog.resolve(true)}
             variant={isDestructive ? "destructive" : "default"}
           >

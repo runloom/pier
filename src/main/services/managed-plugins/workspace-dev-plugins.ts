@@ -139,8 +139,12 @@ export async function syncWorkspaceDevPluginOverrides(
 
     const entry = options.getIndex().plugins[spec.id];
     const existing = entry?.devOverride;
+    const packageVersion = readWorkspacePackageVersion(packageDir);
+    const overrideVersionMatches =
+      packageVersion !== null && existing?.version === packageVersion;
     if (
       existing?.path === packageDir &&
+      overrideVersionMatches &&
       entry?.effectiveAtStartup?.sourceKind === "devOverride" &&
       entry.activeVersion &&
       !entry.uninstalledAt
@@ -150,6 +154,7 @@ export async function syncWorkspaceDevPluginOverrides(
     }
     if (
       existing?.path === packageDir &&
+      overrideVersionMatches &&
       entry?.activeVersion &&
       !entry.uninstalledAt
     ) {

@@ -60,6 +60,23 @@ export function parseIdTokenClaims(idToken: string): AccountIdentity | null {
 }
 
 /**
+ * 从 auth.json 内容字符串解析身份。与 readCodexIdentity 共用，供需要
+ * “读一次、同一份内容做校验”的调用方（如 syncBack 防 TOCTOU）使用。
+ */
+export function parseCodexAuthJson(raw: string): AccountIdentity | null {
+  try {
+    const data = JSON.parse(raw);
+    const idToken = data?.tokens?.id_token;
+    if (typeof idToken !== "string" || idToken.length === 0) {
+      return null;
+    }
+    return parseIdTokenClaims(idToken);
+  } catch {
+    return null;
+  }
+}
+
+/**
  * 读取指定 CODEX_HOME 目录下的 auth.json，解析 id_token 身份。
  * 返回 null 表示文件不存在 / 损坏 / 缺少 id_token。
  */
@@ -68,12 +85,7 @@ export async function readCodexIdentity(
 ): Promise<AccountIdentity | null> {
   try {
     const raw = await readFile(join(homeDir, "auth.json"), "utf-8");
-    const data = JSON.parse(raw);
-    const idToken = data?.tokens?.id_token;
-    if (typeof idToken !== "string" || idToken.length === 0) {
-      return null;
-    }
-    return parseIdTokenClaims(idToken);
+    return parseCodexAuthJson(raw);
   } catch {
     return null;
   }

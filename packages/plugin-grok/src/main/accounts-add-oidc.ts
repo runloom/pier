@@ -5,9 +5,13 @@ import {
   buildOidcAccountRecord,
   mergeIdentityIntoAccount,
 } from "./accounts-records.ts";
+import {
+  type DeviceLoginInfo,
+  parseDeviceLoginOutput,
+} from "./device-login-output.ts";
 import type { GrokAccountProvider } from "./grok-provider.ts";
 import { classifyLoginError } from "./login-error.ts";
-import type { GrokAccountsStateStore } from "./state.ts";
+import type { GrokAccountRecord, GrokAccountsStateStore } from "./state.ts";
 
 export interface AddOidcAccountHost {
   accountHomeDir(accountId: string): string;
@@ -18,8 +22,10 @@ export interface AddOidcAccountHost {
   provider: GrokAccountProvider;
   setLastLoginError(error: { at: number; message: string } | null): void;
   setLoginAbort(abort: AbortController | null): void;
+  setLoginDeviceInfo(info: DeviceLoginInfo | null): void;
   setLoginMode(mode: "oauth" | "device" | null): void;
   setLoginPending(pending: boolean): void;
+  setLoginStartedAt(startedAt: number | null): void;
   setSuppressWatchUntil(ts: number): void;
   stateStore: GrokAccountsStateStore;
 }
@@ -38,13 +44,17 @@ function throwIfAborted(signal: AbortSignal): void {
 
 export async function addOidcAccount(
   host: AddOidcAccountHost,
-  mode: "oauth" | "device"
+  mode: "oauth" | "device",
+  /** Login abort controller, created by the service at enqueue time so a
+   *  cancel issued while this operation is still queued is not lost. */
+  abort: AbortController = new AbortController()
 ): Promise<void> {
   const id = randomUUID();
-  const abort = new AbortController();
   host.setLastLoginError(null);
   host.setLoginPending(true);
   host.setLoginMode(mode);
+  host.setLoginStartedAt(host.now());
+  host.setLoginDeviceInfo(null);
   host.setLoginAbort(abort);
   host.emitSnapshot();
 
@@ -54,13 +64,11 @@ export async function addOidcAccount(
     abort.abort();
   }, LOGIN_TIMEOUT_MS);
 
-  const previousState = host.stateStore.get();
   const compensations: Compensation[] = [];
   let dir = host.accountHomeDir(id);
   let failure: Error | null = null;
   let activatedId: string | null = null;
   let existingId: string | null = null;
-  let metadataCompensationRegistered = false;
 
   // These are registered first so every state/auth restoration runs before
   // temporary secret and directory cleanup during reverse-order compensation.
@@ -77,13 +85,53 @@ export async function addOidcAccount(
     },
   });
 
-  const registerMetadataCompensation = (): void => {
-    if (metadataCompensationRegistered) return;
-    metadataCompensationRegistered = true;
+  // Targeted reverse mutations instead of restoring a whole pre-login state
+  // snapshot: usage refresh legitimately mutates account metadata outside the
+  // mutation queue while the (minutes-long) login is in flight, and a
+  // wholesale restore would silently revert those writes.
+  const registerAddedAccountCompensation = (accountId: string): void => {
     compensations.push({
-      name: "restore account metadata",
+      name: "remove added account metadata",
       run: async () => {
-        host.stateStore.mutate(() => previousState);
+        host.stateStore.mutate((state) => ({
+          ...state,
+          accounts: state.accounts.filter(
+            (account) => account.id !== accountId
+          ),
+          revision: state.revision + 1,
+        }));
+        await host.stateStore.flush();
+      },
+    });
+  };
+  const registerMergedAccountCompensation = (
+    before: GrokAccountRecord
+  ): void => {
+    compensations.push({
+      name: "restore merged account metadata",
+      run: async () => {
+        host.stateStore.mutate((state) => ({
+          ...state,
+          accounts: state.accounts.map((account) =>
+            account.id === before.id ? before : account
+          ),
+          revision: state.revision + 1,
+        }));
+        await host.stateStore.flush();
+      },
+    });
+  };
+  const registerActiveAccountCompensation = (
+    previousActiveId: string | null
+  ): void => {
+    compensations.push({
+      name: "restore active account selection",
+      run: async () => {
+        host.stateStore.mutate((state) => ({
+          ...state,
+          activeAccountId: previousActiveId,
+          revision: state.revision + 1,
+        }));
         await host.stateStore.flush();
       },
     });
@@ -109,13 +157,33 @@ export async function addOidcAccount(
     host.setSuppressWatchUntil(host.now() + WATCH_SUPPRESS_MS);
   };
 
+  // Device-code login prints the verification URL and user code to stdout —
+  // invisible in a GUI app unless captured and surfaced via the snapshot.
+  let outputBuffer = "";
+  let publishedDeviceInfo = "";
+  const handleLoginOutput = (chunk: string): void => {
+    if (mode !== "device") return;
+    outputBuffer = (outputBuffer + chunk).slice(-8192);
+    const info = parseDeviceLoginOutput(outputBuffer);
+    const fingerprint = `${info.deviceVerificationUrl ?? ""}\n${info.deviceCode ?? ""}`;
+    if (
+      (info.deviceCode || info.deviceVerificationUrl) &&
+      fingerprint !== publishedDeviceInfo
+    ) {
+      publishedDeviceInfo = fingerprint;
+      host.setLoginDeviceInfo(info);
+      host.emitSnapshot();
+    }
+  };
+
   try {
+    throwIfAborted(abort.signal);
     const previousCurrentAuth = await host.provider.readCurrentAuthContent();
     throwIfAborted(abort.signal);
     dir = await host.ensureManagedDir(id);
     throwIfAborted(abort.signal);
 
-    await host.provider.login(dir, abort.signal, mode);
+    await host.provider.login(dir, abort.signal, mode, handleLoginOutput);
     throwIfAborted(abort.signal);
     const identity = await host.provider.readIdentity(dir);
     throwIfAborted(abort.signal);
@@ -125,9 +193,13 @@ export async function addOidcAccount(
     const newAuthContent = await host.provider.readManagedAuthContent(dir);
     throwIfAborted(abort.signal);
 
-    const existing = previousState.accounts.find(
+    // Look up duplicates against the *current* state: an account may have
+    // gained this providerAccountId (via identity backfill) during the login.
+    const stateAfterLogin = host.stateStore.get();
+    const existing = stateAfterLogin.accounts.find(
       (account) => account.providerAccountId === identity.providerAccountId
     );
+    const previousActiveId = stateAfterLogin.activeAccountId;
     if (existing) {
       existingId = existing.id;
       const existingDir = host.accountHomeDir(existing.id);
@@ -137,10 +209,18 @@ export async function addOidcAccount(
       compensations.push({
         name: "restore existing managed auth",
         run: async () => {
-          await host.provider.writeManagedAuthContent(
-            existingDir,
-            previousManagedAuth
-          );
+          // Three-way check: only restore when the store still holds the
+          // content this login moved in. A usage refresh may have rotated
+          // the session concurrently — restoring the stale capture would
+          // discard a possibly single-use rotated refresh token.
+          const current =
+            await host.provider.readManagedAuthContent(existingDir);
+          if (current === newAuthContent) {
+            await host.provider.writeManagedAuthContent(
+              existingDir,
+              previousManagedAuth
+            );
+          }
         },
       });
       await host.provider.moveCredential(dir, existingDir);
@@ -148,7 +228,7 @@ export async function addOidcAccount(
       await rm(dir, { recursive: true, force: true });
       throwIfAborted(abort.signal);
 
-      if (previousState.activeAccountId === existing.id) {
+      if (previousActiveId === existing.id) {
         await materializeWithCompensation(
           existingDir,
           newAuthContent,
@@ -156,7 +236,8 @@ export async function addOidcAccount(
         );
       }
 
-      registerMetadataCompensation();
+      const mergedBefore = existing;
+      registerMergedAccountCompensation(mergedBefore);
       host.stateStore.mutate((state) => ({
         ...state,
         accounts: state.accounts.map((account) =>
@@ -172,12 +253,13 @@ export async function addOidcAccount(
         revision: state.revision + 1,
       }));
 
-      if (previousState.activeAccountId === null) {
+      if (previousActiveId === null) {
         await materializeWithCompensation(
           existingDir,
           newAuthContent,
           previousCurrentAuth
         );
+        registerActiveAccountCompensation(previousActiveId);
         host.stateStore.mutate((state) => ({
           ...state,
           activeAccountId: existing.id,
@@ -192,18 +274,19 @@ export async function addOidcAccount(
         host.now(),
         host.now()
       );
-      registerMetadataCompensation();
+      registerAddedAccountCompensation(id);
       host.stateStore.mutate((state) => ({
         ...state,
         accounts: [...state.accounts, account],
         revision: state.revision + 1,
       }));
-      if (previousState.activeAccountId === null) {
+      if (previousActiveId === null) {
         await materializeWithCompensation(
           dir,
           newAuthContent,
           previousCurrentAuth
         );
+        registerActiveAccountCompensation(previousActiveId);
         host.stateStore.mutate((state) => ({
           ...state,
           activeAccountId: id,
@@ -246,6 +329,8 @@ export async function addOidcAccount(
     host.setLoginAbort(null);
     host.setLoginPending(false);
     host.setLoginMode(null);
+    host.setLoginStartedAt(null);
+    host.setLoginDeviceInfo(null);
     host.emitSnapshot();
   }
   if (failure) throw failure;

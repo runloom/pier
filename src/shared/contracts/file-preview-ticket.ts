@@ -6,15 +6,43 @@ import { z } from "zod";
 
 const opaqueTokenSchema = z.string().regex(/^[A-Za-z0-9_-]{22,128}$/u);
 
-export const filePreviewTicketLocatorSchema = z.object({
+/** Root-scoped locator used by the files plugin / markdown preview. */
+export const rootedFilePreviewTicketLocatorSchema = z.object({
   mime: z.string().min(1).max(128),
   path: nonEmptyFileRootRelativePathSchema,
   revision: z.string().min(1),
   root: fileRootSchema,
 });
+export type RootedFilePreviewTicketLocator = z.infer<
+  typeof rootedFilePreviewTicketLocatorSchema
+>;
+
+/**
+ * Absolute-path locator for host surfaces (terminal composer, future flow
+ * previews) that are not rooted under a file workspace root.
+ */
+export const absoluteFilePreviewTicketLocatorSchema = z.object({
+  absolutePath: z.string().min(1).max(4096),
+  mime: z.string().min(1).max(128),
+  revision: z.string().min(1),
+});
+export type AbsoluteFilePreviewTicketLocator = z.infer<
+  typeof absoluteFilePreviewTicketLocatorSchema
+>;
+
+export const filePreviewTicketLocatorSchema = z.union([
+  rootedFilePreviewTicketLocatorSchema,
+  absoluteFilePreviewTicketLocatorSchema,
+]);
 export type FilePreviewTicketLocator = z.infer<
   typeof filePreviewTicketLocatorSchema
 >;
+
+export function isAbsoluteFilePreviewLocator(
+  locator: FilePreviewTicketLocator
+): locator is AbsoluteFilePreviewTicketLocator {
+  return "absolutePath" in locator;
+}
 
 export const filePreviewRuntimeAcquireRequestSchema = z.object({
   recordId: z.string().min(1).max(256),
@@ -57,7 +85,14 @@ export const filePreviewTicketIssueResultSchema = z.discriminatedUnion(
     }),
     z.object({
       issued: z.literal(false),
-      reason: z.enum(["forbidden", "invalid-request", "unavailable"]),
+      reason: z.enum([
+        "forbidden",
+        "invalid-request",
+        "not-found",
+        "too-large",
+        "unavailable",
+        "unsupported",
+      ]),
     }),
   ]
 );
@@ -72,3 +107,19 @@ export const filePreviewTicketReleaseRequestSchema = z.object({
 export const filePreviewRuntimeRevokeRequestSchema = z.object({
   leaseId: opaqueTokenSchema,
 });
+
+/** Host-owned absolute-path issue (no plugin lease). */
+export const mediaPreviewAbsoluteIssueRequestSchema = z.object({
+  absolutePath: z.string().min(1).max(4096),
+  previousTicket: opaqueTokenSchema.optional(),
+});
+export type MediaPreviewAbsoluteIssueRequest = z.infer<
+  typeof mediaPreviewAbsoluteIssueRequestSchema
+>;
+
+export const mediaPreviewAbsoluteReleaseRequestSchema = z.object({
+  ticket: opaqueTokenSchema,
+});
+export type MediaPreviewAbsoluteReleaseRequest = z.infer<
+  typeof mediaPreviewAbsoluteReleaseRequestSchema
+>;

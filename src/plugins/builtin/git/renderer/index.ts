@@ -6,6 +6,7 @@ import { FileDiff, GitBranch } from "lucide-react";
 import { GIT_CHANGES_PANEL_ID, GIT_PLUGIN_ID } from "../manifest.ts";
 import { registerGitActions } from "./git-actions.ts";
 import { createGitChangesPanel } from "./git-changes-panel.tsx";
+import { createGitPanelTransferRegistration } from "./git-panel-transfer.ts";
 import { registerGitReviewTreeActions } from "./git-review-tree-actions.ts";
 import { registerGitStatusItem } from "./git-status-item.tsx";
 import { registerWorktreeActions } from "./worktree-list-action.ts";
@@ -22,6 +23,7 @@ export function registerGitPluginContributions(
       resourcePolicy: "unmountWhenHidden",
       title: () =>
         context.i18n.t("ui.reviewChangesTitle", undefined, "Changes"),
+      transfer: createGitPanelTransferRegistration(),
     }),
     registerWorktreeActions(context),
     registerGitActions(context),

@@ -5,6 +5,7 @@ import {
   AlertTitle,
 } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
+import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { ScrollArea } from "@pier/ui/scroll-area.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
@@ -30,6 +31,79 @@ export function ReviewLoading({
       <Skeleton className="h-4 w-5/6" />
       <Skeleton className="h-4 w-2/3" />
     </div>
+  );
+}
+
+/**
+ * 内容区没有可展示正文时的错误主体状态。基于 kit 的 ErrorEmpty,
+ * 补上插件文案与 Details 对话框接线。
+ */
+export function ReviewErrorEmpty({
+  context,
+  description,
+  detail,
+  onRetry,
+  title,
+}: {
+  readonly context: RendererPluginContext;
+  readonly description?: string | undefined;
+  readonly detail?: string | null | undefined;
+  readonly onRetry?: (() => void) | undefined;
+  readonly title: string;
+}): React.JSX.Element {
+  const hasDetail = (detail?.trim().length ?? 0) > 0;
+  return (
+    <ErrorEmpty
+      {...(description === undefined ? {} : { description })}
+      {...(hasDetail
+        ? {
+            detailAction: {
+              label: pluginText(context, "reviewDetails", "Details"),
+              onClick: () => {
+                context.dialogs
+                  .alert({
+                    body: detail ?? "",
+                    size: "default",
+                    title,
+                  })
+                  .catch(() => undefined);
+              },
+            },
+          }
+        : {})}
+      {...(onRetry
+        ? {
+            retryAction: {
+              label: pluginText(context, "reviewRetry", "Retry"),
+              onClick: onRetry,
+            },
+          }
+        : {})}
+      title={title}
+    />
+  );
+}
+
+/** index/文档失败的 Empty 主体:描述用本地化摘要,原始诊断进 Details。 */
+export function ReviewFailureEmpty({
+  context,
+  failure,
+  onRetry,
+  title,
+}: {
+  readonly context: RendererPluginContext;
+  readonly failure: GitReviewFailure;
+  readonly onRetry?: (() => void) | undefined;
+  readonly title: string;
+}): React.JSX.Element {
+  return (
+    <ReviewErrorEmpty
+      context={context}
+      description={gitReviewFailureMessage(context, failure)}
+      detail={failure.message}
+      onRetry={failure.retryable ? onRetry : undefined}
+      title={title}
+    />
   );
 }
 
@@ -113,7 +187,7 @@ export function ReviewFeedback({
   indexFailureTitle,
   navigationError,
   onRetryNavigation,
-  runtimeError,
+  runtimeError = null,
   onRetryIndex,
   onRetryFailure,
   onRetryRender,
@@ -129,7 +203,8 @@ export function ReviewFeedback({
   readonly onRetryIndex?: () => void;
   readonly onRetryNavigation?: () => void;
   readonly onRetryRender?: () => void;
-  readonly runtimeError: Error | null;
+  /** 仅用于「正文仍可见但最新更新被拒」的暂态横条;全空白错误走 Empty。 */
+  readonly runtimeError?: Error | null;
   readonly staleRetainedCount?: number;
 }): React.JSX.Element | null {
   if (

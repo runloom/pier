@@ -117,7 +117,6 @@ function branchOption(
     label: overrides.name,
     pinReason: null,
     subject: null,
-    tipTreeInCurrentHistory: null,
     ...overrides,
   };
 }
@@ -200,6 +199,36 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       title: "Git: Continue Rebase",
     },
     {
+      id: "pier.git.cherryPick",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Cherry-pick Commit...",
+    },
+    {
+      id: "pier.git.cherryPickAbort",
+      permissions: ["git:write"],
+      title: "Git: Abort Cherry-pick",
+    },
+    {
+      id: "pier.git.cherryPickContinue",
+      permissions: ["git:write"],
+      title: "Git: Continue Cherry-pick",
+    },
+    {
+      id: "pier.git.revert",
+      permissions: ["git:read", "git:write"],
+      title: "Git: Revert Commit...",
+    },
+    {
+      id: "pier.git.revertAbort",
+      permissions: ["git:write"],
+      title: "Git: Abort Revert",
+    },
+    {
+      id: "pier.git.revertContinue",
+      permissions: ["git:write"],
+      title: "Git: Continue Revert",
+    },
+    {
       id: "pier.git.undoLastCommit",
       permissions: ["git:write"],
       title: "Git: Undo Last Commit",
@@ -208,6 +237,21 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
       id: "pier.git.review.openFile",
       permissions: ["file:read", "panel:open"],
       title: "Git: Open File",
+    },
+    {
+      id: "pier.git.review.stageFile",
+      permissions: ["git:write"],
+      title: "Git: Stage Changes",
+    },
+    {
+      id: "pier.git.review.unstageFile",
+      permissions: ["git:write"],
+      title: "Git: Unstage Changes",
+    },
+    {
+      id: "pier.git.review.discardFile",
+      permissions: ["git:write"],
+      title: "Git: Discard Changes",
     },
   ];
   return {
@@ -315,10 +359,10 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
               "Branch {{branch}} has no new commits to merge.",
             "ui.gitMergeSelectBranch":
               "Select a branch to merge into the current branch",
-            "ui.gitMergeSuccess": "Successfully merged branch {{branch}}",
+            "ui.gitMergeSuccess": "Merged {{branch}}",
             "ui.gitNoOtherBranches": "No other branches found",
             "ui.gitStashListEmpty": "No stashes found",
-            "ui.gitStashPopSuccess": "Stash applied and removed",
+            "ui.gitStashPopSuccess": "Stash applied",
             "ui.gitStashSelect": "Select a stash to pop",
             "ui.gitStashSuccess": "Changes stashed",
             "ui.locked": "Locked",
@@ -1195,7 +1239,7 @@ describe("git builtin plugin", () => {
     );
     expect(toastMocks.loading).toHaveBeenCalledWith("Merging...");
     expect(toastMocks.success).toHaveBeenCalledWith(
-      "Successfully merged branch feature/git-panel",
+      "Merged feature/git-panel",
       { id: "git-loading-toast" }
     );
   });
@@ -1457,11 +1501,6 @@ describe("git builtin plugin", () => {
           pinReason: "default",
           refName: "refs/heads/main",
           subject: "main subject",
-          tipTreeInCurrentHistory: {
-            commit: "eb9c60a2",
-            commitsSince: 6,
-            subject: "squash merge commit",
-          },
         }),
         branchOption({
           commit: "bbb2222222",
@@ -1518,7 +1557,6 @@ describe("git builtin plugin", () => {
     expect(branchRow.getByText("graph")).toBeVisible();
     expect(branchRow.getByText("3↑")).toBeVisible();
     expect(branchRow.getByText("5↓")).toBeVisible();
-    expect(branchRow.getByText("seen in history")).toBeVisible();
     expect(
       branchRow.container.querySelector("[data-branch-picker-row-ahead-behind]")
         ?.textContent
@@ -1529,22 +1567,10 @@ describe("git builtin plugin", () => {
       "title",
       "Commit graph counts only. Squash or rebase merges may show already-applied commits as branch-only."
     );
-    expect(
-      branchRow.container.querySelector(
-        "[data-branch-picker-row-tip-tree-in-history]"
-      )
-    ).toHaveAttribute(
-      "title",
-      "Branch tip tree matches eb9c60a2 in the current history; current branch has 6 newer commit(s)."
-    );
     // ahead/behind 用主题语义 token,badge 用 shadcn Badge,不硬编码调色板色
     expect(branchRow.getByText("3↑")).toHaveClass("text-success");
     expect(branchRow.getByText("5↓")).toHaveClass("text-warning");
     expect(branchRow.getByText("default")).toHaveAttribute(
-      "data-slot",
-      "badge"
-    );
-    expect(branchRow.getByText("seen in history")).toHaveAttribute(
       "data-slot",
       "badge"
     );
@@ -2807,6 +2833,7 @@ describe("git builtin plugin", () => {
       "src/plugins/builtin/git/renderer/git-actions.ts",
       "src/plugins/builtin/git/renderer/git-branch-actions.ts",
       "src/plugins/builtin/git/renderer/git-command-helpers.ts",
+      "src/plugins/builtin/git/renderer/git-merge-rebase-actions.ts",
       "src/plugins/builtin/git/renderer/git-sequencer-actions.ts",
       "src/plugins/builtin/git/renderer/git-stash-actions.ts",
       "src/plugins/builtin/git/renderer/git-status-item.tsx",

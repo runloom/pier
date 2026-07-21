@@ -43,6 +43,7 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+Shift+Equal",
   "Mod+Shift+KeyA",
   "Mod+Shift+KeyD",
+  "Mod+Shift+KeyI",
   "Mod+Shift+KeyP",
 ];
 
@@ -181,6 +182,14 @@ describe("DEFAULT_KEYMAP", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.terminal.search",
       keys: "Mod+KeyF",
+      scope: "global",
+    });
+  });
+
+  it("contains the open agent composer shortcut", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.terminal.openAgentComposer",
+      keys: "Mod+Shift+KeyI",
       scope: "global",
     });
   });

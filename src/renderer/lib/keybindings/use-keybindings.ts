@@ -2,7 +2,9 @@
  * 全局快捷键 dispatch hook: capture-phase keydown → resolve → action.handler().
  *
  *   - IME composition 跳过 (e.isComposing / keyCode 229).
- *   - 文本输入框聚焦时, 无 Cmd/Ctrl 的纯字母快捷键不抢焦点输入.
+ *   - 文本输入框聚焦时:
+ *       · 无 Cmd/Ctrl 的快捷键不抢字符输入
+ *       · Enter 系和弦 (含 Mod+Shift+Enter 面板最大化) 留给输入框 (换行 / 提交)
  *   - 命中后 preventDefault + stopPropagation.
  *   - action.handler 抛错走 console.error 留痕, 不静默 swallow.
  *
@@ -18,9 +20,9 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
-import { isTextInputElement } from "./is-text-input.ts";
 import { chordFromEvent } from "./matcher.ts";
 import { keybindingRegistry } from "./registry.ts";
+import { shouldSuppressKeybindingForTextInput } from "./text-input-keybinding-guard.ts";
 import type { KeyChord } from "./types.ts";
 
 const IME_PENDING_KEYCODE = 229;
@@ -51,7 +53,7 @@ function pickAction(
   if (!commandId) {
     return null;
   }
-  if (!chord.cmdOrCtrl && isTextInputElement(target)) {
+  if (shouldSuppressKeybindingForTextInput(chord, target)) {
     return null;
   }
   const action = actionRegistry.get(commandId);

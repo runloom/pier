@@ -23,6 +23,29 @@ export class FileEditorViewCoordinator {
     return this.#sessions.get(editorSessionId);
   }
 
+  captureDocumentSnapshot(documentId: string): {
+    selection?: { anchor: number; head: number };
+    scroll: { left: number; top: number };
+  } | null {
+    for (const session of this.#sessions.values()) {
+      if (session.documentId !== documentId) {
+        continue;
+      }
+      return session.captureSnapshot();
+    }
+    return null;
+  }
+
+  applySnapshot(
+    editorSessionId: string,
+    snapshot: {
+      selection?: { anchor: number; head: number };
+      scroll?: { left: number; top: number };
+    }
+  ): void {
+    this.#sessions.get(editorSessionId)?.applySnapshot(snapshot);
+  }
+
   attach(input: {
     document: FilesDocument;
     editorSessionId: string;

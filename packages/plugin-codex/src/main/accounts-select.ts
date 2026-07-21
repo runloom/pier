@@ -2,6 +2,7 @@ import type {
   CrossToolSyncTarget,
   SyncToPeersPayload,
 } from "../shared/accounts.ts";
+import type { SyncTargetResult } from "./cross-tool-sync.ts";
 import { syncManagedAccountToPeers } from "./peer-credential-sync.ts";
 import type { CodexAccountsStateStore } from "./state.ts";
 import type { AgentAccountProvider } from "./types.ts";
@@ -27,37 +28,45 @@ export async function selectManagedAccount(
   deps: AccountsSelectDeps,
   accountId: string,
   syncTargets?: readonly CrossToolSyncTarget[]
-): Promise<void> {
+): Promise<SyncTargetResult[]> {
   const state = deps.stateStore.get();
   const target = state.accounts.find((account) => account.id === accountId);
   if (!target) {
     throw new Error(`Account not found: ${accountId}`);
   }
   if (state.activeAccountId === accountId) {
-    return;
+    return [];
   }
 
   if (state.activeAccountId) {
     const activeAccount = state.accounts.find(
       (account) => account.id === state.activeAccountId
     );
-    deps.setSuppressWatchUntil(deps.now() + deps.watchSuppressMs);
-    const syncResult = await deps.provider.syncBack(
-      deps.accountHomeDir(state.activeAccountId),
-      activeAccount?.providerAccountId
-    );
-    deps.setSuppressWatchUntil(deps.now() + deps.watchSuppressMs);
-    if (syncResult === "identity-mismatch") {
-      await deps.handleDrift();
+    // Without a providerAccountId fingerprint (legacy-migrated records) the
+    // identity check cannot run — capturing whatever sits in ~/.codex could
+    // bind a different externally-logged-in account's tokens to this record.
+    // Skip the capture; the drift handler adopts external logins safely.
+    if (activeAccount?.providerAccountId !== undefined) {
+      deps.setSuppressWatchUntil(deps.now() + deps.watchSuppressMs);
+      const syncResult = await deps.provider.syncBack(
+        deps.accountHomeDir(state.activeAccountId),
+        activeAccount.providerAccountId
+      );
+      deps.setSuppressWatchUntil(deps.now() + deps.watchSuppressMs);
+      if (syncResult === "identity-mismatch") {
+        await deps.handleDrift();
+      }
     }
   }
   deps.setSuppressWatchUntil(deps.now() + deps.watchSuppressMs);
   await deps.provider.materialize(deps.accountHomeDir(accountId));
   deps.setSuppressWatchUntil(deps.now() + deps.watchSuppressMs);
 
-  // Switch keeps peer sync best-effort so a peer failure never rolls back Codex.
+  // Switch keeps peer sync best-effort so a peer failure never rolls back
+  // Codex; per-target results are returned so the UI can surface failures.
+  let peerResults: SyncTargetResult[] = [];
   if (syncTargets && syncTargets.length > 0) {
-    await syncManagedAccountToPeers({
+    peerResults = await syncManagedAccountToPeers({
       accountHomeDir: deps.accountHomeDir(accountId),
       email: target.email,
       ...(deps.logger ? { logger: deps.logger } : {}),
@@ -73,6 +82,7 @@ export async function selectManagedAccount(
   }));
   await deps.stateStore.flush();
   deps.onSelected(accountId);
+  return peerResults;
 }
 
 export async function syncManagedAccountPeers(

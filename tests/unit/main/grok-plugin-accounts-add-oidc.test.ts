@@ -118,12 +118,14 @@ function createHost(options: {
     setLoginAbort: (abort) => {
       ui.abort = abort;
     },
+    setLoginDeviceInfo: vi.fn(),
     setLoginMode: (mode) => {
       ui.mode = mode;
     },
     setLoginPending: (pending) => {
       ui.pending = pending;
     },
+    setLoginStartedAt: vi.fn(),
     setSuppressWatchUntil: vi.fn(),
     stateStore:
       options.stateStore ??
@@ -348,8 +350,13 @@ describe("addOidcAccount", () => {
     const error = await captureRejection(addOidcAccount(host, "oauth"));
 
     expect(error.message).toBe("flush failed");
-    expect(stateStore.get()).toBe(previousState);
-    expect(stateStore.flush).toHaveBeenCalledTimes(2);
+    // Targeted rollback restores content (accounts / active selection) but
+    // bumps revision — it must not blindly reinstate a pre-login snapshot.
+    expect(stateStore.get().accounts).toEqual(previousState.accounts);
+    expect(stateStore.get().activeAccountId).toBe(
+      previousState.activeAccountId
+    );
+    expect(stateStore.flush).toHaveBeenCalledTimes(3);
     expect(currentAuth).toBe("exact previous current auth");
     expect(provider.restoreCurrentAuthContent).toHaveBeenCalledWith({
       expectedCurrent: "new managed auth",
@@ -478,7 +485,11 @@ describe("addOidcAccount", () => {
     const error = await captureRejection(addOidcAccount(host, "oauth"));
 
     expect(error.message).toBe("duplicate flush failed");
-    expect(stateStore.get()).toBe(previousState);
+    // Targeted rollback restores content but bumps revision.
+    expect(stateStore.get().accounts).toEqual(previousState.accounts);
+    expect(stateStore.get().activeAccountId).toBe(
+      previousState.activeAccountId
+    );
     expect(managedAuth.get(existingDir)).toBe("old managed auth");
     expect(provider.writeManagedAuthContent).toHaveBeenCalledWith(
       existingDir,

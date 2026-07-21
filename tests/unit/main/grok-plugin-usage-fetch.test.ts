@@ -51,19 +51,24 @@ describe("classifyBillingHttpError", () => {
 
   it("classifies structured auth codes as session failure", () => {
     expect(
+      classifyBillingHttpError(403, JSON.stringify({ code: "invalid_grant" }))
+    ).toEqual({
+      kind: "auth",
+      detail: "invalid_grant",
+    });
+  });
+
+  it("classifies permissionDenied as access, not re-login", () => {
+    // "permission denied" means authenticated-but-not-allowed; telling the
+    // user to re-login would not help.
+    expect(
       classifyBillingHttpError(
         403,
         JSON.stringify({ error: "permissionDenied", code: "permissionDenied" })
       )
     ).toEqual({
-      kind: "auth",
+      kind: "access",
       detail: "permissionDenied",
-    });
-    expect(
-      classifyBillingHttpError(403, JSON.stringify({ code: "invalid_grant" }))
-    ).toEqual({
-      kind: "auth",
-      detail: "invalid_grant",
     });
   });
 
@@ -341,7 +346,7 @@ describe("fetchGrokUsage", () => {
     expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
-  it("treats a permissionDenied 403 response as a re-login failure", async () => {
+  it("treats a permissionDenied 403 response as an access failure, not re-login", async () => {
     const fetchImpl = vi.fn(async () => ({
       ok: false,
       status: 403,
@@ -356,7 +361,8 @@ describe("fetchGrokUsage", () => {
     });
 
     expect(result).toMatchObject({ status: "error" });
-    expect(result.error).toContain(SESSION_EXPIRED_RELOGIN_ERROR);
+    expect(result.error).toContain(ACCESS_DENIED_ERROR);
+    expect(result.error).not.toContain(SESSION_EXPIRED_RELOGIN_ERROR);
     expect(result.error).toMatch(/permissionDenied/i);
   });
 

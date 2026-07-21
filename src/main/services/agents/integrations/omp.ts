@@ -27,6 +27,10 @@ const MARKER = "pier-agent-status:v1 (managed by Pier)";
  *   （绝大多数）立即准确；拒绝路径短暂错标 tool, 由后续事件在本轮 loop
  *   收敛内纠正（denial 作为 tool result 喂回模型, loop 必以 agent_end
  *   收敛——abort 这一更极端路径都发 agent_end, 已实证）, 不值得解析载荷。
+ *
+ * Ev5 / FA `error`：probe 未观测到独立失败事件；abort/ESC 仍走
+ * `agent_end→Stop`。禁止把 `agent_end`/`Stop` 假装成 `error`
+ * （用户中断 ≠ 出错）。结论见 `OMP_FA_ERROR_REACHABILITY`。
  */
 const OMP_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
   { nativeEvent: "session_start", pierEvent: "SessionStart" },
@@ -297,3 +301,9 @@ export const OMP_SUBAGENT_EVENT_MAP = OMP_SUBAGENT_EVENTS;
 
 /** marker 常量导出（测试断言用）。 */
 export const OMP_MARKER = MARKER;
+
+/**
+ * Ev5 诚实结论：omp 无原生回合失败语义可映射 FA `error`。
+ * 证据：2026-07-05 probe（abort 仍 `agent_end`）；映射表无独立失败事件。
+ */
+export const OMP_FA_ERROR_REACHABILITY = "unsupported" as const;

@@ -3,7 +3,6 @@ import type {
   RendererPluginQuickPickItem,
 } from "@plugins/api/renderer.ts";
 import type {
-  GitBranchTipTreeInCurrentHistory,
   GitDiffBranchesResult,
   GitDiffBranchOption,
   GitMergeResult,
@@ -153,11 +152,6 @@ async function openBranchPick(
   );
   const graphLabel = pluginText(context, "branchGraph", "graph");
   const remoteLabel = pluginText(context, "branchRemote", "remote");
-  const tipTreeInHistoryLabel = pluginText(
-    context,
-    "branchTipTreeInHistory",
-    "seen in history"
-  );
   context.commandPalette.openQuickPick({
     ...(operation === "switch"
       ? {
@@ -208,17 +202,6 @@ async function openBranchPick(
         graphCaveatTitle,
         graphLabel,
         remoteLabel,
-        tipTreeInHistoryLabel,
-        tipTreeInHistoryTitle: (match: GitBranchTipTreeInCurrentHistory) =>
-          pluginText(
-            context,
-            "branchTipTreeInHistoryTitle",
-            "Branch tip tree matches {{commit}} in the current history; current branch has {{count}} newer commit(s).",
-            {
-              commit: match.commit,
-              count: match.commitsSince,
-            }
-          ),
       });
     },
     title,

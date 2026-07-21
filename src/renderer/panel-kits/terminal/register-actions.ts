@@ -1,5 +1,5 @@
 import type { TerminalOperation } from "@shared/contracts/terminal.ts";
-import { Search, X } from "lucide-react";
+import { PenLine, Search, X } from "lucide-react";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -7,6 +7,8 @@ import {
   activeTerminalPanelId,
   rendererActionContributionRuntime,
 } from "@/lib/actions/renderer-action-runtime.ts";
+import { dispatchTerminalOpenComposer } from "./terminal-composer-events.ts";
+import { isAgentComposerEligibleForPanel } from "./terminal-composer-mount.ts";
 import { dispatchTerminalOpenSearch } from "./terminal-search-events.ts";
 
 function terminalOperationContribution(opts: {
@@ -73,6 +75,32 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     sortOrder: 4,
     surfaces: ["terminal/content"],
     titleKey: "contextMenu.action.find",
+    when: "terminal.hasActivePanel",
+  },
+  {
+    categoryKey: "terminal",
+    enabled: () => {
+      const id = activeTerminalPanelId();
+      return id != null && isAgentComposerEligibleForPanel(id);
+    },
+    group: "0_edit",
+    handler: () => {
+      const panelId = activeTerminalPanelId();
+      if (!panelId) {
+        return;
+      }
+      dispatchTerminalOpenComposer(panelId);
+    },
+    iconComponent: PenLine,
+    id: "pier.terminal.openAgentComposer",
+    menuHidden: () => {
+      const id = activeTerminalPanelId();
+      return id == null || !isAgentComposerEligibleForPanel(id);
+    },
+    // After Find(4), Clear(5), Preview Selected Text(6).
+    sortOrder: 7,
+    surfaces: ["terminal/content", "command-palette"],
+    titleKey: "contextMenu.action.openRichInput",
     when: "terminal.hasActivePanel",
   },
   terminalOperationContribution({

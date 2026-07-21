@@ -98,6 +98,7 @@ describe("terminal native debug IPC", () => {
     }));
     vi.doMock("@main/state/terminal-session-state.ts", () => ({
       clearTerminalPanelAgent: vi.fn(async () => undefined),
+      ensureTerminalPanelSession: vi.fn(async () => undefined),
       flushTerminalSessionState: vi.fn(async () => undefined),
       patchTerminalPanelAgentStatus: vi.fn(async () => false),
       patchTerminalPanelTab: vi.fn(async () => undefined),
@@ -118,6 +119,12 @@ describe("terminal native debug IPC", () => {
       ),
       findAppWindowByWebContents: vi.fn(() => win),
       findInternalWindowId: vi.fn(() => "main"),
+      findWindowContext: vi.fn(() => ({
+        electronWindowId: String(win.id),
+        mode: "restore" as const,
+        recordId: "main",
+        windowId: "main",
+      })),
     }));
 
     const { registerTerminalIpc } = await import("@main/ipc/terminal.ts");
@@ -144,6 +151,7 @@ describe("terminal native debug IPC", () => {
         activePanelId: "terminal-1",
         activeTerminalPanelId: "terminal-1",
         basePanel: { kind: "terminal", panelId: "terminal-1" },
+        focusDisabledPanelIds: [],
         hasMaximizedGroup: false,
         reason: "dockview-active-panel",
         rendererSequence: 1,

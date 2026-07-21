@@ -6,6 +6,7 @@ import {
   CORRUPT_DOCUMENT_DRAFT_STORAGE_PREFIX,
   DISK_DRAFT_STORAGE_PREFIX,
   SAVE_AS_OPERATION_STORAGE_PREFIX,
+  TRANSFER_STAGING_DRAFT_STORAGE_PREFIX,
   UNTITLED_DRAFT_STORAGE_PREFIX,
 } from "./files-document-draft-records.ts";
 import type {
@@ -239,6 +240,7 @@ function isDraftStorageKey(key: string | null): key is string {
   return (
     key?.startsWith(UNTITLED_DRAFT_STORAGE_PREFIX) === true ||
     key?.startsWith(DISK_DRAFT_STORAGE_PREFIX) === true ||
+    key?.startsWith(TRANSFER_STAGING_DRAFT_STORAGE_PREFIX) === true ||
     key?.startsWith(CORRUPT_DOCUMENT_DRAFT_STORAGE_PREFIX) === true ||
     key?.startsWith(SAVE_AS_OPERATION_STORAGE_PREFIX) === true ||
     key?.startsWith(FILE_WRITE_COMMIT_RECEIPT_STORAGE_PREFIX) === true
@@ -456,17 +458,14 @@ export function releaseFilesDraftSuspendAfterDispose(): void {
   deferredWrites.clear();
 }
 
-export async function claimLegacyDraft(key: string): Promise<boolean> {
-  const backend = draftBackend;
-  if (!backend) {
-    return false;
-  }
-  const result = await backend.claimLegacy(key);
-  if (result.kind === "not-found") {
-    return false;
-  }
-  hydrateBackendDrafts([result.draft]);
-  return true;
+export function peekFilesDraftBackend(): FilesDraftBackend | null {
+  return draftBackend;
+}
+
+export function ingestFilesDraftSnapshots(
+  persisted: readonly FileDraftSnapshot[]
+): void {
+  hydrateBackendDrafts(persisted);
 }
 
 export function readFilesDraftRecord(key: string): string | null {

@@ -86,6 +86,15 @@ export interface TaskService {
   isStopRequested(panelId: string, windowId?: string | undefined): boolean;
   list(args: { projectRootPath: string }): Promise<TaskListResult>;
   markPanelClosed(panelId: string, windowId?: string | undefined): void;
+  /**
+   * Move running task ownership to another window. Keeps originPanelId and
+   * panelId stable; only ownerWindowId / node.windowId change.
+   */
+  moveRunningOwnerWindow(input: {
+    panelId: string;
+    sourceWindowId: string;
+    targetWindowId: string;
+  }): void;
   output(runId: string, taskId: string): TaskOutputUpdate | null;
   prepareSpawn(args: TaskSpawnRequest): Promise<TaskSpawnPreparation>;
   recentTasks(): readonly TaskRecentEntry[];

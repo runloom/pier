@@ -1,13 +1,7 @@
 import { Badge } from "@pier/ui/badge.tsx";
-import type {
-  GitBranchTipTreeInCurrentHistory,
-  GitDiffBranchOption,
-} from "@shared/contracts/git.ts";
+import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
 import { CircleAlert, GitBranch, GitBranchPlus } from "lucide-react";
 import { formatRelativeTime } from "./format-relative-time.ts";
-
-/** Badge 默认尺寸偏大,统一压缩到行内 4px 网格;色彩语义交给 variant。 */
-const ROW_BADGE_CLASS = "h-4 rounded-sm px-1.5 text-[10px]";
 
 interface GitBranchQuickPickRowProps {
   branch: GitDiffBranchOption;
@@ -15,8 +9,6 @@ interface GitBranchQuickPickRowProps {
   graphCaveatTitle: string;
   graphLabel: string;
   remoteLabel: string;
-  tipTreeInHistoryLabel: string;
-  tipTreeInHistoryTitle: (match: GitBranchTipTreeInCurrentHistory) => string;
 }
 
 export function GitBranchQuickPickRow({
@@ -25,13 +17,10 @@ export function GitBranchQuickPickRow({
   graphCaveatTitle,
   graphLabel,
   remoteLabel,
-  tipTreeInHistoryLabel,
-  tipTreeInHistoryTitle,
 }: GitBranchQuickPickRowProps) {
   const relativeTime = formatRelativeTime(branch.committerDate);
   const hasMeta = Boolean(branch.authorName || branch.commit || branch.subject);
   const aheadBehind = branchAheadBehind(branch);
-  const tipTreeInHistory = branch.tipTreeInCurrentHistory;
 
   return (
     <span
@@ -92,21 +81,11 @@ export function GitBranchQuickPickRow({
               </span>
             </span>
           ) : null}
-          {tipTreeInHistory ? (
-            <Badge
-              className={ROW_BADGE_CLASS}
-              data-branch-picker-row-tip-tree-in-history
-              title={tipTreeInHistoryTitle(tipTreeInHistory)}
-              variant="secondary"
-            >
-              {tipTreeInHistoryLabel}
-            </Badge>
-          ) : null}
           {branch.pinReason ? (
             <Badge
-              className={ROW_BADGE_CLASS}
               data-branch-picker-row-pin
               data-pin-reason={branch.pinReason}
+              size="xs"
             >
               {defaultLabel}
             </Badge>
@@ -119,8 +98,8 @@ export function GitBranchQuickPickRow({
           >
             {branch.kind === "remote" ? (
               <Badge
-                className={ROW_BADGE_CLASS}
                 data-branch-picker-row-remote
+                size="xs"
                 variant="secondary"
               >
                 {remoteLabel}

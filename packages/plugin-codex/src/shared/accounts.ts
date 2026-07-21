@@ -51,9 +51,17 @@ export interface CodexAccountsSnapshot {
   accounts: CodexAccountSummary[];
   activeAccountId: string | null;
   activeUsage?: CodexUsageSnapshot | null;
+  /** Most recent failed add-login, if any (not tied to a specific account). */
+  lastLoginError?: { at: number; message: string } | null;
   login: CodexLoginState | null;
   revision: number;
   schemaVersion: number;
+}
+
+export interface PeerSyncResult {
+  error?: string | undefined;
+  ok: boolean;
+  target: CrossToolSyncTarget;
 }
 
 export interface CodexAccountsState {

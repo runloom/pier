@@ -33,10 +33,20 @@ export function suppressNextTerminalSurfaceClose(
 }
 
 export interface RegisteredTerminalTaskLifecycle {
+  getCurrentLifecycleId(
+    panelId: string,
+    windowId?: string | undefined
+  ): string | undefined;
   ignoreNextNativeUserClose(
     panelId: string,
     windowId?: string | undefined
   ): void;
+  moveOwner(input: {
+    lifecycleId?: string | undefined;
+    panelId: string;
+    sourceWindowId: string;
+    targetWindowId: string;
+  }): void;
   releasePanel(panelId: string, windowId?: string | undefined): void;
   resetPanel(
     panelId: string,

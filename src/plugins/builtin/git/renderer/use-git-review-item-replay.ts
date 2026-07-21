@@ -13,6 +13,7 @@ import {
 const MAX_REPLAY_ATTEMPTS = 3;
 
 interface PendingReplay {
+  readonly allowedIds: ReadonlySet<string> | null;
   attempts: number;
   readonly generation: number;
   readonly handle: PierDiffViewHandle;
@@ -49,7 +50,8 @@ export function useGitReviewItemReplay({
   ) => void;
   readonly replayLatestItemUpdates: (
     handle: PierDiffViewHandle,
-    generation: number
+    generation: number,
+    allowedIds?: readonly string[]
   ) => boolean;
   readonly retryLatestItemUpdates: () => void;
 } {
@@ -90,7 +92,8 @@ export function useGitReviewItemReplay({
     function apply(
       handle: PierDiffViewHandle,
       generation: number,
-      requestedIds: Set<string> | null
+      requestedIds: Set<string> | null,
+      allowedIds?: ReadonlySet<string> | null
     ): boolean {
       if (
         handle !== diffHandleRef.current ||
@@ -98,6 +101,13 @@ export function useGitReviewItemReplay({
         generation !== committedProjectionGenerationRef.current
       ) {
         return false;
+      }
+      if (allowedIds) {
+        for (const id of [...latestItemUpdatesRef.current.keys()]) {
+          if (!allowedIds.has(id)) {
+            latestItemUpdatesRef.current.delete(id);
+          }
+        }
       }
       const revision = revisionRef.current;
       const pending = pendingRef.current;
@@ -122,6 +132,7 @@ export function useGitReviewItemReplay({
         }
         if (frameRef.current !== null) {
           pendingRef.current = {
+            allowedIds: allowedIds ?? null,
             attempts: previousAttempts,
             generation,
             handle,
@@ -131,13 +142,15 @@ export function useGitReviewItemReplay({
           return false;
         }
       }
-      const items =
-        ids === null
-          ? [...latestItemUpdatesRef.current.values()]
-          : [...ids].flatMap((id) => {
-              const item = latestItemUpdatesRef.current.get(id);
-              return item ? [item] : [];
-            });
+      const candidateIds =
+        ids === null ? [...latestItemUpdatesRef.current.keys()] : [...ids];
+      const items = candidateIds.flatMap((id) => {
+        if (allowedIds && !allowedIds.has(id)) {
+          return [];
+        }
+        const item = latestItemUpdatesRef.current.get(id);
+        return item ? [item] : [];
+      });
       if (items.length === 0) {
         pendingRef.current = null;
         cancelFrame();
@@ -155,6 +168,7 @@ export function useGitReviewItemReplay({
         return true;
       }
       pendingRef.current = {
+        allowedIds: allowedIds ?? null,
         attempts,
         generation,
         handle,
@@ -171,7 +185,7 @@ export function useGitReviewItemReplay({
         frameRef.current = null;
         const current = pendingRef.current;
         if (current?.handle === handle && current.generation === generation) {
-          apply(handle, generation, current.ids);
+          apply(handle, generation, current.ids, current.allowedIds);
         }
       });
       return false;
@@ -196,18 +210,29 @@ export function useGitReviewItemReplay({
     [applyUpdates]
   );
   const replayLatestItemUpdates = useCallback(
-    (handle: PierDiffViewHandle, generation: number) =>
-      applyUpdates(handle, generation, null),
+    (
+      handle: PierDiffViewHandle,
+      generation: number,
+      allowedIds?: readonly string[]
+    ) =>
+      applyUpdates(
+        handle,
+        generation,
+        null,
+        allowedIds ? new Set(allowedIds) : null
+      ),
     [applyUpdates]
   );
 
   const retryLatestItemUpdates = useCallback(() => {
-    const ids = pendingRef.current?.ids ?? null;
+    const pending = pendingRef.current;
+    const ids = pending?.ids ?? null;
+    const allowedIds = pending?.allowedIds ?? null;
     pendingRef.current = null;
     setReplayFailure(null);
     const handle = diffHandleRef.current;
     if (handle) {
-      applyUpdates(handle, documentGenerationRef.current, ids);
+      applyUpdates(handle, documentGenerationRef.current, ids, allowedIds);
     }
   }, [applyUpdates, diffHandleRef, documentGenerationRef]);
 

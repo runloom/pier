@@ -22,6 +22,7 @@ export function buildCspPolicy(isDev: boolean): string {
         "connect-src 'self' http://localhost:* ws://localhost:*",
         "img-src 'self' data: blob: pier-plugin: pier-file-preview:",
         "font-src 'self' data: pier-asset: pier-plugin:",
+        "media-src 'self' pier-asset:",
       ].join("; ")
     : [
         "default-src 'self'",
@@ -30,6 +31,7 @@ export function buildCspPolicy(isDev: boolean): string {
         "connect-src 'self'",
         "img-src 'self' data: pier-plugin: pier-file-preview:",
         "font-src 'self' data: pier-asset: pier-plugin:",
+        "media-src 'self' pier-asset:",
       ].join("; ");
 }
 

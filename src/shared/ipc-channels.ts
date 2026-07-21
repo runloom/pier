@@ -19,6 +19,8 @@ export const PIER = {
   FILE_PREVIEW_RUNTIME_REVOKE: "pier://file-preview-runtime:revoke",
   FILE_PREVIEW_TICKET_ISSUE: "pier://file-preview-ticket:issue",
   FILE_PREVIEW_TICKET_RELEASE: "pier://file-preview-ticket:release",
+  MEDIA_PREVIEW_ABSOLUTE_ISSUE: "pier://media-preview-absolute:issue",
+  MEDIA_PREVIEW_ABSOLUTE_RELEASE: "pier://media-preview-absolute:release",
   // file path query (start/cancel invoke + directed event send;
   // mirrors FILE_WATCH_START/STOP style but delivers ranked path results
   // via `FILE_QUERY_EVENT` so single-command payloads stay bounded).
@@ -28,6 +30,7 @@ export const PIER = {
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",
+  WINDOW_RELOAD: "pier://window:reload",
   WINDOW_RENDERER_BOOT_CHALLENGE: "pier://window:renderer-boot-challenge",
   WINDOW_RENDERER_BOOT_REQUEST: "pier://window:renderer-boot-request",
   WINDOW_RENDERER_READY: "pier://window:renderer-ready",
@@ -53,6 +56,8 @@ export const PIER = {
   SYSTEM_NOTIFICATION_PERMISSION: "pier://notification:permission",
   SYSTEM_NOTIFICATION_TEST: "pier://notification:test",
   SYSTEM_NOTIFICATION_OPEN_SETTINGS: "pier://notification:open-settings",
+  // renderer 直发系统通知（历史 wire 值，改值会破坏滚动升级期的 preload/main 配对）
+  SYSTEM_NOTIFICATION_SHOW: "pier:notification:system",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -122,6 +127,10 @@ export const PIER_BROADCAST = {
   // 系统通知权限探针快照变化；payload SystemNotificationPermissionSnapshot
   SYSTEM_NOTIFICATION_PERMISSION_CHANGED:
     "pier://notification:permission-changed",
+  // Attention 内置提示音：单窗播放指令；payload { soundId }
+  ATTENTION_SOUND_PLAY: "pier://attention-sound:play",
+  // 项目技能状态失效 (main → 所有 renderer, payload { projectIdentity, observedRevision })
+  PROJECT_SKILLS_INVALIDATED: "pier://project-skills:invalidated",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

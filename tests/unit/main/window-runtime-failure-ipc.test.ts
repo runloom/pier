@@ -71,4 +71,29 @@ describe("window renderer runtime failure IPC", () => {
     );
     expect(mocks.error).toHaveBeenCalledOnce();
   });
+
+  it("reloads the sender webContents for soft renderer recovery", async () => {
+    registerWindowIpc({ handle: mocks.handle, on: mocks.on } as never);
+    const listener = mocks.handle.mock.calls.find(
+      ([channel]) => channel === "pier://window:reload"
+    )?.[1] as
+      | ((event: {
+          sender: { isDestroyed: () => boolean; reload: () => void };
+        }) => void)
+      | undefined;
+    expect(listener).toBeTypeOf("function");
+
+    const reload = vi.fn();
+    listener?.({
+      sender: { isDestroyed: () => false, reload },
+    });
+    expect(reload).toHaveBeenCalledOnce();
+
+    expect(() =>
+      listener?.({
+        sender: { isDestroyed: () => true, reload },
+      })
+    ).toThrow(/destroyed/i);
+    expect(reload).toHaveBeenCalledOnce();
+  });
 });

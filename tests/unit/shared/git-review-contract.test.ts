@@ -15,6 +15,7 @@ const source = {
   gitRootPath: "/Users/xyz/ABC/pier",
   oldPaths: [],
   path: "src/index.ts",
+  target: { kind: "uncommitted" },
 } as const;
 const normalizedSource = gitReviewFileSourceSchema.parse(source);
 
@@ -49,6 +50,19 @@ describe("Git review shared contract", () => {
         oldPaths: ["src/previous.ts"],
       })
     );
+    expect(getGitReviewFileSourceIdentity(normalizedSource)).not.toBe(
+      getGitReviewFileSourceIdentity({
+        ...normalizedSource,
+        target: { kind: "commit", oid: "1".repeat(40) },
+      })
+    );
+  });
+
+  it("缺省 target 归一化为 uncommitted", () => {
+    const { target: _target, ...withoutTarget } = source;
+    expect(gitReviewFileSourceSchema.parse(withoutTarget).target).toEqual({
+      kind: "uncommitted",
+    });
   });
 
   it("keeps scope, safe paths, and the renderer entry projection strict", () => {

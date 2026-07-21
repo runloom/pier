@@ -1,5 +1,4 @@
 import type {
-  GitBranchTipTreeInCurrentHistory,
   GitDiffBranchesResult,
   GitDiffBranchOption,
 } from "../../shared/contracts/git.ts";
@@ -18,10 +17,6 @@ const MAX_BRANCH_LIMIT = 1000;
 const ORIGIN_HEAD_RE = /^refs\/remotes\/[^/]+\/(.+)$/;
 const REMOTE_HEAD_RE = /\/HEAD$/;
 const SPLIT_WS_RE = /\s+/;
-const TIMEOUT_RE = /timeout|timed out|超时/i;
-const TREE_HISTORY_SCAN_MAX = 2000;
-const TREE_HISTORY_TIMEOUT_MS = 2000;
-const TREE_OID_RE = /^[0-9a-f]{40,64}$/i;
 
 export type GitBranchSearchExec = (
   args: readonly string[],
@@ -36,16 +31,6 @@ export interface GitBranchSearchOptions {
   query?: string | undefined;
 }
 
-type BranchSearchItem = GitDiffBranchOption & {
-  treeOid: null | string;
-};
-
-interface CurrentHistoryTreeMatch {
-  commit: string;
-  commitsSince: number;
-  subject: null | string;
-}
-
 interface BranchRecordFields {
   authorName: string;
   commit: string;
@@ -55,7 +40,6 @@ interface BranchRecordFields {
   refName: string;
   shortName: string;
   subject: string;
-  treeOid: string;
 }
 
 function durationSince(startedAt: number): number {
@@ -70,7 +54,9 @@ function errorMessage(error: unknown): string {
 }
 
 function errorStatus(error: unknown): "error" | "timeout" {
-  return TIMEOUT_RE.test(errorMessage(error)) ? "timeout" : "error";
+  return error instanceof GitExecError && error.causeKind === "timeout"
+    ? "timeout"
+    : "error";
 }
 
 function normalizeLimit(limit: number | undefined): number {
@@ -81,7 +67,7 @@ function branchSearchArgs(): string[] {
   return [
     "for-each-ref",
     "--sort=-committerdate",
-    `--format=%(refname)${BRANCH_FIELD_SEPARATOR}%(refname:short)${BRANCH_FIELD_SEPARATOR}%(objectname:short)${BRANCH_FIELD_SEPARATOR}%(HEAD)${BRANCH_FIELD_SEPARATOR}%(subject)${BRANCH_FIELD_SEPARATOR}%(authorname)${BRANCH_FIELD_SEPARATOR}%(committerdate:iso-strict)${BRANCH_FIELD_SEPARATOR}%(upstream:short)${BRANCH_FIELD_SEPARATOR}%(upstream:track)${BRANCH_FIELD_SEPARATOR}%(tree)${BRANCH_RECORD_SEPARATOR}`,
+    `--format=%(refname)${BRANCH_FIELD_SEPARATOR}%(refname:short)${BRANCH_FIELD_SEPARATOR}%(objectname:short)${BRANCH_FIELD_SEPARATOR}%(HEAD)${BRANCH_FIELD_SEPARATOR}%(subject)${BRANCH_FIELD_SEPARATOR}%(authorname)${BRANCH_FIELD_SEPARATOR}%(committerdate:iso-strict)${BRANCH_FIELD_SEPARATOR}%(upstream:short)${BRANCH_FIELD_SEPARATOR}%(upstream:track)${BRANCH_RECORD_SEPARATOR}`,
     "refs/heads",
     "refs/remotes",
   ];
@@ -121,14 +107,13 @@ function parseBranchRecordFields(record: string): BranchRecordFields | null {
     refName,
     shortName,
     subject: fields[4] ?? "",
-    treeOid: fields[9] ?? "",
   };
 }
 
 function branchSearchItemFromFields(
   fields: BranchRecordFields,
   isCurrent: boolean
-): BranchSearchItem | null {
+): GitDiffBranchOption | null {
   if (isCurrent) {
     return null;
   }
@@ -146,15 +131,13 @@ function branchSearchItemFromFields(
     pinReason: null,
     refName: fields.refName,
     subject: fields.subject || null,
-    tipTreeInCurrentHistory: null,
-    treeOid: TREE_OID_RE.test(fields.treeOid) ? fields.treeOid : null,
   };
 }
 
 function branchOptionFromRecord(
   record: string,
   current: null | string
-): { currentBranch: null | string; item: BranchSearchItem | null } {
+): { currentBranch: null | string; item: GitDiffBranchOption | null } {
   const fields = parseBranchRecordFields(record);
   if (fields === null) {
     return { currentBranch: null, item: null };
@@ -170,11 +153,11 @@ function branchOptionFromRecord(
 function parseBranchRecords(
   stdout: string,
   currentBranch: null | string | undefined
-): { currentBranch: null | string; items: BranchSearchItem[] } {
+): { currentBranch: null | string; items: GitDiffBranchOption[] } {
   const current = currentBranch?.trim() || null;
   let detectedCurrentBranch = current;
   const seen = new Set<string>();
-  const items: BranchSearchItem[] = [];
+  const items: GitDiffBranchOption[] = [];
 
   for (const record of stdout.split(BRANCH_RECORD_SEPARATOR)) {
     const { currentBranch: detected, item } = branchOptionFromRecord(
@@ -208,9 +191,9 @@ async function resolveDefaultBranchName(
 }
 
 function applyPins(
-  items: BranchSearchItem[],
+  items: GitDiffBranchOption[],
   defaultBranchName: null | string
-): BranchSearchItem[] {
+): GitDiffBranchOption[] {
   let defaultIndex = -1;
   if (defaultBranchName) {
     defaultIndex = items.findIndex(
@@ -230,7 +213,9 @@ function applyPins(
   if (!defaultItem) {
     return items;
   }
-  const next: BranchSearchItem[] = [{ ...defaultItem, pinReason: "default" }];
+  const next: GitDiffBranchOption[] = [
+    { ...defaultItem, pinReason: "default" },
+  ];
   for (const [index, item] of items.entries()) {
     if (index !== defaultIndex) {
       next.push(item);
@@ -240,11 +225,11 @@ function applyPins(
 }
 
 function groupBranchesByKind(
-  items: readonly BranchSearchItem[]
-): BranchSearchItem[] {
-  const pinned: BranchSearchItem[] = [];
-  const locals: BranchSearchItem[] = [];
-  const remotes: BranchSearchItem[] = [];
+  items: readonly GitDiffBranchOption[]
+): GitDiffBranchOption[] {
+  const pinned: GitDiffBranchOption[] = [];
+  const locals: GitDiffBranchOption[] = [];
+  const remotes: GitDiffBranchOption[] = [];
   for (const item of items) {
     if (item.pinReason !== null) {
       pinned.push(item);
@@ -291,83 +276,12 @@ async function computeAheadBehindFromCurrent(
   }
 }
 
-function parseCurrentHistoryTreeMatches(
-  output: string
-): Map<string, CurrentHistoryTreeMatch> {
-  const matches = new Map<string, CurrentHistoryTreeMatch>();
-  let commitsSince = 0;
-  for (const line of output.split("\n")) {
-    if (line.length === 0) {
-      continue;
-    }
-    const [tree = "", commit = "", subject = ""] = line.split(
-      BRANCH_FIELD_SEPARATOR
-    );
-    if (TREE_OID_RE.test(tree) && commit.length > 0 && !matches.has(tree)) {
-      matches.set(tree, {
-        commit,
-        commitsSince,
-        subject: subject || null,
-      });
-    }
-    commitsSince += 1;
-  }
-  return matches;
-}
-
-async function loadCurrentHistoryTreeMatches(
-  execGit: GitBranchSearchExec,
-  cwd: string,
-  diffMode: GitBranchSearchOptions["diffMode"]
-): Promise<Map<string, CurrentHistoryTreeMatch>> {
-  if (diffMode !== "mergeIntoCurrent") {
-    return new Map();
-  }
-  try {
-    const output = await execGit(
-      [
-        "log",
-        `--max-count=${TREE_HISTORY_SCAN_MAX}`,
-        `--format=%T${BRANCH_FIELD_SEPARATOR}%h${BRANCH_FIELD_SEPARATOR}%s`,
-        "HEAD",
-      ],
-      cwd,
-      { timeoutMs: TREE_HISTORY_TIMEOUT_MS }
-    );
-    return parseCurrentHistoryTreeMatches(output);
-  } catch {
-    return new Map();
-  }
-}
-
-function tipTreeInCurrentHistory(
-  item: BranchSearchItem,
-  currentHistoryTreeMatches: ReadonlyMap<string, CurrentHistoryTreeMatch>
-): GitBranchTipTreeInCurrentHistory | null {
-  if (item.treeOid === null) {
-    return null;
-  }
-  return currentHistoryTreeMatches.get(item.treeOid) ?? null;
-}
-
-function stripInternalBranchFields(
-  item: BranchSearchItem
-): GitDiffBranchOption {
-  const { treeOid: _treeOid, ...publicItem } = item;
-  return publicItem;
-}
-
 async function hydrateAheadBehindFromCurrent(
   execGit: GitBranchSearchExec,
   cwd: string,
-  items: readonly BranchSearchItem[],
+  items: readonly GitDiffBranchOption[],
   diffMode: GitBranchSearchOptions["diffMode"]
 ): Promise<GitDiffBranchOption[]> {
-  const currentHistoryTreeMatches = await loadCurrentHistoryTreeMatches(
-    execGit,
-    cwd,
-    diffMode
-  );
   const results = items.map((item) => ({ ...item }));
   const hydrateCount = Math.min(results.length, AHEAD_BEHIND_HYDRATE_MAX);
   let cursor = 0;
@@ -387,10 +301,6 @@ async function hydrateAheadBehindFromCurrent(
       );
       item.aheadFromCurrent = ahead;
       item.behindFromCurrent = behind;
-      item.tipTreeInCurrentHistory = tipTreeInCurrentHistory(
-        item,
-        currentHistoryTreeMatches
-      );
     }
   };
   await Promise.all(
@@ -399,7 +309,7 @@ async function hydrateAheadBehindFromCurrent(
       () => worker()
     )
   );
-  return results.map(stripInternalBranchFields);
+  return results;
 }
 
 export async function searchBranches(

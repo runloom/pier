@@ -13,6 +13,7 @@ import {
   EMPTY_EDITOR_SEARCH_STATE,
 } from "./code-mirror-search-state.ts";
 import type { FileEditorAdapterProps } from "./file-editor-adapter-types.ts";
+import { takeFilesPanelViewSeed } from "./files-panel-transfer-state.ts";
 import { FilesSearchBar } from "./files-search-bar.tsx";
 
 export function CodeMirrorEditor({
@@ -84,6 +85,13 @@ export function CodeMirrorEditor({
           parent,
           presentation: presentation(),
         });
+        const seed = takeFilesPanelViewSeed({ documentId });
+        if (seed?.selection || seed?.scroll) {
+          controller.applyViewSnapshot(editorSessionId, {
+            ...(seed.selection ? { selection: seed.selection } : {}),
+            ...(seed.scroll ? { scroll: seed.scroll } : {}),
+          });
+        }
         return;
       }
       // 仅当 view 仍挂在本 host 时销毁；已 reparent 到新 group 的 view 跳过。

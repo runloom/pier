@@ -156,6 +156,24 @@ export function accountsWidgetActions(
       id: "refresh",
       async invoke() {
         try {
+          // No active account → nothing to refresh; a success toast next to
+          // an error meter would be contradictory feedback.
+          const snapshot = await context.rpc.invoke<{
+            activeAccountId: string | null;
+          }>("accounts.snapshot", null);
+          if (!snapshot.activeAccountId) {
+            await context.dialogs.alert({
+              body: context.i18n.t(
+                "pier.grok.widget.noActiveAccount",
+                "No active account"
+              ),
+              title: context.i18n.t(
+                "pier.grok.widget.refreshFailed",
+                "Could not refresh Grok usage"
+              ),
+            });
+            return;
+          }
           await context.rpc.invoke("accounts.refreshUsage", { force: true });
           context.notifications.success(
             context.i18n.t(

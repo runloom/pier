@@ -7,6 +7,7 @@ const ROOT = process.cwd();
 const SOURCE_ROOTS = [
   join(ROOT, "src", "renderer"),
   join(ROOT, "src", "plugins", "builtin"),
+  join(ROOT, "packages", "plugin-claude", "src", "renderer"),
   join(ROOT, "packages", "plugin-codex", "src", "renderer"),
 ];
 const RAW_BUTTON_OWNERS = new Set([
@@ -23,9 +24,14 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/panel-kits/workbench/workbench-library-dialog.tsx",
   // 环境列表按钮由 Item asChild 提供视觉和交互原语。
   "src/renderer/pages/settings/components/environment-section.tsx",
+  // 技能项目列表同上。
+  "src/renderer/pages/settings/components/skills/skills-project-list.tsx",
+  // Composer attachment tile is a fixed 56×56 preview surface, not a control chrome button.
+  "src/renderer/panel-kits/terminal/terminal-composer-attachment-rail.tsx",
 ]);
 const ITEM_AS_CHILD_BUTTON_OWNERS = new Set([
   "src/renderer/pages/settings/components/environment-section.tsx",
+  "src/renderer/pages/settings/components/skills/skills-project-list.tsx",
 ]);
 const DETACHED_ITEM_HELPERS = new Map([
   [

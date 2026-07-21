@@ -20,6 +20,7 @@ import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.t
 const CONTENT_DIALOG_OVERLAY_ID = "app-content-dialog";
 
 function sizeClass(size: AppContentDialogLayer["size"]): string {
+  if (size === "xl") return "sm:max-w-5xl";
   if (size === "lg") return "sm:max-w-2xl";
   if (size === "sm") return "sm:max-w-sm";
   return "sm:max-w-md";

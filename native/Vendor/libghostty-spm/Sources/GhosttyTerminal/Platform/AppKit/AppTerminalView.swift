@@ -24,6 +24,10 @@
         // render an active cursor on creation.
         var appliedSurfaceFocus: Bool?
         open var focusesOnMouseDown = true
+        /// Host-forced DECTCEM hide while a web overlay owns the keyboard.
+        /// `internal` so `synchronizeHostFocusState` (in the +Lifecycle file)
+        /// can read it when deriving Ghostty focus.
+        var hostCursorHidden = false
         open var hostKeyboardActive = true {
             didSet {
                 guard hostKeyboardActive != oldValue else { return }
@@ -32,7 +36,32 @@
         }
 
         open var cursorSuppressed: Bool {
-            !hostKeyboardActive
+            !hostKeyboardActive || hostCursorHidden
+        }
+
+        /// Hide the hardware cursor while a Pier web overlay (agent composer)
+        /// owns the keyboard. Implemented as a renderer-level suppress
+        /// (Pier ghostty patch 0103) — immune to the TUI re-showing the
+        /// cursor via `CSI ?25h`, unlike a DECTCEM write into the VT parser.
+        /// `force` re-applies even when the cached state matches, covering
+        /// surfaces recreated underneath the cached flag.
+        public func setHostCursorHidden(_ hidden: Bool, force: Bool = false) {
+            let changed = hostCursorHidden != hidden
+            guard force || changed else { return }
+            hostCursorHidden = hidden
+            if changed {
+                NSLog(
+                    "[pier] setHostCursorHidden hidden=%@ hasSurface=%@",
+                    hidden ? "1" : "0",
+                    surface != nil ? "1" : "0"
+                )
+            }
+            core.setCursorSuppress(hidden)
+            // 转场后重新派生 Ghostty focus：hostCursorHidden 生效后
+            // 让 focus=true，避免上一个 apply 遗留的 focus=false 画出 hollow。
+            if changed {
+                synchronizeHostFocusState()
+            }
         }
 
         open weak var delegate: (any TerminalSurfaceViewDelegate)? {

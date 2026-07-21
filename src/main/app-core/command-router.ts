@@ -29,8 +29,10 @@ import {
   executePanelOpenCommand,
   executeTerminalOpenCommand,
 } from "./panel-commands.ts";
+import { executePanelTransferCommand } from "./panel-transfer-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
 import { executePluginCommand } from "./plugin-commands.ts";
+import { executeProjectSkillsCommand } from "./project-skills-commands.ts";
 import {
   executeRunCancelCommand,
   executeRunListCommand,
@@ -123,9 +125,17 @@ async function executeAppStateCommand(
       return success(requestId, await services.appUpdates.check());
     case "appUpdate.download":
       return success(requestId, await services.appUpdates.download());
-    case "appUpdate.quitAndInstall":
-      services.appUpdates.quitAndInstall();
+    case "appUpdate.quitAndInstall": {
+      const status = services.appUpdates.getStatus();
+      if (status.state !== "downloaded") {
+        return success(requestId, status);
+      }
+      // 不直接调 updater：必须先走 before-quit flush（含 layout），
+      // 否则更新安装会丢掉未落盘的工作区布局。
+      const { performProdQuitAndInstall } = await import("./app-relaunch.ts");
+      await performProdQuitAndInstall();
       return success(requestId, services.appUpdates.getStatus());
+    }
     case "app.relaunch": {
       const { isDevRuntime } = await import("../runtime-mode.ts");
       const { performDevSoftRelaunch, performProdRelaunch } = await import(
@@ -358,6 +368,9 @@ async function executeCommandByDomain(
     (cmd: PierCommand) =>
       executeWindowWorkspaceCommand(requestId, cmd, services),
     (cmd: PierCommand) => executePanelCommand(requestId, cmd, services),
+    (cmd: PierCommand) =>
+      executePanelTransferCommand(requestId, cmd, services, context),
+    (cmd: PierCommand) => executeProjectSkillsCommand(requestId, cmd, services),
   ];
   for (const executor of executors) {
     const result = await executor(command);

@@ -1,4 +1,7 @@
-import { partitionPeerTargets } from "@pier/plugin-api/peer-sync";
+import {
+  notifyPeerSyncFailures as notifySharedPeerSyncFailures,
+  partitionPeerTargets,
+} from "@pier/plugin-api/peer-sync";
 import type {
   ExternalRendererPluginContext,
   RendererPluginContentDialogRenderProps,
@@ -59,6 +62,23 @@ export function protocolTargetsFor(
     : ALL_SYNC_TARGETS.filter((target) => target !== "pi");
 }
 
+/**
+ * Surface partial peer-sync failures from an `accounts.select` result.
+ * Thin wrapper over the shared helper with this plugin's i18n prefix.
+ */
+export function notifyPeerSyncFailures(
+  context: ExternalRendererPluginContext,
+  t: Translate,
+  selectResult: unknown
+): void {
+  notifySharedPeerSyncFailures({
+    context,
+    i18nPrefix: "pier.grok",
+    selectResult,
+    t,
+  });
+}
+
 function SwitchConfirmContent({
   accountKind,
   availability,
@@ -77,8 +97,11 @@ function SwitchConfirmContent({
     availability
   );
   const showSyncSection = available.length > 0;
+  // Switch defaults to unchecked: overwriting credentials in other tools the
+  // user may have deliberately pointed at a different account must be opt-in.
+  // The dedicated sync action is explicit intent, so it preselects all.
   const [syncTargets, setSyncTargets] = useState<Set<CrossToolSyncTarget>>(
-    () => new Set(available)
+    () => (mode === "sync" ? new Set(available) : new Set())
   );
 
   function toggleTarget(target: CrossToolSyncTarget): void {

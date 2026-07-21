@@ -44,6 +44,7 @@ const mocks = vi.hoisted(() => {
         return "w-1";
       }
     ),
+    destroyForTransfer: vi.fn(async () => undefined),
     createWindowRecord: vi.fn(async () => ({ id: "record-new" })),
     flushPluginSettings: vi.fn(async () => undefined),
     flushPluginState: vi.fn(async () => undefined),
@@ -109,6 +110,7 @@ const mocks = vi.hoisted(() => {
     readMostRecentClosedWindowRecordId: vi.fn(async () => "record-closed"),
     readOpenWindowRecordIds: vi.fn(async () => ["record-open-1"]),
     readPreferredOpenWindowRecordIds: vi.fn(async () => ["record-open-1"]),
+    readWindowRecordLayout: vi.fn(async () => null as unknown),
     resetLiveWindowCount: () => {
       liveWindowContexts.length = 0;
     },
@@ -134,6 +136,7 @@ vi.mock("@main/state/window-record-state.ts", () => ({
   readMostRecentClosedWindowRecordId: mocks.readMostRecentClosedWindowRecordId,
   readOpenWindowRecordIds: mocks.readOpenWindowRecordIds,
   readPreferredOpenWindowRecordIds: mocks.readPreferredOpenWindowRecordIds,
+  readWindowRecordLayout: mocks.readWindowRecordLayout,
 }));
 
 vi.mock("@main/state/terminal-session-state.ts", () => ({
@@ -165,6 +168,7 @@ vi.mock("@main/windows/window-manager.ts", () => ({
   windowManager: {
     close: mocks.close,
     create: mocks.create,
+    destroyForTransfer: mocks.destroyForTransfer,
     focus: mocks.focus,
     get: mocks.get,
     getAll: mocks.getAll,
@@ -317,11 +321,12 @@ describe("WindowService", () => {
       "window-close",
       expect.stringMatching(/^window-close:main:/)
     );
+    // Session/detach scope = window record id (store keyed by record UUID).
     expect(armDetaching).toHaveBeenCalledWith({
       electronWindowId: "1",
-      recordId: "main",
+      recordId: "record-1",
     });
-    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("main");
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-1");
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
@@ -359,14 +364,14 @@ describe("WindowService", () => {
     );
     expect(armDetaching).toHaveBeenCalledWith({
       electronWindowId: "1",
-      recordId: "main",
+      recordId: "record-main",
     });
     expect(armDetaching).toHaveBeenCalledWith({
       electronWindowId: "2",
-      recordId: "w-1",
+      recordId: "record-w-1",
     });
-    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("main");
-    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("w-1");
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-main");
+    expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-w-1");
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
@@ -619,5 +624,117 @@ describe("WindowService", () => {
     expect(mocks.markWindowRecordClosed).not.toHaveBeenCalledWith(
       "record-focused"
     );
+  });
+
+  it("focus delegates to windowManager.focus", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    const service = createWindowService();
+    service.focus("w-focus-target");
+    expect(mocks.focus).toHaveBeenCalledExactlyOnceWith("w-focus-target");
+  });
+
+  it("runExclusive provides a transition lease", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    const service = createWindowService();
+    const seen: symbol[] = [];
+    await service.runExclusive(async (lease) => {
+      seen.push(lease.token);
+      return "ok";
+    });
+    expect(seen).toHaveLength(1);
+  });
+
+  it("createForTransfer and closeAfterTransfer require the active lease", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    mocks.create.mockImplementationOnce(() => "w-transfer");
+    // ensure destroyForTransfer exists on mock
+    const service = createWindowService();
+    const fakeLease = { token: Symbol("foreign") };
+    await expect(
+      service.createForTransfer(fakeLease, {
+        bounds: { height: 800, width: 1200, x: 10, y: 10 },
+        transferId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      })
+    ).rejects.toThrow(/lease required/);
+
+    await service.runExclusive(async (lease) => {
+      const created = await service.createForTransfer(lease, {
+        bounds: { height: 800, width: 1200, x: 10, y: 10 },
+        transferId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+      });
+      expect(created.windowId).toBeTruthy();
+      expect(mocks.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          showInactive: true,
+          startup: {
+            kind: "panel-transfer",
+            transferId: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+          },
+        })
+      );
+    });
+  });
+
+  it("closeAfterTransfer no-ops when source layout still has panels", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    mocks.setLiveWindowRecords(["record-source"]);
+    mocks.readWindowRecordLayout.mockResolvedValueOnce({
+      panels: { "panel-keep": { id: "panel-keep" } },
+    });
+    const service = createWindowService();
+    await service.runExclusive(async (lease) => {
+      await service.closeAfterTransfer(
+        lease,
+        "main",
+        "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+      );
+    });
+    expect(mocks.markWindowRecordClosed).not.toHaveBeenCalled();
+    expect(mocks.destroyForTransfer).not.toHaveBeenCalled();
+  });
+
+  it("closeAfterTransfer destroys only when source layout is empty", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    mocks.setLiveWindowRecords(["record-source"]);
+    mocks.readWindowRecordLayout.mockResolvedValueOnce({ panels: {} });
+    const service = createWindowService();
+    await service.runExclusive(async (lease) => {
+      await service.closeAfterTransfer(
+        lease,
+        "main",
+        "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+      );
+    });
+    expect(mocks.markWindowRecordClosed).toHaveBeenCalledWith("record-source");
+    expect(mocks.destroyForTransfer).toHaveBeenCalledWith(
+      "main",
+      "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb"
+    );
+  });
+
+  it("closeOpenWindowRecord marks record closed and flushes without lease", async () => {
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+    const service = createWindowService();
+    await service.closeOpenWindowRecord("record-orphan-internal");
+    expect(mocks.markWindowRecordClosed).toHaveBeenCalledWith(
+      "record-orphan-internal"
+    );
+    expect(mocks.flushWindowRecordState).toHaveBeenCalled();
+    expect(mocks.destroyForTransfer).not.toHaveBeenCalled();
+
+    await service.closeOpenWindowRecord("pending:transfer-id");
+    expect(mocks.markWindowRecordClosed).toHaveBeenCalledTimes(1);
   });
 });

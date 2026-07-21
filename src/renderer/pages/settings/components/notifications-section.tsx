@@ -5,12 +5,15 @@ import { FieldSet } from "@pier/ui/field.tsx";
 import {
   AGENT_ATTENTION_COOLDOWN_MS,
   type AgentAttentionCooldownMs,
-  type AgentAttentionSettings,
+  TURN_NOTIFY_MODES,
+  type TurnNotifyMode,
 } from "@shared/contracts/agent-attention.ts";
 import type { SystemNotificationPermissionSnapshot } from "@shared/contracts/notification.ts";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
+import { patchAttention } from "@/pages/settings/components/attention-patch.ts";
+import { NotificationSoundBlock } from "@/pages/settings/components/notification-sound-block.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";
 import { SwitchRow } from "@/pages/settings/components/rows/switch-row.tsx";
 import { useAgentAttentionPreferencesStore } from "@/stores/agent-attention-preferences.store.ts";
@@ -23,20 +26,7 @@ function usePermissionSnapshot(): SystemNotificationPermissionSnapshot | null {
 
   useEffect(() => {
     let cancelled = false;
-    window.pier.notifications
-      .getPermissionStatus()
-      .then((next) => {
-        if (!cancelled) {
-          setSnapshot(next);
-        }
-      })
-      .catch(() => undefined);
-
-    const off = window.pier.notifications.onPermissionChanged((next) => {
-      setSnapshot(next);
-    });
-
-    const onFocus = () => {
+    const refresh = () => {
       window.pier.notifications
         .getPermissionStatus()
         .then((next) => {
@@ -46,35 +36,21 @@ function usePermissionSnapshot(): SystemNotificationPermissionSnapshot | null {
         })
         .catch(() => undefined);
     };
-    window.addEventListener("focus", onFocus);
+
+    refresh();
+    const off = window.pier.notifications.onPermissionChanged((next) => {
+      setSnapshot(next);
+    });
+    window.addEventListener("focus", refresh);
 
     return () => {
       cancelled = true;
       off();
-      window.removeEventListener("focus", onFocus);
+      window.removeEventListener("focus", refresh);
     };
   }, []);
 
   return snapshot;
-}
-
-async function patchAttention(
-  patch: Partial<AgentAttentionSettings>,
-  setAgentAttention: (
-    next:
-      | AgentAttentionSettings
-      | ((current: AgentAttentionSettings) => AgentAttentionSettings)
-  ) => Promise<void>,
-  failedTitle: string
-): Promise<void> {
-  try {
-    await setAgentAttention((current) => ({ ...current, ...patch }));
-  } catch (err) {
-    await showAppAlert({
-      body: err instanceof Error ? err.message : String(err),
-      title: failedTitle,
-    });
-  }
 }
 
 function PermissionBanner({
@@ -170,9 +146,24 @@ function PolicyCard({
               ).catch(() => undefined);
             }}
           />
-          <div className="text-muted-foreground text-sm">
-            {t("settings.notifications.waitingHint")}
-          </div>
+          <SelectRow<TurnNotifyMode>
+            description={t("settings.notifications.turnNotifyModeDesc")}
+            id="settings-attention-turn-notify-mode"
+            label={t("settings.notifications.turnNotifyMode")}
+            onChange={(next) => {
+              patchAttention(
+                { turnNotifyMode: next },
+                setAgentAttention,
+                failedTitle
+              ).catch(() => undefined);
+            }}
+            options={TURN_NOTIFY_MODES.map((mode) => ({
+              label: t(`settings.notifications.turnNotifyModeOptions.${mode}`),
+              value: mode,
+            }))}
+            triggerWidth="w-[200px]"
+            value={agentAttention.turnNotifyMode}
+          />
           <SwitchRow
             checked={agentAttention.enableErrorAttention}
             description={t("settings.notifications.errorDesc")}
@@ -215,6 +206,7 @@ function PolicyCard({
             triggerWidth="w-[160px]"
             value={String(agentAttention.cooldownMs)}
           />
+          <NotificationSoundBlock />
         </FieldSet>
       </CardContent>
     </Card>

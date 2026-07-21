@@ -4,6 +4,7 @@ import {
   type GitReviewGroup,
   type GitReviewIndexResult,
   type GitReviewScope,
+  type GitReviewTarget,
   gitReviewFailureSchema,
   gitReviewIndexOkSchema,
   gitReviewRelativePathSchema,
@@ -34,6 +35,12 @@ import {
 } from "./git-review-index-execution.ts";
 import { GitReviewNumstatParser } from "./git-review-index-numstat-parser.ts";
 import { GitReviewPorcelainV2Parser } from "./git-review-index-primary-parser.ts";
+import {
+  filterCommittedPrimaryEntries,
+  GitReviewCommittedRawParser,
+  type GitReviewRangeBounds,
+  resolveGitReviewRangeBounds,
+} from "./git-review-index-range.ts";
 import {
   applyScopedMovements,
   GitReviewScopedMovementParser,
@@ -83,6 +90,8 @@ export interface GitReviewIndexMetadata {
   readonly canonicalRoot: string;
   readonly headOid: string | null;
   readonly indexRevision: string;
+  /** commit/branch 目标的不可变 range 边界；uncommitted 为 null。 */
+  readonly rangeBounds: GitReviewRangeBounds | null;
 }
 
 /**
@@ -124,12 +133,21 @@ export class GitReviewIndexReader {
       const canonicalRoot = gitReviewRootPathSchema.parse(
         identity.canonicalRoot
       );
-      const read = await this.#readUncommitted(
-        { ...identity, canonicalRoot },
-        budget,
-        signal,
-        paths
-      );
+      const read =
+        scope.target.kind === "uncommitted"
+          ? await this.#readUncommitted(
+              { ...identity, canonicalRoot },
+              budget,
+              signal,
+              paths
+            )
+          : await this.#readRange(
+              { ...identity, canonicalRoot },
+              budget,
+              signal,
+              paths,
+              scope.target
+            );
       const result = gitReviewIndexOkSchema.parse({
         entries: read.assembled.entries,
         kind: "ok",
@@ -143,8 +161,9 @@ export class GitReviewIndexReader {
           headOid: identity.headOid,
           indexRevision: bindGitReviewIndexRevision(
             read.assembled.revision,
-            identity.headOid
+            read.rangeBounds?.headOid ?? identity.headOid
           ),
+          rangeBounds: read.rangeBounds ?? null,
         }),
         resolvedEntries: read.assembled.resolvedEntries,
         result,
@@ -154,6 +173,62 @@ export class GitReviewIndexReader {
     }
   }
 
+  /**
+   * commit/branch 目标的 range diff 读取。始终跑 full-range raw(保证 rename
+   * 检测与 index 请求一致),document 请求的 paths 通过结果过滤实现。
+   */
+  async #readRange(
+    identity: GitReviewRepositoryIdentity,
+    budget: GitReviewIndexExecutionBudget,
+    signal: AbortSignal | undefined,
+    paths: readonly string[] | undefined,
+    target: Exclude<GitReviewTarget, { kind: "uncommitted" }>
+  ): Promise<{
+    assembled: AssembledGitReviewIndex;
+    rangeBounds: GitReviewRangeBounds;
+  }> {
+    const rangeBounds = await resolveGitReviewRangeBounds(
+      this.#execGitRaw,
+      {
+        cwd: identity.canonicalRoot,
+        headOid: identity.headOid,
+        objectFormat: identity.objectFormat,
+        target,
+      },
+      { budget, signal }
+    );
+    const parser = new GitReviewCommittedRawParser(rangeBounds);
+    await runGitReviewIndexParser(
+      this.#execGitRaw,
+      [
+        "--literal-pathspecs",
+        "diff",
+        ...DIFF_MACHINE_ARGS,
+        "--raw",
+        "--no-abbrev",
+        "-z",
+        rangeBounds.baseOid,
+        rangeBounds.headOid,
+        "--",
+      ],
+      identity.canonicalRoot,
+      budget,
+      signal,
+      (record) => parser.push(record)
+    );
+    let primary = parser.finish();
+    if (paths !== undefined) {
+      primary = filterCommittedPrimaryEntries(primary, paths);
+    }
+    assertGitReviewIndexExecutionActive(budget, signal);
+    const assembled = assembleGitReviewIndex({
+      primary,
+      statsByGroup: {},
+    });
+    assertGitReviewIndexExecutionActive(budget, signal);
+    return { assembled, rangeBounds };
+  }
+
   async #readUncommitted(
     identity: GitReviewRepositoryIdentity,
     budget: GitReviewIndexExecutionBudget,
@@ -161,6 +236,7 @@ export class GitReviewIndexReader {
     paths: readonly string[] | undefined
   ): Promise<{
     assembled: AssembledGitReviewIndex;
+    rangeBounds?: undefined;
   }> {
     const readPrimary = async (
       selectedPaths: readonly string[] | undefined

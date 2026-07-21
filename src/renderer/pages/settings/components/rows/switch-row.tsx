@@ -10,6 +10,7 @@ import type { ReactNode } from "react";
 export interface SwitchRowProps {
   checked: boolean;
   description?: ReactNode;
+  disabled?: boolean;
   id: string;
   label: string;
   onCheckedChange: (checked: boolean) => void;
@@ -18,6 +19,7 @@ export interface SwitchRowProps {
 export function SwitchRow({
   checked,
   description,
+  disabled,
   id,
   label,
   onCheckedChange,
@@ -28,7 +30,12 @@ export function SwitchRow({
         <FieldLabel htmlFor={id}>{label}</FieldLabel>
         {description && <FieldDescription>{description}</FieldDescription>}
       </FieldContent>
-      <Switch checked={checked} id={id} onCheckedChange={onCheckedChange} />
+      <Switch
+        checked={checked}
+        disabled={disabled}
+        id={id}
+        onCheckedChange={onCheckedChange}
+      />
     </Field>
   );
 }

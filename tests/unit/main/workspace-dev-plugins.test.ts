@@ -160,6 +160,88 @@ describe("workspace dev plugin isolation", () => {
     expect(applyEffective).toHaveBeenCalledTimes(1);
   });
 
+  it("re-pins when the workspace package version bumps past the override", async () => {
+    const cwd = await mkdtemp(join(tmpdir(), "pier-ws-cwd-"));
+    const packageDir = join(cwd, "packages/plugin-claude");
+    await mkdir(join(packageDir, "dist"), { recursive: true });
+    await writeFile(
+      join(packageDir, "plugin.json"),
+      JSON.stringify({ id: "pier.claude", version: "1.0.2" })
+    );
+    await writeFile(join(packageDir, "dist/main.js"), "export {}");
+
+    const index: ManagedPluginInstallIndex = {
+      plugins: {
+        "pier.claude": {
+          activeVersion: "1.0.0",
+          devOverride: {
+            path: packageDir,
+            registeredAt: 1,
+            version: "1.0.0",
+          },
+          effectiveAtStartup: {
+            enabled: true,
+            sourceKind: "devOverride",
+            version: "1.0.0",
+          },
+          enabled: true,
+          id: "pier.claude",
+          installedVersions: {
+            "1.0.0": {
+              contentHash: "workspace-seed:pier.claude@1.0.0",
+              installedAt: 1,
+              packageUrl: "workspace://pier.claude/1.0.0",
+              sha256: "workspace-seed:pier.claude@1.0.0",
+            },
+          },
+          lastKnownGoodVersion: null,
+          pendingRestart: null,
+          pendingUpdate: null,
+          source: { kind: "devOverride" },
+        },
+      },
+      version: 1,
+    };
+
+    const setDevOverride = vi.fn(async (id: string, path: string) => {
+      index.plugins[id] = {
+        ...index.plugins[id]!,
+        activeVersion: "1.0.2",
+        devOverride: {
+          path,
+          registeredAt: 2,
+          version: "1.0.2",
+        },
+      };
+      return { ok: true as const, pluginId: id, requiresRestart: true };
+    });
+    const applyEffective = vi.fn(async () => {
+      index.plugins["pier.claude"] = {
+        ...index.plugins["pier.claude"]!,
+        effectiveAtStartup: {
+          enabled: true,
+          sourceKind: "devOverride",
+          version: "1.0.2",
+        },
+      };
+    });
+
+    const result = await syncWorkspaceDevPluginOverrides({
+      applyEffective,
+      cwd,
+      getIndex: () => index,
+      setDevOverride,
+      specs: [{ devPackageDir: "packages/plugin-claude", id: "pier.claude" }],
+    });
+
+    expect(result.applied).toEqual(["pier.claude"]);
+    expect(setDevOverride).toHaveBeenCalledWith("pier.claude", packageDir);
+    expect(applyEffective).toHaveBeenCalledTimes(1);
+    expect(index.plugins["pier.claude"]?.effectiveAtStartup?.version).toBe(
+      "1.0.2"
+    );
+  });
+
   it("skips when setDevOverride rejects an unready custom package", async () => {
     const cwd = await mkdtemp(join(tmpdir(), "pier-ws-cwd-"));
     const packageDir = join(cwd, "packages/plugin-grok");

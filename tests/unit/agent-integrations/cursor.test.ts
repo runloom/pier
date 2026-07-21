@@ -1,8 +1,15 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
+  agentHooksDir,
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+} from "../../../src/main/services/agents/agent-hooks-install.ts";
+import {
+  CURSOR_EVENTS,
   installCursorHooks,
   uninstallCursorHooks,
   withoutPierCursorHooks,
@@ -17,11 +24,6 @@ const ALL_EVENTS = [
   "preToolUse",
   "postToolUse",
   "postToolUseFailure",
-  "beforeShellExecution",
-  "beforeMCPExecution",
-  "afterShellExecution",
-  "afterMCPExecution",
-  "afterAgentResponse",
   "subagentStart",
   "subagentStop",
   "stop",
@@ -39,15 +41,100 @@ function hookCommands(settings: Record<string, unknown>): string[] {
 }
 
 describe("withPierCursorHooks", () => {
-  it("为全部 14 个 cursor hook 事件各注入一条 pier 命令", () => {
+  it("为全部 9 个 cursor hook 事件各注入一条 pier 命令", () => {
     const next = withPierCursorHooks({});
     const hooks = next.hooks as Record<string, Array<{ command: string }>>;
     for (const evt of ALL_EVENTS) {
       expect(hooks[evt], evt).toHaveLength(1);
     }
+    expect(Object.keys(hooks).sort()).toEqual([...ALL_EVENTS].sort());
     for (const cmd of hookCommands(next)) {
       expect(cmd).toContain(MARK);
     }
+  });
+
+  it("不安装 afterAgentResponse——回合尾与 stop 竞态, 会把终态拉回 processing", () => {
+    const next = withPierCursorHooks({});
+    const hooks = next.hooks as Record<string, unknown>;
+    expect(hooks.afterAgentResponse).toBeUndefined();
+    expect(
+      CURSOR_EVENTS.some((event) => event.nativeEvent === "afterAgentResponse")
+    ).toBe(false);
+  });
+
+  it("不安装 shell/MCP 闸门事件——无 tool_use_id 无法配对, 拒绝执行时匿名计数滞留", () => {
+    const hooks = withPierCursorHooks({}).hooks as Record<string, unknown>;
+    for (const nativeEvent of [
+      "beforeShellExecution",
+      "beforeMCPExecution",
+      "afterShellExecution",
+      "afterMCPExecution",
+    ]) {
+      expect(hooks[nativeEvent], nativeEvent).toBeUndefined();
+      expect(
+        CURSOR_EVENTS.some((event) => event.nativeEvent === nativeEvent),
+        nativeEvent
+      ).toBe(false);
+    }
+    // 工具生命周期由带 tool_use_id 的 preToolUse/postToolUse(-Failure) 覆盖
+    expect(
+      CURSOR_EVENTS.find((event) => event.nativeEvent === "preToolUse")
+        ?.pierEvent
+    ).toBe("ToolStart");
+  });
+
+  it("stop 命令按 payload status 分发可信终态, 未知值回落 Stop", () => {
+    const hooks = withPierCursorHooks({}).hooks as Record<
+      string,
+      Array<{ command: string }>
+    >;
+    const stopCommand = hooks.stop?.[0]?.command ?? "";
+    expect(stopCommand).toContain('completed) _pier_event="TurnCompleted"');
+    expect(stopCommand).toContain('aborted) _pier_event="TurnInterrupted"');
+    expect(stopCommand).toContain('error) _pier_event="error"');
+    expect(stopCommand).toContain('*) _pier_event="Stop"');
+    expect(stopCommand).toContain('"$_pier_event" "stop"');
+  });
+
+  it("stop 命令经真实 /bin/sh + emit 执行, 三种 status 与缺省各落正确事件", async () => {
+    const userData = await mkdtemp(join(tmpdir(), "pier-cursor-e2e-"));
+    await installAgentHooksEmitScript(userData);
+    const dir = agentHooksDir(userData);
+    const logPath = eventsJsonlPath(userData);
+    const hooks = withPierCursorHooks({}).hooks as Record<
+      string,
+      Array<{ command: string }>
+    >;
+    const stopCommand = hooks.stop?.[0]?.command ?? "";
+    const runStop = (payload: string): void => {
+      const result = spawnSync("/bin/sh", ["-c", stopCommand], {
+        env: {
+          ...process.env,
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: dir,
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+        },
+        input: payload,
+      });
+      expect(result.status).toBe(0);
+    };
+    runStop('{"session_id":"c1","status":"completed","loop_count":0}');
+    runStop('{"session_id":"c1","status":"aborted"}');
+    runStop('{"session_id":"c1","status":"error"}');
+    runStop('{"session_id":"c1"}');
+    const lines = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => JSON.parse(line));
+    expect(
+      lines.map((entry) => [entry.event, entry.nativeEvent, entry.sessionId])
+    ).toEqual([
+      ["TurnCompleted", "stop", "c1"],
+      ["TurnInterrupted", "stop", "c1"],
+      ["error", "stop", "c1"],
+      ["Stop", "stop", "c1"],
+    ]);
   });
 
   it("schema 形状：command 直接在定义对象上（非嵌套 hooks 数组）", () => {
@@ -126,6 +213,27 @@ describe("install/uninstallCursorHooks (文件 IO)", () => {
     await uninstallCursorHooks(path);
     const cleaned = JSON.parse(await readFile(path, "utf8"));
     expect(hookCommands(cleaned)).toHaveLength(0);
+  });
+
+  it("重装剔除上一版遗留的 pier 事件条目（如 afterAgentResponse）", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-cursor-test-"));
+    const path = join(dir, "hooks.json");
+    const legacy = {
+      hooks: {
+        afterAgentResponse: [
+          { command: `[ -x "\${${MARK}}/emit" ] && old || true`, timeout: 10 },
+        ],
+        stop: [{ command: "say done" }],
+      },
+      version: 1,
+    };
+    await writeFile(path, JSON.stringify(legacy), "utf8");
+    await installCursorHooks(path);
+    const installed = JSON.parse(await readFile(path, "utf8"));
+    expect(installed.hooks.afterAgentResponse).toBeUndefined();
+    expect(
+      installed.hooks.stop.map((entry: { command: string }) => entry.command)
+    ).toContain("say done");
   });
 
   it("已损坏的 hooks.json 不被覆盖（安装静默放弃）", async () => {

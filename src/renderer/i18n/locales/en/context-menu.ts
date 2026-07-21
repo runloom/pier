@@ -15,6 +15,7 @@ export const contextMenu = {
     equalizePanels: "Equalize Panels",
     find: "Find",
     newTerminal: "New Terminal",
+    openRichInput: "Toggle Rich Input",
     paste: "Paste",
     rerunTask: "Rerun Task",
     selectAll: "Select All",

@@ -8,6 +8,10 @@ export {
   isTimeoutOrAbortError,
   mergeAbortSignals,
 } from "./abort-signals.ts";
+export {
+  type SuppressedDriftWatchOptions,
+  startSuppressedDriftWatch,
+} from "./drift-watch.ts";
 export { createInflightCoalescer } from "./inflight-coalescer.ts";
 export {
   assertMultiHopBudget,
@@ -28,4 +32,10 @@ export {
   type UsageCacheEntryBase,
   type UsageResultBase,
 } from "./usage-cache.ts";
+export {
+  createUsagePollingRegistry,
+  USAGE_POLLING_HEARTBEAT_MS,
+  USAGE_POLLING_LEASE_TTL_MS,
+  type UsagePollingRegistry,
+} from "./usage-polling-registry.ts";
 export { withOneRetry } from "./with-one-retry.ts";

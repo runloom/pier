@@ -33,12 +33,12 @@ const AUTH_ERROR_CODES = new Set([
   "token_expired",
   "unauthorized",
   "unauthenticated",
-  "permissiondenied",
-  "permission_denied",
   "no_auth_context",
   "noauthcontext",
 ]);
 
+// permission_denied means "authenticated but not allowed" — telling the user
+// to re-login would not help, so it classifies as access, not auth.
 const ACCESS_ERROR_CODES = new Set([
   "access_denied",
   "insufficient_permissions",
@@ -46,6 +46,8 @@ const ACCESS_ERROR_CODES = new Set([
   "not_entitled",
   "entitlement_required",
   "forbidden",
+  "permissiondenied",
+  "permission_denied",
 ]);
 
 function extractStructuredErrorTokens(bodyText: string): string[] {
@@ -75,8 +77,6 @@ export function isAuthFailureMessage(message: string): boolean {
     lower.includes("no auth context") ||
     lower.includes("unauthorized") ||
     lower.includes("unauthenticated") ||
-    lower.includes("permissiondenied") ||
-    lower.includes("permission_denied") ||
     /\b401\b/.test(lower)
   );
 }
@@ -90,7 +90,9 @@ function isAccessFailureMessage(message: string): boolean {
     lower.includes("insufficient permissions") ||
     lower.includes("insufficient_scope") ||
     lower.includes("not entitled") ||
-    lower.includes("entitlement")
+    lower.includes("entitlement") ||
+    lower.includes("permissiondenied") ||
+    lower.includes("permission_denied")
   );
 }
 

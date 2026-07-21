@@ -8,10 +8,13 @@ import type {
   CreateTerminalResult,
 } from "@shared/contracts/terminal.ts";
 import { resolveAgentResumeLaunch } from "../services/agents/agent-resume-adapters.ts";
+import { getTerminalPanelTransfer } from "../services/panel-transfer/terminal-panel-transfer.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
+import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-gate.ts";
 import type { TaskService } from "../services/tasks/task-service-types.ts";
 import {
   clearTerminalPanelAgent,
+  ensureTerminalPanelSession,
   readTerminalPanelSession,
 } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
@@ -38,10 +41,53 @@ import type { RegisteredTerminalTaskLifecycle } from "./terminal-task-lifecycle-
 import type { TaskOutputTerminalBindings } from "./terminal-task-output-bindings.ts";
 import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
+function isStringRecord(value: unknown): value is Record<string, string> {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    Object.values(value).every((entry) => typeof entry === "string")
+  );
+}
+
+type TerminalTransferCreateAction = "proceed" | "skip" | "adopt";
+
+/**
+ * Panel-transfer create disposition for this window/panel.
+ * Call again after any await (skills gate) — lease state can change mid-flight.
+ */
+function resolveTerminalTransferCreateAction(
+  transfer: ReturnType<typeof getTerminalPanelTransfer>,
+  runtimeWindowId: string | undefined,
+  panelId: string
+): TerminalTransferCreateAction {
+  if (!(transfer && runtimeWindowId)) {
+    return "proceed";
+  }
+  if (transfer.shouldSkipTargetCreate(runtimeWindowId, panelId)) {
+    return "skip";
+  }
+  if (transfer.shouldAdoptMovedSurface(runtimeWindowId, panelId)) {
+    return "adopt";
+  }
+  return "proceed";
+}
+
+async function abandonAuthorizedSpawnAttempt(args: {
+  attemptId: string | null;
+  launchGate: ManagedAgentLaunchGate | null | undefined;
+}): Promise<void> {
+  const { attemptId, launchGate } = args;
+  if (!(attemptId && launchGate)) {
+    return;
+  }
+  await launchGate.recordSpawnResult(attemptId, false).catch(() => undefined);
+}
+
 export async function handleTerminalCreate(args: {
   addon: NativeAddon | null;
   createArgs: CreateTerminalArgs;
   loadError: string | null;
+  launchGate?: ManagedAgentLaunchGate | null | undefined;
   processEnvironment: ProcessEnvironmentService;
   recordAgentLaunch?:
     | ((agentId: AgentKind) => Promise<unknown> | unknown)
@@ -55,6 +101,7 @@ export async function handleTerminalCreate(args: {
     addon,
     createArgs,
     loadError,
+    launchGate,
     processEnvironment,
     recordAgentLaunch,
     taskLifecycle,
@@ -181,20 +228,180 @@ export async function handleTerminalCreate(args: {
       }
     );
     const nativePanelId = toNativePanelKey(win, createArgs.panelId);
-    const ok = addon.createTerminal(
-      handle,
-      nativePanelId,
-      createArgs.frame,
-      createArgs.font.family,
-      createArgs.font.size,
-      withPanelStatusEnv(
-        launchForNative,
-        createArgs.panelId,
-        String(win.id),
-        foregroundActivityService.hookEnv()
-      ),
-      lifecycleId
+    const transfer = getTerminalPanelTransfer();
+    const runtimeWindowId = findInternalWindowId(win) ?? undefined;
+    const transferBeforeGate = resolveTerminalTransferCreateAction(
+      transfer,
+      runtimeWindowId,
+      createArgs.panelId
     );
+    if (transferBeforeGate === "skip") {
+      // Target is inert during lease — do not create a competing surface.
+      return { ok: true };
+    }
+    if (transferBeforeGate === "adopt") {
+      // Surface already moved under this native key — register focus only.
+      terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
+      return { ok: true };
+    }
+    // Managed agent launches must pass project-skills gate before native spawn.
+    // Project identity comes from the main-resolved native launch cwd —
+    // never treat renderer createArgs.context as final authority (v8 §5.2).
+    let spawnedUnderAttemptId: string | null = null;
+    if (launchGate && launch.launchAgentId) {
+      const launchSurface = {
+        kind: "terminal" as const,
+        panelId: createArgs.panelId,
+        ...(windowId === undefined ? {} : { windowId }),
+      };
+      const launchEnvironmentCandidate =
+        launchForNative && "env" in launchForNative
+          ? launchForNative.env
+          : undefined;
+      const launchEnvironment = isStringRecord(launchEnvironmentCandidate)
+        ? launchEnvironmentCandidate
+        : undefined;
+      const launchSpecification = {
+        ...(launchForNative?.command === undefined
+          ? {}
+          : { command: launchForNative.command }),
+        ...(launchForNative?.cwd === undefined
+          ? {}
+          : { cwd: launchForNative.cwd }),
+        ...(launchEnvironment === undefined ? {} : { env: launchEnvironment }),
+        ...(createArgs.initialInput === undefined
+          ? {}
+          : { initialInput: createArgs.initialInput }),
+      };
+      const projectRootPath = launchForNative?.cwd;
+      if (createArgs.skillsLaunchContinuation) {
+        // Continuation handshake (design v8 §5.2.7): admit exactly while the
+        // attempt sits in the durable SPAWN_INTENT window; no re-gating, no
+        // new attempt, no replay after consumption.
+        const authorization = await launchGate.authorizeSpawn(
+          createArgs.skillsLaunchContinuation,
+          {
+            agentId: launch.launchAgentId,
+            launchSpecification,
+            ...(projectRootPath === undefined ? {} : { projectRootPath }),
+            surface: launchSurface,
+          }
+        );
+        if (!authorization.ok) {
+          if (!restoredAgentLaunch) {
+            await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
+          }
+          foregroundActivityService.panelClosed(
+            createArgs.panelId,
+            String(win.id)
+          );
+          return {
+            ok: false,
+            error: `launch continuation rejected: ${authorization.message}`,
+          };
+        }
+        spawnedUnderAttemptId = createArgs.skillsLaunchContinuation;
+      } else {
+        const gate = await launchGate.ensureReady({
+          agentId: launch.launchAgentId,
+          launchSpecification,
+          ...(projectRootPath === undefined ? {} : { projectRootPath }),
+          surface: launchSurface,
+        });
+        if (gate.status === "blocked") {
+          if (!restoredAgentLaunch) {
+            await clearTerminalPanelAgent(sessionScope, createArgs.panelId);
+          }
+          foregroundActivityService.panelClosed(
+            createArgs.panelId,
+            String(win.id)
+          );
+          return {
+            ok: false,
+            error: "skills-launch-blocked",
+            skillsLaunchBlocked: {
+              launchAttemptId: gate.launchAttemptId,
+              issueSummary: gate.issueSummary,
+              ...(gate.issues === undefined
+                ? {}
+                : {
+                    focusIssueIds: gate.issues.map((issue) => issue.id),
+                    issues: gate.issues.map((issue) => ({
+                      id: issue.id,
+                      code: issue.code,
+                      ...(issue.skillId === undefined
+                        ? {}
+                        : { skillId: issue.skillId }),
+                      ...(issue.adapterKind === undefined
+                        ? {}
+                        : { adapterKind: issue.adapterKind }),
+                      ...(issue.relativeTarget === undefined
+                        ? {}
+                        : { relativeTarget: issue.relativeTarget }),
+                    })),
+                  }),
+              degradePolicySummary: gate.degradePolicySummary,
+              expiresAt: gate.expiresAt,
+              ...(gate.projectRootPath === undefined
+                ? {}
+                : { projectRootPath: gate.projectRootPath }),
+            },
+          };
+        }
+      }
+    }
+    // Re-check after skills-gate awaits: a cross-window drag may have entered
+    // leased/moving while ensureReady/authorizeSpawn was in flight.
+    const transferAfterGate = resolveTerminalTransferCreateAction(
+      transfer,
+      runtimeWindowId,
+      createArgs.panelId
+    );
+    if (transferAfterGate === "skip") {
+      await abandonAuthorizedSpawnAttempt({
+        attemptId: spawnedUnderAttemptId,
+        launchGate,
+      });
+      return { ok: true };
+    }
+    if (transferAfterGate === "adopt") {
+      await abandonAuthorizedSpawnAttempt({
+        attemptId: spawnedUnderAttemptId,
+        launchGate,
+      });
+      terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
+      return { ok: true };
+    }
+    let ok: boolean;
+    try {
+      ok = addon.createTerminal(
+        handle,
+        nativePanelId,
+        createArgs.frame,
+        createArgs.font.family,
+        createArgs.font.size,
+        withPanelStatusEnv(
+          launchForNative,
+          createArgs.panelId,
+          String(win.id),
+          foregroundActivityService.hookEnv()
+        ),
+        lifecycleId
+      );
+    } catch (error) {
+      await abandonAuthorizedSpawnAttempt({
+        attemptId: spawnedUnderAttemptId,
+        launchGate,
+      });
+      throw error;
+    }
+    if (spawnedUnderAttemptId && launchGate) {
+      // Durable SPAWN_ACCEPTED / SPAWN_FAILED after the actual spawn attempt;
+      // any replay of the same attempt is rejected from here on.
+      await launchGate
+        .recordSpawnResult(spawnedUnderAttemptId, ok)
+        .catch(() => undefined);
+    }
     if (!ok) {
       foregroundActivityService.panelClosed(createArgs.panelId, String(win.id));
       if (!restoredAgentLaunch) {
@@ -224,6 +431,9 @@ export async function handleTerminalCreate(args: {
       }
     }
     consumeCreateLaunch(createArgs);
+    // Invariant: live terminal ⇒ session entry exists (transfer CAS relies on
+    // it). Context/tab writers below only add metadata onto this entry.
+    await ensureTerminalPanelSession(sessionScope, createArgs.panelId);
     await persistInitialTerminalContext(
       sessionScope,
       createArgs.panelId,

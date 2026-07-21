@@ -1,13 +1,13 @@
 export const agents = {
-  focusEmpty: "No agents need your attention",
-  focusFailed: "Could not focus agent",
-  focusPanelGone: "Agent panel is gone",
-  focusWindowGone: "Agent window is gone",
-  indexListFailed: "Could not load agent list",
+  focusEmpty: "Nothing needs your attention",
+  focusFailed: "Couldn't focus agent",
+  focusPanelGone: "Panel closed",
+  focusWindowGone: "Window closed",
+  indexListFailed: "Couldn't load agent list",
   notificationPermissionDenied:
-    "System notifications unavailable; use Agent List or the jump shortcut when confirmation is needed",
+    "Notifications off — use Agent List or the jump shortcut",
   notificationUnsupported:
-    "System notifications unsupported; use Agent List or the jump shortcut when confirmation is needed",
+    "Notifications unavailable — use Agent List or the jump shortcut",
   quickPick: {
     empty: "No running agents",
     emptyDetail: "Start an agent to see it here",
@@ -21,7 +21,7 @@ export const agents = {
   },
   section: {
     needsYou: "Needs you",
-    readyHint: "Awaiting input (no notification)",
+    readyHint: "Awaiting input",
     running: "Running",
   },
   titleBar: {

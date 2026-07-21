@@ -33,6 +33,71 @@ export const EMPTY_LOADER_SNAPSHOT: GitReviewDocumentLoaderSnapshot = {
   settled: false,
 };
 
+export interface ReviewViewOptions {
+  readonly diffStyle: "split" | "unified";
+  readonly wrapLines: boolean;
+}
+
+const REVIEW_VIEW_OPTIONS_KEY = "pier.git.review.viewOptions";
+const DEFAULT_REVIEW_VIEW_OPTIONS: ReviewViewOptions = {
+  diffStyle: "split",
+  wrapLines: false,
+};
+
+function viewOptionsStorage(): Storage | null {
+  try {
+    return globalThis.localStorage ?? null;
+  } catch {
+    return null;
+  }
+}
+
+function readReviewViewOptions(): ReviewViewOptions {
+  try {
+    const raw = viewOptionsStorage()?.getItem(REVIEW_VIEW_OPTIONS_KEY);
+    if (!raw) {
+      return DEFAULT_REVIEW_VIEW_OPTIONS;
+    }
+    const parsed: unknown = JSON.parse(raw);
+    if (typeof parsed !== "object" || parsed === null) {
+      return DEFAULT_REVIEW_VIEW_OPTIONS;
+    }
+    const candidate = parsed as Partial<ReviewViewOptions>;
+    return {
+      diffStyle: candidate.diffStyle === "unified" ? "unified" : "split",
+      wrapLines: candidate.wrapLines === true,
+    };
+  } catch {
+    return DEFAULT_REVIEW_VIEW_OPTIONS;
+  }
+}
+
+/** diff 展示偏好(split/unified、wrap);全局持久化,跨面板共享。 */
+export function useReviewViewOptions(): {
+  readonly options: ReviewViewOptions;
+  readonly setOptions: (patch: Partial<ReviewViewOptions>) => void;
+} {
+  const [options, setOptionsState] = useState(readReviewViewOptions);
+  const setOptions = useMemo(
+    () => (patch: Partial<ReviewViewOptions>) => {
+      setOptionsState((previous) => {
+        const next = { ...previous, ...patch };
+        try {
+          viewOptionsStorage()?.setItem(
+            REVIEW_VIEW_OPTIONS_KEY,
+            JSON.stringify(next)
+          );
+        } catch {
+          // 存储不可用时仅保留会话内偏好
+        }
+        return next;
+      });
+    },
+    []
+  );
+  return { options, setOptions };
+}
+
 export function useReviewAppearance(
   context: RendererPluginContext,
   enabled: boolean

@@ -51,6 +51,7 @@ function documentSource(
     gitRootPath: root,
     oldPaths: entry.oldPaths,
     path: entry.path,
+    target: { kind: "uncommitted" },
   };
 }
 
@@ -60,7 +61,11 @@ describe("Git Review large index document probes", () => {
     const service = new GitReviewService();
     const index = await service.getIndex({
       operationId: randomUUID(),
-      source: { contextId: "worktree:large-index", gitRootPath: root },
+      source: {
+        contextId: "worktree:large-index",
+        gitRootPath: root,
+        target: { kind: "uncommitted" },
+      },
     });
 
     expect(index.kind).toBe("ok");

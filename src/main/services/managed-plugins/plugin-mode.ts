@@ -1,6 +1,8 @@
 import { existsSync, readFileSync } from "node:fs";
-import { isAbsolute, join, resolve } from "node:path";
+import { isAbsolute, join, relative, resolve } from "node:path";
 import {
+  isDevShellPackagedOverride,
+  PIER_DEV_ELECTRON_SHELL_ENV,
   PIER_PLUGIN_MODE_ENV,
   type PierPluginMode,
   type PluginWorkspaceConfigFile,
@@ -72,13 +74,64 @@ export function resolveWorkspaceRootAbsolute(
   return isAbsolute(rootPath) ? rootPath : resolve(cwd, rootPath);
 }
 
+interface WorktreeDevElectronRuntimeInput {
+  actualExecPath: string;
+  cwd: string;
+  devProfile: string | undefined;
+  devRuntime: boolean;
+  electronExecPath: string | undefined;
+}
+
+export function isWorktreeDevElectronRuntime({
+  actualExecPath,
+  cwd,
+  devProfile,
+  devRuntime,
+  electronExecPath,
+}: WorktreeDevElectronRuntimeInput): boolean {
+  if (!(devRuntime && devProfile && electronExecPath)) {
+    return false;
+  }
+  if (resolve(actualExecPath) !== resolve(electronExecPath)) {
+    return false;
+  }
+
+  const runtimeRoot = resolve(cwd, ".pier-dev", "electron-runtime");
+  const relativeExecPath = relative(runtimeRoot, resolve(actualExecPath));
+  return (
+    relativeExecPath !== "" &&
+    !relativeExecPath.startsWith("..") &&
+    !isAbsolute(relativeExecPath)
+  );
+}
+
 export function getPierPluginMode(cwd: string = process.cwd()): PierPluginMode {
   const config = readPluginWorkspaceConfigFile(cwd);
+  const devRuntime = isDevRuntime();
+  // The macOS dev profile copies and renames Electron.app under
+  // `.pier-dev/electron-runtime`; the renamed shell reports isPackaged=true
+  // (derived from the executable name) and must not force release mode under
+  // `pnpm dev`. Recognize the dev shell by the explicit marker set by
+  // dev-profile.mjs or by the profile-owned runtime path; real packaged
+  // distributions remain release.
+  const devShellOverride =
+    isDevShellPackagedOverride({
+      devShellMarker: process.env[PIER_DEV_ELECTRON_SHELL_ENV],
+      isDevRuntime: devRuntime,
+      isPackagedApp: app.isPackaged,
+    }) ||
+    isWorktreeDevElectronRuntime({
+      actualExecPath: process.execPath,
+      cwd,
+      devProfile: process.env.PIER_DEV_PROFILE,
+      devRuntime,
+      electronExecPath: process.env.ELECTRON_EXEC_PATH,
+    });
   return resolvePierPluginMode({
     configMode: config?.mode ?? null,
     envMode: process.env[PIER_PLUGIN_MODE_ENV] ?? null,
-    isDevRuntime: isDevRuntime(),
-    isPackagedApp: app.isPackaged,
+    isDevRuntime: devRuntime,
+    isPackagedApp: app.isPackaged && !devShellOverride,
   });
 }
 

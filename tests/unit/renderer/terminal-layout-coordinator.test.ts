@@ -1,6 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
+  acquireTerminalSurfaceSuppression,
+  pulseTerminalSurfaceSuppression,
   registerTerminalLayoutAnchor,
+  resetTerminalSurfaceSuppressionForTests,
   setTerminalLayoutPresentationScheduler,
 } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import {
@@ -82,11 +85,7 @@ describe("terminal layout coordinator", () => {
       configurable: true,
       value: originalInnerWidth,
     });
-    useTerminalStore.setState({
-      lastDownlinkSequence: 0,
-      placeholderVisible: false,
-      suppressTerminals: false,
-    });
+    resetTerminalSurfaceSuppressionForTests();
   });
 
   it("converts DOM anchor rects to native window points with the active window zoom", () => {
@@ -294,6 +293,60 @@ describe("terminal layout coordinator", () => {
       dispose();
     } finally {
       vi.useRealTimers();
+    }
+  });
+
+  it("acquireTerminalSurfaceSuppression 与 resize 可叠加：holder 未释放时 end 不恢复", () => {
+    const { trigger, dispose } = captureResizePulse();
+    const release = acquireTerminalSurfaceSuppression("lightbox-test");
+    expect(useTerminalStore.getState().suppressTerminals).toBe(true);
+    trigger({ phase: "active", reason: "resize" });
+    trigger({ phase: "end", reason: "resize" });
+    // Resize exited, but lightbox holder keeps suppress on.
+    expect(useTerminalStore.getState().suppressTerminals).toBe(true);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(true);
+    release();
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    dispose();
+  });
+
+  it("同 id 重叠 acquire：先释放不提前结束隐身", () => {
+    const release1 = acquireTerminalSurfaceSuppression("overlap");
+    const release2 = acquireTerminalSurfaceSuppression("overlap");
+    expect(useTerminalStore.getState().suppressTerminals).toBe(true);
+    release1();
+    expect(useTerminalStore.getState().suppressTerminals).toBe(true);
+    release2();
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+  });
+
+  it("同 id 重叠 pulse：较早的 release 不提前结束隐身", () => {
+    const queue: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      queue.push(cb);
+      return queue.length;
+    });
+    try {
+      pulseTerminalSurfaceSuppression("chrome-geometry");
+      pulseTerminalSurfaceSuppression("chrome-geometry");
+      expect(useTerminalStore.getState().suppressTerminals).toBe(true);
+
+      // Drain outer frames → schedule inners.
+      const outerCount = queue.length;
+      for (let i = 0; i < outerCount; i += 1) {
+        queue.shift()?.(0);
+      }
+      expect(queue.length).toBeGreaterThan(0);
+
+      queue.shift()?.(0);
+      expect(useTerminalStore.getState().suppressTerminals).toBe(true);
+
+      while (queue.length > 0) {
+        queue.shift()?.(0);
+      }
+      expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
     }
   });
 });

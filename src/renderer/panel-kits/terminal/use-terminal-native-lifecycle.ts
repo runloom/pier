@@ -9,6 +9,8 @@ import type {
 } from "@shared/contracts/terminal.ts";
 import type { IDockviewPanelProps } from "dockview-react";
 import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
+import { useT } from "@/i18n/use-t.ts";
+import { resolveSkillsLaunchBlock } from "@/lib/skills/launch-block.ts";
 import {
   confirmTerminalLaunch,
   rejectTerminalLaunch,
@@ -88,10 +90,13 @@ export function useTerminalNativeLifecycle({
 }: UseTerminalNativeLifecycleArgs): void {
   const monoFontFamilyRef = useRef(monoFontFamily);
   const effectiveMonoFontSizeRef = useRef(effectiveMonoFontSize);
+  const t = useT();
+  const translateRef = useRef(t);
   useLayoutEffect(() => {
     monoFontFamilyRef.current = monoFontFamily;
     effectiveMonoFontSizeRef.current = effectiveMonoFontSize;
-  }, [effectiveMonoFontSize, monoFontFamily]);
+    translateRef.current = t;
+  }, [effectiveMonoFontSize, monoFontFamily, t]);
   const lifecycleVersionRef = useRef(0);
 
   useEffect(() => {
@@ -226,7 +231,9 @@ export function useTerminalNativeLifecycle({
           createPending: true,
           phase: "creating",
         });
-        const result = await window.pier.terminal.create({
+        const buildCreateArgs = (
+          continuation?: string
+        ): CreateTerminalArgs => ({
           panelId,
           frame,
           font: {
@@ -239,7 +246,32 @@ export function useTerminalNativeLifecycle({
           ...(initialTab && { tab: initialTab }),
           ...(initialTask && { task: initialTask }),
           ...(initialTaskOutput && { taskOutput: initialTaskOutput }),
+          ...(continuation && { skillsLaunchContinuation: continuation }),
         });
+        let result = await window.pier.terminal.create(buildCreateArgs());
+        if (!result.ok && result.skillsLaunchBlocked && !isDisposed()) {
+          // Skills launch gate blocked this managed launch (design v8 §7.8):
+          // three-way choice, then a degrade retries with the continuation
+          // attempt id — admitted exactly once in the SPAWN_INTENT window.
+          const continuation = await resolveSkillsLaunchBlock({
+            blocked: result.skillsLaunchBlocked,
+            t: translateRef.current,
+          });
+          if (continuation && !isDisposed()) {
+            result = await window.pier.terminal.create(
+              buildCreateArgs(continuation)
+            );
+          } else {
+            // User cancelled / went to settings — show a readable panel
+            // message instead of the raw gate error (design v8 §7.8).
+            result = {
+              ok: false,
+              error: translateRef.current(
+                "settings.skills.launchCancelledPanel"
+              ),
+            };
+          }
+        }
         if (!acceptCreateResult(result)) {
           return;
         }

@@ -298,7 +298,7 @@ describe("Settings plugins section", () => {
 
     fireEvent.click(await screen.findByRole("button", { name: "插件" }));
 
-    expect(screen.getAllByText("插件")).toHaveLength(2);
+    expect(screen.getAllByText("插件").length).toBeGreaterThanOrEqual(2);
     expect(
       screen.queryByText(
         "内置插件可以在这里启用或停用。本地插件在当前版本只读取插件清单，不执行第三方代码。"

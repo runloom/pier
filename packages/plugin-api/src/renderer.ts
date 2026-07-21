@@ -82,6 +82,58 @@ export interface RendererPluginAction {
   title: string | (() => string);
 }
 
+export interface RendererPluginQuickPickItem {
+  readonly aliases?: readonly string[];
+  readonly badges?: readonly {
+    readonly label: string;
+    readonly variant?:
+      | "default"
+      | "destructive"
+      | "ghost"
+      | "outline"
+      | "secondary";
+  }[];
+  readonly checked?: boolean;
+  readonly data?: unknown;
+  readonly description?: string;
+  readonly detail?: string;
+  readonly disabled?: boolean;
+  readonly icon?: ComponentType<{ size?: number | string }>;
+  readonly id: string;
+  readonly label: string;
+  readonly searchTerms?: readonly string[];
+  readonly variant?: "default" | "destructive";
+}
+
+export interface RendererPluginQuickPickSection {
+  readonly heading: string;
+  readonly id: string;
+  readonly items: readonly RendererPluginQuickPickItem[];
+}
+
+export interface RendererPluginQuickPick {
+  readonly errorText?: string;
+  getQueryItem?(query: string): RendererPluginQuickPickItem | null;
+  readonly items?: readonly RendererPluginQuickPickItem[];
+  readonly loading?: boolean;
+  onAccept(item: RendererPluginQuickPickItem): Promise<void> | void;
+  onChangeSelection?(item: RendererPluginQuickPickItem): void;
+  onDismiss?(): void;
+  onQueryChange?(query: string, signal: AbortSignal): Promise<void> | void;
+  readonly placeholder?: string;
+  readonly preserveItemOrder?: boolean;
+  renderItem?(item: RendererPluginQuickPickItem): ReactNode;
+  readonly sections?: readonly RendererPluginQuickPickSection[];
+  readonly title: string;
+}
+
+export interface RendererPluginLoadingNotification {
+  dismiss(): void;
+  info(message: string): void;
+  success(message: string): void;
+  update(message: string): void;
+}
+
 export interface RendererPluginPanelRegistration {
   component: ComponentType<Record<string, unknown>>;
   icon?: ComponentType<{ size?: number | string }>;
@@ -155,12 +207,57 @@ export interface RendererPluginContentDialogHandle<TResult = unknown> {
   }): void;
 }
 
+/**
+ * Terminal launch options for `terminals.open`. Structural mirror of the host
+ * `TerminalLaunchOptions` contract — plugin-api stays dependency-free, the
+ * host validates the payload against its own schema.
+ */
+export interface TerminalOpenLaunchOptions {
+  command?: string;
+  cwd?: string;
+  env?: Record<string, string>;
+  profileId?: string;
+}
+
+export interface TerminalOpenRequest {
+  focus?: boolean;
+  launch?: TerminalOpenLaunchOptions;
+  placement?:
+    | "active-tab"
+    | "split-above"
+    | "split-below"
+    | "split-left"
+    | "split-right";
+}
+
+export interface TerminalOpenResult {
+  panelId: string;
+  windowId: string;
+}
+
 export interface ExternalRendererPluginContext {
   actions: {
     register(action: RendererPluginAction): () => void;
   };
   app: {
+    /** Close the host settings dialog, e.g. before opening a panel it would cover. */
+    closeSettings(): void;
+    /**
+     * Open a URL in the user's default browser via the host. Requires the
+     * `external:open` permission in plugin.json. The host denies renderer
+     * `window.open` / navigation outright, so plain `<a target="_blank">`
+     * links are dead — always route external links through this API.
+     * Resolves `true` when the URL was handed to the OS.
+     */
+    openExternal(url: string): Promise<boolean>;
     openSettings(options?: { section?: string }): void;
+  };
+  commandPalette: {
+    openQuickPick(quickPick: RendererPluginQuickPick): void;
+    updateQuickPick(
+      patch: Partial<RendererPluginQuickPick>,
+      options?: { signal?: AbortSignal }
+    ): void;
   };
   configuration: {
     get<T = unknown>(key: string): T;
@@ -230,6 +327,7 @@ export interface ExternalRendererPluginContext {
   notifications: {
     error(message: string): void;
     info(message: string): void;
+    loading(message: string): RendererPluginLoadingNotification;
     success(message: string): void;
   };
   panels: {
@@ -241,6 +339,13 @@ export interface ExternalRendererPluginContext {
   };
   settingsPages: {
     register(registration: RendererSettingsPageRegistration): () => void;
+  };
+  /**
+   * Open a host terminal panel (PierCommand `terminal.open`). Requires the
+   * `terminal:control` capability in the plugin manifest.
+   */
+  terminals: {
+    open(request?: TerminalOpenRequest): Promise<TerminalOpenResult>;
   };
   workbenchWidgets: {
     register(registration: RendererWorkbenchWidgetRegistration): () => void;

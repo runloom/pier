@@ -3,7 +3,16 @@ import { join, relative } from "node:path";
 import { managedPluginPackageManifestSchema } from "@shared/contracts/managed-plugin.ts";
 import { describe, expect, it } from "vitest";
 
+// Ordered to match the manifest scan (readdir, alphabetical by package dir:
+// plugin-claude, plugin-codex, plugin-grok).
 const APPROVED_BUNDLED_WIDGET_SIZE_POLICIES = [
+  {
+    defaultSize: { h: 3, w: 4 },
+    maxSize: { h: 4, w: 8 },
+    minSize: { h: 3, w: 2 },
+    pluginId: "pier.claude",
+    widgetId: "pier.claude.accounts",
+  },
   {
     defaultSize: { h: 3, w: 4 },
     maxSize: { h: 4, w: 8 },
@@ -61,11 +70,19 @@ const committedOfficialIndex = JSON.parse(
 ) as { signature?: { alg?: string } };
 
 describe("managed plugin packaging governance", () => {
+  it("builds every workspace plugin before starting the dev host", () => {
+    expect(packageJson.scripts?.predev).toContain("pnpm plugins:pack");
+  });
+
   it("ships each bundled plugin into an isolated plugin-packages subdir", () => {
+    expect(builderConfig).toContain("from: packages/plugin-claude/dist-pkg");
+    expect(builderConfig).toContain("to: plugin-packages/pier.claude");
     expect(builderConfig).toContain("from: packages/plugin-codex/dist-pkg");
     expect(builderConfig).toContain("to: plugin-packages/pier.codex");
     expect(builderConfig).toContain("from: packages/plugin-grok/dist-pkg");
     expect(builderConfig).toContain("to: plugin-packages/pier.grok");
+    expect(builderConfig).toContain("from: packages/plugin-ssh/dist-pkg");
+    expect(builderConfig).toContain("to: plugin-packages/pier.ssh");
     expect(builderConfig).toContain("*.tgz");
     expect(builderConfig).toContain("*.tgz.sha256");
     expect(builderConfig).toContain("plugin.json");

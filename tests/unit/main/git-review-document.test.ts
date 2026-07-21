@@ -69,6 +69,7 @@ function source(
     gitRootPath: root,
     oldPaths: [...oldPaths],
     path,
+    target: { kind: "uncommitted" },
   };
 }
 
@@ -103,6 +104,57 @@ describe("GitReviewService document", () => {
     const [unstaged, staged] = result.sections;
     expect(unstaged?.kind === "patch" && unstaged.patch).toContain("+worktree");
     expect(staged?.kind === "patch" && staged.patch).toContain("+staged");
+  });
+
+  it("commit 目标返回该提交的 committed patch section", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "file.ts"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await writeFile(join(root, "file.ts"), "committed\n", "utf8");
+    const commit = await commitAll(root, "change");
+    // 工作区后续变化不影响 commit 目标的 patch
+    await writeFile(join(root, "file.ts"), "dirty\n", "utf8");
+
+    const result = await new GitReviewService().getFileDocument(
+      request({
+        ...source(root, "file.ts"),
+        target: { kind: "commit", oid: commit },
+      })
+    );
+
+    expectOk(result);
+    expect(result.sections).toHaveLength(1);
+    const [committed] = result.sections;
+    expect(committed?.kind === "patch" && committed.patch).toContain(
+      "+committed"
+    );
+    expect(committed?.kind === "patch" && committed.patch).not.toContain(
+      "+dirty"
+    );
+  });
+
+  it("branch 目标返回 merge-base..HEAD 的 committed patch section", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "shared.ts"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await execGit(["branch", "main-line"], { cwd: root });
+    await execGit(["switch", "-c", "feature"], { cwd: root });
+    await writeFile(join(root, "shared.ts"), "base\nfeature\n", "utf8");
+    await commitAll(root, "feature work");
+
+    const result = await new GitReviewService().getFileDocument(
+      request({
+        ...source(root, "shared.ts"),
+        target: { kind: "branch", ref: "main-line" },
+      })
+    );
+
+    expectOk(result);
+    expect(result.sections).toHaveLength(1);
+    const [committed] = result.sections;
+    expect(committed?.kind === "patch" && committed.patch).toContain(
+      "+feature"
+    );
   });
 
   it("链式 a→b→c 为每个 group 使用自己的 old/target path", async () => {

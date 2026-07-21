@@ -5,6 +5,15 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
+import {
+  Select,
+  SelectContent,
+  SelectGroup,
+  SelectItem,
+  SelectLabel,
+  SelectTrigger,
+  SelectValue,
+} from "@pier/ui/select.tsx";
 import i18next from "i18next";
 import type { CSSProperties } from "react";
 import { useEffect, useSyncExternalStore } from "react";
@@ -28,11 +37,11 @@ import {
 import { AgentsSection } from "@/pages/settings/components/agents-section.tsx";
 import { AppUpdateSection } from "@/pages/settings/components/app-update-section.tsx";
 import { AppearanceSection } from "@/pages/settings/components/appearance-section.tsx";
-import { EnvironmentSection } from "@/pages/settings/components/environment-section.tsx";
 import { KeybindingsSection } from "@/pages/settings/components/keybindings-section.tsx";
 import { NotificationsSection } from "@/pages/settings/components/notifications-section.tsx";
 import { PluginConfigurationSection } from "@/pages/settings/components/plugin-configuration-section.tsx";
 import { PluginsSection } from "@/pages/settings/components/plugins-section.tsx";
+import { ProjectsSection } from "@/pages/settings/components/projects-section.tsx";
 import { TerminalSection } from "@/pages/settings/components/terminal-section.tsx";
 import { WorkspaceSection } from "@/pages/settings/components/worktree-section.tsx";
 import {
@@ -106,7 +115,17 @@ function PluginSettingsSection({ pluginId }: { pluginId: string }) {
 export function SettingsDialog() {
   const t = useT();
   const open = useSettingsDialogStore((s) => s.isOpen);
-  const onOpenChange = useSettingsDialogStore((s) => s.setOpen);
+  const setOpen = useSettingsDialogStore((s) => s.setOpen);
+  const requestSettingsClose = useSettingsDialogStore(
+    (s) => s.requestSettingsClose
+  );
+  const onOpenChange = (next: boolean) => {
+    if (next) {
+      setOpen(true);
+      return;
+    }
+    requestSettingsClose("dialog").catch(() => undefined);
+  };
   const activeSection = useSettingsDialogStore((s) => s.activeSection);
   const setActiveSection = useSettingsDialogStore((s) => s.setActiveSection);
   const updateSnapshot = useAppUpdateStore((s) => s.snapshot);
@@ -168,7 +187,7 @@ export function SettingsDialog() {
           <DialogDescription>{t("settings.description")}</DialogDescription>
         </DialogHeader>
         <SidebarProvider
-          className="min-h-0 flex-1 items-start gap-3"
+          className="min-h-0 min-w-0 flex-1 flex-col items-start gap-3 md:flex-row"
           style={SIDEBAR_STYLE}
         >
           <Sidebar className="hidden md:flex" collapsible="none">
@@ -212,8 +231,42 @@ export function SettingsDialog() {
             </SidebarContent>
           </Sidebar>
 
+          <nav
+            aria-label={t("settings.title")}
+            className="w-full shrink-0 md:hidden"
+          >
+            <Select onValueChange={setActiveSection} value={activeSection}>
+              <SelectTrigger
+                aria-label={t("settings.title")}
+                className="w-full"
+                data-testid="settings-compact-nav"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent position="popper">
+                <SelectGroup>
+                  {NAV_ITEMS.map((item) => (
+                    <SelectItem key={item.id} value={item.id}>
+                      {t(`settings.nav.${item.id}`)}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                {pluginItems.length > 0 ? (
+                  <SelectGroup>
+                    <SelectLabel>{t("settings.nav.pluginGroup")}</SelectLabel>
+                    {pluginItems.map((item) => (
+                      <SelectItem key={item.id} value={item.id}>
+                        {item.label}
+                      </SelectItem>
+                    ))}
+                  </SelectGroup>
+                ) : null}
+              </SelectContent>
+            </Select>
+          </nav>
+
           <main
-            className="relative -mr-6 flex h-full min-h-0 flex-1 flex-col overflow-y-auto"
+            className="relative -mr-6 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto md:w-auto"
             data-scrollbar="stable"
           >
             {activeSection === "appearance" ? <AppearanceSection /> : null}
@@ -222,7 +275,7 @@ export function SettingsDialog() {
             {activeSection === "keybindings" ? <KeybindingsSection /> : null}
             {activeSection === "updates" ? <AppUpdateSection /> : null}
             {activeSection === "plugins" ? <PluginsSection /> : null}
-            {activeSection === "environment" ? <EnvironmentSection /> : null}
+            {activeSection === "projects" ? <ProjectsSection /> : null}
             {activeSection === "agents" ? <AgentsSection /> : null}
             {activeSection === "notifications" ? (
               <NotificationsSection />

@@ -184,6 +184,28 @@ public final class TerminalSurface {
         ghostty_surface_set_occlusion(s, visible)
     }
 
+    /// Host-forced cursor suppression: renderer never draws the cursor
+    /// glyph while set, regardless of terminal mode (DECTCEM) or focus.
+    /// Pier patch 0103 adds this C API.
+    func setCursorSuppress(_ suppressed: Bool) {
+        guard let s = surface else { return }
+        TerminalDebugLog.log(.lifecycle, "surface cursorSuppress=\(suppressed)")
+        ghostty_surface_set_cursor_suppress(s, suppressed)
+    }
+
+    /// Feed bytes into the terminal's VT parser as if the child wrote them
+    /// (does **not** send to the PTY). Used for host-driven mode changes such
+    /// as DECTCEM cursor hide while a web overlay owns the keyboard.
+    func writeOutput(_ data: Data) {
+        guard let s = surface, !data.isEmpty else { return }
+        data.withUnsafeBytes { raw in
+            guard let base = raw.bindMemory(to: UInt8.self).baseAddress else {
+                return
+            }
+            ghostty_surface_write_buffer(s, base, UInt(data.count))
+        }
+    }
+
     // MARK: - Size Query
 
     func size() -> TerminalGridMetrics? {

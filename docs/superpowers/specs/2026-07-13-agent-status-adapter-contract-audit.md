@@ -38,7 +38,7 @@
 | 提供方适配器 | 探测提供方、幂等安装/卸载 hook、把原生事件转成 Pier 规范事件、声明 `stopAuthority` | 保存统一会话历史、直接修改 UI 状态 |
 | 共享契约 | 定义 `agent/task/shell/idle`、Agent 五态、规范事件到状态和状态到 tab 的映射 | 读取提供方配置或 session 文件 |
 | `ForegroundActivity` 聚合器 | 维护面板活动、优先级、回合/工具/子代理记账、冷却、消抖和生命周期 | 理解提供方原生事件名或文件格式 |
-| Agent 终态对账边界 | 在提供方 hook 缺少可信终态时产生已验收的规范终态；当前仅 Codex 使用 | 提供 Transcript 查询、过程状态、工具内容或回放 |
+| Agent 终态对账边界 | 在提供方 hook 缺少可信终态时产生已验收的规范终态；当前 Codex（完成+中断）与 Claude（仅中断）使用 | 提供 Transcript 查询、过程状态、工具内容或回放 |
 | main 发布层 | 生成按窗口过滤的完整快照并广播，空窗口也发布空快照以清除旧状态 | 让 renderer 读取其他窗口活动 |
 | renderer store 和 UI | 镜像最新快照、拒绝乱序、显示状态栏/tab/标题栏计数 | 从终端文本、标题或提供方文件重新推断状态 |
 | 测试 | 锁定各集成权威等级、事件映射、聚合状态机、窗口隔离和 Codex 内部对账 | 用测试 fixture 建设产品级会话资产 |
@@ -55,7 +55,7 @@ flowchart LR
     C --> D["events.jsonl"]
     D --> E["JsonlObserver 校验与兼容补全"]
     E --> F["ForegroundActivity 聚合器"]
-    E -. "仅 Codex 可信终态补充" .-> G["AgentTerminalReconciler"]
+    E -. "Codex/Claude 可信终态补充" .-> G["AgentTerminalReconciler"]
     G --> F
     H["PTY 命令生命周期"] --> F
     I["Pier task 生命周期"] --> F
@@ -66,7 +66,11 @@ flowchart LR
 
 提供方 session 文件不在这条数据流中向外传播。Codex 对账器只把
 `event_msg/task_complete` 转为 `TurnCompleted`、把 reason 为 `interrupted` 的
-`event_msg/turn_aborted` 转为 `TurnInterrupted`，然后仍经聚合器进入同一状态源。
+`event_msg/turn_aborted` 转为 `TurnInterrupted`；Claude 对账器（2026-07-20）只把
+主链整块中断标记（`[Request interrupted by user]` / `... for tool use]`）转为
+`TurnInterrupted`（Claude 的 Stop hook 在 Esc/Ctrl+C 中断时不触发, 这是唯一的
+上游中断事实）。两者共用 `transcript-tail-reconciler.ts` 机械层（watch/增量
+读取/owner 生命周期）, 格式知识各自私有, 产出仍经聚合器进入同一状态源。
 
 ## 规范状态真值表
 
@@ -102,14 +106,14 @@ flowchart LR
 | antigravity | 嵌套 JSON hook | `coarse` | `PreInvocation→PromptSubmit`；`PostToolUse→ToolComplete`；`Stop→Stop` | `advisory` |
 | aug | 嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop`；`SessionEnd→SessionEnd` | `advisory` |
 | autohand | 扁平 JSON hook 数组 | `full` | `session-start→SessionStart`；`session-end→SessionEnd`；`session-error→error`；`pre-prompt→PromptSubmit`；`stop→Stop`；`permission-request→PermissionRequest`；`pre-tool→ToolStart`；`post-tool→ToolComplete` | `advisory` |
-| claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PermissionRequest→PermissionRequest`；`PermissionDenied/PreCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop→同名`；`SessionEnd→SessionEnd` | `advisory` |
+| claude | Claude 式嵌套 JSON hook | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse/PostToolUseFailure→ToolComplete`；`PermissionRequest→PermissionRequest`；`PermissionDenied/PreCompact→processing`；`Stop→Stop`；`StopFailure→error`；`SubagentStart/SubagentStop→同名`；`SessionEnd→SessionEnd`；内部对账另补 `TurnInterrupted`（Esc/Ctrl+C 不触发 Stop hook——上游缺口, 由 transcript 主链整块中断标记补齐；正常完成不对账, 仍走 advisory Stop） | `advisory` |
 | cline | 可执行 hook 文件 | `full` | `TaskStart→SessionStart`；`TaskResume→running`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`TaskCancel/TaskComplete→Stop`；`PreCompact→processing` | `authoritative` |
 | codebuddy | Claude 兼容嵌套 JSON hook | `full` | 与 claude 相同 | `advisory` |
-| codex | Codex `hooks.json` | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PermissionRequest→PermissionRequest`；`PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop→同名`；`Stop→Stop`；内部对账另补 `TurnCompleted/TurnInterrupted` | `advisory` |
+| codex | Codex `hooks.json` | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PermissionRequest→PermissionRequest`；`PreCompact/PostCompact→processing`；`SubagentStart/SubagentStop→同名`；`Stop→Stop`；内部对账另补 `TurnCompleted/TurnInterrupted`；**`error: unsupported`**（hooks 无 `StopFailure`；`turn_aborted` 仅→`TurnInterrupted`，禁止当失败） | `advisory` |
 | command-code | 嵌套 JSON hook | `coarse` | `SessionStart→SessionStart`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`Stop→Stop` | `advisory` |
 | copilot | Copilot hook 配置 | `full` | `sessionStart→SessionStart`；`sessionEnd→SessionEnd`；`userPromptSubmitted→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse→ToolComplete`；`agentStop→Stop`；`permissionRequest→PermissionRequest`；`subagentStart/subagentStop→同名`；`errorOccurred→error` | `advisory` |
 | crush | 主配置内扁平 hook | `coarse` | `PreToolUse→ToolStart`；没有可信终态 | `none` |
-| cursor | Cursor hook 配置 | `full` | `sessionStart→SessionStart`；`beforeSubmitPrompt→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse/postToolUseFailure/afterShellExecution/afterMCPExecution→ToolComplete`；`beforeShellExecution/beforeMCPExecution→PermissionRequest`；`afterAgentResponse→processing`；`subagentStart/subagentStop→同名`；`stop→Stop`；`sessionEnd→SessionEnd` | `advisory` |
+| cursor | Cursor hook 配置 | `full` | `sessionStart→SessionStart`；`beforeSubmitPrompt→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse/postToolUseFailure→ToolComplete`；`subagentStart/subagentStop→同名`；`stop` 按 payload `status` 安装期分发：`completed→TurnCompleted`、`aborted→TurnInterrupted`、`error→error`、缺失/未知→`Stop`；`sessionEnd→SessionEnd`。**不装 `afterAgentResponse`**（与 stop 同刻并发落盘, 顺序无保证, 曾把终态拉回 processing 造成假"思考中"）；**不装 shell/MCP 闸门四事件**（before* 自动放行也触发→假 waiting；改映 ToolStart 则因无 tool_use_id、拒绝执行时 after* 不触发而滞留匿名计数；工具生命周期由带 id 的 preToolUse/postToolUse(-Failure) 完整覆盖） | `advisory`（仅约束 status 回落的 `Stop`） |
 | devin | JSON hook 配置 | `full` | `SessionStart→SessionStart`；`UserPromptSubmit→PromptSubmit`；`Stop→Stop`；`PostCompaction→processing`；`SessionEnd→SessionEnd`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete`；`PermissionRequest→PermissionRequest` | `advisory` |
 | droid | 嵌套 JSON hook | `full` | `SessionStart/SessionEnd→同名`；`UserPromptSubmit→PromptSubmit`；`Notification→PermissionRequest`；`Stop→Stop`；`StopFailure→error`；`PreCompact→processing`；`PreToolUse→ToolStart`；`PostToolUse→ToolComplete` | `advisory` |
 | gemini | Gemini hook 配置 | `full` | `SessionStart/SessionEnd→同名`；`BeforeAgent→PromptSubmit`；`AfterAgent→Stop`；`Notification→PermissionRequest`；`PreCompress→processing`；`BeforeTool→ToolStart`；`AfterTool→ToolComplete` | `advisory` |
@@ -121,7 +125,7 @@ flowchart LR
 | kiro | Kiro 扁平 hook 配置 | `full` | `agentSpawn→SessionStart`；`userPromptSubmit→PromptSubmit`；`preToolUse→ToolStart`；`postToolUse→ToolComplete`；`stop→Stop` | `advisory` |
 | mimo-code | JavaScript 插件事件总线 | `full` | `session.created→SessionStart`；`session.idle→Stop`；`session.error→error`；`session.deleted→SessionEnd`；`session.status busy/retry→running`、`idle→Stop`；`tui.command.execute(prompt.submit)→PromptSubmit`；`permission.updated→PermissionRequest`；`permission.replied→processing`；`tool.execute.before/after→ToolStart/ToolComplete` | `authoritative` |
 | mistral-vibe | 实验性 TOML hook | `coarse` | `before_tool→ToolStart`；`after_tool→ToolComplete`；`post_agent_turn→Stop` | `authoritative` |
-| omp | JavaScript 扩展 | `full` | `session_start→SessionStart`；主代理 `agent_start→PromptSubmit`、`agent_end→Stop`；子代理 `agent_start/agent_end→SubagentStart/SubagentStop`；`tool_call→ToolStart`；`tool_result→ToolComplete`；`tool_approval_requested→PermissionRequest`；`tool_approval_resolved→ToolStart`；`session_shutdown→SessionEnd` | `authoritative` |
+| omp | JavaScript 扩展 | `full` | `session_start→SessionStart`；主代理 `agent_start→PromptSubmit`、`agent_end→Stop`；子代理 `agent_start/agent_end→SubagentStart/SubagentStop`；`tool_call→ToolStart`；`tool_result→ToolComplete`；`tool_approval_requested→PermissionRequest`；`tool_approval_resolved→ToolStart`；`session_shutdown→SessionEnd`；**`error: unsupported`**（2026-07-05 probe：abort/ESC 仍 `agent_end→Stop`，无独立失败事件） | `authoritative` |
 | opencode | JavaScript 插件事件总线 | `full` | 与 mimo-code 相同 | `authoritative` |
 | openclaude | Claude 兼容嵌套 JSON hook | `full` | 与 claude 相同 | `advisory` |
 | pi | JavaScript 扩展 | `coarse` | `session_start→SessionStart`；`agent_start→PromptSubmit`；`agent_end→Stop`；`session_shutdown→SessionEnd` | `authoritative` |
@@ -138,16 +142,32 @@ flowchart LR
 | rovo | 同上 | 同上 | 同上 |
 | openclaw | 同上 | 同上 | 同上 |
 
+## FA `error` 可达性（Ev5 / 2026-07-19）
+
+通知「出错时」依赖 FA 进入 `error`。下列结论禁止假绿：无原生失败语义时不得把 `Stop` / `agent_end` / `TurnInterrupted` / 用户 abort 映射为 `error`。
+
+| Provider | 结论 | 证据 | 代码锁 |
+|---|---|---|---|
+| omp | **B — `error: unsupported`** | 2026-07-05 probe：abort/ESC 仍发 `agent_end`；`OMP_EVENTS` 无独立失败事件；`agent_end→Stop` | `OMP_FA_ERROR_REACHABILITY`；`omp.test.ts` 断言映射表不含 `error` |
+| codex | **B — `error: unsupported`** | 发布版 hooks 全集无 `StopFailure`；transcript 对账仅 `task_complete→TurnCompleted`、`turn_aborted→TurnInterrupted` | `CODEX_FA_ERROR_REACHABILITY`；`codex.test.ts` 断言 hook 映射不含 `error` |
+| claude（对照） | **A — `StopFailure→error`** | 官方 hooks：`StopFailure` = 回合因 API 错误终止；transcript 中断对账仅→`TurnInterrupted`, 不映 `error` | `claude.ts` 映射保持不变 |
+| cursor（2026-07-20） | **A — `stop(status="error")→error`** | 官方 hooks reference：stop payload `status: completed\|aborted\|error` 是 provider 自报的回合终态；`aborted` 仅→`TurnInterrupted`, 不映 `error` | `CURSOR_FA_ERROR_REACHABILITY`；`cursor.test.ts` 断言 stop 命令分发 |
+
+`enableErrorAttention` 对 omp/codex **无 FA 入口**属预期；对仍有真实 `error` 映射的 Top A（如 claude）继续有效。
+
 ## 兼容输入边界
 
 - `AgentHookEventPayload` v1 和 v2 都保留；v2 的 `nativeEvent` 保存原生事实，`event` 保存规范词汇。
 - `metadataBase64` 只允许补全白名单身份字段：session、turn、tool、agent 和
   `transcriptPath`；解析失败或补全后 schema 不合法时继续使用原事件。
-- `transcriptPath` 是事件路由给 Codex 适配器的内部提示，不是公共文件读取授权。
-- Codex 对账只接受 `$CODEX_HOME/sessions` 真实路径内的文件，同时检查词法路径和
-  `realpath`，拒绝目录穿越和符号链接逃逸。
+- `transcriptPath` 是事件路由给 Codex/Claude 适配器的内部提示，不是公共文件读取授权。
+- Codex 对账只接受 `$CODEX_HOME/sessions` 真实路径内的文件；Claude 对账只接受
+  `~/.claude/projects` 真实路径内的文件（自定义 `CLAUDE_CONFIG_DIR` 落在根外时
+  静默不生效）。两者同时检查词法路径和 `realpath`，拒绝目录穿越和符号链接逃逸。
 - 对账器只读取新增内容，单次最多 1 MiB，同时限制 watcher、turn 上下文、待决终态和去重集合。
-- 坏 JSON、未知记录、非 Codex 事件、foreign turn、旧内容和无 owner 的终态不会改变状态。
+- 坏 JSON、未知记录、非本 agent 事件、foreign turn、旧内容和无 owner 的终态不会改变状态。
+- Claude 中断标记必须**整块相等**（单一 text block 或整串），resume/compact 注入的
+  长 summary 内嵌同字符串、sidechain（子代理链）记录、观察前的历史标记一律不算。
 - 提供方格式变化时对账器静默退化；hook 主路径和 PTY 退出兜底继续工作。
 
 ## 公共 capability 审计
@@ -169,7 +189,7 @@ flowchart LR
 - 不新增 Pier 自有 Transcript、统一 session 表、全文索引或回放界面。
 - 不把提供方原生 session 路径加入 plugin API、preload 或 command router。
 - 不让 renderer 根据终端文字、标题或计时器生成第二份 Agent 状态。
-- 不让 Codex 对账器投影工具、processing、permission 或内容数据；它只补可信终态。
+- 不让终态对账器（Codex/Claude）投影工具、processing、permission 或内容数据；它们只补可信终态。
 - 不因某家提供方事件不足而合成虚假 `Stop`、`ready` 或 `SessionStart`。
 - 不用公共 capability 包装尚不存在的服务；后续 Profile、Evidence 能力须随各自服务一起验收。
 
@@ -192,7 +212,42 @@ flowchart LR
 | renderer 只有一个活动状态源 | `foreground-activity.ts`、`foreground-activity-publication.ts`、`foreground-activity.store.ts` | 状态从 main 完整快照进入 store，旧源不复活 |
 | 每个 Agent 语义可追溯 | `integrations/`、`agent-hook-runtime-semantics.test.ts`、各 integration 单测 | 30 个集成无重复且显式声明权威；5 个仅启动识别名单固定 |
 | 规范状态映射唯一 | `activityStatusForHookEvent`、`foreground-activity-aggregator.test.ts` | 五态、工具并发、迟到事件、冷却和优先级测试通过 |
-| 提供方 session 保持私有 | `terminal-reconciliation.ts`、`codex-transcript-reconciler.ts` 及其单测 | 只产生规范终态；越界、坏行、轮转和释放场景通过 |
+| 提供方 session 保持私有 | `terminal-reconciliation.ts`、`transcript-tail-reconciler.ts`、`codex-transcript-reconciler.ts`、`claude-transcript-reconciler.ts` 及其单测 | 只产生规范终态；越界、坏行、轮转和释放场景通过 |
 | 公共 Transcript 能力消失 | `plugin-permissions-contract.test.ts` | capability、builtin/managed manifest 根级和贡献级均拒绝旧值；双语标签不存在 |
 | 运行 UI 不变 | `codex-status-chain.test.tsx`、终端状态栏测试 | Codex complete/interrupted 均经唯一聚合器进入 ready |
 | 文档和实现一致 | 本文、`AGENTS.md`、能力评分清单 | A1/A2 标记完成并链接审计证据 |
+
+## 增补：2026-07-20 状态诚实性修复
+
+实测复盘（events.jsonl + 各 TUI 行为）确认四类假状态并按下述定案，映射矩阵与
+Ev5 表已同步：
+
+1. **cursor 假"思考中"（用户报告的直接根因）**：`stop` 与 `afterAgentResponse`
+   在回合结束同刻各起一个 hook 进程写 JSONL，落盘顺序无保证；`afterAgentResponse
+   →processing` 属 TURN_RESET，晚到时把已候选/已结算的终态拉回 processing，TUI
+   已等输入而面板长挂"思考中"。回合中途推进已由 tool 系事件覆盖，该映射零增量
+   ——直接不装。安装器改为先剔全部 pier 条目再装（对齐嵌套 JSON 工厂），确保
+   升级后遗留条目被清除。
+2. **cursor 终态升级**：stop payload 自带 `status`（provider 自报），安装期在
+   hook 命令内 case 分发（`pierHookCommandWithStdinStatusDispatch`），接收端保持
+   agent 无关。`completed→TurnCompleted`（等待输入）、`aborted→TurnInterrupted`
+   （修复 Esc 后悬挂）、`error→error`；status 缺失/未知回落 advisory `Stop`，
+   payload 变化时安全退化为旧行为。
+3. **cursor 假"等待确认"**：`beforeShellExecution/beforeMCPExecution` 是执行前
+   闸门，自动放行的命令同样触发且无 approval-resolved 事件——原 `PermissionRequest`
+   映射让每条自动放行命令全程显示等待。评审否决了"改映 ToolStart"的中间方案：
+   闸门 payload 无 tool_use_id 只能走匿名计数，拒绝执行时 after* 不触发，匿名
+   增量无法配对会滞留"执行工具中"。终案：shell/MCP 闸门四事件（before*/after*）
+   全部不装——工具生命周期由带真实 tool_use_id 的 preToolUse/postToolUse(-Failure)
+   完整覆盖（实测每个 shell 闸门都被 `preToolUse(Shell)` 包围），闸门事件对状态
+   零增量。代价：cursor 真实审批期显示"执行工具中"而非"等待确认"；provider
+   提供 approval-scoped 事件后再恢复 waiting。
+4. **claude 中断悬挂**：Esc/Ctrl+C 不触发 Stop hook（上游缺口），面板滞留
+   processing/tool 直到 TTL。新增 `claude-transcript-reconciler.ts`（与 Codex 共用
+   `transcript-tail-reconciler.ts` 机械层）把主链整块中断标记对账为
+   `TurnInterrupted`。正常完成不对账（advisory Stop 已覆盖；transcript 的
+   `stop_reason` 噪声大，不当完成证据）。
+
+未处置项（显式接受）：crush 只有 `PreToolUse`，工具态直到 TTL/进程退出是能力
+上限（`stopAuthority: "none"` 已声明）；kiro/antigravity/command-code 等 coarse
+档位同理。聚合器不做超时推断——没有证据时保持现状是纪律，不是缺陷。

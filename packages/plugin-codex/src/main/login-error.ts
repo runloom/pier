@@ -4,6 +4,13 @@ export interface ClassifiedLoginError {
   failure: Error;
 }
 
+/** 取消错误，与渲染层 `isLoginCancellation` 的判定保持一致。 */
+export function loginCancelledError(): Error {
+  const error = new Error("Login cancelled");
+  error.name = "AbortError";
+  return error;
+}
+
 /**
  * 登录错误分类：
  * - 超时（aborted 且 timedOut）→ 设错误态 + 抛出，调用方报错。

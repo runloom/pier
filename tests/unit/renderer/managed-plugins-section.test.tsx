@@ -437,7 +437,7 @@ describe("ManagedPluginsSection", () => {
     resolveCheck?.(catalogWithUpdate());
 
     await waitFor(() => {
-      expect(toastMocks.success).toHaveBeenCalledWith("Plugin updates checked");
+      expect(toastMocks.success).toHaveBeenCalledWith("Updates checked");
     });
   });
 
@@ -476,7 +476,7 @@ describe("ManagedPluginsSection", () => {
     await waitFor(() => {
       expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
         body: "network down",
-        title: "Failed to check plugin updates",
+        title: "Couldn't check updates",
       });
     });
   });

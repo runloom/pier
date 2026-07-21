@@ -96,7 +96,7 @@ describe("useGitReviewNavigation demand sync", () => {
     expect(applyNavigationDemand).toHaveBeenCalledWith("entry:a");
   });
 
-  it("resumeSelectedNavigation reapplies demand after a completed navigation", async () => {
+  it("resumeSelectedNavigation only advances the settled watermark while the target stays visible", async () => {
     const { applyNavigationDemand, hook } = setup();
     act(() => {
       hook.result.current.beginNavigation("entry:a");
@@ -110,6 +110,32 @@ describe("useGitReviewNavigation demand sync", () => {
     applyNavigationDemand.mockClear();
     act(() => {
       // projection change can re-arm navigation for the still-selected entry
+      hook.result.current.notifyProjectionChanged();
+      hook.result.current.resumeSelectedNavigation();
+    });
+    // 目标仍可见:不得重压排他 demand。排他会取消其它在飞加载,
+    // 被取消项的重投影又推动 revision 变化,形成 resume 活锁。
+    expect(applyNavigationDemand).not.toHaveBeenCalled();
+    expect(hook.result.current.navigationPending).toBe(false);
+  });
+
+  it("resumeSelectedNavigation reapplies demand when the target left the viewport", async () => {
+    let visible = true;
+    const { applyNavigationDemand, hook } = setup({
+      isItemVisible: () => visible,
+    });
+    act(() => {
+      hook.result.current.beginNavigation("entry:a");
+    });
+    act(() => {
+      hook.result.current.tryPendingNavigation();
+    });
+    await flushFrames();
+    expect(hook.result.current.navigationPending).toBe(false);
+
+    applyNavigationDemand.mockClear();
+    visible = false;
+    act(() => {
       hook.result.current.notifyProjectionChanged();
       hook.result.current.resumeSelectedNavigation();
     });

@@ -1,20 +1,19 @@
 import { randomUUID } from "node:crypto";
-import { existsSync } from "node:fs";
 import { rm } from "node:fs/promises";
-import { join } from "node:path";
 import {
-  createInflightCoalescer,
   createUsageRefreshScheduler,
+  startSuppressedDriftWatch,
   USAGE_REFRESH_CONCURRENCY,
 } from "@pier/plugin-api/account-usage";
-import type { AddAccountPayload } from "../shared/accounts.ts";
+import type { AddAccountPayload, PeerSyncResult } from "../shared/accounts.ts";
 import { WATCH_SUPPRESS_MS } from "../shared/constants.ts";
+import { addApiKeyAccount } from "./accounts-add-api-key.ts";
 import { addOidcAccount } from "./accounts-add-oidc.ts";
 import {
-  buildApiKeyAccountRecord,
   buildOidcAccountRecord,
   mergeIdentityIntoAccount,
 } from "./accounts-records.ts";
+import { removeManagedAccount } from "./accounts-remove.ts";
 import {
   selectManagedAccount,
   syncManagedAccountPeers,
@@ -25,20 +24,18 @@ import type {
 } from "./accounts-service-contract.ts";
 import { buildAccountsSnapshot } from "./accounts-snapshot.ts";
 import {
-  activeUsageCacheKey,
-  createUsageCacheEntry,
-  USAGE_MIN_REFETCH_MS,
   USAGE_POLL_INTERVAL_MS,
   type UsageCacheEntry,
 } from "./accounts-usage.ts";
+import { createGrokUsageRefreshRunner } from "./accounts-usage-refresh.ts";
+import type { DeviceLoginInfo } from "./device-login-output.ts";
+import { loginCancelledError } from "./login-error.ts";
 import {
   ensureManagedAccountDir,
   grokAccountHomeDir,
-  PIER_MANAGED_HOME_MARKER,
 } from "./managed-account-home.ts";
 import { reconcileManagedCredentials } from "./managed-credential-reconciliation.ts";
 import { createSerialMutationQueue } from "./serial-mutation-queue.ts";
-import type { AccountUsageResult } from "./types.ts";
 
 export { USAGE_REFRESH_CONCURRENCY } from "@pier/plugin-api/account-usage";
 export { SYSTEM_USAGE_CACHE_KEY } from "./accounts-usage.ts";
@@ -48,16 +45,24 @@ export function createGrokAccountsService(
 ): GrokAccountsService {
   const { managedBaseDir, provider, stateStore, onChanged } = opts;
   const hasVisibleTarget = opts.hasVisibleTarget ?? (() => true);
+  const logger = opts.logger;
 
+  let disposed = false;
   let broadcastSeq = 0;
   let loginAbort: AbortController | null = null;
   let loginPending = false;
   let loginMode: "oauth" | "device" | null = null;
+  let loginStartedAt: number | null = null;
+  let loginDeviceInfo: DeviceLoginInfo | null = null;
+  let cancelGeneration = 0;
   let watchDispose: (() => void) | null = null;
   let lastLoginError: { at: number; message: string } | null = null;
   let suppressWatchUntil = 0;
+  const credentialErrors = new Map<string, string>();
   const usageCache: Record<string, UsageCacheEntry> = {};
-  const usageRefreshInflight = createInflightCoalescer();
+  // Service-level abort so dispose() can cancel in-flight usage fetches
+  // instead of letting them write caches / emit events after deactivation.
+  const usageAbort = new AbortController();
   let usagePollTimer: ReturnType<typeof setInterval> | null = null;
 
   const enqueueMutation = createSerialMutationQueue();
@@ -79,9 +84,12 @@ export function createGrokAccountsService(
   function buildSnapshot() {
     broadcastSeq += 1;
     return buildAccountsSnapshot({
+      credentialErrors,
       lastLoginError,
+      loginDeviceInfo,
       loginMode,
       loginPending,
+      loginStartedAt,
       now: now(),
       revision: broadcastSeq,
       state: stateStore.get(),
@@ -90,6 +98,10 @@ export function createGrokAccountsService(
   }
 
   function emitSnapshot(): void {
+    // A disposed instance must not broadcast: its (still counting) revision
+    // sequence would make the renderer store reject the successor instance's
+    // fresh snapshots.
+    if (disposed) return;
     onChanged(buildSnapshot());
   }
 
@@ -97,79 +109,68 @@ export function createGrokAccountsService(
     return await ensureManagedAccountDir(managedBaseDir, accountId);
   }
 
-  async function doRefreshUsage(
-    options: { accountId?: string; force?: boolean } = {}
-  ): Promise<void> {
-    const state = stateStore.get();
-    const targetId = options.accountId ?? state.activeAccountId;
-    if (
-      targetId &&
-      !state.accounts.some((account) => account.id === targetId)
-    ) {
-      throw new Error(`Account not found: ${targetId}`);
-    }
-    const cacheKey = activeUsageCacheKey(targetId);
-    const cached = usageCache[cacheKey];
-    if (
-      !options.force &&
-      cached &&
-      now() - cached.fetchedAt < USAGE_MIN_REFETCH_MS
-    ) {
-      return;
-    }
-
-    // Coalesce concurrent refresh for the same account (settings lease +
-    // manual refresh + poll must not stampede multi-hop remote calls).
-    await usageRefreshInflight.run(cacheKey, async () => {
-      const latestCached = usageCache[cacheKey];
-      if (
-        !options.force &&
-        latestCached &&
-        now() - latestCached.fetchedAt < USAGE_MIN_REFETCH_MS
-      ) {
-        return;
-      }
-
-      let result: AccountUsageResult;
-      if (targetId) {
-        const account = stateStore
-          .get()
-          .accounts.find((entry) => entry.id === targetId);
-        const abort = new AbortController();
-        try {
-          result = await provider.fetchUsage({
-            kind: account?.kind === "api_key" ? "api_key" : "oidc",
-            signal: abort.signal,
-            ...(account?.kind === "api_key"
-              ? {}
-              : { accountHomeDir: accountHomeDir(targetId) }),
-          });
-        } catch (error) {
-          result = {
-            error: error instanceof Error ? error.message : String(error),
-            status: "error",
-            windows: [],
-          };
-        }
-      } else {
-        result = {
-          status: "error",
-          error: "No active Grok account",
-          windows: [],
-        };
-      }
-
-      usageCache[cacheKey] = createUsageCacheEntry(
-        result,
-        usageCache[cacheKey],
-        now()
-      );
-      if (targetId && cacheKey !== targetId) {
-        usageCache[targetId] = usageCache[cacheKey];
-      }
-      emitSnapshot();
+  /** Skip queued work that starts after the service was disposed. */
+  function enqueueGuarded(operation: () => Promise<void>): Promise<void> {
+    return enqueueMutation(() => {
+      if (disposed) return Promise.resolve();
+      return operation();
     });
   }
+
+  /**
+   * Mirror a refreshed OIDC session into the real Grok home when the account
+   * is active there. Without this, a rotated (possibly single-use) refresh
+   * token lives only in the plugin store and the CLI's own copy goes stale.
+   *
+   * Runs on the mutation queue and re-verifies the active account *inside*
+   * the queued operation: usage refresh is not serialized with `select`, so
+   * checking outside the queue could interleave with a switch and write the
+   * old account's session over the newly materialized one.
+   */
+  function mirrorRefreshedSessionToRealHome(
+    accountId: string,
+    authJson: string
+  ): Promise<void> {
+    return enqueueGuarded(async () => {
+      if (stateStore.get().activeAccountId !== accountId) return;
+      const account = stateStore
+        .get()
+        .accounts.find((entry) => entry.id === accountId);
+      if (account?.kind !== "oidc") return;
+      try {
+        const currentIdentity = await provider.readCurrentIdentity();
+        // Only overwrite the real home when it still belongs to this account —
+        // an external login must never be clobbered by our refresh.
+        if (
+          currentIdentity &&
+          currentIdentity.providerAccountId !== account.providerAccountId
+        ) {
+          return;
+        }
+        suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
+        await provider.writeCurrentAuthContent(authJson);
+        suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
+      } catch (error) {
+        logger?.warn(
+          "[pier.grok] could not mirror refreshed session to real home",
+          { error: error instanceof Error ? error.message : String(error) }
+        );
+      }
+    });
+  }
+
+  const doRefreshUsage = createGrokUsageRefreshRunner({
+    accountHomeDir,
+    emitSnapshot,
+    isDisposed: () => disposed,
+    now,
+    onSessionRefreshed: (accountId, authJson) =>
+      mirrorRefreshedSessionToRealHome(accountId, authJson),
+    provider,
+    signal: usageAbort.signal,
+    stateStore,
+    usageCache,
+  });
 
   async function doAdoptCurrent(): Promise<void> {
     const identity = await provider.readCurrentIdentity();
@@ -182,7 +183,10 @@ export function createGrokAccountsService(
     );
     if (existing) {
       const dir = await ensureManagedDir(existing.id);
-      await provider.syncBack(dir, undefined);
+      // Pass the fingerprint parsed from the same file so an auth.json swap
+      // between the identity read and the capture cannot bind the wrong
+      // account's credentials.
+      await provider.syncBack(dir, identity.providerAccountId);
       stateStore.mutate((s) => ({
         ...s,
         accounts: s.accounts.map((a) =>
@@ -196,7 +200,16 @@ export function createGrokAccountsService(
     } else {
       const id = randomUUID();
       const dir = await ensureManagedDir(id);
-      await provider.syncBack(dir, undefined);
+      const syncResult = await provider.syncBack(
+        dir,
+        identity.providerAccountId
+      );
+      if (syncResult === "identity-mismatch") {
+        // The external login changed between reads; the watcher will fire
+        // again for the new content.
+        await rm(dir, { recursive: true, force: true }).catch(() => undefined);
+        return;
+      }
       const account = buildOidcAccountRecord(identity, id, now());
       stateStore.mutate((s) => ({
         ...s,
@@ -210,7 +223,10 @@ export function createGrokAccountsService(
     doRefreshUsage({ force: true }).catch(() => undefined);
   }
 
-  async function doAddOidc(mode: "oauth" | "device"): Promise<void> {
+  async function doAddOidc(
+    mode: "oauth" | "device",
+    abort: AbortController
+  ): Promise<void> {
     await addOidcAccount(
       {
         accountHomeDir,
@@ -222,8 +238,11 @@ export function createGrokAccountsService(
         setLastLoginError: (error) => {
           lastLoginError = error;
         },
-        setLoginAbort: (abort) => {
-          loginAbort = abort;
+        setLoginAbort: (nextAbort) => {
+          loginAbort = nextAbort;
+        },
+        setLoginDeviceInfo: (info) => {
+          loginDeviceInfo = info;
         },
         setLoginMode: (modeValue) => {
           loginMode = modeValue;
@@ -231,83 +250,60 @@ export function createGrokAccountsService(
         setLoginPending: (pending) => {
           loginPending = pending;
         },
+        setLoginStartedAt: (startedAt) => {
+          loginStartedAt = startedAt;
+        },
         setSuppressWatchUntil: (ts) => {
           suppressWatchUntil = ts;
         },
         stateStore,
       },
-      mode
+      mode,
+      abort
     );
   }
 
-  async function doAddApiKey(apiKey: string, label?: string): Promise<void> {
-    const trimmed = apiKey.trim();
-    if (trimmed.length === 0) {
-      throw new Error("API key must not be empty");
-    }
-    const id = randomUUID();
-    const dir = await ensureManagedDir(id);
-    const displayLabel =
-      typeof label === "string" && label.trim().length > 0
-        ? label.trim()
-        : "API key";
-    const previousState = stateStore.get();
-    let stateMutated = false;
-    try {
-      await provider.storeApiKey(id, trimmed);
-      const account = buildApiKeyAccountRecord(id, displayLabel, now());
-      stateStore.mutate((s) => ({
-        ...s,
-        accounts: [...s.accounts, account],
-        revision: s.revision + 1,
-      }));
-      stateMutated = true;
-      if (stateStore.get().activeAccountId === null) {
-        suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-        await provider.materializeEmptyAuth();
-        suppressWatchUntil = now() + WATCH_SUPPRESS_MS;
-        stateStore.mutate((s) => ({
-          ...s,
-          activeAccountId: id,
-          revision: s.revision + 1,
-        }));
-      }
-      await stateStore.flush();
-      lastLoginError = null;
-      emitSnapshot();
-      // Always refresh — even non-activated accounts need a cache entry to
-      // leave the skeleton state. API keys return a known error result.
-      doRefreshUsage({ accountId: id, force: true }).catch(() => undefined);
-    } catch (error) {
-      if (stateMutated) {
-        stateStore.mutate(() => previousState);
-        await stateStore.flush().catch(() => undefined);
-      }
-      await provider.deleteApiKey(id);
-      await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-      throw error;
-    }
-  }
-
-  async function doAdd(payload: AddAccountPayload): Promise<void> {
+  async function doAdd(
+    payload: AddAccountPayload,
+    abort: AbortController
+  ): Promise<void> {
     if ("kind" in payload && payload.kind === "api_key") {
-      await doAddApiKey(payload.apiKey, payload.label);
+      await addApiKeyAccount(
+        {
+          adoptCurrent: doAdoptCurrent,
+          clearLastLoginError: () => {
+            lastLoginError = null;
+          },
+          doRefreshUsage,
+          emitSnapshot,
+          ensureManagedDir,
+          ...(logger ? { logger } : {}),
+          now,
+          provider,
+          setSuppressWatchUntil: (ts) => {
+            suppressWatchUntil = ts;
+          },
+          stateStore,
+        },
+        payload.apiKey,
+        payload.label
+      );
       return;
     }
     const mode =
       "mode" in payload && payload.mode === "device" ? "device" : "oauth";
-    await doAddOidc(mode);
+    await doAddOidc(mode, abort);
   }
 
   async function doSelect(
     accountId: string,
     syncTargets?: Parameters<typeof selectManagedAccount>[2]
-  ): Promise<void> {
-    await selectManagedAccount(
+  ): Promise<PeerSyncResult[]> {
+    return await selectManagedAccount(
       {
         accountHomeDir,
         handleDrift,
-        ...(opts.logger ? { logger: opts.logger } : {}),
+        ...(logger ? { logger } : {}),
         now,
         onSelected: (selectedId) => {
           emitSnapshot();
@@ -333,7 +329,7 @@ export function createGrokAccountsService(
     await syncManagedAccountPeers(
       {
         accountHomeDir,
-        ...(opts.logger ? { logger: opts.logger } : {}),
+        ...(logger ? { logger } : {}),
         provider,
         stateStore,
       },
@@ -342,42 +338,20 @@ export function createGrokAccountsService(
   }
 
   async function doRemove(accountId: string): Promise<void> {
-    const state = stateStore.get();
-    if (state.activeAccountId === accountId) {
-      throw new Error("Cannot remove active account — select another first");
-    }
-    const account = state.accounts.find((a) => a.id === accountId);
-    stateStore.mutate((s) => ({
-      ...s,
-      accounts: s.accounts.filter((a) => a.id !== accountId),
-      revision: s.revision + 1,
-    }));
-    try {
-      await stateStore.flush();
-    } catch (error) {
-      stateStore.mutate(() => state);
-      try {
-        await stateStore.flush();
-      } catch (rollbackError) {
-        throw new AggregateError(
-          [error, rollbackError],
-          "Grok account remove and metadata rollback failed"
-        );
-      }
-      throw error;
-    }
-    const dir = accountHomeDir(accountId);
-    const markerPath = join(dir, PIER_MANAGED_HOME_MARKER);
-    if (existsSync(markerPath)) {
-      if (account?.kind === "api_key") {
-        await provider.deleteApiKey(accountId);
-      } else {
-        await provider.deleteCredential(dir);
-      }
-      await rm(dir, { recursive: true, force: true });
-    }
-    delete usageCache[accountId];
-    emitSnapshot();
+    await removeManagedAccount(
+      {
+        accountHomeDir,
+        ...(logger ? { logger } : {}),
+        onRemoved: (removedId) => {
+          credentialErrors.delete(removedId);
+          delete usageCache[removedId];
+          emitSnapshot();
+        },
+        provider,
+        stateStore,
+      },
+      accountId
+    );
   }
 
   async function handleDrift(): Promise<void> {
@@ -410,18 +384,13 @@ export function createGrokAccountsService(
   }
 
   function setupWatch(): void {
-    watchDispose = provider.watchExternalAuth(() => {
-      if (now() < suppressWatchUntil) {
-        return;
-      }
-      enqueueMutation(async () => {
-        if (now() < suppressWatchUntil) {
-          return;
-        }
-        await handleDrift();
-      }).catch(() => {
-        /* fire-and-forget */
-      });
+    watchDispose = startSuppressedDriftWatch({
+      enqueueDriftCheck: enqueueGuarded,
+      getSuppressUntil: () => suppressWatchUntil,
+      handleDrift,
+      isDisposed: () => disposed,
+      now,
+      watchExternalAuth: (callback) => provider.watchExternalAuth(callback),
     });
   }
 
@@ -430,17 +399,32 @@ export function createGrokAccountsService(
       await stateStore.init();
       const state = stateStore.get();
       if (state.accounts.length === 0) {
-        if (await provider.readCurrentIdentity()) {
-          await enqueueMutation(doAdoptCurrent);
+        if (await provider.readCurrentIdentity().catch(() => null)) {
+          // Best-effort: a failed adoption (e.g. syncBack IO error) must not
+          // brick activation — the watcher retries on the next auth change.
+          await enqueueGuarded(doAdoptCurrent).catch((error: unknown) => {
+            logger?.warn("[pier.grok] initial adoption failed", {
+              error: error instanceof Error ? error.message : String(error),
+            });
+          });
         }
       } else {
-        await reconcileManagedCredentials({
+        const errors = await reconcileManagedCredentials({
           accounts: state.accounts,
           ensureManagedDir,
+          ...(logger ? { logger } : {}),
           managedBaseDir,
           provider,
         });
-        await enqueueMutation(handleDrift);
+        credentialErrors.clear();
+        for (const [accountId, message] of errors) {
+          credentialErrors.set(accountId, message);
+        }
+        await enqueueGuarded(handleDrift).catch((error: unknown) => {
+          logger?.warn("[pier.grok] initial drift check failed", {
+            error: error instanceof Error ? error.message : String(error),
+          });
+        });
       }
       await stateStore.flush();
       await stateStore.ensureSchemaMarker();
@@ -458,30 +442,54 @@ export function createGrokAccountsService(
       }
     },
     dispose(): void {
+      disposed = true;
+      // Also clears the suppressed-recheck timer inside the drift watch.
       watchDispose?.();
       watchDispose = null;
       clearInterval(usagePollTimer ?? undefined);
       usagePollTimer = null;
       loginAbort?.abort();
+      usageAbort.abort();
     },
     flush: () => stateStore.flush(),
     snapshot: () => buildSnapshot(),
-    add: (payload) => enqueueMutation(() => doAdd(payload)),
-    adoptCurrent: () => enqueueMutation(doAdoptCurrent),
+    add: (payload) => {
+      // Created at enqueue time (not when the queued op starts) so a cancel
+      // issued while the login is still queued is not lost.
+      const abort = new AbortController();
+      const generation = cancelGeneration;
+      return enqueueMutation(() => {
+        if (disposed || cancelGeneration !== generation) {
+          throw loginCancelledError();
+        }
+        return doAdd(payload, abort);
+      });
+    },
+    adoptCurrent: () => enqueueGuarded(doAdoptCurrent),
     cancelLogin: () => {
+      // Generation bump cancels the running login AND every queued add —
+      // deliberate: cancel expresses "no pending login should proceed". A
+      // queued add from another window is also cancelled (its renderer
+      // treats the AbortError as expected cancellation).
+      cancelGeneration += 1;
       loginAbort?.abort();
       return enqueueMutation(() => {
         loginAbort = null;
         loginPending = false;
         loginMode = null;
+        loginStartedAt = null;
+        loginDeviceInfo = null;
         emitSnapshot();
         return Promise.resolve();
       });
     },
     select: (payload) =>
-      enqueueMutation(() => doSelect(payload.accountId, payload.syncTargets)),
-    syncToPeers: (payload) => enqueueMutation(() => doSyncToPeers(payload)),
-    remove: (payload) => enqueueMutation(() => doRemove(payload.accountId)),
+      enqueueMutation(() => {
+        if (disposed) return Promise.resolve([]);
+        return doSelect(payload.accountId, payload.syncTargets);
+      }),
+    syncToPeers: (payload) => enqueueGuarded(() => doSyncToPeers(payload)),
+    remove: (payload) => enqueueGuarded(() => doRemove(payload.accountId)),
     refreshUsage: (options) => doRefreshUsage(options),
     refreshAllUsage,
   };

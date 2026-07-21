@@ -11,19 +11,21 @@ describe("settings navigation metadata", () => {
     expect(NAV_ITEMS.map((item) => item.id)).toContain("workspace");
   });
 
-  it("environment is a top-level static settings section", () => {
-    expect(NAV_ITEMS.map((item) => item.id)).toContain("environment");
+  it("projects is the top-level settings section for environment + skills", () => {
+    expect(NAV_ITEMS.map((item) => item.id)).toContain("projects");
+    expect(NAV_ITEMS.map((item) => item.id)).not.toContain("environment");
+    expect(NAV_ITEMS.map((item) => item.id)).not.toContain("skills");
   });
 
-  it("plugins follows agents so plugin settings stay visually attached to plugins", () => {
+  it("projects sits immediately before plugins", () => {
     expect(NAV_ITEMS.map((item) => item.id)).toEqual([
       "appearance",
       "terminal",
       "workspace",
-      "environment",
       "keybindings",
       "agents",
       "notifications",
+      "projects",
       "plugins",
       "updates",
     ]);

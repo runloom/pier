@@ -333,7 +333,13 @@ describe("PierDiffView", () => {
     });
     fireEvent.click(collapse);
     const collapsedItem = updateItem.mock.calls.at(-1)?.[0];
-    expect(collapsedItem).toBe(documentItem);
+    // 折叠必须克隆而非就地改写共享缓存条目:就地 +1 会把折叠中的占位符
+    // 顶到与稍后到达的正文相同的版本号,CodeView 按 version 去重时丢弃正文。
+    expect(collapsedItem).not.toBe(documentItem);
+    if (!(collapsedItem?.type === "diff" && documentItem?.type === "diff")) {
+      throw new Error("expected official diff items");
+    }
+    expect(collapsedItem.fileDiff).toBe(documentItem.fileDiff);
     expect(collapsedItem?.collapsed).toBe(true);
     expect(collapsedItem?.version).toBe(Number(documentVersion) + 1);
 
@@ -984,6 +990,47 @@ describe("PierDiffView", () => {
       expect(ref.current?.updateItems(updatedItems)).toBe(true);
     });
     expect(updateItem).toHaveBeenCalledTimes(2);
+    expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("稀疏 updateItems 遇到未知拓扑 id 时跳过并返回 false，不抛错拖垮整树", async () => {
+    const ref = createRef<PierDiffViewHandle>();
+    const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
+    const onError = vi.fn();
+    render(
+      <PierDiffView
+        appearance={appearance}
+        items={items}
+        labels={labels}
+        onError={onError}
+        ref={ref}
+      />
+    );
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    updateItem.mockClear();
+
+    let accepted: boolean | undefined;
+    expect(() => {
+      act(() => {
+        accepted = ref.current?.updateItems([
+          {
+            cacheKey: "document:file.ts",
+            id: "file.ts",
+            patch: items[0].patch.replace("+new", "+known"),
+          },
+          {
+            cacheKey: "document:missing.ts",
+            id: "sha256:89975872776f66d3cab99439a8d0be7970987bdfb858f46fe7b36bb9a44fdf64",
+            patch:
+              "diff --git a/missing.ts b/missing.ts\n--- a/missing.ts\n+++ b/missing.ts\n@@ -1 +1 @@\n-old\n+new\n",
+          },
+        ]);
+      });
+    }).not.toThrow();
+
+    expect(accepted).toBe(false);
+    expect(updateItem).toHaveBeenCalledTimes(1);
+    expect(updateItem.mock.calls[0]?.[0].id).toBe("file.ts");
     expect(onError).not.toHaveBeenCalled();
   });
 

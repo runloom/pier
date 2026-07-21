@@ -88,6 +88,11 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
+    commandId: "pier.terminal.openAgentComposer",
+    keys: "Mod+Shift+KeyI",
+    scope: "global",
+  },
+  {
     commandId: "pier.settings.open",
     keys: "Mod+Comma",
     scope: "global",

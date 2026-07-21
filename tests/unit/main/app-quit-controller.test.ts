@@ -148,6 +148,46 @@ describe("createAppQuitController", () => {
     expect(controller.getPhase()).toBe("quitting");
   });
 
+  it("skips confirmation when an intentional relaunch is already armed", async () => {
+    const parent = fakeParentWindow();
+    const { controller, deps, operations } = createHarness({
+      getActivities: vi.fn((): readonly ForegroundActivity[] => [
+        shellActivity("pnpm dev"),
+      ]),
+      getDialogParent: vi.fn(() => parent),
+      isIntentionalRelaunch: vi.fn(() => true),
+    });
+
+    controller.handleBeforeQuit(quitEvent());
+    await vi.waitFor(() => {
+      expect(deps.proceedToQuit).toHaveBeenCalledTimes(1);
+    });
+
+    expect(deps.confirmQuit).not.toHaveBeenCalled();
+    expect(deps.flushBeforeQuit).toHaveBeenCalledTimes(1);
+    expect(operations).toEqual(["flush", "proceed"]);
+    expect(controller.getPhase()).toBe("quitting");
+  });
+
+  it("disarms intentional relaunch when flush fails so later quits still confirm", async () => {
+    const disarmIntentionalRelaunch = vi.fn();
+    const error = new Error("flush failed");
+    const { controller, deps } = createHarness({
+      disarmIntentionalRelaunch,
+      flushBeforeQuit: vi.fn(() => Promise.reject(error)),
+      isIntentionalRelaunch: vi.fn(() => true),
+    });
+
+    controller.handleBeforeQuit(quitEvent());
+    await vi.waitFor(() => {
+      expect(controller.getPhase()).toBe("idle");
+    });
+
+    expect(disarmIntentionalRelaunch).toHaveBeenCalledTimes(1);
+    expect(deps.proceedToQuit).not.toHaveBeenCalled();
+    expect(deps.logFailure).toHaveBeenCalledWith(error);
+  });
+
   it("returns to idle without flushing or proceeding when dangerous activity confirmation is cancelled", async () => {
     const parent = fakeParentWindow();
     const { controller, deps } = createHarness({

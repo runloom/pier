@@ -10,6 +10,7 @@ import type {
   SystemNotificationUnavailableReason,
 } from "@shared/contracts/notification.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
+import type { ProjectSkillsInvalidatedEvent } from "@shared/contracts/project-skills.ts";
 import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
 import type { UsageAggregateSnapshot } from "@shared/contracts/usage-data.ts";
@@ -109,4 +110,31 @@ export function broadcastSystemNotificationPermissionChanged(
     PIER_BROADCAST.SYSTEM_NOTIFICATION_PERMISSION_CHANGED,
     snapshot
   );
+}
+
+/**
+ * 向单一 renderer 下发内置 Attention 播音。
+ * 优先 focused 窗，否则第一个存活窗；禁止 all-windows 各播一次。
+ */
+export function sendAttentionSoundPlayToOneWindow(payload: {
+  soundId: string;
+}): boolean {
+  const win = windowManager.getFocused() ?? windowManager.getAll()[0] ?? null;
+  if (!win || win.isDestroyed()) {
+    return false;
+  }
+  if (win.webContents.isDestroyed()) {
+    return false;
+  }
+  win.webContents.send(PIER_BROADCAST.ATTENTION_SOUND_PLAY, payload);
+  return true;
+}
+
+export function broadcastProjectSkillsInvalidated(
+  event: Omit<ProjectSkillsInvalidatedEvent, "type">
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.PROJECT_SKILLS_INVALIDATED, {
+    type: "project-skills.invalidated",
+    ...event,
+  } satisfies ProjectSkillsInvalidatedEvent);
 }

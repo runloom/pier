@@ -19,6 +19,9 @@ import {
 export type TerminalStatusItemContext = RendererTerminalStatusItemContext;
 export type TerminalStatusItem = RendererTerminalStatusItem;
 
+/** Matches `h-7` on the status bar root — keep composer / floating insets in sync. */
+export const TERMINAL_STATUS_BAR_HEIGHT_PX = 28;
+
 class TerminalStatusItemRegistry extends Notifier {
   private readonly items = new Map<string, TerminalStatusItem>();
 
@@ -189,7 +192,7 @@ export function TerminalStatusBar({
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: 状态栏是原生右键菜单的触发面，无准确交互 ARIA role 可用
     <div
-      className="absolute inset-x-0 bottom-0 flex h-7 items-center gap-1 px-1.5 leading-none"
+      className="absolute inset-x-0 bottom-0 z-0 flex h-7 items-center gap-1 px-1.5 leading-none"
       data-testid="terminal-status-bar"
       onContextMenu={(event) => {
         openTerminalStatusBarContextMenu(event).catch((err: unknown) => {

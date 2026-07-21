@@ -72,4 +72,24 @@ start("plugin-grok renderer watch", "pnpm", [
   "@pier/plugin-grok",
   "dev:renderer",
 ]);
+start("plugin-ssh main watch", "pnpm", [
+  "--filter",
+  "@pier/plugin-ssh",
+  "dev:main",
+]);
+start("plugin-ssh renderer watch", "pnpm", [
+  "--filter",
+  "@pier/plugin-ssh",
+  "dev:renderer",
+]);
+start("plugin-claude main watch", "pnpm", [
+  "--filter",
+  "@pier/plugin-claude",
+  "dev:main",
+]);
+start("plugin-claude renderer watch", "pnpm", [
+  "--filter",
+  "@pier/plugin-claude",
+  "dev:renderer",
+]);
 start("electron dev", "node", ["./scripts/dev-profile.mjs", "electron-dev"]);

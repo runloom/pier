@@ -1,6 +1,7 @@
 import type { CrossToolSyncTarget } from "../shared/accounts.ts";
 import {
   extractTokenSetFromCodexAuth,
+  type SyncTargetResult,
   syncCrossToolCredentials,
 } from "./cross-tool-sync.ts";
 import type { AgentAccountProvider } from "./types.ts";
@@ -12,7 +13,9 @@ export interface PeerCredentialSyncLogger {
 
 /**
  * Materialize the managed Codex OAuth token into peer tools.
- * Failures are independent per target; the aggregate error message lists them.
+ * Failures are independent per target; per-target results are returned so
+ * callers can surface partial failures to the user instead of hiding them
+ * in the log.
  */
 export async function syncManagedAccountToPeers(options: {
   accountHomeDir: string;
@@ -22,10 +25,10 @@ export async function syncManagedAccountToPeers(options: {
   /** When true, throw if any target fails. Select keeps switch best-effort. */
   throwOnFailure?: boolean | undefined;
   syncTargets: readonly CrossToolSyncTarget[];
-}): Promise<void> {
+}): Promise<SyncTargetResult[]> {
   const targets = options.syncTargets.filter((target) => target !== "codex");
   if (targets.length === 0) {
-    return;
+    return [];
   }
 
   try {
@@ -52,12 +55,17 @@ export async function syncManagedAccountToPeers(options: {
           .join("; ")
       );
     }
+    return results;
   } catch (error) {
     if (options.throwOnFailure) {
       throw error instanceof Error ? error : new Error(String(error));
     }
+    const message = error instanceof Error ? error.message : String(error);
     options.logger?.warn("[pier.codex] cross-tool sync skipped", {
-      error: error instanceof Error ? error.message : String(error),
+      error: message,
     });
+    // Token extraction failed before any target write — every requested
+    // target failed with the same cause.
+    return targets.map((target) => ({ target, ok: false, error: message }));
   }
 }

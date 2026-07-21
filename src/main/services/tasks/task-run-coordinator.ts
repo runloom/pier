@@ -6,6 +6,7 @@ import type {
   TaskRunsSnapshot,
   TaskSpawnMode,
 } from "@shared/contracts/tasks.ts";
+import { moveRunningOwnerWindow as moveOwnerWindow } from "./task-run-owner-transfer.ts";
 import {
   aggregateStatus,
   controlSnapshot,
@@ -60,6 +61,11 @@ export interface TaskRunCoordinator {
   ): TaskRunControlEntry | null;
   isStopRequested(panelId: string, windowId?: string | undefined): boolean;
   markPanelClosed(panelId: string, windowId?: string | undefined): void;
+  moveRunningOwnerWindow(input: {
+    panelId: string;
+    sourceWindowId: string;
+    targetWindowId: string;
+  }): void;
   rejectStop(
     runId: string,
     taskIds: ReadonlySet<string>
@@ -96,7 +102,6 @@ export function createTaskRunCoordinator({
   const panelToRunNode = new Map<string, { runId: string; taskId: string }>();
   let sequence = 0;
   let snapshotVersion = 0;
-
   const runsSnapshot = (windowId?: string | undefined): TaskRunsSnapshot => ({
     runs: Object.fromEntries(
       [...runs.entries()]
@@ -389,6 +394,9 @@ export function createTaskRunCoordinator({
       if (run) {
         touch(run);
       }
+    },
+    moveRunningOwnerWindow(input) {
+      moveOwnerWindow({ ...input, panelToRunNode, runs, touch });
     },
     rejectStop(runId, taskIds) {
       const run = runs.get(runId);

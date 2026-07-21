@@ -224,6 +224,59 @@ export class FileEditorViewSession {
     this.#scroll = { left: 0, top: 0 };
   }
 
+  captureSnapshot(): {
+    selection?: { anchor: number; head: number };
+    scroll: { left: number; top: number };
+  } {
+    const view = this.#view;
+    if (view) {
+      const main = view.state.selection.main;
+      return {
+        selection: { anchor: main.anchor, head: main.head },
+        scroll: {
+          left: view.scrollDOM.scrollLeft,
+          top: view.scrollDOM.scrollTop,
+        },
+      };
+    }
+    const saved = this.#savedState;
+    if (saved) {
+      const main = saved.selection.main;
+      return {
+        selection: { anchor: main.anchor, head: main.head },
+        scroll: { ...this.#scroll },
+      };
+    }
+    return { scroll: { ...this.#scroll } };
+  }
+
+  applySnapshot(snapshot: {
+    selection?: { anchor: number; head: number };
+    scroll?: { left: number; top: number };
+  }): void {
+    if (snapshot.scroll) {
+      this.#scroll = {
+        left: snapshot.scroll.left,
+        top: snapshot.scroll.top,
+      };
+    }
+    const view = this.#view;
+    if (!view) {
+      return;
+    }
+    if (snapshot.selection) {
+      view.dispatch({
+        selection: {
+          anchor: snapshot.selection.anchor,
+          head: snapshot.selection.head,
+        },
+      });
+    }
+    if (snapshot.scroll) {
+      this.#restoreScroll();
+    }
+  }
+
   applySearchQuery(
     search: string,
     replace: string,

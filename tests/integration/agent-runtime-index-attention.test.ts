@@ -68,6 +68,7 @@ describe("agent runtime index + attention integration", () => {
 
     const attention = createAgentAttentionService({
       isTargetPanelFocused,
+      isOwnerWindowFocused: () => false,
       now: () => now,
       resolveLocale: () => "en",
       showNotification,
@@ -78,7 +79,8 @@ describe("agent runtime index + attention integration", () => {
       expect.objectContaining({
         agentRef: makeAgentRef("22", "wait"),
         kind: AGENT_ATTENTION_KIND,
-      })
+      }),
+      expect.objectContaining({ silent: expect.any(Boolean) })
     );
 
     showNotification.mockClear();
@@ -112,12 +114,14 @@ describe("agent runtime index + attention integration", () => {
     await expect(index.focusWaiting()).resolves.toEqual({ status: "ok" });
   });
 
-  it("does not notify on ready or default error", async () => {
+  it("notifies on turn-end ready when unfocused, not on first projection or default error", async () => {
     const attention = createAgentAttentionService({
       isTargetPanelFocused,
+      isOwnerWindowFocused: () => false,
       now: () => now,
       showNotification,
     });
+    // 首次投影（boot / 新面板）即 ready 或 error：不通知。
     await attention.observe(null, {
       activities: [
         agent({ panelId: "r", status: "ready", windowId: "1" }),
@@ -126,5 +130,31 @@ describe("agent runtime index + attention integration", () => {
       ts: 1,
     });
     expect(showNotification).not.toHaveBeenCalled();
+
+    // 真实回合结束边沿 processing→ready：通知；error 默认关不通知。
+    await attention.observe(
+      {
+        activities: [
+          agent({ panelId: "r", status: "processing", windowId: "1" }),
+          agent({ panelId: "e", status: "processing", windowId: "1" }),
+        ],
+        ts: 2,
+      },
+      {
+        activities: [
+          agent({ panelId: "r", status: "ready", windowId: "1" }),
+          agent({ panelId: "e", status: "error", windowId: "1" }),
+        ],
+        ts: 3,
+      }
+    );
+    expect(showNotification).toHaveBeenCalledTimes(1);
+    expect(showNotification).toHaveBeenCalledWith(
+      expect.objectContaining({
+        agentRef: makeAgentRef("1", "r"),
+        kind: AGENT_ATTENTION_KIND,
+      }),
+      expect.objectContaining({ silent: expect.any(Boolean) })
+    );
   });
 });

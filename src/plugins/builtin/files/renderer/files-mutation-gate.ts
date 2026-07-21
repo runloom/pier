@@ -11,6 +11,10 @@ export class FilesMutationGate {
   readonly #inFlight = new Set<Promise<unknown>>();
   #suspended = false;
 
+  get suspended(): boolean {
+    return this.#suspended;
+  }
+
   async run<T>(operation: () => Promise<T> | T): Promise<T> {
     if (this.#suspended) {
       throw new FilesMutationSuspendedError();
@@ -24,12 +28,20 @@ export class FilesMutationGate {
     }
   }
 
+  /**
+   * Drain in-flight mutations without flipping the global suspended flag.
+   * Shared by transfer-scoped barriers so they reuse the same Promise set.
+   */
+  async waitForInFlight(signal: AbortSignal): Promise<void> {
+    while (this.#inFlight.size > 0) {
+      await this.#waitForCurrent(signal);
+    }
+  }
+
   async suspend(signal: AbortSignal): Promise<void> {
     this.#suspended = true;
     try {
-      while (this.#inFlight.size > 0) {
-        await this.#waitForCurrent(signal);
-      }
+      await this.waitForInFlight(signal);
     } catch (error) {
       this.#suspended = false;
       throw error;

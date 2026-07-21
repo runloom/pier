@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { createUsagePollingRegistry } from "@pier/plugin-api/account-usage";
 import type {
   MainPluginContext,
   MainPluginModule,
@@ -23,16 +24,20 @@ export const plugin: MainPluginModule = {
     const codexContext = context as CodexPrivateMainPluginContext;
     const stateStore = createCodexAccountsStateStore(
       join(context.paths.workDir, "accounts.json"),
-      context.plugin.version
+      context.plugin.version,
+      context.logger
     );
     const provider = createCodexProvider({
       credentials: context.secrets,
       logger: context.logger,
     });
     const managedBaseDir = join(context.paths.workDir, "runtime-homes");
-    const usagePollingConsumers = new Set<string>();
+    // TTL-based lease registry: renderer leases carry per-mount unique ids
+    // and renew on a heartbeat, so a reloaded/crashed window cannot leave
+    // polling running forever, and two windows never share one lease entry.
+    const usagePolling = createUsagePollingRegistry();
     const service = createCodexAccountsService({
-      hasVisibleTarget: () => usagePollingConsumers.size > 0,
+      hasVisibleTarget: () => usagePolling.hasVisibleTarget(),
       logger: context.logger,
       managedBaseDir,
       provider,
@@ -47,9 +52,8 @@ export const plugin: MainPluginModule = {
 
     registerCodexRpcHandlers({
       acquireUsagePolling: (consumerId) => {
-        const shouldRefresh = usagePollingConsumers.size === 0;
-        usagePollingConsumers.add(consumerId);
-        if (shouldRefresh) {
+        const { firstConsumer } = usagePolling.acquire(consumerId);
+        if (firstConsumer) {
           service.refreshAllUsage().catch((error: unknown) => {
             context.logger.warn("[pier.codex] usage refresh failed", error);
           });
@@ -57,7 +61,7 @@ export const plugin: MainPluginModule = {
         return Promise.resolve();
       },
       releaseUsagePolling: (consumerId) => {
-        usagePollingConsumers.delete(consumerId);
+        usagePolling.release(consumerId);
       },
       rpc: context.rpc,
       service,
@@ -65,7 +69,7 @@ export const plugin: MainPluginModule = {
     context.lifecycle.onBeforeQuit(() => service.flush());
     context.logger.info("[pier.codex] activated");
     return () => {
-      usagePollingConsumers.clear();
+      usagePolling.clear();
       service.dispose();
     };
   },

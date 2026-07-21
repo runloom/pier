@@ -23,7 +23,10 @@ import {
   accountDisplayLabel,
   accountMembershipSummary,
 } from "./account-display.tsx";
-import { openSwitchConfirmDialog } from "./account-switch.ts";
+import {
+  notifyPeerSyncFailures,
+  openSwitchConfirmDialog,
+} from "./account-switch.ts";
 import { formatAccountError, type Translate } from "./format-account-error.ts";
 
 export interface AccountPickerProps {
@@ -67,10 +70,11 @@ export function AccountPicker({
     }
     setSwitchingAccountId(accountId);
     try {
-      await context.rpc.invoke("accounts.select", {
+      const selectResult = await context.rpc.invoke("accounts.select", {
         accountId,
         syncTargets: result.syncTargets.filter((target) => target !== "grok"),
       });
+      notifyPeerSyncFailures(context, t, selectResult);
     } catch (error) {
       await reportError(error);
     } finally {

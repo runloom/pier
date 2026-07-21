@@ -4,6 +4,11 @@ import { createLogger } from "@shared/logger.ts";
 import { app } from "electron";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
 import {
+  getTerminalTaskLifecycleForTransfer,
+  getTerminalTaskOutputBindingsForTransfer,
+  getTerminalTaskServiceForTransfer,
+} from "../ipc/terminal.ts";
+import {
   createExternalMainPluginRuntime,
   type ExternalMainPluginContext,
   type ExternalMainPluginRuntime,
@@ -30,6 +35,7 @@ import { createAppUpdateService } from "../services/app-updates/app-update-servi
 import { createElectronAppUpdaterAdapter } from "../services/app-updates/electron-updater-adapter.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createFileDraftsService } from "../services/file-drafts-service.ts";
+import { FilePathTransactionLock } from "../services/file-path-transaction-lock.ts";
 import { createFileService } from "../services/file-service.ts";
 import { createFileWatchService } from "../services/file-watch-service.ts";
 import { GitReviewService } from "../services/git-review/git-review-service.ts";
@@ -59,7 +65,6 @@ import { createProcessEnvironmentService } from "../services/process-environment
 import { createRendererCommandService } from "../services/renderer-command-service.ts";
 import { createTaskService } from "../services/tasks/task-service.ts";
 import { createTerminalProfileService } from "../services/terminal-profile-service.ts";
-import { createWindowService } from "../services/window-service.ts";
 import { createWorkspaceService } from "../services/workspace-service.ts";
 import { createWorktreeService } from "../services/worktree-service.ts";
 import { createSecretsStore } from "../state/secrets-store.ts";
@@ -72,6 +77,7 @@ import {
 } from "../state/terminal-status-bar-prefs.ts";
 import { showNativeWindowCloseFailure } from "../windows/native-window-close-failure.ts";
 import { windowManager } from "../windows/window-manager.ts";
+import { wireAppCoreWindowAndPanelTransfer } from "./app-core-panel-transfer.ts";
 import { requireAppCoreInitialization } from "./app-core-readiness.ts";
 import { createAppCoreUsageData } from "./app-core-usage-data.ts";
 import {
@@ -92,17 +98,19 @@ import { createLazyAppCore } from "./lazy-app-core.ts";
 import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
+import { wireProjectSkills } from "./project-skills-wiring.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
+import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
 import {
   broadcastAppUpdateChanged,
   broadcastEnvironmentsChanged,
   broadcastMruState,
   broadcastPluginRegistryChanged,
+  broadcastProjectSkillsInvalidated,
   broadcastTaskRunsSnapshot,
   broadcastTerminalStatusBarPrefs,
   broadcastWorktreeCreateProgress,
 } from "./window-broadcasts.ts";
-
 export interface PierAppCore {
   clients: PierClientRegistry;
   commandRouter: CommandRouter;
@@ -325,14 +333,52 @@ function createPierAppCore(): PierAppCore {
     snapshot: () => foregroundActivityService.snapshot(),
     rendererCommand,
   });
+
+  const filePathTransactionLock = new FilePathTransactionLock();
+  const files = createFileService({
+    transactionLock: filePathTransactionLock,
+  });
+  const localEnvironments = createLocalEnvironmentService({
+    processEnvironment,
+  });
+  const panelContexts = createPanelContextService();
+  const { projectSkills, agentLaunchGate } = wireProjectSkills({
+    userData: app.getPath("userData"),
+    isProduction: runtimeMode === "production",
+    transactionLock: filePathTransactionLock,
+    panelContexts,
+    localEnvironments,
+    listInstalledAgents: async () =>
+      (await agentDetection.detect()).detectedIds,
+    onInvalidated: (event) => {
+      broadcastProjectSkillsInvalidated(event);
+    },
+  });
+
+  const workspaceService = createWorkspaceService();
+  const { panelTransfer: panelTransferRef, window: windowService } =
+    wireAppCoreWindowAndPanelTransfer({
+      fileDrafts,
+      fileDraftsFlush: () => fileDrafts.flush(),
+      getTaskLifecycle: () => getTerminalTaskLifecycleForTransfer(),
+      getTaskOutputBindings: () => getTerminalTaskOutputBindingsForTransfer(),
+      getTaskService: () => getTerminalTaskServiceForTransfer(),
+      pluginDisableTransitions,
+      rendererCommand,
+      reportCloseFailureFallback: showNativeWindowCloseFailure,
+      workspace: workspaceService,
+    });
+
   const services: PierCoreServices = {
     agentDetection,
     agentRuntimeIndex,
     agentUsage,
+    agentLaunchGate,
     ai: createAiService({
       detectAgents: async () => (await agentDetection.detect()).detectedIds,
       readAgentUsage: () => agentUsage.read(),
       readPreferences: () => preferences.read(),
+      launchGate: agentLaunchGate,
     }),
     appUpdates: createAppUpdateService({
       currentVersion: app.getVersion(),
@@ -346,47 +392,23 @@ function createPierAppCore(): PierAppCore {
       broadcast: broadcastMruState,
     }),
     fileDrafts,
-    files: createFileService(),
+    files,
     fileWatch: createFileWatchService(),
     preferences,
+    projectSkills,
     secrets,
     usageData,
     processEnvironment,
-    localEnvironments: createLocalEnvironmentService({ processEnvironment }),
+    localEnvironments,
     plugins: pluginHost.plugins,
     managedPlugins,
     pluginDisableTransitions,
     pluginSettings,
-    panelContexts: createPanelContextService(),
+    panelContexts,
     rendererCommand,
     tasks: createTaskService({
       onTaskRunsChanged: broadcastTaskRunsSnapshot,
-      onTaskActivity: {
-        onLaunched: (panelId, windowId, task) => {
-          if (!windowId) {
-            // windowId 缺失的 activity 永远路由不到任何 renderer（广播按
-            // electron id 定向），入聚合器只会留一个不可见 slot——拒收并留痕。
-            // 生产 openTerminalForLaunch 无 windowId 会直接 throw, 此处仅防
-            // 类型层面的 undefined。
-            console.warn(
-              "[task-activity] missing windowId, activity skipped:",
-              panelId
-            );
-            return;
-          }
-          foregroundActivityService.taskLaunched(panelId, windowId, task);
-        },
-        onCleared: (panelId, windowId, args) => {
-          if (!windowId) {
-            console.warn(
-              "[task-activity] missing windowId on clear, activity skipped:",
-              panelId
-            );
-            return;
-          }
-          foregroundActivityService.taskFinished(panelId, windowId, args);
-        },
-      },
+      onTaskActivity: createTaskActivityHandlers(foregroundActivityService),
       processEnvironment,
     }),
     terminalProfiles: createTerminalProfileService(),
@@ -415,45 +437,9 @@ function createPierAppCore(): PierAppCore {
       },
     },
     terminalLaunches: terminalLaunchRegistry,
-    window: createWindowService({
-      finalizeRendererClose: async (windowId, transitionId, outcome) => {
-        const result = await rendererCommand.execute({
-          outcome,
-          transitionId,
-          type: "workspace.finalizeClose",
-          windowId,
-        });
-        if (!result.ok) {
-          throw new Error(result.error.message);
-        }
-      },
-      flushCriticalState: () => fileDrafts.flush(),
-      prepareRendererClose: async (windowId, reason, transitionId) => {
-        const result = await rendererCommand.execute({
-          reason,
-          transitionId,
-          type: "workspace.prepareClose",
-          windowId,
-        });
-        if (!result.ok) {
-          throw new Error(result.error.message);
-        }
-      },
-      reportCloseFailure: async (windowId, error) => {
-        const result = await rendererCommand.execute({
-          body: error instanceof Error ? error.message : String(error),
-          type: "workspace.reportCloseFailure",
-          windowId,
-        });
-        if (!result.ok) {
-          throw new Error(result.error.message);
-        }
-      },
-      reportCloseFailureFallback: showNativeWindowCloseFailure,
-      runWhenPluginTransitionsIdle: (operation) =>
-        pluginDisableTransitions.runWindowCreation(operation),
-    }),
-    workspace: createWorkspaceService(),
+    window: windowService,
+    panelTransfer: panelTransferRef,
+    workspace: workspaceService,
     worktrees: createWorktreeService({
       readPreferences: () => preferences.read(),
     }),

@@ -7,35 +7,13 @@ import {
   environmentWorktreeBindingRequestSchema,
 } from "./environment.ts";
 import { fileCommandSchemas } from "./file-commands.ts";
-import {
-  getFileContentOptionsSchema,
-  gitCommitOptionsSchema,
-  gitCreateBranchOptionsSchema,
-  gitDeleteBranchOptionsSchema,
-  gitDiffOptionsSchema,
-  gitDiffSearchBranchesOptionsSchema,
-  gitLogOptionsSchema,
-  gitMergeOptionsSchema,
-  gitPathsSchema,
-  gitRebaseOptionsSchema,
-  gitStashOptionsSchema,
-  gitStashPopOptionsSchema,
-  listBranchesOptionsSchema,
-} from "./git.ts";
-import { gitReviewCommandSchemas } from "./git-review.ts";
+import { gitCommandSchemas } from "./git-commands.ts";
+import { panelTransferPierCommandSchemas } from "./panel-transfer.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
-import {
-  appRelaunchCommandSchema,
-  pluginCatalogListCommandSchema,
-  pluginCheckUpdatesCommandSchema,
-  pluginDevOverrideClearCommandSchema,
-  pluginDevOverrideSetCommandSchema,
-  pluginInstallCommandSchema,
-  pluginRollbackCommandSchema,
-  pluginUninstallCommandSchema,
-  pluginUpdateCommandSchema,
-} from "./plugin-commands.ts";
+import { managedPluginCommandSchemas } from "./plugin-commands.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
+import { projectPreferencesPatchSchema } from "./preferences-patch.ts";
+import { projectSkillsCommandSchemas } from "./project-skills-commands.ts";
 import { taskSpawnModeSchema } from "./tasks.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
@@ -59,8 +37,6 @@ import {
 } from "./worktree.ts";
 export const pierProtocolVersionSchema = z.literal(1);
 export type PierProtocolVersion = z.infer<typeof pierProtocolVersionSchema>;
-
-import { projectPreferencesPatchSchema } from "./preferences-patch.ts";
 
 export const pierCommandPlacementSchema = z.enum([
   "active-tab",
@@ -258,162 +234,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
     type: z.literal("terminalStatusBar.prefs.applyOverrides"),
   }),
   ...fileCommandSchemas,
-  // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
-  z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),
-  ...gitReviewCommandSchemas,
-  z.object({ type: z.literal("git.listIgnored"), cwd: z.string().min(1) }),
-  z.object({ type: z.literal("git.getRepoInfo"), cwd: z.string().min(1) }),
-  z.object({
-    type: z.literal("git.isWorkingTreeClean"),
-    cwd: z.string().min(1),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: gitDiffOptionsSchema.optional(),
-    type: z.literal("git.getDiffText"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: gitDiffOptionsSchema.optional(),
-    type: z.literal("git.getDiffSummary"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: gitDiffOptionsSchema.optional(),
-    type: z.literal("git.getDiffPatch"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: gitLogOptionsSchema.optional(),
-    type: z.literal("git.getLog"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    oid: z.string().min(1),
-    type: z.literal("git.getCommit"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    oid: z.string().min(1),
-    type: z.literal("git.getCommitPatch"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: getFileContentOptionsSchema,
-    type: z.literal("git.getFileContent"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: listBranchesOptionsSchema,
-    type: z.literal("git.listBranches"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: gitDiffSearchBranchesOptionsSchema.optional(),
-    type: z.literal("git.searchBranches"),
-  }),
-  z.object({ type: z.literal("git.listTags"), cwd: z.string().min(1) }),
-  z.object({
-    cwd: z.string().min(1),
-    ref: z.string().min(1),
-    type: z.literal("git.resolveRef"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    name: z.string().min(1),
-    type: z.literal("git.validateBranchName"),
-  }),
-  // Git 写命令(需 git:write capability)
-  gitPathsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.stage"),
-  }),
-  gitPathsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.unstage"),
-  }),
-  gitPathsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.discardChanges"),
-  }),
-  gitCommitOptionsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.commit"),
-  }),
-  gitCreateBranchOptionsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.createBranch"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    name: z.string().min(1),
-    type: z.literal("git.createAndSwitchBranch"),
-  }),
-  gitDeleteBranchOptionsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.deleteBranch"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    name: z.string().min(1),
-    type: z.literal("git.checkoutBranch"),
-  }),
-  gitMergeOptionsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.merge"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    type: z.literal("git.mergeAbort"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    type: z.literal("git.push"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    type: z.literal("git.pullFastForward"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    type: z.literal("git.sync"),
-  }),
-  gitStashOptionsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.stash"),
-  }),
-  gitStashPopOptionsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.stashPop"),
-  }),
-  gitStashPopOptionsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.stashApply"),
-  }),
-  gitStashPopOptionsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.stashDrop"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    type: z.literal("git.stashList"),
-  }),
-  gitRebaseOptionsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.rebase"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    type: z.literal("git.rebaseAbort"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    type: z.literal("git.rebaseContinue"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    type: z.literal("git.undoLastCommit"),
-  }),
+  ...gitCommandSchemas,
   // Local environment 域命令
   environmentSnapshotRequestSchema.extend({
     type: z.literal("environment.snapshot"),
@@ -436,15 +257,9 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   aiGenerateTextRequestSchema.extend({
     type: z.literal("ai.generateText"),
   }),
-  pluginCatalogListCommandSchema,
-  pluginCheckUpdatesCommandSchema,
-  pluginInstallCommandSchema,
-  pluginUpdateCommandSchema,
-  pluginRollbackCommandSchema,
-  pluginUninstallCommandSchema,
-  pluginDevOverrideSetCommandSchema,
-  pluginDevOverrideClearCommandSchema,
-  appRelaunchCommandSchema,
+  ...managedPluginCommandSchemas,
+  ...panelTransferPierCommandSchemas,
+  ...projectSkillsCommandSchemas,
 ]);
 
 export type PierCommand = z.infer<typeof pierCommandSchema>;

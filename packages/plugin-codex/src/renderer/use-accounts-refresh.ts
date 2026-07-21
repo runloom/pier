@@ -16,7 +16,7 @@ export function useAccountsRefresh(options: {
     context: options.context,
     i18n: {
       refreshAllSuccess: {
-        fallback: "All account usage refreshed",
+        fallback: "All usage refreshed",
         key: "pier.codex.accounts.settings.usageRefreshAllSuccess",
       },
       refreshSuccess: {

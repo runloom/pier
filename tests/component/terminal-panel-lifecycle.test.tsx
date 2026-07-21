@@ -1,3 +1,4 @@
+import type { AgentActivity } from "@shared/contracts/foreground-activity.ts";
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import type {
   TaskOutputPanelParams,
@@ -27,10 +28,15 @@ import {
   resetTerminalLaunchConfirmationsForTest,
   waitForTerminalLaunch,
 } from "@/lib/workspace/terminal-launch-confirmation.ts";
+import { TERMINAL_COMPOSER_GAP_PX } from "@/panel-kits/terminal/terminal-composer.tsx";
 import { hasRegisteredTerminalAnchor } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { TerminalPanel } from "@/panel-kits/terminal/terminal-panel.tsx";
-import { terminalStatusItemRegistry } from "@/panel-kits/terminal/terminal-status-bar.tsx";
+import {
+  TERMINAL_STATUS_BAR_HEIGHT_PX,
+  terminalStatusItemRegistry,
+} from "@/panel-kits/terminal/terminal-status-bar.tsx";
 import { useFontStore } from "@/stores/font.store.ts";
+import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import {
@@ -275,6 +281,19 @@ function createPanelProps(
   return props as unknown as TestPanelProps;
 }
 
+function agentActivityFor(panelId: string): AgentActivity {
+  return {
+    agentId: "claude",
+    kind: "agent",
+    panelId,
+    source: "launch",
+    spawnedAt: 1,
+    subagentCount: 0,
+    updatedAt: 1,
+    windowId: "test-window",
+  };
+}
+
 const context: PanelContext = {
   contextId: "ctx-pier",
   cwd: "/Users/xyz/ABC/pier",
@@ -345,6 +364,9 @@ describe("TerminalPanel lifecycle", () => {
       uiFontFamily: "",
     });
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
+    // M4: composerMounted 现在还要求本面板前台活动是 agent；默认无活动，
+    // 需要挂载 composer 的用例显式注入（见 agentActivityFor）。
+    useForegroundActivityStore.setState({ activities: {}, ts: 0 });
     useTaskRunsStore.setState({
       error: null,
       initialized: true,
@@ -666,19 +688,6 @@ describe("TerminalPanel lifecycle", () => {
     });
   });
 
-  it("does not create a hidden inactive native terminal only because its anchor is renderable", async () => {
-    const props = createPanelProps({ isActive: false, isVisible: false });
-
-    render(<TerminalPanel {...props} />);
-
-    await act(async () => {
-      await new Promise((resolve) => setTimeout(resolve, 20));
-    });
-
-    expect(window.pier.terminal.create).not.toHaveBeenCalled();
-    expect(TestResizeObserver.observeCount).toBe(1);
-  });
-
   it("creates a native terminal for a hidden panel once it becomes active with a renderable anchor", async () => {
     const props = createPanelProps({ isActive: false, isVisible: false });
 
@@ -767,7 +776,7 @@ describe("TerminalPanel lifecycle", () => {
     expect(statusBar).toHaveTextContent("/Users/xyz/ABC/pier");
     expect(
       container.querySelector(".terminal-anchor")?.className ?? ""
-    ).toContain("bottom-6");
+    ).toContain("bottom-[var(--terminal-content-bottom)]");
   });
 
   it("mounts the terminal status bar for a panel with task metadata", async () => {
@@ -785,7 +794,7 @@ describe("TerminalPanel lifecycle", () => {
     ).not.toBeNull();
     expect(
       container.querySelector(".terminal-anchor")?.className ?? ""
-    ).toContain("bottom-6");
+    ).toContain("bottom-[var(--terminal-content-bottom)]");
   });
 
   it("keeps the status bar mounted when no item is visible for the panel", async () => {
@@ -820,7 +829,7 @@ describe("TerminalPanel lifecycle", () => {
     ).not.toBeNull();
     expect(
       container.querySelector(".terminal-anchor")?.className ?? ""
-    ).toContain("bottom-6");
+    ).toContain("bottom-[var(--terminal-content-bottom)]");
   });
 
   it("passes launchId into native terminal creation", async () => {
@@ -1871,32 +1880,6 @@ describe("TerminalPanel lifecycle", () => {
     });
   });
 
-  it("uses dockview dimension events and anchor resize observations for terminal frame updates", async () => {
-    const props = createPanelProps();
-
-    render(<TerminalPanel {...props} />);
-
-    await waitFor(() => {
-      expect(window.pier.terminal.create).toHaveBeenCalledWith(
-        expect.objectContaining({ panelId: "terminal-1" })
-      );
-    });
-    await waitFor(() => {
-      expect(TestResizeObserver.observeCount).toBe(1);
-    });
-    requestTerminalPresentationMock.mockClear();
-
-    props.emitDimensions({ height: 340, width: 460 });
-
-    anchorFrame = {
-      height: 340,
-      width: 460,
-      x: 10,
-      y: 20,
-    };
-    TestResizeObserver.instances[0]?.emit();
-  });
-
   it("sends a trailing native frame after window layout pulses settle", async () => {
     render(<TerminalPanel {...createPanelProps()} />);
 
@@ -2033,64 +2016,6 @@ describe("TerminalPanel lifecycle", () => {
 
     expect(search).toHaveAccessibleName("Find in terminal");
     expect(input).toHaveFocus();
-  });
-
-  it("holds Web keyboard ownership for the whole search lifecycle, not DOM focus", async () => {
-    setTerminalBasePanel({
-      kind: "terminal",
-      panelId: "terminal-1",
-    });
-    vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
-    render(<TerminalPanel {...createPanelProps()} />);
-    act(() => {
-      window.dispatchEvent(
-        new CustomEvent("pier:terminal:open-search", {
-          detail: { panelId: "terminal-1" },
-        })
-      );
-    });
-    await screen.findByTestId("terminal-search-input");
-
-    // 搜索可见 → 持有一次 web 焦点请求，effective = web，basePanel 不被改写。
-    await waitFor(() => {
-      expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          basePanel: { kind: "terminal", panelId: "terminal-1" },
-          webRequestCount: 1,
-        })
-      );
-    });
-
-    // DOM 焦点移动（栏内或栏外）都不应改变请求计数 —— 不再由 focus/blur 驱动。
-    screen.getByRole("button", { name: "Previous match" }).focus();
-    expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
-      expect.objectContaining({ webRequestCount: 1 })
-    );
-
-    const outside = document.createElement("button");
-    document.body.append(outside);
-    try {
-      outside.focus();
-      // 焦点移到搜索栏外、搜索仍可见 —— 仍持有 web 请求（不回写 terminal）。
-      expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
-        expect.objectContaining({ webRequestCount: 1 })
-      );
-    } finally {
-      outside.remove();
-    }
-
-    // 关闭搜索 → 释放请求，effective 回到 basePanel(terminal-1)。
-    fireEvent.keyDown(screen.getByTestId("terminal-search-input"), {
-      key: "Escape",
-    });
-    await waitFor(() => {
-      expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
-        expect.objectContaining({
-          basePanel: { kind: "terminal", panelId: "terminal-1" },
-          webRequestCount: 0,
-        })
-      );
-    });
   });
 
   it("yields keyboard to the terminal on focus intent while the search bar stays mounted", async () => {
@@ -2273,5 +2198,406 @@ describe("TerminalPanel lifecycle", () => {
     expect(requestTerminalPresentationMock).toHaveBeenCalledWith(
       "dockview-active-panel"
     );
+  });
+
+  // M4 前, composer 默认 enabled=true 就会挂载 (无需 agent 活动), 这三个用例
+  // 因此显式关掉开关避免 ResizeObserver.observe / 挂载即聚焦的副作用干扰计数
+  // 断言。M4 后挂载门还要求本面板前台活动是 agent, 本文件其余用例默认不注入
+  // 活动, composer 本就不挂载 —— 这里不再需要关开关, 只留一句存档说明。
+  describe("without an injected agent activity (composer mount gate stays closed)", () => {
+    it("does not create a hidden inactive native terminal only because its anchor is renderable", async () => {
+      const props = createPanelProps({ isActive: false, isVisible: false });
+
+      render(<TerminalPanel {...props} />);
+
+      await act(async () => {
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      });
+
+      expect(window.pier.terminal.create).not.toHaveBeenCalled();
+      expect(TestResizeObserver.observeCount).toBe(1);
+    });
+
+    it("uses dockview dimension events and anchor resize observations for terminal frame updates", async () => {
+      const props = createPanelProps();
+
+      render(<TerminalPanel {...props} />);
+
+      await waitFor(() => {
+        expect(window.pier.terminal.create).toHaveBeenCalledWith(
+          expect.objectContaining({ panelId: "terminal-1" })
+        );
+      });
+      await waitFor(() => {
+        expect(TestResizeObserver.observeCount).toBe(1);
+      });
+      requestTerminalPresentationMock.mockClear();
+
+      props.emitDimensions({ height: 340, width: 460 });
+
+      anchorFrame = {
+        height: 340,
+        width: 460,
+        x: 10,
+        y: 20,
+      };
+      TestResizeObserver.instances[0]?.emit();
+    });
+
+    it("holds Web keyboard ownership for the whole search lifecycle, not DOM focus", async () => {
+      setTerminalBasePanel({
+        kind: "terminal",
+        panelId: "terminal-1",
+      });
+      vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+      render(<TerminalPanel {...createPanelProps()} />);
+      act(() => {
+        window.dispatchEvent(
+          new CustomEvent("pier:terminal:open-search", {
+            detail: { panelId: "terminal-1" },
+          })
+        );
+      });
+      await screen.findByTestId("terminal-search-input");
+
+      // 搜索可见 → 持有一次 web 焦点请求，effective = web，basePanel 不被改写。
+      await waitFor(() => {
+        expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            basePanel: { kind: "terminal", panelId: "terminal-1" },
+            webRequestCount: 1,
+          })
+        );
+      });
+
+      // DOM 焦点移动（栏内或栏外）都不应改变请求计数 —— 不再由 focus/blur 驱动。
+      screen.getByRole("button", { name: "Previous match" }).focus();
+      expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+        expect.objectContaining({ webRequestCount: 1 })
+      );
+
+      const outside = document.createElement("button");
+      document.body.append(outside);
+      try {
+        outside.focus();
+        // 焦点移到搜索栏外、搜索仍可见 —— 仍持有 web 请求（不回写 terminal）。
+        expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+          expect.objectContaining({ webRequestCount: 1 })
+        );
+      } finally {
+        outside.remove();
+      }
+
+      // 关闭搜索 → 释放请求，effective 回到 basePanel(terminal-1)。
+      fireEvent.keyDown(screen.getByTestId("terminal-search-input"), {
+        key: "Escape",
+      });
+      await waitFor(() => {
+        expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            basePanel: { kind: "terminal", panelId: "terminal-1" },
+            webRequestCount: 0,
+          })
+        );
+      });
+    });
+  });
+
+  describe("composer integration (mount gate + pixel formula)", () => {
+    const openComposer = (panelId = "terminal-1") => {
+      window.dispatchEvent(
+        new CustomEvent("pier:terminal:open-composer", {
+          detail: { panelId },
+        })
+      );
+    };
+
+    it("does not mount the composer for agent activity alone until opened", async () => {
+      useForegroundActivityStore.setState({
+        activities: { "terminal-1": agentActivityFor("terminal-1") },
+        ts: 1,
+      });
+
+      render(<TerminalPanel {...createPanelProps()} />);
+
+      await waitFor(() => {
+        expect(window.pier.terminal.create).toHaveBeenCalledWith(
+          expect.objectContaining({ panelId: "terminal-1" })
+        );
+      });
+      expect(screen.queryByTestId("terminal-composer")).toBeNull();
+
+      act(() => {
+        openComposer();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("terminal-composer")).toBeInTheDocument();
+      });
+    });
+
+    it("toggles the composer closed when open-composer fires again", async () => {
+      useForegroundActivityStore.setState({
+        activities: { "terminal-1": agentActivityFor("terminal-1") },
+        ts: 1,
+      });
+
+      render(<TerminalPanel {...createPanelProps()} />);
+
+      act(() => {
+        openComposer();
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("terminal-composer")).toBeInTheDocument();
+      });
+
+      act(() => {
+        openComposer();
+      });
+      await waitFor(() => {
+        expect(screen.queryByTestId("terminal-composer")).toBeNull();
+      });
+    });
+
+    it("does not mount the composer when opened without an agent activity", async () => {
+      render(<TerminalPanel {...createPanelProps()} />);
+
+      await waitFor(() => {
+        expect(window.pier.terminal.create).toHaveBeenCalledWith(
+          expect.objectContaining({ panelId: "terminal-1" })
+        );
+      });
+
+      act(() => {
+        openComposer();
+      });
+
+      expect(screen.queryByTestId("terminal-composer")).toBeNull();
+    });
+
+    it("does not mount the composer when opened on a shell activity", async () => {
+      useForegroundActivityStore.setState({
+        activities: {
+          "terminal-1": {
+            kind: "shell",
+            panelId: "terminal-1",
+            spawnedAt: 1,
+            updatedAt: 1,
+            windowId: "test-window",
+          },
+        },
+        ts: 1,
+      });
+
+      render(<TerminalPanel {...createPanelProps()} />);
+
+      await waitFor(() => {
+        expect(window.pier.terminal.create).toHaveBeenCalledWith(
+          expect.objectContaining({ panelId: "terminal-1" })
+        );
+      });
+
+      act(() => {
+        openComposer();
+      });
+
+      expect(screen.queryByTestId("terminal-composer")).toBeNull();
+    });
+
+    it("returns terminal keyboard focus when the agent activity ends while the panel is active", async () => {
+      useForegroundActivityStore.setState({
+        activities: { "terminal-1": agentActivityFor("terminal-1") },
+        ts: 1,
+      });
+      const props = createPanelProps({ isActive: true });
+
+      render(<TerminalPanel {...props} />);
+
+      act(() => {
+        openComposer();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("terminal-composer")).toBeInTheDocument();
+      });
+      // 原生聚焦开关：composer 挂载即声明该面板禁止原生聚焦。
+      await waitFor(() => {
+        expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            focusDisabledPanelIds: ["terminal-1"],
+          })
+        );
+      });
+      vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+
+      act(() => {
+        useForegroundActivityStore.setState({ activities: {}, ts: 2 });
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("terminal-composer")).toBeNull();
+      });
+      await waitFor(() => {
+        expect(window.pier.terminal.applyHostSnapshot).toHaveBeenLastCalledWith(
+          expect.objectContaining({
+            basePanel: { kind: "terminal", panelId: "terminal-1" },
+            focusDisabledPanelIds: [],
+          })
+        );
+      });
+    });
+
+    it("does not steal terminal keyboard focus when the agent activity ends on an inactive panel", async () => {
+      useForegroundActivityStore.setState({
+        activities: { "terminal-1": agentActivityFor("terminal-1") },
+        ts: 1,
+      });
+      const props = createPanelProps({ isActive: false });
+
+      render(<TerminalPanel {...props} />);
+
+      act(() => {
+        openComposer();
+      });
+
+      await waitFor(() => {
+        expect(screen.getByTestId("terminal-composer")).toBeInTheDocument();
+      });
+      vi.mocked(window.pier.terminal.applyHostSnapshot).mockClear();
+
+      act(() => {
+        useForegroundActivityStore.setState({ activities: {}, ts: 2 });
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByTestId("terminal-composer")).toBeNull();
+      });
+      // composer 自身的 overlay 聚焦/让出记账（activateOverlay/deactivateOverlay）
+      // 会无关地触发 applyHostSnapshot（basePanel 仍是 web），因此不能断言
+      // "完全没被调用"；只断言 basePanel 从未翻向该终端面板。
+      expect(window.pier.terminal.applyHostSnapshot).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          basePanel: { kind: "terminal", panelId: "terminal-1" },
+        })
+      );
+    });
+
+    it("does not mount the composer for a restored (exited) agent session even when opened", async () => {
+      useForegroundActivityStore.setState({
+        activities: { "terminal-1": agentActivityFor("terminal-1") },
+        ts: 1,
+      });
+      vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+        agent: {
+          agentId: "claude",
+          exitCode: 0,
+          finishedAt: 1_772_000_001_000,
+          launch: {
+            agentId: "claude",
+            command: "claude --dangerously-skip-permissions",
+            cwd: "/Users/xyz/ABC/pier",
+          },
+          startedAt: 1_772_000_000_000,
+          status: "exited",
+        },
+        context,
+        tab: { icon: { id: "agent:claude" }, title: "Claude" },
+        title: "Claude",
+        updatedAt: "2026-07-06T00:00:00.000Z",
+      } as TerminalPanelSessionSnapshot);
+
+      render(<TerminalPanel {...createPanelProps({ params: { context } })} />);
+
+      await screen.findByTestId("terminal-agent-result");
+
+      act(() => {
+        openComposer();
+      });
+
+      expect(screen.queryByTestId("terminal-composer")).toBeNull();
+    });
+
+    it("does not mount the composer for a restored (completed) task session even when opened", async () => {
+      useForegroundActivityStore.setState({
+        activities: { "terminal-1": agentActivityFor("terminal-1") },
+        ts: 1,
+      });
+      vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+        context,
+        tab: completedTaskTab,
+        task: { ...taskMetadata, exitCode: 0, status: "succeeded" },
+        title: "test",
+        updatedAt: "2026-06-25T00:00:00.000Z",
+      });
+
+      render(
+        <TerminalPanel
+          {...createPanelProps({
+            params: {
+              context,
+              launchId: "launch-1",
+              tab: taskTab,
+              task: taskMetadata,
+            },
+          })}
+        />
+      );
+
+      await screen.findByTestId("terminal-task-result");
+
+      act(() => {
+        openComposer();
+      });
+
+      expect(screen.queryByTestId("terminal-composer")).toBeNull();
+    });
+
+    it("derives --terminal-content-bottom from the composer's measured height", async () => {
+      useForegroundActivityStore.setState({
+        activities: { "terminal-1": agentActivityFor("terminal-1") },
+        ts: 1,
+      });
+      const composerHeightPx = 96;
+      const isComposerRoot = (element: HTMLElement) =>
+        element.firstElementChild?.getAttribute("data-testid") ===
+        "terminal-composer";
+      const previousGetBoundingClientRect =
+        HTMLElement.prototype.getBoundingClientRect;
+      HTMLElement.prototype.getBoundingClientRect = function () {
+        if (isComposerRoot(this)) {
+          return {
+            bottom: composerHeightPx,
+            height: composerHeightPx,
+            left: 0,
+            right: 0,
+            top: 0,
+            width: 0,
+            x: 0,
+            y: 0,
+            toJSON: () => null,
+          } as DOMRect;
+        }
+        return previousGetBoundingClientRect.call(this);
+      };
+
+      const { container } = render(<TerminalPanel {...createPanelProps()} />);
+
+      act(() => {
+        openComposer();
+      });
+
+      const contentBottom = () =>
+        (
+          container.querySelector(
+            '[data-testid="terminal-panel-root"]'
+          ) as HTMLElement | null
+        )?.style.getPropertyValue("--terminal-content-bottom");
+
+      await waitFor(() => {
+        expect(contentBottom()).toBe(
+          `${TERMINAL_STATUS_BAR_HEIGHT_PX + composerHeightPx + TERMINAL_COMPOSER_GAP_PX * 2}px`
+        );
+      });
+    });
   });
 });

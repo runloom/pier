@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   isPierHookCommand,
   pierHookCommand,
+  pierHookCommandWithStdinStatusDispatch,
   removePierTextBlock,
   upsertPierTextBlock,
   withoutPierNestedHooks,
@@ -37,6 +38,30 @@ describe("pierHookCommand（JSONL emit 脚本格式）", () => {
     expect(isPierHookCommand("echo hello")).toBe(false);
     expect(isPierHookCommand(42)).toBe(false);
     expect(isPierHookCommand(null)).toBe(false);
+  });
+});
+
+describe("pierHookCommandWithStdinStatusDispatch（payload status → pier 事件）", () => {
+  const cmd = pierHookCommandWithStdinStatusDispatch("cursor", "Stop", "stop", [
+    { nativeStatus: "completed", pierEvent: "TurnCompleted" },
+    { nativeStatus: "aborted", pierEvent: "TurnInterrupted" },
+  ]);
+
+  it("命令内含 case 分发与 fallback 分支, emit 使用运行期变量", () => {
+    expect(cmd).toContain('"status"');
+    expect(cmd).toContain('completed) _pier_event="TurnCompleted" ;;');
+    expect(cmd).toContain('aborted) _pier_event="TurnInterrupted" ;;');
+    expect(cmd).toContain('*) _pier_event="Stop" ;;');
+    // emit 的 pierEvent 位置是 shell 变量引用, nativeEvent 保持原生名
+    expect(cmd).toContain('"$_pier_event" "stop"');
+    expect(isPierHookCommand(cmd)).toBe(true);
+  });
+
+  it("保留 stdin 身份提取（session/turn/transcript 等 v2 载荷）", () => {
+    expect(cmd).toContain('"$_pier_session_id"');
+    expect(cmd).toContain('"$_pier_transcript_path"');
+    expect(cmd).toContain('"$_pier_metadata_b64"');
+    expect(cmd.endsWith("|| true")).toBe(true);
   });
 });
 

@@ -267,4 +267,29 @@ describe("file preview protocol", () => {
     );
     expect(response).toMatchObject({ status: 404 });
   });
+
+  it("serves absolute-path locators used by host media preview", async () => {
+    const bytes = Buffer.concat([
+      Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a]),
+      Buffer.from("absolute"),
+    ]);
+    const absolutePath = join(root, "absolute.png");
+    await writeFile(absolutePath, bytes);
+    const { resolveAbsoluteImagePreview } = await import(
+      "@main/files/absolute-image-preview.ts"
+    );
+    const resolved = await resolveAbsoluteImagePreview(absolutePath);
+    expect(resolved.ok).toBe(true);
+    if (!resolved.ok) {
+      return;
+    }
+    const url = filePreviewTicketRegistry.issue({
+      locator: resolved.locator,
+      owner,
+    }).url;
+    const response = await resolveFilePreviewResponse(url);
+    expect(response.status).toBe(200);
+    expect(response.headers.get("content-type")).toBe("image/png");
+    expect(response.headers.get("etag")).toMatch(/^"abs-v1:[a-f0-9]+"$/);
+  });
 });

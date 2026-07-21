@@ -6,9 +6,13 @@ const electronMock = vi.hoisted(() => {
   const handlers = new Map<string, Array<(...args: unknown[]) => void>>();
   const isSupported = vi.fn(() => true);
   let autoEmitShow = true;
+  let lastOptions: Record<string, unknown> | undefined;
 
   class MockNotification {
     static isSupported = isSupported;
+    constructor(options: Record<string, unknown> = {}) {
+      lastOptions = options;
+    }
     show = () => {
       show();
       if (autoEmitShow) {
@@ -40,9 +44,15 @@ const electronMock = vi.hoisted(() => {
   return {
     MockNotification,
     close,
+    get lastOptions() {
+      return lastOptions;
+    },
     handlers,
     isSupported,
     openExternal: vi.fn(async () => undefined),
+    resetLastOptions() {
+      lastOptions = undefined;
+    },
     setAutoEmitShow(value: boolean) {
       autoEmitShow = value;
     },
@@ -97,6 +107,7 @@ describe("system notification permission probe", () => {
     electronMock.openExternal.mockClear();
     electronMock.isSupported.mockReturnValue(true);
     electronMock.setAutoEmitShow(true);
+    electronMock.resetLastOptions();
     childProcessMock.execFile.mockClear();
     childProcessMock.execFile.mockImplementation(
       (
@@ -160,6 +171,23 @@ describe("system notification permission probe", () => {
     expect(getSystemNotificationPermissionSnapshot().status).toBe("authorized");
   });
 
+  it("showTestSystemNotification uses caller copy and defaults to English", async () => {
+    await showTestSystemNotification({
+      copy: { body: "看到这条横幅说明投递正常。", title: "Pier 测试通知" },
+    });
+    expect(electronMock.lastOptions).toEqual(
+      expect.objectContaining({
+        body: "看到这条横幅说明投递正常。",
+        title: "Pier 测试通知",
+      })
+    );
+
+    await showTestSystemNotification();
+    expect(electronMock.lastOptions).toEqual(
+      expect.objectContaining({ title: "Pier test notification" })
+    );
+  });
+
   it("returns unsupported when Notification.isSupported is false", async () => {
     electronMock.isSupported.mockReturnValue(false);
     const result = await showSystemNotification({ title: "x" });
@@ -184,5 +212,23 @@ describe("system notification permission probe", () => {
       configurable: true,
       value: original,
     });
+  });
+
+  it("forwards silent and sound options", async () => {
+    electronMock.setAutoEmitShow(true);
+    await showSystemNotification(
+      { title: "t" },
+      { silent: true, sound: "default" }
+    );
+    expect(electronMock.lastOptions).toMatchObject({
+      silent: true,
+      sound: "default",
+    });
+  });
+
+  it("defaults silent false when omitted", async () => {
+    electronMock.setAutoEmitShow(true);
+    await showSystemNotification({ title: "t" });
+    expect(electronMock.lastOptions?.silent).toBe(false);
   });
 });

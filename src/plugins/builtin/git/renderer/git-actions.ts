@@ -8,6 +8,10 @@ import {
   registerMergeAbortAction,
   registerRebaseAbortAction,
   registerRebaseContinueAction,
+} from "./git-merge-rebase-actions.ts";
+import {
+  registerCherryPickActions,
+  registerRevertActions,
   registerUndoCommitAction,
 } from "./git-sequencer-actions.ts";
 import {
@@ -31,6 +35,8 @@ export function registerGitActions(context: RendererPluginContext): () => void {
     registerRebaseAction(context),
     registerRebaseAbortAction(context),
     registerRebaseContinueAction(context),
+    registerCherryPickActions(context),
+    registerRevertActions(context),
     registerUndoCommitAction(context),
   ];
   return () => {

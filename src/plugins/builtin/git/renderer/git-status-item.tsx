@@ -223,6 +223,8 @@ function StatusBody({
   flags,
   pluginContext,
   showDirtyIndicator,
+  syncCaveat,
+  syncUncertain,
   worktreeName,
 }: {
   branch: GitStatus["branch"] | null;
@@ -230,6 +232,8 @@ function StatusBody({
   flags: StatusFlags;
   pluginContext: RendererPluginContext;
   showDirtyIndicator: boolean;
+  syncCaveat: string | null;
+  syncUncertain: boolean;
   worktreeName: string;
 }): React.ReactElement {
   return (
@@ -268,6 +272,7 @@ function StatusBody({
             ahead={flags.ahead}
             behind={flags.behind}
             pluginContext={pluginContext}
+            syncCaveat={syncUncertain ? syncCaveat : null}
           />
         </>
       )}
@@ -327,6 +332,9 @@ function WorktreeStatusItem({
     .filter(Boolean)
     .join(" · ");
   const syncLine = remoteSyncLine(pluginContext, status?.remoteSync ?? null);
+  const syncUncertain =
+    status?.remoteSync?.state === "authRequired" ||
+    status?.remoteSync?.lastSuccessAt === null;
   const dropdownModel =
     statusState.kind === "loaded"
       ? deriveGitStatusDropdownModel(statusState.status, panelContext, {
@@ -364,6 +372,8 @@ function WorktreeStatusItem({
         flags={flags}
         pluginContext={pluginContext}
         showDirtyIndicator={showDirtyIndicator}
+        syncCaveat={syncLine}
+        syncUncertain={Boolean(syncUncertain)}
         worktreeName={worktreeName}
       />
     </Button>

@@ -26,6 +26,8 @@ export function createCodexUsageRefreshRunner(options: {
   ensureUsageEnv: () => Promise<void>;
   now: () => number;
   provider: AgentAccountProvider;
+  /** Service-level abort: dispose() cancels in-flight fetches through this. */
+  signal?: AbortSignal;
   stateStore: CodexAccountsStateStore;
   usageCache: UsageCache;
 }): (options?: { accountId?: string; force?: boolean }) => Promise<void> {
@@ -36,6 +38,7 @@ export function createCodexUsageRefreshRunner(options: {
     ensureUsageEnv,
     now,
     provider,
+    signal,
     stateStore,
     usageCache,
   } = options;
@@ -56,11 +59,20 @@ export function createCodexUsageRefreshRunner(options: {
     }
 
     await inflight.run(cacheKey, async () => {
+      if (signal?.aborted) return;
       const latestCached = usageCache[cacheKey];
       if (
         !refreshOptions.force &&
         latestCached &&
         now() - latestCached.fetchedAt < USAGE_MIN_REFETCH_MS
+      ) {
+        return;
+      }
+      // Re-check inside the coalesced body: the account may have been
+      // removed while this refresh waited in line.
+      if (
+        targetId &&
+        !stateStore.get().accounts.some((entry) => entry.id === targetId)
       ) {
         return;
       }
@@ -74,12 +86,12 @@ export function createCodexUsageRefreshRunner(options: {
           stateStore,
         });
       }
-      const abort = new AbortController();
+      const fetchSignal = signal ?? new AbortController().signal;
       let result: AccountUsageResult;
       try {
         result = await provider.fetchUsage(
           targetId ? accountHomeDir(targetId) : undefined,
-          abort.signal
+          fetchSignal
         );
       } catch (error) {
         result = {
@@ -87,6 +99,15 @@ export function createCodexUsageRefreshRunner(options: {
           status: "error" as const,
           windows: [],
         };
+      }
+      if (signal?.aborted) return;
+      // The account may have been removed while the fetch was in flight;
+      // writing would resurrect the cache entry doRemove just deleted.
+      if (
+        targetId &&
+        !stateStore.get().accounts.some((entry) => entry.id === targetId)
+      ) {
+        return;
       }
       if (
         targetId &&

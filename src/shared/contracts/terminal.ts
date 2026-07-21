@@ -2,6 +2,12 @@ import { z } from "zod";
 import type { AgentKind } from "./agent.ts";
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
 import type { TaskOutputPanelParams, TaskPanelMetadata } from "./tasks.ts";
+import type {
+  TerminalComposerImageBytes,
+  TerminalComposerMaterializeResult,
+  TerminalComposerPathsResult,
+  TerminalComposerPickResult,
+} from "./terminal-composer-attachments.ts";
 // TerminalAPI 是终端 IPC 契约, 里面 debugSnapshot / openDebugWindow 等 debug 相关
 // 方法需要引用 debug schema. 仅 type-only 循环 import (tsc 会 erase), 不构成运行时环。
 import type {
@@ -12,6 +18,19 @@ import type {
   TerminalDebugWindowOpenResult,
 } from "./terminal-debug.ts";
 import type { TerminalAgentRestoreLaunchOptions } from "./terminal-launch.ts";
+import type { SkillsLaunchBlockedInfo } from "./terminal-skills-launch.ts";
+
+export type {
+  TerminalComposerAttachmentDto,
+  TerminalComposerImageBytes,
+  TerminalComposerMaterializeResult,
+  TerminalComposerPathsResult,
+  TerminalComposerPickResult,
+} from "./terminal-composer-attachments.ts";
+export type {
+  SkillsLaunchBlockedInfo,
+  SkillsLaunchContinueResult,
+} from "./terminal-skills-launch.ts";
 
 export interface TerminalFrame {
   /** BrowserWindow contentView 坐标，top-left origin，已叠加 Electron page zoom。 */
@@ -64,6 +83,11 @@ export interface TerminalHostSnapshot {
   activePanelId: string | null;
   activeTerminalPanelId: string | null;
   basePanel: TerminalKeyboardFocusTarget;
+  /**
+   * 原生聚焦开关关闭的面板（Agent Composer 等 web 输入组件接管期间）。
+   * 名单内终端不得成为原生键盘目标，native 隐藏其硬件光标。renderer panelId。
+   */
+  focusDisabledPanelIds: string[];
   hasMaximizedGroup: boolean;
   reason: TerminalHostReason;
   rendererSequence: number;
@@ -73,6 +97,11 @@ export interface TerminalHostSnapshot {
 }
 
 export interface TerminalNativeWindowState {
+  /**
+   * 原生聚焦开关关闭的面板（native panelId，含窗口前缀）：
+   * 不做 first responder，硬件光标强制隐藏。
+   */
+  focusDisabledPanelIds: string[];
   keyboardTarget: TerminalKeyboardFocusTarget;
   nativeApplySequence: number;
   reason: TerminalHostReason;
@@ -115,7 +144,12 @@ export type NativeFocusIntentResult =
   | { ok: true; panelId: string }
   | {
       ok: false;
-      reason: "cross-window" | "hidden" | "not-ready" | "stale";
+      reason:
+        | "cross-window"
+        | "hidden"
+        | "not-ready"
+        | "stale"
+        | "web-overlay-active";
     };
 
 /**
@@ -147,6 +181,11 @@ export interface CreateTerminalArgs {
   initialInput?: string | undefined;
   launchId?: string | undefined;
   panelId: string;
+  /**
+   * 受管启动重试握手（design v8 §5.2.7）：携带处于 SPAWN_INTENT 授权窗口内的
+   * attempt id 时，跳过重新校正直接放行；窗口外拒绝且不 replay。
+   */
+  skillsLaunchContinuation?: string | undefined;
   tab?: PanelTabChrome | undefined;
   task?: TaskPanelMetadata | undefined;
   /** 后台任务的只读 Ghostty 输出会话；存在时不创建 shell/PTY。 */
@@ -156,6 +195,8 @@ export interface CreateTerminalArgs {
 export interface CreateTerminalResult {
   error?: string;
   ok: boolean;
+  /** 受管启动被技能门阻断时的结构化信息（renderer 弹三选）。 */
+  skillsLaunchBlocked?: SkillsLaunchBlockedInfo | undefined;
 }
 
 export interface RebindTaskOutputResult extends CreateTerminalResult {
@@ -251,6 +292,29 @@ export type TerminalOperation = "copy" | "paste" | "selectAll" | "clearScreen";
 export interface TerminalOperationResult {
   error?: string | undefined;
   ok: boolean;
+  /**
+   * submit 路径：文本已 paste 进 PTY，但随后的 Return 键失败。
+   * 调用方应清空草稿（避免重试重复粘贴），并提示用户用空 Enter 再提交。
+   */
+  textDelivered?: boolean | undefined;
+}
+
+export interface TerminalSendTextArgs {
+  panelId: string;
+  /**
+   * true：先 paste 文本，再注入真实 Return 键提交。
+   * 不能把 `\r` 拼进同一次 sendText——bracketed paste 下末尾回车不会提交。
+   */
+  submit?: boolean | undefined;
+  text: string;
+}
+
+/** 合成按键（Esc / Ctrl+C / 方向键等）。绕过 bracketed paste。 */
+export interface TerminalSendKeyPressArgs {
+  keycode: number;
+  /** ghostty_input_mods 位掩码；缺省 0。 */
+  mods?: number | undefined;
+  panelId: string;
 }
 
 export type TerminalSelectionTextResult =
@@ -328,6 +392,12 @@ export interface TerminalAPI {
     args?: TerminalDebugSnapshotArgs
   ): Promise<TerminalDebugSnapshot>;
   endSearch(panelId: string): Promise<TerminalOperationResult>;
+  /** Resolve the absolute path for a dropped File (sandbox-safe). */
+  getPathForFile(file: File): string;
+  materializeComposerClipboardImage(): Promise<TerminalComposerMaterializeResult>;
+  materializeComposerImageBytes(
+    data: TerminalComposerImageBytes
+  ): Promise<TerminalComposerMaterializeResult>;
   navigateSearch(
     panelId: string,
     direction: TerminalSearchDirection
@@ -371,6 +441,7 @@ export interface TerminalAPI {
     panelId: string,
     operation: TerminalOperation
   ): Promise<TerminalOperationResult>;
+  pickComposerFiles(): Promise<TerminalComposerPickResult>;
   readSelectionText(panelId: string): Promise<TerminalSelectionTextResult>;
   /**
    * 读取上次关闭前的 terminal panel 展示状态. 用于 app 重启后先恢复 tab
@@ -392,7 +463,24 @@ export interface TerminalAPI {
    * 调一次即可. fire-and-forget.
    */
   reconcile(activeIds: string[]): void;
+  resolveComposerPaths(paths: string[]): Promise<TerminalComposerPathsResult>;
+  /** Reveal an attachment path in the platform file manager (Finder/Explorer). */
+  revealComposerPath(path: string): Promise<void>;
   search(panelId: string, query: string): Promise<TerminalOperationResult>;
+  /**
+   * 注入一次 AppKit 虚拟键码的 press+release（绕过 bracketed paste）。
+   * Composer 控制键透传与 submit 后的 Return 都走这条路径。
+   */
+  sendKeyPress(
+    args: TerminalSendKeyPressArgs
+  ): Promise<TerminalOperationResult>;
+  /**
+   * 向已存在 terminal panel 的 PTY 直写 UTF-8 文本（绕过按键翻译）。
+   * shell 开启 bracketed paste (mode 2004) 时 libghostty 自动包裹粘贴标记。
+   * surface 未就绪返回 { ok: false }——调用方负责反馈，不做重试。
+   * 控制键（Esc / Ctrl+C / 方向键）不要走这里，用 {@link sendKeyPress}。
+   */
+  sendText(args: TerminalSendTextArgs): Promise<TerminalOperationResult>;
   setAppShortcutKeys(keys: string[]): void;
   setConfig(config: TerminalRuntimeConfig): void;
   /**

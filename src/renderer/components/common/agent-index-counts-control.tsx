@@ -22,12 +22,13 @@ export function AgentIndexCountsControl(): ReactNode {
         needsYou,
         running,
       })}
-      className="app-no-drag h-auto gap-2 px-1.5 py-0.5 text-xs"
+      className="app-no-drag"
       data-testid="titlebar-agent-counts"
       onClick={() => {
         openAgentIndexQuickPick({ limit: 8 }).catch(() => undefined);
       }}
       size="sm"
+      type="button"
       variant="ghost"
     >
       {running > 0 && (

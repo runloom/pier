@@ -1,10 +1,14 @@
-import { pluginPermissions } from "./plugin-permissions.ts";
+import { settingsNotifications } from "./settings-notifications.ts";
+import { settingsPlugins } from "./settings-plugins.ts";
+import { settingsSkills } from "./settings-skills.ts";
 
 export const settings = {
   title: "设置",
   description: "管理应用偏好设置",
   nav: {
     appearance: "外观",
+    projects: "项目",
+    skills: "技能",
     environment: "环境",
     keybindings: "快捷键",
     plugins: "插件",
@@ -17,6 +21,8 @@ export const settings = {
   },
   section: {
     appearance: "外观",
+    projects: "项目",
+    skills: "技能",
     environment: "环境",
     font: "字体",
     keybindings: "快捷键",
@@ -27,6 +33,43 @@ export const settings = {
     agents: "智能体",
     notifications: "通知",
   },
+  projects: {
+    addProject: "添加项目",
+    back: "返回项目列表",
+    description:
+      "按项目管理环境脚本、变量与智能体技能。选择项目后，可配置环境、技能和常规选项。",
+    emptyDescription: "添加项目后，可配置其环境与技能。",
+    emptyTitle: "还没有项目",
+    general: {
+      dangerDescription:
+        "从 Pier 的共享索引中移除此项目。磁盘上的工作树文件夹和技能文件不会被删除。",
+      dangerTitle: "从 Pier 移除",
+      deleteHint: "之后仍可再次添加该项目。",
+      deleteProject: "移除此项目",
+      deleteConfirmBody:
+        "从 Pier 移除 “{{name}}”？其工作树将不再运行环境脚本。",
+      deleteConfirmBoundBody:
+        "从 Pier 移除 “{{name}}”？当前有 {{count}} 个工作树绑定到该项目，删除后它们的清理脚本将不再运行。",
+      deleteConfirmTitle: "从 Pier 移除此项目？",
+      deliveryDescription:
+        "选择要把已打开的技能放进哪些发现目录。都不选时，智能体不会发现这些技能。",
+      deliveryTitle: "发现路径",
+      deliveryAgents: "项目共用路径（.agents/skills）",
+      deliveryAgentsHint: "Codex、Cursor 等会扫描此目录的智能体可用。",
+      deliveryClaude: "Claude Code（.claude/skills）",
+      deliveryClaudeHint:
+        "Claude Code 只扫这里。需要 Claude Code 看到这些技能时再打开。",
+      gitIgnoreTitle: "建议加入 Git 忽略",
+      gitIgnoreDescription:
+        "建议不要提交发现目录里的链接。需要时可将下列内容复制到 .gitignore。",
+      gitIgnoreCopy: "复制忽略行",
+      gitIgnoreCopied: "已复制",
+    },
+    tabEnvironment: "环境",
+    tabGeneral: "常规",
+    tabSkills: "技能",
+  },
+  skills: settingsSkills,
   environment: {
     addEnvironment: "添加环境设置",
     addFailed: "添加失败",
@@ -86,11 +129,11 @@ export const settings = {
       restart: "重启并安装",
     },
     toast: {
-      statusFailed: "读取更新状态失败",
-      checkFailed: "检查更新失败",
-      downloadFailed: "下载更新失败",
-      installFailed: "安装更新失败",
-      ready: "Pier {{version}} 已就绪，可安装。",
+      statusFailed: "无法读取更新状态",
+      checkFailed: "无法检查更新",
+      downloadFailed: "无法下载更新",
+      installFailed: "无法安装更新",
+      ready: "Pier {{version}} 可安装",
     },
     titleBar: {
       update: "更新",
@@ -223,111 +266,16 @@ export const settings = {
         resetLayout: "清空并恢复默认工作区布局。",
       },
     },
-    errorConflict: "已被“{{command}}”使用。",
-    errorNeedsModifier: "快捷键至少需要包含一个修饰键。",
-    errorUnknown: "无法保存快捷键。",
+    errorConflict: "已被“{{command}}”使用",
+    errorNeedsModifier: "请加上修饰键",
+    errorUnknown: "无法保存快捷键",
     record: "录制",
     recording: "按下按键...",
     reset: "恢复默认",
     resetAll: "全部重置",
     unassigned: "未设置",
   },
-  plugins: {
-    title: "插件",
-    description:
-      "内置插件可以在这里启用或停用。本地插件在当前版本只显示信息，不执行第三方代码。",
-    status: {
-      enabled: "已启用",
-      disabled: "已停用",
-      manifestOnly: "仅显示信息",
-      runtimeUnavailable: "未加载",
-    },
-    runtimeUnavailableDescription:
-      "插件已安装，但当前未加载。请重启 Pier；如问题持续，请重新安装插件。",
-    action: {
-      enable: "启用",
-      disable: "停用",
-      enablePlugin: "启用{{name}}",
-      disablePlugin: "停用{{name}}",
-      install: "安装",
-      update: "更新",
-      uninstall: "卸载",
-      rollback: "回退到 {{version}}",
-      restoreBundled: "恢复内置版本",
-    },
-    contributionSummary: {
-      command: "{{count}} 个命令",
-      commands: "{{count}} 个命令",
-      workbenchWidget: "{{count}} 个工作台组件",
-      workbenchWidgets: "{{count}} 个工作台组件",
-      none: "没有贡献项",
-      panel: "{{count}} 个面板",
-      panels: "{{count}} 个面板",
-      terminalStatusItem: "{{count}} 个终端状态项",
-      terminalStatusItems: "{{count}} 个终端状态项",
-    },
-    permissionLabels: pluginPermissions,
-    loadingTitle: "正在加载插件",
-    loadingDescription: "正在读取插件清单...",
-    emptyTitle: "没有可用插件",
-    emptyDescription: "发现内置或本地插件后会显示在这里。",
-    diagnostics: {
-      invalidManifest: "插件清单无法读取",
-      runtime: "插件加载失败",
-      unsupported: "当前版本不支持此插件",
-    },
-    errorTitle: "无法加载插件",
-    source: {
-      builtin: "内置",
-      local: "本地",
-      git: "Git",
-      registry: "Registry",
-      official: "官方",
-      devOverride: "开发覆盖",
-    },
-    openSettings: "设置",
-    openSettingsPlugin: "打开{{name}}设置",
-    tabs: {
-      installed: "已安装",
-      available: "未安装",
-    },
-    trustNotice: "官方插件按可信代码运行，不设沙箱隔离。",
-    pluginMode: {
-      workspaceTitle: "本地开发加载",
-      workspaceBody:
-        "正在从本地包目录加载插件，并已禁用官方更新，避免覆盖本地改动。",
-      releaseTitle: "正式安装",
-      releaseBody:
-        "插件走正式安装与更新流程，行为接近生产包。本地开发请设置 `PIER_PLUGIN_MODE=workspace`（本地开发加载）。",
-    },
-    checkUpdates: "检查更新",
-    restartNow: "立即重启",
-    restartNotice: "重启 Pier 以使新版本生效。",
-    restartDevNotice:
-      "开发模式下仅重载界面；要完全卸载插件主进程，请退出并重新运行 `pnpm dev`。",
-    updateAvailable: "有可用更新",
-    restartRequired: "需重启",
-    emptyInstalledTitle: "没有已安装的插件",
-    emptyInstalledDescription: "内置和官方插件会显示在这里。",
-    emptyAvailableTitle: "没有未安装的插件",
-    emptyAvailableDescription: "所有可安装的插件都已启用。",
-    toast: {
-      installing: "正在安装 {{name}}…",
-      installed: "{{name}} 已安装 · v{{version}}",
-      installFailed: "{{name}} 安装失败",
-      uninstalling: "正在卸载 {{name}}…",
-      uninstalled: "{{name}} 已卸载(下次启动生效)",
-      uninstallFailed: "{{name}} 卸载失败",
-      updating: "正在更新 {{name}}…",
-      updated: "{{name}} 已更新到 v{{version}}",
-      updateFailed: "{{name}} 更新失败",
-      checkUpdatesSuccess: "插件更新已检查",
-      checkUpdatesFailed: "检查插件更新失败",
-      rollingBack: "正在回退 {{name}}…",
-      rolledBack: "{{name}} 已回退到 v{{version}}",
-      rollbackFailed: "{{name}} 回退失败",
-    },
-  },
+  plugins: settingsPlugins,
   pluginConfiguration: {
     modified: "已修改",
     resetToDefault: "恢复默认",
@@ -378,8 +326,8 @@ export const settings = {
       title: "智能体列表",
       description: "已安装并检测到的智能体",
       refresh: "刷新",
-      refreshSuccess: "智能体列表已刷新",
-      refreshFailed: "刷新智能体列表失败",
+      refreshSuccess: "列表已刷新",
+      refreshFailed: "无法刷新列表",
     },
     status: {
       detected: "已检测",
@@ -393,7 +341,7 @@ export const settings = {
       isDefault: "默认",
       expand: "详情",
       website: "官网",
-      websiteOpenBusy: "另一个外部链接正在打开。",
+      websiteOpenBusy: "另一个链接正在打开",
       websiteOpenFailedDescription: "无法打开该智能体官网。",
       websiteOpenFailedTitle: "无法打开官网",
     },
@@ -415,45 +363,5 @@ export const settings = {
       failed: "无法更新智能体状态提示",
     },
   },
-  notifications: {
-    enabled: "启用系统通知",
-    enabledDesc:
-      "智能体需要你时通过本机系统通知提醒（关闭后标题栏计数仍更新）。",
-    waitingHint: "需要确认（waiting）：跟随上方总开关。",
-    error: "出错时通知",
-    errorDesc: "智能体进入错误状态时也发送系统通知。默认关闭。",
-    suppress: "专注时抑制",
-    suppressDesc: "目标智能体面板已聚焦时不发送系统通知。",
-    cooldownLabel: "同一智能体冷却",
-    cooldownDesc: "同一智能体面板两次系统通知之间的最短间隔。",
-    cooldown: {
-      "60000": "1 分钟",
-      "180000": "3 分钟",
-      "600000": "10 分钟",
-    },
-    sendTest: "发送测试通知",
-    openSystemSettings: "打开系统设置",
-    testSent: "已发送测试通知",
-    testFailed: "测试通知失败",
-    testFailedShort: "无法展示测试通知",
-    testFailedDetail:
-      "无法投递系统通知（{{reason}}）。请到「系统设置 → 通知」允许本应用，然后重试。",
-    testHint: "成功表示已交给系统。前台可能看不到横幅，可到通知中心确认。",
-    openSettingsFailed: "无法打开系统设置",
-    openSettingsManual:
-      "请手动打开系统通知设置并为 Pier 开启允许，然后发送测试通知验证。",
-    saveFailed: "无法保存通知设置",
-    hooksOffTitle: "智能体状态提示已关闭",
-    hooksOffBody:
-      "关闭后不会发送“需要你处理”的系统通知。已在运行的智能体会话可能仍会上报，重开会话后完全生效。",
-    permission: {
-      deniedTitle: "系统通知未授权",
-      deniedBody: "请在系统设置中为 Pier 开启通知，然后发送测试通知验证。",
-      unsupportedTitle: "系统不支持通知",
-      unsupportedBody:
-        "当前环境无法展示系统通知。请使用标题栏“需要你处理”计数与智能体列表。",
-      unknownTitle: "尚未确认通知权限",
-      unknownBody: "发送测试通知以检查 Pier 能否投递系统提醒。",
-    },
-  },
+  notifications: settingsNotifications,
 } as const;

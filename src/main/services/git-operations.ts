@@ -5,103 +5,31 @@ import type {
   GitRebaseContinueResult,
   GitRebaseResult,
   GitRemoteOperationResult,
-  GitStashApplyResult,
-  GitStashDropResult,
-  GitStashEntry,
-  GitStashListResult,
-  GitStashPopResult,
-  GitStashResult,
+  GitSequencerAbortResult,
+  GitSequencerContinueResult,
+  GitSequencerResult,
   GitUndoCommitResult,
 } from "../../shared/contracts/git.ts";
-import { validateGitCwd } from "./git-cwd.ts";
 import { GitExecError } from "./git-exec.ts";
 import { mergeWouldKeepHeadTree } from "./git-merge-preview.ts";
+import {
+  combinedGitErrorOutput,
+  countConflicts,
+  errorMessage,
+  type GitOperationExec,
+  hasConflicts,
+  looksLikeConflict,
+  resolveGitRootOrUnavailable,
+  unavailable,
+  WRITE_TIMEOUT_MS,
+} from "./git-operation-helpers.ts";
 
-const WRITE_TIMEOUT_MS = 60_000;
-const CONFLICT_RE = /CONFLICT|merge conflict|unmerged/i;
 const MERGE_ALREADY_UP_TO_DATE = /^Already up[ -]to[ -]date\.?$/m;
-const NO_LOCAL_CHANGES_RE = /No local changes/i;
 const PARENT_SPLIT_RE = /\s+/;
 const REBASE_ALREADY_UP_TO_DATE =
   /^(?:Current branch .+|HEAD) is up to date\.$/m;
-const STASH_REF_RE = /^stash@\{(\d+)\}$/;
 
-export type GitOperationExec = (
-  args: readonly string[],
-  cwd: string,
-  options?: {
-    env?: Readonly<Record<string, string>>;
-    onSuccessStderr?: (stderr: string) => void;
-    timeoutMs?: number;
-  }
-) => Promise<string>;
-
-function combinedGitErrorOutput(error: GitExecError): string {
-  return `${error.stderr}\n${error.stdout}`;
-}
-
-function unavailable(message?: string): {
-  kind: "unavailable";
-  message: null | string;
-} {
-  return {
-    kind: "unavailable",
-    message: message || null,
-  };
-}
-
-function errorMessage(error: unknown): string {
-  if (error instanceof GitExecError) {
-    return capMessage(error.stderr || error.stdout || error.message);
-  }
-  return capMessage(error instanceof Error ? error.message : String(error));
-}
-
-function capMessage(message: string, maxLength = 2000): string {
-  const trimmed = message.trim();
-  return trimmed.length > maxLength
-    ? `${trimmed.slice(0, maxLength - 1)}…`
-    : trimmed;
-}
-
-function looksLikeConflict(output: string): boolean {
-  return CONFLICT_RE.test(output);
-}
-
-async function resolveGitRootOrUnavailable(
-  execGit: GitOperationExec,
-  cwd: string
-): Promise<
-  { kind: "ok"; root: string } | { kind: "unavailable"; message: null | string }
-> {
-  const root = await validateGitCwd(execGit, cwd);
-  return root ? { kind: "ok", root } : unavailable("Invalid git repository");
-}
-
-async function countConflicts(
-  execGit: GitOperationExec,
-  cwd: string
-): Promise<number> {
-  try {
-    const output = await execGit(
-      ["diff", "--name-only", "--diff-filter=U"],
-      cwd
-    );
-    return output
-      .split("\n")
-      .map((line) => line.trim())
-      .filter(Boolean).length;
-  } catch {
-    return 0;
-  }
-}
-
-async function hasConflicts(
-  execGit: GitOperationExec,
-  cwd: string
-): Promise<boolean> {
-  return (await countConflicts(execGit, cwd)) > 0;
-}
+export type { GitOperationExec } from "./git-operation-helpers.ts";
 
 export async function mergeBranch(
   execGit: GitOperationExec,
@@ -212,142 +140,6 @@ export async function syncBranch(
   }
 }
 
-export async function stashChanges(
-  execGit: GitOperationExec,
-  cwd: string,
-  options: { includeUntracked?: boolean; message?: string }
-): Promise<GitStashResult> {
-  const target = await resolveGitRootOrUnavailable(execGit, cwd);
-  if (target.kind === "unavailable") {
-    return target;
-  }
-  const args = ["stash", "push"];
-  if (options.message) {
-    args.push("-m", options.message);
-  }
-  if (options.includeUntracked) {
-    args.push("--include-untracked");
-  }
-  try {
-    const output = await execGit(args, target.root, {
-      timeoutMs: WRITE_TIMEOUT_MS,
-    });
-    if (NO_LOCAL_CHANGES_RE.test(output)) {
-      return { kind: "nothing_to_stash" };
-    }
-    return { kind: "ok" };
-  } catch (err) {
-    return unavailable(errorMessage(err));
-  }
-}
-
-/**
- * pop/apply 共用主体：仅差子命令；conflict 归因用操作前基线抵扣。
- * 返回并集：GitStashApplyResult 当前是 GitStashPopResult 的契约别名，
- * 若未来 apply 单独扩展 kind，此处签名会强制两个出口显式分流。
- */
-async function applyStashLike(
-  execGit: GitOperationExec,
-  cwd: string,
-  index: number | undefined,
-  subcommand: "apply" | "pop"
-): Promise<GitStashPopResult> {
-  const target = await resolveGitRootOrUnavailable(execGit, cwd);
-  if (target.kind === "unavailable") {
-    return target;
-  }
-  const stashRef = index === undefined ? [] : [`stash@{${index}}`];
-  // 基线：操作前已存在的未合并文件不能归因于本次 pop/apply。
-  const conflictsBefore = await countConflicts(execGit, target.root);
-  try {
-    await execGit(["stash", subcommand, ...stashRef], target.root, {
-      timeoutMs: WRITE_TIMEOUT_MS,
-    });
-    return { kind: "ok" };
-  } catch (err) {
-    if (
-      err instanceof GitExecError &&
-      (looksLikeConflict(combinedGitErrorOutput(err)) ||
-        (await countConflicts(execGit, target.root)) > conflictsBefore)
-    ) {
-      return { kind: "conflict" };
-    }
-    return unavailable(errorMessage(err));
-  }
-}
-
-export function popStash(
-  execGit: GitOperationExec,
-  cwd: string,
-  index: number | undefined
-): Promise<GitStashPopResult> {
-  return applyStashLike(execGit, cwd, index, "pop");
-}
-
-export function applyStash(
-  execGit: GitOperationExec,
-  cwd: string,
-  index: number | undefined
-): Promise<GitStashApplyResult> {
-  return applyStashLike(execGit, cwd, index, "apply");
-}
-
-export async function dropStash(
-  execGit: GitOperationExec,
-  cwd: string,
-  index: number | undefined
-): Promise<GitStashDropResult> {
-  const target = await resolveGitRootOrUnavailable(execGit, cwd);
-  if (target.kind === "unavailable") {
-    return target;
-  }
-  const stashRef = index === undefined ? [] : [`stash@{${index}}`];
-  try {
-    await execGit(["stash", "drop", ...stashRef], target.root, {
-      timeoutMs: WRITE_TIMEOUT_MS,
-    });
-    return { kind: "ok" };
-  } catch (err) {
-    return unavailable(errorMessage(err));
-  }
-}
-
-export function parseStashEntries(output: string): GitStashEntry[] {
-  const entries: GitStashEntry[] = [];
-  for (const line of output.split("\n")) {
-    if (!line.trim()) {
-      continue;
-    }
-    const [ref, message = "", date = "", hash = ""] = line.split("\x1f");
-    const match = STASH_REF_RE.exec(ref ?? "");
-    if (!match) {
-      continue;
-    }
-    entries.push({ date, hash, index: Number(match[1]), message });
-  }
-  return entries;
-}
-
-export async function listStashes(
-  execGit: GitOperationExec,
-  cwd: string
-): Promise<GitStashListResult> {
-  const target = await resolveGitRootOrUnavailable(execGit, cwd);
-  if (target.kind === "unavailable") {
-    return target;
-  }
-  try {
-    const output = await execGit(cwdStashListArgs(), target.root);
-    return { entries: parseStashEntries(output), kind: "ok" };
-  } catch (err) {
-    return unavailable(errorMessage(err));
-  }
-}
-
-function cwdStashListArgs(): string[] {
-  return ["stash", "list", "--format=%gd%x1f%gs%x1f%aI%x1f%H"];
-}
-
 export async function rebaseBranch(
   execGit: GitOperationExec,
   cwd: string,
@@ -423,6 +215,134 @@ export async function continueRebase(
     }
     return unavailable(errorMessage(err));
   }
+}
+
+type GitSequencerKind = "cherry-pick" | "revert";
+
+/**
+ * cherry-pick / revert 共用主体(与 rebase 语义对齐):
+ * 冲突暂停返回 conflict,其余失败返回 unavailable。
+ * revert 用 --no-edit 取默认信息;cherry-pick 默认不开编辑器。
+ */
+async function runSequencer(
+  execGit: GitOperationExec,
+  cwd: string,
+  kind: GitSequencerKind,
+  oid: string
+): Promise<GitSequencerResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  const args =
+    kind === "revert"
+      ? ["revert", "--no-edit", "--", oid]
+      : ["cherry-pick", "--", oid];
+  try {
+    const stdout = await execGit(args, target.root, {
+      timeoutMs: WRITE_TIMEOUT_MS,
+    });
+    return { kind: "ok", message: stdout.trim() };
+  } catch (err) {
+    if (
+      err instanceof GitExecError &&
+      (looksLikeConflict(combinedGitErrorOutput(err)) ||
+        (await hasConflicts(execGit, target.root)))
+    ) {
+      return { kind: "conflict", message: errorMessage(err) };
+    }
+    return unavailable(errorMessage(err));
+  }
+}
+
+async function abortSequencer(
+  execGit: GitOperationExec,
+  cwd: string,
+  kind: GitSequencerKind
+): Promise<GitSequencerAbortResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  try {
+    await execGit([kind, "--abort"], target.root, {
+      timeoutMs: WRITE_TIMEOUT_MS,
+    });
+    return { kind: "ok" };
+  } catch (err) {
+    return unavailable(errorMessage(err));
+  }
+}
+
+async function continueSequencer(
+  execGit: GitOperationExec,
+  cwd: string,
+  kind: GitSequencerKind
+): Promise<GitSequencerContinueResult> {
+  const target = await resolveGitRootOrUnavailable(execGit, cwd);
+  if (target.kind === "unavailable") {
+    return target;
+  }
+  try {
+    const stdout = await execGit([kind, "--continue"], target.root, {
+      env: { GIT_EDITOR: "true" },
+      timeoutMs: WRITE_TIMEOUT_MS,
+    });
+    return { kind: "ok", message: stdout.trim() };
+  } catch (err) {
+    if (
+      err instanceof GitExecError &&
+      (looksLikeConflict(combinedGitErrorOutput(err)) ||
+        (await hasConflicts(execGit, target.root)))
+    ) {
+      return { kind: "conflict", message: errorMessage(err) };
+    }
+    return unavailable(errorMessage(err));
+  }
+}
+
+export function cherryPickCommit(
+  execGit: GitOperationExec,
+  cwd: string,
+  oid: string
+): Promise<GitSequencerResult> {
+  return runSequencer(execGit, cwd, "cherry-pick", oid);
+}
+
+export function abortCherryPick(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitSequencerAbortResult> {
+  return abortSequencer(execGit, cwd, "cherry-pick");
+}
+
+export function continueCherryPick(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitSequencerContinueResult> {
+  return continueSequencer(execGit, cwd, "cherry-pick");
+}
+
+export function revertCommit(
+  execGit: GitOperationExec,
+  cwd: string,
+  oid: string
+): Promise<GitSequencerResult> {
+  return runSequencer(execGit, cwd, "revert", oid);
+}
+
+export function abortRevert(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitSequencerAbortResult> {
+  return abortSequencer(execGit, cwd, "revert");
+}
+
+export function continueRevert(
+  execGit: GitOperationExec,
+  cwd: string
+): Promise<GitSequencerContinueResult> {
+  return continueSequencer(execGit, cwd, "revert");
 }
 
 export async function undoLastCommit(

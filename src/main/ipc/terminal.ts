@@ -2,21 +2,16 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import { isPanelTaskLive } from "@shared/contracts/tasks.ts";
 import type {
   CreateTerminalArgs,
-  TerminalCloseOptions,
   TerminalColors,
   TerminalFont,
-  TerminalSelectionTextResult,
 } from "@shared/contracts/terminal.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import type { IpcMain, WebContents } from "electron";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import { createProcessEnvironmentService } from "../services/process-environment-service.ts";
+import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-gate.ts";
 import type { TaskService } from "../services/tasks/task-service.ts";
-import {
-  readTerminalPanelSession,
-  removeTerminalPanelSession,
-  retainTerminalPanelSessions,
-} from "../state/terminal-session-state.ts";
+import { readTerminalPanelSession } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import {
   findAppWindowByElectronId,
@@ -24,7 +19,6 @@ import {
   findAppWindowByWebContents,
   findInternalWindowId,
 } from "../windows/window-identity.ts";
-import { foregroundActivityService } from "./foreground-activity.ts";
 import { handleTerminalCreate } from "./terminal-create-handler.ts";
 import { handleTerminalCwdChange } from "./terminal-cwd-forwarding.ts";
 import {
@@ -35,17 +29,11 @@ import { registerTerminalDebugSnapshotIpc } from "./terminal-debug-snapshot.ts";
 import { terminalFocusCoordinator } from "./terminal-focus-coordinator.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import { isTerminalHostSnapshot } from "./terminal-host-snapshot-validation.ts";
-import {
-  cancelPromptReady,
-  signalPromptReady,
-} from "./terminal-initial-input-gate.ts";
+import { signalPromptReady } from "./terminal-initial-input-gate.ts";
+import { registerTerminalInputIpc } from "./terminal-input-ipc.ts";
 import { registerTerminalKeybindingForward } from "./terminal-keybinding-forward.ts";
-import { loadNativeAddon, type NativeAddon } from "./terminal-native-addon.ts";
+import { loadNativeAddon } from "./terminal-native-addon.ts";
 import { handleTerminalOpenUrl } from "./terminal-open-url-forwarding.ts";
-import {
-  performTerminalOperation,
-  readTerminalSelectionText,
-} from "./terminal-operations.ts";
 import { fromNativePanelKey, toNativePanelKey } from "./terminal-panel-id.ts";
 import { isTerminalRuntimeConfig } from "./terminal-runtime-config.ts";
 import { registerTerminalSearchIpc } from "./terminal-search.ts";
@@ -53,10 +41,18 @@ import { registerTerminalShortcutIpc } from "./terminal-shortcuts-ipc.ts";
 import { registerTerminalTaskLifecycleForwarding } from "./terminal-task-lifecycle-wiring.ts";
 import { createTaskOutputTerminalBindings } from "./terminal-task-output-bindings.ts";
 import { registerTerminalTaskOutputRebindIpc } from "./terminal-task-output-rebind.ts";
+import {
+  bindTerminalTransferRuntime,
+  registerTerminalTransferGuardIpc,
+} from "./terminal-transfer-guards.ts";
 import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
-let cachedAddon: NativeAddon | null = null;
-export const getTerminalAddon = (): NativeAddon | null => cachedAddon;
+export {
+  getTerminalAddon,
+  getTerminalTaskLifecycleForTransfer,
+  getTerminalTaskOutputBindingsForTransfer,
+  getTerminalTaskServiceForTransfer,
+} from "./terminal-transfer-guards.ts";
 
 export function windowFromWebContents(
   webContents: WebContents
@@ -67,6 +63,7 @@ export function windowFromWebContents(
 export function registerTerminalIpc(
   ipcMain: IpcMain,
   deps: {
+    launchGate?: ManagedAgentLaunchGate | null | undefined;
     loadNativeAddon?: () => ReturnType<typeof loadNativeAddon>;
     processEnvironment?: ProcessEnvironmentService | undefined;
     recordAgentLaunch?:
@@ -96,7 +93,6 @@ export function registerTerminalIpc(
           taskService: deps.taskService,
         })
       : null;
-  cachedAddon = addon;
   registerTerminalDebugSnapshotIpc(ipcMain, addon);
   registerTerminalKeybindingForward(addon);
   deps.taskService?.bindTerminalProcessController({
@@ -132,6 +128,12 @@ export function registerTerminalIpc(
       deps.taskService?.isStopRequested(panelId, windowId) ?? false,
     markTaskPanelClosed: (panelId, windowId) =>
       deps.taskService?.markPanelClosed(panelId, windowId),
+  });
+  bindTerminalTransferRuntime({
+    addon,
+    taskLifecycle,
+    taskOutputBindings,
+    taskService: deps.taskService ?? null,
   });
   // Swift 收到 scoped panelId, renderer 使用 raw panel id.
   addon?.setMouseForwardCallback((id, panelId, x, y) => {
@@ -225,59 +227,19 @@ export function registerTerminalIpc(
     }
   });
 
-  ipcMain.handle(
-    "pier:terminal:perform-operation",
-    (event, panelId: unknown, operation: unknown) =>
-      performTerminalOperation({
-        addon,
-        loadError,
-        operation,
-        panelId,
-        win: windowFromWebContents(event.sender),
-      })
-  );
-
-  ipcMain.handle(
-    "pier:terminal:read-selection-text",
-    (event, panelId: unknown) =>
-      Promise.resolve().then(() => {
-        const trimmedPanelId =
-          typeof panelId === "string" ? panelId.trim() : "";
-        if (!trimmedPanelId) {
-          return { kind: "empty" } satisfies TerminalSelectionTextResult;
-        }
-        const win = windowFromWebContents(event.sender);
-        if (!win) {
-          return {
-            kind: "error",
-            message: "Terminal window is not available.",
-          } satisfies TerminalSelectionTextResult;
-        }
-        try {
-          const text = readTerminalSelectionText({
-            addon,
-            loadError,
-            panelId: trimmedPanelId,
-            win,
-          });
-          if (!text) {
-            return { kind: "empty" } satisfies TerminalSelectionTextResult;
-          }
-          return { kind: "ok", text } satisfies TerminalSelectionTextResult;
-        } catch (err) {
-          return {
-            kind: "error",
-            message: err instanceof Error ? err.message : String(err),
-          } satisfies TerminalSelectionTextResult;
-        }
-      })
-  );
+  registerTerminalInputIpc({
+    addon,
+    ipcMain,
+    loadError,
+    windowFromWebContents,
+  });
 
   ipcMain.handle("pier:terminal:create", (event, args: CreateTerminalArgs) =>
     handleTerminalCreate({
       addon,
       createArgs: args,
       loadError,
+      launchGate: deps.launchGate ?? null,
       processEnvironment,
       recordAgentLaunch: deps.recordAgentLaunch,
       taskLifecycle,
@@ -353,72 +315,13 @@ export function registerTerminalIpc(
     }
   );
 
-  ipcMain.handle(
-    "pier:terminal:close",
-    async (
-      event,
-      panelId: string,
-      options?: TerminalCloseOptions | undefined
-    ) => {
-      const win = windowFromWebContents(event.sender);
-      if (!win) {
-        return;
-      }
-      const windowId = findInternalWindowId(win) ?? undefined;
-      const sessionScope = windowRecordIdFor(win);
-      recordRendererTerminalRoute(win, "close", panelId);
-      if (options?.reason === "relaunch") {
-        // relaunch = 同 panel 换 pty, 不是面板死亡。TaskRuns 仍持有 panel
-        // 映射，RuntimeControl / tab overlay 不依赖 FA task slot。
-        taskLifecycle.ignoreNextNativeUserClose(panelId, windowId);
-      } else {
-        foregroundActivityService.panelClosed(panelId, String(win.id));
-        deps.taskService?.markPanelClosed(panelId, windowId);
-        taskLifecycle.releasePanel(panelId, windowId);
-      }
-      const nativePanelId = toNativePanelKey(win, panelId);
-      taskOutputBindings?.detach(nativePanelId);
-      terminalFocusCoordinator.surfaceWillClose(win, panelId);
-      // 面板关闭时清 initial-input gate 的 pending 定时器，防止 pty 已死
-      // 但 fallback timer 仍尝试注入到不存在的 panel。
-      cancelPromptReady(panelId);
-      addon?.closeTerminal(nativePanelId);
-      try {
-        await removeTerminalPanelSession(sessionScope, panelId);
-      } catch (err) {
-        console.error("[pier-cwd-remove] failed:", err);
-      }
-    }
-  );
-
-  ipcMain.on("pier:terminal:reconcile", (event, activeIds: string[]) => {
-    if (!addon) {
-      return;
-    }
-    const win = windowFromWebContents(event.sender);
-    if (!win) {
-      return;
-    }
-    recordRendererTerminalRoute(win, "reconcile", null, {
-      count: activeIds.length,
-    });
-    foregroundActivityService.retainPanels(String(win.id), activeIds);
-    // 仅在有明确 active 集合时 GC session。空数组常见于 layout 应用前/中，
-    // 此时删 running+resume 会毁掉可恢复会话；单 panel 关闭已走 removeSession。
-    if (activeIds.length > 0) {
-      retainTerminalPanelSessions(windowRecordIdFor(win), activeIds).catch(
-        (err) => {
-          console.error("[pier-terminal-session-gc] failed:", err);
-        }
-      );
-    }
-    try {
-      const activeNativeIds = activeIds.map((id) => toNativePanelKey(win, id));
-      taskOutputBindings?.retainWindow(win.id, activeNativeIds);
-      addon.reconcileTerminals(win.getNativeWindowHandle(), activeNativeIds);
-    } catch (err) {
-      console.error("[pier-terminal-reconcile] failed:", err);
-    }
+  registerTerminalTransferGuardIpc({
+    addon,
+    ipcMain,
+    taskLifecycle,
+    taskOutputBindings,
+    taskService: deps.taskService,
+    windowFromWebContents,
   });
 
   ipcMain.on("pier:terminal:apply-theme", (event, colors: TerminalColors) => {

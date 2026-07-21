@@ -60,6 +60,7 @@ const electronMock = vi.hoisted(() => {
 const focusFeedback = vi.hoisted(() => ({
   broadcastAgentRuntimeFocusFeedback: vi.fn(),
   broadcastSystemNotificationPermissionChanged: vi.fn(),
+  sendAttentionSoundPlayToOneWindow: vi.fn(() => true),
 }));
 
 vi.mock("electron", () => ({
@@ -81,12 +82,18 @@ vi.mock("@main/windows/window-manager.ts", () => ({
   },
 }));
 
+const localeMock = vi.hoisted(() => ({
+  resolveAttentionLocale: vi.fn(async (): Promise<"en" | "zh-CN"> => "en"),
+}));
+
+vi.mock("@main/services/agent-attention/attention-locale.ts", () => localeMock);
+
 import { registerNotificationIpc } from "@main/ipc/notification.ts";
 import { resetSystemNotificationPermissionStateForTests } from "@main/services/system-notification.ts";
 
 type InvokeHandler = (event: IpcMainInvokeEvent, ...args: unknown[]) => unknown;
 
-function setupHandler(
+function setupHandlers(
   focus?: (agentRef: string) => Promise<AgentRuntimeFocusResult>
 ) {
   const handlers = new Map<string, InvokeHandler>();
@@ -107,7 +114,13 @@ function setupHandler(
         }
       : {}
   );
-  const handler = handlers.get("pier:notification:system");
+  return handlers;
+}
+
+function setupHandler(
+  focus?: (agentRef: string) => Promise<AgentRuntimeFocusResult>
+) {
+  const handler = setupHandlers(focus).get("pier:notification:system");
   if (!handler) {
     throw new Error("expected pier:notification:system handler");
   }
@@ -179,6 +192,24 @@ describe("notification IPC", () => {
       handler({} as IpcMainInvokeEvent, { title: "Again" })
     ).resolves.toEqual({ reason: "denied", shown: false });
     expect(electronMock.constructed).toHaveLength(1);
+  });
+
+  it("test notification copy follows the resolved UI locale", async () => {
+    localeMock.resolveAttentionLocale.mockResolvedValue("zh-CN");
+    const handlers = setupHandlers();
+    const testHandler = handlers.get("pier://notification:test");
+    if (!testHandler) {
+      throw new Error("expected test notification handler");
+    }
+
+    await testHandler({} as IpcMainInvokeEvent);
+
+    expect(electronMock.constructed.at(-1)).toEqual(
+      expect.objectContaining({
+        body: "看到这条横幅或通知中心条目，说明系统通知投递正常。",
+        title: "Pier 测试通知",
+      })
+    );
   });
 
   it("focuses agentRef on click and broadcasts non-ok results", async () => {

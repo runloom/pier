@@ -208,7 +208,7 @@ function SummaryLine({
               ·
             </span>
           )}
-          <span className="inline-flex items-center gap-1">
+          <span className="inline-flex items-center gap-1" title={group.title}>
             {group.parts.map((part) => (
               <SummaryPart key={`${part.label}-${part.tone}`} part={part} />
             ))}

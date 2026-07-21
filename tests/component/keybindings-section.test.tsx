@@ -65,6 +65,7 @@ describe("KeybindingsSection", () => {
   });
 
   afterEach(async () => {
+    actionRegistry.clearForTests();
     await i18next.changeLanguage("en");
   });
 
@@ -316,7 +317,7 @@ describe("KeybindingsSection", () => {
     fireEvent.click(screen.getByRole("button", { name: "录制 新建终端" }));
     fireEvent.keyDown(window, { code: "KeyX", key: "X" });
 
-    expect(toast.error).toHaveBeenCalledWith("快捷键至少需要包含一个修饰键。");
+    expect(toast.error).toHaveBeenCalledWith("请加上修饰键");
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     unmount();
     dispose();
@@ -349,7 +350,7 @@ describe("KeybindingsSection", () => {
     });
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("已被“新建终端”使用。");
+      expect(toast.error).toHaveBeenCalledWith("已被“新建终端”使用");
     });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(window.pier.preferences.update).not.toHaveBeenCalled();
@@ -386,7 +387,7 @@ describe("KeybindingsSection", () => {
     });
 
     await waitFor(() => {
-      expect(toast.error).toHaveBeenCalledWith("已被“新建终端”使用。");
+      expect(toast.error).toHaveBeenCalledWith("已被“新建终端”使用");
     });
     expect(screen.queryByRole("alert")).not.toBeInTheDocument();
     expect(window.pier.preferences.update).not.toHaveBeenCalled();
