@@ -856,7 +856,7 @@ describe("FileEditorController", () => {
     await expect(
       harness.controller.saveDocument(documentId, "panel")
     ).resolves.toBe("saved");
-    expect(harness.notifications.success).toHaveBeenCalledWith("File saved");
+    expect(harness.notifications.success).toHaveBeenCalledWith("Saved");
 
     updateDocumentContents(documentId, "# Failed\n");
     harness.writeText.mockRejectedValueOnce(new Error("disk full"));

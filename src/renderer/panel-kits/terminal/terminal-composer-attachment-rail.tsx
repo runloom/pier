@@ -106,12 +106,10 @@ function AttachmentTile({
         {preview && isImage ? (
           <img
             alt=""
-            className="pointer-events-none size-full select-none object-cover"
+            className="pointer-events-none size-full select-none object-cover [-webkit-user-drag:none]"
             draggable={false}
             height={56}
             src={preview}
-            // Chromium still starts HTML5 drag from images without this.
-            style={{ WebkitUserDrag: "none" }}
             width={56}
           />
         ) : (

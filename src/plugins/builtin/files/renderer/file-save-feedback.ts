@@ -15,7 +15,7 @@ export async function reportFileSaveOutcome(
   }
   if (outcome === "saved" && feedback === "all") {
     context.notifications.success(
-      context.i18n.t("filePanel.notifications.saved", undefined, "File saved")
+      context.i18n.t("filePanel.notifications.saved", undefined, "Saved")
     );
     return;
   }

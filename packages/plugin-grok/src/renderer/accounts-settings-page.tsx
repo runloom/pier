@@ -235,33 +235,31 @@ export function AccountsSettingsPage({
       context,
       mode: "sync",
       t,
-    })
-      .then((result) => {
-        if (!result.confirmed) {
-          return;
-        }
-        const peers = result.syncTargets.filter(
-          (target): target is PeerSyncTarget => target !== "grok"
-        );
-        if (peers.length === 0) {
-          return;
-        }
-        context.rpc
-          .invoke("accounts.syncToPeers", {
-            accountId,
-            syncTargets: peers,
-          })
-          .then(() => {
-            context.notifications.success(
-              t(
-                "pier.grok.accounts.settings.syncPeersSuccess",
-                "Synced credentials to selected tools"
-              )
-            );
-          })
-          .catch(reportError);
-      })
-      .catch(reportError);
+    }).then((result) => {
+      if (!result.confirmed) {
+        return;
+      }
+      const peers = result.syncTargets.filter(
+        (target): target is PeerSyncTarget => target !== "grok"
+      );
+      if (peers.length === 0) {
+        return;
+      }
+      context.rpc
+        .invoke("accounts.syncToPeers", {
+          accountId,
+          syncTargets: peers,
+        })
+        .then(() => {
+          context.notifications.success(
+            t(
+              "pier.grok.accounts.settings.syncPeersSuccess",
+              "Credentials synced"
+            )
+          );
+        })
+        .catch(reportError);
+    });
   };
 
   if (loadError) {

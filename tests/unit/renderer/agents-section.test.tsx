@@ -358,7 +358,7 @@ describe("AgentsSection", () => {
 
     await waitFor(() => {
       expect(toastMocks.info).toHaveBeenCalledWith(
-        "Another external link is already opening."
+        "Another link is already opening"
       );
     });
     expect(appDialogMocks.showAppAlert).not.toHaveBeenCalled();
@@ -392,7 +392,7 @@ describe("AgentsSection", () => {
     resolveRefresh?.();
 
     await waitFor(() => {
-      expect(toastMocks.success).toHaveBeenCalledWith("Agent list refreshed");
+      expect(toastMocks.success).toHaveBeenCalledWith("List refreshed");
     });
     expect(appDialogMocks.showAppAlert).not.toHaveBeenCalled();
   });
@@ -409,7 +409,7 @@ describe("AgentsSection", () => {
     await waitFor(() => {
       expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
         body: "detect service down",
-        title: "Failed to refresh agent list",
+        title: "Couldn't refresh list",
       });
     });
     expect(toastMocks.success).not.toHaveBeenCalled();

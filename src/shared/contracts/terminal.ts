@@ -2,6 +2,12 @@ import { z } from "zod";
 import type { AgentKind } from "./agent.ts";
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
 import type { TaskOutputPanelParams, TaskPanelMetadata } from "./tasks.ts";
+import type {
+  TerminalComposerImageBytes,
+  TerminalComposerMaterializeResult,
+  TerminalComposerPathsResult,
+  TerminalComposerPickResult,
+} from "./terminal-composer-attachments.ts";
 // TerminalAPI 是终端 IPC 契约, 里面 debugSnapshot / openDebugWindow 等 debug 相关
 // 方法需要引用 debug schema. 仅 type-only 循环 import (tsc 会 erase), 不构成运行时环。
 import type {
@@ -12,6 +18,19 @@ import type {
   TerminalDebugWindowOpenResult,
 } from "./terminal-debug.ts";
 import type { TerminalAgentRestoreLaunchOptions } from "./terminal-launch.ts";
+import type { SkillsLaunchBlockedInfo } from "./terminal-skills-launch.ts";
+
+export type {
+  TerminalComposerAttachmentDto,
+  TerminalComposerImageBytes,
+  TerminalComposerMaterializeResult,
+  TerminalComposerPathsResult,
+  TerminalComposerPickResult,
+} from "./terminal-composer-attachments.ts";
+export type {
+  SkillsLaunchBlockedInfo,
+  SkillsLaunchContinueResult,
+} from "./terminal-skills-launch.ts";
 
 export interface TerminalFrame {
   /** BrowserWindow contentView 坐标，top-left origin，已叠加 Electron page zoom。 */
@@ -162,6 +181,11 @@ export interface CreateTerminalArgs {
   initialInput?: string | undefined;
   launchId?: string | undefined;
   panelId: string;
+  /**
+   * 受管启动重试握手（design v8 §5.2.7）：携带处于 SPAWN_INTENT 授权窗口内的
+   * attempt id 时，跳过重新校正直接放行；窗口外拒绝且不 replay。
+   */
+  skillsLaunchContinuation?: string | undefined;
   tab?: PanelTabChrome | undefined;
   task?: TaskPanelMetadata | undefined;
   /** 后台任务的只读 Ghostty 输出会话；存在时不创建 shell/PTY。 */
@@ -171,6 +195,8 @@ export interface CreateTerminalArgs {
 export interface CreateTerminalResult {
   error?: string;
   ok: boolean;
+  /** 受管启动被技能门阻断时的结构化信息（renderer 弹三选）。 */
+  skillsLaunchBlocked?: SkillsLaunchBlockedInfo | undefined;
 }
 
 export interface RebindTaskOutputResult extends CreateTerminalResult {
@@ -281,39 +307,6 @@ export interface TerminalSendTextArgs {
    */
   submit?: boolean | undefined;
   text: string;
-}
-
-export interface TerminalComposerAttachmentDto {
-  id: string;
-  /** Directory attachment (folder). */
-  isDirectory?: boolean;
-  kind: "image" | "file";
-  name: string;
-  path: string;
-  /**
-   * Optional image thumbnail as data URL (main-generated).
-   * Omitted for non-images or when preview generation fails.
-   */
-  previewDataUrl?: string | undefined;
-}
-
-export interface TerminalComposerPathsResult {
-  attachments: TerminalComposerAttachmentDto[];
-  failures: { path: string; reason: string }[];
-}
-
-export type TerminalComposerPickResult =
-  | { ok: true; paths: string[] }
-  | { ok: false; error: string };
-
-export type TerminalComposerMaterializeResult =
-  | { ok: true; attachment: TerminalComposerAttachmentDto | null }
-  | { ok: false; error: string };
-
-export interface TerminalComposerImageBytes {
-  bytes: number[] | Uint8Array;
-  mime?: string;
-  name?: string;
 }
 
 /** 合成按键（Esc / Ctrl+C / 方向键等）。绕过 bracketed paste。 */

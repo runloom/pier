@@ -32,6 +32,7 @@ import {
 import { executePanelTransferCommand } from "./panel-transfer-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
 import { executePluginCommand } from "./plugin-commands.ts";
+import { executeProjectSkillsCommand } from "./project-skills-commands.ts";
 import {
   executeRunCancelCommand,
   executeRunListCommand,
@@ -369,6 +370,7 @@ async function executeCommandByDomain(
     (cmd: PierCommand) => executePanelCommand(requestId, cmd, services),
     (cmd: PierCommand) =>
       executePanelTransferCommand(requestId, cmd, services, context),
+    (cmd: PierCommand) => executeProjectSkillsCommand(requestId, cmd, services),
   ];
   for (const executor of executors) {
     const result = await executor(command);

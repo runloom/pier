@@ -9,7 +9,7 @@ export const workbench = {
   emptyDescription: "添加组件以监控活动和管理工作区。",
   removeConfirmTitle: "移除组件？",
   removeConfirmBody: "此操作会从工作台移除该组件。你可以从组件库再次添加。",
-  refreshAllSuccess: "已刷新全部组件",
+  refreshAllSuccess: "已全部刷新",
   library: {
     added: "已添加",
     addedCount: "已添加 {{count}}",
@@ -63,7 +63,7 @@ export const workbench = {
         "使用支持的 AI CLI 后会自动汇总。当前读取本机会话：{{sources}}。",
       period: "最近 31 天成本",
       periodTokens: "最近 31 天 tokens",
-      refreshSuccess: "成本数据已刷新",
+      refreshSuccess: "成本已刷新",
       sourceName: {
         claudeCode: "Claude Code",
         codex: "Codex",

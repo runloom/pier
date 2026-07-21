@@ -129,6 +129,8 @@ export const PIER_BROADCAST = {
     "pier://notification:permission-changed",
   // Attention 内置提示音：单窗播放指令；payload { soundId }
   ATTENTION_SOUND_PLAY: "pier://attention-sound:play",
+  // 项目技能状态失效 (main → 所有 renderer, payload { projectIdentity, observedRevision })
+  PROJECT_SKILLS_INVALIDATED: "pier://project-skills:invalidated",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

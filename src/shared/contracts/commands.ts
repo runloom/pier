@@ -13,6 +13,7 @@ import { pluginInspectRequestSchema } from "./plugin.ts";
 import { managedPluginCommandSchemas } from "./plugin-commands.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
 import { projectPreferencesPatchSchema } from "./preferences-patch.ts";
+import { projectSkillsCommandSchemas } from "./project-skills-commands.ts";
 import { taskSpawnModeSchema } from "./tasks.ts";
 import {
   resolvedTerminalLaunchOptionsSchema,
@@ -258,6 +259,7 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   ...managedPluginCommandSchemas,
   ...panelTransferPierCommandSchemas,
+  ...projectSkillsCommandSchemas,
 ]);
 
 export type PierCommand = z.infer<typeof pierCommandSchema>;

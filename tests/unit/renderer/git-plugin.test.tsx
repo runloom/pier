@@ -360,10 +360,10 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
               "Branch {{branch}} has no new commits to merge.",
             "ui.gitMergeSelectBranch":
               "Select a branch to merge into the current branch",
-            "ui.gitMergeSuccess": "Successfully merged branch {{branch}}",
+            "ui.gitMergeSuccess": "Merged {{branch}}",
             "ui.gitNoOtherBranches": "No other branches found",
             "ui.gitStashListEmpty": "No stashes found",
-            "ui.gitStashPopSuccess": "Stash applied and removed",
+            "ui.gitStashPopSuccess": "Stash applied",
             "ui.gitStashSelect": "Select a stash to pop",
             "ui.gitStashSuccess": "Changes stashed",
             "ui.locked": "Locked",
@@ -1240,7 +1240,7 @@ describe("git builtin plugin", () => {
     );
     expect(toastMocks.loading).toHaveBeenCalledWith("Merging...");
     expect(toastMocks.success).toHaveBeenCalledWith(
-      "Successfully merged branch feature/git-panel",
+      "Merged feature/git-panel",
       { id: "git-loading-toast" }
     );
   });

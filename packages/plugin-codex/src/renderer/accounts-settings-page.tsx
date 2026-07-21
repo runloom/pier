@@ -225,7 +225,7 @@ export function AccountsSettingsPage({
             context.notifications.success(
               t(
                 "pier.codex.accounts.settings.syncPeersSuccess",
-                "Synced credentials to selected tools"
+                "Credentials synced"
               )
             );
           })

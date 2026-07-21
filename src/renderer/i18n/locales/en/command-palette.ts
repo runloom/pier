@@ -6,7 +6,7 @@ export const commandPalette = {
   searchResults: "Results",
   agents: {
     launchFailed: "Failed to Start Agent",
-    noAgentDetected: "No available agent detected",
+    noAgentDetected: "No available agent",
     unavailable: "Agent is no longer available",
   },
   placeholder: {

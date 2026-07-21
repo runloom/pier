@@ -9,6 +9,7 @@ import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import type { IpcMain, WebContents } from "electron";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import { createProcessEnvironmentService } from "../services/process-environment-service.ts";
+import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-gate.ts";
 import type { TaskService } from "../services/tasks/task-service.ts";
 import { readTerminalPanelSession } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "../windows/app-window.ts";
@@ -62,6 +63,7 @@ export function windowFromWebContents(
 export function registerTerminalIpc(
   ipcMain: IpcMain,
   deps: {
+    launchGate?: ManagedAgentLaunchGate | null | undefined;
     loadNativeAddon?: () => ReturnType<typeof loadNativeAddon>;
     processEnvironment?: ProcessEnvironmentService | undefined;
     recordAgentLaunch?:
@@ -237,6 +239,7 @@ export function registerTerminalIpc(
       addon,
       createArgs: args,
       loadError,
+      launchGate: deps.launchGate ?? null,
       processEnvironment,
       recordAgentLaunch: deps.recordAgentLaunch,
       taskLifecycle,

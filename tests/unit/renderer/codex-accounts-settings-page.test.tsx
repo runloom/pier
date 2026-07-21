@@ -756,7 +756,7 @@ describe("AccountsSettingsPage", () => {
       payload: expect.anything(),
     });
     expect(context.notifications.success).toHaveBeenCalledWith(
-      "Synced credentials to selected tools"
+      "Credentials synced"
     );
   });
 

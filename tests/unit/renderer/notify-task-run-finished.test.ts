@@ -100,7 +100,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
 
     expect(toast.success).toHaveBeenCalledTimes(1);
     expect(toast.success).toHaveBeenCalledWith(
-      "Task finished: Test suite",
+      "Finished: Test suite",
       expect.objectContaining({
         action: expect.objectContaining({ label: "View details" }),
       })
@@ -120,7 +120,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     notifyTaskRunFinishedIfNeeded(current);
 
     expect(toast.error).toHaveBeenCalledWith(
-      "Task failed: Test suite",
+      "Failed: Test suite",
       expect.objectContaining({
         action: expect.objectContaining({ label: "View details" }),
       })
@@ -151,7 +151,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     await vi.waitFor(() => {
       expect(showAppAlert).toHaveBeenCalledWith({
         body: "boom",
-        title: "Failed to open task output",
+        title: "Couldn't open task output",
       });
     });
   });
@@ -159,7 +159,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
   it("uses a force-stop toast for forced cancellation", () => {
     notifyTaskRunFinishedIfNeeded(run("cancelled", { force: true }));
     expect(toast.error).toHaveBeenCalledWith(
-      "Task force-stopped: Test suite",
+      "Force-stopped: Test suite",
       expect.any(Object)
     );
   });

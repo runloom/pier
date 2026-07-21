@@ -10,6 +10,7 @@ import type {
   SystemNotificationUnavailableReason,
 } from "@shared/contracts/notification.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
+import type { ProjectSkillsInvalidatedEvent } from "@shared/contracts/project-skills.ts";
 import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
 import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
 import type { UsageAggregateSnapshot } from "@shared/contracts/usage-data.ts";
@@ -127,4 +128,13 @@ export function sendAttentionSoundPlayToOneWindow(payload: {
   }
   win.webContents.send(PIER_BROADCAST.ATTENTION_SOUND_PLAY, payload);
   return true;
+}
+
+export function broadcastProjectSkillsInvalidated(
+  event: Omit<ProjectSkillsInvalidatedEvent, "type">
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.PROJECT_SKILLS_INVALIDATED, {
+    type: "project-skills.invalidated",
+    ...event,
+  } satisfies ProjectSkillsInvalidatedEvent);
 }

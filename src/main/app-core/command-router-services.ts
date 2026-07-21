@@ -28,6 +28,8 @@ import type { PanelTransferService } from "../services/panel-transfer/panel-tran
 import type { PluginService } from "../services/plugin-service.ts";
 import type { PluginSettingsService } from "../services/plugin-settings-service.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
+import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-gate.ts";
+import type { ProjectSkillsService } from "../services/project-skills/service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { TaskService } from "../services/tasks/task-service.ts";
 import type { UsageDataService } from "../services/usage-data/usage-data-service.ts";
@@ -39,6 +41,7 @@ import type { PluginDisableTransitionCoordinator } from "./plugin-disable-transi
 
 export interface PierCoreServices {
   agentDetection: AgentDetectionService;
+  agentLaunchGate?: ManagedAgentLaunchGate;
   agentRuntimeIndex: AgentRuntimeIndexService;
   agentUsage: AgentUsageService;
   ai: AiService;
@@ -73,6 +76,7 @@ export interface PierCoreServices {
     update(patch: ProjectPreferencesPatch): Promise<ProjectPreferences>;
   };
   processEnvironment: ProcessEnvironmentService;
+  projectSkills?: ProjectSkillsService;
   rendererCommand: RendererCommandService;
   secrets: SecretsStore;
   tasks: TaskService;

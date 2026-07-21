@@ -44,6 +44,8 @@ export const pierCapabilitySchema = z.enum([
   "external:open",
   "network",
   "ai:invoke",
+  "skills:read",
+  "skills:write",
 ]);
 
 export type PierClientKind = z.infer<typeof pierClientKindSchema>;
@@ -91,6 +93,8 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "file:read",
     "file:write",
     "ai:invoke",
+    "skills:read",
+    "skills:write",
     "external:open",
     // network 用于 plugin.checkUpdates / plugin.install / plugin.update
     // 拉取签名官方索引与下载 GitHub Release asset (design §5)。
@@ -112,6 +116,7 @@ export const DEFAULT_CAPABILITIES_BY_CLIENT_KIND: Record<
     "terminal:control",
     "plugin:read",
     "git:read",
+    "skills:read",
   ],
   "mcp-local": [
     "app:read",
