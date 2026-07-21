@@ -52,6 +52,7 @@ import {
   registerForegroundActivityIpc,
 } from "./ipc/foreground-activity.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
+import { registerMediaPreviewIpc } from "./ipc/media-preview.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
 import { registerSystemStatsIpc } from "./ipc/system-stats.ts";
@@ -350,6 +351,7 @@ if (gotTheLock) {
       });
       registerFileSaveTargetIpc(ipcMain);
       registerFilePreviewTicketIpc();
+      registerMediaPreviewIpc();
       registerMenuIpc(ipcMain);
       registerClipboardIpc(ipcMain);
       registerAgentsIpc(ipcMain);

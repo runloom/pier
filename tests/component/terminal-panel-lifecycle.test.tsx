@@ -2333,6 +2333,29 @@ describe("TerminalPanel lifecycle", () => {
       });
     });
 
+    it("toggles the composer closed when open-composer fires again", async () => {
+      useForegroundActivityStore.setState({
+        activities: { "terminal-1": agentActivityFor("terminal-1") },
+        ts: 1,
+      });
+
+      render(<TerminalPanel {...createPanelProps()} />);
+
+      act(() => {
+        openComposer();
+      });
+      await waitFor(() => {
+        expect(screen.getByTestId("terminal-composer")).toBeInTheDocument();
+      });
+
+      act(() => {
+        openComposer();
+      });
+      await waitFor(() => {
+        expect(screen.queryByTestId("terminal-composer")).toBeNull();
+      });
+    });
+
     it("does not mount the composer when opened without an agent activity", async () => {
       render(<TerminalPanel {...createPanelProps()} />);
 

@@ -132,6 +132,12 @@ export class TerminalFocusCoordinator {
     if (!entry.visible || entry.frame === null) {
       return { ok: false, reason: "hidden" };
     }
+    // Web overlay (e.g. Rich Input composer) is holding keyboard ownership —
+    // reject native focus intent so the terminal click stays with the web layer.
+    const webRequestCount = record.desired?.webRequestCount ?? 0;
+    if (webRequestCount > 0) {
+      return { ok: false, reason: "web-overlay-active" };
+    }
     return { ok: true, panelId: rawPanelId };
   }
 

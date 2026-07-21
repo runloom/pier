@@ -1,7 +1,7 @@
 import type { ComponentType } from "react";
 import { create } from "zustand";
 
-export type AppContentDialogSize = "sm" | "default" | "lg";
+export type AppContentDialogSize = "sm" | "default" | "lg" | "xl";
 
 export interface AppContentDialogRenderProps<TResult = unknown> {
   close: (result?: TResult | null) => void;

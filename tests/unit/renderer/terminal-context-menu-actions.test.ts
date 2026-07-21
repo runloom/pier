@@ -633,7 +633,7 @@ describe("terminal content context menu actions", () => {
       ids.indexOf("pier.terminal.clearScreen")
     );
     expect(findAction(entries, "pier.terminal.openAgentComposer")?.label).toBe(
-      "打开增强输入"
+      "切换增强输入"
     );
     expect(action.enabled?.()).toBe(true);
 

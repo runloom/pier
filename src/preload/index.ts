@@ -54,6 +54,10 @@ import {
 import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import {
+  createMediaPreviewApi,
+  type PierMediaPreviewApi,
+} from "./media-preview-api.ts";
+import {
   notificationsApi,
   type PierNotificationsAPI,
 } from "./notifications-api.ts";
@@ -239,6 +243,7 @@ export interface PierWindowAPI {
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   managedPlugins: ManagedPluginsPreloadApi;
+  mediaPreviews: PierMediaPreviewApi;
   menu: PierMenuAPI;
   notifications: PierNotificationsAPI;
   panelTransfer: PierPanelTransferAPI;
@@ -381,6 +386,13 @@ const filePreviewApi = createFilePreviewApi({
     ipcRenderer.invoke(PIER.FILE_PREVIEW_RUNTIME_REVOKE, request),
 });
 
+const mediaPreviewApi = createMediaPreviewApi({
+  invokeIssue: (request) =>
+    ipcRenderer.invoke(PIER.MEDIA_PREVIEW_ABSOLUTE_ISSUE, request),
+  invokeRelease: (request) =>
+    ipcRenderer.invoke(PIER.MEDIA_PREVIEW_ABSOLUTE_RELEASE, request),
+});
+
 // gitApi / pluginSettingsApi 实现在独立文件(避免 preload/index.ts 超 500 行硬上限)。
 
 const menuApi: PierMenuAPI = {
@@ -427,6 +439,7 @@ const api: PierWindowAPI = {
   keybinding: keybindingApi,
   listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
   menu: menuApi,
+  mediaPreviews: mediaPreviewApi,
   clipboard: clipboardApi,
   notifications: notificationsApi,
   plugins: pluginsApi,

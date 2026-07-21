@@ -8,26 +8,27 @@ import {
 
 interface UseTerminalComposerOpenArgs {
   onClose?: () => void;
-  onOpen: () => void;
+  /** Open when closed; close when open (shortcut / menu / command palette). */
+  onToggle: () => void;
   panelId: string;
   setActive: () => void;
 }
 
 export function useTerminalComposerOpen({
   onClose,
-  onOpen,
+  onToggle,
   panelId,
   setActive,
 }: UseTerminalComposerOpenArgs): void {
   useEffect(() => {
-    const openComposer = (event: Event) => {
+    const toggleComposer = (event: Event) => {
       if (
         !isTerminalOpenComposerEvent(event) ||
         event.detail.panelId !== panelId
       ) {
         return;
       }
-      onOpen();
+      onToggle();
       setActive();
     };
     const closeComposer = (event: Event) => {
@@ -39,11 +40,11 @@ export function useTerminalComposerOpen({
       }
       onClose?.();
     };
-    window.addEventListener(TERMINAL_OPEN_COMPOSER_EVENT, openComposer);
+    window.addEventListener(TERMINAL_OPEN_COMPOSER_EVENT, toggleComposer);
     window.addEventListener(TERMINAL_CLOSE_COMPOSER_EVENT, closeComposer);
     return () => {
-      window.removeEventListener(TERMINAL_OPEN_COMPOSER_EVENT, openComposer);
+      window.removeEventListener(TERMINAL_OPEN_COMPOSER_EVENT, toggleComposer);
       window.removeEventListener(TERMINAL_CLOSE_COMPOSER_EVENT, closeComposer);
     };
-  }, [onClose, onOpen, panelId, setActive]);
+  }, [onClose, onToggle, panelId, setActive]);
 }

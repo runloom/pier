@@ -20,11 +20,17 @@ export const terminal = {
     waiting: "Awaiting confirmation",
   },
   composer: {
-    keyHint: "⏎ send · ⇧⏎ newline · Esc close",
+    attachFailed: "Couldn’t add file",
+    attachFile: "Add file",
+    invalidAttachmentRef: "Invalid attachment reference",
+    keyHint: "⇧⏎ newline · Esc close",
     label: "Rich Input",
+    pathUnreadable: "Couldn’t read that file path",
     placeholder: "Type here; sends into the terminal session",
+    removeAttachment: "Remove attachment",
     send: "Send",
     sendFailed: "Failed to send to terminal",
+    sendTooLong: "Message is too long to send",
   },
   search: {
     close: "Close search",

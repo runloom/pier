@@ -19,11 +19,17 @@ export const terminal = {
     waiting: "等待确认",
   },
   composer: {
-    keyHint: "⏎ 发送 · ⇧⏎ 换行 · Esc 关闭",
+    attachFailed: "无法添加文件",
+    attachFile: "添加文件",
+    invalidAttachmentRef: "存在无效的附件引用",
+    keyHint: "⇧⏎ 换行 · Esc 关闭",
     label: "增强输入",
+    pathUnreadable: "无法读取该文件路径",
     placeholder: "在此输入，发送到终端中的会话",
+    removeAttachment: "移除附件",
     send: "发送",
     sendFailed: "发送到终端失败",
+    sendTooLong: "内容过长，无法发送",
   },
   search: {
     close: "关闭查找",

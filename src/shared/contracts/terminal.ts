@@ -125,7 +125,12 @@ export type NativeFocusIntentResult =
   | { ok: true; panelId: string }
   | {
       ok: false;
-      reason: "cross-window" | "hidden" | "not-ready" | "stale";
+      reason:
+        | "cross-window"
+        | "hidden"
+        | "not-ready"
+        | "stale"
+        | "web-overlay-active";
     };
 
 /**
@@ -278,6 +283,39 @@ export interface TerminalSendTextArgs {
   text: string;
 }
 
+export interface TerminalComposerAttachmentDto {
+  id: string;
+  /** Directory attachment (folder). */
+  isDirectory?: boolean;
+  kind: "image" | "file";
+  name: string;
+  path: string;
+  /**
+   * Optional image thumbnail as data URL (main-generated).
+   * Omitted for non-images or when preview generation fails.
+   */
+  previewDataUrl?: string | undefined;
+}
+
+export interface TerminalComposerPathsResult {
+  attachments: TerminalComposerAttachmentDto[];
+  failures: { path: string; reason: string }[];
+}
+
+export type TerminalComposerPickResult =
+  | { ok: true; paths: string[] }
+  | { ok: false; error: string };
+
+export type TerminalComposerMaterializeResult =
+  | { ok: true; attachment: TerminalComposerAttachmentDto | null }
+  | { ok: false; error: string };
+
+export interface TerminalComposerImageBytes {
+  bytes: number[] | Uint8Array;
+  mime?: string;
+  name?: string;
+}
+
 /** 合成按键（Esc / Ctrl+C / 方向键等）。绕过 bracketed paste。 */
 export interface TerminalSendKeyPressArgs {
   keycode: number;
@@ -361,6 +399,12 @@ export interface TerminalAPI {
     args?: TerminalDebugSnapshotArgs
   ): Promise<TerminalDebugSnapshot>;
   endSearch(panelId: string): Promise<TerminalOperationResult>;
+  /** Resolve the absolute path for a dropped File (sandbox-safe). */
+  getPathForFile(file: File): string;
+  materializeComposerClipboardImage(): Promise<TerminalComposerMaterializeResult>;
+  materializeComposerImageBytes(
+    data: TerminalComposerImageBytes
+  ): Promise<TerminalComposerMaterializeResult>;
   navigateSearch(
     panelId: string,
     direction: TerminalSearchDirection
@@ -404,6 +448,7 @@ export interface TerminalAPI {
     panelId: string,
     operation: TerminalOperation
   ): Promise<TerminalOperationResult>;
+  pickComposerFiles(): Promise<TerminalComposerPickResult>;
   readSelectionText(panelId: string): Promise<TerminalSelectionTextResult>;
   /**
    * 读取上次关闭前的 terminal panel 展示状态. 用于 app 重启后先恢复 tab
@@ -425,6 +470,9 @@ export interface TerminalAPI {
    * 调一次即可. fire-and-forget.
    */
   reconcile(activeIds: string[]): void;
+  resolveComposerPaths(paths: string[]): Promise<TerminalComposerPathsResult>;
+  /** Reveal an attachment path in the platform file manager (Finder/Explorer). */
+  revealComposerPath(path: string): Promise<void>;
   search(panelId: string, query: string): Promise<TerminalOperationResult>;
   /**
    * 注入一次 AppKit 虚拟键码的 press+release（绕过 bracketed paste）。

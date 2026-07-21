@@ -30,5 +30,21 @@ export const dialog = {
   error: {
     invalid: "输入无效",
   },
+  imagePreview: {
+    actualSize: "实际大小",
+    controlsLabel: "图片控件",
+    fit: "适应窗口",
+    loadFailedDescription: "无法加载该图片，或打开后文件已发生变化。",
+    loadFailedTitle: "无法显示图片",
+    loading: "正在加载图片",
+    title: "图片预览",
+    viewerLabel: "图片预览",
+    zoomIn: "放大",
+    zoomLevel: "缩放级别",
+    zoomOut: "缩小",
+  },
+  contentPreview: {
+    title: "预览",
+  },
   ok: "确定",
 } as const;

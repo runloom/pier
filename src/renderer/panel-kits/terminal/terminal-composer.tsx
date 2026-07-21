@@ -1,14 +1,8 @@
-import {
-  InputGroup,
-  InputGroupAddon,
-  InputGroupButton,
-  InputGroupTextarea,
-} from "@pier/ui/input-group.tsx";
 import { useTerminalOverlayRegistration } from "@pier/ui/use-terminal-overlay.tsx";
-import { cn } from "@pier/ui/utils.ts";
-import { ArrowUp } from "lucide-react";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useRef,
@@ -21,57 +15,35 @@ import {
   useTerminalStore,
 } from "@/stores/terminal.store.ts";
 import { registerTerminalComposerTakeover } from "@/stores/terminal-composer-takeover.ts";
+import {
+  clearComposerDraft,
+  focusComposerInput,
+  readComposerDraft,
+  reportComposerSendFailure,
+  textareaSoftWrapped,
+  writeComposerDraft,
+} from "./terminal-composer-helpers.ts";
 import { passthroughKeyPressForKey } from "./terminal-composer-passthrough.ts";
+import { TerminalComposerView } from "./terminal-composer-view.tsx";
+import { useTerminalComposerAttachments } from "./use-terminal-composer-attachments.ts";
 
-/** 卡片与终端内容 / 状态栏之间的呼吸间距。 */
-export const TERMINAL_COMPOSER_GAP_PX = 8;
-
-/**
- * 单行胶囊未实测前的预留高度：首帧就缩 native 帧，避免叠在未打洞区域上点不中。
- * 与 InputGroup 单行实测高度大致对齐。
- */
-export const TERMINAL_COMPOSER_RESERVE_HEIGHT_PX = 44;
-
-/** textarea 实测高度超过该值视为多行态（单行 36px + 容差）。 */
-const MULTILINE_THRESHOLD_PX = 44;
-
-/** Per-panel draft retained across on-demand open/close. */
-const drafts = new Map<string, string>();
-
-export function resetTerminalComposerDraftsForTests(): void {
-  drafts.clear();
-}
+export {
+  resetTerminalComposerDraftsForTests,
+  TERMINAL_COMPOSER_GAP_PX,
+  TERMINAL_COMPOSER_RESERVE_HEIGHT_PX,
+} from "./terminal-composer-helpers.ts";
 
 interface TerminalComposerProps {
   bottomOffsetPx: number;
   disabled: boolean;
-  /** Bumped on every Open Rich Input request so already-open composer refocuses. */
+  /** Bumped when Rich Input opens so the textarea receives focus. */
   focusRequest?: number;
   /** 面板是否为当前激活 tab；切回时补聚焦。 */
   isActive: boolean;
-  /** Panel-owned close: Esc / send success / terminal click takeover. */
+  /** Panel-owned close: Esc / send success. Terminal surface click does NOT close. */
   onClose: () => void;
   onHeightChange: (heightPx: number) => void;
   panelId: string;
-}
-
-function reportSendFailure(t: (key: string) => string, detail: string): void {
-  showAppAlert({
-    body: detail,
-    title: t("terminal.composer.sendFailed"),
-  }).catch(() => undefined);
-}
-
-function focusComposerInput(
-  el: HTMLTextAreaElement,
-  overlayId: string
-): boolean {
-  el.focus();
-  if (document.activeElement !== el) {
-    return false;
-  }
-  useTerminalStore.getState().activateOverlay(overlayId);
-  return true;
 }
 
 export function TerminalComposer({
@@ -87,10 +59,11 @@ export function TerminalComposer({
   const overlayId = `terminal-composer:${panelId}`;
   const rootRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
-  const [value, setValue] = useState(() => drafts.get(panelId) ?? "");
-  // 胶囊 ↔ 卡片形态：单行是 rounded-full 胶囊，内容撑高后切换为
-  // 圆角卡片 + 快捷键提示行。由 textarea 实测高度驱动（field-sizing 自动增高）。
-  const [multiline, setMultiline] = useState(false);
+  const [value, setValue] = useState(() => readComposerDraft(panelId));
+  // Soft-wrap line count (not raw height) drives compact→expanded with hard \n / attachments.
+  const [softWrapped, setSoftWrapped] = useState(false);
+  // Sticky expanded: once multiline/attached, stay expanded until draft empty.
+  const [stickyExpanded, setStickyExpanded] = useState(false);
   const activeOverlayId = useTerminalOverlayFocus(
     (state) => state.activeOverlayId
   );
@@ -102,8 +75,55 @@ export function TerminalComposer({
   valueRef.current = value;
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
+  // IME composing: freeze chrome mode switching to prevent compact↔expanded flicker.
+  const composingRef = useRef(false);
 
-  // 实测高度上报：field-sizing 自动增高经此驱动内容区 inset；卸载归零。
+  // Persist draft while typing so toggle-close (not only Esc) restores it.
+  useEffect(() => {
+    writeComposerDraft(panelId, value);
+  }, [panelId, value]);
+
+  const reportAttachmentError = useCallback(
+    (titleKey: string, detail: string) => {
+      showAppAlert({
+        body: detail,
+        title: t(titleKey),
+      }).catch(() => undefined);
+    },
+    [t]
+  );
+
+  const attachments = useTerminalComposerAttachments({
+    disabled,
+    getDraftAndCursor: () => {
+      const el = textareaRef.current;
+      const draft = valueRef.current;
+      const cursor = el?.selectionStart ?? draft.length;
+      const selectionEnd = el?.selectionEnd ?? cursor;
+      return { cursor, draft, selectionEnd };
+    },
+    onDraftChange: (draft, cursor) => {
+      valueRef.current = draft;
+      setValue(draft);
+      if (cursor !== undefined) {
+        queueMicrotask(() => {
+          const el = textareaRef.current;
+          if (!el) {
+            return;
+          }
+          el.selectionStart = cursor;
+          el.selectionEnd = cursor;
+        });
+      }
+    },
+    panelId,
+    reportError: reportAttachmentError,
+  });
+
+  const canSend = !disabled && attachments.canSendWithDraft(value);
+
+  // Root height → native inset. Cleanup zeros only on unmount — do not re-run
+  // on every keystroke (would collapse native inset to reserve height).
   useLayoutEffect(() => {
     const root = rootRef.current;
     if (!root) {
@@ -112,32 +132,49 @@ export function TerminalComposer({
     const report = () => {
       onHeightChange(root.getBoundingClientRect().height);
       hitOverlay.flush();
-      const el = textareaRef.current;
-      if (el) {
-        setMultiline(
-          el.getBoundingClientRect().height >= MULTILINE_THRESHOLD_PX
-        );
+      // Freeze soft-wrap during IME composing — intermediate CJK candidates
+      // cause rapid height fluctuation and compact↔expanded flicker.
+      if (!composingRef.current) {
+        const el = textareaRef.current;
+        if (el) {
+          setSoftWrapped(textareaSoftWrapped(el));
+        }
       }
     };
     report();
     const observer = new ResizeObserver(report);
     observer.observe(root);
+    const el = textareaRef.current;
+    if (el) {
+      observer.observe(el);
+    }
     return () => {
       observer.disconnect();
       onHeightChange(0);
     };
   }, [hitOverlay, onHeightChange]);
 
-  // activate：面板激活 / 点 tab → 仍打开则 refocus 输入框。
-  // surface：点终端内容 → 存草稿关闭，返回 false 让 host 归还 TUI。
+  // Soft-wrap may change without root resize when compact max-height clamps.
+  // Also frozen during IME composing; re-evaluated on compositionEnd.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: `value` is the intentional recompute trigger for wrap detection
+  useLayoutEffect(() => {
+    if (composingRef.current) {
+      return;
+    }
+    const el = textareaRef.current;
+    if (el) {
+      setSoftWrapped(textareaSoftWrapped(el));
+    }
+  }, [value]);
+
+  // activate / surface 都 refocus 输入框 — Rich Input 打开时保持键盘所有权。
+  //   Esc / 发送成功 才收起（见 onKeyDown 与 send）。
   useEffect(
     () =>
-      registerTerminalComposerTakeover(panelId, (reason) => {
-        if (reason === "surface") {
-          drafts.set(panelId, valueRef.current);
-          onCloseRef.current();
-          return false;
-        }
+      registerTerminalComposerTakeover(panelId, (_reason) => {
+        // Both activate (tab click) and surface (terminal content click)
+        // refocus the composer input — Rich Input stays open and keeps
+        // keyboard ownership. Only Esc / send close it.
         const el = textareaRef.current;
         if (!el || el.disabled) {
           return false;
@@ -213,38 +250,45 @@ export function TerminalComposer({
       })
       .then((result) => {
         if (!result.ok) {
-          reportSendFailure(t, result.error ?? "");
+          reportComposerSendFailure(t, result.error ?? "");
         }
       })
       .catch((err: unknown) => {
-        reportSendFailure(t, err instanceof Error ? err.message : String(err));
+        reportComposerSendFailure(
+          t,
+          err instanceof Error ? err.message : String(err)
+        );
       });
   };
 
   const send = () => {
-    const text = value;
-    if (text.trim() === "" || disabled) {
+    if (disabled) {
+      return;
+    }
+    const payload = attachments.buildPayloadOrReport(value);
+    if (payload == null) {
       return;
     }
     window.pier.terminal
-      .sendText({ panelId, submit: true, text })
+      .sendText({ panelId, submit: true, text: payload })
       .then((result) => {
-        if (result.ok) {
-          drafts.delete(panelId);
+        if (result.ok || result.textDelivered) {
+          clearComposerDraft(panelId);
           setValue("");
+          attachments.clearAll();
           onCloseRef.current();
+          if (!result.ok) {
+            reportComposerSendFailure(t, result.error ?? "");
+          }
           return;
         }
-        // 文本已进 agent 草稿区：清空避免重试重复粘贴并关闭。
-        if (result.textDelivered) {
-          drafts.delete(panelId);
-          setValue("");
-          onCloseRef.current();
-        }
-        reportSendFailure(t, result.error ?? "");
+        reportComposerSendFailure(t, result.error ?? "");
       })
       .catch((err: unknown) => {
-        reportSendFailure(t, err instanceof Error ? err.message : String(err));
+        reportComposerSendFailure(
+          t,
+          err instanceof Error ? err.message : String(err)
+        );
       });
   };
 
@@ -254,7 +298,7 @@ export function TerminalComposer({
     }
     if (event.key === "Escape") {
       event.preventDefault();
-      drafts.set(panelId, valueRef.current);
+      writeComposerDraft(panelId, valueRef.current);
       onCloseRef.current();
       return;
     }
@@ -271,7 +315,28 @@ export function TerminalComposer({
       sendKey(keyPress.keycode, keyPress.mods);
       return;
     }
-    if (event.key === "Enter" && !event.shiftKey) {
+    if (event.key === "Enter") {
+      // Mod/Shift/Alt+Enter: newline. Do not rely on browser default — Chromium
+      // often does nothing for Meta+Enter, and Mod+Shift+Enter used to be stolen
+      // by panel maximize before the text-input keybinding guard.
+      if (event.shiftKey || event.metaKey || event.ctrlKey || event.altKey) {
+        event.preventDefault();
+        const el = event.currentTarget;
+        const start = el.selectionStart ?? value.length;
+        const end = el.selectionEnd ?? start;
+        const next = `${value.slice(0, start)}\n${value.slice(end)}`;
+        setValue(next);
+        queueMicrotask(() => {
+          const node = textareaRef.current;
+          if (!node) {
+            return;
+          }
+          const cursor = start + 1;
+          node.selectionStart = cursor;
+          node.selectionEnd = cursor;
+        });
+        return;
+      }
       event.preventDefault();
       send();
     }
@@ -282,71 +347,89 @@ export function TerminalComposer({
     hitOverlay.ref(el);
   };
 
+  const hasAttachments = attachments.attachments.length > 0;
+  const hasHardNewline = value.includes("\n");
+  /**
+   * Chrome state machine (Cursor follow-up) with sticky expanded.
+   *
+   * Expand when: attachments | hard \n | soft-wrap (measured when !composing).
+   * Collapse ONLY when draft is empty and there are no attachments.
+   *
+   * Why sticky: compact row is narrower (side buttons steal width) so the same
+   * text soft-wraps in compact but fits one line in expanded — a pure
+   * softWrapped boolean oscillates compact↔expanded (worse under CJK IME).
+   */
+  const wantExpand = hasAttachments || hasHardNewline || softWrapped;
+
+  useLayoutEffect(() => {
+    if (composingRef.current) {
+      return;
+    }
+    if (wantExpand) {
+      setStickyExpanded(true);
+      return;
+    }
+    // Collapse only when truly empty — never because width-unwrapped soft wrap.
+    if (!hasAttachments && value.trim() === "") {
+      setStickyExpanded(false);
+    }
+  }, [hasAttachments, value, wantExpand]);
+
+  // Expanded chrome is the multiline UI: hint + Send with Enter kbd always show.
+  const compact = !(wantExpand || stickyExpanded);
+
+  const focusInputFromChrome = (
+    event: ReactMouseEvent<HTMLDivElement>
+  ): void => {
+    if (disabled) {
+      return;
+    }
+    const target = event.target;
+    if (!(target instanceof Element)) {
+      return;
+    }
+    // Leave real controls / attachment chips alone. Do NOT match the rail
+    // (`terminal-composer-attachment-rail`) — empty rail space should focus.
+    if (
+      target.closest(
+        "button, a, input, textarea, [role='button'], .composer-attachment-surface"
+      )
+    ) {
+      return;
+    }
+    const el = textareaRef.current;
+    if (!el) {
+      return;
+    }
+    // Prevent the empty chrome from taking focus away after we focus the input.
+    event.preventDefault();
+    focusComposerInput(el, overlayId);
+  };
+
   return (
-    <div
-      className="absolute inset-x-2 z-10"
-      ref={setRootRef}
-      style={{ bottom: bottomOffsetPx + TERMINAL_COMPOSER_GAP_PX }}
-    >
-      <InputGroup
-        aria-label={t("terminal.composer.label")}
-        className={cn(
-          "border-border bg-popover text-popover-foreground shadow-background/40 shadow-lg transition-[color,box-shadow,border-radius]",
-          multiline ? "rounded-2xl" : "rounded-full"
-        )}
-        data-testid="terminal-composer"
-      >
-        <InputGroupTextarea
-          className={cn(
-            "field-sizing-content max-h-48 min-h-9 w-full font-mono text-sm placeholder:text-muted-foreground/65",
-            multiline ? "px-3.5" : "px-4"
-          )}
-          data-testid="terminal-composer-input"
-          disabled={disabled}
-          onChange={(event) => setValue(event.currentTarget.value)}
-          onFocus={() => useTerminalStore.getState().activateOverlay(overlayId)}
-          onKeyDown={onKeyDown}
-          placeholder={t("terminal.composer.placeholder")}
-          ref={textareaRef}
-          rows={1}
-          value={value}
-        />
-        {multiline ? (
-          <InputGroupAddon align="block-end">
-            <span
-              aria-hidden="true"
-              className="text-[10px] text-muted-foreground/60"
-            >
-              {t("terminal.composer.keyHint")}
-            </span>
-            <InputGroupButton
-              aria-label={t("terminal.composer.send")}
-              className="ml-auto rounded-full"
-              data-testid="terminal-composer-send"
-              disabled={disabled || value.trim() === ""}
-              onClick={send}
-              size="icon-xs"
-              variant="default"
-            >
-              <ArrowUp />
-            </InputGroupButton>
-          </InputGroupAddon>
-        ) : (
-          <InputGroupAddon align="inline-end">
-            <InputGroupButton
-              aria-label={t("terminal.composer.send")}
-              className="rounded-full"
-              data-testid="terminal-composer-send"
-              disabled={disabled || value.trim() === ""}
-              onClick={send}
-              size="icon-xs"
-              variant="default"
-            >
-              <ArrowUp />
-            </InputGroupButton>
-          </InputGroupAddon>
-        )}
-      </InputGroup>
-    </div>
+    <TerminalComposerView
+      attachments={attachments.attachments}
+      bottomOffsetPx={bottomOffsetPx}
+      canSend={canSend}
+      compact={compact}
+      composingRef={composingRef}
+      disabled={disabled}
+      hasAttachments={hasAttachments}
+      onChromeMouseDown={focusInputFromChrome}
+      onDragOver={attachments.onDragOver}
+      onDrop={attachments.onDrop}
+      onKeyDown={onKeyDown}
+      onPaste={attachments.onPaste}
+      onPickFiles={attachments.pickFiles}
+      onRemoveAttachment={attachments.removeAttachment}
+      onRevealPath={attachments.revealPath}
+      onSend={send}
+      onSetSoftWrapped={setSoftWrapped}
+      onValueChange={setValue}
+      overlayId={overlayId}
+      setRootRef={setRootRef}
+      textareaRef={textareaRef}
+      value={value}
+    />
   );
 }

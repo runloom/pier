@@ -187,7 +187,112 @@ function dismissResizePlaceholder(): void {
     clearTimeout(restoreAckTimer);
     restoreAckTimer = null;
   }
+  // Holders (lightbox / chrome pulse) still need the placeholder while active.
+  if (suppressHolders.size > 0 || resizeSuppressActive) {
+    return;
+  }
   useTerminalStore.setState({ placeholderVisible: false });
+}
+
+/** Effective suppress = resize drag OR any acquireTerminalSurfaceSuppression holder. */
+let resizeSuppressActive = false;
+/** Refcounted holders so overlapping acquire/pulse with the same id stay suppressed. */
+const suppressHolders = new Map<string, number>();
+
+function syncSurfaceSuppression(options?: {
+  /** Entering a new suppress epoch — show placeholder immediately. */
+  showPlaceholder?: boolean;
+}): void {
+  const next = resizeSuppressActive || suppressHolders.size > 0;
+  const prev = useTerminalStore.getState().suppressTerminals;
+  if (next === prev) {
+    if (next && options?.showPlaceholder) {
+      useTerminalStore.setState({ placeholderVisible: true });
+    }
+    return;
+  }
+  if (next) {
+    awaitingRestoreAck = false;
+    if (restoreAckTimer !== null) {
+      clearTimeout(restoreAckTimer);
+      restoreAckTimer = null;
+    }
+    useTerminalStore.setState({
+      placeholderVisible: true,
+      suppressTerminals: true,
+    });
+    notifyPresentationChange("visibility");
+    return;
+  }
+  // Fully clear suppress; placeholder dismiss waits for presentation ack.
+  useTerminalStore.setState({ suppressTerminals: false });
+  notifyPresentationChange("visibility");
+  awaitingRestoreAck = true;
+  if (restoreAckTimer !== null) {
+    clearTimeout(restoreAckTimer);
+  }
+  restoreAckTimer = window.setTimeout(
+    dismissResizePlaceholder,
+    RESTORE_ACK_TIMEOUT_MS
+  );
+}
+
+/**
+ * Hold native terminal surfaces hidden (placeholder up) until dispose.
+ * Composable with sash-resize suppression — either path keeps suppress on.
+ * Same id may be acquired multiple times; each dispose decrements the count.
+ */
+export function acquireTerminalSurfaceSuppression(id: string): () => void {
+  suppressHolders.set(id, (suppressHolders.get(id) ?? 0) + 1);
+  syncSurfaceSuppression({ showPlaceholder: true });
+  let released = false;
+  return () => {
+    if (released) {
+      return;
+    }
+    released = true;
+    const remaining = (suppressHolders.get(id) ?? 1) - 1;
+    if (remaining <= 0) {
+      suppressHolders.delete(id);
+    } else {
+      suppressHolders.set(id, remaining);
+    }
+    syncSurfaceSuppression();
+  };
+}
+
+/**
+ * Brief hide while web chrome geometry jumps (e.g. composer attachment rail).
+ * No-ops the release path if sash-resize already owns suppression.
+ */
+export function pulseTerminalSurfaceSuppression(id = "chrome-geometry"): void {
+  if (resizeSuppressActive) {
+    flushTerminalLayoutFramesTrailing("visibility");
+    return;
+  }
+  const release = acquireTerminalSurfaceSuppression(id);
+  requestAnimationFrame(() => {
+    requestAnimationFrame(() => {
+      release();
+      flushTerminalLayoutFramesTrailing("visibility");
+    });
+  });
+}
+
+/** Test-only: drop holders / resize suppress bits left between cases. */
+export function resetTerminalSurfaceSuppressionForTests(): void {
+  clearResizeFallback();
+  awaitingRestoreAck = false;
+  if (restoreAckTimer !== null) {
+    clearTimeout(restoreAckTimer);
+    restoreAckTimer = null;
+  }
+  resizeSuppressActive = false;
+  suppressHolders.clear();
+  useTerminalStore.setState({
+    placeholderVisible: false,
+    suppressTerminals: false,
+  });
 }
 
 function enterResizeSuppression(): void {
@@ -197,42 +302,22 @@ function enterResizeSuppression(): void {
     exitResizeSuppression,
     RESIZE_FALLBACK_MS
   );
-  // 已隐身：后续 active 帧只续期，不重复下发。
-  if (useTerminalStore.getState().suppressTerminals) {
+  // 已在 resize 隐身：后续 active 帧只续期，不重复下发。
+  if (resizeSuppressActive) {
     return;
   }
-  // 取消上一轮可能仍在等待的撤占位 ack。
-  awaitingRestoreAck = false;
-  if (restoreAckTimer !== null) {
-    clearTimeout(restoreAckTimer);
-    restoreAckTimer = null;
-  }
-  useTerminalStore.setState({
-    placeholderVisible: true,
-    suppressTerminals: true,
-  });
-  // 立即下发一帧：所有 native 终端 visible=false 隐身，露出 web 占位。
-  notifyPresentationChange("visibility");
+  resizeSuppressActive = true;
+  syncSurfaceSuppression({ showPlaceholder: true });
 }
 
 function exitResizeSuppression(): void {
   clearResizeFallback();
-  // 未在隐身（已恢复或从未进入）：幂等空操作。
-  if (!useTerminalStore.getState().suppressTerminals) {
+  // 未在 resize 隐身（已恢复或从未进入）：幂等空操作。
+  if (!resizeSuppressActive) {
     return;
   }
-  // 终端恢复可见（仍在占位幕布之后），最终 frame 由随后的 trailing flush 补齐。
-  useTerminalStore.setState({ suppressTerminals: false });
-  notifyPresentationChange("visibility");
-  // 等 native 把最终几何应用到位的「就位」ack 再撤占位（精确握手，替代盲等帧数）。
-  awaitingRestoreAck = true;
-  if (restoreAckTimer !== null) {
-    clearTimeout(restoreAckTimer);
-  }
-  restoreAckTimer = window.setTimeout(
-    dismissResizePlaceholder,
-    RESTORE_ACK_TIMEOUT_MS
-  );
+  resizeSuppressActive = false;
+  syncSurfaceSuppression();
 }
 
 // native 同步应用某帧后回的「就位」ack。当其 sequence 追上 renderer 最新下发
@@ -311,6 +396,8 @@ function maybeDisposeGlobalListeners(): void {
     clearTimeout(restoreAckTimer);
     restoreAckTimer = null;
   }
+  resizeSuppressActive = false;
+  suppressHolders.clear();
   if (useTerminalStore.getState().suppressTerminals) {
     useTerminalStore.setState({
       placeholderVisible: false,

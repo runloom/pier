@@ -5,6 +5,7 @@ export interface TerminalComposerEventDetail {
   panelId: string;
 }
 
+/** Dispatches the composer toggle for a panel (open ↔ close). */
 export function dispatchTerminalOpenComposer(panelId: string): void {
   window.dispatchEvent(
     new CustomEvent<TerminalComposerEventDetail>(TERMINAL_OPEN_COMPOSER_EVENT, {

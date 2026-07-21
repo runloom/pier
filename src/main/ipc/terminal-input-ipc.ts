@@ -1,6 +1,13 @@
 import type { TerminalSelectionTextResult } from "@shared/contracts/terminal.ts";
-import type { IpcMain, WebContents } from "electron";
+import { BrowserWindow, type IpcMain, type WebContents } from "electron";
 import type { AppWindow } from "../windows/app-window.ts";
+import {
+  materializeTerminalComposerClipboardImage,
+  materializeTerminalComposerImageBytes,
+  pickTerminalComposerFiles,
+  resolveTerminalComposerPaths,
+  revealTerminalComposerPath,
+} from "./terminal-composer-attachments.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
 import {
   performTerminalOperation,
@@ -85,5 +92,37 @@ export function registerTerminalInputIpc(opts: {
           } satisfies TerminalSelectionTextResult;
         }
       })
+  );
+
+  ipcMain.handle("pier:terminal:composer-pick-files", (event) =>
+    pickTerminalComposerFiles({
+      parentWindow: BrowserWindow.fromWebContents(event.sender),
+    })
+  );
+
+  ipcMain.handle(
+    "pier:terminal:composer-resolve-paths",
+    (_event, paths: unknown) =>
+      resolveTerminalComposerPaths(
+        Array.isArray(paths) ? paths.map((path) => String(path)) : []
+      )
+  );
+
+  ipcMain.handle("pier:terminal:composer-materialize-clipboard-image", () =>
+    materializeTerminalComposerClipboardImage()
+  );
+
+  ipcMain.handle(
+    "pier:terminal:composer-materialize-image-bytes",
+    (_event, data: unknown) =>
+      materializeTerminalComposerImageBytes(
+        data as Parameters<typeof materializeTerminalComposerImageBytes>[0]
+      )
+  );
+
+  ipcMain.handle(
+    "pier:terminal:composer-reveal-path",
+    (_event, path: unknown) =>
+      revealTerminalComposerPath(typeof path === "string" ? path : "")
   );
 }

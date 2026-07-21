@@ -195,18 +195,18 @@ test.describe("Agent composer e2e", () => {
         })
         .toBeGreaterThanOrEqual(1);
 
-      // 4. Terminal click takeover closes composer and returns focus to TUI.
+      // 4. Terminal click takeover refocuses the composer input (Rich Input
+      //    stays open and keeps keyboard ownership). Only Esc / send close.
       await simulateTerminalFocusIntent(app, panelId);
-      await expect(composer).not.toBeAttached({ timeout: 5000 });
+      await expect(composer).toBeAttached({ timeout: 1000 });
+      // Composer keeps keyboard ownership (webRequestCount stays >= 1).
       await expect
         .poll(async () => webRequestCount(await readSnapshot(win)), {
           timeout: 8000,
         })
-        .toBe(0);
+        .toBeGreaterThanOrEqual(1);
 
       // 5. Esc closes (draft retained in memory; DOM unmounts).
-      await openComposer(win, panelId);
-      await expect(composer).toBeAttached({ timeout: 5000 });
       await input.focus();
       await input.press("Escape");
       await expect(composer).not.toBeAttached({ timeout: 5000 });

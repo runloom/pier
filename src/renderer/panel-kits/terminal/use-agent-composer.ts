@@ -18,6 +18,8 @@ import {
   canUseAgentComposer,
   shouldMountAgentComposer,
 } from "./terminal-composer-mount.ts";
+import { pulseTerminalSurfaceSuppression } from "./terminal-layout-coordinator.ts";
+import { TERMINAL_STATUS_BAR_HEIGHT_PX } from "./terminal-status-bar.tsx";
 import { useTerminalComposerOpen } from "./use-terminal-composer-open.ts";
 
 // 从 terminal-panel.tsx 抽出：file-size 纪律（超 500 行硬顶）+ 维持挂载判定单一
@@ -49,9 +51,14 @@ export function useAgentComposer({
 }: UseAgentComposerParams): UseAgentComposerResult {
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerFocusRequest, setComposerFocusRequest] = useState(0);
-  const openComposer = useCallback(() => {
+  const composerOpenRef = useRef(false);
+  composerOpenRef.current = composerOpen;
+  const toggleComposer = useCallback(() => {
+    if (composerOpenRef.current) {
+      setComposerOpen(false);
+      return;
+    }
     setComposerOpen(true);
-    // Already open: still bump so TerminalComposer refocuses (mirrors search).
     setComposerFocusRequest((value) => value + 1);
   }, []);
   const closeComposer = useCallback(() => {
@@ -63,7 +70,7 @@ export function useAgentComposer({
 
   useTerminalComposerOpen({
     onClose: closeComposer,
-    onOpen: openComposer,
+    onToggle: toggleComposer,
     panelId,
     setActive: activatePanel,
   });
@@ -83,13 +90,29 @@ export function useAgentComposer({
     restored,
   });
   const [composerHeightPx, setComposerHeightPx] = useState(0);
-  const statusInsetPx = hasStatusBar ? 24 : 0; // 与原 bottom-6 等值
+  const statusInsetPx = hasStatusBar ? TERMINAL_STATUS_BAR_HEIGHT_PX : 0;
   // 首帧用预留高度缩排 native，避免卡片叠在未缩帧上点不中；实测后取真实高度。
   const composerInsetPx = composerMounted
     ? Math.max(composerHeightPx, TERMINAL_COMPOSER_RESERVE_HEIGHT_PX) +
       TERMINAL_COMPOSER_GAP_PX * 2
     : 0;
   const terminalContentBottomPx = statusInsetPx + composerInsetPx;
+
+  const prevComposerHeightRef = useRef(0);
+  const onComposerHeightChange = useCallback(
+    (heightPx: number) => {
+      const previous = prevComposerHeightRef.current;
+      prevComposerHeightRef.current = heightPx;
+      setComposerHeightPx(heightPx);
+      // Attachment rail / expand chrome jumps native inset; briefly hide the
+      // surface so Chromium cannot sample stale Ghostty/sash into composer paint.
+      if (Math.abs(heightPx - previous) >= 24) {
+        pulseTerminalSurfaceSuppression(`composer-height:${panelId}`);
+      }
+    },
+    [panelId]
+  );
+
   // layout 阶段就关原生聚焦 / 光标，尽量赶在首帧绘制前。
   useLayoutEffect(() => {
     if (!composerMounted) {
@@ -114,7 +137,7 @@ export function useAgentComposer({
     closeComposer,
     composerFocusRequest,
     composerMounted,
-    onComposerHeightChange: setComposerHeightPx,
+    onComposerHeightChange,
     statusInsetPx,
     terminalContentBottomPx,
   };

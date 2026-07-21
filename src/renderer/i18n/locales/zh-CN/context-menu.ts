@@ -15,7 +15,7 @@ export const contextMenu = {
     equalizePanels: "均分面板",
     find: "查找",
     newTerminal: "新建终端",
-    openRichInput: "打开增强输入",
+    openRichInput: "切换增强输入",
     paste: "粘贴",
     rerunTask: "重新运行",
     selectAll: "全选",

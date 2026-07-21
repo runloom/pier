@@ -5,6 +5,7 @@ import {
 
 export { FILE_PREVIEW_SCHEME } from "@shared/file-preview-url.ts";
 
+import { isAbsoluteFilePreviewLocator } from "@shared/contracts/file-preview-ticket.ts";
 import type { OnBeforeRequestListenerDetails } from "electron";
 import { protocol as electronProtocol, session } from "electron";
 import {
@@ -12,6 +13,7 @@ import {
   revisionForFileBytes,
   unsupportedFileType,
 } from "../services/file-path-identity.ts";
+import { resolveAbsoluteImagePreview } from "./absolute-image-preview.ts";
 import {
   type FilePreviewTicketRegistry,
   filePreviewPartitionKey,
@@ -54,6 +56,29 @@ function payloadTooLarge(): Response {
   });
 }
 
+function conflict(): Response {
+  return new Response(null, {
+    headers: { "x-content-type-options": "nosniff" },
+    status: 409,
+  });
+}
+
+function imageResponse(
+  bytes: Buffer,
+  mime: string,
+  revision: string
+): Response {
+  return new Response(Uint8Array.from(bytes), {
+    headers: {
+      "cache-control": "private, immutable",
+      "content-length": String(bytes.length),
+      "content-type": mime,
+      etag: `"${revision}"`,
+      "x-content-type-options": "nosniff",
+    },
+  });
+}
+
 export async function resolveFilePreviewResponse(
   requestUrl: string,
   registry: Pick<FilePreviewTicketRegistry, "peek"> = filePreviewTicketRegistry
@@ -63,6 +88,26 @@ export async function resolveFilePreviewResponse(
     const entry = ticket ? registry.peek(ticket) : null;
     if (!entry) {
       return notFound();
+    }
+    if (isAbsoluteFilePreviewLocator(entry.locator)) {
+      const resolved = await resolveAbsoluteImagePreview(
+        entry.locator.absolutePath
+      );
+      if (!resolved.ok) {
+        return resolved.reason === "too-large" ? payloadTooLarge() : notFound();
+      }
+      if (
+        resolved.locator.mime !== entry.locator.mime ||
+        resolved.locator.revision !== entry.locator.revision ||
+        resolved.canonicalPath !== entry.locator.absolutePath
+      ) {
+        return conflict();
+      }
+      return imageResponse(
+        resolved.bytes,
+        resolved.locator.mime,
+        resolved.locator.revision
+      );
     }
     const { path, revision: requestedRevision, root } = entry.locator;
     const identity = await resolveExistingFileIdentity(root, path);
@@ -85,20 +130,9 @@ export async function resolveFilePreviewResponse(
     }
     const revision = revisionForFileBytes(identity, bytes);
     if (revision !== requestedRevision) {
-      return new Response(null, {
-        headers: { "x-content-type-options": "nosniff" },
-        status: 409,
-      });
+      return conflict();
     }
-    return new Response(bytes, {
-      headers: {
-        "cache-control": "private, immutable",
-        "content-length": String(bytes.length),
-        "content-type": mime,
-        etag: `"${revision}"`,
-        "x-content-type-options": "nosniff",
-      },
-    });
+    return imageResponse(bytes, mime, revision);
   } catch {
     return notFound();
   }

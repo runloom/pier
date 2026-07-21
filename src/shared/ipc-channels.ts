@@ -19,6 +19,8 @@ export const PIER = {
   FILE_PREVIEW_RUNTIME_REVOKE: "pier://file-preview-runtime:revoke",
   FILE_PREVIEW_TICKET_ISSUE: "pier://file-preview-ticket:issue",
   FILE_PREVIEW_TICKET_RELEASE: "pier://file-preview-ticket:release",
+  MEDIA_PREVIEW_ABSOLUTE_ISSUE: "pier://media-preview-absolute:issue",
+  MEDIA_PREVIEW_ABSOLUTE_RELEASE: "pier://media-preview-absolute:release",
   // file path query (start/cancel invoke + directed event send;
   // mirrors FILE_WATCH_START/STOP style but delivers ranked path results
   // via `FILE_QUERY_EVENT` so single-command payloads stay bounded).

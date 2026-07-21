@@ -4,7 +4,7 @@ import type {
   TerminalDebugRendererSnapshotResult,
 } from "@shared/contracts/terminal-debug.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
-import { ipcRenderer } from "electron";
+import { ipcRenderer, webUtils } from "electron";
 import { subscribeIpc } from "./ipc-envelope.ts";
 
 /**
@@ -66,15 +66,26 @@ export const terminalApi: TerminalAPI = {
     subscribeIpc(PIER_BROADCAST.TERMINAL_SURFACE_CLOSE_REQUEST, cb),
   onTitleChange: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_TITLE_CHANGED, cb),
+  materializeComposerClipboardImage: () =>
+    ipcRenderer.invoke("pier:terminal:composer-materialize-clipboard-image"),
+  materializeComposerImageBytes: (data) =>
+    ipcRenderer.invoke("pier:terminal:composer-materialize-image-bytes", data),
   openDebugWindow: () => ipcRenderer.invoke("pier:terminal-debug:open-window"),
   performOperation: (panelId, operation) =>
     ipcRenderer.invoke("pier:terminal:perform-operation", panelId, operation),
+  pickComposerFiles: () =>
+    ipcRenderer.invoke("pier:terminal:composer-pick-files"),
+  getPathForFile: (file: File) => webUtils.getPathForFile(file),
+  revealComposerPath: (path) =>
+    ipcRenderer.invoke("pier:terminal:composer-reveal-path", path),
   readSelectionText: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-selection-text", panelId),
   readSession: (panelId) =>
     ipcRenderer.invoke("pier:terminal:read-session", panelId),
   rebindTaskOutput: (panelId, params) =>
     ipcRenderer.invoke("pier:terminal:rebind-task-output", panelId, params),
+  resolveComposerPaths: (paths) =>
+    ipcRenderer.invoke("pier:terminal:composer-resolve-paths", paths),
   search: (panelId, query) =>
     ipcRenderer.invoke("pier:terminal:search", panelId, query),
   sendText: (args) => ipcRenderer.invoke("pier:terminal:send-text", args),
