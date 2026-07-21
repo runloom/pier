@@ -1,11 +1,11 @@
 {
-  "generatedAt": 1784519910861,
+  "generatedAt": 1784664217089,
   "plugins": {
     "pier.claude": {
       "description": "Manage Claude accounts and switch the active login for Pier.",
       "displayName": "Claude Account Management",
       "id": "pier.claude",
-      "latest": "1.3.0",
+      "latest": "1.3.1",
       "locales": {
         "en": {
           "name": "Claude Account Management",
@@ -17,10 +17,10 @@
         }
       },
       "versions": {
-        "1.3.0": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.0/pier.claude-1.3.0.tgz",
+        "1.3.1": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.1/pier.claude-1.3.1.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "edfaca76f2437ca4170a224c3b3df5c5e53557a1eefac66f6d83ed489e8c7605",
+          "sha256": "0c8ef0918260a50e551f523ce344ec8c5e4c103a56fef9a1b78ebeb116517f02",
           "size": 571967
         }
       }
@@ -29,7 +29,7 @@
       "description": "Codex account management and usage monitoring for Pier.",
       "displayName": "Codex Account Management",
       "id": "pier.codex",
-      "latest": "1.4.0",
+      "latest": "1.4.1",
       "locales": {
         "en": {
           "name": "Codex Account Management",
@@ -41,11 +41,11 @@
         }
       },
       "versions": {
-        "1.4.0": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.0/pier.codex-1.4.0.tgz",
+        "1.4.1": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.1/pier.codex-1.4.1.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "52927b504288713f97de982704c9b608029ab8dccead94e11f682a78b083480f",
-          "size": 602180
+          "sha256": "468fca291b7f2db338480e4ec289bc6093506e3f15727067637642e8bde81595",
+          "size": 601668
         }
       }
     },
@@ -53,7 +53,7 @@
       "description": "Manage Grok accounts, login, and switch for Pier.",
       "displayName": "Grok Account Management",
       "id": "pier.grok",
-      "latest": "1.1.0",
+      "latest": "1.1.1",
       "locales": {
         "en": {
           "name": "Grok Account Management",
@@ -65,20 +65,44 @@
         }
       },
       "versions": {
-        "1.1.0": {
-          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.0/pier.grok-1.1.0.tgz",
+        "1.1.1": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.1/pier.grok-1.1.1.tgz",
           "pier": ">=0.1.0 <0.2.0",
-          "sha256": "318949d1f1c3deb77a13be55e87f426043f4d3e761049a9a38d2016671fbdbf4",
-          "size": 646212
+          "sha256": "405899844cdf8553e4b255327c44d9a2a16d1841702efa20f88a915c18ad529b",
+          "size": 645700
+        }
+      }
+    },
+    "pier.ssh": {
+      "description": "Manage SSH hosts and open SSH terminals from Pier.",
+      "displayName": "SSH Hosts",
+      "id": "pier.ssh",
+      "latest": "1.0.1",
+      "locales": {
+        "en": {
+          "name": "SSH Hosts",
+          "description": "Manage SSH hosts and open SSH terminals from Pier."
+        },
+        "zh-CN": {
+          "name": "SSH 主机",
+          "description": "在 Pier 中管理 SSH 主机并打开 SSH 终端。"
+        }
+      },
+      "versions": {
+        "1.0.1": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.1/pier.ssh-1.0.1.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "a4b8f7e6f24ec988c08beb478c007bc7bcfe01d7c7e08084c3324a02b3775f11",
+          "size": 367664
         }
       }
     }
   },
-  "sequence": 17,
+  "sequence": 18,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "wSmxFPgNn2H1FkydIhkKsexaa0ijSzpr8Ge5rMOe0wf324fQI84i7RSfdxmGEGl1HHRsm3e4WGpEL20nk78VBw=="
+    "value": "IVV2EQA7/2IFNHYUJoYFgQWeZmRXx4LXpCg8NIMMnMO6tD8ntpWW2tDM8WaWj6eR/etMVe0fZ4F1xBiNgWzuDQ=="
   }
 }
