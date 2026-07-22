@@ -7,16 +7,12 @@ interface GitBranchQuickPickRowProps {
   branch: GitDiffBranchOption;
   defaultLabel: string;
   graphCaveatTitle: string;
-  graphLabel: string;
-  remoteLabel: string;
 }
 
 export function GitBranchQuickPickRow({
   branch,
   defaultLabel,
   graphCaveatTitle,
-  graphLabel,
-  remoteLabel,
 }: GitBranchQuickPickRowProps) {
   const relativeTime = formatRelativeTime(branch.committerDate);
   const hasMeta = Boolean(branch.authorName || branch.commit || branch.subject);
@@ -54,12 +50,6 @@ export function GitBranchQuickPickRow({
               title={graphCaveatTitle}
             >
               <span
-                className="text-muted-foreground"
-                data-branch-picker-row-graph-label
-              >
-                {graphLabel}
-              </span>
-              <span
                 className={
                   aheadBehind.behind > 0
                     ? "text-warning"
@@ -96,15 +86,6 @@ export function GitBranchQuickPickRow({
             className="flex min-w-0 items-baseline gap-1.5 text-muted-foreground text-xs/tight"
             data-branch-picker-row-meta
           >
-            {branch.kind === "remote" ? (
-              <Badge
-                data-branch-picker-row-remote
-                size="xs"
-                variant="secondary"
-              >
-                {remoteLabel}
-              </Badge>
-            ) : null}
             {branch.authorName ? (
               <span className="shrink-0 truncate" data-branch-picker-row-author>
                 {branch.authorName}

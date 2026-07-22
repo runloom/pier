@@ -348,7 +348,6 @@ export function PrepareBadges({
   }
   return (
     <FieldDescription className="flex flex-wrap items-center gap-1.5">
-      <span>{text("prepareLabel", undefined, "Before creating")}</span>
       <Badge variant="secondary">
         {text(
           "prepareCopy",
