@@ -226,36 +226,50 @@ export function ContentPreviewHost() {
     <div
       aria-label={title || t("dialog.contentPreview.title")}
       aria-modal="true"
-      className="fixed inset-0 z-[100] bg-background outline-none"
+      className="app-no-drag fixed inset-0 z-[100] bg-background outline-none"
       data-testid="content-preview"
       ref={rootRef}
       role="dialog"
       tabIndex={-1}
     >
       <div
-        className="pointer-events-none absolute inset-x-0 top-0 z-20 flex items-center justify-center px-14 py-3"
+        className="absolute inset-0 z-0 flex flex-col"
+        data-testid="content-preview-stage"
+      >
+        <PreviewBody payload={payload} />
+      </div>
+      {/*
+        Chrome sits above the zoom/pan stage (DOM order + z-index). The whole
+        preview opts out of Electron titlebar drag; the close control also
+        stops pointer propagation so canvas pan capture cannot steal the click.
+      */}
+      <div
+        className="pointer-events-none absolute inset-x-0 top-0 z-50 flex items-center justify-center px-14 py-3"
         data-testid="content-preview-header"
       >
         <div className="min-w-0 max-w-full truncate text-center text-foreground text-sm">
           {title}
         </div>
-      </div>
-      <Button
-        aria-label={t("dialog.close")}
-        className="absolute top-3 right-3 z-20"
-        data-testid="content-preview-close"
-        onClick={() => closeContentPreview()}
-        size="icon-sm"
-        type="button"
-        variant="secondary"
-      >
-        <X data-icon />
-      </Button>
-      <div
-        className="absolute inset-0 z-0 flex flex-col"
-        data-testid="content-preview-stage"
-      >
-        <PreviewBody payload={payload} />
+        <div className="pointer-events-auto absolute top-2 right-2">
+          <Button
+            aria-label={t("dialog.close")}
+            className="border-border bg-background shadow-sm hover:bg-muted hover:text-foreground"
+            data-testid="content-preview-close"
+            onClick={(event) => {
+              event.preventDefault();
+              event.stopPropagation();
+              closeContentPreview();
+            }}
+            onPointerDown={(event) => {
+              event.stopPropagation();
+            }}
+            size="icon-sm"
+            type="button"
+            variant="outline"
+          >
+            <X data-icon />
+          </Button>
+        </div>
       </div>
     </div>
   );

@@ -147,6 +147,31 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 检查点在 `tests/unit/renderer/user-copy-governance.test.ts`：锁定本节存在，并扫描中英 locale 字符串值中的禁用实现词。
 
+### Markdown 预览大纲布局复用（最高优先级）
+
+`src/plugins/builtin/files/renderer/markdown-preview*.tsx` 的大纲与正文布局必须先复用、再分模式。模式差异只能落在**定位 / 是否占流**，不得复制第二套壳、高度或间距。
+
+硬规则：
+
+1. **一个大纲壳**：只允许 `MarkdownPreviewToc` 渲染大纲 UI（标题栏、列表、收起芯片）。禁止按 dock/overlay 再写一份 aside。
+2. **布局分工**：并排时正文+大纲在 `data-slot="markdown-preview-layout"` 占流编排；浮动时大纲走 `data-slot="markdown-preview-outline-rail"`，必须与字号控件挂在**同一预览框包含块**，共用 `MARKDOWN_PREVIEW_EDGE_INSET_PX`，禁止在带 padding 的 scroll 内容盒里用负偏移猜对齐。
+3. **共享几何**：顶距、轨宽、边距、最大高度只来自 `markdown-preview-toc-layout.ts` 常量 / `markdownOutlineFrameHeightPx`。大纲 **max-height = 内容区高度 − `MARKDOWN_TOC_MAX_HEIGHT_RESERVE_PX`（200）**；浮动模式大纲外缘与字号控件右对齐；禁止浮层再写 `max-h-[min(70%,…)]` 或另一套 px 公式；禁止 TOC 与布局各自手写 `top-2` / `right-3` / `w-56` 而不读共享常量。
+4. **版心单一来源**：可见行宽由 `[data-slot="markdown-prose"]` 的 `--md-measure`（CSS）决定；TS 不得再平行维护第二套「渲染用 72ch」。TS 常量仅用于 dock 可用性测算的 fallback。
+5. **placement 只切换定位语义**：`dock` = 占流并排 + sticky；`overlay` = 预览框上的 rail。高度、inset、chrome 必须同行。
+
+反例（禁止）：
+
+- dock 用视口高度、overlay 用 `max-h-[min(70%,28rem)]`
+- 浮动大纲在 scroll 内容盒内绝对定位，却期望与预览框上的字号控件右对齐
+- collapsed / expanded 各抄一份定位 class 且数值不一致
+
+检查点在 `tests/unit/plugins/markdown-preview-layout-governance.test.ts`。
+
+Markdown 预览阅读偏好（字号、舒适/宽屏、大纲左右、大纲展开/收起）必须走
+`useMarkdownPreviewPrefsStore`（`markdown-preview-preferences.ts`）：全局一份、
+`localStorage` 持久化、多预览实例共享；禁止在 `MarkdownPreviewToc` 内用组件
+`useState` 持有可持久化的大纲收起态。
+
 ### 交互控件密度规范
 
 Pier 桌面端的单行交互控件统一使用 28px 高度：

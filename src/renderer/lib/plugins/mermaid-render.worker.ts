@@ -174,11 +174,21 @@ function normalizeMermaidStatements(source: string): string {
 }
 
 export function renderMermaidInWorker(request: RenderRequest): string {
+  // Do not pass bare host tokens as --line/--border/--accent:
+  // - host --border is a faint divider (edges nearly invisible)
+  // - host --accent is a UI chrome tint (light theme ≈ near-white), so
+  //   arrowheads that read var(--accent) diverge from connector strokes
+  // Derive strokes from fg/bg; set accent === line so markers match edges.
+  const connector =
+    "color-mix(in srgb, var(--foreground) 45%, var(--background))";
   return renderMermaidSVG(normalizeMermaidStatements(request.source), {
+    accent: connector,
     bg: "var(--background)",
+    border: "color-mix(in srgb, var(--foreground) 22%, var(--background))",
     fg: "var(--foreground)",
-    line: "var(--border)",
+    line: connector,
     muted: "var(--muted-foreground)",
+    surface: "color-mix(in srgb, var(--foreground) 6%, var(--background))",
     transparent: true,
   });
 }

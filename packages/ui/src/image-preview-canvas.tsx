@@ -1,20 +1,15 @@
-import { ChevronDown, ImageOff, ZoomIn, ZoomOut } from "lucide-react";
+import { ImageOff } from "lucide-react";
 import {
   type KeyboardEvent,
-  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type WheelEvent as ReactWheelEvent,
   type SyntheticEvent,
   useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
   useState,
 } from "react";
-import { Button } from "./button.tsx";
-import {
-  DropdownMenu,
-  DropdownMenuContent,
-  DropdownMenuRadioGroup,
-  DropdownMenuRadioItem,
-  DropdownMenuShortcut,
-  DropdownMenuTrigger,
-} from "./dropdown-menu.tsx";
 import {
   Empty,
   EmptyDescription,
@@ -22,30 +17,28 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "./empty.tsx";
+import {
+  anchoredScrollAfterZoom,
+  centeredScroll,
+  clampZoom,
+  KEYBOARD_PAN_STEP_PX,
+  measureContainScale,
+  PAN_CLICK_SLOP_PX,
+  ZOOM_FACTOR,
+} from "./image-preview-canvas-math.ts";
+import {
+  type ImagePreviewCanvasLabels,
+  ImagePreviewControls,
+} from "./image-preview-controls.tsx";
 import { Skeleton } from "./skeleton.tsx";
 import { cn } from "./utils.ts";
 
-const MIN_ZOOM = 0.1;
-const MAX_ZOOM = 8;
-const ZOOM_STEP = 0.1;
-const PRESET_ZOOM_LEVELS = [0.25, 0.5, 1, 2, 4] as const;
-
-function clampZoom(value: number): number {
-  return Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, Number(value.toFixed(1))));
-}
-
-export interface ImagePreviewCanvasLabels {
-  actualSize: string;
-  controlsLabel: string;
-  fit: string;
-  loadFailedDescription: string;
-  loadFailedTitle: string;
-  loading: string;
-  viewerLabel: string;
-  zoomIn: string;
-  zoomLevel: string;
-  zoomOut: string;
-}
+export {
+  anchoredScrollAfterZoom,
+  centeredScroll,
+  measureContainScale,
+} from "./image-preview-canvas-math.ts";
+export type { ImagePreviewCanvasLabels } from "./image-preview-controls.tsx";
 
 export interface ImagePreviewCanvasProps {
   alt: string;
@@ -62,12 +55,23 @@ export interface ImagePreviewCanvasProps {
   status?: "error" | "loading" | "ready";
 }
 
+interface PanSession {
+  fromEmpty: boolean;
+  moved: boolean;
+  originScrollLeft: number;
+  originScrollTop: number;
+  pointerId: number;
+  startX: number;
+  startY: number;
+}
+
 /**
  * Presentational zoomable image canvas.
  *
- * Layout: full-bleed viewport with a compact floating toolbar pinned to the
- * bottom center (does not reserve a footer strip; does not move with zoom).
- * Callers own ticket/URL lifecycle.
+ * Fit and absolute zoom share one CSS `zoom` layout so switching presets does
+ * not jump layout modes. Scroll is re-anchored to the viewport center on zoom
+ * changes. When zoomed past fit, navigation is map-style pan (drag / wheel /
+ * arrows) with system scrollbars hidden.
  */
 export function ImagePreviewCanvas({
   alt,
@@ -81,6 +85,13 @@ export function ImagePreviewCanvas({
   status,
 }: ImagePreviewCanvasProps) {
   const [zoom, setZoom] = useState<number | "fit">("fit");
+  const [fitScale, setFitScale] = useState(1);
+  const [layoutReady, setLayoutReady] = useState(false);
+  const [panning, setPanning] = useState(false);
+  const viewportRef = useRef<HTMLElement | null>(null);
+  const imageRef = useRef<HTMLImageElement | null>(null);
+  const panSessionRef = useRef<PanSession | null>(null);
+  const prevEffectiveZoomRef = useRef<number | null>(null);
   let resolvedStatus: "error" | "loading" | "ready";
   if (status) {
     resolvedStatus = status;
@@ -90,36 +101,234 @@ export function ImagePreviewCanvas({
     resolvedStatus = "ready";
   }
 
-  const adjustZoom = useCallback((delta: number) => {
-    setZoom((current) => clampZoom((current === "fit" ? 1 : current) + delta));
+  const effectiveZoom = zoom === "fit" ? fitScale : zoom;
+  // Absolute zoom mode enables grab-pan; fit mode is contained.
+  const canPan = zoom !== "fit";
+
+  const measureFit = useCallback(() => {
+    const viewport = viewportRef.current;
+    const image = imageRef.current;
+    if (!(viewport && image && image.naturalWidth > 0)) return;
+    setFitScale(
+      measureContainScale({
+        naturalHeight: image.naturalHeight,
+        naturalWidth: image.naturalWidth,
+        viewportHeight: viewport.clientHeight,
+        viewportWidth: viewport.clientWidth,
+      })
+    );
+    setLayoutReady(true);
   }, []);
+
+  const adjustZoom = useCallback(
+    (direction: 1 | -1) => {
+      setZoom((current) => {
+        const base = current === "fit" ? fitScale : current;
+        return clampZoom(
+          direction > 0 ? base * ZOOM_FACTOR : base / ZOOM_FACTOR
+        );
+      });
+    },
+    [fitScale]
+  );
   const toggleZoom = useCallback(() => {
     setZoom((current) => (current === "fit" ? 1 : "fit"));
   }, []);
+
+  useEffect(() => {
+    // Keyed on src: reset fit measurement and scroll anchor for a new image.
+    if (src === null) {
+      prevEffectiveZoomRef.current = null;
+      setLayoutReady(false);
+      setFitScale(1);
+      return;
+    }
+    prevEffectiveZoomRef.current = null;
+    setLayoutReady(false);
+    setFitScale(1);
+  }, [src]);
+
+  useLayoutEffect(() => {
+    measureFit();
+  }, [measureFit]);
+
+  useEffect(() => {
+    const viewport = viewportRef.current;
+    if (!viewport || typeof ResizeObserver === "undefined") return;
+    const observer = new ResizeObserver(() => {
+      measureFit();
+    });
+    observer.observe(viewport);
+    return () => observer.disconnect();
+  }, [measureFit]);
+
+  useLayoutEffect(() => {
+    const viewport = viewportRef.current;
+    if (!(viewport && layoutReady) || resolvedStatus === "error") return;
+    const previous = prevEffectiveZoomRef.current;
+    if (previous === effectiveZoom) return;
+    prevEffectiveZoomRef.current = effectiveZoom;
+
+    const overflows =
+      viewport.scrollWidth > viewport.clientWidth + 1 ||
+      viewport.scrollHeight > viewport.clientHeight + 1;
+
+    // Fit / first layout / undersized: rely on flex + margin:auto centering.
+    // Clear leftover scroll so auto margins can take effect.
+    if (previous === null || zoom === "fit" || !overflows) {
+      if (overflows) {
+        const centered = centeredScroll(viewport);
+        viewport.scrollLeft = centered.scrollLeft;
+        viewport.scrollTop = centered.scrollTop;
+      } else {
+        viewport.scrollLeft = 0;
+        viewport.scrollTop = 0;
+      }
+      return;
+    }
+
+    const next = anchoredScrollAfterZoom({
+      clientHeight: viewport.clientHeight,
+      clientWidth: viewport.clientWidth,
+      newZoom: effectiveZoom,
+      oldZoom: previous,
+      scrollLeft: viewport.scrollLeft,
+      scrollTop: viewport.scrollTop,
+    });
+    viewport.scrollLeft = next.scrollLeft;
+    viewport.scrollTop = next.scrollTop;
+  }, [effectiveZoom, layoutReady, resolvedStatus, zoom]);
+
+  useEffect(
+    () => () => {
+      panSessionRef.current = null;
+    },
+    []
+  );
 
   const handleKeyDown = useCallback(
     (event: KeyboardEvent<HTMLElement>) => {
       if (event.key === "+" || event.key === "=") {
         event.preventDefault();
-        adjustZoom(ZOOM_STEP);
-      } else if (event.key === "-" || event.key === "_") {
+        adjustZoom(1);
+        return;
+      }
+      if (event.key === "-" || event.key === "_") {
         event.preventDefault();
-        adjustZoom(-ZOOM_STEP);
-      } else if (event.key === "0") {
+        adjustZoom(-1);
+        return;
+      }
+      if (event.key === "0") {
         event.preventDefault();
         setZoom(1);
+        return;
+      }
+      if (!canPan) return;
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const step = event.shiftKey
+        ? KEYBOARD_PAN_STEP_PX * 3
+        : KEYBOARD_PAN_STEP_PX;
+      if (event.key === "ArrowLeft") {
+        event.preventDefault();
+        viewport.scrollLeft -= step;
+      } else if (event.key === "ArrowRight") {
+        event.preventDefault();
+        viewport.scrollLeft += step;
+      } else if (event.key === "ArrowUp") {
+        event.preventDefault();
+        viewport.scrollTop -= step;
+      } else if (event.key === "ArrowDown") {
+        event.preventDefault();
+        viewport.scrollTop += step;
       }
     },
-    [adjustZoom]
+    [adjustZoom, canPan]
   );
 
-  const handleViewportClick = useCallback(
-    (event: ReactMouseEvent<HTMLElement>) => {
-      if (event.target === event.currentTarget) {
+  const handlePointerDown = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.button !== 0) return;
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      const fromEmpty = event.target === event.currentTarget;
+      if (!(canPan || fromEmpty)) return;
+      panSessionRef.current = {
+        fromEmpty,
+        moved: false,
+        originScrollLeft: viewport.scrollLeft,
+        originScrollTop: viewport.scrollTop,
+        pointerId: event.pointerId,
+        startX: event.clientX,
+        startY: event.clientY,
+      };
+      if (typeof viewport.setPointerCapture === "function") {
+        viewport.setPointerCapture(event.pointerId);
+      }
+      if (canPan) {
+        setPanning(true);
+      }
+    },
+    [canPan]
+  );
+
+  const handlePointerMove = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const session = panSessionRef.current;
+      if (!session || session.pointerId !== event.pointerId) return;
+      const dx = event.clientX - session.startX;
+      const dy = event.clientY - session.startY;
+      if (
+        !session.moved &&
+        (Math.abs(dx) >= PAN_CLICK_SLOP_PX || Math.abs(dy) >= PAN_CLICK_SLOP_PX)
+      ) {
+        session.moved = true;
+      }
+      if (!(canPan && session.moved)) return;
+      const viewport = viewportRef.current;
+      if (!viewport) return;
+      event.preventDefault();
+      viewport.scrollLeft = session.originScrollLeft - dx;
+      viewport.scrollTop = session.originScrollTop - dy;
+    },
+    [canPan]
+  );
+
+  const endPanSession = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      const session = panSessionRef.current;
+      if (!session || session.pointerId !== event.pointerId) return;
+      panSessionRef.current = null;
+      setPanning(false);
+      if (
+        typeof event.currentTarget.hasPointerCapture === "function" &&
+        event.currentTarget.hasPointerCapture(event.pointerId)
+      ) {
+        event.currentTarget.releasePointerCapture(event.pointerId);
+      }
+      if (!session.moved && session.fromEmpty) {
         onEmptyClick?.();
       }
     },
     [onEmptyClick]
+  );
+
+  const handleWheel = useCallback(
+    (event: ReactWheelEvent<HTMLElement>) => {
+      if (!(event.ctrlKey || event.metaKey)) return;
+      event.preventDefault();
+      if (event.deltaY === 0) return;
+      adjustZoom(event.deltaY < 0 ? 1 : -1);
+    },
+    [adjustZoom]
+  );
+
+  const handleImageLoad = useCallback(
+    (event: SyntheticEvent<HTMLImageElement>) => {
+      measureFit();
+      onLoad?.(event);
+    },
+    [measureFit, onLoad]
   );
 
   const loadingIndicator =
@@ -133,10 +342,17 @@ export function ImagePreviewCanvas({
       </div>
     ) : null;
 
+  const dismissOnEmptyPointerUp = useCallback(
+    (event: ReactPointerEvent<HTMLElement>) => {
+      if (event.button !== 0) return;
+      if (event.target !== event.currentTarget) return;
+      onEmptyClick?.();
+    },
+    [onEmptyClick]
+  );
+
   if (resolvedStatus === "loading" && !src) {
     return (
-      // biome-ignore lint/a11y/noNoninteractiveElementInteractions: empty stage click closes preview
-      // biome-ignore lint/a11y/useKeyWithClickEvents: Esc closes via host; click is pointer-only dismiss
       <section
         aria-busy="true"
         aria-label={labels.viewerLabel}
@@ -144,7 +360,7 @@ export function ImagePreviewCanvas({
           "relative flex min-h-0 flex-1 items-center justify-center bg-muted/20 p-3",
           className
         )}
-        onClick={handleViewportClick}
+        onPointerUp={dismissOnEmptyPointerUp}
       >
         {loadingIndicator}
       </section>
@@ -153,15 +369,12 @@ export function ImagePreviewCanvas({
 
   if (!(src && resolvedStatus !== "error")) {
     return (
-      // biome-ignore lint/a11y/noNoninteractiveElementInteractions: empty stage click closes preview
-      // biome-ignore lint/a11y/noStaticElementInteractions: empty stage click closes preview
-      // biome-ignore lint/a11y/useKeyWithClickEvents: Esc closes via host; click is pointer-only dismiss
       <div
         className={cn(
           "flex min-h-0 flex-1 items-center justify-center",
           className
         )}
-        onClick={handleViewportClick}
+        onPointerUp={dismissOnEmptyPointerUp}
       >
         <Empty>
           <EmptyHeader>
@@ -176,123 +389,60 @@ export function ImagePreviewCanvas({
     );
   }
 
-  const zoomLabel = zoom === "fit" ? labels.fit : `${Math.round(zoom * 100)}%`;
   const showLoading = resolvedStatus === "loading";
 
   return (
     <div className={cn("relative min-h-0 flex-1 bg-background", className)}>
-      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: focusable canvas exposes documented zoom shortcuts */}
+      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: focusable canvas exposes zoom/pan shortcuts */}
       <section
         aria-busy={showLoading}
         aria-label={labels.viewerLabel}
-        className="absolute inset-0 flex items-center justify-center overflow-auto bg-background p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset"
+        className={cn(
+          "absolute inset-0 flex overflow-auto bg-background p-3 outline-none focus-visible:ring-2 focus-visible:ring-ring/30 focus-visible:ring-inset",
+          canPan && (panning ? "cursor-grabbing" : "cursor-grab"),
+          panning && "select-none"
+        )}
+        data-scrollbar="none"
         data-slot="image-preview-viewport"
-        onClick={handleViewportClick}
         onDoubleClick={toggleZoom}
         onKeyDown={handleKeyDown}
-        // biome-ignore lint/a11y/noNoninteractiveTabindex: canvas accepts zoom shortcuts when focused
+        onPointerCancel={endPanSession}
+        onPointerDown={handlePointerDown}
+        onPointerMove={handlePointerMove}
+        onPointerUp={endPanSession}
+        onWheel={handleWheel}
+        ref={viewportRef}
+        // biome-ignore lint/a11y/noNoninteractiveTabindex: canvas accepts zoom/pan shortcuts when focused
         tabIndex={0}
       >
         {loadingIndicator}
         {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: load failures are scoped to the preview URL */}
         <img
           alt={alt}
-          className={cn(
-            "object-contain",
-            showLoading && "opacity-0",
-            zoom === "fit" ? "max-h-full max-w-full" : "max-w-none"
-          )}
+          className={cn("m-auto max-w-none", showLoading && "opacity-0")}
           draggable={false}
           height={1}
           onError={onError}
-          onLoad={onLoad}
+          onLoad={handleImageLoad}
+          ref={imageRef}
           src={src}
           style={{
             height: "auto",
             width: "auto",
-            ...(zoom === "fit" ? {} : { zoom }),
+            zoom: effectiveZoom,
           }}
           width={1}
         />
       </section>
 
-      <div className="pointer-events-none absolute inset-x-0 bottom-0 z-20 flex justify-center px-3 pt-2 pb-4">
-        {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: stop empty-click dismiss on toolbar */}
-        <div
-          aria-label={labels.controlsLabel}
-          className="pointer-events-auto flex items-center gap-1 rounded-full bg-secondary p-1 shadow-sm"
-          data-slot="image-preview-controls"
-          onClick={(event) => event.stopPropagation()}
-          onKeyDown={(event) => event.stopPropagation()}
-          role="toolbar"
-        >
-          <Button
-            aria-label={labels.zoomOut}
-            disabled={zoom !== "fit" && zoom <= MIN_ZOOM}
-            onClick={() => adjustZoom(-ZOOM_STEP)}
-            size="icon-sm"
-            type="button"
-            variant="ghost"
-          >
-            <ZoomOut data-icon />
-          </Button>
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Button
-                aria-label={`${labels.zoomLevel}: ${zoomLabel}`}
-                size="sm"
-                type="button"
-                variant="ghost"
-              >
-                <span className="min-w-10 font-mono tabular-nums">
-                  {zoomLabel}
-                </span>
-                <ChevronDown data-icon="inline-end" />
-              </Button>
-            </DropdownMenuTrigger>
-            {/*
-              Content preview host sits at z-[100]; default menu portals
-              use z-50 and would render underneath.
-            */}
-            <DropdownMenuContent
-              align="center"
-              className="z-[110] min-w-44"
-              side="top"
-            >
-              <DropdownMenuRadioGroup
-                onValueChange={(value) =>
-                  setZoom(value === "fit" ? "fit" : Number(value))
-                }
-                value={zoom === "fit" ? "fit" : String(zoom)}
-              >
-                <DropdownMenuRadioItem value="fit">
-                  {labels.fit}
-                </DropdownMenuRadioItem>
-                {PRESET_ZOOM_LEVELS.map((level) => (
-                  <DropdownMenuRadioItem key={level} value={String(level)}>
-                    {level * 100}%
-                    {level === 1 ? (
-                      <DropdownMenuShortcut className="pr-6">
-                        {labels.actualSize}
-                      </DropdownMenuShortcut>
-                    ) : null}
-                  </DropdownMenuRadioItem>
-                ))}
-              </DropdownMenuRadioGroup>
-            </DropdownMenuContent>
-          </DropdownMenu>
-          <Button
-            aria-label={labels.zoomIn}
-            disabled={zoom !== "fit" && zoom >= MAX_ZOOM}
-            onClick={() => adjustZoom(ZOOM_STEP)}
-            size="icon-sm"
-            type="button"
-            variant="ghost"
-          >
-            <ZoomIn data-icon />
-          </Button>
-        </div>
-      </div>
+      <ImagePreviewControls
+        effectiveZoom={effectiveZoom}
+        labels={labels}
+        onZoomChange={setZoom}
+        onZoomIn={() => adjustZoom(1)}
+        onZoomOut={() => adjustZoom(-1)}
+        zoom={zoom}
+      />
     </div>
   );
 }

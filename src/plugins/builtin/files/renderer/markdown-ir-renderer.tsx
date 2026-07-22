@@ -13,18 +13,22 @@ import {
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { createElement, Fragment, type ReactNode, useMemo } from "react";
 import type { MarkdownCodeHighlighter } from "./markdown/markdown-code-highlighter.ts";
-import type {
-  MarkdownBlock,
-  MarkdownInline,
-  MarkdownSourceRange,
-  MarkdownTableCell,
-} from "./markdown/markdown-ir.ts";
+import type { MarkdownBlock, MarkdownInline } from "./markdown/markdown-ir.ts";
 import type { MarkdownPagination } from "./markdown/markdown-runtime.ts";
 import {
   MarkdownCodeBlock,
   type MarkdownCodeBlockLabels,
 } from "./markdown-code-block.tsx";
 import { MarkdownDiagram } from "./markdown-diagram.tsx";
+import {
+  cellKey,
+  groupSearchMatches,
+  headingClassName,
+  isCalloutDirective,
+  searchMatchesFor,
+  sourceBlockProps,
+  tableAlignment,
+} from "./markdown-ir-render-helpers.ts";
 import { MarkdownMath } from "./markdown-math.tsx";
 import { MarkdownPaginationView } from "./markdown-pagination-view.tsx";
 import {
@@ -45,17 +49,18 @@ export {
   safeMarkdownUrl,
 } from "./markdown-resource-elements.tsx";
 
-import {
-  type MarkdownSearchMatch,
-  markdownSearchNodeKey,
-} from "./markdown-search.ts";
+import type { MarkdownSearchMatch } from "./markdown-search.ts";
 import { MarkdownSearchText } from "./markdown-search-mark.tsx";
 
 export interface MarkdownRendererLabels extends MarkdownCodeBlockLabels {
   completedTask: string;
   diagramFailed: string;
   diagramLabel: string;
+  diagramPreviewTitle: string;
+  imagePreviewFailed: string;
+  imagePreviewTitle: string;
   incompleteTask: string;
+  openFullscreen: string;
 }
 
 interface MarkdownIrRendererProps {
@@ -69,6 +74,7 @@ interface MarkdownIrRendererProps {
   initialAnchor: string | undefined;
   initialAnchorRequestId: string | undefined;
   labels: MarkdownRendererLabels;
+  onJumpToSource?: ((offset: number) => void) | undefined;
   onOpenExternal: (url: string) => void;
   onOpenInternal: ((target: MarkdownInternalTarget) => void) | undefined;
   pagination: MarkdownPagination;
@@ -107,6 +113,7 @@ export function MarkdownIrRenderer(props: MarkdownIrRendererProps) {
           copyCode: props.copyCode,
           fileResources: props.fileResources,
           labels: props.labels,
+          onJumpToSource: props.onJumpToSource,
           onOpenAnchor,
           onOpenExternal: props.onOpenExternal,
           onOpenInternal: props.onOpenInternal,
@@ -140,10 +147,10 @@ function renderBlock(
     case "heading": {
       const heading = createElement(
         `h${block.depth}`,
-        {
+        sourceBlockProps(block.range, context, {
           className: headingClassName(block.depth),
           id: block.id,
-        },
+        }),
         renderInlines(block.children, context)
       );
       return heading;
@@ -154,53 +161,71 @@ function renderBlock(
         : "p";
       return createElement(
         tag,
-        {
-          className:
-            "my-3 text-[0.9375rem] leading-7 text-foreground/95 [&:first-child]:mt-0",
-        },
+        sourceBlockProps(block.range, context, {
+          className: "md-p",
+        }),
         renderInlines(block.children, context)
       );
     }
     case "code":
       if (block.lang?.toLowerCase() === "mermaid" && context.charts) {
         return (
-          <MarkdownDiagram
-            charts={context.charts}
-            errorLabel={context.labels.diagramFailed}
-            label={context.labels.diagramLabel}
-            source={block.value}
-          />
+          <div
+            {...sourceBlockProps(block.range, context, {
+              className: "md-diagram",
+            })}
+          >
+            <MarkdownDiagram
+              charts={context.charts}
+              contentPreview={context.fileResources?.contentPreview}
+              errorLabel={context.labels.diagramFailed}
+              label={context.labels.diagramLabel}
+              openFullscreenLabel={context.labels.openFullscreen}
+              previewTitle={context.labels.diagramPreviewTitle}
+              source={block.value}
+            />
+          </div>
         );
       }
       return (
-        <MarkdownCodeBlock
-          activeSearchMatchId={context.activeSearchMatchId}
-          code={block.value}
-          highlighter={context.codeHighlighter}
-          labels={context.labels}
-          language={block.lang}
-          meta={block.meta}
-          onCopy={context.copyCode}
-          searchMatches={searchMatchesFor(context, "code", block.range)}
-          theme={context.codeTheme}
-        />
+        <div {...sourceBlockProps(block.range, context)}>
+          <MarkdownCodeBlock
+            activeSearchMatchId={context.activeSearchMatchId}
+            code={block.value}
+            highlighter={context.codeHighlighter}
+            labels={context.labels}
+            language={block.lang}
+            meta={block.meta}
+            onCopy={context.copyCode}
+            searchMatches={searchMatchesFor(context, "code", block.range)}
+            theme={context.codeTheme}
+          />
+        </div>
       );
     case "math":
-      return <MarkdownMath displayMode value={block.value} />;
+      return (
+        <div
+          {...sourceBlockProps(block.range, context, {
+            className: "md-math-block",
+          })}
+        >
+          <MarkdownMath displayMode value={block.value} />
+        </div>
+      );
     case "blockquote":
       return (
-        <blockquote className="my-4 border-border border-l-2 pl-4 text-muted-foreground [&>p]:my-2">
+        <blockquote
+          {...sourceBlockProps(block.range, context, {
+            className: "md-blockquote",
+          })}
+        >
           {renderBlocks(block.blocks, context)}
         </blockquote>
       );
     case "list": {
       const listChildren = block.items.map((item) => (
         <li
-          className={
-            item.checked === null
-              ? undefined
-              : "flex list-none items-start gap-2"
-          }
+          className={item.checked === null ? "md-li" : "md-li md-li-task"}
           key={`${item.range.startOffset}-${item.range.endOffset}`}
         >
           {item.checked === null ? null : (
@@ -223,9 +248,7 @@ function renderBlock(
       return createElement(
         block.ordered ? "ol" : "ul",
         {
-          className: block.ordered
-            ? "my-3 grid list-decimal gap-1.5 pl-6 marker:text-muted-foreground"
-            : "my-3 grid list-disc gap-1.5 pl-6 marker:text-muted-foreground",
+          className: block.ordered ? "md-ol" : "md-ul",
           start: block.ordered ? (block.start ?? undefined) : undefined,
         },
         listChildren
@@ -235,41 +258,45 @@ function renderBlock(
       const [header, ...body] = block.rows;
       if (!header) return null;
       return (
-        <Table className="my-4">
-          <TableHeader>
-            <TableRow>
-              {header.cells.map((cell, index) => (
-                <TableHead
-                  className={tableAlignment(block.align[index])}
-                  key={cellKey(cell)}
-                >
-                  {renderInlines(cell.children, context)}
-                </TableHead>
-              ))}
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {body.map((row) => (
-              <TableRow key={`${row.range.startOffset}-${row.range.endOffset}`}>
-                {row.cells.map((cell, index) => (
-                  <TableCell
+        <div className="md-table-wrap">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                {header.cells.map((cell, index) => (
+                  <TableHead
                     className={tableAlignment(block.align[index])}
                     key={cellKey(cell)}
                   >
                     {renderInlines(cell.children, context)}
-                  </TableCell>
+                  </TableHead>
                 ))}
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {body.map((row) => (
+                <TableRow
+                  key={`${row.range.startOffset}-${row.range.endOffset}`}
+                >
+                  {row.cells.map((cell, index) => (
+                    <TableCell
+                      className={tableAlignment(block.align[index])}
+                      key={cellKey(cell)}
+                    >
+                      {renderInlines(cell.children, context)}
+                    </TableCell>
+                  ))}
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       );
     }
     case "thematicBreak":
-      return <Separator className="my-6" />;
+      return <Separator className="md-hr" />;
     case "html":
       return (
-        <pre className="my-3 whitespace-pre-wrap text-muted-foreground">
+        <pre className="md-raw">
           <MarkdownSearchText
             activeMatchId={context.activeSearchMatchId}
             matches={searchMatchesFor(context, "html", block.range)}
@@ -282,7 +309,7 @@ function renderBlock(
         const title = block.attributes.title?.trim();
         return (
           <Alert
-            className="my-4"
+            className="md-callout"
             data-directive={block.name}
             variant={block.name === "danger" ? "destructive" : "default"}
           >
@@ -294,26 +321,20 @@ function renderBlock(
         );
       }
       return (
-        <aside
-          className="my-4 rounded-md border p-3"
-          data-directive={block.name}
-        >
+        <aside className="md-aside" data-directive={block.name}>
           {renderBlocks(block.blocks, context)}
         </aside>
       );
     }
     case "leafDirective":
       return (
-        <div className="my-3" data-directive={block.name}>
+        <div className="md-p" data-directive={block.name}>
           {renderInlines(block.children, context)}
         </div>
       );
     case "footnoteDefinition":
       return (
-        <div
-          className="my-3 flex gap-2 text-sm"
-          id={`footnote-${block.identifier}`}
-        >
+        <div className="md-footnote" id={`footnote-${block.identifier}`}>
           <span className="font-mono text-muted-foreground">
             [{block.label}]
           </span>
@@ -322,7 +343,7 @@ function renderBlock(
       );
     case "unsupported":
       return (
-        <pre className="my-3 whitespace-pre-wrap text-muted-foreground">
+        <pre className="md-raw">
           <MarkdownSearchText
             activeMatchId={context.activeSearchMatchId}
             matches={searchMatchesFor(context, "unsupported", block.range)}
@@ -363,7 +384,7 @@ function renderInline(
       );
     case "inlineCode":
       return (
-        <code className="rounded-md border border-border/60 bg-muted/70 px-1.5 py-0.5 font-mono text-[0.85em] text-foreground">
+        <code className="md-inline-code">
           <MarkdownSearchText
             activeMatchId={context.activeSearchMatchId}
             matches={searchMatchesFor(context, "inlineCode", inline.range)}
@@ -396,7 +417,10 @@ function renderInline(
     case "image":
       return (
         <MarkdownResourceImage
+          imagePreviewFailedLabel={context.labels.imagePreviewFailed}
+          imagePreviewTitle={context.labels.imagePreviewTitle}
           inline={inline}
+          openFullscreenLabel={context.labels.openFullscreen}
           resources={context.fileResources}
           source={context.source}
         />
@@ -405,6 +429,7 @@ function renderInline(
       return (
         <sup>
           <a
+            className="md-link"
             href={`#footnote-${inline.identifier}`}
             onClick={(event) => {
               event.preventDefault();
@@ -437,61 +462,4 @@ function renderInline(
     default:
       return null;
   }
-}
-
-function headingClassName(depth: number): string {
-  if (depth === 1) {
-    return "mt-8 mb-3 border-b border-border/70 pb-2 font-semibold text-3xl tracking-tight first:mt-0";
-  }
-  if (depth === 2) {
-    return "mt-7 mb-2.5 border-b border-border/50 pb-1.5 font-semibold text-2xl tracking-tight";
-  }
-  if (depth === 3) {
-    return "mt-6 mb-2 font-semibold text-xl tracking-tight";
-  }
-  return "mt-5 mb-2 font-semibold text-base tracking-tight";
-}
-
-function tableAlignment(
-  alignment: "center" | "left" | "right" | null | undefined
-) {
-  if (alignment === "center") return "text-center";
-  if (alignment === "right") return "text-right";
-  return "text-left";
-}
-
-function cellKey(cell: MarkdownTableCell): string {
-  return `${cell.range.startOffset}-${cell.range.endOffset}`;
-}
-
-function groupSearchMatches(
-  matches: readonly MarkdownSearchMatch[]
-): ReadonlyMap<string, readonly MarkdownSearchMatch[]> {
-  const grouped = new Map<string, MarkdownSearchMatch[]>();
-  for (const match of matches) {
-    const group = grouped.get(match.nodeKey);
-    if (group) group.push(match);
-    else grouped.set(match.nodeKey, [match]);
-  }
-  return grouped;
-}
-
-function searchMatchesFor(
-  context: MarkdownRenderContext,
-  kind: string,
-  range: MarkdownSourceRange
-): readonly MarkdownSearchMatch[] | undefined {
-  return context.searchMatchesByNode.get(markdownSearchNodeKey(kind, range));
-}
-
-function isCalloutDirective(name: string): boolean {
-  return [
-    "caution",
-    "danger",
-    "important",
-    "info",
-    "note",
-    "tip",
-    "warning",
-  ].includes(name);
 }

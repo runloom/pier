@@ -87,7 +87,18 @@ describe("ContentPreviewHost", () => {
     });
 
     const viewport = await screen.findByLabelText("Image preview");
-    fireEvent.click(viewport);
+    fireEvent.pointerDown(viewport, {
+      button: 0,
+      clientX: 8,
+      clientY: 8,
+      pointerId: 1,
+    });
+    fireEvent.pointerUp(viewport, {
+      button: 0,
+      clientX: 8,
+      clientY: 8,
+      pointerId: 1,
+    });
     expect(screen.queryByTestId("content-preview")).not.toBeInTheDocument();
   });
 
@@ -100,7 +111,18 @@ describe("ContentPreviewHost", () => {
     });
 
     const image = await screen.findByAltText("preview image");
-    fireEvent.click(image);
+    fireEvent.pointerDown(image, {
+      button: 0,
+      clientX: 12,
+      clientY: 12,
+      pointerId: 2,
+    });
+    fireEvent.pointerUp(image, {
+      button: 0,
+      clientX: 12,
+      clientY: 12,
+      pointerId: 2,
+    });
     expect(screen.getByTestId("content-preview")).toBeInTheDocument();
   });
 
@@ -113,8 +135,10 @@ describe("ContentPreviewHost", () => {
 
     const root = await screen.findByTestId("content-preview");
     expect(root.className).toContain("inset-0");
+    expect(root.className).toContain("app-no-drag");
     const header = screen.getByTestId("content-preview-header");
     expect(header.className).toContain("justify-center");
+    expect(header.className).toContain("z-50");
     expect(header).toHaveTextContent("preview.png");
     const stage = screen.getByTestId("content-preview-stage");
     expect(stage.className).toContain("inset-0");
@@ -124,6 +148,43 @@ describe("ContentPreviewHost", () => {
     expect(controls).not.toBeNull();
     expect(controls?.parentElement?.className).toContain("absolute");
     expect(controls?.parentElement?.className).toContain("bottom-0");
+    const close = screen.getByTestId("content-preview-close");
+    expect(close).toHaveAttribute("data-variant", "outline");
+    expect(header.contains(close)).toBe(true);
+  });
+
+  it("closes from the chrome close button without relying on the canvas", async () => {
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      source: { kind: "url", src: "data:image/png;base64,xx" },
+      title: "preview",
+    });
+    await screen.findByTestId("content-preview");
+    fireEvent.pointerDown(screen.getByTestId("content-preview-close"));
+    fireEvent.click(screen.getByTestId("content-preview-close"));
+    expect(screen.queryByTestId("content-preview")).not.toBeInTheDocument();
+  });
+
+  it("invokes onClose when the preview closes or is replaced", async () => {
+    const onClose = vi.fn();
+    const nextOnClose = vi.fn();
+    render(<ContentPreviewHost />);
+    openImagePreview({
+      onClose,
+      source: { kind: "url", src: "data:image/png;base64,xx" },
+      title: "first",
+    });
+    await screen.findByTestId("content-preview");
+    openImagePreview({
+      onClose: nextOnClose,
+      source: { kind: "url", src: "data:image/png;base64,yy" },
+      title: "second",
+    });
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(nextOnClose).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByTestId("content-preview-close"));
+    expect(nextOnClose).toHaveBeenCalledTimes(1);
+    expect(screen.queryByTestId("content-preview")).not.toBeInTheDocument();
   });
 
   it("Esc does not dismiss preview while a dropdown menu is open", async () => {

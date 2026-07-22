@@ -9,7 +9,14 @@ import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { FileEditorAdapter } from "./file-editor-adapter.tsx";
 import type { FileEditorController } from "./file-editor-controller.ts";
 import { FileImagePreview } from "./file-image-preview.tsx";
-import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
+import {
+  createFileEditorAdapterLabels,
+  createFileSearchLabels,
+  createMarkdownErrorLabel,
+  createMarkdownRendererLabels,
+  createMarkdownTocLabels,
+  createMarkdownZoomLabels,
+} from "./file-panel-markdown-labels.ts";
 import {
   MissingTemporaryState,
   ReadOnlyErrorState,
@@ -21,7 +28,7 @@ import type {
   FileViewMode,
 } from "./files-document-types.ts";
 import type { FilesTranslate } from "./files-i18n.ts";
-import type { MarkdownInternalTarget } from "./markdown-ir-renderer.tsx";
+import { useFilePanelMarkdownChrome } from "./use-file-panel-markdown-chrome.ts";
 import { useFilesDocument } from "./use-files-document.ts";
 
 let nextInlineEditorOwnerId = 1;
@@ -36,6 +43,7 @@ export function ResolvedFilePanel({
   markdownAnchorRequestId,
   controller,
   mode,
+  onModeChange,
   panelContext,
   panelId,
   searchRequest,
@@ -47,6 +55,7 @@ export function ResolvedFilePanel({
   markdownAnchorRequestId?: string | undefined;
   controller: FileEditorController;
   mode: FileViewMode;
+  onModeChange?: ((mode: FileViewMode) => void) | undefined;
   panelContext: PanelContext | undefined;
   panelId: string | undefined;
   searchRequest: number;
@@ -62,7 +71,19 @@ export function ResolvedFilePanel({
   }
   const editorOwnerId = panelId ?? inlineEditorOwnerIdRef.current;
   const editorSessionId = document ? createEditorSessionId(editorOwnerId) : "";
-  const externalUrlInFlightRef = useRef<string | null>(null);
+  const {
+    handleCopyMarkdownCode,
+    handleMarkdownPreviewContextMenu,
+    handleOpenExternal,
+    handleOpenMarkdownInternal,
+  } = useFilePanelMarkdownChrome({
+    context,
+    document,
+    editorSessionId,
+    panelContext,
+    panelId,
+    t,
+  });
 
   // Git 变更条：仅 source + disk 模式渲染。非源码模式清空；切回 source 时刷新。
   // attach 在 controller.attachView 时已发生，故此 effect 仅做清空/刷新。
@@ -168,109 +189,6 @@ export function ResolvedFilePanel({
         .catch(() => undefined);
     }
   }, [context, document, t]);
-
-  const handleOpenExternal = useCallback(
-    async (url: string) => {
-      if (!context || externalUrlInFlightRef.current === url) {
-        return;
-      }
-      if (externalUrlInFlightRef.current) {
-        context.notifications.info(
-          t(
-            "filePanel.markdown.externalOpenBusy",
-            "Another external link is already opening."
-          )
-        );
-        return;
-      }
-      externalUrlInFlightRef.current = url;
-      try {
-        const result = await context.externalNavigation.open(url);
-        if (!result.opened && result.reason === "busy") {
-          context.notifications.info(
-            t(
-              "filePanel.markdown.externalOpenBusy",
-              "Another external link is already opening."
-            )
-          );
-        } else if (!result.opened) {
-          await context.dialogs.alert({
-            body: t(
-              "filePanel.markdown.externalOpenFailed.description",
-              "The external link could not be opened."
-            ),
-            size: "sm",
-            title: t(
-              "filePanel.markdown.externalOpenFailed.title",
-              "Unable to open link"
-            ),
-          });
-        }
-      } catch (error) {
-        await context.dialogs
-          .alert({
-            body: error instanceof Error ? error.message : String(error),
-            size: "default",
-            title: t(
-              "filePanel.markdown.externalOpenFailed.title",
-              "Unable to open link"
-            ),
-          })
-          .catch(() => undefined);
-      } finally {
-        if (externalUrlInFlightRef.current === url) {
-          externalUrlInFlightRef.current = null;
-        }
-      }
-    },
-    [context, t]
-  );
-  const handleOpenMarkdownInternal = useCallback(
-    (target: MarkdownInternalTarget) => {
-      if (!(context && document?.source.kind === "disk")) return;
-      const nextSource: FilesDocumentPanelSource = {
-        kind: "disk",
-        path: target.path,
-        root: document.source.root,
-      };
-      context.panels.openInstance({
-        componentId: FILES_FILE_PANEL_ID,
-        ...(panelContext ? { context: panelContext } : {}),
-        dropUnpinnedInstances: true,
-        instanceId: createFileFilePanelInstanceId(nextSource),
-        params: {
-          ...(target.fragment ? { markdownAnchor: target.fragment } : {}),
-          ...(target.fragment
-            ? { markdownAnchorRequestId: crypto.randomUUID() }
-            : {}),
-          pinned: false,
-          source: nextSource,
-        },
-        title: target.path.split("/").at(-1) ?? target.path,
-      });
-    },
-    [context, document, panelContext]
-  );
-  const handleCopyMarkdownCode = useCallback(
-    async (code: string) => {
-      try {
-        await navigator.clipboard.writeText(code);
-      } catch (error) {
-        if (context) {
-          await context.dialogs.alert({
-            body: error instanceof Error ? error.message : String(error),
-            size: "default",
-            title: t(
-              "filePanel.editor.clipboardFailed",
-              "Clipboard unavailable"
-            ),
-          });
-        }
-        throw error;
-      }
-    },
-    [context, t]
-  );
 
   if (!document) {
     if (source.kind === "untitled") {
@@ -404,77 +322,39 @@ export function ResolvedFilePanel({
           controller={controller}
           documentId={document.id}
           editorSessionId={editorSessionId}
-          labels={{
-            diffUnsupported: t(
-              "filePanel.view.diffUnsupported",
-              "Diff view is not enabled yet."
-            ),
-            richUnsupported: t(
-              "filePanel.view.richUnsupported",
-              "Rich Markdown editing is not enabled yet."
-            ),
-            sourceEditor: t("filePanel.editor.sourceLabel", "Source editor"),
-          }}
+          labels={createFileEditorAdapterLabels(t)}
           markdownAppearance={context?.appearance}
           markdownCharts={context?.charts}
           markdownCopyCode={context ? handleCopyMarkdownCode : undefined}
-          markdownErrorLabel={t(
-            "filePanel.markdown.renderFailed",
-            "Unable to render Markdown preview."
-          )}
+          markdownErrorLabel={createMarkdownErrorLabel(t)}
           markdownFileResources={context}
           markdownInitialAnchor={markdownAnchor}
           markdownInitialAnchorRequestId={markdownAnchorRequestId}
-          markdownLabels={{
-            copiedCode: t("filePanel.markdown.copiedCode", "Copied"),
-            copyCode: t("filePanel.markdown.copyCode", "Copy code"),
-            diagramFailed: t(
-              "filePanel.markdown.diagramFailed",
-              "Unable to render diagram"
-            ),
-            diagramLabel: t(
-              "filePanel.markdown.diagramLabel",
-              "Mermaid diagram"
-            ),
-            completedTask: t(
-              "filePanel.markdown.completedTask",
-              "Completed task"
-            ),
-            incompleteTask: t(
-              "filePanel.markdown.incompleteTask",
-              "Incomplete task"
-            ),
-          }}
+          markdownLabels={createMarkdownRendererLabels(t)}
           markdownSource={
             document.source.kind === "disk" ? document.source : undefined
           }
+          markdownTocLabels={createMarkdownTocLabels(t)}
+          markdownZoomLabels={createMarkdownZoomLabels(t)}
           mode={mode}
           onEditorContextMenu={handleEditorContextMenu}
+          onJumpToSource={
+            onModeChange
+              ? (offset) => {
+                  onModeChange("source");
+                  controller.revealOffset(editorSessionId, offset);
+                }
+              : undefined
+          }
+          onMarkdownPreviewContextMenu={handleMarkdownPreviewContextMenu}
           onOpenMarkdownInternal={handleOpenMarkdownInternal}
           openExternal={handleOpenExternal}
+          panelId={panelId}
           readOnly={document.readOnly || document.loadState === "loading"}
-          searchLabels={{
-            close: t("filePanel.search.close", "Close"),
-            matchAnnouncement: t(
-              "filePanel.search.matchAnnouncement",
-              "Matches: {{count}}",
-              { count: "{{count}}" }
-            ),
-            matchCase: t("filePanel.search.matchCase", "Match case"),
-            next: t("filePanel.search.next", "Next match"),
-            noMatches: t("filePanel.search.noMatches", "No matches"),
-            placeholder: t("filePanel.search.placeholder", "Find"),
-            previous: t("filePanel.search.previous", "Previous match"),
-            regexp: t("filePanel.search.regexp", "Regexp"),
-            replace: t("filePanel.search.replace", "Replace"),
-            replaceAll: t("filePanel.search.replaceAll", "Replace all"),
-            replacePlaceholder: t(
-              "filePanel.search.replacePlaceholder",
-              "Replace"
-            ),
-            selectAll: t("filePanel.search.selectAll", "Select all matches"),
-            wholeWord: t("filePanel.search.wholeWord", "Whole word"),
-          }}
+          registerSelectionSelectAllProvider={
+            context?.contextMenu.registerSelectionSelectAllProvider
+          }
+          searchLabels={createFileSearchLabels(t)}
           searchRequest={searchRequest}
           value={document.currentContents}
           {...(mode === "diff"

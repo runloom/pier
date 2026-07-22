@@ -320,6 +320,20 @@ export interface RendererPluginContext {
   };
   configuration: PluginConfigurationApi;
   /**
+   * Host fullscreen content preview (image lightbox). Prefer this over nesting
+   * a product Dialog for media zoom.
+   */
+  contentPreview: {
+    close(): void;
+    openImage(request: {
+      alt?: string;
+      /** Release media owned by this preview when it closes or is replaced. */
+      onClose?: () => void;
+      source: { kind: "url"; src: string };
+      title: string;
+    }): void;
+  };
+  /**
    * 弹出宿主级原生上下文菜单。插件在 DOM 右键处理里计算 CSS 坐标,宿主内部
    * 转成 BrowserWindow contentView 坐标 + 收集 surface 上注册的 actions +
    * popup native menu + 触发选中 action.handler(invocation)。

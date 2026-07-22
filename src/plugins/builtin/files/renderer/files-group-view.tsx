@@ -1,20 +1,17 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
-import type { FileEntry } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   type ReactNode,
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
   useState,
-  useSyncExternalStore,
 } from "react";
-import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import type { FileEditorController } from "./file-editor-controller.ts";
 import { ResolvedFilePanelActions } from "./file-panel-actions.tsx";
 import { ResolvedFilePanel } from "./file-panel-body.tsx";
-import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
 import {
   EmptyFileState,
   FilePanelBreadcrumb,
@@ -25,6 +22,10 @@ import {
   ReadOnlyErrorState,
   SidebarToggleButton,
 } from "./file-panel-parts.tsx";
+import {
+  breadcrumbSegmentsForSource,
+  sourceTitle,
+} from "./file-panel-source.ts";
 import {
   filePanelProjectRoot,
   projectNameFromRoot,
@@ -38,44 +39,26 @@ import type {
 import {
   isDiskSourceRootAllowed,
   parseFilesDocumentPanelSource,
-  sameFilesDocumentPanelSource,
 } from "./files-document-types.ts";
 import { useActiveFilesPanel } from "./files-group-active-panel.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
 import {
-  filesNavBack,
-  filesNavForward,
-  getFilesNavState,
-  pushFilesNavEntry,
-  subscribeFilesNavHistory,
-} from "./files-nav-history.ts";
+  peekFilesPanelViewSeed,
+  rememberFilesPanelViewMode,
+  subscribeFilesPanelViewSeed,
+} from "./files-panel-transfer-state.ts";
 import {
   openFilesTreeSearch,
   revealFilesTreePath,
   toggleFilesTreeSearch,
 } from "./files-tree-registry.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
-
-function sourceTitle(source: FilesDocumentPanelSource): string {
-  if (source.kind === "untitled") {
-    return source.name;
-  }
-  return source.path.split("/").filter(Boolean).at(-1) ?? source.path;
-}
-
-function breadcrumbSegmentsForSource(
-  source: FilesDocumentPanelSource,
-  projectName: string | null
-): string[] {
-  if (source.kind === "untitled") {
-    return [source.name];
-  }
-  const parts = source.path.split("/").filter(Boolean);
-  if (projectName && projectName.length > 0) {
-    return [projectName, ...parts];
-  }
-  return parts;
-}
+import {
+  readMarkdownOpenMode,
+  writeMarkdownOpenMode,
+} from "./markdown-preview-preferences.ts";
+import { useFilesDocument } from "./use-files-document.ts";
+import { useFilesGroupNav } from "./use-files-group-nav.ts";
 
 export function FilesGroupView({
   context,
@@ -154,11 +137,18 @@ export function FilesGroupView({
   } else if (selectedSource) {
     documentKey = `${selectedSource.root}\0${selectedSource.path}`;
   }
+  const selectedDocumentId = selectedSource
+    ? controller.documentId(selectedSource)
+    : null;
+  const selectedDocument = useFilesDocument(selectedDocumentId ?? "");
   const mode =
-    (documentKey ? modeByDocumentId.get(documentKey) : undefined) ?? "source";
+    (documentKey ? modeByDocumentId.get(documentKey) : undefined) ??
+    (selectedDocument?.language === "markdown"
+      ? readMarkdownOpenMode()
+      : "source");
 
-  const setMode = useCallback(
-    (nextMode: FileViewMode) => {
+  const writeMode = useCallback(
+    (nextMode: FileViewMode, panelId: string | undefined) => {
       if (!documentKey) {
         return;
       }
@@ -168,98 +158,86 @@ export function FilesGroupView({
         }
         return new Map(previous).set(documentKey, nextMode);
       });
+      if (panelId) {
+        rememberFilesPanelViewMode(panelId, nextMode);
+      }
+      if (
+        selectedDocument?.language === "markdown" &&
+        (nextMode === "preview" || nextMode === "source")
+      ) {
+        writeMarkdownOpenMode(nextMode);
+      }
     },
-    [documentKey]
+    [documentKey, selectedDocument?.language]
   );
 
-  const navSubscribe = useCallback(
-    (listener: () => void) => subscribeFilesNavHistory(groupId, listener),
-    [groupId]
+  const setMode = useCallback(
+    (nextMode: FileViewMode) => {
+      writeMode(nextMode, activeTab?.panelId);
+    },
+    [activeTab?.panelId, writeMode]
   );
-  const navSnapshot = useCallback(
-    () => JSON.stringify(getFilesNavState(groupId)),
-    [groupId]
+
+  useLayoutEffect(() => {
+    const panelId = activeTab?.panelId;
+    if (!(panelId && documentKey && selectedSource)) {
+      return;
+    }
+    const seed = peekFilesPanelViewSeed({
+      panelId,
+      documentId: controller.documentId(selectedSource),
+    });
+    if (!seed) {
+      return;
+    }
+    writeMode(seed.mode, panelId);
+  }, [activeTab?.panelId, controller, documentKey, selectedSource, writeMode]);
+
+  useEffect(
+    () =>
+      subscribeFilesPanelViewSeed((event) => {
+        const panelId = activeTab?.panelId;
+        if (!(panelId && documentKey && selectedSource)) {
+          return;
+        }
+        const documentId = controller.documentId(selectedSource);
+        const matchesPanel = event.panelId === panelId;
+        const matchesDocument = event.documentId === documentId;
+        if (!(matchesPanel || matchesDocument)) {
+          return;
+        }
+        writeMode(event.view.mode, panelId);
+      }),
+    [activeTab?.panelId, controller, documentKey, selectedSource, writeMode]
   );
-  useSyncExternalStore(navSubscribe, navSnapshot, navSnapshot);
-  const { canBack, canForward } = getFilesNavState(groupId);
 
   useEffect(() => {
-    if (selectedSource) {
-      pushFilesNavEntry(groupId, selectedSource);
+    const panelId = activeTab?.panelId;
+    if (!panelId) {
+      return;
     }
-  }, [groupId, selectedSource]);
+    const seed = peekFilesPanelViewSeed({
+      panelId,
+      ...(selectedDocumentId ? { documentId: selectedDocumentId } : {}),
+    });
+    if (seed && seed.mode !== mode) {
+      return;
+    }
+    rememberFilesPanelViewMode(panelId, mode);
+  }, [activeTab?.panelId, mode, selectedDocumentId]);
 
-  const openSourceInGroup = useCallback(
-    (source: FilesDocumentPanelSource, options: { pinned: boolean }) => {
-      const existingInstance = context.panels
-        .listInstances(FILES_FILE_PANEL_ID)
-        .find(
-          (instance) =>
-            instance.groupId === groupId &&
-            sameFilesDocumentPanelSource(
-              parseFilesDocumentPanelSource(instance.params),
-              source
-            )
-        );
-      const existingSource = parseFilesDocumentPanelSource(
-        existingInstance?.params
-      );
-      const existingParams = existingInstance?.params
-        ? { ...existingInstance.params }
-        : null;
-      const params = existingParams
-        ? {
-            ...existingParams,
-            ...(options.pinned ? { pinned: true } : {}),
-          }
-        : {
-            pinned: options.pinned,
-            source,
-          };
-
-      context.panels.openInstance({
-        componentId: FILES_FILE_PANEL_ID,
-        ...(!existingInstance && panelContext ? { context: panelContext } : {}),
-        dropUnpinnedInstances: existingInstance ? false : !options.pinned,
-        instanceId:
-          existingInstance?.id ?? createFileFilePanelInstanceId(source),
-        params,
-        targetGroupId: groupId,
-        title: sourceTitle(existingSource ?? source),
-      });
-    },
-    [context, groupId, panelContext]
-  );
-
-  const openNavSource = useCallback(
-    (source: FilesDocumentPanelSource | null) => {
-      if (!source) {
-        return;
-      }
-      openSourceInGroup(source, { pinned: false });
-    },
-    [openSourceInGroup]
-  );
-
-  const handleNavBack = useCallback(() => {
-    openNavSource(filesNavBack(groupId));
-  }, [groupId, openNavSource]);
-  const handleNavForward = useCallback(() => {
-    openNavSource(filesNavForward(groupId));
-  }, [groupId, openNavSource]);
-
-  const handleOpenFileFromTree = useCallback(
-    (entry: FileEntry, options?: { pinned?: boolean }) => {
-      const nextSource: FilesDocumentPanelSource = {
-        kind: "disk",
-        path: entry.path,
-        root: entry.root,
-      };
-      const pinned = options?.pinned === true;
-      openSourceInGroup(nextSource, { pinned });
-    },
-    [openSourceInGroup]
-  );
+  const {
+    canBack,
+    canForward,
+    handleNavBack,
+    handleNavForward,
+    handleOpenFileFromTree,
+  } = useFilesGroupNav({
+    context,
+    groupId,
+    panelContext,
+    selectedSource,
+  });
 
   // chrome 🔍:树可用时切换树内搜索(折叠先展开,等挂载再聚焦);
   // 无项目树(如终端 Markdown 草稿)退回编辑器内查找。
@@ -413,6 +391,7 @@ export function FilesGroupView({
         markdownAnchor={activeTab?.markdownAnchor}
         markdownAnchorRequestId={activeTab?.markdownAnchorRequestId}
         mode={mode}
+        onModeChange={setMode}
         panelContext={panelContext}
         panelId={activeTab?.panelId}
         searchRequest={searchRequest}

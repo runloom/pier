@@ -80,7 +80,7 @@ export function MarkdownCodeBlock({
 
   return (
     <div
-      className="my-4 overflow-hidden rounded-md border bg-muted/20"
+      className="md-pre overflow-hidden rounded-md border bg-muted/20"
       data-slot="markdown-code-block"
     >
       <div className="flex h-8 items-center gap-2 border-b bg-muted/40 px-2">
@@ -105,7 +105,7 @@ export function MarkdownCodeBlock({
         ) : null}
       </div>
       <pre
-        className="max-h-[min(28rem,70vh)] overflow-auto overscroll-y-auto p-3 font-mono text-[13px] leading-6 [overscroll-behavior:auto]"
+        className="max-h-[min(28rem,70vh)] overflow-auto overscroll-y-auto p-3 font-mono [overscroll-behavior:auto]"
         data-scrollbar="overlay"
         onWheel={(event) => {
           // data-scrollbar 默认 overscroll-behavior:contain 会吃掉边界外滚动。
