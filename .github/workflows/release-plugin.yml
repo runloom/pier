@@ -246,8 +246,9 @@ jobs:
           fi
           git config user.name "pier-plugins-bot"
           git config user.email "bot@runloom.dev"
-          git checkout main
-          git pull --rebase origin main
+          # Commit the regenerated index before pull --rebase; otherwise dirty
+          # working tree blocks the pull (seen when index.v1.json is already modified).
           git add plugins/index.v1.json
           git commit -m "chore(plugins): update index for ${RELEASE_TAGS}"
+          git pull --rebase origin main
           git push origin main
