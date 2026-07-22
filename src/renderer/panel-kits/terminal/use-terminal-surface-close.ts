@@ -5,6 +5,14 @@ import { taskOutputFromParams } from "@/panel-kits/terminal/terminal-panel-param
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
+/**
+ * Ghostty 在进程退出后保留 surface，提示 "Press any key to close"。
+ * 用户按键后的 close-surface → SURFACE_CLOSE_REQUEST → 这里关 panel。
+ *
+ * Task output 例外：`finishTerminalOutput` 会立刻触发一次 process-closed/
+ * SURFACE_CLOSE，若在此关闭会让用户无法查看终态输出。Task output 的按键
+ * 关闭走 `useTaskOutputKeyDismiss`。
+ */
 export function useTerminalSurfaceClose(
   panelId: string,
   params?: unknown

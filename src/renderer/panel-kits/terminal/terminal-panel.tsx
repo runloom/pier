@@ -67,6 +67,7 @@ import {
 } from "./terminal-tab-chrome.ts";
 import { useAgentComposer } from "./use-agent-composer.ts";
 import { useRestartRestoredAgent } from "./use-restart-restored-agent.ts";
+import { useTaskOutputKeyDismiss } from "./use-task-output-key-dismiss.ts";
 import { useTerminalFloatingLayoutRevision } from "./use-terminal-floating-layout-revision.ts";
 import { useTerminalNativeLifecycle } from "./use-terminal-native-lifecycle.ts";
 import { useTerminalPanelDescriptor } from "./use-terminal-panel-descriptor.ts";
@@ -360,6 +361,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     setActive: activatePanel,
   });
   useTerminalSurfaceClose(panelId, props.params);
+  useTaskOutputKeyDismiss(panelId, props.params, api.isActive);
 
   useEffect(() => {
     const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {
