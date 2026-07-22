@@ -34,14 +34,13 @@ export type SettingsNavItem = PluginNavItem | StaticNavItem;
 export const NAV_ITEMS: readonly StaticNavItem[] = [
   { id: "appearance", icon: Paintbrush, variant: "static" },
   { id: "terminal", icon: Terminal, variant: "static" },
-  // workspace: 宿主级工作区偏好(worktree 目录等), 不属于任何插件的设置页。
-  { id: "workspace", icon: FolderGit2, variant: "static" },
   { id: "keybindings", icon: Keyboard, variant: "static" },
   { id: "agents", icon: Bot, variant: "static" },
   { id: "notifications", icon: Bell, variant: "static" },
-  // projects: 项目级配置壳（环境 + 技能）；紧挨插件，便于对照项目与扩展配置。
-  // 旧 environment/skills 深链仍可用。
+  // projects: 项目级配置壳（环境 + 技能）；旧 environment/skills 深链仍可用。
   { id: "projects", icon: Box, variant: "static" },
+  // workspace: 宿主级工作区偏好(worktree 目录等)；紧挨项目，便于对照项目与工作区配置。
+  { id: "workspace", icon: FolderGit2, variant: "static" },
   { id: "plugins", icon: Plug, variant: "static" },
   { id: "updates", icon: Download, variant: "static" },
 ] as const;

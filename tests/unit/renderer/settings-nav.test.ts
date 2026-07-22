@@ -17,15 +17,15 @@ describe("settings navigation metadata", () => {
     expect(NAV_ITEMS.map((item) => item.id)).not.toContain("skills");
   });
 
-  it("projects sits immediately before plugins", () => {
+  it("workspace sits immediately after projects, before plugins", () => {
     expect(NAV_ITEMS.map((item) => item.id)).toEqual([
       "appearance",
       "terminal",
-      "workspace",
       "keybindings",
       "agents",
       "notifications",
       "projects",
+      "workspace",
       "plugins",
       "updates",
     ]);
