@@ -175,9 +175,9 @@ const completedTaskTab: PanelTabChrome = {
 };
 
 const taskMetadata: TaskPanelMetadata = {
-  cwd: "/Users/xyz/ABC/pier",
+  cwd: "/Users/dev/ABC/pier",
   label: "test",
-  projectRootPath: "/Users/xyz/ABC/pier",
+  projectRootPath: "/Users/dev/ABC/pier",
   rawCommand: "pnpm run test",
   runId: "run-1",
   source: "package-script",
@@ -296,13 +296,13 @@ function agentActivityFor(panelId: string): AgentActivity {
 
 const context: PanelContext = {
   contextId: "ctx-pier",
-  cwd: "/Users/xyz/ABC/pier",
-  openedPath: "/Users/xyz/ABC/pier",
-  projectRootPath: "/Users/xyz/ABC/pier",
+  cwd: "/Users/dev/ABC/pier",
+  openedPath: "/Users/dev/ABC/pier",
+  projectRootPath: "/Users/dev/ABC/pier",
   source: "command",
   updatedAt: 1_772_000_000_000,
-  worktreeKey: "/Users/xyz/ABC/pier",
-  worktreeRoot: "/Users/xyz/ABC/pier",
+  worktreeKey: "/Users/dev/ABC/pier",
+  worktreeRoot: "/Users/dev/ABC/pier",
 };
 
 describe("TerminalPanel lifecycle", () => {
@@ -773,7 +773,7 @@ describe("TerminalPanel lifecycle", () => {
     );
 
     const statusBar = await findByTestId("terminal-status-bar");
-    expect(statusBar).toHaveTextContent("/Users/xyz/ABC/pier");
+    expect(statusBar).toHaveTextContent("/Users/dev/ABC/pier");
     expect(
       container.querySelector(".terminal-anchor")?.className ?? ""
     ).toContain("bottom-[var(--terminal-content-bottom)]");
@@ -811,9 +811,9 @@ describe("TerminalPanel lifecycle", () => {
           params: {
             context: {
               contextId: "ctx-home",
-              cwd: "/Users/xyz",
-              openedPath: "/Users/xyz",
-              projectRootPath: "/Users/xyz",
+              cwd: "/Users/dev",
+              openedPath: "/Users/dev",
+              projectRootPath: "/Users/dev",
               source: "panel",
               updatedAt: 1_772_000_000_000,
             },
@@ -925,20 +925,20 @@ describe("TerminalPanel lifecycle", () => {
     const firstRuntimeContext: PanelContext = {
       ...context,
       contextId: "ctx-old-runtime",
-      cwd: "/Users/xyz/ABC/pier/old-run",
-      openedPath: "/Users/xyz/ABC/pier/old-run",
+      cwd: "/Users/dev/ABC/pier/old-run",
+      openedPath: "/Users/dev/ABC/pier/old-run",
       updatedAt: 1_772_000_001_000,
-      worktreeKey: "/Users/xyz/ABC/pier/old-run",
-      worktreeRoot: "/Users/xyz/ABC/pier/old-run",
+      worktreeKey: "/Users/dev/ABC/pier/old-run",
+      worktreeRoot: "/Users/dev/ABC/pier/old-run",
     };
     const relaunchContext: PanelContext = {
       ...context,
       contextId: "ctx-relaunch",
-      cwd: "/Users/xyz/ABC/pier/packages/app",
-      openedPath: "/Users/xyz/ABC/pier/packages/app",
+      cwd: "/Users/dev/ABC/pier/packages/app",
+      openedPath: "/Users/dev/ABC/pier/packages/app",
       updatedAt: 1_772_000_002_000,
-      worktreeKey: "/Users/xyz/ABC/pier/packages/app",
-      worktreeRoot: "/Users/xyz/ABC/pier/packages/app",
+      worktreeKey: "/Users/dev/ABC/pier/packages/app",
+      worktreeRoot: "/Users/dev/ABC/pier/packages/app",
     };
     const relaunchTab: PanelTabChrome = {
       badge: { label: "app" },
@@ -952,7 +952,7 @@ describe("TerminalPanel lifecycle", () => {
     };
     const relaunchTask: TaskPanelMetadata = {
       ...taskMetadata,
-      cwd: "/Users/xyz/ABC/pier/packages/app",
+      cwd: "/Users/dev/ABC/pier/packages/app",
       label: "lint",
       rawCommand: "pnpm run lint",
       runId: "run-2",
@@ -1057,11 +1057,11 @@ describe("TerminalPanel lifecycle", () => {
     const postRelaunchContext: PanelContext = {
       ...relaunchContext,
       contextId: "ctx-relaunch-runtime",
-      cwd: "/Users/xyz/ABC/pier/packages/app/src",
-      openedPath: "/Users/xyz/ABC/pier/packages/app/src",
+      cwd: "/Users/dev/ABC/pier/packages/app/src",
+      openedPath: "/Users/dev/ABC/pier/packages/app/src",
       updatedAt: 1_772_000_002_500,
-      worktreeKey: "/Users/xyz/ABC/pier/packages/app/src",
-      worktreeRoot: "/Users/xyz/ABC/pier/packages/app/src",
+      worktreeKey: "/Users/dev/ABC/pier/packages/app/src",
+      worktreeRoot: "/Users/dev/ABC/pier/packages/app/src",
     };
 
     act(() => {
@@ -1095,11 +1095,11 @@ describe("TerminalPanel lifecycle", () => {
     const relaunchContext: PanelContext = {
       ...context,
       contextId: "ctx-relaunch-close-error",
-      cwd: "/Users/xyz/ABC/pier/packages/app",
-      openedPath: "/Users/xyz/ABC/pier/packages/app",
+      cwd: "/Users/dev/ABC/pier/packages/app",
+      openedPath: "/Users/dev/ABC/pier/packages/app",
       updatedAt: 1_772_000_002_750,
-      worktreeKey: "/Users/xyz/ABC/pier/packages/app",
-      worktreeRoot: "/Users/xyz/ABC/pier/packages/app",
+      worktreeKey: "/Users/dev/ABC/pier/packages/app",
+      worktreeRoot: "/Users/dev/ABC/pier/packages/app",
     };
     const relaunchTab: PanelTabChrome = {
       badge: { label: "app" },
@@ -1113,7 +1113,7 @@ describe("TerminalPanel lifecycle", () => {
     };
     const relaunchTask: TaskPanelMetadata = {
       ...taskMetadata,
-      cwd: "/Users/xyz/ABC/pier/packages/app",
+      cwd: "/Users/dev/ABC/pier/packages/app",
       label: "lint",
       rawCommand: "pnpm run lint",
       runId: "run-2",
@@ -1180,11 +1180,11 @@ describe("TerminalPanel lifecycle", () => {
     const relaunchContext: PanelContext = {
       ...context,
       contextId: "ctx-relaunch-race",
-      cwd: "/Users/xyz/ABC/pier/packages/app",
-      openedPath: "/Users/xyz/ABC/pier/packages/app",
+      cwd: "/Users/dev/ABC/pier/packages/app",
+      openedPath: "/Users/dev/ABC/pier/packages/app",
       updatedAt: 1_772_000_003_000,
-      worktreeKey: "/Users/xyz/ABC/pier/packages/app",
-      worktreeRoot: "/Users/xyz/ABC/pier/packages/app",
+      worktreeKey: "/Users/dev/ABC/pier/packages/app",
+      worktreeRoot: "/Users/dev/ABC/pier/packages/app",
     };
     const relaunchTab: PanelTabChrome = {
       badge: { label: "app" },
@@ -1198,7 +1198,7 @@ describe("TerminalPanel lifecycle", () => {
     };
     const relaunchTask: TaskPanelMetadata = {
       ...taskMetadata,
-      cwd: "/Users/xyz/ABC/pier/packages/app",
+      cwd: "/Users/dev/ABC/pier/packages/app",
       label: "lint",
       rawCommand: "pnpm run lint",
       runId: "run-2",
@@ -1517,7 +1517,7 @@ describe("TerminalPanel lifecycle", () => {
         launch: {
           agentId: "claude",
           command: "claude --dangerously-skip-permissions",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
         },
         startedAt: 1_772_000_000_000,
         status: "exited",
@@ -1559,7 +1559,7 @@ describe("TerminalPanel lifecycle", () => {
         launch: {
           agentId: "claude",
           command: "claude",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
         },
         startedAt: 1_772_000_000_000,
         status: "exited",
@@ -1588,7 +1588,7 @@ describe("TerminalPanel lifecycle", () => {
         launch: {
           agentId: "claude",
           command: "claude --dangerously-skip-permissions",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
         },
         startedAt: 1_772_000_000_000,
         status: "exited",
@@ -1616,7 +1616,7 @@ describe("TerminalPanel lifecycle", () => {
       expect(window.pier.agents.prepareLaunchFromSpec).toHaveBeenCalledWith({
         agentId: "claude",
         command: "claude --dangerously-skip-permissions",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
       });
     });
     await waitFor(() => {
@@ -1630,7 +1630,7 @@ describe("TerminalPanel lifecycle", () => {
           launchId: "launch-from-spec",
           panelId: "terminal-1",
           context: expect.objectContaining({
-            cwd: "/Users/xyz/ABC/pier",
+            cwd: "/Users/dev/ABC/pier",
           }),
         })
       );
@@ -1644,7 +1644,7 @@ describe("TerminalPanel lifecycle", () => {
         launch: {
           agentId: "claude",
           command: "claude",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
         },
         startedAt: 1_772_000_000_000,
         status: "running",
@@ -1714,10 +1714,10 @@ describe("TerminalPanel lifecycle", () => {
       context: {
         ...context,
         contextId: "ctx-current-work",
-        cwd: "/Users/xyz/ABC/current-work",
-        openedPath: "/Users/xyz/ABC/current-work",
-        projectRootPath: "/Users/xyz/ABC/current-work",
-        worktreeKey: "/Users/xyz/ABC/current-work",
+        cwd: "/Users/dev/ABC/current-work",
+        openedPath: "/Users/dev/ABC/current-work",
+        projectRootPath: "/Users/dev/ABC/current-work",
+        worktreeKey: "/Users/dev/ABC/current-work",
       },
       title: "Claude Code",
       updatedAt: "2026-06-25T00:00:00.000Z",
@@ -2523,7 +2523,7 @@ describe("TerminalPanel lifecycle", () => {
           launch: {
             agentId: "claude",
             command: "claude --dangerously-skip-permissions",
-            cwd: "/Users/xyz/ABC/pier",
+            cwd: "/Users/dev/ABC/pier",
           },
           startedAt: 1_772_000_000_000,
           status: "exited",

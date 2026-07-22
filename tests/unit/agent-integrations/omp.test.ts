@@ -288,7 +288,7 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       hasUI: true,
       sessionManager: {
         getSessionFile: () =>
-          `/Users/xyz/.omp/agent/sessions/-ABC-pier/2026-07-17T12-50-56-579Z_${sessionId}.jsonl`,
+          `/Users/dev/.omp/agent/sessions/-ABC-pier/2026-07-17T12-50-56-579Z_${sessionId}.jsonl`,
         getSessionId: () => sessionId,
       },
     };

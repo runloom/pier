@@ -276,7 +276,7 @@ splitPanel: (panelId: string, direction: "right" | "below" | "left" | "above") =
 focusGroup: (direction: "right" | "down" | "left" | "up") => void;
 ```
 
-实现(参考 loomdesk 的几何算法,位于 `/Users/xyz/ABC/loomdesk/src/lib/workspace/workspace-host.svelte.ts:3227-3280`):
+实现(参考 loomdesk 的几何算法,位于 `/Users/dev/ABC/loomdesk/src/lib/workspace/workspace-host.svelte.ts:3227-3280`):
 
 ```typescript
 focusGroup: (direction) => {

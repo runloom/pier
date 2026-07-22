@@ -124,7 +124,7 @@ const desktopClient: PierClient = {
   lastSeenAt: now,
 };
 
-function panelContext(path = "/Users/xyz/ABC/pier"): PanelContext {
+function panelContext(path = "/Users/dev/ABC/pier"): PanelContext {
   return {
     contextId: `ctx:${path}`,
     cwd: path,
@@ -209,7 +209,7 @@ function services(
   rendererCommands: unknown[] = [],
   panelsByWindow: Record<string, PanelSnapshot[]> = {
     main: [
-      panelSnapshot("terminal-1", panelContext("/Users/xyz/ABC/pier"), true),
+      panelSnapshot("terminal-1", panelContext("/Users/dev/ABC/pier"), true),
     ],
   },
   terminalLaunches: unknown[] = [],
@@ -822,7 +822,7 @@ describe("createCommandRouter", () => {
       router.execute({
         clientId: "desktop-1",
         command: {
-          path: "/Users/xyz/ABC/pier",
+          path: "/Users/dev/ABC/pier",
           placement: "split-right",
           type: "panel.open",
         },
@@ -831,7 +831,7 @@ describe("createCommandRouter", () => {
       })
     ).resolves.toEqual({
       data: {
-        context: panelContext("/Users/xyz/ABC/pier"),
+        context: panelContext("/Users/dev/ABC/pier"),
         panelId: "terminal-from-renderer",
       },
       ok: true,
@@ -840,7 +840,7 @@ describe("createCommandRouter", () => {
 
     expect(rendererCommands).toEqual([
       {
-        context: panelContext("/Users/xyz/ABC/pier"),
+        context: panelContext("/Users/dev/ABC/pier"),
         placement: "split-right",
         type: "panel.open",
         windowId: "main",
@@ -848,7 +848,7 @@ describe("createCommandRouter", () => {
     ]);
 
     await expect(fakeServices.panelContexts.listRecent()).resolves.toEqual([
-      panelContext("/Users/xyz/ABC/pier"),
+      panelContext("/Users/dev/ABC/pier"),
     ]);
   });
 
@@ -886,7 +886,7 @@ describe("createCommandRouter", () => {
         main: [
           panelSnapshot(
             "terminal-1",
-            panelContext("/Users/xyz/ABC/pier"),
+            panelContext("/Users/dev/ABC/pier"),
             true
           ),
         ],
@@ -984,7 +984,7 @@ describe("createCommandRouter", () => {
           profileId === "codex"
             ? {
                 command: "codex",
-                cwd: "/Users/xyz/ABC/profile-cwd",
+                cwd: "/Users/dev/ABC/profile-cwd",
                 env: { FROM_PROFILE: "profile", PATH: "/profile/bin" },
               }
             : null
@@ -1108,7 +1108,7 @@ describe("createCommandRouter", () => {
           profileId === "codex"
             ? {
                 command: "codex",
-                cwd: "/Users/xyz/ABC/profile-cwd",
+                cwd: "/Users/dev/ABC/profile-cwd",
                 env: { PIER_PROFILE: "codex" },
               }
             : null
@@ -2796,8 +2796,8 @@ describe("createCommandRouter", () => {
   });
 
   it("app.status 从当前 focused window 的 active panel snapshot 派生 active context", async () => {
-    const active = panelContext("/Users/xyz/ABC/active");
-    const recent = panelContext("/Users/xyz/ABC/recent");
+    const active = panelContext("/Users/dev/ABC/active");
+    const recent = panelContext("/Users/dev/ABC/recent");
     const fakeServices = services([], {
       main: [panelSnapshot("terminal-active", active, true)],
     });

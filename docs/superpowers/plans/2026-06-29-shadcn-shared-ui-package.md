@@ -231,7 +231,7 @@ git commit -m "build: wire @pier/ui alias, tailwind source, depcruise leaf rule"
 - [ ] **Step 1: git mv 全部纯叶子组件(保留 sonner/sidebar)**
 
 ```bash
-cd /Users/xyz/ABC/pier
+cd /Users/dev/ABC/pier
 for f in src/renderer/components/primitives/*.tsx; do
   base=$(basename "$f")
   if [ "$base" != "sonner.tsx" ] && [ "$base" != "sidebar.tsx" ]; then

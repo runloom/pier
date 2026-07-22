@@ -92,14 +92,14 @@ const DROP_STASH_CONFIRM_BODY_RE = /Drop stash@\{2\}\? This cannot be undone\./;
 const context: PanelContext = {
   branch: "main",
   contextId: "ctx-pier",
-  cwd: "/Users/xyz/ABC/pier",
-  gitRoot: "/Users/xyz/ABC/pier",
-  openedPath: "/Users/xyz/ABC/pier",
-  projectRootPath: "/Users/xyz/ABC/pier",
+  cwd: "/Users/dev/ABC/pier",
+  gitRoot: "/Users/dev/ABC/pier",
+  openedPath: "/Users/dev/ABC/pier",
+  projectRootPath: "/Users/dev/ABC/pier",
   source: "panel",
   updatedAt: now,
-  worktreeKey: "/Users/xyz/ABC/pier",
-  worktreeRoot: "/Users/xyz/ABC/pier",
+  worktreeKey: "/Users/dev/ABC/pier",
+  worktreeRoot: "/Users/dev/ABC/pier",
 };
 
 function branchOption(
@@ -624,9 +624,9 @@ describe("git builtin plugin", () => {
         },
         worktrees: {
           check: vi.fn(async () => ({
-            currentPath: "/Users/xyz/ABC/pier",
-            mainPath: "/Users/xyz/ABC/pier",
-            path: "/Users/xyz/ABC/pier",
+            currentPath: "/Users/dev/ABC/pier",
+            mainPath: "/Users/dev/ABC/pier",
+            path: "/Users/dev/ABC/pier",
             status: "supported",
           })),
           create: vi.fn(async () => ({
@@ -639,21 +639,21 @@ describe("git builtin plugin", () => {
               isMain: false,
               locked: false,
               lockedReason: null,
-              path: "/Users/xyz/ABC/pier.worktree/new-worktree",
+              path: "/Users/dev/ABC/pier.worktree/new-worktree",
               prunable: false,
               prunableReason: null,
             },
-            targetPath: "/Users/xyz/ABC/pier.worktree/new-worktree",
+            targetPath: "/Users/dev/ABC/pier.worktree/new-worktree",
             worktrees: [],
           })),
           creationDefaults: vi.fn(async () => ({
             copyPatterns: [],
-            rootPath: "/Users/xyz/ABC/pier.worktree",
+            rootPath: "/Users/dev/ABC/pier.worktree",
           })),
           list: vi.fn(async () => ({
-            currentPath: "/Users/xyz/ABC/pier",
-            mainPath: "/Users/xyz/ABC/pier",
-            path: "/Users/xyz/ABC/pier",
+            currentPath: "/Users/dev/ABC/pier",
+            mainPath: "/Users/dev/ABC/pier",
+            path: "/Users/dev/ABC/pier",
             status: "available",
             worktrees: [
               {
@@ -665,7 +665,7 @@ describe("git builtin plugin", () => {
                 isMain: true,
                 locked: false,
                 lockedReason: null,
-                path: "/Users/xyz/ABC/pier",
+                path: "/Users/dev/ABC/pier",
                 prunable: false,
                 prunableReason: null,
               },
@@ -678,7 +678,7 @@ describe("git builtin plugin", () => {
                 isMain: false,
                 locked: false,
                 lockedReason: null,
-                path: "/Users/xyz/ABC/pier-feature",
+                path: "/Users/dev/ABC/pier-feature",
                 prunable: false,
                 prunableReason: null,
               },
@@ -691,7 +691,7 @@ describe("git builtin plugin", () => {
                 isMain: false,
                 locked: true,
                 lockedReason: "used by another process",
-                path: "/Users/xyz/ABC/pier-locked",
+                path: "/Users/dev/ABC/pier-locked",
                 prunable: false,
                 prunableReason: null,
               },
@@ -704,7 +704,7 @@ describe("git builtin plugin", () => {
                 isMain: false,
                 locked: false,
                 lockedReason: null,
-                path: "/Users/xyz/ABC/pier-stale",
+                path: "/Users/dev/ABC/pier-stale",
                 prunable: true,
                 prunableReason: "missing gitdir",
               },
@@ -713,14 +713,14 @@ describe("git builtin plugin", () => {
           open: vi.fn(async () => ({ context, panelId: "terminal-worktree" })),
           openTerminal: vi.fn(async () => null),
           prune: vi.fn(async () => ({
-            currentPath: "/Users/xyz/ABC/pier",
-            mainPath: "/Users/xyz/ABC/pier",
-            path: "/Users/xyz/ABC/pier",
+            currentPath: "/Users/dev/ABC/pier",
+            mainPath: "/Users/dev/ABC/pier",
+            path: "/Users/dev/ABC/pier",
             status: "available",
             worktrees: [],
           })),
           remove: vi.fn(async () => ({
-            removedPath: "/Users/xyz/ABC/pier-feature",
+            removedPath: "/Users/dev/ABC/pier-feature",
             worktrees: [],
           })),
         },
@@ -773,9 +773,9 @@ describe("git builtin plugin", () => {
           })),
           getRepoInfo: vi.fn(async () => ({
             defaultBranch: null,
-            gitCommonDir: "/Users/xyz/ABC/pier/.git",
-            gitDir: "/Users/xyz/ABC/pier/.git",
-            gitRoot: "/Users/xyz/ABC/pier",
+            gitCommonDir: "/Users/dev/ABC/pier/.git",
+            gitDir: "/Users/dev/ABC/pier/.git",
+            gitRoot: "/Users/dev/ABC/pier",
             headOid: "abc123",
             isBare: false,
             isWorktree: false,
@@ -947,9 +947,9 @@ describe("git builtin plugin", () => {
         "terminal-1": {
           context: {
             contextId: "ctx-home",
-            cwd: "/Users/xyz",
-            openedPath: "/Users/xyz",
-            projectRootPath: "/Users/xyz",
+            cwd: "/Users/dev",
+            openedPath: "/Users/dev",
+            projectRootPath: "/Users/dev",
             source: "panel",
             updatedAt: now,
           },
@@ -992,7 +992,7 @@ describe("git builtin plugin", () => {
     await actionRegistry.get("pier.worktree.list")?.handler();
 
     expect(window.pier.worktrees.list).toHaveBeenCalledWith({
-      path: "/Users/xyz/ABC/pier",
+      path: "/Users/dev/ABC/pier",
     });
     const quickPick = useCommandPaletteController.getState().quickPick;
     expect(quickPick).toMatchObject({
@@ -1001,31 +1001,31 @@ describe("git builtin plugin", () => {
     });
     const linked = quickPick?.sections
       ?.flatMap((section) => section.items)
-      .find((item) => item.id === "worktree:/Users/xyz/ABC/pier-feature");
+      .find((item) => item.id === "worktree:/Users/dev/ABC/pier-feature");
     const main = quickPick?.sections
       ?.flatMap((section) => section.items)
-      .find((item) => item.id === "worktree:/Users/xyz/ABC/pier");
+      .find((item) => item.id === "worktree:/Users/dev/ABC/pier");
     const locked = quickPick?.sections
       ?.flatMap((section) => section.items)
-      .find((item) => item.id === "worktree:/Users/xyz/ABC/pier-locked");
+      .find((item) => item.id === "worktree:/Users/dev/ABC/pier-locked");
     const prunable = quickPick?.sections
       ?.flatMap((section) => section.items)
-      .find((item) => item.id === "worktree:/Users/xyz/ABC/pier-stale");
+      .find((item) => item.id === "worktree:/Users/dev/ABC/pier-stale");
     // 标题直接用分支名, "主工作树" 语义只由 badge 表达, 不再重复放 description。
     expect(main).toMatchObject({
       badges: expect.arrayContaining([
         expect.objectContaining({ label: "main" }),
       ]),
       checked: true,
-      detail: "/Users/xyz/ABC/pier",
+      detail: "/Users/dev/ABC/pier",
       label: "main",
     });
     expect(main?.description).toBeUndefined();
     expect(linked).toMatchObject({
-      detail: "/Users/xyz/ABC/pier-feature",
+      detail: "/Users/dev/ABC/pier-feature",
       label: "feature/worktree",
       searchTerms: expect.arrayContaining([
-        "/Users/xyz/ABC/pier-feature",
+        "/Users/dev/ABC/pier-feature",
         "pier-feature",
         "feature/worktree",
         "def456",
@@ -1047,7 +1047,7 @@ describe("git builtin plugin", () => {
     await quickPick.onAccept(linked);
 
     expect(window.pier.worktrees.open).toHaveBeenCalledWith({
-      path: "/Users/xyz/ABC/pier-feature",
+      path: "/Users/dev/ABC/pier-feature",
     });
   });
 
@@ -1061,7 +1061,7 @@ describe("git builtin plugin", () => {
     const quickPick = useCommandPaletteController.getState().quickPick;
     const linked = quickPick?.sections
       ?.flatMap((section) => section.items)
-      .find((item) => item.id === "worktree:/Users/xyz/ABC/pier-feature");
+      .find((item) => item.id === "worktree:/Users/dev/ABC/pier-feature");
     if (!(quickPick && linked)) {
       throw new Error("expected linked worktree item");
     }
@@ -1087,13 +1087,13 @@ describe("git builtin plugin", () => {
     });
 
     expect(window.pier.worktrees.list).toHaveBeenCalledWith({
-      path: "/Users/xyz/ABC/pier",
+      path: "/Users/dev/ABC/pier",
     });
     expect(window.pier.worktrees.creationDefaults).toHaveBeenCalledWith({
-      path: "/Users/xyz/ABC/pier",
+      path: "/Users/dev/ABC/pier",
     });
     expect(window.pier.git.listBranches).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       { kind: "all" }
     );
     expect(useAppContentDialogStore.getState().stack[0]).toMatchObject({
@@ -1107,7 +1107,7 @@ describe("git builtin plugin", () => {
     await actionRegistry.get("pier.worktree.delete")?.handler();
     const deletePick = useCommandPaletteController.getState().quickPick;
     const item = deletePick?.items?.find(
-      (candidate) => candidate.id === "delete:/Users/xyz/ABC/pier-feature"
+      (candidate) => candidate.id === "delete:/Users/dev/ABC/pier-feature"
     );
     if (!(deletePick && item)) {
       throw new Error("expected delete worktree quick pick");
@@ -1130,8 +1130,8 @@ describe("git builtin plugin", () => {
     await confirmDelete.onAccept(confirmDeleteItem);
     await deletePromise;
     expect(window.pier.worktrees.remove).toHaveBeenCalledWith({
-      currentPath: "/Users/xyz/ABC/pier",
-      path: "/Users/xyz/ABC/pier-feature",
+      currentPath: "/Users/dev/ABC/pier",
+      path: "/Users/dev/ABC/pier-feature",
     });
 
     const prunePromise = actionRegistry.get("pier.worktree.prune")?.handler();
@@ -1152,13 +1152,13 @@ describe("git builtin plugin", () => {
     await pruneConfirm.onAccept(pruneConfirmItem);
     await prunePromise;
     expect(window.pier.worktrees.prune).toHaveBeenCalledWith({
-      path: "/Users/xyz/ABC/pier",
+      path: "/Users/dev/ABC/pier",
     });
   });
 
   it("Worktree 清理返回 unavailable 时不显示成功提示", async () => {
     vi.mocked(window.pier.worktrees.prune).mockResolvedValueOnce({
-      path: "/Users/xyz/ABC/pier",
+      path: "/Users/dev/ABC/pier",
       reason: "not_git_repo",
       status: "unavailable",
       worktrees: [],
@@ -1230,7 +1230,7 @@ describe("git builtin plugin", () => {
     await quickPick.onAccept(item);
 
     expect(window.pier.git.merge).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       "feature/git-panel"
     );
     expect(toastMocks.loading).toHaveBeenCalledWith("Merging...");
@@ -1290,7 +1290,7 @@ describe("git builtin plugin", () => {
     await quickPick.onAccept(item);
 
     expect(window.pier.git.checkoutBranch).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       "feature/local"
     );
     expect(toastMocks.loading).toHaveBeenCalledWith("Switching branch...");
@@ -1354,7 +1354,7 @@ describe("git builtin plugin", () => {
     await quickPick.onAccept(createItem);
 
     expect(window.pier.git.createAndSwitchBranch).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       "feature/new"
     );
     expect(window.pier.git.checkoutBranch).not.toHaveBeenCalled();
@@ -1402,7 +1402,7 @@ describe("git builtin plugin", () => {
     await quickPick.onAccept(existingItem);
 
     expect(window.pier.git.checkoutBranch).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       "feature/omitted"
     );
     expect(window.pier.git.createAndSwitchBranch).not.toHaveBeenCalled();
@@ -1452,7 +1452,7 @@ describe("git builtin plugin", () => {
     await actionRegistry.get("pier.git.merge")?.handler();
 
     expect(window.pier.git.searchBranches).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       { diffMode: "mergeIntoCurrent", limit: 1000, query: "" }
     );
     expect(toastMocks.loading).toHaveBeenCalledWith("Loading branches...");
@@ -1585,7 +1585,7 @@ describe("git builtin plugin", () => {
     expect(remoteRow.getByText("aaa1111111")).toBeVisible();
     expect(remoteRow.getByText("· remote subject")).toBeVisible();
     expect(window.pier.git.searchBranches).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       { diffMode: "mergeIntoCurrent", limit: 1000, query: "" }
     );
   });
@@ -1672,7 +1672,7 @@ describe("git builtin plugin", () => {
     await quickPick.onAccept(item);
 
     expect(window.pier.git.popStash).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       0
     );
   });
@@ -1775,7 +1775,7 @@ describe("git builtin plugin", () => {
 
     await actionRegistry.get("pier.git.stash")?.handler();
 
-    expect(window.pier.git.stash).toHaveBeenCalledWith("/Users/xyz/ABC/pier", {
+    expect(window.pier.git.stash).toHaveBeenCalledWith("/Users/dev/ABC/pier", {
       includeUntracked: false,
     });
     expect(toastMocks.success).toHaveBeenCalledWith("Changes stashed", {
@@ -1788,7 +1788,7 @@ describe("git builtin plugin", () => {
 
     await actionRegistry.get("pier.git.stashIncludeUntracked")?.handler();
 
-    expect(window.pier.git.stash).toHaveBeenCalledWith("/Users/xyz/ABC/pier", {
+    expect(window.pier.git.stash).toHaveBeenCalledWith("/Users/dev/ABC/pier", {
       includeUntracked: true,
     });
   });
@@ -1817,7 +1817,7 @@ describe("git builtin plugin", () => {
     await quickPick.onAccept(item);
 
     expect(window.pier.git.applyStash).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       1
     );
     expect(window.pier.git.popStash).not.toHaveBeenCalled();
@@ -1872,7 +1872,7 @@ describe("git builtin plugin", () => {
     await acceptPromise;
 
     expect(window.pier.git.applyStash).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       1
     );
     expect(window.pier.git.popStash).not.toHaveBeenCalled();
@@ -1919,7 +1919,7 @@ describe("git builtin plugin", () => {
     await acceptPromise;
 
     expect(window.pier.git.dropStash).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier",
+      "/Users/dev/ABC/pier",
       2
     );
     expect(toastMocks.success).toHaveBeenCalledWith("Stash dropped", {
@@ -2003,7 +2003,7 @@ describe("git builtin plugin", () => {
     );
 
     expect(window.pier.git.undoLastCommit).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier"
+      "/Users/dev/ABC/pier"
     );
     expect(toastMocks.loading).toHaveBeenCalledWith("Undoing commit...");
     expect(toastMocks.success).toHaveBeenCalledWith(
@@ -2042,7 +2042,7 @@ describe("git builtin plugin", () => {
     await handlerPromise;
 
     expect(window.pier.git.continueRebase).toHaveBeenCalledWith(
-      "/Users/xyz/ABC/pier"
+      "/Users/dev/ABC/pier"
     );
     expect(addPanel).not.toHaveBeenCalled();
     expect(
@@ -2123,12 +2123,12 @@ describe("git builtin plugin", () => {
         context: {
           ...context,
           branch: "feature/worktree",
-          cwd: "/Users/xyz/ABC/pier-feature/src",
-          gitRoot: "/Users/xyz/ABC/pier-feature",
-          projectRootPath: "/Users/xyz/ABC/pier-feature",
-          worktreeRoot: "/Users/xyz/ABC/pier-feature",
+          cwd: "/Users/dev/ABC/pier-feature/src",
+          gitRoot: "/Users/dev/ABC/pier-feature",
+          projectRootPath: "/Users/dev/ABC/pier-feature",
+          worktreeRoot: "/Users/dev/ABC/pier-feature",
         },
-        cwd: "/Users/xyz/ABC/pier-feature/src",
+        cwd: "/Users/dev/ABC/pier-feature/src",
         getGroupId: () => null,
         panelId: "terminal-feature",
         title: null,
@@ -2146,7 +2146,7 @@ describe("git builtin plugin", () => {
 
     await waitFor(() => {
       expect(window.pier.worktrees.check).toHaveBeenCalledWith({
-        path: "/Users/xyz/ABC/pier-feature",
+        path: "/Users/dev/ABC/pier-feature",
       });
     });
   });
@@ -2481,13 +2481,13 @@ describe("git builtin plugin", () => {
       statusItem.render({
         context: {
           contextId: "ctx-home",
-          cwd: "/Users/xyz",
-          openedPath: "/Users/xyz",
-          projectRootPath: "/Users/xyz",
+          cwd: "/Users/dev",
+          openedPath: "/Users/dev",
+          projectRootPath: "/Users/dev",
           source: "panel",
           updatedAt: now,
         },
-        cwd: "/Users/xyz",
+        cwd: "/Users/dev",
         getGroupId: () => null,
         panelId: "terminal-home",
         title: null,
@@ -2551,7 +2551,7 @@ describe("git builtin plugin", () => {
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
-      "/Users/xyz/ABC/pier";
+      "/Users/dev/ABC/pier";
     const list = vi.fn<RendererPluginContext["files"]["list"]>(() =>
       Promise.resolve([
         {
@@ -2593,7 +2593,7 @@ describe("git builtin plugin", () => {
       );
 
       await waitFor(() => {
-        expect(list).toHaveBeenCalledWith("/Users/xyz/ABC/pier", { path: "" });
+        expect(list).toHaveBeenCalledWith("/Users/dev/ABC/pier", { path: "" });
       });
       const treeElement = getPierFileTree(container);
       expect(treeElement).toBeVisible();
@@ -2630,7 +2630,7 @@ describe("git builtin plugin", () => {
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
-      "/Users/xyz/ABC/pier";
+      "/Users/dev/ABC/pier";
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       (_root, options) => {
         if (options?.path === "") {
@@ -2684,7 +2684,7 @@ describe("git builtin plugin", () => {
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
-      "/Users/xyz/ABC/pier";
+      "/Users/dev/ABC/pier";
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       (_root, options) => {
         if (options?.path === "") {
@@ -2748,7 +2748,7 @@ describe("git builtin plugin", () => {
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
-      "/Users/xyz/ABC/pier";
+      "/Users/dev/ABC/pier";
     const list = vi.fn<RendererPluginContext["files"]["list"]>(() =>
       Promise.resolve([])
     );
@@ -2770,7 +2770,7 @@ describe("git builtin plugin", () => {
       context.worktreeRoot ??
       context.gitRoot ??
       context.cwd ??
-      "/Users/xyz/ABC/pier";
+      "/Users/dev/ABC/pier";
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       (_root, options) => {
         if (options?.path === "") {

@@ -280,7 +280,7 @@ describe("resolveLocalControlSocketPath", () => {
   });
 
   it("在 Unix socket 路径过长时回退到稳定短路径", () => {
-    const userDataDir = `/Users/sheep/Library/Application Support/Pier-dev/${"very-long-worktree-name-".repeat(4)}`;
+    const userDataDir = `/Users/dev/Library/Application Support/Pier-dev/${"very-long-worktree-name-".repeat(4)}`;
 
     expect(resolveLocalControlSocketPath(userDataDir, "darwin")).toBe(
       expectedFallbackSocketPath(userDataDir)

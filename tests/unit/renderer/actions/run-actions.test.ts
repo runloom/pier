@@ -37,7 +37,7 @@ function panel(id: string, component = "terminal") {
   };
 }
 
-function taskPanel(id: string, projectRoot = "/Users/xyz/ABC/pier") {
+function taskPanel(id: string, projectRoot = "/Users/dev/ABC/pier") {
   return {
     ...panel(id),
     params: {
@@ -84,11 +84,11 @@ function installWorkspaceApi() {
     activeId: "terminal-current",
     descriptors: {
       "terminal-current": {
-        context: context("/Users/xyz/ABC/pier"),
+        context: context("/Users/dev/ABC/pier"),
         display: { short: "pier" },
       },
       "terminal-other": {
-        context: context("/Users/xyz/ABC/loomdesk"),
+        context: context("/Users/dev/ABC/loomdesk"),
         display: { short: "loomdesk" },
       },
       "welcome-1": { display: { short: "Welcome" } },
@@ -110,11 +110,11 @@ function installWebWorkspaceApi() {
     activeId: "web-current",
     descriptors: {
       "web-current": {
-        context: context("/Users/xyz/ABC/pier"),
+        context: context("/Users/dev/ABC/pier"),
         display: { short: "README.md" },
       },
       "terminal-other": {
-        context: context("/Users/xyz/ABC/loomdesk"),
+        context: context("/Users/dev/ABC/loomdesk"),
         display: { short: "loomdesk" },
       },
     },
@@ -122,7 +122,7 @@ function installWebWorkspaceApi() {
   return { api, terminalOther, webCurrent };
 }
 
-function taskList(projectRoot = "/Users/xyz/ABC/pier"): TaskListResult {
+function taskList(projectRoot = "/Users/dev/ABC/pier"): TaskListResult {
   return {
     errors: [],
     projectRootPath: projectRoot,
@@ -301,7 +301,7 @@ describe("run actions", () => {
     await nextMacrotask();
 
     expect(window.pier.tasks.list).toHaveBeenCalledWith({
-      projectRootPath: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
     });
 
     await run;
@@ -378,7 +378,7 @@ describe("run actions", () => {
       forceRestart: false,
       mode: "background",
       placement: "active-tab",
-      projectRootPath: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
       taskId: "package-script:test",
       terminalPanelId: "terminal-current",
     });
@@ -407,7 +407,7 @@ describe("run actions", () => {
       focus: true,
       forceRestart: false,
       placement: "active-tab",
-      projectRootPath: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
       targetGroupId: "group-source",
       taskId: "package-script:test",
     });
@@ -433,7 +433,7 @@ describe("run actions", () => {
       focus: true,
       forceRestart: false,
       placement: "active-tab",
-      projectRootPath: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
       taskId: "package-script:test",
     });
     expect(quickPick.renderItem).toBeUndefined();
@@ -480,7 +480,7 @@ describe("run actions", () => {
 
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith(
       expect.objectContaining({
-        projectRootPath: "/Users/xyz/ABC/pier",
+        projectRootPath: "/Users/dev/ABC/pier",
         taskId: "package-script:test",
       })
     );
@@ -588,7 +588,7 @@ describe("run actions", () => {
       inputs: { pkg: "renderer" },
       mode: "background",
       placement: "active-tab",
-      projectRootPath: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
       taskId: "package-script:test",
       terminalPanelId: "terminal-current",
     });
@@ -617,7 +617,7 @@ describe("run actions", () => {
       forceRestart: true,
       mode: "terminal-tab",
       placement: "active-tab",
-      projectRootPath: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
       terminalPanelId: "terminal-task",
       taskId: "package-script:test",
     });

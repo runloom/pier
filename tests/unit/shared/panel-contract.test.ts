@@ -15,12 +15,12 @@ import { describe, expect, it } from "vitest";
 
 const context = {
   contextId: "ctx-1",
-  cwd: "/Users/xyz/ABC/pier",
-  openedPath: "/Users/xyz/ABC/pier",
-  projectRootPath: "/Users/xyz/ABC/pier",
+  cwd: "/Users/dev/ABC/pier",
+  openedPath: "/Users/dev/ABC/pier",
+  projectRootPath: "/Users/dev/ABC/pier",
   source: "command",
   updatedAt: 1_772_000_000_000,
-  worktreeKey: "/Users/xyz/ABC/pier",
+  worktreeKey: "/Users/dev/ABC/pier",
 };
 
 describe("shared panel contract", () => {
@@ -39,15 +39,15 @@ describe("shared panel contract", () => {
       panelContextSchema.parse({
         ...context,
         branch: "main",
-        gitCommonDir: "/Users/xyz/ABC/pier/.git",
-        gitRoot: "/Users/xyz/ABC/pier",
+        gitCommonDir: "/Users/dev/ABC/pier/.git",
+        gitRoot: "/Users/dev/ABC/pier",
         head: "abc123",
-        worktreeRoot: "/Users/xyz/ABC/pier",
+        worktreeRoot: "/Users/dev/ABC/pier",
       })
     ).toMatchObject({
       contextId: "ctx-1",
-      cwd: "/Users/xyz/ABC/pier",
-      worktreeKey: "/Users/xyz/ABC/pier",
+      cwd: "/Users/dev/ABC/pier",
+      worktreeKey: "/Users/dev/ABC/pier",
     });
   });
 
@@ -76,7 +76,7 @@ describe("shared panel contract", () => {
       panelDescriptorSchema.parse({
         context,
         display: {
-          long: "/Users/xyz/ABC/pier",
+          long: "/Users/dev/ABC/pier",
           short: "pier",
         },
       })
@@ -105,7 +105,7 @@ describe("shared panel contract", () => {
       tooltip: {
         lines: [
           { label: "Command", value: "pnpm run test" },
-          { label: "CWD", value: "/Users/xyz/ABC/pier" },
+          { label: "CWD", value: "/Users/dev/ABC/pier" },
         ],
         title: "test",
       },
@@ -198,7 +198,7 @@ describe("shared panel contract", () => {
       active: true,
       context,
       display: {
-        long: "/Users/xyz/ABC/pier",
+        long: "/Users/dev/ABC/pier",
         short: "pier",
       },
       id: "terminal-1",
@@ -231,7 +231,7 @@ describe("shared panel contract", () => {
         focus: false,
         launch: {
           command: "pnpm test",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
           env: {
             PIER_MODE: "dev",
           },
@@ -245,7 +245,7 @@ describe("shared panel contract", () => {
       focus: false,
       launch: {
         command: "pnpm test",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         env: {
           PIER_MODE: "dev",
         },
@@ -260,7 +260,7 @@ describe("shared panel contract", () => {
   it("allows task spawns to pin their source panel group", () => {
     expect(
       pierCommandSchema.parse({
-        projectRootPath: "/Users/xyz/ABC/pier",
+        projectRootPath: "/Users/dev/ABC/pier",
         targetGroupId: "group-source",
         taskId: "package-script:test",
         type: "run.spawn",
@@ -368,7 +368,7 @@ describe("shared panel contract", () => {
       pierCommandSchema.parse({
         profile: {
           command: "codex",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
           env: { PIER_MODE: "dev" },
         },
         profileId: "codex",
@@ -377,7 +377,7 @@ describe("shared panel contract", () => {
     ).toMatchObject({
       profile: {
         command: "codex",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         env: { PIER_MODE: "dev" },
       },
       profileId: "codex",

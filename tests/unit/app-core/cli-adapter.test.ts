@@ -124,12 +124,12 @@ describe("parsePierCliArgs", () => {
         ["open", ".", "--window", "main", "--split", "right", "--json"],
         {
           clientId: "cli-1",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
           requestId: "req-open",
         }
       ).envelope.command
     ).toEqual({
-      path: "/Users/xyz/ABC/pier",
+      path: "/Users/dev/ABC/pier",
       placement: "split-right",
       type: "panel.open",
       windowId: "main",
@@ -156,7 +156,7 @@ describe("parsePierCliArgs", () => {
     expect(
       parsePierCliArgs(["open", "."], {
         clientId: "cli-1",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         requestId: "req-open",
       }).json
     ).toBe(false);
@@ -166,12 +166,12 @@ describe("parsePierCliArgs", () => {
     expect(
       parsePierCliArgs(["open", ".", "--no-focus"], {
         clientId: "cli-1",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         requestId: "req-open-background",
       }).envelope.command
     ).toEqual({
       focus: false,
-      path: "/Users/xyz/ABC/pier",
+      path: "/Users/dev/ABC/pier",
       type: "panel.open",
     });
   });
@@ -214,11 +214,11 @@ describe("parsePierCliArgs", () => {
     expect(
       parsePierCliArgs(["worktrees", "list", "--path", ".", "--json"], {
         clientId: "cli-1",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         requestId: "req-worktree-list",
       }).envelope.command
     ).toEqual({
-      path: "/Users/xyz/ABC/pier",
+      path: "/Users/dev/ABC/pier",
       type: "worktree.list",
     });
 
@@ -239,7 +239,7 @@ describe("parsePierCliArgs", () => {
         ],
         {
           clientId: "cli-1",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
           requestId: "req-worktree-create",
         }
       ).envelope.command
@@ -247,19 +247,19 @@ describe("parsePierCliArgs", () => {
       base: "origin/main",
       branch: "feature/a",
       name: "feature-a",
-      path: "/Users/xyz/ABC/pier",
+      path: "/Users/dev/ABC/pier",
       type: "worktree.create",
     });
 
     expect(
       parsePierCliArgs(["worktrees", "open", "../linked", "--no-focus"], {
         clientId: "cli-1",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         requestId: "req-worktree-open",
       }).envelope.command
     ).toEqual({
       focus: false,
-      path: "/Users/xyz/ABC/linked",
+      path: "/Users/dev/ABC/linked",
       type: "worktree.open",
     });
   });
@@ -307,7 +307,7 @@ describe("parsePierCliArgs", () => {
     expect(() =>
       parsePierCliArgs(["terminals", "open", "--cwd", "."], {
         clientId: "cli-1",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         requestId: "req-terminals-open-cwd",
       })
     ).toThrow("unknown pier CLI command");
@@ -340,7 +340,7 @@ describe("parsePierCliArgs", () => {
         ],
         {
           clientId: "cli-1",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
           requestId: "req-terminal-open",
         }
       ).envelope.command
@@ -348,7 +348,7 @@ describe("parsePierCliArgs", () => {
       focus: false,
       launch: {
         command: "pnpm test -- watch",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         env: {
           EMPTY: "",
           PIER_MODE: "dev",
@@ -365,7 +365,7 @@ describe("parsePierCliArgs", () => {
     expect(() =>
       parsePierCliArgs(["terminal", "open", "--env", "1BAD=value"], {
         clientId: "cli-1",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         requestId: "req-terminal-open-env",
       })
     ).toThrow("invalid --env value");
@@ -390,7 +390,7 @@ describe("parsePierCliArgs", () => {
       ],
       {
         clientId: "cli-1",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         requestId: "req-terminal-open-command-flags",
       }
     );
@@ -400,7 +400,7 @@ describe("parsePierCliArgs", () => {
       launch: {
         command:
           "env --profile inner --env INNER=value --no-focus --json --print-envelope",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
       },
       type: "terminal.open",
     });
@@ -437,14 +437,14 @@ describe("parsePierCliArgs", () => {
         ],
         {
           clientId: "cli-1",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
           requestId: "req-terminal-profiles-set",
         }
       ).envelope.command
     ).toEqual({
       profile: {
         command: "codex --sandbox workspace-write",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         env: { PIER_MODE: "dev" },
       },
       profileId: "codex",
@@ -462,22 +462,22 @@ describe("parsePierCliArgs", () => {
     expect(
       parsePierCliArgs(["tasks", "list", "--json"], {
         clientId: "cli-1",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         requestId: "req-tasks-list",
       }).envelope.command
     ).toEqual({
-      projectRootPath: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
       type: "run.list",
     });
 
     expect(
       parsePierCliArgs(["tasks", "list", "--path", "../bay", "--json"], {
         clientId: "cli-1",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         requestId: "req-tasks-list-path",
       }).envelope.command
     ).toEqual({
-      projectRootPath: "/Users/xyz/ABC/bay",
+      projectRootPath: "/Users/dev/ABC/bay",
       type: "run.list",
     });
   });
@@ -502,7 +502,7 @@ describe("parsePierCliArgs", () => {
         ],
         {
           clientId: "cli-1",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
           requestId: "req-task-run",
         }
       ).envelope.command
@@ -510,7 +510,7 @@ describe("parsePierCliArgs", () => {
       focus: false,
       inputs: { pkg: "renderer" },
       placement: "split-below",
-      projectRootPath: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
       taskId: "package-script:test",
       type: "run.spawn",
       windowId: "main",

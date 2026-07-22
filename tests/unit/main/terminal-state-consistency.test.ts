@@ -221,12 +221,12 @@ describe("Swift terminal state consistency via main IPC paths", () => {
     const sessionState = await import("@main/state/terminal-session-state.ts");
     const context = {
       contextId: "ctx-pier",
-      cwd: "/Users/xyz/ABC/pier",
-      openedPath: "/Users/xyz/ABC/pier",
-      projectRoot: "/Users/xyz/ABC/pier",
+      cwd: "/Users/dev/ABC/pier",
+      openedPath: "/Users/dev/ABC/pier",
+      projectRoot: "/Users/dev/ABC/pier",
       source: "command" as const,
       updatedAt: 1,
-      worktreeKey: "/Users/xyz/ABC/pier",
+      worktreeKey: "/Users/dev/ABC/pier",
     };
 
     await invokeHandlers.get("pier:terminal:create")?.(

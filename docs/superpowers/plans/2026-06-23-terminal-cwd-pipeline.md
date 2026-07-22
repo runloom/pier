@@ -1302,7 +1302,7 @@ Run: `pnpm dev`
 
 Run:
 ```bash
-grep -rE "shellIntegration|XDG_DATA_DIRS|GHOSTTY_RESOURCES" /Users/xyz/ABC/pier/.claude/worktrees/vigorous-wilson-616700/native/.build/checkouts/libghostty-spm/Sources/GhosttyTerminal --include="*.swift" | head -20
+grep -rE "shellIntegration|XDG_DATA_DIRS|GHOSTTY_RESOURCES" /Users/dev/ABC/pier/.claude/worktrees/vigorous-wilson-616700/native/.build/checkouts/libghostty-spm/Sources/GhosttyTerminal --include="*.swift" | head -20
 ```
 
 预期发现 `TerminalSurfaceOptions` 上有 `envInject` / `shellIntegration` 之类 toggle。

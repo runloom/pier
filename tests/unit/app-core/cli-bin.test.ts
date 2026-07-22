@@ -396,7 +396,7 @@ describe("bin/pier.mjs", () => {
   });
 
   it("PIER_USER_DATA_DIR 过长时连接到稳定短 socket 路径", async () => {
-    const userDataDir = `/Users/sheep/Library/Application Support/Pier-dev/${"very-long-worktree-name-".repeat(4)}`;
+    const userDataDir = `/Users/dev/Library/Application Support/Pier-dev/${"very-long-worktree-name-".repeat(4)}`;
     const socketPath = fallbackSocketPathForUserData(userDataDir);
     const server = createPierLocalControlServer({
       handleRequest: (envelope) => {
@@ -492,12 +492,12 @@ describe("bin/pier.mjs", () => {
                 active: true,
                 context: {
                   contextId: "ctx-pier",
-                  cwd: "/Users/xyz/ABC/pier",
-                  openedPath: "/Users/xyz/ABC/pier",
-                  projectRootPath: "/Users/xyz/ABC/pier",
+                  cwd: "/Users/dev/ABC/pier",
+                  openedPath: "/Users/dev/ABC/pier",
+                  projectRootPath: "/Users/dev/ABC/pier",
                   source: "panel",
                   updatedAt: 1,
-                  worktreeKey: "/Users/xyz/ABC/pier",
+                  worktreeKey: "/Users/dev/ABC/pier",
                 },
                 display: { short: "pier" },
                 groupIndex: 0,
@@ -513,12 +513,12 @@ describe("bin/pier.mjs", () => {
                 active: true,
                 context: {
                   contextId: "ctx-bay",
-                  cwd: "/Users/xyz/ABC/bay",
-                  openedPath: "/Users/xyz/ABC/bay",
-                  projectRootPath: "/Users/xyz/ABC/bay",
+                  cwd: "/Users/dev/ABC/bay",
+                  openedPath: "/Users/dev/ABC/bay",
+                  projectRootPath: "/Users/dev/ABC/bay",
                   source: "panel",
                   updatedAt: 1,
-                  worktreeKey: "/Users/xyz/ABC/bay",
+                  worktreeKey: "/Users/dev/ABC/bay",
                 },
                 display: { short: "bay" },
                 groupIndex: 0,
@@ -557,7 +557,7 @@ describe("bin/pier.mjs", () => {
     expect(stdout).toContain("panel terminal-2");
     expect(stdout).toContain("window secondary");
     expect(stdout).not.toContain("✓ bay");
-    expect(stdout).toContain("/Users/xyz/ABC/pier");
+    expect(stdout).toContain("/Users/dev/ABC/pier");
     await server.close();
   });
 
@@ -571,7 +571,7 @@ describe("bin/pier.mjs", () => {
           data: {
             codex: {
               command: "codex",
-              cwd: "/Users/xyz/ABC/pier",
+              cwd: "/Users/dev/ABC/pier",
               env: { PIER_MODE: "dev" },
             },
             default: {},
@@ -594,7 +594,7 @@ describe("bin/pier.mjs", () => {
 
     expect(stdout).toContain("codex");
     expect(stdout).toContain("command: codex");
-    expect(stdout).toContain("cwd: /Users/xyz/ABC/pier");
+    expect(stdout).toContain("cwd: /Users/dev/ABC/pier");
     expect(stdout).toContain("env: PIER_MODE");
     expect(stdout).toContain("default");
     await server.close();

@@ -70,14 +70,14 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 const panelContext: PanelContext = {
   branch: "main",
   contextId: "ctx-pier",
-  cwd: "/Users/xyz/ABC/pier",
-  gitRoot: "/Users/xyz/ABC/pier",
-  openedPath: "/Users/xyz/ABC/pier",
-  projectRootPath: "/Users/xyz/ABC/pier",
+  cwd: "/Users/dev/ABC/pier",
+  gitRoot: "/Users/dev/ABC/pier",
+  openedPath: "/Users/dev/ABC/pier",
+  projectRootPath: "/Users/dev/ABC/pier",
   source: "panel",
   updatedAt: 1_772_000_000_000,
-  worktreeKey: "/Users/xyz/ABC/pier",
-  worktreeRoot: "/Users/xyz/ABC/pier",
+  worktreeKey: "/Users/dev/ABC/pier",
+  worktreeRoot: "/Users/dev/ABC/pier",
 };
 
 interface ExpectedFilesFacade {
@@ -785,7 +785,7 @@ describe("createRendererPluginContext", () => {
     const nextContext: PanelContext = {
       ...panelContext,
       contextId: "ctx-next",
-      gitRoot: "/Users/xyz/ABC/pier-next",
+      gitRoot: "/Users/dev/ABC/pier-next",
       updatedAt: panelContext.updatedAt + 1,
     };
     const registeredParams = {
