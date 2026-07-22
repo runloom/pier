@@ -259,15 +259,42 @@ function assertNoSameVersionDrift(existingIndex, nextPlugins) {
 }
 
 const dirents = await readdir(packagesDir, { withFileTypes: true });
-const plugins = {};
+const packedPlugins = {};
 for (const d of dirents) {
   if (!(d.isDirectory() && d.name.startsWith("plugin-"))) continue;
   const info = await collectPlugin(join(packagesDir, d.name));
-  if (info) plugins[info.entry.id] = info.entry;
+  if (info) packedPlugins[info.entry.id] = info.entry;
 }
 
 const existingIndex = await readExistingIndex();
-assertNoSameVersionDrift(existingIndex, plugins);
+assertNoSameVersionDrift(existingIndex, packedPlugins);
+
+// Merge: keep previously indexed plugins that were not re-packed in this run
+// (partial packs / single-plugin recovery must not erase the catalog).
+const plugins = { ...packedPlugins };
+const previousPlugins = existingIndex?.plugins;
+if (
+  previousPlugins &&
+  typeof previousPlugins === "object" &&
+  !Array.isArray(previousPlugins)
+) {
+  for (const [id, previous] of Object.entries(previousPlugins)) {
+    const packed = packedPlugins[id];
+    if (!packed) {
+      plugins[id] = previous;
+      continue;
+    }
+    plugins[id] = {
+      ...previous,
+      ...packed,
+      versions: {
+        ...(previous.versions ?? {}),
+        ...packed.versions,
+      },
+      latest: packed.latest,
+    };
+  }
+}
 
 const generatedAt = Number(process.env.PIER_INDEX_GENERATED_AT ?? Date.now());
 const sequence = nextSequence(existingIndex);

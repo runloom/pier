@@ -226,4 +226,84 @@ describe("generate-plugin-index", () => {
       "same-version hash drift for pier.codex@1.2.3"
     );
   });
+
+  it("keeps previously indexed plugins that were not re-packed", async () => {
+    await writeCodexPackage({
+      sha256: "a".repeat(64),
+      version: "1.2.4",
+    });
+    await mkdir(join(dir, "plugins"), { recursive: true });
+    await writeFile(
+      join(dir, "plugins", "index.v1.json"),
+      JSON.stringify({
+        generatedAt: 1,
+        plugins: {
+          "pier.codex": {
+            description: "Codex account management.",
+            displayName: "Codex",
+            id: "pier.codex",
+            latest: "1.2.3",
+            versions: {
+              "1.2.3": {
+                assetUrl:
+                  "https://github.com/runloom/pier/releases/download/plugin-codex-v1.2.3/pier.codex-1.2.3.tgz",
+                pier: ">=0.1.0 <0.2.0",
+                sha256: "c".repeat(64),
+                size: 13,
+              },
+            },
+          },
+          "pier.ssh": {
+            description: "SSH hosts.",
+            displayName: "SSH",
+            id: "pier.ssh",
+            latest: "9.9.9",
+            versions: {
+              "9.9.9": {
+                assetUrl:
+                  "https://github.com/runloom/pier/releases/download/plugin-ssh-v9.9.9/pier.ssh-9.9.9.tgz",
+                pier: ">=0.1.0 <0.2.0",
+                sha256: "d".repeat(64),
+                size: 42,
+              },
+            },
+          },
+        },
+        sequence: 3,
+        signature: { alg: "Ed25519", keyId: "test", value: "test" },
+        version: 1,
+      }),
+      "utf8"
+    );
+
+    await execFileAsync(process.execPath, [SCRIPT_PATH], {
+      cwd: dir,
+      env: {
+        ...process.env,
+        PIER_INDEX_GENERATED_AT: "10",
+      },
+    });
+
+    const index = JSON.parse(
+      await readFile(join(dir, "plugins", "index.v1.json"), "utf8")
+    ) as {
+      plugins: Record<
+        string,
+        { latest: string; versions: Record<string, { sha256: string }> }
+      >;
+    };
+    expect(Object.keys(index.plugins).sort()).toEqual([
+      "pier.codex",
+      "pier.ssh",
+    ]);
+    const codex = index.plugins["pier.codex"];
+    const ssh = index.plugins["pier.ssh"];
+    expect(codex).toBeDefined();
+    expect(ssh).toBeDefined();
+    expect(codex?.latest).toBe("1.2.4");
+    expect(codex?.versions["1.2.3"]?.sha256).toBe("c".repeat(64));
+    expect(codex?.versions["1.2.4"]?.sha256).toBe("a".repeat(64));
+    expect(ssh?.latest).toBe("9.9.9");
+    expect(ssh?.versions["9.9.9"]?.sha256).toBe("d".repeat(64));
+  });
 });
