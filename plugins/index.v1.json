@@ -1,5 +1,5 @@
 {
-  "generatedAt": 1784717049438,
+  "generatedAt": 1784717383497,
   "plugins": {
     "pier.claude": {
       "description": "Manage Claude accounts and switch the active login for Pier.",
@@ -24,13 +24,85 @@
           "size": 571967
         }
       }
+    },
+    "pier.codex": {
+      "description": "Codex account management and usage monitoring for Pier.",
+      "displayName": "Codex Account Management",
+      "id": "pier.codex",
+      "latest": "1.4.2",
+      "locales": {
+        "en": {
+          "name": "Codex Account Management",
+          "description": "Manage Codex accounts, login, switch, and monitor usage."
+        },
+        "zh-CN": {
+          "name": "Codex 账号管理",
+          "description": "管理 Codex 账号，登录、切换、观测用量。"
+        }
+      },
+      "versions": {
+        "1.4.2": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.2/pier.codex-1.4.2.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "fe71d261f46b9110837ed3e450085d25d3fddb0e27f585e14ec335e9a9ce008d",
+          "size": 601668
+        }
+      }
+    },
+    "pier.grok": {
+      "description": "Manage Grok accounts, login, and switch for Pier.",
+      "displayName": "Grok Account Management",
+      "id": "pier.grok",
+      "latest": "1.1.2",
+      "locales": {
+        "en": {
+          "name": "Grok Account Management",
+          "description": "Manage Grok accounts, login, and switch for Pier."
+        },
+        "zh-CN": {
+          "name": "Grok 账号管理",
+          "description": "在 Pier 中管理 Grok 账号、登录与切换。"
+        }
+      },
+      "versions": {
+        "1.1.2": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.2/pier.grok-1.1.2.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "3a3a4197449875241cea7245e316cb0f658f781d672f03d4772e88498eb52932",
+          "size": 645700
+        }
+      }
+    },
+    "pier.ssh": {
+      "description": "Manage SSH hosts and open SSH terminals from Pier.",
+      "displayName": "SSH Hosts",
+      "id": "pier.ssh",
+      "latest": "1.0.2",
+      "locales": {
+        "en": {
+          "name": "SSH Hosts",
+          "description": "Manage SSH hosts and open SSH terminals from Pier."
+        },
+        "zh-CN": {
+          "name": "SSH 主机",
+          "description": "在 Pier 中管理 SSH 主机并打开 SSH 终端。"
+        }
+      },
+      "versions": {
+        "1.0.2": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-ssh-v1.0.2/pier.ssh-1.0.2.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "497de89572cc12a24a0a7e5542d892f572532199b66f74a00ed84566cb4011ee",
+          "size": 367664
+        }
+      }
     }
   },
-  "sequence": 19,
+  "sequence": 20,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "Hk/yDbWWWQnLcrmmFqBr6zTMgEpytMlOVpoC191Dyn68jp6AqfS2B/TUaVlJI/AMIMmpgoOWhuVozAs8ZVzgBA=="
+    "value": "CBS1fwuvYifeA9VIvRD9QyhEQGZ++WQSg6Ce0XllmWPqhgbLe+Gam5yRv4//OqjQmddznu+jBjEzoOcFiMuxCg=="
   }
 }
