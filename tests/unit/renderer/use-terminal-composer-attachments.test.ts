@@ -28,6 +28,10 @@ const materializeComposerImageBytes =
       name?: string;
     }) => Promise<TerminalComposerMaterializeResult>
   >();
+const materializeComposerTextBytes =
+  vi.fn<
+    (data: { text: string }) => Promise<TerminalComposerMaterializeResult>
+  >();
 
 function installTerminalApi(): void {
   Object.defineProperty(window, "pier", {
@@ -36,6 +40,7 @@ function installTerminalApi(): void {
       terminal: {
         materializeComposerClipboardImage,
         materializeComposerImageBytes,
+        materializeComposerTextBytes,
         pickComposerFiles,
         resolveComposerPaths,
       },
@@ -91,6 +96,7 @@ function setup(input: HookInput = {}) {
       onDraftChange,
       panelId: input.panelId ?? "panel-1",
       reportError,
+      t: (key) => key,
     })
   );
 
@@ -109,6 +115,7 @@ beforeEach(() => {
   resolveComposerPaths.mockReset();
   materializeComposerClipboardImage.mockReset();
   materializeComposerImageBytes.mockReset();
+  materializeComposerTextBytes.mockReset();
   resetTerminalComposerAttachmentsForTests();
 });
 
@@ -139,7 +146,7 @@ describe("useTerminalComposerAttachments", () => {
     expect(hook.result.current.attachments[0]?.path).toBe("/abs/a.png");
     expect(onDraftChange).toHaveBeenCalled();
     const afterFirst = draftRef.current.draft;
-    expect(afterFirst).toContain("[#1]");
+    expect(afterFirst).toContain("/abs/a.png");
 
     onDraftChange.mockClear();
     await act(async () => {
@@ -153,12 +160,12 @@ describe("useTerminalComposerAttachments", () => {
       "/abs/a.png",
       "/abs/b.pdf",
     ]);
-    expect(draftRef.current.draft.match(/\[#1\]/g)).toHaveLength(1);
-    expect(draftRef.current.draft).toContain("[#2]");
+    expect(draftRef.current.draft).toContain("/abs/a.png");
+    expect(draftRef.current.draft).toContain("/abs/b.pdf");
     expect(onDraftChange).toHaveBeenCalledTimes(1);
   });
 
-  it("removeAttachment rewrites draft tokens and renumbers", async () => {
+  it("removeAttachment drops the rail item without rewriting plain draft paths", async () => {
     const { draftRef, hook, onDraftChange } = setup();
     draftRef.current = { cursor: 0, draft: "", selectionEnd: 0 };
 
@@ -178,11 +185,7 @@ describe("useTerminalComposerAttachments", () => {
       expect(hook.result.current.attachments).toHaveLength(3);
     });
 
-    draftRef.current = {
-      cursor: 0,
-      draft: "x [#1] y [#3] z [#2]",
-      selectionEnd: 0,
-    };
+    const body = draftRef.current.draft;
     onDraftChange.mockClear();
 
     const removeId = hook.result.current.attachments[1]!.id;
@@ -195,16 +198,44 @@ describe("useTerminalComposerAttachments", () => {
       "/p/1.png",
       "/p/3.txt",
     ]);
-    expect(onDraftChange).toHaveBeenCalledWith(expect.stringMatching(/\[#1]/));
-    const nextDraft = onDraftChange.mock.calls[0]![0] as string;
-    expect(nextDraft).toMatch(/\[#1]/);
-    expect(nextDraft).toMatch(/\[#2]/);
-    expect(nextDraft).not.toMatch(/\[#3\]/);
+    // Without Lexical, body is unchanged and onDraftChange is not forced.
+    expect(onDraftChange).not.toHaveBeenCalled();
+    expect(draftRef.current.draft).toBe(body);
   });
 
-  it("buildPayloadOrReport reports invalid attachment refs", async () => {
-    const { draftRef, hook, reportError } = setup();
-    draftRef.current = { cursor: 0, draft: "", selectionEnd: 0 };
+  it("buildPayloadOrReport reports invalid attachment refs from the editor", async () => {
+    const draftRef = { current: { cursor: 0, draft: "", selectionEnd: 0 } };
+    const onDraftChange = vi.fn((draft: string, cursor?: number) => {
+      draftRef.current = {
+        cursor: cursor ?? draft.length,
+        draft,
+        selectionEnd: cursor ?? draft.length,
+      };
+    });
+    const reportError = vi.fn();
+    const listInvalidAttachmentRefs = vi.fn(() => ["9"]);
+
+    const hook = renderHook(() =>
+      useTerminalComposerAttachments({
+        disabled: false,
+        editorMutations: {
+          getSelection: () => ({
+            cursor: draftRef.current.cursor,
+            selectionEnd: draftRef.current.selectionEnd,
+          }),
+          getValue: () => draftRef.current.draft,
+          insertAttachmentToken: () => undefined,
+          insertTextAtSelection: () => undefined,
+          listInvalidAttachmentRefs,
+          rewriteAttachmentTokensAfterRemove: () => draftRef.current.draft,
+        },
+        getDraftAndCursor: () => ({ ...draftRef.current }),
+        onDraftChange,
+        panelId: "panel-invalid",
+        reportError,
+        t: (key) => key,
+      })
+    );
 
     pickComposerFiles.mockResolvedValue({
       ok: true,
@@ -222,13 +253,13 @@ describe("useTerminalComposerAttachments", () => {
       expect(hook.result.current.attachments).toHaveLength(1);
     });
 
-    const payload =
-      hook.result.current.buildPayloadOrReport("see [#0] and [#9]");
+    const payload = hook.result.current.buildPayloadOrReport("see orphan");
     expect(payload).toBeNull();
     expect(reportError).toHaveBeenCalledWith(
       "terminal.composer.invalidAttachmentRef",
-      expect.stringContaining("[#0]")
+      "9"
     );
+    expect(listInvalidAttachmentRefs).toHaveBeenCalled();
   });
 
   it("buildPayloadOrReport reports when expanded payload exceeds 64k", async () => {
@@ -278,10 +309,10 @@ describe("useTerminalComposerAttachments", () => {
       expect(hook.result.current.attachments).toHaveLength(1);
     });
 
-    const payload = hook.result.current.buildPayloadOrReport("分析 [#1]");
+    const payload = hook.result.current.buildPayloadOrReport("分析 /shot.png");
     expect(payload).toBe("/shot.png\n分析 /shot.png");
     expect(reportError).not.toHaveBeenCalled();
-    expect(hook.result.current.canSendWithDraft("分析 [#1]")).toBe(true);
+    expect(hook.result.current.canSendWithDraft("分析 /shot.png")).toBe(true);
     expect(hook.result.current.canSendWithDraft("   ")).toBe(true);
     expect(hook.result.current.canSendWithDraft("")).toBe(true);
   });
@@ -318,6 +349,7 @@ describe("useTerminalComposerAttachments", () => {
         onDraftChange: vi.fn(),
         panelId: "p-clear",
         reportError: vi.fn(),
+        t: (key) => key,
       })
     );
     expect(restored.result.current.attachments).toEqual([]);
@@ -352,6 +384,7 @@ describe("useTerminalComposerAttachments", () => {
         onDraftChange: vi.fn(),
         panelId: "p-hydrate",
         reportError: vi.fn(),
+        t: (key) => key,
       })
     );
     expect(next.result.current.attachments).toHaveLength(1);
@@ -366,7 +399,7 @@ describe("useTerminalComposerAttachments", () => {
 });
 
 describe("paste file + text", () => {
-  it("keeps [#n] tokens when plain text follows file paste", async () => {
+  it("keeps attachment path when plain text follows file paste", async () => {
     resolveComposerPaths.mockResolvedValue({
       attachments: [dtoFrom("/tmp/shot.png")],
       failures: [],
@@ -401,7 +434,7 @@ describe("paste file + text", () => {
     });
 
     await waitFor(() => {
-      expect(draftRef.current.draft).toContain("[#1]");
+      expect(draftRef.current.draft).toContain("/tmp/shot.png");
       expect(draftRef.current.draft).toContain("说明");
     });
   });
@@ -409,7 +442,7 @@ describe("paste file + text", () => {
 
 describe("paste plain after failed re-attach", () => {
   it("does not wipe later typing when re-paste fails or dedupes", async () => {
-    // First attach succeeds and inserts [#1]
+    // First attach succeeds and inserts the path
     resolveComposerPaths.mockResolvedValueOnce({
       attachments: [dtoFrom("/tmp/shot.png")],
       failures: [],
@@ -441,7 +474,7 @@ describe("paste plain after failed re-attach", () => {
       hook.result.current.onPaste(mkEvent(""));
     });
     await waitFor(() => {
-      expect(draftRef.current.draft).toContain("[#1]");
+      expect(draftRef.current.draft).toContain("/tmp/shot.png");
     });
 
     // User types more after attach
@@ -467,5 +500,31 @@ describe("paste plain after failed re-attach", () => {
     const lastDraft = onDraftChange.mock.calls.at(-1)?.[0] as string;
     expect(lastDraft).toContain("later");
     expect(lastDraft).toContain("extra");
+  });
+});
+
+describe("large plain-text paste", () => {
+  it("materializes text ≥10k as a .txt attachment with a path chip/text", async () => {
+    materializeComposerTextBytes.mockResolvedValue({
+      attachment: dtoFrom("/tmp/paste-1.txt"),
+      ok: true,
+    });
+
+    const { draftRef, hook } = setup({ panelId: "p-large-paste" });
+    draftRef.current = { cursor: 0, draft: "", selectionEnd: 0 };
+
+    const plain = "x".repeat(10_000);
+
+    await act(async () => {
+      hook.result.current.onLargePlainPaste(plain);
+    });
+
+    await waitFor(() => {
+      expect(materializeComposerTextBytes).toHaveBeenCalledWith({
+        text: plain,
+      });
+      expect(draftRef.current.draft).toContain("/tmp/paste-1.txt");
+      expect(hook.result.current.attachments).toHaveLength(1);
+    });
   });
 });

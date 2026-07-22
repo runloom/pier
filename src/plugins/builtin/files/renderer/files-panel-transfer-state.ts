@@ -71,6 +71,14 @@ const viewSeedsByPanelId = new Map<string, FilesPanelTransferViewSeed>();
 const viewSeedsByDocumentId = new Map<string, FilesPanelTransferViewSeed>();
 const panelModes = new Map<string, FileViewMode>();
 
+type ViewSeedListener = (input: {
+  documentId?: string;
+  panelId: string;
+  view: FilesPanelTransferViewSeed;
+}) => void;
+
+const viewSeedListeners = new Set<ViewSeedListener>();
+
 export function rememberFilesPanelViewMode(
   panelId: string,
   mode: FileViewMode
@@ -95,6 +103,19 @@ export function seedFilesPanelView(input: {
   if (input.documentId) {
     viewSeedsByDocumentId.set(input.documentId, input.view);
   }
+  for (const listener of viewSeedListeners) {
+    listener(input);
+  }
+}
+
+/** Notify when a transfer view seed is written (including late seeds). */
+export function subscribeFilesPanelViewSeed(
+  listener: ViewSeedListener
+): () => void {
+  viewSeedListeners.add(listener);
+  return () => {
+    viewSeedListeners.delete(listener);
+  };
 }
 
 /**
@@ -145,6 +166,7 @@ export function clearFilesPanelTransferViewSeedsForTests(): void {
   viewSeedsByPanelId.clear();
   viewSeedsByDocumentId.clear();
   panelModes.clear();
+  viewSeedListeners.clear();
 }
 
 export function parseFilesPanelTransferPreparedState(

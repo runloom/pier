@@ -210,7 +210,6 @@ function createRenameAction(
       } catch (error) {
         await context.dialogs.alert({
           body: error instanceof Error ? error.message : String(error),
-          size: "default",
           title: t("filePanel.tree.renameFailed", "Unable to rename"),
         });
       }
@@ -255,7 +254,6 @@ function createCopyPathAction(
       } catch (error) {
         await context.dialogs.alert({
           body: error instanceof Error ? error.message : String(error),
-          size: "default",
           title: t("filePanel.tree.copyFailed", "Copy failed"),
         });
       }
@@ -304,7 +302,6 @@ function createCopyPathWithRangeAction(
       } catch (error) {
         await context.dialogs.alert({
           body: error instanceof Error ? error.message : String(error),
-          size: "default",
           title: t("filePanel.tree.copyFailed", "Copy failed"),
         });
       }
@@ -332,7 +329,6 @@ function createRevealAction(
       } catch (error) {
         await context.dialogs.alert({
           body: error instanceof Error ? error.message : String(error),
-          size: "default",
           title: t("filePanel.tree.revealFailed", "Unable to reveal item"),
         });
       }

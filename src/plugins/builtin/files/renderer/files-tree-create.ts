@@ -190,7 +190,6 @@ async function createEmptyFile(
                   "filePanel.tree.createDurabilityMismatch",
                   "The new file changed before its write could be confirmed."
                 ),
-          size: "default",
           title: t(
             "filePanel.tree.createDurabilityUnknown",
             "File created, but durability is not confirmed"
@@ -226,7 +225,6 @@ export async function commitCreatedPath(options: {
   } catch (error) {
     await context.dialogs.alert({
       body: error instanceof Error ? error.message : String(error),
-      size: "default",
       title: t("filePanel.tree.createFailed", "Unable to create item"),
     });
     return false;
@@ -311,7 +309,6 @@ export async function commitInlineCreate(options: {
   } catch (error) {
     await options.context.dialogs.alert({
       body: error instanceof Error ? error.message : String(error),
-      size: "default",
       title: t("filePanel.tree.createFailed", "Unable to create item"),
     });
     discardCreateAttempt({

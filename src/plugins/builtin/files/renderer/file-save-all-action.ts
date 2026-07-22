@@ -89,7 +89,6 @@ export function createSaveAllAction(
       if (failures.size > 0) {
         await context.dialogs.alert({
           body: [...failures].join("\n"),
-          size: "default",
           title: t("filePanel.saveAll.failed", "Some files could not be saved"),
         });
       }

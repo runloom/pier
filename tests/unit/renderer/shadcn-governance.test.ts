@@ -28,6 +28,9 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/pages/settings/components/skills/skills-project-list.tsx",
   // Composer attachment tile is a fixed 56×56 preview surface, not a control chrome button.
   "src/renderer/panel-kits/terminal/terminal-composer-attachment-rail.tsx",
+  // Rich Input mention / attachment autocomplete rows need raw hit targets in the popup list.
+  "src/renderer/panel-kits/terminal/structured-composer/attachment-autocomplete-popup.tsx",
+  "src/renderer/panel-kits/terminal/structured-composer/mention-popup.tsx",
 ]);
 const ITEM_AS_CHILD_BUTTON_OWNERS = new Set([
   "src/renderer/pages/settings/components/environment-section.tsx",

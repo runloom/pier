@@ -9,7 +9,7 @@
     "pier.git.switchBranch": {
       "aliases": ["切换分支", "git switch", "qie huan fen zhi"],
       "category": "Git",
-      "description": "切换到本地分支，或从当前 HEAD 新建分支并切换。",
+      "description": "切换到本地分支，或从当前检出新建分支并切换。",
       "title": "Git: 切换分支..."
     },
     "pier.git.mergeAbort": {
@@ -78,40 +78,40 @@
       "title": "Git: 继续变基"
     },
     "pier.git.cherryPick": {
-      "aliases": ["git cherry-pick", "遴选提交", "摘取提交"],
+      "aliases": ["git cherry-pick", "遴选提交", "摘取提交", "拣选提交"],
       "category": "Git",
       "description": "选择一个提交并应用到当前分支。",
-      "title": "Git: Cherry-pick 提交..."
+      "title": "Git: 拣选提交..."
     },
     "pier.git.cherryPickAbort": {
-      "aliases": ["git cherry-pick abort", "中止 cherry-pick"],
+      "aliases": ["git cherry-pick abort", "中止 cherry-pick", "中止拣选"],
       "category": "Git",
-      "description": "中止当前 cherry-pick 操作。",
-      "title": "Git: 中止 Cherry-pick"
+      "description": "中止当前拣选操作。",
+      "title": "Git: 中止拣选"
     },
     "pier.git.cherryPickContinue": {
-      "aliases": ["git cherry-pick continue", "继续 cherry-pick"],
+      "aliases": ["git cherry-pick continue", "继续 cherry-pick", "继续拣选"],
       "category": "Git",
-      "description": "继续当前 cherry-pick 操作。",
-      "title": "Git: 继续 Cherry-pick"
+      "description": "继续当前拣选操作。",
+      "title": "Git: 继续拣选"
     },
     "pier.git.revert": {
       "aliases": ["git revert", "回滚提交", "还原提交"],
       "category": "Git",
       "description": "选择一个提交并创建一个还原它的新提交。",
-      "title": "Git: Revert 提交..."
+      "title": "Git: 还原提交..."
     },
     "pier.git.revertAbort": {
-      "aliases": ["git revert abort", "中止 revert"],
+      "aliases": ["git revert abort", "中止 revert", "中止还原"],
       "category": "Git",
-      "description": "中止当前 revert 操作。",
-      "title": "Git: 中止 Revert"
+      "description": "中止当前还原操作。",
+      "title": "Git: 中止还原"
     },
     "pier.git.revertContinue": {
-      "aliases": ["git revert continue", "继续 revert"],
+      "aliases": ["git revert continue", "继续 revert", "继续还原"],
       "category": "Git",
-      "description": "继续当前 revert 操作。",
-      "title": "Git: 继续 Revert"
+      "description": "继续当前还原操作。",
+      "title": "Git: 继续还原"
     },
     "pier.git.undoLastCommit": {
       "aliases": [
@@ -198,11 +198,9 @@
   "messages": {
     "ui.cancel": "取消",
     "ui.createUnavailable": "创建工作树暂未开放",
-    "ui.current": "当前",
     "ui.deleteUnavailable": "删除工作树暂未开放",
     "ui.detached": "分离 {{head}}",
     "ui.locked": "已锁定",
-    "ui.main": "主工作树",
     "ui.mainBadge": "主工作树",
     "ui.selectPlaceholder": "选择工作树…",
     "ui.statusOpenLabel": "打开 {{name}} 的工作树列表",
@@ -361,9 +359,7 @@
     "ui.largeChange": "变更过大",
     "ui.gitUnsupported": "当前目录不是 Git 仓库",
     "ui.branchDefault": "默认",
-    "ui.branchGraph": "提交图",
-    "ui.branchGraphCaveatTitle": "只统计提交图差异。经 squash 或 rebase 合并后，已应用过的内容仍可能显示为分支独有提交。",
-    "ui.branchRemote": "远端",
+    "ui.branchGraphCaveatTitle": "只按提交数量统计差异。经 squash 或 rebase 合并后，已应用过的内容仍可能显示为分支独有提交。",
     "ui.createNamePrompt": "新工作树名称",
     "ui.createBranchPrompt": "新分支名称",
     "ui.worktreeCreateSuccess": "工作树已创建",
@@ -375,8 +371,8 @@
     "ui.deleteConfirmButton": "删除",
     "ui.deleteWithBranchButton": "删除并移除分支 {{branch}}",
     "ui.deleteBranchSafeDetail": "执行 git branch -d；分支未合并时会失败。",
-    "ui.worktreeDeleteWithBranchSuccess": "已删除 worktree 和分支 {{branch}}",
-    "ui.worktreeDeleteBranchFailed": "worktree 已删除，但分支 {{branch}} 未能移除",
+    "ui.worktreeDeleteWithBranchSuccess": "已删除工作树和分支 {{branch}}",
+    "ui.worktreeDeleteBranchFailed": "工作树已删除，但分支 {{branch}} 未能移除",
     "ui.worktreeDeleteSuccess": "工作树已删除",
     "ui.noPrunableWorktrees": "没有失效工作树",
     "ui.pruneConfirm": "清理失效工作树记录?",
@@ -399,10 +395,9 @@
     "ui.gitNoOtherBranches": "没有其他分支",
     "ui.gitSwitchSelectBranch": "输入分支名称以切换或新建",
     "ui.gitBranchCurrent": "当前分支",
-    "ui.gitBranchLocal": "本地分支",
     "ui.gitBranchNameInvalid": "分支名称无效",
     "ui.gitBranchCannotCreate": "无法新建分支“{{branch}}”",
-    "ui.gitBranchCreateFromHead": "从当前 HEAD 新建",
+    "ui.gitBranchCreateFromHead": "从当前检出新建",
     "ui.gitBranchCreateAndSwitch": "新建分支“{{branch}}”",
     "ui.gitCommitSearchFailed": "提交搜索失败",
     "ui.gitCommitSearchPlaceholder": "搜索提交：文本、hash、@作者、:路径、~代码、since:/until:",
@@ -435,24 +430,24 @@
     "ui.gitRebaseAbortSuccess": "已中止变基",
     "ui.gitRebaseContinueSuccess": "已继续变基",
     "ui.gitRebaseContinueConflict": "变基仍有冲突，请解决后继续。",
-    "ui.gitLoadingCherryPick": "正在 cherry-pick...",
-    "ui.gitLoadingCherryPickAbort": "正在中止 cherry-pick...",
-    "ui.gitLoadingCherryPickContinue": "正在继续 cherry-pick...",
-    "ui.gitCherryPickSuccess": "已 cherry-pick {{commit}}",
-    "ui.gitCherryPickAbortSuccess": "已中止 cherry-pick",
-    "ui.gitCherryPickContinueSuccess": "cherry-pick 已继续",
-    "ui.gitCherryPickConflictTitle": "Cherry-pick 冲突",
-    "ui.gitCherryPickConflict": "cherry-pick 因冲突而暂停。请解决冲突后继续。",
-    "ui.gitCherryPickContinueConflict": "cherry-pick 仍有冲突。请解决后继续。",
-    "ui.gitLoadingRevert": "正在 revert...",
-    "ui.gitLoadingRevertAbort": "正在中止 revert...",
-    "ui.gitLoadingRevertContinue": "正在继续 revert...",
-    "ui.gitRevertSuccess": "已 revert {{commit}}",
-    "ui.gitRevertAbortSuccess": "已中止 revert",
-    "ui.gitRevertContinueSuccess": "revert 已继续",
-    "ui.gitRevertConflictTitle": "Revert 冲突",
-    "ui.gitRevertConflict": "revert 因冲突而暂停。请解决冲突后继续。",
-    "ui.gitRevertContinueConflict": "revert 仍有冲突。请解决后继续。",
+    "ui.gitLoadingCherryPick": "正在拣选…",
+    "ui.gitLoadingCherryPickAbort": "正在中止拣选…",
+    "ui.gitLoadingCherryPickContinue": "正在继续拣选…",
+    "ui.gitCherryPickSuccess": "已拣选 {{commit}}",
+    "ui.gitCherryPickAbortSuccess": "已中止拣选",
+    "ui.gitCherryPickContinueSuccess": "拣选已继续",
+    "ui.gitCherryPickConflictTitle": "拣选冲突",
+    "ui.gitCherryPickConflict": "拣选因冲突暂停，请解决冲突后继续。",
+    "ui.gitCherryPickContinueConflict": "拣选仍有冲突，请解决后继续。",
+    "ui.gitLoadingRevert": "正在还原…",
+    "ui.gitLoadingRevertAbort": "正在中止还原…",
+    "ui.gitLoadingRevertContinue": "正在继续还原…",
+    "ui.gitRevertSuccess": "已还原 {{commit}}",
+    "ui.gitRevertAbortSuccess": "已中止还原",
+    "ui.gitRevertContinueSuccess": "还原已继续",
+    "ui.gitRevertConflictTitle": "还原冲突",
+    "ui.gitRevertConflict": "还原因冲突暂停，请解决冲突后继续。",
+    "ui.gitRevertContinueConflict": "还原仍有冲突，请解决后继续。",
     "ui.gitUndoCommitConfirm": "撤销上次提交？更改将保留为暂存状态。",
     "ui.gitUndoCommitConfirmButton": "撤销",
     "ui.gitUndoCommitSuccess": "已撤销提交",
@@ -467,7 +462,7 @@
     "ui.worktreeCreate.agentEmpty": "没有已启用的智能体",
     "ui.worktreeCreate.agentLabel": "智能体",
     "ui.worktreeCreate.agentPlaceholder": "选择智能体",
-    "ui.worktreeCreate.baseHead": "当前 HEAD",
+    "ui.worktreeCreate.baseHead": "当前检出",
     "ui.worktreeCreate.baseLabel": "基于",
     "ui.worktreeCreate.branchLabel": "分支",
     "ui.worktreeCreate.branchPlaceholder": "feature/fix-dialog",
@@ -497,8 +492,6 @@
     "ui.worktreeCreate.modeCustom": "手动命名",
     "ui.worktreeCreate.openFailed": "无法打开工作树创建: {{message}}",
     "ui.worktreeCreate.prepareCopy": "复制 {{count}} 项被忽略文件",
-    "ui.worktreeCreate.prepareLabel": "创建前",
-    "ui.worktreeCreate.prepareSetup": "运行 setup 命令",
     "ui.worktreeCreate.taskHint": "智能生成会根据任务描述和当前项目信息生成分支名，并在 {{root}} 下创建独立工作树。",
     "ui.worktreeCreate.taskLabel": "任务描述",
     "ui.worktreeCreate.taskPlaceholder": "例如：修复设置页分隔线错位",

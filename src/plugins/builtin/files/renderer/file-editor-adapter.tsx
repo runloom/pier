@@ -25,13 +25,21 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         initialAnchor={props.markdownInitialAnchor}
         initialAnchorRequestId={props.markdownInitialAnchorRequestId}
         labels={props.markdownLabels}
+        onContextMenu={props.onMarkdownPreviewContextMenu}
+        onJumpToSource={props.onJumpToSource}
         openExternal={props.openExternal}
         openInternal={props.onOpenMarkdownInternal}
+        panelId={props.panelId}
+        registerSelectionSelectAllProvider={
+          props.registerSelectionSelectAllProvider
+        }
         searchLabels={props.searchLabels}
         searchRequest={props.searchRequest}
         sessionId={props.editorSessionId}
         source={props.markdownSource}
+        tocLabels={props.markdownTocLabels}
         value={props.value}
+        zoomLabels={props.markdownZoomLabels}
       />
     );
   }

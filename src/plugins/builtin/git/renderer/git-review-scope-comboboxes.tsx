@@ -230,10 +230,8 @@ export function GitReviewBranchCombobox({
     graphCaveatTitle: pluginText(
       context,
       "branchGraphCaveatTitle",
-      "Commit graph counts only. Squash or rebase merges may show already-applied commits as branch-only."
+      "Counts commit divergence only. Squash or rebase merges may show already-applied commits as branch-only."
     ),
-    graphLabel: pluginText(context, "branchGraph", "graph"),
-    remoteLabel: pluginText(context, "branchRemote", "remote"),
   };
   return (
     <Popover onOpenChange={setOpen} open={open}>
@@ -286,8 +284,6 @@ export function GitReviewBranchCombobox({
                     branch={branch}
                     defaultLabel={rowText.defaultLabel}
                     graphCaveatTitle={rowText.graphCaveatTitle}
-                    graphLabel={rowText.graphLabel}
-                    remoteLabel={rowText.remoteLabel}
                   />
                 </CommandItem>
               ))}

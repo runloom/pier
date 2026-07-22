@@ -2,6 +2,7 @@ import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { createExternalRendererPluginContext } from "@/lib/plugins/external-plugin-context.ts";
+import type * as AppDialogStoreModule from "@/stores/app-dialog.store.ts";
 
 const toast = vi.hoisted(() => ({
   dismiss: vi.fn(),
@@ -12,6 +13,16 @@ const toast = vi.hoisted(() => ({
 }));
 
 vi.mock("sonner", () => ({ toast }));
+
+const showAppAlert = vi.hoisted(() => vi.fn(async () => undefined));
+
+vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => {
+  const actual = await importOriginal<typeof AppDialogStoreModule>();
+  return {
+    ...actual,
+    showAppAlert,
+  };
+});
 
 const entry: PluginRegistryEntry = {
   effectivePermissions: [],
@@ -128,5 +139,22 @@ describe("external plugin interaction facades", () => {
     expect(toast.success).toHaveBeenCalledWith("Opened", { id: "toast-1" });
     expect(toast.info).toHaveBeenCalledWith("Info", { id: "toast-1" });
     expect(toast.dismiss).toHaveBeenCalledWith("toast-1");
+  });
+
+  it("forwards plugin alerts without a size option", async () => {
+    const context = createExternalRendererPluginContext(
+      entry,
+      bridge,
+      () => []
+    );
+
+    await context.dialogs.alert({
+      body: "No active account",
+      title: "Could not refresh usage",
+    });
+    expect(showAppAlert).toHaveBeenCalledWith({
+      body: "No active account",
+      title: "Could not refresh usage",
+    });
   });
 });

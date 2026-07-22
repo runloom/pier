@@ -2104,6 +2104,20 @@ describe("TerminalPanel lifecycle", () => {
   });
 
   it("shows terminal search result state and closes cleanly", async () => {
+    useWorkspaceStore.setState({
+      api: {
+        activePanel: {
+          id: "terminal-1",
+          view: { contentComponent: "terminal" },
+        },
+        panels: [
+          {
+            id: "terminal-1",
+            view: { contentComponent: "terminal" },
+          },
+        ],
+      } as never,
+    });
     render(<TerminalPanel {...createPanelProps()} />);
     act(() => {
       window.dispatchEvent(
@@ -2245,6 +2259,20 @@ describe("TerminalPanel lifecycle", () => {
     });
 
     it("holds Web keyboard ownership for the whole search lifecycle, not DOM focus", async () => {
+      useWorkspaceStore.setState({
+        api: {
+          activePanel: {
+            id: "terminal-1",
+            view: { contentComponent: "terminal" },
+          },
+          panels: [
+            {
+              id: "terminal-1",
+              view: { contentComponent: "terminal" },
+            },
+          ],
+        } as never,
+      });
       setTerminalBasePanel({
         kind: "terminal",
         panelId: "terminal-1",

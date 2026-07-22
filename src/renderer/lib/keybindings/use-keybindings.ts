@@ -17,9 +17,11 @@
  */
 import { useEffect } from "react";
 import { actionRegistry } from "@/lib/actions/registry.ts";
+import { activeTerminalPanelId } from "@/lib/actions/renderer-action-runtime.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
+import { isTerminalComposerOpen } from "@/stores/terminal-composer-takeover.ts";
 import { chordFromEvent } from "./matcher.ts";
 import { keybindingRegistry } from "./registry.ts";
 import { shouldSuppressKeybindingForTextInput } from "./text-input-keybinding-guard.ts";
@@ -41,15 +43,50 @@ function isImePending(e: KeyboardEvent): boolean {
   return e.isComposing === true || e.keyCode === IME_PENDING_KEYCODE;
 }
 
+function isNewAgentOrAttachChord(chord: KeyChord): boolean {
+  return (
+    chord.cmdOrCtrl &&
+    chord.shift &&
+    !chord.alt &&
+    !chord.ctrl &&
+    chord.code === "KeyA"
+  );
+}
+
+function isComposerAttachContext(panelId: string): boolean {
+  // Only steal ⌘⇧A while Rich Input is mounted AND keyboard-focused.
+  // Mounted-but-blurred (e.g. typing in the terminal) keeps "new agent".
+  if (!isTerminalComposerOpen(panelId)) {
+    return false;
+  }
+  return (
+    useTerminalStore.getState().activeOverlayId ===
+    `terminal-composer:${panelId}`
+  );
+}
+
 function pickAction(
   chord: KeyChord,
   target: EventTarget | null
 ): Action | null {
   const scope = useKeybindingScope.getState();
-  const commandId = keybindingRegistry.resolve(chord, {
+  let commandId = keybindingRegistry.resolve(chord, {
     activePanelComponent: scope.activePanelComponent,
     overlayStack: scope.overlayStack,
   });
+  // Shared ⌘⇧A: registry may hit either binding. Prefer attach only while
+  // Rich Input is focused; otherwise always new agent.
+  if (
+    isNewAgentOrAttachChord(chord) &&
+    (commandId === "pier.terminal.composerAttach" ||
+      commandId === "pier.agent.new")
+  ) {
+    const panelId = activeTerminalPanelId();
+    commandId =
+      panelId && isComposerAttachContext(panelId)
+        ? "pier.terminal.composerAttach"
+        : "pier.agent.new";
+  }
   if (!commandId) {
     return null;
   }
@@ -130,6 +167,8 @@ function charsToCode(chars: string): string {
       return "ArrowLeft";
     case "\u{F703}":
       return "ArrowRight";
+    case "\u{1b}":
+      return "Escape";
     default:
       return ch; // fallback: 让 keymap resolve 自行不命中
   }

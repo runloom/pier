@@ -31,17 +31,34 @@ export function clearComposerDraft(panelId: string): void {
   drafts.delete(panelId);
 }
 
-export function textareaSoftWrapped(el: HTMLTextAreaElement): boolean {
+/**
+ * Detect soft-wrapped multi-line content inside the composer editable.
+ *
+ * Measure the Lexical paragraph (or first block), not the contenteditable
+ * shell. Compact chrome forces `h-full` on the editable (~36px); with a
+ * shorter line-height than the shell that makes `scrollHeight / lineHeight ≥ 1.6`
+ * even when empty, oscillating compact ↔ expanded and flashing the chrome.
+ */
+export function elementSoftWrapped(el: HTMLElement): boolean {
   const style = getComputedStyle(el);
   const lineHeight = Number.parseFloat(style.lineHeight);
   if (!Number.isFinite(lineHeight) || lineHeight <= 0) {
     return false;
   }
+
+  const block = el.querySelector(":scope > p, :scope p");
+  const target = block instanceof HTMLElement ? block : el;
+  const targetStyle = target === el ? style : getComputedStyle(target);
   const paddingY =
-    (Number.parseFloat(style.paddingTop) || 0) +
-    (Number.parseFloat(style.paddingBottom) || 0);
-  const contentHeight = Math.max(0, el.scrollHeight - paddingY);
+    (Number.parseFloat(targetStyle.paddingTop) || 0) +
+    (Number.parseFloat(targetStyle.paddingBottom) || 0);
+  const contentHeight = Math.max(0, target.scrollHeight - paddingY);
   return contentHeight / lineHeight >= SOFT_WRAP_LINE_THRESHOLD;
+}
+
+/** @deprecated Prefer elementSoftWrapped — kept for call-site migration. */
+export function textareaSoftWrapped(el: HTMLTextAreaElement): boolean {
+  return elementSoftWrapped(el);
 }
 
 export function reportComposerSendFailure(
@@ -55,7 +72,7 @@ export function reportComposerSendFailure(
 }
 
 export function focusComposerInput(
-  el: HTMLTextAreaElement,
+  el: HTMLElement,
   overlayId: string
 ): boolean {
   el.focus();

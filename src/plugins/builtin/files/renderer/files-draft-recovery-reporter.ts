@@ -19,7 +19,6 @@ export class FilesDraftRecoveryReporter {
     this.#reported.add(message);
     await context.dialogs.alert({
       body: message,
-      size: "default",
       title: context.i18n.t(
         "files.draftRecovery.failed",
         undefined,

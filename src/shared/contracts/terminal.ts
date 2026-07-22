@@ -7,6 +7,7 @@ import type {
   TerminalComposerMaterializeResult,
   TerminalComposerPathsResult,
   TerminalComposerPickResult,
+  TerminalComposerTextBytes,
 } from "./terminal-composer-attachments.ts";
 // TerminalAPI 是终端 IPC 契约, 里面 debugSnapshot / openDebugWindow 等 debug 相关
 // 方法需要引用 debug schema. 仅 type-only 循环 import (tsc 会 erase), 不构成运行时环。
@@ -26,6 +27,7 @@ export type {
   TerminalComposerMaterializeResult,
   TerminalComposerPathsResult,
   TerminalComposerPickResult,
+  TerminalComposerTextBytes,
 } from "./terminal-composer-attachments.ts";
 export type {
   SkillsLaunchBlockedInfo,
@@ -144,12 +146,7 @@ export type NativeFocusIntentResult =
   | { ok: true; panelId: string }
   | {
       ok: false;
-      reason:
-        | "cross-window"
-        | "hidden"
-        | "not-ready"
-        | "stale"
-        | "web-overlay-active";
+      reason: "cross-window" | "hidden" | "not-ready" | "stale";
     };
 
 /**
@@ -397,6 +394,9 @@ export interface TerminalAPI {
   materializeComposerClipboardImage(): Promise<TerminalComposerMaterializeResult>;
   materializeComposerImageBytes(
     data: TerminalComposerImageBytes
+  ): Promise<TerminalComposerMaterializeResult>;
+  materializeComposerTextBytes(
+    data: TerminalComposerTextBytes
   ): Promise<TerminalComposerMaterializeResult>;
   navigateSearch(
     panelId: string,

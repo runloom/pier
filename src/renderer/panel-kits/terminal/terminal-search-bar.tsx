@@ -7,12 +7,15 @@ import {
 } from "@pier/ui/input-group.tsx";
 import type { TerminalSearchStateEvent } from "@shared/contracts/terminal.ts";
 import { ArrowDown, ArrowUp, Search, X } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { activeTerminalPanelId } from "@/lib/actions/renderer-action-runtime.ts";
+import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import {
   useTerminalOverlayFocus,
   useTerminalStore,
 } from "@/stores/terminal.store.ts";
+import { acquireTerminalEscapeShortcut } from "./terminal-escape-shortcut.ts";
 
 interface TerminalSearchBarProps {
   focusRequest: number;
@@ -31,6 +34,17 @@ const EMPTY_SEARCH_STATE: SearchState = {
   total: 0,
 };
 
+/** 与 use-keybindings 一致的 NSEvent 修饰位。 */
+const NS_FLAG_SHIFT = 0x2_00_00;
+const NS_FLAG_CONTROL = 0x4_00_00;
+const NS_FLAG_OPTION = 0x8_00_00;
+const NS_FLAG_COMMAND = 0x10_00_00;
+
+function hasNsFlag(modifierFlags: number, flag: number): boolean {
+  // biome-ignore lint/suspicious/noBitwiseOperators: NSEvent.modifierFlags 位掩码
+  return (modifierFlags & flag) !== 0;
+}
+
 function normalizeSearchState(event: TerminalSearchStateEvent): SearchState {
   const total = Number.isFinite(event.total) ? Math.max(0, event.total) : 0;
   const selected =
@@ -43,6 +57,18 @@ function normalizeSearchState(event: TerminalSearchStateEvent): SearchState {
 
 function reportSearchError(action: string, err: unknown): void {
   console.error(`[terminal-search] ${action} failed:`, err);
+}
+
+function isBareEscapeForward(modifierFlags: number, chars: string): boolean {
+  if (
+    hasNsFlag(modifierFlags, NS_FLAG_COMMAND) ||
+    hasNsFlag(modifierFlags, NS_FLAG_CONTROL) ||
+    hasNsFlag(modifierFlags, NS_FLAG_OPTION) ||
+    hasNsFlag(modifierFlags, NS_FLAG_SHIFT)
+  ) {
+    return false;
+  }
+  return chars === "\u{1b}" || chars.toLowerCase() === "escape";
 }
 
 export function TerminalSearchBar({
@@ -105,11 +131,11 @@ export function TerminalSearchBar({
     [panelId]
   );
 
-  const endSearch = () => {
+  const endSearch = useCallback(() => {
     window.pier.terminal
       .endSearch(panelId)
       .catch((err: unknown) => reportSearchError("end", err));
-  };
+  }, [panelId]);
 
   const runSearch = (nextQuery: string) => {
     setQuery(nextQuery);
@@ -142,13 +168,69 @@ export function TerminalSearchBar({
       .catch((err: unknown) => reportSearchError("navigate", err));
   };
 
-  const close = () => {
+  const close = useCallback(() => {
     setQuery("");
     setSearchState(EMPTY_SEARCH_STATE);
     endSearch();
     useTerminalStore.getState().deactivateOverlay(searchId);
     onClose();
-  };
+  }, [endSearch, onClose, searchId]);
+
+  // Panel 内任意处 Esc 关闭：web 焦点走 window keydown；终端占 FR 时走
+  // native shortcut forward（打开期间临时允许 Escape）。
+  useEffect(() => {
+    if (!visible) {
+      return;
+    }
+    const releaseEscapeShortcut = acquireTerminalEscapeShortcut();
+
+    const shouldHandleEscape = (target: EventTarget | null): boolean => {
+      if (activeTerminalPanelId() !== panelId) {
+        return false;
+      }
+      // Dialog / 命令面板等阻断层优先。
+      if (useKeybindingScope.getState().overlayStack.length > 0) {
+        return false;
+      }
+      const el = target instanceof Element ? target : null;
+      // Rich Input 自己的 Esc 关闭路径优先。
+      if (el?.closest?.('[data-testid="terminal-composer"]')) {
+        return false;
+      }
+      return true;
+    };
+
+    const onKeyDown = (event: KeyboardEvent) => {
+      if (event.key !== "Escape" || event.defaultPrevented) {
+        return;
+      }
+      if (!shouldHandleEscape(event.target)) {
+        return;
+      }
+      event.preventDefault();
+      event.stopPropagation();
+      close();
+    };
+
+    const unsubscribeForward = window.pier?.keybinding?.onForward?.(
+      ({ modifierFlags, chars }) => {
+        if (!isBareEscapeForward(modifierFlags, chars)) {
+          return;
+        }
+        if (!shouldHandleEscape(null)) {
+          return;
+        }
+        close();
+      }
+    );
+
+    window.addEventListener("keydown", onKeyDown, true);
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      unsubscribeForward?.();
+      releaseEscapeShortcut();
+    };
+  }, [close, panelId, visible]);
 
   const matchText = (() => {
     if (query === "") {
@@ -188,10 +270,8 @@ export function TerminalSearchBar({
             if (event.key === "Enter") {
               event.preventDefault();
               navigate(event.shiftKey ? "previous" : "next");
-            } else if (event.key === "Escape") {
-              event.preventDefault();
-              close();
             }
+            // Escape：由 panel 级 capture 监听统一关闭，避免双路径。
           }}
           placeholder={t("terminal.search.placeholder")}
           ref={inputRef}

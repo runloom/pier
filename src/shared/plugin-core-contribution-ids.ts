@@ -51,6 +51,7 @@ export const CORE_RESERVED_ACTION_IDS = [
   "pier.settings.open",
   "pier.terminal.clearScreen",
   "pier.terminal.close",
+  "pier.terminal.composerAttach",
   "pier.terminal.copy",
   "pier.terminal.openAgentComposer",
   "pier.terminal.openDebugWindow",

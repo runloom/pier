@@ -45,7 +45,6 @@ export interface RendererPluginDialogsFacade {
     body?: string;
     confirmLabel?: string;
     intent?: RendererPluginDialogIntent;
-    size?: RendererPluginDialogSize;
     title: string;
   }): Promise<void>;
   /**

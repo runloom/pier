@@ -27,6 +27,7 @@ const ZH_BANNED_PATTERNS: ReadonlyArray<{ id: string; pattern: RegExp }> = [
   { id: "新建 agent", pattern: /新建\s*agent/i },
   { id: "无 upstream", pattern: /无\s*upstream/i },
   { id: "Git worktree", pattern: /Git\s*worktree/i },
+  { id: "worktree 英文词", pattern: /\bworktree\b/i },
   { id: "DETACHED", pattern: /\bDETACHED\b/ },
   { id: "MERGING", pattern: /\bMERGING\b/ },
   { id: "REBASING", pattern: /\bREBASING\b/ },
@@ -68,6 +69,10 @@ const EN_BANNED_PATTERNS: ReadonlyArray<{ id: string; pattern: RegExp }> = [
 const VALUE_ALLOWLIST: readonly RegExp[] = [
   /\.worktree\b/,
   /\{[^}]*worktree[^}]*\}/i,
+  /^创建 worktree$/,
+  /^create worktree$/i,
+  /^worktree prune$/i,
+  /^worktree:[a-z]+$/,
   /PIER_PLUGIN_MODE/,
   /pnpm dev/,
 ];

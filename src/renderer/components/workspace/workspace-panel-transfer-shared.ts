@@ -162,5 +162,5 @@ export async function showPanelTransferFailure(
     detail.length > 0 && result.code !== "not_supported"
       ? `${genericBody}\n\n${detail}`
       : genericBody;
-  await showAppAlert({ body, size: "default", title });
+  await showAppAlert({ body, title });
 }

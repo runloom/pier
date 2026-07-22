@@ -16,6 +16,7 @@ export const contextMenu = {
     find: "查找",
     newTerminal: "新建终端",
     openRichInput: "切换增强输入",
+    attachRichInputFile: "增强输入添加文件",
     paste: "粘贴",
     rerunTask: "重新运行",
     selectAll: "全选",

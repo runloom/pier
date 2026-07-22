@@ -1,5 +1,6 @@
 import type {
   MarkdownBlock,
+  MarkdownHeadingSummary,
   MarkdownIrDocument,
   MarkdownParseRequest,
   MarkdownParseResponse,
@@ -61,6 +62,7 @@ export interface MarkdownSemanticPage {
 }
 
 export interface MarkdownPagination {
+  headings: MarkdownHeadingSummary[];
   pageByHeadingId: Record<string, number>;
   pages: MarkdownSemanticPage[];
 }
@@ -151,7 +153,7 @@ export function paginateMarkdownDocument(
       pageByHeadingId[heading.id] = page.index;
     }
   }
-  return { pageByHeadingId, pages };
+  return { headings: document.headings, pageByHeadingId, pages };
 }
 
 export function createMarkdownRuntime(

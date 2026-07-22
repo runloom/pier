@@ -16,6 +16,7 @@ export const contextMenu = {
     find: "Find",
     newTerminal: "New Terminal",
     openRichInput: "Toggle Rich Input",
+    attachRichInputFile: "Add File to Rich Input",
     paste: "Paste",
     rerunTask: "Rerun Task",
     selectAll: "Select All",

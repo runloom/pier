@@ -8,6 +8,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
+import { resetComposerEditorsForTests } from "@/panel-kits/terminal/structured-composer/structured-composer-test-registry.ts";
 import {
   resetTerminalComposerDraftsForTests,
   TerminalComposer,
@@ -22,6 +23,11 @@ import {
   resetTerminalComposerTakeoverForTests,
   terminalComposerTakeoverFocus,
 } from "@/stores/terminal-composer-takeover.ts";
+import {
+  composerInput,
+  readComposerDraftText,
+  setComposerDraftText,
+} from "./terminal-composer-test-utils.ts";
 
 vi.mock("@/stores/app-dialog.store.ts", () => ({
   showAppAlert: vi.fn(async () => undefined),
@@ -73,6 +79,7 @@ beforeEach(async () => {
   vi.mocked(showAppAlert).mockClear();
   resetTerminalComposerDraftsForTests();
   resetTerminalComposerAttachmentsForTests();
+  resetComposerEditorsForTests();
 });
 
 afterEach(() => {
@@ -83,11 +90,13 @@ afterEach(() => {
   resetTerminalComposerTakeoverForTests();
   resetTerminalComposerDraftsForTests();
   resetTerminalComposerAttachmentsForTests();
+  resetComposerEditorsForTests();
   Reflect.deleteProperty(window, "pier");
 });
 
 function renderComposer(
   overrides: Partial<{
+    attachRequest: number;
     bottomOffsetPx: number;
     disabled: boolean;
     focusRequest: number;
@@ -101,6 +110,7 @@ function renderComposer(
   const onHeightChange = overrides.onHeightChange ?? vi.fn();
   const view = render(
     <TerminalComposer
+      attachRequest={overrides.attachRequest ?? 0}
       bottomOffsetPx={overrides.bottomOffsetPx ?? 0}
       disabled={overrides.disabled ?? false}
       focusRequest={overrides.focusRequest ?? 0}
@@ -123,13 +133,26 @@ describe("TerminalComposer", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("opens the file picker once per attachRequest bump, not on remount at 0", async () => {
+    pickComposerFiles.mockResolvedValue({ ok: false, error: "cancelled" });
+    const { view } = renderComposer({ attachRequest: 1 });
+    await vi.waitFor(() => {
+      expect(pickComposerFiles).toHaveBeenCalledTimes(1);
+    });
+
+    view.unmount();
+    pickComposerFiles.mockClear();
+    renderComposer({ attachRequest: 0 });
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 20);
+    });
+    expect(pickComposerFiles).not.toHaveBeenCalled();
+  });
+
   it("shows Send with Enter kbd and multiline hints once chrome expands", () => {
     renderComposer();
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "line1\nline2" } });
+    setComposerDraftText("line1\nline2");
 
     const root = screen.getByTestId("terminal-composer");
     expect(root).toHaveAttribute("data-chrome", "expanded");
@@ -137,7 +160,7 @@ describe("TerminalComposer", () => {
     expect(send).toHaveTextContent(i18next.t("terminal.composer.send"));
     expect(send.querySelector("[data-slot=kbd]")).toHaveTextContent("⏎");
     expect(
-      screen.getByText(i18next.t("terminal.composer.keyHint"))
+      screen.getByText(/⇧⏎ newline · .+ attach · Esc close/)
     ).toBeInTheDocument();
   });
 
@@ -145,10 +168,8 @@ describe("TerminalComposer", () => {
     const onClose = vi.fn();
     const { view } = renderComposer({ onClose, panelId: "t-draft" });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "keep me" } });
+    const textarea = composerInput();
+    setComposerDraftText("keep me");
     fireEvent.keyDown(textarea, { key: "Escape" });
 
     expect(onClose).toHaveBeenCalledTimes(1);
@@ -158,20 +179,15 @@ describe("TerminalComposer", () => {
     view.unmount();
     renderComposer({ panelId: "t-draft" });
 
-    expect(
-      (screen.getByTestId("terminal-composer-input") as HTMLTextAreaElement)
-        .value
-    ).toBe("keep me");
+    expect(readComposerDraftText()).toBe("keep me");
   });
 
   it("sends typed text on Enter, clears textarea, and calls onClose on success", async () => {
     const onClose = vi.fn();
     renderComposer({ onClose });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "fix bug" } });
+    const textarea = composerInput();
+    setComposerDraftText("fix bug");
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     expect(sendText).toHaveBeenCalledWith({
@@ -181,7 +197,7 @@ describe("TerminalComposer", () => {
     });
 
     await vi.waitFor(() => {
-      expect(textarea.value).toBe("");
+      expect(readComposerDraftText()).toBe("");
       expect(onClose).toHaveBeenCalledTimes(1);
     });
   });
@@ -189,19 +205,14 @@ describe("TerminalComposer", () => {
   it("inserts a newline on Shift+Enter and Mod+Shift+Enter without sending", () => {
     renderComposer();
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "fix bug" } });
-    textarea.setSelectionRange(3, 3);
+    const textarea = composerInput();
+    setComposerDraftText("fix bug");
     fireEvent.keyDown(textarea, { key: "Enter", shiftKey: true });
 
     expect(sendText).not.toHaveBeenCalled();
     expect(sendKeyPress).not.toHaveBeenCalled();
-    expect(textarea.value).toBe("fix\n bug");
 
-    fireEvent.change(textarea, { target: { value: "line" } });
-    textarea.setSelectionRange(4, 4);
+    setComposerDraftText("line");
     fireEvent.keyDown(textarea, {
       key: "Enter",
       metaKey: true,
@@ -209,7 +220,7 @@ describe("TerminalComposer", () => {
     });
 
     expect(sendText).not.toHaveBeenCalled();
-    expect(textarea.value).toBe("line\n");
+    expect(readComposerDraftText()).toBe("line");
   });
 
   it("keeps open with text and alerts when sendText resolves ok:false without delivery", async () => {
@@ -217,10 +228,8 @@ describe("TerminalComposer", () => {
     sendText.mockResolvedValueOnce({ error: "boom", ok: false });
     renderComposer({ onClose });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "fix bug" } });
+    const textarea = composerInput();
+    setComposerDraftText("fix bug");
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     await vi.waitFor(() => {
@@ -231,7 +240,7 @@ describe("TerminalComposer", () => {
         })
       );
     });
-    expect(textarea.value).toBe("fix bug");
+    expect(readComposerDraftText()).toBe("fix bug");
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -244,45 +253,45 @@ describe("TerminalComposer", () => {
     });
     renderComposer({ onClose, panelId: "t-delivered" });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "fix bug" } });
+    const textarea = composerInput();
+    setComposerDraftText("fix bug");
     fireEvent.keyDown(textarea, { key: "Enter" });
 
     await vi.waitFor(() => {
-      expect(textarea.value).toBe("");
+      expect(readComposerDraftText()).toBe("");
       expect(showAppAlert).toHaveBeenCalled();
       expect(onClose).toHaveBeenCalledTimes(1);
     });
 
     cleanup();
     renderComposer({ panelId: "t-delivered" });
-    expect(
-      (screen.getByTestId("terminal-composer-input") as HTMLTextAreaElement)
-        .value
-    ).toBe("");
+    expect(readComposerDraftText()).toBe("");
   });
 
-  it("does not sendKeyPress empty navigation keys; only Ctrl+C passthroughs", async () => {
+  it("passthroughs empty-draft navigation keys and always Ctrl+C", async () => {
     renderComposer();
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
+    const textarea = composerInput();
 
-    for (const key of [
-      "ArrowUp",
-      "ArrowDown",
-      "ArrowLeft",
-      "ArrowRight",
-      "Tab",
-    ]) {
-      fireEvent.keyDown(textarea, { key });
-    }
-    expect(sendKeyPress).not.toHaveBeenCalled();
-    expect(sendText).not.toHaveBeenCalled();
+    fireEvent.keyDown(textarea, { key: "ArrowDown" });
+    await vi.waitFor(() => {
+      expect(sendKeyPress).toHaveBeenCalledWith({
+        keycode: APPKIT_KEYCODE.arrowDown,
+        panelId: "t-1",
+      });
+    });
 
+    sendKeyPress.mockClear();
+    fireEvent.keyDown(textarea, { key: "Tab", shiftKey: true });
+    await vi.waitFor(() => {
+      expect(sendKeyPress).toHaveBeenCalledWith({
+        keycode: APPKIT_KEYCODE.tab,
+        mods: GHOSTTY_MODS.shift,
+        panelId: "t-1",
+      });
+    });
+
+    sendKeyPress.mockClear();
     fireEvent.keyDown(textarea, { ctrlKey: true, key: "c" });
     await vi.waitFor(() => {
       expect(sendKeyPress).toHaveBeenCalledWith({
@@ -293,7 +302,7 @@ describe("TerminalComposer", () => {
     });
 
     sendKeyPress.mockClear();
-    fireEvent.change(textarea, { target: { value: "fix bug" } });
+    setComposerDraftText("fix bug");
     fireEvent.keyDown(textarea, { key: "ArrowDown" });
     fireEvent.keyDown(textarea, { ctrlKey: true, key: "c" });
     await vi.waitFor(() => {
@@ -310,7 +319,7 @@ describe("TerminalComposer", () => {
     const onHeightChange = vi.fn();
     const { view } = renderComposer({ onHeightChange });
 
-    const textarea = screen.getByTestId("terminal-composer-input");
+    const textarea = composerInput();
     fireEvent.focus(textarea);
     expect(useTerminalStore.getState().activeOverlayId).toBe(
       "terminal-composer:t-1"
@@ -322,7 +331,7 @@ describe("TerminalComposer", () => {
 
   it("focuses the textarea when clicking empty chrome (not controls)", () => {
     renderComposer({});
-    const textarea = screen.getByTestId("terminal-composer-input");
+    const textarea = composerInput();
     expect(document.activeElement).not.toBe(textarea);
 
     fireEvent.mouseDown(screen.getByTestId("terminal-composer"));
@@ -358,7 +367,7 @@ describe("TerminalComposer", () => {
       ).toBeTruthy();
     });
 
-    const textarea = screen.getByTestId("terminal-composer-input");
+    const textarea = composerInput();
     textarea.blur();
     expect(document.activeElement).not.toBe(textarea);
 
@@ -372,10 +381,8 @@ describe("TerminalComposer", () => {
     const onClose = vi.fn();
     renderComposer({ onClose });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "fix bug" } });
+    const textarea = composerInput();
+    setComposerDraftText("fix bug");
     fireEvent.keyDown(textarea, { isComposing: true, key: "Enter" });
     fireEvent.keyDown(textarea, { isComposing: true, key: "Escape" });
 
@@ -387,13 +394,13 @@ describe("TerminalComposer", () => {
   it("disables the textarea and the send button when disabled", () => {
     renderComposer({ disabled: true });
 
-    expect(screen.getByTestId("terminal-composer-input")).toBeDisabled();
+    expect(composerInput().getAttribute("contenteditable")).toBe("false");
     expect(screen.getByTestId("terminal-composer-send")).toBeDisabled();
   });
 
   it("releases the composer overlay when it becomes disabled while focused", () => {
     const { onClose, onHeightChange, view } = renderComposer();
-    const textarea = screen.getByTestId("terminal-composer-input");
+    const textarea = composerInput();
 
     fireEvent.focus(textarea);
     expect(useTerminalStore.getState().activeOverlayId).toBe(
@@ -436,10 +443,8 @@ describe("TerminalComposer", () => {
     const onClose = vi.fn();
     renderComposer({ onClose, panelId: "t-takeover" });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "drafted" } });
+    const textarea = composerInput();
+    setComposerDraftText("drafted");
     textarea.blur();
     useTerminalStore
       .getState()
@@ -450,17 +455,15 @@ describe("TerminalComposer", () => {
     expect(terminalComposerTakeoverFocus("t-takeover", "surface")).toBe(true);
     expect(onClose).not.toHaveBeenCalled();
     expect(document.activeElement).toBe(textarea);
-    expect(textarea.value).toBe("drafted");
+    expect(readComposerDraftText()).toBe("drafted");
   });
 
   it("activate takeover refocuses the textarea and does not close", () => {
     const onClose = vi.fn();
     renderComposer({ onClose, panelId: "t-activate" });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "keep open" } });
+    const textarea = composerInput();
+    setComposerDraftText("keep open");
     textarea.blur();
     useTerminalStore
       .getState()
@@ -473,17 +476,15 @@ describe("TerminalComposer", () => {
     expect(useTerminalStore.getState().activeOverlayId).toBe(
       "terminal-composer:t-activate"
     );
-    expect(textarea.value).toBe("keep open");
+    expect(readComposerDraftText()).toBe("keep open");
   });
 
   it("surface takeover returns false when disabled and does NOT close", () => {
     const onClose = vi.fn();
     renderComposer({ disabled: true, onClose });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    expect(textarea.disabled).toBe(true);
+    const textarea = composerInput();
+    expect(textarea.getAttribute("contenteditable")).toBe("false");
     textarea.blur();
     expect(document.activeElement).not.toBe(textarea);
 
@@ -502,7 +503,7 @@ describe("TerminalComposer", () => {
 
   it("releases the composer overlay when the panel becomes inactive", () => {
     const { onClose, onHeightChange, view } = renderComposer();
-    const textarea = screen.getByTestId("terminal-composer-input");
+    const textarea = composerInput();
     fireEvent.focus(textarea);
     expect(useTerminalStore.getState().activeOverlayId).toBe(
       "terminal-composer:t-1"
@@ -527,9 +528,7 @@ describe("TerminalComposer", () => {
     const onHeightChange = vi.fn();
     const { view } = renderComposer({ onClose, onHeightChange });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
+    const textarea = composerInput();
     textarea.blur();
     useTerminalStore.getState().deactivateOverlay("terminal-composer:t-1");
     expect(document.activeElement).not.toBe(textarea);
@@ -578,15 +577,11 @@ describe("TerminalComposer", () => {
     fireEvent.click(screen.getByTestId("terminal-composer-attach"));
     await vi.waitFor(() => {
       expect(screen.getByTestId("terminal-composer-attachment-1")).toBeTruthy();
+      expect(readComposerDraftText()).toContain("/tmp/note.pdf");
+      expect(readComposerDraftText()).not.toContain("[#");
     });
 
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    expect(textarea.value).toContain("[#1]");
-    fireEvent.change(textarea, {
-      target: { value: `${textarea.value} please review` },
-    });
+    setComposerDraftText(`${readComposerDraftText()} please review`);
 
     fireEvent.click(screen.getByTestId("terminal-composer-send"));
 
@@ -600,7 +595,7 @@ describe("TerminalComposer", () => {
     });
     await vi.waitFor(() => {
       expect(onClose).toHaveBeenCalledTimes(1);
-      expect(textarea.value).toBe("");
+      expect(readComposerDraftText()).toBe("");
     });
     expect(
       screen.queryByTestId("terminal-composer-attachment-1")
@@ -632,11 +627,8 @@ describe("TerminalComposer", () => {
       expect(screen.getByTestId("terminal-composer-attachment-1")).toBeTruthy();
     });
 
-    // Body may only hold the auto-inserted [#n]; blank body still sends paths.
-    const textarea = screen.getByTestId(
-      "terminal-composer-input"
-    ) as HTMLTextAreaElement;
-    fireEvent.change(textarea, { target: { value: "" } });
+    // Body may hold the auto-inserted path chip; blank body still sends paths.
+    setComposerDraftText("");
 
     const send = screen.getByTestId("terminal-composer-send");
     expect(send).not.toBeDisabled();

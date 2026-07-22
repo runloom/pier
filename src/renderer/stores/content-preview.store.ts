@@ -21,6 +21,11 @@ export interface ContentPreviewPayload {
 
 export interface OpenContentPreviewRequest {
   id?: string;
+  /**
+   * Invoked when this preview closes or is replaced by another open.
+   * Use for releasing file-preview tickets owned by the fullscreen session.
+   */
+  onClose?: () => void;
   payload: ContentPreviewPayload;
   /** Required i18n title from the call site. */
   title: string;
@@ -32,12 +37,14 @@ export type ImageLightboxSource = ContentPreviewImageSource;
 export interface ImageLightboxRequest {
   alt?: string;
   id?: string;
+  onClose?: () => void;
   source: ContentPreviewImageSource;
   title: string;
 }
 
 interface ContentPreviewState {
   id: string;
+  onClose: (() => void) | null;
   open: boolean;
   payload: ContentPreviewPayload | null;
   title: string;
@@ -45,6 +52,7 @@ interface ContentPreviewState {
 
 const INITIAL: ContentPreviewState = {
   id: "content-preview",
+  onClose: null,
   open: false,
   payload: null,
   title: "",
@@ -59,16 +67,21 @@ export const useContentPreviewStore = create<ContentPreviewState>(() => ({
  * Call sites must pass an i18n title.
  */
 export function openContentPreview(request: OpenContentPreviewRequest): void {
+  const previousOnClose = useContentPreviewStore.getState().onClose;
   useContentPreviewStore.setState({
     id: request.id ?? "content-preview",
+    onClose: request.onClose ?? null,
     open: true,
     payload: request.payload,
     title: request.title,
   });
+  previousOnClose?.();
 }
 
 export function closeContentPreview(): void {
+  const onClose = useContentPreviewStore.getState().onClose;
   useContentPreviewStore.setState({ ...INITIAL });
+  onClose?.();
 }
 
 /**
@@ -78,6 +91,7 @@ export function closeContentPreview(): void {
 export function openImagePreview(request: ImageLightboxRequest): void {
   openContentPreview({
     ...(request.id ? { id: request.id } : {}),
+    ...(request.onClose ? { onClose: request.onClose } : {}),
     payload: {
       type: "image",
       source: request.source,

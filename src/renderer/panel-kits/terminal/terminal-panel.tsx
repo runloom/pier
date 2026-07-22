@@ -67,6 +67,7 @@ import {
 } from "./terminal-tab-chrome.ts";
 import { useAgentComposer } from "./use-agent-composer.ts";
 import { useRestartRestoredAgent } from "./use-restart-restored-agent.ts";
+import { useTaskOutputKeyDismiss } from "./use-task-output-key-dismiss.ts";
 import { useTerminalFloatingLayoutRevision } from "./use-terminal-floating-layout-revision.ts";
 import { useTerminalNativeLifecycle } from "./use-terminal-native-lifecycle.ts";
 import { useTerminalPanelDescriptor } from "./use-terminal-panel-descriptor.ts";
@@ -228,6 +229,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   );
   const restored = Boolean(restoredAgentResult || restoredTaskResult);
   const {
+    attachRequest,
     closeComposer,
     composerFocusRequest,
     composerMounted,
@@ -360,6 +362,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     setActive: activatePanel,
   });
   useTerminalSurfaceClose(panelId, props.params);
+  useTaskOutputKeyDismiss(panelId, props.params, api.isActive);
 
   useEffect(() => {
     const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {
@@ -471,6 +474,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       />
       {composerMounted ? (
         <TerminalComposer
+          attachRequest={attachRequest}
           bottomOffsetPx={statusInsetPx}
           disabled={!nativeTerminalReady || Boolean(error)}
           focusRequest={composerFocusRequest}
@@ -478,6 +482,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           onClose={closeComposer}
           onHeightChange={onComposerHeightChange}
           panelId={panelId}
+          projectRootPath={
+            effectiveContext?.projectRootPath ?? effectiveContext?.cwd ?? null
+          }
         />
       ) : null}
       <TerminalStatusBar {...statusContext} />

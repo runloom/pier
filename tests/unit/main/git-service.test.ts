@@ -897,7 +897,7 @@ describe("createGitService", () => {
     ]);
   });
 
-  it("searchBranches 合并模式下有可合入内容时保留提交图 ahead/behind", async () => {
+  it("searchBranches 合并模式下有可合入内容时保留 ahead/behind", async () => {
     const record = (fields: readonly string[]) => `${fields.join("\x1f")}\x1e`;
     const headTree = "a".repeat(40);
     const mergeTree = "b".repeat(40);

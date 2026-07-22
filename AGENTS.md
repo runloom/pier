@@ -1,6 +1,7 @@
 # Pier Agent Context
 
-本文件是开发 Pier 时给 Claude Code、Codex 和 OpenCode 共用的项目级上下文。
+本文件是开发 Pier 时给 Claude Code、Codex 和 OpenCode 共用的项目级上下文（硬约束与治理规则）。  
+人类贡献者请从 [`README.md`](README.md) / [`docs/README.md`](docs/README.md) / [`CONTRIBUTING.md`](CONTRIBUTING.md) 进入；不要把本文当作用户手册全文复制进 PR 描述。
 
 ## 01 项目定位
 
@@ -61,16 +62,17 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
   - `confirm` / `prompt`：`取消 | 主按钮`（主按钮最右）
   - `choice`：`alt | 取消 | confirm`（例：不保存 | 取消 | 保存）；横排三键
 - `size`：
-  - `sm`：仅两键短确认 / 短 prompt（退出、删除、关 panel）
-  - `default`：三键 `choice`、较长说明、错误详情；`choice` 调用方必须传 `default`，host 渲染也强制 default 宽
-  - 长错误 `alert` 默认 `default`；短告知才显式 `sm`
+  - `alert`：**固定 `sm`**，API 不接受 `size`（宿主强制）
+  - `sm`：短确认 / 短 prompt（退出、删除、关 panel）
+  - `default`：三键 `choice`、较长说明；`choice` 调用方必须传 `default`，host 渲染也强制 default 宽
+  - `confirm` / `prompt` 必须显式传 `size`
 - `intent`：调用方必填，不要在 `AppDialogHost` 里按标题或文案猜测危险程度
   - 破坏性确认必须显式传 `intent: "destructive"`，普通确认显式传 `intent: "default"`
   - `confirm` / `prompt`：作用在**主按钮**
   - `choice`：作用在 **alt**（不保存/丢弃）；confirm 始终 default 样式
   - 若破坏动作落在 `choice.confirm`（如覆盖），`intent` 仍必须 `"default"`，不能为了“看起来危险”去染 alt
 - 取消按钮一律 `outline`（含 destructive 场景）；Esc / 点遮罩 = 取消
-- `showAppAlert` 可省略 size（默认 default）；短 alert 如需小尺寸由调用方显式传 `size: "sm"`
+- `showAppAlert` / 插件 `dialogs.alert` **不传 size**，一律 `sm`
 - 检查点在 `tests/unit/renderer/app-dialog-governance.test.ts` 与 `tests/component/app-dialog-host.test.tsx`
 
 复杂内容弹窗（表单、多步、等待态、带自定义 body）统一走宿主 `AppContentDialogHost`：
@@ -79,7 +81,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 插件 renderer 禁止 import `@pier/ui/dialog` 或 `@pier/ui/alert-dialog`；嵌套插件 Dialog（Settings 内再开插件 Dialog）一律禁止。
 - **决策树**（必须按此选型，禁止“图省事全走 content dialog”）：
   1. 短成功 / 弱反馈 → toast
-  2. 只告知、无决策 → `alert`（长错误 `default`，短告知可 `sm`）
+  2. 只告知、无决策 → `alert`（固定 `sm`，无 size 参数）
   3. 取消 | 确认 → `confirm`
   4. alt | 取消 | 确认 → `choice`
   5. 单行输入 + 校验 → `prompt`
@@ -145,6 +147,31 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 业务代码 `toast.*("…")` / `showAppAlert({ title: "…" })` 内联用户串未走 i18n → finding。
 
 检查点在 `tests/unit/renderer/user-copy-governance.test.ts`：锁定本节存在，并扫描中英 locale 字符串值中的禁用实现词。
+
+### Markdown 预览大纲布局复用（最高优先级）
+
+`src/plugins/builtin/files/renderer/markdown-preview*.tsx` 的大纲与正文布局必须先复用、再分模式。模式差异只能落在**定位 / 是否占流**，不得复制第二套壳、高度或间距。
+
+硬规则：
+
+1. **一个大纲壳**：只允许 `MarkdownPreviewToc` 渲染大纲 UI（标题栏、列表、收起芯片）。禁止按 dock/overlay 再写一份 aside。
+2. **布局分工**：并排时正文+大纲在 `data-slot="markdown-preview-layout"` 占流编排；浮动时大纲走 `data-slot="markdown-preview-outline-rail"`，必须与字号控件挂在**同一预览框包含块**，共用 `MARKDOWN_PREVIEW_EDGE_INSET_PX`，禁止在带 padding 的 scroll 内容盒里用负偏移猜对齐。
+3. **共享几何**：顶距、轨宽、边距、最大高度只来自 `markdown-preview-toc-layout.ts` 常量 / `markdownOutlineFrameHeightPx`。大纲 **max-height = 内容区高度 − `MARKDOWN_TOC_MAX_HEIGHT_RESERVE_PX`（200）**；浮动模式大纲外缘与字号控件右对齐；禁止浮层再写 `max-h-[min(70%,…)]` 或另一套 px 公式；禁止 TOC 与布局各自手写 `top-2` / `right-3` / `w-56` 而不读共享常量。
+4. **版心单一来源**：可见行宽由 `[data-slot="markdown-prose"]` 的 `--md-measure`（CSS）决定；TS 不得再平行维护第二套「渲染用 72ch」。TS 常量仅用于 dock 可用性测算的 fallback。
+5. **placement 只切换定位语义**：`dock` = 占流并排 + sticky；`overlay` = 预览框上的 rail。高度、inset、chrome 必须同行。
+
+反例（禁止）：
+
+- dock 用视口高度、overlay 用 `max-h-[min(70%,28rem)]`
+- 浮动大纲在 scroll 内容盒内绝对定位，却期望与预览框上的字号控件右对齐
+- collapsed / expanded 各抄一份定位 class 且数值不一致
+
+检查点在 `tests/unit/plugins/markdown-preview-layout-governance.test.ts`。
+
+Markdown 预览阅读偏好（字号、舒适/宽屏、大纲左右、大纲展开/收起）必须走
+`useMarkdownPreviewPrefsStore`（`markdown-preview-preferences.ts`）：全局一份、
+`localStorage` 持久化、多预览实例共享；禁止在 `MarkdownPreviewToc` 内用组件
+`useState` 持有可持久化的大纲收起态。
 
 ### 交互控件密度规范
 

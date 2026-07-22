@@ -9,12 +9,18 @@ import {
 import {
   buildComposerSendText,
   type ComposerAttachment,
-  findInvalidAttachmentTokens,
-  insertPlainTextAtSelection,
-  insertTokenAtCursor,
   MAX_COMPOSER_SEND_TEXT_LENGTH,
-  removeAttachmentAndRewriteDraft,
 } from "./terminal-composer-attachments-model.ts";
+import {
+  type ComposerEditorMutations,
+  insertComposerPlainTextAtCursor,
+  mergeComposerAttachments,
+  removeComposerAttachment,
+} from "./terminal-composer-editor-mutations.ts";
+import {
+  handleComposerPaste,
+  materializeLargePlainPaste,
+} from "./terminal-composer-paste.ts";
 
 const attachmentsByPanel = new Map<string, ComposerAttachment[]>();
 
@@ -50,6 +56,11 @@ function dtoToAttachment(
 
 export function useTerminalComposerAttachments(input: {
   disabled: boolean;
+  /**
+   * Lexical-preserving mutations. When provided, attachment token edits go
+   * through the editor so @ mention chips are not wiped by setValue.
+   */
+  editorMutations?: ComposerEditorMutations;
   getDraftAndCursor: () => {
     cursor: number;
     draft: string;
@@ -59,6 +70,7 @@ export function useTerminalComposerAttachments(input: {
   onDraftChange: (draft: string, cursor?: number) => void;
   panelId: string;
   reportError: (titleKey: string, detail: string) => void;
+  t: (key: string) => string;
 }): {
   attachments: ComposerAttachment[];
   buildPayloadOrReport: (draft: string) => string | null;
@@ -67,13 +79,21 @@ export function useTerminalComposerAttachments(input: {
   hydrateFromMaps: () => void;
   onDragOver: (event: DragEvent) => void;
   onDrop: (event: DragEvent) => void;
+  onLargePlainPaste: (text: string) => void;
   onPaste: (event: ClipboardEvent) => void;
   pickFiles: () => void;
   removeAttachment: (id: string) => void;
   revealPath: (path: string) => void;
 } {
-  const { disabled, getDraftAndCursor, onDraftChange, panelId, reportError } =
-    input;
+  const {
+    disabled,
+    editorMutations,
+    getDraftAndCursor,
+    onDraftChange,
+    panelId,
+    reportError,
+    t,
+  } = input;
 
   const syncDraftRef = useRef<{ cursor: number; draft: string }>({
     cursor: 0,
@@ -121,11 +141,11 @@ export function useTerminalComposerAttachments(input: {
   const buildPayloadOrReport = useCallback(
     (draft: string): string | null => {
       const current = readAttachments();
-      const invalid = findInvalidAttachmentTokens(draft, current.length);
+      const invalid = editorMutations?.listInvalidAttachmentRefs(current) ?? [];
       if (invalid.length > 0) {
         reportError(
           "terminal.composer.invalidAttachmentRef",
-          invalid.map((n) => `[#${n}]`).join(", ")
+          invalid.join(", ")
         );
         return null;
       }
@@ -140,72 +160,56 @@ export function useTerminalComposerAttachments(input: {
       }
       return payload;
     },
-    [readAttachments, reportError]
+    [editorMutations, readAttachments, reportError]
   );
 
   const removeAttachment = useCallback(
     (id: string) => {
-      const current = readAttachments();
-      const { draft } = getDraftAndCursor();
-      const next = removeAttachmentAndRewriteDraft({
-        attachments: current,
-        draft,
+      const sync = removeComposerAttachment({
+        editorMutations,
+        getDraftAndCursor,
+        onDraftChange,
+        readAttachments,
         removeId: id,
+        writeAttachments,
       });
-      writeAttachments(next.attachments);
-      if (next.draft !== draft) {
-        syncDraftRef.current = { cursor: next.draft.length, draft: next.draft };
-        onDraftChange(next.draft);
+      if (sync) {
+        syncDraftRef.current = sync;
       }
     },
-    [getDraftAndCursor, onDraftChange, readAttachments, writeAttachments]
+    [
+      editorMutations,
+      getDraftAndCursor,
+      onDraftChange,
+      readAttachments,
+      writeAttachments,
+    ]
   );
 
   const mergeAttachments = useCallback(
     (incoming: readonly ComposerAttachment[]): boolean => {
-      if (incoming.length === 0) {
+      const sync = mergeComposerAttachments({
+        editorMutations,
+        getDraftAndCursor,
+        incoming,
+        onDraftChange,
+        readAttachments,
+        writeAttachments,
+      });
+      if (!sync) {
         return false;
       }
-
-      const current = readAttachments();
-      const existingPaths = new Set(current.map((item) => item.path));
-      const unique: ComposerAttachment[] = [];
-      for (const item of incoming) {
-        if (existingPaths.has(item.path)) {
-          continue;
-        }
-        existingPaths.add(item.path);
-        unique.push(item);
-      }
-      if (unique.length === 0) {
-        return false;
-      }
-
-      const snapshot = getDraftAndCursor();
-      let cursor = snapshot.cursor;
-      let selectionEnd = snapshot.selectionEnd ?? snapshot.cursor;
-      let draft = snapshot.draft;
-      const next = [...current];
-      for (const attachment of unique) {
-        next.push(attachment);
-        const inserted = insertTokenAtCursor(
-          draft,
-          cursor,
-          next.length,
-          selectionEnd
-        );
-        cursor = inserted.cursor;
-        selectionEnd = inserted.cursor;
-        draft = inserted.draft;
-      }
-
-      writeAttachments(next);
       mergeGenRef.current += 1;
-      syncDraftRef.current = { cursor, draft };
-      onDraftChange(draft, cursor);
+      syncDraftRef.current = sync;
       return true;
     },
-    [getDraftAndCursor, onDraftChange, readAttachments, writeAttachments]
+    [
+      editorMutations,
+      getDraftAndCursor,
+      onDraftChange,
+      readAttachments,
+      writeAttachments,
+    ]
   );
 
   const reportFailures = useCallback(
@@ -346,86 +350,32 @@ export function useTerminalComposerAttachments(input: {
 
   const insertPlainTextAtCursor = useCallback(
     (text: string, base?: { cursor: number; draft: string }) => {
-      if (text === "") {
-        return;
+      const sync = insertComposerPlainTextAtCursor({
+        ...(base ? { base } : {}),
+        editorMutations,
+        getDraftAndCursor,
+        onDraftChange,
+        text,
+      });
+      if (sync) {
+        syncDraftRef.current = sync;
       }
-      const live = getDraftAndCursor();
-      const source = base ?? {
-        cursor: live.cursor,
-        draft: live.draft,
-      };
-      const selectionEnd = base
-        ? base.cursor
-        : (live.selectionEnd ?? live.cursor);
-      const inserted = insertPlainTextAtSelection(
-        source.draft,
-        source.cursor,
-        base ? base.cursor : selectionEnd,
-        text
-      );
-      syncDraftRef.current = {
-        cursor: inserted.cursor,
-        draft: inserted.draft,
-      };
-      onDraftChange(inserted.draft, inserted.cursor);
     },
-    [getDraftAndCursor, onDraftChange]
+    [editorMutations, getDraftAndCursor, onDraftChange]
   );
 
   const onPaste = useCallback(
     (event: ClipboardEvent) => {
-      if (disabled) {
-        return;
-      }
-
-      const { clipboardData } = event;
-      const files = clipboardData.files;
-      const hasFiles = files != null && files.length > 0;
-      const hasImageItem = Array.from(clipboardData.items ?? []).some(
-        (item) => item.kind === "file" && item.type.startsWith("image/")
-      );
-      const plain = clipboardData.getData("text/plain");
-
-      if (!(hasFiles || hasImageItem)) {
-        return;
-      }
-
-      event.preventDefault();
-
-      (async () => {
-        // `advanced` is only true when THIS paste's own merge appended tokens.
-        // Returned from collectFiles / inline merge — no global gen comparison.
-        let advanced = false;
-        if (hasFiles) {
-          advanced = await collectFiles(files);
-        } else if (hasImageItem) {
-          await enqueueMerge(async () => {
-            try {
-              const result =
-                await window.pier.terminal.materializeComposerClipboardImage();
-              if (!result.ok) {
-                reportError("terminal.composer.attachFailed", result.error);
-                return;
-              }
-              if (result.attachment) {
-                advanced = mergeAttachments([
-                  dtoToAttachment(result.attachment),
-                ]);
-              }
-            } catch (error: unknown) {
-              reportError(
-                "terminal.composer.attachFailed",
-                error instanceof Error ? error.message : String(error)
-              );
-            }
-          });
-        }
-
-        if (plain) {
-          const base = advanced ? syncDraftRef.current : undefined;
-          insertPlainTextAtCursor(plain, base);
-        }
-      })().catch(() => undefined);
+      handleComposerPaste({
+        collectFiles,
+        disabled,
+        dtoToAttachment,
+        enqueueMerge,
+        event,
+        insertPlainTextAtCursor,
+        mergeAttachments,
+        reportError,
+      });
     },
     [
       collectFiles,
@@ -434,6 +384,21 @@ export function useTerminalComposerAttachments(input: {
       mergeAttachments,
       reportError,
     ]
+  );
+
+  const onLargePlainPaste = useCallback(
+    (text: string) => {
+      materializeLargePlainPaste({
+        disabled,
+        dtoToAttachment,
+        enqueueMerge,
+        insertPlainTextAtCursor,
+        mergeAttachments,
+        t,
+        text,
+      });
+    },
+    [disabled, insertPlainTextAtCursor, mergeAttachments, t]
   );
 
   const onDragOver = useCallback(
@@ -487,6 +452,7 @@ export function useTerminalComposerAttachments(input: {
     hydrateFromMaps,
     onDragOver,
     onDrop,
+    onLargePlainPaste,
     onPaste,
     pickFiles,
     removeAttachment,

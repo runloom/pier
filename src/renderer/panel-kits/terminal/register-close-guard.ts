@@ -1,7 +1,11 @@
 import type { QuitActivitySummary } from "@shared/contracts/app-quit.ts";
 import type { TFunction } from "i18next";
 import i18next from "i18next";
-import { dangerousActivitySummariesForPanel } from "@/lib/workspace/panel-close-activity.ts";
+import { stopTaskRun } from "@/lib/actions/task-run-operations.ts";
+import {
+  activeTaskRunsToStopForPanel,
+  dangerousActivitySummariesForPanel,
+} from "@/lib/workspace/panel-close-activity.ts";
 import { registerPanelCloseGuard } from "@/lib/workspace/panel-close-guards.ts";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
@@ -68,17 +72,18 @@ function formatPanelCloseBody(
 
 export function registerTerminalPanelCloseGuard(): () => void {
   return registerPanelCloseGuard("terminal", async ({ panelId }) => {
+    const taskRuns = useTaskRunsStore.getState().snapshot;
     const summaries = dangerousActivitySummariesForPanel(
       panelId,
       useForegroundActivityStore.getState().activities,
-      useTaskRunsStore.getState().snapshot
+      taskRuns
     );
     if (summaries.length === 0) {
       return true;
     }
 
     const t = i18next.t.bind(i18next);
-    return await showAppConfirm({
+    const confirmed = await showAppConfirm({
       body: formatPanelCloseBody(t, summaries),
       cancelLabel: t("dialog.panelClose.cancel"),
       confirmLabel: t("dialog.panelClose.close"),
@@ -86,5 +91,15 @@ export function registerTerminalPanelCloseGuard(): () => void {
       size: "sm",
       title: t("dialog.panelClose.title"),
     });
+    if (!confirmed) {
+      return false;
+    }
+
+    // 用户已确认「关闭会终止」；优雅 stop，不再二次 force 确认。
+    const runsToStop = activeTaskRunsToStopForPanel(panelId, taskRuns);
+    for (const run of runsToStop) {
+      await stopTaskRun(run, false);
+    }
+    return true;
   });
 }

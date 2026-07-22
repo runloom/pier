@@ -6,10 +6,12 @@ import type {
 } from "./code-mirror-search-state.ts";
 import { FileDocumentLifecycle } from "./file-document-lifecycle.ts";
 import { showFileEditorDiffMode } from "./file-editor-mode-handlers.ts";
+import { moveEditorPath } from "./file-editor-move-path.ts";
 import { FileEditorPathMutations } from "./file-editor-path-mutations.ts";
 import { FileEditorSaveCommands } from "./file-editor-save-commands.ts";
 import { FileEditorSaveCoordinator } from "./file-editor-save-coordinator.ts";
 import { createFileEditorTransferSupport } from "./file-editor-transfer-support.ts";
+import { attachFileEditorView } from "./file-editor-view-attach.ts";
 import { FileEditorViewCoordinator } from "./file-editor-view-coordinator.ts";
 import type {
   FileEditorCommand,
@@ -24,7 +26,6 @@ import type {
   FileDocumentSettleResult,
   FileSaveOutcome,
 } from "./file-save-outcome.ts";
-import { isSamePathOrDescendant } from "./files-document-paths.ts";
 import { getDocument, normalizeDocumentEol } from "./files-document-store.ts";
 import type {
   FilesDocument,
@@ -35,7 +36,6 @@ import type {
 import { FilesEditorGitGutterController } from "./files-editor-git-gutter-controller.ts";
 import { FilesMutationGate } from "./files-mutation-gate.ts";
 import { FilesMutationSuspendCoordinator } from "./files-mutation-suspend-coordinator.ts";
-import { moveFilesNavPath } from "./files-nav-history.ts";
 import { preserveDocumentsAsUntitledAndRebind } from "./files-preserve-as-untitled.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
 
@@ -54,6 +54,7 @@ export class FileEditorController {
   readonly #pathMutationGuards: FilePathMutationGuardCoordinator;
   readonly #pathMutations: FileEditorPathMutations;
   readonly #pendingModes = new Map<string, FileViewMode>();
+  readonly #pendingReveals = new Map<string, number>();
   readonly #saveCoordinator: FileEditorSaveCoordinator;
   readonly #views = new FileEditorViewCoordinator();
   #editingSuspended = false;
@@ -72,7 +73,13 @@ export class FileEditorController {
       context,
       onDocumentsChanged: () => this.#views.syncDocuments(),
       onShowDiff: (documentId, panelId) => {
-        this.#showDiff(documentId, panelId);
+        showFileEditorDiffMode({
+          documentId,
+          getPanelDocumentId: (id) => this.#documents.getPanelDocumentId(id),
+          modeHandlers: this.#modeHandlers,
+          pendingModes: this.#pendingModes,
+          ...(panelId ? { preferredPanelId: panelId } : {}),
+        });
       },
       watchHub,
     });
@@ -154,6 +161,16 @@ export class FileEditorController {
     this.#views.applySnapshot(editorSessionId, snapshot);
   }
 
+  revealOffset(editorSessionId: string, offset: number): void {
+    const session = this.#views.getSession(editorSessionId);
+    if (session) {
+      session.revealOffset(offset);
+      this.#pendingReveals.delete(editorSessionId);
+      return;
+    }
+    this.#pendingReveals.set(editorSessionId, offset);
+  }
+
   documentId(source: FilesDocumentPanelSource): string {
     return this.#documents.documentId(source);
   }
@@ -207,39 +224,17 @@ export class FileEditorController {
     oldPath: string,
     newPath: string
   ): Promise<void> {
-    const guard = await this.#pathMutationGuards.beginMove(
-      root,
+    await moveEditorPath({
+      beginMove: (moveRoot, from, to) =>
+        this.#pathMutationGuards.beginMove(moveRoot, from, to),
+      context: this.#context,
+      moveDiskDocumentSource: (moveRoot, from, to, affected) =>
+        this.moveDiskDocumentSource(moveRoot, from, to, affected),
+      newPath,
       oldPath,
-      newPath
-    );
-    try {
-      const affected = guard.currentDocuments();
-      const protectedTarget = affected.find(
-        (document) =>
-          document.source.kind === "disk" &&
-          document.source.root === root &&
-          isSamePathOrDescendant(document.source.path, newPath) &&
-          (document.dirty || document.durabilityUnknown || document.needsSaveAs)
-      );
-      if (protectedTarget) {
-        throw new Error("The move target has protected unsaved changes");
-      }
-      this.#pathMutations.prepare(affected);
-      await this.#context.files.move({
-        newPath,
-        path: oldPath,
-        root,
-      });
-      await this.moveDiskDocumentSource(
-        root,
-        oldPath,
-        newPath,
-        guard.currentDocuments()
-      );
-      moveFilesNavPath(root, oldPath, newPath);
-    } finally {
-      guard.release();
-    }
+      prepare: (documents) => this.#pathMutations.prepare(documents),
+      root,
+    });
   }
 
   removeDiskDocumentForPath(root: string, path: string): void {
@@ -293,23 +288,17 @@ export class FileEditorController {
     parent: HTMLElement;
     presentation: FileEditorViewPresentation;
   }): void {
-    const document = getDocument(input.documentId);
-    if (!document) {
-      return;
-    }
-    this.#pathMutationGuards.syncDocument(document);
-    this.#views.attach({
-      document,
+    attachFileEditorView({
+      documentId: input.documentId,
       editorSessionId: input.editorSessionId,
+      gitGutter: this.#gitGutter,
       minimapEnabled: this.#minimapEnabled,
       parent: input.parent,
+      pathMutationGuards: this.#pathMutationGuards,
+      pendingReveals: this.#pendingReveals,
       presentation: input.presentation,
+      views: this.#views,
     });
-    const session = this.#views.getSession(input.editorSessionId);
-    if (session) {
-      this.#gitGutter.attach(input.editorSessionId, document, session);
-    }
-    this.#pathMutationGuards.syncSessions();
   }
 
   updateViewPresentation(
@@ -436,7 +425,6 @@ export class FileEditorController {
   async showDraftProtectionError(message: string): Promise<void> {
     await this.#context.dialogs.alert({
       body: message,
-      size: "default",
       title: this.#context.i18n.t(
         "files.draftProtection.failed",
         undefined,
@@ -483,16 +471,7 @@ export class FileEditorController {
     this.#modeHandlers.clear();
     this.#saveCoordinator.dispose();
     this.#pendingModes.clear();
+    this.#pendingReveals.clear();
     this.#pathMutationGuards.dispose();
-  }
-
-  #showDiff(documentId: string, preferredPanelId?: string): void {
-    showFileEditorDiffMode({
-      documentId,
-      getPanelDocumentId: (id) => this.#documents.getPanelDocumentId(id),
-      modeHandlers: this.#modeHandlers,
-      pendingModes: this.#pendingModes,
-      ...(preferredPanelId ? { preferredPanelId } : {}),
-    });
   }
 }

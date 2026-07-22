@@ -41,11 +41,15 @@ describe("native terminal key routing", () => {
     const nativeTerminalCommandIds = new Set<string>(
       APP_HANDLED_NATIVE_TERMINAL_COMMANDS
     );
-    const markedDefaultShortcuts = DEFAULT_KEYMAP.filter((binding) =>
-      nativeTerminalCommandIds.has(binding.commandId)
-    )
-      .map((binding) => binding.keys)
-      .sort();
+    // Shared chords (e.g. Mod+Shift+KeyA for agent.new + composerAttach) appear
+    // twice in DEFAULT_KEYMAP; Swift allowlist is a Set and keeps one entry.
+    const markedDefaultShortcuts = [
+      ...new Set(
+        DEFAULT_KEYMAP.filter((binding) =>
+          nativeTerminalCommandIds.has(binding.commandId)
+        ).map((binding) => binding.keys)
+      ),
+    ].sort();
 
     expect(swiftTerminalAppShortcuts(readGhosttyBridgeSource())).toEqual(
       markedDefaultShortcuts

@@ -4,6 +4,7 @@ import type { AppWindow } from "../windows/app-window.ts";
 import {
   materializeTerminalComposerClipboardImage,
   materializeTerminalComposerImageBytes,
+  materializeTerminalComposerTextBytes,
   pickTerminalComposerFiles,
   resolveTerminalComposerPaths,
   revealTerminalComposerPath,
@@ -117,6 +118,14 @@ export function registerTerminalInputIpc(opts: {
     (_event, data: unknown) =>
       materializeTerminalComposerImageBytes(
         data as Parameters<typeof materializeTerminalComposerImageBytes>[0]
+      )
+  );
+
+  ipcMain.handle(
+    "pier:terminal:composer-materialize-text-bytes",
+    (_event, data: unknown) =>
+      materializeTerminalComposerTextBytes(
+        data as Parameters<typeof materializeTerminalComposerTextBytes>[0]
       )
   );
 

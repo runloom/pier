@@ -322,6 +322,15 @@ function createMockContext(overrides?: {
       }
     });
   return {
+    contentPreview: {
+      close: vi.fn(),
+      openImage: vi.fn(),
+    },
+    contextMenu: {
+      popup: vi.fn(async () => undefined),
+      registerSelectionSelectAllProvider: vi.fn(() => () => undefined),
+      registerSelectionTextProvider: vi.fn(() => () => undefined),
+    },
     dialogs: {
       alert: vi.fn(async () => undefined),
       choice: vi.fn(async () => "confirm" as const),
@@ -1567,7 +1576,6 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(context.dialogs.alert).toHaveBeenCalledWith({
         body: "Permission denied",
-        size: "default",
         title: "Unable to load folder",
       });
     });
@@ -4331,7 +4339,6 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(context.dialogs.alert).toHaveBeenCalledWith({
         body: "The external link could not be opened.",
-        size: "sm",
         title: "Unable to open link",
       });
     });

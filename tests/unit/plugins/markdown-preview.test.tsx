@@ -38,7 +38,11 @@ describe("MarkdownPreview", () => {
           completedTask: "Completed task",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
+          diagramPreviewTitle: "Diagram preview",
+          imagePreviewFailed: "Unable to open image preview",
+          imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
+          openFullscreen: "View fullscreen",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
@@ -101,7 +105,11 @@ describe("MarkdownPreview", () => {
           copyCode: "Copy code",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
+          diagramPreviewTitle: "Diagram preview",
+          imagePreviewFailed: "Unable to open image preview",
+          imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
+          openFullscreen: "View fullscreen",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
@@ -185,13 +193,25 @@ describe("MarkdownPreview", () => {
     const { container } = render(
       <MarkdownPreview
         charts={charts}
+        fileResources={{
+          contentPreview: { openImage: vi.fn() },
+          filePreviews: {
+            issue: vi.fn(),
+            release: vi.fn(),
+          },
+          files: { readDocument: vi.fn() },
+        }}
         labels={{
           completedTask: "Completed task",
           copiedCode: "Copied",
           copyCode: "Copy code",
           diagramFailed: "Unable to render diagram",
           diagramLabel: "Mermaid diagram",
+          diagramPreviewTitle: "Diagram preview",
+          imagePreviewFailed: "Unable to open image preview",
+          imagePreviewTitle: "Image",
           incompleteTask: "Incomplete task",
+          openFullscreen: "View fullscreen",
         }}
         openExternal={vi.fn()}
         runtime={immediateRuntime()}
@@ -220,9 +240,91 @@ describe("MarkdownPreview", () => {
       expect(container.querySelector("svg text")).toHaveTextContent("Flow");
     });
     expect(container.querySelector("svg script")).toBeNull();
+    // Diagram must render at natural size — not wrapped in Button (which forces size-4 on SVG).
+    expect(
+      container
+        .querySelector('[data-slot="markdown-diagram"]')
+        ?.closest("button")
+    ).toBeNull();
+    expect(
+      screen.getByRole("button", { name: "View fullscreen" })
+    ).toBeVisible();
     expect(screen.getByText("Heads up")).toBeVisible();
     expect(screen.getByText("Directive body")).toBeVisible();
     expect(screen.getByText("Ctrl K").closest("kbd")).not.toBeNull();
+  });
+
+  it("stops nested double-click source jumps at the nearest block", async () => {
+    const onJumpToSource = vi.fn();
+    render(
+      <MarkdownPreview
+        onJumpToSource={onJumpToSource}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-source-jump"
+        source={source}
+        value={"- outer\n\n  inner paragraph"}
+      />
+    );
+
+    const paragraph = await screen.findByText("inner paragraph");
+    fireEvent.doubleClick(paragraph);
+    expect(onJumpToSource).toHaveBeenCalledTimes(1);
+    const jumpedOffset = onJumpToSource.mock.calls[0]?.[0] as number;
+    expect(jumpedOffset).toBeGreaterThan(0);
+  });
+
+  it("opens diagram fullscreen preview from the media control", async () => {
+    const openImage = vi.fn();
+    const charts: RendererPluginContext["charts"] = {
+      renderMermaid: vi.fn(async () => ({
+        ok: true as const,
+        svg: '<svg xmlns="http://www.w3.org/2000/svg"><text>Flow</text></svg>',
+      })),
+    };
+    const { container } = render(
+      <MarkdownPreview
+        charts={charts}
+        fileResources={{
+          contentPreview: { openImage },
+          filePreviews: {
+            issue: vi.fn(),
+            release: vi.fn(),
+          },
+          files: { readDocument: vi.fn() },
+        }}
+        labels={{
+          completedTask: "Completed task",
+          copiedCode: "Copied",
+          copyCode: "Copy code",
+          diagramFailed: "Unable to render diagram",
+          diagramLabel: "Mermaid diagram",
+          diagramPreviewTitle: "Diagram preview",
+          imagePreviewFailed: "Unable to open image preview",
+          imagePreviewTitle: "Image",
+          incompleteTask: "Incomplete task",
+          openFullscreen: "View fullscreen",
+        }}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-diagram-fullscreen"
+        source={source}
+        value={"```mermaid\ngraph TD; A-->B\n```"}
+      />
+    );
+
+    await waitFor(() => {
+      expect(container.querySelector("svg text")).toHaveTextContent("Flow");
+    });
+    fireEvent.click(screen.getByRole("button", { name: "View fullscreen" }));
+    expect(openImage).toHaveBeenCalledTimes(1);
+    const request = openImage.mock.calls[0]?.[0] as {
+      source: { kind: string; src: string };
+      title: string;
+    };
+    expect(request.title).toBe("Diagram preview");
+    expect(request.source.kind).toBe("url");
+    expect(request.source.src.startsWith("data:image/svg+xml")).toBe(true);
   });
 
   it("routes external, anchor, and relative links through explicit host actions", async () => {
@@ -414,5 +516,232 @@ describe("MarkdownPreview", () => {
     await waitFor(() => {
       expect(release).toHaveBeenCalledWith("markdown-image-00000000");
     });
+  });
+
+  it("issues a dedicated ticket for image fullscreen and releases it on close", async () => {
+    let ticketSerial = 0;
+    const issue = vi.fn<RendererPluginContext["filePreviews"]["issue"]>(
+      async () => {
+        ticketSerial += 1;
+        const ticket = `markdown-image-${String(ticketSerial).padStart(8, "0")}`;
+        return {
+          expiresAt: 100,
+          issued: true,
+          ticket,
+          url: `pier-file-preview://file/${ticket}`,
+        };
+      }
+    );
+    const release = vi.fn(async () => true);
+    const readDocument = vi.fn<RendererPluginContext["files"]["readDocument"]>(
+      async (request) => ({
+        canonicalPath: request.path,
+        kind: "image",
+        mime: "image/png",
+        mtimeMs: 1,
+        path: request.path,
+        revision: "file-v1:image",
+        root: request.root,
+        size: 8,
+      })
+    );
+    const openImage = vi.fn();
+    render(
+      <MarkdownPreview
+        fileResources={{
+          contentPreview: { openImage },
+          filePreviews: { issue, release },
+          files: { readDocument },
+        }}
+        labels={{
+          completedTask: "Completed task",
+          copiedCode: "Copied",
+          copyCode: "Copy code",
+          diagramFailed: "Unable to render diagram",
+          diagramLabel: "Mermaid diagram",
+          diagramPreviewTitle: "Diagram preview",
+          imagePreviewFailed: "Unable to open image preview",
+          imagePreviewTitle: "Image",
+          incompleteTask: "Incomplete task",
+          openFullscreen: "View fullscreen",
+        }}
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        sessionId="markdown-image-fullscreen"
+        source={source}
+        value="![Diagram](../assets/pic.png)"
+      />
+    );
+
+    await screen.findByRole("img", { name: "Diagram" });
+    expect(issue).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole("button", { name: "View fullscreen" }));
+    await waitFor(() => {
+      expect(openImage).toHaveBeenCalledTimes(1);
+    });
+    expect(issue).toHaveBeenCalledTimes(2);
+    const request = openImage.mock.calls[0]?.[0] as {
+      onClose?: () => void;
+      source: { kind: string; src: string };
+      title: string;
+    };
+    expect(request.title).toBe("Diagram");
+    expect(request.source.src).toBe(
+      "pier-file-preview://file/markdown-image-00000002"
+    );
+    expect(release).not.toHaveBeenCalledWith("markdown-image-00000002");
+    request.onClose?.();
+    await waitFor(() => {
+      expect(release).toHaveBeenCalledWith("markdown-image-00000002");
+    });
+  });
+
+  it("keeps the find bar opposite the right outline", async () => {
+    localStorage.removeItem("pier.files.markdown.tocSide");
+    const runtime = immediateRuntime();
+    const view = render(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={runtime}
+        searchLabels={{
+          close: "Close",
+          matchAnnouncement: "Matches: {{count}}",
+          next: "Next match",
+          noMatches: "No matches",
+          placeholder: "Find",
+          previous: "Previous match",
+        }}
+        searchRequest={0}
+        sessionId="markdown-search-side"
+        source={source}
+        value={"# Title\n\n## Section\n\nneedle"}
+      />
+    );
+    view.rerender(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={runtime}
+        searchLabels={{
+          close: "Close",
+          matchAnnouncement: "Matches: {{count}}",
+          next: "Next match",
+          noMatches: "No matches",
+          placeholder: "Find",
+          previous: "Previous match",
+        }}
+        searchRequest={1}
+        sessionId="markdown-search-side"
+        source={source}
+        value={"# Title\n\n## Section\n\nneedle"}
+      />
+    );
+
+    const searchBar = await screen.findByTestId("files-markdown-search-bar");
+    expect(searchBar.className).toContain("left-3");
+    expect(searchBar.className).not.toContain("right-3");
+    localStorage.removeItem("pier.files.markdown.tocSide");
+  });
+
+  it("applies markdown-prose root without heading underlines and scales via --md-scale", async () => {
+    localStorage.removeItem("pier.files.markdown.fontScale");
+    localStorage.removeItem("pier.files.markdown.measureMode");
+    localStorage.removeItem("pier.files.markdown.tocSide");
+    const openImage = vi.fn();
+    const registerSelectionSelectAllProvider = vi.fn<
+      (surface: string, selectAll: () => boolean) => () => void
+    >(() => () => undefined);
+    const onContextMenu = vi.fn();
+    const { container } = render(
+      <MarkdownPreview
+        fileResources={{
+          contentPreview: { openImage },
+          filePreviews: {
+            issue: vi.fn(),
+            release: vi.fn(),
+          },
+          files: { readDocument: vi.fn() },
+        }}
+        onContextMenu={onContextMenu}
+        openExternal={vi.fn()}
+        panelId="panel-markdown-prose"
+        registerSelectionSelectAllProvider={registerSelectionSelectAllProvider}
+        runtime={immediateRuntime()}
+        sessionId="markdown-prose"
+        source={source}
+        value={"# Title\n\n## Section\n\nParagraph with `code`."}
+        zoomLabels={{
+          reset: "Reset text size",
+          zoomIn: "Increase text size",
+          zoomOut: "Decrease text size",
+        }}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-slot="markdown-prose"]')
+      ).not.toBeNull();
+    });
+    const prose = container.querySelector(
+      '[data-slot="markdown-prose"]'
+    ) as HTMLElement;
+    expect(prose.style.getPropertyValue("--md-scale")).toBe("1");
+    expect(prose).toHaveAttribute("data-measure", "comfortable");
+
+    const h1 = await screen.findByRole("heading", { name: "Title", level: 1 });
+    const h2 = screen.getByRole("heading", { name: "Section", level: 2 });
+    expect(h1.className).toContain("md-h1");
+    expect(h1.className).not.toContain("border-b");
+    expect(h2.className).toContain("md-h2");
+    expect(h2.className).not.toContain("border-b");
+    expect(container.querySelector("code.md-inline-code")).not.toBeNull();
+    expect(
+      container.querySelector('[data-slot="markdown-font-scale"]')
+    ).not.toBeNull();
+    const toc = container.querySelector(
+      '[data-slot="markdown-preview-toc"]'
+    ) as HTMLElement;
+    expect(toc).not.toBeNull();
+    expect(toc).toHaveAttribute("data-side", "right");
+    expect(toc).toHaveAttribute("data-placement", "overlay");
+
+    expect(registerSelectionSelectAllProvider).toHaveBeenCalledWith(
+      "panel-markdown-prose",
+      expect.any(Function)
+    );
+    const selectAll = registerSelectionSelectAllProvider.mock.calls[0]?.[1] as
+      | (() => boolean)
+      | undefined;
+    expect(selectAll?.()).toBe(true);
+    expect(window.getSelection()?.toString()).toContain("Title");
+
+    fireEvent.contextMenu(container.firstChild as HTMLElement);
+    expect(onContextMenu).toHaveBeenCalled();
+
+    fireEvent.click(screen.getByRole("button", { name: "Increase text size" }));
+    await waitFor(() => {
+      const scaled = container.querySelector(
+        '[data-slot="markdown-prose"]'
+      ) as HTMLElement;
+      expect(scaled.style.getPropertyValue("--md-scale")).toBe("1.15");
+    });
+
+    const { writeMarkdownMeasureMode, writeMarkdownTocSide } = await import(
+      "@plugins/builtin/files/renderer/markdown-preview-preferences.ts"
+    );
+    writeMarkdownMeasureMode("wide");
+    writeMarkdownTocSide("left");
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-slot="markdown-prose"]')
+      ).toHaveAttribute("data-measure", "wide");
+      expect(
+        container.querySelector('[data-slot="markdown-preview-toc"]')
+      ).toHaveAttribute("data-side", "left");
+    });
+
+    localStorage.removeItem("pier.files.markdown.fontScale");
+    localStorage.removeItem("pier.files.markdown.measureMode");
+    localStorage.removeItem("pier.files.markdown.tocSide");
   });
 });

@@ -188,6 +188,7 @@ describe("AppDialogHost", () => {
 
     expect(await screen.findByText("Git operation failed")).toBeVisible();
     expect(screen.getByText("fatal: not a git repository")).toBeVisible();
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     expect(
       screen.queryByRole("button", { name: "Cancel" })
     ).not.toBeInTheDocument();

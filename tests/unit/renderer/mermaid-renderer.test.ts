@@ -150,6 +150,19 @@ describe("Mermaid renderer", () => {
     expect(svg).toContain("<svg");
     expect(svg).not.toContain("foreignObject");
     expect(svg).not.toContain("--accent:var(--action-accent)");
+    // Host --border is too faint for node strokes / edges; theme must derive from fg/bg.
+    expect(svg).not.toContain("--line:var(--border)");
+    // Arrowheads use --accent; must match --line (not host near-white --accent).
+    expect(svg).toContain(
+      "--accent:color-mix(in srgb, var(--foreground) 45%, var(--background))"
+    );
+    expect(svg).toContain(
+      "--line:color-mix(in srgb, var(--foreground) 45%, var(--background))"
+    );
+    expect(svg).toContain("--border:color-mix(in srgb, var(--foreground)");
+    expect(svg).toContain("--surface:color-mix(in srgb, var(--foreground)");
+    expect(svg).toContain('fill="var(--_arrow)"');
+    expect(svg).toContain('stroke="var(--_line)"');
 
     const classSvg = renderMermaidInWorker({
       source: "classDiagram;class A {;+int x;+f();};class B;A --> B",
