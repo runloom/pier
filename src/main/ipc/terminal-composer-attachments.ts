@@ -209,6 +209,37 @@ export async function materializeTerminalComposerImageBytes(
   }
 }
 
+export async function materializeTerminalComposerTextBytes(data: {
+  name?: string | undefined;
+  text: string;
+}): Promise<TerminalComposerMaterializeResult> {
+  try {
+    const text = typeof data?.text === "string" ? data.text : "";
+    if (text.length === 0) {
+      return { ok: false, error: "empty text" };
+    }
+    // Soft ceiling well above the 10k auto-attach threshold and the 64k
+    // sendText limit — blocks pathological clipboard dumps from filling disk.
+    const MAX_PASTE_CHARS = 2_000_000;
+    if (text.length > MAX_PASTE_CHARS) {
+      return {
+        ok: false,
+        error: `paste too large (${text.length} chars; max ${MAX_PASTE_CHARS})`,
+      };
+    }
+    const directory = await preparePasteDirectory();
+    const name =
+      typeof data.name === "string" && data.name.trim() !== ""
+        ? basename(data.name)
+        : `paste-${crypto.randomUUID()}.txt`;
+    const path = join(directory, name.includes(".") ? name : `${name}.txt`);
+    await writeFile(path, text, "utf8");
+    return { ok: true, attachment: attachmentDtoFromPath(path) };
+  } catch (error) {
+    return { ok: false, error: errorMessage(error) };
+  }
+}
+
 export async function revealTerminalComposerPath(path: string): Promise<void> {
   shell.showItemInFolder(path);
 }

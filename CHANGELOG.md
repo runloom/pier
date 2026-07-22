@@ -6,6 +6,16 @@
 
 ### Changed
 
+- **增强输入升级为 Lexical 结构化编辑器（Phase A / B）。** 按需增强输入从
+  `textarea` 换成 Lexical plain-text 编辑器：空草稿方向键/Tab/Enter 透传
+  TUI、`[#n]` 合法/越界着色、Enter 发送由 Lexical 命令优先处理；大粘贴
+  （≥10k）自动落盘为 `.txt` 附件；`@` 工作区文件/文件夹提及插入 chip，
+  发送序列化为绝对路径。
+- **增强输入后续方向确认。** 新增
+  `docs/superpowers/specs/2026-07-22-rich-input-structured-composer-design.md`：
+  Phase A/B 采用 Lexical 纯文本结构化编辑器、`@` 工作区提及、token 着色、
+  空草稿键盘透传与大粘贴改附件；明确不做 WYSIWYG 与 Cursor 式扩展 `@` 上下文。
+  附件规格中与编辑器 / `@` 冲突的非目标已交叉修订。
 - **文档前门重整。** `README.md` 改为产品入口（功能 / 要求 / bootstrap /
   文档索引），冗长 CLI 细节迁至 `docs/cli.md`；新增 `docs/README.md`、
   `docs/development.md`、`SECURITY.md`，并扩充 `CONTRIBUTING.md`。发布 /

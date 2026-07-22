@@ -30,3 +30,9 @@ export interface TerminalComposerImageBytes {
   mime?: string;
   name?: string;
 }
+
+export interface TerminalComposerTextBytes {
+  name?: string;
+  /** UTF-8 text to materialize as a .txt attachment under pier-terminal-pastes. */
+  text: string;
+}

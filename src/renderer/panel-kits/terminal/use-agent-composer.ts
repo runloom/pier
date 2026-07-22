@@ -34,6 +34,7 @@ export interface UseAgentComposerParams {
 }
 
 export interface UseAgentComposerResult {
+  attachRequest: number;
   closeComposer: () => void;
   composerFocusRequest: number;
   composerMounted: boolean;
@@ -51,11 +52,14 @@ export function useAgentComposer({
 }: UseAgentComposerParams): UseAgentComposerResult {
   const [composerOpen, setComposerOpen] = useState(false);
   const [composerFocusRequest, setComposerFocusRequest] = useState(0);
+  const [attachRequest, setAttachRequest] = useState(0);
   const composerOpenRef = useRef(false);
   composerOpenRef.current = composerOpen;
   const toggleComposer = useCallback(() => {
     if (composerOpenRef.current) {
       setComposerOpen(false);
+      // Drop stale attach ticks so remount does not re-open the file picker.
+      setAttachRequest(0);
       return;
     }
     setComposerOpen(true);
@@ -63,12 +67,21 @@ export function useAgentComposer({
   }, []);
   const closeComposer = useCallback(() => {
     setComposerOpen(false);
+    setAttachRequest(0);
+  }, []);
+  const ensureOpenAndAttach = useCallback(() => {
+    if (!composerOpenRef.current) {
+      setComposerOpen(true);
+      setComposerFocusRequest((value) => value + 1);
+    }
+    setAttachRequest((value) => value + 1);
   }, []);
   const activatePanel = useCallback(() => {
     api.setActive();
   }, [api]);
 
   useTerminalComposerOpen({
+    onAttach: ensureOpenAndAttach,
     onClose: closeComposer,
     onToggle: toggleComposer,
     panelId,
@@ -79,6 +92,7 @@ export function useAgentComposer({
   useEffect(() => {
     if (!canUseAgentComposer({ activityKind, restored })) {
       setComposerOpen(false);
+      setAttachRequest(0);
     }
   }, [activityKind, restored]);
 
@@ -134,6 +148,7 @@ export function useAgentComposer({
   }, [composerMounted, api, panelId]);
 
   return {
+    attachRequest,
     closeComposer,
     composerFocusRequest,
     composerMounted,

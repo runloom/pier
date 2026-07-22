@@ -14,6 +14,57 @@
 @variant dark (:root:not(.light) &);
 
 /*
+ * Rich Input Lexical chip hosts.
+ *
+ * - `inline-block` + ::before/::after gutters: contenteditable carets sit on the
+ *   decorator border-box and ignore host *margin*; empty ::before/::after widen
+ *   the box so the caret lands past a real gap (padding alone is flaky on atomic
+ *   decorators in Chromium).
+ * - Do not stretch the host to the compact shell height — that makes the caret
+ *   next to a chip paint as tall as the input.
+ */
+.composer-ref-chip-host {
+  display: inline-flex;
+  align-items: center;
+  /* Match composer `leading-5` (1.25rem) so pill + caret share one line box. */
+  height: 1.25rem;
+  vertical-align: middle;
+  line-height: 1;
+}
+
+.composer-ref-chip-host::before,
+.composer-ref-chip-host::after {
+  content: "";
+  display: block;
+  width: 0.25rem;
+  flex-shrink: 0;
+}
+
+/*
+ * Rich Input empty placeholder — Cursor TipTap / Codex ProseMirror pattern:
+ * paint hint on the empty paragraph via ::before so the *native* caret stays
+ * visible. Never use a full-bleed sibling overlay (hides Chromium caret).
+ */
+.composer-editor-input p.is-editor-empty {
+  position: relative;
+}
+
+.composer-editor-input p.is-editor-empty::before {
+  content: attr(data-placeholder);
+  pointer-events: none;
+  position: absolute;
+  top: 0;
+  right: 0;
+  left: 0;
+  overflow: hidden;
+  color: var(--muted-foreground);
+  opacity: 0.65;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  user-select: none;
+}
+
+/*
  * Pier UI globals.css
  *
  * shadcn preset b27GcrRo / radix-rhea / neutral。应用 UI chrome 使用中性结构色,

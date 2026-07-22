@@ -229,6 +229,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   );
   const restored = Boolean(restoredAgentResult || restoredTaskResult);
   const {
+    attachRequest,
     closeComposer,
     composerFocusRequest,
     composerMounted,
@@ -473,6 +474,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       />
       {composerMounted ? (
         <TerminalComposer
+          attachRequest={attachRequest}
           bottomOffsetPx={statusInsetPx}
           disabled={!nativeTerminalReady || Boolean(error)}
           focusRequest={composerFocusRequest}
@@ -480,6 +482,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           onClose={closeComposer}
           onHeightChange={onComposerHeightChange}
           panelId={panelId}
+          projectRootPath={
+            effectiveContext?.projectRootPath ?? effectiveContext?.cwd ?? null
+          }
         />
       ) : null}
       <TerminalStatusBar {...statusContext} />

@@ -41,6 +41,8 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+Numpad9",
   "Mod+Shift+Enter",
   "Mod+Shift+Equal",
+  // Shared by pier.agent.new + pier.terminal.composerAttach (contextual).
+  "Mod+Shift+KeyA",
   "Mod+Shift+KeyA",
   "Mod+Shift+KeyD",
   "Mod+Shift+KeyI",
@@ -190,6 +192,14 @@ describe("DEFAULT_KEYMAP", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.terminal.openAgentComposer",
       keys: "Mod+Shift+KeyI",
+      scope: "global",
+    });
+  });
+
+  it("contains the rich-input attach shortcut", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.terminal.composerAttach",
+      keys: "Mod+Shift+KeyA",
       scope: "global",
     });
   });

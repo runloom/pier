@@ -1,5 +1,4 @@
 import { Button } from "@pier/ui/button.tsx";
-import { InputGroupTextarea } from "@pier/ui/input-group.tsx";
 import { Kbd } from "@pier/ui/kbd.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import { ArrowUp, Plus } from "lucide-react";
@@ -10,34 +9,47 @@ import type {
   MouseEvent as ReactMouseEvent,
   Ref,
 } from "react";
+import { useMemo } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { formatChord } from "@/lib/keybindings/formatter.ts";
+import { isMac } from "@/lib/keybindings/matcher.ts";
+import { parseChord } from "@/lib/keybindings/parse.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
+import type { StructuredComposerEditorHandle } from "./structured-composer/structured-composer-editor.tsx";
+import { StructuredComposerEditor } from "./structured-composer/structured-composer-editor.tsx";
 import { TerminalComposerAttachmentRail } from "./terminal-composer-attachment-rail.tsx";
 import type { ComposerAttachment } from "./terminal-composer-attachments-model.ts";
 import {
+  elementSoftWrapped,
   TERMINAL_COMPOSER_GAP_PX,
-  textareaSoftWrapped,
 } from "./terminal-composer-helpers.ts";
+
+const COMPOSER_ATTACH_CHORD = "Mod+Shift+KeyA";
 
 /** Shared attach control — compact row and expanded footer must stay identical. */
 function ComposerAttachButton({
   className,
   disabled,
   onClick,
+  shortcutLabel,
 }: {
   className?: string;
   disabled: boolean;
   onClick: () => void;
+  shortcutLabel: string;
 }) {
   const t = useT();
+  const label = t("terminal.composer.attachFile");
   return (
     <Button
-      aria-label={t("terminal.composer.attachFile")}
+      aria-keyshortcuts={shortcutLabel}
+      aria-label={`${label} (${shortcutLabel})`}
       className={className}
       data-testid="terminal-composer-attach"
       disabled={disabled}
       onClick={onClick}
       size="icon-sm"
+      title={`${label} (${shortcutLabel})`}
       type="button"
       variant="secondary"
     >
@@ -53,11 +65,13 @@ export interface TerminalComposerViewProps {
   compact: boolean;
   composingRef: { current: boolean };
   disabled: boolean;
+  editorRef: Ref<StructuredComposerEditorHandle>;
   hasAttachments: boolean;
   onChromeMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onDragOver: (event: DragEvent) => void;
   onDrop: (event: DragEvent) => void;
-  onKeyDown: (event: ReactKeyboardEvent<HTMLTextAreaElement>) => void;
+  onKeyDown: (event: ReactKeyboardEvent<HTMLDivElement>) => void;
+  onLargePlainPaste: (text: string) => void;
   onPaste: (event: ClipboardEvent) => void;
   onPickFiles: () => void;
   onRemoveAttachment: (id: string) => void;
@@ -66,8 +80,8 @@ export interface TerminalComposerViewProps {
   onSetSoftWrapped: (wrapped: boolean) => void;
   onValueChange: (value: string) => void;
   overlayId: string;
+  projectRootPath: string | null;
   setRootRef: (el: HTMLDivElement | null) => void;
-  textareaRef: Ref<HTMLTextAreaElement>;
   value: string;
 }
 
@@ -78,12 +92,14 @@ export function TerminalComposerView({
   compact,
   composingRef,
   disabled,
+  editorRef,
   hasAttachments,
   onChromeMouseDown,
   onDragOver,
   onDrop,
   onKeyDown,
   onPaste,
+  onLargePlainPaste,
   onPickFiles,
   onRemoveAttachment,
   onRevealPath,
@@ -91,11 +107,15 @@ export function TerminalComposerView({
   onSetSoftWrapped,
   onValueChange,
   overlayId,
+  projectRootPath,
   setRootRef,
-  textareaRef,
   value,
 }: TerminalComposerViewProps) {
   const t = useT();
+  const attachShortcut = useMemo(
+    () => formatChord(parseChord(COMPOSER_ATTACH_CHORD, isMac())),
+    []
+  );
 
   return (
     // biome-ignore lint/a11y/noNoninteractiveElementInteractions: drop target for attachment files
@@ -107,13 +127,13 @@ export function TerminalComposerView({
       ref={setRootRef}
       style={{ bottom: bottomOffsetPx + TERMINAL_COMPOSER_GAP_PX }}
     >
-      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: chrome mousedown focuses textarea */}
-      {/* biome-ignore lint/a11y/noStaticElementInteractions: chrome mousedown focuses textarea */}
+      {/* biome-ignore lint/a11y/noNoninteractiveElementInteractions: chrome mousedown focuses editor */}
+      {/* biome-ignore lint/a11y/noStaticElementInteractions: chrome mousedown focuses editor */}
       {/* biome-ignore lint/a11y/useAriaPropsSupportedByRole: labelled region for composer chrome */}
       <div
         aria-label={t("terminal.composer.label")}
         className={cn(
-          "flex w-full min-w-0 border bg-input/50",
+          "flex w-full min-w-0 border bg-background",
           "text-foreground shadow-lg outline-none",
           "focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30",
           compact
@@ -140,44 +160,64 @@ export function TerminalComposerView({
             className="shrink-0"
             disabled={disabled}
             onClick={onPickFiles}
+            shortcutLabel={attachShortcut}
           />
         ) : null}
 
-        <InputGroupTextarea
+        <StructuredComposerEditor
+          attachments={attachments}
           className={cn(
-            "field-sizing-content w-full min-w-0 font-mono text-sm leading-5",
-            "placeholder:text-muted-foreground/65",
             compact
-              ? "max-h-9 min-h-9 flex-1 py-2 pr-1 pl-1"
+              ? // Keep compact chrome min height (36px); do not clip @/# menus
+                // (menus portal to body; overflow-x still contained by chrome).
+                "h-9 max-h-9 min-h-9 min-w-0 flex-1 pr-1 pl-1"
               : cn(
                   "max-h-48 min-h-5 px-3",
-                  hasAttachments ? "pt-2 pb-1.5" : "pt-2.5 pb-1.5"
+                  hasAttachments ? "pt-2 pb-1.5" : "pt-2 pb-1.5"
                 )
           )}
-          data-testid="terminal-composer-input"
+          compact={compact}
           disabled={disabled}
-          onChange={(event) => onValueChange(event.currentTarget.value)}
           onCompositionEnd={() => {
             composingRef.current = false;
             const el =
-              typeof textareaRef === "object" && textareaRef
-                ? textareaRef.current
+              typeof editorRef === "object" && editorRef
+                ? editorRef.current?.getElement()
                 : null;
             if (el) {
-              onSetSoftWrapped(textareaSoftWrapped(el));
+              onSetSoftWrapped(elementSoftWrapped(el));
             }
           }}
           onCompositionStart={() => {
             composingRef.current = true;
           }}
-          onDragOver={onDragOver}
-          onDrop={onDrop}
-          onFocus={() => useTerminalStore.getState().activateOverlay(overlayId)}
-          onKeyDown={onKeyDown}
+          onFocus={() => {
+            useTerminalStore.getState().activateOverlay(overlayId);
+          }}
+          onKeyDown={(event) => {
+            if (event.nativeEvent.isComposing) {
+              composingRef.current = true;
+            } else {
+              composingRef.current = false;
+            }
+            onKeyDown(event);
+            if (!composingRef.current) {
+              const el =
+                typeof editorRef === "object" && editorRef
+                  ? editorRef.current?.getElement()
+                  : null;
+              if (el) {
+                onSetSoftWrapped(elementSoftWrapped(el));
+              }
+            }
+          }}
+          onLargePlainPaste={onLargePlainPaste}
           onPaste={onPaste}
+          onSend={onSend}
+          onValueChange={onValueChange}
           placeholder={t("terminal.composer.placeholder")}
-          ref={textareaRef}
-          rows={1}
+          projectRootPath={projectRootPath}
+          ref={editorRef}
           value={value}
         />
 
@@ -195,13 +235,17 @@ export function TerminalComposerView({
           </Button>
         ) : (
           <div className="flex shrink-0 items-center gap-1 px-1 pt-0.5 pb-1">
-            <ComposerAttachButton disabled={disabled} onClick={onPickFiles} />
+            <ComposerAttachButton
+              disabled={disabled}
+              onClick={onPickFiles}
+              shortcutLabel={attachShortcut}
+            />
             <div className="min-w-0 flex-1" />
             <span
               aria-hidden="true"
               className="shrink-0 text-[10px] text-muted-foreground/60"
             >
-              {t("terminal.composer.keyHint")}
+              {t("terminal.composer.keyHint", { attach: attachShortcut })}
             </span>
             <Button
               aria-label={t("terminal.composer.send")}

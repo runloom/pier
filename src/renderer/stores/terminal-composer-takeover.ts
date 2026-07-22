@@ -38,6 +38,11 @@ export function terminalComposerTakeoverFocus(
   return handler(reason);
 }
 
+/** True while Rich Input is mounted for the panel (takeover registered). */
+export function isTerminalComposerOpen(panelId: string): boolean {
+  return takeovers.has(panelId);
+}
+
 export function resetTerminalComposerTakeoverForTests(): void {
   takeovers.clear();
 }

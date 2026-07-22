@@ -12,7 +12,7 @@ const base = {
 };
 
 describe("passthroughKeyPressForKey", () => {
-  it("only Ctrl+C passthroughs as a real keypress (empty or not)", () => {
+  it("always passthroughs Ctrl+C", () => {
     expect(
       passthroughKeyPressForKey({
         ...base,
@@ -46,20 +46,34 @@ describe("passthroughKeyPressForKey", () => {
     ).toBeNull();
   });
 
-  it("does not bridge empty-draft navigation keys", () => {
-    for (const key of [
-      "ArrowUp",
-      "ArrowDown",
-      "ArrowLeft",
-      "ArrowRight",
-      "Tab",
-      "Enter",
-    ]) {
-      expect(passthroughKeyPressForKey({ ...base, key })).toBeNull();
-    }
+  it("bridges empty-draft navigation keys to TUI", () => {
+    expect(passthroughKeyPressForKey({ ...base, key: "ArrowUp" })).toEqual({
+      keycode: APPKIT_KEYCODE.arrowUp,
+    });
+    expect(passthroughKeyPressForKey({ ...base, key: "ArrowDown" })).toEqual({
+      keycode: APPKIT_KEYCODE.arrowDown,
+    });
+    expect(passthroughKeyPressForKey({ ...base, key: "ArrowLeft" })).toEqual({
+      keycode: APPKIT_KEYCODE.arrowLeft,
+    });
+    expect(passthroughKeyPressForKey({ ...base, key: "ArrowRight" })).toEqual({
+      keycode: APPKIT_KEYCODE.arrowRight,
+    });
+    expect(passthroughKeyPressForKey({ ...base, key: "Tab" })).toEqual({
+      keycode: APPKIT_KEYCODE.tab,
+    });
     expect(
       passthroughKeyPressForKey({ ...base, key: "Tab", shiftKey: true })
-    ).toBeNull();
+    ).toEqual({
+      keycode: APPKIT_KEYCODE.tab,
+      mods: GHOSTTY_MODS.shift,
+    });
+    expect(passthroughKeyPressForKey({ ...base, key: "Enter" })).toEqual({
+      keycode: APPKIT_KEYCODE.return,
+    });
+  });
+
+  it("does not bridge Shift+Enter even when empty (newline reserved)", () => {
     expect(
       passthroughKeyPressForKey({ ...base, key: "Enter", shiftKey: true })
     ).toBeNull();
@@ -86,7 +100,6 @@ describe("passthroughKeyPressForKey", () => {
     expect(
       passthroughKeyPressForKey({
         ...base,
-        ctrlKey: false,
         key: "c",
         metaKey: true,
       })

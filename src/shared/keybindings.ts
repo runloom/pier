@@ -92,6 +92,14 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     keys: "Mod+Shift+KeyI",
     scope: "global",
   },
+  // composerAttach shares ⌘⇧A with pier.agent.new: when Rich Input is focused,
+  // use-keybindings steals the chord for attach; otherwise agent.new runs.
+  // Binding kept so settings / command palette can show the shortcut.
+  {
+    commandId: "pier.terminal.composerAttach",
+    keys: "Mod+Shift+KeyA",
+    scope: "global",
+  },
   {
     commandId: "pier.settings.open",
     keys: "Mod+Comma",

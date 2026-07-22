@@ -1,7 +1,7 @@
 # 增强输入附件设计
 
 日期：2026-07-21  
-状态：待实现（已按设计审查修订）  
+状态：待实现（已按设计审查修订）；**编辑器 / `@` 相关非目标已由 [`2026-07-22-rich-input-structured-composer-design.md`](./2026-07-22-rich-input-structured-composer-design.md) 修订**  
 范围：按需增强输入（Rich Input）上的任意文件附件：选择、粘贴、拖拽；发送时把绝对路径交给智能体自行处理。
 
 ## 1. 背景与目标
@@ -17,11 +17,11 @@
 
 **非目标：**
 
-- contenteditable / ProseMirror / 真·行内 DOM chip。
+- ~~contenteditable / ProseMirror / 真·行内 DOM chip。~~ → 见结构化编辑器规格（Lexical decorator chip 允许；WYSIWYG 仍禁止）。
 - 缩略图灯箱、上传进度条、复制进项目目录。
 - 模式/模型快捷按钮、发送历史上键（可另案）。
 - 附件个数/单文件体积的产品硬顶（仍受现网 `sendText` 总长 64 000 字符上限约束，见 §2、§6）。
-- `@` 路径语法、相对路径、多模态 API。
+- ~~`@` 路径语法、相对路径、多模态 API。~~ → `@` 工作区文件/文件夹见结构化编辑器 Phase B；相对路径发送形态与多模态 API 仍禁止。
 
 ## 2. 已锁定决策
 
