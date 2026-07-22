@@ -244,12 +244,9 @@ export function createExternalRendererPluginContext(
           body?: string;
           confirmLabel?: string;
           intent?: "default" | "destructive";
-          size?: "default" | "sm";
           title: string;
         } = {
           title: options.title,
-          // Long error bodies need default width; callers may opt into sm.
-          size: options.size ?? "default",
         };
         if (options.body !== undefined) args.body = options.body;
         if (options.confirmLabel !== undefined) {

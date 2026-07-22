@@ -161,7 +161,6 @@ export function createDeleteAction(
         } catch (error) {
           await context.dialogs.alert({
             body: error instanceof Error ? error.message : String(error),
-            size: "default",
             title: t(
               "filePanel.tree.delete.protectionFailed",
               "Unable to protect open files"
@@ -196,7 +195,6 @@ export function createDeleteAction(
                   `${path}: ${error instanceof Error ? error.message : String(error)}`
               )
               .join("\n"),
-            size: "default",
             title: t("filePanel.tree.deleteFailed", "Unable to delete"),
           });
         }

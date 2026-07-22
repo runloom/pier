@@ -114,7 +114,6 @@ export function useFilePanelMarkdownChrome({
               "filePanel.markdown.externalOpenFailed.description",
               "The external link could not be opened."
             ),
-            size: "sm",
             title: t(
               "filePanel.markdown.externalOpenFailed.title",
               "Unable to open link"
@@ -125,7 +124,6 @@ export function useFilePanelMarkdownChrome({
         await context.dialogs
           .alert({
             body: error instanceof Error ? error.message : String(error),
-            size: "default",
             title: t(
               "filePanel.markdown.externalOpenFailed.title",
               "Unable to open link"
@@ -176,7 +174,6 @@ export function useFilePanelMarkdownChrome({
         if (context) {
           await context.dialogs.alert({
             body: error instanceof Error ? error.message : String(error),
-            size: "default",
             title: t(
               "filePanel.editor.clipboardFailed",
               "Clipboard unavailable"

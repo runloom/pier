@@ -84,7 +84,6 @@ export function openGitChangesPanel(input: {
     input.pluginContext.dialogs
       .alert({
         body: error instanceof Error ? error.message : String(error),
-        size: "default",
         title: pluginText(
           input.pluginContext,
           "reviewOpenFailed",

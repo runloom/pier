@@ -425,7 +425,6 @@ export class FileEditorController {
   async showDraftProtectionError(message: string): Promise<void> {
     await this.#context.dialogs.alert({
       body: message,
-      size: "default",
       title: this.#context.i18n.t(
         "files.draftProtection.failed",
         undefined,

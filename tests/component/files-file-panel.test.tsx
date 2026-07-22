@@ -1567,7 +1567,6 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(context.dialogs.alert).toHaveBeenCalledWith({
         body: "Permission denied",
-        size: "default",
         title: "Unable to load folder",
       });
     });
@@ -4331,7 +4330,6 @@ describe("Files file-panel", () => {
     await waitFor(() => {
       expect(context.dialogs.alert).toHaveBeenCalledWith({
         body: "The external link could not be opened.",
-        size: "sm",
         title: "Unable to open link",
       });
     });

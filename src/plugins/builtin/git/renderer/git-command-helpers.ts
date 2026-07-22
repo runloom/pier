@@ -62,7 +62,6 @@ export function showUnavailable(
 ): Promise<void> {
   return context.dialogs.alert({
     ...(detail ? { body: detail } : {}),
-    size: "default",
     title,
   });
 }
@@ -115,7 +114,6 @@ export function showConflictDetails(
 ): Promise<void> {
   return context.dialogs.alert({
     body: [body, detail].filter(Boolean).join("\n\n"),
-    size: "default",
     title,
   });
 }

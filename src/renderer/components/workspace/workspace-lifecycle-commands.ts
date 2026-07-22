@@ -225,7 +225,6 @@ export async function runWorkspaceLifecycleCommand(
       // 被误判为 renderer 反馈失败，再触发原生兜底形成双提示。
       showAppAlert({
         body: envelope.command.body,
-        size: "default",
         title: closeFailureTitle(),
       });
     } else {

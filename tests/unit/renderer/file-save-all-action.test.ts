@@ -51,7 +51,6 @@ describe("Save All action", () => {
     expect(alert).toHaveBeenCalledOnce();
     expect(alert).toHaveBeenCalledWith({
       body: document.name,
-      size: "default",
       title: "Some files could not be saved",
     });
   });

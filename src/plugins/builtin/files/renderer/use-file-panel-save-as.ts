@@ -132,7 +132,6 @@ export function useFilePanelSaveAs(input: {
           console.error("[files] Save As recovery failed:", error);
           await runtimeContext.dialogs.alert({
             body: error instanceof Error ? error.message : String(error),
-            size: "default",
             title: t(
               "filePanel.saveAs.recoveryFailed",
               "Unable to resume the interrupted Save As operation"

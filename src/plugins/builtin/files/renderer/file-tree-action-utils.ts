@@ -213,7 +213,6 @@ export function notifyMoveWithUndo(
             context.dialogs
               .alert({
                 body: error instanceof Error ? error.message : String(error),
-                size: "default",
                 title: t("filePanel.tree.renameFailed", "Unable to rename"),
               })
               .catch(() => undefined);

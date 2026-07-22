@@ -365,7 +365,6 @@ describe("file-tree-actions", () => {
 
     expect(dialogs.alert).toHaveBeenCalledWith({
       body: "disk full",
-      size: "default",
       title: "Unable to create item",
     });
     expect(getFilesTreeSnapshot(ROOT).entriesByPath.has("src/new.ts")).toBe(
@@ -471,7 +470,6 @@ describe("file-tree-actions", () => {
     await vi.waitFor(() =>
       expect(dialogs.alert).toHaveBeenCalledWith({
         body: "undo permission denied",
-        size: "default",
         title: "Unable to rename",
       })
     );
@@ -685,7 +683,6 @@ describe("file-tree-actions", () => {
     expect(dialogs.alert).toHaveBeenCalledOnce();
     expect(dialogs.alert).toHaveBeenCalledWith({
       body: "src/a.ts: first denied\nsrc/b.ts: second denied",
-      size: "default",
       title: "Unable to delete",
     });
   });

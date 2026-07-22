@@ -199,7 +199,6 @@ export function FileTreeSidebar({
       if (result.error instanceof Error) {
         await context.dialogs.alert({
           body: result.error.message,
-          size: "default",
           title,
         });
       } else {
@@ -236,7 +235,6 @@ export function FileTreeSidebar({
         }
         await context.dialogs.alert({
           body: error instanceof Error ? error.message : String(error),
-          size: "default",
           title: t("filePanel.tree.renameFailed", "Unable to rename"),
         });
         reloadFilesTreeRoot(
