@@ -130,6 +130,8 @@ function charsToCode(chars: string): string {
       return "ArrowLeft";
     case "\u{F703}":
       return "ArrowRight";
+    case "\u{1b}":
+      return "Escape";
     default:
       return ch; // fallback: 让 keymap resolve 自行不命中
   }

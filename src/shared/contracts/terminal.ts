@@ -144,12 +144,7 @@ export type NativeFocusIntentResult =
   | { ok: true; panelId: string }
   | {
       ok: false;
-      reason:
-        | "cross-window"
-        | "hidden"
-        | "not-ready"
-        | "stale"
-        | "web-overlay-active";
+      reason: "cross-window" | "hidden" | "not-ready" | "stale";
     };
 
 /**

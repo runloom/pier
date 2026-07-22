@@ -3,7 +3,8 @@
  *
  * workspace-host 与 tab header 在「焦点归还终端」路径上先询问这里：
  * - reason `"activate"`：面板激活 / 点已激活 tab → 若 composer 仍打开，应 refocus 输入框
- * - reason `"surface"`：点终端内容区 focus-request → 关闭 composer 并归还 TUI
+ * - reason `"surface"`：点终端内容区 focus-request → 若 composer 仍打开，应 refocus
+ *   输入框并保持 Rich Input（不关闭；仅 Esc / send 关闭）
  *
  * 回调返回 boolean：true = 已处理焦点（调用方止步）；false = 未接管，
  * 调用方走原生焦点归还路径。

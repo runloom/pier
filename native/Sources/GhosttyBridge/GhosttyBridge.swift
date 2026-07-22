@@ -321,6 +321,8 @@ final class EventRouterView: NSView {
             return "ArrowLeft"
         case "\u{F703}":
             return "ArrowRight"
+        case "\u{1B}":
+            return "Escape"
         default:
             return nil
         }
@@ -406,6 +408,17 @@ final class EventRouterView: NSView {
         // 仅 Cmd 路径走 menu — menu items 全部都是 Cmd+... 修饰, Ctrl+Shift 不参与.
         if isCmd, NSApp.mainMenu?.performKeyEquivalent(with: event) == true {
             record("menu-consumed")
+            return nil
+        }
+
+        // Bare Escape: charactersIgnoringModifiers 在部分输入源下为空，不能只靠
+        // chars 映射。搜索等浮层打开时 allowlist 会临时含 "Escape"。
+        let bareMods = mods.intersection([.command, .control, .option, .shift])
+        if event.keyCode == 53,
+           bareMods.isEmpty,
+           Self.terminalAppShortcutKeys.contains("Escape") {
+            record("shortcut-forward")
+            EventRouterView.forwardCmdKeyCallback?(browserWindowId, mods.rawValue, "\u{1B}")
             return nil
         }
 
