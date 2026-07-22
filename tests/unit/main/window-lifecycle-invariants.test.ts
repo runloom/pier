@@ -42,6 +42,10 @@ const CLOSE_COORDINATOR_FLUSH_RE =
   /intercept\([\s\S]{0,500}?this\.#flush\(payload\)[\s\S]{0,500}?window\.close\(\)/;
 const QUIT_DESTROY_SKIPS_CLOSE_RE =
   /if \(\s*!this\.isDestroyingAllForQuit[\s\S]{0,300}?this\.closeCoordinator\.intercept\(window/;
+const PROCEED_TO_QUIT_BEGINS_QUIT_BEFORE_INSTALL_RE =
+  /proceedToQuit:\s*\(\)\s*=>\s*\{[\s\S]{0,500}?windowManager\.beginQuit\(\);[\s\S]{0,500}?quitAndInstall\(\)/;
+const BEGIN_QUIT_API_RE =
+  /beginQuit\(\):\s*void\s*\{\s*this\.isDestroyingAllForQuit\s*=\s*true;\s*\}/;
 
 describe("window lifecycle persistence invariants", () => {
   it("creates an app quit controller for Cmd+Q", () => {
@@ -87,5 +91,10 @@ describe("window lifecycle persistence invariants", () => {
 
   it("does not run user-close record updates during app quit destroy", () => {
     expect(WINDOW_MANAGER_SOURCE).toMatch(QUIT_DESTROY_SKIPS_CLOSE_RE);
+  });
+
+  it("marks quitting before quitAndInstall so close intercept cannot re-enter prepareClose", () => {
+    expect(WINDOW_MANAGER_SOURCE).toMatch(BEGIN_QUIT_API_RE);
+    expect(MAIN_SOURCE).toMatch(PROCEED_TO_QUIT_BEGINS_QUIT_BEFORE_INSTALL_RE);
   });
 });
