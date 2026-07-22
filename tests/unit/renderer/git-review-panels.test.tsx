@@ -1011,7 +1011,6 @@ describe("Git review panel", () => {
     fireEvent.click(view.getByRole("button", { name: "Details" }));
     expect(context.dialogs.alert).toHaveBeenCalledWith({
       body: "Pierre chunk unavailable",
-      size: "default",
       title: "Failed to render diff",
     });
     diffViewRuntime.error = null;
@@ -1563,7 +1562,6 @@ describe("Git review panel", () => {
     fireEvent.click(view.getByRole("button", { name: "Details" }));
     expect(context.dialogs.alert).toHaveBeenCalledWith({
       body: "temporary document failure",
-      size: "default",
       title: "src/file-0.ts",
     });
 

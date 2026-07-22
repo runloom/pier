@@ -332,7 +332,6 @@ describe("AgentsSection", () => {
     await waitFor(() => {
       expect(appDialogMocks.showAppAlert).toHaveBeenCalledWith({
         body: "The agent website could not be opened.",
-        size: "sm",
         title: "Unable to open website",
       });
     });

@@ -380,7 +380,6 @@ export class FileDocumentLifecycle {
   async #showDurabilityError(message: string): Promise<void> {
     await this.#context.dialogs.alert({
       body: message,
-      size: "default",
       title: this.#context.i18n.t(
         "filePanel.durability.confirmFailed",
         undefined,

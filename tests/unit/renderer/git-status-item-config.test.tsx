@@ -228,7 +228,6 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     await waitFor(() => {
       expect(context.dialogs.alert).toHaveBeenCalledWith({
         body: "target group mismatch",
-        size: "default",
         title: "Failed to open changes",
       });
     });

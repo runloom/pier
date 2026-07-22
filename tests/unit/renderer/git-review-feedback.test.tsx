@@ -89,7 +89,6 @@ describe("Git Review feedback", () => {
     fireEvent.click(screen.getByRole("button", { name: "Details" }));
     expect(context.dialogs.alert).toHaveBeenCalledWith({
       body: "raw diagnostic",
-      size: "default",
       title: "Failed to load changes",
     });
   });
@@ -165,7 +164,6 @@ describe("Git Review feedback", () => {
     );
     expect(context.dialogs.alert).toHaveBeenCalledWith({
       body: "main diagnostic must not be shown",
-      size: "default",
       title: "very/long/path/0/file.ts",
     });
     expect(screen.getAllByText(/very\/long\/path/u)[0]).toHaveClass(

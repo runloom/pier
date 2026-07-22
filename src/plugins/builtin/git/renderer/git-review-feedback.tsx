@@ -63,7 +63,6 @@ export function ReviewErrorEmpty({
                 context.dialogs
                   .alert({
                     body: detail ?? "",
-                    size: "default",
                     title,
                   })
                   .catch(() => undefined);
@@ -131,7 +130,6 @@ function FeedbackActions({
             context.dialogs
               .alert({
                 body: detail ?? "",
-                size: "default",
                 title,
               })
               .catch(() => undefined);

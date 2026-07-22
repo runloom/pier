@@ -37,7 +37,7 @@ export function useFilesTreeContextMenus({
       );
       if (error instanceof Error) {
         context.dialogs
-          .alert({ body: error.message, size: "default", title })
+          .alert({ body: error.message, title })
           .catch(() => undefined);
         return;
       }

@@ -13,7 +13,6 @@ export interface AppAlertOptions {
   body?: string;
   confirmLabel?: string;
   intent?: AppDialogIntent;
-  size?: AppDialogSize;
   title: string;
 }
 
@@ -112,26 +111,29 @@ function openAlertConfirm(
 ): Promise<boolean> {
   useCommandPaletteController.getState().close();
   dismissActive();
-  return new Promise((resolvePromise) => {
-    const request: AlertConfirmDialogRequest = {
-      intent: options.intent ?? "default",
-      kind,
-      resolve: (confirmed) => {
-        if (useAppDialogStore.getState().current === request) {
-          useAppDialogStore.setState({ current: null });
-        }
-        resolvePromise(confirmed);
-      },
-      size: options.size ?? "sm",
-      title: options.title,
-      ...(options.body ? { body: options.body } : {}),
-      ...("cancelLabel" in options && options.cancelLabel
-        ? { cancelLabel: options.cancelLabel }
-        : {}),
-      ...(options.confirmLabel ? { confirmLabel: options.confirmLabel } : {}),
-    };
-    useAppDialogStore.setState({ current: request });
-  });
+  const size: AppDialogSize =
+    kind === "confirm" ? (options as AppConfirmOptions).size : "sm";
+  const { promise, resolve } = Promise.withResolvers<boolean>();
+  const request: AlertConfirmDialogRequest = {
+    intent: options.intent ?? "default",
+    kind,
+    resolve: (confirmed) => {
+      if (useAppDialogStore.getState().current === request) {
+        useAppDialogStore.setState({ current: null });
+      }
+      resolve(confirmed);
+    },
+    // alert is always sm; confirm keeps caller-chosen size.
+    size,
+    title: options.title,
+    ...(options.body ? { body: options.body } : {}),
+    ...("cancelLabel" in options && options.cancelLabel
+      ? { cancelLabel: options.cancelLabel }
+      : {}),
+    ...(options.confirmLabel ? { confirmLabel: options.confirmLabel } : {}),
+  };
+  useAppDialogStore.setState({ current: request });
+  return promise;
 }
 
 export async function showAppAlert(options: AppAlertOptions): Promise<void> {

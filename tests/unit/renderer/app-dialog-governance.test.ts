@@ -47,7 +47,7 @@ describe("app dialog usage governance", () => {
 
     expect(agentContext).toContain("### 宿主弹窗使用规范");
     expect(agentContext).toContain("桌面工具对话框");
-    expect(agentContext).toContain("sm`：仅两键短确认");
+    expect(agentContext).toContain("`alert`：**固定 `sm`**");
     expect(agentContext).toContain("`choice`：`alt | 取消 | confirm`");
     expect(agentContext).toContain(
       '破坏性确认必须显式传 `intent: "destructive"`'
@@ -57,6 +57,9 @@ describe("app dialog usage governance", () => {
     );
     expect(agentContext).toContain(
       "builtin 与 external 插件的简单弹窗 API **同构**"
+    );
+    expect(agentContext).toContain(
+      "showAppAlert` / 插件 `dialogs.alert` **不传 size**，一律 `sm`"
     );
   });
 

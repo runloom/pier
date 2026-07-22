@@ -183,7 +183,6 @@ export async function saveDocumentAs(input: {
             "filePanel.saveAs.targetDirty",
             "The selected target already has protected unsaved changes."
           ),
-          size: "default",
           title: t("filePanel.saveAs.failed", "Unable to save as"),
         });
       return { kind: "failed" };
@@ -260,7 +259,6 @@ export async function saveDocumentAs(input: {
             "filePanel.saveAs.targetDirty",
             "The selected target already has protected unsaved changes."
           ),
-          size: "default",
           title: t("filePanel.saveAs.failed", "Unable to save as"),
         });
       return { kind: "failed" };
@@ -336,7 +334,6 @@ export async function saveDocumentAs(input: {
     if (input.feedback !== "none")
       await context.dialogs.alert({
         body: error instanceof Error ? error.message : String(error),
-        size: "default",
         title: committed
           ? t(
               "filePanel.saveAs.rebindFailed",
@@ -405,7 +402,6 @@ export async function recoverDocumentSaveAs(input: {
           undefined,
           "A file written by an interrupted Save As operation changed before the editor could recover it. The source draft was kept."
         ),
-        size: "default",
         title: input.context.i18n.t(
           "filePanel.saveAs.rebindFailed",
           undefined,

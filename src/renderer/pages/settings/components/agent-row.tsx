@@ -237,14 +237,12 @@ export function AgentRow({ agentId }: { agentId: AgentKind }) {
         }
         return showAppAlert({
           body: t("settings.agents.action.websiteOpenFailedDescription"),
-          size: "sm",
           title: t("settings.agents.action.websiteOpenFailedTitle"),
         });
       })
       .catch((error: unknown) =>
         showAppAlert({
           body: error instanceof Error ? error.message : String(error),
-          size: "default",
           title: t("settings.agents.action.websiteOpenFailedTitle"),
         })
       )

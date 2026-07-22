@@ -41,6 +41,7 @@ function DirectAction({
   run(action: WidgetHeaderAction): Promise<void>;
 }) {
   const Icon = action.icon;
+  const spinning = pending && /(?:^|:)refresh$/u.test(action.id);
   return (
     <Tooltip>
       <TooltipTrigger asChild>
@@ -55,10 +56,12 @@ function DirectAction({
           size="icon-xs"
           variant={action.intent === "destructive" ? "destructive" : "ghost"}
         >
-          {/* pending 时用当前 icon 原地旋转，避免换成 Spinner 组件造成视觉跳变、
-              布局微抖。aria-busy 已由 Button 承担 loading 语义。 */}
+          {/* Refresh keeps the icon spinning in place. Other pending actions
+              stay still (aria-busy + disabled carry the loading state). */}
           <Icon
-            className={cn(pending && "animate-spin motion-reduce:animate-none")}
+            className={cn(
+              spinning && "animate-spin motion-reduce:animate-none"
+            )}
             data-icon="inline-start"
           />
         </Button>
@@ -169,6 +172,8 @@ export function WorkbenchWidgetActions({
                   {overflow.map((action) => {
                     const Icon = action.icon;
                     const pending = pendingIds.has(action.id);
+                    const spinning =
+                      pending && /(?:^|:)refresh$/u.test(action.id);
                     return (
                       <DropdownMenuItem
                         aria-busy={pending || undefined}
@@ -186,7 +191,8 @@ export function WorkbenchWidgetActions({
                       >
                         <Icon
                           className={cn(
-                            pending && "animate-spin motion-reduce:animate-none"
+                            spinning &&
+                              "animate-spin motion-reduce:animate-none"
                           )}
                         />
                         {action.label}

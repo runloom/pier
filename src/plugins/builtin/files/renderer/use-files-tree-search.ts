@@ -142,7 +142,6 @@ export function useFilesTreeSearch({
           context.dialogs
             .alert({
               body,
-              size: "default",
               title: searchFailedTitle,
             })
             .catch(() => undefined);

@@ -272,7 +272,6 @@ export interface ExternalRendererPluginContext {
       body?: string;
       confirmLabel?: string;
       intent?: RendererPluginDialogIntent;
-      size?: RendererPluginDialogSize;
       title: string;
     }): Promise<void>;
     choice(options: {
