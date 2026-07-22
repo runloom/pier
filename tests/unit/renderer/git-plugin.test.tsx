@@ -1550,18 +1550,17 @@ describe("git builtin plugin", () => {
     const branchRow = render(<div>{quickPick.renderItem(firstBranch)}</div>);
     expect(branchRow.getByText("main")).toBeVisible();
     expect(branchRow.getByText("default")).toBeVisible();
-    expect(branchRow.getByText("graph")).toBeVisible();
     expect(branchRow.getByText("3↑")).toBeVisible();
     expect(branchRow.getByText("5↓")).toBeVisible();
     expect(
       branchRow.container.querySelector("[data-branch-picker-row-ahead-behind]")
         ?.textContent
-    ).toBe("graph5↓3↑");
+    ).toBe("5↓3↑");
     expect(
       branchRow.container.querySelector("[data-branch-picker-row-ahead-behind]")
     ).toHaveAttribute(
       "title",
-      "Commit graph counts only. Squash or rebase merges may show already-applied commits as branch-only."
+      "Counts commit divergence only. Squash or rebase merges may show already-applied commits as branch-only."
     );
     // ahead/behind 用主题语义 token,badge 用 shadcn Badge,不硬编码调色板色
     expect(branchRow.getByText("3↑")).toHaveClass("text-success");
@@ -1578,8 +1577,10 @@ describe("git builtin plugin", () => {
       throw new Error("expected remote branch row");
     }
     const remoteRow = render(<div>{quickPick.renderItem(remoteBranch)}</div>);
-    expect(remoteRow.getByText("remote")).toBeVisible();
-    expect(remoteRow.getByText("remote")).toHaveAttribute("data-slot", "badge");
+    expect(
+      remoteRow.container.querySelector('[data-branch-kind="remote"]')
+    ).not.toBeNull();
+    expect(remoteRow.queryByText("remote")).toBeNull();
     expect(remoteRow.getByText("Remote Author")).toBeVisible();
     expect(remoteRow.getByText("aaa1111111")).toBeVisible();
     expect(remoteRow.getByText("· remote subject")).toBeVisible();
@@ -1633,10 +1634,7 @@ describe("git builtin plugin", () => {
         "Merge resulted in 2 conflict(s) that need to be resolved."
       )
     ).toBeVisible();
-    expect(screen.getByRole("alertdialog")).toHaveAttribute(
-      "data-size",
-      "default"
-    );
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     expect(useCommandPaletteController.getState().quickPick?.title).not.toBe(
       "Merge Conflicts"
     );
@@ -1722,10 +1720,7 @@ describe("git builtin plugin", () => {
     expect(useCommandPaletteController.getState().quickPick?.title).not.toBe(
       "Stash Conflicts"
     );
-    expect(screen.getByRole("alertdialog")).toHaveAttribute(
-      "data-size",
-      "default"
-    );
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await acceptPromise;
 
@@ -1872,10 +1867,7 @@ describe("git builtin plugin", () => {
         "Stash was applied but resulted in conflicts that need to be resolved."
       )
     ).toBeVisible();
-    expect(screen.getByRole("alertdialog")).toHaveAttribute(
-      "data-size",
-      "default"
-    );
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await acceptPromise;
 
@@ -2045,10 +2037,7 @@ describe("git builtin plugin", () => {
     expect(screen.getByRole("alertdialog")).toHaveTextContent(
       "CONFLICT (content): still unresolved"
     );
-    expect(screen.getByRole("alertdialog")).toHaveAttribute(
-      "data-size",
-      "default"
-    );
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await handlerPromise;
 
@@ -2109,10 +2098,7 @@ describe("git builtin plugin", () => {
     expect(useCommandPaletteController.getState().quickPick?.title).not.toBe(
       "Rebase Conflicts"
     );
-    expect(screen.getByRole("alertdialog")).toHaveAttribute(
-      "data-size",
-      "default"
-    );
+    expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     fireEvent.click(screen.getByRole("button", { name: "OK" }));
     await acceptPromise;
 

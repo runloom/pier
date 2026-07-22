@@ -322,6 +322,15 @@ function createMockContext(overrides?: {
       }
     });
   return {
+    contentPreview: {
+      close: vi.fn(),
+      openImage: vi.fn(),
+    },
+    contextMenu: {
+      popup: vi.fn(async () => undefined),
+      registerSelectionSelectAllProvider: vi.fn(() => () => undefined),
+      registerSelectionTextProvider: vi.fn(() => () => undefined),
+    },
     dialogs: {
       alert: vi.fn(async () => undefined),
       choice: vi.fn(async () => "confirm" as const),

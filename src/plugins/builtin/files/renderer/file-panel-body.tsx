@@ -352,7 +352,7 @@ export function ResolvedFilePanel({
           panelId={panelId}
           readOnly={document.readOnly || document.loadState === "loading"}
           registerSelectionSelectAllProvider={
-            context?.contextMenu.registerSelectionSelectAllProvider
+            context?.contextMenu?.registerSelectionSelectAllProvider
           }
           searchLabels={createFileSearchLabels(t)}
           searchRequest={searchRequest}
