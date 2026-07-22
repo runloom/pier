@@ -1,6 +1,6 @@
 # 宿主发布细节
 
-总览与流程图：[`release.md`](./release.md)。本文只补宿主 CI / secrets / 本地命令。
+文档索引：[`README.md`](./README.md)。总览与流程图：[`release.md`](./release.md)。本文只补宿主 CI / secrets / 本地命令。
 
 ## CI
 

@@ -1,6 +1,7 @@
 # Pier Agent Context
 
-本文件是开发 Pier 时给 Claude Code、Codex 和 OpenCode 共用的项目级上下文。
+本文件是开发 Pier 时给 Claude Code、Codex 和 OpenCode 共用的项目级上下文（硬约束与治理规则）。  
+人类贡献者请从 [`README.md`](README.md) / [`docs/README.md`](docs/README.md) / [`CONTRIBUTING.md`](CONTRIBUTING.md) 进入；不要把本文当作用户手册全文复制进 PR 描述。
 
 ## 01 项目定位
 

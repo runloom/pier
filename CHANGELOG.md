@@ -4,6 +4,13 @@
 
 ## [Unreleased]
 
+### Changed
+
+- **文档前门重整。** `README.md` 改为产品入口（功能 / 要求 / bootstrap /
+  文档索引），冗长 CLI 细节迁至 `docs/cli.md`；新增 `docs/README.md`、
+  `docs/development.md`、`SECURITY.md`，并扩充 `CONTRIBUTING.md`。发布 /
+  插件文档补交叉链接；`AGENTS.md` 标明面向编码助手而非用户手册。
+
 ### Added
 
 - **成本管理归宿主工作台。** 新增 core widget `core.cost-overview`（分类

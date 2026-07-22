@@ -2,126 +2,134 @@
 
 **本地 AI 开发工作台。**
 
-Pier 提供 dockview panel 布局、终端、代码变更预览、文件查看和多 agent 状态可见性，让 AI 编程从会话走向项目连续性。
+Pier 把稳定终端、可拖拽 panel 布局、文件查看、代码变更预览和多智能体状态放到同一桌面里，让 AI 编程从「单次会话」走向「项目连续性」。
+
+[文档](docs/README.md) · [贡献](CONTRIBUTING.md) · [安全](SECURITY.md) · [变更日志](CHANGELOG.md) · [发布](https://github.com/runloom/pier/releases)
+
+> 当前桌面端面向 **macOS**（Apple Silicon / Intel）。终端运行时依赖 Ghostty native + Swift。
+
+## 功能概览
+
+- **工作区布局** — dockview 驱动的 tab / split / floating panel，布局随偏好持久化
+- **终端** — Ghostty native 嵌入，支持多会话、工作树与项目路径锚点
+- **文件与变更** — 文件浏览 / 编辑预览，Git 变更实时可见
+- **工作台** — 可组装的响应式物料网格（指标、配额、成本等）
+- **多智能体可见性** — 前台活动聚合（agent / task / shell / idle），需要你处理时有明确反馈
+- **官方插件** — Claude / Codex / Grok / SSH 等经签名官方索引分发的受管理插件
+- **本机 CLI** — `pier open` / `status` / `panels` 等控制面命令，便于脚本与 MCP 调用
+
+## 要求
+
+| 项 | 版本 / 说明 |
+| --- | --- |
+| 操作系统 | macOS（开发与分发当前均仅支持 mac） |
+| Node.js | `^24.15.0`（见 `package.json` `engines`） |
+| pnpm | `>=11.12.0`（仓库锁定 `pnpm@11.12.0`） |
+| Xcode CLI Tools | `xcode-select --install` |
+| Homebrew + zig | `brew install zig@0.15`（编译 libghostty / native addon） |
+
+## 快速开始
+
+新机或首次 clone：
+
+```bash
+git clone https://github.com/runloom/pier.git
+cd pier
+pnpm bootstrap   # 预检依赖 → install → setup:worktree（含 native）
+pnpm dev         # 启动 Electron 开发态
+```
+
+已有 git worktree（不共享 `node_modules` / native 构建产物）时，进入目录后先：
+
+```bash
+pnpm setup:worktree
+pnpm dev
+```
+
+无交互 / CI：
+
+```bash
+BOOTSTRAP_YES=1 pnpm bootstrap
+```
+
+完整说明、常见失败与打包步骤见 [`docs/development.md`](docs/development.md)。
+
+## 常用命令
+
+```bash
+pnpm dev              # Electron 开发态（含官方插件打包）
+pnpm check            # typecheck + lint + depcruise + file-size + 测试
+pnpm test:unit        # 单元测试
+pnpm test:component   # 组件测试
+pnpm test:e2e         # Playwright E2E
+pnpm build            # electron-vite 构建
+pnpm build:dist       # 签名 / 公证 / 双架构 mac 分发包
+```
+
+更多脚本与插件打包命令见 [`docs/development.md`](docs/development.md)。
+
+## 文档
+
+| 文档 | 内容 |
+| --- | --- |
+| [`docs/README.md`](docs/README.md) | 文档索引 |
+| [`docs/development.md`](docs/development.md) | 开发环境、worktree、检查与构建 |
+| [`docs/cli.md`](docs/cli.md) | `pier` CLI 与本机控制通道 |
+| [`docs/plugins.md`](docs/plugins.md) | 官方插件开发与校验 |
+| [`docs/release.md`](docs/release.md) | 宿主 / 插件双通道发布 |
+| [`docs/legal/licensing.md`](docs/legal/licensing.md) | 授权边界说明 |
+| [`AGENTS.md`](AGENTS.md) | 给编码助手的项目级约束（非用户手册） |
+
+## 插件
+
+Pier 当前只接受：
+
+1. **内置插件** — `src/plugins/builtin/*`，随宿主构建
+2. **官方受管理外部插件** — `packages/plugin-*`（如 `pier.claude`、`pier.codex`、`pier.grok`、`pier.ssh`），经 Ed25519 签名官方索引安装
+
+不支持第三方 marketplace、任意 registry / git / local 扫描。开发与发布流程见 [`docs/plugins.md`](docs/plugins.md)。
+
+```bash
+pnpm plugins:pack     # 打包全部官方插件
+pnpm plugins:index    # 重新生成 plugins/index.v1.json
+```
+
+官方索引：`https://runloom.github.io/pier/plugins/index.v1.json`
+
+## CLI
+
+安装或开发态下可用 `pier` 控制运行中的桌面实例（类似 `code .`）：
+
+```bash
+pier open . --json
+pier status --json
+pier panels list --json
+```
+
+开发态验证：
+
+```bash
+pnpm dev
+# 另一终端
+pnpm --silent cli:dev -- status --json
+```
+
+完整命令、退出码约定与 MCP 定位顺序见 [`docs/cli.md`](docs/cli.md)。
+
+## 贡献
+
+欢迎 Issue 与 Pull Request。请先阅读 [`CONTRIBUTING.md`](CONTRIBUTING.md)：
+
+- 平凡贡献（typo、小文档）可直接提 PR
+- 非平凡贡献需完成贡献者授权流程后再合并，以免阻塞商业再授权
+
+安全漏洞请按 [`SECURITY.md`](SECURITY.md) 私下报告，不要开公开 Issue。
 
 ## 授权
 
 Pier 采用 **AGPLv3 + 商业授权**：
 
-- 开源版源码按 [`AGPL-3.0-only`](LICENSE) 发布。
-- 需要闭源分发、白标、企业支持或 AGPLv3 之外权利的使用方，可通过单独商业协议授权。
-- 商标和品牌资产不随 AGPLv3 授权，见 [`TRADEMARKS.md`](TRADEMARKS.md)。
-- 第三方依赖和字体资产保留各自许可证，见 [`NOTICE`](NOTICE) 和 [`docs/legal/licensing.md`](docs/legal/licensing.md)。
-
-贡献规则见 [`CONTRIBUTING.md`](CONTRIBUTING.md)。非平凡外部贡献需要先完成贡献者授权流程，避免阻塞后续商业授权。
-
-## 技术栈
-
-- Electron 43 · React 19 · TypeScript · pnpm
-- dockview-react 6.6.1（panel 布局核心）
-- Tailwind CSS v4 + shadcn primitives
-- Biome 2.5 + Ultracite（lint + format）
-- Vitest + Playwright（测试）
-
-## 开发命令
-
-```bash
-pnpm install          # 安装依赖
-pnpm dev              # 启动 Electron 桌面应用
-pnpm check            # typecheck + lint + depcruise + file-size
-pnpm test             # vitest
-pnpm build            # electron-vite build
-```
-
-## 插件开发
-
-官方插件位于 `packages/plugin-*/`，通过受管理的签名官方索引发布。完整流程见 [`docs/plugins.md`](docs/plugins.md)：
-
-```bash
-pnpm plugin:codex:pack       # 打包 Codex 官方插件，生成 tgz 与 sha256
-pnpm plugins:pack            # 打包所有官方插件
-pnpm plugins:index           # 重新生成 plugins/index.v1.json
-```
-
-发布通过 GitHub Actions 完成：
-
-- 单个 `packages/plugin-*/package.json` 版本变更合入 `main` 后，工作流构建并发布 `plugin-<id>-v<version>` GitHub Release，再更新签名官方索引。
-- 索引托管在 `https://runloom.github.io/pier/plugins/index.v1.json`。
-- 当前只支持仓内官方插件和官方受管理外部插件，不支持第三方插件、任意 local / git / registry 来源、自建索引或 marketplace。
-
-## CLI 命令
-
-Pier 控制平面已经定义 CLI 命令形态，用于后续 MCP server、脚本和本机自动化调用。当前仓库已实现 `pier` 可执行入口、CLI 参数解析、路径解析、命令信封生成、开发态本机控制通道和 renderer command bridge。
-
-已定义的第一批命令:
-
-```bash
-pier open <path> --json
-pier status --json
-pier windows list --json
-pier windows focus <windowId> --json
-pier panels list [--window <windowId>] --json
-pier panels focus <panelId> [--window <windowId>] --json
-pier preferences read --json
-```
-
-和 `code .` 一样，CLI 默认成功时不输出内容，只用退出码表达成功或失败。需要机器可读结果时加 `--json`；需要只看命令信封时加 `--print-envelope`。
-
-窗口和分屏路由:
-
-```bash
-pier open . --window main
-pier open . --split right
-```
-
-`--window <windowId>` 会把 renderer 命令发到指定窗口；未指定时优先使用当前聚焦窗口。`--split` 支持 `right`、`below` / `down`、`left`、`above` / `up`；未指定时在当前 active group 内作为 tab 打开。
-
-默认情况下，`open` 和 `panels focus` 会主动聚焦目标 Pier 窗口，适合人工命令行调用。MCP server 或后台 agent 不希望打断当前用户时，加 `--no-focus`:
-
-```bash
-pier open . --no-focus --json
-```
-
-开发态验证真实 CLI 通道时，先启动 Pier:
-
-```bash
-pnpm dev
-```
-
-然后在另一个终端运行:
-
-```bash
-pnpm --silent cli:dev -- status --json
-pnpm --silent cli:dev -- windows list --json
-pnpm --silent cli:dev -- windows focus main --json
-pnpm --silent cli:dev -- panels list --window main --json
-pnpm --silent cli:dev -- panels focus terminal-1 --window main --json
-pnpm --silent cli:dev -- open . --json
-pnpm --silent cli:dev -- open .
-pnpm --silent cli:dev -- open . --window main --split right --json
-pnpm --silent cli:dev -- open . --no-focus --json
-pnpm --silent cli:dev -- preferences read --json
-pnpm vitest run tests/unit/app-core/cli-bin.test.ts
-pnpm vitest run tests/unit/app-core/cli-adapter.test.ts
-pnpm vitest run tests/unit/app-core/local-control.test.ts
-```
-
-这些命令会通过 dev profile 对应的 userData socket 连接运行中的 Pier main 进程，并返回 `PierCommandResult`。只想查看 CLI 解析后的命令信封时，可以加 `--print-envelope`:
-
-```bash
-pnpm --silent cli:dev -- status --json --print-envelope
-```
-
-CLI 默认以 `cli-local` 客户端身份调用控制平面: 可以读取状态、打开路径、聚焦窗口和 panel；默认不能关闭窗口、写配置或发送终端输入。
-
-说明: `pier open <path> --json` 是类似 `code .` 的高层命令，语义是“打开路径/工作区”。当前阶段会在 main 进程解析路径、Git 根目录和 worktree 信息，形成公共 `PanelContext`，再通过 renderer command bridge 打开一个带上下文的 terminal panel，并把解析后的目录作为终端初始 cwd。真正的文件 panel 和插件业务留给后续扩展。
-
-MCP 外部进程定位 `pier` CLI 的顺序:
-
-1. `PIER_CLI_PATH`
-2. `PATH` 中的 `pier`
-3. `/Applications/Pier.app/Contents/Resources/bin/pier`
-4. `$HOME/Applications/Pier.app/Contents/Resources/bin/pier`
-5. fallback 到 `pier`
-
-完整规则见 [`AGENTS.md`](AGENTS.md)。
+- 开源版源码按 [`AGPL-3.0-only`](LICENSE) 发布
+- 闭源分发、白标、企业支持或 AGPLv3 之外的权利，需单独商业协议
+- 商标与品牌资产不随 AGPLv3 授权，见 [`TRADEMARKS.md`](TRADEMARKS.md)
+- 第三方依赖与字体保留各自许可证，见 [`NOTICE`](NOTICE) 与 [`docs/legal/licensing.md`](docs/legal/licensing.md)
