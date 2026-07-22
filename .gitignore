@@ -80,3 +80,6 @@ playwright-report/
 
 # Local code-signing material (CSR/private key)
 .signing/
+
+# Ephemeral CI release target list (Release Plugin job)
+/release-targets.json
