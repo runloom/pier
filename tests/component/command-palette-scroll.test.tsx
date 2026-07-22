@@ -53,6 +53,19 @@ function getItem(label: string): HTMLElement {
   return item;
 }
 
+function intentionalPointerMove(item: HTMLElement): void {
+  fireEvent.pointerMove(item, {
+    clientX: 8,
+    clientY: 12,
+    pointerType: "mouse",
+  });
+  fireEvent.pointerMove(item, {
+    clientX: 24,
+    clientY: 48,
+    pointerType: "mouse",
+  });
+}
+
 async function waitForSelected(label: string): Promise<HTMLElement> {
   const item = getItem(label);
   await waitFor(() => {
@@ -197,7 +210,7 @@ describe("CommandPalette list scrolling", () => {
 
     await waitForSelected("Async 0");
     act(flushAnimationFrames);
-    fireEvent.pointerMove(getItem("Async 15"), { pointerType: "mouse" });
+    intentionalPointerMove(getItem("Async 15"));
     const selected = await waitForSelected("Async 15");
     act(flushAnimationFrames);
     const list = getList();
@@ -232,7 +245,7 @@ describe("CommandPalette list scrolling", () => {
 
     await waitForSelected("Original 0");
     act(flushAnimationFrames);
-    fireEvent.pointerMove(getItem("Original 15"), { pointerType: "mouse" });
+    intentionalPointerMove(getItem("Original 15"));
     await waitForSelected("Original 15");
     act(flushAnimationFrames);
     const list = getList();
@@ -251,5 +264,58 @@ describe("CommandPalette list scrolling", () => {
     act(flushAnimationFrames);
     expect(selected).toHaveAttribute("aria-selected", "true");
     expect(scrollIntoViewMock).toHaveBeenCalledWith({ block: "nearest" });
+  });
+
+  it("keeps the first item selected when the pointer rests over a middle row on open", async () => {
+    render(<CommandPalette />);
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        items: makeItems("Open"),
+        onAccept: vi.fn(),
+        title: "Open picker",
+      });
+    });
+
+    const first = await waitForSelected("Open 0");
+    act(flushAnimationFrames);
+    const list = getList();
+    list.scrollTop = 0;
+    scrollIntoViewMock.mockClear();
+
+    fireEvent.pointerMove(getItem("Open 15"), { pointerType: "mouse" });
+
+    expect(first).toHaveAttribute("aria-selected", "true");
+    expect(getItem("Open 15")).not.toHaveAttribute("aria-selected", "true");
+    expect(list.scrollTop).toBe(0);
+    expect(scrollIntoViewMock).not.toHaveBeenCalled();
+  });
+
+  it("still lets intentional pointer movement change the selected row", async () => {
+    render(<CommandPalette />);
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        items: makeItems("Move"),
+        onAccept: vi.fn(),
+        title: "Move picker",
+      });
+    });
+
+    await waitForSelected("Move 0");
+    act(flushAnimationFrames);
+    scrollIntoViewMock.mockClear();
+
+    fireEvent.pointerMove(getItem("Move 0"), {
+      clientX: 12,
+      clientY: 20,
+      pointerType: "mouse",
+    });
+    fireEvent.pointerMove(getItem("Move 12"), {
+      clientX: 18,
+      clientY: 140,
+      pointerType: "mouse",
+    });
+
+    const selected = await waitForSelected("Move 12");
+    expect(selected).toHaveAttribute("aria-selected", "true");
   });
 });

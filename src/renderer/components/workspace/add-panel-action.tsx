@@ -52,6 +52,7 @@ import {
   rankActionsForPalette,
 } from "@/lib/command-palette/action-search.ts";
 import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
+import { useCommandPointerSelectionGate } from "@/lib/command-palette/use-command-pointer-selection-gate.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import {
   getKeybindingRegistryVersion,
@@ -108,7 +109,10 @@ function compareCreateActions(
   const aScore = frecencyMap.get(a.id);
   const bScore = frecencyMap.get(b.id);
   if (aScore != null && bScore != null) {
-    return bScore - aScore;
+    if (bScore !== aScore) {
+      return bScore - aScore;
+    }
+    return createMenuFallbackPriority(a) - createMenuFallbackPriority(b);
   }
   if (aScore != null) {
     return -1;
@@ -290,6 +294,9 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
         : [],
     [allCreateActions, frecencyMap, keybindingLabels, normalizedQuery]
   );
+  const pointerSelectionGate = useCommandPointerSelectionGate(
+    `${open}:${normalizedQuery}`
+  );
 
   useEffect(() => {
     if (!open) {
@@ -464,6 +471,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
                 setQuery("");
               }
             }}
+            onPointerMoveCapture={pointerSelectionGate.onPointerMoveCapture}
             shouldFilter={false}
           >
             <CommandInput

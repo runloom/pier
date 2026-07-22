@@ -951,6 +951,34 @@ describe("WorkspaceHeaderActions", () => {
     expect(visibleCommandItemLabels()[0]).toBe("Run Task…");
   });
 
+  it("keeps the first create action selected when the pointer rests over a later row on open", async () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderActions {...props} />);
+    openAddPanelPopover();
+
+    const firstLabel = visibleCommandItemLabels()[0];
+    expect(firstLabel).toBeTruthy();
+    const first = await findCommandItem(firstLabel ?? "");
+    await waitFor(() => {
+      expect(first).toHaveAttribute("aria-selected", "true");
+    });
+
+    const laterLabel =
+      visibleCommandItemLabels().find((label) => label !== firstLabel) ?? "";
+    expect(laterLabel).not.toBe("");
+    fireEvent.pointerMove(await findCommandItem(laterLabel), {
+      pointerType: "mouse",
+    });
+
+    expect(first).toHaveAttribute("aria-selected", "true");
+    expect(await findCommandItem(laterLabel)).not.toHaveAttribute(
+      "aria-selected",
+      "true"
+    );
+  });
+
   it("blocks global keybindings and preserves IME Escape", async () => {
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);
     useWorkspaceStore.getState().setApi(props.containerApi as never);

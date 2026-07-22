@@ -474,6 +474,40 @@ describe("action search", () => {
     ).toEqual(["pier.panel.highUse", "pier.panel.lowUse"]);
   });
 
+  it("prefers earlier same-tier title matches over later ones with higher frecency", () => {
+    const docs = [
+      buildActionSearchDocument(action("pier.late", "Advanced Theme Panel")),
+      buildActionSearchDocument(action("pier.early", "My Theme Editor")),
+    ];
+
+    expect(
+      rankActionSearchDocuments(docs, "theme", {
+        frecencyMap: new Map([
+          ["pier.late", 100],
+          ["pier.early", 1],
+        ]),
+      }).map((result) => result.document.id)
+    ).toEqual(["pier.early", "pier.late"]);
+  });
+
+  it("prefers tighter title matches before frecency within the same tier", () => {
+    const docs = [
+      buildActionSearchDocument(
+        action("pier.long", "Theme Preferences and Colors")
+      ),
+      buildActionSearchDocument(action("pier.short", "Theme Prefs")),
+    ];
+
+    expect(
+      rankActionSearchDocuments(docs, "theme", {
+        frecencyMap: new Map([
+          ["pier.long", 80],
+          ["pier.short", 1],
+        ]),
+      }).map((result) => result.document.id)
+    ).toEqual(["pier.short", "pier.long"]);
+  });
+
   // Worktree 命令已整体退出 "git" 查询空间:别名并集不再含任何 "git" 词面,
   // 类目标签也从 "Git" 改为 "Worktree"/"工作树"。同场放入真实 Git 命令文档,
   // 证明 "git" 查询本身仍有召回,worktree 零命中不是空集空转。
