@@ -155,14 +155,12 @@ describe("handleComposerPaste file+plain", () => {
     handleComposerPaste({
       collectFiles,
       disabled: false,
-      dtoToAttachment: (dto) =>
-        ({
-          absolutePath: dto.absolutePath,
-          id: dto.id,
-          kind: "file",
-          name: dto.name,
-          sizeBytes: dto.sizeBytes,
-        }) as never,
+      dtoToAttachment: (dto) => ({
+        id: dto.id,
+        kind: dto.kind,
+        name: dto.name,
+        path: dto.path,
+      }),
       enqueueMerge: async (task) => {
         await task();
       },

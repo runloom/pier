@@ -225,6 +225,10 @@ function createMockContext(): RendererPluginContext {
       registerSelectionSelectAllProvider: () => () => undefined,
       registerSelectionTextProvider: () => () => undefined,
     },
+    contentPreview: {
+      close: vi.fn(),
+      openImage: vi.fn(),
+    },
     configuration: {
       get: <T,>() => "" as T,
       onDidChange: unimplemented("configuration.onDidChange"),

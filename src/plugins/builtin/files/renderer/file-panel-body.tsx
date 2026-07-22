@@ -78,7 +78,7 @@ export function ResolvedFilePanel({
     handleOpenMarkdownInternal,
   } = useFilePanelMarkdownChrome({
     context,
-    document,
+    document: document ?? undefined,
     editorSessionId,
     panelContext,
     panelId,

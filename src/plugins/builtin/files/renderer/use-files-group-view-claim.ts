@@ -19,7 +19,7 @@ export function useFilesGroupViewClaim({
 }: {
   controller: FileEditorController;
   group: PierDockviewGroupHandle | null | undefined;
-  ownerId: string | undefined;
+  ownerId: symbol | undefined;
   panelApiId: string | undefined;
   prefersSharedGroupView: boolean;
   runtimeContext: RendererPluginContext | undefined;

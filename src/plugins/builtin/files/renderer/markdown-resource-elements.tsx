@@ -232,9 +232,10 @@ export function MarkdownResourceImage({
     );
   }
   const caption = inline.title?.trim() ?? "";
-  const canPreview = Boolean(resources?.contentPreview);
+  const contentPreview = resources?.contentPreview;
+  const canPreview = Boolean(contentPreview);
   const openPreview = () => {
-    if (!(resources && source && targetPath && resources.contentPreview)) {
+    if (!(resources && source && targetPath && contentPreview)) {
       return;
     }
     const open = async () => {
@@ -255,7 +256,7 @@ export function MarkdownResourceImage({
         if (!issued.issued) {
           throw new Error("image preview unavailable");
         }
-        resources.contentPreview.openImage({
+        contentPreview.openImage({
           alt: inline.alt,
           onClose: () => {
             // Lifecycle cleanup is not a user-triggered action; there is no UI feedback to emit.

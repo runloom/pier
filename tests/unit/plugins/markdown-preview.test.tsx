@@ -647,7 +647,9 @@ describe("MarkdownPreview", () => {
     localStorage.removeItem("pier.files.markdown.measureMode");
     localStorage.removeItem("pier.files.markdown.tocSide");
     const openImage = vi.fn();
-    const registerSelectionSelectAllProvider = vi.fn(() => () => undefined);
+    const registerSelectionSelectAllProvider = vi.fn<
+      (surface: string, selectAll: () => boolean) => () => void
+    >(() => () => undefined);
     const onContextMenu = vi.fn();
     const { container } = render(
       <MarkdownPreview

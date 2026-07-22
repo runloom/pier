@@ -134,7 +134,7 @@ describe("TerminalComposer", () => {
   });
 
   it("opens the file picker once per attachRequest bump, not on remount at 0", async () => {
-    pickComposerFiles.mockResolvedValue({ ok: false, reason: "cancelled" });
+    pickComposerFiles.mockResolvedValue({ ok: false, error: "cancelled" });
     const { view } = renderComposer({ attachRequest: 1 });
     await vi.waitFor(() => {
       expect(pickComposerFiles).toHaveBeenCalledTimes(1);

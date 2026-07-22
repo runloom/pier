@@ -14,7 +14,9 @@ export function MarkdownDiagram({
   source,
 }: {
   charts: RendererPluginContext["charts"];
-  contentPreview: RendererPluginContext["contentPreview"] | undefined;
+  contentPreview:
+    | Pick<RendererPluginContext["contentPreview"], "openImage">
+    | undefined;
   errorLabel: string;
   label: string;
   openFullscreenLabel: string;
