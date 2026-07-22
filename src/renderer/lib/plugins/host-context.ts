@@ -1,4 +1,3 @@
-import type { PluginConfigurationApi } from "@plugins/api/configuration.ts";
 import type {
   RendererPluginAction,
   RendererPluginContext,
@@ -6,13 +5,12 @@ import type {
 } from "@plugins/api/renderer.ts";
 import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
-import {
-  collectEnabledConfigurationProperties,
-  createConfigurationChangeEvent,
-  effectiveConfigurationValue,
-} from "@shared/plugin-settings.ts";
 import i18next from "i18next";
 import { toast } from "sonner";
+import {
+  closeContentPreview,
+  openImagePreview,
+} from "@/components/common/content-preview.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { terminalStatusItemRegistry } from "../../panel-kits/terminal/terminal-status-bar.tsx";
 import {
@@ -26,11 +24,6 @@ import {
   showAppConfirm,
   showAppPrompt,
 } from "../../stores/app-dialog.store.ts";
-import { usePluginRegistryStore } from "../../stores/plugin-registry.store.ts";
-import {
-  subscribePluginSettingsChanges,
-  usePluginSettingsStore,
-} from "../../stores/plugin-settings.store.ts";
 import { useSettingsDialogStore } from "../../stores/settings-dialog.store.ts";
 import { actionRegistry } from "../actions/registry.ts";
 import type { Action, ActionMetadata } from "../actions/types.ts";
@@ -53,6 +46,7 @@ import {
   createPluginChartsContext,
 } from "./host-appearance-context.ts";
 import { createPluginCommandPaletteContext } from "./host-command-palette-context.ts";
+import { createPluginConfiguration } from "./host-configuration-context.ts";
 import { createPluginEnvironmentsContext } from "./host-environments-context.ts";
 import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
@@ -226,46 +220,6 @@ function assertPluginCapability(
   throw new Error(
     `plugin capability not granted: ${entry.manifest.id}:${capability}`
   );
-}
-
-function createPluginConfiguration(
-  entry?: PluginRegistryEntry
-): PluginConfigurationApi {
-  const assertOwnedKey = (key: string): void => {
-    // 与 assertDeclaredContribution 同惯例：宿主内部 context（无 entry）不受限。
-    if (!entry) {
-      return;
-    }
-    if (!key.startsWith(`${entry.manifest.id}.`)) {
-      throw new Error(
-        `plugin configuration key not owned: ${entry.manifest.id}:${key}`
-      );
-    }
-  };
-  const effectiveValue = (key: string): unknown => {
-    const property = collectEnabledConfigurationProperties(
-      usePluginRegistryStore.getState().plugins
-    ).get(key);
-    const userValue = usePluginSettingsStore.getState().values[key];
-    return property
-      ? effectiveConfigurationValue(property, userValue)
-      : userValue;
-  };
-  return {
-    get: <T>(key: string): T => effectiveValue(key) as T,
-    onDidChange: (listener) =>
-      subscribePluginSettingsChanges((changedKeys) => {
-        listener(createConfigurationChangeEvent(changedKeys));
-      }),
-    reset: async (key) => {
-      assertOwnedKey(key);
-      await usePluginSettingsStore.getState().reset(key);
-    },
-    set: async (key, value) => {
-      assertOwnedKey(key);
-      await usePluginSettingsStore.getState().set(key, value);
-    },
-  };
 }
 
 function toastNotificationOptions(options?: {
@@ -487,6 +441,19 @@ export function createRendererPluginContext(
         return lease
           ? window.pier.filePreviews.release({ leaseId: lease.leaseId, ticket })
           : false;
+      },
+    },
+    contentPreview: {
+      close: () => {
+        closeContentPreview();
+      },
+      openImage: (request) => {
+        openImagePreview({
+          ...(request.alt ? { alt: request.alt } : {}),
+          ...(request.onClose ? { onClose: request.onClose } : {}),
+          source: request.source,
+          title: request.title,
+        });
       },
     },
     files: createPluginFilesContext(entry, assertPluginCapability),

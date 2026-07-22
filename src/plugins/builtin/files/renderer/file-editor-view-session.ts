@@ -265,16 +265,26 @@ export class FileEditorViewSession {
       return;
     }
     if (snapshot.selection) {
+      const docLength = view.state.doc.length;
+      const anchor = Math.max(
+        0,
+        Math.min(snapshot.selection.anchor, docLength)
+      );
+      const head = Math.max(0, Math.min(snapshot.selection.head, docLength));
       view.dispatch({
-        selection: {
-          anchor: snapshot.selection.anchor,
-          head: snapshot.selection.head,
-        },
+        effects: EditorView.scrollIntoView(anchor, { y: "start" }),
+        selection: { anchor, head },
       });
     }
     if (snapshot.scroll) {
       this.#restoreScroll();
     }
+  }
+
+  revealOffset(offset: number): void {
+    this.applySnapshot({
+      selection: { anchor: offset, head: offset },
+    });
   }
 
   applySearchQuery(

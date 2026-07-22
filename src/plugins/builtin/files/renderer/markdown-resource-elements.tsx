@@ -8,6 +8,7 @@ import {
   useState,
 } from "react";
 import type { MarkdownInline } from "./markdown/markdown-ir.ts";
+import { MarkdownMediaFullscreenButton } from "./markdown-media-fullscreen-button.tsx";
 
 export interface MarkdownInternalTarget {
   fragment?: string;
@@ -15,11 +16,13 @@ export interface MarkdownInternalTarget {
 }
 
 export interface MarkdownFileResources {
+  contentPreview?: Pick<RendererPluginContext["contentPreview"], "openImage">;
   filePreviews: Pick<
     RendererPluginContext["filePreviews"],
     "issue" | "release"
   >;
   files: Pick<RendererPluginContext["files"], "readDocument">;
+  notifications?: Pick<RendererPluginContext["notifications"], "error">;
 }
 
 export interface MarkdownDiskSource {
@@ -140,6 +143,7 @@ export function MarkdownResourceLink({
   return (
     <a
       aria-disabled={actionable ? undefined : "true"}
+      className="md-link"
       href={actionable ? inline.url : undefined}
       onAuxClick={onAuxClick}
       onClick={onClick}
@@ -151,11 +155,17 @@ export function MarkdownResourceLink({
 }
 
 export function MarkdownResourceImage({
+  imagePreviewFailedLabel,
+  imagePreviewTitle,
   inline,
+  openFullscreenLabel,
   resources,
   source,
 }: {
+  imagePreviewFailedLabel: string;
+  imagePreviewTitle: string;
   inline: Extract<MarkdownInline, { kind: "image" }>;
+  openFullscreenLabel: string;
   resources: MarkdownFileResources | undefined;
   source: MarkdownDiskSource | undefined;
 }) {
@@ -209,26 +219,80 @@ export function MarkdownResourceImage({
     return (
       <Skeleton
         aria-label={inline.alt}
-        className="my-3 h-28 w-full rounded-md"
+        className="md-img-figure h-28 w-full rounded-md"
       />
     );
   }
   if (state.status === "error") {
     return (
-      <span className="my-3 inline-flex items-center gap-2 text-muted-foreground">
+      <span className="md-img-fallback">
         <ImageOff aria-hidden="true" />
         {inline.alt}
       </span>
     );
   }
+  const caption = inline.title?.trim() ?? "";
+  const canPreview = Boolean(resources?.contentPreview);
+  const openPreview = () => {
+    if (!(resources && source && targetPath && resources.contentPreview)) {
+      return;
+    }
+    const open = async () => {
+      try {
+        const document = await resources.files.readDocument({
+          path: targetPath,
+          root: source.root,
+        });
+        if (document.kind !== "image") {
+          throw new Error("not an image resource");
+        }
+        const issued = await resources.filePreviews.issue({
+          mime: document.mime,
+          path: targetPath,
+          revision: document.revision,
+          root: source.root,
+        });
+        if (!issued.issued) {
+          throw new Error("image preview unavailable");
+        }
+        resources.contentPreview.openImage({
+          alt: inline.alt,
+          onClose: () => {
+            // Lifecycle cleanup is not a user-triggered action; there is no UI feedback to emit.
+            resources.filePreviews
+              .release(issued.ticket)
+              .catch(() => undefined);
+          },
+          source: { kind: "url", src: issued.url },
+          title: inline.title?.trim() || inline.alt || imagePreviewTitle,
+        });
+      } catch {
+        resources.notifications?.error(imagePreviewFailedLabel);
+      }
+    };
+    open().catch(() => undefined);
+  };
   return (
-    <img
-      alt={inline.alt}
-      className="my-3 h-auto max-w-full rounded-md"
-      height={360}
-      src={state.url}
-      title={inline.title ?? undefined}
-      width={640}
-    />
+    <figure className="md-img-figure">
+      <div className="group relative w-fit max-w-full">
+        <img
+          alt={inline.alt}
+          className="md-img"
+          height={360}
+          src={state.url}
+          title={inline.title ?? undefined}
+          width={640}
+        />
+        {canPreview ? (
+          <MarkdownMediaFullscreenButton
+            label={openFullscreenLabel}
+            onClick={openPreview}
+          />
+        ) : null}
+      </div>
+      {caption ? (
+        <figcaption className="md-img-caption">{caption}</figcaption>
+      ) : null}
+    </figure>
   );
 }

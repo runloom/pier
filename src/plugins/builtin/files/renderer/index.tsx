@@ -36,6 +36,7 @@ import {
 } from "./files-document-store.ts";
 import { parseFilesDocumentPanelSource } from "./files-document-types.ts";
 import { createFilesEditorActions } from "./files-editor-actions.ts";
+import { createFilesMarkdownPreviewActions } from "./files-markdown-preview-actions.ts";
 import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
 import { clearFilesNavHistory } from "./files-nav-history.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
@@ -409,6 +410,9 @@ export const filesRendererPlugin: RendererPluginModule = {
         context.actions.register(
           withFilesMutationGate(action, editorController)
         )
+      ),
+      ...createFilesMarkdownPreviewActions(context).map((action) =>
+        context.actions.register(action)
       ),
       registerFilesProjectStatusItem(context),
       registerFilesTerminalOpenUrlHandler(context),

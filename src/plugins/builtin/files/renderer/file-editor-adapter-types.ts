@@ -1,4 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { MouseEvent as ReactMouseEvent } from "react";
 import type { FileEditorController } from "./file-editor-controller.ts";
 import type { EditorRange, FileViewMode } from "./files-document-types.ts";
 import type {
@@ -44,17 +45,39 @@ export interface FileEditorAdapterProps {
   markdownInitialAnchorRequestId?: string | undefined;
   markdownLabels?: MarkdownRendererLabels | undefined;
   markdownSource?: MarkdownDiskSource | undefined;
+  markdownTocLabels?:
+    | {
+        collapse: string;
+        expand: string;
+        title: string;
+      }
+    | undefined;
+  markdownZoomLabels?:
+    | {
+        reset: string;
+        zoomIn: string;
+        zoomOut: string;
+      }
+    | undefined;
   mode: FileViewMode;
   onEditorContextMenu?: (
     event: MouseEvent,
     ranges: readonly EditorRange[]
+  ) => void;
+  onJumpToSource?: ((offset: number) => void) | undefined;
+  onMarkdownPreviewContextMenu?: (
+    event: ReactMouseEvent<HTMLDivElement>
   ) => void;
   onOpenMarkdownInternal?:
     | ((target: MarkdownInternalTarget) => void)
     | undefined;
   openExternal: (url: string) => void;
   originalValue?: string;
+  panelId?: string | undefined;
   readOnly?: boolean;
+  registerSelectionSelectAllProvider?:
+    | RendererPluginContext["contextMenu"]["registerSelectionSelectAllProvider"]
+    | undefined;
   searchLabels?: FilesEditorSearchLabels;
   searchRequest?: number;
   value: string;

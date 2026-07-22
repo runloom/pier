@@ -45,15 +45,12 @@ import {
   isDiskSourceRootAllowed,
   sameFilesDocumentPanelSource,
 } from "./files-document-types.ts";
-import {
-  claimFilesGroupView,
-  releaseFilesGroupView,
-} from "./files-group-view-host.tsx";
 import { createFilesTranslate } from "./files-i18n.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
 import { useFilePanelSaveAs } from "./use-file-panel-save-as.ts";
 import { useFilesDocument } from "./use-files-document.ts";
+import { useFilesGroupViewClaim } from "./use-files-group-view-claim.ts";
 import { useFilesPanelTransferView } from "./use-files-panel-transfer-view.ts";
 
 let nextInlinePanelSessionId = 1;
@@ -95,8 +92,15 @@ function FilePanelContent({
     stableSource?.kind === "untitled" ||
     (stableSource?.kind === "disk" &&
       isDiskSourceRootAllowed(stableSource.root, props.params?.context));
+  const trackedDocumentIdForMode = stableSource
+    ? controller.documentId(stableSource)
+    : null;
+  const trackedDocumentForMode = useFilesDocument(
+    trackedDocumentIdForMode ?? ""
+  );
   const { mode, setMode } = useFilesPanelTransferView({
     controller,
+    language: trackedDocumentForMode?.language,
     panelSessionId,
     stableSource,
   });
@@ -150,62 +154,15 @@ function FilePanelContent({
     };
   }, [controller, inlineUntitledDocumentId]);
 
-  useLayoutEffect(() => {
-    if (
-      !(
-        prefersSharedGroupView &&
-        group &&
-        props.api?.id &&
-        ownerIdRef.current &&
-        runtimeContext
-      )
-    ) {
-      return;
-    }
-    const groupId = group.id;
-    const ownerId = ownerIdRef.current;
-    let cancelled = false;
-    let retryHandle: number | null = null;
-    let attempts = 0;
-    const tryClaim = () => {
-      if (cancelled) {
-        return;
-      }
-      const claimed = claimFilesGroupView({
-        context: runtimeContext,
-        controller,
-        group,
-        ownerId,
-        watchHub: runtimeWatchHub,
-      });
-      if (claimed || attempts >= 10) {
-        if (!claimed) {
-          console.error(
-            "[files] group view claim failed after retries:",
-            groupId
-          );
-        }
-        return;
-      }
-      attempts += 1;
-      retryHandle = requestAnimationFrame(tryClaim);
-    };
-    tryClaim();
-    return () => {
-      cancelled = true;
-      if (retryHandle !== null) {
-        cancelAnimationFrame(retryHandle);
-      }
-      releaseFilesGroupView({ context: runtimeContext, groupId, ownerId });
-    };
-  }, [
+  useFilesGroupViewClaim({
     controller,
     group,
+    ownerId: ownerIdRef.current,
+    panelApiId: props.api?.id,
     prefersSharedGroupView,
-    props.api?.id,
     runtimeContext,
     runtimeWatchHub,
-  ]);
+  });
 
   // tab 未保存圆点:document.dirty 变化时写进 params(与 preview 斜体同通道),
   // panel-tab-header 经 onDidParametersChange 收到后渲染。dirty 同时并入
@@ -473,6 +430,7 @@ function FilePanelContent({
         markdownAnchor={props.params?.markdownAnchor}
         markdownAnchorRequestId={props.params?.markdownAnchorRequestId}
         mode={mode}
+        onModeChange={setMode}
         panelContext={props.params?.context}
         panelId={props.api?.id}
         searchRequest={searchRequest}

@@ -25,7 +25,14 @@ const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
 ]);
 const COLOR_MIX_OWNERS = new Set([
   "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
+  // Mermaid SVG theme: connector/arrow/surface must derive from fg/bg so host
+  // --border/--accent chrome tokens do not wash out diagram strokes.
+  "src/plugins/builtin/files/renderer/markdown-diagram.tsx",
+  // Table thead chrome mirrors code-block `bg-muted/40` (Tailwind class unavailable
+  // in this CSS entry without @reference).
+  "src/plugins/builtin/files/renderer/markdown-prose.css",
   "src/renderer/app/globals.css",
+  "src/renderer/lib/plugins/mermaid-render.worker.ts",
 ]);
 
 function sourceFiles(dir: string): string[] {
