@@ -132,12 +132,11 @@ export class TerminalFocusCoordinator {
     if (!entry.visible || entry.frame === null) {
       return { ok: false, reason: "hidden" };
     }
-    // Web overlay (e.g. Rich Input composer) is holding keyboard ownership —
-    // reject native focus intent so the terminal click stays with the web layer.
-    const webRequestCount = record.desired?.webRequestCount ?? 0;
-    if (webRequestCount > 0) {
-      return { ok: false, reason: "web-overlay-active" };
-    }
+    // 不在此按 webRequestCount 拒绝：点终端内容必须把 focus-request 送到
+    // renderer，由事件路由决定浮层 vs 终端（搜索 yield、菜单靠 blur 关闭、
+    // Rich Input takeover 保持键盘）。主进程拦截会让 pier.click 等瞬时 web
+    // 请求卡住，表现为菜单不关、终端难聚焦。粘性 web owner 由 renderer 的
+    // webRequestIds / focusDisabledPanelIds 在 reconcile 阶段继续持有键盘。
     return { ok: true, panelId: rawPanelId };
   }
 

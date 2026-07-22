@@ -148,10 +148,8 @@ async function openBranchPick(
   const graphCaveatTitle = pluginText(
     context,
     "branchGraphCaveatTitle",
-    "Commit graph counts only. Squash or rebase merges may show already-applied commits as branch-only."
+    "Counts commit divergence only. Squash or rebase merges may show already-applied commits as branch-only."
   );
-  const graphLabel = pluginText(context, "branchGraph", "graph");
-  const remoteLabel = pluginText(context, "branchRemote", "remote");
   context.commandPalette.openQuickPick({
     ...(operation === "switch"
       ? {
@@ -200,8 +198,6 @@ async function openBranchPick(
         branch,
         defaultLabel,
         graphCaveatTitle,
-        graphLabel,
-        remoteLabel,
       });
     },
     title,

@@ -375,6 +375,25 @@ describe("TerminalFocusCoordinator", () => {
     ).toEqual({ ok: false, reason: "cross-window" });
   });
 
+  it("forwards native focus intent while webRequestCount > 0", () => {
+    // pier.click / 搜索 / 菜单打开都会抬高 webRequestCount。主进程不得拦截
+    // focus-request，否则 renderer 无法走「浮层 vs 终端」事件路由（清瞬时
+    // web 请求、搜索 yield、Rich Input takeover）。
+    const { win } = createWindow();
+    const { addon } = createAddon();
+    coordinator.configureNativeAddon(addon);
+    coordinator.surfaceCreated(win, "terminal-1");
+    coordinator.acceptRendererSnapshot(
+      win,
+      terminalSnapshot(1, { webRequestCount: 2 })
+    );
+
+    expect(coordinator.acceptNativeFocusIntent(win, "1::terminal-1")).toEqual({
+      ok: true,
+      panelId: "terminal-1",
+    });
+  });
+
   it("records a first invalid snapshot without installing desired state", () => {
     const { win } = createWindow();
     const { addon, applyTerminalWindowState } = createAddon();

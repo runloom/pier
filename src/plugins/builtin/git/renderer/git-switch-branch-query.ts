@@ -83,7 +83,6 @@ export function switchBranchQueryItem(
         kind: "existing",
         name,
       } satisfies SwitchBranchQueryItemData,
-      detail: pluginText(context, "gitBranchLocal", "Local branch"),
       id: `branch-query:existing:${name}`,
       label: name,
       searchTerms: [name],

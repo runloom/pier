@@ -349,7 +349,6 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "ui.cancel": "Cancel",
             "ui.createBranchPrompt": "New branch name",
             "ui.createNamePrompt": "New worktree name",
-            "ui.current": "current",
             "ui.deleteUnavailable": "Worktree deletion is not available yet",
             "ui.deleteConfirm": "Delete worktree {{name}}?",
             "ui.deleteConfirmButton": "Delete",
@@ -366,7 +365,6 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             "ui.gitStashSelect": "Select a stash to pop",
             "ui.gitStashSuccess": "Changes stashed",
             "ui.locked": "Locked",
-            "ui.main": "main",
             "ui.mainBadge": "main",
             "ui.noPrunableWorktrees": "No stale worktrees found",
             "ui.noWorktreeToDelete": "No worktree can be deleted",
@@ -440,11 +438,9 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
           messages: {
             "ui.createUnavailable": "创建工作树暂未开放",
             "ui.cancel": "取消",
-            "ui.current": "当前",
             "ui.deleteUnavailable": "删除工作树暂未开放",
             "ui.detached": "分离 {{head}}",
             "ui.locked": "已锁定",
-            "ui.main": "主工作树",
             "ui.mainBadge": "主工作树",
             "ui.selectPlaceholder": "选择工作树…",
             "ui.statusOpenLabel": "打开 {{name}} 的工作树列表",
@@ -1396,9 +1392,9 @@ describe("git builtin plugin", () => {
     const existingItem = quickPick?.getQueryItem?.("feature/omitted");
     expect(existingItem).toMatchObject({
       data: { kind: "existing", name: "feature/omitted" },
-      detail: "Local branch",
       label: "feature/omitted",
     });
+    expect(existingItem?.detail).toBeUndefined();
     if (!(quickPick && existingItem)) {
       throw new Error("expected omitted existing branch quick-pick item");
     }
