@@ -5,9 +5,10 @@ import { useTerminalStore } from "@/stores/terminal.store.ts";
 export const TERMINAL_COMPOSER_GAP_PX = 8;
 
 /**
- * 单行卡片未实测前的预留高度（编辑行 + 底栏）：首帧缩 native，避免叠层点不中。
+ * 单行 compact 卡片未实测前的预留高度（h-9 = 36）：首帧缩 native，避免叠层点不中。
+ * 必须 ≤ 实际 compact 高度，否则上方空隙会大于下方 GAP。
  */
-export const TERMINAL_COMPOSER_RESERVE_HEIGHT_PX = 48;
+export const TERMINAL_COMPOSER_RESERVE_HEIGHT_PX = 36;
 
 /** Soft-wrap → expanded when content box exceeds ~1.6 lines. */
 const SOFT_WRAP_LINE_THRESHOLD = 1.6;

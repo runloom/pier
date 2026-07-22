@@ -7,6 +7,7 @@ import {
   uninstallCrushHooks,
   withoutPierCrushHooks,
   withPierCrushHooks,
+  withPierCrushTerminalChrome,
 } from "../../../src/main/services/agents/integrations/crush.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
@@ -68,6 +69,33 @@ describe("withPierCrushHooks", () => {
       true
     );
     expect(preToolUse.some((e) => e.command.includes(MARK))).toBe(true);
+  });
+});
+
+describe("withPierCrushTerminalChrome", () => {
+  it("sets options.tui.transparent=true when unset", () => {
+    const next = withPierCrushTerminalChrome({});
+    const options = next.options as Record<string, unknown>;
+    const tui = options.tui as Record<string, unknown>;
+    expect(tui.transparent).toBe(true);
+  });
+
+  it("preserves explicit user transparent=false", () => {
+    const next = withPierCrushTerminalChrome({
+      options: { tui: { transparent: false } },
+    });
+    const options = next.options as Record<string, unknown>;
+    const tui = options.tui as Record<string, unknown>;
+    expect(tui.transparent).toBe(false);
+  });
+
+  it("keeps hooks transform composable", () => {
+    const next = withPierCrushTerminalChrome(withPierCrushHooks({}));
+    const hooks = next.hooks as Record<string, CrushHookEntry[]>;
+    expect(hooks.PreToolUse).toHaveLength(1);
+    const options = next.options as Record<string, unknown>;
+    const tui = options.tui as Record<string, unknown>;
+    expect(tui.transparent).toBe(true);
   });
 });
 

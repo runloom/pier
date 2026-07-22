@@ -3,7 +3,11 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { atomicWriteFile, transformJsonConfig } from "./shared.ts";
+import {
+  atomicWriteFile,
+  readJsonConfig,
+  transformJsonConfig,
+} from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
@@ -58,6 +62,72 @@ export function opencodeConfigPath(): string {
     }
   }
   return candidateConfigPaths()[0] as string;
+}
+
+/** TUI settings live beside opencode.json (OpenCode migrates theme into tui.json). */
+export function opencodeTuiConfigPath(
+  configPath: string = opencodeConfigPath()
+): string {
+  return join(dirname(configPath), "tui.json");
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Prefer OpenCode `system` theme in Pier so TUI background inherits the host
+ * terminal default (avoids a solid OpenTUI cell bg fighting Pier chrome).
+ * Only set when theme is unset so explicit user themes are preserved.
+ */
+export function withPierOpencodeTerminalChrome(
+  settings: Record<string, unknown>
+): Record<string, unknown> {
+  if (typeof settings.theme === "string" && settings.theme.length > 0) {
+    return settings;
+  }
+  // Nested legacy shape `{ tui: { theme } }` still accepted by OpenCode normalize.
+  if (isPlainObject(settings.tui) && typeof settings.tui.theme === "string") {
+    return settings;
+  }
+  return { ...settings, theme: "system" };
+}
+
+/**
+ * OpenCode migrates theme/keybinds/tui from opencode.json → tui.json only when
+ * tui.json is absent. Creating an empty-theme tui.json first would freeze
+ * migration. Detect keys that still need that hop.
+ */
+export function hasOpencodeLegacyTuiKeys(
+  settings: Record<string, unknown>
+): boolean {
+  if (typeof settings.theme === "string" && settings.theme.length > 0) {
+    return true;
+  }
+  if (isPlainObject(settings.keybinds)) {
+    return true;
+  }
+  return isPlainObject(settings.tui);
+}
+
+/**
+ * Write theme=system into tui.json when safe. Skip creating tui.json while
+ * sibling opencode.json still holds migratable legacy TUI keys.
+ */
+export async function installOpencodeTerminalChrome(
+  configPath: string = opencodeConfigPath()
+): Promise<void> {
+  const tuiPath = opencodeTuiConfigPath(configPath);
+  // Missing main config → safe to seed tui.json.
+  // Corrupt main (null) or still-migratable legacy keys → do not create
+  // tui.json (would freeze OpenCode migrateTuiConfig).
+  if (!existsSync(tuiPath) && existsSync(configPath)) {
+    const main = await readJsonConfig(configPath);
+    if (main === null || hasOpencodeLegacyTuiKeys(main)) {
+      return;
+    }
+  }
+  await transformJsonConfig(tuiPath, withPierOpencodeTerminalChrome, AGENT_ID);
 }
 
 /**
@@ -319,6 +389,7 @@ export async function installOpencodeHooks(
 ): Promise<void> {
   await cleanupOpencodeLegacy(configPath);
   await deployPluginFile(pluginPath, buildOpencodePluginSource());
+  await installOpencodeTerminalChrome(configPath);
 }
 
 /**

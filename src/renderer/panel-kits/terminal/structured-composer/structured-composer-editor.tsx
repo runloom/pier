@@ -269,8 +269,6 @@ export function StructuredComposerEditor({
                 aria-label={placeholder}
                 className={cn(
                   "composer-editor-input w-full min-w-0 resize-none outline-none",
-                  // UI sans like Cursor/Codex; leading-5 keeps caret ≈ chip
-                  // height (leading-relaxed inflated the line box over pills).
                   "font-sans text-foreground text-sm leading-5 caret-foreground",
                   "whitespace-pre-wrap break-words [&_p]:m-0",
                   compact

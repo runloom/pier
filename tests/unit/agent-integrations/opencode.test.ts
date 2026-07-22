@@ -6,19 +6,57 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { effectsForAcceptedAgentEvent } from "../../../src/main/services/agents/agent-event-effects.ts";
 import {
   buildOpencodePluginSource,
+  hasOpencodeLegacyTuiKeys,
   installOpencodeHooks,
   OPENCODE_PLUGIN_FILE_NAME,
   OPENCODE_PLUGIN_MARKER_TEXT,
   opencodeConfigPath,
   opencodeIntegration,
   opencodePluginPath,
+  opencodeTuiConfigPath,
   uninstallOpencodeHooks,
   withoutPierOpencodePlugin,
+  withPierOpencodeTerminalChrome,
 } from "../../../src/main/services/agents/integrations/opencode.ts";
 
 const MARK = "PIER_AGENT_EVENT_LOG";
 const LEGACY_FILE = "opencode-agent-status.js";
 
+describe("withPierOpencodeTerminalChrome", () => {
+  it("sets theme=system when unset", () => {
+    expect(withPierOpencodeTerminalChrome({}).theme).toBe("system");
+  });
+
+  it("preserves explicit user theme", () => {
+    expect(withPierOpencodeTerminalChrome({ theme: "tokyonight" }).theme).toBe(
+      "tokyonight"
+    );
+  });
+
+  it("preserves nested legacy tui.theme", () => {
+    const next = withPierOpencodeTerminalChrome({
+      tui: { theme: "nord" },
+    });
+    expect(next.theme).toBeUndefined();
+    const tui = next.tui;
+    expect(
+      tui && typeof tui === "object" && "theme" in tui ? tui.theme : undefined
+    ).toBe("nord");
+  });
+
+  it("opencodeTuiConfigPath sits beside opencode.json", () => {
+    expect(opencodeTuiConfigPath("/tmp/opencode/opencode.json")).toBe(
+      "/tmp/opencode/tui.json"
+    );
+  });
+
+  it("hasOpencodeLegacyTuiKeys detects theme/keybinds/tui", () => {
+    expect(hasOpencodeLegacyTuiKeys({ theme: "x" })).toBe(true);
+    expect(hasOpencodeLegacyTuiKeys({ keybinds: { a: "b" } })).toBe(true);
+    expect(hasOpencodeLegacyTuiKeys({ tui: { scroll_speed: 1 } })).toBe(true);
+    expect(hasOpencodeLegacyTuiKeys({ model: "x" })).toBe(false);
+  });
+});
 describe("buildOpencodePluginSource", () => {
   const source = buildOpencodePluginSource();
 
@@ -296,11 +334,45 @@ describe("install/uninstallOpencodeHooks (文件 IO)", () => {
     process.env.HOME = originalHome;
   });
 
-  it("安装：部署插件文件到自动发现目录, 不创建也不写 config", async () => {
+  it("安装：无 legacy TUI 键时写 tui.json theme=system（不写 opencode.json）", async () => {
     await installOpencodeHooks(configPath, pluginPath);
     const pluginContent = await readFile(pluginPath, "utf8");
     expect(pluginContent).toContain(OPENCODE_PLUGIN_MARKER_TEXT);
     await expect(readFile(configPath, "utf8")).rejects.toThrow();
+    const tui = JSON.parse(
+      await readFile(opencodeTuiConfigPath(configPath), "utf8")
+    ) as { theme?: string };
+    expect(tui.theme).toBe("system");
+  });
+
+  it("安装：已有 tui.theme 时不覆盖", async () => {
+    const tuiPath = opencodeTuiConfigPath(configPath);
+    await writeFile(
+      tuiPath,
+      `${JSON.stringify({ theme: "tokyonight" }, null, 2)}\n`,
+      "utf8"
+    );
+    await installOpencodeHooks(configPath, pluginPath);
+    const tui = JSON.parse(await readFile(tuiPath, "utf8")) as {
+      theme?: string;
+    };
+    expect(tui.theme).toBe("tokyonight");
+  });
+
+  it("安装：opencode.json 仍有 legacy theme 且无 tui.json 时不抢迁移", async () => {
+    await writeFile(
+      configPath,
+      `${JSON.stringify({ theme: "tokyonight", model: "x" }, null, 2)}\n`,
+      "utf8"
+    );
+    await installOpencodeHooks(configPath, pluginPath);
+    await expect(
+      readFile(opencodeTuiConfigPath(configPath), "utf8")
+    ).rejects.toThrow();
+    const main = JSON.parse(await readFile(configPath, "utf8")) as {
+      theme?: string;
+    };
+    expect(main.theme).toBe("tokyonight");
   });
 
   it("安装：清理旧版 config 注册条目 + 旧版 ~/.pier 插件文件", async () => {
@@ -390,7 +462,7 @@ describe("install/uninstallOpencodeHooks (文件 IO)", () => {
     expect(config.plugin).toEqual(["keep.js"]);
   });
 
-  it("config 损坏时 legacy 清理静默放弃, 字节不变, 插件文件仍部署", async () => {
+  it("config 损坏时 legacy 清理静默放弃, 字节不变, 插件文件仍部署, 不创建 tui.json", async () => {
     await writeFile(configPath, "{ not json", "utf8");
     const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {
       // silence
@@ -400,6 +472,9 @@ describe("install/uninstallOpencodeHooks (文件 IO)", () => {
     expect(await readFile(pluginPath, "utf8")).toContain(
       OPENCODE_PLUGIN_MARKER_TEXT
     );
+    await expect(
+      readFile(opencodeTuiConfigPath(configPath), "utf8")
+    ).rejects.toThrow();
     warnSpy.mockRestore();
   });
 

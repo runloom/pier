@@ -133,6 +133,12 @@ describe("TerminalComposer", () => {
     ).not.toBeInTheDocument();
   });
 
+  it("keeps product bg-background on the input pill chrome", () => {
+    renderComposer({ panelId: "t-1" });
+    const root = screen.getByTestId("terminal-composer");
+    expect(root.className).toContain("bg-background");
+  });
+
   it("opens the file picker once per attachRequest bump, not on remount at 0", async () => {
     pickComposerFiles.mockResolvedValue({ ok: false, error: "cancelled" });
     const { view } = renderComposer({ attachRequest: 1 });

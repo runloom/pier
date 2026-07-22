@@ -4,6 +4,8 @@ import {
   resetTerminalInputRoutingForTests,
 } from "./terminal-input-routing-slice.ts";
 
+const EMPTY_SET: ReadonlySet<string> = new Set();
+
 // ===========================================================================
 // slice.overlayFocus — zustand
 // ===========================================================================
@@ -26,6 +28,13 @@ interface TerminalResizeSlice {
    */
   lastDownlinkSequence: number;
   placeholderVisible: boolean;
+  /**
+   * 被 per-panel suppress 遮蔽的面板 id 集合（composer-height pulse 等）。
+   * 全局 suppress（resize drag / content-preview）仍用 suppressTerminals +
+   * placeholderVisible；此集合只覆盖有明确 panelId 的持有者，避免单面板
+   * 几何瞬变让其他面板跟着闪。
+   */
+  suppressedPanelIds: ReadonlySet<string>;
   suppressTerminals: boolean;
 }
 
@@ -100,6 +109,7 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
   lastDownlinkSequence: 0,
   placeholderVisible: false,
   suppressTerminals: false,
+  suppressedPanelIds: EMPTY_SET,
 
   // --- shortcutHints ---
   activeGroupTabHints: {},
@@ -150,6 +160,7 @@ export function resetTerminalStoreForTests(): void {
     lastDownlinkSequence: 0,
     placeholderVisible: false,
     suppressTerminals: false,
+    suppressedPanelIds: EMPTY_SET,
     activeGroupTabHints: {},
     commandKeyDown: false,
   });
