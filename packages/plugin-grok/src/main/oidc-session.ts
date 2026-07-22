@@ -17,7 +17,7 @@ export interface SelectedAuthEntry {
   entryKey: string;
 }
 
-const REFRESH_SKEW_MS = 60_000;
+const REFRESH_SKEW_MS = 300_000; // 5 min — aligns with cockpit-tools ACCESS_REFRESH_LEAD_SECS
 
 function asRecord(value: unknown): Record<string, unknown> | null {
   if (typeof value !== "object" || value === null || Array.isArray(value)) {

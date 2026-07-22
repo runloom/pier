@@ -318,8 +318,9 @@ describe("fetchGrokUsage", () => {
       error: BILLING_TIMEOUT_ERROR,
       windows: [],
     });
-    // Per attempt: credits + credits-retry + cash; two attempts via silent retry.
-    expect(fetchImpl).toHaveBeenCalledTimes(6);
+    // Per attempt: credits + credits-retry + cash; two attempts via silent
+    // retry, plus one membership fetch after all billing hops time out.
+    expect(fetchImpl).toHaveBeenCalledTimes(7);
     expect(USAGE_RETRY_OVERALL_DEADLINE_MS).toBeGreaterThan(0);
   });
 
@@ -341,9 +342,8 @@ describe("fetchGrokUsage", () => {
       status: "error",
       error: "Grok billing request failed (403)",
     });
-    expect(result.error).not.toMatch(/re-?login|session expired/i);
-    // plain 403 is not transport/auth-shaped: credits once + cash once
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    // plain 403: credits once + cash once + outer subscription fallback
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it("treats a permissionDenied 403 response as an access failure, not re-login", async () => {
@@ -386,8 +386,8 @@ describe("fetchGrokUsage", () => {
       windows: [],
     });
     expect(result.error).not.toMatch(/re-?login|session expired/i);
-    // Access denial is terminal for both billing shapes.
-    expect(fetchImpl).toHaveBeenCalledTimes(1);
+    // Access denial returns immediately; outer subscription fallback tries once.
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
   });
 
   it("does not fall back after an aborted transport", async () => {

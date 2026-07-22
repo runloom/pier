@@ -187,6 +187,24 @@ export function createCodexAccountsService(
         logger?.warn(
           `[pier.codex] migrated credential is invalid for account ${account.id}`
         );
+        continue;
+      }
+      // Backfill identity claims (planType / subscriptionExpiresAt /
+      // providerAccountId) that the legacy state file may not have carried.
+      const merged = mergeIdentityIntoAccount(account, identity, now());
+      if (
+        account.planType !== merged.planType ||
+        account.providerAccountId !== merged.providerAccountId ||
+        account.subscriptionExpiresAt !== merged.subscriptionExpiresAt ||
+        account.email !== merged.email
+      ) {
+        stateStore.mutate((state) => ({
+          ...state,
+          accounts: state.accounts.map((entry) =>
+            entry.id === account.id ? merged : entry
+          ),
+          revision: state.revision + 1,
+        }));
       }
     }
     if (

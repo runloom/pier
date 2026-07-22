@@ -4,6 +4,7 @@ import {
   createUsageCacheEntry,
   USAGE_MIN_REFETCH_MS,
 } from "@pier/plugin-api/account-usage";
+import { applySubscriptionToAccount } from "./accounts-records.ts";
 import type { UsageCacheEntry } from "./accounts-usage.ts";
 import type { GrokAccountProvider } from "./grok-provider.ts";
 import type { GrokAccountsStateStore } from "./state.ts";
@@ -121,6 +122,28 @@ export function createGrokUsageRefreshRunner(options: {
         !stateStore.get().accounts.some((entry) => entry.id === targetId)
       ) {
         return;
+      }
+      if (targetId && result.subscription) {
+        const current = stateStore
+          .get()
+          .accounts.find((entry) => entry.id === targetId);
+        if (current) {
+          const next = applySubscriptionToAccount(
+            current,
+            result.subscription,
+            now()
+          );
+          if (next !== current) {
+            stateStore.mutate((state) => ({
+              ...state,
+              accounts: state.accounts.map((entry) =>
+                entry.id === targetId ? next : entry
+              ),
+              revision: state.revision + 1,
+            }));
+            await stateStore.flush();
+          }
+        }
       }
       usageCache[cacheKey] = createUsageCacheEntry(
         result,

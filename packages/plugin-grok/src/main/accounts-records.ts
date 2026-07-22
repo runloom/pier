@@ -1,5 +1,6 @@
 import type { AccountIdentity } from "./identity.ts";
 import type { GrokAccountRecord } from "./state.ts";
+import type { GrokSubscriptionInfo } from "./subscription-parse.ts";
 
 export function buildOidcAccountRecord(
   identity: AccountIdentity,
@@ -51,6 +52,39 @@ export function mergeIdentityIntoAccount(
     updatedAt: now,
     ...(lastAuthenticatedAt ? { lastAuthenticatedAt } : {}),
     ...(identity.teamId ? { teamId: identity.teamId } : {}),
+  };
+}
+
+export function applySubscriptionToAccount(
+  account: GrokAccountRecord,
+  subscription: GrokSubscriptionInfo,
+  now: number
+): GrokAccountRecord {
+  const previous = account.subscription;
+  const same =
+    previous &&
+    previous.planType === subscription.planType &&
+    previous.status === subscription.status &&
+    previous.expiresAt === subscription.expiresAt &&
+    previous.trialEndsAt === subscription.trialEndsAt &&
+    previous.cancelAtPeriodEnd === subscription.cancelAtPeriodEnd;
+  if (same) return account;
+  return {
+    ...account,
+    subscription: {
+      planType: subscription.planType,
+      status: subscription.status,
+      ...(subscription.expiresAt === undefined
+        ? {}
+        : { expiresAt: subscription.expiresAt }),
+      ...(subscription.trialEndsAt === undefined
+        ? {}
+        : { trialEndsAt: subscription.trialEndsAt }),
+      ...(subscription.cancelAtPeriodEnd === undefined
+        ? {}
+        : { cancelAtPeriodEnd: subscription.cancelAtPeriodEnd }),
+    },
+    updatedAt: now,
   };
 }
 

@@ -5,8 +5,10 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
 import { fetchCodexUsage } from "./codex-usage.ts";
+import { fetchCodexUsageHttp } from "./codex-usage-http.ts";
 import type { AccountIdentity } from "./identity.ts";
 import { parseCodexAuthJson, readCodexIdentity } from "./identity.ts";
+import { maybeRefreshAuthJson } from "./token-refresh.ts";
 import type { AccountUsageResult, AgentAccountProvider } from "./types.ts";
 
 export const PIER_MANAGED_HOME_MARKER = ".pier-managed-home";
@@ -23,6 +25,8 @@ export interface CreateCodexProviderOpts {
     get(key: string): Promise<string | null>;
     set(key: string, value: string): Promise<void>;
   };
+  /** 可注入的 fetch 实现（token 刷新用，单测可替换）。 */
+  fetchImpl?: typeof fetch;
   /** 可注入的用量读取实现（单测验证临时凭据写回）。 */
   fetchUsageImpl?: typeof fetchCodexUsage;
   /** 可选日志器（watchExternalAuth 失败时记录原因，便于诊断漂移检测失效）。 */
@@ -98,6 +102,7 @@ export function createCodexProvider(
   const realCodexHome = opts?.realCodexHome ?? defaultRealCodexHome();
   const spawnLogin = opts?.spawnLogin ?? defaultSpawnLogin;
   const fetchUsageImpl = opts?.fetchUsageImpl ?? fetchCodexUsage;
+  const fetchImpl = opts?.fetchImpl;
   const credentials = opts?.credentials;
   const logger = opts?.logger;
   const credentialTails = new Map<string, Promise<void>>();
@@ -165,6 +170,24 @@ export function createCodexProvider(
     const content = await readManagedAuth(accountHomeDir);
     await mkdir(accountHomeDir, { recursive: true });
     await writeFileAtomic(authPath, content, { mode: 0o600 });
+    // Refresh expired access_token before any operation uses it. The
+    // write-back below captures the refreshed auth.json into credentials.
+    let effectiveContent = content;
+    try {
+      const refreshSignal = new AbortController().signal;
+      const refreshed = await maybeRefreshAuthJson(content, {
+        ...(fetchImpl ? { fetchImpl } : {}),
+        signal: refreshSignal,
+      });
+      if (refreshed?.refreshed) {
+        await writeFileAtomic(authPath, refreshed.authJson, { mode: 0o600 });
+        effectiveContent = refreshed.authJson;
+      }
+    } catch {
+      // Token refresh is best-effort: if it fails, proceed with the
+      // existing (possibly expired) token — the operation will surface
+      // the auth error naturally.
+    }
 
     let operation: { error: unknown; ok: false } | { ok: true; value: T };
     try {
@@ -181,7 +204,7 @@ export function createCodexProvider(
           throw error;
         }
       );
-      if (updated !== null && updated !== content) {
+      if (updated !== null && updated !== effectiveContent) {
         await credentials.set(credentialKey(accountHomeDir), updated);
       }
     } catch (error) {
@@ -261,7 +284,22 @@ export function createCodexProvider(
     async materialize(accountHomeDir: string): Promise<void> {
       await withCredentialLock(accountHomeDir, async () => {
         const dest = join(realCodexHome, "auth.json");
-        const content = await readManagedAuth(accountHomeDir);
+        let content = await readManagedAuth(accountHomeDir);
+        // Refresh expired access_token before materializing to ~/.codex
+        // so spawned codex CLI processes get a usable token.
+        try {
+          const refreshSignal = new AbortController().signal;
+          const refreshed = await maybeRefreshAuthJson(content, {
+            ...(fetchImpl ? { fetchImpl } : {}),
+            signal: refreshSignal,
+          });
+          if (refreshed?.refreshed) {
+            content = refreshed.authJson;
+            await credentials?.set(credentialKey(accountHomeDir), content);
+          }
+        } catch {
+          // Best-effort: proceed with existing token if refresh fails.
+        }
         // login 全程 CODEX_HOME 指向托管目录，真实 ~/.codex 可能从未被创建
         // （用户从未直接跑过 codex）——writeFileAtomic 不会自建父目录，故先 mkdir -p。
         await mkdir(realCodexHome, { recursive: true });
@@ -346,10 +384,39 @@ export function createCodexProvider(
       accountHomeDir: string | undefined,
       signal: AbortSignal
     ): Promise<AccountUsageResult> {
+      // Prefer the HTTP wham/usage endpoint over spawning a `codex
+      // app-server` child process — it is more reliable and faster.
       if (accountHomeDir && credentials) {
-        return await withManagedAuth(accountHomeDir, () =>
-          fetchUsageImpl(signal, { accountHomeDir })
-        );
+        return await withManagedAuth(accountHomeDir, async () => {
+          const authContent = await readManagedAuth(accountHomeDir);
+          const httpResult = await fetchCodexUsageHttp(authContent, {
+            ...(fetchImpl ? { fetchImpl } : {}),
+            signal,
+          });
+          if (httpResult.status === "ok" && httpResult.windows.length > 0) {
+            return httpResult;
+          }
+          // Fallback to app-server JSON-RPC when HTTP fails or returns empty.
+          return await fetchUsageImpl(signal, { accountHomeDir });
+        });
+      }
+      // No managed home — try HTTP if we can read auth.json directly.
+      if (accountHomeDir) {
+        try {
+          const authContent = await readFile(
+            join(accountHomeDir, "auth.json"),
+            "utf-8"
+          );
+          const httpResult = await fetchCodexUsageHttp(authContent, {
+            ...(fetchImpl ? { fetchImpl } : {}),
+            signal,
+          });
+          if (httpResult.status === "ok" && httpResult.windows.length > 0) {
+            return httpResult;
+          }
+        } catch {
+          // No auth.json — fall through to app-server.
+        }
       }
       return await fetchUsageImpl(signal, {
         ...(accountHomeDir ? { accountHomeDir } : {}),
