@@ -137,7 +137,7 @@ type CostOverviewParams = {
 | `by-model` | 31 | cost | model | ranking | period, periodTokens |
 | `tokens` | 31 | tokens | none | line | periodTokens, latestDayTokens, period |
 
-套用预设 = 写入上表字段并设 `preset` 为对应 id。用户随后改任一字段 → `preset` 置 `custom`（或与模板 deep equal 时保持原预设 id，二选一在实现计划写死；推荐 **deep equal 恢复预设 id**，避免无谓 custom）。
+套用预设 = 写入上表字段并设 `preset` 为对应 id。之后每次 `updateParams` 用「除 `preset` 外的字段」与四份官方模板做 deep equal：命中则写回该预设 id，否则 `preset: "custom"`。避免无谓 custom，也避免只改 preset 标签却与真实字段脱节。
 
 ### 6.3 图类型兼容矩阵
 
