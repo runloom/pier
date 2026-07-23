@@ -43,8 +43,11 @@ export interface PierFileTreeApi {
   getSearchMatchCount: () => number;
   /** 从模型移除路径(新建落盘失败回滚幽灵节点用)。 */
   removePaths: (paths: readonly string[]) => void;
-  /** 展开祖先并滚动定位到该路径(面包屑点击/外部 reveal 用)。 */
-  revealPath: (path: string) => void;
+  /**
+   * VS Code-like reveal: expand ancestors, expand folder targets, select+focus
+   * (focus ring), then scroll. Does not open files.
+   */
+  revealPath: (path: string, options?: PierFileTreeRevealOptions) => void;
   /** null = 关闭搜索并恢复完整投影。搜索 UI 由业务层自绘(不用库内置头)。 */
   setSearch: (value: string | null) => void;
   /**
@@ -55,6 +58,18 @@ export interface PierFileTreeApi {
     path: string,
     options?: { removeIfCanceled?: boolean }
   ) => boolean;
+}
+
+export type PierFileTreeRevealScroll = "nearest" | "center" | "top";
+
+export interface PierFileTreeRevealOptions {
+  /** Expand the target when it is a directory. Default true. */
+  expandTarget?: boolean;
+  /**
+   * Scroll alignment. Explicit breadcrumb/command reveal defaults to `center`
+   * (VS Code-like). Active-file auto-reveal should prefer `nearest`.
+   */
+  scroll?: PierFileTreeRevealScroll;
 }
 
 export type PierFileTreeScrollSnapshot =
