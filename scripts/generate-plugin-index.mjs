@@ -224,38 +224,31 @@ function nextSequence(existingIndex) {
   return sequence;
 }
 
-function assertNoSameVersionDrift(existingIndex, nextPlugins) {
-  const previousPlugins = existingIndex?.plugins;
-  if (
-    !previousPlugins ||
-    typeof previousPlugins !== "object" ||
-    Array.isArray(previousPlugins)
-  ) {
-    return;
-  }
-
-  for (const [id, plugin] of Object.entries(nextPlugins)) {
-    for (const [version, entry] of Object.entries(plugin.versions)) {
-      const previousEntry = previousPlugins[id]?.versions?.[version];
-      if (!previousEntry) {
-        continue;
-      }
-      const cacheKey = `${id}@${version}`;
-      if (previousEntry.sha256 && previousEntry.sha256 !== entry.sha256) {
-        throw new Error(
-          `same-version hash drift for ${cacheKey}: existing ${previousEntry.sha256} vs generated ${entry.sha256}; bump the plugin version instead of rewriting an immutable release`
-        );
-      }
-      if (
+/**
+ * Prefer already-indexed digests for a version that was published before.
+ * Local `plugins:pack` rebuilds are not bit-stable across machines / deps, so
+ * reusing the committed index entry keeps clients pointed at the immutable
+ * GitHub release asset. New versions still come from the local pack.
+ */
+function mergePluginVersions(previousVersions, packedVersions, pluginId) {
+  const merged = { ...(previousVersions ?? {}) };
+  for (const [version, entry] of Object.entries(packedVersions ?? {})) {
+    const previousEntry = previousVersions?.[version];
+    if (previousEntry?.sha256) {
+      const sizeDrift =
         Number.isInteger(previousEntry.size) &&
-        previousEntry.size !== entry.size
-      ) {
-        throw new Error(
-          `same-version size drift for ${cacheKey}: existing ${previousEntry.size} vs generated ${entry.size}; bump the plugin version instead of rewriting an immutable release`
+        previousEntry.size !== entry.size;
+      if (previousEntry.sha256 !== entry.sha256 || sizeDrift) {
+        console.warn(
+          `reusing published digest for ${pluginId}@${version} (local rebuild drifted; bump the plugin version to publish a new asset)`
         );
       }
+      merged[version] = previousEntry;
+      continue;
     }
+    merged[version] = entry;
   }
+  return merged;
 }
 
 const dirents = await readdir(packagesDir, { withFileTypes: true });
@@ -267,10 +260,10 @@ for (const d of dirents) {
 }
 
 const existingIndex = await readExistingIndex();
-assertNoSameVersionDrift(existingIndex, packedPlugins);
 
 // Merge: keep previously indexed plugins that were not re-packed in this run
-// (partial packs / single-plugin recovery must not erase the catalog).
+// (partial packs / single-plugin recovery must not erase the catalog). Same
+// version digests stay immutable even when a local rebuild drifts.
 const plugins = { ...packedPlugins };
 const previousPlugins = existingIndex?.plugins;
 if (
@@ -287,10 +280,7 @@ if (
     plugins[id] = {
       ...previous,
       ...packed,
-      versions: {
-        ...(previous.versions ?? {}),
-        ...packed.versions,
-      },
+      versions: mergePluginVersions(previous.versions, packed.versions, id),
       latest: packed.latest,
     };
   }

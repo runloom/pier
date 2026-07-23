@@ -229,6 +229,8 @@ jobs:
       - name: Regenerate plugin index
         if: steps.parse.outputs.should_release == 'true'
         env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GITHUB_REPOSITORY: ${{ github.repository }}
           PIER_PLUGIN_INDEX_REQUIRE_SIGNATURE: "1"
           PIER_PLUGIN_INDEX_SIGNING_KEY_ID: ${{ secrets.PIER_PLUGIN_INDEX_SIGNING_KEY_ID }}
           PIER_PLUGIN_INDEX_SIGNING_PRIVATE_KEY_BASE64: ${{ secrets.PIER_PLUGIN_INDEX_SIGNING_PRIVATE_KEY_BASE64 }}
@@ -238,6 +240,30 @@ jobs:
           # plugin before signing so a single-plugin release cannot shrink the
           # catalog down to only the plugin that was just published.
           pnpm plugins:pack
+          # Prefer immutable GitHub release bits whenever the tag already exists
+          # (including targets published earlier in this job). A fresh pack can
+          # drift across runners; the release asset is the source of truth.
+          for plugin_json in packages/plugin-*/plugin.json; do
+            [ -f "$plugin_json" ] || continue
+            TAIL=$(basename "$(dirname "$plugin_json")")
+            TAIL=${TAIL#plugin-}
+            VERSION=$(node -p "require('./${plugin_json}').version")
+            ID=$(node -p "require('./${plugin_json}').id")
+            TAG="plugin-${TAIL}-v${VERSION}"
+            DIST="packages/plugin-${TAIL}/dist-pkg"
+            if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+              echo "no release yet for $TAG; keeping local pack"
+              continue
+            fi
+            echo "restoring published asset for $TAG into $DIST"
+            mkdir -p "$DIST"
+            gh release download "$TAG" \
+              --repo "$GITHUB_REPOSITORY" \
+              --pattern "${ID}-${VERSION}.tgz" \
+              --pattern "${ID}-${VERSION}.tgz.sha256" \
+              --dir "$DIST" \
+              --clobber
+          done
           pnpm plugins:index
 
       - name: Commit index update

@@ -97,20 +97,6 @@ async function writeExistingIndex(options: {
   );
 }
 
-function commandOutput(err: unknown): string {
-  if (typeof err !== "object" || err === null) {
-    return String(err);
-  }
-  const output: string[] = [];
-  if ("stdout" in err) {
-    output.push(String((err as { stdout?: unknown }).stdout ?? ""));
-  }
-  if ("stderr" in err) {
-    output.push(String((err as { stderr?: unknown }).stderr ?? ""));
-  }
-  return output.join("\n");
-}
-
 describe("generate-plugin-index", () => {
   it("signs the generated official index with Ed25519 when signing env is present", async () => {
     const fixture = JSON.parse(
@@ -197,7 +183,7 @@ describe("generate-plugin-index", () => {
     expect(index.sequence).toBe(8);
   });
 
-  it("rejects same-version package hash drift from the existing index", async () => {
+  it("reuses the published digest when a local same-version rebuild drifts", async () => {
     await writeCodexPackage({
       sha256: "a".repeat(64),
       version: "1.2.3",
@@ -208,22 +194,24 @@ describe("generate-plugin-index", () => {
       version: "1.2.3",
     });
 
-    let thrown: unknown;
-    try {
-      await execFileAsync(process.execPath, [SCRIPT_PATH], {
-        cwd: dir,
-        env: {
-          ...process.env,
-          PIER_INDEX_GENERATED_AT: "10",
-        },
-      });
-    } catch (err) {
-      thrown = err;
-    }
+    const { stderr } = await execFileAsync(process.execPath, [SCRIPT_PATH], {
+      cwd: dir,
+      env: {
+        ...process.env,
+        PIER_INDEX_GENERATED_AT: "10",
+      },
+    });
 
-    expect(thrown).toBeInstanceOf(Error);
-    expect(commandOutput(thrown)).toContain(
-      "same-version hash drift for pier.codex@1.2.3"
+    expect(stderr).toContain("reusing published digest for pier.codex@1.2.3");
+    const index = JSON.parse(
+      await readFile(join(dir, "plugins", "index.v1.json"), "utf8")
+    ) as {
+      plugins: {
+        "pier.codex": { versions: { "1.2.3": { sha256: string } } };
+      };
+    };
+    expect(index.plugins["pier.codex"].versions["1.2.3"].sha256).toBe(
+      "b".repeat(64)
     );
   });
 
