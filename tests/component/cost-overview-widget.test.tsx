@@ -327,14 +327,14 @@ describe("CostOverviewWidget", () => {
     for (const source of unknown.sources) {
       for (const b of source.snapshot.buckets) {
         b.estimatedCostMicrousd = null;
-        b.pricingStatus = "unavailable";
+        b.pricingStatus = "unpriced";
       }
       source.snapshot.summary.estimatedCostMicrousd = null;
       source.snapshot.summary.todayEstimatedCostMicrousd = null;
     }
     for (const b of unknown.overall.buckets) {
       b.estimatedCostMicrousd = null;
-      b.pricingStatus = "unavailable";
+      b.pricingStatus = "unpriced";
     }
     unknown.overall.summary.estimatedCostMicrousd = null;
     unknown.overall.summary.todayEstimatedCostMicrousd = null;

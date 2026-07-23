@@ -1,3 +1,5 @@
+import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
+
 /**
  * 成本总览物料 params 契约。
  * 宿主视 params 为黑盒——校验收敛在本物料边界，非法字段逐条 salvage。
@@ -337,15 +339,17 @@ export function patchCostOverviewParams(
 
 export function costOverviewParamsToJson(
   params: CostOverviewParams
-): Record<string, unknown> {
-  const json: Record<string, unknown> = {
-    preset: params.preset,
-    rangeDays: params.rangeDays,
-    measure: params.measure,
-    groupBy: params.groupBy,
+): Record<string, JsonValue> {
+  const json: Record<string, JsonValue> = {
     chart: params.chart,
+    groupBy: params.groupBy,
     kpis: [...params.kpis],
+    measure: params.measure,
+    rangeDays: params.rangeDays,
   };
+  if (params.preset !== undefined) {
+    json.preset = params.preset;
+  }
   if (params.sources && params.sources.length > 0) {
     json.sources = [...params.sources];
   }

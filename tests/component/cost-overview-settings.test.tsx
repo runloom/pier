@@ -38,7 +38,13 @@ describe("CostOverviewSettings", () => {
 
   it("writes tokens preset fields through updateParams", async () => {
     const updateParams = vi.fn();
-    render(<CostOverviewSettings params={{}} updateParams={updateParams} />);
+    render(
+      <CostOverviewSettings
+        instanceId="core.cost-overview"
+        params={{}}
+        updateParams={updateParams}
+      />
+    );
 
     await chooseOption("Preset", "Tokens");
 
@@ -52,6 +58,7 @@ describe("CostOverviewSettings", () => {
     const updateParams = vi.fn();
     render(
       <CostOverviewSettings
+        instanceId="core.cost-overview"
         params={costOverviewParamsToJson(paramsFromPreset("overview"))}
         updateParams={updateParams}
       />
@@ -72,6 +79,7 @@ describe("CostOverviewSettings", () => {
     const updateParams = vi.fn();
     render(
       <CostOverviewSettings
+        instanceId="core.cost-overview"
         params={{
           ...costOverviewParamsToJson(paramsFromPreset("by-source")),
           kpis: ["today"],

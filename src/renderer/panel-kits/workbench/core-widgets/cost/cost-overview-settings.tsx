@@ -114,7 +114,11 @@ function SettingsSelect({
   return (
     <Field>
       <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Select disabled={disabled} onValueChange={onValueChange} value={value}>
+      <Select
+        disabled={disabled === true}
+        onValueChange={onValueChange}
+        value={value}
+      >
         <SelectTrigger data-testid={testId} id={id} size="sm">
           <SelectValue />
         </SelectTrigger>
@@ -122,7 +126,7 @@ function SettingsSelect({
           <SelectGroup>
             {options.map((option) => (
               <SelectItem
-                disabled={option.disabled}
+                disabled={option.disabled === true}
                 key={option.value}
                 value={option.value}
               >
