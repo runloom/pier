@@ -2,7 +2,10 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import { createLogger } from "@shared/logger.ts";
 import type { HookLayer, HookScope } from "./entry.ts";
-import { refreshHookProjection, setHookScopeStatus } from "./entry.ts";
+import {
+  refreshHookProjection,
+  setHookScopeStatus,
+} from "./hook-scope-projection.ts";
 import type { AgentStopAuthority } from "./types.ts";
 
 /**

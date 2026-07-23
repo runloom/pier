@@ -1,10 +1,9 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
-import type {
-  ActivityStatus,
-  ForegroundActivity,
-  ForegroundActivityBroadcast,
+import {
+  activityStatusForHookEvent,
+  type ForegroundActivity,
+  type ForegroundActivityBroadcast,
 } from "@shared/contracts/foreground-activity.ts";
-import { activityStatusForHookEvent } from "@shared/contracts/foreground-activity.ts";
 import {
   createHookScopeCoordinator,
   isInCooldown,
@@ -25,7 +24,6 @@ import {
   revealHook,
 } from "./aggregator-visibility.ts";
 import {
-  armHookTtlTimer,
   CLOSE_COOLDOWN_MS,
   clearCommandTimers,
   clearHookTimers,
@@ -45,9 +43,10 @@ import {
   SUSPENDED_JOB_EXIT_CODES,
   type TimerCtx,
 } from "./entry.ts";
+import { armHookTtlTimer } from "./hook-scope-projection.ts";
 import {
   applyTurnBookkeeping,
-  hookScopeHasActiveTools,
+  nextStatusAfterTurnBookkeeping,
 } from "./turn-bookkeeping.ts";
 import type {
   ForegroundActivityAggregator,
@@ -325,21 +324,13 @@ export function createForegroundActivityAggregator(
       }
       const scope = getOrCreateHookScope(hook, identity, at);
       const stopAuthority = options.stopAuthority;
-      if (!applyTurnBookkeeping(scope, event, stopAuthority)) {
+      if (!applyTurnBookkeeping(scope, event, stopAuthority, at)) {
         logAgentEventDropped("absorbed", key, event.event, {
           ...(scope.status === undefined ? {} : { frozenStatus: scope.status }),
         });
         return false;
       }
-      let nextStatus: ActivityStatus | undefined = status;
-      if (scope.completionObserved) {
-        nextStatus = undefined;
-      } else if (
-        event.event === "ToolComplete" &&
-        (!event.toolUseId?.trim() || hookScopeHasActiveTools(scope))
-      ) {
-        nextStatus = "tool";
-      }
+      const nextStatus = nextStatusAfterTurnBookkeeping(scope, event, status);
       hookScopes.noteStatusEvent(
         key,
         hook,

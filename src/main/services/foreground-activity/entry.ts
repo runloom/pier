@@ -6,8 +6,8 @@ import type {
 } from "@shared/contracts/foreground-activity.ts";
 
 /**
- * ForegroundActivity 聚合器的模型层：常量、双层 slot 结构、层工厂、
- * timer 帮手、回合记账与投影纯函数。
+ * ForegroundActivity 聚合器的模型层：常量、双层 slot 结构、层工厂与
+ * slot→activity 投影。hook scope 状态选择见 hook-scope-projection.ts。
  *
  * 双层模型（loomdesk pty_command ⊥ agent_hook 分层的 Pier 变体）：
  * - command 层 — OSC 133 C/D、launcher、task lifecycle 驱动的「前台命令存在」。
@@ -97,6 +97,11 @@ export interface HookScope {
   anonymousSubagentCount: number;
   anonymousToolCount: number;
   completionObserved: boolean;
+  /**
+   * advisory Stop 观察到完成的时刻；与 turnEndedAt 一起供投影判定
+   * 「已结算 session 是否应压过尚未开新回合的 panel 兜底噪声」。
+   */
+  completionObservedAt: number | undefined;
   currentTurnId: string | undefined;
   key: string;
   recentSettledTurnIds: Set<string>;
@@ -105,6 +110,10 @@ export interface HookScope {
   status: ActivityStatus | undefined;
   subagentCount: number;
   turnEnded: boolean;
+  /** 可信终态落定时刻（TurnCompleted / 权威 Stop 等）。 */
+  turnEndedAt: number | undefined;
+  /** 最近一次回合重置（PromptSubmit / processing / running）时刻。 */
+  turnResetAt: number | undefined;
   updatedAt: number;
 }
 
@@ -221,6 +230,7 @@ export function newHookScope(key: string, at: number): HookScope {
     anonymousSubagentCount: 0,
     anonymousToolCount: 0,
     completionObserved: false,
+    completionObservedAt: undefined,
     currentTurnId: undefined,
     key,
     recentSettledTurnIds: new Set(),
@@ -229,6 +239,8 @@ export function newHookScope(key: string, at: number): HookScope {
     status: "ready",
     subagentCount: 0,
     turnEnded: false,
+    turnEndedAt: undefined,
+    turnResetAt: undefined,
     updatedAt: at,
   };
 }
@@ -245,126 +257,6 @@ export function getOrCreateHookScope(
   const scope = newHookScope(identity.key, at);
   hook.scopes.set(identity.key, scope);
   return scope;
-}
-
-const STATUS_PRIORITY: Record<ActivityStatus, number> = {
-  error: 2,
-  processing: 3,
-  ready: 1,
-  tool: 4,
-  waiting: 5,
-};
-
-function statusPriority(status: ActivityStatus | undefined): number {
-  // “已观察到完成但尚无可信终态”不能覆盖 error，也不能被旧 ready 掩盖。
-  return status === undefined ? 1.5 : STATUS_PRIORITY[status];
-}
-
-function projectedScopeStatus(scope: HookScope): ActivityStatus | undefined {
-  return scope.stale ? undefined : scope.status;
-}
-
-function preferredScope(current: HookScope, candidate: HookScope): HookScope {
-  const currentPriority = statusPriority(projectedScopeStatus(current));
-  const candidatePriority = statusPriority(projectedScopeStatus(candidate));
-  if (candidatePriority !== currentPriority) {
-    return candidatePriority > currentPriority ? candidate : current;
-  }
-  return candidate.updatedAt >= current.updatedAt ? candidate : current;
-}
-
-export function refreshHookProjection(hook: HookLayer, at?: number): void {
-  let selected: HookScope | null = null;
-  let maxUpdatedAt = hook.updatedAt;
-  let subagentCount = 0;
-  for (const scope of hook.scopes.values()) {
-    selected = selected ? preferredScope(selected, scope) : scope;
-    maxUpdatedAt = Math.max(maxUpdatedAt, scope.updatedAt);
-    subagentCount +=
-      scope.activeSubagentIds.size + scope.anonymousSubagentCount;
-  }
-  if (!selected) {
-    return;
-  }
-  const selectedStatus = projectedScopeStatus(selected);
-  const previousStatus = hook.status;
-  hook.status = selectedStatus;
-  if (selectedStatus === undefined) {
-    hook.stateStartedAt = undefined;
-  } else if (selectedStatus !== previousStatus) {
-    hook.stateStartedAt = at ?? selected.stateStartedAt;
-  }
-  hook.subagentCount = subagentCount;
-  hook.updatedAt = Math.max(maxUpdatedAt, at ?? 0);
-}
-
-export function setHookScopeStatus(
-  hook: HookLayer,
-  scope: HookScope,
-  status: ActivityStatus | undefined,
-  at: number
-): void {
-  if (scope.status !== status) {
-    scope.status = status;
-    scope.stateStartedAt = at;
-  }
-  scope.stale = false;
-  scope.updatedAt = at;
-  refreshHookProjection(hook, at);
-}
-
-/** hook 静默后只失去具体状态置信度，不得凭超时伪造 ready。 */
-export function armHookTtlTimer(key: string, ctx: TimerCtx): void {
-  const hook = ctx.slots.get(key)?.hook;
-  if (!hook) {
-    return;
-  }
-  if (hook.ttlTimer) {
-    clearTimeout(hook.ttlTimer);
-    hook.ttlTimer = null;
-  }
-  const expiringScopes = [...hook.scopes.values()].filter(
-    (scope) =>
-      !(scope.turnEnded || scope.stale) &&
-      scope.status !== undefined &&
-      scope.status !== "ready" &&
-      scope.status !== "error"
-  );
-  if (expiringScopes.length === 0) {
-    return;
-  }
-  const nextExpiry = Math.min(
-    ...expiringScopes.map((scope) => scope.updatedAt + HOOK_FRESH_TTL_MS)
-  );
-  hook.ttlTimer = setTimeout(
-    () => {
-      const current = ctx.slots.get(key)?.hook;
-      if (!current) {
-        return;
-      }
-      current.ttlTimer = null;
-      const at = ctx.now();
-      let changed = false;
-      for (const scope of current.scopes.values()) {
-        if (
-          !(scope.turnEnded || scope.stale) &&
-          scope.status !== undefined &&
-          scope.status !== "ready" &&
-          scope.status !== "error" &&
-          at - scope.updatedAt >= HOOK_FRESH_TTL_MS
-        ) {
-          scope.stale = true;
-          changed = true;
-        }
-      }
-      if (changed) {
-        refreshHookProjection(current);
-        ctx.scheduleEmit();
-      }
-      armHookTtlTimer(key, ctx);
-    },
-    Math.max(0, nextExpiry - ctx.now())
-  );
 }
 
 export function newHookLayer(
