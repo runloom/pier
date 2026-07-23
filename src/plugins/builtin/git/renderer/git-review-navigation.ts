@@ -6,6 +6,7 @@ const NAVIGATION_MAX_ATTEMPTS = 120;
 export interface PendingReviewNavigation {
   readonly entryKey: string;
   readonly generation: number;
+  readonly sectionKey: string;
 }
 
 interface ReviewNavigationTarget {
@@ -16,7 +17,11 @@ interface ReviewNavigationTarget {
 export function reviewNavigationKey(
   navigation: PendingReviewNavigation
 ): string {
-  return JSON.stringify([navigation.entryKey, navigation.generation]);
+  return JSON.stringify([
+    navigation.entryKey,
+    navigation.sectionKey,
+    navigation.generation,
+  ]);
 }
 
 /**
@@ -59,10 +64,22 @@ export function shouldScrollReviewNavigation(options: {
 
 export function findReviewNavigationTarget(
   resource: GitReviewDocumentResource | undefined,
-  projectedCacheKeys: ReadonlyMap<string, string>
+  projectedCacheKeys: ReadonlyMap<string, string>,
+  sectionKey?: string
 ): ReviewNavigationTarget | null {
   if (!isReviewNavigationContentReady(resource)) {
     return null;
+  }
+  if (sectionKey !== undefined) {
+    if (
+      !resource.document.sections.some(
+        (candidate) => candidate.sectionKey === sectionKey
+      )
+    ) {
+      return null;
+    }
+    const cacheKey = projectedCacheKeys.get(sectionKey);
+    return cacheKey === undefined ? null : { cacheKey, sectionId: sectionKey };
   }
   const section = resource.document.sections.find((candidate) =>
     projectedCacheKeys.has(candidate.sectionKey)

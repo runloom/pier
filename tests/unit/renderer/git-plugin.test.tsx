@@ -241,17 +241,27 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
     {
       id: "pier.git.review.stageFile",
       permissions: ["git:write"],
-      title: "Git: Stage Changes",
+      title: "Git: Stage",
     },
     {
       id: "pier.git.review.unstageFile",
       permissions: ["git:write"],
-      title: "Git: Unstage Changes",
+      title: "Git: Unstage",
     },
     {
       id: "pier.git.review.discardFile",
       permissions: ["git:write"],
-      title: "Git: Discard Changes",
+      title: "Git: Restore",
+    },
+    {
+      id: "pier.git.review.stageAll",
+      permissions: ["git:write"],
+      title: "Git: Stage All Changes",
+    },
+    {
+      id: "pier.git.review.unstageAll",
+      permissions: ["git:write"],
+      title: "Git: Unstage All Changes",
     },
   ];
   return {

@@ -24,7 +24,12 @@ function IconChevronSm({
 
 export interface PierDiffViewLabels {
   readonly collapseDiff: string;
+  readonly discardChanges: string;
   readonly expandDiff: string;
+  /** Optional; when set, title click opens the file. */
+  readonly openFile?: string;
+  readonly stageChanges: string;
+  readonly unstageChanges: string;
 }
 
 const OFFICIAL_COLLAPSE_BUTTON_CLASS =

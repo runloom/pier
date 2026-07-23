@@ -55,6 +55,7 @@ import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
 import type {
   GitBranchRef,
   GitChangeEvent,
+  GitCommit,
   GitCommitSearchResult,
   GitDiffBranchesResult,
   GitDiffPatch,
@@ -219,10 +220,30 @@ export interface RendererPluginGitFacade {
       to?: string;
     }
   ): Promise<GitDiffPatch>;
+  getDiffText(
+    cwd: string,
+    options?: {
+      from?: string;
+      paths?: string[];
+      staged?: boolean;
+      to?: string;
+    }
+  ): Promise<string>;
   getFileContent(
     cwd: string,
     options: { path: string; ref?: string }
   ): Promise<string>;
+  getLog(
+    cwd: string,
+    options?: {
+      author?: string;
+      grep?: string;
+      maxCount?: number;
+      path?: string;
+      since?: string;
+      until?: string;
+    }
+  ): Promise<GitCommit[]>;
   getRepoInfo(cwd: string): Promise<GitRepoInfo>;
   getReviewFileDocument(
     request: GitReviewFileDocumentRequest

@@ -95,6 +95,7 @@ describe("git-review-session-cache", () => {
       loadedByEntryKey: new Map([[first.entryKey, loadedDoc(first, "a\n")]]),
       retainedEntryKeys: [first.entryKey],
       selectedEntryKey: first.entryKey,
+      selectedSectionKey: "section:0",
       sourceKey: "source-a",
     });
     writeReviewSession({
@@ -103,6 +104,7 @@ describe("git-review-session-cache", () => {
       loadedByEntryKey: new Map(),
       retainedEntryKeys: [],
       selectedEntryKey: null,
+      selectedSectionKey: null,
       sourceKey: "source-b",
     });
 
@@ -116,6 +118,7 @@ describe("git-review-session-cache", () => {
       loadedByEntryKey: new Map(),
       retainedEntryKeys: [],
       selectedEntryKey: null,
+      selectedSectionKey: null,
       sourceKey: "source-c",
     });
     expect(readReviewSession("source-a")?.anchor).toEqual({
@@ -133,6 +136,7 @@ describe("git-review-session-cache", () => {
         loadedByEntryKey: new Map(),
         retainedEntryKeys: [],
         selectedEntryKey: null,
+        selectedSectionKey: null,
         sourceKey: `source-${index}`,
       });
     }
@@ -157,6 +161,7 @@ describe("git-review-session-cache", () => {
       loadedByEntryKey: new Map(),
       retainedEntryKeys: [],
       selectedEntryKey: null,
+      selectedSectionKey: null,
       sourceKey: "keep",
     });
     writeReviewSession({
@@ -165,6 +170,7 @@ describe("git-review-session-cache", () => {
       loadedByEntryKey: new Map(),
       retainedEntryKeys: [],
       selectedEntryKey: null,
+      selectedSectionKey: null,
       sourceKey: "drop",
     });
     clearReviewSession("drop");
@@ -189,6 +195,7 @@ describe("git-review-session-cache", () => {
       ]),
       retainedEntryKeys: [older.entryKey, selected.entryKey],
       selectedEntryKey: selected.entryKey,
+      selectedSectionKey: null,
       sourceKey: "budget",
     });
     const session = readReviewSession("budget");
@@ -211,6 +218,7 @@ describe("git-review-session-cache", () => {
       loadedByEntryKey: new Map([[item.entryKey, loadedDoc(item, lines)]]),
       retainedEntryKeys: [item.entryKey],
       selectedEntryKey: item.entryKey,
+      selectedSectionKey: null,
       sourceKey: "oversize",
     });
     const session = readReviewSession("oversize");

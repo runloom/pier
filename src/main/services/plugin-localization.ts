@@ -156,9 +156,10 @@ export async function loadManifestLocaleFiles({
   manifest: PluginManifest;
 }> {
   const files = manifest.localization?.files ?? {};
-  const entries = Object.entries(files).filter(
-    ([locale]) => !staticLocales[locale]
-  );
+  // Always start from static (bundled) locales, then overlay disk files when
+  // readable. Builtin used to skip files entirely when static existed, so dev
+  // JSON edits never reached the renderer until a full main rebuild.
+  const entries = Object.entries(files);
   const manifestWithStaticLocales = mergeManifestLocales(
     manifest,
     staticLocales

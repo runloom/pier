@@ -692,7 +692,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect
       .poll(
         () =>
-          page.locator("diffs-container").evaluateAll((containers) => {
+          page.evaluate(() => {
             const scroller = document.querySelector<HTMLElement>(
               '[data-testid="pierre-diff-root"] .cv-scrollbar'
             );
@@ -700,11 +700,16 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
               return false;
             }
             const viewport = scroller.getBoundingClientRect();
-            return containers.some((container) => {
-              const text = container.shadowRoot?.textContent ?? "";
-              const bounds = container.getBoundingClientRect();
+            // Binary notice lives in Pier light-DOM header metadata (not shadow).
+            const notices = [
+              ...document.querySelectorAll(
+                '[data-slot="pier-diff-header-state-notice"]'
+              ),
+            ];
+            return notices.some((node) => {
+              const text = node.textContent ?? "";
+              const bounds = node.getBoundingClientRect();
               return (
-                text.includes("binary-6\\special.bin") &&
                 /Binary file|二进制文件/u.test(text) &&
                 bounds.bottom > viewport.top &&
                 bounds.top < viewport.bottom

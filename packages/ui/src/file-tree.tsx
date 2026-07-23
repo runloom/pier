@@ -48,6 +48,8 @@ export type {
 export function PierFileTree({
   directoryErrorLabel,
   directoryStates,
+  flattenEmptyDirectories = true,
+  flattenMinDepth,
   items,
   label,
   onLoadDirectory,
@@ -138,7 +140,8 @@ export function PierFileTree({
     ...(onMovePaths
       ? { dragAndDrop: fileTreeDragAndDropConfig(readRefs) }
       : {}),
-    flattenEmptyDirectories: true,
+    flattenEmptyDirectories,
+    ...(flattenMinDepth === undefined ? {} : { flattenMinDepth }),
     gitStatus,
     initialExpandedPaths,
     onSelectionChange: handleSelectionChange,

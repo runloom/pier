@@ -48,6 +48,10 @@ export default defineConfig({
       host: devProfile.host,
     },
     build: {
+      // renderer.root is src/renderer; default outDir would be src/renderer/out
+      // and pollute the source tree / git status. Keep artifacts under /out.
+      outDir: resolve(import.meta.dirname, "out/renderer"),
+      emptyOutDir: true,
       rollupOptions: {
         input: resolve(import.meta.dirname, "src/renderer/index.html"),
       },

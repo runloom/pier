@@ -125,19 +125,41 @@
       "aliases": ["stage file", "git add", "stage changes"],
       "category": "Git",
       "description": "Stage the selected file's changes.",
-      "title": "Git: Stage Changes"
+      "title": "Git: Stage"
     },
     "pier.git.review.unstageFile": {
       "aliases": ["unstage file", "git restore --staged", "unstage changes"],
       "category": "Git",
       "description": "Unstage the selected file's staged changes.",
-      "title": "Git: Unstage Changes"
+      "title": "Git: Unstage"
     },
     "pier.git.review.discardFile": {
-      "aliases": ["discard file", "git restore", "discard changes"],
+      "aliases": [
+        "restore",
+        "restore changes",
+        "git restore",
+        "discard",
+        "discard changes"
+      ],
       "category": "Git",
-      "description": "Discard the selected file's working tree changes.",
-      "title": "Git: Discard Changes"
+      "description": "Restore the selected file's working tree changes.",
+      "title": "Git: Restore"
+    },
+    "pier.git.review.stageAll": {
+      "aliases": ["stage all", "git add all", "stage all changes"],
+      "category": "Git",
+      "description": "Stage all unstaged and untracked changes, skipping conflicts.",
+      "title": "Git: Stage All Changes"
+    },
+    "pier.git.review.unstageAll": {
+      "aliases": [
+        "unstage all",
+        "git restore --staged all",
+        "unstage all changes"
+      ],
+      "category": "Git",
+      "description": "Unstage all staged changes.",
+      "title": "Git: Unstage All Changes"
     },
     "pier.worktree.create": {
       "aliases": [
@@ -196,6 +218,9 @@
     "ui.reviewLoading": "Loading changes",
     "ui.reviewCollapseDiff": "Collapse diff",
     "ui.reviewExpandDiff": "Expand diff",
+    "ui.reviewHeaderRestore": "Restore",
+    "ui.reviewHeaderStage": "Stage",
+    "ui.reviewHeaderUnstage": "Unstage",
     "ui.reviewDetails": "Details",
     "ui.reviewInvalidSource": "Invalid Git source",
     "ui.reviewLoadFailed": "Failed to load changes",
@@ -217,9 +242,12 @@
     "ui.reviewEmptyTitle": "No changes",
     "ui.reviewEmptyDescription": "The working tree has no staged or unstaged changes.",
     "ui.reviewEmptyDescriptionCommit": "The selected commit has no file changes.",
-    "ui.reviewEmptyDescriptionFiltered": "All changes are hidden by the current filter.",
-    "ui.reviewFilterUnstaged": "Unstaged",
-    "ui.reviewFilterStaged": "Staged",
+    "ui.reviewTreeGroupUnstaged": "Changes",
+    "ui.reviewTreeGroupStaged": "Staged Changes",
+    "ui.reviewTreeGroupConflict": "Merge Changes",
+    "ui.reviewDiffGroupUnstaged": "Changes",
+    "ui.reviewDiffGroupStaged": "Staged Changes",
+    "ui.reviewDiffGroupConflict": "Merge Changes",
     "ui.reviewEmptyDescriptionBranch": "The current branch has no changes relative to {{branch}}.",
     "ui.reviewScopeUncommitted": "Uncommitted",
     "ui.reviewScopeCommit": "Commit",
@@ -261,19 +289,19 @@
     "ui.reviewTreeNoSearchResultsDescription": "Try another file name or path.",
     "ui.reviewTreeOpenFile": "Open File",
     "ui.reviewTreeOpenFileFailed": "Couldn't open file",
-    "ui.reviewTreeStageFile": "Stage Changes",
-    "ui.reviewTreeStageFailed": "Unable to stage",
-    "ui.reviewTreeUnstageFile": "Unstage Changes",
-    "ui.reviewTreeUnstageFailed": "Unable to unstage",
-    "ui.reviewTreeDiscardFile": "Discard Changes",
-    "ui.reviewTreeDiscardFailed": "Unable to discard changes",
-    "ui.reviewTreeDiscardConfirm": "Discard changes in {{name}}? This cannot be undone.",
-    "ui.reviewTreeDiscardConfirmButton": "Discard",
-    "ui.commitMessageLabel": "Commit message",
-    "ui.commitMessagePlaceholder": "Commit message",
-    "ui.commitButton": "Commit {{count}} staged",
-    "ui.commitSuccess": "Changes committed",
-    "ui.commitFailed": "Commit failed",
+    "ui.reviewTreeStageFile": "Stage",
+    "ui.reviewTreeStageFailed": "Unable to Stage",
+    "ui.reviewTreeUnstageFile": "Unstage",
+    "ui.reviewTreeUnstageFailed": "Unable to Unstage",
+    "ui.reviewTreeDiscardFile": "Restore",
+    "ui.reviewTreeDiscardFailed": "Unable to Restore",
+    "ui.reviewTreeDiscardConfirm": "Restore changes in {{name}}?\nThis cannot be undone.",
+    "ui.reviewTreeDiscardConfirmButton": "Restore",
+    "ui.stageAll": "Stage All Changes",
+    "ui.stageAllBusy": "Staging Changes…",
+    "ui.stageAllSkippedConflicts": "Staged {{staged}} change(s), skipped {{n}} in merge",
+    "ui.unstageAll": "Unstage All Changes",
+    "ui.unstageAllBusy": "Unstaging Changes…",
     "ui.reviewTreeContextMenuFailed": "Couldn't open menu",
     "ui.reviewStateBinary": "Binary file",
     "ui.reviewStateConflict": "Merge conflict",
@@ -481,7 +509,27 @@
     "ui.worktreeCreate.startTaskLabel": "Start task now",
     "ui.worktreeCreate.startTaskNoAgents": "No enabled agent is available.",
     "ui.worktreeCreate.title": "New Worktree",
-    "ui.worktreeCreate.unavailable": "Worktrees are unavailable: {{message}}"
+    "ui.worktreeCreate.unavailable": "Worktrees are unavailable: {{message}}",
+    "ui.reviewTreeDiscardFolderName": "{{count}} files in {{name}}",
+    "ui.reviewStateBinaryDetail": "Binary file — content not shown",
+    "ui.reviewStateBinaryKind": "Binary {{kind}} — content not shown",
+    "ui.reviewBinaryKindImage": "image",
+    "ui.reviewBinaryKindFont": "font",
+    "ui.reviewBinaryKindAudio": "audio",
+    "ui.reviewBinaryKindVideo": "video",
+    "ui.reviewBinaryKindDocument": "document",
+    "ui.reviewBinaryKindArchive": "archive",
+    "ui.reviewBinaryKindNative": "binary",
+    "ui.reviewStateSymlinkRename": "Symbolic link · {{from}} → {{to}}",
+    "ui.reviewStateSubmoduleDetail": "Submodule commit changed",
+    "ui.reviewStateTooLargeDetail": "File is too large to display a text diff",
+    "ui.reviewStateInvalidEncodingDetail": "Unsupported text encoding — open the file to inspect",
+    "ui.reviewStateConflictDetail": "Merge conflict — resolve in the editor",
+    "ui.commitMessageLabel": "Commit message",
+    "ui.commitMessagePlaceholder": "Commit message",
+    "ui.commitButton": "Commit {{count}} staged",
+    "ui.commitSuccess": "Changes committed",
+    "ui.commitFailed": "Commit failed"
   },
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {

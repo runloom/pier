@@ -20,6 +20,99 @@ index efa8b6a2fd70e0d1f1dec1d90ee87268c72f56c4..ce3f101fc8401dd89c5c77b3335c959a
  		this.#searchVisiblePathSet = searchVisiblePathSet;
  		const expandedPaths = this.#searchMode === "expand-matches" ? new Set(this.#searchPreviousExpandedPaths ?? []) : /* @__PURE__ */ new Set();
  		for (const matchingPath of matchingPaths) {
+diff --git a/dist/model/publicTypes.d.ts b/dist/model/publicTypes.d.ts
+index 0d75f14780eb033fdbc8fde76e6f4c080e1d096a..4fadbc7f48ad3f890985d550add3f32477636249 100644
+--- a/dist/model/publicTypes.d.ts
++++ b/dist/model/publicTypes.d.ts
+@@ -42,6 +42,12 @@ interface FileTreeGitStatusPatch {
+ }
+ interface FileTreeStoreOptions {
+   flattenEmptyDirectories?: boolean;
++  /**
++   * Minimum node depth that may start a single-child directory flatten chain.
++   * Synthetic root is depth 0; top-level paths are depth 1. Default 0.
++   * Set to 2 so top-level group roots stay unmerged while nested path chains still flatten.
++   */
++  flattenMinDepth?: number;
+   initialExpansion?: FileTreeInitialExpansion;
+   initialExpandedPaths?: readonly FileTreePublicId[];
+   presorted?: boolean;
+diff --git a/dist/path-store/src/flatten.js b/dist/path-store/src/flatten.js
+index 1f7a2fd6d24db92e4c42aa7d3b5a7881a36af7ae..df9ff1b014f8d1c93212727a86b86a236f24947b 100644
+--- a/dist/path-store/src/flatten.js
++++ b/dist/path-store/src/flatten.js
+@@ -1,9 +1,13 @@
+-import { hasNodeFlag, isDirectoryNode } from "./internal-types.js";
++import { getNodeDepth, hasNodeFlag, isDirectoryNode } from "./internal-types.js";
+ //#region ../path-store/src/flatten.ts
+ function getFlattenedChildDirectoryId(state, directoryNodeId) {
+ 	if (state.snapshot.options.flattenEmptyDirectories !== true) return null;
+ 	const directoryNode = state.snapshot.nodes[directoryNodeId];
+ 	if (directoryNode == null || !isDirectoryNode(directoryNode) || hasNodeFlag(directoryNode, 2)) return null;
++	// Depth gate: refuse to start/continue flatten from nodes shallower than flattenMinDepth.
++	// Default 0 preserves upstream behavior for all real path nodes (depth >= 1).
++	const flattenMinDepth = state.snapshot.options.flattenMinDepth ?? 0;
++	if (getNodeDepth(directoryNode) < flattenMinDepth) return null;
+ 	const directoryIndex = state.snapshot.directories.get(directoryNodeId);
+ 	if (directoryIndex == null || directoryIndex.childIds.length !== 1) return null;
+ 	const childId = directoryIndex.childIds[0];
+diff --git a/dist/path-store/src/options.js b/dist/path-store/src/options.js
+index 0a7e7778124558bd62770e65c1f0928bc61b4fcc..1f2153385e4c7b24b97a4ecc5ef74760e3841103 100644
+--- a/dist/path-store/src/options.js
++++ b/dist/path-store/src/options.js
+@@ -1,7 +1,15 @@
+ //#region ../path-store/src/options.ts
+ function resolvePathStoreOptions(options = {}) {
++	const flattenMinDepthRaw = options.flattenMinDepth;
++	const flattenMinDepth = typeof flattenMinDepthRaw === "number" && Number.isFinite(flattenMinDepthRaw)
++		? Math.max(0, flattenMinDepthRaw | 0)
++		: 0;
+ 	return {
+ 		flattenEmptyDirectories: options.flattenEmptyDirectories !== false,
++		// Minimum node depth eligible to start a single-child directory flatten chain.
++		// Root synthetic node is depth 0; top-level paths are depth 1.
++		// Use 2 to keep depth-1 group roots unmerged while still flattening path chains beneath them.
++		flattenMinDepth,
+ 		sort: options.sort ?? "default"
+ 	};
+ }
+diff --git a/dist/path-store/src/store.js b/dist/path-store/src/store.js
+index d59ea08e0c72a2f3f5caf95dacc541b60c86d0e2..fa14e431b00a6554d3e1274d9dea3ac824800772 100644
+--- a/dist/path-store/src/store.js
++++ b/dist/path-store/src/store.js
+@@ -13,6 +13,7 @@ import { collapsePath, expandPath, getVisibleCount, getVisibleIndexByPath, getVi
+ function initializeOpenVisibleCounts(state) {
+ 	const { directories, nodes, options, rootId, presortedDirectoryNodeIds } = state.snapshot;
+ 	const flattenEmptyDirectories = options.flattenEmptyDirectories === true;
++	const flattenMinDepth = options.flattenMinDepth ?? 0;
+ 	const walkDirectory = (nodeId) => {
+ 		const currentNode = nodes[nodeId];
+ 		if (currentNode == null || !isDirectoryNode(currentNode)) return;
+@@ -34,7 +35,11 @@ function initializeOpenVisibleCounts(state) {
+ 		if (childCount >= 128) rebuildVisibleChildChunks(nodes, currentIndex);
+ 		currentNode.subtreeNodeCount = 1 + totalChildSubtreeNodeCount;
+ 		let newVisibleSubtreeCount;
+-		if (flattenEmptyDirectories && childCount === 1) {
++		if (
++			flattenEmptyDirectories &&
++			childCount === 1 &&
++			getNodeDepth(currentNode) >= flattenMinDepth
++		) {
+ 			const onlyChild = nodes[childIds[0]];
+ 			newVisibleSubtreeCount = onlyChild != null && isDirectoryNode(onlyChild) ? totalChildVisibleSubtreeCount : 1 + totalChildVisibleSubtreeCount;
+ 		} else newVisibleSubtreeCount = 1 + totalChildVisibleSubtreeCount;
+diff --git a/dist/preparedInput.d.ts b/dist/preparedInput.d.ts
+index 92781bbe6f0c2ff49d5242a55dee736d3fff40b3..b41f1861047a2dc8d83a3bac8d52b664aab7770c 100644
+--- a/dist/preparedInput.d.ts
++++ b/dist/preparedInput.d.ts
+@@ -8,6 +8,7 @@ interface FileTreePreparedInput {
+ }
+ declare function prepareFileTreeInput(paths: readonly string[], options?: {
+   flattenEmptyDirectories?: boolean;
++  flattenMinDepth?: number;
+   sort?: 'default' | FileTreeSortComparator;
+ }): FileTreePreparedInput;
+ declare function preparePresortedFileTreeInput(paths: readonly string[]): FileTreePreparedInput;
 diff --git a/dist/render/FileTree.d.ts b/dist/render/FileTree.d.ts
 index b86b9865272df83225a6b0330117ddb9c83a8ee0..bfe7ac319b9376f182bac45b354c894e1951903b 100644
 --- a/dist/render/FileTree.d.ts
@@ -47,7 +140,7 @@ index a3acb5917de61ee8283f12fe5a73282437cfcfab..3b9a14bed67c25109e2303259e9911a6
  		this.#controller.add(path);
  	}
 diff --git a/dist/render/FileTreeView.js b/dist/render/FileTreeView.js
-index 3d02080ad553347e7fe95e261c993b607b4134c2..b33729caf4e65417119cc9c70e3756c14276e771 100644
+index 3d02080ad553347e7fe95e261c993b607b4134c2..6946a1e63bdc1aec8a8158767f3c12f23b9cda94 100644
 --- a/dist/render/FileTreeView.js
 +++ b/dist/render/FileTreeView.js
 @@ -3,7 +3,7 @@ import { createFileTreeIconResolver } from "./iconResolver.js";
@@ -82,7 +175,7 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..b33729caf4e65417119cc9c70e3756c1
  }
  function getFileTreeRowPath(row) {
  	return row.isFlattened ? row.flattenedSegments?.findLast((segment) => segment.isTerminal)?.path ?? row.path : row.path;
-@@ -367,11 +369,7 @@ function renderFileTreeRowContent(row, resolveIcon, { actionLaneEnabled = false,
+@@ -367,11 +370,7 @@ function renderFileTreeRowContent(row, resolveIcon, { actionLaneEnabled = false,
  		}),
  		/* @__PURE__ */ jsx("div", {
  			"data-item-section": "content",
@@ -95,7 +188,7 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..b33729caf4e65417119cc9c70e3756c1
  		}),
  		decorationLaneEnabled ? /* @__PURE__ */ jsx("div", {
  			"data-item-section": "decoration",
-@@ -1051,7 +1049,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -1051,7 +1050,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  			event.stopPropagation();
  			return;
  		}
@@ -104,7 +197,7 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..b33729caf4e65417119cc9c70e3756c1
  			if (event.key === "Escape") {
  				restoreTreeFocusAfterSearchCloseRef.current = false;
  				restoreTreeFocusViewportOffsetRef.current = null;
-@@ -1692,15 +1690,20 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -1692,15 +1691,20 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  			setActiveItemPath((previousPath) => previousPath === actionTargetPath ? previousPath : actionTargetPath);
  			setLastContextMenuInteraction("focus");
  		}

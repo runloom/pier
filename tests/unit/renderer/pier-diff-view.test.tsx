@@ -95,7 +95,10 @@ const appearance = {
 
 const labels = {
   collapseDiff: "Collapse diff",
+  discardChanges: "Restore",
   expandDiff: "Expand diff",
+  stageChanges: "Stage",
+  unstageChanges: "Unstage",
 } as const;
 
 const items = [
@@ -386,8 +389,6 @@ describe("PierDiffView", () => {
 
   it("状态文件通过官方元数据保留路径、旧路径和变更类型", async () => {
     const setItems = vi.spyOn(PierreCodeView.prototype, "setItems");
-    const statePatch =
-      "diff --git a/__pier_state__ b/__pier_state__\n--- a/__pier_state__\n+++ b/__pier_state__\n@@ -1 +1 @@\n Binary file\n";
     const stateItems = [
       "added",
       "conflicted",
@@ -407,7 +408,8 @@ describe("PierDiffView", () => {
         >["status"],
       },
       id: `state:${status}`,
-      patch: statePatch,
+      patch: null,
+      stateNotice: "Binary file — content not shown",
     }));
 
     render(
@@ -1502,6 +1504,95 @@ describe("PierDiffView", () => {
     expect(onScroll).toHaveBeenCalledOnce();
     act(() => emitOfficialScroll());
     expect(onScroll).toHaveBeenCalledOnce();
+  });
+
+  it("header 空白点击折叠，文件名点击打开文件", async () => {
+    const onOpenFile = vi.fn();
+    const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
+    render(
+      <PierDiffView
+        appearance={appearance}
+        items={[
+          {
+            cacheKey: "revision:file.ts",
+            fileDisplay: {
+              path: "src/file.ts",
+              status: "modified",
+            },
+            id: "file.ts",
+            patch: items[0].patch,
+          },
+        ]}
+        labels={labels}
+        onError={vi.fn()}
+        onOpenFile={onOpenFile}
+      />
+    );
+
+    // Wait until official item is applied so getItem/updateItem are live.
+    await screen.findByRole("button", { name: labels.collapseDiff });
+    const root = screen.getByTestId("pierre-diff-root");
+
+    const host = document.createElement("diffs-container");
+    const header = document.createElement("div");
+    header.setAttribute("data-diffs-header", "default");
+    const title = document.createElement("div");
+    title.setAttribute("data-title", "");
+    header.append(title);
+
+    vi.spyOn(PierreCodeView.prototype, "getRenderedItems").mockReturnValue([
+      {
+        element: host,
+        id: "file.ts",
+        instance: {} as never,
+        item: { id: "file.ts", type: "diff" } as never,
+        type: "diff",
+        version: 1,
+      },
+    ]);
+    vi.spyOn(PierreCodeView.prototype, "getItem").mockImplementation(
+      (id: string) => {
+        if (id !== "file.ts") {
+          return;
+        }
+        return {
+          collapsed: false,
+          fileDiff: { splitLineCount: 2, unifiedLineCount: 2 },
+          id: "file.ts",
+          type: "diff",
+        } as never;
+      }
+    );
+
+    const before = updateItem.mock.calls.length;
+    const headerClick = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+    Object.defineProperty(headerClick, "composedPath", {
+      value: () => [header, host, root, document, window],
+    });
+    root.dispatchEvent(headerClick);
+    await waitFor(() => {
+      expect(updateItem.mock.calls.length).toBeGreaterThan(before);
+    });
+    expect(updateItem.mock.calls.at(-1)?.[0]).toMatchObject({
+      collapsed: true,
+      id: "file.ts",
+    });
+    expect(onOpenFile).not.toHaveBeenCalled();
+
+    const titleClick = new MouseEvent("click", {
+      bubbles: true,
+      cancelable: true,
+      composed: true,
+    });
+    Object.defineProperty(titleClick, "composedPath", {
+      value: () => [title, header, host, root, document, window],
+    });
+    root.dispatchEvent(titleClick);
+    expect(onOpenFile).toHaveBeenCalledWith("file.ts");
   });
 
   it("官方主题同步失败时把错误交给宿主反馈", async () => {

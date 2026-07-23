@@ -8,7 +8,6 @@ import { usePanelSidebarCollapsed } from "@pier/ui/use-panel-sidebar-preference.
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import {
-  GIT_REVIEW_STATUS_PRIORITY,
   type GitReviewIndexEntry,
   type GitReviewScope,
   type GitReviewTarget,
@@ -37,17 +36,15 @@ import {
   type GitReviewIndexLoaderSnapshot,
 } from "./git-review-index-loader.ts";
 import { GitReviewPanelLayout } from "./git-review-panel-layout.tsx";
-import {
-  DEFAULT_UNCOMMITTED_FILTER,
-  GitReviewScopeSwitcher,
-  type GitReviewUncommittedFilter,
-} from "./git-review-scope-switcher.tsx";
+import { GitReviewScopeSwitcher } from "./git-review-scope-switcher.tsx";
 import {
   clearReviewSession,
   patchReviewSession,
   readReviewSession,
 } from "./git-review-session-cache.ts";
 import { gitReviewTreeModel } from "./git-review-tree.tsx";
+import { bindGitReviewStageAllTarget } from "./git-review-tree-actions.ts";
+import { usePluginLanguage } from "./use-plugin-language.ts";
 
 const EMPTY_REVIEW_ENTRIES: readonly GitReviewIndexEntry[] = [];
 const REVIEW_TREE_COLLAPSED_STORAGE_PREFIX = "pier.git.review.treeCollapsed:";
@@ -55,45 +52,6 @@ const REVIEW_TREE_COLLAPSED_STORAGE_PREFIX = "pier.git.review.treeCollapsed:";
 /** loading/error/空态下侧栏树为空,打开路径无目标可导航。 */
 function noopOpenPath(_path: string): void {
   // 空树没有可打开的条目
-}
-
-/**
- * uncommitted scope 的未暂存/已暂存过滤(对齐 loomdesk includeUnstaged/
- * includeStaged):纯 renderer 投影过滤,conflict 分组不受过滤影响。
- */
-function filterUncommittedEntries(
-  entries: readonly GitReviewIndexEntry[],
-  filter: GitReviewUncommittedFilter
-): readonly GitReviewIndexEntry[] {
-  if (filter.staged && filter.unstaged) {
-    return entries;
-  }
-  const filtered: GitReviewIndexEntry[] = [];
-  for (const entry of entries) {
-    const renderSlots = entry.renderSlots.filter((slot) => {
-      if (slot.group === "staged") {
-        return filter.staged;
-      }
-      if (slot.group === "unstaged") {
-        return filter.unstaged;
-      }
-      return true;
-    });
-    if (renderSlots.length === 0) {
-      continue;
-    }
-    if (renderSlots.length === entry.renderSlots.length) {
-      filtered.push(entry);
-      continue;
-    }
-    // 契约不变式:entry.status 必须等于剩余 slot 的最高优先级状态。
-    const status =
-      GIT_REVIEW_STATUS_PRIORITY.find((candidate) =>
-        renderSlots.some((slot) => slot.status === candidate)
-      ) ?? entry.status;
-    filtered.push({ ...entry, renderSlots, status });
-  }
-  return filtered;
 }
 
 function readSource(params: unknown): GitReviewScope | null {
@@ -234,17 +192,7 @@ function GitChangesPanelBody({
   })();
   const entries =
     state.kind === "loaded" ? state.result.entries : EMPTY_REVIEW_ENTRIES;
-  const [uncommittedFilter, setUncommittedFilter] = useState(
-    DEFAULT_UNCOMMITTED_FILTER
-  );
-  const visibleEntries = useMemo(
-    () =>
-      source?.target.kind === "uncommitted"
-        ? filterUncommittedEntries(entries, uncommittedFilter)
-        : entries,
-    [entries, source?.target.kind, uncommittedFilter]
-  );
-  const language = context.i18n.language();
+  const language = usePluginLanguage();
   // language 驱动文案；context 在 panel 生命周期内稳定。
   // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable for the factory instance
   const collidingFileLabel = useMemo(() => {
@@ -259,9 +207,27 @@ function GitChangesPanelBody({
       );
     };
   }, [language]);
+  // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable for the factory instance
+  const treeGroupLabels = useMemo(() => {
+    const labelLanguage = language;
+    return {
+      conflict: pluginText(
+        context,
+        "reviewTreeGroupConflict",
+        "Merge Changes",
+        { language: labelLanguage }
+      ),
+      staged: pluginText(context, "reviewTreeGroupStaged", "Staged Changes", {
+        language: labelLanguage,
+      }),
+      unstaged: pluginText(context, "reviewTreeGroupUnstaged", "Changes", {
+        language: labelLanguage,
+      }),
+    };
+  }, [language]);
   const treeModel = useMemo(
-    () => gitReviewTreeModel(visibleEntries, collidingFileLabel),
-    [collidingFileLabel, visibleEntries]
+    () => gitReviewTreeModel(entries, collidingFileLabel, treeGroupLabels),
+    [collidingFileLabel, entries, treeGroupLabels]
   );
 
   // index loader 只随 source 重建；git facade 随 context 稳定。
@@ -324,19 +290,45 @@ function GitChangesPanelBody({
       context={context}
       gitRootPath={source.gitRootPath}
       onSelectTarget={onSelectTarget}
-      onUncommittedFilterChange={setUncommittedFilter}
       target={source.target}
-      uncommittedFilter={uncommittedFilter}
     />
   ) : undefined;
-  const stagedCount =
-    source?.target.kind === "uncommitted"
-      ? entries.filter((entry) =>
-          entry.renderSlots.some((slot) => slot.group === "staged")
-        ).length
-      : 0;
+  const isUncommitted = source?.target.kind === "uncommitted";
+  const reportSkippedConflicts = useCallback(
+    (staged: number, skippedConflicts: number) => {
+      context.notifications.info(
+        pluginText(
+          context,
+          "stageAllSkippedConflicts",
+          "Staged {{staged}} file(s), skipped {{n}} conflicted",
+          { n: skippedConflicts, staged }
+        )
+      );
+    },
+    [context]
+  );
+  // Command handlers read the latest uncommitted index via per-panel binding.
+  useEffect(() => {
+    if (!(source && isUncommitted)) {
+      bindGitReviewStageAllTarget(null, panelId);
+      return () => {
+        bindGitReviewStageAllTarget(null, panelId);
+      };
+    }
+    bindGitReviewStageAllTarget({
+      entries,
+      gitRootPath: source.gitRootPath,
+      panelId,
+      reportSkippedConflicts,
+    });
+    return () => {
+      bindGitReviewStageAllTarget(null, panelId);
+    };
+  }, [entries, isUncommitted, panelId, reportSkippedConflicts, source]);
+
+  const stagedCount = treeModel.groupCounts.staged;
   const commitForm =
-    source && stagedCount > 0 ? (
+    source && isUncommitted && stagedCount > 0 ? (
       <GitCommitForm
         context={context}
         cwd={source.gitRootPath}
@@ -404,12 +396,12 @@ function GitChangesPanelBody({
       </GitReviewPanelLayout>
     );
   }
-  if (visibleEntries.length > 0) {
+  if (entries.length > 0) {
     return (
       <div aria-busy={state.refreshing || undefined} className="h-full min-h-0">
         <ReviewDocuments
           context={context}
-          entries={visibleEntries}
+          entries={entries}
           headerLeading={scopeSwitcher}
           indexGeneration={state.generation}
           indexRefreshFailure={state.refreshFailure}
@@ -419,7 +411,7 @@ function GitChangesPanelBody({
           scope={source}
           setSidebarCollapsed={setSidebarCollapsed}
           sidebarCollapsed={sidebarCollapsed}
-          sidebarFooter={commitForm}
+          {...(commitForm === undefined ? {} : { sidebarFooter: commitForm })}
           treeModel={treeModel}
           warnings={state.result.warnings}
         />
@@ -435,6 +427,7 @@ function GitChangesPanelBody({
       onOpenPath={noopOpenPath}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
+      {...(commitForm === undefined ? {} : { sidebarFooter: commitForm })}
       treeModel={treeModel}
     >
       <div
@@ -453,13 +446,7 @@ function GitChangesPanelBody({
               {pluginText(context, "reviewEmptyTitle", "No changes")}
             </EmptyTitle>
             <EmptyDescription>
-              {entries.length > 0
-                ? pluginText(
-                    context,
-                    "reviewEmptyDescriptionFiltered",
-                    "All changes are hidden by the current filter."
-                  )
-                : emptyDescription(context, source.target)}
+              {emptyDescription(context, source.target)}
             </EmptyDescription>
           </EmptyHeader>
         </Empty>

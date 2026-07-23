@@ -35,8 +35,8 @@ export function ReviewLoading({
 }
 
 /**
- * 内容区没有可展示正文时的错误主体状态。基于 kit 的 ErrorEmpty,
- * 补上插件文案与 Details 对话框接线。
+ * 内容区没有可展示正文时的错误主体。
+ * 技术细节走 Details → dialogs.alert（符合操作反馈规范）；短失败不强制弹窗。
  */
 export function ReviewErrorEmpty({
   context,
@@ -177,14 +177,16 @@ function ReviewFailureActions({
   );
 }
 
+/**
+ * 仅 index/资源/渲染失败横条。
+ * 导航失败不在此展示：内容已可见时静默；真失败由 content toast。
+ */
 export function ReviewFeedback({
   context,
   failures,
   hasHiddenFailures = false,
   indexFailure = null,
   indexFailureTitle,
-  navigationError,
-  onRetryNavigation,
   runtimeError = null,
   onRetryIndex,
   onRetryFailure,
@@ -196,19 +198,15 @@ export function ReviewFeedback({
   readonly hasHiddenFailures?: boolean;
   readonly indexFailure?: GitReviewFailure | null;
   readonly indexFailureTitle?: string;
-  readonly navigationError?: Error | null;
   readonly onRetryFailure?: (entryKey: string) => void;
   readonly onRetryIndex?: () => void;
-  readonly onRetryNavigation?: () => void;
   readonly onRetryRender?: () => void;
-  /** 仅用于「正文仍可见但最新更新被拒」的暂态横条;全空白错误走 Empty。 */
   readonly runtimeError?: Error | null;
   readonly staleRetainedCount?: number;
 }): React.JSX.Element | null {
   if (
     !(
       runtimeError ||
-      navigationError ||
       indexFailure ||
       failures.length > 0 ||
       hasHiddenFailures ||
@@ -227,11 +225,6 @@ export function ReviewFeedback({
     context,
     "reviewRenderFailed",
     "Failed to render diff"
-  );
-  const navigationFailureTitle = pluginText(
-    context,
-    "reviewNavigationFailed",
-    "Failed to navigate to file"
   );
   return (
     <ScrollArea className="max-h-[40%] shrink-0">
@@ -258,17 +251,6 @@ export function ReviewFeedback({
               detail={runtimeError.message}
               onRetry={onRetryRender}
               title={renderFailureTitle}
-            />
-          </Alert>
-        ) : null}
-        {navigationError && onRetryNavigation ? (
-          <Alert variant="destructive">
-            <AlertTitle>{navigationFailureTitle}</AlertTitle>
-            <FeedbackActions
-              context={context}
-              detail={navigationError.message}
-              onRetry={onRetryNavigation}
-              title={navigationFailureTitle}
             />
           </Alert>
         ) : null}

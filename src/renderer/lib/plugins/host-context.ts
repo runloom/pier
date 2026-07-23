@@ -87,10 +87,19 @@ function createPluginI18n(
     },
     language,
     // fallback 也过插值：locale 缺 key 时用户不应看到字面 {{name}} 占位符。
-    t: (key: string, values?: RendererPluginMessageValues, fallback = key) =>
+    t: (
+      key: string,
+      values?: RendererPluginMessageValues,
+      fallback = key,
+      locale?: string
+    ) =>
       entry
-        ? (resolvePluginMessage(entry.manifest, language(), key, values) ??
-          interpolateMessage(fallback, values))
+        ? (resolvePluginMessage(
+            entry.manifest,
+            locale ?? language(),
+            key,
+            values
+          ) ?? interpolateMessage(fallback, values))
         : interpolateMessage(fallback, values),
   };
 }

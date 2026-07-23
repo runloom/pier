@@ -10,6 +10,7 @@ import type {
 } from "@plugins/api/renderer.ts";
 import type {
   GitReviewFailure,
+  GitReviewIndexEntry,
   GitReviewIndexOk,
 } from "@shared/contracts/git-review.ts";
 import { pluginText } from "./git-plugin-text.ts";
@@ -32,19 +33,19 @@ interface GitReviewDocumentViewProps {
   readonly context: RendererPluginContext;
   readonly contextId: string;
   readonly diffRef: (handle: PierDiffViewHandle | null) => void;
+  /** Uncommitted entries enable header stage checkbox. */
+  readonly entries?: readonly GitReviewIndexEntry[];
   readonly failureSummary: ReviewFailureSummary;
   readonly gitRootPath: string;
   readonly headerLeading?: React.ReactNode;
   readonly headerTrailing?: React.ReactNode;
   readonly indexFailure: GitReviewFailure | null;
-  readonly navigationError: Error | null;
   readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
   readonly onItemError: (id: string, error: Error | null) => void;
   readonly onOpenPath: (path: string) => void;
   readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
   readonly onRetryFailure: (entryKey: string) => void;
   readonly onRetryIndex: () => void;
-  readonly onRetryNavigation: () => void;
   readonly onScroll: () => void;
   readonly presentation?: PierDiffViewPresentation;
   readonly projection: ReviewDocumentProjection;
@@ -63,20 +64,19 @@ export function GitReviewDocumentView({
   appearance,
   context,
   diffRef,
+  entries,
   failureSummary,
   contextId,
   gitRootPath,
   headerLeading,
   headerTrailing,
   indexFailure,
-  navigationError,
   onItemError,
   onFeedbackChange,
   onOpenPath,
   onRenderWindowChange,
   onRetryFailure,
   onRetryIndex,
-  onRetryNavigation,
   onScroll,
   presentation,
   projection,
@@ -93,7 +93,10 @@ export function GitReviewDocumentView({
   const diffContent = documentContent({
     appearance,
     context,
+    contextId,
     diffRef,
+    ...(entries === undefined ? {} : { entries }),
+    gitRootPath,
     onItemError,
     onFeedbackChange,
     onRenderWindowChange,
@@ -134,10 +137,8 @@ export function GitReviewDocumentView({
           failures={failureSummary.visibleFailures}
           hasHiddenFailures={failureSummary.hasHiddenFailures}
           indexFailure={indexFailure}
-          navigationError={navigationError}
           onRetryFailure={onRetryFailure}
           onRetryIndex={onRetryIndex}
-          onRetryNavigation={onRetryNavigation}
           {...(renderFeedback === null
             ? {}
             : { onRetryRender: renderFeedback.retry })}
@@ -153,7 +154,10 @@ export function GitReviewDocumentView({
 function documentContent(options: {
   readonly appearance: RendererPluginAppearance;
   readonly context: RendererPluginContext;
+  readonly contextId: string;
   readonly diffRef: (handle: PierDiffViewHandle | null) => void;
+  readonly entries?: readonly GitReviewIndexEntry[];
+  readonly gitRootPath: string;
   readonly onItemError: (id: string, error: Error | null) => void;
   readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
   readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
@@ -167,7 +171,12 @@ function documentContent(options: {
         <ReviewCodeView
           appearance={options.appearance}
           context={options.context}
+          contextId={options.contextId}
           diffRef={options.diffRef}
+          {...(options.entries === undefined
+            ? {}
+            : { entries: options.entries })}
+          {...(options.gitRootPath ? { gitRootPath: options.gitRootPath } : {})}
           items={options.projection.items}
           onFeedbackChange={options.onFeedbackChange}
           onItemError={options.onItemError}

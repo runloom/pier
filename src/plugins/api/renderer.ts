@@ -405,7 +405,9 @@ export interface RendererPluginContext {
     t(
       key: string,
       values?: RendererPluginMessageValues,
-      fallback?: string
+      fallback?: string,
+      /** 覆盖 i18next.language；review 投影等必须用 appearance.locale。 */
+      locale?: string
     ): string;
   };
   lifecycle: {

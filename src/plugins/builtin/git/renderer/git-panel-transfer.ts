@@ -52,11 +52,13 @@ import {
 const GIT_REVIEW_SCOPE_KEY = "source";
 const GIT_REVIEW_ANCHOR_KEY = "anchor";
 const GIT_REVIEW_SELECTED_ENTRY_KEY = "selectedEntryKey";
+const GIT_REVIEW_SELECTED_SECTION_KEY = "selectedSectionKey";
 
 interface GitPreparedState {
   readonly anchor: PierDiffViewAnchor | null;
   readonly scope: GitReviewScope;
   readonly selectedEntryKey: string | null;
+  readonly selectedSectionKey: string | null;
 }
 
 function readScopeFromParams(
@@ -90,7 +92,11 @@ function readPreparedState(
     typeof record[GIT_REVIEW_SELECTED_ENTRY_KEY] === "string"
       ? (record[GIT_REVIEW_SELECTED_ENTRY_KEY] as string)
       : null;
-  return { anchor, scope: scope.data, selectedEntryKey };
+  const selectedSectionKey =
+    typeof record[GIT_REVIEW_SELECTED_SECTION_KEY] === "string"
+      ? (record[GIT_REVIEW_SELECTED_SECTION_KEY] as string)
+      : null;
+  return { anchor, scope: scope.data, selectedEntryKey, selectedSectionKey };
 }
 
 function sourceKeyOf(scope: GitReviewScope): ReviewSessionSourceKey {
@@ -118,6 +124,8 @@ export function createGitPanelTransferRegistration(): PanelTransferRegistration 
           [GIT_REVIEW_ANCHOR_KEY]: (session?.anchor ??
             null) as unknown as JsonValue,
           [GIT_REVIEW_SELECTED_ENTRY_KEY]: session?.selectedEntryKey ?? null,
+          [GIT_REVIEW_SELECTED_SECTION_KEY]:
+            session?.selectedSectionKey ?? null,
         } as unknown as JsonValue,
       };
     },
@@ -137,6 +145,8 @@ export function createGitPanelTransferRegistration(): PanelTransferRegistration 
           anchor: parsed.anchor ?? existing.anchor,
           selectedEntryKey:
             parsed.selectedEntryKey ?? existing.selectedEntryKey,
+          selectedSectionKey:
+            parsed.selectedSectionKey ?? existing.selectedSectionKey,
         });
       }
       return { params: scopeToParams(parsed.scope) };
