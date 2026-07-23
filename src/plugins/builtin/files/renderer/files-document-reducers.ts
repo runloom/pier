@@ -397,12 +397,16 @@ export function withDocumentDeletedOnDisk(
 ): FilesDocument {
   return {
     ...document,
+    // Keep the in-memory buffer; clear revision so Save recreates with
+    // expected: absent instead of treating deletion as a revision conflict.
+    conflictDiskContents: null,
     deletedOnDisk: true,
     dirty: true,
     diskConflict: true,
     error: null,
     hasBackingStore: false,
     loadState: "loaded",
+    revision: null,
     saveState: "idle",
   };
 }

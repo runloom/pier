@@ -51,6 +51,12 @@ describe("FileEditorController governance", () => {
     );
   });
 
+  it("does not revive the whole-tree search loader", () => {
+    expect(existsSync(join(rendererDir, "files-tree-search-loader.ts"))).toBe(
+      false
+    );
+  });
+
   it("keeps the document store independent from React and CodeMirror", () => {
     const store = source("files-document-store.ts");
     expect(store).not.toMatch(/from ["']react["']/);

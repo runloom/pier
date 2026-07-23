@@ -121,19 +121,11 @@ export function isDiskSourceRootAllowed(
   ].some((candidate) => candidate === root);
 }
 
-export type FileViewMode = "diff" | "preview" | "rich" | "source";
+export type FileViewMode = "diff" | "preview" | "source";
 
-// Reserved document-operation vocabulary. Current capability assignment is
-// intentionally narrower than this union: disk text files may save, while
-// temporary Markdown files have no file-system capabilities. Enabling any
-// other operation requires adding matching UI, confirmation flows, and tests.
-export type FilesDocumentCapability =
-  | "delete"
-  | "move"
-  | "rename"
-  | "reveal"
-  | "save"
-  | "saveAs";
+// Document save capabilities only. Path ops (delete/move/rename/reveal) live on
+// tree actions, not the document capability list.
+export type FilesDocumentCapability = "save" | "saveAs";
 
 export interface FilesDocument {
   /** Disk mtime captured at last successful load/save; used for write conflict checks. */

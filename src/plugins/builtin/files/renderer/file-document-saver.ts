@@ -150,13 +150,15 @@ export class FileDocumentSaver {
     | "compare"
     | "noop"
   > {
-    const initial = await this.#writeExpected(
-      document,
-      contents,
-      document.revision
-        ? { kind: "revision", revision: document.revision }
-        : { kind: "absent" }
-    );
+    // External deletion clears revision; recreate with absent so Save skips
+    // the false "changed on disk" dialog.
+    let expected: FileDocumentExpectedState;
+    if (document.deletedOnDisk || !document.revision) {
+      expected = { kind: "absent" };
+    } else {
+      expected = { kind: "revision", revision: document.revision };
+    }
+    const initial = await this.#writeExpected(document, contents, expected);
     if (initial.kind === "written") {
       return initial;
     }
@@ -197,11 +199,11 @@ export class FileDocumentSaver {
       path: document.source.path,
       root: document.source.root,
     });
-    let expected: FileDocumentExpectedState;
+    let overwriteExpected: FileDocumentExpectedState;
     if (inspection.kind === "absent") {
-      expected = { kind: "absent" };
+      overwriteExpected = { kind: "absent" };
     } else if (inspection.kind === "existing") {
-      expected = { kind: "revision", revision: inspection.revision };
+      overwriteExpected = { kind: "revision", revision: inspection.revision };
     } else {
       throw new Error(
         inspection.kind === "not-writable"
@@ -212,7 +214,11 @@ export class FileDocumentSaver {
             )
       );
     }
-    const overwritten = await this.#writeExpected(document, contents, expected);
+    const overwritten = await this.#writeExpected(
+      document,
+      contents,
+      overwriteExpected
+    );
     if (overwritten.kind === "written") {
       return overwritten;
     }

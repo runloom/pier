@@ -6,8 +6,7 @@ import { FilesLineDiff } from "./files-line-diff.tsx";
 import { MarkdownPreview } from "./markdown-preview.tsx";
 
 const DEFAULT_LABELS = {
-  diffUnsupported: "Diff view is not enabled yet.",
-  richUnsupported: "Rich Markdown editing is not enabled yet.",
+  diffUnsupported: "No disk contents available to compare.",
   sourceEditor: "Source editor",
 };
 
@@ -57,10 +56,6 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
         value={props.value}
       />
     );
-  }
-
-  if (props.mode === "rich") {
-    return <UnsupportedFileView label={labels.richUnsupported} />;
   }
 
   return <CodeMirrorEditor {...props} />;

@@ -3,7 +3,6 @@ import {
   cp,
   lstat,
   mkdir,
-  readdir,
   readFile,
   realpath,
   rename,
@@ -19,7 +18,6 @@ import type {
   FileCopyResult,
   FileDocumentReadResult,
   FileDocumentWriteResult,
-  FileEntry,
   FileExistsRequest,
   FileExistsResult,
   FileInspectPathImpactRequest,
@@ -54,6 +52,7 @@ import {
   inspectFileWriteTarget,
   readFileDocument,
 } from "./file-document-reader.ts";
+import { listScopedDirectoryEntries } from "./file-list-entries.ts";
 import { movePathNoReplace } from "./file-move-no-replace.ts";
 import { openPathViaElectronShell } from "./file-open-path.ts";
 import { resolveExistingFileIdentity } from "./file-path-identity.ts";
@@ -260,19 +259,7 @@ export function createFileService(
         request.root,
         request.path
       );
-      const entries = await readdir(target, { withFileTypes: true });
-      return entries
-        .map<FileEntry>((entry) => {
-          const path = request.path
-            ? `${request.path}/${entry.name}`
-            : entry.name;
-          return {
-            kind: entry.isDirectory() ? "directory" : "file",
-            path,
-            root: request.root,
-          };
-        })
-        .sort((left, right) => left.path.localeCompare(right.path));
+      return await listScopedDirectoryEntries(request, target);
     },
     inspectWriteTarget: (request) =>
       inspectFileWriteTarget(request, safeWriter),
