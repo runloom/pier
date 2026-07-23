@@ -54,7 +54,7 @@ describe("interactive density governance", () => {
     expect(density).toContain('CONTROL_ICON_SIZE_CLASS = "size-7"');
     expect(density).toContain('CONTROL_ICON_HIT_COMPACT_CLASS = "size-6"');
     expect(density).toContain(
-      "CONTROL_ICON_GLYPH_CLASS =\n  \"[&_svg:not([class*='size-'])]:size-4\""
+      "CONTROL_ICON_GLYPH_CLASS = \"[&_svg:not([class*='size-'])]:size-4\""
     );
     expect(density).toContain(
       "CONTROL_ICON_GLYPH_COMPACT_CLASS =\n  \"[&_svg:not([class*='size-'])]:size-3.5\""

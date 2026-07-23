@@ -402,7 +402,17 @@ describe("MarkdownPreview", () => {
       );
       await screen.findByRole("heading", { name: "Target" });
       await waitFor(() => {
-        expect(scrollIntoView).toHaveBeenCalledOnce();
+        // Pagination scrolls the heading (block:start). TOC may also scroll
+        // tick/panel chrome (block:nearest) when scroll-spy activates.
+        expect(
+          scrollIntoView.mock.calls.filter(
+            (call) =>
+              call[0] &&
+              typeof call[0] === "object" &&
+              "block" in call[0] &&
+              call[0].block === "start"
+          )
+        ).toHaveLength(1);
       });
 
       view.rerender(
@@ -417,7 +427,15 @@ describe("MarkdownPreview", () => {
         />
       );
       await waitFor(() => {
-        expect(scrollIntoView).toHaveBeenCalledTimes(2);
+        expect(
+          scrollIntoView.mock.calls.filter(
+            (call) =>
+              call[0] &&
+              typeof call[0] === "object" &&
+              "block" in call[0] &&
+              call[0].block === "start"
+          )
+        ).toHaveLength(2);
       });
     } finally {
       HTMLElement.prototype.scrollIntoView = originalScroll;

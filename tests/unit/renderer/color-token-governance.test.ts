@@ -31,6 +31,9 @@ const COLOR_MIX_OWNERS = new Set([
   // Table thead chrome mirrors code-block `bg-muted/40` (Tailwind class unavailable
   // in this CSS entry without @reference).
   "src/plugins/builtin/files/renderer/markdown-prose.css",
+  // Pierre Diff header hover mixes muted into background inside unsafeCSS
+  // (shadow DOM cannot consume Tailwind opacity utilities).
+  "packages/ui/src/diff-view-appearance.ts",
   "src/renderer/app/globals.css",
   "src/renderer/lib/plugins/mermaid-render.worker.ts",
 ]);

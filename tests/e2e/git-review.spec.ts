@@ -28,6 +28,22 @@ function createTemporaryDirectory(prefix: string): string {
   return realpathSync(mkdtempSync(join(tmpdir(), prefix)));
 }
 
+/**
+ * Half-staged files appear under both Staged Changes and Changes. Pierre's
+ * virtual tree keeps treeitems flat under the tree, so disambiguate by order:
+ * conflict → staged → unstaged (see TREE_GROUP_ORDER).
+ */
+function reviewTreeFileItem(
+  page: Page,
+  name: RegExp,
+  group: "staged" | "unstaged" = "unstaged"
+): Locator {
+  const items = page
+    .getByTestId("git-review-tree")
+    .getByRole("treeitem", { name });
+  return group === "staged" ? items.first() : items.last();
+}
+
 async function git(cwd: string, args: string[]): Promise<void> {
   await execFileAsync("git", args, { cwd });
 }
@@ -461,11 +477,9 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(
       page.locator('[data-panel-tab-id^="pier.git.diff:"]')
     ).toHaveCount(0);
-    await expect(page.getByRole("treeitem", { name: /app\.tsx/u })).toBeVisible(
-      {
-        timeout: 20_000,
-      }
-    );
+    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
+      timeout: 20_000,
+    });
     await expect(page.getByTestId("pierre-diff-root")).toBeVisible({
       timeout: 30_000,
     });
@@ -655,9 +669,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     ).toBeVisible();
     await reviewTreeSearch.press("Escape");
     await expect(page.getByTestId("git-review-tree-search-bar")).toHaveCount(0);
-    await expect(
-      page.getByRole("treeitem", { name: /app\.tsx/u })
-    ).toBeVisible();
+    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible();
     await expect(
       page.getByRole("treeitem", { name: /script\.py/u, selected: true })
     ).toBeVisible();
@@ -742,10 +754,10 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     });
     await appTreeSearch.fill("app.tsx");
     await appTreeSearch.press("Enter");
-    await expect(page.getByRole("treeitem", { name: /app\.tsx/u })).toBeVisible(
-      { timeout: 10_000 }
-    );
-    await page.getByRole("treeitem", { name: /app\.tsx/u }).click();
+    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
+      timeout: 10_000,
+    });
+    await reviewTreeFileItem(page, /app\.tsx/u).click();
     await appTreeSearch.press("Escape").catch(() => undefined);
 
     const diffContainers = page.locator("diffs-container");
@@ -873,7 +885,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(page.getByTestId("pierre-diff-root")).toBeVisible({
       timeout: 30_000,
     });
-    await page.getByRole("treeitem", { name: /app\.tsx/u }).click();
+    await reviewTreeFileItem(page, /app\.tsx/u).click();
     await selectTheme(page, { id: "light", label: /Light|浅色/u });
     await expect
       .poll(
@@ -1574,7 +1586,11 @@ test("opens POSIX backslash paths through the real tree keyboard flow", async ()
           tree
             .locator('[role="treeitem"][data-item-path]')
             .evaluateAll((rows) =>
-              rows.map((row) => (row as HTMLElement).dataset.itemPath ?? "")
+              rows.map((row) => {
+                const treePath = (row as HTMLElement).dataset.itemPath ?? "";
+                const slash = treePath.indexOf("/");
+                return slash < 0 ? treePath : treePath.slice(slash + 1);
+              })
             ),
         { timeout: 20_000 }
       )
@@ -1589,13 +1605,17 @@ test("opens POSIX backslash paths through the real tree keyboard flow", async ()
     const renderedPaths = await tree
       .locator('[role="treeitem"][data-item-path]')
       .evaluateAll((rows) =>
-        rows.map((row) => (row as HTMLElement).dataset.itemPath ?? "")
+        rows.map((row) => {
+          const treePath = (row as HTMLElement).dataset.itemPath ?? "";
+          const slash = treePath.indexOf("/");
+          return slash < 0 ? treePath : treePath.slice(slash + 1);
+        })
       );
     expect(renderedPaths).not.toContain("src/dir");
     expect(renderedPaths).not.toContain("src/..");
 
     const srcDirectory = tree.locator(
-      '[role="treeitem"][data-item-path="src/"]'
+      '[role="treeitem"][data-item-path$="/src"]'
     );
     await expect(srcDirectory).toBeVisible();
     if ((await srcDirectory.getAttribute("aria-expanded")) === "true") {
@@ -1714,9 +1734,9 @@ test("same-group tab switch restores Changes tree and diff immediately", async (
     const reviewId = reviewIds[0] as string;
     expect(await panelSharesGroup(page, terminalId, reviewId)).toBe(true);
 
-    await expect(page.getByRole("treeitem", { name: /app\.tsx/u })).toBeVisible(
-      { timeout: 20_000 }
-    );
+    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
+      timeout: 20_000,
+    });
     await page.getByRole("treeitem", { name: /script\.py/u }).click();
     await expect
       .poll(() => isDiffTextInViewport(page, "return 2"), { timeout: 30_000 })
@@ -1726,9 +1746,9 @@ test("same-group tab switch restores Changes tree and diff immediately", async (
     await page.locator(`[data-panel-tab-id="${terminalId}"]`).click();
     await page.locator(`[data-panel-tab-id="${reviewId}"]`).click();
 
-    await expect(page.getByRole("treeitem", { name: /app\.tsx/u })).toBeVisible(
-      { timeout: 1000 }
-    );
+    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
+      timeout: 1000,
+    });
     await expect
       .poll(() => isDiffTextInViewport(page, "return 2"), { timeout: 1000 })
       .toBe(true);
@@ -1736,7 +1756,7 @@ test("same-group tab switch restores Changes tree and diff immediately", async (
       page.getByRole("status", { name: /Loading changes|加载变更/u })
     ).toHaveCount(0);
 
-    await page.getByRole("treeitem", { name: /app\.tsx/u }).click();
+    await reviewTreeFileItem(page, /app\.tsx/u).click();
     await expect
       .poll(() => isDiffTextInViewport(page, "value = 3"), { timeout: 30_000 })
       .toBe(true);

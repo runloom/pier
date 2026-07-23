@@ -33,6 +33,9 @@ function findTreeEntry(target: {
     if (byId) {
       return byId;
     }
+    // Explicit instance id that is not mounted must not steal another same-root
+    // tree (e.g. open-search targeting a closed sidebar instance).
+    return null;
   }
   if (target.root) {
     let lastMatch: FilesTreeRegistryEntry | null = null;

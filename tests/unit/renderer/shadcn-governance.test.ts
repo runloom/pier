@@ -11,6 +11,8 @@ const SOURCE_ROOTS = [
   join(ROOT, "packages", "plugin-codex", "src", "renderer"),
 ];
 const RAW_BUTTON_OWNERS = new Set([
+  // Markdown outline tick / hover list uses raw buttons for Notion-style rail geometry.
+  "src/plugins/builtin/files/renderer/markdown-preview-toc.tsx",
   // shadcn SidebarRail 的上游实现需要独立命中区域。
   "src/renderer/components/primitives/sidebar.tsx",
   // Dockview tab action 必须保留其原生 class 与事件边界。

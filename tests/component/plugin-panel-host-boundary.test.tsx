@@ -48,7 +48,8 @@ describe("plugin panel host boundary", () => {
         tab: { icon: { id: "pier.file:file.ts" } },
       })
     );
-    expect(setTitle).toHaveBeenCalledWith("file.ts");
+    // Title already matches restored chrome — skip no-op setTitle churn.
+    expect(setTitle).not.toHaveBeenCalled();
 
     view.unmount();
     expect(
