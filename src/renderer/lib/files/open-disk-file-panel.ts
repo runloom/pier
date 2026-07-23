@@ -119,7 +119,9 @@ export function openFilesDiskPath(input: {
 
   const result = openPluginPanelInstance({
     componentId: FILES_FILE_PANEL_COMPONENT_ID,
-    ...(existing || !input.context ? {} : { context: input.context }),
+    // Always refresh context when caller provides one — reusing an existing
+    // instance used to drop context and trip outside-workspace restore.
+    ...(input.context ? { context: input.context } : {}),
     dropUnpinnedInstances: !existing,
     instanceId,
     params,

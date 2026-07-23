@@ -52,9 +52,33 @@ describe("interactive density governance", () => {
 
     expect(density).toContain('CONTROL_HEIGHT_CLASS = "h-7"');
     expect(density).toContain('CONTROL_ICON_SIZE_CLASS = "size-7"');
+    expect(density).toContain('CONTROL_ICON_HIT_COMPACT_CLASS = "size-6"');
+    expect(density).toContain(
+      "CONTROL_ICON_GLYPH_CLASS = \"[&_svg:not([class*='size-'])]:size-4\""
+    );
+    expect(density).toContain(
+      "CONTROL_ICON_GLYPH_COMPACT_CLASS =\n  \"[&_svg:not([class*='size-'])]:size-3.5\""
+    );
+    expect(density).toContain(
+      "CONTROL_ICON_GLYPH_SM_CLASS =\n  \"[&_svg:not([class*='size-'])]:size-3\""
+    );
     expect(density).toContain(
       'MENU_ITEM_DENSITY_CLASS = "min-h-7 py-1 text-sm leading-5"'
     );
+  });
+
+  it("keeps icon-xs on compact hit with 14px glyph token", () => {
+    const button = source("packages/ui/src/button.tsx");
+
+    expect(button).toContain("CONTROL_ICON_HIT_COMPACT_CLASS");
+    expect(button).toContain("CONTROL_ICON_GLYPH_CLASS");
+    expect(button).toContain("CONTROL_ICON_GLYPH_COMPACT_CLASS");
+    expect(button).toContain("CONTROL_ICON_GLYPH_SM_CLASS");
+    // icon-xs uses the compact glyph token — not a raw size-3 (text xs only).
+    expect(button).toMatch(
+      /"icon-xs":\s*cn\(\s*CONTROL_ICON_HIT_COMPACT_CLASS,\s*CONTROL_ICON_GLYPH_COMPACT_CLASS\s*\)/
+    );
+    expect(button).not.toMatch(/"icon-xs":\s*[^,\n]*size-3[^\d.]/);
   });
 
   it("routes standard control height through the shared contract", () => {

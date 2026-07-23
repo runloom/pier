@@ -26,6 +26,7 @@ export interface ReviewSessionCacheEntry {
   readonly loadedByEntryKey: ReadonlyMap<string, LoadedReviewDocument>;
   readonly retainedEntryKeys: readonly string[];
   readonly selectedEntryKey: string | null;
+  readonly selectedSectionKey: string | null;
   readonly sourceKey: ReviewSessionSourceKey;
 }
 
@@ -147,6 +148,7 @@ function normalizeEntry(
     loadedByEntryKey: trimmed.loadedByEntryKey,
     retainedEntryKeys: trimmed.retainedEntryKeys,
     selectedEntryKey: entry.selectedEntryKey,
+    selectedSectionKey: entry.selectedSectionKey,
     sourceKey: entry.sourceKey,
   };
 }
@@ -189,6 +191,7 @@ export function patchReviewSession(
       loadedByEntryKey: patch.loadedByEntryKey ?? new Map(),
       retainedEntryKeys: patch.retainedEntryKeys ?? [],
       selectedEntryKey: patch.selectedEntryKey ?? null,
+      selectedSectionKey: patch.selectedSectionKey ?? null,
       sourceKey,
     });
     return;
@@ -211,6 +214,10 @@ export function patchReviewSession(
       patch.selectedEntryKey === undefined
         ? existing.selectedEntryKey
         : patch.selectedEntryKey,
+    selectedSectionKey:
+      patch.selectedSectionKey === undefined
+        ? existing.selectedSectionKey
+        : patch.selectedSectionKey,
     sourceKey,
   };
   sessions.delete(sourceKey);

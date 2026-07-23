@@ -402,7 +402,17 @@ describe("MarkdownPreview", () => {
       );
       await screen.findByRole("heading", { name: "Target" });
       await waitFor(() => {
-        expect(scrollIntoView).toHaveBeenCalledOnce();
+        // Pagination scrolls the heading (block:start). TOC may also scroll
+        // tick/panel chrome (block:nearest) when scroll-spy activates.
+        expect(
+          scrollIntoView.mock.calls.filter(
+            (call) =>
+              call[0] &&
+              typeof call[0] === "object" &&
+              "block" in call[0] &&
+              call[0].block === "start"
+          )
+        ).toHaveLength(1);
       });
 
       view.rerender(
@@ -417,7 +427,15 @@ describe("MarkdownPreview", () => {
         />
       );
       await waitFor(() => {
-        expect(scrollIntoView).toHaveBeenCalledTimes(2);
+        expect(
+          scrollIntoView.mock.calls.filter(
+            (call) =>
+              call[0] &&
+              typeof call[0] === "object" &&
+              "block" in call[0] &&
+              call[0].block === "start"
+          )
+        ).toHaveLength(2);
       });
     } finally {
       HTMLElement.prototype.scrollIntoView = originalScroll;
@@ -596,8 +614,7 @@ describe("MarkdownPreview", () => {
     });
   });
 
-  it("keeps the find bar opposite the right outline", async () => {
-    localStorage.removeItem("pier.files.markdown.tocSide");
+  it("keeps the find bar on the left opposite the right outline", async () => {
     const runtime = immediateRuntime();
     const view = render(
       <MarkdownPreview
@@ -639,13 +656,11 @@ describe("MarkdownPreview", () => {
     const searchBar = await screen.findByTestId("files-markdown-search-bar");
     expect(searchBar.className).toContain("left-3");
     expect(searchBar.className).not.toContain("right-3");
-    localStorage.removeItem("pier.files.markdown.tocSide");
   });
 
   it("applies markdown-prose root without heading underlines and scales via --md-scale", async () => {
     localStorage.removeItem("pier.files.markdown.fontScale");
     localStorage.removeItem("pier.files.markdown.measureMode");
-    localStorage.removeItem("pier.files.markdown.tocSide");
     const openImage = vi.fn();
     const registerSelectionSelectAllProvider = vi.fn<
       (surface: string, selectAll: () => boolean) => () => void
@@ -726,22 +741,20 @@ describe("MarkdownPreview", () => {
       expect(scaled.style.getPropertyValue("--md-scale")).toBe("1.15");
     });
 
-    const { writeMarkdownMeasureMode, writeMarkdownTocSide } = await import(
+    const { writeMarkdownMeasureMode } = await import(
       "@plugins/builtin/files/renderer/markdown-preview-preferences.ts"
     );
     writeMarkdownMeasureMode("wide");
-    writeMarkdownTocSide("left");
     await waitFor(() => {
       expect(
         container.querySelector('[data-slot="markdown-prose"]')
       ).toHaveAttribute("data-measure", "wide");
       expect(
         container.querySelector('[data-slot="markdown-preview-toc"]')
-      ).toHaveAttribute("data-side", "left");
+      ).toHaveAttribute("data-side", "right");
     });
 
     localStorage.removeItem("pier.files.markdown.fontScale");
     localStorage.removeItem("pier.files.markdown.measureMode");
-    localStorage.removeItem("pier.files.markdown.tocSide");
   });
 });

@@ -594,6 +594,17 @@ describe("files-panel-transfer", () => {
     });
     expect(takeFilesPanelViewSeed({ panelId: "panel-seed" })).toBeNull();
   });
+
+  it("coerces legacy rich transfer view mode to source", () => {
+    const parsed = parseFilesPanelTransferPreparedState({
+      sourceDocumentId: "doc-a",
+      targetDocumentId: "doc-b",
+      targetSource: { kind: "disk", path: PATH, root: ROOT },
+      view: { mode: "rich" },
+    });
+    expect(parsed).not.toBeNull();
+    expect(parsed?.view.mode).toBe("source");
+  });
 });
 
 describe("FilesMutationSuspendCoordinator", () => {

@@ -15,7 +15,6 @@ import {
   useMemo,
   useRef,
   useState,
-  useSyncExternalStore,
 } from "react";
 import {
   CommandsView,
@@ -29,11 +28,6 @@ import {
   quickPickQueryItem,
 } from "@/components/common/command-palette-quick-pick-view.tsx";
 import { useT } from "@/i18n/use-t.ts";
-import {
-  actionRegistry,
-  getActionRegistryVersion,
-  subscribeActionRegistry,
-} from "@/lib/actions/registry.ts";
 import type { Action } from "@/lib/actions/types.ts";
 import {
   groupActionsForPalette as groupActionsForPaletteImpl,
@@ -42,74 +36,24 @@ import {
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
 import type { QuickPickItem } from "@/lib/command-palette/types.ts";
-import { useCommandPaletteScroll } from "@/lib/command-palette/use-command-palette-scroll.ts";
-import { useQuickPickQueryChange } from "@/lib/command-palette/use-quick-pick-query-change.ts";
-import { formatChord } from "@/lib/keybindings/formatter.ts";
+import { useCommandPaletteCommandsSelection } from "@/lib/command-palette/use-command-palette-commands-selection.ts";
 import {
-  getKeybindingRegistryVersion,
-  keybindingRegistry,
-  subscribeKeybindingRegistry,
-} from "@/lib/keybindings/registry.ts";
-import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
+  useCommandPaletteActions,
+  useCommandPaletteKeybindingLabels,
+} from "@/lib/command-palette/use-command-palette-data.ts";
+import { useCommandPaletteScroll } from "@/lib/command-palette/use-command-palette-scroll.ts";
+import { useCommandPointerSelectionGate } from "@/lib/command-palette/use-command-pointer-selection-gate.ts";
+import { useQuickPickQueryChange } from "@/lib/command-palette/use-quick-pick-query-change.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
 
-function useActions(): readonly Action[] {
-  const version = useSyncExternalStore(
-    subscribeActionRegistry,
-    getActionRegistryVersion,
-    () => 0
-  );
-  return useMemo(
-    () =>
-      readVersionedSnapshot(version, () =>
-        actionRegistry.list("command-palette")
-      ),
-    [version]
-  );
-}
-
-/**
- * 反查每个 actionId 当前生效的 keybinding 文案. 订阅两个 registry 的 version
- * 触发重渲；只有任一 registry 版本变化时才重建映射。
- */
-function useKeybindingLabels(): ReadonlyMap<string, string> {
-  const actionVersion = useSyncExternalStore(
-    subscribeActionRegistry,
-    getActionRegistryVersion,
-    () => 0
-  );
-  const keybindingVersion = useSyncExternalStore(
-    subscribeKeybindingRegistry,
-    getKeybindingRegistryVersion,
-    () => 0
-  );
-  return useMemo(
-    () =>
-      readVersionedSnapshot(actionVersion + keybindingVersion, () => {
-        const map = new Map<string, string>();
-        for (const action of actionRegistry.list("command-palette")) {
-          const first = keybindingRegistry.getFirstBindingFor(
-            action.id,
-            action.metadata?.shortcutSourceId
-          );
-          if (first) {
-            map.set(action.id, formatChord(first.chord));
-          }
-        }
-        return map;
-      }),
-    [actionVersion, keybindingVersion]
-  );
-}
-
 export function CommandPalette() {
   const t = useT();
   const controller = useCommandPaletteController();
-  const actions = useActions();
-  const keybindingLabels = useKeybindingLabels();
+  const actions = useCommandPaletteActions();
+  const keybindingLabels = useCommandPaletteKeybindingLabels();
   const frecencyMap = useCommandPaletteMru((s) => s.frecencyMap);
 
   // 本地 UI 态: 与 controller 保持同步, 但 cmdk 需要 controlled value/query 引用稳定。
@@ -150,6 +94,9 @@ export function CommandPalette() {
     requestId,
     selectedValue,
   });
+  const pointerSelectionGate = useCommandPointerSelectionGate(
+    `${isOpen}:${requestId}:${normalizedQuery}:${mode}`
+  );
   const [retainedPresentation, setRetainedPresentation] = useState({
     mode,
     quickPick,
@@ -364,15 +311,14 @@ export function CommandPalette() {
     }
   };
 
-  useEffect(() => {
-    if (mode !== "commands" || normalizedQuery.length === 0) {
-      return;
-    }
-    if (rankedActions.some((action) => action.id === selectedValue)) {
-      return;
-    }
-    setSelectedValue(rankedActions[0]?.id ?? "");
-  }, [mode, normalizedQuery, rankedActions, selectedValue]);
+  useCommandPaletteCommandsSelection({
+    groups,
+    mode,
+    normalizedQuery,
+    rankedActions,
+    selectedValue,
+    setSelectedValue,
+  });
 
   const handleAcceptQuickPickItem = async (item: QuickPickItem) => {
     if (!(quickPick && isQuickPickItemSelectable(quickPick, item))) {
@@ -466,6 +412,7 @@ export function CommandPalette() {
       <Command
         loop
         onKeyDown={handleCommandKeyDown}
+        onPointerMoveCapture={pointerSelectionGate.onPointerMoveCapture}
         onValueChange={handleValueChange}
         shouldFilter={false}
         value={selectedValue}

@@ -26,6 +26,9 @@ export const agentRuntimeIndexEntrySchema = z
     cwd: z.string().min(1).optional(),
     projectRootPath: z.string().min(1).optional(),
     worktreeKey: z.string().min(1).optional(),
+    /** 产品会话名（透传 FA；≠ OSC）。P0 通常缺席。 */
+    sessionTitle: z.string().min(1).max(40).optional(),
+    sessionTitleSource: z.enum(["user", "auto"]).optional(),
   })
   .strict();
 
@@ -123,6 +126,12 @@ export function projectAgentActivities(
       ...(activity.stateStartedAt === undefined
         ? {}
         : { stateStartedAt: activity.stateStartedAt }),
+      ...(activity.sessionTitle === undefined
+        ? {}
+        : { sessionTitle: activity.sessionTitle }),
+      ...(activity.sessionTitleSource === undefined
+        ? {}
+        : { sessionTitleSource: activity.sessionTitleSource }),
       ...(context?.cwd ? { cwd: context.cwd } : {}),
       ...(context?.projectRootPath
         ? { projectRootPath: context.projectRootPath }

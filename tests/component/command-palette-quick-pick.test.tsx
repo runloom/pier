@@ -261,7 +261,7 @@ describe("CommandPalette quick pick rows", () => {
               { label: "标签 1/2", variant: "outline" },
             ],
             description: "切换",
-            detail: "/Users/xyz/ABC/pier",
+            detail: "/Users/dev/ABC/pier",
             id: "terminal-1",
             label: "pier",
           },
@@ -275,7 +275,7 @@ describe("CommandPalette quick pick rows", () => {
     });
     expect(screen.getByText("第 1 组")).toBeVisible();
     expect(screen.getByText("标签 1/2")).toBeVisible();
-    expect(screen.getByText("/Users/xyz/ABC/pier")).toBeVisible();
+    expect(screen.getByText("/Users/dev/ABC/pier")).toBeVisible();
 
     const row = screen.getByText("pier").closest("[cmdk-item]");
     expect(row).toHaveTextContent("切换");
@@ -334,7 +334,7 @@ describe("CommandPalette quick pick rows", () => {
               {
                 badges: [{ label: "标签 1/2", variant: "outline" }],
                 checked: true,
-                detail: "/Users/xyz/ABC/pier",
+                detail: "/Users/dev/ABC/pier",
                 id: "terminal-1",
                 label: "pier",
               },
@@ -347,7 +347,7 @@ describe("CommandPalette quick pick rows", () => {
               {
                 badges: [{ label: "已关闭", variant: "secondary" }],
                 description: "重新打开",
-                detail: "/Users/xyz/ABC/pier · 刚刚",
+                detail: "/Users/dev/ABC/pier · 刚刚",
                 id: "recent-1",
                 label: "Claude Code",
               },
@@ -450,13 +450,13 @@ describe("CommandPalette quick pick rows", () => {
             id: "group-1",
             items: [
               {
-                detail: "/Users/xyz/ABC/pier",
+                detail: "/Users/dev/ABC/pier",
                 id: "panel:terminal-1",
                 label: "pier",
                 searchTerms: ["terminal-1", "main"],
               },
               {
-                detail: "/Users/xyz/ABC/loomdesk",
+                detail: "/Users/dev/ABC/loomdesk",
                 id: "panel:terminal-2",
                 label: "workspace",
                 searchTerms: ["terminal-2", "loomdesk", "agent-run"],

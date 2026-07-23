@@ -5,6 +5,7 @@ import {
   commandExistsOnPath,
   createNestedJsonIntegration,
   type NestedJsonIntegrationSpec,
+  pierClaudeUserPromptSubmitCommand,
 } from "./shared.ts";
 
 const openclaudeConfigPath = () =>
@@ -14,6 +15,7 @@ const openclaudeConfigPath = () =>
  * OpenClaude hook 事件 → pier 事件名。
  * OpenClaude 是 Claude Code 的 fork，hook schema 与事件表与 claude.ts
  * 完全一致（wire-identical）：同 13 个事件，无 matcher。
+ * UserPromptSubmit 与 Claude 同走 dual-write（provider sessionTitle + Pier promptSnippet）。
  */
 const OPENCLAUDE_SPEC: NestedJsonIntegrationSpec = {
   agentId: "openclaude",
@@ -24,7 +26,11 @@ const OPENCLAUDE_SPEC: NestedJsonIntegrationSpec = {
     existsSync(openclaudeConfigPath()) || commandExistsOnPath("openclaude"),
   events: [
     { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
-    { nativeEvent: "UserPromptSubmit", pierEvent: "PromptSubmit" },
+    {
+      buildCommand: (agentId) => pierClaudeUserPromptSubmitCommand(agentId),
+      nativeEvent: "UserPromptSubmit",
+      pierEvent: "PromptSubmit",
+    },
     { nativeEvent: "PreToolUse", pierEvent: "ToolStart" },
     { nativeEvent: "PostToolUse", pierEvent: "ToolComplete" },
     { nativeEvent: "PostToolUseFailure", pierEvent: "ToolComplete" },

@@ -3,6 +3,7 @@ import { join } from "node:path";
 import {
   createNestedJsonIntegration,
   type NestedJsonIntegrationSpec,
+  pierClaudeUserPromptSubmitCommand,
   transformJsonConfig,
   withoutPierNestedHooks,
   withPierNestedHooks,
@@ -28,7 +29,11 @@ const CLAUDE_SPEC: NestedJsonIntegrationSpec = {
   detect: () => true,
   events: [
     { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
-    { nativeEvent: "UserPromptSubmit", pierEvent: "PromptSubmit" },
+    {
+      nativeEvent: "UserPromptSubmit",
+      pierEvent: "PromptSubmit",
+      buildCommand: (agentId) => pierClaudeUserPromptSubmitCommand(agentId),
+    },
     { nativeEvent: "PreToolUse", pierEvent: "ToolStart" },
     { nativeEvent: "PostToolUse", pierEvent: "ToolComplete" },
     { nativeEvent: "PostToolUseFailure", pierEvent: "ToolComplete" },

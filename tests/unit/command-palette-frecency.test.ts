@@ -102,6 +102,20 @@ describe("groupRank", () => {
       expect(r.order).toBe(8);
     }
   });
+
+  it("fallback group order uses metadata.categoryKey over display category", () => {
+    const actions = [
+      {
+        id: "plugin.worktree",
+        category: "Worktree",
+        handler: () => undefined,
+        metadata: { categoryKey: "worktree" as const },
+        title: () => "Create Worktree",
+      },
+    ];
+    const r = groupRank(actions, new Map());
+    expect(r).toEqual({ order: 2, tier: "fallback" });
+  });
 });
 
 describe("compareActions", () => {
@@ -129,6 +143,15 @@ describe("compareActions", () => {
 
   it("两个 fallback: 小 sortOrder 在前", () => {
     expect(compareActions(mkA("a", 1), mkA("b", 5), new Map())).toBeLessThan(0);
+  });
+
+  it("equal frecency falls back to sortOrder then id", () => {
+    const map = new Map([
+      ["a", 5],
+      ["b", 5],
+    ]);
+    expect(compareActions(mkA("a", 2), mkA("b", 1), map)).toBeGreaterThan(0);
+    expect(compareActions(mkA("a"), mkA("b"), map)).toBeLessThan(0);
   });
 });
 

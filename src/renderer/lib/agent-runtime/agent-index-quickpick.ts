@@ -1,5 +1,8 @@
 import { formatDurationShort } from "@pier/ui/format.tsx";
-import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import {
+  agentSessionTitleInput,
+  resolveAgentSessionTitle,
+} from "@shared/agent-session-title.ts";
 import {
   type AgentRuntimeIndexEntry,
   isAgentIndexNeedsYou,
@@ -33,7 +36,15 @@ export interface AgentIndexQuickPickModel {
 }
 
 function agentLabel(entry: AgentRuntimeIndexEntry): string {
-  return getAgentCatalogEntry(entry.agentId)?.label ?? entry.agentId;
+  return resolveAgentSessionTitle(
+    agentSessionTitleInput({
+      agentId: entry.agentId,
+      cwd: entry.cwd,
+      projectRootPath: entry.projectRootPath,
+      sessionTitle: entry.sessionTitle,
+      sessionTitleSource: entry.sessionTitleSource,
+    })
+  ).primary;
 }
 
 /**
@@ -65,11 +76,17 @@ function statusDurationLabel(
 
 function windowDetail(
   entry: AgentRuntimeIndexEntry,
-  preferredWindowId: string | undefined
+  options: {
+    preferredWindowId: string | undefined;
+    showWindowLabels: boolean;
+  }
 ): string {
   const pathHint = entry.projectRootPath ?? entry.cwd;
+  if (!options.showWindowLabels) {
+    return pathHint ?? "";
+  }
   const windowHint =
-    preferredWindowId && entry.windowId === preferredWindowId
+    options.preferredWindowId && entry.windowId === options.preferredWindowId
       ? i18next.t("agents.quickPick.thisWindow")
       : i18next.t("agents.quickPick.windowLabel", { id: entry.windowId });
   if (pathHint) {
@@ -80,16 +97,23 @@ function windowDetail(
 
 function toItem(
   entry: AgentRuntimeIndexEntry,
-  options: { now: number; preferredWindowId?: string }
+  options: {
+    now: number;
+    preferredWindowId?: string;
+    showWindowLabels: boolean;
+  }
 ): QuickPickItem {
   const statusLabel = statusSearchLabel(entry);
   const label = agentLabel(entry);
-  const detail = windowDetail(entry, options.preferredWindowId);
+  const detail = windowDetail(entry, {
+    preferredWindowId: options.preferredWindowId,
+    showWindowLabels: options.showWindowLabels,
+  });
   const description = statusDurationLabel(entry, options.now);
   return {
     data: entry,
     ...(description === undefined ? {} : { description }),
-    detail,
+    ...(detail === "" ? {} : { detail }),
     icon: Bot,
     id: entry.agentRef,
     label,
@@ -102,7 +126,7 @@ function toItem(
       entry.projectRootPath,
       entry.cwd,
       description,
-      detail,
+      detail === "" ? undefined : detail,
     ].filter((value): value is string => typeof value === "string"),
     ...(isAgentIndexNeedsYou(entry.status)
       ? { variant: "destructive" as const }
@@ -177,8 +201,10 @@ export function buildAgentIndexQuickPick(
   }
 
   const { needsYou, running, ready } = partition(limited);
+  const distinctWindowIds = new Set(limited.map((entry) => entry.windowId));
   const itemOpts = {
     now,
+    showWindowLabels: distinctWindowIds.size > 1,
     ...(options.preferredWindowId
       ? { preferredWindowId: options.preferredWindowId }
       : {}),

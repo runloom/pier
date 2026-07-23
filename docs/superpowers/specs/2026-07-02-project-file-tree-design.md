@@ -9,7 +9,7 @@ Pier 后续要支持两类相近但数据源不同的树：
 1. **Project Files Tree**：当前项目文件树，用于文件查看、打开、重命名、移动、删除、新建、reveal 当前文件。
 2. **Git Changes / Review Files Tree**：Git 变更文件树，用于审查 staged / unstaged / untracked / conflict 文件，点选后打开 diff、HEAD 内容或工作区内容。
 
-当前子 worktree `/Users/sheep/Xyz/pier-file-tree-plugins` 状态：
+当前子 worktree `/Users/dev/Xyz/pier-file-tree-plugins` 状态：
 
 - `packages/ui/package.json` 已引入 `@pierre/trees@1.0.0-beta.5`，`pnpm-lock.yaml` 已锁定 `packages/ui` importer。
 - `packages/ui/src/file-tree.tsx` 已有第一版 `PierFileTree` wrapper，但当前只覆盖静态 path 列表、尾部 text decoration、selection/open 回调。
@@ -1095,6 +1095,6 @@ tests/component/git-changes-plugin-panel.test.tsx
 - 架构边界：业务 panel 不直接 import `@pierre/trees` 或 dockview；main/preload/renderer 合同分层明确。
 - 大文件夹：已明确 direct children lazy load、tree/list 分工、cursor 预留和 fake path 禁止。
 - 无占位项：本文不含未决占位实现要求；未进入第一版的能力均列为明确非目标或阶段顺序。
-- Worktree 归属：本文位于 `/Users/sheep/Xyz/pier-file-tree-plugins` 子 worktree，不在主仓交付。
+- Worktree 归属：本文位于 `/Users/dev/Xyz/pier-file-tree-plugins` 子 worktree，不在主仓交付。
 - Patch gate：已明确 `@pierre/trees` 不支持 unloaded expandable directory 时必须 patch，且 patch 必须含 runtime directory-hints update surface；上游 primitive 缺口不得由递归扫描或 fake path 绕过。
 - 功能闭环：已覆盖初始加载、目录展开、watch event subscription、session close、reveal、file-service mutation、Files panel refresh、watch stale guard、Git diff/content 打开、测试验收。

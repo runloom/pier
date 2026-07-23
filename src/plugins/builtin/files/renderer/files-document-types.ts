@@ -112,28 +112,41 @@ export function isDiskSourceRootAllowed(
   root: string,
   context: PanelContext | null | undefined
 ): boolean {
-  return [
+  const normalizedRoot = normalizeFsPath(root);
+  if (normalizedRoot.length === 0) {
+    return false;
+  }
+  const anchors = [
     context?.projectRootPath,
     context?.worktreeRoot,
     context?.gitRoot,
     context?.cwd,
     context?.openedPath,
-  ].some((candidate) => candidate === root);
+  ]
+    .filter((candidate): candidate is string => typeof candidate === "string")
+    .map(normalizeFsPath)
+    .filter((candidate) => candidate.length > 0);
+  if (anchors.some((candidate) => candidate === normalizedRoot)) {
+    return true;
+  }
+  // Layout restore can briefly lack params.context while source.root is still
+  // the repo that opened the tab. Don't block a self-consistent disk source.
+  // Fail-open is restore UX only: when any anchor exists, non-matching roots are denied.
+  return anchors.length === 0;
 }
 
-export type FileViewMode = "diff" | "preview" | "rich" | "source";
+function normalizeFsPath(path: string): string {
+  if (path.length <= 1) {
+    return path;
+  }
+  return path.endsWith("/") || path.endsWith("\\") ? path.slice(0, -1) : path;
+}
 
-// Reserved document-operation vocabulary. Current capability assignment is
-// intentionally narrower than this union: disk text files may save, while
-// temporary Markdown files have no file-system capabilities. Enabling any
-// other operation requires adding matching UI, confirmation flows, and tests.
-export type FilesDocumentCapability =
-  | "delete"
-  | "move"
-  | "rename"
-  | "reveal"
-  | "save"
-  | "saveAs";
+export type FileViewMode = "diff" | "preview" | "source";
+
+// Document save capabilities only. Path ops (delete/move/rename/reveal) live on
+// tree actions, not the document capability list.
+export type FilesDocumentCapability = "save" | "saveAs";
 
 export interface FilesDocument {
   /** Disk mtime captured at last successful load/save; used for write conflict checks. */

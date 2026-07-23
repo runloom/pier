@@ -1,70 +1,129 @@
-import type { MarkdownMeasureMode } from "./markdown-preview-preferences.ts";
+/** Expanded outline panel width (px). Hover panel lives inside this rail slot. */
+export const MARKDOWN_TOC_PANEL_WIDTH_PX = 224;
 
-/** Outline rail width (px). Single source for layout math + TOC width style. */
-export const MARKDOWN_TOC_RAIL_WIDTH_PX = 224;
+/** @deprecated Alias for expanded panel width (historical rail name). */
+export const MARKDOWN_TOC_RAIL_WIDTH_PX = MARKDOWN_TOC_PANEL_WIDTH_PX;
 
-/** Gap between prose and outline when docked (`gap-4`). */
-export const MARKDOWN_TOC_DOCK_GAP_PX = 16;
+/** Notion-style tick visual width budget (longest tick + hit padding). */
+export const MARKDOWN_TOC_TICK_RAIL_WIDTH_PX = 20;
+
+/** Tick stroke height (px). */
+export const MARKDOWN_TOC_TICK_HEIGHT_PX = 2;
+
+/** Vertical gap between ticks (px). */
+export const MARKDOWN_TOC_TICK_GAP_PX = 6;
+
+/** Longest tick width for depth-1 headings (px). */
+export const MARKDOWN_TOC_TICK_WIDTH_MAX_PX = 16;
+
+/** Shortest tick width for deep headings (px). */
+export const MARKDOWN_TOC_TICK_WIDTH_MIN_PX = 8;
+
+/** Per-depth step when shrinking ticks (px). */
+export const MARKDOWN_TOC_TICK_WIDTH_STEP_PX = 4;
 
 /**
- * Fallback measure in `ch` for dock *availability* math only.
+ * Fallback measure in `ch` for width helpers only.
  * Visible measure is CSS `--md-measure` on `[data-slot="markdown-prose"]`.
  */
-export const MARKDOWN_COMFORTABLE_MEASURE_CH = 72;
+export const MARKDOWN_COMFORTABLE_MEASURE_CH = 85;
 
-/** Shared top inset for dock + overlay outline chrome (`sticky` / padding). */
+/**
+ * Preview-frame top inset for scroll padding / legacy chrome.
+ * Outline rail uses `MARKDOWN_TOC_TOP_RATIO` instead (center-upper).
+ */
 export const MARKDOWN_TOC_INSET_PX = 8;
 
 /**
- * Preview frame edge inset shared by the floating outline and font-scale control
- * (`right-3` / `bottom-3` = 12px). Overlay outline right-aligns to this edge.
+ * Vertical placement of the outline rail as a fraction of the preview frame
+ * height (center-upper, not pinned to the top edge).
+ */
+export const MARKDOWN_TOC_TOP_RATIO = 0.22;
+
+/**
+ * Preview frame edge inset for font-scale control (`right-3` / `bottom-3` = 12px).
  */
 export const MARKDOWN_PREVIEW_EDGE_INSET_PX = 12;
+
+/**
+ * Outline rail inset from the right edge — looser than the zoom control so the
+ * tick rail is not flush against the frame.
+ */
+export const MARKDOWN_TOC_EDGE_INSET_PX = 28;
+
+/**
+ * Bottom reserve inside the preview frame so the hover panel clears zoom chrome.
+ */
+export const MARKDOWN_TOC_BOTTOM_RESERVE_PX = 56;
 
 /** Horizontal padding on the markdown scrollport (`px-6` = 24px). */
 export const MARKDOWN_PREVIEW_SCROLL_PAD_X_PX = 24;
 
 /**
- * Vertical reserve below the outline within the content area (zoom chrome, etc.).
- * Max outline height = contentAreaHeight - this value.
+ * Extra gap between prose and the tick rail (beyond edge inset + tick width).
  */
-export const MARKDOWN_TOC_MAX_HEIGHT_RESERVE_PX = 200;
+export const MARKDOWN_TOC_CONTENT_GAP_PX = 12;
 
 /**
- * Shared outline max-height for every placement:
- * `content area height - MARKDOWN_TOC_MAX_HEIGHT_RESERVE_PX`.
+ * Right inset for the scrollport when the outline tick rail is present, so wide
+ * reading (`--md-measure: 100%`) does not run under the ticks.
  */
+export const MARKDOWN_TOC_CONTENT_INSET_PX =
+  MARKDOWN_TOC_EDGE_INSET_PX +
+  MARKDOWN_TOC_TICK_RAIL_WIDTH_PX +
+  MARKDOWN_TOC_CONTENT_GAP_PX;
+
+/**
+ * Hover-panel max height that keeps a vertically-centered card inside the
+ * preview frame. The rail sits at `MARKDOWN_TOC_TOP_RATIO`; the panel is
+ * centered on the tick stack, so height is limited by the smaller of the
+ * space above and below that anchor.
+ */
+export function markdownOutlineHoverMaxHeightPx(frameHeightPx: number): number {
+  if (!(frameHeightPx > 0)) return 0;
+  const topOffsetPx = frameHeightPx * MARKDOWN_TOC_TOP_RATIO;
+  const abovePx = Math.max(0, topOffsetPx - MARKDOWN_TOC_EDGE_INSET_PX);
+  const belowPx = Math.max(
+    0,
+    frameHeightPx - topOffsetPx - MARKDOWN_TOC_BOTTOM_RESERVE_PX
+  );
+  return Math.max(0, Math.floor(2 * Math.min(abovePx, belowPx)));
+}
+
+/** @deprecated Prefer `markdownOutlineHoverMaxHeightPx` for the Notion rail. */
 export function markdownOutlineFrameHeightPx(
   contentAreaHeightPx: number
 ): number {
-  return Math.max(0, contentAreaHeightPx - MARKDOWN_TOC_MAX_HEIGHT_RESERVE_PX);
+  return markdownOutlineHoverMaxHeightPx(contentAreaHeightPx);
 }
 
-export type MarkdownTocPlacement = "dock" | "overlay";
-
-/**
- * Dock when comfortable reading is on and
- * `contentWidth + outline + gap <= available`.
- */
-export function canDockMarkdownOutline(params: {
-  availableWidthPx: number;
-  contentWidthPx: number;
-  hasHeadings: boolean;
-  measureMode: MarkdownMeasureMode;
-}): boolean {
-  if (params.measureMode !== "comfortable" || !params.hasHeadings) {
-    return false;
-  }
-  if (!(params.availableWidthPx > 0 && params.contentWidthPx > 0)) {
-    return false;
-  }
-  return (
-    params.availableWidthPx >=
-    params.contentWidthPx +
-      MARKDOWN_TOC_RAIL_WIDTH_PX +
-      MARKDOWN_TOC_DOCK_GAP_PX
+/** Notion-style tick width by heading depth (h1 longest). */
+export function markdownTocTickWidthPx(depth: number): number {
+  const level = Number.isFinite(depth) ? Math.max(1, Math.floor(depth)) : 1;
+  return Math.max(
+    MARKDOWN_TOC_TICK_WIDTH_MIN_PX,
+    MARKDOWN_TOC_TICK_WIDTH_MAX_PX -
+      (level - 1) * MARKDOWN_TOC_TICK_WIDTH_STEP_PX
   );
 }
+
+/**
+ * Hover panel width clamped so the rail slot never extends past the frame.
+ * Prefers the full panel width when the frame is wide enough.
+ */
+export function markdownOutlineHoverWidthPx(frameWidthPx: number): number {
+  if (!(frameWidthPx > 0)) return MARKDOWN_TOC_PANEL_WIDTH_PX;
+  const available = Math.max(
+    0,
+    frameWidthPx - MARKDOWN_TOC_EDGE_INSET_PX - MARKDOWN_PREVIEW_SCROLL_PAD_X_PX
+  );
+  return Math.max(
+    MARKDOWN_TOC_TICK_RAIL_WIDTH_PX,
+    Math.min(MARKDOWN_TOC_PANEL_WIDTH_PX, available)
+  );
+}
+
+export type MarkdownTocPlacement = "overlay";
 
 export function readScrollContentWidthPx(scrollRoot: HTMLElement): number {
   const styles = getComputedStyle(scrollRoot);
@@ -93,8 +152,8 @@ function measureMarkdownChWidthPx(prose: HTMLElement): number {
 }
 
 /**
- * Article column width for dock checks. Cap by CSS max-width so a stretched
- * flex item cannot inflate the measure and flip back to overlay.
+ * Article column width helper. Cap by CSS max-width so a stretched box cannot
+ * inflate the measure.
  */
 export function readMarkdownContentWidthPx(
   prose: HTMLElement | null,

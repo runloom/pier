@@ -5,7 +5,8 @@ export function pluginText(
   context: RendererPluginContext,
   key: string,
   fallback: string,
-  values?: Record<string, number | string>
+  values?: Record<string, number | string>,
+  locale?: string
 ): string {
-  return context.i18n.t(`ui.${key}`, values, fallback);
+  return context.i18n.t(`ui.${key}`, values, fallback, locale);
 }

@@ -1,3 +1,4 @@
+import { cn } from "@pier/ui/utils.ts";
 import { useEffect } from "react";
 import { AgentIndexCountsControl } from "@/components/common/agent-index-counts-control.tsx";
 import { AppUpdateControl } from "@/components/common/app-update-control.tsx";
@@ -11,7 +12,8 @@ const TITLEBAR_HEIGHT = "38px";
  *
  * 仅在 macOS 下渲染, 替代被隐藏的原生标题栏:
  * - 整条区域设为 drag region (窗口拖动手柄)
- * - 居中显示 active panel 的长形式
+ * - 居中显示 active panel 的长形式；超长时从左侧省略，保留路径尾段
+ * - 左右留白避开红绿灯与 Index / Update 芯片，标题在剩余宽度内尽量展示完全
  * - 右侧本机 Agent Index 计数（与非 mac 顶栏共用 AgentIndexCountsControl）
  */
 export function TitleBar() {
@@ -32,9 +34,19 @@ export function TitleBar() {
   const text = (active && resolveLong(active)) || "Pier";
 
   return (
-    <div className="app-drag relative flex h-[38px] shrink-0 items-center justify-center border-[var(--sidebar-border)] border-b bg-[var(--sidebar)]">
-      <span className="select-none font-medium text-muted-foreground text-xs">
-        {text}
+    <div
+      className={cn(
+        "app-drag relative flex h-[38px] shrink-0 items-center justify-center border-[var(--sidebar-border)] border-b bg-[var(--sidebar)]",
+        "pr-[max(7.5rem,env(safe-area-inset-right,0px))] pl-[max(5.5rem,env(safe-area-inset-left,0px))]"
+      )}
+    >
+      <span
+        className="min-w-0 max-w-full select-none truncate text-center font-medium text-muted-foreground text-xs"
+        data-testid="titlebar-title"
+        dir="rtl"
+        title={text}
+      >
+        <bdi>{text}</bdi>
       </span>
       <div className="absolute right-3 flex items-center gap-1">
         <AgentIndexCountsControl />

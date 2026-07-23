@@ -99,4 +99,14 @@ describe("groupActionsForPalette", () => {
     const groups = groupActionsForPalette(actions, map, "");
     expect(groups.map((g) => g.category)).toEqual(["Panel", "View"]);
   });
+
+  it("equal frecency keeps deterministic sortOrder fallback inside a group", () => {
+    const actions = [mk("v2", "View", 5), mk("v1", "View", 1)];
+    const map = new Map([
+      ["v1", 4],
+      ["v2", 4],
+    ]);
+    const groups = groupActionsForPalette(actions, map, "");
+    expect(groups[0]?.actions.map((a) => a.id)).toEqual(["v1", "v2"]);
+  });
 });

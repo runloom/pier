@@ -1,4 +1,5 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import type { HookScope } from "./entry.ts";
 import { TURN_BOUNDARY_EVENTS, TURN_RESET_EVENTS } from "./entry.ts";
 import type { AgentStopAuthority } from "./types.ts";
@@ -7,7 +8,8 @@ import type { AgentStopAuthority } from "./types.ts";
 export function applyTurnBookkeeping(
   scope: HookScope,
   event: AgentHookEventPayload,
-  stopAuthority: AgentStopAuthority
+  stopAuthority: AgentStopAuthority,
+  at: number
 ): boolean {
   const eventName = event.event;
   const eventTurnId = event.turnId?.trim();
@@ -49,22 +51,32 @@ export function applyTurnBookkeeping(
   }
   if (TURN_BOUNDARY_EVENTS.has(eventName)) {
     scope.turnEnded = true;
+    scope.turnEndedAt = at;
     scope.completionObserved = false;
+    scope.completionObservedAt = undefined;
     clearActiveWork(scope);
   } else if (TURN_RESET_EVENTS.has(eventName)) {
     scope.turnEnded = false;
+    scope.turnEndedAt = undefined;
     scope.completionObserved = false;
+    scope.completionObservedAt = undefined;
+    scope.turnResetAt = at;
     clearActiveWork(scope);
     scope.currentTurnId = eventTurnId;
   } else if (eventName === "PermissionRequest") {
     scope.turnEnded = false;
+    scope.turnEndedAt = undefined;
     scope.completionObserved = false;
+    scope.completionObservedAt = undefined;
   } else if (eventName === "Stop" && stopAuthority === "advisory") {
     scope.completionObserved = true;
+    scope.completionObservedAt = at;
     clearActiveWork(scope);
   } else if (eventName === "Stop") {
     scope.turnEnded = true;
+    scope.turnEndedAt = at;
     scope.completionObserved = false;
+    scope.completionObservedAt = undefined;
     clearActiveWork(scope);
   } else if (
     scope.completionObserved &&
@@ -74,6 +86,7 @@ export function applyTurnBookkeeping(
       eventName === "running")
   ) {
     scope.completionObserved = false;
+    scope.completionObservedAt = undefined;
   }
   if (eventName === "Stop" || eventName === "SessionEnd") {
     clearActiveWork(scope);
@@ -114,4 +127,19 @@ function clearActiveWork(scope: HookScope): void {
 
 export function hookScopeHasActiveTools(scope: HookScope): boolean {
   return scope.activeToolIds.size > 0 || scope.anonymousToolCount > 0;
+}
+
+/** ToolComplete 后若仍有未完成工具则维持 tool，否则沿用映射表（通常 processing）。 */
+export function nextStatusAfterTurnBookkeeping(
+  scope: HookScope,
+  event: AgentHookEventPayload,
+  mappedStatus: ActivityStatus | undefined
+): ActivityStatus | undefined {
+  if (scope.completionObserved) {
+    return;
+  }
+  if (event.event === "ToolComplete" && hookScopeHasActiveTools(scope)) {
+    return "tool";
+  }
+  return mappedStatus;
 }

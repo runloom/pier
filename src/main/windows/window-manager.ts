@@ -24,7 +24,6 @@ import {
   isWindowDetaching,
   scheduleDisarmDetaching,
 } from "../services/agents/window-detaching-guard.ts";
-import { detachAgentsForWindowSync } from "../state/terminal-session-state.ts";
 import type { AppWindow } from "./app-window.ts";
 import {
   installRendererFailureRecovery,
@@ -52,6 +51,7 @@ import {
   forgetAppWindow,
   rememberAppWindow,
 } from "./window-identity.ts";
+import { destroyAppWindowForQuit } from "./window-quit-destroy.ts";
 
 const WINDOW_ID_REGEX = /^(main|w-\d+)$/;
 
@@ -433,35 +433,15 @@ class WindowManager {
     return this.closeCoordinator.wait(id, window);
   }
 
-  destroyAllForQuit(): void {
+  /** Mark quitting so close intercept skips prepareClose (call before quitAndInstall). */
+  beginQuit(): void {
     this.isDestroyingAllForQuit = true;
+  }
+
+  destroyAllForQuit(): void {
+    this.beginQuit();
     for (const window of this.windows.values()) {
-      if (!window.isDestroyed()) {
-        const context = findWindowContext(window);
-        const detachingKeys =
-          context == null
-            ? null
-            : {
-                electronWindowId: context.electronWindowId ?? String(window.id),
-                recordId: context.recordId,
-              };
-        if (detachingKeys) {
-          armDetaching(detachingKeys);
-          detachAgentsForWindowSync(detachingKeys.recordId);
-        }
-        try {
-          getTerminalAddon()?.detachWindow(window.getNativeWindowHandle());
-        } catch {
-          // ignore: app 正在退出
-        }
-        if (window.appView && !window.webContents.isDestroyed()) {
-          window.webContents.close();
-        }
-        window.destroy();
-        if (detachingKeys) {
-          scheduleDisarmDetaching(detachingKeys);
-        }
-      }
+      destroyAppWindowForQuit(window);
     }
   }
 

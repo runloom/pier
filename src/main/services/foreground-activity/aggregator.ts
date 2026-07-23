@@ -1,16 +1,23 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
-import type {
-  ActivityStatus,
-  ForegroundActivity,
-  ForegroundActivityBroadcast,
+import {
+  activityStatusForHookEvent,
+  type ForegroundActivity,
+  type ForegroundActivityBroadcast,
 } from "@shared/contracts/foreground-activity.ts";
-import { activityStatusForHookEvent } from "@shared/contracts/foreground-activity.ts";
 import {
   createHookScopeCoordinator,
   isInCooldown,
 } from "./aggregator-hook-scopes.ts";
 import { keysForPanel, panelKey } from "./aggregator-panel-key.ts";
 import { transferPanelOwnership as rekeyPanelOwnership } from "./aggregator-panel-transfer.ts";
+import {
+  closeWindowPanels,
+  retainWindowPanels,
+} from "./aggregator-retain-panels.ts";
+import {
+  hydratePanelSlotSessionTitle,
+  setPanelSlotSessionTitle,
+} from "./aggregator-session-title.ts";
 import {
   logAgentEventDropped,
   logClearForeignHook,
@@ -25,7 +32,6 @@ import {
   revealHook,
 } from "./aggregator-visibility.ts";
 import {
-  armHookTtlTimer,
   CLOSE_COOLDOWN_MS,
   clearCommandTimers,
   clearHookTimers,
@@ -45,9 +51,10 @@ import {
   SUSPENDED_JOB_EXIT_CODES,
   type TimerCtx,
 } from "./entry.ts";
+import { armHookTtlTimer } from "./hook-scope-projection.ts";
 import {
   applyTurnBookkeeping,
-  hookScopeHasActiveTools,
+  nextStatusAfterTurnBookkeeping,
 } from "./turn-bookkeeping.ts";
 import type {
   ForegroundActivityAggregator,
@@ -137,6 +144,14 @@ export function createForegroundActivityAggregator(
     }
     hookScopes.pruneExpiredCooldowns();
   }
+
+  const retainCtx = () => ({
+    closeSlot,
+    panelCooldownUntil,
+    pruneExpiredCooldowns,
+    scheduleEmit,
+    slots,
+  });
 
   /**
    * SessionEnd 干净收尾：只清 hook 层（command 层等 OSC D 自己收），
@@ -325,21 +340,13 @@ export function createForegroundActivityAggregator(
       }
       const scope = getOrCreateHookScope(hook, identity, at);
       const stopAuthority = options.stopAuthority;
-      if (!applyTurnBookkeeping(scope, event, stopAuthority)) {
+      if (!applyTurnBookkeeping(scope, event, stopAuthority, at)) {
         logAgentEventDropped("absorbed", key, event.event, {
           ...(scope.status === undefined ? {} : { frozenStatus: scope.status }),
         });
         return false;
       }
-      let nextStatus: ActivityStatus | undefined = status;
-      if (scope.completionObserved) {
-        nextStatus = undefined;
-      } else if (
-        event.event === "ToolComplete" &&
-        (!event.toolUseId?.trim() || hookScopeHasActiveTools(scope))
-      ) {
-        nextStatus = "tool";
-      }
+      const nextStatus = nextStatusAfterTurnBookkeeping(scope, event, status);
       hookScopes.noteStatusEvent(
         key,
         hook,
@@ -423,40 +430,11 @@ export function createForegroundActivityAggregator(
     },
 
     windowClosed(windowId) {
-      let anyRemoved = false;
-      for (const [key, slot] of [...slots.entries()]) {
-        const slotWindowId = slot.command?.windowId ?? slot.hook?.windowId;
-        if (
-          slotWindowId === windowId &&
-          closeSlot(key, { map: panelCooldownUntil, ms: CLOSE_COOLDOWN_MS })
-        ) {
-          anyRemoved = true;
-        }
-      }
-      if (anyRemoved) {
-        scheduleEmit();
-      }
-      pruneExpiredCooldowns();
+      closeWindowPanels(retainCtx(), windowId);
     },
 
     retainPanels(windowId, activePanelIds) {
-      const active = new Set(activePanelIds);
-      let anyRemoved = false;
-      for (const [key, slot] of [...slots.entries()]) {
-        const slotWindowId = slot.command?.windowId ?? slot.hook?.windowId;
-        if (slotWindowId !== windowId || active.has(slot.panelId)) {
-          continue;
-        }
-        if (
-          closeSlot(key, { map: panelCooldownUntil, ms: CLOSE_COOLDOWN_MS })
-        ) {
-          anyRemoved = true;
-        }
-      }
-      if (anyRemoved) {
-        scheduleEmit();
-      }
-      pruneExpiredCooldowns();
+      retainWindowPanels(retainCtx(), windowId, activePanelIds);
     },
     transferPanelOwnership(input) {
       rekeyPanelOwnership(
@@ -465,6 +443,22 @@ export function createForegroundActivityAggregator(
       );
     },
 
+    setAgentSessionTitle(windowId, panelId, input) {
+      return setPanelSlotSessionTitle(
+        { disposed, scheduleEmit, slotFor },
+        windowId,
+        panelId,
+        input
+      );
+    },
+    hydrateAgentSessionTitle(windowId, panelId, input) {
+      hydratePanelSlotSessionTitle(
+        { disposed, scheduleEmit, slotFor },
+        windowId,
+        panelId,
+        input
+      );
+    },
     onChange(cb) {
       listeners.add(cb);
       return () => {

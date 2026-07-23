@@ -1,6 +1,5 @@
 import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   type CSSProperties,
@@ -42,6 +41,7 @@ import {
 } from "./markdown-preview-toc.tsx";
 import {
   MARKDOWN_PREVIEW_SCROLL_PAD_X_PX,
+  MARKDOWN_TOC_CONTENT_INSET_PX,
   MARKDOWN_TOC_INSET_PX,
 } from "./markdown-preview-toc-layout.ts";
 import {
@@ -92,8 +92,6 @@ interface MarkdownPreviewSearchLabels {
 }
 
 interface MarkdownPreviewTocLabels {
-  collapse: string;
-  expand: string;
   title: string;
 }
 
@@ -109,7 +107,6 @@ type PreviewState =
   | { status: "error" };
 
 export { safeMarkdownUrl } from "./markdown-ir-renderer.tsx";
-export type { MarkdownTocSide } from "./markdown-preview-preferences.ts";
 export { FILES_MARKDOWN_PREVIEW_SURFACE } from "./markdown-preview-preferences.ts";
 
 const DEFAULT_RENDERER_LABELS: MarkdownRendererLabels = {
@@ -135,8 +132,6 @@ const DEFAULT_SEARCH_LABELS: MarkdownPreviewSearchLabels = {
 };
 
 const DEFAULT_TOC_LABELS: MarkdownPreviewTocLabels = {
-  collapse: "Collapse outline",
-  expand: "Expand outline",
   title: "Outline",
 };
 
@@ -188,7 +183,6 @@ export function MarkdownPreview({
   const measureMode = useMarkdownPreviewPrefsStore(
     (state) => state.measureMode
   );
-  const tocSide = useMarkdownPreviewPrefsStore((state) => state.tocSide);
   const [tocAnchor, setTocAnchor] = useState<string | undefined>(undefined);
   const [tocAnchorRequestId, setTocAnchorRequestId] = useState(0);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -213,14 +207,13 @@ export function MarkdownPreview({
   const hasOutline = headings !== undefined && headings.length > 0;
   const {
     maxHeightPx: tocMaxHeightPx,
-    placement: tocPlacement,
+    panelWidthPx: tocPanelWidthPx,
     previewFrameRef,
     scrollRoot,
     scrollRootRef,
   } = useMarkdownOutlineLayout({
     fontScale,
     hasHeadings: hasOutline,
-    measureMode,
     ready: state.status === "ready",
   });
   const activeHeadingId = useMarkdownHeadingScrollSpy(scrollRoot, headingIds);
@@ -235,7 +228,6 @@ export function MarkdownPreview({
   const effectiveAnchorRequestId = tocAnchor
     ? String(tocAnchorRequestId)
     : initialAnchorRequestId;
-  const dockedOutline = tocPlacement === "dock" && hasOutline;
 
   useEffect(() => {
     let active = true;
@@ -340,8 +332,6 @@ export function MarkdownPreview({
         setTocAnchor(headingId);
         setTocAnchorRequestId((current) => current + 1);
       }}
-      placement={tocPlacement}
-      side={tocSide}
     />
   ) : null;
 
@@ -354,11 +344,7 @@ export function MarkdownPreview({
     >
       {searchOpen ? (
         <FilesSearchBar
-          className={cn(
-            "absolute top-2 z-30 max-w-[calc(100%-1.5rem)]",
-            // Keep Find opposite the outline so the two z-stacked chrome do not collide.
-            tocSide === "right" ? "left-3" : "right-3"
-          )}
+          className="absolute top-2 left-3 z-30 max-w-[calc(100%-1.5rem)]"
           focusSignal={searchFocusSignal}
           labels={searchLabels}
           matchAnnouncement={
@@ -392,7 +378,10 @@ export function MarkdownPreview({
           ref={scrollRootRef}
           style={{
             paddingLeft: MARKDOWN_PREVIEW_SCROLL_PAD_X_PX,
-            paddingRight: MARKDOWN_PREVIEW_SCROLL_PAD_X_PX,
+            // Keep wide (and narrow comfortable) prose clear of the right tick rail.
+            paddingRight: hasOutline
+              ? MARKDOWN_TOC_CONTENT_INSET_PX
+              : MARKDOWN_PREVIEW_SCROLL_PAD_X_PX,
             paddingTop: MARKDOWN_TOC_INSET_PX,
           }}
         >
@@ -406,18 +395,9 @@ export function MarkdownPreview({
           ) : null}
           {state.status === "error" ? <ErrorEmpty title={errorLabel} /> : null}
           {state.status === "ready" ? (
-            <MarkdownPreviewArticleLayout
-              outline={outlineToc}
-              placement={tocPlacement}
-              tocSide={tocSide}
-            >
+            <MarkdownPreviewArticleLayout>
               <div
-                className={cn(
-                  "markdown-prose min-w-0",
-                  dockedOutline
-                    ? "w-[var(--md-measure)] shrink-0"
-                    : "mx-auto w-full"
-                )}
+                className="markdown-prose mx-auto w-full min-w-0"
                 data-measure={measureMode}
                 data-slot="markdown-prose"
                 style={
@@ -448,8 +428,11 @@ export function MarkdownPreview({
             </MarkdownPreviewArticleLayout>
           ) : null}
         </div>
-        {!dockedOutline && outlineToc ? (
-          <MarkdownPreviewOverlayRail side={tocSide}>
+        {outlineToc ? (
+          <MarkdownPreviewOverlayRail
+            maxHeightPx={tocMaxHeightPx}
+            panelWidthPx={tocPanelWidthPx}
+          >
             {outlineToc}
           </MarkdownPreviewOverlayRail>
         ) : null}

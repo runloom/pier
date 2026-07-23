@@ -61,3 +61,43 @@ describe("buildTerminalPresentationFacts suppressVisible", () => {
     expect(snapshot.terminals[0]?.visible).toBe(true);
   });
 });
+
+describe("buildTerminalPresentationFacts suppressedPanelIds (per-panel)", () => {
+  it("suppressedPanelIds 内的面板 visible=false，其他面板不受影响", () => {
+    const snapshot = buildTerminalPresentationFacts({
+      readFrame: () => FRAME,
+      reason: REASON,
+      suppressedPanelIds: new Set(["t1"]),
+      workspace: workspaceWith(["t1", "t2"]),
+    });
+    expect(snapshot.terminals).toHaveLength(2);
+    expect(snapshot.terminals[0]?.visible).toBe(false);
+    expect(snapshot.terminals[0]?.frame).toBeNull();
+    expect(snapshot.terminals[1]?.visible).toBe(true);
+    expect(snapshot.terminals[1]?.frame).toBe(FRAME);
+  });
+
+  it("suppressedPanelIds 为空集合：等同未抑制", () => {
+    const snapshot = buildTerminalPresentationFacts({
+      readFrame: () => FRAME,
+      reason: REASON,
+      suppressedPanelIds: new Set<string>(),
+      workspace: workspaceWith(["t1"]),
+    });
+    expect(snapshot.terminals[0]?.visible).toBe(true);
+  });
+
+  it("suppressVisible 与 suppressedPanelIds 叠加：全局 suppress 仍遮蔽所有", () => {
+    const snapshot = buildTerminalPresentationFacts({
+      readFrame: () => FRAME,
+      reason: REASON,
+      suppressVisible: true,
+      suppressedPanelIds: new Set(["t2"]),
+      workspace: workspaceWith(["t1", "t2", "t3"]),
+    });
+    for (const term of snapshot.terminals) {
+      expect(term.visible).toBe(false);
+      expect(term.frame).toBeNull();
+    }
+  });
+});

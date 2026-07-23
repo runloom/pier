@@ -98,7 +98,7 @@ export interface RendererPluginQuickPickItem {
   readonly description?: string;
   readonly detail?: string;
   readonly disabled?: boolean;
-  readonly icon?: ComponentType<{ size?: number | string }>;
+  readonly icon?: ComponentType<{ className?: string; size?: number | string }>;
   readonly id: string;
   readonly label: string;
   readonly searchTerms?: readonly string[];

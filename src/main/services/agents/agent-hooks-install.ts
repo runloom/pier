@@ -10,9 +10,22 @@ export const AGENT_HOOKS_DIR_NAME = "agent-hooks";
 /** emit 脚本文件名。 */
 export const EMIT_SCRIPT_NAME = "emit";
 
+/**
+ * stdin → metadataBase64 提取脚本（含 promptSnippet）。
+ * hooks.json 经 `${PIER_AGENT_HOOKS_DIR}/extract-stdin-meta` 调用，能力跟
+ * **当前 Pier 的 userData** 走，避免全局 hooks 被旧 worktree 覆盖后丢命名字段。
+ */
+export const EXTRACT_STDIN_META_SCRIPT_NAME = "extract-stdin-meta";
+
 /** events.jsonl 文件名。 */
 export const EVENTS_JSONL_NAME = "events.jsonl";
 
+/**
+ * hooks 命令世代：嵌入 extract-stdin-meta / stdin 命令，安装时拒绝用更低世代覆盖。
+ * 2 = PromptSubmit 命名所需的 prompt → promptSnippet。
+ * 3 = 世代标记改为赋值（禁止 `#` 注释，避免 `;` 拼接后整行被注释掉）。
+ */
+export const PIER_HOOK_COMMAND_GENERATION = 3;
 /**
  * emit 脚本内容——保留 v1 agentEvent，并以 agentEventV2 承载新协议。
  *
@@ -111,13 +124,43 @@ export function emitScriptPath(userData: string): string {
   return join(agentHooksDir(userData), EMIT_SCRIPT_NAME);
 }
 
+/** 返回 extract-stdin-meta 脚本绝对路径。 */
+export function extractStdinMetaScriptPath(userData: string): string {
+  return join(agentHooksDir(userData), EXTRACT_STDIN_META_SCRIPT_NAME);
+}
+
 /** 返回 events.jsonl 绝对路径。 */
 export function eventsJsonlPath(userData: string): string {
   return join(agentHooksDir(userData), EVENTS_JSONL_NAME);
 }
 
+function shellDoubleQuote(value: string): string {
+  return value
+    .replaceAll("\\", "\\\\")
+    .replaceAll('"', '\\"')
+    .replaceAll("$", "\\$")
+    .replaceAll("`", "\\`");
+}
+
 /**
- * 幂等安装 emit 脚本到 `${userData}/agent-hooks/emit`。
+ * 安装期生成 extract-stdin-meta：用当前 Electron 以 node 模式跑内联提取。
+ * 输出：stdin JSON → stdout base64(metadata)，含 promptSnippet（≤512）。
+ */
+export function buildExtractStdinMetaScript(
+  electronExecutable: string = process.execPath
+): string {
+  const nodeExecutable = shellDoubleQuote(electronExecutable);
+  // JS 内避免单引号，便于包进 sh -e '...'。
+  const extractJs =
+    'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s),o={};for(const k of ["session_id","sessionId","turn_id","tool_use_id","tool_name","agent_id","agent_type","transcript_path"])if(typeof p[k]==="string")o[k]=p[k];const prompt=[p.prompt,p.user_prompt,p.content,p.message].find(v=>typeof v==="string");if(typeof prompt==="string"&&prompt.trim())o.promptSnippet=prompt.slice(0,512);process.stdout.write(Buffer.from(JSON.stringify(o)).toString("base64"))}catch{}})';
+  return `#!/bin/sh
+# pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}
+ELECTRON_RUN_AS_NODE=1 "${nodeExecutable}" -e '${extractJs}'
+`;
+}
+
+/**
+ * 幂等安装 emit + extract-stdin-meta 到 `${userData}/agent-hooks/`。
  * 每次启动覆盖写入（内容随版本演进），chmod 755。
  */
 export async function installAgentHooksEmitScript(
@@ -125,6 +168,10 @@ export async function installAgentHooksEmitScript(
 ): Promise<void> {
   const dir = agentHooksDir(userData);
   await mkdir(dir, { recursive: true });
-  const scriptPath = emitScriptPath(userData);
-  await writeFile(scriptPath, EMIT_SCRIPT, { mode: 0o755 });
+  await writeFile(emitScriptPath(userData), EMIT_SCRIPT, { mode: 0o755 });
+  await writeFile(
+    extractStdinMetaScriptPath(userData),
+    buildExtractStdinMetaScript(),
+    { mode: 0o755 }
+  );
 }

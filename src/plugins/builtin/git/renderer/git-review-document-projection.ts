@@ -4,10 +4,10 @@ import type {
 } from "@pier/ui/diff-view.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type {
-  GitReviewFileSection,
+  GitReviewFileStatus,
+  GitReviewGroup,
   GitReviewIndexEntry,
 } from "@shared/contracts/git-review.ts";
-import { pluginText } from "./git-plugin-text.ts";
 import {
   GIT_REVIEW_MAX_RETAINED_BYTES,
   GIT_REVIEW_MAX_RETAINED_LINES,
@@ -18,8 +18,43 @@ import type {
   GitReviewDocumentLoaderSnapshot,
   GitReviewDocumentResource,
 } from "./git-review-document-resource.ts";
+import { stateSectionText } from "./git-review-document-state-text.ts";
 
-const STATE_PATCH_PATH = "__pier_git_review_state__";
+/**
+ * Diff / tree display order (VS Code SCM):
+ * conflict → staged → unstaged → committed.
+ */
+const REVIEW_DIFF_GROUP_INDEX: Record<GitReviewGroup, number> = {
+  conflict: 0,
+  staged: 1,
+  unstaged: 2,
+  committed: 3,
+};
+
+/** Uncommitted stage control for multi-diff headers; null when not toggleable. */
+function reviewStageControl(
+  group: GitReviewGroup,
+  status: GitReviewFileStatus
+): {
+  readonly canDiscard?: boolean;
+  readonly state: "staged" | "unstaged";
+} | null {
+  switch (group) {
+    case "staged":
+      return { state: "staged" };
+    case "unstaged":
+      return {
+        // Match tree discard rule: only modified/deleted working-tree changes.
+        canDiscard: status === "modified" || status === "deleted",
+        state: "unstaged",
+      };
+    case "conflict":
+    case "committed":
+      return null;
+    default:
+      return null;
+  }
+}
 
 /**
  * UI 元状态：不持有完整 document resources。
@@ -38,27 +73,6 @@ export const EMPTY_DOCUMENT_VIEW_STATE: ReviewDocumentViewState = {
   settled: false,
   staleRetainedCount: 0,
 };
-
-type ReviewStateSection = Extract<GitReviewFileSection, { kind: "state" }>;
-
-const STATE_SECTION_TEXT = {
-  binary: { fallback: "Binary file", key: "reviewStateBinary" },
-  conflict: { fallback: "Merge conflict", key: "reviewStateConflict" },
-  invalidEncoding: {
-    fallback: "Unsupported text encoding",
-    key: "reviewStateInvalidEncoding",
-  },
-  readError: {
-    fallback: "File could not be read",
-    key: "reviewStateReadError",
-  },
-  submodule: { fallback: "Submodule change", key: "reviewStateSubmodule" },
-  symlink: { fallback: "Symbolic link", key: "reviewStateSymlink" },
-  tooLarge: { fallback: "File is too large", key: "reviewStateTooLarge" },
-} as const satisfies Record<
-  ReviewStateSection["reason"],
-  { readonly fallback: string; readonly key: string }
->;
 
 export interface ReviewDocumentProjection {
   readonly entryKeyBySectionId: ReadonlyMap<string, string>;
@@ -94,17 +108,46 @@ export function projectReviewDocuments(
   locale: string
 ): ReviewDocumentProjection {
   const entryKeyBySectionId = new Map<string, string>();
-  const items: PierDiffViewItem[] = [];
+  const decorated: {
+    readonly group: GitReviewGroup;
+    readonly item: PierDiffViewItem;
+    readonly path: string;
+    readonly sectionKey: string;
+  }[] = [];
   for (const resource of snapshot.resources) {
     for (const slot of resource.entry.renderSlots) {
       entryKeyBySectionId.set(slot.sectionKey, resource.entry.entryKey);
     }
     const projected = projectReviewDocumentResource(resource, context, locale);
-    items.push(...projected.items);
+    for (const [index, item] of projected.items.entries()) {
+      const slot = resource.entry.renderSlots[index];
+      if (slot === undefined) {
+        continue;
+      }
+      decorated.push({
+        group: slot.group,
+        item,
+        path: resource.entry.path,
+        sectionKey: slot.sectionKey,
+      });
+    }
   }
+  decorated.sort((left, right) => {
+    const groupDelta =
+      REVIEW_DIFF_GROUP_INDEX[left.group] -
+      REVIEW_DIFF_GROUP_INDEX[right.group];
+    if (groupDelta !== 0) {
+      return groupDelta;
+    }
+    const pathDelta = left.path.localeCompare(right.path);
+    if (pathDelta !== 0) {
+      return pathDelta;
+    }
+    return left.sectionKey.localeCompare(right.sectionKey);
+  });
   return {
     entryKeyBySectionId,
-    items,
+    items: decorated.map((entry) => entry.item),
   };
 }
 
@@ -136,6 +179,9 @@ export function projectReviewDocumentResource(
   );
   const items = resource.entry.renderSlots.map((slot): PierDiffViewItem => {
     const section = sectionsByKey.get(slot.sectionKey);
+    // Half-staged files produce two items with the same path; stageControl
+    // distinguishes staged vs unstaged (no group label in the path).
+    const stageControl = reviewStageControl(slot.group, slot.status);
     const fileDisplay = {
       path: slot.targetPath,
       status: slot.status,
@@ -147,10 +193,12 @@ export function projectReviewDocumentResource(
         fileDisplay,
         id: slot.sectionKey,
         patch: null,
+        ...(stageControl === null ? {} : { stageControl }),
       };
     }
     if (section.kind === "state") {
-      const stateText = stateSectionText(context, section);
+      // Industry multi-diff: non-text changes are header + notice only.
+      const stateText = stateSectionText(context, section, locale);
       return {
         cacheKey: JSON.stringify([
           document?.revision ?? "missing",
@@ -163,7 +211,9 @@ export function projectReviewDocumentResource(
         ]),
         fileDisplay,
         id: section.sectionKey,
-        patch: statePatch(stateText),
+        patch: null,
+        stateNotice: stateText,
+        ...(stageControl === null ? {} : { stageControl }),
       };
     }
     return {
@@ -171,6 +221,7 @@ export function projectReviewDocumentResource(
       fileDisplay,
       id: section.sectionKey,
       patch: section.patch,
+      ...(stageControl === null ? {} : { stageControl }),
     };
   });
   return {
@@ -194,26 +245,6 @@ export function indexReviewDocumentProjection(
     itemIds,
     itemIndexById,
   };
-}
-
-function stateSectionText(
-  context: RendererPluginContext,
-  section: ReviewStateSection
-): string {
-  const text = STATE_SECTION_TEXT[section.reason];
-  return pluginText(context, text.key, text.fallback);
-}
-
-function statePatch(message: string): string {
-  return [
-    `diff --git a/${STATE_PATCH_PATH} b/${STATE_PATCH_PATH}`,
-    "index 0000000..0000000 100644",
-    `--- a/${STATE_PATCH_PATH}`,
-    `+++ b/${STATE_PATCH_PATH}`,
-    "@@ -1 +1 @@",
-    ` ${message}`,
-    "",
-  ].join("\n");
 }
 
 export interface ReconciledReviewDocumentSnapshot {

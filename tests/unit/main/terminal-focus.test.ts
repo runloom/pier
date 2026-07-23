@@ -85,12 +85,12 @@ describe("terminal focus restoration", () => {
           : {
               context: {
                 contextId: "ctx-pier",
-                cwd: "/Users/xyz/ABC/pier",
-                openedPath: "/Users/xyz/ABC/pier",
-                projectRoot: "/Users/xyz/ABC/pier",
+                cwd: "/Users/dev/ABC/pier",
+                openedPath: "/Users/dev/ABC/pier",
+                projectRoot: "/Users/dev/ABC/pier",
                 source: "panel",
                 updatedAt: 1,
-                worktreeKey: "/Users/xyz/ABC/pier",
+                worktreeKey: "/Users/dev/ABC/pier",
               },
               updatedAt: "2026-06-24T00:00:00.000Z",
             }
@@ -322,7 +322,7 @@ describe("terminal focus restoration", () => {
       "Menlo",
       13,
       {
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         env: expect.objectContaining({
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "7",
@@ -660,12 +660,12 @@ describe("terminal focus restoration", () => {
       await setupTerminalFocusHarness();
     const staleContext = {
       contextId: "ctx-original-open",
-      cwd: "/Users/xyz/ABC/original-open",
-      openedPath: "/Users/xyz/ABC/original-open",
-      projectRoot: "/Users/xyz/ABC/original-open",
+      cwd: "/Users/dev/ABC/original-open",
+      openedPath: "/Users/dev/ABC/original-open",
+      projectRoot: "/Users/dev/ABC/original-open",
       source: "command" as const,
       updatedAt: 1,
-      worktreeKey: "/Users/xyz/ABC/original-open",
+      worktreeKey: "/Users/dev/ABC/original-open",
     };
 
     const result = await invokeHandlers.get("pier:terminal:create")?.(
@@ -686,7 +686,7 @@ describe("terminal focus restoration", () => {
       "Menlo",
       13,
       {
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         env: expect.objectContaining({
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "7",
@@ -703,7 +703,7 @@ describe("terminal focus restoration", () => {
       await setupTerminalFocusHarness({
         launch: {
           command: "pnpm test",
-          cwd: "/Users/xyz/ABC/stale-launch",
+          cwd: "/Users/dev/ABC/stale-launch",
           env: { SECRET: "token" },
           profileId: "codex",
         },
@@ -728,7 +728,7 @@ describe("terminal focus restoration", () => {
       13,
       {
         command: "pnpm test",
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         env: expect.objectContaining({
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "7",
@@ -764,7 +764,7 @@ describe("terminal focus restoration", () => {
       "Menlo",
       13,
       {
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         env: expect.objectContaining({
           PIER_PANEL_ID: "terminal-1",
           PIER_WINDOW_ID: "7",

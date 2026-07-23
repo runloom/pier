@@ -43,8 +43,11 @@ export interface PierFileTreeApi {
   getSearchMatchCount: () => number;
   /** 从模型移除路径(新建落盘失败回滚幽灵节点用)。 */
   removePaths: (paths: readonly string[]) => void;
-  /** 展开祖先并滚动定位到该路径(面包屑点击/外部 reveal 用)。 */
-  revealPath: (path: string) => void;
+  /**
+   * VS Code-like reveal: expand ancestors, expand folder targets, select+focus
+   * (focus ring), then scroll. Does not open files.
+   */
+  revealPath: (path: string, options?: PierFileTreeRevealOptions) => void;
   /** null = 关闭搜索并恢复完整投影。搜索 UI 由业务层自绘(不用库内置头)。 */
   setSearch: (value: string | null) => void;
   /**
@@ -55,6 +58,18 @@ export interface PierFileTreeApi {
     path: string,
     options?: { removeIfCanceled?: boolean }
   ) => boolean;
+}
+
+export type PierFileTreeRevealScroll = "nearest" | "center" | "top";
+
+export interface PierFileTreeRevealOptions {
+  /** Expand the target when it is a directory. Default true. */
+  expandTarget?: boolean;
+  /**
+   * Scroll alignment. Explicit breadcrumb/command reveal defaults to `center`
+   * (VS Code-like). Active-file auto-reveal should prefer `nearest`.
+   */
+  scroll?: PierFileTreeRevealScroll;
 }
 
 export type PierFileTreeScrollSnapshot =
@@ -88,6 +103,16 @@ export interface PierFileTreeProps
   /** 目录读取失败时的本地化行内标记；详细错误仍由业务层反馈。 */
   directoryErrorLabel?: string;
   directoryStates?: ReadonlyMap<string, PierDirectoryLoadState>;
+  /**
+   * Collapse single-child directory chains into one row (pierre default true).
+   */
+  flattenEmptyDirectories?: boolean;
+  /**
+   * Minimum node depth eligible to start a flatten chain (pierre patch).
+   * Root=0, top-level paths=1. Git review uses 2 so group roots stay separate
+   * while nested path folders still compress.
+   */
+  flattenMinDepth?: number;
   items: readonly PierFileTreeItem[];
   label: string;
   onLoadDirectory?: (path: string) => Promise<void> | void;

@@ -56,6 +56,7 @@ export const CORE_RESERVED_ACTION_IDS = [
   "pier.terminal.openAgentComposer",
   "pier.terminal.openDebugWindow",
   "pier.terminal.paste",
+  "pier.terminal.renameAgentSession",
   "pier.terminal.search",
   "pier.terminal.selectAll",
   "pier.view.resetZoom",

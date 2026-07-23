@@ -53,6 +53,7 @@ export function buildAccountsSnapshot({
       status = "error";
     }
     const usage = usageCache[record.id];
+    const subscription = usage?.subscription ?? record.subscription;
     return {
       id: record.id,
       kind: record.kind,
@@ -60,7 +61,7 @@ export function buildAccountsSnapshot({
       status,
       ...(record.email ? { email: record.email } : {}),
       ...(record.teamId ? { teamId: record.teamId } : {}),
-      ...(usage?.subscription ? { subscription: usage.subscription } : {}),
+      ...(subscription ? { subscription } : {}),
       error: credentialError,
       usage: usage ? toUsageSnapshot(usage) : null,
     };

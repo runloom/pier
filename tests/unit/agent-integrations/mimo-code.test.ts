@@ -86,6 +86,8 @@ describe("buildMimoCodePluginSource", () => {
     expect(source).toContain('event.type === "session.deleted"');
     expect(source).toContain("value.info || value.session || value.thread");
     expect(source).toContain("toolUseId");
+    expect(source).toContain("pierPromptSnippetFrom");
+    expect(source).toContain("promptSnippet");
   });
 
   it("无加载合成 SessionStart：factory 体到 return 之间无独立 emit（真实 session.created 覆盖）", () => {

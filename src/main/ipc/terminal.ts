@@ -315,6 +315,63 @@ export function registerTerminalIpc(
     }
   );
 
+  ipcMain.handle(
+    "pier:terminal:set-session-title",
+    async (
+      event,
+      panelId: string,
+      input: { title: string; source: "auto" | "user" }
+    ) => {
+      const win = windowFromWebContents(event.sender);
+      if (!win || typeof panelId !== "string" || panelId.trim().length === 0) {
+        return { applied: false, ok: false };
+      }
+      if (
+        !input ||
+        typeof input.title !== "string" ||
+        (input.source !== "auto" && input.source !== "user")
+      ) {
+        return { applied: false, ok: false };
+      }
+      const { setTerminalPanelSessionTitle } = await import(
+        "../state/terminal-session-title.ts"
+      );
+      const { foregroundActivityService } = await import(
+        "./foreground-activity.ts"
+      );
+      // FA 槽位键 = Electron id；session JSON 键 = record UUID。
+      const faWindowId = String(win.id);
+      const sessionScope = windowRecordIdFor(win);
+      const persisted = await setTerminalPanelSessionTitle(
+        sessionScope,
+        panelId,
+        {
+          source: input.source,
+          title: input.title,
+        }
+      );
+      if (!persisted.ok) {
+        return { applied: false, ok: false };
+      }
+      if (persisted.applied && persisted.title) {
+        foregroundActivityService.setAgentSessionTitle(faWindowId, panelId, {
+          source: persisted.source ?? input.source,
+          title: persisted.title,
+        });
+      } else {
+        foregroundActivityService.hydrateAgentSessionTitle(
+          faWindowId,
+          panelId,
+          {
+            source: input.source,
+            title: input.title,
+          }
+        );
+      }
+      return { applied: Boolean(persisted.applied), ok: true };
+    }
+  );
+
   registerTerminalTransferGuardIpc({
     addon,
     ipcMain,

@@ -213,6 +213,8 @@ const appQuitController = createAppQuitController({
   proceedToQuit: () => {
     // flush 成功后才执行 intentional relaunch / quitAndInstall，避免
     // 更新安装跳过 prepareClose 导致布局与 window-record 未落盘。
+    // 先旁路 close intercept：updater / 二次 app.quit 关窗时不再二次 prepareClose。
+    windowManager.beginQuit();
     const action = consumeIntentionalQuitAction();
     if (action === "quitAndInstall") {
       appCore.services.appUpdates.quitAndInstall();

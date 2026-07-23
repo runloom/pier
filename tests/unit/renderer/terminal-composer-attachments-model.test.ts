@@ -23,11 +23,39 @@ describe("kindFromFileName", () => {
 });
 
 describe("buildComposerSendText", () => {
-  it("joins rail paths and draft body (chips already serialize to paths)", () => {
+  it("does not re-prefix rail paths already present via chips in the draft", () => {
     const atts = [a("/a.png", "1"), a("/b.pdf", "2")];
-    expect(buildComposerSendText(atts, "分析 /a.png")).toBe(
-      "/a.png\n/b.pdf\n分析 /a.png"
+    // Lexical chips serialize to absolute paths in the draft body.
+    expect(buildComposerSendText(atts, "分析 /a.png 与 /b.pdf")).toBe(
+      "分析 /a.png 与 /b.pdf"
     );
+  });
+  it("does not re-prefix adjacent chips serialized without spaces", () => {
+    const atts = [a("/a.png", "1"), a("/b.pdf", "2")];
+    // Multi-attach inserts chips back-to-back; Lexical plain text is /a.png/b.pdf.
+    expect(buildComposerSendText(atts, "/a.png/b.pdf")).toBe("/a.png/b.pdf");
+  });
+  it("treats CJK neighbors as path boundaries for chip bodies", () => {
+    const atts = [a("/a.png", "1")];
+    expect(buildComposerSendText(atts, "分析/a.png里的图")).toBe(
+      "分析/a.png里的图"
+    );
+  });
+  it("does not treat a shorter path prefix as present", () => {
+    const atts = [a("/tmp/a", "1")];
+    expect(buildComposerSendText(atts, "see /tmp/a.png")).toBe(
+      "/tmp/a\nsee /tmp/a.png"
+    );
+  });
+  it("prefixes only rail paths missing from the draft body", () => {
+    const atts = [a("/a.png", "1"), a("/b.pdf", "2")];
+    expect(buildComposerSendText(atts, "只看 /a.png")).toBe(
+      "/b.pdf\n只看 /a.png"
+    );
+  });
+  it("joins rail paths when the draft has no body text", () => {
+    const atts = [a("/a.png", "1"), a("/b.pdf", "2")];
+    expect(buildComposerSendText(atts, "  ")).toBe("/a.png\n/b.pdf");
   });
   it("attachments only has no trailing empty body line", () => {
     expect(buildComposerSendText([a("/a.png", "1")], "  ")).toBe("/a.png");
@@ -35,11 +63,9 @@ describe("buildComposerSendText", () => {
   it("body only", () => {
     expect(buildComposerSendText([], "hello")).toBe("hello");
   });
-  it("preserves leading body whitespace when attachments present", () => {
+  it("does not re-prefix when the path already appears in the body", () => {
     const atts = [a("/a.png", "1")];
-    expect(buildComposerSendText(atts, "  分析 /a.png")).toBe(
-      "/a.png\n  分析 /a.png"
-    );
+    expect(buildComposerSendText(atts, "  分析 /a.png")).toBe("  分析 /a.png");
   });
   it("whitespace-only body is not sendable without attachments", () => {
     expect(buildComposerSendText([], "   \n\t  ")).toBe("");

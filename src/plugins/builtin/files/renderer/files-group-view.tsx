@@ -12,6 +12,7 @@ import {
 import type { FileEditorController } from "./file-editor-controller.ts";
 import { ResolvedFilePanelActions } from "./file-panel-actions.tsx";
 import { ResolvedFilePanel } from "./file-panel-body.tsx";
+import { revealDiskBreadcrumbInTree } from "./file-panel-breadcrumb-reveal.ts";
 import {
   EmptyFileState,
   FilePanelBreadcrumb,
@@ -49,7 +50,6 @@ import {
 } from "./files-panel-transfer-state.ts";
 import {
   openFilesTreeSearch,
-  revealFilesTreePath,
   toggleFilesTreeSearch,
 } from "./files-tree-registry.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
@@ -345,24 +345,17 @@ export function FilesGroupView({
       if (!root || selectedSource.kind !== "disk") {
         return;
       }
-      // segments = [projectName, ...pathParts];index 0 = 项目根,
-      // 中间段 = 目录,最后段 = 文件本身。
-      const pathParts = selectedSource.path.split("/").filter(Boolean);
-      const targetPath = pathParts.slice(0, index).join("/");
-      const revealTarget = targetPath || selectedSource.path;
-      if (treeCollapsed) {
-        setTreeCollapsed(false);
-        // 树刚展开,等挂载完成再定位。
-        setTimeout(() => {
-          revealFilesTreePath({
-            instanceId: groupId,
-            path: revealTarget,
-            root,
-          });
-        }, 80);
-        return;
-      }
-      revealFilesTreePath({ instanceId: groupId, path: revealTarget, root });
+      revealDiskBreadcrumbInTree({
+        context,
+        index,
+        instanceId: groupId,
+        path: selectedSource.path,
+        projectName,
+        root,
+        setTreeCollapsed,
+        source: selectedSource,
+        treeCollapsed,
+      });
     };
     center = (
       <FilePanelBreadcrumb

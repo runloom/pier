@@ -185,6 +185,115 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
+  it("匿名工具：最后一个 ToolComplete 回落 processing，不粘在 tool", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolStart" }));
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolStart" }));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolComplete" }));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolComplete" }));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("主 session TurnCompleted 后，无 sessionId 的迟到工具不得盖住 ready", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "main-session",
+      }),
+      { stopAuthority: "advisory" }
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolStart",
+        sessionId: "main-session",
+        toolUseId: "t1",
+      }),
+      { stopAuthority: "advisory" }
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "ToolComplete",
+        sessionId: "main-session",
+        toolUseId: "t1",
+      }),
+      { stopAuthority: "advisory" }
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "TurnCompleted",
+        sessionId: "main-session",
+      }),
+      { stopAuthority: "advisory" }
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+
+    // Cursor 部分 hook 丢 sessionId → 落入 panel 兜底 scope；不得把已结算
+    // 主会话从 ready 拉回 tool/processing。
+    advance(10);
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "cursor", event: "ToolStart" }),
+      { stopAuthority: "advisory" }
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    advance(10);
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "cursor", event: "ToolComplete" }),
+      { stopAuthority: "advisory" }
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
+  it("主 session 结算后，无 sessionId 的新 PromptSubmit 仍可开新回合", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "PromptSubmit",
+        sessionId: "main-session",
+      }),
+      { stopAuthority: "advisory" }
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        agent: "cursor",
+        event: "TurnCompleted",
+        sessionId: "main-session",
+      }),
+      { stopAuthority: "advisory" }
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+
+    advance(10);
+    agg.ingestAgentEvent(
+      agentHookEvent({ agent: "cursor", event: "PromptSubmit" }),
+      { stopAuthority: "advisory" }
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
   it("并发工具按 toolUseId 幂等记账，全部完成后才离开 tool", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
@@ -1368,7 +1477,7 @@ describe("ForegroundActivityAggregator", () => {
       };
     }
 
-    it("多轮工具循环期间 status 恒为 tool, 仅 Stop 才 ready (旧 turn_end→Stop 谎报回归)", () => {
+    it("多轮工具循环期间 ToolComplete 回落 processing，仅 Stop 才 ready (旧 turn_end→Stop 谎报回归)", () => {
       const agg = createForegroundActivityAggregator({ now });
       // 原生: session_start → agent_start → 2×(tool_call → tool_result) → agent_end
       agg.ingestAgentEvent(ompEvent("SessionStart"));
@@ -1382,8 +1491,8 @@ describe("ForegroundActivityAggregator", () => {
         expect(a.status, `第 ${round} 轮 ToolStart 后`).toBe("tool");
         agg.ingestAgentEvent(ompEvent("ToolComplete"));
         a = agg.snapshot().activities[0] as AgentActivity;
-        // 旧 bug 形态: turn_end→Stop 会在轮间此处插入 ready(谎报等待输入)
-        expect(a.status, `第 ${round} 轮 ToolComplete 后`).toBe("tool");
+        // 轮间是思考（processing），不得插入 ready（旧 turn_end→Stop 谎报）
+        expect(a.status, `第 ${round} 轮 ToolComplete 后`).toBe("processing");
       }
       agg.ingestAgentEvent(ompEvent("Stop"));
       a = agg.snapshot().activities[0] as AgentActivity;
@@ -1400,11 +1509,11 @@ describe("ForegroundActivityAggregator", () => {
       // [原生事件, pier 事件, 期望 status, 期望 subagentCount]
       const steps: [string, string, string, number][] = [
         ["M:tool_call(task)", "ToolStart", "tool", 0],
-        ["M:tool_result(task)", "ToolComplete", "tool", 0],
-        ["S:agent_start", "SubagentStart", "tool", 1],
+        ["M:tool_result(task)", "ToolComplete", "processing", 0],
+        ["S:agent_start", "SubagentStart", "processing", 1],
         ["M:tool_call(job)", "ToolStart", "tool", 1],
         ["S:agent_end", "SubagentStop", "tool", 0],
-        ["M:tool_result(job)", "ToolComplete", "tool", 0],
+        ["M:tool_result(job)", "ToolComplete", "processing", 0],
       ];
       for (const [native, event, status, subagents] of steps) {
         agg.ingestAgentEvent(ompEvent(event));

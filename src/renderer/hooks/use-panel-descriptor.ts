@@ -14,6 +14,8 @@ import {
 export interface PanelHandle {
   readonly id: string;
   setTitle(title: string): void;
+  /** Current dockview tab title; used to skip no-op setTitle. */
+  readonly title?: string | undefined;
 }
 
 /**
@@ -41,7 +43,10 @@ export function usePanelDescriptor(
       remove(panel.id);
       return;
     }
-    panel.setTitle(descriptor.display.short);
+    // Avoid dockview tab churn when only display.long / context changed.
+    if (panel.title !== descriptor.display.short) {
+      panel.setTitle(descriptor.display.short);
+    }
     upsert(panel.id, descriptor);
   }, [panel, descriptor, upsert, remove]);
 

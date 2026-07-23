@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@pier/ui/select.tsx";
 import i18next from "i18next";
-import type { CSSProperties } from "react";
+import type { ComponentType, CSSProperties } from "react";
 import { useEffect, useSyncExternalStore } from "react";
 import {
   Sidebar,
@@ -72,7 +72,7 @@ function NavButton({
   testId,
 }: {
   active: boolean;
-  icon: (typeof NAV_ITEMS)[number]["icon"];
+  icon: ComponentType<{ className?: string; size?: number | string }>;
   label: string;
   onSelect: () => void;
   showDot?: boolean;

@@ -2,7 +2,7 @@
 
 **日期**：2026-07-05
 **范围**：大盘（dashboard）core panel kit + `dashboardWidgets` 插件贡献点 + main 侧账号域服务（agent-accounts）+ `pier.codex` 内置插件
-**参考产品**：orca（`/Users/xyz/Documents/GitHub/orca`）的 codex 多账号管理与全局状态栏
+**参考产品**：orca（`/Users/dev/Documents/GitHub/orca`）的 codex 多账号管理与全局状态栏
 **关联文档**：[2026-06-30-plugin-panel-mechanism-design.md](2026-06-30-plugin-panel-mechanism-design.md)（插件 panel 机制）、[2026-07-02-plugin-configuration-and-statusbar-design.md](2026-07-02-plugin-configuration-and-statusbar-design.md)（贡献点 + 用户覆盖合并管道先例）
 
 ## 1. 背景与问题

@@ -21,6 +21,16 @@ export interface GrokAccountRecord {
   lastAuthenticatedAt?: number | undefined;
   provider: AgentAccountProviderId;
   providerAccountId?: string | undefined;
+  /** Soft-fetched membership; retained across restarts. */
+  subscription?:
+    | {
+        cancelAtPeriodEnd?: boolean | undefined;
+        expiresAt?: number | undefined;
+        planType: string;
+        status: "active" | "canceled" | "expired" | "none" | "unknown";
+        trialEndsAt?: number | undefined;
+      }
+    | undefined;
   teamId?: string | undefined;
   updatedAt: number;
 }
@@ -50,6 +60,15 @@ const accountRecordSchema = z.strictObject({
   lastAuthenticatedAt: z.optional(z.number()),
   provider: z.literal("grok"),
   providerAccountId: z.optional(z.string()),
+  subscription: z.optional(
+    z.strictObject({
+      cancelAtPeriodEnd: z.optional(z.boolean()),
+      expiresAt: z.optional(z.number()),
+      planType: nonEmptyStringSchema,
+      status: z.enum(["active", "canceled", "expired", "none", "unknown"]),
+      trialEndsAt: z.optional(z.number()),
+    })
+  ),
   teamId: z.optional(z.string()),
   updatedAt: z.number(),
 });

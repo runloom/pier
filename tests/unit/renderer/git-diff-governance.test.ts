@@ -62,8 +62,10 @@ describe("Git diff renderer governance", () => {
       "packages/ui/src/diff-view-items.ts",
       "packages/ui/src/diff-view-pointer-selection.ts",
       "packages/ui/src/diff-view-selection-text.ts",
+      "packages/ui/src/diff-view-topology-scroll.ts",
       "packages/ui/src/diff-view-worker.tsx",
       "packages/ui/src/diff-view.tsx",
+      "packages/ui/src/use-diff-view-content-selection.ts",
       "packages/ui/src/use-diff-view-handle.ts",
       "packages/ui/src/use-diff-view-headers.tsx",
       "packages/ui/src/use-diff-view-item-apply.ts",
@@ -119,6 +121,8 @@ describe("Git diff renderer governance", () => {
         if (phase !== "unmount") {
           markRendered(context.item.id, context.version, element);
         }
+        const viewer = codeViewRef.current?.getInstance();
+        stabilizeCodeViewStickyPositioning(viewer);
         scheduleRenderWindowReport();
       },
       overflow,
@@ -139,6 +143,10 @@ describe("Git diff renderer governance", () => {
     expect(appearanceSource).toContain('from "./scrollbar-system.ts"');
     expect(customCss).toBeDefined();
     expect(/\$\{SCROLLBAR_SYSTEM_CSS\}/.test(customCss ?? "")).toBe(true);
+    expect(appearanceSource).toContain("DIFF_HEADER_HEIGHT_PX = 32");
+    expect(appearanceSource).toContain("min-height: 32px");
+    expect(source).toContain('from "./diff-view-sticky-stabilize.ts"');
+    expect(source).toContain("stabilizeCodeViewStickyPositioning(viewer)");
     expect(customCss).toContain("[data-diffs-header]");
     expect(customCss).toContain("[data-metadata] > [data-deletions-count]");
     expect(source).toContain("renderHeaderMetadata={renderHeaderMetadata}");

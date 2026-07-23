@@ -12,27 +12,30 @@ export function useTerminalPanelDescriptor(
   input: TerminalPanelDescriptorInput
 ): void {
   const {
+    displayPrimary,
     effectiveContext,
     effectiveCwd,
     effectiveTab,
-    effectiveTitle,
     sessionLoaded,
+    terminalTitle,
   } = input;
   const descriptor = useMemo(
     () =>
       terminalPanelDescriptor({
+        ...(displayPrimary == null ? {} : { displayPrimary }),
         effectiveContext,
         effectiveCwd,
         effectiveTab,
-        effectiveTitle,
         sessionLoaded,
+        ...(terminalTitle == null ? {} : { terminalTitle }),
       }),
     [
+      displayPrimary,
       effectiveContext,
       effectiveCwd,
       effectiveTab,
-      effectiveTitle,
       sessionLoaded,
+      terminalTitle,
     ]
   );
   usePanelDescriptor(api, descriptor);

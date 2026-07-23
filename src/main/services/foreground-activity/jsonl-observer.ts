@@ -386,6 +386,12 @@ function enrichAgentEventFromRawPayload(
       }
       return;
     };
+    const promptSnippet =
+      readString("promptSnippet", "prompt_snippet") ??
+      (event.v === 2 ? event.promptSnippet : undefined);
+    // v1 agentEvent is `.strict()` and has no promptSnippet — omit the key
+    // entirely so enrichment cannot fail validation and fall back to the
+    // un-enriched line (which would keep nested/tool_input session ids).
     const candidate = {
       ...event,
       agentInstanceId:
@@ -397,6 +403,7 @@ function enrichAgentEventFromRawPayload(
       transcriptPath:
         readString("transcript_path", "transcriptPath") ?? event.transcriptPath,
       turnId: readString("turn_id", "turnId") ?? event.turnId,
+      ...(promptSnippet === undefined ? {} : { promptSnippet }),
     };
     const validated = agentHookEventSchema.safeParse(candidate);
     return validated.success ? validated.data : event;

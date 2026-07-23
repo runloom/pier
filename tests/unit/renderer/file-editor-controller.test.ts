@@ -9,6 +9,7 @@ import {
 } from "@plugins/builtin/files/renderer/files-document-store.ts";
 import type { FilesDocumentPanelSource } from "@plugins/builtin/files/renderer/files-document-types.ts";
 import { FilesWatchHub } from "@plugins/builtin/files/renderer/files-watch-hub.ts";
+import type { FileDocumentWriteResult } from "@shared/contracts/file.ts";
 import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
@@ -98,13 +99,18 @@ function createHarness(
     }
   );
   const writeDocument = vi.fn(
-    async (request: { contents: string; path: string; root: string }) => {
+    async (request: {
+      contents: string;
+      path: string;
+      root: string;
+    }): Promise<FileDocumentWriteResult> => {
       try {
         const result = await writeText(request);
         return {
-          committed: true as const,
-          durability: options.durability ?? ("confirmed" as const),
-          kind: "written" as const,
+          canonicalPath: request.path,
+          committed: true,
+          durability: options.durability ?? "confirmed",
+          kind: "written",
           mode: 0o644,
           mtimeMs: result.mtimeMs,
           revision: `revision-${result.mtimeMs}`,
@@ -118,8 +124,8 @@ function createHarness(
           error.code === "file_conflict"
         ) {
           return {
-            kind: "conflict" as const,
-            reason: "revision-mismatch" as const,
+            kind: "conflict",
+            reason: "revision-mismatch",
           };
         }
         throw error;
@@ -157,6 +163,12 @@ function createHarness(
   const confirmDurability = vi.fn(async () => ({
     kind: "confirmed" as const,
     revision: `revision-${mtimeMs}`,
+  }));
+  const inspectWriteTarget = vi.fn(async (_request) => ({
+    fileType: "text" as const,
+    kind: "existing" as const,
+    revision: `revision-${mtimeMs}`,
+    size: contents.length,
   }));
   const inspectPathImpact = vi.fn(
     async (request: { path: string; root: string }) => ({
@@ -207,12 +219,7 @@ function createHarness(
         }),
         set: setDraft,
       },
-      inspectWriteTarget: vi.fn(async (_request) => ({
-        fileType: "text" as const,
-        kind: "existing" as const,
-        revision: `revision-${mtimeMs}`,
-        size: contents.length,
-      })),
+      inspectWriteTarget,
       inspectPathImpact,
       move,
       readDocument,
@@ -253,6 +260,7 @@ function createHarness(
     deleteDraft,
     flushLayout,
     inspectPathImpact,
+    inspectWriteTarget,
     move,
     notifications,
     readDocument,
@@ -675,6 +683,121 @@ describe("FileEditorController", () => {
         dirty: true,
         diskConflict: true,
         hasBackingStore: false,
+        revision: null,
+      })
+    );
+    release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
+  it("recreates a deleted-on-disk file with expected absent and skips the conflict dialog", async () => {
+    const harness = createHarness();
+    const release = harness.controller.acquirePanel("panel", SOURCE);
+    await flushPromises();
+    const documentId = harness.controller.documentId(SOURCE);
+    updateDocumentContents(documentId, "# Recreate me\n");
+    harness.readDocument.mockRejectedValueOnce(
+      Object.assign(new Error("The file no longer exists"), {
+        code: "not_found",
+      })
+    );
+    harness.watchEvent({
+      changes: [{ kind: "deleted", path: SOURCE.path }],
+      root: ROOT,
+    });
+    await vi.waitFor(() =>
+      expect(getDocument(documentId)?.deletedOnDisk).toBe(true)
+    );
+
+    const outcome = await harness.controller.saveDocument(
+      documentId,
+      "panel",
+      "none"
+    );
+
+    expect(outcome).toBe("saved");
+    expect(harness.dialogs.choice).not.toHaveBeenCalled();
+    expect(harness.writeDocument).toHaveBeenCalledWith(
+      expect.objectContaining({
+        contents: "# Recreate me\n",
+        expected: { kind: "absent" },
+        path: SOURCE.path,
+        root: ROOT,
+      })
+    );
+    expect(getDocument(documentId)).toMatchObject({
+      deletedOnDisk: false,
+      dirty: false,
+      hasBackingStore: true,
+      revision: expect.any(String),
+    });
+    release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
+  it("offers overwrite when recreating a deleted file but the path already exists again", async () => {
+    const harness = createHarness({ conflictChoice: "confirm" });
+    const release = harness.controller.acquirePanel("panel", SOURCE);
+    await flushPromises();
+    const documentId = harness.controller.documentId(SOURCE);
+    updateDocumentContents(documentId, "# Race recreate\n");
+    harness.readDocument.mockRejectedValueOnce(
+      Object.assign(new Error("The file no longer exists"), {
+        code: "not_found",
+      })
+    );
+    harness.watchEvent({
+      changes: [{ kind: "deleted", path: SOURCE.path }],
+      root: ROOT,
+    });
+    await vi.waitFor(() =>
+      expect(getDocument(documentId)?.deletedOnDisk).toBe(true)
+    );
+
+    harness.writeDocument
+      .mockImplementationOnce(
+        async (): Promise<FileDocumentWriteResult> => ({
+          kind: "conflict",
+          reason: "target-exists",
+        })
+      )
+      .mockImplementationOnce(
+        async (): Promise<FileDocumentWriteResult> => ({
+          canonicalPath: SOURCE.path,
+          committed: true,
+          durability: "confirmed",
+          kind: "written",
+          mode: 0o644,
+          mtimeMs: 99,
+          revision: "revision-recreated",
+          size: "# Race recreate\n".length,
+        })
+      );
+    harness.inspectWriteTarget.mockResolvedValueOnce({
+      fileType: "text",
+      kind: "existing",
+      revision: "revision-other",
+      size: 4,
+    });
+
+    const outcome = await harness.controller.saveDocument(
+      documentId,
+      "panel",
+      "none"
+    );
+
+    expect(outcome).toBe("saved");
+    expect(harness.dialogs.choice).toHaveBeenCalledOnce();
+    expect(harness.writeDocument).toHaveBeenNthCalledWith(
+      1,
+      expect.objectContaining({ expected: { kind: "absent" } })
+    );
+    expect(harness.writeDocument).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        expected: { kind: "revision", revision: "revision-other" },
       })
     );
     release();

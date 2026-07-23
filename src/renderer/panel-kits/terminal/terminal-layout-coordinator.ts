@@ -5,7 +5,6 @@ import { useZoomStore } from "@/stores/zoom.store.ts";
 import { readTerminalAnchorFrame } from "./terminal-viewport.ts";
 
 type WindowLayoutPulseReason = WindowLayoutPulse["reason"];
-
 export type TerminalLayoutFlushReason =
   | "anchor-resize"
   | "dockview-active-panel"
@@ -24,13 +23,11 @@ interface TerminalAnchorState {
   panelId: string;
   resizeObserver: ResizeObserver | null;
 }
-
 export interface TerminalLayoutRegistration {
   dispose(): void;
   flushNow(reason: TerminalLayoutFlushReason): void;
   flushTrailing(reason: TerminalLayoutFlushReason): void;
 }
-
 const anchors = new Map<string, TerminalAnchorState>();
 let windowResizeInstalled = false;
 let windowLayoutPulseDispose: (() => void) | null = null;
@@ -38,27 +35,22 @@ let presentationAppliedDispose: (() => void) | null = null;
 let presentationScheduler:
   | ((reason: TerminalLayoutFlushReason) => void)
   | null = null;
-
 export function isRegisteredTerminalAnchorVisible(panelId: string): boolean {
   const state = anchors.get(panelId);
   return state ? readTerminalAnchorFrame(state.anchor) !== null : false;
 }
-
 export function hasRegisteredTerminalAnchor(panelId: string): boolean {
   return anchors.has(panelId);
 }
-
 export function readRegisteredTerminalAnchorFrame(
   panelId: string
 ): TerminalFrame | null {
   const state = anchors.get(panelId);
   return state ? readTerminalAnchorFrame(state.anchor) : null;
 }
-
 function frameKey(frame: TerminalFrame): string {
   return `${frame.x},${frame.y},${frame.width},${frame.height}`;
 }
-
 function debugEnabled(): boolean {
   try {
     return window.localStorage?.getItem("pierTerminalLayoutDebug") === "1";
@@ -66,7 +58,6 @@ function debugEnabled(): boolean {
     return false;
   }
 }
-
 function debugFrame(
   reason: TerminalLayoutFlushReason,
   panelId: string,
@@ -82,7 +73,6 @@ function debugFrame(
     time: performance.now(),
   });
 }
-
 export function setTerminalLayoutPresentationScheduler(
   scheduler: ((reason: TerminalLayoutFlushReason) => void) | null
 ): () => void {
@@ -93,11 +83,9 @@ export function setTerminalLayoutPresentationScheduler(
     }
   };
 }
-
 function notifyPresentationChange(reason: TerminalLayoutFlushReason): void {
   presentationScheduler?.(reason);
 }
-
 function observeFrameNow(
   state: TerminalAnchorState,
   reason: TerminalLayoutFlushReason
@@ -118,7 +106,6 @@ function observeFrameNow(
   debugFrame(reason, state.panelId, frame);
   notifyPresentationChange(reason);
 }
-
 function flushTrailing(
   state: TerminalAnchorState,
   reason: TerminalLayoutFlushReason
@@ -140,7 +127,6 @@ function flushTrailing(
   };
   state.frameRequest = requestAnimationFrame(tick);
 }
-
 export function flushTerminalLayoutFrames(
   reason: TerminalLayoutFlushReason
 ): void {
@@ -148,7 +134,6 @@ export function flushTerminalLayoutFrames(
     observeFrameNow(state, reason);
   }
 }
-
 export function flushTerminalLayoutFramesTrailing(
   reason: TerminalLayoutFlushReason
 ): void {
@@ -156,7 +141,6 @@ export function flushTerminalLayoutFramesTrailing(
     flushTrailing(state, reason);
   }
 }
-
 function handleWindowResize(): void {
   // resize 隐身期间终端已藏，跳过 flush（否则与 pulse 路径重复下发隐身帧）。
   if (useTerminalStore.getState().suppressTerminals) {
@@ -173,77 +157,113 @@ const RESTORE_ACK_TIMEOUT_MS = 500;
 let resizeFallbackTimer: number | null = null;
 let restoreAckTimer: number | null = null;
 let awaitingRestoreAck = false;
-
 function clearResizeFallback(): void {
   if (resizeFallbackTimer !== null) {
     clearTimeout(resizeFallbackTimer);
     resizeFallbackTimer = null;
   }
 }
-
 function dismissResizePlaceholder(): void {
   awaitingRestoreAck = false;
-  if (restoreAckTimer !== null) {
-    clearTimeout(restoreAckTimer);
-    restoreAckTimer = null;
-  }
-  // Holders (lightbox / chrome pulse) still need the placeholder while active.
-  if (suppressHolders.size > 0 || resizeSuppressActive) {
+  clearTimeout(restoreAckTimer ?? undefined);
+  restoreAckTimer = null;
+  if (resizeSuppressActive || hasGlobalSuppressHolder()) {
     return;
   }
   useTerminalStore.setState({ placeholderVisible: false });
 }
-
-/** Effective suppress = resize drag OR any acquireTerminalSurfaceSuppression holder. */
+/** Global suppress = resize drag OR holder without panelId. */
 let resizeSuppressActive = false;
-/** Refcounted holders so overlapping acquire/pulse with the same id stay suppressed. */
-const suppressHolders = new Map<string, number>();
+/** Refcounted holders; panelId undefined = global suppress. */
+const suppressHolders = new Map<
+  string,
+  { count: number; panelId: string | undefined }
+>();
+function computeSuppressedPanelIds(): ReadonlySet<string> {
+  const ids = new Set<string>();
+  for (const { count, panelId } of suppressHolders.values()) {
+    if (count > 0 && panelId !== undefined) {
+      ids.add(panelId);
+    }
+  }
+  return ids;
+}
+function hasGlobalSuppressHolder(): boolean {
+  for (const { count, panelId } of suppressHolders.values()) {
+    if (count > 0 && panelId === undefined) {
+      return true;
+    }
+  }
+  return false;
+}
+function syncSurfaceSuppression(options?: { showPlaceholder?: boolean }): void {
+  const globalSuppress = resizeSuppressActive || hasGlobalSuppressHolder();
+  const suppressedPanelIds = computeSuppressedPanelIds();
+  const prev = useTerminalStore.getState();
+  const sameGlobal = globalSuppress === prev.suppressTerminals;
+  const samePanels =
+    suppressedPanelIds.size === prev.suppressedPanelIds.size &&
+    [...suppressedPanelIds].every((id) => prev.suppressedPanelIds.has(id));
 
-function syncSurfaceSuppression(options?: {
-  /** Entering a new suppress epoch — show placeholder immediately. */
-  showPlaceholder?: boolean;
-}): void {
-  const next = resizeSuppressActive || suppressHolders.size > 0;
-  const prev = useTerminalStore.getState().suppressTerminals;
-  if (next === prev) {
-    if (next && options?.showPlaceholder) {
+  if (sameGlobal && samePanels) {
+    if (
+      globalSuppress &&
+      options?.showPlaceholder &&
+      !prev.placeholderVisible
+    ) {
       useTerminalStore.setState({ placeholderVisible: true });
     }
     return;
   }
-  if (next) {
+
+  if (globalSuppress) {
     awaitingRestoreAck = false;
-    if (restoreAckTimer !== null) {
-      clearTimeout(restoreAckTimer);
-      restoreAckTimer = null;
-    }
+    clearTimeout(restoreAckTimer ?? undefined);
+    restoreAckTimer = null;
     useTerminalStore.setState({
       placeholderVisible: true,
       suppressTerminals: true,
+      suppressedPanelIds,
     });
     notifyPresentationChange("visibility");
     return;
   }
-  // Fully clear suppress; placeholder dismiss waits for presentation ack.
-  useTerminalStore.setState({ suppressTerminals: false });
+
+  // Per-panel only / clear: never raise global suppress or global matte.
+  const leavingGlobal = prev.suppressTerminals;
+  useTerminalStore.setState({
+    suppressTerminals: false,
+    suppressedPanelIds,
+    ...(leavingGlobal ? {} : { placeholderVisible: false }),
+  });
   notifyPresentationChange("visibility");
-  awaitingRestoreAck = true;
-  if (restoreAckTimer !== null) {
-    clearTimeout(restoreAckTimer);
+  if (!leavingGlobal) {
+    return;
   }
+  awaitingRestoreAck = true;
+  clearTimeout(restoreAckTimer ?? undefined);
   restoreAckTimer = window.setTimeout(
     dismissResizePlaceholder,
     RESTORE_ACK_TIMEOUT_MS
   );
 }
-
-/**
- * Hold native terminal surfaces hidden (placeholder up) until dispose.
- * Composable with sash-resize suppression — either path keeps suppress on.
- * Same id may be acquired multiple times; each dispose decrements the count.
- */
-export function acquireTerminalSurfaceSuppression(id: string): () => void {
-  suppressHolders.set(id, (suppressHolders.get(id) ?? 0) + 1);
+/** Hold surfaces hidden until dispose. panelId scopes to one panel; omit = global. */
+export function acquireTerminalSurfaceSuppression(
+  id: string,
+  panelId?: string
+): () => void {
+  const existing = suppressHolders.get(id);
+  if (existing) {
+    existing.count += 1;
+    // Same holder id with a different scope: widen to global so we never
+    // stick the first caller's panel-only mask across a later global acquire
+    // (or two different panelIds under one id).
+    if (existing.panelId !== panelId) {
+      existing.panelId = undefined;
+    }
+  } else {
+    suppressHolders.set(id, { count: 1, panelId });
+  }
   syncSurfaceSuppression({ showPlaceholder: true });
   let released = false;
   return () => {
@@ -251,26 +271,27 @@ export function acquireTerminalSurfaceSuppression(id: string): () => void {
       return;
     }
     released = true;
-    const remaining = (suppressHolders.get(id) ?? 1) - 1;
-    if (remaining <= 0) {
+    const holder = suppressHolders.get(id);
+    if (!holder) {
+      return;
+    }
+    holder.count -= 1;
+    if (holder.count <= 0) {
       suppressHolders.delete(id);
-    } else {
-      suppressHolders.set(id, remaining);
     }
     syncSurfaceSuppression();
   };
 }
-
-/**
- * Brief hide while web chrome geometry jumps (e.g. composer attachment rail).
- * No-ops the release path if sash-resize already owns suppression.
- */
-export function pulseTerminalSurfaceSuppression(id = "chrome-geometry"): void {
+/** Brief hide for chrome geometry jumps. panelId scopes so siblings don't flash. */
+export function pulseTerminalSurfaceSuppression(
+  id = "chrome-geometry",
+  panelId?: string
+): void {
   if (resizeSuppressActive) {
     flushTerminalLayoutFramesTrailing("visibility");
     return;
   }
-  const release = acquireTerminalSurfaceSuppression(id);
+  const release = acquireTerminalSurfaceSuppression(id, panelId);
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       release();
@@ -278,23 +299,20 @@ export function pulseTerminalSurfaceSuppression(id = "chrome-geometry"): void {
     });
   });
 }
-
 /** Test-only: drop holders / resize suppress bits left between cases. */
 export function resetTerminalSurfaceSuppressionForTests(): void {
   clearResizeFallback();
   awaitingRestoreAck = false;
-  if (restoreAckTimer !== null) {
-    clearTimeout(restoreAckTimer);
-    restoreAckTimer = null;
-  }
+  clearTimeout(restoreAckTimer ?? undefined);
+  restoreAckTimer = null;
   resizeSuppressActive = false;
   suppressHolders.clear();
   useTerminalStore.setState({
     placeholderVisible: false,
     suppressTerminals: false,
+    suppressedPanelIds: new Set(),
   });
 }
-
 function enterResizeSuppression(): void {
   // 拖拽持续 → 每个 active 帧续期兜底计时。
   clearResizeFallback();
@@ -309,7 +327,6 @@ function enterResizeSuppression(): void {
   resizeSuppressActive = true;
   syncSurfaceSuppression({ showPlaceholder: true });
 }
-
 function exitResizeSuppression(): void {
   clearResizeFallback();
   // 未在 resize 隐身（已恢复或从未进入）：幂等空操作。
@@ -330,7 +347,6 @@ function handleRestoreAck(rendererSequence: number): void {
     dismissResizePlaceholder();
   }
 }
-
 function handleResizePhase(phase: WindowLayoutPulse["phase"]): void {
   if (phase === "active") {
     enterResizeSuppression();
@@ -339,7 +355,6 @@ function handleResizePhase(phase: WindowLayoutPulse["phase"]): void {
   // 'end'，以及任何缺失/未知 phase：一律收尾恢复，绝不静默卡在隐身。
   exitResizeSuppression();
 }
-
 function ensureGlobalListeners(): void {
   if (!windowResizeInstalled) {
     window.addEventListener("resize", handleWindowResize);
@@ -375,7 +390,6 @@ function ensureGlobalListeners(): void {
       }) ?? null;
   }
 }
-
 function maybeDisposeGlobalListeners(): void {
   if (anchors.size > 0) {
     return;
@@ -398,14 +412,19 @@ function maybeDisposeGlobalListeners(): void {
   }
   resizeSuppressActive = false;
   suppressHolders.clear();
-  if (useTerminalStore.getState().suppressTerminals) {
+  const terminalState = useTerminalStore.getState();
+  if (
+    terminalState.suppressTerminals ||
+    terminalState.suppressedPanelIds.size > 0 ||
+    terminalState.placeholderVisible
+  ) {
     useTerminalStore.setState({
       placeholderVisible: false,
       suppressTerminals: false,
+      suppressedPanelIds: new Set(),
     });
   }
 }
-
 export function registerTerminalLayoutAnchor(
   panelId: string,
   anchor: HTMLDivElement

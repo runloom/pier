@@ -1266,7 +1266,7 @@ describe("Files file-panel", () => {
     });
   });
 
-  it("uses Empty for views that are not implemented", () => {
+  it("uses Empty when diff mode has no disk contents to compare", () => {
     const context = createMockContext();
     const controller = filesRuntimeFor(context).controller;
     const { container } = render(
@@ -1274,7 +1274,7 @@ describe("Files file-panel", () => {
         controller={controller}
         documentId="unimplemented"
         editorSessionId="unimplemented"
-        mode="rich"
+        mode="diff"
         openExternal={() => undefined}
         value=""
       />
@@ -1282,7 +1282,7 @@ describe("Files file-panel", () => {
 
     expect(container.querySelector('[data-slot="empty"]')).not.toBeNull();
     expect(
-      screen.getByText("Rich Markdown editing is not enabled yet.")
+      screen.getByText("No disk contents available to compare.")
     ).toBeVisible();
   });
 

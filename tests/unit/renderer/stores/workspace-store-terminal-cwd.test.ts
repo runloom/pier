@@ -33,12 +33,12 @@ function createApi() {
 
 const context: PanelContext = {
   contextId: "ctx-pier",
-  cwd: "/Users/xyz/ABC/pier",
-  openedPath: "/Users/xyz/ABC/pier",
-  projectRootPath: "/Users/xyz/ABC/pier",
+  cwd: "/Users/dev/ABC/pier",
+  openedPath: "/Users/dev/ABC/pier",
+  projectRootPath: "/Users/dev/ABC/pier",
   source: "command",
   updatedAt: 1_772_000_000_000,
-  worktreeKey: "/Users/xyz/ABC/pier",
+  worktreeKey: "/Users/dev/ABC/pier",
 };
 
 describe("workspace.store — terminal context policy", () => {
@@ -65,7 +65,7 @@ describe("workspace.store — terminal context policy", () => {
       expect.objectContaining({
         component: "terminal",
         params: { context },
-        title: "Terminal: /Users/xyz/ABC/pier",
+        title: "Terminal: /Users/dev/ABC/pier",
       })
     );
   });

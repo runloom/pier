@@ -76,6 +76,14 @@ export function createPluginGitContext(
         ...(path ? { paths: [path] } : {}),
       });
     },
+    getDiffText: (cwd, options) => {
+      assertPluginCapability(entry, "git:read");
+      return window.pier.git.getDiffText(cwd, options);
+    },
+    getLog: (cwd, options) => {
+      assertPluginCapability(entry, "git:read");
+      return window.pier.git.getLog(cwd, options);
+    },
     getFileContent: (cwd, options) => {
       assertPluginCapability(entry, "git:read");
       return window.pier.git.getFileContent(cwd, options);

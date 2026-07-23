@@ -16,6 +16,7 @@ import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import type { FileEditorController } from "./file-editor-controller.ts";
 import { ResolvedFilePanelActions } from "./file-panel-actions.tsx";
 import { ResolvedFilePanel } from "./file-panel-body.tsx";
+import { revealDiskBreadcrumbInTree } from "./file-panel-breadcrumb-reveal.ts";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
 import {
   EmptyFileState,
@@ -279,6 +280,34 @@ function FilePanelContent({
     setSearchRequest((r) => r + 1);
   }, []);
 
+  const treeInstanceId = props.api?.id ?? "pier.files.inlineFilePanel";
+  const handleBreadcrumbClick = useCallback(
+    (index: number, source: FilesDocumentPanelSource) => {
+      if (!(root && runtimeContext) || source.kind !== "disk") {
+        return;
+      }
+      revealDiskBreadcrumbInTree({
+        context: runtimeContext,
+        index,
+        instanceId: treeInstanceId,
+        path: source.path,
+        projectName,
+        root,
+        setTreeCollapsed,
+        source,
+        treeCollapsed,
+      });
+    },
+    [
+      projectName,
+      root,
+      runtimeContext,
+      setTreeCollapsed,
+      treeCollapsed,
+      treeInstanceId,
+    ]
+  );
+
   // 共享 group 视图已接管 chrome+树+编辑器;薄壳仅占位保持 dockview tab 生命周期。
   if (prefersSharedGroupView) {
     return <div aria-hidden="true" className="h-full w-full" />;
@@ -330,6 +359,9 @@ function FilePanelContent({
             center={
               <FilePanelBreadcrumb
                 ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
+                onSegmentClick={(index) =>
+                  handleBreadcrumbClick(index, selectedSource)
+                }
                 segments={breadcrumbSegmentsForSource(
                   selectedSource,
                   projectName
@@ -404,6 +436,9 @@ function FilePanelContent({
           center={
             <FilePanelBreadcrumb
               ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
+              onSegmentClick={(index) =>
+                handleBreadcrumbClick(index, selectedSource)
+              }
               segments={breadcrumbSegmentsForSource(
                 selectedSource,
                 projectName

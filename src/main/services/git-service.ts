@@ -346,7 +346,55 @@ export function createGitService({
       if (request.paths.length === 0) {
         throw new Error("stage requires at least one path");
       }
-      await runGit(["add", "--", ...request.paths], cwd, {
+      // 父目录被 gitignore、但文件已跟踪时，`git add -- path` 会 exit 1
+      //（文案点名父目录）。已跟踪路径改走 `add -u`；未跟踪先 check-ignore
+      // 过滤，避免 Stage All 因忽略项整批失败。
+      const trackedOutput = await runGit(
+        ["ls-files", "-z", "--cached", "--", ...request.paths],
+        cwd,
+        { timeoutMs: WRITE_TIMEOUT_MS }
+      );
+      const tracked = new Set(
+        trackedOutput.split("\0").filter((path) => path.length > 0)
+      );
+      const trackedPaths = request.paths.filter((path) => tracked.has(path));
+      const untrackedPaths = request.paths.filter((path) => !tracked.has(path));
+
+      if (trackedPaths.length > 0) {
+        await runGit(["add", "-u", "--", ...trackedPaths], cwd, {
+          timeoutMs: WRITE_TIMEOUT_MS,
+        });
+      }
+
+      if (untrackedPaths.length === 0) {
+        return;
+      }
+
+      let ignored = new Set<string>();
+      try {
+        const ignoredOutput = await runGit(
+          ["check-ignore", "--", ...untrackedPaths],
+          cwd,
+          { timeoutMs: WRITE_TIMEOUT_MS }
+        );
+        ignored = new Set(
+          ignoredOutput
+            .split("\n")
+            .map((line) => line.trim())
+            .filter((line) => line.length > 0)
+        );
+      } catch {
+        // check-ignore exit 1 = 无一命中；其它失败时保守尝试全部 untracked。
+        ignored = new Set();
+      }
+
+      const addableUntracked = untrackedPaths.filter(
+        (path) => !ignored.has(path)
+      );
+      if (addableUntracked.length === 0) {
+        return;
+      }
+      await runGit(["add", "--", ...addableUntracked], cwd, {
         timeoutMs: WRITE_TIMEOUT_MS,
       });
     },

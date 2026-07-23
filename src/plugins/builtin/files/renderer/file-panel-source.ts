@@ -58,6 +58,36 @@ export function breadcrumbSegmentsForSource(
   return parts;
 }
 
+/**
+ * Map a breadcrumb segment index to a project-relative tree path for reveal.
+ *
+ * When `projectName` prefixes the segments (`[project, ...pathParts]`):
+ * - index 0 → `""` (project root)
+ * - index k → first k path parts
+ *
+ * When there is no project prefix (`segments === pathParts`):
+ * - index k → first k+1 path parts
+ */
+export function breadcrumbRevealPathForDiskSource(params: {
+  path: string;
+  projectName: string | null;
+  segmentIndex: number;
+}): string {
+  const pathParts = params.path.split("/").filter(Boolean);
+  const hasProjectName =
+    params.projectName != null && params.projectName.length > 0;
+  const maxIndex = hasProjectName ? pathParts.length : pathParts.length - 1;
+  if (maxIndex < 0) {
+    return "";
+  }
+  const clampedIndex = Math.max(0, Math.min(params.segmentIndex, maxIndex));
+  const pathPrefixCount = hasProjectName ? clampedIndex : clampedIndex + 1;
+  if (pathPrefixCount <= 0) {
+    return "";
+  }
+  return pathParts.slice(0, pathPrefixCount).join("/");
+}
+
 export function parseSourceState(
   params: unknown,
   t: FilesTranslate

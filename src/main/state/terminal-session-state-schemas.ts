@@ -48,7 +48,11 @@ export const terminalPanelSessionSchema = z.object({
     panelTabChromeSchema.optional()
   ),
   task: taskPanelMetadataSchema.optional(),
+  /** OSC / 终端装饰标题（≠ 产品 sessionTitle）。 */
   title: z.string().optional(),
+  /** 产品会话名（Agent sessionTitle 金标准字段）。 */
+  sessionTitle: z.string().min(1).max(40).optional(),
+  sessionTitleSource: z.enum(["user", "auto"]).optional(),
   updatedAt: z.string(),
 });
 

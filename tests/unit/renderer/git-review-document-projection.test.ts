@@ -49,7 +49,9 @@ function loaded(index: number): GitReviewDocumentResource {
 function context(): RendererPluginContext {
   return {
     i18n: {
-      t: vi.fn((key: string, fallback?: string) => fallback ?? key),
+      t: vi.fn((key: string, _values?: unknown, fallback?: string) =>
+        typeof fallback === "string" ? fallback : key
+      ),
     },
   } as never;
 }
@@ -103,6 +105,82 @@ describe("projectReviewDocuments gold-standard slots", () => {
       "section:3",
       "section:4",
     ]);
+  });
+
+  it("orders projected items conflict, staged, unstaged then path", () => {
+    const mixed = (partial: {
+      path: string;
+      entryKey: string;
+      slots: Array<{
+        group: "conflict" | "unstaged" | "staged" | "committed";
+        sectionKey: string;
+      }>;
+    }): GitReviewDocumentResource => ({
+      entry: {
+        entryKey: partial.entryKey,
+        oldPaths: [],
+        path: partial.path,
+        renderSlots: partial.slots.map((slot) => ({
+          group: slot.group,
+          oldPath: null,
+          sectionKey: slot.sectionKey,
+          status: slot.group === "conflict" ? "conflicted" : "modified",
+          targetPath: partial.path,
+        })),
+        status: "modified",
+      },
+      kind: "idle",
+    });
+    const projection = projectReviewDocuments(
+      {
+        resources: [
+          mixed({
+            entryKey: "entry:b",
+            path: "b.ts",
+            slots: [
+              { group: "staged", sectionKey: "sec:s:b" },
+              { group: "unstaged", sectionKey: "sec:u:b" },
+            ],
+          }),
+          mixed({
+            entryKey: "entry:a",
+            path: "a.ts",
+            slots: [
+              { group: "conflict", sectionKey: "sec:c:a" },
+              { group: "unstaged", sectionKey: "sec:u:a" },
+              { group: "staged", sectionKey: "sec:s:a" },
+            ],
+          }),
+          mixed({
+            entryKey: "entry:z",
+            path: "z.ts",
+            slots: [{ group: "committed", sectionKey: "sec:m:z" }],
+          }),
+        ],
+        retainedEntryKeys: [],
+        settled: false,
+      },
+      context(),
+      "en"
+    );
+    expect(projection.items.map((item) => item.id)).toEqual([
+      "sec:c:a",
+      "sec:s:a",
+      "sec:s:b",
+      "sec:u:a",
+      "sec:u:b",
+      "sec:m:z",
+    ]);
+    // Half-staged path appears twice; stageControl distinguishes groups.
+    const stagedA = projection.items.find((item) => item.id === "sec:s:a");
+    const unstagedA = projection.items.find((item) => item.id === "sec:u:a");
+    expect(stagedA?.fileDisplay?.path).toBe("a.ts");
+    expect(unstagedA?.fileDisplay?.path).toBe("a.ts");
+    expect(stagedA?.stageControl).toEqual({ state: "staged" });
+    expect(unstagedA?.stageControl).toEqual({
+      canDiscard: true,
+      state: "unstaged",
+    });
   });
 });
 

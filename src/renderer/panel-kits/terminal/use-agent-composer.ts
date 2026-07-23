@@ -106,22 +106,30 @@ export function useAgentComposer({
   const [composerHeightPx, setComposerHeightPx] = useState(0);
   const statusInsetPx = hasStatusBar ? TERMINAL_STATUS_BAR_HEIGHT_PX : 0;
   // 首帧用预留高度缩排 native，避免卡片叠在未缩帧上点不中；实测后取真实高度。
+  // compact 预留 = h-9 (36)，避免首帧上方空隙大于下方 GAP。
   const composerInsetPx = composerMounted
     ? Math.max(composerHeightPx, TERMINAL_COMPOSER_RESERVE_HEIGHT_PX) +
       TERMINAL_COMPOSER_GAP_PX * 2
     : 0;
   const terminalContentBottomPx = statusInsetPx + composerInsetPx;
 
-  const prevComposerHeightRef = useRef(0);
+  const prevComposerHeightRef = useRef<number | null>(null);
   const onComposerHeightChange = useCallback(
     (heightPx: number) => {
+      // Unmount cleanup reports 0 — clear baseline so the next mount's first
+      // real measure is treated as first-report (no false geometry pulse).
+      if (heightPx <= 0) {
+        prevComposerHeightRef.current = null;
+        setComposerHeightPx(0);
+        return;
+      }
       const previous = prevComposerHeightRef.current;
       prevComposerHeightRef.current = heightPx;
       setComposerHeightPx(heightPx);
-      // Attachment rail / expand chrome jumps native inset; briefly hide the
-      // surface so Chromium cannot sample stale Ghostty/sash into composer paint.
-      if (Math.abs(heightPx - previous) >= 24) {
-        pulseTerminalSurfaceSuppression(`composer-height:${panelId}`);
+      // Only pulse in-mount geometry jumps (attachment rail expand/collapse).
+      // First measure after mount (previous=null) does not pulse.
+      if (previous !== null && Math.abs(heightPx - previous) >= 24) {
+        pulseTerminalSurfaceSuppression(`composer-height:${panelId}`, panelId);
       }
     },
     [panelId]

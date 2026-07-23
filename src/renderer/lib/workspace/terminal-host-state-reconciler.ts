@@ -26,10 +26,32 @@ let presentationFacts: TerminalHostPresentationFacts | null = null;
 let rendererSequence = 0;
 let lastSnapshot: TerminalHostSnapshot | null = null;
 
+function hostVisualKey(
+  input: TerminalHostInputFacts,
+  presentation: Omit<TerminalHostPresentationFacts, "reason"> & {
+    reason?: TerminalHostReason;
+  },
+  activePanelId: string | null,
+  activeTerminalPanelId: string | null,
+  terminals: TerminalHostSnapshot["terminals"]
+): string {
+  return JSON.stringify({
+    activePanelId,
+    activeTerminalPanelId,
+    basePanel: input.basePanel,
+    focusDisabledPanelIds: input.focusDisabledPanelIds,
+    hasMaximizedGroup: presentation.hasMaximizedGroup,
+    terminals,
+    webOverlayRects: input.webOverlayRects,
+    webRequestCount: input.webRequestCount,
+  });
+}
+
 function publish(
   nextInputFacts: TerminalHostInputFacts,
   nextPresentationFacts: TerminalHostPresentationFacts,
-  reason: TerminalHostReason
+  reason: TerminalHostReason,
+  options?: { allowVisualDedup?: boolean }
 ): TerminalHostSnapshot {
   const basePanel = nextInputFacts.basePanel;
   let activePanelId = nextPresentationFacts.activePanelId;
@@ -47,6 +69,40 @@ function publish(
     }
   } else {
     activeTerminalPanelId = null;
+  }
+
+  // Presentation-only: skip no-op geometry republishes (Enter flash). Input
+  // routing must still bump sequence when intent is unchanged so native can
+  // re-apply keyboard focus (tab click → requestTerminalFocusIntent).
+  if (options?.allowVisualDedup && lastSnapshot) {
+    const visualKey = hostVisualKey(
+      nextInputFacts,
+      nextPresentationFacts,
+      activePanelId,
+      activeTerminalPanelId,
+      terminals
+    );
+    const previousKey = hostVisualKey(
+      {
+        basePanel: lastSnapshot.basePanel,
+        focusDisabledPanelIds: lastSnapshot.focusDisabledPanelIds,
+        webOverlayRects: lastSnapshot.webOverlayRects,
+        webRequestCount: lastSnapshot.webRequestCount,
+      },
+      {
+        activePanelId: lastSnapshot.activePanelId,
+        activeTerminalPanelId: lastSnapshot.activeTerminalPanelId,
+        hasMaximizedGroup: lastSnapshot.hasMaximizedGroup,
+        reason: lastSnapshot.reason,
+        terminals: lastSnapshot.terminals,
+      },
+      lastSnapshot.activePanelId,
+      lastSnapshot.activeTerminalPanelId,
+      lastSnapshot.terminals
+    );
+    if (previousKey === visualKey) {
+      return lastSnapshot;
+    }
   }
 
   rendererSequence += 1;
@@ -99,7 +155,9 @@ export function updateTerminalHostPresentationFacts(
     webOverlayRects: [],
     webRequestCount: 0,
   };
-  return publish(inputFacts ?? fallbackInput, facts, facts.reason);
+  return publish(inputFacts ?? fallbackInput, facts, facts.reason, {
+    allowVisualDedup: true,
+  });
 }
 
 export function getLastTerminalHostSnapshot(): TerminalHostSnapshot | null {

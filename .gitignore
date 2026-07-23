@@ -23,8 +23,10 @@ vite.config.ts.timestamp-*
 !.claude/skills/
 .playwright-cli/
 
+
 # Electron build artifacts
 /out/
+src/renderer/out/
 /dist-builder/
 /dist-electron/
 

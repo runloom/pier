@@ -7,7 +7,8 @@ import { pluginText } from "./git-plugin-text.ts";
 
 /**
  * Changes 面板侧栏底部的提交区。只在 uncommitted scope 且存在 staged
- * 变更时渲染;提交成功后依赖 main 侧 post-op pulse 自动刷新 index。
+ * 变更时渲染；提交成功后依赖 main 侧 post-op pulse 自动刷新 index。
+ * AI 草稿 / Push·Publish 仍属 commit-mainline 后续任务。
  */
 export function GitCommitForm({
   context,

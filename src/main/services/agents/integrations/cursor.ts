@@ -9,6 +9,7 @@ import {
   pierHookCommandWithStdinStatusDispatch,
   type StdinStatusDispatchCase,
   transformJsonConfig,
+  transformPierHooksUnlessNewer,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 
@@ -169,9 +170,13 @@ export async function installCursorHooks(
 ): Promise<void> {
   // 先剔全部 pier 条目再按当前表写入（对齐 createNestedJsonIntegration）：
   // 覆盖「上一版装过但本版已移出」的遗留——如 afterAgentResponse。
+  // 若磁盘已有更高 pier-hook-gen，跳过以免旧 worktree 降级命名提取。
   await transformJsonConfig(
     settingsPath,
-    (s) => withPierCursorHooks(withoutPierCursorHooks(s)),
+    (s) =>
+      transformPierHooksUnlessNewer(s, (current) =>
+        withPierCursorHooks(withoutPierCursorHooks(current))
+      ),
     AGENT_ID
   );
 }

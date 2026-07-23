@@ -83,7 +83,7 @@ describe("dangerousActivitySummariesForPanel", () => {
     ).toEqual([
       {
         kind: "agent",
-        label: "codex",
+        label: "Codex",
         panelId: "terminal-1",
         windowId: "win-1",
       },

@@ -10,22 +10,26 @@ import {
 } from "./file-tree-internal.ts";
 import {
   collectExpandedDirectoryPaths,
-  isDirectoryHandle,
   stripTrailingSlash,
   toOfficialDecoration,
   toOfficialPath,
   treeRenderSignature,
 } from "./file-tree-model.ts";
 import { FileTreeRenameSession } from "./file-tree-rename-session.ts";
+import { revealFileTreePath } from "./file-tree-reveal.ts";
 import { usePierFileTreeScrollController } from "./file-tree-scroll-controller.ts";
 import * as treeSearch from "./file-tree-search.ts";
 import { pierFileTreeStyle, TREE_SCROLLBAR_CSS } from "./file-tree-style.ts";
-import type { PierFileTreeProps } from "./file-tree-types.ts";
+import type {
+  PierFileTreeProps,
+  PierFileTreeRevealOptions,
+} from "./file-tree-types.ts";
 import {
   fileTreeDragAndDropConfig,
   fileTreeRenamingConfig,
 } from "./file-tree-write-options.ts";
 import { useFileTreeContextMenuComposition } from "./use-file-tree-context-menu.ts";
+import { useFileTreeLazyDirectoryLoad } from "./use-file-tree-lazy-directory-load.ts";
 import { useFileTreePathSync } from "./use-file-tree-path-sync.ts";
 import { useFileTreeRefs } from "./use-file-tree-refs.ts";
 import { useFileTreeRowClickSalvage } from "./use-file-tree-row-click-salvage.ts";
@@ -40,6 +44,8 @@ export type {
   PierFileTreeItem,
   PierFileTreeMove,
   PierFileTreeProps,
+  PierFileTreeRevealOptions,
+  PierFileTreeRevealScroll,
   PierFileTreeScrollController,
   PierFileTreeScrollRestoreOptions,
   PierFileTreeScrollSnapshot,
@@ -48,6 +54,8 @@ export type {
 export function PierFileTree({
   directoryErrorLabel,
   directoryStates,
+  flattenEmptyDirectories = true,
+  flattenMinDepth,
   items,
   label,
   onLoadDirectory,
@@ -138,7 +146,8 @@ export function PierFileTree({
     ...(onMovePaths
       ? { dragAndDrop: fileTreeDragAndDropConfig(readRefs) }
       : {}),
-    flattenEmptyDirectories: true,
+    flattenEmptyDirectories,
+    ...(flattenMinDepth === undefined ? {} : { flattenMinDepth }),
     gitStatus,
     initialExpandedPaths,
     onSelectionChange: handleSelectionChange,
@@ -169,6 +178,86 @@ export function PierFileTree({
   useFileTreeContextMenuComposition(model, onOpenItemContextMenu != null, refs);
   treeSearch.useSearchMatchState(model, nextRefs, onSearchMatchStateChange);
   const activeSearchRef = React.useRef<string | null>(null);
+  const pendingRevealRef = React.useRef<{
+    options: PierFileTreeRevealOptions;
+    path: string;
+  } | null>(null);
+  // Explicit API/breadcrumb reveal must win over the active-file prop until the
+  // active path itself changes (otherwise expand/load churn re-asserts the file).
+  const suppressActiveRevealRef = React.useRef(false);
+
+  const runReveal = React.useCallback(
+    (path: string, options?: PierFileTreeRevealOptions): boolean =>
+      revealFileTreePath(
+        {
+          focusNearestPath: (candidate) => model.focusNearestPath(candidate),
+          focusPath: (candidate) => {
+            model.focusPath(candidate);
+          },
+          getFileTreeContainer: () =>
+            containerRef.current?.querySelector("file-tree-container") ??
+            undefined,
+          getItem: (candidate) => model.getItem(candidate),
+          getSelectedPaths: () => model.getSelectedPaths(),
+          scrollToPath: (candidate, scrollOptions) => {
+            model.scrollToPath(candidate, scrollOptions);
+          },
+          selectOnlyPath: (candidate) => {
+            model.selectOnlyPath(candidate);
+          },
+        },
+        readRefs,
+        programmaticSelectionRef,
+        path,
+        options
+      ),
+    [model, readRefs]
+  );
+
+  const requestReveal = React.useCallback(
+    (path: string, options?: PierFileTreeRevealOptions) => {
+      const nextOptions: PierFileTreeRevealOptions = {
+        expandTarget: true,
+        scroll: "center",
+        ...options,
+      };
+      pendingRevealRef.current = {
+        options: nextOptions,
+        path,
+      };
+      if (runReveal(path, nextOptions)) {
+        pendingRevealRef.current = null;
+        return;
+      }
+      // Expand/lazy-load can leave the row unselectable for a frame or two.
+      const retryDelaysMs = [0, 32, 80, 160, 320];
+      for (const delayMs of retryDelaysMs) {
+        window.setTimeout(() => {
+          const pending = pendingRevealRef.current;
+          if (!pending || pending.path !== path) {
+            return;
+          }
+          if (runReveal(pending.path, pending.options)) {
+            pendingRevealRef.current = null;
+          }
+        }, delayMs);
+      }
+    },
+    [runReveal]
+  );
+
+  // Lazy directories: retry after items / directoryStates catch up.
+  // biome-ignore lint/correctness/useExhaustiveDependencies: directoryStates / model / renderSignature intentionally retrigger pending reveal after lazy loads sync into the tree.
+  React.useEffect(() => {
+    const pending = pendingRevealRef.current;
+    if (!pending) {
+      return;
+    }
+    if (runReveal(pending.path, pending.options)) {
+      pendingRevealRef.current = null;
+    }
+  }, [directoryStates, model, renderSignature, runReveal]);
+
   React.useImperativeHandle(
     treeApiRef,
     () => ({
@@ -190,31 +279,9 @@ export function PierFileTree({
           searchValue != null && searchValue.length > 0 ? searchValue : null;
         model.setSearch(searchValue);
       },
-      revealPath: (path) => {
-        const segments = path.split("/").filter(Boolean);
-        // 逐级展开祖先目录,再滚动定位目标本身。
-        for (let index = 1; index < segments.length; index += 1) {
-          const ancestorPath = segments.slice(0, index).join("/");
-          const ancestorItem = readRefs().itemsByPath.get(ancestorPath);
-          if (!ancestorItem) {
-            continue;
-          }
-          const handle = model.getItem(toOfficialPath(ancestorItem));
-          if (isDirectoryHandle(handle) && !handle.isExpanded()) {
-            handle.expand();
-          }
-        }
-        const item = readRefs().itemsByPath.get(path);
-        const officialPath = item ? toOfficialPath(item) : path;
-        try {
-          model.scrollToPath(officialPath, {
-            focus: false,
-            offset: "nearest",
-          });
-          model.focusPath(officialPath);
-        } catch {
-          // 目标尚未加载(懒加载目录):祖先已展开,子层加载后用户可见。
-        }
+      revealPath: (path, options) => {
+        suppressActiveRevealRef.current = true;
+        requestReveal(path, options);
       },
       removePaths: (pathsToRemove) => {
         for (const path of pathsToRemove) {
@@ -259,114 +326,44 @@ export function PierFileTree({
         return started;
       },
     }),
-    [model, readRefs, renameSession]
+    [model, readRefs, renameSession, requestReveal]
   );
 
-  // active 文件变化时定位并选中；model 选中不会触发用户路径的 onOpenPath。
+  // Active file: select+focus+scroll nearest; expand ancestors only (not the
+  // folder itself). Programmatic select must not fire onOpenPath.
+  // Explicit breadcrumb/API reveals suppress this until the active path changes.
   const lastRevealRef = React.useRef<string | null>(null);
   React.useEffect(() => {
-    if (!revealPath || revealPath === lastRevealRef.current) {
-      if (!revealPath) {
-        lastRevealRef.current = null;
-      }
-      return;
-    }
-    const item = readRefs().itemsByPath.get(revealPath);
-    if (!item) {
-      return;
-    }
-    lastRevealRef.current = revealPath;
-    const officialPath = toOfficialPath(item);
-    try {
-      model.scrollToPath(officialPath, { focus: false, offset: "nearest" });
-      model.focusPath(officialPath);
-      const programmaticSelection = { path: officialPath };
-      programmaticSelectionRef.current = programmaticSelection;
-      try {
-        model.selectOnlyPath(officialPath);
-      } finally {
-        queueMicrotask(() => {
-          if (programmaticSelectionRef.current === programmaticSelection) {
-            programmaticSelectionRef.current = null;
-          }
-        });
-      }
-    } catch {
-      // 路径尚未在可见投影中(父目录未展开):静默忽略,下一次 items 变化重试。
+    if (!revealPath) {
       lastRevealRef.current = null;
+      suppressActiveRevealRef.current = false;
+      return;
     }
-  }, [model, readRefs, revealPath]);
+    if (revealPath !== lastRevealRef.current) {
+      lastRevealRef.current = revealPath;
+      suppressActiveRevealRef.current = false;
+      requestReveal(revealPath, {
+        expandTarget: false,
+        scroll: "nearest",
+      });
+      return;
+    }
+    if (suppressActiveRevealRef.current) {
+      return;
+    }
+  }, [requestReveal, revealPath]);
 
   React.useEffect(() => {
     model.setGitStatus(gitStatus);
   }, [gitStatus, model]);
 
-  const syncDirectoryExpansionState = React.useCallback(
-    (notifyOnExpand: boolean) => {
-      // 搜索展开不是用户意图，不能触发懒加载或覆盖 resetPaths 的显式状态。
-      if (activeSearchRef.current != null) {
-        return;
-      }
-      const directoryPaths = readRefs().directoryPaths;
-      const loadableDirectoryPaths = readRefs().loadableDirectoryPaths;
-
-      for (const trackedPath of expandedDirectoriesRef.current.keys()) {
-        if (!directoryPaths.has(trackedPath)) {
-          expandedDirectoriesRef.current.delete(trackedPath);
-        }
-      }
-
-      for (const requestedPath of requestedLoadDirectoriesRef.current) {
-        if (
-          !loadableDirectoryPaths.has(requestedPath) ||
-          readRefs().directoryLoadStatesByPath.get(requestedPath) !== "unloaded"
-        ) {
-          requestedLoadDirectoriesRef.current.delete(requestedPath);
-        }
-      }
-
-      for (const [officialPath, callerPath] of directoryPaths) {
-        const itemHandle = model.getItem(officialPath);
-        let isExpanded = false;
-
-        if (isDirectoryHandle(itemHandle)) {
-          isExpanded = itemHandle.isExpanded();
-        }
-
-        const wasExpanded =
-          expandedDirectoriesRef.current.get(officialPath) ?? false;
-        expandedDirectoriesRef.current.set(officialPath, isExpanded);
-
-        if (!(notifyOnExpand && isExpanded) || wasExpanded) {
-          continue;
-        }
-
-        const onLoadDirectory = readRefs().onLoadDirectory;
-
-        if (
-          onLoadDirectory == null ||
-          !loadableDirectoryPaths.has(officialPath) ||
-          !["error", "unloaded"].includes(
-            readRefs().directoryLoadStatesByPath.get(officialPath) ?? ""
-          ) ||
-          requestedLoadDirectoriesRef.current.has(officialPath)
-        ) {
-          continue;
-        }
-
-        requestedLoadDirectoriesRef.current.add(officialPath);
-        onLoadDirectory(callerPath);
-      }
-    },
-    [model, readRefs]
-  );
-
-  React.useEffect(() => {
-    syncDirectoryExpansionState(false);
-    return model.subscribe(() => {
-      syncDirectoryExpansionState(true);
-    });
-  }, [model, syncDirectoryExpansionState]);
+  useFileTreeLazyDirectoryLoad({
+    activeSearchRef,
+    expandedDirectoriesRef,
+    model,
+    readRefs,
+    requestedLoadDirectoriesRef,
+  });
 
   const { captureSnapshot, restoreSnapshotSoon } =
     usePierFileTreeScrollController({

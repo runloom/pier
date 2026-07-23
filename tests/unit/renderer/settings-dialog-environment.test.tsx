@@ -176,7 +176,7 @@ function projectFixture(
 }
 
 const DEFAULT_SNAPSHOT: LocalEnvironmentState = {
-  projects: [projectFixture("/Users/xyz/ABC/pier")],
+  projects: [projectFixture("/Users/dev/ABC/pier")],
   version: 1,
   worktreeBindings: [],
 };
@@ -185,7 +185,7 @@ function pierMock() {
   return {
     environments: {
       onChanged: vi.fn(() => () => undefined),
-      pickProjectDirectory: vi.fn(async () => "/Users/xyz/new-project"),
+      pickProjectDirectory: vi.fn(async () => "/Users/dev/new-project"),
       project: {
         add: vi.fn(async () => DEFAULT_SNAPSHOT),
         remove: vi.fn(async () => DEFAULT_SNAPSHOT),
@@ -360,8 +360,8 @@ describe("SettingsDialog — Environment section", () => {
   });
 
   it("shows the project list when there is no active project match", () => {
-    const p1 = projectFixture("/Users/xyz/project-a");
-    const p2 = projectFixture("/Users/xyz/project-b", {
+    const p1 = projectFixture("/Users/dev/project-a");
+    const p2 = projectFixture("/Users/dev/project-b", {
       setupCommand: "pnpm setup:b",
     });
     setEnvironmentStoreSnapshot({
@@ -372,13 +372,13 @@ describe("SettingsDialog — Environment section", () => {
 
     openEnvironmentSettings();
 
-    expect(screen.getByText("/Users/xyz/project-a")).toBeInTheDocument();
-    expect(screen.getByText("/Users/xyz/project-b")).toBeInTheDocument();
+    expect(screen.getByText("/Users/dev/project-a")).toBeInTheDocument();
+    expect(screen.getByText("/Users/dev/project-b")).toBeInTheDocument();
     expect(screen.queryByRole("textbox", { name: "Setup command" })).toBeNull();
   });
 
   it("clicking a project row opens its detail view", () => {
-    const p1 = projectFixture("/Users/xyz/project-a");
+    const p1 = projectFixture("/Users/dev/project-a");
     setEnvironmentStoreSnapshot({
       projects: [p1],
       version: 1,
@@ -395,8 +395,8 @@ describe("SettingsDialog — Environment section", () => {
   });
 
   it("opens detail directly when activeProjectRootPath matches a project", () => {
-    const p1 = projectFixture("/Users/xyz/project-a");
-    const p2 = projectFixture("/Users/xyz/project-b", {
+    const p1 = projectFixture("/Users/dev/project-a");
+    const p2 = projectFixture("/Users/dev/project-b", {
       setupCommand: "pnpm setup:b",
     });
     setEnvironmentStoreSnapshot({
@@ -404,7 +404,7 @@ describe("SettingsDialog — Environment section", () => {
       version: 1,
       worktreeBindings: [],
     });
-    setActivePanelProjectRootPath("/Users/xyz/project-b");
+    setActivePanelProjectRootPath("/Users/dev/project-b");
 
     openEnvironmentSettings();
 
@@ -414,23 +414,23 @@ describe("SettingsDialog — Environment section", () => {
   });
 
   it("stays on list when activeProjectRootPath is not in projects", () => {
-    const p1 = projectFixture("/Users/xyz/project-a");
+    const p1 = projectFixture("/Users/dev/project-a");
     setEnvironmentStoreSnapshot({
       projects: [p1],
       version: 1,
       worktreeBindings: [],
     });
-    setActivePanelProjectRootPath("/Users/xyz/unknown-project");
+    setActivePanelProjectRootPath("/Users/dev/unknown-project");
 
     openEnvironmentSettings();
 
     expect(screen.queryByRole("textbox", { name: "Setup command" })).toBeNull();
-    expect(screen.getByText("/Users/xyz/project-a")).toBeInTheDocument();
+    expect(screen.getByText("/Users/dev/project-a")).toBeInTheDocument();
   });
 
   it("Add environment setting picks folder, adds project and auto-opens detail", async () => {
-    const p1 = projectFixture("/Users/xyz/project-a");
-    const newPath = "/Users/xyz/new-project";
+    const p1 = projectFixture("/Users/dev/project-a");
+    const newPath = "/Users/dev/new-project";
     setEnvironmentStoreSnapshot({
       projects: [p1],
       version: 1,
@@ -473,13 +473,13 @@ describe("SettingsDialog — Environment section", () => {
   });
 
   it("Save dispatches flat updateProject payload after opening detail", async () => {
-    const p1 = projectFixture("/Users/xyz/project-a");
+    const p1 = projectFixture("/Users/dev/project-a");
     setEnvironmentStoreSnapshot({
       projects: [p1],
       version: 1,
       worktreeBindings: [],
     });
-    setActivePanelProjectRootPath("/Users/xyz/project-a");
+    setActivePanelProjectRootPath("/Users/dev/project-a");
 
     openEnvironmentSettings();
 
@@ -493,7 +493,7 @@ describe("SettingsDialog — Environment section", () => {
         cleanupCommand: "pnpm cleanup:worktree",
         copyPatterns: [".env*"],
         env: { NODE_ENV: "development" },
-        projectRootPath: "/Users/xyz/project-a",
+        projectRootPath: "/Users/dev/project-a",
         setupCommand: "pnpm run dev",
       });
     });
@@ -503,13 +503,13 @@ describe("SettingsDialog — Environment section", () => {
   });
 
   it("Save failure surfaces a showAppAlert with the error message", async () => {
-    const p1 = projectFixture("/Users/xyz/project-a");
+    const p1 = projectFixture("/Users/dev/project-a");
     setEnvironmentStoreSnapshot({
       projects: [p1],
       version: 1,
       worktreeBindings: [],
     });
-    setActivePanelProjectRootPath("/Users/xyz/project-a");
+    setActivePanelProjectRootPath("/Users/dev/project-a");
 
     vi.mocked(window.pier.environments.update).mockRejectedValueOnce(
       new Error("disk full")
@@ -531,13 +531,13 @@ describe("SettingsDialog — Environment section", () => {
   });
 
   it("Back prompts before returning to list when editor is dirty", async () => {
-    const p1 = projectFixture("/Users/xyz/project-a");
+    const p1 = projectFixture("/Users/dev/project-a");
     setEnvironmentStoreSnapshot({
       projects: [p1],
       version: 1,
       worktreeBindings: [],
     });
-    setActivePanelProjectRootPath("/Users/xyz/project-a");
+    setActivePanelProjectRootPath("/Users/dev/project-a");
 
     openEnvironmentSettings();
 
@@ -562,13 +562,13 @@ describe("SettingsDialog — Environment section", () => {
   });
 
   it("Delete confirms, removes the project and returns to list", async () => {
-    const p1 = projectFixture("/Users/xyz/project-a");
+    const p1 = projectFixture("/Users/dev/project-a");
     setEnvironmentStoreSnapshot({
       projects: [p1],
       version: 1,
       worktreeBindings: [],
     });
-    setActivePanelProjectRootPath("/Users/xyz/project-a");
+    setActivePanelProjectRootPath("/Users/dev/project-a");
 
     const emptyState: LocalEnvironmentState = {
       projects: [],
@@ -609,7 +609,7 @@ describe("SettingsDialog — Environment section", () => {
     });
     await waitFor(() => {
       expect(window.pier.environments.project.remove).toHaveBeenCalledWith({
-        projectRootPath: "/Users/xyz/project-a",
+        projectRootPath: "/Users/dev/project-a",
       });
     });
     await waitFor(() => {

@@ -362,6 +362,22 @@ describeMockedMacOSWindowManager(
       expect(electronMock.baseWindow.close).not.toHaveBeenCalled();
     });
 
+    it("skips close intercept after beginQuit so updater-driven closes do not re-prepare", async () => {
+      const { windowManager } = await import("@main/windows/window-manager.ts");
+      const beforeClose = vi.fn(async () => "allow" as const);
+      windowManager.onBeforeClose(beforeClose);
+      windowManager.create({ id: "main", recordId: "record-main" });
+      windowManager.beginQuit();
+
+      const event = { preventDefault: vi.fn() };
+      electronMock.hostListeners.get("close")?.(event);
+      await Promise.resolve();
+
+      expect(windowManager.isQuitting()).toBe(true);
+      expect(beforeClose).not.toHaveBeenCalled();
+      expect(event.preventDefault).not.toHaveBeenCalled();
+    });
+
     it("does not read the Electron id after a destroyed BaseWindow emits closed", async () => {
       const { windowManager } = await import("@main/windows/window-manager.ts");
       const { findAppWindowByElectronId } = await import(

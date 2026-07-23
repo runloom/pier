@@ -242,11 +242,20 @@ function compareRankedCandidates<TPayload>(
   if (a.rank.tier !== b.rank.tier) {
     return a.rank.tier - b.rank.tier;
   }
-  if (a.rank.frecency !== b.rank.frecency) {
-    return b.rank.frecency - a.rank.frecency;
-  }
   if (a.rank.matchIndex !== b.rank.matchIndex) {
     return a.rank.matchIndex - b.rank.matchIndex;
+  }
+  // 仅主带（title/alias）用更短标题表示更紧匹配；次带命中的是 category
+  // 等元数据，标题长度会误伤同 category 下的 frecency 排序。
+  if (a.rank.tier <= PRIMARY_TIER_MAX && b.rank.tier <= PRIMARY_TIER_MAX) {
+    const aTitleLen = normalize(a.document.title).length;
+    const bTitleLen = normalize(b.document.title).length;
+    if (aTitleLen !== bTitleLen) {
+      return aTitleLen - bTitleLen;
+    }
+  }
+  if (a.rank.frecency !== b.rank.frecency) {
+    return b.rank.frecency - a.rank.frecency;
   }
   if (a.rank.fuzzyOrder !== b.rank.fuzzyOrder) {
     return a.rank.fuzzyOrder - b.rank.fuzzyOrder;

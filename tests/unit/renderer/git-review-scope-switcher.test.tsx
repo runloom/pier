@@ -1,8 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import {
-  DEFAULT_UNCOMMITTED_FILTER,
-  GitReviewScopeSwitcher,
-} from "@plugins/builtin/git/renderer/git-review-scope-switcher.tsx";
+import { GitReviewScopeSwitcher } from "@plugins/builtin/git/renderer/git-review-scope-switcher.tsx";
 import type {
   GitCommit,
   GitCommitSearchResult,
@@ -94,9 +91,7 @@ function renderSwitcher(context: RendererPluginContext) {
       context={context}
       gitRootPath="/repo"
       onSelectTarget={onSelectTarget}
-      onUncommittedFilterChange={vi.fn()}
       target={{ kind: "uncommitted" }}
-      uncommittedFilter={DEFAULT_UNCOMMITTED_FILTER}
     />
   );
   return { onSelectTarget };

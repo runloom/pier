@@ -168,7 +168,16 @@ private enum TerminalCallbacks {
             bridge.handleAction(action)
         }
 
-        return false
+        // Returning true tells Ghostty the host consumed the action. OPEN_URL
+        // must be handled here: a false return triggers
+        // "apprt did not handle open URL action, falling back to default opener"
+        // and dual-opens the target (Pier files tab + system default app).
+        switch action.tag {
+        case GHOSTTY_ACTION_OPEN_URL:
+            return true
+        default:
+            return false
+        }
     }
 
     static func closeSurface(

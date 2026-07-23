@@ -3,18 +3,30 @@ name: Update model pricing
 # 每天 UTC 03:00 自动跑，跟 LiteLLM / OpenRouter 同步。也可以手动触发。
 # 仅当 pricing-catalog.json 有 diff 时才跑护栏测试并开/更新 PR；
 # 无变化则 Detect changes → changed=false，后续 step 全部跳过（不 commit、不开 PR）。
+#
+# pull_request：对定价相关改动跑同一套护栏（不抓上游、不开 PR），避免
+# 写死单价的测试在刷新后才炸、而日常 PR 漏检。
 on:
   schedule:
     - cron: "0 3 * * *"
   workflow_dispatch:
+  pull_request:
+    paths:
+      - ".github/workflows/update-model-pricing.yml"
+      - "scripts/update-model-pricing.mjs"
+      - "src/main/services/usage-data/pricing-catalog.json"
+      - "src/main/services/usage-data/pricing.ts"
+      - "tests/unit/main/pricing-catalog-schema.test.ts"
+      - "tests/unit/main/pricing-catalog.test.ts"
+      - "tests/unit/main/update-model-pricing.test.ts"
 
 permissions:
   contents: write
   pull-requests: write
 
 concurrency:
-  group: update-model-pricing
-  cancel-in-progress: false
+  group: update-model-pricing-${{ github.event_name == 'pull_request' && github.event.pull_request.number || 'refresh' }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 jobs:
   refresh:
@@ -30,9 +42,11 @@ jobs:
           cache: pnpm
 
       - name: Fetch and normalize LiteLLM pricing
+        if: github.event_name != 'pull_request'
         run: node scripts/update-model-pricing.mjs --diff-out=pricing-diff.md
 
       - name: Detect changes
+        if: github.event_name != 'pull_request'
         id: diff
         run: |
           if git diff --quiet src/main/services/usage-data/pricing-catalog.json; then
@@ -45,15 +59,21 @@ jobs:
           fi
 
       - name: Install dependencies
-        if: steps.diff.outputs.changed == 'true'
+        if: >-
+          github.event_name == 'pull_request' ||
+          steps.diff.outputs.changed == 'true'
         run: pnpm install --frozen-lockfile
 
       - name: Guardrail — schema tests
-        if: steps.diff.outputs.changed == 'true'
-        run: pnpm exec vitest run tests/unit/main/pricing-catalog-schema.test.ts tests/unit/main/pricing-catalog.test.ts --run
+        if: >-
+          github.event_name == 'pull_request' ||
+          steps.diff.outputs.changed == 'true'
+        run: pnpm exec vitest run tests/unit/main/pricing-catalog-schema.test.ts tests/unit/main/pricing-catalog.test.ts tests/unit/main/update-model-pricing.test.ts --run
 
       - name: Open PR
-        if: steps.diff.outputs.changed == 'true'
+        if: >-
+          github.event_name != 'pull_request' &&
+          steps.diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
         with:
           commit-message: "chore(pricing): daily LiteLLM refresh"

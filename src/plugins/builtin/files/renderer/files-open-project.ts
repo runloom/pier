@@ -39,6 +39,13 @@ export function openProjectFiles(
     const existing = instances.find(
       (instance) => projectAnchor(contextFromParams(instance.params)) === anchor
     );
+    const activeId =
+      pluginContext.panels.getActiveInstanceId(FILES_FILE_PANEL_ID);
+    // Already focused on this project's files panel — re-open / reveal would
+    // flash the tab and tree without changing anything useful.
+    if (existing && existing.id === activeId) {
+      return { ok: true };
+    }
 
     if (existing) {
       pluginContext.panels.openInstance({

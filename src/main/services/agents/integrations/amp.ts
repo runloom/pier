@@ -3,6 +3,7 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
 import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
@@ -58,6 +59,7 @@ ${eventMapLines}
 };
 
 ${JAVASCRIPT_LOCKED_APPEND_SOURCE}
+${JAVASCRIPT_PROMPT_SNIPPET_SOURCE}
 
 function pierSessionIdFrom(values) {
   for (const value of values) {
@@ -83,6 +85,8 @@ function emitPierEvent(nativeEvent, ...values) {
   const windowId = process.env.PIER_WINDOW_ID;
   if (!log || !panelId || !windowId) return;
   const sessionId = pierSessionIdFrom(values);
+  const promptSnippet =
+    pierEvent === "PromptSubmit" ? pierPromptSnippetFrom(...values) : undefined;
   const line = JSON.stringify({
     v: 2,
     kind: "agentEvent",
@@ -94,6 +98,7 @@ function emitPierEvent(nativeEvent, ...values) {
     event: pierEvent,
     nativeEvent,
     ...(sessionId ? { sessionId } : {}),
+    ...(promptSnippet ? { promptSnippet } : {}),
   }) + "\\n";
   try {
     pierAppend(log, line);

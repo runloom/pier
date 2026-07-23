@@ -53,11 +53,11 @@ describe("panel context state", () => {
       recordRecentPanelContext,
     } = await import("@main/state/panel-context-state.ts");
 
-    const pier = context("ctx-pier", "/Users/xyz/ABC/pier", 100);
-    const pierUpdated = context("ctx-pier-next", "/Users/xyz/ABC/pier", 300, {
+    const pier = context("ctx-pier", "/Users/dev/ABC/pier", 100);
+    const pierUpdated = context("ctx-pier-next", "/Users/dev/ABC/pier", 300, {
       branch: "feature/panel-context",
     });
-    const bay = context("ctx-bay", "/Users/xyz/ABC/bay", 200);
+    const bay = context("ctx-bay", "/Users/dev/ABC/bay", 200);
 
     await recordRecentPanelContext(pier);
     await recordRecentPanelContext(bay);
@@ -99,7 +99,7 @@ describe("panel context state", () => {
   });
 
   it("normalizes state to recent contexts only", async () => {
-    const pier = context("ctx-pier", "/Users/xyz/ABC/pier", 100);
+    const pier = context("ctx-pier", "/Users/dev/ABC/pier", 100);
     await writeFile(
       join(userDataDir, "panel-context-state.json"),
       JSON.stringify({

@@ -197,7 +197,7 @@ export function FilePanelSidebarToggleButton({
       aria-expanded={!collapsed}
       aria-label={label}
       onClick={onToggle}
-      size="xs"
+      size="icon-xs"
       type="button"
       variant="ghost"
     >
@@ -221,7 +221,7 @@ export function FilePanelSearchButton({
       aria-label={label}
       disabled={disabled}
       onClick={onOpenSearch}
-      size="xs"
+      size="icon-xs"
       type="button"
       variant="ghost"
     >

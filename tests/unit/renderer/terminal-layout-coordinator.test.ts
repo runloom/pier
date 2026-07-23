@@ -349,4 +349,108 @@ describe("terminal layout coordinator", () => {
       vi.unstubAllGlobals();
     }
   });
+  it("per-panel acquire：只写 suppressedPanelIds，不拉起全局 suppress", () => {
+    const release = acquireTerminalSurfaceSuppression(
+      "composer-height:p1",
+      "p1"
+    );
+    const state = useTerminalStore.getState();
+    expect(state.suppressTerminals).toBe(false);
+    expect(state.placeholderVisible).toBe(false);
+    expect(state.suppressedPanelIds.has("p1")).toBe(true);
+    expect(state.suppressedPanelIds.has("p2")).toBe(false);
+    release();
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().suppressedPanelIds.has("p1")).toBe(
+      false
+    );
+  });
+
+  it("per-panel pulse：释放后 suppressedPanelIds 清空且全局仍 false", () => {
+    const queue: FrameRequestCallback[] = [];
+    vi.stubGlobal("requestAnimationFrame", (cb: FrameRequestCallback) => {
+      queue.push(cb);
+      return queue.length;
+    });
+    try {
+      pulseTerminalSurfaceSuppression("composer-height:p1", "p1");
+      expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+      expect(useTerminalStore.getState().placeholderVisible).toBe(false);
+      expect(useTerminalStore.getState().suppressedPanelIds.has("p1")).toBe(
+        true
+      );
+      while (queue.length > 0) {
+        queue.shift()?.(0);
+      }
+      expect(useTerminalStore.getState().suppressedPanelIds.has("p1")).toBe(
+        false
+      );
+      expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    } finally {
+      vi.unstubAllGlobals();
+    }
+  });
+
+  it("全局 holder 与 per-panel 并存：全局 suppress 仍 true", () => {
+    const releaseGlobal = acquireTerminalSurfaceSuppression("lightbox");
+    const releasePanel = acquireTerminalSurfaceSuppression(
+      "composer-height:p1",
+      "p1"
+    );
+    const state = useTerminalStore.getState();
+    expect(state.suppressTerminals).toBe(true);
+    expect(state.placeholderVisible).toBe(true);
+    expect(state.suppressedPanelIds.has("p1")).toBe(true);
+    releaseGlobal();
+    // Only per-panel left — global drops, panel set remains until release.
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().suppressedPanelIds.has("p1")).toBe(true);
+    releasePanel();
+    expect(useTerminalStore.getState().suppressedPanelIds.has("p1")).toBe(
+      false
+    );
+  });
+
+  it("同 id 先 per-panel 后 global：重叠时放宽为全局", () => {
+    const releasePanel = acquireTerminalSurfaceSuppression("shared", "p1");
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().suppressedPanelIds.has("p1")).toBe(true);
+    const releaseGlobal = acquireTerminalSurfaceSuppression("shared");
+    expect(useTerminalStore.getState().suppressTerminals).toBe(true);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(true);
+    releasePanel();
+    expect(useTerminalStore.getState().suppressTerminals).toBe(true);
+    releaseGlobal();
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().suppressedPanelIds.size).toBe(0);
+  });
+
+  it("最后一个 anchor dispose 时清掉 per-panel suppressedPanelIds", () => {
+    const anchor = document.createElement("div");
+    anchor.getBoundingClientRect = () =>
+      ({
+        bottom: 100,
+        height: 80,
+        left: 0,
+        right: 100,
+        top: 20,
+        width: 100,
+        x: 0,
+        y: 20,
+        toJSON: () => null,
+      }) as DOMRect;
+    const registration = registerTerminalLayoutAnchor("p1", anchor);
+    const release = acquireTerminalSurfaceSuppression(
+      "composer-height:p1",
+      "p1"
+    );
+    expect(useTerminalStore.getState().suppressedPanelIds.has("p1")).toBe(true);
+    // Simulate last terminal unmount while a per-panel holder is still active
+    // (e.g. composer pulse window). dispose must not leave stale panel ids.
+    registration.dispose();
+    expect(useTerminalStore.getState().suppressTerminals).toBe(false);
+    expect(useTerminalStore.getState().suppressedPanelIds.size).toBe(0);
+    expect(useTerminalStore.getState().placeholderVisible).toBe(false);
+    release();
+  });
 });

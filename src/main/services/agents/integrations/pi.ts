@@ -3,6 +3,7 @@ import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
 import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
@@ -70,6 +71,7 @@ export function buildPiExtensionSource(): string {
 // (Exception to ts-no-dynamic-import: generated file for a foreign host.)
 
 ${JAVASCRIPT_LOCKED_APPEND_SOURCE}
+${JAVASCRIPT_PROMPT_SNIPPET_SOURCE}
 
 function pierSessionIdFrom(values) {
 	for (const value of values) {
@@ -114,6 +116,8 @@ function pierEmit(event, nativeEvent, ...values) {
 	const windowId = process.env.PIER_WINDOW_ID;
 	if (!log || !panelId || !windowId) return;
 	const sessionId = pierSessionIdFrom(values);
+	const promptSnippet =
+		event === "PromptSubmit" ? pierPromptSnippetFrom(...values) : undefined;
 	const line = JSON.stringify({
 		v: 2,
 		kind: "agentEvent",
@@ -125,6 +129,7 @@ function pierEmit(event, nativeEvent, ...values) {
 		event,
 		nativeEvent,
 		...(sessionId ? { sessionId } : {}),
+		...(promptSnippet ? { promptSnippet } : {}),
 	}) + "\\n";
 	try {
 		pierAppend(log, line);

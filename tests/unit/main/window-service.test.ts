@@ -81,6 +81,7 @@ const mocks = vi.hoisted(() => {
         __windowId: context.windowId,
       }))
     ),
+    isQuitting: vi.fn(() => false),
     list: vi.fn(
       (): Array<{ focused: boolean; id: string; recordId: string }> => []
     ),
@@ -172,6 +173,7 @@ vi.mock("@main/windows/window-manager.ts", () => ({
     focus: mocks.focus,
     get: mocks.get,
     getAll: mocks.getAll,
+    isQuitting: mocks.isQuitting,
     list: mocks.list,
     onBeforeClose: mocks.onBeforeClose,
     onClose: mocks.onClose,
@@ -199,6 +201,7 @@ describe("WindowService", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     mocks.resetLiveWindowCount();
+    mocks.isQuitting.mockReturnValue(false);
   });
 
   it("creates Cmd+N windows from a new durable window record", async () => {
@@ -498,6 +501,38 @@ describe("WindowService", () => {
       }),
       windowId: "main",
     });
+  });
+
+  it("suppresses native close feedback while the app is quitting", async () => {
+    mocks.isQuitting.mockReturnValue(true);
+    const prepareRendererClose = vi.fn(async () => {
+      throw new Error("no renderer window available");
+    });
+    const error = vi.spyOn(console, "error").mockImplementation(() => {});
+    const reportCloseFailure = vi.fn(async () => {
+      throw new Error("no renderer window available");
+    });
+    const reportCloseFailureFallback = vi.fn();
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+
+    createWindowService({
+      prepareRendererClose,
+      reportCloseFailure,
+      reportCloseFailureFallback,
+    });
+    const decision = await mocks.getBeforeCloseCallback()?.({
+      recordId: "record-1",
+      windowId: "main",
+    });
+
+    expect(decision).toBe("veto");
+    expect(reportCloseFailureFallback).not.toHaveBeenCalled();
+    expect(error).toHaveBeenCalledWith(
+      "[window-close-native-feedback] suppressed while quitting:",
+      "no renderer window available"
+    );
   });
 
   it("rejects app quit only after attempting every renderer and critical flush", async () => {

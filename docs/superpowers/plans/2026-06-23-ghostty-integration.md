@@ -10,7 +10,7 @@
 
 **Spec:** `docs/superpowers/specs/2026-06-23-ghostty-integration-design.md`
 
-**Reference:** `/Users/xyz/ABC/ghostty-electron-demo` — demo 代码可直接参考复制，下文标注差异点。
+**Reference:** `/Users/dev/ABC/ghostty-electron-demo` — demo 代码可直接参考复制，下文标注差异点。
 
 ---
 

@@ -9,6 +9,7 @@ import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
 } from "../services/agents/agent-hooks-install.ts";
+import { applyAgentSessionTitleFromHookEvent } from "../services/agents/agent-session-title-effects.ts";
 import {
   isAgentStatusHooksIngestEnabled,
   setAgentStatusHooksIngestEnabled,
@@ -24,6 +25,7 @@ import {
 } from "../services/agents/integrations/terminal-reconciliation.ts";
 import { isWindowDetaching } from "../services/agents/window-detaching-guard.ts";
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
+import { isBlankShellCommandLine } from "../services/foreground-activity/blank-command-line.ts";
 import { SUSPENDED_JOB_EXIT_CODES } from "../services/foreground-activity/entry.ts";
 import {
   createJsonlObserver,
@@ -216,6 +218,9 @@ export const foregroundActivityService = {
     commandLine: string,
     matchedAgent: AgentKind | null
   ): void {
+    if (isBlankShellCommandLine(commandLine)) {
+      return;
+    }
     foregroundActivityAggregator.ingestCommandStarted(
       panelId,
       windowId,
@@ -284,6 +289,28 @@ export const foregroundActivityService = {
   snapshot(windowId?: string): ForegroundActivityBroadcast {
     return foregroundActivityAggregator.snapshot(windowId);
   },
+  setAgentSessionTitle(
+    windowId: string,
+    panelId: string,
+    input: { title: string; source: "auto" | "user"; replaceAuto?: boolean }
+  ): boolean {
+    return foregroundActivityAggregator.setAgentSessionTitle(
+      windowId,
+      panelId,
+      input
+    );
+  },
+  hydrateAgentSessionTitle(
+    windowId: string,
+    panelId: string,
+    input: { title: string; source: "auto" | "user" }
+  ): void {
+    foregroundActivityAggregator.hydrateAgentSessionTitle(
+      windowId,
+      panelId,
+      input
+    );
+  },
 };
 
 /** app 退出时释放 JSONL observer 等副资源。 */
@@ -346,6 +373,12 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
           windowId: routed.windowId,
         });
       }
+      applyAgentSessionTitleFromHookEvent({
+        aggregator: foregroundActivityAggregator,
+        event: routed,
+      }).catch((err) => {
+        log.warn("agent session title effect failed", { err });
+      });
     },
     onCommandFinished: (event) => {
       const routed = withResolvedOwner(event);

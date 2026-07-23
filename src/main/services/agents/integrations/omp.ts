@@ -3,6 +3,7 @@ import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
 import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
@@ -143,6 +144,7 @@ export function buildOmpExtensionSource(): string {
 // Bun (omp's extension host) and Node >= 20.16.
 
 ${JAVASCRIPT_LOCKED_APPEND_SOURCE}
+${JAVASCRIPT_PROMPT_SNIPPET_SOURCE}
 
 let pierInstanceCount = 0;
 
@@ -189,6 +191,8 @@ function pierEmit(event, nativeEvent, actorHint, ...values) {
 	const windowId = process.env.PIER_WINDOW_ID;
 	if (!log || !panelId || !windowId) return;
 	const sessionId = pierSessionIdFrom(values);
+	const promptSnippet =
+		event === "PromptSubmit" ? pierPromptSnippetFrom(...values) : undefined;
 	const line = JSON.stringify({
 		v: 2,
 		kind: "agentEvent",
@@ -201,6 +205,7 @@ function pierEmit(event, nativeEvent, actorHint, ...values) {
 		nativeEvent,
 		...(actorHint ? { actorHint } : {}),
 		...(sessionId ? { sessionId } : {}),
+		...(promptSnippet ? { promptSnippet } : {}),
 	}) + "\\n";
 	pierAppend(log, line);
 }

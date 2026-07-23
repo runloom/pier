@@ -47,6 +47,26 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+/**
+ * Non-blocking failure for ordinary git actions (stage/unstage/etc).
+ * Prefer this over dialogs.alert for header/tree mutations.
+ */
+export function notifyError(
+  context: RendererPluginContext,
+  title: string,
+  error?: unknown
+): void {
+  if (error !== undefined) {
+    // Dev-facing only; users see the short toast title.
+    console.error(title, error);
+  }
+  context.notifications.error(title);
+}
+
+/**
+ * Blocking alert for rare "need to read the error" host flows.
+ * Do not use for stage/unstage/header actions — use notifyError.
+ */
 export function showError(
   context: RendererPluginContext,
   title: string,

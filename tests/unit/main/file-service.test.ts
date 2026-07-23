@@ -302,6 +302,29 @@ describe("createFileService", () => {
     await expect(service.list({ path: "linked-dir", root })).rejects.toThrow();
   });
 
+  it("lists in-root symlinks by resolved target kind and omits broken or escaping links", async () => {
+    await mkdir(join(root, "real-dir"));
+    await writeFile(join(root, "real.txt"), "hello\n");
+    await symlink("real-dir", join(root, "link-dir"));
+    await symlink("real.txt", join(root, "link-file.txt"));
+    await symlink("missing-target", join(root, "broken-link"));
+    await symlink(join(outsideRoot, "escape"), join(root, "escape-link"));
+
+    const service = createFileService();
+    const entries = await service.list({ path: "", root });
+
+    expect(entries).toEqual(
+      expect.arrayContaining([
+        { kind: "directory", path: "link-dir", root },
+        { kind: "directory", path: "real-dir", root },
+        { kind: "file", path: "link-file.txt", root },
+        { kind: "file", path: "real.txt", root },
+      ])
+    );
+    expect(entries.map((entry) => entry.path)).not.toContain("broken-link");
+    expect(entries.map((entry) => entry.path)).not.toContain("escape-link");
+  });
+
   it("rejects reading a symlinked file that resolves outside the declared root", async () => {
     const outsideFile = join(outsideRoot, "secret.txt");
     await writeFile(outsideFile, "outside\n");

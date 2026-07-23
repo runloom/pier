@@ -279,7 +279,7 @@ Dev 插件用于开发/测试，不参与官方安装和更新。生产包默认
       "enabled": true,
       "source": { "kind": "official" },
       "devOverride": {
-        "path": "/Users/xyz/dev/pier-codex-plugin",
+        "path": "/Users/dev/dev/pier-codex-plugin",
         "registeredAt": 123456
       }
     }

@@ -33,7 +33,7 @@ describe("process environment service", () => {
     await expect(
       service.resolve({
         clientEnv: { FROM_CLI: "cli", PATH: "/cli/bin" },
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         explicitEnv: { FROM_EXPLICIT: "explicit", PATH: "/explicit/bin" },
         profileEnv: { FROM_PROFILE: "profile", PATH: "/profile/bin" },
         source: "terminal",
@@ -133,12 +133,12 @@ describe("process environment service", () => {
   it("parses null-separated env surrounded by shell startup noise", () => {
     const output = Buffer.concat([
       Buffer.from("startup noise\n__PIER_ENV_START__\n"),
-      Buffer.from("PATH=/shell/bin\0BUN_INSTALL=/Users/xyz/.bun\0"),
+      Buffer.from("PATH=/shell/bin\0BUN_INSTALL=/Users/dev/.bun\0"),
       Buffer.from("\n__PIER_ENV_END__\nmore noise"),
     ]);
 
     expect(parseShellEnvironmentOutput(output)).toEqual({
-      BUN_INSTALL: "/Users/xyz/.bun",
+      BUN_INSTALL: "/Users/dev/.bun",
       PATH: "/shell/bin",
     });
   });

@@ -16,11 +16,10 @@ import {
   LayoutDashboard,
   type LucideIcon,
   PanelsTopLeft,
-  Puzzle,
 } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
-import { getBuiltinRendererPluginModule } from "@/lib/plugins/builtin-catalog.ts";
 import { resolvePluginDisplay } from "@/lib/plugins/display.ts";
+import { resolvePluginIcon } from "@/lib/plugins/resolve-plugin-icon.tsx";
 import { pluginSectionId } from "@/pages/settings/data/appearance-nav.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
@@ -125,8 +124,7 @@ export function PluginRow({
   const t = useT();
   const canToggle = entry.runtime.canToggle;
   const display = resolvePluginDisplay(entry, i18next.language);
-  const RowIcon =
-    getBuiltinRendererPluginModule(entry.manifest.id)?.icon ?? Puzzle;
+  const RowIcon = resolvePluginIcon(entry.manifest.id);
   const actionKey = entry.enabled ? "disable" : "enable";
   const actionLabel = t(`settings.plugins.action.${actionKey}`);
   const actionAriaLabel = t(`settings.plugins.action.${actionKey}Plugin`, {

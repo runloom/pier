@@ -146,6 +146,8 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
   interface OmpEventCtx {
     hasUI: boolean;
     sessionManager?: {
+      getLastUserMessage?: () => string;
+      getMessages?: () => Array<{ role?: string; content?: string }>;
       getSessionFile?: () => string | undefined;
       getSessionId?: () => string;
     };
@@ -288,7 +290,7 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       hasUI: true,
       sessionManager: {
         getSessionFile: () =>
-          `/Users/xyz/.omp/agent/sessions/-ABC-pier/2026-07-17T12-50-56-579Z_${sessionId}.jsonl`,
+          `/Users/dev/.omp/agent/sessions/-ABC-pier/2026-07-17T12-50-56-579Z_${sessionId}.jsonl`,
         getSessionId: () => sessionId,
       },
     };
@@ -306,6 +308,44 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
         sessionId,
       }),
     ]);
+  });
+
+  it("PromptSubmit 从 event.prompt 写入 promptSnippet", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: OmpEventCtx = { hasUI: true };
+    main.fire("agent_start", ctx, {
+      prompt: "帮我分析下当前未提交的修改",
+      type: "agent_start",
+    });
+    const records = await readEmittedRecords(logPath);
+    expect(records).toEqual([
+      expect.objectContaining({
+        event: "PromptSubmit",
+        promptSnippet: "帮我分析下当前未提交的修改",
+      }),
+    ]);
+  });
+
+  it("PromptSubmit 可从 sessionManager.getLastUserMessage 取文案", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    const ctx: OmpEventCtx = {
+      hasUI: true,
+      sessionManager: {
+        getLastUserMessage: () => "fix the flaky test",
+        getSessionId: () => "sess-1",
+      },
+    };
+    main.fire("agent_start", ctx, { type: "agent_start" });
+    const records = await readEmittedRecords(logPath);
+    expect(records[0]).toMatchObject({
+      event: "PromptSubmit",
+      promptSnippet: "fix the flaky test",
+      sessionId: "sess-1",
+    });
   });
 
   it("task subagent(非首实例且 hasUI=false)：交错序列中只追加 Subagent 计数事件", async () => {

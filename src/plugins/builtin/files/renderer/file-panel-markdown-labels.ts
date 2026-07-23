@@ -11,11 +11,7 @@ export function createFileEditorAdapterLabels(
   return {
     diffUnsupported: t(
       "filePanel.view.diffUnsupported",
-      "Diff view is not enabled yet."
-    ),
-    richUnsupported: t(
-      "filePanel.view.richUnsupported",
-      "Rich Markdown editing is not enabled yet."
+      "No disk contents available to compare."
     ),
     sourceEditor: t("filePanel.editor.sourceLabel", "Source editor"),
   };
@@ -48,13 +44,9 @@ export function createMarkdownRendererLabels(
 }
 
 export function createMarkdownTocLabels(t: FilesTranslate): {
-  collapse: string;
-  expand: string;
   title: string;
 } {
   return {
-    collapse: t("filePanel.markdown.toc.collapse", "Collapse outline"),
-    expand: t("filePanel.markdown.toc.expand", "Expand outline"),
     title: t("filePanel.markdown.toc.title", "Outline"),
   };
 }

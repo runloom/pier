@@ -77,6 +77,8 @@ describe("buildAmpPluginSource", () => {
     expect(source).toContain('"tool.call": "ToolStart"');
     expect(source).toContain('"tool.result": "ToolComplete"');
     expect(source).toContain('"agent.end": "Stop"');
+    expect(source).toContain("pierPromptSnippetFrom");
+    expect(source).toContain("promptSnippet");
   });
 
   it("tool.call 拦截返回 allow（不拦截真实工具调用）", () => {

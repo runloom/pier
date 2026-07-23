@@ -35,9 +35,9 @@ function taskPanel(id: string) {
     ...terminalPanel(id),
     params: {
       task: {
-        cwd: "/Users/xyz/ABC/pier",
+        cwd: "/Users/dev/ABC/pier",
         label: "test",
-        projectRootPath: "/Users/xyz/ABC/pier",
+        projectRootPath: "/Users/dev/ABC/pier",
         rawCommand: "pnpm run test",
         runId: "run-1",
         source: "package-script",
@@ -78,7 +78,7 @@ function taskRun(
       },
     },
     ...(mode === "background" ? { originPanelId: "terminal-1" } : {}),
-    projectRootPath: "/Users/xyz/ABC/pier",
+    projectRootPath: "/Users/dev/ABC/pier",
     rootTaskId: "package-script:test",
     runId: "run-1",
     startedAt: 1_772_000_000_000,
@@ -400,7 +400,7 @@ describe("terminal content context menu actions", () => {
       forceRestart: true,
       mode: "terminal-tab",
       placement: "active-tab",
-      projectRootPath: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
       taskId: "package-script:test",
       terminalPanelId: "terminal-task",
     });
@@ -431,7 +431,7 @@ describe("terminal content context menu actions", () => {
       forceRestart: true,
       mode: "terminal-tab",
       placement: "active-tab",
-      projectRootPath: "/Users/xyz/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
       taskId: "package-script:test",
       terminalPanelId: "terminal-task",
     });
@@ -620,6 +620,7 @@ describe("terminal content context menu actions", () => {
         "pier.terminal.clearScreen",
       ])
     );
+    expect(ids).not.toContain("pier.terminal.composerAttach");
     const search = actionRegistry.get("pier.terminal.search");
     const clear = actionRegistry.get("pier.terminal.clearScreen");
     // Find(4) → Clear(5) → Preview Selected Text(6, files plugin) → Rich Input(7)

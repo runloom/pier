@@ -95,6 +95,41 @@ describe("openFilesDiskPath", () => {
     );
   });
 
+  it("refreshes panel context when reusing an existing instance", () => {
+    useWorkspaceStore.getState().setApi({
+      panels: [
+        {
+          id: "existing-file",
+          params: {
+            pinned: true,
+            source: { kind: "disk", path: "src/a.ts", root: "/repo" },
+          },
+          view: { contentComponent: FILES_FILE_PANEL_COMPONENT_ID },
+        },
+      ],
+    } as never);
+
+    const context = {
+      contextId: "ctx-worktree",
+      gitRoot: "/repo",
+      projectRootPath: "/repo",
+      updatedAt: 1,
+    };
+    expect(
+      openFilesDiskPath({
+        context,
+        path: "src/a.ts",
+        root: "/repo",
+      })
+    ).toBe(true);
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        context,
+        instanceId: "existing-file",
+      })
+    );
+  });
+
   it("rejects absolute or parent-relative paths", () => {
     expect(openFilesDiskPath({ path: "/abs/a.ts", root: "/repo" })).toBe(false);
     expect(openFilesDiskPath({ path: "../escape.ts", root: "/repo" })).toBe(

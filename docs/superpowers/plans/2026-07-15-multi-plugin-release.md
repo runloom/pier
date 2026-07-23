@@ -15,7 +15,7 @@
 - Preserve same-version sha256 immutability
 - Preserve Ed25519 required signing for index regeneration
 - `workflow_dispatch` remains single-plugin recovery
-- Work only under `/Users/xyz/ABC/pier.worktree/multi-plugin-release`
+- Work only under `/Users/dev/ABC/pier.worktree/multi-plugin-release`
 
 ## File map
 

@@ -103,10 +103,45 @@ export function withoutPierCrushHooks(
   return { ...settings, hooks };
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+/**
+ * Prefer Crush transparent TUI background in Pier so cell paint does not fight
+ * the host terminal default (status bar / reserved strip). Only set when unset
+ * so an explicit user `false` is preserved.
+ */
+export function withPierCrushTerminalChrome(
+  settings: Record<string, unknown>
+): Record<string, unknown> {
+  const options = isPlainObject(settings.options)
+    ? { ...settings.options }
+    : {};
+  const tui = isPlainObject(options.tui) ? { ...options.tui } : {};
+  if (tui.transparent !== undefined) {
+    return settings;
+  }
+  return {
+    ...settings,
+    options: {
+      ...options,
+      tui: {
+        ...tui,
+        transparent: true,
+      },
+    },
+  };
+}
+
 export async function installCrushHooks(
   settingsPath: string = configPath()
 ): Promise<void> {
-  await transformJsonConfig(settingsPath, withPierCrushHooks, AGENT_ID);
+  await transformJsonConfig(
+    settingsPath,
+    (settings) => withPierCrushTerminalChrome(withPierCrushHooks(settings)),
+    AGENT_ID
+  );
 }
 
 export async function uninstallCrushHooks(

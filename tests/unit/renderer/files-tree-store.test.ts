@@ -467,6 +467,64 @@ describe("files-tree-store", () => {
     expect(snapshot.entriesByPath.get("README.md")).toEqual(file("README.md"));
   });
 
+  it("keeps ancestor stubs unloaded so lazy expand can still fetch children", async () => {
+    await loadRoot([directory("src")]);
+    ensureAncestorDirectoryEntries(ROOT, "src/preload/ai-api.ts");
+
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.entriesByPath.get("src")).toEqual(directory("src"));
+    expect(snapshot.entriesByPath.get("src/preload")).toEqual(
+      directory("src/preload")
+    );
+    // Must not be "loaded" — otherwise expand shows the twistie open with no
+    // children and never calls onLoadDirectory.
+    expect(snapshot.directoryStatesByPath.get("src/preload")).toBe("unloaded");
+  });
+
+  it("repairs stale loaded ancestor stubs that have no children", async () => {
+    await loadRoot([directory("src")]);
+    ensureAncestorDirectoryEntries(ROOT, "src/preload/ai-api.ts");
+    // Simulate the legacy bug: ancestor marked loaded without a listing.
+    (
+      getFilesTreeSnapshot(ROOT).directoryStatesByPath as Map<
+        string,
+        "loaded" | "unloaded"
+      >
+    ).set("src/preload", "loaded");
+
+    ensureAncestorDirectoryEntries(ROOT, "src/preload/ai-api.ts");
+
+    expect(
+      getFilesTreeSnapshot(ROOT).directoryStatesByPath.get("src/preload")
+    ).toBe("unloaded");
+  });
+
+  it("refetches a stale loaded empty directory when loadFilesTreeDirectory is called", async () => {
+    await loadRoot([directory("src")]);
+    ensureAncestorDirectoryEntries(ROOT, "src/preload/ai-api.ts");
+    (
+      getFilesTreeSnapshot(ROOT).directoryStatesByPath as Map<
+        string,
+        "loaded" | "unloaded"
+      >
+    ).set("src/preload", "loaded");
+
+    const result = await loadFilesTreeDirectory(
+      ROOT,
+      "src/preload",
+      listFromResponses({
+        "src/preload": [file("src/preload/ai-api.ts")],
+      })
+    );
+
+    expect(result.ok).toBe(true);
+    const snapshot = getFilesTreeSnapshot(ROOT);
+    expect(snapshot.entriesByPath.get("src/preload/ai-api.ts")).toEqual(
+      file("src/preload/ai-api.ts")
+    );
+    expect(snapshot.directoryStatesByPath.get("src/preload")).toBe("loaded");
+  });
+
   it("preserves a loaded child directory subtree when reloading its parent", async () => {
     await loadRoot([directory("src")]);
     await loadFilesTreeDirectory(

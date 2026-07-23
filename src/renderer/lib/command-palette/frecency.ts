@@ -72,7 +72,8 @@ export function groupRank(
   if (maxScore > Number.NEGATIVE_INFINITY) {
     return { tier: "frecency", maxScore };
   }
-  const category = actions[0]?.category ?? "";
+  const category =
+    actions[0]?.metadata?.categoryKey ?? actions[0]?.category ?? "";
   return {
     tier: "fallback",
     order: CATEGORY_META[category]?.order ?? UNKNOWN_ORDER,
@@ -94,7 +95,15 @@ export function compareActions(
     return 1;
   }
   if (ra.tier === "frecency" && rb.tier === "frecency") {
-    return rb.score - ra.score; // 高分在前
+    if (rb.score !== ra.score) {
+      return rb.score - ra.score; // 高分在前
+    }
+    const bySortOrder =
+      (a.metadata?.sortOrder ?? 0) - (b.metadata?.sortOrder ?? 0);
+    if (bySortOrder !== 0) {
+      return bySortOrder;
+    }
+    return a.id.localeCompare(b.id);
   }
   if (ra.tier === "fallback" && rb.tier === "fallback") {
     return ra.sortOrder - rb.sortOrder; // 小 sortOrder 在前

@@ -9,11 +9,11 @@ import {
   type LucideIcon,
   Paintbrush,
   Plug,
-  Puzzle,
   Terminal,
 } from "lucide-react";
-import { getBuiltinRendererPluginModule } from "@/lib/plugins/builtin-catalog.ts";
+import type { ComponentType } from "react";
 import { resolvePluginConfigurationTitle } from "@/lib/plugins/display.ts";
+import { resolvePluginIcon } from "@/lib/plugins/resolve-plugin-icon.tsx";
 
 export interface StaticNavItem {
   icon: LucideIcon;
@@ -22,7 +22,7 @@ export interface StaticNavItem {
 }
 
 export interface PluginNavItem {
-  icon: LucideIcon;
+  icon: ComponentType<{ className?: string; size?: number | string }>;
   id: string;
   label: string;
   pluginId: string;
@@ -34,14 +34,13 @@ export type SettingsNavItem = PluginNavItem | StaticNavItem;
 export const NAV_ITEMS: readonly StaticNavItem[] = [
   { id: "appearance", icon: Paintbrush, variant: "static" },
   { id: "terminal", icon: Terminal, variant: "static" },
-  // workspace: 宿主级工作区偏好(worktree 目录等), 不属于任何插件的设置页。
-  { id: "workspace", icon: FolderGit2, variant: "static" },
   { id: "keybindings", icon: Keyboard, variant: "static" },
   { id: "agents", icon: Bot, variant: "static" },
   { id: "notifications", icon: Bell, variant: "static" },
-  // projects: 项目级配置壳（环境 + 技能）；紧挨插件，便于对照项目与扩展配置。
-  // 旧 environment/skills 深链仍可用。
+  // projects: 项目级配置壳（环境 + 技能）；旧 environment/skills 深链仍可用。
   { id: "projects", icon: Box, variant: "static" },
+  // workspace: 宿主级工作区偏好(worktree 目录等)；紧挨项目，便于对照项目与工作区配置。
+  { id: "workspace", icon: FolderGit2, variant: "static" },
   { id: "plugins", icon: Plug, variant: "static" },
   { id: "updates", icon: Download, variant: "static" },
 ] as const;
@@ -63,9 +62,8 @@ export function pluginIdFromSectionId(
 }
 
 /**
- * 插件导航项：已启用且声明 configuration 或 settingsPages 的插件；icon 取
- * builtin renderer module 的自描述图标(module.icon), 查不到或未声明时 lucide
- * Puzzle 兜底。
+ * 插件导航项：已启用且声明 configuration 或 settingsPages 的插件；icon 经
+ * {@link resolvePluginIcon}（builtin module → 官方受管品牌图 → Puzzle）。
  */
 export function pluginNavItems(
   entries: readonly PluginRegistryEntry[],
@@ -79,7 +77,7 @@ export function pluginNavItems(
           entry.manifest.settingsPages.length > 0)
     )
     .map((entry) => ({
-      icon: getBuiltinRendererPluginModule(entry.manifest.id)?.icon ?? Puzzle,
+      icon: resolvePluginIcon(entry.manifest.id),
       id: pluginSectionId(entry.manifest.id),
       label: resolvePluginConfigurationTitle(entry, locale),
       pluginId: entry.manifest.id,

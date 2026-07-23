@@ -210,14 +210,22 @@ async function loadFilesTreeDirectoryBranch(
   list: FilesTreeList
 ): Promise<FilesTreeDirectoryLoadDetails> {
   const loadGeneration = session.directoryLoadGenerations.get(path) ?? 0;
+  const priorState = session.snapshot.directoryStatesByPath.get(path);
+  const hasDescendantEntry = [...session.snapshot.entriesByPath.keys()].some(
+    (entryPath) =>
+      path === "" ? entryPath.length > 0 : entryPath.startsWith(`${path}/`)
+  );
+  // Allow refetch of stale "loaded"/"empty" stubs that never received children
+  // (legacy ensureAncestorDirectoryEntries marked ancestors loaded without list).
+  const staleEmptyStub =
+    (priorState === "loaded" || priorState === "empty") && !hasDescendantEntry;
   const loadingStates = setDirectoryState(
     session.snapshot.directoryStatesByPath,
     path,
     "loading"
   );
   if (
-    session.snapshot.directoryStatesByPath.get(path) !== "loaded" &&
-    session.snapshot.directoryStatesByPath.get(path) !== "empty" &&
+    (staleEmptyStub || (priorState !== "loaded" && priorState !== "empty")) &&
     loadingStates !== session.snapshot.directoryStatesByPath
   ) {
     session.snapshot = {
@@ -346,14 +354,35 @@ export function ensureAncestorDirectoryEntries(
       });
       changed = true;
     }
+    // Never mark ancestors as "loaded" here — that blocks PierFileTree lazy
+    // expand (`onLoadDirectory` only runs for unloaded/error). Callers that
+    // need real children must `loadFilesTreeDirectory` (see path-query
+    // materialize). Stubs stay unloaded so expand still fetches contents.
     const state = directoryStatesByPath.get(ancestorPath);
-    if (state !== "loaded" && state !== "empty") {
+    if (state == null) {
       directoryStatesByPath = setDirectoryState(
         directoryStatesByPath,
         ancestorPath,
-        "loaded"
+        "unloaded"
       );
       changed = true;
+    } else if (state === "loaded") {
+      // Repair stale optimistic "loaded" stubs that have no listed children.
+      const hasChild = [...entriesByPath.keys()].some(
+        (entryPath) =>
+          entryPath !== ancestorPath &&
+          (ancestorPath === ""
+            ? !entryPath.includes("/")
+            : entryPath.startsWith(`${ancestorPath}/`))
+      );
+      if (!hasChild) {
+        directoryStatesByPath = setDirectoryState(
+          directoryStatesByPath,
+          ancestorPath,
+          "unloaded"
+        );
+        changed = true;
+      }
     }
   }
   if (!changed) {

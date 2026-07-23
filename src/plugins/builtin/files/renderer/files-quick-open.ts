@@ -33,6 +33,7 @@ import {
   createFilesPathQueryClient,
   type PathQuerySnapshot,
 } from "./files-path-query-client.ts";
+import { filesQuickOpenIcon } from "./files-quick-open-icon.tsx";
 import { recordFilesPathMru } from "./files-quick-open-mru.ts";
 
 let sessionCounter = 0;
@@ -45,12 +46,16 @@ function nextOwner(): string {
 function snapshotToItems(
   snap: PathQuerySnapshot
 ): readonly RendererPluginQuickPickItem[] {
-  return snap.items.map((item) => ({
-    data: item.path,
-    description: item.path,
-    id: item.path,
-    label: basename(item.path),
-  }));
+  return snap.items.map((item) => {
+    const name = basename(item.path);
+    return {
+      data: item.path,
+      description: item.path,
+      icon: filesQuickOpenIcon(name),
+      id: item.path,
+      label: name,
+    };
+  });
 }
 
 function resolveActiveGroupId(

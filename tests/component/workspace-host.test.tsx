@@ -117,12 +117,12 @@ function createPanel(opts: {
 
 const context = {
   contextId: "ctx-pier",
-  cwd: "/Users/xyz/ABC/pier",
-  openedPath: "/Users/xyz/ABC/pier",
-  projectRootPath: "/Users/xyz/ABC/pier",
+  cwd: "/Users/dev/ABC/pier",
+  openedPath: "/Users/dev/ABC/pier",
+  projectRootPath: "/Users/dev/ABC/pier",
   source: "command" as const,
   updatedAt: 1_772_000_000_000,
-  worktreeKey: "/Users/xyz/ABC/pier",
+  worktreeKey: "/Users/dev/ABC/pier",
 };
 
 function installPierWindowApi() {

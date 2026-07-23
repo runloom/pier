@@ -16,7 +16,7 @@ import type {
 } from "@shared/contracts/terminal.ts";
 import type { TerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 import type { PluginConfigurationApi } from "./configuration.ts";
 import type {
   RendererPluginAppearance,
@@ -144,7 +144,7 @@ export interface RendererPluginQuickPickItem {
   readonly description?: string;
   readonly detail?: string;
   readonly disabled?: boolean;
-  readonly icon?: LucideIcon;
+  readonly icon?: ComponentType<{ className?: string; size?: number | string }>;
   readonly id: string;
   readonly label: string;
   readonly searchTerms?: readonly string[];
@@ -405,7 +405,9 @@ export interface RendererPluginContext {
     t(
       key: string,
       values?: RendererPluginMessageValues,
-      fallback?: string
+      fallback?: string,
+      /** 覆盖 i18next.language；review 投影等必须用 appearance.locale。 */
+      locale?: string
     ): string;
   };
   lifecycle: {

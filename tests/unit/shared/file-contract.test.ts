@@ -2,7 +2,7 @@ import { pierCommandSchema } from "@shared/contracts/commands.ts";
 import { fileDocumentReadResultSchema } from "@shared/contracts/file.ts";
 import { describe, expect, it } from "vitest";
 
-const root = "/Users/xyz/ABC/pier";
+const root = "/Users/dev/ABC/pier";
 
 describe("shared file contract", () => {
   it("parses file.list with a non-empty root and root-relative path", () => {
@@ -28,7 +28,7 @@ describe("shared file contract", () => {
 
     expect(
       pierCommandSchema.safeParse({
-        path: "/Users/xyz/ABC/pier/src/renderer",
+        path: "/Users/dev/ABC/pier/src/renderer",
         root,
         type: "file.list",
       }).success
@@ -69,14 +69,14 @@ describe("shared file contract", () => {
       expect(
         pierCommandSchema.safeParse({
           ...command,
-          path: "/Users/xyz/ABC/pier/src/renderer/index.ts",
+          path: "/Users/dev/ABC/pier/src/renderer/index.ts",
         }).success
       ).toBe(false);
     }
 
     expect(
       pierCommandSchema.safeParse({
-        newPath: "/Users/xyz/ABC/pier/src/plugins/index.ts",
+        newPath: "/Users/dev/ABC/pier/src/plugins/index.ts",
         path: "src/renderer/index.ts",
         root,
         type: "file.move",

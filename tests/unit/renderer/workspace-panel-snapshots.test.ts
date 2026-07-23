@@ -23,21 +23,21 @@ describe("buildWorkspacePanelSnapshots", () => {
 
     const pierContext: PanelContext = {
       contextId: "ctx-pier",
-      cwd: "/Users/xyz/ABC/pier",
-      openedPath: "/Users/xyz/ABC/pier",
-      projectRootPath: "/Users/xyz/ABC/pier",
+      cwd: "/Users/dev/ABC/pier",
+      openedPath: "/Users/dev/ABC/pier",
+      projectRootPath: "/Users/dev/ABC/pier",
       source: "panel",
       updatedAt: 1_772_000_000_000,
-      worktreeKey: "/Users/xyz/ABC/pier",
+      worktreeKey: "/Users/dev/ABC/pier",
     };
     const bayContext: PanelContext = {
       contextId: "ctx-bay",
-      cwd: "/Users/xyz/ABC/bay",
-      openedPath: "/Users/xyz/ABC/bay",
-      projectRootPath: "/Users/xyz/ABC/bay",
+      cwd: "/Users/dev/ABC/bay",
+      openedPath: "/Users/dev/ABC/bay",
+      projectRootPath: "/Users/dev/ABC/bay",
       source: "panel",
       updatedAt: 1_772_000_000_001,
-      worktreeKey: "/Users/xyz/ABC/bay",
+      worktreeKey: "/Users/dev/ABC/bay",
     };
 
     expect(

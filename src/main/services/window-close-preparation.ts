@@ -111,6 +111,17 @@ async function reportCloseFailure(
     await currentReportCloseFailure(windowId, closeError);
   } catch (feedbackError) {
     console.error("[window-close-feedback] failed:", feedbackError);
+    // Update/relaunch quit already flushed layout; a dying renderer must not
+    // block install with the native "Unable to close window" error box.
+    if (windowManager.isQuitting()) {
+      console.error(
+        "[window-close-native-feedback] suppressed while quitting:",
+        feedbackError instanceof Error
+          ? feedbackError.message
+          : String(feedbackError)
+      );
+      return;
+    }
     try {
       await currentReportCloseFailureFallback({
         closeError,

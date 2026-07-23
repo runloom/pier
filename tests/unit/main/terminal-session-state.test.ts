@@ -11,9 +11,9 @@ function taskMetadata(
   overrides: Partial<TaskPanelMetadata> = {}
 ): TaskPanelMetadata {
   return {
-    cwd: "/Users/xyz/ABC/pier",
+    cwd: "/Users/dev/ABC/pier",
     label: "test",
-    projectRootPath: "/Users/xyz/ABC/pier",
+    projectRootPath: "/Users/dev/ABC/pier",
     rawCommand: "pnpm test",
     runId: "run-1",
     source: "package-script",
@@ -73,7 +73,7 @@ describe("terminal session state", () => {
     const { readTerminalPanelSession, updateTerminalPanelContext } =
       await loadTerminalSessionState();
 
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await updateTerminalPanelContext("main", "terminal-1", pier);
 
     await expect(
@@ -91,7 +91,7 @@ describe("terminal session state", () => {
       updateTerminalPanelTitle,
     } = await loadTerminalSessionState();
 
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await updateTerminalPanelContext("main", "terminal-1", pier);
     await updateTerminalPanelTitle("main", "terminal-1", "Claude Code");
 
@@ -111,7 +111,7 @@ describe("terminal session state", () => {
       updateTerminalPanelTab,
     } = await loadTerminalSessionState();
 
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await updateTerminalPanelContext("main", "terminal-1", pier);
     await updateTerminalPanelTab("main", "terminal-1", {
       badge: { label: "package.json" },
@@ -182,7 +182,7 @@ describe("terminal session state", () => {
 
   it("preserves saved agent identity for restart restore decisions", async () => {
     const { readTerminalPanelSession } = await loadTerminalSessionState();
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await writeFile(
       join(userDataDir, "terminal-session-state.json"),
       `${JSON.stringify({
@@ -196,7 +196,7 @@ describe("terminal session state", () => {
                   launch: {
                     agentId: "claude",
                     command: "claude --dangerously-skip-permissions",
-                    cwd: "/Users/xyz/ABC/pier",
+                    cwd: "/Users/dev/ABC/pier",
                   },
                   startedAt: 1_772_000_000_000,
                   status: "running",
@@ -218,7 +218,7 @@ describe("terminal session state", () => {
         agentId: "claude",
         launch: {
           command: "claude --dangerously-skip-permissions",
-          cwd: "/Users/xyz/ABC/pier",
+          cwd: "/Users/dev/ABC/pier",
         },
         status: "running",
       },
@@ -589,7 +589,7 @@ describe("terminal session state", () => {
     await updateTerminalPanelContext(
       "main",
       "terminal-1",
-      context("/Users/xyz/ABC/pier")
+      context("/Users/dev/ABC/pier")
     );
 
     await expect(
@@ -605,7 +605,7 @@ describe("terminal session state", () => {
   });
 
   it("normalizes legacy busy tab JSON without resetting the session", async () => {
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await writeFile(
       join(userDataDir, "terminal-session-state.json"),
       JSON.stringify({
@@ -698,7 +698,7 @@ describe("terminal session state", () => {
       updateTerminalPanelTitle,
     } = await loadTerminalSessionState();
 
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await updateTerminalPanelContext("main", "terminal-1", pier);
     await updateTerminalPanelTitle("main", "terminal-1", "Claude Code");
 
@@ -710,7 +710,7 @@ describe("terminal session state", () => {
   });
 
   it("normalizes state to panel sessions only", async () => {
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await writeFile(
       join(userDataDir, "terminal-session-state.json"),
       JSON.stringify({
@@ -776,7 +776,7 @@ describe("terminal session state", () => {
       updateTerminalPanelTask,
     } = await loadTerminalSessionState();
 
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await updateTerminalPanelContext("main", "terminal-1", pier);
     await updateTerminalPanelTask(
       "main",
@@ -824,7 +824,7 @@ describe("terminal session state", () => {
       updateTerminalPanelTask,
     } = await loadTerminalSessionState();
 
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await updateTerminalPanelTask(
       "main",
       "terminal-1",
@@ -900,7 +900,7 @@ describe("terminal session state", () => {
       updateTerminalPanelTask,
     } = await loadTerminalSessionState();
 
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await updateTerminalPanelContext("source-record", "terminal-1", pier);
     await updateTerminalPanelTask(
       "source-record",
@@ -943,7 +943,7 @@ describe("terminal session state", () => {
 
   it("transferPanelOwnership rejects lifecycle mismatch and target conflicts", async () => {
     const mod = await loadTerminalSessionState();
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await mod.updateTerminalPanelContext("source-record", "terminal-1", pier);
     await mod.updateTerminalPanelTask(
       "source-record",
@@ -979,7 +979,7 @@ describe("terminal session state", () => {
       updateTerminalPanelContext,
     } = await loadTerminalSessionState();
 
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await updateTerminalPanelContext("source-record", "shell-1", pier);
 
     await transferPanelOwnership({
@@ -1019,7 +1019,7 @@ describe("terminal session state", () => {
     ).resolves.not.toBeNull();
 
     // Ensure after metadata write is a no-op.
-    const pier = context("/Users/xyz/ABC/pier");
+    const pier = context("/Users/dev/ABC/pier");
     await updateTerminalPanelContext("record-a", "shell-keep", pier);
     await ensureTerminalPanelSession("record-a", "shell-keep");
     await expect(

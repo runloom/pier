@@ -568,19 +568,21 @@ describe("files-document-store", () => {
     const raw = drafts.get(diskDraftKey(document.id));
     expect(raw).toContain('"diskConflict":true');
     expect(raw).toContain('"deletedOnDisk":true');
-    expect(raw).toContain('"conflictDiskContents":"# conflict snapshot"');
+    expect(raw).not.toContain('"conflictDiskContents":"# conflict snapshot"');
+    expect(raw).toContain('"revision":null');
     expect(raw).toContain('"durabilityUnknown":true');
 
     clearFilesDocumentStore({ persisted: false });
     const restored = ensureDiskDocument({ path, root });
     expect(restored).toMatchObject({
-      conflictDiskContents: "# conflict snapshot",
+      conflictDiskContents: null,
       currentContents: "# dirty recovery",
       deletedOnDisk: true,
       dirty: true,
       diskConflict: true,
       durabilityUnknown: true,
       hasBackingStore: false,
+      revision: null,
     });
   });
 
@@ -1224,6 +1226,7 @@ describe("files-document-store", () => {
 
   it("keeps the deleted-on-disk fact while the user continues editing", () => {
     const document = ensureDiskDocument({ path: "README.md", root: "/repo" });
+    markDocumentLoaded(document.id, "# baseline\n", 1);
     markDocumentDeletedOnDisk(document.id);
 
     updateDocumentContents(document.id, "# still editing\n");
@@ -1233,6 +1236,8 @@ describe("files-document-store", () => {
       deletedOnDisk: true,
       dirty: true,
       hasBackingStore: false,
+      revision: null,
+      conflictDiskContents: null,
     });
   });
 });

@@ -12,7 +12,7 @@ import { describe, expect, it } from "vitest";
 const operationId = "9af45a46-24f2-4ac0-9371-fbe78ca295dc";
 const source = {
   contextId: "worktree:abc",
-  gitRootPath: "/Users/xyz/ABC/pier",
+  gitRootPath: "/Users/dev/ABC/pier",
   oldPaths: [],
   path: "src/index.ts",
   target: { kind: "uncommitted" },

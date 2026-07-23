@@ -29,7 +29,13 @@ function findTreeEntry(target: {
   root?: string | undefined;
 }): FilesTreeRegistryEntry | null {
   if (target.instanceId) {
-    return treeRegistry.get(target.instanceId) ?? null;
+    const byId = treeRegistry.get(target.instanceId);
+    if (byId) {
+      return byId;
+    }
+    // Explicit instance id that is not mounted must not steal another same-root
+    // tree (e.g. open-search targeting a closed sidebar instance).
+    return null;
   }
   if (target.root) {
     let lastMatch: FilesTreeRegistryEntry | null = null;
@@ -102,13 +108,25 @@ export function revealFilesTreePath(target: {
   path: string;
   root: string;
 }): boolean {
-  const entry = findTreeEntry(target);
-  const api = entry?.getApi();
-  if (!api) {
-    return false;
+  const tryReveal = (): boolean => {
+    const entry = findTreeEntry(target);
+    const api = entry?.getApi();
+    if (!api) {
+      return false;
+    }
+    api.revealPath(target.path);
+    return true;
+  };
+  if (tryReveal()) {
+    return true;
   }
-  api.revealPath(target.path);
-  return true;
+  // Tree may still be mounting after sidebar expand.
+  for (const delayMs of [32, 80, 160, 320]) {
+    window.setTimeout(() => {
+      tryReveal();
+    }, delayMs);
+  }
+  return false;
 }
 
 export function findFilesTreeInstanceId(root: string): string | null {

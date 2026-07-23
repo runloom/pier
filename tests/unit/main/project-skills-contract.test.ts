@@ -33,7 +33,7 @@ const validManifest = {
 };
 
 const sampleProjectRef = {
-  realPath: "/Users/xyz/ABC/pier",
+  realPath: "/Users/dev/ABC/pier",
   volumeIdentity: "vol-1",
   directoryIdentity: "dir-1",
   token: "tok-1",

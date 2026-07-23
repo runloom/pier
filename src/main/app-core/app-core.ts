@@ -29,6 +29,7 @@ import { isDevRuntime } from "../runtime-mode.ts";
 import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
 import { createAgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
+import { registerAgentSessionTitleRefineGenerateText } from "../services/agents/agent-session-title-refine.ts";
 import { createAgentUsageService } from "../services/agents/agent-usage-service.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
 import { createAppUpdateService } from "../services/app-updates/app-update-service.ts";
@@ -462,6 +463,11 @@ function createPierAppCore(): PierAppCore {
       };
     })(),
   };
+
+  registerAgentSessionTitleRefineGenerateText((request) =>
+    services.ai.generateText(request)
+  );
+
   return {
     clients,
     commandRouter: createCommandRouter({

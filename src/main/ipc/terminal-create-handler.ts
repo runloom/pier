@@ -434,6 +434,21 @@ export async function handleTerminalCreate(args: {
     // Invariant: live terminal ⇒ session entry exists (transfer CAS relies on
     // it). Context/tab writers below only add metadata onto this entry.
     await ensureTerminalPanelSession(sessionScope, createArgs.panelId);
+    if (launch.launchAgentId) {
+      const session = await readTerminalPanelSession(
+        sessionScope,
+        createArgs.panelId
+      );
+      const title = session?.sessionTitle?.trim();
+      const source = session?.sessionTitleSource;
+      if (title && source) {
+        foregroundActivityService.hydrateAgentSessionTitle(
+          String(win.id),
+          createArgs.panelId,
+          { source, title }
+        );
+      }
+    }
     await persistInitialTerminalContext(
       sessionScope,
       createArgs.panelId,
