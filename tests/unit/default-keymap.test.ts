@@ -26,6 +26,7 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+KeyD",
   "Mod+KeyF",
   "Mod+KeyN",
+  "Mod+KeyP",
   "Mod+KeyT",
   "Mod+KeyW",
   "Mod+Minus",

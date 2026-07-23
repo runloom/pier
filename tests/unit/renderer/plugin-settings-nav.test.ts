@@ -1,4 +1,5 @@
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
+import { FolderTree, Server } from "lucide-react";
 import { describe, expect, it } from "vitest";
 import {
   pluginNavItems,
@@ -11,9 +12,15 @@ function entry(
     configured?: boolean;
     enabled?: boolean;
     settingsPages?: boolean;
+    sourceKind?: "builtin" | "official";
   } = {}
 ): PluginRegistryEntry {
-  const { configured = true, enabled = true, settingsPages = false } = options;
+  const {
+    configured = true,
+    enabled = true,
+    settingsPages = false,
+    sourceKind = "builtin",
+  } = options;
 
   return {
     effectivePermissions: [],
@@ -38,11 +45,15 @@ function entry(
             },
           }
         : {}),
-      source: { kind: "builtin" },
+      source: { kind: sourceKind },
       terminalStatusItems: [],
       version: "1.0.0",
     },
-    runtime: { canToggle: true, enabled, kind: "builtin" },
+    runtime: {
+      canToggle: true,
+      enabled,
+      kind: sourceKind === "builtin" ? "builtin" : "external",
+    },
   };
 }
 
@@ -77,5 +88,25 @@ describe("pluginNavItems", () => {
       "en"
     );
     expect(items).toHaveLength(0);
+  });
+
+  it("resolves builtin and first-party managed plugin icons", () => {
+    const items = pluginNavItems(
+      [
+        entry("pier.files", { configured: false, settingsPages: true }),
+        entry("pier.ssh", {
+          configured: false,
+          settingsPages: true,
+          sourceKind: "official",
+        }),
+      ],
+      "en"
+    );
+    expect(items.find((item) => item.pluginId === "pier.files")?.icon).toBe(
+      FolderTree
+    );
+    expect(items.find((item) => item.pluginId === "pier.ssh")?.icon).toBe(
+      Server
+    );
   });
 });

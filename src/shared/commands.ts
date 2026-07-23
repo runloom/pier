@@ -6,6 +6,7 @@ export const APP_HANDLED_NATIVE_TERMINAL_COMMANDS = [
   "pier.panel.openCreateMenu",
   "pier.window.newWindow",
   "pier.commandPalette.toggle",
+  "pier.files.quickOpen",
   "pier.agent.new",
   "pier.panel.toggleMaximized",
   "pier.terminal.openDebugWindow",

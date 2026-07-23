@@ -3,8 +3,7 @@
  * Action / ActionMetadata 在 lib/actions/types.ts 中定义（共享）。
  */
 
-import type { LucideIcon } from "lucide-react";
-import type { ReactNode } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export type CommandPaletteSurface = "command-palette" | (string & {});
 
@@ -29,7 +28,10 @@ export interface QuickPickItem {
   readonly description?: string;
   readonly detail?: string;
   readonly disabled?: boolean;
-  readonly icon?: LucideIcon;
+  readonly icon?: ComponentType<{
+    className?: string;
+    size?: number | string;
+  }>;
   readonly id: string;
   readonly label: string;
   readonly searchTerms?: readonly string[];

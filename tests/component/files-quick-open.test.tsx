@@ -246,6 +246,7 @@ describe("files quick open", () => {
         "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
       label: "code-mirror-editor-theme.ts",
     });
+    expect(lastPatch.items?.[0]?.icon).toEqual(expect.any(Function));
   });
 
   it("opens the accepted path in the active group and records MRU", async () => {
