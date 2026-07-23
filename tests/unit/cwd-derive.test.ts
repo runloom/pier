@@ -4,6 +4,7 @@ import { resolveLong } from "@/components/common/document-title.tsx";
 import {
   activityTabChromeOverlay,
   basename,
+  terminalPanelDescriptor,
 } from "@/panel-kits/terminal/terminal-tab-chrome.ts";
 
 describe("basename", () => {
@@ -39,17 +40,6 @@ describe("resolveLong", () => {
   it("falls back to display.short when no long", () => {
     expect(resolveLong({ display: { short: "x" } })).toBe("x");
   });
-
-  it("OSC sequenceTitle 在 display.long 里时优先显示", () => {
-    expect(
-      resolveLong({
-        display: {
-          long: "Claude Code",
-          short: "pier",
-        },
-      })
-    ).toBe("Claude Code");
-  });
 });
 
 describe("activityTabChromeOverlay", () => {
@@ -71,36 +61,79 @@ describe("activityTabChromeOverlay", () => {
     agentId: "grok",
   } satisfies ForegroundActivity;
 
-  it("uses a short terminal title for agent tabs when present", () => {
+  it("uses catalog · project placeholder and ignores short OSC", () => {
     expect(
-      activityTabChromeOverlay(agentActivity, "Fix parser crash")
+      activityTabChromeOverlay(agentActivity, {
+        projectRootPath: "/Users/x/ABC/pier",
+      })
     ).toMatchObject({
       icon: { id: "agent:claude" },
       state: { status: "running" },
+      title: "Claude · pier",
+    });
+  });
+
+  it("falls back to catalog label when no project path", () => {
+    expect(activityTabChromeOverlay(agentActivity)).toMatchObject({
+      title: "Claude",
+    });
+  });
+
+  it("ignores long Grok OSC dumps for the tab primary title", () => {
+    expect(
+      activityTabChromeOverlay(grokActivity, {
+        projectRootPath: "/Users/x/ABC/pier",
+      })
+    ).toMatchObject({
+      icon: { id: "agent:grok" },
+      title: "Grok · pier",
+    });
+  });
+
+  it("prefers FA sessionTitle when present", () => {
+    expect(
+      activityTabChromeOverlay(
+        {
+          ...agentActivity,
+          sessionTitle: "Fix parser crash",
+          sessionTitleSource: "auto",
+        },
+        { projectRootPath: "/Users/x/ABC/pier" }
+      )
+    ).toMatchObject({
       title: "Fix parser crash",
     });
   });
 
-  it("falls back to the agent label when the terminal title is empty", () => {
-    expect(activityTabChromeOverlay(agentActivity, "  ")).toMatchObject({
-      title: "Claude",
-    });
-  });
-
-  it("falls back to the agent label when Grok dumps a long prompt into OSC title", () => {
-    const longPrompt =
-      "[Image #3] 如图当前代码实现 tab 的内容还是路径 name , 这里是为什么呢？agent 对应的标题设置没有生效吗？ - grok";
-    expect(activityTabChromeOverlay(grokActivity, longPrompt)).toMatchObject({
-      icon: { id: "agent:grok" },
-      title: "Grok",
-    });
-  });
-
-  it("falls back to the agent label when the terminal title contains newlines", () => {
+  it("falls back to persisted sessionTitle when FA has none", () => {
     expect(
-      activityTabChromeOverlay(agentActivity, "line one\nline two")
+      activityTabChromeOverlay(agentActivity, {
+        projectRootPath: "/Users/x/ABC/pier",
+        sessionTitle: "Persisted rename",
+        sessionTitleSource: "user",
+      })
     ).toMatchObject({
-      title: "Claude",
+      title: "Persisted rename",
     });
+  });
+});
+
+describe("terminalPanelDescriptor agent primary", () => {
+  it("keeps long OSC out of display.long when displayPrimary is set", () => {
+    const descriptor = terminalPanelDescriptor({
+      displayPrimary: "Grok · pier",
+      effectiveContext: undefined,
+      effectiveCwd: "/Users/x/ABC/pier",
+      effectiveTab: { title: "Grok · pier" },
+      sessionLoaded: true,
+      terminalTitle:
+        "[Image #3] 如图当前代码实现 tab 的内容还是路径 name , 这里是为什么呢？agent 对应的标题设置没有生效吗？ - grok more text to exceed tooltip cap intentionally for the test case padding padding",
+    });
+    expect(descriptor?.display.short).toBe("Grok · pier");
+    expect(descriptor?.display.long).toBe("Grok · pier");
+    expect(descriptor?.display.terminalTitle?.includes("[Image #3]")).toBe(
+      true
+    );
+    expect((descriptor?.display.terminalTitle?.length ?? 0) <= 120).toBe(true);
   });
 });

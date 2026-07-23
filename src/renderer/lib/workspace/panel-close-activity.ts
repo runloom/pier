@@ -1,3 +1,7 @@
+import {
+  agentSessionTitleInput,
+  resolveAgentSessionTitle,
+} from "@shared/agent-session-title.ts";
 import type { QuitActivitySummary } from "@shared/contracts/app-quit.ts";
 import type {
   ActivityStatus,
@@ -25,7 +29,13 @@ function summarizeActiveAgent(
   }
   return {
     kind: "agent",
-    label: activity.agentId,
+    label: resolveAgentSessionTitle(
+      agentSessionTitleInput({
+        agentId: activity.agentId,
+        sessionTitle: activity.sessionTitle,
+        sessionTitleSource: activity.sessionTitleSource,
+      })
+    ).primary,
     panelId: activity.panelId,
     windowId: activity.windowId,
   };

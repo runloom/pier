@@ -1,5 +1,4 @@
 import { z } from "zod";
-import type { AgentKind } from "./agent.ts";
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
 import type { TaskOutputPanelParams, TaskPanelMetadata } from "./tasks.ts";
 import type {
@@ -18,7 +17,6 @@ import type {
   TerminalDebugSnapshotArgs,
   TerminalDebugWindowOpenResult,
 } from "./terminal-debug.ts";
-import type { TerminalAgentRestoreLaunchOptions } from "./terminal-launch.ts";
 import type { SkillsLaunchBlockedInfo } from "./terminal-skills-launch.ts";
 
 export type {
@@ -201,26 +199,11 @@ export interface RebindTaskOutputResult extends CreateTerminalResult {
   stale?: boolean;
 }
 
-export interface TerminalAgentResumeMetadata {
-  capturedAt: number;
-  sessionId: string;
-  source: "hook";
-}
-
-export interface TerminalAgentPanelMetadata {
-  agentId: AgentKind;
-  exitCode?: number | undefined;
-  finishedAt?: number | undefined;
-  launch: TerminalAgentRestoreLaunchOptions;
-  restore?:
-    | {
-        detachedAt?: number | undefined;
-      }
-    | undefined;
-  resume?: TerminalAgentResumeMetadata | undefined;
-  startedAt: number;
-  status: "exited" | "running";
-}
+export type {
+  TerminalAgentPanelMetadata,
+  TerminalAgentResumeMetadata,
+  TerminalPanelSessionSnapshot,
+} from "./terminal-panel-session.ts";
 
 export interface TerminalContextMenuRequest {
   panelId: string;
@@ -267,22 +250,6 @@ export const terminalOpenUrlEventSchema = z.object({
   url: z.string().min(1).max(16_384),
 });
 export type TerminalOpenUrlEvent = z.infer<typeof terminalOpenUrlEventSchema>;
-
-export interface TerminalPanelSessionSnapshot {
-  agent?: TerminalAgentPanelMetadata | undefined;
-  context?: PanelContext | undefined;
-  tab?: PanelTabChrome | undefined;
-  task?: TaskPanelMetadata | undefined;
-  /**
-   * main 担保的 task 活性：该 panel 的 task 面板寿命仍在本 main 进程内
-   * （foreground-activity 有 task slot——running 或终态常驻）。true = renderer
-   * reload 重挂路径（native 面保留, 渲染真终端）；false/缺席 = app restart,
-   * 渲染静态结果卡。
-   */
-  taskLive?: boolean | undefined;
-  title?: string | undefined;
-  updatedAt: string;
-}
 
 export type TerminalOperation = "copy" | "paste" | "selectAll" | "clearScreen";
 
@@ -455,7 +422,6 @@ export interface TerminalAPI {
   readSession(panelId: string): Promise<TerminalPanelSessionSnapshot | null>;
   /**
    * 在不更换 dockview panel 的前提下，把只读输出终端切换到另一 TaskRun。
-   * generation 用于拒绝晚到的旧选择；失败时保留原绑定。
    */
   rebindTaskOutput(
     panelId: string,
@@ -493,5 +459,13 @@ export interface TerminalAPI {
    * → ghostty_surface_update_config, 不重建 surface, 不杀 shell. fire-and-forget.
    */
   setFont(panelId: string, font: TerminalFont): void;
+  /**
+   * 设置 Agent 产品 sessionTitle（source=user 可覆盖 auto）。
+   * 失败安全：返回 ok/applied，不抛。
+   */
+  setSessionTitle(
+    panelId: string,
+    input: { title: string; source: "auto" | "user" }
+  ): Promise<{ applied: boolean; ok: boolean }>;
   setup(): Promise<CreateTerminalResult>;
 }

@@ -2,6 +2,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import type {
   ActivityStatus,
+  AgentSessionTitleSource,
   ForegroundActivity,
 } from "@shared/contracts/foreground-activity.ts";
 
@@ -172,6 +173,9 @@ export interface PanelSlot {
   command: CommandLayer | null;
   hook: HookLayer | null;
   panelId: string;
+  /** 产品会话名（与 status 隔离；挂 panel 而非 hook 层）。 */
+  sessionTitle?: string;
+  sessionTitleSource?: AgentSessionTitleSource;
 }
 
 export interface TimerCtx {
@@ -362,6 +366,12 @@ export function projectSlot(
       subagentCount: hook.subagentCount,
       updatedAt: hook.updatedAt,
       windowId: hook.windowId,
+      ...(slot.sessionTitle === undefined
+        ? {}
+        : { sessionTitle: slot.sessionTitle }),
+      ...(slot.sessionTitleSource === undefined
+        ? {}
+        : { sessionTitleSource: slot.sessionTitleSource }),
     };
   }
   if (command?.kind === "agent-launch" && !command.hidden) {
@@ -374,6 +384,12 @@ export function projectSlot(
       subagentCount: 0,
       updatedAt: command.updatedAt,
       windowId: command.windowId,
+      ...(slot.sessionTitle === undefined
+        ? {}
+        : { sessionTitle: slot.sessionTitle }),
+      ...(slot.sessionTitleSource === undefined
+        ? {}
+        : { sessionTitleSource: slot.sessionTitleSource }),
     };
   }
   if (command?.kind === "shell") {

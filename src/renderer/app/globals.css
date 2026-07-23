@@ -691,8 +691,10 @@ body {
 .dv-tab-ghost-drag .dv-default-tab {
   box-sizing: border-box;
   gap: 6px;
-  /* 默认 tab 限宽以 ellipsis OSC/长标题；文件 tab 见 data-pier-tab-kind=file 例外 */
-  max-width: 180px;
+  /* 默认 tab 限宽以 ellipsis 长标题；文件 tab 见 data-pier-tab-kind=file 例外。
+   * 180px 在 ⌘ 序号 + 图标 + 关闭后中文大约只剩 6–8 字；280px 更接近常见 IDE
+   * 密度，仍可在多 tab 时滚动，避免单 tab 占满轨。 */
+  max-width: 280px;
   min-width: 0;
   padding-inline: 8px 4px;
   &[data-pier-tab-kind="file"] {

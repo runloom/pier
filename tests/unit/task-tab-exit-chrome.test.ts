@@ -101,8 +101,7 @@ describe("task exit tab chrome uses TaskRuns as single live source", () => {
         updatedAt: 2,
         windowId: "1",
       },
-      undefined,
-      runsSnapshot("run-1", "running")
+      { taskRuns: runsSnapshot("run-1", "running") }
     );
 
     expect(overlay).toEqual({ title: "npm build" });
@@ -152,8 +151,7 @@ describe("task exit tab chrome uses TaskRuns as single live source", () => {
           updatedAt: 2,
           windowId: "1",
         },
-        undefined,
-        runsSnapshot("run-1", "running")
+        { taskRuns: runsSnapshot("run-1", "running") }
       )?.state
     ).toBeUndefined();
   });
@@ -171,8 +169,7 @@ describe("task exit tab chrome uses TaskRuns as single live source", () => {
           updatedAt: 2,
           windowId: "1",
         },
-        undefined,
-        runsSnapshot("run-1", "succeeded")
+        { taskRuns: runsSnapshot("run-1", "succeeded") }
       )
     ).toBeNull();
   });

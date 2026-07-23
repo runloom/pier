@@ -1,6 +1,10 @@
 import { cn } from "@pier/ui/utils.ts";
 import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
 import type { WorkbenchWidgetComponentProps } from "@plugins/api/renderer.ts";
+import {
+  agentSessionTitleInput,
+  resolveAgentSessionTitle,
+} from "@shared/agent-session-title.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import {
   isActiveTaskRunNodeStatus,
@@ -101,7 +105,13 @@ function activityLabel(
   t: (key: string) => string
 ): string {
   if (activity.kind === "agent") {
-    return activity.agentId;
+    return resolveAgentSessionTitle(
+      agentSessionTitleInput({
+        agentId: activity.agentId,
+        sessionTitle: activity.sessionTitle,
+        sessionTitleSource: activity.sessionTitleSource,
+      })
+    ).primary;
   }
   if (activity.kind === "task") {
     return activity.label;

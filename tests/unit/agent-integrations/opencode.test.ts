@@ -130,6 +130,8 @@ describe("buildOpencodePluginSource", () => {
     expect(source).toContain('event.type === "session.deleted"');
     expect(source).toContain("value.info || value.session || value.thread");
     expect(source).toContain("toolUseId");
+    expect(source).toContain("pierPromptSnippetFrom");
+    expect(source).toContain("promptSnippet");
   });
 
   it("无加载合成 SessionStart：factory 体到 return 之间无独立 emit（真实 session.created 覆盖）", () => {
@@ -143,6 +145,68 @@ describe("buildOpencodePluginSource", () => {
 });
 
 describe("opencode 生成插件的子会话身份继承", () => {
+  it("prompt.submit 带 properties.prompt 时写入 promptSnippet", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-opencode-prompt-"));
+    const logPath = join(dir, "events.jsonl");
+    const previousEnv = {
+      log: process.env.PIER_AGENT_EVENT_LOG,
+      panel: process.env.PIER_PANEL_ID,
+      window: process.env.PIER_WINDOW_ID,
+    };
+    process.env.PIER_AGENT_EVENT_LOG = logPath;
+    process.env.PIER_PANEL_ID = "panel-1";
+    process.env.PIER_WINDOW_ID = "1";
+    try {
+      interface GeneratedPlugin {
+        event: (args: { event: Record<string, unknown> }) => void;
+      }
+      const moduleShim: {
+        exports: (() => GeneratedPlugin) | undefined;
+      } = { exports: undefined };
+      const source = buildOpencodePluginSource().replace(
+        "export const PierAgentStatus =",
+        "module.exports ="
+      );
+      const evaluate = new Function("module", source) as (
+        module: typeof moduleShim
+      ) => void;
+      evaluate(moduleShim);
+      if (!moduleShim.exports) throw new Error("生成插件没有导出 factory");
+      const plugin = moduleShim.exports();
+      plugin.event({
+        event: {
+          properties: {
+            command: "prompt.submit",
+            prompt: "帮我分析下当前未提交的修改",
+          },
+          type: "tui.command.execute",
+        },
+      });
+      const lines = (await readFile(logPath, "utf8")).trim().split("\n");
+      expect(lines).toHaveLength(1);
+      expect(JSON.parse(lines[0] ?? "{}")).toMatchObject({
+        event: "PromptSubmit",
+        promptSnippet: "帮我分析下当前未提交的修改",
+      });
+    } finally {
+      if (previousEnv.log === undefined) {
+        delete process.env.PIER_AGENT_EVENT_LOG;
+      } else {
+        process.env.PIER_AGENT_EVENT_LOG = previousEnv.log;
+      }
+      if (previousEnv.panel === undefined) {
+        delete process.env.PIER_PANEL_ID;
+      } else {
+        process.env.PIER_PANEL_ID = previousEnv.panel;
+      }
+      if (previousEnv.window === undefined) {
+        delete process.env.PIER_WINDOW_ID;
+      } else {
+        process.env.PIER_WINDOW_ID = previousEnv.window;
+      }
+    }
+  });
+
   it("child created 后的 status/tool/deleted 全部保持 subagent actor", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-opencode-runtime-"));
     const logPath = join(dir, "events.jsonl");

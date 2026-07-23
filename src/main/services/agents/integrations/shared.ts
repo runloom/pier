@@ -2,6 +2,7 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { delimiter, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { PIER_HOOK_COMMAND_GENERATION } from "../agent-hooks-install.ts";
 import type {
   AgentHookCapability,
   AgentHookIntegration,
@@ -13,6 +14,19 @@ import type {
  * hooks.json command 模板引用此环境变量名。
  */
 export const PIER_AGENT_HOOKS_DIR_MARK = "PIER_AGENT_HOOKS_DIR";
+
+/** 嵌入 hook 命令的世代标记（勿用 `#` 注释——命令经 `;` 拼成单行）。 */
+export const PIER_HOOK_GEN_MARK = `pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}`;
+
+/** 从 hook command 文本解析世代；无标记视为 1（旧 stdin 内联提取）。 */
+export function pierHookCommandGeneration(command: string): number {
+  const match = /pier-hook-gen=(\d+)/.exec(command);
+  if (!match) {
+    return 1;
+  }
+  const value = Number(match[1]);
+  return Number.isFinite(value) ? value : 1;
+}
 
 /**
  * 生成静态 hook 命令（spec §4.4）：通过 emit 脚本写 JSONL，取代旧版 curl。
@@ -41,9 +55,16 @@ export function pierHookCommand(
 /** stdin 身份提取前奏（各 stdin 系构造器共用）。 */
 function stdinIdentityExtractionLines(): string[] {
   const nodeExecutable = shellDoubleQuote(process.execPath);
+  // 优先走当前终端 PIER_AGENT_HOOKS_DIR 里的 extract-stdin-meta（跟该 Pier
+  // userData 版本），这样旧 worktree 覆盖全局 hooks.json 命令模板后，只要
+  // 命令仍指向 extract-stdin-meta，本 Pier 终端仍能抽出 promptSnippet。
+  // 回退：内联 ELECTRON_RUN_AS_NODE（安装本命令的 Pier 的 execPath）。
+  const inlineExtract = `ELECTRON_RUN_AS_NODE=1 "${nodeExecutable}" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s),o={};for(const k of ["session_id","sessionId","turn_id","tool_use_id","tool_name","agent_id","agent_type","transcript_path"])if(typeof p[k]==="string")o[k]=p[k];const prompt=[p.prompt,p.user_prompt,p.content,p.message].find(v=>typeof v==="string");if(typeof prompt==="string"&&prompt.trim())o.promptSnippet=prompt.slice(0,512);process.stdout.write(Buffer.from(JSON.stringify(o)).toString("base64"))}catch{}})'`;
+  const extractMeta = `\${${PIER_AGENT_HOOKS_DIR_MARK}}/extract-stdin-meta`;
   return [
+    `_pier_hook_gen=${PIER_HOOK_GEN_MARK}`,
     "_pier_payload=$(cat 2>/dev/null | head -c 65536)",
-    `_pier_metadata_b64=$(printf '%s' "$_pier_payload" | ELECTRON_RUN_AS_NODE=1 "${nodeExecutable}" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s),o={};for(const k of ["session_id","sessionId","turn_id","tool_use_id","tool_name","agent_id","agent_type","transcript_path"])if(typeof p[k]==="string")o[k]=p[k];process.stdout.write(Buffer.from(JSON.stringify(o)).toString("base64"))}catch{}})' 2>/dev/null || true)`,
+    `_pier_metadata_b64=$(printf '%s' "$_pier_payload" | { if [ -x "${extractMeta}" ]; then "${extractMeta}"; else ${inlineExtract}; fi; } 2>/dev/null || true)`,
     `_pier_session_id=$(printf '%s' "$_pier_payload" | sed -n 's/.*"session_id"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p; s/.*"sessionId"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
     `_pier_turn_id=$(printf '%s' "$_pier_payload" | sed -n 's/.*"turn_id"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
     `_pier_tool_use_id=$(printf '%s' "$_pier_payload" | sed -n 's/.*"tool_use_id"[[:space:]]*:[[:space:]]*"\\([^"]*\\)".*/\\1/p' | head -n 1)`,
@@ -78,6 +99,25 @@ export function pierHookCommandWithStdinSessionId(
       nativeEvent,
       ...STDIN_IDENTITY_PAYLOAD_ARGS
     ),
+  ].join("; ");
+}
+
+/**
+ * Claude UserPromptSubmit：emit 之后向 stdout 回写 hookSpecificOutput.sessionTitle
+ * （双写 provider UI；Pier 仍以 FA sessionTitle 为准）。
+ */
+export function pierClaudeUserPromptSubmitCommand(agentId: AgentKind): string {
+  const nodeExecutable = shellDoubleQuote(process.execPath);
+  const deriveAndPrint = `ELECTRON_RUN_AS_NODE=1 "${nodeExecutable}" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s);const raw=[p.prompt,p.user_prompt,p.content,p.message].find(v=>typeof v==="string");if(typeof raw!=="string")return;let t=String(raw).replace(/\\r\\n/g,"\\n").replace(/\\r/g,"\\n").replace(/\\[Image\\s*#?\\d*\\]/gi," ").replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g," ").replace(/\\s+/g," ").trim();if(!t||/^(hi|hello|hey|yo|sup|你好|您好|嗨|哈喽|在吗|在么)[!?？。.\\s]*$/i.test(t))return;if(t.length>40)t=t.slice(0,40).trimEnd();if(!t||t.includes("\\n"))return;process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"UserPromptSubmit",sessionTitle:t,suppressOutput:true}}))}catch{}})'`;
+  return [
+    ...stdinIdentityExtractionLines(),
+    pierHookCommand(
+      agentId,
+      "PromptSubmit",
+      "UserPromptSubmit",
+      ...STDIN_IDENTITY_PAYLOAD_ARGS
+    ),
+    `printf '%s' "$_pier_payload" | ${deriveAndPrint} 2>/dev/null || true`,
   ].join("; ");
 }
 
@@ -136,6 +176,61 @@ export function isPierHookCommand(command: unknown): boolean {
   return (
     typeof command === "string" && command.includes(PIER_AGENT_HOOKS_DIR_MARK)
   );
+}
+
+/** 扫描 settings.hooks 下全部 pier command 的最大世代。 */
+export function maxPierHookGenerationInSettings(
+  settings: Record<string, unknown>
+): number {
+  let max = 0;
+  const visitCommand = (command: unknown): void => {
+    if (typeof command !== "string" || !isPierHookCommand(command)) {
+      return;
+    }
+    max = Math.max(max, pierHookCommandGeneration(command));
+  };
+  const hooks = settings.hooks;
+  if (!(hooks && typeof hooks === "object" && !Array.isArray(hooks))) {
+    return max;
+  }
+  for (const entries of Object.values(hooks as Record<string, unknown>)) {
+    if (!Array.isArray(entries)) {
+      continue;
+    }
+    for (const entry of entries) {
+      if (!(entry && typeof entry === "object")) {
+        continue;
+      }
+      const record = entry as Record<string, unknown>;
+      visitCommand(record.command);
+      const nested = record.hooks;
+      if (!Array.isArray(nested)) {
+        continue;
+      }
+      for (const hook of nested) {
+        if (hook && typeof hook === "object") {
+          visitCommand((hook as { command?: unknown }).command);
+        }
+      }
+    }
+  }
+  return max;
+}
+
+/**
+ * 若磁盘上已有更高世代的 pier hook，则保留原配置（防止旧 worktree 降级覆盖）。
+ * 否则执行 rewrite。
+ */
+export function transformPierHooksUnlessNewer(
+  settings: Record<string, unknown>,
+  rewrite: (s: Record<string, unknown>) => Record<string, unknown>
+): Record<string, unknown> {
+  if (
+    maxPierHookGenerationInSettings(settings) > PIER_HOOK_COMMAND_GENERATION
+  ) {
+    return settings;
+  }
+  return rewrite(settings);
 }
 
 /**
@@ -213,6 +308,11 @@ export async function transformJsonConfig(
 // ---------------------------------------------------------------------------
 
 export interface NestedHookEventSpec {
+  /**
+   * 覆盖默认 stdin emit 命令（例如 Claude UserPromptSubmit 双写 sessionTitle）。
+   * 未设则 `pierHookCommandWithStdinSessionId`。
+   */
+  buildCommand?: (agentId: AgentKind) => string;
   /** 工具类事件的 matcher；undefined = 不写 matcher 字段。 */
   matcher?: string;
   /** 该 agent 的原生事件名。 */
@@ -271,11 +371,13 @@ export function withPierNestedHooks(
       ...(event.matcher === undefined ? {} : { matcher: event.matcher }),
       hooks: [
         {
-          command: pierHookCommandWithStdinSessionId(
-            spec.agentId,
-            event.pierEvent,
-            event.nativeEvent
-          ),
+          command:
+            event.buildCommand?.(spec.agentId) ??
+            pierHookCommandWithStdinSessionId(
+              spec.agentId,
+              event.pierEvent,
+              event.nativeEvent
+            ),
           timeout: spec.timeoutSeconds ?? 5,
           type: "command",
         },
@@ -328,7 +430,10 @@ export function createNestedJsonIntegration(
     install: () =>
       transformJsonConfig(
         spec.configPath(),
-        (s) => withPierNestedHooks(withoutPierNestedHooks(s), spec),
+        (s) =>
+          transformPierHooksUnlessNewer(s, (current) =>
+            withPierNestedHooks(withoutPierNestedHooks(current), spec)
+          ),
         spec.agentId
       ),
     uninstall: () =>

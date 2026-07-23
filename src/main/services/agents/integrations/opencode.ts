@@ -3,6 +3,7 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
 import {
   atomicWriteFile,
   readJsonConfig,
@@ -160,6 +161,7 @@ export function buildOpencodePluginSource(
 // (Exception to ts-no-dynamic-import: generated file for a foreign host.)
 
 ${JAVASCRIPT_LOCKED_APPEND_SOURCE}
+${JAVASCRIPT_PROMPT_SNIPPET_SOURCE}
 
 function pierSessionIdFrom(event) {
   const values = Array.isArray(event) ? [...event] : [event];
@@ -219,6 +221,8 @@ function emitPierEvent(pierEvent, nativeEvent, rawEvent) {
     ? pierParentSessionIds.get(sessionId)
     : undefined;
   const isSubagent = parentSessionId !== undefined;
+  const promptSnippet =
+    pierEvent === "PromptSubmit" ? pierPromptSnippetFrom(rawEvent) : undefined;
   const line = JSON.stringify({
     v: 2,
     kind: "agentEvent",
@@ -236,6 +240,7 @@ function emitPierEvent(pierEvent, nativeEvent, rawEvent) {
       : {}),
     ...(sessionId ? { sessionId } : {}),
     ...(toolUseId ? { toolUseId } : {}),
+    ...(promptSnippet ? { promptSnippet } : {}),
   }) + "\\n";
   try {
     pierAppend(log, line);

@@ -89,6 +89,15 @@ describe("openclaudeIntegration", () => {
       expect(cmd).toContain(MARK);
       expect(cmd).toContain('"openclaude"');
     }
+    const ups = (
+      installed.hooks as Record<
+        string,
+        Array<{ hooks: Array<{ command: string }> }>
+      >
+    ).UserPromptSubmit?.[0]?.hooks?.[0]?.command;
+    expect(ups).toContain("sessionTitle");
+    expect(ups).toContain("promptSnippet");
+    expect(ups).toContain("hookSpecificOutput");
   });
 
   it("幂等：重复安装不产生重复条目", async () => {

@@ -49,6 +49,8 @@ const baseActivityFields = {
   updatedAt: z.number().int().nonnegative(),
 };
 
+const agentSessionTitleSourceSchema = z.enum(["user", "auto"]);
+
 const agentActivitySchema = z
   .object({
     kind: z.literal("agent"),
@@ -63,9 +65,18 @@ const agentActivitySchema = z
      * 与 status 同生同灭：无可信状态投影时缺席。
      */
     stateStartedAt: z.number().int().nonnegative().optional(),
+    /**
+     * 产品会话名（≠ OSC terminalTitle）。P0 契约预留；P1 起由宿主写入。
+     * status 映射禁止读/写本字段。
+     */
+    sessionTitle: z.string().min(1).max(40).optional(),
+    sessionTitleSource: agentSessionTitleSourceSchema.optional(),
   })
   .strict();
 export type AgentActivity = z.infer<typeof agentActivitySchema>;
+export type AgentSessionTitleSource = z.infer<
+  typeof agentSessionTitleSourceSchema
+>;
 
 const taskActivitySchema = z
   .object({

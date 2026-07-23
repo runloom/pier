@@ -80,6 +80,8 @@ const agentEventPayloadV2Schema = z
     toolUseId: z.string().max(128).optional(),
     transcriptPath: z.string().max(8192).optional(),
     turnId: z.string().max(128).optional(),
+    /** PromptSubmit 旁路：截断用户原文，供 sessionTitle 派生；不进 status 映射。 */
+    promptSnippet: z.string().max(512).optional(),
   })
   .strict();
 

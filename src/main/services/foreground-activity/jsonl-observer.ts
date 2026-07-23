@@ -397,6 +397,9 @@ function enrichAgentEventFromRawPayload(
       transcriptPath:
         readString("transcript_path", "transcriptPath") ?? event.transcriptPath,
       turnId: readString("turn_id", "turnId") ?? event.turnId,
+      promptSnippet:
+        readString("promptSnippet", "prompt_snippet") ??
+        (event.v === 2 ? event.promptSnippet : undefined),
     };
     const validated = agentHookEventSchema.safeParse(candidate);
     return validated.success ? validated.data : event;

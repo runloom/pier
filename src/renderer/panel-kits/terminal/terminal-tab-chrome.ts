@@ -1,4 +1,8 @@
-import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import {
+  agentSessionTitleInput,
+  resolveAgentSessionTitle,
+  truncateTerminalTitleForTooltip,
+} from "@shared/agent-session-title.ts";
 import { agentTabIconId } from "@shared/contracts/agent-session.ts";
 import {
   type ForegroundActivity,
@@ -82,55 +86,69 @@ export function terminalPanelDescriptor(args: {
   effectiveContext: PanelContext | undefined;
   effectiveCwd: string | null;
   effectiveTab: PanelTabChrome | undefined;
-  effectiveTitle: string | null;
+  /**
+   * 产品主标题（Agent 走 resolveAgentSessionTitle.primary）。
+   * 缺席时 short 回退 cwd basename（普通 shell）。
+   */
+  displayPrimary?: string | null | undefined;
+  /**
+   * OSC 终端标题——仅进 display.terminalTitle（tooltip）。
+   * 普通 shell 无 displayPrimary 时仍可作为 long 回退。
+   */
+  terminalTitle?: string | null | undefined;
   sessionLoaded: boolean;
 }): PanelDescriptor | null {
   if (!args.sessionLoaded) {
     return null;
   }
+  const primary = args.displayPrimary?.trim() || null;
+  const oscTooltip = truncateTerminalTitleForTooltip(args.terminalTitle);
   const short =
     args.effectiveTab?.title ??
+    primary ??
     (args.effectiveCwd ? basename(args.effectiveCwd) : "Terminal");
+  const long =
+    primary ??
+    oscTooltip ??
+    (args.effectiveCwd ? args.effectiveCwd : undefined);
   return {
     ...(args.effectiveContext ? { context: args.effectiveContext } : {}),
     display: {
       short,
-      ...(args.effectiveTitle || args.effectiveCwd
-        ? { long: args.effectiveTitle ?? args.effectiveCwd ?? undefined }
-        : {}),
-      ...(args.effectiveTitle ? { terminalTitle: args.effectiveTitle } : {}),
+      ...(long ? { long } : {}),
+      ...(oscTooltip ? { terminalTitle: oscTooltip } : {}),
     },
     ...(args.effectiveTab ? { tab: args.effectiveTab } : {}),
   };
 }
 
-/**
- * Agent tab 可见标题上限。Grok / 部分 TUI 会把整段 prompt、图片占位符甚至
- * 对话摘要写进 OSC 0/2；这些适合 tooltip，不适合 tab 栏。
- *
- * 短且像会话名的标题（如 "Fix parser crash"）仍可进 tab；超长或含换行则回退
- * catalog label，完整 OSC 仍经 display.long / terminalTitle 进 tooltip。
- */
-export const MAX_AGENT_TAB_TITLE_LENGTH = 40;
+export interface ActivityTabChromeOverlayOptions {
+  cwd?: string | null | undefined;
+  projectRootPath?: string | null | undefined;
+  /** session JSON 回退（FA 尚未 hydrate 时） */
+  sessionTitle?: string | null | undefined;
+  sessionTitleSource?: "auto" | "user" | null | undefined;
+  taskRuns?: TaskRunsSnapshot | undefined;
+}
 
-/**
- * 从 agent 终端 OSC 标题派生 tab 短标题。
- * - 空 / 仅空白 → catalog label
- * - 含换行或超长 → catalog label（避免 Grok 把用户消息顶上 tab）
- * - 否则保留原标题（含有意义的短会话名）
- */
-export function agentTabTitleFromTerminal(
-  terminalTitle: string | null | undefined,
-  agentLabel: string
-): string {
-  const trimmed = terminalTitle?.trim();
-  if (!trimmed) {
-    return agentLabel;
+/** Agent 产品主标题（FA 优先，session JSON 回退）；非 agent 返回 null。 */
+export function agentPanelDisplayPrimary(
+  activity: ForegroundActivity | undefined,
+  options?: ActivityTabChromeOverlayOptions
+): string | null {
+  if (activity?.kind !== "agent") {
+    return null;
   }
-  if (trimmed.includes("\n") || trimmed.length > MAX_AGENT_TAB_TITLE_LENGTH) {
-    return agentLabel;
-  }
-  return trimmed;
+  return resolveAgentSessionTitle(
+    agentSessionTitleInput({
+      agentId: activity.agentId,
+      cwd: options?.cwd,
+      projectRootPath: options?.projectRootPath,
+      sessionTitle: activity.sessionTitle ?? options?.sessionTitle ?? null,
+      sessionTitleSource:
+        activity.sessionTitleSource ?? options?.sessionTitleSource ?? null,
+    })
+  ).primary;
 }
 
 /**
@@ -139,33 +157,28 @@ export function agentTabTitleFromTerminal(
  * tab-chrome-patch 持久化管线）——reload 后经 snapshot pull 自动恢复,
  * 活动消失即自动回退。
  *
- * - `agent` kind: 状态点从 agent status 派生, icon 换 agent；title 用短 OSC
- *   或 catalog label（长 prompt 不进 tab，完整标题走 tooltip）
+ * - `agent` kind: 状态点从 agent status 派生, icon 换 agent；title 走
+ *   `resolveAgentSessionTitle`（sessionTitle → catalog·项目；**不读 OSC**）
  * - `task` kind: 无 tab state overlay（活体状态只读 TaskRunsSnapshot）；label 作为 title
  * - `shell` / `idle` / undefined: 无 overlay, 走 tab 默认呈现
  */
 export function activityTabChromeOverlay(
   activity: ForegroundActivity | undefined,
-  terminalTitle?: string | null,
-  taskRuns?: TaskRunsSnapshot
+  options?: ActivityTabChromeOverlayOptions
 ): Partial<PanelTabChrome> | null {
   if (!activity) {
     return null;
   }
   if (activity.kind === "agent") {
-    const state = {
-      state: { status: tabStatusForActivityStatus(activity.status) },
-    };
-    const entry = getAgentCatalogEntry(activity.agentId);
-    const agentLabel = entry?.label || activity.agentId;
+    const title = agentPanelDisplayPrimary(activity, options);
     return {
-      ...state,
+      state: { status: tabStatusForActivityStatus(activity.status) },
       icon: { id: agentTabIconId(activity.agentId) },
-      title: agentTabTitleFromTerminal(terminalTitle, agentLabel),
+      ...(title ? { title } : {}),
     };
   }
   if (activity.kind === "task") {
-    const run = taskRuns?.runs[activity.runId];
+    const run = options?.taskRuns?.runs[activity.runId];
     if (!(run && isActiveTaskRunNodeStatus(run.status))) {
       return null;
     }

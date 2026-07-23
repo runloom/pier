@@ -28,6 +28,12 @@ export interface ForegroundActivityAggregator {
    */
   agentLaunched(windowId: string, panelId: string, agentId: AgentKind): void;
   dispose(): void;
+  /** 从持久化种子标题（reload / launch）；不覆盖已有 slot 标题。 */
+  hydrateAgentSessionTitle(
+    windowId: string,
+    panelId: string,
+    input: { title: string; source: "auto" | "user" }
+  ): void;
 
   /**
    * Path B 三 kind: agentEvent（真身，聚合器消费驱动 agent activity）。
@@ -74,6 +80,16 @@ export interface ForegroundActivityAggregator {
   ptyExited(panelId: string, windowId?: string): void;
   /** reconcile 对账：该窗口不在 activePanelIds 集合内的活动按 panelClosed 处理。 */
   retainPanels(windowId: string, activePanelIds: readonly string[]): void;
+  /**
+   * 写入产品 sessionTitle（与 status 隔离）。
+   * 无 agent hook/launch 层时仍可写 slot（供随后投影）；auto 受既有标题阻挡。
+   * @returns 是否实际写入并触发广播
+   */
+  setAgentSessionTitle(
+    windowId: string,
+    panelId: string,
+    input: { title: string; source: "auto" | "user"; replaceAuto?: boolean }
+  ): boolean;
 
   snapshot(windowId?: string): ForegroundActivityBroadcast;
   /**

@@ -60,6 +60,7 @@ import {
 } from "./terminal-status-bar.tsx";
 import {
   activityTabChromeOverlay,
+  agentPanelDisplayPrimary,
   mergeTabChrome,
   tabChromeFromParams,
   taskOutputTabChromeOverlay,
@@ -166,7 +167,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
   const effectiveContext =
     runtimeContext ?? savedSession?.context ?? activeLaunch.context;
   const effectiveCwd = effectiveContext?.cwd ?? null;
-  const effectiveTitle = sequenceTitle ?? savedSession?.title ?? null;
+  const terminalTitle = sequenceTitle ?? savedSession?.title ?? null;
   const activity = useForegroundActivityStore((s) => s.activities[panelId]);
   const taskRunsSnapshot = useTaskRunsStore((state) => state.snapshot);
   const panelTaskRuns = useMemo(
@@ -189,11 +190,23 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           n.termination === "force"
       )
   );
+  const agentDisplayPrimary = agentPanelDisplayPrimary(activity, {
+    cwd: effectiveCwd,
+    projectRootPath: effectiveContext?.projectRootPath,
+    sessionTitle: savedSession?.sessionTitle,
+    sessionTitleSource: savedSession?.sessionTitleSource,
+  });
   const effectiveTab = mergeTabChrome(
     mergeTabChrome(
       mergeTabChrome(
         savedSession?.tab ?? activeLaunch.tab,
-        activityTabChromeOverlay(activity, effectiveTitle, taskRunsSnapshot)
+        activityTabChromeOverlay(activity, {
+          cwd: effectiveCwd,
+          projectRootPath: effectiveContext?.projectRootPath,
+          sessionTitle: savedSession?.sessionTitle,
+          sessionTitleSource: savedSession?.sessionTitleSource,
+          taskRuns: taskRunsSnapshot,
+        })
       ),
       taskRunTabChromeOverlay(
         panelId,
@@ -209,7 +222,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     cwd: effectiveCwd,
     getGroupId,
     panelId,
-    title: effectiveTitle,
+    title: agentDisplayPrimary ?? terminalTitle,
   };
   const hasStatusBar = shouldMountTerminalStatusBar(
     statusItems,
@@ -261,11 +274,12 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     [api, effectiveContext, panelId, windowZoomLevel]
   );
   useTerminalPanelDescriptor(api, {
+    displayPrimary: agentDisplayPrimary,
     effectiveContext,
     effectiveCwd,
     effectiveTab,
-    effectiveTitle,
     sessionLoaded,
+    terminalTitle,
   });
   useEffect(() => {
     if (freshPanel.panelId === panelId && freshPanel.value) {

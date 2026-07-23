@@ -1,5 +1,8 @@
 import { formatDurationShort } from "@pier/ui/format.tsx";
-import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import {
+  agentSessionTitleInput,
+  resolveAgentSessionTitle,
+} from "@shared/agent-session-title.ts";
 import {
   type AgentRuntimeIndexEntry,
   isAgentIndexNeedsYou,
@@ -33,7 +36,15 @@ export interface AgentIndexQuickPickModel {
 }
 
 function agentLabel(entry: AgentRuntimeIndexEntry): string {
-  return getAgentCatalogEntry(entry.agentId)?.label ?? entry.agentId;
+  return resolveAgentSessionTitle(
+    agentSessionTitleInput({
+      agentId: entry.agentId,
+      cwd: entry.cwd,
+      projectRootPath: entry.projectRootPath,
+      sessionTitle: entry.sessionTitle,
+      sessionTitleSource: entry.sessionTitleSource,
+    })
+  ).primary;
 }
 
 /**

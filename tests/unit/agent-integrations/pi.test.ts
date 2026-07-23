@@ -125,6 +125,7 @@ describe("生成源码行为（动态加载 + 假 pi 触发）", () => {
 
   interface PiEventCtx {
     sessionManager?: {
+      getLastUserMessage?: () => string;
       getSessionFile?: () => string | undefined;
       getSessionId?: () => string;
     };
@@ -232,6 +233,22 @@ describe("生成源码行为（动态加载 + 假 pi 触发）", () => {
         sessionId,
       }),
     ]);
+  });
+
+  it("PromptSubmit 从 event.prompt 写入 promptSnippet", async () => {
+    const { factory, logPath } = await loadFreshExtension();
+    const main = createFakePi();
+    factory(main.pi);
+    main.fire(
+      "agent_start",
+      {},
+      { prompt: "帮我分析下当前未提交的修改", type: "agent_start" }
+    );
+    const records = await readEmittedRecords(logPath);
+    const submit = records.find((r) => r.event === "PromptSubmit");
+    expect(submit).toMatchObject({
+      promptSnippet: "帮我分析下当前未提交的修改",
+    });
   });
 });
 
