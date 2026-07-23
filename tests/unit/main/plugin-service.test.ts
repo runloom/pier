@@ -446,6 +446,100 @@ describe("createPluginService", () => {
     });
   });
 
+  it("builtin 已有 static locale 时磁盘 locale 缺失不报 invalid plugin locale", async () => {
+    const dir = await makeTempDir();
+    const service = createPluginService({
+      sources: [
+        {
+          baseDir: dir,
+          kind: "builtin",
+          locales: {
+            en: { name: "Sample Builtin" },
+            "zh-CN": { name: "示例内置" },
+          },
+          manifest: {
+            ...builtinManifest,
+            localization: {
+              defaultLocale: "en",
+              files: {
+                en: "locales/en.json",
+                "zh-CN": "locales/zh-CN.json",
+              },
+              locales: ["en", "zh-CN"],
+            },
+          },
+        },
+      ],
+      state: emptyState,
+    });
+
+    await expect(service.list()).resolves.toMatchObject({
+      diagnostics: [],
+      entries: [
+        {
+          manifest: {
+            id: "sample.builtin",
+            locales: {
+              en: { name: "Sample Builtin" },
+              "zh-CN": { name: "示例内置" },
+            },
+          },
+        },
+      ],
+    });
+  });
+
+  it("builtin static locale 存在时仍可 overlay 磁盘 locale 文案", async () => {
+    const dir = await makeTempDir();
+    await mkdir(join(dir, "locales"), { recursive: true });
+    await writeFile(
+      join(dir, "locales", "zh-CN.json"),
+      JSON.stringify({
+        name: "磁盘覆盖名",
+        messages: { "ui.title": "来自磁盘" },
+      })
+    );
+    const service = createPluginService({
+      sources: [
+        {
+          baseDir: dir,
+          kind: "builtin",
+          locales: {
+            "zh-CN": {
+              name: "静态名",
+              messages: { "ui.title": "来自静态" },
+            },
+          },
+          manifest: {
+            ...builtinManifest,
+            localization: {
+              defaultLocale: "en",
+              files: { "zh-CN": "locales/zh-CN.json" },
+              locales: ["zh-CN"],
+            },
+          },
+        },
+      ],
+      state: emptyState,
+    });
+
+    await expect(service.list()).resolves.toMatchObject({
+      diagnostics: [],
+      entries: [
+        {
+          manifest: {
+            locales: {
+              "zh-CN": {
+                messages: { "ui.title": "来自磁盘" },
+                name: "磁盘覆盖名",
+              },
+            },
+          },
+        },
+      ],
+    });
+  });
+
   it("enabled/disabled 状态由 userData state 决定", async () => {
     let enabled = false;
     const service = createPluginService({

@@ -169,10 +169,14 @@ export async function loadManifestLocaleFiles({
   }
 
   if (!baseDir) {
+    // Packaged builtins ship static locales only; missing baseDir is not a
+    // failure when every declared file locale already has a static fallback.
     return {
-      diagnostics: entries.map(([_, filePath]) =>
-        invalidLocaleDiagnostic({ kind: source.kind, path: filePath })
-      ),
+      diagnostics: entries
+        .filter(([locale]) => !staticLocales[locale])
+        .map(([_, filePath]) =>
+          invalidLocaleDiagnostic({ kind: source.kind, path: filePath })
+        ),
       manifest: manifestWithStaticLocales,
     };
   }
@@ -188,6 +192,11 @@ export async function loadManifestLocaleFiles({
       );
       nextManifest = mergeManifestLocale(nextManifest, locale, messages);
     } catch {
+      // Disk overlay is best-effort when static locales already cover this
+      // locale (production asar has no loose locales/*.json next to main).
+      if (staticLocales[locale]) {
+        continue;
+      }
       diagnostics.push(
         invalidLocaleDiagnostic({
           kind: source.kind,
