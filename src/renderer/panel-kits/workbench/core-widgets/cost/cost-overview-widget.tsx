@@ -1,4 +1,5 @@
 import { Badge } from "@pier/ui/badge.tsx";
+import { Button } from "@pier/ui/button.tsx";
 import {
   formatCompactNumber,
   formatCurrency,
@@ -27,6 +28,9 @@ import { useUsageDataStore } from "@/stores/usage-data.store.ts";
 import { CostOverviewChart } from "./cost-overview-chart.tsx";
 import {
   type CostOverviewKpiId,
+  type CostOverviewPresetId,
+  costOverviewParamsToJson,
+  paramsFromPreset,
   parseCostOverviewParams,
 } from "./cost-overview-params.ts";
 import {
@@ -141,6 +145,57 @@ function EmptyByReason({
   );
 }
 
+const PRESET_CHIPS = [
+  "overview",
+  "by-source",
+  "by-model",
+  "tokens",
+] as const satisfies readonly Exclude<CostOverviewPresetId, "custom">[];
+
+const PRESET_CHIP_LABEL = {
+  overview: "workbench.widget.costOverview.settings.presetOverview",
+  "by-source": "workbench.widget.costOverview.settings.presetBySource",
+  "by-model": "workbench.widget.costOverview.settings.presetByModel",
+  tokens: "workbench.widget.costOverview.settings.presetTokens",
+} as const;
+
+function PresetChips({
+  activePreset,
+  onSelect,
+  t,
+}: {
+  activePreset: CostOverviewPresetId | undefined;
+  onSelect: (preset: Exclude<CostOverviewPresetId, "custom">) => void;
+  t: TFunction;
+}) {
+  return (
+    <div
+      className="flex flex-wrap gap-1.5"
+      data-testid="cost-overview-preset-chips"
+    >
+      {PRESET_CHIPS.map((preset) => {
+        const active = activePreset === preset;
+        return (
+          <Button
+            aria-pressed={active}
+            className="rounded-full"
+            data-testid={`cost-overview-preset-chip-${preset}`}
+            key={preset}
+            onClick={() => {
+              onSelect(preset);
+            }}
+            size="xs"
+            tone={active ? "default" : "muted"}
+            variant={active ? "secondary" : "outline"}
+          >
+            {t(PRESET_CHIP_LABEL[preset])}
+          </Button>
+        );
+      })}
+    </div>
+  );
+}
+
 /**
  * 跨插件成本聚合物料。params → parseCostOverviewParams → costViewQuery。
  *
@@ -150,6 +205,7 @@ function EmptyByReason({
 export function CostOverviewWidget({
   params,
   size,
+  updateParams,
 }: WorkbenchWidgetComponentProps) {
   const t = useT();
   const locale = i18next.language || "en";
@@ -218,6 +274,15 @@ export function CostOverviewWidget({
             })}
           </p>
         </div>
+      ) : null}
+      {size.w >= 4 ? (
+        <PresetChips
+          activePreset={parsed.preset}
+          onSelect={(preset) => {
+            updateParams(costOverviewParamsToJson(paramsFromPreset(preset)));
+          }}
+          t={t}
+        />
       ) : null}
       <div
         className="grid @[24rem]:grid-cols-2 @[36rem]:grid-cols-4 grid-cols-1 gap-x-6 gap-y-3"

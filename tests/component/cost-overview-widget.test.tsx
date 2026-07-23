@@ -202,6 +202,26 @@ describe("CostOverviewWidget", () => {
     ).toHaveTextContent("initial boom");
   });
 
+  it("renders filtered-empty copy when sources filter matches nothing", () => {
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(loadedSnapshot());
+    });
+    renderWidget({
+      params: {
+        sources: ["missing-source-a", "missing-source-b"],
+      },
+      size: { h: 3, w: 8 },
+    });
+    expect(
+      document.querySelector('[data-slot="widget-empty"]')
+    ).toBeInTheDocument();
+    expect(screen.getByText("No sources match this view")).toBeInTheDocument();
+    expect(
+      screen.getByText("Open widget settings and include at least one source.")
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("cost-overview-kpis")).not.toBeInTheDocument();
+  });
+
   it("renders KPI tiles and the stacked bar chart when data is loaded", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());

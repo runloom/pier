@@ -18,6 +18,8 @@ import {
 import type { WorkbenchWidgetSettingsProps } from "@plugins/api/renderer.ts";
 import { useMemo } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { resolveUsageSourceLabel } from "@/lib/workbench/usage-source-labels.ts";
+import { useUsageDataStore } from "@/stores/usage-data.store.ts";
 import {
   type CostOverviewChart,
   type CostOverviewGroupBy,
@@ -37,17 +39,16 @@ const I18N = "workbench.widget.costOverview.settings" as const;
 const SETTINGS_PRESETS = [
   "overview",
   "by-source",
+  "by-model",
   "tokens",
-] as const satisfies readonly Exclude<
-  CostOverviewPresetId,
-  "custom" | "by-model"
->[];
+] as const satisfies readonly Exclude<CostOverviewPresetId, "custom">[];
 
 const RANGE_OPTIONS: readonly CostOverviewRangeDays[] = [7, 14, 31];
 const MEASURE_OPTIONS: readonly CostOverviewMeasure[] = ["cost", "tokens"];
-const GROUP_BY_OPTIONS: readonly Exclude<CostOverviewGroupBy, "model">[] = [
+const GROUP_BY_OPTIONS: readonly CostOverviewGroupBy[] = [
   "none",
   "source",
+  "model",
 ];
 const KPI_OPTIONS: readonly CostOverviewKpiId[] = [
   "today",
@@ -59,6 +60,7 @@ const KPI_OPTIONS: readonly CostOverviewKpiId[] = [
 const PRESET_LABEL = {
   overview: `${I18N}.presetOverview`,
   "by-source": `${I18N}.presetBySource`,
+  "by-model": `${I18N}.presetByModel`,
   tokens: `${I18N}.presetTokens`,
   custom: `${I18N}.presetCustom`,
 } as const;
@@ -71,6 +73,7 @@ const MEASURE_LABEL = {
 const GROUP_LABEL = {
   none: `${I18N}.groupNone`,
   source: `${I18N}.groupSource`,
+  model: `${I18N}.groupModel`,
 } as const;
 
 const CHART_LABEL = {
@@ -141,7 +144,7 @@ function SettingsSelect({
 }
 
 /**
- * 成本总览物料设置：预设 + 范围/度量/分组/图表/KPI。
+ * 成本总览物料设置：预设 + 范围/度量/分组/图表/KPI + 来源过滤。
  * 每次变更即时 updateParams；列表即反馈，不加 toast。
  */
 export function CostOverviewSettings({
@@ -149,10 +152,15 @@ export function CostOverviewSettings({
   updateParams,
 }: WorkbenchWidgetSettingsProps) {
   const t = useT();
+  const snapshot = useUsageDataStore((state) => state.snapshot);
   const current = useMemo(
     () => parseCostOverviewParams(params as Readonly<Record<string, unknown>>),
     [params]
   );
+
+  const availableSources = snapshot?.sources ?? [];
+  const selectedSources = current.sources ?? [];
+  // Empty allowlist = no filter (all sources). Checkboxes stay unchecked.
 
   const allowedCharts = chartsForGroupBy(current.groupBy);
   const chartLocked = allowedCharts.length <= 1;
@@ -161,11 +169,7 @@ export function CostOverviewSettings({
     current.chart
   );
   const presetValue =
-    current.preset === "custom" || current.preset === "by-model"
-      ? "custom"
-      : (current.preset ?? "custom");
-  const groupByValue: Exclude<CostOverviewGroupBy, "model"> =
-    current.groupBy === "model" ? "none" : current.groupBy;
+    current.preset === "custom" ? "custom" : (current.preset ?? "custom");
 
   const persist = (patch: Partial<CostOverviewParams>): void => {
     updateParams(
@@ -183,6 +187,28 @@ export function CostOverviewSettings({
     if (current.kpis.length <= 1) return;
     persist({ kpis: current.kpis.filter((id) => id !== kpi) });
   };
+  const toggleSource = (sourceId: string, checked: boolean): void => {
+    if (checked) {
+      if (selectedSources.includes(sourceId)) return;
+      const next = [...selectedSources, sourceId];
+      const allIds = availableSources.map((source) => source.sourceId);
+      // Selecting every available source collapses back to "all".
+      if (
+        allIds.length > 0 &&
+        next.length === allIds.length &&
+        allIds.every((id) => next.includes(id))
+      ) {
+        persist({ sources: undefined });
+        return;
+      }
+      persist({ sources: next });
+      return;
+    }
+
+    const next = selectedSources.filter((id) => id !== sourceId);
+    persist({ sources: next.length > 0 ? next : undefined });
+  };
+
   const presetOptions = [
     ...SETTINGS_PRESETS.map((preset) => ({
       label: t(PRESET_LABEL[preset]),
@@ -255,16 +281,14 @@ export function CostOverviewSettings({
             id="cost-overview-group-by"
             label={t(`${I18N}.groupBy`)}
             onValueChange={(next) => {
-              persist({
-                groupBy: next as Exclude<CostOverviewGroupBy, "model">,
-              });
+              persist({ groupBy: next as CostOverviewGroupBy });
             }}
             options={GROUP_BY_OPTIONS.map((groupBy) => ({
               label: t(GROUP_LABEL[groupBy]),
               value: groupBy,
             }))}
             testId="cost-overview-settings-group-by"
-            value={groupByValue}
+            value={current.groupBy}
           />
           <Field>
             <FieldLabel htmlFor="cost-overview-chart">
@@ -300,6 +324,49 @@ export function CostOverviewSettings({
           </Field>
         </FieldGroup>
       </FieldSet>
+
+      {availableSources.length > 0 ? (
+        <FieldSet className="gap-3">
+          <FieldLegend className="mb-0" variant="label">
+            {t(`${I18N}.sources`)}
+          </FieldLegend>
+          <FieldDescription>{t(`${I18N}.sourcesAll`)}</FieldDescription>
+          <FieldGroup
+            className="gap-2"
+            data-slot="checkbox-group"
+            data-testid="cost-overview-settings-sources"
+          >
+            {availableSources.map((source) => {
+              const id = `cost-overview-source-${source.sourceId}`;
+              const label = resolveUsageSourceLabel(
+                t,
+                source.pluginId,
+                source.sourceId
+              );
+              const checked = selectedSources.includes(source.sourceId);
+              return (
+                <Field
+                  className="items-center"
+                  key={`${source.pluginId}:${source.sourceId}`}
+                  orientation="horizontal"
+                >
+                  <Checkbox
+                    checked={checked}
+                    data-testid={id}
+                    id={id}
+                    onCheckedChange={(value) => {
+                      toggleSource(source.sourceId, value === true);
+                    }}
+                  />
+                  <FieldLabel className="font-normal" htmlFor={id}>
+                    {label}
+                  </FieldLabel>
+                </Field>
+              );
+            })}
+          </FieldGroup>
+        </FieldSet>
+      ) : null}
 
       <FieldSet className="gap-3">
         <FieldLegend className="mb-0" variant="label">
