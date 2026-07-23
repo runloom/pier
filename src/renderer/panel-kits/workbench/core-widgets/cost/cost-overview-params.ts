@@ -54,13 +54,6 @@ const KPI_IDS: Record<CostOverviewKpiId, true> = {
   periodTokens: true,
   latestDayTokens: true,
 };
-const PRESET_IDS: Record<CostOverviewPresetId, true> = {
-  overview: true,
-  "by-source": true,
-  "by-model": true,
-  tokens: true,
-  custom: true,
-};
 const OFFICIAL_PRESET_IDS = [
   "overview",
   "by-source",
@@ -184,13 +177,6 @@ function isKpiId(value: unknown): value is CostOverviewKpiId {
   );
 }
 
-function isPresetId(value: unknown): value is CostOverviewPresetId {
-  return (
-    typeof value === "string" &&
-    PRESET_IDS[value as CostOverviewPresetId] === true
-  );
-}
-
 function isOfficialPresetId(
   value: unknown
 ): value is Exclude<CostOverviewPresetId, "custom"> {
@@ -295,9 +281,11 @@ export function parseCostOverviewParams(
     ...(sources ? { sources } : {}),
   };
 
-  const preset = isPresetId(raw.preset)
-    ? raw.preset
-    : resolvePresetId(candidate);
+  const preset =
+    isOfficialPresetId(raw.preset) &&
+    paramsFieldsEqual(candidate, COST_OVERVIEW_PRESETS[raw.preset])
+      ? raw.preset
+      : resolvePresetId(candidate);
 
   return {
     ...candidate,

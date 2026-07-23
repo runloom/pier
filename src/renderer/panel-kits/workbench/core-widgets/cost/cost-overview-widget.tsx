@@ -145,6 +145,28 @@ function EmptyByReason({
   );
 }
 
+/** Keep KPI/chart shell when range is empty but tokens/unpriced still signal activity. */
+function shouldShowContentShell(view: CostViewModel): boolean {
+  if (view.emptyReason === null) return true;
+  if (
+    view.emptyReason === "no-sources" ||
+    view.emptyReason === "filtered-empty"
+  ) {
+    return false;
+  }
+  // no-points-in-range: keep shell if any KPI/token/unpriced signal
+  const k = view.kpis;
+  return (
+    k.today != null ||
+    k.period != null ||
+    k.periodTokens > 0 ||
+    k.latestDayTokens > 0 ||
+    view.unpricedDayCount > 0 ||
+    view.series.length > 0 ||
+    view.ranking.length > 0
+  );
+}
+
 const PRESET_CHIPS = [
   "overview",
   "by-source",
@@ -242,10 +264,7 @@ export function CostOverviewWidget({
       />
     );
   }
-  if (
-    view.emptyReason === "no-sources" ||
-    view.emptyReason === "filtered-empty"
-  ) {
+  if (!shouldShowContentShell(view) && view.emptyReason !== null) {
     return <EmptyByReason reason={view.emptyReason} t={t} />;
   }
 

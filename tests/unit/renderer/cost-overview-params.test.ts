@@ -38,7 +38,8 @@ describe("parseCostOverviewParams", () => {
         preset: "tokens",
       })
     ).toEqual({
-      preset: "tokens",
+      // fields diverge from tokens template → re-resolve
+      preset: "custom",
       rangeDays: 7,
       measure: "tokens",
       groupBy: "none",
@@ -46,6 +47,21 @@ describe("parseCostOverviewParams", () => {
       kpis: ["periodTokens", "today", "latestDayTokens"],
       sources: ["codex-local-sessions"],
     });
+  });
+
+  it("re-resolves official preset when fields do not match template", () => {
+    const parsed = parseCostOverviewParams({
+      preset: "tokens",
+      measure: "cost",
+      groupBy: "source",
+      chart: "stackedBar",
+      rangeDays: 31,
+      kpis: ["today", "period", "periodTokens", "latestDayTokens"],
+    });
+    // overview template, not the claimed tokens label
+    expect(parsed.preset).toBe("overview");
+    expect(parsed.measure).toBe("cost");
+    expect(parsed.groupBy).toBe("source");
   });
 
   it("corrects chart for groupBy source on parse", () => {

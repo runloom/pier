@@ -312,6 +312,49 @@ describe("CostOverviewWidget", () => {
     expect(screen.queryByText("No cost data yet")).not.toBeInTheDocument();
   });
 
+  it("shows emptyInRange when sources exist but all activity is outside rangeDays", () => {
+    const stale: UsageAggregateSnapshot = {
+      overall: {
+        buckets: [bucket("2026-06-01", 100, 1_000_000)],
+        coverage: { complete: true, from: "2026-06-01", to: "2026-07-11" },
+        observedAt: Date.now(),
+        summary: {
+          byModel: [],
+          estimatedCostMicrousd: 1_000_000,
+          latestDayTokens: 100,
+          periodTokens: 100,
+          sourceCount: 1,
+          todayEstimatedCostMicrousd: null,
+        },
+      },
+      sources: [
+        sourceSnapshot(
+          "pier.codex",
+          [bucket("2026-06-01", 100, 1_000_000)],
+          1_000_000
+        ),
+      ],
+    };
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(stale);
+    });
+    renderWidget({
+      params: {
+        rangeDays: 7,
+        measure: "cost",
+        groupBy: "source",
+        chart: "stackedBar",
+        kpis: ["today", "period", "periodTokens", "latestDayTokens"],
+      },
+      size: { h: 3, w: 8 },
+    });
+    expect(
+      document.querySelector('[data-slot="widget-empty"]')
+    ).toBeInTheDocument();
+    expect(screen.getByText("No usage in this range")).toBeInTheDocument();
+    expect(screen.queryByTestId("cost-overview-kpis")).not.toBeInTheDocument();
+  });
+
   it("hides the description at the minimum height", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());
