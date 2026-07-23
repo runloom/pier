@@ -61,6 +61,11 @@ final class TerminalContainerView: NSView, TerminalScrollbarStateSink {
     }
 
     func applyHostFrame(_ hostFrame: NSRect) {
+        // Spurious presentation republishes (same viewport) used to call
+        // flushHostResizeFrame → synchronous Metal resize/render and flash.
+        if frame.equalTo(hostFrame) {
+            return
+        }
         CATransaction.begin()
         CATransaction.setDisableActions(true)
         frame = hostFrame

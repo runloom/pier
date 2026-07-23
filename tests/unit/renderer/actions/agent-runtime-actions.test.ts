@@ -64,6 +64,7 @@ describe("buildAgentIndexQuickPick", () => {
     expect(waiting?.label).toBe("Claude");
     expect(waiting?.searchTerms).toContain("Awaiting confirmation");
     expect(waiting?.detail).toContain("This window");
+    expect(model.sections?.[1]?.items[0]?.detail).toMatch(/^Window 2/);
     expect(model.sections?.[1]?.items[0]?.searchTerms).toContain("Thinking");
     expect(model.sections?.[2]?.heading).toMatch(/awaiting input/i);
   });
@@ -77,7 +78,53 @@ describe("buildAgentIndexQuickPick", () => {
         windowId: "1",
       }),
     ]);
-    expect(model.sections?.[0]?.items[0]?.detail).toContain("/Users/me/pier");
+    expect(model.sections?.[0]?.items[0]?.detail).toBe("/Users/me/pier");
+  });
+
+  it("omits window labels when every agent is in one window", () => {
+    const model = buildAgentIndexQuickPick(
+      [
+        entry({
+          panelId: "a",
+          projectRootPath: "/tmp/a",
+          status: "waiting",
+          windowId: "1",
+        }),
+        entry({
+          panelId: "b",
+          projectRootPath: "/tmp/b",
+          status: "processing",
+          windowId: "1",
+        }),
+      ],
+      { preferredWindowId: "1" }
+    );
+    expect(model.sections?.[0]?.items[0]?.detail).toBe("/tmp/a");
+    expect(model.sections?.[1]?.items[0]?.detail).toBe("/tmp/b");
+  });
+
+  it("keeps window labels when agents span multiple windows", () => {
+    const model = buildAgentIndexQuickPick(
+      [
+        entry({
+          panelId: "here",
+          projectRootPath: "/tmp/here",
+          status: "waiting",
+          windowId: "1",
+        }),
+        entry({
+          panelId: "there",
+          projectRootPath: "/tmp/there",
+          status: "ready",
+          windowId: "2",
+        }),
+      ],
+      { preferredWindowId: "1" }
+    );
+    expect(model.sections?.[0]?.items[0]?.detail).toBe(
+      "This window · /tmp/here"
+    );
+    expect(model.sections?.[1]?.items[0]?.detail).toBe("Window 2 · /tmp/there");
   });
 
   it("labels launch (no status) as Running without fabricated duration", () => {

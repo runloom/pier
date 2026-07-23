@@ -17,6 +17,7 @@ const baseContext: PanelContext = {
 };
 
 function makePlugin(overrides?: {
+  activeInstanceId?: string | null;
   listInstances?: PluginPanelInstanceSnapshot[];
   openInstance?: RendererPluginContext["panels"]["openInstance"];
 }): RendererPluginContext {
@@ -42,7 +43,11 @@ function makePlugin(overrides?: {
     },
     panels: {
       getActiveContext: vi.fn(),
-      getActiveInstanceId: vi.fn(),
+      getActiveInstanceId: vi.fn((componentId: string) =>
+        componentId === FILES_FILE_PANEL_ID
+          ? (overrides?.activeInstanceId ?? null)
+          : null
+      ),
       listInstances: vi.fn().mockReturnValue(listInstances),
       open: vi.fn(),
       openInstance,
@@ -112,6 +117,36 @@ describe("openProjectFiles", () => {
     expect(openInstance).toHaveBeenCalledWith(
       expect.objectContaining({ instanceId: "existing-id" })
     );
+  });
+
+  it("does not reopen or reveal when the project files panel is already active", () => {
+    const openInstance = vi.fn();
+    const reveal = vi
+      .spyOn(treeRegistry, "revealFilesTreePath")
+      .mockReturnValue(true);
+    const expand = vi.spyOn(prefs, "ensureProjectFileTreeExpanded");
+    const plugin = makePlugin({
+      activeInstanceId: "existing-id",
+      listInstances: [
+        {
+          id: "existing-id",
+          componentId: FILES_FILE_PANEL_ID,
+          groupId: "g1",
+          title: "proj",
+          params: { context: baseContext },
+        },
+      ],
+      openInstance,
+    });
+
+    expect(openProjectFiles(plugin, baseContext)).toEqual({ ok: true });
+    expect(openInstance).not.toHaveBeenCalled();
+    expect(expand).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(80);
+    expect(reveal).not.toHaveBeenCalled();
+
+    expand.mockRestore();
+    reveal.mockRestore();
   });
 
   it("schedules reveal after open", () => {

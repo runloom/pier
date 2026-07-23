@@ -39,6 +39,14 @@ describe("TitleBar / AgentIndexChromeBar", () => {
     expect(screen.getByTestId("titlebar-agent-counts")).toBeTruthy();
   });
 
+  it("constrains the title to the available width with start ellipsis", () => {
+    render(<TitleBar />);
+    const title = screen.getByTestId("titlebar-title");
+    expect(title.getAttribute("dir")).toBe("rtl");
+    expect(title.className).toContain("max-w-full");
+    expect(title.className).toContain("truncate");
+  });
+
   it("shows the same counts control on non-mac chrome bar", () => {
     seedCounts();
     render(<AgentIndexChromeBar />);

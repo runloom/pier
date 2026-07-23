@@ -1023,7 +1023,12 @@ final class GhosttyBridgeImpl {
             }
 
             if entry.visible, let viewport {
-                contentView.addSubview(term.containerView, positioned: .below, relativeTo: nil)
+                let needsAttach =
+                    term.containerView.superview !== contentView
+                    || contentView.subviews.first !== term.containerView
+                if needsAttach {
+                    contentView.addSubview(term.containerView, positioned: .below, relativeTo: nil)
+                }
                 term.containerView.alphaValue = 1
                 term.containerView.isHidden = false
                 nextTargets[entry.panelId] = EventRouterView.Target(

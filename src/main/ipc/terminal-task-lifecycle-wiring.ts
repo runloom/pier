@@ -22,6 +22,8 @@ import { createTerminalTaskLifecycle } from "./terminal-task-lifecycle.ts";
 import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
 const suppressedSurfaceClosePanelIds = new Set<string>();
+/** Last OSC title forwarded per panel — shells often re-set the same title on precmd. */
+const lastForwardedTitleByPanel = new Map<string, string>();
 
 export function suppressNextTerminalSurfaceClose(
   nativePanelId: string
@@ -30,6 +32,10 @@ export function suppressNextTerminalSurfaceClose(
   return () => {
     suppressedSurfaceClosePanelIds.delete(nativePanelId);
   };
+}
+
+export function resetTerminalTitleForwardingForTests(): void {
+  lastForwardedTitleByPanel.clear();
 }
 
 export interface RegisteredTerminalTaskLifecycle {
@@ -319,6 +325,10 @@ export function registerTerminalTaskLifecycleForwarding(
         console.error("[pier-title-persist] failed:", err);
       });
     }
+    if (lastForwardedTitleByPanel.get(rawPanelId) === title) {
+      return;
+    }
+    lastForwardedTitleByPanel.set(rawPanelId, title);
     forwardToWindow(
       id,
       PIER_BROADCAST.TERMINAL_TITLE_CHANGED,

@@ -1,6 +1,34 @@
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 
 /**
+ * Compare extracted panel-event values without treating a refreshed
+ * `updatedAt` (or a new object identity) as a change. Shell precmd re-sends
+ * OSC 7 with the same cwd; main builds a new PanelContext each time.
+ */
+export function panelEventValuesEqual(a: unknown, b: unknown): boolean {
+  if (Object.is(a, b)) {
+    return true;
+  }
+  if (
+    typeof a !== "object" ||
+    typeof b !== "object" ||
+    a === null ||
+    b === null
+  ) {
+    return false;
+  }
+  return stablePanelEventValueKey(a) === stablePanelEventValueKey(b);
+}
+
+function stablePanelEventValueKey(value: object): string {
+  if (!("updatedAt" in value)) {
+    return JSON.stringify(value);
+  }
+  const { updatedAt: _updatedAt, ...rest } = value as Record<string, unknown>;
+  return JSON.stringify(rest);
+}
+
+/**
  * 订阅一个跨进程 panel-scoped 事件流, 按 panelId 过滤后把 extract 出的字段存入
  * React state. 适用于 terminal-panel 这类"single global listener + per-panel
  * filter"的场景 (cwd / OSC title / 未来 bell / focus 都同模式).
@@ -50,10 +78,21 @@ export function usePanelEventState<E extends { panelId: string }, V>(
       if (next === null || next === undefined || next === "") {
         return;
       }
-      setState({
-        panelId,
-        resetKey: resetKeyRef.current,
-        value: next,
+      // Same payload again (shell precmd often re-sends OSC 7 / title): skip
+      // setState so TerminalPanel does not re-render on every empty Enter.
+      setState((prev) => {
+        if (
+          prev.panelId === panelId &&
+          Object.is(prev.resetKey, resetKeyRef.current) &&
+          panelEventValuesEqual(prev.value, next)
+        ) {
+          return prev;
+        }
+        return {
+          panelId,
+          resetKey: resetKeyRef.current,
+          value: next,
+        };
       });
     });
     return dispose;

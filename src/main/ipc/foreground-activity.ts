@@ -24,6 +24,7 @@ import {
 } from "../services/agents/integrations/terminal-reconciliation.ts";
 import { isWindowDetaching } from "../services/agents/window-detaching-guard.ts";
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
+import { isBlankShellCommandLine } from "../services/foreground-activity/blank-command-line.ts";
 import { SUSPENDED_JOB_EXIT_CODES } from "../services/foreground-activity/entry.ts";
 import {
   createJsonlObserver,
@@ -216,6 +217,9 @@ export const foregroundActivityService = {
     commandLine: string,
     matchedAgent: AgentKind | null
   ): void {
+    if (isBlankShellCommandLine(commandLine)) {
+      return;
+    }
     foregroundActivityAggregator.ingestCommandStarted(
       panelId,
       windowId,

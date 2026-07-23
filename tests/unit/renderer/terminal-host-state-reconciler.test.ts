@@ -127,4 +127,47 @@ describe("terminal host state reconciler", () => {
     expect(snapshot.basePanel).toEqual({ kind: "web" });
     expect(snapshot.activeTerminalPanelId).toBeNull();
   });
+
+  it("dedups unchanged presentation geometry but still republishes input intent", () => {
+    updateTerminalHostInputFacts(
+      {
+        basePanel: { kind: "terminal", panelId: "terminal-1" },
+        focusDisabledPanelIds: [],
+        webOverlayRects: [],
+        webRequestCount: 0,
+      },
+      "input-routing"
+    );
+    updateTerminalHostPresentationFacts({
+      activePanelId: "terminal-1",
+      activeTerminalPanelId: "terminal-1",
+      hasMaximizedGroup: false,
+      reason: "dockview-layout",
+      terminals: [terminalEntry],
+    });
+    applyHostSnapshot.mockClear();
+    const afterLayout = getLastTerminalHostSnapshot()?.rendererSequence ?? 0;
+
+    const deduped = updateTerminalHostPresentationFacts({
+      activePanelId: "terminal-1",
+      activeTerminalPanelId: "terminal-1",
+      hasMaximizedGroup: false,
+      reason: "visibility",
+      terminals: [terminalEntry],
+    });
+    expect(deduped.rendererSequence).toBe(afterLayout);
+    expect(applyHostSnapshot).not.toHaveBeenCalled();
+
+    const focusRepublish = updateTerminalHostInputFacts(
+      {
+        basePanel: { kind: "terminal", panelId: "terminal-1" },
+        focusDisabledPanelIds: [],
+        webOverlayRects: [],
+        webRequestCount: 0,
+      },
+      "input-routing"
+    );
+    expect(focusRepublish.rendererSequence).toBe(afterLayout + 1);
+    expect(applyHostSnapshot).toHaveBeenCalledTimes(1);
+  });
 });
