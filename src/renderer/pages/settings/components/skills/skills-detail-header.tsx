@@ -1,4 +1,3 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import type { ProjectRootRef } from "@shared/contracts/project-skills.ts";
@@ -6,10 +5,7 @@ import { ArrowLeft } from "lucide-react";
 import { SkillsAddMenu } from "./skills-add-menu.tsx";
 import { projectBasename, type Translate } from "./skills-shared.tsx";
 
-/**
- * Project-detail header and status banner, split from
- * skills-project-detail.tsx (file-size cap).
- */
+/** Project-detail header (split for file-size cap). */
 
 export function SkillsDetailHeader({
   projectRef,
@@ -58,41 +54,5 @@ export function SkillsDetailHeader({
         <SkillsAddMenu disabled={addDisabled} />
       </div>
     </div>
-  );
-}
-
-export function SkillsDetailBanner({
-  title,
-  body,
-  variant,
-  actionLabel,
-  onAction,
-}: {
-  title: string;
-  body: string | null;
-  variant: "default" | "warning" | "destructive";
-  actionLabel?: string;
-  onAction: () => void;
-}) {
-  return (
-    <Alert variant={variant}>
-      <AlertTitle>{title}</AlertTitle>
-      <AlertDescription>
-        <span className="flex flex-col gap-2">
-          {body ? <span>{body}</span> : null}
-          {actionLabel ? (
-            <Button
-              className="self-start"
-              onClick={onAction}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {actionLabel}
-            </Button>
-          ) : null}
-        </span>
-      </AlertDescription>
-    </Alert>
   );
 }

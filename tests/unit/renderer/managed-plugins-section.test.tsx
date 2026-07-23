@@ -223,7 +223,8 @@ describe("ManagedPluginsSection", () => {
     expect(install).not.toHaveBeenCalled();
   });
 
-  it("renders workspace plugin mode banner as warning with icon", async () => {
+  it("reports workspace plugin mode via onCatalogStatusChange without Alert banner", async () => {
+    const onCatalogStatusChange = vi.fn();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -247,16 +248,21 @@ describe("ManagedPluginsSection", () => {
       <ManagedPluginsSection
         builtinEntries={[externalEntry(true)]}
         builtinInitialized
+        onCatalogStatusChange={onCatalogStatusChange}
         onToggleBuiltin={vi.fn()}
         pendingBuiltinId={null}
       />
     );
 
-    const alert = (
-      await screen.findByText("Local development loading")
-    ).closest('[data-slot="alert"]');
-    expect(alert).toHaveAttribute("data-variant", "warning");
-    expect(alert?.querySelector("svg")).not.toBeNull();
+    await screen.findByRole("tab", { name: "Installed" });
+    await waitFor(() => {
+      expect(onCatalogStatusChange).toHaveBeenCalledWith({
+        catalogError: null,
+        pluginMode: "workspace",
+      });
+    });
+    expect(screen.queryByText("Local development loading")).toBeNull();
+    expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
   });
 
   it("hides release plugin mode banner in production-like catalog", async () => {
@@ -366,7 +372,8 @@ describe("ManagedPluginsSection", () => {
     ).not.toBeInTheDocument();
   });
 
-  it("shows catalog load failures instead of an empty managed list", async () => {
+  it("reports catalog load failures via onCatalogStatusChange instead of Alert", async () => {
+    const onCatalogStatusChange = vi.fn();
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
@@ -383,12 +390,21 @@ describe("ManagedPluginsSection", () => {
       <ManagedPluginsSection
         builtinEntries={[]}
         builtinInitialized
+        onCatalogStatusChange={onCatalogStatusChange}
         onToggleBuiltin={vi.fn()}
         pendingBuiltinId={null}
       />
     );
 
-    expect(await screen.findByText("catalog unavailable")).toBeInTheDocument();
+    await screen.findByRole("tab", { name: "Installed" });
+    await waitFor(() => {
+      expect(onCatalogStatusChange).toHaveBeenCalledWith({
+        catalogError: "catalog unavailable",
+        pluginMode: "release",
+      });
+    });
+    expect(screen.queryByText("catalog unavailable")).toBeNull();
+    expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
   });
 
   it("spins the check updates icon while pending and shows a success toast", async () => {

@@ -1,13 +1,14 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@pier/ui/card.tsx";
+import { StatusStack } from "@pier/ui/status-stack.tsx";
 import { ArrowLeft } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import {
   type ImportCandidateView,
   useProjectSkillsStore,
 } from "@/stores/project-skills.store.ts";
+import { buildSkillsImportStatusItems } from "./build-skills-import-status-items.ts";
 import { SkillContentBody } from "./skills-readonly-detail.tsx";
 import { formatBytes, type Translate } from "./skills-shared.tsx";
 
@@ -62,12 +63,29 @@ export function SkillsImportReview({
     };
   }, [candidate.expiresAt]);
   const expired = candidate.expiresAt <= deadlineNow;
-  const risk = candidate.riskSummary;
-  const riskFrontmatterKeys = Object.keys(risk?.riskFrontmatter ?? {});
-  const hasRisk =
-    (risk?.executables.length ?? 0) > 0 ||
-    (risk?.dynamicCommandTraces.length ?? 0) > 0 ||
-    riskFrontmatterKeys.length > 0;
+  const statusItems = useMemo(
+    () =>
+      buildSkillsImportStatusItems({
+        actionBlocked,
+        conflict,
+        expired,
+        onConflictResolve,
+        reloadRequired,
+        riskSummary: candidate.riskSummary,
+        skillId: candidate.skillId,
+        t,
+      }),
+    [
+      actionBlocked,
+      candidate.riskSummary,
+      candidate.skillId,
+      conflict,
+      expired,
+      onConflictResolve,
+      reloadRequired,
+      t,
+    ]
+  );
   const isReadOnlyCopy =
     candidate.sourceKind === "project-discovery-import" ||
     candidate.sourceKind === "local-import";
@@ -137,36 +155,11 @@ export function SkillsImportReview({
             </p>
           ) : null}
 
-          {hasRisk ? (
-            <Alert variant="warning">
-              <AlertTitle>{t("settings.skills.riskTitle")}</AlertTitle>
-              <AlertDescription>
-                <span className="flex flex-col gap-1">
-                  {risk && risk.executables.length > 0 ? (
-                    <span>
-                      {t("settings.skills.riskExecutables", {
-                        count: risk.executables.length,
-                      })}
-                    </span>
-                  ) : null}
-                  {risk && risk.dynamicCommandTraces.length > 0 ? (
-                    <span>
-                      {t("settings.skills.riskDynamic", {
-                        count: risk.dynamicCommandTraces.length,
-                      })}
-                    </span>
-                  ) : null}
-                  {riskFrontmatterKeys.length > 0 ? (
-                    <span>
-                      {t("settings.skills.riskFrontmatter", {
-                        keys: riskFrontmatterKeys.join(", "),
-                      })}
-                    </span>
-                  ) : null}
-                  <span>{t("settings.skills.riskDisclaimer")}</span>
-                </span>
-              </AlertDescription>
-            </Alert>
+          {statusItems.length > 0 ? (
+            <StatusStack
+              data-testid="skills-import-status-stack"
+              items={statusItems}
+            />
           ) : null}
 
           {candidate.skillMdPreview === undefined ? null : (
@@ -185,69 +178,6 @@ export function SkillsImportReview({
               />
             </div>
           )}
-
-          {conflict ? (
-            <Alert variant="destructive">
-              <AlertTitle>
-                {t("settings.skills.conflictExists", {
-                  id: candidate.skillId,
-                })}
-              </AlertTitle>
-              <AlertDescription>
-                <span className="flex flex-col gap-2">
-                  {t("settings.skills.conflictExistsBody")}
-                  {onConflictResolve ? (
-                    <span className="flex justify-end">
-                      <Button
-                        onClick={onConflictResolve}
-                        size="sm"
-                        type="button"
-                      >
-                        {t("settings.skills.reloadAndReturn")}
-                      </Button>
-                    </span>
-                  ) : null}
-                </span>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {reloadRequired && !conflict ? (
-            <Alert variant="destructive">
-              <AlertTitle>{t("settings.skills.reloadRequired")}</AlertTitle>
-              <AlertDescription>
-                <span className="flex flex-col gap-2">
-                  {t("settings.skills.conflictReloadBody")}
-                  {onConflictResolve ? (
-                    <span className="flex justify-end">
-                      <Button
-                        onClick={onConflictResolve}
-                        size="sm"
-                        type="button"
-                      >
-                        {t("settings.skills.reloadAndReturn")}
-                      </Button>
-                    </span>
-                  ) : null}
-                </span>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {actionBlocked ? (
-            <Alert variant="destructive">
-              <AlertTitle>{t("settings.skills.actionBlockedTitle")}</AlertTitle>
-              <AlertDescription>
-                {t("settings.skills.actionBlockedBody")}
-              </AlertDescription>
-            </Alert>
-          ) : null}
-
-          {expired ? (
-            <Alert variant="destructive">
-              <AlertTitle>{t("settings.skills.importExpired")}</AlertTitle>
-            </Alert>
-          ) : null}
 
           {isReadOnlyCopy ? (
             <p className="text-muted-foreground text-xs">
