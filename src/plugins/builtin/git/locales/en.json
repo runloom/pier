@@ -145,22 +145,6 @@
       "description": "Restore the selected file's working tree changes.",
       "title": "Git: Restore"
     },
-    "pier.git.review.stageAll": {
-      "aliases": ["stage all", "git add all", "stage all changes"],
-      "category": "Git",
-      "description": "Stage all unstaged and untracked changes, skipping conflicts.",
-      "title": "Git: Stage All Changes"
-    },
-    "pier.git.review.unstageAll": {
-      "aliases": [
-        "unstage all",
-        "git restore --staged all",
-        "unstage all changes"
-      ],
-      "category": "Git",
-      "description": "Unstage all staged changes.",
-      "title": "Git: Unstage All Changes"
-    },
     "pier.worktree.create": {
       "aliases": [
         "worktree",
@@ -297,11 +281,11 @@
     "ui.reviewTreeDiscardFailed": "Unable to Restore",
     "ui.reviewTreeDiscardConfirm": "Restore changes in {{name}}?\nThis cannot be undone.",
     "ui.reviewTreeDiscardConfirmButton": "Restore",
-    "ui.stageAll": "Stage All Changes",
-    "ui.stageAllBusy": "Staging Changes…",
+    "ui.stageAll": "Stage All",
+    "ui.stageAllBusy": "Staging…",
     "ui.stageAllSkippedConflicts": "Staged {{staged}} change(s), skipped {{n}} in merge",
-    "ui.unstageAll": "Unstage All Changes",
-    "ui.unstageAllBusy": "Unstaging Changes…",
+    "ui.unstageAll": "Unstage All",
+    "ui.unstageAllBusy": "Unstaging…",
     "ui.reviewTreeContextMenuFailed": "Couldn't open menu",
     "ui.reviewStateBinary": "Binary file",
     "ui.reviewStateConflict": "Merge conflict",

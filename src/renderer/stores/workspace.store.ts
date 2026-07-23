@@ -39,7 +39,8 @@ interface WorkspaceState {
   }) => void;
   addTab: () => void;
   addTerminal: (opts?: {
-    context?: PanelContext;
+    /** `null` forces no cwd; omit the key to inherit from the active terminal. */
+    context?: PanelContext | null;
     initialInput?: string;
     launchId?: string;
     placement?: PierCommandPlacement;
@@ -165,10 +166,10 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const fallbackPosition = activeGroup
       ? { referenceGroup: activeGroup, direction: "within" as const }
       : { direction: "right" as const };
-    const inheritedContext = opts?.context
-      ? undefined
-      : inheritedActiveTerminalContext(api);
-    const context = opts?.context ?? inheritedContext;
+    const context =
+      opts && Object.hasOwn(opts, "context")
+        ? (opts.context ?? undefined)
+        : inheritedActiveTerminalContext(api);
     const params = terminalPanelParams({
       context,
       launchId: opts?.launchId,

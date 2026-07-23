@@ -166,20 +166,15 @@ function findLatestDataDate(
  * refreshable=false，改用 `costOverviewWidgetActions` 提供自定义刷新 action，
  * 让宿主 header 刷新按钮的 spinner 反映真实 refreshAll 时长。
  *
- * visible=false 时不订阅 store（store 是 push 型，但仍避免不必要的重渲染）。
+ * 数据来自 app-shell 级 push store（UsageDataBridge）。`visible` 只是轮询类
+ * 物料的停表信号；本物料始终订阅 store，避免切回工作台 tab 时闪 skeleton。
  */
-export function CostOverviewWidget({
-  size,
-  visible,
-}: WorkbenchWidgetComponentProps) {
+export function CostOverviewWidget({ size }: WorkbenchWidgetComponentProps) {
   const t = useT();
   const locale = i18next.language || "en";
   const chartAnchorRef = useRef<HTMLDivElement>(null);
 
-  // 面板不可见时不订阅 store，恢复可见时重新订阅并立刻取值。
-  const snapshot = useUsageDataStore((state) =>
-    visible ? state.snapshot : null
-  );
+  const snapshot = useUsageDataStore((state) => state.snapshot);
   const loadStatus = useUsageDataStore((state) => state.loadStatus);
   const loadError = useUsageDataStore((state) => state.error);
 
@@ -197,7 +192,7 @@ export function CostOverviewWidget({
     [snapshot]
   );
 
-  if (!visible || loadStatus === "idle") {
+  if (loadStatus === "idle") {
     return <WidgetSkeleton />;
   }
   if (loadStatus === "error") {

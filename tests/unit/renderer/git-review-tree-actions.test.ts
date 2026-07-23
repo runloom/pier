@@ -1,15 +1,11 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
-  bindGitReviewStageAllTarget,
   GIT_REVIEW_OPEN_FILE_COMMAND_ID,
-  GIT_REVIEW_STAGE_ALL_COMMAND_ID,
   GIT_REVIEW_TREE_ITEM_SURFACE,
-  GIT_REVIEW_UNSTAGE_ALL_COMMAND_ID,
   registerGitReviewTreeActions,
 } from "@plugins/builtin/git/renderer/git-review-tree-actions.ts";
 import { buildGitReviewTreeItemMenuFlags } from "@plugins/builtin/git/renderer/git-review-tree-context-menu.ts";
 import type { GitReviewTreeFileRef } from "@plugins/builtin/git/renderer/git-review-tree-section.ts";
-import type { GitReviewIndexEntry } from "@shared/contracts/git-review.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { buildMenuEntries } from "@/lib/context-menu/build-entries.ts";
@@ -36,7 +32,6 @@ describe("git review tree actions", () => {
 
   beforeEach(() => {
     actionRegistry.clearForTests();
-    bindGitReviewStageAllTarget(null, "panel-1");
     openInEditor.mockClear();
     openInEditor.mockReturnValue(true);
     error.mockClear();
@@ -63,7 +58,6 @@ describe("git review tree actions", () => {
 
   afterEach(() => {
     dispose?.();
-    bindGitReviewStageAllTarget(null, "panel-1");
     actionRegistry.clearForTests();
   });
 
@@ -176,177 +170,6 @@ describe("git review tree actions", () => {
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
     expect(error).toHaveBeenCalledWith("Unable to open file");
-  });
-
-  it("registers stageAll/unstageAll and stages unstaged paths only", async () => {
-    const entries: GitReviewIndexEntry[] = [
-      {
-        entryKey: "ek:a",
-        oldPaths: [],
-        path: "a.ts",
-        status: "modified",
-        renderSlots: [
-          {
-            group: "unstaged",
-            oldPath: null,
-            sectionKey: "sec:u:a",
-            status: "modified",
-            targetPath: "a.ts",
-          },
-        ],
-      },
-      {
-        entryKey: "ek:new",
-        oldPaths: [],
-        path: "new.ts",
-        status: "added",
-        renderSlots: [
-          {
-            group: "unstaged",
-            oldPath: null,
-            sectionKey: "sec:u:new",
-            status: "added",
-            targetPath: "new.ts",
-          },
-        ],
-      },
-      {
-        entryKey: "ek:c",
-        oldPaths: [],
-        path: "conflict.ts",
-        status: "conflicted",
-        renderSlots: [
-          {
-            group: "conflict",
-            oldPath: null,
-            sectionKey: "sec:c",
-            status: "conflicted",
-            targetPath: "conflict.ts",
-          },
-        ],
-      },
-      {
-        entryKey: "ek:s",
-        oldPaths: [],
-        path: "staged-only.ts",
-        status: "modified",
-        renderSlots: [
-          {
-            group: "staged",
-            oldPath: null,
-            sectionKey: "sec:s",
-            status: "modified",
-            targetPath: "staged-only.ts",
-          },
-        ],
-      },
-    ];
-    const reportSkippedConflicts = vi.fn();
-    bindGitReviewStageAllTarget({
-      entries,
-      gitRootPath: "/repo",
-      panelId: "panel-1",
-      reportSkippedConflicts,
-    });
-
-    const stageAll = actionRegistry.get(GIT_REVIEW_STAGE_ALL_COMMAND_ID);
-    const unstageAll = actionRegistry.get(GIT_REVIEW_UNSTAGE_ALL_COMMAND_ID);
-    expect(stageAll).toBeDefined();
-    expect(unstageAll).toBeDefined();
-    expect(stageAll?.enabled?.()).toBe(true);
-    expect(unstageAll?.enabled?.()).toBe(true);
-
-    await stageAll?.handler();
-    expect(stage).toHaveBeenCalledWith("/repo", ["a.ts", "new.ts"]);
-    expect(reportSkippedConflicts).toHaveBeenCalledWith(2, 1);
-
-    await unstageAll?.handler();
-    expect(unstage).toHaveBeenCalledWith("/repo", ["staged-only.ts"]);
-  });
-
-  it("disables stageAll/unstageAll without binding or paths", async () => {
-    const stageAll = actionRegistry.get(GIT_REVIEW_STAGE_ALL_COMMAND_ID);
-    const unstageAll = actionRegistry.get(GIT_REVIEW_UNSTAGE_ALL_COMMAND_ID);
-    expect(stageAll?.enabled?.()).toBe(false);
-    expect(unstageAll?.enabled?.()).toBe(false);
-
-    await stageAll?.handler();
-    await unstageAll?.handler();
-    expect(stage).not.toHaveBeenCalled();
-    expect(unstage).not.toHaveBeenCalled();
-
-    bindGitReviewStageAllTarget({
-      entries: [
-        {
-          entryKey: "ek:c",
-          oldPaths: [],
-          path: "conflict.ts",
-          status: "conflicted",
-          renderSlots: [
-            {
-              group: "conflict",
-              oldPath: null,
-              sectionKey: "sec:c",
-              status: "conflicted",
-              targetPath: "conflict.ts",
-            },
-          ],
-        },
-      ],
-      gitRootPath: "/repo",
-      panelId: "panel-1",
-    });
-    expect(stageAll?.enabled?.()).toBe(false);
-    expect(unstageAll?.enabled?.()).toBe(false);
-  });
-
-  it("prefers the active Changes panel binding over another instance", async () => {
-    bindGitReviewStageAllTarget({
-      entries: [
-        {
-          entryKey: "ek:a",
-          oldPaths: [],
-          path: "a.ts",
-          status: "modified",
-          renderSlots: [
-            {
-              group: "unstaged",
-              oldPath: null,
-              sectionKey: "sec:a",
-              status: "modified",
-              targetPath: "a.ts",
-            },
-          ],
-        },
-      ],
-      gitRootPath: "/repo-a",
-      panelId: "panel-a",
-    });
-    bindGitReviewStageAllTarget({
-      entries: [
-        {
-          entryKey: "ek:b",
-          oldPaths: [],
-          path: "b.ts",
-          status: "modified",
-          renderSlots: [
-            {
-              group: "unstaged",
-              oldPath: null,
-              sectionKey: "sec:b",
-              status: "modified",
-              targetPath: "b.ts",
-            },
-          ],
-        },
-      ],
-      gitRootPath: "/repo-b",
-      panelId: "panel-1",
-    });
-
-    const stageAll = actionRegistry.get(GIT_REVIEW_STAGE_ALL_COMMAND_ID);
-    await stageAll?.handler();
-    expect(stage).toHaveBeenCalledWith("/repo-b", ["b.ts"]);
   });
 });
 

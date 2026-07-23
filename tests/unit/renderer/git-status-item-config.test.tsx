@@ -58,7 +58,10 @@ function makeContext(
       t: vi.fn((_key: string, _values?: unknown, fallback = "") => fallback),
     },
     notifications: { error: vi.fn() },
-    panels: { listInstances: vi.fn(() => []), openInstance },
+    panels: {
+      listInstances: vi.fn(() => []),
+      openInstance,
+    },
     terminalStatusItems: {
       register: (registration: RendererTerminalStatusItem) => {
         item = registration;
@@ -178,14 +181,18 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     expect(context.notifications.error).not.toHaveBeenCalled();
   });
 
-  it("Review 拖组后按实际分组复用，并为原分组生成不冲突实例", () => {
+  it("Review 同组已打开时复用，跨组再开会新建", () => {
     const { context, openInstance } = makeContext(true);
     const movedInstance = {
       componentId: "pier.git.changes",
       groupId: "group-b",
       id: "pier.git.changes:group-a:worktree:repo",
       params: {
-        source: { contextId: "worktree:repo", gitRootPath: "/repo" },
+        source: {
+          contextId: "worktree:repo",
+          gitRootPath: "/repo",
+          target: { kind: "uncommitted" },
+        },
       },
       title: "Changes",
     };
@@ -211,6 +218,84 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     expect(originalGroupRequest.instanceId).toMatch(
       /^pier\.git\.changes:group-a:worktree:repo:/u
     );
+    expect(openInstance).toHaveBeenCalledTimes(2);
+  });
+
+  it("Review focus 在 targetGroupMissing 时回退创建且刷新实例列表", () => {
+    const { context, openInstance } = makeContext(true);
+    const stale = {
+      componentId: "pier.git.changes",
+      // Same preferred group so we take the focus path first.
+      groupId: "group-a",
+      id: "pier.git.changes:group-a:worktree:repo:uncommitted",
+      params: {
+        source: {
+          contextId: "worktree:repo",
+          gitRootPath: "/repo",
+          target: { kind: "uncommitted" },
+        },
+      },
+      title: "Changes",
+    };
+    vi.mocked(context.panels.listInstances)
+      .mockReturnValueOnce([stale])
+      .mockReturnValueOnce([]);
+    openInstance
+      .mockReturnValueOnce({ kind: "targetGroupMissing" as const })
+      .mockReturnValueOnce({ kind: "opened" as const });
+
+    openGitChangesPanel({
+      getGroupId: () => "group-a",
+      panelContext: PANEL_CONTEXT,
+      pluginContext: context,
+    });
+
+    expect(openInstance).toHaveBeenCalledTimes(2);
+    expect(openInstance.mock.calls[0]?.[0]).toMatchObject({
+      instanceId: stale.id,
+      targetGroupId: "group-a",
+    });
+    expect(openInstance.mock.calls[1]?.[0]).toMatchObject({
+      instanceId: "pier.git.changes:group-a:worktree:repo:uncommitted",
+      targetGroupId: "group-a",
+    });
+  });
+
+  it("Review 同组多实例时优先复用该组实例", () => {
+    const { context, openInstance } = makeContext(true);
+    const first = {
+      componentId: "pier.git.changes",
+      groupId: "group-a",
+      id: "review-a",
+      params: {
+        source: {
+          contextId: "worktree:repo",
+          gitRootPath: "/repo",
+          target: { kind: "uncommitted" },
+        },
+      },
+      title: "Changes",
+    };
+    const otherGroup = {
+      ...first,
+      groupId: "group-b",
+      id: "review-b",
+    };
+    vi.mocked(context.panels.listInstances).mockReturnValue([
+      otherGroup,
+      first,
+    ]);
+
+    openGitChangesPanel({
+      getGroupId: () => "group-a",
+      panelContext: PANEL_CONTEXT,
+      pluginContext: context,
+    });
+
+    expect(openInstance.mock.calls.at(-1)?.[0]).toMatchObject({
+      instanceId: "review-a",
+      targetGroupId: "group-a",
+    });
   });
 
   it("Review 打开异常通过宿主弹窗提供技术详情", async () => {

@@ -150,18 +150,6 @@
       "description": "还原所选文件的工作区更改。",
       "title": "Git: 还原"
     },
-    "pier.git.review.stageAll": {
-      "aliases": ["暂存所有更改", "全部暂存", "stage all", "git add all"],
-      "category": "Git",
-      "description": "暂存全部未暂存与未跟踪更改，跳过合并冲突中的文件。",
-      "title": "Git: 暂存所有更改"
-    },
-    "pier.git.review.unstageAll": {
-      "aliases": ["取消暂存所有更改", "全部取消暂存", "unstage all"],
-      "category": "Git",
-      "description": "取消暂存全部已暂存的更改。",
-      "title": "Git: 取消暂存所有更改"
-    },
     "pier.worktree.create": {
       "aliases": [
         "工作树",
@@ -304,10 +292,10 @@
     "ui.reviewTreeDiscardFailed": "无法还原",
     "ui.reviewTreeDiscardConfirm": "是否确定还原 {{name}} 中的更改？\n此操作不可撤销！",
     "ui.reviewTreeDiscardConfirmButton": "还原",
-    "ui.stageAll": "暂存所有更改",
-    "ui.stageAllBusy": "正在暂存更改…",
+    "ui.stageAll": "全部暂存",
+    "ui.stageAllBusy": "正在暂存…",
     "ui.stageAllSkippedConflicts": "已暂存 {{staged}} 项更改，跳过 {{n}} 个合并中的文件",
-    "ui.unstageAll": "取消暂存所有更改",
+    "ui.unstageAll": "全部取消暂存",
     "ui.unstageAllBusy": "正在取消暂存…",
     "ui.reviewTreeOpenFileFailed": "无法打开文件",
     "ui.reviewTreeContextMenuFailed": "无法打开菜单",

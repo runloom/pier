@@ -275,14 +275,57 @@ describe("CostOverviewWidget", () => {
     expect(toast.success).toHaveBeenCalledWith("Cost refreshed");
   });
 
-  it("does not read the store while the panel is hidden", () => {
+  it("keeps push-store content available while the panel is hidden", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());
     });
     renderWidget({ visible: false });
     expect(
       document.querySelector('[data-slot="widget-skeleton"]')
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("cost-overview-kpis")).not.toBeInTheDocument();
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-kpis")).toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-chart")).toBeInTheDocument();
+  });
+
+  it("applies store updates while the panel stays hidden", () => {
+    const first = loadedSnapshot();
+    first.overall.summary.todayEstimatedCostMicrousd = 500_000;
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(first);
+    });
+    renderWidget({ visible: false, size: { h: 3, w: 8 } });
+    expect(screen.getByText("$0.50")).toBeInTheDocument();
+
+    const second = loadedSnapshot();
+    second.overall.observedAt = first.overall.observedAt + 1;
+    second.overall.summary.todayEstimatedCostMicrousd = 1_250_000;
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(second);
+    });
+    expect(screen.getByText("$1.25")).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-slot="widget-skeleton"]')
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not flash skeleton when the panel becomes visible again", () => {
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(loadedSnapshot());
+    });
+    const { rerender } = renderWidget({ visible: true });
+    expect(screen.getByTestId("cost-overview-kpis")).toBeInTheDocument();
+
+    rerender(<CostOverviewWidget {...baseProps({ visible: false })} />);
+    expect(
+      document.querySelector('[data-slot="widget-skeleton"]')
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-kpis")).toBeInTheDocument();
+
+    rerender(<CostOverviewWidget {...baseProps({ visible: true })} />);
+    expect(
+      document.querySelector('[data-slot="widget-skeleton"]')
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-kpis")).toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-chart")).toBeInTheDocument();
   });
 });

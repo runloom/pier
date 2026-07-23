@@ -49,22 +49,47 @@ export function openGitChangesPanel(input: {
     target: input.target ?? { kind: "uncommitted" },
   };
   try {
+    const preferredGroupId = input.getGroupId();
+    const instances =
+      input.pluginContext.panels.listInstances(GIT_CHANGES_PANEL_ID);
+    const matches = instances.filter((instance) =>
+      sameReviewSource(instance.params?.source, source)
+    );
+    // Prefer the caller's group so each Dockview group can keep its own Review.
+    // Cross-group focus would block "open again after drag" from creating a
+    // second panel in the original group (see git-review e2e).
+    const existingInGroup = preferredGroupId
+      ? matches.find((instance) => instance.groupId === preferredGroupId)
+      : undefined;
+    if (existingInGroup) {
+      const focusResult = input.pluginContext.panels.openInstance({
+        componentId: GIT_CHANGES_PANEL_ID,
+        context: input.panelContext,
+        instanceId: existingInGroup.id,
+        params: { source },
+        ...(existingInGroup.groupId
+          ? { targetGroupId: existingInGroup.groupId }
+          : {}),
+        title: pluginText(input.pluginContext, "reviewChangesTitle", "Changes"),
+      });
+      if (focusResult.kind !== "targetGroupMissing") {
+        return;
+      }
+      // Listed group vanished between list and open — fall through to create
+      // in the caller's current group instead of silent no-op.
+    }
     openInCurrentGroup({
       getGroupId: input.getGroupId,
       open: (targetGroupId) => {
-        const instances =
+        // Refresh: focus-path ghosts must not poison collision checks.
+        const liveInstances =
           input.pluginContext.panels.listInstances(GIT_CHANGES_PANEL_ID);
-        const existingInTarget = instances.find(
-          (instance) =>
-            instance.groupId === targetGroupId &&
-            sameReviewSource(instance.params?.source, source)
-        );
         const canonicalId = `${GIT_CHANGES_PANEL_ID}:${targetGroupId}:${source.contextId}:${reviewTargetKey(source.target)}`;
-        const instanceId =
-          existingInTarget?.id ??
-          (instances.some((instance) => instance.id === canonicalId)
-            ? `${canonicalId}:${crypto.randomUUID()}`
-            : canonicalId);
+        const instanceId = liveInstances.some(
+          (instance) => instance.id === canonicalId
+        )
+          ? `${canonicalId}:${crypto.randomUUID()}`
+          : canonicalId;
         return input.pluginContext.panels.openInstance({
           componentId: GIT_CHANGES_PANEL_ID,
           context: input.panelContext,

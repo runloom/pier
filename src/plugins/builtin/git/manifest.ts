@@ -170,18 +170,6 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       permissions: ["git:write"],
       title: "Git: Restore",
     },
-    {
-      category: "Git",
-      id: "pier.git.review.stageAll",
-      permissions: ["git:write"],
-      title: "Git: Stage All Changes",
-    },
-    {
-      category: "Git",
-      id: "pier.git.review.unstageAll",
-      permissions: ["git:write"],
-      title: "Git: Unstage All Changes",
-    },
   ],
   configuration: {
     properties: {
