@@ -44,6 +44,11 @@
             press.keycode = keycode
             press.mods = ghostty_input_mods_e(rawValue: mods)
             press.composing = false
+            if let text, let scalar = text.unicodeScalars.first {
+                press.unshifted_codepoint = scalar.value
+            } else if let scalar = Self.unshiftedCodepoint(forAppKitKeyCode: keycode) {
+                press.unshifted_codepoint = scalar
+            }
             let pressOk: Bool
             if let text, !text.isEmpty {
                 pressOk = text.withCString { ptr in
@@ -58,8 +63,30 @@
             release.keycode = keycode
             release.mods = ghostty_input_mods_e(rawValue: mods)
             release.composing = false
+            if let text, let scalar = text.unicodeScalars.first {
+                release.unshifted_codepoint = scalar.value
+            } else if let scalar = Self.unshiftedCodepoint(forAppKitKeyCode: keycode) {
+                release.unshifted_codepoint = scalar
+            }
             _ = surface.sendKeyEvent(release)
             return pressOk
+        }
+
+        /// Best-effort unshifted codepoint for synthetic keycodes when the
+        /// caller omits `text`. Return/Tab/Esc are the composer hot path.
+        private static func unshiftedCodepoint(forAppKitKeyCode keycode: UInt32) -> UInt32? {
+            switch keycode {
+            case 0x24, 0x4C: // Return / keypad Enter
+                return 0x0D
+            case 0x30: // Tab
+                return 0x09
+            case 0x35: // Escape
+                return 0x1B
+            case 0x31: // Space
+                return 0x20
+            default:
+                return nil
+            }
         }
 
         /// Invoke a named Ghostty binding action (e.g. "copy_to_clipboard",

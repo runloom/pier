@@ -312,6 +312,11 @@ export interface TerminalSendKeyPressArgs {
   /** ghostty_input_mods 位掩码；缺省 0。 */
   mods?: number | undefined;
   panelId: string;
+  /**
+   * Optional UTF-8 text associated with the key (e.g. "\\r" for Return).
+   * Ghostty needs this for some TUI submit paths when only keycode is synthetic.
+   */
+  text?: string | undefined;
 }
 
 export type TerminalSelectionTextResult =

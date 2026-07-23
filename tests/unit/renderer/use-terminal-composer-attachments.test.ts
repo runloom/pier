@@ -310,7 +310,7 @@ describe("useTerminalComposerAttachments", () => {
     });
 
     const payload = hook.result.current.buildPayloadOrReport("分析 /shot.png");
-    expect(payload).toBe("/shot.png\n分析 /shot.png");
+    expect(payload).toBe("分析 /shot.png");
     expect(reportError).not.toHaveBeenCalled();
     expect(hook.result.current.canSendWithDraft("分析 /shot.png")).toBe(true);
     expect(hook.result.current.canSendWithDraft("   ")).toBe(true);

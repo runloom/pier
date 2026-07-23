@@ -11,7 +11,12 @@ import {
 } from "../../../src/shared/terminal-appkit-keys.ts";
 
 function fakeAddon(handlers: {
-  sendKeyPress?: (id: string, keycode: number, mods?: number) => boolean;
+  sendKeyPress?: (
+    id: string,
+    keycode: number,
+    mods?: number,
+    text?: string
+  ) => boolean;
   sendText: (id: string, text: string) => boolean;
 }): NativeAddon {
   return {
@@ -22,7 +27,7 @@ function fakeAddon(handlers: {
 const win = { id: 7 } as unknown as AppWindow;
 
 describe("sendTerminalText", () => {
-  it("submit=true 时先 paste 文本再注入 Return 键（不把 \\r 拼进同一次 sendText）", () => {
+  it("submit=true 时先 paste 文本再注入带 \\r 文本的 Return 键", () => {
     const addon = fakeAddon({ sendText: () => true });
     const result = sendTerminalText({
       addon,
@@ -34,7 +39,9 @@ describe("sendTerminalText", () => {
     expect(addon.sendText).toHaveBeenCalledWith("7::terminal-a", "echo hi");
     expect(addon.sendKeyPress).toHaveBeenCalledWith(
       "7::terminal-a",
-      APPKIT_KEYCODE.return
+      APPKIT_KEYCODE.return,
+      0,
+      "\r"
     );
   });
 

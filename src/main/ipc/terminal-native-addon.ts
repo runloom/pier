@@ -81,8 +81,14 @@ export interface NativeAddon {
   /**
    * 注入一次 AppKit 虚拟键码的 press+release（绕过 bracketed paste）。
    * `keycode` 例：0x24 = Return；`mods` 为 ghostty_input_mods 位掩码，默认 0。
+   * `text` 可选：Return 传 "\\r"，确保 agent TUI 能识别提交。
    */
-  sendKeyPress(panelId: string, keycode: number, mods?: number): boolean;
+  sendKeyPress(
+    panelId: string,
+    keycode: number,
+    mods?: number,
+    text?: string
+  ): boolean;
   sendText(panelId: string, text: string): boolean;
   setAppShortcutKeys(keys: string[]): void;
   setCommandFinishedForwardCallback?(

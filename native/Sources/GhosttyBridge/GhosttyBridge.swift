@@ -119,6 +119,7 @@ final class EventRouterView: NSView {
         "Mod+KeyD",
         "Mod+KeyF",
         "Mod+KeyN",
+        "Mod+KeyP",
         "Mod+KeyT",
         "Mod+KeyW",
         "Mod+Minus",
@@ -1717,9 +1718,15 @@ final class GhosttyBridgeImpl {
 
     /// AppKit virtual keycode press+release (e.g. 0x24 = Return). Used after
     /// paste-style `sendText` so Enter actually submits under bracketed paste.
-    func sendKeyPress(panelId: String, keycode: UInt32, mods: UInt32) -> Bool {
+    /// Optional `text` (e.g. "\\r") fills Ghostty key.text + unshifted_codepoint.
+    func sendKeyPress(
+        panelId: String,
+        keycode: UInt32,
+        mods: UInt32,
+        text: String? = nil
+    ) -> Bool {
         guard let term = terminals[panelId] else { return false }
-        return term.terminalView.sendKeyPress(keycode: keycode, mods: mods)
+        return term.terminalView.sendKeyPress(keycode: keycode, mods: mods, text: text)
     }
 
     /// 孤儿清理:关掉该 window 下不在 activeIds 集合中的 terminal NSView. 配合
@@ -2253,13 +2260,18 @@ public func ghosttyBridgeSendText(
 public func ghosttyBridgeSendKeyPress(
     _ panelId: UnsafePointer<CChar>,
     _ keycode: UInt32,
-    _ mods: UInt32
+    _ mods: UInt32,
+    _ text: UnsafePointer<CChar>?
 ) -> Bool {
     MainActor.assumeIsolated {
-        GhosttyBridgeImpl.shared.sendKeyPress(
+        let textValue: String? = text.map { String(cString: $0) }.flatMap { value in
+            value.isEmpty ? nil : value
+        }
+        return GhosttyBridgeImpl.shared.sendKeyPress(
             panelId: String(cString: panelId),
             keycode: keycode,
-            mods: mods
+            mods: mods,
+            text: textValue
         )
     }
 }

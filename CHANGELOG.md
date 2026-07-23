@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### Fixed
+
+- **增强输入图片/附件路径重复。** Lexical chip 已把绝对路径写进正文后，
+  发送载荷不再无条件把附件轨路径再拼一遍前缀，避免智能体侧看到两份同一
+  图片路径。
+- **增强输入 Enter 对 Cursor 等 agent 只进输入框不提交。** `submit: true`
+  时在 paste 文本后注入的 Return 键补上 `text="\\r"` 与
+  `unshifted_codepoint`，避免 bracketed paste 后 synthetic keycode 单独
+  不足以触发 TUI 提交。
+- **终端右键去掉「增强输入添加文件」。** 添加文件保留增强输入内回形针与
+  ⌘⇧A；右键只留「切换增强输入」，避免入口重复。
+
 ### Changed
 
 - **增强输入升级为 Lexical 结构化编辑器（Phase A / B）。** 按需增强输入从

@@ -83,6 +83,7 @@ interface ParsedSendKeyPressArgs {
   keycode: number;
   mods: number;
   panelId: string;
+  text?: string | undefined;
 }
 
 function parseSendTextArgs(value: unknown): ParsedSendTextArgs | null {
@@ -132,10 +133,17 @@ function parseSendKeyPressArgs(value: unknown): ParsedSendKeyPressArgs | null {
       return null;
     }
   }
+  if (
+    record.text !== undefined &&
+    (typeof record.text !== "string" || record.text.length > 16)
+  ) {
+    return null;
+  }
   return {
     keycode: record.keycode,
     mods: typeof record.mods === "number" ? record.mods : 0,
     panelId: record.panelId,
+    ...(typeof record.text === "string" ? { text: record.text } : {}),
   };
 }
 
@@ -159,7 +167,8 @@ export function sendTerminalText(opts: {
     const nativePanelId = toNativePanelKey(opts.win, parsed.panelId);
     // sendText 走 clipboard-paste 路径：shell 开了 mode 2004 时整段会被
     // bracketed paste 包裹，末尾拼 \\r 不会真正「按回车」。提交必须拆成
-    // paste 文本 + 单独的 Return 键事件。
+    // paste 文本 + 单独的 Return 键事件；Return 必须带 text="\\r"/
+    // unshifted_codepoint，否则部分 agent TUI 只把文本留在输入框。
     const textOk = opts.addon.sendText(nativePanelId, parsed.text);
     if (!textOk) {
       return { ok: false, error: "terminal surface not ready" };
@@ -169,7 +178,9 @@ export function sendTerminalText(opts: {
     }
     const enterOk = opts.addon.sendKeyPress(
       nativePanelId,
-      APPKIT_KEYCODE.return
+      APPKIT_KEYCODE.return,
+      0,
+      "\r"
     );
     return enterOk
       ? { ok: true }
@@ -201,11 +212,15 @@ export function sendTerminalKeyPress(opts: {
   }
   try {
     const nativePanelId = toNativePanelKey(opts.win, parsed.panelId);
-    const ok = opts.addon.sendKeyPress(
-      nativePanelId,
-      parsed.keycode,
-      parsed.mods
-    );
+    const ok =
+      parsed.text === undefined
+        ? opts.addon.sendKeyPress(nativePanelId, parsed.keycode, parsed.mods)
+        : opts.addon.sendKeyPress(
+            nativePanelId,
+            parsed.keycode,
+            parsed.mods,
+            parsed.text
+          );
     return ok
       ? { ok: true }
       : { ok: false, error: "terminal surface not ready" };

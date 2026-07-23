@@ -620,6 +620,7 @@ describe("terminal content context menu actions", () => {
         "pier.terminal.clearScreen",
       ])
     );
+    expect(ids).not.toContain("pier.terminal.composerAttach");
     const search = actionRegistry.get("pier.terminal.search");
     const clear = actionRegistry.get("pier.terminal.clearScreen");
     // Find(4) → Clear(5) → Preview Selected Text(6, files plugin) → Rich Input(7)

@@ -122,12 +122,10 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     },
     iconComponent: Paperclip,
     id: "pier.terminal.composerAttach",
-    menuHidden: () => {
-      const id = activeTerminalPanelId();
-      return id == null || !isAgentComposerEligibleForPanel(id);
-    },
+    // Attach lives on the Rich Input paperclip + ⌘⇧A; keep command palette,
+    // but do not crowd the terminal context menu.
     sortOrder: 8,
-    surfaces: ["terminal/content", "command-palette"],
+    surfaces: ["command-palette"],
     titleKey: "contextMenu.action.attachRichInputFile",
     when: "terminal.hasActivePanel",
   },
