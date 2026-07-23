@@ -18,7 +18,7 @@ import {
 import type { CostViewModel } from "./cost-view-query.ts";
 
 function buildChartConfig(view: CostViewModel): ChartConfig {
-  if (view.chart === "line") {
+  if (view.chart === "line" || view.groupBy === "none") {
     return {
       value: {
         color: "var(--chart-1)",
@@ -120,6 +120,39 @@ export function CostOverviewChart({
         </ChartContainer>
         {/* recharts Line 不转发 DOM test id；用稳定锚点供组件测锁定 line 模式 */}
         <span className="sr-only" data-testid="cost-overview-chart-line" />
+      </div>
+    );
+  }
+
+  // groupBy none series is `{date, value}`; stacked source keys would draw nothing.
+  if (view.groupBy === "none" || view.sourceMetas.length === 0) {
+    return (
+      <div
+        className="flex min-h-8 flex-1 flex-col"
+        data-testid="cost-overview-chart"
+        ref={chartAnchorRef}
+      >
+        <ChartContainer
+          className="aspect-auto min-h-8 w-full flex-1"
+          config={config}
+        >
+          <BarChart
+            data={view.series as { date: string; value?: number }[]}
+            margin={{ bottom: 0, left: 0, right: 0, top: 4 }}
+          >
+            <XAxis dataKey="date" hide />
+            <YAxis hide />
+            <ChartTooltip
+              content={<ChartTooltipPortalContent anchorRef={chartAnchorRef} />}
+            />
+            <Bar
+              dataKey="value"
+              fill="var(--color-value)"
+              isAnimationActive={false}
+              radius={[2, 2, 0, 0]}
+            />
+          </BarChart>
+        </ChartContainer>
       </div>
     );
   }

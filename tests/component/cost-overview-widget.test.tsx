@@ -261,6 +261,37 @@ describe("CostOverviewWidget", () => {
     expect(screen.getByTestId("cost-overview-unpriced")).toBeInTheDocument();
   });
 
+  it("keeps KPIs and unpriced badge when costs are all null", () => {
+    const unpriced = loadedSnapshot();
+    for (const source of unpriced.sources) {
+      for (const b of source.snapshot.buckets) {
+        b.estimatedCostMicrousd = null;
+        b.pricingStatus = "unpriced";
+      }
+      source.snapshot.summary.estimatedCostMicrousd = null;
+      source.snapshot.summary.todayEstimatedCostMicrousd = null;
+    }
+    for (const b of unpriced.overall.buckets) {
+      b.estimatedCostMicrousd = null;
+      b.pricingStatus = "unpriced";
+    }
+    unpriced.overall.summary.estimatedCostMicrousd = null;
+    unpriced.overall.summary.todayEstimatedCostMicrousd = null;
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(unpriced);
+    });
+    renderWidget({ size: { h: 3, w: 8 } });
+    expect(screen.getByTestId("cost-overview-kpis")).toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-unpriced")).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-slot="widget-empty"]')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No usage in this range")
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No cost data yet")).not.toBeInTheDocument();
+  });
+
   it("hides the description at the minimum height", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());

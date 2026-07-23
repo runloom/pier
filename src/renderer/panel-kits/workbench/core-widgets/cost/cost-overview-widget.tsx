@@ -186,7 +186,10 @@ export function CostOverviewWidget({
       />
     );
   }
-  if (view.emptyReason !== null) {
+  if (
+    view.emptyReason === "no-sources" ||
+    view.emptyReason === "filtered-empty"
+  ) {
     return <EmptyByReason reason={view.emptyReason} t={t} />;
   }
 
