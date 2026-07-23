@@ -211,6 +211,56 @@ describe("CostOverviewWidget", () => {
     expect(screen.getByTestId("cost-overview-chart")).toBeInTheDocument();
   });
 
+  it("renders a line chart when params request tokens over time", () => {
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(loadedSnapshot());
+    });
+    renderWidget({
+      params: {
+        rangeDays: 31,
+        measure: "tokens",
+        groupBy: "none",
+        chart: "line",
+        kpis: ["periodTokens", "latestDayTokens"],
+        preset: "tokens",
+      },
+      size: { h: 3, w: 8 },
+    });
+    expect(screen.getByTestId("cost-overview-chart")).toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-chart-line")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("cost-overview-unpriced")
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides unpriced badge for token measure even when pricing is partial", () => {
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(loadedSnapshot());
+    });
+    renderWidget({
+      params: {
+        rangeDays: 31,
+        measure: "tokens",
+        groupBy: "none",
+        chart: "line",
+        kpis: ["periodTokens", "latestDayTokens"],
+        preset: "tokens",
+      },
+      size: { h: 3, w: 8 },
+    });
+    expect(
+      screen.queryByTestId("cost-overview-unpriced")
+    ).not.toBeInTheDocument();
+  });
+
+  it("exposes unpriced badge test id when cost measure has partial pricing", () => {
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(loadedSnapshot());
+    });
+    renderWidget({ size: { h: 3, w: 8 } });
+    expect(screen.getByTestId("cost-overview-unpriced")).toBeInTheDocument();
+  });
+
   it("hides the description at the minimum height", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());
@@ -242,12 +292,34 @@ describe("CostOverviewWidget", () => {
 
   it("preserves unknown costs instead of formatting them as zero", () => {
     const unknown = loadedSnapshot();
+    // Clear all priced points; keep token series via tokens measure so KPIs still render.
+    for (const source of unknown.sources) {
+      for (const b of source.snapshot.buckets) {
+        b.estimatedCostMicrousd = null;
+        b.pricingStatus = "unavailable";
+      }
+      source.snapshot.summary.estimatedCostMicrousd = null;
+      source.snapshot.summary.todayEstimatedCostMicrousd = null;
+    }
+    for (const b of unknown.overall.buckets) {
+      b.estimatedCostMicrousd = null;
+      b.pricingStatus = "unavailable";
+    }
     unknown.overall.summary.estimatedCostMicrousd = null;
     unknown.overall.summary.todayEstimatedCostMicrousd = null;
     act(() => {
       useUsageDataStore.getState().applySnapshot(unknown);
     });
-    renderWidget({ size: { h: 3, w: 8 } });
+    renderWidget({
+      params: {
+        rangeDays: 31,
+        measure: "tokens",
+        groupBy: "none",
+        chart: "line",
+        kpis: ["today", "period", "periodTokens", "latestDayTokens"],
+      },
+      size: { h: 3, w: 8 },
+    });
     expect(screen.getAllByText("—")).toHaveLength(2);
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
   });
@@ -289,7 +361,11 @@ describe("CostOverviewWidget", () => {
 
   it("applies store updates while the panel stays hidden", () => {
     const first = loadedSnapshot();
-    first.overall.summary.todayEstimatedCostMicrousd = 500_000;
+    // View model uses coverage.to as "today"; stamp cost on that day.
+    for (const source of first.sources) {
+      const last = source.snapshot.buckets.at(-1);
+      if (last) last.estimatedCostMicrousd = 250_000;
+    }
     act(() => {
       useUsageDataStore.getState().applySnapshot(first);
     });
@@ -298,7 +374,10 @@ describe("CostOverviewWidget", () => {
 
     const second = loadedSnapshot();
     second.overall.observedAt = first.overall.observedAt + 1;
-    second.overall.summary.todayEstimatedCostMicrousd = 1_250_000;
+    for (const source of second.sources) {
+      const last = source.snapshot.buckets.at(-1);
+      if (last) last.estimatedCostMicrousd = 625_000;
+    }
     act(() => {
       useUsageDataStore.getState().applySnapshot(second);
     });
