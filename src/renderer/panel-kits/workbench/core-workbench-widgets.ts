@@ -8,6 +8,7 @@ import {
 } from "@shared/plugin-core-contribution-ids.ts";
 import { Activity, Blocks, Cpu, DollarSign } from "lucide-react";
 import { ActivityWidget } from "./core-widgets/activity-widget.tsx";
+import { CostOverviewSettings } from "./core-widgets/cost/cost-overview-settings.tsx";
 import {
   CostOverviewWidget,
   costOverviewWidgetActions,
@@ -59,6 +60,7 @@ export const CORE_WORKBENCH_WIDGETS: readonly CoreWorkbenchWidgetDeclaration[] =
     },
     {
       category: "analytics",
+      configurable: true,
       defaultSize: { h: 3, w: 4 },
       descriptionKey: "workbench.widget.costOverview.description",
       id: CORE_COST_OVERVIEW_WIDGET_ID,
@@ -67,14 +69,21 @@ export const CORE_WORKBENCH_WIDGETS: readonly CoreWorkbenchWidgetDeclaration[] =
         "spending",
         "tokens",
         "usage",
+        "model",
+        "source",
+        "trend",
         "成本",
         "花费",
         "令牌",
+        "模型",
+        "来源",
+        "趋势",
       ],
       maxSize: { h: 5, w: 8 },
       // h=2: 极简布局隐藏副标题，仅保留 KPI、细 sparkline 和 footer；
       // w=2 时 KPI 会响应式堆叠成单列，用户拖窄自负。
       minSize: { h: 2, w: 2 },
+      multiInstance: true,
       // refreshable=false：改用 registration 里的 async action，让 header 刷新
       // 按钮 spinner 覆盖真实 refreshAll 耗时。
       refreshable: false,
@@ -126,6 +135,7 @@ export const CORE_WORKBENCH_WIDGET_COMPONENTS: ReadonlyMap<
       icon: DollarSign,
       id: CORE_COST_OVERVIEW_WIDGET_ID,
       previewComponent: CostOverviewWidgetPreview,
+      settingsComponent: CostOverviewSettings,
     },
   ],
 ]);
