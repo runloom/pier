@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  costOverviewParamsToJson,
   DEFAULT_COST_OVERVIEW_PARAMS,
   normalizeCostOverviewChart,
   paramsFromPreset,
@@ -52,6 +53,14 @@ describe("parseCostOverviewParams", () => {
       parseCostOverviewParams({ groupBy: "source", chart: "line" }).chart
     ).toBe("stackedBar");
   });
+
+  it("treats null sources as no filter", () => {
+    expect(parseCostOverviewParams({ sources: null }).sources).toBeUndefined();
+  });
+
+  it("treats empty sources array as no filter", () => {
+    expect(parseCostOverviewParams({ sources: [] }).sources).toBeUndefined();
+  });
 });
 
 describe("normalizeCostOverviewChart", () => {
@@ -81,5 +90,30 @@ describe("patchCostOverviewParams", () => {
       preset: "tokens",
     });
     expect(next).toEqual(paramsFromPreset("tokens"));
+  });
+});
+
+describe("costOverviewParamsToJson", () => {
+  it("writes sources:null when no active filter", () => {
+    const json = costOverviewParamsToJson(paramsFromPreset("overview"));
+    expect(json.sources).toBeNull();
+  });
+
+  it("writes sources allowlist when present", () => {
+    const json = costOverviewParamsToJson({
+      ...paramsFromPreset("overview"),
+      sources: ["codex-local-sessions"],
+    });
+    expect(json.sources).toEqual(["codex-local-sessions"]);
+  });
+
+  it("emits sources:null after patch clears allowlist", () => {
+    const filtered = {
+      ...paramsFromPreset("overview"),
+      sources: ["codex-local-sessions"],
+    };
+    const cleared = patchCostOverviewParams(filtered, { sources: undefined });
+    expect(cleared.sources).toBeUndefined();
+    expect(costOverviewParamsToJson(cleared).sources).toBeNull();
   });
 });

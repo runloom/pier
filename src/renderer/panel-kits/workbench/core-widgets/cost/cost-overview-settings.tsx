@@ -25,7 +25,7 @@ import {
   type CostOverviewGroupBy,
   type CostOverviewKpiId,
   type CostOverviewMeasure,
-  type CostOverviewParams,
+  type CostOverviewParamsPatch,
   type CostOverviewPresetId,
   type CostOverviewRangeDays,
   costOverviewParamsToJson,
@@ -171,7 +171,7 @@ export function CostOverviewSettings({
   const presetValue =
     current.preset === "custom" ? "custom" : (current.preset ?? "custom");
 
-  const persist = (patch: Partial<CostOverviewParams>): void => {
+  const persist = (patch: CostOverviewParamsPatch): void => {
     updateParams(
       costOverviewParamsToJson(patchCostOverviewParams(current, patch))
     );

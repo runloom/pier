@@ -216,7 +216,9 @@ function parseKpis(raw: unknown): CostOverviewKpiId[] {
 }
 
 function parseSources(raw: unknown): string[] | undefined {
-  if (!Array.isArray(raw)) {
+  // null / missing / empty = no filter (all sources). Host shallow-merges
+  // params, so clear must round-trip via explicit null from toJson.
+  if (raw == null || !Array.isArray(raw)) {
     return;
   }
   const sources = raw.filter(
@@ -303,9 +305,14 @@ export function parseCostOverviewParams(
   };
 }
 
+/** Patch may explicitly clear optional fields with `undefined` (e.g. sources → all). */
+export type CostOverviewParamsPatch = {
+  [K in keyof CostOverviewParams]?: CostOverviewParams[K] | undefined;
+};
+
 export function patchCostOverviewParams(
   current: CostOverviewParams,
-  patch: Partial<CostOverviewParams>
+  patch: CostOverviewParamsPatch
 ): CostOverviewParams {
   if (isOfficialPresetId(patch.preset)) {
     return paramsFromPreset(patch.preset);
@@ -350,8 +357,8 @@ export function costOverviewParamsToJson(
   if (params.preset !== undefined) {
     json.preset = params.preset;
   }
-  if (params.sources && params.sources.length > 0) {
-    json.sources = [...params.sources];
-  }
+  // Always write sources so host shallow-merge can clear a prior allowlist.
+  json.sources =
+    params.sources && params.sources.length > 0 ? [...params.sources] : null;
   return json;
 }

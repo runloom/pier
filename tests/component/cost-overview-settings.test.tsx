@@ -234,4 +234,27 @@ describe("CostOverviewSettings", () => {
     const next = updateParams.mock.calls[0]?.[0] as Record<string, unknown>;
     expect(next.sources).toEqual(["codex-local-sessions"]);
   });
+
+  it("clears source filter with sources:null via updateParams", async () => {
+    const updateParams = vi.fn();
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(settingsSnapshot());
+    });
+    render(
+      <CostOverviewSettings
+        instanceId="core.cost-overview"
+        params={costOverviewParamsToJson({
+          ...paramsFromPreset("overview"),
+          sources: ["codex-local-sessions"],
+        })}
+        updateParams={updateParams}
+      />
+    );
+
+    fireEvent.click(screen.getByRole("checkbox", { name: "Codex" }));
+
+    expect(updateParams).toHaveBeenCalledTimes(1);
+    const next = updateParams.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(next.sources).toBeNull();
+  });
 });
