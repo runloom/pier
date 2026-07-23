@@ -4,14 +4,10 @@ import {
   readMarkdownFontScale,
   readMarkdownMeasureMode,
   readMarkdownOpenMode,
-  readMarkdownTocCollapsed,
-  readMarkdownTocSide,
   useMarkdownPreviewPrefsStore,
   writeMarkdownFontScale,
   writeMarkdownMeasureMode,
   writeMarkdownOpenMode,
-  writeMarkdownTocCollapsed,
-  writeMarkdownTocSide,
 } from "../../../src/plugins/builtin/files/renderer/markdown-preview-preferences.ts";
 
 describe("markdown-preview-preferences", () => {
@@ -29,8 +25,6 @@ describe("markdown-preview-preferences", () => {
     useMarkdownPreviewPrefsStore.setState({
       fontScale: 1,
       measureMode: "comfortable",
-      tocCollapsed: false,
-      tocSide: "right",
     });
   });
 
@@ -53,16 +47,11 @@ describe("markdown-preview-preferences", () => {
     expect(cycleMarkdownFontScale(0.75, "out")).toBe(0.75);
   });
 
-  it("persists global reading mode, outline side, and collapse", () => {
+  it("persists global reading mode", () => {
     writeMarkdownMeasureMode("wide");
-    writeMarkdownTocSide("left");
-    writeMarkdownTocCollapsed(true);
     expect(readMarkdownMeasureMode()).toBe("wide");
-    expect(readMarkdownTocSide()).toBe("left");
-    expect(readMarkdownTocCollapsed()).toBe(true);
-    expect(useMarkdownPreviewPrefsStore.getState().tocCollapsed).toBe(true);
-    expect(localStorage.getItem("pier.files.markdown.tocCollapsed")).toBe(
-      "true"
+    expect(localStorage.getItem("pier.files.markdown.measureMode")).toBe(
+      "wide"
     );
   });
 });

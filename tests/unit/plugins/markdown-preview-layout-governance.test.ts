@@ -23,6 +23,8 @@ describe("markdown preview layout governance", () => {
     expect(agents).toContain('data-slot="markdown-preview-layout"');
     expect(agents).toContain("一个大纲壳");
     expect(agents).toContain("同一预览框包含块");
+    expect(agents).toContain("默认不遮挡正文");
+    expect(agents).toContain("MARKDOWN_TOC_TOP_RATIO");
     expect(agents).toContain(
       "tests/unit/plugins/markdown-preview-layout-governance.test.ts"
     );
@@ -37,59 +39,75 @@ describe("markdown preview layout governance", () => {
     expect(article).toContain("MarkdownPreviewOverlayRail");
     expect(article).toContain('data-slot="markdown-preview-outline-rail"');
     expect(article).toContain("items-end");
-    expect(article).toContain("items-start");
-    expect(readPreview("markdown-preview-toc.tsx")).toContain("scrollIntoView");
+    expect(article).toContain("MARKDOWN_TOC_TOP_RATIO");
+    expect(article).toContain("MARKDOWN_TOC_EDGE_INSET_PX");
+    expect(article).toContain("markdownOutlineHoverMaxHeightPx");
+    expect(article).toContain("markdownOutlineHoverWidthPx");
+    expect(article).toContain("panelWidthPx");
+    expect(toc).toContain("scrollIntoView");
+    expect(toc).toContain("group-hover/toc");
+    expect(toc).toContain("group-focus-within/toc");
+    expect(toc).toContain("markdownTocTickWidthPx");
+    expect(toc).toContain("top-1/2");
+    expect(toc).toContain("-translate-y-1/2");
+    expect(toc).toContain("MutationObserver");
+    expect(toc).not.toContain("setTocCollapsed");
+    expect(toc).not.toContain("<X");
     // Pier light-DOM scrollbars only hide via data-scrollbar="none"
     // (globals.css); Tailwind scrollbar utilities cannot override *::-webkit-scrollbar.
-    expect(readPreview("markdown-preview-toc.tsx")).toContain(
-      'data-scrollbar="none"'
-    );
+    expect(toc).toContain('data-scrollbar="none"');
     expect(preview).toContain("MarkdownPreviewArticleLayout");
     expect(preview).toContain("MarkdownPreviewOverlayRail");
     expect(preview).toContain("<MarkdownPreviewToc");
     expect(preview.match(/<MarkdownPreviewToc\b/g)?.length).toBe(1);
 
     expect(preview).not.toContain("markdown-preview-dock");
+    expect(preview).not.toContain("tocSide");
     expect(toc).not.toContain("max-h-[min(70%");
     expect(toc).not.toContain("absolute top-2");
   });
 
   it("shares outline geometry constants instead of hard-coded twins", () => {
+    const preview = readPreview("markdown-preview.tsx");
     const toc = readPreview("markdown-preview-toc.tsx");
     const article = readPreview("markdown-preview-article-layout.tsx");
     const layout = readPreview("markdown-preview-toc-layout.ts");
     const fontScale = readPreview("markdown-preview-font-scale.tsx");
 
     expect(layout).toContain("export const MARKDOWN_TOC_INSET_PX");
-    expect(layout).toContain("export const MARKDOWN_TOC_RAIL_WIDTH_PX");
-    expect(layout).toContain("export const MARKDOWN_TOC_MAX_HEIGHT_RESERVE_PX");
+    expect(layout).toContain("export const MARKDOWN_TOC_PANEL_WIDTH_PX");
+    expect(layout).toContain("export const MARKDOWN_TOC_TICK_RAIL_WIDTH_PX");
+    expect(layout).toContain("export const MARKDOWN_TOC_TOP_RATIO");
+    expect(layout).toContain("export const MARKDOWN_TOC_EDGE_INSET_PX");
+    expect(layout).toContain("export const MARKDOWN_TOC_BOTTOM_RESERVE_PX");
     expect(layout).toContain("export const MARKDOWN_PREVIEW_EDGE_INSET_PX");
-    expect(layout).toMatch(/MARKDOWN_TOC_MAX_HEIGHT_RESERVE_PX\s*=\s*200\b/);
+    expect(layout).toContain("export const MARKDOWN_TOC_CONTENT_INSET_PX");
+    expect(layout).toContain("MARKDOWN_TOC_CONTENT_GAP_PX");
+    expect(preview).toContain("MARKDOWN_TOC_CONTENT_INSET_PX");
+    expect(preview).toContain("hasOutline");
     expect(fontScale).toContain("MARKDOWN_PREVIEW_EDGE_INSET_PX");
-    expect(article).toContain("MARKDOWN_PREVIEW_EDGE_INSET_PX");
-    expect(toc).toContain("MARKDOWN_TOC_INSET_PX");
-    expect(toc).toContain("MARKDOWN_TOC_RAIL_WIDTH_PX");
+    expect(article).toContain("MARKDOWN_TOC_EDGE_INSET_PX");
+    expect(toc).not.toContain("MARKDOWN_TOC_PANEL_WIDTH_PX");
+    expect(toc).toContain("MARKDOWN_TOC_TICK_HEIGHT_PX");
     expect(toc).not.toContain("w-56");
     expect(toc).not.toMatch(/\btop-2\b/);
     expect(article).not.toMatch(/\btop-2\b/);
     expect(fontScale).not.toMatch(/\bright-3\b/);
   });
 
-  it("keeps reading prefs in the shared store instead of local TOC state", () => {
+  it("keeps reading prefs in the shared store without outline side/collapse", () => {
     const prefs = readPreview("markdown-preview-preferences.ts");
     const toc = readPreview("markdown-preview-toc.tsx");
     expect(prefs).toContain("useMarkdownPreviewPrefsStore");
-    expect(prefs).toContain("tocCollapsed");
-    expect(prefs).toContain("pier.files.markdown.tocCollapsed");
-    expect(toc).toContain("useMarkdownPreviewPrefsStore");
+    expect(prefs).not.toContain("tocCollapsed");
+    expect(prefs).not.toContain("tocSide");
+    expect(toc).not.toContain("useMarkdownPreviewPrefsStore");
     expect(toc).not.toMatch(/useState\(false\)/);
   });
 
   it("keeps visible measure owned by CSS --md-measure", () => {
-    const preview = readPreview("markdown-preview.tsx");
     const proseCss = readPreview("markdown-prose.css");
     expect(proseCss).toContain("--md-measure:");
-    expect(preview).toContain("w-[var(--md-measure)]");
-    expect(preview).not.toContain("w-[72ch]");
+    expect(proseCss).toContain("max-width: var(--md-measure)");
   });
 });

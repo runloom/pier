@@ -6,23 +6,13 @@ import type {
 import {
   FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID,
   FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID,
-  FILES_MARKDOWN_TOC_LEFT_COMMAND_ID,
-  FILES_MARKDOWN_TOC_RIGHT_COMMAND_ID,
 } from "../manifest.ts";
 import { createFilesTranslate, type FilesTranslate } from "./files-i18n.ts";
 import {
   FILES_MARKDOWN_PREVIEW_SURFACE,
   readMarkdownMeasureMode,
-  readMarkdownTocSide,
   writeMarkdownMeasureMode,
-  writeMarkdownTocSide,
 } from "./markdown-preview-preferences.ts";
-
-function hasPreviewHeadings(
-  invocation: RendererPluginActionInvocation | undefined
-): boolean {
-  return invocation?.metadata?.hasHeadings === true;
-}
 
 function previewAction(action: {
   group: string;
@@ -71,28 +61,6 @@ export function createFilesMarkdownPreviewActions(
       menuHidden: () => readMarkdownMeasureMode() === "wide",
       handler: () => {
         writeMarkdownMeasureMode("wide");
-      },
-    }),
-    previewAction({
-      group: "1_outline",
-      id: FILES_MARKDOWN_TOC_LEFT_COMMAND_ID,
-      sortOrder: 1,
-      title: () => t("filePanel.markdown.toc.sideLeft", "Move outline left"),
-      menuHidden: (invocation) =>
-        !hasPreviewHeadings(invocation) || readMarkdownTocSide() === "left",
-      handler: () => {
-        writeMarkdownTocSide("left");
-      },
-    }),
-    previewAction({
-      group: "1_outline",
-      id: FILES_MARKDOWN_TOC_RIGHT_COMMAND_ID,
-      sortOrder: 2,
-      title: () => t("filePanel.markdown.toc.sideRight", "Move outline right"),
-      menuHidden: (invocation) =>
-        !hasPreviewHeadings(invocation) || readMarkdownTocSide() === "right",
-      handler: () => {
-        writeMarkdownTocSide("right");
       },
     }),
   ];
