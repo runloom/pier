@@ -15,7 +15,7 @@ export interface PanelHandle {
   readonly id: string;
   setTitle(title: string): void;
   /** Current dockview tab title; used to skip no-op setTitle. */
-  readonly title?: string;
+  readonly title?: string | undefined;
 }
 
 /**

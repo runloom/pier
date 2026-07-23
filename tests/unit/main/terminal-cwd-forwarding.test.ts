@@ -25,7 +25,7 @@ vi.mock("@main/ipc/terminal-forwarding.ts", () => ({
   forwardToWindow: (...args: unknown[]) => forwardToWindow(...args),
 }));
 vi.mock("@main/ipc/terminal-window-scope.ts", () => ({
-  windowRecordIdFor: (...args: unknown[]) => windowRecordIdFor(...args),
+  windowRecordIdFor: () => windowRecordIdFor(),
 }));
 
 import {

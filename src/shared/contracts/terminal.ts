@@ -17,6 +17,7 @@ import type {
   TerminalDebugSnapshotArgs,
   TerminalDebugWindowOpenResult,
 } from "./terminal-debug.ts";
+import type { TerminalPanelSessionSnapshot } from "./terminal-panel-session.ts";
 import type { SkillsLaunchBlockedInfo } from "./terminal-skills-launch.ts";
 
 export type {

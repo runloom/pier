@@ -259,6 +259,7 @@ describe("gitReviewTreeModel rename chains", () => {
         entryKey: "ek:rename",
         oldPaths: ["a.ts"],
         path: "c.ts",
+        status: "renamed" as const,
         renderSlots: [
           {
             group: "staged" as const,

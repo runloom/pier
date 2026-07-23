@@ -36,7 +36,7 @@ import {
   waitFor,
   within,
 } from "@testing-library/react";
-import type { ReactElement } from "react";
+import type { ReactElement, ReactNode } from "react";
 
 function render(ui: ReactElement, options?: Parameters<typeof renderBase>[1]) {
   const wrapped = (
@@ -46,12 +46,12 @@ function render(ui: ReactElement, options?: Parameters<typeof renderBase>[1]) {
   );
   const view = renderBase(wrapped, options);
   const originalRerender = view.rerender;
-  view.rerender = (next: ReactElement) =>
+  view.rerender = ((next: ReactNode) =>
     originalRerender(
       <TooltipProvider delayDuration={0} disableHoverableContent>
         {next}
       </TooltipProvider>
-    );
+    )) as typeof view.rerender;
   return view;
 }
 

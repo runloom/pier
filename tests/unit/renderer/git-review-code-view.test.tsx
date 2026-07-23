@@ -51,6 +51,7 @@ it("Pierre 模块首次拒绝后显示错误，并在重试时重新加载成功
     <ReviewCodeView
       appearance={context.appearance.current()}
       context={context}
+      contextId="test-context"
       diffRef={() => undefined}
       items={[]}
       onFeedbackChange={(next) => {
@@ -85,6 +86,7 @@ it("appearance 变化会把最新代码主题传给 Pierre", async () => {
     <ReviewCodeView
       appearance={context.appearance.current()}
       context={context}
+      contextId="test-context"
       diffRef={() => undefined}
       items={[]}
       onFeedbackChange={() => undefined}
@@ -103,6 +105,7 @@ it("appearance 变化会把最新代码主题传给 Pierre", async () => {
         theme: "light",
       }}
       context={context}
+      contextId="test-context"
       diffRef={() => undefined}
       items={[]}
       onFeedbackChange={() => undefined}
@@ -137,6 +140,7 @@ it("运行时失败先卸载 Worker consumer，重试时再建立新实例", asy
     <ReviewCodeView
       appearance={context.appearance.current()}
       context={context}
+      contextId="test-context"
       diffRef={() => undefined}
       items={[]}
       onFeedbackChange={(next) => {

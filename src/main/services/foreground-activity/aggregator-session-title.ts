@@ -25,11 +25,13 @@ export function setPanelSlotSessionTitle(
   const key = panelKey(windowId, panelId);
   const slot = ctx.slotFor(key, panelId);
   const decision = decideAgentSessionTitleWrite({
-    currentSource: slot.sessionTitleSource,
-    currentTitle: slot.sessionTitle,
+    currentSource: slot.sessionTitleSource ?? null,
+    currentTitle: slot.sessionTitle ?? null,
     nextSource: input.source,
     nextTitle: input.title,
-    replaceAuto: input.replaceAuto,
+    ...(input.replaceAuto === undefined
+      ? {}
+      : { replaceAuto: input.replaceAuto }),
   });
   if (!decision.apply) {
     return false;
@@ -59,8 +61,8 @@ export function hydratePanelSlotSessionTitle(
     return;
   }
   const decision = decideAgentSessionTitleWrite({
-    currentSource: slot.sessionTitleSource,
-    currentTitle: slot.sessionTitle,
+    currentSource: slot.sessionTitleSource ?? null,
+    currentTitle: slot.sessionTitle ?? null,
     nextSource: input.source,
     nextTitle: input.title,
   });

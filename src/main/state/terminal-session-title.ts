@@ -28,11 +28,13 @@ export async function setTerminalPanelSessionTitle(
       return state;
     }
     const decision = decideAgentSessionTitleWrite({
-      currentSource: current.sessionTitleSource,
-      currentTitle: current.sessionTitle,
+      currentSource: current.sessionTitleSource ?? null,
+      currentTitle: current.sessionTitle ?? null,
       nextSource: input.source,
       nextTitle: input.title,
-      replaceAuto: input.replaceAuto,
+      ...(input.replaceAuto === undefined
+        ? {}
+        : { replaceAuto: input.replaceAuto }),
     });
     if (!decision.apply) {
       result = { applied: false, ok: true };
