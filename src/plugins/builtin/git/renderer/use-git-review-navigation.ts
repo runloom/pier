@@ -1,7 +1,4 @@
-import type { PierDiffViewHandle } from "@pier/ui/diff-view.tsx";
-import { type RefObject, useCallback, useRef, useState } from "react";
-import type { GitReviewDocumentLoader } from "./git-review-document-loader.ts";
-import type { PendingReviewAnchor } from "./git-review-document-projection.ts";
+import { useCallback, useRef, useState } from "react";
 import {
   findReviewNavigationTarget,
   isReviewNavigationTerminal,
@@ -10,19 +7,7 @@ import {
   reviewNavigationKey,
   scheduleReviewNavigationVerification,
 } from "./git-review-navigation.ts";
-
-interface UseGitReviewNavigationOptions {
-  readonly applyNavigationDemand: (entryKey: string) => void;
-  readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
-  readonly documentGenerationRef: RefObject<number>;
-  readonly firstSectionIdByEntryKeyRef: RefObject<ReadonlyMap<string, string>>;
-  readonly initialSelectedEntryKey?: string | null;
-  readonly itemCacheKeysRef: RefObject<ReadonlyMap<string, string>>;
-  readonly itemIndexByIdRef: RefObject<ReadonlyMap<string, number>>;
-  readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
-  readonly pendingAnchorRef: RefObject<PendingReviewAnchor | null>;
-  readonly renderedGenerationRef: RefObject<number>;
-}
+import type { UseGitReviewNavigationOptions } from "./use-git-review-navigation-types.ts";
 
 export function useGitReviewNavigation({
   applyNavigationDemand,
@@ -32,6 +17,7 @@ export function useGitReviewNavigation({
   itemCacheKeysRef,
   itemIndexByIdRef,
   initialSelectedEntryKey = null,
+  initialSelectedSectionKey = null,
   loaderRef,
   pendingAnchorRef,
   renderedGenerationRef,
@@ -40,10 +26,14 @@ export function useGitReviewNavigation({
     entryKeys: ReadonlySet<string>,
     generation: number
   ) => string | null;
-  readonly beginNavigation: (entryKey: string) => void;
+  readonly beginNavigation: (target: {
+    readonly entryKey: string;
+    readonly sectionKey: string;
+  }) => void;
   readonly cancelVerification: () => void;
   readonly clearForUserIntent: () => void;
   readonly getSelectedEntryKey: () => string | null;
+  readonly getSelectedSectionKey: () => string | null;
   readonly hasPendingNavigation: () => boolean;
   readonly navigationError: Error | null;
   readonly navigationPending: boolean;
@@ -64,6 +54,9 @@ export function useGitReviewNavigation({
   } | null>(null);
   const projectionRevisionRef = useRef(0);
   const selectedEntryKeyRef = useRef<string | null>(initialSelectedEntryKey);
+  const selectedSectionKeyRef = useRef<string | null>(
+    initialSelectedSectionKey
+  );
   const [navigationError, setNavigationError] = useState<Error | null>(null);
   const [navigationPending, setNavigationPending] = useState(false);
 
@@ -81,23 +74,14 @@ export function useGitReviewNavigation({
       ) {
         return null;
       }
-      const sectionId = firstSectionIdByEntryKeyRef.current.get(
-        navigation.entryKey
-      );
-      const cacheKey = sectionId
-        ? itemCacheKeysRef.current.get(sectionId)
-        : undefined;
+      const sectionId = navigation.sectionKey;
+      const cacheKey = itemCacheKeysRef.current.get(sectionId);
       if (!(sectionId && cacheKey)) {
         return null;
       }
       return { cacheKey, sectionId };
     },
-    [
-      documentGenerationRef,
-      firstSectionIdByEntryKeyRef,
-      itemCacheKeysRef,
-      renderedGenerationRef,
-    ]
+    [documentGenerationRef, itemCacheKeysRef, renderedGenerationRef]
   );
 
   const currentLoadedTarget = useCallback(
@@ -107,7 +91,8 @@ export function useGitReviewNavigation({
       }
       return findReviewNavigationTarget(
         loaderRef.current?.getResource(navigation.entryKey),
-        itemCacheKeysRef.current
+        itemCacheKeysRef.current,
+        navigation.sectionKey
       );
     },
     [currentProjectedTarget, itemCacheKeysRef, loaderRef]
@@ -147,15 +132,11 @@ export function useGitReviewNavigation({
 
   const notifyProjectionChanged = useCallback(
     (changedItemIds?: readonly string[]) => {
-      const selectedEntryKey = selectedEntryKeyRef.current;
-      if (!selectedEntryKey) {
+      const selectedSectionKey = selectedSectionKeyRef.current;
+      if (!selectedSectionKey) {
         return;
       }
-      const targetId =
-        firstSectionIdByEntryKeyRef.current.get(selectedEntryKey);
-      const targetIndex = targetId
-        ? itemIndexByIdRef.current.get(targetId)
-        : undefined;
+      const targetIndex = itemIndexByIdRef.current.get(selectedSectionKey);
       if (
         changedItemIds === undefined ||
         targetIndex === undefined ||
@@ -167,7 +148,7 @@ export function useGitReviewNavigation({
         projectionRevisionRef.current += 1;
       }
     },
-    [firstSectionIdByEntryKeyRef, itemIndexByIdRef]
+    [itemIndexByIdRef]
   );
 
   const verify = useCallback(
@@ -195,7 +176,9 @@ export function useGitReviewNavigation({
           );
         },
         isVisible: (sectionId) => {
-          const target = currentLoadedTarget(navigation);
+          // 可见性以投影为准（含暂留 ready 正文），不要卡在 loader 尚未 settle。
+          // 否则「屏幕上已看到文件」仍会 4s 后误报定位失败。
+          const target = currentScrollTarget(navigation);
           return (
             target?.sectionId === sectionId &&
             diffHandleRef.current?.isItemVisible(sectionId, target.cacheKey) ===
@@ -204,6 +187,29 @@ export function useGitReviewNavigation({
         },
         onTerminal: finishTerminal,
         onTimeout: () => {
+          const target = currentScrollTarget(navigation);
+          const visible =
+            target !== null &&
+            diffHandleRef.current?.isItemVisible(
+              target.sectionId,
+              target.cacheKey
+            ) === true;
+          // 内容已在视口或至少已投影：静默结束，并 settle，避免 resume 每 4s 重武装。
+          if (visible || target !== null) {
+            pendingNavigationRef.current = null;
+            failedNavigationKeyRef.current = null;
+            cancelVerificationRef.current = null;
+            activeNavigationKeyRef.current = null;
+            const revision = currentProjectionRevision(navigation);
+            settledProjectionRef.current =
+              revision === null ? null : { navigationKey, revision };
+            if (visible) {
+              pendingAnchorRef.current = null;
+            }
+            setNavigationError(null);
+            setNavigationPending(false);
+            return;
+          }
           pendingNavigationRef.current = null;
           failedNavigationKeyRef.current = navigationKey;
           cancelVerificationRef.current = null;
@@ -285,22 +291,24 @@ export function useGitReviewNavigation({
   ]);
 
   const beginNavigation = useCallback(
-    (entryKey: string) => {
+    (target: { readonly entryKey: string; readonly sectionKey: string }) => {
       pendingAnchorRef.current = null;
       cancelVerification();
       failedNavigationKeyRef.current = null;
       settledProjectionRef.current = null;
-      selectedEntryKeyRef.current = entryKey;
+      selectedEntryKeyRef.current = target.entryKey;
+      selectedSectionKeyRef.current = target.sectionKey;
       const loader = loaderRef.current;
-      if (loader?.getResource(entryKey)) {
-        loader.setProtectedEntryKey(entryKey);
+      if (loader?.getResource(target.entryKey)) {
+        loader.setProtectedEntryKey(target.entryKey);
       }
       // 必须同步写入排他 demand。navigationPending 已为 true 时 effect 不会重跑，
       // 否则第二次树点击会继续只加载旧 selected，表现为“点了没反应”。
-      applyNavigationDemand(entryKey);
+      applyNavigationDemand(target.entryKey);
       pendingNavigationRef.current = {
-        entryKey,
+        entryKey: target.entryKey,
         generation: documentGenerationRef.current,
+        sectionKey: target.sectionKey,
       };
       setNavigationPending(true);
       setNavigationError(null);
@@ -322,9 +330,22 @@ export function useGitReviewNavigation({
       setNavigationError(null);
       const selected = selectedEntryKeyRef.current;
       if (selected && entryKeys.has(selected)) {
+        const selectedSection =
+          selectedSectionKeyRef.current ??
+          firstSectionIdByEntryKeyRef.current.get(selected) ??
+          null;
+        if (!selectedSection) {
+          selectedEntryKeyRef.current = null;
+          selectedSectionKeyRef.current = null;
+          pendingNavigationRef.current = null;
+          setNavigationPending(false);
+          return null;
+        }
+        selectedSectionKeyRef.current = selectedSection;
         pendingNavigationRef.current = {
           entryKey: selected,
           generation,
+          sectionKey: selectedSection,
         };
         applyNavigationDemand(selected);
         setNavigationPending(true);
@@ -333,12 +354,18 @@ export function useGitReviewNavigation({
       }
       if (selected) {
         selectedEntryKeyRef.current = null;
+        selectedSectionKeyRef.current = null;
       }
       pendingNavigationRef.current = null;
       setNavigationPending(false);
       return null;
     },
-    [applyNavigationDemand, cancelVerification, pendingAnchorRef]
+    [
+      applyNavigationDemand,
+      cancelVerification,
+      firstSectionIdByEntryKeyRef,
+      pendingAnchorRef,
+    ]
   );
 
   const resumeSelectedNavigation = useCallback(() => {
@@ -346,9 +373,18 @@ export function useGitReviewNavigation({
     if (!(selected && pendingNavigationRef.current === null)) {
       return;
     }
+    const selectedSection =
+      selectedSectionKeyRef.current ??
+      firstSectionIdByEntryKeyRef.current.get(selected) ??
+      null;
+    if (!selectedSection) {
+      return;
+    }
+    selectedSectionKeyRef.current = selectedSection;
     const navigation = {
       entryKey: selected,
       generation: documentGenerationRef.current,
+      sectionKey: selectedSection,
     };
     const navigationKey = reviewNavigationKey(navigation);
     if (failedNavigationKeyRef.current === navigationKey) {
@@ -388,10 +424,12 @@ export function useGitReviewNavigation({
     currentProjectionRevision,
     diffHandleRef,
     documentGenerationRef,
+    firstSectionIdByEntryKeyRef,
   ]);
 
   const clearForUserIntent = useCallback(() => {
     selectedEntryKeyRef.current = null;
+    selectedSectionKeyRef.current = null;
     pendingNavigationRef.current = null;
     failedNavigationKeyRef.current = null;
     settledProjectionRef.current = null;
@@ -407,15 +445,27 @@ export function useGitReviewNavigation({
       setNavigationError(null);
       return;
     }
-    beginNavigation(selected);
+    const selectedSection =
+      selectedSectionKeyRef.current ??
+      firstSectionIdByEntryKeyRef.current.get(selected) ??
+      null;
+    if (!selectedSection) {
+      setNavigationError(null);
+      return;
+    }
+    beginNavigation({ entryKey: selected, sectionKey: selectedSection });
     tryPendingNavigation();
-  }, [beginNavigation, tryPendingNavigation]);
+  }, [beginNavigation, firstSectionIdByEntryKeyRef, tryPendingNavigation]);
   const hasPendingNavigation = useCallback(
     () => pendingNavigationRef.current !== null,
     []
   );
   const getSelectedEntryKey = useCallback(
     () => selectedEntryKeyRef.current,
+    []
+  );
+  const getSelectedSectionKey = useCallback(
+    () => selectedSectionKeyRef.current,
     []
   );
 
@@ -425,6 +475,7 @@ export function useGitReviewNavigation({
     cancelVerification,
     clearForUserIntent,
     getSelectedEntryKey,
+    getSelectedSectionKey,
     hasPendingNavigation,
     navigationError,
     navigationPending,

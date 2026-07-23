@@ -1,6 +1,4 @@
 import { Button } from "@pier/ui/button.tsx";
-import { Checkbox } from "@pier/ui/checkbox.tsx";
-import { Label } from "@pier/ui/label.tsx";
 import {
   Select,
   SelectContent,
@@ -12,7 +10,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
 import type { GitReviewTarget } from "@shared/contracts/git-review.ts";
 import { ChevronDown } from "lucide-react";
-import { useEffect, useId, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { pluginText } from "./git-plugin-text.ts";
 import {
   GitReviewBranchCombobox,
@@ -29,16 +27,6 @@ const DEFAULT_TARGET_BRANCH_NAMES = [
 
 type GitReviewScopeKind = GitReviewTarget["kind"];
 
-export interface GitReviewUncommittedFilter {
-  readonly staged: boolean;
-  readonly unstaged: boolean;
-}
-
-export const DEFAULT_UNCOMMITTED_FILTER: GitReviewUncommittedFilter = {
-  staged: true,
-  unstaged: true,
-};
-
 function preferredTargetBranch(
   branches: readonly GitDiffBranchOption[]
 ): GitDiffBranchOption | null {
@@ -54,27 +42,20 @@ function preferredTargetBranch(
 }
 
 /**
- * Changes 面板 header 左侧的 review 目标切换(对齐 loomdesk toolbar):
- * 第一段是 scope Select(未提交/提交/分支);uncommitted 附带
- * 未暂存/已暂存过滤,commit/branch 在右侧内联第二段 combobox,并在
- * 切换 scope 时自动选中默认目标(最新提交 / main·master 系默认分支)。
+ * Changes 面板 header 左侧的 review 目标切换:
+ * 第一段是 scope Select(未提交/提交/分支);commit/branch 在右侧内联第二段
+ * combobox,并在切换 scope 时自动选中默认目标(最新提交 / main·master 系默认分支)。
  */
 export function GitReviewScopeSwitcher({
   context,
   gitRootPath,
   onSelectTarget,
-  onUncommittedFilterChange,
   target,
-  uncommittedFilter,
 }: {
   readonly context: RendererPluginContext;
   readonly gitRootPath: string;
   readonly onSelectTarget: (target: GitReviewTarget) => void;
-  readonly onUncommittedFilterChange: (
-    filter: GitReviewUncommittedFilter
-  ) => void;
   readonly target: GitReviewTarget;
-  readonly uncommittedFilter: GitReviewUncommittedFilter;
 }): React.JSX.Element {
   // 切到 commit/branch 后 target 尚未变化(自动/手动选定目标前);pending 驱动 UI。
   const [pendingKind, setPendingKind] = useState<GitReviewScopeKind | null>(
@@ -240,13 +221,6 @@ export function GitReviewScopeSwitcher({
           </SelectGroup>
         </SelectContent>
       </Select>
-      {kind === "uncommitted" ? (
-        <GitReviewUncommittedFilterControls
-          context={context}
-          filter={uncommittedFilter}
-          onChange={onUncommittedFilterChange}
-        />
-      ) : null}
       {kind === "commit" ? (
         <GitReviewCommitCombobox
           context={context}
@@ -269,48 +243,6 @@ export function GitReviewScopeSwitcher({
           selectedRef={target.kind === "branch" ? target.ref : null}
         />
       ) : null}
-    </div>
-  );
-}
-
-/** uncommitted scope 的分组过滤(对齐 loomdesk 的未暂存/已暂存复选)。 */
-function GitReviewUncommittedFilterControls({
-  context,
-  filter,
-  onChange,
-}: {
-  readonly context: RendererPluginContext;
-  readonly filter: GitReviewUncommittedFilter;
-  readonly onChange: (filter: GitReviewUncommittedFilter) => void;
-}): React.JSX.Element {
-  const unstagedId = useId();
-  const stagedId = useId();
-  return (
-    <div className="flex shrink-0 items-center gap-3 px-1">
-      {/* Label 而非 FieldLabel:后者的 has-data-checked 底色语义面向表单场景,
-          header 内联过滤不需要选中态高亮。 */}
-      <Label htmlFor={unstagedId}>
-        <Checkbox
-          checked={filter.unstaged}
-          data-testid="git-review-filter-unstaged"
-          id={unstagedId}
-          onCheckedChange={(checked) => {
-            onChange({ ...filter, unstaged: checked === true });
-          }}
-        />
-        {pluginText(context, "reviewFilterUnstaged", "Unstaged")}
-      </Label>
-      <Label htmlFor={stagedId}>
-        <Checkbox
-          checked={filter.staged}
-          data-testid="git-review-filter-staged"
-          id={stagedId}
-          onCheckedChange={(checked) => {
-            onChange({ ...filter, staged: checked === true });
-          }}
-        />
-        {pluginText(context, "reviewFilterStaged", "Staged")}
-      </Label>
     </div>
   );
 }

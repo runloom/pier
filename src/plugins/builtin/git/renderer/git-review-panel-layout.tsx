@@ -26,20 +26,20 @@ const REVIEW_TREE_WIDTH_STORAGE_KEY = "pier.git.review.treeWidthPx";
 function GitReviewTreeSidebarComponent({
   context,
   contextId,
-  footer,
   gitRootPath,
   onOpenPath,
   revealPath,
+  sidebarFooter,
   sourcePanelId,
   treeSearch,
   treeModel,
 }: {
   context: RendererPluginContext;
   contextId: string;
-  footer?: ReactNode;
   gitRootPath: string;
   onOpenPath: (path: string) => void;
   revealPath: string | null;
+  sidebarFooter?: ReactNode;
   sourcePanelId?: string;
   treeSearch: ReturnType<typeof useFileTreeSearch>;
   treeModel: ReturnType<typeof gitReviewTreeModel>;
@@ -47,9 +47,9 @@ function GitReviewTreeSidebarComponent({
   const openItemContextMenu = useGitReviewTreeContextMenu({
     context,
     contextId,
-    entryByPath: treeModel.entryByPath,
     gitRootPath,
     ...(sourcePanelId ? { sourcePanelId } : {}),
+    treeModel,
   });
   const hasQuery = treeSearch.value.trim().length > 0;
   const searchHasNoResults =
@@ -113,6 +113,8 @@ function GitReviewTreeSidebarComponent({
       <div className="relative flex min-h-0 flex-1">
         <PierFileTree
           className="min-h-0 w-full flex-1"
+          flattenEmptyDirectories
+          flattenMinDepth={2}
           items={treeModel.items}
           label={pluginText(context, "reviewTreeLabel", "Changed files")}
           onOpenItemContextMenu={openItemContextMenu}
@@ -151,7 +153,7 @@ function GitReviewTreeSidebarComponent({
           </Empty>
         ) : null}
       </div>
-      {footer}
+      {sidebarFooter ?? null}
     </aside>
   );
 }
@@ -215,10 +217,10 @@ export function GitReviewPanelLayout({
       <GitReviewTreeSidebar
         context={context}
         contextId={contextId}
-        {...(sidebarFooter === undefined ? {} : { footer: sidebarFooter })}
         gitRootPath={gitRootPath}
         onOpenPath={onOpenPath}
         revealPath={selectedTreePath ?? null}
+        {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
         {...(sourcePanelId ? { sourcePanelId } : {})}
         treeModel={treeModel}
         treeSearch={treeSearch}

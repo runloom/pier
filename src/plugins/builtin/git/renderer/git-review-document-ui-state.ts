@@ -9,6 +9,7 @@ import type {
 import {
   type Dispatch,
   type SetStateAction,
+  useCallback,
   useEffect,
   useMemo,
   useRef,
@@ -120,21 +121,35 @@ export function useReviewSelection(
   treeModel: ReturnType<typeof gitReviewTreeModel>
 ): {
   readonly selectedEntryKey: string | null;
+  readonly selectedSectionKey: string | null;
   readonly selectedTreeEntry: {
     readonly entry: GitReviewIndexEntry;
     readonly path: string;
+    readonly sectionKey: string;
   } | null;
   readonly setSelectedEntryKey: Dispatch<SetStateAction<string | null>>;
+  readonly setSelectedSectionKey: Dispatch<SetStateAction<string | null>>;
+  readonly setSelectedTreeTarget: (
+    target: {
+      readonly entryKey: string;
+      readonly sectionKey: string;
+    } | null
+  ) => void;
 } {
   const sourceKey = JSON.stringify(scope);
+  const session = readReviewSession(sourceKey);
   const [selectedEntryKey, setSelectedEntryKeyState] = useState<string | null>(
-    () => readReviewSession(sourceKey)?.selectedEntryKey ?? null
+    () => session?.selectedEntryKey ?? null
   );
+  const [selectedSectionKey, setSelectedSectionKeyState] = useState<
+    string | null
+  >(() => session?.selectedSectionKey ?? null);
   const scopeKeyRef = useRef(sourceKey);
   useEffect(() => {
     if (scopeKeyRef.current !== sourceKey) {
       scopeKeyRef.current = sourceKey;
       setSelectedEntryKeyState(null);
+      setSelectedSectionKeyState(null);
     }
   }, [sourceKey]);
   const setSelectedEntryKey = useMemo(() => {
@@ -152,21 +167,80 @@ export function useReviewSelection(
     };
     return setWithSession;
   }, [sourceKey]);
+  const setSelectedSectionKey = useMemo(() => {
+    const setWithSession: Dispatch<SetStateAction<string | null>> = (value) => {
+      setSelectedSectionKeyState((previous) => {
+        const next =
+          typeof value === "function"
+            ? (value as (prev: string | null) => string | null)(previous)
+            : value;
+        if (next !== previous) {
+          patchReviewSession(sourceKey, { selectedSectionKey: next });
+        }
+        return next;
+      });
+    };
+    return setWithSession;
+  }, [sourceKey]);
+  const setSelectedTreeTarget = useCallback(
+    (
+      target: {
+        readonly entryKey: string;
+        readonly sectionKey: string;
+      } | null
+    ) => {
+      if (target === null) {
+        setSelectedEntryKey(null);
+        setSelectedSectionKey(null);
+        return;
+      }
+      setSelectedEntryKey(target.entryKey);
+      setSelectedSectionKey(target.sectionKey);
+    },
+    [setSelectedEntryKey, setSelectedSectionKey]
+  );
   const selectedTreeEntry = useMemo(() => {
-    if (!selectedEntryKey) {
+    if (!(selectedEntryKey && selectedSectionKey)) {
       return null;
     }
-    for (const [path, entry] of treeModel.entryByPath) {
-      if (entry.entryKey === selectedEntryKey) {
-        return { entry, path };
+    const entry = treeModel.entryByKey.get(selectedEntryKey);
+    if (!entry) {
+      return null;
+    }
+    for (const item of treeModel.items) {
+      if (item.kind !== "file") {
+        continue;
+      }
+      const fileRef = treeModel.getFileRefForTreePath(item.path);
+      if (
+        fileRef?.entryKey === selectedEntryKey &&
+        fileRef.sectionKey === selectedSectionKey
+      ) {
+        return {
+          entry,
+          path: item.path,
+          sectionKey: selectedSectionKey,
+        };
       }
     }
     return null;
-  }, [selectedEntryKey, treeModel]);
+  }, [selectedEntryKey, selectedSectionKey, treeModel]);
   useEffect(() => {
-    if (selectedEntryKey && !selectedTreeEntry) {
-      setSelectedEntryKey(null);
+    if ((selectedEntryKey || selectedSectionKey) && !selectedTreeEntry) {
+      setSelectedTreeTarget(null);
     }
-  }, [selectedEntryKey, selectedTreeEntry, setSelectedEntryKey]);
-  return { selectedEntryKey, selectedTreeEntry, setSelectedEntryKey };
+  }, [
+    selectedEntryKey,
+    selectedSectionKey,
+    selectedTreeEntry,
+    setSelectedTreeTarget,
+  ]);
+  return {
+    selectedEntryKey,
+    selectedSectionKey,
+    selectedTreeEntry,
+    setSelectedEntryKey,
+    setSelectedSectionKey,
+    setSelectedTreeTarget,
+  };
 }

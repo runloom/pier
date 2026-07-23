@@ -3,7 +3,11 @@ export type PierDiffItemPresentation = "loading" | "ready";
 
 export function pierDiffItemPresentation(input: {
   readonly patch: string | null;
+  readonly stateNotice?: string;
 }): PierDiffItemPresentation {
+  if (input.stateNotice) {
+    return "ready";
+  }
   return input.patch === null ? "loading" : "ready";
 }
 

@@ -8,6 +8,7 @@ import type {
   RendererPluginAppearance,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
+import type { GitReviewIndexEntry } from "@shared/contracts/git-review.ts";
 import {
   Component,
   type LazyExoticComponent,
@@ -16,10 +17,18 @@ import {
   Suspense,
   useCallback,
   useEffect,
+  useMemo,
   useState,
 } from "react";
+import { confirmDialog, notifyError } from "./git-command-helpers.ts";
 import { pluginText } from "./git-plugin-text.ts";
 import { ReviewErrorEmpty, ReviewLoading } from "./git-review-feedback.tsx";
+import { usePluginLanguage } from "./use-plugin-language.ts";
+
+function basename(path: string): string {
+  const segments = path.split("/").filter(Boolean);
+  return segments.at(-1) ?? path;
+}
 
 const loadPierDiffView = () =>
   import("@pier/ui/diff-view.tsx").then((module) => ({
@@ -70,11 +79,19 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
         colorMode: "dark" | "light";
       };
       items: readonly PierDiffViewItem[];
-      labels: { collapseDiff: string; expandDiff: string };
+      labels: {
+        collapseDiff: string;
+        discardChanges: string;
+        expandDiff: string;
+        stageChanges: string;
+        unstageChanges: string;
+      };
+      onDiscardFile?: (itemId: string) => void;
       onError: (error: Error) => void;
       onItemError?: (id: string, error: Error | null) => void;
       onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
       onScroll: () => void;
+      onToggleStage?: (itemId: string) => void;
       presentation?: PierDiffViewPresentation;
       ref: (handle: PierDiffViewHandle | null) => void;
     }) => React.JSX.Element | null
@@ -88,7 +105,10 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
   return function ReviewCodeView({
     appearance,
     context,
+    contextId,
     diffRef,
+    entries,
+    gitRootPath,
     items,
     onFeedbackChange,
     onItemError,
@@ -98,7 +118,11 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
   }: {
     readonly appearance: RendererPluginAppearance;
     readonly context: RendererPluginContext;
+    readonly contextId: string;
     readonly diffRef: (handle: PierDiffViewHandle | null) => void;
+    /** Uncommitted index entries for header stage toggle; omit for read-only scopes. */
+    readonly entries?: readonly GitReviewIndexEntry[];
+    readonly gitRootPath?: string;
     readonly items: readonly PierDiffViewItem[];
     readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
     readonly onItemError?: (id: string, error: Error | null) => void;
@@ -106,11 +130,15 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     readonly onScroll: () => void;
     readonly presentation?: PierDiffViewPresentation;
   }): React.JSX.Element {
+    const language = usePluginLanguage();
     const [runtimeError, setRuntimeError] = useState<Error | null>(null);
     const [attempt, setAttempt] = useState(() => ({
       id: 0,
       View: getSharedView(),
     }));
+    const [busySectionKeys, setBusySectionKeys] = useState(
+      () => new Set<string>()
+    );
     const LazyPierDiffView = attempt.View;
     const retry = useCallback(() => {
       setRuntimeError(null);
@@ -127,6 +155,265 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       );
       return () => onFeedbackChange(null);
     }, [onFeedbackChange, retry, runtimeError]);
+
+    const displayItems = useMemo(() => {
+      if (busySectionKeys.size === 0) {
+        return items;
+      }
+      return items.map((item) => {
+        if (!(item.stageControl && busySectionKeys.has(item.id))) {
+          return item;
+        }
+        return {
+          ...item,
+          stageControl: { ...item.stageControl, busy: true },
+        };
+      });
+    }, [busySectionKeys, items]);
+
+    const resolveSlot = useCallback(
+      (itemId: string) => {
+        if (!entries) {
+          return null;
+        }
+        for (const entry of entries) {
+          const slot = entry.renderSlots.find(
+            (candidate) => candidate.sectionKey === itemId
+          );
+          if (slot) {
+            return { entry, slot };
+          }
+        }
+        return null;
+      },
+      [entries]
+    );
+
+    const withBusy = useCallback((itemId: string, run: Promise<unknown>) => {
+      setBusySectionKeys((prev) => {
+        const next = new Set(prev);
+        next.add(itemId);
+        return next;
+      });
+      return run.finally(() => {
+        setBusySectionKeys((prev) => {
+          if (!prev.has(itemId)) {
+            return prev;
+          }
+          const next = new Set(prev);
+          next.delete(itemId);
+          return next;
+        });
+      });
+    }, []);
+
+    const onToggleStage = useCallback(
+      (itemId: string) => {
+        if (!(entries && gitRootPath) || busySectionKeys.has(itemId)) {
+          return;
+        }
+        const item = items.find((candidate) => candidate.id === itemId);
+        const stageState = item?.stageControl?.state;
+        if (!stageState) {
+          return;
+        }
+        const resolved = resolveSlot(itemId);
+        if (!resolved) {
+          return;
+        }
+        const { entry, slot } = resolved;
+        const paths = [
+          slot.targetPath,
+          ...entry.oldPaths.filter((path) => path !== slot.targetPath),
+        ];
+        withBusy(
+          itemId,
+          (async () => {
+            try {
+              const ok =
+                stageState === "staged"
+                  ? await context.git.unstage(gitRootPath, paths)
+                  : await context.git.stage(gitRootPath, paths);
+              if (!ok) {
+                notifyError(
+                  context,
+                  stageState === "staged"
+                    ? pluginText(
+                        context,
+                        "reviewTreeUnstageFailed",
+                        "Unable to Unstage"
+                      )
+                    : pluginText(
+                        context,
+                        "reviewTreeStageFailed",
+                        "Unable to Stage"
+                      )
+                );
+              }
+            } catch (error) {
+              notifyError(
+                context,
+                stageState === "staged"
+                  ? pluginText(
+                      context,
+                      "reviewTreeUnstageFailed",
+                      "Unable to Unstage"
+                    )
+                  : pluginText(
+                      context,
+                      "reviewTreeStageFailed",
+                      "Unable to Stage"
+                    ),
+                error
+              );
+            }
+          })()
+        ).catch(() => undefined);
+      },
+      [
+        busySectionKeys,
+        context,
+        entries,
+        gitRootPath,
+        items,
+        resolveSlot,
+        withBusy,
+      ]
+    );
+
+    const onDiscardFile = useCallback(
+      (itemId: string) => {
+        if (!(entries && gitRootPath) || busySectionKeys.has(itemId)) {
+          return;
+        }
+        const item = items.find((candidate) => candidate.id === itemId);
+        if (
+          item?.stageControl?.state !== "unstaged" ||
+          item.stageControl.canDiscard !== true
+        ) {
+          return;
+        }
+        const resolved = resolveSlot(itemId);
+        if (!resolved) {
+          return;
+        }
+        const path = resolved.slot.targetPath;
+        const slash = path.lastIndexOf("/");
+        const name = slash >= 0 ? path.slice(slash + 1) : path;
+        (async () => {
+          const title = pluginText(context, "reviewHeaderRestore", "Restore");
+          const confirmed = await confirmDialog(
+            context,
+            title,
+            pluginText(
+              context,
+              "reviewTreeDiscardConfirm",
+              "Restore changes in {{name}}?\nThis cannot be undone.",
+              { name }
+            ),
+            pluginText(context, "reviewHeaderRestore", "Restore"),
+            undefined,
+            { intent: "destructive" }
+          );
+          if (!confirmed) {
+            return;
+          }
+          await withBusy(
+            itemId,
+            (async () => {
+              try {
+                const ok = await context.git.discardChanges(gitRootPath, [
+                  path,
+                ]);
+                if (!ok) {
+                  notifyError(
+                    context,
+                    pluginText(
+                      context,
+                      "reviewTreeDiscardFailed",
+                      "Unable to Restore"
+                    )
+                  );
+                }
+              } catch (error) {
+                notifyError(
+                  context,
+                  pluginText(
+                    context,
+                    "reviewTreeDiscardFailed",
+                    "Unable to Restore"
+                  ),
+                  error
+                );
+              }
+            })()
+          );
+        })().catch(() => undefined);
+      },
+      [
+        busySectionKeys,
+        context,
+        entries,
+        gitRootPath,
+        items,
+        resolveSlot,
+        withBusy,
+      ]
+    );
+
+    const canMutate = Boolean(entries && gitRootPath);
+    const onOpenFile = useCallback(
+      (itemId: string) => {
+        if (!gitRootPath) {
+          return;
+        }
+        const item = items.find((entry) => entry.id === itemId);
+        const path = item?.fileDisplay?.path;
+        if (!path) {
+          return;
+        }
+        const opened = context.files.openInEditor({
+          context: {
+            contextId,
+            gitRoot: gitRootPath,
+            projectRootPath: gitRootPath,
+            source: "panel",
+            updatedAt: Date.now(),
+          },
+          path,
+          root: gitRootPath,
+          title: basename(path),
+        });
+        if (!opened) {
+          context.notifications.error(
+            pluginText(
+              context,
+              "reviewTreeOpenFileFailed",
+              "Unable to open file"
+            )
+          );
+        }
+      },
+      [context, contextId, gitRootPath, items]
+    );
+    // Rebuild tooltip/aria labels when host locale switches.
+    // biome-ignore lint/correctness/useExhaustiveDependencies: language drives i18n re-read
+    const diffLabels = useMemo(
+      () => ({
+        collapseDiff: pluginText(
+          context,
+          "reviewCollapseDiff",
+          "Collapse diff"
+        ),
+        discardChanges: pluginText(context, "reviewHeaderRestore", "Restore"),
+        expandDiff: pluginText(context, "reviewExpandDiff", "Expand diff"),
+        openFile: pluginText(context, "reviewTreeOpenFile", "Open File"),
+        stageChanges: pluginText(context, "reviewHeaderStage", "Stage"),
+        unstageChanges: pluginText(context, "reviewHeaderUnstage", "Unstage"),
+      }),
+      [context, language]
+    );
+
     return (
       <div className="h-full min-h-0">
         {runtimeError ? (
@@ -154,23 +441,14 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                   codeTheme: appearance.codeTheme,
                   colorMode: appearance.theme,
                 }}
-                items={items}
-                labels={{
-                  collapseDiff: pluginText(
-                    context,
-                    "reviewCollapseDiff",
-                    "Collapse diff"
-                  ),
-                  expandDiff: pluginText(
-                    context,
-                    "reviewExpandDiff",
-                    "Expand diff"
-                  ),
-                }}
+                items={displayItems}
+                labels={diffLabels}
                 onError={setRuntimeError}
                 {...(onItemError === undefined ? {} : { onItemError })}
+                {...(gitRootPath ? { onOpenFile } : {})}
                 onRenderWindowChange={onRenderWindowChange}
                 onScroll={onScroll}
+                {...(canMutate ? { onDiscardFile, onToggleStage } : {})}
                 {...(presentation === undefined ? {} : { presentation })}
                 ref={diffRef}
               />

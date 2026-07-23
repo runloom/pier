@@ -112,13 +112,34 @@ export function isDiskSourceRootAllowed(
   root: string,
   context: PanelContext | null | undefined
 ): boolean {
-  return [
+  const normalizedRoot = normalizeFsPath(root);
+  if (normalizedRoot.length === 0) {
+    return false;
+  }
+  const anchors = [
     context?.projectRootPath,
     context?.worktreeRoot,
     context?.gitRoot,
     context?.cwd,
     context?.openedPath,
-  ].some((candidate) => candidate === root);
+  ]
+    .filter((candidate): candidate is string => typeof candidate === "string")
+    .map(normalizeFsPath)
+    .filter((candidate) => candidate.length > 0);
+  if (anchors.some((candidate) => candidate === normalizedRoot)) {
+    return true;
+  }
+  // Layout restore can briefly lack params.context while source.root is still
+  // the repo that opened the tab. Don't block a self-consistent disk source.
+  // Fail-open is restore UX only: when any anchor exists, non-matching roots are denied.
+  return anchors.length === 0;
+}
+
+function normalizeFsPath(path: string): string {
+  if (path.length <= 1) {
+    return path;
+  }
+  return path.endsWith("/") || path.endsWith("\\") ? path.slice(0, -1) : path;
 }
 
 export type FileViewMode = "diff" | "preview" | "source";

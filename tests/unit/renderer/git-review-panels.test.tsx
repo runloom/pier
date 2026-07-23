@@ -4,6 +4,7 @@ import type {
   PierDiffViewItem,
   PierDiffViewRenderWindow,
 } from "@pier/ui/diff-view.tsx";
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import type {
   RendererPluginAppearance,
   RendererPluginContext,
@@ -31,10 +32,29 @@ import {
   act,
   cleanup,
   fireEvent,
-  render,
+  render as renderBase,
   waitFor,
   within,
 } from "@testing-library/react";
+import type { ReactElement } from "react";
+
+function render(ui: ReactElement, options?: Parameters<typeof renderBase>[1]) {
+  const wrapped = (
+    <TooltipProvider delayDuration={0} disableHoverableContent>
+      {ui}
+    </TooltipProvider>
+  );
+  const view = renderBase(wrapped, options);
+  const originalRerender = view.rerender;
+  view.rerender = (next: ReactElement) =>
+    originalRerender(
+      <TooltipProvider delayDuration={0} disableHoverableContent>
+        {next}
+      </TooltipProvider>
+    );
+  return view;
+}
+
 import {
   useEffect,
   useImperativeHandle,
@@ -166,7 +186,9 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
         data-testid="pierre-diff"
         data-theme={props.appearance.codeTheme}
       >
-        {renderedItems.map((item) => item.patch).join("\n")}
+        {renderedItems
+          .map((item) => item.stateNotice ?? item.patch ?? "")
+          .join("\n")}
       </output>
     );
   },
@@ -340,18 +362,60 @@ function pluginContext(input: {
       current: () => appearance,
       onDidChange: input.appearanceOnDidChange ?? (() => () => undefined),
     },
+    ai: {
+      generateText: vi.fn(async () => ({
+        message: "not configured",
+        reason: "not_configured" as const,
+        status: "unavailable" as const,
+      })),
+      status: vi.fn(async () => ({
+        agent: null,
+        configured: false,
+        label: "",
+      })),
+    },
+    configuration: {
+      get: vi.fn(() => undefined),
+      onDidChange: vi.fn(() => () => undefined),
+      reset: vi.fn(async () => undefined),
+      set: vi.fn(async () => undefined),
+    },
     contextMenu: {
       popup: vi.fn(async () => undefined),
       registerSelectionSelectAllProvider: () => () => undefined,
       registerSelectionTextProvider: () => () => undefined,
     },
-    dialogs: { alert: vi.fn(async () => undefined) },
+    dialogs: {
+      alert: vi.fn(async () => undefined),
+      confirm: vi.fn(async () => false),
+    },
     git: {
       cancelReviewRequest:
         input.cancelReviewRequest ?? vi.fn(async () => undefined),
+      commit: vi.fn(async () => true),
+      getDiffText: vi.fn(async () => ""),
+      getLog: vi.fn(async () => []),
       getReviewFileDocument:
         input.getReviewFileDocument ?? vi.fn(async () => documentResult(0)),
       getReviewIndex: input.getReviewIndex ?? vi.fn(async () => indexResult()),
+      getStatus: vi.fn(async () => ({
+        branch: {
+          ahead: 0,
+          behind: 0,
+          branch: "main",
+          mergedIntoDefault: null,
+          oid: "abc",
+          upstream: null,
+          upstreamGone: false,
+        },
+        counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+        delta: null,
+        files: [],
+        remoteSync: null,
+        repoState: { kind: "clean" as const },
+        stashCount: 0,
+      })),
+      stage: vi.fn(async () => true),
       watch: input.watch ?? vi.fn(() => () => undefined),
     },
     i18n: {
@@ -368,7 +432,7 @@ function pluginContext(input: {
           return text;
         }),
     },
-    notifications: { error: vi.fn() },
+    notifications: { error: vi.fn(), success: vi.fn() },
     panels: { openInstance: vi.fn(() => ({ kind: "opened" })) },
   } as unknown as RendererPluginContext;
 }
@@ -1112,7 +1176,7 @@ describe("Git review panel", () => {
     await waitFor(() =>
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
         "data-item-ids",
-        `${unstagedSlot.sectionKey},${stagedSlot.sectionKey}`
+        `${stagedSlot.sectionKey},${unstagedSlot.sectionKey}`
       )
     );
     expect(diffViewRuntime.unknownItemUpdates).toEqual([]);
@@ -1142,7 +1206,7 @@ describe("Git review panel", () => {
     expect(context.panels.openInstance).not.toHaveBeenCalled();
   });
 
-  it("同一路径 staged 与 unstaged 只保留一个树项和两个正文 item", async () => {
+  it("同一路径 staged 与 unstaged 各保留一个树项和两个正文 item", async () => {
     const path = "src/app.ts";
     const context = pluginContext({
       getReviewFileDocument: vi.fn(async () =>
@@ -1188,16 +1252,25 @@ describe("Git review panel", () => {
     await waitFor(() => {
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
         "data-item-ids",
-        "unstaged:app,staged:app"
+        "staged:app,unstaged:app"
       );
     });
-    expect(
-      [
-        ...fileTree(view.container).querySelectorAll('[role="treeitem"]'),
-      ].filter((element) => element.textContent?.includes("app.ts"))
-    ).toHaveLength(1);
-    fireEvent.click(findTreeItem(view.container, "app.ts"));
-    expect(scrollToItem).toHaveBeenCalledWith("unstaged:app");
+    const appRows = [
+      ...fileTree(view.container).querySelectorAll('[role="treeitem"]'),
+    ].filter((element) => element.textContent?.includes("app.ts"));
+    expect(appRows).toHaveLength(2);
+    const scrolledSectionIds: string[] = [];
+    for (const row of appRows) {
+      scrollToItem.mockClear();
+      fireEvent.click(row);
+      const sectionId = scrollToItem.mock.calls[0]?.[0];
+      if (typeof sectionId === "string") {
+        scrolledSectionIds.push(sectionId);
+      }
+    }
+    expect(scrolledSectionIds.sort()).toEqual(
+      ["staged:app", "unstaged:app"].sort()
+    );
   });
 
   it("远树点击导航期间 CodeView 拓扑身份保持稳定", async () => {
@@ -1521,9 +1594,10 @@ describe("Git review panel", () => {
         frame(now);
       }
     });
-    await expect(
-      view.findByText("Failed to navigate to file")
-    ).resolves.toBeVisible();
+    // 目标已投影但未进 isItemVisible：静默结束，不弹 banner/alert。
+    await waitFor(() => {
+      expect(view.queryByText("Failed to navigate to file")).toBeNull();
+    });
     const callsAfterTimeout = scrollToItem.mock.calls.filter(
       ([sectionId]) => sectionId === "section:2"
     ).length;
@@ -1536,7 +1610,7 @@ describe("Git review panel", () => {
       )
     );
 
-    expect(view.getByText("Failed to navigate to file")).toBeVisible();
+    expect(view.queryByText("Failed to navigate to file")).toBeNull();
     expect(
       scrollToItem.mock.calls.filter(([sectionId]) => sectionId === "section:2")
     ).toHaveLength(callsAfterTimeout);
@@ -2021,7 +2095,9 @@ describe("Git review panel", () => {
       "src/file-0.ts,src/file-1.ts"
     );
     await waitFor(() =>
-      expect(view.getByTestId("pierre-diff")).toHaveTextContent("Binary file")
+      expect(view.getByTestId("pierre-diff")).toHaveTextContent(
+        "Binary file — content not shown"
+      )
     );
     fireEvent.click(findTreeItem(view.container, "file-1.ts"));
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("state:1"));
@@ -2087,20 +2163,20 @@ describe("Git review panel", () => {
     await waitFor(() =>
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
         "data-item-ids",
-        "unstaged:binary,staged:binary"
+        "staged:binary,unstaged:binary"
       )
     );
     expect(view.getByTestId("pierre-diff")).toHaveAttribute(
       "data-file-statuses",
-      "modified,renamed"
+      "renamed,modified"
     );
     expect(view.getByTestId("pierre-diff")).toHaveAttribute(
       "data-file-paths",
-      "src/current.bin,src/staged-current.bin"
+      "src/staged-current.bin,src/current.bin"
     );
     expect(view.getByTestId("pierre-diff")).toHaveAttribute(
       "data-previous-paths",
-      ",src/old.bin"
+      "src/old.bin,"
     );
   });
 
@@ -2163,15 +2239,23 @@ describe("Git review panel", () => {
           ]),
         ])
       ),
-      translate: (key, _values, fallback) =>
-        key === "ui.reviewStateBinary" && language === "zh"
-          ? "二进制文件"
-          : (fallback ?? ""),
+      translate: (key, _values, fallback) => {
+        if (
+          language === "zh" &&
+          (key === "ui.reviewStateBinary" ||
+            key === "ui.reviewStateBinaryDetail")
+        ) {
+          return "二进制文件 — 不显示内容";
+        }
+        return fallback ?? "";
+      },
     });
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
     const output = await view.findByTestId("pierre-diff");
-    await waitFor(() => expect(output).toHaveTextContent("Binary file"));
+    await waitFor(() =>
+      expect(output).toHaveTextContent("Binary file — content not shown")
+    );
     expect(output).toHaveTextContent("+new");
     const englishCacheKeys = output.getAttribute("data-cache-keys")?.split("|");
 
@@ -2184,14 +2268,18 @@ describe("Git review panel", () => {
       })
     );
 
-    await waitFor(() => expect(output).toHaveTextContent("二进制文件"));
-    expect(output).not.toHaveTextContent("Binary file");
+    await waitFor(() =>
+      expect(output).toHaveTextContent("二进制文件 — 不显示内容")
+    );
+    expect(output).not.toHaveTextContent("Binary file — content not shown");
     expect(output).toHaveTextContent("+new");
     const localizedCacheKeys = output
       .getAttribute("data-cache-keys")
       ?.split("|");
-    expect(localizedCacheKeys?.[0]).toBe(englishCacheKeys?.[0]);
-    expect(localizedCacheKeys?.[1]).not.toBe(englishCacheKeys?.[1]);
+    // Item order is staged then unstaged; patch (index 1) is locale-stable,
+    // state section (index 0) embeds localized copy in its cache key.
+    expect(localizedCacheKeys?.[1]).toBe(englishCacheKeys?.[1]);
+    expect(localizedCacheKeys?.[0]).not.toBe(englishCacheKeys?.[0]);
   });
 
   it("不可重试的 index 刷新失败后旧树窗口外文件仍可读取和定位", async () => {

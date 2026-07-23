@@ -1277,18 +1277,94 @@ describe("createGitService", () => {
   });
 
   // Phase 2-A: 暂存与提交(写)
-  it("stage 用 git add -- <paths>", async () => {
+  it("stage 已跟踪路径用 git add -u -- <paths>", async () => {
     const calls: Array<readonly string[]> = [];
     const service = createGitService({
       execGit: (args) => {
         calls.push(args);
+        if (args[0] === "ls-files") {
+          return Promise.resolve("src/a.ts\0src/b.ts\0");
+        }
         return Promise.resolve("");
       },
     });
 
     await service.stage("/repo", { paths: ["src/a.ts", "src/b.ts"] });
 
-    expect(calls[0]).toEqual(["add", "--", "src/a.ts", "src/b.ts"]);
+    expect(calls[0]).toEqual([
+      "ls-files",
+      "-z",
+      "--cached",
+      "--",
+      "src/a.ts",
+      "src/b.ts",
+    ]);
+    expect(calls[1]).toEqual(["add", "-u", "--", "src/a.ts", "src/b.ts"]);
+  });
+
+  it("stage 未跟踪路径先 check-ignore 再 git add --", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (args[0] === "ls-files") {
+          return Promise.resolve("");
+        }
+        if (args[0] === "check-ignore") {
+          return Promise.reject(new Error("exit 1"));
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await service.stage("/repo", { paths: ["new.ts"] });
+
+    expect(calls.some((args) => args[0] === "check-ignore")).toBe(true);
+    expect(calls.at(-1)).toEqual(["add", "--", "new.ts"]);
+  });
+
+  it("stage 跳过被 ignore 的未跟踪路径且不抛错", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (args[0] === "ls-files") {
+          return Promise.resolve("");
+        }
+        if (args[0] === "check-ignore") {
+          return Promise.resolve(".superpowers/secret.txt\n");
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await service.stage("/repo", {
+      paths: [".superpowers/secret.txt", "ok.ts"],
+    });
+
+    const addCalls = calls.filter((args) => args[0] === "add");
+    expect(addCalls).toEqual([["add", "--", "ok.ts"]]);
+  });
+
+  it("stage 混合已跟踪与未跟踪时分别 add -u 与 add", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (args[0] === "ls-files") {
+          return Promise.resolve("tracked.ts\0");
+        }
+        if (args[0] === "check-ignore") {
+          return Promise.reject(new Error("exit 1"));
+        }
+        return Promise.resolve("");
+      },
+    });
+
+    await service.stage("/repo", { paths: ["tracked.ts", "new.ts"] });
+
+    expect(calls).toContainEqual(["add", "-u", "--", "tracked.ts"]);
+    expect(calls).toContainEqual(["add", "--", "new.ts"]);
   });
 
   it("stage paths 为空抛错(防误调清空所有)", async () => {
@@ -1358,19 +1434,36 @@ describe("createGitService", () => {
   });
 
   it("写操作传 timeoutMs: 60000(避免大仓库回归)", async () => {
-    const seenOptions: Array<{ timeoutMs?: number } | undefined> = [];
+    const seen: Array<{
+      args: readonly string[];
+      options: { timeoutMs?: number } | undefined;
+    }> = [];
     const service = createGitService({
-      execGit: (_args, _cwd, options) => {
-        seenOptions.push(options);
+      execGit: (args, _cwd, options) => {
+        seen.push({ args, options });
+        if (args[0] === "ls-files") {
+          return Promise.resolve("a\0");
+        }
         return Promise.resolve("");
       },
     });
 
     await service.stage("/repo", { paths: ["a"] });
+    await service.stage("/repo", { paths: ["new-untracked.ts"] });
     await service.commit("/repo", { message: "m" });
 
-    expect(seenOptions[0]?.timeoutMs).toBe(60_000);
-    expect(seenOptions[1]?.timeoutMs).toBe(60_000);
+    const stageLsFiles = seen.find((entry) => entry.args[0] === "ls-files");
+    const stageCheckIgnore = seen.find(
+      (entry) => entry.args[0] === "check-ignore"
+    );
+    const stageAdd = seen.find(
+      (entry) => entry.args[0] === "add" && entry.args.includes("-u")
+    );
+    const commitCall = seen.find((entry) => entry.args[0] === "commit");
+    expect(stageLsFiles?.options?.timeoutMs).toBe(60_000);
+    expect(stageCheckIgnore?.options?.timeoutMs).toBe(60_000);
+    expect(stageAdd?.options?.timeoutMs).toBe(60_000);
+    expect(commitCall?.options?.timeoutMs).toBe(60_000);
   });
 
   // Phase 2-B: 分支写操作

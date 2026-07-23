@@ -18,6 +18,7 @@ import {
   useRef,
   useState,
 } from "react";
+import { pluginText } from "./git-plugin-text.ts";
 import type { ReviewRenderFeedback } from "./git-review-code-view.tsx";
 import type { ReviewDocumentDemand } from "./git-review-document-demand.ts";
 import type { GitReviewDocumentGeneration } from "./git-review-document-generation.ts";
@@ -111,8 +112,12 @@ function ReviewDocumentsComponent({
   const [projection, setProjection] = useState(EMPTY_REVIEW_PROJECTION);
   const [projectionGeneration, setProjectionGeneration] = useState(0);
   const [demandPrefetchVersion, setDemandPrefetchVersion] = useState(0);
-  const { selectedEntryKey, selectedTreeEntry, setSelectedEntryKey } =
-    useReviewSelection(scope, treeModel);
+  const {
+    selectedEntryKey,
+    selectedSectionKey,
+    selectedTreeEntry,
+    setSelectedTreeTarget,
+  } = useReviewSelection(scope, treeModel);
   const {
     applyGenerationChanges: applyFailureChanges,
     resetGenerationFailures,
@@ -151,6 +156,7 @@ function ReviewDocumentsComponent({
     cancelVerification,
     clearForUserIntent,
     getSelectedEntryKey,
+    getSelectedSectionKey,
     hasPendingNavigation,
     navigationError,
     navigationPending,
@@ -166,10 +172,32 @@ function ReviewDocumentsComponent({
     itemCacheKeysRef,
     itemIndexByIdRef,
     initialSelectedEntryKey: selectedEntryKey,
+    initialSelectedSectionKey: selectedSectionKey,
     loaderRef,
     pendingAnchorRef,
     renderedGenerationRef,
   });
+  // 真正无法定位时 toast + Retry；已可见内容的超时在 hook 内静默。
+  useEffect(() => {
+    if (!navigationError) {
+      return;
+    }
+    context.notifications.error(
+      pluginText(
+        context,
+        "reviewNavigationFailed",
+        "Failed to navigate to file"
+      ),
+      {
+        action: {
+          label: pluginText(context, "reviewRetry", "Retry"),
+          onClick: () => {
+            retryNavigation();
+          },
+        },
+      }
+    );
+  }, [context, navigationError, retryNavigation]);
   const requestRenderWindow = useGitReviewDocumentDemand({
     currentDemandRef,
     entries,
@@ -204,6 +232,7 @@ function ReviewDocumentsComponent({
     cancelRetentionSync,
     clearLatestItemUpdates,
     getSelectedEntryKey,
+    getSelectedSectionKey,
     hasPendingNavigation,
     notifyProjectionChanged,
     recordLatestItemUpdates,
@@ -218,6 +247,7 @@ function ReviewDocumentsComponent({
     cancelRetentionSync,
     clearLatestItemUpdates,
     getSelectedEntryKey,
+    getSelectedSectionKey,
     hasPendingNavigation,
     notifyProjectionChanged,
     recordLatestItemUpdates,
@@ -347,25 +377,43 @@ function ReviewDocumentsComponent({
     };
   }, [context, panelId]);
 
-  const openPath = useCallback(
+  const openTreeNode = useCallback(
     (path: string) => {
-      const entry = treeModel.entryByPath.get(path);
-      if (!entry) {
+      if (path.startsWith("group:") && path.split("/").length === 1) {
         return;
       }
-      setSelectedEntryKey(entry.entryKey);
-      beginNavigation(entry.entryKey);
+      const fileRef = treeModel.getFileRefForTreePath(path);
+      if (!fileRef) {
+        return;
+      }
+      setSelectedTreeTarget({
+        entryKey: fileRef.entryKey,
+        sectionKey: fileRef.sectionKey,
+      });
+      beginNavigation({
+        entryKey: fileRef.entryKey,
+        sectionKey: fileRef.sectionKey,
+      });
       generationCallbacksRef.current.tryPendingNavigation();
     },
-    [beginNavigation, setSelectedEntryKey, treeModel]
+    [beginNavigation, setSelectedTreeTarget, treeModel]
   );
   const retryFailure = useCallback(
     (entryKey: string) => {
       loaderRef.current?.retry(entryKey);
-      beginNavigation(entryKey);
+      const sectionKey =
+        selectedSectionKey &&
+        entryKeyBySectionIdRef.current.get(selectedSectionKey) === entryKey
+          ? selectedSectionKey
+          : firstSectionIdByEntryKeyRef.current.get(entryKey);
+      if (!sectionKey) {
+        return;
+      }
+      setSelectedTreeTarget({ entryKey, sectionKey });
+      beginNavigation({ entryKey, sectionKey });
       generationCallbacksRef.current.tryPendingNavigation();
     },
-    [beginNavigation]
+    [beginNavigation, selectedSectionKey, setSelectedTreeTarget]
   );
   const handleRenderItemError = useCallback(
     (id: string, error: Error | null) => {
@@ -375,18 +423,20 @@ function ReviewDocumentsComponent({
   );
   const { options: viewOptions, setOptions: setViewOptions } =
     useReviewViewOptions();
-  const collapseAll = useCallback(() => {
-    diffHandleRef.current?.setAllCollapsed(true);
-  }, []);
-  const expandAll = useCallback(() => {
-    diffHandleRef.current?.setAllCollapsed(false);
+  const [allCollapsed, setAllCollapsed] = useState(false);
+  const onToggleCollapseAll = useCallback(() => {
+    setAllCollapsed((current) => {
+      const next = !current;
+      diffHandleRef.current?.setAllCollapsed(next);
+      return next;
+    });
   }, []);
   const toolbar = (
     <GitReviewToolbar
+      allCollapsed={allCollapsed}
       context={context}
-      onCollapseAll={collapseAll}
-      onExpandAll={expandAll}
       onRefresh={onRetryIndex}
+      onToggleCollapseAll={onToggleCollapseAll}
       refreshing={indexRefreshing}
       setViewOptions={setViewOptions}
       viewOptions={viewOptions}
@@ -399,21 +449,21 @@ function ReviewDocumentsComponent({
       context={context}
       contextId={scope.contextId}
       diffRef={setDiffHandle}
+      {...(scope.target.kind === "uncommitted" ? { entries } : {})}
       failureSummary={failureSummary}
       gitRootPath={scope.gitRootPath}
       {...(headerLeading === undefined ? {} : { headerLeading })}
       headerTrailing={toolbar}
       indexFailure={indexRefreshFailure}
-      navigationError={navigationError}
       onFeedbackChange={updateRenderFeedback}
       onItemError={handleRenderItemError}
-      onOpenPath={openPath}
+      onOpenPath={openTreeNode}
       onRenderWindowChange={requestRenderWindow}
       onRetryFailure={retryFailure}
       onRetryIndex={onRetryIndex}
-      onRetryNavigation={retryNavigation}
       onScroll={() => {
         clearForUserIntent();
+        setSelectedTreeTarget(null);
         if (pendingAnchorRef.current?.restored) {
           pendingAnchorRef.current = null;
         }

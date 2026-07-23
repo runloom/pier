@@ -266,6 +266,8 @@ function createMockContext(): RendererPluginContext {
       createAndSwitchBranch: unimplemented("git.createAndSwitchBranch"),
       continueRebase: unimplemented("git.continueRebase"),
       discardChanges: unimplemented("git.discardChanges"),
+      getDiffText: unimplemented("git.getDiffText"),
+      getLog: unimplemented("git.getLog"),
       getDiffPatch: unimplemented("git.getDiffPatch"),
       getFileContent: unimplemented("git.getFileContent"),
       getRepoInfo: unimplemented("git.getRepoInfo"),

@@ -7,15 +7,30 @@ export interface PierDiffViewFileDisplay {
   readonly status: "added" | "conflicted" | "deleted" | "modified" | "renamed";
 }
 
+/** Uncommitted header actions; omit/null = no stage cluster. */
+export interface PierDiffViewStageControl {
+  readonly busy?: boolean;
+  /** Unstaged modified/deleted may offer discard (restore). */
+  readonly canDiscard?: boolean;
+  readonly state: "staged" | "unstaged";
+}
+
 export interface PierDiffViewItem {
   readonly cacheKey: string;
   readonly fileDisplay?: PierDiffViewFileDisplay;
   readonly id: string;
   /**
-   * null = loading 占位（仅文件头，同 id 后续 update 为 ready）。
-   * 非 null = 可渲染 patch/state 正文。
+   * null = loading 占位或非文本 state（仅文件头）。
+   * 有 `stateNotice` 时为 ready 空正文（二进制/子模块等），不是 loading。
+   * 非 null = 可渲染文本 patch 正文。
    */
   readonly patch: string | null;
+  readonly stageControl?: PierDiffViewStageControl | null;
+  /**
+   * 非文本变更说明（binary / symlink / submodule…）。
+   * 业界 multi-diff：只保留 header + 说明，不伪造代码行。
+   */
+  readonly stateNotice?: string;
 }
 
 /** 与 Pierre 官方 header 一致：按 hunk.additionLines / deletionLines 汇总。 */

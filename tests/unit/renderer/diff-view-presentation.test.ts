@@ -12,6 +12,15 @@ describe("pierDiffItemPresentation", () => {
       "ready"
     );
   });
+
+  it("treats header-only state notices as ready empty content", () => {
+    expect(
+      pierDiffItemPresentation({
+        patch: null,
+        stateNotice: "Binary file — content not shown",
+      })
+    ).toBe("ready");
+  });
 });
 
 describe("shouldRotateCollapseChevron", () => {

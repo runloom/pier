@@ -66,6 +66,7 @@ export interface GitReviewGenerationCallbacks {
   cancelRetentionSync: (controller: GitReviewDocumentGeneration) => void;
   clearLatestItemUpdates: () => void;
   getSelectedEntryKey: () => string | null;
+  getSelectedSectionKey: () => string | null;
   hasPendingNavigation: () => boolean;
   notifyProjectionChanged: (ids?: readonly string[]) => void;
   recordLatestItemUpdates: (items: readonly PierDiffViewItem[]) => void;
@@ -449,6 +450,8 @@ export function useGitReviewDocumentSession(options: {
         loadedByEntryKey: loaded,
         retainedEntryKeys: loader.getRetainedEntryKeys(),
         selectedEntryKey: generationCallbacksRef.current.getSelectedEntryKey(),
+        selectedSectionKey:
+          generationCallbacksRef.current.getSelectedSectionKey(),
         anchor: diffHandleRef.current?.captureTopAnchor() ?? null,
       });
       unsubscribe();

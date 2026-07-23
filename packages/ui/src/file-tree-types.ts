@@ -103,6 +103,16 @@ export interface PierFileTreeProps
   /** 目录读取失败时的本地化行内标记；详细错误仍由业务层反馈。 */
   directoryErrorLabel?: string;
   directoryStates?: ReadonlyMap<string, PierDirectoryLoadState>;
+  /**
+   * Collapse single-child directory chains into one row (pierre default true).
+   */
+  flattenEmptyDirectories?: boolean;
+  /**
+   * Minimum node depth eligible to start a flatten chain (pierre patch).
+   * Root=0, top-level paths=1. Git review uses 2 so group roots stay separate
+   * while nested path folders still compress.
+   */
+  flattenMinDepth?: number;
   items: readonly PierFileTreeItem[];
   label: string;
   onLoadDirectory?: (path: string) => Promise<void> | void;

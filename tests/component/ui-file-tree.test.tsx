@@ -448,6 +448,49 @@ describe("PierFileTree", () => {
     ).toBeGreaterThan(1);
   });
 
+  it("keeps depth-1 roots unmerged when flattenMinDepth is 2", () => {
+    // Git review group roots live at depth 1; path folders start at depth 2+.
+    const { container } = render(
+      <PierFileTree
+        flattenEmptyDirectories
+        flattenMinDepth={2}
+        items={[
+          { kind: "directory", path: "Staged Changes" },
+          {
+            kind: "directory",
+            path: "Staged Changes/docs/superpowers/plans",
+          },
+          {
+            kind: "file",
+            path: "Staged Changes/docs/superpowers/plans/note.md",
+          },
+        ]}
+        label="Review files"
+      />
+    );
+
+    const tree = getFileTree(container);
+    // Group root stays its own row (not "Staged Changes / docs / ...").
+    expect(
+      within(tree).getByRole("treeitem", { name: "Staged Changes" })
+    ).toBeTruthy();
+    expect(
+      within(tree).queryByRole("treeitem", {
+        name: /Staged Changes \/ docs/,
+      })
+    ).toBeNull();
+
+    // Nested single-child path chain still flattens under the group root.
+    const nested = within(tree).getByRole("treeitem", {
+      name: "docs / superpowers / plans",
+    });
+    expect(
+      nested.querySelector(
+        '[data-item-flattened-subitems="true"], [data-item-flattened-subitems]'
+      )
+    ).toBeInstanceOf(HTMLElement);
+  });
+
   it("lets item names consume space left by an empty decoration lane", () => {
     expect(TREE_SCROLLBAR_CSS).toContain(
       '[data-item-section="content"] {\n  flex: 1 1 auto;'
