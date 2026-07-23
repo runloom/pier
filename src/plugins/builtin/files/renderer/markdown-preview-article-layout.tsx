@@ -1,64 +1,44 @@
-import { cn } from "@pier/ui/utils.ts";
 import { type CSSProperties, type ReactNode, useEffect, useState } from "react";
-import type {
-  MarkdownMeasureMode,
-  MarkdownTocSide,
-} from "./markdown-preview-preferences.ts";
 import {
-  canDockMarkdownOutline,
-  MARKDOWN_PREVIEW_EDGE_INSET_PX,
-  MARKDOWN_TOC_INSET_PX,
-  MARKDOWN_TOC_RAIL_WIDTH_PX,
-  type MarkdownTocPlacement,
-  markdownOutlineFrameHeightPx,
-  readMarkdownContentWidthPx,
-  readScrollContentWidthPx,
+  MARKDOWN_TOC_EDGE_INSET_PX,
+  MARKDOWN_TOC_TOP_RATIO,
+  markdownOutlineHoverMaxHeightPx,
+  markdownOutlineHoverWidthPx,
 } from "./markdown-preview-toc-layout.ts";
 
 export function useMarkdownOutlineLayout(params: {
   fontScale: number;
   hasHeadings: boolean;
-  measureMode: MarkdownMeasureMode;
   ready: boolean;
 }): {
   maxHeightPx: number;
-  placement: MarkdownTocPlacement;
+  panelWidthPx: number;
   previewFrameRef: (node: HTMLDivElement | null) => void;
   scrollRoot: HTMLDivElement | null;
   scrollRootRef: (node: HTMLDivElement | null) => void;
 } {
   const [previewFrame, setPreviewFrame] = useState<HTMLDivElement | null>(null);
   const [scrollRoot, setScrollRoot] = useState<HTMLDivElement | null>(null);
-  const [placement, setPlacement] = useState<MarkdownTocPlacement>("overlay");
   const [maxHeightPx, setMaxHeightPx] = useState(0);
+  const [panelWidthPx, setPanelWidthPx] = useState(0);
 
   useEffect(() => {
-    if (!(params.ready && scrollRoot && previewFrame)) {
-      setPlacement("overlay");
+    if (!(params.ready && scrollRoot && previewFrame && params.hasHeadings)) {
       setMaxHeightPx(0);
+      setPanelWidthPx(0);
       return;
     }
     let raf = 0;
     const updateLayout = () => {
-      // Reading zoom can change prose width via --md-scale without resizing the
-      // scroll root; keep fontScale in deps and bail on invalid scale.
+      // Reading zoom can change prose metrics via --md-scale without resizing.
       if (params.fontScale <= 0) {
         return;
       }
-      const prose = scrollRoot.querySelector<HTMLElement>(
-        '[data-slot="markdown-prose"]'
+      // Clamp to the preview frame so the hover card never escapes overflow-hidden.
+      setMaxHeightPx(
+        markdownOutlineHoverMaxHeightPx(previewFrame.clientHeight)
       );
-      setPlacement(
-        canDockMarkdownOutline({
-          availableWidthPx: readScrollContentWidthPx(scrollRoot),
-          contentWidthPx: readMarkdownContentWidthPx(prose),
-          hasHeadings: params.hasHeadings,
-          measureMode: params.measureMode,
-        })
-          ? "dock"
-          : "overlay"
-      );
-      setMaxHeightPx(markdownOutlineFrameHeightPx(scrollRoot.clientHeight));
+      setPanelWidthPx(markdownOutlineHoverWidthPx(previewFrame.clientWidth));
     };
     const scheduleUpdate = () => {
       cancelAnimationFrame(raf);
@@ -71,10 +51,6 @@ export function useMarkdownOutlineLayout(params: {
     const observer = new ResizeObserver(scheduleUpdate);
     observer.observe(scrollRoot);
     observer.observe(previewFrame);
-    const prose = scrollRoot.querySelector<HTMLElement>(
-      '[data-slot="markdown-prose"]'
-    );
-    if (prose) observer.observe(prose);
     return () => {
       cancelAnimationFrame(raf);
       observer.disconnect();
@@ -82,7 +58,6 @@ export function useMarkdownOutlineLayout(params: {
   }, [
     params.fontScale,
     params.hasHeadings,
-    params.measureMode,
     params.ready,
     previewFrame,
     scrollRoot,
@@ -90,7 +65,7 @@ export function useMarkdownOutlineLayout(params: {
 
   return {
     maxHeightPx,
-    placement,
+    panelWidthPx,
     previewFrameRef: setPreviewFrame,
     scrollRoot,
     scrollRootRef: setScrollRoot,
@@ -98,35 +73,33 @@ export function useMarkdownOutlineLayout(params: {
 }
 
 /**
- * Floating outline rail on the preview frame — same containing block and edge
- * inset as the font-scale control. Left/right sides pin to the matching edge;
- * `items-end` / `items-start` keep collapsed chips on that outer edge.
+ * Floating outline rail on the preview frame. Width matches the hover panel
+ * slot; height hugs the tick stack (maxHeight only clamps). Empty slot space is
+ * pointer-events-none so prose stays clickable underneath.
  */
 export function MarkdownPreviewOverlayRail({
   children,
-  side,
+  maxHeightPx,
+  panelWidthPx,
 }: {
   children: ReactNode;
-  side: MarkdownTocSide;
+  maxHeightPx: number;
+  panelWidthPx: number;
 }) {
   const style: CSSProperties = {
-    top: MARKDOWN_TOC_INSET_PX,
-    width: MARKDOWN_TOC_RAIL_WIDTH_PX,
-    ...(side === "left"
-      ? { left: MARKDOWN_PREVIEW_EDGE_INSET_PX }
-      : { right: MARKDOWN_PREVIEW_EDGE_INSET_PX }),
+    top: `${MARKDOWN_TOC_TOP_RATIO * 100}%`,
+    right: MARKDOWN_TOC_EDGE_INSET_PX,
+    width: panelWidthPx > 0 ? panelWidthPx : undefined,
+    ...(maxHeightPx > 0 ? { maxHeight: maxHeightPx } : {}),
   };
   return (
     <div
-      className={cn(
-        "pointer-events-none absolute z-20 flex flex-col",
-        side === "right" ? "items-end" : "items-start"
-      )}
-      data-side={side}
+      className="pointer-events-none absolute z-20 flex flex-col items-end"
+      data-side="right"
       data-slot="markdown-preview-outline-rail"
       style={style}
     >
-      <div className="pointer-events-auto flex max-w-full flex-col items-stretch">
+      <div className="pointer-events-none relative w-full max-w-full">
         {children}
       </div>
     </div>
@@ -134,34 +107,21 @@ export function MarkdownPreviewOverlayRail({
 }
 
 /**
- * Article row for comfortable dock (in-flow outline + prose). Overlay outline
- * is mounted on the preview frame via `MarkdownPreviewOverlayRail`.
+ * Article row wrapper. Outline always mounts on the preview-frame overlay rail
+ * (Notion tick style); this slot only centers the prose column.
  */
 export function MarkdownPreviewArticleLayout({
   children,
-  outline,
-  placement,
-  tocSide,
 }: {
   children: ReactNode;
-  outline: ReactNode;
-  placement: MarkdownTocPlacement;
-  tocSide: MarkdownTocSide;
 }) {
-  const docked = placement === "dock";
-
   return (
     <div
-      className={cn(
-        "relative mx-auto max-w-full",
-        docked ? "flex w-fit gap-4" : "w-full"
-      )}
-      data-placement={placement}
+      className="relative mx-auto w-full max-w-full"
+      data-placement="overlay"
       data-slot="markdown-preview-layout"
     >
-      {docked && tocSide === "left" ? outline : null}
       {children}
-      {docked && tocSide === "right" ? outline : null}
     </div>
   );
 }

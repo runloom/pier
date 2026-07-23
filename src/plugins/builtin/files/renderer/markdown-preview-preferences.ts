@@ -2,13 +2,10 @@ import { create } from "zustand";
 
 export type MarkdownOpenMode = "preview" | "source";
 export type MarkdownMeasureMode = "comfortable" | "wide";
-export type MarkdownTocSide = "left" | "right";
 
 const OPEN_MODE_KEY = "pier.files.markdown.openMode";
 const FONT_SCALE_KEY = "pier.files.markdown.fontScale";
 const MEASURE_MODE_KEY = "pier.files.markdown.measureMode";
-const TOC_SIDE_KEY = "pier.files.markdown.tocSide";
-const TOC_COLLAPSED_KEY = "pier.files.markdown.tocCollapsed";
 
 /** Broader reading zoom; 1 = body matches fenced code at 13px. */
 const FONT_SCALES = [0.75, 0.85, 1, 1.15, 1.35, 1.6, 2] as const;
@@ -19,8 +16,6 @@ export const MARKDOWN_PREFS_CHANGED_EVENT = "pier:files:markdown-prefs-changed";
 export interface MarkdownPrefsSnapshot {
   fontScale: MarkdownFontScale;
   measureMode: MarkdownMeasureMode;
-  tocCollapsed: boolean;
-  tocSide: MarkdownTocSide;
 }
 
 type PrefsListener = (snapshot: MarkdownPrefsSnapshot) => void;
@@ -64,22 +59,10 @@ function readStoredMeasureMode(): MarkdownMeasureMode {
     : "comfortable";
 }
 
-function readStoredTocSide(): MarkdownTocSide {
-  return preferenceStorage()?.getItem(TOC_SIDE_KEY) === "left"
-    ? "left"
-    : "right";
-}
-
-function readStoredTocCollapsed(): boolean {
-  return preferenceStorage()?.getItem(TOC_COLLAPSED_KEY) === "true";
-}
-
 function loadPrefsSnapshot(): MarkdownPrefsSnapshot {
   return {
     fontScale: readStoredFontScale(),
     measureMode: readStoredMeasureMode(),
-    tocCollapsed: readStoredTocCollapsed(),
-    tocSide: readStoredTocSide(),
   };
 }
 
@@ -99,8 +82,6 @@ function emitPrefsChanged(snapshot: MarkdownPrefsSnapshot): void {
 interface MarkdownPreviewPrefsState extends MarkdownPrefsSnapshot {
   setFontScale: (scale: MarkdownFontScale) => void;
   setMeasureMode: (mode: MarkdownMeasureMode) => void;
-  setTocCollapsed: (collapsed: boolean) => void;
-  setTocSide: (side: MarkdownTocSide) => void;
 }
 
 /**
@@ -120,18 +101,6 @@ export const useMarkdownPreviewPrefsStore = create<MarkdownPreviewPrefsState>(
     setMeasureMode(mode) {
       preferenceStorage()?.setItem(MEASURE_MODE_KEY, mode);
       set({ measureMode: mode });
-      emitPrefsChanged(get());
-    },
-
-    setTocSide(side) {
-      preferenceStorage()?.setItem(TOC_SIDE_KEY, side);
-      set({ tocSide: side });
-      emitPrefsChanged(get());
-    },
-
-    setTocCollapsed(collapsed) {
-      preferenceStorage()?.setItem(TOC_COLLAPSED_KEY, String(collapsed));
-      set({ tocCollapsed: collapsed });
       emitPrefsChanged(get());
     },
   })
@@ -163,8 +132,6 @@ export function readMarkdownPrefsSnapshot(): MarkdownPrefsSnapshot {
   return {
     fontScale: state.fontScale,
     measureMode: state.measureMode,
-    tocCollapsed: state.tocCollapsed,
-    tocSide: state.tocSide,
   };
 }
 
@@ -209,22 +176,6 @@ export function toggleMarkdownMeasureMode(
   current: MarkdownMeasureMode
 ): MarkdownMeasureMode {
   return current === "wide" ? "comfortable" : "wide";
-}
-
-export function readMarkdownTocSide(): MarkdownTocSide {
-  return useMarkdownPreviewPrefsStore.getState().tocSide;
-}
-
-export function writeMarkdownTocSide(side: MarkdownTocSide): void {
-  useMarkdownPreviewPrefsStore.getState().setTocSide(side);
-}
-
-export function readMarkdownTocCollapsed(): boolean {
-  return useMarkdownPreviewPrefsStore.getState().tocCollapsed;
-}
-
-export function writeMarkdownTocCollapsed(collapsed: boolean): void {
-  useMarkdownPreviewPrefsStore.getState().setTocCollapsed(collapsed);
 }
 
 export const MARKDOWN_FONT_SCALES = FONT_SCALES;

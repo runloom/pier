@@ -154,6 +154,163 @@ describe("PierFileTree", () => {
     expect(onOpenPath).toHaveBeenCalledWith("src/app.tsx");
   });
 
+  it("revealPath API selects and expands a directory without opening it", async () => {
+    const onOpenPath = vi.fn();
+    const treeApi = { current: null as PierFileTreeApi | null };
+    const { container } = render(
+      <PierFileTree
+        items={items}
+        label="Project files"
+        onOpenPath={onOpenPath}
+        treeApiRef={treeApi}
+      />
+    );
+
+    act(() => {
+      treeApi.current?.revealPath("src");
+    });
+
+    await waitFor(() => {
+      const srcRow = within(getFileTree(container)).getByRole("treeitem", {
+        name: SRC_NAME_PATTERN,
+        selected: true,
+      });
+      expect(srcRow).toHaveAttribute("aria-expanded", "true");
+    });
+    expect(onOpenPath).not.toHaveBeenCalled();
+  });
+
+  it("revealPath API selects a nested file after expanding ancestors", async () => {
+    const onOpenPath = vi.fn();
+    const treeApi = { current: null as PierFileTreeApi | null };
+    const nestedItems: PierFileTreeItem[] = [
+      { kind: "directory", path: "src" },
+      { kind: "directory", path: "src/lib" },
+      { kind: "file", path: "src/lib/util.ts" },
+    ];
+    const { container } = render(
+      <PierFileTree
+        items={nestedItems}
+        label="Project files"
+        onOpenPath={onOpenPath}
+        treeApiRef={treeApi}
+      />
+    );
+
+    act(() => {
+      treeApi.current?.revealPath("src/lib/util.ts");
+    });
+
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: /util\.ts/,
+          selected: true,
+        })
+      ).toBeVisible();
+    });
+    expect(
+      within(getFileTree(container)).getByRole("treeitem", {
+        name: SRC_NAME_PATTERN,
+      })
+    ).toHaveAttribute("aria-expanded", "true");
+    expect(onOpenPath).not.toHaveBeenCalled();
+  });
+
+  it("breadcrumb-style API reveal keeps folder selected while active revealPath stays on the file", async () => {
+    const onOpenPath = vi.fn();
+    const treeApi = { current: null as PierFileTreeApi | null };
+    const nestedItems: PierFileTreeItem[] = [
+      { kind: "directory", path: "src" },
+      { kind: "directory", path: "src/preload" },
+      { kind: "file", path: "src/preload/ai-api.ts" },
+      { kind: "file", path: "src/main.ts" },
+    ];
+    const { container } = render(
+      <PierFileTree
+        items={nestedItems}
+        label="Project files"
+        onOpenPath={onOpenPath}
+        revealPath="src/preload/ai-api.ts"
+        treeApiRef={treeApi}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: /ai-api\.ts/,
+          selected: true,
+        })
+      ).toBeVisible();
+    });
+
+    act(() => {
+      treeApi.current?.revealPath("src/preload");
+    });
+
+    await waitFor(() => {
+      const preloadRow = within(getFileTree(container)).getByRole("treeitem", {
+        name: /preload/,
+        selected: true,
+      });
+      expect(preloadRow).toBeVisible();
+      expect(preloadRow).toHaveAttribute("aria-expanded", "true");
+    });
+
+    // Active-file prop must not steal selection back after an explicit reveal.
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 100));
+    });
+    expect(
+      within(getFileTree(container)).getByRole("treeitem", {
+        name: /preload/,
+        selected: true,
+      })
+    ).toBeVisible();
+    expect(onOpenPath).not.toHaveBeenCalled();
+  });
+
+  it("reveals the compact-folder terminal when API targets a flattened head", async () => {
+    const treeApi = { current: null as PierFileTreeApi | null };
+    const chainItems: PierFileTreeItem[] = [
+      { kind: "directory", path: "src" },
+      { kind: "directory", path: "src/preload" },
+      { kind: "file", path: "src/preload/ai-api.ts" },
+    ];
+    const { container } = render(
+      <PierFileTree
+        items={chainItems}
+        label="Project files"
+        revealPath="src/preload/ai-api.ts"
+        treeApiRef={treeApi}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: /ai-api\.ts/,
+          selected: true,
+        })
+      ).toBeVisible();
+    });
+
+    act(() => {
+      // "src" is absorbed into the compact "src / preload" row.
+      treeApi.current?.revealPath("src");
+    });
+
+    await waitFor(() => {
+      expect(
+        within(getFileTree(container)).getByRole("treeitem", {
+          name: /preload/,
+          selected: true,
+        })
+      ).toBeVisible();
+    });
+  });
+
   it("keeps scrolling on the official shadow scroller instead of the wrapper host", () => {
     const { container } = render(
       <PierFileTree items={items} label="Project files" />
@@ -754,6 +911,36 @@ describe("PierFileTree", () => {
     expect(onLoadDirectory).toHaveBeenCalledTimes(1);
     expect(onLoadDirectory).toHaveBeenCalledWith("src");
     expect(tree.getAllByRole("treeitem")).toHaveLength(1);
+  });
+
+  it("reloads a falsely loaded empty directory when pointer activation expands it", () => {
+    const onLoadDirectory = vi.fn<(path: string) => void>();
+    const { container } = render(
+      <LazyPierFileTree
+        items={[
+          {
+            kind: "directory",
+            path: "src",
+            hasChildren: true,
+            loadState: "loaded",
+          },
+        ]}
+        label="Project files"
+        onLoadDirectory={onLoadDirectory}
+      />
+    );
+
+    const tree = within(getFileTree(container));
+    const srcRow = tree.getByRole("treeitem", { name: SRC_NAME_PATTERN });
+    fireEvent.click(srcRow);
+
+    expect(onLoadDirectory).toHaveBeenCalledTimes(1);
+    expect(onLoadDirectory).toHaveBeenCalledWith("src");
+
+    // Collapse → expand before props change must not spam the same refetch.
+    fireEvent.click(srcRow);
+    fireEvent.click(srcRow);
+    expect(onLoadDirectory).toHaveBeenCalledTimes(1);
   });
 
   it("routes item context menus through the tree model with the caller path", async () => {

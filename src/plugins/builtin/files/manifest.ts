@@ -39,9 +39,6 @@ export const FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID =
   "pier.files.markdown.measureComfortable";
 export const FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID =
   "pier.files.markdown.measureWide";
-export const FILES_MARKDOWN_TOC_LEFT_COMMAND_ID = "pier.files.markdown.tocLeft";
-export const FILES_MARKDOWN_TOC_RIGHT_COMMAND_ID =
-  "pier.files.markdown.tocRight";
 
 export const FILES_PROJECT_STATUS_ITEM_ID = "pier.files.project";
 export const FILES_PLUGIN_MANIFEST = {
@@ -173,18 +170,6 @@ export const FILES_PLUGIN_MANIFEST = {
       id: FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID,
       permissions: [],
       title: "Wide reading",
-    },
-    {
-      category: "file",
-      id: FILES_MARKDOWN_TOC_LEFT_COMMAND_ID,
-      permissions: [],
-      title: "Move outline left",
-    },
-    {
-      category: "file",
-      id: FILES_MARKDOWN_TOC_RIGHT_COMMAND_ID,
-      permissions: [],
-      title: "Move outline right",
     },
   ],
   configuration: {

@@ -48,13 +48,9 @@ export function createMarkdownRendererLabels(
 }
 
 export function createMarkdownTocLabels(t: FilesTranslate): {
-  collapse: string;
-  expand: string;
   title: string;
 } {
   return {
-    collapse: t("filePanel.markdown.toc.collapse", "Collapse outline"),
-    expand: t("filePanel.markdown.toc.expand", "Expand outline"),
     title: t("filePanel.markdown.toc.title", "Outline"),
   };
 }
