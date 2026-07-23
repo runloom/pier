@@ -11,11 +11,7 @@ export function createFileEditorAdapterLabels(
   return {
     diffUnsupported: t(
       "filePanel.view.diffUnsupported",
-      "Diff view is not enabled yet."
-    ),
-    richUnsupported: t(
-      "filePanel.view.richUnsupported",
-      "Rich Markdown editing is not enabled yet."
+      "No disk contents available to compare."
     ),
     sourceEditor: t("filePanel.editor.sourceLabel", "Source editor"),
   };

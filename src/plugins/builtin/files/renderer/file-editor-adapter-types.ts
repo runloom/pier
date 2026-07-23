@@ -11,7 +11,6 @@ import type {
 
 export interface FileEditorAdapterLabels {
   diffUnsupported: string;
-  richUnsupported: string;
   sourceEditor: string;
 }
 
@@ -47,8 +46,6 @@ export interface FileEditorAdapterProps {
   markdownSource?: MarkdownDiskSource | undefined;
   markdownTocLabels?:
     | {
-        collapse: string;
-        expand: string;
         title: string;
       }
     | undefined;

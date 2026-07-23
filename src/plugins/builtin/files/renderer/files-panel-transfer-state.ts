@@ -21,7 +21,11 @@ export const filesPanelTransferScrollSchema = z
 
 export const filesPanelTransferViewSchema = z
   .object({
-    mode: z.enum(["diff", "preview", "rich", "source"]),
+    // Legacy transfer payloads may still carry "rich"; coerce to source.
+    mode: z.preprocess(
+      (value) => (value === "rich" ? "source" : value),
+      z.enum(["diff", "preview", "source"])
+    ),
     selection: filesPanelTransferSelectionSchema.optional(),
     scroll: filesPanelTransferScrollSchema.optional(),
   })
