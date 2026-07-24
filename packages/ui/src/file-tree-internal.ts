@@ -5,6 +5,7 @@ import {
   resolveDirectoryLoadState,
   toOfficialPath,
 } from "./file-tree-model.ts";
+import { pinFileTreeScrollDuringContextMenu } from "./file-tree-scroll.ts";
 import type {
   PierDirectoryLoadState,
   PierFileTreeItem,
@@ -63,7 +64,11 @@ function fileTreeContextMenuComposition(refs: {
   return {
     enabled: true,
     onOpen: (item, context) => {
+      // Capture before close: pierre may still scrollIntoView in a later layout
+      // effect of this commit (stickyFolders + focus). Restore before paint.
+      pinFileTreeScrollDuringContextMenu(context.anchorElement);
       const callerItem = refs.current.itemsByPath.get(item.path);
+      // External Electron menu owns focus; don't bounce focus back into the tree.
       context.close({ restoreFocus: false });
       if (!callerItem) {
         return;
