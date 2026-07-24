@@ -330,15 +330,26 @@
     "ui.statusDropdownSync": "同步更改",
     "ui.statusDropdownSyncing": "正在同步更改…",
     "ui.statusDropdownSyncSuccess": "已同步",
-    "ui.statusDropdownStateActive": "进行中",
-    "ui.statusDropdownStateClean": "干净",
-    "ui.statusDropdownStateCompleted": "就绪",
-    "ui.statusDropdownStateDirty": "有变更",
-    "ui.statusDropdownStateLoading": "检查中",
-    "ui.statusDropdownStateUnavailable": "不可用",
-    "ui.statusDropdownChanged": "{{count}} 项变更",
     "ui.statusDropdownNoLocalChanges": "无未提交变更",
     "ui.statusDropdownLoading": "正在加载 Git 状态…",
+    "ui.statusRowChanges": "更改",
+    "ui.statusRowSync": "同步",
+    "ui.statusRowPull": "拉取",
+    "ui.statusRowPush": "推送",
+    "ui.statusRowStash": "储藏",
+    "ui.statusRowContinueOperation": "继续{{operation}}",
+    "ui.statusRowAbortOperation": "中止{{operation}}",
+    "ui.statusRowLargeChange": "变更规模较大，同步前请先查看",
+    "ui.statusRowPullBlocked": "本地有改动，请先提交或储藏再拉取",
+    "ui.statusSyncLabel": "同步更改",
+    "ui.statusSyncAlreadyRunning": "同步正在进行中",
+    "ui.statusSyncConfirmBody": "将与 {{upstream}} 拉取并推送提交。可在 Git 设置中关闭此确认。",
+    "ui.statusSyncConfirmButton": "同步",
+    "ui.statusChangesOpenLabel": "打开更改",
+    "ui.statusChangesFiles": "个文件",
+    "ui.gitAbortOperationConfirmTitle": "中止{{operation}}？",
+    "ui.gitAbortOperationConfirmBody": "将放弃当前暂停的{{operation}}，分支回到操作前的状态。",
+    "ui.gitAbortOperationConfirmButton": "中止{{operation}}",
     "ui.statusDropdownUnavailable": "Git 状态不可用",
     "ui.statusDropdownConflictSingle": "{{count}} 个冲突",
     "ui.statusDropdownConflictPlural": "{{count}} 个冲突",
@@ -541,8 +552,20 @@
   },
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {
-      "label": "显示变更指示",
-      "description": "在工作树状态项中显示变更文件计数与行数增减。"
+      "label": "在分支图标上标示改动",
+      "description": "在状态栏分支图标上标示工作区是否有改动；打开 Git 下拉可查看变更详情。"
+    },
+    "pier.git.statusItem.showChangesStatus": {
+      "label": "显示更改项",
+      "description": "在终端状态栏显示更改项（彩色增删行数；点击打开审查面板）。"
+    },
+    "pier.git.statusItem.showSyncStatus": {
+      "label": "显示同步项",
+      "description": "在终端状态栏显示同步项（领先/落后计数与一键同步）。"
+    },
+    "pier.git.statusItem.confirmSync": {
+      "label": "同步前确认",
+      "description": "从状态栏同步项执行同步（先拉取后推送）前先弹出确认。"
     },
     "pier.git.worktree.branchNamePrompt": {
       "label": "工作树分支提示词",
@@ -552,8 +575,16 @@
   },
   "terminalStatusItems": {
     "pier.worktree.status": {
-      "description": "在终端面板中显示当前 Git 工作树。",
-      "title": "工作树状态"
+      "description": "在终端面板中显示 Git 分支；点击打开状态操作。",
+      "title": "Git 分支"
+    },
+    "pier.git.status.changes": {
+      "description": "显示增删行数；点击打开审查面板。",
+      "title": "Git 更改"
+    },
+    "pier.git.status.sync": {
+      "description": "显示领先/落后计数与一键同步。",
+      "title": "Git 同步"
     }
   },
   "panels": {

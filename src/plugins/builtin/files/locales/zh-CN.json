@@ -215,7 +215,6 @@
     "filePanel.saveOnClose.dontSaveLabel": "不保存",
     "filePanel.saveOnClose.cancelLabel": "取消",
     "files.projectStatus.openLabel": "打开项目文件",
-    "files.projectStatus.openTooltip": "打开项目文件",
     "files.projectStatus.openFailed": "无法打开项目文件",
     "files.notifications.terminalOpenUrl.relativeWithoutCwd": "当前终端没有工作目录",
     "files.notifications.terminalOpenUrl.invalid": "无法打开该路径",

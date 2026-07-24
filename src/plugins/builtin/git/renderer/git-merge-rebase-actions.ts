@@ -1,21 +1,15 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type {
-  GitMergeAbortResult,
-  GitRebaseAbortResult,
-  GitRebaseContinueResult,
-} from "@shared/contracts/git.ts";
 import { GitBranch, GitMerge } from "lucide-react";
 import {
   activeCwdOrMessage,
   commandTitle,
   disabledReasonForActiveGit,
   enabledForActiveGit,
-  showConflictDetails,
-  showError,
-  showLoading,
-  showUnavailable,
 } from "./git-command-helpers.ts";
-import { pluginText } from "./git-plugin-text.ts";
+import {
+  runAbortPausedOperation,
+  runContinuePausedOperation,
+} from "./git-operation-runners.ts";
 
 export function registerMergeAbortAction(
   context: RendererPluginContext
@@ -34,26 +28,11 @@ export function registerMergeAbortAction(
       if (!cwd) {
         return;
       }
-      const loading = showLoading(
-        context,
-        pluginText(context, "gitLoadingMergeAbort", "Aborting merge...")
-      );
-      let result: GitMergeAbortResult;
-      try {
-        result = await context.git.abortMerge(cwd);
-      } catch (err) {
-        loading.dismiss();
-        await showError(context, title, err);
-        return;
-      }
-      if (result.kind === "ok") {
-        loading.success(
-          pluginText(context, "gitMergeAbortSuccess", "Merge aborted")
-        );
-      } else {
-        loading.dismiss();
-        await showUnavailable(context, title, result.message?.trim());
-      }
+      await runAbortPausedOperation(context, {
+        cwd,
+        kind: "merging",
+        title,
+      });
     },
     id: "pier.git.mergeAbort",
     metadata: {
@@ -85,26 +64,11 @@ export function registerRebaseAbortAction(
       if (!cwd) {
         return;
       }
-      const loading = showLoading(
-        context,
-        pluginText(context, "gitLoadingRebaseAbort", "Aborting rebase...")
-      );
-      let result: GitRebaseAbortResult;
-      try {
-        result = await context.git.abortRebase(cwd);
-      } catch (err) {
-        loading.dismiss();
-        await showError(context, title, err);
-        return;
-      }
-      if (result.kind === "ok") {
-        loading.success(
-          pluginText(context, "gitRebaseAbortSuccess", "Rebase aborted")
-        );
-      } else {
-        loading.dismiss();
-        await showUnavailable(context, title, result.message?.trim());
-      }
+      await runAbortPausedOperation(context, {
+        cwd,
+        kind: "rebasing",
+        title,
+      });
     },
     id: "pier.git.rebaseAbort",
     metadata: {
@@ -136,38 +100,11 @@ export function registerRebaseContinueAction(
       if (!cwd) {
         return;
       }
-      const loading = showLoading(
-        context,
-        pluginText(context, "gitLoadingRebaseContinue", "Continuing rebase...")
-      );
-      let result: GitRebaseContinueResult;
-      try {
-        result = await context.git.continueRebase(cwd);
-      } catch (err) {
-        loading.dismiss();
-        await showError(context, title, err);
-        return;
-      }
-      if (result.kind === "ok") {
-        loading.success(
-          pluginText(context, "gitRebaseContinueSuccess", "Rebase continued")
-        );
-      } else if (result.kind === "conflict") {
-        loading.dismiss();
-        await showConflictDetails(
-          context,
-          pluginText(context, "gitRebaseConflictTitle", "Rebase Conflicts"),
-          pluginText(
-            context,
-            "gitRebaseContinueConflict",
-            "Rebase still has conflicts. Resolve them, then continue."
-          ),
-          result.message
-        );
-      } else {
-        loading.dismiss();
-        await showUnavailable(context, title, result.message?.trim());
-      }
+      await runContinuePausedOperation(context, {
+        cwd,
+        kind: "rebasing",
+        title,
+      });
     },
     id: "pier.git.rebaseContinue",
     metadata: {

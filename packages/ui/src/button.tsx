@@ -14,7 +14,7 @@ import { cn } from "./utils.ts";
 
 const buttonVariants = cva(
   cn(
-    "group/button inline-flex shrink-0 select-none items-center justify-center whitespace-nowrap rounded-full border border-transparent bg-clip-padding font-medium text-sm outline-none transition-all focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0",
+    "group/button inline-flex select-none items-center justify-center whitespace-nowrap rounded-full border border-transparent bg-clip-padding font-medium text-sm outline-none transition-all focus-visible:border-ring focus-visible:ring-3 focus-visible:ring-ring/30 active:not-aria-[haspopup]:translate-y-px disabled:pointer-events-none disabled:opacity-50 aria-disabled:pointer-events-none aria-disabled:opacity-50 aria-invalid:border-destructive aria-invalid:ring-3 aria-invalid:ring-destructive/20 dark:aria-invalid:border-destructive/50 dark:aria-invalid:ring-destructive/40 [&_svg]:pointer-events-none [&_svg]:shrink-0",
     CONTROL_ICON_GLYPH_CLASS
   ),
   {
@@ -39,23 +39,35 @@ const buttonVariants = cva(
       size: {
         default: cn(
           CONTROL_HEIGHT_CLASS,
-          "gap-1.5 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5"
+          "shrink-0 gap-1.5 px-3 has-data-[icon=inline-end]:pr-2.5 has-data-[icon=inline-start]:pl-2.5"
         ),
         // 带文字紧凑钮：缩小 hit 与 glyph；纯图标请用 icon-xs。
         xs: cn(
-          "h-6 gap-1 px-2.5 text-xs has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+          "h-6 shrink-0 gap-1 px-2.5 text-xs has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
           CONTROL_ICON_GLYPH_SM_CLASS
         ),
-        sm: "h-7 gap-1 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
-        lg: "h-9 gap-1.5 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
-        icon: CONTROL_ICON_SIZE_CLASS,
+        /**
+         * 终端状态栏项：22px 落在 28px 条内；可收缩 + truncate；圆角 md（非 full）。
+         * 与 STATUS_BAR_ITEM_TRIGGER_CLASS 色板组合使用。
+         */
+        "status-bar": cn(
+          "h-[22px] min-w-0 shrink gap-1 rounded-md px-1.5 font-normal text-[11px]",
+          CONTROL_ICON_GLYPH_SM_CLASS
+        ),
+        sm: "h-7 shrink-0 gap-1 px-3 has-data-[icon=inline-end]:pr-2 has-data-[icon=inline-start]:pl-2",
+        lg: "h-9 shrink-0 gap-1.5 px-4 has-data-[icon=inline-end]:pr-3 has-data-[icon=inline-start]:pl-3",
+        icon: cn(CONTROL_ICON_SIZE_CLASS, "shrink-0"),
         // 紧凑 hit 24 + 14px glyph（size-3.5），与默认 16 / 文字 xs 12 分层。
         "icon-xs": cn(
           CONTROL_ICON_HIT_COMPACT_CLASS,
-          CONTROL_ICON_GLYPH_COMPACT_CLASS
+          CONTROL_ICON_GLYPH_COMPACT_CLASS,
+          "shrink-0"
         ),
-        "icon-sm": CONTROL_ICON_SIZE_CLASS,
-        "icon-lg": cn("size-9", "[&_svg:not([class*='size-'])]:size-5"),
+        "icon-sm": cn(CONTROL_ICON_SIZE_CLASS, "shrink-0"),
+        "icon-lg": cn(
+          "size-9 shrink-0",
+          "[&_svg:not([class*='size-'])]:size-5"
+        ),
       },
     },
     defaultVariants: {

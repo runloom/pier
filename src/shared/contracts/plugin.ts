@@ -164,6 +164,13 @@ export const pluginTerminalStatusItemContributionSchema = z.object({
   id: z.string().min(1),
   /** 同侧排序权重,缺省 0。语义见 alignment 注释。 */
   order: z.number().optional(),
+  /**
+   * 窄屏整项隐藏优先级：越大越先藏。缺省由宿主默认 25。
+   * 与 order（阅读顺序）独立。
+   */
+  overflowPriority: z.number().optional(),
+  /** true 时永不因溢出整项隐藏（通常分支身份）；仍可能被 CSS 截断。 */
+  overflowPinned: z.boolean().optional(),
   permissions: z.array(pierCapabilitySchema).default([]),
   title: z.string().min(1),
 });

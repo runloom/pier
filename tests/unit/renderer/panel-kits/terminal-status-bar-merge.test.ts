@@ -62,7 +62,13 @@ describe("resolveEffectiveTerminalStatusItemConfig", () => {
   it("默认值:left / 0 / 可见", () => {
     expect(
       resolveEffectiveTerminalStatusItemConfig(undefined, undefined)
-    ).toEqual({ alignment: "left", hidden: false, order: 0 });
+    ).toEqual({
+      alignment: "left",
+      hidden: false,
+      order: 0,
+      overflowPinned: false,
+      overflowPriority: undefined,
+    });
   });
 
   it("manifest 声明覆盖默认", () => {
@@ -71,7 +77,13 @@ describe("resolveEffectiveTerminalStatusItemConfig", () => {
         { alignment: "right", order: 10 },
         undefined
       )
-    ).toEqual({ alignment: "right", hidden: false, order: 10 });
+    ).toEqual({
+      alignment: "right",
+      hidden: false,
+      order: 10,
+      overflowPinned: false,
+      overflowPriority: undefined,
+    });
   });
 
   it("用户覆盖优先于 manifest", () => {
@@ -80,7 +92,13 @@ describe("resolveEffectiveTerminalStatusItemConfig", () => {
         { alignment: "right", order: 10 },
         { alignment: "left", hidden: true, order: -1 }
       )
-    ).toEqual({ alignment: "left", hidden: true, order: -1 });
+    ).toEqual({
+      alignment: "left",
+      hidden: true,
+      order: -1,
+      overflowPinned: false,
+      overflowPriority: undefined,
+    });
   });
 
   it("覆盖字段独立回落:只覆盖 order 时 alignment 仍取 manifest", () => {
@@ -89,7 +107,33 @@ describe("resolveEffectiveTerminalStatusItemConfig", () => {
         { alignment: "right" },
         { order: 5 }
       )
-    ).toEqual({ alignment: "right", hidden: false, order: 5 });
+    ).toEqual({
+      alignment: "right",
+      hidden: false,
+      order: 5,
+      overflowPinned: false,
+      overflowPriority: undefined,
+    });
+  });
+
+  it("保留贡献声明的 overflowPinned / overflowPriority", () => {
+    expect(
+      resolveEffectiveTerminalStatusItemConfig(
+        {
+          alignment: "right",
+          order: 12,
+          overflowPinned: true,
+          overflowPriority: 0,
+        },
+        undefined
+      )
+    ).toEqual({
+      alignment: "right",
+      hidden: false,
+      order: 12,
+      overflowPinned: true,
+      overflowPriority: 0,
+    });
   });
 });
 
