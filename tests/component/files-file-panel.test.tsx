@@ -460,6 +460,22 @@ function createMockContext(overrides?: {
       writeDocument,
       writeText,
     },
+    appearance: {
+      current: () => ({
+        codeTheme: "github-dark",
+        density: "compact",
+        language: "en",
+        locale: "en",
+        theme: "dark",
+        typography: {
+          baseFontSize: "16px",
+          codeFontFamily: "monospace",
+          codeFontSize: "13px",
+          fontFamily: "sans-serif",
+        },
+      }),
+      onDidChange: () => () => undefined,
+    },
     groupContent: createHostGroupContentContext(undefined, () => undefined),
     i18n: {
       language: () => "en",

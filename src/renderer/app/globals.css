@@ -238,6 +238,8 @@
   --pier-mono-font-family:
     "JetBrainsMono Nerd Font Mono", ui-monospace, SFMono-Regular,
     "HarmonyOS Sans SC", "PingFang SC", Menlo, monospace;
+  /* Code editor + Git diff body size; terminal uses monoFontSize separately. */
+  --pier-code-font-size: 13px;
 
   /* === Capsule toast (Sonner) ===
      反差色表面：dark 主题用近白底深字、light 主题用近黑底浅字，

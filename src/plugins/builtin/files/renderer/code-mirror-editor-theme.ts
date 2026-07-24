@@ -1,7 +1,7 @@
 import { EditorView } from "codemirror";
 
-// 与终端相同的字体族,字号沿 tw text-[13px] 的比例 (0.8125rem)。CodeMirror
-// content 用 var(--font-mono) 让 Zen / 首选设置里改的等宽字体自动同步;
+// 与终端相同的字体族;字号走 --pier-code-font-size（设置「代码字号」）。
+// CodeMirror content 用 var(--font-mono) 让首选设置里改的等宽字体自动同步;
 // color 用 inherit 让 :root.light / :root.dark 切换自然生效。
 export const EDITOR_THEME = EditorView.theme({
   "&": {
@@ -12,7 +12,7 @@ export const EDITOR_THEME = EditorView.theme({
   ".cm-content": {
     caretColor: "currentColor",
     fontFamily: "var(--font-mono)",
-    fontSize: "0.8125rem",
+    fontSize: "var(--pier-code-font-size, 13px)",
     // CJK 字形有较高的 x-height + 无明显 descender,1.55 会让相邻两行紧贴,
     // 视觉上像"重叠"。抬到 1.75 与 Cursor / VSCode 默认接近,同时不至于
     // 拉太散显得空白多。ASCII 也受益,不会撑破 CodeMirror 布局。
@@ -36,7 +36,7 @@ export const EDITOR_THEME = EditorView.theme({
     borderRight: "none",
     color: "color-mix(in oklab, var(--muted-foreground) 70%, transparent)",
     fontFamily: "var(--font-mono)",
-    fontSize: "0.8125rem",
+    fontSize: "var(--pier-code-font-size, 13px)",
     // 与内容同层的层级不足以完全稳,追加 z-index 保证 sticky gutter 一定盖内容。
     position: "sticky",
     left: 0,

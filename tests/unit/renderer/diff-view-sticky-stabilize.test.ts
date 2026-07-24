@@ -1,6 +1,7 @@
 import {
   DIFF_HEADER_HEIGHT_PX,
   diffFontMetrics,
+  pierDiffCodeViewKey,
 } from "@pier/ui/diff-view-appearance.ts";
 import { stabilizeCodeViewStickyPositioning } from "@pier/ui/diff-view-sticky-stabilize.ts";
 import { describe, expect, it, vi } from "vitest";
@@ -8,8 +9,29 @@ import { describe, expect, it, vi } from "vitest";
 describe("diff header metrics", () => {
   it("uses the compact 32px multi-diff header chrome height", () => {
     expect(DIFF_HEADER_HEIGHT_PX).toBe(32);
-    expect(diffFontMetrics("16px").diffHeaderHeight).toBe(32);
-    expect(diffFontMetrics("16px").lineHeight).toBeCloseTo(22.75);
+    expect(diffFontMetrics("13px").diffHeaderHeight).toBe(32);
+    expect(diffFontMetrics("13px").lineHeight).toBeCloseTo(22.75);
+    expect(diffFontMetrics("16px").lineHeight).toBeCloseTo(28);
+  });
+
+  it("pierDiffCodeViewKey remounts when lineHeight (codeFontSize) changes", () => {
+    const base = {
+      diffStyle: "split",
+      overflow: "scroll",
+      renderMode: "worker",
+      topologyKey: "a,b",
+    } as const;
+    const small = pierDiffCodeViewKey({
+      ...base,
+      lineHeight: diffFontMetrics("13px").lineHeight,
+    });
+    const large = pierDiffCodeViewKey({
+      ...base,
+      lineHeight: diffFontMetrics("16px").lineHeight,
+    });
+    expect(small).not.toBe(large);
+    expect(small).toContain("lh=");
+    expect(large).toContain(`lh=${diffFontMetrics("16px").lineHeight}`);
   });
 });
 

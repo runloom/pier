@@ -204,6 +204,7 @@ function createMockContext(): RendererPluginContext {
         typography: {
           baseFontSize: "16px",
           codeFontFamily: "monospace",
+          codeFontSize: "13px",
           fontFamily: "sans-serif",
         },
       }),

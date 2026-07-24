@@ -1,6 +1,8 @@
 /**
- * 字体偏好 store — 管理 UI / Mono 字体族自定义值，
- * 同步写入 :root CSS 变量 (--pier-ui-font-family / --pier-mono-font-family)。
+ * 字体偏好 store — 管理 UI / Mono 字体族与字号偏好，
+ * 同步写入 :root CSS 变量：
+ * - --pier-ui-font-family / --pier-mono-font-family
+ * - --pier-code-font-size（文件编辑 + Git Diff；终端字号不写 CSS，走 native）
  *
  * 参考 loomdesk font.svelte.ts + font-utils.ts:
  * - 用户输入空字符串 → 走内置 fallback 链
@@ -137,7 +139,11 @@ export function computeMonoFontFamilyList(userInput: string): string[] {
 
 // ── DOM 同步 ─────────────────────────────────────────────────────────────────
 
-function syncCssVars(uiInput: string, monoInput: string): void {
+function syncCssVars(
+  uiInput: string,
+  monoInput: string,
+  codeFontSize: number
+): void {
   if (typeof document === "undefined") {
     return;
   }
@@ -147,32 +153,65 @@ function syncCssVars(uiInput: string, monoInput: string): void {
     "--pier-mono-font-family",
     computeMonoFontFamily(monoInput)
   );
+  root.style.setProperty("--pier-code-font-size", `${codeFontSize}px`);
 }
 
 // ── Store ────────────────────────────────────────────────────────────────────
 
-interface FontState {
-  _hydrate: (snapshot: {
-    uiFontFamily: string;
-    monoFontFamily: string;
-    monoFontSize: number;
-  }) => void;
+interface FontSnapshot {
+  codeFontSize: number;
   monoFontFamily: string;
   monoFontSize: number;
-  setMonoFontFamily: (next: string) => Promise<void>;
-  setMonoFontSize: (next: number) => Promise<void>;
-  setUiFontFamily: (next: string) => Promise<void>;
   uiFontFamily: string;
 }
 
-export const useFontStore = create<FontState>((set) => ({
+interface FontState extends FontSnapshot {
+  _hydrate: (snapshot: FontSnapshot) => void;
+  setCodeFontSize: (next: number) => Promise<void>;
+  setMonoFontFamily: (next: string) => Promise<void>;
+  setMonoFontSize: (next: number) => Promise<void>;
+  setUiFontFamily: (next: string) => Promise<void>;
+}
+
+function toFontSnapshot(snapshot: {
+  codeFontSize?: unknown;
+  monoFontFamily?: unknown;
+  monoFontSize?: unknown;
+  uiFontFamily?: unknown;
+}): FontSnapshot {
+  return {
+    uiFontFamily:
+      typeof snapshot.uiFontFamily === "string" ? snapshot.uiFontFamily : "",
+    monoFontFamily:
+      typeof snapshot.monoFontFamily === "string"
+        ? snapshot.monoFontFamily
+        : "",
+    monoFontSize:
+      typeof snapshot.monoFontSize === "number" ? snapshot.monoFontSize : 13,
+    codeFontSize:
+      typeof snapshot.codeFontSize === "number" ? snapshot.codeFontSize : 13,
+  };
+}
+
+export const useFontStore = create<FontState>((set, get) => ({
   uiFontFamily: "",
   monoFontFamily: "",
   monoFontSize: 13,
+  codeFontSize: 13,
 
-  _hydrate({ uiFontFamily, monoFontFamily, monoFontSize }) {
-    syncCssVars(uiFontFamily, monoFontFamily);
-    set({ uiFontFamily, monoFontFamily, monoFontSize });
+  _hydrate(snapshot) {
+    const next = toFontSnapshot(snapshot);
+    const current = get();
+    if (
+      current.uiFontFamily === next.uiFontFamily &&
+      current.monoFontFamily === next.monoFontFamily &&
+      current.monoFontSize === next.monoFontSize &&
+      current.codeFontSize === next.codeFontSize
+    ) {
+      return;
+    }
+    syncCssVars(next.uiFontFamily, next.monoFontFamily, next.codeFontSize);
+    set(next);
   },
 
   async setUiFontFamily(next) {
@@ -180,9 +219,7 @@ export const useFontStore = create<FontState>((set) => ({
       const merged = await window.pier.preferences.update({
         uiFontFamily: next,
       });
-      const value = (merged.uiFontFamily as string) ?? "";
-      syncCssVars(value, useFontStore.getState().monoFontFamily);
-      set({ uiFontFamily: value });
+      useFontStore.getState()._hydrate(toFontSnapshot(merged));
     } catch (err) {
       console.error("[font.store] setUiFontFamily IPC failed:", err);
     }
@@ -193,9 +230,7 @@ export const useFontStore = create<FontState>((set) => ({
       const merged = await window.pier.preferences.update({
         monoFontFamily: next,
       });
-      const value = (merged.monoFontFamily as string) ?? "";
-      syncCssVars(useFontStore.getState().uiFontFamily, value);
-      set({ monoFontFamily: value });
+      useFontStore.getState()._hydrate(toFontSnapshot(merged));
     } catch (err) {
       console.error("[font.store] setMonoFontFamily IPC failed:", err);
     }
@@ -206,24 +241,56 @@ export const useFontStore = create<FontState>((set) => ({
       const merged = await window.pier.preferences.update({
         monoFontSize: next,
       });
-      const value = (merged.monoFontSize as number) ?? 13;
-      set({ monoFontSize: value });
+      useFontStore.getState()._hydrate(toFontSnapshot(merged));
     } catch (err) {
       console.error("[font.store] setMonoFontSize IPC failed:", err);
+    }
+  },
+
+  async setCodeFontSize(next) {
+    try {
+      const merged = await window.pier.preferences.update({
+        codeFontSize: next,
+      });
+      useFontStore.getState()._hydrate(toFontSnapshot(merged));
+    } catch (err) {
+      console.error("[font.store] setCodeFontSize IPC failed:", err);
     }
   },
 }));
 
 // ── Bootstrap ────────────────────────────────────────────────────────────────
 
+let preferencesListenerAttached = false;
+let detachPreferencesListener: (() => void) | null = null;
+
+function attachPreferencesListener(): void {
+  if (preferencesListenerAttached || typeof window === "undefined") {
+    return;
+  }
+  const detach = window.pier?.preferences?.onChanged?.((next) => {
+    useFontStore.getState()._hydrate(toFontSnapshot(next));
+  });
+  if (!detach) {
+    return;
+  }
+  detachPreferencesListener = detach;
+  preferencesListenerAttached = true;
+}
+
+export function detachFontListener(): void {
+  detachPreferencesListener?.();
+  detachPreferencesListener = null;
+  preferencesListenerAttached = false;
+}
+
 export async function initFont(): Promise<void> {
+  // Attach before read so multi-window pier:preferences:changed is not dropped
+  // during the first await (same ordering as theme/zoom stores).
+  attachPreferencesListener();
   try {
     const snapshot = await window.pier.preferences.read();
-    useFontStore.getState()._hydrate({
-      uiFontFamily: (snapshot.uiFontFamily as string) ?? "",
-      monoFontFamily: (snapshot.monoFontFamily as string) ?? "",
-      monoFontSize: (snapshot.monoFontSize as number) ?? 13,
-    });
+    useFontStore.getState()._hydrate(toFontSnapshot(snapshot));
   } catch (err) {
     console.error("[font.store] initFont IPC failed; keeping defaults:", err);
   }

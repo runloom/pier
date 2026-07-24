@@ -77,8 +77,8 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
   let sharedView: LazyExoticComponent<
     (props: {
       appearance: {
-        baseFontSize: string;
         codeFontFamily: string;
+        codeFontSize: string;
         codeTheme: string;
         colorMode: "dark" | "light";
       };
@@ -434,8 +434,8 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
             <Suspense fallback={<ReviewLoading context={context} />}>
               <LazyPierDiffView
                 appearance={{
-                  baseFontSize: appearance.typography.baseFontSize,
                   codeFontFamily: appearance.typography.codeFontFamily,
+                  codeFontSize: appearance.typography.codeFontSize,
                   codeTheme: appearance.codeTheme,
                   colorMode: appearance.theme,
                 }}

@@ -33,6 +33,7 @@ const DEFAULTS: ProjectPreferences = {
   uiFontFamily: "",
   monoFontFamily: "",
   monoFontSize: 13,
+  codeFontSize: 13,
   terminalCursorStyle: DEFAULT_TERMINAL_CURSOR_STYLE,
   terminalCursorBlink: DEFAULT_TERMINAL_CURSOR_BLINK,
   terminalScrollbackMb: DEFAULT_TERMINAL_SCROLLBACK_MB,
