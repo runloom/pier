@@ -2,7 +2,12 @@ import type {
   GitStatusDropdownModel,
   GitStatusDropdownText,
 } from "@plugins/builtin/git/renderer/git-status-dropdown-model.ts";
-import { deriveGitStatusDropdownModel } from "@plugins/builtin/git/renderer/git-status-dropdown-model.ts";
+import {
+  deriveGitStatusDropdownModel,
+  GIT_LARGE_CHANGE_FILE_THRESHOLD,
+  GIT_LARGE_CHANGE_LINE_THRESHOLD,
+  resolveRemoteSyncActionId,
+} from "@plugins/builtin/git/renderer/git-status-dropdown-model.ts";
 import type { GitStatus } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { describe, expect, it } from "vitest";
@@ -21,14 +26,18 @@ const PANEL_CONTEXT = {
 } as const satisfies PanelContext;
 
 const ZH_TEXT: GitStatusDropdownText = {
+  abortOperation: (operation) => `中止${operation}`,
   ahead: "领先",
   behind: "落后",
-  changed: (count) => `${count} 项变更`,
+  changes: "更改",
   conflict: (count) => `${count} 个冲突`,
+  continueOperation: (operation) => `继续${operation}`,
   deletions: "行删除",
   insertions: "行新增",
+  largeChange: "变更规模较大",
   merged: "已合并",
   noLocalChanges: "无未提交变更",
+  noUpstream: "无上游分支",
   operationName: (kind) => {
     const names = {
       bisecting: "二分查找",
@@ -40,6 +49,11 @@ const ZH_TEXT: GitStatusDropdownText = {
     return names[kind];
   },
   operationPaused: (operation) => `${operation}已暂停`,
+  pull: "拉取",
+  pullBlocked: "本地有改动，请先提交或储藏再拉取",
+  push: "推送",
+  stash: "储藏",
+  sync: "同步",
   upstreamGone: "远端已删",
 };
 
@@ -71,22 +85,52 @@ function makeStatus(overrides: Partial<GitStatus> = {}): GitStatus {
   };
 }
 
-function actionIds(status: GitStatus): string[] {
+function derive(
+  status: GitStatus,
+  options: Partial<Parameters<typeof deriveGitStatusDropdownModel>[2]> = {}
+): GitStatusDropdownModel {
   return deriveGitStatusDropdownModel(status, PANEL_CONTEXT, {
     fallbackWorktreeName: "pier",
     worktreePath: "/workspace/pier",
-  }).actions.map((action) => action.id);
+    ...options,
+  });
 }
 
-function summaryText(model: GitStatusDropdownModel): string {
-  return model.statusGroups
-    .map((group) => group.parts.map((part) => part.label).join(" "))
-    .join(" · ");
+function rowIds(model: GitStatusDropdownModel): string[] {
+  return model.rows.map((row) => row.id);
+}
+
+function row(model: GitStatusDropdownModel, id: string) {
+  const match = model.rows.find((candidate) => candidate.id === id);
+  if (!match) {
+    throw new Error(`expected row ${id}`);
+  }
+  return match;
 }
 
 describe("deriveGitStatusDropdownModel", () => {
-  it("models tracked dirty changes with review and switch-worktree actions", () => {
-    const model = deriveGitStatusDropdownModel(
+  it("keeps the fixed task zone in every normal model", () => {
+    for (const status of [
+      makeStatus(),
+      makeStatus({
+        counts: { conflict: 0, modified: 3, staged: 1, untracked: 0 },
+      }),
+      makeStatus({
+        counts: { conflict: 2, modified: 0, staged: 0, untracked: 0 },
+        repoState: { conflictCount: 2, current: 1, kind: "rebasing", total: 4 },
+      }),
+    ]) {
+      const model = derive(status);
+      expect(model.variant).toBe("normal");
+      expect(model.tasks.map((task) => task.id)).toEqual([
+        "switchBranch",
+        "switchWorktree",
+      ]);
+    }
+  });
+
+  it("models tracked dirty changes as a single actionable changes row", () => {
+    const model = derive(
       makeStatus({
         branch: {
           ahead: 2,
@@ -100,146 +144,126 @@ describe("deriveGitStatusDropdownModel", () => {
         counts: { conflict: 0, modified: 4, staged: 2, untracked: 1 },
         delta: { deletions: 42, insertions: 128 },
       }),
-      PANEL_CONTEXT,
-      {
-        fallbackWorktreeName: "pier",
-        remoteSyncLabel: "Remote fetched 1 min ago",
-        worktreePath: "/workspace/pier",
-      }
+      { remoteSyncLabel: "Remote fetched 1 min ago" }
     );
 
-    expect(model.variant).toBe("dirty");
-    expect(model.actions.map((action) => action.id)).toEqual([
-      "viewChanges",
-      "switchWorktree",
-    ]);
-    expect(summaryText(model)).toContain("7 changed");
-    expect(summaryText(model)).toContain("+128 −42");
-    expect(summaryText(model)).toContain("↑2 ↓1");
-    expect(model.statusGroups).toEqual([
-      { parts: [{ icon: "changed", label: "7 changed", tone: "warning" }] },
-      {
-        parts: [
-          { assistiveLabel: "insertions", label: "+128", tone: "success" },
-          {
-            assistiveLabel: "deletions",
-            label: "−42",
-            tone: "destructive",
-          },
-        ],
-      },
-      {
-        parts: [
-          {
-            assistiveLabel: "ahead",
-            icon: "ahead",
-            label: "↑2",
-            tone: "muted",
-          },
-          {
-            assistiveLabel: "behind",
-            icon: "behind",
-            label: "↓1",
-            tone: "muted",
-          },
-        ],
-      },
-    ]);
+    expect(rowIds(model)).toEqual(["changes", "sync"]);
+    const changes = row(model, "changes");
+    expect(changes.action).toBe("viewChanges");
+    expect(changes.value).toBe("7 · +128 −42");
+    expect(changes.tone).toBe("default");
     expect(model.contextLine).toBe("pier · Remote fetched 1 min ago");
   });
 
+  it("escalates the changes row for large changes", () => {
+    const byFiles = derive(
+      makeStatus({
+        counts: {
+          conflict: 0,
+          modified: GIT_LARGE_CHANGE_FILE_THRESHOLD,
+          staged: 0,
+          untracked: 0,
+        },
+      })
+    );
+    expect(row(byFiles, "changes").tone).toBe("warning");
+    expect(row(byFiles, "changes").title).toBeTruthy();
+
+    const byLines = derive(
+      makeStatus({
+        counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
+        delta: {
+          deletions: 0,
+          insertions: GIT_LARGE_CHANGE_LINE_THRESHOLD,
+        },
+      })
+    );
+    expect(row(byLines, "changes").tone).toBe("warning");
+  });
+
   it("offers push when the branch is only ahead of its upstream", () => {
-    expect(
-      actionIds(
-        makeStatus({
-          branch: {
-            ahead: 2,
-            behind: 0,
-            branch: "feature/ahead-only",
-            mergedIntoDefault: null,
-            oid: "abc1234567",
-            upstream: "origin/feature/ahead-only",
-            upstreamGone: false,
-          },
-        })
-      )
-    ).toEqual(["push", "switchBranch", "switchWorktree"]);
+    const model = derive(
+      makeStatus({
+        branch: {
+          ahead: 2,
+          behind: 0,
+          branch: "feature/ahead-only",
+          mergedIntoDefault: null,
+          oid: "abc1234567",
+          upstream: "origin/feature/ahead-only",
+          upstreamGone: false,
+        },
+      })
+    );
+    const sync = row(model, "sync");
+    expect(sync.action).toBe("push");
+    expect(sync.label).toBe("Push");
+    expect(sync.value).toBe("↑2");
   });
 
   it("offers pull when the clean branch is only behind its upstream", () => {
-    expect(
-      actionIds(
-        makeStatus({
-          branch: {
-            ahead: 0,
-            behind: 3,
-            branch: "feature/behind-only",
-            mergedIntoDefault: null,
-            oid: "abc1234567",
-            upstream: "origin/feature/behind-only",
-            upstreamGone: false,
-          },
-        })
-      )
-    ).toEqual(["pull", "switchBranch", "switchWorktree"]);
+    const model = derive(
+      makeStatus({
+        branch: {
+          ahead: 0,
+          behind: 3,
+          branch: "feature/behind-only",
+          mergedIntoDefault: null,
+          oid: "abc1234567",
+          upstream: "origin/feature/behind-only",
+          upstreamGone: false,
+        },
+      })
+    );
+    const sync = row(model, "sync");
+    expect(sync.action).toBe("pull");
+    expect(sync.value).toBe("↓3");
   });
 
   it("offers sync when the clean branch is both ahead and behind", () => {
-    expect(
-      actionIds(
-        makeStatus({
-          branch: {
-            ahead: 2,
-            behind: 3,
-            branch: "feature/sync",
-            mergedIntoDefault: null,
-            oid: "abc1234567",
-            upstream: "origin/feature/sync",
-            upstreamGone: false,
-          },
-        })
-      )
-    ).toEqual(["syncChanges", "switchBranch", "switchWorktree"]);
+    const model = derive(
+      makeStatus({
+        branch: {
+          ahead: 2,
+          behind: 3,
+          branch: "feature/sync",
+          mergedIntoDefault: null,
+          oid: "abc1234567",
+          upstream: "origin/feature/sync",
+          upstreamGone: false,
+        },
+      })
+    );
+    const sync = row(model, "sync");
+    expect(sync.action).toBe("syncChanges");
+    expect(sync.value).toBe("↑2 ↓3");
   });
 
-  it("does not offer pull or sync when local changes could be disturbed", () => {
-    expect(
-      actionIds(
-        makeStatus({
-          branch: {
-            ahead: 0,
-            behind: 2,
-            branch: "feature/dirty-behind",
-            mergedIntoDefault: null,
-            oid: "abc1234567",
-            upstream: "origin/feature/dirty-behind",
-            upstreamGone: false,
-          },
-          counts: { conflict: 0, modified: 2, staged: 1, untracked: 2 },
-        })
-      )
-    ).toEqual(["viewChanges", "switchWorktree"]);
-    expect(
-      actionIds(
-        makeStatus({
-          branch: {
-            ahead: 2,
-            behind: 2,
-            branch: "feature/dirty-diverged",
-            mergedIntoDefault: null,
-            oid: "abc1234567",
-            upstream: "origin/feature/dirty-diverged",
-            upstreamGone: false,
-          },
-          counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
-        })
-      )
-    ).toEqual(["viewChanges", "switchWorktree"]);
+  it("keeps the sync row visible but inert when local changes block pull", () => {
+    const model = derive(
+      makeStatus({
+        branch: {
+          ahead: 0,
+          behind: 2,
+          branch: "feature/dirty-behind",
+          mergedIntoDefault: null,
+          oid: "abc1234567",
+          upstream: "origin/feature/dirty-behind",
+          upstreamGone: false,
+        },
+        counts: { conflict: 0, modified: 2, staged: 1, untracked: 2 },
+      })
+    );
+    const sync = row(model, "sync");
+    expect(sync.action).toBeNull();
+    expect(sync.tone).toBe("muted");
+    expect(sync.title).toBe("Commit or stash local changes before pulling");
+    expect(sync.value).toBe("↓2");
   });
 
   it("does not offer sync operations without a usable upstream", () => {
     expect(
-      actionIds(
+      resolveRemoteSyncActionId(
         makeStatus({
           branch: {
             ahead: 2,
@@ -252,9 +276,9 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["switchBranch", "switchWorktree"]);
+    ).toBeNull();
     expect(
-      actionIds(
+      resolveRemoteSyncActionId(
         makeStatus({
           branch: {
             ahead: 2,
@@ -267,11 +291,11 @@ describe("deriveGitStatusDropdownModel", () => {
           },
         })
       )
-    ).toEqual(["switchBranch", "switchWorktree"]);
+    ).toBeNull();
   });
 
-  it("models rebasing conflicts without write actions", () => {
-    const model = deriveGitStatusDropdownModel(
+  it("puts paused rebase with continue and abort rows on top", () => {
+    const model = derive(
       makeStatus({
         counts: { conflict: 3, modified: 0, staged: 0, untracked: 0 },
         repoState: {
@@ -280,29 +304,26 @@ describe("deriveGitStatusDropdownModel", () => {
           kind: "rebasing",
           total: 5,
         },
-      }),
-      PANEL_CONTEXT,
-      {
-        fallbackWorktreeName: "pier",
-        worktreePath: "/workspace/pier",
-      }
+      })
     );
 
-    expect(model.variant).toBe("active");
-    expect(model.actions.map((action) => action.id)).toEqual([
-      "viewChanges",
-      "switchWorktree",
+    expect(rowIds(model)).toEqual([
+      "operation",
+      "continueOperation",
+      "abortOperation",
     ]);
-    expect(summaryText(model)).toContain("Rebase paused");
-    expect(summaryText(model)).toContain("3 conflicts");
-    expect(model.statusGroups).toEqual([
-      { parts: [{ icon: "rebase", label: "Rebase paused", tone: "info" }] },
-      { parts: [{ icon: "conflict", label: "3 conflicts", tone: "danger" }] },
-    ]);
+    expect(model.operationKind).toBe("rebasing");
+    const operation = row(model, "operation");
+    expect(operation.label).toBe("Rebase paused");
+    expect(operation.value).toBe("3 conflicts");
+    expect(operation.tone).toBe("danger");
+    expect(operation.action).toBe("viewChanges");
+    expect(row(model, "continueOperation").label).toBe("Continue Rebase");
+    expect(row(model, "abortOperation").label).toBe("Abort Rebase");
   });
 
   it("uses singular conflict copy for one active conflict", () => {
-    const model = deriveGitStatusDropdownModel(
+    const model = derive(
       makeStatus({
         counts: { conflict: 1, modified: 0, staged: 0, untracked: 0 },
         repoState: {
@@ -311,31 +332,58 @@ describe("deriveGitStatusDropdownModel", () => {
           kind: "rebasing",
           total: 5,
         },
-      }),
-      PANEL_CONTEXT,
-      {
-        fallbackWorktreeName: "pier",
-        worktreePath: "/workspace/pier",
-      }
+      })
     );
 
-    expect(summaryText(model)).toContain("1 conflict");
-    expect(summaryText(model)).not.toContain("1 conflicts");
+    expect(row(model, "operation").value).toBe("1 conflict");
   });
 
-  it("models cherry-pick pause as review-only", () => {
-    expect(
-      actionIds(
-        makeStatus({
-          counts: { conflict: 2, modified: 0, staged: 0, untracked: 0 },
-          repoState: { conflictCount: 2, kind: "cherry-picking" },
-        })
-      )
-    ).toEqual(["viewChanges", "switchWorktree"]);
+  it("offers abort but no continue for a paused merge", () => {
+    const model = derive(
+      makeStatus({
+        counts: { conflict: 2, modified: 0, staged: 0, untracked: 0 },
+        repoState: { conflictCount: 2, kind: "merging" },
+      })
+    );
+
+    expect(rowIds(model)).toEqual(["operation", "abortOperation"]);
+    expect(model.operationKind).toBe("merging");
+    expect(row(model, "abortOperation").label).toBe("Abort Merge");
   });
 
-  it("models clean merged upstream-gone branch without prune", () => {
-    const model = deriveGitStatusDropdownModel(
+  it("keeps bisect informational without continue or abort rows", () => {
+    const model = derive(
+      makeStatus({
+        repoState: { bad: 2, good: 3, kind: "bisecting" },
+      })
+    );
+
+    expect(rowIds(model)).toEqual(["operation"]);
+    expect(model.operationKind).toBeNull();
+    expect(row(model, "operation").tone).toBe("default");
+  });
+
+  it("hides the sync row while an operation is paused", () => {
+    const model = derive(
+      makeStatus({
+        branch: {
+          ahead: 2,
+          behind: 1,
+          branch: "feature/rebase",
+          mergedIntoDefault: null,
+          oid: "abc1234567",
+          upstream: "origin/feature/rebase",
+          upstreamGone: false,
+        },
+        repoState: { conflictCount: 0, current: 1, kind: "rebasing", total: 3 },
+      })
+    );
+
+    expect(rowIds(model)).not.toContain("sync");
+  });
+
+  it("models clean merged upstream-gone branch as muted lifecycle rows", () => {
+    const model = derive(
       makeStatus({
         branch: {
           ahead: 0,
@@ -346,199 +394,78 @@ describe("deriveGitStatusDropdownModel", () => {
           upstream: "origin/feature/auth-flow",
           upstreamGone: true,
         },
-      }),
-      PANEL_CONTEXT,
-      {
-        fallbackWorktreeName: "pier",
-        worktreePath: "/workspace/pier",
-      }
+      })
     );
 
-    expect(model.variant).toBe("completed");
-    expect(model.actions.map((action) => action.id)).toEqual([
-      "switchBranch",
-      "switchWorktree",
-    ]);
-    expect(summaryText(model)).toBe(
-      "No local changes · merged · upstream gone"
-    );
-    expect(model.statusGroups).toEqual([
-      {
-        parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
-      },
-      { parts: [{ icon: "merged", label: "merged", tone: "done" }] },
-      {
-        parts: [
-          { icon: "upstreamGone", label: "upstream gone", tone: "warning" },
-        ],
-      },
-    ]);
+    expect(rowIds(model)).toEqual(["clean", "merged", "upstreamGone"]);
+    expect(row(model, "merged").action).toBeNull();
+    expect(row(model, "merged").tone).toBe("muted");
+    expect(row(model, "upstreamGone").tone).toBe("muted");
   });
 
-  it("keeps sync counts visible when the working tree is clean", () => {
-    const model = deriveGitStatusDropdownModel(
-      makeStatus({
-        branch: {
-          ahead: 2,
-          behind: 3,
-          branch: "feature/sync-only",
-          mergedIntoDefault: null,
-          oid: "abc1234567",
-          upstream: "origin/feature/sync-only",
-          upstreamGone: false,
-        },
-      }),
-      PANEL_CONTEXT,
-      {
-        fallbackWorktreeName: "pier",
-        worktreePath: "/workspace/pier",
-      }
-    );
-
-    expect(model.variant).toBe("clean");
-    expect(summaryText(model)).toBe("No local changes · ↑2 ↓3");
-    expect(model.actions.map((action) => action.id)).toEqual([
-      "syncChanges",
-      "switchBranch",
-      "switchWorktree",
-    ]);
-    expect(model.statusGroups).toEqual([
-      {
-        parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
-      },
-      {
-        parts: [
-          {
-            assistiveLabel: "ahead",
-            icon: "ahead",
-            label: "↑2",
-            tone: "muted",
-          },
-          {
-            assistiveLabel: "behind",
-            icon: "behind",
-            label: "↓3",
-            tone: "muted",
-          },
-        ],
-      },
-    ]);
-  });
-
-  it("omits zero sync directions to match the status bar summary", () => {
-    const aheadOnly = deriveGitStatusDropdownModel(
-      makeStatus({
-        branch: {
-          ahead: 2,
-          behind: 0,
-          branch: "feature/ahead-only",
-          mergedIntoDefault: null,
-          oid: "abc1234567",
-          upstream: "origin/feature/ahead-only",
-          upstreamGone: false,
-        },
-      }),
-      PANEL_CONTEXT,
-      {
-        fallbackWorktreeName: "pier",
-        worktreePath: "/workspace/pier",
-      }
-    );
-    const behindOnly = deriveGitStatusDropdownModel(
+  it("flags a branch without upstream as a muted info row", () => {
+    const model = derive(
       makeStatus({
         branch: {
           ahead: 0,
-          behind: 3,
-          branch: "feature/behind-only",
+          behind: 0,
+          branch: "feature/local-only",
           mergedIntoDefault: null,
           oid: "abc1234567",
-          upstream: "origin/feature/behind-only",
+          upstream: null,
           upstreamGone: false,
         },
-      }),
-      PANEL_CONTEXT,
-      {
-        fallbackWorktreeName: "pier",
-        worktreePath: "/workspace/pier",
-      }
+      })
     );
 
-    expect(summaryText(aheadOnly)).toBe("No local changes · ↑2");
-    expect(summaryText(aheadOnly)).not.toContain("↓0");
-    expect(aheadOnly.statusGroups.at(1)).toEqual({
-      parts: [
-        {
-          assistiveLabel: "ahead",
-          icon: "ahead",
-          label: "↑2",
-          tone: "muted",
-        },
-      ],
-    });
-    expect(summaryText(behindOnly)).toBe("No local changes · ↓3");
-    expect(summaryText(behindOnly)).not.toContain("↑0");
-    expect(behindOnly.statusGroups.at(1)).toEqual({
-      parts: [
-        {
-          assistiveLabel: "behind",
-          icon: "behind",
-          label: "↓3",
-          tone: "muted",
-        },
-      ],
-    });
+    expect(rowIds(model)).toEqual(["clean", "noUpstream"]);
+    expect(row(model, "noUpstream").action).toBeNull();
+  });
+
+  it("shows the stash count as an informational row", () => {
+    const model = derive(makeStatus({ stashCount: 3 }));
+
+    const stash = row(model, "stash");
+    expect(stash.action).toBeNull();
+    expect(stash.value).toBe("3");
   });
 
   it("does not treat zero line delta as dirty", () => {
-    const model = deriveGitStatusDropdownModel(
+    const model = derive(
       makeStatus({
         delta: { deletions: 0, insertions: 0 },
-      }),
-      PANEL_CONTEXT,
-      {
-        fallbackWorktreeName: "pier",
-        worktreePath: "/workspace/pier",
-      }
+      })
     );
 
-    expect(model.variant).toBe("clean");
-    expect(summaryText(model)).toBe("No local changes");
+    expect(rowIds(model)).toEqual(["clean"]);
+    expect(row(model, "clean").action).toBeNull();
   });
 
-  it("uses a differentiated clean summary instead of repeating the clean badge", () => {
-    const model = deriveGitStatusDropdownModel(makeStatus(), PANEL_CONTEXT, {
-      fallbackWorktreeName: "pier",
-      worktreePath: "/workspace/pier",
-    });
-
-    expect(model.variant).toBe("clean");
-    expect(summaryText(model)).toBe("No local changes");
-    expect(summaryText(model)).not.toBe("Clean");
-  });
-
-  it("formats status lines with injected localized text", () => {
-    const model = deriveGitStatusDropdownModel(
+  it("formats rows with injected localized text", () => {
+    const model = derive(
       makeStatus({
         counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
         delta: { deletions: 1, insertions: 2 },
       }),
-      PANEL_CONTEXT,
-      {
-        fallbackWorktreeName: "pier",
-        text: ZH_TEXT,
-        worktreePath: "/workspace/pier",
-      }
+      { text: ZH_TEXT }
     );
 
-    expect(summaryText(model)).toBe("1 项变更 · +2 −1");
-    expect(model.statusGroups).toEqual([
-      { parts: [{ icon: "changed", label: "1 项变更", tone: "warning" }] },
-      {
-        parts: [
-          { assistiveLabel: "行新增", label: "+2", tone: "success" },
-          { assistiveLabel: "行删除", label: "−1", tone: "destructive" },
-        ],
-      },
-    ]);
+    const changes = row(model, "changes");
+    expect(changes.label).toBe("更改");
+    expect(changes.value).toBe("1 · +2 −1");
+  });
+
+  it("localizes operation rows with injected text", () => {
+    const model = derive(
+      makeStatus({
+        counts: { conflict: 2, modified: 0, staged: 0, untracked: 0 },
+        repoState: { conflictCount: 2, kind: "cherry-picking" },
+      }),
+      { text: ZH_TEXT }
+    );
+
+    expect(row(model, "operation").label).toBe("拣选已暂停");
+    expect(row(model, "continueOperation").label).toBe("继续拣选");
+    expect(row(model, "abortOperation").label).toBe("中止拣选");
   });
 });

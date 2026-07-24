@@ -306,15 +306,26 @@
     "ui.statusDropdownSync": "Sync Changes",
     "ui.statusDropdownSyncing": "Syncing changes…",
     "ui.statusDropdownSyncSuccess": "Synced",
-    "ui.statusDropdownStateActive": "in progress",
-    "ui.statusDropdownStateClean": "clean",
-    "ui.statusDropdownStateCompleted": "ready",
-    "ui.statusDropdownStateDirty": "changed",
-    "ui.statusDropdownStateLoading": "checking",
-    "ui.statusDropdownStateUnavailable": "unavailable",
-    "ui.statusDropdownChanged": "{{count}} changed",
     "ui.statusDropdownNoLocalChanges": "No local changes",
     "ui.statusDropdownLoading": "Loading Git status…",
+    "ui.statusRowChanges": "Changes",
+    "ui.statusRowSync": "Sync",
+    "ui.statusRowPull": "Pull",
+    "ui.statusRowPush": "Push",
+    "ui.statusRowStash": "Stashes",
+    "ui.statusRowContinueOperation": "Continue {{operation}}",
+    "ui.statusRowAbortOperation": "Abort {{operation}}",
+    "ui.statusRowLargeChange": "Large change — review before syncing",
+    "ui.statusRowPullBlocked": "Commit or stash local changes before pulling",
+    "ui.statusSyncLabel": "Sync changes",
+    "ui.statusSyncAlreadyRunning": "Sync already in progress",
+    "ui.statusSyncConfirmBody": "This pulls from and pushes to {{upstream}}. You can turn off this confirmation in Git settings.",
+    "ui.statusSyncConfirmButton": "Sync",
+    "ui.statusChangesOpenLabel": "Open changes",
+    "ui.statusChangesFiles": "files",
+    "ui.gitAbortOperationConfirmTitle": "Abort {{operation}}?",
+    "ui.gitAbortOperationConfirmBody": "This discards the paused {{operation}} and returns the branch to its previous state.",
+    "ui.gitAbortOperationConfirmButton": "Abort {{operation}}",
     "ui.statusDropdownUnavailable": "Git status unavailable",
     "ui.statusDropdownConflictSingle": "{{count}} conflict",
     "ui.statusDropdownConflictPlural": "{{count}} conflicts",
@@ -517,8 +528,20 @@
   },
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {
-      "label": "Show dirty indicator",
-      "description": "Show working tree change counts and line delta in the worktree status item."
+      "label": "Encode dirtiness in branch icon",
+      "description": "Show dirtiness on the status bar branch icon. Open the Git dropdown for change details."
+    },
+    "pier.git.statusItem.showChangesStatus": {
+      "label": "Show changes item",
+      "description": "Show the changes item (colored +/− line stats; click opens the review panel) in the terminal status bar."
+    },
+    "pier.git.statusItem.showSyncStatus": {
+      "label": "Show sync item",
+      "description": "Show the sync item (ahead/behind counts with one-click sync) in the terminal status bar."
+    },
+    "pier.git.statusItem.confirmSync": {
+      "label": "Confirm before syncing",
+      "description": "Ask for confirmation before syncing (pull then push) from the status bar sync item."
     },
     "pier.git.worktree.branchNamePrompt": {
       "label": "Worktree branch prompt",
@@ -528,8 +551,16 @@
   },
   "terminalStatusItems": {
     "pier.worktree.status": {
-      "description": "Shows the current Git worktree in terminal panels.",
-      "title": "Worktree Status"
+      "description": "Shows the Git branch in terminal panels. Click to open status actions.",
+      "title": "Git Branch"
+    },
+    "pier.git.status.changes": {
+      "description": "Shows changed line counts; click opens the review panel.",
+      "title": "Git Changes"
+    },
+    "pier.git.status.sync": {
+      "description": "Shows ahead/behind counts with one-click sync.",
+      "title": "Git Sync"
     }
   },
   "panels": {

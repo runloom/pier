@@ -215,7 +215,6 @@
     "filePanel.saveOnClose.dontSaveLabel": "Don't Save",
     "filePanel.saveOnClose.cancelLabel": "Cancel",
     "files.projectStatus.openLabel": "Open project files",
-    "files.projectStatus.openTooltip": "Open project files",
     "files.projectStatus.openFailed": "Couldn't open project files",
     "files.notifications.terminalOpenUrl.relativeWithoutCwd": "Terminal has no working directory",
     "files.notifications.terminalOpenUrl.invalid": "Couldn't open this path",

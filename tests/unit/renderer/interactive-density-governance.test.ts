@@ -65,6 +65,14 @@ describe("interactive density governance", () => {
     expect(density).toContain(
       'MENU_ITEM_DENSITY_CLASS = "min-h-7 py-1 text-sm leading-5"'
     );
+    expect(density).toContain("STATUS_BAR_ITEM_TRIGGER_CLASS =");
+  });
+
+  it("keeps status-bar Button size for terminal chrome", () => {
+    const button = source("packages/ui/src/button.tsx");
+    expect(button).toContain('"status-bar":');
+    expect(button).toContain("h-[22px]");
+    expect(button).toContain("rounded-md");
   });
 
   it("keeps icon-xs on compact hit with 14px glyph token", () => {
@@ -76,11 +84,10 @@ describe("interactive density governance", () => {
     expect(button).toContain("CONTROL_ICON_GLYPH_SM_CLASS");
     // icon-xs uses the compact glyph token — not a raw size-3 (text xs only).
     expect(button).toMatch(
-      /"icon-xs":\s*cn\(\s*CONTROL_ICON_HIT_COMPACT_CLASS,\s*CONTROL_ICON_GLYPH_COMPACT_CLASS\s*\)/
+      /"icon-xs":\s*cn\(\s*CONTROL_ICON_HIT_COMPACT_CLASS,\s*CONTROL_ICON_GLYPH_COMPACT_CLASS,/
     );
     expect(button).not.toMatch(/"icon-xs":\s*[^,\n]*size-3[^\d.]/);
   });
-
   it("routes standard control height through the shared contract", () => {
     for (const path of CONTROL_HEIGHT_CONSUMERS) {
       expect(source(path), path).toContain("CONTROL_HEIGHT_CLASS");

@@ -86,5 +86,9 @@ export interface CoreTerminalStatusItemDeclaration {
   alignment?: "left" | "right";
   id: string;
   order?: number;
+  /** true 时永不因溢出整项隐藏。 */
+  overflowPinned?: boolean;
+  /** 窄屏整项隐藏优先级：越大越先藏。缺省宿主 25。 */
+  overflowPriority?: number;
   titleKey: string;
 }

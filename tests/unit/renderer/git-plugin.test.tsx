@@ -7,6 +7,7 @@ import {
   GIT_CHANGES_PANEL_ID,
   GIT_PLUGIN_ID,
 } from "@plugins/builtin/git/manifest.ts";
+import { resetGitStatusSessionsForTests } from "@plugins/builtin/git/renderer/git-status-state.ts";
 import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
 import type { GitDiffBranchOption } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
@@ -277,6 +278,18 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
             default: true,
             type: "boolean",
           },
+          "pier.git.statusItem.showChangesStatus": {
+            default: true,
+            type: "boolean",
+          },
+          "pier.git.statusItem.showSyncStatus": {
+            default: true,
+            type: "boolean",
+          },
+          "pier.git.statusItem.confirmSync": {
+            default: true,
+            type: "boolean",
+          },
         },
       },
       workbenchWidgets: [],
@@ -473,7 +486,17 @@ function pluginEntry(enabled: boolean): PluginRegistryEntry {
         {
           id: "pier.worktree.status",
           permissions: ["worktree:read", "workspace:open"],
-          title: "Worktree Status",
+          title: "Git Branch",
+        },
+        {
+          id: "pier.git.status.changes",
+          permissions: ["git:read", "panel:open"],
+          title: "Git Changes",
+        },
+        {
+          id: "pier.git.status.sync",
+          permissions: ["git:read", "git:write"],
+          title: "Git Sync",
         },
       ],
       version: "1.0.0",
@@ -539,6 +562,27 @@ function renderFilesFilePanel(list: RendererPluginContext["files"]["list"]) {
     ...render(<FilesPanel {...makeFilesPanelProps({ context })} />),
     disposeFiles,
   };
+}
+
+function renderGitStatusItems(statusContext: {
+  context: PanelContext;
+  cwd: string | null;
+  getGroupId: () => string | null;
+  panelId: string;
+  title: null;
+}) {
+  const items = terminalStatusItemRegistry
+    .list()
+    .filter((item) =>
+      [
+        "pier.worktree.status",
+        "pier.git.status.changes",
+        "pier.git.status.sync",
+      ].includes(item.id)
+    );
+  return render(
+    items.map((item) => <div key={item.id}>{item.render(statusContext)}</div>)
+  );
 }
 
 describe("git builtin plugin", () => {
@@ -835,6 +879,7 @@ describe("git builtin plugin", () => {
     dispose = null;
     await rendererPluginRuntime.dispose();
     terminalStatusItemRegistry.clearForTests();
+    resetGitStatusSessionsForTests();
     resetAppContentDialogForTests();
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     useWorkspaceStore.setState({ api: null });
@@ -865,8 +910,12 @@ describe("git builtin plugin", () => {
       terminalStatusItemRegistry
         .list()
         .map((item) => item.id)
-        .includes("pier.worktree.status")
-    ).toBe(true);
+        .sort()
+    ).toEqual([
+      "pier.git.status.changes",
+      "pier.git.status.sync",
+      "pier.worktree.status",
+    ]);
   });
 
   it("只注册稳定的 Changes Review 面板，但不恢复旧打开命令", () => {
@@ -2151,7 +2200,7 @@ describe("git builtin plugin", () => {
     });
   });
 
-  it("upstream 已 gone 时展示带文字的红色胶囊", async () => {
+  it("upstream 已 gone 时底栏不堆 pill，详情在下拉", async () => {
     vi.mocked(window.pier.git.getStatus).mockResolvedValue({
       branch: {
         ahead: 0,
@@ -2187,11 +2236,19 @@ describe("git builtin plugin", () => {
       })
     );
 
-    const pill = await screen.findByTestId("upstream-gone-pill");
-    expect(pill).toHaveTextContent("upstream gone");
+    const trigger = await screen.findByTestId("worktree-status-trigger");
+    expect(trigger).toHaveTextContent("feature/gone-branch");
+    expect(screen.queryByTestId("upstream-gone-pill")).toBeNull();
+
+    fireEvent.pointerDown(trigger, {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+    expect(await screen.findByText("upstream gone")).toBeInTheDocument();
   });
 
-  it("no upstream 状态展示带文字胶囊且不会复用未跟踪图标", async () => {
+  it("no upstream 时底栏用脏图标编码未跟踪，不展示 no-upstream pill", async () => {
     vi.mocked(window.pier.git.getStatus).mockResolvedValue({
       branch: {
         ahead: 0,
@@ -2227,24 +2284,15 @@ describe("git builtin plugin", () => {
       })
     );
 
-    const pill = await screen.findByTestId("no-upstream-pill");
-    expect(within(pill).getByText("no upstream branch")).toBeVisible();
-
-    const trigger = screen.getByTestId("worktree-status-trigger");
-    expect(
-      trigger.querySelectorAll('[data-git-icon="git-branch-plus"]')
-    ).toHaveLength(1);
-
+    const trigger = await screen.findByTestId("worktree-status-trigger");
+    expect(screen.queryByTestId("no-upstream-pill")).toBeNull();
     const dirtyIndicator = screen.getByTestId("git-dirty-indicator");
-    const untrackedIcons = dirtyIndicator.querySelectorAll(
-      '[data-git-icon="git-branch-plus"]'
-    );
-    expect(untrackedIcons).toHaveLength(1);
-    expect(trigger.querySelector('[data-git-icon="git-branch-plus"]')).toBe(
-      untrackedIcons[0]
-    );
+    expect(
+      dirtyIndicator.querySelector('[data-git-icon="git-branch-changes"]')
+    ).toBeInTheDocument();
+    expect(trigger).toHaveTextContent("feature/no-upstream");
   });
-  it("分支已合入默认分支时展示 merged 胶囊，可与 gone 胶囊共存", async () => {
+  it("merged / upstream gone 详情在下拉，不在底栏堆 pill", async () => {
     vi.mocked(window.pier.git.getStatus).mockResolvedValue({
       branch: {
         ahead: 0,
@@ -2280,15 +2328,21 @@ describe("git builtin plugin", () => {
       })
     );
 
-    const merged = await screen.findByTestId("merged-pill");
-    expect(merged).toHaveTextContent("merged");
-    expect(
-      merged.querySelector('[data-git-icon="git-merge"]')
-    ).toBeInTheDocument();
-    expect(screen.getByTestId("upstream-gone-pill")).toBeInTheDocument();
+    const trigger = await screen.findByTestId("worktree-status-trigger");
+    expect(screen.queryByTestId("merged-pill")).toBeNull();
+    expect(screen.queryByTestId("upstream-gone-pill")).toBeNull();
+    expect(trigger).toHaveTextContent("feature/done");
+
+    fireEvent.pointerDown(trigger, {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+    expect(await screen.findByText("merged")).toBeInTheDocument();
+    expect(screen.getByText("upstream gone")).toBeInTheDocument();
   });
 
-  it("工作区状态计数使用 Git 图标族", async () => {
+  it("工作区脏态用分支图标变体编码；更改计数在独立项", async () => {
     vi.mocked(window.pier.git.getStatus).mockResolvedValue({
       branch: {
         ahead: 0,
@@ -2300,46 +2354,45 @@ describe("git builtin plugin", () => {
         upstreamGone: false,
       },
       counts: { conflict: 4, modified: 2, staged: 1, untracked: 3 },
-      delta: null,
+      delta: { deletions: 10, insertions: 20 },
       files: [],
       remoteSync: null,
       repoState: { kind: "clean" as const },
       stashCount: 0,
     });
     dispose = activateWorktreePlugin();
-    const statusItem = terminalStatusItemRegistry
-      .list()
-      .find((item) => item.id === "pier.worktree.status");
-    if (!statusItem) {
-      throw new Error("expected worktree status item");
-    }
+    renderGitStatusItems({
+      context: { ...context, branch: "feature/dirty" },
+      cwd: context.cwd ?? null,
+      getGroupId: () => null,
+      panelId: "terminal-1",
+      title: null,
+    });
 
-    render(
-      statusItem.render({
-        context: { ...context, branch: "feature/dirty" },
-        cwd: context.cwd ?? null,
-        getGroupId: () => null,
-        panelId: "terminal-1",
-        title: null,
-      })
+    const trigger = await screen.findByTestId("worktree-status-trigger");
+    const changesTrigger = await screen.findByTestId(
+      "git-changes-status-trigger"
     );
-
-    const dirtyIndicator = await screen.findByTestId("git-dirty-indicator");
+    // conflict 优先 → conflict 图标；分项/±不上分支项
     expect(
-      dirtyIndicator.querySelector('[data-git-icon="git-commit-horizontal"]')
+      trigger.querySelector('[data-git-icon="git-branch-conflicts"]')
     ).toBeInTheDocument();
+    expect(screen.queryByTestId("git-dirty-indicator")).toBeNull();
+    expect(trigger).toHaveTextContent("feature/dirty");
+    expect(trigger).not.toHaveTextContent("4");
+    expect(trigger).not.toHaveTextContent("+");
+    // 独立更改项：彩色 ± 行；文件总数不上栏
+    expect(changesTrigger).toHaveTextContent("+20");
+    expect(changesTrigger).toHaveTextContent("−10");
     expect(
-      dirtyIndicator.querySelector('[data-git-icon="git-compare-arrows"]')
-    ).toBeInTheDocument();
+      changesTrigger.querySelector('[data-git-delta="insertions"]')
+    ).toHaveTextContent("+20");
     expect(
-      dirtyIndicator.querySelector('[data-git-icon="git-branch-plus"]')
-    ).toBeInTheDocument();
-    expect(
-      dirtyIndicator.querySelector('[data-git-icon="git-merge-conflict"]')
-    ).toBeInTheDocument();
+      changesTrigger.querySelector('[data-git-delta="deletions"]')
+    ).toHaveTextContent("−10");
   });
 
-  it("同步和 stash 计数使用 Git 图标族", async () => {
+  it("同步计数保留在底栏，stash 不上栏", async () => {
     vi.mocked(window.pier.git.getStatus).mockResolvedValue({
       branch: {
         ahead: 2,
@@ -2358,33 +2411,31 @@ describe("git builtin plugin", () => {
       stashCount: 3,
     });
     dispose = activateWorktreePlugin();
-    const statusItem = terminalStatusItemRegistry
-      .list()
-      .find((item) => item.id === "pier.worktree.status");
-    if (!statusItem) {
-      throw new Error("expected worktree status item");
-    }
-
-    render(
-      statusItem.render({
-        context: { ...context, branch: "feature/sync" },
-        cwd: context.cwd ?? null,
-        getGroupId: () => null,
-        panelId: "terminal-1",
-        title: null,
-      })
-    );
+    renderGitStatusItems({
+      context: { ...context, branch: "feature/sync" },
+      cwd: context.cwd ?? null,
+      getGroupId: () => null,
+      panelId: "terminal-1",
+      title: null,
+    });
 
     const trigger = await screen.findByTestId("worktree-status-trigger");
+    const syncTrigger = await screen.findByTestId("git-sync-status-trigger");
+    // ↑↓ 移入独立同步项，分支项不再重复。
+    expect(trigger.querySelector('[data-git-icon="git-ahead"]')).toBeNull();
     expect(
-      trigger.querySelectorAll('[data-git-icon="git-pull-request-arrow"]')
-    ).toHaveLength(2);
-    expect(
-      trigger.querySelector('[data-git-icon="git-commit-horizontal"]')
+      syncTrigger.querySelector('[data-git-icon="git-ahead"]')
     ).toBeInTheDocument();
+    expect(
+      syncTrigger.querySelector('[data-git-icon="git-behind"]')
+    ).toBeInTheDocument();
+    expect(syncTrigger).toHaveTextContent("2");
+    expect(syncTrigger).toHaveTextContent("1");
+    expect(trigger).not.toHaveTextContent("stash");
+    expect(syncTrigger).not.toHaveTextContent("stash");
   });
 
-  it("DETACHED 胶囊使用 text-foreground（neutral 风格），与 muted 计数区分", async () => {
+  it("DETACHED 用 muted 文案，不再用 Badge 胶囊", async () => {
     vi.mocked(window.pier.git.getStatus).mockResolvedValue({
       branch: {
         ahead: 0,
@@ -2421,8 +2472,8 @@ describe("git builtin plugin", () => {
       })
     );
 
-    const pill = await screen.findByText("Detached");
-    expect(pill.className).toContain("text-foreground");
+    const label = await screen.findByText("Detached");
+    expect(label.className).toContain("text-muted-foreground");
   });
 
   it("分支名不设固定宽度上限，仅靠 truncate 在溢出时截断", async () => {

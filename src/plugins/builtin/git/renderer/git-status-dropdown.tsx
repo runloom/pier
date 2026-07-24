@@ -1,4 +1,3 @@
-import { Badge } from "@pier/ui/badge.tsx";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -11,19 +10,19 @@ import {
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
+  Check,
   Download,
   FolderGit,
   GitBranch,
   GitCommitHorizontal,
   GitCompareArrows,
   GitMerge,
-  GitMergeConflict,
   GitPullRequestArrow,
   GitPullRequestClosed,
   type LucideIcon,
   RefreshCw,
-  SquareSplitHorizontal,
   Upload,
+  X,
 } from "lucide-react";
 import type React from "react";
 import { useId, useState } from "react";
@@ -36,25 +35,34 @@ import type {
   GitStatusDropdownAction,
   GitStatusDropdownActionId,
   GitStatusDropdownModel,
-  GitStatusDropdownSummaryGroup,
-  GitStatusDropdownSummaryIcon,
-  GitStatusDropdownSummaryPart,
-  GitStatusDropdownSummaryTone,
+  GitStatusDropdownRow,
+  GitStatusDropdownRowIcon,
+  GitStatusDropdownRowTone,
 } from "./git-status-dropdown-model.ts";
 
-const ACTION_ICONS: Record<GitStatusDropdownActionId, LucideIcon> = {
+const TASK_ICONS: Record<GitStatusDropdownActionId, LucideIcon> = {
+  abortOperation: X,
+  continueOperation: Check,
   pull: Download,
   push: Upload,
   switchBranch: GitBranch,
   switchWorktree: FolderGit,
   syncChanges: RefreshCw,
-  viewChanges: SquareSplitHorizontal,
+  viewChanges: GitCompareArrows,
 };
 
-const ACTION_LABELS: Record<
+const TASK_LABELS: Record<
   GitStatusDropdownActionId,
   { fallback: string; key: string }
 > = {
+  abortOperation: {
+    fallback: "Abort",
+    key: "statusRowAbortOperation",
+  },
+  continueOperation: {
+    fallback: "Continue",
+    key: "statusRowContinueOperation",
+  },
   pull: {
     fallback: "Pull Changes",
     key: "statusDropdownPull",
@@ -81,47 +89,11 @@ const ACTION_LABELS: Record<
   },
 };
 
-const STATUS_LABELS: Record<
-  GitStatusDropdownModel["variant"],
-  { fallback: string; key: string }
-> = {
-  active: { fallback: "in progress", key: "statusDropdownStateActive" },
-  clean: { fallback: "clean", key: "statusDropdownStateClean" },
-  completed: { fallback: "ready", key: "statusDropdownStateCompleted" },
-  dirty: { fallback: "changed", key: "statusDropdownStateDirty" },
-  loading: { fallback: "checking", key: "statusDropdownStateLoading" },
-  unavailable: {
-    fallback: "unavailable",
-    key: "statusDropdownStateUnavailable",
-  },
-};
-
-const STATUS_BADGE_VARIANTS = {
-  active: "info",
-  clean: "neutral",
-  completed: "done",
-  dirty: "warning",
-  loading: "neutral",
-  unavailable: "danger",
-} as const satisfies Record<GitStatusDropdownModel["variant"], string>;
-
-const SUMMARY_TONE_CLASSES: Record<GitStatusDropdownSummaryTone, string> = {
-  danger: "text-status-danger-fg",
-  default: "text-foreground",
-  destructive: "text-destructive",
-  done: "text-status-done-fg",
-  info: "text-status-info-fg",
-  muted: "text-muted-foreground",
-  success: "text-success",
-  warning: "text-status-warning-fg",
-};
-
-const SUMMARY_ICONS: Record<
-  GitStatusDropdownSummaryIcon,
+const ROW_ICONS: Record<
+  GitStatusDropdownRowIcon,
   { Icon: LucideIcon; gitIcon: string }
 > = {
-  ahead: { Icon: GitPullRequestArrow, gitIcon: "git-pull-request-arrow" },
-  behind: { Icon: GitPullRequestArrow, gitIcon: "git-pull-request-arrow" },
+  abort: { Icon: X, gitIcon: "git-abort" },
   bisect: { Icon: GitCompareArrows, gitIcon: "git-compare-arrows" },
   changed: { Icon: GitCompareArrows, gitIcon: "git-compare-arrows" },
   cherryPick: {
@@ -129,18 +101,99 @@ const SUMMARY_ICONS: Record<
     gitIcon: "git-commit-horizontal",
   },
   clean: { Icon: GitCommitHorizontal, gitIcon: "git-commit-horizontal" },
-  conflict: { Icon: GitMergeConflict, gitIcon: "git-merge-conflict" },
+  continue: { Icon: Check, gitIcon: "git-continue" },
   merge: { Icon: GitMerge, gitIcon: "git-merge" },
   merged: { Icon: GitMerge, gitIcon: "git-merge" },
+  pull: { Icon: Download, gitIcon: "git-pull" },
+  push: { Icon: Upload, gitIcon: "git-push" },
   rebase: { Icon: GitPullRequestArrow, gitIcon: "git-pull-request-arrow" },
   revert: { Icon: GitCommitHorizontal, gitIcon: "git-commit-horizontal" },
+  stash: { Icon: GitCommitHorizontal, gitIcon: "git-stash" },
+  sync: { Icon: RefreshCw, gitIcon: "git-sync" },
   upstreamGone: {
     Icon: GitPullRequestClosed,
     gitIcon: "git-pull-request-closed",
   },
 };
 
-function ActionItem({
+const ROW_TONE_CLASSES: Record<GitStatusDropdownRowTone, string> = {
+  danger: "text-status-danger-fg",
+  default: "text-foreground",
+  muted: "text-muted-foreground",
+  warning: "text-status-warning-fg",
+};
+
+function RowContent({
+  row,
+}: {
+  row: GitStatusDropdownRow;
+}): React.ReactElement {
+  const iconSpec = row.icon ? ROW_ICONS[row.icon] : null;
+  const Icon = iconSpec?.Icon ?? null;
+  return (
+    <>
+      {Icon && (
+        <Icon
+          aria-hidden="true"
+          data-git-icon={iconSpec?.gitIcon}
+          data-testid={`git-status-row-icon-${row.icon}`}
+        />
+      )}
+      <span className={cn("truncate", ROW_TONE_CLASSES[row.tone])}>
+        {row.label}
+      </span>
+      {row.assistiveLabel && (
+        <span className="sr-only">{row.assistiveLabel}</span>
+      )}
+      {row.value && (
+        <span
+          aria-hidden={row.assistiveLabel ? true : undefined}
+          className={cn(
+            "ml-auto pl-3 text-xs tabular-nums",
+            row.tone === "danger"
+              ? "text-status-danger-fg"
+              : "text-muted-foreground"
+          )}
+        >
+          {row.value}
+        </span>
+      )}
+    </>
+  );
+}
+
+function StatusRow({
+  onRun,
+  row,
+}: {
+  onRun: (actionId: GitStatusDropdownActionId) => void;
+  row: GitStatusDropdownRow;
+}): React.ReactElement {
+  if (row.action === null) {
+    return (
+      <DropdownMenuItem
+        data-testid={`git-status-row-${row.id}`}
+        disabled
+        title={row.title}
+      >
+        <RowContent row={row} />
+      </DropdownMenuItem>
+    );
+  }
+  const actionId = row.action;
+  return (
+    <DropdownMenuItem
+      data-testid={`git-status-row-${row.id}`}
+      onSelect={() => onRun(actionId)}
+      title={row.title}
+      variant={row.tone === "danger" ? "destructive" : "default"}
+    >
+      <RowContent row={row} />
+    </DropdownMenuItem>
+  );
+}
+
+function TaskItem({
   action,
   onRun,
   pluginContext,
@@ -149,73 +202,13 @@ function ActionItem({
   onRun: (actionId: GitStatusDropdownActionId) => void;
   pluginContext: RendererPluginContext;
 }): React.ReactElement {
-  const Icon = ACTION_ICONS[action.id];
-  const label = ACTION_LABELS[action.id];
+  const Icon = TASK_ICONS[action.id];
+  const label = TASK_LABELS[action.id];
   return (
     <DropdownMenuItem onSelect={() => onRun(action.id)}>
       <Icon />
       {pluginText(pluginContext, label.key, label.fallback)}
     </DropdownMenuItem>
-  );
-}
-
-function SummaryPart({
-  part,
-}: {
-  part: GitStatusDropdownSummaryPart;
-}): React.ReactElement {
-  const iconSpec = part.icon ? SUMMARY_ICONS[part.icon] : null;
-  const Icon = iconSpec?.Icon ?? null;
-  return (
-    <span
-      className={cn(
-        "inline-flex items-center gap-0.5 tabular-nums",
-        SUMMARY_TONE_CLASSES[part.tone]
-      )}
-    >
-      {Icon && (
-        <Icon
-          aria-hidden="true"
-          className="size-3 shrink-0"
-          data-git-icon={iconSpec?.gitIcon}
-          data-testid={`git-status-summary-icon-${part.icon}`}
-        />
-      )}
-      {part.label}
-      {part.assistiveLabel && (
-        <span className="sr-only"> {part.assistiveLabel},</span>
-      )}
-    </span>
-  );
-}
-
-function SummaryLine({
-  groups,
-}: {
-  groups: GitStatusDropdownSummaryGroup[];
-}): React.ReactElement {
-  return (
-    <div className="flex flex-wrap items-center gap-x-1.5 gap-y-0.5 font-medium text-sm leading-5">
-      {groups.map((group, groupIndex) => (
-        <span
-          className="contents"
-          key={group.parts
-            .map((part) => `${part.label}-${part.tone}`)
-            .join("|")}
-        >
-          {groupIndex > 0 && (
-            <span aria-hidden="true" className="text-muted-foreground">
-              ·
-            </span>
-          )}
-          <span className="inline-flex items-center gap-1" title={group.title}>
-            {group.parts.map((part) => (
-              <SummaryPart key={`${part.label}-${part.tone}`} part={part} />
-            ))}
-          </span>
-        </span>
-      ))}
-    </div>
   );
 }
 
@@ -233,7 +226,6 @@ export function GitStatusDropdown({
   const [open, setOpen] = useState(false);
   const menuTitleId = useId();
   const statusLabel = pluginText(pluginContext, "gitStatusLabel", "Git status");
-  const variantLabel = STATUS_LABELS[model.variant];
   const onRun = (actionId: GitStatusDropdownActionId): void => {
     setOpen(false);
     if (actionId === "viewChanges") {
@@ -262,37 +254,27 @@ export function GitStatusDropdown({
           {statusLabel}
         </span>
         <DropdownMenuLabel>
-          <div className="flex min-w-0 items-start justify-between gap-2">
-            <div className="flex min-w-0 flex-col gap-0.5">
-              <span className="truncate font-medium text-foreground text-sm">
-                {model.branchLabel}
-              </span>
-              <span className="truncate text-muted-foreground text-xs">
-                {model.contextLine}
-              </span>
-            </div>
-            <Badge
-              className="shrink-0"
-              variant={STATUS_BADGE_VARIANTS[model.variant]}
-            >
-              {pluginText(
-                pluginContext,
-                variantLabel.key,
-                variantLabel.fallback
-              )}
-            </Badge>
+          <div className="flex min-w-0 flex-col gap-0.5">
+            <span className="truncate font-medium text-foreground text-sm">
+              {model.branchLabel}
+            </span>
+            <span className="truncate text-muted-foreground text-xs">
+              {model.contextLine}
+            </span>
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
-        <DropdownMenuLabel>
-          <SummaryLine groups={model.statusGroups} />
-        </DropdownMenuLabel>
+        <DropdownMenuGroup>
+          {model.rows.map((row) => (
+            <StatusRow key={row.id} onRun={onRun} row={row} />
+          ))}
+        </DropdownMenuGroup>
         <DropdownMenuSeparator />
         <DropdownMenuGroup>
-          {model.actions.map((action) => (
-            <ActionItem
-              action={action}
-              key={action.id}
+          {model.tasks.map((task) => (
+            <TaskItem
+              action={task}
+              key={task.id}
               onRun={onRun}
               pluginContext={pluginContext}
             />

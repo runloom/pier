@@ -1,11 +1,18 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitRemoteOperationResult } from "@shared/contracts/git.ts";
 import { openSwitchBranchPick } from "./git-branch-actions.ts";
+import {
+  canContinuePausedOperation,
+  pausedOperationName,
+  runAbortPausedOperation,
+  runContinuePausedOperation,
+} from "./git-operation-runners.ts";
 import { pluginText } from "./git-plugin-text.ts";
 import type {
   GitStatusDropdownActionId,
   GitStatusDropdownModel,
 } from "./git-status-dropdown-model.ts";
+import { getInFlightSync, trackSync } from "./git-sync-busy.ts";
 import { openWorktreeListQuickPick } from "./worktree-list-action.ts";
 
 export function gitStatusDropdownErrorMessage(error: unknown): string {
@@ -39,24 +46,64 @@ const REMOTE_ACTION_FEEDBACK = {
   },
 } as const;
 
-async function runRemoteAction(
+export type GitRemoteSyncActionId = keyof typeof REMOTE_ACTION_FEEDBACK;
+
+function remoteFacadeCall(
   pluginContext: RendererPluginContext,
-  actionId: keyof typeof REMOTE_ACTION_FEEDBACK,
-  run: () => Promise<GitRemoteOperationResult>
-): Promise<void> {
-  const feedback = REMOTE_ACTION_FEEDBACK[actionId];
-  const loading = pluginContext.notifications.loading(
-    pluginText(pluginContext, feedback.loadingKey, feedback.loadingFallback)
-  );
-  try {
-    assertRemoteOperationOk(await run());
-    loading.success(
-      pluginText(pluginContext, feedback.successKey, feedback.successFallback)
-    );
-  } catch (error) {
-    loading.dismiss();
-    throw error;
+  actionId: GitRemoteSyncActionId,
+  worktreePath: string
+): Promise<GitRemoteOperationResult> {
+  switch (actionId) {
+    case "pull":
+      return pluginContext.git.pullFastForward(worktreePath);
+    case "push":
+      return pluginContext.git.push(worktreePath);
+    case "syncChanges":
+      return pluginContext.git.sync(worktreePath);
+    default: {
+      const exhaustive: never = actionId;
+      return exhaustive;
+    }
   }
+}
+
+/**
+ * 远端同步动作（浮层同步行与状态栏同步项共用）：
+ * 同一工作树并发去重——已有 in-flight 时提示并复用同一 promise。
+ */
+export function runRemoteSyncAction(
+  pluginContext: RendererPluginContext,
+  actionId: GitRemoteSyncActionId,
+  worktreePath: string
+): Promise<void> {
+  const existing = getInFlightSync(worktreePath);
+  if (existing) {
+    pluginContext.notifications.info(
+      pluginText(
+        pluginContext,
+        "statusSyncAlreadyRunning",
+        "Sync already in progress"
+      )
+    );
+    return existing;
+  }
+  return trackSync(worktreePath, async () => {
+    const feedback = REMOTE_ACTION_FEEDBACK[actionId];
+    const loading = pluginContext.notifications.loading(
+      pluginText(pluginContext, feedback.loadingKey, feedback.loadingFallback)
+    );
+    try {
+      assertRemoteOperationOk(
+        await remoteFacadeCall(pluginContext, actionId, worktreePath)
+      );
+      loading.success(
+        pluginText(pluginContext, feedback.successKey, feedback.successFallback)
+      );
+    } catch (error) {
+      loading.dismiss();
+      throw error;
+    }
+  });
 }
 
 export async function runGitStatusDropdownAction({
@@ -68,24 +115,49 @@ export async function runGitStatusDropdownAction({
   model: GitStatusDropdownModel;
   pluginContext: RendererPluginContext;
 }): Promise<void> {
-  if (actionId === "push") {
-    await runRemoteAction(pluginContext, actionId, () =>
-      pluginContext.git.push(model.worktreePath)
-    );
+  if (
+    actionId === "push" ||
+    actionId === "pull" ||
+    actionId === "syncChanges"
+  ) {
+    await runRemoteSyncAction(pluginContext, actionId, model.worktreePath);
     return;
   }
 
-  if (actionId === "pull") {
-    await runRemoteAction(pluginContext, actionId, () =>
-      pluginContext.git.pullFastForward(model.worktreePath)
-    );
+  if (actionId === "abortOperation") {
+    if (model.operationKind === null) {
+      return;
+    }
+    await runAbortPausedOperation(pluginContext, {
+      cwd: model.worktreePath,
+      kind: model.operationKind,
+      title: pluginText(
+        pluginContext,
+        "gitAbortOperationConfirmButton",
+        "Abort {{operation}}",
+        { operation: pausedOperationName(pluginContext, model.operationKind) }
+      ),
+    });
     return;
   }
 
-  if (actionId === "syncChanges") {
-    await runRemoteAction(pluginContext, actionId, () =>
-      pluginContext.git.sync(model.worktreePath)
-    );
+  if (actionId === "continueOperation") {
+    if (
+      model.operationKind === null ||
+      !canContinuePausedOperation(model.operationKind)
+    ) {
+      return;
+    }
+    await runContinuePausedOperation(pluginContext, {
+      cwd: model.worktreePath,
+      kind: model.operationKind,
+      title: pluginText(
+        pluginContext,
+        "statusRowContinueOperation",
+        "Continue {{operation}}",
+        { operation: pausedOperationName(pluginContext, model.operationKind) }
+      ),
+    });
     return;
   }
 

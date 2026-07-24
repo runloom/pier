@@ -34,7 +34,7 @@ function AgentStatusItemView({ panelId }: { panelId: string }) {
   if (agent.status === undefined) {
     return (
       <span
-        className="inline-flex shrink-0 items-center gap-1"
+        className="inline-flex shrink-0 items-center gap-1 font-mono"
         data-agent-status="none"
         data-testid="agent-status-item"
       >
@@ -48,7 +48,7 @@ function AgentStatusItemView({ panelId }: { panelId: string }) {
 
   return (
     <span
-      className="inline-flex shrink-0 items-center gap-1"
+      className="inline-flex shrink-0 items-center gap-1 font-mono"
       data-agent-status={agent.status}
       data-testid="agent-status-item"
     >

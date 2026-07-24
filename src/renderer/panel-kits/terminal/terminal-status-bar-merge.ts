@@ -22,13 +22,15 @@ import type {
 
 export type DeclaredTerminalStatusItem = Pick<
   PluginTerminalStatusItemContribution,
-  "alignment" | "order"
+  "alignment" | "order" | "overflowPinned" | "overflowPriority"
 >;
 
 export interface EffectiveTerminalStatusItemConfig {
   alignment: "left" | "right";
   hidden: boolean;
   order: number;
+  overflowPinned: boolean;
+  overflowPriority: number | undefined;
 }
 
 export interface TerminalStatusBarGroups<T> {
@@ -44,6 +46,8 @@ export function resolveEffectiveTerminalStatusItemConfig(
     alignment: override?.alignment ?? declared?.alignment ?? "left",
     hidden: override?.hidden ?? false,
     order: override?.order ?? declared?.order ?? 0,
+    overflowPinned: declared?.overflowPinned ?? false,
+    overflowPriority: declared?.overflowPriority,
   };
 }
 
@@ -70,7 +74,12 @@ export function declaredTerminalStatusItemsById(
   >();
   // Core 先塞:同 id 时 core 优先,防止插件抢占 core id。
   for (const item of coreItems) {
-    byId.set(item.id, { alignment: item.alignment, order: item.order });
+    byId.set(item.id, {
+      alignment: item.alignment,
+      order: item.order,
+      overflowPinned: item.overflowPinned,
+      overflowPriority: item.overflowPriority,
+    });
   }
   for (const entry of plugins) {
     // F12:口径统一用 entry.runtime.enabled(与 runtime 激活、pluginNavItems、

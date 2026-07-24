@@ -9,159 +9,247 @@ export type GitStatusLoadState =
   | { kind: "loaded"; status: GitStatus }
   | { kind: "loading" };
 
-/** Git 状态快照与 watch START 共用同一套有界恢复和显式重试。 */
+const LOADING_STATE: GitStatusLoadState = { kind: "loading" };
+
+type SessionListener = () => void;
+type GitApi = RendererPluginContext["git"];
+
+interface GitStatusSession {
+  /** 可变：同 gitRoot 后续 acquirer 可刷新，避免钉死首次 context。 */
+  git: GitApi;
+  listeners: Set<SessionListener>;
+  refCount: number;
+  sequence: number;
+  state: GitStatusLoadState;
+  statusRetryIndex: number;
+  statusRetryTimer: null | ReturnType<typeof setTimeout>;
+  unsubscribeWatch: () => void;
+  watchAttempt: number;
+  watchReady: boolean;
+  watchRetryIndex: number;
+  watchRetryTimer: null | ReturnType<typeof setTimeout>;
+}
+
+/** 同一 gitRoot 多状态栏项共享一份 watch，避免拆项后重复订阅。 */
+const sessions = new Map<string, GitStatusSession>();
+
+function clearTimer(timer: null | ReturnType<typeof setTimeout>): null {
+  if (timer !== null) {
+    clearTimeout(timer);
+  }
+  return null;
+}
+
+function notify(session: GitStatusSession): void {
+  for (const listener of session.listeners) {
+    listener();
+  }
+}
+
+function setSessionState(
+  session: GitStatusSession,
+  state: GitStatusLoadState
+): void {
+  session.state = state;
+  notify(session);
+}
+
+function createSession(git: GitApi, root: string): GitStatusSession {
+  const session: GitStatusSession = {
+    git,
+    listeners: new Set(),
+    refCount: 0,
+    sequence: 0,
+    state: LOADING_STATE,
+    statusRetryIndex: 0,
+    statusRetryTimer: null,
+    unsubscribeWatch: () => undefined,
+    watchAttempt: 0,
+    watchReady: false,
+    watchRetryIndex: 0,
+    watchRetryTimer: null,
+  };
+
+  function retry(): void {
+    session.statusRetryIndex = 0;
+    session.statusRetryTimer = clearTimer(session.statusRetryTimer);
+    session.watchRetryIndex = 0;
+    session.watchRetryTimer = clearTimer(session.watchRetryTimer);
+    setSessionState(session, LOADING_STATE);
+    startWatch();
+  }
+
+  function apply(next: GitStatus): void {
+    session.statusRetryIndex = 0;
+    session.statusRetryTimer = clearTimer(session.statusRetryTimer);
+    setSessionState(
+      session,
+      session.watchReady
+        ? { kind: "loaded", status: next }
+        : { kind: "error", retry }
+    );
+  }
+
+  function scheduleStatusRetry(): void {
+    const delay = RETRY_DELAYS_MS[session.statusRetryIndex];
+    if (delay === undefined || session.statusRetryTimer !== null) {
+      return;
+    }
+    session.statusRetryIndex += 1;
+    session.statusRetryTimer = setTimeout(() => {
+      session.statusRetryTimer = null;
+      refetch();
+    }, delay);
+  }
+
+  function refetch(): void {
+    const request = ++session.sequence;
+    session.git.getStatus(root).then(
+      (next) => {
+        if (request === session.sequence) {
+          apply(next);
+        }
+      },
+      () => {
+        if (request === session.sequence) {
+          setSessionState(session, { kind: "error", retry });
+          scheduleStatusRetry();
+        }
+      }
+    );
+  }
+
+  function scheduleWatchRetry(): void {
+    const delay = RETRY_DELAYS_MS[session.watchRetryIndex];
+    if (delay === undefined || session.watchRetryTimer !== null) {
+      return;
+    }
+    session.watchRetryIndex += 1;
+    session.watchRetryTimer = setTimeout(() => {
+      session.watchRetryTimer = null;
+      startWatch();
+    }, delay);
+  }
+
+  function startWatch(): void {
+    session.unsubscribeWatch();
+    session.unsubscribeWatch = () => undefined;
+    const attempt = ++session.watchAttempt;
+    session.watchReady = true;
+    let failedSynchronously = false;
+    try {
+      const unsubscribe = session.git.watch(
+        root,
+        (event) => {
+          if (attempt !== session.watchAttempt) {
+            return;
+          }
+          session.watchReady = true;
+          session.watchRetryIndex = 0;
+          session.watchRetryTimer = clearTimer(session.watchRetryTimer);
+          if (event.status) {
+            session.sequence += 1;
+            apply(event.status);
+          } else {
+            refetch();
+          }
+        },
+        () => {
+          if (attempt !== session.watchAttempt) {
+            return;
+          }
+          failedSynchronously = true;
+          session.watchReady = false;
+          session.unsubscribeWatch();
+          session.unsubscribeWatch = () => undefined;
+          setSessionState(session, { kind: "error", retry });
+          scheduleWatchRetry();
+        }
+      );
+      if (failedSynchronously) {
+        unsubscribe();
+        return;
+      }
+      session.unsubscribeWatch = unsubscribe;
+    } catch {
+      session.watchReady = false;
+      setSessionState(session, { kind: "error", retry });
+      scheduleWatchRetry();
+      return;
+    }
+    refetch();
+  }
+
+  setSessionState(session, LOADING_STATE);
+  startWatch();
+  return session;
+}
+
+function acquireSession(
+  context: RendererPluginContext,
+  root: string
+): GitStatusSession {
+  let session = sessions.get(root);
+  if (session) {
+    // 同 root 复用 session 时刷新 git API，避免钉死首次 context 闭包。
+    session.git = context.git;
+  } else {
+    session = createSession(context.git, root);
+    sessions.set(root, session);
+  }
+  session.refCount += 1;
+  return session;
+}
+
+function releaseSession(root: string, session: GitStatusSession): void {
+  session.refCount -= 1;
+  if (session.refCount > 0) {
+    return;
+  }
+  session.sequence += 1;
+  session.statusRetryTimer = clearTimer(session.statusRetryTimer);
+  session.watchRetryTimer = clearTimer(session.watchRetryTimer);
+  session.unsubscribeWatch();
+  sessions.delete(root);
+}
+
+/**
+ * 分支 / 更改 / 同步状态栏项共用。同一 gitRoot 只建一条 watch。
+ */
 export function useGitStatus(
   context: RendererPluginContext,
   gitRoot: string | undefined
 ): GitStatusLoadState {
-  const [state, setState] = useState<GitStatusLoadState>({ kind: "loading" });
+  const [state, setState] = useState<GitStatusLoadState>(LOADING_STATE);
 
   useEffect(() => {
     if (!gitRoot) {
-      setState({ kind: "loading" });
+      setState(LOADING_STATE);
       return;
     }
     const root = gitRoot;
-    let alive = true;
-    let sequence = 0;
-    let statusRetryIndex = 0;
-    let statusRetryTimer: ReturnType<typeof setTimeout> | null = null;
-    let unsubscribeWatch: () => void = () => undefined;
-    let watchAttempt = 0;
-    let watchReady = false;
-    let watchRetryIndex = 0;
-    let watchRetryTimer: ReturnType<typeof setTimeout> | null = null;
-
-    const clearTimer = (timer: ReturnType<typeof setTimeout> | null): null => {
-      if (timer !== null) {
-        clearTimeout(timer);
-      }
-      return null;
+    const session = acquireSession(context, root);
+    const onChange = (): void => {
+      setState(session.state);
     };
-
-    function retry(): void {
-      if (!alive) {
-        return;
-      }
-      statusRetryIndex = 0;
-      statusRetryTimer = clearTimer(statusRetryTimer);
-      watchRetryIndex = 0;
-      watchRetryTimer = clearTimer(watchRetryTimer);
-      setState({ kind: "loading" });
-      startWatch();
-    }
-
-    function apply(next: GitStatus): void {
-      if (!alive) {
-        return;
-      }
-      statusRetryIndex = 0;
-      statusRetryTimer = clearTimer(statusRetryTimer);
-      setState(
-        watchReady ? { kind: "loaded", status: next } : { kind: "error", retry }
-      );
-    }
-
-    function scheduleStatusRetry(): void {
-      const delay = RETRY_DELAYS_MS[statusRetryIndex];
-      if (delay === undefined || statusRetryTimer !== null) {
-        return;
-      }
-      statusRetryIndex += 1;
-      statusRetryTimer = setTimeout(() => {
-        statusRetryTimer = null;
-        refetch();
-      }, delay);
-    }
-
-    function refetch(): void {
-      const request = ++sequence;
-      context.git.getStatus(root).then(
-        (next) => {
-          if (request === sequence) {
-            apply(next);
-          }
-        },
-        () => {
-          if (alive && request === sequence) {
-            setState({ kind: "error", retry });
-            scheduleStatusRetry();
-          }
-        }
-      );
-    }
-
-    function scheduleWatchRetry(): void {
-      const delay = RETRY_DELAYS_MS[watchRetryIndex];
-      if (delay === undefined || watchRetryTimer !== null) {
-        return;
-      }
-      watchRetryIndex += 1;
-      watchRetryTimer = setTimeout(() => {
-        watchRetryTimer = null;
-        startWatch();
-      }, delay);
-    }
-
-    function startWatch(): void {
-      unsubscribeWatch();
-      unsubscribeWatch = () => undefined;
-      const attempt = ++watchAttempt;
-      watchReady = true;
-      let failedSynchronously = false;
-      try {
-        const unsubscribe = context.git.watch(
-          root,
-          (event) => {
-            if (!(alive && attempt === watchAttempt)) {
-              return;
-            }
-            watchReady = true;
-            watchRetryIndex = 0;
-            watchRetryTimer = clearTimer(watchRetryTimer);
-            if (event.status) {
-              sequence += 1;
-              apply(event.status);
-            } else {
-              refetch();
-            }
-          },
-          () => {
-            if (!(alive && attempt === watchAttempt)) {
-              return;
-            }
-            failedSynchronously = true;
-            watchReady = false;
-            unsubscribeWatch();
-            unsubscribeWatch = () => undefined;
-            setState({ kind: "error", retry });
-            scheduleWatchRetry();
-          }
-        );
-        if (failedSynchronously) {
-          unsubscribe();
-          return;
-        }
-        unsubscribeWatch = unsubscribe;
-      } catch {
-        watchReady = false;
-        setState({ kind: "error", retry });
-        scheduleWatchRetry();
-        return;
-      }
-      refetch();
-    }
-
-    setState({ kind: "loading" });
-    startWatch();
+    onChange();
+    session.listeners.add(onChange);
     return () => {
-      alive = false;
-      sequence += 1;
-      statusRetryTimer = clearTimer(statusRetryTimer);
-      watchRetryTimer = clearTimer(watchRetryTimer);
-      unsubscribeWatch();
+      session.listeners.delete(onChange);
+      releaseSession(root, session);
     };
   }, [context, gitRoot]);
 
   return state;
+}
+
+/** 单测用：清空会话表。 */
+export function resetGitStatusSessionsForTests(): void {
+  for (const [root, session] of sessions) {
+    session.sequence += 1;
+    session.statusRetryTimer = clearTimer(session.statusRetryTimer);
+    session.watchRetryTimer = clearTimer(session.watchRetryTimer);
+    session.unsubscribeWatch();
+    sessions.delete(root);
+  }
 }

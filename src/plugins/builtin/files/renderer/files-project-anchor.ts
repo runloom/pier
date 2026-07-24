@@ -42,3 +42,13 @@ export function formatProjectPath(
   }
   return normalized;
 }
+
+/** 状态栏短标签：只显示末段；全路径留给 tooltip。 */
+export function formatProjectStatusLabel(path: string): string {
+  const normalized = stripTrailingSeparators(path);
+  if (normalized === "/" || normalized === "\\") {
+    return normalized;
+  }
+  const parts = normalized.split(/[\\/]/).filter(Boolean);
+  return parts.at(-1) ?? normalized;
+}

@@ -1,3 +1,4 @@
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import type {
   RendererTerminalStatusItem,
   RendererTerminalStatusItemContext,
@@ -15,6 +16,11 @@ import {
   mergeTerminalStatusItems,
   type TerminalStatusBarGroups,
 } from "./terminal-status-bar-merge.ts";
+import {
+  pinnedIdsFromOverflowDeclarations,
+  type TerminalStatusOverflowPolicy,
+} from "./terminal-status-bar-overflow.ts";
+import { useTerminalStatusBarOverflow } from "./use-terminal-status-bar-overflow.ts";
 
 export type TerminalStatusItemContext = RendererTerminalStatusItemContext;
 export type TerminalStatusItem = RendererTerminalStatusItem;
@@ -118,17 +124,8 @@ export function hasVisibleTerminalStatusItems(
 }
 
 /**
- * F4:挂载判定口径 —— 只要有已启用插件在 manifest 里声明了 terminalStatusItems
- * (无论该项当前 hidden 生效值如何),状态栏容器就应该挂载,以保留 h-7 高度和
- * 右键管理入口。此前用 hasVisibleTerminalStatusItems(合并层已在内部把 hidden
- * 项过滤掉)判定挂载,会导致「全部隐藏后容器 unmount → 找不到入口重新打开」的
- * 自锁:用户想恢复显示,却连右键菜单都没有了。
- *
- * 与 terminal-panel.tsx 的 hasStatusBar 判定必须同一口径 —— 两处都改这个函数,
- * 不要各自维出一份等价逻辑。
- *
- * 注:core 声明源(CORE_TERMINAL_STATUS_ITEMS)恒非空,本函数实际恒返回 true ——
- * 设计原意为「有声明就挂载」故不视为退化;详见 spec §5。
+ * 声明源是否非空（设置页 / 右键菜单列表用）。
+ * 挂载底栏请用 shouldMountTerminalStatusBar（只看可见项）。
  */
 export function hasDeclaredTerminalStatusItems(
   plugins: readonly PluginRegistryEntry[]
@@ -140,31 +137,47 @@ export function hasDeclaredTerminalStatusItems(
 }
 
 /**
- * F4:挂载判定的唯一实现 —— TerminalStatusBar 组件与 terminal-panel.tsx 的
- * hasStatusBar(控制 h-7 内容区留白)都必须调这一个函数,禁止各自重复等价逻辑
- * (曾经两处判定口径不一致是本 bug 的根因之一)。
- *
- * 注:core 声明源(CORE_TERMINAL_STATUS_ITEMS)恒非空,hasDeclaredTerminalStatusItems
- * 恒返回 true,故本函数也恒返回 true —— 设计原意为「有声明就挂载」故不视为退化;
- * 详见 spec §5。
+ * 空闲策略：仅当有可见项时挂载底栏（高度 0 还给终端）。
+ * 全部隐藏后的恢复入口：设置 → 终端 → 状态栏（不再靠空条右键）。
+ * TerminalStatusBar 与 terminal-panel.tsx 的 hasStatusBar 必须共用本函数。
  */
 export function shouldMountTerminalStatusBar(
   groups: TerminalStatusBarGroups<TerminalStatusItem>,
   context: TerminalStatusItemContext,
-  plugins: readonly PluginRegistryEntry[]
+  _plugins: readonly PluginRegistryEntry[]
 ): boolean {
-  return (
-    hasDeclaredTerminalStatusItems(plugins) ||
-    hasVisibleTerminalStatusItems(groups, context)
+  return hasVisibleTerminalStatusItems(groups, context);
+}
+
+function overflowPolicyMapFromDeclared(
+  plugins: readonly PluginRegistryEntry[]
+): ReadonlyMap<string, TerminalStatusOverflowPolicy> {
+  const declared = declaredTerminalStatusItemsById(
+    plugins,
+    CORE_TERMINAL_STATUS_ITEMS
   );
+  const map = new Map<string, TerminalStatusOverflowPolicy>();
+  for (const [id, item] of declared) {
+    map.set(id, {
+      overflowPinned: item.overflowPinned,
+      overflowPriority: item.overflowPriority,
+    });
+  }
+  return map;
 }
 
 function renderStatusGroup(
   items: readonly TerminalStatusItem[],
-  statusContext: TerminalStatusItemContext
+  statusContext: TerminalStatusItemContext,
+  overflowHiddenIds: ReadonlySet<string>
 ) {
   return items.map((item) => (
-    <div className="min-w-0" key={item.id}>
+    <div
+      className="min-w-0 empty:hidden"
+      data-overflow-slot={item.id}
+      hidden={overflowHiddenIds.has(item.id)}
+      key={item.id}
+    >
       {item.render(statusContext)}
     </div>
   ));
@@ -174,31 +187,47 @@ export function TerminalStatusBar(statusContext: TerminalStatusItemContext) {
   const groups = useTerminalStatusBarItems();
   const plugins = usePluginRegistryStore((s) => s.plugins);
   const visible = visibleTerminalStatusItems(groups, statusContext);
-  // F4:挂载判定见 shouldMountTerminalStatusBar 注释 —— 此前只看「当前有可见
-  // 项」,用户把全部项都隐藏后容器连同右键管理入口一起 unmount,没有任何 UI
-  // 能再打开恢复,构成自锁。
-  // 注:core 声明源恒非空,shouldMountTerminalStatusBar 实际恒返回 true —— 设计
-  // 原意为「有声明就挂载」故不视为退化;详见 spec §5。
-  if (!shouldMountTerminalStatusBar(groups, statusContext, plugins)) {
+  const shouldMount = shouldMountTerminalStatusBar(
+    groups,
+    statusContext,
+    plugins
+  );
+  const overflowById = useMemo(
+    () => overflowPolicyMapFromDeclared(plugins),
+    [plugins]
+  );
+  const pinnedIds = useMemo(
+    () => pinnedIdsFromOverflowDeclarations(overflowById),
+    [overflowById]
+  );
+  const { hiddenIds, rootRef } = useTerminalStatusBarOverflow(shouldMount, {
+    overflowById,
+    pinnedIds,
+  });
+  // 仅有可见项时挂载；全部隐藏后从设置「终端 → 状态栏」恢复。
+  if (!shouldMount) {
     return null;
   }
   return (
     // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: 状态栏是原生右键菜单的触发面，无准确交互 ARIA role 可用
     <div
-      className="absolute inset-x-0 bottom-0 z-0 flex h-7 items-center gap-1 px-1.5 leading-none"
+      className="absolute inset-x-0 bottom-0 z-0 flex h-7 items-center gap-1 overflow-hidden px-1.5 leading-none"
       data-testid="terminal-status-bar"
       onContextMenu={(event) => {
         openTerminalStatusBarContextMenu(event).catch((err: unknown) => {
           console.error("[terminal-status-bar] context menu failed:", err);
         });
       }}
+      ref={rootRef}
     >
-      {renderStatusGroup(visible.left, statusContext)}
-      <div
-        className="min-w-0 flex-1"
-        data-testid="terminal-status-bar-spacer"
-      />
-      {renderStatusGroup(visible.right, statusContext)}
+      <TooltipProvider>
+        {renderStatusGroup(visible.left, statusContext, hiddenIds)}
+        <div
+          className="min-w-0 flex-1"
+          data-testid="terminal-status-bar-spacer"
+        />
+        {renderStatusGroup(visible.right, statusContext, hiddenIds)}
+      </TooltipProvider>
     </div>
   );
 }

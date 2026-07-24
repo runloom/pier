@@ -12,6 +12,7 @@ export const CORE_TERMINAL_STATUS_ITEMS: readonly CoreTerminalStatusItemDeclarat
     {
       id: CORE_AGENT_STATUS_ITEM_ID,
       order: -10,
+      overflowPriority: 10,
       titleKey: "terminal.statusBar.item.agentStatus.title",
     },
   ];
