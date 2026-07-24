@@ -198,7 +198,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       category: "Git",
       id: "pier.git.review.discardFile",
       permissions: ["git:write"],
-      title: "Git: Restore",
+      title: "Git: Discard Changes",
     },
   ],
   configuration: {

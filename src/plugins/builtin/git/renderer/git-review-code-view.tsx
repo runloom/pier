@@ -20,8 +20,12 @@ import {
   useMemo,
   useState,
 } from "react";
-import { confirmDialog, notifyError } from "./git-command-helpers.ts";
+import { notifyError } from "./git-command-helpers.ts";
 import { pluginText } from "./git-plugin-text.ts";
+import {
+  confirmGitDiscard,
+  partitionDiscardPaths,
+} from "./git-review-discard.ts";
 import { ReviewErrorEmpty, ReviewLoading } from "./git-review-feedback.tsx";
 import { usePluginLanguage } from "./use-plugin-language.ts";
 
@@ -298,24 +302,14 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
           return;
         }
         const path = resolved.slot.targetPath;
-        const slash = path.lastIndexOf("/");
-        const name = slash >= 0 ? path.slice(slash + 1) : path;
+        const selection = partitionDiscardPaths({
+          paths: [path],
+          uniformStatus: resolved.slot.status,
+        });
+        // Confirm first (no busy chrome); busy only during the write.
         (async () => {
-          const title = pluginText(context, "reviewHeaderRestore", "Restore");
-          const confirmed = await confirmDialog(
-            context,
-            title,
-            pluginText(
-              context,
-              "reviewTreeDiscardConfirm",
-              "Restore changes in {{name}}?\nThis cannot be undone.",
-              { name }
-            ),
-            pluginText(context, "reviewHeaderRestore", "Restore"),
-            undefined,
-            { intent: "destructive" }
-          );
-          if (!confirmed) {
+          const decision = await confirmGitDiscard(context, selection);
+          if (decision.kind !== "proceed" || decision.paths.length === 0) {
             return;
           }
           await withBusy(
@@ -323,15 +317,15 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
             (async () => {
               try {
                 const ok = await context.git.discardChanges(gitRootPath, [
-                  path,
+                  ...decision.paths,
                 ]);
                 if (!ok) {
                   notifyError(
                     context,
                     pluginText(
                       context,
-                      "reviewTreeDiscardFailed",
-                      "Unable to Restore"
+                      "reviewDiscardFailed",
+                      "Unable to discard changes"
                     )
                   );
                 }
@@ -340,8 +334,8 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                   context,
                   pluginText(
                     context,
-                    "reviewTreeDiscardFailed",
-                    "Unable to Restore"
+                    "reviewDiscardFailed",
+                    "Unable to discard changes"
                   ),
                   error
                 );
@@ -405,7 +399,11 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
           "reviewCollapseDiff",
           "Collapse diff"
         ),
-        discardChanges: pluginText(context, "reviewHeaderRestore", "Restore"),
+        discardChanges: pluginText(
+          context,
+          "reviewHeaderRestore",
+          "Discard Changes"
+        ),
         expandDiff: pluginText(context, "reviewExpandDiff", "Expand diff"),
         openFile: pluginText(context, "reviewTreeOpenFile", "Open File"),
         stageChanges: pluginText(context, "reviewHeaderStage", "Stage"),

@@ -1025,6 +1025,77 @@ describe("PierFileTree", () => {
     });
   });
 
+  it("keeps the tree scroller stable when opening a row context menu", async () => {
+    const onOpenItemContextMenu = vi.fn();
+    // Tall list so stickyFolders + focus can scroll into the sticky inset band.
+    const manyItems: PierFileTreeItem[] = [
+      { kind: "directory", path: "group-a", hasChildren: true },
+      ...Array.from({ length: 40 }, (_, index) => ({
+        kind: "file" as const,
+        path: `group-a/file-${String(index).padStart(2, "0")}.ts`,
+      })),
+    ];
+    const { container } = render(
+      <PierFileTree
+        items={manyItems}
+        label="Changed files"
+        onOpenItemContextMenu={onOpenItemContextMenu}
+        stickyFolders
+      />
+    );
+
+    const host = getFileTreeHost(container);
+    const scrollElement = host.shadowRoot?.querySelector<HTMLElement>(
+      '[data-file-tree-virtualized-scroll="true"]'
+    );
+    expect(scrollElement).toBeInstanceOf(HTMLElement);
+    const scroller = scrollElement as HTMLElement;
+
+    await act(async () => {
+      scroller.scrollTop = 280;
+      scroller.dispatchEvent(new Event("scroll"));
+    });
+    const scrollBefore = scroller.scrollTop;
+    expect(scrollBefore).toBeGreaterThan(0);
+
+    // trees suppresses contextmenu while isScrolling (~50ms after scroll).
+    await act(async () => {
+      await new Promise((resolve) => {
+        setTimeout(resolve, 80);
+      });
+    });
+
+    // Right-click a currently mounted row after scrolling (virtual window).
+    const mountedRows = [
+      ...(host.shadowRoot?.querySelectorAll<HTMLElement>(
+        '[role="treeitem"][data-item-path]'
+      ) ?? []),
+    ];
+    const row =
+      mountedRows.find((candidate) =>
+        candidate.dataset.itemPath?.includes("/")
+      ) ?? mountedRows.at(-1);
+    expect(row).toBeInstanceOf(HTMLElement);
+
+    fireEvent.contextMenu(row as HTMLElement, { clientX: 40, clientY: 120 });
+
+    await waitFor(() => {
+      expect(onOpenItemContextMenu).toHaveBeenCalled();
+    });
+
+    // Allow microtask + double-rAF pin to settle.
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
+    });
+
+    expect(scroller.scrollTop).toBe(scrollBefore);
+  });
+
   it("synchronizes context-menu enablement after mount", async () => {
     const onOpenItemContextMenu = vi.fn();
     const treeItems: LazyPierFileTreeItem[] = [

@@ -89,7 +89,8 @@ function getPierFileTree(container: HTMLElement): HTMLElement {
 
 /** 分支名不应再带 max-w-[...] 固定宽度上限（只在容器溢出时 truncate）。 */
 const FIXED_MAX_WIDTH_CLASS_RE = /max-w-\[/;
-const DROP_STASH_CONFIRM_BODY_RE = /Drop stash@\{2\}\? This cannot be undone\./;
+const DROP_STASH_CONFIRM_BODY_RE =
+  /Delete stash stash@\{2\}\? This cannot be undone\./;
 
 const context: PanelContext = {
   branch: "main",
@@ -1832,13 +1833,13 @@ describe("git builtin plugin", () => {
     expect(screen.getByRole("alertdialog")).toHaveAttribute("data-size", "sm");
     // {{stash}} 插值链路：fallback 也必须替换为实际 label
     expect(await screen.findByText(DROP_STASH_CONFIRM_BODY_RE)).toBeVisible();
-    expect(screen.getByRole("button", { name: "Drop" })).toHaveAttribute(
+    expect(screen.getByRole("button", { name: "Delete" })).toHaveAttribute(
       "data-variant",
       "destructive"
     );
     // 确认前不得触发删除
     expect(window.pier.git.dropStash).not.toHaveBeenCalled();
-    fireEvent.click(screen.getByRole("button", { name: "Drop" }));
+    fireEvent.click(screen.getByRole("button", { name: "Delete" }));
     await acceptPromise;
 
     expect(window.pier.git.dropStash).toHaveBeenCalledWith(

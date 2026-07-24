@@ -5,9 +5,87 @@
 
 import { Badge } from "@pier/ui/badge.tsx";
 import { CommandGroup, CommandItem } from "@pier/ui/command.tsx";
+import { Skeleton } from "@pier/ui/skeleton.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type { ReactNode } from "react";
 import { quickPickResults } from "@/lib/command-palette/quick-pick-search.ts";
 import type { QuickPick, QuickPickItem } from "@/lib/command-palette/types.ts";
+
+/** 静态骨架行：固定宽度 class，模拟文件快捷打开的「图标 + 标题/副标题 + 右侧路径」。 */
+const LOADING_SKELETON_ROWS = [
+  {
+    detail: true,
+    id: "sk-0",
+    labelClass: "w-3/5",
+    metaClass: "w-1/5",
+  },
+  {
+    detail: false,
+    id: "sk-1",
+    labelClass: "w-2/5",
+    metaClass: "w-1/6",
+  },
+  {
+    detail: true,
+    id: "sk-2",
+    labelClass: "w-1/2",
+    metaClass: "w-1/4",
+  },
+  {
+    detail: false,
+    id: "sk-3",
+    labelClass: "w-2/3",
+    metaClass: "w-1/5",
+  },
+  {
+    detail: true,
+    id: "sk-4",
+    labelClass: "w-1/2",
+    metaClass: "w-1/6",
+  },
+  {
+    detail: false,
+    id: "sk-5",
+    labelClass: "w-3/5",
+    metaClass: "w-1/4",
+  },
+] as const;
+
+/** 异步 quick-pick 首屏 / 清空重搜时的列表骨架，避免先闪「无匹配项」。 */
+export function QuickPickLoadingSkeleton({
+  label,
+}: {
+  label: string;
+}): ReactNode {
+  return (
+    <div
+      aria-busy="true"
+      aria-label={label}
+      aria-live="polite"
+      className="mt-2 flex flex-col gap-1 p-1"
+      data-slot="command-palette-loading"
+      role="status"
+    >
+      {LOADING_SKELETON_ROWS.map((row) => (
+        <div
+          className="flex min-h-7 items-center gap-2.5 rounded-xl px-2 py-1"
+          key={row.id}
+        >
+          <Skeleton className="size-4 shrink-0 rounded-md" />
+          <div className="flex min-w-0 flex-1 flex-col gap-1.5">
+            <Skeleton className={cn("h-3.5 rounded-md", row.labelClass)} />
+            {row.detail ? (
+              <Skeleton className="h-2.5 w-2/5 rounded-md" />
+            ) : null}
+          </div>
+          <Skeleton
+            className={cn("h-2.5 shrink-0 rounded-md", row.metaClass)}
+          />
+        </div>
+      ))}
+    </div>
+  );
+}
 
 export function quickPickItems(quickPick: QuickPick): readonly QuickPickItem[] {
   if (quickPick.sections && quickPick.sections.length > 0) {
@@ -49,6 +127,20 @@ export function isQuickPickItemSelectable(
   item: QuickPickItem
 ): boolean {
   return quickPick.loading !== true && item.disabled !== true;
+}
+
+/**
+ * 异步 quick-pick 正在加载且尚无任何可呈现项。
+ * 骨架屏与 CommandEmpty 抑制共用此判断，避免一侧改了另一侧仍闪「无匹配项」。
+ */
+export function isQuickPickLoadingEmpty(
+  quickPick: QuickPick,
+  query: string
+): boolean {
+  return (
+    quickPick.loading === true &&
+    quickPickPresentedItems(quickPick, query).length === 0
+  );
 }
 
 /**
@@ -107,15 +199,21 @@ function QuickPickDefaultRow({ item }: { item: QuickPickItem }): ReactNode {
 }
 
 export function QuickPickView({
+  loadingLabel,
   quickPick,
   onAccept,
   query,
 }: {
+  loadingLabel: string;
   quickPick: QuickPick;
   onAccept: (item: QuickPickItem) => Promise<void>;
   query: string;
 }): ReactNode {
   const queryItem = quickPickQueryItem(quickPick, query);
+  if (isQuickPickLoadingEmpty(quickPick, query)) {
+    return <QuickPickLoadingSkeleton label={loadingLabel} />;
+  }
+
   const renderItem = (item: QuickPickItem) => {
     const disabled = !isQuickPickItemSelectable(quickPick, item);
     const content = quickPick.renderItem ? (

@@ -221,10 +221,10 @@ async function runDropStash(
     pluginText(
       context,
       "gitStashDropConfirmBody",
-      "Drop {{stash}}? This cannot be undone.",
+      "Delete stash {{stash}}? This cannot be undone.",
       { stash: item.label }
     ),
-    pluginText(context, "gitStashDropConfirmLabel", "Drop"),
+    pluginText(context, "gitStashDropConfirmLabel", "Delete"),
     item.detail,
     { intent: "destructive" }
   );

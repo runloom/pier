@@ -589,8 +589,10 @@ body {
 
    3 种 tab 状态:
    S1  未选中 (hidden panel, 任意 group)    — 最弱: 透明底 + 暗文字
-   S2  分组选中 (visible panel, 失焦 group) — 中等: 内容底色 + 顶部 1px muted 指示线
-   S3  当前聚焦 (visible panel, 聚焦 group) — 最强: 内容底色 + 顶部 2px primary 指示线 */
+   S2  分组选中 (visible panel, 失焦 group 或 窗口失焦) — 中等: 内容底色 + 顶部 1px muted 指示线
+   S3  当前聚焦 (visible panel, 聚焦 group 且 窗口聚焦) — 最强: 内容底色 + 顶部 2px primary 指示线
+
+   窗口聚焦位: html[data-window-focused] (installWindowFocusAttribute) */
 
 .dockview-theme-pier {
   /* — 紧凑布局 — */
@@ -764,7 +766,7 @@ body {
 .dv-tab.dv-tab-dragging
   .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
 .dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"] {
-  color: var(--status-warning-fg);
+  color: var(--status-success-fg);
 }
 
 .dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="workbench"],
@@ -890,7 +892,7 @@ body {
   position: relative;
 }
 
-/* — S3 指示线: 聚焦 group 选中 tab → 顶部 2px primary — */
+/* — S3 指示线: 聚焦 group 选中 tab + 窗口聚焦 → 顶部 2px primary — */
 .dockview-theme-pier
   .dv-groupview.dv-active-group
   > .dv-tabs-and-actions-container
@@ -916,10 +918,21 @@ body {
   position: absolute;
   top: 1px;
   inset-inline: 0;
-  height: 2px;
+  height: 1px;
   background-color: var(--muted-foreground);
   outline: none !important;
   z-index: 2;
+}
+
+/* — 窗口失焦: active-group 也降为 S2 (dockview 不会因 OS blur 翻 inactive-group) — */
+:root[data-window-focused="false"]
+  .dockview-theme-pier
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab::after {
+  height: 1px;
+  background-color: var(--muted-foreground);
 }
 
 /* 拖拽线 */

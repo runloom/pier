@@ -26,9 +26,14 @@ export function pluginPanelDescriptor(
   params: Readonly<Record<string, unknown>> = {}
 ): PanelDescriptor {
   const tab = resolvePluginPanelTab(registration, params, title);
+  // resolveTab 可从 params 派生实例标题（如变更 panel 的工作树名）；优先于 open 时传入的静态 title。
+  const shortTitle = tab?.title ?? title;
   return {
     ...(context ? { context } : {}),
-    display: { short: title },
+    display: {
+      short: shortTitle,
+      ...(tab?.tooltip?.title ? { long: tab.tooltip.title } : {}),
+    },
     ...(tab ? { tab } : {}),
   };
 }

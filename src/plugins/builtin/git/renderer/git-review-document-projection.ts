@@ -44,8 +44,9 @@ function reviewStageControl(
       return { state: "staged" };
     case "unstaged":
       return {
-        // Match tree discard rule: only modified/deleted working-tree changes.
-        canDiscard: status === "modified" || status === "deleted",
+        // VS Code clean: tracked modified/deleted + untracked added.
+        canDiscard:
+          status === "modified" || status === "deleted" || status === "added",
         state: "unstaged",
       };
     case "conflict":

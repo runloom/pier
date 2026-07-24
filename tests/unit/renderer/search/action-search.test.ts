@@ -367,7 +367,7 @@ describe("action search", () => {
     ["zh-CN", "git 合并", ["pier.git.merge"]],
     [
       "zh-CN",
-      "Git: 暂存",
+      "Git: 储藏",
       ["pier.git.stash", "pier.git.stashIncludeUntracked"],
     ],
     ["zh-CN", "Git: 变基", ["pier.git.rebase"]],
@@ -385,7 +385,7 @@ describe("action search", () => {
     ["en", "rebase", ["pier.git.rebase"]],
     ["zh-CN", "合并", ["pier.git.merge"]],
     ["zh-CN", "合并分支", ["pier.git.merge"]],
-    ["zh-CN", "暂存", ["pier.git.stash", "pier.git.stashIncludeUntracked"]],
+    ["zh-CN", "储藏", ["pier.git.stash", "pier.git.stashIncludeUntracked"]],
   ])("keeps matching bare operation keywords with %s prefixed titles: %s", (titleLocale, query, expectedIds) => {
     const docs = titleLocale === "zh-CN" ? gitCommandDocsZh : gitCommandDocs;
     expect(expectedIds).toContain(

@@ -242,6 +242,39 @@ describe("AppDialogHost", () => {
     await expect(result).resolves.toBe("alt");
   });
 
+  it("choice 支持 confirm-alt-cancel 顺序（主动作 | 次动作 | 取消）", async () => {
+    renderHost();
+
+    let result: Promise<"alt" | "cancel" | "confirm"> | undefined;
+    act(() => {
+      result = showAppChoice({
+        altLabel: "Discard All",
+        buttonOrder: "confirm-alt-cancel",
+        confirmLabel: "Discard Modified",
+        intent: "destructive",
+        size: "default",
+        title: "Discard Changes",
+      });
+    });
+
+    expect(await screen.findByText("Discard Changes")).toBeVisible();
+    const buttons = screen.getAllByRole("button");
+    expect(buttons.map((button) => button.textContent)).toEqual([
+      "Discard Modified",
+      "Discard All",
+      "Cancel",
+    ]);
+    expect(
+      screen.getByRole("button", { name: "Discard Modified" })
+    ).toHaveAttribute("data-variant", "default");
+    expect(screen.getByRole("button", { name: "Discard All" })).toHaveAttribute(
+      "data-variant",
+      "destructive"
+    );
+    fireEvent.click(screen.getByRole("button", { name: "Discard Modified" }));
+    await expect(result).resolves.toBe("confirm");
+  });
+
   it("prompt 弹窗立即返回输入值并独立退场", async () => {
     renderHost();
 

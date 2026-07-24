@@ -21,6 +21,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { gitChangesPanelTitle } from "./git-changes-tab-title.ts";
 import { GitCommitForm } from "./git-commit-form.tsx";
 import { pluginText } from "./git-plugin-text.ts";
 import { preloadReviewCodeView } from "./git-review-code-view.tsx";
@@ -86,6 +87,17 @@ export function createGitChangesPanel(context: RendererPluginContext) {
     const sourceKey = source ? JSON.stringify(source) : null;
     const visible = useDockviewPanelVisible(props.api);
     const panelId = props.api.id;
+
+    // Scope / 路径变化时同步 tab 标题（含 layout 恢复后纠正旧「变更」标题）。
+    useEffect(() => {
+      if (!source) {
+        return;
+      }
+      const nextTitle = gitChangesPanelTitle(source);
+      if (props.api.title !== nextTitle) {
+        props.api.setTitle(nextTitle);
+      }
+    }, [props.api, source]);
 
     useEffect(() => {
       if (!sourceKey) {
