@@ -764,7 +764,7 @@ body {
 .dv-tab.dv-tab-dragging
   .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
 .dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"] {
-  color: var(--status-warning-fg);
+  color: var(--status-success-fg);
 }
 
 .dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="workbench"],

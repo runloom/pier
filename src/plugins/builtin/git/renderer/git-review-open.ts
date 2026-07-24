@@ -7,6 +7,7 @@ import {
 } from "@shared/contracts/git-review.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { GIT_CHANGES_PANEL_ID } from "../manifest.ts";
+import { gitChangesPanelTitle } from "./git-changes-tab-title.ts";
 import { pluginText } from "./git-plugin-text.ts";
 
 function reviewTargetKey(target: GitReviewTarget): string {
@@ -61,6 +62,7 @@ export function openGitChangesPanel(input: {
     const existingInGroup = preferredGroupId
       ? matches.find((instance) => instance.groupId === preferredGroupId)
       : undefined;
+    const title = gitChangesPanelTitle(source);
     if (existingInGroup) {
       const focusResult = input.pluginContext.panels.openInstance({
         componentId: GIT_CHANGES_PANEL_ID,
@@ -70,7 +72,7 @@ export function openGitChangesPanel(input: {
         ...(existingInGroup.groupId
           ? { targetGroupId: existingInGroup.groupId }
           : {}),
-        title: pluginText(input.pluginContext, "reviewChangesTitle", "Changes"),
+        title,
       });
       if (focusResult.kind !== "targetGroupMissing") {
         return;
@@ -97,11 +99,7 @@ export function openGitChangesPanel(input: {
           instanceId,
           params: { source },
           ...(targetGroupId ? { targetGroupId } : {}),
-          title: pluginText(
-            input.pluginContext,
-            "reviewChangesTitle",
-            "Changes"
-          ),
+          title,
         });
       },
       pluginContext: input.pluginContext,
