@@ -101,6 +101,7 @@ export const workbench = {
         presetTokens: "Tokens",
         presetCustom: "Custom",
         range: "Time range",
+        rangeDaysShort: "{{count}}d",
         rangeDays: "{{count}} days",
         measure: "Metric",
         measureCost: "Cost",

@@ -95,6 +95,7 @@ export const workbench = {
         presetTokens: "Tokens",
         presetCustom: "自定义",
         range: "时间范围",
+        rangeDaysShort: "{{count}} 天",
         rangeDays: "近 {{count}} 天",
         measure: "度量",
         measureCost: "成本",
