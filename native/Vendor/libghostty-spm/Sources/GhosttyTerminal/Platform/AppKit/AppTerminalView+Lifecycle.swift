@@ -168,13 +168,33 @@
         }
 
         public func synchronizeHostFocusState() {
-            // 键盘路由仍走 hostKeyboardActive（见 AppTerminalView+Input.swift 各处 guard）。
-            // Ghostty focus 只影响光标样式（focused=solid，unfocused=hollow）；
-            // 我们希望即便被 web 浮层「接管」的那一刻也别画 hollow 出现「双光标」，
-            // 所以只要窗口是 key + (是 FR 或 hostCursorHidden) 就报告 focused=true。
-            // 配合 setHostCursorHidden 发出的 DECTCEM ?25l，能同时挡住 hollow 与 solid。
+            // Ghostty focus 跟随「逻辑键盘归属」而非 AppKit first responder 瞬态。
+            // 转场期间 FR 在 WKWebView ⇄ 终端之间迁移存在竞态（Chromium resign
+            // 滞后/拒绝），按 FR 瞬态派生会向 TUI 发出瞬时 focus-out（ESC[O）；
+            // cursor-agent 等 TUI 的输入框失焦后不随 focus-in 恢复，表现为
+            // paste 进框但 Enter 不提交。hostKeyboardActive（coordinator 下发
+            // 的键盘归属）与 hostCursorHidden（web 浮层接管保活）都算聚焦；
+            // 键盘真正切去别的面板时 hostKeyboardActive=false，仍会正确 blur。
+            // 配合 setHostCursorHidden 的 renderer 级 suppress，无双光标问题。
+            //
+            // 为什么仅有公式还不够、还需要 applyTerminalWindowState 的转场
+            // 顺序修正（打开浮层先挂 hidden 再交 FR）——打开方向若先交 FR：
+            //   ① hostKeyboardActive=false → didSet → sync：FR 仍在终端
+            //     → (FR===self || …) = true，无事件；
+            //   ② resignFirstResponder → sync：
+            //     (✗ || hidden=false || hostKeyboardActive=false) = false
+            //     → ESC[O；
+            //   ③ 挂 hidden → sync → true → ESC[I。
+            // 反过来，为什么仅有顺序也不够、还需要本公式——关闭方向先回 FR
+            // 再摘 hidden 时，makeFirstResponder 与 WKWebView resign 竞态会
+            // 让「摘 hidden 那一帧」的 FR 尚未落回终端，旧公式（FR || hidden）
+            // 派生 false → ESC[O；hostKeyboardActive 入 OR 后该帧恒为 true。
+            // 结论：打开方向靠顺序、关闭方向靠公式，两者缺一不可。
+            //
+            // 保留 FR===self 项的理由：ghostty 的 mouseDown 可能先于
+            // coordinator 响应直接把终端 view 抓成 FR，该项与旧行为一致。
             let focused = window?.isKeyWindow == true
-                && (window?.firstResponder === self || hostCursorHidden)
+                && (window?.firstResponder === self || hostCursorHidden || hostKeyboardActive)
             applySurfaceFocus(focused)
         }
 

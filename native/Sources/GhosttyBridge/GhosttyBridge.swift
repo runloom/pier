@@ -764,6 +764,17 @@ final class GhosttyBridgeImpl {
     /// createTerminal 用它给 TerminalEventDelegate 初始化 browserWindowId.
     private var windowToBrowserWindowId: [ObjectIdentifier: Int] = [:]
 
+    private init() {
+        // PIER_TERMINAL_DEBUG_LOG=1 开启 TerminalDebugLog standard 通道（含
+        // input：sendText / sendKeyEvent 及 result），"all" 再加 render。
+        // 诊断「增强输入 paste → Return」时序、surface focus 等问题的唯一入口。
+        guard let flag = ProcessInfo.processInfo.environment["PIER_TERMINAL_DEBUG_LOG"],
+              !flag.isEmpty, flag != "0"
+        else { return }
+        TerminalDebugLog.enable(flag == "all" ? .all : .standard)
+        NSLog("[ghostty-bridge] TerminalDebugLog enabled (\(flag))")
+    }
+
     private func controller(for window: NSWindow) -> TerminalController {
         let windowId = ObjectIdentifier(window)
         if let existing = controllers[windowId] { return existing }
@@ -1056,20 +1067,58 @@ final class GhosttyBridgeImpl {
         }
         CATransaction.commit()
 
+        // 转场顺序按方向选择，避免向 TUI 发出瞬时 focus-out（ESC[O）：
+        // cursor-agent 等 TUI 依赖 mode 1004 focus 上报决定输入框聚焦态，
+        // 收到 ESC[O 后输入框失焦且不会随随后的 ESC[I 恢复——表现为增强输入
+        // paste 能进框但 Enter 不提交。
+        // - 打开浮层（focusDisabled 新增）：先挂 hostCursorHidden（focused
+        //   保持 true），再移交 first responder → 全程无 focus 事件。
+        // - 关闭浮层：先让 first responder 回终端（hidden 还在，focused
+        //   保持 true），再摘 hidden → 同样无事件。
+        //
+        // 为什么仅靠 synchronizeHostFocusState 的公式（hostKeyboardActive
+        // 纳入 OR）还不够——打开方向若按本分支的 else 顺序（先 FR 后 hidden）
+        // 逐帧推演：
+        //   ① hostKeyboardActive=false → didSet → sync：
+        //      FR 尚未离开终端 → (FR===self || …) = true，无事件；
+        //   ② resignFirstResponder → sync：
+        //      (✗ || hidden=false || hostKeyboardActive=false) = false
+        //      → ESC[O（瞬时 focus-out 复活）；
+        //   ③ 随后挂 hidden → sync → true → ESC[I。
+        // 反过来，为什么仅靠本顺序修正也不够——关闭方向按 if 分支（先 FR 后
+        // 摘 hidden）逐帧推演：makeFirstResponder(终端) 与 WKWebView resign
+        // 存在竞态（Chromium 在 DOM 输入聚焦时滞后/拒绝 resign），摘 hidden
+        // 那一刻若 FR 尚未落回终端，按「FR===self || hidden」旧公式派生出
+        // focused=false → ESC[O；hostKeyboardActive 入 OR 后该帧恒为 true。
+        // 结论：打开方向靠本顺序、关闭方向靠公式，两者缺一不可。
+        let previousFocusDisabled = appliedWindowStates[windowId]?.focusDisabledSet ?? []
+        let hidesAdded = !state.focusDisabledSet.isSubset(of: previousFocusDisabled)
         appliedWindowStates[windowId] = state
         applyState.lastAppliedNativeApplySequence = state.nativeApplySequence
         applyState.lastAppliedRendererSequence = state.rendererSequence
         applyState.lastReason = state.reason
         windowApplyStates[windowId] = applyState
-        applyFirstResponder(
-            for: parent,
-            targetPanelId: eligibleFirstResponderTarget(state),
-            windowFocused: state.windowFocused
-        )
-        applyHostCursorVisibility(
-            for: parent,
-            focusDisabledPanelIds: state.focusDisabledSet
-        )
+        if hidesAdded {
+            applyHostCursorVisibility(
+                for: parent,
+                focusDisabledPanelIds: state.focusDisabledSet
+            )
+            applyFirstResponder(
+                for: parent,
+                targetPanelId: eligibleFirstResponderTarget(state),
+                windowFocused: state.windowFocused
+            )
+        } else {
+            applyFirstResponder(
+                for: parent,
+                targetPanelId: eligibleFirstResponderTarget(state),
+                windowFocused: state.windowFocused
+            )
+            applyHostCursorVisibility(
+                for: parent,
+                focusDisabledPanelIds: state.focusDisabledSet
+            )
+        }
         return .applied
     }
 
@@ -1716,6 +1765,14 @@ final class GhosttyBridgeImpl {
         return term.terminalView.readSelectionText()
     }
 
+    /// TUI 输入聚焦探针：1=visible，0=hidden，-1=surface 不存在。
+    func readCursorVisible(panelId: String) -> Int32 {
+        guard let term = terminals[panelId],
+              let visible = term.terminalView.cursorVisibleProbe()
+        else { return -1 }
+        return visible ? 1 : 0
+    }
+
     func sendText(panelId: String, text: String) -> Bool {
         guard let term = terminals[panelId] else { return false }
         return term.terminalView.sendText(text)
@@ -2289,6 +2346,17 @@ public func ghosttyBridgeReadSelectionText(
         GhosttyBridgeImpl.shared.readSelectionText(panelId: String(cString: panelId))
     }
     return text?.withCString { strdup($0) }
+}
+
+@_cdecl("ghostty_bridge_read_cursor_visible")
+public func ghosttyBridgeReadCursorVisible(
+    _ panelId: UnsafePointer<CChar>
+) -> Int32 {
+    MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.readCursorVisible(
+            panelId: String(cString: panelId)
+        )
+    }
 }
 
 @_cdecl("ghostty_bridge_close_all")
