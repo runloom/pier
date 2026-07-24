@@ -484,7 +484,7 @@ describe("file-tree-actions", () => {
     await action.handler(treeInvocation(file("src/delete-me.ts")));
 
     expect(dialogs.confirm).toHaveBeenCalledWith({
-      body: 'Delete "delete-me.ts"? You can restore it from the system Trash.',
+      body: "Delete delete-me.ts? You can restore it from Trash.",
       cancelLabel: "Cancel",
       confirmLabel: "Delete",
       intent: "destructive",
@@ -529,7 +529,7 @@ describe("file-tree-actions", () => {
 
     expect(dialogs.confirm).toHaveBeenCalledWith(
       expect.objectContaining({
-        body: 'Delete "src"? You can restore it from the system Trash.',
+        body: "Delete src? You can restore it from Trash.",
       })
     );
     expect(files.trash).toHaveBeenCalledOnce();

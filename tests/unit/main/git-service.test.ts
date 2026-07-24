@@ -1388,18 +1388,85 @@ describe("createGitService", () => {
     expect(calls[0]).toEqual(["restore", "--staged", "--", "src/a.ts"]);
   });
 
-  it("discardChanges 用 git restore -- <paths>(不带 --staged)", async () => {
+  it("discardChanges 对已跟踪文件用 git restore -- <paths>(不带 --staged)", async () => {
     const calls: Array<readonly string[]> = [];
     const service = createGitService({
       execGit: (args) => {
         calls.push(args);
+        if (args[0] === "ls-files") {
+          return Promise.resolve("src/a.ts\0");
+        }
         return Promise.resolve("");
       },
     });
 
     await service.discardChanges("/repo", { paths: ["src/a.ts"] });
 
-    expect(calls[0]).toEqual(["restore", "--", "src/a.ts"]);
+    expect(calls[0]).toEqual(["ls-files", "-z", "--", "src/a.ts"]);
+    expect(calls[1]).toEqual(["restore", "--", "src/a.ts"]);
+  });
+
+  it("discardChanges 对未跟踪文件优先移入废纸篓", async () => {
+    const calls: Array<readonly string[]> = [];
+    const trashed: string[] = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (args[0] === "ls-files") {
+          return Promise.resolve("");
+        }
+        return Promise.resolve("");
+      },
+      trashItem: async (absolutePath) => {
+        trashed.push(absolutePath);
+      },
+    });
+
+    await service.discardChanges("/repo", { paths: ["new.ts"] });
+
+    expect(calls.some((args) => args[0] === "restore")).toBe(false);
+    expect(trashed).toEqual(["/repo/new.ts"]);
+  });
+
+  it("discardChanges 废纸篓失败时回退 git clean -f -d", async () => {
+    const calls: Array<readonly string[]> = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        return Promise.resolve("");
+      },
+      trashItem: async () => {
+        throw new Error("trash unavailable");
+      },
+    });
+
+    await service.discardChanges("/repo", { paths: ["tmp/out.log"] });
+
+    expect(calls).toContainEqual(["clean", "-f", "-d", "--", "tmp/out.log"]);
+  });
+
+  it("discardChanges 混合路径：restore 已跟踪 + trash 未跟踪", async () => {
+    const calls: Array<readonly string[]> = [];
+    const trashed: string[] = [];
+    const service = createGitService({
+      execGit: (args) => {
+        calls.push(args);
+        if (args[0] === "ls-files") {
+          return Promise.resolve("tracked.ts\0");
+        }
+        return Promise.resolve("");
+      },
+      trashItem: async (absolutePath) => {
+        trashed.push(absolutePath);
+      },
+    });
+
+    await service.discardChanges("/repo", {
+      paths: ["tracked.ts", "untracked.ts"],
+    });
+
+    expect(calls).toContainEqual(["restore", "--", "tracked.ts"]);
+    expect(trashed).toEqual(["/repo/untracked.ts"]);
   });
 
   it("discardChanges paths 为空抛错(危险操作显式)", async () => {

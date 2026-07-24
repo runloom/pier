@@ -36,6 +36,11 @@ import { listBranches as listGitBranches } from "./git-branch-list.ts";
 import { searchBranches as searchGitBranches } from "./git-branch-search.ts";
 import { assertSafeBranchName, switchBranch } from "./git-branch-switch.ts";
 import { searchCommits as searchGitCommits } from "./git-commit-search.ts";
+import {
+  discardChanges as discardWorkingTreeChanges,
+  type TrashItem,
+  trashViaElectronShell,
+} from "./git-discard-operations.ts";
 import { listIgnoredPaths } from "./git-ignored.ts";
 import {
   abortCherryPick,
@@ -181,6 +186,11 @@ export interface CreateGitServiceOptions {
   resolveEnvironment?: (
     cwd: string
   ) => Promise<Readonly<Record<string, string>>>;
+  /**
+   * Untracked discard: move to OS Trash/Recycle Bin (VS Code default).
+   * Injected in tests; production uses Electron `shell.trashItem`.
+   */
+  trashItem?: TrashItem;
 }
 
 /**
@@ -190,6 +200,7 @@ export interface CreateGitServiceOptions {
 export function createGitService({
   execGit = defaultExecGit,
   resolveEnvironment,
+  trashItem = trashViaElectronShell,
 }: CreateGitServiceOptions = {}): GitService {
   const runGit = withResolvedEnvironment(execGit, resolveEnvironment);
   return {
@@ -406,14 +417,8 @@ export function createGitService({
         timeoutMs: WRITE_TIMEOUT_MS,
       });
     },
-    discardChanges: async (cwd, request) => {
-      if (request.paths.length === 0) {
-        throw new Error("discardChanges requires at least one path");
-      }
-      await runGit(["restore", "--", ...request.paths], cwd, {
-        timeoutMs: WRITE_TIMEOUT_MS,
-      });
-    },
+    discardChanges: (cwd, request) =>
+      discardWorkingTreeChanges(runGit, cwd, request.paths, trashItem),
     commit: async (cwd, options) => {
       const args = ["commit", "-m", options.message];
       if (options.signoff) {
