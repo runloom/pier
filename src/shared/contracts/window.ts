@@ -16,6 +16,13 @@ export interface WindowContext {
    * 可选仅为兼容旧测试 mock，生产创建窗口时必填。
    */
   electronWindowId?: string;
+  /**
+   * OS-level key-window focus for this BrowserWindow / BaseWindow.
+   * Enriched at WINDOW_CONTEXT IPC time via `win.isFocused()` — not stored on
+   * the identity record. Distinct from DOM `document.hasFocus()` (false while
+   * native terminal is firstResponder).
+   */
+  focused?: boolean;
   mode: WindowOpenMode;
   recordId: string;
   /**
@@ -25,4 +32,9 @@ export interface WindowContext {
    */
   startup?: { kind: "panel-transfer"; transferId: string };
   windowId: string;
+}
+
+/** Main → owning renderer: BrowserWindow/BaseWindow key-window focus changed. */
+export interface WindowFocusChangedPayload {
+  focused: boolean;
 }

@@ -56,7 +56,10 @@ export function registerWindowIpc(ipcMain: IpcMain): void {
     if (!context) {
       throw new Error("window context not found");
     }
-    return context;
+    return {
+      ...context,
+      focused: win.isFocused(),
+    };
   });
 
   ipcMain.handle(PIER.WINDOW_CLOSE_CURRENT, (event) => {

@@ -21,3 +21,14 @@ describe("PIER.FILE_PICK_SAVE_TARGET", () => {
     expect(ALLOWED_RENDERER_CHANNELS).not.toContain(PIER.FILE_PICK_SAVE_TARGET);
   });
 });
+
+describe("PIER_BROADCAST.WINDOW_FOCUS_CHANGED", () => {
+  it("uses pier:// window focus channel and is allowlisted for renderer subscribe", () => {
+    expect(PIER_BROADCAST.WINDOW_FOCUS_CHANGED).toBe(
+      "pier://window:focus-changed"
+    );
+    expect(ALLOWED_RENDERER_CHANNELS).toContain(
+      PIER_BROADCAST.WINDOW_FOCUS_CHANGED
+    );
+  });
+});
