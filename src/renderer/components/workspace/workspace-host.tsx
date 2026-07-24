@@ -26,6 +26,7 @@ import {
 } from "@/lib/workspace/workspace-layout-persistence.ts";
 import { setTerminalLayoutPresentationScheduler } from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
 import { requestTerminalPresentation } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
+import { ensureTuiInputFocus } from "@/panel-kits/terminal/tui-input-focus.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
@@ -97,6 +98,9 @@ function syncActivePanelScope(panel: WorkspacePanel | null | undefined): void {
     // 未接管则走原生焦点归还路径。
     if (!terminalComposerTakeoverFocus(panel.id, "activate")) {
       requestTerminalFocusIntent(panel.id);
+      // crush 等 TUI 内部输入框可能失焦（paste/Enter 会被静默丢弃）：
+      // 探针确认后按 catalog 白名单恢复。fire-and-forget，内部 per-panel 互斥。
+      ensureTuiInputFocus(panel.id).catch(() => undefined);
     }
   } else {
     setTerminalBasePanel({ kind: "web" });
@@ -348,6 +352,7 @@ export function WorkspaceHost() {
             // effective 随 basePanel=terminal 转向终端。
             useTerminalStore.getState().yieldToTerminal();
             requestTerminalFocusIntent(req.panelId);
+            ensureTuiInputFocus(req.panelId).catch(() => undefined);
             syncTerminalPresentation(event.api, "dockview-active-panel");
           }
         }) ?? (() => undefined);

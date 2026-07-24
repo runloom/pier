@@ -1,4 +1,5 @@
 import { useTerminalOverlayRegistration } from "@pier/ui/use-terminal-overlay.tsx";
+import { APPKIT_KEYCODE } from "@shared/terminal-appkit-keys.ts";
 import {
   type KeyboardEvent as ReactKeyboardEvent,
   type MouseEvent as ReactMouseEvent,
@@ -25,9 +26,14 @@ import {
   reportComposerSendFailure,
   writeComposerDraft,
 } from "./terminal-composer-helpers.ts";
-import { passthroughKeyPressForKey } from "./terminal-composer-passthrough.ts";
+import {
+  type ComposerPassthroughKeyPress,
+  passthroughKeyPressForKey,
+} from "./terminal-composer-passthrough.ts";
 import { TerminalComposerView } from "./terminal-composer-view.tsx";
+import { useTuiSendBlock } from "./tui-input-focus.ts";
 import { useTerminalComposerAttachments } from "./use-terminal-composer-attachments.ts";
+import { useTerminalComposerSend } from "./use-terminal-composer-send.ts";
 
 export {
   resetTerminalComposerDraftsForTests,
@@ -157,7 +163,9 @@ export function TerminalComposer({
     t,
   });
 
-  const canSend = !disabled && attachments.canSendWithDraft(value);
+  const sendBlock = useTuiSendBlock(panelId, isActive);
+  const canSend =
+    !disabled && sendBlock === null && attachments.canSendWithDraft(value);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -281,12 +289,13 @@ export function TerminalComposer({
     }
   }, [isActive, overlayId]);
 
-  const sendKey = (keycode: number, mods?: number) => {
+  const sendKey = (keyPress: ComposerPassthroughKeyPress) => {
     window.pier.terminal
       .sendKeyPress({
-        keycode,
+        keycode: keyPress.keycode,
         panelId,
-        ...(mods === undefined ? {} : { mods }),
+        ...(keyPress.mods === undefined ? {} : { mods: keyPress.mods }),
+        ...(keyPress.text === undefined ? {} : { text: keyPress.text }),
       })
       .then((result) => {
         if (!result.ok) {
@@ -301,36 +310,20 @@ export function TerminalComposer({
       });
   };
 
-  const send = () => {
-    if (disabled) {
-      return;
-    }
-    const payload = attachments.buildPayloadOrReport(value);
-    if (payload == null) {
-      return;
-    }
-    window.pier.terminal
-      .sendText({ panelId, submit: true, text: payload })
-      .then((result) => {
-        if (result.ok || result.textDelivered) {
-          clearComposerDraft(panelId);
-          setValue("");
-          attachments.clearAll();
-          onCloseRef.current();
-          if (!result.ok) {
-            reportComposerSendFailure(t, result.error ?? "");
-          }
-          return;
-        }
-        reportComposerSendFailure(t, result.error ?? "");
-      })
-      .catch((err: unknown) => {
-        reportComposerSendFailure(
-          t,
-          err instanceof Error ? err.message : String(err)
-        );
-      });
-  };
+  const { send } = useTerminalComposerSend({
+    buildPayloadOrReport: attachments.buildPayloadOrReport,
+    disabled,
+    onSent: () => {
+      clearComposerDraft(panelId);
+      setValue("");
+      attachments.clearAll();
+      onCloseRef.current();
+    },
+    panelId,
+    sendBlock,
+    t,
+    value,
+  });
 
   const onKeyDown = (event: ReactKeyboardEvent<HTMLDivElement>) => {
     if (event.nativeEvent.isComposing) {
@@ -368,8 +361,15 @@ export function TerminalComposer({
       shiftKey: event.shiftKey,
     });
     if (keyPress !== null) {
+      // 阻断态下 Enter 透传必须截住：空草稿时 Return 会直达 TUI，waiting 态
+      // 可能误触确认对话框——与 send() 的门禁同一口径（方向键导航仍放行，
+      // Ctrl+C 中断不受影响）。
+      if (sendBlock !== null && keyPress.keycode === APPKIT_KEYCODE.return) {
+        event.preventDefault();
+        return;
+      }
       event.preventDefault();
-      sendKey(keyPress.keycode, keyPress.mods);
+      sendKey(keyPress);
       return;
     }
     // Enter / Shift+Enter handled by Lexical EnterKeyPlugin.
@@ -434,6 +434,7 @@ export function TerminalComposer({
   return (
     <TerminalComposerView
       attachments={attachments.attachments}
+      blockReason={sendBlock}
       bottomOffsetPx={bottomOffsetPx}
       canSend={canSend}
       compact={compact}

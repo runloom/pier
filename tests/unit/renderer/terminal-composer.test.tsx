@@ -13,8 +13,10 @@ import {
   resetTerminalComposerDraftsForTests,
   TerminalComposer,
 } from "@/panel-kits/terminal/terminal-composer.tsx";
+import { resetTuiInputFocusForTests } from "@/panel-kits/terminal/tui-input-focus.ts";
 import { resetTerminalComposerAttachmentsForTests } from "@/panel-kits/terminal/use-terminal-composer-attachments.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import {
   resetTerminalStoreForTests,
   useTerminalStore,
@@ -33,9 +35,41 @@ vi.mock("@/stores/app-dialog.store.ts", () => ({
   showAppAlert: vi.fn(async () => undefined),
 }));
 
+function setAgentActivity(overrides: {
+  agentId?: string;
+  status?: string;
+}): void {
+  useForegroundActivityStore.setState({
+    activities: {
+      "t-1": {
+        agentId: overrides.agentId ?? "crush",
+        kind: "agent",
+        panelId: "t-1",
+        source: "hook",
+        status: overrides.status ?? "ready",
+        subagentCount: 0,
+        spawnedAt: 1,
+        updatedAt: 1,
+        windowId: "w-1",
+      },
+    },
+  } as never);
+}
+
+const toastError = vi.fn();
+vi.mock("sonner", () => ({
+  toast: {
+    error: (...args: unknown[]) => toastError(...args),
+    success: vi.fn(),
+  },
+}));
+
 class TestResizeObserver {
   observe() {
     // Test no-op.
+  }
+  unobserve() {
+    // Test no-op (radix use-size cleanup).
   }
   disconnect() {
     // Test no-op.
@@ -48,6 +82,9 @@ const sendText = vi.fn<(args: unknown) => Promise<TerminalOperationResult>>(
 const sendKeyPress = vi.fn<(args: unknown) => Promise<TerminalOperationResult>>(
   async () => ({ ok: true })
 );
+const cursorVisible = vi.fn<(panelId: string) => Promise<string>>(
+  async () => "visible"
+);
 const pickComposerFiles = vi.fn<() => Promise<TerminalComposerPickResult>>();
 const resolveComposerPaths =
   vi.fn<(paths: string[]) => Promise<TerminalComposerPathsResult>>();
@@ -57,6 +94,7 @@ function installTerminalApi(): void {
     configurable: true,
     value: {
       terminal: {
+        cursorVisible,
         pickComposerFiles,
         resolveComposerPaths,
         sendKeyPress,
@@ -76,6 +114,11 @@ beforeEach(async () => {
   sendKeyPress.mockResolvedValue({ ok: true });
   pickComposerFiles.mockReset();
   resolveComposerPaths.mockReset();
+  cursorVisible.mockReset();
+  cursorVisible.mockResolvedValue("visible");
+  toastError.mockClear();
+  useForegroundActivityStore.setState({ activities: {} });
+  resetTuiInputFocusForTests();
   vi.mocked(showAppAlert).mockClear();
   resetTerminalComposerDraftsForTests();
   resetTerminalComposerAttachmentsForTests();
@@ -205,6 +248,131 @@ describe("TerminalComposer", () => {
     await vi.waitFor(() => {
       expect(readComposerDraftText()).toBe("");
       expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("waiting 态：发送按钮禁用、原因常驻展示、回车不生效、草稿保留", async () => {
+    const onClose = vi.fn();
+    setAgentActivity({ status: "waiting" });
+    renderComposer({ onClose });
+
+    setComposerDraftText("fix bug");
+    expect(screen.getByTestId("terminal-composer-send")).toBeDisabled();
+    expect(
+      screen.getByTestId("terminal-composer-send-block")
+    ).toHaveTextContent(i18next.t("terminal.composer.blockedWaiting"));
+
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 30);
+    });
+    expect(sendText).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(readComposerDraftText()).toBe("fix bug");
+  });
+
+  it("TUI 输入失焦：阻断展示；探针转 visible 后解除并可正常发送", async () => {
+    const onClose = vi.fn();
+    setAgentActivity({ status: "ready" });
+    cursorVisible.mockResolvedValue("hidden");
+    renderComposer({ onClose });
+
+    // 首轮探针轮询后进入阻断态
+    await vi.waitFor(() => {
+      expect(
+        screen.getByTestId("terminal-composer-send-block")
+      ).toHaveTextContent(i18next.t("terminal.composer.blockedUnfocused"));
+    });
+    setComposerDraftText("fix bug");
+    expect(screen.getByTestId("terminal-composer-send")).toBeDisabled();
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    expect(sendText).not.toHaveBeenCalled();
+
+    // TUI 重新聚焦（用户点了输入框）→ 下一轮轮询解除阻断
+    cursorVisible.mockResolvedValue("visible");
+    await vi.waitFor(
+      () => {
+        expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
+      },
+      { timeout: 2000 }
+    );
+    expect(
+      screen.queryByTestId("terminal-composer-send-block")
+    ).not.toBeInTheDocument();
+
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        submit: true,
+        text: "fix bug",
+      });
+    });
+  });
+
+  it("探针 unknown：不阻断 UI；发送确认失败时保留草稿并给出反馈", async () => {
+    const onClose = vi.fn();
+    setAgentActivity({ status: "ready" });
+    cursorVisible.mockResolvedValue("unknown");
+    renderComposer({ onClose });
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 30);
+    });
+    expect(
+      screen.queryByTestId("terminal-composer-send-block")
+    ).not.toBeInTheDocument();
+
+    setComposerDraftText("fix bug");
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => {
+      expect(toastError).toHaveBeenCalledWith(
+        i18next.t("terminal.composer.sendStateUnknown")
+      );
+    });
+    expect(sendText).not.toHaveBeenCalled();
+    expect(onClose).not.toHaveBeenCalled();
+    expect(readComposerDraftText()).toBe("fix bug");
+  });
+
+  it("waiting 态空草稿 Enter 透传同样被截住（不误触 TUI 确认）", async () => {
+    setAgentActivity({ status: "waiting" });
+    renderComposer();
+
+    // 空草稿（不写任何内容）按 Enter：此前走 passthrough 直达 TUI
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 30);
+    });
+    expect(sendKeyPress).not.toHaveBeenCalled();
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it("非白名单 agent（未声明恢复键）探针 hidden 也不阻断", async () => {
+    setAgentActivity({ agentId: "claude", status: "ready" });
+    cursorVisible.mockResolvedValue("hidden");
+    renderComposer();
+
+    setComposerDraftText("fix bug");
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 600);
+    });
+    expect(
+      screen.queryByTestId("terminal-composer-send-block")
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
+  });
+
+  it("settle 窗口内双击发送只提交一次（in-flight 守卫）", async () => {
+    renderComposer();
+
+    const textarea = composerInput();
+    setComposerDraftText("fix bug");
+    fireEvent.keyDown(textarea, { key: "Enter" });
+    fireEvent.keyDown(textarea, { key: "Enter" });
+
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledTimes(1);
     });
   });
 
