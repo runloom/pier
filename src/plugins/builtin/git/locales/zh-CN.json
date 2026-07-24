@@ -396,7 +396,6 @@
     "ui.pruneConfirmButton": "清理",
     "ui.worktreePruneSuccess": "已清理失效工作树",
     "ui.gitErrorUnavailable": "Git 操作失败",
-    "ui.gitLoadingBranches": "正在加载分支…",
     "ui.gitLoadingMerge": "正在合并…",
     "ui.gitLoadingSwitchBranch": "正在切换分支…",
     "ui.gitLoadingCreateAndSwitchBranch": "正在新建分支…",

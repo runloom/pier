@@ -1481,7 +1481,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 分支选择请求全量候选、不截断 50 条并展示加载提示", async () => {
+  it("Git 分支选择请求全量候选、不截断 50 条且不展示列表加载提示", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
       durationMs: 4,
@@ -1504,8 +1504,7 @@ describe("git builtin plugin", () => {
       "/Users/dev/ABC/pier",
       { diffMode: "mergeIntoCurrent", limit: 1000, query: "" }
     );
-    expect(toastMocks.loading).toHaveBeenCalledWith("Loading branches...");
-    expect(toastMocks.dismiss).toHaveBeenCalledWith("git-loading-toast");
+    expect(toastMocks.loading).not.toHaveBeenCalledWith("Loading branches...");
     const quickPick = useCommandPaletteController.getState().quickPick;
     expect(quickPick?.items).toHaveLength(60);
   });

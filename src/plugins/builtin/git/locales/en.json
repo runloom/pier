@@ -384,7 +384,6 @@
     "ui.worktreePruneSuccess": "Stale worktrees pruned",
     "ui.worktreeDeleteSuccess": "Worktree deleted",
     "ui.gitErrorUnavailable": "Git operation failed",
-    "ui.gitLoadingBranches": "Loading branches…",
     "ui.gitLoadingMerge": "Merging…",
     "ui.gitLoadingSwitchBranch": "Switching branch…",
     "ui.gitLoadingCreateAndSwitchBranch": "Creating branch…",
