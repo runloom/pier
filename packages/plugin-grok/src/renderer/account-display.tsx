@@ -26,7 +26,10 @@ import type {
   GrokUsageWindow,
 } from "../shared/accounts.ts";
 import { remainingPercent, usageRisk } from "../shared/usage.ts";
-import type { Translate } from "./format-account-error.ts";
+import {
+  isTransientUsageError,
+  type Translate,
+} from "./format-account-error.ts";
 import { usageProgressVariant, usageWindowLabel } from "./usage-meter.tsx";
 
 export function accountDisplayLabel(account: {
@@ -147,6 +150,7 @@ function Quota({
 export function QuotaGroup({
   compact = false,
   error,
+  errorTransient = false,
   language,
   loading = false,
   t,
@@ -154,6 +158,7 @@ export function QuotaGroup({
 }: {
   compact?: boolean;
   error: string | undefined;
+  errorTransient?: boolean;
   language: string;
   loading?: boolean;
   t: Translate;
@@ -168,8 +173,9 @@ export function QuotaGroup({
     );
   }
 
+  const hasError = error !== undefined && error.length > 0;
   const errorBanner =
-    error !== undefined && error.length > 0 ? (
+    hasError && !errorTransient ? (
       <div
         className="flex w-full flex-col gap-1 text-sm"
         data-slot="grok-usage-error"
@@ -181,10 +187,28 @@ export function QuotaGroup({
         <p className="break-all text-muted-foreground text-xs">{error}</p>
       </div>
     ) : null;
+  // Transient failure: last-good data stays on screen without alarm. Only
+  // when there is nothing to show do we surface a muted note, not a red
+  // banner — the next poll retries automatically.
+  const transientNote =
+    hasError && errorTransient && windows.length === 0 ? (
+      <p
+        className="w-full text-muted-foreground text-sm"
+        data-slot="grok-usage-error"
+      >
+        {t(
+          "pier.grok.errors.usageTemporarilyUnavailable",
+          "Could not update Grok usage right now — will retry automatically"
+        )}
+      </p>
+    ) : null;
 
   if (windows.length === 0) {
     if (errorBanner) {
       return errorBanner;
+    }
+    if (transientNote) {
+      return transientNote;
     }
     return (
       <Empty className="min-h-19 gap-0 border-0 p-3">
@@ -279,6 +303,7 @@ export function OtherAccount({
         <QuotaGroup
           compact
           error={account.usage?.error}
+          errorTransient={isTransientUsageError(account.usage?.error)}
           language={language}
           loading={!account.usage}
           t={t}

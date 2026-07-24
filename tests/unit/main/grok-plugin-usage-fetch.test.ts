@@ -14,6 +14,7 @@ import {
   SESSION_EXPIRED_RELOGIN_ERROR,
   USAGE_OVERALL_DEADLINE_MS,
   USAGE_RETRY_OVERALL_DEADLINE_MS,
+  USAGE_TEMPORARILY_UNAVAILABLE_ERROR,
 } from "../../../packages/plugin-grok/src/main/grok-usage.ts";
 
 const AUTH_ENTRY = {
@@ -38,6 +39,14 @@ const EXPIRED_AUTH = JSON.stringify({
   "https://auth.x.ai::test-client": {
     ...AUTH_ENTRY,
     expires_at: "2020-01-01T00:00:00.000Z",
+  },
+});
+
+// Expires inside the 5-minute refresh skew but still valid right now.
+const SKEW_AUTH = JSON.stringify({
+  "https://auth.x.ai::test-client": {
+    ...AUTH_ENTRY,
+    expires_at: new Date(Date.now() + 2 * 60 * 1000).toISOString(),
   },
 });
 
@@ -578,6 +587,198 @@ describe("fetchGrokUsage", () => {
 
     expect(result.status).toBe("error");
     expect(result.error).toMatch(/re-?login|session expired/i);
+  });
+
+  it("reports a transient refresh failure as temporary, not session expired", async () => {
+    // Token endpoint 5xx with an expired access token: the session may be
+    // perfectly healthy — only invalid_grant/access_denied justify re-login.
+    const fetchImpl = vi.fn(async () => ({
+      ok: false,
+      status: 503,
+      text: async () => "Service Unavailable",
+    }));
+
+    const result = await fetchGrokUsage({
+      authJson: EXPIRED_AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("error");
+    expect(result.error).toContain(USAGE_TEMPORARILY_UNAVAILABLE_ERROR);
+    expect(result.error).not.toContain(SESSION_EXPIRED_RELOGIN_ERROR);
+  });
+
+  it("keeps using a still-valid token when proactive refresh fails transiently", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("token")) {
+        return {
+          ok: false,
+          status: 503,
+          text: async () => "Service Unavailable",
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            config: {
+              creditUsagePercent: 40,
+              currentPeriod: {
+                end: "2026-07-21T00:00:00.000Z",
+                start: "2026-07-14T00:00:00.000Z",
+                type: "USAGE_PERIOD_TYPE_WEEKLY",
+              },
+              productUsage: [{ product: "Api", usagePercent: 40 }],
+            },
+          }),
+      };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: SKEW_AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(fetchImpl).toHaveBeenCalledWith(
+      GROK_BILLING_CREDITS_URL,
+      expect.objectContaining({
+        headers: expect.objectContaining({
+          Authorization: "Bearer session-token-abc",
+        }),
+      })
+    );
+  });
+
+  it("reports temporary failure when 401 refresh recovery fails transiently", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("token") || url.includes("/rest/subscriptions")) {
+        return {
+          ok: false,
+          status: 503,
+          text: async () => "Service Unavailable",
+        };
+      }
+      return { ok: false, status: 401, text: async () => "Unauthorized" };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("error");
+    expect(result.error).toContain(USAGE_TEMPORARILY_UNAVAILABLE_ERROR);
+    expect(result.error).not.toContain(SESSION_EXPIRED_RELOGIN_ERROR);
+  });
+
+  it("short-circuits to re-login on invalid_grant without a rotated token", async () => {
+    // Expired access token + revoked refresh token + no rotated entry: going
+    // through billing would only produce a 401 and a second doomed refresh.
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("token")) {
+        return {
+          ok: false,
+          status: 400,
+          text: async () => JSON.stringify({ error: "invalid_grant" }),
+        };
+      }
+      return { ok: false, status: 401, text: async () => "Unauthorized" };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: EXPIRED_AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("error");
+    expect(result.error).toContain(SESSION_EXPIRED_RELOGIN_ERROR);
+    const billingCalls = fetchImpl.mock.calls.filter(([url]) =>
+      String(url).includes("billing")
+    );
+    expect(billingCalls).toHaveLength(0);
+  });
+
+  it("retries transport refresh failures with backoff instead of failing", async () => {
+    let tokenCalls = 0;
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("token")) {
+        tokenCalls += 1;
+        if (tokenCalls === 1) {
+          throw new TypeError("fetch failed");
+        }
+        return {
+          ok: true,
+          status: 200,
+          text: async () =>
+            JSON.stringify({
+              access_token: "fresh-session-token",
+              expires_in: 3600,
+              refresh_token: "refresh-2",
+            }),
+        };
+      }
+      return {
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            config: {
+              creditUsagePercent: 40,
+              currentPeriod: {
+                end: "2026-07-21T00:00:00.000Z",
+                start: "2026-07-14T00:00:00.000Z",
+                type: "USAGE_PERIOD_TYPE_WEEKLY",
+              },
+              productUsage: [{ product: "Api", usagePercent: 40 }],
+            },
+          }),
+      };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: EXPIRED_AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("ok");
+    expect(tokenCalls).toBe(2);
+  });
+
+  it("reports temporary failure once transport refresh retries are exhausted", async () => {
+    const fetchImpl = vi.fn(async (url: string) => {
+      if (url.includes("token")) {
+        throw new TypeError("fetch failed");
+      }
+      return { ok: false, status: 503, text: async () => "down" };
+    });
+
+    const result = await fetchGrokUsage({
+      authJson: EXPIRED_AUTH,
+      fetchImpl,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("error");
+    expect(result.error).toContain(USAGE_TEMPORARILY_UNAVAILABLE_ERROR);
+    expect(result.error).not.toContain(SESSION_EXPIRED_RELOGIN_ERROR);
+    const tokenCalls = fetchImpl.mock.calls.filter(([url]) =>
+      String(url).includes("token")
+    );
+    // Initial attempt + 2 linear-backoff retries.
+    expect(tokenCalls).toHaveLength(3);
   });
 });
 
