@@ -7,7 +7,20 @@
       "title": "Git: 合并分支..."
     },
     "pier.git.switchBranch": {
-      "aliases": ["切换分支", "git switch", "qie huan fen zhi"],
+      "aliases": [
+        "切换分支",
+        "切分支",
+        "git switch",
+        "git checkout",
+        "checkout",
+        "gco",
+        "检出",
+        "检出分支",
+        "新建分支",
+        "创建分支",
+        "qie huan fen zhi",
+        "qiehuafenzhi"
+      ],
       "category": "Git",
       "description": "切换到本地分支，或从当前检出新建分支并切换。",
       "title": "Git: 切换分支..."
@@ -19,19 +32,37 @@
       "title": "Git: 中止合并"
     },
     "pier.git.stash": {
-      "aliases": ["暂存更改", "git stash", "zan cun geng gai"],
+      "aliases": [
+        "暂存更改",
+        "贮藏",
+        "贮藏更改",
+        "git stash",
+        "git stash save",
+        "zan cun geng gai"
+      ],
       "category": "Git",
       "description": "储藏本地已跟踪的变更。",
       "title": "Git: 暂存更改"
     },
     "pier.git.stashApply": {
-      "aliases": ["应用暂存", "git stash apply", "ying yong zan cun"],
+      "aliases": [
+        "应用暂存",
+        "应用贮藏",
+        "git stash apply",
+        "ying yong zan cun"
+      ],
       "category": "Git",
       "description": "选择一个储藏并应用，保留在储藏列表中。",
       "title": "Git: 应用暂存..."
     },
     "pier.git.stashDrop": {
-      "aliases": ["删除暂存", "丢弃暂存", "git stash drop", "shan chu zan cun"],
+      "aliases": [
+        "删除暂存",
+        "丢弃暂存",
+        "删除贮藏",
+        "git stash drop",
+        "shan chu zan cun"
+      ],
       "category": "Git",
       "description": "选择一个储藏并从列表中删除。",
       "title": "Git: 删除暂存..."
@@ -39,7 +70,9 @@
     "pier.git.stashIncludeUntracked": {
       "aliases": [
         "暂存含未跟踪",
+        "贮藏含未跟踪",
         "git stash --include-untracked",
+        "git stash -u",
         "zan cun han wei gen zong"
       ],
       "category": "Git",
@@ -50,6 +83,7 @@
       "aliases": [
         "弹出暂存",
         "恢复暂存",
+        "弹出贮藏",
         "恢复",
         "git stash pop",
         "tan chu zan cun",
@@ -60,7 +94,7 @@
       "title": "Git: 弹出暂存..."
     },
     "pier.git.rebase": {
-      "aliases": ["变基到分支", "git rebase", "bian ji fen zhi"],
+      "aliases": ["变基到分支", "git rebase", "rebase onto", "bian ji fen zhi"],
       "category": "Git",
       "description": "选择一个分支并将当前分支变基到它之上。",
       "title": "Git: 变基到分支..."
@@ -78,7 +112,16 @@
       "title": "Git: 继续变基"
     },
     "pier.git.cherryPick": {
-      "aliases": ["git cherry-pick", "遴选提交", "摘取提交", "拣选提交"],
+      "aliases": [
+        "git cherry-pick",
+        "遴选提交",
+        "摘取提交",
+        "拣选提交",
+        "摘樱桃",
+        "cherrypick",
+        "jian xuan",
+        "jianxuan"
+      ],
       "category": "Git",
       "description": "选择一个提交并应用到当前分支。",
       "title": "Git: 拣选提交..."
@@ -116,9 +159,13 @@
     "pier.git.undoLastCommit": {
       "aliases": [
         "撤销上次提交",
+        "撤销提交",
         "回退提交",
+        "回退上次",
         "回退",
         "undo commit",
+        "soft reset",
+        "uncommit",
         "che xiao ti jiao",
         "hui tui ti jiao"
       ],
@@ -127,7 +174,7 @@
       "title": "Git: 撤销上次提交"
     },
     "pier.git.review.openFile": {
-      "aliases": ["打开文件", "打开变更文件", "open file"],
+      "aliases": ["打开文件", "打开变更文件", "open file", "查看变更文件"],
       "category": "Git",
       "description": "在文件面板中打开所选变更文件。",
       "title": "Git: 打开文件"
@@ -145,7 +192,15 @@
       "title": "Git: 取消暂存"
     },
     "pier.git.review.discardFile": {
-      "aliases": ["还原", "还原更改", "git restore", "丢弃变更", "discard"],
+      "aliases": [
+        "还原",
+        "还原更改",
+        "git restore",
+        "丢弃变更",
+        "discard",
+        "restore file",
+        "checkout file"
+      ],
       "category": "Git",
       "description": "还原所选文件的工作区更改。",
       "title": "Git: 还原"
@@ -158,7 +213,9 @@
         "chuangjian gongzuoshu",
         "新建工作树",
         "创建 worktree",
-        "xin jian gong zuo shu"
+        "xin jian gong zuo shu",
+        "wt",
+        "wt add"
       ],
       "category": "工作树",
       "description": "在仓库托管的工作树目录下创建 Git 工作树。",
@@ -170,7 +227,9 @@
         "删除工作树",
         "移除工作树",
         "gongzuoshu",
-        "shanchu gongzuoshu"
+        "shanchu gongzuoshu",
+        "wt",
+        "wt remove"
       ],
       "category": "工作树",
       "description": "选择并删除 Git 工作树。",
@@ -181,17 +240,70 @@
         "工作树",
         "清理工作树",
         "worktree prune",
-        "qing li gong zuo shu"
+        "qing li gong zuo shu",
+        "wt",
+        "wt prune"
       ],
       "category": "工作树",
       "description": "清理失效的 Git 工作树记录。",
       "title": "清理工作树"
     },
     "pier.worktree.list": {
-      "aliases": ["工作树", "工作树列表", "gongzuoshu", "gong zuo shu"],
+      "aliases": [
+        "工作树",
+        "工作树列表",
+        "打开工作树",
+        "切换工作树",
+        "gongzuoshu",
+        "gong zuo shu",
+        "wt",
+        "wt list"
+      ],
       "category": "工作树",
       "description": "列出当前仓库的 Git 工作树并打开目标工作树。",
       "title": "工作树列表"
+    },
+    "pier.git.pull": {
+      "aliases": ["git pull", "pull", "拉取", "拉取更改", "同步拉取", "la qu"],
+      "category": "Git",
+      "description": "仅快进拉取远端更改。",
+      "title": "Git: 拉取"
+    },
+    "pier.git.push": {
+      "aliases": ["git push", "push", "推送", "推送更改", "tui song"],
+      "category": "Git",
+      "description": "将本地提交推送到远端。",
+      "title": "Git: 推送"
+    },
+    "pier.git.sync": {
+      "aliases": [
+        "git sync",
+        "sync",
+        "同步",
+        "同步更改",
+        "拉取并推送",
+        "tong bu"
+      ],
+      "category": "Git",
+      "description": "先拉取再推送，与远端同步。",
+      "title": "Git: 同步"
+    },
+    "pier.git.viewChanges": {
+      "aliases": [
+        "查看变更",
+        "打开变更",
+        "变更",
+        "git status",
+        "status",
+        "git diff",
+        "diff",
+        "changes",
+        "view changes",
+        "cha kan bian geng"
+      ],
+      "category": "Git",
+      "description": "打开当前仓库的变更审阅面板。",
+      "title": "Git: 查看变更"
     }
   },
   "description": "提供 Git 命令面板入口和终端状态栏支持。",
