@@ -1,14 +1,21 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import { Card, CardContent } from "@pier/ui/card.tsx";
 import { FieldSet } from "@pier/ui/field.tsx";
+import {
+  StatusStack,
+  type StatusStackItem,
+  type StatusStackTone,
+} from "@pier/ui/status-stack.tsx";
 import {
   AGENT_ATTENTION_COOLDOWN_MS,
   type AgentAttentionCooldownMs,
   TURN_NOTIFY_MODES,
   type TurnNotifyMode,
 } from "@shared/contracts/agent-attention.ts";
-import type { SystemNotificationPermissionSnapshot } from "@shared/contracts/notification.ts";
+import type {
+  SystemNotificationPermissionSnapshot,
+  SystemNotificationPermissionStatus,
+} from "@shared/contracts/notification.ts";
 import { useEffect, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
@@ -53,52 +60,60 @@ function usePermissionSnapshot(): SystemNotificationPermissionSnapshot | null {
   return snapshot;
 }
 
-function PermissionBanner({
-  snapshot,
-}: {
+function permissionStatusCopy(
+  status: Exclude<SystemNotificationPermissionStatus, "authorized">,
+  t: (key: string) => string
+): { tone: StatusStackTone; title: string; description: string } {
+  if (status === "unsupported") {
+    return {
+      tone: "warning",
+      title: t("settings.notifications.permission.unsupportedTitle"),
+      description: t("settings.notifications.permission.unsupportedBody"),
+    };
+  }
+  if (status === "denied") {
+    return {
+      tone: "warning",
+      title: t("settings.notifications.permission.deniedTitle"),
+      description: t("settings.notifications.permission.deniedBody"),
+    };
+  }
+  return {
+    tone: "info",
+    title: t("settings.notifications.permission.unknownTitle"),
+    description: t("settings.notifications.permission.unknownBody"),
+  };
+}
+
+/** PolicyCard 顶部状态带：权限三态互斥，可与 hooks-off 并排。 */
+export function buildNotificationPolicyStatusItems(input: {
   snapshot: SystemNotificationPermissionSnapshot | null;
-}) {
-  const t = useT();
-  if (!snapshot || snapshot.status === "authorized") {
-    return null;
+  agentStatusHooks: boolean;
+  t: (key: string) => string;
+}): StatusStackItem[] {
+  const { snapshot, agentStatusHooks, t } = input;
+  const items: StatusStackItem[] = [];
+
+  if (snapshot && snapshot.status !== "authorized") {
+    const copy = permissionStatusCopy(snapshot.status, t);
+    items.push({
+      id: "notif-permission",
+      tone: copy.tone,
+      title: copy.title,
+      description: copy.description,
+    });
   }
 
-  if (snapshot.status === "unsupported") {
-    return (
-      <Alert variant="warning">
-        <AlertTitle>
-          {t("settings.notifications.permission.unsupportedTitle")}
-        </AlertTitle>
-        <AlertDescription>
-          {t("settings.notifications.permission.unsupportedBody")}
-        </AlertDescription>
-      </Alert>
-    );
+  if (!agentStatusHooks) {
+    items.push({
+      id: "notif-hooks-off",
+      tone: "info",
+      title: t("settings.notifications.hooksOffTitle"),
+      description: t("settings.notifications.hooksOffBody"),
+    });
   }
 
-  if (snapshot.status === "denied") {
-    return (
-      <Alert variant="warning">
-        <AlertTitle>
-          {t("settings.notifications.permission.deniedTitle")}
-        </AlertTitle>
-        <AlertDescription>
-          {t("settings.notifications.permission.deniedBody")}
-        </AlertDescription>
-      </Alert>
-    );
-  }
-
-  return (
-    <Alert variant="info">
-      <AlertTitle>
-        {t("settings.notifications.permission.unknownTitle")}
-      </AlertTitle>
-      <AlertDescription>
-        {t("settings.notifications.permission.unknownBody")}
-      </AlertDescription>
-    </Alert>
-  );
+  return items;
 }
 
 function PolicyCard({
@@ -115,8 +130,11 @@ function PolicyCard({
   );
   const agentStatusHooks = useAgentPreferencesStore((s) => s.agentStatusHooks);
   const failedTitle = t("settings.notifications.saveFailed");
-  const showPermission = snapshot !== null && snapshot.status !== "authorized";
-  const showHooksOff = !agentStatusHooks;
+  const items = buildNotificationPolicyStatusItems({
+    snapshot,
+    agentStatusHooks,
+    t,
+  });
 
   const cooldownOptions = AGENT_ATTENTION_COOLDOWN_MS.map((ms) => ({
     label: t(`settings.notifications.cooldown.${ms}`),
@@ -126,11 +144,11 @@ function PolicyCard({
   return (
     <Card>
       <CardContent className="flex flex-col gap-4">
-        {showPermission || showHooksOff ? (
-          <div className="flex flex-col gap-3">
-            {showPermission ? <PermissionBanner snapshot={snapshot} /> : null}
-            {showHooksOff ? <StatusHooksHint /> : null}
-          </div>
+        {items.length > 0 ? (
+          <StatusStack
+            data-testid="notifications-policy-status-stack"
+            items={items}
+          />
         ) : null}
         <FieldSet>
           <SwitchRow
@@ -303,25 +321,9 @@ function DiagnosticsCard() {
   );
 }
 
-function StatusHooksHint() {
-  const t = useT();
-  const agentStatusHooks = useAgentPreferencesStore((s) => s.agentStatusHooks);
-  if (agentStatusHooks) {
-    return null;
-  }
-  return (
-    <Alert variant="warning">
-      <AlertTitle>{t("settings.notifications.hooksOffTitle")}</AlertTitle>
-      <AlertDescription>
-        {t("settings.notifications.hooksOffBody")}
-      </AlertDescription>
-    </Alert>
-  );
-}
-
 /**
  * 通知设置：Attention 策略 + 系统通知通道健康。
- * 权限/hooks Alert 并入策略 Card 顶部（与插件页「Card 内 Alert」一致，避免卡套卡）。
+ * 权限/hooks 状态并入策略 Card 顶部 StatusStack（与插件页一致，避免卡套卡）。
  */
 export function NotificationsSection() {
   const t = useT();

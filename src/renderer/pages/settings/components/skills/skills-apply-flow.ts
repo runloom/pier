@@ -1,3 +1,4 @@
+import { toast } from "sonner";
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import {
   type ApplyOutcome,
@@ -15,24 +16,49 @@ import {
 
 let commitInFlight = false;
 
-function noticeAfterSuccessfulApply(draft: SkillsUiDraft): void {
+export function notifyRecentImportSuccess(name: string, t: Translate): void {
+  // Capsule toast: title only (AGENTS — no toast description).
+  toast.success(t("settings.skills.importAddedTitle", { name }));
+}
+
+const IMPORT_SOURCE_KINDS = new Set([
+  "local-import",
+  "project-discovery-import",
+  "template",
+]);
+
+/** Capture import display name before apply clears candidatesByToken. */
+export function resolveImportSuccessName(
+  draft: SkillsUiDraft,
+  candidatesByToken: Readonly<
+    Record<string, { name?: string; skillId?: string; sourceKind?: string }>
+  >
+): string | null {
+  const tokens = draft.importTokens ?? [];
+  const first = tokens[0];
+  if (!first) {
+    return null;
+  }
+  const candidate = candidatesByToken[first];
+  if (
+    !(candidate?.sourceKind && IMPORT_SOURCE_KINDS.has(candidate.sourceKind))
+  ) {
+    return null;
+  }
+  const name = (candidate.name || candidate.skillId || "").trim();
+  return name.length > 0 ? name : null;
+}
+
+function noticeAfterSuccessfulApply(
+  draft: SkillsUiDraft,
+  t: Translate,
+  importName: string | null
+): void {
+  if (importName) {
+    notifyRecentImportSuccess(importName, t);
+  }
   const store = useProjectSkillsStore.getState();
   const tokens = draft.importTokens ?? [];
-  if (tokens.length > 0) {
-    const first = tokens[0];
-    const candidate = first ? store.candidatesByToken[first] : undefined;
-    const importKinds = new Set([
-      "local-import",
-      "project-discovery-import",
-      "template",
-    ]);
-    if (candidate && importKinds.has(candidate.sourceKind)) {
-      const name = candidate.name || candidate.skillId || "";
-      if (name) {
-        store.setRecentImportNotice({ name });
-      }
-    }
-  }
   const enablementChanged =
     Object.keys(draft.enabledBySkillId ?? {}).length > 0;
   const deleted = (draft.deleteSkillIds?.length ?? 0) > 0;
@@ -63,6 +89,11 @@ export async function commitSkillsIntent(args: {
 
   commitInFlight = true;
   try {
+    // Snapshot import label before apply/loadSnapshot clears candidatesByToken.
+    const importName = resolveImportSuccessName(
+      args.draft,
+      store.candidatesByToken
+    );
     store.setDraft(args.draft);
     const plan = await useProjectSkillsStore.getState().planDraft();
     if (!plan) {
@@ -104,7 +135,7 @@ export async function commitSkillsIntent(args: {
         await latest.loadSnapshot(latest.projectRef);
       }
       latest.setDraft(null);
-      noticeAfterSuccessfulApply(args.draft);
+      noticeAfterSuccessfulApply(args.draft, args.t, importName);
       return "converged";
     }
     if (result?.status === "degraded") {
@@ -113,7 +144,7 @@ export async function commitSkillsIntent(args: {
         await latest.loadSnapshot(latest.projectRef);
       }
       latest.setDraft(null);
-      noticeAfterSuccessfulApply(args.draft);
+      noticeAfterSuccessfulApply(args.draft, args.t, importName);
       // Project list shows an in-page Retry banner; skill detail does not.
       // Skip for deletes — caller navigates back to the list banner.
       const deleting = (args.draft.deleteSkillIds?.length ?? 0) > 0;

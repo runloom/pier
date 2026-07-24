@@ -57,6 +57,26 @@ describe("PluginsSection", () => {
     Object.defineProperty(window, "pier", {
       configurable: true,
       value: {
+        managedPlugins: {
+          checkUpdates: vi.fn(async () => ({
+            checkedAt: 1,
+            officialMutationsAllowed: true,
+            pluginMode: "release" as const,
+            plugins: [],
+          })),
+          disable: vi.fn(),
+          enable: vi.fn(),
+          install: vi.fn(),
+          list: vi.fn(async () => ({
+            checkedAt: 1,
+            officialMutationsAllowed: true,
+            pluginMode: "release" as const,
+            plugins: [],
+          })),
+          rollback: vi.fn(),
+          uninstall: vi.fn(),
+          update: vi.fn(),
+        },
         plugins: {
           disable: vi.fn(async () => entry("pier.git", false)),
           enable: vi.fn(async () => entry("pier.git", true)),
@@ -112,7 +132,7 @@ describe("PluginsSection", () => {
     expect(screen.getByTestId("plugin-row-pier.extra")).toBeInTheDocument();
   });
 
-  it("shows external renderer activation diagnostics without blocking the plugin list", () => {
+  it("shows external renderer activation diagnostics without blocking the plugin list", async () => {
     usePluginRegistryStore.setState({
       initialized: true,
       plugins: [entry("pier.external", true)],
@@ -125,16 +145,17 @@ describe("PluginsSection", () => {
     render(<PluginsSection />);
 
     expect(screen.getByTestId("plugin-row-pier.external")).toBeVisible();
-    expect(screen.getByText("Plugin failed to load")).toBeVisible();
-    expect(screen.getByText("renderer plugin load timed out")).toBeVisible();
+    const stack = await screen.findByTestId("plugins-status-stack");
+    expect(stack).toHaveAttribute("data-slot", "status-stack");
+    expect(within(stack).getByText("Plugin failed to load")).toBeVisible();
     expect(
-      within(screen.getByTestId("plugin-diagnostics-summary")).queryByText(
-        "pier.external"
-      )
-    ).toBeNull();
+      within(stack).getByText("renderer plugin load timed out")
+    ).toBeVisible();
+    expect(within(stack).queryByText("pier.external")).toBeNull();
+    expect(stack.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
   });
 
-  it("groups repeated registry diagnostics into one compact issue", () => {
+  it("groups repeated registry diagnostics into one compact status item", async () => {
     usePluginRegistryStore.setState({
       diagnostics: [
         {
@@ -159,22 +180,23 @@ describe("PluginsSection", () => {
 
     render(<PluginsSection />);
 
-    const summary = screen.getByTestId("plugin-diagnostics-summary");
-    expect(summary.querySelectorAll('[data-slot="alert"]')).toHaveLength(1);
-    expect(summary.querySelector('[data-slot="alert-title"]')).not.toBeNull();
-    expect(summary.querySelector('[data-slot="alert-action"]')).toBeNull();
-    expect(summary).toHaveTextContent("Plugin manifest could not be read");
-    expect(summary).not.toHaveTextContent("3 reports");
-    expect(within(summary).queryByText("Built-in")).toBeNull();
-    expect(within(summary).queryByText("Dev Override")).toBeNull();
-    expect(within(summary).queryByText("Official")).toBeNull();
+    const stack = await screen.findByTestId("plugins-status-stack");
+    expect(
+      stack.querySelectorAll('[data-slot="status-stack-item"]')
+    ).toHaveLength(1);
+    expect(stack).toHaveTextContent("Plugin manifest could not be read");
+    expect(stack).not.toHaveTextContent("3 reports");
+    expect(within(stack).queryByText("Built-in")).toBeNull();
+    expect(within(stack).queryByText("Dev Override")).toBeNull();
+    expect(within(stack).queryByText("Official")).toBeNull();
     expect(screen.queryByText("invalid plugin manifest")).toBeNull();
     expect(
       screen.getAllByText("Plugin manifest could not be read")
     ).toHaveLength(1);
+    expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
   });
 
-  it("uses one standard shadcn alert per distinct diagnostic", () => {
+  it("summarizes multiple distinct diagnostics in one status-stack item", async () => {
     usePluginRegistryStore.setState({
       diagnostics: [
         {
@@ -194,11 +216,152 @@ describe("PluginsSection", () => {
 
     render(<PluginsSection />);
 
+    const stack = await screen.findByTestId("plugins-status-stack");
+    expect(stack.querySelectorAll('[data-slot="status-stack"]')).toHaveLength(
+      0
+    );
     expect(
-      screen
-        .getByTestId("plugin-diagnostics-summary")
-        .querySelectorAll('[data-slot="alert"]')
-    ).toHaveLength(2);
+      document.querySelectorAll('[data-slot="status-stack"]')
+    ).toHaveLength(1);
+    expect(
+      stack.querySelectorAll('[data-slot="status-stack-item"]')
+    ).toHaveLength(1);
+    expect(stack).toHaveTextContent("Plugin issues");
+    expect(stack).toHaveTextContent("Plugin manifest could not be read");
+    expect(stack).toHaveTextContent("Plugin is not supported");
+    expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
+  });
+
+  it("renders one status-stack for workspace mode plus a diagnostic with zero alerts", async () => {
+    const list = vi.fn(async () => ({
+      checkedAt: 1,
+      officialMutationsAllowed: false,
+      pluginMode: "workspace" as const,
+      plugins: [],
+    }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        ...(window as unknown as { pier: Record<string, unknown> }).pier,
+        managedPlugins: {
+          checkUpdates: vi.fn(async () => list()),
+          disable: vi.fn(),
+          enable: vi.fn(),
+          install: vi.fn(),
+          list,
+          rollback: vi.fn(),
+          uninstall: vi.fn(),
+          update: vi.fn(),
+        },
+      },
+    });
+    usePluginRegistryStore.setState({
+      diagnostics: [
+        {
+          code: "invalid_manifest",
+          message: "invalid plugin manifest",
+          source: { kind: "builtin" },
+        },
+      ],
+      initialized: true,
+      plugins: [entry("pier.git", true)],
+    });
+
+    render(<PluginsSection />);
+
+    const stack = await screen.findByTestId("plugins-status-stack");
+    expect(
+      document.querySelectorAll('[data-slot="status-stack"]')
+    ).toHaveLength(1);
+    expect(stack).toHaveAttribute("data-shell-tone", "warning");
+    expect(
+      within(stack).getByText("Plugin manifest could not be read")
+    ).toBeVisible();
+    expect(within(stack).getByText("Local development loading")).toBeVisible();
+    expect(
+      stack.querySelectorAll('[data-slot="status-stack-item"]').length
+    ).toBeGreaterThanOrEqual(2);
+    expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
+  });
+
+  it("uses info shell-tone when only workspace mode is reported", async () => {
+    const list = vi.fn(async () => ({
+      checkedAt: 1,
+      officialMutationsAllowed: false,
+      pluginMode: "workspace" as const,
+      plugins: [],
+    }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        ...(window as unknown as { pier: Record<string, unknown> }).pier,
+        managedPlugins: {
+          checkUpdates: vi.fn(async () => list()),
+          disable: vi.fn(),
+          enable: vi.fn(),
+          install: vi.fn(),
+          list,
+          rollback: vi.fn(),
+          uninstall: vi.fn(),
+          update: vi.fn(),
+        },
+      },
+    });
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      error: null,
+      initialized: true,
+      plugins: [entry("pier.git", true)],
+    });
+
+    render(<PluginsSection />);
+
+    const stack = await screen.findByTestId("plugins-status-stack");
+    expect(stack).toHaveAttribute("data-shell-tone", "info");
+    expect(within(stack).getByText("Local development loading")).toBeVisible();
+    expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
+  });
+
+  it("merges page error and catalog error into one destructive status item", async () => {
+    const list = vi.fn(async () => {
+      throw new Error("catalog boom");
+    });
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        ...(window as unknown as { pier: Record<string, unknown> }).pier,
+        managedPlugins: {
+          checkUpdates: vi.fn(),
+          disable: vi.fn(),
+          enable: vi.fn(),
+          install: vi.fn(),
+          list,
+          rollback: vi.fn(),
+          uninstall: vi.fn(),
+          update: vi.fn(),
+        },
+      },
+    });
+    usePluginRegistryStore.setState({
+      diagnostics: [],
+      error: "page boom",
+      initialized: true,
+      plugins: [entry("pier.git", true)],
+    });
+
+    render(<PluginsSection />);
+
+    const stack = await screen.findByTestId("plugins-status-stack");
+    expect(stack).toHaveAttribute("data-shell-tone", "destructive");
+    expect(within(stack).getByText("Unable to load plugins")).toBeVisible();
+    expect(stack).toHaveTextContent("page boom");
+    await waitFor(() => {
+      expect(stack).toHaveTextContent("catalog boom");
+    });
+    expect(
+      stack.querySelectorAll('[data-slot="status-stack-item"]')
+    ).toHaveLength(1);
+    expect(document.querySelectorAll('[data-slot="alert"]')).toHaveLength(0);
   });
 
   it("toggle 调用 disable 并 refresh store", async () => {

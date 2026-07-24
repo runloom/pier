@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { rejectFailedManagedPluginOperation } from "@/pages/settings/components/managed-plugin-rows.tsx";
+import { rejectFailedManagedPluginOperation } from "@/pages/settings/components/managed-plugin-operation.ts";
 
 describe("managed plugin row operations", () => {
   it("rejects resolved managed operation failures so toast.promise uses the error path", async () => {
