@@ -87,6 +87,7 @@ export const workbench = {
       emptyFiltered: "当前筛选下没有来源",
       emptyFilteredHint: "打开组件设置，至少保留一个来源。",
       settings: {
+        sectionView: "视图",
         preset: "预设",
         presetOverview: "总览",
         presetBySource: "按来源",
@@ -108,12 +109,14 @@ export const workbench = {
         chartRanking: "排行",
         chartAutoHint: "图表类型随分组自动匹配。",
         kpis: "指标",
+        kpisHint: "至少保留一项。取消勾选会隐藏对应数字。",
         kpiToday: "今天",
         kpiPeriod: "区间成本",
         kpiPeriodTokens: "区间 tokens",
         kpiLatestDayTokens: "最近有数据日 tokens",
         sources: "来源",
         sourcesAll: "全部来源",
+        sourcesHint: "不勾选表示包含全部来源；勾选后只统计所选来源。",
       },
     },
     activityOverview: {

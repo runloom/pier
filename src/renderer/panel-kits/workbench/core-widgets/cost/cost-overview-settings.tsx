@@ -15,6 +15,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@pier/ui/select.tsx";
+import { ToggleGroup, ToggleGroupItem } from "@pier/ui/toggle-group.tsx";
 import type { WorkbenchWidgetSettingsProps } from "@plugins/api/renderer.ts";
 import { useMemo } from "react";
 import { useT } from "@/i18n/use-t.ts";
@@ -58,11 +59,11 @@ const KPI_OPTIONS: readonly CostOverviewKpiId[] = [
 ];
 
 const PRESET_LABEL = {
-  overview: `${I18N}.presetOverview`,
-  "by-source": `${I18N}.presetBySource`,
   "by-model": `${I18N}.presetByModel`,
-  tokens: `${I18N}.presetTokens`,
+  "by-source": `${I18N}.presetBySource`,
   custom: `${I18N}.presetCustom`,
+  overview: `${I18N}.presetOverview`,
+  tokens: `${I18N}.presetTokens`,
 } as const;
 
 const MEASURE_LABEL = {
@@ -71,81 +72,36 @@ const MEASURE_LABEL = {
 } as const;
 
 const GROUP_LABEL = {
+  model: `${I18N}.groupModel`,
   none: `${I18N}.groupNone`,
   source: `${I18N}.groupSource`,
-  model: `${I18N}.groupModel`,
 } as const;
 
 const CHART_LABEL = {
-  stackedBar: `${I18N}.chartStackedBar`,
   line: `${I18N}.chartLine`,
   ranking: `${I18N}.chartRanking`,
+  stackedBar: `${I18N}.chartStackedBar`,
 } as const;
 
 const KPI_LABEL = {
-  today: `${I18N}.kpiToday`,
+  latestDayTokens: `${I18N}.kpiLatestDayTokens`,
   period: `${I18N}.kpiPeriod`,
   periodTokens: `${I18N}.kpiPeriodTokens`,
-  latestDayTokens: `${I18N}.kpiLatestDayTokens`,
+  today: `${I18N}.kpiToday`,
 } as const;
 
 function chartsForGroupBy(
   groupBy: CostOverviewGroupBy
 ): readonly CostOverviewChart[] {
-  if (groupBy === "source") return ["stackedBar"];
   if (groupBy === "model") return ["ranking"];
+  if (groupBy === "source") return ["stackedBar"];
   return ["line", "stackedBar"];
 }
 
-function SettingsSelect({
-  disabled,
-  id,
-  label,
-  onValueChange,
-  options,
-  testId,
-  value,
-}: {
-  disabled?: boolean;
-  id: string;
-  label: string;
-  onValueChange: (value: string) => void;
-  options: readonly { disabled?: boolean; label: string; value: string }[];
-  testId: string;
-  value: string;
-}) {
-  return (
-    <Field>
-      <FieldLabel htmlFor={id}>{label}</FieldLabel>
-      <Select
-        disabled={disabled === true}
-        onValueChange={onValueChange}
-        value={value}
-      >
-        <SelectTrigger data-testid={testId} id={id} size="sm">
-          <SelectValue />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectGroup>
-            {options.map((option) => (
-              <SelectItem
-                disabled={option.disabled === true}
-                key={option.value}
-                value={option.value}
-              >
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectGroup>
-        </SelectContent>
-      </Select>
-    </Field>
-  );
-}
-
 /**
- * 成本总览物料设置：预设 + 范围/度量/分组/图表/KPI + 来源过滤。
- * 每次变更即时 updateParams；列表即反馈，不加 toast。
+ * 成本总览物料设置。
+ * Field 规范：分区用 FieldLegend；控件旁只用 FieldLabel 一次，禁止 Legend+Label 同文。
+ * 短枚举（范围/度量）用 ToggleGroup；长列表用 Select；多选走 Checkbox 组。
  */
 export function CostOverviewSettings({
   params,
@@ -160,8 +116,6 @@ export function CostOverviewSettings({
 
   const availableSources = snapshot?.sources ?? [];
   const selectedSources = current.sources ?? [];
-  // Empty allowlist = no filter (all sources). Checkboxes stay unchecked.
-
   const allowedCharts = chartsForGroupBy(current.groupBy);
   const chartLocked = allowedCharts.length <= 1;
   const displayChart = normalizeCostOverviewChart(
@@ -187,12 +141,12 @@ export function CostOverviewSettings({
     if (current.kpis.length <= 1) return;
     persist({ kpis: current.kpis.filter((id) => id !== kpi) });
   };
+
   const toggleSource = (sourceId: string, checked: boolean): void => {
     if (checked) {
       if (selectedSources.includes(sourceId)) return;
       const next = [...selectedSources, sourceId];
       const allIds = availableSources.map((source) => source.sourceId);
-      // Selecting every available source collapses back to "all".
       if (
         allIds.length > 0 &&
         next.length === allIds.length &&
@@ -204,92 +158,133 @@ export function CostOverviewSettings({
       persist({ sources: next });
       return;
     }
-
     const next = selectedSources.filter((id) => id !== sourceId);
     persist({ sources: next.length > 0 ? next : undefined });
   };
 
-  const presetOptions = [
-    ...SETTINGS_PRESETS.map((preset) => ({
-      label: t(PRESET_LABEL[preset]),
-      value: preset,
-    })),
-    ...(presetValue === "custom"
-      ? [
-          {
-            disabled: true,
-            label: t(PRESET_LABEL.custom),
-            value: "custom" as const,
-          },
-        ]
-      : []),
-  ];
-
   return (
     <div className="flex flex-col gap-6">
-      <FieldSet className="gap-3">
+      <FieldSet className="gap-4">
         <FieldLegend className="mb-0" variant="label">
-          {t(`${I18N}.preset`)}
+          {t(`${I18N}.sectionView`)}
         </FieldLegend>
-        <FieldGroup className="gap-3">
-          <SettingsSelect
-            id="cost-overview-preset"
-            label={t(`${I18N}.preset`)}
-            onValueChange={(next) => {
-              if (next === "custom") return;
-              persist({ preset: next as (typeof SETTINGS_PRESETS)[number] });
-            }}
-            options={presetOptions}
-            testId="cost-overview-settings-preset"
-            value={presetValue}
-          />
-        </FieldGroup>
-      </FieldSet>
+        <FieldGroup className="gap-4">
+          <Field>
+            <FieldLabel htmlFor="cost-overview-preset">
+              {t(`${I18N}.preset`)}
+            </FieldLabel>
+            <Select
+              onValueChange={(next) => {
+                if (next === "custom") return;
+                persist({ preset: next as (typeof SETTINGS_PRESETS)[number] });
+              }}
+              value={presetValue}
+            >
+              <SelectTrigger
+                data-testid="cost-overview-settings-preset"
+                id="cost-overview-preset"
+                size="sm"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {SETTINGS_PRESETS.map((preset) => (
+                    <SelectItem key={preset} value={preset}>
+                      {t(PRESET_LABEL[preset])}
+                    </SelectItem>
+                  ))}
+                  {presetValue === "custom" ? (
+                    <SelectItem disabled value="custom">
+                      {t(PRESET_LABEL.custom)}
+                    </SelectItem>
+                  ) : null}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
 
-      <FieldSet className="gap-3">
-        <FieldLegend className="mb-0" variant="label">
-          {t(`${I18N}.range`)}
-        </FieldLegend>
-        <FieldGroup className="gap-3">
-          <SettingsSelect
-            id="cost-overview-range"
-            label={t(`${I18N}.range`)}
-            onValueChange={(next) => {
-              persist({ rangeDays: Number(next) as CostOverviewRangeDays });
-            }}
-            options={RANGE_OPTIONS.map((days) => ({
-              label: t(`${I18N}.rangeDays`, { count: days }),
-              value: String(days),
-            }))}
-            testId="cost-overview-settings-range"
-            value={String(current.rangeDays)}
-          />
-          <SettingsSelect
-            id="cost-overview-measure"
-            label={t(`${I18N}.measure`)}
-            onValueChange={(next) => {
-              persist({ measure: next as CostOverviewMeasure });
-            }}
-            options={MEASURE_OPTIONS.map((measure) => ({
-              label: t(MEASURE_LABEL[measure]),
-              value: measure,
-            }))}
-            testId="cost-overview-settings-measure"
-            value={current.measure}
-          />
-          <SettingsSelect
-            id="cost-overview-group-by"
-            label={t(`${I18N}.groupBy`)}
-            onValueChange={(next) => {
-              persist({ groupBy: next as CostOverviewGroupBy });
-            }}
-            options={GROUP_BY_OPTIONS.map((groupBy) => ({
-              label: t(GROUP_LABEL[groupBy]),
-              value: groupBy,
-            }))}
-            testId="cost-overview-settings-group-by"
-            value={current.groupBy}
-          />
+          <Field>
+            <FieldLabel id="cost-overview-range-label">
+              {t(`${I18N}.range`)}
+            </FieldLabel>
+            <ToggleGroup
+              aria-labelledby="cost-overview-range-label"
+              className="flex-wrap"
+              data-testid="cost-overview-settings-range"
+              onValueChange={(next) => {
+                if (!next) return;
+                persist({ rangeDays: Number(next) as CostOverviewRangeDays });
+              }}
+              size="sm"
+              spacing={0}
+              type="single"
+              value={String(current.rangeDays)}
+              variant="outline"
+            >
+              {RANGE_OPTIONS.map((days) => (
+                <ToggleGroupItem key={days} value={String(days)}>
+                  {t(`${I18N}.rangeDays`, { count: days })}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </Field>
+
+          <Field>
+            <FieldLabel id="cost-overview-measure-label">
+              {t(`${I18N}.measure`)}
+            </FieldLabel>
+            <ToggleGroup
+              aria-labelledby="cost-overview-measure-label"
+              className="flex-wrap"
+              data-testid="cost-overview-settings-measure"
+              onValueChange={(next) => {
+                if (!next) return;
+                persist({ measure: next as CostOverviewMeasure });
+              }}
+              size="sm"
+              spacing={0}
+              type="single"
+              value={current.measure}
+              variant="outline"
+            >
+              {MEASURE_OPTIONS.map((measure) => (
+                <ToggleGroupItem key={measure} value={measure}>
+                  {t(MEASURE_LABEL[measure])}
+                </ToggleGroupItem>
+              ))}
+            </ToggleGroup>
+          </Field>
+
+          <Field>
+            <FieldLabel htmlFor="cost-overview-group-by">
+              {t(`${I18N}.groupBy`)}
+            </FieldLabel>
+            <Select
+              onValueChange={(next) => {
+                persist({ groupBy: next as CostOverviewGroupBy });
+              }}
+              value={current.groupBy}
+            >
+              <SelectTrigger
+                data-testid="cost-overview-settings-group-by"
+                id="cost-overview-group-by"
+                size="sm"
+              >
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  {GROUP_BY_OPTIONS.map((groupBy) => (
+                    <SelectItem key={groupBy} value={groupBy}>
+                      {t(GROUP_LABEL[groupBy])}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+              </SelectContent>
+            </Select>
+          </Field>
+
           <Field>
             <FieldLabel htmlFor="cost-overview-chart">
               {t(`${I18N}.chart`)}
@@ -325,53 +320,13 @@ export function CostOverviewSettings({
         </FieldGroup>
       </FieldSet>
 
-      {availableSources.length > 0 ? (
-        <FieldSet className="gap-3">
-          <FieldLegend className="mb-0" variant="label">
-            {t(`${I18N}.sources`)}
-          </FieldLegend>
-          <FieldDescription>{t(`${I18N}.sourcesAll`)}</FieldDescription>
-          <FieldGroup
-            className="gap-2"
-            data-slot="checkbox-group"
-            data-testid="cost-overview-settings-sources"
-          >
-            {availableSources.map((source) => {
-              const id = `cost-overview-source-${source.sourceId}`;
-              const label = resolveUsageSourceLabel(
-                t,
-                source.pluginId,
-                source.sourceId
-              );
-              const checked = selectedSources.includes(source.sourceId);
-              return (
-                <Field
-                  className="items-center"
-                  key={`${source.pluginId}:${source.sourceId}`}
-                  orientation="horizontal"
-                >
-                  <Checkbox
-                    checked={checked}
-                    data-testid={id}
-                    id={id}
-                    onCheckedChange={(value) => {
-                      toggleSource(source.sourceId, value === true);
-                    }}
-                  />
-                  <FieldLabel className="font-normal" htmlFor={id}>
-                    {label}
-                  </FieldLabel>
-                </Field>
-              );
-            })}
-          </FieldGroup>
-        </FieldSet>
-      ) : null}
-
       <FieldSet className="gap-3">
-        <FieldLegend className="mb-0" variant="label">
-          {t(`${I18N}.kpis`)}
-        </FieldLegend>
+        <div className="flex flex-col gap-1">
+          <FieldLegend className="mb-0" variant="label">
+            {t(`${I18N}.kpis`)}
+          </FieldLegend>
+          <FieldDescription>{t(`${I18N}.kpisHint`)}</FieldDescription>
+        </div>
         <FieldGroup className="gap-2" data-slot="checkbox-group">
           {KPI_OPTIONS.map((kpi) => {
             const id = `cost-overview-kpi-${kpi}`;
@@ -397,6 +352,50 @@ export function CostOverviewSettings({
           })}
         </FieldGroup>
       </FieldSet>
+
+      {availableSources.length > 0 ? (
+        <FieldSet className="gap-3">
+          <div className="flex flex-col gap-1">
+            <FieldLegend className="mb-0" variant="label">
+              {t(`${I18N}.sources`)}
+            </FieldLegend>
+            <FieldDescription>{t(`${I18N}.sourcesHint`)}</FieldDescription>
+          </div>
+          <FieldGroup
+            className="gap-2"
+            data-slot="checkbox-group"
+            data-testid="cost-overview-settings-sources"
+          >
+            {availableSources.map((source) => {
+              const id = `cost-overview-source-${source.sourceId}`;
+              const label = resolveUsageSourceLabel(
+                t,
+                source.pluginId,
+                source.sourceId
+              );
+              return (
+                <Field
+                  className="items-center"
+                  key={`${source.pluginId}:${source.sourceId}`}
+                  orientation="horizontal"
+                >
+                  <Checkbox
+                    checked={selectedSources.includes(source.sourceId)}
+                    data-testid={id}
+                    id={id}
+                    onCheckedChange={(value) => {
+                      toggleSource(source.sourceId, value === true);
+                    }}
+                  />
+                  <FieldLabel className="font-normal" htmlFor={id}>
+                    {label}
+                  </FieldLabel>
+                </Field>
+              );
+            })}
+          </FieldGroup>
+        </FieldSet>
+      ) : null}
     </div>
   );
 }

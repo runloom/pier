@@ -93,6 +93,7 @@ export const workbench = {
       emptyFilteredHint:
         "Open widget settings and include at least one source.",
       settings: {
+        sectionView: "View",
         preset: "Preset",
         presetOverview: "Overview",
         presetBySource: "By source",
@@ -114,12 +115,15 @@ export const workbench = {
         chartRanking: "Ranking",
         chartAutoHint: "Chart type follows the selected grouping.",
         kpis: "KPI tiles",
+        kpisHint: "Keep at least one tile. Uncheck to hide a number.",
         kpiToday: "Today",
         kpiPeriod: "Period cost",
         kpiPeriodTokens: "Period tokens",
         kpiLatestDayTokens: "Latest day tokens",
         sources: "Sources",
         sourcesAll: "All sources",
+        sourcesHint:
+          "Leave all unchecked to include every source. Checking any limits the view to those sources.",
       },
     },
     activityOverview: {

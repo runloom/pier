@@ -165,7 +165,7 @@ describe("CostOverviewSettings", () => {
       />
     );
 
-    await chooseOption("Time range", "7 days");
+    fireEvent.click(screen.getByRole("radio", { name: "7 days" }));
 
     expect(updateParams).toHaveBeenCalledTimes(1);
     const next = updateParams.mock.calls[0]?.[0] as Record<string, unknown>;
