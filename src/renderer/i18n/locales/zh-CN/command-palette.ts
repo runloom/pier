@@ -2,6 +2,7 @@ export const commandPalette = {
   title: "命令面板",
   empty: "无匹配命令",
   emptyQuickPick: "无匹配项",
+  loading: "加载中…",
   inputFailed: "无法提交输入",
   searchResults: "搜索结果",
   agents: {
