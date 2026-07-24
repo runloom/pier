@@ -166,6 +166,14 @@ public final class TerminalSurface {
 
     // MARK: - State
 
+    /// 应用请求的 DECTCEM(?25) 光标模式位（TUI 输入聚焦探针）。
+    /// 与 host cursor suppress 正交：读的是 VT 模式位，不是渲染结果。
+    /// inner surface 已释放返回 nil——「读不到」不得被下游当作「失焦」。
+    func cursorVisible() -> Bool? {
+        guard let s = surface else { return nil }
+        return ghostty_surface_cursor_visible(s)
+    }
+
     func setFocus(_ focused: Bool) {
         guard let s = surface else { return }
         TerminalDebugLog.log(.lifecycle, "surface focus=\(focused)")

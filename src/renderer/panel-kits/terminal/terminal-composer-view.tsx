@@ -1,7 +1,6 @@
 import { Button } from "@pier/ui/button.tsx";
-import { Kbd } from "@pier/ui/kbd.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { ArrowUp, Plus } from "lucide-react";
+import { Plus } from "lucide-react";
 import type {
   ClipboardEvent,
   DragEvent,
@@ -23,6 +22,8 @@ import {
   elementSoftWrapped,
   TERMINAL_COMPOSER_GAP_PX,
 } from "./terminal-composer-helpers.ts";
+import { SendButtonWithBlockHint } from "./terminal-composer-send-button.tsx";
+import type { TuiSendBlockReason } from "./tui-input-focus.ts";
 
 const COMPOSER_ATTACH_CHORD = "Mod+Shift+KeyA";
 
@@ -60,6 +61,7 @@ function ComposerAttachButton({
 
 export interface TerminalComposerViewProps {
   attachments: readonly ComposerAttachment[];
+  blockReason: TuiSendBlockReason | null;
   bottomOffsetPx: number;
   canSend: boolean;
   compact: boolean;
@@ -87,6 +89,7 @@ export interface TerminalComposerViewProps {
 
 export function TerminalComposerView({
   attachments,
+  blockReason,
   bottomOffsetPx,
   canSend,
   compact,
@@ -222,17 +225,12 @@ export function TerminalComposerView({
         />
 
         {compact ? (
-          <Button
-            aria-label={t("terminal.composer.send")}
-            className="mr-0.5 shrink-0 rounded-full"
-            data-testid="terminal-composer-send"
-            disabled={!canSend}
-            onClick={onSend}
-            size="icon-sm"
-            variant="default"
-          >
-            <ArrowUp data-icon />
-          </Button>
+          <SendButtonWithBlockHint
+            blockReason={blockReason}
+            canSend={canSend}
+            compact
+            onSend={onSend}
+          />
         ) : (
           <div className="flex shrink-0 items-center gap-1 px-1 pt-0.5 pb-1">
             <ComposerAttachButton
@@ -247,20 +245,12 @@ export function TerminalComposerView({
             >
               {t("terminal.composer.keyHint", { attach: attachShortcut })}
             </span>
-            <Button
-              aria-label={t("terminal.composer.send")}
-              className="rounded-full"
-              data-testid="terminal-composer-send"
-              disabled={!canSend}
-              onClick={onSend}
-              size="sm"
-              variant="default"
-            >
-              {t("terminal.composer.send")}
-              <Kbd className="h-4 bg-action-accent-foreground/20 text-[10px] text-action-accent-foreground">
-                ⏎
-              </Kbd>
-            </Button>
+            <SendButtonWithBlockHint
+              blockReason={blockReason}
+              canSend={canSend}
+              compact={false}
+              onSend={onSend}
+            />
           </div>
         )}
       </div>

@@ -394,6 +394,46 @@ describe("TerminalFocusCoordinator", () => {
     });
   });
 
+  it("records rejected native focus intents in lastError for debuggability", () => {
+    const { win } = createWindow();
+    const { addon } = createAddon();
+    coordinator.configureNativeAddon(addon);
+    coordinator.acceptRendererSnapshot(win, terminalSnapshot());
+
+    // surface 未就绪 → not-ready
+    expect(coordinator.acceptNativeFocusIntent(win, "1::terminal-1")).toEqual({
+      ok: false,
+      reason: "not-ready",
+    });
+    expect(coordinator.readDebug(win).lastError).toBe(
+      "focus-intent-rejected:not-ready"
+    );
+
+    // snapshot 标记 hidden → hidden
+    coordinator.surfaceCreated(win, "terminal-1");
+    coordinator.acceptRendererSnapshot(
+      win,
+      terminalSnapshot(2, {
+        terminals: [{ frame: null, panelId: "terminal-1", visible: false }],
+      })
+    );
+    expect(coordinator.acceptNativeFocusIntent(win, "1::terminal-1")).toEqual({
+      ok: false,
+      reason: "hidden",
+    });
+    expect(coordinator.readDebug(win).lastError).toBe(
+      "focus-intent-rejected:hidden"
+    );
+
+    // 恢复可见后成功 intent 清掉本路径的拒绝记录
+    coordinator.acceptRendererSnapshot(win, terminalSnapshot(3));
+    expect(coordinator.acceptNativeFocusIntent(win, "1::terminal-1")).toEqual({
+      ok: true,
+      panelId: "terminal-1",
+    });
+    expect(coordinator.readDebug(win).lastError).toBeNull();
+  });
+
   it("records a first invalid snapshot without installing desired state", () => {
     const { win } = createWindow();
     const { addon, applyTerminalWindowState } = createAddon();

@@ -11,6 +11,8 @@ import { APPKIT_KEYCODE, GHOSTTY_MODS } from "@shared/terminal-appkit-keys.ts";
 export interface ComposerPassthroughKeyPress {
   keycode: number;
   mods?: number | undefined;
+  /** 随键附带的文本（如 Return 带 "\r"）；部分 agent TUI 只认 text。 */
+  text?: string | undefined;
 }
 
 export function passthroughKeyPressForKey(input: {
@@ -49,7 +51,9 @@ export function passthroughKeyPressForKey(input: {
       if (input.shiftKey) {
         return null;
       }
-      return { keycode: APPKIT_KEYCODE.return };
+      // 与 sendTerminalText 的 submit 路径同口径：Return 必须带 text="\r"，
+      // 否则部分 agent TUI 不把它当提交（见 bafabd7f / codex#28167）。
+      return { keycode: APPKIT_KEYCODE.return, text: "\r" };
     default:
       return null;
   }

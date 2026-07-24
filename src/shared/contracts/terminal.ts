@@ -269,6 +269,9 @@ export interface TerminalSendTextArgs {
   /**
    * true：先 paste 文本，再注入真实 Return 键提交。
    * 不能把 `\r` 拼进同一次 sendText——bracketed paste 下末尾回车不会提交。
+   * paste 与 Return 之间 main 侧会留 settle 延迟（SUBMIT_ENTER_SETTLE_MS）：
+   * 两次写入落在 TUI 同一次 stdin read() 时，部分 agent 会把 \r 吞进
+   * paste 处理而不提交（codex#28167 同款）。
    */
   submit?: boolean | undefined;
   text: string;
@@ -286,6 +289,12 @@ export interface TerminalSendKeyPressArgs {
    */
   text?: string | undefined;
 }
+
+/**
+ * TUI 输入聚焦探针结果：读应用设置的 DECTCEM(?25) 光标模式位。
+ * `unknown` = surface 不存在 / addon 未加载——禁止当作「失焦」处理。
+ */
+export type TerminalCursorVisibility = "hidden" | "unknown" | "visible";
 
 export type TerminalSelectionTextResult =
   | { kind: "empty" }
@@ -358,6 +367,12 @@ export interface TerminalAPI {
    */
   close(panelId: string, options?: TerminalCloseOptions): Promise<void>;
   create(args: CreateTerminalArgs): Promise<CreateTerminalResult>;
+  /**
+   * TUI 输入聚焦探针：读该 surface 应用设置的 DECTCEM(?25) 光标模式位。
+   * 现代 TUI 输入框失焦即隐藏硬件光标（crush 已源码验证），「visible」
+   * 可解释为「输入框大概率聚焦」；「unknown」时调用方禁止按「失焦」行动。
+   */
+  cursorVisible(panelId: string): Promise<TerminalCursorVisibility>;
   debugSnapshot(
     args?: TerminalDebugSnapshotArgs
   ): Promise<TerminalDebugSnapshot>;

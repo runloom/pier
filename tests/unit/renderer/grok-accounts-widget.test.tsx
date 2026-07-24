@@ -255,4 +255,52 @@ describe("Grok accounts widget", () => {
       container.querySelector('[data-slot="grok-usage-error"]')
     ).not.toBeNull();
   });
+
+  it("keeps last-good meters without alarm on transient usage failure", async () => {
+    const snap = activeSnapshot();
+    snap.activeUsage = {
+      error: "Grok usage temporarily unavailable (HTTP 503)",
+      fetchedAt: Date.now(),
+      status: "error",
+      windows: [
+        {
+          id: "grok:period",
+          limitId: "period",
+          limitName: "Weekly limit",
+          usedPercent: 40,
+          windowMinutes: 10_080,
+        },
+      ],
+    };
+    const { context } = contextWithSnapshot(snap);
+    await act(async () => {
+      render(<AccountsWidget context={context} {...baseProps()} />);
+    });
+    // Stale data stays on screen; no destructive banner, no alert role.
+    expect(
+      document.querySelector("[data-slot='grok-quota-group']")
+    ).toBeTruthy();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText(/usage update failed/i)).toBeNull();
+  });
+
+  it("shows a muted note instead of a red banner when a transient failure has no data", async () => {
+    const snap = activeSnapshot();
+    snap.activeUsage = {
+      error: "Grok usage temporarily unavailable (HTTP 503)",
+      fetchedAt: Date.now(),
+      status: "error",
+      windows: [],
+    };
+    const { context } = contextWithSnapshot(snap);
+    await act(async () => {
+      render(<AccountsWidget context={context} {...baseProps()} />);
+    });
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(screen.queryByText(/usage update failed/i)).toBeNull();
+    expect(await screen.findByText(/retry automatically/i)).toBeTruthy();
+    expect(
+      document.querySelector('[data-slot="grok-usage-error"]')
+    ).not.toBeNull();
+  });
 });

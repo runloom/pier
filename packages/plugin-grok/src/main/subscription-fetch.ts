@@ -3,6 +3,7 @@ import {
   type GrokSubscriptionInfo,
   parseGrokSubscriptionResult,
 } from "./subscription-parse.ts";
+import type { AccountUsageResult } from "./types.ts";
 import {
   createTimeoutSignal,
   mergeAbortSignals,
@@ -63,4 +64,32 @@ export async function fetchGrokSubscriptionSoft(options: {
     // Soft-fail: transport/timeout/parse issues never poison billing.
     return null;
   }
+}
+
+/**
+ * Attach best-effort membership to a billing result. Never fails the usage
+ * pipeline: a soft-null subscription leaves the result untouched.
+ */
+export async function withSoftSubscription(
+  result: AccountUsageResult,
+  options: {
+    caller: AbortSignal;
+    fetchImpl: FetchImpl;
+    overall: AbortSignal | null;
+    sessionKey: string;
+    userId?: string | null;
+  }
+): Promise<AccountUsageResult> {
+  if (options.caller.aborted || options.overall?.aborted) {
+    return result;
+  }
+  const subscription = await fetchGrokSubscriptionSoft({
+    fetchImpl: options.fetchImpl,
+    overall: options.overall,
+    sessionKey: options.sessionKey,
+    signal: options.caller,
+    ...(options.userId ? { userId: options.userId } : {}),
+  });
+  if (!subscription) return result;
+  return { ...result, subscription };
 }
