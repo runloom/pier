@@ -94,10 +94,8 @@ async function openBranchPick(
     return;
   }
 
-  const loading = showLoading(
-    context,
-    pluginText(context, "gitLoadingBranches", "Loading branches...")
-  );
+  // 打开分支选择器不弹 loading：常见仓 searchBranches 通常百毫秒级，
+  // toast 一闪比静默等待更吵；真正 merge/switch/rebase 执行时仍走 showLoading。
   let result: GitDiffBranchesResult;
   let allLocalBranchNames = new Set<string>();
   try {
@@ -116,11 +114,9 @@ async function openBranchPick(
     result = searchResult;
     allLocalBranchNames = new Set(localBranches.map((branch) => branch.name));
   } catch (err) {
-    loading.dismiss();
     await showError(context, title, err);
     return;
   }
-  loading.dismiss();
   if (result.status !== "ok") {
     await showUnavailable(context, title, result.message?.trim());
     return;

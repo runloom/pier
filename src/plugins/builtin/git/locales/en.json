@@ -7,7 +7,16 @@
       "title": "Git: Merge Branch..."
     },
     "pier.git.switchBranch": {
-      "aliases": ["git switch", "switch branch", "checkout branch"],
+      "aliases": [
+        "git switch",
+        "switch branch",
+        "checkout branch",
+        "git checkout",
+        "checkout",
+        "gco",
+        "create branch",
+        "new branch"
+      ],
       "category": "Git",
       "description": "Switch to a local branch or create a new branch from the current HEAD.",
       "title": "Git: Switch Branch..."
@@ -19,7 +28,7 @@
       "title": "Git: Abort Merge"
     },
     "pier.git.stash": {
-      "aliases": ["git stash", "stash save"],
+      "aliases": ["git stash", "stash save", "git stash save"],
       "category": "Git",
       "description": "Stash local tracked changes.",
       "title": "Git: Stash"
@@ -37,7 +46,12 @@
       "title": "Git: Drop Stash..."
     },
     "pier.git.stashIncludeUntracked": {
-      "aliases": ["git stash --include-untracked", "stash untracked"],
+      "aliases": [
+        "git stash --include-untracked",
+        "git stash -u",
+        "stash untracked",
+        "stash include untracked"
+      ],
       "category": "Git",
       "description": "Stash local changes, including untracked files.",
       "title": "Git: Stash (Include Untracked)"
@@ -49,7 +63,7 @@
       "title": "Git: Pop Stash..."
     },
     "pier.git.rebase": {
-      "aliases": ["git rebase", "rebase branch"],
+      "aliases": ["git rebase", "rebase branch", "rebase onto"],
       "category": "Git",
       "description": "Select a branch and rebase the current branch onto it.",
       "title": "Git: Rebase Branch..."
@@ -67,7 +81,12 @@
       "title": "Git: Continue Rebase"
     },
     "pier.git.cherryPick": {
-      "aliases": ["git cherry-pick", "cherry pick", "pick commit"],
+      "aliases": [
+        "git cherry-pick",
+        "cherry pick",
+        "pick commit",
+        "cherrypick"
+      ],
       "category": "Git",
       "description": "Select a commit and apply it onto the current branch.",
       "title": "Git: Cherry-pick Commit..."
@@ -108,8 +127,10 @@
         "git undo",
         "git reset",
         "git reset soft",
+        "soft reset",
         "reset commit",
-        "undo last commit"
+        "undo last commit",
+        "uncommit"
       ],
       "category": "Git",
       "description": "Undo the last commit while preserving its changes as staged.",
@@ -137,9 +158,11 @@
       "aliases": [
         "restore",
         "restore changes",
+        "restore file",
         "git restore",
         "discard",
-        "discard changes"
+        "discard changes",
+        "checkout file"
       ],
       "category": "Git",
       "description": "Restore the selected file's working tree changes.",
@@ -151,7 +174,9 @@
         "worktree create",
         "worktree add",
         "new worktree",
-        "create worktree"
+        "create worktree",
+        "wt",
+        "wt add"
       ],
       "category": "Worktree",
       "description": "Creates a Git worktree under the repository-managed worktrees directory.",
@@ -163,23 +188,72 @@
         "worktree delete",
         "worktree remove",
         "remove worktree",
-        "delete worktree"
+        "delete worktree",
+        "wt",
+        "wt remove"
       ],
       "category": "Worktree",
       "description": "Selects and removes a Git worktree.",
       "title": "Delete Worktrees..."
     },
     "pier.worktree.prune": {
-      "aliases": ["worktree", "worktree prune", "cleanup worktree"],
+      "aliases": [
+        "worktree",
+        "worktree prune",
+        "cleanup worktree",
+        "wt",
+        "wt prune"
+      ],
       "category": "Worktree",
       "description": "Prunes stale Git worktree entries.",
       "title": "Prune Stale Worktrees"
     },
     "pier.worktree.list": {
-      "aliases": ["worktree", "worktree list", "workspace worktree"],
+      "aliases": [
+        "worktree",
+        "worktree list",
+        "workspace worktree",
+        "open worktree",
+        "switch worktree",
+        "wt",
+        "wt list"
+      ],
       "category": "Worktree",
       "description": "Lists Git worktrees for the current repository and opens the selected worktree.",
       "title": "List Worktrees"
+    },
+    "pier.git.pull": {
+      "aliases": ["git pull", "pull", "pull changes", "fast forward"],
+      "category": "Git",
+      "description": "Pull remote changes with fast-forward only.",
+      "title": "Git: Pull"
+    },
+    "pier.git.push": {
+      "aliases": ["git push", "push", "push changes"],
+      "category": "Git",
+      "description": "Push local commits to the remote.",
+      "title": "Git: Push"
+    },
+    "pier.git.sync": {
+      "aliases": ["git sync", "sync", "sync changes", "pull and push"],
+      "category": "Git",
+      "description": "Pull then push to sync with the remote.",
+      "title": "Git: Sync"
+    },
+    "pier.git.viewChanges": {
+      "aliases": [
+        "view changes",
+        "git status",
+        "status",
+        "git diff",
+        "diff",
+        "changes",
+        "open changes",
+        "review changes"
+      ],
+      "category": "Git",
+      "description": "Open the changes review panel for the current repository.",
+      "title": "Git: View Changes"
     }
   },
   "description": "Built-in git command palette and terminal status support.",
@@ -384,7 +458,6 @@
     "ui.worktreePruneSuccess": "Stale worktrees pruned",
     "ui.worktreeDeleteSuccess": "Worktree deleted",
     "ui.gitErrorUnavailable": "Git operation failed",
-    "ui.gitLoadingBranches": "Loading branches…",
     "ui.gitLoadingMerge": "Merging…",
     "ui.gitLoadingSwitchBranch": "Switching branch…",
     "ui.gitLoadingCreateAndSwitchBranch": "Creating branch…",

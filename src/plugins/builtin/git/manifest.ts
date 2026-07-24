@@ -154,6 +154,30 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "Git",
+      id: "pier.git.pull",
+      permissions: ["git:write"],
+      title: "Git: Pull",
+    },
+    {
+      category: "Git",
+      id: "pier.git.push",
+      permissions: ["git:write"],
+      title: "Git: Push",
+    },
+    {
+      category: "Git",
+      id: "pier.git.sync",
+      permissions: ["git:write"],
+      title: "Git: Sync",
+    },
+    {
+      category: "Git",
+      id: "pier.git.viewChanges",
+      permissions: ["git:read", "panel:open"],
+      title: "Git: View Changes",
+    },
+    {
+      category: "Git",
       id: "pier.git.review.openFile",
       permissions: ["file:read", "panel:open"],
       title: "Git: Open File",

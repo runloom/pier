@@ -84,7 +84,8 @@ export function openGitChangesPanel(input: {
         // Refresh: focus-path ghosts must not poison collision checks.
         const liveInstances =
           input.pluginContext.panels.listInstances(GIT_CHANGES_PANEL_ID);
-        const canonicalId = `${GIT_CHANGES_PANEL_ID}:${targetGroupId}:${source.contextId}:${reviewTargetKey(source.target)}`;
+        const groupKey = targetGroupId ?? "active";
+        const canonicalId = `${GIT_CHANGES_PANEL_ID}:${groupKey}:${source.contextId}:${reviewTargetKey(source.target)}`;
         const instanceId = liveInstances.some(
           (instance) => instance.id === canonicalId
         )
@@ -95,7 +96,7 @@ export function openGitChangesPanel(input: {
           context: input.panelContext,
           instanceId,
           params: { source },
-          targetGroupId,
+          ...(targetGroupId ? { targetGroupId } : {}),
           title: pluginText(
             input.pluginContext,
             "reviewChangesTitle",
@@ -131,7 +132,7 @@ function sameReviewSource(input: unknown, expected: GitReviewScope): boolean {
 
 function openInCurrentGroup(input: {
   getGroupId: () => string | null;
-  open: (groupId: string) => PluginPanelInstanceOpenResult;
+  open: (groupId: null | string) => PluginPanelInstanceOpenResult;
   pluginContext: RendererPluginContext;
 }): void {
   const groupId = input.getGroupId();
@@ -148,6 +149,10 @@ function openInCurrentGroup(input: {
     ) {
       return;
     }
+  }
+  // 命令面板等无 status-item getGroupId 时：交给宿主 active group 落点。
+  if (input.open(null).kind === "opened") {
+    return;
   }
   input.pluginContext.notifications.error(
     pluginText(

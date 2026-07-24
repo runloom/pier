@@ -6,6 +6,7 @@ import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
 import {
   GIT_CHANGES_PANEL_ID,
   GIT_PLUGIN_ID,
+  GIT_PLUGIN_MANIFEST,
 } from "@plugins/builtin/git/manifest.ts";
 import { resetGitStatusSessionsForTests } from "@plugins/builtin/git/renderer/git-status-state.ts";
 import { gitRendererPlugin } from "@plugins/builtin/git/renderer/index.ts";
@@ -123,144 +124,14 @@ function branchOption(
 }
 
 function pluginEntry(enabled: boolean): PluginRegistryEntry {
-  const commands: PluginRegistryEntry["manifest"]["commands"] = [
-    {
-      id: "pier.worktree.list",
-      permissions: ["worktree:read", "workspace:open"],
-      title: "List Worktrees",
-    },
-    {
-      id: "pier.worktree.create",
-      permissions: ["worktree:write", "environment:read"],
-      title: "Create Worktree",
-    },
-    {
-      id: "pier.worktree.delete",
-      permissions: ["worktree:read", "worktree:write", "environment:read"],
-      title: "Delete Worktrees...",
-    },
-    {
-      id: "pier.worktree.prune",
-      permissions: ["worktree:read", "worktree:write"],
-      title: "Prune Stale Worktrees",
-    },
-    {
-      id: "pier.git.switchBranch",
-      permissions: ["git:read", "git:write"],
-      title: "Git: Switch Branch...",
-    },
-    {
-      id: "pier.git.merge",
-      permissions: ["git:read", "git:write"],
-      title: "Git: Merge Branch...",
-    },
-    {
-      id: "pier.git.mergeAbort",
-      permissions: ["git:write"],
-      title: "Git: Abort Merge",
-    },
-    {
-      id: "pier.git.stashApply",
-      permissions: ["git:read", "git:write"],
-      title: "Git: Apply Stash...",
-    },
-    {
-      id: "pier.git.stashDrop",
-      permissions: ["git:read", "git:write"],
-      title: "Git: Drop Stash...",
-    },
-    {
-      id: "pier.git.stashIncludeUntracked",
-      permissions: ["git:write"],
-      title: "Git: Stash (Include Untracked)",
-    },
-    {
-      id: "pier.git.stash",
-      permissions: ["git:write"],
-      title: "Git: Stash",
-    },
-    {
-      id: "pier.git.stashPop",
-      permissions: ["git:read", "git:write"],
-      title: "Git: Pop Stash...",
-    },
-    {
-      id: "pier.git.rebase",
-      permissions: ["git:read", "git:write"],
-      title: "Git: Rebase Branch...",
-    },
-    {
-      id: "pier.git.rebaseAbort",
-      permissions: ["git:write"],
-      title: "Git: Abort Rebase",
-    },
-    {
-      id: "pier.git.rebaseContinue",
-      permissions: ["git:write"],
-      title: "Git: Continue Rebase",
-    },
-    {
-      id: "pier.git.cherryPick",
-      permissions: ["git:read", "git:write"],
-      title: "Git: Cherry-pick Commit...",
-    },
-    {
-      id: "pier.git.cherryPickAbort",
-      permissions: ["git:write"],
-      title: "Git: Abort Cherry-pick",
-    },
-    {
-      id: "pier.git.cherryPickContinue",
-      permissions: ["git:write"],
-      title: "Git: Continue Cherry-pick",
-    },
-    {
-      id: "pier.git.revert",
-      permissions: ["git:read", "git:write"],
-      title: "Git: Revert Commit...",
-    },
-    {
-      id: "pier.git.revertAbort",
-      permissions: ["git:write"],
-      title: "Git: Abort Revert",
-    },
-    {
-      id: "pier.git.revertContinue",
-      permissions: ["git:write"],
-      title: "Git: Continue Revert",
-    },
-    {
-      id: "pier.git.undoLastCommit",
-      permissions: ["git:write"],
-      title: "Git: Undo Last Commit",
-    },
-    {
-      id: "pier.git.review.openFile",
-      permissions: ["file:read", "panel:open"],
-      title: "Git: Open File",
-    },
-    {
-      id: "pier.git.review.stageFile",
-      permissions: ["git:write"],
-      title: "Git: Stage",
-    },
-    {
-      id: "pier.git.review.unstageFile",
-      permissions: ["git:write"],
-      title: "Git: Unstage",
-    },
-    {
-      id: "pier.git.review.discardFile",
-      permissions: ["git:write"],
-      title: "Git: Restore",
-    },
-  ];
+  const commands = GIT_PLUGIN_MANIFEST.commands;
   return {
     effectivePermissions: [
       "workspace:open",
       "worktree:read",
       "worktree:write",
       "environment:read",
+      "ai:invoke",
       "command:register",
       "git:read",
       "git:write",
@@ -905,6 +776,10 @@ describe("git builtin plugin", () => {
     expect(actionRegistry.get("pier.git.stash")).toBeDefined();
     expect(actionRegistry.get("pier.git.rebaseContinue")).toBeDefined();
     expect(actionRegistry.get("pier.git.undoLastCommit")).toBeDefined();
+    expect(actionRegistry.get("pier.git.pull")).toBeDefined();
+    expect(actionRegistry.get("pier.git.push")).toBeDefined();
+    expect(actionRegistry.get("pier.git.sync")).toBeDefined();
+    expect(actionRegistry.get("pier.git.viewChanges")).toBeDefined();
     expect(actionRegistry.get("pier.worktree.switch")).toBeUndefined();
     expect(
       terminalStatusItemRegistry
@@ -1481,7 +1356,7 @@ describe("git builtin plugin", () => {
     );
   });
 
-  it("Git 分支选择请求全量候选、不截断 50 条并展示加载提示", async () => {
+  it("Git 分支选择请求全量候选、不截断 50 条且不展示列表加载提示", async () => {
     vi.mocked(window.pier.git.searchBranches).mockResolvedValueOnce({
       currentBranch: "main",
       durationMs: 4,
@@ -1504,8 +1379,7 @@ describe("git builtin plugin", () => {
       "/Users/dev/ABC/pier",
       { diffMode: "mergeIntoCurrent", limit: 1000, query: "" }
     );
-    expect(toastMocks.loading).toHaveBeenCalledWith("Loading branches...");
-    expect(toastMocks.dismiss).toHaveBeenCalledWith("git-loading-toast");
+    expect(toastMocks.loading).not.toHaveBeenCalledWith("Loading branches...");
     const quickPick = useCommandPaletteController.getState().quickPick;
     expect(quickPick?.items).toHaveLength(60);
   });
