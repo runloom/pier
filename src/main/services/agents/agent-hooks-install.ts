@@ -24,8 +24,10 @@ export const EVENTS_JSONL_NAME = "events.jsonl";
  * hooks 命令世代：嵌入 extract-stdin-meta / stdin 命令，安装时拒绝用更低世代覆盖。
  * 2 = PromptSubmit 命名所需的 prompt → promptSnippet。
  * 3 = 世代标记改为赋值（禁止 `#` 注释，避免 `;` 拼接后整行被注释掉）。
+ * 4 = stdin 身份字段补 camelCase（toolUseId / toolName / turnId / agentId /
+ *     agentType / transcriptPath）；Grok 等 provider 官方 envelope 为 camelCase。
  */
-export const PIER_HOOK_COMMAND_GENERATION = 3;
+export const PIER_HOOK_COMMAND_GENERATION = 4;
 /**
  * emit 脚本内容——保留 v1 agentEvent，并以 agentEventV2 承载新协议。
  *
@@ -151,8 +153,9 @@ export function buildExtractStdinMetaScript(
 ): string {
   const nodeExecutable = shellDoubleQuote(electronExecutable);
   // JS 内避免单引号，便于包进 sh -e '...'。
+  // 与 shared.stdinIdentityExtractionLines 的键表保持同步（snake + camel）。
   const extractJs =
-    'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s),o={};for(const k of ["session_id","sessionId","turn_id","tool_use_id","tool_name","agent_id","agent_type","transcript_path"])if(typeof p[k]==="string")o[k]=p[k];const prompt=[p.prompt,p.user_prompt,p.content,p.message].find(v=>typeof v==="string");if(typeof prompt==="string"&&prompt.trim())o.promptSnippet=prompt.slice(0,512);process.stdout.write(Buffer.from(JSON.stringify(o)).toString("base64"))}catch{}})';
+    'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s),o={};for(const k of ["session_id","sessionId","turn_id","turnId","tool_use_id","toolUseId","tool_name","toolName","agent_id","agentId","agent_type","agentType","transcript_path","transcriptPath"])if(typeof p[k]==="string")o[k]=p[k];const prompt=[p.prompt,p.user_prompt,p.content,p.message].find(v=>typeof v==="string");if(typeof prompt==="string"&&prompt.trim())o.promptSnippet=prompt.slice(0,512);process.stdout.write(Buffer.from(JSON.stringify(o)).toString("base64"))}catch{}})';
   return `#!/bin/sh
 # pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}
 ELECTRON_RUN_AS_NODE=1 "${nodeExecutable}" -e '${extractJs}'

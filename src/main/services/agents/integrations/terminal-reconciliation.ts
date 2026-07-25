@@ -1,12 +1,14 @@
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import { createClaudeTranscriptReconciler } from "./claude-transcript-reconciler.ts";
 import { createCodexTranscriptReconciler } from "./codex-transcript-reconciler.ts";
+import { createGrokTranscriptReconciler } from "./grok-transcript-reconciler.ts";
 import type { TranscriptTailReconciler } from "./transcript-tail-reconciler.ts";
 
 /**
  * Agent 私有终态对账的统一宿主边界。foreground-activity 只投递已验收的
  * 规范事件，不感知各 provider transcript 路径、格式或 watcher 生命周期。
- * 当前接入：Codex（task_complete / turn_aborted）、Claude（中断标记）。
+ * 当前接入：Codex（task_complete / turn_aborted）、Claude（中断标记）、
+ * Grok（updates.jsonl turn_completed cancelled / end_turn）。
  */
 export interface AgentTerminalReconciler {
   dispose(): void;
@@ -27,6 +29,7 @@ export function createAgentTerminalReconciler(args: {
   const reconcilers: readonly TranscriptTailReconciler[] = [
     createCodexTranscriptReconciler(args),
     createClaudeTranscriptReconciler(args),
+    createGrokTranscriptReconciler(args),
   ];
   return {
     dispose: () => {
