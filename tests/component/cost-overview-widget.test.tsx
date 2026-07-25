@@ -355,33 +355,43 @@ describe("CostOverviewWidget", () => {
     expect(screen.queryByTestId("cost-overview-kpis")).not.toBeInTheDocument();
   });
 
-  it("hides the description at the minimum height", () => {
+  it("uses compact density without chart or description at minimum height", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());
     });
     const { rerender } = renderWidget({ size: { h: 2, w: 8 } });
+    expect(screen.getByTestId("cost-overview-content")).toHaveAttribute(
+      "data-density",
+      "compact"
+    );
     expect(
       screen.queryByTestId("cost-overview-description")
     ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("cost-overview-chart")).not.toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-content")).toHaveClass(
+      "overflow-hidden"
+    );
+    expect(screen.getByTestId("cost-overview-content")).not.toHaveClass(
+      "overflow-y-auto"
+    );
 
-    rerender(<CostOverviewWidget {...baseProps({ size: { h: 3, w: 8 } })} />);
+    rerender(<CostOverviewWidget {...baseProps({ size: { h: 4, w: 8 } })} />);
+    expect(screen.getByTestId("cost-overview-content")).toHaveAttribute(
+      "data-density",
+      "full"
+    );
     expect(screen.getByTestId("cost-overview-description")).toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-chart")).toBeInTheDocument();
   });
 
-  it("keeps a minimum chart height when dense content needs to scroll", () => {
+  it("does not show view preset chips on the card face", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());
     });
-    renderWidget({ size: { h: 2, w: 4 } });
-    expect(screen.getByTestId("cost-overview-content")).toHaveClass(
-      "h-full",
-      "min-h-0",
-      "overflow-y-auto"
-    );
-    expect(screen.getByTestId("cost-overview-chart")).toHaveClass("min-h-8");
-    expect(screen.getByTestId("cost-overview-chart")).not.toHaveClass(
-      "min-h-0"
-    );
+    renderWidget({ size: { h: 3, w: 8 } });
+    expect(
+      screen.queryByTestId("cost-overview-preset-chips")
+    ).not.toBeInTheDocument();
   });
 
   it("preserves unknown costs instead of formatting them as zero", () => {

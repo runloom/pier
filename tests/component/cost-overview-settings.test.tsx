@@ -137,7 +137,7 @@ describe("CostOverviewSettings", () => {
     cleanup();
   });
 
-  it("writes tokens preset fields through updateParams", async () => {
+  it("writes tokens view fields through updateParams", async () => {
     const updateParams = vi.fn();
     render(
       <CostOverviewSettings
@@ -147,15 +147,16 @@ describe("CostOverviewSettings", () => {
       />
     );
 
-    await chooseOption("Preset", "Tokens");
+    await chooseOption(/View/i, "Tokens");
 
     expect(updateParams).toHaveBeenCalledTimes(1);
-    expect(updateParams).toHaveBeenCalledWith(
-      costOverviewParamsToJson(paramsFromPreset("tokens"))
-    );
+    const next = updateParams.mock.calls[0]?.[0] as Record<string, unknown>;
+    expect(next.preset).toBe("tokens");
+    expect(next.measure).toBe("tokens");
+    expect(next.groupBy).toBe("none");
   });
 
-  it("marks custom after changing range on overview", async () => {
+  it("keeps view preset when changing range", async () => {
     const updateParams = vi.fn();
     render(
       <CostOverviewSettings
@@ -169,32 +170,37 @@ describe("CostOverviewSettings", () => {
 
     expect(updateParams).toHaveBeenCalledTimes(1);
     const next = updateParams.mock.calls[0]?.[0] as Record<string, unknown>;
-    expect(next.preset).toBe("custom");
+    expect(next.preset).toBe("overview");
     expect(next.rangeDays).toBe(7);
     expect(next.measure).toBe("cost");
     expect(next.groupBy).toBe("source");
     expect(next.chart).toBe("stackedBar");
   });
 
-  it("does not clear the last remaining KPI", async () => {
-    const updateParams = vi.fn();
+  it("does not expose metric/group/chart/kpi advanced controls", () => {
     render(
       <CostOverviewSettings
         instanceId="core.cost-overview"
-        params={{
-          ...costOverviewParamsToJson(paramsFromPreset("by-source")),
-          kpis: ["today"],
-        }}
-        updateParams={updateParams}
+        params={{}}
+        updateParams={vi.fn()}
       />
     );
 
-    fireEvent.click(screen.getByRole("checkbox", { name: "Today" }));
-
-    expect(updateParams).not.toHaveBeenCalled();
+    expect(
+      screen.queryByTestId("cost-overview-settings-measure")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("cost-overview-settings-group-by")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("cost-overview-settings-chart")
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByTestId("cost-overview-kpi-today")
+    ).not.toBeInTheDocument();
   });
 
-  it("writes by-model preset with model ranking", async () => {
+  it("writes by-model view with model ranking", async () => {
     const updateParams = vi.fn();
     render(
       <CostOverviewSettings
@@ -204,7 +210,7 @@ describe("CostOverviewSettings", () => {
       />
     );
 
-    await chooseOption("Preset", "By model");
+    await chooseOption(/View/i, "By model");
 
     expect(updateParams).toHaveBeenCalledTimes(1);
     expect(updateParams).toHaveBeenCalledWith(

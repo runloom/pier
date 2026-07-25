@@ -48,4 +48,24 @@ describe("model pricing updater", () => {
     expect(canFillFromOpenRouter("openai/gpt", "gpt")).toBe(false);
     expect(canFillFromOpenRouter("some-random/gpt-5", "gpt-5")).toBe(false);
   });
+
+  it("allows OpenRouter fill-missing for moonshotai kimi-k3", () => {
+    // LiteLLM 尚无 kimi-k3 时，脚本应能从 OpenRouter 补入
+    expect(canFillFromOpenRouter("moonshotai/kimi-k3", "kimi-k3")).toBe(true);
+    expect(shouldInclude("kimi-k3", { mode: "chat" })).toBe(true);
+    expect(
+      openRouterModelToEntry({
+        id: "moonshotai/kimi-k3",
+        pricing: {
+          completion: "0.000015",
+          input_cache_read: "0.0000003",
+          prompt: "0.000003",
+        },
+      })
+    ).toEqual({
+      cachedInputMicrousd: 0.3,
+      inputMicrousd: 3,
+      outputMicrousd: 15,
+    });
+  });
 });

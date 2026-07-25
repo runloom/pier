@@ -46,27 +46,31 @@ function formatRankingValue(
 /**
  * 成本总览图表区：stackedBar / line / ranking。
  * 抽离以控制 widget 主文件行数；坐标轴 hide，靠 tooltip 读数。
+ * rankingLimit 由物料尺寸控制，避免矮卡出现滚动条。
  */
 export function CostOverviewChart({
   locale,
+  rankingLimit = 8,
   view,
 }: {
   locale: string;
+  rankingLimit?: number;
   view: CostViewModel;
 }) {
   const chartAnchorRef = useRef<HTMLDivElement>(null);
   const config = useMemo(() => buildChartConfig(view), [view]);
 
   if (view.chart === "ranking") {
-    if (view.ranking.length === 0) return null;
-    const max = Math.max(...view.ranking.map((row) => row.value), 1);
+    if (view.ranking.length === 0 || rankingLimit <= 0) return null;
+    const rows = view.ranking.slice(0, rankingLimit);
+    const max = Math.max(...rows.map((row) => row.value), 1);
     return (
       <div
-        className="flex min-h-8 flex-1 flex-col gap-1.5"
+        className="flex h-full min-h-0 flex-1 flex-col justify-center gap-1.5 overflow-hidden"
         data-testid="cost-overview-chart"
       >
-        {view.ranking.map((row) => (
-          <div className="flex flex-col gap-0.5" key={row.label}>
+        {rows.map((row) => (
+          <div className="flex min-h-0 flex-col gap-0.5" key={row.label}>
             <div className="flex items-center justify-between gap-2 text-xs">
               <span className="truncate">{row.label}</span>
               <span className="shrink-0 font-mono text-muted-foreground tabular-nums">
@@ -90,12 +94,12 @@ export function CostOverviewChart({
   if (view.chart === "line") {
     return (
       <div
-        className="flex min-h-8 flex-1 flex-col"
+        className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
         data-testid="cost-overview-chart"
         ref={chartAnchorRef}
       >
         <ChartContainer
-          className="aspect-auto min-h-8 w-full flex-1"
+          className="aspect-auto h-full min-h-0 w-full flex-1"
           config={config}
         >
           <LineChart
@@ -128,12 +132,12 @@ export function CostOverviewChart({
   if (view.groupBy === "none" || view.sourceMetas.length === 0) {
     return (
       <div
-        className="flex min-h-8 flex-1 flex-col"
+        className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
         data-testid="cost-overview-chart"
         ref={chartAnchorRef}
       >
         <ChartContainer
-          className="aspect-auto min-h-8 w-full flex-1"
+          className="aspect-auto h-full min-h-0 w-full flex-1"
           config={config}
         >
           <BarChart
@@ -159,12 +163,12 @@ export function CostOverviewChart({
 
   return (
     <div
-      className="flex min-h-8 flex-1 flex-col"
+      className="flex h-full min-h-0 flex-1 flex-col overflow-hidden"
       data-testid="cost-overview-chart"
       ref={chartAnchorRef}
     >
       <ChartContainer
-        className="aspect-auto min-h-8 w-full flex-1"
+        className="aspect-auto h-full min-h-0 w-full flex-1"
         config={config}
       >
         <BarChart
