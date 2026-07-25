@@ -7,6 +7,8 @@ export interface RendererPluginAppearance {
   typography: {
     baseFontSize: string;
     codeFontFamily: string;
+    /** Code editor + Git diff body size, e.g. "13px". */
+    codeFontSize: string;
     fontFamily: string;
   };
 }

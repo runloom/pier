@@ -40,9 +40,20 @@ export const CORE_WORKBENCH_WIDGETS: readonly CoreWorkbenchWidgetDeclaration[] =
       defaultSize: { h: 4, w: 4 },
       descriptionKey: "workbench.widget.systemResources.description",
       id: CORE_SYSTEM_RESOURCES_WIDGET_ID,
-      searchTerms: ["cpu", "memory", "load", "内存", "负载", "系统"],
+      searchTerms: [
+        "cpu",
+        "memory",
+        "terminal",
+        "agent",
+        "process",
+        "内存",
+        "终端",
+        "智能体",
+        "进程",
+        "资源",
+      ],
       maxSize: { h: 12, w: 12 },
-      minSize: { h: 2, w: 3 },
+      minSize: { h: 2, w: 2 },
       refreshable: true,
       titleKey: "workbench.widget.systemResources.title",
     },
@@ -80,8 +91,8 @@ export const CORE_WORKBENCH_WIDGETS: readonly CoreWorkbenchWidgetDeclaration[] =
         "趋势",
       ],
       maxSize: { h: 5, w: 8 },
-      // h=2: 极简布局隐藏副标题，仅保留 KPI、细 sparkline 和 footer；
-      // w=2 时 KPI 会响应式堆叠成单列，用户拖窄自负。
+      // h≤2 / w≤2: compact 密度只保留主数字（无图、无滚动）；
+      // h=3 medium 少量 KPI+图；h≥4 full 完整说明与 KPI。
       minSize: { h: 2, w: 2 },
       multiInstance: true,
       // refreshable=false：改用 registration 里的 async action，让 header 刷新

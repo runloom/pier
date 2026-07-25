@@ -26,6 +26,8 @@ function currentPluginAppearance(): RendererPluginAppearance {
     typography: {
       baseFontSize: rootStyles.fontSize,
       codeFontFamily: rootStyles.getPropertyValue("--font-mono").trim(),
+      codeFontSize:
+        rootStyles.getPropertyValue("--pier-code-font-size").trim() || "13px",
       fontFamily: rootStyles.getPropertyValue("--font-sans").trim(),
     },
   };

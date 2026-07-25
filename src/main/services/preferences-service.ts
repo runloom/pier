@@ -41,6 +41,7 @@ const PATCHABLE_KEYS = [
   "language",
   "monoFontFamily",
   "monoFontSize",
+  "codeFontSize",
   "stylePresetId",
   "terminalCursorBlink",
   "terminalCursorStyle",

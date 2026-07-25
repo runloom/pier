@@ -26,30 +26,30 @@ describe("parseCostOverviewParams", () => {
     ).toEqual(DEFAULT_COST_OVERVIEW_PARAMS);
   });
 
-  it("keeps valid fields and dedupes kpis in order", () => {
+  it("keeps valid fields and treats range as orthogonal to preset", () => {
     expect(
       parseCostOverviewParams({
         rangeDays: 7,
         measure: "tokens",
         groupBy: "none",
         chart: "line",
-        kpis: ["periodTokens", "today", "periodTokens", "latestDayTokens"],
+        kpis: ["periodTokens", "latestDayTokens", "period"],
         sources: ["codex-local-sessions", 1, ""],
         preset: "tokens",
       })
     ).toEqual({
-      // fields diverge from tokens template → re-resolve
-      preset: "custom",
+      // view fields match tokens; range/sources do not break preset
+      preset: "tokens",
       rangeDays: 7,
       measure: "tokens",
       groupBy: "none",
       chart: "line",
-      kpis: ["periodTokens", "today", "latestDayTokens"],
+      kpis: ["periodTokens", "latestDayTokens", "period"],
       sources: ["codex-local-sessions"],
     });
   });
 
-  it("re-resolves official preset when fields do not match template", () => {
+  it("re-resolves official preset when view fields do not match template", () => {
     const parsed = parseCostOverviewParams({
       preset: "tokens",
       measure: "cost",
@@ -88,24 +88,30 @@ describe("normalizeCostOverviewChart", () => {
 });
 
 describe("patchCostOverviewParams", () => {
-  it("restores preset id when fields match a template", () => {
+  it("restores preset id when view fields match a template", () => {
     const tokens = paramsFromPreset("tokens");
     const customish = { ...tokens, preset: "custom" as const };
     expect(patchCostOverviewParams(customish, {}).preset).toBe("tokens");
   });
 
-  it("marks custom when fields diverge", () => {
+  it("keeps preset when only range changes", () => {
     const overview = paramsFromPreset("overview");
     expect(patchCostOverviewParams(overview, { rangeDays: 7 }).preset).toBe(
-      "custom"
+      "overview"
+    );
+    expect(patchCostOverviewParams(overview, { rangeDays: 7 }).rangeDays).toBe(
+      7
     );
   });
 
-  it("applies preset template when patch.preset is official", () => {
-    const next = patchCostOverviewParams(DEFAULT_COST_OVERVIEW_PARAMS, {
-      preset: "tokens",
-    });
-    expect(next).toEqual(paramsFromPreset("tokens"));
+  it("applies preset template when patch.preset is official and preserves range", () => {
+    const next = patchCostOverviewParams(
+      { ...DEFAULT_COST_OVERVIEW_PARAMS, rangeDays: 7 },
+      { preset: "tokens" }
+    );
+    expect(next.preset).toBe("tokens");
+    expect(next.measure).toBe("tokens");
+    expect(next.rangeDays).toBe(7);
   });
 });
 

@@ -6,6 +6,15 @@ name: Update model pricing
 #
 # pull_request：对定价相关改动跑同一套护栏（不抓上游、不开 PR），避免
 # 写死单价的测试在刷新后才炸、而日常 PR 漏检。
+#
+# PR 创建权限：
+# - 工作流已声明 contents/pull-requests: write。
+# - 若组织关闭了「Allow GitHub Actions to create and approve pull requests」
+#   或 default_workflow_permissions=read 且禁止提权，GITHUB_TOKEN 无法开 PR。
+# - 可选：在仓库 secrets 配置 `PRICING_BOT_TOKEN`（classic PAT：repo 权限，
+#   或 fine-grained：Contents R/W + Pull requests R/W），workflow 会优先使用。
+# - 若仍无法开 PR：分支仍会 push 到 `chore/pricing-refresh`，本地可
+#   `gh pr create --base main --head chore/pricing-refresh`。
 on:
   schedule:
     - cron: "0 3 * * *"
@@ -70,12 +79,26 @@ jobs:
           steps.diff.outputs.changed == 'true'
         run: pnpm exec vitest run tests/unit/main/pricing-catalog-schema.test.ts tests/unit/main/pricing-catalog.test.ts tests/unit/main/update-model-pricing.test.ts --run
 
+      - name: Upload pricing diff
+        if: >-
+          github.event_name != 'pull_request' &&
+          steps.diff.outputs.changed == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: pricing-diff
+          path: pricing-diff.md
+          if-no-files-found: ignore
+
       - name: Open PR
+        id: cpr
         if: >-
           github.event_name != 'pull_request' &&
           steps.diff.outputs.changed == 'true'
         uses: peter-evans/create-pull-request@v6
+        continue-on-error: true
         with:
+          # Prefer a bot PAT when org forbids GITHUB_TOKEN PR creation.
+          token: ${{ secrets.PRICING_BOT_TOKEN || github.token }}
           commit-message: "chore(pricing): daily LiteLLM refresh"
           title: "chore(pricing): daily LiteLLM refresh"
           body-path: pricing-diff.md
@@ -86,3 +109,50 @@ jobs:
           labels: |
             chore
             pricing
+
+      - name: Report PR outcome
+        if: >-
+          github.event_name != 'pull_request' &&
+          steps.diff.outputs.changed == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.PRICING_BOT_TOKEN || github.token }}
+          CPR_OUTCOME: ${{ steps.cpr.outcome }}
+          CPR_NUMBER: ${{ steps.cpr.outputs.pull-request-number }}
+          CPR_URL: ${{ steps.cpr.outputs.pull-request-url }}
+        run: |
+          set -euo pipefail
+          if [ "$CPR_OUTCOME" = "success" ] && [ -n "${CPR_NUMBER:-}" ]; then
+            echo "Opened/updated PR #$CPR_NUMBER: $CPR_URL"
+            exit 0
+          fi
+
+          echo "::warning::create-pull-request did not open a PR (outcome=$CPR_OUTCOME)."
+          echo "Common cause: org disables GitHub Actions PR creation, or GITHUB_TOKEN lacks pull-requests write."
+          echo "Branch should still exist as chore/pricing-refresh if push succeeded."
+          echo "Fix options:"
+          echo "  1) Org/repo: enable 'Allow GitHub Actions to create and approve pull requests'"
+          echo "  2) Add secret PRICING_BOT_TOKEN (PAT with repo + pull_request scopes)"
+          echo "  3) Manually: gh pr create --base main --head chore/pricing-refresh --body-file pricing-diff.md"
+
+          # Last-chance: try gh with the same token (helps when CPR failed for other reasons).
+          if git ls-remote --exit-code origin refs/heads/chore/pricing-refresh >/dev/null 2>&1; then
+            if gh pr list --head chore/pricing-refresh --state open --json number --jq 'length' | grep -qx '0'; then
+              if gh pr create \
+                --base main \
+                --head chore/pricing-refresh \
+                --title "chore(pricing): daily LiteLLM refresh" \
+                --body-file pricing-diff.md; then
+                echo "Opened PR via gh fallback."
+                exit 0
+              fi
+            else
+              echo "An open PR for chore/pricing-refresh already exists."
+              gh pr list --head chore/pricing-refresh --state open
+              exit 0
+            fi
+          else
+            echo "::error::Branch chore/pricing-refresh was not found on origin; push may have failed."
+          fi
+
+          # Surface as job failure so the schedule still alerts maintainers.
+          exit 1

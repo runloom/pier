@@ -58,8 +58,11 @@ export class FileEditorController {
   readonly #saveCoordinator: FileEditorSaveCoordinator;
   readonly #views = new FileEditorViewCoordinator();
   #editingSuspended = false;
+  #appearanceDispose: (() => void) | null = null;
   #minimapConfigDispose: (() => void) | null = null;
   #minimapEnabled: boolean;
+  #lastCodeFontFamily: string;
+  #lastCodeFontSize: string;
 
   constructor(context: RendererPluginContext, watchHub: FilesWatchHub) {
     this.#context = context;
@@ -118,6 +121,23 @@ export class FileEditorController {
       for (const session of this.#views.values()) {
         session.setMinimapEnabled(enabled);
       }
+    });
+    // CodeMirror theme uses CSS vars for mono family / code size; CM6 caches
+    // line geometry until requestMeasure after external style changes.
+    const initialTypography = context.appearance.current().typography;
+    this.#lastCodeFontFamily = initialTypography.codeFontFamily;
+    this.#lastCodeFontSize = initialTypography.codeFontSize;
+    this.#appearanceDispose = context.appearance.onDidChange((next) => {
+      const { codeFontFamily, codeFontSize } = next.typography;
+      if (
+        codeFontFamily === this.#lastCodeFontFamily &&
+        codeFontSize === this.#lastCodeFontSize
+      ) {
+        return;
+      }
+      this.#lastCodeFontFamily = codeFontFamily;
+      this.#lastCodeFontSize = codeFontSize;
+      this.#views.requestMeasureAll();
     });
   }
 
@@ -463,6 +483,8 @@ export class FileEditorController {
 
   dispose(options: { clearDocuments?: boolean } = {}): void {
     this.#mutationSuspend.resumeAll();
+    this.#appearanceDispose?.();
+    this.#appearanceDispose = null;
     this.#minimapConfigDispose?.();
     this.#minimapConfigDispose = null;
     this.#gitGutter.dispose();

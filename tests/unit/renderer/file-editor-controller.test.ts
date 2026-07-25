@@ -229,6 +229,22 @@ function createHarness(
       writeText,
       writeDocument,
     },
+    appearance: {
+      current: () => ({
+        codeTheme: "github-dark",
+        density: "compact",
+        language: "en",
+        locale: "en",
+        theme: "dark",
+        typography: {
+          baseFontSize: "16px",
+          codeFontFamily: "monospace",
+          codeFontSize: "13px",
+          fontFamily: "sans-serif",
+        },
+      }),
+      onDidChange: () => () => undefined,
+    },
     i18n: {
       t: vi.fn(
         (_key: string, _values?: unknown, fallback?: string) => fallback ?? ""

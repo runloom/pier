@@ -183,20 +183,21 @@ describe("Grok accounts widget", () => {
       render(<AccountsWidget context={context} {...baseProps()} />);
     });
     expect(await screen.findByText("user@example.com")).toBeTruthy();
+    // 工作台卡对齐 Codex/Claude：UsageMeter（非设置页 QuotaGroup）
     expect(
-      document.querySelector("[data-slot='grok-quota-group']")
+      document.querySelector("[data-slot='grok-usage-meter']")
     ).toBeTruthy();
     expect(
       document.querySelector("[data-slot='grok-usage-progress']")
     ).toBeTruthy();
     // activeUsage has one window → full-width single column (not half-row auto-fit).
-    const grid = document.querySelector(
-      '[data-slot="grok-quota-grid"][data-layout="single"]'
+    const meter = document.querySelector(
+      '[data-slot="grok-usage-meter"][data-layout="single"]'
     );
-    expect(grid).toBeTruthy();
-    expect(grid?.className).toContain("block");
-    expect(grid?.className).toContain("w-full");
-    expect(grid?.className).not.toContain("auto-fit");
+    expect(meter).toBeTruthy();
+    expect(meter?.className).toContain("flex");
+    expect(meter?.className).toContain("w-full");
+    expect(meter?.className).not.toContain("grid");
     expect(
       screen.queryByText("Quota monitoring is not available yet")
     ).toBeNull();
@@ -251,8 +252,9 @@ describe("Grok accounts widget", () => {
     );
     expect(alert.querySelector('[data-slot="badge"]')).toBeNull();
     expect(alert.querySelector('[data-slot="alert"]')).toBeNull();
+    // 非 transient 失败走 WidgetError（非设置页 QuotaGroup 的 grok-usage-error）
     expect(
-      container.querySelector('[data-slot="grok-usage-error"]')
+      container.querySelector('[data-slot="widget-error"]')
     ).not.toBeNull();
   });
 
@@ -278,7 +280,10 @@ describe("Grok accounts widget", () => {
     });
     // Stale data stays on screen; no destructive banner, no alert role.
     expect(
-      document.querySelector("[data-slot='grok-quota-group']")
+      document.querySelector("[data-slot='grok-usage-meter']")
+    ).toBeTruthy();
+    expect(
+      document.querySelector("[data-slot='grok-usage-progress']")
     ).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText(/usage update failed/i)).toBeNull();

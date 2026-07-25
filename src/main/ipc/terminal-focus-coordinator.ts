@@ -10,6 +10,11 @@ import type {
   TerminalNativeWindowState,
 } from "@shared/contracts/terminal.ts";
 import { computeEffectiveKeyboardTarget } from "@shared/terminal-keyboard-target.ts";
+import {
+  clearTerminalResourceSessionsForWindow,
+  registerTerminalResourceSession,
+  unregisterTerminalResourceSession,
+} from "../services/pier-resource/terminal-session-registry.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { isTerminalHostSnapshot } from "./terminal-host-snapshot-validation.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
@@ -176,6 +181,11 @@ export class TerminalFocusCoordinator {
     const record = this.recordFor(win);
     record.readyPanelIds.add(panelId);
     record.dirty = true;
+    // 资源账本：surface 就绪即登记（含 create / reload 复用 / transfer adopt）
+    registerTerminalResourceSession({
+      panelId,
+      windowId: String(win.id),
+    });
     return this.reconcile(record, "surface-created");
   }
 
@@ -189,6 +199,10 @@ export class TerminalFocusCoordinator {
     const record = this.recordFor(win);
     record.readyPanelIds.delete(panelId);
     record.dirty = true;
+    unregisterTerminalResourceSession({
+      panelId,
+      windowId: String(win.id),
+    });
     return this.reconcile(record, "surface-closing");
   }
 
@@ -206,6 +220,8 @@ export class TerminalFocusCoordinator {
 
   clearWindow(windowId: number): void {
     this.records.delete(windowId);
+    // 整窗关闭不走 per-panel surfaceWillClose；必须同步清资源登记，避免 ghost session
+    clearTerminalResourceSessionsForWindow(String(windowId));
   }
 
   readDebug(win: AppWindow): TerminalCoordinatorDebugSnapshot {

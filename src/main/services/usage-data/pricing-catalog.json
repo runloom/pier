@@ -965,6 +965,32 @@
       "outputMicrousd": 4,
       "aliases": ["moonshot/kimi-k2.6", "moonshotai/kimi-k2.6"]
     },
+    "kimi-k2.7-code": {
+      "cachedInputMicrousd": 0.078,
+      "inputMicrousd": 0.78,
+      "outputMicrousd": 3.5,
+      "aliases": ["moonshotai/kimi-k2.7-code", "kimi-k2.7-code-*"]
+    },
+    "kimi-k3": {
+      "cachedInputMicrousd": 0.3,
+      "inputMicrousd": 3,
+      "outputMicrousd": 15,
+      "aliases": [
+        "k3",
+        "k3-*",
+        "kimi-code/k3",
+        "kimi-code/k3-*",
+        "kimi-k3-*",
+        "kimi-for-coding",
+        "kimi-for-coding-*",
+        "kimi-code/kimi-for-coding",
+        "kimi-code/kimi-for-coding-*",
+        "kimi-for-coding-highspeed",
+        "kimi-code/kimi-for-coding-highspeed",
+        "moonshot/kimi-k3",
+        "moonshotai/kimi-k3"
+      ]
+    },
     "kimi-latest-128k": {
       "cachedInputMicrousd": 0.15,
       "inputMicrousd": 2,

@@ -62,6 +62,7 @@ import {
   pierBindingsApi,
   pierHomeSkillsApi,
 } from "./pier-home-skills-api.ts";
+import { type PierResourceAPI, pierResourceApi } from "./pier-resource-api.ts";
 import {
   type AppPreloadApi,
   type AppUpdatePreloadApi,
@@ -81,7 +82,6 @@ import {
   projectSkillsApi,
 } from "./project-skills-api.ts";
 import { installRendererBootHandshake } from "./renderer-boot-handshake.ts";
-import { type PierSystemStatsAPI, systemStatsApi } from "./system-stats-api.ts";
 import { type PierTasksAPI, tasksApi } from "./task-api.ts";
 import { terminalApi } from "./terminal-api.ts";
 import {
@@ -173,8 +173,8 @@ export interface PierWindowAPI {
   preferences: PierPreferencesAPI;
   projectSkills: PierProjectSkillsAPI;
   rendererCommand: PierRendererCommandAPI;
+  resources: PierResourceAPI;
   settings: PierSettingsAPI;
-  systemStats: PierSystemStatsAPI;
   tasks: PierTasksAPI;
   terminal: TerminalAPI;
   terminalStatusBarPrefs: PierTerminalStatusBarPrefsAPI;
@@ -372,7 +372,7 @@ const api: PierWindowAPI = {
   pierBindings: pierBindingsApi,
   rendererCommand: rendererCommandApi,
   settings: settingsApi,
-  systemStats: systemStatsApi,
+  resources: pierResourceApi,
   tasks: tasksApi,
   terminal: terminalApi,
   terminals: terminalsApi,

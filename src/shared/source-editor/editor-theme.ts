@@ -14,7 +14,8 @@ export const pierEditorTheme = EditorView.theme({
   ".cm-content": {
     caretColor: "currentColor",
     fontFamily: "var(--font-mono)",
-    fontSize: "0.8125rem",
+    // 设置「代码字号」经 font.store 写入 --pier-code-font-size。
+    fontSize: "var(--pier-code-font-size, 13px)",
     lineHeight: "1.75",
     minHeight: "100%",
     outline: "none",
@@ -32,7 +33,7 @@ export const pierEditorTheme = EditorView.theme({
     borderRight: "none",
     color: "color-mix(in oklab, var(--muted-foreground) 70%, transparent)",
     fontFamily: "var(--font-mono)",
-    fontSize: "0.8125rem",
+    fontSize: "var(--pier-code-font-size, 13px)",
     position: "sticky",
     left: 0,
     zIndex: 1,
@@ -85,7 +86,7 @@ export const settingsSourceEditorTheme = EditorView.theme({
   ".cm-content": {
     caretColor: "currentColor",
     fontFamily: "var(--font-mono)",
-    fontSize: "0.8125rem",
+    fontSize: "var(--pier-code-font-size, 13px)",
     lineHeight: "1.75",
     minHeight: "15rem",
     outline: "none",

@@ -87,8 +87,8 @@ class TestWorker extends EventTarget {
 }
 
 const appearance = {
-  baseFontSize: "16px",
   codeFontFamily: "monospace",
+  codeFontSize: "13px",
   codeTheme: "github-dark",
   colorMode: "dark",
 } as const;

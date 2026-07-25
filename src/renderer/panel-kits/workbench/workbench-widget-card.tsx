@@ -294,10 +294,13 @@ export function WorkbenchWidgetCard({
         </CardAction>
       </CardHeader>
       <CardContent
-        className="@container min-h-0 flex-1 overflow-y-auto p-0"
+        className="@container flex min-h-0 flex-1 flex-col overflow-y-auto p-0"
         data-scrollbar="stable"
       >
-        {renderBody()}
+        {/* 子物料用 h-full/flex-1 铺满内容区；flex 列保证小卡 KPI 能贴底吃高度 */}
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          {renderBody()}
+        </div>
       </CardContent>
     </Card>
   );

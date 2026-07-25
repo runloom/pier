@@ -7,9 +7,9 @@ import {
   useForegroundActivityStore,
 } from "@/stores/foreground-activity.store.ts";
 import {
-  acquireSystemStatsPolling,
-  useSystemStatsStore,
-} from "@/stores/system-stats.store.ts";
+  acquirePierResourcePolling,
+  usePierResourceStore,
+} from "@/stores/pier-resource.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useUsageDataStore } from "@/stores/usage-data.store.ts";
 import type { MetricValue } from "./metric-registry.ts";
@@ -17,7 +17,7 @@ import { registerMetric } from "./metric-registry.ts";
 
 /**
  * core 指标接线：活动域（push，foreground-activity store 驱动）+
- * 系统域（pull，订阅时 acquire 轮询、退订即停表）。
+ * Pier 资源域（pull，订阅时 acquire 轮询、退订即停表）。
  * 幂等注册——首个消费方 import 即生效。
  */
 
@@ -74,31 +74,31 @@ function activityByKind(): MetricValue {
   };
 }
 
-function systemSubscribe(listener: () => void): () => void {
-  const release = acquireSystemStatsPolling();
-  const unsubscribe = useSystemStatsStore.subscribe(listener);
+function pierResourceSubscribe(listener: () => void): () => void {
+  const release = acquirePierResourcePolling();
+  const unsubscribe = usePierResourceStore.subscribe(listener);
   return () => {
     unsubscribe();
     release();
   };
 }
 
-function systemInstant(
+function pierResourceInstant(
   select: (
     snapshot: NonNullable<
-      ReturnType<typeof useSystemStatsStore.getState>["snapshot"]
+      ReturnType<typeof usePierResourceStore.getState>["snapshot"]
     >
   ) => number | null
 ): { read(): MetricValue; subscribe(listener: () => void): () => void } {
   return {
     read: () => {
-      const snapshot = useSystemStatsStore.getState().snapshot;
+      const snapshot = usePierResourceStore.getState().snapshot;
       return {
         kind: "instant",
         value: snapshot === null ? null : select(snapshot),
       };
     },
-    subscribe: systemSubscribe,
+    subscribe: pierResourceSubscribe,
   };
 }
 
@@ -232,64 +232,74 @@ export function ensureCoreMetricsRegistered(): void {
 
   registerMetric({
     descriptor: {
-      format: "percent",
-      id: "core.system.cpu",
-      kind: "instant",
-      titleKey: "workbench.metrics.systemCpu",
-    },
-    ...systemInstant((snapshot) => snapshot.cpuUsage),
-  });
-  registerMetric({
-    descriptor: {
-      format: "percent",
-      id: "core.system.cpuHistory",
-      kind: "series",
-      titleKey: "workbench.metrics.systemCpuHistory",
-    },
-    read: () => ({
-      kind: "series",
-      points: useSystemStatsStore.getState().cpuHistory,
-    }),
-    subscribe: systemSubscribe,
-  });
-  registerMetric({
-    descriptor: {
       format: "bytes",
-      id: "core.system.memoryUsed",
+      id: "core.pier.totalMemory",
       kind: "instant",
-      titleKey: "workbench.metrics.systemMemoryUsed",
+      titleKey: "workbench.metrics.pierTotalMemory",
     },
-    ...systemInstant((snapshot) => snapshot.memoryTotal - snapshot.memoryFree),
-  });
-  registerMetric({
-    descriptor: {
-      format: "percent",
-      id: "core.system.memoryPercent",
-      kind: "instant",
-      titleKey: "workbench.metrics.systemMemoryPercent",
-    },
-    ...systemInstant(
-      (snapshot) =>
-        (snapshot.memoryTotal - snapshot.memoryFree) / snapshot.memoryTotal
+    ...pierResourceInstant(
+      (snapshot) => snapshot.summary.totalRelatedMemoryBytes
     ),
   });
   registerMetric({
     descriptor: {
-      format: "bytes",
-      id: "core.system.appMemory",
+      format: "percent",
+      id: "core.pier.totalCpu",
       kind: "instant",
-      titleKey: "workbench.metrics.systemAppMemory",
+      titleKey: "workbench.metrics.pierTotalCpu",
     },
-    ...systemInstant((snapshot) => snapshot.appMemoryRss),
+    ...pierResourceInstant(
+      (snapshot) => snapshot.summary.totalRelatedCpuPercent
+    ),
   });
   registerMetric({
     descriptor: {
-      format: "decimal",
-      id: "core.system.load1",
-      kind: "instant",
-      titleKey: "workbench.metrics.systemLoad1",
+      format: "percent",
+      id: "core.pier.totalCpuHistory",
+      kind: "series",
+      titleKey: "workbench.metrics.pierTotalCpuHistory",
     },
-    ...systemInstant((snapshot) => snapshot.loadAvg1),
+    read: () => ({
+      kind: "series",
+      points: usePierResourceStore.getState().cpuHistory,
+    }),
+    subscribe: pierResourceSubscribe,
+  });
+  registerMetric({
+    descriptor: {
+      format: "bytes",
+      id: "core.pier.appMemory",
+      kind: "instant",
+      titleKey: "workbench.metrics.pierAppMemory",
+    },
+    ...pierResourceInstant((snapshot) => snapshot.summary.pierAppMemoryBytes),
+  });
+  registerMetric({
+    descriptor: {
+      format: "bytes",
+      id: "core.pier.workloadMemory",
+      kind: "instant",
+      titleKey: "workbench.metrics.pierWorkloadMemory",
+    },
+    ...pierResourceInstant((snapshot) => snapshot.summary.workloadMemoryBytes),
+  });
+  registerMetric({
+    descriptor: {
+      format: "count",
+      id: "core.pier.terminalCount",
+      kind: "instant",
+      titleKey: "workbench.metrics.pierTerminalCount",
+    },
+    ...pierResourceInstant((snapshot) => snapshot.summary.terminalCount),
+  });
+  registerMetric({
+    descriptor: {
+      format: "count",
+      id: "core.pier.hotCount",
+      kind: "instant",
+      titleKey: "workbench.metrics.pierHotCount",
+    },
+    ...pierResourceInstant((snapshot) => snapshot.summary.hotCount),
   });
 
   registerMetric({

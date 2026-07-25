@@ -1,10 +1,10 @@
 import { Badge } from "@pier/ui/badge.tsx";
-import { Button } from "@pier/ui/button.tsx";
 import {
   formatCompactNumber,
   formatCurrency,
   formatRelativeTime,
 } from "@pier/ui/format.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import {
   WidgetEmpty,
   WidgetError,
@@ -21,16 +21,25 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import {
+  type WorkbenchWidgetDensity,
+  workbenchDensityFor,
+  workbenchKpiCollectionClassName,
+  workbenchKpiCollectionStyle,
+  workbenchKpiLayoutMode,
+  workbenchMaxKpisFor,
+} from "@/lib/workbench/kpi-auto-layout.ts";
+import {
   listSupportedUsageSourceLabels,
   resolveUsageSourceLabel,
 } from "@/lib/workbench/usage-source-labels.ts";
 import { useUsageDataStore } from "@/stores/usage-data.store.ts";
-import { CostOverviewChart } from "./cost-overview-chart.tsx";
+import {
+  CostOverviewChart,
+  costOverviewChartHasContent,
+} from "./cost-overview-chart.tsx";
 import {
   type CostOverviewKpiId,
-  type CostOverviewPresetId,
-  costOverviewParamsToJson,
-  paramsFromPreset,
+  DEFAULT_COST_OVERVIEW_KPIS,
   parseCostOverviewParams,
 } from "./cost-overview-params.ts";
 import {
@@ -39,15 +48,72 @@ import {
   costViewQuery,
 } from "./cost-view-query.ts";
 
+type CostDensity = WorkbenchWidgetDensity;
+
+function densityFor(size: { h: number; w: number }): CostDensity {
+  return workbenchDensityFor(size);
+}
+
+function maxKpisFor(density: CostDensity, width: number): number {
+  return workbenchMaxKpisFor(density, width);
+}
+
+function rankingLimitFor(density: CostDensity, height: number): number {
+  if (density === "compact") return 0;
+  if (density === "medium") return height <= 3 ? 4 : 6;
+  return height >= 5 ? 10 : 6;
+}
+
+/** 用默认池把 KPI 列表补到 max。 */
+function resolveVisibleKpis(
+  selected: readonly CostOverviewKpiId[],
+  max: number
+): CostOverviewKpiId[] {
+  const filled: CostOverviewKpiId[] = [];
+  for (const id of selected) {
+    if (filled.length >= max) break;
+    if (!filled.includes(id)) filled.push(id);
+  }
+  for (const id of DEFAULT_COST_OVERVIEW_KPIS) {
+    if (filled.length >= max) break;
+    if (!filled.includes(id)) filled.push(id);
+  }
+  return filled;
+}
+
 /**
- * KPI 单元格。极简样式（无边框、无背景）——参考仪表盘 dense KPI 惯例，让
- * label / value 视觉重量差通过字号 + 前景色对比表达，不靠容器装饰。
+ * KPI 单元格。
+ * - primary：主指标，数字更大
+ * - secondary：次指标，略小，仍完整可读（纵排时不截断到 $14,…）
  */
-function KpiTile({ label, value }: { label: string; value: string }) {
+function KpiTile({
+  label,
+  value,
+  role = "secondary",
+}: {
+  label: string;
+  role?: "primary" | "secondary";
+  value: string;
+}) {
+  const primary = role === "primary";
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
-      <span className="truncate text-muted-foreground text-xs">{label}</span>
-      <p className="font-semibold text-lg tabular-nums leading-tight">
+    <div className="flex min-w-0 flex-col gap-1">
+      <span
+        className={cn(
+          "truncate text-muted-foreground leading-none",
+          primary ? "text-xs" : "text-[11px]"
+        )}
+      >
+        {label}
+      </span>
+      <p
+        className={cn(
+          "min-w-0 font-semibold tabular-nums leading-none tracking-tight",
+          // 纵排：允许稍长数字完整显示；横排才 truncate
+          primary ? "text-2xl" : "text-lg",
+          "break-all"
+        )}
+      >
         {value}
       </p>
     </div>
@@ -167,70 +233,20 @@ function shouldShowContentShell(view: CostViewModel): boolean {
   );
 }
 
-const PRESET_CHIPS = [
-  "overview",
-  "by-source",
-  "by-model",
-  "tokens",
-] as const satisfies readonly Exclude<CostOverviewPresetId, "custom">[];
-
-const PRESET_CHIP_LABEL = {
-  overview: "workbench.widget.costOverview.settings.presetOverview",
-  "by-source": "workbench.widget.costOverview.settings.presetBySource",
-  "by-model": "workbench.widget.costOverview.settings.presetByModel",
-  tokens: "workbench.widget.costOverview.settings.presetTokens",
-} as const;
-
-function PresetChips({
-  activePreset,
-  onSelect,
-  t,
-}: {
-  activePreset: CostOverviewPresetId | undefined;
-  onSelect: (preset: Exclude<CostOverviewPresetId, "custom">) => void;
-  t: TFunction;
-}) {
-  return (
-    <div
-      className="flex flex-wrap gap-1.5"
-      data-testid="cost-overview-preset-chips"
-    >
-      {PRESET_CHIPS.map((preset) => {
-        const active = activePreset === preset;
-        return (
-          <Button
-            aria-pressed={active}
-            className="rounded-full"
-            data-testid={`cost-overview-preset-chip-${preset}`}
-            key={preset}
-            onClick={() => {
-              onSelect(preset);
-            }}
-            size="xs"
-            tone={active ? "default" : "muted"}
-            variant={active ? "secondary" : "outline"}
-          >
-            {t(PRESET_CHIP_LABEL[preset])}
-          </Button>
-        );
-      })}
-    </div>
-  );
-}
-
 /**
  * 跨插件成本聚合物料。params → parseCostOverviewParams → costViewQuery。
  *
+ * 视图切换（总览/来源/模型/tokens）只在设置里改；卡片面按尺寸自适应披露。
  * refreshable=false，改用 `costOverviewWidgetActions` 提供自定义刷新 action。
  * 数据来自 app-shell 级 push store；始终订阅，避免切回 tab 时闪 skeleton。
  */
 export function CostOverviewWidget({
   params,
   size,
-  updateParams,
 }: WorkbenchWidgetComponentProps) {
   const t = useT();
   const locale = i18next.language || "en";
+  const density = densityFor(size);
 
   const snapshot = useUsageDataStore((state) => state.snapshot);
   const loadStatus = useUsageDataStore((state) => state.loadStatus);
@@ -273,14 +289,34 @@ export function CostOverviewWidget({
       ? formatRelativeTime(view.observedAt, Date.now(), locale)
       : "";
   const showUnpriced = view.measure !== "tokens" && view.unpricedDayCount > 0;
+  const maxKpis = maxKpisFor(density, size.w);
+  const visibleKpis = resolveVisibleKpis(parsed.kpis, maxKpis);
+  const rankingLimit = rankingLimitFor(density, size.h);
+  // 有序列数据就出图；绝不挂空 flex-1 壳
+  const showChartSlot =
+    density !== "compact" && costOverviewChartHasContent(view, rankingLimit);
+  const showDescription = density === "full";
+  const showFooter = density !== "compact";
+  // KPI 排列：内容 auto-fit 网格（宽→横排铺满，窄→自然换行），禁止 stack/row 单轴
+  const kpiLayout = workbenchKpiLayoutMode(visibleKpis.length);
+  const kpiGridClassName = workbenchKpiCollectionClassName(visibleKpis.length);
+  const kpiGridStyle = workbenchKpiCollectionStyle(visibleKpis.length);
 
   return (
     <div
-      className="flex h-full min-h-0 flex-col gap-3 overflow-y-auto p-3"
+      className={
+        density === "compact"
+          ? "flex h-full min-h-0 flex-col justify-start gap-2 overflow-hidden p-2.5"
+          : "flex h-full min-h-0 flex-col justify-start gap-3 overflow-hidden p-3"
+      }
+      data-density={density}
+      data-kpi-layout={kpiLayout}
+      data-size-h={size.h}
+      data-size-w={size.w}
       data-testid="cost-overview-content"
     >
-      {size.h > 2 ? (
-        <div className="flex flex-col gap-0.5">
+      {showDescription ? (
+        <div className="flex shrink-0 flex-col gap-0.5">
           <p
             className="text-muted-foreground text-xs leading-relaxed"
             data-testid="cost-overview-description"
@@ -294,49 +330,62 @@ export function CostOverviewWidget({
           </p>
         </div>
       ) : null}
-      {size.w >= 4 ? (
-        <PresetChips
-          activePreset={parsed.preset}
-          onSelect={(preset) => {
-            updateParams(costOverviewParamsToJson(paramsFromPreset(preset)));
-          }}
-          t={t}
-        />
-      ) : null}
+
       <div
-        className="grid @[24rem]:grid-cols-2 @[36rem]:grid-cols-4 grid-cols-1 gap-x-6 gap-y-3"
+        className={kpiGridClassName}
+        data-layout={kpiLayout}
         data-testid="cost-overview-kpis"
+        style={kpiGridStyle}
       >
-        {parsed.kpis.map((id) => (
+        {visibleKpis.map((id, index) => (
           <KpiTile
             key={id}
             label={kpiLabel(id, view, t)}
+            role={index === 0 ? "primary" : "secondary"}
             value={kpiValue(id, view.kpis, locale)}
           />
         ))}
       </div>
-      <CostOverviewChart locale={locale} view={view} />
-      <div className="flex items-center justify-between gap-2 text-muted-foreground text-xs">
-        <span className="truncate" data-testid="cost-overview-observed-at">
-          {observedAt
-            ? t("workbench.widget.costOverview.updatedAt", {
-                relative: observedAt,
-              })
-            : ""}
-        </span>
-        {showUnpriced ? (
-          <Badge
-            className="shrink-0"
-            data-testid="cost-overview-unpriced"
-            title={t("workbench.widget.costOverview.unpricedNoteHover")}
-            variant="outline"
-          >
-            {t("workbench.widget.costOverview.unpricedNote", {
-              count: view.unpricedDayCount,
-            })}
-          </Badge>
-        ) : null}
-      </div>
+
+      {showChartSlot ? (
+        <div
+          className="relative min-h-24 w-full min-w-0 flex-1"
+          data-testid="cost-overview-chart-slot"
+        >
+          {/* absolute 填充：recharts 在纯 flex-1 链上经常高度为 0 */}
+          <div className="absolute inset-0 min-h-0">
+            <CostOverviewChart
+              locale={locale}
+              rankingLimit={rankingLimit}
+              view={view}
+            />
+          </div>
+        </div>
+      ) : null}
+
+      {showFooter ? (
+        <div className="flex shrink-0 items-center justify-between gap-2 text-muted-foreground text-xs">
+          <span className="truncate" data-testid="cost-overview-observed-at">
+            {observedAt
+              ? t("workbench.widget.costOverview.updatedAt", {
+                  relative: observedAt,
+                })
+              : ""}
+          </span>
+          {showUnpriced ? (
+            <Badge
+              className="shrink-0"
+              data-testid="cost-overview-unpriced"
+              title={t("workbench.widget.costOverview.unpricedNoteHover")}
+              variant="outline"
+            >
+              {t("workbench.widget.costOverview.unpricedNote", {
+                count: view.unpricedDayCount,
+              })}
+            </Badge>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }

@@ -36,6 +36,46 @@ const KNOWN_SOURCES: readonly SourceDisplay[] = [
     i18nKey: "workbench.widget.costOverview.sourceName.omp",
     sourceId: "omp-local-sessions",
   },
+  {
+    i18nKey: "workbench.widget.costOverview.sourceName.grok",
+    sourceId: "grok-local-sessions",
+  },
+  {
+    i18nKey: "workbench.widget.costOverview.sourceName.kimi",
+    sourceId: "kimi-local-sessions",
+  },
+  {
+    i18nKey: "workbench.widget.costOverview.sourceName.copilot",
+    sourceId: "copilot-local-sessions",
+  },
+  {
+    i18nKey: "workbench.widget.costOverview.sourceName.hermes",
+    sourceId: "hermes-local-sessions",
+  },
+  {
+    i18nKey: "workbench.widget.costOverview.sourceName.goose",
+    sourceId: "goose-local-sessions",
+  },
+  {
+    i18nKey: "workbench.widget.costOverview.sourceName.crush",
+    sourceId: "crush-local-sessions",
+  },
+  {
+    i18nKey: "workbench.widget.costOverview.sourceName.cline",
+    sourceId: "cline-local-sessions",
+  },
+  {
+    i18nKey: "workbench.widget.costOverview.sourceName.droid",
+    sourceId: "droid-local-sessions",
+  },
+  {
+    i18nKey: "workbench.widget.costOverview.sourceName.qodercli",
+    sourceId: "qodercli-local-sessions",
+  },
+  {
+    i18nKey: "workbench.widget.costOverview.sourceName.kiro",
+    sourceId: "kiro-local-sessions",
+  },
 ];
 
 const KNOWN_BY_SOURCE_ID: ReadonlyMap<string, SourceDisplay> = new Map(

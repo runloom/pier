@@ -18,10 +18,7 @@ import {
 import { parseTerminalOpenUrl } from "./files-terminal-open-url-resolve.ts";
 import { revealFilesTreePath } from "./files-tree-registry.ts";
 
-type SystemOpenFallbackReason =
-  | "binary-or-unsupported"
-  | "open-instance-failed"
-  | "open-project-failed";
+type SystemOpenFallbackReason = "open-instance-failed" | "open-project-failed";
 
 const inflight = new Set<string>();
 
@@ -134,7 +131,16 @@ function openDiskFile(
   });
 }
 
-async function openReadableDiskTarget(
+/**
+ * Open a disk path in Pier Files.
+ *
+ * Files always get a Files panel tab. Binary / too-large / unsupported
+ * encodings are not routed to the OS default app — the panel loads the
+ * document and shows its built-in unsupported/read-only fallback UI.
+ * System open remains only when Files cannot open a project tree or mint
+ * a panel instance at all.
+ */
+async function openDiskTarget(
   context: RendererPluginContext,
   panelContext: PanelContext | null,
   root: string,
@@ -209,23 +215,6 @@ async function openReadableDiskTarget(
     return true;
   }
 
-  const document = await context.files.readDocument({
-    path: relativePath,
-    root,
-  });
-  if (
-    document.kind === "binary" ||
-    document.kind === "too-large" ||
-    document.kind === "unsupported-encoding" ||
-    document.kind === "unsupported-file"
-  ) {
-    return await openAbsoluteWithSystem(
-      context,
-      absolutePath,
-      "binary-or-unsupported"
-    );
-  }
-
   try {
     openDiskFile(context, openContext, root, relativePath);
     return true;
@@ -288,7 +277,7 @@ export async function handleFilesTerminalOpenUrl(
     if (anchor) {
       const relativePath = toRootRelative(anchor, absolutePath);
       if (relativePath !== null) {
-        return await openReadableDiskTarget(
+        return await openDiskTarget(
           context,
           panelContext,
           anchor,
@@ -299,7 +288,7 @@ export async function handleFilesTerminalOpenUrl(
     }
 
     const fallback = splitAbsoluteDiskTarget(absolutePath);
-    return await openReadableDiskTarget(
+    return await openDiskTarget(
       context,
       panelContext,
       fallback.root,

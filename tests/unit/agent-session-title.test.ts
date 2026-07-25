@@ -1,8 +1,11 @@
 import {
   decideAgentSessionTitleWrite,
   deriveAgentSessionTitleFromPrompt,
+  MAX_AGENT_SESSION_TITLE_LENGTH,
   MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH,
+  normalizeAgentSessionTitle,
   resolveAgentSessionTitle,
+  stripAgentPromptMarkup,
   truncateTerminalTitleForTooltip,
 } from "@shared/agent-session-title.ts";
 import { describe, expect, it } from "vitest";
@@ -47,19 +50,45 @@ describe("resolveAgentSessionTitle", () => {
     });
   });
 
-  it("rejects multiline or overlong sessionTitle", () => {
+  it("rejects multiline sessionTitle and truncates overlong for display", () => {
     expect(
       resolveAgentSessionTitle({
         agentId: "claude",
         sessionTitle: "line one\nline two",
       }).primary
     ).toBe("Claude");
+    const primary = resolveAgentSessionTitle({
+      agentId: "claude",
+      sessionTitle: "x".repeat(41),
+    }).primary;
+    expect(primary.length).toBe(MAX_AGENT_SESSION_TITLE_LENGTH);
+    expect(primary.endsWith("…")).toBe(true);
+  });
+
+  it("strips persisted user_query markup on display", () => {
     expect(
       resolveAgentSessionTitle({
         agentId: "claude",
-        sessionTitle: "x".repeat(41),
+        sessionTitle: "<user_query> cmd + p 会先展示 loading",
+        sessionTitleSource: "auto",
       }).primary
-    ).toBe("Claude");
+    ).toBe("cmd + p 会先展示 loading");
+  });
+});
+
+describe("stripAgentPromptMarkup", () => {
+  it("extracts inner user_query body and drops tags", () => {
+    expect(
+      stripAgentPromptMarkup(
+        "<user_query>\ncmd + p 会先展示 loading\n</user_query>"
+      )
+    ).toBe("cmd + p 会先展示 loading");
+  });
+
+  it("strips orphan wrapper tags without a closed pair", () => {
+    expect(stripAgentPromptMarkup("<user_query> 修一下 parser")).toBe(
+      "修一下 parser"
+    );
   });
 });
 
@@ -88,9 +117,41 @@ describe("deriveAgentSessionTitleFromPrompt", () => {
     ).toBe("帮我分析下当前未提交的修改");
   });
 
-  it("truncates overlong prompts", () => {
+  it("strips user_query wrappers before deriving", () => {
+    expect(
+      deriveAgentSessionTitleFromPrompt(
+        "<user_query>\ncmd + p 会先展示 loading spinner\n</user_query>"
+      )
+    ).toBe("cmd + p 会先展示 loading spinner");
+  });
+
+  it("returns null when markup-only prompt becomes empty", () => {
+    expect(deriveAgentSessionTitleFromPrompt("<user_query></user_query>")).toBe(
+      null
+    );
+  });
+
+  it("truncates overlong prompts with an ellipsis", () => {
     const title = deriveAgentSessionTitleFromPrompt("a".repeat(80));
-    expect(title?.length).toBe(40);
+    expect(title?.length).toBe(MAX_AGENT_SESSION_TITLE_LENGTH);
+    expect(title?.endsWith("…")).toBe(true);
+  });
+
+  it("soft-breaks near spaces when truncating", () => {
+    const title = deriveAgentSessionTitleFromPrompt(
+      "fix the terminal open url path when pasting images into rich input"
+    );
+    expect(title?.length).toBeLessThanOrEqual(MAX_AGENT_SESSION_TITLE_LENGTH);
+    expect(title?.endsWith("…")).toBe(true);
+    expect(title?.includes("<")).toBe(false);
+  });
+});
+
+describe("normalizeAgentSessionTitle", () => {
+  it("caps length with ellipsis", () => {
+    const title = normalizeAgentSessionTitle("b".repeat(50));
+    expect(title?.length).toBe(MAX_AGENT_SESSION_TITLE_LENGTH);
+    expect(title?.endsWith("…")).toBe(true);
   });
 });
 

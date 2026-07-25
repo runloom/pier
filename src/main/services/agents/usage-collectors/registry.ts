@@ -1,24 +1,48 @@
 import { createClaudeCodeUsageCollector } from "./claude-code.ts";
+import { createClineUsageCollector } from "./cline.ts";
 import { createCodexUsageCollector } from "./codex.ts";
+import { createCopilotUsageCollector } from "./copilot.ts";
+import { createCrushUsageCollector } from "./crush.ts";
+import { createDroidUsageCollector } from "./droid.ts";
+import { createGooseUsageCollector } from "./goose.ts";
+import { createGrokUsageCollector } from "./grok.ts";
+import { createHermesUsageCollector } from "./hermes.ts";
+import { createKimiUsageCollector } from "./kimi.ts";
+import { createKiroUsageCollector } from "./kiro.ts";
 import { createOmpUsageCollector } from "./omp.ts";
 import { createOpenCodeUsageCollector } from "./opencode.ts";
 import { createPiUsageCollector } from "./pi.ts";
+import { createQodercliUsageCollector } from "./qodercli.ts";
 import type { AgentUsageCollectorFactory } from "./types.ts";
 
 /**
- * 已接入的 agent usage collector 注册表。跟 `integrations/registry.ts` 同构：
- * 每个 agent 一个模块 + 此处一行。新增 agent 的会话用量采集只需：
- *   1. 新增 `<agent-id>-parser.ts` / `<agent-id>-scanner.ts` / `<agent-id>.ts`
- *      三件套（parser 抽 jsonl，scanner 组装 publish 输入，collector 是 factory）。
- *   2. 在此数组追加 `create<Agent>UsageCollector`。
- *   3. Runner 会自动 registerBuiltInSource 并接入统一 refresh 通道。
+ * 已接入的 agent usage collector 注册表（与 integrations/registry 对齐）。
  *
- * 已覆盖：Codex CLI、Claude Code、pi、omp（oh-my-pi）、OpenCode（v1.2.0+
- * SQLite 存储走 `node:sqlite`；v1.2.0 之前 JSON storage 走文件扫描；两侧
- * 结果由 collector 合并去重）。
+ * 覆盖矩阵（本机实证 2026-07）：
  *
- * 未接入的 agent（Gemini CLI、Cursor、Copilot、Aider 等）：会话数据格式演进中
- * 或非结构化，暂无稳定 spec；等上游明确后按同一 pattern 添加。
+ * | agentId   | 数据源 | 状态 |
+ * |-----------|--------|------|
+ * | codex     | ~/.codex/sessions jsonl token_count | ✅ |
+ * | claude    | ~/.claude/projects jsonl message.usage | ✅ |
+ * | opencode  | OpenCode JSON storage + SQLite | ✅ |
+ * | pi / omp  | ~/.pi|~/.omp agent sessions jsonl | ✅ |
+ * | grok      | ~/.grok/sessions updates.jsonl turn_completed | ✅ |
+ * | kimi      | ~/.kimi wire.jsonl StatusUpdate.token_usage | ✅ |
+ * | copilot   | ~/.copilot/session-state events shutdown.modelMetrics | ✅ |
+ * | hermes    | ~/.hermes/state.db sessions | ✅ |
+ * | goose     | ~/.local/share/goose sessions usage_ledger | ✅ |
+ * | crush     | 项目 .crush/crush.db sessions | ✅ |
+ * | cline     | ~/.cline/data/sessions metadata.usage | ✅ |
+ * | droid     | ~/.factory/sessions *.settings.json tokenUsage | ✅ |
+ * | qodercli  | ~/.qoder/logs/sessions model.response.completed | ✅ |
+ * | kiro      | ~/.kiro/sessions json token counts（常为 0） | ✅ |
+ *
+ * 暂无稳定本机 token 日志（detect/hook 可能有，但无可靠用量字段）：
+ * gemini（会话无 token）、cursor（transcript/store 无 token）、aider（已退役且无日志）、
+ * amp / aug / autohand / antigravity / codebuddy / command-code / openclaude /
+ * mistral-vibe / mimo-code / kilo / devin / continue / codebuff / ante / rovo /
+ * openclaw / qwen-code（本机无会话目录）。
+ * 上游一旦落盘结构化 usage，按本目录 pattern 加 parser + 本表一行即可。
  */
 export const AGENT_USAGE_COLLECTOR_FACTORIES: readonly AgentUsageCollectorFactory[] =
   [
@@ -27,4 +51,14 @@ export const AGENT_USAGE_COLLECTOR_FACTORIES: readonly AgentUsageCollectorFactor
     createOpenCodeUsageCollector,
     createPiUsageCollector,
     createOmpUsageCollector,
+    createGrokUsageCollector,
+    createKimiUsageCollector,
+    createCopilotUsageCollector,
+    createHermesUsageCollector,
+    createGooseUsageCollector,
+    createCrushUsageCollector,
+    createClineUsageCollector,
+    createDroidUsageCollector,
+    createQodercliUsageCollector,
+    createKiroUsageCollector,
   ];

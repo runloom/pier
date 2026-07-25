@@ -26,6 +26,8 @@ const WIDGET_SOURCES = [
   "packages/plugin-codex/src/renderer/usage-meter.tsx",
   "packages/plugin-claude/src/renderer/accounts-widget.tsx",
   "packages/plugin-claude/src/renderer/usage-meter.tsx",
+  "packages/plugin-grok/src/renderer/accounts-widget.tsx",
+  "packages/plugin-grok/src/renderer/usage-meter.tsx",
 ] as const;
 
 /** Settings + widget quota grids that must force single-window full width. */
@@ -69,21 +71,31 @@ describe("widget size adaptation governance", () => {
     expect(context).toContain("不得按尺寸丢弃");
   });
 
+  it("keeps shared collection auto-layout in @pier/ui for host + plugins", () => {
+    const shared = source("packages/ui/src/collection-auto-layout.ts");
+    expect(shared).toContain("collectionAutoFitStyle");
+    expect(shared).toContain("gridTemplateColumns");
+    expect(shared).toContain("auto-fit");
+    expect(shared).toContain("minmax(min(100%");
+    expect(shared).toContain("widgetDensityFor");
+    expect(shared).toContain("COLLECTION_QUOTA_ITEM_MIN_WIDTH");
+  });
+
   it("keeps the Codex quota collection intrinsic and complete", () => {
     const contents = source(WIDGET_SOURCES[1]);
+    const shared = source("packages/ui/src/collection-auto-layout.ts");
 
     expect(contents).toContain("data-limit-id");
-    expect(contents).toContain("auto-fit");
-    expect(contents).toContain("minmax(min(100%,");
-    expect(contents).toContain("18rem");
-    expect(contents).toContain("var(--codex-quota-item-min-width)");
-    expect(contents).toContain("content-start");
+    expect(contents).toContain("collectionAutoFitStyle");
+    expect(contents).toContain("COLLECTION_QUOTA_ITEM_MIN_WIDTH");
+    expect(shared).toContain("content-start");
     expect(contents).not.toContain("@pier/ui/separator");
     expect(contents).not.toContain("justify-between gap-1.5");
+    // 列定义不走 size.w 换算像素
     expect(contents).not.toMatch(/\bsize(?:\?|\.)?\.w\b/);
   });
 
-  it("does not use container query display:none to hide content in codex widgets", () => {
+  it("does not use container query display:none to hide content in account widgets", () => {
     for (const path of WIDGET_SOURCES) {
       const contents = source(path);
       expect(
@@ -93,28 +105,40 @@ describe("widget size adaptation governance", () => {
     }
   });
 
-  it("uses size prop for structural decisions in accounts widget", () => {
-    const accounts = source(WIDGET_SOURCES[0]);
-    expect(accounts, "AccountsWidget should use size prop").toMatch(/\bsize\b/);
+  it("uses size prop for structural decisions in accounts widgets", () => {
+    for (const path of [
+      WIDGET_SOURCES[0],
+      WIDGET_SOURCES[2],
+      WIDGET_SOURCES[4],
+    ] as const) {
+      const accounts = source(path);
+      expect(accounts, `${path} should use size prop`).toMatch(/\bsize\b/);
+      expect(accounts, `${path} should use density shell`).toContain(
+        "widgetDensityFor"
+      );
+      expect(accounts).toContain("data-density");
+    }
   });
 
   it("forces single-window quota meters to full width without auto-fit grid", () => {
+    const shared = source("packages/ui/src/collection-auto-layout.ts");
+    expect(shared).toContain('"single"');
+    expect(shared).toContain("singleAs");
+    expect(shared).toContain("auto-fit");
+
     for (const path of QUOTA_LAYOUT_SOURCES) {
       const contents = source(path);
       expect(
         contents,
-        `${path} must branch on a single window (not auto-fit alone)`
-      ).toMatch(/length === 1|const single = /);
+        `${path} must branch via collectionLayoutMode`
+      ).toContain("collectionLayoutMode");
       expect(
         contents,
-        `${path} must emit data-layout single for the full-width path`
+        `${path} must emit data-layout for the full-width path`
       ).toContain("data-layout={");
-      expect(contents).toContain('"single"');
-      // Single path must avoid auto-fit; multi path may still use it.
-      expect(contents).toMatch(
-        /single\s*\?\s*"block"|single\s*\?\s*"flex flex-col/
-      );
-      expect(contents).toContain("auto-fit");
+      // 单项满宽：block 或 flex 列；多列走 inline style auto-fit
+      expect(contents).toMatch(/singleAs:\s*"(block|flex)"/);
+      expect(contents).toContain("collectionAutoFitStyle");
       expect(contents).toContain("w-full");
     }
   });

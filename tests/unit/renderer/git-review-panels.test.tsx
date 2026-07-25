@@ -354,6 +354,7 @@ function pluginContext(input: {
     typography: {
       baseFontSize: "16px",
       codeFontFamily: "Berkeley Mono",
+      codeFontSize: "13px",
       fontFamily: "Inter",
     },
   };
@@ -2194,6 +2195,7 @@ describe("Git review panel", () => {
         typography: {
           baseFontSize: "16px",
           codeFontFamily: "Berkeley Mono",
+          codeFontSize: "13px",
           fontFamily: "Inter",
         },
       },

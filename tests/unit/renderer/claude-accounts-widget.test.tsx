@@ -20,7 +20,7 @@ function baseProps(
     instanceId: "widget-1",
     params: {},
     refreshToken: 0,
-    size: { w: 4, h: 2 },
+    size: { w: 4, h: 3 },
     updateParams: vi.fn(),
     visible: true,
     ...overrides,

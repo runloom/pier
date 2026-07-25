@@ -58,8 +58,8 @@ import {
   flushNotificationCenterHistory,
   registerNotificationCenterIpc,
 } from "./ipc/notification-center.ts";
+import { registerPierResourceIpc } from "./ipc/pier-resource.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
-import { registerSystemStatsIpc } from "./ipc/system-stats.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
@@ -370,7 +370,7 @@ if (gotTheLock) {
         eventBus: appCore.eventBus,
         index: appCore.services.agentRuntimeIndex,
       });
-      registerSystemStatsIpc(ipcMain);
+      registerPierResourceIpc(ipcMain);
       registerUsageDataIpc(ipcMain, appCore.services.usageData);
       ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {
         appQuitRendererTransport.handleDecision(payload);

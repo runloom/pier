@@ -4,6 +4,10 @@ import type {
   WorkbenchWidgetActionContext,
   WorkbenchWidgetComponentProps,
 } from "@pier/plugin-api/renderer";
+import {
+  widgetDensityFor,
+  widgetShellClassName,
+} from "@pier/ui/collection-auto-layout.ts";
 import { formatRelativeTime } from "@pier/ui/format.tsx";
 import {
   Item,
@@ -13,6 +17,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@pier/ui/item.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import { RefreshCw } from "lucide-react";
 import type { JSX } from "react";
@@ -54,6 +59,7 @@ export function AccountsWidget({
     return <WidgetSkeleton data-slot="widget-skeleton" />;
   }
 
+  const density = widgetDensityFor(size);
   const activeAccount = snapshot.accounts.find(
     (account) => account.id === snapshot.activeAccountId
   );
@@ -79,11 +85,16 @@ export function AccountsWidget({
         )
       : accountMembershipSummary(activeAccount, context.i18n.language(), t);
   }
+  const showFetchedInline = Boolean(fetchedLabel) && size.w >= 4;
+  // 矮卡藏 membership 副文案；账号异常时仍展示
+  const showMembershipSummary =
+    density !== "compact" || Boolean(activeAccount?.error);
 
   let usageContent: JSX.Element;
   if (!usage) {
     usageContent = <WidgetSkeleton data-slot="claude-usage-loading" />;
-  } else if (usage.status === "ok") {
+  } else if (usage.status === "ok" || usage.windows.length > 0) {
+    // last-good 窗口保留展示（对齐 Grok）
     usageContent = (
       <UsageMeter
         language={context.i18n.language()}
@@ -108,10 +119,16 @@ export function AccountsWidget({
 
   return (
     <div
-      className="pier-claude-accounts-widget flex h-full min-h-0 flex-col gap-3 p-(--card-spacing) text-sm"
+      className={cn(
+        "pier-claude-accounts-widget text-sm",
+        widgetShellClassName(density)
+      )}
+      data-density={density}
+      data-size-h={size.h}
+      data-size-w={size.w}
       data-slot="claude-accounts-widget"
     >
-      <Item className="flex-nowrap px-0 py-0" size="xs">
+      <Item className="shrink-0 flex-nowrap px-0 py-0" size="xs">
         <ItemMedia align="center">
           <AccountAvatar label={accountLabel} />
         </ItemMedia>
@@ -119,15 +136,17 @@ export function AccountsWidget({
           <ItemTitle className="block w-full truncate" title={accountLabel}>
             {accountLabel}
           </ItemTitle>
-          <ItemDescription>
-            <span>{accountDescription}</span>
-            {fetchedLabel && size.w >= 4 ? (
-              <span>
-                {" · "}
-                {fetchedLabel}
-              </span>
-            ) : null}
-          </ItemDescription>
+          {showMembershipSummary ? (
+            <ItemDescription>
+              <span>{accountDescription}</span>
+              {showFetchedInline ? (
+                <span>
+                  {" · "}
+                  {fetchedLabel}
+                </span>
+              ) : null}
+            </ItemDescription>
+          ) : null}
         </ItemContent>
         {switchableAccounts.length > 0 ? (
           <ItemActions>
@@ -140,7 +159,9 @@ export function AccountsWidget({
         ) : null}
       </Item>
 
-      <div className="flex min-h-0 flex-1 flex-col">{usageContent}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col content-start">
+        {usageContent}
+      </div>
     </div>
   );
 }

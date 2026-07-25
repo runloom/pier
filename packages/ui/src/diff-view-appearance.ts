@@ -175,12 +175,27 @@ export interface DiffTypographyStyle extends CSSProperties {
 /** Multi-diff file header chrome height — keep in sync with CSS min-height: 32px. */
 export const DIFF_HEADER_HEIGHT_PX = 32;
 
-export function diffFontMetrics(baseFontSize: string): {
+/**
+ * Line metrics for multi-diff CodeView.
+ * `codeFontSize` is the resolved code body size (e.g. "13px" from settings).
+ */
+export function diffFontMetrics(codeFontSize: string): {
   diffHeaderHeight: number;
   lineHeight: number;
 } {
-  const rootSize = Number.parseFloat(baseFontSize);
-  const codeSize = (Number.isFinite(rootSize) ? rootSize : 16) * 0.8125;
+  const parsed = Number.parseFloat(codeFontSize);
+  const codeSize = Number.isFinite(parsed) && parsed > 0 ? parsed : 13;
   const lineHeight = codeSize * 1.75;
   return { diffHeaderHeight: DIFF_HEADER_HEIGHT_PX, lineHeight };
+}
+
+/** Stable remount key fragment for Pierre CodeView when line metrics change. */
+export function pierDiffCodeViewKey(parts: {
+  diffStyle: string;
+  lineHeight: number;
+  overflow: string;
+  renderMode: string;
+  topologyKey: string;
+}): string {
+  return `${parts.renderMode}\0selection=uncontrolled\0${parts.diffStyle}\0${parts.overflow}\0${parts.topologyKey}\0lh=${parts.lineHeight}`;
 }
