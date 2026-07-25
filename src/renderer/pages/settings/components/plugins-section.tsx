@@ -1,5 +1,5 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Card, CardContent } from "@pier/ui/card.tsx";
+import { StatusStack } from "@pier/ui/status-stack.tsx";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { useState, useSyncExternalStore } from "react";
 import { useT } from "@/i18n/use-t.ts";
@@ -9,7 +9,7 @@ import {
 } from "@/lib/plugins/plugin-runtime-diagnostics.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { ManagedPluginsSection } from "./managed-plugins-section.tsx";
-import { PluginDiagnosticsSummary } from "./plugin-diagnostics-summary.tsx";
+import { buildPluginStatusItems } from "./plugin-status-items.ts";
 
 export function PluginsSection() {
   const t = useT();
@@ -24,6 +24,10 @@ export function PluginsSection() {
   const storeError = usePluginRegistryStore((state) => state.error);
   const [toggleError, setToggleError] = useState<string | null>(null);
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [catalogStatus, setCatalogStatus] = useState<{
+    pluginMode: "workspace" | "release";
+    catalogError: string | null;
+  }>({ pluginMode: "release", catalogError: null });
 
   const togglePlugin = (entry: PluginRegistryEntry) => {
     setPendingId(entry.manifest.id);
@@ -46,30 +50,29 @@ export function PluginsSection() {
   };
 
   const error = toggleError ?? storeError;
+  const items = buildPluginStatusItems({
+    pageError: error,
+    catalogError: catalogStatus.catalogError,
+    diagnostics,
+    runtimeDiagnostics,
+    pluginMode: catalogStatus.pluginMode,
+    t,
+  });
 
   return (
     <div className="px-4 pb-4" id="plugins">
       <h1 className="mb-4 text-xl">{t("settings.section.plugins")}</h1>
       <Card>
         <CardContent className="flex flex-col gap-3 px-0">
-          {error ? (
+          {items.length > 0 ? (
             <div className="px-(--card-spacing)">
-              <Alert variant="destructive">
-                <AlertTitle>{t("settings.plugins.errorTitle")}</AlertTitle>
-                <AlertDescription>{error}</AlertDescription>
-              </Alert>
+              <StatusStack data-testid="plugins-status-stack" items={items} />
             </div>
           ) : null}
-          <div className="px-(--card-spacing)">
-            <PluginDiagnosticsSummary
-              diagnostics={diagnostics}
-              runtimeDiagnostics={runtimeDiagnostics}
-              t={t}
-            />
-          </div>
           <ManagedPluginsSection
             builtinEntries={plugins}
             builtinInitialized={initialized}
+            onCatalogStatusChange={setCatalogStatus}
             onToggleBuiltin={togglePlugin}
             pendingBuiltinId={pendingId}
           />

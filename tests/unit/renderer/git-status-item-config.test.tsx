@@ -4,7 +4,7 @@ import type {
 } from "@plugins/api/renderer.ts";
 import { openGitChangesPanel } from "@plugins/builtin/git/renderer/git-review-open.ts";
 import { registerGitStatusItem } from "@plugins/builtin/git/renderer/git-status-item.tsx";
-import { RepoStatePill } from "@plugins/builtin/git/renderer/git-status-parts.tsx";
+import { resetGitStatusSessionsForTests } from "@plugins/builtin/git/renderer/git-status-state.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   cleanup,
@@ -26,19 +26,34 @@ const DIRTY_STATUS = {
 function makeContext(
   showDirtyIndicator: boolean,
   getStatus: () => Promise<typeof DIRTY_STATUS> = () =>
-    Promise.resolve(DIRTY_STATUS)
+    Promise.resolve(DIRTY_STATUS),
+  options: {
+    showChangesStatus?: boolean;
+    showSyncStatus?: boolean;
+  } = {}
 ): {
   context: RendererPluginContext;
   openInstance: ReturnType<typeof vi.fn>;
-  registered: () => RendererTerminalStatusItem;
+  registered: () => RendererTerminalStatusItem[];
 } {
-  let item: RendererTerminalStatusItem | undefined;
+  const showChangesStatus = options.showChangesStatus ?? true;
+  const showSyncStatus = options.showSyncStatus ?? true;
+  const items: RendererTerminalStatusItem[] = [];
   const openInstance = vi.fn(() => ({ kind: "opened" as const }));
   const context = {
     configuration: {
       get: <T,>(key: string): T => {
         if (key === "pier.git.statusItem.showDirtyIndicator") {
           return showDirtyIndicator as unknown as T;
+        }
+        if (key === "pier.git.statusItem.showChangesStatus") {
+          return showChangesStatus as unknown as T;
+        }
+        if (key === "pier.git.statusItem.showSyncStatus") {
+          return showSyncStatus as unknown as T;
+        }
+        if (key === "pier.git.statusItem.confirmSync") {
+          return true as unknown as T;
         }
         return undefined as unknown as T;
       },
@@ -58,10 +73,13 @@ function makeContext(
       t: vi.fn((_key: string, _values?: unknown, fallback = "") => fallback),
     },
     notifications: { error: vi.fn() },
-    panels: { listInstances: vi.fn(() => []), openInstance },
+    panels: {
+      listInstances: vi.fn(() => []),
+      openInstance,
+    },
     terminalStatusItems: {
       register: (registration: RendererTerminalStatusItem) => {
-        item = registration;
+        items.push(registration);
         return () => undefined;
       },
     },
@@ -70,10 +88,10 @@ function makeContext(
     context,
     openInstance,
     registered: () => {
-      if (!item) {
+      if (items.length === 0) {
         throw new Error("status item not registered");
       }
-      return item;
+      return items;
     },
   };
 }
@@ -88,38 +106,62 @@ const PANEL_CONTEXT = {
 describe("git status item — showDirtyIndicator 设置消费", () => {
   afterEach(() => {
     cleanup();
+    resetGitStatusSessionsForTests();
   });
+
+  function renderRegistered(
+    items: RendererTerminalStatusItem[],
+    statusContext: {
+      context: PanelContext;
+      cwd: string;
+      getGroupId: () => string | null;
+      panelId: string;
+      title: null;
+    }
+  ) {
+    return render(
+      items.map((item) => <div key={item.id}>{item.render(statusContext)}</div>)
+    );
+  }
 
   async function renderItem(showDirtyIndicator: boolean) {
     const { context, registered } = makeContext(showDirtyIndicator);
     registerGitStatusItem(context);
-    render(
-      registered().render({
-        context: PANEL_CONTEXT,
-        cwd: "/repo",
-        getGroupId: () => null,
-        panelId: "panel-1",
-        title: null,
-      })
-    );
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => null,
+      panelId: "panel-1",
+      title: null,
+    });
     await waitFor(() => {
       expect(screen.getByTestId("worktree-status-trigger")).toBeInTheDocument();
     });
   }
 
-  it("默认 true：渲染 dirty indicator", async () => {
+  it("默认 true：脏态编码为分支图标（git-dirty-indicator）", async () => {
     await renderItem(true);
     await waitFor(() => {
       expect(screen.getByTestId("git-dirty-indicator")).toBeInTheDocument();
     });
+    expect(
+      screen
+        .getByTestId("git-dirty-indicator")
+        .querySelector('[data-git-icon="git-branch-staged"]')
+    ).toBeInTheDocument();
   });
 
-  it("false：dirty indicator 隐藏，其余状态项内容保留", async () => {
+  it("false：不编码脏图标，分支名仍保留", async () => {
     await renderItem(false);
     await waitFor(() => {
       expect(screen.getByText("main")).toBeInTheDocument();
     });
     expect(screen.queryByTestId("git-dirty-indicator")).toBeNull();
+    expect(
+      screen
+        .getByTestId("worktree-status-trigger")
+        .querySelector('[data-git-icon="git-branch"]')
+    ).toBeInTheDocument();
   });
 
   it("左键打开 Git 状态下拉面板", async () => {
@@ -136,6 +178,92 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     ).toBeInTheDocument();
   });
 
+  it("更改项显示彩色 ± 行并点击打开审查面板", async () => {
+    const { context, openInstance, registered } = makeContext(true);
+    registerGitStatusItem(context);
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => "group-a",
+      panelId: "panel-1",
+      title: null,
+    });
+    const changesTrigger = await screen.findByTestId(
+      "git-changes-status-trigger"
+    );
+    expect(changesTrigger).toHaveTextContent("+5");
+    expect(changesTrigger).toHaveTextContent("−3");
+    expect(
+      changesTrigger.querySelector('[data-git-delta="insertions"]')
+    ).toHaveTextContent("+5");
+    expect(
+      changesTrigger.querySelector('[data-git-delta="deletions"]')
+    ).toHaveTextContent("−3");
+    fireEvent.click(changesTrigger);
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        componentId: "pier.git.changes",
+        targetGroupId: "group-a",
+        title: "repo",
+      })
+    );
+  });
+
+  it("showChangesStatus=false 时隐藏更改项且 isVisible 为 false", async () => {
+    const { context, registered } = makeContext(
+      true,
+      () => Promise.resolve(DIRTY_STATUS),
+      { showChangesStatus: false }
+    );
+    registerGitStatusItem(context);
+    const changesItem = registered().find(
+      (item) => item.id === "pier.git.status.changes"
+    );
+    expect(
+      changesItem?.isVisible?.({
+        context: PANEL_CONTEXT,
+        cwd: "/repo",
+        getGroupId: () => null,
+        panelId: "panel-1",
+        title: null,
+      })
+    ).toBe(false);
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => null,
+      panelId: "panel-1",
+      title: null,
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("worktree-status-trigger")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("git-changes-status-trigger")).toBeNull();
+  });
+
+  it("干净仓库不渲染更改项空壳", async () => {
+    const clean = {
+      ...DIRTY_STATUS,
+      counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
+      delta: { deletions: 0, insertions: 0 },
+    };
+    const { context, registered } = makeContext(true, () =>
+      Promise.resolve(clean)
+    );
+    registerGitStatusItem(context);
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => null,
+      panelId: "panel-1",
+      title: null,
+    });
+    await waitFor(() => {
+      expect(screen.getByTestId("worktree-status-trigger")).toBeInTheDocument();
+    });
+    expect(screen.queryByTestId("git-changes-status-trigger")).toBeNull();
+  });
+
   it("查看变更在点击时读取当前组，组消失时只向新当前组重试一次", async () => {
     const { context, openInstance, registered } = makeContext(true);
     let currentGroupId = "group-a";
@@ -149,15 +277,13 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       }
     );
     registerGitStatusItem(context);
-    render(
-      registered().render({
-        context: PANEL_CONTEXT,
-        cwd: "/repo",
-        getGroupId: () => currentGroupId,
-        panelId: "panel-1",
-        title: null,
-      })
-    );
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => currentGroupId,
+      panelId: "panel-1",
+      title: null,
+    });
     await waitFor(() => {
       expect(screen.getByTestId("worktree-status-trigger")).toBeInTheDocument();
     });
@@ -168,9 +294,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       pointerType: "mouse",
     });
     currentGroupId = "group-b";
-    fireEvent.click(
-      await screen.findByRole("menuitem", { name: "View Changes" })
-    );
+    fireEvent.click(await screen.findByRole("menuitem", { name: /^Changes/ }));
 
     expect(
       openInstance.mock.calls.map(([input]) => input.targetGroupId)
@@ -178,14 +302,18 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     expect(context.notifications.error).not.toHaveBeenCalled();
   });
 
-  it("Review 拖组后按实际分组复用，并为原分组生成不冲突实例", () => {
+  it("Review 同组已打开时复用，跨组再开会新建", () => {
     const { context, openInstance } = makeContext(true);
     const movedInstance = {
       componentId: "pier.git.changes",
       groupId: "group-b",
       id: "pier.git.changes:group-a:worktree:repo",
       params: {
-        source: { contextId: "worktree:repo", gitRootPath: "/repo" },
+        source: {
+          contextId: "worktree:repo",
+          gitRootPath: "/repo",
+          target: { kind: "uncommitted" },
+        },
       },
       title: "Changes",
     };
@@ -211,6 +339,84 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     expect(originalGroupRequest.instanceId).toMatch(
       /^pier\.git\.changes:group-a:worktree:repo:/u
     );
+    expect(openInstance).toHaveBeenCalledTimes(2);
+  });
+
+  it("Review focus 在 targetGroupMissing 时回退创建且刷新实例列表", () => {
+    const { context, openInstance } = makeContext(true);
+    const stale = {
+      componentId: "pier.git.changes",
+      // Same preferred group so we take the focus path first.
+      groupId: "group-a",
+      id: "pier.git.changes:group-a:worktree:repo:uncommitted",
+      params: {
+        source: {
+          contextId: "worktree:repo",
+          gitRootPath: "/repo",
+          target: { kind: "uncommitted" },
+        },
+      },
+      title: "Changes",
+    };
+    vi.mocked(context.panels.listInstances)
+      .mockReturnValueOnce([stale])
+      .mockReturnValueOnce([]);
+    openInstance
+      .mockReturnValueOnce({ kind: "targetGroupMissing" as const })
+      .mockReturnValueOnce({ kind: "opened" as const });
+
+    openGitChangesPanel({
+      getGroupId: () => "group-a",
+      panelContext: PANEL_CONTEXT,
+      pluginContext: context,
+    });
+
+    expect(openInstance).toHaveBeenCalledTimes(2);
+    expect(openInstance.mock.calls[0]?.[0]).toMatchObject({
+      instanceId: stale.id,
+      targetGroupId: "group-a",
+    });
+    expect(openInstance.mock.calls[1]?.[0]).toMatchObject({
+      instanceId: "pier.git.changes:group-a:worktree:repo:uncommitted",
+      targetGroupId: "group-a",
+    });
+  });
+
+  it("Review 同组多实例时优先复用该组实例", () => {
+    const { context, openInstance } = makeContext(true);
+    const first = {
+      componentId: "pier.git.changes",
+      groupId: "group-a",
+      id: "review-a",
+      params: {
+        source: {
+          contextId: "worktree:repo",
+          gitRootPath: "/repo",
+          target: { kind: "uncommitted" },
+        },
+      },
+      title: "Changes",
+    };
+    const otherGroup = {
+      ...first,
+      groupId: "group-b",
+      id: "review-b",
+    };
+    vi.mocked(context.panels.listInstances).mockReturnValue([
+      otherGroup,
+      first,
+    ]);
+
+    openGitChangesPanel({
+      getGroupId: () => "group-a",
+      panelContext: PANEL_CONTEXT,
+      pluginContext: context,
+    });
+
+    expect(openInstance.mock.calls.at(-1)?.[0]).toMatchObject({
+      instanceId: "review-a",
+      targetGroupId: "group-a",
+    });
   });
 
   it("Review 打开异常通过宿主弹窗提供技术详情", async () => {
@@ -240,15 +446,13 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       () => new Promise<typeof DIRTY_STATUS>(() => undefined)
     );
     registerGitStatusItem(context);
-    render(
-      registered().render({
-        context: PANEL_CONTEXT,
-        cwd: "/repo",
-        getGroupId: () => null,
-        panelId: "panel-1",
-        title: null,
-      })
-    );
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => null,
+      panelId: "panel-1",
+      title: null,
+    });
     await waitFor(() => {
       expect(screen.getByTestId("worktree-status-trigger")).toBeInTheDocument();
     });
@@ -268,15 +472,13 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       Promise.reject(new Error("git failed"))
     );
     registerGitStatusItem(context);
-    render(
-      registered().render({
-        context: PANEL_CONTEXT,
-        cwd: "/repo",
-        getGroupId: () => null,
-        panelId: "panel-1",
-        title: null,
-      })
-    );
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => null,
+      panelId: "panel-1",
+      title: null,
+    });
     await waitFor(() => {
       expect(context.git.getStatus).toHaveBeenCalled();
     });
@@ -300,15 +502,13 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       .mockResolvedValue(DIRTY_STATUS);
     const { context, registered } = makeContext(true, getStatus);
     registerGitStatusItem(context);
-    render(
-      registered().render({
-        context: PANEL_CONTEXT,
-        cwd: "/repo",
-        getGroupId: () => null,
-        panelId: "panel-1",
-        title: null,
-      })
-    );
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => null,
+      panelId: "panel-1",
+      title: null,
+    });
 
     await waitFor(() => expect(getStatus).toHaveBeenCalledTimes(2));
     expect(await screen.findByTestId("git-dirty-indicator")).toBeVisible();
@@ -332,82 +532,17 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
         return () => undefined;
       });
     registerGitStatusItem(context);
-    render(
-      registered().render({
-        context: PANEL_CONTEXT,
-        cwd: "/repo",
-        getGroupId: () => null,
-        panelId: "panel-1",
-        title: null,
-      })
-    );
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => null,
+      panelId: "panel-1",
+      title: null,
+    });
 
     await waitFor(() => expect(context.git.watch).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(context.git.getStatus).toHaveBeenCalledOnce());
     recoveredListeners[0]?.();
     await waitFor(() => expect(context.git.getStatus).toHaveBeenCalledTimes(2));
-  });
-
-  it("repo state 胶囊使用单数冲突文案", () => {
-    const { context } = makeContext(true);
-    vi.mocked(context.i18n.t).mockImplementation(
-      (
-        key: string,
-        values?: Record<string, number | string>,
-        fallback = ""
-      ) => {
-        if (key === "ui.conflictSuffixSingle") {
-          return ` · ${values?.n} conflict`;
-        }
-        if (key === "ui.conflictSuffix") {
-          return ` · ${values?.n} conflicts`;
-        }
-        return fallback;
-      }
-    );
-
-    render(
-      <RepoStatePill
-        pluginContext={context}
-        state={{ conflictCount: 1, kind: "merging" }}
-      />
-    );
-
-    expect(screen.getByText("Merging · 1 conflict")).toBeInTheDocument();
-    expect(screen.queryByText("Merging · 1 conflicts")).toBeNull();
-  });
-
-  it.each([
-    [
-      "bisecting",
-      { bad: 1, good: 2, kind: "bisecting" as const },
-      "git-compare-arrows",
-    ],
-    [
-      "cherry-picking",
-      { conflictCount: 0, kind: "cherry-picking" as const },
-      "git-commit-horizontal",
-    ],
-    ["merging", { conflictCount: 0, kind: "merging" as const }, "git-merge"],
-    [
-      "rebasing",
-      { conflictCount: 0, current: 1, kind: "rebasing" as const, total: 3 },
-      "git-pull-request-arrow",
-    ],
-    [
-      "reverting",
-      { conflictCount: 0, kind: "reverting" as const },
-      "git-commit-horizontal",
-    ],
-  ])("repo state %s 胶囊使用 Git 图标族", (_name, state, iconName) => {
-    const { context } = makeContext(true);
-
-    const { container } = render(
-      <RepoStatePill pluginContext={context} state={state} />
-    );
-
-    expect(
-      container.querySelector(`[data-git-icon="${iconName}"]`)
-    ).toBeInTheDocument();
   });
 });

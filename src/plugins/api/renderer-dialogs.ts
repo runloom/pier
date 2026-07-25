@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export type RendererPluginDialogIntent = "default" | "destructive";
 export type RendererPluginDialogSize = "default" | "sm";
@@ -9,6 +9,15 @@ export interface RendererPluginContentDialogRenderProps<TResult = unknown> {
   id: string;
   setDescription: (description?: string) => void;
   setDismissible: (dismissible: boolean) => void;
+  /** Sticky DialogFooter actions; pass null to hide. */
+  setFooter: (footer: ReactNode | null) => void;
+  /**
+   * Guard header X / Esc / overlay dismiss. Return false to keep the dialog
+   * open (e.g. confirm discarding unsaved edits). Prefer over hiding the X.
+   */
+  setOnDismissRequest: (
+    handler: (() => boolean | Promise<boolean>) | null
+  ) => void;
   setTitle: (title: string) => void;
 }
 
@@ -50,10 +59,16 @@ export interface RendererPluginDialogsFacade {
   /**
    * 三选弹窗(如 保存/放弃/取消)。confirm → "confirm",altLabel 按钮 →
    * "alt",取消/Esc → "cancel"。intent 作用于 alt 按钮(破坏性放弃)。
+   * buttonOrder 默认 alt|取消|confirm；confirm-alt-cancel 为 主|次|取消。
    */
   choice(options: {
     altLabel: string;
     body?: string;
+    /**
+     * `alt-cancel-confirm`（默认）：次动作 | 取消 | 主按钮。
+     * `confirm-alt-cancel`：主按钮 | 次动作 | 取消（对齐 VS Code discard）。
+     */
+    buttonOrder?: "alt-cancel-confirm" | "confirm-alt-cancel";
     cancelLabel?: string;
     confirmLabel: string;
     intent: RendererPluginDialogIntent;

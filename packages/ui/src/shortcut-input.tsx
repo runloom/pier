@@ -29,6 +29,10 @@ interface ShortcutInputProps {
   tooltipLabel: string;
 }
 
+/**
+ * Idle: one capsule shell owns hover/background.
+ * Recording: separate outline button with a static halo (not hover-driven).
+ */
 export function ShortcutInput({
   canClear = true,
   canReset = true,
@@ -61,7 +65,7 @@ export function ShortcutInput({
         aria-pressed="true"
         className={cn(
           CONTROL_HEIGHT_CLASS,
-          "w-44 rounded-2xl border-1 border-muted-foreground/40 bg-background px-4 text-muted-foreground shadow-[0_0_0_4px_var(--muted)] hover:bg-background hover:text-muted-foreground",
+          "w-44 rounded-2xl border border-muted-foreground/40 bg-background px-4 text-muted-foreground shadow-[0_0_0_4px_var(--muted)] hover:bg-background hover:text-muted-foreground dark:hover:bg-background",
           className
         )}
         data-recording="true"
@@ -82,9 +86,13 @@ export function ShortcutInput({
     <InputGroup
       className={cn(
         CONTROL_HEIGHT_CLASS,
-        "w-56 rounded-2xl border-input bg-background/90 p-1 shadow-xs",
+        // Shell owns fill + hover so the whole capsule reacts as one control.
+        // p-1 is the inset around trigger + addon; do not put hover fill on the
+        // inner trigger or it becomes a second pill inside this padding.
+        "w-56 overflow-hidden rounded-2xl border-input bg-background/90 p-1 shadow-xs transition-[color,box-shadow,background-color] duration-200 hover:bg-interactive-hover",
         className
       )}
+      data-slot="shortcut-input"
       data-testid="shortcut-input"
     >
       <Tooltip>
@@ -92,7 +100,13 @@ export function ShortcutInput({
           <Button
             aria-label={recordLabel}
             aria-pressed="false"
-            className="h-full min-w-0 flex-1 shrink justify-between rounded-xl px-2 text-left font-normal shadow-none hover:bg-muted/70 active:translate-y-0"
+            className={cn(
+              "h-full min-w-0 flex-1 shrink justify-start rounded-xl px-2 text-left font-normal shadow-none",
+              // Kill ghost/default hover — shell already paints the hover fill.
+              "hover:bg-transparent hover:text-foreground dark:hover:bg-transparent",
+              // Focus immediately starts recording; avoid a nested focus ring flash.
+              "focus-visible:border-transparent focus-visible:ring-0 active:translate-y-0"
+            )}
             data-slot="shortcut-input-trigger"
             onClick={onRecord}
             onFocus={onRecord}
@@ -126,17 +140,19 @@ export function ShortcutInput({
       >
         <InputGroupButton
           aria-label={clearLabel}
+          className="rounded-full hover:bg-muted/80 dark:hover:bg-muted/60"
           disabled={!canClear}
           onClick={onClear}
-          size="icon-sm"
+          size="icon-xs"
         >
           <X />
         </InputGroupButton>
         <InputGroupButton
           aria-label={resetLabel}
+          className="rounded-full hover:bg-muted/80 dark:hover:bg-muted/60"
           disabled={!canReset}
           onClick={onReset}
-          size="icon-sm"
+          size="icon-xs"
         >
           <RotateCcw />
         </InputGroupButton>

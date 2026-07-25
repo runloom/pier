@@ -1,4 +1,3 @@
-import { Badge } from "@pier/ui/badge.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
@@ -13,6 +12,15 @@ import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
 import { discardActiveImportReview } from "./skills-candidate-lifecycle.ts";
 
 export type Translate = TFunction;
+
+/** Clarifies that the skill open UI only shows SKILL.md, not the whole folder. */
+export function SkillMdScopeNotice({ t }: { t: Translate }) {
+  return (
+    <p className="text-muted-foreground text-xs">
+      {t("settings.skills.contentSkillMdOnlyNotice")}
+    </p>
+  );
+}
 
 /**
  * §7.7: confirm before discarding unsaved skill-editor drafts. Returns true
@@ -82,6 +90,8 @@ export function sourceLabel(
       return t("settings.skills.managedSource.projectDiscoveryImport");
     case "git-declared":
       return t("settings.skills.managedSource.gitDeclared");
+    case "pier-home":
+      return t("settings.skills.managedSource.pierHome");
     default:
       return t("settings.skills.managedSource.localImport");
   }
@@ -110,15 +120,6 @@ export function effectLabel(cell: SkillEffectiveCell, t: Translate): string {
   }
 }
 
-function isAttention(cell: SkillEffectiveCell): boolean {
-  return (
-    cell.effect.state === "shadowed-by-user" ||
-    cell.effect.state === "overridden" ||
-    cell.effect.state === "duplicate" ||
-    cell.effect.state === "unknown-version"
-  );
-}
-
 function agentLabel(cell: SkillEffectiveCell): string {
   return (
     getAgentCatalogEntry(cell.agentKind as AgentKind)?.label ?? cell.agentKind
@@ -126,10 +127,8 @@ function agentLabel(cell: SkillEffectiveCell): string {
 }
 
 /**
- * Row-level effect summary (design v8 §7.3): colored icons + a readable
- * count for agents that can discover the skill, one warning badge per
- * precedence-attention agent, and a muted "not effective" line when neither
- * applies. The complete per-agent facts live in the detail page matrix.
+ * Compact list-row availability strip: unique discoverable agent icons only.
+ * Path / count labels belong nowhere on this strip.
  */
 export function AgentEffectSummary({
   effects,
@@ -138,29 +137,14 @@ export function AgentEffectSummary({
   effects: readonly SkillEffectiveCell[];
   t: Translate;
 }) {
-  const cells = effects.filter(
-    (cell) =>
-      cell.effect.state !== "agent-not-installed" &&
-      cell.effect.state !== "not-applicable"
-  );
-  const discoverable = cells.filter(
-    (cell) => cell.effect.state === "discoverable"
-  );
-  const attention = cells.filter(isAttention);
-  const attentionGroups = [
-    ...attention
-      .reduce((groups, cell) => {
-        const viaRoot =
-          "viaRoot" in cell.effect ? (cell.effect.viaRoot ?? "") : "";
-        const key = `${cell.effect.state}\0${viaRoot}`;
-        const group = groups.get(key) ?? [];
-        group.push(cell);
-        groups.set(key, group);
-        return groups;
-      }, new Map<string, SkillEffectiveCell[]>())
-      .values(),
-  ];
-  if (discoverable.length === 0 && attention.length === 0) {
+  const discoverable = [
+    ...new Map(
+      effects
+        .filter((cell) => cell.effect.state === "discoverable")
+        .map((cell) => [cell.agentKind, cell] as const)
+    ).values(),
+  ].toSorted((a, b) => a.agentKind.localeCompare(b.agentKind));
+  if (discoverable.length === 0) {
     return (
       <span className="text-muted-foreground text-xs">
         {t("settings.skills.effectSummaryNone")}
@@ -168,58 +152,18 @@ export function AgentEffectSummary({
     );
   }
   return (
-    <div className="flex flex-wrap items-center gap-2">
-      {discoverable.length > 0 ? (
-        <span className="flex items-center gap-1.5">
-          <span className="flex items-center gap-1">
-            {discoverable.map((cell) => (
-              <span
-                aria-label={agentLabel(cell)}
-                className="inline-flex size-5 items-center justify-center"
-                key={cell.agentKind}
-                role="img"
-              >
-                <AgentIcon agentId={cell.agentKind as AgentKind} size={14} />
-              </span>
-            ))}
-          </span>
-          <span className="text-muted-foreground text-xs">
-            {t("settings.skills.effectSummaryDiscoverable", {
-              count: discoverable.length,
-            })}
-          </span>
+    <span className="flex flex-wrap items-center gap-1">
+      {discoverable.map((cell) => (
+        <span
+          aria-label={agentLabel(cell)}
+          className="inline-flex size-5 items-center justify-center"
+          key={cell.agentKind}
+          role="img"
+        >
+          <AgentIcon agentId={cell.agentKind as AgentKind} size={14} />
         </span>
-      ) : null}
-      {attentionGroups.map((group) => {
-        const sample = group[0];
-        if (!sample) return null;
-        return (
-          <Badge
-            key={`${sample.effect.state}:${group.map(agentLabel).join(",")}`}
-            variant="warning"
-          >
-            <span className="inline-flex items-center gap-0.5">
-              {group.map((cell) => (
-                <span
-                  aria-label={agentLabel(cell)}
-                  className="inline-flex items-center"
-                  key={cell.agentKind}
-                  role="img"
-                >
-                  <AgentIcon agentId={cell.agentKind as AgentKind} size={14} />
-                </span>
-              ))}
-            </span>
-            {group.length === 1
-              ? effectLabel(sample, t)
-              : t("settings.skills.matrixGroupState", {
-                  count: group.length,
-                  state: effectLabel(sample, t),
-                })}
-          </Badge>
-        );
-      })}
-    </div>
+      ))}
+    </span>
   );
 }
 

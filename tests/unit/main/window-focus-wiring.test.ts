@@ -19,9 +19,9 @@ const SOURCE = readFileSync(
 );
 
 const BLUR_WIRING_RE =
-  /window\.host\.on\("blur",\s*\(\)\s*=>\s*\{\s*terminalFocusCoordinator\.setWindowFocused\(window, false, "window-blur"\);\s*\}\);/;
+  /window\.host\.on\("blur",\s*\(\)\s*=>\s*\{\s*terminalFocusCoordinator\.setWindowFocused\(window, false, "window-blur"\);\s*sendWindowFocusChanged\(window, false\);\s*\}\);/;
 const FOCUS_WIRING_RE =
-  /window\.host\.on\("focus",\s*\(\)\s*=>\s*\{\s*this\.rememberFocusedWindow\(id\);\s*terminalFocusCoordinator\.setWindowFocused\(window, true, "window-focus"\);[\s\S]{0,350}?this\.onFocusCallbacks/;
+  /window\.host\.on\("focus",\s*\(\)\s*=>\s*\{\s*this\.rememberFocusedWindow\(id\);\s*terminalFocusCoordinator\.setWindowFocused\(window, true, "window-focus"\);\s*sendWindowFocusChanged\(window, true\);[\s\S]{0,350}?this\.onFocusCallbacks/;
 
 describe("window-manager focus / blur wiring", () => {
   it("routes window blur through the focus coordinator", () => {

@@ -17,10 +17,11 @@ describe("projectPreferencesSchema — language", () => {
   });
 });
 
-describe("projectPreferencesSchema — monoFontSize", () => {
-  it("默认值是 13", () => {
+describe("projectPreferencesSchema — monoFontSize / codeFontSize", () => {
+  it("默认值都是 13", () => {
     const parsed = projectPreferencesSchema.parse({});
     expect(parsed.monoFontSize).toBe(13);
+    expect(parsed.codeFontSize).toBe(13);
   });
 
   it("接受边界值 8 和 32", () => {
@@ -30,6 +31,12 @@ describe("projectPreferencesSchema — monoFontSize", () => {
     expect(
       projectPreferencesSchema.parse({ monoFontSize: 32 }).monoFontSize
     ).toBe(32);
+    expect(
+      projectPreferencesSchema.parse({ codeFontSize: 8 }).codeFontSize
+    ).toBe(8);
+    expect(
+      projectPreferencesSchema.parse({ codeFontSize: 32 }).codeFontSize
+    ).toBe(32);
   });
 
   it("拒绝越界 (7 / 33)", () => {
@@ -37,11 +44,18 @@ describe("projectPreferencesSchema — monoFontSize", () => {
     expect(() =>
       projectPreferencesSchema.parse({ monoFontSize: 33 })
     ).toThrow();
+    expect(() => projectPreferencesSchema.parse({ codeFontSize: 7 })).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ codeFontSize: 33 })
+    ).toThrow();
   });
 
   it("拒绝非整数 (12.5)", () => {
     expect(() =>
       projectPreferencesSchema.parse({ monoFontSize: 12.5 })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ codeFontSize: 12.5 })
     ).toThrow();
   });
 });

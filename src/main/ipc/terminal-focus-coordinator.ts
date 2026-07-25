@@ -10,6 +10,11 @@ import type {
   TerminalNativeWindowState,
 } from "@shared/contracts/terminal.ts";
 import { computeEffectiveKeyboardTarget } from "@shared/terminal-keyboard-target.ts";
+import {
+  clearTerminalResourceSessionsForWindow,
+  registerTerminalResourceSession,
+  unregisterTerminalResourceSession,
+} from "../services/pier-resource/terminal-session-registry.ts";
 import type { AppWindow } from "../windows/app-window.ts";
 import { isTerminalHostSnapshot } from "./terminal-host-snapshot-validation.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
@@ -120,16 +125,21 @@ export class TerminalFocusCoordinator {
     if (!record || win.isDestroyed()) {
       return { ok: false, reason: "stale" };
     }
+    // 拒绝原因写入 lastError：debug 窗口 / readDebug 是定位「点终端不聚焦」
+    // 的唯一入口，静默拒绝会让点击激活失败完全不可观测。
     if (!record.readyPanelIds.has(rawPanelId)) {
+      record.lastError = "focus-intent-rejected:not-ready";
       return { ok: false, reason: "not-ready" };
     }
     const entry = record.desired?.terminals.find(
       (terminal) => terminal.panelId === rawPanelId
     );
     if (!entry) {
+      record.lastError = "focus-intent-rejected:stale";
       return { ok: false, reason: "stale" };
     }
     if (!entry.visible || entry.frame === null) {
+      record.lastError = "focus-intent-rejected:hidden";
       return { ok: false, reason: "hidden" };
     }
     // 不在此按 webRequestCount 拒绝：点终端内容必须把 focus-request 送到
@@ -137,6 +147,10 @@ export class TerminalFocusCoordinator {
     // Rich Input takeover 保持键盘）。主进程拦截会让 pier.click 等瞬时 web
     // 请求卡住，表现为菜单不关、终端难聚焦。粘性 web owner 由 renderer 的
     // webRequestIds / focusDisabledPanelIds 在 reconcile 阶段继续持有键盘。
+    // 成功时只清掉本路径的拒绝记录，保留 reconcile 等其他来源的 lastError。
+    if (record.lastError?.startsWith("focus-intent-rejected:")) {
+      record.lastError = null;
+    }
     return { ok: true, panelId: rawPanelId };
   }
 
@@ -167,6 +181,11 @@ export class TerminalFocusCoordinator {
     const record = this.recordFor(win);
     record.readyPanelIds.add(panelId);
     record.dirty = true;
+    // 资源账本：surface 就绪即登记（含 create / reload 复用 / transfer adopt）
+    registerTerminalResourceSession({
+      panelId,
+      windowId: String(win.id),
+    });
     return this.reconcile(record, "surface-created");
   }
 
@@ -180,6 +199,10 @@ export class TerminalFocusCoordinator {
     const record = this.recordFor(win);
     record.readyPanelIds.delete(panelId);
     record.dirty = true;
+    unregisterTerminalResourceSession({
+      panelId,
+      windowId: String(win.id),
+    });
     return this.reconcile(record, "surface-closing");
   }
 
@@ -197,6 +220,8 @@ export class TerminalFocusCoordinator {
 
   clearWindow(windowId: number): void {
     this.records.delete(windowId);
+    // 整窗关闭不走 per-panel surfaceWillClose；必须同步清资源登记，避免 ghost session
+    clearTerminalResourceSessionsForWindow(String(windowId));
   }
 
   readDebug(win: AppWindow): TerminalCoordinatorDebugSnapshot {

@@ -152,6 +152,8 @@ export interface CreateManagedAgentLaunchGateOptions {
   ensureReady: ProjectSkillsEnsureReady;
   /** Whole-correction deadline (design §5.2.3); defaults to 10s. */
   ensureReadyTimeoutMs?: number;
+  /** When true for the resolved project root, skip skills ensure/reconcile. */
+  isPierHomeRoot?: (path: string) => Promise<boolean>;
   now?: () => number;
   userData: string;
 }

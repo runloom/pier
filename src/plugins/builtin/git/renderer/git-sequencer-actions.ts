@@ -1,7 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type {
-  GitSequencerAbortResult,
-  GitSequencerContinueResult,
   GitSequencerResult,
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
@@ -19,6 +17,11 @@ import {
 } from "./git-command-helpers.ts";
 import { openCommitPick } from "./git-commit-pick.ts";
 import { shortCommitHash } from "./git-commit-quick-pick-row.tsx";
+import type { GitContinuablePausedOperationKind } from "./git-operation-runners.ts";
+import {
+  runAbortPausedOperation,
+  runContinuePausedOperation,
+} from "./git-operation-runners.ts";
 import { pluginText } from "./git-plugin-text.ts";
 
 interface SequencerActionText {
@@ -108,19 +111,15 @@ function registerSequencerRunAction(
   });
 }
 
-interface SequencerFollowUpText {
+interface SequencerFollowUpCommand {
   readonly commandFallback: string;
   readonly commandId: string;
-  readonly loadingFallback: string;
-  readonly loadingKey: string;
-  readonly successFallback: string;
-  readonly successKey: string;
+  readonly kind: GitContinuablePausedOperationKind;
 }
 
 function registerSequencerAbortAction(
   context: RendererPluginContext,
-  text: SequencerFollowUpText,
-  run: (cwd: string) => Promise<GitSequencerAbortResult>,
+  command: SequencerFollowUpCommand,
   sortOrder: number
 ): () => void {
   return context.actions.register({
@@ -128,33 +127,22 @@ function registerSequencerAbortAction(
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
-      const title = commandTitle(context, text.commandId, text.commandFallback);
+      const title = commandTitle(
+        context,
+        command.commandId,
+        command.commandFallback
+      );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
         return;
       }
-      const loading = showLoading(
-        context,
-        pluginText(context, text.loadingKey, text.loadingFallback)
-      );
-      let result: GitSequencerAbortResult;
-      try {
-        result = await run(cwd);
-      } catch (err) {
-        loading.dismiss();
-        await showError(context, title, err);
-        return;
-      }
-      if (result.kind === "ok") {
-        loading.success(
-          pluginText(context, text.successKey, text.successFallback)
-        );
-      } else {
-        loading.dismiss();
-        await showUnavailable(context, title, result.message?.trim());
-      }
+      await runAbortPausedOperation(context, {
+        cwd,
+        kind: command.kind,
+        title,
+      });
     },
-    id: text.commandId,
+    id: command.commandId,
     metadata: {
       categoryKey: "git",
       group: "2_git",
@@ -162,19 +150,14 @@ function registerSequencerAbortAction(
       sortOrder,
     },
     surfaces: ["command-palette"],
-    title: () => commandTitle(context, text.commandId, text.commandFallback),
+    title: () =>
+      commandTitle(context, command.commandId, command.commandFallback),
   });
 }
 
 function registerSequencerContinueAction(
   context: RendererPluginContext,
-  text: SequencerFollowUpText & {
-    readonly conflictBodyFallback: string;
-    readonly conflictBodyKey: string;
-    readonly conflictTitleFallback: string;
-    readonly conflictTitleKey: string;
-  },
-  run: (cwd: string) => Promise<GitSequencerContinueResult>,
+  command: SequencerFollowUpCommand,
   sortOrder: number
 ): () => void {
   return context.actions.register({
@@ -182,45 +165,22 @@ function registerSequencerContinueAction(
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
     handler: async () => {
-      const title = commandTitle(context, text.commandId, text.commandFallback);
+      const title = commandTitle(
+        context,
+        command.commandId,
+        command.commandFallback
+      );
       const cwd = activeCwdOrMessage(context, title);
       if (!cwd) {
         return;
       }
-      const loading = showLoading(
-        context,
-        pluginText(context, text.loadingKey, text.loadingFallback)
-      );
-      let result: GitSequencerContinueResult;
-      try {
-        result = await run(cwd);
-      } catch (err) {
-        loading.dismiss();
-        await showError(context, title, err);
-        return;
-      }
-      if (result.kind === "ok") {
-        loading.success(
-          pluginText(context, text.successKey, text.successFallback)
-        );
-      } else if (result.kind === "conflict") {
-        loading.dismiss();
-        await showConflictDetails(
-          context,
-          pluginText(
-            context,
-            text.conflictTitleKey,
-            text.conflictTitleFallback
-          ),
-          pluginText(context, text.conflictBodyKey, text.conflictBodyFallback),
-          result.message
-        );
-      } else {
-        loading.dismiss();
-        await showUnavailable(context, title, result.message?.trim());
-      }
+      await runContinuePausedOperation(context, {
+        cwd,
+        kind: command.kind,
+        title,
+      });
     },
-    id: text.commandId,
+    id: command.commandId,
     metadata: {
       categoryKey: "git",
       group: "2_git",
@@ -228,7 +188,8 @@ function registerSequencerContinueAction(
       sortOrder,
     },
     surfaces: ["command-palette"],
-    title: () => commandTitle(context, text.commandId, text.commandFallback),
+    title: () =>
+      commandTitle(context, command.commandId, command.commandFallback),
   });
 }
 
@@ -259,12 +220,8 @@ export function registerCherryPickActions(
       {
         commandFallback: "Git: Abort Cherry-pick",
         commandId: "pier.git.cherryPickAbort",
-        loadingFallback: "Aborting cherry-pick...",
-        loadingKey: "gitLoadingCherryPickAbort",
-        successFallback: "Cherry-pick aborted",
-        successKey: "gitCherryPickAbortSuccess",
+        kind: "cherry-picking",
       },
-      (cwd) => context.git.abortCherryPick(cwd),
       22
     ),
     registerSequencerContinueAction(
@@ -272,17 +229,8 @@ export function registerCherryPickActions(
       {
         commandFallback: "Git: Continue Cherry-pick",
         commandId: "pier.git.cherryPickContinue",
-        conflictBodyFallback:
-          "Cherry-pick still has conflicts. Resolve them, then continue.",
-        conflictBodyKey: "gitCherryPickContinueConflict",
-        conflictTitleFallback: "Cherry-pick Conflicts",
-        conflictTitleKey: "gitCherryPickConflictTitle",
-        loadingFallback: "Continuing cherry-pick...",
-        loadingKey: "gitLoadingCherryPickContinue",
-        successFallback: "Cherry-pick continued",
-        successKey: "gitCherryPickContinueSuccess",
+        kind: "cherry-picking",
       },
-      (cwd) => context.git.continueCherryPick(cwd),
       23
     ),
   ];
@@ -320,12 +268,8 @@ export function registerRevertActions(
       {
         commandFallback: "Git: Abort Revert",
         commandId: "pier.git.revertAbort",
-        loadingFallback: "Aborting revert...",
-        loadingKey: "gitLoadingRevertAbort",
-        successFallback: "Revert aborted",
-        successKey: "gitRevertAbortSuccess",
+        kind: "reverting",
       },
-      (cwd) => context.git.abortRevert(cwd),
       25
     ),
     registerSequencerContinueAction(
@@ -333,17 +277,8 @@ export function registerRevertActions(
       {
         commandFallback: "Git: Continue Revert",
         commandId: "pier.git.revertContinue",
-        conflictBodyFallback:
-          "Revert still has conflicts. Resolve them, then continue.",
-        conflictBodyKey: "gitRevertContinueConflict",
-        conflictTitleFallback: "Revert Conflicts",
-        conflictTitleKey: "gitRevertConflictTitle",
-        loadingFallback: "Continuing revert...",
-        loadingKey: "gitLoadingRevertContinue",
-        successFallback: "Revert continued",
-        successKey: "gitRevertContinueSuccess",
+        kind: "reverting",
       },
-      (cwd) => context.git.continueRevert(cwd),
       26
     ),
   ];

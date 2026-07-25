@@ -169,6 +169,13 @@ export class FileEditorViewCoordinator {
     }
   }
 
+  /** After host CSS font vars change, force CM6 geometry remeasure on all views. */
+  requestMeasureAll(): void {
+    for (const session of this.#sessions.values()) {
+      session.requestMeasure();
+    }
+  }
+
   disposeDocument(documentId: string): void {
     for (const [sessionId, session] of this.#sessions) {
       if (

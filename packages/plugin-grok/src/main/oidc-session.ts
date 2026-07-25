@@ -119,6 +119,19 @@ export function needsRefresh(entry: OidcAuthEntry, nowMs: number): boolean {
   return exp <= nowMs + REFRESH_SKEW_MS;
 }
 
+/**
+ * Hard expiry without the refresh skew: a token inside the skew window is
+ * still accepted by the billing API, so a transient refresh failure may
+ * continue with it. Unknown expiry counts as usable (the request decides).
+ */
+export function accessTokenExpired(
+  entry: OidcAuthEntry,
+  nowMs: number
+): boolean {
+  const exp = sessionExpiryMs(entry);
+  return exp !== null && exp <= nowMs;
+}
+
 function resolveTokenEndpoint(entry: OidcAuthEntry): string | null {
   if (typeof entry.oidc_issuer !== "string" || entry.oidc_issuer.length === 0) {
     return null;
@@ -176,12 +189,18 @@ export async function refreshOidcSession(options: {
       json = null;
     }
     if (!response.ok) {
+      // Keep the OAuth error code in the message: classifiers downstream key
+      // on invalid_grant/access_denied, which often only appear in `error`
+      // while `error_description` is free-form prose.
+      const code = typeof json?.error === "string" ? json.error : null;
       const description =
-        (typeof json?.error_description === "string" &&
-          json.error_description) ||
-        (typeof json?.error === "string" && json.error) ||
-        `HTTP ${response.status}`;
-      return { error: description };
+        typeof json?.error_description === "string"
+          ? json.error_description
+          : null;
+      if (code) {
+        return { error: description ? `${code}: ${description}` : code };
+      }
+      return { error: `HTTP ${response.status}` };
     }
     const accessToken =
       (typeof json?.access_token === "string" && json.access_token) ||

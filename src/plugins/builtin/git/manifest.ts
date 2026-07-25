@@ -5,6 +5,12 @@ import { GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY } from "./settings.ts";
 // manifest.id 消费,不再从 shared 契约取常量。
 export const GIT_PLUGIN_ID = "pier.git";
 export const GIT_CHANGES_PANEL_ID = "pier.git.changes";
+/** 底栏分支身份项（下拉入口）；溢出时 pinned。 */
+export const GIT_WORKTREE_STATUS_ITEM_ID = "pier.worktree.status";
+/** 底栏更改 ± 项；可被溢出整项隐藏。 */
+export const GIT_CHANGES_STATUS_ITEM_ID = "pier.git.status.changes";
+/** 底栏同步 ↑↓ 项；可被溢出整项隐藏。 */
+export const GIT_SYNC_STATUS_ITEM_ID = "pier.git.status.sync";
 
 export const GIT_PLUGIN_MANIFEST: PluginManifest = {
   apiVersion: 1,
@@ -148,6 +154,30 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
     },
     {
       category: "Git",
+      id: "pier.git.pull",
+      permissions: ["git:write"],
+      title: "Git: Pull",
+    },
+    {
+      category: "Git",
+      id: "pier.git.push",
+      permissions: ["git:write"],
+      title: "Git: Push",
+    },
+    {
+      category: "Git",
+      id: "pier.git.sync",
+      permissions: ["git:write"],
+      title: "Git: Sync",
+    },
+    {
+      category: "Git",
+      id: "pier.git.viewChanges",
+      permissions: ["git:read", "panel:open"],
+      title: "Git: View Changes",
+    },
+    {
+      category: "Git",
       id: "pier.git.review.openFile",
       permissions: ["file:read", "panel:open"],
       title: "Git: Open File",
@@ -168,19 +198,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       category: "Git",
       id: "pier.git.review.discardFile",
       permissions: ["git:write"],
-      title: "Git: Restore",
-    },
-    {
-      category: "Git",
-      id: "pier.git.review.stageAll",
-      permissions: ["git:write"],
-      title: "Git: Stage All Changes",
-    },
-    {
-      category: "Git",
-      id: "pier.git.review.unstageAll",
-      permissions: ["git:write"],
-      title: "Git: Unstage All Changes",
+      title: "Git: Discard Changes",
     },
   ],
   configuration: {
@@ -188,8 +206,29 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       "pier.git.statusItem.showDirtyIndicator": {
         default: true,
         description:
-          "Show working tree change counts and line delta in the worktree status item.",
+          "Show dirtiness on the status bar branch icon. Open the Git dropdown for change details.",
         order: 10,
+        type: "boolean",
+      },
+      "pier.git.statusItem.showChangesStatus": {
+        default: true,
+        description:
+          "Show the changes item (colored +/− line stats; click opens the review panel) in the terminal status bar.",
+        order: 11,
+        type: "boolean",
+      },
+      "pier.git.statusItem.showSyncStatus": {
+        default: true,
+        description:
+          "Show the sync item (ahead/behind counts with one-click sync) in the terminal status bar.",
+        order: 12,
+        type: "boolean",
+      },
+      "pier.git.statusItem.confirmSync": {
+        default: true,
+        description:
+          "Ask for confirmation before syncing (pull then push) from the status bar sync item.",
+        order: 13,
         type: "boolean",
       },
       [GIT_WORKTREE_BRANCH_NAME_PROMPT_SETTING_KEY]: {
@@ -247,10 +286,29 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
   terminalStatusItems: [
     {
       alignment: "right",
-      id: "pier.worktree.status",
-      order: 10,
+      id: GIT_WORKTREE_STATUS_ITEM_ID,
+      // 右组 reverse 后：高 order 更靠左（内）→ branch · changes · sync · project
+      order: 12,
+      overflowPinned: true,
+      overflowPriority: 0,
       permissions: ["worktree:read", "workspace:open"],
-      title: "Worktree Status",
+      title: "Git Branch",
+    },
+    {
+      alignment: "right",
+      id: GIT_CHANGES_STATUS_ITEM_ID,
+      order: 11,
+      overflowPriority: 30,
+      permissions: ["git:read", "panel:open"],
+      title: "Git Changes",
+    },
+    {
+      alignment: "right",
+      id: GIT_SYNC_STATUS_ITEM_ID,
+      order: 10,
+      overflowPriority: 20,
+      permissions: ["git:read", "git:write"],
+      title: "Git Sync",
     },
   ],
   version: "1.0.0",

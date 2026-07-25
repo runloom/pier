@@ -1,5 +1,11 @@
 import { Avatar, AvatarFallback } from "@pier/ui/avatar.tsx";
 import { Button } from "@pier/ui/button.tsx";
+import {
+  COLLECTION_QUOTA_SETTINGS_ITEM_MIN_WIDTH,
+  collectionAutoFitClassName,
+  collectionAutoFitStyle,
+  collectionLayoutMode,
+} from "@pier/ui/collection-auto-layout.ts";
 import { Empty, EmptyDescription, EmptyHeader } from "@pier/ui/empty.tsx";
 import {
   formatDurationShort,
@@ -26,7 +32,10 @@ import type {
   GrokUsageWindow,
 } from "../shared/accounts.ts";
 import { remainingPercent, usageRisk } from "../shared/usage.ts";
-import type { Translate } from "./format-account-error.ts";
+import {
+  isTransientUsageError,
+  type Translate,
+} from "./format-account-error.ts";
 import { usageProgressVariant, usageWindowLabel } from "./usage-meter.tsx";
 
 export function accountDisplayLabel(account: {
@@ -147,6 +156,7 @@ function Quota({
 export function QuotaGroup({
   compact = false,
   error,
+  errorTransient = false,
   language,
   loading = false,
   t,
@@ -154,6 +164,7 @@ export function QuotaGroup({
 }: {
   compact?: boolean;
   error: string | undefined;
+  errorTransient?: boolean;
   language: string;
   loading?: boolean;
   t: Translate;
@@ -168,8 +179,9 @@ export function QuotaGroup({
     );
   }
 
+  const hasError = error !== undefined && error.length > 0;
   const errorBanner =
-    error !== undefined && error.length > 0 ? (
+    hasError && !errorTransient ? (
       <div
         className="flex w-full flex-col gap-1 text-sm"
         data-slot="grok-usage-error"
@@ -181,10 +193,28 @@ export function QuotaGroup({
         <p className="break-all text-muted-foreground text-xs">{error}</p>
       </div>
     ) : null;
+  // Transient failure: last-good data stays on screen without alarm. Only
+  // when there is nothing to show do we surface a muted note, not a red
+  // banner — the next poll retries automatically.
+  const transientNote =
+    hasError && errorTransient && windows.length === 0 ? (
+      <p
+        className="w-full text-muted-foreground text-sm"
+        data-slot="grok-usage-error"
+      >
+        {t(
+          "pier.grok.errors.usageTemporarilyUnavailable",
+          "Could not update Grok usage right now — will retry automatically"
+        )}
+      </p>
+    ) : null;
 
   if (windows.length === 0) {
     if (errorBanner) {
       return errorBanner;
+    }
+    if (transientNote) {
+      return transientNote;
     }
     return (
       <Empty className="min-h-19 gap-0 border-0 p-3">
@@ -197,7 +227,8 @@ export function QuotaGroup({
     );
   }
 
-  const single = windows.length === 1;
+  const count = windows.length;
+  const layout = collectionLayoutMode(count);
 
   return (
     <div
@@ -205,7 +236,7 @@ export function QuotaGroup({
         "flex w-full min-w-0 flex-col gap-3",
         compact && "flex-1 max-[48rem]:col-span-full max-[48rem]:row-start-2"
       )}
-      data-count={windows.length}
+      data-count={count}
       data-slot="grok-quota-group"
     >
       {errorBanner}
@@ -216,13 +247,17 @@ export function QuotaGroup({
       */}
       <div
         className={cn(
-          "w-full min-w-0",
-          single
-            ? "block"
-            : "grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))] max-[36rem]:grid-cols-1"
+          collectionAutoFitClassName(count, {
+            gapClassName: "gap-4",
+            singleAs: "block",
+          })
         )}
-        data-layout={single ? "single" : "auto-fit"}
+        data-layout={layout}
         data-slot="grok-quota-grid"
+        style={collectionAutoFitStyle(
+          count,
+          COLLECTION_QUOTA_SETTINGS_ITEM_MIN_WIDTH
+        )}
       >
         {windows.map((window) => (
           <Quota
@@ -279,6 +314,7 @@ export function OtherAccount({
         <QuotaGroup
           compact
           error={account.usage?.error}
+          errorTransient={isTransientUsageError(account.usage?.error)}
           language={language}
           loading={!account.usage}
           t={t}

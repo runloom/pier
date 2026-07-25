@@ -42,7 +42,6 @@ import { createFileWatchService } from "../services/file-watch-service.ts";
 import { GitReviewService } from "../services/git-review/git-review-service.ts";
 import { createGitService } from "../services/git-service.ts";
 import { createGitWatchService } from "../services/git-watch-service.ts";
-import { createLocalEnvironmentService } from "../services/local-environments-service.ts";
 import { createNodeHttpAssetFetcher } from "../services/managed-plugins/http-asset-fetcher.ts";
 import { createHttpOfficialIndexProvider } from "../services/managed-plugins/http-index-provider.ts";
 import { createManagedPluginIndexStore } from "../services/managed-plugins/index-state.ts";
@@ -79,6 +78,7 @@ import {
 import { showNativeWindowCloseFailure } from "../windows/native-window-close-failure.ts";
 import { windowManager } from "../windows/window-manager.ts";
 import { wireAppCoreWindowAndPanelTransfer } from "./app-core-panel-transfer.ts";
+import { wireAppCorePierHomeAndSkills } from "./app-core-pier-home.ts";
 import { requireAppCoreInitialization } from "./app-core-readiness.ts";
 import { createAppCoreUsageData } from "./app-core-usage-data.ts";
 import {
@@ -99,7 +99,6 @@ import { createLazyAppCore } from "./lazy-app-core.ts";
 import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
-import { wireProjectSkills } from "./project-skills-wiring.ts";
 import { sendRendererCommand } from "./renderer-command-host.ts";
 import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
 import {
@@ -339,21 +338,24 @@ function createPierAppCore(): PierAppCore {
   const files = createFileService({
     transactionLock: filePathTransactionLock,
   });
-  const localEnvironments = createLocalEnvironmentService({
-    processEnvironment,
-  });
   const panelContexts = createPanelContextService();
-  const { projectSkills, agentLaunchGate } = wireProjectSkills({
-    userData: app.getPath("userData"),
-    isProduction: runtimeMode === "production",
-    transactionLock: filePathTransactionLock,
-    panelContexts,
+  const {
+    agentLaunchGate,
+    agentMcpCatalog,
+    agentRules,
     localEnvironments,
+    pierBindings,
+    pierHome,
+    projectSkills,
+  } = wireAppCorePierHomeAndSkills({
+    isProduction: runtimeMode === "production",
     listInstalledAgents: async () =>
       (await agentDetection.detect()).detectedIds,
-    onInvalidated: (event) => {
-      broadcastProjectSkillsInvalidated(event);
-    },
+    onProjectSkillsInvalidated: broadcastProjectSkillsInvalidated,
+    panelContexts,
+    processEnvironment,
+    transactionLock: filePathTransactionLock,
+    userDataPath: app.getPath("userData"),
   });
 
   const workspaceService = createWorkspaceService();
@@ -375,6 +377,8 @@ function createPierAppCore(): PierAppCore {
     agentRuntimeIndex,
     agentUsage,
     agentLaunchGate,
+    agentMcpCatalog,
+    agentRules,
     ai: createAiService({
       detectAgents: async () => (await agentDetection.detect()).detectedIds,
       readAgentUsage: () => agentUsage.read(),
@@ -401,6 +405,8 @@ function createPierAppCore(): PierAppCore {
     usageData,
     processEnvironment,
     localEnvironments,
+    pierHome,
+    pierBindings,
     plugins: pluginHost.plugins,
     managedPlugins,
     pluginDisableTransitions,

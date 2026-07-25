@@ -149,6 +149,27 @@ describe("pricing catalog", () => {
     }
   });
 
+  it("prices kimi-k3 and Kimi Code short ids (not k2.6 rates)", () => {
+    const k3 = requirePricing("kimi-k3");
+    expect(k3.inputMicrousd).toBe(3);
+    expect(k3.outputMicrousd).toBe(15);
+    const expected = plainCost(k3);
+    for (const modelId of [
+      "kimi-k3",
+      "k3",
+      "kimi-code/k3",
+      "moonshotai/kimi-k3",
+      "kimi-for-coding",
+    ]) {
+      expect(
+        estimateObservationCostMicrousd(observation({ modelId })),
+        modelId
+      ).toBe(expected);
+    }
+    // Must not collapse to older k2.6 rates
+    expect(expected).not.toBe(plainCost(requirePricing("kimi-k2.6")));
+  });
+
   it("does not let the grok-4 hyphen wildcard swallow dotted 4.x ids", () => {
     // `aliases: ["grok-4-*"]` → prefix `grok-4-`；`grok-4.5` 以 `.` 接续，不得命中。
     expect("grok-4.5".startsWith("grok-4-")).toBe(false);

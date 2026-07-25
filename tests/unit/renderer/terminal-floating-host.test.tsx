@@ -47,6 +47,10 @@ describe("terminal panel floating host", () => {
         if (this.dataset.floatingItem === "runtime-controls") {
           return rect(160, 8, 180, 32);
         }
+        // 可见胶囊比外层 min-width 壳窄：几何必须以它为准。
+        if (this.dataset.floatingPill === "runtime-controls") {
+          return rect(160, 8, 140, 32);
+        }
         if (this.dataset.floatingItem === "terminal-search") {
           return rect(360, 12, 120, 40);
         }
@@ -118,11 +122,15 @@ describe("terminal panel floating host", () => {
     expect(primary?.style.width).toBe("fit-content");
     expect(primary?.style.minWidth).toBe("min(20rem, calc(100% - 1rem))");
     expect(primary?.style.maxWidth).toBe("min(25rem, calc(100% - 1rem))");
-    expect(primary?.style.left).toBe("160px");
+    // 初始位置按可见胶囊宽度（140）归一化还原：8 + (500 - 140 - 16) * 0.5
+    expect(primary?.style.left).toBe("180px");
     expect(primary?.style.top).toBe("8px");
     expect(primary?.style.transform).toBe("");
+    // 透明外壳不接收指针事件；命中区与可见胶囊一致。
+    expect(primary).not.toHaveClass("pointer-events-auto");
     const shell = primary?.firstElementChild;
     expect(shell).toHaveClass(
+      "pointer-events-auto",
       "rounded-full",
       "border",
       "border-border",
@@ -174,6 +182,32 @@ describe("terminal panel floating host", () => {
     expect(dragCommit?.y).toBeGreaterThan(0.2);
     expect(primary).toHaveAttribute("data-dragging", "false");
     expect(getLastTerminalHostSnapshot()?.webOverlayRects).toEqual([]);
+
+    // 拖到面板右缘：右限按可见胶囊宽度计算（8 + 500 - 140 - 16 = 352），
+    // 不再被外层 320px min-width 壳提前卡住。
+    fireEvent.pointerDown(handle, {
+      button: 0,
+      clientX: 270,
+      clientY: 76,
+      pointerId: 8,
+    });
+    fireEvent.pointerMove(window, {
+      buttons: 1,
+      clientX: 2000,
+      clientY: 76,
+      pointerId: 8,
+    });
+    fireEvent.pointerUp(window, {
+      button: 0,
+      clientX: 2000,
+      clientY: 76,
+      pointerId: 8,
+    });
+    expect(primary?.style.left).toBe("352px");
+    expect(commit).toHaveBeenLastCalledWith(
+      "runtime-controls",
+      expect.objectContaining({ x: 1 })
+    );
 
     fireEvent.doubleClick(handle);
     expect(commit).toHaveBeenLastCalledWith("runtime-controls", {

@@ -213,11 +213,11 @@
       "id": "pier.codex.accounts",
       "maxSize": {
         "w": 8,
-        "h": 4
+        "h": 6
       },
       "minSize": {
         "w": 2,
-        "h": 3
+        "h": 2
       },
       "refreshable": false,
       "searchTerms": ["codex", "account", "quota", "账号", "配额"],
@@ -235,5 +235,5 @@
     }
   ],
   "terminalStatusItems": [],
-  "version": "1.4.3"
+  "version": "1.4.4"
 }

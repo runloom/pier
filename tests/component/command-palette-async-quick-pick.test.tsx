@@ -1,4 +1,5 @@
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
+import i18next from "i18next";
 import { act } from "react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { CommandPalette } from "@/components/common/command-palette.tsx";
@@ -17,6 +18,7 @@ const originalScrollIntoView = Element.prototype.scrollIntoView;
 describe("CommandPalette async quick pick", () => {
   beforeEach(async () => {
     await initI18n();
+    await i18next.changeLanguage("en");
     vi.stubGlobal("ResizeObserver", TestResizeObserver);
     Element.prototype.scrollIntoView = vi.fn();
     resetAppDialogForTests();
@@ -154,5 +156,89 @@ describe("CommandPalette async quick pick", () => {
     expect(state.stack).toHaveLength(0);
     expect(state.quickPick?.errorText).toBe("Search failed: boom");
     expect(state.quickPick?.loading).toBe(false);
+  });
+
+  it("shows a loading skeleton instead of empty copy while async items are pending", async () => {
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        items: [],
+        loading: true,
+        onAccept: vi.fn(),
+        placeholder: "Search things",
+        title: "Async pick",
+      });
+    });
+
+    await screen.findByPlaceholderText("Search things");
+    expect(
+      document.querySelector('[data-slot="command-palette-loading"]')
+    ).not.toBeNull();
+    expect(
+      screen.getByRole("status", {
+        name: i18next.t("commandPalette.loading"),
+      })
+    ).toBeVisible();
+    expect(
+      screen.queryByText(i18next.t("commandPalette.emptyQuickPick"))
+    ).toBeNull();
+
+    act(() => {
+      useCommandPaletteController.getState().updateQuickPick({
+        items: [
+          {
+            id: "result-1",
+            label: "Result One",
+          },
+        ],
+        loading: false,
+      });
+    });
+
+    await waitFor(() => {
+      expect(screen.getByText("Result One")).toBeVisible();
+    });
+    expect(
+      document.querySelector('[data-slot="command-palette-loading"]')
+    ).toBeNull();
+    expect(
+      screen.queryByText(i18next.t("commandPalette.emptyQuickPick"))
+    ).toBeNull();
+  });
+
+  it("shows empty copy only after loading finishes with no results", async () => {
+    render(<CommandPalette />);
+
+    act(() => {
+      useCommandPaletteController.getState().openQuickPick({
+        items: [],
+        loading: true,
+        onAccept: vi.fn(),
+        placeholder: "Search things",
+        title: "Async pick",
+      });
+    });
+
+    await screen.findByPlaceholderText("Search things");
+    expect(
+      screen.queryByText(i18next.t("commandPalette.emptyQuickPick"))
+    ).toBeNull();
+
+    act(() => {
+      useCommandPaletteController.getState().updateQuickPick({
+        items: [],
+        loading: false,
+      });
+    });
+
+    await waitFor(() => {
+      expect(
+        screen.getByText(i18next.t("commandPalette.emptyQuickPick"))
+      ).toBeVisible();
+    });
+    expect(
+      document.querySelector('[data-slot="command-palette-loading"]')
+    ).toBeNull();
   });
 });

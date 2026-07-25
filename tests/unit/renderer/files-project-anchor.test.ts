@@ -2,6 +2,7 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import { describe, expect, it } from "vitest";
 import {
   formatProjectPath,
+  formatProjectStatusLabel,
   projectAnchor,
 } from "../../../src/plugins/builtin/files/renderer/files-project-anchor.ts";
 
@@ -78,5 +79,17 @@ describe("formatProjectPath", () => {
 
   it("strips trailing separators before compare", () => {
     expect(formatProjectPath("/Users/a/proj/", "/Users/a/")).toBe("~/proj");
+  });
+});
+
+describe("formatProjectStatusLabel", () => {
+  it("returns the final path segment for status bar chrome", () => {
+    expect(formatProjectStatusLabel("/Users/xyz/ABC/pier")).toBe("pier");
+    expect(formatProjectStatusLabel("/Users/xyz/ABC/pier/")).toBe("pier");
+  });
+
+  it("keeps root and single-segment paths readable", () => {
+    expect(formatProjectStatusLabel("/")).toBe("/");
+    expect(formatProjectStatusLabel("pier")).toBe("pier");
   });
 });

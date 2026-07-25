@@ -209,11 +209,11 @@
       "id": "pier.claude.accounts",
       "maxSize": {
         "w": 8,
-        "h": 4
+        "h": 6
       },
       "minSize": {
         "w": 2,
-        "h": 3
+        "h": 2
       },
       "refreshable": false,
       "searchTerms": ["claude", "anthropic", "account", "usage", "账号"],
@@ -236,5 +236,5 @@
     }
   ],
   "terminalStatusItems": [],
-  "version": "1.3.2"
+  "version": "1.3.3"
 }

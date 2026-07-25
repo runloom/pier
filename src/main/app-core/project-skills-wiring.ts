@@ -7,10 +7,15 @@ import { dialog } from "electron";
 import type { FilePathTransactionLock } from "../services/file-path-transaction-lock.ts";
 import type { LocalEnvironmentService } from "../services/local-environments-service.ts";
 import type { PanelContextService } from "../services/panel-context-service.ts";
+import type { PierHomeService } from "../services/pier-home/service.ts";
 import {
   createManagedAgentLaunchGate,
   type ManagedAgentLaunchGate,
 } from "../services/project-skills/launch-gate.ts";
+import {
+  createPierBindingsChannel,
+  type PierBindingsChannel,
+} from "../services/project-skills/pier-bindings.ts";
 import {
   createProjectSkillsService,
   type ProjectSkillsService,
@@ -76,6 +81,8 @@ export function wireProjectSkills(args: {
   transactionLock: FilePathTransactionLock;
   panelContexts: PanelContextService;
   localEnvironments: LocalEnvironmentService;
+  pierHome?: PierHomeService;
+  isPierHomeRoot?: (path: string) => Promise<boolean>;
   listInstalledAgents: () => Promise<readonly string[]>;
   onInvalidated: (event: {
     projectIdentity: string;
@@ -85,13 +92,36 @@ export function wireProjectSkills(args: {
   projectSkills: ProjectSkillsService;
   agentLaunchGate: ManagedAgentLaunchGate;
   systemSkills: SystemSkillsChannel;
+  pierBindings: PierBindingsChannel;
 } {
+  const isPierHomeRoot = args.isPierHomeRoot;
   const systemSkills = createSystemSkillsChannel({
     userData: args.userData,
     isProduction: args.isProduction,
     // First contribution consumer: official capability plugins (e.g. the
     // canvas skill) register here via the managed-plugin discipline chain.
     contributions: [],
+  });
+
+  const pierBindings = createPierBindingsChannel({
+    userData: args.userData,
+    contentDirFor: (skillId) => {
+      if (!args.pierHome) {
+        throw new Error("pier home is not configured");
+      }
+      return args.pierHome.skills.contentDir(skillId);
+    },
+    listAlwaysIncludeSkills: async () => {
+      if (!args.pierHome) return [];
+      await args.pierHome.ensure();
+      return args.pierHome.skills.listAlwaysIncludeSkills();
+    },
+    listLibrarySkillIds: async () => {
+      if (!args.pierHome) return [];
+      await args.pierHome.ensure();
+      const list = await args.pierHome.skills.list();
+      return list.map((skill) => skill.id);
+    },
   });
 
   const projectSkills = createProjectSkillsService({
@@ -108,6 +138,7 @@ export function wireProjectSkills(args: {
     // Git five-state for projection targets — deletion confirmations show
     // the real tracked/untracked/ignored fact instead of "unknown".
     inspectGitState,
+    ...(isPierHomeRoot ? { isPierHomeRoot } : {}),
     // Design v8 §3.3: shared local project index + recent panel contexts,
     // current-panel projects first. The index is an entry list, never an
     // authorization — every command re-resolves identity from realpath.
@@ -119,15 +150,24 @@ export function wireProjectSkills(args: {
       try {
         const recent = await args.panelContexts.listRecent();
         for (const context of recent) {
-          if (context.projectRootPath) {
-            roots.push({ realPath: context.projectRootPath, source: "panel" });
+          if (!context.projectRootPath) continue;
+          if (
+            isPierHomeRoot &&
+            (await isPierHomeRoot(context.projectRootPath))
+          ) {
+            continue;
           }
+          roots.push({ realPath: context.projectRootPath, source: "panel" });
         }
       } catch {
         // Panel context state unavailable — index still serves entries.
       }
       const snapshot = await args.localEnvironments.snapshot();
       for (const project of snapshot.projects) {
+        if (project.kind === "pier-home") continue;
+        if (isPierHomeRoot && (await isPierHomeRoot(project.projectRootPath))) {
+          continue;
+        }
         roots.push({
           realPath: project.projectRootPath,
           source: "environment" as const,
@@ -137,13 +177,15 @@ export function wireProjectSkills(args: {
     },
     listInstalledAgents: args.listInstalledAgents,
     systemSkills,
+    pierBindings,
     onInvalidated: args.onInvalidated,
   });
 
   const agentLaunchGate = createManagedAgentLaunchGate({
     userData: args.userData,
+    ...(isPierHomeRoot ? { isPierHomeRoot } : {}),
     ensureReady: (skillArgs) => projectSkills.ensureReady(skillArgs),
   });
 
-  return { projectSkills, agentLaunchGate, systemSkills };
+  return { projectSkills, agentLaunchGate, systemSkills, pierBindings };
 }

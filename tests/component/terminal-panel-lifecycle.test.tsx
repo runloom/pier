@@ -780,6 +780,13 @@ describe("TerminalPanel lifecycle", () => {
   });
 
   it("mounts the terminal status bar for a panel with task metadata", async () => {
+    terminalStatusItemRegistry.register({
+      id: "test.worktree-status",
+      isVisible: ({ context: panelContext }) =>
+        Boolean(panelContext?.worktreeRoot),
+      render: () => <span>worktree</span>,
+    });
+
     const { container, findByTestId } = render(
       <TerminalPanel
         {...createPanelProps({
@@ -797,7 +804,9 @@ describe("TerminalPanel lifecycle", () => {
     ).toContain("bottom-[var(--terminal-content-bottom)]");
   });
 
-  it("keeps the status bar mounted when no item is visible for the panel", async () => {
+  it("unmounts the status bar when no item is visible for the panel", async () => {
+    // 空闲策略（G6）：零可见项时不挂载底栏，高度还给终端；
+    // 恢复入口在设置 → 终端 → 状态栏，而非空条右键。
     terminalStatusItemRegistry.register({
       id: "test.worktree-status",
       isVisible: ({ context: panelContext }) =>
@@ -805,7 +814,7 @@ describe("TerminalPanel lifecycle", () => {
       render: () => <span>worktree</span>,
     });
 
-    const { container, findByTestId } = render(
+    const { container, queryByTestId } = render(
       <TerminalPanel
         {...createPanelProps({
           params: {
@@ -822,11 +831,12 @@ describe("TerminalPanel lifecycle", () => {
       />
     );
 
-    const statusBar = await findByTestId("terminal-status-bar");
-    expect(statusBar).not.toHaveTextContent("worktree");
-    expect(
-      statusBar.querySelector('[data-testid="terminal-status-bar-spacer"]')
-    ).not.toBeNull();
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-testid="terminal-panel-root"]')
+      ).not.toBeNull();
+    });
+    expect(queryByTestId("terminal-status-bar")).toBeNull();
     expect(
       container.querySelector(".terminal-anchor")?.className ?? ""
     ).toContain("bottom-[var(--terminal-content-bottom)]");
@@ -2581,6 +2591,12 @@ describe("TerminalPanel lifecycle", () => {
     });
 
     it("derives --terminal-content-bottom from the composer's measured height", async () => {
+      // 状态栏高度只在有可见项挂载时计入公式（仅可见项挂载策略）。
+      terminalStatusItemRegistry.register({
+        id: "test.worktree-status",
+        isVisible: () => true,
+        render: () => <span>worktree</span>,
+      });
       useForegroundActivityStore.setState({
         activities: { "terminal-1": agentActivityFor("terminal-1") },
         ts: 1,

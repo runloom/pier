@@ -1,7 +1,7 @@
 import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import i18next from "i18next";
-import { toast } from "sonner";
 import { create } from "zustand";
+import { systemNotify } from "@/lib/notifications/system-notify.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
@@ -27,6 +27,7 @@ interface AppUpdateState {
   snapshot: AppUpdateSnapshot | null;
 }
 
+// toast 同步连发节流（会话内）；记录去重由 NCS dedupeKey 负责（跨会话）。
 let readyToastVersion: string | null = null;
 
 function maybeToastReady(snapshot: AppUpdateSnapshot): void {
@@ -37,22 +38,17 @@ function maybeToastReady(snapshot: AppUpdateSnapshot): void {
     return;
   }
   readyToastVersion = snapshot.availableVersion;
-  toast.success(
-    i18next.t("settings.appUpdate.toast.ready", {
-      version: snapshot.availableVersion,
-    }),
-    {
-      action: {
-        label: i18next.t("settings.appUpdate.action.restart"),
-        onClick: () => {
-          useAppUpdateStore
-            .getState()
-            .quitAndInstall()
-            .catch(() => undefined);
-        },
-      },
-    }
-  );
+  const version = snapshot.availableVersion;
+  systemNotify({
+    actions: [
+      { id: "relaunch", labelKey: "settings.appUpdate.action.restart" },
+    ],
+    body: i18next.t("settings.appUpdate.toast.readyDetail", { version }),
+    dedupeKey: `app-update:${version}`,
+    kind: "app.update",
+    severity: "success",
+    titleKey: "settings.appUpdate.toast.ready",
+  });
 }
 
 export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
@@ -142,10 +138,14 @@ export function initAppUpdateBridge(): { dispose: () => void } {
     .status()
     .then(apply)
     .catch((err: unknown) => {
-      showAppAlert({
+      // 启动拉取失败不弹窗打断：只落消息中心（带技术详情）。
+      systemNotify({
         body: err instanceof Error ? err.message : String(err),
-        title: i18next.t("settings.appUpdate.toast.statusFailed"),
-      }).catch(() => undefined);
+        kind: "app.update",
+        severity: "warning",
+        suppressToast: true,
+        titleKey: "settings.appUpdate.toast.statusFailed",
+      });
     });
   return {
     dispose: () => {

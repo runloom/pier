@@ -3,6 +3,7 @@ import { useEffect } from "react";
 import { AgentIndexCountsControl } from "@/components/common/agent-index-counts-control.tsx";
 import { AppUpdateControl } from "@/components/common/app-update-control.tsx";
 import { resolveLong } from "@/components/common/document-title.tsx";
+import { NotificationCenterControl } from "@/components/common/notification-center-control.tsx";
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
 
 const TITLEBAR_HEIGHT = "38px";
@@ -50,6 +51,7 @@ export function TitleBar() {
       </span>
       <div className="absolute right-3 flex items-center gap-1">
         <AgentIndexCountsControl />
+        <NotificationCenterControl />
         <AppUpdateControl />
       </div>
     </div>

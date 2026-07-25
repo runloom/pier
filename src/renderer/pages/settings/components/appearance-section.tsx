@@ -1,6 +1,7 @@
 import { Card, CardContent } from "@pier/ui/card.tsx";
 import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
 import { useT } from "@/i18n/use-t.ts";
+import { CodeFontSizeRow } from "@/pages/settings/components/rows/code-font-size-row.tsx";
 import { LanguageRow } from "@/pages/settings/components/rows/language-row.tsx";
 import { MonoFontRow } from "@/pages/settings/components/rows/mono-font-row.tsx";
 import { MonoFontSizeRow } from "@/pages/settings/components/rows/mono-font-size-row.tsx";
@@ -25,6 +26,8 @@ export function AppearanceSection() {
             <MonoFontRow />
             <FieldSeparator />
             <MonoFontSizeRow />
+            <FieldSeparator />
+            <CodeFontSizeRow />
             <FieldSeparator />
             <LanguageRow />
           </FieldSet>

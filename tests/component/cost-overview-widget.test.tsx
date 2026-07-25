@@ -202,6 +202,26 @@ describe("CostOverviewWidget", () => {
     ).toHaveTextContent("initial boom");
   });
 
+  it("renders filtered-empty copy when sources filter matches nothing", () => {
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(loadedSnapshot());
+    });
+    renderWidget({
+      params: {
+        sources: ["missing-source-a", "missing-source-b"],
+      },
+      size: { h: 3, w: 8 },
+    });
+    expect(
+      document.querySelector('[data-slot="widget-empty"]')
+    ).toBeInTheDocument();
+    expect(screen.getByText("No sources match this view")).toBeInTheDocument();
+    expect(
+      screen.getByText("Open widget settings and include at least one source.")
+    ).toBeInTheDocument();
+    expect(screen.queryByTestId("cost-overview-kpis")).not.toBeInTheDocument();
+  });
+
   it("renders KPI tiles and the stacked bar chart when data is loaded", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());
@@ -211,43 +231,208 @@ describe("CostOverviewWidget", () => {
     expect(screen.getByTestId("cost-overview-chart")).toBeInTheDocument();
   });
 
-  it("hides the description at the minimum height", () => {
+  it("renders a line chart when params request tokens over time", () => {
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(loadedSnapshot());
+    });
+    renderWidget({
+      params: {
+        rangeDays: 31,
+        measure: "tokens",
+        groupBy: "none",
+        chart: "line",
+        kpis: ["periodTokens", "latestDayTokens"],
+        preset: "tokens",
+      },
+      size: { h: 3, w: 8 },
+    });
+    expect(screen.getByTestId("cost-overview-chart")).toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-chart-line")).toBeInTheDocument();
+    expect(
+      screen.queryByTestId("cost-overview-unpriced")
+    ).not.toBeInTheDocument();
+  });
+
+  it("hides unpriced badge for token measure even when pricing is partial", () => {
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(loadedSnapshot());
+    });
+    renderWidget({
+      params: {
+        rangeDays: 31,
+        measure: "tokens",
+        groupBy: "none",
+        chart: "line",
+        kpis: ["periodTokens", "latestDayTokens"],
+        preset: "tokens",
+      },
+      size: { h: 3, w: 8 },
+    });
+    expect(
+      screen.queryByTestId("cost-overview-unpriced")
+    ).not.toBeInTheDocument();
+  });
+
+  it("exposes unpriced badge test id when cost measure has partial pricing", () => {
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(loadedSnapshot());
+    });
+    renderWidget({ size: { h: 3, w: 8 } });
+    expect(screen.getByTestId("cost-overview-unpriced")).toBeInTheDocument();
+  });
+
+  it("keeps KPIs and unpriced badge when costs are all null", () => {
+    const unpriced = loadedSnapshot();
+    for (const source of unpriced.sources) {
+      for (const b of source.snapshot.buckets) {
+        b.estimatedCostMicrousd = null;
+        b.pricingStatus = "unpriced";
+      }
+      source.snapshot.summary.estimatedCostMicrousd = null;
+      source.snapshot.summary.todayEstimatedCostMicrousd = null;
+    }
+    for (const b of unpriced.overall.buckets) {
+      b.estimatedCostMicrousd = null;
+      b.pricingStatus = "unpriced";
+    }
+    unpriced.overall.summary.estimatedCostMicrousd = null;
+    unpriced.overall.summary.todayEstimatedCostMicrousd = null;
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(unpriced);
+    });
+    renderWidget({ size: { h: 3, w: 8 } });
+    expect(screen.getByTestId("cost-overview-kpis")).toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-unpriced")).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-slot="widget-empty"]')
+    ).not.toBeInTheDocument();
+    expect(
+      screen.queryByText("No usage in this range")
+    ).not.toBeInTheDocument();
+    expect(screen.queryByText("No cost data yet")).not.toBeInTheDocument();
+  });
+
+  it("shows emptyInRange when sources exist but all activity is outside rangeDays", () => {
+    const stale: UsageAggregateSnapshot = {
+      overall: {
+        buckets: [bucket("2026-06-01", 100, 1_000_000)],
+        coverage: { complete: true, from: "2026-06-01", to: "2026-07-11" },
+        observedAt: Date.now(),
+        summary: {
+          byModel: [],
+          estimatedCostMicrousd: 1_000_000,
+          latestDayTokens: 100,
+          periodTokens: 100,
+          sourceCount: 1,
+          todayEstimatedCostMicrousd: null,
+        },
+      },
+      sources: [
+        sourceSnapshot(
+          "pier.codex",
+          [bucket("2026-06-01", 100, 1_000_000)],
+          1_000_000
+        ),
+      ],
+    };
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(stale);
+    });
+    renderWidget({
+      params: {
+        rangeDays: 7,
+        measure: "cost",
+        groupBy: "source",
+        chart: "stackedBar",
+        kpis: ["today", "period", "periodTokens", "latestDayTokens"],
+      },
+      size: { h: 3, w: 8 },
+    });
+    expect(
+      document.querySelector('[data-slot="widget-empty"]')
+    ).toBeInTheDocument();
+    expect(screen.getByText("No usage in this range")).toBeInTheDocument();
+    expect(screen.queryByTestId("cost-overview-kpis")).not.toBeInTheDocument();
+  });
+
+  it("uses compact density without chart or description at minimum height", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());
     });
     const { rerender } = renderWidget({ size: { h: 2, w: 8 } });
+    expect(screen.getByTestId("cost-overview-content")).toHaveAttribute(
+      "data-density",
+      "compact"
+    );
     expect(
       screen.queryByTestId("cost-overview-description")
     ).not.toBeInTheDocument();
+    expect(screen.queryByTestId("cost-overview-chart")).not.toBeInTheDocument();
+    // compact 至少 2 个 KPI；列定义走 inline auto-fit，不依赖 Tailwind 任意值
+    const compactKpis = screen.getByTestId("cost-overview-kpis");
+    expect(compactKpis.childElementCount).toBe(2);
+    expect(compactKpis).toHaveAttribute("data-layout", "auto-fit");
+    expect(compactKpis).toHaveStyle({
+      gridTemplateColumns: expect.stringContaining(
+        "auto-fit"
+      ) as unknown as string,
+    });
+    expect(screen.getByTestId("cost-overview-content")).toHaveClass(
+      "overflow-hidden"
+    );
+    expect(screen.getByTestId("cost-overview-content")).not.toHaveClass(
+      "overflow-y-auto"
+    );
 
-    rerender(<CostOverviewWidget {...baseProps({ size: { h: 3, w: 8 } })} />);
+    rerender(<CostOverviewWidget {...baseProps({ size: { h: 4, w: 8 } })} />);
+    expect(screen.getByTestId("cost-overview-content")).toHaveAttribute(
+      "data-density",
+      "full"
+    );
     expect(screen.getByTestId("cost-overview-description")).toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-chart")).toBeInTheDocument();
   });
 
-  it("keeps a minimum chart height when dense content needs to scroll", () => {
+  it("does not show view preset chips on the card face", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());
     });
-    renderWidget({ size: { h: 2, w: 4 } });
-    expect(screen.getByTestId("cost-overview-content")).toHaveClass(
-      "h-full",
-      "min-h-0",
-      "overflow-y-auto"
-    );
-    expect(screen.getByTestId("cost-overview-chart")).toHaveClass("min-h-8");
-    expect(screen.getByTestId("cost-overview-chart")).not.toHaveClass(
-      "min-h-0"
-    );
+    renderWidget({ size: { h: 3, w: 8 } });
+    expect(
+      screen.queryByTestId("cost-overview-preset-chips")
+    ).not.toBeInTheDocument();
   });
 
   it("preserves unknown costs instead of formatting them as zero", () => {
     const unknown = loadedSnapshot();
+    // Clear all priced points; keep token series via tokens measure so KPIs still render.
+    for (const source of unknown.sources) {
+      for (const b of source.snapshot.buckets) {
+        b.estimatedCostMicrousd = null;
+        b.pricingStatus = "unpriced";
+      }
+      source.snapshot.summary.estimatedCostMicrousd = null;
+      source.snapshot.summary.todayEstimatedCostMicrousd = null;
+    }
+    for (const b of unknown.overall.buckets) {
+      b.estimatedCostMicrousd = null;
+      b.pricingStatus = "unpriced";
+    }
     unknown.overall.summary.estimatedCostMicrousd = null;
     unknown.overall.summary.todayEstimatedCostMicrousd = null;
     act(() => {
       useUsageDataStore.getState().applySnapshot(unknown);
     });
-    renderWidget({ size: { h: 3, w: 8 } });
+    renderWidget({
+      params: {
+        rangeDays: 31,
+        measure: "tokens",
+        groupBy: "none",
+        chart: "line",
+        kpis: ["today", "period", "periodTokens", "latestDayTokens"],
+      },
+      size: { h: 3, w: 8 },
+    });
     expect(screen.getAllByText("—")).toHaveLength(2);
     expect(screen.queryByText("$0.00")).not.toBeInTheDocument();
   });
@@ -275,14 +460,64 @@ describe("CostOverviewWidget", () => {
     expect(toast.success).toHaveBeenCalledWith("Cost refreshed");
   });
 
-  it("does not read the store while the panel is hidden", () => {
+  it("keeps push-store content available while the panel is hidden", () => {
     act(() => {
       useUsageDataStore.getState().applySnapshot(loadedSnapshot());
     });
     renderWidget({ visible: false });
     expect(
       document.querySelector('[data-slot="widget-skeleton"]')
-    ).toBeInTheDocument();
-    expect(screen.queryByTestId("cost-overview-kpis")).not.toBeInTheDocument();
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-kpis")).toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-chart")).toBeInTheDocument();
+  });
+
+  it("applies store updates while the panel stays hidden", () => {
+    const first = loadedSnapshot();
+    // View model uses coverage.to as "today"; stamp cost on that day.
+    for (const source of first.sources) {
+      const last = source.snapshot.buckets.at(-1);
+      if (last) last.estimatedCostMicrousd = 250_000;
+    }
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(first);
+    });
+    renderWidget({ visible: false, size: { h: 3, w: 8 } });
+    expect(screen.getByText("$0.50")).toBeInTheDocument();
+
+    const second = loadedSnapshot();
+    second.overall.observedAt = first.overall.observedAt + 1;
+    for (const source of second.sources) {
+      const last = source.snapshot.buckets.at(-1);
+      if (last) last.estimatedCostMicrousd = 625_000;
+    }
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(second);
+    });
+    expect(screen.getByText("$1.25")).toBeInTheDocument();
+    expect(
+      document.querySelector('[data-slot="widget-skeleton"]')
+    ).not.toBeInTheDocument();
+  });
+
+  it("does not flash skeleton when the panel becomes visible again", () => {
+    act(() => {
+      useUsageDataStore.getState().applySnapshot(loadedSnapshot());
+    });
+    const { rerender } = renderWidget({ visible: true });
+    expect(screen.getByTestId("cost-overview-kpis")).toBeInTheDocument();
+
+    rerender(<CostOverviewWidget {...baseProps({ visible: false })} />);
+    expect(
+      document.querySelector('[data-slot="widget-skeleton"]')
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-kpis")).toBeInTheDocument();
+
+    rerender(<CostOverviewWidget {...baseProps({ visible: true })} />);
+    expect(
+      document.querySelector('[data-slot="widget-skeleton"]')
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-kpis")).toBeInTheDocument();
+    expect(screen.getByTestId("cost-overview-chart")).toBeInTheDocument();
   });
 });

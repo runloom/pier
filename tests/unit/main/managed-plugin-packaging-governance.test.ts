@@ -8,22 +8,22 @@ import { describe, expect, it } from "vitest";
 const APPROVED_BUNDLED_WIDGET_SIZE_POLICIES = [
   {
     defaultSize: { h: 3, w: 4 },
-    maxSize: { h: 4, w: 8 },
-    minSize: { h: 3, w: 2 },
+    maxSize: { h: 6, w: 8 },
+    minSize: { h: 2, w: 2 },
     pluginId: "pier.claude",
     widgetId: "pier.claude.accounts",
   },
   {
     defaultSize: { h: 3, w: 4 },
-    maxSize: { h: 4, w: 8 },
-    minSize: { h: 3, w: 2 },
+    maxSize: { h: 6, w: 8 },
+    minSize: { h: 2, w: 2 },
     pluginId: "pier.codex",
     widgetId: "pier.codex.accounts",
   },
   {
     defaultSize: { h: 3, w: 4 },
-    maxSize: { h: 4, w: 8 },
-    minSize: { h: 3, w: 2 },
+    maxSize: { h: 6, w: 8 },
+    minSize: { h: 2, w: 2 },
     pluginId: "pier.grok",
     widgetId: "pier.grok.accounts",
   },

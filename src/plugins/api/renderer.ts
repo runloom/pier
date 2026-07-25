@@ -216,6 +216,8 @@ export interface RendererPluginNotificationOptions {
     label: string;
     onClick: () => void;
   };
+  /** 后台/系统事件：除 toast 外同时落入宿主消息中心（kind=plugin.event，source=插件 id）。 */
+  systemEvent?: boolean;
 }
 
 export type RendererPluginAgentSelection = AgentSelectionResult;

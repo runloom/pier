@@ -2,6 +2,7 @@ import {
   deriveAgentSessionTitleFromPrompt,
   MAX_AGENT_SESSION_TITLE_LENGTH,
   normalizeAgentSessionTitle,
+  stripAgentPromptMarkup,
 } from "@shared/agent-session-title.ts";
 import type {
   AiGenerateTextRequest,
@@ -41,6 +42,7 @@ export async function refineAgentSessionTitleFromPrompt(
   const prompt = [
     "Generate a short session title for this coding agent chat.",
     `Max ${MAX_AGENT_SESSION_TITLE_LENGTH} characters, single line, no quotes.`,
+    "No XML/HTML tags (e.g. never output <user_query>). No markdown fences.",
     "Match the user language. Output ONLY the title.",
     "",
     "User message:",
@@ -66,7 +68,7 @@ export async function refineAgentSessionTitleFromPrompt(
       return null;
     }
     const refined = normalizeAgentSessionTitle(
-      result.text.replace(/^["「]|["」]$/g, "").trim()
+      stripAgentPromptMarkup(result.text.replace(/^["「]|["」]$/g, "").trim())
     );
     if (!refined || refined === currentTitle) {
       return null;

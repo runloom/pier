@@ -144,7 +144,7 @@ describe("terminal status bar grouped rendering", () => {
     expect(bar).toHaveTextContent("LR");
   });
 
-  it("hidden 覆盖过滤该项渲染;core 声明恒存在使容器恒挂载(内容为空但入口保留)", () => {
+  it("hidden 覆盖过滤后无可见项则不挂载", () => {
     terminalStatusItemRegistry.register({
       id: "test.only",
       render: () => <span>Only</span>,
@@ -153,14 +153,10 @@ describe("terminal status bar grouped rendering", () => {
 
     renderBar();
 
-    // core 声明表恒含 core.agent-status → hasDeclaredTerminalStatusItems=true → 容器挂载。
-    // test.only 因 hidden 被过滤;本测试未走 registerAgentStatusItem 故 agent-status 也不渲染。
-    const bar = screen.getByTestId("terminal-status-bar");
-    expect(bar).toBeInTheDocument();
-    expect(bar).toHaveTextContent("");
+    expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
   });
 
-  it("F4:有已启用插件声明状态项时,即使全部生效隐藏,容器仍挂载(右键面保留)", () => {
+  it("无可见项时不挂载空栏（恢复入口在设置页）", () => {
     usePluginRegistryStore.setState({
       diagnostics: [],
       error: null,
@@ -171,12 +167,10 @@ describe("terminal status bar grouped rendering", () => {
 
     renderBar();
 
-    const bar = screen.getByTestId("terminal-status-bar");
-    expect(bar).toBeInTheDocument();
-    expect(bar).toHaveTextContent("");
+    expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
   });
 
-  it("F4:仅 core 声明时容器仍挂载(agent activity 无关)", () => {
+  it("仅 core 声明且 agent 不可见时不挂载空栏", () => {
     usePluginRegistryStore.setState({
       diagnostics: [],
       error: null,
@@ -186,24 +180,26 @@ describe("terminal status bar grouped rendering", () => {
 
     renderBar();
 
-    // 无插件声明,但 core 声明恒含 core.agent-status → 容器挂载。
-    const bar = screen.getByTestId("terminal-status-bar");
-    expect(bar).toBeInTheDocument();
+    expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
   });
 
-  it("isVisible 动态可见性在 hidden 过滤之后仍生效(容器因 core 声明挂载,test.invisible 因 isVisible=false 不渲染)", () => {
+  it("isVisible 动态可见性在 hidden 过滤之后仍生效", () => {
     terminalStatusItemRegistry.register({
       id: "test.invisible",
       isVisible: () => false,
       render: () => <span>Invisible</span>,
     });
+    terminalStatusItemRegistry.register({
+      id: "test.visible",
+      render: () => <span>Visible</span>,
+    });
 
     renderBar();
 
-    // core 声明恒存在,容器挂载;test.invisible 被 isVisible 过滤,不出现在 DOM。
     const bar = screen.getByTestId("terminal-status-bar");
     expect(bar).toBeInTheDocument();
     expect(bar).not.toHaveTextContent("Invisible");
+    expect(bar).toHaveTextContent("Visible");
   });
 
   it("状态项容器允许收缩，内容溢出时才由内部 truncate 截断", () => {
@@ -229,7 +225,7 @@ describe("terminal status bar grouped rendering", () => {
     expect(wrapper.className).not.toContain("shrink-0");
   });
 
-  it("dispose 后移除状态项渲染;core 声明恒存在使容器仍挂载", () => {
+  it("dispose 后无可见项则不挂载空栏", () => {
     const dispose = terminalStatusItemRegistry.register({
       id: "test.item",
       render: () => <span>Visible</span>,
@@ -238,10 +234,7 @@ describe("terminal status bar grouped rendering", () => {
 
     renderBar();
 
-    // dispose 让 test.item 从 registry 移除;core 声明恒存在 → 容器挂载但不含 test.item。
-    const bar = screen.getByTestId("terminal-status-bar");
-    expect(bar).toBeInTheDocument();
-    expect(bar).not.toHaveTextContent("Visible");
+    expect(screen.queryByTestId("terminal-status-bar")).toBeNull();
   });
 });
 
@@ -281,7 +274,7 @@ describe("hasDeclaredTerminalStatusItems(F4:挂载判定口径 —— 有声明�
   });
 });
 
-describe("shouldMountTerminalStatusBar(F4:与 terminal-panel.tsx hasStatusBar 必须同一实现)", () => {
+describe("shouldMountTerminalStatusBar(仅可见项挂载)", () => {
   const statusContext = {
     context,
     cwd: context.cwd ?? null,
@@ -290,22 +283,21 @@ describe("shouldMountTerminalStatusBar(F4:与 terminal-panel.tsx hasStatusBar �
     title: null,
   };
 
-  it("零 plugin 声明零可见但 core 声明恒存在 → true", () => {
-    // 同上:hasDeclaredTerminalStatusItems 恒 true(因 core 声明) → shouldMount 恒 true。
+  it("零可见 → false（空闲卸栏）", () => {
     expect(
       shouldMountTerminalStatusBar({ left: [], right: [] }, statusContext, [])
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("有声明但零可见(全部 hidden)→ true", () => {
+  it("有声明但零可见(全部 hidden)→ false", () => {
     expect(
       shouldMountTerminalStatusBar({ left: [], right: [] }, statusContext, [
         pluginEntryWithStatusItem("pier.a"),
       ])
-    ).toBe(true);
+    ).toBe(false);
   });
 
-  it("零声明但有可见项(运行时注册未声明)→ true", () => {
+  it("有可见项 → true", () => {
     expect(
       shouldMountTerminalStatusBar(
         { left: [{ id: "x", render: () => null }], right: [] },

@@ -10,10 +10,11 @@ import {
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 
 vi.mock("sonner", () => ({
-  toast: {
+  toast: Object.assign(vi.fn(), {
+    dismiss: vi.fn(),
     error: vi.fn(),
     success: vi.fn(),
-  },
+  }),
 }));
 
 vi.mock("@/lib/actions/task-run-operations.ts", () => ({

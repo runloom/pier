@@ -24,6 +24,9 @@ interface PanelKitMetadata {
  * Core（主系统）panel kit 静态表 — terminal native bridge、welcome fallback
  * 等系统预留能力。业务插件 panel 通过 plugin-panel-registry 动态叠加，
  * 见 getPanelComponents()。新增主系统 panel 时在此登记一行。
+ *
+ * 消息中心不再是 dockview panel：入口为标题栏铃铛 + Popover 全量列表。
+ * 旧 layout 里的 `notifications` panel 由 sanitizeSavedLayout 剔除。
  */
 export const panelKits = {
   workbench: workbenchPanelKit,

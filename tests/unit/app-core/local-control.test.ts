@@ -158,6 +158,7 @@ function cliClientServices(): PierCoreServices {
       addProject: async () => emptyEnvironmentState(),
       bindWorktree: async () => undefined,
       clearWorktreeBinding: async () => undefined,
+      getProjectKind: async () => null,
       projectSnapshot: async () => null,
       removeProject: async () => emptyEnvironmentState(),
       resolveProject: async () => null,
@@ -165,6 +166,7 @@ function cliClientServices(): PierCoreServices {
       runLifecycle: async () => undefined,
       snapshot: async () => emptyEnvironmentState(),
       updateProject: async () => emptyEnvironmentState(),
+      upsertPierHome: async () => emptyEnvironmentState(),
       worktreeBinding: async () => null,
     },
     secrets: {

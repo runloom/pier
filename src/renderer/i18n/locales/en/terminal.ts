@@ -23,6 +23,8 @@ export const terminal = {
   composer: {
     attachFailed: "Couldn’t add file",
     attachFile: "Add file",
+    blockedUnfocused: "Session input not focused",
+    blockedWaiting: "Session awaiting confirmation",
     invalidAttachmentRef: "Invalid attachment reference",
     keyHint: "⇧⏎ newline · {{attach}} attach · Esc close",
     label: "Rich Input",
@@ -36,6 +38,10 @@ export const terminal = {
     mentionEmptyProjectTitle: "No project open",
     mentionNoResults: "No matching files",
     mentionPlaceholder: "Mention a file or folder…",
+    noActiveTerminal:
+      "Switch to the target terminal tab first, then open Rich Input.",
+    sendStateUnknown:
+      "Couldn’t confirm the session input state. Sending cancelled — try again.",
     pasteInsertAnyway: "Insert into message anyway",
     pathUnreadable: "Couldn’t read that file path",
     placeholder: "Type here; sends into the terminal session",
@@ -59,11 +65,16 @@ export const terminal = {
     controlLabel: "Task run controls: {{label}}",
     duration: "Elapsed time: {{duration}}",
     failed: "Failed",
-    finishedBlocked: "Blocked: {{label}}",
-    finishedCancelled: "Cancelled: {{label}}",
-    finishedFailed: "Failed: {{label}}",
-    finishedForceCancelled: "Force-stopped: {{label}}",
-    finishedSuccess: "Finished: {{label}}",
+    finishedBlocked: "Task blocked",
+    finishedCancelled: "Task cancelled",
+    finishedDetailDuration: "{{label}} · took {{duration}}",
+    finishedDetailFailed: "{{label}} · exit code {{code}} · took {{duration}}",
+    finishedDetailRanFor: "{{label}} · ran for {{duration}}",
+    finishedDetailBlocked:
+      "{{label}} · waiting on dependencies, took {{duration}}",
+    finishedFailed: "Task failed",
+    finishedForceCancelled: "Task force-stopped",
+    finishedSuccess: "Task finished",
     forceStop: "Force stop",
     forceStopBody:
       "The task process did not stop. Force stopping terminates it immediately; terminal task panels keep a result summary.",

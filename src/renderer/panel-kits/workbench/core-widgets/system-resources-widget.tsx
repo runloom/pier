@@ -1,56 +1,161 @@
-import { type ChartConfig, ChartContainer } from "@pier/ui/chart.tsx";
-import { formatBytes, formatPercent } from "@pier/ui/format.tsx";
-import { Progress } from "@pier/ui/progress.tsx";
-import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
+import {
+  formatBytes,
+  formatPercent,
+  formatRelativeTime,
+} from "@pier/ui/format.tsx";
+import { cn } from "@pier/ui/utils.ts";
+import {
+  WidgetEmpty,
+  WidgetError,
+  WidgetSkeleton,
+} from "@pier/ui/widget-state.tsx";
 import type { WorkbenchWidgetComponentProps } from "@plugins/api/renderer.ts";
+import {
+  agentSessionTitleInput,
+  resolveAgentSessionTitle,
+} from "@shared/agent-session-title.ts";
+import type {
+  PierResourceSnapshot,
+  SessionIdentity,
+  SessionResourceRow,
+} from "@shared/contracts/pier-resource.ts";
 import i18next from "i18next";
 import { useEffect, useRef } from "react";
-import { Area, AreaChart } from "recharts";
 import { useT } from "@/i18n/use-t.ts";
 import {
-  acquireSystemStatsPolling,
-  pollSystemStatsOnce,
-  useSystemStatsStore,
-} from "@/stores/system-stats.store.ts";
+  workbenchKpiCollectionClassName,
+  workbenchKpiCollectionStyle,
+  workbenchKpiLayoutMode,
+} from "@/lib/workbench/kpi-auto-layout.ts";
+import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import {
+  acquirePierResourcePolling,
+  pollPierResourceOnce,
+  usePierResourceStore,
+} from "@/stores/pier-resource.store.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import {
+  densityFor,
+  processRowLimitFor,
+  type ResourceDensity,
+  type ResourceKpiId,
+  visibleKpiIds,
+} from "./system-resources-density.ts";
 
-const CPU_CHART_CONFIG = {
-  value: { color: "var(--chart-1)" },
-} satisfies ChartConfig;
-
-function MeterTile({
-  detail,
+/**
+ * KPI 单元格：主指标大、次指标小；纵排时数字完整可读。
+ */
+function KpiTile({
   label,
-  ratio,
+  role = "secondary",
   value,
 }: {
-  detail?: string;
   label: string;
-  ratio: number | null;
+  role?: "primary" | "secondary";
   value: string;
 }) {
+  const primary = role === "primary";
   return (
-    <div className="flex flex-col gap-1.5 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-      <div className="flex items-baseline justify-between gap-2">
-        <span className="truncate text-muted-foreground text-xs">{label}</span>
-        {detail ? (
-          <span className="truncate text-muted-foreground text-xs tabular-nums">
-            {detail}
-          </span>
-        ) : null}
-      </div>
-      <p className="font-semibold text-lg tabular-nums leading-tight">
+    <div className="flex min-w-0 flex-col gap-1">
+      <span
+        className={cn(
+          "truncate text-muted-foreground leading-none",
+          primary ? "text-xs" : "text-[11px]"
+        )}
+      >
+        {label}
+      </span>
+      <p
+        className={cn(
+          "min-w-0 break-all font-semibold tabular-nums leading-none tracking-tight",
+          primary ? "text-2xl" : "text-lg"
+        )}
+      >
         {value}
       </p>
-      {ratio === null ? null : <Progress className="h-1" value={ratio * 100} />}
     </div>
   );
 }
 
+function kpiLabel(id: ResourceKpiId, t: ReturnType<typeof useT>): string {
+  switch (id) {
+    case "totalMemory":
+      return t("workbench.widget.systemResources.totalMemory");
+    case "totalCpu":
+      return t("workbench.widget.systemResources.totalCpu");
+    case "appMemory":
+      return t("workbench.widget.systemResources.appMemory");
+    case "workloadMemory":
+      return t("workbench.widget.systemResources.workloadMemory");
+    default:
+      return id;
+  }
+}
+
+function kpiValue(
+  id: ResourceKpiId,
+  snapshot: PierResourceSnapshot,
+  locale: string
+): string {
+  const { summary } = snapshot;
+  switch (id) {
+    case "totalMemory":
+      return formatBytes(summary.totalRelatedMemoryBytes, locale);
+    case "totalCpu":
+      return summary.totalRelatedCpuPercent === null
+        ? "—"
+        : formatPercent(summary.totalRelatedCpuPercent, locale);
+    case "appMemory":
+      return formatBytes(summary.pierAppMemoryBytes, locale);
+    case "workloadMemory":
+      return formatBytes(summary.workloadMemoryBytes, locale);
+    default:
+      return "—";
+  }
+}
+
+function sessionTitle(
+  identity: SessionIdentity,
+  t: ReturnType<typeof useT>
+): string {
+  switch (identity.kind) {
+    case "agent":
+      return resolveAgentSessionTitle(
+        agentSessionTitleInput({
+          agentId: identity.agentId,
+          sessionTitle: identity.sessionTitle,
+        })
+      ).primary;
+    case "task":
+      return identity.label;
+    case "shell":
+      return (
+        identity.commandLine ??
+        t("workbench.widget.activityOverview.kind.shell")
+      );
+    case "idle":
+      return t("workbench.widget.activityOverview.kind.idle");
+    default:
+      return t("workbench.widget.systemResources.sessionTerminal");
+  }
+}
+
+function sessionHotDot(session: SessionResourceRow): string {
+  if (session.hot) {
+    return "bg-warning";
+  }
+  if (
+    (session.cpuPercent ?? 0) > 0.05 ||
+    (session.memoryBytes ?? 0) > 64 * 1024 * 1024
+  ) {
+    return "bg-success";
+  }
+  return "bg-muted-foreground/40";
+}
+
 /**
- * 系统资源物料：CPU / 内存 / 负载 / Pier 自身内存。
- * 拉取式 2s 轮询，面板可见才 acquire（协议红线：不可见必须停表）；
- * refreshToken 变化时立即补采一次，不等待下一拍。
- * 数据全部来自 main 侧 os.* 真实采样，零外部依赖。
+ * 工作台资源：KPI 汇总 + 终端会话列表（唯一列表）。
+ * Pier 进程分项不在卡面展示；本体占用仍反映在 KPI。
  */
 export function SystemResourcesWidget({
   refreshToken,
@@ -60,12 +165,13 @@ export function SystemResourcesWidget({
   const t = useT();
   const locale = i18next.language || "en";
   const previousRefreshTokenRef = useRef(refreshToken);
+  const workspaceApi = useWorkspaceStore((s) => s.api);
 
   useEffect(() => {
     if (!visible) {
       return;
     }
-    return acquireSystemStatsPolling();
+    return acquirePierResourcePolling();
   }, [visible]);
 
   useEffect(() => {
@@ -74,21 +180,19 @@ export function SystemResourcesWidget({
     }
     previousRefreshTokenRef.current = refreshToken;
     if (visible) {
-      // pollSystemStatsOnce 内部负责错误落态，不会产生未处理 rejection。
-      pollSystemStatsOnce();
+      pollPierResourceOnce();
     }
   }, [refreshToken, visible]);
 
-  const snapshot = useSystemStatsStore((s) => s.snapshot);
-  const error = useSystemStatsStore((s) => s.error);
-  const cpuHistory = useSystemStatsStore((s) => s.cpuHistory);
+  const snapshot = usePierResourceStore((s) => s.snapshot);
+  const error = usePierResourceStore((s) => s.error);
 
   if (snapshot === null && error) {
     return (
       <WidgetError
         message={t("workbench.widget.systemResources.error")}
         onRetry={() => {
-          pollSystemStatsOnce().catch(() => undefined);
+          pollPierResourceOnce().catch(() => undefined);
         }}
         retryLabel={t("workbench.widget.retry")}
       />
@@ -98,70 +202,143 @@ export function SystemResourcesWidget({
     return <WidgetSkeleton />;
   }
 
-  const memoryUsed = snapshot.memoryTotal - snapshot.memoryFree;
-  const memoryRatio = memoryUsed / snapshot.memoryTotal;
-  const showTrend = size.h >= 4 && cpuHistory.length >= 2;
+  const density: ResourceDensity = densityFor(size);
+  const kpiIds = visibleKpiIds(density, size.w, size.h);
+  const rowLimit = processRowLimitFor(density, size.h);
+  const showDescription = density === "full";
+  const showFooter = density !== "compact";
+  // h≥3 有会话列表区（空态也占位，避免只剩 KPI 悬空）
+  const showSessionList = density !== "compact";
+  const sessions = snapshot.sessions.slice(0, Math.max(rowLimit, 1));
+  const hostFree = snapshot.summary.hostMemoryFreeBytes;
+  const observedAt =
+    snapshot.sampledAt > 0
+      ? formatRelativeTime(snapshot.sampledAt, Date.now(), locale)
+      : "";
+
+  const handleFocusSession = (panelId: string): void => {
+    if (!workspaceApi) {
+      return;
+    }
+    activateWorkspacePanel(workspaceApi, panelId, { reveal: "always" });
+  };
+
+  const kpiCount = kpiIds.length;
+  const kpiGridClassName = workbenchKpiCollectionClassName(kpiCount);
+  const kpiGridStyle = workbenchKpiCollectionStyle(kpiCount);
+  const kpiLayout = workbenchKpiLayoutMode(kpiCount);
 
   return (
-    <div className="flex min-h-full flex-col gap-2 p-3">
+    <div
+      className={
+        density === "compact"
+          ? "flex h-full min-h-0 flex-col justify-start gap-2 overflow-hidden p-2.5"
+          : "flex h-full min-h-0 flex-col justify-start gap-3 overflow-hidden p-3"
+      }
+      data-density={density}
+      data-kpi-layout={kpiLayout}
+      data-testid="pier-resources-content"
+    >
+      {showDescription ? (
+        <p
+          className="shrink-0 text-muted-foreground text-xs leading-relaxed"
+          data-testid="pier-resources-description"
+        >
+          {t("workbench.widget.systemResources.description")}
+        </p>
+      ) : null}
+
       <div
-        className="grid @[14rem]:grid-cols-2 grid-cols-1 gap-2"
-        data-testid="system-resources-grid"
+        className={kpiGridClassName}
+        data-layout={kpiLayout}
+        data-testid="pier-resources-kpis"
+        style={kpiGridStyle}
       >
-        <MeterTile
-          detail={t("workbench.widget.systemResources.cores").replace(
-            "{{count}}",
-            String(snapshot.cpuCount)
-          )}
-          label={t("workbench.widget.systemResources.cpu")}
-          ratio={snapshot.cpuUsage}
-          value={
-            snapshot.cpuUsage === null
-              ? "—"
-              : formatPercent(snapshot.cpuUsage, locale)
-          }
-        />
-        <MeterTile
-          detail={formatBytes(snapshot.memoryTotal, locale)}
-          label={t("workbench.widget.systemResources.memory")}
-          ratio={memoryRatio}
-          value={formatBytes(memoryUsed, locale)}
-        />
-        <MeterTile
-          label={t("workbench.widget.systemResources.load")}
-          ratio={null}
-          value={`${snapshot.loadAvg1.toFixed(1)} · ${snapshot.loadAvg5.toFixed(1)} · ${snapshot.loadAvg15.toFixed(1)}`}
-        />
-        <MeterTile
-          label={t("workbench.widget.systemResources.appMemory")}
-          ratio={null}
-          value={formatBytes(snapshot.appMemoryRss, locale)}
-        />
+        {kpiIds.map((id, index) => (
+          <KpiTile
+            key={id}
+            label={kpiLabel(id, t)}
+            role={index === 0 ? "primary" : "secondary"}
+            value={kpiValue(id, snapshot, locale)}
+          />
+        ))}
       </div>
-      {showTrend ? (
-        <div className="flex min-h-0 flex-1 flex-col gap-1 rounded-lg border border-border/60 bg-muted/30 px-3 py-2">
-          <span className="text-muted-foreground text-xs">
-            {t("workbench.widget.systemResources.cpuTrend")}
+
+      {showSessionList ? (
+        <div
+          className="flex min-h-0 min-w-0 flex-1 flex-col gap-2 overflow-hidden"
+          data-testid="pier-resources-sessions"
+        >
+          <span className="shrink-0 text-muted-foreground text-xs">
+            {t("workbench.widget.systemResources.sessionsHeading")}
           </span>
-          <ChartContainer
-            className="aspect-auto min-h-12 w-full flex-1"
-            config={CPU_CHART_CONFIG}
-          >
-            <AreaChart
-              data={cpuHistory as { ts: number; value: number }[]}
-              margin={{ bottom: 2, left: 0, right: 0, top: 2 }}
-            >
-              <Area
-                dataKey="value"
-                fill="var(--color-value)"
-                fillOpacity={0.15}
-                isAnimationActive={false}
-                stroke="var(--color-value)"
-                strokeWidth={1.5}
-                type="monotone"
+          {sessions.length === 0 ? (
+            <div className="flex min-h-0 flex-1 flex-col justify-center">
+              <WidgetEmpty
+                hint={t("workbench.widget.systemResources.sessionsEmptyHint")}
+                title={t("workbench.widget.systemResources.sessionsEmpty")}
               />
-            </AreaChart>
-          </ChartContainer>
+            </div>
+          ) : (
+            <ul className="flex min-h-0 flex-1 flex-col overflow-y-auto">
+              {sessions.map((session) => (
+                <li key={`${session.windowId}:${session.panelId}`}>
+                  <button
+                    className="flex w-full items-center justify-between gap-2 rounded-md px-0.5 py-1.5 text-left text-xs transition-colors hover:bg-accent/50"
+                    onClick={() => handleFocusSession(session.panelId)}
+                    type="button"
+                  >
+                    <span className="flex min-w-0 items-center gap-2">
+                      <span
+                        aria-hidden="true"
+                        className={cn(
+                          "size-1.5 shrink-0 rounded-full",
+                          sessionHotDot(session)
+                        )}
+                      />
+                      <span className="min-w-0 truncate font-medium text-foreground">
+                        {sessionTitle(session.identity, t)}
+                      </span>
+                    </span>
+                    <span className="flex shrink-0 items-center gap-2 text-muted-foreground tabular-nums">
+                      <span>
+                        {session.memoryBytes === null
+                          ? "—"
+                          : formatBytes(session.memoryBytes, locale)}
+                      </span>
+                      <span className="w-10 text-right">
+                        {session.cpuPercent === null
+                          ? "—"
+                          : formatPercent(session.cpuPercent, locale)}
+                      </span>
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      ) : null}
+
+      {showFooter ? (
+        <div className="flex shrink-0 items-center justify-between gap-2 text-muted-foreground text-xs">
+          <span className="truncate" data-testid="pier-resources-observed-at">
+            {observedAt
+              ? t("workbench.widget.systemResources.updatedAt", {
+                  relative: observedAt,
+                })
+              : ""}
+          </span>
+          {hostFree !== undefined && density === "full" ? (
+            <span
+              className="shrink-0 tabular-nums"
+              data-testid="pier-resources-host-free"
+            >
+              {t("workbench.widget.systemResources.hostFree", {
+                value: formatBytes(hostFree, locale),
+              })}
+            </span>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -3,11 +3,22 @@ import { terminalLaunchEnvKeySchema } from "./terminal-launch.ts";
 
 const copyPatternSchema = z.array(z.string().min(1).max(256)).max(64);
 
+export const localEnvironmentProjectKindSchema = z.enum([
+  "project",
+  "pier-home",
+]);
+
+export type LocalEnvironmentProjectKind = z.infer<
+  typeof localEnvironmentProjectKindSchema
+>;
+
 export const localEnvironmentProjectSchema = z
   .object({
     cleanupCommand: z.string().max(12_000).default(""),
     copyPatterns: copyPatternSchema.default([]),
     env: z.record(terminalLaunchEnvKeySchema, z.string()).default({}),
+    /** Index kind; pier-home never carries real setup/cleanup scripts. */
+    kind: localEnvironmentProjectKindSchema.default("project"),
     projectRootPath: z.string().min(1),
     setupCommand: z.string().max(12_000).default(""),
     updatedAt: z.number().int().nonnegative(),

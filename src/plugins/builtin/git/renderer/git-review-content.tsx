@@ -60,6 +60,7 @@ function ReviewDocumentsComponent({
   setSidebarCollapsed,
   sidebarCollapsed,
   sidebarFooter,
+  sidebarHeader,
   treeModel,
   warnings,
 }: {
@@ -75,6 +76,7 @@ function ReviewDocumentsComponent({
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
   readonly sidebarFooter?: React.ReactNode;
+  readonly sidebarHeader?: React.ReactNode;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly warnings: GitReviewIndexOk["warnings"];
 }): React.JSX.Element {
@@ -484,6 +486,7 @@ function ReviewDocumentsComponent({
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
       {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
+      {...(sidebarHeader === undefined ? {} : { sidebarHeader })}
       sourcePanelId={panelId}
       treeModel={treeModel}
       viewState={viewState}

@@ -70,6 +70,7 @@ describe("passthroughKeyPressForKey", () => {
     });
     expect(passthroughKeyPressForKey({ ...base, key: "Enter" })).toEqual({
       keycode: APPKIT_KEYCODE.return,
+      text: "\r",
     });
   });
 

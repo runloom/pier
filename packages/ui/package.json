@@ -6,7 +6,10 @@
   "exports": {
     "./tailwind-theme.css": "./src/tailwind-theme.css",
     "./*": "./src/*.tsx",
-    "./utils": "./src/utils.ts"
+    "./utils": "./src/utils.ts",
+    "./utils.ts": "./src/utils.ts",
+    "./collection-auto-layout": "./src/collection-auto-layout.ts",
+    "./collection-auto-layout.ts": "./src/collection-auto-layout.ts"
   },
   "dependencies": {
     "@pierre/diffs": "1.2.12",

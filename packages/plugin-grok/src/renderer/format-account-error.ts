@@ -1,4 +1,25 @@
+import { USAGE_TEMPORARILY_UNAVAILABLE_ERROR } from "../shared/constants.ts";
+
 export type Translate = (key: string, fallback: string) => string;
+
+// Match the full marker only — loose substrings like "temporarily
+// unavailable" can appear inside genuine auth-failure details.
+const TRANSIENT_USAGE_MARKER =
+  USAGE_TEMPORARILY_UNAVAILABLE_ERROR.toLowerCase();
+
+/**
+ * Transient usage failures (network blip, 5xx, credential-store read error)
+ * keep last-good data and retry on the next poll — they never ask the user
+ * to re-login.
+ */
+export function isTransientUsageError(
+  error: string | null | undefined
+): boolean {
+  return (
+    typeof error === "string" &&
+    error.toLowerCase().includes(TRANSIENT_USAGE_MARKER)
+  );
+}
 
 /**
  * Map low-level account RPC / peer-sync failures to short user-facing copy.
@@ -50,6 +71,12 @@ export function formatAccountError(err: unknown, t: Translate): string {
     return t(
       "pier.grok.errors.apiKeyQuotaUnsupported",
       "API key accounts cannot report Grok quota — switch to an OIDC account"
+    );
+  }
+  if (lower.includes(TRANSIENT_USAGE_MARKER)) {
+    return t(
+      "pier.grok.errors.usageTemporarilyUnavailable",
+      "Could not update Grok usage right now — will retry automatically"
     );
   }
   if (

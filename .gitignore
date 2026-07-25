@@ -85,3 +85,7 @@ playwright-report/
 
 # Ephemeral CI release target list (Release Plugin job)
 /release-targets.json
+
+
+.agents/skills/
+.claude/skills/

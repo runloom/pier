@@ -286,6 +286,8 @@ function createPanelHarness(initialGroupId = "group-a") {
         },
       };
     }),
+    setTitle: vi.fn(),
+    title: "Changes",
     setVisible(next: boolean) {
       if (isVisible === next) {
         return;
@@ -354,6 +356,7 @@ function pluginContext(input: {
     typography: {
       baseFontSize: "16px",
       codeFontFamily: "Berkeley Mono",
+      codeFontSize: "13px",
       fontFamily: "Inter",
     },
   };
@@ -2194,6 +2197,7 @@ describe("Git review panel", () => {
         typography: {
           baseFontSize: "16px",
           codeFontFamily: "Berkeley Mono",
+          codeFontSize: "13px",
           fontFamily: "Inter",
         },
       },

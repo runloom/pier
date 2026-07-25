@@ -26,8 +26,8 @@ function translator(messages: Record<string, string>) {
 
 describe("files delete translations", () => {
   it.each([
-    [en.messages, "README.md", "Delete “README.md”?"],
-    [zhCn.messages, "README.md", "确定删除“README.md”吗？"],
+    [en.messages, "README.md", "Delete README.md?"],
+    [zhCn.messages, "README.md", "确定删除 README.md？"],
   ])("includes the target name in localized confirmation", (messages, name, expected) => {
     const t = translator(messages);
 

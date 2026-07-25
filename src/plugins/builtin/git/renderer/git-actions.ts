@@ -9,6 +9,7 @@ import {
   registerRebaseAbortAction,
   registerRebaseContinueAction,
 } from "./git-merge-rebase-actions.ts";
+import { registerGitRemotePaletteActions } from "./git-remote-palette-actions.ts";
 import {
   registerCherryPickActions,
   registerRevertActions,
@@ -21,9 +22,12 @@ import {
   registerStashIncludeUntrackedAction,
   registerStashPopAction,
 } from "./git-stash-actions.ts";
+import { registerViewChangesAction } from "./git-view-changes-action.ts";
 
 export function registerGitActions(context: RendererPluginContext): () => void {
   const disposers = [
+    registerViewChangesAction(context),
+    registerGitRemotePaletteActions(context),
     registerMergeAction(context),
     registerSwitchBranchAction(context),
     registerMergeAbortAction(context),

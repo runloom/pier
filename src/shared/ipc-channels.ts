@@ -42,8 +42,8 @@ export const PIER = {
   PLUGIN_RENDERER_ACTIVATION_REPORT: "pier://plugin:renderer-activation-report",
   ENVIRONMENT_PICK_PROJECT_DIRECTORY:
     "pier://environment:pick-project-directory",
-  // 系统资源快照（renderer 拉取式轮询;工作台 system-resources 物料）
-  SYSTEM_STATS_SNAPSHOT: "pier://system-stats:snapshot",
+  // Pier 资源快照（renderer 拉取式轮询;工作台 system-resources 物料）
+  PIER_RESOURCE_SNAPSHOT: "pier://pier-resource:snapshot",
   // 跨插件 API 等价成本聚合快照的初值拉取（增量走 PIER_BROADCAST.USAGE_DATA_CHANGED）。
   USAGE_DATA_SNAPSHOT: "pier://usage-data:snapshot",
   // 触发所有注册源的 rescan + 广播；成本物料手动刷新入口。
@@ -58,6 +58,14 @@ export const PIER = {
   SYSTEM_NOTIFICATION_OPEN_SETTINGS: "pier://notification:open-settings",
   // renderer 直发系统通知（历史 wire 值，改值会破坏滚动升级期的 preload/main 配对）
   SYSTEM_NOTIFICATION_SHOW: "pier:notification:system",
+  // 统一消息中心：snapshot pull + 系统事件上报 + 已读/DND 写操作
+  NOTIFICATION_CENTER_SNAPSHOT: "pier://notification-center:snapshot",
+  NOTIFICATION_CENTER_REPORT: "pier://notification-center:report",
+  NOTIFICATION_CENTER_MARK_READ: "pier://notification-center:mark-read",
+  NOTIFICATION_CENTER_MARK_READ_BY_KEY:
+    "pier://notification-center:mark-read-by-key",
+  NOTIFICATION_CENTER_MARK_ALL_READ: "pier://notification-center:mark-all-read",
+  NOTIFICATION_CENTER_SET_DND: "pier://notification-center:set-dnd",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -73,6 +81,9 @@ export const PIER_BROADCAST = {
   PREFERENCES_CHANGED: "pier:preferences:changed",
   // 原生窗口几何变化后触发 renderer 补发 overlay / native view layout.
   WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
+  // OS 级窗口 key-window 聚焦变化 (main → 该窗 renderer, payload WindowFocusChangedPayload).
+  // 勿用 DOM window blur/focus：原生终端 firstResponder 时 document.hasFocus() 为 false。
+  WINDOW_FOCUS_CHANGED: "pier://window:focus-changed",
   // 终端工作目录变更广播 (main → renderer).
   TERMINAL_CWD_CHANGED: "pier://terminal:cwd-changed",
   // 终端超链接激活广播 (main → renderer).
@@ -131,6 +142,8 @@ export const PIER_BROADCAST = {
   ATTENTION_SOUND_PLAY: "pier://attention-sound:play",
   // 项目技能状态失效 (main → 所有 renderer, payload { projectIdentity, observedRevision })
   PROJECT_SKILLS_INVALIDATED: "pier://project-skills:invalidated",
+  // 统一消息中心快照广播 (main → 所有 renderer, payload NotificationCenterSnapshot)。
+  NOTIFICATION_CENTER_CHANGED: "pier://notification-center:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

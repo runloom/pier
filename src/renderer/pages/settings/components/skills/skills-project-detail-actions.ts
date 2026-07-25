@@ -2,7 +2,6 @@ import type { ProjectRootRef } from "@shared/contracts/project-skills.ts";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
-  emptyDraft,
   type ImportCandidateView,
   type SkillsUiDraft,
   useProjectSkillsStore,
@@ -26,10 +25,6 @@ export function useSkillsProjectDetailActions(args: {
   projectRef: ProjectRootRef | null;
   retryDraft: SkillsUiDraft | null;
   setPreparePending: (pending: boolean) => void;
-  snapshot: {
-    manifest?: { delivery?: { agents?: boolean; claude?: boolean } } | null;
-  } | null;
-  writesDisabled: boolean;
 }) {
   const t = useT();
   const loadSnapshot = useProjectSkillsStore((s) => s.loadSnapshot);
@@ -41,8 +36,6 @@ export function useSkillsProjectDetailActions(args: {
     projectRef,
     retryDraft,
     setPreparePending,
-    snapshot,
-    writesDisabled,
   } = args;
 
   function reviewCandidate(raw: unknown): void {
@@ -94,22 +87,9 @@ export function useSkillsProjectDetailActions(args: {
     }
   }
 
-  async function handleToggle(skillId: string, enabled: boolean) {
-    if (writesDisabled) return;
-    const intent = emptyDraft({
-      agents: Boolean(snapshot?.manifest?.delivery?.agents),
-      claude: Boolean(snapshot?.manifest?.delivery?.claude),
-    });
-    intent.enabledBySkillId[skillId] = enabled;
-    await commitSkillsIntent({
-      draft: intent,
-      t,
-    });
-  }
-
   async function handleReload() {
     if (!projectRef) return;
-    await loadSnapshot(projectRef);
+    await loadSnapshot(projectRef, { quiet: true });
     setDraft(null);
   }
 
@@ -122,7 +102,6 @@ export function useSkillsProjectDetailActions(args: {
     handleImportFolder,
     handleReload,
     handleRetryOperation,
-    handleToggle,
     reviewCandidate,
     runRepair: () => runRepair(t),
   };

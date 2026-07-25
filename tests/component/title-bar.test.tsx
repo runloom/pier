@@ -1,3 +1,4 @@
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import { makeAgentRef } from "@shared/contracts/agent-runtime-index.ts";
 import { cleanup, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -23,7 +24,11 @@ describe("TitleBar / AgentIndexChromeBar", () => {
   });
 
   it("publishes the draggable titlebar height for portal overlays", () => {
-    const view = render(<TitleBar />);
+    const view = render(
+      <TooltipProvider>
+        <TitleBar />
+      </TooltipProvider>
+    );
     expect(
       document.documentElement.style.getPropertyValue("--app-titlebar-height")
     ).toBe("38px");
@@ -35,12 +40,20 @@ describe("TitleBar / AgentIndexChromeBar", () => {
 
   it("shows Index needsYou / running counts on mac title bar", () => {
     seedCounts();
-    render(<TitleBar />);
+    render(
+      <TooltipProvider>
+        <TitleBar />
+      </TooltipProvider>
+    );
     expect(screen.getByTestId("titlebar-agent-counts")).toBeTruthy();
   });
 
   it("constrains the title to the available width with start ellipsis", () => {
-    render(<TitleBar />);
+    render(
+      <TooltipProvider>
+        <TitleBar />
+      </TooltipProvider>
+    );
     const title = screen.getByTestId("titlebar-title");
     expect(title.getAttribute("dir")).toBe("rtl");
     expect(title.className).toContain("max-w-full");
@@ -49,7 +62,11 @@ describe("TitleBar / AgentIndexChromeBar", () => {
 
   it("shows the same counts control on non-mac chrome bar", () => {
     seedCounts();
-    render(<AgentIndexChromeBar />);
+    render(
+      <TooltipProvider>
+        <AgentIndexChromeBar />
+      </TooltipProvider>
+    );
     expect(screen.getByTestId("agent-index-chrome-bar")).toBeTruthy();
     expect(screen.getByTestId("titlebar-agent-counts")).toBeTruthy();
   });

@@ -23,6 +23,7 @@ function draft(partial: Partial<SkillsUiDraft> = {}): SkillsUiDraft {
     importTokens: [],
     deliveryAgents: true,
     deliveryClaude: false,
+    deliveryBySkillId: {},
     enabledBySkillId: { "review-guide": true },
     deleteSkillIds: [],
     ...partial,
@@ -377,6 +378,7 @@ describe("project-skills store", () => {
         deleteSkillIds: [],
         deliveryAgents: true,
         deliveryClaude: false,
+        deliveryBySkillId: {},
         enabledBySkillId: { "review-guide": false },
         importTokens: [],
       },
@@ -388,7 +390,7 @@ describe("project-skills store", () => {
     expect(dirty).toBe(false);
   });
 
-  it("keeps page error clear when background plan fails", async () => {
+  it("surfaces IPC plan failures so commit UI is not a dead end", async () => {
     const mock = installMock();
     mock.plan.mockRejectedValueOnce(new Error("identity-mismatch"));
     const store = useProjectSkillsStore.getState();
@@ -397,7 +399,9 @@ describe("project-skills store", () => {
     store.setDraft(draft());
     const plan = await store.planDraft();
     expect(plan).toBeNull();
-    expect(useProjectSkillsStore.getState().errorMessage).toBeNull();
+    expect(useProjectSkillsStore.getState().errorMessage).toBe(
+      "identity-mismatch"
+    );
     expect(useProjectSkillsStore.getState().lastPlan).toBeNull();
   });
 });

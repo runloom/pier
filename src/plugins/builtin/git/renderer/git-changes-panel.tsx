@@ -21,6 +21,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
+import { gitChangesPanelTitle } from "./git-changes-tab-title.ts";
 import { GitCommitForm } from "./git-commit-form.tsx";
 import { pluginText } from "./git-plugin-text.ts";
 import { preloadReviewCodeView } from "./git-review-code-view.tsx";
@@ -43,7 +44,7 @@ import {
   readReviewSession,
 } from "./git-review-session-cache.ts";
 import { gitReviewTreeModel } from "./git-review-tree.tsx";
-import { bindGitReviewStageAllTarget } from "./git-review-tree-actions.ts";
+import { GitReviewTreeToolbar } from "./git-review-tree-toolbar.tsx";
 import { usePluginLanguage } from "./use-plugin-language.ts";
 
 const EMPTY_REVIEW_ENTRIES: readonly GitReviewIndexEntry[] = [];
@@ -86,6 +87,17 @@ export function createGitChangesPanel(context: RendererPluginContext) {
     const sourceKey = source ? JSON.stringify(source) : null;
     const visible = useDockviewPanelVisible(props.api);
     const panelId = props.api.id;
+
+    // Scope / 路径变化时同步 tab 标题（含 layout 恢复后纠正旧「变更」标题）。
+    useEffect(() => {
+      if (!source) {
+        return;
+      }
+      const nextTitle = gitChangesPanelTitle(source);
+      if (props.api.title !== nextTitle) {
+        props.api.setTitle(nextTitle);
+      }
+    }, [props.api, source]);
 
     useEffect(() => {
       if (!sourceKey) {
@@ -307,24 +319,15 @@ function GitChangesPanelBody({
     },
     [context]
   );
-  // Command handlers read the latest uncommitted index via per-panel binding.
-  useEffect(() => {
-    if (!(source && isUncommitted)) {
-      bindGitReviewStageAllTarget(null, panelId);
-      return () => {
-        bindGitReviewStageAllTarget(null, panelId);
-      };
-    }
-    bindGitReviewStageAllTarget({
-      entries,
-      gitRootPath: source.gitRootPath,
-      panelId,
-      reportSkippedConflicts,
-    });
-    return () => {
-      bindGitReviewStageAllTarget(null, panelId);
-    };
-  }, [entries, isUncommitted, panelId, reportSkippedConflicts, source]);
+  const treeToolbar =
+    source && isUncommitted ? (
+      <GitReviewTreeToolbar
+        context={context}
+        entries={entries}
+        gitRootPath={source.gitRootPath}
+        onSkippedConflicts={reportSkippedConflicts}
+      />
+    ) : undefined;
 
   const stagedCount = treeModel.groupCounts.staged;
   const commitForm =
@@ -412,6 +415,7 @@ function GitChangesPanelBody({
           setSidebarCollapsed={setSidebarCollapsed}
           sidebarCollapsed={sidebarCollapsed}
           {...(commitForm === undefined ? {} : { sidebarFooter: commitForm })}
+          {...(treeToolbar === undefined ? {} : { sidebarHeader: treeToolbar })}
           treeModel={treeModel}
           warnings={state.result.warnings}
         />
@@ -428,6 +432,7 @@ function GitChangesPanelBody({
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
       {...(commitForm === undefined ? {} : { sidebarFooter: commitForm })}
+      {...(treeToolbar === undefined ? {} : { sidebarHeader: treeToolbar })}
       treeModel={treeModel}
     >
       <div

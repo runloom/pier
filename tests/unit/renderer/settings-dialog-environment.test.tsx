@@ -26,6 +26,7 @@ interface LocalEnvironmentProject {
   cleanupCommand: string;
   copyPatterns: string[];
   env: Record<string, string>;
+  kind: "project" | "pier-home";
   projectRootPath: string;
   setupCommand: string;
   updatedAt: number;
@@ -65,6 +66,7 @@ interface EnvironmentStoreState {
   addProject: (request: {
     projectRootPath: string;
   }) => Promise<LocalEnvironmentState>;
+  hydration: "pending" | "ready" | "error";
   projects: LocalEnvironmentProject[];
   removeProject: (request: {
     projectRootPath: string;
@@ -87,16 +89,23 @@ const environmentStore = vi.hoisted(() => ({
   state: null as EnvironmentStoreState | null,
 }));
 
-vi.mock("@/stores/local-environments.store.ts", () => ({
-  useLocalEnvironmentsStore: <T,>(
+vi.mock("@/stores/local-environments.store.ts", () => {
+  function useLocalEnvironmentsStore<T>(
     selector?: (state: EnvironmentStoreState) => T
-  ) => {
+  ) {
     if (!environmentStore.state) {
       throw new Error("local environment store fixture was not initialized");
     }
     return selector ? selector(environmentStore.state) : environmentStore.state;
-  },
-}));
+  }
+  useLocalEnvironmentsStore.getState = () => {
+    if (!environmentStore.state) {
+      throw new Error("local environment store fixture was not initialized");
+    }
+    return environmentStore.state;
+  };
+  return { useLocalEnvironmentsStore };
+});
 
 const appDialogMocks = vi.hoisted(() => ({
   showAppAlert: vi.fn(async () => undefined),
@@ -168,6 +177,7 @@ function projectFixture(
     cleanupCommand: "pnpm cleanup:worktree",
     copyPatterns: [".env*"],
     env: { NODE_ENV: "development" },
+    kind: "project",
     projectRootPath: rootPath,
     setupCommand: "pnpm setup:worktree",
     updatedAt: 1,
@@ -217,6 +227,7 @@ function pierMock() {
 function setEnvironmentStoreSnapshot(snapshot: LocalEnvironmentState): void {
   environmentStore.state = {
     ...snapshot,
+    hydration: "ready",
     addProject: async (request) =>
       window.pier.environments.project.add(request),
     removeProject: async (request) =>

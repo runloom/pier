@@ -40,6 +40,7 @@ import {
   useSyncExternalStore,
 } from "react";
 import { ActionCommandItem } from "@/components/common/command-palette-action-rows.tsx";
+import { groupCreateActions } from "@/components/workspace/add-panel-create-menu.ts";
 import { useT } from "@/i18n/use-t.ts";
 import {
   actionRegistry,
@@ -47,10 +48,7 @@ import {
   subscribeActionRegistry,
 } from "@/lib/actions/registry.ts";
 import type { Action, ActionInvocation } from "@/lib/actions/types.ts";
-import {
-  actionCategoryKey,
-  rankActionsForPalette,
-} from "@/lib/command-palette/action-search.ts";
+import { rankActionsForPalette } from "@/lib/command-palette/action-search.ts";
 import { CATEGORY_META } from "@/lib/command-palette/frecency.ts";
 import { useCommandPointerSelectionGate } from "@/lib/command-palette/use-command-pointer-selection-gate.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
@@ -60,6 +58,11 @@ import {
   subscribeKeybindingRegistry,
 } from "@/lib/keybindings/registry.ts";
 import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
+import {
+  consumeWebOverlayOutsideDismiss,
+  markWebOverlayOutsideDismissIfNeeded,
+  restoreTerminalFocusAfterWebOverlayDismiss,
+} from "@/lib/workspace/restore-terminal-focus-after-web-overlay-dismiss.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
@@ -73,116 +76,6 @@ import {
 
 const CREATE_MENU_SCOPE = "overlay:add-panel";
 const IME_PENDING_KEYCODE = 229;
-
-interface CreateActionGroup {
-  actions: Action[];
-  category: string;
-}
-
-const CREATE_MENU_CATEGORY_ORDER: Readonly<Record<string, number>> = {
-  run: 0,
-  panel: 1,
-  worktree: 2,
-};
-
-function createMenuFallbackPriority(action: Action): number {
-  if (action.id === "pier.panel.newTerminal") {
-    return 0;
-  }
-  if (action.id === "pier.agent.new") {
-    return 1;
-  }
-  if (action.id.startsWith("pier.agent.start.")) {
-    return action.metadata?.sortOrder ?? 10;
-  }
-  if (action.id === "pier.run.task") {
-    return 100;
-  }
-  return 200 + (action.metadata?.sortOrder ?? 0);
-}
-
-function compareCreateActions(
-  a: Action,
-  b: Action,
-  frecencyMap: ReadonlyMap<string, number>
-): number {
-  const aScore = frecencyMap.get(a.id);
-  const bScore = frecencyMap.get(b.id);
-  if (aScore != null && bScore != null) {
-    if (bScore !== aScore) {
-      return bScore - aScore;
-    }
-    return createMenuFallbackPriority(a) - createMenuFallbackPriority(b);
-  }
-  if (aScore != null) {
-    return -1;
-  }
-  if (bScore != null) {
-    return 1;
-  }
-  return createMenuFallbackPriority(a) - createMenuFallbackPriority(b);
-}
-
-function maxGroupFrecency(
-  actions: readonly Action[],
-  frecencyMap: ReadonlyMap<string, number>
-): number | undefined {
-  let max: number | undefined;
-  for (const action of actions) {
-    const score = frecencyMap.get(action.id);
-    if (score != null && (max == null || score > max)) {
-      max = score;
-    }
-  }
-  return max;
-}
-
-function compareCreateGroups(
-  a: CreateActionGroup,
-  b: CreateActionGroup,
-  frecencyMap: ReadonlyMap<string, number>
-): number {
-  const aScore = maxGroupFrecency(a.actions, frecencyMap);
-  const bScore = maxGroupFrecency(b.actions, frecencyMap);
-  if (aScore != null && bScore != null) {
-    return bScore - aScore;
-  }
-  if (aScore != null) {
-    return -1;
-  }
-  if (bScore != null) {
-    return 1;
-  }
-  const aOrder =
-    CREATE_MENU_CATEGORY_ORDER[a.category] ??
-    100 + (CATEGORY_META[a.category]?.order ?? 100);
-  const bOrder =
-    CREATE_MENU_CATEGORY_ORDER[b.category] ??
-    100 + (CATEGORY_META[b.category]?.order ?? 100);
-  return aOrder - bOrder;
-}
-
-function groupCreateActions(
-  actions: readonly Action[],
-  frecencyMap: ReadonlyMap<string, number>
-): CreateActionGroup[] {
-  const byCategory = new Map<string, Action[]>();
-  for (const action of actions) {
-    const category = actionCategoryKey(action);
-    const categoryActions = byCategory.get(category) ?? [];
-    categoryActions.push(action);
-    byCategory.set(category, categoryActions);
-  }
-  const groups = Array.from(byCategory.entries()).map(
-    ([category, categoryActions]) => ({
-      actions: categoryActions.sort((a, b) =>
-        compareCreateActions(a, b, frecencyMap)
-      ),
-      category,
-    })
-  );
-  return groups.sort((a, b) => compareCreateGroups(a, b, frecencyMap));
-}
 
 function useKeybindingLabels(
   actions: readonly Action[]
@@ -340,6 +233,10 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
       releaseOverlayRoute.dispose();
       releaseWebFocus();
       invocationRef.current = null;
+      // outside（含点终端经全屏 overlay 改道）关闭后补终端聚焦；选动作/Esc 不 mark。
+      if (consumeWebOverlayOutsideDismiss(CREATE_MENU_SCOPE)) {
+        restoreTerminalFocusAfterWebOverlayDismiss();
+      }
     };
   }, [open, props.activePanel, sourceActionInvocation]);
 
@@ -432,7 +329,7 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
         <PopoverContent
           align="start"
           aria-labelledby={titleId}
-          className="w-80 gap-0 p-0 shadow-xl ring-0"
+          className="w-80 gap-0 p-0"
           onEscapeKeyDown={(event) => {
             if (event.isComposing || event.keyCode === IME_PENDING_KEYCODE) {
               event.preventDefault();
@@ -441,6 +338,13 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
           onOpenAutoFocus={(event) => {
             event.preventDefault();
             inputRef.current?.focus();
+          }}
+          onPointerDownOutside={(event) => {
+            // 仅终端向 outside 才 mark；点 trigger / 其它 web 控件不补终端聚焦。
+            markWebOverlayOutsideDismissIfNeeded(
+              CREATE_MENU_SCOPE,
+              event.detail.originalEvent.target
+            );
           }}
           style={{
             maxWidth:

@@ -2,6 +2,7 @@ export const commandPalette = {
   title: "Command Palette",
   empty: "No matching command",
   emptyQuickPick: "No matching items",
+  loading: "Loading…",
   inputFailed: "Unable to Submit Input",
   searchResults: "Results",
   agents: {
@@ -31,6 +32,9 @@ export const commandPalette = {
   },
   action: {
     toggleCommandPalette: "Show Command Palette",
+    openNotificationCenter: "Open Notification Center",
+    toggleNotificationDnd: "Toggle Do Not Disturb",
+    markAllNotificationsRead: "Mark All Notifications as Read",
     openTerminalDebugWindow: "Open Terminal Debug Window",
     openTerminalDebugWindowFailed: "Unable to Open Terminal Debug Window",
     openSettings: "Open Settings",

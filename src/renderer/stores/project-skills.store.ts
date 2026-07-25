@@ -69,7 +69,10 @@ interface ProjectSkillsState {
   lastApplyOutcome: "converged" | "degraded" | null;
   lastPlan: ProjectSkillsPlanView | null;
   loadProjects: (projectRootPath?: string) => Promise<ProjectRootRef | null>;
-  loadSnapshot: (projectRef: ProjectRootRef) => Promise<void>;
+  loadSnapshot: (
+    projectRef: ProjectRootRef,
+    options?: { quiet?: boolean }
+  ) => Promise<void>;
   loadStatus: LoadStatus;
   markReloadRequired: (observedRevision?: string) => void;
   mode: SkillsViewMode;
@@ -86,8 +89,6 @@ interface ProjectSkillsState {
   projectRef: ProjectRootRef | null;
   projects: ProjectSkillsProjectSummary[];
   projectsRequestId: number;
-  /** Dismissible list banner after import/create (§7.12). */
-  recentImportNotice: { name: string } | null;
   registerCandidate: (candidate: ImportCandidateView) => void;
   reloadRequired: boolean;
   removeCandidate: (token: string) => void;
@@ -104,9 +105,7 @@ interface ProjectSkillsState {
   sessionRefreshHint: boolean;
   setDraft: (draft: SkillsUiDraft | null) => void;
   setEditDraft: (skillId: string, text: string | null) => void;
-
   setMode: (mode: SkillsViewMode) => void;
-  setRecentImportNotice: (notice: { name: string } | null) => void;
   setSessionRefreshHint: (show: boolean) => void;
   snapshot: ProjectSkillsSnapshotView | null;
   snapshotRequestId: number;
@@ -138,7 +137,6 @@ const initialState = {
   projectRef: null as ProjectRootRef | null,
   projects: [] as ProjectSkillsProjectSummary[],
   projectsRequestId: 0,
-  recentImportNotice: null as { name: string } | null,
   reloadRequired: false,
   sessionRefreshHint: false,
   snapshot: null as ProjectSkillsSnapshotView | null,
@@ -199,17 +197,15 @@ export const useProjectSkillsStore = create<ProjectSkillsState>((set, get) => ({
       ...(preservePendingFocus ? {} : { pendingFocusIssueIds: [] }),
       writesFrozen: false,
       projectRef,
-      recentImportNotice: null,
       reloadRequired: false,
       sessionRefreshHint: false,
       snapshot: null,
+      // Selecting a project clears the snapshot — mark loading so the detail
+      // shell does not flash the empty state before loadSnapshot runs.
+      loadStatus: projectRef ? "loading" : state.loadStatus,
       snapshotRequestId: state.snapshotRequestId + 1,
       mode: projectRef ? { kind: "detail" } : { kind: "projects" },
     }));
-  },
-
-  setRecentImportNotice(notice) {
-    set({ recentImportNotice: notice });
   },
 
   setSessionRefreshHint(show) {
@@ -312,11 +308,13 @@ export const useProjectSkillsStore = create<ProjectSkillsState>((set, get) => ({
     }
   },
 
-  async loadSnapshot(projectRef) {
+  async loadSnapshot(projectRef, options) {
     const requestId = get().snapshotRequestId + 1;
+    // Quiet refresh keeps the current list painted; only first loads show skeletons.
+    const quiet = Boolean(options?.quiet && get().snapshot);
     set({
       errorMessage: null,
-      loadStatus: "loading",
+      ...(quiet ? {} : { loadStatus: "loading" as const }),
       projectRef,
       snapshotRequestId: requestId,
     });

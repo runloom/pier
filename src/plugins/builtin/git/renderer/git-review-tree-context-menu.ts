@@ -15,8 +15,17 @@ import { GIT_REVIEW_TREE_ITEM_SURFACE } from "./git-review-tree-actions.ts";
 import type { GitReviewTreeFileRef } from "./git-review-tree-section.ts";
 
 export interface GitReviewTreeItemMenuFlags {
-  /** Unstaged modified/deleted paths eligible for restore/discard. */
+  /** True when every tracked discard path is a deleted working-tree file. */
+  allDiscardTrackedDeleted: boolean;
+  /**
+   * Unstaged paths eligible for discard (tracked modified/deleted + untracked
+   * added). Prefer tracked/untracked split when building confirm dialogs.
+   */
   discardPaths: readonly string[];
+  /** Unstaged modified/deleted (git restore). */
+  discardTrackedPaths: readonly string[];
+  /** Unstaged added / untracked (trash or git clean). */
+  discardUntrackedPaths: readonly string[];
   hasConflict: boolean;
   hasStaged: boolean;
   hasUnstaged: boolean;
@@ -25,6 +34,39 @@ export interface GitReviewTreeItemMenuFlags {
   unstagedStatus: GitReviewFileStatus | null;
   /** Repo-relative paths to unstage. */
   unstagePaths: readonly string[];
+}
+
+function isDiscardTrackedStatus(status: GitReviewFileStatus): boolean {
+  return status === "modified" || status === "deleted";
+}
+
+function isDiscardUntrackedStatus(status: GitReviewFileStatus): boolean {
+  return status === "added";
+}
+
+function packDiscardFlags(
+  tracked: readonly string[],
+  untracked: readonly string[],
+  allDiscardTrackedDeleted: boolean
+): Pick<
+  GitReviewTreeItemMenuFlags,
+  | "allDiscardTrackedDeleted"
+  | "discardPaths"
+  | "discardTrackedPaths"
+  | "discardUntrackedPaths"
+> {
+  const discardTrackedPaths = uniquePaths(tracked);
+  const discardUntrackedPaths = uniquePaths(untracked);
+  return {
+    allDiscardTrackedDeleted:
+      discardTrackedPaths.length > 0 && allDiscardTrackedDeleted,
+    discardPaths: uniquePaths([
+      ...discardTrackedPaths,
+      ...discardUntrackedPaths,
+    ]),
+    discardTrackedPaths,
+    discardUntrackedPaths,
+  };
 }
 
 function uniquePaths(paths: readonly string[]): string[] {
@@ -51,13 +93,20 @@ export function buildGitReviewTreeItemMenuFlags(options: {
   if (fileRef) {
     const stagePaths = fileRef.group === "unstaged" ? [fileRef.path] : [];
     const unstagePaths = fileRef.group === "staged" ? [fileRef.path] : [];
-    const discardPaths =
-      fileRef.group === "unstaged" &&
-      (fileRef.status === "modified" || fileRef.status === "deleted")
+    const tracked =
+      fileRef.group === "unstaged" && isDiscardTrackedStatus(fileRef.status)
+        ? [fileRef.path]
+        : [];
+    const untracked =
+      fileRef.group === "unstaged" && isDiscardUntrackedStatus(fileRef.status)
         ? [fileRef.path]
         : [];
     return {
-      discardPaths,
+      ...packDiscardFlags(
+        tracked,
+        untracked,
+        tracked.length > 0 && fileRef.status === "deleted"
+      ),
       hasConflict: fileRef.group === "conflict",
       hasStaged: fileRef.group === "staged",
       hasUnstaged: fileRef.group === "unstaged",
@@ -72,7 +121,9 @@ export function buildGitReviewTreeItemMenuFlags(options: {
     let hasUnstaged = false;
     const stagePaths: string[] = [];
     const unstagePaths: string[] = [];
-    const discardPaths: string[] = [];
+    const discardTrackedPaths: string[] = [];
+    const discardUntrackedPaths: string[] = [];
+    let trackedDeletedCount = 0;
     let unstagedStatus: GitReviewFileStatus | null = null;
     for (const ref of fileRefs) {
       if (ref.group === "conflict") {
@@ -88,13 +139,23 @@ export function buildGitReviewTreeItemMenuFlags(options: {
         hasUnstaged = true;
         stagePaths.push(ref.path);
         unstagedStatus ??= ref.status;
-        if (ref.status === "modified" || ref.status === "deleted") {
-          discardPaths.push(ref.path);
+        if (isDiscardTrackedStatus(ref.status)) {
+          discardTrackedPaths.push(ref.path);
+          if (ref.status === "deleted") {
+            trackedDeletedCount += 1;
+          }
+        } else if (isDiscardUntrackedStatus(ref.status)) {
+          discardUntrackedPaths.push(ref.path);
         }
       }
     }
     return {
-      discardPaths: uniquePaths(discardPaths),
+      ...packDiscardFlags(
+        discardTrackedPaths,
+        discardUntrackedPaths,
+        discardTrackedPaths.length > 0 &&
+          trackedDeletedCount === discardTrackedPaths.length
+      ),
       hasConflict,
       hasStaged,
       hasUnstaged,
@@ -112,16 +173,27 @@ export function buildGitReviewTreeItemMenuFlags(options: {
     entry?.renderSlots
       .filter((slot) => slot.group === "staged")
       .map((slot) => slot.targetPath) ?? [];
-  const discardPaths =
+  const trackedSlots =
+    entry?.renderSlots.filter(
+      (slot) => slot.group === "unstaged" && isDiscardTrackedStatus(slot.status)
+    ) ?? [];
+  const discardTrackedPaths = trackedSlots.map((slot) => slot.targetPath);
+  const discardUntrackedPaths =
     entry?.renderSlots
       .filter(
         (slot) =>
-          slot.group === "unstaged" &&
-          (slot.status === "modified" || slot.status === "deleted")
+          slot.group === "unstaged" && isDiscardUntrackedStatus(slot.status)
       )
       .map((slot) => slot.targetPath) ?? [];
+  const allDiscardTrackedDeleted =
+    trackedSlots.length > 0 &&
+    trackedSlots.every((slot) => slot.status === "deleted");
   return {
-    discardPaths: uniquePaths(discardPaths),
+    ...packDiscardFlags(
+      discardTrackedPaths,
+      discardUntrackedPaths,
+      allDiscardTrackedDeleted
+    ),
     hasConflict: slotGroups.includes("conflict"),
     hasStaged: slotGroups.includes("staged"),
     hasUnstaged: slotGroups.includes("unstaged"),
@@ -177,8 +249,11 @@ export function useGitReviewTreeContextMenu({
       context.contextMenu
         .popup(GIT_REVIEW_TREE_ITEM_SURFACE, point, {
           metadata: {
+            allDiscardTrackedDeleted: flags.allDiscardTrackedDeleted,
             contextId,
             discardPaths: flags.discardPaths,
+            discardTrackedPaths: flags.discardTrackedPaths,
+            discardUntrackedPaths: flags.discardUntrackedPaths,
             gitRootPath,
             hasConflict: flags.hasConflict,
             hasStaged: flags.hasStaged,

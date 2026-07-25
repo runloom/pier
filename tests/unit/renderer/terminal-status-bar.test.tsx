@@ -35,6 +35,7 @@ afterEach(() => {
   terminalStatusItemRegistry.clearForTests();
   useForegroundActivityStore.setState({ activities: {}, ts: 0 });
   useLocalEnvironmentsStore.setState({
+    hydration: "ready",
     projects: [],
     version: 1,
     worktreeBindings: [],
@@ -70,11 +71,13 @@ describe("ForegroundActivityBridge terminal status registration", () => {
   it("does not mount environment selection in a project terminal status bar", async () => {
     installForegroundActivityApi();
     useLocalEnvironmentsStore.setState({
+      hydration: "ready",
       projects: [
         {
           cleanupCommand: "",
           copyPatterns: [],
           env: {},
+          kind: "project",
           projectRootPath: "/repo",
           setupCommand: "",
           updatedAt: 2,

@@ -1,4 +1,5 @@
 import type { AgentCatalogEntry, AgentKind } from "@shared/contracts/agent.ts";
+import { APPKIT_KEYCODE } from "@shared/terminal-appkit-keys.ts";
 
 export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
   {
@@ -194,6 +195,11 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
   },
   {
     id: "crush",
+    // crush 编辑器失焦（点消息区 / Tab 切到消息区）时会静默丢弃 paste 与
+    // Enter；失焦必定隐藏硬件光标（ui.go Draw 里 textarea.Focused() 门控），
+    // Tab 在 chat/main 态必定重新 Focus 编辑器（ui.go:2553），符合
+    // inputFocusKey 的确定性要求。
+    inputFocusKey: { keycode: APPKIT_KEYCODE.tab },
     label: "Charm",
     launchCmd: "crush",
     detectCmd: "crush",

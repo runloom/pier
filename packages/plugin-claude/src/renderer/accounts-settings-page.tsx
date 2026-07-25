@@ -34,7 +34,7 @@ import {
   TooltipTrigger,
 } from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils";
-import { CircleUserRound, KeyRound, RefreshCw, Trash2 } from "lucide-react";
+import { CircleUserRound, RefreshCw, Trash2 } from "lucide-react";
 import { Fragment, type JSX, useCallback, useState } from "react";
 import {
   AccountAvatar,
@@ -280,8 +280,7 @@ export function AccountsSettingsPage({
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             {snapshot.apiKeyModeDetected ? (
-              <Alert data-testid="claude-api-key-mode">
-                <KeyRound />
+              <Alert data-testid="claude-api-key-mode" variant="info">
                 <AlertTitle>
                   {t(
                     "pier.claude.accounts.settings.apiKeyModeTitle",

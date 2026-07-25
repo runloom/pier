@@ -6,16 +6,14 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@pier/ui/item.tsx";
-import type {
-  ManagedPluginCatalogSnapshot,
-  ManagedPluginOperationResult,
-} from "@shared/contracts/managed-plugin.ts";
+import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
 import i18next from "i18next";
 import { Loader2, Package } from "lucide-react";
 import { type JSX, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { rejectFailedManagedPluginOperation } from "./managed-plugin-operation.ts";
 import {
   type ContributionCounts,
   contributionCountItemsFromCounts,
@@ -94,33 +92,6 @@ const FAILED_KEY: Record<OpKind, string> = {
   rollback: "rollbackFailed",
 };
 
-function isManagedOperationFailure(
-  result: unknown
-): result is Extract<ManagedPluginOperationResult, { ok: false }> {
-  return (
-    typeof result === "object" &&
-    result !== null &&
-    "ok" in result &&
-    result.ok === false &&
-    "error" in result &&
-    typeof result.error === "object" &&
-    result.error !== null &&
-    "message" in result.error &&
-    typeof result.error.message === "string"
-  );
-}
-
-export function rejectFailedManagedPluginOperation<T>(
-  op: Promise<T>
-): Promise<T> {
-  return op.then((result) => {
-    if (isManagedOperationFailure(result)) {
-      throw new Error(result.error.message);
-    }
-    return result;
-  });
-}
-
 /**
  * Shared across install/uninstall/update/rollback buttons.
  *   - flips `pending` while the promise is in-flight
@@ -187,12 +158,15 @@ export function ManagedRowExtraActions({
   win,
   onRefresh,
   officialMutationsAllowed = true,
+  mutationsLocked = false,
 }: {
   row: CatalogRow;
   win: ManagedPluginsWindowShim | undefined;
   onRefresh: () => void;
   /** When false (workspace mode), hide official update/rollback. */
   officialMutationsAllowed?: boolean;
+  /** When true (batch update in flight), disable mutate buttons. */
+  mutationsLocked?: boolean;
 }): JSX.Element {
   const t = useT();
   const display = resolveRowDisplay(row);
@@ -201,7 +175,7 @@ export function ManagedRowExtraActions({
     <>
       {officialMutationsAllowed && row.update ? (
         <Button
-          disabled={pending}
+          disabled={pending || mutationsLocked}
           onClick={() => {
             const v = row.update?.version;
             run(
@@ -223,7 +197,7 @@ export function ManagedRowExtraActions({
       row.effective &&
       row.lastKnownGoodVersion !== row.effective.version ? (
         <Button
-          disabled={pending}
+          disabled={pending || mutationsLocked}
           onClick={() => {
             const lkg = row.lastKnownGoodVersion;
             if (!lkg) return;
@@ -242,7 +216,7 @@ export function ManagedRowExtraActions({
         </Button>
       ) : null}
       <Button
-        disabled={pending}
+        disabled={pending || mutationsLocked}
         onClick={() => run(win?.managedPlugins?.uninstall(row.id), "uninstall")}
         size="sm"
         type="button"
@@ -287,10 +261,12 @@ export function AvailableManagedRow({
   row,
   win,
   onRefresh,
+  mutationsLocked = false,
 }: {
   row: CatalogRow;
   win: ManagedPluginsWindowShim | undefined;
   onRefresh: () => void;
+  mutationsLocked?: boolean;
 }): JSX.Element {
   const t = useT();
   const display = resolveRowDisplay(row);
@@ -320,7 +296,7 @@ export function AvailableManagedRow({
         <div className="flex w-full flex-wrap items-center justify-between gap-2">
           <ContributionCountsInline counts={row.contributionCounts} />
           <Button
-            disabled={pending}
+            disabled={pending || mutationsLocked}
             onClick={() => {
               const v = row.update?.version;
               run(
@@ -350,6 +326,7 @@ export function UnavailableManagedRow({
   row,
   win,
   officialMutationsAllowed = true,
+  mutationsLocked = false,
 }: {
   onRefresh: () => void;
   onToggle: () => void;
@@ -357,6 +334,7 @@ export function UnavailableManagedRow({
   row: CatalogRow;
   win: ManagedPluginsWindowShim | undefined;
   officialMutationsAllowed?: boolean;
+  mutationsLocked?: boolean;
 }): JSX.Element {
   const t = useT();
   const display = resolveRowDisplay(row);
@@ -394,6 +372,7 @@ export function UnavailableManagedRow({
           <ContributionCountsInline counts={row.contributionCounts} />
           <div className="flex flex-wrap items-center gap-2">
             <ManagedRowExtraActions
+              mutationsLocked={mutationsLocked}
               officialMutationsAllowed={officialMutationsAllowed}
               onRefresh={onRefresh}
               row={row}
@@ -403,7 +382,7 @@ export function UnavailableManagedRow({
               aria-label={t(`settings.plugins.action.${actionKey}Plugin`, {
                 name: display.name,
               })}
-              disabled={pending}
+              disabled={pending || mutationsLocked}
               onClick={onToggle}
               size="sm"
               type="button"

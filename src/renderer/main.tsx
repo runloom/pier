@@ -4,9 +4,9 @@ import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./app/globals.css";
+import { installTerminalInputRoutingDragWatcher } from "@/stores/terminal-input-routing-drag.ts";
 import {
   installTerminalInputRoutingBlurSuppressor,
-  installTerminalInputRoutingDragWatcher,
   installTerminalInputRoutingPointerDownListener,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { installBundledFontFaces } from "./app/fonts.ts";
@@ -35,6 +35,7 @@ import { installCommandPaletteMenuRequest } from "./lib/command-palette/menu-req
 import { DEFAULT_KEYMAP } from "./lib/keybindings/defaults.ts";
 import { keybindingRegistry } from "./lib/keybindings/registry.ts";
 import { bootstrapBuiltinPlugins } from "./lib/plugins/bootstrap.ts";
+import { installWindowFocusAttribute } from "./lib/window-focus-attribute.ts";
 import { registerTerminalActions } from "./panel-kits/terminal/register-actions.ts";
 import { registerTerminalPanelCloseGuard } from "./panel-kits/terminal/register-close-guard.ts";
 import { initAgentAttentionPreferences } from "./stores/agent-attention-preferences.store.ts";
@@ -136,6 +137,8 @@ async function bootstrap() {
   });
   // blur 抑制器必须最先注册 (早于一切 window blur 监听, 含 Radix), 见其 doc comment
   installTerminalInputRoutingBlurSuppressor();
+  // OS key-window focus → data-window-focused (main broadcast; not DOM blur).
+  installWindowFocusAttribute();
   installTerminalInputRoutingDragWatcher();
   installTerminalInputRoutingPointerDownListener();
   installCommandPaletteMenuRequest();

@@ -8,6 +8,7 @@ import type {
   EnvironmentWorktreeBindingRequest,
   LocalEnvironmentProject,
   LocalEnvironmentProjectFile,
+  LocalEnvironmentProjectKind,
   LocalEnvironmentState,
   LocalEnvironmentWorktreeBindingSnapshot,
 } from "@shared/contracts/environment.ts";
@@ -22,23 +23,17 @@ import {
   readProjectFile,
   writeProjectFile,
 } from "./local-environment-store.ts";
+import {
+  defaultWireProject,
+  entryKind,
+  findIndexEntry,
+  LocalEnvironmentServiceError,
+  seedProjectFile,
+  toWireProject,
+} from "./local-environments-service-wire.ts";
 import type { ProcessEnvironmentService } from "./process-environment-service.ts";
 
-export class LocalEnvironmentServiceError extends Error {
-  readonly reason = "project_not_found" as const;
-  constructor(message: string) {
-    super(message);
-    this.name = "LocalEnvironmentServiceError";
-  }
-}
-
-/**
- * 新项目首次 Add 时写入 `.pier/environment.json` 的默认 copyPatterns.
- * `.env*` 跨技术栈通用; 其他 stack-specific 的 pattern (Vite `*.local`,
- * Claude `.claude/settings.local.json` 等) 由用户或对应插件按需追加,
- * 主体保持中立.
- */
-const DEFAULT_PROJECT_COPY_PATTERNS = [".env*"];
+export { LocalEnvironmentServiceError } from "./local-environments-service-wire.ts";
 
 export interface LocalEnvironmentService {
   addProject(
@@ -49,6 +44,10 @@ export interface LocalEnvironmentService {
     worktreePath: string;
   }): Promise<void>;
   clearWorktreeBinding(worktreePath: string): Promise<void>;
+  /** Resolve index kind for a registered root (after realpath). */
+  getProjectKind(
+    projectRootPath: string
+  ): Promise<LocalEnvironmentProjectKind | null>;
   projectSnapshot(
     projectRootPath: string
   ): Promise<LocalEnvironmentProject | null>;
@@ -73,6 +72,11 @@ export interface LocalEnvironmentService {
   updateProject(
     request: EnvironmentUpdateRequest
   ): Promise<LocalEnvironmentState>;
+  /**
+   * Dedicated Pier Home upsert: index only, never seeds
+   * `.pier/environment.json`.
+   */
+  upsertPierHome(projectRootPath: string): Promise<LocalEnvironmentState>;
   worktreeBinding(
     request: EnvironmentWorktreeBindingRequest
   ): Promise<LocalEnvironmentWorktreeBindingSnapshot | null>;
@@ -80,6 +84,8 @@ export interface LocalEnvironmentService {
 
 export function createLocalEnvironmentService(options: {
   filePath?: string;
+  /** When set, addProject rejects this root; used for pier-home path. */
+  isPierHomeRoot?: (path: string) => Promise<boolean>;
   now?: () => number;
   processEnvironment: ProcessEnvironmentService;
   realpath?: (path: string) => Promise<string>;
@@ -104,67 +110,34 @@ export function createLocalEnvironmentService(options: {
     }
   }
 
-  function findIndexEntry(
-    state: LocalEnvironmentGlobalState,
-    projectRootPath: string
-  ): LocalEnvironmentIndexEntry | undefined {
-    return state.projects.find((p) => p.projectRootPath === projectRootPath);
-  }
-
-  /** File shape (no projectRootPath) → wire shape (with projectRootPath). */
-  function toWireProject(
-    projectRootPath: string,
-    file: LocalEnvironmentProjectFile
-  ): LocalEnvironmentProject {
-    return {
-      cleanupCommand: file.cleanupCommand,
-      copyPatterns: file.copyPatterns,
-      env: file.env,
-      projectRootPath,
-      setupCommand: file.setupCommand,
-      updatedAt: file.updatedAt,
-    };
-  }
-
-  /** File missing 时给 UI 的降级默认 (registered 但配置暂时不存在). */
-  function defaultWireProject(
-    projectRootPath: string
-  ): LocalEnvironmentProject {
-    return {
-      cleanupCommand: "",
-      copyPatterns: [],
-      env: {},
-      projectRootPath,
-      setupCommand: "",
-      updatedAt: 0,
-    };
-  }
-
-  function seedProjectFile(): LocalEnvironmentProjectFile {
-    return {
-      cleanupCommand: "",
-      copyPatterns: [...DEFAULT_PROJECT_COPY_PATTERNS],
-      env: {},
-      setupCommand: "",
-      updatedAt: now(),
-      version: 1,
-    };
+  async function assertNotPierHome(path: string): Promise<void> {
+    if (options.isPierHomeRoot && (await options.isPierHomeRoot(path))) {
+      throw new LocalEnvironmentServiceError(
+        "Pier Home cannot be managed as a normal project",
+        "pier_home_forbidden"
+      );
+    }
   }
 
   async function readWireProject(
-    projectRootPath: string
+    entry: LocalEnvironmentIndexEntry
   ): Promise<LocalEnvironmentProject> {
-    const file = await readProjectFile(projectRootPath);
+    const kind = entryKind(entry);
+    if (kind === "pier-home") {
+      // Never read/write `.pier/environment.json` for Home.
+      return defaultWireProject(entry.projectRootPath, "pier-home");
+    }
+    const file = await readProjectFile(entry.projectRootPath);
     return file
-      ? toWireProject(projectRootPath, file)
-      : defaultWireProject(projectRootPath);
+      ? toWireProject(entry.projectRootPath, file, kind)
+      : defaultWireProject(entry.projectRootPath, kind);
   }
 
   async function composeState(
     global: LocalEnvironmentGlobalState
   ): Promise<LocalEnvironmentState> {
     const projects = await Promise.all(
-      global.projects.map((entry) => readWireProject(entry.projectRootPath))
+      global.projects.map((entry) => readWireProject(entry))
     );
     return {
       projects,
@@ -178,20 +151,25 @@ export function createLocalEnvironmentService(options: {
       request: EnvironmentProjectRequest
     ): Promise<LocalEnvironmentState> {
       const projectRootPath = await realpathFn(request.projectRootPath);
+      await assertNotPierHome(projectRootPath);
       // 全局注册: 幂等.
       const global = await mutateState((state) => {
-        if (findIndexEntry(state, projectRootPath)) {
+        const existing = findIndexEntry(state, projectRootPath);
+        if (existing) {
           return state;
         }
         return {
           ...state,
-          projects: [...state.projects, { projectRootPath }],
+          projects: [
+            ...state.projects,
+            { kind: "project" as const, projectRootPath },
+          ],
         };
       });
       // 文件不存在则 seed 默认; 存在则保留用户已有内容 (支持团队 git 里预置文件的场景).
       const existing = await readProjectFile(projectRootPath);
       if (!existing) {
-        await writeProjectFile(projectRootPath, seedProjectFile());
+        await writeProjectFile(projectRootPath, seedProjectFile(now));
       }
       return composeState(global);
     },
@@ -201,13 +179,22 @@ export function createLocalEnvironmentService(options: {
       worktreePath: string;
     }): Promise<void> {
       const projectRootPath = await safeRealpath(request.projectRootPath);
+      await assertNotPierHome(projectRootPath);
+      const state = await readState();
+      const entry = findIndexEntry(state, projectRootPath);
+      if (entryKind(entry) === "pier-home") {
+        throw new LocalEnvironmentServiceError(
+          "Pier Home cannot be bound as a worktree project",
+          "pier_home_forbidden"
+        );
+      }
       const worktreePath = await safeRealpath(request.worktreePath);
-      await mutateState((state) => {
-        const filtered = state.worktreeBindings.filter(
+      await mutateState((next) => {
+        const filtered = next.worktreeBindings.filter(
           (b) => b.worktreePath !== worktreePath
         );
         return {
-          ...state,
+          ...next,
           worktreeBindings: [
             ...filtered,
             {
@@ -230,21 +217,41 @@ export function createLocalEnvironmentService(options: {
       }));
     },
 
+    async getProjectKind(
+      projectRootPath: string
+    ): Promise<LocalEnvironmentProjectKind | null> {
+      const state = await readState();
+      const normalized = await safeRealpath(projectRootPath);
+      const entry = findIndexEntry(state, normalized);
+      if (!entry) return null;
+      return entryKind(entry);
+    },
+
     async projectSnapshot(
       projectRootPath: string
     ): Promise<LocalEnvironmentProject | null> {
       const state = await readState();
       const normalized = await safeRealpath(projectRootPath);
-      if (!findIndexEntry(state, normalized)) {
+      const entry = findIndexEntry(state, normalized);
+      if (!entry) {
         return null;
       }
-      return await readWireProject(normalized);
+      return await readWireProject(entry);
     },
 
     async removeProject(
       request: EnvironmentProjectRequest
     ): Promise<LocalEnvironmentState> {
       const projectRootPath = await safeRealpath(request.projectRootPath);
+      const before = await readState();
+      const entry = findIndexEntry(before, projectRootPath);
+      if (entryKind(entry) === "pier-home") {
+        throw new LocalEnvironmentServiceError(
+          "Pier Home cannot be removed from the project list",
+          "pier_home_forbidden"
+        );
+      }
+      await assertNotPierHome(projectRootPath);
       const global = await mutateState((state) => ({
         ...state,
         projects: state.projects.filter(
@@ -272,11 +279,17 @@ export function createLocalEnvironmentService(options: {
     ): Promise<LocalEnvironmentProject | null> {
       // 生命周期路径: 完全绕过全局注册, 以 .pier/environment.json 存在与否为准.
       const normalized = await safeRealpath(projectRootPath);
+      if (
+        options.isPierHomeRoot &&
+        (await options.isPierHomeRoot(normalized))
+      ) {
+        return null;
+      }
       const file = await readProjectFile(normalized);
       if (!file) {
         return null;
       }
-      return toWireProject(normalized, file);
+      return toWireProject(normalized, file, "project");
     },
 
     async resolveForWorktree(worktreePath: string): Promise<{
@@ -291,12 +304,16 @@ export function createLocalEnvironmentService(options: {
       if (!binding) {
         return null;
       }
+      const entry = findIndexEntry(state, binding.projectRootPath);
+      if (entryKind(entry) === "pier-home") {
+        return null;
+      }
       const file = await readProjectFile(binding.projectRootPath);
       if (!file) {
         return null;
       }
       return {
-        project: toWireProject(binding.projectRootPath, file),
+        project: toWireProject(binding.projectRootPath, file, "project"),
         projectRootPath: binding.projectRootPath,
       };
     },
@@ -306,6 +323,12 @@ export function createLocalEnvironmentService(options: {
       project: LocalEnvironmentProject;
       phase: LocalEnvironmentLifecyclePhase;
     }): Promise<void> {
+      if (request.project.kind === "pier-home") {
+        throw new LocalEnvironmentServiceError(
+          "Pier Home has no environment scripts",
+          "pier_home_forbidden"
+        );
+      }
       await runLocalEnvironmentLifecycle(
         options.spawn
           ? { ...request, processEnvironment, spawn: options.spawn }
@@ -319,7 +342,8 @@ export function createLocalEnvironmentService(options: {
       const global = await readState();
       if (request?.projectRootPath) {
         const normalized = await safeRealpath(request.projectRootPath);
-        if (!findIndexEntry(global, normalized)) {
+        const entry = findIndexEntry(global, normalized);
+        if (!entry) {
           return {
             projects: [],
             version: global.version,
@@ -327,7 +351,7 @@ export function createLocalEnvironmentService(options: {
           };
         }
         return {
-          projects: [await readWireProject(normalized)],
+          projects: [await readWireProject(entry)],
           version: global.version,
           worktreeBindings: global.worktreeBindings,
         };
@@ -340,9 +364,16 @@ export function createLocalEnvironmentService(options: {
     ): Promise<LocalEnvironmentState> {
       const projectRootPath = await safeRealpath(request.projectRootPath);
       const global = await readState();
-      if (!findIndexEntry(global, projectRootPath)) {
+      const entry = findIndexEntry(global, projectRootPath);
+      if (!entry) {
         throw new LocalEnvironmentServiceError(
           `project not found: ${projectRootPath}`
+        );
+      }
+      if (entryKind(entry) === "pier-home") {
+        throw new LocalEnvironmentServiceError(
+          "Pier Home has no environment scripts",
+          "pier_home_forbidden"
         );
       }
 
@@ -380,6 +411,29 @@ export function createLocalEnvironmentService(options: {
       return composeState(global);
     },
 
+    async upsertPierHome(
+      projectRootPath: string
+    ): Promise<LocalEnvironmentState> {
+      const normalized = await safeRealpath(projectRootPath);
+      const global = await mutateState((state) => {
+        const existing = findIndexEntry(state, normalized);
+        if (existing?.kind === "pier-home") {
+          return state;
+        }
+        const without = state.projects.filter(
+          (p) => p.projectRootPath !== normalized
+        );
+        return {
+          ...state,
+          projects: [
+            { kind: "pier-home" as const, projectRootPath: normalized },
+            ...without,
+          ],
+        };
+      });
+      return composeState(global);
+    },
+
     async worktreeBinding(
       request: EnvironmentWorktreeBindingRequest
     ): Promise<LocalEnvironmentWorktreeBindingSnapshot | null> {
@@ -389,6 +443,10 @@ export function createLocalEnvironmentService(options: {
         (b) => b.worktreePath === normalized
       );
       if (!binding) {
+        return null;
+      }
+      const entry = findIndexEntry(state, binding.projectRootPath);
+      if (entryKind(entry) === "pier-home") {
         return null;
       }
       const file = await readProjectFile(binding.projectRootPath);

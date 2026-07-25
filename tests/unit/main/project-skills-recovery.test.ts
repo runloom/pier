@@ -70,6 +70,7 @@ function emptyDraft(
   return {
     deliveryAgents: true,
     deliveryClaude: false,
+    deliveryBySkillId: {},
     enabledBySkillId: {},
     importTokens: [],
     deleteSkillIds: [],

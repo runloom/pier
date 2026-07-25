@@ -143,10 +143,15 @@ test("collapse-all then tree navigation shows the target diff without failures",
       .locator('[data-testid="worktree-status-trigger"]:visible')
       .first();
     await expect(statusTrigger).toBeVisible({ timeout: 20_000 });
-    await statusTrigger.click();
-    await page
-      .getByRole("menuitem", { name: /View Changes|查看变更/u })
-      .click();
+    const changesTrigger = page
+      .locator('[data-testid="git-changes-status-trigger"]:visible')
+      .first();
+    if (await changesTrigger.isVisible().catch(() => false)) {
+      await changesTrigger.click();
+    } else {
+      await statusTrigger.click();
+      await page.getByTestId("git-status-row-changes").click();
+    }
 
     await expect(
       page.getByRole("treeitem", { name: /alpha\.ts/u })

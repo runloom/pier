@@ -20,6 +20,7 @@ import { showSystemNotification } from "../services/system-notification.ts";
 import { readPreferences } from "../state/preferences.ts";
 import { windowManager } from "../windows/window-manager.ts";
 import { onForegroundActivityPublished } from "./foreground-activity.ts";
+import { ingestHostNotification } from "./notification-center.ts";
 import { terminalFocusCoordinator } from "./terminal-focus-coordinator.ts";
 
 const log = createLogger("agent-attention.ipc");
@@ -72,6 +73,7 @@ export function registerAgentAttention(
   });
 
   const attention = createAgentAttentionService({
+    ingestNotification: ingestHostNotification,
     isTargetPanelFocused,
     isOwnerWindowFocused,
     resolveLocale: resolveAttentionLocale,

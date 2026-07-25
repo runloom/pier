@@ -3,7 +3,11 @@ import { mkdir, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import writeFileAtomic from "write-file-atomic";
-import { type FetchImpl, fetchGrokUsage } from "./grok-usage.ts";
+import {
+  type FetchImpl,
+  fetchGrokUsage,
+  USAGE_TEMPORARILY_UNAVAILABLE_ERROR,
+} from "./grok-usage.ts";
 import type { AccountIdentity } from "./identity.ts";
 import { parseGrokAuthJson, readGrokIdentity } from "./identity.ts";
 import { defaultSpawnLogin, type SpawnLoginFn } from "./login-spawn.ts";
@@ -348,9 +352,25 @@ export function createGrokProvider(
         };
       }
       const accountHomeDir = options.accountHomeDir;
-      const authJson = await withCredentialLock(accountHomeDir, () =>
-        readManagedAuth(accountHomeDir)
-      ).catch(() => null);
+      let authJson: string | null = null;
+      try {
+        authJson = await withCredentialLock(accountHomeDir, () =>
+          readManagedAuth(accountHomeDir)
+        );
+      } catch (error) {
+        // ENOENT means there are genuinely no stored credentials (re-login
+        // path below). Any other read failure (safeStorage locked, store IO)
+        // is transient — the session may be perfectly healthy.
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") {
+          return {
+            status: "error",
+            error: `${USAGE_TEMPORARILY_UNAVAILABLE_ERROR} (credential read failed: ${
+              error instanceof Error ? error.message : String(error)
+            })`,
+            windows: [],
+          };
+        }
+      }
       return await fetchGrokUsage({
         authJson,
         kind: "oidc",

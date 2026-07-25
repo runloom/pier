@@ -169,7 +169,14 @@ export function SettingsDialog() {
   );
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
+    <Dialog
+      onAbandonOpen={() => {
+        // deferred-open 被浮层阻塞放弃时复位产品态（同 onOpenChange(false)）
+        requestSettingsClose("dialog").catch(() => undefined);
+      }}
+      onOpenChange={onOpenChange}
+      open={open}
+    >
       <DialogContent
         className="flex h-[90vh] max-h-[900px] w-[90vw] max-w-[1200px] flex-col sm:max-w-[1200px]"
         closeLabel={t("dialog.close")}
@@ -266,7 +273,7 @@ export function SettingsDialog() {
           </nav>
 
           <main
-            className="relative -mr-6 flex h-full min-h-0 w-full min-w-0 flex-1 flex-col overflow-y-auto md:w-auto"
+            className="relative -mr-6 flex h-full min-h-0 w-full min-w-0 flex-1 scroll-pb-8 flex-col overflow-y-auto pb-8 md:w-auto"
             data-scrollbar="stable"
           >
             {activeSection === "appearance" ? <AppearanceSection /> : null}

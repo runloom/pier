@@ -24,3 +24,12 @@ export const CONTROL_ICON_GLYPH_COMPACT_CLASS =
 export const CONTROL_ICON_GLYPH_SM_CLASS =
   "[&_svg:not([class*='size-'])]:size-3";
 export const MENU_ITEM_DENSITY_CLASS = "min-h-7 py-1 text-sm leading-5";
+
+/**
+ * 终端状态栏可点项的色/交互（与 Button size=`status-bar` + variant=`ghost` 组合）。
+ * 几何（22px / rounded-md / shrink）归 Button size，避免与 h-6 / rounded-full 双写。
+ * 全项统一字色（对齐 VS Code statusBar.foreground）；语义色只落在图标（脏/冲突）。
+ * 终端脚栏文字用等宽，贴近终端语境。
+ */
+export const STATUS_BAR_ITEM_TRIGGER_CLASS =
+  "font-mono text-foreground/90 shadow-none hover:bg-muted hover:text-foreground aria-expanded:bg-muted aria-expanded:text-foreground";

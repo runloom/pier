@@ -32,7 +32,9 @@ export function initProjectSkillsBridge(): { dispose: () => void } {
         if (draftIsDirty(state.draft, state.snapshot) || hasUnsavedEdits) {
           state.markReloadRequired(observed);
         } else if (state.projectRef) {
-          state.loadSnapshot(state.projectRef).catch(() => undefined);
+          state
+            .loadSnapshot(state.projectRef, { quiet: true })
+            .catch(() => undefined);
         }
       }
     );

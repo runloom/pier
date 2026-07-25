@@ -31,6 +31,86 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "environment.snapshot": { capabilities: ["environment:read"] },
   "environment.update": { capabilities: ["environment:write"] },
   "environment.worktreeBinding": { capabilities: ["environment:read"] },
+  "pierHome.info": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["app:read"],
+  },
+  "pierHome.reveal": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "pierHome.skills.list": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "pierHome.skills.snapshot": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "pierHome.skills.create": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:write"],
+  },
+  "pierHome.skills.read": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "pierHome.skills.write": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:write"],
+  },
+  "pierHome.skills.delete": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:write"],
+  },
+  "pierHome.skills.setAlwaysInclude": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:write"],
+  },
+  "pierHome.skills.reveal": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "skills.pierBindings.list": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "skills.pierBindings.bind": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:write"],
+  },
+  "skills.pierBindings.unbind": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:write"],
+  },
+  "rules.snapshot": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "rules.read": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "rules.write": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:write"],
+  },
+  "rules.ensure": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:write"],
+  },
+  "agentMcp.catalog": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "agentMcp.reveal": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "agentMcp.open": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
   "app.status": { capabilities: ["app:read"] },
   "appUpdate.status": {
     allowedClientKinds: ["desktop-renderer"],

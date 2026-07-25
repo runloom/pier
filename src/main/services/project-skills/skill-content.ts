@@ -86,6 +86,30 @@ async function readSkillMdCapped(dir: string): Promise<SkillContentResult> {
   }
 }
 
+/**
+ * Read-only user-global SKILL.md (Home / project discovery). Roots are
+ * re-validated against the registry whitelist; never accepts raw paths.
+ */
+export async function readUserGlobalSkillContent(args: {
+  root: string;
+  directoryName: string;
+  registry?: SkillDiscoveryAdapterRegistry;
+  homeDir?: string;
+}): Promise<SkillContentResult> {
+  const registry = args.registry ?? createSkillDiscoveryAdapterRegistry();
+  const whitelist = listUserSkillRoots(registry);
+  if (!whitelist.some((entry) => entry.root === args.root)) {
+    throw new SkillContentReadError(
+      "invalid-ref",
+      `user root is not whitelisted: ${args.root}`
+    );
+  }
+  assertPlainChildName(args.directoryName);
+  const home = args.homeDir ?? homedir();
+  const dir = join(expandUserRoot(args.root, home), args.directoryName);
+  return await readSkillMdCapped(dir);
+}
+
 export async function readSkillContent(args: {
   projectRef: ContractProjectRootRef | MainProjectRootRef;
   ref: SkillContentRef;
@@ -131,16 +155,10 @@ export async function readSkillContent(args: {
   }
 
   // user-global
-  const ref = args.ref;
-  const whitelist = listUserSkillRoots(registry);
-  if (!whitelist.some((entry) => entry.root === ref.root)) {
-    throw new SkillContentReadError(
-      "invalid-ref",
-      `user root is not whitelisted: ${ref.root}`
-    );
-  }
-  assertPlainChildName(ref.directoryName);
-  const home = args.homeDir ?? homedir();
-  const dir = join(expandUserRoot(ref.root, home), ref.directoryName);
-  return await readSkillMdCapped(dir);
+  return await readUserGlobalSkillContent({
+    root: args.ref.root,
+    directoryName: args.ref.directoryName,
+    registry,
+    ...(args.homeDir === undefined ? {} : { homeDir: args.homeDir }),
+  });
 }

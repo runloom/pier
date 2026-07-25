@@ -4,8 +4,12 @@ export const agents = {
   focusPanelGone: "面板已关闭",
   focusWindowGone: "窗口已关闭",
   indexListFailed: "无法加载智能体列表",
-  notificationPermissionDenied: "系统通知未开 — 请用智能体列表或跳转快捷键",
-  notificationUnsupported: "系统不支持通知 — 请用智能体列表或跳转快捷键",
+  notificationPermissionDenied: "系统通知未开",
+  notificationPermissionDeniedDetail:
+    "收不到智能体完成与需要处理的提醒，可在列表或跳转快捷键查看状态",
+  notificationUnsupported: "系统不支持通知",
+  notificationUnsupportedDetail:
+    "收不到智能体完成与需要处理的提醒，可在列表或跳转快捷键查看状态",
   quickPick: {
     empty: "当前没有运行中的智能体",
     emptyDetail: "启动智能体后会显示在这里",

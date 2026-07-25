@@ -44,6 +44,22 @@ function reviewTreeFileItem(
   return group === "staged" ? items.first() : items.last();
 }
 
+/**
+ * Click a review tree row. CI sticky group headers render an aria-hidden
+ * overlay that intercepts normal Playwright hit-testing; scroll first (force
+ * skips auto-scroll), then force the click.
+ */
+async function clickReviewTreeFile(
+  page: Page,
+  name: RegExp,
+  group: "staged" | "unstaged" = "unstaged"
+): Promise<void> {
+  const item = reviewTreeFileItem(page, name, group);
+  await expect(item).toBeVisible({ timeout: 20_000 });
+  await item.scrollIntoViewIfNeeded();
+  await item.click({ force: true });
+}
+
 /** `.bin` uses kind copy ("Binary binary"); generic fallback stays "Binary file". */
 const BINARY_STATE_NOTICE = /Binary (?:file|binary)|二进制文件/u;
 
@@ -277,17 +293,53 @@ async function panelSharesGroup(
     }, `[data-panel-tab-id="${rightPanelId}"]`);
 }
 
+/**
+ * Open Git Changes review from a terminal group.
+ *
+ * Status bar v2 splits identity / changes / sync. Prefer the dedicated
+ * changes slot when visible; otherwise open the branch dropdown and use the
+ * contextual "Changes"/"更改" row (no longer a fixed "View Changes" task).
+ */
 async function openReviewFromTerminal(
   page: Page,
-  terminalPanelId: string
+  terminalPanelId: string,
+  options?: {
+    /** Called with the click target before the open click (timing probes). */
+    beforeOpenClick?: (target: Locator) => Promise<void> | void;
+  }
 ): Promise<void> {
   await page.locator(`[data-panel-tab-id="${terminalPanelId}"]`).click();
-  const statusTrigger = groupForPanel(page, terminalPanelId).locator(
+  const group = groupForPanel(page, terminalPanelId);
+  const statusTrigger = group.locator(
     '[data-testid="worktree-status-trigger"]'
   );
   await expect(statusTrigger).toBeVisible({ timeout: 20_000 });
+
+  const changesTrigger = group.locator(
+    '[data-testid="git-changes-status-trigger"]'
+  );
+  const dedicatedVisible = await changesTrigger.isVisible().catch(() => false);
+  if (dedicatedVisible) {
+    await options?.beforeOpenClick?.(changesTrigger);
+    await changesTrigger.click();
+    return;
+  }
+
+  // Wait for loaded dirty status: dedicated slot may appear after first poll.
+  try {
+    await expect(changesTrigger).toBeVisible({ timeout: 12_000 });
+    await options?.beforeOpenClick?.(changesTrigger);
+    await changesTrigger.click();
+    return;
+  } catch {
+    // Narrow status bar / overflow: open branch dropdown instead.
+  }
+
   await statusTrigger.click();
-  await page.getByRole("menuitem", { name: /View Changes|查看变更/u }).click();
+  const changesRow = page.getByTestId("git-status-row-changes");
+  await expect(changesRow).toBeVisible({ timeout: 15_000 });
+  await options?.beforeOpenClick?.(changesRow);
+  await changesRow.click();
 }
 
 async function reviewPanelIds(page: Page): Promise<string[]> {
@@ -472,14 +524,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     expect(shortGroupHeight).toBeGreaterThan(100);
     expect(shortGroupHeight).toBeLessThan(500);
 
-    const statusTrigger = groupForPanel(page, terminalPanelId).locator(
-      '[data-testid="worktree-status-trigger"]'
-    );
-    await expect(statusTrigger).toBeVisible({ timeout: 20_000 });
-    await statusTrigger.click();
-    await page
-      .getByRole("menuitem", { name: /View Changes|查看变更/u })
-      .click();
+    await openReviewFromTerminal(page, terminalPanelId);
 
     const changesTab = page.locator('[data-panel-tab-id^="pier.git.changes:"]');
     await expect(changesTab).toBeVisible({ timeout: 20_000 });
@@ -717,7 +762,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await changesTab.click();
     // Demand-loaded review may not keep binary sections mounted after viewing
     // another file — navigate via the tree so the binary state patch is loaded.
-    await reviewTreeFileItem(page, /binary-6\\special\.bin/u).click();
+    await clickReviewTreeFile(page, /binary-6\\special\.bin/u);
     await expect
       .poll(
         () =>
@@ -770,10 +815,17 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     });
     await appTreeSearch.fill("app.tsx");
     await appTreeSearch.press("Enter");
-    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
-      timeout: 10_000,
-    });
-    await reviewTreeFileItem(page, /app\.tsx/u).click();
+    await expect
+      .poll(
+        () =>
+          page
+            .getByTestId("git-review-tree")
+            .getByRole("treeitem", { name: /app\.tsx/u })
+            .count(),
+        { timeout: 20_000 }
+      )
+      .toBeGreaterThan(0);
+    await clickReviewTreeFile(page, /app\.tsx/u);
     await appTreeSearch.press("Escape").catch(() => undefined);
 
     const diffContainers = page.locator("diffs-container");
@@ -901,7 +953,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(page.getByTestId("pierre-diff-root")).toBeVisible({
       timeout: 30_000,
     });
-    await reviewTreeFileItem(page, /app\.tsx/u).click();
+    await clickReviewTreeFile(page, /app\.tsx/u);
     await selectTheme(page, { id: "light", label: /Light|浅色/u });
     await expect
       .poll(
@@ -942,10 +994,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       });
       await reviewTreeSearch.fill("script.py");
       await reviewTreeSearch.press("Enter");
-      await expect(
-        page.getByRole("treeitem", { name: /script\.py/u })
-      ).toBeVisible({ timeout: 3000 });
-      await page.getByRole("treeitem", { name: /script\.py/u }).click();
+      await clickReviewTreeFile(page, /script\.py/u);
       expect(
         await diffContainers.evaluateAll((containers) =>
           containers.some((host) =>
@@ -1009,7 +1058,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       }).observe({ entryTypes: ["longtask"] });
     });
     const largeStartedAt = performance.now();
-    await page.getByRole("treeitem", { name: /large\.ts/u }).click();
+    await clickReviewTreeFile(page, /large\.ts/u);
     await expect
       .poll(
         () =>
@@ -1266,28 +1315,25 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
 
     const opened = await openTerminalWhenReady(userDataDir, repository);
     expect(opened.ok).toBe(true);
-    const statusTrigger = page
-      .locator('[data-testid="worktree-status-trigger"]:visible')
-      .first();
-    await expect(statusTrigger).toBeVisible({ timeout: 20_000 });
-    await statusTrigger.click();
-    const viewChangesItem = page.getByRole("menuitem", {
-      name: /View Changes|查看变更/u,
-    });
-    await viewChangesItem.evaluate((element) => {
-      element.addEventListener(
-        "click",
-        () => {
-          Reflect.set(
-            window,
-            "__pierGitReviewFirstContentStartedAt",
-            performance.now()
+    const terminalPanelId = opened.data?.panelId ?? "";
+    expect(terminalPanelId).not.toBe("");
+    await openReviewFromTerminal(page, terminalPanelId, {
+      beforeOpenClick: async (target) => {
+        await target.evaluate((element) => {
+          element.addEventListener(
+            "click",
+            () => {
+              Reflect.set(
+                window,
+                "__pierGitReviewFirstContentStartedAt",
+                performance.now()
+              );
+            },
+            { once: true }
           );
-        },
-        { once: true }
-      );
+        });
+      },
     });
-    await viewChangesItem.click();
     await expect(
       page.getByRole("treeitem", { name: /file-0000\.ts/u })
     ).toBeVisible({ timeout: 30_000 });
@@ -1751,7 +1797,7 @@ test("same-group tab switch restores Changes tree and diff immediately", async (
     await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
       timeout: 20_000,
     });
-    await page.getByRole("treeitem", { name: /script\.py/u }).click();
+    await clickReviewTreeFile(page, /script\.py/u);
     await expect
       .poll(() => isDiffTextInViewport(page, "return 2"), { timeout: 30_000 })
       .toBe(true);
@@ -1770,7 +1816,7 @@ test("same-group tab switch restores Changes tree and diff immediately", async (
       page.getByRole("status", { name: /Loading changes|加载变更/u })
     ).toHaveCount(0);
 
-    await reviewTreeFileItem(page, /app\.tsx/u).click();
+    await clickReviewTreeFile(page, /app\.tsx/u);
     await expect
       .poll(() => isDiffTextInViewport(page, "value = 3"), { timeout: 30_000 })
       .toBe(true);

@@ -32,6 +32,7 @@ function stubProject(
     cleanupCommand: "",
     copyPatterns: [],
     env: { PIER_ENV: "test" },
+    kind: "project",
     projectRootPath: "/stub/project",
     setupCommand: "",
     updatedAt: 1,

@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { create } from "zustand";
 
 export type AppContentDialogSize = "sm" | "default" | "lg" | "xl";
@@ -8,6 +8,19 @@ export interface AppContentDialogRenderProps<TResult = unknown> {
   id: string;
   setDescription: (description?: string) => void;
   setDismissible: (dismissible: boolean) => void;
+  /**
+   * Sticky footer slot (shadcn Sticky Footer). Pass `null` to hide.
+   * Host owns DialogFooter chrome; callers only supply actions.
+   */
+  setFooter: (footer: ReactNode | null) => void;
+  /**
+   * Optional guard for header X / Esc / overlay dismiss. Return false (or a
+   * rejected promise of false) to keep the dialog open — e.g. confirm
+   * discarding unsaved edits. Prefer this over hiding the close button.
+   */
+  setOnDismissRequest: (
+    handler: (() => boolean | Promise<boolean>) | null
+  ) => void;
   setTitle: (title: string) => void;
 }
 
@@ -40,6 +53,7 @@ export interface AppContentDialogLayer {
   description?: string | undefined;
   dismissible: boolean;
   id: string;
+  onDismissRequest: (() => boolean | Promise<boolean>) | null;
   resolve: (result: unknown) => void;
   size: AppContentDialogSize;
   title: string;
@@ -73,6 +87,7 @@ export function openAppContentDialog<TResult = unknown>(
     size: request.size ?? "default",
     dismissible: request.dismissible ?? true,
     closeOnOverlayClick: request.closeOnOverlayClick ?? false,
+    onDismissRequest: null,
     content: request.content as ComponentType<
       AppContentDialogRenderProps<unknown>
     >,
@@ -103,6 +118,7 @@ export function updateAppContentDialog(
     description?: string | undefined;
     dismissible?: boolean;
     closeOnOverlayClick?: boolean;
+    onDismissRequest?: (() => boolean | Promise<boolean>) | null;
   }
 ): void {
   useAppContentDialogStore.setState((state) => ({
@@ -117,6 +133,9 @@ export function updateAppContentDialog(
         ...(patch.closeOnOverlayClick === undefined
           ? {}
           : { closeOnOverlayClick: patch.closeOnOverlayClick }),
+        ...(patch.onDismissRequest === undefined
+          ? {}
+          : { onDismissRequest: patch.onDismissRequest }),
       };
       if ("description" in patch) {
         next.description = patch.description;

@@ -1,5 +1,11 @@
 import { Badge } from "@pier/ui/badge.tsx";
 import {
+  COLLECTION_QUOTA_ITEM_MIN_WIDTH,
+  collectionAutoFitClassName,
+  collectionAutoFitStyle,
+  collectionLayoutMode,
+} from "@pier/ui/collection-auto-layout.ts";
+import {
   formatCount,
   formatDurationShort,
   formatPercent,
@@ -193,22 +199,20 @@ export function UsageMeter({
   }
 
   const sorted = sortUsageWindows(windows);
-  const single = sorted.length === 1;
+  const count = sorted.length;
+  const layout = collectionLayoutMode(count);
 
   return (
     <div
       className={cn(
-        "w-full min-w-0 content-start",
-        "[--codex-quota-item-min-width:18rem]",
-        single
-          ? "flex flex-col gap-3"
-          : "grid grid-cols-[repeat(auto-fit,minmax(min(100%,var(--codex-quota-item-min-width)),1fr))] gap-3",
+        collectionAutoFitClassName(count, { singleAs: "flex" }),
         "pier-codex-usage-meter",
         className
       )}
-      data-count={sorted.length}
-      data-layout={single ? "single" : "auto-fit"}
+      data-count={count}
+      data-layout={layout}
       data-slot="codex-usage-meter"
+      style={collectionAutoFitStyle(count, COLLECTION_QUOTA_ITEM_MIN_WIDTH)}
     >
       {sorted.map((window) => (
         <UsageProgress

@@ -437,8 +437,7 @@ async function openGitChanges(
   userDataDir: string,
   repoPath: string
 ): Promise<string> {
-  // The status dropdown only offers 查看变更/View Changes in dirty/active
-  // variants — a clean repo renders the clean menu without that action.
+  // Dirty workspace so the changes status slot / dropdown row appears.
   writeFileSync(join(repoPath, "notes.txt"), "dirty for changes panel\n");
   const opened = await runPierCliJson<{ panelId: string }>(userDataDir, [
     "terminal",
@@ -454,8 +453,15 @@ async function openGitChanges(
     .locator('[data-testid="worktree-status-trigger"]:visible')
     .first();
   await expect(statusTrigger).toBeVisible({ timeout: 20_000 });
-  await statusTrigger.click();
-  await page.getByRole("menuitem", { name: /View Changes|查看变更/u }).click();
+  const changesTrigger = page
+    .locator('[data-testid="git-changes-status-trigger"]:visible')
+    .first();
+  if (await changesTrigger.isVisible().catch(() => false)) {
+    await changesTrigger.click();
+  } else {
+    await statusTrigger.click();
+    await page.getByTestId("git-status-row-changes").click();
+  }
   const changesTab = page.locator('[data-panel-tab-id^="pier.git.changes:"]');
   await expect(changesTab.first()).toBeVisible({ timeout: 20_000 });
   const panelId = await changesTab.first().getAttribute("data-panel-tab-id");

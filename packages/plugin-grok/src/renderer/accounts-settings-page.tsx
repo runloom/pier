@@ -51,7 +51,11 @@ import {
 } from "./account-switch.ts";
 import { ActiveCardActions } from "./active-card-actions.tsx";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
-import { formatAccountError, type Translate } from "./format-account-error.ts";
+import {
+  formatAccountError,
+  isTransientUsageError,
+  type Translate,
+} from "./format-account-error.ts";
 import { useAccountsRefresh } from "./use-accounts-refresh.ts";
 import { useGrokAccountsSnapshot } from "./use-accounts-snapshot.ts";
 import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
@@ -384,6 +388,7 @@ export function AccountsSettingsPage({
             <ItemSeparator className="my-0" />
             <QuotaGroup
               error={activeUsage?.error}
+              errorTransient={isTransientUsageError(activeUsage?.error)}
               language={language}
               loading={!activeUsage}
               t={t}

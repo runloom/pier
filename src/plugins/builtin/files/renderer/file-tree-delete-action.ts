@@ -43,7 +43,7 @@ async function protectOpenDocumentsBeforeTrash(input: {
     altLabel: t("filePanel.tree.delete.otherOptions", "Other options"),
     body: t(
       "filePanel.tree.delete.protectedBody",
-      "Open files under this path have protected changes. Save them before deleting the path? Deleted items can be restored from the system Trash."
+      "Open files under this path have unsaved changes. Save them before deleting? Deleted items can be restored from Trash."
     ),
     cancelLabel: t("filePanel.tree.delete.cancelLabel", "Cancel"),
     confirmLabel: t("filePanel.tree.delete.saveAndTrash", "Save and Delete"),
@@ -79,7 +79,7 @@ async function protectOpenDocumentsBeforeTrash(input: {
     ),
     body: t(
       "filePanel.tree.delete.preserveBody",
-      "Keep the current buffers as protected untitled documents, or explicitly discard them. Deleted items can be restored from the system Trash."
+      "Keep unsaved content as temporary drafts, or discard the changes. Deleted items can be restored from Trash."
     ),
     cancelLabel: t("filePanel.tree.delete.cancelLabel", "Cancel"),
     confirmLabel: t("filePanel.tree.delete.keepUntitled", "Keep as Untitled"),
@@ -145,7 +145,7 @@ export function createDeleteAction(
             const confirmed = await context.dialogs.confirm({
               body: t(
                 "filePanel.tree.delete.body",
-                `Delete "${displayName}"? You can restore it from the system Trash.`,
+                `Delete ${displayName}? You can restore it from Trash.`,
                 { name: displayName }
               ),
               cancelLabel: t("filePanel.tree.delete.cancelLabel", "Cancel"),

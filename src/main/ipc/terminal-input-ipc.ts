@@ -12,6 +12,7 @@ import {
 import type { NativeAddon } from "./terminal-native-addon.ts";
 import {
   performTerminalOperation,
+  readTerminalCursorVisibility,
   readTerminalSelectionText,
   sendTerminalKeyPress,
   sendTerminalText,
@@ -55,6 +56,14 @@ export function registerTerminalInputIpc(opts: {
       addon,
       args,
       loadError,
+      win: windowFromWebContents(event.sender),
+    })
+  );
+
+  ipcMain.handle("pier:terminal:cursor-visible", (event, panelId: unknown) =>
+    readTerminalCursorVisibility({
+      addon,
+      panelId,
       win: windowFromWebContents(event.sender),
     })
   );

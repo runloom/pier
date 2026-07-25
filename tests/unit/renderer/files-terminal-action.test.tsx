@@ -119,6 +119,19 @@ function createMockContext(overrides?: {
         return dispose;
       }),
     },
+    appearance: {
+      current: vi.fn(() => ({
+        codeTheme: "github-dark",
+        typography: {
+          codeFontFamily: "JetBrains Mono",
+          codeFontSize: 13,
+          monoFontFamily: "JetBrains Mono",
+          monoFontSize: 13,
+          uiFontFamily: "system-ui",
+        },
+      })),
+      onDidChange: vi.fn(() => vi.fn()),
+    },
     captured,
     contentPreview: {
       close: vi.fn(),

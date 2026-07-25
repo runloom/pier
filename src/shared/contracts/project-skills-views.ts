@@ -45,7 +45,17 @@ export interface ProjectSkillView {
    * digest (drift, design §3.5); null while they match or unreadable.
    */
   actualContentDigest: string | null;
+  /**
+   * Pier Home always-include lock. True only for `managedBy: "pier-bound"`
+   * rows that cannot be unbound from the project (IA v5).
+   */
+  alwaysInclude: boolean;
   contentDigest: string;
+  /**
+   * Explicit per-skill discovery channels when set on the manifest entry.
+   * Null means inherit project `manifest.delivery` (legacy).
+   */
+  delivery: { agents: boolean; claude: boolean } | null;
   description: string;
   /** Library tree breakdown (same shape as import candidates, §7.5). */
   directorySummary: {
@@ -60,8 +70,8 @@ export interface ProjectSkillView {
   fileCount: number;
   id: string;
   issueIds: string[];
-  /** Managed origin: user manifest entry vs Pier system channel. */
-  managedBy: "user" | "pier-system";
+  /** Managed origin: user manifest entry vs Pier system / Pier Home bind. */
+  managedBy: "user" | "pier-system" | "pier-bound";
   /** From library SKILL.md frontmatter; empty string when unparsable. */
   name: string;
   riskSummary: {
@@ -69,7 +79,7 @@ export interface ProjectSkillView {
     dynamicCommandTraces: string[];
     riskFrontmatter: Record<string, unknown>;
   } | null;
-  source: ProjectSkillSource;
+  source: ProjectSkillSource | { type: "pier-home" };
   totalBytes: number;
 }
 

@@ -27,7 +27,9 @@ import {
   keybindingRegistry,
   subscribeKeybindingRegistry,
 } from "@/lib/keybindings/registry.ts";
+import { systemNotify } from "@/lib/notifications/system-notify.ts";
 import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useKeybindingPreferencesStore } from "@/stores/keybinding-preferences.store.ts";
 
 const MODIFIER_CODES = new Set([
@@ -172,7 +174,18 @@ export function KeybindingsSection() {
           );
         })
         .catch((err) => {
-          toast.error(err instanceof Error ? err.message : String(err));
+          // 带技术详情的失败：alert 展示 + 消息中心留痕（操作反馈规范）。
+          showAppAlert({
+            body: err instanceof Error ? err.message : String(err),
+            title: t("settings.keybindings.errorUnknown"),
+          }).catch(() => undefined);
+          systemNotify({
+            body: err instanceof Error ? err.message : String(err),
+            kind: "operation.result",
+            severity: "error",
+            suppressToast: true,
+            titleKey: "settings.keybindings.errorUnknown",
+          });
         });
     };
     window.addEventListener("keydown", onKeyDown, true);

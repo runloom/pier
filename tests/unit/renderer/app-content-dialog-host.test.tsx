@@ -129,6 +129,45 @@ describe("AppContentDialogHost", () => {
     expect(screen.getByText("Locked")).toBeTruthy();
   });
 
+  it("keeps the close button and blocks dismiss when onDismissRequest returns false", async () => {
+    function GuardedBody({ setOnDismissRequest }: AppContentDialogRenderProps) {
+      return (
+        <button
+          onClick={() => {
+            setOnDismissRequest(() => false);
+          }}
+          type="button"
+        >
+          Guard
+        </button>
+      );
+    }
+
+    render(<AppContentDialogHost />);
+    await act(async () => {
+      openAppContentDialog({
+        content: GuardedBody,
+        id: "guarded",
+        title: "Guarded",
+      });
+    });
+
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Guard" }));
+    });
+    await act(async () => {
+      fireEvent.click(screen.getByRole("button", { name: "Close" }));
+    });
+
+    expect(screen.getByText("Guarded")).toBeTruthy();
+    expect(useAppContentDialogStore.getState().stack.map((l) => l.id)).toEqual([
+      "guarded",
+    ]);
+    expect(screen.getByRole("button", { name: "Close" })).toBeTruthy();
+  });
+
   it("defers first mount while body is locked, then shows after unlock", async () => {
     vi.useFakeTimers();
     document.body.style.pointerEvents = "none";

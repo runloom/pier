@@ -146,16 +146,21 @@ export function useSkillsSectionActions(args: {
           `${entry.root}/${entry.directoryName}`
         );
       const latestMode = useProjectSkillsStore.getState().mode;
+      const modeOk =
+        latestMode.kind === "detail" || latestMode.kind === "skill-detail";
       const requestIsCurrent =
         adoptRequestRef.current === requestId &&
         useProjectSkillsStore.getState().projectRef?.realPath ===
           requestProject.realPath &&
-        latestMode.kind === "skill-detail" &&
-        latestMode.target.kind === "project" &&
-        latestMode.target.root === entry.root &&
-        latestMode.target.directoryName === entry.directoryName;
+        modeOk;
+      const stillOnEntry =
+        latestMode.kind !== "skill-detail" ||
+        (latestMode.target.kind === "project" &&
+          latestMode.target.root === entry.root &&
+          latestMode.target.directoryName === entry.directoryName);
       if (
         requestIsCurrent &&
+        stillOnEntry &&
         candidate &&
         typeof candidate === "object" &&
         "token" in (candidate as Record<string, unknown>)

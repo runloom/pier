@@ -134,6 +134,12 @@ export interface RendererPluginLoadingNotification {
   update(message: string): void;
 }
 
+export interface RendererPluginNotificationOptions {
+  action?: { label: string; onClick: () => void };
+  /** 后台/系统事件：除 toast 外同时落入宿主消息中心（kind=plugin.event，source=插件 id）。 */
+  systemEvent?: boolean;
+}
+
 export interface RendererPluginPanelRegistration {
   component: ComponentType<Record<string, unknown>>;
   icon?: ComponentType<{ size?: number | string }>;
@@ -182,6 +188,15 @@ export interface RendererPluginContentDialogRenderProps<TResult = unknown> {
   id: string;
   setDescription: (description?: string) => void;
   setDismissible: (dismissible: boolean) => void;
+  /** Sticky DialogFooter actions; pass null to hide. */
+  setFooter: (footer: ReactNode | null) => void;
+  /**
+   * Guard header X / Esc / overlay dismiss. Return false to keep the dialog
+   * open (e.g. confirm discarding unsaved edits). Prefer over hiding the X.
+   */
+  setOnDismissRequest: (
+    handler: (() => boolean | Promise<boolean>) | null
+  ) => void;
   setTitle: (title: string) => void;
 }
 
@@ -324,10 +339,10 @@ export interface ExternalRendererPluginContext {
     beforeSuspend(participant: RendererPluginSuspendParticipant): () => void;
   };
   notifications: {
-    error(message: string): void;
-    info(message: string): void;
+    error(message: string, options?: RendererPluginNotificationOptions): void;
+    info(message: string, options?: RendererPluginNotificationOptions): void;
     loading(message: string): RendererPluginLoadingNotification;
-    success(message: string): void;
+    success(message: string, options?: RendererPluginNotificationOptions): void;
   };
   panels: {
     register(registration: RendererPluginPanelRegistration): () => void;

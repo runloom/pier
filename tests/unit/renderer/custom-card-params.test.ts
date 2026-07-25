@@ -24,7 +24,12 @@ describe("parseCustomCardParams", () => {
         { id: "b1", metricId: "core.activity.total", type: "kpi" },
         { id: "b2", metricId: "", type: "kpi" }, // metricId 空
         { id: "b3", metricId: "m", type: "pie" }, // 未知块型
-        { id: "b4", label: "CPU", metricId: "core.system.cpu", type: "gauge" },
+        {
+          id: "b4",
+          label: "CPU",
+          metricId: "core.pier.totalCpu",
+          type: "gauge",
+        },
       ],
     });
     expect(parsed.blocks.map((b) => b.id)).toEqual(["b1", "b4"]);

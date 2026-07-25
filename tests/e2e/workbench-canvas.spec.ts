@@ -30,8 +30,8 @@ const MATERIALS: readonly MaterialCase[] = [
   {
     id: "core.system-resources",
     max: { h: 12, w: 12 },
-    min: { h: 2, w: 3 },
-    name: "system resources",
+    min: { h: 2, w: 2 },
+    name: "workbench resources",
   },
   {
     id: "core.custom-card",
@@ -85,11 +85,16 @@ async function assertPrimaryContentUsable(
     return;
   }
   if (material.id === "core.system-resources") {
-    const grid = card.locator('[data-testid="system-resources-grid"]');
-    await expect(grid).toBeVisible({ timeout: 15_000 });
+    const body = card.locator('[data-testid="pier-resources-content"]');
+    await expect(body).toBeVisible({ timeout: 15_000 });
+    await expect(
+      card.locator('[data-testid="pier-resources-kpis"]')
+    ).toBeVisible();
     await content.hover();
     await win.mouse.wheel(0, 1200);
-    await expect(grid.locator(":scope > div").last()).toBeVisible();
+    await expect(
+      card.locator('[data-testid="pier-resources-kpis"]')
+    ).toBeVisible();
     return;
   }
   if (material.id === "core.custom-card") {

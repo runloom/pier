@@ -34,6 +34,7 @@ import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
+import { ensureTuiInputFocus } from "@/panel-kits/terminal/tui-input-focus.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/terminal.store.ts";
 import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
@@ -242,6 +243,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       return;
     }
     requestTerminalFocusIntent(props.api.id);
+    ensureTuiInputFocus(props.api.id).catch(() => undefined);
   }, [props.api.component, props.api.id]);
   const onClick = useCallback(() => {
     const shouldReplay = wasActiveOnPointerDownRef.current;

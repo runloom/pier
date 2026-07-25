@@ -4,8 +4,39 @@
 
 ## [Unreleased]
 
+### Added
+
+- **统一消息中心。** main 侧 NotificationCenterService 统一接收系统/后台
+  消息（去重合并、ring buffer 持久化、全窗广播）。入口为标题栏铃铛 + 未读
+  徽标 + Popover 全量列表（滚动加载更多；无独立 dockview 面板、无筛选/
+  搜索）。系统/后台事件经 `systemNotify` 双写：消息型 toast（形态 B）+
+  收件箱；用户动作仍走确认型 toast（形态 A）。agent「需要你处理」/ 回合
+  结束 / 出错、后台任务终态、应用更新、通道故障等可回看；卡片
+  `NotificationCard` 与 action 分发在 popover 内统一。支持勿扰（仅 error
+  弹出）、按类静音、7/30 天保留；设置页为「消息中心 → 提醒内容 → 提醒
+  方式」三卡。旧 layout 中的 `notifications` panel 会在恢复时被剔除。
+- **Agent Assets：MCP 发现（规则 UI defer）。** 设置 → 项目详情保留「MCP」
+  只读发现；「规则」Tab 暂不展示（产品面收窄为 Skills + MCP，多会话 /
+  Canvas 以技能为主）。本机工作台详情为技能 → MCP；仓库项目为
+  环境 → 技能 → MCP → 常规。
+- **Pier Home 技能库 + 项目 pierBindings（主链路）。** `{userData}/pier-home/skills/library`
+  CRUD（`pierHome.skills.*`，含 `setAlwaysInclude`）；每项目
+  `pier-bindings.json` 绑定/解绑（`skills.pierBindings.*`）；ensureReady 与系统
+  技能共用投影通道。本机工作台 Skills：库编辑与智能体全局只读均二级弹窗
+  （CodeMirror）；全局仅打开预览（无 Finder / 采纳）；库编辑可开关「始终包含」；
+  行上展示可用智能体。项目：Pier badge、「从本机库添加」、「从本项目移除」。
+  规则超限文件仍可在 Pier 中打开。
+
 ### Fixed
 
+- **Pier Home 技能装入收敛。** 删除库技能 / 改「始终包含」/ 编辑库正文后会
+  fan-out `ensureReady`，卸掉或刷新各项目的发布副本与发现根 symlink；手动绑定
+  支持 per-bind delivery（可选 Claude）。ledger 升为 v2 `bindings[]`。
+- **Pier Home fan-out / 投影可观测性。** 无已知项目时 converge 不再静默成功；
+  `ensureReady` blocked 在 converge / bind / unbind 中按失败处理；打开项目技能
+  snapshot 会 best-effort 自愈并把 blocked issues 并入 health；删除始终包含技能
+  改为先删库再 converge（避免删前再投递）；始终包含默认投递 agents；错误软链
+  校验目标后交给 repair；损坏的 `pier-bindings.json` 抛错而非静默清空。
 - **增强输入图片/附件路径重复。** Lexical chip 已把绝对路径写进正文后，
   发送载荷不再无条件把附件轨路径再拼一遍前缀，避免智能体侧看到两份同一
   图片路径。
@@ -13,11 +44,56 @@
   时在 paste 文本后注入的 Return 键补上 `text="\\r"` 与
   `unshifted_codepoint`，避免 bracketed paste 后 synthetic keycode 单独
   不足以触发 TUI 提交。
+- **增强输入 Enter 仍被部分 agent TUI 吞掉（paste 与回车同批到达）。**
+  `submit: true` 时 paste 文本与合成 Return 之间加入 settle 延迟，把两次
+  写入拆成 TUI 的两次 stdin read，避免其输入状态机仍停在 bracketed paste
+  处理中吞掉回车（codex#28167 同款，cursor-agent 实测复现）；增强输入
+  空草稿透传的 Enter 同步补上 `text="\\r"`。
+- **终端点击激活失败可观测 + ⌘⇧I 无目标时有反馈。** main 侧
+  `acceptNativeFocusIntent` 拒绝（not-ready/stale/hidden）写入 lastError，
+  终端 debug 窗口可见；增强输入快捷键解析不到目标终端时 toast 提示先切换
+  到目标终端标签页，不再静默。
+- **打开增强输入瞬间向 TUI 发瞬时 focus-out，导致部分 agent 输入框失焦、
+  Enter 不提交。** `applyTerminalWindowState` 原先先移交 first responder 再挂
+  hostCursorHidden，转场间隙 surface 派生出 focused=false 并发出 `ESC[O`；
+  cursor-agent 等依赖 mode 1004 上报的 TUI 输入框失焦后不会随随后的
+  `ESC[I` 恢复，表现为 paste 进框但回车不提交。转场顺序改为按方向选择：
+  打开浮层先挂 hidden 再移交 first responder，关闭浮层反之；ghostty focus
+  改按逻辑键盘归属（hostKeyboardActive）派生，消除 FR 迁移竞态，全程零
+  focus 事件。另新增 `PIER_TERMINAL_DEBUG_LOG=1|all` 环境变量开启
+  TerminalDebugLog（input/lifecycle 等通道）用于输入链路诊断。
+- **crush 等 TUI 输入框失焦时，切 tab / 增强输入发送被静默丢弃。** 新增
+  ghostty patch `0104-cursor-visibility-probe`：`ghostty_surface_cursor_visible`
+  只读探针暴露应用设置的 DECTCEM(?25) 光标模式位（现代 TUI 输入失焦即藏
+  光标）。renderer 新增 `ensureTuiInputFocus` 恢复原语：探针三态
+  （visible/hidden/unknown，unknown 禁止当作失焦）+ agent-catalog 白名单
+  `inputFocusKey`（crush=Tab，已源码验证确定性）+ per-panel 互斥（防 toggle
+  双击）+ waiting 态跳过；在 tab 激活、点终端内容、增强输入打开三个触发点
+  自动恢复 TUI 输入聚焦，为后续多 agent 调度注入提供「输入可达性」基础。
+- **增强输入提交门禁：TUI 无可输入的聚焦内容时拒绝提交，且阻断态前置为
+  常驻 UI。** activity waiting（权限确认等 dialog 态，响应式）与
+  cursor-visible 探针失焦（500ms 轮询，busy 态不探不注、unknown 不阻断、
+  与白名单同口径只对声明 `inputFocusKey` 的 agent 启用、后台 tab 停轮询）
+  都会使发送按钮禁用、回车不生效（含空草稿 Enter 透传同口径截住），并在
+  发送按钮上方以受控 tooltip 常开展示精简原因（非 hover，复用
+  @pier/ui/tooltip 能力）；探针恢复可见即自动解除。发送前再经
+  `ensureTuiInputFocus` 最终确认（crush 失焦透传 Tab 恢复后送达）；确认
+  失败且 UI 无法自解释时 toast 反馈并保留草稿，不再静默失败。发送链路
+  防交错：renderer in-flight 守卫 + main 按 panel 串行发送队列，settle
+  窗口内双击/键重复不会把两条消息揉成一团。
 - **终端右键去掉「增强输入添加文件」。** 添加文件保留增强输入内回形针与
   ⌘⇧A；右键只留「切换增强输入」，避免入口重复。
 
 ### Changed
 
+- **Pier Home → 项目装入语义钉死为发布副本。** 装入是复制进项目
+  `.pier/skills/library` 再投影，不是指向本机库的实时链接；在技能库编辑后会
+  更新已装入项目的副本。见 agent-assets 规格 §7.5。
+- **项目设置 Skills/MCP IA 收敛为 v5。** 智能体全局 `~/` 默认只读（打开/
+  Reveal，可选采纳到 Pier 库）；项目技能三来源用轻分组+badge；「始终包含」
+  为 Pier 行锁定态而非第四来源；Pier 绑定文案为「从本项目移除」。见
+  `docs/superpowers/specs/2026-07-23-agent-assets-home-and-instructions-design.md`
+  §0 与原型 `pier-home-binding-proto-flows.canvas.tsx`。
 - **增强输入升级为 Lexical 结构化编辑器（Phase A / B）。** 按需增强输入从
   `textarea` 换成 Lexical plain-text 编辑器：空草稿方向键/Tab/Enter 透传
   TUI、`[#n]` 合法/越界着色、Enter 发送由 Lexical 命令优先处理；大粘贴

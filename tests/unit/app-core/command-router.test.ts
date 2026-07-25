@@ -287,6 +287,7 @@ function services(
       addProject: vi.fn(async () => emptyEnvironmentState()),
       bindWorktree: vi.fn(async () => undefined),
       clearWorktreeBinding: vi.fn(async () => undefined),
+      getProjectKind: vi.fn(async () => null),
       projectSnapshot: vi.fn(async () => null),
       removeProject: vi.fn(async () => emptyEnvironmentState()),
       resolveProject: vi.fn(async () => null),
@@ -294,6 +295,7 @@ function services(
       runLifecycle: vi.fn(async () => undefined),
       snapshot: vi.fn(async () => emptyEnvironmentState()),
       updateProject: vi.fn(async () => emptyEnvironmentState()),
+      upsertPierHome: vi.fn(async () => emptyEnvironmentState()),
       worktreeBinding: vi.fn(async () => null),
     },
     plugins: {

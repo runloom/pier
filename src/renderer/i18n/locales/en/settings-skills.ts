@@ -5,7 +5,7 @@ export const settingsSkills = {
   emptyTitle: "No project skills",
   detailEmptyTitle: "No skills in this project yet",
   detailEmptyDescription:
-    'Import from a folder or create one. New skills stay off until you turn them on. Skills already installed by other tools show under "In project".',
+    'Import from a folder or add a new skill. New skills stay off until you check a discovery path in the skill details. Skills already installed by other tools show under "In project".',
   emptyDescription: "Choose a project, then import a local skill directory.",
   searchPlaceholder: "Search skills",
   filterAll: "All",
@@ -14,7 +14,18 @@ export const settingsSkills = {
   filterProject: "In project",
   filterUserGlobal: "On this Mac",
   contentTitle: "SKILL.md content",
+  contentSkillMdOnlyNotice:
+    "Only SKILL.md opens here. Other files stay in the skill folder — open that folder to view or edit them.",
   metadataTitle: "Details",
+  metadataCompanionHint:
+    "Includes other files in the folder; only SKILL.md opens here.",
+  policyTitle: "Policy",
+  removeTitle: "Remove",
+  removeBody:
+    "Deletes this skill from the project. This cannot be undone. To stop using it temporarily, uncheck the discovery paths in the skill details.",
+  removeLibraryBody:
+    "Removes this skill from the Pier library on this Mac. This cannot be undone.",
+
   matrixNotInstalled_one: "{{count}} agent that is not installed is hidden.",
   matrixNotInstalled_other:
     "{{count}} agents that are not installed are hidden.",
@@ -54,6 +65,10 @@ export const settingsSkills = {
   currentBadge: "Current",
   deleteSkill: "Delete this skill",
   enableSkill: "Enable skill",
+  enableSkillLabel: "Enable this skill",
+  enableSkillHint: "When on, installed agents can discover and use this skill.",
+  enableSkillHintPending:
+    "Takes effect when you save. When on, installed agents can discover and use this skill.",
   deliveryClaude: "Also available to Claude Code",
   deliveryClaudeHint:
     "Turned-on skills already go to your usual agents. Turn this on to include Claude Code too.",
@@ -75,24 +90,49 @@ export const settingsSkills = {
   resultCount_other: "{{shown}} of {{total}} skills",
   addSkill: "Add skill",
   addFromFolder: "Import from folder",
-  addBlank: "New skill",
-  blankIdTitle: "New skill id",
+  addBlank: "Add new skill",
+  blankIdTitle: "Name",
   blankIdBody:
     "Lowercase letters, digits, and dashes (for example review-guide).",
-  blankDescriptionTitle: "Skill description",
-  blankDescriptionBody:
-    "One sentence describing when agents should use this skill.",
+  blankIdInvalid:
+    "Use lowercase letters, digits, and dashes, starting with a letter or digit.",
+  blankIdReserved:
+    "Names starting with “pier-” are reserved for Pier system skills.",
+  blankIdTaken: "A skill with this name already exists. Choose another.",
+  confirmAdd: "Add",
+  createFailed: "Couldn’t add skill",
+  createFailedBody: "Something went wrong while adding the skill. Try again.",
+  createSkillMdInvalid:
+    "Fix SKILL.md frontmatter: it needs a name matching the field above, and a description.",
+  createContentSaveFailedBody:
+    "The skill was added, but its SKILL.md content could not be saved. Open the skill to edit it again.",
   open: "Open",
   unmanagedBadge: "In project",
   userGlobalBadge: "On this Mac",
   importAsManaged: "Manage with Pier",
   systemBadge: "Pier system",
+  pierLibraryBadge: "Pier",
+  pierBoundBadge: "Pier",
+  alwaysIncludeBadge: "Always included",
+  removeFromProject: "Remove from this project",
+  removeFromProjectFailed: "Couldn’t remove Pier skill from this project",
+  bindFromLibrary: "Add from Pier library",
+  bindFromLibraryTitle: "Add from Pier library",
+  bindFromLibraryAdd: "Add to project",
+  bindFromLibraryFailed: "Couldn’t add library skill to this project",
+  bindFromLibraryEmptyTitle: "Nothing to add",
+  bindFromLibraryEmptyBody:
+    "Add skills in Pier Home first, or they may already be added / always included.",
+  bindAlsoClaude: "Also offer to Claude Code",
+  bindAlsoClaudeHint:
+    "Creates a Claude discovery link in addition to the default Agents path. Editing the library later updates installed project copies.",
   managedSource: {
     localImport: "Added locally",
     projectDiscoveryImport: "Imported from project",
     gitDeclared: "Declared in the repository",
+    pierHome: "Installed from Pier Home",
   },
-  effectDiscoverable: "Available",
+  effectDiscoverable: "Discoverable",
   effectNotProjected: "Not enabled",
   effectShadowed: "Hidden by a same-named skill on this Mac",
   effectOverridden: "Another copy takes priority",
@@ -146,15 +186,16 @@ export const settingsSkills = {
   applyIndeterminate:
     "Confirming disk state… editing is paused until this finishes.",
   skillDetailBack: "Back to skills",
-  editSave: "Save",
+  editSave: "Save changes",
   editDiscard: "Discard changes",
-  editSaved: "Saved",
   editFailed: "Couldn't save skill",
   driftTitle: "This skill was changed outside Pier",
   driftBody:
     "Files on disk no longer match what Pier recorded. Use the current files, or delete the skill.",
   driftUseCurrent: "Use current files",
   matrixTitle: "Which agents can use this",
+  discoveryChannelsHint: "Changes apply when you save.",
+  discoveryChannelsHintAdd: "Checked paths apply when you add the skill.",
   metadataFiles_one: "{{count}} file · {{size}}",
   metadataFiles_other: "{{count}} files · {{size}}",
   riskTitle: "Risk notes",
@@ -184,36 +225,18 @@ export const settingsSkills = {
     "Go back to the project list and reopen this project before trying again.",
   reloadAndReturn: "Reload and return",
   addSkillCommit: "Add skill",
-  dismiss: "Dismiss",
   leaveBlocked: "Still confirming disk state. Try leaving again in a moment.",
-  importAddedTitle: "Added “{{name}}” (off)",
-  importAddedBody: "Turn it on when you want agents to use it.",
-  sessionRefreshTitle: "Start a new session",
-  sessionRefreshBody:
-    "Running sessions may keep older content. Start a new session when you need the updated skills.",
-  gitStatusTitle: "Git status for discovery paths",
-  gitIgnoreHint:
-    "Prefer not committing .agents/skills/ and .claude/skills/. Copy ignore lines into .gitignore if you want.",
-  copyGitIgnore: "Copy ignore lines",
-  gitState: {
-    absent: "Absent",
-    ignored: "Ignored",
-    untracked: "Untracked",
-    tracked: "Tracked",
-    unknown: "Unknown",
-  },
   confirmDeleteAction: "Delete",
   launchCancelledPanel:
     "Launch cancelled: skills are not ready for this project. Open skill settings, then start a new terminal.",
   sourceTemplate: "Added locally",
-  effectSummaryDiscoverable_one: "Available to {{count}} agent",
-  effectSummaryDiscoverable_other: "Available to {{count}} agents",
+  blankDefaultDescription: "Describe when agents should use this skill.",
+  discoveryChannelSummary_one: "{{count}} agent · {{path}}",
+  discoveryChannelSummary_other: "{{count}} agents · {{path}}",
+  discoveryChannelSummaryNoPath_one: "{{count}} agent",
+  discoveryChannelSummaryNoPath_other: "{{count}} agents",
   effectSummaryNone: "Not available to agents",
   openProjectMissing: "Couldn't open project skills",
-  blankDialogTitle: "New blank skill",
-  blankIdInvalid:
-    "Use lowercase letters, digits, and dashes, starting with a letter or digit.",
-  create: "Create",
   importFailedBody: "Choose the skill source again and retry.",
   loadFailedBody: "Reload the project or return to the project list.",
 } as const;

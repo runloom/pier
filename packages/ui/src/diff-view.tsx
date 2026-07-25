@@ -17,6 +17,7 @@ import {
   CODE_VIEW_CUSTOM_CSS,
   type DiffTypographyStyle,
   diffFontMetrics,
+  pierDiffCodeViewKey,
 } from "./diff-view-appearance.ts";
 import type { PierDiffViewLabels } from "./diff-view-collapse.tsx";
 import {
@@ -48,8 +49,9 @@ import { useDiffViewHeaders } from "./use-diff-view-headers.tsx";
 import { useDiffViewItemApply } from "./use-diff-view-item-apply.ts";
 
 export interface PierDiffViewAppearance {
-  readonly baseFontSize: string;
   readonly codeFontFamily: string;
+  /** Resolved code body size, e.g. "13px" from settings `codeFontSize`. */
+  readonly codeFontSize: string;
   readonly codeTheme: string;
   readonly colorMode: "dark" | "light";
 }
@@ -188,15 +190,21 @@ export function PierDiffView({
   });
   previousTopologyKeyRef.current = topologyKey;
   const metrics = useMemo(
-    () => diffFontMetrics(appearance.baseFontSize),
-    [appearance.baseFontSize]
+    () => diffFontMetrics(appearance.codeFontSize),
+    [appearance.codeFontSize]
   );
   const renderMode = workerUnavailable ? "inline" : "worker";
   // selection=uncontrolled 钉进 key：避免 HMR 从旧受控实例切过来时
   // CodeView 拒绝 controlled→uncontrolled 并卡死选区。
-  // diffStyle/overflow 影响行高与布局缓存，切换时强制重建实例。
+  // diffStyle/overflow/lineHeight（含 codeFontSize）影响行高与布局缓存，切换时强制重建实例。
   // topologyKey：item id 集合变化时重建（stage 会改 sectionKey/group）。
-  const codeViewKey = `${renderMode}\0selection=uncontrolled\0${diffStyle}\0${overflow}\0${topologyKey}`;
+  const codeViewKey = pierDiffCodeViewKey({
+    diffStyle,
+    lineHeight: metrics.lineHeight,
+    overflow,
+    renderMode,
+    topologyKey,
+  });
   const renderEnvironment = useMemo(
     () =>
       `${renderMode}\0${appearance.codeTheme}\0${appearance.colorMode}\0${metrics.diffHeaderHeight}\0${metrics.lineHeight}\0${diffStyle}\0${overflow}`,
@@ -280,13 +288,13 @@ export function PierDiffView({
       "--diffshub-annotation-border": "var(--border)",
       "--diffshub-diff-separator": "var(--border)",
       "--diffs-font-family": appearance.codeFontFamily,
-      "--diffs-font-size": "0.8125rem",
+      "--diffs-font-size": appearance.codeFontSize,
       "--diffs-line-height": "1.75",
       "--diffs-scrollbar-gutter-override":
         "var(--shell-scrollbar-width-legacy)",
       height: "100%",
     }),
-    [appearance.codeFontFamily]
+    [appearance.codeFontFamily, appearance.codeFontSize]
   );
   const {
     handleCodeViewScroll,

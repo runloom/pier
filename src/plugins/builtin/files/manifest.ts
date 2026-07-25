@@ -255,6 +255,7 @@ export const FILES_PLUGIN_MANIFEST = {
       alignment: "right",
       id: FILES_PROJECT_STATUS_ITEM_ID,
       order: 9,
+      overflowPriority: 40,
       permissions: ["panel:open", "file:read"],
       title: "Project",
     },

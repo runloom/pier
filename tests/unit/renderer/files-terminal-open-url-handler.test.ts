@@ -234,8 +234,9 @@ describe("handleFilesTerminalOpenUrl", () => {
     expect(openPath).not.toHaveBeenCalled();
   });
 
-  it("falls back for binary documents", async () => {
-    readDocument.mockResolvedValue({ kind: "binary", mime: null });
+  it("opens binary and unsupported files in Files instead of the system app", async () => {
+    // Handler no longer pre-reads; the file panel loads and shows its
+    // built-in unsupported / read-only fallback UI.
     await expect(
       handleFilesTerminalOpenUrl(context, {
         kind: "text",
@@ -243,13 +244,50 @@ describe("handleFilesTerminalOpenUrl", () => {
         url: "/repo/a.zip",
       })
     ).resolves.toBe(true);
-    expect(openPath).toHaveBeenCalledWith({ path: "/repo/a.zip" });
-    expect(openInstance).not.toHaveBeenCalled();
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          source: {
+            kind: "disk",
+            path: "a.zip",
+            root: "/repo",
+          },
+        }),
+        title: "a.zip",
+      })
+    );
+    expect(openPath).not.toHaveBeenCalled();
+    expect(readDocument).not.toHaveBeenCalled();
   });
 
-  it("logs why system open fallback is used for unsupported files", async () => {
+  it("opens unreadable outside-anchor files in Files without system open", async () => {
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: "/tmp/outside.bin",
+      })
+    ).resolves.toBe(true);
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          source: {
+            kind: "disk",
+            path: "outside.bin",
+            root: "/tmp",
+          },
+        }),
+        title: "outside.bin",
+      })
+    );
+    expect(openPath).not.toHaveBeenCalled();
+  });
+
+  it("logs why system open fallback is used when openInstance throws", async () => {
     const info = vi.spyOn(console, "info").mockImplementation(() => undefined);
-    readDocument.mockResolvedValue({ kind: "binary", mime: null });
+    openInstance.mockImplementation(() => {
+      throw new Error("panel not registered");
+    });
     try {
       await expect(
         handleFilesTerminalOpenUrl(context, {
@@ -262,7 +300,7 @@ describe("handleFilesTerminalOpenUrl", () => {
         "[files-terminal-open-url] system open fallback",
         expect.objectContaining({
           path: "/tmp/outside.bin",
-          reason: "binary-or-unsupported",
+          reason: "open-instance-failed",
         })
       );
       expect(openPath).toHaveBeenCalledWith({ path: "/tmp/outside.bin" });

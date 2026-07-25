@@ -2,7 +2,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { GitStatusDropdown } from "@plugins/builtin/git/renderer/git-status-dropdown.tsx";
 import type {
   GitStatusDropdownModel,
-  GitStatusDropdownSummaryIcon,
+  GitStatusDropdownRowIcon,
 } from "@plugins/builtin/git/renderer/git-status-dropdown-model.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
@@ -13,8 +13,6 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-const STASH_ACTION_NAME = /stash/i;
 
 const PANEL_CONTEXT = {
   branch: "main",
@@ -29,173 +27,209 @@ const PANEL_CONTEXT = {
   worktreeRoot: "/workspace/pier",
 } as const satisfies PanelContext;
 
-const DIRTY_MODEL = model({
-  actions: [{ id: "switchWorktree" }],
-  statusGroups: [
-    { parts: [{ icon: "changed", label: "7 changed", tone: "warning" }] },
-    {
-      parts: [
-        { assistiveLabel: "insertions", label: "+128", tone: "success" },
-        {
-          assistiveLabel: "deletions",
-          label: "−42",
-          tone: "destructive",
-        },
-      ],
-    },
-    {
-      parts: [
-        {
-          assistiveLabel: "ahead",
-          icon: "ahead",
-          label: "↑2",
-          tone: "muted",
-        },
-        {
-          assistiveLabel: "behind",
-          icon: "behind",
-          label: "↓1",
-          tone: "muted",
-        },
-      ],
-    },
-  ],
-  variant: "dirty",
-});
-
-const COMPLETED_MODEL = model({
-  actions: [{ id: "switchWorktree" }],
-  statusGroups: [
-    {
-      parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
-    },
-    { parts: [{ icon: "merged", label: "merged", tone: "done" }] },
-    {
-      parts: [
-        { icon: "upstreamGone", label: "upstream gone", tone: "warning" },
-      ],
-    },
-  ],
-  variant: "completed",
-});
-
-const REBASE_MODEL = model({
-  actions: [{ id: "switchWorktree" }],
-  statusGroups: [
-    { parts: [{ icon: "rebase", label: "Rebase paused", tone: "info" }] },
-    { parts: [{ icon: "conflict", label: "3 conflicts", tone: "danger" }] },
-  ],
-  variant: "active",
-});
-
-const CLEAN_MODEL = model({
-  actions: [{ id: "switchBranch" }, { id: "switchWorktree" }],
-  statusGroups: [{ parts: [{ label: "No local changes", tone: "default" }] }],
-  variant: "clean",
-});
-
-const AHEAD_MODEL = model({
-  actions: [{ id: "push" }, { id: "switchBranch" }, { id: "switchWorktree" }],
-  statusGroups: [
-    {
-      parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
-    },
-    {
-      parts: [
-        { assistiveLabel: "ahead", icon: "ahead", label: "↑2", tone: "muted" },
-      ],
-    },
-  ],
-  variant: "clean",
-});
-
-const BEHIND_MODEL = model({
-  actions: [{ id: "pull" }, { id: "switchBranch" }, { id: "switchWorktree" }],
-  statusGroups: [
-    {
-      parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
-    },
-    {
-      parts: [
-        {
-          assistiveLabel: "behind",
-          icon: "behind",
-          label: "↓2",
-          tone: "muted",
-        },
-      ],
-    },
-  ],
-  variant: "clean",
-});
-
-const DIVERGED_MODEL = model({
-  actions: [
-    { id: "syncChanges" },
-    { id: "switchBranch" },
-    { id: "switchWorktree" },
-  ],
-  statusGroups: [
-    {
-      parts: [{ icon: "clean", label: "No local changes", tone: "default" }],
-    },
-    {
-      parts: [
-        {
-          assistiveLabel: "ahead",
-          icon: "ahead",
-          label: "↑2",
-          tone: "muted",
-        },
-        {
-          assistiveLabel: "behind",
-          icon: "behind",
-          label: "↓2",
-          tone: "muted",
-        },
-      ],
-    },
-  ],
-  variant: "clean",
-});
-
-const SUMMARY_ICON_EXPECTATIONS: ReadonlyArray<{
-  icon: GitStatusDropdownSummaryIcon;
-  lucideName: string;
-}> = [
-  { icon: "ahead", lucideName: "git-pull-request-arrow" },
-  { icon: "behind", lucideName: "git-pull-request-arrow" },
-  { icon: "bisect", lucideName: "git-compare-arrows" },
-  { icon: "changed", lucideName: "git-compare-arrows" },
-  { icon: "cherryPick", lucideName: "git-commit-horizontal" },
-  { icon: "clean", lucideName: "git-commit-horizontal" },
-  { icon: "conflict", lucideName: "git-merge-conflict" },
-  { icon: "merge", lucideName: "git-merge" },
-  { icon: "merged", lucideName: "git-merge" },
-  { icon: "rebase", lucideName: "git-pull-request-arrow" },
-  { icon: "revert", lucideName: "git-commit-horizontal" },
-  { icon: "upstreamGone", lucideName: "git-pull-request-closed" },
-];
-
-const ALL_SUMMARY_ICONS_MODEL = model({
-  statusGroups: SUMMARY_ICON_EXPECTATIONS.map(({ icon }) => ({
-    parts: [{ icon, label: icon, tone: "default" }],
-  })),
-  variant: "active",
-});
-
 function model(
   overrides: Partial<GitStatusDropdownModel>
 ): GitStatusDropdownModel {
   return {
-    actions: [],
     branchLabel: "feature/terminal-status",
     contextLine: "pier · fetched 1m ago",
-    statusGroups: [{ parts: [{ label: "Clean", tone: "default" }] }],
-    variant: "clean",
+    operationKind: null,
+    rows: [
+      {
+        action: null,
+        icon: "clean",
+        id: "clean",
+        label: "No local changes",
+        tone: "muted",
+      },
+    ],
+    tasks: [{ id: "switchBranch" }, { id: "switchWorktree" }],
+    variant: "normal",
     worktreePath: "/workspace/pier",
     ...overrides,
   };
+}
+
+const DIRTY_MODEL = model({
+  rows: [
+    {
+      action: "viewChanges",
+      assistiveLabel: "128 insertions, 42 deletions",
+      icon: "changed",
+      id: "changes",
+      label: "Changes",
+      tone: "default",
+      value: "7 · +128 −42",
+    },
+    {
+      action: "syncChanges",
+      assistiveLabel: "2 ahead, 1 behind",
+      icon: "sync",
+      id: "sync",
+      label: "Sync",
+      tone: "default",
+      value: "↑2 ↓1",
+    },
+  ],
+});
+
+const REBASE_MODEL = model({
+  operationKind: "rebasing",
+  rows: [
+    {
+      action: "viewChanges",
+      icon: "rebase",
+      id: "operation",
+      label: "Rebase paused",
+      tone: "danger",
+      value: "3 conflicts",
+    },
+    {
+      action: "continueOperation",
+      icon: "continue",
+      id: "continueOperation",
+      label: "Continue Rebase",
+      tone: "default",
+    },
+    {
+      action: "abortOperation",
+      icon: "abort",
+      id: "abortOperation",
+      label: "Abort Rebase",
+      tone: "default",
+    },
+  ],
+});
+
+const AHEAD_MODEL = model({
+  rows: [
+    {
+      action: null,
+      icon: "clean",
+      id: "clean",
+      label: "No local changes",
+      tone: "muted",
+    },
+    {
+      action: "push",
+      icon: "push",
+      id: "sync",
+      label: "Push",
+      tone: "default",
+      value: "↑2",
+    },
+  ],
+});
+
+const BEHIND_MODEL = model({
+  rows: [
+    {
+      action: null,
+      icon: "clean",
+      id: "clean",
+      label: "No local changes",
+      tone: "muted",
+    },
+    {
+      action: "pull",
+      icon: "pull",
+      id: "sync",
+      label: "Pull",
+      tone: "default",
+      value: "↓2",
+    },
+  ],
+});
+
+const DIVERGED_MODEL = model({
+  rows: [
+    {
+      action: null,
+      icon: "clean",
+      id: "clean",
+      label: "No local changes",
+      tone: "muted",
+    },
+    {
+      action: "syncChanges",
+      icon: "sync",
+      id: "sync",
+      label: "Sync",
+      tone: "default",
+      value: "↑2 ↓2",
+    },
+  ],
+});
+
+const LIFECYCLE_MODEL = model({
+  rows: [
+    {
+      action: null,
+      icon: "clean",
+      id: "clean",
+      label: "No local changes",
+      tone: "muted",
+    },
+    {
+      action: null,
+      icon: "merged",
+      id: "merged",
+      label: "merged",
+      tone: "muted",
+    },
+    {
+      action: null,
+      icon: "upstreamGone",
+      id: "upstreamGone",
+      label: "upstream gone",
+      tone: "muted",
+    },
+    {
+      action: null,
+      icon: "stash",
+      id: "stash",
+      label: "Stashes",
+      tone: "muted",
+      value: "3",
+    },
+  ],
+});
+
+const ROW_ICON_EXPECTATIONS: ReadonlyArray<{
+  icon: GitStatusDropdownRowIcon;
+  gitIcon: string;
+}> = [
+  { gitIcon: "git-abort", icon: "abort" },
+  { gitIcon: "git-compare-arrows", icon: "bisect" },
+  { gitIcon: "git-compare-arrows", icon: "changed" },
+  { gitIcon: "git-commit-horizontal", icon: "cherryPick" },
+  { gitIcon: "git-commit-horizontal", icon: "clean" },
+  { gitIcon: "git-continue", icon: "continue" },
+  { gitIcon: "git-merge", icon: "merge" },
+  { gitIcon: "git-merge", icon: "merged" },
+  { gitIcon: "git-pull", icon: "pull" },
+  { gitIcon: "git-push", icon: "push" },
+  { gitIcon: "git-pull-request-arrow", icon: "rebase" },
+  { gitIcon: "git-commit-horizontal", icon: "revert" },
+  { gitIcon: "git-stash", icon: "stash" },
+  { gitIcon: "git-sync", icon: "sync" },
+  { gitIcon: "git-pull-request-closed", icon: "upstreamGone" },
+];
+
+function singleIconModel(
+  icon: GitStatusDropdownRowIcon
+): GitStatusDropdownModel {
+  return model({
+    rows: [
+      {
+        action: null,
+        icon,
+        id: "clean",
+        label: icon,
+        tone: "muted",
+      },
+    ],
+  });
 }
 
 function makePluginContext(): RendererPluginContext {
@@ -262,11 +296,11 @@ function makePluginContext(): RendererPluginContext {
 
 async function openDropdown(
   pluginContext: RendererPluginContext,
-  model: GitStatusDropdownModel
+  dropdownModel: GitStatusDropdownModel
 ): Promise<void> {
   render(
     <GitStatusDropdown
-      model={model}
+      model={dropdownModel}
       onViewChanges={vi.fn()}
       pluginContext={pluginContext}
     >
@@ -286,56 +320,76 @@ describe("GitStatusDropdown", () => {
     cleanup();
   });
 
-  it("renders compact dropdown menu actions instead of primary blue pills", async () => {
+  it("renders compact dropdown menu rows and tasks", async () => {
     const pluginContext = makePluginContext();
     await openDropdown(pluginContext, DIRTY_MODEL);
 
     expect(screen.getByRole("menu", { name: "Git status" })).toHaveClass(
       "w-72"
     );
+    expect(screen.getByTestId("git-status-row-changes")).toHaveAttribute(
+      "data-slot",
+      "dropdown-menu-item"
+    );
+    expect(
+      screen.getByRole("menuitem", { name: "Switch Branch" })
+    ).toBeInTheDocument();
     expect(
       screen.getByRole("menuitem", { name: "Switch Worktree" })
-    ).toHaveAttribute("data-slot", "dropdown-menu-item");
+    ).toBeInTheDocument();
   });
 
-  it("uses status-token colors for badge and summary details", async () => {
+  it("renders row values right-aligned in muted tabular numerals", async () => {
     const pluginContext = makePluginContext();
     await openDropdown(pluginContext, DIRTY_MODEL);
 
-    expect(screen.getByText("changed")).toHaveClass(
-      "bg-status-warning-bg",
-      "border-status-warning-border",
-      "text-status-warning-fg"
-    );
-    expect(screen.getByText("7 changed")).toHaveClass("text-status-warning-fg");
-    expect(screen.getByText("+128")).toHaveClass("text-success");
-    expect(screen.getByText("−42")).toHaveClass("text-destructive");
-    expect(screen.getByText("↑2")).toHaveClass("text-muted-foreground");
-    expect(screen.getByText("↓1")).toHaveClass("text-muted-foreground");
-    expect(screen.getByText("insertions,", { exact: false })).toHaveClass(
-      "sr-only"
-    );
-    expect(screen.getByText("deletions,", { exact: false })).toHaveClass(
+    const value = screen.getByText("7 · +128 −42");
+    expect(value).toHaveClass("ml-auto", "tabular-nums");
+    expect(value).toHaveClass("text-muted-foreground");
+    expect(screen.getByText("128 insertions, 42 deletions")).toHaveClass(
       "sr-only"
     );
   });
 
-  it("renders Git-specific summary icons for every summary state", async () => {
+  it("renders informational rows as disabled menu items", async () => {
     const pluginContext = makePluginContext();
-    await openDropdown(pluginContext, ALL_SUMMARY_ICONS_MODEL);
+    await openDropdown(pluginContext, LIFECYCLE_MODEL);
 
-    for (const { icon, lucideName } of SUMMARY_ICON_EXPECTATIONS) {
-      expect(
-        screen.getByTestId(`git-status-summary-icon-${icon}`)
-      ).toHaveAttribute("data-git-icon", lucideName);
+    for (const id of ["clean", "merged", "upstreamGone", "stash"]) {
+      expect(screen.getByTestId(`git-status-row-${id}`)).toHaveAttribute(
+        "data-disabled"
+      );
     }
+    expect(screen.getByText("3")).toBeInTheDocument();
+  });
+
+  it("renders Git row icons for every row icon kind", async () => {
+    for (const { icon, gitIcon } of ROW_ICON_EXPECTATIONS) {
+      const pluginContext = makePluginContext();
+      await openDropdown(pluginContext, singleIconModel(icon));
+      expect(screen.getByTestId(`git-status-row-icon-${icon}`)).toHaveAttribute(
+        "data-git-icon",
+        gitIcon
+      );
+      cleanup();
+    }
+  });
+
+  it("marks the conflict operation row with danger styling", async () => {
+    const pluginContext = makePluginContext();
+    await openDropdown(pluginContext, REBASE_MODEL);
+
+    const operationRow = screen.getByTestId("git-status-row-operation");
+    expect(operationRow).toHaveAttribute("data-variant", "destructive");
+    expect(screen.getByText("Rebase paused")).toHaveClass(
+      "text-status-danger-fg"
+    );
   });
 
   it("localizes dropdown labels through plugin text", async () => {
     const pluginContext = makePluginContext();
     const translations: Record<string, string> = {
       "ui.gitStatusLabel": "Git 状态",
-      "ui.statusDropdownStateDirty": "有变更",
       "ui.statusDropdownSwitchWorktree": "切换工作树",
     };
     vi.mocked(pluginContext.i18n.t).mockImplementation(
@@ -352,12 +406,11 @@ describe("GitStatusDropdown", () => {
     expect(
       screen.getByRole("menuitem", { name: "切换工作树" })
     ).toBeInTheDocument();
-    expect(screen.getByText("有变更")).toBeInTheDocument();
   });
 
-  it("opens worktree quick pick from clean completed dropdown", async () => {
+  it("opens worktree quick pick from the fixed task zone", async () => {
     const pluginContext = makePluginContext();
-    await openDropdown(pluginContext, COMPLETED_MODEL);
+    await openDropdown(pluginContext, LIFECYCLE_MODEL);
 
     fireEvent.click(screen.getByRole("menuitem", { name: "Switch Worktree" }));
 
@@ -366,7 +419,7 @@ describe("GitStatusDropdown", () => {
     });
   });
 
-  it("opens branch quick pick from the clean dropdown and switches the selected branch", async () => {
+  it("opens branch quick pick from the fixed task zone and switches the selected branch", async () => {
     const pluginContext = makePluginContext();
     vi.mocked(pluginContext.panels.getActiveContext).mockReturnValue({
       ...PANEL_CONTEXT,
@@ -402,7 +455,7 @@ describe("GitStatusDropdown", () => {
     }));
     pluginContext.git.listBranches = vi.fn(async () => []);
     pluginContext.git.checkoutBranch = vi.fn(async () => true);
-    await openDropdown(pluginContext, CLEAN_MODEL);
+    await openDropdown(pluginContext, model({}));
 
     fireEvent.click(screen.getByRole("menuitem", { name: "Switch Branch" }));
 
@@ -448,17 +501,58 @@ describe("GitStatusDropdown", () => {
     });
   });
 
-  it("keeps write operations out of the status dropdown", async () => {
+  it("continues a paused rebase from the contextual zone", async () => {
     const pluginContext = makePluginContext();
+    pluginContext.git.continueRebase = vi.fn(async () => ({
+      kind: "ok" as const,
+      message: "",
+    }));
     await openDropdown(pluginContext, REBASE_MODEL);
 
-    expect(screen.queryByRole("menuitem", { name: "Continue Rebase" })).toBe(
-      null
-    );
-    expect(screen.queryByRole("menuitem", { name: "Abort" })).toBe(null);
-    expect(screen.queryByRole("menuitem", { name: STASH_ACTION_NAME })).toBe(
-      null
-    );
+    fireEvent.click(screen.getByRole("menuitem", { name: "Continue Rebase" }));
+
+    await waitFor(() => {
+      expect(pluginContext.git.continueRebase).toHaveBeenCalledWith(
+        "/workspace/pier"
+      );
+    });
+  });
+
+  it("aborts a paused rebase only after destructive confirmation", async () => {
+    const pluginContext = makePluginContext();
+    pluginContext.git.abortRebase = vi.fn(async () => ({
+      kind: "ok" as const,
+    }));
+    await openDropdown(pluginContext, REBASE_MODEL);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Abort Rebase" }));
+
+    await waitFor(() => {
+      expect(pluginContext.dialogs.confirm).toHaveBeenCalledWith(
+        expect.objectContaining({ intent: "destructive" })
+      );
+    });
+    await waitFor(() => {
+      expect(pluginContext.git.abortRebase).toHaveBeenCalledWith(
+        "/workspace/pier"
+      );
+    });
+  });
+
+  it("does not abort when the destructive confirmation is cancelled", async () => {
+    const pluginContext = makePluginContext();
+    vi.mocked(pluginContext.dialogs.confirm).mockResolvedValue(false);
+    pluginContext.git.abortRebase = vi.fn(async () => ({
+      kind: "ok" as const,
+    }));
+    await openDropdown(pluginContext, REBASE_MODEL);
+
+    fireEvent.click(screen.getByRole("menuitem", { name: "Abort Rebase" }));
+
+    await waitFor(() => {
+      expect(pluginContext.dialogs.confirm).toHaveBeenCalled();
+    });
+    expect(pluginContext.git.abortRebase).not.toHaveBeenCalled();
   });
 
   it("runs push from an ahead-only branch", async () => {
@@ -466,7 +560,7 @@ describe("GitStatusDropdown", () => {
     pluginContext.git.push = vi.fn(async () => ({ kind: "ok" as const }));
     await openDropdown(pluginContext, AHEAD_MODEL);
 
-    fireEvent.click(screen.getByRole("menuitem", { name: "Push Changes" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Push/ }));
 
     await waitFor(() => {
       expect(pluginContext.git.push).toHaveBeenCalledWith("/workspace/pier");
@@ -484,7 +578,7 @@ describe("GitStatusDropdown", () => {
     }));
     await openDropdown(pluginContext, AHEAD_MODEL);
 
-    fireEvent.click(screen.getByRole("menuitem", { name: "Push Changes" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Push/ }));
 
     await waitFor(() => {
       expect(pluginContext.notifications.error).toHaveBeenCalledWith(
@@ -500,7 +594,7 @@ describe("GitStatusDropdown", () => {
     }));
     await openDropdown(pluginContext, BEHIND_MODEL);
 
-    fireEvent.click(screen.getByRole("menuitem", { name: "Pull Changes" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Pull/ }));
 
     await waitFor(() => {
       expect(pluginContext.git.pullFastForward).toHaveBeenCalledWith(
@@ -514,7 +608,7 @@ describe("GitStatusDropdown", () => {
     pluginContext.git.sync = vi.fn(async () => ({ kind: "ok" as const }));
     await openDropdown(pluginContext, DIVERGED_MODEL);
 
-    fireEvent.click(screen.getByRole("menuitem", { name: "Sync Changes" }));
+    fireEvent.click(screen.getByRole("menuitem", { name: /^Sync/ }));
 
     await waitFor(() => {
       expect(pluginContext.git.sync).toHaveBeenCalledWith("/workspace/pier");

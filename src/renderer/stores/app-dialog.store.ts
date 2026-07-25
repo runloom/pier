@@ -23,12 +23,24 @@ export interface AppConfirmOptions extends AppAlertOptions {
 }
 
 /**
+ * 三选弹窗按钮横排顺序。
+ * - `alt-cancel-confirm`（默认）：不保存 | 取消 | 保存
+ * - `confirm-alt-cancel`：主动作 | 次动作 | 取消（如放弃更改：只放弃修改 | 全部放弃 | 取消）
+ */
+export type AppChoiceButtonOrder = "alt-cancel-confirm" | "confirm-alt-cancel";
+
+/**
  * 三选弹窗(保存/放弃/取消形态)。confirm 是主按钮(默认动作,如保存),
  * alt 是次动作(intent 为 destructive 时按危险样式渲染,如放弃),
  * cancel/Esc 一律 resolve "cancel"。
  */
 export interface AppChoiceOptions extends AppAlertOptions {
   altLabel: string;
+  /**
+   * 按钮顺序。默认 `alt-cancel-confirm`；多破坏选项场景可用
+   * `confirm-alt-cancel` 让主按钮靠左、取消靠右（对齐 VS Code discard）。
+   */
+  buttonOrder?: AppChoiceButtonOrder;
   cancelLabel?: string;
   confirmLabel: string;
   intent: AppDialogIntent;
@@ -64,6 +76,7 @@ interface AlertConfirmDialogRequest extends BaseDialogRequest {
 
 interface ChoiceDialogRequest extends BaseDialogRequest {
   altLabel: string;
+  buttonOrder: AppChoiceButtonOrder;
   kind: "choice";
   resolve(result: AppChoiceResult): void;
 }
@@ -152,6 +165,7 @@ export function showAppChoice(
   return new Promise((resolvePromise) => {
     const request: ChoiceDialogRequest = {
       altLabel: options.altLabel,
+      buttonOrder: options.buttonOrder ?? "alt-cancel-confirm",
       confirmLabel: options.confirmLabel,
       intent: options.intent,
       kind: "choice",

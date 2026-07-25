@@ -5,8 +5,22 @@ import type {
   GitStatus,
 } from "@shared/contracts/git.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { GitStatusDropdownText } from "./git-status-dropdown-text.ts";
+import { DEFAULT_GIT_STATUS_DROPDOWN_TEXT } from "./git-status-dropdown-text.ts";
 
+export type { GitStatusDropdownText } from "./git-status-dropdown-text.ts";
+
+/**
+ * 浮层三区模型（v2 金标准方案）：
+ * 1. 身份区 — 分支名 + 工作树/fetch 上下文行（组件层渲染，不进 rows）。
+ * 2. 情境区 rows — 只在对应事实存在时出现的行：冲突/暂停操作（置顶，
+ *    含继续/中止）、更改（含大变更提级）、同步、储藏计数、生命周期灰化
+ *    信息行（merged / upstream gone / no upstream）、clean 单行。
+ * 3. 固定任务区 tasks — 永远存在的导航动作（切换分支 / 切换工作树）。
+ */
 export type GitStatusDropdownActionId =
+  | "abortOperation"
+  | "continueOperation"
   | "pull"
   | "push"
   | "switchBranch"
@@ -14,76 +28,78 @@ export type GitStatusDropdownActionId =
   | "syncChanges"
   | "viewChanges";
 
-export type GitStatusDropdownVariant =
-  | "active"
-  | "clean"
-  | "completed"
-  | "dirty"
-  | "loading"
-  | "unavailable";
+export type GitStatusDropdownVariant = "loading" | "normal" | "unavailable";
 
-export type GitStatusDropdownSummaryTone =
+export type GitStatusDropdownRowTone =
   | "danger"
   | "default"
-  | "destructive"
-  | "done"
-  | "info"
   | "muted"
-  | "success"
   | "warning";
 
-export type GitStatusDropdownSummaryIcon =
-  | "ahead"
-  | "behind"
+export type GitStatusDropdownRowIcon =
+  | "abort"
   | "bisect"
   | "changed"
   | "cherryPick"
   | "clean"
-  | "conflict"
+  | "continue"
   | "merge"
   | "merged"
+  | "pull"
+  | "push"
   | "rebase"
   | "revert"
+  | "stash"
+  | "sync"
   | "upstreamGone";
+
+export type GitStatusDropdownRowId =
+  | "abortOperation"
+  | "changes"
+  | "clean"
+  | "continueOperation"
+  | "merged"
+  | "noUpstream"
+  | "operation"
+  | "stash"
+  | "status"
+  | "sync"
+  | "upstreamGone";
+
+export interface GitStatusDropdownRow {
+  /** null = 信息行（灰化、不可点）。 */
+  action: GitStatusDropdownActionId | null;
+  /** sr-only 补充（± 行含义、领先/落后方向）。 */
+  assistiveLabel?: string;
+  icon?: GitStatusDropdownRowIcon;
+  id: GitStatusDropdownRowId;
+  label: string;
+  /** tooltip：fetch 快照 caveat、大变更提示、拉取被本地改动阻塞的原因。 */
+  title?: string;
+  tone: GitStatusDropdownRowTone;
+  /** 行尾数值（计数 / ± / ↑↓），组件层右对齐 tabular-nums。 */
+  value?: string;
+}
 
 export interface GitStatusDropdownAction {
   id: GitStatusDropdownActionId;
 }
 
-export interface GitStatusDropdownSummaryPart {
-  assistiveLabel?: string;
-  icon?: GitStatusDropdownSummaryIcon;
-  label: string;
-  tone: GitStatusDropdownSummaryTone;
-}
-
-export interface GitStatusDropdownSummaryGroup {
-  parts: GitStatusDropdownSummaryPart[];
-  /** Fetch freshness caveat when ahead/behind may be stale. */
-  title?: string;
-}
+/** 可从浮层收敛的暂停操作（bisect 由终端主导，不提供继续/中止）。 */
+export type GitStatusDropdownOperationKind = Exclude<
+  GitRepoState["kind"],
+  "bisecting" | "clean"
+>;
 
 export interface GitStatusDropdownModel {
-  actions: GitStatusDropdownAction[];
   branchLabel: string;
   contextLine: string;
-  statusGroups: GitStatusDropdownSummaryGroup[];
+  /** 非 null 时情境区含继续/中止行，供动作层解析 runner。 */
+  operationKind: GitStatusDropdownOperationKind | null;
+  rows: GitStatusDropdownRow[];
+  tasks: GitStatusDropdownAction[];
   variant: GitStatusDropdownVariant;
   worktreePath: string;
-}
-
-export interface GitStatusDropdownText {
-  ahead: string;
-  behind: string;
-  changed: (count: number) => string;
-  conflict: (count: number) => string;
-  deletions: string;
-  insertions: string;
-  merged: string;
-  noLocalChanges: string;
-  operationName: (kind: Exclude<GitRepoState["kind"], "clean">) => string;
-  operationPaused: (operation: string) => string;
-  upstreamGone: string;
 }
 
 export interface GitStatusDropdownModelOptions {
@@ -93,50 +109,18 @@ export interface GitStatusDropdownModelOptions {
   worktreePath: string;
 }
 
+/**
+ * 大变更提级阈值（Pier 差异化：AI 智能体一次改动上百文件是常态）。
+ * 任一超阈值即把「更改」行提级为 warning 并附 tooltip。
+ */
+export const GIT_LARGE_CHANGE_FILE_THRESHOLD = 50;
+export const GIT_LARGE_CHANGE_LINE_THRESHOLD = 1000;
+
 const EMPTY_COUNTS: GitCounts = {
   conflict: 0,
   modified: 0,
   staged: 0,
   untracked: 0,
-};
-
-const ACTIONS = {
-  pull: {
-    id: "pull",
-  },
-  push: {
-    id: "push",
-  },
-  switchBranch: {
-    id: "switchBranch",
-  },
-  switchWorktree: {
-    id: "switchWorktree",
-  },
-  syncChanges: {
-    id: "syncChanges",
-  },
-  viewChanges: {
-    id: "viewChanges",
-  },
-} as const satisfies Record<GitStatusDropdownActionId, GitStatusDropdownAction>;
-
-function action(id: GitStatusDropdownActionId): GitStatusDropdownAction {
-  return { ...ACTIONS[id] };
-}
-
-const DEFAULT_TEXT: GitStatusDropdownText = {
-  ahead: "ahead",
-  behind: "behind",
-  changed: (count) => `${count} changed`,
-  conflict: (count) => `${count} ${count === 1 ? "conflict" : "conflicts"}`,
-  deletions: "deletions",
-  insertions: "insertions",
-  merged: "merged",
-  noLocalChanges: "No local changes",
-  operationName: activeOperationName,
-  operationPaused: (operation) => `${operation} paused`,
-  upstreamGone: "upstream gone",
 };
 
 const LINE_DELETION_SIGN = "\u2212";
@@ -149,15 +133,9 @@ function hasLineDelta(delta: GitDelta | null): boolean {
   return Boolean(delta && (delta.insertions > 0 || delta.deletions > 0));
 }
 
-function summaryGroup(
-  ...parts: GitStatusDropdownSummaryPart[]
-): GitStatusDropdownSummaryGroup {
-  return { parts };
-}
-
 function operationIcon(
   kind: Exclude<GitRepoState["kind"], "clean">
-): GitStatusDropdownSummaryIcon {
+): GitStatusDropdownRowIcon {
   switch (kind) {
     case "bisecting":
       return "bisect";
@@ -176,62 +154,11 @@ function operationIcon(
   }
 }
 
-function formatDeltaGroup(
-  delta: GitDelta | null,
-  text: GitStatusDropdownText
-): GitStatusDropdownSummaryGroup | null {
-  if (delta === null || !hasLineDelta(delta)) {
-    return null;
+function conflictCount(repoState: GitRepoState, counts: GitCounts): number {
+  if ("conflictCount" in repoState) {
+    return repoState.conflictCount;
   }
-  return summaryGroup(
-    {
-      assistiveLabel: text.insertions,
-      label: `+${delta.insertions}`,
-      tone: "success",
-    },
-    {
-      assistiveLabel: text.deletions,
-      label: `${LINE_DELETION_SIGN}${delta.deletions}`,
-      tone: "destructive",
-    }
-  );
-}
-
-function formatSyncGroup(
-  status: GitStatus,
-  text: GitStatusDropdownText,
-  remoteSyncLabel?: null | string
-): GitStatusDropdownSummaryGroup | null {
-  const ahead = status.branch.ahead;
-  const behind = status.branch.behind;
-  if (ahead === 0 && behind === 0) {
-    return null;
-  }
-  const parts: GitStatusDropdownSummaryPart[] = [];
-  if (ahead > 0) {
-    parts.push({
-      assistiveLabel: text.ahead,
-      icon: "ahead",
-      label: `↑${ahead}`,
-      tone: "muted",
-    });
-  }
-  if (behind > 0) {
-    parts.push({
-      assistiveLabel: text.behind,
-      icon: "behind",
-      label: `↓${behind}`,
-      tone: "muted",
-    });
-  }
-  const uncertain =
-    status.remoteSync?.state === "authRequired" ||
-    status.remoteSync?.lastSuccessAt === null;
-  const group = summaryGroup(...parts);
-  if (uncertain && remoteSyncLabel) {
-    return { ...group, title: remoteSyncLabel };
-  }
-  return group;
+  return counts.conflict;
 }
 
 function canUseUpstream(status: GitStatus): boolean {
@@ -242,10 +169,20 @@ function canUseUpstream(status: GitStatus): boolean {
   );
 }
 
-function remoteSyncAction(
-  status: GitStatus,
-  counts: GitCounts
-): GitStatusDropdownAction | null {
+export function isSyncUncertain(status: GitStatus): boolean {
+  return (
+    status.remoteSync?.state === "authRequired" ||
+    status.remoteSync?.lastSuccessAt === null
+  );
+}
+
+/**
+ * 远端同步动作解析（状态栏同步项与浮层同步行共用）：
+ * behind 且有本地改动时禁用 pull/sync（避免打断本地工作）。
+ */
+export function resolveRemoteSyncActionId(
+  status: GitStatus
+): "pull" | "push" | "syncChanges" | null {
   if (!canUseUpstream(status)) {
     return null;
   }
@@ -253,143 +190,247 @@ function remoteSyncAction(
   if (ahead === 0 && behind === 0) {
     return null;
   }
+  const counts = status.counts ?? EMPTY_COUNTS;
   const hasLocalChanges =
     totalChanges(counts) > 0 || hasLineDelta(status.delta);
   if (behind > 0 && hasLocalChanges) {
     return null;
   }
   if (ahead > 0 && behind > 0) {
-    return action("syncChanges");
+    return "syncChanges";
   }
   if (ahead > 0) {
-    return action("push");
+    return "push";
   }
-  return action("pull");
+  return "pull";
 }
 
-function conflictCount(repoState: GitRepoState, counts: GitCounts): number {
-  if ("conflictCount" in repoState) {
-    return repoState.conflictCount;
+function formatSyncValue(ahead: number, behind: number): string {
+  const parts: string[] = [];
+  if (ahead > 0) {
+    parts.push(`↑${ahead}`);
   }
-  return counts.conflict;
+  if (behind > 0) {
+    parts.push(`↓${behind}`);
+  }
+  return parts.join(" ");
 }
 
-function activeOperationName(kind: Exclude<GitRepoState["kind"], "clean">) {
-  switch (kind) {
-    case "bisecting":
-      return "Bisect";
-    case "cherry-picking":
-      return "Cherry-pick";
-    case "merging":
-      return "Merge";
-    case "rebasing":
-      return "Rebase";
-    case "reverting":
-      return "Revert";
-    default: {
-      const exhaustive: never = kind;
-      return exhaustive;
-    }
+function syncAssistiveLabel(
+  status: GitStatus,
+  text: GitStatusDropdownText
+): string {
+  const parts: string[] = [];
+  if (status.branch.ahead > 0) {
+    parts.push(`${status.branch.ahead} ${text.ahead}`);
   }
+  if (status.branch.behind > 0) {
+    parts.push(`${status.branch.behind} ${text.behind}`);
+  }
+  return parts.join(", ");
 }
 
-function activeStatusGroups(
+function isLargeChange(counts: GitCounts, delta: GitDelta | null): boolean {
+  if (totalChanges(counts) >= GIT_LARGE_CHANGE_FILE_THRESHOLD) {
+    return true;
+  }
+  return Boolean(
+    delta &&
+      delta.insertions + delta.deletions >= GIT_LARGE_CHANGE_LINE_THRESHOLD
+  );
+}
+
+function operationRows(
   repoState: Extract<
     GitRepoState,
     { kind: Exclude<GitRepoState["kind"], "clean"> }
   >,
   counts: GitCounts,
   text: GitStatusDropdownText
-): GitStatusDropdownSummaryGroup[] {
+): GitStatusDropdownRow[] {
+  const operation = text.operationName(repoState.kind);
   const conflicts = conflictCount(repoState, counts);
-  const groups = [
-    summaryGroup({
+  const rows: GitStatusDropdownRow[] = [
+    {
+      action: "viewChanges",
       icon: operationIcon(repoState.kind),
-      label: text.operationPaused(text.operationName(repoState.kind)),
-      tone: "info",
-    }),
+      id: "operation",
+      label: text.operationPaused(operation),
+      tone: conflicts > 0 ? "danger" : "default",
+      ...(conflicts > 0 ? { value: text.conflict(conflicts) } : {}),
+    },
   ];
-  if (conflicts > 0) {
-    groups.push(
-      summaryGroup({
-        icon: "conflict",
-        label: text.conflict(conflicts),
-        tone: "danger",
-      })
-    );
+  if (repoState.kind === "bisecting") {
+    return rows;
   }
-  return groups;
-}
-
-function dirtySummaryGroups(
-  status: GitStatus,
-  text: GitStatusDropdownText,
-  remoteSyncLabel?: null | string
-): GitStatusDropdownSummaryGroup[] {
-  const pieces = [
-    summaryGroup({
-      icon: "changed",
-      label: text.changed(totalChanges(status.counts)),
-      tone: "warning",
-    }),
-  ];
-  const delta = formatDeltaGroup(status.delta, text);
-  const sync = formatSyncGroup(status, text, remoteSyncLabel);
-  if (delta) {
-    pieces.push(delta);
-  }
-  if (sync) {
-    pieces.push(sync);
-  }
-  return pieces;
-}
-
-function cleanStatusGroups(
-  status: GitStatus,
-  text: GitStatusDropdownText,
-  remoteSyncLabel?: null | string
-): GitStatusDropdownSummaryGroup[] {
-  const parts = [
-    summaryGroup({
-      icon: "clean",
-      label: text.noLocalChanges,
+  if (repoState.kind !== "merging") {
+    rows.push({
+      action: "continueOperation",
+      icon: "continue",
+      id: "continueOperation",
+      label: text.continueOperation(operation),
       tone: "default",
-    }),
-  ];
-  const sync = formatSyncGroup(status, text, remoteSyncLabel);
-  if (sync) {
-    parts.push(sync);
+    });
   }
+  rows.push({
+    action: "abortOperation",
+    icon: "abort",
+    id: "abortOperation",
+    label: text.abortOperation(operation),
+    tone: "default",
+  });
+  return rows;
+}
+
+function changesRow(
+  status: GitStatus,
+  counts: GitCounts,
+  text: GitStatusDropdownText
+): GitStatusDropdownRow {
+  const total = totalChanges(counts);
+  const delta = status.delta;
+  const deltaValue = hasLineDelta(delta)
+    ? ` · +${delta?.insertions ?? 0} ${LINE_DELETION_SIGN}${delta?.deletions ?? 0}`
+    : "";
+  const large = isLargeChange(counts, delta);
+  return {
+    action: "viewChanges",
+    icon: "changed",
+    id: "changes",
+    label: text.changes,
+    tone: large ? "warning" : "default",
+    value: `${total}${deltaValue}`,
+    ...(hasLineDelta(delta)
+      ? {
+          assistiveLabel: `${delta?.insertions ?? 0} ${text.insertions}, ${delta?.deletions ?? 0} ${text.deletions}`,
+        }
+      : {}),
+    ...(large ? { title: text.largeChange } : {}),
+  };
+}
+
+function syncRow(
+  status: GitStatus,
+  text: GitStatusDropdownText,
+  remoteSyncLabel: null | string
+): GitStatusDropdownRow | null {
+  const { ahead, behind } = status.branch;
+  if (ahead === 0 && behind === 0) {
+    return null;
+  }
+  const actionId = resolveRemoteSyncActionId(status);
+  const value = formatSyncValue(ahead, behind);
+  const assistiveLabel = syncAssistiveLabel(status, text);
+  const caveat =
+    isSyncUncertain(status) && remoteSyncLabel ? remoteSyncLabel : null;
+  if (actionId === null) {
+    const counts = status.counts ?? EMPTY_COUNTS;
+    const blockedByLocalChanges =
+      canUseUpstream(status) &&
+      behind > 0 &&
+      (totalChanges(counts) > 0 || hasLineDelta(status.delta));
+    const title = blockedByLocalChanges ? text.pullBlocked : caveat;
+    return {
+      action: null,
+      assistiveLabel,
+      icon: "sync",
+      id: "sync",
+      label: text.sync,
+      tone: "muted",
+      value,
+      ...(title ? { title } : {}),
+    };
+  }
+  const labels = {
+    pull: text.pull,
+    push: text.push,
+    syncChanges: text.sync,
+  } as const;
+  const icons = {
+    pull: "pull",
+    push: "push",
+    syncChanges: "sync",
+  } as const satisfies Record<string, GitStatusDropdownRowIcon>;
+  return {
+    action: actionId,
+    assistiveLabel,
+    icon: icons[actionId],
+    id: "sync",
+    label: labels[actionId],
+    tone: "default",
+    value,
+    ...(caveat ? { title: caveat } : {}),
+  };
+}
+
+/** 生命周期灰化信息行：merged / upstream gone / no upstream。 */
+function lifecycleRows(
+  status: GitStatus,
+  text: GitStatusDropdownText
+): GitStatusDropdownRow[] {
+  const rows: GitStatusDropdownRow[] = [];
   if (status.branch.mergedIntoDefault === true) {
-    parts.push(
-      summaryGroup({ icon: "merged", label: text.merged, tone: "done" })
-    );
+    rows.push({
+      action: null,
+      icon: "merged",
+      id: "merged",
+      label: text.merged,
+      tone: "muted",
+    });
   }
   if (status.branch.upstreamGone) {
-    parts.push(
-      summaryGroup({
-        icon: "upstreamGone",
-        label: text.upstreamGone,
-        tone: "warning",
-      })
-    );
+    rows.push({
+      action: null,
+      icon: "upstreamGone",
+      id: "upstreamGone",
+      label: text.upstreamGone,
+      tone: "muted",
+    });
+  } else if (status.branch.branch !== null && status.branch.upstream === null) {
+    rows.push({
+      action: null,
+      id: "noUpstream",
+      label: text.noUpstream,
+      tone: "muted",
+    });
   }
-  return parts;
+  return rows;
+}
+
+function stashRow(
+  status: GitStatus,
+  text: GitStatusDropdownText
+): GitStatusDropdownRow | null {
+  if (status.stashCount === 0) {
+    return null;
+  }
+  return {
+    action: null,
+    icon: "stash",
+    id: "stash",
+    label: text.stash,
+    tone: "muted",
+    value: String(status.stashCount),
+  };
 }
 
 function contextLine(
   options: GitStatusDropdownModelOptions,
   status: GitStatus
 ): string {
-  const uncertain =
-    status.remoteSync?.state === "authRequired" ||
-    status.remoteSync?.lastSuccessAt === null;
   const hasSyncCounts = status.branch.ahead > 0 || status.branch.behind > 0;
-  // When ↑/↓ already carry the fetch caveat as a title, don't repeat it here.
+  // ↑/↓ 已在同步行携带 fetch caveat 时，上下文行不再重复。
   const syncLabel =
-    uncertain && hasSyncCounts ? null : (options.remoteSyncLabel ?? null);
+    isSyncUncertain(status) && hasSyncCounts
+      ? null
+      : (options.remoteSyncLabel ?? null);
   return [options.fallbackWorktreeName, syncLabel].filter(Boolean).join(" · ");
 }
+
+const FIXED_TASKS: GitStatusDropdownAction[] = [
+  { id: "switchBranch" },
+  { id: "switchWorktree" },
+];
 
 export function deriveGitStatusDropdownModel(
   status: GitStatus,
@@ -397,66 +438,52 @@ export function deriveGitStatusDropdownModel(
   options: GitStatusDropdownModelOptions
 ): GitStatusDropdownModel {
   const counts = status.counts ?? EMPTY_COUNTS;
-  const text = options.text ?? DEFAULT_TEXT;
+  const text = options.text ?? DEFAULT_GIT_STATUS_DROPDOWN_TEXT;
   const branchLabel =
     status.branch.branch ?? context.branch ?? options.fallbackWorktreeName;
   const remoteSyncLabel = options.remoteSyncLabel ?? null;
-  const base = {
-    branchLabel,
-    contextLine: contextLine(options, status),
-    worktreePath: options.worktreePath,
-  };
+
+  const rows: GitStatusDropdownRow[] = [];
+  let operationKind: GitStatusDropdownOperationKind | null = null;
 
   if (status.repoState.kind !== "clean") {
-    const statusGroups = activeStatusGroups(status.repoState, counts, text);
-    return {
-      ...base,
-      actions: [action("viewChanges"), action("switchWorktree")],
-      statusGroups,
-      variant: "active",
-    };
+    rows.push(...operationRows(status.repoState, counts, text));
+    if (status.repoState.kind !== "bisecting") {
+      operationKind = status.repoState.kind;
+    }
+  } else if (totalChanges(counts) > 0 || hasLineDelta(status.delta)) {
+    rows.push(changesRow(status, counts, text));
+  } else {
+    rows.push({
+      action: null,
+      icon: "clean",
+      id: "clean",
+      label: text.noLocalChanges,
+      tone: "muted",
+    });
   }
 
-  if (totalChanges(counts) > 0 || hasLineDelta(status.delta)) {
-    const statusGroups = dirtySummaryGroups(status, text, remoteSyncLabel);
-    const syncAction = remoteSyncAction(status, counts);
-    return {
-      ...base,
-      actions: [
-        action("viewChanges"),
-        ...(syncAction ? [syncAction] : []),
-        action("switchWorktree"),
-      ],
-      statusGroups,
-      variant: "dirty",
-    };
+  // 阻塞操作期间隐藏同步行：sync/pull/push 与暂停操作互斥。
+  if (status.repoState.kind === "clean") {
+    const sync = syncRow(status, text, remoteSyncLabel);
+    if (sync) {
+      rows.push(sync);
+    }
   }
 
-  const completed =
-    status.branch.mergedIntoDefault === true || status.branch.upstreamGone;
-  if (completed) {
-    const statusGroups = cleanStatusGroups(status, text, remoteSyncLabel);
-    const syncAction = remoteSyncAction(status, counts);
-    return {
-      ...base,
-      actions: syncAction
-        ? [syncAction, action("switchBranch"), action("switchWorktree")]
-        : [action("switchBranch"), action("switchWorktree")],
-      statusGroups,
-      variant: "completed",
-    };
+  const stash = stashRow(status, text);
+  if (stash) {
+    rows.push(stash);
   }
+  rows.push(...lifecycleRows(status, text));
 
-  const statusGroups = cleanStatusGroups(status, text, remoteSyncLabel);
-  const syncAction = remoteSyncAction(status, counts);
   return {
-    ...base,
-    actions: [
-      ...(syncAction ? [syncAction] : []),
-      action("switchBranch"),
-      action("switchWorktree"),
-    ],
-    statusGroups,
-    variant: "clean",
+    branchLabel,
+    contextLine: contextLine(options, status),
+    operationKind,
+    rows,
+    tasks: FIXED_TASKS.map((task) => ({ ...task })),
+    variant: "normal",
+    worktreePath: options.worktreePath,
   };
 }

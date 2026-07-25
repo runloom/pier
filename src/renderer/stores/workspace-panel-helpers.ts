@@ -40,6 +40,65 @@ export function terminalPanelParams(args: {
   };
 }
 
+function contextFromGroupTerminal(
+  api: DockviewApi,
+  groupId: string | undefined
+): PanelContext | undefined {
+  if (!groupId) {
+    return;
+  }
+  const group = findGroupById(api, groupId);
+  if (!group) {
+    return;
+  }
+  // Prefer the group's last-active terminal when the current tab is not one
+  // (e.g. workbench). Tab order in panels[] is not a stable project signal.
+  const groupActive = group.activePanel;
+  if (groupActive?.view.contentComponent === "terminal") {
+    const activeContext = terminalPanelContext(groupActive.id);
+    if (activeContext) {
+      return activeContext;
+    }
+  }
+  let newest: PanelContext | undefined;
+  for (const panel of group.panels) {
+    if (panel.view.contentComponent !== "terminal") {
+      continue;
+    }
+    const context = terminalPanelContext(panel.id);
+    if (!context) {
+      continue;
+    }
+    if (!newest || context.updatedAt > newest.updatedAt) {
+      newest = context;
+    }
+  }
+  return newest;
+}
+
+function panelComponent(
+  api: DockviewApi,
+  panelId: string | undefined
+): string | undefined {
+  if (!panelId) {
+    return;
+  }
+  return api.panels.find((panel) => panel.id === panelId)?.view
+    .contentComponent;
+}
+
+function panelInGroup(
+  api: DockviewApi,
+  panelId: string,
+  groupId: string | undefined
+): boolean {
+  if (!groupId) {
+    return false;
+  }
+  const group = findGroupById(api, groupId);
+  return group?.panels.some((panel) => panel.id === panelId) ?? false;
+}
+
 export function inheritedActiveTerminalContext(
   api: DockviewApi
 ): PanelContext | undefined {
@@ -50,10 +109,10 @@ export function inheritedActiveTerminalContext(
     return;
   }
   const activePanel = api.activePanel;
-  if (activePanel?.view.contentComponent !== "terminal") {
-    return;
+  if (activePanel?.view.contentComponent === "terminal") {
+    return terminalPanelContext(activePanel.id);
   }
-  return terminalPanelContext(activePanel.id);
+  return contextFromGroupTerminal(api, api.activeGroup?.id);
 }
 
 export function uniquePanelId(api: DockviewApi, prefix: string): string {
@@ -116,9 +175,93 @@ export interface WorkspaceSourceInvocation {
   sourcePanelId?: string;
 }
 
-export interface AnchoredTerminalTarget {
+export interface WorkspaceAnchor {
   context?: PanelContext;
   groupId?: string;
+}
+
+/**
+ * Resolve the workspace directory/project anchor for create/open actions.
+ *
+ * Order:
+ * 1. explicit source panel context
+ * 2. source panel descriptor context (or active panel only when it belongs to
+ *    the resolved group)
+ * 3. same-group terminal context when the source is not itself a terminal
+ *
+ * Terminal sources never inherit a sibling terminal's cwd. `shellDefault`
+ * suppresses context inheritance entirely.
+ */
+export function resolveWorkspaceAnchor(input: {
+  api: DockviewApi | null;
+  sourcePanelContext?: PanelContext | undefined;
+  sourcePanelGroupId?: string | undefined;
+  sourcePanelId?: string | undefined;
+}): WorkspaceAnchor {
+  const groupId =
+    input.sourcePanelGroupId ?? input.api?.activeGroup?.id ?? undefined;
+  if (
+    useTerminalPreferencesStore.getState().terminalNewCwdPolicy !==
+    "activeTerminal"
+  ) {
+    return {
+      ...(groupId ? { groupId } : {}),
+    };
+  }
+  if (input.sourcePanelContext) {
+    return {
+      context: input.sourcePanelContext,
+      ...(groupId ? { groupId } : {}),
+    };
+  }
+
+  let sourcePanelId = input.sourcePanelId;
+  if (!sourcePanelId && input.api?.activePanel) {
+    const activeId = input.api.activePanel.id;
+    // When the caller pinned a group, never pull context from a foreign
+    // active panel that lives outside that group.
+    if (
+      !input.sourcePanelGroupId ||
+      panelInGroup(input.api, activeId, input.sourcePanelGroupId)
+    ) {
+      sourcePanelId = activeId;
+    }
+  }
+
+  const sourceComponent = input.api
+    ? panelComponent(input.api, sourcePanelId)
+    : undefined;
+  const directContext = terminalPanelContext(sourcePanelId);
+  if (directContext) {
+    return {
+      context: directContext,
+      ...(groupId ? { groupId } : {}),
+    };
+  }
+  // Fresh/empty terminal stays empty — do not steal a sibling project.
+  if (sourceComponent === "terminal") {
+    return {
+      ...(groupId ? { groupId } : {}),
+    };
+  }
+
+  const groupContext =
+    input.api === null
+      ? undefined
+      : contextFromGroupTerminal(input.api, groupId);
+  return {
+    ...(groupContext ? { context: groupContext } : {}),
+    ...(groupId ? { groupId } : {}),
+  };
+}
+
+export interface AnchoredTerminalTarget {
+  /**
+   * `null` = intentionally no project cwd (empty terminal / shellDefault).
+   * Must stay sticky across async prepareLaunch — do not re-inherit later.
+   */
+  readonly context?: PanelContext | null;
+  readonly groupId?: string;
 }
 
 /** Capture terminal placement and context before an asynchronous launch starts. */
@@ -126,16 +269,16 @@ export function captureAnchoredTerminalTarget(
   api: DockviewApi | null,
   invocation?: WorkspaceSourceInvocation
 ): AnchoredTerminalTarget {
-  const sourcePanelId = invocation?.sourcePanelId ?? api?.activePanel?.id;
-  const context =
-    useTerminalPreferencesStore.getState().terminalNewCwdPolicy ===
-    "activeTerminal"
-      ? (invocation?.sourcePanelContext ?? terminalPanelContext(sourcePanelId))
-      : undefined;
-  const groupId = invocation?.sourcePanelGroupId ?? api?.activeGroup?.id;
+  const anchor = resolveWorkspaceAnchor({
+    api,
+    sourcePanelContext: invocation?.sourcePanelContext,
+    sourcePanelGroupId: invocation?.sourcePanelGroupId,
+    sourcePanelId: invocation?.sourcePanelId,
+  });
   return {
-    ...(context ? { context } : {}),
-    ...(groupId ? { groupId } : {}),
+    // Always pin: missing context is an intentional empty cwd, not "inherit later".
+    context: anchor.context ?? null,
+    ...(anchor.groupId ? { groupId: anchor.groupId } : {}),
   };
 }
 
@@ -146,13 +289,17 @@ export function captureAnchoredTerminalTarget(
 export function resolveAnchoredTerminalOptions(
   api: DockviewApi | null,
   target: AnchoredTerminalTarget
-): { context?: PanelContext; referenceGroup?: WorkspaceGroupRef } | null {
+): {
+  context?: PanelContext | null;
+  referenceGroup?: WorkspaceGroupRef;
+} | null {
   const referenceGroup = findGroupById(api, target.groupId);
   if (target.groupId && !referenceGroup) {
     return null;
   }
   return {
-    ...(target.context ? { context: target.context } : {}),
+    // Forward pinned null/value so addTerminal does not re-inherit after await.
+    context: target.context ?? null,
     ...(referenceGroup ? { referenceGroup } : {}),
   };
 }

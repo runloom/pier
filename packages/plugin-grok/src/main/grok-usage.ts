@@ -6,13 +6,13 @@ import {
 import { parseGrokBillingResult } from "./billing-parse.ts";
 import type { FetchImpl } from "./grok-usage-types.ts";
 import {
+  accessTokenExpired,
   extractSessionKeyFromAuthJson,
   needsRefresh,
   type OidcAuthEntry,
-  refreshOidcSession,
   selectOidcAuthEntry,
 } from "./oidc-session.ts";
-import { fetchGrokSubscriptionSoft } from "./subscription-fetch.ts";
+import { withSoftSubscription } from "./subscription-fetch.ts";
 import type { AccountUsageResult } from "./types.ts";
 import {
   BILLING_HOP_TIMEOUT_MS,
@@ -20,10 +20,23 @@ import {
   createTimeoutSignal,
   isTimeoutOrAbortError,
   mergeAbortSignals,
-  OIDC_REFRESH_TIMEOUT_MS,
   USAGE_OVERALL_DEADLINE_MS,
   USAGE_RETRY_OVERALL_DEADLINE_MS,
 } from "./usage-fetch-timeouts.ts";
+import {
+  isInvalidGrantError,
+  isSessionExpiredRefreshError,
+  refreshWithTransportRetry,
+} from "./usage-refresh.ts";
+import {
+  ACCESS_DENIED_ERROR,
+  abortedResult,
+  accessDeniedResult,
+  authFailureResult,
+  SESSION_EXPIRED_RELOGIN_ERROR,
+  timedOutResult,
+  transientFailureResult,
+} from "./usage-result.ts";
 
 export {
   type BillingHttpErrorClassification,
@@ -43,45 +56,22 @@ export {
   USAGE_RETRY_OVERALL_DEADLINE_MS,
 } from "./usage-fetch-timeouts.ts";
 
+export {
+  ACCESS_DENIED_ERROR,
+  SESSION_EXPIRED_RELOGIN_ERROR,
+  USAGE_TEMPORARILY_UNAVAILABLE_ERROR,
+} from "./usage-result.ts";
+
 export const GROK_BILLING_URL = "https://cli-chat-proxy.grok.com/v1/billing";
 export const GROK_BILLING_CREDITS_URL =
   "https://cli-chat-proxy.grok.com/v1/billing?format=credits";
 export const API_KEY_QUOTA_ERROR =
   "API key accounts cannot report Grok quota — switch to an OIDC account";
-export const SESSION_EXPIRED_RELOGIN_ERROR =
-  "Grok session expired — re-login required";
-export const ACCESS_DENIED_ERROR =
-  "Grok account cannot access billing for this product";
-async function withSoftSubscription(
-  result: AccountUsageResult,
-  options: {
-    caller: AbortSignal;
-    fetchImpl: FetchImpl;
-    overall: AbortSignal | null;
-    sessionKey: string;
-    userId?: string | null;
-  }
-): Promise<AccountUsageResult> {
-  if (options.caller.aborted || options.overall?.aborted) {
-    return result;
-  }
-  const subscription = await fetchGrokSubscriptionSoft({
-    fetchImpl: options.fetchImpl,
-    overall: options.overall,
-    sessionKey: options.sessionKey,
-    signal: options.caller,
-    ...(options.userId ? { userId: options.userId } : {}),
-  });
-  if (!subscription) return result;
-  return { ...result, subscription };
-}
-function isInvalidGrantError(error: string): boolean {
-  return /invalid_grant|401/i.test(error);
-}
 function userIdFromEntry(entry: OidcAuthEntry | undefined): string | null {
   const id = entry?.user_id;
   return typeof id === "string" && id.length > 0 ? id : null;
 }
+
 function throwIfCallerOrOverallAborted(
   caller: AbortSignal,
   overall: AbortSignal | null
@@ -97,28 +87,6 @@ function throwIfCallerOrOverallAborted(
     error.name = "TimeoutError";
     throw error;
   }
-}
-function abortedResult(): AccountUsageResult {
-  return { status: "error", error: "Aborted", windows: [] };
-}
-function timedOutResult(): AccountUsageResult {
-  return { status: "error", error: BILLING_TIMEOUT_ERROR, windows: [] };
-}
-function authFailureResult(detail?: string): AccountUsageResult {
-  return {
-    status: "error",
-    error: detail
-      ? `${SESSION_EXPIRED_RELOGIN_ERROR} (${detail})`
-      : SESSION_EXPIRED_RELOGIN_ERROR,
-    windows: [],
-  };
-}
-function accessDeniedResult(detail?: string): AccountUsageResult {
-  return {
-    status: "error",
-    error: detail ? `${ACCESS_DENIED_ERROR} (${detail})` : ACCESS_DENIED_ERROR,
-    windows: [],
-  };
 }
 export async function fetchGrokUsage(options: {
   authJson: string | null;
@@ -205,55 +173,68 @@ async function fetchGrokUsageAttempt(options: {
   try {
     throwIfCallerOrOverallAborted(caller, overall);
     if (needsRefresh(selected.entry, Date.now())) {
-      const refreshSignal = mergeAbortSignals([
+      const refreshed = await refreshWithTransportRetry({
         caller,
-        overall,
-        createTimeoutSignal(OIDC_REFRESH_TIMEOUT_MS),
-      ]);
-      const refreshed = await refreshOidcSession({
         entry: selected.entry,
         entryKey: selected.entryKey,
         fetchImpl,
+        overall,
         rawAuthJson: authJson,
-        signal: refreshSignal,
       });
       if ("error" in refreshed) {
         if (caller.aborted) return abortedResult();
         if (overall?.aborted || refreshed.error === "Aborted") {
           return timedOutResult();
         }
+        let refreshError: string | null = refreshed.error;
         // invalid_grant: the refresh_token may have been rotated by another
         // instance (official CLI / different Pier window). Re-select the
         // latest entry from auth.json and retry once with the new token.
-        if (isInvalidGrantError(refreshed.error)) {
+        if (isInvalidGrantError(refreshError)) {
           const reselected = selectOidcAuthEntry(authJson);
           if (
             reselected &&
             typeof reselected.entry.refresh_token === "string" &&
             reselected.entry.refresh_token !== selected.entry.refresh_token
           ) {
-            const fallbackSignal = mergeAbortSignals([
+            const retryRefreshed = await refreshWithTransportRetry({
               caller,
-              overall,
-              createTimeoutSignal(OIDC_REFRESH_TIMEOUT_MS),
-            ]);
-            const retryRefreshed = await refreshOidcSession({
               entry: reselected.entry,
               entryKey: reselected.entryKey,
               fetchImpl,
+              overall,
               rawAuthJson: authJson,
-              signal: fallbackSignal,
             });
-            if (!("error" in retryRefreshed)) {
+            if ("error" in retryRefreshed) {
+              if (caller.aborted) return abortedResult();
+              if (overall?.aborted || retryRefreshed.error === "Aborted") {
+                return timedOutResult();
+              }
+              refreshError = retryRefreshed.error;
+            } else {
               authJson = retryRefreshed.authJson;
               sessionKey = retryRefreshed.sessionKey;
               selected = selectOidcAuthEntry(authJson) ?? reselected;
               await options.onAuthJsonUpdated?.(authJson);
               throwIfCallerOrOverallAborted(caller, overall);
+              refreshError = null;
             }
           }
-        } else {
-          return authFailureResult(refreshed.error);
+        }
+        // When the access token is still inside its validity window, proceed
+        // with it and let the billing API decide — even after invalid_grant,
+        // since a revoked refresh token says nothing about the access token.
+        if (
+          refreshError !== null &&
+          accessTokenExpired(selected.entry, Date.now())
+        ) {
+          if (isSessionExpiredRefreshError(refreshError)) {
+            return authFailureResult(refreshError);
+          }
+          // Transient refresh failure (network/5xx/...) with an already
+          // expired access token: nothing usable left, report a temporary
+          // failure and keep last-good data instead of claiming re-login.
+          return transientFailureResult(refreshError);
         }
       } else {
         authJson = refreshed.authJson;
@@ -346,43 +327,36 @@ async function fetchGrokUsageAttempt(options: {
       ) {
         return first;
       }
-      const refreshSignal = mergeAbortSignals([
+      const refreshed = await refreshWithTransportRetry({
         caller,
-        overall,
-        createTimeoutSignal(OIDC_REFRESH_TIMEOUT_MS),
-      ]);
-      const refreshed = await refreshOidcSession({
         entry: selected.entry,
         entryKey: selected.entryKey,
         fetchImpl,
+        overall,
         rawAuthJson: authJson,
-        signal: refreshSignal,
       });
       if ("error" in refreshed) {
         if (caller.aborted) return abortedResult();
         if (overall?.aborted || refreshed.error === "Aborted") {
           return timedOutResult();
         }
+        let refreshError = refreshed.error;
         // invalid_grant: re-select from auth.json for a rotated refresh_token
         // and retry once before giving up.
-        if (isInvalidGrantError(refreshed.error)) {
+        if (isInvalidGrantError(refreshError)) {
           const reselected = selectOidcAuthEntry(authJson);
           if (
             reselected &&
             typeof reselected.entry.refresh_token === "string" &&
             reselected.entry.refresh_token !== selected.entry.refresh_token
           ) {
-            const fallbackSignal = mergeAbortSignals([
+            const retryRefreshed = await refreshWithTransportRetry({
               caller,
-              overall,
-              createTimeoutSignal(OIDC_REFRESH_TIMEOUT_MS),
-            ]);
-            const retryRefreshed = await refreshOidcSession({
               entry: reselected.entry,
               entryKey: reselected.entryKey,
               fetchImpl,
+              overall,
               rawAuthJson: authJson,
-              signal: fallbackSignal,
             });
             if (!("error" in retryRefreshed)) {
               authJson = retryRefreshed.authJson;
@@ -394,9 +368,16 @@ async function fetchGrokUsageAttempt(options: {
               if (overall?.aborted) return timedOutResult();
               return await request(url);
             }
+            if (caller.aborted) return abortedResult();
+            if (overall?.aborted || retryRefreshed.error === "Aborted") {
+              return timedOutResult();
+            }
+            refreshError = retryRefreshed.error;
           }
         }
-        return authFailureResult(refreshed.error);
+        return isSessionExpiredRefreshError(refreshError)
+          ? authFailureResult(refreshError)
+          : transientFailureResult(refreshError);
       }
       authJson = refreshed.authJson;
       sessionKey = refreshed.sessionKey;

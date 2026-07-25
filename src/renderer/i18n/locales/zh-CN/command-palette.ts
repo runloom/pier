@@ -2,6 +2,7 @@ export const commandPalette = {
   title: "命令面板",
   empty: "无匹配命令",
   emptyQuickPick: "无匹配项",
+  loading: "加载中…",
   inputFailed: "无法提交输入",
   searchResults: "搜索结果",
   agents: {
@@ -31,6 +32,9 @@ export const commandPalette = {
   },
   action: {
     toggleCommandPalette: "显示命令面板",
+    openNotificationCenter: "打开消息中心",
+    toggleNotificationDnd: "切换勿扰模式",
+    markAllNotificationsRead: "全部消息标为已读",
     openTerminalDebugWindow: "打开终端调试窗口",
     openTerminalDebugWindowFailed: "无法打开终端调试窗口",
     openSettings: "打开设置",

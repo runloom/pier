@@ -276,4 +276,46 @@ describe("pier.grok provider", () => {
       process.env.PATH = originalPath;
     }
   });
+
+  it("reports credential read failures as transient, not session expired", async () => {
+    const credentials = memoryCredentials();
+    credentials.get = vi.fn(async () => {
+      throw new Error("safeStorage is locked");
+    });
+    const managedHome = join(dir, "runtime-homes", "grok", "account-io");
+    await mkdir(managedHome, { recursive: true });
+    const provider = createGrokProvider({
+      credentials,
+      realGrokHome: join(dir, "real-grok"),
+    });
+
+    const result = await provider.fetchUsage({
+      accountHomeDir: managedHome,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("error");
+    expect(result.error).toContain("Grok usage temporarily unavailable");
+    expect(result.error).not.toMatch(/session expired|re-login/i);
+  });
+
+  it("keeps re-login guidance when no credentials exist at all", async () => {
+    const credentials = memoryCredentials();
+    const managedHome = join(dir, "runtime-homes", "grok", "account-missing");
+    await mkdir(managedHome, { recursive: true });
+    const provider = createGrokProvider({
+      credentials,
+      realGrokHome: join(dir, "real-grok"),
+    });
+
+    const result = await provider.fetchUsage({
+      accountHomeDir: managedHome,
+      kind: "oidc",
+      signal: new AbortController().signal,
+    });
+
+    expect(result.status).toBe("error");
+    expect(result.error).toMatch(/session expired|re-login/i);
+  });
 });

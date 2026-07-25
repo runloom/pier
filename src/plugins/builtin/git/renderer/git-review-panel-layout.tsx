@@ -30,6 +30,7 @@ function GitReviewTreeSidebarComponent({
   onOpenPath,
   revealPath,
   sidebarFooter,
+  sidebarHeader,
   sourcePanelId,
   treeSearch,
   treeModel,
@@ -40,6 +41,7 @@ function GitReviewTreeSidebarComponent({
   onOpenPath: (path: string) => void;
   revealPath: string | null;
   sidebarFooter?: ReactNode;
+  sidebarHeader?: ReactNode;
   sourcePanelId?: string;
   treeSearch: ReturnType<typeof useFileTreeSearch>;
   treeModel: ReturnType<typeof gitReviewTreeModel>;
@@ -61,6 +63,7 @@ function GitReviewTreeSidebarComponent({
 
   return (
     <aside className="flex h-full min-h-0 w-full flex-col bg-sidebar">
+      {sidebarHeader ?? null}
       {treeSearch.open ? (
         <div className="shrink-0 px-2 py-1">
           <FileSearchBar
@@ -172,6 +175,7 @@ export function GitReviewPanelLayout({
   setSidebarCollapsed,
   sidebarCollapsed,
   sidebarFooter,
+  sidebarHeader,
   sourcePanelId,
   treeModel,
 }: {
@@ -186,6 +190,7 @@ export function GitReviewPanelLayout({
   setSidebarCollapsed: (collapsed: boolean) => void;
   sidebarCollapsed: boolean;
   sidebarFooter?: ReactNode;
+  sidebarHeader?: ReactNode;
   sourcePanelId?: string;
   treeModel?: ReturnType<typeof gitReviewTreeModel> | null;
 }) {
@@ -221,6 +226,7 @@ export function GitReviewPanelLayout({
         onOpenPath={onOpenPath}
         revealPath={selectedTreePath ?? null}
         {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
+        {...(sidebarHeader === undefined ? {} : { sidebarHeader })}
         {...(sourcePanelId ? { sourcePanelId } : {})}
         treeModel={treeModel}
         treeSearch={treeSearch}

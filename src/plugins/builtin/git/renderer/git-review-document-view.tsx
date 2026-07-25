@@ -54,6 +54,7 @@ interface GitReviewDocumentViewProps {
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
   readonly sidebarFooter?: React.ReactNode;
+  readonly sidebarHeader?: React.ReactNode;
   readonly sourcePanelId?: string;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly viewState: ReviewDocumentViewState;
@@ -86,6 +87,7 @@ export function GitReviewDocumentView({
   setSidebarCollapsed,
   sidebarCollapsed,
   sidebarFooter,
+  sidebarHeader,
   treeModel,
   viewState,
   warnings,
@@ -116,6 +118,7 @@ export function GitReviewDocumentView({
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
       {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
+      {...(sidebarHeader === undefined ? {} : { sidebarHeader })}
       {...(sourcePanelId ? { sourcePanelId } : {})}
       treeModel={treeModel}
     >

@@ -23,11 +23,9 @@ import {
   type ProjectSkillsHealthService,
   type SnapshotHealth,
 } from "./health.ts";
-import {
-  type ProjectRootRef as MainProjectRootRef,
-  resolveStableProjectIdentity,
-  type StableProjectIdentity,
-  toContractProjectRootRef,
+import type {
+  ProjectRootRef as MainProjectRootRef,
+  StableProjectIdentity,
 } from "./identity.ts";
 import {
   type CreateProjectSkillsImportServiceOptions,
@@ -39,6 +37,7 @@ import {
 import { createProjectSkillsLock, type ProjectSkillsLock } from "./lock.ts";
 import { createObservedRevisionProvider } from "./observed-revision.ts";
 import { createProjectSkillsPaths } from "./paths.ts";
+import { healPierBindingsBeforeSnapshot } from "./pier-bindings-snapshot-heal.ts";
 import {
   createProjectSkillsPlanService,
   type ProjectSkillsPlan,
@@ -62,7 +61,6 @@ import {
   buildProjectSnapshot,
   type ProjectSkillsProjectSummary,
   type ProjectSkillsSnapshot,
-  readManifestFile,
   type SnapshotBuilderCtx,
 } from "./snapshot-builder.ts";
 
@@ -71,10 +69,17 @@ export type {
   ProjectSkillsSnapshot,
 } from "./snapshot-builder.ts";
 
+import type { PierBindingsChannel } from "./pier-bindings.ts";
+import {
+  createPierBindingsServiceApi,
+  type PierBindingsServiceApi,
+  unavailablePierBindingsApi,
+} from "./pier-bindings-api.ts";
+import { buildProjectsSnapshot } from "./projects-snapshot.ts";
 import { createProjectSkillsStore, type ProjectSkillsStore } from "./store.ts";
 import type { SystemSkillsChannel } from "./system-skills.ts";
 
-export interface ProjectSkillsService {
+export interface ProjectSkillsService extends PierBindingsServiceApi {
   apply(request: {
     projectRef: ContractProjectRootRef | MainProjectRootRef;
     observedRevision: string;
@@ -150,6 +155,8 @@ export interface CreateProjectSkillsServiceOptions {
   healthService?: ProjectSkillsHealthService;
   importService?: ProjectSkillsImportService;
   inspectGitState?: CreateProjectSkillsApplyServiceOptions["inspectGitState"];
+  /** Reject skills mutations / snapshot overrides for Pier Home. */
+  isPierHomeRoot?: (path: string) => Promise<boolean>;
   /** Installed agent ids for the effective matrix (agent-detection). */
   listInstalledAgents?: () => Promise<readonly string[]>;
   /** Known project roots for projectsSnapshot (shared index + panels). */
@@ -162,6 +169,7 @@ export interface CreateProjectSkillsServiceOptions {
     projectIdentity: string;
     observedRevision: string;
   }) => void;
+  pierBindings?: PierBindingsChannel;
   planService?: ProjectSkillsPlanService;
   recovery?: ProjectSkillsRecoveryCoordinator;
   repairService?: ProjectSkillsRepairService;
@@ -257,6 +265,7 @@ export function createProjectSkillsService(
       now,
       ...sharedInject,
       ...(options.systemSkills ? { systemSkills: options.systemSkills } : {}),
+      ...(options.pierBindings ? { pierBindings: options.pierBindings } : {}),
       ...(onInvalidated
         ? { onInvalidated: (event) => onInvalidated(event) }
         : {}),
@@ -333,72 +342,70 @@ export function createProjectSkillsService(
     getObservedRevision,
     readInstalledAgents,
     systemSkills: options.systemSkills,
+    pierBindings: options.pierBindings,
   };
 
+  async function assertNotPierHomeRef(
+    projectRef: ContractProjectRootRef | MainProjectRootRef
+  ): Promise<void> {
+    if (!options.isPierHomeRoot) return;
+    const realPath =
+      "identity" in projectRef
+        ? projectRef.identity.realPath
+        : projectRef.realPath;
+    if (await options.isPierHomeRoot(realPath)) {
+      throw new Error("Pier Home does not support project skills");
+    }
+  }
+
+  const pierBindingsApi = options.pierBindings
+    ? createPierBindingsServiceApi({
+        assertNotPierHomeRef,
+        paths,
+        pierBindings: options.pierBindings,
+        repairService,
+        store,
+        listAlwaysIncludeSkills: () =>
+          options.pierBindings!.listAlwaysIncludeSkills(),
+        listKnownProjectRoots: async () =>
+          (await options.listKnownProjectRoots?.()) ?? [],
+      })
+    : unavailablePierBindingsApi();
+
   return {
+    ...pierBindingsApi,
     async projectsSnapshot(projectRootPath) {
-      const knownRoots = (await options.listKnownProjectRoots?.()) ?? [];
-      const roots = projectRootPath
-        ? [
-            { realPath: projectRootPath, source: "panel" as const },
-            ...knownRoots.filter((root) => root.realPath !== projectRootPath),
-          ]
-        : knownRoots;
-      const checkedAt = now();
-      const summaries: ProjectSkillsProjectSummary[] = [];
-      const seen = new Map<string, ProjectSkillsProjectSummary>();
-      for (const root of roots) {
-        try {
-          const identity = await resolveStableProjectIdentity(root.realPath);
-          const key = projectIdentityKey(identity);
-          const existing = seen.get(key);
-          if (existing) {
-            // "environment" is the stronger fact (explicitly added to the
-            // shared index); a duplicate panel entry must not mask it —
-            // direct-to-detail semantics depend on it (design v8 §7.1).
-            if (root.source === "environment" && existing.source === "panel") {
-              existing.source = "environment";
-            }
-            continue;
-          }
-          const manifest = await readManifestFile(identity.realPath);
-          const skillCount =
-            manifest.status === "present" ? manifest.manifest.skills.length : 0;
-          let readStatus: ProjectSkillsProjectSummary["readStatus"] = "error";
-          if (manifest.status === "present") readStatus = "ok";
-          else if (manifest.status === "absent")
-            readStatus = "missing-manifest";
-          else readStatus = "invalid-manifest";
-          const summary: ProjectSkillsProjectSummary = {
-            projectRef: toContractProjectRootRef(identity),
-            displayPath: identity.realPath,
-            source: root.source,
-            skillCount,
-            readStatus,
-            checkedAt,
-          };
-          seen.set(key, summary);
-          summaries.push(summary);
-        } catch (error) {
-          if (root.realPath === projectRootPath) {
-            throw error;
-          }
-          // Skip unreadable roots.
-        }
-      }
-      return summaries;
+      return buildProjectsSnapshot({
+        now,
+        ...(projectRootPath === undefined ? {} : { projectRootPath }),
+        ...(options.isPierHomeRoot
+          ? { isPierHomeRoot: options.isPierHomeRoot }
+          : {}),
+        ...(options.listKnownProjectRoots
+          ? { listKnownProjectRoots: options.listKnownProjectRoots }
+          : {}),
+      });
     },
 
     async snapshot(ref) {
       await sweepRecovery(ref);
-      return buildProjectSnapshot(snapshotCtx, ref);
+      return healPierBindingsBeforeSnapshot({
+        pierBindings: options.pierBindings,
+        projectRef: ref,
+        repairService,
+        buildSnapshot: () => buildProjectSnapshot(snapshotCtx, ref),
+      });
     },
 
     plan(projectRef, observedRevision, draft) {
-      return planService.plan(projectRef, observedRevision, draft);
+      return (async () => {
+        await assertNotPierHomeRef(projectRef);
+        return planService.plan(projectRef, observedRevision, draft);
+      })();
     },
 
     async apply(request) {
+      await assertNotPierHomeRef(request.projectRef);
       const result = await applyService.apply(request);
       const claimed =
         "identity" in request.projectRef

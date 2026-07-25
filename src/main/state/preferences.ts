@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { resolvePermissionMode } from "@shared/contracts/agent.ts";
 import { DEFAULT_AGENT_ATTENTION_SETTINGS } from "@shared/contracts/agent-attention.ts";
+import { DEFAULT_NOTIFICATION_CENTER_PREFS } from "@shared/contracts/notification-center.ts";
 import {
   DEFAULT_APP_QUIT_CONFIRMATION_MODE,
   DEFAULT_GIT_AUTO_FETCH_ENABLED,
@@ -33,6 +34,7 @@ const DEFAULTS: ProjectPreferences = {
   uiFontFamily: "",
   monoFontFamily: "",
   monoFontSize: 13,
+  codeFontSize: 13,
   terminalCursorStyle: DEFAULT_TERMINAL_CURSOR_STYLE,
   terminalCursorBlink: DEFAULT_TERMINAL_CURSOR_BLINK,
   terminalScrollbackMb: DEFAULT_TERMINAL_SCROLLBACK_MB,
@@ -50,6 +52,7 @@ const DEFAULTS: ProjectPreferences = {
   worktreeRootPath: "",
   agentStatusHooks: true,
   agentAttention: { ...DEFAULT_AGENT_ATTENTION_SETTINGS },
+  notificationCenter: { ...DEFAULT_NOTIFICATION_CENTER_PREFS },
   gitAutoFetchEnabled: DEFAULT_GIT_AUTO_FETCH_ENABLED,
   gitAutoFetchIntervalMinutes: DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
 };

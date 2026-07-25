@@ -558,8 +558,14 @@ describe("AccountsWidget (usage)", () => {
     );
     expect(meter?.className).toContain("pier-codex-usage-meter");
     expect(meter?.getAttribute("data-layout")).toBe("auto-fit");
-    expect(meter?.className).toContain("auto-fit");
+    expect(meter?.className).toContain("grid");
     expect(meter?.className).toContain("content-start");
+    // 列定义走 inline style，不依赖 Tailwind 任意值
+    expect(meter).toHaveStyle({
+      gridTemplateColumns: expect.stringContaining(
+        "auto-fit"
+      ) as unknown as string,
+    });
     expect(windows).toHaveLength(2);
     expect(
       Array.from(windows, (window) => window.getAttribute("data-limit-id"))
@@ -600,10 +606,74 @@ describe("AccountsWidget (usage)", () => {
     expect(meter).not.toBeNull();
     expect(meter?.className).toContain("flex");
     expect(meter?.className).toContain("w-full");
-    expect(meter?.className).not.toContain("auto-fit");
+    expect(meter?.className).not.toContain("grid");
+    // 单项无 grid-template-columns（style 为 undefined）
+    expect((meter as HTMLElement | null)?.style.gridTemplateColumns ?? "").toBe(
+      ""
+    );
     expect(
       container.querySelectorAll('[data-slot="codex-usage-progress"]')
     ).toHaveLength(1);
+  });
+
+  it("keeps last-good quota meters when usage status is error", async () => {
+    const snapshot = usageSnapshot({
+      activeUsage: {
+        error: "network timeout",
+        fetchedAt: Date.now(),
+        status: "error",
+        windows: [
+          {
+            id: "codex:primary",
+            limitId: "codex",
+            usedPercent: 40,
+            windowMinutes: 300,
+          },
+        ],
+      },
+    });
+    const { context } = contextWithSnapshot(snapshot);
+    const { container } = render(
+      <AccountsWidget context={context} {...baseProps()} />
+    );
+    await screen.findByText("5-hour quota");
+    expect(
+      container.querySelector('[data-slot="codex-usage-meter"]')
+    ).not.toBeNull();
+    expect(container.querySelector('[data-slot="widget-error"]')).toBeNull();
+  });
+
+  it("hides plan summary on compact height unless account is unavailable", async () => {
+    const { context } = contextWithSnapshot(usageSnapshot());
+    const { rerender, container } = render(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ size: { w: 4, h: 2 } })}
+      />
+    );
+    await screen.findByText("test@codex.dev");
+    expect(container.querySelector('[data-density="compact"]')).not.toBeNull();
+    // 默认 usageSnapshot 账号无 error → compact 藏 plan 副文案
+    expect(screen.queryByText(/unavailable/i)).toBeNull();
+
+    const errorSnap = usageSnapshot({
+      accounts: [
+        {
+          error: "token expired",
+          id: "acc-1",
+          label: "test@codex.dev",
+          status: "error",
+        },
+      ],
+    });
+    const { context: errorContext } = contextWithSnapshot(errorSnap);
+    rerender(
+      <AccountsWidget
+        context={errorContext}
+        {...baseProps({ size: { w: 4, h: 2 } })}
+      />
+    );
+    expect(await screen.findByText("Account unavailable")).toBeDefined();
   });
 
   it("keeps primary quota windows before model-specific windows", () => {

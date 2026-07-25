@@ -1861,6 +1861,7 @@ describe("createRendererPluginContext", () => {
     document.documentElement.style.fontSize = "16px";
     document.documentElement.style.setProperty("--font-sans", "Pier Sans");
     document.documentElement.style.setProperty("--font-mono", "Pier Mono");
+    document.documentElement.style.setProperty("--pier-code-font-size", "14px");
     useLocaleStore.setState({ language: "zh-CN" });
     useThemeStore.setState({
       resolvedTheme: "light",
@@ -1881,6 +1882,7 @@ describe("createRendererPluginContext", () => {
       typography: {
         baseFontSize: "16px",
         codeFontFamily: "Pier Mono",
+        codeFontSize: "14px",
         fontFamily: "Pier Sans",
       },
     });

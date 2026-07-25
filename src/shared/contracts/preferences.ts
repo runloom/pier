@@ -10,6 +10,10 @@ import {
   agentAttentionSettingsSchema,
   DEFAULT_AGENT_ATTENTION_SETTINGS,
 } from "./agent-attention.ts";
+import {
+  DEFAULT_NOTIFICATION_CENTER_PREFS,
+  notificationCenterPrefsSchema,
+} from "./notification-center.ts";
 
 export const themePreferenceSchema = z.enum(["light", "dark", "system"]);
 export const resolvedThemeSchema = z.enum(["light", "dark"]);
@@ -63,7 +67,10 @@ export const stylePresetIdSchema = z.enum([
 
 export const DEFAULT_UI_FONT_FAMILY = "";
 export const DEFAULT_MONO_FONT_FAMILY = "";
+/** Terminal mono font size (px). Independent of code editor / diff. */
 export const DEFAULT_MONO_FONT_SIZE = 13;
+/** Code editor + Git diff mono font size (px). Independent of terminal. */
+export const DEFAULT_CODE_FONT_SIZE = 13;
 export const DEFAULT_TERMINAL_CURSOR_STYLE = "block";
 export const DEFAULT_TERMINAL_CURSOR_BLINK = true;
 export const DEFAULT_TERMINAL_SCROLLBACK_MB = 64;
@@ -83,6 +90,7 @@ export const projectPreferencesSchema = z.object({
   uiFontFamily: z.string().default(DEFAULT_UI_FONT_FAMILY),
   monoFontFamily: z.string().default(DEFAULT_MONO_FONT_FAMILY),
   monoFontSize: z.number().int().min(8).max(32).default(DEFAULT_MONO_FONT_SIZE),
+  codeFontSize: z.number().int().min(8).max(32).default(DEFAULT_CODE_FONT_SIZE),
   terminalCursorStyle: terminalCursorStyleSchema.default(
     DEFAULT_TERMINAL_CURSOR_STYLE
   ),
@@ -127,6 +135,9 @@ export const projectPreferencesSchema = z.object({
   agentStatusHooks: z.boolean().default(true),
   agentAttention: agentAttentionSettingsSchema.default(
     DEFAULT_AGENT_ATTENTION_SETTINGS
+  ),
+  notificationCenter: notificationCenterPrefsSchema.default(
+    DEFAULT_NOTIFICATION_CENTER_PREFS
   ),
   gitAutoFetchEnabled: z.boolean().default(DEFAULT_GIT_AUTO_FETCH_ENABLED),
   gitAutoFetchIntervalMinutes: z

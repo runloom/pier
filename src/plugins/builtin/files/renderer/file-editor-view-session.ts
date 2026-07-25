@@ -287,6 +287,11 @@ export class FileEditorViewSession {
     });
   }
 
+  /** Recompute line geometry after external CSS font-size / family changes. */
+  requestMeasure(): void {
+    this.#view?.requestMeasure();
+  }
+
   applySearchQuery(
     search: string,
     replace: string,

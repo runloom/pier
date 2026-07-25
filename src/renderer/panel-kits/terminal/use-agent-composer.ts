@@ -20,6 +20,7 @@ import {
 } from "./terminal-composer-mount.ts";
 import { pulseTerminalSurfaceSuppression } from "./terminal-layout-coordinator.ts";
 import { TERMINAL_STATUS_BAR_HEIGHT_PX } from "./terminal-status-bar.tsx";
+import { ensureTuiInputFocus } from "./tui-input-focus.ts";
 import { useTerminalComposerOpen } from "./use-terminal-composer-open.ts";
 
 // 从 terminal-panel.tsx 抽出：file-size 纪律（超 500 行硬顶）+ 维持挂载判定单一
@@ -64,7 +65,10 @@ export function useAgentComposer({
     }
     setComposerOpen(true);
     setComposerFocusRequest((value) => value + 1);
-  }, []);
+    // crush 等 TUI 输入框可能处于失焦态（其失焦时 paste/Enter 会被静默
+    // 丢弃）：打开增强输入时按探针+白名单恢复，保证随后发送必达。
+    ensureTuiInputFocus(panelId).catch(() => undefined);
+  }, [panelId]);
   const closeComposer = useCallback(() => {
     setComposerOpen(false);
     setAttachRequest(0);
@@ -73,9 +77,10 @@ export function useAgentComposer({
     if (!composerOpenRef.current) {
       setComposerOpen(true);
       setComposerFocusRequest((value) => value + 1);
+      ensureTuiInputFocus(panelId).catch(() => undefined);
     }
     setAttachRequest((value) => value + 1);
-  }, []);
+  }, [panelId]);
   const activatePanel = useCallback(() => {
     api.setActive();
   }, [api]);

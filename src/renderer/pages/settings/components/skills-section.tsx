@@ -1,21 +1,25 @@
+import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
 import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
 import { initProjectSkillsBridge } from "@/stores/project-skills-actions.ts";
+import type { SkillDetailTarget } from "@/stores/project-skills-model.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { discardReviewCandidate } from "./skills/skills-candidate-lifecycle.ts";
 import { SkillsImportReview } from "./skills/skills-import-review.tsx";
 import { SkillsProjectDetail } from "./skills/skills-project-detail.tsx";
 import { SkillsProjectList } from "./skills/skills-project-list.tsx";
-import { SkillsReadonlyDetail } from "./skills/skills-readonly-detail.tsx";
 import { useSkillsSectionActions } from "./skills/skills-section-actions.ts";
 import {
   confirmDiscardSkillEditDrafts,
   leaveSkillsTransientState,
 } from "./skills/skills-shared.tsx";
-import { SkillsSkillDetail } from "./skills/skills-skill-detail.tsx";
+import {
+  openSkillsManagedSkillDialog,
+  openSkillsReadonlySkillDialog,
+} from "./skills/skills-skill-dialogs.tsx";
 
 export { confirmSkillsLaunchBlock } from "@/lib/skills/launch-block.ts";
 
@@ -346,7 +350,15 @@ export function SkillsSection({
   function renderContent() {
     if (mode.kind === "projects" || !projectRef) {
       if (embeddedPath) {
-        return null;
+        // Projects shell already selected a path; wait for selectProject /
+        // loadSnapshot without flashing a blank panel.
+        return (
+          <div className="flex flex-col gap-2">
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+            <Skeleton className="h-14 w-full" />
+          </div>
+        );
       }
       return (
         <div className="flex flex-col gap-4">
@@ -372,33 +384,28 @@ export function SkillsSection({
       );
     }
     if (mode.kind === "skill-detail") {
-      const target = mode.target;
-      if (target.kind === "managed") {
-        return (
-          <SkillsSkillDetail
-            onBack={() => {
-              setMode({ kind: "detail" });
-            }}
-            skillId={target.skillId}
-          />
-        );
-      }
-      // Read-only detail for project-directory / user-global entries.
-      const readonlyTarget = resolveReadonlyTarget(target);
-      if (!readonlyTarget) {
-        setMode({ kind: "detail" });
-        return null;
-      }
+      // List stays visible under the secondary dialog (Home-aligned shell).
       return (
-        <SkillsReadonlyDetail
-          adoptPending={adoptPending}
-          onAdopt={(entry) => {
-            adoptUnmanaged(entry).catch(() => undefined);
-          }}
+        <SkillsProjectDetail
+          activeProjectRootPath={activeProjectRootPath}
+          {...(focusSkillId === undefined ? {} : { focusSkillId })}
+          hideBack={Boolean(embeddedPath)}
           onBack={() => {
-            setMode({ kind: "detail" });
+            confirmDiscardSkillEditDrafts(t)
+              .then((ok) => {
+                if (!ok) return;
+                if (onLeaveProject) {
+                  onLeaveProject();
+                  return;
+                }
+                selectProject(null);
+              })
+              .catch(() => undefined);
           }}
-          target={readonlyTarget}
+          onOpenSkill={(target) => {
+            openSkillDialog(target).catch(() => undefined);
+          }}
+          onReviewCandidate={reviewCandidate}
         />
       );
     }
@@ -449,11 +456,36 @@ export function SkillsSection({
             .catch(() => undefined);
         }}
         onOpenSkill={(target) => {
-          setMode({ kind: "skill-detail", target });
+          openSkillDialog(target).catch(() => undefined);
         }}
         onReviewCandidate={reviewCandidate}
       />
     );
+  }
+
+  async function openSkillDialog(target: SkillDetailTarget): Promise<void> {
+    // Keep skill-detail mode while the dialog is open so save/apply race
+    // guards still recognize the active skill editor.
+    setMode({ kind: "skill-detail", target });
+    try {
+      if (target.kind === "managed") {
+        await openSkillsManagedSkillDialog(target.skillId);
+        return;
+      }
+      const readonlyTarget = resolveReadonlyTarget(target);
+      if (!readonlyTarget) return;
+      await openSkillsReadonlySkillDialog(readonlyTarget, {
+        adoptPending,
+        onAdopt: (entry) => {
+          adoptUnmanaged(entry).catch(() => undefined);
+        },
+      });
+    } finally {
+      const state = useProjectSkillsStore.getState();
+      if (state.mode.kind === "skill-detail") {
+        state.setMode({ kind: "detail" });
+      }
+    }
   }
 
   return (

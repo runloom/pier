@@ -78,6 +78,25 @@ Pier 宿主在 `src/main/services/usage-data/pricing-catalog.json` 集中持有 
 8. **有 diff →** 跑 schema/pricing 护栏测试，再开/更新 PR（title `chore(pricing): daily LiteLLM refresh`），reviewer 检查后 merge
 9. PR 里的 `pricing-diff.md` 单独列出**可疑变化**（>= 5x 涨或 <= 20% 跌），提醒 reviewer 二次核对
 
+### OpenRouter fill-missing（LiteLLM 未收录时）
+
+LiteLLM 尚无条目、但 OpenRouter 已标价的 chat 模型，会以 **fill-missing** 写入（不覆盖已有价）。例：
+
+| 模型 | 来源 | 费率（microusd/token） |
+|------|------|------------------------|
+| `kimi-k3` | OpenRouter `moonshotai/kimi-k3` | input 3 / cache 0.3 / output 15（官方 $3/$0.30/$15 per 1M） |
+| `kimi-k2.7-code` | OpenRouter | 按 OR 当前价 |
+
+Kimi Code CLI 短 id（`k3`、`kimi-code/k3`、`kimi-for-coding`）挂在 `kimi-k3` 的 `aliases` 上；**不要**把 `k3` 指到 `kimi-k2.6`。
+
+### CI 开 PR 失败时
+
+若 job 报 `GitHub Actions is not permitted to create or approve pull requests`：
+
+1. 组织/仓库开启 **Allow GitHub Actions to create and approve pull requests**；或
+2. 配置 secret **`PRICING_BOT_TOKEN`**（有 `repo` / Pull requests 写权限的 PAT）；或
+3. 分支 `chore/pricing-refresh` 仍会 push，手动：`gh pr create --base main --head chore/pricing-refresh`
+
 **手动触发**：`gh workflow run update-model-pricing.yml` 或 GitHub UI 里 "Run workflow"。
 
 **本地跑**：

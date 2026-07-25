@@ -47,12 +47,16 @@ export function useTerminalPanelFloatingDrag({
   panelRootRef,
   pointRef,
 }: UseTerminalPanelFloatingDragOptions): {
+  dragActiveRef: RefObject<boolean>;
   dragging: boolean;
   onPointerDown(event: ReactPointerEvent<HTMLButtonElement>): void;
 } {
   const callbacksRef = useRef({ constrain, onCancel, onCommit, onMove });
   const dragRef = useRef<FloatingDragSession | null>(null);
   const frameRef = useRef<number | null>(null);
+  // 同步镜像会话存续状态，供宿主在 ResizeObserver / layout 回调里判断
+  // 是否处于拖拽中（state 的异步提交来不及挡住同帧的位置恢复）。
+  const dragActiveRef = useRef(false);
   const [dragging, setDragging] = useState(false);
 
   useLayoutEffect(() => {
@@ -65,6 +69,7 @@ export function useTerminalPanelFloatingDrag({
       return;
     }
     dragRef.current = null;
+    dragActiveRef.current = false;
     window.clearTimeout(drag.timer);
     drag.capture.dispose();
     if (frameRef.current !== null) {
@@ -167,10 +172,11 @@ export function useTerminalPanelFloatingDrag({
         startPoint,
         timer: window.setTimeout(() => finishDrag(false), DRAG_FALLBACK_MS),
       };
+      dragActiveRef.current = true;
       setDragging(true);
     },
     [finishDrag, panelId, panelRootRef, pointRef]
   );
 
-  return { dragging, onPointerDown };
+  return { dragActiveRef, dragging, onPointerDown };
 }

@@ -19,6 +19,9 @@ interface WorkbenchSettingsDialogProps {
 /**
  * 物料设置宿主：Dialog 内嵌物料自带的 settingsComponent。
  * 写回统一走 updateParams（随 panel params 持久化），宿主不解释配置内容。
+ *
+ * 密度对齐桌面工具对话框：紧凑 Header（单行标题 + 说明仅 a11y）、
+ * 中等宽度、body 可滚；不与全页设置/物料库的大 Header 同规格。
  */
 export function WorkbenchSettingsDialog({
   onOpenChange,
@@ -48,20 +51,24 @@ export function WorkbenchSettingsDialog({
   return (
     <Dialog onOpenChange={onOpenChange} open={widget !== null}>
       <DialogContent
-        className="max-h-[calc(100vh-var(--app-titlebar-height)-2rem)] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-2xl"
+        className="max-h-[min(36rem,calc(100vh-var(--app-titlebar-height)-2rem))] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-lg"
         closeLabel={t("dialog.close")}
         data-testid="workbench-widget-settings-dialog"
         initialFocus="firstFocusable"
         showCloseButton
       >
-        <DialogHeader className="border-border/60 border-b px-6 py-5 pr-14">
-          <DialogTitle>{title}</DialogTitle>
-          <DialogDescription>
+        <DialogHeader className="gap-1 border-border/60 border-b px-5 py-3.5 pr-12">
+          <DialogTitle className="text-base leading-none">{title}</DialogTitle>
+          {/* 持久化说明对视线噪音大，保留给读屏；正文区才是配置面。 */}
+          <DialogDescription className="sr-only">
             {t("workbench.widget.settingsDescription")}
           </DialogDescription>
         </DialogHeader>
         {presentedWidget && SettingsComponent ? (
-          <div className="min-h-0 overflow-y-auto p-6" data-scrollbar="stable">
+          <div
+            className="min-h-0 overflow-y-auto px-5 py-4"
+            data-scrollbar="stable"
+          >
             <SettingsComponent
               instanceId={presentedWidget.instanceId}
               params={presentedWidget.params}

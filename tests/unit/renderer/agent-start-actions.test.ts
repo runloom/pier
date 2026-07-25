@@ -234,6 +234,7 @@ describe("agent start actions", () => {
     });
 
     expect(addTerminal).toHaveBeenCalledWith({
+      context: null,
       launchId: "launch-shell-default",
       referenceGroup: sourceGroup,
     });
@@ -278,6 +279,7 @@ describe("agent start actions", () => {
 
     expect(prepareLaunch).toHaveBeenCalledWith("claude");
     expect(addTerminal).toHaveBeenCalledWith({
+      context: null,
       launchId: "launch-1",
       referenceGroup: group,
     });

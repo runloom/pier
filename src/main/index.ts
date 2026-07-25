@@ -54,8 +54,12 @@ import {
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
 import { registerMediaPreviewIpc } from "./ipc/media-preview.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
+import {
+  flushNotificationCenterHistory,
+  registerNotificationCenterIpc,
+} from "./ipc/notification-center.ts";
+import { registerPierResourceIpc } from "./ipc/pier-resource.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
-import { registerSystemStatsIpc } from "./ipc/system-stats.ts";
 import { registerTerminalIpc } from "./ipc/terminal.ts";
 import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
@@ -160,6 +164,7 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
       appCore.services.secrets.flush(),
       appCore.services.agentUsage.flush(),
       appCore.services.usageData.flush(),
+      flushNotificationCenterHistory(),
     ]);
   });
   // Clean quit：在销毁窗口前对 background 任务做 TERM→grace→KILL。
@@ -358,11 +363,14 @@ if (gotTheLock) {
       registerClipboardIpc(ipcMain);
       registerAgentsIpc(ipcMain);
       registerForegroundActivityIpc(ipcMain);
+      registerNotificationCenterIpc(ipcMain, {
+        eventBus: appCore.eventBus,
+      });
       registerAgentRuntimeHostIpc(ipcMain, {
         eventBus: appCore.eventBus,
         index: appCore.services.agentRuntimeIndex,
       });
-      registerSystemStatsIpc(ipcMain);
+      registerPierResourceIpc(ipcMain);
       registerUsageDataIpc(ipcMain, appCore.services.usageData);
       ipcMain.handle(PIER.APP_QUIT_DECISION, (_event, payload: unknown) => {
         appQuitRendererTransport.handleDecision(payload);

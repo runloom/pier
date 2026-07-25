@@ -1,4 +1,3 @@
-import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Empty,
@@ -19,7 +18,7 @@ import { cn } from "@pier/ui/utils.ts";
 import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import i18next from "i18next";
-import { Puzzle, RefreshCw } from "lucide-react";
+import { Loader2, Puzzle, RefreshCw } from "lucide-react";
 import {
   Fragment,
   type JSX,
@@ -30,17 +29,19 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
+import { systemNotify } from "@/lib/notifications/system-notify.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { rejectFailedManagedPluginOperation } from "./managed-plugin-operation.ts";
 import {
   AvailableManagedRow,
   type CatalogRow,
   type ManagedPluginsWindowShim,
   ManagedRowExtraActions,
-  rejectFailedManagedPluginOperation,
   UnavailableManagedRow,
 } from "./managed-plugin-rows.tsx";
 import { sortUnifiedRows, type UnifiedRow } from "./plugin-list-order.ts";
 import { PluginRow, PluginsLoadingState } from "./plugin-row.tsx";
+import { useManagedPluginUpdateAll } from "./use-managed-plugin-update-all.ts";
 
 /**
  * Unified plugin management section.
@@ -136,6 +137,7 @@ function UnifiedList({
   pendingBuiltinId,
   emptyKey,
   officialMutationsAllowed = true,
+  mutationsLocked = false,
 }: {
   rows: readonly UnifiedRow[];
   win: ManagedPluginsWindowShim | undefined;
@@ -146,6 +148,7 @@ function UnifiedList({
   pendingBuiltinId: string | null;
   emptyKey: "emptyInstalled" | "emptyAvailable";
   officialMutationsAllowed?: boolean;
+  mutationsLocked?: boolean;
 }): JSX.Element {
   if (rows.length === 0) {
     return <EmptyList emptyKey={emptyKey} />;
@@ -161,6 +164,7 @@ function UnifiedList({
                 <ItemSeparator className="mx-(--card-spacing) my-0 data-horizontal:w-auto" />
               ) : null}
               <AvailableManagedRow
+                mutationsLocked={mutationsLocked}
                 onRefresh={onRefreshManaged}
                 row={row.row}
                 win={win}
@@ -175,10 +179,11 @@ function UnifiedList({
                 <ItemSeparator className="mx-(--card-spacing) my-0 data-horizontal:w-auto" />
               ) : null}
               <UnavailableManagedRow
+                mutationsLocked={mutationsLocked}
                 officialMutationsAllowed={officialMutationsAllowed}
                 onRefresh={onRefreshManaged}
                 onToggle={() => onToggleManaged(row.row)}
-                pending={pendingManagedId === row.row.id}
+                pending={mutationsLocked || pendingManagedId === row.row.id}
                 row={row.row}
                 win={win}
               />
@@ -191,6 +196,7 @@ function UnifiedList({
           : row.entry;
         const extraActions: ReactNode = managedRow ? (
           <ManagedRowExtraActions
+            mutationsLocked={mutationsLocked}
             officialMutationsAllowed={officialMutationsAllowed}
             onRefresh={onRefreshManaged}
             row={managedRow}
@@ -210,7 +216,8 @@ function UnifiedList({
               }
               pending={
                 managedRow
-                  ? pendingManagedId === row.entry.manifest.id
+                  ? mutationsLocked ||
+                    pendingManagedId === row.entry.manifest.id
                   : pendingBuiltinId === row.entry.manifest.id
               }
             />
@@ -242,11 +249,16 @@ function errorDescription(err: unknown): string {
 export function ManagedPluginsSection({
   builtinEntries,
   builtinInitialized,
+  onCatalogStatusChange,
   onToggleBuiltin,
   pendingBuiltinId,
 }: {
   builtinEntries: readonly PluginRegistryEntry[];
   builtinInitialized: boolean;
+  onCatalogStatusChange?(status: {
+    pluginMode: "workspace" | "release";
+    catalogError: string | null;
+  }): void;
   onToggleBuiltin(entry: PluginRegistryEntry): void;
   pendingBuiltinId: string | null;
 }): JSX.Element {
@@ -254,6 +266,9 @@ export function ManagedPluginsSection({
   const { catalog, refresh, checkUpdates, checkingUpdates, error, win } =
     useCatalog();
   const [pendingManagedId, setPendingManagedId] = useState<string | null>(null);
+  const { showUpdateAll, updatingAll, handleUpdateAll } =
+    useManagedPluginUpdateAll({ catalog, refresh, win });
+  const mutationsLocked = updatingAll;
 
   const managedById = new Map(catalog?.plugins.map((p) => [p.id, p]) ?? []);
   // Trust catalog.installed over registry presence: main broadcasts
@@ -299,6 +314,7 @@ export function ManagedPluginsSection({
 
   const toggleManaged = useCallback(
     (row: CatalogRow): void => {
+      if (updatingAll) return;
       const request = row.desired.enabled
         ? win?.managedPlugins?.disable(row.id)
         : win?.managedPlugins?.enable(row.id);
@@ -309,14 +325,29 @@ export function ManagedPluginsSection({
       rejectFailedManagedPluginOperation(request)
         .then(refresh)
         .catch((err: unknown) => {
-          const message = err instanceof Error ? err.message : String(err);
-          toast.error(message);
+          // 带技术详情的失败：alert 展示 + 消息中心留痕（操作反馈规范）。
+          const titleKey = row.desired.enabled
+            ? "settings.plugins.toast.disableFailed"
+            : "settings.plugins.toast.enableFailed";
+          const body = err instanceof Error ? err.message : String(err);
+          showAppAlert({
+            body,
+            title: i18next.t(titleKey, { name: row.id }),
+          }).catch(() => undefined);
+          systemNotify({
+            body,
+            kind: "operation.result",
+            severity: "error",
+            suppressToast: true,
+            titleKey,
+            titleParams: { name: row.id },
+          });
         })
         .finally(() => {
           setPendingManagedId(null);
         });
     },
-    [refresh, win]
+    [refresh, updatingAll, win]
   );
   const handleCheckUpdates = useCallback((): void => {
     checkUpdates()
@@ -332,36 +363,24 @@ export function ManagedPluginsSection({
       });
   }, [checkUpdates, t]);
 
+  const pluginMode = catalog?.pluginMode ?? "release";
+
+  useEffect(() => {
+    onCatalogStatusChange?.({
+      pluginMode,
+      catalogError: error,
+    });
+  }, [error, onCatalogStatusChange, pluginMode]);
+
   if (!builtinInitialized) {
     return <PluginsLoadingState />;
   }
 
-  const pluginMode = catalog?.pluginMode ?? "release";
   const officialMutationsAllowed = catalog?.officialMutationsAllowed ?? true;
 
   return (
     <div className="flex flex-col gap-2">
-      {catalog && pluginMode === "workspace" ? (
-        <div className="mx-(--card-spacing) -mt-2 mb-2">
-          <Alert variant="warning">
-            <AlertTitle>
-              {t("settings.plugins.pluginMode.workspaceTitle")}
-            </AlertTitle>
-            <AlertDescription>
-              {t("settings.plugins.pluginMode.workspaceBody")}
-            </AlertDescription>
-          </Alert>
-        </div>
-      ) : null}
       <Tabs defaultValue="installed">
-        {error ? (
-          <div className="mx-(--card-spacing) mb-2">
-            <Alert variant="destructive">
-              <AlertTitle>{t("settings.plugins.errorTitle")}</AlertTitle>
-              <AlertDescription>{error}</AlertDescription>
-            </Alert>
-          </div>
-        ) : null}
         <div className="mx-(--card-spacing) flex items-center justify-between gap-2">
           <TabsList>
             <TabsTrigger value="installed">
@@ -389,13 +408,31 @@ export function ManagedPluginsSection({
                 {t("settings.plugins.restartNow")}
               </Button>
             ) : null}
+            {showUpdateAll ? (
+              <Button
+                disabled={updatingAll}
+                onClick={handleUpdateAll}
+                size="sm"
+                type="button"
+                variant="default"
+              >
+                {updatingAll ? (
+                  <Loader2
+                    aria-hidden
+                    className="animate-spin"
+                    data-icon="inline-start"
+                  />
+                ) : null}
+                {t("settings.plugins.action.updateAll")}
+              </Button>
+            ) : null}
             {officialMutationsAllowed ? (
               <TooltipProvider delayDuration={0} disableHoverableContent>
                 <Tooltip>
                   <TooltipTrigger asChild>
                     <Button
                       aria-label={t("settings.plugins.checkUpdates")}
-                      disabled={checkingUpdates}
+                      disabled={checkingUpdates || updatingAll}
                       onClick={handleCheckUpdates}
                       size="icon-sm"
                       type="button"
@@ -419,6 +456,7 @@ export function ManagedPluginsSection({
         <TabsContent value="installed">
           <UnifiedList
             emptyKey="emptyInstalled"
+            mutationsLocked={mutationsLocked}
             officialMutationsAllowed={officialMutationsAllowed}
             onRefreshManaged={refresh}
             onToggleBuiltin={onToggleBuiltin}
@@ -432,6 +470,7 @@ export function ManagedPluginsSection({
         <TabsContent value="available">
           <UnifiedList
             emptyKey="emptyAvailable"
+            mutationsLocked={mutationsLocked}
             officialMutationsAllowed={officialMutationsAllowed}
             onRefreshManaged={refresh}
             onToggleBuiltin={onToggleBuiltin}

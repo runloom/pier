@@ -57,7 +57,13 @@ const runtime: ActionContributionRuntime = {
   t: (key) => i18next.t(key),
 };
 
+/** 命令面板 Git 主路径命令（不含 review 树 surface-only 动作）。 */
 const LOOMDESK_GIT_ACTION_IDS = [
+  "pier.git.viewChanges",
+  "pier.git.pull",
+  "pier.git.push",
+  "pier.git.sync",
+  "pier.git.switchBranch",
   "pier.git.merge",
   "pier.git.mergeAbort",
   "pier.git.stash",
@@ -68,6 +74,12 @@ const LOOMDESK_GIT_ACTION_IDS = [
   "pier.git.rebase",
   "pier.git.rebaseAbort",
   "pier.git.rebaseContinue",
+  "pier.git.cherryPick",
+  "pier.git.cherryPickAbort",
+  "pier.git.cherryPickContinue",
+  "pier.git.revert",
+  "pier.git.revertAbort",
+  "pier.git.revertContinue",
   "pier.git.undoLastCommit",
 ] as const;
 
@@ -289,6 +301,32 @@ describe("action search", () => {
     ["继续变基", "pier.git.rebaseContinue"],
     ["git reset", "pier.git.undoLastCommit"],
     ["回退", "pier.git.undoLastCommit"],
+    // 切换分支：CLI 习惯与无空格缩写
+    ["git checkout", "pier.git.switchBranch"],
+    ["gitcheck", "pier.git.switchBranch"],
+    ["gitcheckout", "pier.git.switchBranch"],
+    ["gco", "pier.git.switchBranch"],
+    ["检出", "pier.git.switchBranch"],
+    ["检出分支", "pier.git.switchBranch"],
+    ["新建分支", "pier.git.switchBranch"],
+    ["create branch", "pier.git.switchBranch"],
+    // 远端同步 / 变更面板（能力终态）
+    ["git pull", "pier.git.pull"],
+    ["pull", "pier.git.pull"],
+    ["拉取", "pier.git.pull"],
+    ["git push", "pier.git.push"],
+    ["推送", "pier.git.push"],
+    ["sync", "pier.git.sync"],
+    ["同步", "pier.git.sync"],
+    ["git status", "pier.git.viewChanges"],
+    ["查看变更", "pier.git.viewChanges"],
+    ["diff", "pier.git.viewChanges"],
+    // undo / stash 同义
+    ["soft reset", "pier.git.undoLastCommit"],
+    ["uncommit", "pier.git.undoLastCommit"],
+    ["撤销提交", "pier.git.undoLastCommit"],
+    ["贮藏", "pier.git.stash"],
+    ["git stash -u", "pier.git.stashIncludeUntracked"],
   ])("matches every LoomDesk Git command keyword: %s", (query, expectedId) => {
     expect(
       rankActionSearchDocuments(gitCommandDocs, query)[0]?.document.id
@@ -329,7 +367,7 @@ describe("action search", () => {
     ["zh-CN", "git 合并", ["pier.git.merge"]],
     [
       "zh-CN",
-      "Git: 暂存",
+      "Git: 储藏",
       ["pier.git.stash", "pier.git.stashIncludeUntracked"],
     ],
     ["zh-CN", "Git: 变基", ["pier.git.rebase"]],
@@ -347,7 +385,7 @@ describe("action search", () => {
     ["en", "rebase", ["pier.git.rebase"]],
     ["zh-CN", "合并", ["pier.git.merge"]],
     ["zh-CN", "合并分支", ["pier.git.merge"]],
-    ["zh-CN", "暂存", ["pier.git.stash", "pier.git.stashIncludeUntracked"]],
+    ["zh-CN", "储藏", ["pier.git.stash", "pier.git.stashIncludeUntracked"]],
   ])("keeps matching bare operation keywords with %s prefixed titles: %s", (titleLocale, query, expectedIds) => {
     const docs = titleLocale === "zh-CN" ? gitCommandDocsZh : gitCommandDocs;
     expect(expectedIds).toContain(
@@ -560,6 +598,39 @@ describe("action search", () => {
       for (const worktreeId of WORKTREE_ACTION_IDS) {
         expect(ids).toContain(worktreeId);
       }
+    }
+  });
+
+  it.each([
+    ["wt list", "pier.worktree.list"],
+    ["打开工作树", "pier.worktree.list"],
+    ["切换工作树", "pier.worktree.list"],
+    ["open worktree", "pier.worktree.list"],
+  ])("matches worktree list shortcuts without entering git namespace: %s", (query, expectedId) => {
+    for (const [worktreeDocs, gitDocs] of worktreeScenes()) {
+      const ranked = rankActionSearchDocuments(
+        [...worktreeDocs, ...gitDocs],
+        query
+      );
+      expect(ranked[0]?.document.id).toBe(expectedId);
+      expect(
+        ranked.every((result) => !result.document.id.startsWith("pier.git."))
+      ).toBe(true);
+    }
+  });
+
+  it("matches bare wt to worktree family only", () => {
+    for (const [worktreeDocs, gitDocs] of worktreeScenes()) {
+      const ranked = rankActionSearchDocuments(
+        [...worktreeDocs, ...gitDocs],
+        "wt"
+      );
+      expect(ranked.length).toBeGreaterThan(0);
+      expect(
+        ranked.every((result) =>
+          result.document.id.startsWith("pier.worktree.")
+        )
+      ).toBe(true);
     }
   });
 });
