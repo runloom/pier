@@ -197,7 +197,11 @@ export function PierFileTree({
     }),
     []
   );
-  refs.current.fileTreeModel = fileTreeModelApi;
+  // FileTreeRefs.fileTreeModel is readonly; replace the whole bag (same pattern as useFileTreeRefs).
+  refs.current = {
+    ...refs.current,
+    fileTreeModel: fileTreeModelApi,
+  };
   useFileTreeContextMenuComposition(model, onOpenItemContextMenu != null, refs);
   treeSearch.useSearchMatchState(model, nextRefs, onSearchMatchStateChange);
   const activeSearchRef = React.useRef<string | null>(null);

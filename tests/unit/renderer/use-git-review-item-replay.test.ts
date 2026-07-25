@@ -19,12 +19,14 @@ function diffHandle(
 ): PierDiffViewHandle {
   return {
     captureTopAnchor: () => null,
+    getScrollTop: () => null,
     getSelectedText: () => "",
     isItemVisible: () => true,
     restoreAnchor: () => true,
     scrollToItem: () => true,
     selectAll: () => false,
     setAllCollapsed: () => undefined,
+    setScrollTop: () => false,
     updateItems,
   };
 }

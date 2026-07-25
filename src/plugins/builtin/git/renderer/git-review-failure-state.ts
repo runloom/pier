@@ -313,7 +313,10 @@ export function useReviewFailureSummary(options: {
     ) => {
       if (
         generation === currentGenerationRef.current &&
-        accumulatorRef.current.applyGenerationChanges(changes, { settled })
+        accumulatorRef.current.applyGenerationChanges(
+          changes,
+          settled === undefined ? undefined : { settled }
+        )
       ) {
         schedulePublish();
       }
@@ -342,9 +345,12 @@ export function useReviewFailureSummary(options: {
         options.entryKeyBySectionIdRef.current.get(id) ?? undefined;
       const entry = entryKey ? entryByKeyRef.current.get(entryKey) : undefined;
       if (
-        accumulatorRef.current.updateRenderError(id, error, entry, {
-          settled,
-        })
+        accumulatorRef.current.updateRenderError(
+          id,
+          error,
+          entry,
+          settled === undefined ? undefined : { settled }
+        )
       ) {
         schedulePublish();
       }

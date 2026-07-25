@@ -288,7 +288,7 @@ function pathFromRoot(node: LexicalNode): number[] {
   const indices: number[] = [];
   let current: LexicalNode | null = node;
   while (current) {
-    const parent = current.getParent();
+    const parent: LexicalNode | null = current.getParent();
     if (!(parent && $isElementNode(parent))) {
       break;
     }

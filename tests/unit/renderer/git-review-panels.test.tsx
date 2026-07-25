@@ -130,6 +130,7 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
       props.ref,
       () => ({
         captureTopAnchor,
+        getScrollTop: () => null,
         getSelectedText: () => "",
         isItemVisible,
         restoreAnchor,
@@ -147,6 +148,7 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
         },
         selectAll: () => false,
         setAllCollapsed: () => undefined,
+        setScrollTop: () => false,
         updateItems(items) {
           const currentIds = new Set(
             renderedItemsRef.current.map((item) => item.id)
