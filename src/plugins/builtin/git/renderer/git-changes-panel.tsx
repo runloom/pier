@@ -22,7 +22,6 @@ import {
   useSyncExternalStore,
 } from "react";
 import { gitChangesPanelTitle } from "./git-changes-tab-title.ts";
-import { GitCommitForm } from "./git-commit-form.tsx";
 import { pluginText } from "./git-plugin-text.ts";
 import { preloadReviewCodeView } from "./git-review-code-view.tsx";
 import { ReviewDocuments } from "./git-review-content.tsx";
@@ -44,7 +43,6 @@ import {
   readReviewSession,
 } from "./git-review-session-cache.ts";
 import { gitReviewTreeModel } from "./git-review-tree.tsx";
-import { GitReviewTreeToolbar } from "./git-review-tree-toolbar.tsx";
 import { usePluginLanguage } from "./use-plugin-language.ts";
 
 const EMPTY_REVIEW_ENTRIES: readonly GitReviewIndexEntry[] = [];
@@ -305,40 +303,6 @@ function GitChangesPanelBody({
       target={source.target}
     />
   ) : undefined;
-  const isUncommitted = source?.target.kind === "uncommitted";
-  const reportSkippedConflicts = useCallback(
-    (staged: number, skippedConflicts: number) => {
-      context.notifications.info(
-        pluginText(
-          context,
-          "stageAllSkippedConflicts",
-          "Staged {{staged}} file(s), skipped {{n}} conflicted",
-          { n: skippedConflicts, staged }
-        )
-      );
-    },
-    [context]
-  );
-  const treeToolbar =
-    source && isUncommitted ? (
-      <GitReviewTreeToolbar
-        context={context}
-        entries={entries}
-        gitRootPath={source.gitRootPath}
-        onSkippedConflicts={reportSkippedConflicts}
-      />
-    ) : undefined;
-
-  const stagedCount = treeModel.groupCounts.staged;
-  const commitForm =
-    source && isUncommitted && stagedCount > 0 ? (
-      <GitCommitForm
-        context={context}
-        cwd={source.gitRootPath}
-        stagedCount={stagedCount}
-      />
-    ) : undefined;
-
   if (!source) {
     return (
       <GitReviewPanelLayout
@@ -414,8 +378,6 @@ function GitChangesPanelBody({
           scope={source}
           setSidebarCollapsed={setSidebarCollapsed}
           sidebarCollapsed={sidebarCollapsed}
-          {...(commitForm === undefined ? {} : { sidebarFooter: commitForm })}
-          {...(treeToolbar === undefined ? {} : { sidebarHeader: treeToolbar })}
           treeModel={treeModel}
           warnings={state.result.warnings}
         />
@@ -431,8 +393,6 @@ function GitChangesPanelBody({
       onOpenPath={noopOpenPath}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
-      {...(commitForm === undefined ? {} : { sidebarFooter: commitForm })}
-      {...(treeToolbar === undefined ? {} : { sidebarHeader: treeToolbar })}
       treeModel={treeModel}
     >
       <div

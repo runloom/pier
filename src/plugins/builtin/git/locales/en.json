@@ -378,11 +378,6 @@
     "ui.reviewDiscardMixedBody": "This will delete {{untracked}} new file(s) (recoverable from Trash) and discard changes in {{tracked}} existing file(s). This cannot be undone.",
     "ui.reviewDiscardTrackedOnlyButton": "Discard {{count}} Changes",
     "ui.reviewDiscardAllFilesButton": "Discard All {{count}}",
-    "ui.stageAll": "Stage All",
-    "ui.stageAllBusy": "Staging…",
-    "ui.stageAllSkippedConflicts": "Staged {{staged}} change(s), skipped {{n}} in merge",
-    "ui.unstageAll": "Unstage All",
-    "ui.unstageAllBusy": "Unstaging…",
     "ui.reviewTreeContextMenuFailed": "Couldn't open menu",
     "ui.reviewStateBinary": "Binary file",
     "ui.reviewStateConflict": "Merge conflict",
@@ -615,12 +610,7 @@
     "ui.reviewStateSubmoduleDetail": "Submodule commit changed",
     "ui.reviewStateTooLargeDetail": "File is too large to display a text diff",
     "ui.reviewStateInvalidEncodingDetail": "Unsupported text encoding. Open the file to inspect.",
-    "ui.reviewStateConflictDetail": "Merge conflict. Resolve it in the editor.",
-    "ui.commitMessageLabel": "Commit message",
-    "ui.commitMessagePlaceholder": "Commit message",
-    "ui.commitButton": "Commit {{count}} staged",
-    "ui.commitSuccess": "Changes committed",
-    "ui.commitFailed": "Commit failed"
+    "ui.reviewStateConflictDetail": "Merge conflict. Resolve it in the editor."
   },
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {
