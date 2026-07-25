@@ -8,6 +8,7 @@ import {
   reviewNavigationKey,
   scheduleReviewNavigationVerification,
 } from "./git-review-navigation.ts";
+import { resumeGitReviewSelectedNavigation } from "./use-git-review-navigation-resume.ts";
 import type { UseGitReviewNavigationOptions } from "./use-git-review-navigation-types.ts";
 
 export function useGitReviewNavigation({
@@ -378,57 +379,21 @@ export function useGitReviewNavigation({
   );
 
   const resumeSelectedNavigation = useCallback(() => {
-    const selected = selectedEntryKeyRef.current;
-    if (!(selected && pendingNavigationRef.current === null)) {
-      return;
-    }
-    const selectedSection = resolveReviewSectionKey({
-      entryKey: selected,
-      entryKeyBySectionId: entryKeyBySectionIdRef.current,
-      firstSectionIdByEntryKey: firstSectionIdByEntryKeyRef.current,
-      preferredSectionKey: selectedSectionKeyRef.current,
+    resumeGitReviewSelectedNavigation({
+      applyNavigationDemand,
+      currentLoadedTarget,
+      currentProjectionRevision,
+      diffHandleRef,
+      documentGenerationRef,
+      entryKeyBySectionIdRef,
+      failedNavigationKeyRef,
+      firstSectionIdByEntryKeyRef,
+      pendingNavigationRef,
+      selectedEntryKeyRef,
+      selectedSectionKeyRef,
+      setNavigationPending,
+      settledProjectionRef,
     });
-    if (!selectedSection) {
-      return;
-    }
-    selectedSectionKeyRef.current = selectedSection;
-    const navigation = {
-      entryKey: selected,
-      generation: documentGenerationRef.current,
-      sectionKey: selectedSection,
-    };
-    const navigationKey = reviewNavigationKey(navigation);
-    if (failedNavigationKeyRef.current === navigationKey) {
-      return;
-    }
-    const revision = currentProjectionRevision(navigation);
-    if (revision === null) {
-      return;
-    }
-    const settled = settledProjectionRef.current;
-    if (
-      settled?.navigationKey === navigationKey &&
-      settled.revision === revision
-    ) {
-      return;
-    }
-    // 目标已在投影中：只同步 settled 水位，不再排他 demand。
-    // 否则 resume 会取消其它 seed/window 加载并形成活锁。
-    const target = currentLoadedTarget(navigation);
-    if (target !== null) {
-      settledProjectionRef.current = { navigationKey, revision };
-      if (
-        diffHandleRef.current?.isItemVisible(target.sectionId, target.cacheKey)
-      ) {
-        return;
-      }
-      // 已投影但不可见：单次 scroll，不重新 set exclusive demand。
-      diffHandleRef.current?.scrollToItem(target.sectionId);
-      return;
-    }
-    pendingNavigationRef.current = navigation;
-    applyNavigationDemand(selected);
-    setNavigationPending(true);
   }, [
     applyNavigationDemand,
     currentLoadedTarget,

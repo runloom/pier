@@ -28,6 +28,8 @@ function GitReviewTreeSidebarComponent({
   contextId,
   gitRootPath,
   onOpenPath,
+  isActiveOpenPath,
+  onContextMenuSession,
   revealPath,
   sidebarFooter,
   sidebarHeader,
@@ -39,6 +41,14 @@ function GitReviewTreeSidebarComponent({
   contextId: string;
   gitRootPath: string;
   onOpenPath: (path: string) => void;
+  isActiveOpenPath?: (path: string) => boolean;
+  onContextMenuSession?: (
+    phase: "begin" | "end",
+    detail: {
+      readonly intent: "inspect" | "command";
+      readonly path: string;
+    }
+  ) => void;
   revealPath: string | null;
   sidebarFooter?: ReactNode;
   sidebarHeader?: ReactNode;
@@ -122,6 +132,8 @@ function GitReviewTreeSidebarComponent({
           label={pluginText(context, "reviewTreeLabel", "Changed files")}
           onOpenItemContextMenu={openItemContextMenu}
           onOpenPath={onOpenPath}
+          {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
+          {...(onContextMenuSession ? { onContextMenuSession } : {})}
           onSearchMatchStateChange={treeSearch.updateMatchState}
           revealPath={revealPath}
           stickyFolders
@@ -171,6 +183,8 @@ export function GitReviewPanelLayout({
   headerLeading,
   headerTrailing,
   onOpenPath,
+  isActiveOpenPath,
+  onContextMenuSession,
   selectedTreePath,
   setSidebarCollapsed,
   sidebarCollapsed,
@@ -186,6 +200,14 @@ export function GitReviewPanelLayout({
   headerLeading?: ReactNode;
   headerTrailing?: ReactNode;
   onOpenPath?: (path: string) => void;
+  isActiveOpenPath?: (path: string) => boolean;
+  onContextMenuSession?: (
+    phase: "begin" | "end",
+    detail: {
+      readonly intent: "inspect" | "command";
+      readonly path: string;
+    }
+  ) => void;
   selectedTreePath?: string | null;
   setSidebarCollapsed: (collapsed: boolean) => void;
   sidebarCollapsed: boolean;
@@ -224,6 +246,8 @@ export function GitReviewPanelLayout({
         contextId={contextId}
         gitRootPath={gitRootPath}
         onOpenPath={onOpenPath}
+        {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
+        {...(onContextMenuSession ? { onContextMenuSession } : {})}
         revealPath={selectedTreePath ?? null}
         {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
         {...(sidebarHeader === undefined ? {} : { sidebarHeader })}

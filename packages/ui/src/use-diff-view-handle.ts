@@ -18,6 +18,8 @@ export interface PierDiffViewAnchor {
 
 export interface PierDiffViewHandle {
   captureTopAnchor(): PierDiffViewAnchor | null;
+  /** 当前 CodeView 容器 raw scrollTop；无容器时 null。 */
+  getScrollTop(): number | null;
   /** Pierre 行选区文本；无选区时返回空串。 */
   getSelectedText(): string;
   isItemVisible(id: string, cacheKey?: string): boolean;
@@ -27,6 +29,8 @@ export interface PierDiffViewHandle {
   selectAll(): boolean;
   /** 折叠/展开当前拓扑内的全部 diff item。 */
   setAllCollapsed(collapsed: boolean): void;
+  /** 写回 raw scrollTop（菜单 Freeze 用；禁止用 item scrollTo 代替）。 */
+  setScrollTop(scrollTop: number): boolean;
   updateItems(
     items: readonly PierDiffViewItem[],
     options?: PierDiffViewUpdateOptions
@@ -35,6 +39,30 @@ export interface PierDiffViewHandle {
 
 export interface PierDiffViewUpdateOptions {
   readonly preserveAnchor?: boolean;
+}
+
+/**
+ * CodeView 真实滚动节点可能是 getContainerElement，也可能是带 overflow 的祖先/自身。
+ * 取 scrollHeight 明显大于 clientHeight 且 scrollTop 可写的那个。
+ */
+function resolveCodeViewScrollElement(
+  start: HTMLElement | null | undefined
+): HTMLElement | null {
+  if (!start) {
+    return null;
+  }
+  let best: HTMLElement | null = null;
+  let bestSlack = 0;
+  let node: HTMLElement | null = start;
+  for (let depth = 0; node && depth < 6; depth += 1) {
+    const slack = node.scrollHeight - node.clientHeight;
+    if (slack > bestSlack) {
+      best = node;
+      bestSlack = slack;
+    }
+    node = node.parentElement;
+  }
+  return best ?? start;
 }
 
 export interface DiffViewCollapsedItemState {
@@ -210,6 +238,12 @@ function createDiffViewHandle({
     captureTopAnchor(): PierDiffViewAnchor | null {
       return captureTopAnchor();
     },
+    getScrollTop(): number | null {
+      const container = resolveCodeViewScrollElement(
+        codeViewRef.current?.getInstance()?.getContainerElement()
+      );
+      return container ? container.scrollTop : null;
+    },
     getSelectedText(): string {
       const viewer = codeViewRef.current;
       const selection = viewer?.getSelectedLines();
@@ -245,6 +279,16 @@ function createDiffViewHandle({
     },
     restoreAnchor(anchor: PierDiffViewAnchor): boolean {
       return restoreAnchor(anchor);
+    },
+    setScrollTop(scrollTop: number): boolean {
+      const container = resolveCodeViewScrollElement(
+        codeViewRef.current?.getInstance()?.getContainerElement()
+      );
+      if (!container) {
+        return false;
+      }
+      container.scrollTop = scrollTop;
+      return true;
     },
     scrollToItem(id: string): boolean {
       const viewer = codeViewRef.current;

@@ -1025,6 +1025,111 @@ describe("PierFileTree", () => {
     });
   });
 
+  it("right-click selects an unselected file once, then re-open is suppressed", async () => {
+    const onOpenPath = vi.fn();
+    const onOpenItemContextMenu = vi.fn();
+    // Git Review 式路径：组前缀控制字符 + 深路径，选中必须用 pierre 的 path。
+    const reviewLikeItems: PierFileTreeItem[] = [
+      {
+        kind: "directory",
+        path: "\u0003Changes",
+        hasChildren: true,
+        loadState: "loaded",
+      },
+      {
+        kind: "directory",
+        path: "\u0003Changes/templates",
+        hasChildren: true,
+        loadState: "loaded",
+        gitStatus: "added",
+      },
+      {
+        kind: "file",
+        path: "\u0003Changes/templates/kit.canvas.tsx",
+        gitStatus: "added",
+      },
+      {
+        kind: "file",
+        path: "\u0003Changes/templates/hello.canvas.tsx",
+        gitStatus: "added",
+      },
+    ];
+    const { container } = render(
+      <PierFileTree
+        items={reviewLikeItems}
+        label="Changed files"
+        onOpenItemContextMenu={onOpenItemContextMenu}
+        onOpenPath={onOpenPath}
+        stickyFolders
+      />
+    );
+
+    const tree = within(getFileTree(container));
+    fireEvent.click(tree.getByRole("treeitem", { name: /kit\.canvas/ }));
+    expect(onOpenPath).toHaveBeenCalledWith(
+      "\u0003Changes/templates/kit.canvas.tsx"
+    );
+    onOpenPath.mockClear();
+
+    // 右键未选中文件：应选中并 open 一次
+    fireEvent.contextMenu(
+      tree.getByRole("treeitem", { name: /hello\.canvas/ }),
+      { button: 2, clientX: 24, clientY: 48 }
+    );
+    await waitFor(() => {
+      expect(onOpenItemContextMenu).toHaveBeenCalledWith(
+        { kind: "file", path: "\u0003Changes/templates/hello.canvas.tsx" },
+        { x: 24, y: 48 }
+      );
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
+    });
+    expect(onOpenPath).toHaveBeenCalledWith(
+      "\u0003Changes/templates/hello.canvas.tsx"
+    );
+    expect(onOpenPath).toHaveBeenCalledTimes(1);
+    await waitFor(() => {
+      expect(
+        tree.getByRole("treeitem", {
+          name: /hello\.canvas/,
+          selected: true,
+        })
+      ).toBeVisible();
+    });
+    onOpenPath.mockClear();
+    onOpenItemContextMenu.mockClear();
+
+    // 已选中再右键：只出菜单，不 re-open，仍保持选中
+    fireEvent.contextMenu(
+      tree.getByRole("treeitem", { name: /hello\.canvas/ }),
+      { button: 2, clientX: 30, clientY: 50 }
+    );
+    await waitFor(() => {
+      expect(onOpenItemContextMenu).toHaveBeenCalledTimes(1);
+    });
+    await act(async () => {
+      await Promise.resolve();
+      await new Promise<void>((resolve) => {
+        requestAnimationFrame(() => {
+          requestAnimationFrame(() => resolve());
+        });
+      });
+    });
+    expect(onOpenPath).not.toHaveBeenCalled();
+    expect(
+      tree.getByRole("treeitem", {
+        name: /hello\.canvas/,
+        selected: true,
+      })
+    ).toBeVisible();
+  });
+
   it("keeps the tree scroller stable when opening a row context menu", async () => {
     const onOpenItemContextMenu = vi.fn();
     // Tall list so stickyFolders + focus can scroll into the sticky inset band.

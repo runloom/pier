@@ -46,6 +46,7 @@ import { useGitReviewLocaleProjection } from "./use-git-review-locale-projection
 import { useGitReviewNavigation } from "./use-git-review-navigation.ts";
 import { useGitReviewProjectionCommit } from "./use-git-review-projection-commit.ts";
 import { useGitReviewRetentionSync } from "./use-git-review-retention-sync.ts";
+import { useGitReviewTreeOpen } from "./use-git-review-tree-open.ts";
 
 function ReviewDocumentsComponent({
   context,
@@ -379,27 +380,17 @@ function ReviewDocumentsComponent({
     };
   }, [context, panelId]);
 
-  const openTreeNode = useCallback(
-    (path: string) => {
-      if (path.startsWith("group:") && path.split("/").length === 1) {
-        return;
-      }
-      const fileRef = treeModel.getFileRefForTreePath(path);
-      if (!fileRef) {
-        return;
-      }
-      setSelectedTreeTarget({
-        entryKey: fileRef.entryKey,
-        sectionKey: fileRef.sectionKey,
-      });
-      beginNavigation({
-        entryKey: fileRef.entryKey,
-        sectionKey: fileRef.sectionKey,
-      });
-      generationCallbacksRef.current.tryPendingNavigation();
-    },
-    [beginNavigation, setSelectedTreeTarget, treeModel]
-  );
+  const { isActiveOpenPath, onContextMenuSession, openTreeNode } =
+    useGitReviewTreeOpen({
+      beginNavigation,
+      cancelVerification,
+      diffHandleRef,
+      getSelectedEntryKey,
+      getSelectedSectionKey,
+      setSelectedTreeTarget,
+      treeModel,
+      tryPendingNavigation,
+    });
   const retryFailure = useCallback(
     (entryKey: string) => {
       loaderRef.current?.retry(entryKey);
@@ -457,6 +448,8 @@ function ReviewDocumentsComponent({
       {...(headerLeading === undefined ? {} : { headerLeading })}
       headerTrailing={toolbar}
       indexFailure={indexRefreshFailure}
+      isActiveOpenPath={isActiveOpenPath}
+      onContextMenuSession={onContextMenuSession}
       onFeedbackChange={updateRenderFeedback}
       onItemError={handleRenderItemError}
       onOpenPath={openTreeNode}

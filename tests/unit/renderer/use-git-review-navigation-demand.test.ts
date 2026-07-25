@@ -131,7 +131,7 @@ describe("useGitReviewNavigation demand sync", () => {
     expect(hook.result.current.navigationPending).toBe(false);
   });
 
-  it("resumeSelectedNavigation scrolls without exclusive demand when projected but off-screen", async () => {
+  it("resumeSelectedNavigation does not re-scroll when target is already projected", async () => {
     let visible = true;
     const scrollToItem = vi.fn(() => true);
     const { applyNavigationDemand, hook } = setup({
@@ -157,9 +157,9 @@ describe("useGitReviewNavigation demand sync", () => {
       hook.result.current.notifyProjectionChanged(["section:a"]);
       hook.result.current.resumeSelectedNavigation();
     });
-    // 已投影：只 scroll，不排他 demand（否则 cancel 其它 seed 形成 thrash）。
+    // 终态：已投影则用户拥有滚动；resume 不得 align:start 再 scroll。
     expect(applyNavigationDemand).not.toHaveBeenCalled();
-    expect(scrollToItem).toHaveBeenCalledWith("section:a");
+    expect(scrollToItem).not.toHaveBeenCalled();
     expect(hook.result.current.navigationPending).toBe(false);
   });
 

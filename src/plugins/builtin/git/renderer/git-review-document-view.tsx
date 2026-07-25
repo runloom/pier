@@ -40,6 +40,14 @@ interface GitReviewDocumentViewProps {
   readonly headerLeading?: React.ReactNode;
   readonly headerTrailing?: React.ReactNode;
   readonly indexFailure: GitReviewFailure | null;
+  readonly isActiveOpenPath?: (path: string) => boolean;
+  readonly onContextMenuSession?: (
+    phase: "begin" | "end",
+    detail: {
+      readonly intent: "inspect" | "command";
+      readonly path: string;
+    }
+  ) => void;
   readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
   readonly onItemError: (id: string, error: Error | null) => void;
   readonly onOpenPath: (path: string) => void;
@@ -75,6 +83,8 @@ export function GitReviewDocumentView({
   onItemError,
   onFeedbackChange,
   onOpenPath,
+  isActiveOpenPath,
+  onContextMenuSession,
   onRenderWindowChange,
   onRetryFailure,
   onRetryIndex,
@@ -115,6 +125,8 @@ export function GitReviewDocumentView({
       {...(headerLeading === undefined ? {} : { headerLeading })}
       {...(headerTrailing === undefined ? {} : { headerTrailing })}
       onOpenPath={onOpenPath}
+      {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
+      {...(onContextMenuSession ? { onContextMenuSession } : {})}
       selectedTreePath={selectedTreePath}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
