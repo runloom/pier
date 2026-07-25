@@ -455,4 +455,28 @@ describe("task run coordinator", () => {
       "cancelled"
     );
   });
+
+  it("marks restart cancellation as superseded on active nodes", async () => {
+    const coordinator = createTaskRunCoordinator({
+      openTerminal: (plan) =>
+        Promise.resolve({ panelId: `panel-${plan.taskId}` }),
+    });
+
+    const result = await coordinator.start({
+      launches: [launch("test", "test")],
+      projectRootPath: "/repo",
+      rootTaskId: "test",
+    });
+
+    expect(
+      coordinator.cancel(result.runId, { termination: "superseded" })
+    ).toMatchObject({
+      nodes: { test: { status: "cancelled" } },
+      status: "cancelled",
+    });
+    expect(coordinator.controlStatus(result.runId)?.nodes.test).toMatchObject({
+      status: "cancelled",
+      termination: "superseded",
+    });
+  });
 });

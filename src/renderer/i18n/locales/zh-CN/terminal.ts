@@ -68,6 +68,7 @@ export const terminal = {
     finishedDetailBlocked: "{{label}} · 等待前置任务，已耗时 {{duration}}",
     finishedFailed: "任务失败",
     finishedForceCancelled: "任务已强制停止",
+    finishedStopped: "任务已停止",
     finishedSuccess: "任务已完成",
     forceStop: "强制停止",
     forceStopBody:
@@ -75,7 +76,8 @@ export const terminal = {
     forceStopConfirm: "强制停止",
     forceStopTitle: "强制停止任务？",
     inputResolutionFailed: "任务仍有未完成的输入项",
-    missingRunIdentity: "任务已启动，但无法关联运行状态。",
+    missingRunIdentity:
+      "任务已启动，但未能显示运行状态。请重新运行，或打开输出查看。",
     move: "移动运行控制浮层",
     openOutput: "打开任务输出",
     openOutputFailed: "无法打开任务输出",

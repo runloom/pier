@@ -285,8 +285,8 @@ export function createTaskService({
     bindTerminalProcessController(controller) {
       terminalProcessController = controller;
     },
-    cancelRun(runId) {
-      const result = taskRuns.cancel(runId);
+    cancelRun(runId, options) {
+      const result = taskRuns.cancel(runId, options);
       if (!result) {
         return null;
       }

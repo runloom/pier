@@ -74,6 +74,7 @@ export const terminal = {
       "{{label}} · waiting on dependencies, took {{duration}}",
     finishedFailed: "Task failed",
     finishedForceCancelled: "Task force-stopped",
+    finishedStopped: "Task stopped",
     finishedSuccess: "Task finished",
     forceStop: "Force stop",
     forceStopBody:
@@ -82,7 +83,7 @@ export const terminal = {
     forceStopTitle: "Force stop task?",
     inputResolutionFailed: "The task still requires unresolved input",
     missingRunIdentity:
-      "The task started, but its running state could not be linked.",
+      "The task started, but its status couldn't be shown. Try running it again or open the output.",
     move: "Move run controls",
     openOutput: "Open task output",
     openOutputFailed: "Couldn't open task output",

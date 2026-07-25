@@ -39,10 +39,15 @@ function run(
     force?: boolean;
     mode?: TaskRunControlEntry["mode"];
     runId?: string;
+    stopRequestedAt?: number;
+    termination?: "force" | "interrupt" | "superseded";
   } = {}
 ): TaskRunControlEntry {
+  const termination =
+    options.termination ?? (options.force ? "force" : undefined);
   return {
-    mode: options.mode ?? "terminal-tab",
+    // 默认 background：与设置「后台任务完成时弹出」一致；前台任务另测静默。
+    mode: options.mode ?? "background",
     nodes: {
       test: {
         label: "Test suite",
@@ -52,7 +57,10 @@ function run(
         ...(options.exitCode === undefined
           ? {}
           : { exitCode: options.exitCode }),
-        ...(options.force ? { termination: "force" as const } : {}),
+        ...(options.stopRequestedAt === undefined
+          ? {}
+          : { stopRequestedAt: options.stopRequestedAt }),
+        ...(termination ? { termination } : {}),
       },
     },
     projectRootPath: "/repo",
@@ -112,7 +120,20 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     expect(toastRendererMock).not.toHaveBeenCalled();
   });
 
-  it("toasts a rich card once and open-output reveals the terminal panel", () => {
+  it("does not toast for foreground terminal-tab runs (strong UI feedback)", () => {
+    notifyTaskRunFinishedIfNeeded(
+      run("succeeded", { mode: "terminal-tab", runId: "fg-ok" })
+    );
+    notifyTaskRunFinishedIfNeeded(
+      run("failed", { mode: "terminal-tab", runId: "fg-fail", exitCode: 1 })
+    );
+    notifyTaskRunFinishedIfNeeded(
+      run("cancelled", { mode: "terminal-tab", runId: "fg-cancel" })
+    );
+    expect(toastRendererMock).not.toHaveBeenCalled();
+  });
+
+  it("toasts a rich card once and open-output opens background output", () => {
     const current = run("succeeded");
     seedTaskRuns([current]);
     notifyTaskRunFinishedIfNeeded(current);
@@ -129,15 +150,14 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     ]);
 
     runNotificationAction(notification, "open-output");
-    expect(revealTaskRun).toHaveBeenCalledWith(current);
-    expect(openTaskRunOutput).not.toHaveBeenCalled();
-    // toast 副本不在 NCS 历史中：按 dedupeKey 标已读
+    expect(openTaskRunOutput).toHaveBeenCalledWith(current, "Test suite");
+    expect(revealTaskRun).not.toHaveBeenCalled();
     expect(markReadByDedupeKeyMock).toHaveBeenCalledWith(
       `task-run:${current.runId}`
     );
   });
 
-  it("open-output opens background output", () => {
+  it("open-output opens background output on failure", () => {
     const current = run("failed", { mode: "background" });
     seedTaskRuns([current]);
     notifyTaskRunFinishedIfNeeded(current);
@@ -176,19 +196,58 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     });
   });
 
-  it("uses an error-severity toast for forced cancellation", () => {
-    notifyTaskRunFinishedIfNeeded(run("cancelled", { force: true }));
+  it("uses an error-severity toast for forced cancellation even after stopRequestedAt", () => {
+    notifyTaskRunFinishedIfNeeded(
+      run("cancelled", {
+        force: true,
+        runId: "run-force",
+        stopRequestedAt: 2000,
+      })
+    );
     const notification = lastToastNotification();
     expect(notification.title).toBe("Task force-stopped");
     expect(notification.severity).toBe("error");
     expect(notification.body).toBe("Test suite · ran for 42s");
   });
 
-  it("uses a neutral info severity for normal cancellation (not success)", () => {
+  it("does not notify user-requested stop (interrupt)", () => {
+    notifyTaskRunFinishedIfNeeded(
+      run("cancelled", { termination: "interrupt", runId: "run-stop" })
+    );
+    expect(toastRendererMock).not.toHaveBeenCalled();
+  });
+
+  it("does not notify user-requested stop via stopRequestedAt (panel close path)", () => {
+    notifyTaskRunFinishedIfNeeded(
+      run("cancelled", {
+        runId: "run-panel-close",
+        stopRequestedAt: 2000,
+      })
+    );
+    expect(toastRendererMock).not.toHaveBeenCalled();
+  });
+
+  it("uses a neutral info severity for unexpected cancellation", () => {
     notifyTaskRunFinishedIfNeeded(run("cancelled"));
     const notification = lastToastNotification();
     expect(notification.title).toBe("Task cancelled");
     expect(notification.severity).toBe("info");
     expect(notification.body).toBe("Test suite · ran for 42s");
+  });
+
+  it("does not notify when cancellation is a restart supersession", () => {
+    notifyTaskRunFinishedIfNeeded(
+      run("cancelled", { termination: "superseded", runId: "run-superseded" })
+    );
+    expect(toastRendererMock).not.toHaveBeenCalled();
+  });
+
+  it("still notifies unexpected cancel after a superseded run was skipped", () => {
+    notifyTaskRunFinishedIfNeeded(
+      run("cancelled", { termination: "superseded", runId: "run-a" })
+    );
+    notifyTaskRunFinishedIfNeeded(run("cancelled", { runId: "run-b" }));
+    expect(toastRendererMock).toHaveBeenCalledTimes(1);
+    expect(lastToastNotification().title).toBe("Task cancelled");
   });
 });

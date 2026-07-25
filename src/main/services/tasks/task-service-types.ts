@@ -13,6 +13,7 @@ import type {
 import type { ProcessEnvironmentService } from "../process-environment-service.ts";
 import type { SpawnBackgroundTask } from "./task-background-runner.ts";
 import type {
+  CancelTaskRunOptions,
   TaskRunCoordinatorStartResult,
   TaskRunTerminalOpenResult,
 } from "./task-run-coordinator.ts";
@@ -75,7 +76,10 @@ export interface TaskService {
   bindTerminalProcessController(
     controller: TaskTerminalProcessController | null
   ): void;
-  cancelRun(runId: string): TaskRunSnapshot | null;
+  cancelRun(
+    runId: string,
+    options?: CancelTaskRunOptions | undefined
+  ): TaskRunSnapshot | null;
   completePanel(
     panelId: string,
     exitCode: number,

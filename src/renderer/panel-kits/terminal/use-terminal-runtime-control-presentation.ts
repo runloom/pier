@@ -98,7 +98,8 @@ export function currentTaskRunsByLogicalTask(
 }
 
 function shouldPresentRun(run: TaskRunControlEntry): boolean {
-  // 终态由 toast（查看详情）承接；浮层只覆盖活跃进程控制。
+  // 浮层只覆盖活跃进程控制。
+  // 终态：前台任务靠 tab/输出；后台任务靠 task-run.finished toast（查看详情）。
   return isActiveTaskRunStatus(run.status);
 }
 
@@ -123,7 +124,8 @@ function sameRuns(
  * 运行控制浮层的唯一呈现状态机。
  *
  * 任务运行状态仍由 TaskService / taskRuns store 所有；这里仅负责退出在场管理。
- * 活跃任务显示控制条；进入终态后立即退场，由 toast（含查看详情）承接结果反馈。
+ * 活跃任务显示控制条；进入终态后立即退场。
+ * 结果反馈：前台靠面板/tab；后台由 notifyTaskRunFinishedIfNeeded 发系统消息。
  * 退出阶段冻结最后一次完整 runs，保证内容与容器作为一个整体退场。
  */
 export function useTerminalRuntimeControlPresentation(
