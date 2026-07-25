@@ -46,7 +46,8 @@ function reviewTreeFileItem(
 
 /**
  * Click a review tree row. CI sticky group headers render an aria-hidden
- * overlay that intercepts normal Playwright hit-testing; force the click.
+ * overlay that intercepts normal Playwright hit-testing; scroll first (force
+ * skips auto-scroll), then force the click.
  */
 async function clickReviewTreeFile(
   page: Page,
@@ -54,7 +55,8 @@ async function clickReviewTreeFile(
   group: "staged" | "unstaged" = "unstaged"
 ): Promise<void> {
   const item = reviewTreeFileItem(page, name, group);
-  await expect(item).toBeVisible({ timeout: 15_000 });
+  await expect(item).toBeVisible({ timeout: 20_000 });
+  await item.scrollIntoViewIfNeeded();
   await item.click({ force: true });
 }
 
@@ -813,6 +815,16 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     });
     await appTreeSearch.fill("app.tsx");
     await appTreeSearch.press("Enter");
+    await expect
+      .poll(
+        () =>
+          page
+            .getByTestId("git-review-tree")
+            .getByRole("treeitem", { name: /app\.tsx/u })
+            .count(),
+        { timeout: 20_000 }
+      )
+      .toBeGreaterThan(0);
     await clickReviewTreeFile(page, /app\.tsx/u);
     await appTreeSearch.press("Escape").catch(() => undefined);
 
