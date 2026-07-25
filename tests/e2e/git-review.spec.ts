@@ -802,8 +802,11 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
       timeout: 10_000,
     });
+    // Close search before click — sticky overlay / search chrome intercepts hits.
+    await appTreeSearch.press("Escape");
+    await expect(page.getByTestId("git-review-tree-search-bar")).toHaveCount(0);
+    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible();
     await reviewTreeFileItem(page, /app\.tsx/u).click();
-    await appTreeSearch.press("Escape").catch(() => undefined);
 
     const diffContainers = page.locator("diffs-container");
     await expect
