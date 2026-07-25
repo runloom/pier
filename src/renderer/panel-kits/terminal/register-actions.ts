@@ -6,6 +6,7 @@ import {
 import type { TerminalOperation } from "@shared/contracts/terminal.ts";
 import i18next from "i18next";
 import { Paperclip, Pencil, PenLine, Search, X } from "lucide-react";
+import { toast } from "sonner";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
@@ -98,6 +99,9 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     handler: () => {
       const panelId = activeTerminalPanelId();
       if (!panelId) {
+        // 点击激活失败时 activePanel 可能不是终端；静默返回会让用户以为
+        // 快捷键失效，给出可操作的反馈。
+        toast.error(i18next.t("terminal.composer.noActiveTerminal"));
         return;
       }
       dispatchTerminalOpenComposer(panelId);

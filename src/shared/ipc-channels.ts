@@ -81,6 +81,9 @@ export const PIER_BROADCAST = {
   PREFERENCES_CHANGED: "pier:preferences:changed",
   // 原生窗口几何变化后触发 renderer 补发 overlay / native view layout.
   WINDOW_LAYOUT_PULSE: "pier:window:layout-pulse",
+  // OS 级窗口 key-window 聚焦变化 (main → 该窗 renderer, payload WindowFocusChangedPayload).
+  // 勿用 DOM window blur/focus：原生终端 firstResponder 时 document.hasFocus() 为 false。
+  WINDOW_FOCUS_CHANGED: "pier://window:focus-changed",
   // 终端工作目录变更广播 (main → renderer).
   TERMINAL_CWD_CHANGED: "pier://terminal:cwd-changed",
   // 终端超链接激活广播 (main → renderer).

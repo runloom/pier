@@ -204,6 +204,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       expect.objectContaining({
         componentId: "pier.git.changes",
         targetGroupId: "group-a",
+        title: "repo",
       })
     );
   });

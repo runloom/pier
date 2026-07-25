@@ -102,6 +102,9 @@ function DraggablePrimaryItem({
 }) {
   const t = useT();
   const itemRef = useRef<HTMLDivElement | null>(null);
+  // 可见胶囊（内层 w-max）。外层容器带 min-width 视觉壳，宽度可能大于
+  // 可见内容；拖拽边界、障碍物规避与归一化都必须以用户看得见的胶囊为准。
+  const pillRef = useRef<HTMLDivElement | null>(null);
   const pointRef = useRef<FloatingPoint>({ x: SAFE_INSET, y: SAFE_INSET });
   const pointerInsideRef = useRef(false);
   const focusWithinRef = useRef(false);
@@ -113,9 +116,12 @@ function DraggablePrimaryItem({
     `terminal-floating:${panelId}:${id}`
   );
   const [point, setPointState] = useState(pointRef.current);
-  const itemCallbackRef = useCallback(
+  const itemCallbackRef = useCallback((element: HTMLDivElement | null) => {
+    itemRef.current = element;
+  }, []);
+  const pillCallbackRef = useCallback(
     (element: HTMLDivElement | null) => {
-      itemRef.current = element;
+      pillRef.current = element;
       overlay.ref(element);
     },
     [overlay]
@@ -147,15 +153,25 @@ function DraggablePrimaryItem({
     setPointState(next);
   }, []);
 
+  const measureItemRect = useCallback(
+    (root: HTMLElement): FloatingRect | null => {
+      const target = pillRef.current ?? itemRef.current;
+      return target ? localRect(target, root) : null;
+    },
+    []
+  );
+
   const constrainedPoint = useCallback(
     (desired: FloatingPoint): FloatingPoint => {
       const root = panelRootRef.current;
-      const item = itemRef.current;
-      if (!(root && item)) {
+      if (!root) {
         return desired;
       }
       const rootRect = root.getBoundingClientRect();
-      const itemRect = localRect(item, root);
+      const itemRect = measureItemRect(root);
+      if (!itemRect) {
+        return desired;
+      }
       const obstacleRects = obstacles
         .filter((element) => element.isConnected)
         .map((element) => localRect(element, root));
@@ -171,17 +187,19 @@ function DraggablePrimaryItem({
         obstacleRects
       );
     },
-    [obstacles, panelRootRef]
+    [measureItemRect, obstacles, panelRootRef]
   );
 
   const restoreFromNormalized = useCallback(() => {
     const root = panelRootRef.current;
-    const item = itemRef.current;
-    if (!(root && item)) {
+    if (!root) {
       return;
     }
     const rootRect = root.getBoundingClientRect();
-    const itemRect = localRect(item, root);
+    const itemRect = measureItemRect(root);
+    if (!itemRect) {
+      return;
+    }
     setPoint(
       constrainedPoint(
         pointFromNormalizedPosition(
@@ -196,48 +214,19 @@ function DraggablePrimaryItem({
         )
       )
     );
-  }, [constrainedPoint, panelRootRef, setPoint]);
-
-  useLayoutEffect(() => {
-    normalizedRef.current =
-      layout.positions[id] ?? DEFAULT_PANEL_FLOATING_POSITION;
-    restoreFromNormalized();
-  }, [id, layout.positions, restoreFromNormalized]);
-
-  useLayoutEffect(() => {
-    if (layoutRevision > 0) {
-      restoreFromNormalized();
-    }
-  }, [layoutRevision, restoreFromNormalized]);
-
-  useLayoutEffect(() => {
-    overlay.flush();
-  });
-
-  useLayoutEffect(() => {
-    const root = panelRootRef.current;
-    const item = itemRef.current;
-    if (!(root && item)) {
-      return;
-    }
-    const observer = new ResizeObserver(restoreFromNormalized);
-    observer.observe(root);
-    observer.observe(item);
-    for (const obstacle of obstacles) {
-      observer.observe(obstacle);
-    }
-    restoreFromNormalized();
-    return () => observer.disconnect();
-  }, [obstacles, panelRootRef, restoreFromNormalized]);
+  }, [constrainedPoint, measureItemRect, panelRootRef, setPoint]);
 
   const commitPoint = useCallback(
     (next: FloatingPoint) => {
       const root = panelRootRef.current;
-      const item = itemRef.current;
-      if (!(root && item)) {
+      if (!root) {
         return;
       }
       const rootRect = root.getBoundingClientRect();
+      const itemRect = measureItemRect(root);
+      if (!itemRect) {
+        return;
+      }
       const position = normalizedPositionFromPoint(
         next,
         {
@@ -246,12 +235,12 @@ function DraggablePrimaryItem({
           inset: SAFE_INSET,
           width: rootRect.width,
         },
-        localRect(item, root)
+        itemRect
       );
       normalizedRef.current = position;
       onPositionCommit(id, position);
     },
-    [id, onPositionCommit, panelRootRef]
+    [id, measureItemRect, onPositionCommit, panelRootRef]
   );
   const drag = useTerminalPanelFloatingDrag({
     constrain: constrainedPoint,
@@ -262,6 +251,49 @@ function DraggablePrimaryItem({
     panelRootRef,
     pointRef,
   });
+
+  // 拖拽会话存续期间禁止位置恢复：时长文本每秒变化会改变胶囊宽度并触发
+  // ResizeObserver，若此时按上次 commit 的归一化位置重算，会把胶囊从指针
+  // 下方弹回去。拖拽中的越界由下一次 pointermove / pointerup 的 constrain
+  // 兜底。
+  const restoreIfIdle = useCallback(() => {
+    if (drag.dragActiveRef.current) {
+      return;
+    }
+    restoreFromNormalized();
+  }, [drag.dragActiveRef, restoreFromNormalized]);
+
+  useLayoutEffect(() => {
+    normalizedRef.current =
+      layout.positions[id] ?? DEFAULT_PANEL_FLOATING_POSITION;
+    restoreIfIdle();
+  }, [id, layout.positions, restoreIfIdle]);
+
+  useLayoutEffect(() => {
+    if (layoutRevision > 0) {
+      restoreIfIdle();
+    }
+  }, [layoutRevision, restoreIfIdle]);
+
+  useLayoutEffect(() => {
+    overlay.flush();
+  });
+
+  useLayoutEffect(() => {
+    const root = panelRootRef.current;
+    const item = pillRef.current ?? itemRef.current;
+    if (!(root && item)) {
+      return;
+    }
+    const observer = new ResizeObserver(restoreIfIdle);
+    observer.observe(root);
+    observer.observe(item);
+    for (const obstacle of obstacles) {
+      observer.observe(obstacle);
+    }
+    restoreIfIdle();
+    return () => observer.disconnect();
+  }, [obstacles, panelRootRef, restoreIfIdle]);
 
   const moveBy = (dx: number, dy: number) => {
     const next = constrainedPoint({
@@ -274,7 +306,7 @@ function DraggablePrimaryItem({
 
   return (
     <div
-      className="@container pointer-events-auto absolute top-0 left-0 data-[phase=exiting]:pointer-events-none"
+      className="@container absolute top-0 left-0"
       data-dragging={drag.dragging ? "true" : "false"}
       data-floating-item={id}
       data-phase={phase}
@@ -313,9 +345,11 @@ function DraggablePrimaryItem({
       }}
     >
       <div
-        className="flex w-max max-w-full items-stretch overflow-hidden rounded-full border border-border bg-popover text-popover-foreground shadow-background/40 shadow-lg transition-[opacity,transform,box-shadow] duration-[180ms] ease-in data-[phase=exiting]:-translate-y-1 data-[phase=exiting]:scale-[0.985] data-[phase=exiting]:opacity-0 data-[dragging=true]:shadow-xl motion-reduce:transition-none"
+        className="pointer-events-auto flex w-max max-w-full items-stretch overflow-hidden rounded-full border border-border bg-popover text-popover-foreground shadow-background/40 shadow-lg transition-[opacity,transform,box-shadow] duration-[180ms] ease-in data-[phase=exiting]:pointer-events-none data-[phase=exiting]:-translate-y-1 data-[phase=exiting]:scale-[0.985] data-[phase=exiting]:opacity-0 data-[dragging=true]:shadow-xl motion-reduce:transition-none"
         data-dragging={drag.dragging ? "true" : "false"}
+        data-floating-pill={id}
         data-phase={phase}
+        ref={pillCallbackRef}
       >
         <div className="flex items-center pl-1">
           <Button

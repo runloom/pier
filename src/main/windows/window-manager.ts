@@ -14,6 +14,7 @@
  */
 import { join } from "node:path";
 import type { WindowOpenMode } from "@shared/contracts/window.ts";
+import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { app, nativeTheme } from "electron";
 import { installDetachedDevToolsHandlers } from "../devtools.ts";
 import { foregroundActivityService } from "../ipc/foreground-activity.ts";
@@ -54,6 +55,14 @@ import {
 import { destroyAppWindowForQuit } from "./window-quit-destroy.ts";
 
 const WINDOW_ID_REGEX = /^(main|w-\d+)$/;
+
+/** Push OS key-window focus to the owning renderer (tab S3 chrome, etc.). */
+function sendWindowFocusChanged(window: AppWindow, focused: boolean): void {
+  if (window.webContents.isDestroyed()) {
+    return;
+  }
+  window.webContents.send(PIER_BROADCAST.WINDOW_FOCUS_CHANGED, { focused });
+}
 
 export interface WindowBounds {
   height?: number;
@@ -266,6 +275,7 @@ class WindowManager {
     });
     window.host.on("blur", () => {
       terminalFocusCoordinator.setWindowFocused(window, false, "window-blur");
+      sendWindowFocusChanged(window, false);
     });
     // BrowserWindow resignKey 时 Ghostty 库的 windowDidResignKey 会把每个 surface
     // 的 core.setFocus(false), cursor 变空心、shell 不接 stdin. becomeKey 只在
@@ -277,6 +287,7 @@ class WindowManager {
     window.host.on("focus", () => {
       this.rememberFocusedWindow(id);
       terminalFocusCoordinator.setWindowFocused(window, true, "window-focus");
+      sendWindowFocusChanged(window, true);
       const context = findWindowContext(window);
       if (context) {
         for (const cb of this.onFocusCallbacks) {
@@ -293,6 +304,7 @@ class WindowManager {
     if (isDev) {
       installDetachedDevToolsHandlers(window, () => {
         terminalFocusCoordinator.setWindowFocused(window, true, "window-focus");
+        sendWindowFocusChanged(window, true);
       });
     }
 
@@ -423,6 +435,7 @@ class WindowManager {
     this.rememberFocusedWindow(id);
     w.focus();
     terminalFocusCoordinator.setWindowFocused(w, true, "window-focus");
+    sendWindowFocusChanged(w, true);
   }
 
   close(id: string): Promise<WindowCloseResult> {

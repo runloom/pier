@@ -7,6 +7,7 @@ import {
 } from "@shared/contracts/git-review.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { GIT_CHANGES_PANEL_ID } from "../manifest.ts";
+import { gitChangesPanelTitle } from "./git-changes-tab-title.ts";
 import { pluginText } from "./git-plugin-text.ts";
 
 function reviewTargetKey(target: GitReviewTarget): string {
@@ -61,6 +62,7 @@ export function openGitChangesPanel(input: {
     const existingInGroup = preferredGroupId
       ? matches.find((instance) => instance.groupId === preferredGroupId)
       : undefined;
+    const title = gitChangesPanelTitle(source);
     if (existingInGroup) {
       const focusResult = input.pluginContext.panels.openInstance({
         componentId: GIT_CHANGES_PANEL_ID,
@@ -70,7 +72,7 @@ export function openGitChangesPanel(input: {
         ...(existingInGroup.groupId
           ? { targetGroupId: existingInGroup.groupId }
           : {}),
-        title: pluginText(input.pluginContext, "reviewChangesTitle", "Changes"),
+        title,
       });
       if (focusResult.kind !== "targetGroupMissing") {
         return;
@@ -84,7 +86,8 @@ export function openGitChangesPanel(input: {
         // Refresh: focus-path ghosts must not poison collision checks.
         const liveInstances =
           input.pluginContext.panels.listInstances(GIT_CHANGES_PANEL_ID);
-        const canonicalId = `${GIT_CHANGES_PANEL_ID}:${targetGroupId}:${source.contextId}:${reviewTargetKey(source.target)}`;
+        const groupKey = targetGroupId ?? "active";
+        const canonicalId = `${GIT_CHANGES_PANEL_ID}:${groupKey}:${source.contextId}:${reviewTargetKey(source.target)}`;
         const instanceId = liveInstances.some(
           (instance) => instance.id === canonicalId
         )
@@ -95,12 +98,8 @@ export function openGitChangesPanel(input: {
           context: input.panelContext,
           instanceId,
           params: { source },
-          targetGroupId,
-          title: pluginText(
-            input.pluginContext,
-            "reviewChangesTitle",
-            "Changes"
-          ),
+          ...(targetGroupId ? { targetGroupId } : {}),
+          title,
         });
       },
       pluginContext: input.pluginContext,
@@ -131,7 +130,7 @@ function sameReviewSource(input: unknown, expected: GitReviewScope): boolean {
 
 function openInCurrentGroup(input: {
   getGroupId: () => string | null;
-  open: (groupId: string) => PluginPanelInstanceOpenResult;
+  open: (groupId: null | string) => PluginPanelInstanceOpenResult;
   pluginContext: RendererPluginContext;
 }): void {
   const groupId = input.getGroupId();
@@ -148,6 +147,10 @@ function openInCurrentGroup(input: {
     ) {
       return;
     }
+  }
+  // 命令面板等无 status-item getGroupId 时：交给宿主 active group 落点。
+  if (input.open(null).kind === "opened") {
+    return;
   }
   input.pluginContext.notifications.error(
     pluginText(

@@ -124,9 +124,41 @@ function ActiveAppDialog({
     );
   }
 
-  // 三选(保存/不保存/取消):macOS 桌面横排 —— alt | 取消 | confirm。
+  // 三选:默认 macOS 保存态 alt | 取消 | confirm；也可 confirm | alt | 取消。
   // choice 一律 default 宽:三键 + 带文件名标题放不进 sm。
   if (dialog.kind === "choice") {
+    const cancelLabel = dialog.cancelLabel ?? t("dialog.cancel");
+    const altButton = (
+      <AlertDialogAction
+        key="alt"
+        onClick={() => dialog.resolve("alt")}
+        variant={isDestructive ? "destructive" : "outline"}
+      >
+        {dialog.altLabel}
+      </AlertDialogAction>
+    );
+    const cancelButton = (
+      <AlertDialogCancel
+        key="cancel"
+        onClick={() => dialog.resolve("cancel")}
+        variant="outline"
+      >
+        {cancelLabel}
+      </AlertDialogCancel>
+    );
+    const confirmButton = (
+      <AlertDialogAction
+        key="confirm"
+        onClick={() => dialog.resolve("confirm")}
+        variant="default"
+      >
+        {dialog.confirmLabel ?? t("dialog.ok")}
+      </AlertDialogAction>
+    );
+    const footerButtons =
+      dialog.buttonOrder === "confirm-alt-cancel"
+        ? [confirmButton, altButton, cancelButton]
+        : [altButton, cancelButton, confirmButton];
     return (
       <AlertDialog
         onOpenChange={(nextOpen) => {
@@ -141,26 +173,7 @@ function ActiveAppDialog({
           terminalOverlayId={APP_DIALOG_OVERLAY_ID}
         >
           <DialogCopy body={dialog.body} title={dialog.title} />
-          <AlertDialogFooter>
-            <AlertDialogAction
-              onClick={() => dialog.resolve("alt")}
-              variant={isDestructive ? "destructive" : "outline"}
-            >
-              {dialog.altLabel}
-            </AlertDialogAction>
-            <AlertDialogCancel
-              onClick={() => dialog.resolve("cancel")}
-              variant="outline"
-            >
-              {dialog.cancelLabel ?? t("dialog.cancel")}
-            </AlertDialogCancel>
-            <AlertDialogAction
-              onClick={() => dialog.resolve("confirm")}
-              variant="default"
-            >
-              {dialog.confirmLabel ?? t("dialog.ok")}
-            </AlertDialogAction>
-          </AlertDialogFooter>
+          <AlertDialogFooter>{footerButtons}</AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
     );

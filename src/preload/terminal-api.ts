@@ -21,6 +21,8 @@ export const terminalApi: TerminalAPI = {
       .invoke("pier:terminal:close", panelId, options)
       .then(() => undefined),
   create: (args) => ipcRenderer.invoke("pier:terminal:create", args),
+  cursorVisible: (panelId) =>
+    ipcRenderer.invoke("pier:terminal:cursor-visible", panelId),
   debugSnapshot: (args) =>
     ipcRenderer.invoke("pier:terminal:debug-snapshot", args),
   endSearch: (panelId) =>

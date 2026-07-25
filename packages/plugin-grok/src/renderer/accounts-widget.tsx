@@ -23,7 +23,11 @@ import {
   QuotaGroup,
 } from "./account-display.tsx";
 import { AccountPicker } from "./account-picker.tsx";
-import { formatAccountError, type Translate } from "./format-account-error.ts";
+import {
+  formatAccountError,
+  isTransientUsageError,
+  type Translate,
+} from "./format-account-error.ts";
 import { useGrokAccountsSnapshot } from "./use-accounts-snapshot.ts";
 import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
 
@@ -91,6 +95,7 @@ export function AccountsWidget({
             t("pier.grok.accounts.settings.usageFailed", "Usage update failed"),
           t
         )}
+        errorTransient={isTransientUsageError(usage.error)}
         language={context.i18n.language()}
         loading={false}
         t={t}

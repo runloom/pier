@@ -45,6 +45,60 @@ export function fileTreeScrollElement(
   return null;
 }
 
+/** Resolve the virtualized scroller from any node inside the tree shadow root. */
+export function fileTreeScrollElementFromNode(
+  node: Element | null | undefined
+): HTMLElement | null {
+  if (!node) {
+    return null;
+  }
+  const root = node.getRootNode();
+  if (root instanceof ShadowRoot && root.host instanceof HTMLElement) {
+    return fileTreeScrollElement(root.host);
+  }
+  if (node instanceof HTMLElement) {
+    return fileTreeScrollElement(
+      node.closest<HTMLElement>(FILE_TREE_HOST_SELECTOR)
+    );
+  }
+  return null;
+}
+
+/**
+ * Pin the tree scroller around a context-menu open.
+ *
+ * @pierre/trees right-click focuses the row, then a layout effect may call
+ * scrollFocusedRowIntoView with stickyOverlayHeight as topInset. Rows that sit
+ * under sticky group headers (git review tree) get scrolled even though the
+ * pointer is already on them — the scrollbar jumps. Restore the pre-open
+ * scrollTop after that layout work, before paint when possible.
+ */
+export function pinFileTreeScrollDuringContextMenu(
+  anchorElement: Element | null | undefined
+): void {
+  const scrollElement = fileTreeScrollElementFromNode(anchorElement);
+  if (!scrollElement) {
+    return;
+  }
+
+  const scrollTop = scrollElement.scrollTop;
+  const restore = () => {
+    if (Math.abs(scrollElement.scrollTop - scrollTop) > 0.5) {
+      scrollElement.scrollTop = scrollTop;
+    }
+  };
+
+  // Context-menu onOpen runs in a layout effect *before* the focus/scroll
+  // layout effect in the same commit. Microtask runs after all layout effects.
+  queueMicrotask(restore);
+  // Close() schedules another render; cover two frames for residual jostle.
+  const schedule = getAnimationFrameScheduler();
+  schedule(() => {
+    restore();
+    schedule(restore);
+  });
+}
+
 function fileTreeRows(host: HTMLElement | null): HTMLElement[] {
   const shadowRoot = host?.shadowRoot;
   if (!shadowRoot) {

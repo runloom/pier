@@ -22,6 +22,8 @@ export const terminal = {
   composer: {
     attachFailed: "无法添加文件",
     attachFile: "添加文件",
+    blockedUnfocused: "会话输入框未聚焦",
+    blockedWaiting: "会话等待你确认",
     invalidAttachmentRef: "存在无效的附件引用",
     keyHint: "⇧⏎ 换行 · {{attach}} 添加文件 · Esc 关闭",
     label: "增强输入",
@@ -33,6 +35,8 @@ export const terminal = {
     mentionEmptyProjectTitle: "未打开项目",
     mentionNoResults: "没有匹配的文件",
     mentionPlaceholder: "提及文件或文件夹…",
+    noActiveTerminal: "请先切换到目标终端标签页，再打开增强输入。",
+    sendStateUnknown: "无法确认会话输入状态，发送已取消。请重试。",
     pasteInsertAnyway: "仍插入正文",
     pathUnreadable: "无法读取该文件路径",
     placeholder: "在此输入，发送到终端中的会话",

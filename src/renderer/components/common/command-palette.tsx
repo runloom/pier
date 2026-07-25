@@ -22,6 +22,7 @@ import {
 } from "@/components/common/command-palette-action-rows.tsx";
 import {
   isQuickPickItemSelectable,
+  isQuickPickLoadingEmpty,
   QuickPickView,
   quickPickItems,
   quickPickPresentedItems,
@@ -374,6 +375,7 @@ export function CommandPalette() {
   const commandContent: ReactNode =
     presentedMode === "quick-pick" && presentedQuickPick ? (
       <QuickPickView
+        loadingLabel={t("commandPalette.loading")}
         onAccept={handleAcceptQuickPickItem}
         query={normalizedQuery}
         quickPick={presentedQuickPick}
@@ -436,11 +438,18 @@ export function CommandPalette() {
         ) : null}
         {quickPick?.onAcceptQuery ? null : (
           <CommandList className="max-h-[min(60vh,520px)]" ref={listRef}>
-            <CommandEmpty>
-              {presentedMode === "quick-pick"
-                ? t("commandPalette.emptyQuickPick")
-                : t("commandPalette.empty")}
-            </CommandEmpty>
+            {presentedMode === "quick-pick" &&
+            presentedQuickPick &&
+            isQuickPickLoadingEmpty(
+              presentedQuickPick,
+              normalizedQuery
+            ) ? null : (
+              <CommandEmpty>
+                {presentedMode === "quick-pick"
+                  ? t("commandPalette.emptyQuickPick")
+                  : t("commandPalette.empty")}
+              </CommandEmpty>
+            )}
             {commandContent ?? actionContent}
           </CommandList>
         )}

@@ -220,7 +220,10 @@ describe("buildGitReviewTreeItemMenuFlags", () => {
         fileRef: stagedRef,
       })
     ).toEqual({
+      allDiscardTrackedDeleted: false,
       discardPaths: [],
+      discardTrackedPaths: [],
+      discardUntrackedPaths: [],
       hasConflict: false,
       hasStaged: true,
       hasUnstaged: false,
@@ -237,7 +240,10 @@ describe("buildGitReviewTreeItemMenuFlags", () => {
         fileRef: unstagedRef,
       })
     ).toEqual({
+      allDiscardTrackedDeleted: false,
       discardPaths: ["a.ts"],
+      discardTrackedPaths: ["a.ts"],
+      discardUntrackedPaths: [],
       hasConflict: false,
       hasStaged: false,
       hasUnstaged: true,
@@ -250,7 +256,10 @@ describe("buildGitReviewTreeItemMenuFlags", () => {
   it("ORs slot groups when fileRef is missing (directory)", () => {
     expect(buildGitReviewTreeItemMenuFlags({ entry: halfStagedEntry })).toEqual(
       {
+        allDiscardTrackedDeleted: false,
         discardPaths: ["a.ts"],
+        discardTrackedPaths: ["a.ts"],
+        discardUntrackedPaths: [],
         hasConflict: false,
         hasStaged: true,
         hasUnstaged: true,
@@ -277,13 +286,41 @@ describe("buildGitReviewTreeItemMenuFlags", () => {
         ],
       })
     ).toEqual({
-      discardPaths: ["a.ts"],
+      allDiscardTrackedDeleted: false,
+      discardPaths: ["a.ts", "dir/b.ts"],
+      discardTrackedPaths: ["a.ts"],
+      discardUntrackedPaths: ["dir/b.ts"],
       hasConflict: false,
       hasStaged: true,
       hasUnstaged: true,
       stagePaths: ["a.ts", "dir/b.ts"],
       unstagePaths: ["a.ts"],
       unstagedStatus: "modified",
+    });
+  });
+
+  it("includes untracked added files in discard paths", () => {
+    expect(
+      buildGitReviewTreeItemMenuFlags({
+        fileRef: {
+          entryKey: "ek:new.ts",
+          group: "unstaged",
+          path: "new.ts",
+          sectionKey: "sec:u:new",
+          status: "added",
+        },
+      })
+    ).toEqual({
+      allDiscardTrackedDeleted: false,
+      discardPaths: ["new.ts"],
+      discardTrackedPaths: [],
+      discardUntrackedPaths: ["new.ts"],
+      hasConflict: false,
+      hasStaged: false,
+      hasUnstaged: true,
+      stagePaths: ["new.ts"],
+      unstagePaths: [],
+      unstagedStatus: "added",
     });
   });
 });

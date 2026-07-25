@@ -67,6 +67,11 @@ export interface NativeAddon {
   /** NSApp.orderedWindows windowNumbers, front → back. Optional. */
   orderedWindowNumbers?(): number[];
   performTerminalBindingAction(panelId: string, action: string): boolean;
+  /**
+   * TUI 输入聚焦探针：读应用设置的 DECTCEM(?25) 光标模式位。
+   * 返回 1=visible，0=hidden，-1=surface 不存在（调用方映射 unknown）。
+   */
+  readCursorVisible(panelId: string): number;
   readSelectionText(panelId: string): string | null;
   /**
    * 孤儿清理:关掉该 window 下不在 activeIds 集合的 terminal NSView. C 方案

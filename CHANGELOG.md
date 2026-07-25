@@ -44,6 +44,43 @@
   时在 paste 文本后注入的 Return 键补上 `text="\\r"` 与
   `unshifted_codepoint`，避免 bracketed paste 后 synthetic keycode 单独
   不足以触发 TUI 提交。
+- **增强输入 Enter 仍被部分 agent TUI 吞掉（paste 与回车同批到达）。**
+  `submit: true` 时 paste 文本与合成 Return 之间加入 settle 延迟，把两次
+  写入拆成 TUI 的两次 stdin read，避免其输入状态机仍停在 bracketed paste
+  处理中吞掉回车（codex#28167 同款，cursor-agent 实测复现）；增强输入
+  空草稿透传的 Enter 同步补上 `text="\\r"`。
+- **终端点击激活失败可观测 + ⌘⇧I 无目标时有反馈。** main 侧
+  `acceptNativeFocusIntent` 拒绝（not-ready/stale/hidden）写入 lastError，
+  终端 debug 窗口可见；增强输入快捷键解析不到目标终端时 toast 提示先切换
+  到目标终端标签页，不再静默。
+- **打开增强输入瞬间向 TUI 发瞬时 focus-out，导致部分 agent 输入框失焦、
+  Enter 不提交。** `applyTerminalWindowState` 原先先移交 first responder 再挂
+  hostCursorHidden，转场间隙 surface 派生出 focused=false 并发出 `ESC[O`；
+  cursor-agent 等依赖 mode 1004 上报的 TUI 输入框失焦后不会随随后的
+  `ESC[I` 恢复，表现为 paste 进框但回车不提交。转场顺序改为按方向选择：
+  打开浮层先挂 hidden 再移交 first responder，关闭浮层反之；ghostty focus
+  改按逻辑键盘归属（hostKeyboardActive）派生，消除 FR 迁移竞态，全程零
+  focus 事件。另新增 `PIER_TERMINAL_DEBUG_LOG=1|all` 环境变量开启
+  TerminalDebugLog（input/lifecycle 等通道）用于输入链路诊断。
+- **crush 等 TUI 输入框失焦时，切 tab / 增强输入发送被静默丢弃。** 新增
+  ghostty patch `0104-cursor-visibility-probe`：`ghostty_surface_cursor_visible`
+  只读探针暴露应用设置的 DECTCEM(?25) 光标模式位（现代 TUI 输入失焦即藏
+  光标）。renderer 新增 `ensureTuiInputFocus` 恢复原语：探针三态
+  （visible/hidden/unknown，unknown 禁止当作失焦）+ agent-catalog 白名单
+  `inputFocusKey`（crush=Tab，已源码验证确定性）+ per-panel 互斥（防 toggle
+  双击）+ waiting 态跳过；在 tab 激活、点终端内容、增强输入打开三个触发点
+  自动恢复 TUI 输入聚焦，为后续多 agent 调度注入提供「输入可达性」基础。
+- **增强输入提交门禁：TUI 无可输入的聚焦内容时拒绝提交，且阻断态前置为
+  常驻 UI。** activity waiting（权限确认等 dialog 态，响应式）与
+  cursor-visible 探针失焦（500ms 轮询，busy 态不探不注、unknown 不阻断、
+  与白名单同口径只对声明 `inputFocusKey` 的 agent 启用、后台 tab 停轮询）
+  都会使发送按钮禁用、回车不生效（含空草稿 Enter 透传同口径截住），并在
+  发送按钮上方以受控 tooltip 常开展示精简原因（非 hover，复用
+  @pier/ui/tooltip 能力）；探针恢复可见即自动解除。发送前再经
+  `ensureTuiInputFocus` 最终确认（crush 失焦透传 Tab 恢复后送达）；确认
+  失败且 UI 无法自解释时 toast 反馈并保留草稿，不再静默失败。发送链路
+  防交错：renderer in-flight 守卫 + main 按 panel 串行发送队列，settle
+  窗口内双击/键重复不会把两条消息揉成一团。
 - **终端右键去掉「增强输入添加文件」。** 添加文件保留增强输入内回形针与
   ⌘⇧A；右键只留「切换增强输入」，避免入口重复。
 

@@ -49,6 +49,17 @@ export interface AgentCatalogEntry {
   homepageUrl?: string;
   iconId?: string;
   id: AgentKind;
+  /**
+   * TUI 输入框失焦时的恢复键（经 sendKeyPress 透传）。仅在逐一验证过
+   * 「硬件光标可见性 ⇔ 输入聚焦」的 agent 上声明：cursor-visible 探针
+   * 确认失焦时才发送，此时该键必须是确定性的「聚焦输入框」动作
+   * （crush: Tab 在 chat/main 态必定 Focus 编辑器）。未声明 = 不做自动恢复。
+   */
+  inputFocusKey?: {
+    keycode: number;
+    mods?: number | undefined;
+    text?: string | undefined;
+  };
   label: string;
   launchCmd: string;
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>;

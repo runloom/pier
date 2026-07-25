@@ -7,6 +7,7 @@
 相关：
 
 - 附件契约基线：[`2026-07-21-rich-input-attachments-design.md`](./2026-07-21-rich-input-attachments-design.md)（发送序列化、`[#n]`、附件轨仍有效；本文修订其「非目标」中与编辑器 / `@` 冲突的条目）
+- TUI 输入聚焦模型：[`2026-07-24-tui-input-focus-model.md`](./2026-07-24-tui-input-focus-model.md)（cursor-visible 探针、白名单恢复、提交门禁、原生 focus 转场两个不变量）
 - 调研结论：Cursor App 3.12 / ChatGPT·Codex App 26.x 对照（会话内确认清单）
 - 能力边界：[`2026-06-25-ai-workbench-capability-scorecard.md`](./2026-06-25-ai-workbench-capability-scorecard.md)
 

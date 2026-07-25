@@ -2,6 +2,7 @@ export const commandPalette = {
   title: "Command Palette",
   empty: "No matching command",
   emptyQuickPick: "No matching items",
+  loading: "Loading…",
   inputFailed: "Unable to Submit Input",
   searchResults: "Results",
   agents: {

@@ -140,7 +140,7 @@ index a3acb5917de61ee8283f12fe5a73282437cfcfab..3b9a14bed67c25109e2303259e9911a6
  		this.#controller.add(path);
  	}
 diff --git a/dist/render/FileTreeView.js b/dist/render/FileTreeView.js
-index 3d02080ad553347e7fe95e261c993b607b4134c2..6946a1e63bdc1aec8a8158767f3c12f23b9cda94 100644
+index 3d02080ad553347e7fe95e261c993b607b4134c2..badd8788f67c0f70c94d8c0e81cf662f1c196110 100644
 --- a/dist/render/FileTreeView.js
 +++ b/dist/render/FileTreeView.js
 @@ -3,7 +3,7 @@ import { createFileTreeIconResolver } from "./iconResolver.js";
@@ -188,7 +188,22 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..6946a1e63bdc1aec8a8158767f3c12f2
  		}),
  		decorationLaneEnabled ? /* @__PURE__ */ jsx("div", {
  			"data-item-section": "decoration",
-@@ -1051,7 +1050,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -704,9 +703,12 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+ 		const item = controller.getItem(targetPath);
+ 		if (item == null) return;
+ 		const anchorButton = getTriggerAnchorButton(targetPath);
++		// Pin scroll for every menu open. focusPath → scrollFocusedRowIntoView uses
++		// stickyOverlayHeight as topInset and jumps the scroller when the row sits in
++		// the sticky occlusion band (common in git review trees with stickyFolders).
++		const scrollElement = scrollRef.current;
++		preserveStickyKeyboardFocusAtScrollTop(targetPath, scrollElement?.scrollTop ?? null);
+ 		if (anchorButton?.dataset.fileTreeStickyRow === "true") {
+-			const scrollElement = scrollRef.current;
+-			preserveStickyKeyboardFocusAtScrollTop(targetPath, scrollElement?.scrollTop ?? null);
+ 			domFocusOwnerRef.current = true;
+ 			setActiveItemPath((previousPath) => previousPath === targetPath ? previousPath : targetPath);
+ 		}
+@@ -1051,7 +1053,7 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  			event.stopPropagation();
  			return;
  		}
@@ -197,7 +212,7 @@ index 3d02080ad553347e7fe95e261c993b607b4134c2..6946a1e63bdc1aec8a8158767f3c12f2
  			if (event.key === "Escape") {
  				restoreTreeFocusAfterSearchCloseRef.current = false;
  				restoreTreeFocusViewportOffsetRef.current = null;
-@@ -1692,15 +1691,20 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
+@@ -1692,15 +1694,20 @@ function FileTreeView({ composition, controller, gitStatusByPath, ignoredGitDire
  			setActiveItemPath((previousPath) => previousPath === actionTargetPath ? previousPath : actionTargetPath);
  			setLastContextMenuInteraction("focus");
  		}
