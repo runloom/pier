@@ -25,16 +25,22 @@ export function reviewNavigationKey(
 }
 
 /**
- * 导航成功只接受 ready 正文（loaded document 已投影）。
- * loading 占位可见不算完成——对齐 DiffsHub/Cursor：内容就绪后再确认定位。
+ * 导航成功只接受已进 CodeView 的真成员（loaded 正文；error 说明）。
+ * 未 materialize 的 entry 不在列表——对齐 DiffsHub：内容就绪后再 scroll。
  */
 export function isReviewNavigationContentReady(
   resource: GitReviewDocumentResource | undefined
-): resource is Extract<GitReviewDocumentResource, { kind: "loaded" }> {
-  return resource?.kind === "loaded";
+): resource is Extract<
+  GitReviewDocumentResource,
+  { kind: "loaded" | "error" }
+> {
+  return resource?.kind === "loaded" || resource?.kind === "error";
 }
 
-/** loading 占位 cacheKey：允许保留列表身份，但禁止作为导航 scroll 目标。 */
+/**
+ * 历史 placeholder cacheKey 或未投影 id：禁止作为 scroll 目标。
+ * 终态投影不再产生 git-review-placeholder: 前缀。
+ */
 export function isReviewPlaceholderCacheKey(
   cacheKey: string | undefined
 ): boolean {
@@ -44,10 +50,7 @@ export function isReviewPlaceholderCacheKey(
 }
 
 /**
- * 允许 scroll 的 ready 内容：
- * - 当前 loader 已 loaded；或
- * - 投影已是非 placeholder（含刷新暂留的上一代 ready 正文）
- * 空占位一律不 scroll。
+ * 允许 scroll：loader 已 loaded/error 且投影已有该 section 的真 cacheKey。
  */
 export function shouldScrollReviewNavigation(options: {
   readonly projectedCacheKey: string | undefined;
@@ -56,10 +59,7 @@ export function shouldScrollReviewNavigation(options: {
   if (isReviewPlaceholderCacheKey(options.projectedCacheKey)) {
     return false;
   }
-  return (
-    isReviewNavigationContentReady(options.resource) ||
-    options.projectedCacheKey !== undefined
-  );
+  return isReviewNavigationContentReady(options.resource);
 }
 
 export function findReviewNavigationTarget(
@@ -71,26 +71,46 @@ export function findReviewNavigationTarget(
     return null;
   }
   if (sectionKey !== undefined) {
-    if (
-      !resource.document.sections.some(
-        (candidate) => candidate.sectionKey === sectionKey
-      )
+    if (resource.kind === "loaded") {
+      if (
+        !resource.document.sections.some(
+          (candidate) => candidate.sectionKey === sectionKey
+        )
+      ) {
+        return null;
+      }
+    } else if (
+      !resource.entry.renderSlots.some((slot) => slot.sectionKey === sectionKey)
     ) {
       return null;
     }
     const cacheKey = projectedCacheKeys.get(sectionKey);
-    return cacheKey === undefined ? null : { cacheKey, sectionId: sectionKey };
+    return cacheKey === undefined || isReviewPlaceholderCacheKey(cacheKey)
+      ? null
+      : { cacheKey, sectionId: sectionKey };
   }
-  const section = resource.document.sections.find((candidate) =>
+  if (resource.kind === "loaded") {
+    const section = resource.document.sections.find((candidate) =>
+      projectedCacheKeys.has(candidate.sectionKey)
+    );
+    if (!section) {
+      return null;
+    }
+    const cacheKey = projectedCacheKeys.get(section.sectionKey);
+    return cacheKey === undefined || isReviewPlaceholderCacheKey(cacheKey)
+      ? null
+      : { cacheKey, sectionId: section.sectionKey };
+  }
+  const slot = resource.entry.renderSlots.find((candidate) =>
     projectedCacheKeys.has(candidate.sectionKey)
   );
-  if (!section) {
+  if (!slot) {
     return null;
   }
-  const cacheKey = projectedCacheKeys.get(section.sectionKey);
-  return cacheKey === undefined
+  const cacheKey = projectedCacheKeys.get(slot.sectionKey);
+  return cacheKey === undefined || isReviewPlaceholderCacheKey(cacheKey)
     ? null
-    : { cacheKey, sectionId: section.sectionKey };
+    : { cacheKey, sectionId: slot.sectionKey };
 }
 
 export function isReviewNavigationTerminal(

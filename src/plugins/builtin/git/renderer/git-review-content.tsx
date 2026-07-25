@@ -419,9 +419,10 @@ function ReviewDocumentsComponent({
   );
   const handleRenderItemError = useCallback(
     (id: string, error: Error | null) => {
-      updateRenderItemError(viewState.generation, id, error);
+      // 终态：仅 settled 后的 parse 错误进失败面，避免 materialize/stage 闪错。
+      updateRenderItemError(viewState.generation, id, error, viewState.settled);
     },
-    [updateRenderItemError, viewState.generation]
+    [updateRenderItemError, viewState.generation, viewState.settled]
   );
   const { options: viewOptions, setOptions: setViewOptions } =
     useReviewViewOptions();

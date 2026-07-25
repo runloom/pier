@@ -224,10 +224,27 @@ describe("Review navigation verification", () => {
 });
 
 describe("Review navigation content readiness", () => {
-  it("does not scroll while projection is still a loading placeholder", () => {
+  it("does not scroll until loader member is loaded/error (end-state)", () => {
     expect(
       shouldScrollReviewNavigation({
         projectedCacheKey: "git-review-placeholder:section:1",
+        resource: {
+          entry: {
+            entryKey: "entry:1",
+            oldPaths: [],
+            path: "a.ts",
+            renderSlots: [],
+            status: "modified",
+          },
+          kind: "loading",
+          operationId: "op-1",
+        },
+      })
+    ).toBe(false);
+    // 即使投影残留旧 cacheKey，loading 也不得 scroll（终态禁止假就绪）。
+    expect(
+      shouldScrollReviewNavigation({
+        projectedCacheKey: "document:1:section:1",
         resource: {
           entry: {
             entryKey: "entry:1",
@@ -245,6 +262,11 @@ describe("Review navigation content readiness", () => {
       shouldScrollReviewNavigation({
         projectedCacheKey: "document:1:section:1",
         resource: {
+          document: {
+            kind: "ok",
+            revision: "r1",
+            sections: [],
+          },
           entry: {
             entryKey: "entry:1",
             oldPaths: [],
@@ -252,14 +274,13 @@ describe("Review navigation content readiness", () => {
             renderSlots: [],
             status: "modified",
           },
-          kind: "loading",
-          operationId: "op-1",
+          kind: "loaded",
         },
       })
     ).toBe(true);
   });
 
-  it("treats only loaded documents as navigation-ready content", () => {
+  it("treats only loaded/error documents as navigation-ready content", () => {
     expect(isReviewNavigationContentReady(undefined)).toBe(false);
     expect(
       isReviewNavigationContentReady({

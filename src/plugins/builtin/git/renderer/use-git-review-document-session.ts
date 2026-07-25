@@ -27,8 +27,8 @@ import {
 import { GitReviewDocumentLoader } from "./git-review-document-loader.ts";
 import {
   EMPTY_DOCUMENT_VIEW_STATE,
+  isCodeViewMemberResource,
   type PendingReviewAnchor,
-  projectReviewDocumentResource,
   projectReviewDocuments,
   type ReviewDocumentProjection,
   type ReviewDocumentViewState,
@@ -264,9 +264,12 @@ export function useGitReviewDocumentSession(options: {
     const initialViewState = controller.initialViewState();
     // 真资源只在 controller；UI viewState 仅 meta。
     const initialSnapshot = controller.snapshot(loader.getRetainedEntryKeys());
-    // 金标准：代际接受时一次投全量轻量槽；同代只 sparse 正文更新，绝不因 load 改拓扑。
+    // 终态：CodeView 只收 loaded/error 真成员；idle 不进列表。
     const initialProjection = projectReviewDocuments(
-      initialSnapshot,
+      {
+        ...initialSnapshot,
+        resources: initialSnapshot.resources.filter(isCodeViewMemberResource),
+      },
       context,
       projectionLocaleRef.current
     );
@@ -305,6 +308,12 @@ export function useGitReviewDocumentSession(options: {
       controller.initialFailureChanges()
     );
     const resourceByEntryKey = new Map(initialResourceByEntryKey);
+    let previousMemberIds = new Set(
+      initialProjection.items.map((item) => item.id)
+    );
+    const previousCacheKeys = new Map(
+      initialProjection.items.map((item) => [item.id, item.cacheKey] as const)
+    );
     const sync = (change: Parameters<typeof controller.apply>[0]) => {
       const protectedKey = generationCallbacksRef.current.getSelectedEntryKey();
       const next = controller.apply(change, protectedKey);
@@ -316,7 +325,7 @@ export function useGitReviewDocumentSession(options: {
         resourceByEntryKey.set(resource.entry.entryKey, resource);
       }
       const retainedEntryKeys = loader.getRetainedEntryKeys();
-      // demand 预取覆盖只服务 seed/window/lookahead；CodeView 成员始终=全量轻量槽。
+      // demand 预取覆盖 seed/window/lookahead；CodeView 成员=已 materialize 集合。
       const prefetchLookup = new Map<string, GitReviewDocumentResource>();
       for (const entryKey of demandPrefetchEntryKeysRef.current) {
         const resource = resourceByEntryKey.get(entryKey);
@@ -341,56 +350,53 @@ export function useGitReviewDocumentSession(options: {
         demandPrefetchEntryKeysRef.current = prefetchSet;
         setDemandPrefetchVersion((value) => value + 1);
       }
-      // 同代拓扑冻结：只 sparse update 已变化 entry 的正文/占位 cacheKey。
-      const itemUpdates = next.changedResources.flatMap(
-        (resource) =>
-          projectReviewDocumentResource(
-            resource,
-            context,
-            projectionLocaleRef.current
-          ).items
+      // 终态：按当前全量成员重建投影（允许拓扑随 materialize 增长，禁止假槽）。
+      const memberResources = entryKeysInOrder.flatMap((entryKey) => {
+        const resource = resourceByEntryKey.get(entryKey);
+        return resource && isCodeViewMemberResource(resource) ? [resource] : [];
+      });
+      const nextProjection = projectReviewDocuments(
+        {
+          resources: memberResources,
+          retainedEntryKeys,
+          settled: next.settled,
+        },
+        context,
+        projectionLocaleRef.current
       );
-      if (itemUpdates.length > 0) {
-        for (const item of itemUpdates) {
-          itemCacheKeysRef.current.set(item.id, item.cacheKey);
-        }
-        generationCallbacksRef.current.recordLatestItemUpdates(itemUpdates);
+      // 稀疏 update 仅针对已在 handle 中的 id；新成员靠 React items 拓扑提交。
+      const contentUpdates = nextProjection.items.filter(
+        (item) =>
+          previousMemberIds.has(item.id) &&
+          previousCacheKeys.get(item.id) !== item.cacheKey
+      );
+      const membershipChanged =
+        nextProjection.items.length !== previousMemberIds.size ||
+        nextProjection.items.some((item) => !previousMemberIds.has(item.id));
+      previousMemberIds = new Set(nextProjection.items.map((item) => item.id));
+      previousCacheKeys.clear();
+      for (const item of nextProjection.items) {
+        previousCacheKeys.set(item.id, item.cacheKey);
+        itemCacheKeysRef.current.set(item.id, item.cacheKey);
+      }
+      setProjection(nextProjection);
+      if (contentUpdates.length > 0) {
+        generationCallbacksRef.current.recordLatestItemUpdates(contentUpdates);
         generationCallbacksRef.current.notifyProjectionChanged(
-          itemUpdates.map((item) => item.id)
+          contentUpdates.map((item) => item.id)
         );
-        // 稀疏正文必须回写 React projection。否则 CodeView remount /
-        // 虚拟化重建只会看到代际初的 placeholder，刷新失败后正文“消失”。
-        setProjection((previous) => {
-          if (previous.items.length === 0) {
-            return previous;
-          }
-          const byId = new Map(itemUpdates.map((item) => [item.id, item]));
-          let changed = false;
-          const items = previous.items.map((item) => {
-            const next = byId.get(item.id);
-            if (!next || next.cacheKey === item.cacheKey) {
-              return item;
-            }
-            changed = true;
-            return next;
-          });
-          return changed
-            ? {
-                entryKeyBySectionId: previous.entryKeyBySectionId,
-                items,
-              }
-            : previous;
-        });
         const handle = diffHandleRef.current;
         if (handle && committedProjectionGenerationRef.current === generation) {
           generationCallbacksRef.current.applyItemUpdates(
             handle,
             generation,
-            itemUpdates
+            contentUpdates
           );
-          // ready 正文到达后立刻续跑导航。
-          generationCallbacksRef.current.tryPendingNavigation();
         }
+      }
+      if (membershipChanged || contentUpdates.length > 0) {
+        // 新成员进入投影后由 layout commit 续跑导航；此处再兜底一次。
+        generationCallbacksRef.current.tryPendingNavigation();
       }
       const nextViewState: ReviewDocumentViewState = {
         generation,

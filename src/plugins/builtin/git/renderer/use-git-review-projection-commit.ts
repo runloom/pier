@@ -7,6 +7,7 @@ import { type RefObject, useLayoutEffect, useMemo } from "react";
 import {
   indexReviewDocumentProjection,
   indexReviewEntrySections,
+  indexReviewSectionEntries,
   type ReviewDocumentProjection,
 } from "./git-review-document-projection.ts";
 
@@ -60,10 +61,15 @@ export function useGitReviewProjectionCommit({
     () => indexReviewEntrySections(entries),
     [entries]
   );
+  // 全量 section→entry（含未 materialize），供 demand / failure 解析。
+  const fullSectionIndex = useMemo(
+    () => indexReviewSectionEntries(entries),
+    [entries]
+  );
 
   useLayoutEffect(() => {
     committedProjectionGenerationRef.current = projectionGeneration;
-    entryKeyBySectionIdRef.current = projection.entryKeyBySectionId;
+    entryKeyBySectionIdRef.current = fullSectionIndex;
     // firstSection 来自全量 entries，保证 idle 树点击可解析 sectionId。
     firstSectionIdByEntryKeyRef.current = entrySectionIndex;
     itemIndexByIdRef.current = projectionIndex.itemIndexById;
@@ -95,12 +101,12 @@ export function useGitReviewProjectionCommit({
     entryKeyBySectionIdRef,
     entrySectionIndex,
     firstSectionIdByEntryKeyRef,
+    fullSectionIndex,
     itemCacheKeysRef,
     itemIdsRef,
     itemIndexByIdRef,
     latestItemUpdatesRef,
     notifyProjectionChanged,
-    projection.entryKeyBySectionId,
     projectionGeneration,
     projectionIndex,
     renderedGenerationRef,
