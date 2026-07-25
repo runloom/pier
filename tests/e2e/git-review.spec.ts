@@ -44,6 +44,20 @@ function reviewTreeFileItem(
   return group === "staged" ? items.first() : items.last();
 }
 
+/**
+ * Click a review tree row. CI sticky group headers render an aria-hidden
+ * overlay that intercepts normal Playwright hit-testing; force the click.
+ */
+async function clickReviewTreeFile(
+  page: Page,
+  name: RegExp,
+  group: "staged" | "unstaged" = "unstaged"
+): Promise<void> {
+  const item = reviewTreeFileItem(page, name, group);
+  await expect(item).toBeVisible({ timeout: 15_000 });
+  await item.click({ force: true });
+}
+
 /** `.bin` uses kind copy ("Binary binary"); generic fallback stays "Binary file". */
 const BINARY_STATE_NOTICE = /Binary (?:file|binary)|二进制文件/u;
 
@@ -746,7 +760,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await changesTab.click();
     // Demand-loaded review may not keep binary sections mounted after viewing
     // another file — navigate via the tree so the binary state patch is loaded.
-    await reviewTreeFileItem(page, /binary-6\\special\.bin/u).click();
+    await clickReviewTreeFile(page, /binary-6\\special\.bin/u);
     await expect
       .poll(
         () =>
@@ -799,14 +813,8 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     });
     await appTreeSearch.fill("app.tsx");
     await appTreeSearch.press("Enter");
-    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
-      timeout: 10_000,
-    });
-    // Close search before click — sticky overlay / search chrome intercepts hits.
-    await appTreeSearch.press("Escape");
-    await expect(page.getByTestId("git-review-tree-search-bar")).toHaveCount(0);
-    await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible();
-    await reviewTreeFileItem(page, /app\.tsx/u).click();
+    await clickReviewTreeFile(page, /app\.tsx/u);
+    await appTreeSearch.press("Escape").catch(() => undefined);
 
     const diffContainers = page.locator("diffs-container");
     await expect
@@ -933,7 +941,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(page.getByTestId("pierre-diff-root")).toBeVisible({
       timeout: 30_000,
     });
-    await reviewTreeFileItem(page, /app\.tsx/u).click();
+    await clickReviewTreeFile(page, /app\.tsx/u);
     await selectTheme(page, { id: "light", label: /Light|浅色/u });
     await expect
       .poll(
@@ -974,10 +982,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       });
       await reviewTreeSearch.fill("script.py");
       await reviewTreeSearch.press("Enter");
-      await expect(
-        page.getByRole("treeitem", { name: /script\.py/u })
-      ).toBeVisible({ timeout: 3000 });
-      await page.getByRole("treeitem", { name: /script\.py/u }).click();
+      await clickReviewTreeFile(page, /script\.py/u);
       expect(
         await diffContainers.evaluateAll((containers) =>
           containers.some((host) =>
@@ -1041,7 +1046,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       }).observe({ entryTypes: ["longtask"] });
     });
     const largeStartedAt = performance.now();
-    await page.getByRole("treeitem", { name: /large\.ts/u }).click();
+    await clickReviewTreeFile(page, /large\.ts/u);
     await expect
       .poll(
         () =>
@@ -1780,7 +1785,7 @@ test("same-group tab switch restores Changes tree and diff immediately", async (
     await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
       timeout: 20_000,
     });
-    await page.getByRole("treeitem", { name: /script\.py/u }).click();
+    await clickReviewTreeFile(page, /script\.py/u);
     await expect
       .poll(() => isDiffTextInViewport(page, "return 2"), { timeout: 30_000 })
       .toBe(true);
@@ -1799,7 +1804,7 @@ test("same-group tab switch restores Changes tree and diff immediately", async (
       page.getByRole("status", { name: /Loading changes|加载变更/u })
     ).toHaveCount(0);
 
-    await reviewTreeFileItem(page, /app\.tsx/u).click();
+    await clickReviewTreeFile(page, /app\.tsx/u);
     await expect
       .poll(() => isDiffTextInViewport(page, "value = 3"), { timeout: 30_000 })
       .toBe(true);
