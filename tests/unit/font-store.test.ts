@@ -93,19 +93,25 @@ describe("font.store — monoFontSize / codeFontSize", () => {
   });
 
   it("initFont 订阅 preferences.onChanged 并跨窗同步 codeFontSize", async () => {
-    let changed: ((snapshot: Record<string, unknown>) => void) | null = null;
-    const read = vi.fn(async () => ({
-      uiFontFamily: "",
-      monoFontFamily: "",
-      monoFontSize: 13,
-      codeFontSize: 13,
-    }));
-    const onChanged = vi.fn(
-      (cb: (snapshot: Record<string, unknown>) => void) => {
-        changed = cb;
-        return vi.fn();
-      }
+    interface FontPrefsSlice {
+      codeFontSize: number;
+      monoFontFamily: string;
+      monoFontSize: number;
+      uiFontFamily: string;
+    }
+    let changed: ((snapshot: FontPrefsSlice) => void) | undefined;
+    const read = vi.fn(
+      async (): Promise<FontPrefsSlice> => ({
+        uiFontFamily: "",
+        monoFontFamily: "",
+        monoFontSize: 13,
+        codeFontSize: 13,
+      })
     );
+    const onChanged = vi.fn((cb: (snapshot: FontPrefsSlice) => void) => {
+      changed = cb;
+      return vi.fn();
+    });
     (
       window as unknown as {
         pier: {
@@ -123,6 +129,7 @@ describe("font.store — monoFontSize / codeFontSize", () => {
     expect(onChanged).toHaveBeenCalled();
     expect(useFontStore.getState().codeFontSize).toBe(13);
 
+    expect(changed).toBeTypeOf("function");
     changed?.({
       uiFontFamily: "",
       monoFontFamily: "",

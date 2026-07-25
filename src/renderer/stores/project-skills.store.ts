@@ -101,9 +101,12 @@ interface ProjectSkillsState {
     projectRef: ProjectRootRef | null,
     preservePendingFocus?: boolean
   ) => void;
+  /** Soft tip after discovery-changing applies (§1.2). */
+  sessionRefreshHint: boolean;
   setDraft: (draft: SkillsUiDraft | null) => void;
   setEditDraft: (skillId: string, text: string | null) => void;
   setMode: (mode: SkillsViewMode) => void;
+  setSessionRefreshHint: (show: boolean) => void;
   snapshot: ProjectSkillsSnapshotView | null;
   snapshotRequestId: number;
   updateDraft: (patch: Partial<SkillsUiDraft>) => void;
@@ -135,6 +138,7 @@ const initialState = {
   projects: [] as ProjectSkillsProjectSummary[],
   projectsRequestId: 0,
   reloadRequired: false,
+  sessionRefreshHint: false,
   snapshot: null as ProjectSkillsSnapshotView | null,
 };
 
@@ -194,6 +198,7 @@ export const useProjectSkillsStore = create<ProjectSkillsState>((set, get) => ({
       writesFrozen: false,
       projectRef,
       reloadRequired: false,
+      sessionRefreshHint: false,
       snapshot: null,
       // Selecting a project clears the snapshot — mark loading so the detail
       // shell does not flash the empty state before loadSnapshot runs.
@@ -201,6 +206,10 @@ export const useProjectSkillsStore = create<ProjectSkillsState>((set, get) => ({
       snapshotRequestId: state.snapshotRequestId + 1,
       mode: projectRef ? { kind: "detail" } : { kind: "projects" },
     }));
+  },
+
+  setSessionRefreshHint(show) {
+    set({ sessionRefreshHint: show });
   },
 
   setDraft(draft) {

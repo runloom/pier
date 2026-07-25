@@ -335,15 +335,30 @@ export function createPierHomeSkillsLibrary(options: {
       delivery?: PierHomeSkillDelivery
     ): Promise<PierHomeSkillView> {
       const { catalog, entry } = await requireEntry(skillId);
-      entry.alwaysInclude = alwaysInclude;
-      if (alwaysInclude) {
-        entry.delivery = normalizeDelivery(delivery);
-      } else {
-        entry.delivery = undefined;
+      const index = catalog.skills.findIndex((item) => item.id === entry.id);
+      if (index < 0) {
+        throw new PierHomeSkillsError(
+          "skill-missing",
+          `skill not found: ${skillId}`
+        );
       }
-      entry.updatedAt = now();
+      const next: CatalogEntry = alwaysInclude
+        ? {
+            alwaysInclude: true,
+            createdAt: entry.createdAt,
+            delivery: normalizeDelivery(delivery),
+            id: entry.id,
+            updatedAt: now(),
+          }
+        : {
+            alwaysInclude: false,
+            createdAt: entry.createdAt,
+            id: entry.id,
+            updatedAt: now(),
+          };
+      catalog.skills[index] = next;
       await writeCatalog(catalog);
-      return toView(entry);
+      return toView(next);
     },
 
     async delete(skillId: string): Promise<void> {

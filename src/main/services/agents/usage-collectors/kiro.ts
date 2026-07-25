@@ -73,13 +73,8 @@ function walkTokenFields(
     record.output_token_count ?? record.outputTokenCount ?? record.output_tokens
   );
   if (input + output > 0) {
-    hits.push({
-      at:
-        stringField(record, "timestamp", "created_at", "updated_at") ??
-        undefined,
-      input,
-      output,
-    });
+    const at = stringField(record, "timestamp", "created_at", "updated_at");
+    hits.push(at == null ? { input, output } : { at, input, output });
   }
   for (const value of Object.values(record)) {
     if (value && typeof value === "object") walkTokenFields(value, hits);

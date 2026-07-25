@@ -78,12 +78,14 @@ export async function alertConvergeFailures(
     failed.length === 1 &&
     failed[0]?.rootKey === "(none)" &&
     failed[0].message.toLowerCase().includes("no known projects");
+  if (onlyNoProjects) {
+    await showAppAlert({
+      title: t("settings.projects.pierHomeSkillsConvergeNoProjects"),
+    });
+    return;
+  }
   await showAppAlert({
-    title: onlyNoProjects
-      ? t("settings.projects.pierHomeSkillsConvergeNoProjects")
-      : t("settings.projects.pierHomeSkillsConvergeFailed"),
-    body: onlyNoProjects
-      ? undefined
-      : failed.map((item) => `${item.rootKey}: ${item.message}`).join("\n"),
+    title: t("settings.projects.pierHomeSkillsConvergeFailed"),
+    body: failed.map((item) => `${item.rootKey}: ${item.message}`).join("\n"),
   });
 }
