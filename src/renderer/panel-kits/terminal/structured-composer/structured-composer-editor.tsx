@@ -25,6 +25,8 @@ import { MentionDeletePlugin } from "./mention-delete-plugin.tsx";
 import { MentionPlugin } from "./mention-plugin.tsx";
 import { OnChangePlainTextPlugin } from "./on-change-plain-text-plugin.tsx";
 import { PastePlainTextPlugin } from "./paste-plain-text-plugin.tsx";
+import { SkillMentionNode } from "./skill-mention-node.tsx";
+import { SkillSuggestPlugin } from "./skill-suggest-plugin.tsx";
 import {
   insertAttachmentTokenAtLexicalSelection,
   insertLexicalPlainTextAtSelection,
@@ -42,7 +44,7 @@ import { WorkspacePathMentionNode } from "./workspace-path-mention-node.tsx";
 
 export interface StructuredComposerEditorHandle {
   blur: () => void;
-  /** Close @ / # autocomplete without closing Rich Input. */
+  /** Close @ / # / skill autocomplete without closing Rich Input. */
   dismissMentionMenu: () => void;
   focus: () => boolean;
   getElement: () => HTMLElement | null;
@@ -52,7 +54,7 @@ export interface StructuredComposerEditorHandle {
   insertAttachmentToken: (absolutePath: string, ordinal1Based: number) => void;
   /** Insert plain text at the caret/selection; preserves mention chips. */
   insertTextAtSelection: (text: string) => void;
-  /** True while @ or # autocomplete is open. */
+  /** True while @ / # / skill autocomplete is open. */
   isMentionMenuOpen: () => boolean;
   listInvalidAttachmentRefs: (
     attachments: readonly ComposerAttachment[]
@@ -67,7 +69,17 @@ export interface StructuredComposerEditorHandle {
 }
 
 export interface StructuredComposerEditorProps {
+  /**
+   * Foreground agent kind for skill invoke prefix (`/` vs `$`) and
+   * discoverability filter. Null when unknown.
+   */
+  agentKind?: string | null;
   attachments: readonly ComposerAttachment[];
+  /**
+   * Composer chrome element for autocomplete width (list = chrome width).
+   * Prefer the card with data-testid="terminal-composer".
+   */
+  chromeAnchor?: HTMLElement | null;
   className?: string;
   /** Single-line chrome: center text inside the fixed h-9 shell. */
   compact?: boolean;
@@ -91,12 +103,14 @@ export interface StructuredComposerEditorProps {
 function EditorHandleBridge({
   dismissAttachmentMenuRef,
   dismissMentionMenuRef,
+  dismissSkillMenuRef,
   handleRef,
   menuOpenRef,
   value,
 }: {
   dismissAttachmentMenuRef: { current: (() => void) | null };
   dismissMentionMenuRef: { current: (() => void) | null };
+  dismissSkillMenuRef: { current: (() => void) | null };
   handleRef: Ref<StructuredComposerEditorHandle> | undefined;
   menuOpenRef: { current: boolean };
   value: string;
@@ -113,6 +127,7 @@ function EditorHandleBridge({
       dismissMentionMenu: () => {
         dismissMentionMenuRef.current?.();
         dismissAttachmentMenuRef.current?.();
+        dismissSkillMenuRef.current?.();
       },
       focus: () => {
         const el = editor.getRootElement();
@@ -160,7 +175,13 @@ function EditorHandleBridge({
         writeLexicalPlainText(editor, text);
       },
     }),
-    [dismissAttachmentMenuRef, dismissMentionMenuRef, editor, menuOpenRef]
+    [
+      dismissAttachmentMenuRef,
+      dismissMentionMenuRef,
+      dismissSkillMenuRef,
+      editor,
+      menuOpenRef,
+    ]
   );
 
   useEffect(() => registerComposerEditorForTests(editor), [editor]);
@@ -196,7 +217,9 @@ function SyncEditable({ disabled }: { disabled: boolean }): null {
 }
 
 export function StructuredComposerEditor({
+  agentKind = null,
   attachments,
+  chromeAnchor = null,
   className,
   compact = false,
   disabled,
@@ -215,15 +238,21 @@ export function StructuredComposerEditor({
 }: StructuredComposerEditorProps) {
   const mentionMenuOpenRef = useRef(false);
   const attachmentMenuOpenRef = useRef(false);
+  const skillMenuOpenRef = useRef(false);
   const dismissMentionMenuRef = useRef<(() => void) | null>(null);
   const dismissAttachmentMenuRef = useRef<(() => void) | null>(null);
+  const dismissSkillMenuRef = useRef<(() => void) | null>(null);
   const anyMenuOpenRef = useMemo(
     () => ({
       get current() {
-        return mentionMenuOpenRef.current || attachmentMenuOpenRef.current;
+        return (
+          mentionMenuOpenRef.current ||
+          attachmentMenuOpenRef.current ||
+          skillMenuOpenRef.current
+        );
       },
       set current(_value: boolean) {
-        // Slot refs are owned by @ / # plugins; combined ref is read-only.
+        // Slot refs are owned by @ / # / skill plugins; combined ref is read-only.
       },
     }),
     []
@@ -233,7 +262,7 @@ export function StructuredComposerEditor({
     () => ({
       editable: !disabled,
       namespace: "PierTerminalComposer",
-      nodes: [WorkspacePathMentionNode, AttachmentTokenNode],
+      nodes: [WorkspacePathMentionNode, AttachmentTokenNode, SkillMentionNode],
       onError: (error: Error) => {
         console.error("[structured-composer]", error);
       },
@@ -254,14 +283,23 @@ export function StructuredComposerEditor({
       <div className={cn("min-w-0", className, compact && "flex items-center")}>
         <div className="relative w-full min-w-0">
           <MentionPlugin
+            chromeAnchor={chromeAnchor}
             dismissMenuRef={dismissMentionMenuRef}
             menuOpenRef={mentionMenuOpenRef}
             projectRootPath={projectRootPath}
           />
           <AttachmentAutocompletePlugin
             attachments={attachments}
+            chromeAnchor={chromeAnchor}
             dismissMenuRef={dismissAttachmentMenuRef}
             menuOpenRef={attachmentMenuOpenRef}
+          />
+          <SkillSuggestPlugin
+            agentKind={agentKind}
+            chromeAnchor={chromeAnchor}
+            dismissMenuRef={dismissSkillMenuRef}
+            menuOpenRef={skillMenuOpenRef}
+            projectRootPath={projectRootPath}
           />
           <PlainTextPlugin
             contentEditable={
@@ -283,6 +321,8 @@ export function StructuredComposerEditor({
                 onFocus={onFocus}
                 onKeyDown={onKeyDown}
                 onPaste={onPaste}
+                // Skill ids / paths must not get red squiggles while typing.
+                spellCheck={false}
               />
             }
             ErrorBoundary={LexicalErrorBoundary}
@@ -306,6 +346,7 @@ export function StructuredComposerEditor({
       <EditorHandleBridge
         dismissAttachmentMenuRef={dismissAttachmentMenuRef}
         dismissMentionMenuRef={dismissMentionMenuRef}
+        dismissSkillMenuRef={dismissSkillMenuRef}
         handleRef={ref}
         menuOpenRef={anyMenuOpenRef}
         value={value}

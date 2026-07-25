@@ -49,6 +49,17 @@ export const terminal = {
     send: "Send",
     sendFailed: "Failed to send to terminal",
     sendTooLong: "Message is too long to send",
+    skillEmptyProjectBody:
+      "Open a project folder first, then type / to insert a skill.",
+    skillEmptyProjectTitle: "No project open",
+    skillNoResults: "No matching skills",
+    skillNoneAvailableBody:
+      "Turn skills on in Settings → Projects → Skills, or this agent may not use project skills.",
+    skillNoneAvailableTitle: "No skills available",
+    skillPlaceholder: "Choose a skill…",
+    skillSourceGlobal: "On this Mac",
+    skillSourceInRepo: "In project",
+    skillSourceProject: "Managed",
   },
   search: {
     close: "Close search",

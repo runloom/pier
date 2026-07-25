@@ -1,10 +1,13 @@
 import { type ReactNode, useLayoutEffect, useState } from "react";
 import { createPortal } from "react-dom";
+import { COMPOSER_SUGGEST_GAP_PX } from "./composer-suggest-layout.ts";
 
 /**
- * Renders autocomplete above the composer input via a body portal.
- * Compact chrome uses `overflow-hidden` on the editor shell; in-tree
- * `absolute bottom-full` menus are clipped and look like "@ does nothing".
+ * Renders autocomplete above the composer via a body portal.
+ *
+ * Width always equals the anchor’s client width (Codex: list is w-full of the
+ * composer chrome). Prefer anchoring to the full Rich Input card
+ * (`data-testid="terminal-composer"`), not only the contenteditable.
  */
 export function ComposerAutocompletePortal({
   anchor,
@@ -27,17 +30,25 @@ export function ComposerAutocompletePortal({
     const update = (): void => {
       const rect = anchor.getBoundingClientRect();
       setBox({
-        bottom: Math.max(0, window.innerHeight - rect.top + 4),
+        bottom: Math.max(
+          0,
+          window.innerHeight - rect.top + COMPOSER_SUGGEST_GAP_PX
+        ),
         left: rect.left,
+        // Match chrome width exactly — no independent maxWidth.
         width: rect.width,
       });
     };
     update();
     window.addEventListener("resize", update);
     window.addEventListener("scroll", update, true);
+    const ro =
+      typeof ResizeObserver === "undefined" ? null : new ResizeObserver(update);
+    ro?.observe(anchor);
     return () => {
       window.removeEventListener("resize", update);
       window.removeEventListener("scroll", update, true);
+      ro?.disconnect();
     };
   }, [anchor]);
 

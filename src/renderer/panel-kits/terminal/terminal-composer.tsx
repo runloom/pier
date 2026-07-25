@@ -46,6 +46,8 @@ export {
 } from "./terminal-composer-helpers.ts";
 
 interface TerminalComposerProps {
+  /** Foreground agent kind for skill suggest; null when unknown. */
+  agentKind?: string | null;
   /** Bumped to open the OS file picker (keyboard shortcut / command). */
   attachRequest?: number;
   bottomOffsetPx: number;
@@ -63,6 +65,7 @@ interface TerminalComposerProps {
 }
 
 export function TerminalComposer({
+  agentKind = null,
   attachRequest = 0,
   bottomOffsetPx,
   disabled,
@@ -455,6 +458,7 @@ export function TerminalComposer({
 
   return (
     <TerminalComposerView
+      agentKind={agentKind}
       attachments={attachments.attachments}
       blockReason={sendBlock}
       bottomOffsetPx={bottomOffsetPx}

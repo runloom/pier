@@ -15,6 +15,8 @@ import type { JSX } from "react";
 import {
   COMPOSER_CHIP_CLASS,
   COMPOSER_CHIP_HOST_CLASS,
+  COMPOSER_CHIP_TONE_ATTACHMENT,
+  COMPOSER_CHIP_TONE_ATTACHMENT_INVALID,
 } from "./composer-chip-styles.ts";
 
 export type SerializedAttachmentTokenNode = Spread<
@@ -144,8 +146,8 @@ export class AttachmentTokenNode extends DecoratorNode<JSX.Element> {
 
   override decorate(): JSX.Element {
     const tone = this.__valid
-      ? "border-status-done-border bg-status-done-bg text-status-done-fg"
-      : "border-status-warning-border bg-status-warning-bg text-status-warning-fg";
+      ? COMPOSER_CHIP_TONE_ATTACHMENT
+      : COMPOSER_CHIP_TONE_ATTACHMENT_INVALID;
     return (
       <span
         className={cn(COMPOSER_CHIP_CLASS, tone)}

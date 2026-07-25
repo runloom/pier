@@ -15,6 +15,7 @@ import type { JSX } from "react";
 import {
   COMPOSER_CHIP_CLASS,
   COMPOSER_CHIP_HOST_CLASS,
+  COMPOSER_CHIP_TONE_PATH,
 } from "./composer-chip-styles.ts";
 
 export type SerializedWorkspacePathMentionNode = Spread<
@@ -114,10 +115,7 @@ export class WorkspacePathMentionNode extends DecoratorNode<JSX.Element> {
   override decorate(): JSX.Element {
     return (
       <span
-        className={cn(
-          COMPOSER_CHIP_CLASS,
-          "border-status-info-border bg-status-info-bg text-status-info-fg"
-        )}
+        className={cn(COMPOSER_CHIP_CLASS, COMPOSER_CHIP_TONE_PATH)}
         contentEditable={false}
         data-mention-path={this.__absolutePath}
       >

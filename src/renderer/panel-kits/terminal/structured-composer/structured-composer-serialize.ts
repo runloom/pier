@@ -16,11 +16,11 @@ import { $isComposerChipNode } from "./composer-chip-caret.ts";
 /**
  * Plain-text export for the structured composer.
  *
- * Chip nodes ( @ mention / attachment ) still store only their absolute path
- * in the document model. On export we insert a single ASCII space at chip
- * boundaries when the neighboring projected character is non-whitespace, so
- * agent-facing payloads do not glue paths together (`/a.png/b.pdf`) or onto
- * adjacent words. Visual chip gaps remain CSS-only; the editor does not gain
+ * Chip nodes (@ path / skill invoke / attachment) contribute via
+ * `getTextContent()` (abs path, `/id` or `$id`, abs path). On export we insert
+ * a single ASCII space at chip boundaries when the neighboring projected
+ * character is non-whitespace, so agent-facing payloads do not glue tokens
+ * together. Visual chip gaps remain CSS-only; the editor does not gain
  * synthetic TextNodes.
  */
 

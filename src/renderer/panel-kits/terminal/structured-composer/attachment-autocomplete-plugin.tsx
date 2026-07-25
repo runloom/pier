@@ -83,10 +83,13 @@ function filterAttachmentItems(
 
 export function AttachmentAutocompletePlugin({
   attachments,
+  chromeAnchor = null,
   dismissMenuRef,
   menuOpenRef,
 }: {
   attachments: readonly ComposerAttachment[];
+  /** Composer chrome for list width; falls back to editor root. */
+  chromeAnchor?: HTMLElement | null;
   dismissMenuRef: { current: (() => void) | null };
   menuOpenRef: { current: boolean };
 }): JSX.Element | null {
@@ -324,7 +327,9 @@ export function AttachmentAutocompletePlugin({
   }
 
   return (
-    <ComposerAutocompletePortal anchor={editor.getRootElement()}>
+    <ComposerAutocompletePortal
+      anchor={chromeAnchor ?? editor.getRootElement()}
+    >
       <AttachmentAutocompletePopup
         activeIndex={activeIndex}
         emptyAttachmentsBody={t(

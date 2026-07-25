@@ -44,6 +44,16 @@ export const terminal = {
     send: "发送",
     sendFailed: "发送到终端失败",
     sendTooLong: "内容过长，无法发送",
+    skillEmptyProjectBody: "请先打开项目文件夹，再输入 / 插入技能。",
+    skillEmptyProjectTitle: "未打开项目",
+    skillNoResults: "没有匹配的技能",
+    skillNoneAvailableBody:
+      "请在设置 → 项目 → 技能中打开技能，或当前智能体不使用项目技能。",
+    skillNoneAvailableTitle: "没有可用技能",
+    skillPlaceholder: "选择技能…",
+    skillSourceGlobal: "本机",
+    skillSourceInRepo: "仓库内",
+    skillSourceProject: "已托管",
   },
   search: {
     close: "关闭查找",

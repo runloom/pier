@@ -1,5 +1,4 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import type { FilePathQueryItem } from "@shared/contracts/file-query.ts";
 import {
   $createTextNode,
   $getSelection,
@@ -24,38 +23,33 @@ import { useT } from "@/i18n/use-t.ts";
 import { ComposerAutocompletePortal } from "./composer-autocomplete-portal.tsx";
 import { $placeCaretAfterComposerChip } from "./composer-chip-caret.ts";
 import {
-  type ComposerPathQuerySnapshot,
-  createComposerPathQueryClient,
-  joinProjectPath,
-  mentionLabelFromRelativePath,
-} from "./composer-path-query.ts";
-import { MENTION_LISTBOX_ID, MentionPopup } from "./mention-popup.tsx";
-import { $createWorkspacePathMentionNode } from "./workspace-path-mention-node.tsx";
+  type ComposerSkillQuerySnapshot,
+  createComposerSkillQueryClient,
+} from "./composer-skill-query.ts";
+import {
+  type ComposerSkillSuggestItem,
+  getSkillSuggestMatch,
+} from "./composer-skill-suggest.ts";
+import { $createSkillMentionNode } from "./skill-mention-node.tsx";
+import {
+  SKILL_SUGGEST_LISTBOX_ID,
+  SkillSuggestPopup,
+} from "./skill-suggest-popup.tsx";
 
-interface MentionMatch {
+interface SkillMatch {
   leadOffset: number;
   matchingString: string;
+  trigger: "/";
 }
 
-function getMentionMatch(text: string, cursor: number): MentionMatch | null {
-  const before = text.slice(0, cursor);
-  const match = before.match(/(^|[\s([{])@([^\s@]*)$/);
-  if (!match || match.index === undefined) {
-    return null;
-  }
-  const atIndex = match.index + (match[1] ?? "").length;
-  return {
-    leadOffset: atIndex,
-    matchingString: match[2] ?? "",
-  };
-}
-
-export function MentionPlugin({
+export function SkillSuggestPlugin({
+  agentKind,
   chromeAnchor = null,
   dismissMenuRef,
   menuOpenRef,
   projectRootPath,
 }: {
+  agentKind: string | null;
   /** Composer chrome for list width; falls back to editor root. */
   chromeAnchor?: HTMLElement | null;
   dismissMenuRef: { current: (() => void) | null };
@@ -64,15 +58,17 @@ export function MentionPlugin({
 }): JSX.Element | null {
   const [editor] = useLexicalComposerContext();
   const t = useT();
-  const client = useMemo(() => createComposerPathQueryClient(), []);
+  const client = useMemo(() => createComposerSkillQueryClient(), []);
 
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
-  const [match, setMatch] = useState<MentionMatch | null>(null);
-  const [items, setItems] = useState<readonly FilePathQueryItem[]>([]);
+  const [match, setMatch] = useState<SkillMatch | null>(null);
+  const [items, setItems] = useState<readonly ComposerSkillSuggestItem[]>([]);
   const [status, setStatus] =
-    useState<ComposerPathQuerySnapshot["status"]>("idle");
+    useState<ComposerSkillQuerySnapshot["status"]>("idle");
   const [activeIndex, setActiveIndex] = useState(0);
+  /** True after first successful load when list is empty for this agent. */
+  const [catalogEmpty, setCatalogEmpty] = useState(false);
 
   const matchRef = useRef(match);
   matchRef.current = match;
@@ -80,8 +76,6 @@ export function MentionPlugin({
   itemsRef.current = items;
   const activeIndexRef = useRef(activeIndex);
   activeIndexRef.current = activeIndex;
-  const projectRootRef = useRef(projectRootPath);
-  projectRootRef.current = projectRootPath;
   const queryRef = useRef(query);
   queryRef.current = query;
 
@@ -120,7 +114,7 @@ export function MentionPlugin({
             setMatch(null);
             return;
           }
-          const found = getMentionMatch(
+          const found = getSkillSuggestMatch(
             node.getTextContent(),
             selection.anchor.offset
           );
@@ -144,37 +138,43 @@ export function MentionPlugin({
     if (!open) {
       setItems([]);
       setStatus("idle");
+      setCatalogEmpty(false);
       return;
     }
     if (!projectRootPath) {
       setItems([]);
       setStatus("done");
+      setCatalogEmpty(false);
+      return;
+    }
+    if (!agentKind) {
+      setItems([]);
+      setStatus("done");
+      setCatalogEmpty(true);
       return;
     }
     return client.search({
+      agentKind,
       onUpdate: (snap) => {
         setItems(snap.items);
         setStatus(snap.status);
         setActiveIndex(0);
+        if (snap.status === "done" && queryRef.current.trim().length === 0) {
+          setCatalogEmpty(snap.items.length === 0);
+        }
       },
+      projectRootPath,
       query,
-      root: projectRootPath,
     });
-  }, [client, open, projectRootPath, query]);
+  }, [agentKind, client, open, projectRootPath, query]);
 
   const selectIndex = useCallback(
     (index: number) => {
       const currentMatch = matchRef.current;
-      const root = projectRootRef.current;
       const item = itemsRef.current[index];
-      if (!(currentMatch && root && item)) {
+      if (!(currentMatch && item)) {
         return;
       }
-      const absolutePath = joinProjectPath(root, item.path);
-      if (absolutePath == null) {
-        return;
-      }
-      const label = mentionLabelFromRelativePath(item.path);
       editor.update(() => {
         const selection = $getSelection();
         if (!($isRangeSelection(selection) && selection.isCollapsed())) {
@@ -192,23 +192,22 @@ export function MentionPlugin({
         }
         const before = text.slice(0, start);
         const after = text.slice(end);
-        const mention = $createWorkspacePathMentionNode(absolutePath, label);
+        const skill = $createSkillMentionNode(item.id, item.invokeText);
 
         if (before.length === 0 && after.length === 0) {
-          node.replace(mention);
+          node.replace(skill);
         } else if (before.length === 0) {
           node.setTextContent(after);
-          node.insertBefore(mention);
+          node.insertBefore(skill);
         } else {
           node.setTextContent(before);
-          node.insertAfter(mention);
+          node.insertAfter(skill);
           if (after.length > 0) {
-            mention.insertAfter($createTextNode(after));
+            skill.insertAfter($createTextNode(after));
           }
         }
-
-        // Caret in a following TextNode (short caret); gap from host ::after.
-        $placeCaretAfterComposerChip(mention);
+        // Atomic chip — caret after pill (no plain-text skill id / no waves).
+        $placeCaretAfterComposerChip(skill);
       });
       setOpen(false);
       setMatch(null);
@@ -233,17 +232,17 @@ export function MentionPlugin({
     }
     root.setAttribute("role", "combobox");
     root.setAttribute("aria-autocomplete", "list");
-    root.setAttribute("aria-controls", MENTION_LISTBOX_ID);
+    root.setAttribute("aria-controls", SKILL_SUGGEST_LISTBOX_ID);
     root.setAttribute("aria-expanded", "true");
-    if (!projectRootPath || items.length === 0) {
+    if (items.length === 0) {
       root.removeAttribute("aria-activedescendant");
       return;
     }
     root.setAttribute(
       "aria-activedescendant",
-      `terminal-composer-mention-option-${activeIndex}`
+      `terminal-composer-skill-option-${activeIndex}`
     );
-  }, [activeIndex, editor, items.length, open, projectRootPath]);
+  }, [activeIndex, editor, items.length, open]);
 
   useEffect(() => {
     if (!open) {
@@ -279,11 +278,12 @@ export function MentionPlugin({
       editor.registerCommand(
         KEY_ENTER_COMMAND,
         (event) => {
-          // Menu owns Enter while open — never fall through to send.
-          event?.preventDefault();
-          if (itemsRef.current.length === 0 || !projectRootRef.current) {
-            return true;
+          // Only own Enter when there is something to insert — leave
+          // `/model`-style free text and empty catalogs for send/edit.
+          if (itemsRef.current.length === 0) {
+            return false;
           }
+          event?.preventDefault();
           selectIndex(activeIndexRef.current);
           return true;
         },
@@ -292,10 +292,10 @@ export function MentionPlugin({
       editor.registerCommand(
         KEY_TAB_COMMAND,
         (event) => {
-          event?.preventDefault();
-          if (itemsRef.current.length === 0 || !projectRootRef.current) {
-            return true;
+          if (itemsRef.current.length === 0) {
+            return false;
           }
+          event?.preventDefault();
           selectIndex(activeIndexRef.current);
           return true;
         },
@@ -322,20 +322,32 @@ export function MentionPlugin({
     return null;
   }
 
+  const emptyProject = !projectRootPath;
+  const showNotSupported =
+    !emptyProject &&
+    (agentKind == null ||
+      (catalogEmpty &&
+        status === "done" &&
+        items.length === 0 &&
+        query.trim().length === 0));
+
   return (
     <ComposerAutocompletePortal
       anchor={chromeAnchor ?? editor.getRootElement()}
     >
-      <MentionPopup
+      <SkillSuggestPopup
         activeIndex={activeIndex}
-        emptyProject={!projectRootPath}
-        emptyProjectBody={t("terminal.composer.mentionEmptyProjectBody")}
-        emptyProjectTitle={t("terminal.composer.mentionEmptyProjectTitle")}
+        emptyProject={emptyProject}
+        emptyProjectBody={t("terminal.composer.skillEmptyProjectBody")}
+        emptyProjectTitle={t("terminal.composer.skillEmptyProjectTitle")}
         items={items}
-        noResults={t("terminal.composer.mentionNoResults")}
+        noResults={t("terminal.composer.skillNoResults")}
+        notSupportedBody={t("terminal.composer.skillNoneAvailableBody")}
+        notSupportedTitle={t("terminal.composer.skillNoneAvailableTitle")}
         onHover={setActiveIndex}
         onSelect={selectIndex}
-        placeholder={t("terminal.composer.mentionPlaceholder")}
+        placeholder={t("terminal.composer.skillPlaceholder")}
+        showNotSupported={showNotSupported}
         status={status}
       />
     </ComposerAutocompletePortal>
