@@ -7,6 +7,7 @@ export interface UseGitReviewNavigationOptions {
   readonly applyNavigationDemand: (entryKey: string) => void;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
   readonly documentGenerationRef: RefObject<number>;
+  readonly entryKeyBySectionIdRef: RefObject<ReadonlyMap<string, string>>;
   readonly firstSectionIdByEntryKeyRef: RefObject<ReadonlyMap<string, string>>;
   readonly initialSelectedEntryKey?: string | null;
   readonly initialSelectedSectionKey?: string | null;

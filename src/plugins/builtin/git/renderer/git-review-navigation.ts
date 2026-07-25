@@ -25,6 +25,26 @@ export function reviewNavigationKey(
 }
 
 /**
+ * stage 换 group 会换 sectionKey：优先保留仍属该 entry 的 preferred，
+ * 否则落到 first section。禁止对已失效 section 武装导航。
+ */
+export function resolveReviewSectionKey(options: {
+  readonly entryKey: string;
+  readonly entryKeyBySectionId: ReadonlyMap<string, string>;
+  readonly firstSectionIdByEntryKey: ReadonlyMap<string, string>;
+  readonly preferredSectionKey: string | null;
+}): string | null {
+  const preferred = options.preferredSectionKey;
+  if (
+    preferred !== null &&
+    options.entryKeyBySectionId.get(preferred) === options.entryKey
+  ) {
+    return preferred;
+  }
+  return options.firstSectionIdByEntryKey.get(options.entryKey) ?? null;
+}
+
+/**
  * 导航成功只接受已进 CodeView 的真成员（loaded 正文；error 说明）。
  * 未 materialize 的 entry 不在列表——对齐 DiffsHub：内容就绪后再 scroll。
  */
@@ -115,13 +135,25 @@ export function findReviewNavigationTarget(
 
 export function isReviewNavigationTerminal(
   resource: GitReviewDocumentResource | undefined,
-  settled: boolean
+  settled: boolean,
+  sectionKey?: string
 ): boolean {
-  return (
-    resource?.kind === "error" ||
-    resource?.kind === "unchanged" ||
-    (resource === undefined && settled)
-  );
+  if (resource?.kind === "error" || (resource === undefined && settled)) {
+    return true;
+  }
+  // settled 且目标 section 已不在 entry（stage 换 group 未 rebind）：任何非 loading 态都终态。
+  // unchanged 仅在 section 仍属 entry 时不当终态（软保留正文可能仍在 projection）。
+  if (
+    sectionKey !== undefined &&
+    settled &&
+    resource !== undefined &&
+    resource.kind !== "loading" &&
+    resource.kind !== "cancelling" &&
+    !resource.entry.renderSlots.some((slot) => slot.sectionKey === sectionKey)
+  ) {
+    return true;
+  }
+  return false;
 }
 
 interface ReviewNavigationVerificationOptions {

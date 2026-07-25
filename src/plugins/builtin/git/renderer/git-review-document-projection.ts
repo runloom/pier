@@ -14,6 +14,7 @@ import {
   gitReviewDocumentMetrics,
   isGitReviewDocumentReservable,
 } from "./git-review-document-limits.ts";
+import { retainLoadedDocumentForEntry } from "./git-review-document-loader-utils.ts";
 import type {
   GitReviewDocumentLoaderSnapshot,
   GitReviewDocumentResource,
@@ -364,11 +365,11 @@ export function reconcileReviewDocumentSnapshot(
     } else if (resource.kind === "loaded") {
       return resource;
     }
-    return {
-      document: previous.document,
-      entry: resource.entry,
-      kind: "loaded" as const,
-    };
+    // stage 换 sectionKey 时必须 remap，否则投影按新 slot 找不到 section。
+    return (
+      retainLoadedDocumentForEntry(resource.entry, previous.document) ??
+      resource
+    );
   });
   const retainedEntryKeys = [
     ...previousByEntryKey.keys(),

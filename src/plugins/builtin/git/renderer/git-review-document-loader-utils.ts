@@ -26,6 +26,46 @@ export function documentMatchesSlots(
   );
 }
 
+/**
+ * stage 换 group 会换 sectionKey，但 patch 正文仍可复用。
+ * 槽位数一致时按 index 重绑 key，避免整段 rematerialize 闪烁。
+ */
+export function remapDocumentSectionsToEntry(
+  entry: GitReviewIndexEntry,
+  document: GitReviewFileDocumentOk
+): GitReviewFileDocumentOk | null {
+  if (entry.renderSlots.length !== document.sections.length) {
+    return null;
+  }
+  if (documentMatchesSlots(entry, document)) {
+    return document;
+  }
+  const sections = document.sections.map((section, index) => {
+    const slot = entry.renderSlots[index];
+    if (slot === undefined) {
+      return section;
+    }
+    if (section.kind === "patch") {
+      return {
+        ...section,
+        sectionKey: slot.sectionKey,
+      };
+    }
+    return {
+      ...section,
+      oldPath: slot.oldPath,
+      sectionKey: slot.sectionKey,
+      status: slot.status,
+      targetPath: slot.targetPath,
+    };
+  });
+  return {
+    ...document,
+    revision: `${document.revision}:slot-remap`,
+    sections,
+  };
+}
+
 export function sameEntries(
   left: readonly string[],
   right: readonly string[]
@@ -60,7 +100,26 @@ type LoadedDocumentResource = Extract<
   { kind: "loaded" }
 >;
 
-/** 从 session 缓存挑选可灌入 loader 的 loaded 正文（slots 必须匹配）。 */
+/**
+ * 将已 loaded 正文绑到当前 index entry。
+ * stage 换 group 会换 sectionKey：槽位数一致时 remap 后软保留，避免投影丢项。
+ */
+export function retainLoadedDocumentForEntry(
+  entry: GitReviewIndexEntry,
+  document: GitReviewFileDocumentOk
+): LoadedDocumentResource | null {
+  const remapped = remapDocumentSectionsToEntry(entry, document);
+  if (!remapped) {
+    return null;
+  }
+  return {
+    document: remapped,
+    entry,
+    kind: "loaded",
+  };
+}
+
+/** 从 session 缓存挑选可灌入 loader 的 loaded 正文（可 slot-remap）。 */
 export function collectHydrateCandidates(
   resources: ReadonlyMap<string, GitReviewDocumentResource>,
   loaded: ReadonlyMap<string, LoadedDocumentResource>
@@ -79,19 +138,23 @@ export function collectHydrateCandidates(
     if (!current) {
       continue;
     }
-    if (!documentMatchesSlots(current.entry, resource.document)) {
+    const retained = retainLoadedDocumentForEntry(
+      current.entry,
+      resource.document
+    );
+    if (!retained) {
       continue;
     }
     candidates.push({
-      document: resource.document,
-      entry: current.entry,
+      document: retained.document,
+      entry: retained.entry,
       entryKey,
     });
   }
   return candidates;
 }
 
-/** settle 成功路径：ok/unchanged/error → resource；slots 匹配的 ok 走 retain。 */
+/** settle 成功路径：ok/unchanged/error → resource；可 remap 的 ok 走 retain。 */
 export function resourceFromDocumentResult(
   entry: GitReviewIndexEntry,
   result: GitReviewFileDocumentResult
@@ -101,10 +164,11 @@ export function resourceFromDocumentResult(
       GitReviewDocumentResource,
       { kind: "loaded" | "idle" | "loading" | "cancelling" }
     > {
-  if (result.kind === "ok" && documentMatchesSlots(entry, result)) {
-    return { document: result, kind: "retain" };
-  }
   if (result.kind === "ok") {
+    const remapped = remapDocumentSectionsToEntry(entry, result);
+    if (remapped) {
+      return { document: remapped, kind: "retain" };
+    }
     return {
       entry,
       failure: {

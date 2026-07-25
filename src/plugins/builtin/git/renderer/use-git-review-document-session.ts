@@ -27,6 +27,8 @@ import {
 import { GitReviewDocumentLoader } from "./git-review-document-loader.ts";
 import {
   EMPTY_DOCUMENT_VIEW_STATE,
+  indexReviewEntrySections,
+  indexReviewSectionEntries,
   isCodeViewMemberResource,
   type PendingReviewAnchor,
   projectReviewDocuments,
@@ -52,7 +54,8 @@ export interface GitReviewGenerationCallbacks {
   // 失败变更类型由 failure-state 模块拥有；此处只约束调用形状。
   applyFailureChanges: (
     generation: number,
-    changes: readonly ReviewFailureChange[]
+    changes: readonly ReviewFailureChange[],
+    settled?: boolean
   ) => void;
   applyItemUpdates: (
     handle: PierDiffViewHandle,
@@ -87,6 +90,7 @@ export function useGitReviewDocumentSession(options: {
   readonly documentGenerationRef: RefObject<number>;
   readonly entries: readonly GitReviewIndexEntry[];
   readonly entryKeyBySectionIdRef: RefObject<ReadonlyMap<string, string>>;
+  readonly firstSectionIdByEntryKeyRef: RefObject<ReadonlyMap<string, string>>;
   readonly generationCallbacksRef: RefObject<GitReviewGenerationCallbacks>;
   readonly indexGeneration: number;
   readonly itemCacheKeysRef: RefObject<Map<string, string>>;
@@ -118,6 +122,7 @@ export function useGitReviewDocumentSession(options: {
     documentGenerationRef,
     entries,
     entryKeyBySectionIdRef,
+    firstSectionIdByEntryKeyRef,
     generationCallbacksRef,
     indexGeneration,
     itemCacheKeysRef,
@@ -165,6 +170,10 @@ export function useGitReviewDocumentSession(options: {
       bufferedEntryKeys: [],
       visibleEntryKeys: [],
     };
+    // beginGeneration 依赖 section 映射；须先于其调用用新 index 预热，
+    // 避免 layout commit 前用旧/空 map 误清选择或武装 orphan sectionKey。
+    entryKeyBySectionIdRef.current = indexReviewSectionEntries(entries);
+    firstSectionIdByEntryKeyRef.current = indexReviewEntrySections(entries);
     const selectedEntryKey = generationCallbacksRef.current.beginGeneration(
       retainPrevious || session?.selectedEntryKey
         ? currentEntryKeys
@@ -319,7 +328,8 @@ export function useGitReviewDocumentSession(options: {
       const next = controller.apply(change, protectedKey);
       generationCallbacksRef.current.applyFailureChanges(
         generation,
-        next.failureChanges
+        next.failureChanges,
+        next.settled
       );
       for (const resource of next.changedResources) {
         resourceByEntryKey.set(resource.entry.entryKey, resource);

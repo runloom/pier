@@ -45,9 +45,17 @@ export class GitReviewFailureAccumulator {
   readonly #entryKeyBySectionId = new Map<string, string>();
   readonly #sourcesByEntryKey = new Map<string, FailureSources>();
 
-  applyGenerationChanges(changes: readonly ReviewFailureChange[]): boolean {
+  applyGenerationChanges(
+    changes: readonly ReviewFailureChange[],
+    options?: { readonly settled?: boolean }
+  ): boolean {
     let changed = false;
     for (const change of changes) {
+      // 未 settled 时忽略 refresh 中间态（stage/watch 整代重建常见），避免闪条。
+      // document 终态 error 仍接受（单项 materialize 失败）。
+      if (options?.settled === false && change.source === "refresh") {
+        continue;
+      }
       const sources = this.#sourcesForChange(change);
       if (!sources) {
         continue;
@@ -239,7 +247,8 @@ export function useReviewFailureSummary(options: {
 }): {
   readonly applyGenerationChanges: (
     generation: number,
-    changes: readonly ReviewFailureChange[]
+    changes: readonly ReviewFailureChange[],
+    settled?: boolean
   ) => void;
   readonly resetGenerationFailures: (
     generation: number,
@@ -297,10 +306,14 @@ export function useReviewFailureSummary(options: {
   }, []);
 
   const applyGenerationChanges = useCallback(
-    (generation: number, changes: readonly ReviewFailureChange[]) => {
+    (
+      generation: number,
+      changes: readonly ReviewFailureChange[],
+      settled?: boolean
+    ) => {
       if (
         generation === currentGenerationRef.current &&
-        accumulatorRef.current.applyGenerationChanges(changes)
+        accumulatorRef.current.applyGenerationChanges(changes, { settled })
       ) {
         schedulePublish();
       }

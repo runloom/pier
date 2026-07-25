@@ -1,7 +1,7 @@
 # Git Review 终态架构：官方 CodeView 数据面 + SCM Index
 
 日期：2026-07-25  
-状态：**已确认（P0）+ 核心实现落地（P1–P5 首版）**  
+状态：**已确认（P0）+ P1 成员模型已落地；P2 导航（含 stage 后 section rebind）/ soft-retain 1:1 slot-remap / failure settled-only 门控已落地；P3 树 delta、P4 完整乐观 stage、P5 占位清理与 §9 全绿仍开放**  
 成员策略：**A — CodeView 窗口成员（大仓默认）**
 
 ## 0. 决策摘要

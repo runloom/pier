@@ -226,14 +226,28 @@ export function useReviewSelection(
     return null;
   }, [selectedEntryKey, selectedSectionKey, treeModel]);
   useEffect(() => {
-    if ((selectedEntryKey || selectedSectionKey) && !selectedTreeEntry) {
-      setSelectedTreeTarget(null);
+    if (!(selectedEntryKey || selectedSectionKey) || selectedTreeEntry) {
+      return;
     }
+    // stage 换 group 会换 sectionKey：entry 仍在时 rebind 到首个 slot，勿清空选择。
+    if (selectedEntryKey) {
+      const entry = treeModel.entryByKey.get(selectedEntryKey);
+      const rebound = entry?.renderSlots[0]?.sectionKey;
+      if (rebound) {
+        setSelectedTreeTarget({
+          entryKey: selectedEntryKey,
+          sectionKey: rebound,
+        });
+        return;
+      }
+    }
+    setSelectedTreeTarget(null);
   }, [
     selectedEntryKey,
     selectedSectionKey,
     selectedTreeEntry,
     setSelectedTreeTarget,
+    treeModel.entryByKey,
   ]);
   return {
     selectedEntryKey,

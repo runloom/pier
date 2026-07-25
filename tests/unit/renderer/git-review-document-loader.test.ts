@@ -365,7 +365,7 @@ describe("GitReviewDocumentLoader", () => {
     });
   });
 
-  it("rejects state metadata that disagrees with the index slot", async () => {
+  it("remaps state slot metadata from the index when document drifts", async () => {
     const item = entry(0);
     const load = vi.fn(async () => {
       const document = stateDocumentFor(item);
@@ -389,9 +389,14 @@ describe("GitReviewDocumentLoader", () => {
     });
     await flush();
 
-    expect(loader.getSnapshot().resources[0]).toMatchObject({
-      failure: { reason: "internal", retryable: true },
-      kind: "error",
+    const resource = loader.getSnapshot().resources[0];
+    expect(resource?.kind).toBe("loaded");
+    if (resource?.kind !== "loaded") {
+      throw new Error("expected remapped loaded");
+    }
+    expect(resource.document.sections[0]).toMatchObject({
+      sectionKey: item.renderSlots[0]?.sectionKey,
+      targetPath: item.path,
     });
   });
 
@@ -632,13 +637,13 @@ describe("GitReviewDocumentLoader", () => {
     second.dispose();
   });
 
-  it("hydrateLoaded skips entries whose slots no longer match", () => {
+  it("hydrateLoaded remaps sectionKey when stage group moves slots", () => {
     const original = entry(0);
     const changed: GitReviewIndexEntry = {
       ...original,
       renderSlots: [
         {
-          group: "unstaged",
+          group: "staged",
           oldPath: null,
           sectionKey: "section:changed",
           status: "modified",
@@ -650,6 +655,32 @@ describe("GitReviewDocumentLoader", () => {
     const loader = new GitReviewDocumentLoader({
       cancel: vi.fn(async () => undefined),
       entries: [changed],
+      load,
+    });
+    const stale: Extract<GitReviewDocumentResource, { kind: "loaded" }> = {
+      document: documentFor(original),
+      entry: original,
+      kind: "loaded",
+    };
+    loader.hydrateLoaded(new Map([[original.entryKey, stale]]));
+    const resource = loader.getResource(original.entryKey);
+    expect(resource?.kind).toBe("loaded");
+    if (resource?.kind !== "loaded") {
+      throw new Error("expected remapped loaded");
+    }
+    expect(resource.document.sections[0]?.sectionKey).toBe("section:changed");
+    expect(resource.entry.renderSlots[0]?.group).toBe("staged");
+    expect(load).not.toHaveBeenCalled();
+    loader.dispose();
+  });
+
+  it("hydrateLoaded skips entries when slot arity no longer matches", () => {
+    const original = entry(0);
+    const halfStaged = entry(0, ["unstaged", "staged"]);
+    const load = vi.fn(async (item: GitReviewIndexEntry) => documentFor(item));
+    const loader = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries: [halfStaged],
       load,
     });
     const stale: Extract<GitReviewDocumentResource, { kind: "loaded" }> = {

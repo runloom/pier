@@ -170,6 +170,7 @@ function ReviewDocumentsComponent({
     applyNavigationDemand,
     diffHandleRef,
     documentGenerationRef,
+    entryKeyBySectionIdRef,
     firstSectionIdByEntryKeyRef,
     itemCacheKeysRef,
     itemIndexByIdRef,
@@ -257,7 +258,6 @@ function ReviewDocumentsComponent({
     syncRetentionLimits,
     tryPendingNavigation,
   };
-
   useGitReviewDocumentSession({
     committedProjectionGenerationRef,
     context,
@@ -267,6 +267,7 @@ function ReviewDocumentsComponent({
     documentGenerationRef,
     entries,
     entryKeyBySectionIdRef,
+    firstSectionIdByEntryKeyRef,
     generationCallbacksRef,
     indexGeneration,
     itemCacheKeysRef,
@@ -298,7 +299,6 @@ function ReviewDocumentsComponent({
     itemIdsRef,
     itemIndexByIdRef,
     latestItemUpdatesRef,
-    notifyProjectionChanged,
     projection,
     projectionGeneration,
     renderedGenerationRef,
@@ -445,7 +445,6 @@ function ReviewDocumentsComponent({
       viewOptions={viewOptions}
     />
   );
-
   return (
     <GitReviewDocumentView
       appearance={appearance}

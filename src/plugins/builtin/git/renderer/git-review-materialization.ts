@@ -9,14 +9,15 @@ export function isActiveReviewResource(
 }
 
 /**
- * demand 预取覆盖集合（不是 CodeView 成员集）：
+ * demand 预取覆盖集合（≠ CodeView 成员集）：
  * - 离开 idle 即加入，供 lookahead 锚点
  * - 从 index 消失即删除
  * - loader 回到 idle 且不再被 demand/selected/retained 覆盖时，在 allowReclaim 时回收
  * - 导航事务中禁止回收，避免 seed/window 抖动导致重复预取
  * 返回按 index 顺序的稳定数组。
  *
- * CodeView 成员始终 = 全量轻量槽；本集合只影响 seed/window/lookahead demand。
+ * CodeView 成员 = 已 materialize 的 loaded|error（见 end-state 契约）；
+ * 本集合只影响 seed/window/lookahead demand。
  */
 export function nextDemandPrefetchEntryKeys(options: {
   readonly allowReclaim?: boolean;

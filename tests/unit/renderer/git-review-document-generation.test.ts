@@ -29,10 +29,17 @@ function entry(index: number): GitReviewIndexEntry {
 }
 
 function document(index: number): GitReviewFileDocumentOk {
+  const path = `src/file-${index}.ts`;
   return {
     kind: "ok",
     revision: `document:${index}`,
-    sections: [],
+    sections: [
+      {
+        kind: "patch",
+        patch: `diff --git a/${path} b/${path}\n`,
+        sectionKey: `section:${index}`,
+      },
+    ],
   };
 }
 
@@ -66,7 +73,7 @@ describe("GitReviewDocumentGeneration", () => {
 
     expect(controller.retentionLimits()).toEqual({
       maxRetainedBytes: GIT_REVIEW_MAX_RETAINED_BYTES - entries.length * 256,
-      maxRetainedLines: GIT_REVIEW_MAX_RETAINED_LINES,
+      maxRetainedLines: GIT_REVIEW_MAX_RETAINED_LINES - entries.length,
     });
 
     const change = controller.apply(
@@ -88,7 +95,7 @@ describe("GitReviewDocumentGeneration", () => {
     expect(controller.retentionLimits()).toEqual({
       maxRetainedBytes:
         GIT_REVIEW_MAX_RETAINED_BYTES - (entries.length - 1) * 256,
-      maxRetainedLines: GIT_REVIEW_MAX_RETAINED_LINES,
+      maxRetainedLines: GIT_REVIEW_MAX_RETAINED_LINES - (entries.length - 1),
     });
   });
 
@@ -116,7 +123,7 @@ describe("GitReviewDocumentGeneration", () => {
 
     expect(controller.retentionLimits()).toEqual({
       maxRetainedBytes: GIT_REVIEW_MAX_RETAINED_BYTES - entries.length * 256,
-      maxRetainedLines: GIT_REVIEW_MAX_RETAINED_LINES,
+      maxRetainedLines: GIT_REVIEW_MAX_RETAINED_LINES - entries.length,
     });
   });
 
@@ -162,6 +169,61 @@ describe("GitReviewDocumentGeneration", () => {
         },
       ]);
     }
+  });
+
+  it("跨代 soft retain 在 sectionKey 变化时 remap 到当前 entry", () => {
+    const previousEntry = entry(0);
+    const stagedEntry: GitReviewIndexEntry = {
+      ...previousEntry,
+      renderSlots: [
+        {
+          group: "staged",
+          oldPath: null,
+          sectionKey: "section:0:staged",
+          status: "modified",
+          targetPath: previousEntry.path,
+        },
+      ],
+    };
+    const previousDoc: GitReviewFileDocumentOk = {
+      kind: "ok",
+      revision: "document:0",
+      sections: [
+        {
+          kind: "patch",
+          patch: "diff --git a/src/file-0.ts b/src/file-0.ts\n",
+          sectionKey: "section:0",
+        },
+      ],
+    };
+    const controller = new GitReviewDocumentGeneration({
+      current: {
+        resources: [{ entry: stagedEntry, kind: "idle" }],
+        retainedEntryKeys: [],
+        settled: false,
+      },
+      generation: 1,
+      previousByEntryKey: new Map([
+        [
+          previousEntry.entryKey,
+          {
+            document: previousDoc,
+            entry: previousEntry,
+            kind: "loaded",
+          },
+        ],
+      ]),
+      protectedEntryKey: previousEntry.entryKey,
+    });
+    const resource = controller
+      .snapshot([])
+      .resources.find((item) => item.entry.entryKey === previousEntry.entryKey);
+    expect(resource?.kind).toBe("loaded");
+    if (resource?.kind !== "loaded") {
+      throw new Error("expected remapped soft retain");
+    }
+    expect(resource.entry.renderSlots[0]?.sectionKey).toBe("section:0:staged");
+    expect(resource.document.sections[0]?.sectionKey).toBe("section:0:staged");
   });
 
   it("同代 soft budget 回收 idle 时仍保留已 loaded 正文", () => {

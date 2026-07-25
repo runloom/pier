@@ -105,6 +105,7 @@ export function GitReviewDocumentView({
     onScroll,
     ...(presentation === undefined ? {} : { presentation }),
     projection,
+    settled: viewState.settled,
   });
   return (
     <GitReviewPanelLayout
@@ -167,6 +168,7 @@ function documentContent(options: {
   readonly onScroll: () => void;
   readonly presentation?: PierDiffViewPresentation;
   readonly projection: ReviewDocumentProjection;
+  readonly settled: boolean;
 }): React.JSX.Element {
   if (options.projection.items.length > 0) {
     return (
@@ -192,5 +194,29 @@ function documentContent(options: {
       </div>
     );
   }
-  return <ReviewLoading context={options.context} />;
+  // 终态：未 materialize 完成时 skeleton；settled 仍无成员则保持 CodeView 空壳路径
+  // （上层 index 空态另有 Empty）。避免把「空成员」当成永久全页 loading。
+  if (!options.settled) {
+    return <ReviewLoading context={options.context} />;
+  }
+  return (
+    <div className="min-h-0 flex-1">
+      <ReviewCodeView
+        appearance={options.appearance}
+        context={options.context}
+        contextId={options.contextId}
+        diffRef={options.diffRef}
+        {...(options.entries === undefined ? {} : { entries: options.entries })}
+        {...(options.gitRootPath ? { gitRootPath: options.gitRootPath } : {})}
+        items={[]}
+        onFeedbackChange={options.onFeedbackChange}
+        onItemError={options.onItemError}
+        onRenderWindowChange={options.onRenderWindowChange}
+        onScroll={options.onScroll}
+        {...(options.presentation === undefined
+          ? {}
+          : { presentation: options.presentation })}
+      />
+    </div>
+  );
 }

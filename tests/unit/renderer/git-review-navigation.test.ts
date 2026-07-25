@@ -3,6 +3,7 @@ import {
   findReviewNavigationTarget,
   isReviewNavigationContentReady,
   isReviewNavigationTerminal,
+  resolveReviewSectionKey,
   scheduleReviewNavigationVerification,
   shouldScrollReviewNavigation,
 } from "@plugins/builtin/git/renderer/git-review-navigation.ts";
@@ -84,6 +85,81 @@ describe("Review navigation verification", () => {
     ).toEqual({ cacheKey, sectionId: "state:binary" });
     expect(
       isReviewNavigationTerminal(snapshot.resources[0], snapshot.settled)
+    ).toBe(false);
+  });
+
+  it("resolveReviewSectionKey rebinds when preferred left the entry", () => {
+    expect(
+      resolveReviewSectionKey({
+        entryKey: "entry:a",
+        entryKeyBySectionId: new Map([["section:staged", "entry:a"]]),
+        firstSectionIdByEntryKey: new Map([["entry:a", "section:staged"]]),
+        preferredSectionKey: "section:unstaged",
+      })
+    ).toBe("section:staged");
+    expect(
+      resolveReviewSectionKey({
+        entryKey: "entry:a",
+        entryKeyBySectionId: new Map([
+          ["section:unstaged", "entry:a"],
+          ["section:staged", "entry:a"],
+        ]),
+        firstSectionIdByEntryKey: new Map([["entry:a", "section:unstaged"]]),
+        preferredSectionKey: "section:staged",
+      })
+    ).toBe("section:staged");
+  });
+
+  it("isReviewNavigationTerminal when settled resource lacks orphan sectionKey", () => {
+    const entry = {
+      entryKey: "entry:a",
+      oldPaths: [] as string[],
+      path: "a.ts",
+      renderSlots: [
+        {
+          group: "staged" as const,
+          oldPath: null,
+          sectionKey: "section:staged",
+          status: "modified" as const,
+          targetPath: "a.ts",
+        },
+      ],
+      status: "modified" as const,
+    };
+    const loaded = {
+      document: {
+        kind: "ok" as const,
+        revision: "r",
+        sections: [
+          {
+            kind: "patch" as const,
+            patch: "diff",
+            sectionKey: "section:staged",
+          },
+        ],
+      },
+      entry,
+      kind: "loaded" as const,
+    };
+    expect(isReviewNavigationTerminal(loaded, true, "section:unstaged")).toBe(
+      true
+    );
+    expect(isReviewNavigationTerminal(loaded, true, "section:staged")).toBe(
+      false
+    );
+    expect(
+      isReviewNavigationTerminal(
+        { entry, kind: "unchanged" },
+        true,
+        "section:unstaged"
+      )
+    ).toBe(true);
+    expect(
+      isReviewNavigationTerminal(
+        { entry, kind: "unchanged" },
+        true,
+        "section:staged"
+      )
     ).toBe(false);
   });
 

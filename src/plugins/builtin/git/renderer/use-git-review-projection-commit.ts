@@ -23,7 +23,6 @@ export function useGitReviewProjectionCommit({
   itemIdsRef,
   itemIndexByIdRef,
   latestItemUpdatesRef,
-  notifyProjectionChanged,
   projection,
   projectionGeneration,
   renderedGenerationRef,
@@ -41,7 +40,6 @@ export function useGitReviewProjectionCommit({
   readonly itemIdsRef: RefObject<readonly string[]>;
   readonly itemIndexByIdRef: RefObject<ReadonlyMap<string, number>>;
   readonly latestItemUpdatesRef: RefObject<Map<string, PierDiffViewItem>>;
-  readonly notifyProjectionChanged: (ids?: readonly string[]) => void;
   readonly projection: ReviewDocumentProjection;
   readonly projectionGeneration: number;
   readonly renderedGenerationRef: RefObject<number>;
@@ -91,7 +89,7 @@ export function useGitReviewProjectionCommit({
       );
     }
     renderedGenerationRef.current = projectionGeneration;
-    notifyProjectionChanged();
+    // 不调用无参 notifyProjectionChanged：会误抬 revision 触发 resume 排他 thrash。
     resumeSelectedNavigation();
     tryPendingNavigation();
   }, [
@@ -106,7 +104,6 @@ export function useGitReviewProjectionCommit({
     itemIdsRef,
     itemIndexByIdRef,
     latestItemUpdatesRef,
-    notifyProjectionChanged,
     projectionGeneration,
     projectionIndex,
     renderedGenerationRef,
