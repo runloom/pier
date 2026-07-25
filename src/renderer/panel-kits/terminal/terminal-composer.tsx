@@ -31,8 +31,12 @@ import {
   passthroughKeyPressForKey,
 } from "./terminal-composer-passthrough.ts";
 import { TerminalComposerView } from "./terminal-composer-view.tsx";
-import { useTuiSendBlock } from "./tui-input-focus.ts";
+import {
+  requestComposerCursorProbe,
+  useTuiSendBlock,
+} from "./tui-input-focus.ts";
 import { useTerminalComposerAttachments } from "./use-terminal-composer-attachments.ts";
+import { useTerminalComposerEscape } from "./use-terminal-composer-escape.ts";
 import { useTerminalComposerSend } from "./use-terminal-composer-send.ts";
 
 export {
@@ -164,6 +168,7 @@ export function TerminalComposer({
   });
 
   const sendBlock = useTuiSendBlock(panelId, isActive);
+  // 硬门禁只认光标探针（unfocused）；不认 FA waiting。
   const canSend =
     !disabled && sendBlock === null && attachments.canSendWithDraft(value);
 
@@ -208,7 +213,17 @@ export function TerminalComposer({
 
   useEffect(
     () =>
-      registerTerminalComposerTakeover(panelId, (_reason) => {
+      registerTerminalComposerTakeover(panelId, (reason) => {
+        // 点终端内容：
+        // - 不关增强输入、不 yield 键盘（键仍在卡片，避免 limbo）
+        // - 鼠标已点到 TUI：用户点输入框即可复原聚焦
+        // - 立刻重探光标，尽快解除「未聚焦输入框」
+        // 关闭只走 Esc / 发送成功 / 资格失效。
+        if (reason === "surface") {
+          requestComposerCursorProbe(panelId);
+          return true;
+        }
+        // 面板激活 / 点 tab：若 composer 仍开着，refocus 输入框。
         const el = editorRef.current?.getElement();
         if (!el || disabled) {
           return false;
@@ -289,6 +304,17 @@ export function TerminalComposer({
     }
   }, [isActive, overlayId]);
 
+  useTerminalComposerEscape({
+    disabled,
+    editorRef,
+    isActive,
+    onClose: () => {
+      onCloseRef.current();
+    },
+    panelId,
+    valueRef,
+  });
+
   const sendKey = (keyPress: ComposerPassthroughKeyPress) => {
     window.pier.terminal
       .sendKeyPress({
@@ -330,11 +356,8 @@ export function TerminalComposer({
       return;
     }
     if (event.key === "Escape") {
-      // Lexical may close the mention menu first (ref → false + preventDefault).
-      // Treat that as "Esc consumed by popup" and do not close Rich Input.
-      if (event.defaultPrevented) {
-        return;
-      }
+      // @ / # 菜单优先：关掉菜单，不关增强输入。
+      // 勿因其它层（历史受控 Tooltip 等）的 preventDefault 就放弃关闭。
       if (editorRef.current?.isMentionMenuOpen()) {
         event.preventDefault();
         event.stopPropagation();
@@ -342,6 +365,7 @@ export function TerminalComposer({
         return;
       }
       event.preventDefault();
+      event.stopPropagation();
       writeComposerDraft(panelId, valueRef.current);
       onCloseRef.current();
       return;
@@ -361,9 +385,7 @@ export function TerminalComposer({
       shiftKey: event.shiftKey,
     });
     if (keyPress !== null) {
-      // 阻断态下 Enter 透传必须截住：空草稿时 Return 会直达 TUI，waiting 态
-      // 可能误触确认对话框——与 send() 的门禁同一口径（方向键导航仍放行，
-      // Ctrl+C 中断不受影响）。
+      // 光标门禁期间截住空草稿 Enter 透传（避免误触 TUI dialog）。
       if (sendBlock !== null && keyPress.keycode === APPKIT_KEYCODE.return) {
         event.preventDefault();
         return;

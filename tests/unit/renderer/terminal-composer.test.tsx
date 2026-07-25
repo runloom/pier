@@ -13,6 +13,7 @@ import {
   resetTerminalComposerDraftsForTests,
   TerminalComposer,
 } from "@/panel-kits/terminal/terminal-composer.tsx";
+import { resetTerminalEscapeShortcutForTests } from "@/panel-kits/terminal/terminal-escape-shortcut.ts";
 import { resetTuiInputFocusForTests } from "@/panel-kits/terminal/tui-input-focus.ts";
 import { resetTerminalComposerAttachmentsForTests } from "@/panel-kits/terminal/use-terminal-composer-attachments.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
@@ -34,6 +35,18 @@ import {
 vi.mock("@/stores/app-dialog.store.ts", () => ({
   showAppAlert: vi.fn(async () => undefined),
 }));
+
+const activeTerminalPanelIdMock = vi.fn(() => "t-1");
+vi.mock("@/lib/actions/renderer-action-runtime.ts", async (importOriginal) => {
+  const actual =
+    await importOriginal<
+      typeof import("@/lib/actions/renderer-action-runtime.ts")
+    >();
+  return {
+    ...actual,
+    activeTerminalPanelId: () => activeTerminalPanelIdMock(),
+  };
+});
 
 function setAgentActivity(overrides: {
   agentId?: string;
@@ -88,17 +101,28 @@ const cursorVisible = vi.fn<(panelId: string) => Promise<string>>(
 const pickComposerFiles = vi.fn<() => Promise<TerminalComposerPickResult>>();
 const resolveComposerPaths =
   vi.fn<(paths: string[]) => Promise<TerminalComposerPathsResult>>();
+const setAppShortcutKeys = vi.fn();
+const keybindingOnForward =
+  vi.fn<
+    (
+      cb: (payload: { chars: string; modifierFlags: number }) => void
+    ) => () => void
+  >();
 
 function installTerminalApi(): void {
   Object.defineProperty(window, "pier", {
     configurable: true,
     value: {
+      keybinding: {
+        onForward: keybindingOnForward,
+      },
       terminal: {
         cursorVisible,
         pickComposerFiles,
         resolveComposerPaths,
         sendKeyPress,
         sendText,
+        setAppShortcutKeys,
       },
     },
   });
@@ -116,9 +140,14 @@ beforeEach(async () => {
   resolveComposerPaths.mockReset();
   cursorVisible.mockReset();
   cursorVisible.mockResolvedValue("visible");
+  setAppShortcutKeys.mockClear();
+  keybindingOnForward.mockReset();
+  keybindingOnForward.mockImplementation(() => () => undefined);
+  activeTerminalPanelIdMock.mockReturnValue("t-1");
   toastError.mockClear();
   useForegroundActivityStore.setState({ activities: {} });
   resetTuiInputFocusForTests();
+  resetTerminalEscapeShortcutForTests();
   vi.mocked(showAppAlert).mockClear();
   resetTerminalComposerDraftsForTests();
   resetTerminalComposerAttachmentsForTests();
@@ -134,6 +163,7 @@ afterEach(() => {
   resetTerminalComposerDraftsForTests();
   resetTerminalComposerAttachmentsForTests();
   resetComposerEditorsForTests();
+  resetTerminalEscapeShortcutForTests();
   Reflect.deleteProperty(window, "pier");
 });
 
@@ -231,6 +261,19 @@ describe("TerminalComposer", () => {
     expect(readComposerDraftText()).toBe("keep me");
   });
 
+  it("panel-level Esc closes when focus is outside the editor", () => {
+    activeTerminalPanelIdMock.mockReturnValue("t-1");
+    setAgentActivity({ status: "ready" });
+    const onClose = vi.fn();
+    renderComposer({ onClose, panelId: "t-1" });
+
+    setComposerDraftText("draft while open");
+    fireEvent.keyDown(window, { key: "Escape" });
+
+    expect(onClose).toHaveBeenCalledTimes(1);
+    expect(sendKeyPress).not.toHaveBeenCalled();
+  });
+
   it("sends typed text on Enter, clears textarea, and calls onClose on success", async () => {
     const onClose = vi.fn();
     renderComposer({ onClose });
@@ -251,33 +294,35 @@ describe("TerminalComposer", () => {
     });
   });
 
-  it("waiting 态：发送按钮禁用、原因常驻展示、回车不生效、草稿保留", async () => {
+  it("FA waiting 不单独门禁：光标 visible 时可正常发送", async () => {
     const onClose = vi.fn();
     setAgentActivity({ status: "waiting" });
+    cursorVisible.mockResolvedValue("visible");
     renderComposer({ onClose });
 
     setComposerDraftText("fix bug");
-    expect(screen.getByTestId("terminal-composer-send")).toBeDisabled();
+    // waiting 不再驱动门禁；有光标即可发。
     expect(
-      screen.getByTestId("terminal-composer-send-block")
-    ).toHaveTextContent(i18next.t("terminal.composer.blockedWaiting"));
+      screen.queryByTestId("terminal-composer-send-block")
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
 
     fireEvent.keyDown(composerInput(), { key: "Enter" });
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 30);
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        submit: true,
+        text: "fix bug",
+      });
     });
-    expect(sendText).not.toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
-    expect(readComposerDraftText()).toBe("fix bug");
   });
 
-  it("TUI 输入失焦：阻断展示；探针转 visible 后解除并可正常发送", async () => {
+  it("TUI 输入光标 hidden：硬禁用发送 + 未聚焦输入框提示", async () => {
     const onClose = vi.fn();
     setAgentActivity({ status: "ready" });
     cursorVisible.mockResolvedValue("hidden");
     renderComposer({ onClose });
 
-    // 首轮探针轮询后进入阻断态
     await vi.waitFor(() => {
       expect(
         screen.getByTestId("terminal-composer-send-block")
@@ -288,7 +333,7 @@ describe("TerminalComposer", () => {
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     expect(sendText).not.toHaveBeenCalled();
 
-    // TUI 重新聚焦（用户点了输入框）→ 下一轮轮询解除阻断
+    // 光标恢复 → 解除门禁并可发送
     cursorVisible.mockResolvedValue("visible");
     await vi.waitFor(
       () => {
@@ -335,11 +380,16 @@ describe("TerminalComposer", () => {
     expect(readComposerDraftText()).toBe("fix bug");
   });
 
-  it("waiting 态空草稿 Enter 透传同样被截住（不误触 TUI 确认）", async () => {
-    setAgentActivity({ status: "waiting" });
+  it("光标 hidden 时空草稿 Enter 透传被截住", async () => {
+    setAgentActivity({ status: "ready" });
+    cursorVisible.mockResolvedValue("hidden");
     renderComposer();
 
-    // 空草稿（不写任何内容）按 Enter：此前走 passthrough 直达 TUI
+    await vi.waitFor(() => {
+      expect(
+        screen.getByTestId("terminal-composer-send-block")
+      ).toBeInTheDocument();
+    });
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     await new Promise((resolve) => {
       window.setTimeout(resolve, 30);
@@ -348,19 +398,20 @@ describe("TerminalComposer", () => {
     expect(sendText).not.toHaveBeenCalled();
   });
 
-  it("非白名单 agent（未声明恢复键）探针 hidden 也不阻断", async () => {
-    setAgentActivity({ agentId: "claude", status: "ready" });
+  it("非白名单 agent（如 grok）光标 hidden 同样硬拦发送", async () => {
+    setAgentActivity({ agentId: "grok", status: "processing" });
     cursorVisible.mockResolvedValue("hidden");
     renderComposer();
 
     setComposerDraftText("fix bug");
-    await new Promise((resolve) => {
-      window.setTimeout(resolve, 600);
+    await vi.waitFor(() => {
+      expect(
+        screen.getByTestId("terminal-composer-send-block")
+      ).toHaveTextContent(i18next.t("terminal.composer.blockedUnfocused"));
     });
-    expect(
-      screen.queryByTestId("terminal-composer-send-block")
-    ).not.toBeInTheDocument();
-    expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
+    expect(screen.getByTestId("terminal-composer-send")).toBeDisabled();
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    expect(sendText).not.toHaveBeenCalled();
   });
 
   it("settle 窗口内双击发送只提交一次（in-flight 守卫）", async () => {
@@ -613,23 +664,43 @@ describe("TerminalComposer", () => {
     expect(useTerminalStore.getState().activeOverlayId).toBe("other");
   });
 
-  it("surface takeover refocuses input, returns true, does NOT close", () => {
+  it("surface takeover swallows focus-request: no close, no steal, keeps composer", () => {
     const onClose = vi.fn();
     renderComposer({ onClose, panelId: "t-takeover" });
 
-    const textarea = composerInput();
     setComposerDraftText("drafted");
-    textarea.blur();
     useTerminalStore
       .getState()
       .deactivateOverlay("terminal-composer:t-takeover");
-    expect(document.activeElement).not.toBe(textarea);
 
-    // surface takeover refocuses composer and returns true (keep keyboard).
+    // 点终端：吞掉归还（true），不关卡片、不抢编辑器焦点。
     expect(terminalComposerTakeoverFocus("t-takeover", "surface")).toBe(true);
     expect(onClose).not.toHaveBeenCalled();
-    expect(document.activeElement).toBe(textarea);
     expect(readComposerDraftText()).toBe("drafted");
+  });
+
+  it("surface click re-probes cursor so send unblocks after TUI input focus", async () => {
+    setAgentActivity({ status: "ready" });
+    cursorVisible.mockResolvedValue("hidden");
+    const onClose = vi.fn();
+    renderComposer({ onClose, panelId: "t-1" });
+
+    setComposerDraftText("fix bug");
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("terminal-composer-send")).toBeDisabled();
+    });
+
+    // 用户点终端输入区 → TUI 聚焦 → 立刻重探
+    cursorVisible.mockResolvedValue("visible");
+    expect(terminalComposerTakeoverFocus("t-1", "surface")).toBe(true);
+    expect(onClose).not.toHaveBeenCalled();
+
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
+    });
+    expect(
+      screen.queryByTestId("terminal-composer-send-block")
+    ).not.toBeInTheDocument();
   });
 
   it("activate takeover refocuses the textarea and does not close", () => {
@@ -653,7 +724,7 @@ describe("TerminalComposer", () => {
     expect(readComposerDraftText()).toBe("keep open");
   });
 
-  it("surface takeover returns false when disabled and does NOT close", () => {
+  it("surface takeover still swallows when disabled and does NOT close", () => {
     const onClose = vi.fn();
     renderComposer({ disabled: true, onClose });
 
@@ -662,7 +733,7 @@ describe("TerminalComposer", () => {
     textarea.blur();
     expect(document.activeElement).not.toBe(textarea);
 
-    expect(terminalComposerTakeoverFocus("t-1", "surface")).toBe(false);
+    expect(terminalComposerTakeoverFocus("t-1", "surface")).toBe(true);
     expect(document.activeElement).not.toBe(textarea);
     expect(onClose).not.toHaveBeenCalled();
   });

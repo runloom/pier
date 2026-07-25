@@ -22,8 +22,8 @@ export const terminal = {
   composer: {
     attachFailed: "无法添加文件",
     attachFile: "添加文件",
-    blockedUnfocused: "会话输入框未聚焦",
-    blockedWaiting: "会话等待你确认",
+    // 门禁只认 TUI 输入光标：hidden = 未聚焦输入框（非 FA waiting）。
+    blockedUnfocused: "未聚焦输入框",
     invalidAttachmentRef: "存在无效的附件引用",
     keyHint: "⇧⏎ 换行 · {{attach}} 添加文件 · Esc 关闭",
     label: "增强输入",

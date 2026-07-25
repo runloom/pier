@@ -23,8 +23,8 @@ export const terminal = {
   composer: {
     attachFailed: "Couldn’t add file",
     attachFile: "Add file",
-    blockedUnfocused: "Session input not focused",
-    blockedWaiting: "Session awaiting confirmation",
+    // Gate is cursor-only: hidden = terminal input not focused (not FA waiting).
+    blockedUnfocused: "Input not focused",
     invalidAttachmentRef: "Invalid attachment reference",
     keyHint: "⇧⏎ newline · {{attach}} attach · Esc close",
     label: "Rich Input",

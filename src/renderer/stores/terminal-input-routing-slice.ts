@@ -46,7 +46,7 @@ export function beginTerminalPanelWebDragCapture(
 
 const webOverlayRects = new Map<string, TerminalFrame>();
 const webRequestIds = new Set<string>();
-/** composer 等 web 输入组件接管的面板：native 不得聚焦、硬件光标隐藏。 */
+/** composer 等 web 输入组件接管的面板：native 不得成 FR；pin focus + 藏绘制光标。 */
 const focusDisabledPanelIds = new Set<string>();
 const TRANSIENT_WEB_CLICK_FOCUS_ID = "pier.click";
 
@@ -89,9 +89,9 @@ function applyTerminalInputRouting(): void {
 }
 
 /**
- * 声明某终端面板的原生聚焦开关（Agent Composer 挂载即关闭原生聚焦）。
- * 关闭期间：main 不会把键盘交给该终端，native 隐藏其硬件光标；
- * 开关恢复后回到常规路由。
+ * 声明某终端面板的原生聚焦开关（Agent Composer 挂载即关闭原生 FR）。
+ * 关闭期间：main 不会把键盘交给该终端；native pin surface focus（防 ESC[O]）
+ * 并 suppress 绘制光标（避免双闪）。探针仍读 DECTCEM 模式位。
  */
 export function setTerminalNativeFocusDisabled(
   panelId: string,

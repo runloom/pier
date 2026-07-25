@@ -73,8 +73,9 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
   },
 
   {
+    // 不用 Mod+Shift+Enter：与增强输入/聊天「换行」撞车。M ≈ Maximize。
     commandId: "pier.panel.toggleMaximized",
-    keys: "Mod+Shift+Enter",
+    keys: "Mod+Shift+KeyM",
     scope: "global",
   },
   {

@@ -2,12 +2,12 @@
  * Rich Input / agent composer 键盘路径注册表。
  *
  * workspace-host 与 tab header 在「焦点归还终端」路径上先询问这里：
- * - reason `"activate"`：面板激活 / 点已激活 tab → 若 composer 仍打开，应 refocus 输入框
- * - reason `"surface"`：点终端内容区 focus-request → 若 composer 仍打开，应 refocus
- *   输入框并保持 Rich Input（不关闭；仅 Esc / send 关闭）
+ * - reason `"activate"`：面板激活 / 点已激活 tab → 若 composer 仍打开，refocus 输入框
+ * - reason `"surface"`：点终端内容区 → **吞掉**归还键盘（return true）：
+ *   不关卡片、不 yield、键仍钉在增强输入；鼠标已点到 TUI 可复原输入聚焦，
+ *   并立刻重探光标。关闭只走 Esc / 发送成功 / 资格失效
  *
- * 回调返回 boolean：true = 已处理焦点（调用方止步）；false = 未接管，
- * 调用方走原生焦点归还路径。
+ * 回调返回 boolean：true = 已处理（调用方止步）；false = 未接管，走原生路径。
  */
 export type TerminalComposerTakeoverReason = "activate" | "surface";
 

@@ -13,7 +13,7 @@ function chord(partial: Partial<KeyChord> & Pick<KeyChord, "code">): KeyChord {
 }
 
 describe("shouldSuppressKeybindingForTextInput", () => {
-  it("suppresses Mod+Shift+Enter in a textarea so maximize does not steal newline", () => {
+  it("suppresses Mod+Shift+Enter in a textarea so Enter chords stay with newline/send", () => {
     const textarea = document.createElement("textarea");
     expect(
       shouldSuppressKeybindingForTextInput(
@@ -23,11 +23,17 @@ describe("shouldSuppressKeybindingForTextInput", () => {
     ).toBe(true);
   });
 
-  it("still allows Mod+letter shortcuts while typing", () => {
+  it("still allows Mod+letter shortcuts while typing (including maximize Mod+Shift+M)", () => {
     const textarea = document.createElement("textarea");
     expect(
       shouldSuppressKeybindingForTextInput(
         chord({ code: "KeyW", cmdOrCtrl: true }),
+        textarea
+      )
+    ).toBe(false);
+    expect(
+      shouldSuppressKeybindingForTextInput(
+        chord({ code: "KeyM", cmdOrCtrl: true, shift: true }),
         textarea
       )
     ).toBe(false);

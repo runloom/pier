@@ -11,7 +11,7 @@ Lakr233 上游 patches 之后再 apply 这一批。编号从 `0100` 起，跟 La
 | `0100-command-started-action.patch` | 加 `GHOSTTY_ACTION_COMMAND_STARTED` C 符号 + Zig `Action` 变体 + Surface 消息路由，从 OSC 133 C / 633 E 提取 `cmdline_url` 交给上层。Native 通路的核心，pier `command_started` C API 依赖这一坨。等 Lakr233 上游合并同款可以删。 |
 | `0101-zsh-cmdline-url.patch` | 让 ghostty 自带的 zsh shell integration 在 OSC 133 C 中附带 `cmdline_url=<URL-percent 编码>`。pier 靠这一段拿到用户敲的命令行文本，匹配 agent CLI 名点亮 tab icon。仅 zsh，其他 shell 上游没有等价 hook。 |
 | `0102-embedded-main-thread-target-render.patch` | 为 embedded runtime 声明主线程绘制要求。renderer 完成 frame 后沿 Ghostty 原有 `redraw_surface` 路径保留精确 surface target，由宿主主线程只呈现目标 surface。 |
-| `0103-host-cursor-suppress.patch` | 加 `ghostty_surface_set_cursor_suppress`：renderer 层强制不画光标（不受 TUI `CSI ?25h` 重开影响），web 浮层（增强输入）接管键盘时避免双光标。 |
+| `0103-host-cursor-suppress.patch` | 加 `ghostty_surface_set_cursor_suppress`：renderer 层强制不画光标（不受 TUI `CSI ?25h` 影响）。增强输入 pin 时 suppress 绘制（只闪 composer caret）；探针 0104 仍读模式位。 |
 | `0104-cursor-visibility-probe.patch` | 加 `ghostty_surface_cursor_visible` 只读探针：读应用设置的 DECTCEM(?25) 模式位（不受 0103 渲染层 suppress 影响），用作「TUI 输入框是否聚焦」信号——现代 TUI 输入失焦即藏光标。 |
 
 ## 规则

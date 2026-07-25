@@ -86,7 +86,9 @@ export interface TerminalHostSnapshot {
   basePanel: TerminalKeyboardFocusTarget;
   /**
    * 原生聚焦开关关闭的面板（Agent Composer 等 web 输入组件接管期间）。
-   * 名单内终端不得成为原生键盘目标，native 隐藏其硬件光标。renderer panelId。
+   * 名单内终端不得成为原生键盘目标；native pin surface focus（防 ESC[O]）
+   * 并 suppress 绘制光标（避免与增强输入 caret 双闪）。探针仍读 DECTCEM
+   * 模式位。renderer panelId。
    */
   focusDisabledPanelIds: string[];
   hasMaximizedGroup: boolean;
@@ -100,7 +102,7 @@ export interface TerminalHostSnapshot {
 export interface TerminalNativeWindowState {
   /**
    * 原生聚焦开关关闭的面板（native panelId，含窗口前缀）：
-   * 不做 first responder，硬件光标强制隐藏。
+   * 不做 first responder；surface focus pin + 绘制光标 suppress。
    */
   focusDisabledPanelIds: string[];
   keyboardTarget: TerminalKeyboardFocusTarget;

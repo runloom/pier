@@ -173,9 +173,10 @@
             // 滞后/拒绝），按 FR 瞬态派生会向 TUI 发出瞬时 focus-out（ESC[O）；
             // cursor-agent 等 TUI 的输入框失焦后不随 focus-in 恢复，表现为
             // paste 进框但 Enter 不提交。hostKeyboardActive（coordinator 下发
-            // 的键盘归属）与 hostCursorHidden（web 浮层接管保活）都算聚焦；
-            // 键盘真正切去别的面板时 hostKeyboardActive=false，仍会正确 blur。
-            // 配合 setHostCursorHidden 的 renderer 级 suppress，无双光标问题。
+            // 的键盘归属）与 hostCursorHidden（composer pin）都算聚焦；键盘真正
+            // 切去别的面板时 hostKeyboardActive=false，仍会正确 blur。
+            // pin 同时 suppress 绘制光标（仅 composer caret 闪烁）；探针仍读
+            // DECTCEM 模式位，不受绘制 suppress 影响。
             //
             // 为什么仅有公式还不够、还需要 applyTerminalWindowState 的转场
             // 顺序修正（打开浮层先挂 hidden 再交 FR）——打开方向若先交 FR：

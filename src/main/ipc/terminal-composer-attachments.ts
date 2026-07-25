@@ -174,6 +174,27 @@ export async function materializeTerminalComposerClipboardImage(): Promise<Termi
   }
 }
 
+/**
+ * Paste materializations always use a unique on-disk name under
+ * pier-terminal-pastes. Reusing the client basename (e.g. image.png) would
+ * overwrite the previous file and collide with path-based rail dedupe, so the
+ * second paste looks "stuck" or shows a stale preview/status.
+ */
+function uniquePasteFileName(extension: string): string {
+  const ext = extension.replace(/^\./, "") || "bin";
+  return `attachment-${crypto.randomUUID()}.${ext}`;
+}
+
+function displayNameForPaste(
+  requested: string | undefined,
+  fallback: string
+): string {
+  if (typeof requested === "string" && requested.trim() !== "") {
+    return basename(requested);
+  }
+  return fallback;
+}
+
 export async function materializeTerminalComposerImageBytes(
   data: TerminalComposerImageBytes
 ): Promise<TerminalComposerMaterializeResult> {
@@ -187,22 +208,20 @@ export async function materializeTerminalComposerImageBytes(
     }
     const extension = extensionForMime(data.mime);
     const directory = await preparePasteDirectory();
-    const name =
-      typeof data.name === "string" && data.name.trim() !== ""
-        ? basename(data.name)
-        : `attachment-${crypto.randomUUID()}.${extension}`;
-    const path = join(
-      directory,
-      name.includes(".") ? name : `${name}.${extension}`
+    const displayName = displayNameForPaste(
+      data.name,
+      `attachment.${extension}`
     );
+    const path = join(directory, uniquePasteFileName(extension));
     const raw =
       rawBytes instanceof Uint8Array
         ? rawBytes
         : Uint8Array.from(rawBytes as number[]);
     await writeFile(path, Buffer.from(raw));
+    const preview = previewDataUrlForImagePath(path);
     return {
       ok: true,
-      attachment: attachmentDtoFromPath(path),
+      attachment: attachmentDto(path, displayName, preview),
     };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
@@ -228,13 +247,16 @@ export async function materializeTerminalComposerTextBytes(data: {
       };
     }
     const directory = await preparePasteDirectory();
-    const name =
-      typeof data.name === "string" && data.name.trim() !== ""
-        ? basename(data.name)
-        : `paste-${crypto.randomUUID()}.txt`;
-    const path = join(directory, name.includes(".") ? name : `${name}.txt`);
+    const displayName = displayNameForPaste(data.name, "paste.txt");
+    const path = join(directory, uniquePasteFileName("txt"));
     await writeFile(path, text, "utf8");
-    return { ok: true, attachment: attachmentDtoFromPath(path) };
+    return {
+      ok: true,
+      attachment: attachmentDto(
+        path,
+        displayName.includes(".") ? displayName : `${displayName}.txt`
+      ),
+    };
   } catch (error) {
     return { ok: false, error: errorMessage(error) };
   }
