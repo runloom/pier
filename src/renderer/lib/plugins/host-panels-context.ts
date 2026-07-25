@@ -7,6 +7,7 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { PierCapability } from "@shared/contracts/permissions.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { registerPanelCloseGuard } from "@/lib/workspace/panel-close-guards.ts";
+import { resolvePanelPathAnchor } from "@/stores/workspace-panel-helpers.ts";
 import { usePanelDescriptorStore } from "../../stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "../../stores/workspace.store.ts";
 import { activateWorkspacePanel } from "../workspace/panel-activation.ts";
@@ -47,9 +48,12 @@ function openPluginPanel(
   }
   const registration = getPluginPanelRegistrations().get(panelId);
   const descriptorStore = usePanelDescriptorStore.getState();
-  // 无来源 context 时保留 panel 已存的 context,避免重开时被抹掉。
+  // 优先级：显式传入 → 已存 descriptor → 当前活动 panel 持有的路径。
+  // 项目相关插件 panel 打开时必须钉住路径，避免只依赖同组终端回退。
   const context =
-    options.context ?? descriptorStore.descriptors[panelId]?.context;
+    options.context ??
+    descriptorStore.descriptors[panelId]?.context ??
+    resolvePanelPathAnchor({ api }).context;
   const params = {
     ...(registration?.getParams?.() ?? {}),
     ...(context ? { context } : {}),

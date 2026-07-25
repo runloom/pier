@@ -72,7 +72,7 @@ export const commandPalette = {
     noTerminals: "No terminals available",
     noTerminalsDetail: "New terminals will appear here",
     noTaskContext: "No active project",
-    noTaskContextDetail: "Open a panel inside a project, then run a task",
+    noTaskContextDetail: "Focus a project panel first",
     loadFailed: "Failed to load tasks",
     loadingTasks: "Finding tasks...",
     loadingTasksDetail: "Scanning supported task sources in the active project",

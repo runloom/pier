@@ -73,6 +73,7 @@ const ADD_TILE_DECLARATION = {
 
 export function WorkbenchPanel(props: IDockviewPanelProps) {
   const t = useT();
+  // 工作台是全局 panel：descriptor 不挂 context，路径依赖操作读不到锚点。
   const panelDescriptor = useMemo(
     () => ({
       display: {

@@ -72,6 +72,7 @@ describe("action contributions", () => {
     );
 
     expect(dockviewTabActions.map((action) => action.id)).toEqual([
+      "pier.panel.copyPath",
       "pier.panel.close",
       "pier.panel.closeOthers",
     ]);

@@ -6,6 +6,7 @@ import type {
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { resolvePanelPathAnchor } from "@/stores/workspace-panel-helpers.ts";
 import { activateWorkspacePanel } from "../workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../workspace/tab-visibility.ts";
 import {
@@ -247,7 +248,14 @@ export function openPluginPanelInstance(
   }
   const descriptorStore = usePanelDescriptorStore.getState();
   const context =
-    options.context ?? descriptorStore.descriptors[options.instanceId]?.context;
+    options.context ??
+    descriptorStore.descriptors[options.instanceId]?.context ??
+    resolvePanelPathAnchor({
+      api,
+      ...(options.targetGroupId
+        ? { sourcePanelGroupId: options.targetGroupId }
+        : {}),
+    }).context;
   const resolvedTitle =
     options.title ??
     resolveRegistrationTitle(registration, options.componentId);

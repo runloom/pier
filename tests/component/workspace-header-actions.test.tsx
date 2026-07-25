@@ -121,6 +121,28 @@ function createPanel(id: string, title: string): TestPanel {
   };
 }
 
+const DEFAULT_TEST_PANEL_CONTEXT = {
+  contextId: "ctx-test",
+  cwd: "/repo",
+  gitRoot: "/repo",
+  openedPath: "/repo",
+  projectRootPath: "/repo",
+  source: "panel" as const,
+  updatedAt: 1,
+  worktreeKey: "/repo",
+};
+
+/** 路径依赖 create 动作（新建终端/工作台/任务/智能体）需要 panel 自持路径。 */
+function seedPanelProjectContext(
+  panelId: string,
+  context = DEFAULT_TEST_PANEL_CONTEXT
+): void {
+  usePanelDescriptorStore.getState().upsert(panelId, {
+    context,
+    display: { short: panelId },
+  });
+}
+
 function createProps(
   panels: TestPanel[],
   groupCount = 1
@@ -870,6 +892,7 @@ describe("WorkspaceHeaderActions", () => {
     vi.spyOn(Date, "now").mockReturnValue(321);
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
+    seedPanelProjectContext("terminal-1");
 
     render(<WorkspaceHeaderActions {...props} />);
     openAddPanelPopover();
@@ -961,6 +984,7 @@ describe("WorkspaceHeaderActions", () => {
   it("keeps the first create action selected when the pointer rests over a later row on open", async () => {
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
+    seedPanelProjectContext("terminal-1");
 
     render(<WorkspaceHeaderActions {...props} />);
     openAddPanelPopover();
@@ -1030,6 +1054,7 @@ describe("WorkspaceHeaderActions", () => {
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);
     const originalGroup = props.group;
     useWorkspaceStore.getState().setApi(props.containerApi as never);
+    seedPanelProjectContext("terminal-1");
 
     render(<WorkspaceHeaderActions {...props} />);
 
@@ -1066,10 +1091,38 @@ describe("WorkspaceHeaderActions", () => {
     );
   });
 
-  it("opens the existing task quick pick from the creator", async () => {
+  it("disables path-dependent create actions without a project path", async () => {
     const panel = createPanel("terminal-1", "Terminal 1");
     const props = createProps([panel]);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
+    // no seedPanelProjectContext — empty terminal holds no path
+
+    render(<WorkspaceHeaderActions {...props} />);
+    openAddPanelPopover();
+
+    const runTask = await findCommandItem("Run Task…");
+    expect(runTask).toHaveAttribute("aria-disabled", "true");
+    expect(runTask).toHaveTextContent("Focus a project panel first");
+    fireEvent.click(runTask);
+    expect(useCommandPaletteController.getState().open).toBe(false);
+
+    const newTerminal = await findCommandItem("New Terminal");
+    expect(newTerminal).toHaveAttribute("aria-disabled", "true");
+  });
+
+  it("opens the task quick pick from a project-scoped panel", async () => {
+    const panel = createPanel("terminal-1", "Terminal 1");
+    const props = createProps([panel]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+    seedPanelProjectContext("terminal-1");
+    const listTasks = vi.fn(async () => ({ errors: [], tasks: [] }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: {
+        ...(window.pier as object),
+        tasks: { list: listTasks },
+      },
+    });
 
     render(<WorkspaceHeaderActions {...props} />);
     openAddPanelPopover();
@@ -1078,18 +1131,8 @@ describe("WorkspaceHeaderActions", () => {
     });
 
     expect(panel.api.setActive).toHaveBeenCalledTimes(2);
-    expect(useCommandPaletteController.getState()).toMatchObject({
-      mode: "quick-pick",
-      open: true,
-      quickPick: {
-        items: [
-          {
-            disabled: true,
-            id: "task-no-context",
-            label: "No active project",
-          },
-        ],
-      },
+    await waitFor(() => {
+      expect(listTasks).toHaveBeenCalledWith({ projectRootPath: "/repo" });
     });
     expect(document.querySelector("[data-slot='popover-content']")).toBeNull();
   });
@@ -1325,6 +1368,7 @@ describe("WorkspaceHeaderActions", () => {
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);
     const originalGroup = props.group;
     useWorkspaceStore.getState().setApi(props.containerApi as never);
+    seedPanelProjectContext("terminal-1");
 
     render(<WorkspaceHeaderActions {...props} />);
     openAddPanelPopover();
@@ -1347,7 +1391,10 @@ describe("WorkspaceHeaderActions", () => {
         expect.objectContaining({
           component: "terminal",
           id: "terminal-456",
-          params: { launchId: "launch-agent" },
+          params: {
+            context: DEFAULT_TEST_PANEL_CONTEXT,
+            launchId: "launch-agent",
+          },
           position: {
             direction: "within",
             referenceGroup: originalGroup,

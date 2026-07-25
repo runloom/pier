@@ -8,13 +8,50 @@ import {
 } from "lucide-react";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
+import {
+  projectPathActionDisabledReason,
+  projectPathActionEnabled,
+} from "@/lib/actions/project-path-action-gate.ts";
 import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
 import { createWindow } from "@/lib/ipc/window-ipc.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useCreateMenuRequestStore } from "@/stores/create-menu-request.store.ts";
+import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { referenceGroupById } from "@/stores/workspace-panel-helpers.ts";
+import {
+  captureAnchoredTerminalTarget,
+  referenceGroupById,
+  resolveAnchoredTerminalOptions,
+} from "@/stores/workspace-panel-helpers.ts";
 import { PANEL_LAYOUT_ACTION_CONTRIBUTIONS } from "./panel-layout-contributions.ts";
+
+function newTerminalRequiresProjectPath(): boolean {
+  return (
+    useTerminalPreferencesStore.getState().terminalNewCwdPolicy ===
+    "activeTerminal"
+  );
+}
+
+function newTerminalEnabled(
+  invocation?: Parameters<typeof projectPathActionEnabled>[0]
+): boolean {
+  if (useWorkspaceStore.getState().api == null) {
+    return false;
+  }
+  if (!newTerminalRequiresProjectPath()) {
+    return true;
+  }
+  return projectPathActionEnabled(invocation);
+}
+
+function newTerminalDisabledReason(
+  invocation?: Parameters<typeof projectPathActionEnabled>[0]
+): string | null {
+  if (newTerminalEnabled(invocation)) {
+    return null;
+  }
+  return projectPathActionDisabledReason(invocation);
+}
 
 export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
@@ -27,6 +64,7 @@ export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     when: "workspace.hasApi",
   },
   {
+    // 工作台是全局 panel，创建不要求项目路径。
     categoryKey: "panel",
     group: "1_new",
     handler: (invocation) => {
@@ -44,12 +82,17 @@ export const PANEL_HOST_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   },
   {
     categoryKey: "run",
+    disabledReason: newTerminalDisabledReason,
+    enabled: newTerminalEnabled,
     group: "1_new",
     handler: (invocation) => {
       const api = useWorkspaceStore.getState().api;
-      useWorkspaceStore
-        .getState()
-        .addTerminal(referenceGroupById(api, invocation?.sourcePanelGroupId));
+      const target = captureAnchoredTerminalTarget(api, invocation);
+      const options = resolveAnchoredTerminalOptions(api, target);
+      if (!options) {
+        return;
+      }
+      useWorkspaceStore.getState().addTerminal(options);
     },
     iconComponent: Plus,
     id: "pier.panel.newTerminal",

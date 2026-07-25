@@ -24,6 +24,11 @@ export type ActionWhenExpression =
 
 export interface ActionContribution {
   categoryKey: ActionCategoryKey;
+  /**
+   * 禁用原因（命令面板 / 创建菜单展示）。仅在 enabled 为 false 时消费。
+   * 快捷键路径见 use-keybindings：有 reason 时 toast，无 reason 静默跳过。
+   */
+  disabledReason?: (invocation?: ActionInvocation) => string | null | undefined;
   enabled?: (invocation?: ActionInvocation) => boolean;
   excludeFromMru?: boolean;
   group?: string;
