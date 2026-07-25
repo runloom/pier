@@ -45,7 +45,9 @@ describe("MentionPopup", () => {
     );
     expect(screen.getAllByText("a.ts").length).toBeGreaterThanOrEqual(1);
     expect(screen.getAllByText("src").length).toBeGreaterThanOrEqual(1);
-    fireEvent.mouseDown(screen.getByTestId("terminal-composer-mention-item-0"));
+    fireEvent.mouseDown(
+      screen.getByTestId("terminal-composer-mention-popup-item-0")
+    );
     expect(onSelect).toHaveBeenCalledWith(0);
   });
 
@@ -64,11 +66,9 @@ describe("MentionPopup", () => {
         status="done"
       />
     );
-    const popup = container.querySelector(
-      "[data-testid='terminal-composer-mention-popup']"
-    );
-    expect(popup).toHaveAttribute("data-scrollbar", "none");
-    expect(popup?.className).toContain("no-scrollbar");
+    const scrollRegion = container.querySelector("[data-scrollbar='none']");
+    expect(scrollRegion).not.toBeNull();
+    expect(scrollRegion?.className).toContain("no-scrollbar");
   });
 
   it("renders file-tree icons for each path", () => {
