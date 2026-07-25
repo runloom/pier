@@ -23,6 +23,8 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/panel-kits/workbench/workbench-add-card.tsx",
   // 活动列表和物料库预览卡需要保持卡内响应式几何与整面点击区域。
   "src/renderer/panel-kits/workbench/core-widgets/activity-widget.tsx",
+  // 资源会话行是列表内窄行 hit target，不是通用控制 chrome。
+  "src/renderer/panel-kits/workbench/core-widgets/system-resources-widget.tsx",
   "src/renderer/panel-kits/workbench/workbench-library-dialog.tsx",
   // 环境列表按钮由 Item asChild 提供视觉和交互原语。
   "src/renderer/pages/settings/components/environment-section.tsx",

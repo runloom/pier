@@ -286,6 +286,8 @@ function createPanelHarness(initialGroupId = "group-a") {
         },
       };
     }),
+    setTitle: vi.fn(),
+    title: "Changes",
     setVisible(next: boolean) {
       if (isVisible === next) {
         return;

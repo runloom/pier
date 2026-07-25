@@ -24,6 +24,7 @@ describe("local environment contracts", () => {
       cleanupCommand: "pnpm cleanup:worktree",
       copyPatterns: [],
       env: { NODE_ENV: "development" },
+      kind: "project",
       projectRootPath: "/repo/pier",
       setupCommand: "pnpm setup:worktree",
       updatedAt: 1,
@@ -88,7 +89,11 @@ describe("local environment contracts", () => {
     const expected = {
       ...state,
       projects: [
-        { ...(project() as Record<string, unknown>), copyPatterns: [] },
+        {
+          ...(project() as Record<string, unknown>),
+          copyPatterns: [],
+          kind: "project",
+        },
       ],
     };
     expect(localEnvironmentStateSchema.parse(state)).toEqual(expected);

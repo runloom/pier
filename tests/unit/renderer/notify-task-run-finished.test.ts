@@ -120,8 +120,8 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
 
     expect(toastRendererMock).toHaveBeenCalledTimes(1);
     const notification = lastToastNotification();
-    expect(notification.title).toBe("Finished: Test suite");
-    expect(notification.body).toBe("Took 42s");
+    expect(notification.title).toBe("Task finished");
+    expect(notification.body).toBe("Test suite · took 42s");
     expect(notification.kind).toBe("task-run.finished");
     expect(notification.severity).toBe("success");
     expect(notification.actions).toEqual([
@@ -143,7 +143,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     notifyTaskRunFinishedIfNeeded(current);
 
     const notification = lastToastNotification();
-    expect(notification.title).toBe("Failed: Test suite");
+    expect(notification.title).toBe("Task failed");
     expect(notification.severity).toBe("error");
 
     runNotificationAction(notification, "open-output");
@@ -153,7 +153,9 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
 
   it("failed detail includes exit code and duration", () => {
     notifyTaskRunFinishedIfNeeded(run("failed", { exitCode: 1 }));
-    expect(lastToastNotification().body).toBe("Exit code 1 · took 42s");
+    expect(lastToastNotification().body).toBe(
+      "Test suite · exit code 1 · took 42s"
+    );
   });
 
   it("surfaces view-details failures with an alert", async () => {
@@ -177,16 +179,16 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
   it("uses an error-severity toast for forced cancellation", () => {
     notifyTaskRunFinishedIfNeeded(run("cancelled", { force: true }));
     const notification = lastToastNotification();
-    expect(notification.title).toBe("Force-stopped: Test suite");
+    expect(notification.title).toBe("Task force-stopped");
     expect(notification.severity).toBe("error");
-    expect(notification.body).toBe("Ran for 42s");
+    expect(notification.body).toBe("Test suite · ran for 42s");
   });
 
   it("uses a neutral info severity for normal cancellation (not success)", () => {
     notifyTaskRunFinishedIfNeeded(run("cancelled"));
     const notification = lastToastNotification();
-    expect(notification.title).toBe("Cancelled: Test suite");
+    expect(notification.title).toBe("Task cancelled");
     expect(notification.severity).toBe("info");
-    expect(notification.body).toBe("Ran for 42s");
+    expect(notification.body).toBe("Test suite · ran for 42s");
   });
 });

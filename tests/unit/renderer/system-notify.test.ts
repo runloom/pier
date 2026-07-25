@@ -55,7 +55,7 @@ describe("systemNotify", () => {
     systemNotify({ ...baseInput(), body: "detail-body" });
     expect(toastRendererMock).toHaveBeenCalledTimes(1);
     const notification = lastToastNotification();
-    expect(notification.title).toContain("0.2.0");
+    expect(notification.title).toBe("Update ready");
     expect(notification.body).toBe("detail-body");
     expect(notification.kind).toBe("app.update");
     expect(notification.severity).toBe("success");

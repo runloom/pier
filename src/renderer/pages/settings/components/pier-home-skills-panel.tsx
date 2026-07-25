@@ -122,7 +122,7 @@ export function PierHomeSkillsPanel() {
   return (
     <div className="flex flex-col gap-4">
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between gap-3 space-y-0">
+        <CardHeader className="flex flex-row items-center justify-between gap-3">
           <div className="min-w-0">
             <CardTitle className="text-base">
               {t("settings.projects.pierHomeLibraryTitle")}

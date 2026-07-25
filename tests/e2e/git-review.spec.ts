@@ -277,17 +277,53 @@ async function panelSharesGroup(
     }, `[data-panel-tab-id="${rightPanelId}"]`);
 }
 
+/**
+ * Open Git Changes review from a terminal group.
+ *
+ * Status bar v2 splits identity / changes / sync. Prefer the dedicated
+ * changes slot when visible; otherwise open the branch dropdown and use the
+ * contextual "Changes"/"更改" row (no longer a fixed "View Changes" task).
+ */
 async function openReviewFromTerminal(
   page: Page,
-  terminalPanelId: string
+  terminalPanelId: string,
+  options?: {
+    /** Called with the click target before the open click (timing probes). */
+    beforeOpenClick?: (target: Locator) => Promise<void> | void;
+  }
 ): Promise<void> {
   await page.locator(`[data-panel-tab-id="${terminalPanelId}"]`).click();
-  const statusTrigger = groupForPanel(page, terminalPanelId).locator(
+  const group = groupForPanel(page, terminalPanelId);
+  const statusTrigger = group.locator(
     '[data-testid="worktree-status-trigger"]'
   );
   await expect(statusTrigger).toBeVisible({ timeout: 20_000 });
+
+  const changesTrigger = group.locator(
+    '[data-testid="git-changes-status-trigger"]'
+  );
+  const dedicatedVisible = await changesTrigger.isVisible().catch(() => false);
+  if (dedicatedVisible) {
+    await options?.beforeOpenClick?.(changesTrigger);
+    await changesTrigger.click();
+    return;
+  }
+
+  // Wait for loaded dirty status: dedicated slot may appear after first poll.
+  try {
+    await expect(changesTrigger).toBeVisible({ timeout: 12_000 });
+    await options?.beforeOpenClick?.(changesTrigger);
+    await changesTrigger.click();
+    return;
+  } catch {
+    // Narrow status bar / overflow: open branch dropdown instead.
+  }
+
   await statusTrigger.click();
-  await page.getByRole("menuitem", { name: /View Changes|查看变更/u }).click();
+  const changesRow = page.getByTestId("git-status-row-changes");
+  await expect(changesRow).toBeVisible({ timeout: 15_000 });
+  await options?.beforeOpenClick?.(changesRow);
+  await changesRow.click();
 }
 
 async function reviewPanelIds(page: Page): Promise<string[]> {
@@ -472,14 +508,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     expect(shortGroupHeight).toBeGreaterThan(100);
     expect(shortGroupHeight).toBeLessThan(500);
 
-    const statusTrigger = groupForPanel(page, terminalPanelId).locator(
-      '[data-testid="worktree-status-trigger"]'
-    );
-    await expect(statusTrigger).toBeVisible({ timeout: 20_000 });
-    await statusTrigger.click();
-    await page
-      .getByRole("menuitem", { name: /View Changes|查看变更/u })
-      .click();
+    await openReviewFromTerminal(page, terminalPanelId);
 
     const changesTab = page.locator('[data-panel-tab-id^="pier.git.changes:"]');
     await expect(changesTab).toBeVisible({ timeout: 20_000 });
@@ -1266,28 +1295,25 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
 
     const opened = await openTerminalWhenReady(userDataDir, repository);
     expect(opened.ok).toBe(true);
-    const statusTrigger = page
-      .locator('[data-testid="worktree-status-trigger"]:visible')
-      .first();
-    await expect(statusTrigger).toBeVisible({ timeout: 20_000 });
-    await statusTrigger.click();
-    const viewChangesItem = page.getByRole("menuitem", {
-      name: /View Changes|查看变更/u,
-    });
-    await viewChangesItem.evaluate((element) => {
-      element.addEventListener(
-        "click",
-        () => {
-          Reflect.set(
-            window,
-            "__pierGitReviewFirstContentStartedAt",
-            performance.now()
+    const terminalPanelId = opened.data?.panelId ?? "";
+    expect(terminalPanelId).not.toBe("");
+    await openReviewFromTerminal(page, terminalPanelId, {
+      beforeOpenClick: async (target) => {
+        await target.evaluate((element) => {
+          element.addEventListener(
+            "click",
+            () => {
+              Reflect.set(
+                window,
+                "__pierGitReviewFirstContentStartedAt",
+                performance.now()
+              );
+            },
+            { once: true }
           );
-        },
-        { once: true }
-      );
+        });
+      },
     });
-    await viewChangesItem.click();
     await expect(
       page.getByRole("treeitem", { name: /file-0000\.ts/u })
     ).toBeVisible({ timeout: 30_000 });

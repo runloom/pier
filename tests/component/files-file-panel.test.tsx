@@ -5237,13 +5237,10 @@ describe("Files file-panel", () => {
 
   it("keeps CodeMirror gutters opaque and sticky so horizontal scroll cannot bleed into line numbers", async () => {
     // Regression:CM 把 gutters position:sticky 钉在左边;bg 若为 transparent,
-    // 横向滚动时行内代码会穿透 gutter 盖到行号上。锁死主题里 `.cm-gutters`
-    // 声明 opaque + sticky + z-index。
+    // 横向滚动时行内代码会穿透 gutter 盖到行号上。共享 pierEditorTheme 锁死
+    // `.cm-gutters` 声明 opaque + sticky + z-index。
     const editorSource = await readFile(
-      join(
-        process.cwd(),
-        "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts"
-      ),
+      join(process.cwd(), "src/shared/source-editor/editor-theme.ts"),
       "utf8"
     );
     const guttersRule = editorSource.match(CM_GUTTERS_RULE);

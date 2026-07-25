@@ -62,7 +62,7 @@ describe("showNotificationToast（形态 B）", () => {
         "--normal-bg": "var(--popover)",
         "--normal-text": "var(--popover-foreground)",
         "--normal-border": "var(--border)",
-        "--border-radius": "10px",
+        "--border-radius": "16px",
         "--width": "min(360px, calc(100vw - 32px))",
       },
     });
