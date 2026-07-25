@@ -138,8 +138,11 @@ const Toaster = ({ ...props }: ToasterProps) => {
             <Loader2Icon className="size-[18px] animate-spin text-[color:var(--toast-foreground)]" />
           ),
         }}
-        offset={{ top: "calc(var(--app-titlebar-height) + 24px)" }}
-        position="top-center"
+        offset={{
+          right: "24px",
+          top: "calc(var(--app-titlebar-height) + 24px)",
+        }}
+        position="top-right"
         style={
           {
             "--normal-bg": "var(--toast-surface)",
