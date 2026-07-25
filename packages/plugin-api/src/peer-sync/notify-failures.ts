@@ -2,7 +2,9 @@ import type { PeerSyncTarget } from "./shared.ts";
 
 /** Minimal context surface needed to surface a peer-sync failure. */
 export interface PeerSyncFailureNotifier {
-  notifications: { error(message: string): void };
+  notifications: {
+    error(message: string, options?: { systemEvent?: boolean }): void;
+  };
 }
 
 export type PeerSyncTranslate = (key: string, fallback: string) => string;
@@ -57,6 +59,8 @@ export function notifyPeerSyncFailures(options: {
     `${t(
       `${i18nPrefix}.accounts.settings.syncPeersFailed`,
       "Couldn't sync credentials to the selected tools. Try again after opening those tools once."
-    )} (${failedNames})`
+    )} (${failedNames})`,
+    // 后台同步失败：除 toast 外落宿主消息中心，供事后回看。
+    { systemEvent: true }
   );
 }

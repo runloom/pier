@@ -135,7 +135,8 @@ export const settings = {
       checkFailed: "Couldn't check for updates",
       downloadFailed: "Couldn't download update",
       installFailed: "Couldn't install update",
-      ready: "Pier {{version}} ready to install",
+      ready: "Update ready",
+      readyDetail: "Pier {{version}} · restart to finish installing",
     },
     titleBar: {
       update: "Update",

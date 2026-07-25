@@ -4,6 +4,18 @@
 
 ## [Unreleased]
 
+### Added
+
+- **统一消息中心。** main 侧 NotificationCenterService 统一接收系统/后台
+  消息（去重合并、ring buffer 持久化、全窗广播）。入口为标题栏铃铛 + 未读
+  徽标 + Popover 全量列表（滚动加载更多；无独立 dockview 面板、无筛选/
+  搜索）。系统/后台事件经 `systemNotify` 双写：消息型 toast（形态 B）+
+  收件箱；用户动作仍走确认型 toast（形态 A）。agent「需要你处理」/ 回合
+  结束 / 出错、后台任务终态、应用更新、通道故障等可回看；卡片
+  `NotificationCard` 与 action 分发在 popover 内统一。支持勿扰（仅 error
+  弹出）、按类静音、7/30 天保留；设置页为「消息中心 → 提醒内容 → 提醒
+  方式」三卡。旧 layout 中的 `notifications` panel 会在恢复时被剔除。
+
 ### Fixed
 
 - **增强输入图片/附件路径重复。** Lexical chip 已把绝对路径写进正文后，

@@ -169,7 +169,14 @@ export function SettingsDialog() {
   );
 
   return (
-    <Dialog onOpenChange={onOpenChange} open={open}>
+    <Dialog
+      onAbandonOpen={() => {
+        // deferred-open 被浮层阻塞放弃时复位产品态（同 onOpenChange(false)）
+        requestSettingsClose("dialog").catch(() => undefined);
+      }}
+      onOpenChange={onOpenChange}
+      open={open}
+    >
       <DialogContent
         className="flex h-[90vh] max-h-[900px] w-[90vw] max-w-[1200px] flex-col sm:max-w-[1200px]"
         closeLabel={t("dialog.close")}

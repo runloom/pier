@@ -11,6 +11,7 @@ import {
   closeContentPreview,
   openImagePreview,
 } from "@/components/common/content-preview.ts";
+import { reportPluginSystemEvent } from "@/lib/plugins/plugin-notification-report.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 import { terminalStatusItemRegistry } from "../../panel-kits/terminal/terminal-status-bar.tsx";
 import {
@@ -369,9 +370,21 @@ export function createRendererPluginContext(
     notifications: {
       error: (message, options) => {
         toast.error(message, toastNotificationOptions(options));
+        reportPluginSystemEvent(
+          entry?.manifest.id ?? "plugin",
+          "error",
+          message,
+          options
+        );
       },
       info: (message, options) => {
         toast.info(message, toastNotificationOptions(options));
+        reportPluginSystemEvent(
+          entry?.manifest.id ?? "plugin",
+          "info",
+          message,
+          options
+        );
       },
       loading: (message) => {
         const id = toast.loading(message);
@@ -392,6 +405,12 @@ export function createRendererPluginContext(
       },
       success: (message, options) => {
         toast.success(message, toastNotificationOptions(options));
+        reportPluginSystemEvent(
+          entry?.manifest.id ?? "plugin",
+          "success",
+          message,
+          options
+        );
       },
       system: (options) => window.pier.notifications.system(options),
     },

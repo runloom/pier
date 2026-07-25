@@ -65,6 +65,16 @@ describe("agent-runtime-index store", () => {
 describe("initAgentRuntimeIndexBridge", () => {
   beforeEach(async () => {
     useAgentRuntimeIndexStore.getState().reset();
+    const { useNotificationCenterStore } = await import(
+      "@/stores/notification-center.store.ts"
+    );
+    useNotificationCenterStore.setState({
+      dndEnabled: false,
+      hydrated: true,
+      items: [],
+      seq: 0,
+      unreadCount: 0,
+    });
     await initI18n();
     vi.clearAllMocks();
   });
@@ -126,10 +136,11 @@ describe("initAgentRuntimeIndexBridge", () => {
     });
   });
 
-  it("alerts when the startup list fails", async () => {
+  it("reports startup list failure to the notification center (toast + inbox)", async () => {
     const list = vi.fn(async () => {
       throw new Error("ipc down");
     });
+    const report = vi.fn(async () => null);
     const previous = window.pier;
     Object.defineProperty(window, "pier", {
       configurable: true,
@@ -143,16 +154,23 @@ describe("initAgentRuntimeIndexBridge", () => {
           onChanged: vi.fn(() => () => undefined),
           onFocusFeedback: vi.fn(() => () => undefined),
         },
+        notificationCenter: { report },
       },
     });
 
     initAgentRuntimeIndexBridge();
     await vi.waitFor(() => {
-      expect(showAppAlert).toHaveBeenCalledWith({
-        body: "ipc down",
-        title: expect.any(String),
-      });
+      expect(report).toHaveBeenCalledWith(
+        expect.objectContaining({
+          body: "ipc down",
+          kind: "agent.runtime",
+          severity: "warning",
+          trigger: "system-event",
+        })
+      );
     });
+    // 启动失败不再弹 alert 打断（消息中心留痕替代）
+    expect(showAppAlert).not.toHaveBeenCalled();
 
     Object.defineProperty(window, "pier", {
       configurable: true,

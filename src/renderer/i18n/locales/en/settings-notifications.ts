@@ -64,6 +64,38 @@ export const settingsNotifications = {
   soundPreviewSystemHint:
     "System default sound cannot be previewed in-app. Use “Send test notification” below.",
   soundPreviewFailed: "Could not play alert sound",
+  centerTitle: "Notification Center",
+  centerDesc:
+    "The single archive for all system messages, linked to the alert switches below.",
+  retention: "Keep messages",
+  retentionDesc: "Messages older than this are cleaned up automatically.",
+  retentionOptions: {
+    "7": "7 days",
+    "30": "30 days",
+  },
+  showBadge: "Show unread count in title bar",
+  showBadgeDesc: "When off, the bell no longer shows the unread badge.",
+  contentTitle: "What to Alert",
+  contentDesc: "Choose which events should alert you.",
+  agentGroup: "Agents",
+  taskSystemGroup: "Tasks & System",
+  taskRunFinished: "Pop up when background tasks finish",
+  taskRunFinishedDesc:
+    "Show the result when builds, scripts and other background tasks end; still recorded in Notification Center when off.",
+  appUpdate: "App update alerts",
+  appUpdateDesc:
+    "Alert you to restart when a new version is downloaded; still recorded in Notification Center when off.",
+  deliveryTitle: "How to Alert",
+  deliveryDesc: "Control which channels messages use to interrupt you.",
+  systemGroup: "System Notifications",
+  systemGroupDesc:
+    "Alerts you via the OS notification center while the window is unfocused.",
+  disturbGroup: "Interruption Control",
+  disturbGroupDesc:
+    "Further reduce interruptions on top of the channels above.",
+  dnd: "Do Not Disturb",
+  dndDesc:
+    "When on, only error messages pop up; the rest go silently to Notification Center. You can also toggle it from the title bar bell.",
   sound: {
     system: "System default",
     "abstract-sound1": "Abstract Sound 1",

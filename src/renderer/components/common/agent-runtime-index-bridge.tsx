@@ -1,7 +1,7 @@
 import i18next from "i18next";
 import { useEffect } from "react";
-import { toast } from "sonner";
 import { reportAgentRuntimeFocusResult } from "@/lib/agent-runtime/focus-feedback.ts";
+import { systemNotify } from "@/lib/notifications/system-notify.ts";
 import { initAgentRuntimeIndexBridge } from "@/stores/agent-runtime-index.store.ts";
 
 /**
@@ -30,13 +30,20 @@ export function AgentRuntimeIndexBridge(): null {
         return;
       }
       toasted = true;
-      toast(
-        i18next.t(
+      systemNotify({
+        body: i18next.t(
+          reason === "unsupported"
+            ? "agents.notificationUnsupportedDetail"
+            : "agents.notificationPermissionDeniedDetail"
+        ),
+        dedupeKey: `channel.health:attention-${reason}`,
+        kind: "channel.health",
+        severity: "info",
+        titleKey:
           reason === "unsupported"
             ? "agents.notificationUnsupported"
-            : "agents.notificationPermissionDenied"
-        )
-      );
+            : "agents.notificationPermissionDenied",
+      });
     });
   }, []);
 

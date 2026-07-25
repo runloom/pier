@@ -85,6 +85,8 @@ export const settingsPlugins = {
     installing: "正在安装 {{name}}…",
     installed: "{{name}} 已安装 · v{{version}}",
     installFailed: "无法安装 {{name}}",
+    enableFailed: "无法启用 {{name}}",
+    disableFailed: "无法禁用 {{name}}",
     uninstalling: "正在卸载 {{name}}…",
     uninstalled: "{{name}} 已卸载 · 下次启动生效",
     uninstallFailed: "无法卸载 {{name}}",

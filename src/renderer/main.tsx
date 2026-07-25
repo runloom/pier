@@ -4,9 +4,9 @@ import type { Root } from "react-dom/client";
 import { createRoot } from "react-dom/client";
 import { App } from "./App.tsx";
 import "./app/globals.css";
+import { installTerminalInputRoutingDragWatcher } from "@/stores/terminal-input-routing-drag.ts";
 import {
   installTerminalInputRoutingBlurSuppressor,
-  installTerminalInputRoutingDragWatcher,
   installTerminalInputRoutingPointerDownListener,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { installBundledFontFaces } from "./app/fonts.ts";

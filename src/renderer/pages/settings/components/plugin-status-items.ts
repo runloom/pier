@@ -1,5 +1,6 @@
 import type { StatusStackItem } from "@pier/ui/status-stack.tsx";
 import type { PluginRegistryDiagnostic } from "@shared/contracts/plugin.ts";
+import type { TFunction } from "i18next";
 import type { RendererPluginRuntimeDiagnostic } from "@/lib/plugins/plugin-runtime-diagnostics.ts";
 import { groupPluginDiagnostics } from "./plugin-diagnostics-summary.tsx";
 
@@ -7,7 +8,7 @@ type DiagnosticKind = PluginRegistryDiagnostic["code"] | "runtime";
 
 export function pluginDiagnosticKindLabel(
   kind: DiagnosticKind,
-  t: (key: string, opts?: Record<string, unknown>) => string
+  t: TFunction
 ): string {
   if (kind === "invalid_manifest") {
     return t("settings.plugins.diagnostics.invalidManifest");
@@ -24,7 +25,7 @@ export function buildPluginStatusItems(input: {
   diagnostics: readonly PluginRegistryDiagnostic[];
   runtimeDiagnostics: readonly RendererPluginRuntimeDiagnostic[];
   pluginMode: "workspace" | "release" | null | undefined;
-  t: (key: string, opts?: Record<string, unknown>) => string;
+  t: TFunction;
 }): StatusStackItem[] {
   const {
     pageError,

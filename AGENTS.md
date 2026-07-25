@@ -106,10 +106,11 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 所有用户触发的动作必须有可识别的完成或失败信号，静默失败（`catch (err) { console.error(...) }` 就结束）一律禁止。选择反馈方式时按以下顺序判断，防止漏报也防止重复：
 
+- **后台/系统事件（非用户动作触发）一律经 `systemNotify()`**（`src/renderer/lib/notifications/system-notify.ts`）：本地 toast + 落消息中心双写，禁止裸 `toast.*` 发系统事件；只落档不打扰时传 `suppressToast: true`。记录去重用 `dedupeKey`（NCS 统一合并），不在调用方手写一次性 flag。
 - 已经有**强自然 UI 反馈**（列表新增/删除、导航切换、Modal 关闭、面板打开、表单值即时更新等）→ **不再加 toast**；重复反馈是噪声。
 - 只有**弱 UI 反馈**（Save 按钮从 enabled → disabled、dirty 位清零等）或**完全无 UI 反馈**（写盘、无 refetch 的写请求、后台任务触发） → 成功走 `toast.success(t("..."))`。
 - 短失败（用户能从 title 理解、无技术详情）→ `toast.error(t("...Failed"))`。
-- 带技术详情的失败（`Error.message`、IPC 错误串、多行说明）→ **直接** `showAppAlert({ title: t("...Failed"), body: err instanceof Error ? err.message : String(err) })`，禁止 `toast.*(…, { description })`。`console.error` 不面向用户，只能作为额外日志。
+- 带技术详情的失败（`Error.message`、IPC 错误串、多行说明）→ **直接** `showAppAlert({ title: t("...Failed"), body: err instanceof Error ? err.message : String(err) })`，禁止 `toast.*(…, { description })`。`console.error` 不面向用户，只能作为额外日志。唯一例外：消息型 toast（形态 B）的详情槽位是契约一部分，唯一实现 `show-notification-toast.tsx`（治理测试锁定），其余调用点仍禁 description。
 - Toast 复用 `sonner`（胶囊短 title；可选 action 如撤销）；宿主代码从 `sonner` 直接 `import { toast }`，插件走 `context.notifications.{success,error}`；文案必须走 i18n key，禁止内联字符串。
 
 **代码审查检查点**：
@@ -117,7 +118,24 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 遇到 `catch` 里只有 `console.error` / `console.warn` 而没有 `toast.error` / `showAppAlert` → finding，除非注释里明确说明不面向用户的路径（如启动阶段 boot log）。
 - 遇到"有明显 UI 变化 + 又加了 toast"的双反馈 → minor finding，建议删掉冗余 toast。
 - 遇到内联 toast 文案字符串（未走 i18n） → finding。
-- 遇到 `toast.*(…, { description })` → finding，详情应走 `showAppAlert`。
+- 遇到 `toast.*(…, { description })` → finding，详情应走 `showAppAlert`（`show-notification-toast.tsx` 的形态 B 详情槽位除外）。
+
+### 消息中心（统一系统消息）
+
+统一消息中心是全部系统/后台消息的收件箱：main 侧 `src/main/services/notification-center/`（NCS）是唯一写入方，契约在 `src/shared/contracts/notification-center.ts`，广播通道 `pier://notification-center:changed`；renderer 镜像 store 是 `stores/notification-center.store.ts`。
+
+硬规则：
+
+1. **toast 双形态**：确认型（用户动作即时反馈，不进消息中心）维持 sonner 反色胶囊；消息型（系统/后台事件，进消息中心）走 `lib/notifications/show-notification-toast.tsx` 的标准 shadcn sonner 卡片——**标题 + 详情（必备，必须由调用方提供友好内容：下一步/上下文/摘要；类型行回退仅为防御兜底，不得作为常态）+ ≤1 outline 操作 + 关闭 X（右上），无前置状态图标**。消息中心卡片唯一实现是 `components/common/notification-card.tsx` 的 `NotificationCard`（无前置图标；标题/详情/时间 + 未读红点 + 操作），**仅 Popover 列表使用**（无 dockview panel），禁止另写一套卡片样式。action 统一走 `lib/notifications/notification-actions.ts` 分发（同一 id 各载体行为一致；toast 副本按 dedupeKey 标已读）。
+2. **状态图标的归属**：StatusIcon 只出现在确认型 toast（结果确认着色）与 Alert 等即时反馈中；**消息型 toast 与消息中心条目一律无前置状态图标**。severity 只驱动行为：徽标只计 warning/error 未读（`attentionUnreadCount`）、toast 时长 error 10s / warning 6s / success·info 4s、DND 仅 error 弹出。不要给 inbox 条目重新引入 severity 图标。
+3. **路由单一实现**：toast / inbox / OS 通知的投递判定只走 `src/shared/notification-delivery.ts` 的 `routeDelivery`（mutedKinds → DND（error 除外）→ suppressToast）；业务代码不得手写 DND 判断。
+4. **去重下沉**：同 `dedupeKey` 窗口（24h，`NOTIFICATION_DEDUPE_WINDOW_MS`，契约单一来源）内由 NCS 合并（`repeatCount`），调用方不维护版本/runId 级记录去重；toast 同步连发节流（会话内）是门面与调用方仅有的例外。dedupe 判定依赖镜像水合（`hydrated`），启动期未水合时门面延后判定。
+5. **agent 通知同构**：agent「需要你处理」/ 回合结束 / 出错经 agent-attention 接入 NCS（OS 通知发送权唯一留在 agent-attention，NCS 不重复发）；深链 `focus-panel` 聚焦 agent 面板并标记已读。
+6. **入口**：标题栏铃铛（mac `title-bar.tsx` 与非 mac `agent-index-chrome-bar.tsx` 必须同位同步）+ Popover 全量列表（滚动触底加载更多；**无**独立 dockview panel、**无**筛选/搜索）。命令面板 `pier.notifications.open` 打开同一 Popover（`useNotificationCenterPopoverStore`）。Header「全部已读」仅在有未读时显示；全部已读 / 勿扰 **成功后**关 Popover，失败走 `showAppAlert`（禁止 silent catch + 假关闭）。
+7. **popover 在终端上的四条例**：① 打开期间挂 `registerTerminalFullscreenWebOverlay`（否则点终端不收起）；② `requestTerminalWebFocus` 钉键盘但不 `pushBlockingScope`（否则吞全局快捷键）；③ 订阅 Dialog 打开信号自动收起；④ **终端向 outside 关闭后**才 `markWebOverlayOutsideDismissIfNeeded`（仅 `.terminal-anchor` / `body` / `html`；**排除** trigger 与其它 web 控件）→ cleanup 里 `restoreTerminalFocusAfterWebOverlayDismiss`。Dialog 让路 / Esc / 点铃铛自关不要补聚焦。新增 `+` 创建器等同款。分支状态栏 **Dropdown** 不走全屏路径（modal + blur），勿混用。
+8. **设置三卡**：通知设置页按消息生命周期排序——消息中心（记录）→ 提醒内容（类别）→ 提醒方式（通道）；权限/hooks 警示在「提醒方式」卡内顶部 StatusStack。
+
+检查点在 `tests/unit/renderer/notification-center-governance.test.ts` 与 `tests/unit/main/notification-center-governance.test.ts`。
 
 ### 用户可见文案规范
 

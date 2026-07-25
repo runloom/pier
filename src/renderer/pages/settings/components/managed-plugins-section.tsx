@@ -29,6 +29,7 @@ import {
 } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
+import { systemNotify } from "@/lib/notifications/system-notify.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { rejectFailedManagedPluginOperation } from "./managed-plugin-operation.ts";
 import {
@@ -324,8 +325,23 @@ export function ManagedPluginsSection({
       rejectFailedManagedPluginOperation(request)
         .then(refresh)
         .catch((err: unknown) => {
-          const message = err instanceof Error ? err.message : String(err);
-          toast.error(message);
+          // 带技术详情的失败：alert 展示 + 消息中心留痕（操作反馈规范）。
+          const titleKey = row.desired.enabled
+            ? "settings.plugins.toast.disableFailed"
+            : "settings.plugins.toast.enableFailed";
+          const body = err instanceof Error ? err.message : String(err);
+          showAppAlert({
+            body,
+            title: i18next.t(titleKey, { name: row.id }),
+          }).catch(() => undefined);
+          systemNotify({
+            body,
+            kind: "operation.result",
+            severity: "error",
+            suppressToast: true,
+            titleKey,
+            titleParams: { name: row.id },
+          });
         })
         .finally(() => {
           setPendingManagedId(null);

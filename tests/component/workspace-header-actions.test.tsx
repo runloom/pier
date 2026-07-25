@@ -778,7 +778,14 @@ describe("WorkspaceHeaderActions", () => {
     });
     const content = title.closest("[data-slot='popover-content']");
     expect(content).toHaveAccessibleName("Create in this panel group");
-    expect(content).toHaveClass("gap-0", "p-0", "ring-0", "shadow-xl");
+    // 容器 token 与 dropdown-menu/select 统一：ring-1 + shadow-lg + rounded-2xl
+    expect(content).toHaveClass(
+      "gap-0",
+      "p-0",
+      "ring-1",
+      "shadow-lg",
+      "rounded-2xl"
+    );
     expect(content).toHaveStyle({
       maxWidth: "calc(var(--radix-popover-content-available-width) - 0.5rem)",
     });

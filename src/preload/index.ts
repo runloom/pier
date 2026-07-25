@@ -44,6 +44,10 @@ import {
   type PierMediaPreviewApi,
 } from "./media-preview-api.ts";
 import {
+  notificationCenterApi,
+  type PierNotificationCenterAPI,
+} from "./notification-center-api.ts";
+import {
   notificationsApi,
   type PierNotificationsAPI,
 } from "./notifications-api.ts";
@@ -150,6 +154,7 @@ export interface PierWindowAPI {
   managedPlugins: ManagedPluginsPreloadApi;
   mediaPreviews: PierMediaPreviewApi;
   menu: PierMenuAPI;
+  notificationCenter: PierNotificationCenterAPI;
   notifications: PierNotificationsAPI;
   panelTransfer: PierPanelTransferAPI;
   pluginRpc: PluginRpcPreloadApi;
@@ -347,6 +352,7 @@ const api: PierWindowAPI = {
   menu: menuApi,
   clipboard: clipboardApi,
   notifications: notificationsApi,
+  notificationCenter: notificationCenterApi,
   plugins: pluginsApi,
   pluginSettings: pluginSettingsApi,
   preferences: preferencesApi,

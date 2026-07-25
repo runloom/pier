@@ -58,6 +58,14 @@ export const PIER = {
   SYSTEM_NOTIFICATION_OPEN_SETTINGS: "pier://notification:open-settings",
   // renderer 直发系统通知（历史 wire 值，改值会破坏滚动升级期的 preload/main 配对）
   SYSTEM_NOTIFICATION_SHOW: "pier:notification:system",
+  // 统一消息中心：snapshot pull + 系统事件上报 + 已读/DND 写操作
+  NOTIFICATION_CENTER_SNAPSHOT: "pier://notification-center:snapshot",
+  NOTIFICATION_CENTER_REPORT: "pier://notification-center:report",
+  NOTIFICATION_CENTER_MARK_READ: "pier://notification-center:mark-read",
+  NOTIFICATION_CENTER_MARK_READ_BY_KEY:
+    "pier://notification-center:mark-read-by-key",
+  NOTIFICATION_CENTER_MARK_ALL_READ: "pier://notification-center:mark-all-read",
+  NOTIFICATION_CENTER_SET_DND: "pier://notification-center:set-dnd",
 } as const;
 
 export const PIER_BROADCAST = {
@@ -131,6 +139,8 @@ export const PIER_BROADCAST = {
   ATTENTION_SOUND_PLAY: "pier://attention-sound:play",
   // 项目技能状态失效 (main → 所有 renderer, payload { projectIdentity, observedRevision })
   PROJECT_SKILLS_INVALIDATED: "pier://project-skills:invalidated",
+  // 统一消息中心快照广播 (main → 所有 renderer, payload NotificationCenterSnapshot)。
+  NOTIFICATION_CENTER_CHANGED: "pier://notification-center:changed",
 } as const;
 
 export type PierCommand = (typeof PIER)[keyof typeof PIER];

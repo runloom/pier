@@ -86,6 +86,8 @@ export const settingsPlugins = {
     installing: "Installing {{name}}…",
     installed: "{{name}} installed · v{{version}}",
     installFailed: "Couldn't install {{name}}",
+    enableFailed: "Couldn't enable {{name}}",
+    disableFailed: "Couldn't disable {{name}}",
     uninstalling: "Uninstalling {{name}}…",
     uninstalled: "{{name}} uninstalled · next launch",
     uninstallFailed: "Couldn't uninstall {{name}}",

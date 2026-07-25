@@ -31,6 +31,9 @@ export const commandPalette = {
   },
   action: {
     toggleCommandPalette: "Show Command Palette",
+    openNotificationCenter: "Open Notification Center",
+    toggleNotificationDnd: "Toggle Do Not Disturb",
+    markAllNotificationsRead: "Mark All Notifications as Read",
     openTerminalDebugWindow: "Open Terminal Debug Window",
     openTerminalDebugWindowFailed: "Unable to Open Terminal Debug Window",
     openSettings: "Open Settings",

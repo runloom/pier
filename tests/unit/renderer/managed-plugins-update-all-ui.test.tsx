@@ -23,7 +23,9 @@ const toastMocks = vi.hoisted(() => ({
 vi.mock("sonner", () => ({ toast: toastMocks }));
 
 const appDialogMocks = vi.hoisted(() => ({
-  showAppAlert: vi.fn(async () => undefined),
+  showAppAlert: vi.fn(
+    async (_options: { body?: string; title: string }) => undefined
+  ),
 }));
 
 vi.mock("@/stores/app-dialog.store.ts", async (importOriginal) => {
@@ -220,13 +222,10 @@ describe("ManagedPluginsSection Update All", () => {
       expect(update).toHaveBeenCalledTimes(2);
       expect(appDialogMocks.showAppAlert).toHaveBeenCalled();
     });
-    const arg = appDialogMocks.showAppAlert.mock.calls[0]?.[0] as {
-      title: string;
-      body: string;
-    };
-    expect(arg.title).toMatch(/couldn't be updated|未能更新/i);
-    expect(arg.body).toMatch(/Ada/i);
-    expect(arg.body).toMatch(/network down/i);
+    const arg = appDialogMocks.showAppAlert.mock.calls[0]?.[0];
+    expect(arg?.title).toMatch(/couldn't be updated|未能更新/i);
+    expect(arg?.body).toMatch(/Ada/i);
+    expect(arg?.body).toMatch(/network down/i);
   });
 
   it("hides Update All when official mutations are disallowed", async () => {

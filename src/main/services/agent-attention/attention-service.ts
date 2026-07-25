@@ -13,6 +13,7 @@ import type {
   SystemNotificationRequest,
   SystemNotificationResult,
 } from "@shared/contracts/notification.ts";
+import type { NotificationReport } from "@shared/contracts/notification-center.ts";
 import { createLogger } from "@shared/logger.ts";
 import {
   decideNotificationAudio,
@@ -44,6 +45,8 @@ export interface AgentAttentionService {
 }
 
 export interface CreateAgentAttentionServiceArgs {
+  /** 同步投递到消息中心（NCS）；未注入时只发 OS 通知（单测兼容）。 */
+  ingestNotification?: (report: NotificationReport) => void;
   /** 拥有该智能体面板的 BrowserWindow 是否聚焦（ready / unfocused 模式）。 */
   isOwnerWindowFocused(electronWindowId: string): boolean;
   isTargetPanelFocused(electronWindowId: string, panelId: string): boolean;
@@ -64,6 +67,15 @@ export interface CreateAgentAttentionServiceArgs {
 
 type AgentStatusMap = Map<string, ActivityStatus | undefined>;
 
+function inboxSeverityFor(
+  kind: AgentNotificationEventKind
+): "error" | "info" | "warning" {
+  if (kind === "error") {
+    return "error";
+  }
+  return kind === "waiting" ? "warning" : "info";
+}
+
 function agentStatusMap(
   activities: readonly ForegroundActivity[]
 ): AgentStatusMap {
@@ -78,6 +90,7 @@ function agentStatusMap(
 }
 
 export function createAgentAttentionService({
+  ingestNotification,
   isTargetPanelFocused,
   isOwnerWindowFocused,
   now = () => Date.now(),
@@ -150,6 +163,32 @@ export function createAgentAttentionService({
           continue;
         }
 
+        const copy = formatAttentionNotificationCopy(activity, locale);
+
+        // 消息中心落档：与 OS 通知同一事件源，但不受冷却约束（重复事件由
+        // NCS dedupe 合并为 repeatCount），也不投递 OS——发送权唯一留在本服务。
+        ingestNotification?.({
+          actionParams: { agentRef },
+          actions: [
+            {
+              id: "focus-panel",
+              labelKey: "notificationsCenter.action.goToAgent",
+            },
+          ],
+          agentRef,
+          body: copy.body,
+          dedupeKey:
+            kind === "ready"
+              ? `agent.turn-finished:${agentRef}`
+              : `agent.attention:${kind}:${agentRef}`,
+          kind: kind === "ready" ? "agent.turn-finished" : "agent.attention",
+          panelRef: { panelId: activity.panelId },
+          severity: inboxSeverityFor(kind),
+          source: "agent-attention",
+          title: copy.title,
+          trigger: "system-event",
+        });
+
         const lastAt = lastNotified.get(cooldownKey(agentRef, kind));
         const ts = now();
         if (lastAt !== undefined && ts - lastAt < prefs.cooldownMs) {
@@ -157,7 +196,6 @@ export function createAgentAttentionService({
           continue;
         }
 
-        const copy = formatAttentionNotificationCopy(activity, locale);
         const tag = `${AGENT_ATTENTION_KIND}:${agentRef}`;
         const decision = decideNotificationAudio(prefs);
         const audio = toShowAudio(decision);

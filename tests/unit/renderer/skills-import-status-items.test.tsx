@@ -1,9 +1,10 @@
 import { StatusStack } from "@pier/ui/status-stack.tsx";
 import { cleanup, render } from "@testing-library/react";
+import type { TFunction } from "i18next";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildSkillsImportStatusItems } from "@/pages/settings/components/skills/build-skills-import-status-items.ts";
 
-const t = (key: string, opts?: Record<string, unknown>) => {
+const t = ((key: string, opts?: Record<string, unknown>) => {
   if (opts?.id) {
     return `${key}:${String(opts.id)}`;
   }
@@ -14,7 +15,7 @@ const t = (key: string, opts?: Record<string, unknown>) => {
     return `${key}:${String(opts.keys)}`;
   }
   return key;
-};
+}) as unknown as TFunction;
 
 const noop = () => undefined;
 

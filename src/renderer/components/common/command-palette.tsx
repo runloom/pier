@@ -405,6 +405,10 @@ export function CommandPalette() {
     <CommandDialog
       className="top-[14vh] sm:max-w-130"
       description={dialogTitle}
+      onAbandonOpen={() => {
+        // deferred-open 被浮层阻塞放弃时复位产品态，避免 open=true 但无挂载的僵尸态
+        useCommandPaletteController.getState().close();
+      }}
       onOpenChange={handleOpenChange}
       open={isOpen}
       title={dialogTitle}

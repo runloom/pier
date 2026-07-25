@@ -36,7 +36,8 @@ describe("settings status stack governance", () => {
   });
 
   it("notifications policy does not use warning Alert for hooks-off", () => {
-    const src = readComponent("notifications-section.tsx");
+    // 通知设置三卡拆分后，StatusStack 与 hooks-off 项在 delivery-card（提醒方式卡顶部）
+    const src = readComponent("notifications/delivery-card.tsx");
     expect(src).toMatch(/StatusStack/);
     // hooks-off must be info tone, not warning Alert
     expect(src).toMatch(/id:\s*["']notif-hooks-off["']/);

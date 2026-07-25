@@ -293,8 +293,34 @@ describe("color token governance", () => {
       ).toBeGreaterThanOrEqual(4.5);
     }
     expect(globals).toContain("--toast-action-bg:");
+    // Toaster --normal-* 默认为胶囊反色表面；胶囊规则用 :not(.pier-msg-toast)
+    // 排除形态 B，所以胶囊的 toast-surface / toast-foreground 不污染卡片。
     expect(sonner).toContain('"--normal-bg": "var(--toast-surface)"');
     expect(sonner).toContain('"--normal-text": "var(--toast-foreground)"');
+    expect(globals).toContain(
+      "[data-sonner-toast].pier-toast:not(.pier-msg-toast)"
+    );
+    expect(globals).toContain("background: var(--toast-surface) !important");
+    expect(globals).toContain("color: var(--toast-foreground) !important");
+    // 形态 B 卡片通过 per-call style 切 --normal-* 到 popover 语义令牌，
+    // 继承 sonner 默认 [data-styled=true] 卡片，不在 globals.css 覆盖几何。
+    const showNotification = readFileSync(
+      join(ROOT, "src/renderer/lib/notifications/show-notification-toast.tsx"),
+      "utf8"
+    );
+    expect(showNotification).toContain('"--normal-bg": "var(--popover)"');
+    expect(showNotification).toContain(
+      '"--normal-text": "var(--popover-foreground)"'
+    );
+    expect(showNotification).toContain('"--normal-border": "var(--border)"');
+    expect(showNotification).toContain(
+      '"--width": "min(360px, calc(100vw - 32px))"'
+    );
+    // 形态 B 不用 !important 覆盖 sonner 默认卡片几何（padding 微调除外）
+    const formBBlock = globals
+      .slice(globals.indexOf("/* ── 形态 B"))
+      .replace(/\/\*[\s\S]*?\*\//g, "");
+    expect(formBBlock).not.toContain("!important");
     expect(sonner).toContain('StatusIcon kind="success"');
     expect(sonner).toContain('StatusIcon kind="warning"');
     expect(statusIcon).toContain("text-status-solid-foreground");

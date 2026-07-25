@@ -133,7 +133,8 @@ export const settings = {
       checkFailed: "无法检查更新",
       downloadFailed: "无法下载更新",
       installFailed: "无法安装更新",
-      ready: "Pier {{version}} 可安装",
+      ready: "更新已就绪",
+      readyDetail: "Pier {{version}} · 重启后自动安装",
     },
     titleBar: {
       update: "更新",

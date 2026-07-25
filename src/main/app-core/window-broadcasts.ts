@@ -9,6 +9,7 @@ import type {
   SystemNotificationPermissionSnapshot,
   SystemNotificationUnavailableReason,
 } from "@shared/contracts/notification.ts";
+import type { NotificationCenterSnapshot } from "@shared/contracts/notification-center.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import type { ProjectSkillsInvalidatedEvent } from "@shared/contracts/project-skills.ts";
 import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
@@ -137,4 +138,11 @@ export function broadcastProjectSkillsInvalidated(
     type: "project-skills.invalidated",
     ...event,
   } satisfies ProjectSkillsInvalidatedEvent);
+}
+
+/** 统一消息中心快照 (main → 所有 renderer)。 */
+export function broadcastNotificationCenterChanged(
+  snapshot: NotificationCenterSnapshot
+): void {
+  broadcastToAllWindows(PIER_BROADCAST.NOTIFICATION_CENTER_CHANGED, snapshot);
 }

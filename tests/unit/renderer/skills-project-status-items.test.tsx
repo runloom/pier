@@ -1,5 +1,6 @@
 import { StatusStack } from "@pier/ui/status-stack.tsx";
 import { cleanup, render } from "@testing-library/react";
+import type { TFunction } from "i18next";
 import { toast } from "sonner";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { buildSkillsProjectStatusItems } from "@/pages/settings/components/skills/build-skills-project-status-items.ts";
@@ -8,8 +9,8 @@ import {
   resolveImportSuccessName,
 } from "@/pages/settings/components/skills/skills-apply-flow.ts";
 
-const t = (key: string, opts?: Record<string, unknown>) =>
-  opts?.name ? `${key}:${String(opts.name)}` : key;
+const t = ((key: string, opts?: Record<string, unknown>) =>
+  opts?.name ? `${key}:${String(opts.name)}` : key) as unknown as TFunction;
 
 const noop = () => undefined;
 

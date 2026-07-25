@@ -1,8 +1,9 @@
 import type { PluginRegistryDiagnostic } from "@shared/contracts/plugin.ts";
+import type { TFunction } from "i18next";
 import { describe, expect, it } from "vitest";
 import { buildPluginStatusItems } from "@/pages/settings/components/plugin-status-items.ts";
 
-const t = (key: string) => key;
+const t = ((key: string) => key) as unknown as TFunction;
 
 function registryDiagnostic(
   partial: Pick<PluginRegistryDiagnostic, "code" | "message">

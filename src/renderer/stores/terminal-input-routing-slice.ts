@@ -160,6 +160,18 @@ export function requestTerminalFocusIntent(panelId: string): void {
 }
 
 /**
+ * 清掉 capture 阶段 pointerdown 留下的瞬时 `pier.click` web 请求。
+ * 全屏 overlay 把「点终端」改道到 web 时 native 不会发 focus-request，
+ * 若不清理则 sticky 浮层关掉后键盘仍钉在 web。
+ */
+export function clearTransientWebClickFocus(): void {
+  if (!webRequestIds.delete(TRANSIENT_WEB_CLICK_FOCUS_ID)) {
+    return;
+  }
+  applyTerminalInputRouting();
+}
+
+/**
  * 浮在终端上的 web 元素声明一次键盘焦点意图。任意活跃请求即把 effective 拉成
  * web。返回的释放函数 idempotent —— 多次调用只在首次真正移除请求时重算。
  */
@@ -337,153 +349,6 @@ export function installTerminalInputRoutingPointerDownListener(): void {
   );
 }
 
-const TAB_DRAG_FALLBACK_MS = 5000;
-const DRAG_WATCHER_CLEANUP_KEY = "__pierTerminalInputRoutingDragCleanup__";
-
-interface DragWatcherDocument extends Document {
-  [DRAG_WATCHER_CLEANUP_KEY]?: () => void;
-}
-
-function beginFullscreenWebInputCapture(id: string): () => void {
-  const route = registerTerminalFullscreenWebOverlay(id);
-  const releaseWebFocus = requestTerminalWebFocus(id);
-  return () => {
-    releaseWebFocus();
-    route.dispose();
-  };
-}
-
-let dragWatcherInstalled = false;
-
-export function installTerminalInputRoutingDragWatcher(): void {
-  if (dragWatcherInstalled) {
-    return;
-  }
-  const watcherDocument = document as DragWatcherDocument;
-  watcherDocument[DRAG_WATCHER_CLEANUP_KEY]?.();
-  dragWatcherInstalled = true;
-
-  let dragActive = false;
-  let endDragCapture: (() => void) | null = null;
-  let dragFallbackTimer: number | null = null;
-
-  const clearDragFallback = () => {
-    if (dragFallbackTimer === null) {
-      return;
-    }
-    window.clearTimeout(dragFallbackTimer);
-    dragFallbackTimer = null;
-  };
-
-  const endTabDrag = () => {
-    if (!dragActive) {
-      return;
-    }
-    dragActive = false;
-    clearDragFallback();
-    endDragCapture?.();
-    endDragCapture = null;
-  };
-
-  const armDragFallback = () => {
-    clearDragFallback();
-    dragFallbackTimer = window.setTimeout(endTabDrag, TAB_DRAG_FALLBACK_MS);
-  };
-
-  const beginTabDrag = () => {
-    if (dragActive) {
-      return;
-    }
-    dragActive = true;
-    endDragCapture = beginFullscreenWebInputCapture("dockview-tab-drag");
-    armDragFallback();
-  };
-
-  const onDragStart = (e: DragEvent) => {
-    const t = e.target as HTMLElement | null;
-    if (!t?.closest?.(".dv-tab")) {
-      return;
-    }
-    beginTabDrag();
-  };
-
-  const onDrop = () => {
-    if (!dragActive) {
-      return;
-    }
-    window.setTimeout(endTabDrag, 0);
-  };
-
-  const onVisibilityChange = () => {
-    if (document.visibilityState === "hidden") {
-      endTabDrag();
-    }
-  };
-
-  const onKeyDown = (e: KeyboardEvent) => {
-    if (e.key === "Escape") {
-      endTabDrag();
-    }
-  };
-
-  document.addEventListener("dragstart", onDragStart, true);
-  document.addEventListener("dragend", endTabDrag, true);
-  document.addEventListener("drop", onDrop, true);
-  document.addEventListener("visibilitychange", onVisibilityChange, true);
-  window.addEventListener("blur", endTabDrag);
-  window.addEventListener("keydown", onKeyDown, true);
-
-  let sashDragActive = false;
-  let endSashDrag: (() => void) | null = null;
-  const beginSashDrag = () => {
-    if (sashDragActive) {
-      return;
-    }
-    sashDragActive = true;
-    const endSashCapture = beginFullscreenWebInputCapture("dockview-sash-drag");
-    const cleanup = () => {
-      if (!sashDragActive) {
-        return;
-      }
-      sashDragActive = false;
-      endSashCapture();
-      window.removeEventListener("pointerup", cleanup);
-      window.removeEventListener("pointercancel", cleanup);
-      window.removeEventListener("blur", cleanup);
-      endSashDrag = null;
-    };
-    endSashDrag = cleanup;
-    window.addEventListener("pointerup", cleanup);
-    window.addEventListener("pointercancel", cleanup);
-    window.addEventListener("blur", cleanup);
-  };
-
-  const onPointerDown = (e: PointerEvent) => {
-    const t = e.target as HTMLElement;
-    if (!(t.closest(".dv-sash") || t.closest(".dv-resize-container"))) {
-      return;
-    }
-    beginSashDrag();
-  };
-
-  document.addEventListener("pointerdown", onPointerDown, true);
-
-  watcherDocument[DRAG_WATCHER_CLEANUP_KEY] = () => {
-    endTabDrag();
-    endSashDrag?.();
-    clearDragFallback();
-    document.removeEventListener("dragstart", onDragStart, true);
-    document.removeEventListener("dragend", endTabDrag, true);
-    document.removeEventListener("drop", onDrop, true);
-    document.removeEventListener("visibilitychange", onVisibilityChange, true);
-    document.removeEventListener("pointerdown", onPointerDown, true);
-    window.removeEventListener("blur", endTabDrag);
-    window.removeEventListener("keydown", onKeyDown, true);
-    dragWatcherInstalled = false;
-    delete watcherDocument[DRAG_WATCHER_CLEANUP_KEY];
-  };
-}
-
 export function resetTerminalInputRoutingForTests(): void {
   webOverlayRects.clear();
   webRequestIds.clear();
@@ -492,5 +357,4 @@ export function resetTerminalInputRoutingForTests(): void {
   resetTerminalHostStateForTests();
   lastEffectiveKeyboardKind = "web";
   webFocusHandOffArmedUntil = 0;
-  dragWatcherInstalled = false;
 }

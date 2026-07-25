@@ -10,6 +10,10 @@ import {
   agentAttentionSettingsSchema,
   DEFAULT_AGENT_ATTENTION_SETTINGS,
 } from "./agent-attention.ts";
+import {
+  DEFAULT_NOTIFICATION_CENTER_PREFS,
+  notificationCenterPrefsSchema,
+} from "./notification-center.ts";
 
 export const themePreferenceSchema = z.enum(["light", "dark", "system"]);
 export const resolvedThemeSchema = z.enum(["light", "dark"]);
@@ -127,6 +131,9 @@ export const projectPreferencesSchema = z.object({
   agentStatusHooks: z.boolean().default(true),
   agentAttention: agentAttentionSettingsSchema.default(
     DEFAULT_AGENT_ATTENTION_SETTINGS
+  ),
+  notificationCenter: notificationCenterPrefsSchema.default(
+    DEFAULT_NOTIFICATION_CENTER_PREFS
   ),
   gitAutoFetchEnabled: z.boolean().default(DEFAULT_GIT_AUTO_FETCH_ENABLED),
   gitAutoFetchIntervalMinutes: z

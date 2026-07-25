@@ -16,7 +16,6 @@ function row(
     diagnostics: [],
     displayName: partial.displayName ?? partial.id,
     effective: { enabled: true, source: "official", version: "1.0.0" },
-    id: partial.id,
     installed: partial.installed ?? true,
     lastKnownGoodVersion: "1.0.0",
     offlineRestoreAvailable: false,

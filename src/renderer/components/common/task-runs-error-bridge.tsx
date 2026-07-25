@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { systemNotify } from "@/lib/notifications/system-notify.ts";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import {
   initTaskRunsStore,
@@ -17,6 +18,15 @@ export function TaskRunsErrorBridge(): null {
       return;
     }
     presentedError.current = error;
+    // 通道故障：confirm（重试/忽略）处理当下，消息中心留痕供事后回看。
+    systemNotify({
+      body: error,
+      dedupeKey: "channel.health:task-runs",
+      kind: "channel.health",
+      severity: "error",
+      suppressToast: true,
+      titleKey: "terminal.runtimeControl.stateUnavailableTitle",
+    });
     showAppConfirm({
       body: error,
       cancelLabel: t("terminal.runtimeControl.stateUnavailableDismiss"),

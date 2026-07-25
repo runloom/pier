@@ -146,8 +146,6 @@ const Toaster = ({ ...props }: ToasterProps) => {
             "--normal-text": "var(--toast-foreground)",
             "--normal-border": "transparent",
             "--border-radius": "9999px",
-            /* toaster 需要真实宽度才能 left:50%+translateX(-50%) 居中；
-               abspos 子项不撑开 max-content，会塌成 0 宽导致胶囊从中线往右偏。 */
             "--width": "min(420px, calc(100vw - 32px))",
           } as CSSProperties
         }
@@ -156,10 +154,8 @@ const Toaster = ({ ...props }: ToasterProps) => {
           classNames: {
             toast: "cn-toast pier-toast app-no-drag",
             title: "pier-toast-title",
-            description: "hidden",
             actionButton: "pier-toast-action app-no-drag",
             cancelButton: "hidden",
-            closeButton: "hidden",
           },
         }}
         {...props}

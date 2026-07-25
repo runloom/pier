@@ -4,10 +4,12 @@ export const agents = {
   focusPanelGone: "Panel closed",
   focusWindowGone: "Window closed",
   indexListFailed: "Couldn't load agent list",
-  notificationPermissionDenied:
-    "Notifications off — use Agent List or the jump shortcut",
-  notificationUnsupported:
-    "Notifications unavailable — use Agent List or the jump shortcut",
+  notificationPermissionDenied: "Notifications off",
+  notificationPermissionDeniedDetail:
+    "Won't get agent alerts; check the list or jump shortcuts",
+  notificationUnsupported: "Notifications unsupported",
+  notificationUnsupportedDetail:
+    "Won't get agent alerts; check the list or jump shortcuts",
   quickPick: {
     empty: "No running agents",
     emptyDetail: "Start an agent to see it here",

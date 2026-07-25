@@ -1,7 +1,5 @@
 import type { AgentRuntimeIndexSnapshot } from "@shared/contracts/agent-runtime-index.ts";
-import i18next from "i18next";
 import { create } from "zustand";
-import { showAppAlert } from "@/stores/app-dialog.store.ts";
 
 interface AgentRuntimeIndexState {
   applySnapshot: (snapshot: AgentRuntimeIndexSnapshot) => void;
@@ -45,10 +43,19 @@ export function initAgentRuntimeIndexBridge(): { dispose: () => void } {
     .list()
     .then(apply)
     .catch((err: unknown) => {
-      showAppAlert({
-        body: err instanceof Error ? err.message : String(err),
-        title: i18next.t("agents.indexListFailed"),
-      }).catch(() => undefined);
+      // 启动拉取失败不弹窗打断：toast + 消息中心留痕（带技术详情）。
+      // 动态 import 破环：notification-card 订阅本 store，system-notify → 卡片链路。
+      import("@/lib/notifications/system-notify.ts")
+        .then(({ systemNotify }) => {
+          systemNotify({
+            body: err instanceof Error ? err.message : String(err),
+            dedupeKey: "agent.runtime:index-list",
+            kind: "agent.runtime",
+            severity: "warning",
+            titleKey: "agents.indexListFailed",
+          });
+        })
+        .catch(() => undefined);
     });
   return {
     dispose: () => {

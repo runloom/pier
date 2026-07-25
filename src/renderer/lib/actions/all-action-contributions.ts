@@ -5,6 +5,7 @@ import { COMMAND_PALETTE_MRU_ACTION_CONTRIBUTIONS } from "./command-palette-mru-
 import { CONFIG_ACTION_CONTRIBUTIONS } from "./config-actions.ts";
 import type { ActionContribution } from "./contribution-types.ts";
 import { NEW_AGENT_ACTION_CONTRIBUTIONS } from "./new-agent-action.ts";
+import { NOTIFICATION_CENTER_ACTION_CONTRIBUTIONS } from "./notification-center-actions.ts";
 import { PANEL_ACTION_CONTRIBUTIONS } from "./panel-actions.ts";
 import { RUN_ACTION_CONTRIBUTIONS } from "./run-actions.ts";
 import { SETTINGS_ACTION_CONTRIBUTIONS } from "./settings-actions.ts";
@@ -16,6 +17,7 @@ export const ALL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   ...COMMAND_PALETTE_MRU_ACTION_CONTRIBUTIONS,
   ...CONFIG_ACTION_CONTRIBUTIONS,
   ...NEW_AGENT_ACTION_CONTRIBUTIONS,
+  ...NOTIFICATION_CENTER_ACTION_CONTRIBUTIONS,
   ...AGENT_RUNTIME_ACTION_CONTRIBUTIONS,
   ...PANEL_ACTION_CONTRIBUTIONS,
   ...RUN_ACTION_CONTRIBUTIONS,

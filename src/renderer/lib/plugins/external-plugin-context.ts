@@ -21,6 +21,7 @@ import { KeyRound, type LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
 import { toast } from "sonner";
 import { actionRegistry } from "@/lib/actions/registry.ts";
+import { reportPluginSystemEvent } from "@/lib/plugins/plugin-notification-report.ts";
 import {
   closeAppContentDialog,
   openAppContentDialog,
@@ -311,8 +312,14 @@ export function createExternalRendererPluginContext(
         track(pluginLifecycleBarriers.register(pluginId, barrier)),
     },
     notifications: {
-      error: (message) => toast.error(message),
-      info: (message) => toast.info(message),
+      error: (message, options) => {
+        toast.error(message);
+        reportPluginSystemEvent(pluginId, "error", message, options);
+      },
+      info: (message, options) => {
+        toast.info(message);
+        reportPluginSystemEvent(pluginId, "info", message, options);
+      },
       loading: (message) => {
         const id = toast.loading(message);
         return {
@@ -330,7 +337,10 @@ export function createExternalRendererPluginContext(
           },
         };
       },
-      success: (message) => toast.success(message),
+      success: (message, options) => {
+        toast.success(message);
+        reportPluginSystemEvent(pluginId, "success", message, options);
+      },
     },
     panels: {
       register: (registration: ExternalPluginPanelRegistration) => {

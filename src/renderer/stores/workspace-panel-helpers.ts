@@ -194,9 +194,9 @@ export interface WorkspaceAnchor {
  */
 export function resolveWorkspaceAnchor(input: {
   api: DockviewApi | null;
-  sourcePanelContext?: PanelContext;
-  sourcePanelGroupId?: string;
-  sourcePanelId?: string;
+  sourcePanelContext?: PanelContext | undefined;
+  sourcePanelGroupId?: string | undefined;
+  sourcePanelId?: string | undefined;
 }): WorkspaceAnchor {
   const groupId =
     input.sourcePanelGroupId ?? input.api?.activeGroup?.id ?? undefined;

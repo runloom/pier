@@ -11,9 +11,9 @@ export function buildSkillsImportStatusItems(input: {
   actionBlocked: boolean;
   conflict: boolean;
   expired: boolean;
-  onConflictResolve?: () => void;
+  onConflictResolve?: (() => void) | undefined;
   reloadRequired: boolean;
-  riskSummary?: SkillsImportRiskSummary | null;
+  riskSummary?: SkillsImportRiskSummary | null | undefined;
   skillId: string;
   t: Translate;
 }): StatusStackItem[] {

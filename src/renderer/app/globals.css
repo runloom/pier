@@ -1076,10 +1076,11 @@ body {
   }
 }
 
-/* === Capsule toast (Sonner) ===
-   短反馈胶囊：top-center、色块状态图标、单行 title。
-   表面走反差色（变量定义见 :root / :root.light），保证相对 app chrome 高对比。
-   长错误走 showAppAlert。 */
+/* === Toast (Sonner) ===
+   双形态：形态 A 确认型胶囊（.pier-toast:not(.pier-msg-toast)，!important 覆盖
+   sonner 默认卡片为反色胶囊）与形态 B 消息型卡片（.pier-msg-toast，继承 sonner
+   默认 [data-styled=true] 卡片，--normal-* 由 show-notification-toast.tsx per-call
+   style 切到 popover 语义令牌）。长错误走 showAppAlert。 */
 [data-sonner-toaster] {
   font-family: var(--pier-ui-font-family);
   /* 保证落在终端 NSView 之上的命中层语义清晰；实际命中靠 webOverlayRects。 */
@@ -1095,7 +1096,11 @@ body {
   margin-inline: auto !important;
 }
 
-[data-sonner-toast].pier-toast {
+/* ── 形态 A · 确认型胶囊（.pier-toast 默认即胶囊）────────────────────
+   短反馈胶囊：反色表面、999px 圆角、单行 title、隐藏 close、pill action。
+   sonner 把 per-call className 合并到 toastOptions.classNames.toast，故形态 B
+   也会带 .pier-toast；胶囊规则只对「非形态 B」生效，不污染卡片。 */
+[data-sonner-toast].pier-toast:not(.pier-msg-toast) {
   display: flex !important;
   flex-direction: row !important;
   flex-wrap: nowrap !important;
@@ -1119,14 +1124,14 @@ body {
   -webkit-app-region: no-drag;
 }
 
-[data-sonner-toast].pier-toast [data-content] {
+[data-sonner-toast].pier-toast:not(.pier-msg-toast) [data-content] {
   display: flex !important;
   flex-direction: row !important;
   align-items: center !important;
   min-width: 0;
 }
 
-[data-sonner-toast].pier-toast [data-title],
+[data-sonner-toast].pier-toast:not(.pier-msg-toast) [data-title],
 .pier-toast-title {
   font-size: 12px;
   font-weight: 500;
@@ -1137,15 +1142,14 @@ body {
   text-overflow: ellipsis;
 }
 
-[data-sonner-toast].pier-toast [data-icon] {
+[data-sonner-toast].pier-toast:not(.pier-msg-toast) [data-icon] {
   width: 16px !important;
   height: 16px !important;
   margin: 0 !important;
   flex-shrink: 0 !important;
 }
 
-[data-sonner-toast].pier-toast [data-button],
-.pier-toast-action {
+[data-sonner-toast].pier-toast:not(.pier-msg-toast) [data-button] {
   height: 24px !important;
   border-radius: 999px !important;
   padding-inline: 10px !important;
@@ -1158,4 +1162,83 @@ body {
   pointer-events: auto !important;
   cursor: pointer !important;
   -webkit-app-region: no-drag;
+}
+
+/* 胶囊隐藏 close（自动消失）；形态 B 由 .pier-msg-toast 自己显式控制 close。 */
+[data-sonner-toast].pier-toast:not(.pier-msg-toast) [data-close-button] {
+  display: none !important;
+}
+
+/* ── 形态 B · 消息型卡片（.pier-msg-toast）──────────────────────────
+   卡片几何（padding/background/border/border-radius/box-shadow/width/
+   align-items:center/gap/[data-content] column）全部继承 sonner 默认
+   [data-styled=true] 规则；--normal-* 变量由 show-notification-toast.tsx
+   per-call style 切到卡片语义令牌。这里只补 sonner 不提供的形态差异：
+   close 右上定位 + title 加粗 + description 截断 + action outline。
+   选择器特异性（attr+class+class = 0,3,0）高于 sonner [data-styled=true]
+   （attr+attr = 0,2,0），无需 !important。 */
+
+/* 卡片几何微调：padding（sonner 默认 16px，我们要 12px 14px 更紧凑） */
+[data-sonner-toast].pier-toast.pier-msg-toast {
+  padding: 12px 40px 12px 14px;
+}
+
+/* content 占满剩余宽度，给右上 close 预留空间 */
+[data-sonner-toast].pier-toast.pier-msg-toast [data-content] {
+  flex: 1 1 0;
+  min-width: 0;
+  padding-right: 20px;
+}
+
+/* title 加粗（sonner 默认 500） */
+[data-sonner-toast].pier-toast.pier-msg-toast [data-title] {
+  font-weight: 600;
+}
+
+/* description 弱化色 + 单行截断（sonner 默认 color:#3f3f3f 无截断） */
+[data-sonner-toast].pier-toast.pier-msg-toast [data-description] {
+  max-width: 100%;
+  font-size: 12px;
+  color: var(--muted-foreground);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* close 定位到右上（sonner 默认 top:0/left:0/translate(-35%,-35%)），
+   透明背景无边框（sonner 默认有背景+边框）；多行卡片顶对齐，不垂直居中 */
+[data-sonner-toast].pier-toast.pier-msg-toast [data-close-button] {
+  top: 10px;
+  right: 10px;
+  left: auto;
+  transform: none;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: var(--muted-foreground);
+  width: 24px;
+  height: 24px;
+}
+
+[data-sonner-toast].pier-toast.pier-msg-toast [data-close-button] svg {
+  width: 16px;
+  height: 16px;
+}
+
+[data-sonner-toast].pier-toast.pier-msg-toast [data-close-button]:hover {
+  background: var(--interactive-hover);
+  color: var(--foreground);
+}
+
+/* action 按钮改为 outline（sonner 默认实心 background:var(--normal-text)） */
+[data-sonner-toast].pier-toast.pier-msg-toast [data-button] {
+  padding-inline: 11px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--foreground);
+}
+
+[data-sonner-toast].pier-toast.pier-msg-toast [data-button]:hover {
+  background: var(--interactive-hover);
 }

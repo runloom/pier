@@ -4,6 +4,7 @@ import type {
 } from "@shared/contracts/agent-runtime-index.ts";
 import i18next from "i18next";
 import { toast } from "sonner";
+import { systemNotify } from "@/lib/notifications/system-notify.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 
 /**
@@ -30,6 +31,14 @@ export function reportAgentRuntimeFocusResult(
         body: result.message,
         title: i18next.t("agents.focusFailed"),
       }).catch(() => undefined);
+      // 带技术详情的失败：dialog + 落消息中心供追溯（设计 §7.3）
+      systemNotify({
+        body: result.message,
+        kind: "operation.result",
+        severity: "error",
+        suppressToast: true,
+        titleKey: "agents.focusFailed",
+      });
       return;
     default: {
       const _exhaustive: never = result;
@@ -47,9 +56,18 @@ export async function invokeAgentRuntimeFocus(
   try {
     reportAgentRuntimeFocusResult(await run());
   } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
     await showAppAlert({
-      body: err instanceof Error ? err.message : String(err),
+      body: message,
       title: i18next.t("agents.focusFailed"),
+    });
+    // 与 result.status==="error" 同族：落消息中心供追溯（两条失败路径归档一致）
+    systemNotify({
+      body: message,
+      kind: "operation.result",
+      severity: "error",
+      suppressToast: true,
+      titleKey: "agents.focusFailed",
     });
   }
 }
