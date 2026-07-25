@@ -103,9 +103,24 @@ afterEach(async () => {
   vi.unstubAllEnvs();
   vi.doUnmock("electron");
   vi.resetModules();
-  await Promise.all(
-    tempDirs.splice(0).map((dir) => rm(dir, { force: true, recursive: true }))
-  );
+  // App-core services may still hold handles for a tick; retry rm under CI.
+  const dirs = tempDirs.splice(0);
+  for (const dir of dirs) {
+    let lastError: unknown;
+    for (let attempt = 0; attempt < 6; attempt += 1) {
+      try {
+        await rm(dir, { force: true, recursive: true, maxRetries: 3 });
+        lastError = undefined;
+        break;
+      } catch (error) {
+        lastError = error;
+        await new Promise((resolve) => setTimeout(resolve, 50 * (attempt + 1)));
+      }
+    }
+    if (lastError) {
+      throw lastError;
+    }
+  }
 });
 
 describe("createPierAppCore worktree service graph", () => {
