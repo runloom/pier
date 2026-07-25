@@ -1,12 +1,12 @@
 /**
  * NotificationCenterService（NCS）：统一消息流水线 main 侧唯一写入方。
  *
- * ingest → schema 校验 → dedupe 合并 → ring buffer → 广播快照。
+ * ingest → schema 校验 → dedupe 合并 → ring buffer → 广播快照 → 形态 B toast 单投。
  * 边界纪律：本模块不 import services/agents/（对齐 foreground-activity 先例）；
- * agent 事件经 agent-attention 已分类的产物输入（M2 接入）。
+ * agent 事件经 agent-attention 已分类的产物输入。
  *
- * toast 预览由 renderer 门面本地决定（不等 main 往返）；本服务只负责
- * 落档、去重、未读数与快照广播。
+ * 形态 B toast 由 main `resolveToastTarget` + `deliverToast` 单窗投递；
+ * renderer 不得订阅快照后自弹（见 2026-07-26 多窗投递金标准）。
  */
 import {
   type AppNotification,
@@ -14,11 +14,22 @@ import {
   type NotificationCenterSnapshot,
   notificationReportSchema,
 } from "@shared/contracts/notification-center.ts";
+import {
+  resolveToastTarget,
+  type ToastTarget,
+} from "@shared/notification-delivery.ts";
 import { decideDedupe } from "./dedupe.ts";
 import type { NotificationHistoryStore } from "./store.ts";
 
+export interface NotificationIngestContext {
+  /** 上报方 electron window id（字符串）；origin-aware kind 单投用。 */
+  originWindowId?: string;
+}
+
 export interface NotificationCenterServiceDeps {
   broadcast: (snapshot: NotificationCenterSnapshot) => void;
+  /** 形态 B toast 单投；target.mode=none 时可不调或 no-op。 */
+  deliverToast?: (notification: AppNotification, target: ToastTarget) => void;
   history: NotificationHistoryStore;
   idGen?: () => string;
   now?: () => number;
@@ -29,7 +40,10 @@ export interface NotificationCenterServiceDeps {
 export interface NotificationCenterService {
   /** 退出前强制落盘（500ms 防抖窗口内的已读/新消息不丢）。 */
   flush(): Promise<void>;
-  ingest(report: unknown): AppNotification | null;
+  ingest(
+    report: unknown,
+    context?: NotificationIngestContext
+  ): AppNotification | null;
   markAllRead(): void;
   markRead(id: string): void;
   /** toast 上的 action 触达时按 dedupeKey 标已读（toast 副本 id 不在历史中）。 */
@@ -67,7 +81,35 @@ export async function createNotificationCenterService(
     deps.broadcast(snapshot());
   }
 
-  function ingest(report: unknown): AppNotification | null {
+  function scheduleToast(
+    notification: AppNotification,
+    suppressToast: boolean | undefined,
+    context: NotificationIngestContext | undefined
+  ): void {
+    if (!deps.deliverToast) {
+      return;
+    }
+    const target = resolveToastTarget(
+      {
+        kind: notification.kind,
+        severity: notification.severity,
+        ...(suppressToast === undefined ? {} : { suppressToast }),
+        ...(context?.originWindowId
+          ? { originWindowId: context.originWindowId }
+          : {}),
+      },
+      { dndEnabled: prefs.dndEnabled, mutedKinds: prefs.mutedKinds }
+    );
+    if (target.mode === "none") {
+      return;
+    }
+    deps.deliverToast(notification, target);
+  }
+
+  function ingest(
+    report: unknown,
+    context?: NotificationIngestContext
+  ): AppNotification | null {
     const parsed = notificationReportSchema.safeParse(report);
     if (!parsed.success) {
       console.warn(
@@ -76,7 +118,7 @@ export async function createNotificationCenterService(
       );
       return null;
     }
-    const input = parsed.data;
+    const { suppressToast, ...input } = parsed.data;
     const ts = now();
 
     const { existingId } = decideDedupe(deps.history.items(), {
@@ -96,6 +138,7 @@ export async function createNotificationCenterService(
       if (merged) {
         deps.history.pruneExpired(prefs.retentionDays, ts);
         publish();
+        scheduleToast(merged, suppressToast, context);
         return merged;
       }
     }
@@ -109,6 +152,7 @@ export async function createNotificationCenterService(
     deps.history.prepend(notification);
     deps.history.pruneExpired(prefs.retentionDays, ts);
     publish();
+    scheduleToast(notification, suppressToast, context);
     return notification;
   }
 

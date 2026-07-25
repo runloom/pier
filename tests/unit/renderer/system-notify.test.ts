@@ -1,18 +1,11 @@
-import type {
-  AppNotification,
-  NotificationReport,
-} from "@shared/contracts/notification-center.ts";
+import type { NotificationReport } from "@shared/contracts/notification-center.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import {
-  registerSystemToastRenderer,
   resetSystemNotifyRecentKeysForTests,
   systemNotify,
 } from "@/lib/notifications/system-notify.ts";
 import { useNotificationCenterStore } from "@/stores/notification-center.store.ts";
-
-const toastRendererMock = vi.fn<(n: AppNotification) => void>();
-registerSystemToastRenderer(toastRendererMock);
 
 const reportMock = vi.fn<(r: NotificationReport) => Promise<null>>();
 
@@ -25,8 +18,8 @@ function baseInput() {
   };
 }
 
-function lastToastNotification(): AppNotification {
-  return toastRendererMock.mock.calls.at(-1)?.[0] as AppNotification;
+function lastReport(): NotificationReport {
+  return reportMock.mock.calls.at(-1)?.[0] as NotificationReport;
 }
 
 describe("systemNotify", () => {
@@ -51,24 +44,19 @@ describe("systemNotify", () => {
     (window as { pier?: unknown }).pier = undefined;
   });
 
-  it("shows a rich card toast (title/detail/type/time model) and reports to NCS", () => {
+  it("reports to NCS without local shape-B toast (Strict main-owned)", () => {
     systemNotify({ ...baseInput(), body: "detail-body" });
-    expect(toastRendererMock).toHaveBeenCalledTimes(1);
-    const notification = lastToastNotification();
-    expect(notification.title).toBe("Update ready");
-    expect(notification.body).toBe("detail-body");
-    expect(notification.kind).toBe("app.update");
-    expect(notification.severity).toBe("success");
-    expect(reportMock).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: "app.update",
-        titleKey: "settings.appUpdate.toast.ready",
-        trigger: "system-event",
-      })
-    );
+    expect(reportMock).toHaveBeenCalledTimes(1);
+    const report = lastReport();
+    expect(report.title).toBe("Update ready");
+    expect(report.body).toBe("detail-body");
+    expect(report.kind).toBe("app.update");
+    expect(report.severity).toBe("success");
+    expect(report.trigger).toBe("system-event");
+    expect(report.suppressToast).toBeUndefined();
   });
 
-  it("suppresses toast when dedupeKey already recorded (dedupe sink)", () => {
+  it("passes suppressToast when dedupeKey already recorded (dedupe sink)", () => {
     useNotificationCenterStore.setState({
       items: [
         {
@@ -85,11 +73,11 @@ describe("systemNotify", () => {
       ],
     });
     systemNotify({ ...baseInput(), dedupeKey: "app-update:0.2.0" });
-    expect(toastRendererMock).not.toHaveBeenCalled();
     expect(reportMock).toHaveBeenCalledTimes(1);
+    expect(lastReport().suppressToast).toBe(true);
   });
 
-  it("toasts again when the same dedupeKey is outside the 24h merge window", () => {
+  it("does not suppress when the same dedupeKey is outside the 24h merge window", () => {
     useNotificationCenterStore.setState({
       hydrated: true,
       items: [
@@ -107,55 +95,22 @@ describe("systemNotify", () => {
       ],
     });
     systemNotify({ ...baseInput(), dedupeKey: "app-update:0.2.0" });
-    expect(toastRendererMock).toHaveBeenCalledTimes(1);
+    expect(reportMock).toHaveBeenCalledTimes(1);
+    expect(lastReport().suppressToast).toBeUndefined();
   });
 
   it("suppresses rapid repeat toasts before the NCS broadcast returns", () => {
-    // 广播往返窗口内的同 key 连发：镜像尚无记录，靠本地近因 dedupe 抑制
     systemNotify({ ...baseInput(), dedupeKey: "app-update:0.3.0" });
     systemNotify({ ...baseInput(), dedupeKey: "app-update:0.3.0" });
-    expect(toastRendererMock).toHaveBeenCalledTimes(1);
-    // 两次都照常落档（合并由 main 侧负责）
     expect(reportMock).toHaveBeenCalledTimes(2);
+    expect(reportMock.mock.calls[0]?.[0].suppressToast).toBeUndefined();
+    expect(reportMock.mock.calls[1]?.[0].suppressToast).toBe(true);
   });
 
-  it("suppressToast reports without toasting", () => {
+  it("explicit suppressToast reports without toasting intent", () => {
     systemNotify({ ...baseInput(), suppressToast: true });
-    expect(toastRendererMock).not.toHaveBeenCalled();
     expect(reportMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("DND silences non-error toast but error still toasts", () => {
-    useNotificationCenterStore.setState({ dndEnabled: true });
-    systemNotify(baseInput());
-    expect(toastRendererMock).not.toHaveBeenCalled();
-    systemNotify({ ...baseInput(), severity: "error" });
-    expect(toastRendererMock).toHaveBeenCalledTimes(1);
-  });
-
-  it("mutedKinds silence toast but still report to inbox", async () => {
-    const { useNotificationCenterPrefsStore } = await import(
-      "@/stores/notification-center-prefs.store.ts"
-    );
-    useNotificationCenterPrefsStore.setState({
-      prefs: {
-        dndEnabled: false,
-        mutedKinds: ["app.update"],
-        retentionDays: 7,
-        showUnreadBadge: true,
-      },
-    });
-    systemNotify(baseInput());
-    expect(toastRendererMock).not.toHaveBeenCalled();
-    expect(reportMock).toHaveBeenCalledTimes(1);
-    useNotificationCenterPrefsStore.setState({
-      prefs: {
-        dndEnabled: false,
-        mutedKinds: [],
-        retentionDays: 7,
-        showUnreadBadge: true,
-      },
-    });
+    expect(lastReport().suppressToast).toBe(true);
   });
 
   it("survives missing preload (report is best-effort)", () => {
@@ -163,6 +118,5 @@ describe("systemNotify", () => {
     expect(() => {
       systemNotify(baseInput());
     }).not.toThrow();
-    expect(toastRendererMock).toHaveBeenCalledTimes(1);
   });
 });

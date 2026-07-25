@@ -14,12 +14,27 @@
 export const WINDOW_FOCUSED_ATTR = "data-window-focused";
 
 let installed = false;
+/** OS key-window focus for this renderer; optimistic true until seed / live event. */
+let keyFocused = true;
 
 function applyWindowFocused(focused: boolean): void {
+  keyFocused = focused;
   document.documentElement.setAttribute(
     WINDOW_FOCUSED_ATTR,
     focused ? "true" : "false"
   );
+}
+
+/**
+ * Whether this Pier window is the OS key window.
+ * Source of truth matches `data-window-focused` (main focus/blur), not DOM
+ * `document.hasFocus()` (false while native terminal is firstResponder).
+ *
+ * Used to gate multi-window message toasts: only the focused window renders
+ * in-app toast; unfocused windows still sync inbox via NCS broadcast.
+ */
+export function isWindowKeyFocused(): boolean {
+  return keyFocused;
 }
 
 interface WindowFocusApi {
@@ -90,4 +105,16 @@ export function resetWindowFocusAttributeForTests(): void {
     document.documentElement.removeAttribute(WINDOW_FOCUSED_ATTR);
   }
   installed = false;
+  keyFocused = true;
+}
+
+/** Test helper — set focus without installing the full attribute bridge. */
+export function setWindowKeyFocusedForTests(focused: boolean): void {
+  keyFocused = focused;
+  if (typeof document !== "undefined") {
+    document.documentElement.setAttribute(
+      WINDOW_FOCUSED_ATTR,
+      focused ? "true" : "false"
+    );
+  }
 }

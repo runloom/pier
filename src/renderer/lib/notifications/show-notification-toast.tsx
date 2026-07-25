@@ -1,9 +1,11 @@
 /**
  * 消息型 toast（形态 B）的统一渲染：标准 shadcn sonner 卡片。
- * systemNotify 门面与 agent 预览桥共用：标题（必备）+ 详情（必备 ≤1 行）
- * + ≤1 outline 操作 + 关闭 X；无前置状态图标；severity 只驱动时长分级。
+ * 仅由 main 单投桥（NotificationMessageToastBridge）调用：标题（必备）+ 详情
+ * （必备 ≤1 行）+ ≤1 outline 操作 + 关闭 X；无前置状态图标；severity 只驱动时长分级。
  *
- * 形态 A（确认型 toast）不走这里，维持 sonner 反色胶囊现状。
+ * 多窗口：投递权在 main（resolveToastTarget + sendMessageToastToOneWindow）；
+ * 本模块只负责渲染，不做 focus 门闩。
+ * 形态 A（确认型 toast）不走这里，维持触发窗本地 sonner 反色胶囊。
  */
 
 import type { AppNotification } from "@shared/contracts/notification-center.ts";
@@ -14,7 +16,6 @@ import {
   isNotificationActionAvailable,
   runNotificationAction,
 } from "@/lib/notifications/notification-actions.ts";
-import { registerSystemToastRenderer } from "@/lib/notifications/system-notify.ts";
 import { useAgentRuntimeIndexStore } from "@/stores/agent-runtime-index.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 
@@ -99,6 +100,3 @@ export function showNotificationToast(notification: AppNotification): void {
     } as CSSProperties,
   });
 }
-
-// 应用引导路径（app-shell → preview bridge 引入本模块）即完成渲染槽注册。
-registerSystemToastRenderer(showNotificationToast);

@@ -72,13 +72,20 @@ export const appNotificationSchema = z.object({
 });
 export type AppNotification = z.infer<typeof appNotificationSchema>;
 
-/** renderer → main 上报载荷（id/ts/read/repeatCount 由 NCS 分配，strict 拒绝夹带）。 */
+/**
+ * renderer → main 上报载荷（id/ts/read/repeatCount 由 NCS 分配，strict 拒绝夹带）。
+ * `suppressToast` 仅投递提示（近因 dedupe / 调用方只落档），不入 inbox 条目。
+ */
 export const notificationReportSchema = appNotificationSchema
   .omit({
     id: true,
     ts: true,
     read: true,
     repeatCount: true,
+  })
+  .extend({
+    /** true 时本条 ingest 不弹形态 B toast（仍落档）。 */
+    suppressToast: z.boolean().optional(),
   })
   .strict();
 export type NotificationReport = z.infer<typeof notificationReportSchema>;

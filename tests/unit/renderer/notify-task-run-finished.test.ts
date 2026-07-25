@@ -1,4 +1,7 @@
-import type { AppNotification } from "@shared/contracts/notification-center.ts";
+import type {
+  AppNotification,
+  NotificationReport,
+} from "@shared/contracts/notification-center.ts";
 import type { TaskRunControlEntry } from "@shared/contracts/tasks.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -7,10 +10,7 @@ import {
   revealTaskRun,
 } from "@/lib/actions/task-run-operations.ts";
 import { runNotificationAction } from "@/lib/notifications/notification-actions.ts";
-import {
-  registerSystemToastRenderer,
-  resetSystemNotifyRecentKeysForTests,
-} from "@/lib/notifications/system-notify.ts";
+import { resetSystemNotifyRecentKeysForTests } from "@/lib/notifications/system-notify.ts";
 import {
   clearTaskRunFinishedNotificationsForTests,
   notifyTaskRunFinishedIfNeeded,
@@ -19,9 +19,8 @@ import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useNotificationCenterStore } from "@/stores/notification-center.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 
-const toastRendererMock = vi.fn<(n: AppNotification) => void>();
+const reportMock = vi.fn<(r: NotificationReport) => Promise<null>>();
 const markReadByDedupeKeyMock = vi.fn(async () => undefined);
-registerSystemToastRenderer(toastRendererMock);
 
 vi.mock("@/lib/actions/task-run-operations.ts", () => ({
   openTaskRunOutput: vi.fn(async () => undefined),
@@ -83,8 +82,18 @@ function seedTaskRuns(entries: TaskRunControlEntry[]): void {
   });
 }
 
-function lastToastNotification(): AppNotification {
-  return toastRendererMock.mock.calls.at(-1)?.[0] as AppNotification;
+function lastReport(): NotificationReport {
+  return reportMock.mock.calls.at(-1)?.[0] as NotificationReport;
+}
+
+function reportAsNotification(report: NotificationReport): AppNotification {
+  return {
+    ...report,
+    // toast 副本 id 前缀触发 markReadByDedupeKey（与 main 回投形态 B 一致）
+    id: "toast:test",
+    read: false,
+    ts: Date.now(),
+  };
 }
 
 describe("notifyTaskRunFinishedIfNeeded", () => {
@@ -105,6 +114,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
       notificationCenter: {
         markRead: vi.fn(async () => undefined),
         markReadByDedupeKey: markReadByDedupeKeyMock,
+        report: reportMock,
       },
     };
   });
@@ -115,12 +125,12 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     (window as { pier?: unknown }).pier = undefined;
   });
 
-  it("does not toast for active runs", () => {
+  it("does not report for active runs", () => {
     notifyTaskRunFinishedIfNeeded(run("running"));
-    expect(toastRendererMock).not.toHaveBeenCalled();
+    expect(reportMock).not.toHaveBeenCalled();
   });
 
-  it("does not toast for foreground terminal-tab runs (strong UI feedback)", () => {
+  it("does not report for foreground terminal-tab runs (strong UI feedback)", () => {
     notifyTaskRunFinishedIfNeeded(
       run("succeeded", { mode: "terminal-tab", runId: "fg-ok" })
     );
@@ -130,25 +140,26 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     notifyTaskRunFinishedIfNeeded(
       run("cancelled", { mode: "terminal-tab", runId: "fg-cancel" })
     );
-    expect(toastRendererMock).not.toHaveBeenCalled();
+    expect(reportMock).not.toHaveBeenCalled();
   });
 
-  it("toasts a rich card once and open-output opens background output", () => {
+  it("reports a rich card once and open-output opens background output", () => {
     const current = run("succeeded");
     seedTaskRuns([current]);
     notifyTaskRunFinishedIfNeeded(current);
     notifyTaskRunFinishedIfNeeded(current);
 
-    expect(toastRendererMock).toHaveBeenCalledTimes(1);
-    const notification = lastToastNotification();
-    expect(notification.title).toBe("Task finished");
-    expect(notification.body).toBe("Test suite · took 42s");
-    expect(notification.kind).toBe("task-run.finished");
-    expect(notification.severity).toBe("success");
-    expect(notification.actions).toEqual([
+    expect(reportMock).toHaveBeenCalledTimes(1);
+    const report = lastReport();
+    expect(report.title).toBe("Task finished");
+    expect(report.body).toBe("Test suite · took 42s");
+    expect(report.kind).toBe("task-run.finished");
+    expect(report.severity).toBe("success");
+    expect(report.actions).toEqual([
       { id: "open-output", labelKey: "terminal.runtimeControl.viewDetails" },
     ]);
 
+    const notification = reportAsNotification(report);
     runNotificationAction(notification, "open-output");
     expect(openTaskRunOutput).toHaveBeenCalledWith(current, "Test suite");
     expect(revealTaskRun).not.toHaveBeenCalled();
@@ -162,7 +173,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     seedTaskRuns([current]);
     notifyTaskRunFinishedIfNeeded(current);
 
-    const notification = lastToastNotification();
+    const notification = reportAsNotification(lastReport());
     expect(notification.title).toBe("Task failed");
     expect(notification.severity).toBe("error");
 
@@ -173,9 +184,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
 
   it("failed detail includes exit code and duration", () => {
     notifyTaskRunFinishedIfNeeded(run("failed", { exitCode: 1 }));
-    expect(lastToastNotification().body).toBe(
-      "Test suite · exit code 1 · took 42s"
-    );
+    expect(lastReport().body).toBe("Test suite · exit code 1 · took 42s");
   });
 
   it("surfaces view-details failures with an alert", async () => {
@@ -187,7 +196,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     seedTaskRuns([current]);
     notifyTaskRunFinishedIfNeeded(current);
 
-    runNotificationAction(lastToastNotification(), "open-output");
+    runNotificationAction(reportAsNotification(lastReport()), "open-output");
     await vi.waitFor(() => {
       expect(showAppAlert).toHaveBeenCalledWith({
         body: "boom",
@@ -196,7 +205,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
     });
   });
 
-  it("uses an error-severity toast for forced cancellation even after stopRequestedAt", () => {
+  it("uses an error-severity report for forced cancellation even after stopRequestedAt", () => {
     notifyTaskRunFinishedIfNeeded(
       run("cancelled", {
         force: true,
@@ -204,17 +213,17 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
         stopRequestedAt: 2000,
       })
     );
-    const notification = lastToastNotification();
-    expect(notification.title).toBe("Task force-stopped");
-    expect(notification.severity).toBe("error");
-    expect(notification.body).toBe("Test suite · ran for 42s");
+    const report = lastReport();
+    expect(report.title).toBe("Task force-stopped");
+    expect(report.severity).toBe("error");
+    expect(report.body).toBe("Test suite · ran for 42s");
   });
 
   it("does not notify user-requested stop (interrupt)", () => {
     notifyTaskRunFinishedIfNeeded(
       run("cancelled", { termination: "interrupt", runId: "run-stop" })
     );
-    expect(toastRendererMock).not.toHaveBeenCalled();
+    expect(reportMock).not.toHaveBeenCalled();
   });
 
   it("does not notify user-requested stop via stopRequestedAt (panel close path)", () => {
@@ -224,22 +233,22 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
         stopRequestedAt: 2000,
       })
     );
-    expect(toastRendererMock).not.toHaveBeenCalled();
+    expect(reportMock).not.toHaveBeenCalled();
   });
 
   it("uses a neutral info severity for unexpected cancellation", () => {
     notifyTaskRunFinishedIfNeeded(run("cancelled"));
-    const notification = lastToastNotification();
-    expect(notification.title).toBe("Task cancelled");
-    expect(notification.severity).toBe("info");
-    expect(notification.body).toBe("Test suite · ran for 42s");
+    const report = lastReport();
+    expect(report.title).toBe("Task cancelled");
+    expect(report.severity).toBe("info");
+    expect(report.body).toBe("Test suite · ran for 42s");
   });
 
   it("does not notify when cancellation is a restart supersession", () => {
     notifyTaskRunFinishedIfNeeded(
       run("cancelled", { termination: "superseded", runId: "run-superseded" })
     );
-    expect(toastRendererMock).not.toHaveBeenCalled();
+    expect(reportMock).not.toHaveBeenCalled();
   });
 
   it("still notifies unexpected cancel after a superseded run was skipped", () => {
@@ -247,7 +256,7 @@ describe("notifyTaskRunFinishedIfNeeded", () => {
       run("cancelled", { termination: "superseded", runId: "run-a" })
     );
     notifyTaskRunFinishedIfNeeded(run("cancelled", { runId: "run-b" }));
-    expect(toastRendererMock).toHaveBeenCalledTimes(1);
-    expect(lastToastNotification().title).toBe("Task cancelled");
+    expect(reportMock).toHaveBeenCalledTimes(1);
+    expect(lastReport().title).toBe("Task cancelled");
   });
 });

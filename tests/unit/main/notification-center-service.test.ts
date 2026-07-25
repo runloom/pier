@@ -6,6 +6,7 @@ import {
   type NotificationCenterSnapshot,
   type NotificationReport,
 } from "@shared/contracts/notification-center.ts";
+import type { ToastTarget } from "@shared/notification-delivery.ts";
 import { beforeEach, describe, expect, it } from "vitest";
 
 /** 内存 history stub（文件持久化由 store 单测覆盖）。 */
@@ -57,6 +58,7 @@ function report(
 
 describe("notificationCenterService", () => {
   let broadcasts: NotificationCenterSnapshot[];
+  let deliveries: { notification: AppNotification; target: ToastTarget }[];
   let now: number;
   let idSeq: number;
 
@@ -65,9 +67,13 @@ describe("notificationCenterService", () => {
     prefs = { ...DEFAULT_NOTIFICATION_CENTER_PREFS }
   ) {
     broadcasts = [];
+    deliveries = [];
     return createNotificationCenterService({
       broadcast: (snapshot) => {
         broadcasts.push(snapshot);
+      },
+      deliverToast: (notification, target) => {
+        deliveries.push({ notification, target });
       },
       history: memoryHistory(items),
       idGen: () => `id-${idSeq++}`,
@@ -183,5 +189,61 @@ describe("notificationCenterService", () => {
     service.syncPrefs({ ...prefs, dndEnabled: true });
     expect(service.snapshot().dndEnabled).toBe(true);
     expect(broadcasts).toHaveLength(count + 1);
+  });
+
+  it("delivers shape-B toast to key-window after ingest (not suppressToast)", async () => {
+    const service = await makeService();
+    service.ingest(report({ kind: "agent.attention", severity: "warning" }));
+    expect(deliveries).toHaveLength(1);
+    expect(deliveries[0]?.target).toEqual({ mode: "key-window" });
+    expect(deliveries[0]?.notification.kind).toBe("agent.attention");
+  });
+
+  it("delivers task-run toast to origin-window when context has origin", async () => {
+    const service = await makeService();
+    service.ingest(report({ kind: "task-run.finished", severity: "success" }), {
+      originWindowId: "7",
+    });
+    expect(deliveries[0]?.target).toEqual({
+      mode: "origin-window",
+      originWindowId: "7",
+    });
+  });
+
+  it("skips toast delivery when suppressToast is set", async () => {
+    const service = await makeService();
+    service.ingest(report({ suppressToast: true }));
+    expect(broadcasts).toHaveLength(1);
+    expect(deliveries).toHaveLength(0);
+  });
+
+  it("skips toast under DND for non-error", async () => {
+    const service = await makeService([], {
+      ...DEFAULT_NOTIFICATION_CENTER_PREFS,
+      dndEnabled: true,
+    });
+    service.ingest(report({ severity: "info" }));
+    expect(deliveries).toHaveLength(0);
+    service.ingest(report({ severity: "error", title: "boom" }));
+    expect(deliveries).toHaveLength(1);
+  });
+
+  it("re-delivers toast on dedupe merge (repeat attention)", async () => {
+    const service = await makeService();
+    service.ingest(
+      report({
+        dedupeKey: "agent.attention:a1",
+        kind: "agent.attention",
+        severity: "warning",
+      })
+    );
+    service.ingest(
+      report({
+        dedupeKey: "agent.attention:a1",
+        kind: "agent.attention",
+        severity: "warning",
+      })
+    );
+    expect(deliveries).toHaveLength(2);
   });
 });

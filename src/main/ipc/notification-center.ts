@@ -2,8 +2,8 @@
  * 统一消息中心 IPC：snapshot pull + 系统事件上报 + 已读/DND 写操作。
  *
  * 装配模式对齐 ipc/foreground-activity.ts（模块级单例 + registerXxxIpc）。
- * 快照经 broadcastNotificationCenterChanged 全窗广播；renderer 镜像 store
- * 以 seq 单调守卫拒收乱序。
+ * 快照经 broadcastNotificationCenterChanged 全窗广播；形态 B toast 经
+ * sendMessageToastToOneWindow 单窗投递。renderer 镜像 store 以 seq 单调守卫拒收乱序。
  */
 
 import { join } from "node:path";
@@ -14,12 +14,16 @@ import {
 } from "@shared/contracts/notification-center.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
-import { app, type IpcMain } from "electron";
+import { app, type IpcMain, type IpcMainInvokeEvent } from "electron";
 import type { PierEventBus } from "../app-core/event-bus.ts";
-import { broadcastNotificationCenterChanged } from "../app-core/window-broadcasts.ts";
+import {
+  broadcastNotificationCenterChanged,
+  sendMessageToastToOneWindow,
+} from "../app-core/window-broadcasts.ts";
 import { createNotificationCenterService } from "../services/notification-center/service.ts";
 import { createNotificationHistoryStore } from "../services/notification-center/store.ts";
 import { readPreferences, updatePreferences } from "../state/preferences.ts";
+import { findAppWindowByWebContents } from "../windows/window-identity.ts";
 
 const log = createLogger("notification-center.ipc");
 
@@ -35,6 +39,13 @@ async function init() {
         broadcastNotificationCenterChanged(snapshot);
       } catch (err) {
         log.warn("broadcast failed", { err });
+      }
+    },
+    deliverToast: (notification, target) => {
+      try {
+        sendMessageToastToOneWindow(notification, target);
+      } catch (err) {
+        log.warn("message toast deliver failed", { err });
       }
     },
     history,
@@ -79,6 +90,16 @@ export async function flushNotificationCenterHistory(): Promise<void> {
   }
 }
 
+function originWindowIdFromEvent(
+  event: IpcMainInvokeEvent
+): string | undefined {
+  const win = findAppWindowByWebContents(event.sender);
+  if (!win || win.isDestroyed()) {
+    return;
+  }
+  return String(win.id);
+}
+
 export function registerNotificationCenterIpc(
   ipcMain: IpcMain,
   args?: { eventBus?: PierEventBus }
@@ -115,7 +136,13 @@ export function registerNotificationCenterIpc(
   );
   ipcMain.handle(
     PIER.NOTIFICATION_CENTER_REPORT,
-    async (_event, payload: unknown) => (await service()).ingest(payload)
+    async (event, payload: unknown) => {
+      const originWindowId = originWindowIdFromEvent(event);
+      return (await service()).ingest(
+        payload,
+        originWindowId ? { originWindowId } : undefined
+      );
+    }
   );
   ipcMain.handle(
     PIER.NOTIFICATION_CENTER_MARK_READ,

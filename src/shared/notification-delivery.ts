@@ -1,13 +1,14 @@
 /**
- * 消息投递路由矩阵（设计文档 §3.2 / §3.3 的纯函数实现，main 与 renderer 共用）。
+ * 消息投递路由（设计文档 §3.2 / 2026-07-26 多窗金标准）。
  *
- * - renderer：`systemNotify()` 门面用它决定「本地是否立即弹 toast」（toast 不等待 main 往返）。
- * - main：NCS 在 M2 用它决定 agent 类消息的 toast 预览 / OS 通知位。
+ * - `routeDelivery`：是否 toast / inbox / os（main 与 renderer 共用布尔决策）。
+ * - `resolveToastTarget`：形态 B 投到哪一窗（仅 main 消费；renderer 不得自弹）。
  *
  * 规则：
- * - inbox 恒为 true：到达消息中心的消息一律落档（上报侧已筛掉纯用户动作反馈）。
- * - toast：按类静音（mutedKinds）→ DND（error 除外）→ 上报方 suppressToast 依次否决。
- * - osNotify：M1 恒 false（OS 通知发送权唯一留在 agent-attention，M2 接入）。
+ * - inbox 恒 true（上报侧已筛掉纯用户动作反馈）。
+ * - toast 布尔：suppressToast → mutedKinds → DND（error 除外）。
+ * - toast 目标：task-run + origin → origin-window；否则 key-window；无 toast → none。
+ * - osNotify：恒 false（OS 发送权唯一留在 agent-attention）。
  */
 import type {
   NotificationKind,
@@ -19,6 +20,17 @@ export interface NotificationDeliveryDecision {
   osNotify: boolean;
   toast: boolean;
 }
+
+/** 形态 B in-app toast 的窗目标（main 单投）。 */
+export type ToastTarget =
+  | { mode: "none" }
+  | { mode: "key-window" }
+  | { mode: "origin-window"; originWindowId: string };
+
+/** 有明确窗归属、优先投 origin 的 kind。 */
+const ORIGIN_AWARE_KINDS: ReadonlySet<NotificationKind> = new Set([
+  "task-run.finished",
+]);
 
 export function routeDelivery(
   input: {
@@ -39,4 +51,32 @@ export function routeDelivery(
     toast = false;
   }
   return { inbox: true, osNotify: false, toast };
+}
+
+/**
+ * 在 `routeDelivery.toast === true` 时选出单投目标。
+ * - origin-aware kind 且带 originWindowId → origin-window
+ * - 否则 key-window（无 key 时 send 层不弹，不 fallback 随机窗）
+ */
+export function resolveToastTarget(
+  input: {
+    kind: NotificationKind;
+    severity: NotificationSeverity;
+    suppressToast?: boolean;
+    originWindowId?: string;
+  },
+  prefs: { dndEnabled: boolean; mutedKinds: readonly NotificationKind[] }
+): ToastTarget {
+  const decision = routeDelivery(input, prefs);
+  if (!decision.toast) {
+    return { mode: "none" };
+  }
+  if (
+    ORIGIN_AWARE_KINDS.has(input.kind) &&
+    input.originWindowId &&
+    input.originWindowId.length > 0
+  ) {
+    return { mode: "origin-window", originWindowId: input.originWindowId };
+  }
+  return { mode: "key-window" };
 }

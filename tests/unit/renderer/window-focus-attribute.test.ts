@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   installWindowFocusAttribute,
+  isWindowKeyFocused,
   resetWindowFocusAttributeForTests,
   WINDOW_FOCUSED_ATTR,
 } from "@/lib/window-focus-attribute.ts";
@@ -123,5 +124,18 @@ describe("installWindowFocusAttribute", () => {
       "true"
     );
     expect(focusListeners).toHaveLength(1);
+  });
+
+  it("isWindowKeyFocused tracks OS key-window state for chrome/CSS", async () => {
+    dispose = installWindowFocusAttribute();
+    expect(isWindowKeyFocused()).toBe(true);
+    for (const listener of focusListeners) {
+      listener({ focused: false });
+    }
+    expect(isWindowKeyFocused()).toBe(false);
+    for (const listener of focusListeners) {
+      listener({ focused: true });
+    }
+    expect(isWindowKeyFocused()).toBe(true);
   });
 });

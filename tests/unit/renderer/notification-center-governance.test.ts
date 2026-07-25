@@ -153,6 +153,43 @@ describe("notification center governance", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("shape-B toast is only rendered from the main single-window bridge", () => {
+    const ALLOWED = new Set([
+      "src/renderer/components/common/notification-message-toast-bridge.tsx",
+      "src/renderer/lib/notifications/show-notification-toast.tsx",
+    ]);
+    const offenders: string[] = [];
+    for (const filePath of sourceFiles(RENDERER_ROOT)) {
+      const rel = relative(ROOT, filePath);
+      if (ALLOWED.has(rel)) {
+        continue;
+      }
+      const content = readFileSync(filePath, "utf8");
+      if (/\bshowNotificationToast\s*\(/.test(content)) {
+        offenders.push(rel);
+      }
+    }
+    expect(offenders).toEqual([]);
+  });
+
+  it("does not reintroduce store-subscribe toast preview bridge", () => {
+    expect(() =>
+      readFileSync(
+        join(
+          ROOT,
+          "src/renderer/components/common/notification-toast-preview-bridge.tsx"
+        ),
+        "utf8"
+      )
+    ).toThrow();
+    const appShell = readFileSync(
+      join(ROOT, "src/renderer/components/common/app-shell.tsx"),
+      "utf8"
+    );
+    expect(appShell).toContain("NotificationMessageToastBridge");
+    expect(appShell).not.toContain("NotificationToastPreviewBridge");
+  });
+
   it("plain toasts never carry description (消息详情只走形态 B 渲染器)", () => {
     const ALLOWED = new Set([
       "src/renderer/lib/notifications/show-notification-toast.tsx",
