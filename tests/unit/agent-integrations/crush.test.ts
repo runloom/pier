@@ -7,7 +7,6 @@ import {
   uninstallCrushHooks,
   withoutPierCrushHooks,
   withPierCrushHooks,
-  withPierCrushTerminalChrome,
 } from "../../../src/main/services/agents/integrations/crush.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
@@ -72,33 +71,6 @@ describe("withPierCrushHooks", () => {
   });
 });
 
-describe("withPierCrushTerminalChrome", () => {
-  it("sets options.tui.transparent=true when unset", () => {
-    const next = withPierCrushTerminalChrome({});
-    const options = next.options as Record<string, unknown>;
-    const tui = options.tui as Record<string, unknown>;
-    expect(tui.transparent).toBe(true);
-  });
-
-  it("preserves explicit user transparent=false", () => {
-    const next = withPierCrushTerminalChrome({
-      options: { tui: { transparent: false } },
-    });
-    const options = next.options as Record<string, unknown>;
-    const tui = options.tui as Record<string, unknown>;
-    expect(tui.transparent).toBe(false);
-  });
-
-  it("keeps hooks transform composable", () => {
-    const next = withPierCrushTerminalChrome(withPierCrushHooks({}));
-    const hooks = next.hooks as Record<string, CrushHookEntry[]>;
-    expect(hooks.PreToolUse).toHaveLength(1);
-    const options = next.options as Record<string, unknown>;
-    const tui = options.tui as Record<string, unknown>;
-    expect(tui.transparent).toBe(true);
-  });
-});
-
 describe("withoutPierCrushHooks", () => {
   it("只移除 pier 条目，保留用户条目", () => {
     const user = {
@@ -127,12 +99,13 @@ describe("withoutPierCrushHooks", () => {
 });
 
 describe("install/uninstallCrushHooks (文件 IO)", () => {
-  it("往不存在的 crush.json 安装并可卸载还原", async () => {
+  it("往不存在的 crush.json 安装 hooks 并可卸载", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-crush-test-"));
     const path = join(dir, "crush.json");
     await installCrushHooks(path);
     const installed = JSON.parse(await readFile(path, "utf8"));
     expect(installed.hooks.PreToolUse[0].command).toContain(MARK);
+    expect(installed.options?.tui?.transparent).toBeUndefined();
     await uninstallCrushHooks(path);
     const cleaned = JSON.parse(await readFile(path, "utf8"));
     expect(cleaned.hooks?.PreToolUse ?? []).toEqual([]);
