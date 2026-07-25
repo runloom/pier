@@ -83,8 +83,10 @@ export function SkillsProjectDetail({
     };
   }, []);
 
-  const writesDisabled =
-    writesFrozen || reloadRequired || planPending || applyPending;
+  // Hard locks only. plan/apply busy must not grey out every row switch —
+  // that was painting intermediate commit chrome onto the list.
+  const writesDisabled = writesFrozen || reloadRequired;
+  const commitBusy = planPending || applyPending;
 
   useEffect(() => {
     if (!focusSkillId) return;
@@ -117,21 +119,15 @@ export function SkillsProjectDetail({
     filteredUnmanaged.length +
     filteredUserGlobal.length;
 
-  const {
-    handleImportFolder,
-    handleReload,
-    handleRetryOperation,
-    handleToggle,
-  } = useSkillsProjectDetailActions({
-    onReviewCandidate,
-    preparePending,
-    prepareRequestRef,
-    projectRef,
-    retryDraft,
-    setPreparePending,
-    snapshot,
-    writesDisabled,
-  });
+  const { handleImportFolder, handleReload, handleRetryOperation } =
+    useSkillsProjectDetailActions({
+      onReviewCandidate,
+      preparePending,
+      prepareRequestRef,
+      projectRef,
+      retryDraft,
+      setPreparePending,
+    });
 
   const riskyGitStates = useMemo(
     () =>
@@ -203,7 +199,7 @@ export function SkillsProjectDetail({
     <div className="flex min-w-0 flex-col gap-4">
       <SkillsDetailHeader
         activeProjectRootPath={activeProjectRootPath}
-        addDisabled={writesDisabled || preparePending}
+        addDisabled={writesDisabled || commitBusy || preparePending}
         hideBack={hideBack}
         onBack={onBack}
         projectRef={projectRef}
@@ -211,7 +207,7 @@ export function SkillsProjectDetail({
       />
 
       <Card
-        aria-busy={planPending || applyPending}
+        aria-busy={commitBusy}
         className="overflow-visible border border-border shadow-none ring-0"
       >
         <CardHeader>
@@ -271,14 +267,27 @@ export function SkillsProjectDetail({
             <ItemGroup>
               {filteredSkills.map((skill) => (
                 <ManagedSkillRow
-                  disabled={writesDisabled}
-                  enabled={skill.enabled}
+                  disabled={writesDisabled || commitBusy}
                   key={skill.id}
                   onOpenSkill={(skillId) => {
                     onOpenSkill({ kind: "managed", skillId });
                   }}
-                  onToggle={(skillId, checked) => {
-                    handleToggle(skillId, checked).catch(() => undefined);
+                  onUnbindPier={(skillId) => {
+                    if (!projectRef || writesDisabled || commitBusy) return;
+                    window.pier.pierBindings
+                      .unbind(projectRef, skillId)
+                      .then(async () => {
+                        await useProjectSkillsStore
+                          .getState()
+                          .loadSnapshot(projectRef, { quiet: true });
+                      })
+                      .catch((err: unknown) => {
+                        showAppAlert({
+                          title: t("settings.skills.removeFromProjectFailed"),
+                          body:
+                            err instanceof Error ? err.message : String(err),
+                        }).catch(() => undefined);
+                      });
                   }}
                   skill={skill}
                   t={t}
@@ -302,13 +311,6 @@ export function SkillsProjectDetail({
                 <UserGlobalSkillRow
                   entry={entry}
                   key={`${entry.root}/${entry.directoryName}`}
-                  onView={(target) => {
-                    onOpenSkill({
-                      kind: "user-global",
-                      root: target.root,
-                      directoryName: target.directoryName,
-                    });
-                  }}
                   t={t}
                 />
               ))}

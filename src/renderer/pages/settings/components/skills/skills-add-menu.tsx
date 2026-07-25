@@ -14,8 +14,9 @@ import {
   type ImportCandidateView,
   useProjectSkillsStore,
 } from "@/stores/project-skills.store.ts";
-import { promptNewBlankSkill } from "./skills-blank-skill-dialog.tsx";
+import { openBindFromLibraryDialog } from "./skills-bind-from-library-dialog.tsx";
 import { discardPreparedCandidate } from "./skills-candidate-lifecycle.ts";
+import { openSkillsCreateSkillDialog } from "./skills-create-skill-dialog.tsx";
 import { skillsErrorMessage } from "./skills-error-copy.ts";
 
 function isImportCandidate(value: unknown): value is ImportCandidateView {
@@ -118,49 +119,15 @@ export function SkillsAddMenu({ disabled = false }: { disabled?: boolean }) {
 
   async function handleNewBlank() {
     if (!projectRef || writesDisabled) return;
-    const form = await promptNewBlankSkill(
-      t("settings.skills.blankDialogTitle")
+    await openSkillsCreateSkillDialog();
+  }
+
+  async function handleBindFromLibrary() {
+    if (!projectRef || writesDisabled) return;
+    await openBindFromLibraryDialog(
+      projectRef,
+      t("settings.skills.bindFromLibraryTitle")
     );
-    if (!(form && prepareMountedRef.current)) return;
-    const requestId = prepareRequestRef.current + 1;
-    prepareRequestRef.current = requestId;
-    const requestProject = projectRef;
-    setPreparePending(true);
-    try {
-      const candidate = await window.pier.projectSkills.importPrepareTemplate(
-        requestProject,
-        { skillId: form.skillId, description: form.description }
-      );
-      if (
-        prepareRequestRef.current !== requestId ||
-        useProjectSkillsStore.getState().projectRef?.realPath !==
-          requestProject.realPath ||
-        useProjectSkillsStore.getState().mode.kind !== "detail"
-      ) {
-        await discardPreparedCandidate(requestProject, candidate);
-        return;
-      }
-      reviewCandidate(
-        candidate && typeof candidate === "object"
-          ? { ...candidate, sourceKind: "template" }
-          : candidate
-      );
-    } catch (error) {
-      if (prepareRequestRef.current === requestId) {
-        await showAppAlert({
-          title: t("settings.skills.importFailed"),
-          body: skillsErrorMessage(
-            error,
-            t,
-            "settings.skills.importFailedBody"
-          ),
-        });
-      }
-    } finally {
-      if (prepareRequestRef.current === requestId) {
-        setPreparePending(false);
-      }
-    }
   }
 
   return (
@@ -175,17 +142,24 @@ export function SkillsAddMenu({ disabled = false }: { disabled?: boolean }) {
         <DropdownMenuGroup>
           <DropdownMenuItem
             onSelect={() => {
-              handleImportFolder().catch(() => undefined);
-            }}
-          >
-            {t("settings.skills.addFromFolder")}
-          </DropdownMenuItem>
-          <DropdownMenuItem
-            onSelect={() => {
               handleNewBlank().catch(() => undefined);
             }}
           >
             {t("settings.skills.addBlank")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              handleBindFromLibrary().catch(() => undefined);
+            }}
+          >
+            {t("settings.skills.bindFromLibrary")}
+          </DropdownMenuItem>
+          <DropdownMenuItem
+            onSelect={() => {
+              handleImportFolder().catch(() => undefined);
+            }}
+          >
+            {t("settings.skills.addFromFolder")}
           </DropdownMenuItem>
         </DropdownMenuGroup>
       </DropdownMenuContent>

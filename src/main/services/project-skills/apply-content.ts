@@ -307,6 +307,7 @@ export function buildNextManifest(
       enabled: existing?.enabled ?? false,
       contentDigest: meta.contentDigest,
       source: meta.source,
+      ...(existing?.delivery ? { delivery: existing.delivery } : {}),
     });
   }
   for (const [skillId, enabled] of Object.entries(
@@ -315,6 +316,19 @@ export function buildNextManifest(
     const existing = byId.get(skillId);
     if (!existing) continue;
     byId.set(skillId, { ...existing, enabled: enabled === true });
+  }
+  for (const [skillId, delivery] of Object.entries(
+    draft.deliveryBySkillId ?? {}
+  )) {
+    const existing = byId.get(skillId);
+    if (!existing) continue;
+    byId.set(skillId, {
+      ...existing,
+      delivery: {
+        agents: delivery.agents === true,
+        claude: delivery.claude === true,
+      },
+    });
   }
   for (const skillId of draft.deleteSkillIds ?? []) {
     byId.delete(skillId);

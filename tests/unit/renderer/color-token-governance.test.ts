@@ -25,6 +25,8 @@ const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
 ]);
 const COLOR_MIX_OWNERS = new Set([
   "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
+  // Shared source-editor chrome (files + settings Rules/Skills); semantic token mixes only.
+  "src/shared/source-editor/editor-theme.ts",
   // Mermaid SVG theme: connector/arrow/surface must derive from fg/bg so host
   // --border/--accent chrome tokens do not wash out diagram strokes.
   "src/plugins/builtin/files/renderer/markdown-diagram.tsx",

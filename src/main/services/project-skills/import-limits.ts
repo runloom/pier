@@ -1,5 +1,6 @@
 import {
   type ProjectRootRef as ContractProjectRootRef,
+  PIER_SYSTEM_SKILL_PREFIX,
   skillIdSchema,
 } from "../../../shared/contracts/project-skills.ts";
 import {
@@ -340,18 +341,31 @@ export function validateSkillMetadata(args: {
     );
   }
   const skillId = skillIdParse.data;
+  if (skillId.startsWith(PIER_SYSTEM_SKILL_PREFIX)) {
+    throw new ProjectSkillsImportError(
+      "invalid-skill",
+      `skill id must not use the reserved ${PIER_SYSTEM_SKILL_PREFIX} prefix`
+    );
+  }
   const nameRaw = args.frontmatter.name;
   const descriptionRaw = args.frontmatter.description;
-  if (typeof nameRaw !== "string" || nameRaw.length === 0) {
+  // YAML may parse unquoted numeric ids as numbers — coerce for resilience.
+  let name = "";
+  if (typeof nameRaw === "string") {
+    name = nameRaw;
+  } else if (typeof nameRaw === "number" || typeof nameRaw === "boolean") {
+    name = String(nameRaw);
+  }
+  if (name.length === 0) {
     throw new ProjectSkillsImportError(
       "invalid-skill",
       "SKILL.md frontmatter must include string name"
     );
   }
-  if (nameRaw !== skillId) {
+  if (name !== skillId) {
     throw new ProjectSkillsImportError(
       "invalid-skill",
-      `SKILL.md name "${nameRaw}" must match directory id "${skillId}"`
+      `SKILL.md name "${name}" must match directory id "${skillId}"`
     );
   }
   if (typeof descriptionRaw !== "string" || descriptionRaw.length === 0) {
@@ -366,5 +380,5 @@ export function validateSkillMetadata(args: {
       "description must be at most 1024 characters"
     );
   }
-  return { skillId, name: nameRaw, description: descriptionRaw };
+  return { skillId, name, description: descriptionRaw };
 }

@@ -1,4 +1,4 @@
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 
 export type RendererPluginDialogIntent = "default" | "destructive";
 export type RendererPluginDialogSize = "default" | "sm";
@@ -9,6 +9,15 @@ export interface RendererPluginContentDialogRenderProps<TResult = unknown> {
   id: string;
   setDescription: (description?: string) => void;
   setDismissible: (dismissible: boolean) => void;
+  /** Sticky DialogFooter actions; pass null to hide. */
+  setFooter: (footer: ReactNode | null) => void;
+  /**
+   * Guard header X / Esc / overlay dismiss. Return false to keep the dialog
+   * open (e.g. confirm discarding unsaved edits). Prefer over hiding the X.
+   */
+  setOnDismissRequest: (
+    handler: (() => boolean | Promise<boolean>) | null
+  ) => void;
   setTitle: (title: string) => void;
 }
 

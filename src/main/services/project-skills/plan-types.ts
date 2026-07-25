@@ -61,6 +61,7 @@ export type PlanConfirmationRequirement =
 export interface NormalizedProjectSkillsDraft {
   deleteSkillIds: string[];
   deliveryAgents: boolean;
+  deliveryBySkillId: Record<string, { agents: boolean; claude: boolean }>;
   deliveryClaude: boolean;
   enabledBySkillId: Record<string, boolean>;
   importTokens: string[];
@@ -111,6 +112,21 @@ function sortRecordKeys(
   return out;
 }
 
+function sortDeliveryBySkillId(
+  record: Record<string, { agents: boolean; claude: boolean }>
+): Record<string, { agents: boolean; claude: boolean }> {
+  const out: Record<string, { agents: boolean; claude: boolean }> = {};
+  for (const key of Object.keys(record).sort()) {
+    const value = record[key];
+    if (!value) continue;
+    out[key] = {
+      agents: value.agents === true,
+      claude: value.claude === true,
+    };
+  }
+  return out;
+}
+
 /** Stable, order-independent draft normalization for planDigest input. */
 export function normalizeProjectSkillsDraft(
   draft: ProjectSkillsDraft
@@ -118,6 +134,7 @@ export function normalizeProjectSkillsDraft(
   return {
     deliveryAgents: draft.deliveryAgents === true,
     deliveryClaude: draft.deliveryClaude === true,
+    deliveryBySkillId: sortDeliveryBySkillId(draft.deliveryBySkillId ?? {}),
     enabledBySkillId: sortRecordKeys(draft.enabledBySkillId ?? {}),
     importTokens: [...(draft.importTokens ?? [])].sort(),
     deleteSkillIds: [...(draft.deleteSkillIds ?? [])].sort(),

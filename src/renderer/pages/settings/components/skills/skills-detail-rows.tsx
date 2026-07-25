@@ -7,7 +7,6 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@pier/ui/item.tsx";
-import { Switch } from "@pier/ui/switch.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type {
   ProjectSkillView,
@@ -22,49 +21,67 @@ import {
 } from "./skills-shared.tsx";
 
 /**
- * Unified-list rows (design v8 §7.3), split from skills-project-detail.tsx
+ * Unified-list rows (design v8 §7.3 / IA v5), split from skills-project-detail.tsx
  * (file-size cap). The caller renders these inside its own ItemGroup.
+ *
+ * Enablement is edited on the skill detail matrix (discovery channels), not
+ * via a list Switch.
+ *
+ * Pier-bound: unbind only (always-include = locked, no remove). No content open.
+ * User-global: jump to Pier Home (no in-project open/edit).
+ * Project-owned / system: open in-project detail.
  */
 
 export function ManagedSkillRow({
   skill,
-  enabled,
   disabled,
   t,
-  onToggle,
   onOpenSkill,
+  onUnbindPier,
 }: {
   skill: ProjectSkillView;
-  enabled: boolean;
   disabled: boolean;
   t: Translate;
-  onToggle: (skillId: string, enabled: boolean) => void;
   onOpenSkill: (skillId: string) => void;
+  onUnbindPier?: (skillId: string) => void;
 }) {
   const isSystem = skill.managedBy === "pier-system";
+  const isPierBound = skill.managedBy === "pier-bound";
   const titleId = useId();
-  const enableLabelId = useId();
   const openLabelId = useId();
+
   function renderPrimaryAction() {
     if (isSystem) {
       return null;
     }
-    return (
-      <>
-        <span className="sr-only" id={enableLabelId}>
-          {t("settings.skills.enableSkill")}
-        </span>
-        <Switch
-          aria-labelledby={`${enableLabelId} ${titleId}`}
-          checked={enabled}
+    if (isPierBound) {
+      if (skill.alwaysInclude) {
+        return (
+          <Badge variant="outline">
+            {t("settings.skills.alwaysIncludeBadge")}
+          </Badge>
+        );
+      }
+      if (!onUnbindPier) return null;
+      return (
+        <Button
           disabled={disabled}
-          onCheckedChange={(checked) => {
-            onToggle(skill.id, checked);
+          onClick={() => {
+            onUnbindPier(skill.id);
           }}
-        />
-      </>
-    );
+          size="sm"
+          type="button"
+          variant="ghost"
+        >
+          {t("settings.skills.removeFromProject")}
+        </Button>
+      );
+    }
+    return null;
   }
+
+  // Pier-bound content is edited in Pier Home only (IA v5 §0.3).
+  const canOpenContent = !isPierBound;
 
   return (
     <li
@@ -80,7 +97,13 @@ export function ManagedSkillRow({
               <Badge variant="secondary">
                 {t("settings.skills.systemBadge")}
               </Badge>
-            ) : (
+            ) : null}
+            {isPierBound ? (
+              <Badge variant="secondary">
+                {t("settings.skills.pierBoundBadge")}
+              </Badge>
+            ) : null}
+            {isSystem || isPierBound ? null : (
               <Badge variant="outline">{sourceLabel(skill, t)}</Badge>
             )}
             {skill.issueIds.some((id) => id.startsWith("library-drift")) ? (
@@ -101,20 +124,24 @@ export function ManagedSkillRow({
         </ItemContent>
         <ItemActions>
           {renderPrimaryAction()}
-          <span className="sr-only" id={openLabelId}>
-            {t("settings.skills.open")}
-          </span>
-          <Button
-            aria-labelledby={`${openLabelId} ${titleId}`}
-            onClick={() => {
-              onOpenSkill(skill.id);
-            }}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            {t("settings.skills.open")}
-          </Button>
+          {canOpenContent ? (
+            <>
+              <span className="sr-only" id={openLabelId}>
+                {t("settings.skills.open")}
+              </span>
+              <Button
+                aria-labelledby={`${openLabelId} ${titleId}`}
+                onClick={() => {
+                  onOpenSkill(skill.id);
+                }}
+                size="sm"
+                type="button"
+                variant="ghost"
+              >
+                {t("settings.skills.open")}
+              </Button>
+            </>
+          ) : null}
         </ItemActions>
       </Item>
     </li>
@@ -122,20 +149,17 @@ export function ManagedSkillRow({
 }
 
 /**
- * Layer-3 user-global row: read-only fact with a "view" entry into the
- * read-only detail (Cursor form: any listed skill can be opened and read).
+ * Layer-3 user-global row: read-only discovery fact in the project list.
+ * No open/edit here — content is managed under Pier Home (agent-global RO).
  */
 export function UserGlobalSkillRow({
   entry,
   t,
-  onView,
 }: {
   entry: UserGlobalSkillView;
   t: Translate;
-  onView: (entry: UserGlobalSkillView) => void;
 }) {
   const titleId = useId();
-  const viewLabelId = useId();
   return (
     <li>
       <Item className={cn("border-dashed")} variant="outline">
@@ -156,19 +180,6 @@ export function UserGlobalSkillRow({
             <AgentEffectSummary effects={entry.effects} t={t} />
           </div>
         </ItemContent>
-        <ItemActions>
-          <Button
-            aria-labelledby={`${viewLabelId} ${titleId}`}
-            onClick={() => {
-              onView(entry);
-            }}
-            size="sm"
-            type="button"
-            variant="ghost"
-          >
-            <span id={viewLabelId}>{t("settings.skills.open")}</span>
-          </Button>
-        </ItemActions>
       </Item>
     </li>
   );

@@ -8,8 +8,10 @@ import {
   waitFor,
 } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { AppContentDialogHost } from "@/components/common/app-content-dialog-host.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { SettingsDialog } from "@/pages/settings/settings-dialog.tsx";
+import { resetAppContentDialogForTests } from "@/stores/app-content-dialog.store.ts";
 import { useLocalEnvironmentsStore } from "@/stores/local-environments.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
@@ -48,6 +50,7 @@ const fixtures = vi.hoisted(() => ({
     {
       id: "review-guide",
       enabled: false,
+      delivery: null,
       name: "Review Guide",
       description: "Review changes",
       managedBy: "user",
@@ -116,6 +119,7 @@ function renderDialog() {
   return render(
     <TooltipProvider delayDuration={0} disableHoverableContent>
       <SettingsDialog />
+      <AppContentDialogHost />
     </TooltipProvider>
   );
 }
@@ -150,11 +154,22 @@ describe("settings dialog skills section", () => {
       sectionGuards: {},
     });
     useLocalEnvironmentsStore.setState({
+      hydration: "ready",
       projects: [
         {
           cleanupCommand: "",
           copyPatterns: [],
           env: {},
+          kind: "pier-home",
+          projectRootPath: "/tmp/pier-home",
+          setupCommand: "",
+          updatedAt: 1,
+        },
+        {
+          cleanupCommand: "",
+          copyPatterns: [],
+          env: {},
+          kind: "project",
           projectRootPath: "/tmp/demo",
           setupCommand: "",
           updatedAt: 1,
@@ -170,6 +185,32 @@ describe("settings dialog skills section", () => {
         update: async (p: unknown) => p,
       },
       projectSkills: projectSkillsApi,
+      pierHomeSkills: {
+        list: vi.fn(async () => []),
+        snapshot: vi.fn(async () => ({
+          library: [],
+          userGlobal: [
+            {
+              root: "~/.claude/skills",
+              directoryName: "home-guide",
+              name: "Home Guide",
+              description: "Personal review workflow",
+              absolutePath: "/tmp/home/.claude/skills/home-guide/SKILL.md",
+            },
+          ],
+        })),
+        create: vi.fn(),
+        delete: vi.fn(),
+        read: vi.fn(async () => "---\nname: home-guide\n---\n# Home Guide\n"),
+        reveal: vi.fn(),
+        setAlwaysInclude: vi.fn(),
+        write: vi.fn(),
+      },
+      pierBindings: {
+        list: vi.fn(async () => []),
+        bind: vi.fn(async () => []),
+        unbind: vi.fn(async () => []),
+      },
       settings: { onOpenRequest: () => () => undefined },
       terminal: {},
       window: {},
@@ -188,6 +229,7 @@ describe("settings dialog skills section", () => {
       {
         id: "review-guide",
         enabled: false,
+        delivery: null,
         name: "Review Guide",
         description: "Review changes",
         managedBy: "user",
@@ -207,6 +249,7 @@ describe("settings dialog skills section", () => {
 
   afterEach(() => {
     cleanup();
+    resetAppContentDialogForTests();
     vi.clearAllMocks();
   });
 
@@ -402,6 +445,7 @@ describe("settings dialog skills section", () => {
       {
         id: "pier-canvas",
         enabled: true,
+        delivery: null,
         name: "Pier Canvas",
         description: "Canvas capability",
         managedBy: "pier-system",
@@ -418,10 +462,8 @@ describe("settings dialog skills section", () => {
     fireEvent.click(await screen.findByText("demo"));
     await waitFor(() => expect(projectSkillsApi.snapshot).toHaveBeenCalled());
     expect(screen.getAllByText("Pier Canvas").length).toBeGreaterThan(0);
-    const switches = screen.getAllByRole("switch");
-    // User skill has an enable switch; system skill is read-only (no switch).
-    // Claude delivery moved to Projects → General.
-    expect(switches).toHaveLength(1);
+    // Enablement lives on the skill detail discovery matrix — list has no Switch.
+    expect(screen.queryAllByRole("switch")).toHaveLength(0);
   });
 
   it("does not render a global Apply bar", async () => {
@@ -462,15 +504,12 @@ describe("settings dialog skills section", () => {
     expect(
       screen.getAllByText(/~\/\.claude\/skills\/home-guide/).length
     ).toBeGreaterThan(0);
-    // Read-only: no switch; the only action opens its detail.
-    // read-only detail (Cursor form: any listed skill can be opened).
+    // Read-only discovery fact: no switch, no open action in project.
     const title = screen.getAllByText("Home Guide")[0];
     const row = title?.closest("li");
     expect(row).toBeTruthy();
     expect(row?.querySelectorAll('[role="switch"]')).toHaveLength(0);
-    const buttons = [...(row?.querySelectorAll("button") ?? [])];
-    expect(buttons).toHaveLength(1);
-    expect(buttons[0]?.textContent ?? "").toMatch(/open|打开/i);
+    expect(row?.querySelectorAll("button")).toHaveLength(0);
   });
 
   it("managed detail opens directly in the populated editor", async () => {
@@ -481,7 +520,7 @@ describe("settings dialog skills section", () => {
     });
     const manageBtn = screen
       .getAllByRole("button")
-      .find((b) => /open|打开/i.test(b.textContent ?? ""));
+      .find((b) => /^(open|打开)$/i.test((b.textContent ?? "").trim()));
     if (!manageBtn) throw new Error("manage button missing");
     fireEvent.click(manageBtn);
     await waitFor(() => {
@@ -490,44 +529,15 @@ describe("settings dialog skills section", () => {
         { kind: "managed", skillId: "review-guide" }
       );
     });
-    const textbox = await screen.findByRole("textbox");
-    expect((textbox as HTMLTextAreaElement).value).toContain("# Home Guide");
-  });
-
-  it("view opens a read-only detail with content (v8 §7.4)", async () => {
-    fixtures.userGlobalSkills = [
-      {
-        root: "~/.claude/skills",
-        directoryName: "home-guide",
-        name: "Home Guide",
-        description: "Personal review workflow",
-        effects: [],
-      },
-    ];
-    renderDialog();
-    fireEvent.click(await screen.findByText("demo"));
-    await waitFor(() => {
-      expect(screen.getAllByText("Home Guide").length).toBeGreaterThan(0);
+    const editor = await screen.findByRole("textbox", {
+      name: /SKILL\.md/i,
     });
-    const homeRow = screen.getAllByText("Home Guide")[0]?.closest("li");
-    const viewBtn = [...(homeRow?.querySelectorAll("button") ?? [])].find((b) =>
-      /open|打开/i.test(b.textContent ?? "")
-    );
-    expect(viewBtn).toBeTruthy();
-    if (viewBtn) fireEvent.click(viewBtn);
-    await waitFor(() => {
-      expect(projectSkillsApi.skillRead).toHaveBeenCalledWith(
-        expect.anything(),
-        {
-          kind: "user-global",
-          root: "~/.claude/skills",
-          directoryName: "home-guide",
-        }
-      );
-    });
-    // Content is rendered read-only (no textarea, no switch).
-    expect(await screen.findByText(/# Home Guide/)).toBeTruthy();
-    expect(screen.queryByRole("textbox")).toBeNull();
+    expect(editor.textContent ?? "").toContain("# Home Guide");
+    // Discovery channels replace the old "Enable this skill" Switch.
+    expect(screen.getAllByRole("checkbox").length).toBeGreaterThanOrEqual(2);
+    expect(
+      screen.queryByRole("switch", { name: /Enable this skill|启用此技能/i })
+    ).toBeNull();
   });
 
   it("filter axis is source-based (v8 §7.3): managed / project / user-global", async () => {
@@ -597,31 +607,59 @@ describe("settings dialog skills section", () => {
     expect(addBtn?.hasAttribute("disabled")).toBe(true);
   });
 
-  it("fast path: toggling a valid skill with a clean draft applies immediately without confirmations", async () => {
-    // Disabled + valid library + no confirmations runs immediately.
+  it("defers discovery-channel changes until Save on skill detail", async () => {
     renderDialog();
     fireEvent.click(await screen.findByText("demo"));
     await waitFor(() => {
       expect(screen.getAllByText("Review Guide").length).toBeGreaterThan(0);
     });
-    const switches = screen.getAllByRole("switch");
-    // First switch is the skill row (the Claude delivery switch sits at the
-    // list bottom); flip it on.
-    const rowSwitch = switches[0];
-    expect(rowSwitch).toBeTruthy();
-    if (rowSwitch) fireEvent.click(rowSwitch);
+    const openBtn = screen
+      .getAllByRole("button")
+      .find((b) => /^(open|打开)$/i.test((b.textContent ?? "").trim()));
+    if (!openBtn) throw new Error("open button missing");
+    fireEvent.click(openBtn);
+    await waitFor(() => {
+      expect(screen.getAllByRole("checkbox").length).toBeGreaterThanOrEqual(2);
+    });
+    const channelBox = screen.getAllByRole("checkbox")[0];
+    expect(channelBox).toBeTruthy();
+    if (channelBox) fireEvent.click(channelBox);
+    // Selection is draft — no plan/apply until Save.
+    expect(projectSkillsApi.apply).not.toHaveBeenCalled();
+    const saveBtn = await waitFor(() => {
+      const btn = screen
+        .getAllByRole("button")
+        .find((b) => /save changes|保存更改|保存/i.test(b.textContent ?? ""));
+      expect(btn).toBeTruthy();
+      expect(btn?.hasAttribute("disabled")).toBe(false);
+      return btn;
+    });
+    if (!saveBtn) throw new Error("save button missing");
+    fireEvent.click(saveBtn);
     await waitFor(() => {
       expect(projectSkillsApi.apply).toHaveBeenCalled();
     });
-    // No confirmation dialogs on the fast path.
     expect(appDialogMocks.showAppConfirm).not.toHaveBeenCalled();
     const request = (
       projectSkillsApi.apply.mock.calls.at(-1) as unknown[] | undefined
     )?.[0] as
-      | { draft?: { enabledBySkillId?: Record<string, boolean> } }
+      | {
+          draft?: {
+            enabledBySkillId?: Record<string, boolean>;
+            deliveryAgents?: boolean;
+            deliveryBySkillId?: Record<
+              string,
+              { agents: boolean; claude: boolean }
+            >;
+          };
+        }
       | undefined;
     expect(request?.draft?.enabledBySkillId?.["review-guide"]).toBe(true);
-    // Snapshot refreshed and the draft cleared after the applied toggle.
+    expect(request?.draft?.deliveryAgents).toBe(true);
+    expect(request?.draft?.deliveryBySkillId?.["review-guide"]).toEqual({
+      agents: true,
+      claude: false,
+    });
     await waitFor(() => {
       expect(useProjectSkillsStore.getState().draft).toBeNull();
     });
@@ -650,9 +688,10 @@ describe("settings dialog skills section", () => {
     await waitFor(() => {
       expect(screen.getAllByText("Review Guide").length).toBeGreaterThan(0);
     });
+    expect(screen.getAllByLabelText("Claude").length).toBeGreaterThan(0);
     expect(
-      screen.getAllByText(/Available to 1 agent|1 个智能体可使用/).length
-    ).toBeGreaterThan(0);
+      screen.queryByText(/\.agents\/skills|个智能体 ·|agent ·/)
+    ).not.toBeInTheDocument();
     expect(
       screen.getAllByText(/^Not available to agents$|^未对智能体开放$/).length
     ).toBeGreaterThan(0);
@@ -673,8 +712,24 @@ describe("settings dialog skills section", () => {
     await waitFor(() => {
       expect(projectSkillsApi.snapshot).toHaveBeenCalled();
     });
-    const rowSwitch = screen.getAllByRole("switch")[0];
-    if (rowSwitch) fireEvent.click(rowSwitch);
+    const openBtn = screen
+      .getAllByRole("button")
+      .find((b) => /^(open|打开)$/i.test((b.textContent ?? "").trim()));
+    if (!openBtn) throw new Error("open button missing");
+    fireEvent.click(openBtn);
+    await waitFor(() => {
+      expect(screen.getAllByRole("checkbox").length).toBeGreaterThanOrEqual(2);
+    });
+    const channelBox = screen.getAllByRole("checkbox")[0];
+    if (channelBox) fireEvent.click(channelBox);
+    const saveBtn = await waitFor(() => {
+      const btn = screen
+        .getAllByRole("button")
+        .find((b) => /save changes|保存更改/i.test(b.textContent ?? ""));
+      expect(btn).toBeTruthy();
+      return btn;
+    });
+    if (saveBtn) fireEvent.click(saveBtn);
     await waitFor(() => expect(appDialogMocks.showAppAlert).toHaveBeenCalled());
     const alertArgs = (
       appDialogMocks.showAppAlert.mock.calls as unknown as unknown[][]

@@ -10,6 +10,7 @@ import {
 import { dirname, join } from "node:path";
 import {
   type ProjectRootRef as ContractProjectRootRef,
+  PIER_SYSTEM_SKILL_PREFIX,
   skillIdSchema,
 } from "../../../shared/contracts/project-skills.ts";
 import type {
@@ -102,24 +103,37 @@ export async function prepareTemplate(
   args: { skillId: string; description: string },
   caller?: ImportCallerBinding
 ): Promise<ImportCandidateView> {
+  const skillIdParse = skillIdSchema.safeParse(args.skillId);
+  if (!skillIdParse.success) {
+    throw new ProjectSkillsImportError(
+      "invalid-skill",
+      `skill id is not valid: ${args.skillId}`
+    );
+  }
+  if (skillIdParse.data.startsWith(PIER_SYSTEM_SKILL_PREFIX)) {
+    throw new ProjectSkillsImportError(
+      "invalid-skill",
+      `skill id must not use the reserved ${PIER_SYSTEM_SKILL_PREFIX} prefix`
+    );
+  }
   const { identity, rootKey } = await ctx.resolveProject(projectRef);
-  const libraryDir = await libraryDirFor(identity, args.skillId);
+  const libraryDir = await libraryDirFor(identity, skillIdParse.data);
   try {
     await lstat(libraryDir);
     throw new ProjectSkillsImportError(
       "skill-exists",
-      `a managed skill with id ${args.skillId} already exists`
+      `a managed skill with id ${skillIdParse.data} already exists`
     );
   } catch (error) {
     if (error instanceof ProjectSkillsImportError) throw error;
     if (!isErrno(error, "ENOENT")) throw error;
   }
 
-  const compose = join(composeDir(ctx.paths, rootKey), args.skillId);
+  const compose = join(composeDir(ctx.paths, rootKey), skillIdParse.data);
   try {
     await mkdir(compose, { recursive: true });
     const description = args.description.replace(/\r?\n/g, " ").trim();
-    const template = `---\nname: ${args.skillId}\ndescription: ${JSON.stringify(description)}\n---\n\n# ${args.skillId}\n\n<!-- Describe when and how agents should use this skill. -->\n`;
+    const template = `---\nname: ${JSON.stringify(skillIdParse.data)}\ndescription: ${JSON.stringify(description)}\n---\n\n# ${skillIdParse.data}\n\n<!-- Describe when and how agents should use this skill. -->\n`;
     await writeFile(join(compose, "SKILL.md"), template, {
       mode: 0o644,
       flag: "wx",
@@ -128,7 +142,7 @@ export async function prepareTemplate(
       identity,
       rootKey,
       sourcePath: compose,
-      sourceDisplayPath: `template:${args.skillId}`,
+      sourceDisplayPath: `template:${skillIdParse.data}`,
       sourceKind: "local-import",
       caller: caller ?? ctx.defaultCaller,
     });

@@ -76,6 +76,9 @@ export async function executeProjectSkillsCommand(
       case "skills.doctor":
       case "skills.skill.read":
       case "skills.operation.status":
+      case "skills.pierBindings.list":
+      case "skills.pierBindings.bind":
+      case "skills.pierBindings.unbind":
         return failure(
           requestId,
           "invalid_command",
@@ -225,6 +228,28 @@ export async function executeProjectSkillsCommand(
           requestId,
           await skills.operationStatus(request.projectRef, request.operationId)
         );
+      }
+      case "skills.pierBindings.list": {
+        return success(requestId, {
+          skills: await skills.pierBindingsList(command.projectRef),
+        });
+      }
+      case "skills.pierBindings.bind": {
+        return success(requestId, {
+          skills: await skills.pierBindingsBind(
+            command.projectRef,
+            command.skillId,
+            command.delivery
+          ),
+        });
+      }
+      case "skills.pierBindings.unbind": {
+        return success(requestId, {
+          skills: await skills.pierBindingsUnbind(
+            command.projectRef,
+            command.skillId
+          ),
+        });
       }
       case "agent.launch.continue": {
         const gate = services.agentLaunchGate;

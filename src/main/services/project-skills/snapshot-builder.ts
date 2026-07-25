@@ -31,6 +31,7 @@ import {
 } from "./identity.ts";
 import { inspectLibraryContent } from "./library-state.ts";
 import type { createProjectSkillsPaths } from "./paths.ts";
+import type { PierBindingsChannel } from "./pier-bindings.ts";
 import { analyzeLibrarySkill } from "./risk.ts";
 import type { ProjectSkillsStore } from "./store.ts";
 import type { SystemSkillsChannel } from "./system-skills.ts";
@@ -109,6 +110,7 @@ export interface SnapshotBuilderCtx {
   healthService: ProjectSkillsHealthService;
   now: () => number;
   paths: ReturnType<typeof createProjectSkillsPaths>;
+  pierBindings?: PierBindingsChannel | undefined;
   readInstalledAgents: () => Promise<ReadonlySet<string> | undefined>;
   registry: SkillDiscoveryAdapterRegistry;
   store: ProjectSkillsStore;
@@ -171,7 +173,14 @@ export async function buildProjectSnapshot(
   const systemViews = ctx.systemSkills
     ? await ctx.systemSkills.views(rootKey)
     : [];
+  const pierBoundViews = ctx.pierBindings
+    ? await ctx.pierBindings.views(rootKey)
+    : [];
   const systemIds = new Set(systemViews.map((v) => v.id));
+  const pierBoundIds = new Set(pierBoundViews.map((v) => v.id));
+  const pierAlwaysIncludeIds = new Set(
+    pierBoundViews.filter((v) => v.alwaysInclude).map((v) => v.id)
+  );
 
   const matrixManaged: MatrixManagedSkill[] = [];
   for (const entry of manifestEntries) {
@@ -186,6 +195,15 @@ export async function buildProjectSnapshot(
     matrixManaged.push({
       skillId: view.id,
       enabled: view.enabled,
+      projectedRoots: presence.ownedProjectedRoots.get(view.id) ?? [],
+    });
+  }
+  for (const view of pierBoundViews) {
+    if (manifestEntries.some((e) => e.id === view.id)) continue;
+    if (systemIds.has(view.id)) continue;
+    matrixManaged.push({
+      skillId: view.id,
+      enabled: true,
       projectedRoots: presence.ownedProjectedRoots.get(view.id) ?? [],
     });
   }
@@ -235,15 +253,26 @@ export async function buildProjectSnapshot(
     const issueIds = health.issues
       .filter((i) => i.skillId === entry.id)
       .map((i) => i.id);
+    let managedBy: "pier-system" | "pier-bound" | "user" = "user";
+    if (systemIds.has(entry.id)) {
+      managedBy = "pier-system";
+    } else if (pierBoundIds.has(entry.id)) {
+      managedBy = "pier-bound";
+    }
     skills.push({
       id: entry.id,
       name: meta.name,
       description: meta.description,
       enabled: entry.enabled,
+      delivery: entry.delivery
+        ? { agents: entry.delivery.agents, claude: entry.delivery.claude }
+        : null,
       contentDigest: entry.contentDigest,
       actualContentDigest,
       source: entry.source,
-      managedBy: systemIds.has(entry.id) ? "pier-system" : "user",
+      managedBy,
+      alwaysInclude:
+        managedBy === "pier-bound" && pierAlwaysIncludeIds.has(entry.id),
       fileCount: analysis?.fileCount ?? 0,
       totalBytes: analysis?.totalBytes ?? 0,
       riskSummary: analysis?.riskSummary ?? null,
@@ -275,10 +304,47 @@ export async function buildProjectSnapshot(
       name: meta.name,
       description: meta.description,
       enabled: view.enabled,
+      delivery: null,
       contentDigest: view.contentDigest ?? systemContent.actualDigest ?? "",
       actualContentDigest: null,
       source: { type: "local-import" },
       managedBy: "pier-system",
+      alwaysInclude: false,
+      fileCount: analysis?.fileCount ?? 0,
+      totalBytes: analysis?.totalBytes ?? 0,
+      riskSummary: analysis?.riskSummary ?? null,
+      directorySummary: analysis?.directorySummary ?? null,
+      effects: matrix.managedEffects.get(view.id) ?? [],
+      issueIds: [],
+    });
+  }
+  for (const view of pierBoundViews) {
+    if (skills.some((s) => s.id === view.id)) continue;
+    const libraryDir = join(
+      live.realPath,
+      ".pier",
+      "skills",
+      "library",
+      view.id
+    );
+    const meta = await peekSkillMetadata(libraryDir);
+    const analysis = await analyzeLibrarySkill(live.realPath, view.id);
+    const boundContent = await inspectLibraryContent(
+      live.realPath,
+      view.id,
+      view.contentDigest ?? ""
+    );
+    skills.push({
+      id: view.id,
+      name: meta.name || view.name,
+      description: meta.description || view.description,
+      enabled: true,
+      delivery: view.delivery,
+      contentDigest: view.contentDigest ?? boundContent.actualDigest ?? "",
+      actualContentDigest: null,
+      source: { type: "pier-home" },
+      managedBy: "pier-bound",
+      alwaysInclude: view.alwaysInclude,
       fileCount: analysis?.fileCount ?? 0,
       totalBytes: analysis?.totalBytes ?? 0,
       riskSummary: analysis?.riskSummary ?? null,

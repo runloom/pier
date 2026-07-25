@@ -188,6 +188,8 @@ export interface RendererPluginContentDialogRenderProps<TResult = unknown> {
   id: string;
   setDescription: (description?: string) => void;
   setDismissible: (dismissible: boolean) => void;
+  /** Sticky DialogFooter actions; pass null to hide. */
+  setFooter: (footer: ReactNode | null) => void;
   setTitle: (title: string) => void;
 }
 

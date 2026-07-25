@@ -25,7 +25,10 @@ export interface ProjectSkillsMutationApi {
   lastApplyOperationId: string | null;
   lastApplyOutcome: "converged" | "degraded" | null;
   lastPlan: ProjectSkillsPlanView | null;
-  loadSnapshot: (projectRef: ProjectRootRef) => Promise<void>;
+  loadSnapshot: (
+    projectRef: ProjectRootRef,
+    options?: { quiet?: boolean }
+  ) => Promise<void>;
   observedRevision: string | null;
   pendingOperationId: string | null;
   planPending: boolean;
@@ -102,10 +105,11 @@ export async function runPlanDraft(get: Get, set: Set) {
     };
     set({ lastPlan: view, planPending: false });
     return view;
-  } catch {
+  } catch (error) {
     if (get().planRequestId === requestId) {
-      // Background planning must not paint the page as a hard failure.
+      // Surface the IPC / validation message so commit UI is not a dead end.
       set({
+        errorMessage: error instanceof Error ? error.message : String(error),
         lastPlan: null,
         planPending: false,
       });
@@ -234,7 +238,7 @@ export async function runPollOperation(get: Get, set: Set): Promise<void> {
       });
       const ref = get().projectRef;
       if (ref) {
-        await get().loadSnapshot(ref);
+        await get().loadSnapshot(ref, { quiet: true });
       }
       if (terminalStatus === "converged" || terminalStatus === "degraded") {
         get().setDraft(null);

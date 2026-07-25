@@ -57,6 +57,7 @@ function emptyDraft(
   return {
     deliveryAgents: true,
     deliveryClaude: false,
+    deliveryBySkillId: {},
     enabledBySkillId: {},
     importTokens: [],
     deleteSkillIds: [],
@@ -79,6 +80,7 @@ describe("project-skills plan", () => {
     const normalized = normalizeProjectSkillsDraft({
       deliveryAgents: true,
       deliveryClaude: true,
+      deliveryBySkillId: {},
       enabledBySkillId: { "zeta-skill": true, "alpha-skill": false },
       importTokens: ["tok-b", "tok-a"],
       deleteSkillIds: ["z-del", "a-del"],
@@ -227,6 +229,65 @@ describe("project-skills plan", () => {
         confirmationRequirements: plan.confirmationRequirements,
       })
     );
+  });
+
+  it("projects only the per-skill discovery channels when set", async () => {
+    const digest = await writeLibrarySkill("review-guide");
+    await writeManifest({
+      version: 1,
+      delivery: { agents: true, claude: true },
+      skills: [
+        {
+          id: "review-guide",
+          enabled: false,
+          contentDigest: digest,
+          source: { type: "local-import" },
+        },
+      ],
+    });
+    const service = createProjectSkillsPlanService({
+      userData,
+      getObservedRevision: async () => "rev-skill-channels",
+      adapterRegistry: createSkillDiscoveryAdapterRegistry(),
+      inspectGitState: async () => "absent",
+    });
+
+    const agentsOnly = await service.plan(
+      await projectRef(),
+      "rev-skill-channels",
+      emptyDraft({
+        deliveryAgents: true,
+        deliveryClaude: true,
+        enabledBySkillId: { "review-guide": true },
+        deliveryBySkillId: {
+          "review-guide": { agents: true, claude: false },
+        },
+      })
+    );
+    expect(agentsOnly.applicable).toBe(true);
+    const createTargets = agentsOnly.targetOperations
+      .filter((op) => op.kind === "create-symlink")
+      .map((op) => op.relativeTarget)
+      .sort();
+    expect(createTargets).toEqual([".agents/skills/review-guide"]);
+
+    const claudeOnly = await service.plan(
+      await projectRef(),
+      "rev-skill-channels",
+      emptyDraft({
+        deliveryAgents: true,
+        deliveryClaude: true,
+        enabledBySkillId: { "review-guide": true },
+        deliveryBySkillId: {
+          "review-guide": { agents: false, claude: true },
+        },
+      })
+    );
+    const claudeTargets = claudeOnly.targetOperations
+      .filter((op) => op.kind === "create-symlink")
+      .map((op) => op.relativeTarget)
+      .sort();
+    expect(claudeTargets).toEqual([".claude/skills/review-guide"]);
   });
 
   it("keeps valid enables applicable without confirmation", async () => {

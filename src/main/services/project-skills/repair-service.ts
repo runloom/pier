@@ -80,6 +80,14 @@ export interface CreateProjectSkillsRepairServiceOptions {
     projectIdentity: string;
     observedRevision: string;
   }) => void;
+  pierBindings?: {
+    reconcile(args: {
+      manifestSkillIds?: ReadonlySet<string>;
+      projectIdentity: StableProjectIdentity;
+      rootKey: string;
+      systemSkillIds?: ReadonlySet<string>;
+    }): Promise<{ desiredProjections: DesiredSystemProjection[] }>;
+  };
   store?: ProjectSkillsStore;
   /**
    * Pier system skills channel (design v8 §8): reconciled inside the
@@ -177,6 +185,18 @@ export function createProjectSkillsRepairService(
       }
       if (options.systemSkills !== undefined) {
         deps.systemSkills = options.systemSkills;
+      }
+      if (options.pierBindings !== undefined) {
+        deps.pierBindings = options.pierBindings;
+      }
+      if (
+        options.systemSkills !== undefined &&
+        "views" in options.systemSkills
+      ) {
+        const channel = options.systemSkills as {
+          views: (rootKey: string) => Promise<Array<{ id: string }>>;
+        };
+        deps.systemSkillViews = (rootKey) => channel.views(rootKey);
       }
       return runEnsureReady(deps, args);
     },

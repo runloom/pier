@@ -5,10 +5,14 @@ import type {
 } from "@shared/contracts/environment.ts";
 import { create } from "zustand";
 
+type LocalEnvironmentsHydration = "pending" | "ready" | "error";
+
 interface LocalEnvironmentsStoreState extends LocalEnvironmentState {
   addProject: (request: {
     projectRootPath: string;
   }) => Promise<LocalEnvironmentState>;
+  /** Settles after the first snapshot (or failed init). */
+  hydration: LocalEnvironmentsHydration;
   removeProject: (request: {
     projectRootPath: string;
   }) => Promise<LocalEnvironmentState>;
@@ -20,11 +24,15 @@ interface LocalEnvironmentsStoreState extends LocalEnvironmentState {
   }) => Promise<LocalEnvironmentWorktreeBindingSnapshot | null>;
 }
 
-function hydrate(snapshot: LocalEnvironmentState): void {
+function hydrate(
+  snapshot: LocalEnvironmentState,
+  hydration: LocalEnvironmentsHydration = "ready"
+): void {
   useLocalEnvironmentsStore.setState({
     projects: snapshot.projects,
     version: snapshot.version,
     worktreeBindings: snapshot.worktreeBindings,
+    hydration,
   });
 }
 
@@ -33,6 +41,7 @@ export const useLocalEnvironmentsStore = create<LocalEnvironmentsStoreState>(
     projects: [],
     version: 1,
     worktreeBindings: [],
+    hydration: "pending",
 
     async addProject(request) {
       const snapshot = await window.pier.environments.project.add(request);
@@ -85,11 +94,12 @@ export async function initLocalEnvironments(): Promise<void> {
   attachListener();
   try {
     const snapshot = await window.pier.environments.snapshot();
-    hydrate(snapshot);
+    hydrate(snapshot, "ready");
   } catch (err) {
     console.error(
       "[local-environments.store] init IPC failed; keeping defaults:",
       err
     );
+    useLocalEnvironmentsStore.setState({ hydration: "error" });
   }
 }

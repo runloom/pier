@@ -1,13 +1,19 @@
 /**
  * Project settings shell: one settings nav entry owns the shared project
- * index; Environment, Skills, and General are tabs inside a selected project.
+ * index; Environment, Skills, MCP, and General are tabs inside a selected
+ * project. Rules are deferred (type kept for persisted tab ids only).
  *
- * Structure-first (before delivery multi-target config):
  * - Nav id: `projects` (aliases: `environment`, `skills` → same section + tab)
- * - List → project detail → Environment | Skills | General
+ * - List → project detail → Environment | Skills | MCP | General
+ * - Home detail → Skills | MCP
  * - Domain stores/commands stay split (local-environments vs project-skills)
  */
-export type ProjectsSettingsTab = "environment" | "skills" | "general";
+export type ProjectsSettingsTab =
+  | "environment"
+  | "rules"
+  | "skills"
+  | "mcp"
+  | "general";
 
 export const PROJECTS_SECTION_ID = "projects" as const;
 

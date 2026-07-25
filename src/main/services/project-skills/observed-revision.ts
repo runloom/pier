@@ -32,6 +32,7 @@ export interface ObservedRevisionFacts {
     actualDigest: string | null;
     skillId: string;
   }>;
+  pierBindingsGeneration: number;
   /** Projection identity+shape per owned relative target (§3.2). */
   projectionFacts: ReadonlyArray<{
     identityKey: string | null;
@@ -59,6 +60,7 @@ export function computeObservedRevision(facts: ObservedRevisionFacts): string {
         identityKey: entry.identityKey,
       })),
     systemSkillsGeneration: facts.systemSkillsGeneration,
+    pierBindingsGeneration: facts.pierBindingsGeneration,
   });
   return `sha256:${createHash("sha256")
     .update("project-skills-observed-revision-v3", "utf8")
@@ -83,6 +85,16 @@ function digestBytes(bytes: Buffer): string {
 async function readSystemSkillsGeneration(projectDir: string): Promise<number> {
   try {
     const raw = await readFile(join(projectDir, "system-skills.json"), "utf8");
+    const parsed = JSON.parse(raw) as { generation?: unknown };
+    return typeof parsed.generation === "number" ? parsed.generation : 0;
+  } catch {
+    return 0;
+  }
+}
+
+async function readPierBindingsGeneration(projectDir: string): Promise<number> {
+  try {
+    const raw = await readFile(join(projectDir, "pier-bindings.json"), "utf8");
     const parsed = JSON.parse(raw) as { generation?: unknown };
     return typeof parsed.generation === "number" ? parsed.generation : 0;
   } catch {
@@ -189,6 +201,9 @@ export function createObservedRevisionProvider(
       perSkillActualTreeDigests,
       projectionFacts,
       systemSkillsGeneration: await readSystemSkillsGeneration(
+        paths.projectDir(rootKey)
+      ),
+      pierBindingsGeneration: await readPierBindingsGeneration(
         paths.projectDir(rootKey)
       ),
     });

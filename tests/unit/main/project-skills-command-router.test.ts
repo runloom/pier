@@ -188,6 +188,7 @@ describe("project-skills command router", () => {
         draft: {
           deliveryAgents: true,
           deliveryClaude: false,
+          deliveryBySkillId: {},
           enabledBySkillId: {},
           importTokens: [],
           deleteSkillIds: [],
@@ -231,6 +232,7 @@ describe("project-skills command router", () => {
         draft: {
           deliveryAgents: true,
           deliveryClaude: false,
+          deliveryBySkillId: {},
           enabledBySkillId: { guide: true },
           importTokens: [],
           deleteSkillIds: [],
