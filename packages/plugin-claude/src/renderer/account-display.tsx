@@ -1,5 +1,11 @@
 import { Avatar, AvatarFallback } from "@pier/ui/avatar.tsx";
 import { Button } from "@pier/ui/button.tsx";
+import {
+  COLLECTION_QUOTA_SETTINGS_ITEM_MIN_WIDTH,
+  collectionAutoFitClassName,
+  collectionAutoFitStyle,
+  collectionLayoutMode,
+} from "@pier/ui/collection-auto-layout.ts";
 import { Empty, EmptyDescription, EmptyHeader } from "@pier/ui/empty.tsx";
 import { formatDurationShort, formatPercent } from "@pier/ui/format.tsx";
 import {
@@ -181,7 +187,8 @@ export function QuotaGroup({
     );
   }
 
-  const single = windows.length === 1;
+  const count = windows.length;
+  const layout = collectionLayoutMode(count);
 
   return (
     <div
@@ -189,7 +196,7 @@ export function QuotaGroup({
         "flex w-full min-w-0 flex-col gap-3",
         compact && "flex-1 max-[48rem]:col-span-full max-[48rem]:row-start-2"
       )}
-      data-count={windows.length}
+      data-count={count}
       data-slot="claude-quota-group"
     >
       {errorBanner}
@@ -200,13 +207,17 @@ export function QuotaGroup({
       */}
       <div
         className={cn(
-          "w-full min-w-0",
-          single
-            ? "block"
-            : "grid gap-4 [grid-template-columns:repeat(auto-fit,minmax(min(100%,14rem),1fr))] max-[36rem]:grid-cols-1"
+          collectionAutoFitClassName(count, {
+            gapClassName: "gap-4",
+            singleAs: "block",
+          })
         )}
-        data-layout={single ? "single" : "auto-fit"}
+        data-layout={layout}
         data-slot="claude-quota-grid"
+        style={collectionAutoFitStyle(
+          count,
+          COLLECTION_QUOTA_SETTINGS_ITEM_MIN_WIDTH
+        )}
       >
         {windows.map((window) => (
           <Quota

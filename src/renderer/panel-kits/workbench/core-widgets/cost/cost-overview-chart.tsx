@@ -43,6 +43,17 @@ function formatRankingValue(
     : formatCurrency(value, locale);
 }
 
+/** 是否有可绘制内容——widget 据此决定是否挂 flex-1 图区，避免 null 图 + 空壳占高。 */
+export function costOverviewChartHasContent(
+  view: CostViewModel,
+  rankingLimit = 8
+): boolean {
+  if (view.chart === "ranking") {
+    return view.ranking.length > 0 && rankingLimit > 0;
+  }
+  return view.series.length > 0;
+}
+
 /**
  * 成本总览图表区：stackedBar / line / ranking。
  * 抽离以控制 widget 主文件行数；坐标轴 hide，靠 tooltip 读数。

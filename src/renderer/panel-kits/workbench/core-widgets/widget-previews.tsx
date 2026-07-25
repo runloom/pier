@@ -40,9 +40,15 @@ export function ActivityWidgetPreview() {
 export function SystemResourcesWidgetPreview() {
   return (
     <div className="flex h-full flex-col gap-1.5 p-2.5">
-      <div className="grid grid-cols-2 gap-1.5">
-        <PreviewTile bar />
-        <PreviewTile bar />
+      <div className="grid grid-cols-2 gap-x-3 gap-y-1.5">
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="h-1 w-8 rounded-full bg-muted-foreground/25" />
+          <div className="h-2.5 w-10 rounded-sm bg-muted-foreground/45" />
+        </div>
+        <div className="flex min-w-0 flex-col gap-0.5">
+          <div className="h-1 w-6 rounded-full bg-muted-foreground/25" />
+          <div className="h-2.5 w-8 rounded-sm bg-muted-foreground/40" />
+        </div>
       </div>
       <svg
         aria-hidden="true"
@@ -62,6 +68,16 @@ export function SystemResourcesWidgetPreview() {
           strokeWidth="1.5"
         />
       </svg>
+      <div className="flex flex-col gap-1 px-0.5">
+        <div className="flex items-center justify-between gap-2">
+          <div className="h-1.5 w-14 rounded-full bg-muted-foreground/25" />
+          <div className="h-1.5 w-8 rounded-full bg-muted-foreground/20" />
+        </div>
+        <div className="flex items-center justify-between gap-2">
+          <div className="h-1.5 w-10 rounded-full bg-muted-foreground/20" />
+          <div className="h-1.5 w-6 rounded-full bg-muted-foreground/15" />
+        </div>
+      </div>
     </div>
   );
 }

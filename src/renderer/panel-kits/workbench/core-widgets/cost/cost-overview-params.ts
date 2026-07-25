@@ -64,12 +64,15 @@ const OFFICIAL_PRESET_IDS = [
   "tokens",
 ] as const satisfies readonly Exclude<CostOverviewPresetId, "custom">[];
 
-const DEFAULT_KPIS: CostOverviewKpiId[] = [
+export const DEFAULT_COST_OVERVIEW_KPIS: CostOverviewKpiId[] = [
   "today",
   "period",
   "periodTokens",
   "latestDayTokens",
 ];
+
+/** @deprecated 使用 DEFAULT_COST_OVERVIEW_KPIS */
+const DEFAULT_KPIS = DEFAULT_COST_OVERVIEW_KPIS;
 
 export const DEFAULT_COST_OVERVIEW_PARAMS: CostOverviewParams = {
   preset: "overview",

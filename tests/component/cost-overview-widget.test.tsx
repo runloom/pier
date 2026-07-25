@@ -368,6 +368,15 @@ describe("CostOverviewWidget", () => {
       screen.queryByTestId("cost-overview-description")
     ).not.toBeInTheDocument();
     expect(screen.queryByTestId("cost-overview-chart")).not.toBeInTheDocument();
+    // compact 至少 2 个 KPI；列定义走 inline auto-fit，不依赖 Tailwind 任意值
+    const compactKpis = screen.getByTestId("cost-overview-kpis");
+    expect(compactKpis.childElementCount).toBe(2);
+    expect(compactKpis).toHaveAttribute("data-layout", "auto-fit");
+    expect(compactKpis).toHaveStyle({
+      gridTemplateColumns: expect.stringContaining(
+        "auto-fit"
+      ) as unknown as string,
+    });
     expect(screen.getByTestId("cost-overview-content")).toHaveClass(
       "overflow-hidden"
     );

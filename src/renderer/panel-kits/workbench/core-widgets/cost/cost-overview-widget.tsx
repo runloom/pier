@@ -4,6 +4,7 @@ import {
   formatCurrency,
   formatRelativeTime,
 } from "@pier/ui/format.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import {
   WidgetEmpty,
   WidgetError,
@@ -20,13 +21,25 @@ import { useMemo } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import {
+  type WorkbenchWidgetDensity,
+  workbenchDensityFor,
+  workbenchKpiCollectionClassName,
+  workbenchKpiCollectionStyle,
+  workbenchKpiLayoutMode,
+  workbenchMaxKpisFor,
+} from "@/lib/workbench/kpi-auto-layout.ts";
+import {
   listSupportedUsageSourceLabels,
   resolveUsageSourceLabel,
 } from "@/lib/workbench/usage-source-labels.ts";
 import { useUsageDataStore } from "@/stores/usage-data.store.ts";
-import { CostOverviewChart } from "./cost-overview-chart.tsx";
+import {
+  CostOverviewChart,
+  costOverviewChartHasContent,
+} from "./cost-overview-chart.tsx";
 import {
   type CostOverviewKpiId,
+  DEFAULT_COST_OVERVIEW_KPIS,
   parseCostOverviewParams,
 } from "./cost-overview-params.ts";
 import {
@@ -35,24 +48,14 @@ import {
   costViewQuery,
 } from "./cost-view-query.ts";
 
-/**
- * 布局密度：按物料格子尺寸渐进披露（Apple 小组件思路）。
- * - compact（h≤2 或 w≤2）：主数字 + 可选辅数字，无图无滚动
- * - medium（h=3）：少量 KPI + 图
- * - full（h≥4）：完整 KPI + 图 + 说明/脚注
- */
-type CostDensity = "compact" | "medium" | "full";
+type CostDensity = WorkbenchWidgetDensity;
 
 function densityFor(size: { h: number; w: number }): CostDensity {
-  if (size.h <= 2 || size.w <= 2) return "compact";
-  if (size.h <= 3) return "medium";
-  return "full";
+  return workbenchDensityFor(size);
 }
 
 function maxKpisFor(density: CostDensity, width: number): number {
-  if (density === "compact") return width <= 2 ? 1 : 2;
-  if (density === "medium") return width >= 6 ? 4 : 2;
-  return 4;
+  return workbenchMaxKpisFor(density, width);
 }
 
 function rankingLimitFor(density: CostDensity, height: number): number {
@@ -61,36 +64,55 @@ function rankingLimitFor(density: CostDensity, height: number): number {
   return height >= 5 ? 10 : 6;
 }
 
+/** 用默认池把 KPI 列表补到 max。 */
+function resolveVisibleKpis(
+  selected: readonly CostOverviewKpiId[],
+  max: number
+): CostOverviewKpiId[] {
+  const filled: CostOverviewKpiId[] = [];
+  for (const id of selected) {
+    if (filled.length >= max) break;
+    if (!filled.includes(id)) filled.push(id);
+  }
+  for (const id of DEFAULT_COST_OVERVIEW_KPIS) {
+    if (filled.length >= max) break;
+    if (!filled.includes(id)) filled.push(id);
+  }
+  return filled;
+}
+
 /**
- * KPI 单元格。极简样式（无边框、无背景）——参考仪表盘 dense KPI 惯例，让
- * label / value 视觉重量差通过字号 + 前景色对比表达，不靠容器装饰。
+ * KPI 单元格。
+ * - primary：主指标，数字更大
+ * - secondary：次指标，略小，仍完整可读（纵排时不截断到 $14,…）
  */
 function KpiTile({
   label,
   value,
-  compact,
+  role = "secondary",
 }: {
-  compact?: boolean;
   label: string;
+  role?: "primary" | "secondary";
   value: string;
 }) {
+  const primary = role === "primary";
   return (
-    <div className="flex min-w-0 flex-col gap-0.5">
+    <div className="flex min-w-0 flex-col gap-1">
       <span
-        className={
-          compact
-            ? "truncate text-[11px] text-muted-foreground leading-none"
-            : "truncate text-muted-foreground text-xs"
-        }
+        className={cn(
+          "truncate text-muted-foreground leading-none",
+          primary ? "text-xs" : "text-[11px]"
+        )}
       >
         {label}
       </span>
       <p
-        className={
-          compact
-            ? "truncate font-semibold text-base tabular-nums leading-tight"
-            : "font-semibold text-lg tabular-nums leading-tight"
-        }
+        className={cn(
+          "min-w-0 font-semibold tabular-nums leading-none tracking-tight",
+          // 纵排：允许稍长数字完整显示；横排才 truncate
+          primary ? "text-2xl" : "text-lg",
+          "break-all"
+        )}
       >
         {value}
       </p>
@@ -267,20 +289,30 @@ export function CostOverviewWidget({
       ? formatRelativeTime(view.observedAt, Date.now(), locale)
       : "";
   const showUnpriced = view.measure !== "tokens" && view.unpricedDayCount > 0;
-  const visibleKpis = parsed.kpis.slice(0, maxKpisFor(density, size.w));
-  const showChart = density !== "compact";
+  const maxKpis = maxKpisFor(density, size.w);
+  const visibleKpis = resolveVisibleKpis(parsed.kpis, maxKpis);
+  const rankingLimit = rankingLimitFor(density, size.h);
+  // 有序列数据就出图；绝不挂空 flex-1 壳
+  const showChartSlot =
+    density !== "compact" && costOverviewChartHasContent(view, rankingLimit);
   const showDescription = density === "full";
   const showFooter = density !== "compact";
-  const rankingLimit = rankingLimitFor(density, size.h);
+  // KPI 排列：内容 auto-fit 网格（宽→横排铺满，窄→自然换行），禁止 stack/row 单轴
+  const kpiLayout = workbenchKpiLayoutMode(visibleKpis.length);
+  const kpiGridClassName = workbenchKpiCollectionClassName(visibleKpis.length);
+  const kpiGridStyle = workbenchKpiCollectionStyle(visibleKpis.length);
 
   return (
     <div
       className={
         density === "compact"
-          ? "flex h-full min-h-0 flex-col justify-center gap-2 overflow-hidden p-3"
-          : "flex h-full min-h-0 flex-col gap-3 overflow-hidden p-3"
+          ? "flex h-full min-h-0 flex-col justify-start gap-2 overflow-hidden p-2.5"
+          : "flex h-full min-h-0 flex-col justify-start gap-3 overflow-hidden p-3"
       }
       data-density={density}
+      data-kpi-layout={kpiLayout}
+      data-size-h={size.h}
+      data-size-w={size.w}
       data-testid="cost-overview-content"
     >
       {showDescription ? (
@@ -300,30 +332,34 @@ export function CostOverviewWidget({
       ) : null}
 
       <div
-        className={
-          density === "compact"
-            ? "grid shrink-0 grid-cols-1 gap-2"
-            : "grid shrink-0 @[24rem]:grid-cols-2 @[36rem]:grid-cols-4 grid-cols-1 gap-x-6 gap-y-3"
-        }
+        className={kpiGridClassName}
+        data-layout={kpiLayout}
         data-testid="cost-overview-kpis"
+        style={kpiGridStyle}
       >
-        {visibleKpis.map((id) => (
+        {visibleKpis.map((id, index) => (
           <KpiTile
-            compact={density === "compact"}
             key={id}
             label={kpiLabel(id, view, t)}
+            role={index === 0 ? "primary" : "secondary"}
             value={kpiValue(id, view.kpis, locale)}
           />
         ))}
       </div>
 
-      {showChart ? (
-        <div className="min-h-0 min-w-0 flex-1 overflow-hidden">
-          <CostOverviewChart
-            locale={locale}
-            rankingLimit={rankingLimit}
-            view={view}
-          />
+      {showChartSlot ? (
+        <div
+          className="relative min-h-24 w-full min-w-0 flex-1"
+          data-testid="cost-overview-chart-slot"
+        >
+          {/* absolute 填充：recharts 在纯 flex-1 链上经常高度为 0 */}
+          <div className="absolute inset-0 min-h-0">
+            <CostOverviewChart
+              locale={locale}
+              rankingLimit={rankingLimit}
+              view={view}
+            />
+          </div>
         </div>
       ) : null}
 

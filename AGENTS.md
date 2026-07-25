@@ -313,7 +313,7 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 
 - 持久化参数 `{layoutVersion: 3, widgets: [{id, widgetId?, params?, w, h}]}`：数组顺序是唯一阅读顺序；`w/h` 是用户尺寸偏好；`x/y` 只在渲染期按容器宽度派生，不持久化。`id` 是实例 id（多实例物料为 uuid），`widgetId` 是物料 id；`params` 是物料私有配置，宿主视为黑盒 JSON，校验责任在物料边界。
 - 旧版 `x/y/locked/placementDirection` 只在读取时转换：条目按 `y → x → 原始索引` 得到稳定顺序，废弃字段不进入 v3。打开面板不得主动写回；首次添加、删除、排序、调整尺寸或设置修改时自然写入 v3。
-- 组件 props：`size / instanceId / params / updateParams / refreshToken / visible`。拉取型物料把 `refreshToken` 放进 effect 依赖；`visible=false` 时**必须停轮询**（数据源用 acquire/release 引用计数，参考 `system-stats.store.ts`）。
+- 组件 props：`size / instanceId / params / updateParams / refreshToken / visible`。拉取型物料把 `refreshToken` 放进 effect 依赖；`visible=false` 时**必须停轮询**（数据源用 acquire/release 引用计数，参考 `pier-resource.store.ts`）。
 - 声明元数据：`category`（物料库分类）、`searchTerms`（搜索命中面）、`multiInstance`（可复制/重复添加）、`configurable`（注册时须提供 `settingsComponent`，渲染进宿主设置弹窗）、`refreshable`（菜单显示"刷新"）；注册可带 `previewComponent`（物料库预览卡，样例数据静态渲染）。
 - 添加入口是物料库对话框（分类 + 搜索 + 预览），不是下拉菜单；空态和底部添加入口只打开物料库，不提供快速开始预设。
 - 指标目录（`src/renderer/lib/workbench/metric-registry.ts`）：core/插件用代码贡献指标（instant/series/grouped × 格式），"自定义卡片"物料把区块（kpi/gauge/trend/ranking）绑定到指标做用户级组装；不做查询语言、不做自由画布。

@@ -87,6 +87,75 @@ export function agentSessionPlaceholder(
   };
 }
 
+const TITLE_ELLIPSIS = "…";
+
+/** Soft-break window when hard-capping overlong titles. */
+const TITLE_SOFT_BREAK_LOOKBACK = 12;
+
+/** Protocol / transcript wrappers that must never appear in product titles. */
+const PROMPT_WRAPPER_NAMES =
+  "user_query|user_message|user_prompt|human|query|system|assistant";
+
+const PROMPT_WRAPPER_PAIR = new RegExp(
+  `<(${PROMPT_WRAPPER_NAMES})\\b[^>]*>([\\s\\S]*?)<\\/\\1>`,
+  "i"
+);
+
+const PROMPT_WRAPPER_TAG = new RegExp(
+  `<\\/?(?:${PROMPT_WRAPPER_NAMES})\\b[^>]*>`,
+  "gi"
+);
+
+const TITLE_SOFT_BREAK = /[\s，。、；：,.!?;:：]/u;
+
+/**
+ * Strip agent/transcript markup so tab titles stay product-facing.
+ * Prefer inner text of a known wrapper; drop leftover open/close tags.
+ * Does not apply greeting filters (those belong to derive-from-prompt).
+ */
+export function stripAgentPromptMarkup(raw: string): string {
+  let text = raw.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
+
+  // Full-message fenced block → body only.
+  const fenced = /^```[\w-]*\n([\s\S]*?)\n```$/m.exec(text.trim());
+  if (fenced?.[1] !== undefined) {
+    text = fenced[1];
+  }
+
+  // Prefer first non-empty known wrapper body (e.g. <user_query>…</user_query>).
+  const wrapped = PROMPT_WRAPPER_PAIR.exec(text);
+  if (wrapped?.[2]?.trim()) {
+    text = wrapped[2];
+  }
+
+  text = text.replace(PROMPT_WRAPPER_TAG, " ");
+  text = text.replace(/\[Image\s*#?\d*\]/gi, " ");
+  text = text.replace(/!\[[^\]]*\]\([^)]*\)/g, " ");
+  text = text.replace(/\s+/g, " ").trim();
+  return text;
+}
+
+function truncateAgentSessionTitle(text: string): string {
+  if (text.length <= MAX_AGENT_SESSION_TITLE_LENGTH) {
+    return text;
+  }
+  const budget = MAX_AGENT_SESSION_TITLE_LENGTH - TITLE_ELLIPSIS.length;
+  let cut = text.slice(0, budget);
+  const minKeep = Math.max(0, budget - TITLE_SOFT_BREAK_LOOKBACK);
+  for (let index = cut.length - 1; index >= minKeep; index -= 1) {
+    const ch = cut[index];
+    if (ch && TITLE_SOFT_BREAK.test(ch)) {
+      cut = cut.slice(0, index);
+      break;
+    }
+  }
+  cut = cut.trimEnd();
+  if (cut.length < 2) {
+    cut = text.slice(0, budget).trimEnd();
+  }
+  return `${cut}${TITLE_ELLIPSIS}`;
+}
+
 /**
  * Agent 产品主标题唯一入口（金标准 G6）。
  * 不接收 OSC / terminalTitle——调用方不得把终端装饰标题传入。
@@ -99,14 +168,16 @@ export function resolveAgentSessionTitle(
     input.projectRootPath,
     input.cwd
   );
-  const trimmed = input.sessionTitle?.trim();
-  if (
-    trimmed &&
-    !trimmed.includes("\n") &&
-    trimmed.length <= MAX_AGENT_SESSION_TITLE_LENGTH
-  ) {
+  const raw = input.sessionTitle?.trim();
+  // Display path also strips protocol markup so already-persisted auto titles
+  // like `<user_query> …` render as product copy without a rewrite.
+  const title =
+    raw && !raw.includes("\n")
+      ? normalizeAgentSessionTitle(stripAgentPromptMarkup(raw))
+      : null;
+  if (title) {
     return {
-      primary: trimmed,
+      primary: title,
       placeholder,
       ...(secondary === undefined ? {} : { secondary }),
     };
@@ -132,7 +203,7 @@ export function truncateTerminalTitleForTooltip(
   return `${trimmed.slice(0, MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH - 1)}…`;
 }
 
-/** 写入前规范化：trim、拒换行、硬上限；不合法返回 null（调用方失败安全）。 */
+/** 写入前规范化：trim、拒换行、硬上限（超长带省略号）；不合法返回 null。 */
 export function normalizeAgentSessionTitle(
   raw: string | null | undefined
 ): string | null {
@@ -141,7 +212,7 @@ export function normalizeAgentSessionTitle(
     return null;
   }
   if (trimmed.length > MAX_AGENT_SESSION_TITLE_LENGTH) {
-    return trimmed.slice(0, MAX_AGENT_SESSION_TITLE_LENGTH).trimEnd();
+    return truncateAgentSessionTitle(trimmed);
   }
   return trimmed;
 }
@@ -154,6 +225,7 @@ const TRIVIAL_TITLE = /^[\s·•‧・\-–—_|/\\.,;:!?'"“”‘’`~()[\]{}
 
 /**
  * 从首条用户 prompt 派生 auto 标题。寒暄 / 空 / 纯噪声 → null（保持占位）。
+ * 会剥 `<user_query>` 等 transcript 包装与图片占位，避免进 tab。
  */
 export function deriveAgentSessionTitleFromPrompt(
   prompt: string | null | undefined
@@ -161,10 +233,7 @@ export function deriveAgentSessionTitleFromPrompt(
   if (!prompt) {
     return null;
   }
-  let text = prompt.replace(/\r\n/g, "\n").replace(/\r/g, "\n");
-  text = text.replace(/\[Image\s*#?\d*\]/gi, " ");
-  text = text.replace(/!\[[^\]]*\]\([^)]*\)/g, " ");
-  text = text.replace(/\s+/g, " ").trim();
+  const text = stripAgentPromptMarkup(prompt);
   if (!text || GREETING_ONLY.test(text) || TRIVIAL_TITLE.test(text)) {
     return null;
   }

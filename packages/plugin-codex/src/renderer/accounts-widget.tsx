@@ -5,6 +5,10 @@ import type {
   WorkbenchWidgetComponentProps,
 } from "@pier/plugin-api/renderer";
 import { Badge } from "@pier/ui/badge.tsx";
+import {
+  widgetDensityFor,
+  widgetShellClassName,
+} from "@pier/ui/collection-auto-layout.ts";
 import { formatRelativeTime } from "@pier/ui/format.tsx";
 import {
   Item,
@@ -15,6 +19,7 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import { RefreshCw } from "lucide-react";
 import type { JSX } from "react";
@@ -31,10 +36,11 @@ import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
 /**
  * Codex account and quota widget. The host owns the outer Card and title.
  *
+ * 布局对齐成本 / 资源卡：size → density 结构；配额条 content auto-fit；
+ * 顶对齐 + 无空 flex 壳浪费。
+ *
  * Refresh flows through {@link accountsWidgetActions}: the async invoke keeps
- * the header refresh-button spinner spinning for the real IPC duration, and
- * the widget body doesn't render a separate spinner element (双 spinner 是错
- * 觉——同一动作有两个 loading 指示是 UX bug)。
+ * the header refresh-button spinner spinning for the real IPC duration.
  */
 
 export interface AccountsWidgetProps extends WorkbenchWidgetComponentProps {
@@ -53,7 +59,6 @@ export function AccountsWidget({
 
   useUsagePollingLease(context, `widget:${instanceId}`, visible);
 
-  // Error state
   if (loadError) {
     return (
       <WidgetError message={loadError}>
@@ -62,11 +67,11 @@ export function AccountsWidget({
     );
   }
 
-  // Loading state
   if (!snapshot) {
     return <WidgetSkeleton data-slot="widget-skeleton" />;
   }
 
+  const density = widgetDensityFor(size);
   const activeAccount = snapshot.accounts.find(
     (account) => account.id === snapshot.activeAccountId
   );
@@ -83,12 +88,20 @@ export function AccountsWidget({
   const accountLabel =
     activeAccount?.label ??
     t("pier.codex.widget.noActiveAccount", "No active account");
+  // size 做结构：宽卡才在标题行露出 credits / 更新时间；矮卡藏 plan 副文案吃高度
+  const showCredits = Boolean(creditsLabel) && size.w >= 4;
+  const showFetchedInline = Boolean(fetchedLabel) && size.w >= 4;
+  // 矮卡藏 plan 副文案；账号异常时仍展示（可用性优先于密度）
+  const showPlanSummary =
+    density !== "compact" || Boolean(activeAccount?.error);
+
   let usageContent: JSX.Element;
   if (!usage) {
     usageContent = (
       <Skeleton className="min-h-20 w-full" data-slot="codex-usage-loading" />
     );
-  } else if (usage.status === "ok") {
+  } else if (usage.status === "ok" || usage.windows.length > 0) {
+    // last-good 窗口保留展示（对齐 Grok；瞬时刷新失败不清空进度）
     usageContent = (
       <UsageMeter
         language={context.i18n.language()}
@@ -109,10 +122,16 @@ export function AccountsWidget({
 
   return (
     <div
-      className="pier-codex-account-quota-widget flex h-full min-h-0 flex-col gap-3 p-(--card-spacing) text-sm"
+      className={cn(
+        "pier-codex-account-quota-widget text-sm",
+        widgetShellClassName(density)
+      )}
+      data-density={density}
+      data-size-h={size.h}
+      data-size-w={size.w}
       data-slot="codex-accounts-widget"
     >
-      <Item className="flex-nowrap px-0 py-0" size="xs">
+      <Item className="shrink-0 flex-nowrap px-0 py-0" size="xs">
         <ItemMedia align="center">
           <AccountAvatar label={accountLabel} />
         </ItemMedia>
@@ -120,30 +139,32 @@ export function AccountsWidget({
           <ItemTitle className="block w-full truncate" title={accountLabel}>
             {accountLabel}
           </ItemTitle>
-          <ItemDescription>
-            <span>
-              {(activeAccount
-                ? accountPlanSummary(activeAccount, context.i18n.language(), t)
-                : null) ??
-                t(
-                  "pier.codex.widget.accountUnavailable",
-                  "Account unavailable"
-                )}
-            </span>
-            {fetchedLabel && size.w >= 4 ? (
+          {showPlanSummary ? (
+            <ItemDescription>
               <span>
-                {" · "}
-                {fetchedLabel}
+                {(activeAccount
+                  ? accountPlanSummary(
+                      activeAccount,
+                      context.i18n.language(),
+                      t
+                    )
+                  : null) ??
+                  t(
+                    "pier.codex.widget.accountUnavailable",
+                    "Account unavailable"
+                  )}
               </span>
-            ) : null}
-          </ItemDescription>
+              {showFetchedInline ? (
+                <span>
+                  {" · "}
+                  {fetchedLabel}
+                </span>
+              ) : null}
+            </ItemDescription>
+          ) : null}
         </ItemContent>
-        {creditsLabel ? (
-          <Badge
-            className="@[34rem]:inline-flex hidden"
-            size="xs"
-            variant="neutral"
-          >
+        {showCredits ? (
+          <Badge className="shrink-0" size="xs" variant="neutral">
             {creditsLabel}
           </Badge>
         ) : null}
@@ -158,7 +179,9 @@ export function AccountsWidget({
         ) : null}
       </Item>
 
-      <div className="flex min-h-0 flex-1 flex-col">{usageContent}</div>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col content-start">
+        {usageContent}
+      </div>
     </div>
   );
 }
