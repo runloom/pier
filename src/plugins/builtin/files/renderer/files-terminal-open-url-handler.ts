@@ -159,7 +159,7 @@ async function openDiskTarget(
       );
       return true;
     }
-    const opened = openProjectFiles(context, openContext);
+    const opened = await openProjectFiles(context, openContext);
     if (!opened.ok) {
       return await openAbsoluteWithSystem(
         context,
@@ -198,7 +198,7 @@ async function openDiskTarget(
       );
       return true;
     }
-    const opened = openProjectFiles(context, openContext);
+    const opened = await openProjectFiles(context, openContext);
     if (!opened.ok) {
       return await openAbsoluteWithSystem(
         context,

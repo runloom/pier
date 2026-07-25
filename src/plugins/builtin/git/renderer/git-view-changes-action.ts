@@ -15,13 +15,13 @@ export function registerViewChangesAction(
     category: "Git",
     disabledReason: () => disabledReasonForActiveGit(context),
     enabled: () => enabledForActiveGit(context),
-    handler: () => {
+    handler: async () => {
       const panelContext = context.panels.getActiveContext();
       if (!panelContext?.gitRoot) {
         context.notifications.error(unsupportedGitReason(context));
         return;
       }
-      openGitChangesPanel({
+      await openGitChangesPanel({
         getGroupId: () => null,
         panelContext,
         pluginContext: context,

@@ -1,4 +1,7 @@
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type {
+  PluginPanelInstanceSnapshot,
+  RendererPluginContext,
+} from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { panelContextSchema } from "@shared/contracts/panel.ts";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
@@ -6,6 +9,7 @@ import {
   ensureProjectFileTreeExpanded,
   projectNameFromRoot,
 } from "./file-tree-preferences.ts";
+import { parseFilesDocumentPanelSource } from "./files-document-types.ts";
 import { projectAnchor } from "./files-project-anchor.ts";
 import { stableFileIdentityHash } from "./files-stable-hash.ts";
 import { revealFilesTreePath } from "./files-tree-registry.ts";
@@ -25,10 +29,46 @@ function contextFromParams(params: unknown): PanelContext | undefined {
   return parsed.success ? parsed.data : undefined;
 }
 
-export function openProjectFiles(
+/** Project-directory tabs are tree-only (no open document source). */
+function isProjectDirectoryInstance(
+  instance: PluginPanelInstanceSnapshot,
+  anchor: string
+): boolean {
+  const projectInstanceId = createProjectFilesInstanceId(anchor);
+  if (
+    instance.id === projectInstanceId ||
+    instance.id.startsWith(`${projectInstanceId}:`)
+  ) {
+    return true;
+  }
+  if (parseFilesDocumentPanelSource(instance.params) !== null) {
+    return false;
+  }
+  return projectAnchor(contextFromParams(instance.params)) === anchor;
+}
+
+function findOpenProjectDirectory(
+  instances: readonly PluginPanelInstanceSnapshot[],
+  anchor: string
+): PluginPanelInstanceSnapshot | undefined {
+  const projectInstanceId = createProjectFilesInstanceId(anchor);
+  return (
+    instances.find((instance) => instance.id === projectInstanceId) ??
+    instances.find((instance) => isProjectDirectoryInstance(instance, anchor))
+  );
+}
+
+function scheduleProjectReveal(anchor: string): void {
+  ensureProjectFileTreeExpanded(anchor);
+  globalThis.setTimeout(() => {
+    revealFilesTreePath({ path: "", root: anchor });
+  }, REVEAL_DELAY_MS);
+}
+
+export async function openProjectFiles(
   pluginContext: RendererPluginContext,
   panelContext: PanelContext
-): { ok: true } | { ok: false; reason: "no-anchor" | "open-failed" } {
+): Promise<{ ok: true } | { ok: false; reason: "no-anchor" | "open-failed" }> {
   const anchor = projectAnchor(panelContext);
   if (!anchor) {
     return { ok: false, reason: "no-anchor" };
@@ -36,9 +76,7 @@ export function openProjectFiles(
 
   try {
     const instances = pluginContext.panels.listInstances(FILES_FILE_PANEL_ID);
-    const existing = instances.find(
-      (instance) => projectAnchor(contextFromParams(instance.params)) === anchor
-    );
+    const existing = findOpenProjectDirectory(instances, anchor);
     const activeId =
       pluginContext.panels.getActiveInstanceId(FILES_FILE_PANEL_ID);
     // Already focused on this project's files panel — re-open / reveal would
@@ -56,21 +94,39 @@ export function openProjectFiles(
         title: existing.title,
         ...(existing.groupId ? { targetGroupId: existing.groupId } : {}),
       });
-    } else {
-      pluginContext.panels.openInstance({
-        componentId: FILES_FILE_PANEL_ID,
-        context: panelContext,
-        instanceId: createProjectFilesInstanceId(anchor),
-        params: {},
-        title: projectNameFromRoot(anchor),
-      });
+      scheduleProjectReveal(anchor);
+      return { ok: true };
     }
 
-    ensureProjectFileTreeExpanded(anchor);
-    globalThis.setTimeout(() => {
-      revealFilesTreePath({ path: "", root: anchor });
-    }, REVEAL_DELAY_MS);
+    // Local miss: focus any window that already has this project directory.
+    const globalMatch = (
+      await pluginContext.panels.listInstancesGlobal(FILES_FILE_PANEL_ID)
+    ).find((instance) => isProjectDirectoryInstance(instance, anchor));
+    if (globalMatch) {
+      const remoteFocus = await pluginContext.panels.focusInstance({
+        componentId: FILES_FILE_PANEL_ID,
+        instanceId: globalMatch.id,
+        windowId: globalMatch.windowId,
+      });
+      if (remoteFocus.kind === "focused") {
+        // Tree reveal is owned by the focused window; skip local reveal.
+        return { ok: true };
+      }
+      if (remoteFocus.kind === "error") {
+        return { ok: false, reason: "open-failed" };
+      }
+      // not_found — fall through to create locally.
+    }
 
+    pluginContext.panels.openInstance({
+      componentId: FILES_FILE_PANEL_ID,
+      context: panelContext,
+      instanceId: createProjectFilesInstanceId(anchor),
+      params: {},
+      title: projectNameFromRoot(anchor),
+    });
+
+    scheduleProjectReveal(anchor);
     return { ok: true };
   } catch {
     return { ok: false, reason: "open-failed" };

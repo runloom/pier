@@ -75,6 +75,8 @@ function makeContext(
     notifications: { error: vi.fn() },
     panels: {
       listInstances: vi.fn(() => []),
+      listInstancesGlobal: vi.fn(async () => []),
+      focusInstance: vi.fn(async () => ({ kind: "focused" as const })),
       openInstance,
     },
     terminalStatusItems: {
@@ -200,13 +202,15 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       changesTrigger.querySelector('[data-git-delta="deletions"]')
     ).toHaveTextContent("−3");
     fireEvent.click(changesTrigger);
-    expect(openInstance).toHaveBeenCalledWith(
-      expect.objectContaining({
-        componentId: "pier.git.changes",
-        targetGroupId: "group-a",
-        title: "repo",
-      })
-    );
+    await waitFor(() => {
+      expect(openInstance).toHaveBeenCalledWith(
+        expect.objectContaining({
+          componentId: "pier.git.changes",
+          targetGroupId: "group-a",
+          title: "repo",
+        })
+      );
+    });
   });
 
   it("showChangesStatus=false 时隐藏更改项且 isVisible 为 false", async () => {
@@ -296,13 +300,15 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     currentGroupId = "group-b";
     fireEvent.click(await screen.findByRole("menuitem", { name: /^Changes/ }));
 
-    expect(
-      openInstance.mock.calls.map(([input]) => input.targetGroupId)
-    ).toEqual(["group-b", "group-c"]);
+    await waitFor(() => {
+      expect(
+        openInstance.mock.calls.map(([input]) => input.targetGroupId)
+      ).toEqual(["group-b", "group-c"]);
+    });
     expect(context.notifications.error).not.toHaveBeenCalled();
   });
 
-  it("Review 同组已打开时复用，跨组再开会新建", () => {
+  it("Review 已打开时聚焦已有 tab，跨组不重复新建", async () => {
     const { context, openInstance } = makeContext(true);
     const movedInstance = {
       componentId: "pier.git.changes",
@@ -319,7 +325,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     };
     vi.mocked(context.panels.listInstances).mockReturnValue([movedInstance]);
 
-    openGitChangesPanel({
+    await openGitChangesPanel({
       getGroupId: () => "group-b",
       panelContext: PANEL_CONTEXT,
       pluginContext: context,
@@ -329,20 +335,85 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       targetGroupId: "group-b",
     });
 
-    openGitChangesPanel({
+    await openGitChangesPanel({
       getGroupId: () => "group-a",
       panelContext: PANEL_CONTEXT,
       pluginContext: context,
     });
-    const originalGroupRequest = openInstance.mock.calls.at(-1)?.[0];
-    expect(originalGroupRequest).toMatchObject({ targetGroupId: "group-a" });
-    expect(originalGroupRequest.instanceId).toMatch(
-      /^pier\.git\.changes:group-a:worktree:repo:/u
-    );
+    expect(openInstance.mock.calls.at(-1)?.[0]).toMatchObject({
+      instanceId: movedInstance.id,
+      targetGroupId: "group-b",
+    });
     expect(openInstance).toHaveBeenCalledTimes(2);
   });
 
-  it("Review focus 在 targetGroupMissing 时回退创建且刷新实例列表", () => {
+  it("Review 命令面板无 group 时聚焦已打开实例", async () => {
+    const { context, openInstance } = makeContext(true);
+    const existing = {
+      componentId: "pier.git.changes",
+      groupId: "group-b",
+      id: "review-existing",
+      params: {
+        source: {
+          contextId: "worktree:repo",
+          gitRootPath: "/repo",
+          target: { kind: "uncommitted" },
+        },
+      },
+      title: "Changes",
+    };
+    vi.mocked(context.panels.listInstances).mockReturnValue([existing]);
+
+    await openGitChangesPanel({
+      getGroupId: () => null,
+      panelContext: PANEL_CONTEXT,
+      pluginContext: context,
+    });
+
+    expect(openInstance).toHaveBeenCalledTimes(1);
+    expect(openInstance.mock.calls[0]?.[0]).toMatchObject({
+      instanceId: "review-existing",
+      targetGroupId: "group-b",
+    });
+  });
+
+  it("Review 已在其它窗口打开时跨窗口聚焦", async () => {
+    const { context, openInstance } = makeContext(true);
+    const focusInstance = vi.fn(async () => ({ kind: "focused" as const }));
+    context.panels.focusInstance = focusInstance;
+    vi.mocked(context.panels.listInstances).mockReturnValue([]);
+    vi.mocked(context.panels.listInstancesGlobal).mockResolvedValue([
+      {
+        componentId: "pier.git.changes",
+        groupId: null,
+        id: "review-remote",
+        title: "Changes",
+        windowId: "win-remote",
+        params: {
+          source: {
+            contextId: "worktree:repo",
+            gitRootPath: "/repo",
+            target: { kind: "uncommitted" },
+          },
+        },
+      },
+    ]);
+
+    await openGitChangesPanel({
+      getGroupId: () => "group-a",
+      panelContext: PANEL_CONTEXT,
+      pluginContext: context,
+    });
+
+    expect(focusInstance).toHaveBeenCalledWith({
+      componentId: "pier.git.changes",
+      instanceId: "review-remote",
+      windowId: "win-remote",
+    });
+    expect(openInstance).not.toHaveBeenCalled();
+  });
+
+  it("Review focus 在 targetGroupMissing 时回退创建且刷新实例列表", async () => {
     const { context, openInstance } = makeContext(true);
     const stale = {
       componentId: "pier.git.changes",
@@ -365,7 +436,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       .mockReturnValueOnce({ kind: "targetGroupMissing" as const })
       .mockReturnValueOnce({ kind: "opened" as const });
 
-    openGitChangesPanel({
+    await openGitChangesPanel({
       getGroupId: () => "group-a",
       panelContext: PANEL_CONTEXT,
       pluginContext: context,
@@ -382,7 +453,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     });
   });
 
-  it("Review 同组多实例时优先复用该组实例", () => {
+  it("Review 同组多实例时优先复用该组实例", async () => {
     const { context, openInstance } = makeContext(true);
     const first = {
       componentId: "pier.git.changes",
@@ -407,7 +478,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       first,
     ]);
 
-    openGitChangesPanel({
+    await openGitChangesPanel({
       getGroupId: () => "group-a",
       panelContext: PANEL_CONTEXT,
       pluginContext: context,
@@ -425,7 +496,7 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
       throw new Error("target group mismatch");
     });
 
-    openGitChangesPanel({
+    await openGitChangesPanel({
       getGroupId: () => "group-a",
       panelContext: PANEL_CONTEXT,
       pluginContext: context,

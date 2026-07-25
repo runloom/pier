@@ -63,6 +63,7 @@ describe("buildWorkspacePanelSnapshots", () => {
     ).toEqual([
       {
         active: false,
+        component: "terminal",
         context: pierContext,
         display: { short: "pier" },
         groupIndex: 0,
@@ -78,6 +79,7 @@ describe("buildWorkspacePanelSnapshots", () => {
       },
       {
         active: false,
+        component: "welcome",
         display: { short: "Terminal" },
         groupIndex: 0,
         id: "welcome-1",
@@ -87,6 +89,7 @@ describe("buildWorkspacePanelSnapshots", () => {
       },
       {
         active: true,
+        component: "terminal",
         context: bayContext,
         display: {
           long: "Claude Code",

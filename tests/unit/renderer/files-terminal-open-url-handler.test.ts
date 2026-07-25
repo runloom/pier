@@ -57,6 +57,9 @@ describe("handleFilesTerminalOpenUrl", () => {
       panels: {
         openInstance,
         listInstances,
+        listInstancesGlobal: vi.fn(async () => []),
+        focusInstance: vi.fn(async () => ({ kind: "focused" as const })),
+        getActiveInstanceId: vi.fn(() => null),
       },
       terminal: {
         getPanelContext,

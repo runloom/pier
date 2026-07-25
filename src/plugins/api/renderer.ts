@@ -31,10 +31,7 @@ import type {
 } from "./renderer-facades.ts";
 import type {
   PluginGroupContentClaim,
-  PluginPanelInstanceOpenResult,
-  PluginPanelInstanceOptions,
-  PluginPanelInstanceSnapshot,
-  PluginPanelRegistration,
+  RendererPluginPanelsFacade,
 } from "./renderer-panels.ts";
 import type { RendererWorkbenchWidgetRegistration } from "./workbench.ts";
 
@@ -60,11 +57,14 @@ export type {
 } from "./renderer-facades.ts";
 export type {
   PluginGroupContentClaim,
+  PluginPanelFocusInstanceResult,
+  PluginPanelGlobalInstanceSnapshot,
   PluginPanelGroupId,
   PluginPanelInstanceOpenResult,
   PluginPanelInstanceOptions,
   PluginPanelInstanceSnapshot,
   PluginPanelRegistration,
+  RendererPluginPanelsFacade,
 } from "./renderer-panels.ts";
 export type {
   RendererWorkbenchWidgetAction,
@@ -431,43 +431,7 @@ export interface RendererPluginContext {
       title: string;
     }): Promise<{ shown: boolean }>;
   };
-  panels: {
-    /**
-     * 当前活动 panel 若属于本插件贡献的组件,返回其 dockview instance id。
-     * 用于 keybinding 分发；非本插件 panel 返回 null。
-     */
-    getActiveContext(): PanelContext | null;
-    getActiveInstanceId(componentId: string): string | null;
-    listInstances(componentId: string): readonly PluginPanelInstanceSnapshot[];
-    updateInstanceParams(
-      componentId: string,
-      instanceId: string,
-      patch: Record<string, unknown>
-    ): boolean;
-    /** 等待当前工作区 panel 布局耐久写入；用于跨身份迁移的提交屏障。 */
-    flushLayout(): Promise<void>;
-    /**
-     * 单例打开指定 panel。panelId 必须在本插件 manifest 的 panels[] 中声明 ——
-     * 不支持打开其它插件贡献的 panel(权限/所有权对称约束)。
-     */
-    open(panelId: string, options?: { context?: PanelContext }): void;
-    openInstance(
-      options: PluginPanelInstanceOptions
-    ): PluginPanelInstanceOpenResult;
-    register(registration: PluginPanelRegistration): () => void;
-    /**
-     * 注册关闭前守卫。仅可为本插件声明的 componentId 注册；返回 false 可否决关闭。
-     */
-    registerCloseGuard(
-      componentId: string,
-      guard: (input: {
-        closingPanelIds?: readonly string[];
-        componentId: string;
-        panelId: string;
-        params?: unknown;
-      }) => boolean | Promise<boolean>
-    ): () => void;
-  };
+  panels: RendererPluginPanelsFacade;
   settings: {
     openSection(section: "environment"): void;
   };

@@ -1,9 +1,11 @@
 import type { PanelSnapshot } from "@shared/contracts/panel.ts";
+import { clonePanelParams } from "@/lib/plugins/host-panel-params.ts";
 import type { PanelDescriptor } from "@/stores/panel-descriptor.store.ts";
 import { panelKindOf } from "./panel-registry.ts";
 
 interface WorkspacePanelLike {
   id: string;
+  params?: Record<string, unknown> | undefined;
   title?: string | undefined;
   view: { contentComponent: string };
 }
@@ -61,13 +63,16 @@ export function buildWorkspacePanelSnapshots(
     const display = descriptor?.display ?? {
       short: panel.title ?? panel.id,
     };
+    const params = clonePanelParams(panel.params);
     return {
       active: panel.id === api.activePanel?.id,
+      component,
       id: panel.id,
       kind: panelKindOf(component),
       ...position,
       ...(descriptor?.context ? { context: descriptor.context } : {}),
       display,
+      ...(params ? { params } : {}),
       ...(descriptor?.tab ? { tab: descriptor.tab } : {}),
     };
   });
