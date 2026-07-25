@@ -13,6 +13,8 @@ export const FILES_FILE_PANEL_ID = "pier.files.filePanel";
 export const FILES_GROUP_VIEW_CONTENT_ID = "pier.files.groupView";
 export const FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID =
   "pier.files.openSelectionAsMarkdown";
+export const FILES_OPEN_SELECTION_PATH_COMMAND_ID =
+  "pier.files.openSelectionPath";
 export const FILES_NEW_FILE_COMMAND_ID = "pier.files.newFile";
 export const FILES_NEW_FOLDER_COMMAND_ID = "pier.files.newFolder";
 export const FILES_RENAME_COMMAND_ID = "pier.files.rename";
@@ -44,6 +46,12 @@ export const FILES_PROJECT_STATUS_ITEM_ID = "pier.files.project";
 export const FILES_PLUGIN_MANIFEST = {
   apiVersion: 1,
   commands: [
+    {
+      category: "file",
+      id: FILES_OPEN_SELECTION_PATH_COMMAND_ID,
+      permissions: ["terminal:read", "file:read", "panel:open"],
+      title: "Open Path",
+    },
     {
       category: "file",
       id: FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,

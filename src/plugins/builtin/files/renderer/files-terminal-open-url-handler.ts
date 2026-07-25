@@ -15,7 +15,7 @@ import {
   longestCoveringAnchor,
   terminalOpenUrlAnchors,
 } from "./files-terminal-open-url-anchors.ts";
-import { parseTerminalOpenUrl } from "./files-terminal-open-url-resolve.ts";
+import { resolveTerminalLocalPathTargets } from "./files-terminal-open-url-resolve.ts";
 import { revealFilesTreePath } from "./files-tree-registry.ts";
 
 type SystemOpenFallbackReason = "open-instance-failed" | "open-project-failed";
@@ -131,6 +131,32 @@ function openDiskFile(
   });
 }
 
+interface DiskTargetParts {
+  absolutePath: string;
+  relativePath: string;
+  root: string;
+}
+
+function diskTargetPartsForAbsolute(
+  absolutePath: string,
+  panelContext: PanelContext | null
+): DiskTargetParts {
+  const anchors = terminalOpenUrlAnchors(panelContext);
+  const anchor = longestCoveringAnchor(absolutePath, anchors);
+  if (anchor) {
+    const relativePath = toRootRelative(anchor, absolutePath);
+    if (relativePath !== null) {
+      return { absolutePath, relativePath, root: anchor };
+    }
+  }
+  const fallback = splitAbsoluteDiskTarget(absolutePath);
+  return {
+    absolutePath,
+    relativePath: fallback.path,
+    root: fallback.root,
+  };
+}
+
 /**
  * Open a disk path in Pier Files.
  *
@@ -143,34 +169,28 @@ function openDiskFile(
 async function openDiskTarget(
   context: RendererPluginContext,
   panelContext: PanelContext | null,
-  root: string,
-  relativePath: string,
-  absolutePath: string
-): Promise<boolean> {
+  parts: DiskTargetParts
+): Promise<"opened" | "missing" | "failed"> {
+  const { absolutePath, relativePath, root } = parts;
   const openContext = withTerminalAnchor(panelContext, root);
 
   if (relativePath === "") {
     if (!openContext) {
-      context.notifications.error(
-        createFilesTranslate(context)(
-          "files.notifications.terminalOpenUrl.invalid",
-          "Cannot open this path."
-        )
-      );
-      return true;
+      return "failed";
     }
     const opened = await openProjectFiles(context, openContext);
     if (!opened.ok) {
-      return await openAbsoluteWithSystem(
+      await openAbsoluteWithSystem(
         context,
         absolutePath,
         "open-project-failed"
       );
+      return "opened";
     }
     globalThis.setTimeout(() => {
       revealFilesTreePath({ path: "", root });
     }, 80);
-    return true;
+    return "opened";
   }
 
   const stat = await context.files.stat({
@@ -179,32 +199,21 @@ async function openDiskTarget(
   });
 
   if (!stat.exists) {
-    context.notifications.error(
-      createFilesTranslate(context)(
-        "files.notifications.terminalOpenUrl.invalid",
-        "Cannot open this path."
-      )
-    );
-    return true;
+    return "missing";
   }
 
   if (stat.isDirectory) {
     if (!openContext) {
-      context.notifications.error(
-        createFilesTranslate(context)(
-          "files.notifications.terminalOpenUrl.invalid",
-          "Cannot open this path."
-        )
-      );
-      return true;
+      return "failed";
     }
     const opened = await openProjectFiles(context, openContext);
     if (!opened.ok) {
-      return await openAbsoluteWithSystem(
+      await openAbsoluteWithSystem(
         context,
         absolutePath,
         "open-project-failed"
       );
+      return "opened";
     }
     globalThis.setTimeout(() => {
       revealFilesTreePath({
@@ -212,19 +221,44 @@ async function openDiskTarget(
         root,
       });
     }, 80);
-    return true;
+    return "opened";
   }
 
   try {
     openDiskFile(context, openContext, root, relativePath);
-    return true;
+    return "opened";
   } catch {
-    return await openAbsoluteWithSystem(
-      context,
-      absolutePath,
-      "open-instance-failed"
-    );
+    await openAbsoluteWithSystem(context, absolutePath, "open-instance-failed");
+    return "opened";
   }
+}
+
+function reportUnresolved(
+  context: RendererPluginContext,
+  reason: "relative-without-cwd" | "unsupported-scheme" | "invalid"
+): void {
+  const t = createFilesTranslate(context);
+  if (reason === "relative-without-cwd") {
+    context.notifications.error(
+      t(
+        "files.notifications.terminalOpenUrl.relativeWithoutCwd",
+        "This terminal has no working directory, so the relative path cannot be opened."
+      )
+    );
+    return;
+  }
+  if (reason === "unsupported-scheme") {
+    context.notifications.error(
+      t(
+        "files.notifications.terminalOpenUrl.unsupportedScheme",
+        "Cannot open this link in Pier."
+      )
+    );
+    return;
+  }
+  context.notifications.error(
+    t("files.notifications.terminalOpenUrl.invalid", "Cannot open this path.")
+  );
 }
 
 export async function handleFilesTerminalOpenUrl(
@@ -232,72 +266,41 @@ export async function handleFilesTerminalOpenUrl(
   event: TerminalOpenUrlEvent
 ): Promise<boolean> {
   const panelContext = context.terminal.getPanelContext(event.panelId);
-  const cwd = panelContext?.cwd ?? null;
-  const parsed = parseTerminalOpenUrl(event.url, cwd);
+  const resolved = resolveTerminalLocalPathTargets(event.url, panelContext);
 
-  if (parsed.kind === "remote") {
+  if (resolved.kind === "remote") {
     return false;
   }
 
-  const t = createFilesTranslate(context);
-  if (parsed.kind === "unresolved") {
-    if (parsed.reason === "relative-without-cwd") {
-      context.notifications.error(
-        t(
-          "files.notifications.terminalOpenUrl.relativeWithoutCwd",
-          "This terminal has no working directory, so the relative path cannot be opened."
-        )
-      );
-    } else if (parsed.reason === "unsupported-scheme") {
-      context.notifications.error(
-        t(
-          "files.notifications.terminalOpenUrl.unsupportedScheme",
-          "Cannot open this link in Pier."
-        )
-      );
-    } else {
-      context.notifications.error(
-        t(
-          "files.notifications.terminalOpenUrl.invalid",
-          "Cannot open this path."
-        )
-      );
-    }
+  if (resolved.kind === "unresolved") {
+    reportUnresolved(context, resolved.reason);
     return true;
   }
 
-  const absolutePath = parsed.path;
-  if (inflight.has(absolutePath)) {
-    return true;
-  }
-  inflight.add(absolutePath);
-  try {
-    const anchors = terminalOpenUrlAnchors(panelContext);
-    const anchor = longestCoveringAnchor(absolutePath, anchors);
-    if (anchor) {
-      const relativePath = toRootRelative(anchor, absolutePath);
-      if (relativePath !== null) {
-        return await openDiskTarget(
-          context,
-          panelContext,
-          anchor,
-          relativePath,
-          absolutePath
-        );
+  // Prefer the first candidate that already exists on disk so agent-relative
+  // paths can fall back from cwd to worktree / project / git roots.
+  for (const absolutePath of resolved.paths) {
+    if (inflight.has(absolutePath)) {
+      return true;
+    }
+    inflight.add(absolutePath);
+    try {
+      const parts = diskTargetPartsForAbsolute(absolutePath, panelContext);
+      const result = await openDiskTarget(context, panelContext, parts);
+      if (result === "opened") {
+        return true;
       }
+      // missing → try next root; failed → still try next when multi-root.
+      if (result === "failed" && resolved.paths.length === 1) {
+        break;
+      }
+    } finally {
+      inflight.delete(absolutePath);
     }
-
-    const fallback = splitAbsoluteDiskTarget(absolutePath);
-    return await openDiskTarget(
-      context,
-      panelContext,
-      fallback.root,
-      fallback.path,
-      absolutePath
-    );
-  } finally {
-    inflight.delete(absolutePath);
   }
+
+  reportUnresolved(context, "invalid");
+  return true;
 }
 
 export function registerFilesTerminalOpenUrlHandler(
