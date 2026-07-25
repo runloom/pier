@@ -22,7 +22,14 @@ import {
   deriveWorktreeCreation,
   sanitizeWorktreeName,
 } from "@shared/worktree-naming.ts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { Controller, useForm } from "react-hook-form";
 import {
   buildFormSchema,
@@ -45,6 +52,7 @@ interface WorktreeCreateOverlayProps {
   close: RendererPluginContentDialogRenderProps["close"];
   context: RendererPluginContext;
   data: WorktreeCreateOverlayData;
+  setFooter: RendererPluginContentDialogRenderProps["setFooter"];
   targetGroupId?: string;
 }
 
@@ -76,6 +84,7 @@ function WorktreeCreateOverlay({
   close,
   context,
   data,
+  setFooter,
   targetGroupId,
 }: WorktreeCreateOverlayProps) {
   const [agentSelection, setAgentSelection] =
@@ -348,9 +357,33 @@ function WorktreeCreateOverlay({
     }
   }
 
+  const worktreeFormId = "worktree-create-form";
+  useLayoutEffect(() => {
+    setFooter(
+      <>
+        <Button
+          onClick={() => {
+            close();
+          }}
+          type="button"
+          variant="outline"
+        >
+          {context.i18n.t("ui.cancel", undefined, "Cancel")}
+        </Button>
+        <Button form={worktreeFormId} type="submit" variant="default">
+          {text("confirm", undefined, "Create")}
+        </Button>
+      </>
+    );
+    return () => {
+      setFooter(null);
+    };
+  }, [close, context.i18n, setFooter, text]);
+
   return (
     <form
       className="flex flex-col gap-6"
+      id={worktreeFormId}
       onSubmit={form.handleSubmit(onSubmit)}
     >
       <FieldGroup className="gap-4">
@@ -423,15 +456,6 @@ function WorktreeCreateOverlay({
 
         <PrepareBadges defaults={data.defaults} text={text} />
       </FieldGroup>
-
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button onClick={closeOverlay} type="button" variant="outline">
-          {context.i18n.t("ui.cancel", undefined, "Cancel")}
-        </Button>
-        <Button type="submit" variant="default">
-          {text("confirm", undefined, "Create")}
-        </Button>
-      </div>
     </form>
   );
 }
@@ -450,11 +474,12 @@ export function openWorktreeCreateOverlay(
       undefined,
       "Create an isolated worktree for this task"
     ),
-    content: ({ close }) => (
+    content: ({ close, setFooter }) => (
       <WorktreeCreateOverlay
         close={close}
         context={context}
         data={data}
+        setFooter={setFooter}
         {...(targetGroupId ? { targetGroupId } : {})}
       />
     ),

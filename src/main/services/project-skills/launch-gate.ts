@@ -192,6 +192,14 @@ export function createManagedAgentLaunchGate(
       return { status: "ready", launchAttemptId };
     }
 
+    if (
+      options.isPierHomeRoot &&
+      (await options.isPierHomeRoot(toIdentity(projectRef).realPath))
+    ) {
+      // Pier Home is an agent cwd for rules/canvases, not a skills project.
+      return { status: "ready", launchAttemptId };
+    }
+
     sweepAttemptFiles(paths.rootKeyFor(toIdentity(projectRef))).catch(
       () => undefined
     );

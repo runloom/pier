@@ -56,6 +56,9 @@ export async function executeEnvironmentCommand(
     }
   } catch (err) {
     if (err instanceof LocalEnvironmentServiceError) {
+      if (err.reason === "pier_home_forbidden") {
+        return failure(requestId, "invalid_command", err.message);
+      }
       return failure(requestId, "not_found", `${err.reason}: ${err.message}`);
     }
     if (isLocalEnvironmentScriptError(err)) {

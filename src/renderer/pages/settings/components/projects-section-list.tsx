@@ -9,7 +9,7 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@pier/ui/item.tsx";
-import { ChevronRight, Folder, FolderPlus } from "lucide-react";
+import { ChevronRight, Folder, FolderPlus, House } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
 import type { ProjectSkillsProjectSummary } from "@/stores/project-skills.store.ts";
 
@@ -22,6 +22,11 @@ function projectBasename(projectRootPath: string): string {
   );
 }
 
+interface ProjectListEntry {
+  kind?: "project" | "pier-home";
+  projectRootPath: string;
+}
+
 export function ProjectsSectionList({
   activeProjectRootPath,
   onAddProject,
@@ -32,16 +37,22 @@ export function ProjectsSectionList({
   activeProjectRootPath: string | null;
   onAddProject: () => void;
   onOpenProject: (projectRootPath: string) => void;
-  projects: readonly { projectRootPath: string }[];
+  projects: readonly ProjectListEntry[];
   skillsProjects: readonly ProjectSkillsProjectSummary[];
 }) {
   const t = useT();
   const sorted = [...projects].sort((a, b) => {
+    // User projects first; Pier Home stays at the bottom as a fixed host entry.
+    const aHome = a.kind === "pier-home" ? 1 : 0;
+    const bHome = b.kind === "pier-home" ? 1 : 0;
+    if (aHome !== bHome) return aHome - bHome;
     const aCurrent = a.projectRootPath === activeProjectRootPath ? 0 : 1;
     const bCurrent = b.projectRootPath === activeProjectRootPath ? 0 : 1;
     if (aCurrent !== bCurrent) return aCurrent - bCurrent;
     return a.projectRootPath.localeCompare(b.projectRootPath);
   });
+
+  const hasUserProjects = projects.some((p) => p.kind !== "pier-home");
 
   return (
     <div className="px-4 pb-4" id="projects">
@@ -63,14 +74,21 @@ export function ProjectsSectionList({
           {t("settings.projects.addProject")}
         </Button>
       </div>
+      {hasUserProjects ? null : (
+        <p className="mb-3 text-muted-foreground text-sm">
+          {t("settings.projects.emptyDescription")}
+        </p>
+      )}
       <ItemGroup>
         {sorted.map((project) => {
-          const isCurrent = project.projectRootPath === activeProjectRootPath;
+          const isHome = project.kind === "pier-home";
+          const isCurrent =
+            !isHome && project.projectRootPath === activeProjectRootPath;
           const skillsSummary = skillsProjects.find(
             (entry) => entry.projectRef.realPath === project.projectRootPath
           );
           let trailing: string | null = null;
-          if (skillsSummary != null) {
+          if (!isHome && skillsSummary != null) {
             if (
               skillsSummary.readStatus === "ok" ||
               skillsSummary.readStatus === "missing-manifest"
@@ -93,21 +111,32 @@ export function ProjectsSectionList({
               variant="outline"
             >
               <ItemMedia variant="icon">
-                <Folder />
+                {isHome ? <House /> : <Folder />}
               </ItemMedia>
               <ItemContent>
                 <ItemTitle className="flex items-center gap-2">
                   <span className="truncate">
-                    {projectBasename(project.projectRootPath)}
+                    {isHome
+                      ? t("settings.projects.pierHomeTitle")
+                      : projectBasename(project.projectRootPath)}
                   </span>
+                  {isHome ? (
+                    <Badge variant="secondary">
+                      {t("settings.projects.pierHomeBadge")}
+                    </Badge>
+                  ) : null}
                   {isCurrent ? (
                     <Badge variant="secondary">
                       {t("settings.skills.currentBadge")}
                     </Badge>
                   ) : null}
                 </ItemTitle>
-                <ItemDescription className="truncate font-mono">
-                  {project.projectRootPath}
+                <ItemDescription
+                  className={isHome ? "truncate" : "truncate font-mono"}
+                >
+                  {isHome
+                    ? t("settings.projects.pierHomePathHint")
+                    : project.projectRootPath}
                 </ItemDescription>
               </ItemContent>
               <ItemActions>

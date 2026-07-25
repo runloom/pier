@@ -10,6 +10,8 @@ import type {
   TerminalStatusBarPrefs,
 } from "@shared/contracts/terminal-status-bar.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
+import type { AgentMcpCatalogService } from "../services/agent-mcp-catalog/service.ts";
+import type { AgentRulesService } from "../services/agent-rules/service.ts";
 import type { AgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import type { AgentDetectionService } from "../services/agents/agent-detection-service.ts";
 import type { AgentUsageService } from "../services/agents/agent-usage-service.ts";
@@ -25,10 +27,12 @@ import type { LocalEnvironmentService } from "../services/local-environments-ser
 import type { ManagedPluginInstallService } from "../services/managed-plugins/install-service.ts";
 import type { PanelContextResolutionControl } from "../services/panel-context-resolver.ts";
 import type { PanelTransferService } from "../services/panel-transfer/panel-transfer-types.ts";
+import type { PierHomeService } from "../services/pier-home/service.ts";
 import type { PluginService } from "../services/plugin-service.ts";
 import type { PluginSettingsService } from "../services/plugin-settings-service.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-gate.ts";
+import type { PierBindingsChannel } from "../services/project-skills/pier-bindings.ts";
 import type { ProjectSkillsService } from "../services/project-skills/service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
 import type { TaskService } from "../services/tasks/task-service.ts";
@@ -42,6 +46,8 @@ import type { PluginDisableTransitionCoordinator } from "./plugin-disable-transi
 export interface PierCoreServices {
   agentDetection: AgentDetectionService;
   agentLaunchGate?: ManagedAgentLaunchGate;
+  agentMcpCatalog?: AgentMcpCatalogService;
+  agentRules?: AgentRulesService;
   agentRuntimeIndex: AgentRuntimeIndexService;
   agentUsage: AgentUsageService;
   ai: AiService;
@@ -68,6 +74,8 @@ export interface PierCoreServices {
     ): Promise<PanelContext>;
   };
   panelTransfer?: PanelTransferService;
+  pierBindings?: PierBindingsChannel;
+  pierHome?: PierHomeService;
   pluginDisableTransitions: PluginDisableTransitionCoordinator;
   pluginSettings: PluginSettingsService;
   plugins: PluginService;

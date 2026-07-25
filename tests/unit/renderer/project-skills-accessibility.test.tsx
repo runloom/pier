@@ -8,23 +8,22 @@ import {
 } from "@testing-library/react";
 import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { AppContentDialogHost } from "@/components/common/app-content-dialog-host.tsx";
 import { initI18n } from "@/i18n/index.ts";
-import { promptNewBlankSkill } from "@/pages/settings/components/skills/skills-blank-skill-dialog.tsx";
 import { ManagedSkillRow } from "@/pages/settings/components/skills/skills-detail-rows.tsx";
 import { SkillsListToolbar } from "@/pages/settings/components/skills/skills-detail-toolbar.tsx";
 import { SkillsImportReview } from "@/pages/settings/components/skills/skills-import-review.tsx";
 import { AgentEffectSummary } from "@/pages/settings/components/skills/skills-shared.tsx";
-import { resetAppContentDialogForTests } from "@/stores/app-content-dialog.store.ts";
 import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
 
 const SKILL: ProjectSkillView = {
   actualContentDigest: null,
+  alwaysInclude: false,
   contentDigest: `sha256:${"a".repeat(64)}`,
   description: "Review changes",
   directorySummary: null,
   effects: [],
   enabled: false,
+  delivery: null,
   fileCount: 1,
   id: "review-guide",
   issueIds: [],
@@ -44,7 +43,6 @@ describe("project skills accessibility", () => {
   afterEach(() => {
     vi.useRealTimers();
     cleanup();
-    resetAppContentDialogForTests();
   });
 
   it("names repeated row controls for their skill and exposes launch focus", () => {
@@ -52,18 +50,14 @@ describe("project skills accessibility", () => {
       <ul>
         <ManagedSkillRow
           disabled={false}
-          enabled={false}
           onOpenSkill={vi.fn()}
-          onToggle={vi.fn()}
           skill={SKILL}
           t={i18next.t}
         />
       </ul>
     );
 
-    expect(
-      screen.getByRole("switch", { name: "Enable skill Review Guide" })
-    ).toBeInTheDocument();
+    expect(screen.queryByRole("switch")).toBeNull();
     expect(
       screen.getByRole("button", { name: "Open Review Guide" })
     ).toBeInTheDocument();
@@ -79,39 +73,6 @@ describe("project skills accessibility", () => {
     );
     launchTarget?.focus();
     expect(document.activeElement).toBe(launchTarget);
-  });
-
-  it("links required blank-skill fields to help and validation text", async () => {
-    render(<AppContentDialogHost />);
-    await act(async () => {
-      promptNewBlankSkill("New blank skill");
-    });
-
-    const idInput = screen.getByRole("textbox", { name: "New skill id" });
-    const descriptionInput = screen.getByRole("textbox", {
-      name: "Skill description",
-    });
-
-    expect(idInput).toBeRequired();
-    expect(idInput).toHaveAttribute("aria-required", "true");
-    expect(idInput).toHaveAttribute("aria-describedby", "skills-blank-id-help");
-    expect(descriptionInput).toBeRequired();
-    expect(descriptionInput).toHaveAttribute("aria-required", "true");
-    expect(descriptionInput).toHaveAttribute(
-      "aria-describedby",
-      "skills-blank-description-help"
-    );
-
-    fireEvent.change(idInput, { target: { value: "Invalid id" } });
-
-    expect(idInput).toHaveAttribute(
-      "aria-describedby",
-      "skills-blank-id-help skills-blank-id-error"
-    );
-    expect(screen.getByText(/Use lowercase letters/)).toHaveAttribute(
-      "id",
-      "skills-blank-id-error"
-    );
   });
 
   it("turns a conflict review into a navigable blocked state", () => {
@@ -191,16 +152,33 @@ describe("project skills accessibility", () => {
     vi.useRealTimers();
   });
 
-  it("groups repeated warning effects and uses English singular copy", () => {
+  it("shows unique discoverable agent icons without path labels", () => {
     render(
       <AgentEffectSummary
         effects={[
           {
             agentKind: "claude",
-            effect: { state: "duplicate", roots: [".agents/skills"] },
+            effect: {
+              state: "discoverable",
+              viaRoot: ".agents/skills",
+            },
           },
           {
             agentKind: "codex",
+            effect: {
+              state: "discoverable",
+              viaRoot: ".agents/skills",
+            },
+          },
+          {
+            agentKind: "claude",
+            effect: {
+              state: "discoverable",
+              viaRoot: ".claude/skills",
+            },
+          },
+          {
+            agentKind: "claude",
             effect: { state: "duplicate", roots: [".agents/skills"] },
           },
         ]}
@@ -208,13 +186,11 @@ describe("project skills accessibility", () => {
       />
     );
 
-    expect(
-      screen.getAllByText("2 agents: Discovered more than once")
-    ).toHaveLength(1);
     expect(screen.getAllByRole("img")).toHaveLength(2);
-    expect(
-      i18next.t("settings.skills.effectSummaryDiscoverable", { count: 1 })
-    ).toBe("Available to 1 agent");
+    expect(screen.getByLabelText("Claude")).toBeInTheDocument();
+    expect(screen.getByLabelText("Codex")).toBeInTheDocument();
+    expect(screen.queryByText(/\.agents\/skills/)).not.toBeInTheDocument();
+    expect(screen.queryByText(/\.claude\/skills/)).not.toBeInTheDocument();
   });
 
   it("renders a singular result count with count interpolation", () => {

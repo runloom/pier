@@ -10,6 +10,7 @@ import {
 } from "@shared/contracts/panel.ts";
 import type { WorktreeCreateProgress } from "@shared/contracts/worktree.ts";
 import { applyAgentStatusHooksPreference } from "../services/agents/integrations/registry.ts";
+import { executeAgentAssetsCommand } from "./agent-assets-commands.ts";
 import { executeAiCommand } from "./ai-commands.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import { mapCommandError } from "./command-error-mapping.ts";
@@ -31,6 +32,7 @@ import {
 } from "./panel-commands.ts";
 import { executePanelTransferCommand } from "./panel-transfer-commands.ts";
 import { authorizeCommand } from "./permissions.ts";
+import { executePierHomeCommand } from "./pier-home-commands.ts";
 import { executePluginCommand } from "./plugin-commands.ts";
 import { executeProjectSkillsCommand } from "./project-skills-commands.ts";
 import {
@@ -349,6 +351,8 @@ async function executeCommandByDomain(
         services,
         onEnvironmentsChanged
       ),
+    (cmd: PierCommand) => executePierHomeCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeAgentAssetsCommand(requestId, cmd, services),
     (cmd: PierCommand) =>
       executeWorktreeCommand(
         requestId,

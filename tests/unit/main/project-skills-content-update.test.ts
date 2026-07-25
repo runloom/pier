@@ -168,6 +168,7 @@ describe("content update / drift acceptance candidates (v8)", () => {
     const draft = {
       deliveryAgents: true,
       deliveryClaude: false,
+      deliveryBySkillId: {},
       enabledBySkillId: {},
       importTokens: [candidate.token],
       deleteSkillIds: [],
@@ -218,6 +219,7 @@ describe("content update / drift acceptance candidates (v8)", () => {
     const draft = {
       deliveryAgents: true,
       deliveryClaude: false,
+      deliveryBySkillId: {},
       enabledBySkillId: {},
       importTokens: [candidate.token],
       deleteSkillIds: [],
@@ -319,6 +321,7 @@ describe("content update / drift acceptance candidates (v8)", () => {
     const draft = {
       deliveryAgents: true,
       deliveryClaude: false,
+      deliveryBySkillId: {},
       enabledBySkillId: { "review-guide": true },
       importTokens: [candidate.token],
       deleteSkillIds: [],
@@ -406,6 +409,7 @@ describe("content update / drift acceptance candidates (v8)", () => {
     const draft = {
       deliveryAgents: true,
       deliveryClaude: false,
+      deliveryBySkillId: {},
       enabledBySkillId: {},
       importTokens: [candidate.token],
       deleteSkillIds: [],
@@ -485,6 +489,7 @@ describe("content update / drift acceptance candidates (v8)", () => {
     const draft = {
       deliveryAgents: true,
       deliveryClaude: false,
+      deliveryBySkillId: {},
       enabledBySkillId: {},
       importTokens: [candidate.token],
       deleteSkillIds: [],
@@ -565,6 +570,7 @@ describe("content update / drift acceptance candidates (v8)", () => {
     const draft = {
       deliveryAgents: true,
       deliveryClaude: false,
+      deliveryBySkillId: {},
       enabledBySkillId: {},
       importTokens: [candidate.token],
       deleteSkillIds: [],
@@ -641,6 +647,7 @@ describe("content update / drift acceptance candidates (v8)", () => {
     const draft = {
       deliveryAgents: true,
       deliveryClaude: false,
+      deliveryBySkillId: {},
       enabledBySkillId: {},
       importTokens: [candidate.token],
       deleteSkillIds: [],

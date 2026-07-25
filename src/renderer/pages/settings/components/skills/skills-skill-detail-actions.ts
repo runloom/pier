@@ -1,9 +1,11 @@
 import type { ProjectRootRef } from "@shared/contracts/project-skills.ts";
+import { resolveSkillDelivery } from "@shared/contracts/project-skills.ts";
 import type { Dispatch, SetStateAction } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
+  type ApplyOutcome,
   emptyDraft,
   useProjectSkillsStore,
 } from "@/stores/project-skills.store.ts";
@@ -16,8 +18,16 @@ function isImportCandidate(value: unknown): value is { token: string } {
   return typeof (value as { token?: unknown }).token === "string";
 }
 
+export interface SkillDiscoveryDraft {
+  enabled: boolean;
+  skillDelivery: { agents: boolean; claude: boolean };
+}
+
 export function useSkillsSkillDetailActions(args: {
+  discoveryDraft: SkillDiscoveryDraft | null;
+  discoveryDirty: boolean;
   editorText: string;
+  hasEditDraft: boolean;
   isSystem: boolean;
   libraryPath: string;
   onBack: () => void;
@@ -25,10 +35,16 @@ export function useSkillsSkillDetailActions(args: {
   prepareRequestRef: { current: number };
   projectRef: ProjectRootRef | null;
   setContent: (content: { skillMd: string; truncated: boolean }) => void;
+  setDiscoveryDraft: (next: SkillDiscoveryDraft | null) => void;
   setEditDraft: (skillId: string, text: string | null) => void;
   setPreparePending: (pending: boolean) => void;
   setRetryNonce: Dispatch<SetStateAction<number>>;
-  skill: { id: string; contentDigest: string } | null;
+  skill: {
+    id: string;
+    contentDigest: string;
+    enabled: boolean;
+    delivery: { agents: boolean; claude: boolean } | null;
+  } | null;
   skillId: string;
   snapshot: {
     manifest?: { delivery?: { agents?: boolean; claude?: boolean } } | null;
@@ -37,14 +53,17 @@ export function useSkillsSkillDetailActions(args: {
 }) {
   const t = useT();
   const {
+    discoveryDraft,
+    discoveryDirty,
     editorText,
-    isSystem,
+    hasEditDraft,
     libraryPath,
     onBack,
     preparePending,
     prepareRequestRef,
     projectRef,
     setContent,
+    setDiscoveryDraft,
     setEditDraft,
     setPreparePending,
     setRetryNonce,
@@ -53,6 +72,13 @@ export function useSkillsSkillDetailActions(args: {
     snapshot,
     writesDisabled,
   } = args;
+
+  function deliveryBaseline() {
+    return {
+      agents: Boolean(snapshot?.manifest?.delivery?.agents),
+      claude: Boolean(snapshot?.manifest?.delivery?.claude),
+    };
+  }
 
   async function copyLibraryPath() {
     try {
@@ -64,10 +90,7 @@ export function useSkillsSkillDetailActions(args: {
   }
 
   async function deleteSkill() {
-    const intent = emptyDraft({
-      agents: Boolean(snapshot?.manifest?.delivery?.agents),
-      claude: Boolean(snapshot?.manifest?.delivery?.claude),
-    });
+    const intent = emptyDraft(deliveryBaseline());
     intent.deleteSkillIds = [skillId];
     const result = await commitSkillsIntent({
       draft: intent,
@@ -78,74 +101,97 @@ export function useSkillsSkillDetailActions(args: {
     }
   }
 
-  async function toggleEnabled(enabled: boolean) {
-    if (writesDisabled || isSystem) return;
-    const intent = emptyDraft({
-      agents: Boolean(snapshot?.manifest?.delivery?.agents),
-      claude: Boolean(snapshot?.manifest?.delivery?.claude),
-    });
-    intent.enabledBySkillId[skillId] = enabled;
-    await commitSkillsIntent({
-      draft: intent,
-      t,
-    });
-  }
+  async function saveEdit(): Promise<ApplyOutcome | "noop"> {
+    if (!(projectRef && skill) || preparePending || writesDisabled) {
+      return "noop";
+    }
+    const contentDirty = hasEditDraft;
+    if (!(contentDirty || discoveryDirty)) {
+      return "noop";
+    }
+    if (contentDirty && editorText.trim().length === 0) {
+      return "noop";
+    }
 
-  async function saveEdit() {
-    if (!(projectRef && skill) || preparePending || writesDisabled) return;
     const requestId = prepareRequestRef.current + 1;
     prepareRequestRef.current = requestId;
     const requestProject = projectRef;
     setPreparePending(true);
+    let preparedToken: string | null = null;
     try {
-      const candidate =
-        await window.pier.projectSkills.importPrepareContentUpdate(
-          requestProject,
-          {
-            skillId: skill.id,
-            baseContentDigest: skill.contentDigest,
-            skillMd: editorText,
-          }
-        );
-      const latestMode = useProjectSkillsStore.getState().mode;
-      if (
-        prepareRequestRef.current !== requestId ||
-        useProjectSkillsStore.getState().projectRef?.realPath !==
-          requestProject.realPath ||
-        latestMode.kind !== "skill-detail" ||
-        latestMode.target.kind !== "managed" ||
-        latestMode.target.skillId !== skillId
-      ) {
-        await discardPreparedCandidate(requestProject, candidate);
-        return;
+      if (contentDirty) {
+        const candidate =
+          await window.pier.projectSkills.importPrepareContentUpdate(
+            requestProject,
+            {
+              skillId: skill.id,
+              baseContentDigest: skill.contentDigest,
+              skillMd: editorText,
+            }
+          );
+        const latestMode = useProjectSkillsStore.getState().mode;
+        if (
+          prepareRequestRef.current !== requestId ||
+          useProjectSkillsStore.getState().projectRef?.realPath !==
+            requestProject.realPath ||
+          latestMode.kind !== "skill-detail" ||
+          latestMode.target.kind !== "managed" ||
+          latestMode.target.skillId !== skillId
+        ) {
+          await discardPreparedCandidate(requestProject, candidate);
+          return "cancelled";
+        }
+        if (!isImportCandidate(candidate)) {
+          await showAppAlert({
+            title: t("settings.skills.editFailed"),
+            body: t("settings.skills.importInvalid"),
+          });
+          return "failed";
+        }
+        preparedToken = candidate.token;
       }
-      if (!isImportCandidate(candidate)) {
-        await showAppAlert({
-          title: t("settings.skills.editFailed"),
-          body: t("settings.skills.importInvalid"),
-        });
-        return;
+
+      const projectDelivery = deliveryBaseline();
+      const intent = emptyDraft(projectDelivery);
+      if (preparedToken) {
+        intent.importTokens = [preparedToken];
       }
-      const intent = emptyDraft({
-        agents: Boolean(snapshot?.manifest?.delivery?.agents),
-        claude: Boolean(snapshot?.manifest?.delivery?.claude),
-      });
-      intent.importTokens = [candidate.token];
+      if (discoveryDirty && discoveryDraft) {
+        intent.enabledBySkillId[skillId] = discoveryDraft.enabled;
+        intent.deliveryBySkillId[skillId] = discoveryDraft.skillDelivery;
+        if (discoveryDraft.skillDelivery.agents) {
+          intent.deliveryAgents = true;
+        }
+        if (discoveryDraft.skillDelivery.claude) {
+          intent.deliveryClaude = true;
+        }
+      }
       const result = await commitSkillsIntent({
         draft: intent,
         t,
       });
-      if (result === "converged") {
-        setEditDraft(skill.id, null);
-        setContent({ skillMd: editorText, truncated: false });
-      } else if (result === "degraded") {
-        setEditDraft(skill.id, null);
-        setContent({ skillMd: editorText, truncated: false });
-      } else if (result === "failed" || result === "cancelled") {
-        await discardPreparedCandidate(requestProject, candidate);
+      if (result === "converged" || result === "degraded") {
+        if (contentDirty) {
+          setEditDraft(skill.id, null);
+          setContent({ skillMd: editorText, truncated: false });
+        }
+        setDiscoveryDraft(null);
+      } else if (
+        (result === "failed" || result === "cancelled") &&
+        preparedToken
+      ) {
+        await discardPreparedCandidate(requestProject, {
+          token: preparedToken,
+        });
       }
+      return result;
     } catch (error) {
       if (prepareRequestRef.current === requestId) {
+        if (preparedToken) {
+          await discardPreparedCandidate(requestProject, {
+            token: preparedToken,
+          });
+        }
         await showAppAlert({
           title: t("settings.skills.editFailed"),
           body: skillsErrorMessage(
@@ -155,6 +201,7 @@ export function useSkillsSkillDetailActions(args: {
           ),
         });
       }
+      return "failed";
     } finally {
       if (prepareRequestRef.current === requestId) {
         setPreparePending(false);
@@ -193,10 +240,7 @@ export function useSkillsSkillDetailActions(args: {
         });
         return;
       }
-      const intent = emptyDraft({
-        agents: Boolean(snapshot?.manifest?.delivery?.agents),
-        claude: Boolean(snapshot?.manifest?.delivery?.claude),
-      });
+      const intent = emptyDraft(deliveryBaseline());
       intent.importTokens = [candidate.token];
       const result = await commitSkillsIntent({
         draft: intent,
@@ -231,6 +275,22 @@ export function useSkillsSkillDetailActions(args: {
     copyLibraryPath,
     deleteSkill,
     saveEdit,
-    toggleEnabled,
+  };
+}
+
+/** Live baseline used to seed / compare the discovery draft. */
+export function liveDiscoveryDraft(args: {
+  enabled: boolean;
+  projectDelivery: { agents: boolean; claude: boolean };
+  skillDelivery: { agents: boolean; claude: boolean } | null;
+}): SkillDiscoveryDraft {
+  const channels = resolveSkillDelivery({
+    enabled: args.enabled,
+    projectDelivery: args.projectDelivery,
+    skillDelivery: args.skillDelivery,
+  });
+  return {
+    enabled: args.enabled && (channels.agents || channels.claude),
+    skillDelivery: channels,
   };
 }

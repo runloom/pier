@@ -31,6 +31,14 @@ export const projectSkillManifestEntrySchema = z
     enabled: z.boolean(),
     contentDigest: contentDigestSchema,
     source: projectSkillSourceSchema,
+    /**
+     * Which Pier projection roots this skill uses. Omitted = inherit the
+     * project-level `manifest.delivery` (legacy manifests).
+     */
+    delivery: z
+      .object({ agents: z.boolean(), claude: z.boolean() })
+      .strict()
+      .optional(),
   })
   .strict();
 
@@ -68,6 +76,46 @@ export function listPierProjectionRoots(
     roots.push(PIER_PROJECTION_ROOT_CLAUDE);
   }
   return roots;
+}
+
+/**
+ * Roots for one skill: project delivery ∩ skill delivery (or inherit project
+ * when skill delivery is omitted). Disabled skills project nowhere.
+ */
+export function listPierProjectionRootsForSkill(args: {
+  enabled: boolean;
+  projectDelivery: ProjectSkillsDelivery;
+  skillDelivery?: ProjectSkillsDelivery | null;
+}): string[] {
+  if (!args.enabled) {
+    return [];
+  }
+  const skill = args.skillDelivery ?? args.projectDelivery;
+  return listPierProjectionRoots({
+    agents: args.projectDelivery.agents && skill.agents,
+    claude: args.projectDelivery.claude && skill.claude,
+  });
+}
+
+/** Effective channel flags for UI / intent (inherit project when omitted). */
+export function resolveSkillDelivery(args: {
+  enabled: boolean;
+  projectDelivery: ProjectSkillsDelivery;
+  skillDelivery?: ProjectSkillsDelivery | null;
+}): ProjectSkillsDelivery {
+  if (!args.enabled) {
+    return { agents: false, claude: false };
+  }
+  if (args.skillDelivery) {
+    return {
+      agents: args.skillDelivery.agents === true,
+      claude: args.skillDelivery.claude === true,
+    };
+  }
+  return {
+    agents: args.projectDelivery.agents === true,
+    claude: args.projectDelivery.claude === true,
+  };
 }
 
 export const projectSkillsManifestSchema = z
@@ -138,6 +186,16 @@ export const projectSkillsDraftSchema = z
     deliveryAgents: z.boolean(),
     deliveryClaude: z.boolean(),
     enabledBySkillId: z.record(skillIdSchema, z.boolean()),
+    /**
+     * Per-skill discovery channels. Absent ids keep the manifest entry’s
+     * delivery (or inherit project delivery when the entry has none).
+     */
+    deliveryBySkillId: z
+      .record(
+        skillIdSchema,
+        z.object({ agents: z.boolean(), claude: z.boolean() }).strict()
+      )
+      .default({}),
     importTokens: z.array(z.string().min(1)),
     deleteSkillIds: z.array(skillIdSchema),
   })

@@ -418,4 +418,52 @@ describe("createLocalEnvironmentService", () => {
       worktreeBindings: [],
     });
   });
+
+  it("upsertPierHome indexes kind without seeding environment.json", async () => {
+    const homePath = await makeDir("pier-home");
+    const canonical = await realpath(homePath);
+    const state = await service.upsertPierHome(homePath);
+    expect(state.projects).toEqual([
+      expect.objectContaining({
+        kind: "pier-home",
+        projectRootPath: canonical,
+        setupCommand: "",
+        cleanupCommand: "",
+      }),
+    ]);
+    await expect(existsProjectFile(canonical)).resolves.toBe(false);
+    await expect(readWrittenState()).resolves.toMatchObject({
+      projects: [{ kind: "pier-home", projectRootPath: canonical }],
+    });
+  });
+
+  it("rejects update/remove/add for pier-home", async () => {
+    const homePath = await makeDir("pier-home");
+    const canonical = await realpath(homePath);
+    const gated = createLocalEnvironmentService({
+      filePath: stateFilePath,
+      now: () => now,
+      processEnvironment: fakeProcessEnvironment(),
+      isPierHomeRoot: async (path) => (await realpath(path)) === canonical,
+    });
+    await gated.upsertPierHome(homePath);
+
+    await expect(
+      gated.updateProject({
+        cleanupCommand: "",
+        copyPatterns: [],
+        env: {},
+        projectRootPath: homePath,
+        setupCommand: "echo hi",
+      })
+    ).rejects.toMatchObject({ reason: "pier_home_forbidden" });
+
+    await expect(
+      gated.removeProject({ projectRootPath: homePath })
+    ).rejects.toMatchObject({ reason: "pier_home_forbidden" });
+
+    await expect(
+      gated.addProject({ projectRootPath: homePath })
+    ).rejects.toMatchObject({ reason: "pier_home_forbidden" });
+  });
 });

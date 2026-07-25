@@ -249,6 +249,7 @@ describe("project-skills contract", () => {
     const draft = {
       deliveryAgents: true,
       deliveryClaude: false,
+      deliveryBySkillId: {},
       enabledBySkillId: { "review-guide": true },
       importTokens: [],
       deleteSkillIds: [],

@@ -128,6 +128,7 @@ export function emptyDraft(
     deleteSkillIds: [],
     deliveryAgents: delivery.agents === true,
     deliveryClaude: delivery.claude === true,
+    deliveryBySkillId: {},
     enabledBySkillId: {},
     importTokens: [],
   };
@@ -138,6 +139,9 @@ export function draftFingerprint(draft: SkillsUiDraft): string {
     deleteSkillIds: [...draft.deleteSkillIds].sort(),
     deliveryAgents: draft.deliveryAgents,
     deliveryClaude: draft.deliveryClaude,
+    deliveryBySkillId: Object.keys(draft.deliveryBySkillId)
+      .sort()
+      .map((id) => [id, draft.deliveryBySkillId[id]]),
     enabledBySkillId: Object.keys(draft.enabledBySkillId)
       .sort()
       .map((id) => [id, draft.enabledBySkillId[id]]),
@@ -152,6 +156,7 @@ type DraftSnapshotBaseline = {
   skills?: readonly {
     id: string;
     enabled: boolean;
+    delivery?: { agents: boolean; claude: boolean } | null;
   }[];
 } | null;
 
@@ -181,6 +186,21 @@ export function draftIsDirty(
   );
   for (const [skillId, enabled] of Object.entries(draft.enabledBySkillId)) {
     if ((baselineEnabled.get(skillId) ?? false) !== enabled) {
+      return true;
+    }
+  }
+  const baselineDelivery = new Map(
+    (snapshot?.skills ?? []).map(
+      (skill) => [skill.id, skill.delivery ?? null] as const
+    )
+  );
+  for (const [skillId, delivery] of Object.entries(draft.deliveryBySkillId)) {
+    const baseline = baselineDelivery.get(skillId);
+    if (
+      !baseline ||
+      baseline.agents !== delivery.agents ||
+      baseline.claude !== delivery.claude
+    ) {
       return true;
     }
   }
@@ -252,7 +272,11 @@ export function normalizeSnapshot(
         description:
           typeof skill.description === "string" ? skill.description : "",
         enabled: skill.enabled === true,
-        managedBy: skill.managedBy === "pier-system" ? "pier-system" : "user",
+        managedBy:
+          skill.managedBy === "pier-system" || skill.managedBy === "pier-bound"
+            ? skill.managedBy
+            : "user",
+        alwaysInclude: skill.alwaysInclude === true,
         fileCount: typeof skill.fileCount === "number" ? skill.fileCount : 0,
         totalBytes: typeof skill.totalBytes === "number" ? skill.totalBytes : 0,
         riskSummary: skill.riskSummary ?? null,

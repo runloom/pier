@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import { listPierProjectionRoots } from "../../../shared/contracts/project-skills.ts";
+import { listPierProjectionRootsForSkill } from "../../../shared/contracts/project-skills.ts";
 import {
   createSkillDiscoveryAdapterRegistry,
   listDuplicateDiscoveryAgentKinds,
@@ -274,6 +274,10 @@ export function createProjectSkillsPlanService(
           candidateBySkillId.get(skillId)?.contentDigest ??
           entry?.contentDigest ??
           "";
+        const skillDelivery =
+          normalizedDraft.deliveryBySkillId[skillId] ?? entry?.delivery ?? null;
+        const previousSkillDelivery = entry?.delivery ?? null;
+        const previousWantEnabled = Boolean(entry?.enabled);
         // Keeping/enabling a skill whose library content no longer matches the
         // manifest digest is blocked as an integrity conflict. Content updates
         // and "use current files" carry a candidate and are exempt because
@@ -310,8 +314,16 @@ export function createProjectSkillsPlanService(
           }
         }
 
-        const projectionRoots = listPierProjectionRoots(delivery);
-        const previousRoots = listPierProjectionRoots(previousDelivery);
+        const projectionRoots = listPierProjectionRootsForSkill({
+          enabled: wantEnabled,
+          projectDelivery: delivery,
+          skillDelivery,
+        });
+        const previousRoots = listPierProjectionRootsForSkill({
+          enabled: previousWantEnabled,
+          projectDelivery: previousDelivery,
+          skillDelivery: previousSkillDelivery,
+        });
         const teardownRoots = previousRoots.filter(
           (root) => !projectionRoots.includes(root)
         );

@@ -15,33 +15,6 @@ import {
 
 let commitInFlight = false;
 
-function noticeAfterSuccessfulApply(draft: SkillsUiDraft): void {
-  const store = useProjectSkillsStore.getState();
-  const tokens = draft.importTokens ?? [];
-  if (tokens.length > 0) {
-    const first = tokens[0];
-    const candidate = first ? store.candidatesByToken[first] : undefined;
-    const importKinds = new Set([
-      "local-import",
-      "project-discovery-import",
-      "template",
-    ]);
-    if (candidate && importKinds.has(candidate.sourceKind)) {
-      const name = candidate.name || candidate.skillId || "";
-      if (name) {
-        store.setRecentImportNotice({ name });
-      }
-    }
-  }
-  const enablementChanged =
-    Object.keys(draft.enabledBySkillId ?? {}).length > 0;
-  const deleted = (draft.deleteSkillIds?.length ?? 0) > 0;
-  const deliveryOnly = !(enablementChanged || deleted) && tokens.length === 0;
-  if (enablementChanged || deleted || tokens.length > 0 || deliveryOnly) {
-    store.setSessionRefreshHint(true);
-  }
-}
-
 /**
  * Product-facing commit primitive: one user action, one transient intent,
  * one plan/confirmation/apply chain. The draft remains an IPC carrier only;
@@ -50,6 +23,16 @@ function noticeAfterSuccessfulApply(draft: SkillsUiDraft): void {
 export async function commitSkillsIntent(args: {
   draft: SkillsUiDraft;
   t: Translate;
+  /**
+   * Skip per-requirement destructive confirmations when the user already
+   * confirmed the outer action (blank add / folder import commit).
+   */
+  skipConfirmations?: boolean;
+  /**
+   * When true, do not show failure/busy/indeterminate alerts — caller owns
+   * user-facing copy (e.g. create content follow-up).
+   */
+  suppressFailureAlerts?: boolean;
 }): Promise<ApplyOutcome> {
   const store = useProjectSkillsStore.getState();
   if (
@@ -58,6 +41,12 @@ export async function commitSkillsIntent(args: {
     store.applyPending ||
     store.writesFrozen
   ) {
+    if (!args.suppressFailureAlerts) {
+      await showAppAlert({
+        title: args.t("settings.skills.actionFailed"),
+        body: args.t("settings.skills.launchOperationBusy"),
+      });
+    }
     return "failed";
   }
 
@@ -66,11 +55,29 @@ export async function commitSkillsIntent(args: {
     store.setDraft(args.draft);
     const plan = await useProjectSkillsStore.getState().planDraft();
     if (!plan) {
+      const message = useProjectSkillsStore.getState().errorMessage;
       useProjectSkillsStore.getState().setDraft(null);
-      await showAppAlert({
-        title: args.t("settings.skills.actionFailed"),
-        body: args.t("settings.skills.actionFailedBody"),
-      });
+      if (!args.suppressFailureAlerts) {
+        const knownCodes = new Set([
+          "action-blocked",
+          "operation-not-applied",
+          "plan-stale",
+          "revision-conflict",
+          "content-conflict",
+        ]);
+        const body =
+          message && !knownCodes.has(message)
+            ? message
+            : skillsErrorMessage(
+                message,
+                args.t,
+                "settings.skills.actionFailedBody"
+              );
+        await showAppAlert({
+          title: args.t("settings.skills.actionFailed"),
+          body,
+        });
+      }
       return "failed";
     }
     if (!plan.applicable) {
@@ -80,17 +87,35 @@ export async function commitSkillsIntent(args: {
         .join("\n");
       useProjectSkillsStore.getState().setDraft(null);
       useProjectSkillsStore.setState({ errorMessage: "action-blocked" });
-      await showAppAlert({
-        title: args.t("settings.skills.actionBlockedTitle"),
-        body: lines || args.t("settings.skills.actionBlockedBody"),
-      });
+      if (!args.suppressFailureAlerts) {
+        await showAppAlert({
+          title: args.t("settings.skills.actionBlockedTitle"),
+          body: lines || args.t("settings.skills.actionBlockedBody"),
+        });
+      }
       return "failed";
     }
 
-    const collected = await collectAcknowledgements({
-      requirements: plan.confirmationRequirements,
-      t: args.t,
-    });
+    const collected = args.skipConfirmations
+      ? {
+          ok: true as const,
+          acknowledgements: plan.confirmationRequirements.map(
+            (requirement) => ({
+              requirementId: requirement.id,
+              nonce: crypto.randomUUID(),
+              ...(requirement.expectedActualTreeDigest === undefined
+                ? {}
+                : {
+                    expectedActualTreeDigest:
+                      requirement.expectedActualTreeDigest,
+                  }),
+            })
+          ),
+        }
+      : await collectAcknowledgements({
+          requirements: plan.confirmationRequirements,
+          t: args.t,
+        });
     if (!collected.ok) {
       useProjectSkillsStore.getState().setDraft(null);
       return "cancelled";
@@ -101,23 +126,33 @@ export async function commitSkillsIntent(args: {
     if (result?.status === "converged") {
       const latest = useProjectSkillsStore.getState();
       if (latest.projectRef) {
-        await latest.loadSnapshot(latest.projectRef);
+        try {
+          await latest.loadSnapshot(latest.projectRef, { quiet: true });
+        } catch {
+          // Apply already landed; refresh is best-effort.
+        }
       }
       latest.setDraft(null);
-      noticeAfterSuccessfulApply(args.draft);
       return "converged";
     }
     if (result?.status === "degraded") {
       const latest = useProjectSkillsStore.getState();
       if (latest.projectRef) {
-        await latest.loadSnapshot(latest.projectRef);
+        try {
+          await latest.loadSnapshot(latest.projectRef, { quiet: true });
+        } catch {
+          // Apply already landed; refresh is best-effort.
+        }
       }
       latest.setDraft(null);
-      noticeAfterSuccessfulApply(args.draft);
       // Project list shows an in-page Retry banner; skill detail does not.
       // Skip for deletes — caller navigates back to the list banner.
       const deleting = (args.draft.deleteSkillIds?.length ?? 0) > 0;
-      if (latest.mode.kind === "skill-detail" && !deleting) {
+      if (
+        latest.mode.kind === "skill-detail" &&
+        !deleting &&
+        !args.suppressFailureAlerts
+      ) {
         await showAppAlert({
           title: args.t("settings.skills.projectionIncomplete"),
           body: args.t("settings.skills.projectionIncompleteBody"),
@@ -126,19 +161,27 @@ export async function commitSkillsIntent(args: {
       return "degraded";
     }
     if (result?.status === "indeterminate") {
+      if (!args.suppressFailureAlerts) {
+        await showAppAlert({
+          title: args.t("settings.skills.applyIndeterminate"),
+          body: args.t("settings.skills.operationNotApplied"),
+        });
+      }
       return "indeterminate";
     }
 
     const message = useProjectSkillsStore.getState().errorMessage;
     useProjectSkillsStore.getState().setDraft(null);
-    await showAppAlert({
-      title: args.t("settings.skills.actionFailed"),
-      body: skillsErrorMessage(
-        message,
-        args.t,
-        "settings.skills.actionFailedBody"
-      ),
-    });
+    if (!args.suppressFailureAlerts) {
+      await showAppAlert({
+        title: args.t("settings.skills.actionFailed"),
+        body: skillsErrorMessage(
+          message,
+          args.t,
+          "settings.skills.actionFailedBody"
+        ),
+      });
+    }
     return "failed";
   } finally {
     commitInFlight = false;
@@ -185,7 +228,7 @@ export async function runRepair(t: Translate): Promise<void> {
       useProjectSkillsStore.setState({ lastApplyOutcome: "converged" });
       const latest = useProjectSkillsStore.getState();
       if (latest.projectRef) {
-        await latest.loadSnapshot(latest.projectRef);
+        await latest.loadSnapshot(latest.projectRef, { quiet: true });
       }
       return;
     }

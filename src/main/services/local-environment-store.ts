@@ -20,7 +20,10 @@ import {
  * 具体 setup/cleanup/env/copyPatterns 由每项目的 `.pier/environment.json` 承担.
  */
 const localEnvironmentIndexEntrySchema = z
-  .object({ projectRootPath: z.string().min(1) })
+  .object({
+    kind: z.enum(["project", "pier-home"]).default("project"),
+    projectRootPath: z.string().min(1),
+  })
   .strict();
 
 export const localEnvironmentGlobalStateSchema = z

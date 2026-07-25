@@ -28,6 +28,8 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/pages/settings/components/environment-section.tsx",
   // 技能项目列表同上。
   "src/renderer/pages/settings/components/skills/skills-project-list.tsx",
+  // 规则文件族列表同上。
+  "src/renderer/pages/settings/components/project-rules-panel.tsx",
   // Composer attachment tile is a fixed 56×56 preview surface, not a control chrome button.
   "src/renderer/panel-kits/terminal/terminal-composer-attachment-rail.tsx",
   // Rich Input mention / attachment autocomplete rows need raw hit targets in the popup list.
@@ -37,6 +39,7 @@ const RAW_BUTTON_OWNERS = new Set([
 const ITEM_AS_CHILD_BUTTON_OWNERS = new Set([
   "src/renderer/pages/settings/components/environment-section.tsx",
   "src/renderer/pages/settings/components/skills/skills-project-list.tsx",
+  "src/renderer/pages/settings/components/project-rules-panel.tsx",
 ]);
 const DETACHED_ITEM_HELPERS = new Map([
   [

@@ -9,6 +9,7 @@ interface LocalEnvironmentProject {
   cleanupCommand: string;
   copyPatterns: string[];
   env: Record<string, string>;
+  kind: "project" | "pier-home";
   projectRootPath: string;
   setupCommand: string;
   updatedAt: number;
@@ -50,6 +51,7 @@ const PROJECT_SNAPSHOT: LocalEnvironmentState = {
       cleanupCommand: "pnpm cleanup:worktree",
       copyPatterns: [".env*"],
       env: { NODE_ENV: "development" },
+      kind: "project",
       projectRootPath: "/repo/pier",
       setupCommand: "pnpm setup:worktree",
       updatedAt: 21,
@@ -103,7 +105,10 @@ describe("useLocalEnvironmentsStore", () => {
     snapshotMock.mockReset();
     updateMock.mockReset();
     worktreeBindingMock.mockReset();
-    useLocalEnvironmentsStore.setState(EMPTY_SNAPSHOT as never);
+    useLocalEnvironmentsStore.setState({
+      ...EMPTY_SNAPSHOT,
+      hydration: "ready",
+    } as never);
     vi.stubGlobal("window", {
       ...window,
       pier: {
@@ -130,9 +135,10 @@ describe("useLocalEnvironmentsStore", () => {
   });
 
   it("starts from the empty local-environment snapshot before IPC hydration", () => {
-    expect(useLocalEnvironmentsStore.getInitialState()).toMatchObject(
-      EMPTY_SNAPSHOT
-    );
+    expect(useLocalEnvironmentsStore.getInitialState()).toMatchObject({
+      ...EMPTY_SNAPSHOT,
+      hydration: "pending",
+    });
   });
 
   it("initLocalEnvironments hydrates from environments.snapshot and attaches one broadcast listener", async () => {
@@ -147,6 +153,7 @@ describe("useLocalEnvironmentsStore", () => {
     expect(useLocalEnvironmentsStore.getState().worktreeBindings).toEqual(
       PROJECT_SNAPSHOT.worktreeBindings
     );
+    expect(useLocalEnvironmentsStore.getState().hydration).toBe("ready");
     expect(changedCallback).not.toBeNull();
   });
 

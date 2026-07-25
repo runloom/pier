@@ -4,7 +4,6 @@ import { go } from "@codemirror/lang-go";
 import { html } from "@codemirror/lang-html";
 import { javascript } from "@codemirror/lang-javascript";
 import { json } from "@codemirror/lang-json";
-import { markdown } from "@codemirror/lang-markdown";
 import { python } from "@codemirror/lang-python";
 import { rust } from "@codemirror/lang-rust";
 import { xml } from "@codemirror/lang-xml";
@@ -17,6 +16,7 @@ import { standardSQL } from "@codemirror/legacy-modes/mode/sql";
 import { swift } from "@codemirror/legacy-modes/mode/swift";
 import { toml } from "@codemirror/legacy-modes/mode/toml";
 import type { Extension } from "@codemirror/state";
+import { pierMarkdownLanguage } from "@shared/source-editor/markdown-language.ts";
 import type { FilesDocumentLanguage } from "./files-document-types.ts";
 
 // Cursor 参考:每个 language id 对应 CodeMirror 里一段“语言 extension”。
@@ -53,7 +53,7 @@ export function cmLanguageExtension(
     case "kotlin":
       return StreamLanguage.define(kotlin);
     case "markdown":
-      return markdown();
+      return pierMarkdownLanguage();
     case "python":
       return python();
     case "ruby":

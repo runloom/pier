@@ -4,8 +4,30 @@
 
 ## [Unreleased]
 
+### Added
+
+- **Agent Assets：MCP 发现（规则 UI defer）。** 设置 → 项目详情保留「MCP」
+  只读发现；「规则」Tab 暂不展示（产品面收窄为 Skills + MCP，多会话 /
+  Canvas 以技能为主）。本机工作台详情为技能 → MCP；仓库项目为
+  环境 → 技能 → MCP → 常规。
+- **Pier Home 技能库 + 项目 pierBindings（主链路）。** `{userData}/pier-home/skills/library`
+  CRUD（`pierHome.skills.*`，含 `setAlwaysInclude`）；每项目
+  `pier-bindings.json` 绑定/解绑（`skills.pierBindings.*`）；ensureReady 与系统
+  技能共用投影通道。本机工作台 Skills：库编辑与智能体全局只读均二级弹窗
+  （CodeMirror）；全局仅打开预览（无 Finder / 采纳）；库编辑可开关「始终包含」；
+  行上展示可用智能体。项目：Pier badge、「从本机库添加」、「从本项目移除」。
+  规则超限文件仍可在 Pier 中打开。
+
 ### Fixed
 
+- **Pier Home 技能装入收敛。** 删除库技能 / 改「始终包含」/ 编辑库正文后会
+  fan-out `ensureReady`，卸掉或刷新各项目的发布副本与发现根 symlink；手动绑定
+  支持 per-bind delivery（可选 Claude）。ledger 升为 v2 `bindings[]`。
+- **Pier Home fan-out / 投影可观测性。** 无已知项目时 converge 不再静默成功；
+  `ensureReady` blocked 在 converge / bind / unbind 中按失败处理；打开项目技能
+  snapshot 会 best-effort 自愈并把 blocked issues 并入 health；删除始终包含技能
+  改为先删库再 converge（避免删前再投递）；始终包含默认投递 agents；错误软链
+  校验目标后交给 repair；损坏的 `pier-bindings.json` 抛错而非静默清空。
 - **增强输入图片/附件路径重复。** Lexical chip 已把绝对路径写进正文后，
   发送载荷不再无条件把附件轨路径再拼一遍前缀，避免智能体侧看到两份同一
   图片路径。
@@ -18,6 +40,14 @@
 
 ### Changed
 
+- **Pier Home → 项目装入语义钉死为发布副本。** 装入是复制进项目
+  `.pier/skills/library` 再投影，不是指向本机库的实时链接；在技能库编辑后会
+  更新已装入项目的副本。见 agent-assets 规格 §7.5。
+- **项目设置 Skills/MCP IA 收敛为 v5。** 智能体全局 `~/` 默认只读（打开/
+  Reveal，可选采纳到 Pier 库）；项目技能三来源用轻分组+badge；「始终包含」
+  为 Pier 行锁定态而非第四来源；Pier 绑定文案为「从本项目移除」。见
+  `docs/superpowers/specs/2026-07-23-agent-assets-home-and-instructions-design.md`
+  §0 与原型 `pier-home-binding-proto-flows.canvas.tsx`。
 - **增强输入升级为 Lexical 结构化编辑器（Phase A / B）。** 按需增强输入从
   `textarea` 换成 Lexical plain-text 编辑器：空草稿方向键/Tab/Enter 透传
   TUI、`[#n]` 合法/越界着色、Enter 发送由 Lexical 命令优先处理；大粘贴

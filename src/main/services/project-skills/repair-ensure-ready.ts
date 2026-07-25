@@ -14,6 +14,7 @@ import type { ProjectSkillsLock } from "./lock.ts";
 import {
   type EnsureReadyResult,
   type RepairContext,
+  readManifestState,
   toIdentity,
 } from "./repair-log.ts";
 import {
@@ -39,6 +40,18 @@ export interface EnsureReadyDeps {
   disableEnsureReadyRepair?: boolean;
   lock: ProjectSkillsLock;
   /**
+   * Pier Home library → project bind channel (design 2026-07-23 §0.7).
+   * Reconciled alongside system skills; projections share the same plan input.
+   */
+  pierBindings?: {
+    reconcile(args: {
+      manifestSkillIds?: ReadonlySet<string>;
+      projectIdentity: StableProjectIdentity;
+      rootKey: string;
+      systemSkillIds?: ReadonlySet<string>;
+    }): Promise<{ desiredProjections: DesiredSystemProjection[] }>;
+  };
+  /**
    * Pier system skills channel (design v8 §8): reconciled inside the
    * ensureReady lock before the launch decision — injection completes before
    * spawn or the launch is blocked.
@@ -49,6 +62,7 @@ export interface EnsureReadyDeps {
       rootKey: string;
     }): Promise<{ desiredProjections: DesiredSystemProjection[] }>;
   };
+  systemSkillViews?: (rootKey: string) => Promise<Array<{ id: string }>>;
 }
 
 export async function ensureReady(
@@ -101,20 +115,63 @@ export async function ensureReady(
     // skills inside the same lock — injection completes before spawn,
     // failure blocks the launch (default no-launch on failure).
     let desiredSystemProjections: DesiredSystemProjection[] = [];
-    if (deps.systemSkills) {
+    const capabilityChannels = [
+      deps.systemSkills
+        ? { name: "systemSkills" as const, channel: deps.systemSkills }
+        : null,
+      deps.pierBindings
+        ? { name: "pierBindings" as const, channel: deps.pierBindings }
+        : null,
+    ].filter(
+      (
+        entry
+      ): entry is {
+        name: "systemSkills" | "pierBindings";
+        channel: NonNullable<typeof deps.systemSkills>;
+      } => entry !== null
+    );
+    let manifestSkillIds: ReadonlySet<string> = new Set();
+    let systemSkillIds: ReadonlySet<string> = new Set();
+    if (deps.pierBindings) {
       try {
-        const systemResult = await deps.systemSkills.reconcile({
+        const manifestState = await readManifestState(live.realPath);
+        if (manifestState.status === "present") {
+          manifestSkillIds = new Set(
+            manifestState.manifest.skills.map((s) => s.id)
+          );
+        }
+      } catch {
+        // Retirement falls back to digests-only without manifest ids.
+      }
+      if (deps.systemSkillViews) {
+        try {
+          const views = await deps.systemSkillViews(rootKey);
+          systemSkillIds = new Set(views.map((v) => v.id));
+        } catch {
+          // Ignore.
+        }
+      }
+    }
+    for (const { name, channel } of capabilityChannels) {
+      try {
+        const result = await channel.reconcile({
           projectIdentity: live,
           rootKey,
+          ...(name === "pierBindings"
+            ? { manifestSkillIds, systemSkillIds }
+            : {}),
         });
-        desiredSystemProjections = systemResult.desiredProjections;
+        desiredSystemProjections = [
+          ...desiredSystemProjections,
+          ...result.desiredProjections,
+        ];
       } catch (error) {
         const issue = buildProjectSkillsIssue({
           code: "projection-missing",
           scope: "project",
           checkedAt: ctx.now(),
           evidence: {
-            systemSkills: true,
+            [name]: true,
             message: error instanceof Error ? error.message : String(error),
           },
         });

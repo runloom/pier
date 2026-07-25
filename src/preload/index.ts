@@ -14,6 +14,7 @@ import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import type { WindowCreateResult } from "@shared/contracts/window.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { contextBridge, ipcRenderer } from "electron";
+import { agentAssetsApi, type PierAgentAssetsAPI } from "./agent-assets-api.ts";
 import {
   agentRuntimeIndexApi,
   type PierAgentRuntimeIndexAPI,
@@ -51,6 +52,12 @@ import {
   createPanelTransferApi,
   type PierPanelTransferAPI,
 } from "./panel-transfer-api.ts";
+import {
+  type PierHomeSkillsAPI,
+  type PierPierBindingsAPI,
+  pierBindingsApi,
+  pierHomeSkillsApi,
+} from "./pier-home-skills-api.ts";
 import {
   type AppPreloadApi,
   type AppUpdatePreloadApi,
@@ -125,6 +132,7 @@ import type {
 import type { PierWindowNsAPI } from "./window-api.ts";
 
 export interface PierWindowAPI {
+  agentAssets: PierAgentAssetsAPI;
   agentRuntimeIndex: PierAgentRuntimeIndexAPI;
   agents: PierAgentsAPI;
   ai: PierAiAPI;
@@ -152,6 +160,8 @@ export interface PierWindowAPI {
   menu: PierMenuAPI;
   notifications: PierNotificationsAPI;
   panelTransfer: PierPanelTransferAPI;
+  pierBindings: PierPierBindingsAPI;
+  pierHomeSkills: PierHomeSkillsAPI;
   pluginRpc: PluginRpcPreloadApi;
   pluginSettings: PierPluginSettingsAPI;
   plugins: PierPluginsAPI;
@@ -321,6 +331,7 @@ const mediaPreviewApi = createMediaPreviewApi({
 
 const api: PierWindowAPI = {
   agents: agentsApi,
+  agentAssets: agentAssetsApi,
   appQuit: appQuitApi,
   agentRuntimeIndex: agentRuntimeIndexApi,
   foregroundActivity: foregroundActivityApi,
@@ -351,6 +362,8 @@ const api: PierWindowAPI = {
   pluginSettings: pluginSettingsApi,
   preferences: preferencesApi,
   projectSkills: projectSkillsApi,
+  pierHomeSkills: pierHomeSkillsApi,
+  pierBindings: pierBindingsApi,
   rendererCommand: rendererCommandApi,
   settings: settingsApi,
   systemStats: systemStatsApi,

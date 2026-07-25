@@ -2,7 +2,7 @@ import { readlink } from "node:fs/promises";
 import { join } from "node:path";
 import {
   type ProjectRootRef as ContractProjectRootRef,
-  listPierProjectionRoots,
+  listPierProjectionRootsForSkill,
 } from "../../../shared/contracts/project-skills.ts";
 import { buildProjectSkillsIssue, type ProjectSkillsIssue } from "./health.ts";
 import {
@@ -229,7 +229,11 @@ export async function buildRepairPlan(
   for (const entry of manifest.skills) {
     if (!entry.enabled) continue;
 
-    const roots = listPierProjectionRoots(manifest.delivery);
+    const roots = listPierProjectionRootsForSkill({
+      enabled: true,
+      projectDelivery: manifest.delivery,
+      skillDelivery: entry.delivery ?? null,
+    });
 
     // The manifest digest is the expected content, but the library tree may
     // have changed underneath. Drifted or

@@ -4,7 +4,6 @@ import { Card, CardContent, CardHeader, CardTitle } from "@pier/ui/card.tsx";
 import { ItemGroup } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import {
@@ -65,15 +64,6 @@ export function SkillsProjectDetail({
     s.errorMessage === "operation-not-applied" ? s.draft : null
   );
   const lastApplyOutcome = useProjectSkillsStore((s) => s.lastApplyOutcome);
-  const recentImportNotice = useProjectSkillsStore((s) => s.recentImportNotice);
-  const sessionRefreshHint = useProjectSkillsStore((s) => s.sessionRefreshHint);
-  const setRecentImportNotice = useProjectSkillsStore(
-    (s) => s.setRecentImportNotice
-  );
-  const setSessionRefreshHint = useProjectSkillsStore(
-    (s) => s.setSessionRefreshHint
-  );
-  const lastPlan = useProjectSkillsStore((s) => s.lastPlan);
 
   const [filter, setFilter] = useState<SkillsFilterId>("all");
   const [query, setQuery] = useState("");
@@ -89,8 +79,10 @@ export function SkillsProjectDetail({
     };
   }, []);
 
-  const writesDisabled =
-    writesFrozen || reloadRequired || planPending || applyPending;
+  // Hard locks only. plan/apply busy must not grey out every row switch —
+  // that was painting intermediate commit chrome onto the list.
+  const writesDisabled = writesFrozen || reloadRequired;
+  const commitBusy = planPending || applyPending;
 
   useEffect(() => {
     if (!focusSkillId) return;
@@ -123,30 +115,19 @@ export function SkillsProjectDetail({
     filteredUnmanaged.length +
     filteredUserGlobal.length;
 
-  const {
-    handleImportFolder,
-    handleReload,
-    handleRetryOperation,
-    handleToggle,
-  } = useSkillsProjectDetailActions({
-    onReviewCandidate,
-    preparePending,
-    prepareRequestRef,
-    projectRef,
-    retryDraft,
-    setPreparePending,
-    snapshot,
-    writesDisabled,
-  });
+  const { handleImportFolder, handleReload, handleRetryOperation } =
+    useSkillsProjectDetailActions({
+      onReviewCandidate,
+      preparePending,
+      prepareRequestRef,
+      projectRef,
+      retryDraft,
+      setPreparePending,
+    });
 
   if (!projectRef) {
     return null;
   }
-
-  const riskyGitStates =
-    lastPlan?.gitStates?.filter(
-      (entry) => entry.state === "tracked" || entry.state === "untracked"
-    ) ?? [];
 
   let bannerVariant: "default" | "warning" | "destructive" = "destructive";
   let bannerTitle = t("settings.skills.loadFailed");
@@ -182,7 +163,7 @@ export function SkillsProjectDetail({
     <div className="flex min-w-0 flex-col gap-4">
       <SkillsDetailHeader
         activeProjectRootPath={activeProjectRootPath}
-        addDisabled={writesDisabled || preparePending}
+        addDisabled={writesDisabled || commitBusy || preparePending}
         hideBack={hideBack}
         onBack={onBack}
         projectRef={projectRef}
@@ -190,7 +171,7 @@ export function SkillsProjectDetail({
       />
 
       <Card
-        aria-busy={planPending || applyPending}
+        aria-busy={commitBusy}
         className="overflow-visible border border-border shadow-none ring-0"
       >
         <CardHeader>
@@ -199,103 +180,6 @@ export function SkillsProjectDetail({
           </CardTitle>
         </CardHeader>
         <CardContent className="flex flex-col gap-3">
-          {recentImportNotice ? (
-            <Alert>
-              <AlertTitle>
-                {t("settings.skills.importAddedTitle", {
-                  name: recentImportNotice.name,
-                })}
-              </AlertTitle>
-              <AlertDescription>
-                <span className="flex flex-col gap-2">
-                  {t("settings.skills.importAddedBody")}
-                  <span className="flex justify-end">
-                    <Button
-                      onClick={() => {
-                        setRecentImportNotice(null);
-                      }}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {t("settings.skills.dismiss")}
-                    </Button>
-                  </span>
-                </span>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          {sessionRefreshHint ? (
-            <Alert>
-              <AlertTitle>
-                {t("settings.skills.sessionRefreshTitle")}
-              </AlertTitle>
-              <AlertDescription>
-                <span className="flex flex-col gap-2">
-                  {t("settings.skills.sessionRefreshBody")}
-                  <span className="flex justify-end">
-                    <Button
-                      onClick={() => {
-                        setSessionRefreshHint(false);
-                      }}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {t("settings.skills.dismiss")}
-                    </Button>
-                  </span>
-                </span>
-              </AlertDescription>
-            </Alert>
-          ) : null}
-          {riskyGitStates.length > 0 ? (
-            <Alert>
-              <AlertTitle>{t("settings.skills.gitStatusTitle")}</AlertTitle>
-              <AlertDescription>
-                <span className="flex flex-col gap-2">
-                  <ul className="flex flex-col gap-1 text-sm">
-                    {riskyGitStates.map((entry) => (
-                      <li key={entry.relativeTarget}>
-                        <span className="font-mono">
-                          {entry.relativeTarget}
-                        </span>
-                        {" · "}
-                        {t(`settings.skills.gitState.${entry.state}`)}
-                      </li>
-                    ))}
-                  </ul>
-                  <p>{t("settings.skills.gitIgnoreHint")}</p>
-                  <span className="flex justify-end">
-                    <Button
-                      onClick={() => {
-                        const text = [
-                          ".agents/skills/",
-                          ".claude/skills/",
-                        ].join("\n");
-                        navigator.clipboard
-                          .writeText(text)
-                          .then(() => {
-                            toast.success(t("settings.skills.copySuccess"));
-                          })
-                          .catch(() => {
-                            showAppAlert({
-                              title: t("settings.skills.copyFailed"),
-                              body: t("settings.skills.copyFailed"),
-                            }).catch(() => undefined);
-                          });
-                      }}
-                      size="sm"
-                      type="button"
-                      variant="outline"
-                    >
-                      {t("settings.skills.copyGitIgnore")}
-                    </Button>
-                  </span>
-                </span>
-              </AlertDescription>
-            </Alert>
-          ) : null}
           {reloadRequired || writesFrozen || errorMessage ? (
             <SkillsDetailBanner
               {...(bannerActionLabel === undefined
@@ -323,7 +207,7 @@ export function SkillsProjectDetail({
                   {t("settings.skills.projectionIncompleteBody")}
                   <span className="flex justify-end">
                     <Button
-                      disabled={writesDisabled}
+                      disabled={writesDisabled || commitBusy}
                       onClick={() => {
                         runRepair(t).catch(() => undefined);
                       }}
@@ -381,14 +265,27 @@ export function SkillsProjectDetail({
             <ItemGroup>
               {filteredSkills.map((skill) => (
                 <ManagedSkillRow
-                  disabled={writesDisabled}
-                  enabled={skill.enabled}
+                  disabled={writesDisabled || commitBusy}
                   key={skill.id}
                   onOpenSkill={(skillId) => {
                     onOpenSkill({ kind: "managed", skillId });
                   }}
-                  onToggle={(skillId, checked) => {
-                    handleToggle(skillId, checked).catch(() => undefined);
+                  onUnbindPier={(skillId) => {
+                    if (!projectRef || writesDisabled || commitBusy) return;
+                    window.pier.pierBindings
+                      .unbind(projectRef, skillId)
+                      .then(async () => {
+                        await useProjectSkillsStore
+                          .getState()
+                          .loadSnapshot(projectRef, { quiet: true });
+                      })
+                      .catch((err: unknown) => {
+                        showAppAlert({
+                          title: t("settings.skills.removeFromProjectFailed"),
+                          body:
+                            err instanceof Error ? err.message : String(err),
+                        }).catch(() => undefined);
+                      });
                   }}
                   skill={skill}
                   t={t}
@@ -412,13 +309,6 @@ export function SkillsProjectDetail({
                 <UserGlobalSkillRow
                   entry={entry}
                   key={`${entry.root}/${entry.directoryName}`}
-                  onView={(target) => {
-                    onOpenSkill({
-                      kind: "user-global",
-                      root: target.root,
-                      directoryName: target.directoryName,
-                    });
-                  }}
                   t={t}
                 />
               ))}

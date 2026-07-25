@@ -1,4 +1,3 @@
-import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
 import {
   Empty,
@@ -8,8 +7,8 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
-import { Tabs, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
-import { ArrowLeft, FolderPlus } from "lucide-react";
+import { Skeleton } from "@pier/ui/skeleton.tsx";
+import { FolderPlus } from "lucide-react";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
@@ -19,32 +18,26 @@ import { useLocalEnvironmentsStore } from "@/stores/local-environments.store.ts"
 import { useActiveDescriptor } from "@/stores/panel-descriptor.store.ts";
 import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
+import type { EnvironmentEditorHandle } from "./environment-editor.tsx";
+import { ProjectsSectionDetail } from "./projects-section-detail.tsx";
 import {
-  EnvironmentEditor,
-  type EnvironmentEditorHandle,
-} from "./environment-editor.tsx";
-import { ProjectGeneralPanel } from "./project-general-panel.tsx";
+  defaultTabFor,
+  isPierHomeSkillsDirty,
+  isTabAllowedForProject,
+  leaveAllSkillsTransientState,
+  projectBasename,
+} from "./projects-section-helpers.ts";
 import { ProjectsSectionList } from "./projects-section-list.tsx";
-import { SkillsAddMenu } from "./skills/skills-add-menu.tsx";
-import { leaveSkillsTransientState } from "./skills/skills-shared.tsx";
-import { SkillsSection } from "./skills-section.tsx";
-
-const PATH_SEPARATOR_RE = /[\\/]/;
-
-function projectBasename(projectRootPath: string): string {
-  return (
-    projectRootPath.split(PATH_SEPARATOR_RE).filter(Boolean).at(-1) ??
-    projectRootPath
-  );
-}
 
 /**
  * Unified project settings shell: shared project list, then Environment /
- * Skills / General tabs. Domain logic stays in environment + skills modules.
+ * Skills / MCP / General (Rules deferred). Domain logic stays in environment +
+ * skills + MCP modules.
  */
 export function ProjectsSection() {
   const t = useT();
   const projects = useLocalEnvironmentsStore((s) => s.projects);
+  const hydration = useLocalEnvironmentsStore((s) => s.hydration);
   const worktreeBindings = useLocalEnvironmentsStore((s) => s.worktreeBindings);
   const addProject = useLocalEnvironmentsStore((s) => s.addProject);
   const removeProject = useLocalEnvironmentsStore((s) => s.removeProject);
@@ -68,16 +61,44 @@ export function ProjectsSection() {
   const [initializedFromActive, setInitializedFromActive] = useState(false);
   const [envDirty, setEnvDirty] = useState(false);
   const editorRef = useRef<EnvironmentEditorHandle | null>(null);
+  const selectedKindRef = useRef<"project" | "pier-home" | null>(null);
 
   useEffect(() => {
     if (selected) return;
     loadSkillsProjects().catch(() => undefined);
   }, [loadSkillsProjects, selected]);
 
+  /**
+   * Select a project/Home entry. Reset the active tab only when the entry
+   * kind changes (Home ↔ project) so Environment/General do not stick onto
+   * Home, and Home's narrower tab set is not reused on a normal project.
+   * Reads projects from the store so callers that await a mutation (e.g. add)
+   * see the post-write snapshot, not a stale render closure.
+   */
+  const focusProject = useCallback(
+    (projectRootPath: string) => {
+      const target = useLocalEnvironmentsStore
+        .getState()
+        .projects.find((p) => p.projectRootPath === projectRootPath);
+      if (!target) return;
+      const isPierHome = target.kind === "pier-home";
+      const nextKind = isPierHome ? "pier-home" : "project";
+      const kindChanged =
+        selectedKindRef.current !== null &&
+        selectedKindRef.current !== nextKind;
+      if (kindChanged || !isTabAllowedForProject(projectsTab, isPierHome)) {
+        setProjectsTab(defaultTabFor(isPierHome));
+      }
+      selectedKindRef.current = nextKind;
+      setSelected(projectRootPath);
+    },
+    [projectsTab, setProjectsTab]
+  );
+
   useEffect(() => {
     if (projectsFocusPath) {
       if (projects.some((p) => p.projectRootPath === projectsFocusPath)) {
-        setSelected(projectsFocusPath);
+        focusProject(projectsFocusPath);
       }
       clearProjectsFocusPath();
       return;
@@ -89,12 +110,13 @@ export function ProjectsSection() {
       activeProjectRootPath &&
       projects.some((p) => p.projectRootPath === activeProjectRootPath)
     ) {
-      setSelected(activeProjectRootPath);
+      focusProject(activeProjectRootPath);
       setInitializedFromActive(true);
     }
   }, [
     activeProjectRootPath,
     clearProjectsFocusPath,
+    focusProject,
     initializedFromActive,
     projects,
     projectsFocusPath,
@@ -104,6 +126,7 @@ export function ProjectsSection() {
   useEffect(() => {
     if (selected && !projects.some((p) => p.projectRootPath === selected)) {
       setSelected(null);
+      selectedKindRef.current = null;
     }
   }, [selected, projects]);
 
@@ -111,6 +134,15 @@ export function ProjectsSection() {
     selected === null
       ? null
       : (projects.find((p) => p.projectRootPath === selected) ?? null);
+
+  useEffect(() => {
+    if (!focused) return;
+    const isPierHome = focused.kind === "pier-home";
+    selectedKindRef.current = isPierHome ? "pier-home" : "project";
+    if (!isTabAllowedForProject(projectsTab, isPierHome)) {
+      setProjectsTab(defaultTabFor(isPierHome));
+    }
+  }, [focused, projectsTab, setProjectsTab]);
 
   const guardEnvDirty = useCallback(async (): Promise<boolean> => {
     if (!(envDirty && focused)) {
@@ -130,6 +162,7 @@ export function ProjectsSection() {
     registerSectionGuard("projects", {
       canLeave: () => {
         if (envDirty) return false;
+        if (isPierHomeSkillsDirty()) return false;
         const state = useProjectSkillsStore.getState();
         return (
           Object.keys(state.editDraftBySkillId).length === 0 &&
@@ -140,13 +173,10 @@ export function ProjectsSection() {
         );
       },
       leave: async () => {
-        // Confirm env discard first, but only clear envDirty after skills
-        // leave also succeeds — otherwise a frozen apply would drop the
-        // dirty bit and silently discard environment edits on the next leave.
         if (envDirty && !(await guardEnvDirty())) {
           return false;
         }
-        if (!(await leaveSkillsTransientState(t))) {
+        if (!(await leaveAllSkillsTransientState(t))) {
           return false;
         }
         if (envDirty) {
@@ -164,11 +194,12 @@ export function ProjectsSection() {
     if (!(await guardEnvDirty())) {
       return;
     }
-    if (!(await leaveSkillsTransientState(t))) {
+    if (!(await leaveAllSkillsTransientState(t))) {
       return;
     }
     setEnvDirty(false);
     setSelected(null);
+    selectedKindRef.current = null;
     useProjectSkillsStore.getState().selectProject(null);
   }
 
@@ -178,35 +209,32 @@ export function ProjectsSection() {
     }
     const state = useProjectSkillsStore.getState();
     const needsSkillsLeave =
+      isPierHomeSkillsDirty() ||
       Object.keys(state.editDraftBySkillId).length > 0 ||
       state.mode.kind === "import-review" ||
       state.planPending ||
       state.applyPending ||
       state.writesFrozen;
 
-    const switchTo = async (clearEnvDirty: boolean) => {
-      if (needsSkillsLeave && !(await leaveSkillsTransientState(t))) {
+    const switchTo = async (clearDirty: boolean) => {
+      if (needsSkillsLeave && !(await leaveAllSkillsTransientState(t))) {
         return;
       }
-      if (clearEnvDirty) {
+      if (clearDirty) {
         setEnvDirty(false);
       }
-      setSelected(projectRootPath);
+      focusProject(projectRootPath);
     };
 
-    // Keep the common (clean) path synchronous so list→detail works without
-    // waiting on a microtask after click.
     if (!(envDirty || needsSkillsLeave)) {
-      setSelected(projectRootPath);
+      focusProject(projectRootPath);
       return;
     }
     if (envDirty) {
-      guardEnvDirty()
-        .then((ok) => {
-          if (!ok) return;
-          switchTo(true).catch(() => undefined);
-        })
-        .catch(() => undefined);
+      (async () => {
+        if (!(await guardEnvDirty())) return;
+        await switchTo(true);
+      })().catch(() => undefined);
       return;
     }
     switchTo(false).catch(() => undefined);
@@ -217,7 +245,7 @@ export function ProjectsSection() {
       const dir = await window.pier.environments.pickProjectDirectory();
       if (!dir) return;
       await addProject({ projectRootPath: dir });
-      setSelected(dir);
+      focusProject(dir);
     } catch (err) {
       await showAppAlert({
         title: t("settings.environment.addFailed"),
@@ -228,7 +256,7 @@ export function ProjectsSection() {
 
   async function requestDelete() {
     if (!focused) return;
-    if (!(await leaveSkillsTransientState(t))) {
+    if (!(await leaveAllSkillsTransientState(t))) {
       return;
     }
     const name = projectBasename(focused.projectRootPath);
@@ -251,6 +279,7 @@ export function ProjectsSection() {
     try {
       await removeProject({ projectRootPath: focused.projectRootPath });
       setSelected(null);
+      selectedKindRef.current = null;
       setEnvDirty(false);
     } catch (err) {
       await showAppAlert({
@@ -260,7 +289,7 @@ export function ProjectsSection() {
     }
   }
 
-  async function triggerSave() {
+  async function triggerEnvSave() {
     try {
       await editorRef.current?.save();
       toast.success(t("settings.environment.saveSuccess"));
@@ -275,6 +304,10 @@ export function ProjectsSection() {
   function onTabChange(next: string) {
     const tab = next as ProjectsSettingsTab;
     if (tab === projectsTab) return;
+    const isPierHome = focused?.kind === "pier-home";
+    if (!isTabAllowedForProject(tab, Boolean(isPierHome))) {
+      return;
+    }
 
     (async () => {
       const leavingEnv =
@@ -285,7 +318,7 @@ export function ProjectsSection() {
       if (
         projectsTab === "skills" &&
         tab !== "skills" &&
-        !(await leaveSkillsTransientState(t))
+        !(await leaveAllSkillsTransientState(t))
       ) {
         return;
       }
@@ -296,9 +329,29 @@ export function ProjectsSection() {
     })().catch(() => undefined);
   }
 
+  if (hydration === "pending") {
+    return (
+      <div
+        className="flex min-h-0 min-w-0 flex-col gap-3 px-4 pb-2"
+        id="projects"
+      >
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex min-w-0 flex-col gap-2">
+            <Skeleton className="h-7 w-24" />
+            <Skeleton className="h-4 w-72 max-w-full" />
+          </div>
+          <Skeleton className="h-7 w-24" />
+        </div>
+        <Skeleton className="h-14 w-full" />
+        <Skeleton className="h-14 w-full" />
+        <Skeleton className="h-14 w-full" />
+      </div>
+    );
+  }
+
   if (projects.length === 0) {
     return (
-      <div className="px-4 pb-4" id="projects">
+      <div className="flex min-h-0 min-w-0 flex-col px-4 pb-2" id="projects">
         <div className="mb-4 flex min-w-0 flex-col gap-1">
           <h1 className="text-xl">{t("settings.section.projects")}</h1>
           <p className="text-muted-foreground text-sm">
@@ -333,101 +386,26 @@ export function ProjectsSection() {
 
   if (focused) {
     return (
-      <div className="flex min-h-0 min-w-0 flex-col px-4 pb-6" id="projects">
-        <div className="mb-4 flex items-center gap-3">
-          <Button
-            aria-label={t("settings.projects.back")}
-            onClick={() => {
-              goBackToList().catch(() => undefined);
-            }}
-            size="icon"
-            type="button"
-            variant="ghost"
-          >
-            <ArrowLeft data-icon="inline-start" />
-          </Button>
-          <div className="flex min-w-0 flex-1 flex-col gap-0.5">
-            <div className="flex min-w-0 items-center gap-2">
-              <h1 className="truncate text-xl">
-                {projectBasename(focused.projectRootPath)}
-              </h1>
-              {focused.projectRootPath === activeProjectRootPath ? (
-                <Badge variant="secondary">
-                  {t("settings.skills.currentBadge")}
-                </Badge>
-              ) : null}
-            </div>
-            <span className="truncate text-muted-foreground text-xs">
-              {focused.projectRootPath}
-            </span>
-          </div>
-        </div>
-
-        <Tabs
-          onValueChange={(value) => {
-            onTabChange(value);
-          }}
-          value={projectsTab}
-        >
-          <div className="sticky top-0 isolate z-10 -mx-4 bg-background px-4 pb-3">
-            <div className="flex items-center justify-between gap-3">
-              <TabsList variant="line">
-                <TabsTrigger value="environment">
-                  {t("settings.projects.tabEnvironment")}
-                </TabsTrigger>
-                <TabsTrigger value="skills">
-                  {t("settings.projects.tabSkills")}
-                </TabsTrigger>
-                <TabsTrigger value="general">
-                  {t("settings.projects.tabGeneral")}
-                </TabsTrigger>
-              </TabsList>
-              {projectsTab === "environment" && envDirty ? (
-                <Button
-                  onClick={() => {
-                    triggerSave().catch(() => undefined);
-                  }}
-                  size="sm"
-                  type="button"
-                >
-                  {t("settings.environment.save")}
-                </Button>
-              ) : null}
-              {projectsTab === "skills" && skillsModeKind === "detail" ? (
-                <SkillsAddMenu />
-              ) : null}
-            </div>
-          </div>
-          <div className="min-w-0 pt-4">
-            {projectsTab === "environment" ? (
-              <EnvironmentEditor
-                key={focused.projectRootPath}
-                onDirtyChange={setEnvDirty}
-                project={focused}
-                ref={editorRef}
-              />
-            ) : null}
-            {projectsTab === "skills" ? (
-              <SkillsSection
-                embedded={{
-                  onLeaveProject: () => {
-                    goBackToList().catch(() => undefined);
-                  },
-                  projectRootPath: focused.projectRootPath,
-                }}
-              />
-            ) : null}
-            {projectsTab === "general" ? (
-              <ProjectGeneralPanel
-                onDelete={() => {
-                  requestDelete().catch(() => undefined);
-                }}
-                projectRootPath={focused.projectRootPath}
-              />
-            ) : null}
-          </div>
-        </Tabs>
-      </div>
+      <ProjectsSectionDetail
+        activeProjectRootPath={activeProjectRootPath}
+        editorRef={editorRef}
+        envDirty={envDirty}
+        focused={focused}
+        onBack={() => {
+          goBackToList().catch(() => undefined);
+        }}
+        onDelete={() => {
+          requestDelete().catch(() => undefined);
+        }}
+        onDirtyChange={setEnvDirty}
+        onTabChange={onTabChange}
+        projectsTab={projectsTab}
+        skillsModeKind={skillsModeKind}
+        t={t}
+        triggerEnvSave={() => {
+          triggerEnvSave().catch(() => undefined);
+        }}
+      />
     );
   }
 

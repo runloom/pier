@@ -1,4 +1,12 @@
 import { z } from "zod";
+import {
+  agentMcpCatalogRequestSchema,
+  agentMcpPathActionRequestSchema,
+  rulesEnsureRequestSchema,
+  rulesReadRequestSchema,
+  rulesSnapshotRequestSchema,
+  rulesWriteRequestSchema,
+} from "./agent-assets.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
   environmentProjectRequestSchema,
@@ -9,6 +17,20 @@ import {
 import { fileCommandSchemas } from "./file-commands.ts";
 import { gitCommandSchemas } from "./git-commands.ts";
 import { panelTransferPierCommandSchemas } from "./panel-transfer.ts";
+import {
+  pierHomeInfoRequestSchema,
+  pierHomeRevealRequestSchema,
+  pierHomeSkillsCreateRequestSchema,
+  pierHomeSkillsDeleteRequestSchema,
+  pierHomeSkillsListRequestSchema,
+  pierHomeSkillsReadRequestSchema,
+  pierHomeSkillsRevealRequestSchema,
+  pierHomeSkillsSetAlwaysIncludeRequestSchema,
+  pierHomeSkillsSnapshotRequestSchema,
+  pierHomeSkillsWriteRequestSchema,
+  skillsPierBindingsListRequestSchema,
+  skillsPierBindingsMutateRequestSchema,
+} from "./pier-home.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
 import { managedPluginCommandSchemas } from "./plugin-commands.ts";
 import { jsonValueSchema } from "./plugin-settings.ts";
@@ -250,6 +272,66 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   environmentWorktreeBindingRequestSchema.extend({
     type: z.literal("environment.worktreeBinding"),
+  }),
+  pierHomeInfoRequestSchema.extend({
+    type: z.literal("pierHome.info"),
+  }),
+  pierHomeRevealRequestSchema.extend({
+    type: z.literal("pierHome.reveal"),
+  }),
+  pierHomeSkillsListRequestSchema.extend({
+    type: z.literal("pierHome.skills.list"),
+  }),
+  pierHomeSkillsSnapshotRequestSchema.extend({
+    type: z.literal("pierHome.skills.snapshot"),
+  }),
+  pierHomeSkillsCreateRequestSchema.extend({
+    type: z.literal("pierHome.skills.create"),
+  }),
+  pierHomeSkillsReadRequestSchema.extend({
+    type: z.literal("pierHome.skills.read"),
+  }),
+  pierHomeSkillsWriteRequestSchema.extend({
+    type: z.literal("pierHome.skills.write"),
+  }),
+  pierHomeSkillsDeleteRequestSchema.extend({
+    type: z.literal("pierHome.skills.delete"),
+  }),
+  pierHomeSkillsSetAlwaysIncludeRequestSchema.extend({
+    type: z.literal("pierHome.skills.setAlwaysInclude"),
+  }),
+  pierHomeSkillsRevealRequestSchema.extend({
+    type: z.literal("pierHome.skills.reveal"),
+  }),
+  skillsPierBindingsListRequestSchema.extend({
+    type: z.literal("skills.pierBindings.list"),
+  }),
+  skillsPierBindingsMutateRequestSchema.extend({
+    type: z.literal("skills.pierBindings.bind"),
+  }),
+  skillsPierBindingsMutateRequestSchema.extend({
+    type: z.literal("skills.pierBindings.unbind"),
+  }),
+  rulesSnapshotRequestSchema.extend({
+    type: z.literal("rules.snapshot"),
+  }),
+  rulesReadRequestSchema.extend({
+    type: z.literal("rules.read"),
+  }),
+  rulesWriteRequestSchema.extend({
+    type: z.literal("rules.write"),
+  }),
+  rulesEnsureRequestSchema.extend({
+    type: z.literal("rules.ensure"),
+  }),
+  agentMcpCatalogRequestSchema.extend({
+    type: z.literal("agentMcp.catalog"),
+  }),
+  agentMcpPathActionRequestSchema.extend({
+    type: z.literal("agentMcp.reveal"),
+  }),
+  agentMcpPathActionRequestSchema.extend({
+    type: z.literal("agentMcp.open"),
   }),
   // accounts.* commands removed: Codex accounts now live behind plugin RPC.
   // AI 任务级命令(main 侧持有配置与密钥,renderer 不经手 prompt/key)

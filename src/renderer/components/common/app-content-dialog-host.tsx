@@ -2,11 +2,20 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
 import { cn } from "@pier/ui/utils.ts";
-import { useEffect, useLayoutEffect, useMemo, useState } from "react";
+import i18next from "i18next";
+import {
+  type ReactNode,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useState,
+} from "react";
 import {
   type AppContentDialogLayer,
   type AppContentDialogRenderProps,
@@ -18,6 +27,11 @@ import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
 
 const CONTENT_DIALOG_OVERLAY_ID = "app-content-dialog";
+
+function contentDialogCloseLabel(): string {
+  if (!i18next.isInitialized) return "Close";
+  return i18next.t("dialog.close", { defaultValue: "Close" });
+}
 
 function sizeClass(size: AppContentDialogLayer["size"]): string {
   if (size === "xl") return "sm:max-w-5xl";
@@ -43,6 +57,26 @@ function ContentDialogLayerView({
   open: boolean;
 }) {
   const Content = layer.content;
+  const [footer, setFooterState] = useState<ReactNode | null>(null);
+
+  const setFooter = useCallback((next: ReactNode | null) => {
+    setFooterState(next);
+  }, []);
+
+  useEffect(() => {
+    if (!open) {
+      setFooterState(null);
+    }
+  }, [open]);
+
+  const requestDismiss = useCallback(async () => {
+    const allow = layer.onDismissRequest
+      ? await layer.onDismissRequest()
+      : true;
+    if (allow) {
+      closeAppContentDialog(layer.id, null);
+    }
+  }, [layer.id, layer.onDismissRequest]);
 
   const renderProps = useMemo<AppContentDialogRenderProps>(
     () => ({
@@ -53,6 +87,10 @@ function ContentDialogLayerView({
       setDismissible: (dismissible) => {
         updateAppContentDialog(layer.id, { dismissible });
       },
+      setOnDismissRequest: (handler) => {
+        updateAppContentDialog(layer.id, { onDismissRequest: handler });
+      },
+      setFooter,
       setTitle: (title) => {
         updateAppContentDialog(layer.id, { title });
       },
@@ -62,8 +100,12 @@ function ContentDialogLayerView({
         });
       },
     }),
-    [layer.id]
+    [layer.id, setFooter]
   );
+
+  // Header X stays available whenever dismissible; dirty forms should guard
+  // via setOnDismissRequest instead of hiding the button.
+  const showCloseButton = layer.dismissible;
 
   return (
     <div
@@ -83,7 +125,7 @@ function ContentDialogLayerView({
           // Closing animation: product close sets open=false first; Radix then
           // fires onOpenChange(false). Only mutate the store when still live.
           if (!nextOpen && open && layer.dismissible) {
-            closeAppContentDialog(layer.id, null);
+            requestDismiss().catch(() => undefined);
           }
         }}
         open={open}
@@ -91,6 +133,9 @@ function ContentDialogLayerView({
         <DialogContent
           className={cn(
             sizeClass(layer.size),
+            // Align workbench-settings / shadcn sticky-footer: p-0 chrome,
+            // header (+ optional footer) fixed, body is the only scroller.
+            "flex max-h-[min(calc(90vh-2rem),880px)] min-h-0 min-w-0 flex-col gap-0 overflow-hidden p-0",
             !isTopmost && "pointer-events-none opacity-0"
           )}
           closeOnOverlayClick={layer.closeOnOverlayClick && layer.dismissible}
@@ -104,22 +149,44 @@ function ContentDialogLayerView({
               event.preventDefault();
               return;
             }
-            closeAppContentDialog(layer.id, null);
+            event.preventDefault();
+            requestDismiss().catch(() => undefined);
           }}
-          showCloseButton={false}
+          {...(showCloseButton
+            ? {
+                closeLabel: contentDialogCloseLabel(),
+                showCloseButton: true as const,
+              }
+            : { showCloseButton: false as const })}
           {...(isTopmost
             ? {}
             : {
                 "aria-hidden": true,
               })}
         >
-          <DialogHeader>
+          <DialogHeader
+            className={cn(
+              "shrink-0 border-border/60 border-b px-6 py-5",
+              showCloseButton && "pr-14"
+            )}
+          >
             <DialogTitle>{layer.title}</DialogTitle>
             {layer.description ? (
               <DialogDescription>{layer.description}</DialogDescription>
             ) : null}
           </DialogHeader>
-          <Content {...renderProps} />
+          <div
+            className="min-h-0 min-w-0 flex-1 overflow-y-auto px-6 py-5"
+            data-scrollbar="stable"
+            data-slot="app-content-dialog-body"
+          >
+            <Content {...renderProps} />
+          </div>
+          {footer ? (
+            <DialogFooter className="shrink-0 border-border/60 border-t px-6 py-4">
+              {footer}
+            </DialogFooter>
+          ) : null}
         </DialogContent>
       </Dialog>
     </div>
