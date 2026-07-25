@@ -189,6 +189,18 @@
       "outputMicrousd": 50,
       "aliases": ["anthropic/claude-opus-4.8-fast"]
     },
+    "claude-opus-5": {
+      "cachedInputMicrousd": 0.5,
+      "inputMicrousd": 5,
+      "outputMicrousd": 25,
+      "aliases": ["anthropic/claude-opus-5"]
+    },
+    "claude-opus-5-fast": {
+      "cachedInputMicrousd": 1,
+      "inputMicrousd": 10,
+      "outputMicrousd": 50,
+      "aliases": ["anthropic/claude-opus-5-fast"]
+    },
     "claude-sonnet-4": {
       "cachedInputMicrousd": 0.3,
       "inputMicrousd": 3,
