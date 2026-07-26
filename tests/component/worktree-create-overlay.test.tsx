@@ -345,7 +345,9 @@ function createMockContext(): RendererPluginContext {
     liveModules: {
       compile: unimplemented("liveModules.compile"),
       getUrl: unimplemented("liveModules.getUrl"),
+      onChanged: unimplemented("liveModules.onChanged"),
       registerRoot: unimplemented("liveModules.registerRoot"),
+      unregisterRoot: unimplemented("liveModules.unregisterRoot"),
     },
     lifecycle: {
       beforeSuspend: vi.fn(() => () => undefined),

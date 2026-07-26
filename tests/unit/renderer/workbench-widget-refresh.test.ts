@@ -1,3 +1,4 @@
+import { RefreshCw } from "lucide-react";
 import { describe, expect, it, vi } from "vitest";
 import type {
   RendererWorkbenchWidgetRegistration,
@@ -46,14 +47,14 @@ describe("resolveWidgetRefreshTarget", () => {
     const registration: RendererWorkbenchWidgetRegistration = {
       actions: () => [
         {
-          icon: () => null,
+          icon: RefreshCw,
           id: WORKBENCH_REFRESH_ACTION_ID,
           invoke,
           label: "Refresh",
         },
       ],
       component: () => null,
-      icon: () => null,
+      icon: RefreshCw,
       id: "core.cost",
     };
     const target = resolveWidgetRefreshTarget(
@@ -70,7 +71,7 @@ describe("resolveWidgetRefreshTarget", () => {
         refreshable: true,
         registration: {
           component: () => null,
-          icon: () => null,
+          icon: RefreshCw,
           id: "core.resources",
         },
         title: "Resources",
@@ -98,7 +99,9 @@ describe("resolveWidgetRefreshTarget", () => {
 
 describe("refreshAllWorkbenchWidgets", () => {
   it("invokes action-mode widgets with bulkRefresh and bumps token-mode", async () => {
-    const actionInvoke = vi.fn(async () => undefined);
+    const actionInvoke = vi.fn(
+      async (_context: WorkbenchWidgetActionContext) => undefined
+    );
     const bumpTokens = vi.fn();
     const widgets: ResolvedWorkbenchWidget[] = [
       baseWidget({
@@ -106,14 +109,14 @@ describe("refreshAllWorkbenchWidgets", () => {
         registration: {
           actions: () => [
             {
-              icon: () => null,
+              icon: RefreshCw,
               id: "refresh",
               invoke: actionInvoke,
               label: "Refresh",
             },
           ],
           component: () => null,
-          icon: () => null,
+          icon: RefreshCw,
           id: "core.cost",
         },
         title: "Cost",
@@ -124,7 +127,7 @@ describe("refreshAllWorkbenchWidgets", () => {
         refreshable: true,
         registration: {
           component: () => null,
-          icon: () => null,
+          icon: RefreshCw,
           id: "core.resources",
         },
         title: "Resources",
@@ -166,7 +169,7 @@ describe("refreshAllWorkbenchWidgets", () => {
         registration: {
           actions: () => [
             {
-              icon: () => null,
+              icon: RefreshCw,
               id: "refresh",
               invoke: async () => {
                 throw new Error("quota down");
@@ -175,7 +178,7 @@ describe("refreshAllWorkbenchWidgets", () => {
             },
           ],
           component: () => null,
-          icon: () => null,
+          icon: RefreshCw,
           id: "pier.codex.accounts",
         },
         title: "Codex",
