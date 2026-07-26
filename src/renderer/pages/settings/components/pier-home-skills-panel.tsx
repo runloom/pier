@@ -44,7 +44,6 @@ export async function leavePierHomeSkillsTransientState(
   const ok = await showAppConfirm({
     body: t("settings.skills.leaveEditBody"),
     intent: "destructive",
-    size: "sm",
     title: t("settings.skills.leaveEditTitle"),
   });
   if (!ok) return false;

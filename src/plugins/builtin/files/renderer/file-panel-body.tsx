@@ -3,6 +3,7 @@ import { Button } from "@pier/ui/button.tsx";
 import { formatBytes } from "@pier/ui/format.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
 import { FolderSearch } from "lucide-react";
 import { type ReactNode, useCallback, useEffect, useRef } from "react";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
@@ -319,10 +320,25 @@ export function ResolvedFilePanel({
       ) : null}
       <main className="flex min-h-0 flex-1 flex-col overflow-hidden">
         <FileEditorAdapter
+          canvasDiskSource={
+            document.source.kind === "disk" &&
+            (document.language === "canvas" ||
+              isProjectCanvasPath(document.source.path))
+              ? { path: document.source.path, root: document.source.root }
+              : undefined
+          }
+          context={context}
           controller={controller}
           documentId={document.id}
           editorSessionId={editorSessionId}
           labels={createFileEditorAdapterLabels(t)}
+          language={
+            document.language === "canvas" ||
+            (document.source.kind === "disk" &&
+              isProjectCanvasPath(document.source.path))
+              ? "canvas"
+              : document.language
+          }
           markdownAppearance={context?.appearance}
           markdownCharts={context?.charts}
           markdownCopyCode={context ? handleCopyMarkdownCode : undefined}
@@ -356,6 +372,7 @@ export function ResolvedFilePanel({
           }
           searchLabels={createFileSearchLabels(t)}
           searchRequest={searchRequest}
+          t={t}
           value={document.currentContents}
           {...(mode === "diff"
             ? {

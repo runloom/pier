@@ -562,7 +562,6 @@ describe("SettingsDialog — Environment section", () => {
       expect(appDialogMocks.showAppConfirm).toHaveBeenCalledWith(
         expect.objectContaining({
           intent: "destructive",
-          size: "sm",
         })
       );
     });
@@ -614,7 +613,6 @@ describe("SettingsDialog — Environment section", () => {
       expect(appDialogMocks.showAppConfirm).toHaveBeenCalledWith(
         expect.objectContaining({
           intent: "destructive",
-          size: "default",
         })
       );
     });

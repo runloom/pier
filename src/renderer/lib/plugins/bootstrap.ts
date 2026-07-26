@@ -3,6 +3,7 @@ import {
   initPluginRegistry,
   usePluginRegistryStore,
 } from "@/stores/plugin-registry.store.ts";
+import { installPluginSharedRuntime } from "./plugin-shared-runtime.ts";
 import { rendererPluginRuntime } from "./runtime.ts";
 
 /**
@@ -41,6 +42,7 @@ export interface RendererPluginBootstrapHandle {
  * 单个外部包超时或失败只产生该插件的诊断。
  */
 export async function bootstrapBuiltinPlugins(): Promise<RendererPluginBootstrapHandle> {
+  installPluginSharedRuntime();
   let bootstrapping = true;
   let externalStarted = false;
   let pendingEntries: readonly PluginRegistryEntry[] | null = null;

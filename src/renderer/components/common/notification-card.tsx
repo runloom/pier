@@ -47,8 +47,11 @@ function markRead(notification: AppNotification): void {
 
 export function NotificationCard({
   notification,
+  onActionRun,
 }: {
   notification: AppNotification;
+  /** action 执行后回调；popover 传入关层，其它载体可不传。 */
+  onActionRun?: () => void;
 }): ReactNode {
   const t = useT();
   const title = notificationTitle(notification);
@@ -107,6 +110,8 @@ export function NotificationCard({
           onClick={(event) => {
             event.stopPropagation();
             runNotificationAction(notification, action.id);
+            // 当前卡片 action 均为离开收件箱的深链；popover 传 onActionRun 关层。
+            onActionRun?.();
           }}
           size="xs"
           type="button"

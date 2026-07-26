@@ -1545,15 +1545,24 @@ describe("TerminalPanel lifecycle", () => {
 
     const result = await screen.findByTestId("terminal-agent-result");
     expect(result).toHaveAttribute("data-scrollbar", "stable");
-    expect(result).toHaveTextContent("Agent ended");
+    expect(result).toHaveTextContent("Agent session ended");
     expect(result).toHaveTextContent(
-      "The previous session has exited. You can start it again."
+      "The previous session has exited. Restart to continue."
     );
-    expect(result).toHaveTextContent("AgentClaude");
-    expect(result).toHaveTextContent("Statusexited");
-    expect(result).toHaveTextContent(
-      "Commandclaude --dangerously-skip-permissions"
-    );
+    expect(result).toHaveTextContent("Session summary");
+    expect(result).toHaveTextContent("Agent");
+    expect(result).toHaveTextContent("Claude");
+    expect(result).toHaveTextContent("Ended normally");
+    expect(result).toHaveTextContent("Working directory");
+    expect(result).toHaveTextContent("/Users/dev/ABC/pier");
+    expect(result).toHaveTextContent("Command");
+    expect(result).toHaveTextContent("claude --dangerously-skip-permissions");
+    expect(result).toHaveTextContent("Duration");
+    expect(result).toHaveTextContent("1s");
+    expect(result).toHaveTextContent("Exit code");
+    expect(result).toHaveTextContent("0");
+    const statusBadge = screen.getByTestId("terminal-agent-status-badge");
+    expect(statusBadge).toHaveAttribute("data-variant", "success");
     expect(
       screen.getByRole("button", { name: "Restart agent" })
     ).toBeInTheDocument();
@@ -1582,11 +1591,44 @@ describe("TerminalPanel lifecycle", () => {
       <TerminalPanel {...createPanelProps({ params: { context } })} />
     );
 
-    await screen.findByTestId("terminal-agent-result");
+    const result = await screen.findByTestId("terminal-agent-result");
+    expect(result).toHaveTextContent("Failed");
+    expect(result).toHaveTextContent("Exit code");
+    expect(result).toHaveTextContent("1");
+    expect(result).not.toHaveTextContent("Ended normally");
+    const statusBadge = screen.getByTestId("terminal-agent-status-badge");
+    expect(statusBadge).toHaveAttribute("data-variant", "danger");
+    expect(
+      screen.getByRole("button", { name: "Restart agent" })
+    ).toBeInTheDocument();
     await new Promise((resolve) => setTimeout(resolve, 20));
 
     expect(container.querySelector(".terminal-anchor")).toBeNull();
     expect(window.pier.terminal.create).not.toHaveBeenCalled();
+  });
+
+  it("omits duration when finishedAt is missing on restored exited agent", async () => {
+    vi.mocked(window.pier.terminal.readSession).mockResolvedValue({
+      agent: {
+        agentId: "claude",
+        exitCode: 0,
+        launch: {
+          agentId: "claude",
+          command: "claude",
+          cwd: "/Users/dev/ABC/pier",
+        },
+        startedAt: 1_772_000_000_000,
+        status: "exited",
+      },
+      context,
+      updatedAt: "2026-07-06T00:00:00.000Z",
+    } as TerminalPanelSessionSnapshot);
+
+    render(<TerminalPanel {...createPanelProps({ params: { context } })} />);
+
+    const result = await screen.findByTestId("terminal-agent-result");
+    expect(result).toHaveTextContent("Ended normally");
+    expect(result).not.toHaveTextContent("Duration");
   });
 
   it("restarts an exited agent from the saved launch via relaunch store", async () => {

@@ -1,3 +1,4 @@
+import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
 import {
   useCallback,
   useEffect,
@@ -27,6 +28,16 @@ function resolveDocumentId(
   return source ? controller.documentId(source) : undefined;
 }
 
+function sourceIdentityKey(source: FilesDocumentPanelSource | null): string {
+  if (!source) {
+    return "";
+  }
+  if (source.kind === "untitled") {
+    return `untitled:${source.id}`;
+  }
+  return `disk:${source.root}\0${source.path}`;
+}
+
 function resolveSeedMode(input: {
   controller: FileEditorController;
   panelSessionId: string;
@@ -40,12 +51,26 @@ function resolveSeedMode(input: {
   return seed?.mode ?? null;
 }
 
+function isCanvasSource(
+  source: FilesDocumentPanelSource | null,
+  language: string | null | undefined
+): boolean {
+  if (language === "canvas") {
+    return true;
+  }
+  return source?.kind === "disk" && isProjectCanvasPath(source.path);
+}
+
 function defaultModeForSource(
   source: FilesDocumentPanelSource | null,
   language: string | null | undefined
 ): FileViewMode {
   if (source && language === "markdown") {
     return readMarkdownOpenMode();
+  }
+  // Canvas: default preview. Use path when language has not hydrated yet.
+  if (isCanvasSource(source, language)) {
+    return "preview";
   }
   return "source";
 }
@@ -60,21 +85,30 @@ export function useFilesPanelTransferView(input: {
   setMode: (mode: FileViewMode) => void;
 } {
   const { controller, language, panelSessionId, stableSource } = input;
+  const sourceKey = sourceIdentityKey(stableSource);
   const [mode, setModeState] = useState<FileViewMode>(
     () =>
       resolveSeedMode({ controller, panelSessionId, stableSource }) ??
       defaultModeForSource(stableSource, language)
   );
-  const appliedTransferSeedRef = useRef(
+  /** User/transfer explicitly chose a mode for the *current* source. */
+  const pinnedModeForSourceRef = useRef(
     resolveSeedMode({ controller, panelSessionId, stableSource }) !== null
   );
+  const lastSourceKeyRef = useRef(sourceKey);
 
   const applySeedMode = useCallback((next: FileViewMode) => {
-    appliedTransferSeedRef.current = true;
+    pinnedModeForSourceRef.current = true;
     setModeState((current) => (current === next ? current : next));
   }, []);
 
   useLayoutEffect(() => {
+    if (lastSourceKeyRef.current !== sourceKey) {
+      lastSourceKeyRef.current = sourceKey;
+      // New document: allow default mode (canvas → preview) unless transfer seed.
+      pinnedModeForSourceRef.current = false;
+    }
+
     const seeded = resolveSeedMode({
       controller,
       panelSessionId,
@@ -84,11 +118,18 @@ export function useFilesPanelTransferView(input: {
       applySeedMode(seeded);
       return;
     }
-    if (!appliedTransferSeedRef.current) {
+    if (!pinnedModeForSourceRef.current) {
       const fallback = defaultModeForSource(stableSource, language);
       setModeState((current) => (current === fallback ? current : fallback));
     }
-  }, [applySeedMode, controller, language, panelSessionId, stableSource]);
+  }, [
+    applySeedMode,
+    controller,
+    language,
+    panelSessionId,
+    sourceKey,
+    stableSource,
+  ]);
 
   useEffect(
     () =>
@@ -119,7 +160,7 @@ export function useFilesPanelTransferView(input: {
 
   const setMode = useCallback(
     (next: FileViewMode) => {
-      appliedTransferSeedRef.current = true;
+      pinnedModeForSourceRef.current = true;
       setModeState(next);
       rememberFilesPanelViewMode(panelSessionId, next);
       if (

@@ -1,7 +1,6 @@
 import type { ComponentType, ReactNode } from "react";
 
 export type RendererPluginDialogIntent = "default" | "destructive";
-export type RendererPluginDialogSize = "default" | "sm";
 export type RendererPluginContentDialogSize = "sm" | "default" | "lg";
 
 export interface RendererPluginContentDialogRenderProps<TResult = unknown> {
@@ -48,6 +47,9 @@ export interface RendererPluginContentDialogHandle<TResult = unknown> {
  * 多控件/多步/等待态走 open/update/close（AppContentDialogHost）。
  * 简单弹窗全局单槽，新请求会顶替未决旧弹窗；content dialog 为栈。
  * confirmLabel/cancelLabel 省略时用宿主 i18n 的默认文案(OK/Cancel)。
+ *
+ * size 不由插件传入：alert/confirm/prompt → sm，choice → default（与
+ * `appDialogSizeForKind` 一致）。更长内容走 `open` content dialog。
  */
 export interface RendererPluginDialogsFacade {
   alert(options: {
@@ -60,6 +62,7 @@ export interface RendererPluginDialogsFacade {
    * 三选弹窗(如 保存/放弃/取消)。confirm → "confirm",altLabel 按钮 →
    * "alt",取消/Esc → "cancel"。intent 作用于 alt 按钮(破坏性放弃)。
    * buttonOrder 默认 alt|取消|confirm；confirm-alt-cancel 为 主|次|取消。
+   * 宽度固定 default，禁止传 size。
    */
   choice(options: {
     altLabel: string;
@@ -72,16 +75,15 @@ export interface RendererPluginDialogsFacade {
     cancelLabel?: string;
     confirmLabel: string;
     intent: RendererPluginDialogIntent;
-    size: RendererPluginDialogSize;
     title: string;
   }): Promise<"alt" | "cancel" | "confirm">;
   close(id: string, result?: unknown): void;
+  /** 取消|确认。宽度固定 sm，禁止传 size。intent 必填。 */
   confirm(options: {
     body?: string;
     cancelLabel?: string;
     confirmLabel?: string;
     intent: RendererPluginDialogIntent;
-    size: RendererPluginDialogSize;
     title: string;
   }): Promise<boolean>;
   /** 打开宿主 content dialog。id 建议稳定；同 id 重开会替换并 resolve 旧 waiter 为 null。 */
@@ -91,6 +93,7 @@ export interface RendererPluginDialogsFacade {
   // 文本输入弹窗。resolve:submit → 返回 trim 后的字符串;cancel → null。
   // validate 在 submit 前跑一次,返回非空 = 校验失败(在弹窗内展示,不 resolve),
   // 返回 null/undefined 才放行。keybinding scope + terminal focus 与 host 统一处理。
+  // 宽度固定 sm，禁止传 size。
   prompt(options: {
     body?: string;
     cancelLabel?: string;
@@ -98,7 +101,6 @@ export interface RendererPluginDialogsFacade {
     initialValue?: string;
     intent: RendererPluginDialogIntent;
     placeholder?: string;
-    size: RendererPluginDialogSize;
     title: string;
     validate?: (value: string) => Promise<string | null> | string | null;
   }): Promise<string | null>;

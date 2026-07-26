@@ -1,6 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PierDockviewGroupHandle } from "@shared/contracts/dockview.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
 import {
   type ReactNode,
   useCallback,
@@ -141,11 +142,20 @@ export function FilesGroupView({
     ? controller.documentId(selectedSource)
     : null;
   const selectedDocument = useFilesDocument(selectedDocumentId ?? "");
-  const mode =
-    (documentKey ? modeByDocumentId.get(documentKey) : undefined) ??
-    (selectedDocument?.language === "markdown"
-      ? readMarkdownOpenMode()
-      : "source");
+  const mode = (() => {
+    const stored = documentKey ? modeByDocumentId.get(documentKey) : undefined;
+    if (stored) {
+      return stored;
+    }
+    if (selectedDocument?.language === "markdown") {
+      return readMarkdownOpenMode();
+    }
+    const isCanvas =
+      selectedDocument?.language === "canvas" ||
+      (selectedSource?.kind === "disk" &&
+        isProjectCanvasPath(selectedSource.path));
+    return isCanvas ? "preview" : "source";
+  })();
 
   const writeMode = useCallback(
     (nextMode: FileViewMode, panelId: string | undefined) => {

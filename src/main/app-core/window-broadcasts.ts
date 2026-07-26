@@ -5,6 +5,7 @@ import type {
 import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
+import type { LiveModuleEvent } from "@shared/contracts/live-modules.ts";
 import type {
   SystemNotificationPermissionSnapshot,
   SystemNotificationUnavailableReason,
@@ -187,6 +188,11 @@ export function broadcastProjectSkillsInvalidated(
     type: "project-skills.invalidated",
     ...event,
   } satisfies ProjectSkillsInvalidatedEvent);
+}
+
+/** Live Modules compile/watch events (main → 所有 renderer)。 */
+export function broadcastLiveModulesChanged(event: LiveModuleEvent): void {
+  broadcastToAllWindows(PIER_BROADCAST.LIVE_MODULES_CHANGED, event);
 }
 
 /** 统一消息中心快照 (main → 所有 renderer)。 */

@@ -233,7 +233,6 @@ export async function openSwitchConfirmDialog(options: {
     const confirmed = await context.dialogs.confirm({
       body: description,
       intent: "default",
-      size: "sm",
       title,
     });
     return { confirmed, syncTargets: [] };

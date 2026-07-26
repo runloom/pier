@@ -40,10 +40,12 @@ import {
 } from "./core-workbench-widgets.ts";
 import { usePanelVisible } from "./use-panel-visible.ts";
 import { useWorkbenchGridInteractions } from "./use-workbench-grid-interactions.ts";
+import { useWorkbenchLayoutTransitions } from "./use-workbench-layout-transitions.ts";
 import {
   findWidgetDeclaration,
   useWorkbenchPanelState,
 } from "./use-workbench-panel-state.ts";
+import { useWorkbenchRefreshAll } from "./use-workbench-refresh-all.ts";
 import { WorkbenchAddCard } from "./workbench-add-card.tsx";
 import { useWorkbenchContextMenu } from "./workbench-context-menu.ts";
 import { MARGIN, ROW_HEIGHT } from "./workbench-grid-geometry.ts";
@@ -104,10 +106,6 @@ export function WorkbenchPanel(props: IDockviewPanelProps) {
   });
   const visible = usePanelVisible(props.api);
   const gridWrapperRef = useRef<HTMLElement>(null);
-  // open / 量宽 / 列数变化时先关掉 RGL 过渡，避免卡片从 fallback 尺寸滑入。
-  // 落定后再恢复，拖拽松手后的归位动画仍可用。
-  const [layoutTransitionsReady, setLayoutTransitionsReady] = useState(false);
-  const layoutSettleTimerRef = useRef<number | null>(null);
 
   const widgetRegistrations = useMemo(
     () =>
@@ -153,39 +151,26 @@ export function WorkbenchPanel(props: IDockviewPanelProps) {
   );
   const settingsWidget =
     resolved.find((widget) => widget.instanceId === settingsInstanceId) ?? null;
+
+  const onRefreshAll = useWorkbenchRefreshAll({
+    bumpRefreshTokens: state.bumpRefreshTokens,
+    handleUpdateParams: state.handleUpdateParams,
+    refreshOne: state.refreshOne,
+    widgets: resolved,
+  });
+
   const nativeMenu = useWorkbenchContextMenu({
     activatePanel: () => {
       props.api.setActive();
     },
     hasWidgets: resolved.length > 0,
     onAddWidget: () => setLibraryOpen(true),
-    onRefreshAll: state.refreshAll,
+    onRefreshAll,
     panelId: props.api.id,
   });
 
   const cols = resolveResponsiveGridCols(viewport.width);
-
-  useEffect(() => {
-    // 宽度未就绪时保持 settling，避免用 0 宽布局误开过渡。
-    if (viewport.width <= 0) {
-      setLayoutTransitionsReady(false);
-      return;
-    }
-    setLayoutTransitionsReady(false);
-    if (layoutSettleTimerRef.current !== null) {
-      window.clearTimeout(layoutSettleTimerRef.current);
-    }
-    layoutSettleTimerRef.current = window.setTimeout(() => {
-      setLayoutTransitionsReady(true);
-      layoutSettleTimerRef.current = null;
-    }, 50);
-    return () => {
-      if (layoutSettleTimerRef.current !== null) {
-        window.clearTimeout(layoutSettleTimerRef.current);
-        layoutSettleTimerRef.current = null;
-      }
-    };
-  }, [viewport.width]);
+  const layoutTransitionsReady = useWorkbenchLayoutTransitions(viewport.width);
 
   const declarationsByInstanceId = useMemo(
     () =>

@@ -367,6 +367,8 @@ EN「Pier Home / Home」与技能层「On this Mac / 本机全局」分层，禁
 2. Canvas 创建对话框：**默认当前项目**；可选「保存到本机工作台」（不用未锁定的「本机画布」产品名）。
 3. 本切片负责 `mkdir` Home `canvases/`，不实现编译与 Viewer。
 
+完整 C 轨方案（编译、项目组件 resolve、分期与可行性）见：[`2026-07-25-live-modules-and-project-components-design.md`](./2026-07-25-live-modules-and-project-components-design.md)。
+
 ## 7. 分期实施计划
 
 ### Phase 0 — 规格确认（0.5d）

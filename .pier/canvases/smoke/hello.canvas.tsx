@@ -1,0 +1,27 @@
+import { Badge, Frame, Stack, Text } from "pier/canvas";
+
+/**
+ * Smoke-only canvas. Prefer templates/ for product examples;
+ * stress/workbench-proposal for multi-file + hooks.
+ * Open: `.pier/canvases/smoke/hello.canvas.tsx`
+ */
+export const canvas = {
+  description: "Minimal smoke — not a product template.",
+  kind: "composition" as const,
+  title: "Hello smoke",
+};
+
+export default function HelloCanvas() {
+  return (
+    <Frame maxWidth={520}>
+      <Stack gap={10}>
+        <Text as="h2">Smoke</Text>
+        <Text tone="secondary">
+          Pipeline ok. Product shapes: templates/*. Quality stress:
+          stress/workbench-proposal.canvas.tsx (multi-file + hooks).
+        </Text>
+        <Badge variant="neutral">smoke only</Badge>
+      </Stack>
+    </Frame>
+  );
+}

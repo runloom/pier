@@ -112,7 +112,6 @@ export async function confirmGitDiscard(
           "Move to Trash"
         ),
         intent: "destructive",
-        size: "sm",
         title: pluginText(context, "reviewDiscardTitleTrash", "Move to Trash"),
       });
       return confirmed
@@ -132,7 +131,6 @@ export async function confirmGitDiscard(
         "Move All to Trash"
       ),
       intent: "destructive",
-      size: "sm",
       title: pluginText(context, "reviewDiscardTitleTrash", "Move to Trash"),
     });
     return confirmed
@@ -163,7 +161,6 @@ export async function confirmGitDiscard(
           ? pluginText(context, "reviewDiscardRestoreFileButton", "Restore")
           : pluginText(context, "reviewDiscardConfirmButtonSingle", "Discard"),
         intent: "destructive",
-        size: "sm",
         title: restoreDeleted
           ? pluginText(context, "reviewDiscardTitleRestore", "Restore File")
           : pluginText(context, "reviewDiscardTitle", "Discard Changes"),
@@ -190,7 +187,6 @@ export async function confirmGitDiscard(
         ? pluginText(context, "reviewDiscardRestoreMultiButton", "Restore All")
         : pluginText(context, "reviewDiscardConfirmButtonMulti", "Discard All"),
       intent: "destructive",
-      size: "sm",
       title: restoreDeleted
         ? pluginText(context, "reviewDiscardTitleRestore", "Restore File")
         : pluginText(context, "reviewDiscardTitle", "Discard Changes"),
@@ -224,7 +220,6 @@ export async function confirmGitDiscard(
       { count: trackedCount }
     ),
     intent: "destructive",
-    size: "default",
     title: pluginText(context, "reviewDiscardTitle", "Discard Changes"),
   });
 

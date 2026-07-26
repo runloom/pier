@@ -497,11 +497,47 @@ describe("AccountsWidget (usage)", () => {
       requestRefresh: vi.fn(),
       updateParams: vi.fn(),
     });
+    // Shared refreshAccountUsage always force:true; active guard loads snapshot first.
     expect(invokeCalls).toContainEqual({
-      method: "accounts.refreshUsage",
+      method: "accounts.snapshot",
       payload: null,
     });
+    expect(invokeCalls).toContainEqual({
+      method: "accounts.refreshUsage",
+      payload: { force: true },
+    });
     expect(context.notifications.success).toHaveBeenCalledTimes(1);
+  });
+
+  it("refresh action alerts without success when no account is active", async () => {
+    const snap = noActiveAccountSnapshot();
+    const { context, invokeCalls } = contextWithSnapshot(snap);
+    const [action] = accountsWidgetActions(context, {
+      instanceId: "widget-1",
+      params: {},
+      requestRefresh: vi.fn(),
+      updateParams: vi.fn(),
+    });
+    await action?.invoke({
+      instanceId: "widget-1",
+      params: {},
+      requestRefresh: vi.fn(),
+      updateParams: vi.fn(),
+    });
+    expect(invokeCalls).toContainEqual({
+      method: "accounts.snapshot",
+      payload: null,
+    });
+    expect(
+      invokeCalls.filter((c) => c.method === "accounts.refreshUsage")
+    ).toHaveLength(0);
+    expect(context.notifications.success).not.toHaveBeenCalled();
+    expect(context.dialogs.alert).toHaveBeenCalledWith(
+      expect.objectContaining({
+        body: "No active account",
+        title: "Could not refresh Codex usage",
+      })
+    );
   });
 
   it("renders an explicit fallback when no account is active", async () => {

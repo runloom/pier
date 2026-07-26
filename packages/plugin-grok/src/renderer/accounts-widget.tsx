@@ -1,3 +1,4 @@
+import { createAccountsWidgetRefreshAction } from "@pier/plugin-api/account-usage/renderer";
 import type {
   ExternalRendererPluginContext,
   RendererWorkbenchWidgetAction,
@@ -175,57 +176,33 @@ export function AccountsWidget({
   );
 }
 
+/** Shared {@link createAccountsWidgetRefreshAction} (same RPC as settings). */
 export function accountsWidgetActions(
   context: ExternalRendererPluginContext,
   _actionContext: WorkbenchWidgetActionContext
 ): readonly RendererWorkbenchWidgetAction[] {
   return [
-    {
+    createAccountsWidgetRefreshAction({
+      context,
       icon: RefreshCw,
-      id: "refresh",
-      async invoke() {
-        try {
-          // No active account → nothing to refresh; a success toast next to
-          // an error meter would be contradictory feedback.
-          const snapshot = await context.rpc.invoke<{
-            activeAccountId: string | null;
-          }>("accounts.snapshot", null);
-          if (!snapshot.activeAccountId) {
-            await context.dialogs.alert({
-              body: context.i18n.t(
-                "pier.grok.widget.noActiveAccount",
-                "No active account"
-              ),
-              title: context.i18n.t(
-                "pier.grok.widget.refreshFailed",
-                "Could not refresh Grok usage"
-              ),
-            });
-            return;
-          }
-          await context.rpc.invoke("accounts.refreshUsage", { force: true });
-          context.notifications.success(
-            context.i18n.t(
-              "pier.grok.accounts.settings.usageRefreshSuccess",
-              "Usage refreshed"
-            )
-          );
-        } catch (err) {
-          await context.dialogs.alert({
-            body: err instanceof Error ? err.message : String(err),
-            title: context.i18n.t(
-              "pier.grok.widget.refreshFailed",
-              "Could not refresh Grok usage"
-            ),
-          });
-        }
+      i18n: {
+        label: {
+          fallback: "Refresh usage",
+          key: "pier.grok.accounts.settings.refreshUsage",
+        },
+        noActiveAccountBody: {
+          fallback: "No active account",
+          key: "pier.grok.widget.noActiveAccount",
+        },
+        refreshFailedTitle: {
+          fallback: "Could not refresh Grok usage",
+          key: "pier.grok.widget.refreshFailed",
+        },
+        refreshSuccess: {
+          fallback: "Usage refreshed",
+          key: "pier.grok.accounts.settings.usageRefreshSuccess",
+        },
       },
-      label: () =>
-        context.i18n.t(
-          "pier.grok.accounts.settings.refreshUsage",
-          "Refresh usage"
-        ),
-      priority: 50,
-    },
+    }),
   ];
 }

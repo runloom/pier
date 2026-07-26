@@ -160,7 +160,6 @@ export function ProjectRulesPanel({
         title: t("settings.projects.rulesDiscardTitle"),
         body: t("settings.projects.rulesDiscardBody", { name: discardName }),
         intent: "destructive",
-        size: "sm",
       });
       if (!ok) return;
     }
@@ -203,7 +202,6 @@ export function ProjectRulesPanel({
         name: files.find((f) => f.id === id)?.relativePath ?? id,
       }),
       intent: "default",
-      size: "sm",
     });
     if (!ok) return;
     try {

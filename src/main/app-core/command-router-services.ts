@@ -23,6 +23,7 @@ import type { FileWatchService } from "../services/file-watch-service.ts";
 import type { GitReviewService } from "../services/git-review/git-review-service.ts";
 import type { GitService } from "../services/git-service.ts";
 import type { GitWatchService } from "../services/git-watch-service.ts";
+import type { LiveModulesService } from "../services/live-modules/service.ts";
 import type { LocalEnvironmentService } from "../services/local-environments-service.ts";
 import type { ManagedPluginInstallService } from "../services/managed-plugins/install-service.ts";
 import type { PanelContextResolutionControl } from "../services/panel-context-resolver.ts";
@@ -63,6 +64,7 @@ export interface PierCoreServices {
   git: GitService;
   gitReview: GitReviewService;
   gitWatch: GitWatchService;
+  liveModules?: LiveModulesService;
   localEnvironments: LocalEnvironmentService;
   managedPlugins: ManagedPluginInstallService;
   panelContexts: {

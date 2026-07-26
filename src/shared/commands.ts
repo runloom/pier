@@ -14,6 +14,7 @@ export const APP_HANDLED_NATIVE_TERMINAL_COMMANDS = [
   "pier.terminal.openAgentComposer",
   "pier.terminal.composerAttach",
   "pier.settings.open",
+  "pier.notifications.open",
   "pier.view.zoomIn",
   "pier.view.zoomOut",
   "pier.view.resetZoom",

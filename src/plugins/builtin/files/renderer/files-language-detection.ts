@@ -1,3 +1,4 @@
+import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
 import type { FilesDocumentLanguage } from "./files-document-types.ts";
 
 // Cursor 参考:文件面板顶部的语言标签 + syntax highlight 依赖此推断。扩展名到
@@ -54,6 +55,11 @@ const EXTENSION_TO_LANGUAGE: Readonly<Record<string, FilesDocumentLanguage>> = {
 };
 
 export function languageForPath(path: string): FilesDocumentLanguage {
+  // Live Modules: require `.pier/canvases/**/*.canvas.tsx` (directory + compound
+  // suffix). Bare `*.tsx` or `*.canvas.tsx` outside that tree stay TypeScript.
+  if (isProjectCanvasPath(path)) {
+    return "canvas";
+  }
   const basename = path.split("/").filter(Boolean).at(-1) ?? "";
   const lowered = basename.toLowerCase();
   const dot = lowered.lastIndexOf(".");

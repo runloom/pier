@@ -29,6 +29,9 @@ export function cmLanguageExtension(
   path?: string
 ): Extension | null {
   switch (language) {
+    case "canvas":
+      // Canvas files are TSX; preview uses Live Modules, source uses TSX highlight.
+      return javascript({ typescript: true, jsx: true });
     case "cpp": {
       const lower = path?.toLowerCase() ?? "";
       if (lower.endsWith(".c") || lower.endsWith(".h")) {
@@ -84,6 +87,7 @@ export function cmLanguageExtension(
 // 顶部语言标签的短名。文件面板右上角展示,与 Cursor 右上 `Swift`/`TypeScript` 徽章对齐。
 export const LANGUAGE_LABELS: Readonly<Record<FilesDocumentLanguage, string>> =
   {
+    canvas: "Canvas",
     cpp: "C++",
     css: "CSS",
     go: "Go",

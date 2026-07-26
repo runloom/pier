@@ -20,6 +20,12 @@ export interface WorkbenchWidgetSettingsProps {
 }
 
 export interface WorkbenchWidgetActionContext {
+  /**
+   * Host "Refresh all" sets this so actions skip their own success toast and
+   * rethrow failures for aggregation. Header single-button refresh leaves it
+   * unset / false.
+   */
+  bulkRefresh?: boolean;
   instanceId: string;
   params: Readonly<Record<string, JsonValue>>;
   requestRefresh(): void;

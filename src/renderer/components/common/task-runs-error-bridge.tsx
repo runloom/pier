@@ -32,7 +32,6 @@ export function TaskRunsErrorBridge(): null {
       cancelLabel: t("terminal.runtimeControl.stateUnavailableDismiss"),
       confirmLabel: t("terminal.runtimeControl.stateUnavailableRetry"),
       intent: "default",
-      size: "default",
       title: t("terminal.runtimeControl.stateUnavailableTitle"),
     }).then((retry) => {
       if (retry) {

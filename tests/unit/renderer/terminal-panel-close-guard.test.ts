@@ -79,7 +79,6 @@ describe("registerTerminalPanelCloseGuard", () => {
     expect(showAppConfirm).toHaveBeenCalledWith(
       expect.objectContaining({
         intent: "destructive",
-        size: "sm",
         title: "Close panel?",
       })
     );

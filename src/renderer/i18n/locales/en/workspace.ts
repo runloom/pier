@@ -25,6 +25,9 @@ export const workspace = {
     title: "Interface error",
   },
   tab: {
+    create: "New",
+    maximize: "Maximize",
+    restore: "Restore",
     unsaved: "Unsaved changes",
   },
   addPanelMenu: {
@@ -33,7 +36,6 @@ export const workspace = {
     noMatches: "No matching items",
     searchPlaceholder: "Search panel types or agents…",
     title: "Create in this panel group",
-    trigger: "Create in this panel group",
     startAgentFailed: "Couldn’t start agent",
   },
   panelTransfer: {

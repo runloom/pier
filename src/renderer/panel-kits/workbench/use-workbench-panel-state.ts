@@ -11,7 +11,6 @@ import {
   HOST_MIN_WIDGET_SIZE,
   widgetEntryWidgetId,
 } from "@shared/contracts/workbench.ts";
-import i18next from "i18next";
 import {
   useCallback,
   useEffect,
@@ -19,7 +18,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { toast } from "sonner";
 import { clampSize } from "./workbench-grid-geometry.ts";
 import { moveWorkbenchEntry } from "./workbench-ordered-layout.ts";
 import {
@@ -307,16 +305,21 @@ export function useWorkbenchPanelState(
     },
     [commitUserParams]
   );
+  /** Bump refreshToken for one instance (token-mode / host:refresh path). */
   const refreshOne = useCallback((instanceId: string) => {
     setRefreshTokens((tokens) => ({
       ...tokens,
       [instanceId]: (tokens[instanceId] ?? 0) + 1,
     }));
   }, []);
-  const refreshAll = useCallback(() => {
-    const instanceIds = optimisticParamsRef.current.widgets.map(
-      (entry) => entry.id
-    );
+
+  /**
+   * Bump refreshToken for selected instances only. Used by the host bulk
+   * refresh orchestrator for token-mode widgets (e.g. system resources).
+   * Action-mode widgets (accounts, cost) are invoked separately and must not
+   * rely on this path alone.
+   */
+  const bumpRefreshTokens = useCallback((instanceIds: readonly string[]) => {
     if (instanceIds.length === 0) return;
     setRefreshTokens((tokens) => {
       const next = { ...tokens };
@@ -325,10 +328,10 @@ export function useWorkbenchPanelState(
       }
       return next;
     });
-    toast.success(i18next.t("workbench.refreshAllSuccess"));
   }, []);
 
   return {
+    bumpRefreshTokens,
     handleAdd,
     handleDuplicate,
     handleRemove,
@@ -337,7 +340,6 @@ export function useWorkbenchPanelState(
     handleUpdateParams,
     highlightId,
     optimisticParams: renderedParams,
-    refreshAll,
     refreshOne,
     refreshTokens,
   };

@@ -107,6 +107,12 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     scope: "global",
   },
   {
+    // 打开/关闭消息中心铃铛 Popover（无独立 dockview panel）。
+    commandId: "pier.notifications.open",
+    keys: "Mod+Shift+KeyN",
+    scope: "global",
+  },
+  {
     commandId: "pier.view.zoomIn",
     keys: "Mod+Equal",
     scope: "global",

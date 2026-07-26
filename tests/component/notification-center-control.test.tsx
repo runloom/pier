@@ -8,8 +8,12 @@ import { useNotificationCenterStore } from "@/stores/notification-center.store.t
 import { useNotificationCenterPopoverStore } from "@/stores/notification-center-popover.store.ts";
 import { useNotificationCenterPrefsStore } from "@/stores/notification-center-prefs.store.ts";
 
+const runNotificationActionMock = vi.fn();
+
 vi.mock("@/lib/notifications/notification-actions.ts", () => ({
-  runNotificationAction: vi.fn(),
+  isNotificationActionAvailable: () => true,
+  runNotificationAction: (...args: unknown[]) =>
+    runNotificationActionMock(...args),
 }));
 
 const overlayDisposeMock = vi.fn();
@@ -267,6 +271,40 @@ describe("NotificationCenterControl", () => {
     );
     useNotificationCenterPopoverStore.getState().setOpen(true);
     expect(await screen.findByText("msg-a")).toBeTruthy();
+  });
+
+  it("closes popover after a card action runs (deep-link leaves inbox)", async () => {
+    seed([
+      {
+        ...item("a", "warning"),
+        actions: [
+          {
+            id: "open-output",
+            labelKey: "terminal.runtimeControl.viewDetails",
+          },
+        ],
+      },
+    ]);
+    render(
+      <TooltipProvider>
+        <NotificationCenterControl />
+      </TooltipProvider>
+    );
+    fireEvent.click(
+      screen.getByRole("button", { name: "Notifications, 1 unread" })
+    );
+    expect(await screen.findByText("msg-a")).toBeTruthy();
+    fireEvent.click(screen.getByText("View details"));
+    expect(runNotificationActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "a" }),
+      "open-output"
+    );
+    await vi.waitFor(() => {
+      expect(
+        document.querySelector('[data-slot="popover-content"]')
+      ).toBeNull();
+    });
+    expect(useNotificationCenterPopoverStore.getState().open).toBe(false);
   });
 
   it("closes itself when a dialog opens (unblocks deferred dialog mount)", async () => {

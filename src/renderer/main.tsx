@@ -26,6 +26,7 @@ import { registerCommandPaletteAction } from "./lib/actions/command-palette-acti
 import { registerCommandPaletteMruAction } from "./lib/actions/command-palette-mru-action.ts";
 import { registerConfigActions } from "./lib/actions/config-actions.ts";
 import { registerNewAgentAction } from "./lib/actions/new-agent-action.ts";
+import { registerNotificationCenterActions } from "./lib/actions/notification-center-actions.ts";
 import { registerPanelActions } from "./lib/actions/panel-actions.ts";
 import { registerRunActions } from "./lib/actions/run-actions.ts";
 import { registerSettingsActions } from "./lib/actions/settings-actions.ts";
@@ -151,6 +152,7 @@ async function bootstrap() {
   registerAgentStartActions();
   registerRunActions();
   registerPanelActions();
+  registerNotificationCenterActions();
   registerSettingsActions();
   registerViewActions();
   registerCommandPaletteMruAction();

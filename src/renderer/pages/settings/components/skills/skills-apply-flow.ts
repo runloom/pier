@@ -351,7 +351,6 @@ export async function collectAcknowledgements(args: {
         body: args.t("settings.skills.confirmGitDeleteBody"),
         confirmLabel: args.t("settings.skills.confirmDeleteAction"),
         intent: "destructive",
-        size: "default",
         title: args.t("settings.skills.confirmGitDeleteTitle", {
           target: requirement.relativeTarget ?? "",
         }),
@@ -363,7 +362,6 @@ export async function collectAcknowledgements(args: {
         }),
         confirmLabel: args.t("settings.skills.confirmDeleteAction"),
         intent: "destructive",
-        size: "default",
         title: args.t("settings.skills.confirmContentDeleteTitle", {
           skill: requirement.skillId ?? "",
         }),
@@ -372,7 +370,6 @@ export async function collectAcknowledgements(args: {
       confirmed = await showAppConfirm({
         body: args.t("settings.skills.actionDangerConfirmBody"),
         intent: "destructive",
-        size: "default",
         title: args.t("settings.skills.actionDangerConfirmTitle"),
       });
     }

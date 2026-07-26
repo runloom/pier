@@ -88,7 +88,6 @@ describe("AppDialogHost", () => {
         body: "Delete worktree feature-x?",
         confirmLabel: "Delete",
         intent: "destructive",
-        size: "sm",
         title: "Delete Worktree",
       });
     });
@@ -108,7 +107,6 @@ describe("AppDialogHost", () => {
       result = showAppConfirm({
         confirmLabel: "Go",
         intent: "default",
-        size: "sm",
         title: "Rebase Branch",
       });
     });
@@ -138,7 +136,6 @@ describe("AppDialogHost", () => {
         body: "Quitting will terminate these processes.",
         confirmLabel: "Quit",
         intent: "destructive",
-        size: "sm",
         title: "Quit Pier?",
       });
     });
@@ -206,14 +203,13 @@ describe("AppDialogHost", () => {
         altLabel: "Discard",
         confirmLabel: "Save",
         intent: "destructive",
-        size: "sm",
         title: "Save changes?",
       });
     });
 
     expect(await screen.findByText("Save changes?")).toBeVisible();
     const dialog = screen.getByRole("alertdialog");
-    // 调用方即使传 sm，choice 也强制 default 宽，且无危险侧标。
+    // choice 宽度由 host 固定 default，调用方不可选；无危险侧标。
     expect(dialog).toHaveAttribute("data-size", "default");
     expect(
       dialog.querySelector('[data-slot="alert-dialog-media"]')
@@ -252,7 +248,6 @@ describe("AppDialogHost", () => {
         buttonOrder: "confirm-alt-cancel",
         confirmLabel: "Discard Modified",
         intent: "destructive",
-        size: "default",
         title: "Discard Changes",
       });
     });
@@ -284,7 +279,6 @@ describe("AppDialogHost", () => {
         confirmLabel: "Save",
         initialValue: "old-name",
         intent: "default",
-        size: "sm",
         title: "Rename",
       });
     });
@@ -306,7 +300,6 @@ describe("AppDialogHost", () => {
       result = showAppConfirm({
         confirmLabel: "Go",
         intent: "default",
-        size: "sm",
         title: "Routing Check",
       });
     });
@@ -370,7 +363,6 @@ describe("AppDialogHost", () => {
       first = showAppConfirm({
         confirmLabel: "A",
         intent: "default",
-        size: "sm",
         title: "First Dialog",
       });
     });
@@ -381,7 +373,6 @@ describe("AppDialogHost", () => {
       second = showAppConfirm({
         confirmLabel: "B",
         intent: "default",
-        size: "sm",
         title: "Second Dialog",
       });
     });

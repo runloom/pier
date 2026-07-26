@@ -236,10 +236,10 @@ export async function buildRepairPlan(
     });
 
     // The manifest digest is the expected content, but the library tree may
-    // have changed underneath. Drifted or
-    // missing content is never (re)projected; while a live projection still
-    // exposes it, the issue blocks managed launches. Once the projection is
-    // gone the skill simply stops loading — launches proceed.
+    // have changed underneath. Drifted or missing content is never
+    // (re)projected. Live projections surface settings-only integrity
+    // (library-drift / missing-source) without hard-blocking agent launch;
+    // once the projection is gone the skill simply stops loading.
     const contentState = await inspectLibraryContentState(
       live.realPath,
       entry.id,

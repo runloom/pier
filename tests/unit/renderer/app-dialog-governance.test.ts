@@ -7,18 +7,14 @@ const SOURCE_FILE_RE = /\.(ts|tsx)$/;
 const PRODUCTION_SOURCE_ROOTS = [
   join(ROOT, "src", "renderer"),
   join(ROOT, "src", "plugins", "builtin"),
+  join(ROOT, "packages", "plugin-codex"),
+  join(ROOT, "packages", "plugin-claude"),
+  join(ROOT, "packages", "plugin-grok"),
+  join(ROOT, "packages", "plugin-ssh"),
 ];
 const ALLOWED_ALERT_DIALOG_IMPORTS = new Set([
   "src/renderer/components/common/app-dialog-host.tsx",
 ]);
-const REQUIRED_APP_CONFIRM_OPTIONS_RE =
-  /interface AppConfirmOptions[\s\S]*intent: AppDialogIntent;[\s\S]*size: AppDialogSize;/;
-const REQUIRED_PLUGIN_CONFIRM_OPTIONS_RE =
-  /confirm\(options: \{[\s\S]*intent: RendererPluginDialogIntent;[\s\S]*size: RendererPluginDialogSize;/;
-const REQUIRED_APP_PROMPT_OPTIONS_RE =
-  /interface AppPromptOptions[\s\S]*intent: AppDialogIntent;[\s\S]*size: AppDialogSize;/;
-const REQUIRED_PLUGIN_PROMPT_OPTIONS_RE =
-  /prompt\(options: \{[\s\S]*intent: RendererPluginDialogIntent;[\s\S]*size: RendererPluginDialogSize;/;
 
 function sourceFiles(dir: string): string[] {
   const entries = readdirSync(dir);
@@ -47,7 +43,11 @@ describe("app dialog usage governance", () => {
 
     expect(agentContext).toContain("### 宿主弹窗使用规范");
     expect(agentContext).toContain("桌面工具对话框");
-    expect(agentContext).toContain("`alert`：**固定 `sm`**");
+    expect(agentContext).toContain("**`size` 禁止调用方传入**");
+    expect(agentContext).toContain(
+      "`alert` / `confirm` / `prompt` → 固定 `sm`"
+    );
+    expect(agentContext).toContain("`choice` → 固定 `default`");
     expect(agentContext).toContain("`choice`：`alt | 取消 | confirm`");
     expect(agentContext).toContain(
       '破坏性确认必须显式传 `intent: "destructive"`'
@@ -58,9 +58,7 @@ describe("app dialog usage governance", () => {
     expect(agentContext).toContain(
       "builtin 与 external 插件的简单弹窗 API **同构**"
     );
-    expect(agentContext).toContain(
-      "showAppAlert` / 插件 `dialogs.alert` **不传 size**，一律 `sm`"
-    );
+    expect(agentContext).toContain("禁止回退为「每个确认各自传 sm/default」");
   });
 
   it("keeps shadcn AlertDialog primitive behind AppDialogHost", () => {
@@ -92,7 +90,7 @@ describe("app dialog usage governance", () => {
     expect(appDialogHost).not.toContain("setTimeout(");
   });
 
-  it("requires every confirm dialog request to choose size and intent explicitly", () => {
+  it("owns size by kind in the store (callers cannot pass size)", () => {
     const appDialogStore = readFileSync(
       join(ROOT, "src", "renderer", "stores", "app-dialog.store.ts"),
       "utf8"
@@ -101,37 +99,54 @@ describe("app dialog usage governance", () => {
       join(ROOT, "src", "plugins", "api", "renderer-dialogs.ts"),
       "utf8"
     );
-
-    expect(appDialogStore).toMatch(REQUIRED_APP_CONFIRM_OPTIONS_RE);
-    expect(pluginDialogsApi).toMatch(REQUIRED_PLUGIN_CONFIRM_OPTIONS_RE);
-  });
-
-  it("requires prompt dialog request to declare size + intent explicitly", () => {
-    const appDialogStore = readFileSync(
-      join(ROOT, "src", "renderer", "stores", "app-dialog.store.ts"),
-      "utf8"
-    );
-    const pluginDialogsApi = readFileSync(
-      join(ROOT, "src", "plugins", "api", "renderer-dialogs.ts"),
+    const externalPluginApi = readFileSync(
+      join(ROOT, "packages", "plugin-api", "src", "renderer.ts"),
       "utf8"
     );
 
-    // 与 confirm 对齐:size 与 intent 强制,避免 prompt 无声继承 default 尺寸
-    // 导致长内容溢出、或误用 destructive 语义。
-    expect(appDialogStore).toMatch(REQUIRED_APP_PROMPT_OPTIONS_RE);
-    expect(pluginDialogsApi).toMatch(REQUIRED_PLUGIN_PROMPT_OPTIONS_RE);
+    expect(appDialogStore).toContain("export function appDialogSizeForKind");
+    expect(appDialogStore).toContain(
+      'return kind === "choice" ? "default" : "sm"'
+    );
+    expect(appDialogStore).toContain("禁止调用方传入");
+    // Public option types must not declare size (internal request may keep it).
+    for (const name of [
+      "AppAlertOptions",
+      "AppConfirmOptions",
+      "AppChoiceOptions",
+      "AppPromptOptions",
+    ]) {
+      const block = appDialogStore.match(
+        new RegExp(`export interface ${name}[^{]*\\{([\\s\\S]*?)\\n\\}`, "m")
+      )?.[1];
+      expect(block, name).toBeDefined();
+      expect(block, name).not.toMatch(/\bsize\s*:/);
+    }
+    // Public open helpers must not read options.size.
+    expect(appDialogStore).not.toContain("options.size");
+    expect(appDialogStore).not.toContain("(options as AppConfirmOptions).size");
+
+    expect(pluginDialogsApi).not.toContain("size: RendererPluginDialogSize");
+    expect(pluginDialogsApi).not.toContain(
+      "export type RendererPluginDialogSize"
+    );
+    expect(pluginDialogsApi).toContain("size 不由插件传入");
+    expect(externalPluginApi).not.toContain("size: RendererPluginDialogSize");
+    expect(externalPluginApi).not.toContain(
+      "export type RendererPluginDialogSize"
+    );
   });
 
-  it("keeps choice dialogs on default width in production sources", () => {
-    const choiceCallRe =
-      /(?:showAppChoice|dialogs\.choice)\(\s*\{([\s\S]*?)\}\s*\)/g;
+  it("forbids size: in production simple-dialog call sites", () => {
+    const callRe =
+      /(?:showAppConfirm|showAppChoice|showAppPrompt|dialogs\.confirm|dialogs\.choice|dialogs\.prompt)\(\s*\{([\s\S]*?)\}\s*\)/g;
     const offenders = PRODUCTION_SOURCE_ROOTS.flatMap(sourceFiles).flatMap(
       (filePath) => {
         const source = readFileSync(filePath, "utf8");
         const hits: string[] = [];
-        for (const match of source.matchAll(choiceCallRe)) {
+        for (const match of source.matchAll(callRe)) {
           const body = match[1] ?? "";
-          if (/size:\s*"sm"/.test(body)) {
+          if (/\bsize\s*:/.test(body)) {
             hits.push(projectRelative(filePath));
           }
         }

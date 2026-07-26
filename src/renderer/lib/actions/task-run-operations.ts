@@ -37,7 +37,6 @@ async function retryFailedOutputRebind(
     cancelLabel: i18next.t("terminal.runtimeControl.stateUnavailableDismiss"),
     confirmLabel: i18next.t("terminal.runtimeControl.stateUnavailableRetry"),
     intent: "default",
-    size: "default",
     title: i18next.t("terminal.runtimeControl.openOutputFailed"),
   });
   if (!confirmed) {
@@ -80,7 +79,6 @@ export async function stopTaskRun(
       body: i18next.t("terminal.runtimeControl.forceStopBody"),
       confirmLabel: i18next.t("terminal.runtimeControl.forceStopConfirm"),
       intent: "destructive",
-      size: "sm",
       title: i18next.t("terminal.runtimeControl.forceStopTitle"),
     });
     if (!confirmed) {

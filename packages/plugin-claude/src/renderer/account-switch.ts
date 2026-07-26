@@ -21,7 +21,6 @@ export async function confirmSwitch(options: {
       "Confirm"
     ),
     intent: "default",
-    size: "sm",
     title: t(
       "pier.claude.accounts.settings.switchConfirmTitle",
       "Switch Claude account?"

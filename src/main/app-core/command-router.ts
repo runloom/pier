@@ -24,6 +24,7 @@ import { executeEnvironmentCommand } from "./environment-commands.ts";
 import { executeFileCommand } from "./file-commands.ts";
 import { executeGitCommand } from "./git-commands.ts";
 import { executeGitReviewCommand } from "./git-review-commands.ts";
+import { executeLiveModulesCommand } from "./live-modules-commands.ts";
 import {
   executePanelFocusCommand,
   executePanelListCommand,
@@ -352,6 +353,7 @@ async function executeCommandByDomain(
         onEnvironmentsChanged
       ),
     (cmd: PierCommand) => executePierHomeCommand(requestId, cmd, services),
+    (cmd: PierCommand) => executeLiveModulesCommand(requestId, cmd, services),
     (cmd: PierCommand) => executeAgentAssetsCommand(requestId, cmd, services),
     (cmd: PierCommand) =>
       executeWorktreeCommand(

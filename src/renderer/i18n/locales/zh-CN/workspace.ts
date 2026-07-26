@@ -21,6 +21,9 @@ export const workspace = {
     title: "界面出现错误",
   },
   tab: {
+    create: "新建",
+    maximize: "最大化",
+    restore: "还原",
     unsaved: "未保存的更改",
   },
   addPanelMenu: {
@@ -29,7 +32,6 @@ export const workspace = {
     noMatches: "没有匹配项",
     searchPlaceholder: "搜索面板类型或智能体…",
     title: "在此标签组新建",
-    trigger: "在此面板组中新建",
     startAgentFailed: "无法启动智能体",
   },
   panelTransfer: {

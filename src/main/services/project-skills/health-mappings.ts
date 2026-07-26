@@ -159,7 +159,10 @@ export const HEALTH_ISSUE_MAPPINGS: readonly HealthIssueMapping[] = [
   {
     code: "library-drift",
     severity: "error",
-    blockingScopes: ["enable", "projection", "launch"],
+    // Integrity still blocks enable / projection (adopt current / delete in
+    // settings). Do not hard-block managed agent launch: drift is a settings
+    // hygiene issue, not a reason to refuse opening an agent.
+    blockingScopes: ["enable", "projection"],
     degradePolicy: "denied",
     repairable: false,
   },

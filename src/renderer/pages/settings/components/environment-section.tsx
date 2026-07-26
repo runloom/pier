@@ -97,7 +97,6 @@ export function EnvironmentSection() {
         name: projectBasename(focused.projectRootPath),
       }),
       intent: "destructive",
-      size: "sm",
       title: t("settings.environment.discardTitle"),
     });
   }
@@ -150,7 +149,6 @@ export function EnvironmentSection() {
             })
           : t("settings.environment.deleteConfirmBody", { name }),
       intent: "destructive",
-      size: "sm",
       title: t("settings.environment.deleteConfirmTitle"),
     });
     if (!confirmed) {

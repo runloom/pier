@@ -15,6 +15,7 @@ function isLanguageExtension(value: unknown): boolean {
 }
 
 const ALL_LANGUAGE_IDS = [
+  "canvas",
   "cpp",
   "css",
   "go",

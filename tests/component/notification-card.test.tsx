@@ -74,6 +74,29 @@ describe("NotificationCard", () => {
   });
 
   it("dispatches action via the shared dispatcher", () => {
+    const onActionRun = vi.fn();
+    render(
+      <NotificationCard
+        notification={notification({
+          actions: [
+            {
+              id: "open-output",
+              labelKey: "terminal.runtimeControl.viewDetails",
+            },
+          ],
+        })}
+        onActionRun={onActionRun}
+      />
+    );
+    fireEvent.click(screen.getByText("View details"));
+    expect(runActionMock).toHaveBeenCalledWith(
+      expect.objectContaining({ id: "n1" }),
+      "open-output"
+    );
+    expect(onActionRun).toHaveBeenCalledTimes(1);
+  });
+
+  it("works without onActionRun (optional callback)", () => {
     render(
       <NotificationCard
         notification={notification({
@@ -87,10 +110,7 @@ describe("NotificationCard", () => {
       />
     );
     fireEvent.click(screen.getByText("View details"));
-    expect(runActionMock).toHaveBeenCalledWith(
-      expect.objectContaining({ id: "n1" }),
-      "open-output"
-    );
+    expect(runActionMock).toHaveBeenCalled();
   });
 
   it("clicking the title area marks the item read (once)", () => {

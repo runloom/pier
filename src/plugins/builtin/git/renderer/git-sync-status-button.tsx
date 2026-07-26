@@ -86,7 +86,7 @@ async function confirmAndRunSync({
       ),
       pluginText(pluginContext, "statusSyncConfirmButton", "Sync"),
       undefined,
-      { intent: "default", size: "sm" }
+      { intent: "default" }
     );
     if (!confirmed) {
       return;

@@ -32,6 +32,7 @@ export const panelKits = {
   workbench: workbenchPanelKit,
   terminal: terminalPanelKit,
   welcome: welcomePanelKit,
+  // Canvas preview is files panel view mode (like Markdown), not a core kit.
   "panel-transfer-unavailable": {
     component: PanelTransferUnavailablePanel,
     icon: AlertTriangle,

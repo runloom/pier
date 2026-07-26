@@ -83,13 +83,11 @@ export function openFilesDiskPath(input: {
   title?: string;
 }): boolean {
   const pathParsed = nonEmptyFileRootRelativePathSchema.safeParse(input.path);
-  if (
-    !(
-      getPluginPanelRegistrations().has(FILES_FILE_PANEL_COMPONENT_ID) &&
-      pathParsed.success
-    ) ||
-    input.root.length === 0
-  ) {
+  if (!(pathParsed.success && input.root.length > 0)) {
+    return false;
+  }
+
+  if (!getPluginPanelRegistrations().has(FILES_FILE_PANEL_COMPONENT_ID)) {
     return false;
   }
 
