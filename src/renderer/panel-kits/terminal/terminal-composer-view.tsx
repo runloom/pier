@@ -8,7 +8,7 @@ import type {
   MouseEvent as ReactMouseEvent,
   Ref,
 } from "react";
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { formatChord } from "@/lib/keybindings/formatter.ts";
 import { isMac } from "@/lib/keybindings/matcher.ts";
@@ -60,6 +60,8 @@ function ComposerAttachButton({
 }
 
 export interface TerminalComposerViewProps {
+  /** Foreground agent kind for skill suggest (`/` / `$`). */
+  agentKind?: string | null;
   attachments: readonly ComposerAttachment[];
   blockReason: TuiSendBlockReason | null;
   bottomOffsetPx: number;
@@ -88,6 +90,7 @@ export interface TerminalComposerViewProps {
 }
 
 export function TerminalComposerView({
+  agentKind = null,
   attachments,
   blockReason,
   bottomOffsetPx,
@@ -115,6 +118,8 @@ export function TerminalComposerView({
   value,
 }: TerminalComposerViewProps) {
   const t = useT();
+  /** Full chrome card — autocomplete list width matches this element. */
+  const [chromeEl, setChromeEl] = useState<HTMLDivElement | null>(null);
   const attachShortcut = useMemo(
     () => formatChord(parseChord(COMPOSER_ATTACH_CHORD, isMac())),
     []
@@ -136,6 +141,8 @@ export function TerminalComposerView({
       <div
         aria-label={t("terminal.composer.label")}
         className={cn(
+          // Full panel strip (terminal tool chrome), not chat column max-width.
+          // Suggest portal width tracks this card 1:1.
           "flex w-full min-w-0 border bg-background",
           "text-foreground shadow-lg outline-none",
           "focus-within:border-ring focus-within:ring-3 focus-within:ring-ring/30",
@@ -146,6 +153,7 @@ export function TerminalComposerView({
         data-chrome={compact ? "compact" : "expanded"}
         data-testid="terminal-composer"
         onMouseDown={onChromeMouseDown}
+        ref={setChromeEl}
       >
         {!compact && hasAttachments ? (
           <div className="px-2 pt-2 pb-0.5">
@@ -168,7 +176,9 @@ export function TerminalComposerView({
         ) : null}
 
         <StructuredComposerEditor
+          agentKind={agentKind}
           attachments={attachments}
+          chromeAnchor={chromeEl}
           className={cn(
             compact
               ? // Keep compact chrome min height (36px); do not clip @/# menus

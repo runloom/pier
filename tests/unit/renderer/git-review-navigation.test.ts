@@ -3,6 +3,7 @@ import {
   findReviewNavigationTarget,
   isReviewNavigationContentReady,
   isReviewNavigationTerminal,
+  resolveReviewSectionKey,
   scheduleReviewNavigationVerification,
   shouldScrollReviewNavigation,
 } from "@plugins/builtin/git/renderer/git-review-navigation.ts";
@@ -84,6 +85,81 @@ describe("Review navigation verification", () => {
     ).toEqual({ cacheKey, sectionId: "state:binary" });
     expect(
       isReviewNavigationTerminal(snapshot.resources[0], snapshot.settled)
+    ).toBe(false);
+  });
+
+  it("resolveReviewSectionKey rebinds when preferred left the entry", () => {
+    expect(
+      resolveReviewSectionKey({
+        entryKey: "entry:a",
+        entryKeyBySectionId: new Map([["section:staged", "entry:a"]]),
+        firstSectionIdByEntryKey: new Map([["entry:a", "section:staged"]]),
+        preferredSectionKey: "section:unstaged",
+      })
+    ).toBe("section:staged");
+    expect(
+      resolveReviewSectionKey({
+        entryKey: "entry:a",
+        entryKeyBySectionId: new Map([
+          ["section:unstaged", "entry:a"],
+          ["section:staged", "entry:a"],
+        ]),
+        firstSectionIdByEntryKey: new Map([["entry:a", "section:unstaged"]]),
+        preferredSectionKey: "section:staged",
+      })
+    ).toBe("section:staged");
+  });
+
+  it("isReviewNavigationTerminal when settled resource lacks orphan sectionKey", () => {
+    const entry = {
+      entryKey: "entry:a",
+      oldPaths: [] as string[],
+      path: "a.ts",
+      renderSlots: [
+        {
+          group: "staged" as const,
+          oldPath: null,
+          sectionKey: "section:staged",
+          status: "modified" as const,
+          targetPath: "a.ts",
+        },
+      ],
+      status: "modified" as const,
+    };
+    const loaded = {
+      document: {
+        kind: "ok" as const,
+        revision: "r",
+        sections: [
+          {
+            kind: "patch" as const,
+            patch: "diff",
+            sectionKey: "section:staged",
+          },
+        ],
+      },
+      entry,
+      kind: "loaded" as const,
+    };
+    expect(isReviewNavigationTerminal(loaded, true, "section:unstaged")).toBe(
+      true
+    );
+    expect(isReviewNavigationTerminal(loaded, true, "section:staged")).toBe(
+      false
+    );
+    expect(
+      isReviewNavigationTerminal(
+        { entry, kind: "unchanged" },
+        true,
+        "section:unstaged"
+      )
+    ).toBe(true);
+    expect(
+      isReviewNavigationTerminal(
+        { entry, kind: "unchanged" },
+        true,
+        "section:staged"
+      )
     ).toBe(false);
   });
 
@@ -224,10 +300,27 @@ describe("Review navigation verification", () => {
 });
 
 describe("Review navigation content readiness", () => {
-  it("does not scroll while projection is still a loading placeholder", () => {
+  it("does not scroll until loader member is loaded/error (end-state)", () => {
     expect(
       shouldScrollReviewNavigation({
         projectedCacheKey: "git-review-placeholder:section:1",
+        resource: {
+          entry: {
+            entryKey: "entry:1",
+            oldPaths: [],
+            path: "a.ts",
+            renderSlots: [],
+            status: "modified",
+          },
+          kind: "loading",
+          operationId: "op-1",
+        },
+      })
+    ).toBe(false);
+    // 即使投影残留旧 cacheKey，loading 也不得 scroll（终态禁止假就绪）。
+    expect(
+      shouldScrollReviewNavigation({
+        projectedCacheKey: "document:1:section:1",
         resource: {
           entry: {
             entryKey: "entry:1",
@@ -245,6 +338,11 @@ describe("Review navigation content readiness", () => {
       shouldScrollReviewNavigation({
         projectedCacheKey: "document:1:section:1",
         resource: {
+          document: {
+            kind: "ok",
+            revision: "r1",
+            sections: [],
+          },
           entry: {
             entryKey: "entry:1",
             oldPaths: [],
@@ -252,14 +350,13 @@ describe("Review navigation content readiness", () => {
             renderSlots: [],
             status: "modified",
           },
-          kind: "loading",
-          operationId: "op-1",
+          kind: "loaded",
         },
       })
     ).toBe(true);
   });
 
-  it("treats only loaded documents as navigation-ready content", () => {
+  it("treats only loaded/error documents as navigation-ready content", () => {
     expect(isReviewNavigationContentReady(undefined)).toBe(false);
     expect(
       isReviewNavigationContentReady({

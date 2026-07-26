@@ -57,6 +57,9 @@ describe("handleFilesTerminalOpenUrl", () => {
       panels: {
         openInstance,
         listInstances,
+        listInstancesGlobal: vi.fn(async () => []),
+        focusInstance: vi.fn(async () => ({ kind: "focused" as const })),
+        getActiveInstanceId: vi.fn(() => null),
       },
       terminal: {
         getPanelContext,
@@ -76,8 +79,8 @@ describe("handleFilesTerminalOpenUrl", () => {
     expect(openPath).not.toHaveBeenCalled();
   });
 
-  it("toasts when relative path has no cwd", async () => {
-    getPanelContext.mockReturnValue(panelContext({ cwd: undefined }));
+  it("toasts when relative path has no resolve roots", async () => {
+    getPanelContext.mockReturnValue(null);
     await expect(
       handleFilesTerminalOpenUrl(context, {
         kind: "text",
@@ -87,6 +90,81 @@ describe("handleFilesTerminalOpenUrl", () => {
     ).resolves.toBe(true);
     expect(notificationsError).toHaveBeenCalled();
     expect(openPath).not.toHaveBeenCalled();
+  });
+
+  it("falls back from cwd to project root when only project has the file", async () => {
+    getPanelContext.mockReturnValue(
+      panelContext({
+        cwd: "/repo/src",
+        projectRootPath: "/repo",
+        worktreeRoot: "/repo",
+      })
+    );
+    stat.mockImplementation(async (request: { path: string; root: string }) => {
+      const exists = request.root === "/repo" && request.path === "docs/a.md";
+      return {
+        exists,
+        isDirectory: false,
+        mtimeMs: 1,
+        path: request.path,
+        root: request.root,
+        size: 2,
+      };
+    });
+
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: "docs/a.md",
+      })
+    ).resolves.toBe(true);
+
+    // First candidate is under cwd (/repo/src/docs/a.md) and is missing.
+    expect(stat).toHaveBeenCalledWith({
+      path: "docs/a.md",
+      root: "/repo/src",
+    });
+    // Second candidate is under worktree/project root and exists.
+    expect(stat).toHaveBeenCalledWith({
+      path: "docs/a.md",
+      root: "/repo",
+    });
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          source: {
+            kind: "disk",
+            path: "docs/a.md",
+            root: "/repo",
+          },
+        }),
+      })
+    );
+  });
+
+  it("opens relative path against project root when cwd is missing", async () => {
+    getPanelContext.mockReturnValue(
+      panelContext({ cwd: undefined, projectRootPath: "/repo" })
+    );
+    await expect(
+      handleFilesTerminalOpenUrl(context, {
+        kind: "text",
+        panelId: "t1",
+        url: "README.md",
+      })
+    ).resolves.toBe(true);
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({
+        params: expect.objectContaining({
+          source: {
+            kind: "disk",
+            path: "README.md",
+            root: "/repo",
+          },
+        }),
+      })
+    );
   });
 
   it("opens readable text files outside anchors via Files", async () => {

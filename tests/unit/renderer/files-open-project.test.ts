@@ -1,4 +1,5 @@
 import type {
+  PluginPanelGlobalInstanceSnapshot,
   PluginPanelInstanceSnapshot,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
@@ -6,7 +7,10 @@ import type { PanelContext } from "@shared/contracts/panel.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { FILES_FILE_PANEL_ID } from "../../../src/plugins/builtin/files/manifest.ts";
 import * as prefs from "../../../src/plugins/builtin/files/renderer/file-tree-preferences.ts";
-import { openProjectFiles } from "../../../src/plugins/builtin/files/renderer/files-open-project.ts";
+import {
+  createProjectFilesInstanceId,
+  openProjectFiles,
+} from "../../../src/plugins/builtin/files/renderer/files-open-project.ts";
 import * as treeRegistry from "../../../src/plugins/builtin/files/renderer/files-tree-registry.ts";
 
 const baseContext: PanelContext = {
@@ -18,13 +22,21 @@ const baseContext: PanelContext = {
 
 function makePlugin(overrides?: {
   activeInstanceId?: string | null;
+  focusInstance?: RendererPluginContext["panels"]["focusInstance"];
   listInstances?: PluginPanelInstanceSnapshot[];
+  listInstancesGlobal?: PluginPanelGlobalInstanceSnapshot[];
   openInstance?: RendererPluginContext["panels"]["openInstance"];
 }): RendererPluginContext {
   const openInstance =
     overrides?.openInstance ??
     vi.fn<RendererPluginContext["panels"]["openInstance"]>();
   const listInstances = overrides?.listInstances ?? [];
+  const listInstancesGlobal = overrides?.listInstancesGlobal ?? [];
+  const focusInstance =
+    overrides?.focusInstance ??
+    vi.fn<RendererPluginContext["panels"]["focusInstance"]>(async () => ({
+      kind: "focused" as const,
+    }));
 
   return {
     actions: { register: vi.fn() },
@@ -49,6 +61,8 @@ function makePlugin(overrides?: {
           : null
       ),
       listInstances: vi.fn().mockReturnValue(listInstances),
+      listInstancesGlobal: vi.fn().mockResolvedValue(listInstancesGlobal),
+      focusInstance,
       open: vi.fn(),
       openInstance,
       register: vi.fn(),
@@ -70,9 +84,9 @@ describe("openProjectFiles", () => {
     vi.useRealTimers();
   });
 
-  it("returns no-anchor when context lacks project fields", () => {
+  it("returns no-anchor when context lacks project fields", async () => {
     const plugin = makePlugin();
-    const result = openProjectFiles(plugin, {
+    const result = await openProjectFiles(plugin, {
       contextId: "x",
       projectRootPath: "",
       updatedAt: 1,
@@ -80,11 +94,11 @@ describe("openProjectFiles", () => {
     expect(result).toEqual({ ok: false, reason: "no-anchor" });
   });
 
-  it("opens a new empty files instance for the project root", () => {
+  it("opens a new empty files instance for the project root", async () => {
     const openInstance = vi.fn();
     const plugin = makePlugin({ listInstances: [], openInstance });
     const expand = vi.spyOn(prefs, "ensureProjectFileTreeExpanded");
-    expect(openProjectFiles(plugin, baseContext)).toEqual({ ok: true });
+    expect(await openProjectFiles(plugin, baseContext)).toEqual({ ok: true });
     expect(openInstance).toHaveBeenCalledWith(
       expect.objectContaining({
         componentId: FILES_FILE_PANEL_ID,
@@ -96,7 +110,7 @@ describe("openProjectFiles", () => {
     expand.mockRestore();
   });
 
-  it("reuses an existing instance for the same project anchor", () => {
+  it("reuses an existing project-directory instance for the same anchor", async () => {
     const openInstance = vi.fn();
     const plugin = makePlugin({
       listInstances: [
@@ -107,19 +121,73 @@ describe("openProjectFiles", () => {
           title: "proj",
           params: {
             context: baseContext,
+          },
+        },
+      ],
+      openInstance,
+    });
+    await openProjectFiles(plugin, baseContext);
+    expect(openInstance).toHaveBeenCalledWith(
+      expect.objectContaining({ instanceId: "existing-id" })
+    );
+  });
+
+  it("does not treat an open file editor as the project directory tab", async () => {
+    const openInstance = vi.fn();
+    const plugin = makePlugin({
+      listInstances: [
+        {
+          id: "file-editor",
+          componentId: FILES_FILE_PANEL_ID,
+          groupId: "g1",
+          title: "a.ts",
+          params: {
+            context: baseContext,
             source: { kind: "disk", path: "a.ts", root: "/Users/a/proj" },
           },
         },
       ],
       openInstance,
     });
-    openProjectFiles(plugin, baseContext);
+    await openProjectFiles(plugin, baseContext);
     expect(openInstance).toHaveBeenCalledWith(
-      expect.objectContaining({ instanceId: "existing-id" })
+      expect.objectContaining({
+        instanceId: expect.stringContaining(":project:"),
+        params: {},
+      })
     );
   });
 
-  it("does not reopen or reveal when the project files panel is already active", () => {
+  it("focuses a project directory in another window instead of opening again", async () => {
+    const openInstance = vi.fn();
+    const focusInstance = vi.fn(async () => ({ kind: "focused" as const }));
+    const remoteId = createProjectFilesInstanceId("/Users/a/proj");
+    const plugin = makePlugin({
+      focusInstance,
+      listInstances: [],
+      listInstancesGlobal: [
+        {
+          componentId: FILES_FILE_PANEL_ID,
+          groupId: null,
+          id: remoteId,
+          title: "proj",
+          windowId: "win-remote",
+          params: { context: baseContext },
+        },
+      ],
+      openInstance,
+    });
+
+    expect(await openProjectFiles(plugin, baseContext)).toEqual({ ok: true });
+    expect(focusInstance).toHaveBeenCalledWith({
+      componentId: FILES_FILE_PANEL_ID,
+      instanceId: remoteId,
+      windowId: "win-remote",
+    });
+    expect(openInstance).not.toHaveBeenCalled();
+  });
+
+  it("does not reopen or reveal when the project files panel is already active", async () => {
     const openInstance = vi.fn();
     const reveal = vi
       .spyOn(treeRegistry, "revealFilesTreePath")
@@ -139,7 +207,7 @@ describe("openProjectFiles", () => {
       openInstance,
     });
 
-    expect(openProjectFiles(plugin, baseContext)).toEqual({ ok: true });
+    expect(await openProjectFiles(plugin, baseContext)).toEqual({ ok: true });
     expect(openInstance).not.toHaveBeenCalled();
     expect(expand).not.toHaveBeenCalled();
     vi.advanceTimersByTime(80);
@@ -149,12 +217,12 @@ describe("openProjectFiles", () => {
     reveal.mockRestore();
   });
 
-  it("schedules reveal after open", () => {
+  it("schedules reveal after open", async () => {
     const reveal = vi
       .spyOn(treeRegistry, "revealFilesTreePath")
       .mockReturnValue(true);
     const plugin = makePlugin({ listInstances: [], openInstance: vi.fn() });
-    openProjectFiles(plugin, baseContext);
+    await openProjectFiles(plugin, baseContext);
     expect(reveal).not.toHaveBeenCalled();
     vi.advanceTimersByTime(80);
     expect(reveal).toHaveBeenCalledWith(

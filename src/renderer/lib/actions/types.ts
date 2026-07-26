@@ -68,7 +68,11 @@ export type ActionCategoryKey =
 
 export interface Action {
   category: string;
-  disabledReason?: () => string | null | undefined;
+  /**
+   * 禁用原因。命令面板 / 创建菜单在 enabled=false 时展示；
+   * 快捷键在 enabled=false 时 toast 该文案（无 reason 则静默跳过）。
+   */
+  disabledReason?: (invocation?: ActionInvocation) => string | null | undefined;
   enabled?: (invocation?: ActionInvocation) => boolean;
   handler: (invocation?: ActionInvocation) => void | Promise<void>;
   id: string;

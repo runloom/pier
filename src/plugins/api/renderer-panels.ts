@@ -24,6 +24,17 @@ export interface PluginPanelInstanceSnapshot {
   readonly title: string;
 }
 
+/** Cross-window instance from `panels.listInstancesGlobal`. */
+export interface PluginPanelGlobalInstanceSnapshot
+  extends PluginPanelInstanceSnapshot {
+  readonly windowId: string;
+}
+
+export type PluginPanelFocusInstanceResult =
+  | { readonly kind: "focused" }
+  | { readonly kind: "not_found" }
+  | { readonly kind: "error"; readonly message: string };
+
 export interface PluginPanelInstanceOptions {
   componentId: string;
   context?: PanelContext;
@@ -39,6 +50,45 @@ export interface PluginPanelInstanceOptions {
 export type PluginPanelInstanceOpenResult =
   | { readonly kind: "opened" }
   | { readonly kind: "targetGroupMissing" };
+
+/** Plugin-facing panels host surface (local + cross-window). */
+export interface RendererPluginPanelsFacade {
+  flushLayout(): Promise<void>;
+  /** Focus a declared instance in any window (brings that window forward). */
+  focusInstance(options: {
+    componentId: string;
+    instanceId: string;
+    windowId: string;
+  }): Promise<PluginPanelFocusInstanceResult>;
+  /** Active panel context when it belongs to this plugin; otherwise null. */
+  getActiveContext(): PanelContext | null;
+  getActiveInstanceId(componentId: string): string | null;
+  listInstances(componentId: string): readonly PluginPanelInstanceSnapshot[];
+  /** Cross-window list of declared component instances (includes current window). */
+  listInstancesGlobal(
+    componentId: string
+  ): Promise<readonly PluginPanelGlobalInstanceSnapshot[]>;
+  /** Singleton open; panelId must be declared by this plugin. */
+  open(panelId: string, options?: { context?: PanelContext }): void;
+  openInstance(
+    options: PluginPanelInstanceOptions
+  ): PluginPanelInstanceOpenResult;
+  register(registration: PluginPanelRegistration): () => void;
+  registerCloseGuard(
+    componentId: string,
+    guard: (input: {
+      closingPanelIds?: readonly string[];
+      componentId: string;
+      panelId: string;
+      params?: unknown;
+    }) => boolean | Promise<boolean>
+  ): () => void;
+  updateInstanceParams(
+    componentId: string,
+    instanceId: string,
+    patch: Record<string, unknown>
+  ): boolean;
+}
 
 export interface PluginPanelRegistration {
   component: FunctionComponent<IDockviewPanelProps>;

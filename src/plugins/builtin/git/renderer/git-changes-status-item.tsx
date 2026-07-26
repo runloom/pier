@@ -39,13 +39,13 @@ export function GitChangesStatusItem({
   }
   return (
     <GitChangesStatusButton
-      onOpenChanges={() =>
+      onOpenChanges={() => {
         openGitChangesPanel({
           getGroupId,
           panelContext,
           pluginContext,
-        })
-      }
+        }).catch(() => undefined);
+      }}
       pluginContext={pluginContext}
       status={statusState.status}
     />

@@ -24,41 +24,42 @@
         // render an active cursor on creation.
         var appliedSurfaceFocus: Bool?
         open var focusesOnMouseDown = true
-        /// Host-forced DECTCEM hide while a web overlay owns the keyboard.
-        /// `internal` so `synchronizeHostFocusState` (in the +Lifecycle file)
-        /// can read it when deriving Ghostty focus.
+        /// Surface focus pin + visual cursor suppress while Rich Input owns keys.
+        /// - Focus: keeps Ghostty `focused=true` (no mode-1004 `ESC[O]`).
+        /// - Visual: suppress painted cursor so only the composer caret blinks.
+        ///   Probe still reads DECTCEM mode bit (patch 0104), not paint state.
+        /// `internal` so `synchronizeHostFocusState` can read it.
         var hostCursorHidden = false
         open var hostKeyboardActive = true {
             didSet {
                 guard hostKeyboardActive != oldValue else { return }
+                core.setCursorSuppress(cursorSuppressed)
                 synchronizeHostFocusState()
             }
         }
 
+        /// Visual suppress (patch 0103). Suppress when this terminal lacks
+        /// keyboard ownership **or** when Rich Input has focus-disabled pin
+        /// (composer open — no dual blinking carets).
         open var cursorSuppressed: Bool {
             !hostKeyboardActive || hostCursorHidden
         }
 
-        /// Hide the hardware cursor while a Pier web overlay (agent composer)
-        /// owns the keyboard. Implemented as a renderer-level suppress
-        /// (Pier ghostty patch 0103) — immune to the TUI re-showing the
-        /// cursor via `CSI ?25h`, unlike a DECTCEM write into the VT parser.
-        /// `force` re-applies even when the cached state matches, covering
-        /// surfaces recreated underneath the cached flag.
+        /// Pin surface focus + suppress painted cursor for composer takeover.
+        /// `force` re-applies even when the cached flag matches (surface rebuild).
         public func setHostCursorHidden(_ hidden: Bool, force: Bool = false) {
             let changed = hostCursorHidden != hidden
             guard force || changed else { return }
             hostCursorHidden = hidden
             if changed {
                 NSLog(
-                    "[pier] setHostCursorHidden hidden=%@ hasSurface=%@",
+                    "[pier] setHostCursorHidden pin=%@ hasSurface=%@ visualSuppress=%@",
                     hidden ? "1" : "0",
-                    surface != nil ? "1" : "0"
+                    surface != nil ? "1" : "0",
+                    cursorSuppressed ? "1" : "0"
                 )
             }
-            core.setCursorSuppress(hidden)
-            // 转场后重新派生 Ghostty focus：hostCursorHidden 生效后
-            // 让 focus=true，避免上一个 apply 遗留的 focus=false 画出 hollow。
+            core.setCursorSuppress(cursorSuppressed)
             if changed {
                 synchronizeHostFocusState()
             }

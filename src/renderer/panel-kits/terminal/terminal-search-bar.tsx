@@ -15,7 +15,10 @@ import {
   useTerminalOverlayFocus,
   useTerminalStore,
 } from "@/stores/terminal.store.ts";
-import { acquireTerminalEscapeShortcut } from "./terminal-escape-shortcut.ts";
+import {
+  acquireTerminalEscapeShortcut,
+  isBareEscapeForward,
+} from "./terminal-escape-shortcut.ts";
 
 interface TerminalSearchBarProps {
   focusRequest: number;
@@ -34,17 +37,6 @@ const EMPTY_SEARCH_STATE: SearchState = {
   total: 0,
 };
 
-/** 与 use-keybindings 一致的 NSEvent 修饰位。 */
-const NS_FLAG_SHIFT = 0x2_00_00;
-const NS_FLAG_CONTROL = 0x4_00_00;
-const NS_FLAG_OPTION = 0x8_00_00;
-const NS_FLAG_COMMAND = 0x10_00_00;
-
-function hasNsFlag(modifierFlags: number, flag: number): boolean {
-  // biome-ignore lint/suspicious/noBitwiseOperators: NSEvent.modifierFlags 位掩码
-  return (modifierFlags & flag) !== 0;
-}
-
 function normalizeSearchState(event: TerminalSearchStateEvent): SearchState {
   const total = Number.isFinite(event.total) ? Math.max(0, event.total) : 0;
   const selected =
@@ -57,18 +49,6 @@ function normalizeSearchState(event: TerminalSearchStateEvent): SearchState {
 
 function reportSearchError(action: string, err: unknown): void {
   console.error(`[terminal-search] ${action} failed:`, err);
-}
-
-function isBareEscapeForward(modifierFlags: number, chars: string): boolean {
-  if (
-    hasNsFlag(modifierFlags, NS_FLAG_COMMAND) ||
-    hasNsFlag(modifierFlags, NS_FLAG_CONTROL) ||
-    hasNsFlag(modifierFlags, NS_FLAG_OPTION) ||
-    hasNsFlag(modifierFlags, NS_FLAG_SHIFT)
-  ) {
-    return false;
-  }
-  return chars === "\u{1b}" || chars.toLowerCase() === "escape";
 }
 
 export function TerminalSearchBar({

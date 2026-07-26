@@ -107,7 +107,17 @@ export type TaskOutputPanelParamsV2 = z.infer<
   typeof taskOutputPanelParamsV2Schema
 >;
 
-export const taskRunTerminationSchema = z.enum(["interrupt", "force"]);
+/**
+ * 节点如何进入 cancelled：
+ * - interrupt：用户/系统优雅停止（TERM）
+ * - force：强制杀进程
+ * - superseded：同任务重新运行替换本轮（实现细节，不对用户发「已取消」）
+ */
+export const taskRunTerminationSchema = z.enum([
+  "interrupt",
+  "force",
+  "superseded",
+]);
 export type TaskRunTermination = z.infer<typeof taskRunTerminationSchema>;
 
 export const TASK_STOP_GRACE_MS = 2000;

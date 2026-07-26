@@ -122,6 +122,57 @@ describe("Git Review failure state", () => {
     });
   });
 
+  it("settled=false 时忽略 refresh 失败与 render 闪错", () => {
+    const accumulator = new GitReviewFailureAccumulator();
+    const item = entry(0);
+    const refreshFailure = failure(item, "refresh mid-stage");
+    expect(
+      accumulator.applyGenerationChanges(
+        [change(refreshFailure, item.entryKey, "refresh")],
+        { settled: false }
+      )
+    ).toBe(false);
+    expect(accumulator.summary(null).visibleFailures).toEqual([]);
+
+    expect(
+      accumulator.updateRenderError(
+        "section:0:0",
+        new Error("parse mid-materialize"),
+        item,
+        { settled: false }
+      )
+    ).toBe(false);
+    expect(accumulator.summary(null).visibleFailures).toEqual([]);
+
+    // document materialize 终态 error 在 unsettled 仍可见
+    const documentFailure = failure(item, "document settled item");
+    expect(
+      accumulator.applyGenerationChanges(
+        [change(documentFailure, item.entryKey)],
+        { settled: false }
+      )
+    ).toBe(true);
+    expect(accumulator.summary(null).visibleFailures).toEqual([
+      documentFailure,
+    ]);
+
+    // settled 后 refresh / render 进入失败面
+    expect(
+      accumulator.applyGenerationChanges(
+        [change(refreshFailure, item.entryKey, "refresh")],
+        { settled: true }
+      )
+    ).toBe(true);
+    expect(
+      accumulator.updateRenderError(
+        "section:0:0",
+        new Error("parse settled"),
+        item,
+        { settled: true }
+      )
+    ).toBe(true);
+  });
+
   it("2,001 个同轮渲染错误只发布一次，且旧 generation 回调被丢弃", async () => {
     const entries = Array.from({ length: 2001 }, (_, index) => entry(index));
     const entryKeyBySectionId = new Map(

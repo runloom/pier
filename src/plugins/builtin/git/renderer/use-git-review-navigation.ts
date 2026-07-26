@@ -4,15 +4,18 @@ import {
   isReviewNavigationTerminal,
   isReviewPlaceholderCacheKey,
   type PendingReviewNavigation,
+  resolveReviewSectionKey,
   reviewNavigationKey,
   scheduleReviewNavigationVerification,
 } from "./git-review-navigation.ts";
+import { resumeGitReviewSelectedNavigation } from "./use-git-review-navigation-resume.ts";
 import type { UseGitReviewNavigationOptions } from "./use-git-review-navigation-types.ts";
 
 export function useGitReviewNavigation({
   applyNavigationDemand,
   diffHandleRef,
   documentGenerationRef,
+  entryKeyBySectionIdRef,
   firstSectionIdByEntryKeyRef,
   itemCacheKeysRef,
   itemIndexByIdRef,
@@ -86,21 +89,6 @@ export function useGitReviewNavigation({
 
   const currentLoadedTarget = useCallback(
     (navigation: PendingReviewNavigation) => {
-      if (currentProjectedTarget(navigation) === null) {
-        return null;
-      }
-      return findReviewNavigationTarget(
-        loaderRef.current?.getResource(navigation.entryKey),
-        itemCacheKeysRef.current,
-        navigation.sectionKey
-      );
-    },
-    [currentProjectedTarget, itemCacheKeysRef, loaderRef]
-  );
-
-  /** 可 scroll 的目标：非 placeholder 投影（含暂留 ready），不含 loading 空头。 */
-  const currentScrollTarget = useCallback(
-    (navigation: PendingReviewNavigation) => {
       const projected = currentProjectedTarget(navigation);
       if (
         projected === null ||
@@ -108,9 +96,22 @@ export function useGitReviewNavigation({
       ) {
         return null;
       }
-      return projected;
+      // 优先 loader 真 loaded/error；软保留时 loader 可能是 unchanged/idle，
+      // 仍允许以投影真成员导航（避免 silent terminal）。
+      const fromLoader = findReviewNavigationTarget(
+        loaderRef.current?.getResource(navigation.entryKey),
+        itemCacheKeysRef.current,
+        navigation.sectionKey
+      );
+      return fromLoader ?? projected;
     },
-    [currentProjectedTarget]
+    [currentProjectedTarget, itemCacheKeysRef, loaderRef]
+  );
+
+  /** 可 scroll 的目标：投影上的真成员（loaded/error 或软保留正文）。 */
+  const currentScrollTarget = useCallback(
+    (navigation: PendingReviewNavigation) => currentLoadedTarget(navigation),
+    [currentLoadedTarget]
   );
 
   const finishTerminal = useCallback(() => {
@@ -136,9 +137,13 @@ export function useGitReviewNavigation({
       if (!selectedSectionKey) {
         return;
       }
+      // 无 id 列表的全量 notify 会误抬 revision → resume 排他 demand 饿死其它文件。
+      // 仅在明确传入且命中选中项及其前序拓扑时推进水位。
+      if (changedItemIds === undefined) {
+        return;
+      }
       const targetIndex = itemIndexByIdRef.current.get(selectedSectionKey);
       if (
-        changedItemIds === undefined ||
         targetIndex === undefined ||
         changedItemIds.some((id) => {
           const index = itemIndexByIdRef.current.get(id);
@@ -171,7 +176,8 @@ export function useGitReviewNavigation({
             loader !== null &&
             isReviewNavigationTerminal(
               loader.getResource(navigation.entryKey),
-              loader.isSettled()
+              loader.isSettled(),
+              navigation.sectionKey
             )
           );
         },
@@ -276,7 +282,8 @@ export function useGitReviewNavigation({
       loader &&
       isReviewNavigationTerminal(
         loader.getResource(navigation.entryKey),
-        loader.isSettled()
+        loader.isSettled(),
+        navigation.sectionKey
       )
     ) {
       finishTerminal();
@@ -330,10 +337,12 @@ export function useGitReviewNavigation({
       setNavigationError(null);
       const selected = selectedEntryKeyRef.current;
       if (selected && entryKeys.has(selected)) {
-        const selectedSection =
-          selectedSectionKeyRef.current ??
-          firstSectionIdByEntryKeyRef.current.get(selected) ??
-          null;
+        const selectedSection = resolveReviewSectionKey({
+          entryKey: selected,
+          entryKeyBySectionId: entryKeyBySectionIdRef.current,
+          firstSectionIdByEntryKey: firstSectionIdByEntryKeyRef.current,
+          preferredSectionKey: selectedSectionKeyRef.current,
+        });
         if (!selectedSection) {
           selectedEntryKeyRef.current = null;
           selectedSectionKeyRef.current = null;
@@ -363,67 +372,35 @@ export function useGitReviewNavigation({
     [
       applyNavigationDemand,
       cancelVerification,
+      entryKeyBySectionIdRef,
       firstSectionIdByEntryKeyRef,
       pendingAnchorRef,
     ]
   );
 
   const resumeSelectedNavigation = useCallback(() => {
-    const selected = selectedEntryKeyRef.current;
-    if (!(selected && pendingNavigationRef.current === null)) {
-      return;
-    }
-    const selectedSection =
-      selectedSectionKeyRef.current ??
-      firstSectionIdByEntryKeyRef.current.get(selected) ??
-      null;
-    if (!selectedSection) {
-      return;
-    }
-    selectedSectionKeyRef.current = selectedSection;
-    const navigation = {
-      entryKey: selected,
-      generation: documentGenerationRef.current,
-      sectionKey: selectedSection,
-    };
-    const navigationKey = reviewNavigationKey(navigation);
-    if (failedNavigationKeyRef.current === navigationKey) {
-      return;
-    }
-    const revision = currentProjectionRevision(navigation);
-    if (revision === null) {
-      return;
-    }
-    const settled = settledProjectionRef.current;
-    if (
-      settled?.navigationKey === navigationKey &&
-      settled.revision === revision
-    ) {
-      return;
-    }
-    // 目标当前就可见时只推进 settled 水位,不发起导航事务。
-    // resume 的唯一目的就是保持目标可见;此时仍走完整事务会让排他 demand
-    // 反复取消其它在飞加载,被取消项的占位重投影又推动 revision 变化,
-    // 形成「resume→取消→重载→revision 变→再 resume」的活锁,
-    // 表现为目标之后的文件正文永远加载不出来。
-    const target = currentLoadedTarget(navigation);
-    if (
-      target !== null &&
-      diffHandleRef.current?.isItemVisible(target.sectionId, target.cacheKey)
-    ) {
-      settledProjectionRef.current = { navigationKey, revision };
-      return;
-    }
-    pendingNavigationRef.current = navigation;
-    // 与 beginNavigation 一致：resume 时同步排他 demand，不依赖 pending 边沿 effect。
-    applyNavigationDemand(selected);
-    setNavigationPending(true);
+    resumeGitReviewSelectedNavigation({
+      applyNavigationDemand,
+      currentLoadedTarget,
+      currentProjectionRevision,
+      diffHandleRef,
+      documentGenerationRef,
+      entryKeyBySectionIdRef,
+      failedNavigationKeyRef,
+      firstSectionIdByEntryKeyRef,
+      pendingNavigationRef,
+      selectedEntryKeyRef,
+      selectedSectionKeyRef,
+      setNavigationPending,
+      settledProjectionRef,
+    });
   }, [
     applyNavigationDemand,
     currentLoadedTarget,
     currentProjectionRevision,
     diffHandleRef,
     documentGenerationRef,
+    entryKeyBySectionIdRef,
     firstSectionIdByEntryKeyRef,
   ]);
 

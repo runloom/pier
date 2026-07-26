@@ -84,6 +84,19 @@ describe("withPierNestedHooks（matcher 约定）", () => {
     expect("matcher" in (hooks.Stop?.[0] ?? {})).toBe(false);
   });
 
+  it("stdin 身份提取同时覆盖 snake_case 与 camelCase（Grok envelope）", () => {
+    const cmd = pierHookCommandWithStdinStatusDispatch("grok", "Stop", "Stop", [
+      { nativeStatus: "completed", pierEvent: "TurnCompleted" },
+    ]);
+    expect(cmd).toContain("toolUseId");
+    expect(cmd).toContain("tool_use_id");
+    expect(cmd).toContain("toolName");
+    expect(cmd).toContain("tool_name");
+    expect(cmd).toContain("turnId");
+    expect(cmd).toContain("transcriptPath");
+    expect(cmd).toContain("pier-hook-gen=4");
+  });
+
   it("幂等 + 保留用户条目 + 卸载还原", () => {
     const user = {
       hooks: { Stop: [{ hooks: [{ type: "command", command: "say hi" }] }] },

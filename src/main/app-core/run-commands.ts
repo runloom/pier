@@ -288,7 +288,10 @@ export async function executeRunSpawnCommand(
   if (preparation.restartRunId) {
     const snapshot = services.tasks.statusRun(preparation.restartRunId);
     if (snapshot) {
-      services.tasks.cancelRun(preparation.restartRunId);
+      // 重新运行替换旧实例：标记 superseded，避免 UI 弹「任务已取消」。
+      services.tasks.cancelRun(preparation.restartRunId, {
+        termination: "superseded",
+      });
       const reusablePanels =
         mode === "background"
           ? undefined

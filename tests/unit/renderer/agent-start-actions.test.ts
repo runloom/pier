@@ -158,14 +158,37 @@ describe("agent start actions", () => {
     ).toHaveLength(1);
   });
 
-  it("disables launch actions until the workspace API is ready", () => {
+  it("disables launch actions until the workspace API is ready with a project path", () => {
     seedAgents(["claude"]);
     const action = actionRegistry.get("pier.agent.start.claude");
 
     expect(action?.enabled?.()).toBe(false);
 
-    useWorkspaceStore.setState({ api: { groups: [] } } as never);
-    expect(action?.enabled?.()).toBe(true);
+    // API alone is not enough — path-scoped launch needs a panel-held path.
+    useWorkspaceStore.setState({
+      api: {
+        activeGroup: { id: "g1" },
+        activePanel: {
+          id: "terminal-1",
+          view: { contentComponent: "terminal" },
+        },
+        groups: [],
+      },
+    } as never);
+    expect(action?.enabled?.()).toBe(false);
+
+    expect(
+      action?.enabled?.({
+        sourcePanelContext: {
+          contextId: "ctx",
+          cwd: "/repo",
+          openedPath: "/repo",
+          projectRootPath: "/repo",
+          source: "panel",
+          updatedAt: 1,
+        },
+      })
+    ).toBe(true);
   });
 
   it("keeps the invoking panel context while launch preparation is pending", async () => {

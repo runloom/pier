@@ -222,6 +222,9 @@ describe("materializeTerminalComposerImageBytes", () => {
       path: expect.stringContaining("pier-terminal-pastes"),
     });
     expect(result.attachment?.path.endsWith(".webp")).toBe(true);
+    // On-disk name is unique — never the bare client basename (overwrite risk).
+    expect(result.attachment?.path.endsWith("/clip.webp")).toBe(false);
+    expect(result.attachment?.path).toMatch(/attachment-[0-9a-f-]+\.webp$/i);
     if (result.attachment?.path) {
       fixtures.push(result.attachment.path);
       expect(await readFile(result.attachment.path)).toEqual(
@@ -240,5 +243,33 @@ describe("materializeTerminalComposerImageBytes", () => {
     expect(result.attachment?.path.endsWith(".png")).toBe(true);
     expect(result.attachment?.kind).toBe("image");
     if (result.attachment?.path) fixtures.push(result.attachment.path);
+  });
+
+  it("does not reuse a fixed basename like image.png across pastes", async () => {
+    const first = await materializeTerminalComposerImageBytes({
+      bytes: [1, 1, 1],
+      mime: "image/png",
+      name: "image.png",
+    });
+    const second = await materializeTerminalComposerImageBytes({
+      bytes: [2, 2, 2],
+      mime: "image/png",
+      name: "image.png",
+    });
+
+    expect(first.ok).toBe(true);
+    expect(second.ok).toBe(true);
+    if (!(first.ok && second.ok)) return;
+    expect(first.attachment?.name).toBe("image.png");
+    expect(second.attachment?.name).toBe("image.png");
+    expect(first.attachment?.path).not.toBe(second.attachment?.path);
+    if (first.attachment?.path) fixtures.push(first.attachment.path);
+    if (second.attachment?.path) fixtures.push(second.attachment.path);
+    expect(await readFile(first.attachment?.path ?? "")).toEqual(
+      Buffer.from([1, 1, 1])
+    );
+    expect(await readFile(second.attachment?.path ?? "")).toEqual(
+      Buffer.from([2, 2, 2])
+    );
   });
 });

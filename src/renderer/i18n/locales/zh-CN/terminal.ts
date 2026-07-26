@@ -22,8 +22,8 @@ export const terminal = {
   composer: {
     attachFailed: "无法添加文件",
     attachFile: "添加文件",
-    blockedUnfocused: "会话输入框未聚焦",
-    blockedWaiting: "会话等待你确认",
+    // 门禁只认 TUI 输入光标：hidden = 未聚焦输入框（非 FA waiting）。
+    blockedUnfocused: "未聚焦输入框",
     invalidAttachmentRef: "存在无效的附件引用",
     keyHint: "⇧⏎ 换行 · {{attach}} 添加文件 · Esc 关闭",
     label: "增强输入",
@@ -44,6 +44,16 @@ export const terminal = {
     send: "发送",
     sendFailed: "发送到终端失败",
     sendTooLong: "内容过长，无法发送",
+    skillEmptyProjectBody: "请先打开项目文件夹，再输入 / 插入技能。",
+    skillEmptyProjectTitle: "未打开项目",
+    skillNoResults: "没有匹配的技能",
+    skillNoneAvailableBody:
+      "请在设置 → 项目 → 技能中打开技能，或当前智能体不使用项目技能。",
+    skillNoneAvailableTitle: "没有可用技能",
+    skillPlaceholder: "选择技能…",
+    skillSourceGlobal: "本机",
+    skillSourceInRepo: "仓库内",
+    skillSourceProject: "已托管",
   },
   search: {
     close: "关闭查找",
@@ -68,6 +78,7 @@ export const terminal = {
     finishedDetailBlocked: "{{label}} · 等待前置任务，已耗时 {{duration}}",
     finishedFailed: "任务失败",
     finishedForceCancelled: "任务已强制停止",
+    finishedStopped: "任务已停止",
     finishedSuccess: "任务已完成",
     forceStop: "强制停止",
     forceStopBody:
@@ -75,7 +86,8 @@ export const terminal = {
     forceStopConfirm: "强制停止",
     forceStopTitle: "强制停止任务？",
     inputResolutionFailed: "任务仍有未完成的输入项",
-    missingRunIdentity: "任务已启动，但无法关联运行状态。",
+    missingRunIdentity:
+      "任务已启动，但未能显示运行状态。请重新运行，或打开输出查看。",
     move: "移动运行控制浮层",
     openOutput: "打开任务输出",
     openOutputFailed: "无法打开任务输出",

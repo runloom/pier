@@ -46,6 +46,7 @@ import { useGitReviewLocaleProjection } from "./use-git-review-locale-projection
 import { useGitReviewNavigation } from "./use-git-review-navigation.ts";
 import { useGitReviewProjectionCommit } from "./use-git-review-projection-commit.ts";
 import { useGitReviewRetentionSync } from "./use-git-review-retention-sync.ts";
+import { useGitReviewTreeOpen } from "./use-git-review-tree-open.ts";
 
 function ReviewDocumentsComponent({
   context,
@@ -170,6 +171,7 @@ function ReviewDocumentsComponent({
     applyNavigationDemand,
     diffHandleRef,
     documentGenerationRef,
+    entryKeyBySectionIdRef,
     firstSectionIdByEntryKeyRef,
     itemCacheKeysRef,
     itemIndexByIdRef,
@@ -257,7 +259,6 @@ function ReviewDocumentsComponent({
     syncRetentionLimits,
     tryPendingNavigation,
   };
-
   useGitReviewDocumentSession({
     committedProjectionGenerationRef,
     context,
@@ -267,6 +268,7 @@ function ReviewDocumentsComponent({
     documentGenerationRef,
     entries,
     entryKeyBySectionIdRef,
+    firstSectionIdByEntryKeyRef,
     generationCallbacksRef,
     indexGeneration,
     itemCacheKeysRef,
@@ -298,7 +300,6 @@ function ReviewDocumentsComponent({
     itemIdsRef,
     itemIndexByIdRef,
     latestItemUpdatesRef,
-    notifyProjectionChanged,
     projection,
     projectionGeneration,
     renderedGenerationRef,
@@ -379,27 +380,17 @@ function ReviewDocumentsComponent({
     };
   }, [context, panelId]);
 
-  const openTreeNode = useCallback(
-    (path: string) => {
-      if (path.startsWith("group:") && path.split("/").length === 1) {
-        return;
-      }
-      const fileRef = treeModel.getFileRefForTreePath(path);
-      if (!fileRef) {
-        return;
-      }
-      setSelectedTreeTarget({
-        entryKey: fileRef.entryKey,
-        sectionKey: fileRef.sectionKey,
-      });
-      beginNavigation({
-        entryKey: fileRef.entryKey,
-        sectionKey: fileRef.sectionKey,
-      });
-      generationCallbacksRef.current.tryPendingNavigation();
-    },
-    [beginNavigation, setSelectedTreeTarget, treeModel]
-  );
+  const { isActiveOpenPath, onContextMenuSession, openTreeNode } =
+    useGitReviewTreeOpen({
+      beginNavigation,
+      cancelVerification,
+      diffHandleRef,
+      getSelectedEntryKey,
+      getSelectedSectionKey,
+      setSelectedTreeTarget,
+      treeModel,
+      tryPendingNavigation,
+    });
   const retryFailure = useCallback(
     (entryKey: string) => {
       loaderRef.current?.retry(entryKey);
@@ -419,9 +410,10 @@ function ReviewDocumentsComponent({
   );
   const handleRenderItemError = useCallback(
     (id: string, error: Error | null) => {
-      updateRenderItemError(viewState.generation, id, error);
+      // 终态：仅 settled 后的 parse 错误进失败面，避免 materialize/stage 闪错。
+      updateRenderItemError(viewState.generation, id, error, viewState.settled);
     },
-    [updateRenderItemError, viewState.generation]
+    [updateRenderItemError, viewState.generation, viewState.settled]
   );
   const { options: viewOptions, setOptions: setViewOptions } =
     useReviewViewOptions();
@@ -444,7 +436,6 @@ function ReviewDocumentsComponent({
       viewOptions={viewOptions}
     />
   );
-
   return (
     <GitReviewDocumentView
       appearance={appearance}
@@ -457,6 +448,8 @@ function ReviewDocumentsComponent({
       {...(headerLeading === undefined ? {} : { headerLeading })}
       headerTrailing={toolbar}
       indexFailure={indexRefreshFailure}
+      isActiveOpenPath={isActiveOpenPath}
+      onContextMenuSession={onContextMenuSession}
       onFeedbackChange={updateRenderFeedback}
       onItemError={handleRenderItemError}
       onOpenPath={openTreeNode}

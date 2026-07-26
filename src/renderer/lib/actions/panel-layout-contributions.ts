@@ -10,6 +10,7 @@ import {
   PanelsTopLeft,
   PanelTop,
 } from "lucide-react";
+import { toast } from "sonner";
 import {
   captureDomSelectionText,
   runSelectionSelectAll,
@@ -19,9 +20,18 @@ import {
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import type { ActionContribution } from "./contribution-types.ts";
+import { resolvePanelCopyPath } from "./panel-copy-path.ts";
 
 function activePanelId(): string | null {
   return useWorkspaceStore.getState().api?.activePanel?.id ?? null;
+}
+
+async function writeClipboardText(text: string): Promise<void> {
+  if (window.pier?.clipboard?.writeText) {
+    await window.pier.clipboard.writeText(text);
+    return;
+  }
+  await navigator.clipboard.writeText(text);
 }
 
 export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
@@ -39,11 +49,7 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
           return;
         }
         try {
-          if (window.pier?.clipboard?.writeText) {
-            await window.pier.clipboard.writeText(text);
-          } else {
-            await navigator.clipboard.writeText(text);
-          }
+          await writeClipboardText(text);
         } catch (error) {
           showAppAlert({
             body: error instanceof Error ? error.message : String(error),
@@ -64,6 +70,31 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       sortOrder: 0,
       surfaces: ["panel/content"],
       titleKey: "contextMenu.action.copy",
+    },
+    {
+      categoryKey: "panel",
+      group: "0_edit",
+      handler: async (invocation) => {
+        const path = resolvePanelCopyPath(invocation);
+        if (!path) {
+          return;
+        }
+        try {
+          await writeClipboardText(path);
+          toast.success(i18next.t("contextMenu.action.pathCopied"));
+        } catch (error) {
+          await showAppAlert({
+            body: error instanceof Error ? error.message : String(error),
+            title: i18next.t("contextMenu.action.clipboardFailed"),
+          });
+        }
+      },
+      id: "pier.panel.copyPath",
+      // 无持有路径时整行移除，不置灰。
+      menuHidden: (invocation) => resolvePanelCopyPath(invocation) == null,
+      sortOrder: 2,
+      surfaces: ["dockview-tab"],
+      titleKey: "contextMenu.action.copyPath",
     },
     {
       categoryKey: "panel",

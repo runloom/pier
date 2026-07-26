@@ -238,6 +238,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                 stageState === "staged"
                   ? await context.git.unstage(gitRootPath, paths)
                   : await context.git.stage(gitRootPath, paths);
+              // 成功路径静默：watch/index 以 delta 对齐；不 toast、不抬 failure 面。
               if (!ok) {
                 notifyError(
                   context,
@@ -255,6 +256,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                 );
               }
             } catch (error) {
+              // 仅 write 真失败时一次稳定错误（终态：禁止中间态闪错）。
               notifyError(
                 context,
                 stageState === "staged"

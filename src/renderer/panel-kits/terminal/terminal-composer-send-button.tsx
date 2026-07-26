@@ -10,7 +10,11 @@ import { ArrowUp } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
 import type { TuiSendBlockReason } from "./tui-input-focus.ts";
 
-/** 发送按钮 + 阻断提示：阻断时 tooltip 受控常开（非 hover），锚在按钮上方。 */
+/**
+ * 发送按钮 + 光标门禁提示。
+ * 阻断时用受控 Tooltip 锚在按钮上（Portal，不裁切；箭头指向发送按钮）。
+ * Esc 关增强输入由 composer 自理（不再因 defaultPrevented 放弃关闭）。
+ */
 export function SendButtonWithBlockHint({
   blockReason,
   canSend,
@@ -51,22 +55,23 @@ export function SendButtonWithBlockHint({
       </Kbd>
     </Button>
   );
+
   if (blockReason === null) {
     return button;
   }
+
   return (
     <TooltipProvider>
       <Tooltip open>
         <TooltipTrigger asChild>
-          <span className="shrink-0">{button}</span>
+          <span className="inline-flex shrink-0">{button}</span>
         </TooltipTrigger>
         <TooltipContent
           data-testid="terminal-composer-send-block"
+          side="top"
           sideOffset={6}
         >
-          {blockReason === "waiting"
-            ? t("terminal.composer.blockedWaiting")
-            : t("terminal.composer.blockedUnfocused")}
+          {t("terminal.composer.blockedUnfocused")}
         </TooltipContent>
       </Tooltip>
     </TooltipProvider>

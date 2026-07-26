@@ -32,3 +32,14 @@ describe("PIER_BROADCAST.WINDOW_FOCUS_CHANGED", () => {
     );
   });
 });
+
+describe("PIER_BROADCAST.NOTIFICATION_CENTER_MESSAGE_TOAST", () => {
+  it("uses dedicated single-window toast channel on the allowlist", () => {
+    expect(PIER_BROADCAST.NOTIFICATION_CENTER_MESSAGE_TOAST).toBe(
+      "pier://notification-center:message-toast"
+    );
+    expect(ALLOWED_RENDERER_CHANNELS).toContain(
+      PIER_BROADCAST.NOTIFICATION_CENTER_MESSAGE_TOAST
+    );
+  });
+});

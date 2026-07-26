@@ -1,6 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   acquireTerminalEscapeShortcut,
+  isBareEscapeForward,
   resetTerminalEscapeShortcutForTests,
 } from "@/panel-kits/terminal/terminal-escape-shortcut.ts";
 
@@ -36,5 +37,14 @@ describe("acquireTerminalEscapeShortcut", () => {
     releaseB();
     const lastKeys = setAppShortcutKeys.mock.calls.at(-1)?.[0] as string[];
     expect(lastKeys).not.toContain("Escape");
+  });
+});
+
+describe("isBareEscapeForward", () => {
+  it("accepts bare Escape chars and rejects modifiers", () => {
+    expect(isBareEscapeForward(0, "\u{1b}")).toBe(true);
+    expect(isBareEscapeForward(0, "Escape")).toBe(true);
+    expect(isBareEscapeForward(0x10_00_00, "\u{1b}")).toBe(false);
+    expect(isBareEscapeForward(0x4_00_00, "\u{1b}")).toBe(false);
   });
 });

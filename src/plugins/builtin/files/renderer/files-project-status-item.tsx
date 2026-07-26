@@ -46,15 +46,18 @@ function FilesProjectStatusItem({
             className={cn(STATUS_BAR_ITEM_TRIGGER_CLASS, "max-w-full")}
             data-testid="files-project-status-trigger"
             onClick={() => {
-              const result = openProjectFiles(pluginContext, panelContext);
-              if (!result.ok) {
-                pluginContext.notifications.error(
-                  t(
-                    "files.projectStatus.openFailed",
-                    "Unable to open project files"
-                  )
-                );
-              }
+              openProjectFiles(pluginContext, panelContext)
+                .then((result) => {
+                  if (!result.ok) {
+                    pluginContext.notifications.error(
+                      t(
+                        "files.projectStatus.openFailed",
+                        "Unable to open project files"
+                      )
+                    );
+                  }
+                })
+                .catch(() => undefined);
             }}
             size="status-bar"
             type="button"

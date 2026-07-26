@@ -27,12 +27,22 @@ function sameReviewTarget(
   return reviewTargetKey(left) === reviewTargetKey(right);
 }
 
-export function openGitChangesPanel(input: {
+function sameReviewSource(input: unknown, expected: GitReviewScope): boolean {
+  const parsed = gitReviewScopeSchema.safeParse(input);
+  return (
+    parsed.success &&
+    parsed.data.contextId === expected.contextId &&
+    parsed.data.gitRootPath === expected.gitRootPath &&
+    sameReviewTarget(parsed.data.target, expected.target)
+  );
+}
+
+export async function openGitChangesPanel(input: {
   getGroupId: () => string | null;
   panelContext: PanelContext;
   pluginContext: RendererPluginContext;
   target?: GitReviewTarget;
-}): void {
+}): Promise<void> {
   const gitRootPath = input.panelContext.gitRoot;
   if (!gitRootPath) {
     input.pluginContext.notifications.error(
@@ -56,30 +66,56 @@ export function openGitChangesPanel(input: {
     const matches = instances.filter((instance) =>
       sameReviewSource(instance.params?.source, source)
     );
-    // Prefer the caller's group so each Dockview group can keep its own Review.
-    // Cross-group focus would block "open again after drag" from creating a
-    // second panel in the original group (see git-review e2e).
-    const existingInGroup = preferredGroupId
-      ? matches.find((instance) => instance.groupId === preferredGroupId)
-      : undefined;
+    // Status bar / command palette "open Review" is show-or-focus, not create
+    // another copy. Prefer the caller's group when it already has a match;
+    // otherwise focus any open Review for the same source (including other windows).
+    const existing =
+      (preferredGroupId
+        ? matches.find((instance) => instance.groupId === preferredGroupId)
+        : undefined) ?? matches[0];
     const title = gitChangesPanelTitle(source);
-    if (existingInGroup) {
+    if (existing) {
       const focusResult = input.pluginContext.panels.openInstance({
         componentId: GIT_CHANGES_PANEL_ID,
         context: input.panelContext,
-        instanceId: existingInGroup.id,
+        instanceId: existing.id,
         params: { source },
-        ...(existingInGroup.groupId
-          ? { targetGroupId: existingInGroup.groupId }
-          : {}),
+        ...(existing.groupId ? { targetGroupId: existing.groupId } : {}),
         title,
       });
       if (focusResult.kind !== "targetGroupMissing") {
         return;
       }
-      // Listed group vanished between list and open — fall through to create
-      // in the caller's current group instead of silent no-op.
+      // Listed group vanished between list and open — fall through.
     }
+
+    // Local miss (or stale group): any window with the same review source.
+    const remote = (
+      await input.pluginContext.panels.listInstancesGlobal(GIT_CHANGES_PANEL_ID)
+    ).find((instance) => sameReviewSource(instance.params?.source, source));
+    if (remote) {
+      const remoteFocus = await input.pluginContext.panels.focusInstance({
+        componentId: GIT_CHANGES_PANEL_ID,
+        instanceId: remote.id,
+        windowId: remote.windowId,
+      });
+      if (remoteFocus.kind === "focused") {
+        return;
+      }
+      if (remoteFocus.kind === "error") {
+        await input.pluginContext.dialogs.alert({
+          body: remoteFocus.message,
+          title: pluginText(
+            input.pluginContext,
+            "reviewOpenFailed",
+            "Failed to open changes"
+          ),
+        });
+        return;
+      }
+      // not_found — panel closed between list and focus; create locally.
+    }
+
     openInCurrentGroup({
       getGroupId: input.getGroupId,
       open: (targetGroupId) => {
@@ -116,16 +152,6 @@ export function openGitChangesPanel(input: {
       })
       .catch(() => undefined);
   }
-}
-
-function sameReviewSource(input: unknown, expected: GitReviewScope): boolean {
-  const parsed = gitReviewScopeSchema.safeParse(input);
-  return (
-    parsed.success &&
-    parsed.data.contextId === expected.contextId &&
-    parsed.data.gitRootPath === expected.gitRootPath &&
-    sameReviewTarget(parsed.data.target, expected.target)
-  );
 }
 
 function openInCurrentGroup(input: {

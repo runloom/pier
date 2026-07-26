@@ -14,6 +14,11 @@ export interface TerminalPanelParams {
 export type WorkspaceGroupRef = NonNullable<DockviewApi["activeGroup"]>;
 type WorkspacePanelRef = DockviewApi["panels"][number];
 
+/**
+ * 读 panel descriptor 上的路径锚点。命名历史来自终端，但任意 panel 只要
+ * 经 `usePanelDescriptor` / plugin host boundary 注册了 `context` 即可读到。
+ * 项目相关 panel 应自持 context；全局 panel（workbench / welcome 等）不写 context。
+ */
 export function terminalPanelContext(
   panelId: string | undefined
 ): PanelContext | undefined {
@@ -40,53 +45,6 @@ export function terminalPanelParams(args: {
   };
 }
 
-function contextFromGroupTerminal(
-  api: DockviewApi,
-  groupId: string | undefined
-): PanelContext | undefined {
-  if (!groupId) {
-    return;
-  }
-  const group = findGroupById(api, groupId);
-  if (!group) {
-    return;
-  }
-  // Prefer the group's last-active terminal when the current tab is not one
-  // (e.g. workbench). Tab order in panels[] is not a stable project signal.
-  const groupActive = group.activePanel;
-  if (groupActive?.view.contentComponent === "terminal") {
-    const activeContext = terminalPanelContext(groupActive.id);
-    if (activeContext) {
-      return activeContext;
-    }
-  }
-  let newest: PanelContext | undefined;
-  for (const panel of group.panels) {
-    if (panel.view.contentComponent !== "terminal") {
-      continue;
-    }
-    const context = terminalPanelContext(panel.id);
-    if (!context) {
-      continue;
-    }
-    if (!newest || context.updatedAt > newest.updatedAt) {
-      newest = context;
-    }
-  }
-  return newest;
-}
-
-function panelComponent(
-  api: DockviewApi,
-  panelId: string | undefined
-): string | undefined {
-  if (!panelId) {
-    return;
-  }
-  return api.panels.find((panel) => panel.id === panelId)?.view
-    .contentComponent;
-}
-
 function panelInGroup(
   api: DockviewApi,
   panelId: string,
@@ -99,20 +57,14 @@ function panelInGroup(
   return group?.panels.some((panel) => panel.id === panelId) ?? false;
 }
 
+/**
+ * 新建终端默认 cwd：只读当前活动 panel 自身持有的路径，不再回落到同组
+ * 兄弟终端。无路径时返回 undefined（调用方创建空 cwd 或禁用路径依赖操作）。
+ */
 export function inheritedActiveTerminalContext(
   api: DockviewApi
 ): PanelContext | undefined {
-  if (
-    useTerminalPreferencesStore.getState().terminalNewCwdPolicy !==
-    "activeTerminal"
-  ) {
-    return;
-  }
-  const activePanel = api.activePanel;
-  if (activePanel?.view.contentComponent === "terminal") {
-    return terminalPanelContext(activePanel.id);
-  }
-  return contextFromGroupTerminal(api, api.activeGroup?.id);
+  return resolveWorkspaceAnchor({ api }).context;
 }
 
 export function uniquePanelId(api: DockviewApi, prefix: string): string {
@@ -181,18 +133,10 @@ export interface WorkspaceAnchor {
 }
 
 /**
- * Resolve the workspace directory/project anchor for create/open actions.
- *
- * Order:
- * 1. explicit source panel context
- * 2. source panel descriptor context (or active panel only when it belongs to
- *    the resolved group)
- * 3. same-group terminal context when the source is not itself a terminal
- *
- * Terminal sources never inherit a sibling terminal's cwd. `shellDefault`
- * suppresses context inheritance entirely.
+ * 解析 source/active panel 自身持有的路径锚点（忽略 terminalNewCwdPolicy）。
+ * 项目相关 panel 必须自持路径；无 context 时不向同组兄弟 panel 回退。
  */
-export function resolveWorkspaceAnchor(input: {
+export function resolvePanelPathAnchor(input: {
   api: DockviewApi | null;
   sourcePanelContext?: PanelContext | undefined;
   sourcePanelGroupId?: string | undefined;
@@ -200,14 +144,6 @@ export function resolveWorkspaceAnchor(input: {
 }): WorkspaceAnchor {
   const groupId =
     input.sourcePanelGroupId ?? input.api?.activeGroup?.id ?? undefined;
-  if (
-    useTerminalPreferencesStore.getState().terminalNewCwdPolicy !==
-    "activeTerminal"
-  ) {
-    return {
-      ...(groupId ? { groupId } : {}),
-    };
-  }
   if (input.sourcePanelContext) {
     return {
       context: input.sourcePanelContext,
@@ -228,31 +164,62 @@ export function resolveWorkspaceAnchor(input: {
     }
   }
 
-  const sourceComponent = input.api
-    ? panelComponent(input.api, sourcePanelId)
-    : undefined;
   const directContext = terminalPanelContext(sourcePanelId);
-  if (directContext) {
-    return {
-      context: directContext,
-      ...(groupId ? { groupId } : {}),
-    };
-  }
-  // Fresh/empty terminal stays empty — do not steal a sibling project.
-  if (sourceComponent === "terminal") {
-    return {
-      ...(groupId ? { groupId } : {}),
-    };
-  }
-
-  const groupContext =
-    input.api === null
-      ? undefined
-      : contextFromGroupTerminal(input.api, groupId);
   return {
-    ...(groupContext ? { context: groupContext } : {}),
+    ...(directContext ? { context: directContext } : {}),
     ...(groupId ? { groupId } : {}),
   };
+}
+
+/**
+ * Resolve the workspace directory/project anchor for terminal create/open.
+ *
+ * `shellDefault` 抑制 cwd 继承（新建终端用壳默认目录）。
+ * 其余情况等同 {@link resolvePanelPathAnchor}。
+ */
+export function resolveWorkspaceAnchor(input: {
+  api: DockviewApi | null;
+  sourcePanelContext?: PanelContext | undefined;
+  sourcePanelGroupId?: string | undefined;
+  sourcePanelId?: string | undefined;
+}): WorkspaceAnchor {
+  const groupId =
+    input.sourcePanelGroupId ?? input.api?.activeGroup?.id ?? undefined;
+  if (
+    useTerminalPreferencesStore.getState().terminalNewCwdPolicy !==
+    "activeTerminal"
+  ) {
+    return {
+      ...(groupId ? { groupId } : {}),
+    };
+  }
+  return resolvePanelPathAnchor(input);
+}
+
+/**
+ * 当前（或 invocation 指定）panel 是否持有项目路径锚点。
+ * 路径依赖操作（新建终端/任务/智能体/工作台等）用此判定 enabled。
+ * 不读 terminalNewCwdPolicy——那是「新建终端 cwd 继承」，不是「panel 有无路径」。
+ */
+export function hasProjectPathAnchor(input: {
+  api: DockviewApi | null;
+  sourcePanelContext?: PanelContext | undefined;
+  sourcePanelGroupId?: string | undefined;
+  sourcePanelId?: string | undefined;
+}): boolean {
+  return Boolean(projectPathFromContext(resolvePanelPathAnchor(input).context));
+}
+
+/** 从 PanelContext 取项目路径锚点（projectRootPath 优先）。 */
+export function projectPathFromContext(
+  context: PanelContext | null | undefined
+): string | undefined {
+  return (
+    context?.projectRootPath ??
+    context?.gitRoot ??
+    context?.worktreeRoot ??
+    context?.cwd
+  );
 }
 
 export interface AnchoredTerminalTarget {

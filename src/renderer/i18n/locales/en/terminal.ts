@@ -23,8 +23,8 @@ export const terminal = {
   composer: {
     attachFailed: "Couldn’t add file",
     attachFile: "Add file",
-    blockedUnfocused: "Session input not focused",
-    blockedWaiting: "Session awaiting confirmation",
+    // Gate is cursor-only: hidden = terminal input not focused (not FA waiting).
+    blockedUnfocused: "Input not focused",
     invalidAttachmentRef: "Invalid attachment reference",
     keyHint: "⇧⏎ newline · {{attach}} attach · Esc close",
     label: "Rich Input",
@@ -49,6 +49,17 @@ export const terminal = {
     send: "Send",
     sendFailed: "Failed to send to terminal",
     sendTooLong: "Message is too long to send",
+    skillEmptyProjectBody:
+      "Open a project folder first, then type / to insert a skill.",
+    skillEmptyProjectTitle: "No project open",
+    skillNoResults: "No matching skills",
+    skillNoneAvailableBody:
+      "Turn skills on in Settings → Projects → Skills, or this agent may not use project skills.",
+    skillNoneAvailableTitle: "No skills available",
+    skillPlaceholder: "Choose a skill…",
+    skillSourceGlobal: "On this Mac",
+    skillSourceInRepo: "In project",
+    skillSourceProject: "Managed",
   },
   search: {
     close: "Close search",
@@ -74,6 +85,7 @@ export const terminal = {
       "{{label}} · waiting on dependencies, took {{duration}}",
     finishedFailed: "Task failed",
     finishedForceCancelled: "Task force-stopped",
+    finishedStopped: "Task stopped",
     finishedSuccess: "Task finished",
     forceStop: "Force stop",
     forceStopBody:
@@ -82,7 +94,7 @@ export const terminal = {
     forceStopTitle: "Force stop task?",
     inputResolutionFailed: "The task still requires unresolved input",
     missingRunIdentity:
-      "The task started, but its running state could not be linked.",
+      "The task started, but its status couldn't be shown. Try running it again or open the output.",
     move: "Move run controls",
     openOutput: "Open task output",
     openOutputFailed: "Couldn't open task output",

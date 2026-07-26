@@ -224,7 +224,7 @@ export function useGitReviewTreeContextMenu({
     (
       item: PierFileTreeContextMenuItem,
       point: PierFileTreeContextMenuPoint
-    ) => {
+    ): Promise<void> => {
       // tree path 带 group 前缀；Open File 必须用真实 git path。
       // 目录/组根：聚合子文件 refs，供 stage/unstage 批量路径。
       const fileRef =
@@ -246,7 +246,8 @@ export function useGitReviewTreeContextMenu({
         ...(fileRefs ? { fileRefs } : {}),
       });
       // 目录也弹 surface，阻断冒泡到 panel/content 的复制/全选；Open File 仅对文件有意义。
-      context.contextMenu
+      // 返回 Promise：PierFileTree 在菜单关闭后把 focus 还回右键行。
+      return context.contextMenu
         .popup(GIT_REVIEW_TREE_ITEM_SURFACE, point, {
           metadata: {
             allDiscardTrackedDeleted: flags.allDiscardTrackedDeleted,

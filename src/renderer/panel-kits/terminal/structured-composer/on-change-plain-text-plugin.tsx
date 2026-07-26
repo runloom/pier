@@ -1,6 +1,6 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import { $getRoot } from "lexical";
 import { useEffect } from "react";
+import { $readComposerPlainText } from "./structured-composer-serialize.ts";
 
 /** Push plain-text changes to the parent controlled draft. */
 export function OnChangePlainTextPlugin({
@@ -17,7 +17,8 @@ export function OnChangePlainTextPlugin({
           return;
         }
         editorState.read(() => {
-          onChange($getRoot().getTextContent());
+          // Chip boundary spaces (not present in the document model).
+          onChange($readComposerPlainText());
         });
       }),
     [editor, onChange]

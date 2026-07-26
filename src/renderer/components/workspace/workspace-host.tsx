@@ -342,14 +342,13 @@ export function WorkspaceHost() {
             }
           );
           if (result.ok) {
-            // 点终端内容：Rich Input 应关闭并归还 TUI（reason=surface）。
-            // 若 handler 返回 true 表示仍接管（兼容旧行为）；false 则走原生归还。
+            // 点终端内容：composer 打开时 surface 返回 true——不关卡片、不 yield
+            // 键盘（键仍在增强输入）；鼠标点到 TUI 输入区可复原聚焦并重探门禁。
+            // composer 未打开时走下方原生归还。
             if (terminalComposerTakeoverFocus(req.panelId, "surface")) {
               syncTerminalPresentation(event.api, "dockview-active-panel");
               return;
             }
-            // 终端焦点意图：让任何活跃的共存浮层（如搜索栏）让出键盘但保持可见，
-            // effective 随 basePanel=terminal 转向终端。
             useTerminalStore.getState().yieldToTerminal();
             requestTerminalFocusIntent(req.panelId);
             ensureTuiInputFocus(req.panelId).catch(() => undefined);

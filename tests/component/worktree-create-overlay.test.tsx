@@ -354,9 +354,11 @@ function createMockContext(): RendererPluginContext {
     },
     panels: {
       flushLayout: unimplemented("panels.flushLayout"),
+      focusInstance: unimplemented("panels.focusInstance"),
       getActiveContext: unimplemented("panels.getActiveContext"),
       getActiveInstanceId: unimplemented("panels.getActiveInstanceId"),
       listInstances: unimplemented("panels.listInstances"),
+      listInstancesGlobal: unimplemented("panels.listInstancesGlobal"),
       updateInstanceParams: unimplemented("panels.updateInstanceParams"),
       open: unimplemented("panels.open"),
       openInstance: unimplemented("panels.openInstance"),

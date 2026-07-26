@@ -123,6 +123,41 @@ export function rejectStopForTasks(
   return changed;
 }
 
+export interface CancelTaskRunOptions {
+  /** 写入被取消节点的 termination；restart 路径传 superseded。 */
+  termination?: TaskRunTermination | undefined;
+}
+
+/**
+ * 将仍活跃的节点标为 cancelled。
+ * 返回应从 panel→run 索引删除的 panelNodeKey 列表。
+ */
+export function cancelActiveRunNodes(
+  run: TaskRunState,
+  options?: CancelTaskRunOptions | undefined
+): string[] {
+  const clearedPanelKeys: string[] = [];
+  const termination = options?.termination;
+  for (const node of run.nodes.values()) {
+    if (
+      node.status === "pending" ||
+      node.status === "running" ||
+      node.status === "stopping"
+    ) {
+      node.status = "cancelled";
+      if (termination) {
+        node.termination = termination;
+      } else if (node.stopRequestedAt !== undefined) {
+        node.termination ??= "interrupt";
+      }
+      if (node.panelId) {
+        clearedPanelKeys.push(panelNodeKey(node.panelId, node.windowId));
+      }
+    }
+  }
+  return clearedPanelKeys;
+}
+
 export function controlSnapshot(run: TaskRunState): TaskRunControlEntry {
   return {
     mode: run.mode,

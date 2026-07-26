@@ -65,6 +65,45 @@ export function fileTreeScrollElementFromNode(
 }
 
 /**
+ * Pin raw scrollTop of an element across involuntary layout/focus jostle.
+ * Prefer this over item-based scrollTo for context-menu freeze.
+ */
+export function pinRawScrollTop(
+  scrollElement: HTMLElement | null | undefined,
+  options?: { readonly frames?: number }
+): () => void {
+  if (!scrollElement) {
+    return () => undefined;
+  }
+  const scrollTop = scrollElement.scrollTop;
+  let disposed = false;
+  const restore = () => {
+    if (disposed) {
+      return;
+    }
+    if (Math.abs(scrollElement.scrollTop - scrollTop) > 0.5) {
+      scrollElement.scrollTop = scrollTop;
+    }
+  };
+  queueMicrotask(restore);
+  const schedule = getAnimationFrameScheduler();
+  const frames = options?.frames ?? 2;
+  let remaining = frames;
+  const tick = () => {
+    restore();
+    remaining -= 1;
+    if (remaining > 0) {
+      schedule(tick);
+    }
+  };
+  schedule(tick);
+  return () => {
+    disposed = true;
+    restore();
+  };
+}
+
+/**
  * Pin the tree scroller around a context-menu open.
  *
  * @pierre/trees right-click focuses the row, then a layout effect may call
@@ -75,27 +114,9 @@ export function fileTreeScrollElementFromNode(
  */
 export function pinFileTreeScrollDuringContextMenu(
   anchorElement: Element | null | undefined
-): void {
-  const scrollElement = fileTreeScrollElementFromNode(anchorElement);
-  if (!scrollElement) {
-    return;
-  }
-
-  const scrollTop = scrollElement.scrollTop;
-  const restore = () => {
-    if (Math.abs(scrollElement.scrollTop - scrollTop) > 0.5) {
-      scrollElement.scrollTop = scrollTop;
-    }
-  };
-
-  // Context-menu onOpen runs in a layout effect *before* the focus/scroll
-  // layout effect in the same commit. Microtask runs after all layout effects.
-  queueMicrotask(restore);
-  // Close() schedules another render; cover two frames for residual jostle.
-  const schedule = getAnimationFrameScheduler();
-  schedule(() => {
-    restore();
-    schedule(restore);
+): () => void {
+  return pinRawScrollTop(fileTreeScrollElementFromNode(anchorElement), {
+    frames: 2,
   });
 }
 

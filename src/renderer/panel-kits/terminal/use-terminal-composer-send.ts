@@ -10,12 +10,8 @@ import {
 /**
  * 增强输入发送编排（从 terminal-composer.tsx 抽出，守 file-size 硬顶）。
  *
- * - 阻断态（sendBlock）与 in-flight（sendingRef）双重闸门：按钮禁用与回车
- *   同口径；settle 窗口内双击/键重复不得触发第二次提交（防两条消息揉成
- *   一团，main 侧另有按 panel 的发送队列兜底）。
- * - 发送前最终确认：UI 阻断态是轮询值（≤500ms 陈旧），crush 等失焦可恢复
- *   的 agent 在此透传恢复键后送达；确认失败且 UI 无法自解释
- *   （sendBlock 为 null，如探针 unknown）时必须反馈，禁止静默失败。
+ * - sendBlock（仅 unfocused / 光标探针）与 in-flight 双重闸门。
+ * - 发送前 ensureTuiInputFocus：白名单 agent 可透传恢复键；确认失败 toast。
  */
 export function useTerminalComposerSend(opts: {
   buildPayloadOrReport: (value: string) => string | null;
@@ -35,7 +31,6 @@ export function useTerminalComposerSend(opts: {
     t,
     value,
   } = opts;
-  /** in-flight 发送守卫：settle 窗口内双击/键重复不得触发第二次提交。 */
   const sendingRef = useRef(false);
 
   const send = () => {
@@ -53,9 +48,7 @@ export function useTerminalComposerSend(opts: {
       if (activity?.kind === "agent") {
         const ready = await ensureTuiInputFocus(panelId).catch(() => false);
         if (!ready) {
-          if (sendBlock === null) {
-            toast.error(t("terminal.composer.sendStateUnknown"));
-          }
+          toast.error(t("terminal.composer.sendStateUnknown"));
           return;
         }
       }

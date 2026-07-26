@@ -116,8 +116,9 @@ export function useFileTreePathSync({
       }
     }
 
+    // 终态：status delta 后多锁几帧，避免 group 搬家时滚动条被 reveal 冲掉。
     restoreSnapshotSoon(scrollSnapshot, {
-      frames: 2,
+      frames: 4,
       lock: true,
     });
 

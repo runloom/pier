@@ -113,18 +113,37 @@ export interface PierFileTreeProps
    * while nested path folders still compress.
    */
   flattenMinDepth?: number;
+  /**
+   * 宿主判定 path 是否已是当前打开的审查目标（B-Select）。
+   * 为 true 时右键强制 Command（即使树 L-Select 暂时丢了）。
+   */
+  isActiveOpenPath?: (path: string) => boolean;
   items: readonly PierFileTreeItem[];
   label: string;
+  /**
+   * 原生菜单会话 begin/end：宿主可冻结 CodeView raw scrollTop。
+   * intent: inspect=未选中打开一次；command=已选中仅菜单。
+   */
+  onContextMenuSession?: (
+    phase: "begin" | "end",
+    detail: {
+      readonly intent: "inspect" | "command";
+      readonly path: string;
+    }
+  ) => void;
   onLoadDirectory?: (path: string) => Promise<void> | void;
   /** 模型层因 Esc/空提交 removeIfCanceled 删除路径时回调(caller path)。 */
   onModelPathsRemoved?: (paths: readonly string[]) => void;
   /** 树内拖拽完成(模型层已移动);业务方执行真实 fs move,失败自行刷新回滚。 */
   onMovePaths?: (moves: readonly PierFileTreeMove[]) => void;
-  /** 由树模型解析真实行目标后触发，兼容压缩目录、Shadow DOM 与键盘菜单键。 */
+  /**
+   * 由树模型解析真实行目标后触发，兼容压缩目录、Shadow DOM 与键盘菜单键。
+   * 可返回 Promise（如 Electron 菜单 popup）；settle 后结束菜单会话（unfreeze / 清 suppress）。
+   */
   onOpenItemContextMenu?: (
     item: PierFileTreeContextMenuItem,
     point: PierFileTreeContextMenuPoint
-  ) => void;
+  ) => void | Promise<void>;
   onOpenPath?: (path: string) => void;
   /**
    * inline rename 提交;业务方执行 fs move 或新建落盘。

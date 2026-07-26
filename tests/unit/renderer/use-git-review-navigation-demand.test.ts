@@ -49,6 +49,9 @@ function setup(options?: {
       },
     },
     documentGenerationRef: { current: 1 },
+    entryKeyBySectionIdRef: {
+      current: new Map([["section:a", "entry:a"]]),
+    },
     firstSectionIdByEntryKeyRef: {
       current: new Map([["entry:a", "section:a"]]),
     },
@@ -128,10 +131,12 @@ describe("useGitReviewNavigation demand sync", () => {
     expect(hook.result.current.navigationPending).toBe(false);
   });
 
-  it("resumeSelectedNavigation reapplies demand when the target left the viewport", async () => {
+  it("resumeSelectedNavigation does not re-scroll when target is already projected", async () => {
     let visible = true;
+    const scrollToItem = vi.fn(() => true);
     const { applyNavigationDemand, hook } = setup({
       isItemVisible: () => visible,
+      scrollToItem,
     });
     act(() => {
       hook.result.current.beginNavigation({
@@ -146,13 +151,16 @@ describe("useGitReviewNavigation demand sync", () => {
     expect(hook.result.current.navigationPending).toBe(false);
 
     applyNavigationDemand.mockClear();
+    scrollToItem.mockClear();
     visible = false;
     act(() => {
-      hook.result.current.notifyProjectionChanged();
+      hook.result.current.notifyProjectionChanged(["section:a"]);
       hook.result.current.resumeSelectedNavigation();
     });
-    expect(applyNavigationDemand).toHaveBeenCalledWith("entry:a");
-    expect(hook.result.current.navigationPending).toBe(true);
+    // 终态：已投影则用户拥有滚动；resume 不得 align:start 再 scroll。
+    expect(applyNavigationDemand).not.toHaveBeenCalled();
+    expect(scrollToItem).not.toHaveBeenCalled();
+    expect(hook.result.current.navigationPending).toBe(false);
   });
 
   it("beginNavigation scrolls the requested sectionKey not the first section", async () => {
@@ -212,6 +220,12 @@ describe("useGitReviewNavigation demand sync", () => {
         },
       },
       documentGenerationRef: { current: 1 },
+      entryKeyBySectionIdRef: {
+        current: new Map([
+          ["section:u", "entry:a"],
+          ["section:s", "entry:a"],
+        ]),
+      },
       firstSectionIdByEntryKeyRef: {
         current: new Map([["entry:a", "section:u"]]),
       },
@@ -244,5 +258,49 @@ describe("useGitReviewNavigation demand sync", () => {
     expect(scrollToItem).toHaveBeenCalledWith("section:s");
     expect(scrollToItem).not.toHaveBeenCalledWith("section:u");
     expect(applyNavigationDemand).toHaveBeenCalledWith("entry:a");
+  });
+
+  it("resume rebinds sectionKey when stage moves the selected slot", async () => {
+    let visible = true;
+    const scrollToItem = vi.fn(() => true);
+    const { applyNavigationDemand, hook, refs } = setup({
+      isItemVisible: () => visible,
+      scrollToItem,
+    });
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+    });
+    act(() => {
+      hook.result.current.tryPendingNavigation();
+    });
+    await flushFrames();
+    expect(hook.result.current.navigationPending).toBe(false);
+
+    // stage: old section:a 消失，新 section:a-staged 成为该 entry 唯一 slot
+    refs.entryKeyBySectionIdRef.current = new Map([
+      ["section:a-staged", "entry:a"],
+    ]);
+    refs.firstSectionIdByEntryKeyRef.current = new Map([
+      ["entry:a", "section:a-staged"],
+    ]);
+    refs.itemCacheKeysRef.current = new Map([
+      ["section:a-staged", "document:a:section:a-staged"],
+    ]);
+    refs.itemIndexByIdRef.current = new Map([["section:a-staged", 0]]);
+    // 旧 id 离开视口；新 id 尚未滚入
+    visible = false;
+    applyNavigationDemand.mockClear();
+    scrollToItem.mockClear();
+    act(() => {
+      hook.result.current.resumeSelectedNavigation();
+    });
+    expect(applyNavigationDemand).not.toHaveBeenCalled();
+    expect(scrollToItem).toHaveBeenCalledWith("section:a-staged");
+    expect(hook.result.current.getSelectedSectionKey()).toBe(
+      "section:a-staged"
+    );
   });
 });

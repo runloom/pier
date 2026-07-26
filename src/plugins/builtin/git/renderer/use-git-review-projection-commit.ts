@@ -7,6 +7,7 @@ import { type RefObject, useLayoutEffect, useMemo } from "react";
 import {
   indexReviewDocumentProjection,
   indexReviewEntrySections,
+  indexReviewSectionEntries,
   type ReviewDocumentProjection,
 } from "./git-review-document-projection.ts";
 
@@ -22,7 +23,6 @@ export function useGitReviewProjectionCommit({
   itemIdsRef,
   itemIndexByIdRef,
   latestItemUpdatesRef,
-  notifyProjectionChanged,
   projection,
   projectionGeneration,
   renderedGenerationRef,
@@ -40,7 +40,6 @@ export function useGitReviewProjectionCommit({
   readonly itemIdsRef: RefObject<readonly string[]>;
   readonly itemIndexByIdRef: RefObject<ReadonlyMap<string, number>>;
   readonly latestItemUpdatesRef: RefObject<Map<string, PierDiffViewItem>>;
-  readonly notifyProjectionChanged: (ids?: readonly string[]) => void;
   readonly projection: ReviewDocumentProjection;
   readonly projectionGeneration: number;
   readonly renderedGenerationRef: RefObject<number>;
@@ -60,10 +59,15 @@ export function useGitReviewProjectionCommit({
     () => indexReviewEntrySections(entries),
     [entries]
   );
+  // 全量 section→entry（含未 materialize），供 demand / failure 解析。
+  const fullSectionIndex = useMemo(
+    () => indexReviewSectionEntries(entries),
+    [entries]
+  );
 
   useLayoutEffect(() => {
     committedProjectionGenerationRef.current = projectionGeneration;
-    entryKeyBySectionIdRef.current = projection.entryKeyBySectionId;
+    entryKeyBySectionIdRef.current = fullSectionIndex;
     // firstSection 来自全量 entries，保证 idle 树点击可解析 sectionId。
     firstSectionIdByEntryKeyRef.current = entrySectionIndex;
     itemIndexByIdRef.current = projectionIndex.itemIndexById;
@@ -85,7 +89,7 @@ export function useGitReviewProjectionCommit({
       );
     }
     renderedGenerationRef.current = projectionGeneration;
-    notifyProjectionChanged();
+    // 不调用无参 notifyProjectionChanged：会误抬 revision 触发 resume 排他 thrash。
     resumeSelectedNavigation();
     tryPendingNavigation();
   }, [
@@ -95,12 +99,11 @@ export function useGitReviewProjectionCommit({
     entryKeyBySectionIdRef,
     entrySectionIndex,
     firstSectionIdByEntryKeyRef,
+    fullSectionIndex,
     itemCacheKeysRef,
     itemIdsRef,
     itemIndexByIdRef,
     latestItemUpdatesRef,
-    notifyProjectionChanged,
-    projection.entryKeyBySectionId,
     projectionGeneration,
     projectionIndex,
     renderedGenerationRef,

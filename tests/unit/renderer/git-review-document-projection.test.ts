@@ -7,6 +7,8 @@ import { describe, expect, it, vi } from "vitest";
 import {
   indexReviewDocumentProjection,
   indexReviewEntrySections,
+  indexReviewSectionEntries,
+  isCodeViewMemberResource,
   projectReviewDocuments,
 } from "../../../src/plugins/builtin/git/renderer/git-review-document-projection.ts";
 import type { GitReviewDocumentResource } from "../../../src/plugins/builtin/git/renderer/git-review-document-resource.ts";
@@ -56,8 +58,8 @@ function context(): RendererPluginContext {
   } as never;
 }
 
-describe("projectReviewDocuments gold-standard slots", () => {
-  it("projects every index entry as a stable CodeView item including idle placeholders", () => {
+describe("projectReviewDocuments end-state membership", () => {
+  it("only projects loaded and error members — never idle/loading placeholders", () => {
     const resources: GitReviewDocumentResource[] = [
       { entry: entry(0), kind: "idle" },
       { entry: entry(1), kind: "loading", operationId: "op-1" },
@@ -85,29 +87,49 @@ describe("projectReviewDocuments gold-standard slots", () => {
     );
 
     expect(projection.items.map((item) => item.id)).toEqual([
-      "section:0",
-      "section:1",
       "section:2",
       "section:3",
-      "section:4",
     ]);
-    expect(projection.items[0]?.cacheKey).toBe(
-      "git-review-placeholder:section:0"
-    );
-    expect(projection.items[1]?.cacheKey).toBe(
-      "git-review-placeholder:section:1"
-    );
-    expect(projection.items[2]?.patch).toContain("+new");
+    expect(projection.items[0]?.patch).toContain("+new");
+    expect(projection.items[1]?.stateNotice).toBe("Unable to load this change");
+    expect(
+      projection.items.every(
+        (item) => !item.cacheKey.startsWith("git-review-placeholder:")
+      )
+    ).toBe(true);
     expect([...projection.entryKeyBySectionId.keys()]).toEqual([
-      "section:0",
-      "section:1",
       "section:2",
       "section:3",
-      "section:4",
     ]);
   });
 
-  it("orders projected items conflict, staged, unstaged then path", () => {
+  it("classifies code-view membership", () => {
+    expect(isCodeViewMemberResource(loaded(0))).toBe(true);
+    expect(
+      isCodeViewMemberResource({
+        entry: entry(1),
+        failure: {
+          kind: "error",
+          message: "x",
+          reason: "internal",
+          retryable: false,
+        },
+        kind: "error",
+      })
+    ).toBe(true);
+    expect(isCodeViewMemberResource({ entry: entry(2), kind: "idle" })).toBe(
+      false
+    );
+    expect(
+      isCodeViewMemberResource({
+        entry: entry(3),
+        kind: "loading",
+        operationId: "op",
+      })
+    ).toBe(false);
+  });
+
+  it("orders projected loaded items conflict, staged, unstaged then path", () => {
     const mixed = (partial: {
       path: string;
       entryKey: string;
@@ -115,8 +137,8 @@ describe("projectReviewDocuments gold-standard slots", () => {
         group: "conflict" | "unstaged" | "staged" | "committed";
         sectionKey: string;
       }>;
-    }): GitReviewDocumentResource => ({
-      entry: {
+    }): GitReviewDocumentResource => {
+      const item: GitReviewIndexEntry = {
         entryKey: partial.entryKey,
         oldPaths: [],
         path: partial.path,
@@ -128,9 +150,21 @@ describe("projectReviewDocuments gold-standard slots", () => {
           targetPath: partial.path,
         })),
         status: "modified",
-      },
-      kind: "idle",
-    });
+      };
+      return {
+        document: {
+          kind: "ok",
+          revision: `rev:${partial.entryKey}`,
+          sections: partial.slots.map((slot) => ({
+            kind: "patch" as const,
+            patch: `diff --git a/${partial.path} b/${partial.path}\n@@ -1 +1 @@\n-a\n+b\n`,
+            sectionKey: slot.sectionKey,
+          })),
+        },
+        entry: item,
+        kind: "loaded",
+      };
+    };
     const projection = projectReviewDocuments(
       {
         resources: [
@@ -171,11 +205,8 @@ describe("projectReviewDocuments gold-standard slots", () => {
       "sec:u:b",
       "sec:m:z",
     ]);
-    // Half-staged path appears twice; stageControl distinguishes groups.
     const stagedA = projection.items.find((item) => item.id === "sec:s:a");
     const unstagedA = projection.items.find((item) => item.id === "sec:u:a");
-    expect(stagedA?.fileDisplay?.path).toBe("a.ts");
-    expect(unstagedA?.fileDisplay?.path).toBe("a.ts");
     expect(stagedA?.stageControl).toEqual({ state: "staged" });
     expect(unstagedA?.stageControl).toEqual({
       canDiscard: true,
@@ -185,7 +216,7 @@ describe("projectReviewDocuments gold-standard slots", () => {
 });
 
 describe("indexReviewEntrySections", () => {
-  it("indexes first section from full entries independent of item index", () => {
+  it("indexes first section from full entries independent of projection", () => {
     const entries = [entry(0), entry(1), entry(2)];
     expect([...indexReviewEntrySections(entries).entries()]).toEqual([
       ["entry:0", "section:0"],
@@ -199,13 +230,22 @@ describe("indexReviewEntrySections", () => {
           kind: "idle" as const,
         })),
         retainedEntryKeys: [],
-        settled: false,
+        settled: true,
       },
       context(),
       "en"
     );
-    const itemIndex = indexReviewDocumentProjection(projection);
-    expect(itemIndex.itemIds).toEqual(["section:0", "section:1", "section:2"]);
-    expect(itemIndex).not.toHaveProperty("firstSectionIdByEntryKey");
+    expect(projection.items).toEqual([]);
+    expect(indexReviewDocumentProjection(projection).itemIds).toEqual([]);
+  });
+});
+
+describe("indexReviewSectionEntries", () => {
+  it("maps every section of the full index", () => {
+    const entries = [entry(0), entry(1)];
+    expect([...indexReviewSectionEntries(entries).entries()]).toEqual([
+      ["section:0", "entry:0"],
+      ["section:1", "entry:1"],
+    ]);
   });
 });

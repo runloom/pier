@@ -139,6 +139,14 @@ export function createActionFromContribution(
   return {
     category: contribution.categoryKey,
     enabled: isEnabled,
+    ...(contribution.disabledReason
+      ? {
+          disabledReason: (invocation?: ActionInvocation) =>
+            isEnabled(invocation)
+              ? null
+              : (contribution.disabledReason?.(invocation) ?? null),
+        }
+      : {}),
     handler: async (invocation) => {
       if (!isEnabled(invocation)) {
         return;

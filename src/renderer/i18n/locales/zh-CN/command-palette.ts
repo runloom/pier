@@ -72,7 +72,7 @@ export const commandPalette = {
     noTerminals: "没有可切换的终端",
     noTerminalsDetail: "新建终端后会显示在这里",
     noTaskContext: "没有活跃项目",
-    noTaskContextDetail: "先点开某个项目里的面板，再运行任务",
+    noTaskContextDetail: "先聚焦项目面板",
     loadFailed: "任务加载失败",
     loadingTasks: "正在查找任务...",
     loadingTasksDetail: "正在扫描当前项目支持的任务源",

@@ -3,7 +3,7 @@ import type { LucideIcon } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import type { FunctionComponent } from "react";
 import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
-import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
+import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel-kit.ts";
 import { workbenchPanelKit } from "@/panel-kits/workbench/workbench-panel.tsx";
 import {
   withPanelResourceBoundary,

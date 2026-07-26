@@ -206,6 +206,8 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
     const fallbackPosition = activeGroup
       ? { referenceGroup: activeGroup, direction: "within" as const }
       : { direction: "right" as const };
+    // 工作台是全局 panel：不持有项目路径。其上的路径依赖操作（新建终端/任务等）
+    // 因无 context 而禁用，不会回落到同组终端 cwd。
     api.addPanel({
       id,
       component: "workbench",

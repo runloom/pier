@@ -7,6 +7,8 @@ export const contextMenu = {
     closeTerminal: "Close Terminal",
     clipboardFailed: "Clipboard unavailable",
     copy: "Copy",
+    copyPath: "Copy Path",
+    pathCopied: "Path copied",
     noSelection: "Nothing is selected to copy.",
     focusDown: "Focus Down",
     focusLeft: "Focus Left",

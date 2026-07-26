@@ -1,8 +1,10 @@
 import { PierFileIcon } from "@pier/ui/file-icon.tsx";
-import { MENU_ITEM_DENSITY_CLASS } from "@pier/ui/interactive-density.ts";
-import { cn } from "@pier/ui/utils.ts";
 import type { FilePathQueryItem } from "@shared/contracts/file-query.ts";
 import type { ComposerPathQueryStatus } from "./composer-path-query.ts";
+import {
+  ComposerSuggestList,
+  type ComposerSuggestRowModel,
+} from "./composer-suggest-list.tsx";
 
 export const MENTION_LISTBOX_ID = "terminal-composer-mention-listbox";
 
@@ -39,95 +41,32 @@ export function MentionPopup({
   placeholder,
   status,
 }: MentionPopupProps) {
+  const rows: ComposerSuggestRowModel[] = items.map((item) => {
+    const { dir, name } = pathParts(item.path);
+    return {
+      detail: dir.length > 0 ? dir : null,
+      icon: <PierFileIcon aria-hidden="true" fileName={name} size={16} />,
+      key: item.path,
+      label: name,
+      meta: null,
+    };
+  });
+
   return (
-    <div
-      className={cn(
-        // Position comes from ComposerAutocompletePortal (fixed above input).
-        "max-h-56 w-full min-w-0",
-        "overflow-y-auto overflow-x-hidden rounded-xl border bg-popover p-1 shadow-md",
-        "no-scrollbar"
-      )}
-      data-scrollbar="none"
-      data-testid="terminal-composer-mention-popup"
-      id={MENTION_LISTBOX_ID}
-      role="listbox"
-    >
-      {emptyProject ? (
-        <div className="px-2 py-1.5">
-          <div className="font-medium text-foreground text-xs/tight">
-            {emptyProjectTitle}
-          </div>
-          <div className="mt-0.5 text-muted-foreground text-xs/tight">
-            {emptyProjectBody}
-          </div>
-        </div>
-      ) : null}
-
-      {!emptyProject && status === "loading" && items.length === 0 ? (
-        <div className="px-2 py-1.5 text-muted-foreground text-xs/tight">
-          {placeholder}
-        </div>
-      ) : null}
-
-      {!emptyProject &&
-      (status === "done" || status === "error") &&
-      items.length === 0 ? (
-        <div className="px-2 py-1.5 text-muted-foreground text-xs/tight">
-          {noResults}
-        </div>
-      ) : null}
-
-      {emptyProject
-        ? null
-        : items.map((item, index) => {
-            const { dir, name } = pathParts(item.path);
-            return (
-              <button
-                aria-selected={index === activeIndex}
-                className={cn(
-                  "flex w-full min-w-0 items-center gap-2 rounded-lg px-2 text-left",
-                  MENU_ITEM_DENSITY_CLASS,
-                  index === activeIndex
-                    ? "bg-accent text-accent-foreground"
-                    : "text-foreground hover:bg-accent/50"
-                )}
-                data-testid={`terminal-composer-mention-item-${index}`}
-                id={`terminal-composer-mention-option-${index}`}
-                key={item.path}
-                onMouseDown={(event) => {
-                  event.preventDefault();
-                  onSelect(index);
-                }}
-                onMouseEnter={() => onHover(index)}
-                role="option"
-                type="button"
-              >
-                <PierFileIcon
-                  aria-hidden="true"
-                  className="shrink-0"
-                  fileName={name}
-                  size={14}
-                />
-                <span className="flex min-w-0 flex-1 flex-col gap-0.5 py-0.5">
-                  <span className="truncate font-medium font-mono text-xs/tight">
-                    {name}
-                  </span>
-                  {dir ? (
-                    <span
-                      className={cn(
-                        "truncate font-mono text-[10px]/tight",
-                        index === activeIndex
-                          ? "text-accent-foreground/70"
-                          : "text-muted-foreground"
-                      )}
-                    >
-                      {dir}
-                    </span>
-                  ) : null}
-                </span>
-              </button>
-            );
-          })}
-    </div>
+    <ComposerSuggestList
+      activeIndex={activeIndex}
+      emptyBody={emptyProject ? emptyProjectBody : null}
+      emptyTitle={emptyProject ? emptyProjectTitle : null}
+      items={rows}
+      listboxId={MENTION_LISTBOX_ID}
+      loading={status === "loading"}
+      loadingLabel={placeholder}
+      noResults={noResults}
+      onHover={onHover}
+      onSelect={onSelect}
+      optionIdPrefix="terminal-composer-mention-option"
+      showEmpty={emptyProject}
+      testId="terminal-composer-mention-popup"
+    />
   );
 }

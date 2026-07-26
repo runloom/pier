@@ -280,6 +280,123 @@ describe("terminal debug diagnostics", () => {
     );
   });
 
+  it("allows focus-pinned composer surface focus while keyboard is Web, but cursor must stay suppressed", () => {
+    const desired = {
+      ...desiredHostSnapshot({ kind: "web" }, 4),
+      focusDisabledPanelIds: ["terminal-1"],
+      webRequestCount: 1,
+    };
+    const okIssues = buildTerminalDebugIssues(
+      {
+        activePanelId: "terminal-1",
+        desiredHostSnapshot: desired,
+        hasMaximizedGroup: false,
+        panelCount: 1,
+        panels: [
+          {
+            anchorFrame: { height: 93, width: 213, x: 0, y: 72 },
+            component: "terminal",
+            dockviewActive: true,
+            dockviewVisible: true,
+            hasAnchor: true,
+            isActivePanel: true,
+            panelId: "terminal-1",
+          },
+        ],
+      },
+      {
+        surfaces: [
+          {
+            alpha: 1,
+            browserWindowId: 1,
+            cursorSuppressed: true,
+            frame: { height: 93, width: 213, x: 0, y: 72 },
+            hasRouterTarget: true,
+            hostKeyboardActive: false,
+            isFirstResponder: false,
+            isHidden: false,
+            isOffscreen: false,
+            isSurfaceFocused: true,
+            nativePanelId: "1::terminal-1",
+            panelId: "terminal-1",
+            viewportFrame: { height: 93, width: 213, x: 0, y: 72 },
+          },
+        ],
+        window: {
+          activeTerminalPanelId: null,
+          keyboardFocusTarget: { kind: "web" },
+          lastAppliedRendererSequence: 4,
+          nativeActiveTerminalPanelId: null,
+          terminalTargetCount: 1,
+          webOverlayRectCount: 1,
+        },
+      }
+    );
+    expect(okIssues).not.toContainEqual(
+      expect.objectContaining({
+        code: "input_routing_terminal_surface_focus_mismatch",
+      })
+    );
+    expect(okIssues).not.toContainEqual(
+      expect.objectContaining({
+        code: "input_routing_terminal_cursor_policy_mismatch",
+      })
+    );
+
+    const blinkIssues = buildTerminalDebugIssues(
+      {
+        activePanelId: "terminal-1",
+        desiredHostSnapshot: desired,
+        hasMaximizedGroup: false,
+        panelCount: 1,
+        panels: [
+          {
+            anchorFrame: { height: 93, width: 213, x: 0, y: 72 },
+            component: "terminal",
+            dockviewActive: true,
+            dockviewVisible: true,
+            hasAnchor: true,
+            isActivePanel: true,
+            panelId: "terminal-1",
+          },
+        ],
+      },
+      {
+        surfaces: [
+          {
+            alpha: 1,
+            browserWindowId: 1,
+            cursorSuppressed: false,
+            frame: { height: 93, width: 213, x: 0, y: 72 },
+            hasRouterTarget: true,
+            hostKeyboardActive: false,
+            isFirstResponder: false,
+            isHidden: false,
+            isOffscreen: false,
+            isSurfaceFocused: true,
+            nativePanelId: "1::terminal-1",
+            panelId: "terminal-1",
+            viewportFrame: { height: 93, width: 213, x: 0, y: 72 },
+          },
+        ],
+        window: {
+          activeTerminalPanelId: null,
+          keyboardFocusTarget: { kind: "web" },
+          lastAppliedRendererSequence: 4,
+          nativeActiveTerminalPanelId: null,
+          terminalTargetCount: 1,
+          webOverlayRectCount: 1,
+        },
+      }
+    );
+    expect(blinkIssues).toContainEqual(
+      expect.objectContaining({
+        code: "input_routing_terminal_cursor_policy_mismatch",
+        panelId: "terminal-1",
+      })
+    );
+  });
+
   it("reports a terminal keyboard target with no native surface", () => {
     const issues = buildTerminalDebugIssues(
       {

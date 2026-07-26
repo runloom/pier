@@ -63,6 +63,8 @@ export function PierFileTree({
   onMovePaths,
   onOpenItemContextMenu,
   onOpenPath,
+  isActiveOpenPath,
+  onContextMenuSession,
   onRenamePath,
   onSearchMatchStateChange,
   onScrollSnapshotChange,
@@ -101,6 +103,8 @@ export function PierFileTree({
     onMovePaths,
     onOpenItemContextMenu,
     onOpenPath,
+    isActiveOpenPath,
+    onContextMenuSession,
     onRenamePath,
     onSelectPaths,
   });
@@ -114,23 +118,26 @@ export function PierFileTree({
       (selectedPaths) => {
         const nextSelectedPaths = [...selectedPaths];
         const selectedPath = nextSelectedPaths.at(-1);
+        const refsSnapshot = readRefs();
+        // suppressOpenPathFromContextMenu 由菜单会话 end 清掉，selection 里不消费。
         const suppressOpenPath =
-          selectedPath != null &&
-          programmaticSelectionRef.current?.path === selectedPath;
+          (selectedPath != null &&
+            programmaticSelectionRef.current?.path === selectedPath) ||
+          refsSnapshot.suppressOpenPathFromContextMenu;
         programmaticSelectionRef.current = null;
         const selectedItem =
           selectedPath == null
             ? undefined
-            : readRefs().itemsByPath.get(selectedPath);
+            : refsSnapshot.itemsByPath.get(selectedPath);
         const outwardSelectedPaths = nextSelectedPaths.map(
-          (path) => readRefs().itemsByPath.get(path)?.path ?? path
+          (path) => refsSnapshot.itemsByPath.get(path)?.path ?? path
         );
 
-        readRefs().onSelectPaths?.(outwardSelectedPaths);
+        refsSnapshot.onSelectPaths?.(outwardSelectedPaths);
 
         if (selectedItem?.kind === "file" && !suppressOpenPath) {
           lastOpenedPathRef.current = selectedItem.path;
-          readRefs().onOpenPath?.(selectedItem.path);
+          refsSnapshot.onOpenPath?.(selectedItem.path);
         }
       },
       [readRefs]
@@ -175,6 +182,26 @@ export function PierFileTree({
   });
 
   React.useEffect(() => () => renameSession.dispose(), [renameSession]);
+  // 右键菜单 select 必须总能拿到最新 model（避免 layout 注入竞态导致 fileTreeModel=null）。
+  const modelRef = React.useRef(model);
+  modelRef.current = model;
+  const fileTreeModelApi = React.useMemo(
+    () => ({
+      focusPath: (path: string) => {
+        modelRef.current.focusPath(path);
+      },
+      getSelectedPaths: () => modelRef.current.getSelectedPaths(),
+      selectOnlyPath: (path: string) => {
+        modelRef.current.selectOnlyPath(path);
+      },
+    }),
+    []
+  );
+  // FileTreeRefs.fileTreeModel is readonly; replace the whole bag (same pattern as useFileTreeRefs).
+  refs.current = {
+    ...refs.current,
+    fileTreeModel: fileTreeModelApi,
+  };
   useFileTreeContextMenuComposition(model, onOpenItemContextMenu != null, refs);
   treeSearch.useSearchMatchState(model, nextRefs, onSearchMatchStateChange);
   const activeSearchRef = React.useRef<string | null>(null);

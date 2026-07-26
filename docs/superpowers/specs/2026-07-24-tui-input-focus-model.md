@@ -64,43 +64,41 @@ header、增强输入打开。场景 3（多 agent 调度）注入前复用同�
 
 ## 4. 提交门禁（增强输入 UI）
 
-规则：**TUI 没有可输入的聚焦内容时，增强输入不能提交，且阻断态前置为
-常驻 UI**（非事后 toast）：
+规则：**只认输入光标（DECTCEM）是否存在**，不认 FA `waiting`：
 
-- 阻断来源：`waiting`（activity store 响应式，全 agent 生效）+ 探针失焦
-  （500ms 轮询，**与白名单同口径**——只对声明 `inputFocusKey` 的 agent 启用，
-  未验证光标语义的 agent 不探不阻断；busy 不探、unknown 不阻断、后台 tab
-  停轮询、首轮轮询延迟一个间隔）。
-- 阻断表现：发送按钮禁用、回车不生效（**含空草稿 Enter 透传同口径截住**，
-  方向键导航与 Ctrl+C 中断放行）、发送按钮上方以受控 tooltip 常开展示精简
-  原因（非 hover，复用 `@pier/ui/tooltip` 受控 open；`blockedUnfocused` /
-  `blockedWaiting` i18n），草稿保留。
-- 解除：探针转 visible（用户点了 TUI 输入框 / 自动恢复成功）→ 下一轮
-  轮询自动恢复可用。
-- 发送前最终确认：轮询值可能 ≤500ms 陈旧，`send()` 仍走
-  `ensureTuiInputFocus`（crush 失焦透传 Tab 恢复后送达）；确认失败且 UI
-  无法自解释（sendBlock 为 null，如探针 unknown）时 toast 反馈并保留草稿，
-  禁止静默失败。
-- 防交错：renderer `sendingRef` in-flight 守卫 + main 按 panel 的发送队列
-  （`enqueueTerminalSend`），settle 窗口内双击/键重复/并发注入不会产出
-  `paste1→paste2→enter1→enter2` 的揉团时间线。
+- 门禁信号：cursor-visible 探针 hidden → `unfocused`（500ms 轮询，**全
+  agent**，含 busy「思考中」；unknown 不拦、后台 tab 停轮询）。
+- **不**用 activity `waiting` 做发送门禁。
+- 恢复键：仅 `inputFocusKey` 白名单（crush=Tab）在 ensure 时注入；Grok 等
+  无恢复键时 hidden → 门禁拦发、ensure 失败。
+- 表现：硬禁用发送 + 内联提示 `blockedUnfocused`（「未聚焦输入框」）+ 截空
+  草稿 Enter 透传；光标 visible 才可提交。
+- 点终端内容：**不关**增强输入；**吞掉**归还键盘（键仍钉在卡片，避免 limbo）。
+  鼠标点到 TUI 输入区可复原聚焦；立刻重探光标以解除发送门禁。
+  关闭只走 Esc / 发送成功 / 资格失效。
+- 防交错：renderer `sendingRef` + main `enqueueTerminalSend`。
 
 ## 5. 原生 focus 转场的两个不变量（缺一不可）
 
 症状：打开增强输入瞬间向 TUI 发瞬时 `ESC[O`，输入框失焦不再恢复。
 
-**不变量 A（转场顺序，`applyTerminalWindowState`）**：打开浮层先挂
-`hostCursorHidden` 再移交 first responder；关闭浮层反之。
+**不变量 A（转场顺序，`applyTerminalWindowState`）**：打开浮层先 **pin
+surface focus**（`hostCursorHidden` 作保活位，**不**视觉藏光标）再移交
+first responder；关闭浮层反之。
 反证（打开方向若先交 FR）：`resignFirstResponder` 那一帧
-`(FR✗ || hidden✗ || hostKeyboardActive✗) = false → ESC[O`，随后挂 hidden
+`(FR✗ || pin✗ || hostKeyboardActive✗) = false → ESC[O`，随后挂 pin
 再 `ESC[I`——瞬时 pair 复活。
 
 **不变量 B（focus 公式，`synchronizeHostFocusState`）**：
 `focused = isKeyWindow && (FR===self || hostCursorHidden || hostKeyboardActive)`。
-反证（关闭方向若只看 `FR || hidden`）：`makeFirstResponder` 与 WKWebView
-resign 竞态（Chromium 在 DOM 输入聚焦时滞后/拒绝）使「摘 hidden 那一帧」
+反证（关闭方向若只看 `FR || pin`）：`makeFirstResponder` 与 WKWebView
+resign 竞态（Chromium 在 DOM 输入聚焦时滞后/拒绝）使「摘 pin 那一帧」
 FR 未落回终端 → 派生 `false → ESC[O`；`hostKeyboardActive`（coordinator
 下发的逻辑归属，无竞态）入 OR 后该帧恒为 true。
+
+**视觉**：`cursorSuppressed = !hostKeyboardActive || hostCursorHidden`。
+增强输入打开（pin）时 **suppress 绘制光标**（只让 composer caret 闪烁）；
+发送门禁探针仍读 DECTCEM **模式位**（不受绘制 suppress 影响）。
 
 分工：**打开方向靠顺序（A）、关闭方向靠公式（B）**。两处注释内有完整
 逐帧推演（`GhosttyBridge.swift` applyTerminalWindowState、

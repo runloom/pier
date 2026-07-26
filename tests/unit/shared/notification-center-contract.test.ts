@@ -51,9 +51,13 @@ describe("notification-center contract", () => {
     ).toBe(false);
   });
 
-  it("report omits server-assigned fields", () => {
+  it("report omits server-assigned fields and allows suppressToast", () => {
     const { id: _id, read: _read, ts: _ts, ...report } = validNotification();
     expect(notificationReportSchema.safeParse(report).success).toBe(true);
+    expect(
+      notificationReportSchema.safeParse({ ...report, suppressToast: true })
+        .success
+    ).toBe(true);
     expect(
       notificationReportSchema.safeParse({ ...report, id: "x" }).success
     ).toBe(false);

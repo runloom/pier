@@ -5,7 +5,6 @@ import {
 import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
 import { effectiveTerminalFontSize } from "@shared/zoom.ts";
 import type { IDockviewPanelProps } from "dockview-react";
-import { SquareTerminal } from "lucide-react";
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
@@ -475,6 +474,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       />
       {composerMounted ? (
         <TerminalComposer
+          agentKind={activity?.kind === "agent" ? activity.agentId : null}
           attachRequest={attachRequest}
           bottomOffsetPx={statusInsetPx}
           disabled={!nativeTerminalReady || Boolean(error)}
@@ -492,9 +492,3 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     </div>
   );
 }
-
-export const terminalPanelKit = {
-  component: TerminalPanel,
-  icon: SquareTerminal,
-  kind: "terminal",
-} as const;

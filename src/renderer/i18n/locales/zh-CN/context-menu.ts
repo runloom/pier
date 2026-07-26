@@ -7,6 +7,8 @@ export const contextMenu = {
     closeTerminal: "关闭终端",
     clipboardFailed: "剪贴板不可用",
     copy: "复制",
+    copyPath: "复制地址",
+    pathCopied: "已复制",
     noSelection: "没有可复制的选中内容。",
     focusDown: "向下聚焦",
     focusLeft: "向左聚焦",

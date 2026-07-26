@@ -40,13 +40,13 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+Numpad7",
   "Mod+Numpad8",
   "Mod+Numpad9",
-  "Mod+Shift+Enter",
   "Mod+Shift+Equal",
   // Shared by pier.agent.new + pier.terminal.composerAttach (contextual).
   "Mod+Shift+KeyA",
   "Mod+Shift+KeyA",
   "Mod+Shift+KeyD",
   "Mod+Shift+KeyI",
+  "Mod+Shift+KeyM",
   "Mod+Shift+KeyP",
 ];
 
@@ -135,7 +135,7 @@ describe("DEFAULT_KEYMAP", () => {
   it("contains the panel maximize shortcut", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.panel.toggleMaximized",
-      keys: "Mod+Shift+Enter",
+      keys: "Mod+Shift+KeyM",
       scope: "global",
     });
   });

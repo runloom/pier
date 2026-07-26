@@ -5,6 +5,7 @@ import {
   gitReviewDocumentMetrics,
   isGitReviewDocumentReservable,
 } from "./git-review-document-limits.ts";
+import { retainLoadedDocumentForEntry } from "./git-review-document-loader-utils.ts";
 import {
   type ReviewDocumentViewState,
   reconcileReviewDocumentSnapshot,
@@ -300,12 +301,17 @@ export class GitReviewDocumentGeneration {
     const index = this.#indexByEntryKey.get(entryKey);
     const effective =
       index === undefined ? undefined : this.#effectiveResources[index];
-    const retainedLoaded =
+    const retainedSource =
       previous ?? (effective?.kind === "loaded" ? effective : undefined);
     // 在新的 loaded 到达前，保留已有正文：
     // - soft budget idle 不会抹掉 diff
     // - loading/error/unchanged 期间继续显示旧正文
+    // - stage 换 sectionKey 时 remap 到当前 entry（否则投影丢 section）
     // 真正替换只发生在 current.kind === "loaded"。
+    const retainedLoaded =
+      retainedSource === undefined
+        ? null
+        : retainLoadedDocumentForEntry(current.entry, retainedSource.document);
     if (retainedLoaded && current.kind !== "loaded") {
       if (current.kind === "error") {
         this.#refreshFailures.set(entryKey, current);
@@ -317,7 +323,14 @@ export class GitReviewDocumentGeneration {
       } else {
         this.#staleEntryKeys.delete(entryKey);
       }
-      this.#replaceEffective(entryKey, retainedLoaded, changed);
+      // 已是同 entry + 同 document 的 soft retain：复用 effective 身份，避免 idle 空转发 change。
+      const reuseEffective =
+        effective?.kind === "loaded" &&
+        effective.entry === current.entry &&
+        effective.document === retainedLoaded.document
+          ? effective
+          : retainedLoaded;
+      this.#replaceEffective(entryKey, reuseEffective, changed);
       return;
     }
     this.#refreshFailures.delete(entryKey);

@@ -55,8 +55,13 @@ export function parseSafeSkillFrontmatter(markdown: string): {
     );
   }
 
-  // Reject anchors, aliases, custom tags.
-  if (/(^|[\s[{,])[&*!]/.test(rawFm) || /!!/.test(rawFm)) {
+  // Reject YAML anchors (&name), aliases (*name), and custom tags (!!tag).
+  // Do not treat bare `*` in plain scalars (e.g. `Bash(npx foo *)`) as aliases.
+  if (
+    /(^|[\s[{,])&[A-Za-z_]/.test(rawFm) ||
+    /(^|[\s[{,])\*[A-Za-z_]/.test(rawFm) ||
+    /!!/.test(rawFm)
+  ) {
     throw new SkillFrontmatterError(
       "YAML anchors, aliases, and custom tags are not allowed"
     );
@@ -188,6 +193,15 @@ function parseYamlMapping(
     const rest = line.text.slice(colon + 1).trim();
     i += 1;
     if (rest.length > 0) {
+      // Folded/literal block scalars: `description: >-` then indented lines.
+      // Without this, rest is the bare `>-` token and real copy is dropped
+      // (common in SKILL.md frontmatter).
+      const blockScalar = parseYamlBlockScalar(rest, lines, i, indent);
+      if (blockScalar) {
+        out[key] = blockScalar.value;
+        i = blockScalar.next;
+        continue;
+      }
       out[key] = parseYamlScalar(rest);
       continue;
     }
@@ -206,6 +220,44 @@ function parseYamlMapping(
     i = nested.next;
   }
   return { value: out, next: i };
+}
+
+/**
+ * Parse `>`, `>-`, `|+`, `|` style block scalars used by many SKILL.md files.
+ * Returns null when `rest` is not a block-scalar indicator.
+ */
+function parseYamlBlockScalar(
+  rest: string,
+  lines: YamlLine[],
+  start: number,
+  parentIndent: number
+): { value: string; next: number } | null {
+  const match = rest.match(/^([|>])([+-]?)(?:\d+)?$/);
+  if (!match) {
+    return null;
+  }
+  const style = match[1]!; // > fold, | literal
+  let i = start;
+  if (i >= lines.length || lines[i]!.indent <= parentIndent) {
+    return { value: "", next: i };
+  }
+  const contentIndent = lines[i]!.indent;
+  const parts: string[] = [];
+  while (i < lines.length && lines[i]!.indent >= contentIndent) {
+    parts.push(lines[i]!.text);
+    i += 1;
+  }
+  if (style === "|") {
+    return { value: parts.join("\n"), next: i };
+  }
+  // Folded `>`: join with spaces (good enough for skill descriptions).
+  return {
+    value: parts
+      .join(" ")
+      .replace(/[ \t]+/g, " ")
+      .trim(),
+    next: i,
+  };
 }
 
 function parseYamlSequence(

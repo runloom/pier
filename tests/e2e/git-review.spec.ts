@@ -1583,19 +1583,17 @@ test("reuses Review in its actual Dockview group after a drag", async () => {
         )
     ).toHaveClass(/dv-active-tab/u);
 
+    // Status-bar open is show-or-focus: another terminal must not spawn a
+    // second Review for the same source when one is already open.
     await openReviewFromTerminal(page, terminalA);
-    await expect
-      .poll(() => reviewPanelIds(page), { timeout: 20_000 })
-      .toHaveLength(2);
-    const originalGroupReviewId = (await reviewPanelIds(page)).find(
-      (panelId) => panelId !== originalReviewId
-    );
-    if (!originalGroupReviewId) {
-      throw new Error("new Review id for original group missing");
-    }
-    expect(await panelSharesGroup(page, originalGroupReviewId, terminalA)).toBe(
-      true
-    );
+    expect(await reviewPanelIds(page)).toEqual([originalReviewId]);
+    await expect(
+      page
+        .locator(`[data-panel-tab-id="${originalReviewId}"]`)
+        .locator(
+          "xpath=ancestor::*[contains(concat(' ', normalize-space(@class), ' '), ' dv-tab ')][1]"
+        )
+    ).toHaveClass(/dv-active-tab/u);
     expect(await panelSharesGroup(page, originalReviewId, terminalB)).toBe(
       true
     );

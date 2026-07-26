@@ -9,6 +9,10 @@ import i18next from "i18next";
 import { List, Play } from "lucide-react";
 import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
+import {
+  projectPathActionDisabledReason,
+  projectPathActionEnabled,
+} from "@/lib/actions/project-path-action-gate.ts";
 import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
 import { TASK_RUN_ACTION_CONTRIBUTIONS } from "@/lib/actions/task-run-context-actions.ts";
 import { openTerminalListQuickPick } from "@/lib/actions/terminal-list-quickpick.ts";
@@ -19,8 +23,11 @@ import type {
   QuickPickSection,
 } from "@/lib/command-palette/types.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
-import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import {
+  projectPathFromContext,
+  resolvePanelPathAnchor,
+} from "@/stores/workspace-panel-helpers.ts";
 import { spawnTaskWithInputResolution } from "./task-input-flow.ts";
 import { scheduleTaskOutputPanelSync } from "./task-output-sync.ts";
 
@@ -57,32 +64,35 @@ interface ProjectContext {
   terminalPanelId?: string;
 }
 
-function activeProjectContext(targetGroupId?: string): ProjectContext | null {
+function activeProjectContext(
+  invocation?: ActionInvocation
+): ProjectContext | null {
   const api = useWorkspaceStore.getState().api;
-  const activePanel = api?.activePanel;
-  const activePanelId = activePanel?.id;
-  if (!activePanelId) {
-    return null;
-  }
-  const descriptor =
-    usePanelDescriptorStore.getState().descriptors[activePanelId];
-  const projectRootPath =
-    descriptor?.context?.projectRootPath ??
-    descriptor?.context?.gitRoot ??
-    descriptor?.context?.worktreeRoot ??
-    descriptor?.context?.cwd;
+  const anchor = resolvePanelPathAnchor({
+    api,
+    sourcePanelContext: invocation?.sourcePanelContext,
+    sourcePanelGroupId: invocation?.sourcePanelGroupId,
+    sourcePanelId: invocation?.sourcePanelId,
+  });
+  const projectRootPath = projectPathFromContext(anchor.context);
   if (!projectRootPath) {
     return null;
   }
-  const resolvedTargetGroupId = targetGroupId ?? api?.activeGroup?.id;
+  const sourcePanelId =
+    invocation?.sourcePanelId ?? api?.activePanel?.id ?? undefined;
+  const sourcePanel = sourcePanelId
+    ? api?.panels.find((panel) => panel.id === sourcePanelId)
+    : api?.activePanel;
+  const resolvedTargetGroupId =
+    invocation?.sourcePanelGroupId ?? anchor.groupId ?? api?.activeGroup?.id;
   return {
     defaultTaskSpawnMode:
-      activePanel?.view.contentComponent === "terminal"
+      sourcePanel?.view.contentComponent === "terminal"
         ? "background"
         : "terminal-tab",
     projectRootPath,
-    ...(activePanel?.view.contentComponent === "terminal"
-      ? { terminalPanelId: activePanel.id }
+    ...(sourcePanel?.view.contentComponent === "terminal"
+      ? { terminalPanelId: sourcePanel.id }
       : {}),
     ...(resolvedTargetGroupId ? { targetGroupId: resolvedTargetGroupId } : {}),
   };
@@ -230,10 +240,12 @@ function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
 }
 
 export async function openRunTaskQuickPick(invocation?: ActionInvocation) {
-  const project = activeProjectContext(invocation?.sourcePanelGroupId);
+  const project = activeProjectContext(invocation);
   const title = i18next.t("commandPalette.action.runTask");
   const placeholder = i18next.t("commandPalette.placeholder.runTask");
   if (!project) {
+    // 入口 action 在无路径时已 disabled；快捷键 toast 由 keybinding 层处理。
+    // 若仍走到此处（旧调用），保持 quick-pick 空态作为兜底。
     useCommandPaletteController.getState().openQuickPick({
       title,
       placeholder,
@@ -323,6 +335,8 @@ export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   ...TASK_RUN_ACTION_CONTRIBUTIONS,
   {
     categoryKey: "run",
+    disabledReason: projectPathActionDisabledReason,
+    enabled: projectPathActionEnabled,
     group: "1_run",
     handler: openRunTaskQuickPick,
     iconComponent: Play,
@@ -330,6 +344,7 @@ export const RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     sortOrder: 0,
     surfaces: ["command-palette", "create-menu"],
     titleKey: "commandPalette.action.runTask",
+    when: "workspace.hasApi",
   },
   {
     categoryKey: "run",

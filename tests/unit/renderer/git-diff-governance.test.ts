@@ -307,9 +307,11 @@ describe("Git diff renderer governance", () => {
     expect(projectionCommit).toContain(
       "renderedGenerationRef.current = projectionGeneration;"
     );
+    // 全量 index section 映射（含未 materialize），供 demand / failure / 树导航解析。
     expect(projectionCommit).toContain(
-      "entryKeyBySectionIdRef.current = projection.entryKeyBySectionId;"
+      "entryKeyBySectionIdRef.current = fullSectionIndex;"
     );
+    expect(projectionCommit).toContain("indexReviewSectionEntries(entries)");
     expect(projectionCommit).toContain("itemCacheKeysRef.current = cacheKeys;");
     expect(projectionCommit).toContain(
       "itemIdsRef.current = projectionIndex.itemIds;"
@@ -318,7 +320,8 @@ describe("Git diff renderer governance", () => {
       "itemCacheKeysRef.current.set(item.id, item.cacheKey);"
     );
     expect(reviewRuntime).not.toContain("new Map(itemCacheKeysRef.current)");
-    expect(documentSession).toContain("projectReviewDocumentResource(");
+    // 终态：session 只走成员投影 projectReviewDocuments（内部可再分 resource）。
+    expect(documentSession).toContain("projectReviewDocuments(");
     expect(documentSession).toContain(
       "generationCallbacksRef.current.applyItemUpdates("
     );
@@ -327,12 +330,16 @@ describe("Git diff renderer governance", () => {
       "useEffect(() => {\n    const generation = Math.max("
     );
     expect(reviewContent).not.toContain("diffHandleRef.current = null");
-    // demand 预取覆盖不是 CodeView 成员；全量轻量槽在 projectReviewDocuments。
+    // demand 预取覆盖 ≠ CodeView 成员；成员只经 projectReviewDocuments。
     expect(documentSession).toContain("nextDemandPrefetchEntryKeys(");
-    expect(documentSession).toContain("projectReviewDocuments(");
+    expect(documentSession).toContain("isCodeViewMemberResource");
+    // session 代际预热 + projection commit 刷新（beginGeneration 不得读空/旧 map）
     expect(
       reviewRuntime.match(/entryKeyBySectionIdRef\.current\s*=/gu)
-    ).toHaveLength(1);
+    ).toHaveLength(2);
+    expect(documentSession).toContain(
+      "entryKeyBySectionIdRef.current = indexReviewSectionEntries(entries)"
+    );
     expect(reviewRuntime.match(/itemIdsRef\.current\s*=/gu)).toHaveLength(1);
     expect(
       reviewRuntime.match(/renderedGenerationRef\.current\s*=/gu)

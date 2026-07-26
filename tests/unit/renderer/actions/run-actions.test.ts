@@ -7,7 +7,10 @@ import type { DockviewApi } from "dockview-react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
-import { registerRunActions } from "@/lib/actions/run-actions.ts";
+import {
+  openRunTaskQuickPick,
+  registerRunActions,
+} from "@/lib/actions/run-actions.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 import {
   resetAppDialogForTests,
@@ -249,10 +252,24 @@ describe("run actions", () => {
     expect(quickPick?.items).toBeUndefined();
   });
 
-  it("opens a disabled no-context Run Task picker without listing tasks", async () => {
+  it("disables Run Task and no-ops when there is no project context", async () => {
     disposeRunActions = registerRunActions();
 
-    const run = runTaskAction();
+    const action = actionRegistry.get("pier.run.task");
+    expect(action?.enabled?.()).toBe(false);
+
+    await action?.handler();
+
+    expect(useCommandPaletteController.getState()).toMatchObject({
+      mode: "commands",
+      open: false,
+      quickPick: null,
+    });
+    expect(window.pier.tasks.list).not.toHaveBeenCalled();
+  });
+
+  it("openRunTaskQuickPick still shows a disabled empty state for legacy direct calls", async () => {
+    await openRunTaskQuickPick();
 
     expect(useCommandPaletteController.getState()).toMatchObject({
       mode: "quick-pick",
@@ -260,7 +277,7 @@ describe("run actions", () => {
       quickPick: {
         items: [
           {
-            detail: "Open a panel inside a project, then run a task",
+            detail: "Focus a project panel first",
             disabled: true,
             id: "task-no-context",
             label: "No active project",
@@ -270,10 +287,6 @@ describe("run actions", () => {
         title: "Run Task…",
       },
     });
-    expect(window.pier.tasks.list).not.toHaveBeenCalled();
-
-    await run;
-
     expect(window.pier.tasks.list).not.toHaveBeenCalled();
   });
 
@@ -390,7 +403,10 @@ describe("run actions", () => {
     disposeRunActions = registerRunActions();
 
     await actionRegistry.get("pier.run.task")?.handler({
+      // Pin both the path-bearing panel and the group so enablement/path
+      // resolution still succeed when the source group is not the active one.
       sourcePanelGroupId: "group-source",
+      sourcePanelId: "web-current",
     });
 
     const quickPick = useCommandPaletteController.getState().quickPick;

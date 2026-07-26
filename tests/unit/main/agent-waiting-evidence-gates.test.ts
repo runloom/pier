@@ -193,8 +193,11 @@ describe("B-tier permission-adjacent mappings retained after review", () => {
     expect(hasPermissionMapping(GEMINI_HOOK_EVENTS, "Notification")).toBe(true);
   });
 
-  it("Grok Notification → PermissionRequest", () => {
-    expect(hasPermissionMapping(GROK_HOOK_EVENTS, "Notification")).toBe(true);
+  it("Grok 不装 Notification→PermissionRequest（Turn complete 会假 waiting）", () => {
+    expect(hasPermissionMapping(GROK_HOOK_EVENTS, "Notification")).toBe(false);
+    expect(
+      GROK_HOOK_EVENTS.some((event) => event.nativeEvent === "Notification")
+    ).toBe(false);
   });
 
   it("Droid Notification → PermissionRequest", () => {

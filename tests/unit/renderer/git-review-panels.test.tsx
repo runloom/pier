@@ -130,6 +130,7 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
       props.ref,
       () => ({
         captureTopAnchor,
+        getScrollTop: () => null,
         getSelectedText: () => "",
         isItemVisible,
         restoreAnchor,
@@ -147,6 +148,7 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
         },
         selectAll: () => false,
         setAllCollapsed: () => undefined,
+        setScrollTop: () => false,
         updateItems(items) {
           const currentIds = new Set(
             renderedItemsRef.current.map((item) => item.id)
@@ -978,14 +980,21 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
+    // 终态：CodeView 仅 seed/已 materialize 成员，不是全量 201 假槽。
     await waitFor(() =>
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
         "data-item-count",
-        "201"
+        "25"
       )
     );
     fireEvent.click(findTreeItem(view.container, "aaa-selected.ts"));
     await waitFor(() => expect(selectedReads).toBe(1));
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
+        "data-item-ids",
+        expect.stringContaining("section:200")
+      )
+    );
     await waitFor(() =>
       expect(scrollToItem).toHaveBeenCalledWith("section:200")
     );
@@ -1276,7 +1285,7 @@ describe("Git review panel", () => {
     );
   });
 
-  it("远树点击导航期间 CodeView 拓扑身份保持稳定", async () => {
+  it("远树点击：未 materialize 不进 CodeView，就绪后加入并定位", async () => {
     const entries = [
       ...Array.from({ length: 40 }, (_, index) => entry(index)),
       entry(79, "src/aaa-far.ts"),
@@ -1298,42 +1307,37 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
+    // 终态：seed 成员（25），远文件不在列表。
     await waitFor(() =>
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
         "data-item-count",
-        String(entries.length)
+        "25"
       )
     );
-    const countBeforeNav = Number(
-      view.getByTestId("pierre-diff").getAttribute("data-item-count")
-    );
     const unmountsBefore = diffViewRuntime.unmounts;
-    const idsBefore = view
-      .getByTestId("pierre-diff")
-      .getAttribute("data-item-ids");
+    expect(
+      view.getByTestId("pierre-diff").getAttribute("data-item-ids")
+    ).not.toContain("section:79");
 
     fireEvent.click(findTreeItem(view.container, "aaa-far.ts"));
     await waitFor(() => expect(farRequested).toBe(true));
-    // 金标准：点击不改 id 拓扑，不 remount CodeView。
+    // 加载中：仍无假槽、不 scroll。
     expect(
-      Number(view.getByTestId("pierre-diff").getAttribute("data-item-count"))
-    ).toBe(countBeforeNav);
-    expect(view.getByTestId("pierre-diff").getAttribute("data-item-ids")).toBe(
-      idsBefore
-    );
+      view.getByTestId("pierre-diff").getAttribute("data-item-ids")
+    ).not.toContain("section:79");
     expect(scrollToItem).not.toHaveBeenCalledWith("section:79");
 
     act(() => farPending.resolve(documentResult(79)));
     await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
+        "data-item-ids",
+        expect.stringContaining("section:79")
+      )
+    );
+    await waitFor(() =>
       expect(scrollToItem).toHaveBeenCalledWith("section:79")
     );
     expect(diffViewRuntime.unmounts).toBe(unmountsBefore);
-    expect(
-      Number(view.getByTestId("pierre-diff").getAttribute("data-item-count"))
-    ).toBe(countBeforeNav);
-    expect(view.getByTestId("pierre-diff").getAttribute("data-item-ids")).toBe(
-      idsBefore
-    );
   });
 
   it("连续点击不同树文件时立即切换排他 demand 并定位最新目标", async () => {
@@ -1510,14 +1514,10 @@ describe("Git review panel", () => {
 
   it("目标后方正文增量插入时不重复滚动已可见的树选择", async () => {
     const entries = [0, 1, 2].map((index) => entry(index));
-    const pending = new Map<
-      string,
-      ReturnType<typeof deferred<GitReviewFileDocumentResult>>
-    >();
-    const getReviewFileDocument = vi.fn((request) => {
-      const next = deferred<GitReviewFileDocumentResult>();
-      pending.set(request.source.path, next);
-      return next.promise;
+    // 终态：先灌满 seed 真成员，再点选；后续兄弟项插入不得重滚已可见目标。
+    const getReviewFileDocument = vi.fn(async (request) => {
+      const match = request.source.path.match(/file-(\d+)\.ts$/u);
+      return documentResult(Number(match?.[1] ?? 0));
     });
     const context = pluginContext({
       getReviewFileDocument,
@@ -1526,9 +1526,13 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
-    await waitFor(() => expect(getReviewFileDocument).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
+        "data-item-count",
+        "3"
+      )
+    );
     fireEvent.click(findTreeItem(view.container, "file-0.ts"));
-    act(() => pending.get("src/file-0.ts")?.resolve(documentResult(0)));
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:0"));
     await waitFor(() =>
       expect(isItemVisible).toHaveBeenCalledWith(
@@ -1540,14 +1544,8 @@ describe("Git review panel", () => {
       ([sectionId]) => sectionId === "section:0"
     ).length;
 
-    act(() => pending.get("src/file-1.ts")?.resolve(documentResult(1)));
-    await waitFor(() =>
-      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
-        "data-item-ids",
-        expect.stringContaining("section:1")
-      )
-    );
-
+    // 用户滚动触发窗口变化：不应重滚已可见的 section:0。
+    act(() => diffViewRuntime.onScroll?.());
     expect(
       scrollToItem.mock.calls.filter(([sectionId]) => sectionId === "section:0")
     ).toHaveLength(callsAfterFirstVisibility);
@@ -1555,10 +1553,6 @@ describe("Git review panel", () => {
 
   it("导航超时后增量投影不静默清错或自动重启定位", async () => {
     const entries = [0, 1, 2].map((index) => entry(index));
-    const pending = new Map<
-      string,
-      ReturnType<typeof deferred<GitReviewFileDocumentResult>>
-    >();
     const frames: FrameRequestCallback[] = [];
     let now = 0;
     vi.spyOn(performance, "now").mockImplementation(() => now);
@@ -1572,10 +1566,10 @@ describe("Git review panel", () => {
       () => undefined
     );
     isItemVisible.mockReturnValue(false);
-    const getReviewFileDocument = vi.fn((request) => {
-      const next = deferred<GitReviewFileDocumentResult>();
-      pending.set(request.source.path, next);
-      return next.promise;
+    // 终态：同步 materialize 全部真 item 后点选，再模拟不可见超时。
+    const getReviewFileDocument = vi.fn(async (request) => {
+      const match = request.source.path.match(/file-(\d+)\.ts$/u);
+      return documentResult(Number(match?.[1] ?? 0));
     });
     const context = pluginContext({
       getReviewFileDocument,
@@ -1584,14 +1578,16 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
-    await waitFor(() => expect(getReviewFileDocument).toHaveBeenCalledTimes(2));
+    await waitFor(() =>
+      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
+        "data-item-count",
+        "3"
+      )
+    );
     fireEvent.click(findTreeItem(view.container, "file-2.ts"));
-    act(() => pending.get("src/file-0.ts")?.resolve(documentResult(0)));
-    await waitFor(() => expect(pending.has("src/file-2.ts")).toBe(true));
-    act(() => pending.get("src/file-2.ts")?.resolve(documentResult(2)));
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:2"));
 
-    now = 2000;
+    now = 5000;
     act(() => {
       for (let frame = frames.shift(); frame; frame = frames.shift()) {
         frame(now);
@@ -1605,13 +1601,11 @@ describe("Git review panel", () => {
       ([sectionId]) => sectionId === "section:2"
     ).length;
 
-    act(() => pending.get("src/file-1.ts")?.resolve(documentResult(1)));
-    await waitFor(() =>
-      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
-        "data-item-ids",
-        expect.stringContaining("section:1")
-      )
-    );
+    // 用户滚动 / 其它项更新：不得重启已超时导航。
+    act(() => diffViewRuntime.onScroll?.());
+    await act(async () => {
+      await Promise.resolve();
+    });
 
     expect(view.queryByText("Failed to navigate to file")).toBeNull();
     expect(
@@ -1758,7 +1752,7 @@ describe("Git review panel", () => {
     ).toBe(2);
   });
 
-  it("轻量槽位显示后立即订阅 appearance", async () => {
+  it("seed materialize 前即订阅 appearance（loading 壳）", async () => {
     const pending = deferred<GitReviewFileDocumentResult>();
     const appearanceOnDidChange = vi.fn(() => () => undefined);
     const context = pluginContext({
@@ -1771,6 +1765,7 @@ describe("Git review panel", () => {
     await waitFor(() =>
       expect(context.git.getReviewFileDocument).toHaveBeenCalled()
     );
+    // 终态：未 materialize 时 CodeView 为空，仍挂 loading 壳并订阅 appearance。
     expect(appearanceOnDidChange).toHaveBeenCalledTimes(1);
     act(() => pending.resolve(documentResult(0)));
     await waitFor(() => expect(view.getByTestId("pierre-diff")).toBeVisible());
@@ -1982,13 +1977,13 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
+    // 终态：CodeView 仅 seed 真成员，不是 2000 假槽。
     await waitFor(() =>
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
         "data-item-count",
-        "2000"
+        "25"
       )
     );
-    // 全量轻量槽稳定；首批 document 读取仍受 seed/demand 有界。
     await waitFor(() =>
       expect(getReviewFileDocument.mock.calls.length).toBeGreaterThan(0)
     );

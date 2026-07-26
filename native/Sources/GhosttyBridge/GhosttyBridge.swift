@@ -133,12 +133,12 @@ final class EventRouterView: NSView {
         "Mod+Numpad7",
         "Mod+Numpad8",
         "Mod+Numpad9",
-        "Mod+Shift+Enter",
         "Mod+Shift+Equal",
-        "Mod+Shift+KeyD",
-        "Mod+Shift+KeyP",
-        "Mod+Shift+KeyI",
         "Mod+Shift+KeyA",
+        "Mod+Shift+KeyD",
+        "Mod+Shift+KeyI",
+        "Mod+Shift+KeyM",
+        "Mod+Shift+KeyP",
     ]
 
     static func setTerminalAppShortcutKeys(_ keys: Set<String>) {
@@ -1001,7 +1001,7 @@ final class GhosttyBridgeImpl {
                     targetPanelId: eligibleFirstResponderTarget(applied),
                     windowFocused: applied.windowFocused
                 )
-                applyHostCursorVisibility(
+                applyHostSurfaceFocusPin(
                     for: parent,
                     focusDisabledPanelIds: applied.focusDisabledSet
                 )
@@ -1071,24 +1071,24 @@ final class GhosttyBridgeImpl {
         // cursor-agent 等 TUI 依赖 mode 1004 focus 上报决定输入框聚焦态，
         // 收到 ESC[O 后输入框失焦且不会随随后的 ESC[I 恢复——表现为增强输入
         // paste 能进框但 Enter 不提交。
-        // - 打开浮层（focusDisabled 新增）：先挂 hostCursorHidden（focused
-        //   保持 true），再移交 first responder → 全程无 focus 事件。
-        // - 关闭浮层：先让 first responder 回终端（hidden 还在，focused
-        //   保持 true），再摘 hidden → 同样无事件。
+        // - 打开浮层（focusDisabled 新增）：先 pin surface focus（hostCursorHidden
+        //   保活 + 绘制光标 suppress），再移交 first responder → 全程无 focus 事件。
+        // - 关闭浮层：先让 first responder 回终端（pin 还在，focused 保持 true），
+        //   再摘 pin → 同样无事件。
         //
         // 为什么仅靠 synchronizeHostFocusState 的公式（hostKeyboardActive
-        // 纳入 OR）还不够——打开方向若按本分支的 else 顺序（先 FR 后 hidden）
+        // 纳入 OR）还不够——打开方向若按本分支的 else 顺序（先 FR 后 pin）
         // 逐帧推演：
         //   ① hostKeyboardActive=false → didSet → sync：
         //      FR 尚未离开终端 → (FR===self || …) = true，无事件；
         //   ② resignFirstResponder → sync：
-        //      (✗ || hidden=false || hostKeyboardActive=false) = false
+        //      (✗ || pin=false || hostKeyboardActive=false) = false
         //      → ESC[O（瞬时 focus-out 复活）；
-        //   ③ 随后挂 hidden → sync → true → ESC[I。
+        //   ③ 随后挂 pin → sync → true → ESC[I。
         // 反过来，为什么仅靠本顺序修正也不够——关闭方向按 if 分支（先 FR 后
-        // 摘 hidden）逐帧推演：makeFirstResponder(终端) 与 WKWebView resign
-        // 存在竞态（Chromium 在 DOM 输入聚焦时滞后/拒绝 resign），摘 hidden
-        // 那一刻若 FR 尚未落回终端，按「FR===self || hidden」旧公式派生出
+        // 摘 pin）逐帧推演：makeFirstResponder(终端) 与 WKWebView resign
+        // 存在竞态（Chromium 在 DOM 输入聚焦时滞后/拒绝 resign），摘 pin
+        // 那一刻若 FR 尚未落回终端，按「FR===self || pin」旧公式派生出
         // focused=false → ESC[O；hostKeyboardActive 入 OR 后该帧恒为 true。
         // 结论：打开方向靠本顺序、关闭方向靠公式，两者缺一不可。
         let previousFocusDisabled = appliedWindowStates[windowId]?.focusDisabledSet ?? []
@@ -1099,7 +1099,7 @@ final class GhosttyBridgeImpl {
         applyState.lastReason = state.reason
         windowApplyStates[windowId] = applyState
         if hidesAdded {
-            applyHostCursorVisibility(
+            applyHostSurfaceFocusPin(
                 for: parent,
                 focusDisabledPanelIds: state.focusDisabledSet
             )
@@ -1114,7 +1114,7 @@ final class GhosttyBridgeImpl {
                 targetPanelId: eligibleFirstResponderTarget(state),
                 windowFocused: state.windowFocused
             )
-            applyHostCursorVisibility(
+            applyHostSurfaceFocusPin(
                 for: parent,
                 focusDisabledPanelIds: state.focusDisabledSet
             )
@@ -1131,7 +1131,9 @@ final class GhosttyBridgeImpl {
         return state.focusDisabledSet.contains(panelId) ? nil : panelId
     }
 
-    private func applyHostCursorVisibility(
+    /// focusDisabled → surface focus pin（防 ESC[O]）+ 绘制光标 suppress
+    /// （增强输入打开时只闪 composer caret；探针仍读 DECTCEM 模式位）。
+    private func applyHostSurfaceFocusPin(
         for window: NSWindow,
         focusDisabledPanelIds: Set<String>
     ) {
@@ -1139,10 +1141,9 @@ final class GhosttyBridgeImpl {
         for (panelId, term) in terminals
             where ObjectIdentifier(term.parentWindow) == windowId
         {
-            let hidden = focusDisabledPanelIds.contains(panelId)
-            // force=true：智能体 TUI（Claude Code / Codex）可能重发 CSI ?25h
-            // 让光标可见。宿主每次 apply 都重放 hide 与其抢占。
-            term.terminalView.setHostCursorHidden(hidden, force: hidden)
+            let pinned = focusDisabledPanelIds.contains(panelId)
+            // force=true when pinning：surface 重建后 pin 位需重放。
+            term.terminalView.setHostCursorHidden(pinned, force: pinned)
         }
     }
 

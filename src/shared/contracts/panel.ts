@@ -181,11 +181,15 @@ export type PanelDescriptor = z.infer<typeof panelDescriptorSchema>;
 
 export const panelSnapshotSchema = z.object({
   active: z.boolean().optional(),
+  /** Dockview content component id (plugin panel component / kit id). */
+  component: z.string().min(1).optional(),
   context: panelContextSchema.optional(),
   display: panelDisplaySchema.optional(),
   groupIndex: z.number().int().nonnegative().optional(),
   id: z.string().min(1),
   kind: panelKindSchema,
+  /** Dockview params snapshot; used for cross-window plugin panel matching. */
+  params: z.record(z.string(), z.unknown()).optional(),
   recordId: z.string().min(1).optional(),
   tab: panelTabChromeSchema.optional(),
   tabCount: z.number().int().nonnegative().optional(),

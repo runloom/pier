@@ -2,6 +2,10 @@ import { pickAgent } from "@shared/agent-selection.ts";
 import i18next from "i18next";
 import { Bot } from "lucide-react";
 import { toast } from "sonner";
+import {
+  projectPathActionDisabledReason,
+  projectPathActionEnabled,
+} from "@/lib/actions/project-path-action-gate.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
@@ -51,6 +55,8 @@ export async function handleNewAgent(
 export const NEW_AGENT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
     categoryKey: "run",
+    disabledReason: projectPathActionDisabledReason,
+    enabled: projectPathActionEnabled,
     group: "1_new",
     handler: handleNewAgent,
     iconComponent: Bot,

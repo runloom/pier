@@ -9,7 +9,9 @@ import type { PierFileTreeProps } from "./file-tree-types.ts";
 interface FileTreeRefOptions {
   directoryErrorLabel: PierFileTreeProps["directoryErrorLabel"];
   directoryStates: PierFileTreeProps["directoryStates"];
+  isActiveOpenPath: PierFileTreeProps["isActiveOpenPath"];
   items: PierFileTreeProps["items"];
+  onContextMenuSession: PierFileTreeProps["onContextMenuSession"];
   onLoadDirectory: PierFileTreeProps["onLoadDirectory"];
   onModelPathsRemoved: PierFileTreeProps["onModelPathsRemoved"];
   onMovePaths: PierFileTreeProps["onMovePaths"];
@@ -33,6 +35,8 @@ export function useFileTreeRefs(options: FileTreeRefOptions): {
     onMovePaths,
     onOpenItemContextMenu,
     onOpenPath,
+    isActiveOpenPath,
+    onContextMenuSession,
     onRenamePath,
     onSelectPaths,
   } = options;
@@ -45,6 +49,8 @@ export function useFileTreeRefs(options: FileTreeRefOptions): {
       onMovePaths,
       onOpenItemContextMenu,
       onOpenPath,
+      isActiveOpenPath,
+      onContextMenuSession,
       onRenamePath,
       onSelectPaths,
     }),
@@ -57,12 +63,22 @@ export function useFileTreeRefs(options: FileTreeRefOptions): {
       onMovePaths,
       onOpenItemContextMenu,
       onOpenPath,
+      isActiveOpenPath,
+      onContextMenuSession,
       onRenamePath,
       onSelectPaths,
     ]
   );
   React.useLayoutEffect(() => {
-    refs.current = nextRefs;
+    // 保留 context-menu 抑制位与 model 注入：nextRefs 重建时不能清掉。
+    const suppressOpenPathFromContextMenu =
+      refs.current.suppressOpenPathFromContextMenu;
+    const fileTreeModel = refs.current.fileTreeModel;
+    refs.current = {
+      ...nextRefs,
+      fileTreeModel,
+      suppressOpenPathFromContextMenu,
+    };
   }, [nextRefs]);
   const readRefs = React.useCallback(() => refs.current, []);
   return { nextRefs, readRefs, refs };

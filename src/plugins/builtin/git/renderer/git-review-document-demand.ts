@@ -21,8 +21,8 @@ export function prioritizeReviewNavigationDemand(
   if (!(navigationPending && selectedEntryKey)) {
     return demand;
   }
-  // 导航事务必须强制读取所选文件。目标可能仍不在 Pierre 当前窗口里；
-  // 若只保留“已经可见/缓冲”的交集，窗口外点击会永远停在轻量占位槽。
+  // 导航事务必须强制读取所选文件。目标可能仍不在 CodeView 窗口里；
+  // 若只保留“已经可见/缓冲”的交集，窗口外点击永远 materialize 不到。
   return {
     bufferedEntryKeys: [],
     visibleEntryKeys: [selectedEntryKey],

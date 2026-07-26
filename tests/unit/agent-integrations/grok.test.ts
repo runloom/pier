@@ -53,7 +53,7 @@ describe("grokIntegration", () => {
     expect(integration.detect()).toBe(true);
   });
 
-  it("写入专用文件 ~/.grok/hooks/pier-status.json，14 个事件各一条命令", async () => {
+  it("写入专用文件 ~/.grok/hooks/pier-status.json，13 个事件各一条命令（不含 Notification）", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -65,13 +65,16 @@ describe("grokIntegration", () => {
     }
     const typedHooks = hooks as unknown as Record<string, Matcher[]>;
 
-    // 生命周期/非工具事件：无 matcher
+    // 全部事件省略 matcher（empty/omitted = match all；避免裸 "*" 正则）
     for (const evt of [
       "SessionStart",
       "UserPromptSubmit",
+      "PreToolUse",
+      "PostToolUse",
+      "PostToolUseFailure",
+      "PermissionDenied",
       "Stop",
       "StopFailure",
-      "Notification",
       "SubagentStart",
       "SubagentStop",
       "PreCompact",
@@ -81,21 +84,15 @@ describe("grokIntegration", () => {
       expect(hooks[evt], evt).toHaveLength(1);
       expect(typedHooks[evt]?.[0]?.matcher).toBeUndefined();
     }
-    // 工具事件：matcher "*"（官方文档 line 147 明确 matcher 测试 tool name）
-    for (const evt of [
-      "PreToolUse",
-      "PostToolUse",
-      "PostToolUseFailure",
-      "PermissionDenied",
-    ]) {
-      expect(hooks[evt], evt).toHaveLength(1);
-      expect(typedHooks[evt]?.[0]?.matcher).toBe("*");
-    }
+    // 不装 Notification：Turn complete / Background task completed 会假 waiting
+    expect(hooks.Notification).toBeUndefined();
 
-    // 所有命令包含 agentId
+    // 所有命令包含 agentId + camelCase 身份键（Grok envelope）
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);
       expect(cmd).toContain('"grok"');
+      expect(cmd).toContain("toolUseId");
+      expect(cmd).toContain("toolName");
     }
 
     // pierEvent 名称核验（本机 ~/.grok/docs/user-guide/10-hooks.md 对照）
@@ -106,9 +103,6 @@ describe("grokIntegration", () => {
       '"SessionEnd"'
     );
     expect(typedHooks.StopFailure?.[0]?.hooks[0]?.command).toContain('"error"');
-    expect(typedHooks.Notification?.[0]?.hooks[0]?.command).toContain(
-      '"PermissionRequest"'
-    );
     expect(typedHooks.PermissionDenied?.[0]?.hooks[0]?.command).toContain(
       '"processing"'
     );

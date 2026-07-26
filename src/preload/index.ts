@@ -56,6 +56,7 @@ import {
   createPanelTransferApi,
   type PierPanelTransferAPI,
 } from "./panel-transfer-api.ts";
+import { type PierPanelsAPI, panelsApi } from "./panels-api.ts";
 import {
   type PierHomeSkillsAPI,
   type PierPierBindingsAPI,
@@ -164,6 +165,7 @@ export interface PierWindowAPI {
   menu: PierMenuAPI;
   notificationCenter: PierNotificationCenterAPI;
   notifications: PierNotificationsAPI;
+  panels: PierPanelsAPI;
   panelTransfer: PierPanelTransferAPI;
   pierBindings: PierPierBindingsAPI;
   pierHomeSkills: PierHomeSkillsAPI;
@@ -380,6 +382,7 @@ const api: PierWindowAPI = {
   usageData: usageDataApi,
   managedPlugins: createManagedPluginsPreloadApi(),
   mediaPreviews: mediaPreviewApi,
+  panels: panelsApi,
   panelTransfer: createPanelTransferApi(),
   pluginRpc: createPluginRpcPreloadApi(),
   app: createAppPreloadApi(),

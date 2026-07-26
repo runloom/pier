@@ -14,6 +14,7 @@ import {
   gitReviewDocumentMetrics,
   isGitReviewDocumentReservable,
 } from "./git-review-document-limits.ts";
+import { retainLoadedDocumentForEntry } from "./git-review-document-loader-utils.ts";
 import type {
   GitReviewDocumentLoaderSnapshot,
   GitReviewDocumentResource,
@@ -99,10 +100,18 @@ export interface PendingReviewAnchor {
 }
 
 /**
- * 金标准：index 全量轻量槽进 CodeView。
- * idle/loading/error/unchanged → placeholder 头；loaded → 正文。
- * 列表身份随 index 代稳定，点击只 scroll，正文只 sparse 更新。
+ * 终态成员规则（见 docs/.../git-review-codeview-endstate-design.md）：
+ * CodeView 只收 **已 materialize 的真 item**（loaded 正文 / error 说明）。
+ * idle·loading·cancelling·unchanged **不进** CodeView——避免 patch:null
+ * 假槽污染折叠语义（远文件「先收起再展开」）。
+ * 未加载文件只存在于 L1 index + L2 树。
  */
+export function isCodeViewMemberResource(
+  resource: GitReviewDocumentResource
+): boolean {
+  return resource.kind === "loaded" || resource.kind === "error";
+}
+
 export function projectReviewDocuments(
   snapshot: GitReviewDocumentLoaderSnapshot,
   context: RendererPluginContext,
@@ -116,6 +125,9 @@ export function projectReviewDocuments(
     readonly sectionKey: string;
   }[] = [];
   for (const resource of snapshot.resources) {
+    if (!isCodeViewMemberResource(resource)) {
+      continue;
+    }
     for (const slot of resource.entry.renderSlots) {
       entryKeyBySectionId.set(slot.sectionKey, resource.entry.entryKey);
     }
@@ -152,6 +164,19 @@ export function projectReviewDocuments(
   };
 }
 
+/** 全量 index：sectionKey → entryKey（不依赖 CodeView 成员）。 */
+export function indexReviewSectionEntries(
+  entries: readonly GitReviewIndexEntry[]
+): ReadonlyMap<string, string> {
+  const map = new Map<string, string>();
+  for (const entry of entries) {
+    for (const slot of entry.renderSlots) {
+      map.set(slot.sectionKey, entry.entryKey);
+    }
+  }
+  return map;
+}
+
 /** 从全量 index entries 建 entryKey → first sectionKey，供 idle 树导航解析。 */
 export function indexReviewEntrySections(
   entries: readonly GitReviewIndexEntry[]
@@ -172,59 +197,86 @@ export function projectReviewDocumentResource(
   context: RendererPluginContext,
   locale: string
 ): ReviewDocumentResourceProjection {
-  const document = resource.kind === "loaded" ? resource.document : null;
-  const sectionsByKey = new Map(
-    document === null
-      ? []
-      : document.sections.map((section) => [section.sectionKey, section])
-  );
-  const items = resource.entry.renderSlots.map((slot): PierDiffViewItem => {
-    const section = sectionsByKey.get(slot.sectionKey);
-    // Half-staged files produce two items with the same path; stageControl
-    // distinguishes staged vs unstaged (no group label in the path).
-    const stageControl = reviewStageControl(slot.group, slot.status);
-    const fileDisplay = {
-      path: slot.targetPath,
-      status: slot.status,
-      ...(slot.oldPath === null ? {} : { previousPath: slot.oldPath }),
-    };
-    if (section === undefined) {
+  // 非成员资源不应被投影；调用方应先 isCodeViewMemberResource 过滤。
+  if (!(resource.kind === "loaded" || resource.kind === "error")) {
+    return { items: [] };
+  }
+
+  if (resource.kind === "error") {
+    // 列表内只放友好说明；技术原文在 failure banner / Details。
+    const notice = context.i18n.t(
+      "ui.reviewDocumentLoadFailed",
+      undefined,
+      "Unable to load this change"
+    );
+    const items = resource.entry.renderSlots.map((slot): PierDiffViewItem => {
+      const stageControl = reviewStageControl(slot.group, slot.status);
       return {
-        cacheKey: `git-review-placeholder:${slot.sectionKey}`,
-        fileDisplay,
+        cacheKey: `git-review-error:${slot.sectionKey}:${resource.failure.reason}`,
+        fileDisplay: {
+          path: slot.targetPath,
+          status: slot.status,
+          ...(slot.oldPath === null ? {} : { previousPath: slot.oldPath }),
+        },
         id: slot.sectionKey,
+        // stateNotice → presentation ready（非 loading 假收起）。
         patch: null,
+        stateNotice: notice,
         ...(stageControl === null ? {} : { stageControl }),
       };
-    }
-    if (section.kind === "state") {
-      // Industry multi-diff: non-text changes are header + notice only.
-      const stateText = stateSectionText(context, section, locale);
-      return {
-        cacheKey: JSON.stringify([
-          document?.revision ?? "missing",
-          section.sectionKey,
-          locale,
-          section.targetPath,
-          section.oldPath,
-          section.status,
-          stateText,
-        ]),
-        fileDisplay,
-        id: section.sectionKey,
-        patch: null,
-        stateNotice: stateText,
-        ...(stageControl === null ? {} : { stageControl }),
+    });
+    return { items };
+  }
+
+  const document = resource.document;
+  const sectionsByKey = new Map(
+    document.sections.map((section) => [section.sectionKey, section])
+  );
+  const items = resource.entry.renderSlots.flatMap(
+    (slot): PierDiffViewItem[] => {
+      const section = sectionsByKey.get(slot.sectionKey);
+      const stageControl = reviewStageControl(slot.group, slot.status);
+      const fileDisplay = {
+        path: slot.targetPath,
+        status: slot.status,
+        ...(slot.oldPath === null ? {} : { previousPath: slot.oldPath }),
       };
+      // loaded 但缺 section：不当 placeholder 塞进 CodeView（终态禁止）。
+      if (section === undefined) {
+        return [];
+      }
+      if (section.kind === "state") {
+        const stateText = stateSectionText(context, section, locale);
+        return [
+          {
+            cacheKey: JSON.stringify([
+              document.revision,
+              section.sectionKey,
+              locale,
+              section.targetPath,
+              section.oldPath,
+              section.status,
+              stateText,
+            ]),
+            fileDisplay,
+            id: section.sectionKey,
+            patch: null,
+            stateNotice: stateText,
+            ...(stageControl === null ? {} : { stageControl }),
+          },
+        ];
+      }
+      return [
+        {
+          cacheKey: `${document.revision}:${section.sectionKey}`,
+          fileDisplay,
+          id: section.sectionKey,
+          patch: section.patch,
+          ...(stageControl === null ? {} : { stageControl }),
+        },
+      ];
     }
-    return {
-      cacheKey: `${document?.revision ?? "missing"}:${section.sectionKey}`,
-      fileDisplay,
-      id: section.sectionKey,
-      patch: section.patch,
-      ...(stageControl === null ? {} : { stageControl }),
-    };
-  });
+  );
   return {
     items,
   };
@@ -313,11 +365,11 @@ export function reconcileReviewDocumentSnapshot(
     } else if (resource.kind === "loaded") {
       return resource;
     }
-    return {
-      document: previous.document,
-      entry: resource.entry,
-      kind: "loaded" as const,
-    };
+    // stage 换 sectionKey 时必须 remap，否则投影按新 slot 找不到 section。
+    return (
+      retainLoadedDocumentForEntry(resource.entry, previous.document) ??
+      resource
+    );
   });
   const retainedEntryKeys = [
     ...previousByEntryKey.keys(),

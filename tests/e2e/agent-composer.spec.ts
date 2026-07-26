@@ -22,7 +22,8 @@ test.skip(process.platform !== "darwin", "native terminal is macOS-only");
 
 /**
  * On-demand Rich Input e2e: agent activity alone never mounts; open via
- * `pier:terminal:open-composer`; Esc/send close; idle eligibility loss
+ * `pier:terminal:open-composer`; Esc/send close (surface click does not);
+ * idle eligibility loss
  * unmounts. sendText IPC stays independent of UI mount.
  */
 
@@ -195,16 +196,9 @@ test.describe("Agent composer e2e", () => {
         })
         .toBeGreaterThanOrEqual(1);
 
-      // 4. Terminal click takeover refocuses the composer input (Rich Input
-      //    stays open and keeps keyboard ownership). Only Esc / send close.
+      // 4. Terminal click does NOT close composer (only Esc / send close).
       await simulateTerminalFocusIntent(app, panelId);
       await expect(composer).toBeAttached({ timeout: 1000 });
-      // Composer keeps keyboard ownership (webRequestCount stays >= 1).
-      await expect
-        .poll(async () => webRequestCount(await readSnapshot(win)), {
-          timeout: 8000,
-        })
-        .toBeGreaterThanOrEqual(1);
 
       // 5. Esc closes (draft retained in memory; DOM unmounts).
       await input.focus();

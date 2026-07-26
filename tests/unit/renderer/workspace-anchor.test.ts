@@ -4,7 +4,9 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store.ts";
 import {
   captureAnchoredTerminalTarget,
+  hasProjectPathAnchor,
   inheritedActiveTerminalContext,
+  resolvePanelPathAnchor,
   resolveWorkspaceAnchor,
 } from "@/stores/workspace-panel-helpers.ts";
 
@@ -24,11 +26,10 @@ function makeContext(id: string, cwd: string, updatedAt: number): PanelContext {
 
 const repoA = makeContext("ctx:a", "/repo/a", 10);
 const repoB = makeContext("ctx:b", "/repo/b", 20);
-const repoC = makeContext("ctx:c", "/repo/c", 30);
 
 interface MockPanel {
   id: string;
-  view: { contentComponent: "terminal" | "workbench" };
+  view: { contentComponent: "terminal" | "workbench" | "welcome" };
 }
 
 interface MockGroup {
@@ -43,6 +44,10 @@ function terminalPanel(id: string): MockPanel {
 
 function workbenchPanel(id: string): MockPanel {
   return { id, view: { contentComponent: "workbench" } };
+}
+
+function welcomePanel(id: string): MockPanel {
+  return { id, view: { contentComponent: "welcome" } };
 }
 
 function createApi(options: {
@@ -110,7 +115,7 @@ describe("resolveWorkspaceAnchor", () => {
     });
   });
 
-  it("falls back to the group active terminal before other terminals", () => {
+  it("treats workbench as a global pathless panel (no sibling terminal fallback)", () => {
     const terminalOld = terminalPanel("terminal-old");
     const terminalActive = terminalPanel("terminal-active");
     const workbench = workbenchPanel("workbench-1");
@@ -120,7 +125,6 @@ describe("resolveWorkspaceAnchor", () => {
         {
           activePanel: terminalActive,
           id: "group-a",
-          // panels[] order deliberately puts the stale terminal first
           panels: [terminalOld, workbench, terminalActive],
         },
       ],
@@ -133,6 +137,7 @@ describe("resolveWorkspaceAnchor", () => {
       context: repoB,
       display: { short: "active" },
     });
+    // Workbench intentionally has no descriptor context.
 
     expect(
       resolveWorkspaceAnchor({
@@ -141,9 +146,14 @@ describe("resolveWorkspaceAnchor", () => {
         sourcePanelId: "workbench-1",
       })
     ).toEqual({
-      context: repoB,
       groupId: "group-a",
     });
+    expect(
+      hasProjectPathAnchor({
+        api: api as never,
+        sourcePanelId: "workbench-1",
+      })
+    ).toBe(false);
   });
 
   it("does not read a foreign activePanel when only sourcePanelGroupId is set", () => {
@@ -169,11 +179,16 @@ describe("resolveWorkspaceAnchor", () => {
       context: repoB,
       display: { short: "b" },
     });
+    usePanelDescriptorStore.getState().upsert("workbench-a", {
+      context: repoA,
+      display: { short: "wb" },
+    });
 
     expect(
       resolveWorkspaceAnchor({
         api: api as never,
         sourcePanelGroupId: "group-a",
+        sourcePanelId: "workbench-a",
       })
     ).toEqual({
       context: repoA,
@@ -234,7 +249,7 @@ describe("resolveWorkspaceAnchor", () => {
     ).toEqual({ context: null, groupId: "group-a" });
   });
 
-  it("captureAnchoredTerminalTarget inherits group terminal cwd from workbench", () => {
+  it("captureAnchoredTerminalTarget from global workbench pins null context", () => {
     const api = createApi({
       activePanelId: "workbench-1",
       groups: [
@@ -245,8 +260,8 @@ describe("resolveWorkspaceAnchor", () => {
       ],
     });
     usePanelDescriptorStore.getState().upsert("terminal-1", {
-      context: repoC,
-      display: { short: "c" },
+      context: repoA,
+      display: { short: "a" },
     });
 
     expect(
@@ -255,12 +270,12 @@ describe("resolveWorkspaceAnchor", () => {
         sourcePanelId: "workbench-1",
       })
     ).toEqual({
-      context: repoC,
+      context: null,
       groupId: "group-a",
     });
   });
 
-  it("inheritedActiveTerminalContext falls back to group terminal when active is not terminal", () => {
+  it("inheritedActiveTerminalContext is empty on global workbench", () => {
     const api = createApi({
       activePanelId: "workbench-1",
       groups: [
@@ -271,23 +286,59 @@ describe("resolveWorkspaceAnchor", () => {
       ],
     });
     usePanelDescriptorStore.getState().upsert("terminal-1", {
-      context: repoA,
-      display: { short: "a" },
+      context: repoB,
+      display: { short: "b" },
     });
 
-    expect(inheritedActiveTerminalContext(api as never)).toEqual(repoA);
+    expect(inheritedActiveTerminalContext(api as never)).toBeUndefined();
   });
 
-  it("omits context under shellDefault policy", () => {
+  it("omits context under shellDefault policy for terminal inheritance", () => {
     useTerminalPreferencesStore.setState({
       terminalNewCwdPolicy: "shellDefault",
     });
     const api = createApi({
-      activePanelId: "workbench-1",
+      activePanelId: "terminal-1",
       groups: [
         {
           id: "group-a",
           panels: [workbenchPanel("workbench-1"), terminalPanel("terminal-1")],
+        },
+      ],
+    });
+    usePanelDescriptorStore.getState().upsert("terminal-1", {
+      context: repoA,
+      display: { short: "t" },
+    });
+
+    expect(
+      resolveWorkspaceAnchor({
+        api: api as never,
+        sourcePanelGroupId: "group-a",
+        sourcePanelId: "terminal-1",
+      })
+    ).toEqual({ groupId: "group-a" });
+
+    // Panel path anchor still available for tasks / agents (not cwd policy).
+    expect(
+      resolvePanelPathAnchor({
+        api: api as never,
+        sourcePanelGroupId: "group-a",
+        sourcePanelId: "terminal-1",
+      })
+    ).toEqual({
+      context: repoA,
+      groupId: "group-a",
+    });
+  });
+
+  it("hasProjectPathAnchor is false for global pathless panels", () => {
+    const api = createApi({
+      activePanelId: "welcome-1",
+      groups: [
+        {
+          id: "group-a",
+          panels: [welcomePanel("welcome-1"), terminalPanel("terminal-1")],
         },
       ],
     });
@@ -297,11 +348,10 @@ describe("resolveWorkspaceAnchor", () => {
     });
 
     expect(
-      resolveWorkspaceAnchor({
+      hasProjectPathAnchor({
         api: api as never,
-        sourcePanelGroupId: "group-a",
-        sourcePanelId: "workbench-1",
+        sourcePanelId: "welcome-1",
       })
-    ).toEqual({ groupId: "group-a" });
+    ).toBe(false);
   });
 });

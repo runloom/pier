@@ -211,7 +211,7 @@ function GitBranchStatusItem({
       getGroupId,
       panelContext,
       pluginContext,
-    });
+    }).catch(() => undefined);
   };
   const dropdownModel =
     statusState.kind === "loaded"

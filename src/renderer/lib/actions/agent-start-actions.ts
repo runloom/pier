@@ -21,6 +21,10 @@ import type { AgentCatalogEntry, AgentKind } from "@shared/contracts/agent.ts";
 import i18next from "i18next";
 import { Bot } from "lucide-react";
 import { toast } from "sonner";
+import {
+  projectPathActionDisabledReason,
+  projectPathActionEnabled,
+} from "@/lib/actions/project-path-action-gate.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";
 import { useAgentPreferencesStore } from "@/stores/agent-preferences.store.ts";
@@ -82,7 +86,9 @@ function createAgentStartAction(
 ): Action {
   return {
     category: "run",
-    enabled: () => visible && useWorkspaceStore.getState().api !== null,
+    disabledReason: (invocation) =>
+      visible ? projectPathActionDisabledReason(invocation) : null,
+    enabled: (invocation) => visible && projectPathActionEnabled(invocation),
     handler: (invocation) =>
       startAgentInAnchoredTerminal(
         entry.id,

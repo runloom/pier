@@ -9,6 +9,8 @@ import type {
 import { moveRunningOwnerWindow as moveOwnerWindow } from "./task-run-owner-transfer.ts";
 import {
   aggregateStatus,
+  type CancelTaskRunOptions,
+  cancelActiveRunNodes,
   controlSnapshot,
   panelNodeKey,
   rejectStopForTasks,
@@ -17,6 +19,7 @@ import {
   type TaskRunState,
 } from "./task-run-state.ts";
 
+export type { CancelTaskRunOptions } from "./task-run-state.ts";
 export type TaskRunLaunchPlan = TaskLaunchPlan;
 
 export interface TaskRunTerminalOpenResult {
@@ -47,7 +50,10 @@ export interface TaskRunCoordinatorStartResult {
 }
 
 export interface TaskRunCoordinator {
-  cancel(runId: string): TaskRunSnapshot | null;
+  cancel(
+    runId: string,
+    options?: CancelTaskRunOptions | undefined
+  ): TaskRunSnapshot | null;
   completePanel(
     panelId: string,
     exitCode: number,
@@ -287,25 +293,13 @@ export function createTaskRunCoordinator({
   };
 
   return {
-    cancel(runId) {
+    cancel(runId, options) {
       const run = runs.get(runId);
       if (!run) {
         return null;
       }
-      for (const node of run.nodes.values()) {
-        if (
-          node.status === "pending" ||
-          node.status === "running" ||
-          node.status === "stopping"
-        ) {
-          node.status = "cancelled";
-          if (node.stopRequestedAt !== undefined) {
-            node.termination ??= "interrupt";
-          }
-          if (node.panelId) {
-            panelToRunNode.delete(panelNodeKey(node.panelId, node.windowId));
-          }
-        }
+      for (const key of cancelActiveRunNodes(run, options)) {
+        panelToRunNode.delete(key);
       }
       sweepFinishedRuns();
       touch(run);

@@ -51,10 +51,13 @@ function getMentionMatch(text: string, cursor: number): MentionMatch | null {
 }
 
 export function MentionPlugin({
+  chromeAnchor = null,
   dismissMenuRef,
   menuOpenRef,
   projectRootPath,
 }: {
+  /** Composer chrome for list width; falls back to editor root. */
+  chromeAnchor?: HTMLElement | null;
   dismissMenuRef: { current: (() => void) | null };
   menuOpenRef: { current: boolean };
   projectRootPath: string | null;
@@ -320,7 +323,9 @@ export function MentionPlugin({
   }
 
   return (
-    <ComposerAutocompletePortal anchor={editor.getRootElement()}>
+    <ComposerAutocompletePortal
+      anchor={chromeAnchor ?? editor.getRootElement()}
+    >
       <MentionPopup
         activeIndex={activeIndex}
         emptyProject={!projectRootPath}

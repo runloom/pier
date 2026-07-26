@@ -1103,14 +1103,6 @@ body {
   z-index: 100;
 }
 
-/* 轨道居中后，短胶囊用 left/right + margin auto 在轨道内再居中；
-   不碰 transform，避免和 Sonner 的 --y 进出场动画冲突。 */
-[data-sonner-toaster][data-x-position="center"] [data-sonner-toast].pier-toast {
-  left: 0 !important;
-  right: 0 !important;
-  margin-inline: auto !important;
-}
-
 /* ── 形态 A · 确认型胶囊（.pier-toast 默认即胶囊）────────────────────
    短反馈胶囊：反色表面、999px 圆角、单行 title、隐藏 close、pill action。
    sonner 把 per-call className 合并到 toastOptions.classNames.toast，故形态 B

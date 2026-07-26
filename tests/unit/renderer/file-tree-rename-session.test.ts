@@ -58,6 +58,7 @@ function createRefs(): FileTreeRefs {
     decorationsByPath: new Map(),
     directoryLoadStatesByPath: new Map(),
     directoryPaths: new Map(),
+    fileTreeModel: null,
     itemsByPath: new Map(),
     loadableDirectoryPaths: new Map(),
     onLoadDirectory: undefined,
@@ -65,8 +66,11 @@ function createRefs(): FileTreeRefs {
     onMovePaths: undefined,
     onOpenItemContextMenu: undefined,
     onOpenPath: undefined,
+    isActiveOpenPath: undefined,
+    onContextMenuSession: undefined,
     onRenamePath: vi.fn(),
     onSelectPaths: undefined,
+    suppressOpenPathFromContextMenu: false,
   };
 }
 

@@ -6,12 +6,17 @@ import {
   type LexicalNode,
 } from "lexical";
 import { $isAttachmentTokenNode } from "./attachment-token-node.tsx";
+import { $isSkillMentionNode } from "./skill-mention-node.tsx";
 import { $isWorkspacePathMentionNode } from "./workspace-path-mention-node.tsx";
 
 export function $isComposerChipNode(
   node: LexicalNode | null | undefined
 ): node is LexicalNode {
-  return $isWorkspacePathMentionNode(node) || $isAttachmentTokenNode(node);
+  return (
+    $isWorkspacePathMentionNode(node) ||
+    $isAttachmentTokenNode(node) ||
+    $isSkillMentionNode(node)
+  );
 }
 
 /**

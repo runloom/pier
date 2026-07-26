@@ -111,7 +111,7 @@ describe("structured-composer-mutations", () => {
     expect(countAttachmentTokens(editor)).toBe(1);
   });
 
-  it("inserts attachment chip without synthetic surrounding spaces", () => {
+  it("inserts attachment chip without document TextNode spaces; export adds them", () => {
     const editor = createMentionEditor();
     editor.update(
       () => {
@@ -127,8 +127,22 @@ describe("structured-composer-mutations", () => {
     );
 
     insertAttachmentTokenAtLexicalSelection(editor, "/p/x.png", 1);
-    expect(readLexicalPlainText(editor)).toBe("a/p/x.pngb");
+    // Document model: text "a" + chip + text "b" (no synthetic space nodes).
+    // Export inserts chip-boundary spaces for the agent payload.
+    expect(readLexicalPlainText(editor)).toBe("a /p/x.png b");
     expect(countAttachmentTokens(editor)).toBe(1);
+    editor.getEditorState().read(() => {
+      const paragraph = $getRoot().getFirstChild();
+      expect(paragraph).toBeTruthy();
+      if (paragraph && "getChildren" in paragraph) {
+        const children = (
+          paragraph as { getChildren: () => LexicalNode[] }
+        ).getChildren();
+        // a | chip | b — three leaves, no space TextNodes.
+        expect(children).toHaveLength(3);
+        expect(children.every((c) => c.getTextContent() !== " ")).toBe(true);
+      }
+    });
   });
 
   it("removes chips for a deleted path and renumbers survivors", () => {

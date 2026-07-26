@@ -1,4 +1,7 @@
-import { routeDelivery } from "@shared/notification-delivery.ts";
+import {
+  resolveToastTarget,
+  routeDelivery,
+} from "@shared/notification-delivery.ts";
 import { describe, expect, it } from "vitest";
 
 const UNMUTED = { dndEnabled: false, mutedKinds: [] as const };
@@ -38,5 +41,47 @@ describe("routeDelivery", () => {
     expect(
       routeDelivery({ kind: "agent.runtime", severity: "error" }, dnd).toast
     ).toBe(true);
+  });
+});
+
+describe("resolveToastTarget", () => {
+  it("returns none when routeDelivery.toast is false", () => {
+    expect(
+      resolveToastTarget(
+        { kind: "app.update", severity: "info", suppressToast: true },
+        UNMUTED
+      )
+    ).toEqual({ mode: "none" });
+  });
+
+  it("uses origin-window for task-run.finished when origin is present", () => {
+    expect(
+      resolveToastTarget(
+        {
+          kind: "task-run.finished",
+          severity: "success",
+          originWindowId: "42",
+        },
+        UNMUTED
+      )
+    ).toEqual({ mode: "origin-window", originWindowId: "42" });
+  });
+
+  it("falls back to key-window for task-run without origin", () => {
+    expect(
+      resolveToastTarget(
+        { kind: "task-run.finished", severity: "success" },
+        UNMUTED
+      )
+    ).toEqual({ mode: "key-window" });
+  });
+
+  it("uses key-window for agent attention (global)", () => {
+    expect(
+      resolveToastTarget(
+        { kind: "agent.attention", severity: "warning", originWindowId: "9" },
+        UNMUTED
+      )
+    ).toEqual({ mode: "key-window" });
   });
 });

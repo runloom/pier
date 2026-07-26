@@ -9,7 +9,10 @@ import type {
   SystemNotificationPermissionSnapshot,
   SystemNotificationUnavailableReason,
 } from "@shared/contracts/notification.ts";
-import type { NotificationCenterSnapshot } from "@shared/contracts/notification-center.ts";
+import type {
+  AppNotification,
+  NotificationCenterSnapshot,
+} from "@shared/contracts/notification-center.ts";
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import type { ProjectSkillsInvalidatedEvent } from "@shared/contracts/project-skills.ts";
 import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
@@ -17,7 +20,12 @@ import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-b
 import type { UsageAggregateSnapshot } from "@shared/contracts/usage-data.ts";
 import type { WorktreeCreateProgress } from "@shared/contracts/worktree.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
-import { findInternalWindowId } from "../windows/window-identity.ts";
+import type { ToastTarget } from "@shared/notification-delivery.ts";
+import type { AppWindow } from "../windows/app-window.ts";
+import {
+  findAppWindowByElectronId,
+  findInternalWindowId,
+} from "../windows/window-identity.ts";
 import { windowManager } from "../windows/window-manager.ts";
 
 function broadcastToAllWindows(channel: string, payload: unknown): void {
@@ -113,6 +121,10 @@ export function broadcastSystemNotificationPermissionChanged(
   );
 }
 
+function isLiveWindow(win: AppWindow | null | undefined): win is AppWindow {
+  return Boolean(win && !win.isDestroyed() && !win.webContents.isDestroyed());
+}
+
 /**
  * 向单一 renderer 下发内置 Attention 播音。
  * 优先 focused 窗，否则第一个存活窗；禁止 all-windows 各播一次。
@@ -121,13 +133,50 @@ export function sendAttentionSoundPlayToOneWindow(payload: {
   soundId: string;
 }): boolean {
   const win = windowManager.getFocused() ?? windowManager.getAll()[0] ?? null;
-  if (!win || win.isDestroyed()) {
-    return false;
-  }
-  if (win.webContents.isDestroyed()) {
+  if (!isLiveWindow(win)) {
     return false;
   }
   win.webContents.send(PIER_BROADCAST.ATTENTION_SOUND_PLAY, payload);
+  return true;
+}
+
+/**
+ * 形态 B 消息 toast 单窗投递（金标准：main 唯一调度）。
+ * - key-window：仅 OS key 窗；无 key → 不发（不 fallback 随机窗）
+ * - origin-window：优先归属 electron 窗；不可用时 fallback key-window
+ * - none：不发
+ */
+export function sendMessageToastToOneWindow(
+  notification: AppNotification,
+  target: ToastTarget
+): boolean {
+  if (target.mode === "none") {
+    return false;
+  }
+
+  let win: AppWindow | null = null;
+  if (target.mode === "origin-window") {
+    const electronId = Number(target.originWindowId);
+    if (Number.isFinite(electronId)) {
+      const origin = findAppWindowByElectronId(electronId);
+      if (isLiveWindow(origin)) {
+        win = origin;
+      }
+    }
+    if (!win) {
+      win = windowManager.getFocused();
+    }
+  } else {
+    win = windowManager.getFocused();
+  }
+
+  if (!isLiveWindow(win)) {
+    return false;
+  }
+  win.webContents.send(
+    PIER_BROADCAST.NOTIFICATION_CENTER_MESSAGE_TOAST,
+    notification
+  );
   return true;
 }
 

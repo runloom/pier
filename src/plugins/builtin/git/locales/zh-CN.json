@@ -433,11 +433,6 @@
     "ui.reviewDiscardMixedBody": "将删除 {{untracked}} 个新增文件（可从废纸篓还原），并放弃 {{tracked}} 处已有更改。此操作不可撤销。",
     "ui.reviewDiscardTrackedOnlyButton": "放弃 {{count}} 处更改",
     "ui.reviewDiscardAllFilesButton": "全部放弃 {{count}} 个",
-    "ui.stageAll": "全部暂存",
-    "ui.stageAllBusy": "正在暂存…",
-    "ui.stageAllSkippedConflicts": "已暂存 {{staged}} 项更改，跳过 {{n}} 个合并中的文件",
-    "ui.unstageAll": "全部取消暂存",
-    "ui.unstageAllBusy": "正在取消暂存…",
     "ui.reviewTreeOpenFileFailed": "无法打开文件",
     "ui.reviewTreeContextMenuFailed": "无法打开菜单",
     "ui.reviewStateBinary": "二进制文件",
@@ -671,12 +666,7 @@
     "ui.reviewStateSubmoduleDetail": "子模块提交已变更",
     "ui.reviewStateTooLargeDetail": "文件过大，无法显示文本差异",
     "ui.reviewStateInvalidEncodingDetail": "不支持的文本编码，请打开文件查看",
-    "ui.reviewStateConflictDetail": "合并冲突，请在编辑器中解决",
-    "ui.commitMessageLabel": "提交说明",
-    "ui.commitMessagePlaceholder": "提交说明",
-    "ui.commitButton": "提交 {{count}} 项已暂存更改",
-    "ui.commitSuccess": "已提交更改",
-    "ui.commitFailed": "提交失败"
+    "ui.reviewStateConflictDetail": "合并冲突，请在编辑器中解决"
   },
   "settings": {
     "pier.git.statusItem.showDirtyIndicator": {

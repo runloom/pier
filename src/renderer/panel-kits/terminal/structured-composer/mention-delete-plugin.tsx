@@ -15,14 +15,22 @@ import {
   type AttachmentTokenNode,
 } from "./attachment-token-node.tsx";
 import {
+  $isSkillMentionNode,
+  type SkillMentionNode,
+} from "./skill-mention-node.tsx";
+import {
   $isWorkspacePathMentionNode,
   type WorkspacePathMentionNode,
 } from "./workspace-path-mention-node.tsx";
 
-type ComposerChipNode = AttachmentTokenNode | WorkspacePathMentionNode;
+type ComposerChipNode =
+  | AttachmentTokenNode
+  | WorkspacePathMentionNode
+  | SkillMentionNode;
 
 /**
- * Delete an adjacent @ / attachment chip as one atomic unit on Backspace/Delete.
+ * Delete an adjacent @ / skill / attachment chip as one atomic unit on
+ * Backspace/Delete.
  */
 export function MentionDeletePlugin(): null {
   const [editor] = useLexicalComposerContext();
@@ -82,7 +90,11 @@ export function $deleteAdjacentComposerChip(
 function $isComposerChipNode(
   node: LexicalNode | null | undefined
 ): node is ComposerChipNode {
-  return $isWorkspacePathMentionNode(node) || $isAttachmentTokenNode(node);
+  return (
+    $isWorkspacePathMentionNode(node) ||
+    $isAttachmentTokenNode(node) ||
+    $isSkillMentionNode(node)
+  );
 }
 
 function $findAdjacentComposerChip(

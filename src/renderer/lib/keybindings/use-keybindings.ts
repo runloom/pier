@@ -4,7 +4,7 @@
  *   - IME composition 跳过 (e.isComposing / keyCode 229).
  *   - 文本输入框聚焦时:
  *       · 无 Cmd/Ctrl 的快捷键不抢字符输入
- *       · Enter 系和弦 (含 Mod+Shift+Enter 面板最大化) 留给输入框 (换行 / 提交)
+ *       · Enter 系和弦留给输入框 (换行 / 提交)；布局类如 maximize(⌘⇧M) 仍可触发
  *   - 命中后 preventDefault + stopPropagation.
  *   - action.handler 抛错走 console.error 留痕, 不静默 swallow.
  *
@@ -16,6 +16,7 @@
  *      经此路径走相同的 action dispatch.
  */
 import { useEffect } from "react";
+import { toast } from "sonner";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { activeTerminalPanelId } from "@/lib/actions/renderer-action-runtime.ts";
 import type { Action } from "@/lib/actions/types.ts";
@@ -94,7 +95,15 @@ function pickAction(
     return null;
   }
   const action = actionRegistry.get(commandId);
-  if (!action || action.enabled?.() === false) {
+  if (!action) {
+    return null;
+  }
+  // 路径依赖等动作在菜单里禁用；快捷键仍命中并 toast 原因，避免静默无响应。
+  if (action.enabled?.() === false) {
+    const reason = action.disabledReason?.();
+    if (reason) {
+      toast(reason);
+    }
     return null;
   }
   return action;

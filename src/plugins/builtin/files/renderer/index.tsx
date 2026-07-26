@@ -45,6 +45,7 @@ import { createFilesPanelTransferRegistration } from "./files-panel-transfer.ts"
 import { readFilesPanelViewMode } from "./files-panel-transfer-state.ts";
 import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
 import { createFilesQuickOpenAction } from "./files-quick-open.ts";
+import { createOpenSelectionPathAction } from "./files-terminal-open-selection-path.ts";
 import { registerFilesTerminalOpenUrlHandler } from "./files-terminal-open-url-handler.ts";
 import {
   clearFileTreeSidebarCache,
@@ -373,6 +374,7 @@ export const filesRendererPlugin: RendererPluginModule = {
         })(),
       }),
       registerDirtyCloseGuard(context, editorController),
+      context.actions.register(createOpenSelectionPathAction(context)),
       context.actions.register(
         withFilesMutationGate(
           createOpenSelectionAsMarkdownAction(context, editorController),

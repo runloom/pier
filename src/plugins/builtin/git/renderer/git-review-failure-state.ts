@@ -45,9 +45,17 @@ export class GitReviewFailureAccumulator {
   readonly #entryKeyBySectionId = new Map<string, string>();
   readonly #sourcesByEntryKey = new Map<string, FailureSources>();
 
-  applyGenerationChanges(changes: readonly ReviewFailureChange[]): boolean {
+  applyGenerationChanges(
+    changes: readonly ReviewFailureChange[],
+    options?: { readonly settled?: boolean }
+  ): boolean {
     let changed = false;
     for (const change of changes) {
+      // 未 settled 时忽略 refresh 中间态（stage/watch 整代重建常见），避免闪条。
+      // document 终态 error 仍接受（单项 materialize 失败）。
+      if (options?.settled === false && change.source === "refresh") {
+        continue;
+      }
       const sources = this.#sourcesForChange(change);
       if (!sources) {
         continue;
@@ -113,7 +121,8 @@ export class GitReviewFailureAccumulator {
   updateRenderError(
     sectionId: string,
     error: Error | null,
-    entry: GitReviewIndexEntry | undefined
+    entry: GitReviewIndexEntry | undefined,
+    options?: { readonly settled?: boolean }
   ): boolean {
     const entryKey =
       this.#entryKeyBySectionId.get(sectionId) ?? entry?.entryKey;
@@ -131,6 +140,10 @@ export class GitReviewFailureAccumulator {
       this.#removeEmptySources(entryKey, existingSources);
       this.#reconcileActive(entryKey);
       return true;
+    }
+    // 终态：未 settled 的 parse 闪错不进用户失败面（materialize/stage 中间态）。
+    if (options?.settled === false) {
+      return false;
     }
     if (!entry) {
       return false;
@@ -234,7 +247,8 @@ export function useReviewFailureSummary(options: {
 }): {
   readonly applyGenerationChanges: (
     generation: number,
-    changes: readonly ReviewFailureChange[]
+    changes: readonly ReviewFailureChange[],
+    settled?: boolean
   ) => void;
   readonly resetGenerationFailures: (
     generation: number,
@@ -244,7 +258,8 @@ export function useReviewFailureSummary(options: {
   readonly updateRenderItemError: (
     generation: number,
     id: string,
-    error: Error | null
+    error: Error | null,
+    settled?: boolean
   ) => void;
 } {
   const accumulatorRef = useRef(new GitReviewFailureAccumulator());
@@ -291,10 +306,17 @@ export function useReviewFailureSummary(options: {
   }, []);
 
   const applyGenerationChanges = useCallback(
-    (generation: number, changes: readonly ReviewFailureChange[]) => {
+    (
+      generation: number,
+      changes: readonly ReviewFailureChange[],
+      settled?: boolean
+    ) => {
       if (
         generation === currentGenerationRef.current &&
-        accumulatorRef.current.applyGenerationChanges(changes)
+        accumulatorRef.current.applyGenerationChanges(
+          changes,
+          settled === undefined ? undefined : { settled }
+        )
       ) {
         schedulePublish();
       }
@@ -310,14 +332,26 @@ export function useReviewFailureSummary(options: {
     [schedulePublish]
   );
   const updateRenderItemError = useCallback(
-    (generation: number, id: string, error: Error | null) => {
+    (
+      generation: number,
+      id: string,
+      error: Error | null,
+      settled?: boolean
+    ) => {
       if (generation !== currentGenerationRef.current) {
         return;
       }
       const entryKey =
         options.entryKeyBySectionIdRef.current.get(id) ?? undefined;
       const entry = entryKey ? entryByKeyRef.current.get(entryKey) : undefined;
-      if (accumulatorRef.current.updateRenderError(id, error, entry)) {
+      if (
+        accumulatorRef.current.updateRenderError(
+          id,
+          error,
+          entry,
+          settled === undefined ? undefined : { settled }
+        )
+      ) {
         schedulePublish();
       }
     },

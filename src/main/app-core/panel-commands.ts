@@ -108,8 +108,10 @@ function normalizePanelSnapshot(
   const parsedKind = panelKindSchema.safeParse(rawKind);
   const kind = parsedKind.success ? parsedKind.data : "web";
   const active = booleanValue(record, "active");
+  const component = stringValue(record, "component");
   const context = panelContextSchema.safeParse(record.context);
   const display = panelDisplaySchema.safeParse(record.display);
+  const rawParams = asRecord(record.params);
   return {
     groupIndex: numberValue(record, "groupIndex", 0),
     id,
@@ -121,8 +123,10 @@ function normalizePanelSnapshot(
     windowId: windowInfo.id,
     windowIndex,
     ...(active === undefined ? {} : { active }),
+    ...(component ? { component } : {}),
     ...(context.success ? { context: context.data } : {}),
     ...(display.success ? { display: display.data } : {}),
+    ...(rawParams ? { params: rawParams } : {}),
   };
 }
 
