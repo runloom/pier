@@ -84,8 +84,6 @@ export function TerminalPanelBody({
       <RestoredAgentResultView
         agent={restoredAgentResult}
         className={terminalContentClassName}
-        fontFamily={fontFamily}
-        fontSize={effectiveMonoFontSize}
         {...(onRestartAgent ? { onRestart: onRestartAgent } : {})}
       />
     );
