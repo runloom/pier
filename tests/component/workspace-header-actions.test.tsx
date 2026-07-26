@@ -1,14 +1,17 @@
+import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   act,
   cleanup,
   fireEvent,
-  render,
+  type RenderOptions,
+  render as renderBase,
   screen,
   waitFor,
 } from "@testing-library/react";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import i18next from "i18next";
+import type { ReactElement } from "react";
 import {
   afterEach,
   beforeAll,
@@ -43,6 +46,10 @@ import { useCommandPaletteMru } from "@/stores/command-palette-mru.store.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+
+function render(ui: ReactElement, options?: RenderOptions) {
+  return renderBase(<TooltipProvider>{ui}</TooltipProvider>, options);
+}
 
 let applyHostSnapshot: Mock;
 let detectAgents: Mock;
@@ -182,7 +189,7 @@ function createProps(
 
 function openAddPanelPopover(): HTMLElement {
   const trigger = screen.getByRole("button", {
-    name: "Create in this panel group",
+    name: "New",
   });
   expect(trigger).toHaveAttribute("aria-haspopup", "dialog");
   fireEvent.click(trigger);
@@ -366,7 +373,7 @@ describe("WorkspaceHeaderActions", () => {
     render(<WorkspaceHeaderRightActions {...props} />);
 
     expect(
-      screen.getByRole("button", { name: "Toggle Panel Maximize" })
+      screen.getByRole("button", { name: "Maximize" })
     ).toBeInTheDocument();
   });
 
@@ -376,9 +383,7 @@ describe("WorkspaceHeaderActions", () => {
     useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderRightActions {...props} />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Toggle Panel Maximize" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Maximize" }));
 
     expect(panel.api.setActive).toHaveBeenCalledOnce();
     expect(panel.api.maximize).toHaveBeenCalledOnce();
@@ -403,9 +408,7 @@ describe("WorkspaceHeaderActions", () => {
     useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderRightActions {...props} />);
-    fireEvent.click(
-      screen.getByRole("button", { name: "Toggle Panel Maximize" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Restore" }));
 
     expect(panel.api.setActive).toHaveBeenCalledOnce();
     expect(panel.api.exitMaximized).toHaveBeenCalledOnce();
@@ -949,7 +952,7 @@ describe("WorkspaceHeaderActions", () => {
     useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderActions {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "在此面板组中新建" }));
+    fireEvent.click(screen.getByRole("button", { name: "新建" }));
     const search = screen.getByPlaceholderText("搜索面板类型或智能体…");
     fireEvent.change(search, { target: { value: query } });
 
@@ -1274,7 +1277,7 @@ describe("WorkspaceHeaderActions", () => {
     useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderActions {...props} />);
-    fireEvent.click(screen.getByRole("button", { name: "在此面板组中新建" }));
+    fireEvent.click(screen.getByRole("button", { name: "新建" }));
 
     expect(
       await screen.findByText("工作树", { selector: "[cmdk-group-heading]" })

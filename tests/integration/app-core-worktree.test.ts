@@ -1,3 +1,6 @@
+// @vitest-environment node
+// App-core now wires live-modules (esbuild). jsdom's cross-realm Uint8Array
+// breaks esbuild's TextEncoder invariant — match other live-modules tests.
 import { execFile } from "node:child_process";
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
