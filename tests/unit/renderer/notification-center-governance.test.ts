@@ -172,6 +172,25 @@ describe("notification center governance", () => {
     expect(offenders).toEqual([]);
   });
 
+  it("locks dual toast placement: 形态 A top-center, 形态 B top-right", () => {
+    const sonner = readFileSync(
+      join(ROOT, "src/renderer/components/primitives/sonner.tsx"),
+      "utf8"
+    );
+    const showNotification = readFileSync(
+      join(ROOT, "src/renderer/lib/notifications/show-notification-toast.tsx"),
+      "utf8"
+    );
+    const agentContext = readFileSync(join(ROOT, "AGENTS.md"), "utf8");
+    // 默认 Toaster 必须是中间上方（确认型短提示）；禁止回退为整站 top-right。
+    expect(sonner).toMatch(/position=["']top-center["']/);
+    expect(sonner).not.toMatch(/position=["']top-right["']/);
+    // 形态 B 仅 per-call 右上角；不得依赖第二个 Toaster id 或样式分支。
+    expect(showNotification).toMatch(/position:\s*["']top-right["']/);
+    expect(agentContext).toContain('position="top-center"');
+    expect(agentContext).toContain('position: "top-right"');
+  });
+
   it("does not reintroduce store-subscribe toast preview bridge", () => {
     expect(() =>
       readFileSync(

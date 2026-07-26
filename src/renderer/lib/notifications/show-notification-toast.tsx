@@ -91,6 +91,8 @@ export function showNotificationToast(notification: AppNotification): void {
     closeButton: true,
     description: detailFor(notification),
     duration: toastDurationFor(notification.severity),
+    // 形态 B 右上角；默认 Toaster 是 top-center（形态 A 确认胶囊）。
+    position: "top-right",
     style: {
       "--normal-bg": "var(--popover)",
       "--normal-text": "var(--popover-foreground)",

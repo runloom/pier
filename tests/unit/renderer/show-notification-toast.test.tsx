@@ -58,6 +58,7 @@ describe("showNotificationToast（形态 B）", () => {
       closeButton: true,
       description: "用时 42 秒",
       duration: 4000,
+      position: "top-right",
       style: {
         "--normal-bg": "var(--popover)",
         "--normal-text": "var(--popover-foreground)",
