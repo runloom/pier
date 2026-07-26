@@ -8,10 +8,18 @@ import {
 } from "./tui-input-focus.ts";
 
 /**
+ * Hold text-only pasteboard after PTY paste so Grok's async attachment-probe
+ * gate does not see a leftover screenshot (matches main SUBMIT_ENTER settle).
+ */
+const AGENT_CLIPBOARD_SUPPRESS_HOLD_MS = 200;
+
+/**
  * 增强输入发送编排（从 terminal-composer.tsx 抽出，守 file-size 硬顶）。
  *
  * - sendBlock（仅 unfocused / 光标探针）与 in-flight 双重闸门。
  * - 发送前 ensureTuiInputFocus：白名单 agent 可透传恢复键；确认失败 toast。
+ * - agent 发送期间 suppress 系统剪贴板图，避免短 bracketed paste 被 Grok
+ *   误挂成 `[Image #N]`（例如只输入「你好」）。
  */
 export function useTerminalComposerSend(opts: {
   buildPayloadOrReport: (value: string) => string | null;
@@ -45,26 +53,38 @@ export function useTerminalComposerSend(opts: {
     (async () => {
       const activity =
         useForegroundActivityStore.getState().activities[panelId];
-      if (activity?.kind === "agent") {
+      const isAgent = activity?.kind === "agent";
+      if (isAgent) {
         const ready = await ensureTuiInputFocus(panelId).catch(() => false);
         if (!ready) {
           toast.error(t("terminal.composer.sendStateUnknown"));
           return;
         }
+        await window.pier.clipboard.beginImageSuppress();
       }
-      const result = await window.pier.terminal.sendText({
-        panelId,
-        submit: true,
-        text: payload,
-      });
-      if (result.ok || result.textDelivered) {
-        onSent();
-        if (!result.ok) {
-          reportComposerSendFailure(t, result.error ?? "");
+      try {
+        const result = await window.pier.terminal.sendText({
+          panelId,
+          submit: true,
+          text: payload,
+        });
+
+        if (result.ok || result.textDelivered) {
+          onSent();
+          if (!result.ok) {
+            reportComposerSendFailure(t, result.error ?? "");
+          }
+          return;
         }
-        return;
+        reportComposerSendFailure(t, result.error ?? "");
+      } finally {
+        if (isAgent) {
+          await new Promise((resolve) => {
+            window.setTimeout(resolve, AGENT_CLIPBOARD_SUPPRESS_HOLD_MS);
+          });
+          await window.pier.clipboard.endImageSuppress();
+        }
       }
-      reportComposerSendFailure(t, result.error ?? "");
     })()
       .catch((err: unknown) => {
         reportComposerSendFailure(

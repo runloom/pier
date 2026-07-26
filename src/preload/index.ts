@@ -320,6 +320,9 @@ const menuApi: PierMenuAPI = {
 
 const clipboardApi: PierClipboardAPI = {
   writeText: (text) => ipcRenderer.invoke("pier:clipboard:writeText", text),
+  beginImageSuppress: () =>
+    ipcRenderer.invoke("pier:clipboard:beginImageSuppress"),
+  endImageSuppress: () => ipcRenderer.invoke("pier:clipboard:endImageSuppress"),
 };
 
 const settingsApi: PierSettingsAPI = {

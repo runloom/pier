@@ -36,6 +36,7 @@ import {
   useTuiSendBlock,
 } from "./tui-input-focus.ts";
 import { useTerminalComposerAttachments } from "./use-terminal-composer-attachments.ts";
+import { useTerminalComposerClose } from "./use-terminal-composer-close.ts";
 import { useTerminalComposerEscape } from "./use-terminal-composer-escape.ts";
 import { useTerminalComposerSend } from "./use-terminal-composer-send.ts";
 
@@ -307,13 +308,18 @@ export function TerminalComposer({
     }
   }, [isActive, overlayId]);
 
+  const closeComposer = useTerminalComposerClose({
+    clearAttachments: attachments.clearAll,
+    onClose: () => {
+      onCloseRef.current();
+    },
+  });
+
   useTerminalComposerEscape({
     disabled,
     editorRef,
     isActive,
-    onClose: () => {
-      onCloseRef.current();
-    },
+    onClose: closeComposer,
     panelId,
     valueRef,
   });
@@ -370,7 +376,7 @@ export function TerminalComposer({
       event.preventDefault();
       event.stopPropagation();
       writeComposerDraft(panelId, valueRef.current);
-      onCloseRef.current();
+      closeComposer();
       return;
     }
     // Mention menu owns arrows / Enter; do not bridge them to the TUI.
