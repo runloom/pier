@@ -16,6 +16,7 @@
       "!src/renderer/app/globals.css",
       "!docs/**/*.html",
       "!.pier/canvases",
+      "!.pier/plans",
       "!fixtures/live-modules"
     ]
   },

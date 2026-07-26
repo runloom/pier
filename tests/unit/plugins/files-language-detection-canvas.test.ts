@@ -9,8 +9,14 @@ describe("languageForPath canvas", () => {
     expect(languageForPath(".pier/canvases/a.canvas.vue")).toBe("canvas");
     expect(languageForPath(".pier/canvases/a.canvas.svelte")).toBe("canvas");
     expect(languageForPath(".pier/canvases/a.canvas.solid.tsx")).toBe("canvas");
+    expect(languageForPath(".pier/canvases/templates/blank.canvas.tsx")).toBe(
+      "canvas"
+    );
+  });
+
+  it("treats plan canvases under .pier/plans as canvas", () => {
     expect(
-      languageForPath(".pier/canvases/stress/workbench-proposal.canvas.tsx")
+      languageForPath(".pier/plans/canvas-capabilities-v1/plan.canvas.tsx")
     ).toBe("canvas");
   });
 

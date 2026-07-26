@@ -276,7 +276,14 @@ describe("shadcn composition governance", () => {
 
   it("keeps group-owned items inside their matching container", () => {
     const offenders: string[] = [];
-    for (const filePath of files) {
+    // Product renderer/plugins + live-module canvases (SelectItem must use
+    // SelectGroup; SelectContent also auto-wraps as a runtime safety net).
+    const canvasRoot = join(ROOT, ".pier", "canvases");
+    const scanFiles = [
+      ...files,
+      ...(statSync(canvasRoot).isDirectory() ? sourceFiles(canvasRoot) : []),
+    ];
+    for (const filePath of scanFiles) {
       const relativePath = projectRelative(filePath);
       const source = readFileSync(filePath, "utf8");
       const sourceFile = ts.createSourceFile(

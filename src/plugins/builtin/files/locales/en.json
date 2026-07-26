@@ -108,7 +108,7 @@
     "filePanel.canvas.compileFailedHint": "Fix the canvas file or its imports, then reload.",
     "filePanel.canvas.compiling": "Compiling canvas…",
     "filePanel.canvas.diagnosticsHeading": "Details",
-    "filePanel.canvas.notUnderCanvases": "Open a canvas under .pier/canvases (e.g. *.canvas.tsx / *.canvas.vue).",
+    "filePanel.canvas.notUnderCanvases": "Open a canvas under .pier/canvases or .pier/plans (e.g. *.canvas.tsx / *.canvas.vue).",
     "filePanel.canvas.reload": "Reload",
     "filePanel.canvas.unavailableTitle": "Can’t preview canvas",
     "filePanel.view.diffUnsupported": "No disk contents available to compare.",

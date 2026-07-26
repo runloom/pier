@@ -30,6 +30,22 @@ describe("live-module-canvas-path", () => {
     ).toBe("nested/demo.canvas.tsx");
   });
 
+  it("accepts plan canvases under .pier/plans", () => {
+    expect(
+      isProjectCanvasPath(".pier/plans/canvas-capabilities-v1/plan.canvas.tsx")
+    ).toBe(true);
+    expect(
+      canvasRelPathFromProjectPath(
+        ".pier/plans/canvas-capabilities-v1/plan.canvas.tsx"
+      )
+    ).toBe("canvas-capabilities-v1/plan.canvas.tsx");
+    expect(
+      detectProjectCanvasFramework(
+        ".pier/plans/canvas-capabilities-v1/plan.canvas.tsx"
+      )
+    ).toBe("react");
+  });
+
   it("rejects non-canvas names and out-of-root paths", () => {
     expect(isProjectCanvasPath("src/foo.tsx")).toBe(false);
     expect(isProjectCanvasPath(".pier/canvases/hello.tsx")).toBe(false);

@@ -53,6 +53,9 @@ asar: true
 asarUnpack:
   - native/build/Release/**
   - native/GhosttyResources/**
+  # 画布编译走 esbuild，它 spawn 一个原生二进制。asar 是单个文件，spawn 会
+  # ENOTDIR；main 侧 ensureEsbuildBinaryPath() 把路径改写到这里的解包副本。
+  - '**/node_modules/@esbuild/**'
 
 mac:
   category: public.app-category.developer-tools

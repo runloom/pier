@@ -4,7 +4,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@pier/ui/accordion.tsx";
-import { Alert } from "@pier/ui/alert.tsx";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@pier/ui/alert.tsx";
 import { AspectRatio } from "@pier/ui/aspect-ratio.tsx";
 import {
   Avatar,
@@ -346,6 +351,9 @@ export const pierCanvasExports = {
   AccordionItem,
   AccordionTrigger,
   Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
   AspectRatio,
   Avatar,
   AvatarBadge,

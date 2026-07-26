@@ -108,7 +108,7 @@
     "filePanel.canvas.compileFailedHint": "请修复画布文件或其引用，然后重新加载。",
     "filePanel.canvas.compiling": "正在编译画布…",
     "filePanel.canvas.diagnosticsHeading": "详情",
-    "filePanel.canvas.notUnderCanvases": "请打开 .pier/canvases 下的画布文件（例如 *.canvas.tsx / *.canvas.vue）。",
+    "filePanel.canvas.notUnderCanvases": "请打开 .pier/canvases 或 .pier/plans 下的画布文件（例如 *.canvas.tsx / *.canvas.vue）。",
     "filePanel.canvas.reload": "重新加载",
     "filePanel.canvas.unavailableTitle": "无法预览画布",
     "filePanel.view.diffUnsupported": "没有可对比的磁盘内容。",

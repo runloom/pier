@@ -1,8 +1,8 @@
 import { Badge, Frame, Stack, Text } from "pier/canvas";
 
 /**
- * Smoke-only canvas. Prefer templates/ for product examples;
- * stress/workbench-proposal for multi-file + hooks.
+ * Smoke-only canvas. Thin scaffolds: templates/blank.canvas.tsx.
+ * Design-time plan dogfood: .pier/plans/.../plan.canvas.tsx.
  * Open: `.pier/canvases/smoke/hello.canvas.tsx`
  */
 export const canvas = {
@@ -17,8 +17,8 @@ export default function HelloCanvas() {
       <Stack gap={10}>
         <Text as="h2">Smoke</Text>
         <Text tone="secondary">
-          Pipeline ok. Product shapes: templates/*. Quality stress:
-          stress/workbench-proposal.canvas.tsx (multi-file + hooks).
+          Pipeline ok. Scaffold: templates/blank.canvas.tsx. Plan dogfood (multi-file
+          + tabs): .pier/plans/canvas-capabilities-v1/plan.canvas.tsx.
         </Text>
         <Badge variant="neutral">smoke only</Badge>
       </Stack>

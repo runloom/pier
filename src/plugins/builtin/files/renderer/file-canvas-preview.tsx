@@ -22,8 +22,8 @@ import {
   parsePierCanvasMeta,
 } from "@shared/contracts/pier-canvas.ts";
 import {
-  canvasRelPathFromProjectPath,
   detectProjectCanvasFramework,
+  projectCanvasLocation,
 } from "@shared/live-module-canvas-path.ts";
 import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
 import { FileQuestion } from "lucide-react";
@@ -56,10 +56,13 @@ type PreviewState =
 
 function moduleIdentity(
   root: string,
+  contentDirectory: string,
   relPath: string,
   framework: LiveModuleFramework
 ): string {
-  return `${root}\0${relPath}\0${framework}`;
+  // Include content directory so .pier/canvases vs .pier/plans never share a
+  // hot-reload identity when relative paths collide.
+  return `${root}\0${contentDirectory}\0${relPath}\0${framework}`;
 }
 
 /**
@@ -85,7 +88,10 @@ export function FileCanvasPreview(props: {
   const [nonce, setNonce] = useState(0);
   const [state, setState] = useState<PreviewState>({ kind: "pending" });
 
-  const relPath = canvasRelPathFromProjectPath(props.path);
+  const canvasLocation = projectCanvasLocation(props.path);
+  const relPath = canvasLocation?.relPath ?? null;
+  const contentDirectory =
+    canvasLocation?.directory ?? LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY;
   const framework = detectProjectCanvasFramework(props.path) ?? "react";
   const liveModules = props.context.liveModules;
 
@@ -113,7 +119,7 @@ export function FileCanvasPreview(props: {
         kind: "error",
         message: props.t(
           "filePanel.canvas.notUnderCanvases",
-          "Open a canvas under .pier/canvases (e.g. *.canvas.tsx / *.canvas.vue)."
+          "Open a canvas under .pier/canvases or .pier/plans (e.g. *.canvas.tsx)."
         ),
       });
       return;
@@ -124,7 +130,12 @@ export function FileCanvasPreview(props: {
       return;
     }
 
-    const identity = moduleIdentity(props.root, relPath, framework);
+    const identity = moduleIdentity(
+      props.root,
+      contentDirectory,
+      relPath,
+      framework
+    );
     // Mark host with compile generation (stale / Reload bump `nonce`).
     hostEl.dataset.pierCanvasCompile = String(reloadGeneration);
     let cancelled = false;
@@ -165,16 +176,28 @@ export function FileCanvasPreview(props: {
       }, CANVAS_SKELETON_DELAY_MS);
     }
 
-    const rootId = projectLiveRootId(props.root);
+    const baseRootId = projectLiveRootId(props.root);
+    const rootIdSuffix =
+      contentDirectory === LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY
+        ? ""
+        : `.${contentDirectory.replace(/^\./u, "").replaceAll("/", "-")}`;
+    // Must match registerRoot id — used for stale events + unregister.
+    const rootId = `${baseRootId}${rootIdSuffix}`;
     const run = async () => {
       try {
         const spec = projectLiveRootSpec({
-          directory: LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY,
+          directory: contentDirectory,
+          // Distinct root id per content directory so plans/ and canvases/
+          // registrations do not clobber each other (id charset: a-z0-9._-).
+          id: rootId,
           projectRootPath: props.root,
         });
         await liveModules.registerRoot(spec);
         if (!stillOwner()) {
           return;
+        }
+        if (!relPath) {
+          throw new Error("Not a project canvas path");
         }
         const result = await liveModules.compile(spec.id, relPath);
         if (!stillOwner()) {
@@ -301,7 +324,15 @@ export function FileCanvasPreview(props: {
       // Refcounted release — last panel for this project drops watchers/tickets.
       liveModules.unregisterRoot(rootId).catch(() => undefined);
     };
-  }, [framework, liveModules, nonce, props.root, props.t, relPath]);
+  }, [
+    contentDirectory,
+    framework,
+    liveModules,
+    nonce,
+    props.root,
+    props.t,
+    relPath,
+  ]);
 
   if (!relPath) {
     return (
@@ -319,7 +350,7 @@ export function FileCanvasPreview(props: {
           <EmptyDescription>
             {props.t(
               "filePanel.canvas.notUnderCanvases",
-              "Open a canvas under .pier/canvases (e.g. *.canvas.tsx / *.canvas.vue)."
+              "Open a canvas under .pier/canvases or .pier/plans (e.g. *.canvas.tsx)."
             )}
           </EmptyDescription>
         </EmptyHeader>

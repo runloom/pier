@@ -334,4 +334,66 @@ describe("FileCanvasPreview", () => {
     });
     expect(screen.queryByRole("status")).toBeNull();
   });
+
+  it("registers plans canvases with distinct root id and reloads on that id's stale", async () => {
+    const plansPath = ".pier/plans/canvas-capabilities-v1/plan.canvas.tsx";
+    const baseId = projectLiveRootId(PROJECT_ROOT);
+    const plansRootId = `${baseId}.pier-plans`;
+    const url = makeModuleDataUrl(`
+      export function mount(el) {
+        el.setAttribute("data-test-canvas", "plan");
+        return () => {};
+      }
+      export default function App() { return null; }
+    `);
+    const compile = vi.fn(async () => ({
+      graph: [],
+      moduleId: "canvas-capabilities-v1/plan.canvas.tsx",
+      ok: true as const,
+      url,
+    }));
+    let staleCb:
+      | ((event: { moduleId: string; rootId: string; type: "stale" }) => void)
+      | null = null;
+    const onChanged = vi.fn((cb: typeof staleCb) => {
+      staleCb = cb;
+      return () => {
+        staleCb = null;
+      };
+    });
+    const registerRoot = vi.fn(async (spec: { id: string }) => ({
+      rootId: spec.id,
+    }));
+
+    render(
+      <FileCanvasPreview
+        context={createContext({ compile, onChanged, registerRoot })}
+        path={plansPath}
+        root={PROJECT_ROOT}
+        t={t}
+      />
+    );
+
+    await waitFor(() => {
+      expect(document.querySelector("[data-test-canvas='plan']")).toBeTruthy();
+    });
+    expect(registerRoot).toHaveBeenCalled();
+    const registeredId = (
+      registerRoot.mock.calls[0]?.[0] as { id: string } | undefined
+    )?.id;
+    expect(registeredId).toBe(plansRootId);
+    expect(registeredId).not.toBe(baseId);
+
+    await act(async () => {
+      staleCb?.({
+        moduleId: "canvas-capabilities-v1/plan.canvas.tsx",
+        rootId: plansRootId,
+        type: "stale",
+      });
+    });
+
+    await waitFor(() => {
+      expect(compile.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+  });
 });

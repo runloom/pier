@@ -23,6 +23,8 @@ import { assetRootRefSchema } from "./agent-assets.ts";
 export const LIVE_MODULE_DEFAULT_PREVIEW_BARREL = ".pier/preview-exports.ts";
 
 export const LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY = ".pier/canvases";
+/** Design-time plan canvases + plan.json (L3 dogfood / workflow artifacts). */
+export const LIVE_MODULE_DEFAULT_PLANS_DIRECTORY = ".pier/plans";
 export const LIVE_MODULE_DEFAULT_HOME_DIRECTORY = "canvases";
 /** Library scan glob (multi-framework entry names). */
 export const LIVE_MODULE_DEFAULT_PATTERN =
