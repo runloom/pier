@@ -35,11 +35,13 @@ export interface ResolvedInstallSource {
 
 export interface ResolvedOfficialUpdateSource {
   archivePath: string;
-  assetUrl: string;
-  officialIndexSequence: number;
+  /** Present for HTTP official assets; omitted for bundled archives. */
+  assetUrl?: string;
+  /** Official index sequence when the asset came from the signed index. */
+  officialIndexSequence?: number;
   packageUrl: string;
   sha256: string;
-  size: number;
+  size?: number;
   version: string;
 }
 
@@ -63,6 +65,20 @@ function bundledInstallSource(
     sha256: bundled.sha256,
     ...(bundled.size ? { size: bundled.size } : {}),
     version: bundled.version,
+  };
+}
+
+function bundledUpdateSource(
+  bundled: BundledPluginRegistration,
+  officialIndexSequence?: number
+): ResolvedOfficialUpdateSource {
+  return {
+    archivePath: bundled.archivePath,
+    packageUrl: `bundled://${bundled.id}/${bundled.version}`,
+    sha256: bundled.sha256,
+    version: bundled.version,
+    ...(bundled.size ? { size: bundled.size } : {}),
+    ...(officialIndexSequence === undefined ? {} : { officialIndexSequence }),
   };
 }
 
@@ -128,6 +144,14 @@ export async function resolveInstallSource(
   return bundledInstallSource(bundled);
 }
 
+/**
+ * Resolves the archive for an already-installed plugin update.
+ *
+ * Target version matches catalog: max(official.latest, bundled.version).
+ * Same-version prefers the official HTTP asset when available (install parity);
+ * otherwise uses the app-bundled tgz. This avoids catalog showing "Update"
+ * while update() no-ops on an older official latest.
+ */
 export async function resolveOfficialUpdateSource(
   ctx: OperationsContext,
   id: string
@@ -135,99 +159,127 @@ export async function resolveOfficialUpdateSource(
   | { ok: true; source: ResolvedOfficialUpdateSource }
   | { ok: false; error: OfficialUpdateSourceFailure }
 > {
-  try {
-    if (ctx.officialIndexRefresh) {
-      await ctx.officialIndexRefresh();
-    }
-  } catch (err) {
-    return {
-      error: {
-        code: "network",
-        message: `failed to refresh official plugin index: ${(err as Error).message}`,
-      },
-      ok: false,
-    };
+  if (ctx.officialIndexRefresh) {
+    await ctx.officialIndexRefresh().catch(() => {
+      /* fall through to cached index + bundled, same as install */
+    });
   }
   const index = ctx.officialIndexProvider();
   const entry = index?.plugins[id];
-  if (!(index && entry)) {
+  const bundled = ctx.bundledPlugins.find((candidate) => candidate.id === id);
+  const targetVersion = selectNewestVersion([entry?.latest, bundled?.version]);
+  if (!targetVersion) {
     return {
       error: {
         code: "not_found",
-        message: `no official update source for plugin: ${id}`,
+        message: `no update source for plugin: ${id}`,
       },
       ok: false,
     };
   }
-  const targetVersion = entry.latest;
-  const asset = entry.versions[targetVersion];
-  if (!asset) {
-    return {
-      error: {
-        code: "not_found",
-        message: `official index missing asset for ${id}@${targetVersion}`,
-      },
-      ok: false,
-    };
-  }
-  if (!ctx.assetFetcher) {
-    return {
-      error: {
-        code: "network",
-        message: "official plugin asset fetcher is not configured",
-      },
-      ok: false,
-    };
-  }
-  try {
-    const download = await downloadOfficialPluginAsset({
-      assetUrl: asset.assetUrl,
-      fetch: ctx.assetFetcher,
-      maxRedirects: 3,
-    });
-    if (download.body.length !== asset.size) {
-      return {
-        error: {
-          code: "hash_mismatch",
-          message: `size mismatch: expected ${asset.size}, got ${download.body.length}`,
-        },
-        ok: false,
-      };
+
+  // Prefer official HTTP when it owns the newest target (install parity).
+  if (entry && entry.latest === targetVersion && ctx.assetFetcher) {
+    const asset = entry.versions[targetVersion];
+    if (asset) {
+      try {
+        const download = await downloadOfficialPluginAsset({
+          assetUrl: asset.assetUrl,
+          fetch: ctx.assetFetcher,
+          maxRedirects: 3,
+        });
+        if (download.body.length !== asset.size) {
+          throw new Error(
+            `size mismatch: expected ${asset.size}, got ${download.body.length}`
+          );
+        }
+        const hash = createHash("sha256").update(download.body).digest("hex");
+        if (hash !== asset.sha256) {
+          throw new Error(
+            `sha256 mismatch: expected ${asset.sha256}, got ${hash}`
+          );
+        }
+        const stagedPath = join(
+          ctx.paths.stagingDir,
+          `${id}-${targetVersion}-${ctx.now()}.tgz`
+        );
+        await writeFile(stagedPath, download.body);
+        return {
+          ok: true,
+          source: {
+            archivePath: stagedPath,
+            assetUrl: asset.assetUrl,
+            officialIndexSequence: index?.sequence,
+            packageUrl: download.finalUrl,
+            sha256: asset.sha256,
+            size: asset.size,
+            version: targetVersion,
+          },
+        };
+      } catch (err) {
+        // Same version available as bundled → offline / corrupt download can
+        // still promote from the ship-with-app archive (install parity).
+        // Stamp index sequence only here: the signed index listed this version
+        // and we fell back after a failed HTTP fetch of that asset.
+        if (bundled?.version === targetVersion) {
+          return {
+            ok: true,
+            source: bundledUpdateSource(bundled, index?.sequence),
+          };
+        }
+        const message = err instanceof Error ? err.message : String(err);
+        const isIntegrity =
+          message.includes("size mismatch") ||
+          message.includes("sha256 mismatch");
+        return {
+          error: {
+            code: isIntegrity ? "hash_mismatch" : "network",
+            message: isIntegrity
+              ? message
+              : `failed to download official plugin update: ${message}`,
+          },
+          ok: false,
+        };
+      }
     }
-    const hash = createHash("sha256").update(download.body).digest("hex");
-    if (hash !== asset.sha256) {
-      return {
-        error: {
-          code: "hash_mismatch",
-          message: `sha256 mismatch: expected ${asset.sha256}, got ${hash}`,
-        },
-        ok: false,
-      };
-    }
-    const stagedPath = join(
-      ctx.paths.stagingDir,
-      `${id}-${targetVersion}-${ctx.now()}.tgz`
-    );
-    await writeFile(stagedPath, download.body);
+  }
+
+  // Pure bundled target (newer than official latest, or no official entry).
+  // Do not stamp officialIndexSequence — the archive did not come from the
+  // signed index asset for this version.
+  if (bundled && bundled.version === targetVersion) {
     return {
       ok: true,
-      source: {
-        archivePath: stagedPath,
-        assetUrl: asset.assetUrl,
-        officialIndexSequence: index.sequence,
-        packageUrl: download.finalUrl,
-        sha256: asset.sha256,
-        size: asset.size,
-        version: targetVersion,
-      },
-    };
-  } catch (err) {
-    return {
-      error: {
-        code: "network",
-        message: `failed to download official plugin update: ${(err as Error).message}`,
-      },
-      ok: false,
+      source: bundledUpdateSource(bundled),
     };
   }
+
+  if (entry?.latest === targetVersion) {
+    if (!entry.versions[targetVersion]) {
+      return {
+        error: {
+          code: "not_found",
+          message: `official index missing asset for ${id}@${targetVersion}`,
+        },
+        ok: false,
+      };
+    }
+    if (!ctx.assetFetcher) {
+      return {
+        error: {
+          code: "network",
+          message: "official plugin asset fetcher is not configured",
+        },
+        ok: false,
+      };
+    }
+  }
+
+  return {
+    error: {
+      code: "not_found",
+      message: `no update source for plugin: ${id}@${targetVersion}`,
+    },
+    ok: false,
+  };
 }

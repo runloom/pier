@@ -201,9 +201,11 @@ export async function performUpdate(
   await ctx.store.flush();
   await ctx.appendOperationLog({
     actorKind: "desktop-renderer",
-    assetUrl: source.assetUrl,
+    ...(source.assetUrl ? { assetUrl: source.assetUrl } : {}),
     fromVersion: existing.activeVersion,
-    officialIndexSequence: source.officialIndexSequence,
+    ...(source.officialIndexSequence === undefined
+      ? {}
+      : { officialIndexSequence: source.officialIndexSequence }),
     operation: "update",
     pluginId: id,
     result: "success",
