@@ -170,7 +170,6 @@ export function SkillsSkillDetail({
       return showAppConfirm({
         body: t("settings.skills.leaveEditBody"),
         intent: "destructive",
-        size: "sm",
         title: t("settings.skills.leaveEditTitle"),
       });
     }

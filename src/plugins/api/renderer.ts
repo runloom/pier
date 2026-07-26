@@ -46,7 +46,6 @@ export type {
   RendererPluginContentDialogRenderProps,
   RendererPluginContentDialogSize,
   RendererPluginDialogIntent,
-  RendererPluginDialogSize,
   RendererPluginDialogsFacade,
 } from "./renderer-dialogs.ts";
 export type {

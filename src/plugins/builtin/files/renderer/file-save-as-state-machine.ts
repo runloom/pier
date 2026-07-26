@@ -214,7 +214,6 @@ export async function saveDocumentAs(input: {
           cancelLabel: t("filePanel.saveAs.cancel", "Cancel"),
           confirmLabel: t("filePanel.saveAs.overwrite", "Overwrite"),
           intent: "destructive",
-          size: "sm",
           title: t("filePanel.saveAs.overwriteTitle", "Replace existing file"),
         });
         if (!overwrite) {

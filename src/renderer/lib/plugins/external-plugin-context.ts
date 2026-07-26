@@ -263,11 +263,9 @@ export function createExternalRendererPluginContext(
           cancelLabel?: string;
           confirmLabel?: string;
           intent: "default" | "destructive";
-          size: "default" | "sm";
           title: string;
         } = {
           intent: options.intent,
-          size: options.size,
           title: options.title,
         };
         if (options.body !== undefined) args.body = options.body;

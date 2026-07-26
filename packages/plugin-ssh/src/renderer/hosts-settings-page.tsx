@@ -199,7 +199,6 @@ export function HostsSettingsPage({
       ),
       confirmLabel: t("pier.ssh.hosts.settings.remove", "Remove"),
       intent: "destructive",
-      size: "sm",
       title: t(
         "pier.ssh.hosts.settings.removeConfirmTitle",
         "Remove SSH host?"

@@ -1,13 +1,38 @@
 /**
- * 宿主级模态弹窗(alert/confirm/prompt)状态容器。全局同一时刻只有一个弹窗:
- * 新请求会把上一个未决弹窗按「取消」resolve 掉再顶替。
- * 渲染与 blocking overlay 生命周期由 components/common/app-dialog-host.tsx 承担。
+ * 宿主级模态弹窗(alert/confirm/choice/prompt)状态容器。
+ *
+ * - 全局同一时刻只有一个简单弹窗：新请求会把上一个未决弹窗按「取消」resolve 掉再顶替。
+ * - 渲染与 blocking overlay 生命周期由 components/common/app-dialog-host.tsx 承担。
+ *
+ * ## size 归属（禁止调用方传入）
+ *
+ * 宽度只由 kind 决定，API 不接受 `size`。禁止业务/插件再传自定义宽，避免回归到
+ * “每个确认各自猜 sm/default”：
+ *
+ * | kind    | size    | 原因 |
+ * |---------|---------|------|
+ * | alert   | sm      | 单按钮告知 |
+ * | confirm | sm      | 取消\|确认 短确认 |
+ * | prompt  | sm      | 单行输入 |
+ * | choice  | default | 三键横排需要更宽 |
+ *
+ * 更长内容请走 content dialog（`openAppContentDialog` / `dialogs.open`），不要
+ * 用 default 宽的 confirm 硬塞说明。
  */
 import { create } from "zustand";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
 
 export type AppDialogIntent = "default" | "destructive";
+
+/** Host-internal only. Callers never choose this. */
 export type AppDialogSize = "default" | "sm";
+
+/** Size owned by dialog kind — single source of truth for AppDialogHost. */
+export function appDialogSizeForKind(
+  kind: "alert" | "confirm" | "choice" | "prompt"
+): AppDialogSize {
+  return kind === "choice" ? "default" : "sm";
+}
 
 export interface AppAlertOptions {
   body?: string;
@@ -19,7 +44,6 @@ export interface AppAlertOptions {
 export interface AppConfirmOptions extends AppAlertOptions {
   cancelLabel?: string;
   intent: AppDialogIntent;
-  size: AppDialogSize;
 }
 
 /**
@@ -33,6 +57,7 @@ export type AppChoiceButtonOrder = "alt-cancel-confirm" | "confirm-alt-cancel";
  * 三选弹窗(保存/放弃/取消形态)。confirm 是主按钮(默认动作,如保存),
  * alt 是次动作(intent 为 destructive 时按危险样式渲染,如放弃),
  * cancel/Esc 一律 resolve "cancel"。
+ * size 固定 default，调用方不得传 size。
  */
 export interface AppChoiceOptions extends AppAlertOptions {
   altLabel: string;
@@ -44,19 +69,18 @@ export interface AppChoiceOptions extends AppAlertOptions {
   cancelLabel?: string;
   confirmLabel: string;
   intent: AppDialogIntent;
-  size: AppDialogSize;
 }
 
 export type AppChoiceResult = "alt" | "cancel" | "confirm";
 
 // prompt = confirm + 单行文本输入。validate 在 submit 前跑一次,返回非空字符串
 // 表示校验失败,直接展示错误、不 resolve;返回 null / undefined 才放行。
+// size 固定 sm，调用方不得传 size。
 export interface AppPromptOptions extends AppAlertOptions {
   cancelLabel?: string;
   initialValue?: string;
   intent: AppDialogIntent;
   placeholder?: string;
-  size: AppDialogSize;
   validate?: (value: string) => Promise<string | null> | string | null;
 }
 
@@ -124,8 +148,6 @@ function openAlertConfirm(
 ): Promise<boolean> {
   useCommandPaletteController.getState().close();
   dismissActive();
-  const size: AppDialogSize =
-    kind === "confirm" ? (options as AppConfirmOptions).size : "sm";
   const { promise, resolve } = Promise.withResolvers<boolean>();
   const request: AlertConfirmDialogRequest = {
     intent: options.intent ?? "default",
@@ -136,8 +158,7 @@ function openAlertConfirm(
       }
       resolve(confirmed);
     },
-    // alert is always sm; confirm keeps caller-chosen size.
-    size,
+    size: appDialogSizeForKind(kind),
     title: options.title,
     ...(options.body ? { body: options.body } : {}),
     ...("cancelLabel" in options && options.cancelLabel
@@ -175,7 +196,7 @@ export function showAppChoice(
         }
         resolvePromise(result);
       },
-      size: options.size,
+      size: appDialogSizeForKind("choice"),
       title: options.title,
       ...(options.body ? { body: options.body } : {}),
       ...(options.cancelLabel ? { cancelLabel: options.cancelLabel } : {}),
@@ -200,7 +221,7 @@ export function showAppPrompt(
         }
         resolvePromise(value);
       },
-      size: options.size,
+      size: appDialogSizeForKind("prompt"),
       title: options.title,
       ...(options.body ? { body: options.body } : {}),
       ...(options.cancelLabel ? { cancelLabel: options.cancelLabel } : {}),

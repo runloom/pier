@@ -1,7 +1,6 @@
 import type {
   RendererPluginContext,
   RendererPluginDialogIntent,
-  RendererPluginDialogSize,
   RendererPluginLoadingNotification,
 } from "@plugins/api/renderer.ts";
 import { activeGitTarget } from "./git-target.ts";
@@ -17,7 +16,6 @@ export function commandTitle(
 export type GitLoadingToast = RendererPluginLoadingNotification;
 export interface GitConfirmDialogOptions {
   intent?: RendererPluginDialogIntent;
-  size?: RendererPluginDialogSize;
 }
 
 export function showLoading(
@@ -110,7 +108,6 @@ export function confirmDialog(
     body: [body, detail].filter(Boolean).join("\n\n"),
     confirmLabel,
     intent: options.intent ?? "default",
-    size: options.size ?? "sm",
     title,
   });
 }

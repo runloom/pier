@@ -488,7 +488,6 @@ describe("file-tree-actions", () => {
       cancelLabel: "Cancel",
       confirmLabel: "Delete",
       intent: "destructive",
-      size: "sm",
       title: "Delete",
     });
     expect(files.trash).toHaveBeenCalledWith({

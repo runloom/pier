@@ -156,6 +156,9 @@ describe("project-skills health issue mapping (§5.1)", () => {
         code: "library-drift",
         severity: "error",
         degradePolicy: "denied",
+        // Settings-only integrity: enable/projection blocked; launch allowed.
+        includes: ["enable", "projection"],
+        excludes: ["launch"],
       },
       {
         code: "content-conflict",
@@ -247,6 +250,11 @@ describe("project-skills health issue mapping (§5.1)", () => {
       if (row.includes) {
         for (const scope of row.includes) {
           expect(mapping.blockingScopes, row.code).toContain(scope);
+        }
+      }
+      if (row.excludes) {
+        for (const scope of row.excludes) {
+          expect(mapping.blockingScopes, row.code).not.toContain(scope);
         }
       }
       if (row.repairable !== undefined) {

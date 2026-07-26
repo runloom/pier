@@ -202,16 +202,18 @@ export async function ensureReady(
       issue.blockingScopes.includes("launch")
     );
 
-    // Hard blocks: corrupt / unmanaged / invalid.
+    // Hard blocks: only launch-scoped issues. Denied integrity without a
+    // launch scope (e.g. library-drift → settings-only) must not refuse spawn.
     const hard = plan.blockingIssues.filter(
       (i) =>
-        i.code === "ledger-corrupt" ||
-        i.code === "recovery-record-corrupt" ||
-        i.code === "unmanaged-conflict" ||
-        i.code === "managed-target-modified" ||
-        i.code === "invalid-skill" ||
-        i.code === "project-identity-changed" ||
-        i.degradePolicy === "denied"
+        i.blockingScopes.includes("launch") &&
+        (i.code === "ledger-corrupt" ||
+          i.code === "recovery-record-corrupt" ||
+          i.code === "unmanaged-conflict" ||
+          i.code === "managed-target-modified" ||
+          i.code === "invalid-skill" ||
+          i.code === "project-identity-changed" ||
+          i.degradePolicy === "denied")
     );
 
     if (hard.length > 0) {
@@ -269,26 +271,19 @@ export async function ensureReady(
         };
       }
     } else if (actionable.length > 0 && !plan.safeAutoFixable) {
-      // Needs confirmation or not safe — block, do not write.
-      const fallbackIssues =
-        plan.blockingIssues.length > 0
-          ? plan.blockingIssues
-          : [
-              buildProjectSkillsIssue({
-                code: "projection-missing",
-                scope: "project",
-                checkedAt: ctx.now(),
-              }),
-            ];
-      const summary =
-        blockingForLaunch.length > 0 ? blockingForLaunch : fallbackIssues;
-      return {
-        status: "blocked",
-        launchAttemptId,
-        issueSummary: summary,
-        degradePolicySummary: worstDegradePolicy(summary),
-        expiresAt: ctx.now() + 120_000,
-      };
+      // Needs confirmation or not safe — do not write during launch.
+      // Only refuse spawn for launch-scoped issues. Settings-only integrity
+      // (e.g. library-drift) must not hard-block opening an agent; skip the
+      // non-safe repair and continue.
+      if (blockingForLaunch.length > 0) {
+        return {
+          status: "blocked",
+          launchAttemptId,
+          issueSummary: blockingForLaunch,
+          degradePolicySummary: worstDegradePolicy(blockingForLaunch),
+          expiresAt: ctx.now() + 120_000,
+        };
+      }
     } else if (blockingForLaunch.length > 0) {
       return {
         status: "blocked",

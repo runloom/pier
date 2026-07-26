@@ -179,7 +179,6 @@ export interface RendererSettingsPageRegistration {
 }
 
 export type RendererPluginDialogIntent = "default" | "destructive";
-export type RendererPluginDialogSize = "default" | "sm";
 
 export type RendererPluginContentDialogSize = "sm" | "default" | "lg";
 
@@ -282,6 +281,10 @@ export interface ExternalRendererPluginContext {
     reset(key: string): Promise<void>;
     set(key: string, value: unknown): Promise<void>;
   };
+  /**
+   * Simple dialogs: size is host-owned (alert/confirm/prompt → sm, choice →
+   * default). Callers must not pass `size`. Longer UI → `open` content dialog.
+   */
   dialogs: {
     alert(options: {
       body?: string;
@@ -292,10 +295,10 @@ export interface ExternalRendererPluginContext {
     choice(options: {
       altLabel: string;
       body?: string;
+      buttonOrder?: "alt-cancel-confirm" | "confirm-alt-cancel";
       cancelLabel?: string;
       confirmLabel: string;
       intent: RendererPluginDialogIntent;
-      size: RendererPluginDialogSize;
       title: string;
     }): Promise<"alt" | "cancel" | "confirm">;
     confirm(options: {
@@ -303,7 +306,6 @@ export interface ExternalRendererPluginContext {
       cancelLabel?: string;
       confirmLabel?: string;
       intent: RendererPluginDialogIntent;
-      size: RendererPluginDialogSize;
       title: string;
     }): Promise<boolean>;
     open<TResult = unknown>(
@@ -316,7 +318,6 @@ export interface ExternalRendererPluginContext {
       initialValue?: string;
       intent: RendererPluginDialogIntent;
       placeholder?: string;
-      size: RendererPluginDialogSize;
       title: string;
       validate?: (value: string) => Promise<string | null> | string | null;
     }): Promise<string | null>;

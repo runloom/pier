@@ -116,7 +116,6 @@ export function AccountsSettingsPage({
           ),
       confirmLabel: t("pier.claude.accounts.settings.remove", "Remove"),
       intent: "destructive",
-      size: "sm",
       title: t(
         "pier.claude.accounts.settings.removeConfirmTitle",
         "Remove account?"

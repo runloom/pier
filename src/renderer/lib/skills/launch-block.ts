@@ -72,12 +72,12 @@ export async function confirmSkillsLaunchBlock(args: {
   const denied = blocked.degradePolicySummary === "denied";
 
   if (denied) {
+    // Denied → confirm (host size sm); allowed → choice (host size default).
     const openSettings = await showAppConfirm({
       ...(body ? { body } : {}),
       cancelLabel: t("settings.skills.launchCancel"),
       confirmLabel: t("settings.skills.launchOpenSettings"),
       intent: "default",
-      size: "default",
       title: t("settings.skills.launchBlockedTitle"),
     });
     return openSettings ? { kind: "open-settings" } : { kind: "cancel" };
@@ -89,7 +89,6 @@ export async function confirmSkillsLaunchBlock(args: {
     cancelLabel: t("settings.skills.launchCancel"),
     confirmLabel: t("settings.skills.launchOpenSettings"),
     intent: "default",
-    size: "default",
     title: t("settings.skills.launchBlockedTitle"),
   });
 

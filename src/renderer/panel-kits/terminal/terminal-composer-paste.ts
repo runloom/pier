@@ -154,7 +154,6 @@ async function offerLargePasteFallback(input: {
     body: detail,
     confirmLabel: t("terminal.composer.pasteInsertAnyway"),
     intent: "default",
-    size: "default",
     title: t("terminal.composer.largePasteAttachFailed"),
   });
   if (confirmed) {

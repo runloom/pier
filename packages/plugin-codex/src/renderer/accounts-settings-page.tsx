@@ -181,7 +181,6 @@ export function AccountsSettingsPage({
           ),
       confirmLabel: t("pier.codex.accounts.settings.remove", "Remove"),
       intent: "destructive",
-      size: "sm",
       title: t(
         "pier.codex.accounts.settings.removeConfirmTitle",
         "Remove account?"

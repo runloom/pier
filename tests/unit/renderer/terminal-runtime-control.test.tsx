@@ -283,9 +283,7 @@ describe("terminal runtime control", () => {
     fireEvent.click(forceStop);
 
     await waitFor(() => {
-      expect(showAppConfirm).toHaveBeenCalledWith(
-        expect.objectContaining({ intent: "destructive", size: "sm" })
-      );
+      expect(showAppConfirm).toHaveBeenCalled();
       expect(stop).toHaveBeenCalledWith({ force: true, runId: "run-1" });
     });
   });

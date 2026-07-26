@@ -34,7 +34,6 @@ export async function showFilesNamePrompt(
 ): Promise<FilesNamePromptOutcome> {
   const value = await context.dialogs.prompt({
     intent: "default",
-    size: "sm",
     title: options.title,
     ...(options.cancelLabel ? { cancelLabel: options.cancelLabel } : {}),
     ...(options.confirmLabel ? { confirmLabel: options.confirmLabel } : {}),

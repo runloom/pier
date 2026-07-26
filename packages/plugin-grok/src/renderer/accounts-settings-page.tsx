@@ -176,7 +176,6 @@ export function AccountsSettingsPage({
           ),
       confirmLabel: t("pier.grok.accounts.settings.remove", "Remove"),
       intent: "destructive",
-      size: "sm",
       title: t(
         "pier.grok.accounts.settings.removeConfirmTitle",
         "Remove Grok account?"

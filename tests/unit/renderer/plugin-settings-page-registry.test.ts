@@ -150,7 +150,7 @@ describe("createExternalRendererPluginContext settingsPages", () => {
     );
   });
 
-  it("confirm forwards intent and size to showAppConfirm", async () => {
+  it("confirm forwards intent to showAppConfirm without caller size", async () => {
     const context = createExternalRendererPluginContext(
       demoEntry(),
       bridge,
@@ -159,11 +159,9 @@ describe("createExternalRendererPluginContext settingsPages", () => {
     await context.dialogs.confirm({
       title: "Delete",
       intent: "destructive",
-      size: "sm",
     });
     expect(showAppConfirm).toHaveBeenCalledWith({
       intent: "destructive",
-      size: "sm",
       title: "Delete",
     });
   });

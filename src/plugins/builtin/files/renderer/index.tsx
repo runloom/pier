@@ -275,7 +275,6 @@ function registerDirtyCloseGuard(
           "Save"
         ),
         intent: "default",
-        size: "default",
         title: context.i18n.t(
           "filePanel.saveOnClose.title",
           { name: document.name },

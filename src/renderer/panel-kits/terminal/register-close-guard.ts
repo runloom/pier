@@ -88,7 +88,6 @@ export function registerTerminalPanelCloseGuard(): () => void {
       cancelLabel: t("dialog.panelClose.cancel"),
       confirmLabel: t("dialog.panelClose.close"),
       intent: "destructive",
-      size: "sm",
       title: t("dialog.panelClose.title"),
     });
     if (!confirmed) {

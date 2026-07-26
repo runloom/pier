@@ -119,7 +119,6 @@ export function openPierHomeLibrarySkillDialog(
         const ok = await showAppConfirm({
           body: t("settings.skills.leaveEditBody"),
           intent: "destructive",
-          size: "sm",
           title: t("settings.skills.leaveEditTitle"),
         });
         if (ok) {
@@ -223,7 +222,6 @@ export function openPierHomeLibrarySkillDialog(
         }),
         confirmLabel: t("settings.projects.pierHomeSkillsDeleteConfirm"),
         intent: "destructive",
-        size: "sm",
       });
       if (!confirmed) return;
       try {
@@ -249,7 +247,6 @@ export function openPierHomeLibrarySkillDialog(
         const ok = await showAppConfirm({
           body: t("settings.skills.leaveEditBody"),
           intent: "destructive",
-          size: "sm",
           title: t("settings.skills.leaveEditTitle"),
         });
         if (!ok) return;

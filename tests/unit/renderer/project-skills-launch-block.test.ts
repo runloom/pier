@@ -91,6 +91,11 @@ describe("project skills replacement launch gate", () => {
     expect(continuation).toBeNull();
     expect(dialogMocks.showAppChoice).toHaveBeenCalledTimes(1);
     expect(dialogMocks.showAppConfirm).toHaveBeenCalledTimes(1);
+    expect(dialogMocks.showAppConfirm).toHaveBeenCalledWith(
+      expect.objectContaining({
+        intent: "default",
+      })
+    );
     expect(launchContinue).toHaveBeenNthCalledWith(1, {
       launchAttemptId: "attempt-1",
       decision: "degrade",

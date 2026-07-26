@@ -54,25 +54,24 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 业务代码不要直接 import `@pier/ui/alert-dialog.tsx`；宿主 renderer 使用 `showAppConfirm` / `showAppAlert` / `showAppChoice` / `showAppPrompt`，插件使用 `RendererPluginContext.dialogs` / `ExternalRendererPluginContext.dialogs`。
 - builtin 与 external 插件的简单弹窗 API **同构**：`alert` / `confirm` / `choice` / `prompt`；复杂内容另加 `open` / `update` / `close`。
 - 布局（路线 B：桌面工具对话框；macOS 优先，全平台同一套壳）：
-  - 文案一律左齐；`size` 只控制宽度，不再切换居中营销卡
+  - 文案一律左齐；宽度只由 kind 决定，不再切换居中营销卡
   - 密度：`p-5` + `gap-4`、标题 `text-base`、footer **右簇**（禁止 sm 两列等宽铺满）
   - destructive `confirm`：侧标必须用共享 `@pier/ui/status-icon`（与 toast / Alert 同套，`kind="error"`），禁止手写 Lucide 大圆/方底
   - `choice` / 普通 confirm / prompt：**无**侧标；危险只靠按钮色
   - `alert`：单主按钮（右簇）
   - `confirm` / `prompt`：`取消 | 主按钮`（主按钮最右）
   - `choice`：`alt | 取消 | confirm`（例：不保存 | 取消 | 保存）；横排三键
-- `size`：
-  - `alert`：**固定 `sm`**，API 不接受 `size`（宿主强制）
-  - `sm`：短确认 / 短 prompt（退出、删除、关 panel）
-  - `default`：三键 `choice`、较长说明；`choice` 调用方必须传 `default`，host 渲染也强制 default 宽
-  - `confirm` / `prompt` 必须显式传 `size`
+- **`size` 禁止调用方传入**（宿主 `appDialogSizeForKind` / 插件 facade 同构强制）：
+  - `alert` / `confirm` / `prompt` → 固定 `sm`
+  - `choice` → 固定 `default`（三键横排）
+  - 业务与插件 API **不接受** `size` 字段；更长内容走 content dialog（`openAppContentDialog` / `dialogs.open`），不要用宽 confirm 硬塞说明
+  - 禁止回退为「每个确认各自传 sm/default」
 - `intent`：调用方必填，不要在 `AppDialogHost` 里按标题或文案猜测危险程度
   - 破坏性确认必须显式传 `intent: "destructive"`，普通确认显式传 `intent: "default"`
   - `confirm` / `prompt`：作用在**主按钮**
   - `choice`：作用在 **alt**（不保存/丢弃）；confirm 始终 default 样式
   - 若破坏动作落在 `choice.confirm`（如覆盖），`intent` 仍必须 `"default"`，不能为了“看起来危险”去染 alt
 - 取消按钮一律 `outline`（含 destructive 场景）；Esc / 点遮罩 = 取消
-- `showAppAlert` / 插件 `dialogs.alert` **不传 size**，一律 `sm`
 - 检查点在 `tests/unit/renderer/app-dialog-governance.test.ts` 与 `tests/component/app-dialog-host.test.tsx`
 
 复杂内容弹窗（表单、多步、等待态、带自定义 body）统一走宿主 `AppContentDialogHost`：
@@ -81,10 +80,10 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 插件 renderer 禁止 import `@pier/ui/dialog` 或 `@pier/ui/alert-dialog`；嵌套插件 Dialog（Settings 内再开插件 Dialog）一律禁止。
 - **决策树**（必须按此选型，禁止“图省事全走 content dialog”）：
   1. 短成功 / 弱反馈 → toast
-  2. 只告知、无决策 → `alert`（固定 `sm`，无 size 参数）
-  3. 取消 | 确认 → `confirm`
-  4. alt | 取消 | 确认 → `choice`
-  5. 单行输入 + 校验 → `prompt`
+  2. 只告知、无决策 → `alert`（固定 `sm`）
+  3. 取消 | 确认 → `confirm`（固定 `sm`）
+  4. alt | 取消 | 确认 → `choice`（固定 `default`）
+  5. 单行输入 + 校验 → `prompt`（固定 `sm`）
   6. 多控件 / 多步 / 等待态 / 结构化结果 → `dialogs.open`（content dialog）
   7. 全页产品壳（设置、物料库）→ 宿主自有 `Dialog`（非插件）
 - **无自定义控件的纯确认/提示，禁止塞进 content dialog**（含“title/description + 两个按钮”）。

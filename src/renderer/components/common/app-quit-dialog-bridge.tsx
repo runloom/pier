@@ -118,7 +118,6 @@ export function AppQuitDialogBridge() {
         cancelLabel: readT()("dialog.appQuit.cancel"),
         confirmLabel: readT()("dialog.appQuit.quit"),
         intent: request.summaries.length > 0 ? "destructive" : "default",
-        size: "sm",
       });
 
       if (currentQuitIdRef.current !== request.quitId) {

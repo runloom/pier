@@ -179,7 +179,6 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
         initialValue: current,
         intent: "default",
         placeholder: i18next.t("contextMenu.action.renameAgentSessionPrompt"),
-        size: "sm",
         title: i18next.t("contextMenu.action.renameAgentSession"),
         validate: (value) => {
           const normalized = normalizeAgentSessionTitle(value);

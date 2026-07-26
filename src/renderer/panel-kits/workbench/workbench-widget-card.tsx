@@ -84,7 +84,6 @@ export function WorkbenchWidgetCard({
     const confirmed = await showAppConfirm({
       body: t("workbench.removeConfirmBody"),
       intent: "destructive",
-      size: "sm",
       title: t("workbench.removeConfirmTitle"),
     });
     if (confirmed) {

@@ -150,7 +150,7 @@ export async function runAbortPausedOperation(
       { operation }
     ),
     undefined,
-    { intent: "destructive", size: "sm" }
+    { intent: "destructive" }
   );
   if (!confirmed) {
     return;
