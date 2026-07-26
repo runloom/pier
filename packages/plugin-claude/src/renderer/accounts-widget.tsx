@@ -1,3 +1,4 @@
+import { createAccountsWidgetRefreshAction } from "@pier/plugin-api/account-usage/renderer";
 import type {
   ExternalRendererPluginContext,
   RendererWorkbenchWidgetAction,
@@ -166,57 +167,34 @@ export function AccountsWidget({
   );
 }
 
+/** Shared {@link createAccountsWidgetRefreshAction} (same RPC as settings). */
 export function accountsWidgetActions(
   context: ExternalRendererPluginContext,
   _actionContext: WorkbenchWidgetActionContext
 ): readonly RendererWorkbenchWidgetAction[] {
   return [
-    {
+    createAccountsWidgetRefreshAction({
+      context,
       icon: RefreshCw,
-      id: "refresh",
-      async invoke() {
-        try {
-          // No active account → nothing to refresh; a success toast next to
-          // an error meter would be contradictory feedback.
-          const snapshot = await context.rpc.invoke<{
-            activeAccountId: string | null;
-          }>("accounts.snapshot", null);
-          if (!snapshot.activeAccountId) {
-            await context.dialogs.alert({
-              body: context.i18n.t(
-                "pier.claude.errors.noActiveAccount",
-                "No active account — add or switch to a Claude account first"
-              ),
-              title: context.i18n.t(
-                "pier.claude.widget.refreshFailed",
-                "Could not refresh Claude usage"
-              ),
-            });
-            return;
-          }
-          await context.rpc.invoke("accounts.refreshUsage", { force: true });
-          context.notifications.success(
-            context.i18n.t(
-              "pier.claude.accounts.settings.usageRefreshSuccess",
-              "Usage refreshed"
-            )
-          );
-        } catch (err) {
-          await context.dialogs.alert({
-            body: err instanceof Error ? err.message : String(err),
-            title: context.i18n.t(
-              "pier.claude.widget.refreshFailed",
-              "Could not refresh Claude usage"
-            ),
-          });
-        }
+      i18n: {
+        label: {
+          fallback: "Refresh usage",
+          key: "pier.claude.accounts.settings.refreshUsage",
+        },
+        noActiveAccountBody: {
+          fallback:
+            "No active account — add or switch to a Claude account first",
+          key: "pier.claude.errors.noActiveAccount",
+        },
+        refreshFailedTitle: {
+          fallback: "Could not refresh Claude usage",
+          key: "pier.claude.widget.refreshFailed",
+        },
+        refreshSuccess: {
+          fallback: "Usage refreshed",
+          key: "pier.claude.accounts.settings.usageRefreshSuccess",
+        },
       },
-      label: () =>
-        context.i18n.t(
-          "pier.claude.accounts.settings.refreshUsage",
-          "Refresh usage"
-        ),
-      priority: 50,
-    },
+    }),
   ];
 }

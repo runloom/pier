@@ -1,3 +1,4 @@
+import { createAccountsWidgetRefreshAction } from "@pier/plugin-api/account-usage/renderer";
 import type {
   ExternalRendererPluginContext,
   RendererWorkbenchWidgetAction,
@@ -39,8 +40,8 @@ import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
  * 布局对齐成本 / 资源卡：size → density 结构；配额条 content auto-fit；
  * 顶对齐 + 无空 flex 壳浪费。
  *
- * Refresh flows through {@link accountsWidgetActions}: the async invoke keeps
- * the header refresh-button spinner spinning for the real IPC duration.
+ * Refresh uses the shared {@link createAccountsWidgetRefreshAction} path
+ * (same `refreshAccountUsage` as the settings page).
  */
 
 export interface AccountsWidgetProps extends WorkbenchWidgetComponentProps {
@@ -187,43 +188,35 @@ export function AccountsWidget({
 }
 
 /**
- * Async refresh action builder for the Codex accounts widget. The header
- * button's spinner covers the whole `accounts.refreshUsage` RPC round-trip.
- * Success/failure feedback stays with the plugin context.
+ * Async refresh action for the Codex accounts widget. Header spinner covers
+ * the full shared `refreshAccountUsage` round-trip (same as settings).
  */
 export function accountsWidgetActions(
   context: ExternalRendererPluginContext,
   _actionContext: WorkbenchWidgetActionContext
 ): readonly RendererWorkbenchWidgetAction[] {
   return [
-    {
+    createAccountsWidgetRefreshAction({
+      context,
       icon: RefreshCw,
-      id: "refresh",
-      async invoke() {
-        try {
-          await context.rpc.invoke("accounts.refreshUsage", null);
-          context.notifications.success(
-            context.i18n.t(
-              "pier.codex.accounts.settings.usageRefreshSuccess",
-              "Usage refreshed"
-            )
-          );
-        } catch (err) {
-          await context.dialogs.alert({
-            body: err instanceof Error ? err.message : String(err),
-            title: context.i18n.t(
-              "pier.codex.widget.refreshFailed",
-              "Could not refresh Codex usage"
-            ),
-          });
-        }
+      i18n: {
+        label: {
+          fallback: "Refresh usage",
+          key: "pier.codex.accounts.settings.refreshUsage",
+        },
+        noActiveAccountBody: {
+          fallback: "No active account",
+          key: "pier.codex.widget.noActiveAccount",
+        },
+        refreshFailedTitle: {
+          fallback: "Could not refresh Codex usage",
+          key: "pier.codex.widget.refreshFailed",
+        },
+        refreshSuccess: {
+          fallback: "Usage refreshed",
+          key: "pier.codex.accounts.settings.usageRefreshSuccess",
+        },
       },
-      label: () =>
-        context.i18n.t(
-          "pier.codex.accounts.settings.refreshUsage",
-          "Refresh usage"
-        ),
-      priority: 50,
-    },
+    }),
   ];
 }

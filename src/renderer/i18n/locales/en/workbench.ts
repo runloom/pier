@@ -11,6 +11,7 @@ export const workbench = {
   removeConfirmTitle: "Remove widget?",
   removeConfirmBody:
     "This removes the widget from Workbench. You can add it again from the library.",
+  refreshAllFailed: "Couldn’t refresh some widgets",
   refreshAllSuccess: "Refreshed",
   library: {
     added: "Added",

@@ -1,7 +1,11 @@
 import { useCallback, useRef, useState } from "react";
 import type { ExternalRendererPluginContext } from "../renderer.ts";
-
-export type AccountUsageTranslate = (key: string, fallback: string) => string;
+import {
+  type AccountUsageTranslate,
+  normalizeAccountId,
+  refreshAccountUsage,
+  refreshAllAccountUsage,
+} from "./refresh-account-usage.ts";
 
 export interface AccountsRefreshI18n {
   refreshAllSuccess: { fallback: string; key: string };
@@ -9,8 +13,12 @@ export interface AccountsRefreshI18n {
 }
 
 /**
- * Shared settings/widget hook for accounts.refreshUsage / refreshAllUsage.
- * Manual actions always pass force: true so min-refetch cannot swallow clicks.
+ * Settings-page (and any React surface) hook for manual usage refresh.
+ *
+ * RPC body is owned by {@link refreshAccountUsage} /
+ * {@link refreshAllAccountUsage} — the same functions workbench widget actions
+ * call — so min-refetch / force / payload shape cannot diverge. This hook only
+ * owns busy-state and toast / error plumbing.
  */
 export function useAccountsRefresh(options: {
   context: ExternalRendererPluginContext;
@@ -34,17 +42,17 @@ export function useAccountsRefresh(options: {
   const refreshUsage = useCallback(
     (accountId?: string) => {
       if (refreshingAllRef.current) return;
-      const key = accountId ?? "__active__";
+      const normalizedId = normalizeAccountId(accountId);
+      const key = normalizedId ?? "__active__";
       setRefreshingAccountIds((current) => {
         const next = new Set(current);
         next.add(key);
         return next;
       });
-      context.rpc
-        .invoke("accounts.refreshUsage", {
-          ...(accountId ? { accountId } : {}),
-          force: true,
-        })
+      refreshAccountUsage(
+        context,
+        normalizedId === undefined ? {} : { accountId: normalizedId }
+      )
         .then(() => {
           context.notifications.success(
             t(i18n.refreshSuccess.key, i18n.refreshSuccess.fallback)
@@ -69,8 +77,7 @@ export function useAccountsRefresh(options: {
       refreshingAllRef.current = true;
       setRefreshingAll(true);
       setRefreshingAccountIds(new Set(accountIds));
-      context.rpc
-        .invoke("accounts.refreshAllUsage", null)
+      refreshAllAccountUsage(context)
         .then(() => {
           if (generation !== allGeneration.current) return;
           context.notifications.success(

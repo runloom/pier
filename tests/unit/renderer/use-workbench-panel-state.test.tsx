@@ -129,7 +129,7 @@ describe("useWorkbenchPanelState v3", () => {
     const hook = renderState(params([entry("a"), entry("b")]));
 
     act(() => hook.result.current.refreshOne("a"));
-    act(() => hook.result.current.refreshAll());
+    act(() => hook.result.current.bumpRefreshTokens(["a", "b"]));
 
     expect(hook.result.current.refreshTokens).toEqual({ a: 2, b: 1 });
     expect(hook.updateParameters).not.toHaveBeenCalled();

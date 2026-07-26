@@ -392,7 +392,8 @@ export function CostOverviewWidget({
 
 /**
  * 自定义刷新 action：`invoke` 返回 Promise，header 按钮的 spinner 会持续到
- * `usageData.refreshAll()` 完成。
+ * `usageData.refreshAll()` 完成。Bulk refresh skips the success toast so the
+ * host can show a single summary.
  */
 export function costOverviewWidgetActions(
   _context: WorkbenchWidgetActionContext
@@ -401,11 +402,13 @@ export function costOverviewWidgetActions(
     {
       icon: RefreshCw,
       id: "refresh",
-      async invoke() {
+      async invoke(actionContext: WorkbenchWidgetActionContext) {
         await window.pier.usageData.refreshAll();
-        toast.success(
-          i18next.t("workbench.widget.costOverview.refreshSuccess")
-        );
+        if (!actionContext.bulkRefresh) {
+          toast.success(
+            i18next.t("workbench.widget.costOverview.refreshSuccess")
+          );
+        }
       },
       label: () => i18next.t("workbench.widget.refresh"),
       priority: 50,
