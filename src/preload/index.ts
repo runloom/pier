@@ -40,6 +40,7 @@ import {
 } from "./foreground-activity-api.ts";
 import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
+import { liveModulesApi, type PierLiveModulesAPI } from "./live-modules-api.ts";
 import {
   createMediaPreviewApi,
   type PierMediaPreviewApi,
@@ -160,6 +161,7 @@ export interface PierWindowAPI {
   git: PierGitAPI;
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
+  liveModules: PierLiveModulesAPI;
   managedPlugins: ManagedPluginsPreloadApi;
   mediaPreviews: PierMediaPreviewApi;
   menu: PierMenuAPI;
@@ -362,6 +364,7 @@ const api: PierWindowAPI = {
   git: gitApi,
   keybinding: keybindingApi,
   listWindows: () => invokePierCommand<WindowInfo[]>({ type: "window.list" }),
+  liveModules: liveModulesApi,
   menu: menuApi,
   clipboard: clipboardApi,
   notifications: notificationsApi,

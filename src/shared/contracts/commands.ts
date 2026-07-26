@@ -16,6 +16,12 @@ import {
 } from "./environment.ts";
 import { fileCommandSchemas } from "./file-commands.ts";
 import { gitCommandSchemas } from "./git-commands.ts";
+import {
+  liveModulesCompileRequestSchema,
+  liveModulesGetUrlRequestSchema,
+  liveModulesRegisterRootRequestSchema,
+  liveModulesUnregisterRootRequestSchema,
+} from "./live-modules.ts";
 import { panelTransferPierCommandSchemas } from "./panel-transfer.ts";
 import {
   pierHomeInfoRequestSchema,
@@ -311,6 +317,18 @@ export const pierCommandSchema = z.discriminatedUnion("type", [
   }),
   skillsPierBindingsMutateRequestSchema.extend({
     type: z.literal("skills.pierBindings.unbind"),
+  }),
+  liveModulesRegisterRootRequestSchema.extend({
+    type: z.literal("liveModules.registerRoot"),
+  }),
+  liveModulesUnregisterRootRequestSchema.extend({
+    type: z.literal("liveModules.unregisterRoot"),
+  }),
+  liveModulesCompileRequestSchema.extend({
+    type: z.literal("liveModules.compile"),
+  }),
+  liveModulesGetUrlRequestSchema.extend({
+    type: z.literal("liveModules.getUrl"),
   }),
   rulesSnapshotRequestSchema.extend({
     type: z.literal("rules.snapshot"),

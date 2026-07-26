@@ -14,7 +14,9 @@
       "!coverage",
       "!pnpm-lock.yaml",
       "!src/renderer/app/globals.css",
-      "!docs/**/*.html"
+      "!docs/**/*.html",
+      "!.pier/canvases",
+      "!fixtures/live-modules"
     ]
   },
   "css": {

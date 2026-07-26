@@ -11,9 +11,17 @@ describe("buildCspPolicy", () => {
       directive.includes("pier-file-preview:")
     );
 
+    // pier-file-preview is img-only; pier-live may share the same img-src line.
     expect(previewDirectives).toEqual([
-      expect.stringMatching(/^img-src .* pier-file-preview:$/),
+      expect.stringMatching(/^img-src .* pier-file-preview:/u),
     ]);
+    expect(
+      directives.some(
+        (directive) =>
+          directive.startsWith("script-src ") &&
+          directive.includes("pier-file-preview:")
+      )
+    ).toBe(false);
   });
 
   it("allows Shiki wasm compilation without production unsafe-eval", () => {

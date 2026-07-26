@@ -415,6 +415,11 @@ export interface RendererPluginContext {
     beforeSuspend(participant: RendererPluginSuspendParticipant): () => void;
   };
   /**
+   * Host Live Modules (C 轨). Compile canvases; watch via
+   * `onChanged` (`pier://live-modules:changed`). Recompile on `stale`.
+   */
+  liveModules: import("./live-modules-context.ts").RendererLiveModulesApi;
+  /**
    * 通知能力。error/info/success/loading 是应用内短 toast(由宿主统一渲染与
    * 排队,插件不感知具体 toast 库);可带可选 action(如撤销)。长说明/错误详情
    * 走 dialogs.alert。system 是 OS 级系统通知(走 main 进程 Electron

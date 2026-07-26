@@ -52,6 +52,7 @@ import { createPluginEnvironmentsContext } from "./host-environments-context.ts"
 import { createPluginFilesContext } from "./host-files-context.ts";
 import { createPluginGitContext } from "./host-git-context.ts";
 import { createHostGroupContentContext } from "./host-group-content-context.tsx";
+import { createHostLiveModulesApi } from "./host-live-modules.ts";
 import { createPluginPanelsContext } from "./host-panels-context.ts";
 import { createPluginTerminalContext } from "./host-terminal-context.ts";
 import { createPluginTerminalsContext } from "./host-terminals-context.ts";
@@ -361,6 +362,7 @@ export function createRendererPluginContext(
         ),
     },
     i18n: createPluginI18n(entry),
+    liveModules: createHostLiveModulesApi(entry),
     lifecycle: {
       beforeSuspend: (barrier) =>
         entry
