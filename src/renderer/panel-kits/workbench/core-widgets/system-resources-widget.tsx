@@ -95,16 +95,27 @@ function kpiLabel(id: ResourceKpiId, t: ReturnType<typeof useT>): string {
 function kpiValue(
   id: ResourceKpiId,
   snapshot: PierResourceSnapshot,
-  locale: string
+  locale: string,
+  t: ReturnType<typeof useT>
 ): string {
   const { summary } = snapshot;
   switch (id) {
     case "totalMemory":
       return formatBytes(summary.totalRelatedMemoryBytes, locale);
-    case "totalCpu":
-      return summary.totalRelatedCpuPercent === null
-        ? "—"
-        : formatPercent(summary.totalRelatedCpuPercent, locale);
+    case "totalCpu": {
+      if (summary.totalRelatedCpuPercent === null) {
+        return "—";
+      }
+      const value = formatPercent(summary.totalRelatedCpuPercent, locale);
+      const cores = summary.hostLogicalCpuCount;
+      if (cores !== undefined && cores > 0) {
+        return t("workbench.widget.systemResources.totalCpuWithCores", {
+          cores,
+          value,
+        });
+      }
+      return value;
+    }
     case "appMemory":
       return formatBytes(summary.pierAppMemoryBytes, locale);
     case "workloadMemory":
@@ -209,7 +220,9 @@ export function SystemResourcesWidget({
   const showFooter = density !== "compact";
   // h≥3 有会话列表区（空态也占位，避免只剩 KPI 悬空）
   const showSessionList = density !== "compact";
-  const sessions = snapshot.sessions.slice(0, Math.max(rowLimit, 1));
+  const allSessions = snapshot.sessions;
+  const sessions = allSessions.slice(0, Math.max(rowLimit, 1));
+  const sessionsTruncated = allSessions.length > sessions.length;
   const hostFree = snapshot.summary.hostMemoryFreeBytes;
   const observedAt =
     snapshot.sampledAt > 0
@@ -259,7 +272,7 @@ export function SystemResourcesWidget({
             key={id}
             label={kpiLabel(id, t)}
             role={index === 0 ? "primary" : "secondary"}
-            value={kpiValue(id, snapshot, locale)}
+            value={kpiValue(id, snapshot, locale, t)}
           />
         ))}
       </div>
@@ -270,7 +283,12 @@ export function SystemResourcesWidget({
           data-testid="pier-resources-sessions"
         >
           <span className="shrink-0 text-muted-foreground text-xs">
-            {t("workbench.widget.systemResources.sessionsHeading")}
+            {sessionsTruncated
+              ? t("workbench.widget.systemResources.sessionsShown", {
+                  shown: sessions.length,
+                  total: allSessions.length,
+                })
+              : t("workbench.widget.systemResources.sessionsHeading")}
           </span>
           {sessions.length === 0 ? (
             <div className="flex min-h-0 flex-1 flex-col justify-center">

@@ -7,6 +7,7 @@ import type { PanelEnvMarker } from "./panel-env-scan.ts";
 import type { ProcessTableRow } from "./process-table.ts";
 import {
   aggregateFromRoot,
+  pickPreferredResolvedRoot,
   reconcileTerminalSessionRoots,
   resolveRootFromPid,
 } from "./resolve-session-roots.ts";
@@ -58,15 +59,19 @@ export function identityFromActivity(
 
 /**
  * 组装 L2 session 行：
- * 1) 登记表（create 时写入）保证空闲终端也有行
- * 2) reconcile 绑定 login/shell 根（env 标记优先；无歧义时 1:1 发现）
+ * 1) 登记表（create 时写入 seed）保证空闲终端也有行
+ * 2) reconcile 绑定 login 根（seed / env 标记优先；无歧义时 1:1 发现）
  * 3) 活动身份 join
- * 4) 登记尚未绑根但有 marker 时，用 marker.pid 即时聚合（reload 竞态）
+ * 4) 登记尚未绑根但有 marker 时，用 marker 解析（prefer login）即时聚合
  */
 export function assembleSessionRows(input: {
   activities: readonly ForegroundActivity[];
   appPids: readonly number[];
   markers: readonly PanelEnvMarker[];
+  /**
+   * Linux 上 ps %cpu 是生命周期均值，会话 CPU 置 null，只保留内存/树。
+   */
+  nullSessionCpu?: boolean;
   processes: readonly ProcessTableRow[];
 }): SessionResourceRow[] {
   const sessions = reconcileTerminalSessionRoots({
@@ -100,12 +105,14 @@ export function assembleSessionRows(input: {
     ])
   );
 
-  const markerByKey = new Map<string, PanelEnvMarker>();
+  const markersByKey = new Map<string, PanelEnvMarker[]>();
   for (const marker of input.markers) {
     const key = panelKey(marker.windowId, marker.panelId);
-    // 同 panel 多个标记时保留首次即可（resolve 会向上爬）
-    if (!markerByKey.has(key)) {
-      markerByKey.set(key, marker);
+    const list = markersByKey.get(key);
+    if (list) {
+      list.push(marker);
+    } else {
+      markersByKey.set(key, [marker]);
     }
   }
 
@@ -113,10 +120,11 @@ export function assembleSessionRows(input: {
   for (const key of keys) {
     const registered = sessionByKey.get(key);
     const activity = activityByPanel.get(key);
-    const marker = markerByKey.get(key);
-    const panelId = registered?.panelId ?? activity?.panelId ?? marker?.panelId;
+    const markers = markersByKey.get(key) ?? [];
+    const panelId =
+      registered?.panelId ?? activity?.panelId ?? markers[0]?.panelId;
     const windowId =
-      registered?.windowId ?? activity?.windowId ?? marker?.windowId;
+      registered?.windowId ?? activity?.windowId ?? markers[0]?.windowId;
     if (!(panelId && windowId)) {
       continue;
     }
@@ -128,19 +136,30 @@ export function assembleSessionRows(input: {
     let rootPid = registered?.rootPid ?? null;
     let shellPid = registered?.shellPid ?? registered?.rootPid ?? null;
 
-    // 登记未绑根、但 env 已标记：即时从 marker 解析并聚合
-    if (rootPid === null && marker !== undefined) {
-      const resolved = resolveRootFromPid(marker.pid, input.processes);
-      rootPid = resolved.rootPid;
-      shellPid = resolved.shellPid ?? resolved.rootPid;
+    // 登记未绑根、但 env 已标记：即时从 marker 解析并聚合（prefer login）
+    if (rootPid === null && markers.length > 0) {
+      const preferred = pickPreferredResolvedRoot(
+        markers.map((marker) => resolveRootFromPid(marker.pid, input.processes))
+      );
+      if (preferred) {
+        rootPid = preferred.rootPid;
+        shellPid = preferred.shellPid ?? preferred.rootPid;
+      }
     }
 
     if (rootPid !== null) {
       const agg = aggregateFromRoot(rootPid, input.processes);
-      cpuPercent = agg.cpuPercent;
+      cpuPercent = input.nullSessionCpu ? null : agg.cpuPercent;
       memoryBytes = agg.memoryBytes;
       processCount = agg.processCount;
-      topProcess = agg.topProcess;
+      if (input.nullSessionCpu) {
+        topProcess =
+          agg.topProcess === null
+            ? null
+            : { ...agg.topProcess, cpuPercent: null };
+      } else {
+        topProcess = agg.topProcess;
+      }
     }
 
     const hot =

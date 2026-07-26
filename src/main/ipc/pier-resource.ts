@@ -6,25 +6,15 @@ import { foregroundActivityService } from "./foreground-activity.ts";
 
 /**
  * 资源快照 IPC。
- * 采样含同步 `ps`，先 `setImmediate` 让出一轮 event loop，避免在
- * `ipcMain.handle` 调用栈上直接堵死菜单/焦点/其它 invoke。
+ * 采样为异步 `ps`（主路径不 `execFileSync` 堵 event loop）；
+ * 多窗并发由 sample 层单飞合并。
  */
 export function registerPierResourceIpc(ipcMain: IpcMain): void {
   ipcMain.handle(
     PIER.PIER_RESOURCE_SNAPSHOT,
-    (): Promise<PierResourceSnapshot> =>
-      new Promise((resolve, reject) => {
-        setImmediate(() => {
-          try {
-            resolve(
-              samplePierResource({
-                activities: foregroundActivityService.snapshot().activities,
-              })
-            );
-          } catch (error) {
-            reject(error instanceof Error ? error : new Error(String(error)));
-          }
-        });
+    async (): Promise<PierResourceSnapshot> =>
+      samplePierResource({
+        activities: foregroundActivityService.snapshot().activities,
       })
   );
 }

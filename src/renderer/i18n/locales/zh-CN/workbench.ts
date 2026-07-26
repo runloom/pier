@@ -191,7 +191,8 @@ export const workbench = {
     systemResources: {
       appMemory: "Pier 本体",
       cpuTrend: "相关 CPU 趋势",
-      description: "查看 Pier 与终端占用的 CPU 和内存",
+      description:
+        "查看 Pier 与终端占用的 CPU 和内存。内存为进程常驻估算，共享页可能重复计。",
       error: "无法加载工作台资源",
       errorHint: "重试以重新采样 Pier 与终端占用。",
       hostFree: "本机可用 {{value}}",
@@ -205,8 +206,10 @@ export const workbench = {
       sessionsEmpty: "暂无终端负载",
       sessionsEmptyHint: "打开终端后，这里会显示各终端占用的 CPU 和内存。",
       sessionsHeading: "终端与负载",
+      sessionsShown: "显示 {{shown}} / {{total}}",
       title: "工作台资源",
       totalCpu: "相关 CPU",
+      totalCpuWithCores: "{{value}} · {{cores}} 核",
       totalMemory: "相关内存",
       updatedAt: "{{relative}}更新",
       workloadMemory: "终端负载",

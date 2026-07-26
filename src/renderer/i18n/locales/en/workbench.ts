@@ -199,10 +199,11 @@ export const workbench = {
     systemResources: {
       appMemory: "Pier app",
       cpuTrend: "Related CPU trend",
-      description: "CPU and memory used by Pier and its terminals",
+      description:
+        "CPU and memory used by Pier and its terminals. Memory is estimated from process resident size and may double-count shared pages.",
       error: "Couldn't load workbench resources",
       errorHint: "Retry to sample Pier and terminal usage again.",
-      hostFree: "Host free {{value}}",
+      hostFree: "Host available {{value}}",
       pierProcesses: "Pier processes ({{count}})",
       roleGpu: "Graphics",
       roleMain: "Main process",
@@ -214,8 +215,10 @@ export const workbench = {
       sessionsEmptyHint:
         "Open a terminal to see each terminal’s CPU and memory usage here.",
       sessionsHeading: "Terminals & workloads",
+      sessionsShown: "Showing {{shown}} of {{total}}",
       title: "Workbench resources",
       totalCpu: "Related CPU",
+      totalCpuWithCores: "{{value}} · {{cores}} cores",
       totalMemory: "Related memory",
       updatedAt: "Updated {{relative}}",
       workloadMemory: "Terminals",
