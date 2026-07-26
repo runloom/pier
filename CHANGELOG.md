@@ -4,6 +4,33 @@
 
 ## [Unreleased]
 
+## [0.1.9] - 2026-07-26
+
+### Added
+
+- **Live Modules（C-track）与 Canvas 预览。** 宿主侧 `live-modules` 编译管线
+  （esbuild + 多框架插件）与 `pier-live://` 协议；Files 插件可预览
+  `.canvas.*` 模块；`.pier/canvases` 样例与 fixtures 一并入库。
+- **工作台「全部刷新」。** 统一 core/插件物料的 refresh action 与 token 刷新；
+  账号用量物料（Claude / Codex / Grok）接入共享 refresh-all 路径。
+- **消息中心快捷键与关闭策略。** `⌘⇧N` 切换消息中心 Popover；卡片导航与
+  Header「全部已读 / 勿扰」成功后自动关闭。
+- **标签页操作简洁提示。** 最大化 / 新建等 tab 动作使用短产品文案，并在
+  tooltip 中附带快捷键。
+
+### Fixed
+
+- **宿主独占确认弹窗尺寸。** `alert` / `confirm` / `prompt` / `choice` 宽度由
+  宿主按 kind 固定，调用方与插件 facade 不再传 `size`。
+- **技能库漂移不再阻断智能体启动。** 与 launch gate 对齐，避免 library-drift
+  误拦。
+- **恢复的智能体结果空态。** 终端「已恢复结果」视图改为产品向空态文案与布局。
+
+### Plugins
+
+- 官方插件 patch：`pier.claude` 1.3.4、`pier.codex` 1.4.5、`pier.grok` 1.1.5、
+  `pier.ssh` 1.0.3（账号物料 refresh-all 与清理）。
+
 ## [0.1.8] - 2026-07-26
 
 ### Added
