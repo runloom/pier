@@ -272,6 +272,12 @@ export const taskRecentEntrySchema = z
   .object({
     command: z.string().min(1),
     cwd: z.string().min(1),
+    /**
+     * Git common dir（`rev-parse --git-common-dir` 绝对路径）。
+     * 同一仓库的多个 worktree 共享此值；package-script 的 frecency 按此作用域合并。
+     * 旧数据可缺省，加载时会按 cwd 补齐。
+     */
+    gitCommonDir: z.string().min(1).optional(),
     lastUsedAt: z.number().int().optional(),
     label: z.string().min(1),
     source: z.literal("history"),

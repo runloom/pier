@@ -42,7 +42,7 @@ export function createTaskCatalog({
       recentTasks: recent.entries(),
       ...(homeDir ? { homeDir } : {}),
     } satisfies CollectTaskCandidatesOptions);
-    return { ...result, tasks: recent.sort(result.tasks) };
+    return { ...result, tasks: await recent.sort(result.tasks) };
   };
 
   return {
