@@ -4,6 +4,8 @@
 
 ## [Unreleased]
 
+## [0.1.8] - 2026-07-26
+
 ### Added
 
 - **统一消息中心。** main 侧 NotificationCenterService 统一接收系统/后台
