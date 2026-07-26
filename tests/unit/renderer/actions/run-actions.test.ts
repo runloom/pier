@@ -388,7 +388,7 @@ describe("run actions", () => {
 
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
       focus: false,
-      forceRestart: false,
+      forceRestart: true,
       mode: "background",
       placement: "active-tab",
       projectRootPath: "/Users/dev/ABC/pier",
@@ -421,7 +421,7 @@ describe("run actions", () => {
 
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
       focus: true,
-      forceRestart: false,
+      forceRestart: true,
       placement: "active-tab",
       projectRootPath: "/Users/dev/ABC/pier",
       targetGroupId: "group-source",
@@ -447,35 +447,12 @@ describe("run actions", () => {
 
     expect(window.pier.tasks.spawn).toHaveBeenCalledWith({
       focus: true,
-      forceRestart: false,
+      forceRestart: true,
       placement: "active-tab",
       projectRootPath: "/Users/dev/ABC/pier",
       taskId: "package-script:test",
     });
     expect(quickPick.renderItem).toBeUndefined();
-  });
-
-  it("does not locally activate an already-running task panel after main focuses it", async () => {
-    const { terminalOther } = installWorkspaceApi();
-    vi.mocked(window.pier.tasks.spawn).mockResolvedValueOnce({
-      panelId: "terminal-other",
-      status: "already-running",
-      windowId: "main",
-    });
-    disposeRunActions = registerRunActions();
-
-    await runTaskAction();
-    const quickPick = useCommandPaletteController.getState().quickPick;
-    const target = quickPick?.sections
-      ?.flatMap((section) => section.items)
-      .find((item) => item.id === "package-script:test");
-    if (!(quickPick && target)) {
-      throw new Error("expected task item");
-    }
-
-    await quickPick.onAccept(target);
-
-    expect(terminalOther.api.setActive).not.toHaveBeenCalled();
   });
 
   it("does not show loading toast when starting a task from the command palette", async () => {
@@ -600,7 +577,7 @@ describe("run actions", () => {
 
     expect(window.pier.tasks.spawn).toHaveBeenLastCalledWith({
       focus: false,
-      forceRestart: false,
+      forceRestart: true,
       inputs: { pkg: "renderer" },
       mode: "background",
       placement: "active-tab",

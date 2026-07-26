@@ -443,6 +443,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
             ? {
                 content: (
                   <TerminalRuntimeControl
+                    dismissRun={runtimeControl.dismissRun}
                     now={runtimeControl.now}
                     panelId={panelId}
                     runs={runtimeControl.runs}

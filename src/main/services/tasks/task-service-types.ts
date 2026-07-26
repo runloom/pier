@@ -105,6 +105,11 @@ export interface TaskService {
   recordRecent(launch: TaskLaunchPlan): Promise<void>;
   recordStarted(record: TaskStartedRecord): void;
   runsSnapshot(windowId?: string | undefined): TaskRunsSnapshot;
+  /** 进程自然退出时是否保留 terminal surface（任务结果 panel 不自动关）。 */
+  shouldRetainSurfaceOnProcessExit(
+    panelId: string,
+    windowId?: string | undefined
+  ): boolean;
   shutdownForQuit(graceMs?: number): Promise<void>;
   startBackgroundRun(args: {
     clientEnv?: Record<string, string> | undefined;

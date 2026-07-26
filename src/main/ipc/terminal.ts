@@ -128,6 +128,9 @@ export function registerTerminalIpc(
       deps.taskService?.isStopRequested(panelId, windowId) ?? false,
     markTaskPanelClosed: (panelId, windowId) =>
       deps.taskService?.markPanelClosed(panelId, windowId),
+    shouldRetainSurfaceOnProcessExit: (panelId, windowId) =>
+      deps.taskService?.shouldRetainSurfaceOnProcessExit(panelId, windowId) ??
+      false,
   });
   bindTerminalTransferRuntime({
     addon,

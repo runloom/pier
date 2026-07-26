@@ -10,17 +10,18 @@ import {
   useRef,
   useState,
 } from "react";
+import { useTaskRunControlDismissStore } from "@/stores/task-run-control-dismiss.store.ts";
 import {
   taskRunsForPanel,
   useTaskRunsStore,
 } from "@/stores/task-runs.store.ts";
-import { notifyTaskRunFinishedIfNeeded } from "./notify-task-run-finished.ts";
 
 export const RUNTIME_CONTROL_EXIT_MS = 180;
 
 export type TerminalRuntimeControlPhase = "exiting" | "visible";
 
 interface TerminalRuntimeControlPresentation {
+  dismissRun(runId: string): void;
   mounted: boolean;
   now: number;
   phase: TerminalRuntimeControlPhase;
@@ -97,10 +98,18 @@ export function currentTaskRunsByLogicalTask(
   return currentRuns.toSorted(compareTaskRuns);
 }
 
-function shouldPresentRun(run: TaskRunControlEntry): boolean {
-  // 浮层只覆盖活跃进程控制。
-  // 终态：前台任务靠 tab/输出；后台任务靠 task-run.finished toast（查看详情）。
-  return isActiveTaskRunStatus(run.status);
+/**
+ * 活跃与终态都在场；用户点「关闭」dismiss 后才退场。
+ * 不自动打开输出面板；不靠消息中心兜底。
+ */
+function shouldPresentRun(
+  run: TaskRunControlEntry,
+  dismissedRunIds: ReadonlySet<string>
+): boolean {
+  if (dismissedRunIds.has(run.runId)) {
+    return false;
+  }
+  return true;
 }
 
 function reducedMotionEnabled(): boolean {
@@ -123,16 +132,19 @@ function sameRuns(
 /**
  * 运行控制浮层的唯一呈现状态机。
  *
- * 任务运行状态仍由 TaskService / taskRuns store 所有；这里仅负责退出在场管理。
- * 活跃任务显示控制条；进入终态后立即退场。
- * 结果反馈：前台靠面板/tab；后台由 notifyTaskRunFinishedIfNeeded 发系统消息。
- * 退出阶段冻结最后一次完整 runs，保证内容与容器作为一个整体退场。
+ * 活跃与终态均保留控制条（停止→关闭 / 重新运行）；用户 dismiss 后才退场。
+ * 后台「关闭」只 dismiss 控制条，不关发起终端（方案 A）。
  */
 export function useTerminalRuntimeControlPresentation(
   panelId: string
 ): TerminalRuntimeControlPresentation {
   const snapshot = useTaskRunsStore((state) => state.snapshot);
+  const dismissed = useTaskRunControlDismissStore((state) => state.dismissed);
   const [now, setNow] = useState(() => Date.now());
+  const dismissedRunIds = useMemo(
+    () => new Set(Object.keys(dismissed)),
+    [dismissed]
+  );
   const panelRuns = useMemo(
     () => taskRunsForPanel(snapshot, panelId),
     [panelId, snapshot]
@@ -141,7 +153,10 @@ export function useTerminalRuntimeControlPresentation(
     () => currentTaskRunsByLogicalTask(panelRuns),
     [panelRuns]
   );
-  const eligibleRuns = currentRuns.filter(shouldPresentRun);
+  const eligibleRuns = useMemo(
+    () => currentRuns.filter((run) => shouldPresentRun(run, dismissedRunIds)),
+    [currentRuns, dismissedRunIds]
+  );
   const [retainedRuns, setRetainedRuns] = useState<
     readonly TaskRunControlEntry[]
   >(() => eligibleRuns);
@@ -153,6 +168,9 @@ export function useTerminalRuntimeControlPresentation(
   const exitTimerRef = useRef<number | null>(null);
 
   const setPhase = useCallback((next: InternalPhase) => {
+    if (phaseRef.current === next) {
+      return;
+    }
     phaseRef.current = next;
     setPhaseState(next);
   }, []);
@@ -162,6 +180,14 @@ export function useTerminalRuntimeControlPresentation(
       exitTimerRef.current = null;
     }
   }, []);
+
+  const dismissRun = useCallback((runId: string) => {
+    useTaskRunControlDismissStore.getState().dismiss(runId);
+  }, []);
+
+  // 不在 active/stopping 时 undismiss：优雅停止后 run 仍是 stopping，
+  // 任意 TaskRuns 快照刷新都会把条拉回，抵消「停止即收条」。
+  // 重新运行会分配新 runId，天然可展示，无需 undismiss 旧 id。
 
   useEffect(() => {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
@@ -175,12 +201,6 @@ export function useTerminalRuntimeControlPresentation(
     [clearExitTimer]
   );
 
-  useEffect(() => {
-    for (const run of currentRuns) {
-      notifyTaskRunFinishedIfNeeded(run);
-    }
-  }, [currentRuns]);
-
   useLayoutEffect(() => {
     if (eligibleRuns.length > 0) {
       clearExitTimer();
@@ -192,7 +212,6 @@ export function useTerminalRuntimeControlPresentation(
       return;
     }
 
-    // 终态不单独挂载：只有从可见活跃态退出时才播退场动画。
     if (phaseRef.current === "hidden" || retainedRunsRef.current.length === 0) {
       clearExitTimer();
       if (retainedRunsRef.current.length > 0) {
@@ -226,11 +245,11 @@ export function useTerminalRuntimeControlPresentation(
     );
   }, [clearExitTimer, currentRuns, eligibleRuns, setPhase]);
 
-  // 终态已无 linger；保留 API 以兼容浮层 interaction 接线。
   const setAutoExitPause = useCallback((_paused: boolean) => {}, []);
 
   const runs = eligibleRuns.length > 0 ? eligibleRuns : retainedRuns;
   return {
+    dismissRun,
     mounted: runs.length > 0,
     now,
     phase: eligibleRuns.length > 0 || phase === "hidden" ? "visible" : phase,

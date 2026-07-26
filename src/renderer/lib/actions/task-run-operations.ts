@@ -70,10 +70,15 @@ export function forceStopAvailable(
   );
 }
 
+/**
+ * 停止任务。
+ * @returns `"dismiss"` 优雅停止已受理，调用方应收起控制条；
+ *          `"keep"` 强制停止 / 失败 / 用户取消确认，控制条保留。
+ */
 export async function stopTaskRun(
   run: TaskRunControlEntry,
   force: boolean
-): Promise<void> {
+): Promise<"dismiss" | "keep"> {
   if (force) {
     const confirmed = await showAppConfirm({
       body: i18next.t("terminal.runtimeControl.forceStopBody"),
@@ -82,7 +87,7 @@ export async function stopTaskRun(
       title: i18next.t("terminal.runtimeControl.forceStopTitle"),
     });
     if (!confirmed) {
-      return;
+      return "keep";
     }
   }
   try {
@@ -92,12 +97,17 @@ export async function stopTaskRun(
         body: result.failures.map((failure) => failure.message).join("\n"),
         title: i18next.t("terminal.runtimeControl.stopFailed"),
       });
+      return "keep";
     }
+    // 优雅停止：用户已明确结束，控制条直接收起，不必再点「关闭」。
+    // 强制停止：保留条（可能还有半截输出 / 重跑）。
+    return force ? "keep" : "dismiss";
   } catch (error) {
     await showAppAlert({
       body: error instanceof Error ? error.message : String(error),
       title: i18next.t("terminal.runtimeControl.stopFailed"),
     });
+    return "keep";
   }
 }
 

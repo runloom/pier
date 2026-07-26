@@ -13,7 +13,6 @@ const RENDERER_ROOT = join(ROOT, "src", "renderer");
 const SYSTEM_EVENT_FILES = [
   "src/renderer/stores/app-update.store.ts",
   "src/renderer/stores/agent-runtime-index.store.ts",
-  "src/renderer/panel-kits/terminal/notify-task-run-finished.ts",
   "src/renderer/components/common/agent-runtime-index-bridge.tsx",
   "src/renderer/components/common/task-runs-error-bridge.tsx",
 ];

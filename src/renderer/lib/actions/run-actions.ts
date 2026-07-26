@@ -233,8 +233,9 @@ async function spawnTaskWithInputFlow(
 }
 
 function handleTaskAccept(project: ProjectContext, item: QuickPickItem) {
+  // 与控制条「重新运行」同语义：未关闭的同任务复用 / 顶替旧 run，不另开 tab。
   return spawnTaskWithInputFlow(project, item.id, {
-    forceRestart: false,
+    forceRestart: true,
     mode: project.defaultTaskSpawnMode ?? "terminal-tab",
   });
 }
