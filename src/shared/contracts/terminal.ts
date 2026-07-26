@@ -478,12 +478,13 @@ export interface TerminalAPI {
    */
   setFont(panelId: string, font: TerminalFont): void;
   /**
-   * 设置 Agent 产品 sessionTitle（source=user 可覆盖 auto）。
+   * 用户改名。`rule` / `model` 是 main 内部层级，renderer 不得写入——
+   * 因此 source 固定 `user`（最高秩，可覆盖任何自动标题）。
    * 失败安全：返回 ok/applied，不抛。
    */
   setSessionTitle(
     panelId: string,
-    input: { title: string; source: "auto" | "user" }
+    input: { title: string; source: "user" }
   ): Promise<{ applied: boolean; ok: boolean }>;
   setup(): Promise<CreateTerminalResult>;
 }

@@ -49,7 +49,12 @@ const baseActivityFields = {
   updatedAt: z.number().int().nonnegative(),
 };
 
-const agentSessionTitleSourceSchema = z.enum(["user", "auto"]);
+/**
+ * 标题来源即优先级秩：rule(1) < model(2) < user(3)。
+ * 历史值 `auto` 等价 `rule`，读取期由 normalizeAgentSessionTitleSource 归一，
+ * 永不写回。
+ */
+export const agentSessionTitleSourceSchema = z.enum(["rule", "model", "user"]);
 
 const agentActivitySchema = z
   .object({

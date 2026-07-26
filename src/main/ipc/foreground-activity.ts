@@ -1,5 +1,8 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
+import type {
+  AgentSessionTitleSource,
+  ForegroundActivityBroadcast,
+} from "@shared/contracts/foreground-activity.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app, type IpcMain } from "electron";
@@ -9,7 +12,6 @@ import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
 } from "../services/agents/agent-hooks-install.ts";
-import { applyAgentSessionTitleFromHookEvent } from "../services/agents/agent-session-title-effects.ts";
 import {
   isAgentStatusHooksIngestEnabled,
   setAgentStatusHooksIngestEnabled,
@@ -23,6 +25,10 @@ import {
   type AgentTerminalReconciler,
   createAgentTerminalReconciler,
 } from "../services/agents/integrations/terminal-reconciliation.ts";
+import {
+  applyAgentSessionTitleFromHookEvent,
+  forgetPanelTitleState,
+} from "../services/agents/session-title/index.ts";
 import { isWindowDetaching } from "../services/agents/window-detaching-guard.ts";
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
 import { isBlankShellCommandLine } from "../services/foreground-activity/blank-command-line.ts";
@@ -259,6 +265,9 @@ export const foregroundActivityService = {
   },
   panelClosed(panelId: string, windowId?: string): void {
     agentTerminalReconciler?.releasePanel(panelId, windowId);
+    if (windowId) {
+      forgetPanelTitleState(windowId, panelId);
+    }
     foregroundActivityAggregator.panelClosed(panelId, windowId);
   },
   ptyExited(panelId: string, windowId?: string): void {
@@ -292,7 +301,7 @@ export const foregroundActivityService = {
   setAgentSessionTitle(
     windowId: string,
     panelId: string,
-    input: { title: string; source: "auto" | "user"; replaceAuto?: boolean }
+    input: { title: string; source: AgentSessionTitleSource }
   ): boolean {
     return foregroundActivityAggregator.setAgentSessionTitle(
       windowId,
@@ -303,7 +312,7 @@ export const foregroundActivityService = {
   hydrateAgentSessionTitle(
     windowId: string,
     panelId: string,
-    input: { title: string; source: "auto" | "user" }
+    input: { title: string; source: AgentSessionTitleSource }
   ): void {
     foregroundActivityAggregator.hydrateAgentSessionTitle(
       windowId,

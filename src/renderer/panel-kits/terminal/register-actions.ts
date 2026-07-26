@@ -2,7 +2,7 @@ import {
   agentSessionTitleInput,
   normalizeAgentSessionTitle,
   resolveAgentSessionTitle,
-} from "@shared/agent-session-title.ts";
+} from "@shared/agent-session-title/index.ts";
 import type { TerminalOperation } from "@shared/contracts/terminal.ts";
 import i18next from "i18next";
 import { Paperclip, Pencil, PenLine, Search, X } from "lucide-react";

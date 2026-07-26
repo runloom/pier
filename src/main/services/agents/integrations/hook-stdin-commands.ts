@@ -1,3 +1,8 @@
+import {
+  GREETING_ONLY_SOURCE,
+  MAX_AGENT_SESSION_TITLE_LENGTH,
+  MAX_PROMPT_SNIPPET_LENGTH,
+} from "@shared/agent-session-title/index.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   PIER_AGENT_HOOKS_DIR_MARK,
@@ -71,14 +76,27 @@ export function pierHookCommandWithStdinSessionId(
   ].join("; ");
 }
 
+/** shell 单引号转义——插值进来的表可能含 `'`（如中文引号表）。 */
+function shellSingleQuote(value: string): string {
+  return value.replaceAll("'", String.raw`'\''`);
+}
+
 /**
- * Claude UserPromptSubmit：emit 之后向 stdout 回写 hookSpecificOutput.sessionTitle
- * （双写 provider UI；Pier 仍以 FA sessionTitle 为准）。
+ * Claude UserPromptSubmit：emit 之后向 stdout 回写 hookSpecificOutput.sessionTitle，
+ * 让 Claude 自己的会话列表也有个像样的名字。
+ *
+ * **这是对第三方 UI 的顺带写入，不是 Pier 标题的真源**——Pier 的 tab 走 FA。
+ * 因此这里只做「剥标记 + 挡寒暄 + 硬截断」这个便宜子集，**不复刻**规则层的
+ * 首句/前缀/名词化流水线：把那套算法再抄一份进 shell 单行命令，正是我们要
+ * 消除的漂移源。常量与寒暄表从 shared 插值，改一处两边同时变。
  */
 export function pierClaudeUserPromptSubmitCommand(agentId: AgentKind): string {
   const nodeExecutable = shellDoubleQuote(process.execPath);
-  // Keep in sync with shared/agent-session-title strip + normalize (inline: no import).
-  const deriveAndPrint = `ELECTRON_RUN_AS_NODE=1 "${nodeExecutable}" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s);const raw=[p.prompt,p.user_prompt,p.content,p.message].find(v=>typeof v==="string");if(typeof raw!=="string")return;let t=String(raw).replace(/\\r\\n/g,"\\n").replace(/\\r/g,"\\n");const m=/<(user_query|user_message|user_prompt|human|query)\\b[^>]*>([\\s\\S]*?)<\\/\\1>/i.exec(t);if(m&&m[2].trim())t=m[2];t=t.replace(/<\\/?(?:user_query|user_message|user_prompt|human|query|system|assistant)\\b[^>]*>/gi," ").replace(/\\[Image\\s*#?\\d*\\]/gi," ").replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g," ").replace(/\\s+/g," ").trim();if(!t||/^(hi|hello|hey|yo|sup|你好|您好|嗨|哈喽|在吗|在么)[!?？。.\\s]*$/i.test(t))return;if(t.length>40){t=t.slice(0,39).trimEnd()+"…"}if(!t||t.includes("\\n"))return;process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"UserPromptSubmit",sessionTitle:t,suppressOutput:true}}))}catch{}})'`;
+  // 先 JSON.stringify 成 JS 字符串字面量，再做 shell 转义——顺序反了会把
+  // 转义引入的反斜杠再转义一次。
+  const greeting = shellSingleQuote(JSON.stringify(GREETING_ONLY_SOURCE));
+  const cap = MAX_AGENT_SESSION_TITLE_LENGTH;
+  const deriveAndPrint = `ELECTRON_RUN_AS_NODE=1 "${nodeExecutable}" -e 'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s);const raw=[p.prompt,p.user_prompt,p.content,p.message].find(v=>typeof v==="string");if(typeof raw!=="string")return;let t=String(raw).slice(0,${MAX_PROMPT_SNIPPET_LENGTH}).replace(/\\r\\n/g,"\\n").replace(/\\r/g,"\\n");const m=/<(user_query|user_message|user_prompt|human|query)\\b[^>]*>([\\s\\S]*?)<\\/\\1>/i.exec(t);if(m&&m[2].trim())t=m[2];t=t.replace(/<\\/?(?:user_query|user_message|user_prompt|human|query|system|assistant)\\b[^>]*>/gi," ").replace(/\\[Image\\s*#?\\d*\\]/gi," ").replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g," ").replace(/\\s+/g," ").trim();if(!t||new RegExp(${greeting},"i").test(t))return;if(t.length>${cap}){t=t.slice(0,${cap - 1}).trimEnd()+"…"}if(!t||t.includes("\\n"))return;process.stdout.write(JSON.stringify({hookSpecificOutput:{hookEventName:"UserPromptSubmit",sessionTitle:t,suppressOutput:true}}))}catch{}})'`;
   return [
     ...stdinIdentityExtractionLines(),
     pierHookCommand(

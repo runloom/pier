@@ -44,6 +44,7 @@ interface AgentPreferenceSnapshot {
   agentDefaultArgs: AgentDefaultArgs;
   agentDefaultEnv: AgentDefaultEnv;
   agentPermissionMode: AgentPermissionModePreference;
+  agentSessionTitleRefine: boolean;
   agentStatusHooks: boolean;
   defaultAgentId: DefaultAgentId;
   disabledAgentIds: AgentKind[];
@@ -61,6 +62,7 @@ interface AgentPreferencesState extends AgentPreferenceSnapshot {
     agentDefaultEnv: AgentDefaultEnv;
     mode: AgentPermissionModePreference;
   }) => Promise<void>;
+  setAgentSessionTitleRefine: (next: boolean) => Promise<void>;
   setAgentStatusHooks: (next: boolean) => Promise<void>;
   setDefaultAgentId: (next: DefaultAgentId) => Promise<void>;
   setDisabledAgentIds: (next: AgentKind[]) => Promise<void>;
@@ -72,6 +74,7 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
     agentDefaultArgs: {},
     agentDefaultEnv: {},
     agentPermissionMode: "manual",
+    agentSessionTitleRefine: true,
     agentStatusHooks: false,
     defaultAgentId: null,
     disabledAgentIds: [],
@@ -168,6 +171,24 @@ export const useAgentPreferencesStore = create<AgentPreferencesState>(
       }
     },
 
+    async setAgentSessionTitleRefine(next) {
+      const prev = get().agentSessionTitleRefine;
+      set({ agentSessionTitleRefine: next });
+      try {
+        const merged = await window.pier.preferences.update({
+          agentSessionTitleRefine: next,
+        });
+        useAgentPreferencesStore.getState()._hydrate(snapshotFrom(merged));
+      } catch (err) {
+        set({ agentSessionTitleRefine: prev });
+        console.error(
+          "[agent-preferences.store] setAgentSessionTitleRefine failed:",
+          err
+        );
+        throw err;
+      }
+    },
+
     async setAgentStatusHooks(next) {
       const prev = get().agentStatusHooks;
       set({ agentStatusHooks: next });
@@ -194,6 +215,7 @@ function snapshotFrom(prefs: ProjectPreferences): AgentPreferenceSnapshot {
     agentDefaultArgs: prefs.agentDefaultArgs,
     agentDefaultEnv: prefs.agentDefaultEnv,
     agentPermissionMode: prefs.agentPermissionMode,
+    agentSessionTitleRefine: prefs.agentSessionTitleRefine,
     agentStatusHooks: prefs.agentStatusHooks,
     defaultAgentId: prefs.defaultAgentId,
     disabledAgentIds: prefs.disabledAgentIds,

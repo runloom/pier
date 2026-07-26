@@ -2,7 +2,7 @@ import { formatDurationShort } from "@pier/ui/format.tsx";
 import {
   agentSessionTitleInput,
   resolveAgentSessionTitle,
-} from "@shared/agent-session-title.ts";
+} from "@shared/agent-session-title/index.ts";
 import {
   type AgentRuntimeIndexEntry,
   isAgentIndexNeedsYou,
