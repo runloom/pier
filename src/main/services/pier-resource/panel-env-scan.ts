@@ -1,6 +1,9 @@
-import { execFileSync } from "node:child_process";
+import { execFile } from "node:child_process";
 import { readdirSync, readFileSync } from "node:fs";
+import { promisify } from "node:util";
 import type { ProcessTableRow } from "./process-table.ts";
+
+const execFileAsync = promisify(execFile);
 
 export interface PanelEnvMarker {
   panelId: string;
@@ -14,6 +17,9 @@ const WINDOW_ID_RE = /(?:^|[\s\0])PIER_WINDOW_ID=([0-9]+)/;
 
 const ELECTRON_COMM_RE =
   /Electron|PierDev|Pier Helper|chrome_crashpad|Helper \(GPU\)|Helper \(Plugin\)|Helper \(Renderer\)/i;
+
+/** pid → 标记；null = 已扫过且无 PIER_PANEL_ID（生命周期内不变）。 */
+const darwinEnvCache = new Map<number, PanelEnvMarker | null>();
 
 function parseMarkerFromBlob(pid: number, blob: string): PanelEnvMarker | null {
   const panelMatch = PANEL_ID_RE.exec(blob);
@@ -87,17 +93,18 @@ export function candidatePidsForEnvScan(
   return candidates;
 }
 
-function scanDarwinEnvForPids(pids: readonly number[]): PanelEnvMarker[] {
+async function scanDarwinEnvForPids(
+  pids: readonly number[]
+): Promise<PanelEnvMarker[]> {
   if (pids.length === 0) {
     return [];
   }
   const markers: PanelEnvMarker[] = [];
-  // 分批避免超长命令行；macOS ps -E -p a,b,c 可一次读多进程 environ。
   const batchSize = 80;
   for (let offset = 0; offset < pids.length; offset += batchSize) {
     const batch = pids.slice(offset, offset + batchSize);
     try {
-      const output = execFileSync(
+      const { stdout } = await execFileAsync(
         "ps",
         ["-E", "-p", batch.join(","), "-o", "pid=", "-o", "command="],
         {
@@ -106,8 +113,21 @@ function scanDarwinEnvForPids(pids: readonly number[]): PanelEnvMarker[] {
           timeout: 2000,
         }
       );
-      for (const line of output.split("\n")) {
+      const seenInBatch = new Set<number>();
+      for (const line of stdout.split("\n")) {
         if (!line.includes("PIER_PANEL_ID=")) {
+          // 可能是无标记行；pid 解析后再记 cache miss
+          const trimmed = line.trimStart();
+          const space = trimmed.indexOf(" ");
+          if (space > 0) {
+            const pid = Number(trimmed.slice(0, space));
+            if (Number.isFinite(pid) && pid > 0) {
+              seenInBatch.add(pid);
+              if (!darwinEnvCache.has(pid)) {
+                darwinEnvCache.set(pid, null);
+              }
+            }
+          }
           continue;
         }
         const trimmed = line.trimStart();
@@ -119,13 +139,21 @@ function scanDarwinEnvForPids(pids: readonly number[]): PanelEnvMarker[] {
         if (!Number.isFinite(pid) || pid <= 0) {
           continue;
         }
+        seenInBatch.add(pid);
         const marker = parseMarkerFromBlob(pid, trimmed.slice(space + 1));
+        darwinEnvCache.set(pid, marker);
         if (marker) {
           markers.push(marker);
         }
       }
+      // 批次里请求了但 ps 未输出的 pid：记为无标记，避免下拍重扫
+      for (const pid of batch) {
+        if (!(seenInBatch.has(pid) || darwinEnvCache.has(pid))) {
+          darwinEnvCache.set(pid, null);
+        }
+      }
     } catch {
-      // 单批失败不拖垮整次采样
+      // 单批失败不拖垮整次采样；不写 cache，下拍可重试
     }
   }
   return markers;
@@ -165,25 +193,50 @@ function scanLinuxProc(pids: readonly number[] | null): PanelEnvMarker[] {
 
 /**
  * 扫描带 `PIER_PANEL_ID` + `PIER_WINDOW_ID` 的进程。
- *
- * @param appPids Electron `getAppMetrics` 的 pid（及可选 main pid）
- * @param processes 全机进程表（用于子树闭包）
+ * Darwin：按 pid 缓存 environ 结果，只扫新候选。
  */
-export function scanPanelEnvMarkers(input: {
+export async function scanPanelEnvMarkers(input: {
   appPids: readonly number[];
   processes: readonly ProcessTableRow[];
-}): PanelEnvMarker[] {
+}): Promise<PanelEnvMarker[]> {
   if (process.platform === "win32") {
     return [];
   }
   const candidates = candidatePidsForEnvScan(input.appPids, input.processes);
   if (process.platform === "linux") {
-    // Linux 可扫 /proc；优先子树候选，失败再全量。
     const scoped = scanLinuxProc(candidates);
     if (scoped.length > 0 || candidates.length === 0) {
       return scoped;
     }
     return scanLinuxProc(null);
   }
-  return scanDarwinEnvForPids(candidates);
+
+  // 清理已退出 pid 的 cache
+  const live = new Set(input.processes.map((row) => row.pid));
+  for (const pid of darwinEnvCache.keys()) {
+    if (!live.has(pid)) {
+      darwinEnvCache.delete(pid);
+    }
+  }
+
+  const markers: PanelEnvMarker[] = [];
+  const uncached: number[] = [];
+  for (const pid of candidates) {
+    const cached = darwinEnvCache.get(pid);
+    if (cached === undefined) {
+      uncached.push(pid);
+    } else if (cached !== null) {
+      markers.push(cached);
+    }
+  }
+  if (uncached.length > 0) {
+    const fresh = await scanDarwinEnvForPids(uncached);
+    markers.push(...fresh);
+  }
+  return markers;
+}
+
+/** 测试用：清空 Darwin environ 缓存。 */
+export function resetPanelEnvScanCacheForTests(): void {
+  darwinEnvCache.clear();
 }

@@ -2,6 +2,7 @@ import type { ForegroundActivity } from "@shared/contracts/foreground-activity.t
 import type { UsageAggregateSnapshot } from "@shared/contracts/usage-data.ts";
 import { activityKindCounts } from "@shared/task-activity-sources.ts";
 import i18next from "i18next";
+import { currentElectronWindowId } from "@/lib/agent-runtime/current-window-id.ts";
 import {
   activityCounts,
   useForegroundActivityStore,
@@ -21,22 +22,16 @@ import { registerMetric } from "./metric-registry.ts";
  * 幂等注册——首个消费方 import 即生效。
  */
 
-function activityInstant(
-  select: (activities: Record<string, ForegroundActivity>) => number
-): { read(): MetricValue; subscribe(listener: () => void): () => void } {
-  return {
-    read: () => ({
-      kind: "instant",
-      value: select(useForegroundActivityStore.getState().activities),
-    }),
-    subscribe: (listener) => useForegroundActivityStore.subscribe(listener),
-  };
+function activityWindowScope(): { windowId?: string } | undefined {
+  const windowId = currentElectronWindowId();
+  return windowId === undefined ? undefined : { windowId };
 }
 
 function combinedActivityInstant(
   select: (
     activities: Record<string, ForegroundActivity>,
-    taskRuns: ReturnType<typeof useTaskRunsStore.getState>["snapshot"]
+    taskRuns: ReturnType<typeof useTaskRunsStore.getState>["snapshot"],
+    scope: { windowId?: string } | undefined
   ) => number
 ): { read(): MetricValue; subscribe(listener: () => void): () => void } {
   return {
@@ -44,7 +39,8 @@ function combinedActivityInstant(
       kind: "instant",
       value: select(
         useForegroundActivityStore.getState().activities,
-        useTaskRunsStore.getState().snapshot
+        useTaskRunsStore.getState().snapshot,
+        activityWindowScope()
       ),
     }),
     subscribe: (listener) => {
@@ -61,7 +57,8 @@ function combinedActivityInstant(
 function activityByKind(): MetricValue {
   const counts = activityKindCounts(
     useForegroundActivityStore.getState().activities,
-    useTaskRunsStore.getState().snapshot
+    useTaskRunsStore.getState().snapshot,
+    activityWindowScope()
   );
   return {
     items: Array.from(counts.entries())
@@ -188,7 +185,10 @@ export function ensureCoreMetricsRegistered(): void {
       kind: "instant",
       titleKey: "workbench.metrics.activityTotal",
     },
-    ...activityInstant((activities) => Object.keys(activities).length),
+    ...combinedActivityInstant(
+      (activities, taskRuns, scope) =>
+        activityCounts(activities, taskRuns, scope).inProgress
+    ),
   });
   registerMetric({
     descriptor: {
@@ -198,18 +198,33 @@ export function ensureCoreMetricsRegistered(): void {
       titleKey: "workbench.metrics.activityRunning",
     },
     ...combinedActivityInstant(
-      (activities, taskRuns) => activityCounts(activities, taskRuns).running
+      (activities, taskRuns, scope) =>
+        activityCounts(activities, taskRuns, scope).running
     ),
   });
+  // 历史 id 保留：语义已升级为 needsYou（waiting + error）。
   registerMetric({
     descriptor: {
       format: "count",
       id: "core.activity.waiting",
       kind: "instant",
-      titleKey: "workbench.metrics.activityWaiting",
+      titleKey: "workbench.metrics.activityNeedsYou",
     },
     ...combinedActivityInstant(
-      (activities, taskRuns) => activityCounts(activities, taskRuns).waiting
+      (activities, taskRuns, scope) =>
+        activityCounts(activities, taskRuns, scope).needsYou
+    ),
+  });
+  registerMetric({
+    descriptor: {
+      format: "count",
+      id: "core.activity.needsYou",
+      kind: "instant",
+      titleKey: "workbench.metrics.activityNeedsYou",
+    },
+    ...combinedActivityInstant(
+      (activities, taskRuns, scope) =>
+        activityCounts(activities, taskRuns, scope).needsYou
     ),
   });
   registerMetric({

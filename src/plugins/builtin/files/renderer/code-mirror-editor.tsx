@@ -14,7 +14,11 @@ import {
 } from "./code-mirror-search-state.ts";
 import type { FileEditorAdapterProps } from "./file-editor-adapter-types.ts";
 import { takeFilesPanelViewSeed } from "./files-panel-transfer-state.ts";
-import { FilesSearchBar } from "./files-search-bar.tsx";
+import {
+  FILES_IN_FILE_SEARCH_BAR_CLASSNAME,
+  FilesSearchBar,
+} from "./files-search-bar.tsx";
+import { useFilesInFileSearchEscape } from "./use-files-in-file-search-escape.ts";
 
 export function CodeMirrorEditor({
   controller,
@@ -30,6 +34,7 @@ export function CodeMirrorEditor({
   const handledSearchRequestRef = useRef(searchRequest);
   const labelRef = useRef(labels?.sourceEditor ?? "Source editor");
   const lastHostRef = useRef<HTMLDivElement | null>(null);
+  const surfaceRef = useRef<HTMLDivElement | null>(null);
   const openSearchRef = useRef<() => void>(() => undefined);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
@@ -115,6 +120,8 @@ export function CodeMirrorEditor({
       controller.clearSearch(editorSessionId, replaceValue, searchOptions)
     );
   }, [controller, editorSessionId, replaceValue, searchOptions]);
+
+  useFilesInFileSearchEscape(searchOpen, closeSearch, surfaceRef);
 
   const handleSearchChange = useCallback(
     (nextValue: string) => {
@@ -208,10 +215,13 @@ export function CodeMirrorEditor({
   })();
 
   return (
-    <div className="relative h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground">
+    <div
+      className="relative h-full min-h-0 flex-1 overflow-hidden bg-background text-foreground"
+      ref={surfaceRef}
+    >
       {searchOpen ? (
         <FilesSearchBar
-          className="absolute top-2 right-3 z-20 max-w-[calc(100%-1.5rem)]"
+          className={FILES_IN_FILE_SEARCH_BAR_CLASSNAME}
           focusSignal={searchFocusSignal}
           labels={{
             close: searchLabels?.close ?? "Close",

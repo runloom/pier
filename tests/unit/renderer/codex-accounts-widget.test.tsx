@@ -679,37 +679,20 @@ describe("AccountsWidget (usage)", () => {
     expect(container.querySelector('[data-slot="widget-error"]')).toBeNull();
   });
 
-  it("hides plan summary on compact height unless account is unavailable", async () => {
+  it("hides the whole account header on compact height", async () => {
     const { context } = contextWithSnapshot(usageSnapshot());
-    const { rerender, container } = render(
+    const { container } = render(
       <AccountsWidget
         context={context}
         {...baseProps({ size: { w: 4, h: 2 } })}
       />
     );
-    await screen.findByText("test@codex.dev");
+    // 额度仍可见
+    await screen.findByText("5-hour quota");
     expect(container.querySelector('[data-density="compact"]')).not.toBeNull();
-    // 默认 usageSnapshot 账号无 error → compact 藏 plan 副文案
-    expect(screen.queryByText(/unavailable/i)).toBeNull();
-
-    const errorSnap = usageSnapshot({
-      accounts: [
-        {
-          error: "token expired",
-          id: "acc-1",
-          label: "test@codex.dev",
-          status: "error",
-        },
-      ],
-    });
-    const { context: errorContext } = contextWithSnapshot(errorSnap);
-    rerender(
-      <AccountsWidget
-        context={errorContext}
-        {...baseProps({ size: { w: 4, h: 2 } })}
-      />
-    );
-    expect(await screen.findByText("Account unavailable")).toBeDefined();
+    // 小卡整段隐藏账号区（邮箱 / 套餐 / 切换）
+    expect(screen.queryByText("test@codex.dev")).toBeNull();
+    expect(container.querySelector('[data-slot="item"]')).toBeNull();
   });
 
   it("keeps primary quota windows before model-specific windows", () => {

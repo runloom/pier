@@ -26,12 +26,20 @@ export function ActivityWidgetPreview() {
         <PreviewTile />
       </div>
       <div className="flex items-center gap-1.5 px-0.5">
-        <div className="size-1.5 rounded-full bg-success/70" />
-        <div className="h-1.5 flex-1 rounded-full bg-muted-foreground/20" />
+        <div className="size-3.5 shrink-0 rounded-sm bg-warning/40" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="h-1.5 w-3/4 rounded-full bg-muted-foreground/30" />
+          <div className="h-1 w-1/3 rounded-full bg-warning/50" />
+        </div>
+        <div className="h-1 w-6 shrink-0 rounded-full bg-muted-foreground/20" />
       </div>
       <div className="flex items-center gap-1.5 px-0.5">
-        <div className="size-1.5 rounded-full bg-warning/70" />
-        <div className="h-1.5 flex-1 rounded-full bg-muted-foreground/20" />
+        <div className="size-3.5 shrink-0 rounded-sm bg-success/40" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="h-1.5 w-2/3 rounded-full bg-muted-foreground/25" />
+          <div className="h-1 w-1/4 rounded-full bg-success/50" />
+        </div>
+        <div className="h-1 w-5 shrink-0 rounded-full bg-muted-foreground/15" />
       </div>
     </div>
   );
