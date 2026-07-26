@@ -214,10 +214,11 @@ export function sortAgentIndexEntries(
 }
 
 /**
- * 本机 Index 计数（标题栏）。与本窗 FA `activityCounts` 有意分叉：
+ * 本机 Index 计数（标题栏）。与本窗 `activityOverviewCounts` 有意分叉：
+ * - 本机全窗、仅 agent
  * - running 含 launch（无 status）与 processing/tool
  * - needsYou 含 waiting + error
- * 本窗 overview 的 waiting 不含 error、running 不计 launch。
+ * 本窗 overview：running 不计 launch；needsYou 另可含列表中的 task blocked/failed。
  */
 export function agentIndexCounts(entries: readonly AgentRuntimeIndexEntry[]): {
   needsYou: number;

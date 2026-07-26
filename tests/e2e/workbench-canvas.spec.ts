@@ -79,9 +79,17 @@ async function assertPrimaryContentUsable(
     await expect(
       card.locator('[data-testid="activity-stat-grid"]')
     ).toBeVisible();
-    await content.hover();
-    await win.mouse.wheel(0, 1200);
-    await expect(card.locator('[data-slot="widget-empty"]')).toBeVisible();
+    // compact 小卡只保留 KPI；medium+ 才有列表/空态正文。
+    const summaryOnly = card.locator('[data-testid="activity-summary-only"]');
+    const emptyBody = card.locator('[data-slot="widget-empty"]');
+    const hasSummaryOnly = await summaryOnly.isVisible().catch(() => false);
+    if (hasSummaryOnly) {
+      await expect(emptyBody).toHaveCount(0);
+    } else {
+      await content.hover();
+      await win.mouse.wheel(0, 1200);
+      await expect(emptyBody).toBeVisible();
+    }
     return;
   }
   if (material.id === "core.system-resources") {

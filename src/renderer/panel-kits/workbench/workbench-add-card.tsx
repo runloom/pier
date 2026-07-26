@@ -31,7 +31,9 @@ export function WorkbenchAddCard({ isEmpty, onBrowse }: WorkbenchAddCardProps) {
     </button>
   );
 
-  if (!isEmpty) return card;
+  if (!isEmpty) {
+    return card;
+  }
 
   return (
     <Empty className="absolute inset-0 p-6" data-testid="workbench-empty">
