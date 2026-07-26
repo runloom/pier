@@ -27,6 +27,7 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@pier/ui/popover.tsx";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import i18next from "i18next";
 import { Plus } from "lucide-react";
@@ -57,6 +58,7 @@ import {
   keybindingRegistry,
   subscribeKeybindingRegistry,
 } from "@/lib/keybindings/registry.ts";
+import { useActionKeybindingLabel } from "@/lib/keybindings/use-action-keybinding-label.ts";
 import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 import {
   consumeWebOverlayOutsideDismiss,
@@ -106,6 +108,7 @@ function useKeybindingLabels(
 
 export function AddPanelAction(props: IDockviewHeaderActionsProps) {
   const t = useT();
+  const createShortcut = useActionKeybindingLabel("pier.panel.openCreateMenu");
   // Contextual action thunks use getState(); this subscription keeps their
   // enabled state and disabled reason current while the creator stays open.
   usePanelDescriptorStore((state) =>
@@ -315,17 +318,28 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
         }}
         open={open}
       >
-        <PopoverTrigger asChild>
-          <Button
-            aria-label={t("workspace.addPanelMenu.trigger")}
-            size="icon-xs"
-            title={t("workspace.addPanelMenu.trigger")}
-            type="button"
-            variant="secondary"
-          >
-            <Plus data-icon="inline-start" />
-          </Button>
-        </PopoverTrigger>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <PopoverTrigger asChild>
+              <Button
+                aria-label={t("workspace.tab.create")}
+                size="icon-xs"
+                type="button"
+                variant="secondary"
+              >
+                <Plus data-icon="inline-start" />
+              </Button>
+            </PopoverTrigger>
+          </TooltipTrigger>
+          <TooltipContent side="bottom">
+            {t("workspace.tab.create")}
+            {createShortcut ? (
+              <span className="text-background/70 tracking-wide">
+                {createShortcut}
+              </span>
+            ) : null}
+          </TooltipContent>
+        </Tooltip>
         <PopoverContent
           align="start"
           aria-labelledby={titleId}
