@@ -47,6 +47,7 @@ const TERMINAL_MODE_APP_SHORTCUTS = [
   "Mod+Shift+KeyD",
   "Mod+Shift+KeyI",
   "Mod+Shift+KeyM",
+  "Mod+Shift+KeyN",
   "Mod+Shift+KeyP",
 ];
 
@@ -219,7 +220,7 @@ describe("DEFAULT_KEYMAP", () => {
     keybindingRegistry.loadUserKeymap([]);
     keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
 
-    for (const keys of ["Mod+Backquote", "Mod+Shift+KeyT", "Mod+Shift+KeyN"]) {
+    for (const keys of ["Mod+Backquote", "Mod+Shift+KeyT"]) {
       expect(
         keybindingRegistry.resolve(parseChord(keys, false), {
           activePanelComponent: null,
@@ -227,6 +228,28 @@ describe("DEFAULT_KEYMAP", () => {
         })
       ).toBeNull();
     }
+  });
+
+  it("binds open notification center to Mod+Shift+N", () => {
+    expect(DEFAULT_KEYMAP).toContainEqual({
+      commandId: "pier.notifications.open",
+      keys: "Mod+Shift+KeyN",
+      scope: "global",
+    });
+  });
+
+  it("resolves the open notification center shortcut from DEFAULT_KEYMAP", () => {
+    keybindingRegistry.loadUserKeymap([]);
+    keybindingRegistry.registerDefaults(DEFAULT_KEYMAP);
+
+    const commandId = keybindingRegistry.resolve(
+      parseChord("Mod+Shift+KeyN", false),
+      {
+        activePanelComponent: null,
+        overlayStack: [],
+      }
+    );
+    expect(commandId).toBe("pier.notifications.open");
   });
 
   it("keeps rerun task and command palette shortcuts", () => {

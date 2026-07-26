@@ -34,6 +34,7 @@ import {
 import { NotificationCard } from "@/components/common/notification-card.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
+import { useActionKeybindingLabel } from "@/lib/keybindings/use-action-keybinding-label.ts";
 import {
   consumeWebOverlayOutsideDismiss,
   markWebOverlayOutsideDismissIfNeeded,
@@ -203,6 +204,7 @@ function NotificationCenterPopoverBody({
             <NotificationCard
               key={notification.id}
               notification={notification}
+              onActionRun={onClose}
             />
           ))}
           {hasMore ? (
@@ -228,6 +230,7 @@ export function NotificationCenterControl(): ReactNode {
   );
   const open = useNotificationCenterPopoverStore((s) => s.open);
   const setOpen = useNotificationCenterPopoverStore((s) => s.setOpen);
+  const openShortcut = useActionKeybindingLabel("pier.notifications.open");
   const attentionCount = attentionUnreadCount(items);
   const badgeVisible = showUnreadBadge && attentionCount > 0;
 
@@ -317,6 +320,11 @@ export function NotificationCenterControl(): ReactNode {
         </TooltipTrigger>
         <TooltipContent side="bottom">
           {t("notificationsCenter.header.title")}
+          {openShortcut ? (
+            <span className="text-background/70 tracking-wide">
+              {openShortcut}
+            </span>
+          ) : null}
         </TooltipContent>
       </Tooltip>
       <PopoverContent

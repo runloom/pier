@@ -1,6 +1,8 @@
 import i18next from "i18next";
 import { Bell, BellOff, CheckCheck } from "lucide-react";
+import { registerActionContributions } from "@/lib/actions/contribution-runtime.ts";
 import type { ActionContribution } from "@/lib/actions/contribution-types.ts";
+import { rendererActionContributionRuntime } from "@/lib/actions/renderer-action-runtime.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useNotificationCenterStore } from "@/stores/notification-center.store.ts";
 import { useNotificationCenterPopoverStore } from "@/stores/notification-center-popover.store.ts";
@@ -25,7 +27,8 @@ export const NOTIFICATION_CENTER_ACTION_CONTRIBUTIONS: readonly ActionContributi
       categoryKey: "panel",
       group: "1_new",
       handler: () => {
-        useNotificationCenterPopoverStore.getState().setOpen(true);
+        // 快捷键 toggle；命令面板打开时 popover 已让路为关，此处等价于 open。
+        useNotificationCenterPopoverStore.getState().toggle();
       },
       iconComponent: Bell,
       id: "pier.notifications.open",
@@ -58,3 +61,17 @@ export const NOTIFICATION_CENTER_ACTION_CONTRIBUTIONS: readonly ActionContributi
       titleKey: "commandPalette.action.markAllNotificationsRead",
     },
   ];
+
+/** 注册进 actionRegistry：命令面板与 useKeyboardShortcuts 共用。 */
+export function registerNotificationCenterActions(): () => void {
+  const disposers = registerActionContributions(
+    NOTIFICATION_CENTER_ACTION_CONTRIBUTIONS,
+    rendererActionContributionRuntime
+  );
+
+  return () => {
+    for (const dispose of disposers) {
+      dispose();
+    }
+  };
+}

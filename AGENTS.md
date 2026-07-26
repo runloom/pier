@@ -130,7 +130,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 3. **路由单一实现**：toast / inbox / OS 通知的投递判定只走 `src/shared/notification-delivery.ts` 的 `routeDelivery`（mutedKinds → DND（error 除外）→ suppressToast）；业务代码不得手写 DND 判断。
 4. **去重下沉**：同 `dedupeKey` 窗口（24h，`NOTIFICATION_DEDUPE_WINDOW_MS`，契约单一来源）内由 NCS 合并（`repeatCount`），调用方不维护版本/runId 级记录去重；toast 同步连发节流（会话内）是门面与调用方仅有的例外。dedupe 判定依赖镜像水合（`hydrated`），启动期未水合时门面延后判定。
 5. **agent 通知同构**：agent「需要你处理」/ 回合结束 / 出错经 agent-attention 接入 NCS（OS 通知发送权唯一留在 agent-attention，NCS 不重复发）；深链 `focus-panel` 聚焦 agent 面板并标记已读。
-6. **入口**：标题栏铃铛（mac `title-bar.tsx` 与非 mac `agent-index-chrome-bar.tsx` 必须同位同步）+ Popover 全量列表（滚动触底加载更多；**无**独立 dockview panel、**无**筛选/搜索）。命令面板 `pier.notifications.open` 打开同一 Popover（`useNotificationCenterPopoverStore`）。Header「全部已读」仅在有未读时显示；全部已读 / 勿扰 **成功后**关 Popover，失败走 `showAppAlert`（禁止 silent catch + 假关闭）。
+6. **入口**：标题栏铃铛（mac `title-bar.tsx` 与非 mac `agent-index-chrome-bar.tsx` 必须同位同步）+ Popover 全量列表（滚动触底加载更多；**无**独立 dockview panel、**无**筛选/搜索）。命令面板 / 默认快捷键 `⌘⇧N`（`pier.notifications.open`，toggle）打开同一 Popover（`useNotificationCenterPopoverStore`）。Header「全部已读」仅在有未读时显示；全部已读 / 勿扰 **成功后**关 Popover；卡片导航 action（查看输出 / 聚焦面板 / 重启等）点击后关 Popover；失败走 `showAppAlert`（禁止 silent catch + 假关闭）。
 7. **popover 在终端上的四条例**：① 打开期间挂 `registerTerminalFullscreenWebOverlay`（否则点终端不收起）；② `requestTerminalWebFocus` 钉键盘但不 `pushBlockingScope`（否则吞全局快捷键）；③ 订阅 Dialog 打开信号自动收起；④ **终端向 outside 关闭后**才 `markWebOverlayOutsideDismissIfNeeded`（仅 `.terminal-anchor` / `body` / `html`；**排除** trigger 与其它 web 控件）→ cleanup 里 `restoreTerminalFocusAfterWebOverlayDismiss`。Dialog 让路 / Esc / 点铃铛自关不要补聚焦。新增 `+` 创建器等同款。分支状态栏 **Dropdown** 不走全屏路径（modal + blur），勿混用。
 8. **设置三卡**：通知设置页按消息生命周期排序——消息中心（记录）→ 提醒内容（类别）→ 提醒方式（通道）；权限/hooks 警示在「提醒方式」卡内顶部 StatusStack。
 

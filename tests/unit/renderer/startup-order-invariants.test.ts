@@ -53,4 +53,13 @@ describe("renderer startup ordering", () => {
       /<RendererBootSignal key="startup-error" \/>\s*<StartupErrorScreen error=\{err\} \/>/
     );
   });
+
+  // 仅有 contribution 导出不够：快捷键 / 命令面板依赖 actionRegistry。
+  // 漏掉 bootstrap 注册会静默 no-op（历史事故：pier.notifications.open）。
+  it("registers notification-center actions during bootstrap", () => {
+    expect(source).toContain(
+      'from "./lib/actions/notification-center-actions.ts"'
+    );
+    expect(source).toContain("registerNotificationCenterActions()");
+  });
 });
