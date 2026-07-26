@@ -86,10 +86,13 @@ export function AccountsWidget({
         )
       : accountMembershipSummary(activeAccount, context.i18n.language(), t);
   }
-  const showFetchedInline = Boolean(fetchedLabel) && size.w >= 4;
-  // 矮卡藏 membership 副文案；账号异常时仍展示
+  // 小卡整段隐藏账号区，把高度留给额度
+  const showAccountHeader = density !== "compact";
+  const showFetchedInline =
+    showAccountHeader && Boolean(fetchedLabel) && size.w >= 4;
+  // 账号区可见时展示 membership；异常时也强制展示
   const showMembershipSummary =
-    density !== "compact" || Boolean(activeAccount?.error);
+    showAccountHeader || Boolean(activeAccount?.error);
 
   let usageContent: JSX.Element;
   if (!usage) {
@@ -129,36 +132,38 @@ export function AccountsWidget({
       data-size-w={size.w}
       data-slot="claude-accounts-widget"
     >
-      <Item className="shrink-0 flex-nowrap px-0 py-0" size="xs">
-        <ItemMedia align="center">
-          <AccountAvatar label={accountLabel} />
-        </ItemMedia>
-        <ItemContent className="min-w-0 basis-0">
-          <ItemTitle className="block w-full truncate" title={accountLabel}>
-            {accountLabel}
-          </ItemTitle>
-          {showMembershipSummary ? (
-            <ItemDescription>
-              <span>{accountDescription}</span>
-              {showFetchedInline ? (
-                <span>
-                  {" · "}
-                  {fetchedLabel}
-                </span>
-              ) : null}
-            </ItemDescription>
+      {showAccountHeader ? (
+        <Item className="shrink-0 flex-nowrap px-0 py-0" size="xs">
+          <ItemMedia align="center">
+            <AccountAvatar label={accountLabel} />
+          </ItemMedia>
+          <ItemContent className="min-w-0 basis-0">
+            <ItemTitle className="block w-full truncate" title={accountLabel}>
+              {accountLabel}
+            </ItemTitle>
+            {showMembershipSummary ? (
+              <ItemDescription>
+                <span>{accountDescription}</span>
+                {showFetchedInline ? (
+                  <span>
+                    {" · "}
+                    {fetchedLabel}
+                  </span>
+                ) : null}
+              </ItemDescription>
+            ) : null}
+          </ItemContent>
+          {switchableAccounts.length > 0 ? (
+            <ItemActions>
+              <AccountPicker
+                accounts={switchableAccounts}
+                context={context}
+                t={t}
+              />
+            </ItemActions>
           ) : null}
-        </ItemContent>
-        {switchableAccounts.length > 0 ? (
-          <ItemActions>
-            <AccountPicker
-              accounts={switchableAccounts}
-              context={context}
-              t={t}
-            />
-          </ItemActions>
-        ) : null}
-      </Item>
+        </Item>
+      ) : null}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col content-start">
         {usageContent}
