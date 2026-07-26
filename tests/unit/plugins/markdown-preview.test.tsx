@@ -1,4 +1,5 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { FILES_IN_FILE_SEARCH_BAR_CLASSNAME } from "@plugins/builtin/files/renderer/files-search-bar.tsx";
 import type { MarkdownCodeHighlighter } from "@plugins/builtin/files/renderer/markdown/markdown-code-highlighter.ts";
 import { parseMarkdownToIr } from "@plugins/builtin/files/renderer/markdown/markdown-parser.ts";
 import {
@@ -181,6 +182,87 @@ describe("MarkdownPreview", () => {
     expect(
       document.querySelectorAll('mark[data-active-search-match="true"]')
     ).toHaveLength(1);
+  });
+
+  it("opens find with Cmd/Ctrl+F on the preview surface", async () => {
+    const searchLabels = {
+      close: "Close",
+      matchAnnouncement: "Matches: {{count}}",
+      next: "Next match",
+      noMatches: "No matches",
+      placeholder: "Find",
+      previous: "Previous match",
+    };
+    const { container } = render(
+      <MarkdownPreview
+        openExternal={vi.fn()}
+        runtime={immediateRuntime()}
+        searchLabels={searchLabels}
+        sessionId="markdown-search-shortcut"
+        source={source}
+        value={"needle one\n\nneedle two"}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-slot="markdown-prose"]')
+      ).not.toBeNull();
+    });
+    expect(screen.queryByRole("textbox", { name: "Find" })).toBeNull();
+
+    const scrollport = container.querySelector(
+      '[data-slot="markdown-preview"]'
+    ) as HTMLElement;
+    scrollport.focus();
+    fireEvent.keyDown(scrollport, { key: "f", metaKey: true });
+
+    const input = await screen.findByRole("textbox", { name: "Find" });
+    expect(input).toBeVisible();
+
+    // Second chord re-focuses the find field (same as source editor).
+    fireEvent.keyDown(scrollport, { key: "f", ctrlKey: true });
+    await waitFor(() => {
+      expect(input).toHaveFocus();
+    });
+  });
+
+  it("closes find with Escape when focus is outside the search input", async () => {
+    const searchLabels = {
+      close: "Close",
+      matchAnnouncement: "Matches: {{count}}",
+      next: "Next match",
+      noMatches: "No matches",
+      placeholder: "Find",
+      previous: "Previous match",
+    };
+    const runtime = immediateRuntime();
+    const props = {
+      openExternal: vi.fn(),
+      runtime,
+      searchLabels,
+      sessionId: "markdown-search-escape",
+      source,
+      value: "needle one\n\nneedle two",
+    };
+    const view = render(<MarkdownPreview {...props} searchRequest={0} />);
+    view.rerender(<MarkdownPreview {...props} searchRequest={1} />);
+
+    expect(
+      await screen.findByTestId("files-markdown-search-bar")
+    ).toBeVisible();
+
+    const scrollport = view.container.querySelector(
+      '[data-slot="markdown-preview"]'
+    ) as HTMLElement;
+    scrollport.focus();
+    expect(screen.getByRole("textbox", { name: "Find" })).not.toHaveFocus();
+
+    fireEvent.keyDown(scrollport, { key: "Escape" });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("files-markdown-search-bar")).toBeNull();
+    });
   });
 
   it("renders KaTeX, sanitized Mermaid, and semantic directive blocks", async () => {
@@ -614,7 +696,7 @@ describe("MarkdownPreview", () => {
     });
   });
 
-  it("keeps the find bar on the left opposite the right outline", async () => {
+  it("places the find bar like the source editor (shared overlay class)", async () => {
     const runtime = immediateRuntime();
     const view = render(
       <MarkdownPreview
@@ -654,8 +736,12 @@ describe("MarkdownPreview", () => {
     );
 
     const searchBar = await screen.findByTestId("files-markdown-search-bar");
-    expect(searchBar.className).toContain("left-3");
-    expect(searchBar.className).not.toContain("right-3");
+    for (const token of FILES_IN_FILE_SEARCH_BAR_CLASSNAME.split(/\s+/)) {
+      expect(searchBar.className).toContain(token);
+    }
+    expect(searchBar.className).not.toContain("left-3");
+    // Outline present: keep find clear of the right tick rail.
+    expect(searchBar).toHaveStyle({ right: "60px" });
   });
 
   it("applies markdown-prose root without heading underlines and scales via --md-scale", async () => {

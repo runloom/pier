@@ -5033,6 +5033,40 @@ describe("Files file-panel", () => {
     expect(container.querySelector(".cm-search")).toBeNull();
   });
 
+  it("closes the project search bar with Escape when focus is in the editor", async () => {
+    const { container } = renderFilePanel(
+      {
+        context: panelContext,
+        source: { kind: "disk", path: "src/index.ts", root: PROJECT_ROOT },
+      },
+      createMockContext({
+        readText: vi.fn(async () => "export const x = 1;\n"),
+      })
+    );
+
+    await screen.findByText("TypeScript");
+    const editorContent = container.querySelector(".cm-content");
+    expect(editorContent).toBeInstanceOf(HTMLElement);
+
+    fireEvent.keyDown(editorContent as HTMLElement, {
+      key: "f",
+      metaKey: true,
+    });
+    expect(await screen.findByTestId("files-editor-search-bar")).toBeVisible();
+
+    // Return focus to the editor surface (not the find input).
+    (editorContent as HTMLElement).focus();
+    expect(screen.getByRole("textbox", { name: "Find" })).not.toHaveFocus();
+
+    act(() => {
+      fireEvent.keyDown(editorContent as HTMLElement, { key: "Escape" });
+    });
+
+    await waitFor(() => {
+      expect(screen.queryByTestId("files-editor-search-bar")).toBeNull();
+    });
+  });
+
   it("keeps replace and search option behavior in the project search bar", async () => {
     const document = createUntitledMarkdownDocument({
       contents: "foo Foo foo\n",
