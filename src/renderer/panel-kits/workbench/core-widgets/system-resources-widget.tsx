@@ -13,7 +13,7 @@ import type { WorkbenchWidgetComponentProps } from "@plugins/api/renderer.ts";
 import {
   agentSessionTitleInput,
   resolveAgentSessionTitle,
-} from "@shared/agent-session-title.ts";
+} from "@shared/agent-session-title/index.ts";
 import type {
   PierResourceSnapshot,
   SessionIdentity,

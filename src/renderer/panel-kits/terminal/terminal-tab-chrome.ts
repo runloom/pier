@@ -2,9 +2,10 @@ import {
   agentSessionTitleInput,
   resolveAgentSessionTitle,
   truncateTerminalTitleForTooltip,
-} from "@shared/agent-session-title.ts";
+} from "@shared/agent-session-title/index.ts";
 import { agentTabIconId } from "@shared/contracts/agent-session.ts";
 import {
+  type AgentSessionTitleSource,
   type ForegroundActivity,
   tabStatusForActivityStatus,
 } from "@shared/contracts/foreground-activity.ts";
@@ -127,7 +128,7 @@ export interface ActivityTabChromeOverlayOptions {
   projectRootPath?: string | null | undefined;
   /** session JSON 回退（FA 尚未 hydrate 时） */
   sessionTitle?: string | null | undefined;
-  sessionTitleSource?: "auto" | "user" | null | undefined;
+  sessionTitleSource?: AgentSessionTitleSource | null | undefined;
   taskRuns?: TaskRunsSnapshot | undefined;
 }
 

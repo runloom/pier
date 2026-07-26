@@ -4,7 +4,7 @@ import type { WorkbenchWidgetComponentProps } from "@plugins/api/renderer.ts";
 import {
   agentSessionTitleInput,
   resolveAgentSessionTitle,
-} from "@shared/agent-session-title.ts";
+} from "@shared/agent-session-title/index.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import {
   isActiveTaskRunNodeStatus,

@@ -1,6 +1,7 @@
 /** Product sessionTitle writes on FA panel slots (isolated from status). */
 
-import { decideAgentSessionTitleWrite } from "@shared/agent-session-title.ts";
+import { decideAgentSessionTitleWrite } from "@shared/agent-session-title/index.ts";
+import type { AgentSessionTitleSource } from "@shared/contracts/foreground-activity.ts";
 import { panelKey } from "./aggregator-panel-key.ts";
 import type { PanelSlot } from "./entry.ts";
 
@@ -10,28 +11,35 @@ interface SessionTitleSlotCtx {
   slotFor: (key: string, panelId: string) => PanelSlot;
 }
 
+function resolveSlot(
+  ctx: SessionTitleSlotCtx,
+  windowId: string,
+  panelId: string
+): PanelSlot | null {
+  if (ctx.disposed) {
+    return null;
+  }
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return null;
+  }
+  return ctx.slotFor(panelKey(windowId, panelId), panelId);
+}
+
 export function setPanelSlotSessionTitle(
   ctx: SessionTitleSlotCtx,
   windowId: string,
   panelId: string,
-  input: { title: string; source: "auto" | "user"; replaceAuto?: boolean }
+  input: { title: string; source: AgentSessionTitleSource }
 ): boolean {
-  if (ctx.disposed) {
+  const slot = resolveSlot(ctx, windowId, panelId);
+  if (!slot) {
     return false;
   }
-  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
-    return false;
-  }
-  const key = panelKey(windowId, panelId);
-  const slot = ctx.slotFor(key, panelId);
   const decision = decideAgentSessionTitleWrite({
     currentSource: slot.sessionTitleSource ?? null,
     currentTitle: slot.sessionTitle ?? null,
     nextSource: input.source,
     nextTitle: input.title,
-    ...(input.replaceAuto === undefined
-      ? {}
-      : { replaceAuto: input.replaceAuto }),
   });
   if (!decision.apply) {
     return false;
@@ -47,22 +55,13 @@ export function hydratePanelSlotSessionTitle(
   ctx: SessionTitleSlotCtx,
   windowId: string,
   panelId: string,
-  input: { title: string; source: "auto" | "user" }
+  input: { title: string; source: AgentSessionTitleSource }
 ): void {
-  if (ctx.disposed) {
-    return;
-  }
-  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
-    return;
-  }
-  const key = panelKey(windowId, panelId);
-  const slot = ctx.slotFor(key, panelId);
-  if (slot.sessionTitle?.trim()) {
+  const slot = resolveSlot(ctx, windowId, panelId);
+  if (!slot || slot.sessionTitle?.trim()) {
     return;
   }
   const decision = decideAgentSessionTitleWrite({
-    currentSource: slot.sessionTitleSource ?? null,
-    currentTitle: slot.sessionTitle ?? null,
     nextSource: input.source,
     nextTitle: input.title,
   });

@@ -1,7 +1,7 @@
 import {
   agentSessionTitleInput,
   resolveAgentSessionTitle,
-} from "@shared/agent-session-title.ts";
+} from "@shared/agent-session-title/index.ts";
 import type { QuitActivitySummary } from "@shared/contracts/app-quit.ts";
 import type {
   ActivityStatus,

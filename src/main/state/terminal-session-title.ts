@@ -1,20 +1,26 @@
 /** Persist product sessionTitle onto terminal panel session JSON. */
 
-import { decideAgentSessionTitleWrite } from "@shared/agent-session-title.ts";
+import { decideAgentSessionTitleWrite } from "@shared/agent-session-title/index.ts";
+import type { AgentSessionTitleSource } from "@shared/contracts/foreground-activity.ts";
 import { ensureTerminalSessionStore } from "./terminal-session-store.ts";
 
 export type SetAgentSessionTitleResult =
-  | { applied: boolean; ok: true; title?: string; source?: "auto" | "user" }
+  | {
+      applied: boolean;
+      ok: true;
+      title?: string;
+      source?: AgentSessionTitleSource;
+    }
   | { ok: false };
 
 /**
- * 持久化产品 sessionTitle。auto 不覆盖已有；user 可覆盖 auto。
+ * 持久化产品 sessionTitle。裁决由 decideAgentSessionTitleWrite 的秩比较负责。
  * 面板条目不存在时 ok:true applied:false（失败安全，不抛）。
  */
 export async function setTerminalPanelSessionTitle(
   windowId: string,
   panelId: string,
-  input: { title: string; source: "auto" | "user"; replaceAuto?: boolean }
+  input: { title: string; source: AgentSessionTitleSource }
 ): Promise<SetAgentSessionTitleResult> {
   if (windowId.trim().length === 0 || panelId.trim().length === 0) {
     return { ok: false };
@@ -32,9 +38,6 @@ export async function setTerminalPanelSessionTitle(
       currentTitle: current.sessionTitle ?? null,
       nextSource: input.source,
       nextTitle: input.title,
-      ...(input.replaceAuto === undefined
-        ? {}
-        : { replaceAuto: input.replaceAuto }),
     });
     if (!decision.apply) {
       result = { applied: false, ok: true };

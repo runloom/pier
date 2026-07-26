@@ -29,8 +29,8 @@ import { isDevRuntime } from "../runtime-mode.ts";
 import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/legacy-migration-adapter.ts";
 import { createAgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
-import { registerAgentSessionTitleRefineGenerateText } from "../services/agents/agent-session-title-refine.ts";
 import { createAgentUsageService } from "../services/agents/agent-usage-service.ts";
+import { wireAgentSessionTitleDeps } from "../services/agents/session-title/wire-deps.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
 import { createAppUpdateService } from "../services/app-updates/app-update-service.ts";
 import { createElectronAppUpdaterAdapter } from "../services/app-updates/electron-updater-adapter.ts";
@@ -472,9 +472,7 @@ function createPierAppCore(): PierAppCore {
     })(),
   };
 
-  registerAgentSessionTitleRefineGenerateText((request) =>
-    services.ai.generateText(request)
-  );
+  wireAgentSessionTitleDeps({ git: services.git, preferences });
 
   return {
     clients,

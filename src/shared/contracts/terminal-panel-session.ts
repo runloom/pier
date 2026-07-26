@@ -1,4 +1,5 @@
 import type { AgentKind } from "./agent.ts";
+import type { AgentSessionTitleSource } from "./foreground-activity.ts";
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
 import type { TaskPanelMetadata } from "./tasks.ts";
 import type { TerminalAgentRestoreLaunchOptions } from "./terminal-launch.ts";
@@ -29,7 +30,7 @@ export interface TerminalPanelSessionSnapshot {
   context?: PanelContext | undefined;
   /** 产品会话名（≠ OSC title）。 */
   sessionTitle?: string | undefined;
-  sessionTitleSource?: "auto" | "user" | undefined;
+  sessionTitleSource?: AgentSessionTitleSource | undefined;
   tab?: PanelTabChrome | undefined;
   task?: TaskPanelMetadata | undefined;
   /**

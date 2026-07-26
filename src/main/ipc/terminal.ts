@@ -320,7 +320,7 @@ export function registerTerminalIpc(
     async (
       event,
       panelId: string,
-      input: { title: string; source: "auto" | "user" }
+      input: { title: string; source: "user" }
     ) => {
       const win = windowFromWebContents(event.sender);
       if (!win || typeof panelId !== "string" || panelId.trim().length === 0) {
@@ -329,7 +329,7 @@ export function registerTerminalIpc(
       if (
         !input ||
         typeof input.title !== "string" ||
-        (input.source !== "auto" && input.source !== "user")
+        input.source !== "user"
       ) {
         return { applied: false, ok: false };
       }

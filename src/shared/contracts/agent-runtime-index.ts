@@ -7,6 +7,7 @@ import { z } from "zod";
 import { agentKindSchema } from "./agent.ts";
 import {
   activityStatusSchema,
+  agentSessionTitleSourceSchema,
   type ForegroundActivity,
 } from "./foreground-activity.ts";
 
@@ -28,7 +29,7 @@ export const agentRuntimeIndexEntrySchema = z
     worktreeKey: z.string().min(1).optional(),
     /** 产品会话名（透传 FA；≠ OSC）。P0 通常缺席。 */
     sessionTitle: z.string().min(1).max(40).optional(),
-    sessionTitleSource: z.enum(["user", "auto"]).optional(),
+    sessionTitleSource: agentSessionTitleSourceSchema.optional(),
   })
   .strict();
 

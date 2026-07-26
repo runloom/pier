@@ -4,7 +4,10 @@ import type {
   CommandFinishedHookEvent,
   CommandStartHookEvent,
 } from "@shared/contracts/agent-session.ts";
-import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
+import type {
+  AgentSessionTitleSource,
+  ForegroundActivityBroadcast,
+} from "@shared/contracts/foreground-activity.ts";
 
 export type AgentStopAuthority =
   | "advisory"
@@ -32,7 +35,7 @@ export interface ForegroundActivityAggregator {
   hydrateAgentSessionTitle(
     windowId: string,
     panelId: string,
-    input: { title: string; source: "auto" | "user" }
+    input: { title: string; source: AgentSessionTitleSource }
   ): void;
 
   /**
@@ -82,13 +85,13 @@ export interface ForegroundActivityAggregator {
   retainPanels(windowId: string, activePanelIds: readonly string[]): void;
   /**
    * 写入产品 sessionTitle（与 status 隔离）。
-   * 无 agent hook/launch 层时仍可写 slot（供随后投影）；auto 受既有标题阻挡。
+   * 无 agent hook/launch 层时仍可写 slot（供随后投影）；秩不升高则拒绝。
    * @returns 是否实际写入并触发广播
    */
   setAgentSessionTitle(
     windowId: string,
     panelId: string,
-    input: { title: string; source: "auto" | "user"; replaceAuto?: boolean }
+    input: { title: string; source: AgentSessionTitleSource }
   ): boolean;
 
   snapshot(windowId?: string): ForegroundActivityBroadcast;
