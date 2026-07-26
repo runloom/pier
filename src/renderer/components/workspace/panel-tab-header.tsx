@@ -16,6 +16,7 @@
 
 import { fileNameFromTabIconId, PierFileIcon } from "@pier/ui/file-icon.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { agentKindFromTabIconId } from "@shared/contracts/agent-session.ts";
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { X } from "lucide-react";
@@ -30,7 +31,6 @@ import {
   useRef,
   useState,
 } from "react";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";

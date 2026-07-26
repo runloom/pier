@@ -1,10 +1,10 @@
 import { Badge } from "@pier/ui/badge.tsx";
 import { Card, CardContent, CardHeader, CardTitle } from "@pier/ui/card.tsx";
 import { cn } from "@pier/ui/utils.ts";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { SkillEffectiveCell } from "@shared/contracts/project-skills.ts";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { SkillDetailSection } from "./skill-detail-section.tsx";
 import { effectLabel, type Translate } from "./skills-shared.tsx";
 

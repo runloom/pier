@@ -11,6 +11,7 @@ import {
 } from "@pier/ui/empty.tsx";
 import { formatDurationShort } from "@pier/ui/format.tsx";
 import { cn } from "@pier/ui/utils.ts";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type {
@@ -21,7 +22,6 @@ import i18next from "i18next";
 import { RefreshCw } from "lucide-react";
 import type { MouseEventHandler, ReactNode } from "react";
 import { useState } from "react";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 
 export function RestoredTaskResultView({
   className,

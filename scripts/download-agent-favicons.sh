@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# 下载各 agent 的 favicon 到 src/renderer/components/agent-icons/favicons/<id>.png。
+# 下载各 agent 的 favicon 到 src/plugins/api/components/agent-icons/favicons/<id>.png。
 #
 # Why: 运行时直接用 Google favicon service 会被 renderer 的 img-src CSP
 # ('self' data:) 拦成空白（见 src/main/csp.ts）。把图标打包成本地资产后
@@ -16,7 +16,7 @@
 # 保持一致；lobehub 源用 lobehub 仓的 brand slug（见 lobehub.com/icons/<id>）。
 set -euo pipefail
 
-DIR="$(cd "$(dirname "$0")/.." && pwd)/src/renderer/components/agent-icons/favicons"
+DIR="$(cd "$(dirname "$0")/.." && pwd)/src/plugins/api/components/agent-icons/favicons"
 mkdir -p "$DIR"
 
 while IFS=' ' read -r id source; do
