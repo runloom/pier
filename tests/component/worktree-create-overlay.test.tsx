@@ -342,6 +342,11 @@ function createMockContext(): RendererPluginContext {
       language: unimplemented("i18n.language"),
       t: tMock,
     },
+    liveModules: {
+      compile: unimplemented("liveModules.compile"),
+      getUrl: unimplemented("liveModules.getUrl"),
+      registerRoot: unimplemented("liveModules.registerRoot"),
+    },
     lifecycle: {
       beforeSuspend: vi.fn(() => () => undefined),
     },

@@ -1,7 +1,12 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { MouseEvent as ReactMouseEvent } from "react";
 import type { FileEditorController } from "./file-editor-controller.ts";
-import type { EditorRange, FileViewMode } from "./files-document-types.ts";
+import type {
+  EditorRange,
+  FilesDocumentLanguage,
+  FileViewMode,
+} from "./files-document-types.ts";
+import type { FilesTranslate } from "./files-i18n.ts";
 import type {
   MarkdownDiskSource,
   MarkdownFileResources,
@@ -31,10 +36,13 @@ export interface FilesEditorSearchLabels {
 }
 
 export interface FileEditorAdapterProps {
+  canvasDiskSource?: { path: string; root: string } | undefined;
+  context?: RendererPluginContext | undefined;
   controller: FileEditorController;
   documentId: string;
   editorSessionId: string;
   labels?: FileEditorAdapterLabels;
+  language?: FilesDocumentLanguage | undefined;
   markdownAppearance?: RendererPluginContext["appearance"] | undefined;
   markdownCharts?: RendererPluginContext["charts"] | undefined;
   markdownCopyCode?: ((code: string) => Promise<void>) | undefined;
@@ -77,5 +85,6 @@ export interface FileEditorAdapterProps {
     | undefined;
   searchLabels?: FilesEditorSearchLabels;
   searchRequest?: number;
+  t?: FilesTranslate | undefined;
   value: string;
 }

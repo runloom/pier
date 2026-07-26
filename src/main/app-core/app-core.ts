@@ -96,6 +96,7 @@ import {
 } from "./command-router.ts";
 import { createPierEventBus, type PierEventBus } from "./event-bus.ts";
 import { createLazyAppCore } from "./lazy-app-core.ts";
+import { createAppLiveModulesService } from "./live-modules-wiring.ts";
 import { createManagedPluginDevRuntimeWatchRegistry } from "./managed-plugin-dev-runtime-watch.ts";
 import { createManagedPluginRuntimeReconciler } from "./managed-plugin-runtime-reconciler.ts";
 import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
@@ -333,7 +334,6 @@ function createPierAppCore(): PierAppCore {
     snapshot: () => foregroundActivityService.snapshot(),
     rendererCommand,
   });
-
   const filePathTransactionLock = new FilePathTransactionLock();
   const files = createFileService({
     transactionLock: filePathTransactionLock,
@@ -357,7 +357,6 @@ function createPierAppCore(): PierAppCore {
     transactionLock: filePathTransactionLock,
     userDataPath: app.getPath("userData"),
   });
-
   const workspaceService = createWorkspaceService();
   const { panelTransfer: panelTransferRef, window: windowService } =
     wireAppCoreWindowAndPanelTransfer({
@@ -405,6 +404,9 @@ function createPierAppCore(): PierAppCore {
     usageData,
     processEnvironment,
     localEnvironments,
+    liveModules: createAppLiveModulesService({
+      resolveHomeRoot: () => pierHome.rootPath(),
+    }),
     pierHome,
     pierBindings,
     plugins: pluginHost.plugins,

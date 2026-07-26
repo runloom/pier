@@ -25,17 +25,11 @@ import { formatQuitFailure } from "./app-quit/quit-failure-format.ts";
 import { createAppQuitRendererTransport } from "./app-quit/quit-renderer-transport.ts";
 import { shouldBypassQuitConfirmationForTests } from "./app-quit/quit-test-runtime.ts";
 import { handleMainStartupFailure } from "./app-startup-failure.ts";
-import { installCsp } from "./csp.ts";
+import {
+  attachPrivilegedProtocolHandlers,
+  registerPrivilegedProtocolSchemes,
+} from "./bootstrap-privileged-protocols.ts";
 import { installMainDiagnosticsLogging } from "./diagnostics/app-diagnostics.ts";
-import {
-  handleFilePreviewProtocol,
-  registerFilePreviewRequestGuard,
-  registerFilePreviewScheme,
-} from "./files/file-preview-protocol.ts";
-import {
-  handleAssetProtocol,
-  registerAssetScheme,
-} from "./fonts/asset-protocol.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { registerAgentRuntimeHostIpc } from "./ipc/agent-runtime-host.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
@@ -71,10 +65,6 @@ import {
   prepareQuitDialogWindow,
   toggleCommandPaletteFromMenu,
 } from "./menu/menu-window-actions.ts";
-import {
-  handlePluginAssetProtocol,
-  registerPluginAssetScheme,
-} from "./plugins/plugin-asset-protocol.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
 import { createAppUpdateScheduler } from "./services/app-updates/app-update-scheduler.ts";
@@ -244,18 +234,12 @@ const appQuitController = createAppQuitController({
 if (gotTheLock) {
   Promise.resolve()
     .then(() => {
-      registerAssetScheme();
-      registerPluginAssetScheme();
-      registerFilePreviewScheme();
+      registerPrivilegedProtocolSchemes();
       return app.whenReady();
     })
     .then(async () => {
-      installCsp();
-      handleAssetProtocol();
-      registerFilePreviewRequestGuard();
-      handleFilePreviewProtocol();
-      handlePluginAssetProtocol({
-        getRuntimeSources: () =>
+      attachPrivilegedProtocolHandlers({
+        getPluginRuntimeSources: () =>
           appCore.services.managedPlugins.getRuntimeSources(),
       });
       await appCore.ready;

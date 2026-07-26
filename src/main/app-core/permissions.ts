@@ -83,6 +83,22 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["file:write"],
   },
+  "liveModules.registerRoot": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:write"],
+  },
+  "liveModules.unregisterRoot": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:write"],
+  },
+  "liveModules.compile": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
+  "liveModules.getUrl": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["file:read"],
+  },
   "rules.snapshot": {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["file:read"],

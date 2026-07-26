@@ -1,4 +1,5 @@
 import { Button } from "@pier/ui/button.tsx";
+import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
 import { Code2, Eye, ShieldCheck } from "lucide-react";
 import { useCallback, useEffect } from "react";
 import type { FileEditorController } from "./file-editor-controller.ts";
@@ -71,7 +72,11 @@ export function ResolvedFilePanelActions({
     return null;
   }
 
-  const isMarkdown = document.language === "markdown";
+  const supportsPreview =
+    document.language === "markdown" ||
+    document.language === "canvas" ||
+    (document.source.kind === "disk" &&
+      isProjectCanvasPath(document.source.path));
   const showDiffToggle =
     mode === "diff" || document.conflictDiskContents !== null;
 
@@ -84,7 +89,7 @@ export function ResolvedFilePanelActions({
       />
       <LanguageBadge document={document} t={t} />
       <DocumentFormatBadge document={document} />
-      {isMarkdown ? (
+      {supportsPreview ? (
         <Button
           aria-label={
             mode === "preview"

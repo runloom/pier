@@ -142,6 +142,8 @@ export const PIER_BROADCAST = {
   ATTENTION_SOUND_PLAY: "pier://attention-sound:play",
   // 项目技能状态失效 (main → 所有 renderer, payload { projectIdentity, observedRevision })
   PROJECT_SKILLS_INVALIDATED: "pier://project-skills:invalidated",
+  // Live Modules 编译/失效广播 (main → 所有 renderer, payload LiveModuleEvent)。
+  LIVE_MODULES_CHANGED: "pier://live-modules:changed",
   // 统一消息中心快照广播 (main → 所有 renderer, payload NotificationCenterSnapshot)。
   NOTIFICATION_CENTER_CHANGED: "pier://notification-center:changed",
 } as const;

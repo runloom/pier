@@ -1,6 +1,7 @@
 import { Empty, EmptyHeader, EmptyMedia, EmptyTitle } from "@pier/ui/empty.tsx";
 import { Construction } from "lucide-react";
 import { CodeMirrorEditor } from "./code-mirror-editor.tsx";
+import { FileCanvasPreview } from "./file-canvas-preview.tsx";
 import type { FileEditorAdapterProps } from "./file-editor-adapter-types.ts";
 import { FilesLineDiff } from "./files-line-diff.tsx";
 import { MarkdownPreview } from "./markdown-preview.tsx";
@@ -14,6 +15,29 @@ export function FileEditorAdapter(props: FileEditorAdapterProps) {
   const labels = props.labels ?? DEFAULT_LABELS;
 
   if (props.mode === "preview") {
+    // Canvas must never fall through to MarkdownPreview (raw TSX as markdown).
+    if (props.language === "canvas" || props.canvasDiskSource) {
+      if (props.context && props.canvasDiskSource && props.t) {
+        return (
+          <FileCanvasPreview
+            context={props.context}
+            path={props.canvasDiskSource.path}
+            root={props.canvasDiskSource.root}
+            t={props.t}
+          />
+        );
+      }
+      return (
+        <UnsupportedFileView
+          label={
+            props.t?.(
+              "filePanel.canvas.unavailableTitle",
+              "Can’t preview canvas"
+            ) ?? "Can’t preview canvas"
+          }
+        />
+      );
+    }
     return (
       <MarkdownPreview
         appearance={props.markdownAppearance}

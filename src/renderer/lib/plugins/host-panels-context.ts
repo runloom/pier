@@ -9,6 +9,7 @@ import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 import { registerPanelCloseGuard } from "@/lib/workspace/panel-close-guards.ts";
 import { usePanelDescriptorStore } from "../../stores/panel-descriptor.store.ts";
 import { useWorkspaceStore } from "../../stores/workspace.store.ts";
+
 import { activateWorkspacePanel } from "../workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../workspace/tab-visibility.ts";
 import { flushWorkspaceLayout } from "../workspace/workspace-layout-persistence.ts";

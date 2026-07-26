@@ -12,6 +12,7 @@ import {
 } from "./files-document-paths.ts";
 
 export type FilesDocumentLanguage =
+  | "canvas"
   | "cpp"
   | "css"
   | "go"
