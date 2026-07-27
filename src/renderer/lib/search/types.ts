@@ -15,6 +15,13 @@ export interface SearchRank {
   frecency: number;
   fuzzyOrder: number;
   matchIndex: number;
+  /**
+   * Length of the visible field (title / alias / category text) that produced
+   * this rank. Shorter fields are tighter matches when tier + matchIndex tie
+   * (e.g. alias `git merge` beats `git merge abort` for query `gitm`).
+   * Infinity when the rank did not come from a visible-text field.
+   */
+  matchLength: number;
   tier: number;
 }
 
