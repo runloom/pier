@@ -6,6 +6,9 @@
  *
  * Replace with a deterministic flush: same geometry, no random offset.
  * Patches the instance once; safe to call repeatedly.
+ *
+ * `reapply`（默认 true）：在 layout/挂载后强制 flush 当前 bounds。
+ * 虚拟化 onPostRender 应传 `reapply: false`——只 patch 一次，避免每帧写 style 造成滚动卡顿。
  */
 
 interface StickyBounds {
@@ -44,7 +47,10 @@ function isStickyCodeView(value: unknown): value is StickyCodeView {
   );
 }
 
-export function stabilizeCodeViewStickyPositioning(viewer: unknown): void {
+export function stabilizeCodeViewStickyPositioning(
+  viewer: unknown,
+  options?: { readonly reapply?: boolean }
+): void {
   if (!isStickyCodeView(viewer)) {
     return;
   }
@@ -67,6 +73,9 @@ export function stabilizeCodeViewStickyPositioning(viewer: unknown): void {
         stickyJitter + this.itemMetricsCache.diffHeaderHeight
       }px`;
     };
+  }
+  if (options?.reapply === false) {
+    return;
   }
   // Re-apply current bounds even when updateStickyPositioning would early-return
   // because stickyTop/Bottom already match (common after official apply).

@@ -272,6 +272,8 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
   "git.searchBranches": { capabilities: ["git:read"] },
   "git.searchCommits": { capabilities: ["git:read"] },
   "git.stage": { capabilities: ["git:write"] },
+  "git.applyPatch": { capabilities: ["git:write"] },
+
   "git.stash": { capabilities: ["git:write"] },
   "git.stashApply": { capabilities: ["git:write"] },
   "git.stashDrop": { capabilities: ["git:write"] },

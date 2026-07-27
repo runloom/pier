@@ -10,6 +10,7 @@ import {
   indexReviewSectionEntries,
   isCodeViewMemberResource,
   projectReviewDocuments,
+  projectReviewLedger,
 } from "../../../src/plugins/builtin/git/renderer/git-review-document-projection.ts";
 import type { GitReviewDocumentResource } from "../../../src/plugins/builtin/git/renderer/git-review-document-resource.ts";
 
@@ -58,8 +59,66 @@ function context(): RendererPluginContext {
   } as never;
 }
 
-describe("projectReviewDocuments end-state membership", () => {
-  it("only projects loaded and error members — never idle/loading placeholders", () => {
+describe("projectReviewLedger stable-ledger", () => {
+  it("projects every index slot; idle/loading become estimate", () => {
+    const entries = [entry(0), entry(1), entry(2), entry(3), entry(4)];
+    const resourceByEntryKey = new Map<string, GitReviewDocumentResource>([
+      ["entry:0", { entry: entry(0), kind: "idle" }],
+      ["entry:1", { entry: entry(1), kind: "loading", operationId: "op-1" }],
+      ["entry:2", loaded(2)],
+      [
+        "entry:3",
+        {
+          entry: entry(3),
+          failure: {
+            kind: "error",
+            message: "boom",
+            reason: "internal",
+            retryable: true,
+          },
+          kind: "error",
+        },
+      ],
+      ["entry:4", { entry: entry(4), kind: "unchanged" }],
+    ]);
+    const projection = projectReviewLedger({
+      context: context(),
+      entries,
+      locale: "en",
+      resourceByEntryKey,
+    });
+
+    expect(projection.items.map((item) => item.id)).toEqual([
+      "section:0",
+      "section:1",
+      "section:2",
+      "section:3",
+      "section:4",
+    ]);
+    expect(projection.items[0]?.kind).toBe("estimate");
+    expect(projection.items[0]?.cacheKey.startsWith("estimate:")).toBe(true);
+    expect(projection.items[0]?.estimateLines).toBeGreaterThan(0);
+    expect(projection.items[2]?.patch).toContain("+new");
+    expect(projection.items[2]?.kind).toBe("loaded");
+    expect(projection.items[3]?.stateNotice).toBe("Unable to load this change");
+    expect(projection.items[3]?.kind).toBe("error");
+    expect(
+      projection.items.every(
+        (item) => !item.cacheKey.startsWith("git-review-placeholder:")
+      )
+    ).toBe(true);
+    expect([...projection.entryKeyBySectionId.keys()].sort()).toEqual([
+      "section:0",
+      "section:1",
+      "section:2",
+      "section:3",
+      "section:4",
+    ]);
+  });
+});
+
+describe("projectReviewDocuments end-state membership (legacy subset)", () => {
+  it("only projects loaded and error members from snapshot resources", () => {
     const resources: GitReviewDocumentResource[] = [
       { entry: entry(0), kind: "idle" },
       { entry: entry(1), kind: "loading", operationId: "op-1" },

@@ -1,4 +1,3 @@
-import type { CodeViewOptions } from "@pierre/diffs";
 import {
   CodeView,
   type CodeViewHandle,
@@ -14,12 +13,15 @@ import {
   useState,
 } from "react";
 import {
-  CODE_VIEW_CUSTOM_CSS,
-  type DiffTypographyStyle,
   diffFontMetrics,
+  ensurePierDiffLightDomStyles,
   pierDiffCodeViewKey,
 } from "./diff-view-appearance.ts";
 import type { PierDiffViewLabels } from "./diff-view-collapse.tsx";
+import type {
+  PierHunkActionEvent,
+  PierHunkAnnotationMetadata,
+} from "./diff-view-hunk-actions.tsx";
 import {
   type ParsedItemCacheEntry,
   type PierDiffViewItem,
@@ -38,6 +40,7 @@ import {
   type TopologyScrollRestore,
 } from "./diff-view-topology-scroll.ts";
 import { PierDiffWorkerProvider } from "./diff-view-worker.tsx";
+import { useDiffViewCodeOptions } from "./use-diff-view-code-options.ts";
 import { useDiffViewContentSelection } from "./use-diff-view-content-selection.ts";
 import {
   type DiffViewCollapsedItemState,
@@ -61,6 +64,11 @@ export type {
   PierDiffViewItem,
   PierDiffViewStageControl,
 } from "./diff-view-items.ts";
+export {
+  estimateLinesForFileStatus,
+  PIER_DIFF_DEFAULT_ESTIMATE_LINES,
+  PIER_DIFF_ESTIMATE_SLOT_HEIGHT_PX,
+} from "./diff-view-items.ts";
 export type { PierDiffViewRenderWindow } from "./diff-view-render-window.ts";
 export {
   fullSelectionRangeForCodeViewItem,
@@ -75,13 +83,29 @@ export interface PierDiffViewPresentation {
   readonly diffStyle: "split" | "unified";
   readonly wrapLines: boolean;
 }
+export type {
+  PierHunkActionEvent,
+  PierHunkAnnotationMetadata,
+} from "./diff-view-hunk-actions.tsx";
+
 export interface PierDiffViewProps {
   readonly appearance: PierDiffViewAppearance;
+  /**
+   * 同步闸门（layout 可读）：与 pendingNavigationRef 同源，
+   * 避免仅依赖 React state 时同帧 membership apply 漏 suppress。
+   */
+  readonly getSuppressMembershipScrollRestore?: () => boolean;
   readonly items: readonly PierDiffViewItem[];
   readonly labels: PierDiffViewLabels;
   /** Discard unstaged working-tree changes for a multi-diff item id. */
   readonly onDiscardFile?: (itemId: string) => void;
+
   readonly onError: (error: Error) => void;
+  /**
+   * Codex-style per-hunk Stage / Unstage / Revert (Pierre annotations +
+   * renderAnnotation). When set, items with stageControl get hunk toolbars.
+   */
+  readonly onHunkAction?: (event: PierHunkActionEvent) => void;
   readonly onItemError?: (id: string, error: Error | null) => void;
   /** Open the file for a multi-diff item id (header title click). */
   readonly onOpenFile?: (itemId: string) => void;
@@ -92,6 +116,11 @@ export interface PierDiffViewProps {
   /** 缺省 split + 不换行(既有行为)。变更会强制 CodeView 重建。 */
   readonly presentation?: PierDiffViewPresentation;
   readonly ref?: Ref<PierDiffViewHandle>;
+  /**
+   * 树导航 pending 时禁止成员变更后的 scrollTop 硬恢复，
+   * 避免与 scrollTo(target) 双意图（full-alignment K5）。
+   */
+  readonly suppressMembershipScrollRestore?: boolean;
 }
 
 const INLINE_RENDER_TIMEOUT_MS = 10_000;
@@ -101,6 +130,7 @@ export function PierDiffView({
   labels,
   onDiscardFile,
   onError,
+  onHunkAction,
   onItemError,
   onOpenFile,
   onRenderWindowChange,
@@ -108,10 +138,16 @@ export function PierDiffView({
   onToggleStage,
   presentation,
   ref,
+  getSuppressMembershipScrollRestore,
+  suppressMembershipScrollRestore = false,
 }: PierDiffViewProps): React.JSX.Element | null {
   const diffStyle = presentation?.diffStyle ?? "split";
   const overflow = presentation?.wrapLines === true ? "wrap" : "scroll";
-  const codeViewRef = useRef<CodeViewHandle<undefined>>(null);
+  const codeViewRef = useRef<CodeViewHandle<PierHunkAnnotationMetadata>>(null);
+  // Light-DOM portal pills need document CSS (shadow unsafeCSS cannot reach them).
+  useEffect(() => {
+    ensurePierDiffLightDomStyles();
+  }, []);
   const parsedItemsRef = useRef(new Map<string, ParsedItemCacheEntry>());
   const renderItemIdentitiesRef = useRef(
     new Map<string, DiffViewRenderItemIdentity>()
@@ -122,21 +158,35 @@ export function PierDiffView({
     new Map<string, DiffViewCollapsedItemState>()
   );
   const parsedItemIndexesRef = useRef(new Map<string, number>());
-  const parsedItemListRef = useRef<CodeViewItem[]>([]);
+  const parsedItemListRef = useRef<CodeViewItem<PierHunkAnnotationMetadata>[]>(
+    []
+  );
   const parsedInputsRef = useRef<readonly PierDiffViewItem[] | null>(null);
   const appliedItemsRef = useRef<{
     readonly key: string;
-    readonly items: Map<string, CodeViewItem>;
+    readonly items: Map<string, CodeViewItem<PierHunkAnnotationMetadata>>;
   } | null>(null);
+  /** 最近一次 membership apply 新建的 item id；scrollToItem 用 instant。 */
+  const firstLayoutItemIdsRef = useRef(new Set<string>());
   /**
-   * Stage/unstage changes sectionKey (group is part of the id) → topologyKey
-   * changes → CodeView remounts. Capture scroll before commit and restore after
-   * layout (VS Code multi-diff keeps viewport across SCM mutations).
+   * 仅布局不变量（lineHeight/diffStyle/…）触发 remount 时恢复视口。
+   * 成员/stage 变更不 remount，不走此路径。
    */
-  const topologyScrollRestoreRef = useRef<TopologyScrollRestore | null>(null);
-  const previousTopologyKeyRef = useRef<string | null>(null);
+  const layoutScrollRestoreRef = useRef<TopologyScrollRestore | null>(null);
+  const previousCodeViewKeyRef = useRef<string | null>(null);
   const [inlineRenderFailed, setInlineRenderFailed] = useState(false);
   const [workerUnavailable, setWorkerUnavailable] = useState(false);
+  /**
+   * 命令式 updateItem / 折叠会改 parsedItemListRef，但不改 inputs。
+   * epoch 迫使 codeViewItems 重新读取权威列表，供 layout remount 的 initialItems 使用。
+   */
+  const [itemEpoch, setItemEpoch] = useState(0);
+  const bumpItemEpoch = useCallback(() => {
+    setItemEpoch((current) => current + 1);
+  }, []);
+  /** 文件 host 标记 data-pier-file-host，供 CSS :hover 显示 hunk pills。 */
+  const fileHoverCleanupsRef = useRef(new Map<string, () => void>());
+  const fileHoverHostsRef = useRef(new Map<string, HTMLElement>());
   // 菜单打开瞬间的 live 选区文本快照（非受控选区源；Pierre 内部才是真相）。
   const selectedTextRef = useRef("");
   const contentDragAnchorRef = useRef<DiffPointerLineHit | null>(null);
@@ -158,8 +208,14 @@ export function PierDiffView({
       }
     }
   }, [inputs]);
+  // itemEpoch：折叠 / 命令式 updateItems 后强制刷新（读 ref，linter 看不到）。
+  // biome-ignore lint/correctness/useExhaustiveDependencies: itemEpoch is intentional recompute trigger
   const codeViewItems = useMemo(() => {
-    if (parsedInputsRef.current === inputs) {
+    // 权威列表：已成功 apply 的 parsedItemList（含折叠与增量正文）。
+    if (
+      parsedInputsRef.current === inputs &&
+      parsedItemListRef.current.length > 0
+    ) {
       return parsedItemListRef.current;
     }
     return parsed.items.map((item) => {
@@ -175,20 +231,7 @@ export function PierDiffView({
           collapsed.revision,
       };
     });
-  }, [inputs, parsed.items]);
-  const topologyKey = useMemo(
-    () => JSON.stringify(codeViewItems.map((item) => item.id)),
-    [codeViewItems]
-  );
-  // Capture while the previous CodeView instance is still mounted (render phase).
-  captureTopologyScrollRestore({
-    codeViewRef,
-    inputs,
-    previousTopologyKey: previousTopologyKeyRef.current,
-    topologyKey,
-    topologyScrollRestoreRef,
-  });
-  previousTopologyKeyRef.current = topologyKey;
+  }, [inputs, itemEpoch, parsed.items]);
   const metrics = useMemo(
     () => diffFontMetrics(appearance.codeFontSize),
     [appearance.codeFontSize]
@@ -197,14 +240,22 @@ export function PierDiffView({
   // selection=uncontrolled 钉进 key：避免 HMR 从旧受控实例切过来时
   // CodeView 拒绝 controlled→uncontrolled 并卡死选区。
   // diffStyle/overflow/lineHeight（含 codeFontSize）影响行高与布局缓存，切换时强制重建实例。
-  // topologyKey：item id 集合变化时重建（stage 会改 sectionKey/group）。
+  // 成员 id 集合变化不 remount：由 syncCodeViewItems（addItems/setItems）消化。
   const codeViewKey = pierDiffCodeViewKey({
     diffStyle,
     lineHeight: metrics.lineHeight,
     overflow,
     renderMode,
-    topologyKey,
   });
+  // Capture while the previous CodeView instance is still mounted (render phase).
+  captureTopologyScrollRestore({
+    codeViewRef,
+    inputs,
+    previousTopologyKey: previousCodeViewKeyRef.current,
+    topologyKey: codeViewKey,
+    topologyScrollRestoreRef: layoutScrollRestoreRef,
+  });
+  previousCodeViewKeyRef.current = codeViewKey;
   const renderEnvironment = useMemo(
     () =>
       `${renderMode}\0${appearance.codeTheme}\0${appearance.colorMode}\0${metrics.diffHeaderHeight}\0${metrics.lineHeight}\0${diffStyle}\0${overflow}`,
@@ -244,61 +295,36 @@ export function PierDiffView({
     parsedItemsRef,
     selectedTextRef,
   });
-  const options = useMemo<CodeViewOptions<undefined>>(
-    () => ({
-      diffIndicators: "bars",
-      diffStyle,
-      disableBackground: false,
-      disableLineNumbers: false,
-      enableGutterUtility: false,
-      enableLineSelection: true,
-      itemMetrics: {
-        diffHeaderHeight: metrics.diffHeaderHeight,
-        lineHeight: metrics.lineHeight,
-      },
-      layout: { gap: 1, paddingBottom: 0, paddingTop: 0 },
-      lineHoverHighlight: "number",
-      onPostRender(element, _instance, phase, context) {
-        if (phase !== "unmount") {
-          markRendered(context.item.id, context.version, element);
-        }
-        const viewer = codeViewRef.current?.getInstance();
-        stabilizeCodeViewStickyPositioning(viewer);
-        scheduleRenderWindowReport();
-      },
-      overflow,
-      preferredHighlighter: "shiki-wasm",
-      stickyHeaders: true,
-      theme: appearance.codeTheme,
-      themeType: appearance.colorMode,
-      unsafeCSS: CODE_VIEW_CUSTOM_CSS,
-    }),
-    [
-      appearance.codeTheme,
-      appearance.colorMode,
-      diffStyle,
-      markRendered,
-      metrics,
-      overflow,
-      scheduleRenderWindowReport,
-    ]
+  const { options, renderAnnotation, style } = useDiffViewCodeOptions({
+    appearance,
+    codeViewRef,
+    diffStyle,
+    fileHoverCleanupsRef,
+    fileHoverHostsRef,
+    inputs,
+    labels,
+    markRendered,
+    metrics,
+    ...(onHunkAction === undefined ? {} : { onHunkAction }),
+    overflow,
+    scheduleRenderWindowReport,
+  });
+
+  useEffect(
+    () => () => {
+      for (const cleanup of fileHoverCleanupsRef.current.values()) {
+        cleanup();
+      }
+      fileHoverCleanupsRef.current.clear();
+      fileHoverHostsRef.current.clear();
+    },
+    []
   );
-  const style = useMemo<DiffTypographyStyle>(
-    () => ({
-      "--diffshub-annotation-border": "var(--border)",
-      "--diffshub-diff-separator": "var(--border)",
-      "--diffs-font-family": appearance.codeFontFamily,
-      "--diffs-font-size": appearance.codeFontSize,
-      "--diffs-line-height": "1.75",
-      "--diffs-scrollbar-gutter-override":
-        "var(--shell-scrollbar-width-legacy)",
-      height: "100%",
-    }),
-    [appearance.codeFontFamily, appearance.codeFontSize]
-  );
+
   const {
     handleCodeViewScroll,
     handleHeaderClickCapture,
+    handleUserScrollIntent,
     handleUserScrollKey,
     renderHeaderMetadata,
     renderHeaderPrefix,
@@ -306,6 +332,7 @@ export function PierDiffView({
   } = useDiffViewHeaders({
     appliedItemsRef,
     auditVisibleItems,
+    bumpItemEpoch,
     codeViewItems,
     codeViewRef,
     collapsedItemsRef,
@@ -323,11 +350,14 @@ export function PierDiffView({
     scheduleRenderWindowReport,
   });
 
+  // membership 拓扑变：apply 内 render(true) 同步 Pierre 行锚；禁止 item 级 scrollTo。
   useDiffViewItemApply({
     appliedItemsRef,
+    bumpItemEpoch,
     codeViewItems,
     codeViewKey,
     codeViewRef,
+    firstLayoutItemIdsRef,
     inputs,
     onError,
     parsedCache: parsed.cache,
@@ -337,20 +367,18 @@ export function PierDiffView({
     parsedItemsRef,
     renderItemIdentitiesRef,
     scheduleRenderWindowReport,
+    ...(getSuppressMembershipScrollRestore === undefined
+      ? {}
+      : { getSuppressMembershipScrollRestore }),
+    suppressMembershipScrollRestore,
   });
 
-  // Patch Pierre sticky jitter once the imperative handle exists. onPostRender
-  // can fire before codeViewRef is assigned on first mount.
   useLayoutEffect(() => {
-    // Re-run after CodeView remount / item topology changes (ref may lag first paint).
     if (codeViewKey.length >= 0 && codeViewItems.length >= 0) {
       stabilizeCodeViewStickyPositioning(codeViewRef.current?.getInstance());
     }
   }, [codeViewItems, codeViewKey]);
 
-  // After CodeView remount (new key), put the viewport back. Prefer the same
-  // section id; if stage rewrote the sectionKey, match by file path; last resort
-  // is raw scrollTop so we never silently jump to 0 on a successful stage.
   useLayoutEffect(() => {
     restoreTopologyScroll({
       codeViewItemsLength: codeViewItems.length,
@@ -358,7 +386,7 @@ export function PierDiffView({
       codeViewRef,
       inputs,
       scheduleRenderWindowReport,
-      topologyScrollRestoreRef,
+      topologyScrollRestoreRef: layoutScrollRestoreRef,
     });
   }, [codeViewItems, codeViewKey, inputs, scheduleRenderWindowReport]);
 
@@ -371,11 +399,10 @@ export function PierDiffView({
         disableWorkerPool();
         return;
       }
-      const error = new Error(
-        "Pierre did not render the diff after the worker fallback."
-      );
       setInlineRenderFailed(true);
-      onError(error);
+      onError(
+        new Error("Pierre did not render the diff after the worker fallback.")
+      );
     }, INLINE_RENDER_TIMEOUT_MS);
     return () => clearTimeout(timeout);
   }, [
@@ -389,9 +416,11 @@ export function PierDiffView({
   useDiffViewHandle({
     appliedItemsRef,
     auditVisibleItems,
+    bumpItemEpoch,
     codeViewRef,
     collapsedItemsRef,
     expectItemRender,
+    firstLayoutItemIdsRef,
     itemErrorIdsRef,
     onItemErrorRef,
     parsedItemIndexesRef,
@@ -433,6 +462,8 @@ export function PierDiffView({
       onScroll={handleCodeViewScroll}
       options={options}
       ref={codeViewRef}
+      // Writable review only: Pierre fills annotation slots when this prop is set.
+      {...(onHunkAction ? { renderAnnotation } : {})}
       renderHeaderMetadata={renderHeaderMetadata}
       renderHeaderPrefix={renderHeaderPrefix}
       style={style}
@@ -446,8 +477,8 @@ export function PierDiffView({
       onClickCapture={handleHeaderClickCapture}
       onKeyDownCapture={handleUserScrollKey}
       onPointerDownCapture={handlePointerDownCapture}
-      onTouchStartCapture={onScroll}
-      onWheelCapture={onScroll}
+      onTouchStartCapture={handleUserScrollIntent}
+      onWheelCapture={handleUserScrollIntent}
     >
       {workerUnavailable ? (
         codeView

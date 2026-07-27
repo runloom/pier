@@ -3,6 +3,7 @@ import type {
   PierDiffViewItem,
   PierDiffViewPresentation,
   PierDiffViewRenderWindow,
+  PierHunkActionEvent,
 } from "@pier/ui/diff-view.tsx";
 import type {
   RendererPluginAppearance,
@@ -18,21 +19,13 @@ import {
   useCallback,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from "react";
-import { notifyError } from "./git-command-helpers.ts";
 import { pluginText } from "./git-plugin-text.ts";
-import {
-  confirmGitDiscard,
-  partitionDiscardPaths,
-} from "./git-review-discard.ts";
 import { ReviewErrorEmpty, ReviewLoading } from "./git-review-feedback.tsx";
+import { useGitReviewCodeMutations } from "./use-git-review-code-mutations.ts";
 import { usePluginLanguage } from "./use-plugin-language.ts";
-
-function basename(path: string): string {
-  const segments = path.split("/").filter(Boolean);
-  return segments.at(-1) ?? path;
-}
 
 const loadPierDiffView = () =>
   import("@pier/ui/diff-view.tsx").then((module) => ({
@@ -87,17 +80,23 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
         collapseDiff: string;
         discardChanges: string;
         expandDiff: string;
+        revertHunk?: string;
         stageChanges: string;
+        stageHunk?: string;
         unstageChanges: string;
+        unstageHunk?: string;
       };
       onDiscardFile?: (itemId: string) => void;
       onError: (error: Error) => void;
+      onHunkAction?: (event: PierHunkActionEvent) => void;
       onItemError?: (id: string, error: Error | null) => void;
       onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
       onScroll: () => void;
       onToggleStage?: (itemId: string) => void;
       presentation?: PierDiffViewPresentation;
       ref: (handle: PierDiffViewHandle | null) => void;
+      getSuppressMembershipScrollRestore?: () => boolean;
+      suppressMembershipScrollRestore?: boolean;
     }) => React.JSX.Element | null
   > | null = null;
   const getSharedView = () => {
@@ -119,6 +118,8 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     onRenderWindowChange,
     onScroll,
     presentation,
+    getSuppressMembershipScrollRestore,
+    suppressMembershipScrollRestore = false,
   }: {
     readonly appearance: RendererPluginAppearance;
     readonly context: RendererPluginContext;
@@ -133,16 +134,17 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
     readonly onScroll: () => void;
     readonly presentation?: PierDiffViewPresentation;
+    readonly sourcePanelId?: string;
+    readonly getSuppressMembershipScrollRestore?: () => boolean;
+    readonly suppressMembershipScrollRestore?: boolean;
   }): React.JSX.Element {
     const language = usePluginLanguage();
+    const handleRef = useRef<PierDiffViewHandle | null>(null);
     const [runtimeError, setRuntimeError] = useState<Error | null>(null);
     const [attempt, setAttempt] = useState(() => ({
       id: 0,
       View: getSharedView(),
     }));
-    const [busySectionKeys, setBusySectionKeys] = useState(
-      () => new Set<string>()
-    );
     const LazyPierDiffView = attempt.View;
     const retry = useCallback(() => {
       setRuntimeError(null);
@@ -160,238 +162,29 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       return () => onFeedbackChange(null);
     }, [onFeedbackChange, retry, runtimeError]);
 
-    const displayItems = useMemo(() => {
-      if (busySectionKeys.size === 0) {
-        return items;
-      }
-      return items.map((item) => {
-        if (!(item.stageControl && busySectionKeys.has(item.id))) {
-          return item;
-        }
-        return {
-          ...item,
-          stageControl: { ...item.stageControl, busy: true },
-        };
-      });
-    }, [busySectionKeys, items]);
+    const {
+      canMutate,
+      displayItems,
+      onDiscardFile,
+      onHunkAction,
+      onOpenFile,
+      onToggleStage,
+    } = useGitReviewCodeMutations({
+      context,
+      contextId,
+      items,
+      ...(entries === undefined ? {} : { entries }),
+      ...(gitRootPath === undefined ? {} : { gitRootPath }),
+    });
 
-    const resolveSlot = useCallback(
-      (itemId: string) => {
-        if (!entries) {
-          return null;
-        }
-        for (const entry of entries) {
-          const slot = entry.renderSlots.find(
-            (candidate) => candidate.sectionKey === itemId
-          );
-          if (slot) {
-            return { entry, slot };
-          }
-        }
-        return null;
+    const setDiffHandle = useCallback(
+      (handle: PierDiffViewHandle | null) => {
+        handleRef.current = handle;
+        diffRef(handle);
       },
-      [entries]
+      [diffRef]
     );
 
-    const withBusy = useCallback((itemId: string, run: Promise<unknown>) => {
-      setBusySectionKeys((prev) => {
-        const next = new Set(prev);
-        next.add(itemId);
-        return next;
-      });
-      return run.finally(() => {
-        setBusySectionKeys((prev) => {
-          if (!prev.has(itemId)) {
-            return prev;
-          }
-          const next = new Set(prev);
-          next.delete(itemId);
-          return next;
-        });
-      });
-    }, []);
-
-    const onToggleStage = useCallback(
-      (itemId: string) => {
-        if (!(entries && gitRootPath) || busySectionKeys.has(itemId)) {
-          return;
-        }
-        const item = items.find((candidate) => candidate.id === itemId);
-        const stageState = item?.stageControl?.state;
-        if (!stageState) {
-          return;
-        }
-        const resolved = resolveSlot(itemId);
-        if (!resolved) {
-          return;
-        }
-        const { entry, slot } = resolved;
-        const paths = [
-          slot.targetPath,
-          ...entry.oldPaths.filter((path) => path !== slot.targetPath),
-        ];
-        withBusy(
-          itemId,
-          (async () => {
-            try {
-              const ok =
-                stageState === "staged"
-                  ? await context.git.unstage(gitRootPath, paths)
-                  : await context.git.stage(gitRootPath, paths);
-              // 成功路径静默：watch/index 以 delta 对齐；不 toast、不抬 failure 面。
-              if (!ok) {
-                notifyError(
-                  context,
-                  stageState === "staged"
-                    ? pluginText(
-                        context,
-                        "reviewTreeUnstageFailed",
-                        "Unable to Unstage"
-                      )
-                    : pluginText(
-                        context,
-                        "reviewTreeStageFailed",
-                        "Unable to Stage"
-                      )
-                );
-              }
-            } catch (error) {
-              // 仅 write 真失败时一次稳定错误（终态：禁止中间态闪错）。
-              notifyError(
-                context,
-                stageState === "staged"
-                  ? pluginText(
-                      context,
-                      "reviewTreeUnstageFailed",
-                      "Unable to Unstage"
-                    )
-                  : pluginText(
-                      context,
-                      "reviewTreeStageFailed",
-                      "Unable to Stage"
-                    ),
-                error
-              );
-            }
-          })()
-        ).catch(() => undefined);
-      },
-      [
-        busySectionKeys,
-        context,
-        entries,
-        gitRootPath,
-        items,
-        resolveSlot,
-        withBusy,
-      ]
-    );
-
-    const onDiscardFile = useCallback(
-      (itemId: string) => {
-        if (!(entries && gitRootPath) || busySectionKeys.has(itemId)) {
-          return;
-        }
-        const item = items.find((candidate) => candidate.id === itemId);
-        if (
-          item?.stageControl?.state !== "unstaged" ||
-          item.stageControl.canDiscard !== true
-        ) {
-          return;
-        }
-        const resolved = resolveSlot(itemId);
-        if (!resolved) {
-          return;
-        }
-        const path = resolved.slot.targetPath;
-        const selection = partitionDiscardPaths({
-          paths: [path],
-          uniformStatus: resolved.slot.status,
-        });
-        // Confirm first (no busy chrome); busy only during the write.
-        (async () => {
-          const decision = await confirmGitDiscard(context, selection);
-          if (decision.kind !== "proceed" || decision.paths.length === 0) {
-            return;
-          }
-          await withBusy(
-            itemId,
-            (async () => {
-              try {
-                const ok = await context.git.discardChanges(gitRootPath, [
-                  ...decision.paths,
-                ]);
-                if (!ok) {
-                  notifyError(
-                    context,
-                    pluginText(
-                      context,
-                      "reviewDiscardFailed",
-                      "Unable to discard changes"
-                    )
-                  );
-                }
-              } catch (error) {
-                notifyError(
-                  context,
-                  pluginText(
-                    context,
-                    "reviewDiscardFailed",
-                    "Unable to discard changes"
-                  ),
-                  error
-                );
-              }
-            })()
-          );
-        })().catch(() => undefined);
-      },
-      [
-        busySectionKeys,
-        context,
-        entries,
-        gitRootPath,
-        items,
-        resolveSlot,
-        withBusy,
-      ]
-    );
-
-    const canMutate = Boolean(entries && gitRootPath);
-    const onOpenFile = useCallback(
-      (itemId: string) => {
-        if (!gitRootPath) {
-          return;
-        }
-        const item = items.find((entry) => entry.id === itemId);
-        const path = item?.fileDisplay?.path;
-        if (!path) {
-          return;
-        }
-        const opened = context.files.openInEditor({
-          context: {
-            contextId,
-            gitRoot: gitRootPath,
-            projectRootPath: gitRootPath,
-            source: "panel",
-            updatedAt: Date.now(),
-          },
-          path,
-          root: gitRootPath,
-          title: basename(path),
-        });
-        if (!opened) {
-          context.notifications.error(
-            pluginText(
-              context,
-              "reviewTreeOpenFileFailed",
-              "Unable to open file"
-            )
-          );
-        }
-      },
-      [context, contextId, gitRootPath, items]
-    );
     // Rebuild tooltip/aria labels when host locale switches.
     // biome-ignore lint/correctness/useExhaustiveDependencies: language drives i18n re-read
     const diffLabels = useMemo(
@@ -408,8 +201,11 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
         ),
         expandDiff: pluginText(context, "reviewExpandDiff", "Expand diff"),
         openFile: pluginText(context, "reviewTreeOpenFile", "Open File"),
+        revertHunk: pluginText(context, "reviewHunkRevert", "Revert"),
         stageChanges: pluginText(context, "reviewHeaderStage", "Stage"),
+        stageHunk: pluginText(context, "reviewHunkStage", "Stage"),
         unstageChanges: pluginText(context, "reviewHeaderUnstage", "Unstage"),
+        unstageHunk: pluginText(context, "reviewHunkUnstage", "Unstage"),
       }),
       [context, language]
     );
@@ -448,9 +244,21 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                 {...(gitRootPath ? { onOpenFile } : {})}
                 onRenderWindowChange={onRenderWindowChange}
                 onScroll={onScroll}
-                {...(canMutate ? { onDiscardFile, onToggleStage } : {})}
+                {...(canMutate
+                  ? {
+                      onDiscardFile,
+                      onHunkAction,
+                      onToggleStage,
+                    }
+                  : {})}
                 {...(presentation === undefined ? {} : { presentation })}
-                ref={diffRef}
+                ref={setDiffHandle}
+                {...(getSuppressMembershipScrollRestore === undefined
+                  ? {}
+                  : { getSuppressMembershipScrollRestore })}
+                suppressMembershipScrollRestore={
+                  suppressMembershipScrollRestore
+                }
               />
             </Suspense>
           </ReviewCodeViewLoadBoundary>

@@ -19,7 +19,6 @@ describe("diff header metrics", () => {
       diffStyle: "split",
       overflow: "scroll",
       renderMode: "worker",
-      topologyKey: "a,b",
     } as const;
     const small = pierDiffCodeViewKey({
       ...base,
@@ -32,6 +31,24 @@ describe("diff header metrics", () => {
     expect(small).not.toBe(large);
     expect(small).toContain("lh=");
     expect(large).toContain(`lh=${diffFontMetrics("16px").lineHeight}`);
+  });
+
+  it("pierDiffCodeViewKey does not include item membership (no topology remount)", () => {
+    const key = pierDiffCodeViewKey({
+      diffStyle: "split",
+      lineHeight: 22.75,
+      overflow: "scroll",
+      renderMode: "worker",
+    });
+    expect(key).not.toContain("topology");
+    expect(key).toBe(
+      pierDiffCodeViewKey({
+        diffStyle: "split",
+        lineHeight: 22.75,
+        overflow: "scroll",
+        renderMode: "worker",
+      })
+    );
   });
 });
 
@@ -67,6 +84,12 @@ describe("stabilizeCodeViewStickyPositioning", () => {
     stabilizeCodeViewStickyPositioning(viewer);
     expect(viewer.applyStickyPositioning).toBe(patched);
     expect(stickyContainer.style.top).toBe("250px");
+
+    // 虚拟化热路径：reapply:false 只保留 patch，不再写 style。
+    stickyContainer.style.top = "0px";
+    stabilizeCodeViewStickyPositioning(viewer, { reapply: false });
+    expect(viewer.applyStickyPositioning).toBe(patched);
+    expect(stickyContainer.style.top).toBe("0px");
   });
 
   it("patches without applying when sticky bounds are unset", () => {

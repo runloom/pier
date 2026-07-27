@@ -713,6 +713,12 @@ describe("git builtin plugin", () => {
           applyStash: vi.fn(async () => ({ kind: "ok" as const })),
           dropStash: vi.fn(async () => ({ kind: "ok" as const })),
           rebase: vi.fn(async () => ({ kind: "ok" as const, message: "" })),
+          applyPatch: vi.fn(async () => ({
+            appliedPaths: [],
+            conflictedPaths: [],
+            skippedPaths: [],
+            status: "success" as const,
+          })),
           stage: vi.fn(async () => true),
           stash: vi.fn(async () => ({ kind: "ok" as const })),
           unstage: vi.fn(async () => true),

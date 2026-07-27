@@ -36,6 +36,7 @@ interface GitReviewDocumentViewProps {
   /** Uncommitted entries enable header stage checkbox. */
   readonly entries?: readonly GitReviewIndexEntry[];
   readonly failureSummary: ReviewFailureSummary;
+  readonly getSuppressMembershipScrollRestore?: () => boolean;
   readonly gitRootPath: string;
   readonly headerLeading?: React.ReactNode;
   readonly headerTrailing?: React.ReactNode;
@@ -64,6 +65,7 @@ interface GitReviewDocumentViewProps {
   readonly sidebarFooter?: React.ReactNode;
   readonly sidebarHeader?: React.ReactNode;
   readonly sourcePanelId?: string;
+  readonly suppressMembershipScrollRestore?: boolean;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly viewState: ReviewDocumentViewState;
   readonly warnings: GitReviewIndexOk["warnings"];
@@ -98,6 +100,8 @@ export function GitReviewDocumentView({
   sidebarCollapsed,
   sidebarFooter,
   sidebarHeader,
+  getSuppressMembershipScrollRestore,
+  suppressMembershipScrollRestore = false,
   treeModel,
   viewState,
   warnings,
@@ -116,7 +120,13 @@ export function GitReviewDocumentView({
     ...(presentation === undefined ? {} : { presentation }),
     projection,
     settled: viewState.settled,
+    ...(sourcePanelId === undefined ? {} : { sourcePanelId }),
+    ...(getSuppressMembershipScrollRestore === undefined
+      ? {}
+      : { getSuppressMembershipScrollRestore }),
+    suppressMembershipScrollRestore,
   });
+
   return (
     <GitReviewPanelLayout
       context={context}
@@ -181,7 +191,18 @@ function documentContent(options: {
   readonly presentation?: PierDiffViewPresentation;
   readonly projection: ReviewDocumentProjection;
   readonly settled: boolean;
+  readonly sourcePanelId?: string;
+  readonly getSuppressMembershipScrollRestore?: () => boolean;
+  readonly suppressMembershipScrollRestore?: boolean;
 }): React.JSX.Element {
+  const suppress = options.suppressMembershipScrollRestore === true;
+  const suppressGetter =
+    options.getSuppressMembershipScrollRestore === undefined
+      ? {}
+      : {
+          getSuppressMembershipScrollRestore:
+            options.getSuppressMembershipScrollRestore,
+        };
   if (options.projection.items.length > 0) {
     return (
       <div className="min-h-0 flex-1">
@@ -202,6 +223,11 @@ function documentContent(options: {
           {...(options.presentation === undefined
             ? {}
             : { presentation: options.presentation })}
+          {...(options.sourcePanelId === undefined
+            ? {}
+            : { sourcePanelId: options.sourcePanelId })}
+          {...suppressGetter}
+          suppressMembershipScrollRestore={suppress}
         />
       </div>
     );
@@ -228,6 +254,11 @@ function documentContent(options: {
         {...(options.presentation === undefined
           ? {}
           : { presentation: options.presentation })}
+        {...(options.sourcePanelId === undefined
+          ? {}
+          : { sourcePanelId: options.sourcePanelId })}
+        {...suppressGetter}
+        suppressMembershipScrollRestore={suppress}
       />
     </div>
   );

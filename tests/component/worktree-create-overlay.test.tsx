@@ -294,6 +294,7 @@ function createMockContext(): RendererPluginContext {
       revert: unimplemented("git.revert"),
       searchBranches: unimplemented("git.searchBranches"),
       searchCommits: unimplemented("git.searchCommits"),
+      applyPatch: unimplemented("git.applyPatch"),
       stage: unimplemented("git.stage"),
       stash: unimplemented("git.stash"),
       sync: unimplemented("git.sync"),

@@ -53,6 +53,7 @@ import type {
 } from "@shared/contracts/file-save-target.ts";
 import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
 import type {
+  GitApplyPatchResult,
   GitBranchRef,
   GitChangeEvent,
   GitCommit,
@@ -196,7 +197,21 @@ export interface RendererPluginGitFacade {
   abortMerge(cwd: string): Promise<GitMergeAbortResult>;
   abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
   abortRevert(cwd: string): Promise<GitSequencerAbortResult>;
+  /**
+   * Codex review apply-patch (`git apply` target/revert).
+   * Caller supplies a unified patch (file or single hunk).
+   */
+  applyPatch(
+    cwd: string,
+    options: {
+      atomic?: boolean;
+      diff: string;
+      revert?: boolean;
+      target: "staged" | "unstaged" | "staged-and-unstaged";
+    }
+  ): Promise<GitApplyPatchResult>;
   applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
+
   cancelReviewRequest(request: GitReviewCancelRequest): Promise<void>;
   checkoutBranch(cwd: string, name: string): Promise<boolean>;
   cherryPick(cwd: string, oid: string): Promise<GitSequencerResult>;

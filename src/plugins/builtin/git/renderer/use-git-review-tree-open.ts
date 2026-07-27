@@ -21,7 +21,6 @@ export function useGitReviewTreeOpen(options: {
     } | null
   ) => void;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
-  readonly tryPendingNavigation: () => void;
 }): {
   readonly commandMenuSessionRef: RefObject<boolean>;
   readonly isActiveOpenPath: (path: string) => boolean;
@@ -42,7 +41,6 @@ export function useGitReviewTreeOpen(options: {
     getSelectedSectionKey,
     setSelectedTreeTarget,
     treeModel,
-    tryPendingNavigation,
   } = options;
   /** Command 菜单会话：禁止任何导航/scrollToItem。 */
   const commandMenuSessionRef = useRef(false);
@@ -69,11 +67,11 @@ export function useGitReviewTreeOpen(options: {
         entryKey: fileRef.entryKey,
         sectionKey: fileRef.sectionKey,
       });
+      // 只标 pending + boost demand；scroll 在 projection-commit / pending layout
       beginNavigation({
         entryKey: fileRef.entryKey,
         sectionKey: fileRef.sectionKey,
       });
-      tryPendingNavigation();
     },
     [
       beginNavigation,
@@ -81,7 +79,6 @@ export function useGitReviewTreeOpen(options: {
       getSelectedSectionKey,
       setSelectedTreeTarget,
       treeModel,
-      tryPendingNavigation,
     ]
   );
   /** 树 path → 是否已是 B-Select 打开目标（Command 判定，不依赖 L-Select）。 */

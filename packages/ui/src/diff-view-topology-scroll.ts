@@ -1,5 +1,6 @@
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import type { RefObject } from "react";
+import type { PierHunkAnnotationMetadata } from "./diff-view-hunk-actions.tsx";
 import type { PierDiffViewItem } from "./diff-view-items.ts";
 import type { PierDiffViewAnchor } from "./use-diff-view-handle.ts";
 
@@ -11,7 +12,7 @@ export interface TopologyScrollRestore {
 
 /** Capture viewport while previous CodeView is still mounted (render phase). */
 export function captureTopologyScrollRestore(input: {
-  readonly codeViewRef: RefObject<CodeViewHandle<undefined> | null>;
+  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
   readonly inputs: readonly PierDiffViewItem[];
   readonly previousTopologyKey: string | null;
   readonly topologyKey: string;
@@ -63,7 +64,7 @@ export function captureTopologyScrollRestore(input: {
 export function restoreTopologyScroll(input: {
   readonly codeViewKey: string;
   readonly codeViewItemsLength: number;
-  readonly codeViewRef: RefObject<CodeViewHandle<undefined> | null>;
+  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
   readonly inputs: readonly PierDiffViewItem[];
   readonly scheduleRenderWindowReport: () => void;
   readonly topologyScrollRestoreRef: RefObject<TopologyScrollRestore | null>;

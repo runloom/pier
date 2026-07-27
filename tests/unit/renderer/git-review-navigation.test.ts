@@ -3,6 +3,7 @@ import {
   findReviewNavigationTarget,
   isReviewNavigationContentReady,
   isReviewNavigationTerminal,
+  NAVIGATION_MAX_RESCROLL_ATTEMPTS,
   resolveReviewSectionKey,
   scheduleReviewNavigationVerification,
   shouldScrollReviewNavigation,
@@ -221,12 +222,17 @@ describe("Review navigation verification", () => {
     });
   });
 
-  it("首轮未进入视口时重发定位，直到真实可见", () => {
+  it("locks product default maxRescrollAttempts at 0", () => {
+    expect(NAVIGATION_MAX_RESCROLL_ATTEMPTS).toBe(0);
+  });
+
+  it("默认不重发 scrollTo，仅观测可见性直至进入视口", () => {
     const frames = frameHarness();
     const onVisible = vi.fn();
     const scrollToItem = vi.fn(() => true);
     const isVisible = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
 
+    // 主路径 scrollTo 由调用方触发一次；verify 默认 maxRescroll=0
     scheduleReviewNavigationVerification({
       getSectionId: () => "section:1999",
       isCurrent: () => true,
@@ -239,15 +245,16 @@ describe("Review navigation verification", () => {
     });
     frames.flushFrame();
     frames.flushFrame();
-    expect(scrollToItem).toHaveBeenCalledWith("section:1999");
+    expect(scrollToItem).not.toHaveBeenCalled();
     expect(onVisible).not.toHaveBeenCalled();
 
     frames.flushFrame();
     frames.flushFrame();
+    expect(scrollToItem).not.toHaveBeenCalled();
     expect(onVisible).toHaveBeenCalledOnce();
   });
 
-  it("动态高度连续变化超过旧的 45 轮后仍可完成有界定位", () => {
+  it("显式 maxRescroll 时才有界重发定位", () => {
     const frames = frameHarness();
     const onTimeout = vi.fn();
     const onVisible = vi.fn();
@@ -255,7 +262,7 @@ describe("Review navigation verification", () => {
     let checks = 0;
     const isVisible = vi.fn(() => {
       checks += 1;
-      return checks > 46;
+      return checks > 3;
     });
 
     scheduleReviewNavigationVerification({
@@ -263,16 +270,17 @@ describe("Review navigation verification", () => {
       isCurrent: () => true,
       isTerminal: () => false,
       isVisible,
+      maxRescrollAttempts: 2,
       onTerminal: vi.fn(),
       onTimeout,
       onVisible,
       scrollToItem,
     });
-    for (let frame = 0; frame < 94; frame += 1) {
+    for (let frame = 0; frame < 20; frame += 1) {
       frames.flushFrame();
     }
 
-    expect(scrollToItem).toHaveBeenCalledTimes(46);
+    expect(scrollToItem.mock.calls.length).toBeLessThanOrEqual(2);
     expect(onVisible).toHaveBeenCalledOnce();
     expect(onTimeout).not.toHaveBeenCalled();
   });
@@ -300,7 +308,7 @@ describe("Review navigation verification", () => {
 });
 
 describe("Review navigation content readiness", () => {
-  it("does not scroll until loader member is loaded/error (end-state)", () => {
+  it("scrolls when ledger has estimate or loaded cacheKey (stable-ledger)", () => {
     expect(
       shouldScrollReviewNavigation({
         projectedCacheKey: "git-review-placeholder:section:1",
@@ -317,10 +325,10 @@ describe("Review navigation content readiness", () => {
         },
       })
     ).toBe(false);
-    // 即使投影残留旧 cacheKey，loading 也不得 scroll（终态禁止假就绪）。
+    // estimate 账本可滚（不要求 body loaded）
     expect(
       shouldScrollReviewNavigation({
-        projectedCacheKey: "document:1:section:1",
+        projectedCacheKey: "estimate:section:1",
         resource: {
           entry: {
             entryKey: "entry:1",
@@ -333,7 +341,7 @@ describe("Review navigation content readiness", () => {
           operationId: "op-1",
         },
       })
-    ).toBe(false);
+    ).toBe(true);
     expect(
       shouldScrollReviewNavigation({
         projectedCacheKey: "document:1:section:1",

@@ -29,19 +29,23 @@ export function useGitReviewItemReplay({
   committedProjectionGenerationRef,
   diffHandleRef,
   documentGenerationRef,
-  hasPendingNavigation,
   latestItemUpdatesRef,
 }: {
   readonly committedProjectionGenerationRef: RefObject<number>;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
   readonly documentGenerationRef: RefObject<number>;
-  readonly hasPendingNavigation: () => boolean;
   readonly latestItemUpdatesRef: RefObject<Map<string, PierDiffViewItem>>;
 }): {
   readonly applyItemUpdates: (
     handle: PierDiffViewHandle,
     generation: number,
-    items: readonly PierDiffViewItem[]
+    items: readonly PierDiffViewItem[],
+    options?: { readonly flush?: boolean }
+  ) => boolean;
+  /** settle 前冲刷挂起的 coalesce rAF，避免 restore 后再被晚到 updateItems 推视口 */
+  readonly flushPendingItemUpdates: (
+    handle: PierDiffViewHandle,
+    generation: number
   ) => boolean;
   readonly clearLatestItemUpdates: () => void;
   readonly replayFailure: Error | null;
@@ -57,6 +61,13 @@ export function useGitReviewItemReplay({
 } {
   const pendingRef = useRef<PendingReplay | null>(null);
   const frameRef = useRef<number | null>(null);
+  /** 同帧多 settle 合并：ids + generation + handle */
+  const coalesceRef = useRef<{
+    readonly generation: number;
+    readonly handle: PierDiffViewHandle;
+    readonly ids: Set<string>;
+    frameId: number | null;
+  } | null>(null);
   const revisionRef = useRef(0);
   const [replayFailure, setReplayFailure] = useState<Error | null>(null);
 
@@ -65,6 +76,11 @@ export function useGitReviewItemReplay({
       cancelAnimationFrame(frameRef.current);
       frameRef.current = null;
     }
+    const coalesce = coalesceRef.current;
+    if (coalesce?.frameId != null) {
+      cancelAnimationFrame(coalesce.frameId);
+    }
+    coalesceRef.current = null;
   }, []);
 
   const clearLatestItemUpdates = useCallback(() => {
@@ -157,11 +173,8 @@ export function useGitReviewItemReplay({
         return true;
       }
       const attempts = previousAttempts + 1;
-      if (
-        handle.updateItems(items, {
-          preserveAnchor: !hasPendingNavigation(),
-        })
-      ) {
+      // preserveAnchor:false → Pierre CodeView 内置行级 scroll anchoring。
+      if (handle.updateItems(items, { preserveAnchor: false })) {
         pendingRef.current = null;
         cancelFrame();
         setReplayFailure(null);
@@ -195,20 +208,106 @@ export function useGitReviewItemReplay({
       committedProjectionGenerationRef,
       diffHandleRef,
       documentGenerationRef,
-      hasPendingNavigation,
       latestItemUpdatesRef,
     ]
   );
 
+  /**
+   * 冷启动 / 并发 settle：同帧内多次 apply 合并为一次 updateItems，
+   * 让 Pierre 只做一轮 layout + 行级 anchoring，减少「一文件一抖」。
+   * settle 路径传 `flush: true`：立刻 updateItems，再跑 endReadingRefresh，
+   * 避免 rAF 正文晚于外层 restore 二次推视口。
+   */
   const applyItemUpdates = useCallback(
     (
       handle: PierDiffViewHandle,
       generation: number,
-      items: readonly PierDiffViewItem[]
-    ) =>
-      applyUpdates(handle, generation, new Set(items.map((item) => item.id))),
+      items: readonly PierDiffViewItem[],
+      options?: { readonly flush?: boolean }
+    ): boolean => {
+      if (items.length === 0) {
+        return true;
+      }
+      const ids = items.map((item) => item.id);
+      if (options?.flush === true) {
+        // 取消挂起 coalesce，同步落正文后再由调用方 settle restore
+        const existing = coalesceRef.current;
+        if (existing?.frameId != null) {
+          cancelAnimationFrame(existing.frameId);
+        }
+        if (existing && existing.generation === generation) {
+          for (const id of ids) {
+            existing.ids.add(id);
+          }
+          const merged = existing.ids;
+          coalesceRef.current = null;
+          return applyUpdates(handle, generation, merged);
+        }
+        coalesceRef.current = null;
+        return applyUpdates(handle, generation, new Set(ids));
+      }
+      const existing = coalesceRef.current;
+      if (
+        existing &&
+        existing.handle === handle &&
+        existing.generation === generation
+      ) {
+        for (const id of ids) {
+          existing.ids.add(id);
+        }
+        return true;
+      }
+      if (existing?.frameId != null) {
+        cancelAnimationFrame(existing.frameId);
+      }
+      const bucket = {
+        frameId: null as number | null,
+        generation,
+        handle,
+        ids: new Set(ids),
+      };
+      coalesceRef.current = bucket;
+      bucket.frameId = requestAnimationFrame(() => {
+        const current = coalesceRef.current;
+        coalesceRef.current = null;
+        if (
+          !(
+            current &&
+            current.handle === handle &&
+            current.generation === generation
+          )
+        ) {
+          return;
+        }
+        applyUpdates(handle, generation, current.ids);
+      });
+      return true;
+    },
     [applyUpdates]
   );
+
+  const flushPendingItemUpdates = useCallback(
+    (handle: PierDiffViewHandle, generation: number): boolean => {
+      const existing = coalesceRef.current;
+      if (
+        !(
+          existing &&
+          existing.handle === handle &&
+          existing.generation === generation
+        )
+      ) {
+        return true;
+      }
+      if (existing.frameId != null) {
+        cancelAnimationFrame(existing.frameId);
+      }
+      const ids = existing.ids;
+      coalesceRef.current = null;
+      return applyUpdates(handle, generation, ids);
+    },
+    [applyUpdates]
+  );
+
   const replayLatestItemUpdates = useCallback(
     (
       handle: PierDiffViewHandle,
@@ -241,6 +340,7 @@ export function useGitReviewItemReplay({
   return {
     applyItemUpdates,
     clearLatestItemUpdates,
+    flushPendingItemUpdates,
     replayFailure,
     recordLatestItemUpdates,
     replayLatestItemUpdates,

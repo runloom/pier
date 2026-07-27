@@ -14,6 +14,10 @@ export interface UseGitReviewNavigationOptions {
   readonly itemCacheKeysRef: RefObject<ReadonlyMap<string, string>>;
   readonly itemIndexByIdRef: RefObject<ReadonlyMap<string, number>>;
   readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
+  /** 导航 settle/取消时通知阅读会话结束 navigating */
+  readonly onNavigationSettled?: () => void;
+  /** 树导航开始时通知阅读会话（pin 保护） */
+  readonly onNavigationStarted?: (entryKey: string) => void;
   readonly pendingAnchorRef: RefObject<PendingReviewAnchor | null>;
   readonly renderedGenerationRef: RefObject<number>;
 }

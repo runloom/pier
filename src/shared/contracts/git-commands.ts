@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   getFileContentOptionsSchema,
+  gitApplyPatchOptionsSchema,
   gitCommitOptionsSchema,
   gitCreateBranchOptionsSchema,
   gitDeleteBranchOptionsSchema,
@@ -16,6 +17,7 @@ import {
   gitStashPopOptionsSchema,
   listBranchesOptionsSchema,
 } from "./git.ts";
+
 import { gitReviewCommandSchemas } from "./git-review.ts";
 
 // Git 只读底座命令（renderer/插件经 IPC 调用 main 的 GitService）
@@ -98,10 +100,16 @@ export const gitCommandSchemas = [
     cwd: z.string().min(1),
     type: z.literal("git.unstage"),
   }),
+  gitApplyPatchOptionsSchema.extend({
+    cwd: z.string().min(1),
+    type: z.literal("git.applyPatch"),
+  }),
+
   gitPathsSchema.extend({
     cwd: z.string().min(1),
     type: z.literal("git.discardChanges"),
   }),
+
   gitCommitOptionsSchema.extend({
     cwd: z.string().min(1),
     type: z.literal("git.commit"),
