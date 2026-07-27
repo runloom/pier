@@ -14,7 +14,7 @@ function serviceStub(): ClaudeAccountsService {
     refreshAllUsage: vi.fn(),
     refreshUsage: vi.fn(),
     remove: vi.fn(),
-    select: vi.fn(),
+    select: vi.fn(async () => []),
     snapshot: vi.fn(() => ({
       accounts: [],
       activeAccountId: null,
@@ -22,6 +22,7 @@ function serviceStub(): ClaudeAccountsService {
       revision: 1,
       schemaVersion: 1 as const,
     })),
+    syncToPeers: vi.fn(),
   };
 }
 
@@ -52,11 +53,13 @@ describe("Claude plugin RPC handlers", () => {
       "accounts.adoptCurrent",
       "accounts.cancelLogin",
       "accounts.completeLogin",
+      "accounts.peerAvailability",
       "accounts.refreshAllUsage",
       "accounts.refreshUsage",
       "accounts.remove",
       "accounts.select",
       "accounts.snapshot",
+      "accounts.syncToPeers",
       "accounts.usagePolling.acquire",
       "accounts.usagePolling.release",
     ]);
@@ -76,8 +79,33 @@ describe("Claude plugin RPC handlers", () => {
     await handlers.get("accounts.cancelLogin")?.(null);
     expect(service.cancelLogin).toHaveBeenCalledOnce();
 
-    await handlers.get("accounts.select")?.({ accountId: "a1" });
-    expect(service.select).toHaveBeenCalledWith({ accountId: "a1" });
+    await handlers.get("accounts.select")?.({
+      accountId: "a1",
+      syncTargets: ["pi", "omp"],
+    });
+    expect(service.select).toHaveBeenCalledWith({
+      accountId: "a1",
+      syncTargets: ["pi", "omp"],
+    });
+
+    await handlers.get("accounts.syncToPeers")?.({
+      syncTargets: ["opencode"],
+    });
+    expect(service.syncToPeers).toHaveBeenCalledWith({
+      syncTargets: ["opencode"],
+    });
+
+    const availability = await handlers.get("accounts.peerAvailability")?.(
+      null
+    );
+    expect(availability).toEqual(
+      expect.objectContaining({
+        omp: expect.any(Boolean),
+        opencode: expect.any(Boolean),
+        pi: expect.any(Boolean),
+        piOauthCapable: expect.any(Boolean),
+      })
+    );
 
     await handlers.get("accounts.remove")?.({ accountId: "a1" });
     expect(service.remove).toHaveBeenCalledWith({ accountId: "a1" });

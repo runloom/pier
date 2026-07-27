@@ -36,4 +36,26 @@ describe("Claude formatAccountError", () => {
       )
     ).toBe("Claude plugin is still starting — try again in a moment");
   });
+
+  it("maps peer-sync failures by first known peer prefix", () => {
+    expect(formatAccountError(new Error("omp: database not found"), t)).toBe(
+      "Couldn't sync credentials to OMP. Make sure OMP is installed and has been opened at least once on this device."
+    );
+    expect(
+      formatAccountError(
+        new Error("opencode: file missing; pi: file missing"),
+        t
+      )
+    ).toBe(
+      "Couldn't sync credentials to OpenCode. Make sure OpenCode is installed on this device."
+    );
+    expect(
+      formatAccountError(
+        new Error(
+          "No active managed account to sync. Select a managed Claude account first."
+        ),
+        t
+      )
+    ).toBe("Select a managed Claude account first, then try syncing again.");
+  });
 });

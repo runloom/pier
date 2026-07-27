@@ -1,4 +1,7 @@
+import type { CrossToolSyncTarget } from "../shared/accounts.ts";
 import type { ClaudeAccountProvider } from "./claude-provider.ts";
+import type { SyncTargetResult } from "./cross-tool-sync.ts";
+import { syncManagedAccountToPeers } from "./peer-credential-sync.ts";
 import type { ClaudeAccountsStateStore } from "./state.ts";
 
 export interface AccountsSelectDeps {
@@ -21,20 +24,21 @@ export interface AccountsSelectDeps {
 /**
  * Switch the active Claude account: sync the current active account's live
  * credential back into its managed store first (in case Claude rotated its
- * token), then materialize the target account into the active store. Mirrors
- * Codex/Grok switch ordering; identity is only mutated after materialize.
+ * token), then materialize the target account into the active store. Optional
+ * peer sync is best-effort and never rolls back the Claude switch.
  */
 export async function selectManagedAccount(
   deps: AccountsSelectDeps,
-  accountId: string
-): Promise<void> {
+  accountId: string,
+  syncTargets?: readonly CrossToolSyncTarget[]
+): Promise<SyncTargetResult[]> {
   const state = deps.stateStore.get();
   const target = state.accounts.find((account) => account.id === accountId);
   if (!target) {
     throw new Error(`Account not found: ${accountId}`);
   }
   if (state.activeAccountId === accountId) {
-    return;
+    return [];
   }
 
   if (state.activeAccountId) {
@@ -61,6 +65,20 @@ export async function selectManagedAccount(
   await deps.provider.materialize(deps.accountHomeDir(accountId));
   deps.setSuppressWatchUntil(deps.now() + deps.watchSuppressMs);
 
+  let peerResults: SyncTargetResult[] = [];
+  if (syncTargets && syncTargets.length > 0) {
+    peerResults = await syncManagedAccountToPeers({
+      accountHomeDir: deps.accountHomeDir(accountId),
+      ...(target.providerAccountId
+        ? { accountUuid: target.providerAccountId }
+        : {}),
+      ...(target.email ? { email: target.email } : {}),
+      ...(deps.logger ? { logger: deps.logger } : {}),
+      provider: deps.provider,
+      syncTargets,
+    });
+  }
+
   deps.stateStore.mutate((current) => ({
     ...current,
     activeAccountId: accountId,
@@ -68,4 +86,42 @@ export async function selectManagedAccount(
   }));
   await deps.stateStore.flush();
   deps.onSelected(accountId);
+  return peerResults;
+}
+
+export async function syncManagedAccountPeers(
+  deps: Pick<
+    AccountsSelectDeps,
+    "accountHomeDir" | "logger" | "provider" | "stateStore"
+  >,
+  payload: {
+    accountId?: string | undefined;
+    syncTargets: readonly Exclude<CrossToolSyncTarget, "claude">[];
+  }
+): Promise<void> {
+  if (payload.syncTargets.length === 0) {
+    throw new Error("Select at least one tool to sync");
+  }
+  const state = deps.stateStore.get();
+  const accountId = payload.accountId ?? state.activeAccountId;
+  if (!accountId) {
+    throw new Error(
+      "No active managed account to sync. Select a managed Claude account first."
+    );
+  }
+  const account = state.accounts.find((entry) => entry.id === accountId);
+  if (!account) {
+    throw new Error(`Account not found: ${accountId}`);
+  }
+  await syncManagedAccountToPeers({
+    accountHomeDir: deps.accountHomeDir(accountId),
+    ...(account.providerAccountId
+      ? { accountUuid: account.providerAccountId }
+      : {}),
+    ...(account.email ? { email: account.email } : {}),
+    ...(deps.logger ? { logger: deps.logger } : {}),
+    provider: deps.provider,
+    syncTargets: payload.syncTargets,
+    throwOnFailure: true,
+  });
 }

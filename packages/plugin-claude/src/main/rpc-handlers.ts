@@ -1,4 +1,5 @@
 import type { MainPluginContext } from "@pier/plugin-api/main";
+import { detectPeerAvailability } from "@pier/plugin-api/peer-sync/main";
 import {
   addAccountPayloadSchema,
   completeLoginPayloadSchema,
@@ -6,6 +7,7 @@ import {
   refreshUsagePayloadSchema,
   removeAccountPayloadSchema,
   selectAccountPayloadSchema,
+  syncToPeersPayloadSchema,
   usagePollingPayloadSchema,
 } from "../shared/accounts.ts";
 import type { ClaudeAccountsService } from "./accounts-service-contract.ts";
@@ -42,8 +44,17 @@ export function registerClaudeRpcHandlers(options: {
     return null;
   });
   rpc.handle("accounts.select", async (payload) => {
-    await service.select(selectAccountPayloadSchema.parse(payload));
+    // Returns per-target peer sync results so the renderer can surface
+    // partial failures instead of silently dropping them.
+    return await service.select(selectAccountPayloadSchema.parse(payload));
+  });
+  rpc.handle("accounts.syncToPeers", async (payload) => {
+    await service.syncToPeers(syncToPeersPayloadSchema.parse(payload));
     return null;
+  });
+  rpc.handle("accounts.peerAvailability", async (payload) => {
+    emptyRpcPayloadSchema.parse(payload);
+    return detectPeerAvailability();
   });
   rpc.handle("accounts.remove", async (payload) => {
     await service.remove(removeAccountPayloadSchema.parse(payload));

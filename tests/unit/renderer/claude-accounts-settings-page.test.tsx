@@ -68,6 +68,17 @@ function contextWithSnapshot(snapshot: ClaudeAccountsSnapshot): {
     if (method === "accounts.snapshot") {
       return snapshot as T;
     }
+    if (method === "accounts.peerAvailability") {
+      return {
+        omp: true,
+        opencode: true,
+        pi: true,
+        piOauthCapable: true,
+      } as T;
+    }
+    if (method === "accounts.select") {
+      return [] as T;
+    }
     return null as T;
   };
   return {
@@ -273,12 +284,12 @@ describe("Claude accounts settings page", () => {
     await act(async () => {
       fireEvent.click(switchButton);
     });
+    expect(await screen.findByText("Switch Claude account?")).toBeTruthy();
+    const confirm = await screen.findByRole("button", { name: "Confirm" });
+    await act(async () => {
+      fireEvent.click(confirm);
+    });
     await waitFor(() => {
-      expect(context.dialogs.confirm).toHaveBeenCalledWith(
-        expect.objectContaining({
-          title: "Switch Claude account?",
-        })
-      );
       expect(
         invokeCalls.some(
           (call) =>

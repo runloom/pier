@@ -24,11 +24,24 @@ parity with `pier.codex` / `pier.grok` within Claude Code's platform limits.
   usable claude.ai OAuth envelope, so a stale `oauthAccount` cache alone never
   surfaces a wrong account.
 
+## Cross-tool peer sync
+
+On account switch (opt-in checkboxes) or via **Sync to other tools**, Pier can
+mirror the managed Claude OAuth tokens into:
+
+- OpenCode → `~/.local/share/opencode/auth.json` key `anthropic`
+- Pi → `~/.pi/agent/auth.json` key `anthropic`
+- OMP → `~/.omp/agent/agent.db` provider `anthropic` / `oauth`
+
+Tokens use the same Claude Code OAuth client id as community tools. Already-
+running peer sessions may need a restart. Shared refresh tokens can be rotated
+by whichever tool refreshes first.
+
 ## Intentional omissions
 
-- No cross-tool peer credential sync (no Claude peer-tool ecosystem)
 - No API-key account kind (the plugin manages claude.ai OAuth logins;
   API-key mode is surfaced, not managed)
+
 
 ## Layout
 
