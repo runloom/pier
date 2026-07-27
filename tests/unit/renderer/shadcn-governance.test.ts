@@ -13,6 +13,8 @@ const SOURCE_ROOTS = [
 const RAW_BUTTON_OWNERS = new Set([
   // Markdown outline tick / hover list uses raw buttons for Notion-style rail geometry.
   "src/plugins/builtin/files/renderer/markdown-preview-toc.tsx",
+  // Content-search hit rows use Item asChild for full-row hit targets.
+  "src/plugins/builtin/files/renderer/files-content-search-result-row.tsx",
   // shadcn SidebarRail 的上游实现需要独立命中区域。
   "src/renderer/components/primitives/sidebar.tsx",
   // Dockview tab action 必须保留其原生 class 与事件边界。
@@ -21,8 +23,9 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/panel-kits/workbench/workbench-widget-card.tsx",
   // 物料添加卡与物料预览卡属于响应式网格中的专用几何表面。
   "src/renderer/panel-kits/workbench/workbench-add-card.tsx",
-  // 活动列表和物料库预览卡需要保持卡内响应式几何与整面点击区域。
-  "src/renderer/panel-kits/workbench/core-widgets/activity-widget.tsx",
+  // 活动列表（壳 + 行）需要保持卡内响应式几何与整面点击区域。
+  "src/renderer/panel-kits/workbench/core-widgets/activity/activity-widget.tsx",
+  "src/renderer/panel-kits/workbench/core-widgets/activity/activity-row.tsx",
   // 资源会话行是列表内窄行 hit target，不是通用控制 chrome。
   "src/renderer/panel-kits/workbench/core-widgets/system-resources-widget.tsx",
   "src/renderer/panel-kits/workbench/workbench-library-dialog.tsx",
@@ -38,6 +41,7 @@ const RAW_BUTTON_OWNERS = new Set([
   "src/renderer/panel-kits/terminal/structured-composer/composer-suggest-list.tsx",
 ]);
 const ITEM_AS_CHILD_BUTTON_OWNERS = new Set([
+  "src/plugins/builtin/files/renderer/files-content-search-result-row.tsx",
   "src/renderer/pages/settings/components/environment-section.tsx",
   "src/renderer/pages/settings/components/skills/skills-project-list.tsx",
   "src/renderer/pages/settings/components/project-rules-panel.tsx",

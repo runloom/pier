@@ -6,9 +6,16 @@ import {
 } from "../../../packages/ui/src/diff-view-presentation.ts";
 
 describe("pierDiffItemPresentation", () => {
-  it("maps null patch to loading and content patch to ready", () => {
-    expect(pierDiffItemPresentation({ patch: null })).toBe("loading");
+  it("treats null patch as ready estimate (no fake loading collapse)", () => {
+    // stable-ledger: bare patch:null is estimate geometry, not a spinner.
+    expect(pierDiffItemPresentation({ patch: null })).toBe("ready");
     expect(pierDiffItemPresentation({ patch: "diff --git a/a b/a\n" })).toBe(
+      "ready"
+    );
+    expect(pierDiffItemPresentation({ kind: "estimate", patch: null })).toBe(
+      "ready"
+    );
+    expect(pierDiffItemPresentation({ kind: "loaded", patch: "x" })).toBe(
       "ready"
     );
   });

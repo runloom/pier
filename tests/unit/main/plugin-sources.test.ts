@@ -53,7 +53,7 @@ describe("createDefaultPluginSources", () => {
     expect(GIT_PLUGIN_MANIFEST.locales).toBeUndefined();
   });
 
-  it("includes the builtin Files plugin manifest and single file-panel declaration", async () => {
+  it("includes the builtin Files plugin manifest with file and search panels", async () => {
     const sources = await createDefaultPluginSources();
     const filesSource = sources.find(
       (source) =>
@@ -73,13 +73,18 @@ describe("createDefaultPluginSources", () => {
       main: { id: FILES_PLUGIN_ID },
       manifest: {
         id: FILES_PLUGIN_ID,
-        panels: [
+        panels: expect.arrayContaining([
           expect.objectContaining({
             component: FILES_FILE_PANEL_ID,
             id: FILES_FILE_PANEL_ID,
             permissions: expect.arrayContaining(["file:read", "file:write"]),
           }),
-        ],
+          expect.objectContaining({
+            component: "pier.files.searchPanel",
+            id: "pier.files.searchPanel",
+            permissions: expect.arrayContaining(["file:read", "panel:open"]),
+          }),
+        ]),
         permissions: expect.arrayContaining([
           "command:register",
           "file:read",

@@ -1,5 +1,6 @@
 /**
  * P0 阅读稳定门禁：禁止内容变更主路径 scrollTop freeze / 外层 item 级 scrollTo 抢 Pierre。
+ * 实现已拆到 viewport / reading-callbacks / generation-effect / viewport-effects。
  */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
@@ -28,7 +29,11 @@ describe("git-review reading stability governance (P0)", () => {
       "src/plugins/builtin/git/renderer/git-review-content.tsx"
     );
     expect(content).not.toContain("beginScrollFreeze");
-    expect(content).toContain("restoreReviewReadingViewport");
+    // content 委托 viewport-effects；restore 实现在 document-viewport
+    const viewport = read(
+      "src/plugins/builtin/git/renderer/git-review-document-viewport.ts"
+    );
+    expect(viewport).toContain("restoreReviewReadingViewport");
   });
 
   it("item replay defaults to preserveAnchor false (Pierre line anchor)", () => {
@@ -66,51 +71,62 @@ describe("git-review reading stability governance (P0)", () => {
   });
 
   it("settle path only external-restores on identity loss", () => {
-    const projection = read(
-      "src/plugins/builtin/git/renderer/git-review-document-projection.ts"
+    const viewport = read(
+      "src/plugins/builtin/git/renderer/git-review-document-viewport.ts"
     );
-    expect(projection).toContain("shouldRestoreReadingAnchorExternally");
-    expect(projection).toContain("restoreReviewReadingViewport");
-    const restoreStart = projection.indexOf(
+    expect(viewport).toContain("shouldRestoreReadingAnchorExternally");
+    expect(viewport).toContain("restoreReviewReadingViewport");
+    const restoreStart = viewport.indexOf(
       "export function restoreReviewReadingViewport"
     );
-    const restoreEnd = projection.indexOf(
+    const restoreEnd = viewport.indexOf(
       "export function restoreReviewViewportFreeze",
       restoreStart
     );
-    const restoreFn = projection.slice(
+    const restoreFn = viewport.slice(
       restoreStart,
       restoreEnd > restoreStart ? restoreEnd : restoreStart + 800
     );
     expect(restoreFn).not.toContain("setScrollTop");
+    // re-export still available from projection barrel
+    const projection = read(
+      "src/plugins/builtin/git/renderer/git-review-document-projection.ts"
+    );
+    expect(projection).toContain("restoreReviewReadingViewport");
   });
 
   it("session captures preferredSide + previous entryKey before index reassignment", () => {
-    const session = read(
-      "src/plugins/builtin/git/renderer/use-git-review-document-session.ts"
+    const generation = read(
+      "src/plugins/builtin/git/renderer/use-git-review-document-generation-effect.ts"
     );
-    expect(session).toContain("previousEntryKeyBySectionId");
-    expect(session).toContain("preferredSide");
-    expect(session).toContain("previousItemIds");
-    expect(session).toContain("flush: true");
+    expect(generation).toContain("previousEntryKeyBySectionId");
+    expect(generation).toContain("preferredSide");
+    expect(generation).toContain("previousItemIds");
+    const replay = read(
+      "src/plugins/builtin/git/renderer/use-git-review-item-replay.ts"
+    );
+    expect(replay).toContain("flush: true");
   });
 
   it("content pending lifecycle defers identity restore to layout tryPendingAnchor", () => {
-    const content = read(
-      "src/plugins/builtin/git/renderer/git-review-content.tsx"
+    const callbacks = read(
+      "src/plugins/builtin/git/renderer/use-git-review-reading-callbacks.ts"
     );
     // endReadingRefresh must not call restoreReviewReadingViewport (race)
-    const endStart = content.indexOf("const endReadingRefresh = useCallback");
-    const endEnd = content.indexOf("const getReadingMode", endStart);
-    const endBody = content.slice(
+    const endStart = callbacks.indexOf("const endReadingRefresh = useCallback");
+    const endEnd = callbacks.indexOf("const getReadingMode", endStart);
+    const endBody = callbacks.slice(
       endStart,
       endEnd > endStart ? endEnd : endStart + 800
     );
     expect(endBody).toContain("shouldRestoreReadingAnchorExternally");
     expect(endBody).not.toContain("restoreReviewReadingViewport");
-    // layout path still restores
-    expect(content).toContain("tryPendingAnchor");
-    expect(content).toContain("restoreReviewReadingViewport");
+    // layout path still restores via viewport-effects
+    const viewportEffects = read(
+      "src/plugins/builtin/git/renderer/use-git-review-viewport-effects.ts"
+    );
+    expect(viewportEffects).toContain("tryPendingAnchor");
+    expect(viewportEffects).toContain("restoreReviewReadingViewport");
   });
 
   it("git review content path forbids preserveAnchor true", () => {

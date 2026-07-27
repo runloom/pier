@@ -147,7 +147,7 @@ export function FilesContentSearchFileGroup(props: {
       className="flex min-w-0 flex-col gap-0"
       data-slot="files-content-search-file-group"
     >
-      <div className="sticky top-0 z-10 flex min-w-0 items-center gap-2 bg-background/95 px-2 py-1 backdrop-blur-sm">
+      <div className="sticky top-0 z-10 flex min-w-0 items-center gap-2 bg-background px-2 py-1">
         <PierFileIcon aria-hidden="true" fileName={name} size={16} />
         <span
           className="min-w-0 flex-1 truncate font-medium text-sm"
