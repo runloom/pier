@@ -13,7 +13,7 @@ const FIXED_TAILWIND_COLOR_VAR_RE =
 const SKIPPED_DIRECTORIES = new Set(["build", "dist", "node_modules", "out"]);
 const RAW_COLOR_WHOLE_FILE_OWNERS = new Set([
   "src/renderer/app/globals.css",
-  "src/renderer/components/agent-icons/glyphs.tsx",
+  "src/plugins/api/components/agent-icons/glyphs.tsx",
   "src/renderer/lib/theme/derive-terminal-colors.ts",
   "src/renderer/lib/theme/derive-tokens.ts",
   "src/renderer/lib/theme/oklch.ts",

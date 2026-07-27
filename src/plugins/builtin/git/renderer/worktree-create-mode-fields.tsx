@@ -17,6 +17,7 @@ import {
   type FormValues,
   type TextFn,
 } from "./worktree-create-form.tsx";
+import { writeWorktreeCreateStartTask } from "./worktree-create-preferences.ts";
 
 const TRAILING_PATH_SEPARATOR_RE = /[\\/]+$/;
 
@@ -110,14 +111,20 @@ export function AiModeFields({
               id="worktree-create-start-task"
               onCheckedChange={(checked) => {
                 field.onChange(checked);
-                if (
-                  checked &&
-                  form.getValues("agentId") === "" &&
-                  defaultAgentId
-                ) {
-                  form.setValue("agentId", defaultAgentId, {
-                    shouldValidate: true,
-                  });
+                writeWorktreeCreateStartTask(checked);
+                // 打开时用设置页默认智能体预填;用户之后可改,不持久化 agent 选择。
+                if (checked && defaultAgentId) {
+                  const current = form.getValues("agentId");
+                  if (
+                    current === "" ||
+                    !enabledAgentIds.includes(
+                      current as (typeof enabledAgentIds)[number]
+                    )
+                  ) {
+                    form.setValue("agentId", defaultAgentId, {
+                      shouldValidate: true,
+                    });
+                  }
                 }
               }}
             />

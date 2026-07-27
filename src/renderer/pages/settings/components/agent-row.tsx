@@ -7,6 +7,7 @@ import {
 } from "@pier/ui/collapsible.tsx";
 import { Item, ItemActions, ItemContent, ItemTitle } from "@pier/ui/item.tsx";
 import { Separator } from "@pier/ui/separator.tsx";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import {
   type AgentKind,
@@ -16,7 +17,6 @@ import {
 import { ChevronDown, ChevronRight, ExternalLink } from "lucide-react";
 import { type MouseEvent, useState } from "react";
 import { toast } from "sonner";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { useAgentDetectStore } from "@/stores/agent-detect.store.ts";

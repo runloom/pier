@@ -850,9 +850,10 @@ describe("PierDiffView", () => {
       expect(ref.current?.scrollToItem("file.ts")).toBe(true);
     });
     expect(scrollTo).toHaveBeenCalledTimes(1);
+    // 已在拓扑中的成员用 smooth；新建/刚展开用 instant
     expect(scrollTo).toHaveBeenCalledWith({
       align: "start",
-      behavior: "instant",
+      behavior: "smooth",
       id: "file.ts",
       type: "item",
     });
@@ -1219,17 +1220,26 @@ describe("PierDiffView", () => {
     const initialSetCalls = setItems.mock.calls.length;
     updateItem.mockClear();
 
-    fireEvent.click(
-      await screen.findByRole("button", { name: labels.collapseDiff })
-    );
+    // estimate 槽也有 header：取第一个 collapse（首项真 diff）
+    const collapseButtons = await screen.findAllByRole("button", {
+      name: labels.collapseDiff,
+    });
+    fireEvent.click(collapseButtons[0] as HTMLElement);
 
     expect(updateItem).toHaveBeenCalledTimes(1);
-    expect(updateItem.mock.calls[0]?.[0]).toBe(initialItems?.[0]);
+    // 折叠克隆新对象，禁止就地改写 initialItems[0]（version 链安全）。
+    expect(updateItem.mock.calls[0]?.[0]).not.toBe(initialItems?.[0]);
+    expect(updateItem.mock.calls[0]?.[0]).toEqual(
+      expect.objectContaining({
+        collapsed: true,
+        id: initialItems?.[0]?.id,
+      })
+    );
     expect(initialItems?.[1]).toBe(untouchedItem);
     expect(setItems).toHaveBeenCalledTimes(initialSetCalls);
   });
 
-  it("增量正文改变条目高度时通过官方滚动接口保留顶部锚点", async () => {
+  it("增量正文默认交给 Pierre 行级 anchoring，显式 preserveAnchor 才 item 级 restore", async () => {
     const ref = createRef<PierDiffViewHandle>();
     const renderedElement = document.createElement("diffs-container");
     vi.spyOn(PierreCodeView.prototype, "getRenderedItems").mockReturnValue([
@@ -1250,6 +1260,7 @@ describe("PierDiffView", () => {
       Object.assign(document.createElement("div"), { scrollTop: 92 })
     );
     const scrollTo = vi.spyOn(PierreCodeView.prototype, "scrollTo");
+    const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
     render(
       <PierDiffView
         appearance={appearance}
@@ -1271,14 +1282,9 @@ describe("PierDiffView", () => {
         },
       ])
     );
-
-    expect(scrollTo).toHaveBeenCalledWith({
-      align: "start",
-      behavior: "instant",
-      id: "file.ts",
-      offset: -12,
-      type: "item",
-    });
+    // 默认 preserveAnchor:false → 不抢 Pierre 内置行锚
+    expect(updateItem).toHaveBeenCalled();
+    expect(scrollTo).not.toHaveBeenCalled();
 
     scrollTo.mockClear();
     act(() =>
@@ -1291,10 +1297,16 @@ describe("PierDiffView", () => {
               "diff --git a/file.ts b/file.ts\n--- a/file.ts\n+++ b/file.ts\n@@ -1 +1,3 @@\n-old\n+new\n+line\n+more\n",
           },
         ],
-        { preserveAnchor: false }
+        { preserveAnchor: true }
       )
     );
-    expect(scrollTo).not.toHaveBeenCalled();
+    expect(scrollTo).toHaveBeenCalledWith({
+      align: "start",
+      behavior: "instant",
+      id: "file.ts",
+      offset: -12,
+      type: "item",
+    });
   });
 
   it("放弃的删除渲染不会让同 id 新正文复用旧 version", async () => {
@@ -1378,6 +1390,8 @@ describe("PierDiffView", () => {
     const firstControlledItem = setItems.mock.calls.at(-1)?.[0][0];
     const optionUpdatesBeforeAppend = setOptions.mock.calls.length;
 
+    const addItems = vi.spyOn(PierreCodeView.prototype, "addItems");
+    const addCallsBefore = addItems.mock.calls.length;
     view.rerender(
       <PierDiffView
         appearance={appearance}
@@ -1386,12 +1400,13 @@ describe("PierDiffView", () => {
         onError={vi.fn()}
       />
     );
+    // DiffsHub 路径：前缀不变时 append addItems，不整表 setItems remount。
     await waitFor(() =>
-      expect(setItems.mock.calls.at(-1)?.[0]).toHaveLength(2)
+      expect(addItems.mock.calls.length).toBeGreaterThan(addCallsBefore)
     );
-    expect(setItems.mock.calls.at(-1)?.[0][1]).toEqual(
-      expect.objectContaining({ id: "second.ts" })
-    );
+    expect(addItems.mock.calls.at(-1)?.[0]).toEqual([
+      expect.objectContaining({ id: "second.ts" }),
+    ]);
     expect(setItems.mock.calls.at(-1)?.[0][0]).toBe(firstControlledItem);
     expect(setOptions.mock.calls.length).toBeGreaterThanOrEqual(
       optionUpdatesBeforeAppend

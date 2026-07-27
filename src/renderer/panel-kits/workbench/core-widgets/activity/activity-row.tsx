@@ -1,5 +1,6 @@
 import { formatDurationShort } from "@pier/ui/format.tsx";
 import { cn } from "@pier/ui/utils.ts";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import {
   agentSessionTitleInput,
   resolveAgentSessionTitle,
@@ -12,7 +13,6 @@ import type {
 import { taskNodeStatusForActivity } from "@shared/task-activity-sources.ts";
 import { ListTodo, Terminal } from "lucide-react";
 import { type ReactNode, useEffect, useState } from "react";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { AgentStatusLabel } from "@/components/agent-status/agent-status-label.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { activityRowMetaText } from "./activity-path-label.ts";

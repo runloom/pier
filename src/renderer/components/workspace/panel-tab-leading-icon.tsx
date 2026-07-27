@@ -1,8 +1,8 @@
 import { fileNameFromTabIconId, PierFileIcon } from "@pier/ui/file-icon.tsx";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { agentKindFromTabIconId } from "@shared/contracts/agent-session.ts";
 import type { PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { ReactNode } from "react";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { resolvePanelTabIcon } from "./panel-tab-icon-registry.ts";
 
 /**

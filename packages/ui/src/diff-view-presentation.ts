@@ -4,11 +4,24 @@ export type PierDiffItemPresentation = "loading" | "ready";
 export function pierDiffItemPresentation(input: {
   readonly patch: string | null;
   readonly stateNotice?: string;
+  readonly kind?: "estimate" | "loaded" | "error" | "ready-notice";
 }): PierDiffItemPresentation {
+  // estimate / error / ready-notice 均非 loading 转圈（stable-ledger：禁假收起）
+  if (
+    input.kind === "estimate" ||
+    input.kind === "error" ||
+    input.kind === "ready-notice"
+  ) {
+    return "ready";
+  }
   if (input.stateNotice) {
     return "ready";
   }
-  return input.patch === null ? "loading" : "ready";
+  // 无 kind 的旧 patch:null：按 estimate 处理（ready），不再 loading
+  if (input.patch === null) {
+    return "ready";
+  }
+  return "ready";
 }
 
 /**

@@ -294,6 +294,7 @@ function createMockContext(): RendererPluginContext {
       revert: unimplemented("git.revert"),
       searchBranches: unimplemented("git.searchBranches"),
       searchCommits: unimplemented("git.searchCommits"),
+      applyPatch: unimplemented("git.applyPatch"),
       stage: unimplemented("git.stage"),
       stash: unimplemented("git.stash"),
       sync: unimplemented("git.sync"),
@@ -465,6 +466,9 @@ describe("WorktreeCreateOverlay", () => {
 
   beforeEach(() => {
     installSelectPolyfills();
+    // 命名方式偏好持久化在 localStorage,用例间必须清掉,否则前一例切到手动命名
+    // 会污染后一例的默认 tab。
+    globalThis.localStorage.clear();
     vi.clearAllMocks();
     createMock.mockResolvedValue(createResultFor("fix-focus", "fix-focus"));
     openTerminalMock.mockResolvedValue({ panelId: "worktree-terminal" });
@@ -529,6 +533,81 @@ describe("WorktreeCreateOverlay", () => {
     expect(
       screen.queryByRole("tab", { name: "AI naming" })
     ).not.toBeInTheDocument();
+  });
+
+  it("命名方式选择全局缓存:再次打开默认停在上次的手动命名", async () => {
+    await openOverlay(context);
+    await switchToCustom();
+
+    act(() => {
+      resetAppContentDialogForTests();
+    });
+    cleanup();
+    await openOverlay(context);
+
+    expect(
+      await screen.findByRole("textbox", { name: BRANCH_LABEL })
+    ).toBeInTheDocument();
+    expect(
+      screen.queryByRole("textbox", { name: TASK_LABEL })
+    ).not.toBeInTheDocument();
+  });
+
+  it("AI 不可用的强制回落不写入缓存:恢复可用后仍默认智能生成", async () => {
+    aiStatusMock.mockResolvedValueOnce({
+      agent: null,
+      configured: false,
+      label: "",
+    });
+    await openOverlay(context);
+    expect(
+      await screen.findByRole("textbox", { name: BRANCH_LABEL })
+    ).toBeInTheDocument();
+
+    act(() => {
+      resetAppContentDialogForTests();
+    });
+    cleanup();
+    await openOverlay(context);
+
+    expect(
+      await screen.findByRole("textbox", { name: TASK_LABEL })
+    ).toBeInTheDocument();
+  });
+
+  it("立即开始任务开关全局缓存:再次打开仍保持开启", async () => {
+    await openOverlay(context);
+    fireEvent.click(screen.getByRole("switch", { name: START_TASK_LABEL }));
+    expect(
+      screen.getByRole("switch", { name: START_TASK_LABEL })
+    ).toBeChecked();
+
+    act(() => {
+      resetAppContentDialogForTests();
+    });
+    cleanup();
+    await openOverlay(context);
+
+    expect(
+      await screen.findByRole("switch", { name: START_TASK_LABEL })
+    ).toBeChecked();
+    expect(
+      await screen.findByRole("combobox", { name: AGENT_LABEL })
+    ).toBeInTheDocument();
+  });
+
+  it("智能体默认选中设置页默认(selectedId),而非列表第一项", async () => {
+    agentSelectionMock.mockResolvedValue({
+      detectedIds: ["claude", "codex"],
+      enabledIds: ["claude", "codex"],
+      rankedIds: ["claude", "codex"],
+      selectedId: "codex",
+    });
+    await openOverlay(context);
+    fireEvent.click(screen.getByRole("switch", { name: START_TASK_LABEL }));
+
+    const trigger = await screen.findByRole("combobox", { name: AGENT_LABEL });
+    expect(trigger).toHaveTextContent("Codex");
   });
 
   it("en locale closes the overlay and shows branch generation in a toast", async () => {
@@ -689,6 +768,23 @@ describe("WorktreeCreateOverlay", () => {
         taskPrompt: "修复终端焦点问题",
       });
     });
+  });
+
+  it("智能体下拉:选项与已选值都带品牌图标", async () => {
+    await openOverlay(context);
+
+    fireEvent.click(screen.getByRole("switch", { name: START_TASK_LABEL }));
+    const trigger = await screen.findByRole("combobox", { name: AGENT_LABEL });
+    // 设置页默认是 claude(mock selectedId),选中值应已带图标
+    expect(trigger).toHaveTextContent("Claude");
+    fireEvent.click(trigger);
+
+    // 未选中项不渲染 check 指示器,余下的 svg 只可能是品牌图标
+    const codexOption = await screen.findByRole("option", { name: "Codex" });
+    expect(codexOption.querySelector("svg")).not.toBeNull();
+    expect(
+      trigger.querySelector('[data-slot="select-value"] svg')
+    ).not.toBeNull();
   });
 
   it("AI 模式:任务描述为空时提交报错且不调 AI", async () => {

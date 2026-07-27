@@ -1,10 +1,10 @@
 import { CommandGroup, CommandItem } from "@pier/ui/command.tsx";
 import { Kbd } from "@pier/ui/kbd.tsx";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { AGENT_START_COMMAND_PREFIX } from "@shared/commands.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { Settings } from "lucide-react";
 import type { ReactNode } from "react";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import type { Action } from "@/lib/actions/types.ts";
 import type { ActionGroup } from "@/lib/command-palette/action-search.ts";
 

@@ -1,6 +1,7 @@
 import type {
   GitReviewFileDocumentOk,
   GitReviewFileDocumentResult,
+  GitReviewFileSection,
   GitReviewIndexEntry,
 } from "@shared/contracts/git-review.ts";
 import type { GitReviewDocumentResource } from "./git-review-document-resource.ts";
@@ -26,9 +27,28 @@ export function documentMatchesSlots(
   );
 }
 
+function remapSectionToSlot(
+  section: GitReviewFileSection,
+  slot: GitReviewIndexEntry["renderSlots"][number]
+): GitReviewFileSection {
+  if (section.kind === "patch") {
+    return {
+      ...section,
+      sectionKey: slot.sectionKey,
+    };
+  }
+  return {
+    ...section,
+    oldPath: slot.oldPath,
+    sectionKey: slot.sectionKey,
+    status: slot.status,
+    targetPath: slot.targetPath,
+  };
+}
+
 /**
- * stage 换 group 会换 sectionKey，但 patch 正文仍可复用。
- * 槽位数一致时按 index 重绑 key，避免整段 rematerialize 闪烁。
+ * 槽位数一致时按 index 重绑 sectionKey（stage 换 group 常见）。
+ * 必须整表对齐，供 fresh load 校验。
  */
 export function remapDocumentSectionsToEntry(
   entry: GitReviewIndexEntry,
@@ -45,23 +65,92 @@ export function remapDocumentSectionsToEntry(
     if (slot === undefined) {
       return section;
     }
-    if (section.kind === "patch") {
-      return {
-        ...section,
-        sectionKey: slot.sectionKey,
-      };
-    }
-    return {
-      ...section,
-      oldPath: slot.oldPath,
-      sectionKey: slot.sectionKey,
-      status: slot.status,
-      targetPath: slot.targetPath,
-    };
+    return remapSectionToSlot(section, slot);
   });
   return {
     ...document,
     revision: `${document.revision}:slot-remap`,
+    sections,
+  };
+}
+
+/**
+ * 半暂存 / stage 导致 1↔2 槽时，尽量保住旧正文，避免整文件掉成 estimate。
+ *
+ * 策略：
+ * 1. 同 sectionKey 精确命中 → 原样保留
+ * 2. 剩余槽按剩余 section 顺序软绑（stale bridge，真 load 到达后 cacheKey 换新）
+ * 3. 仍无 body 的槽不写进 document（投影侧走 estimate，只影响新增半槽）
+ *
+ * 仅用于跨代 retain，不用于 fresh document 验收。
+ */
+export function softRemapDocumentSectionsToEntry(
+  entry: GitReviewIndexEntry,
+  document: GitReviewFileDocumentOk
+): GitReviewFileDocumentOk | null {
+  if (entry.renderSlots.length === 0 || document.sections.length === 0) {
+    return null;
+  }
+  const strict = remapDocumentSectionsToEntry(entry, document);
+  if (strict) {
+    return strict;
+  }
+
+  const usedSectionIndexes = new Set<number>();
+  const bySlotKey = new Map<string, GitReviewFileSection>();
+
+  for (const slot of entry.renderSlots) {
+    const exactIndex = document.sections.findIndex(
+      (section, index) =>
+        !usedSectionIndexes.has(index) && section.sectionKey === slot.sectionKey
+    );
+    if (exactIndex < 0) {
+      continue;
+    }
+    usedSectionIndexes.add(exactIndex);
+    const section = document.sections[exactIndex];
+    if (section) {
+      bySlotKey.set(slot.sectionKey, section);
+    }
+  }
+
+  // 自由槽填充：优先 unstaged（半暂存残体常在操作侧），再 staged。
+  // 禁止默认扫 renderSlots 序把唯一旧 body 钉到 staged 第一槽（R2）。
+  const freeSlots = entry.renderSlots.filter(
+    (slot) => !bySlotKey.has(slot.sectionKey)
+  );
+  const orderedFreeSlots = [
+    ...freeSlots.filter((slot) => slot.group === "unstaged"),
+    ...freeSlots.filter((slot) => slot.group === "staged"),
+    ...freeSlots.filter(
+      (slot) => slot.group !== "unstaged" && slot.group !== "staged"
+    ),
+  ];
+  for (const slot of orderedFreeSlots) {
+    const freeIndex = document.sections.findIndex(
+      (_section, index) => !usedSectionIndexes.has(index)
+    );
+    if (freeIndex < 0) {
+      break;
+    }
+    usedSectionIndexes.add(freeIndex);
+    const previous = document.sections[freeIndex];
+    if (!previous) {
+      continue;
+    }
+    bySlotKey.set(slot.sectionKey, remapSectionToSlot(previous, slot));
+  }
+
+  const sections = entry.renderSlots.flatMap((slot) => {
+    const section = bySlotKey.get(slot.sectionKey);
+    return section ? [section] : [];
+  });
+  if (sections.length === 0) {
+    return null;
+  }
+  return {
+    ...document,
+    revision: `${document.revision}:slot-soft-remap`,
     sections,
   };
 }
@@ -102,13 +191,14 @@ type LoadedDocumentResource = Extract<
 
 /**
  * 将已 loaded 正文绑到当前 index entry。
- * stage 换 group 会换 sectionKey：槽位数一致时 remap 后软保留，避免投影丢项。
+ * - 槽位数一致：strict remap
+ * - 半暂存 1↔2：soft remap，尽量保旧 body，新增半槽可 estimate
  */
 export function retainLoadedDocumentForEntry(
   entry: GitReviewIndexEntry,
   document: GitReviewFileDocumentOk
 ): LoadedDocumentResource | null {
-  const remapped = remapDocumentSectionsToEntry(entry, document);
+  const remapped = softRemapDocumentSectionsToEntry(entry, document);
   if (!remapped) {
     return null;
   }
@@ -154,7 +244,10 @@ export function collectHydrateCandidates(
   return candidates;
 }
 
-/** settle 成功路径：ok/unchanged/error → resource；可 remap 的 ok 走 retain。 */
+/**
+ * settle 成功路径：ok/unchanged/error → resource。
+ * fresh ok 只接受 strict remap（整表对齐），不走 soft 以免吞不完整文档。
+ */
 export function resourceFromDocumentResult(
   entry: GitReviewIndexEntry,
   result: GitReviewFileDocumentResult

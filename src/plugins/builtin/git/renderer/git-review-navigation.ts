@@ -1,6 +1,8 @@
 import type { GitReviewDocumentResource } from "./git-review-document-resource.ts";
 
 const NAVIGATION_TIMEOUT_MS = 4000;
+/** full-alignment：生产主路径禁止多轮 scrollTo（默认 0）。 */
+export const NAVIGATION_MAX_RESCROLL_ATTEMPTS = 0;
 const NAVIGATION_MAX_ATTEMPTS = 120;
 
 export interface PendingReviewNavigation {
@@ -45,8 +47,8 @@ export function resolveReviewSectionKey(options: {
 }
 
 /**
- * 导航成功只接受已进 CodeView 的真成员（loaded 正文；error 说明）。
- * 未 materialize 的 entry 不在列表——对齐 DiffsHub：内容就绪后再 scroll。
+ * loader 是否已有可展示正文（loaded/error）。
+ * 与「能否 scroll」解耦：账本有 estimate 即可滚（stable-ledger）。
  */
 export function isReviewNavigationContentReady(
   resource: GitReviewDocumentResource | undefined
@@ -58,8 +60,8 @@ export function isReviewNavigationContentReady(
 }
 
 /**
- * 历史 placeholder cacheKey 或未投影 id：禁止作为 scroll 目标。
- * 终态投影不再产生 git-review-placeholder: 前缀。
+ * 历史假 placeholder cacheKey 或未投影 id：禁止作为 scroll 目标。
+ * estimate: 前缀合法（全量账本）。
  */
 export function isReviewPlaceholderCacheKey(
   cacheKey: string | undefined
@@ -70,16 +72,14 @@ export function isReviewPlaceholderCacheKey(
 }
 
 /**
- * 允许 scroll：loader 已 loaded/error 且投影已有该 section 的真 cacheKey。
+ * 允许 scroll：投影已有非历史-placeholder 的 cacheKey（含 estimate）。
+ * resource 参数保留兼容；不再要求 loaded。
  */
 export function shouldScrollReviewNavigation(options: {
   readonly projectedCacheKey: string | undefined;
-  readonly resource: GitReviewDocumentResource | undefined;
+  readonly resource?: GitReviewDocumentResource | undefined;
 }): boolean {
-  if (isReviewPlaceholderCacheKey(options.projectedCacheKey)) {
-    return false;
-  }
-  return isReviewNavigationContentReady(options.resource);
+  return !isReviewPlaceholderCacheKey(options.projectedCacheKey);
 }
 
 export function findReviewNavigationTarget(
@@ -161,6 +161,8 @@ interface ReviewNavigationVerificationOptions {
   readonly isCurrent: () => boolean;
   readonly isTerminal: () => boolean;
   readonly isVisible: (sectionId: string) => boolean;
+  /** 默认 0：只观察可见性，不重发 scrollTo（DiffsHub 对齐）。 */
+  readonly maxRescrollAttempts?: number;
   readonly onTerminal: () => void;
   readonly onTimeout: () => void;
   readonly onVisible: () => void;
@@ -168,8 +170,8 @@ interface ReviewNavigationVerificationOptions {
 }
 
 /**
- * Pierre 的 scrollTo 会在自己的动画帧中兑现。这里连续等待两个帧边界后再检查
- * 真实可见性；首轮未命中时有界重发定位，直到成功、资源终态或截止时间。
+ * 观察 scrollTo 是否落定。主路径 scrollTo 只应在调用方触发一次；
+ * 默认 maxRescrollAttempts=0，双 rAF 仅用于 isVisible 观测。
  */
 export function scheduleReviewNavigationVerification({
   getSectionId,
@@ -180,6 +182,7 @@ export function scheduleReviewNavigationVerification({
   onTimeout,
   onVisible,
   scrollToItem,
+  maxRescrollAttempts = NAVIGATION_MAX_RESCROLL_ATTEMPTS,
 }: ReviewNavigationVerificationOptions): () => void {
   const deadline = performance.now() + NAVIGATION_TIMEOUT_MS;
   let attempts = 0;
@@ -216,15 +219,21 @@ export function scheduleReviewNavigationVerification({
           onTerminal();
           return;
         }
-        attempts += 1;
-        if (
-          attempts >= NAVIGATION_MAX_ATTEMPTS ||
-          performance.now() >= deadline
-        ) {
+        if (performance.now() >= deadline) {
           onTimeout();
           return;
         }
-        if (sectionId) {
+        if (attempts >= NAVIGATION_MAX_ATTEMPTS) {
+          onTimeout();
+          return;
+        }
+        attempts += 1;
+        // 主路径 maxRescroll=0：只 poll 可见性。显式放开时才有界补偿 scrollTo。
+        if (
+          maxRescrollAttempts > 0 &&
+          attempts <= maxRescrollAttempts &&
+          sectionId
+        ) {
           scrollToItem(sectionId);
         }
         schedule();

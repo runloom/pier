@@ -1,21 +1,23 @@
 # Git Review 终态架构：官方 CodeView 数据面 + SCM Index
 
 日期：2026-07-25  
-状态：**已确认（P0）+ P1 成员模型已落地；P2 导航（含 stage 后 section rebind）/ soft-retain 1:1 slot-remap / failure settled-only 门控已落地；P3 树 delta、P4 完整乐观 stage、P5 占位清理与 §9 全绿仍开放**  
-成员策略：**A — CodeView 窗口成员（大仓默认）**
+状态：**部分 supersede（2026-07-27）** — **显示几何 / CodeView 身份集 / 点树可滚** 以  
+`2026-07-27-git-review-stable-ledger-design.md` **为准**。  
+本文仍管辖：真正文、soft-retain、stage/hunk、failure settled-only、树 delta 开放项。  
+成员策略（历史名「A」）：**仅 materialize 进 CodeView 已作废** → 全量稳定高度账本 + estimate 槽。
 
 ## 0. 决策摘要
 
 | 项 | 决定 |
 |---|---|
-| 方向 | **根治终态**，禁止在 placeholder 投影上继续症状修补 |
+| 方向 | **根治终态**，禁止在 **旧** placeholder（`patch:null` 假折叠）上继续症状修补 |
 | 官方对齐 | `@pierre/diffs` CodeView + 真 `FileDiffMetadata` + 可选 `loadDiffFiles` |
-| DiffsHub 对齐 | 真 item 再 scroll；树稳定 model + delta batch |
+| DiffsHub 对齐 | **稳定 id 账本**上 scrollTo；树稳定 model + delta batch（几何见 stable-ledger） |
 | Pier 独有 | L1 SCM Index（uncommitted / stage / conflict）+ Electron IPC |
-| CodeView 成员 | **A：仅「已 materialize ∪ 视口缓冲」真 item** 进 CodeView |
-| 废弃 | `patch: null` 假槽进 CodeView；stage 后整图 projection 核爆 |
+| CodeView 身份集 | **superseded** → `stable-ledger`：全 `renderSlots` + estimate\|loaded\|error\|ready-notice |
+| 废弃 | `patch: null` **假**槽；stage 后整图 projection 核爆；**稀疏 members 冒充对齐** |
 
-本文件是后续实现 PR 的硬契约。与本文冲突的旧注释（如「全量轻量槽进 CodeView」）以本文为准。
+**§4「未 materialize 不进 CodeView」整段作废。** 未 materialize 以 **estimate** 进账本（见 stable-ledger §3）。
 
 ---
 
@@ -109,20 +111,24 @@ L3  CodeView（@pierre/diffs）
 
 ---
 
-## 4. CodeView 成员策略 A（已锁定）
+## 4. CodeView 成员策略 A（**整节作废** → stable-ledger）
 
-### 4.1 成员集合
+> **Superseded by** `2026-07-27-git-review-stable-ledger-design.md`。  
+> 下式仅为历史记录，**禁止**再实现。正确：全 `renderSlots` 进账本；未 materialize = **estimate**。
+
+### 4.1 成员集合（历史，勿实现）
 
 ```
+// 作废：
 CodeViewMembers =
   Materialized(entryKeys)
-  ∪ ViewportBuffer(entryKeys)   // 由官方 render window 映射
-  ∪ SelectedEntry               // 导航强制
-  ∪ Seed(first N)               // 打开时首批，N 有界
+  ∪ ViewportBuffer(entryKeys)
+  ∪ SelectedEntry
+  ∪ Seed(first N)
 ```
 
-- **未 materialize 的文件只存在于 L1 + L2 树，不进 L3**  
-- 侧栏可对「正在 materialize 的选中项」显示加载态，**不**塞假 CodeView header  
+- **现行：** 未 materialize **以 estimate 进 CodeView 账本**；demand 只水合正文  
+- 侧栏加载态可保留；**禁止** collapsed 伪加载  
 
 ### 4.2 首批 seed
 

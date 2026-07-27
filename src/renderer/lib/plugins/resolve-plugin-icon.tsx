@@ -8,10 +8,10 @@
  */
 
 import { cn } from "@pier/ui/utils.ts";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { Puzzle, Server } from "lucide-react";
 import type { ComponentType } from "react";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { getBuiltinRendererPluginModule } from "./builtin-catalog.ts";
 
 export type PluginDisplayIcon = ComponentType<{

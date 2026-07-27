@@ -1,6 +1,5 @@
 import type {
   GitReviewFileDocumentOk,
-  GitReviewFileDocumentResult,
   GitReviewIndexEntry,
 } from "@shared/contracts/git-review.ts";
 import type { ReviewDocumentDemand } from "./git-review-document-demand.ts";
@@ -15,8 +14,16 @@ import {
   type GitReviewDocumentLoaderOptions,
 } from "./git-review-document-loader-options.ts";
 import {
+  cancelLoaderOperation,
+  emitLoaderChange,
+  type GitReviewDocumentLoaderRuntime,
+  pumpLoaderLoads,
+  rebuildLoaderWaiting,
+  releaseLoaderRetainedEntries,
+  retainLoaderDocument,
+} from "./git-review-document-loader-runtime.ts";
+import {
   collectHydrateCandidates,
-  resourceFromDocumentResult,
   sameEntries,
   validateReviewDocumentDemand,
 } from "./git-review-document-loader-utils.ts";
@@ -42,12 +49,15 @@ export class GitReviewDocumentLoader {
   readonly #waiting: string[] = [];
   readonly #budgetDeferredEntryKeys = new Set<string>();
   readonly #changedEntryKeys = new Set<string>();
+  /** settle 时已提前释放并发的 operationId（插队 yield）。 */
+  readonly #preFreedOperationIds = new Set<string>();
   #activeCount = 0;
   #bufferedEntryKeys: readonly string[] = [];
   #disposed = false;
   #retentionLimits: GitReviewRetentionLimits;
   #selectedDemandedEntryKey: string | null = null;
   #selectedEntryKey: string | null = null;
+  #stickyMemberEntryKeys: readonly string[] = [];
   #visibleEntryKeys: readonly string[] = [];
 
   constructor(options: GitReviewDocumentLoaderOptions) {
@@ -146,6 +156,8 @@ export class GitReviewDocumentLoader {
       return;
     }
     this.#selectedEntryKey = entryKey;
+    // 仅 protect 不构成 demand（无 window 时不得开读）；
+    // 已在 visible/buffered 时 boost 为 selectedDemanded 队首。
     this.#selectedDemandedEntryKey =
       entryKey !== null &&
       [...this.#visibleEntryKeys, ...this.#bufferedEntryKeys].includes(entryKey)
@@ -155,11 +167,34 @@ export class GitReviewDocumentLoader {
       this.#budgetDeferredEntryKeys.delete(this.#selectedDemandedEntryKey);
     }
     this.#cancelObsoleteLoads(this.#requiredEntryKeys());
+    this.#yieldConcurrencyForSelected();
     const evicted = this.#syncPinnedEntries();
     this.#releaseRetainedEntries(evicted);
     this.#rebuildWaiting();
     this.#pump(false);
     this.#emit();
+  }
+
+  /**
+   * tree-nav 期间把 sticky CodeView 成员并入 retention pin，避免 LRU 抽空 candidates。
+   * settled 后传 [] 即可。
+   */
+  setStickyMemberEntryKeys(entryKeys: readonly string[]): void {
+    if (this.#disposed) {
+      return;
+    }
+    if (sameEntries(this.#stickyMemberEntryKeys, entryKeys)) {
+      return;
+    }
+    this.#stickyMemberEntryKeys = [...entryKeys];
+    const evicted = this.#syncPinnedEntries();
+    this.#releaseRetainedEntries(evicted);
+    this.#rebuildWaiting();
+    // sticky 常在 sync 监听器内更新；无资源变更时勿 #emit 重入（滚动热路径双倍 sync）。
+    const pumped = this.#pump(false);
+    if (evicted.length > 0 || pumped || this.#changedEntryKeys.size > 0) {
+      this.#emit();
+    }
   }
 
   setRetentionLimits(limits: GitReviewRetentionLimits): void {
@@ -210,6 +245,7 @@ export class GitReviewDocumentLoader {
         this.#budgetDeferredEntryKeys.delete(entryKey);
       }
     }
+    // selected 在 demand 中则 boost 为队首 required
     if (
       this.#selectedEntryKey !== null &&
       [...visibleEntryKeys, ...bufferedEntryKeys].includes(
@@ -220,6 +256,7 @@ export class GitReviewDocumentLoader {
       this.#budgetDeferredEntryKeys.delete(this.#selectedEntryKey);
     }
     this.#cancelObsoleteLoads(this.#requiredEntryKeys());
+    this.#yieldConcurrencyForSelected();
     this.#releaseRetainedEntries(this.#syncPinnedEntries());
     this.#rebuildWaiting();
     this.#pump(false);
@@ -287,124 +324,57 @@ export class GitReviewDocumentLoader {
     }
   }
 
-  #cancelOperation(operationId: string): void {
-    try {
-      this.#cancel(operationId).catch(() => undefined);
-    } catch {
-      // 取消是尽力而为；operationId 围栏仍会拒绝迟到结果。
+  #yieldConcurrencyForSelected(): void {
+    const selected = this.#selectedDemandedEntryKey;
+    if (selected === null) {
+      return;
     }
+    const resource = this.#resources.get(selected);
+    if (resource?.kind !== "idle") {
+      return;
+    }
+    if (this.#activeCount < this.#maxConcurrent) {
+      return;
+    }
+    for (const entryKey of this.#activeEntryKeys) {
+      if (entryKey === selected) {
+        continue;
+      }
+      const active = this.#resources.get(entryKey);
+      if (active?.kind !== "loading") {
+        continue;
+      }
+      this.#setResource(entryKey, {
+        entry: active.entry,
+        kind: "cancelling",
+        operationId: active.operationId,
+      });
+      this.#activeEntryKeys.delete(entryKey);
+      this.#activeCount -= 1;
+      this.#preFreedOperationIds.add(active.operationId);
+      this.#cancelOperation(active.operationId);
+      break;
+    }
+  }
+
+  #cancelOperation(operationId: string): void {
+    cancelLoaderOperation(this.#asRuntime(), operationId);
   }
 
   #emit(): void {
-    if (this.#disposed) {
-      return;
-    }
-    const resources = [...this.#changedEntryKeys].flatMap((entryKey) => {
-      const resource = this.#resources.get(entryKey);
-      return resource === undefined ? [] : [resource];
-    });
-    this.#changedEntryKeys.clear();
-    const change = Object.freeze({
-      resources: Object.freeze(resources),
-      settled: this.#isSettled(),
-    });
-    for (const listener of this.#listeners) {
-      listener(change);
-    }
+    emitLoaderChange(this.#asRuntime());
   }
 
   #pump(emitChange = true): boolean {
-    if (this.#disposed) {
-      return false;
-    }
-    let changed = false;
-    while (
-      this.#activeCount < this.#maxConcurrent &&
-      this.#waiting.length > 0
-    ) {
-      const entryKey = this.#waiting.shift();
-      if (entryKey === undefined) {
-        break;
-      }
-      const resource = this.#resources.get(entryKey);
-      if (resource?.kind !== "idle") {
-        continue;
-      }
-      const operationId = this.#createOperationId();
-      this.#setResource(entryKey, {
-        entry: resource.entry,
-        kind: "loading",
-        operationId,
-      });
-      this.#activeCount += 1;
-      this.#activeEntryKeys.add(entryKey);
-      changed = true;
-      let pending: Promise<GitReviewFileDocumentResult>;
-      try {
-        pending = this.#load(resource.entry, operationId);
-      } catch (error) {
-        pending = Promise.reject(error);
-      }
-      pending.then(
-        (result) => this.#settle(entryKey, operationId, result),
-        (error: unknown) =>
-          this.#settle(entryKey, operationId, {
-            kind: "error",
-            message: error instanceof Error ? error.message : String(error),
-            reason: "internal",
-            retryable: true,
-          })
-      );
-    }
-    if (changed && emitChange) {
-      this.#emit();
-    }
-    return changed;
+    return pumpLoaderLoads(this.#asRuntime(), emitChange);
   }
 
   #rebuildWaiting(): void {
-    this.#waiting.length = 0;
-    const seen = new Set<string>();
-    for (const entryKey of [
-      ...(this.#selectedDemandedEntryKey === null
-        ? []
-        : [this.#selectedDemandedEntryKey]),
-      ...this.#visibleEntryKeys,
-      ...this.#bufferedEntryKeys,
-    ]) {
-      if (seen.has(entryKey)) {
-        continue;
-      }
-      seen.add(entryKey);
-      const resource = this.#resources.get(entryKey);
-      if (resource?.kind === "loaded") {
-        this.#retention.touch(entryKey);
-      } else if (
-        resource?.kind === "idle" &&
-        !this.#budgetDeferredEntryKeys.has(entryKey)
-      ) {
-        this.#waiting.push(entryKey);
-      }
-    }
+    rebuildLoaderWaiting(this.#asRuntime());
   }
 
   #releaseRetainedEntries(entryKeys: readonly string[]): void {
-    for (const entryKey of entryKeys) {
-      const evicted = this.#resources.get(entryKey);
-      if (evicted?.kind === "loaded") {
-        this.#setResource(entryKey, {
-          entry: evicted.entry,
-          kind: "idle",
-        });
-        if (
-          this.#bufferedEntryKeys.includes(entryKey) &&
-          !this.#visibleEntryKeys.includes(entryKey) &&
-          entryKey !== this.#selectedDemandedEntryKey
-        ) {
-          this.#budgetDeferredEntryKeys.add(entryKey);
-        }
-      }
-    }
+    releaseLoaderRetainedEntries(this.#asRuntime(), entryKeys);
   }
 
   #retainDocument(
@@ -412,8 +382,7 @@ export class GitReviewDocumentLoader {
     entry: GitReviewIndexEntry,
     document: GitReviewFileDocumentOk
   ): void {
-    this.#setResource(entryKey, { document, entry, kind: "loaded" });
-    this.#releaseRetainedEntries(this.#retention.retain(entryKey, document));
+    retainLoaderDocument(this.#asRuntime(), entryKey, entry, document);
   }
 
   #requiredEntryKeys(): Set<string> {
@@ -428,45 +397,12 @@ export class GitReviewDocumentLoader {
     ]);
   }
 
-  #settle(
-    entryKey: string,
-    operationId: string,
-    result: GitReviewFileDocumentResult
-  ): void {
-    if (this.#disposed) {
-      return;
-    }
-    const resource = this.#resources.get(entryKey);
-    if (
-      (resource?.kind !== "loading" && resource?.kind !== "cancelling") ||
-      resource.operationId !== operationId
-    ) {
-      return;
-    }
-    this.#activeEntryKeys.delete(entryKey);
-    this.#activeCount -= 1;
-    if (resource.kind === "cancelling") {
-      this.#setResource(entryKey, { entry: resource.entry, kind: "idle" });
-      this.#rebuildWaiting();
-      this.#pump(false);
-      this.#emit();
-      return;
-    }
-    const next = resourceFromDocumentResult(resource.entry, result);
-    if (next.kind === "retain") {
-      this.#retainDocument(entryKey, resource.entry, next.document);
-    } else {
-      this.#setResource(entryKey, next);
-    }
-    this.#pump(false);
-    this.#emit();
-  }
-
   #syncPinnedEntries(): string[] {
     return this.#retention.setPinnedEntryKeys(
       new Set([
         ...(this.#selectedEntryKey === null ? [] : [this.#selectedEntryKey]),
         ...this.#visibleEntryKeys,
+        ...this.#stickyMemberEntryKeys,
       ])
     );
   }
@@ -488,5 +424,76 @@ export class GitReviewDocumentLoader {
   #setResource(entryKey: string, resource: GitReviewDocumentResource): void {
     this.#resources.set(entryKey, resource);
     this.#changedEntryKeys.add(entryKey);
+  }
+
+  #asRuntime(): GitReviewDocumentLoaderRuntime {
+    const self = this;
+    return {
+      get activeCount() {
+        return {
+          get value() {
+            return self.#activeCount;
+          },
+          set value(next: number) {
+            self.#activeCount = next;
+          },
+        };
+      },
+      activeEntryKeys: self.#activeEntryKeys,
+      budgetDeferredEntryKeys: self.#budgetDeferredEntryKeys,
+      get bufferedEntryKeys() {
+        return {
+          get value() {
+            return self.#bufferedEntryKeys;
+          },
+          set value(next: readonly string[]) {
+            self.#bufferedEntryKeys = next;
+          },
+        };
+      },
+      cancel: (operationId) => self.#cancel(operationId),
+      changedEntryKeys: self.#changedEntryKeys,
+      createOperationId: () => self.#createOperationId(),
+      get disposed() {
+        return {
+          get value() {
+            return self.#disposed;
+          },
+          set value(next: boolean) {
+            self.#disposed = next;
+          },
+        };
+      },
+      listeners: self.#listeners,
+      load: (entry, operationId) => self.#load(entry, operationId),
+      maxConcurrent: self.#maxConcurrent,
+      preFreedOperationIds: self.#preFreedOperationIds,
+      resources: self.#resources,
+      retention: self.#retention,
+      get selectedDemandedEntryKey() {
+        return {
+          get value() {
+            return self.#selectedDemandedEntryKey;
+          },
+          set value(next: string | null) {
+            self.#selectedDemandedEntryKey = next;
+          },
+        };
+      },
+      get visibleEntryKeys() {
+        return {
+          get value() {
+            return self.#visibleEntryKeys;
+          },
+          set value(next: readonly string[]) {
+            self.#visibleEntryKeys = next;
+          },
+        };
+      },
+      waiting: self.#waiting,
+      isSettled: () => self.#isSettled(),
+      setResource: (entryKey, resource) =>
+        self.#setResource(entryKey, resource),
+    };
   }
 }

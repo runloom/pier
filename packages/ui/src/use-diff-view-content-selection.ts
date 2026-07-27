@@ -1,6 +1,10 @@
-import type { CodeViewHandle, CodeViewItem } from "@pierre/diffs/react";
+import type { CodeViewHandle } from "@pierre/diffs/react";
 import { type RefObject, useCallback } from "react";
-import type { ParsedItemCacheEntry } from "./diff-view-items.ts";
+import type { PierHunkAnnotationMetadata } from "./diff-view-hunk-actions.tsx";
+import type {
+  ParsedItemCacheEntry,
+  PierDiffCodeViewItem,
+} from "./diff-view-items.ts";
 import {
   clearBrowserTextSelection,
   type DiffPointerLineHit,
@@ -12,9 +16,9 @@ import { selectedLinesTextFromCodeViewItem } from "./diff-view-selection-text.ts
 export function useDiffViewContentSelection(input: {
   readonly appliedItemsRef: RefObject<{
     readonly key: string;
-    readonly items: Map<string, CodeViewItem>;
+    readonly items: Map<string, PierDiffCodeViewItem>;
   } | null>;
-  readonly codeViewRef: RefObject<CodeViewHandle<undefined> | null>;
+  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
   readonly contentDragAnchorRef: RefObject<DiffPointerLineHit | null>;
   readonly parsedItemsRef: RefObject<Map<string, ParsedItemCacheEntry>>;
   readonly selectedTextRef: RefObject<string>;

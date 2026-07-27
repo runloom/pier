@@ -30,8 +30,10 @@ const GIT_WRITE_COMMANDS: Record<string, true> = {
   "git.revert": true,
   "git.revertAbort": true,
   "git.revertContinue": true,
+  "git.applyPatch": true,
   "git.stage": true,
   "git.stash": true,
+
   "git.stashApply": true,
   "git.stashDrop": true,
   "git.stashPop": true,
@@ -147,6 +149,16 @@ async function dispatchGitCommand(
     case "git.unstage":
       await services.git.unstage(command.cwd, { paths: command.paths });
       return success(requestId, true);
+    case "git.applyPatch":
+      return success(
+        requestId,
+        await services.git.applyPatch(command.cwd, {
+          ...(command.atomic !== undefined && { atomic: command.atomic }),
+          diff: command.diff,
+          ...(command.revert !== undefined && { revert: command.revert }),
+          target: command.target,
+        })
+      );
     case "git.discardChanges":
       await services.git.discardChanges(command.cwd, {
         paths: command.paths,

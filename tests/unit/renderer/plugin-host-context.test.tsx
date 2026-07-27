@@ -1466,6 +1466,12 @@ describe("createRendererPluginContext", () => {
       push: vi.fn(async () => ({ kind: "ok" })),
       rebase: vi.fn(async () => ({ status: "rebased" })),
       searchBranches: vi.fn(async () => ({ branches: [] })),
+      applyPatch: vi.fn(async () => ({
+        appliedPaths: [],
+        conflictedPaths: [],
+        skippedPaths: [],
+        status: "success" as const,
+      })),
       stage: vi.fn(async () => true),
       stash: vi.fn(async () => ({ status: "stashed" })),
       sync: vi.fn(async () => ({ kind: "ok" })),

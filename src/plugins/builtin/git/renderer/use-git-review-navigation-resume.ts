@@ -1,5 +1,6 @@
 import type { PierDiffViewHandle } from "@pier/ui/diff-view.tsx";
 import type { RefObject } from "react";
+import type { ReviewNavigationMemberReason } from "./git-review-document-demand.ts";
 import {
   type PendingReviewNavigation,
   resolveReviewSectionKey,
@@ -23,6 +24,7 @@ export function resumeGitReviewSelectedNavigation(options: {
   readonly entryKeyBySectionIdRef: RefObject<ReadonlyMap<string, string>>;
   readonly failedNavigationKeyRef: RefObject<string | null>;
   readonly firstSectionIdByEntryKeyRef: RefObject<ReadonlyMap<string, string>>;
+  readonly navigationMemberReasonRef: RefObject<ReviewNavigationMemberReason | null>;
   readonly pendingNavigationRef: RefObject<PendingReviewNavigation | null>;
   readonly selectedEntryKeyRef: RefObject<string | null>;
   readonly selectedSectionKeyRef: {
@@ -89,10 +91,14 @@ export function resumeGitReviewSelectedNavigation(options: {
     ) {
       return;
     }
+    // 与树点击一致：默认 smooth（firstLayout 由 handle 决定 instant）
     options.diffHandleRef.current?.scrollToItem(target.sectionId);
     return;
   }
+  // pending + rebind reason 先于 demand（与 beginNavigation 闸门同构）
   options.pendingNavigationRef.current = navigation;
-  options.applyNavigationDemand(selected);
+  options.navigationMemberReasonRef.current = "rebind";
   options.setNavigationPending(true);
+  // resume 路径不递增 epoch（content layout 靠 projection commit tryPending）
+  options.applyNavigationDemand(selected);
 }

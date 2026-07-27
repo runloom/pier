@@ -122,6 +122,7 @@ function createMockContext(): {
       dropStash: unimplemented("git.dropStash"),
       rebase: unimplemented("git.rebase"),
       searchBranches: unimplemented("git.searchBranches"),
+      applyPatch: unimplemented("git.applyPatch"),
       stage: unimplemented("git.stage"),
       stash: unimplemented("git.stash"),
       sync: unimplemented("git.sync"),

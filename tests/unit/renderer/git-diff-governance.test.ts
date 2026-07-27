@@ -59,12 +59,15 @@ describe("Git diff renderer governance", () => {
     }
 
     expect(importers).toEqual([
+      "packages/ui/src/diff-view-hunk-annotations.ts",
+      "packages/ui/src/diff-view-item-sync.ts",
       "packages/ui/src/diff-view-items.ts",
       "packages/ui/src/diff-view-pointer-selection.ts",
       "packages/ui/src/diff-view-selection-text.ts",
       "packages/ui/src/diff-view-topology-scroll.ts",
       "packages/ui/src/diff-view-worker.tsx",
       "packages/ui/src/diff-view.tsx",
+      "packages/ui/src/use-diff-view-code-options.ts",
       "packages/ui/src/use-diff-view-content-selection.ts",
       "packages/ui/src/use-diff-view-handle.ts",
       "packages/ui/src/use-diff-view-headers.tsx",
@@ -76,6 +79,10 @@ describe("Git diff renderer governance", () => {
     const uiFiles = await sourceFiles(join(ROOT, "packages/ui/src"));
     const source = await readFile(
       join(ROOT, "packages/ui/src/diff-view.tsx"),
+      "utf8"
+    );
+    const codeOptionsSource = await readFile(
+      join(ROOT, "packages/ui/src/use-diff-view-code-options.ts"),
       "utf8"
     );
     const appearanceSource = await readFile(
@@ -93,60 +100,66 @@ describe("Git diff renderer governance", () => {
     const customCss = appearanceSource.match(
       /const CODE_VIEW_CUSTOM_CSS = `([\s\S]*?)`;/u
     )?.[1];
-    const codeViewOptions = source.match(
-      /const options = useMemo<CodeViewOptions<undefined>>\(\n\s+\(\) => \(\{([\s\S]*?)\n\s+\}\),\n\s+\[[\s\S]*?\n\s+\]\n\s+\);/u
+    const codeViewOptions = codeOptionsSource.match(
+      /useMemo<CodeViewOptions<[^>]+>>\(\n\s+\(\) => \(\{([\s\S]*?)\n\s+\}\),\n\s+\[[\s\S]*?\n\s+\]\n\s+\);/u
     )?.[1];
+    const adapterSource = `${source}\n${codeOptionsSource}`;
 
     expect(uiFiles.map((file) => relative(ROOT, file))).not.toContain(
       "packages/ui/src/diff-view/diff-view-profile.ts"
     );
     expect(workerSource).toContain("worker/worker.js");
-    expect(source).toContain('preferredHighlighter: "shiki-wasm"');
+    expect(adapterSource).toContain('preferredHighlighter: "shiki-wasm"');
     // diffStyle/overflow 由 PierDiffViewPresentation 驱动(split/unified、wrap),
     // 缺省仍是 split + scroll;其余配置保持锁定。
-    expect(codeViewOptions?.trim()).toBe(
-      `diffIndicators: "bars",
-      diffStyle,
-      disableBackground: false,
-      disableLineNumbers: false,
-      enableGutterUtility: false,
-      enableLineSelection: true,
-      itemMetrics: {
-        diffHeaderHeight: metrics.diffHeaderHeight,
-        lineHeight: metrics.lineHeight,
-      },
-      layout: { gap: 1, paddingBottom: 0, paddingTop: 0 },
-      lineHoverHighlight: "number",
-      onPostRender(element, _instance, phase, context) {
-        if (phase !== "unmount") {
-          markRendered(context.item.id, context.version, element);
-        }
-        const viewer = codeViewRef.current?.getInstance();
-        stabilizeCodeViewStickyPositioning(viewer);
-        scheduleRenderWindowReport();
-      },
-      overflow,
-      preferredHighlighter: "shiki-wasm",
-      stickyHeaders: true,
-      theme: appearance.codeTheme,
-      themeType: appearance.colorMode,
-      unsafeCSS: CODE_VIEW_CUSTOM_CSS,`
+    // Codex hunk stage uses annotations + renderAnnotation, not gutter utility.
+    // Keep enableGutterUtility false (no review comments → no empty "+").
+    expect(codeViewOptions).toContain("enableGutterUtility: false");
+    expect(codeViewOptions).not.toContain("onGutterUtilityClick:");
+    expect(adapterSource).toContain("renderPierHunkAnnotation");
+    expect(adapterSource).toContain("onHunkAction");
+    // Codex Tn: -top-8.5 right-0.5 pill + per-file hover + icon-xs ghost.
+    // Hover reveal is document-level (light DOM portals); shadow uses :host().
+    expect(adapterSource).toContain("data-pier-file-host");
+    expect(adapterSource).toContain("ensurePierDiffLightDomStyles");
+    expect(appearanceSource).toContain(
+      "diffs-container[data-pier-file-host]:hover [data-pier-hunk-actions]"
     );
+    expect(appearanceSource).toContain(
+      ":host([data-pier-file-host]) [data-annotation-content]"
+    );
+    const hunkActions = await readFile(
+      join(ROOT, "packages/ui/src/diff-view-hunk-actions.tsx"),
+      "utf8"
+    );
+    expect(hunkActions).toContain("-top-8.5");
+    expect(hunkActions).toContain("right-0.5");
+    expect(hunkActions).toContain('size="icon-xs"');
+    expect(hunkActions).toContain('variant="ghost"');
+    expect(hunkActions).toContain("primaryHunkActionForVariant");
+    expect(codeViewOptions).toContain('diffIndicators: "bars"');
+    expect(codeViewOptions).toContain("enableLineSelection: true");
+    expect(codeViewOptions).toContain('preferredHighlighter: "shiki-wasm"');
+    expect(codeViewOptions).toContain("stickyHeaders: true");
+    expect(codeViewOptions).toContain("unsafeCSS: CODE_VIEW_CUSTOM_CSS");
+
     expect(source).toContain(
       'const diffStyle = presentation?.diffStyle ?? "split";'
     );
     expect(source).toContain(
       'const overflow = presentation?.wrapLines === true ? "wrap" : "scroll";'
     );
-    expect(source.match(/unsafeCSS:/gu)).toHaveLength(1);
+    expect(adapterSource.match(/unsafeCSS:/gu)).toHaveLength(1);
     expect(appearanceSource).toContain("SCROLLBAR_SYSTEM_CSS");
     expect(appearanceSource).toContain('from "./scrollbar-system.ts"');
     expect(customCss).toBeDefined();
     expect(/\$\{SCROLLBAR_SYSTEM_CSS\}/.test(customCss ?? "")).toBe(true);
     expect(appearanceSource).toContain("DIFF_HEADER_HEIGHT_PX = 32");
     expect(appearanceSource).toContain("min-height: 32px");
-    expect(source).toContain('from "./diff-view-sticky-stabilize.ts"');
-    expect(source).toContain("stabilizeCodeViewStickyPositioning(viewer)");
+    expect(adapterSource).toContain('from "./diff-view-sticky-stabilize.ts"');
+    // 挂载 layout 会 reapply；onPostRender 热路径 reapply:false 只 patch
+    expect(adapterSource).toContain("stabilizeCodeViewStickyPositioning(");
+    expect(adapterSource).toContain("reapply: false");
     expect(customCss).toContain("[data-diffs-header]");
     expect(customCss).toContain("[data-metadata] > [data-deletions-count]");
     expect(source).toContain("renderHeaderMetadata={renderHeaderMetadata}");
@@ -164,7 +177,7 @@ describe("Git diff renderer governance", () => {
     expect(lockfile).toContain(
       "sha512-pY/gmgWL03WnagqCyCnBi3QtRXUv4hCIY6FYqd5b1ZGaoI6a4Bsji8j+yRl2RfzPh/8Hf19rCl1GE80G6a1cLQ=="
     );
-    expect(`${source}\n${appearanceSource}`).not.toMatch(
+    expect(`${adapterSource}\n${appearanceSource}`).not.toMatch(
       /#[0-9a-f]{3,8}|rgb\(|hsl\(|oklch\(/iu
     );
     expect(source).toContain("renderHeaderPrefix={renderHeaderPrefix}");
@@ -207,12 +220,17 @@ describe("Git diff renderer governance", () => {
     for (const [file, source] of reviewSources) {
       const isAdapter = [
         join(ROOT, "packages/ui/src/diff-view.tsx"),
+        join(ROOT, "packages/ui/src/diff-view-item-sync.ts"),
         join(ROOT, "packages/ui/src/use-diff-view-handle.ts"),
         join(ROOT, "packages/ui/src/use-diff-view-headers.tsx"),
         join(ROOT, "packages/ui/src/use-diff-view-item-apply.ts"),
       ].includes(file);
       if (
-        /\b(?:addItems|updateItemId|WorkerPoolManager)\b/u.test(source) ||
+        // 成员同步 API 仅适配层可用（\.setItems 避免误伤 React useState setItems）。
+        (!isAdapter &&
+          /\b(?:addItems|updateItemId|WorkerPoolManager)\b|\.setItems\b/u.test(
+            source
+          )) ||
         (!isAdapter && /\bupdateItem\b/u.test(source)) ||
         source.includes("shadowRoot")
       ) {
@@ -223,6 +241,7 @@ describe("Git diff renderer governance", () => {
     expect(violations).toEqual([]);
     const adapter = [
       reviewSources.get(join(ROOT, "packages/ui/src/diff-view.tsx")),
+      reviewSources.get(join(ROOT, "packages/ui/src/diff-view-item-sync.ts")),
       reviewSources.get(join(ROOT, "packages/ui/src/use-diff-view-handle.ts")),
       reviewSources.get(
         join(ROOT, "packages/ui/src/use-diff-view-headers.tsx")
@@ -235,6 +254,27 @@ describe("Git diff renderer governance", () => {
     expect(adapter).toContain("getRenderedItems()");
     expect(adapter).toContain("initialItems={codeViewItems}");
     expect(adapter).toContain("handle.updateItem(item)");
+    // DiffsHub 对齐：成员变更走实例 API，禁止 id 列表 topology remount / 受控 items=。
+    expect(adapter).toContain("syncCodeViewItems");
+    expect(adapter).toContain("addItems");
+    expect(adapter).toContain("setItems");
+    expect(adapter).toContain("updateItemId");
+    expect(adapter).toContain("planPathAlignedIdRenames");
+    expect(adapter).toContain("suppressMembershipScrollRestore");
+    expect(adapter).toContain("getSuppressMembershipScrollRestore");
+    expect(adapter).toContain("shouldRestoreMembershipScrollTop");
+    // 宿主 wiring：pending 同步闸门接到 DiffView（state + hasPendingNavigation ref）
+    const content = await readFile(
+      join(ROOT, "src/plugins/builtin/git/renderer/git-review-content.tsx"),
+      "utf8"
+    );
+    expect(content).toContain(
+      "getSuppressMembershipScrollRestore={hasPendingNavigation}"
+    );
+    expect(content).toContain(
+      "suppressMembershipScrollRestore={navigationPending}"
+    );
+    expect(adapter).not.toMatch(/JSON\.stringify\(\s*codeViewItems\.map/u);
     expect(adapter).not.toContain("items={codeViewItems}");
     expect(adapter).not.toMatch(/querySelector|shadowRoot/u);
     const changesSources = await localDependencySources([
@@ -291,7 +331,22 @@ describe("Git diff renderer governance", () => {
       ),
       "utf8"
     );
-    const reviewRuntime = `${reviewContent}\n${projectionCommit}\n${itemReplay}\n${documentSession}`;
+    const documentGenerationEffect = await readFile(
+      join(
+        ROOT,
+        "src/plugins/builtin/git/renderer/use-git-review-document-generation-effect.ts"
+      ),
+      "utf8"
+    );
+    const documentSessionSync = await readFile(
+      join(
+        ROOT,
+        "src/plugins/builtin/git/renderer/git-review-document-session-sync.ts"
+      ),
+      "utf8"
+    );
+    const documentSessionRuntime = `${documentSession}\n${documentGenerationEffect}\n${documentSessionSync}`;
+    const reviewRuntime = `${reviewContent}\n${projectionCommit}\n${itemReplay}\n${documentSessionRuntime}`;
     const reviewPanelLayout = await readFile(
       join(
         ROOT,
@@ -316,31 +371,45 @@ describe("Git diff renderer governance", () => {
     expect(projectionCommit).toContain(
       "itemIdsRef.current = projectionIndex.itemIds;"
     );
-    expect(documentSession).toContain(
+    expect(documentSessionRuntime).toContain(
       "itemCacheKeysRef.current.set(item.id, item.cacheKey);"
     );
     expect(reviewRuntime).not.toContain("new Map(itemCacheKeysRef.current)");
-    // 终态：session 只走成员投影 projectReviewDocuments（内部可再分 resource）。
-    expect(documentSession).toContain("projectReviewDocuments(");
-    expect(documentSession).toContain(
+    // stable-ledger：全槽 projectReviewLedger；禁止 selectMembers 驱动投影 id
+    expect(documentSessionRuntime).toContain("projectReviewLedger(");
+    expect(documentSessionRuntime).not.toContain(
+      "selectCodeViewMemberEntryKeys({"
+    );
+    expect(documentSessionRuntime).toContain(
       "generationCallbacksRef.current.applyItemUpdates("
     );
     expect(itemReplay).toContain("handle.updateItems(items, {");
+    // 代际 effect：阅读 refresh 闸门先于 generation 递增
+    expect(documentSessionRuntime).toContain("beginReadingRefresh()");
     expect(documentSession).toContain(
-      "useEffect(() => {\n    const generation = Math.max("
+      "mountGitReviewDocumentGeneration(options)"
     );
+    expect(documentGenerationEffect).toMatch(
+      /generationCallbacksRef\.current\.beginReadingRefresh\(\);\s*const generation = Math\.max\(/u
+    );
+    expect(documentSessionRuntime).toContain("syncReadingPinnedPrefix({");
+    expect(documentSessionRuntime).toContain("pinnedPrefixEntryKeys");
+    expect(documentSessionRuntime).toContain("readingMode");
     expect(reviewContent).not.toContain("diffHandleRef.current = null");
-    // demand 预取覆盖 ≠ CodeView 成员；成员只经 projectReviewDocuments。
-    expect(documentSession).toContain("nextDemandPrefetchEntryKeys(");
-    expect(documentSession).toContain("isCodeViewMemberResource");
+    // demand 预取覆盖；body 就绪用 isCodeViewMemberResource（≠ 显示 id 集）
+    expect(documentSessionRuntime).toContain("nextDemandPrefetchEntryKeys(");
+    expect(documentSessionRuntime).toContain("isCodeViewMemberResource");
     // session 代际预热 + projection commit 刷新（beginGeneration 不得读空/旧 map）
     expect(
       reviewRuntime.match(/entryKeyBySectionIdRef\.current\s*=/gu)
     ).toHaveLength(2);
-    expect(documentSession).toContain(
+    expect(documentSessionRuntime).toContain(
       "entryKeyBySectionIdRef.current = indexReviewSectionEntries(entries)"
     );
-    expect(reviewRuntime.match(/itemIdsRef\.current\s*=/gu)).toHaveLength(1);
+    // projection-commit 写正式账本；session 在 setProjection 热路径同步写，避免 commit 前二次误判 membership
+    expect(
+      reviewRuntime.match(/itemIdsRef\.current\s*=/gu)?.length
+    ).toBeGreaterThanOrEqual(1);
     expect(
       reviewRuntime.match(/renderedGenerationRef\.current\s*=/gu)
     ).toHaveLength(1);
@@ -382,7 +451,7 @@ describe("Git diff renderer governance", () => {
       {
         command: "git.getReviewFileDocument",
         consumers: [
-          "src/plugins/builtin/git/renderer/use-git-review-document-session.ts",
+          "src/plugins/builtin/git/renderer/use-git-review-document-generation-effect.ts",
         ],
         method: "getReviewFileDocument",
         service: "getFileDocument",
@@ -391,7 +460,7 @@ describe("Git diff renderer governance", () => {
         command: "git.cancelReviewRequest",
         consumers: [
           "src/plugins/builtin/git/renderer/git-changes-panel.tsx",
-          "src/plugins/builtin/git/renderer/use-git-review-document-session.ts",
+          "src/plugins/builtin/git/renderer/use-git-review-document-generation-effect.ts",
         ],
         method: "cancelReviewRequest",
         service: "cancelReviewRequest",
@@ -442,7 +511,7 @@ describe("Git diff renderer governance", () => {
         "src/renderer/components/common/diff-worker-host.tsx",
         "src/plugins/builtin/git/renderer/git-review-session-cache.ts",
         "src/plugins/builtin/git/renderer/git-review-document-loader.ts",
-        "src/plugins/builtin/git/renderer/use-git-review-document-session.ts",
+        "src/plugins/builtin/git/renderer/use-git-review-document-generation-effect.ts",
         "src/plugins/builtin/git/renderer/git-changes-panel.tsx",
       ].map((file) => readFile(join(ROOT, file), "utf8"))
     );

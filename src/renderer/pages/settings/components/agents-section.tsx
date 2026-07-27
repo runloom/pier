@@ -9,6 +9,7 @@ import {
 import { ItemGroup, ItemSeparator } from "@pier/ui/item.tsx";
 import { ToggleGroup, ToggleGroupItem } from "@pier/ui/toggle-group.tsx";
 import { cn } from "@pier/ui/utils.ts";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { AGENT_CATALOG, getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import {
   type AgentKind,
@@ -17,7 +18,6 @@ import {
 import { RefreshCw } from "lucide-react";
 import { Fragment, useEffect } from "react";
 import { toast } from "sonner";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { AgentRow } from "@/pages/settings/components/agent-row.tsx";
 import { SelectRow } from "@/pages/settings/components/rows/select-row.tsx";

@@ -201,6 +201,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       title: "Git: Discard Changes",
     },
   ],
+
   configuration: {
     properties: {
       "pier.git.statusItem.showDirtyIndicator": {

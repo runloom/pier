@@ -1,5 +1,6 @@
 import { Checkbox } from "@pier/ui/checkbox.tsx";
 import { cn } from "@pier/ui/utils.ts";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { SkillEffectiveCell } from "@shared/contracts/project-skills.ts";
@@ -9,7 +10,6 @@ import {
   type PierDiscoveryChannelId,
 } from "@shared/project-skills-pier-channels.ts";
 import { useId } from "react";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import type { Translate } from "./skills-shared.tsx";
 
 /**
