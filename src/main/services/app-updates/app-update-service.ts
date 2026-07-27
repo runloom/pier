@@ -46,6 +46,11 @@ function resolveAvailableVersion(
 export function createAppUpdateService(options: {
   readonly currentVersion: string;
   readonly onChange?: (snapshot: AppUpdateSnapshot) => void;
+  /**
+   * Fired once per process when state crosses into `downloaded` with a version.
+   * Host wires this to NCS (process-level single notify; not per-window mirror).
+   */
+  readonly onReady?: (version: string) => void;
   readonly runtimeMode: AppUpdateRuntimeMode;
   readonly updater?: AppUpdaterAdapter;
 }): AppUpdateService {
@@ -58,8 +63,16 @@ export function createAppUpdateService(options: {
   let downloadInFlight: Promise<AppUpdateSnapshot> | null = null;
 
   function setSnapshot(next: AppUpdateSnapshot): AppUpdateSnapshot {
+    const prevState = snapshot.state;
     snapshot = next;
     options.onChange?.(snapshot);
+    if (
+      prevState !== "downloaded" &&
+      next.state === "downloaded" &&
+      next.availableVersion
+    ) {
+      options.onReady?.(next.availableVersion);
+    }
     return snapshot;
   }
 

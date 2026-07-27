@@ -32,8 +32,6 @@ import { createAgentDetectionService } from "../services/agents/agent-detection-
 import { createAgentUsageService } from "../services/agents/agent-usage-service.ts";
 import { wireAgentSessionTitleDeps } from "../services/agents/session-title/wire-deps.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
-import { createAppUpdateService } from "../services/app-updates/app-update-service.ts";
-import { createElectronAppUpdaterAdapter } from "../services/app-updates/electron-updater-adapter.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createFileDraftsService } from "../services/file-drafts-service.ts";
 import { FilePathTransactionLock } from "../services/file-path-transaction-lock.ts";
@@ -81,6 +79,7 @@ import { wireAppCoreWindowAndPanelTransfer } from "./app-core-panel-transfer.ts"
 import { wireAppCorePierHomeAndSkills } from "./app-core-pier-home.ts";
 import { requireAppCoreInitialization } from "./app-core-readiness.ts";
 import { createAppCoreUsageData } from "./app-core-usage-data.ts";
+import { createWiredAppUpdateService } from "./app-update-wiring.ts";
 import {
   collectBundledPluginRegistrations,
   OFFICIAL_BUNDLED_PLUGIN_SPECS,
@@ -103,7 +102,6 @@ import { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.
 import { sendRendererCommand } from "./renderer-command-host.ts";
 import { createTaskActivityHandlers } from "./task-activity-wiring.ts";
 import {
-  broadcastAppUpdateChanged,
   broadcastEnvironmentsChanged,
   broadcastMruState,
   broadcastPluginRegistryChanged,
@@ -384,14 +382,7 @@ function createPierAppCore(): PierAppCore {
       readPreferences: () => preferences.read(),
       launchGate: agentLaunchGate,
     }),
-    appUpdates: createAppUpdateService({
-      currentVersion: app.getVersion(),
-      onChange: broadcastAppUpdateChanged,
-      runtimeMode,
-      ...(runtimeMode === "production"
-        ? { updater: createElectronAppUpdaterAdapter() }
-        : {}),
-    }),
+    appUpdates: createWiredAppUpdateService(runtimeMode),
     commandPaletteMru: createCommandPaletteMruService({
       broadcast: broadcastMruState,
     }),

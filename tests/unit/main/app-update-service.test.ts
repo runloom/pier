@@ -191,6 +191,34 @@ describe("AppUpdateService", () => {
     expect(quitAndInstall).not.toHaveBeenCalled();
   });
 
+  it("fires onReady once when entering downloaded (not on later status)", async () => {
+    const onReady = vi.fn();
+    const service = createAppUpdateService({
+      currentVersion: "0.1.0",
+      onReady,
+      runtimeMode: "production",
+      updater: {
+        checkForUpdates: vi.fn(async () => ({
+          isUpdateAvailable: true,
+          updateInfo: { version: "0.2.0" },
+        })),
+        downloadUpdate: vi.fn(async () => []),
+        on: vi.fn(),
+        quitAndInstall: vi.fn(),
+      },
+    });
+
+    await service.check();
+    expect(onReady).toHaveBeenCalledTimes(1);
+    expect(onReady).toHaveBeenCalledWith("0.2.0");
+    // already downloaded: check is a no-op edge
+    await service.check();
+    expect(onReady).toHaveBeenCalledTimes(1);
+    // download short-circuits without re-notifying
+    await service.download();
+    expect(onReady).toHaveBeenCalledTimes(1);
+  });
+
   it("notifies listeners when download progress and completion change", async () => {
     let progressListener:
       | ((progress: { percent?: number }) => void)

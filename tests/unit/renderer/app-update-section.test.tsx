@@ -9,22 +9,17 @@ import {
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { AppUpdateSection } from "@/pages/settings/components/app-update-section.tsx";
-import {
-  __resetAppUpdateReadyToastForTests,
-  useAppUpdateStore,
-} from "@/stores/app-update.store.ts";
+import { useAppUpdateStore } from "@/stores/app-update.store.ts";
 
 describe("AppUpdateSection", () => {
   beforeEach(async () => {
     await initI18n();
-    __resetAppUpdateReadyToastForTests();
     useAppUpdateStore.getState().reset();
   });
 
   afterEach(() => {
     cleanup();
     useAppUpdateStore.getState().reset();
-    __resetAppUpdateReadyToastForTests();
     vi.restoreAllMocks();
     vi.unstubAllGlobals();
   });

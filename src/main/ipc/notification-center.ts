@@ -20,16 +20,21 @@ import {
   broadcastNotificationCenterChanged,
   sendMessageToastToOneWindow,
 } from "../app-core/window-broadcasts.ts";
-import { createNotificationCenterService } from "../services/notification-center/service.ts";
+import {
+  createNotificationCenterService,
+  type NotificationCenterService,
+} from "../services/notification-center/service.ts";
 import { createNotificationHistoryStore } from "../services/notification-center/store.ts";
 import { readPreferences, updatePreferences } from "../state/preferences.ts";
 import { findAppWindowByWebContents } from "../windows/window-identity.ts";
 
 const log = createLogger("notification-center.ipc");
 
-let initPromise: ReturnType<typeof init> | null = null;
+export type NotificationCenterServiceHandle = NotificationCenterService;
 
-async function init() {
+let initPromise: Promise<NotificationCenterService> | null = null;
+
+async function init(): Promise<NotificationCenterService> {
   const history = await createNotificationHistoryStore({
     filePath: join(app.getPath("userData"), "notifications.json"),
   });
@@ -77,6 +82,21 @@ export function ingestHostNotification(report: NotificationReport): void {
     .catch((err) => {
       log.warn("ingest failed", { err });
     });
+}
+
+/**
+ * Await the NCS singleton (null when IPC not registered or init failed).
+ * Used by host services that need history-aware ingest (e.g. one-shot toast).
+ */
+export async function getNotificationCenterService(): Promise<NotificationCenterServiceHandle | null> {
+  if (!initPromise) {
+    return null;
+  }
+  try {
+    return await initPromise;
+  } catch {
+    return null;
+  }
 }
 
 export async function flushNotificationCenterHistory(): Promise<void> {

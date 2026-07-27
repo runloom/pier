@@ -3,16 +3,12 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { AppUpdateControl } from "@/components/common/app-update-control.tsx";
 import { initI18n } from "@/i18n/index.ts";
-import {
-  __resetAppUpdateReadyToastForTests,
-  useAppUpdateStore,
-} from "@/stores/app-update.store.ts";
+import { useAppUpdateStore } from "@/stores/app-update.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 
 describe("AppUpdateControl", () => {
   beforeEach(async () => {
     await initI18n();
-    __resetAppUpdateReadyToastForTests();
     useAppUpdateStore.getState().reset();
     useSettingsDialogStore.setState({
       activeSection: "appearance",
@@ -23,7 +19,6 @@ describe("AppUpdateControl", () => {
   afterEach(() => {
     cleanup();
     useAppUpdateStore.getState().reset();
-    __resetAppUpdateReadyToastForTests();
     vi.restoreAllMocks();
   });
 

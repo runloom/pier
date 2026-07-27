@@ -27,40 +27,16 @@ interface AppUpdateState {
   snapshot: AppUpdateSnapshot | null;
 }
 
-// toast 同步连发节流（会话内）；记录去重由 NCS dedupeKey 负责（跨会话）。
-let readyToastVersion: string | null = null;
-
-function maybeToastReady(snapshot: AppUpdateSnapshot): void {
-  if (snapshot.state !== "downloaded" || !snapshot.availableVersion) {
-    return;
-  }
-  if (readyToastVersion === snapshot.availableVersion) {
-    return;
-  }
-  readyToastVersion = snapshot.availableVersion;
-  const version = snapshot.availableVersion;
-  systemNotify({
-    actions: [
-      { id: "relaunch", labelKey: "settings.appUpdate.action.restart" },
-    ],
-    body: i18next.t("settings.appUpdate.toast.readyDetail", { version }),
-    dedupeKey: `app-update:${version}`,
-    kind: "app.update",
-    severity: "success",
-    titleKey: "settings.appUpdate.toast.ready",
-  });
-}
-
 export const useAppUpdateStore = create<AppUpdateState>((set, get) => ({
   pending: false,
   snapshot: null,
   applySnapshot: (snapshot) => {
+    // Ready toast is process-level on main (downloaded edge → NCS).
+    // Do not systemNotify here: multi-window mirrors would double-report.
     set({ snapshot });
-    maybeToastReady(snapshot);
   },
   reset: () => {
     set({ pending: false, snapshot: null });
-    readyToastVersion = null;
   },
   check: async () => {
     const api = appUpdateApi();
@@ -169,9 +145,4 @@ export function appUpdateNeedsAttention(
     state === "downloaded" ||
     state === "error"
   );
-}
-
-/** Test-only: reset one-shot ready toast tracking. */
-export function __resetAppUpdateReadyToastForTests(): void {
-  readyToastVersion = null;
 }
