@@ -55,8 +55,8 @@ const EXTENSION_TO_LANGUAGE: Readonly<Record<string, FilesDocumentLanguage>> = {
 };
 
 export function languageForPath(path: string): FilesDocumentLanguage {
-  // Live Modules: require `.pier/canvases/**/*.canvas.tsx` (directory + compound
-  // suffix). Bare `*.tsx` or `*.canvas.tsx` outside that tree stay TypeScript.
+  // Live Modules: require canvas under known project content directories
+  // with a compound canvas suffix. Bare `*.tsx` outside those trees stay TS.
   if (isProjectCanvasPath(path)) {
     return "canvas";
   }

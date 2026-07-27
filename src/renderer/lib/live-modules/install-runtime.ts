@@ -10,7 +10,7 @@ declare global {
  * Install host runtime for Live Modules (`pier/canvas` + relies on
  * `__PIER_PLUGIN_SHARED__` for React). Call after `installPluginSharedRuntime`.
  * Always refresh exports so HMR / whitelist growth is not stuck on the first
- * install (e.g. missing `Frame` after expanding pier/canvas).
+ * install.
  *
  * Also installs framework-agnostic `pier-c-*` shell CSS for Vue/Solid/Svelte
  * canvases (React continues to use pier/canvas components).

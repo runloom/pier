@@ -82,6 +82,9 @@ export function createFrameworkCompilePlugins(input: {
                 errors: errors.map((error) => ({ text: String(error) })),
               };
             }
+            const hasScopedStyle = descriptor.styles.some((style) =>
+              Boolean(style.scoped)
+            );
             let script: string;
             if (descriptor.scriptSetup || descriptor.script) {
               const compiled = compiler.compileScript(descriptor, {
@@ -94,6 +97,7 @@ export function createFrameworkCompilePlugins(input: {
               const template = compiler.compileTemplate({
                 filename: args.path,
                 id,
+                scoped: hasScopedStyle,
                 source: descriptor.template.content,
               });
               if (template.errors.length > 0) {
@@ -108,6 +112,13 @@ export function createFrameworkCompilePlugins(input: {
               return {
                 errors: [{ text: "Vue SFC has no script or template" }],
               };
+            }
+
+            // compileScript(genDefaultAs) does not attach __scopeId — same as
+            // @vitejs/plugin-vue: without it, scoped CSS selectors never match
+            // because the runtime never writes data-v-* on host elements.
+            if (hasScopedStyle) {
+              script += `\n__pier_sfc_main.__scopeId = ${JSON.stringify(scopeAttr)};\n`;
             }
 
             const styleChunks: string[] = [];
@@ -215,16 +226,20 @@ export function mount(el) {
             const source = readFileSync(args.path, "utf8");
             try {
               // Svelte 5: generate "client"; Svelte 4 may ignore unknown options.
+              // dev:false ensures production output — dev-mode code may emit
+              // `node:*` imports for HMR helpers that the fence would reject.
               let jsCode: string;
               try {
                 jsCode = compiler.compile(source, {
                   css: "injected",
+                  dev: false,
                   filename: args.path,
                   generate: "client",
                 }).js.code;
               } catch {
                 jsCode = compiler.compile(source, {
                   css: "injected",
+                  dev: false,
                   filename: args.path,
                   generate: "dom",
                 }).js.code;

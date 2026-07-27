@@ -33,7 +33,8 @@
       "@preload/*": ["./src/preload/*"],
       "@plugins/*": ["./src/plugins/*"],
       "@pier/ui/*": ["./packages/ui/src/*"],
-      "@pier/ui": ["./packages/ui/src"]
+      "@pier/ui": ["./packages/ui/src"],
+      "pier/canvas": ["./tests/support/pier-canvas.ts"]
     }
   },
   "include": [

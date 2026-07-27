@@ -24,6 +24,7 @@ const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
   ["src/renderer/index.html", /#1e1e1e\b/gi],
 ]);
 const COLOR_MIX_OWNERS = new Set([
+  "packages/ui/src/diff-view-appearance.ts",
   "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
   // Shared source-editor chrome (files + settings Rules/Skills); semantic token mixes only.
   "src/shared/source-editor/editor-theme.ts",
@@ -35,7 +36,6 @@ const COLOR_MIX_OWNERS = new Set([
   "src/plugins/builtin/files/renderer/markdown-prose.css",
   // Pierre Diff header hover mixes muted into background inside unsafeCSS
   // (shadow DOM cannot consume Tailwind opacity utilities).
-  "packages/ui/src/diff-view-appearance.ts",
   "src/renderer/app/globals.css",
   "src/renderer/lib/plugins/mermaid-render.worker.ts",
 ]);
