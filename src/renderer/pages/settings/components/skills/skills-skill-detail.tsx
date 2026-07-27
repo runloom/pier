@@ -1,5 +1,6 @@
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
+import { DIALOG_FOOTER_ACTIONS_CLASS } from "@pier/ui/dialog-form-layout.ts";
 import { ArrowLeft, Loader2, Trash2 } from "lucide-react";
 import {
   type ReactNode,
@@ -250,20 +251,18 @@ export function SkillsSkillDetail({
           onClick={() => {
             deleteSkill().catch(() => undefined);
           }}
-          size="sm"
           type="button"
           variant="destructive"
         >
           <Trash2 data-icon="inline-start" />
           {t("settings.skills.deleteSkill")}
         </Button>
-        <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+        <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
           <Button
             disabled={writesDisabled}
             onClick={() => {
               handleBack().catch(() => undefined);
             }}
-            size="sm"
             type="button"
             variant="outline"
           >
@@ -274,7 +273,6 @@ export function SkillsSkillDetail({
             onClick={() => {
               handleSave().catch(() => undefined);
             }}
-            size="sm"
             type="button"
           >
             {saving ? (

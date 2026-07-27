@@ -1,6 +1,7 @@
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
+import { DIALOG_FOOTER_ACTIONS_CLASS } from "@pier/ui/dialog-form-layout.ts";
 import {
   Field,
   FieldContent,
@@ -273,20 +274,18 @@ export function openPierHomeLibrarySkillDialog(
             onClick={() => {
               deleteRef.current().catch(() => undefined);
             }}
-            size="sm"
             type="button"
             variant="destructive"
           >
             <Trash2 data-icon="inline-start" />
             {t("settings.projects.pierHomeSkillsDeleteConfirm")}
           </Button>
-          <div className="flex flex-col-reverse gap-2 sm:flex-row sm:justify-end">
+          <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
             <Button
               disabled={writesDisabled}
               onClick={() => {
                 cancelRef.current().catch(() => undefined);
               }}
-              size="sm"
               type="button"
               variant="outline"
             >
@@ -297,7 +296,6 @@ export function openPierHomeLibrarySkillDialog(
               onClick={() => {
                 saveRef.current().catch(() => undefined);
               }}
-              size="sm"
               type="button"
             >
               {saving ? (

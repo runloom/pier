@@ -172,8 +172,12 @@ export const workbench = {
     },
     customCard: {
       addBlock: "添加区块",
+      addConfirm: "添加",
+      addDialogDescription: "选择类型和指标，确认后加入卡片。",
+      addDialogTitle: "添加区块",
       addSection: "添加区块",
       blocksSection: "区块",
+      blockOrdinal: "第 {{n}} 块",
       blockType: {
         gauge: "量规",
         kpi: "KPI 数值",
@@ -192,7 +196,7 @@ export const workbench = {
       metricUnavailableHint: "在设置中移除该区块，或重新启用对应指标来源。",
       moveDown: "下移",
       moveUp: "上移",
-      noBlocks: "还没有区块，在下方添加一个。",
+      noBlocks: "还没有区块，点底部「添加区块」开始。",
       removeBlock: "移除区块",
       title: "自定义卡片",
       allBlocksHidden: "当前尺寸下无可见区块",

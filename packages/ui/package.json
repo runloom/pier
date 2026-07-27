@@ -9,7 +9,9 @@
     "./utils": "./src/utils.ts",
     "./utils.ts": "./src/utils.ts",
     "./collection-auto-layout": "./src/collection-auto-layout.ts",
-    "./collection-auto-layout.ts": "./src/collection-auto-layout.ts"
+    "./collection-auto-layout.ts": "./src/collection-auto-layout.ts",
+    "./dialog-form-layout": "./src/dialog-form-layout.ts",
+    "./dialog-form-layout.ts": "./src/dialog-form-layout.ts"
   },
   "dependencies": {
     "@pierre/diffs": "1.2.12",

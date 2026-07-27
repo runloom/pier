@@ -1,5 +1,9 @@
 import { Button } from "@pier/ui/button.tsx";
 import {
+  DIALOG_COMMIT_FORM_CLASS,
+  DIALOG_FOOTER_ACTIONS_CLASS,
+} from "@pier/ui/dialog-form-layout.ts";
+import {
   Field,
   FieldDescription,
   FieldError,
@@ -147,13 +151,12 @@ export function openPierHomeCreateSkillDialog(
 
     const footer = useMemo(
       () => (
-        <div className="flex w-full justify-end gap-2">
+        <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
           <Button
             disabled={writesDisabled}
             onClick={() => {
               close(false);
             }}
-            size="sm"
             type="button"
             variant="outline"
           >
@@ -164,7 +167,6 @@ export function openPierHomeCreateSkillDialog(
             onClick={() => {
               confirmAddRef.current().catch(() => undefined);
             }}
-            size="sm"
             type="button"
           >
             {t("settings.skills.confirmAdd")}
@@ -176,7 +178,7 @@ export function openPierHomeCreateSkillDialog(
     useContentDialogFooter(setFooter, footer);
 
     return (
-      <div className="flex min-w-0 flex-col gap-5">
+      <div className={DIALOG_COMMIT_FORM_CLASS} data-slot="dialog-commit-form">
         <Field data-invalid={nameInvalid || nameTaken || undefined}>
           <FieldLabel htmlFor="pier-home-create-name">
             {t("settings.skills.blankIdTitle")}

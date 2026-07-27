@@ -1,5 +1,9 @@
 import { Button } from "@pier/ui/button.tsx";
 import {
+  DIALOG_COMMIT_FORM_CLASS,
+  DIALOG_FOOTER_ACTIONS_CLASS,
+} from "@pier/ui/dialog-form-layout.ts";
+import {
   Field,
   FieldDescription,
   FieldError,
@@ -357,13 +361,12 @@ export function openSkillsCreateSkillDialog(): Promise<null> {
 
     const footer = useMemo(
       () => (
-        <div className="flex w-full justify-end gap-2">
+        <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
           <Button
             disabled={saving}
             onClick={() => {
               close(null);
             }}
-            size="sm"
             type="button"
             variant="outline"
           >
@@ -374,7 +377,6 @@ export function openSkillsCreateSkillDialog(): Promise<null> {
             onClick={() => {
               confirmAddRef.current().catch(() => undefined);
             }}
-            size="sm"
             type="button"
           >
             {t("settings.skills.confirmAdd")}
@@ -386,7 +388,7 @@ export function openSkillsCreateSkillDialog(): Promise<null> {
     useContentDialogFooter(setFooter, footer);
 
     return (
-      <div className="flex min-w-0 flex-col gap-5">
+      <div className={DIALOG_COMMIT_FORM_CLASS} data-slot="dialog-commit-form">
         <Field data-invalid={nameInvalid || nameTaken || undefined}>
           <FieldLabel htmlFor="skills-create-name">
             {t("settings.skills.blankIdTitle")}

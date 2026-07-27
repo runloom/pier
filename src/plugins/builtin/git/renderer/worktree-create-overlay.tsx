@@ -1,5 +1,10 @@
 import { zodResolver } from "@hookform/resolvers/zod";
 import { Button } from "@pier/ui/button.tsx";
+import {
+  DIALOG_COMMIT_FIELD_GROUP_CLASS,
+  DIALOG_COMMIT_FORM_CLASS,
+  DIALOG_FOOTER_ACTIONS_CLASS,
+} from "@pier/ui/dialog-form-layout.ts";
 import { Field, FieldGroup, FieldLabel } from "@pier/ui/field.tsx";
 import {
   Select,
@@ -214,7 +219,7 @@ function WorktreeCreateOverlay({
   const worktreeFormId = "worktree-create-form";
   useLayoutEffect(() => {
     setFooter(
-      <>
+      <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
         <Button
           onClick={() => {
             close();
@@ -227,7 +232,7 @@ function WorktreeCreateOverlay({
         <Button form={worktreeFormId} type="submit" variant="default">
           {text("confirm", undefined, "Create")}
         </Button>
-      </>
+      </div>
     );
     return () => {
       setFooter(null);
@@ -236,11 +241,12 @@ function WorktreeCreateOverlay({
 
   return (
     <form
-      className="flex flex-col gap-6"
+      className={DIALOG_COMMIT_FORM_CLASS}
+      data-slot="dialog-commit-form"
       id={worktreeFormId}
       onSubmit={form.handleSubmit(onSubmit)}
     >
-      <FieldGroup className="gap-4">
+      <FieldGroup className={DIALOG_COMMIT_FIELD_GROUP_CLASS}>
         <Tabs
           onValueChange={(value) => {
             const nextMode = value as CreateMode;

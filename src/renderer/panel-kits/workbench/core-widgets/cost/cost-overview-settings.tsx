@@ -1,12 +1,15 @@
 import { Checkbox } from "@pier/ui/checkbox.tsx";
 import {
+  DIALOG_COMMIT_FIELD_GROUP_CLASS,
+  DIALOG_COMMIT_FORM_CLASS,
+  DIALOG_SECTION_TITLE_CLASS,
+} from "@pier/ui/dialog-form-layout.ts";
+import {
   Field,
-  FieldContent,
   FieldDescription,
   FieldGroup,
   FieldLabel,
   FieldLegend,
-  FieldSeparator,
   FieldSet,
 } from "@pier/ui/field.tsx";
 import {
@@ -52,12 +55,9 @@ const PRESET_LABEL = {
 } as const;
 
 /**
- * 成本总览设置：只暴露用户真正需要的三项——
- * 1. 视图（总览 / 按来源 / 按模型 / Tokens）
- * 2. 时间范围
- * 3. 来源筛选（有多来源时才出现）
- *
- * measure / groupBy / chart / KPI 由视图预设决定，不再单独暴露。
+ * 成本总览设置：即时写 params，但字段布局对齐提交型 dialog 表单
+ * （垂直 Label → 全宽控件 → Description），与新建 worktree / SSH host 同节奏。
+ * measure / groupBy / chart 由视图预设决定，不单独暴露。
  */
 export function CostOverviewSettings({
   params,
@@ -102,15 +102,15 @@ export function CostOverviewSettings({
   };
 
   return (
-    <FieldSet className="gap-0">
-      <FieldGroup className="gap-3">
-        <Field className="items-center" orientation="horizontal">
-          <FieldContent className="min-w-0">
-            <FieldLabel htmlFor="cost-overview-preset">
-              {t(`${I18N}.view`)}
-            </FieldLabel>
-            <FieldDescription>{t(`${I18N}.viewHint`)}</FieldDescription>
-          </FieldContent>
+    <div
+      className={DIALOG_COMMIT_FORM_CLASS}
+      data-slot="workbench-live-preference-form"
+    >
+      <FieldGroup className={DIALOG_COMMIT_FIELD_GROUP_CLASS}>
+        <Field>
+          <FieldLabel htmlFor="cost-overview-preset">
+            {t(`${I18N}.view`)}
+          </FieldLabel>
           <Select
             onValueChange={(next) => {
               if (next === "custom") return;
@@ -119,10 +119,9 @@ export function CostOverviewSettings({
             value={presetValue}
           >
             <SelectTrigger
-              className="w-[11.5rem]"
+              className="w-full"
               data-testid="cost-overview-settings-preset"
               id="cost-overview-preset"
-              size="sm"
             >
               <SelectValue />
             </SelectTrigger>
@@ -141,23 +140,22 @@ export function CostOverviewSettings({
               </SelectGroup>
             </SelectContent>
           </Select>
+          <FieldDescription>{t(`${I18N}.viewHint`)}</FieldDescription>
         </Field>
 
-        <Field className="items-center" orientation="horizontal">
-          <FieldContent className="min-w-0">
-            <FieldLabel id="cost-overview-range-label">
-              {t(`${I18N}.range`)}
-            </FieldLabel>
-          </FieldContent>
+        <Field>
+          <FieldLabel id="cost-overview-range-label">
+            {t(`${I18N}.range`)}
+          </FieldLabel>
+          {/* 分段选项按内容收缩，不铺满整行（避免三段被拉成等宽条）。 */}
           <ToggleGroup
             aria-labelledby="cost-overview-range-label"
-            className="shrink-0 justify-end"
+            className="w-fit max-w-full justify-start"
             data-testid="cost-overview-settings-range"
             onValueChange={(next) => {
               if (!next) return;
               persist({ rangeDays: Number(next) as CostOverviewRangeDays });
             }}
-            size="sm"
             spacing={0}
             type="single"
             value={String(current.rangeDays)}
@@ -173,51 +171,49 @@ export function CostOverviewSettings({
       </FieldGroup>
 
       {availableSources.length > 0 ? (
-        <>
-          <FieldSeparator className="my-4" />
-          <div className="flex flex-col gap-2">
-            <div className="flex flex-col gap-0.5">
-              <FieldLegend className="mb-0" variant="label">
-                {t(`${I18N}.sources`)}
-              </FieldLegend>
-              <FieldDescription>{t(`${I18N}.sourcesHint`)}</FieldDescription>
-            </div>
-            <FieldGroup
-              className="flex flex-row flex-wrap gap-x-4 gap-y-2"
-              data-slot="checkbox-group"
-              data-testid="cost-overview-settings-sources"
-            >
-              {availableSources.map((source) => {
-                const id = `cost-overview-source-${source.sourceId}`;
-                const label = resolveUsageSourceLabel(
-                  t,
-                  source.pluginId,
-                  source.sourceId
-                );
-                return (
-                  <Field
-                    className="w-auto items-center"
-                    key={`${source.pluginId}:${source.sourceId}`}
-                    orientation="horizontal"
-                  >
-                    <Checkbox
-                      checked={selectedSources.includes(source.sourceId)}
-                      data-testid={id}
-                      id={id}
-                      onCheckedChange={(value) => {
-                        toggleSource(source.sourceId, value === true);
-                      }}
-                    />
-                    <FieldLabel className="font-normal" htmlFor={id}>
-                      {label}
-                    </FieldLabel>
-                  </Field>
-                );
-              })}
-            </FieldGroup>
+        <FieldSet className="gap-3">
+          <div className="flex flex-col gap-1">
+            <FieldLegend className={DIALOG_SECTION_TITLE_CLASS} variant="label">
+              {t(`${I18N}.sources`)}
+            </FieldLegend>
+            <FieldDescription>{t(`${I18N}.sourcesHint`)}</FieldDescription>
           </div>
-        </>
+          {/* 多选标签横排换行：来源短、项多时竖排浪费高度。 */}
+          <FieldGroup
+            className="flex flex-row flex-wrap gap-x-4 gap-y-2"
+            data-slot="checkbox-group"
+            data-testid="cost-overview-settings-sources"
+          >
+            {availableSources.map((source) => {
+              const id = `cost-overview-source-${source.sourceId}`;
+              const label = resolveUsageSourceLabel(
+                t,
+                source.pluginId,
+                source.sourceId
+              );
+              return (
+                <Field
+                  className="w-auto items-center"
+                  key={`${source.pluginId}:${source.sourceId}`}
+                  orientation="horizontal"
+                >
+                  <Checkbox
+                    checked={selectedSources.includes(source.sourceId)}
+                    data-testid={id}
+                    id={id}
+                    onCheckedChange={(value) => {
+                      toggleSource(source.sourceId, value === true);
+                    }}
+                  />
+                  <FieldLabel className="font-normal" htmlFor={id}>
+                    {label}
+                  </FieldLabel>
+                </Field>
+              );
+            })}
+          </FieldGroup>
+        </FieldSet>
       ) : null}
-    </FieldSet>
+    </div>
   );
 }
