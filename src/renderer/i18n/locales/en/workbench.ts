@@ -197,11 +197,36 @@ export const workbench = {
       metricLabel: "Metric",
       metricPlaceholder: "Pick a metric",
       metricUnavailable: "Metric unavailable",
+      metricUnavailableHint:
+        "Remove this block in settings, or re-enable its metric provider.",
       moveDown: "Move down",
       moveUp: "Move up",
       noBlocks: "No blocks. Add one below.",
       removeBlock: "Remove block",
       title: "Custom Card",
+      allBlocksHidden: "No visible blocks at this size",
+      allBlocksHiddenHint:
+        'These block types are hidden at "{{density}}" size. Resize the card to show them.',
+      density: {
+        compact: "compact",
+        full: "full",
+        medium: "medium",
+      },
+      insufficientData: "Not enough data",
+      metricFormat: {
+        bytes: "bytes",
+        compactNumber: "compact number",
+        count: "count",
+        decimal: "decimal",
+        duration: "duration",
+        percent: "percent",
+      },
+      metricKind: {
+        grouped: "grouped",
+        instant: "instant",
+        series: "series",
+      },
+      noCompatibleMetrics: 'No metrics available for "{{type}}"',
     },
     layoutHandle: "Reorder or resize {{title}}",
     layoutInstructions:
