@@ -78,7 +78,7 @@ function sha256File(path) {
 
 async function downloadTo(url, destPath) {
   const res = await fetch(url, { redirect: "follow" });
-  if (!res.ok || !res.body) {
+  if (!(res.ok && res.body)) {
     throw new Error(`download failed ${res.status} ${url}`);
   }
   await pipeline(res.body, createWriteStream(destPath));
@@ -91,21 +91,23 @@ async function fetchMacArch(arch) {
   mkdirSync(work, { recursive: true });
   const tgz = join(work, "rg.tgz");
   try {
-    console.log(`[fetch-file-search-runtime] downloading ${arch}: ${asset.url}`);
+    console.log(
+      `[fetch-file-search-runtime] downloading ${arch}: ${asset.url}`
+    );
     await downloadTo(asset.url, tgz);
     // Extract only the rg binary path via tar CLI (portable).
-    const extract = spawnSync(
-      "tar",
-      ["-xzf", tgz, "-C", work, asset.member],
-      { encoding: "utf8" }
-    );
+    const extract = spawnSync("tar", ["-xzf", tgz, "-C", work, asset.member], {
+      encoding: "utf8",
+    });
     if (extract.status !== 0) {
       console.error(extract.stderr || extract.stdout);
       return false;
     }
     const bin = join(work, asset.member);
     if (!existsSync(bin)) {
-      console.error(`[fetch-file-search-runtime] missing member ${asset.member}`);
+      console.error(
+        `[fetch-file-search-runtime] missing member ${asset.member}`
+      );
       return false;
     }
     writeBinary(arch, bin);
@@ -143,7 +145,7 @@ function tryWhichRgHostOnly() {
   const which = spawnSync("which", ["rg"], { encoding: "utf8" });
   if (which.status !== 0) return false;
   const path = which.stdout.trim();
-  if (!path || !existsSync(path)) return false;
+  if (!(path && existsSync(path))) return false;
   writeBinary(mapArch(osArch()), path);
   return true;
 }
@@ -193,10 +195,11 @@ async function main() {
 
   // Host-only fallbacks if download failed for this machine.
   const host = mapArch(osArch());
-  if (!written.has(host)) {
-    if (tryVscodeRipgrepHostOnly() || tryWhichRgHostOnly()) {
-      written.add(host);
-    }
+  if (
+    !written.has(host) &&
+    (tryVscodeRipgrepHostOnly() || tryWhichRgHostOnly())
+  ) {
+    written.add(host);
   }
 
   if (written.size === 0) {
