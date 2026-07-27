@@ -750,46 +750,49 @@ body {
   opacity: 0.7;
 }
 
+/* 不强制 currentColor：文件图标保留 token 彩色；select-item 覆盖 overflow portal。 */
 .dockview-theme-pier .pier-panel-tab-icon,
 .dv-tab.dv-tab-dragging .pier-panel-tab-icon,
-.dv-tab-ghost-drag .pier-panel-tab-icon {
-  /* 不强制 currentColor：文件图标保留 token 彩色，Lucide/品牌色走各自 fill。 */
+.dv-tab-ghost-drag .pier-panel-tab-icon,
+[data-slot="select-item"] .pier-panel-tab-icon {
   flex-shrink: 0;
   height: 14px;
   opacity: 0.92;
   width: 14px;
 }
 
-/* 默认 panel 图标语义配色（文件/Agent 图标不走此选择器路径）。 */
-.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="terminal"],
-.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="terminal"],
-.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="terminal"] {
+/*
+ * 默认 panel 图标语义配色（文件/Agent 图标不走此选择器路径）。
+ * 选择器不绑 .dockview-theme-pier：overflow 下拉 portal 到 body，也必须同色。
+ * SelectItem 的 focus:**:text-accent-foreground 会级联改色，故 :focus 下再钉一次。
+ */
+.pier-panel-tab-icon[data-panel-tab-icon="terminal"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="terminal"] {
   color: var(--status-info-fg);
 }
 
-.dockview-theme-pier
-  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
-.dv-tab.dv-tab-dragging
-  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
-.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"] {
+.pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"] {
   color: var(--status-success-fg);
 }
 
-.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="workbench"],
-.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="workbench"],
-.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="workbench"] {
+.pier-panel-tab-icon[data-panel-tab-icon="workbench"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="workbench"] {
   color: var(--pier-file-icon-indigo);
 }
 
-.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="welcome"],
-.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="welcome"],
-.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="welcome"] {
+.pier-panel-tab-icon[data-panel-tab-icon="welcome"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="welcome"] {
   color: var(--pier-file-icon-orange);
 }
 
-.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="pier.task"],
-.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="pier.task"],
-.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="pier.task"] {
+.pier-panel-tab-icon[data-panel-tab-icon="pier.task"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.task"] {
   color: var(--status-done-fg);
 }
 
