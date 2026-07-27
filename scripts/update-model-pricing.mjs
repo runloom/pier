@@ -386,8 +386,27 @@ function sortObjectKeys(record) {
   return sorted;
 }
 
+/**
+ * Deep equality that ignores object key insertion order (JSON.stringify does not).
+ * Prevents merge-rebuilt entries from looking "changed" when only key order differs.
+ */
 function equalEntries(a, b) {
-  return JSON.stringify(a) === JSON.stringify(b);
+  return stableStringify(a) === stableStringify(b);
+}
+
+function stableStringify(value) {
+  if (value === null || typeof value !== "object") {
+    return JSON.stringify(value);
+  }
+  if (Array.isArray(value)) {
+    return `[${value.map((item) => stableStringify(item)).join(",")}]`;
+  }
+  const keys = Object.keys(value).sort((left, right) =>
+    left.localeCompare(right)
+  );
+  return `{${keys
+    .map((key) => `${JSON.stringify(key)}:${stableStringify(value[key])}`)
+    .join(",")}}`;
 }
 
 async function main() {
@@ -418,10 +437,6 @@ async function main() {
   // 按 LiteLLM 的独立费率身份建立基座。日期版本单独保留；仅 `-latest`
   // 归入基础模型。再把上游未覆盖的本地条目搬回来。
   const nextModels = {};
-  const added = [];
-  const changed = [];
-  const suspicious = [];
-  let unchanged = 0;
   let skipped = 0;
 
   const rawKeysByCatalogKey = new Map();
@@ -464,22 +479,6 @@ async function main() {
     if (nextModels[key]) continue;
     nextModels[key] = entry;
   }
-  // 计算 diff 报告
-  for (const catalogKey of rawKeysByCatalogKey.keys()) {
-    const next = nextModels[catalogKey];
-    if (!next) continue;
-    const prev = currentModels[catalogKey];
-    if (!prev) {
-      added.push(summariseChange(catalogKey, null, next));
-    } else if (equalEntries(prev, next)) {
-      unchanged += 1;
-    } else {
-      changed.push(summariseChange(catalogKey, prev, next));
-      if (isSuspicious(next, prev)) {
-        suspicious.push(summariseChange(catalogKey, prev, next));
-      }
-    }
-  }
 
   // OpenRouter：
   // 1) 给已有 canonical 补 `provider/id` alias；
@@ -509,9 +508,6 @@ async function main() {
         ...entry,
         aliases: [id],
       };
-      added.push(
-        `${summariseChange(canonical, null, entry)} _(openrouter fill-missing)_`
-      );
       openRouterFilled += 1;
     }
   }
@@ -520,6 +516,13 @@ async function main() {
       `[pricing] OpenRouter fill-missing entries: ${openRouterFilled}`
     );
   }
+
+  // 语义相等时保留磁盘上的旧 entry 引用，避免 merge 重建导致键序噪音 diff。
+  // 全量 diff 必须在 OpenRouter 别名/补缺之后做，否则 alias-only 变更会漏计。
+  const { added, changed, unchanged, suspicious } = finalizeCatalogDiff(
+    currentModels,
+    nextModels
+  );
 
   const sortedModels = sortObjectKeys(nextModels);
   const nextCatalog = { ...current, models: sortedModels };
@@ -541,12 +544,54 @@ async function main() {
     console.error("[pricing] --dry: catalog not written");
     return;
   }
+  // 无实质变更时不要重写文件：否则 JSON 键序噪音会触发 git diff，
+  // create-pull-request + lint-staged 再 format 后变成空 commit 失败。
+  if (added.length === 0 && changed.length === 0) {
+    console.error(
+      "[pricing] no semantic catalog changes; leaving pricing-catalog.json untouched"
+    );
+    return;
+  }
   await writeFile(
     CATALOG_PATH,
     `${JSON.stringify(nextCatalog, null, 2)}\n`,
     "utf8"
   );
   console.error(`[pricing] catalog written: ${CATALOG_PATH}`);
+}
+
+/**
+ * Compare current vs next models after all merges. When entries are equal,
+ * replace next with the previous object so on-disk key order stays stable.
+ */
+export function finalizeCatalogDiff(currentModels, nextModels) {
+  const added = [];
+  const changed = [];
+  const suspicious = [];
+  let unchanged = 0;
+
+  for (const catalogKey of Object.keys(nextModels).sort((a, b) =>
+    a.localeCompare(b)
+  )) {
+    const next = nextModels[catalogKey];
+    if (!next) continue;
+    const prev = currentModels[catalogKey];
+    if (!prev) {
+      added.push(summariseChange(catalogKey, null, next));
+      continue;
+    }
+    if (equalEntries(prev, next)) {
+      nextModels[catalogKey] = prev;
+      unchanged += 1;
+      continue;
+    }
+    changed.push(summariseChange(catalogKey, prev, next));
+    if (isSuspicious(next, prev)) {
+      suspicious.push(summariseChange(catalogKey, prev, next));
+    }
+  }
+
+  return { added, changed, unchanged, suspicious };
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) {

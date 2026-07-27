@@ -42,7 +42,7 @@ describe("grok cross-tool sync", () => {
     });
   });
 
-  it("writes xai oauth into opencode and rejects oauth for pi", async () => {
+  it("writes xai oauth into opencode and pi, preserving unrelated pi providers", async () => {
     const opencodeDataDir = join(dir, "opencode");
     const homeDir = join(dir, "home");
     await mkdir(join(homeDir, ".pi", "agent"), { recursive: true });
@@ -63,12 +63,7 @@ describe("grok cross-tool sync", () => {
     );
     expect(results).toEqual([
       { ok: true, target: "opencode" },
-      {
-        error:
-          "pi does not support xAI OAuth; sync a Grok API-key account or set XAI_API_KEY",
-        ok: false,
-        target: "pi",
-      },
+      { ok: true, target: "pi" },
     ]);
 
     const opencodeAuth = JSON.parse(
@@ -85,16 +80,33 @@ describe("grok cross-tool sync", () => {
     expect(opencodeAuth.xai).toMatchObject({
       access: "access-token-xyz",
       accountId: "user-1",
+      expires: credential.expiresAtMs,
       refresh: "refresh-token-xyz",
       type: "oauth",
     });
+    expect(Number.isFinite(opencodeAuth.xai.expires)).toBe(true);
 
     const piAuth = JSON.parse(
       await readFile(join(homeDir, ".pi", "agent", "auth.json"), "utf8")
-    ) as Record<string, unknown>;
-    // OAuth must not be written; leave existing unrelated providers alone.
-    expect(piAuth.xai).toBeUndefined();
+    ) as {
+      anthropic: { key: string; type: string };
+      xai: {
+        access: string;
+        accountId: string;
+        expires: number;
+        refresh: string;
+        type: string;
+      };
+    };
     expect(piAuth.anthropic).toEqual({ type: "api_key", key: "keep-me" });
+    expect(piAuth.xai).toMatchObject({
+      access: "access-token-xyz",
+      accountId: "user-1",
+      expires: credential.expiresAtMs,
+      refresh: "refresh-token-xyz",
+      type: "oauth",
+    });
+    expect(Number.isFinite(piAuth.xai.expires)).toBe(true);
   });
 
   it("writes xai api key into opencode and pi auth.json with tool-specific types", async () => {

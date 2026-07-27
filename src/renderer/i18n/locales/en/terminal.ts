@@ -82,7 +82,9 @@ export const terminal = {
   runtimeControl: {
     blocked: "Blocked",
     cancelled: "Cancelled",
+    close: "Close task panel",
     controlLabel: "Task run controls: {{label}}",
+    dismiss: "Dismiss task controls",
     duration: "Elapsed time: {{duration}}",
     failed: "Failed",
     finishedBlocked: "Task blocked",

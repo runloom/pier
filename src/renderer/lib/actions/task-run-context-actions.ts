@@ -1,5 +1,6 @@
 import i18next from "i18next";
 import { RotateCcw, Square } from "lucide-react";
+import { useTaskRunControlDismissStore } from "@/stores/task-run-control-dismiss.store.ts";
 import type { ActionContribution } from "./contribution-types.ts";
 import {
   forceStopAvailable,
@@ -51,7 +52,10 @@ export const TASK_RUN_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       if (target.run.status === "stopping" && !force) {
         return;
       }
-      await stopTaskRun(target.run, force);
+      const outcome = await stopTaskRun(target.run, force);
+      if (outcome === "dismiss") {
+        useTaskRunControlDismissStore.getState().dismiss(target.run.runId);
+      }
     },
     id: "pier.run.stopTask",
     group: "1_new",

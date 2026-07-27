@@ -18,6 +18,8 @@ interface RankedCandidate<TPayload> {
   sourceIndex: number;
 }
 
+type VisibleTextRank = Pick<SearchRank, "matchIndex" | "matchLength" | "tier">;
+
 export function rankSearchDocuments<TPayload>(
   documents: readonly SearchDocument<TPayload>[],
   query: string,
@@ -114,6 +116,7 @@ function rankDocument<TPayload>(
       frecency,
       fuzzyOrder,
       matchIndex: secondaryRank.matchIndex,
+      matchLength: secondaryRank.matchLength,
       tier: secondaryRank.tier + SECONDARY_TIER_OFFSET,
     };
   }
@@ -123,6 +126,7 @@ function rankDocument<TPayload>(
       frecency,
       fuzzyOrder,
       matchIndex: 0,
+      matchLength: Number.POSITIVE_INFINITY,
       tier: 8,
     };
   }
@@ -133,6 +137,7 @@ function rankDocument<TPayload>(
       frecency,
       fuzzyOrder,
       matchIndex: 0,
+      matchLength: stableId.length,
       tier: 9,
     };
   }
@@ -142,6 +147,7 @@ function rankDocument<TPayload>(
       frecency,
       fuzzyOrder,
       matchIndex: stableIdIndex,
+      matchLength: stableId.length,
       tier: 10,
     };
   }
@@ -152,8 +158,8 @@ function rankDocument<TPayload>(
 function bestVisibleTextRank(
   texts: readonly string[],
   normalizedQuery: string
-): Pick<SearchRank, "matchIndex" | "tier"> | null {
-  let best: Pick<SearchRank, "matchIndex" | "tier"> | null = null;
+): VisibleTextRank | null {
+  let best: VisibleTextRank | null = null;
   for (const text of texts) {
     const normalizedText = normalize(text);
     if (!normalizedText) {
@@ -163,38 +169,49 @@ function bestVisibleTextRank(
     if (!rank) {
       continue;
     }
-    if (
-      !best ||
-      rank.tier < best.tier ||
-      (rank.tier === best.tier && rank.matchIndex < best.matchIndex)
-    ) {
+    if (!best || isBetterVisibleRank(rank, best)) {
       best = rank;
     }
   }
   return best;
 }
 
+/** Prefer lower tier, then earlier matchIndex, then shorter matched field. */
+function isBetterVisibleRank(
+  candidate: VisibleTextRank,
+  best: VisibleTextRank
+): boolean {
+  if (candidate.tier !== best.tier) {
+    return candidate.tier < best.tier;
+  }
+  if (candidate.matchIndex !== best.matchIndex) {
+    return candidate.matchIndex < best.matchIndex;
+  }
+  return candidate.matchLength < best.matchLength;
+}
+
 function visibleTextRank(
   normalizedText: string,
   normalizedQuery: string
-): Pick<SearchRank, "matchIndex" | "tier"> | null {
+): VisibleTextRank | null {
+  const matchLength = normalizedText.length;
   if (normalizedText === normalizedQuery) {
-    return { matchIndex: 0, tier: 0 };
+    return { matchIndex: 0, matchLength, tier: 0 };
   }
   if (normalizedText.startsWith(normalizedQuery)) {
-    return { matchIndex: 0, tier: 1 };
+    return { matchIndex: 0, matchLength, tier: 1 };
   }
   const matchIndex = normalizedText.indexOf(normalizedQuery);
   if (matchIndex >= 0) {
-    return { matchIndex, tier: 2 };
+    return { matchIndex, matchLength, tier: 2 };
   }
   const compactRank = compactTextRank(normalizedText, normalizedQuery);
   if (compactRank) {
-    return compactRank;
+    return { ...compactRank, matchLength };
   }
   const initialsRank = initialsTextRank(normalizedText, normalizedQuery);
   if (initialsRank) {
-    return initialsRank;
+    return { ...initialsRank, matchLength };
   }
   return null;
 }
@@ -245,14 +262,16 @@ function compareRankedCandidates<TPayload>(
   if (a.rank.matchIndex !== b.rank.matchIndex) {
     return a.rank.matchIndex - b.rank.matchIndex;
   }
-  // 仅主带（title/alias）用更短标题表示更紧匹配；次带命中的是 category
-  // 等元数据，标题长度会误伤同 category 下的 frecency 排序。
-  if (a.rank.tier <= PRIMARY_TIER_MAX && b.rank.tier <= PRIMARY_TIER_MAX) {
-    const aTitleLen = normalize(a.document.title).length;
-    const bTitleLen = normalize(b.document.title).length;
-    if (aTitleLen !== bTitleLen) {
-      return aTitleLen - bTitleLen;
-    }
+  // 仅主带（title/alias）用更短「命中字段」表示更紧匹配。
+  // 必须用实际命中的 title/alias 长度，不能用展示标题长度——否则
+  // `git merge abort` 因标题「中止合并」更短，会在 gitm 上压过 `git merge`。
+  // 次带命中的是 category 等元数据，字段长度会误伤同 category 下的 frecency。
+  if (
+    a.rank.tier <= PRIMARY_TIER_MAX &&
+    b.rank.tier <= PRIMARY_TIER_MAX &&
+    a.rank.matchLength !== b.rank.matchLength
+  ) {
+    return a.rank.matchLength - b.rank.matchLength;
   }
   if (a.rank.frecency !== b.rank.frecency) {
     return b.rank.frecency - a.rank.frecency;

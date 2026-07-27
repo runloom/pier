@@ -469,6 +469,54 @@ describe("GitReviewDocumentLoader", () => {
     ).toHaveLength(2);
   });
 
+  it("tree-nav sticky members stay pinned against soft budget eviction", async () => {
+    const entries = [entry(0), entry(1), entry(2)];
+    const load = vi.fn(async (item: GitReviewIndexEntry) =>
+      documentFor(item, "const value = 1;\n".repeat(40))
+    );
+    const loader = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries,
+      load,
+      maxConcurrent: 3,
+      maxRetainedBytes: 4096,
+      maxRetainedLines: 50,
+    });
+
+    loader.setWindowDemand({
+      bufferedEntryKeys: [],
+      visibleEntryKeys: entries.map((item) => item.entryKey),
+    });
+    await flush();
+    expect(
+      loader
+        .getSnapshot()
+        .resources.filter((resource) => resource.kind === "loaded")
+    ).toHaveLength(3);
+
+    // 钉 sticky 后再收窗口并压 soft budget：sticky 不得被 LRU 踢出
+    loader.setStickyMemberEntryKeys(["entry:1", "entry:2"]);
+    loader.setWindowDemand({
+      bufferedEntryKeys: [],
+      visibleEntryKeys: ["entry:0"],
+    });
+    loader.setRetentionLimits({ maxRetainedBytes: 256, maxRetainedLines: 5 });
+    const loadedKeys = loader
+      .getSnapshot()
+      .resources.filter((resource) => resource.kind === "loaded")
+      .map((resource) => resource.entry.entryKey)
+      .sort();
+    expect(loadedKeys).toEqual(["entry:0", "entry:1", "entry:2"]);
+
+    loader.setStickyMemberEntryKeys([]);
+    const after = loader
+      .getSnapshot()
+      .resources.filter((resource) => resource.kind === "loaded")
+      .map((resource) => resource.entry.entryKey);
+    expect(after).toContain("entry:0");
+    expect(after.length).toBeLessThan(3);
+  });
+
   it("does not loop-reload a buffered document evicted by a smaller soft budget", async () => {
     const entries = [entry(0), entry(1)];
     const load = vi.fn(async (item: GitReviewIndexEntry) => documentFor(item));
@@ -674,7 +722,8 @@ describe("GitReviewDocumentLoader", () => {
     loader.dispose();
   });
 
-  it("hydrateLoaded skips entries when slot arity no longer matches", () => {
+  it("hydrateLoaded soft-remaps half-stage 1→2 residual onto unstaged", () => {
+    // 半暂存：旧 1 槽 body 可 soft 挂到 unstaged 操作侧，不因槽数变化丢弃
     const original = entry(0);
     const halfStaged = entry(0, ["unstaged", "staged"]);
     const load = vi.fn(async (item: GitReviewIndexEntry) => documentFor(item));
@@ -689,7 +738,16 @@ describe("GitReviewDocumentLoader", () => {
       kind: "loaded",
     };
     loader.hydrateLoaded(new Map([[original.entryKey, stale]]));
-    expect(loader.getResource(original.entryKey)?.kind).toBe("idle");
+    const resource = loader.getResource(original.entryKey);
+    expect(resource?.kind).toBe("loaded");
+    if (resource?.kind !== "loaded") {
+      throw new Error("expected soft-remapped loaded");
+    }
+    const unstagedKey = halfStaged.renderSlots.find(
+      (slot) => slot.group === "unstaged"
+    )?.sectionKey;
+    expect(resource.document.sections).toHaveLength(1);
+    expect(resource.document.sections[0]?.sectionKey).toBe(unstagedKey);
     expect(load).not.toHaveBeenCalled();
     loader.dispose();
   });

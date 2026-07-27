@@ -10,6 +10,7 @@ export {
 } from "./notify-failures.ts";
 export {
   ALL_PEER_SYNC_TARGETS,
+  effectivePeerAvailabilityForKind,
   isPeerTargetAvailable,
   type PeerAvailability,
   type PeerSyncTarget,

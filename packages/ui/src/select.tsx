@@ -1,7 +1,12 @@
 import { CheckIcon, ChevronDownIcon, ChevronUpIcon } from "lucide-react";
 import { Select as SelectPrimitive } from "radix-ui";
 import { useComposedRefs } from "radix-ui/internal";
-import type * as React from "react";
+import {
+  Children,
+  isValidElement,
+  type ReactElement,
+  type ReactNode,
+} from "react";
 import { useFreezeFloatingOnClose } from "./freeze-floating-on-close.ts";
 import {
   CONTROL_HEIGHT_CLASS,
@@ -9,6 +14,27 @@ import {
 } from "./interactive-density.ts";
 import { useTerminalOverlay } from "./use-terminal-overlay.tsx";
 import { cn } from "./utils.ts";
+
+/**
+ * True when Content has option rows but no SelectGroup yet.
+ * Only compares against SelectGroup (defined above); bare SelectItem lists
+ * get a default group so item padding / scroll-margin always apply.
+ */
+function selectContentNeedsDefaultGroup(children: ReactNode): boolean {
+  let sawGroup = false;
+  let sawBody = false;
+  Children.forEach(children, (child) => {
+    if (!isValidElement(child)) {
+      return;
+    }
+    if ((child as ReactElement).type === SelectGroup) {
+      sawGroup = true;
+      return;
+    }
+    sawBody = true;
+  });
+  return sawBody && !sawGroup;
+}
 
 function Select({
   ...props
@@ -86,6 +112,14 @@ function SelectContent({
   const overlayRef = useTerminalOverlay();
   const freezeRef = useFreezeFloatingOnClose();
   const composedRef = useComposedRefs(props.ref, overlayRef, freezeRef);
+  // Enforce SelectGroup for item padding / scroll margin. Call sites should
+  // still write <SelectGroup> explicitly; this is a safety net for demos and
+  // one-off lists that only pass bare SelectItem children.
+  const content = selectContentNeedsDefaultGroup(children) ? (
+    <SelectGroup>{children}</SelectGroup>
+  ) : (
+    children
+  );
   return (
     <SelectPrimitive.Portal>
       <SelectPrimitive.Content
@@ -111,7 +145,7 @@ function SelectContent({
           )}
           data-position={position}
         >
-          {children}
+          {content}
         </SelectPrimitive.Viewport>
         <SelectScrollDownButton />
       </SelectPrimitive.Content>

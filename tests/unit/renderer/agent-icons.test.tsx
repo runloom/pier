@@ -1,6 +1,6 @@
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { render } from "@testing-library/react";
 import { describe, expect, it } from "vitest";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 
 describe("AgentIcon 四级 dispatch", () => {
   it("内联 iconId 渲染 svg（claude + 新内联 gemini/omp/kilo）", () => {

@@ -1,5 +1,5 @@
 import type { FileDiffMetadata, SelectedLineRange } from "@pierre/diffs";
-import type { CodeViewItem } from "@pierre/diffs/react";
+import type { PierDiffCodeViewItem } from "./diff-view-items.ts";
 
 type SelectionSide = "additions" | "deletions";
 
@@ -62,7 +62,7 @@ export function selectedLinesTextFromFileDiff(
 }
 
 export function selectedLinesTextFromCodeViewItem(
-  item: CodeViewItem | undefined,
+  item: PierDiffCodeViewItem | undefined,
   range: SelectedLineRange
 ): string {
   if (!item) {
@@ -102,7 +102,7 @@ function selectedLinesTextFromFileContents(
 
 /** 当前 item 可全选的行范围；空文件返回 null。 */
 export function fullSelectionRangeForCodeViewItem(
-  item: CodeViewItem | undefined
+  item: PierDiffCodeViewItem | undefined
 ): SelectedLineRange | null {
   if (!item) {
     return null;

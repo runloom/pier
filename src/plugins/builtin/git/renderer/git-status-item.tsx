@@ -246,7 +246,8 @@ function GitBranchStatusItem({
           })}
           className={cn(
             STATUS_BAR_ITEM_TRIGGER_CLASS,
-            "max-w-64",
+            // 不设固定 max-w-*：溢出由状态栏整项 hide；文案自身 truncate
+            // 仅在 pinned 仍放不下时收缩（对齐分支名无 max-w-[…] 约定）。
             statusState.kind === "error" && "text-status-danger-fg"
           )}
           data-testid="worktree-status-trigger"

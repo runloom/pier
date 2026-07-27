@@ -87,8 +87,11 @@ function getPierFileTree(container: HTMLElement): HTMLElement {
   return tree as HTMLElement;
 }
 
-/** 分支名不应再带 max-w-[...] 固定宽度上限（只在容器溢出时 truncate）。 */
-const FIXED_MAX_WIDTH_CLASS_RE = /max-w-\[/;
+/**
+ * 状态栏项不应带固定宽度上限（max-w-64 / max-w-[160px] 等）。
+ * max-w-full 相对父级，允许；截断只在容器真正溢出时由 truncate 完成。
+ */
+const FIXED_MAX_WIDTH_CLASS_RE = /(?:^|\s)max-w-(?:\[|\d)/;
 const DROP_STASH_CONFIRM_BODY_RE =
   /Delete stash stash@\{2\}\? This cannot be undone\./;
 
@@ -713,6 +716,12 @@ describe("git builtin plugin", () => {
           applyStash: vi.fn(async () => ({ kind: "ok" as const })),
           dropStash: vi.fn(async () => ({ kind: "ok" as const })),
           rebase: vi.fn(async () => ({ kind: "ok" as const, message: "" })),
+          applyPatch: vi.fn(async () => ({
+            appliedPaths: [],
+            conflictedPaths: [],
+            skippedPaths: [],
+            status: "success" as const,
+          })),
           stage: vi.fn(async () => true),
           stash: vi.fn(async () => ({ kind: "ok" as const })),
           unstage: vi.fn(async () => true),
@@ -781,6 +790,12 @@ describe("git builtin plugin", () => {
     expect(actionRegistry.get("pier.git.push")).toBeDefined();
     expect(actionRegistry.get("pier.git.sync")).toBeDefined();
     expect(actionRegistry.get("pier.git.viewChanges")).toBeDefined();
+    expect(actionRegistry.get("pier.git.viewChanges")?.surfaces).toEqual([
+      "command-palette",
+    ]);
+    expect(actionRegistry.get("pier.git.viewChanges")?.title()).toMatch(
+      /Open Review|打开审查/
+    );
     expect(actionRegistry.get("pier.worktree.switch")).toBeUndefined();
     expect(
       terminalStatusItemRegistry
@@ -2392,6 +2407,8 @@ describe("git builtin plugin", () => {
     const label = await screen.findByText(longBranch);
     expect(label.className).toContain("truncate");
     expect(label.className).not.toMatch(FIXED_MAX_WIDTH_CLASS_RE);
+    const trigger = screen.getByTestId("worktree-status-trigger");
+    expect(trigger.className).not.toMatch(FIXED_MAX_WIDTH_CLASS_RE);
   });
 
   it("终端状态栏在非 Git context 下不渲染 worktree 入口", () => {

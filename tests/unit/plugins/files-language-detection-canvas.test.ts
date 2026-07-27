@@ -9,9 +9,9 @@ describe("languageForPath canvas", () => {
     expect(languageForPath(".pier/canvases/a.canvas.vue")).toBe("canvas");
     expect(languageForPath(".pier/canvases/a.canvas.svelte")).toBe("canvas");
     expect(languageForPath(".pier/canvases/a.canvas.solid.tsx")).toBe("canvas");
-    expect(
-      languageForPath(".pier/canvases/stress/workbench-proposal.canvas.tsx")
-    ).toBe("canvas");
+    expect(languageForPath(".pier/canvases/templates/blank.canvas.tsx")).toBe(
+      "canvas"
+    );
   });
 
   it("does not mis-label other tsx or misplaced *.canvas.tsx", () => {
@@ -22,6 +22,9 @@ describe("languageForPath canvas", () => {
       "typescript"
     );
     expect(languageForPath("docs/hello.canvas.tsx")).toBe("typescript");
+    expect(languageForPath(".pier/plans/demo/plan.canvas.tsx")).toBe(
+      "typescript"
+    );
     // Bare name under canvases without compound suffix.
     expect(languageForPath(".pier/canvases/helper.tsx")).toBe("typescript");
   });

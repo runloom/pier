@@ -86,8 +86,8 @@ export type AddAccountPayload =
 /**
  * Peer tools that can receive a mirrored Grok/xAI credential.
  * - `"grok"` is the primary switch (materialize), not a peer write target.
- * - opencode / omp accept xAI oauth or api_key under tool-specific keys.
- * - pi only accepts xAI api_key (`type: "api_key"`); OIDC sync fails for pi.
+ * - opencode / pi / omp accept xAI oauth or api_key under tool-specific keys.
+ * - pi oauth requires pi ≥ 0.80.8 (same xAI client as Grok CLI); api_key works on older pi.
  */
 export type CrossToolSyncTarget = "grok" | "opencode" | "pi" | "omp";
 
@@ -100,12 +100,15 @@ export interface PeerAvailability {
   omp: boolean;
   opencode: boolean;
   pi: boolean;
+  /** Pi ≥ 0.80.8 can consume xAI OAuth; API-key sync still keys off `pi`. */
+  piOauthCapable: boolean;
 }
 
 export const EMPTY_PEER_AVAILABILITY: PeerAvailability = {
   omp: false,
   opencode: false,
   pi: false,
+  piOauthCapable: false,
 };
 
 export interface SyncToPeersPayload {

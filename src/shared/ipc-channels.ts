@@ -21,9 +21,9 @@ export const PIER = {
   FILE_PREVIEW_TICKET_RELEASE: "pier://file-preview-ticket:release",
   MEDIA_PREVIEW_ABSOLUTE_ISSUE: "pier://media-preview-absolute:issue",
   MEDIA_PREVIEW_ABSOLUTE_RELEASE: "pier://media-preview-absolute:release",
-  // file path query (start/cancel invoke + directed event send;
-  // mirrors FILE_WATCH_START/STOP style but delivers ranked path results
-  // via `FILE_QUERY_EVENT` so single-command payloads stay bounded).
+  // file path + content query (start/cancel invoke + directed event send;
+  // mirrors FILE_WATCH_START/STOP style but delivers ranked path results /
+  // content hits via `FILE_QUERY_EVENT` so single-command payloads stay bounded).
   FILE_QUERY_START: "pier://file-query:start",
   FILE_QUERY_CANCEL: "pier://file-query:cancel",
   FILE_QUERY_EVENT: "pier://file-query:event",

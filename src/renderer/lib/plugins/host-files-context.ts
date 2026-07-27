@@ -109,6 +109,22 @@ export function createPluginFilesContext(
       assertPluginCapability(entry, "file:read");
       return window.pier.fileQuery.onEvent(listener);
     },
+    queryContents: (request) => {
+      assertPluginCapability(entry, "file:read");
+      const queryId = request.queryId ?? crypto.randomUUID();
+      const started = window.pier.fileQuery.start({
+        ...request,
+        mode: "content",
+        queryId,
+      });
+      return {
+        cancel: () => {
+          window.pier.fileQuery.cancel(queryId).catch(() => undefined);
+        },
+        queryId,
+        started,
+      };
+    },
     queryPaths: (request) => {
       assertPluginCapability(entry, "file:read");
       const queryId = request.queryId ?? crypto.randomUUID();

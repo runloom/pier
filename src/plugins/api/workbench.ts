@@ -1,7 +1,7 @@
 import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import type { WorkbenchGridSize } from "@shared/contracts/workbench.ts";
 import type { LucideIcon } from "lucide-react";
-import type { FunctionComponent } from "react";
+import type { FunctionComponent, ReactNode } from "react";
 
 export interface WorkbenchWidgetComponentProps {
   instanceId: string;
@@ -16,6 +16,12 @@ export interface WorkbenchWidgetComponentProps {
 export interface WorkbenchWidgetSettingsProps {
   instanceId: string;
   params: Readonly<Record<string, JsonValue>>;
+  /**
+   * Sticky DialogFooter slot owned by WorkbenchSettingsDialog.
+   * Host always provides this; pass null to hide. Use for primary panel
+   * actions (e.g. add block), not per-field live edits.
+   */
+  setFooter: (footer: ReactNode | null) => void;
   updateParams: (patch: Record<string, JsonValue>) => void;
 }
 

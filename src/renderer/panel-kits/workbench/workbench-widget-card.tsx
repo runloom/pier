@@ -27,7 +27,7 @@ import {
   PackageX,
   RefreshCw,
   Settings2,
-  Trash2,
+  X,
 } from "lucide-react";
 import { type KeyboardEvent, useId } from "react";
 import { useT } from "@/i18n/use-t.ts";
@@ -163,13 +163,14 @@ export function WorkbenchWidgetCard({
           } satisfies WidgetHeaderAction,
         ]
       : []),
+    // 移除用与刷新/设置同款 ghost + X，不在卡头用红色垃圾桶抢注意力；
+    // 真正破坏性确认仍走 confirmRemove 的 destructive 弹窗。
     ...(widget.status === "unknown"
       ? []
       : [
           {
-            icon: Trash2,
+            icon: X,
             id: "host:remove",
-            intent: "destructive",
             invoke: confirmRemove,
             label: t("workbench.widget.remove"),
             priority: 10,

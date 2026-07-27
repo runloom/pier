@@ -15,8 +15,9 @@
     "pnpm": ">=11.12.0"
   },
   "scripts": {
-    "typecheck": "pnpm typecheck:host && pnpm typecheck:packages",
+    "typecheck": "pnpm typecheck:host && pnpm typecheck:packages && pnpm typecheck:canvases",
     "typecheck:host": "tsc --noEmit",
+    "typecheck:canvases": "tsc -p tsconfig.canvases.json --noEmit",
     "typecheck:packages": "tsc -p packages/ui/tsconfig.json --noEmit && tsc -p packages/plugin-api/tsconfig.json --noEmit && tsc -p packages/plugin-codex/tsconfig.json --noEmit && tsc -p packages/plugin-grok/tsconfig.json --noEmit && tsc -p packages/plugin-ssh/tsconfig.json --noEmit && tsc -p packages/plugin-claude/tsconfig.json --noEmit",
     "lint": "ultracite check",
     "lint:fix": "ultracite fix",

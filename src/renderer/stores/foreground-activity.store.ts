@@ -1,9 +1,13 @@
+import {
+  type ActivityOverviewCounts,
+  activityOverviewCounts,
+} from "@shared/activity-overview.ts";
 import type {
   ForegroundActivity,
   ForegroundActivityBroadcast,
 } from "@shared/contracts/foreground-activity.ts";
 import {
-  activeTaskRunCount,
+  emptyTaskRunsSnapshot,
   type TaskRunsSnapshot,
 } from "@shared/contracts/tasks.ts";
 import { create } from "zustand";
@@ -39,29 +43,24 @@ export const useForegroundActivityStore = create<ForegroundActivityState>(
 
 export { combinedActivityRows } from "@shared/task-activity-sources.ts";
 
-export interface ActivityCounts {
-  running: number;
-  waiting: number;
-}
+export type ActivityCounts = ActivityOverviewCounts;
 
 /**
- * 本窗 FA 计数（工作台 overview 等）。与标题栏 `agentIndexCounts` 有意分叉：
- * 不计 launch、waiting 不含 error；勿混用两套桶。
+ * 本窗活动总览计数。与标题栏 `agentIndexCounts` 有意分叉：
+ * - 本窗范围；running 不计 launch 无 status
+ * - needsYou 含 waiting + error（+ 列表中的 task blocked/failed）
+ * - inProgress = combinedActivityRows 行数
+ * 无 taskRuns 时按空 snapshot 计（仅 agent 侧有效）。
+ * 有 TaskRuns 时务必传 `windowId`，否则 background task 可能跨窗泄漏。
  */
 export function activityCounts(
   activities: Record<string, ForegroundActivity>,
-  taskRuns?: TaskRunsSnapshot
+  taskRuns?: TaskRunsSnapshot,
+  options?: { windowId?: string }
 ): ActivityCounts {
-  let running = taskRuns ? activeTaskRunCount(taskRuns) : 0;
-  let waiting = 0;
-  for (const a of Object.values(activities)) {
-    if (a.kind === "agent") {
-      if (a.status === "processing" || a.status === "tool") {
-        running += 1;
-      } else if (a.status === "waiting") {
-        waiting += 1;
-      }
-    }
-  }
-  return { running, waiting };
+  return activityOverviewCounts(
+    activities,
+    taskRuns ?? emptyTaskRunsSnapshot(),
+    options
+  );
 }

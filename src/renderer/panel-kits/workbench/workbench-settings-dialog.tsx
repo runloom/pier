@@ -2,11 +2,12 @@ import {
   Dialog,
   DialogContent,
   DialogDescription,
+  DialogFooter,
   DialogHeader,
   DialogTitle,
 } from "@pier/ui/dialog.tsx";
 import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
-import { useLayoutEffect, useState } from "react";
+import { type ReactNode, useCallback, useLayoutEffect, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import type { ResolvedWorkbenchWidget } from "./workbench-merge.ts";
 
@@ -20,8 +21,10 @@ interface WorkbenchSettingsDialogProps {
  * 物料设置宿主：Dialog 内嵌物料自带的 settingsComponent。
  * 写回统一走 updateParams（随 panel params 持久化），宿主不解释配置内容。
  *
- * 密度对齐桌面工具对话框：紧凑 Header（单行标题 + 说明仅 a11y）、
- * 中等宽度、body 可滚；不与全页设置/物料库的大 Header 同规格。
+ * 交互模型 = 即时偏好（改即写）；可选 sticky footer 由 settings 经 setFooter
+ * 注册。footer 仅在 dialog 关闭（widget=null）时由宿主清空——不在 instance
+ * 切换时 layout 清空，避免与子组件 useContentDialogFooter 竞态（子先 set、
+ * 宿主后 null）。
  */
 export function WorkbenchSettingsDialog({
   onOpenChange,
@@ -31,12 +34,20 @@ export function WorkbenchSettingsDialog({
   const t = useT();
   const [retainedWidget, setRetainedWidget] =
     useState<ResolvedWorkbenchWidget | null>(widget);
+  const [footer, setFooterState] = useState<ReactNode | null>(null);
 
   useLayoutEffect(() => {
     if (widget) {
       setRetainedWidget(widget);
+      return;
     }
+    // Fully closed: drop footer so exit animation / next open starts clean.
+    setFooterState(null);
   }, [widget]);
+
+  const setFooter = useCallback((next: ReactNode | null) => {
+    setFooterState(next);
+  }, []);
 
   const presentedWidget = widget ?? retainedWidget;
   const SettingsComponent = presentedWidget?.registration?.settingsComponent;
@@ -51,30 +62,39 @@ export function WorkbenchSettingsDialog({
   return (
     <Dialog onOpenChange={onOpenChange} open={widget !== null}>
       <DialogContent
-        className="max-h-[min(36rem,calc(100vh-var(--app-titlebar-height)-2rem))] grid-rows-[auto_minmax(0,1fr)] gap-0 overflow-hidden p-0 sm:max-w-lg"
+        className="flex max-h-[min(36rem,calc(100vh-var(--app-titlebar-height)-2rem))] min-h-0 flex-col gap-0 overflow-hidden p-0 sm:max-w-lg"
         closeLabel={t("dialog.close")}
         data-testid="workbench-widget-settings-dialog"
         initialFocus="firstFocusable"
         showCloseButton
       >
-        <DialogHeader className="gap-1 border-border/60 border-b px-5 py-3.5 pr-12">
+        <DialogHeader className="shrink-0 gap-1 border-border/60 border-b px-6 py-4 pr-14">
           <DialogTitle className="text-base leading-none">{title}</DialogTitle>
-          {/* 持久化说明对视线噪音大，保留给读屏；正文区才是配置面。 */}
           <DialogDescription className="sr-only">
             {t("workbench.widget.settingsDescription")}
           </DialogDescription>
         </DialogHeader>
         {presentedWidget && SettingsComponent ? (
           <div
-            className="min-h-0 overflow-y-auto px-5 py-4"
+            className="min-h-0 flex-1 overflow-y-auto px-6 py-5"
             data-scrollbar="stable"
+            data-slot="workbench-widget-settings-body"
           >
             <SettingsComponent
               instanceId={presentedWidget.instanceId}
               params={presentedWidget.params}
+              setFooter={setFooter}
               updateParams={updateParams}
             />
           </div>
+        ) : null}
+        {footer ? (
+          <DialogFooter
+            className="shrink-0 border-border/60 border-t px-6 py-4"
+            data-testid="workbench-widget-settings-footer"
+          >
+            {footer}
+          </DialogFooter>
         ) : null}
       </DialogContent>
     </Dialog>

@@ -1,4 +1,5 @@
 import { agents } from "./agents.ts";
+import { canvas } from "./canvas.ts";
 import commandPaletteAliases from "./command-palette.aliases.json" with {
   type: "json",
 };
@@ -13,6 +14,7 @@ import { workspace } from "./workspace.ts";
 
 export const en = {
   agents,
+  canvas,
   commandPalette: {
     ...commandPalette,
     aliases: commandPaletteAliases,

@@ -78,10 +78,7 @@ export const settingsNotifications = {
   contentTitle: "What to Alert",
   contentDesc: "Choose which events should alert you.",
   agentGroup: "Agents",
-  taskSystemGroup: "Tasks & System",
-  taskRunFinished: "Pop up when background tasks finish",
-  taskRunFinishedDesc:
-    "Show the result when builds, scripts and other background tasks end; still recorded in Notification Center when off.",
+  taskSystemGroup: "System",
   appUpdate: "App update alerts",
   appUpdateDesc:
     "Alert you to restart when a new version is downloaded; still recorded in Notification Center when off.",

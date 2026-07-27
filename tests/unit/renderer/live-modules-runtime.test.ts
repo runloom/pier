@@ -3,7 +3,11 @@ import { describe, expect, it } from "vitest";
 import { installLiveModuleRuntime } from "../../../src/renderer/lib/live-modules/install-runtime.ts";
 import { mountLiveModule } from "../../../src/renderer/lib/live-modules/mount.ts";
 import { pierCanvasExports } from "../../../src/renderer/lib/live-modules/pier-canvas-exports.ts";
-import { PIER_CANVAS_EXPORT_NAMES } from "../../../src/shared/pier-canvas-export-names.ts";
+import {
+  PIER_CANVAS_COMPONENT_EXPORT_NAMES,
+  PIER_CANVAS_EXPORT_NAMES,
+  PIER_CANVAS_VALUE_EXPORT_NAMES,
+} from "../../../src/shared/pier-canvas-export-names.ts";
 
 describe("live-modules runtime", () => {
   it("keeps pierCanvasExports keys aligned with PIER_CANVAS_EXPORT_NAMES", () => {
@@ -13,6 +17,15 @@ describe("live-modules runtime", () => {
     expect(pierCanvasExports.Input).toBeTypeOf("function");
     expect(pierCanvasExports.Select).toBeTypeOf("function");
     expect(pierCanvasExports.Empty).toBeTypeOf("function");
+  });
+
+  it("splits component exports from value exports without overlap", () => {
+    const components = new Set<string>(PIER_CANVAS_COMPONENT_EXPORT_NAMES);
+    for (const name of PIER_CANVAS_VALUE_EXPORT_NAMES) {
+      expect(components.has(name)).toBe(false);
+      expect(name.startsWith("use")).toBe(true);
+      expect(pierCanvasExports[name]).toBeTypeOf("function");
+    }
   });
 
   it("installs pier/canvas exports on globalThis and refreshes on reinstall", () => {
@@ -28,7 +41,6 @@ describe("live-modules runtime", () => {
     expect(pierCanvasExports.Row).toBeTypeOf("function");
     expect(pierCanvasExports.Frame).toBeTypeOf("function");
     expect(pierCanvasExports.CardTitle).toBeTypeOf("function");
-    // Framework-agnostic shell CSS for Vue/Solid/Svelte pier-c-* classes.
     expect(
       document.head.querySelector("style[data-pier-canvas-shell-style]")
     ).toBeTruthy();
@@ -41,7 +53,6 @@ describe("live-modules runtime", () => {
       return pierCanvasExports.Text({ children: "hi" });
     }
     const unmount = mountLiveModule(el, Hello);
-    // React 19 createRoot may flush async in jsdom; unmount must be safe.
     expect(() => unmount()).not.toThrow();
     el.remove();
   });

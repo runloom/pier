@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  estimateLinesForFileStatus,
   fileDiffLineStats,
   type PierDiffViewItem,
   toCodeViewItem,
@@ -26,15 +27,25 @@ describe("fileDiffLineStats", () => {
   });
 });
 
-describe("toCodeViewItem placeholders", () => {
-  it("builds zero-hunk placeholders so unloaded files do not claim line stats", () => {
+describe("estimateLinesForFileStatus", () => {
+  it("scales skeleton by status", () => {
+    expect(estimateLinesForFileStatus("deleted")).toBe(4);
+    expect(estimateLinesForFileStatus("added")).toBe(24);
+    expect(estimateLinesForFileStatus("modified")).toBe(16);
+  });
+});
+
+describe("toCodeViewItem estimate slots", () => {
+  it("builds estimate geometry with status-aware body lines and zero change stats", () => {
     const input: PierDiffViewItem = {
-      cacheKey: "git-review-placeholder:section:1",
+      cacheKey: "estimate:section:1",
+      estimateLines: estimateLinesForFileStatus("added"),
       fileDisplay: {
         path: "tests/unit/main/git-watch-root.test.ts",
         status: "added",
       },
       id: "section:1",
+      kind: "estimate",
       patch: null,
     };
     const { entry, error } = toCodeViewItem(input, undefined);
@@ -43,12 +54,14 @@ describe("toCodeViewItem placeholders", () => {
     if (entry.item.type !== "diff") {
       throw new Error("expected diff item");
     }
-    expect(entry.item.fileDiff.hunks).toEqual([]);
+    // added 启发式 24 行骨架
+    expect(entry.item.fileDiff.unifiedLineCount).toBe(24);
+    expect(entry.item.fileDiff.hunks).toHaveLength(1);
     expect(fileDiffLineStats(entry.item.fileDiff)).toEqual({
       additions: 0,
       deletions: 0,
     });
-    expect(pierDiffItemPresentation(input)).toBe("loading");
+    expect(pierDiffItemPresentation(input)).toBe("ready");
   });
 
   it("surfaces real addition counts after a new-file patch loads", () => {

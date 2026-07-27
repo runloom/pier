@@ -6,8 +6,16 @@ import {
   type LiveModuleRuntimeId,
   liveModuleRuntimeUrl,
 } from "@shared/live-module-url.ts";
-import { PIER_CANVAS_EXPORT_NAMES } from "@shared/pier-canvas-export-names.ts";
-import * as esbuild from "esbuild";
+import {
+  PIER_CANVAS_COMPONENT_EXPORT_NAMES,
+  PIER_CANVAS_VALUE_EXPORT_NAMES,
+} from "@shared/pier-canvas-export-names.ts";
+// Type-only: erased at runtime. esbuild reads ESBUILD_BINARY_PATH once at
+// module load and caches it (node_modules/esbuild/lib/main.js), so a static
+// `import * as esbuild` would capture the env before we can set it. The value
+// is loaded lazily below, AFTER ensureEsbuildBinaryPath() runs.
+import type * as esbuild from "esbuild";
+import { ensureEsbuildBinaryPath } from "./esbuild-binary.ts";
 import {
   assertNotNodeModulesPath,
   assertPathInsideRoot,
@@ -43,9 +51,45 @@ const RUNTIME_BY_SPECIFIER: Record<string, LiveModuleRuntimeId> = {
 const PIER_CANVAS_STUB_NAMESPACE = "pier-live-canvas-stub";
 const PIER_CANVAS_STUB_PATH = "pier:canvas-stub";
 
+const NODE_STUB_NAMESPACE = "pier-live-node-stub";
+
+/**
+ * No-op stub for `node:*` builtins referenced by non-React framework
+ * internals (e.g. Svelte/Vue dev-mode or CJS-interop code paths that import
+ * `createRequire` from `node:module`). These paths are dead in the browser
+ * (guarded by environment checks); stubbing lets the bundle build without
+ * resolving them. React canvases keep the strict compile-time deny.
+ */
+export function nodeBuiltinStubSource(specifier: string): string {
+  if (specifier === "node:module") {
+    return [
+      "function createRequire() {",
+      "  // Return a callable require whose result is also a deep no-op,",
+      "  // so chained access (require('fs').readFileSync) never throws in",
+      "  // the dead browser code paths that reference node:module.",
+      "  return () => new Proxy({}, { get: () => () => undefined });",
+      "}",
+      "function isBuiltin() { return false; }",
+      "const _default = { createRequire, isBuiltin };",
+      "export { createRequire, isBuiltin };",
+      "export default _default;",
+    ].join("\n");
+  }
+  // Other node: builtins: a Proxy default returns a no-op for any property,
+  // covering both named and default import patterns frameworks may emit.
+  return ["export default new Proxy({}, { get: () => () => undefined });"].join(
+    "\n"
+  );
+}
+
 /**
  * Stub module inlined into each canvas bundle. Named exports always exist;
  * implementations are read from `globalThis.__PIER_LIVE_CANVAS__` at render time.
+ *
+ * Components become `createElement` wrappers. Value exports (hooks) are called
+ * through with their own arguments and return value — wrapping those in
+ * `createElement` would drop both. The wrapper keeps the `useX` name so React's
+ * hook rules still apply at the canvas call site.
  */
 export function pierCanvasStubSource(): string {
   const lines = [
@@ -58,7 +102,7 @@ export function pierCanvasStubSource(): string {
     "  return canvas;",
     "}",
   ];
-  for (const name of PIER_CANVAS_EXPORT_NAMES) {
+  for (const name of PIER_CANVAS_COMPONENT_EXPORT_NAMES) {
     lines.push(
       `export function ${name}(props) {`,
       `  const Comp = getCanvas().${name};`,
@@ -66,6 +110,17 @@ export function pierCanvasStubSource(): string {
       `    throw new Error("pier/canvas export missing: ${name}");`,
       "  }",
       "  return createElement(Comp, props);",
+      "}"
+    );
+  }
+  for (const name of PIER_CANVAS_VALUE_EXPORT_NAMES) {
+    lines.push(
+      `export function ${name}(...args) {`,
+      `  const fn = getCanvas().${name};`,
+      '  if (typeof fn !== "function") {',
+      `    throw new Error("pier/canvas export missing: ${name}");`,
+      "  }",
+      "  return fn(...args);",
       "}"
     );
   }
@@ -122,6 +177,12 @@ function diagnosticFromError(
 export async function compileLiveModule(
   input: CompileLiveModuleInput
 ): Promise<CompileLiveModuleResult> {
+  // esbuild caches process.env.ESBUILD_BINARY_PATH into a module-level variable
+  // the first time its module loads. Loading esbuild lazily here (after setting
+  // the env) is what makes the packaged fix work — a static top-level import
+  // would have already captured `undefined` at app startup.
+  ensureEsbuildBinaryPath();
+  const esbuild = await import("esbuild");
   const graph = new Set<string>();
   const fenceRoot = input.projectRoot ?? input.contentRoot;
   const entryDir = dirname(input.entryAbsolutePath);
@@ -140,6 +201,24 @@ export async function compileLiveModule(
             contents: pierCanvasStubSource(),
             loader: "js",
             resolveDir: entryDir,
+          })
+        );
+      }
+
+      // Non-React frameworks bundle the project's framework + transitive deps.
+      // Some internals reference `node:*` builtins in dead browser paths
+      // (Svelte/Vue dev-mode, CJS interop). Stub them to no-ops instead of
+      // failing the build; React keeps the strict compile-time deny.
+      if (input.framework !== "react") {
+        build.onResolve({ filter: /^node:/ }, (args) => ({
+          namespace: NODE_STUB_NAMESPACE,
+          path: args.path,
+        }));
+        build.onLoad(
+          { filter: /.*/, namespace: NODE_STUB_NAMESPACE },
+          (args) => ({
+            contents: nodeBuiltinStubSource(args.path),
+            loader: "js",
           })
         );
       }

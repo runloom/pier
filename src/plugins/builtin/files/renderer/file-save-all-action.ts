@@ -95,7 +95,8 @@ export function createSaveAllAction(
     },
     id: FILES_SAVE_ALL_COMMAND_ID,
     metadata: { group: "5_save", sortOrder: 3 },
-    surfaces: ["command-palette"],
+    // 快捷键路径；不进命令面板。
+    surfaces: [],
     title: () => t("filePanel.saveAll", "Save All"),
   };
 }

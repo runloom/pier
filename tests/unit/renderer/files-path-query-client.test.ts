@@ -168,6 +168,7 @@ describe("files path query client", () => {
     env.emit({
       items: [{ path: "old.ts", score: 1 }],
       kind: "batch",
+      mode: "path",
       queryId: firstId,
     });
     expect(first).not.toHaveBeenCalled();
@@ -187,11 +188,13 @@ describe("files path query client", () => {
     env.emit({
       items: [{ path: "a.ts", score: 10 }],
       kind: "batch",
+      mode: "path",
       queryId: id,
     });
     env.emit({
       items: [{ path: "b.ts", score: 8 }],
       kind: "batch",
+      mode: "path",
       queryId: id,
     });
     env.emit({
@@ -266,6 +269,7 @@ describe("files path query client", () => {
     env.emit({
       items: [{ path: "late.ts", score: 1 }],
       kind: "batch",
+      mode: "path",
       queryId: id,
     });
     expect(onUpdate).not.toHaveBeenCalled();

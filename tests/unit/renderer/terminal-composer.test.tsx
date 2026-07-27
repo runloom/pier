@@ -109,10 +109,18 @@ const keybindingOnForward =
     ) => () => void
   >();
 
+const beginImageSuppress = vi.fn(async () => undefined);
+const endImageSuppress = vi.fn(async () => undefined);
+
 function installTerminalApi(): void {
   Object.defineProperty(window, "pier", {
     configurable: true,
     value: {
+      clipboard: {
+        beginImageSuppress,
+        endImageSuppress,
+        writeText: vi.fn(async () => undefined),
+      },
       keybinding: {
         onForward: keybindingOnForward,
       },
@@ -143,6 +151,8 @@ beforeEach(async () => {
   setAppShortcutKeys.mockClear();
   keybindingOnForward.mockReset();
   keybindingOnForward.mockImplementation(() => () => undefined);
+  beginImageSuppress.mockClear();
+  endImageSuppress.mockClear();
   activeTerminalPanelIdMock.mockReturnValue("t-1");
   toastError.mockClear();
   useForegroundActivityStore.setState({ activities: {} });
@@ -259,6 +269,40 @@ describe("TerminalComposer", () => {
     renderComposer({ panelId: "t-draft" });
 
     expect(readComposerDraftText()).toBe("keep me");
+  });
+
+  it("Esc clears attachment rail so remount does not keep clipboard images", async () => {
+    const onClose = vi.fn();
+    pickComposerFiles.mockResolvedValue({
+      ok: true,
+      paths: ["/tmp/stale.png"],
+    });
+    resolveComposerPaths.mockResolvedValue({
+      attachments: [
+        {
+          id: "img-stale",
+          kind: "image",
+          name: "stale.png",
+          path: "/tmp/stale.png",
+        },
+      ],
+      failures: [],
+    });
+
+    const { view } = renderComposer({ onClose, panelId: "t-esc-att" });
+    fireEvent.click(screen.getByTestId("terminal-composer-attach"));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("terminal-composer-attachment-1")).toBeTruthy();
+    });
+
+    fireEvent.keyDown(composerInput(), { key: "Escape" });
+    expect(onClose).toHaveBeenCalledTimes(1);
+
+    view.unmount();
+    renderComposer({ panelId: "t-esc-att" });
+    expect(
+      screen.queryByTestId("terminal-composer-attachment-1")
+    ).not.toBeInTheDocument();
   });
 
   it("panel-level Esc closes when focus is outside the editor", () => {
@@ -888,6 +932,27 @@ describe("TerminalComposer", () => {
       text: "/tmp/only.png",
     });
     await vi.waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
+  });
+
+  it("agent panel: plain text send suppresses clipboard image probe window", async () => {
+    setAgentActivity({ status: "ready" });
+    const onClose = vi.fn();
+    renderComposer({ onClose });
+    setComposerDraftText("你好");
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+
+    await vi.waitFor(() => {
+      expect(beginImageSuppress).toHaveBeenCalled();
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        submit: true,
+        text: "你好",
+      });
+    });
+    await vi.waitFor(() => {
+      expect(endImageSuppress).toHaveBeenCalled();
       expect(onClose).toHaveBeenCalledTimes(1);
     });
   });

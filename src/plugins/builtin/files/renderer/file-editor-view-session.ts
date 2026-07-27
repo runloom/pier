@@ -287,6 +287,14 @@ export class FileEditorViewSession {
     });
   }
 
+  revealRange(from: number, to: number): void {
+    const anchor = Math.min(from, to);
+    const head = Math.max(from, to);
+    this.applySnapshot({
+      selection: { anchor, head },
+    });
+  }
+
   /** Recompute line geometry after external CSS font-size / family changes. */
   requestMeasure(): void {
     this.#view?.requestMeasure();

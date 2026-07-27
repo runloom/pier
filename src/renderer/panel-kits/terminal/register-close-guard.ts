@@ -95,6 +95,7 @@ export function registerTerminalPanelCloseGuard(): () => void {
     }
 
     // 用户已确认「关闭会终止」；优雅 stop，不再二次 force 确认。
+    // 关 panel 本身会拆掉控制条，不必再 dismiss。
     const runsToStop = activeTaskRunsToStopForPanel(panelId, taskRuns);
     for (const run of runsToStop) {
       await stopTaskRun(run, false);

@@ -89,12 +89,14 @@ export function AccountsWidget({
   const accountLabel =
     activeAccount?.label ??
     t("pier.codex.widget.noActiveAccount", "No active account");
-  // size 做结构：宽卡才在标题行露出 credits / 更新时间；矮卡藏 plan 副文案吃高度
-  const showCredits = Boolean(creditsLabel) && size.w >= 4;
-  const showFetchedInline = Boolean(fetchedLabel) && size.w >= 4;
-  // 矮卡藏 plan 副文案；账号异常时仍展示（可用性优先于密度）
-  const showPlanSummary =
-    density !== "compact" || Boolean(activeAccount?.error);
+  // 小卡整段隐藏账号区，把高度留给额度
+  const showAccountHeader = density !== "compact";
+  // size 做结构：宽卡才在标题行露出 credits / 更新时间
+  const showCredits = showAccountHeader && Boolean(creditsLabel) && size.w >= 4;
+  const showFetchedInline =
+    showAccountHeader && Boolean(fetchedLabel) && size.w >= 4;
+  // 账号区可见时展示 plan；异常时也强制展示
+  const showPlanSummary = showAccountHeader || Boolean(activeAccount?.error);
 
   let usageContent: JSX.Element;
   if (!usage) {
@@ -132,53 +134,55 @@ export function AccountsWidget({
       data-size-w={size.w}
       data-slot="codex-accounts-widget"
     >
-      <Item className="shrink-0 flex-nowrap px-0 py-0" size="xs">
-        <ItemMedia align="center">
-          <AccountAvatar label={accountLabel} />
-        </ItemMedia>
-        <ItemContent className="min-w-0 basis-0">
-          <ItemTitle className="block w-full truncate" title={accountLabel}>
-            {accountLabel}
-          </ItemTitle>
-          {showPlanSummary ? (
-            <ItemDescription>
-              <span>
-                {(activeAccount
-                  ? accountPlanSummary(
-                      activeAccount,
-                      context.i18n.language(),
-                      t
-                    )
-                  : null) ??
-                  t(
-                    "pier.codex.widget.accountUnavailable",
-                    "Account unavailable"
-                  )}
-              </span>
-              {showFetchedInline ? (
+      {showAccountHeader ? (
+        <Item className="shrink-0 flex-nowrap px-0 py-0" size="xs">
+          <ItemMedia align="center">
+            <AccountAvatar label={accountLabel} />
+          </ItemMedia>
+          <ItemContent className="min-w-0 basis-0">
+            <ItemTitle className="block w-full truncate" title={accountLabel}>
+              {accountLabel}
+            </ItemTitle>
+            {showPlanSummary ? (
+              <ItemDescription>
                 <span>
-                  {" · "}
-                  {fetchedLabel}
+                  {(activeAccount
+                    ? accountPlanSummary(
+                        activeAccount,
+                        context.i18n.language(),
+                        t
+                      )
+                    : null) ??
+                    t(
+                      "pier.codex.widget.accountUnavailable",
+                      "Account unavailable"
+                    )}
                 </span>
-              ) : null}
-            </ItemDescription>
+                {showFetchedInline ? (
+                  <span>
+                    {" · "}
+                    {fetchedLabel}
+                  </span>
+                ) : null}
+              </ItemDescription>
+            ) : null}
+          </ItemContent>
+          {showCredits ? (
+            <Badge className="shrink-0" size="xs" variant="neutral">
+              {creditsLabel}
+            </Badge>
           ) : null}
-        </ItemContent>
-        {showCredits ? (
-          <Badge className="shrink-0" size="xs" variant="neutral">
-            {creditsLabel}
-          </Badge>
-        ) : null}
-        {switchableAccounts.length > 0 ? (
-          <ItemActions>
-            <AccountPicker
-              accounts={switchableAccounts}
-              context={context}
-              t={t}
-            />
-          </ItemActions>
-        ) : null}
-      </Item>
+          {switchableAccounts.length > 0 ? (
+            <ItemActions>
+              <AccountPicker
+                accounts={switchableAccounts}
+                context={context}
+                t={t}
+              />
+            </ItemActions>
+          ) : null}
+        </Item>
+      ) : null}
 
       <div className="flex min-h-0 min-w-0 flex-1 flex-col content-start">
         {usageContent}

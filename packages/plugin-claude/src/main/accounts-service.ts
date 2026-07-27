@@ -1,5 +1,3 @@
-import { randomUUID } from "node:crypto";
-import { rm } from "node:fs/promises";
 import {
   createUsageRefreshScheduler,
   startSuppressedDriftWatch,
@@ -8,13 +6,13 @@ import {
 } from "@pier/plugin-api/account-usage";
 import type { ClaudeAccountsSnapshot } from "../shared/accounts.ts";
 import { WATCH_SUPPRESS_MS } from "../shared/constants.ts";
+import { adoptCurrentClaudeLogin } from "./accounts-adopt.ts";
 import { createOauthLoginController } from "./accounts-login.ts";
-import {
-  buildAccountRecord,
-  mergeIdentityIntoAccount,
-} from "./accounts-records.ts";
 import { removeManagedAccount } from "./accounts-remove.ts";
-import { selectManagedAccount } from "./accounts-select.ts";
+import {
+  selectManagedAccount,
+  syncManagedAccountPeers,
+} from "./accounts-select.ts";
 import type {
   ClaudeAccountsService,
   ClaudeAccountsServiceOpts,
@@ -203,64 +201,21 @@ export function createClaudeAccountsService(
     usageCache,
   });
 
-  /**
-   * Import the current Claude login into managed accounts and activate it
-   * (the CLI-import add path; the OAuth add path is completeLogin).
-   */
   async function doAdoptCurrent(): Promise<void> {
-    const identity = await provider.readCurrentIdentity();
-    if (!identity) {
-      throw new Error(
-        "No valid Claude login found. Sign in with the Claude CLI first."
-      );
-    }
-    lastActionError = null;
-    const state = stateStore.get();
-    const existing = state.accounts.find(
-      (a) => a.providerAccountId === identity.providerAccountId
-    );
-    if (existing) {
-      const dir = await ensureManagedDir(existing.id);
-      const syncResult = await provider.syncBack(
-        dir,
-        identity.providerAccountId
-      );
-      if (syncResult !== "ok") {
-        throw new Error("Could not capture the current Claude credential");
-      }
-      credentialErrors.delete(existing.id);
-      stateStore.mutate((s) => ({
-        ...s,
-        accounts: s.accounts.map((a) =>
-          a.id === existing.id
-            ? mergeIdentityIntoAccount(a, identity, now())
-            : a
-        ),
-        activeAccountId: existing.id,
-        revision: s.revision + 1,
-      }));
-    } else {
-      const id = randomUUID();
-      const dir = await ensureManagedDir(id);
-      const syncResult = await provider.syncBack(
-        dir,
-        identity.providerAccountId
-      );
-      if (syncResult !== "ok") {
-        await rm(dir, { recursive: true, force: true }).catch(() => undefined);
-        throw new Error("Could not capture the current Claude credential");
-      }
-      const account = buildAccountRecord(identity, id, now());
-      stateStore.mutate((s) => ({
-        ...s,
-        accounts: [...s.accounts, account],
-        activeAccountId: id,
-        revision: s.revision + 1,
-      }));
-    }
-    await stateStore.flush();
-    emitSnapshot();
-    doRefreshUsage({ force: true }).catch(() => undefined);
+    await adoptCurrentClaudeLogin({
+      clearLastActionError: () => {
+        lastActionError = null;
+      },
+      credentialErrors,
+      emitSnapshot,
+      ensureManagedDir,
+      now,
+      provider,
+      refreshUsage: () => {
+        doRefreshUsage({ force: true }).catch(() => undefined);
+      },
+      stateStore,
+    });
   }
 
   const login = createOauthLoginController({
@@ -293,34 +248,26 @@ export function createClaudeAccountsService(
     },
   });
 
-  async function doCompleteLogin(code: string): Promise<void> {
-    await login.complete(code);
-    doRefreshUsage({ force: true }).catch(() => undefined);
-  }
-
-  async function doSelect(accountId: string): Promise<void> {
-    await selectManagedAccount(
-      {
-        accountHomeDir,
-        handleDrift,
-        ...(logger ? { logger } : {}),
-        now,
-        onSelected: (selectedId) => {
-          lastActionError = null;
-          emitSnapshot();
-          doRefreshUsage({ accountId: selectedId, force: true }).catch(
-            () => undefined
-          );
-        },
-        provider,
-        setSuppressWatchUntil: (until) => {
-          suppressWatchUntil = until;
-        },
-        stateStore,
-        watchSuppressMs: WATCH_SUPPRESS_MS,
+  function selectDeps() {
+    return {
+      accountHomeDir,
+      handleDrift,
+      ...(logger ? { logger } : {}),
+      now,
+      onSelected: (selectedId: string) => {
+        lastActionError = null;
+        emitSnapshot();
+        doRefreshUsage({ accountId: selectedId, force: true }).catch(
+          () => undefined
+        );
       },
-      accountId
-    );
+      provider,
+      setSuppressWatchUntil: (until: number) => {
+        suppressWatchUntil = until;
+      },
+      stateStore,
+      watchSuppressMs: WATCH_SUPPRESS_MS,
+    };
   }
 
   async function doRemove(accountId: string): Promise<void> {
@@ -484,9 +431,35 @@ export function createClaudeAccountsService(
       });
     },
     completeLogin: (payload) =>
-      enqueueGuarded(() => doCompleteLogin(payload.code)),
+      enqueueGuarded(async () => {
+        await login.complete(payload.code);
+        doRefreshUsage({ force: true }).catch(() => undefined);
+      }),
     select: (payload) =>
-      enqueueGuarded(withActionError(() => doSelect(payload.accountId))),
+      enqueueMutation(async () => {
+        if (disposed) return [];
+        return await withActionError(() =>
+          selectManagedAccount(
+            selectDeps(),
+            payload.accountId,
+            payload.syncTargets
+          )
+        )();
+      }),
+    syncToPeers: (payload) =>
+      enqueueGuarded(
+        withActionError(() =>
+          syncManagedAccountPeers(
+            {
+              accountHomeDir,
+              ...(logger ? { logger } : {}),
+              provider,
+              stateStore,
+            },
+            payload
+          )
+        )
+      ),
     remove: (payload) =>
       enqueueGuarded(withActionError(() => doRemove(payload.accountId))),
     refreshUsage: (options) =>

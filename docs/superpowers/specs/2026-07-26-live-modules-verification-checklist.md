@@ -30,15 +30,15 @@
 | Demo 类型 | 作用 | 不够证明什么 |
 |---|---|---|
 | **冒烟** `smoke/hello.canvas.*`（React / Vue / Solid / Svelte） | 协议 + 编译 + 挂载通了 | 多文件图、hooks、真产品复杂度 |
-| **模版** `templates/*` | 产品形态参考（kit / composition / docs） | 依赖图深度、交互态、回归自动化 |
-| **压测** `stress/workbench-proposal.canvas.tsx` | 多模块相对 import + hooks + 表单交互 | 业务 Provider / 项目 Tailwind / 任意 `src/` 深依赖 |
+| **薄模板** `templates/blank.canvas.tsx` | 最小 composition 起稿 | 依赖图深度、交互态 |
+
+> Plan dogfood / `pier/plan-kit` 已按 [`2026-07-27-canvas-framework-course-correct.md`](./2026-07-27-canvas-framework-course-correct.md) 暂停拆除；框架验收以 `.pier/canvases` 为准。
 
 原则：
 
 1. **冒烟必绿**，否则管道坏了。  
-2. **压测 Demo 必绿**，才敢说「能做技术设计稿」。  
-3. **负例必红**（`electron` / `fs` / `..` 逃逸），才敢说围栏在干活。  
-4. 不要一上来 import 宿主 `src/renderer/**` 大图——那会测成「业务依赖可编译」，不是 C 轨关门条件；真 UI 深集成用预览桶与后续切片。
+2. **负例必红**（`electron` / `fs` / `..` 逃逸），才敢说围栏在干活。  
+3. 不要一上来 import 宿主 `src/renderer/**` 大图——那会测成「业务依赖可编译」，不是 C 轨关门条件；真 UI 深集成用预览桶与后续切片。
 
 ---
 
@@ -59,8 +59,7 @@ pnpm test:unit -- \
 ```
 
 - [ ] 全部通过  
-- [ ] service 测覆盖：`@/` Button、home 禁 paths、force 预览桶、protocol 404、模板编译  
-- [ ] service 测覆盖：压测 Demo `stress/workbench-proposal.canvas.tsx` 编译成功  
+- [ ] service 测覆盖：`@/` Button、home 禁 paths、force 预览桶、protocol 404、smoke/blank 编译
 
 **通过含义：** 契约与编译管道可信。  
 **不通过含义：** 先修测试，不要进 Electron 手工。
@@ -78,18 +77,13 @@ pnpm dev
 | # | 路径 | 期望 |
 |---|---|---|
 | A | `.pier/canvases/smoke/hello.canvas.tsx` | 进入 Live Modules 预览；loading → ready |
-| B | `.pier/canvases/templates/kit.canvas.tsx` | kit badge；长目录可滚动 |
-| C | `.pier/canvases/templates/composition-checkout.canvas.tsx` | composition；含 shared `DemoChip` |
-| D | `.pier/canvases/templates/docs-button.canvas.tsx` | docs badge |
-| E | **`.pier/canvases/stress/workbench-proposal.canvas.tsx`** | **压测**：表单可点、数字会变、多文件组件可见 |
+| B | `.pier/canvases/templates/blank.canvas.tsx` | composition scaffold |
 
 勾选：
 
-- [ ] A–E 均走 Viewer（标题栏有路径 / Reload）  
+- [ ] A–B 均走 Viewer（标题栏有路径 / Reload）  
 - [ ] ready 后可见 UI（不是白屏、不是未编译源码）  
-- [ ] 点 Reload 后仍 ready（无挂载泄漏导致空白）  
-- [ ] E：切换方案 / 改座位数后汇总金额变化（hooks + 重渲染）  
-- [ ] E：列表区出现多个本地子组件（依赖图编入）  
+- [ ] 点 Reload 后仍 ready（无挂载泄漏导致空白）
 
 ---
 

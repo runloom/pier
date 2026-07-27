@@ -695,14 +695,19 @@ body {
 .dv-tab-ghost-drag .dv-default-tab {
   box-sizing: border-box;
   gap: 6px;
-  /* 默认 tab 限宽以 ellipsis 长标题；文件 tab 见 data-pier-tab-kind=file 例外。
-   * 180px 在 ⌘ 序号 + 图标 + 关闭后中文大约只剩 6–8 字；280px 更接近常见 IDE
-   * 密度，仍可在多 tab 时滚动，避免单 tab 占满轨。 */
-  max-width: 280px;
+  /*
+   * Tab 按内容定宽，不设固定 max-width。
+   * 有空位时展示完整标题（工作树名 / session 名等）；多 tab 超出时由
+   * dockview tabs 横向滚动承载，避免「条带仍空却 ellipsis」。
+   * 极端长标题（agent/OSC）仍可在被父级真正约束时由下方 content
+   * ellipsis 兜底。拖拽 ghost 另有 220px 上限（见下方 dragging 规则）。
+   */
+  max-width: none;
   min-width: 0;
   padding-inline: 8px 4px;
-  &[data-pier-tab-kind="file"] {
-    max-width: none;
+  /* 活跃任务圆点占左缘槽位：6px 点 + 6px 与 flex gap 对齐的间距 */
+  &[data-pier-tab-has-active-task="true"] {
+    padding-left: 18px;
   }
 }
 
@@ -715,20 +720,6 @@ body {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-
-.dockview-theme-pier
-  .dv-tab
-  .dv-default-tab[data-pier-tab-kind="file"]
-  .dv-default-tab-content,
-.dv-tab.dv-tab-dragging
-  .dv-default-tab[data-pier-tab-kind="file"]
-  .dv-default-tab-content,
-.dv-tab-ghost-drag
-  .dv-default-tab[data-pier-tab-kind="file"]
-  .dv-default-tab-content {
-  overflow: visible;
-  text-overflow: clip;
 }
 
 .dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
@@ -746,46 +737,49 @@ body {
   opacity: 0.7;
 }
 
+/* 不强制 currentColor：文件图标保留 token 彩色；select-item 覆盖 overflow portal。 */
 .dockview-theme-pier .pier-panel-tab-icon,
 .dv-tab.dv-tab-dragging .pier-panel-tab-icon,
-.dv-tab-ghost-drag .pier-panel-tab-icon {
-  /* 不强制 currentColor：文件图标保留 token 彩色，Lucide/品牌色走各自 fill。 */
+.dv-tab-ghost-drag .pier-panel-tab-icon,
+[data-slot="select-item"] .pier-panel-tab-icon {
   flex-shrink: 0;
   height: 14px;
   opacity: 0.92;
   width: 14px;
 }
 
-/* 默认 panel 图标语义配色（文件/Agent 图标不走此选择器路径）。 */
-.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="terminal"],
-.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="terminal"],
-.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="terminal"] {
+/*
+ * 默认 panel 图标语义配色（文件/Agent 图标不走此选择器路径）。
+ * 选择器不绑 .dockview-theme-pier：overflow 下拉 portal 到 body，也必须同色。
+ * SelectItem 的 focus:**:text-accent-foreground 会级联改色，故 :focus 下再钉一次。
+ */
+.pier-panel-tab-icon[data-panel-tab-icon="terminal"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="terminal"] {
   color: var(--status-info-fg);
 }
 
-.dockview-theme-pier
-  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
-.dv-tab.dv-tab-dragging
-  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
-.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"] {
+.pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.git.changes"] {
   color: var(--status-success-fg);
 }
 
-.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="workbench"],
-.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="workbench"],
-.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="workbench"] {
+.pier-panel-tab-icon[data-panel-tab-icon="workbench"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="workbench"] {
   color: var(--pier-file-icon-indigo);
 }
 
-.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="welcome"],
-.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="welcome"],
-.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="welcome"] {
+.pier-panel-tab-icon[data-panel-tab-icon="welcome"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="welcome"] {
   color: var(--pier-file-icon-orange);
 }
 
-.dockview-theme-pier .pier-panel-tab-icon[data-panel-tab-icon="pier.task"],
-.dv-tab.dv-tab-dragging .pier-panel-tab-icon[data-panel-tab-icon="pier.task"],
-.dv-tab-ghost-drag .pier-panel-tab-icon[data-panel-tab-icon="pier.task"] {
+.pier-panel-tab-icon[data-panel-tab-icon="pier.task"],
+[data-slot="select-item"]:focus
+  .pier-panel-tab-icon[data-panel-tab-icon="pier.task"] {
   color: var(--status-done-fg);
 }
 
@@ -868,6 +862,15 @@ body {
   overflow: hidden !important;
   padding-inline: 10px 12px !important;
   width: fit-content !important;
+}
+
+/* drag/ghost 的 padding-inline !important 会盖掉常态 gutter；active-task 再抬左 inset */
+.dockview-theme-pier
+  .dv-tab.dv-tab-dragging
+  .dv-default-tab[data-pier-tab-has-active-task="true"],
+.dv-tab.dv-tab-dragging .dv-default-tab[data-pier-tab-has-active-task="true"],
+.dv-tab-ghost-drag .dv-default-tab[data-pier-tab-has-active-task="true"] {
+  padding-left: 20px !important;
 }
 
 .dockview-theme-pier .dv-tab-ghost-drag::after,

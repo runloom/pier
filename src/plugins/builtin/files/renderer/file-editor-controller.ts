@@ -1,5 +1,4 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { FILES_EDITOR_MINIMAP_SETTING_KEY } from "../settings.ts";
 import type {
   EditorSearchOptions,
   EditorSearchState,
@@ -8,11 +7,17 @@ import { FileDocumentLifecycle } from "./file-document-lifecycle.ts";
 import { showFileEditorDiffMode } from "./file-editor-mode-handlers.ts";
 import { moveEditorPath } from "./file-editor-move-path.ts";
 import { FileEditorPathMutations } from "./file-editor-path-mutations.ts";
+import { FileEditorPendingReveals } from "./file-editor-pending-reveals.ts";
 import { FileEditorSaveCommands } from "./file-editor-save-commands.ts";
 import { FileEditorSaveCoordinator } from "./file-editor-save-coordinator.ts";
 import { createFileEditorTransferSupport } from "./file-editor-transfer-support.ts";
 import { attachFileEditorView } from "./file-editor-view-attach.ts";
 import { FileEditorViewCoordinator } from "./file-editor-view-coordinator.ts";
+import {
+  bindCodeFontAppearance,
+  bindMinimapSetting,
+  readMinimapEnabled,
+} from "./file-editor-view-prefs.ts";
 import type {
   FileEditorCommand,
   FileEditorViewPresentation,
@@ -39,9 +44,7 @@ import { FilesMutationSuspendCoordinator } from "./files-mutation-suspend-coordi
 import { preserveDocumentsAsUntitledAndRebind } from "./files-preserve-as-untitled.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
 
-export type { FilePathMutationGuard } from "./file-path-mutation-guard.ts";
-export type { FileDocumentSettleResult } from "./file-save-outcome.ts";
-/** file 插件中文档与 CodeMirror 生命周期的唯一公开入口。 */
+/** Documents + CodeMirror lifecycle for the files plugin. */
 export class FileEditorController {
   readonly #context: RendererPluginContext;
   readonly #documents: FileDocumentLifecycle;
@@ -54,7 +57,7 @@ export class FileEditorController {
   readonly #pathMutationGuards: FilePathMutationGuardCoordinator;
   readonly #pathMutations: FileEditorPathMutations;
   readonly #pendingModes = new Map<string, FileViewMode>();
-  readonly #pendingReveals = new Map<string, number>();
+  readonly #pendingReveals = new FileEditorPendingReveals();
   readonly #saveCoordinator: FileEditorSaveCoordinator;
   readonly #views = new FileEditorViewCoordinator();
   #editingSuspended = false;
@@ -107,37 +110,28 @@ export class FileEditorController {
         this.#documents.getPanelDocumentId(panelId),
       saveCommands,
     });
-    this.#minimapEnabled =
-      context.configuration.get<boolean>(FILES_EDITOR_MINIMAP_SETTING_KEY) !==
-      false;
-    this.#minimapConfigDispose = context.configuration.onDidChange((event) => {
-      if (!event.affectsConfiguration(FILES_EDITOR_MINIMAP_SETTING_KEY)) {
-        return;
-      }
-      const enabled =
-        context.configuration.get<boolean>(FILES_EDITOR_MINIMAP_SETTING_KEY) !==
-        false;
-      this.#minimapEnabled = enabled;
-      for (const session of this.#views.values()) {
-        session.setMinimapEnabled(enabled);
-      }
+    this.#minimapEnabled = readMinimapEnabled(context);
+    this.#minimapConfigDispose = bindMinimapSetting({
+      context,
+      onEnabled: (enabled) => {
+        this.#minimapEnabled = enabled;
+      },
+      views: this.#views,
     });
-    // CodeMirror theme uses CSS vars for mono family / code size; CM6 caches
-    // line geometry until requestMeasure after external style changes.
     const initialTypography = context.appearance.current().typography;
     this.#lastCodeFontFamily = initialTypography.codeFontFamily;
     this.#lastCodeFontSize = initialTypography.codeFontSize;
-    this.#appearanceDispose = context.appearance.onDidChange((next) => {
-      const { codeFontFamily, codeFontSize } = next.typography;
-      if (
-        codeFontFamily === this.#lastCodeFontFamily &&
-        codeFontSize === this.#lastCodeFontSize
-      ) {
-        return;
-      }
-      this.#lastCodeFontFamily = codeFontFamily;
-      this.#lastCodeFontSize = codeFontSize;
-      this.#views.requestMeasureAll();
+    this.#appearanceDispose = bindCodeFontAppearance({
+      context,
+      getLast: () => ({
+        family: this.#lastCodeFontFamily,
+        size: this.#lastCodeFontSize,
+      }),
+      setLast: (family, size) => {
+        this.#lastCodeFontFamily = family;
+        this.#lastCodeFontSize = size;
+      },
+      views: this.#views,
     });
   }
 
@@ -182,13 +176,20 @@ export class FileEditorController {
   }
 
   revealOffset(editorSessionId: string, offset: number): void {
-    const session = this.#views.getSession(editorSessionId);
-    if (session) {
-      session.revealOffset(offset);
-      this.#pendingReveals.delete(editorSessionId);
-      return;
-    }
-    this.#pendingReveals.set(editorSessionId, offset);
+    this.revealRange(editorSessionId, offset, offset);
+  }
+
+  /**
+   * Reveal a selection range. Returns true when applied to a live session;
+   * false when queued for attach (caller may keep retrying).
+   */
+  revealRange(editorSessionId: string, from: number, to: number): boolean {
+    return this.#pendingReveals.revealRange(
+      this.#views.getSession(editorSessionId),
+      editorSessionId,
+      from,
+      to
+    );
   }
 
   documentId(source: FilesDocumentPanelSource): string {
@@ -315,7 +316,7 @@ export class FileEditorController {
       minimapEnabled: this.#minimapEnabled,
       parent: input.parent,
       pathMutationGuards: this.#pathMutationGuards,
-      pendingReveals: this.#pendingReveals,
+      pendingReveals: this.#pendingReveals.map,
       presentation: input.presentation,
       views: this.#views,
     });

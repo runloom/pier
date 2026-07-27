@@ -1,21 +1,30 @@
 /**
- * In-process file path query service.
+ * In-process file path + content query service.
  *
- * Owns walk lifecycle, per-owner cancellation, and result streaming to a
- * caller-supplied `emit` callback. IPC glue lives elsewhere (task 3).
+ * Owns walk/search lifecycle, per-owner cancellation, and result streaming to a
+ * caller-supplied `emit` callback. IPC glue lives elsewhere.
  *
  * Session key: `${senderId}\0${owner}` — starting a new query under the same
  * key aborts the previous one and its terminal `done` event is emitted with
  * `reason: "cancelled"`. No `batch` is ever emitted after `done`.
  *
- * Design: docs/superpowers/specs/2026-07-17-files-path-query-and-quick-open-design.md §4.2
+ * Path design: docs/superpowers/specs/2026-07-17-files-path-query-and-quick-open-design.md §4.2
+ * Content design: docs/superpowers/specs/2026-07-27-files-content-search-design.md
  */
 
-import type {
-  FilePathQueryStart,
-  FileQueryEvent,
+import {
+  type FileContentQueryStart,
+  type FilePathQueryStart,
+  type FileQueryEvent,
+  type FileQueryStart,
+  isFileContentQueryStart,
 } from "@shared/contracts/file-query.ts";
 import { FILES_TREE_DEFAULT_EXCLUDE_PATTERNS } from "@shared/contracts/files-tree-exclude.ts";
+import {
+  ContentSearchError,
+  type ContentSearchRunner,
+  createRgContentSearchRunner,
+} from "./content-search.ts";
 import { selectTopFilePaths } from "./path-score.ts";
 import {
   AbortedWalkError,
@@ -32,6 +41,8 @@ export type ListIgnored = (
 ) => Promise<readonly string[]>;
 
 export interface FileQueryServiceOptions {
+  /** Inject content search runner (tests); default spawns packaged rg. */
+  readonly contentSearch?: ContentSearchRunner | undefined;
   /** Override the default exclude glob source (merged, not replaced). */
   readonly defaultExcludePatterns?: string | undefined;
   /** Optional git-ignore lister; when omitted, `applyGitIgnore` is a no-op. */
@@ -43,11 +54,7 @@ export interface FileQueryServiceOptions {
 export interface FileQueryService {
   cancel(senderId: number, queryId: string): void;
   cancelAll(senderId: number): void;
-  start(
-    senderId: number,
-    request: FilePathQueryStart,
-    emit: FileQueryEmit
-  ): void;
+  start(senderId: number, request: FileQueryStart, emit: FileQueryEmit): void;
 }
 
 interface ActiveSession {
@@ -68,6 +75,7 @@ export function createFileQueryService(
     options.defaultExcludePatterns ?? FILES_TREE_DEFAULT_EXCLUDE_PATTERNS;
   const maxScanned = options.maxScanned ?? FILE_WALK_MAX_SCANNED;
   const listIgnored = options.listIgnored;
+  const contentSearch = options.contentSearch ?? createRgContentSearchRunner();
 
   const sessions = new Map<string, ActiveSession>();
   const byQueryId = new Map<string, string>();
@@ -94,12 +102,25 @@ export function createFileQueryService(
 
   const start = (
     senderId: number,
-    request: FilePathQueryStart,
+    request: FileQueryStart,
     emit: FileQueryEmit
   ): void => {
     const key = sessionKey(senderId, request.owner);
     const previous = sessions.get(key);
     if (previous) abortSession(key, previous);
+
+    // Reject reusing an active queryId under a different owner/session so cancel
+    // and event routing cannot cross sessions (security review finding).
+    const existingKey = byQueryId.get(request.queryId);
+    if (existingKey && existingKey !== key) {
+      emit({
+        kind: "error",
+        queryId: request.queryId,
+        code: "query-id-conflict",
+        message: "queryId is already in use by another search session",
+      });
+      return;
+    }
 
     const controller = new AbortController();
     const session: ActiveSession = {
@@ -113,27 +134,40 @@ export function createFileQueryService(
 
     emit({ kind: "started", queryId: request.queryId });
 
+    const onFinished = (): void => {
+      // Only clear if this session is still current — a subsequent start
+      // under the same key has already replaced it.
+      if (sessions.get(key) === session) {
+        sessions.delete(key);
+        byQueryId.delete(session.queryId);
+      }
+    };
+
+    if (isFileContentQueryStart(request)) {
+      runContentQuery({
+        request,
+        session,
+        defaultExcludes,
+        contentSearch,
+        onFinished,
+      }).catch(() => undefined);
+      return;
+    }
+
     const excludePatternSource = resolveExcludePatterns(
       defaultExcludes,
       request.options
     );
     const applyGitIgnore = request.options?.applyGitIgnore ?? true;
 
-    runQuery({
+    runPathQuery({
       request,
       session,
       excludePatternSource,
       applyGitIgnore,
       listIgnored,
       maxScanned,
-      onFinished: () => {
-        // Only clear if this session is still current — a subsequent start
-        // under the same key has already replaced it.
-        if (sessions.get(key) === session) {
-          sessions.delete(key);
-          byQueryId.delete(session.queryId);
-        }
-      },
+      onFinished,
     }).catch(() => undefined); // runQuery owns its own errors; never rejects
   };
 
@@ -171,7 +205,7 @@ function resolveExcludePatterns(
   return defaults;
 }
 
-interface RunQueryArgs {
+interface RunPathQueryArgs {
   readonly applyGitIgnore: boolean;
   readonly excludePatternSource: string;
   readonly listIgnored: ListIgnored | undefined;
@@ -181,7 +215,7 @@ interface RunQueryArgs {
   readonly session: ActiveSession;
 }
 
-async function runQuery(args: RunQueryArgs): Promise<void> {
+async function runPathQuery(args: RunPathQueryArgs): Promise<void> {
   const { request, session, listIgnored, applyGitIgnore, maxScanned } = args;
   const started = performance.now();
   const signal = session.controller.signal;
@@ -218,6 +252,7 @@ async function runQuery(args: RunQueryArgs): Promise<void> {
 
     session.emit({
       kind: "batch",
+      mode: "path",
       queryId: request.queryId,
       items: ranked.items.map(({ path, score }) => ({ path, score })),
     });
@@ -243,6 +278,74 @@ async function runQuery(args: RunQueryArgs): Promise<void> {
         message: error instanceof Error ? error.message : String(error),
       });
     }
+  } finally {
+    args.onFinished();
+  }
+}
+
+interface RunContentQueryArgs {
+  readonly contentSearch: ContentSearchRunner;
+  readonly defaultExcludes: string;
+  readonly onFinished: () => void;
+  readonly request: FileContentQueryStart;
+  readonly session: ActiveSession;
+}
+
+async function runContentQuery(args: RunContentQueryArgs): Promise<void> {
+  const { request, session, contentSearch, defaultExcludes } = args;
+  const started = performance.now();
+  const signal = session.controller.signal;
+
+  try {
+    const result = await contentSearch({
+      request,
+      signal,
+      defaultExcludePatterns: defaultExcludes,
+      onBatch: (items) => {
+        if (session.emit === null || signal.aborted || items.length === 0) {
+          return;
+        }
+        session.emit({
+          kind: "batch",
+          mode: "content",
+          queryId: request.queryId,
+          items: [...items],
+        });
+      },
+    });
+
+    if (session.emit === null || signal.aborted) return;
+
+    session.emit({
+      kind: "done",
+      queryId: request.queryId,
+      reason: "completed",
+      truncated: result.truncated,
+      scanned: result.scanned,
+      elapsedMs: Math.max(0, performance.now() - started),
+    });
+    session.emit = null;
+  } catch (error) {
+    if (signal.aborted) return; // cancel already emitted done
+    const emit = session.emit;
+    session.emit = null;
+    if (!emit) return;
+    if (error instanceof ContentSearchError) {
+      emit({
+        kind: "error",
+        queryId: request.queryId,
+        code: error.code,
+        message: error.message.slice(0, 2048),
+      });
+      return;
+    }
+    const raw = error instanceof Error ? error.message : String(error);
+    emit({
+      kind: "error",
+      queryId: request.queryId,
+      code: "content-search-failed",
+      message: (raw.length > 0 ? raw : "content search failed").slice(0, 2048),
+    });
   } finally {
     args.onFinished();
   }

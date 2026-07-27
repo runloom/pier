@@ -1,4 +1,5 @@
 import type {
+  GitApplyPatchResult,
   GitBranchRef,
   GitChangeEvent,
   GitCommit,
@@ -94,7 +95,21 @@ export interface PierGitAPI {
   abortMerge: (cwd: string) => Promise<GitMergeAbortResult>;
   abortRebase: (cwd: string) => Promise<GitRebaseAbortResult>;
   abortRevert: (cwd: string) => Promise<GitSequencerAbortResult>;
+  /**
+   * Codex review apply-patch: `git apply` with target/revert.
+   * Client extracts single-file or single-hunk unified patch first.
+   */
+  applyPatch: (
+    cwd: string,
+    options: {
+      atomic?: boolean;
+      diff: string;
+      revert?: boolean;
+      target: "staged" | "unstaged" | "staged-and-unstaged";
+    }
+  ) => Promise<GitApplyPatchResult>;
   applyStash: (cwd: string, index?: number) => Promise<GitStashApplyResult>;
+
   cancelReviewRequest: (request: GitReviewCancelRequest) => Promise<void>;
   checkoutBranch: (cwd: string, name: string) => Promise<boolean>;
   cherryPick: (cwd: string, oid: string) => Promise<GitSequencerResult>;
@@ -153,7 +168,6 @@ export interface PierGitAPI {
     cwd: string,
     options?: GitSearchCommitsOptionsValue
   ) => Promise<GitCommitSearchResult>;
-  // 写(git:write;默认 desktop-renderer 已给,与 worktree:write 同等待遇;二次确认由插件 UI 负责)
   stage: (cwd: string, paths: string[]) => Promise<boolean>;
   stash: (
     cwd: string,
@@ -163,6 +177,7 @@ export interface PierGitAPI {
   undoLastCommit: (cwd: string) => Promise<GitUndoCommitResult>;
   unstage: (cwd: string, paths: string[]) => Promise<boolean>;
   validateBranchName: (cwd: string, name: string) => Promise<boolean>;
+
   /** 订阅 gitRoot 的 git 变化。返回 unsubscribe。多次 watch 同一 gitRoot 各自独立。 */
   watch: (
     gitRoot: string,
@@ -259,8 +274,18 @@ export const gitApi: PierGitAPI = {
     invokePierCommand<boolean>({ cwd, name, type: "git.validateBranchName" }),
   stage: (cwd, paths) =>
     invokePierCommand<boolean>({ cwd, paths, type: "git.stage" }),
+  applyPatch: (cwd, options) =>
+    invokePierCommand<GitApplyPatchResult>({
+      cwd,
+      ...(options.atomic !== undefined && { atomic: options.atomic }),
+      diff: options.diff,
+      ...(options.revert !== undefined && { revert: options.revert }),
+      target: options.target,
+      type: "git.applyPatch",
+    }),
   unstage: (cwd, paths) =>
     invokePierCommand<boolean>({ cwd, paths, type: "git.unstage" }),
+
   discardChanges: (cwd, paths) =>
     invokePierCommand<boolean>({ cwd, paths, type: "git.discardChanges" }),
   checkoutBranch: (cwd, name) =>

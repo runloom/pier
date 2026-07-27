@@ -151,6 +151,8 @@ export function createFilesPathQueryClient(
       case "started":
         return;
       case "batch":
+        // Shared query event bus also carries content hits; ignore non-path.
+        if (event.mode !== "path") return;
         for (const item of event.items) {
           session.items.push(item);
         }

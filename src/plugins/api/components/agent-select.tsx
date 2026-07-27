@@ -8,6 +8,10 @@ import {
 } from "@pier/ui/select.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import { type AgentKind, agentKindSchema } from "@shared/contracts/agent.ts";
+import { AgentIcon } from "./agent-icons/index.tsx";
+
+/** 与 Select trigger / item 的 `size-4` svg 规则对齐（img 兜底图标同尺寸）。 */
+const AGENT_ICON_SIZE = 16;
 
 export function AgentSelect({
   agentIds,
@@ -47,6 +51,7 @@ export function AgentSelect({
               const entry = getAgentCatalogEntry(agentId);
               return (
                 <SelectItem key={agentId} value={agentId}>
+                  <AgentIcon agentId={agentId} size={AGENT_ICON_SIZE} />
                   {entry?.label ?? agentId}
                 </SelectItem>
               );

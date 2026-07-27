@@ -107,13 +107,19 @@ export const pierResourceSnapshotSchema = z.object({
   sampledAt: z.number().int().positive(),
   sessions: z.array(sessionResourceRowSchema),
   summary: z.object({
+    /** 逻辑 CPU 核数（单核比例分母；相关 CPU 可 >1）。 */
+    hostLogicalCpuCount: z.number().int().positive().optional(),
+    /**
+     * 主机可用内存（字节）。
+     * macOS：free+inactive+speculative+purgeable；其它平台多为 os.freemem()。
+     */
     hostMemoryFreeBytes: z.number().nonnegative().optional(),
     hostMemoryTotalBytes: z.number().positive().optional(),
     hotCount: z.number().int().nonnegative(),
     pierAppCpuPercent: z.number().min(0).nullable(),
     pierAppMemoryBytes: z.number().nonnegative(),
     terminalCount: z.number().int().nonnegative(),
-    /** L1∪L2 去重后；P0 等于 pierApp*。 */
+    /** L1∪L2：会话树聚合时排除 Pier 本体 pid，避免双计。 */
     totalRelatedCpuPercent: z.number().min(0).nullable(),
     totalRelatedMemoryBytes: z.number().nonnegative(),
     workloadCpuPercent: z.number().min(0).nullable(),

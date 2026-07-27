@@ -162,7 +162,107 @@ ${SCROLLBAR_SYSTEM_CSS}
       background-color: var(--diffshub-annotation-border);
     }
   }
+
+  /*
+   * Host attrs (data-pier-file-host / estimate) live on <diffs-container>.
+   * Inside shadow CSS they must be addressed with :host(...), not as
+   * descendant selectors (the host is not a descendant of the shadow root).
+   *
+   * Annotation *content* (data-pier-hunk-actions) is light DOM portal children
+   * of the host — shadow styles cannot reach them. Hover reveal is owned by
+   * PIER_DIFF_LIGHT_DOM_CSS (document stylesheet).
+   */
+  :host([data-pier-file-host]) {
+    overflow: visible;
+  }
+
+  /*
+   * Codex Tn is absolute -top-*; Pierre core sets code { contain: content }
+   * which paint-clips overflow. Soften so pills above the anchor line show.
+   */
+  :host([data-pier-file-host]) code {
+    contain: style;
+    overflow: visible;
+  }
+
+  :host([data-pier-file-host]) pre {
+    overflow: visible;
+  }
+
+  /*
+   * Codex Tn sits absolute over a line-level annotation slot. Keep a normal
+   * relative containing block; only disable sticky + left offset that would
+   * detach the pill from the change line while scrolling.
+   */
+  :host([data-pier-file-host]) [data-annotation-content] {
+    position: relative;
+    left: auto;
+    width: 100%;
+    min-height: 0;
+    overflow: visible;
+  }
+
+  :host([data-pier-file-host]) [data-line-annotation] {
+    --diffs-annotation-min-height: 0;
+    overflow: visible;
+  }
+
+  /*
+   * estimate 槽：partial 空行在默认主题下像白屏。
+   * 用 muted 底 + 降低内容对比，像骨架而非空白文档。
+   */
+  :host([data-pier-estimate="true"]) [data-code],
+  :host([data-pier-estimate="true"]) pre {
+    background-color: color-mix(
+      in oklab,
+      var(--muted, var(--diffs-mixer)) 35%,
+      var(--background, var(--diffs-bg))
+    );
+  }
+
+  :host([data-pier-estimate="true"]) [data-line] {
+    opacity: 0.35;
+  }
 `;
+
+/**
+ * Document-level CSS for light-DOM annotation pills (React portals on
+ * <diffs-container>). Shadow unsafeCSS cannot style these descendants.
+ *
+ * Host is marked data-pier-file-host in onPostRender. Hovering any shadow
+ * child of the host still matches :hover on the host element.
+ */
+export const PIER_DIFF_LIGHT_DOM_CSS = `
+  diffs-container[data-pier-file-host] [data-pier-hunk-actions] {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity 120ms ease;
+  }
+
+  diffs-container[data-pier-file-host]:hover [data-pier-hunk-actions],
+  diffs-container[data-pier-file-host]:focus-within [data-pier-hunk-actions],
+  diffs-container[data-pier-file-host] [data-pier-hunk-actions]:focus-within {
+    opacity: 1;
+    pointer-events: auto;
+  }
+`;
+
+export const PIER_DIFF_LIGHT_DOM_STYLE_ID = "pier-diff-light-dom-css";
+
+/** Idempotent inject of light-DOM hunk hover styles into document.head. */
+export function ensurePierDiffLightDomStyles(): void {
+  if (typeof document === "undefined") {
+    return;
+  }
+  if (document.getElementById(PIER_DIFF_LIGHT_DOM_STYLE_ID) != null) {
+    return;
+  }
+  const style = document.createElement("style");
+  style.id = PIER_DIFF_LIGHT_DOM_STYLE_ID;
+  style.textContent = PIER_DIFF_LIGHT_DOM_CSS;
+  document.head.appendChild(style);
+}
+
 export interface DiffTypographyStyle extends CSSProperties {
   "--diffs-font-family": string;
   "--diffs-font-size": string;
@@ -189,13 +289,15 @@ export function diffFontMetrics(codeFontSize: string): {
   return { diffHeaderHeight: DIFF_HEADER_HEIGHT_PX, lineHeight };
 }
 
-/** Stable remount key fragment for Pierre CodeView when line metrics change. */
+/**
+ * CodeView remount key for layout invariants only.
+ * Item membership / stage / demand 不得进入此 key——成员变更走实例内 sync（见 diff-view-item-sync）。
+ */
 export function pierDiffCodeViewKey(parts: {
   diffStyle: string;
   lineHeight: number;
   overflow: string;
   renderMode: string;
-  topologyKey: string;
 }): string {
-  return `${parts.renderMode}\0selection=uncontrolled\0${parts.diffStyle}\0${parts.overflow}\0${parts.topologyKey}\0lh=${parts.lineHeight}`;
+  return `${parts.renderMode}\0selection=uncontrolled\0${parts.diffStyle}\0${parts.overflow}\0lh=${parts.lineHeight}`;
 }

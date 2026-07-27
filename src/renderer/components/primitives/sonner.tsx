@@ -21,7 +21,6 @@ function SonnerToasterTerminalOverlayBridge(): null {
     >();
     const elementIds = new WeakMap<HTMLElement, string>();
     let debounceTimer: ReturnType<typeof setTimeout> | null = null;
-    let observedToaster: Element | null = null;
 
     const idFor = (element: HTMLElement): string => {
       let id = elementIds.get(element);
@@ -33,10 +32,11 @@ function SonnerToasterTerminalOverlayBridge(): null {
     };
 
     const sync = () => {
-      const toaster = document.querySelector("[data-sonner-toaster]");
-      const toastEls = toaster
-        ? [...toaster.querySelectorAll<HTMLElement>("[data-sonner-toast]")]
-        : [];
+      // Sonner 按 position 各渲一个 ol[data-sonner-toaster]（如 top-center + top-right）。
+      const toasters = document.querySelectorAll("[data-sonner-toaster]");
+      const toastEls = [...toasters].flatMap((toaster) => [
+        ...toaster.querySelectorAll<HTMLElement>("[data-sonner-toast]"),
+      ]);
       const nextIds = new Set<string>();
 
       for (const element of new Set(toastEls)) {
@@ -72,35 +72,36 @@ function SonnerToasterTerminalOverlayBridge(): null {
       }, 32);
     };
 
+    // toast 清空时 Sonner 会卸载 ol，下次再挂新节点——每次 rebind 都 disconnect 后只观察当前集合。
     const toasterObserver = new MutationObserver(scheduleSync);
 
-    const bindToasterObserver = () => {
-      const toaster = document.querySelector("[data-sonner-toaster]");
-      if (!toaster || toaster === observedToaster) {
-        return;
-      }
-      observedToaster = toaster;
+    const rebindToasterObservers = () => {
+      // MutationObserver 无 unobserve；disconnect 后只 observe 当前仍挂在文档上的 toaster。
       toasterObserver.disconnect();
-      toasterObserver.observe(toaster, {
-        attributeFilter: [
-          "data-expanded",
-          "data-mounted",
-          "data-removed",
-          "data-styled",
-        ],
-        attributes: true,
-        childList: true,
-        subtree: true,
-      });
+      for (const toaster of document.querySelectorAll(
+        "[data-sonner-toaster]"
+      )) {
+        toasterObserver.observe(toaster, {
+          attributeFilter: [
+            "data-expanded",
+            "data-mounted",
+            "data-removed",
+            "data-styled",
+          ],
+          attributes: true,
+          childList: true,
+          subtree: true,
+        });
+      }
     };
 
     // toaster 可能晚于 bridge 挂载；body 只负责发现 toaster，属性变更收窄到 toaster 子树。
     const bodyObserver = new MutationObserver(() => {
-      bindToasterObserver();
+      rebindToasterObservers();
       scheduleSync();
     });
     bodyObserver.observe(document.body, { childList: true, subtree: true });
-    bindToasterObserver();
+    rebindToasterObservers();
     sync();
 
     return () => {
@@ -139,10 +140,12 @@ const Toaster = ({ ...props }: ToasterProps) => {
           ),
         }}
         offset={{
+          // 形态 B 消息 toast 用 top-right 时需要 right；形态 A 只用 top。
           right: "24px",
           top: "calc(var(--app-titlebar-height) + 24px)",
         }}
-        position="top-right"
+        // 默认中间上方（确认型短提示）；消息型在 showNotificationToast 里传 position: top-right。
+        position="top-center"
         style={
           {
             "--normal-bg": "var(--toast-surface)",

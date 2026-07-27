@@ -62,7 +62,7 @@ function resolveCreateTarget(
       ...(background.treeId ? { treeId: background.treeId } : {}),
     };
   }
-  // command-palette:落到当前活动 files 树根。
+  // 无树调用上下文时，落到当前活动 files 树根（如未来快捷键路径）。
   const root = filePanelProjectRoot(context.panels.getActiveContext());
   if (!root) {
     return null;
@@ -88,7 +88,8 @@ function createNewChildAction(
       group: "1_new",
       sortOrder: kind === "file" ? 1 : 2,
     },
-    surfaces: ["files/tree-item", "files/tree-background", "command-palette"],
+    // 仅树右键 / 空白处；不进命令面板（文件类仅保留转到文件 / 打开目录）。
+    surfaces: ["files/tree-item", "files/tree-background"],
     title: () =>
       kind === "file"
         ? t("filePanel.tree.action.newFile", "New File...")
@@ -102,18 +103,6 @@ function createNewChildAction(
             "Open a project to create files."
           )
         );
-        return;
-      }
-      // 命令面板走 prompt,支持 a/b/c.ts 嵌套路径;树内右键优先 inline。
-      if (invocation?.surface === "command-palette") {
-        await createViaPrompt({
-          allowNestedPath: true,
-          context,
-          kind,
-          parentDir: target.parentDir,
-          root: target.root,
-          ...(target.treeId ? { treeId: target.treeId } : {}),
-        });
         return;
       }
       const started = await beginInlineCreate({

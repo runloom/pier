@@ -1,9 +1,11 @@
 import type {
   ClaudeAccountsSnapshot,
   CompleteLoginPayload,
+  PeerSyncResult,
   RefreshUsagePayload,
   RemoveAccountPayload,
   SelectAccountPayload,
+  SyncToPeersPayload,
 } from "../shared/accounts.ts";
 import type { ClaudeAccountProvider } from "./claude-provider.ts";
 import type { FetchImpl } from "./oauth.ts";
@@ -43,6 +45,12 @@ export interface ClaudeAccountsService {
   refreshAllUsage(options?: { force?: boolean }): Promise<void>;
   refreshUsage(options?: RefreshUsagePayload): Promise<void>;
   remove(payload: RemoveAccountPayload): Promise<void>;
-  select(payload: SelectAccountPayload): Promise<void>;
+  /**
+   * Switch the active managed account. Returns per-target peer sync results
+   * when `syncTargets` were requested (empty array when none / no-op switch).
+   */
+  select(payload: SelectAccountPayload): Promise<PeerSyncResult[]>;
   snapshot(): ClaudeAccountsSnapshot;
+  /** Mirror the active (or specified) account into peer tools. */
+  syncToPeers(payload: SyncToPeersPayload): Promise<void>;
 }

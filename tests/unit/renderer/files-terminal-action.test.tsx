@@ -5,9 +5,9 @@ import type {
 import {
   FILES_FILE_PANEL_ID,
   FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
-  FILES_OPEN_SELECTION_PATH_COMMAND_ID,
   FILES_PLUGIN_MANIFEST,
   FILES_SAVE_COMMAND_ID,
+  FILES_SEARCH_PANEL_ID,
   FILES_TREE_SEARCH_COMMAND_ID,
 } from "@plugins/builtin/files/manifest.ts";
 import {
@@ -268,9 +268,6 @@ function createMockContext(overrides?: {
       t:
         overrides?.translate ??
         vi.fn((key: string, _values?: unknown, fallback?: string) => {
-          if (key === "files.actions.openSelectionPath.title") {
-            return "打开路径";
-          }
           if (key === "files.actions.openSelectionAsMarkdown.title") {
             return "预览选中文本";
           }
@@ -334,16 +331,6 @@ function createMockContext(overrides?: {
 function findOpenSelectionAction(context: { captured: CapturedRegistrations }) {
   const action = context.captured.actions.find(
     (candidate) => candidate.id === FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID
-  );
-  expect(action).toBeDefined();
-  return action as RendererPluginAction;
-}
-
-function findOpenSelectionPathAction(context: {
-  captured: CapturedRegistrations;
-}) {
-  const action = context.captured.actions.find(
-    (candidate) => candidate.id === FILES_OPEN_SELECTION_PATH_COMMAND_ID
   );
   expect(action).toBeDefined();
   return action as RendererPluginAction;
@@ -419,20 +406,20 @@ afterEach(() => {
 });
 
 describe("files terminal selection action", () => {
-  it("declares only the shared file-panel and terminal selection commands in the manifest", () => {
-    expect(FILES_PLUGIN_MANIFEST.panels).toHaveLength(1);
-    expect(FILES_PLUGIN_MANIFEST.panels[0]).toMatchObject({
-      component: FILES_FILE_PANEL_ID,
-      id: FILES_FILE_PANEL_ID,
-    });
-
-    const openPathCommand = FILES_PLUGIN_MANIFEST.commands.find(
-      (candidate) => candidate.id === FILES_OPEN_SELECTION_PATH_COMMAND_ID
+  it("declares the shared file panels and terminal selection commands in the manifest", () => {
+    expect(FILES_PLUGIN_MANIFEST.panels).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          component: FILES_FILE_PANEL_ID,
+          id: FILES_FILE_PANEL_ID,
+        }),
+        expect.objectContaining({
+          component: FILES_SEARCH_PANEL_ID,
+          id: FILES_SEARCH_PANEL_ID,
+        }),
+      ])
     );
-    expect(openPathCommand).toBeDefined();
-    expect(openPathCommand?.permissions).toEqual(
-      expect.arrayContaining(["terminal:read", "file:read", "panel:open"])
-    );
+    expect(FILES_PLUGIN_MANIFEST.panels).toHaveLength(2);
 
     const command = FILES_PLUGIN_MANIFEST.commands.find(
       (candidate) =>
@@ -442,6 +429,11 @@ describe("files terminal selection action", () => {
     expect(command?.permissions).toEqual(
       expect.arrayContaining(["terminal:read", "panel:open"])
     );
+    expect(
+      FILES_PLUGIN_MANIFEST.commands.some(
+        (candidate) => candidate.id === "pier.files.openSelectionPath"
+      )
+    ).toBe(false);
     expect(FILES_PLUGIN_MANIFEST.permissions).toEqual(
       expect.arrayContaining([
         "command:register",
@@ -459,60 +451,20 @@ describe("files terminal selection action", () => {
 
     filesRendererPlugin.activate(context);
 
-    expect(context.captured.panelIds).toEqual([FILES_FILE_PANEL_ID]);
-    const openPathAction = findOpenSelectionPathAction(context);
-    expect(openPathAction.surfaces).toEqual(["terminal/content"]);
-    expect(openPathAction.metadata).toMatchObject({
-      group: "0_edit",
-      sortOrder: 5,
-    });
-    expect(openPathAction.title()).toBe("打开路径");
+    expect(context.captured.panelIds).toEqual([
+      FILES_FILE_PANEL_ID,
+      FILES_SEARCH_PANEL_ID,
+    ]);
+    expect(
+      context.captured.actions.some(
+        (candidate) => candidate.id === "pier.files.openSelectionPath"
+      )
+    ).toBe(false);
 
     const action = findOpenSelectionAction(context);
     expect(action.surfaces).toEqual(["terminal/content"]);
     expect(action.metadata).toMatchObject({ group: "0_edit", sortOrder: 6 });
     expect(action.title()).toBe("预览选中文本");
-  });
-
-  it("opens a selected relative path in the Files panel", async () => {
-    const readSelectionText = vi.fn(async () => ({
-      kind: "ok" as const,
-      text: "`docs/superpowers/specs/checklist.md`",
-    }));
-    const context = createMockContext({
-      activePanelContext: sourcePanelContext,
-      activePanelId: "terminal-source",
-      readSelectionText,
-    });
-    vi.mocked(context.terminal.getPanelContext).mockReturnValue(
-      sourcePanelContext
-    );
-    filesRendererPlugin.activate(context);
-
-    await findOpenSelectionPathAction(context).handler({
-      sourcePanelComponent: "terminal",
-      sourcePanelContext,
-      sourcePanelGroupId: "group-terminal-source",
-      sourcePanelId: "terminal-source",
-      surface: "terminal/content",
-    });
-
-    expect(readSelectionText).toHaveBeenCalledWith("terminal-source");
-    expect(context.panels.openInstance).toHaveBeenCalledWith(
-      expect.objectContaining({
-        componentId: FILES_FILE_PANEL_ID,
-        dropUnpinnedInstances: false,
-        params: expect.objectContaining({
-          pinned: true,
-          source: {
-            kind: "disk",
-            path: "docs/superpowers/specs/checklist.md",
-            root: sourcePanelContext.projectRootPath,
-          },
-        }),
-        title: "checklist.md",
-      })
-    );
   });
 
   it("opens the source terminal selection as an untitled Markdown file-panel", async () => {

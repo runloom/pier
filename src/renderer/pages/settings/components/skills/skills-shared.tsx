@@ -1,3 +1,4 @@
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
@@ -6,7 +7,6 @@ import type {
 } from "@shared/contracts/project-skills.ts";
 import type { TFunction } from "i18next";
 import { toast } from "sonner";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { useProjectSkillsStore } from "@/stores/project-skills.store.ts";
 import { discardActiveImportReview } from "./skills-candidate-lifecycle.ts";

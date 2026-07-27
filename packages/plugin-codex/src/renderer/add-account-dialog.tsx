@@ -3,6 +3,7 @@ import type {
   RendererPluginContentDialogRenderProps,
 } from "@pier/plugin-api/renderer";
 import { Button } from "@pier/ui/button.tsx";
+import { DIALOG_FOOTER_ACTIONS_CLASS } from "@pier/ui/dialog-form-layout.ts";
 import {
   Item,
   ItemContent,
@@ -12,7 +13,14 @@ import {
 import { Spinner } from "@pier/ui/spinner.tsx";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@pier/ui/tabs.tsx";
 import { ExternalLink, HardDrive, ShieldCheck, UserPlus } from "lucide-react";
-import { type JSX, useCallback, useEffect, useRef, useState } from "react";
+import {
+  type JSX,
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+} from "react";
 import type { CodexLoginState } from "../shared/accounts.ts";
 import { AddAccountWaiting } from "./add-account-waiting.tsx";
 import type { Translate } from "./usage-meter.tsx";
@@ -34,6 +42,7 @@ function AddAccountContent({
   t,
   close,
   setDismissible,
+  setFooter,
   setTitle,
   setDescription,
   initialLogin,
@@ -173,20 +182,129 @@ function AddAccountContent({
       });
   };
 
+  const startLoginRef = useRef(startLogin);
+  const adoptLocalRef = useRef(adoptLocal);
+  const cancelLoginRef = useRef(cancelLogin);
+  const restartLoginRef = useRef(restartLogin);
+  startLoginRef.current = startLogin;
+  adoptLocalRef.current = adoptLocal;
+  cancelLoginRef.current = cancelLogin;
+  restartLoginRef.current = restartLogin;
+
+  // Single owner for sticky footer across authorize + waiting stages (no child setFooter).
+  useLayoutEffect(() => {
+    if (presentation === "waiting") {
+      const loginActive = login !== null || starting;
+      setFooter(
+        <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
+          <Button
+            aria-busy={pendingAction === "cancel" || undefined}
+            disabled={pendingAction !== null || !loginActive}
+            onClick={() => {
+              cancelLoginRef.current();
+            }}
+            type="button"
+            variant="outline"
+          >
+            {pendingAction === "cancel" ? (
+              <Spinner data-icon="inline-start" />
+            ) : null}
+            {t("pier.codex.accounts.settings.cancelLogin", "Cancel login")}
+          </Button>
+          <Button
+            aria-busy={pendingAction === "restart" || undefined}
+            disabled={pendingAction !== null || !loginActive}
+            onClick={() => {
+              restartLoginRef.current();
+            }}
+            type="button"
+            variant="secondary"
+          >
+            {pendingAction === "restart" ? (
+              <Spinner data-icon="inline-start" />
+            ) : null}
+            {t(
+              "pier.codex.accounts.settings.addDialogReopenBrowser",
+              "Reopen browser"
+            )}
+          </Button>
+        </div>
+      );
+    } else {
+      setFooter(
+        <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
+          <Button
+            disabled={waiting}
+            onClick={() => close(null)}
+            type="button"
+            variant="outline"
+          >
+            {t("pier.codex.accounts.settings.cancel", "Cancel")}
+          </Button>
+          {tab === "local" ? (
+            <Button
+              aria-busy={starting || undefined}
+              disabled={starting}
+              onClick={() => {
+                adoptLocalRef.current();
+              }}
+              type="button"
+            >
+              {starting ? (
+                <Spinner data-icon="inline-start" />
+              ) : (
+                <HardDrive data-icon="inline-start" />
+              )}
+              {t(
+                "pier.codex.accounts.settings.addDialogLocalSubmit",
+                "Import local account"
+              )}
+            </Button>
+          ) : (
+            <Button
+              aria-busy={starting || undefined}
+              disabled={starting}
+              onClick={() => {
+                startLoginRef.current();
+              }}
+              type="button"
+            >
+              {starting ? <Spinner data-icon="inline-start" /> : null}
+              {t(
+                "pier.codex.accounts.settings.addDialogContinue",
+                "Continue in browser"
+              )}
+              <ExternalLink data-icon="inline-end" />
+            </Button>
+          )}
+        </div>
+      );
+    }
+    return () => {
+      setFooter(null);
+    };
+  }, [
+    close,
+    login,
+    pendingAction,
+    presentation,
+    setFooter,
+    starting,
+    t,
+    tab,
+    waiting,
+  ]);
+
   if (presentation === "waiting") {
-    return (
-      <AddAccountWaiting
-        loginActive={login !== null || starting}
-        onCancel={cancelLogin}
-        onRestart={restartLogin}
-        pendingAction={pendingAction}
-        t={t}
-      />
-    );
+    return <AddAccountWaiting t={t} />;
   }
 
   return (
-    <div className="flex flex-col gap-4" data-pier-codex-scope="">
+    <div
+      className="flex flex-col gap-4"
+      data-pier-codex-scope=""
+      data-slot="dialog-commit-form"
+    >
       <Item size="sm" variant="muted">
         <ItemMedia variant="icon">
           <ShieldCheck aria-hidden />
@@ -240,49 +358,6 @@ function AddAccountContent({
           </p>
         </TabsContent>
       </Tabs>
-
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          disabled={waiting}
-          onClick={() => close(null)}
-          type="button"
-          variant="outline"
-        >
-          {t("pier.codex.accounts.settings.cancel", "Cancel")}
-        </Button>
-        {tab === "local" ? (
-          <Button
-            aria-busy={starting || undefined}
-            disabled={starting}
-            onClick={adoptLocal}
-            type="button"
-          >
-            {starting ? (
-              <Spinner data-icon="inline-start" />
-            ) : (
-              <HardDrive data-icon="inline-start" />
-            )}
-            {t(
-              "pier.codex.accounts.settings.addDialogLocalSubmit",
-              "Import local account"
-            )}
-          </Button>
-        ) : (
-          <Button
-            aria-busy={starting || undefined}
-            disabled={starting}
-            onClick={startLogin}
-            type="button"
-          >
-            {starting ? <Spinner data-icon="inline-start" /> : null}
-            {t(
-              "pier.codex.accounts.settings.addDialogContinue",
-              "Continue in browser"
-            )}
-            <ExternalLink data-icon="inline-end" />
-          </Button>
-        )}
-      </div>
     </div>
   );
 }

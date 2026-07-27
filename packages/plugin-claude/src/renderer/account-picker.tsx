@@ -22,7 +22,10 @@ import {
   accountDisplayLabel,
   accountMembershipSummary,
 } from "./account-display.tsx";
-import { confirmSwitch } from "./account-switch.ts";
+import {
+  notifyPeerSyncFailures,
+  openSwitchConfirmDialog,
+} from "./account-switch.ts";
 import { formatAccountError, type Translate } from "./format-account-error.ts";
 
 export interface AccountPickerProps {
@@ -51,13 +54,21 @@ export function AccountPicker({
   };
 
   const handleSelectAccount = async (accountId: string): Promise<void> => {
-    const confirmed = await confirmSwitch({ context, t });
-    if (!confirmed) {
+    const result = await openSwitchConfirmDialog({
+      context,
+      mode: "switch",
+      t,
+    });
+    if (!result.confirmed) {
       return;
     }
     setSwitchingAccountId(accountId);
     try {
-      await context.rpc.invoke("accounts.select", { accountId });
+      const selectResult = await context.rpc.invoke("accounts.select", {
+        accountId,
+        syncTargets: result.syncTargets.filter((target) => target !== "claude"),
+      });
+      notifyPeerSyncFailures(context, t, selectResult);
     } catch (error) {
       await reportError(error);
     } finally {

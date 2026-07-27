@@ -1,9 +1,11 @@
-import type { CodeViewHandle, CodeViewItem } from "@pierre/diffs/react";
-import { type RefObject, useCallback, useEffect, useMemo } from "react";
+import type { CodeViewHandle } from "@pierre/diffs/react";
+import { type RefObject, useCallback, useEffect, useMemo, useRef } from "react";
 import {
   CollapseDiffButton,
   type PierDiffViewLabels,
 } from "./diff-view-collapse.tsx";
+import type { PierHunkAnnotationMetadata } from "./diff-view-hunk-actions.tsx";
+import type { PierDiffCodeViewItem } from "./diff-view-items.ts";
 import {
   fileDiffLineStats,
   type ParsedItemCacheEntry,
@@ -28,6 +30,9 @@ const USER_SCROLL_KEYS = new Set([
   "PageDown",
   "PageUp",
 ]);
+
+/** 连续 wheel/触控只通知宿主一次，避免每帧 setState/清导航拖垮滚动。 */
+const USER_SCROLL_INTENT_GESTURE_MS = 160;
 
 function isHtmlElement(
   value: EventTarget | null | undefined
@@ -99,12 +104,13 @@ function findRenderedItemIdFromPath(
 
 export function useDiffViewHeaders(options: {
   readonly appliedItemsRef: RefObject<{
-    readonly items: Map<string, CodeViewItem>;
+    readonly items: Map<string, PierDiffCodeViewItem>;
     readonly key: string;
   } | null>;
   readonly auditVisibleItems: () => void;
-  readonly codeViewItems: CodeViewItem[];
-  readonly codeViewRef: RefObject<CodeViewHandle<undefined> | null>;
+  readonly bumpItemEpoch: () => void;
+  readonly codeViewItems: PierDiffCodeViewItem[];
+  readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
   readonly collapsedItemsRef: RefObject<
     Map<string, DiffViewCollapsedItemState>
   >;
@@ -116,7 +122,7 @@ export function useDiffViewHeaders(options: {
   readonly onToggleStage?: ((itemId: string) => void) | undefined;
   readonly onScroll?: (() => void) | undefined;
   readonly parsedItemIndexesRef: RefObject<Map<string, number>>;
-  readonly parsedItemListRef: RefObject<CodeViewItem[]>;
+  readonly parsedItemListRef: RefObject<PierDiffCodeViewItem[]>;
   readonly parsedItemsRef: RefObject<Map<string, ParsedItemCacheEntry>>;
   readonly renderItemIdentitiesRef: RefObject<
     Map<string, DiffViewRenderItemIdentity>
@@ -127,11 +133,15 @@ export function useDiffViewHeaders(options: {
   readonly handleHeaderClickCapture: (
     event: React.MouseEvent<HTMLDivElement>
   ) => void;
+  /** 明确用户手势（wheel/touch/page keys），非官方 onScroll。 */
+  readonly handleUserScrollIntent: () => void;
   readonly handleUserScrollKey: (
     event: React.KeyboardEvent<HTMLDivElement>
   ) => void;
-  readonly renderHeaderMetadata: (item: CodeViewItem) => React.ReactNode;
-  readonly renderHeaderPrefix: (item: CodeViewItem) => React.ReactNode;
+  readonly renderHeaderMetadata: (
+    item: PierDiffCodeViewItem
+  ) => React.ReactNode;
+  readonly renderHeaderPrefix: (item: PierDiffCodeViewItem) => React.ReactNode;
   readonly setItemCollapsed: (
     id: string,
     nextCollapsed?: boolean,
@@ -141,6 +151,7 @@ export function useDiffViewHeaders(options: {
   const {
     appliedItemsRef,
     auditVisibleItems,
+    bumpItemEpoch,
     codeViewItems,
     codeViewRef,
     collapsedItemsRef,
@@ -157,6 +168,10 @@ export function useDiffViewHeaders(options: {
     renderItemIdentitiesRef,
     scheduleRenderWindowReport,
   } = options;
+  const userScrollGestureActiveRef = useRef(false);
+  const userScrollGestureTimerRef = useRef<ReturnType<
+    typeof setTimeout
+  > | null>(null);
 
   const setItemCollapsed = useCallback(
     (id: string, nextCollapsed?: boolean, preserveTopAnchor = true) => {
@@ -205,6 +220,7 @@ export function useDiffViewHeaders(options: {
       });
       appliedItemsRef.current?.items.set(id, nextItem);
       expectItemRender(id, nextItem.version);
+      bumpItemEpoch();
       if (shouldAnchor) {
         handle.scrollTo({
           align: "start",
@@ -219,6 +235,7 @@ export function useDiffViewHeaders(options: {
     [
       appliedItemsRef,
       auditVisibleItems,
+      bumpItemEpoch,
       codeViewRef,
       collapsedItemsRef,
       expectItemRender,
@@ -230,22 +247,45 @@ export function useDiffViewHeaders(options: {
     ]
   );
   const handleToggleItemCollapsed = useCallback(
-    (item: CodeViewItem) => {
+    (item: PierDiffCodeViewItem) => {
       setItemCollapsed(item.id);
     },
     [setItemCollapsed]
   );
   const handleCodeViewScroll = useCallback(() => {
+    // 官方 onScroll：只更新 render window / watchdog，不冒充用户意图
     auditVisibleItems();
     scheduleRenderWindowReport();
   }, [auditVisibleItems, scheduleRenderWindowReport]);
+  const handleUserScrollIntent = useCallback(() => {
+    // 手势级合并：连续 wheel 只通知宿主一次，gesture 结束后才重新武装
+    if (!userScrollGestureActiveRef.current) {
+      userScrollGestureActiveRef.current = true;
+      onScroll?.();
+    }
+    if (userScrollGestureTimerRef.current !== null) {
+      clearTimeout(userScrollGestureTimerRef.current);
+    }
+    userScrollGestureTimerRef.current = setTimeout(() => {
+      userScrollGestureActiveRef.current = false;
+      userScrollGestureTimerRef.current = null;
+    }, USER_SCROLL_INTENT_GESTURE_MS);
+  }, [onScroll]);
   const handleUserScrollKey = useCallback(
     (event: React.KeyboardEvent<HTMLDivElement>) => {
       if (USER_SCROLL_KEYS.has(event.key)) {
-        onScroll?.();
+        handleUserScrollIntent();
       }
     },
-    [onScroll]
+    [handleUserScrollIntent]
+  );
+  useEffect(
+    () => () => {
+      if (userScrollGestureTimerRef.current !== null) {
+        clearTimeout(userScrollGestureTimerRef.current);
+      }
+    },
+    []
   );
   useEffect(() => {
     if (codeViewItems.length === 0) {
@@ -324,7 +364,7 @@ export function useDiffViewHeaders(options: {
     [codeViewRef, handleToggleItemCollapsed, inputById, onOpenFile]
   );
   const renderHeaderPrefix = useCallback(
-    (item: CodeViewItem) => {
+    (item: PierDiffCodeViewItem) => {
       if (item.type !== "diff") {
         return null;
       }
@@ -348,7 +388,7 @@ export function useDiffViewHeaders(options: {
     [handleToggleItemCollapsed, inputById, labels]
   );
   const renderHeaderMetadata = useCallback(
-    (item: CodeViewItem) => {
+    (item: PierDiffCodeViewItem) => {
       if (item.type !== "diff") {
         return null;
       }
@@ -437,6 +477,7 @@ export function useDiffViewHeaders(options: {
   return {
     handleCodeViewScroll,
     handleHeaderClickCapture,
+    handleUserScrollIntent,
     handleUserScrollKey,
     renderHeaderMetadata,
     renderHeaderPrefix,

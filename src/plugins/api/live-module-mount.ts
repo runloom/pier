@@ -1,19 +1,29 @@
 import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
-import type { ComponentType } from "react";
+import type { ComponentType, ReactNode } from "react";
 import { createElement } from "react";
 import { createRoot, type Root } from "react-dom/client";
 
 export type LiveModuleUnmount = () => void;
+
+export interface MountLiveModuleOptions {
+  /**
+   * Wrap the canvas element before rendering (React only). Canvases mount in a
+   * dedicated React root, so host context providers must be injected here.
+   */
+  wrap?: ((node: ReactNode) => ReactNode) | undefined;
+}
 
 /**
  * Mount a React component (default-export shape) into `el`.
  */
 export function mountLiveModule(
   el: HTMLElement,
-  Comp: ComponentType
+  Comp: ComponentType,
+  options: MountLiveModuleOptions = {}
 ): LiveModuleUnmount {
   const root: Root = createRoot(el);
-  root.render(createElement(Comp));
+  const element = createElement(Comp);
+  root.render(options.wrap ? options.wrap(element) : element);
   return () => {
     root.unmount();
   };
@@ -28,7 +38,8 @@ export function mountLiveModule(
 export async function mountLiveModuleExport(
   el: HTMLElement,
   framework: LiveModuleFramework,
-  mod: Record<string, unknown>
+  mod: Record<string, unknown>,
+  options: MountLiveModuleOptions = {}
 ): Promise<LiveModuleUnmount> {
   const explicitMount = mod.mount;
   if (typeof explicitMount === "function") {
@@ -48,7 +59,7 @@ export async function mountLiveModuleExport(
         "React canvas must default-export a component (or export mount(el))"
       );
     }
-    return mountLiveModule(el, Comp as ComponentType);
+    return mountLiveModule(el, Comp as ComponentType, options);
   }
 
   if (framework === "svelte") {

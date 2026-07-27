@@ -14,9 +14,7 @@
  * 改前不一致, inspect DOM 取 dockview 实际默认 tab 的 class 对齐.
  */
 
-import { fileNameFromTabIconId, PierFileIcon } from "@pier/ui/file-icon.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
-import { agentKindFromTabIconId } from "@shared/contracts/agent-session.ts";
 import type { IDockviewPanelHeaderProps } from "dockview-react";
 import { X } from "lucide-react";
 import {
@@ -30,16 +28,19 @@ import {
   useRef,
   useState,
 } from "react";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
 import { ensureTuiInputFocus } from "@/panel-kits/terminal/tui-input-focus.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import {
+  panelHasActiveTaskRun,
+  useTaskRunsStore,
+} from "@/stores/task-runs.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/terminal.store.ts";
 import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
 import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
-import { resolvePanelTabIcon } from "./panel-tab-icon-registry.ts";
+import { PanelTabLeadingIcon } from "./panel-tab-leading-icon.tsx";
 import {
   PANEL_TAB_TOOLTIP_DELAY_MS,
   tabAriaLabel,
@@ -96,10 +97,10 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const descriptor = usePanelDescriptorStore(
     (state) => state.descriptors[props.api.id]
   );
+  const showActiveTaskDot = useTaskRunsStore((state) =>
+    panelHasActiveTaskRun(state.snapshot, props.api.id)
+  );
   const tab = descriptor?.tab;
-  const { Icon, iconId } = resolvePanelTabIcon(tab, props.api.component);
-  const agentKind = agentKindFromTabIconId(tab?.icon?.id);
-  const fileName = fileNameFromTabIconId(tab?.icon?.id);
   const displayTitle = tab?.title ?? title;
   const tooltipText = tabTooltipText(
     tab?.tooltip,
@@ -128,34 +129,9 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
         ⌘{shortcutIndex}
       </span>
     );
-  } else if (agentKind) {
+  } else {
     leadingVisual = (
-      <span
-        aria-hidden="true"
-        className="flex shrink-0 items-center"
-        data-panel-tab-icon={tab?.icon?.id}
-      >
-        <AgentIcon agentId={agentKind} size={14} />
-      </span>
-    );
-  } else if (fileName) {
-    leadingVisual = (
-      <PierFileIcon
-        aria-hidden="true"
-        className="pier-panel-tab-icon shrink-0"
-        data-panel-tab-icon={tab?.icon?.id}
-        fileName={fileName}
-        size={14}
-      />
-    );
-  } else if (Icon) {
-    leadingVisual = (
-      <Icon
-        aria-hidden="true"
-        className="pier-panel-tab-icon shrink-0"
-        data-panel-tab-icon={iconId}
-        size={14}
-      />
+      <PanelTabLeadingIcon component={props.api.component} tab={tab} />
     );
   }
   useEffect(() => {
@@ -308,6 +284,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
       className="dv-default-tab relative"
       data-panel-tab-id={props.api.id}
+      data-pier-tab-has-active-task={showActiveTaskDot ? "true" : undefined}
       data-pier-tab-kind={
         props.api.component === FILE_PANEL_COMPONENT_ID ? "file" : undefined
       }
@@ -322,6 +299,14 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       role="tab"
       tabIndex={0}
     >
+      {showActiveTaskDot ? (
+        <span
+          aria-label={t("workspace.tab.activeTask")}
+          className="pointer-events-none absolute top-1/2 left-1.5 z-10 size-1.5 -translate-y-1/2 rounded-full bg-status-info-fg"
+          data-pier-tab-active-task="true"
+          role="status"
+        />
+      ) : null}
       {leadingVisual}
       <span className="dv-default-tab-content">{displayTitle}</span>
       {isDirty ? (

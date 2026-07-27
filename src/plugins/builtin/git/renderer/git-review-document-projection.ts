@@ -2,24 +2,31 @@ import type {
   PierDiffViewAnchor,
   PierDiffViewItem,
 } from "@pier/ui/diff-view.tsx";
+import { estimateLinesForFileStatus } from "@pier/ui/diff-view.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type {
   GitReviewFileStatus,
   GitReviewGroup,
   GitReviewIndexEntry,
 } from "@shared/contracts/git-review.ts";
-import {
-  GIT_REVIEW_MAX_RETAINED_BYTES,
-  GIT_REVIEW_MAX_RETAINED_LINES,
-  gitReviewDocumentMetrics,
-  isGitReviewDocumentReservable,
-} from "./git-review-document-limits.ts";
-import { retainLoadedDocumentForEntry } from "./git-review-document-loader-utils.ts";
 import type {
   GitReviewDocumentLoaderSnapshot,
   GitReviewDocumentResource,
 } from "./git-review-document-resource.ts";
 import { stateSectionText } from "./git-review-document-state-text.ts";
+import type { ReviewReadingSide } from "./git-review-reading-anchor.ts";
+
+/** 轻量 32-bit FNV-1a，给 patch cacheKey 叠内容指纹。 */
+function fnv1a32(text: string): string {
+  let hash = 0x81_1c_9d_c5;
+  for (let index = 0; index < text.length; index += 1) {
+    // biome-ignore lint/suspicious/noBitwiseOperators: FNV-1a hash
+    hash ^= text.charCodeAt(index);
+    hash = Math.imul(hash, 0x01_00_01_93);
+  }
+  // biome-ignore lint/suspicious/noBitwiseOperators: FNV-1a unsigned coerce
+  return (hash >>> 0).toString(16);
+}
 
 /**
  * Diff / tree display order (VS Code SCM):
@@ -95,16 +102,22 @@ export interface PendingReviewAnchor {
   readonly anchor: PierDiffViewAnchor;
   readonly entryKey: string | null;
   readonly generation: number;
+  /**
+   * 采锚时阅读侧（P0：半暂存 remap 优先此侧）。
+   */
+  readonly preferredSide: ReviewReadingSide;
   readonly previousItemIds: readonly string[];
   readonly restored: boolean;
+  /**
+   * Generation 开始时的 raw scrollTop 快照。
+   * 仅 identity 丢失兜底的次级线索；主策略是内容锚点。
+   */
+  readonly scrollTop: number | null;
 }
 
 /**
- * 终态成员规则（见 docs/.../git-review-codeview-endstate-design.md）：
- * CodeView 只收 **已 materialize 的真 item**（loaded 正文 / error 说明）。
- * idle·loading·cancelling·unchanged **不进** CodeView——避免 patch:null
- * 假槽污染折叠语义（远文件「先收起再展开」）。
- * 未加载文件只存在于 L1 index + L2 树。
+ * 能否挂 **loaded 正文**（非「能否进账本」）。
+ * 账本身份集 = 全 index renderSlots；见 projectReviewLedger。
  */
 export function isCodeViewMemberResource(
   resource: GitReviewDocumentResource
@@ -112,6 +125,144 @@ export function isCodeViewMemberResource(
   return resource.kind === "loaded" || resource.kind === "error";
 }
 
+/** estimate 槽 cacheKey 前缀（可 scroll；非历史 git-review-placeholder）。 */
+export const GIT_REVIEW_ESTIMATE_CACHE_PREFIX = "estimate:";
+
+export function estimateReviewSlotItem(options: {
+  readonly entry: GitReviewIndexEntry;
+  readonly slot: GitReviewIndexEntry["renderSlots"][number];
+  /** index/numstat 行数提示；缺省按 status 启发式。 */
+  readonly estimateLines?: number;
+}): PierDiffViewItem {
+  const { entry: _entry, slot } = options;
+  const stageControl = reviewStageControl(slot.group, slot.status);
+  const estimateLines =
+    options.estimateLines ?? estimateLinesForFileStatus(slot.status);
+  return {
+    cacheKey: `${GIT_REVIEW_ESTIMATE_CACHE_PREFIX}${slot.sectionKey}`,
+    estimateLines,
+    fileDisplay: {
+      path: slot.targetPath,
+      status: slot.status,
+      ...(slot.oldPath === null ? {} : { previousPath: slot.oldPath }),
+    },
+    id: slot.sectionKey,
+    kind: "estimate",
+    patch: null,
+    ...(stageControl === null ? {} : { stageControl }),
+  };
+}
+
+/**
+ * 稳定高度账本投影（stable-ledger）：
+ * 每个 index renderSlot 恰好一个 item；body 缺失 → estimate。
+ */
+export function projectReviewLedger(options: {
+  readonly context: RendererPluginContext;
+  readonly entries: readonly GitReviewIndexEntry[];
+  readonly locale: string;
+  readonly resourceByEntryKey: ReadonlyMap<string, GitReviewDocumentResource>;
+}): ReviewDocumentProjection {
+  const { context, entries, locale, resourceByEntryKey } = options;
+  const entryKeyBySectionId = new Map<string, string>();
+  const decorated: {
+    readonly group: GitReviewGroup;
+    readonly item: PierDiffViewItem;
+    readonly path: string;
+    readonly sectionKey: string;
+  }[] = [];
+
+  for (const entry of entries) {
+    const resource = resourceByEntryKey.get(entry.entryKey);
+    for (const slot of entry.renderSlots) {
+      entryKeyBySectionId.set(slot.sectionKey, entry.entryKey);
+      const item = projectReviewLedgerSlot({
+        context,
+        entry,
+        locale,
+        resource,
+        slot,
+      });
+      decorated.push({
+        group: slot.group,
+        item,
+        path: entry.path,
+        sectionKey: slot.sectionKey,
+      });
+    }
+  }
+
+  decorated.sort((left, right) => {
+    const groupDelta =
+      REVIEW_DIFF_GROUP_INDEX[left.group] -
+      REVIEW_DIFF_GROUP_INDEX[right.group];
+    if (groupDelta !== 0) {
+      return groupDelta;
+    }
+    const pathDelta = left.path.localeCompare(right.path);
+    if (pathDelta !== 0) {
+      return pathDelta;
+    }
+    return left.sectionKey.localeCompare(right.sectionKey);
+  });
+  return {
+    entryKeyBySectionId,
+    items: decorated.map((row) => row.item),
+  };
+}
+
+function projectReviewLedgerSlot(options: {
+  readonly context: RendererPluginContext;
+  readonly entry: GitReviewIndexEntry;
+  readonly locale: string;
+  readonly resource: GitReviewDocumentResource | undefined;
+  readonly slot: GitReviewIndexEntry["renderSlots"][number];
+}): PierDiffViewItem {
+  const { context, entry, locale, resource, slot } = options;
+  if (resource?.kind === "error") {
+    const notice = context.i18n.t(
+      "ui.reviewDocumentLoadFailed",
+      undefined,
+      "Unable to load this change"
+    );
+    const stageControl = reviewStageControl(slot.group, slot.status);
+    return {
+      cacheKey: `git-review-error:${slot.sectionKey}:${resource.failure.reason}`,
+      fileDisplay: {
+        path: slot.targetPath,
+        status: slot.status,
+        ...(slot.oldPath === null ? {} : { previousPath: slot.oldPath }),
+      },
+      id: slot.sectionKey,
+      kind: "error",
+      patch: null,
+      stateNotice: notice,
+      ...(stageControl === null ? {} : { stageControl }),
+    };
+  }
+  if (resource?.kind === "loaded") {
+    const projected = projectReviewDocumentResource(resource, context, locale);
+    const match = projected.items.find((item) => item.id === slot.sectionKey);
+    if (match !== undefined) {
+      if (match.kind !== undefined) {
+        return match;
+      }
+      let inferredKind: "ready-notice" | "estimate" | "loaded" = "loaded";
+      if (match.stateNotice !== undefined && match.stateNotice.length > 0) {
+        inferredKind = "ready-notice";
+      } else if (match.patch === null) {
+        inferredKind = "estimate";
+      }
+      return { ...match, kind: inferredKind };
+    }
+  }
+  return estimateReviewSlotItem({ entry, slot });
+}
+
+/**
+ * 仅投影 snapshot 内 loaded|error（legacy subset）。
+ * 全账本路径用 projectReviewLedger。
+ */
 export function projectReviewDocuments(
   snapshot: GitReviewDocumentLoaderSnapshot,
   context: RendererPluginContext,
@@ -197,13 +348,11 @@ export function projectReviewDocumentResource(
   context: RendererPluginContext,
   locale: string
 ): ReviewDocumentResourceProjection {
-  // 非成员资源不应被投影；调用方应先 isCodeViewMemberResource 过滤。
   if (!(resource.kind === "loaded" || resource.kind === "error")) {
     return { items: [] };
   }
 
   if (resource.kind === "error") {
-    // 列表内只放友好说明；技术原文在 failure banner / Details。
     const notice = context.i18n.t(
       "ui.reviewDocumentLoadFailed",
       undefined,
@@ -219,7 +368,7 @@ export function projectReviewDocumentResource(
           ...(slot.oldPath === null ? {} : { previousPath: slot.oldPath }),
         },
         id: slot.sectionKey,
-        // stateNotice → presentation ready（非 loading 假收起）。
+        kind: "error",
         patch: null,
         stateNotice: notice,
         ...(stageControl === null ? {} : { stageControl }),
@@ -241,7 +390,7 @@ export function projectReviewDocumentResource(
         status: slot.status,
         ...(slot.oldPath === null ? {} : { previousPath: slot.oldPath }),
       };
-      // loaded 但缺 section：不当 placeholder 塞进 CodeView（终态禁止）。
+      // loaded 但缺 section：退回 estimate（由 ledger 填）
       if (section === undefined) {
         return [];
       }
@@ -260,6 +409,7 @@ export function projectReviewDocumentResource(
             ]),
             fileDisplay,
             id: section.sectionKey,
+            kind: "ready-notice",
             patch: null,
             stateNotice: stateText,
             ...(stageControl === null ? {} : { stageControl }),
@@ -268,9 +418,10 @@ export function projectReviewDocumentResource(
       }
       return [
         {
-          cacheKey: `${document.revision}:${section.sectionKey}`,
+          cacheKey: `${document.revision}:${section.sectionKey}:${section.patch.length}:${fnv1a32(section.patch)}`,
           fileDisplay,
           id: section.sectionKey,
+          kind: "loaded",
           patch: section.patch,
           ...(stageControl === null ? {} : { stageControl }),
         },
@@ -306,144 +457,10 @@ export interface ReconciledReviewDocumentSnapshot {
   readonly staleRetainedCount: number;
 }
 
-export function reconcileReviewDocumentSnapshot(
-  current: GitReviewDocumentLoaderSnapshot,
-  previousByEntryKey: Map<
-    string,
-    Extract<GitReviewDocumentResource, { kind: "loaded" }>
-  >,
-  generation: number,
-  protectedEntryKey: string | null
-): ReconciledReviewDocumentSnapshot {
-  let staleRetainedCount = 0;
-  for (const resource of current.resources) {
-    if (resource.kind === "loaded") {
-      previousByEntryKey.delete(resource.entry.entryKey);
-    }
-  }
-  let retainedBytes = 0;
-  let retainedLines = 0;
-  for (const previous of previousByEntryKey.values()) {
-    const metrics = gitReviewDocumentMetrics(previous.document);
-    retainedBytes += metrics.bytes;
-    retainedLines += metrics.lines;
-  }
-  for (const resource of current.resources) {
-    if (resource.kind === "loaded") {
-      const metrics = gitReviewDocumentMetrics(resource.document);
-      retainedBytes += metrics.bytes;
-      retainedLines += metrics.lines;
-    }
-  }
-  const protectedPreviousEntryKey = effectiveProtectedPreviousEntryKey(
-    previousByEntryKey,
-    protectedEntryKey
-  );
-  while (
-    retainedBytes > GIT_REVIEW_MAX_RETAINED_BYTES ||
-    retainedLines > GIT_REVIEW_MAX_RETAINED_LINES
-  ) {
-    const oldest = oldestUnprotectedPrevious(
-      previousByEntryKey,
-      protectedPreviousEntryKey
-    );
-    if (!oldest) {
-      break;
-    }
-    previousByEntryKey.delete(oldest[0]);
-    const metrics = gitReviewDocumentMetrics(oldest[1].document);
-    retainedBytes -= metrics.bytes;
-    retainedLines -= metrics.lines;
-  }
-  const resources = current.resources.map((resource) => {
-    const previous = previousByEntryKey.get(resource.entry.entryKey);
-    if (!previous) {
-      return resource;
-    }
-    if (resource.kind === "unchanged") {
-      staleRetainedCount += 1;
-    } else if (resource.kind === "loaded") {
-      return resource;
-    }
-    // stage 换 sectionKey 时必须 remap，否则投影按新 slot 找不到 section。
-    return (
-      retainLoadedDocumentForEntry(resource.entry, previous.document) ??
-      resource
-    );
-  });
-  const retainedEntryKeys = [
-    ...previousByEntryKey.keys(),
-    ...current.retainedEntryKeys,
-  ];
-  return {
-    generation,
-    snapshot: { ...current, resources, retainedEntryKeys },
-    staleRetainedCount,
-  };
-}
-
-function effectiveProtectedPreviousEntryKey(
-  previousByEntryKey: ReadonlyMap<
-    string,
-    Extract<GitReviewDocumentResource, { kind: "loaded" }>
-  >,
-  protectedEntryKey: string | null
-): string | null {
-  const protectedResource = protectedEntryKey
-    ? previousByEntryKey.get(protectedEntryKey)
-    : undefined;
-  if (!protectedResource) {
-    return null;
-  }
-  return isGitReviewDocumentReservable(protectedResource.document)
-    ? protectedEntryKey
-    : null;
-}
-
-function oldestUnprotectedPrevious(
-  previousByEntryKey: ReadonlyMap<
-    string,
-    Extract<GitReviewDocumentResource, { kind: "loaded" }>
-  >,
-  protectedEntryKey: string | null
-):
-  | readonly [string, Extract<GitReviewDocumentResource, { kind: "loaded" }>]
-  | null {
-  for (const entry of previousByEntryKey) {
-    if (entry[0] !== protectedEntryKey) {
-      return entry;
-    }
-  }
-  return null;
-}
-
-export function resolveReviewAnchor(
-  pending: PendingReviewAnchor,
-  currentItemIds: readonly string[]
-): PierDiffViewAnchor | null {
-  const current = new Set(currentItemIds);
-  if (current.has(pending.anchor.id)) {
-    return pending.anchor;
-  }
-  const oldIndex = pending.previousItemIds.indexOf(pending.anchor.id);
-  if (oldIndex < 0) {
-    return null;
-  }
-  for (
-    let index = oldIndex + 1;
-    index < pending.previousItemIds.length;
-    index += 1
-  ) {
-    const successor = pending.previousItemIds[index];
-    if (successor && current.has(successor)) {
-      return { id: successor, offset: 0 };
-    }
-  }
-  for (let index = oldIndex - 1; index >= 0; index -= 1) {
-    const predecessor = pending.previousItemIds[index];
-    if (predecessor && current.has(predecessor)) {
-      return { id: predecessor, offset: 0 };
-    }
-  }
-  return null;
-}
+export { reconcileReviewDocumentSnapshot } from "./git-review-document-reconcile.ts";
+export {
+  type ReviewReadingRestoreResult,
+  resolveReviewAnchor,
+  restoreReviewReadingViewport,
+  restoreReviewViewportFreeze,
+} from "./git-review-document-viewport.ts";

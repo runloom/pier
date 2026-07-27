@@ -1,4 +1,7 @@
-import { partitionPeerTargets } from "@pier/plugin-api/peer-sync";
+import {
+  effectivePeerAvailabilityForKind,
+  partitionPeerTargets,
+} from "@pier/plugin-api/peer-sync";
 import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
 import { Badge } from "@pier/ui/badge.tsx";
 import { Button } from "@pier/ui/button.tsx";
@@ -32,6 +35,7 @@ import { cn } from "@pier/ui/utils.ts";
 import { CircleUserRound, RefreshCw } from "lucide-react";
 import { Fragment, type JSX, useCallback, useEffect, useState } from "react";
 import {
+  ALL_SYNC_TARGETS,
   EMPTY_PEER_AVAILABILITY,
   type PeerAvailability,
   type PeerSyncTarget,
@@ -47,7 +51,6 @@ import {
   loadPeerAvailability,
   notifyPeerSyncFailures,
   openSwitchConfirmDialog,
-  protocolTargetsFor,
 } from "./account-switch.ts";
 import { ActiveCardActions } from "./active-card-actions.tsx";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
@@ -71,7 +74,8 @@ function samePeerAvailability(
   return (
     left.omp === right.omp &&
     left.opencode === right.opencode &&
-    left.pi === right.pi
+    left.pi === right.pi &&
+    left.piOauthCapable === right.piOauthCapable
   );
 }
 
@@ -355,8 +359,11 @@ export function AccountsSettingsPage({
                 removeDisabled={busyAccountId === active.id}
                 showSyncPeers={
                   partitionPeerTargets(
-                    protocolTargetsFor(active.kind),
-                    peerAvailability
+                    ALL_SYNC_TARGETS,
+                    effectivePeerAvailabilityForKind(
+                      active.kind,
+                      peerAvailability
+                    )
                   ).available.length > 0
                 }
                 t={t}

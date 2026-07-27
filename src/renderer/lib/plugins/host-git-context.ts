@@ -156,6 +156,11 @@ export function createPluginGitContext(
       assertPluginCapability(entry, "git:write");
       return window.pier.git.stage(cwd, paths);
     },
+    applyPatch: (cwd, options) => {
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.applyPatch(cwd, options);
+    },
+
     stash: (cwd, options) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.stash(cwd, options);

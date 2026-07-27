@@ -1,24 +1,19 @@
 import i18next from "i18next";
 import { useEffect } from "react";
 import { requestTaskOutputSurfaceClose } from "@/lib/actions/task-output-run-operations.ts";
-import { taskOutputFromParams } from "@/panel-kits/terminal/terminal-panel-params.ts";
+import { shouldRetainTaskResultPanel } from "@/panel-kits/terminal/should-retain-task-result-panel.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 /**
- * Ghostty 在进程退出后保留 surface，提示 "Press any key to close"。
- * 用户按键后的 close-surface → SURFACE_CLOSE_REQUEST → 这里关 panel。
- *
- * Task output 例外：`finishTerminalOutput` 会立刻触发一次 process-closed/
- * SURFACE_CLOSE，若在此关闭会让用户无法查看终态输出。Task output 的按键
- * 关闭走 `useTaskOutputKeyDismiss`。
+ * Ghostty 进程退出后的 close-surface → SURFACE_CLOSE_REQUEST。
+ * 普通 shell 关 panel；任务结果 panel（前台 task / Task Output）保留，
+ * 由控制条「关闭」或用户关 tab 收口。
  */
 export function useTerminalSurfaceClose(
   panelId: string,
   params?: unknown
 ): void {
-  const isTaskOutputPanel = Boolean(taskOutputFromParams(params));
-
   useEffect(
     () =>
       window.pier.terminal.onSurfaceCloseRequest((request) => {
@@ -26,7 +21,7 @@ export function useTerminalSurfaceClose(
           return;
         }
         requestTaskOutputSurfaceClose(panelId, () => {
-          if (isTaskOutputPanel) {
+          if (shouldRetainTaskResultPanel(panelId, params)) {
             return;
           }
           useWorkspaceStore
@@ -40,6 +35,6 @@ export function useTerminalSurfaceClose(
             });
         });
       }),
-    [isTaskOutputPanel, panelId]
+    [panelId, params]
   );
 }

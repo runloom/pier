@@ -1,4 +1,5 @@
 import { TooltipProvider } from "@pier/ui/tooltip.tsx";
+import { emptyTaskRunsSnapshot } from "@shared/contracts/tasks.ts";
 import {
   fireEvent,
   type RenderOptions,
@@ -27,6 +28,7 @@ import { PanelTabHeader } from "@/components/workspace/panel-tab-header.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
 
@@ -127,6 +129,11 @@ describe("PanelTabHeader", () => {
     vi.unstubAllGlobals();
     await i18next.changeLanguage("en");
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
+    useTaskRunsStore.setState({
+      error: null,
+      initialized: false,
+      snapshot: emptyTaskRunsSnapshot(),
+    });
     useTerminalStore.getState().resetShortcutHints();
   });
 
@@ -983,6 +990,107 @@ describe("PanelTabHeader", () => {
 
     expect(fileUpdateParameters).toHaveBeenCalledTimes(1);
     expect(fileUpdateParameters).toHaveBeenCalledWith({ pinned: true });
+  });
+
+  it("shows a frontmost absolutely positioned active-task presence dot when RC-scoped runs are active", () => {
+    useTaskRunsStore.setState({
+      error: null,
+      initialized: true,
+      snapshot: {
+        runs: {
+          "run-bg": {
+            mode: "background",
+            nodes: {
+              dev: {
+                label: "dev",
+                panelId: "background-task:run-bg:dev",
+                status: "running",
+                taskId: "dev",
+              },
+            },
+            originPanelId: "terminal-1",
+            projectRootPath: "/repo",
+            rootTaskId: "dev",
+            runId: "run-bg",
+            startedAt: 1,
+            status: "running",
+            updatedAt: 2,
+          },
+        },
+        version: 1,
+      },
+    });
+
+    const { container } = render(
+      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+    );
+
+    const tab = container.querySelector(".dv-default-tab");
+    const title = container.querySelector(".dv-default-tab-content");
+    const dot = container.querySelector('[data-pier-tab-active-task="true"]');
+    expect(tab).not.toBeNull();
+    expect(tab).toHaveClass("relative");
+    // Root flag drives left padding gutter so the absolute dot does not
+    // overlap ⌘ index / icon / title.
+    expect(tab).toHaveAttribute("data-pier-tab-has-active-task", "true");
+    expect(title).not.toBeNull();
+    expect(dot).not.toBeNull();
+    expect(title?.contains(dot)).toBe(false);
+    expect(dot).toHaveClass(
+      "pointer-events-none",
+      "absolute",
+      "top-1/2",
+      "left-1.5",
+      "-translate-y-1/2",
+      "size-1.5",
+      "rounded-full",
+      "bg-status-info-fg"
+    );
+    expect(dot).toHaveAttribute("aria-label", "Task running");
+    expect(dot).toHaveAttribute("role", "status");
+    // Frontmost in DOM among tab children (before icon/title).
+    expect(tab?.firstElementChild).toBe(dot);
+  });
+
+  it("hides the active-task presence dot when no related run is active", () => {
+    useTaskRunsStore.setState({
+      error: null,
+      initialized: true,
+      snapshot: {
+        runs: {
+          "run-done": {
+            mode: "background",
+            nodes: {
+              dev: {
+                label: "dev",
+                panelId: "background-task:run-done:dev",
+                status: "succeeded",
+                taskId: "dev",
+              },
+            },
+            originPanelId: "terminal-1",
+            projectRootPath: "/repo",
+            rootTaskId: "dev",
+            runId: "run-done",
+            startedAt: 1,
+            status: "succeeded",
+            updatedAt: 2,
+          },
+        },
+        version: 1,
+      },
+    });
+
+    const { container } = render(
+      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+    );
+
+    expect(
+      container.querySelector('[data-pier-tab-active-task="true"]')
+    ).toBeNull();
+    expect(
+      container.querySelector('[data-pier-tab-has-active-task="true"]')
+    ).toBeNull();
   });
 
   it("pins a preview through the real dockview parameter channel", async () => {

@@ -130,6 +130,12 @@ export interface PierMenuAPI {
 }
 
 export interface PierClipboardAPI {
+  /**
+   * Force text-only system pasteboard (no image) until matching end.
+   * Used when injecting text into agent TUIs that probe clipboard images on paste.
+   */
+  beginImageSuppress: () => Promise<void>;
+  endImageSuppress: () => Promise<void>;
   writeText: (text: string) => Promise<void>;
 }
 

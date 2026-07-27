@@ -28,8 +28,12 @@ export interface PierDiffViewLabels {
   readonly expandDiff: string;
   /** Optional; when set, title click opens the file. */
   readonly openFile?: string;
+  /** Hunk toolbar (Codex); falls back to stageChanges / unstageChanges. */
+  readonly revertHunk?: string;
   readonly stageChanges: string;
+  readonly stageHunk?: string;
   readonly unstageChanges: string;
+  readonly unstageHunk?: string;
 }
 
 const OFFICIAL_COLLAPSE_BUTTON_CLASS =

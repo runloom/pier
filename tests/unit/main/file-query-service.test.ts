@@ -350,4 +350,237 @@ describe("createFileQueryService", () => {
     expect(rec.events.some((e) => e.kind === "error")).toBe(true);
     expect(rec.events.some((e) => e.kind === "done")).toBe(false);
   });
+
+  it("content mode streams batches from the injected runner then done", async () => {
+    const root = await makeFixtureRoot();
+    const service = createFileQueryService({
+      contentSearch: async ({ onBatch, signal }) => {
+        expect(signal.aborted).toBe(false);
+        onBatch([
+          {
+            path: "src/main/ipc/theme.ts",
+            line: 1,
+            matchCharStart: 0,
+            matchCharEnd: 4,
+            matchByteStart: 0,
+            matchByteEnd: 4,
+            preview: "TODO theme",
+            previewMatchStart: 0,
+            previewMatchEnd: 4,
+          },
+        ]);
+        onBatch([
+          {
+            path: "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
+            line: 8,
+            matchCharStart: 0,
+            matchCharEnd: 4,
+            matchByteStart: 10,
+            matchByteEnd: 14,
+            preview: "also TODO here",
+            previewMatchStart: 5,
+            previewMatchEnd: 9,
+          },
+        ]);
+        return { scanned: 2, truncated: false };
+      },
+    });
+    const rec = recorder();
+    service.start(
+      1,
+      {
+        mode: "content",
+        owner: "content-search:p1",
+        query: "TODO",
+        queryId: "c1",
+        root,
+      },
+      rec.emit
+    );
+    await rec.done;
+
+    expect(rec.events[0]).toEqual({ kind: "started", queryId: "c1" });
+    const batches = rec.events.filter((e) => e.kind === "batch");
+    expect(batches).toHaveLength(2);
+    for (const batch of batches) {
+      if (batch.kind !== "batch") throw new Error("expected batch");
+      expect(batch.mode).toBe("content");
+    }
+    const done = rec.events.at(-1);
+    if (done?.kind !== "done") throw new Error("expected done");
+    expect(done.reason).toBe("completed");
+    expect(done.scanned).toBe(2);
+  });
+
+  it("content mode empty query completes without batches", async () => {
+    const root = await makeFixtureRoot();
+    const runner = vi.fn(async () => ({ scanned: 0, truncated: false }));
+    const service = createFileQueryService({ contentSearch: runner });
+    const rec = recorder();
+    service.start(
+      1,
+      {
+        mode: "content",
+        owner: "content-search:p1",
+        query: "",
+        queryId: "c-empty",
+        root,
+      },
+      rec.emit
+    );
+    await rec.done;
+    // Runner is still invoked; real runner short-circuits empty query.
+    expect(runner).toHaveBeenCalled();
+    expect(rec.events.some((e) => e.kind === "batch")).toBe(false);
+    const done = rec.events.at(-1);
+    if (done?.kind !== "done") throw new Error("expected done");
+    expect(done.reason).toBe("completed");
+  });
+
+  it("content mode cancel detaches emit so late batches are dropped", async () => {
+    const root = await makeFixtureRoot();
+    let release!: () => void;
+    const gate = new Promise<void>((resolve) => {
+      release = resolve;
+    });
+    const service = createFileQueryService({
+      contentSearch: async ({ onBatch, signal }) => {
+        await gate;
+        onBatch([
+          {
+            path: "late.ts",
+            line: 1,
+            matchCharStart: 0,
+            matchCharEnd: 4,
+            matchByteStart: 0,
+            matchByteEnd: 1,
+            preview: "x",
+            previewMatchStart: 0,
+            previewMatchEnd: 1,
+          },
+        ]);
+        if (signal.aborted) {
+          return { scanned: 0, truncated: false };
+        }
+        return { scanned: 1, truncated: false };
+      },
+    });
+    const rec = recorder();
+    service.start(
+      1,
+      {
+        mode: "content",
+        owner: "content-search:p1",
+        query: "x",
+        queryId: "c-cancel",
+        root,
+      },
+      rec.emit
+    );
+    service.cancel(1, "c-cancel");
+    release();
+    await rec.done;
+
+    const done = rec.events.find((e) => e.kind === "done");
+    if (done?.kind !== "done") throw new Error("expected done");
+    expect(done.reason).toBe("cancelled");
+    expect(rec.events.some((e) => e.kind === "batch")).toBe(false);
+  });
+
+  it("content mode surfaces search-runtime-unavailable from runner", async () => {
+    const root = await makeFixtureRoot();
+    const { ContentSearchError } = await import(
+      "../../../src/main/services/file-query/content-search.ts"
+    );
+    const service = createFileQueryService({
+      contentSearch: async () => {
+        throw new ContentSearchError(
+          "search-runtime-unavailable",
+          "no rg binary"
+        );
+      },
+    });
+    const rec = recorder();
+    service.start(
+      1,
+      {
+        mode: "content",
+        owner: "content-search:p1",
+        query: "x",
+        queryId: "c-missing-rt",
+        root,
+      },
+      rec.emit
+    );
+    await rec.done;
+    const err = rec.events.find((e) => e.kind === "error");
+    if (err?.kind !== "error") throw new Error("expected error");
+    expect(err.code).toBe("search-runtime-unavailable");
+    expect(rec.events.some((e) => e.kind === "done")).toBe(false);
+  });
+
+  it("path and content owners run in parallel without cancelling each other", async () => {
+    const root = await makeFixtureRoot();
+    const pathRec = recorder();
+    const contentRec = recorder();
+    const service = createFileQueryService({
+      contentSearch: async ({ onBatch }) => {
+        onBatch([
+          {
+            path: "src/main/ipc/theme.ts",
+            line: 1,
+            matchCharStart: 0,
+            matchCharEnd: 4,
+            matchByteStart: 0,
+            matchByteEnd: 1,
+            preview: "t",
+            previewMatchStart: 0,
+            previewMatchEnd: 1,
+          },
+        ]);
+        return { scanned: 1, truncated: false };
+      },
+    });
+
+    service.start(
+      1,
+      {
+        limit: 200,
+        mruPaths: [],
+        owner: "quick-open:s1",
+        query: "theme",
+        queryId: "path-1",
+        root,
+      },
+      pathRec.emit
+    );
+    service.start(
+      1,
+      {
+        mode: "content",
+        owner: "content-search:p1",
+        query: "theme",
+        queryId: "content-1",
+        root,
+      },
+      contentRec.emit
+    );
+
+    await Promise.all([pathRec.done, contentRec.done]);
+
+    const pathDone = pathRec.events.find((e) => e.kind === "done");
+    const contentDone = contentRec.events.find((e) => e.kind === "done");
+    if (pathDone?.kind !== "done" || contentDone?.kind !== "done") {
+      throw new Error("expected both done");
+    }
+    expect(pathDone.reason).toBe("completed");
+    expect(contentDone.reason).toBe("completed");
+    const pathBatch = pathRec.events.find((e) => e.kind === "batch");
+    const contentBatch = contentRec.events.find((e) => e.kind === "batch");
+    if (pathBatch?.kind !== "batch" || contentBatch?.kind !== "batch") {
+      throw new Error("expected batches");
+    }
+    expect(pathBatch.mode).toBe("path");
+    expect(contentBatch.mode).toBe("content");
+  });
 });

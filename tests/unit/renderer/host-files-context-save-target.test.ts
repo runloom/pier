@@ -104,4 +104,30 @@ describe("plugin files queryPaths facade", () => {
 
     await expect(handle.started).rejects.toThrow("main unavailable");
   });
+
+  it("queryContents forces mode content and asserts file:read", async () => {
+    start.mockResolvedValue(true);
+    const assertCapability = vi.fn();
+    const files = createPluginFilesContext(undefined, assertCapability);
+
+    const handle = files.queryContents({
+      owner: "content-search:p1",
+      query: "TODO",
+      root: "/repo",
+      options: { caseSensitive: true },
+    });
+
+    expect(assertCapability).toHaveBeenCalledWith(undefined, "file:read");
+    await expect(handle.started).resolves.toBe(true);
+    expect(start).toHaveBeenCalledWith(
+      expect.objectContaining({
+        mode: "content",
+        owner: "content-search:p1",
+        query: "TODO",
+        queryId: handle.queryId,
+        root: "/repo",
+        options: { caseSensitive: true },
+      })
+    );
+  });
 });

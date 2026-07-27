@@ -11,6 +11,9 @@ import { cn } from "./utils.ts";
  * - title/description stay on neutral text tokens (not tinted)
  */
 const alertVariants = cva(
+  // Grid is [icon | content] when a status icon is present. Title/description
+  // must use AlertTitle / AlertDescription (col-start-2). Free children in the
+  // icon track collapse to ~1ch and CJK wraps one glyph per line.
   "group/alert relative grid w-full gap-0.5 rounded-2xl border px-4 py-3 text-left text-foreground text-sm has-data-[slot=alert-action]:relative has-[[data-slot=status-icon]]:grid-cols-[auto_1fr] has-[[data-slot=status-icon]]:gap-x-2.5 has-data-[slot=alert-action]:pr-18 *:[data-slot=status-icon]:row-span-2 *:[data-slot=status-icon]:translate-y-0.5",
   {
     variants: {
@@ -56,7 +59,22 @@ function Alert({
       {...props}
     >
       {iconKind ? <StatusIcon kind={iconKind} /> : null}
-      {children}
+      {/*
+        Body wrapper owns the content column so free children (not only
+        AlertTitle/Description) never land in the ~1ch icon track — that was
+        causing CJK titles to stack one glyph per line in canvas demos.
+        Absolute AlertAction still positions against this relative root.
+      */}
+      {iconKind ? (
+        <div
+          className="col-start-2 grid min-w-0 gap-0.5"
+          data-slot="alert-body"
+        >
+          {children}
+        </div>
+      ) : (
+        children
+      )}
     </div>
   );
 }
@@ -65,7 +83,8 @@ function AlertTitle({ className, ...props }: React.ComponentProps<"div">) {
   return (
     <div
       className={cn(
-        "font-medium text-foreground group-has-[[data-slot=status-icon]]/alert:col-start-2 [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground",
+        // Content column is owned by Alert's body wrapper when an icon is present.
+        "font-medium text-foreground [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground",
         className
       )}
       data-slot="alert-title"
@@ -81,7 +100,7 @@ function AlertDescription({
   return (
     <div
       className={cn(
-        "text-balance text-muted-foreground text-sm group-has-[[data-slot=status-icon]]/alert:col-start-2 md:text-pretty [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
+        "text-balance text-muted-foreground text-sm md:text-pretty [&_a]:underline [&_a]:underline-offset-3 [&_a]:hover:text-foreground [&_p:not(:last-child)]:mb-4",
         className
       )}
       data-slot="alert-description"

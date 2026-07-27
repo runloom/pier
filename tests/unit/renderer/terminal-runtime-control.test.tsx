@@ -11,6 +11,7 @@ import { openTaskOutputPanel } from "@/components/workspace/open-task-output-pan
 import { initI18n } from "@/i18n/index.ts";
 import { TerminalRuntimeControl } from "@/panel-kits/terminal/terminal-runtime-control.tsx";
 import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
+import { useTaskRunControlDismissStore } from "@/stores/task-run-control-dismiss.store.ts";
 import { useTaskRunSelectionStore } from "@/stores/task-run-selection.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -80,16 +81,23 @@ function installTasks(tasks: Record<string, unknown>): void {
 
 function renderControl({
   current,
+  dismissRun = vi.fn(),
   now = 3000,
   runs = [current],
 }: {
   current: TaskRunControlEntry;
+  dismissRun?: (runId: string) => void;
   now?: number;
   runs?: readonly TaskRunControlEntry[];
 }) {
   const view: ReactElement = (
     <TooltipProvider>
-      <TerminalRuntimeControl now={now} panelId="terminal-task" runs={runs} />
+      <TerminalRuntimeControl
+        dismissRun={dismissRun}
+        now={now}
+        panelId="terminal-task"
+        runs={runs}
+      />
     </TooltipProvider>
   );
   return render(view);
@@ -126,6 +134,7 @@ describe("terminal runtime control", () => {
     vi.spyOn(Date, "now").mockReturnValue(3000);
     vi.clearAllMocks();
     useTaskRunSelectionStore.setState({ selectedRunIdsByPanel: {} });
+    useTaskRunControlDismissStore.getState().clearForTests();
   });
 
   afterEach(() => {
@@ -136,6 +145,7 @@ describe("terminal runtime control", () => {
       snapshot: { runs: {}, version: 0 },
     });
     useWorkspaceStore.setState({ api: null, hasMaximizedGroup: false });
+    useTaskRunControlDismissStore.getState().clearForTests();
     vi.restoreAllMocks();
   });
 
@@ -310,21 +320,20 @@ describe("terminal runtime control", () => {
     "cancelled",
     "failed",
     "blocked",
-  ] as const)("shows restart and reveal for finished terminal %s", (status) => {
+  ] as const)("shows close, restart, and reveal for finished terminal %s", (status) => {
     const current = run(status);
     installTasks({});
 
     renderControl({ current });
 
+    const close = screen.getByRole("button", { name: "Close task panel" });
     const restart = screen.getByRole("button", { name: "Restart task" });
     const reveal = screen.getByRole("button", {
       name: "Reveal task terminal",
     });
+    expectBefore(close, restart);
     expectBefore(restart, reveal);
     expect(screen.queryByRole("button", { name: "Stop task" })).toBeNull();
-    expect(
-      screen.queryByRole("button", { name: "Dismiss task result" })
-    ).toBeNull();
     expect(
       screen.queryByTestId("terminal-runtime-control-more")
     ).not.toBeInTheDocument();
@@ -335,22 +344,63 @@ describe("terminal runtime control", () => {
     "cancelled",
     "failed",
     "blocked",
-  ] as const)("shows restart and output for finished background %s", (status) => {
+  ] as const)("shows dismiss, restart, and output for finished background %s", (status) => {
     const current = run(status, { mode: "background" });
     installTasks({});
 
     renderControl({ current });
 
+    const dismiss = screen.getByRole("button", {
+      name: "Dismiss task controls",
+    });
     const restart = screen.getByRole("button", { name: "Restart task" });
     const output = screen.getByRole("button", { name: "Open task output" });
+    expectBefore(dismiss, restart);
     expectBefore(restart, output);
     expect(screen.queryByRole("button", { name: "Stop task" })).toBeNull();
     expect(
-      screen.queryByRole("button", { name: "Dismiss task result" })
-    ).toBeNull();
-    expect(
       screen.queryByTestId("terminal-runtime-control-more")
     ).not.toBeInTheDocument();
+  });
+
+  it("dismisses background controls without closing the origin panel", async () => {
+    const current = run("succeeded", { mode: "background" });
+    const dismissRun = vi.fn();
+    const closePanel = vi.fn(async () => true);
+    installTasks({});
+    useWorkspaceStore.setState({
+      api: workspaceApiWithTerminal() as never,
+      closePanel,
+      hasMaximizedGroup: false,
+    });
+
+    renderControl({ current, dismissRun });
+    fireEvent.click(
+      screen.getByRole("button", { name: "Dismiss task controls" })
+    );
+
+    await waitFor(() => {
+      expect(dismissRun).toHaveBeenCalledWith("run-1");
+    });
+    expect(closePanel).not.toHaveBeenCalled();
+  });
+
+  it("closes the terminal-tab task panel from finished close control", async () => {
+    const current = run("succeeded");
+    const closePanel = vi.fn(async () => true);
+    installTasks({});
+    useWorkspaceStore.setState({
+      api: workspaceApiWithTerminal() as never,
+      closePanel,
+      hasMaximizedGroup: false,
+    });
+
+    renderControl({ current });
+    fireEvent.click(screen.getByRole("button", { name: "Close task panel" }));
+
+    await waitFor(() => {
+      expect(closePanel).toHaveBeenCalledWith("terminal-task");
+    });
   });
 
   it("restarts a running task once and disables every direct control while pending", async () => {
@@ -492,9 +542,10 @@ describe("terminal runtime control", () => {
     });
   });
 
-  it("requests an ordinary graceful stop", async () => {
+  it("requests an ordinary graceful stop and dismisses the control bar", async () => {
     const current = run("running");
     const stop = vi.fn(async () => stopResult(current));
+    const dismissRun = vi.fn();
     installTasks({ stop });
     useTaskRunsStore.setState({
       error: null,
@@ -502,7 +553,7 @@ describe("terminal runtime control", () => {
       snapshot: { runs: { [current.runId]: current }, version: 1 },
     });
 
-    const { container } = renderControl({ current });
+    const { container } = renderControl({ current, dismissRun });
     expect(container.querySelector('[data-slot="badge"]')).toBeNull();
     expect(container.querySelector('[data-slot="separator"]')).not.toBeNull();
     expect(screen.getByText("Test suite")).toHaveClass("flex-1", "truncate");
@@ -515,9 +566,38 @@ describe("terminal runtime control", () => {
 
     await waitFor(() => {
       expect(stop).toHaveBeenCalledWith({ force: false, runId: "run-1" });
+      expect(dismissRun).toHaveBeenCalledWith("run-1");
     });
     expect(showAppConfirm).not.toHaveBeenCalled();
     expect(showAppAlert).not.toHaveBeenCalled();
+  });
+
+  it("does not dismiss the control bar after force stop", async () => {
+    const current = run("stopping");
+    const stop = vi.fn(async () => ({
+      failures: [],
+      snapshot: { ...current, status: "cancelled" as const },
+      status: "force-stopped" as const,
+    }));
+    const dismissRun = vi.fn();
+    installTasks({ stop });
+    useTaskRunsStore.setState({
+      error: null,
+      initialized: true,
+      snapshot: { runs: { [current.runId]: current }, version: 1 },
+    });
+
+    renderControl({
+      current,
+      dismissRun,
+      now: 1000 + TASK_STOP_GRACE_MS,
+    });
+    fireEvent.click(screen.getByRole("button", { name: "Force stop" }));
+
+    await waitFor(() => {
+      expect(stop).toHaveBeenCalledWith({ force: true, runId: "run-1" });
+    });
+    expect(dismissRun).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -560,6 +640,7 @@ describe("terminal runtime control", () => {
     view.rerender(
       <TooltipProvider>
         <TerminalRuntimeControl
+          dismissRun={vi.fn()}
           now={3000}
           panelId="terminal-task"
           runs={[active, failed]}

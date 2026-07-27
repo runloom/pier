@@ -44,6 +44,55 @@ export function formatAccountError(err: unknown, t: Translate): string {
       "No active account — add or switch to a Claude account first"
     );
   }
+  if (
+    lower.includes("unknown named parameter") ||
+    lower.includes("omp database not found") ||
+    /(^|;\s*)omp:/.test(raw)
+  ) {
+    return t(
+      "pier.claude.accounts.settings.syncPeersFailedOmp",
+      "Couldn't sync credentials to OMP. Make sure OMP is installed and has been opened at least once on this device."
+    );
+  }
+  if (
+    /(^|;\s*)opencode:/.test(raw) ||
+    (lower.includes("opencode") && lower.includes("not found"))
+  ) {
+    return t(
+      "pier.claude.accounts.settings.syncPeersFailedOpencode",
+      "Couldn't sync credentials to OpenCode. Make sure OpenCode is installed on this device."
+    );
+  }
+  if (
+    /(^|;\s*)pi:/.test(raw) ||
+    (lower.includes("pi ") && lower.includes("not found"))
+  ) {
+    return t(
+      "pier.claude.accounts.settings.syncPeersFailedPi",
+      "Couldn't sync credentials to Pi. Make sure Pi is installed on this device."
+    );
+  }
+  if (lower.includes("no active managed account")) {
+    return t(
+      "pier.claude.accounts.settings.syncPeersFailedNoActive",
+      "Select a managed Claude account first, then try syncing again."
+    );
+  }
+  if (
+    lower.includes("select at least one tool") ||
+    lower.includes("at least one tool to sync")
+  ) {
+    return t(
+      "pier.claude.accounts.settings.syncPeersFailedNoTargets",
+      "Select at least one tool to sync."
+    );
+  }
+  if (/opencode:|pi:|omp:/.test(raw)) {
+    return t(
+      "pier.claude.accounts.settings.syncPeersFailed",
+      "Couldn't sync credentials to the selected tools. Try again after opening those tools once."
+    );
+  }
   if (lower.includes("re-authorize in the browser")) {
     return t(
       "pier.claude.errors.reAuthorize",

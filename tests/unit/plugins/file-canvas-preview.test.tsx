@@ -334,4 +334,65 @@ describe("FileCanvasPreview", () => {
     });
     expect(screen.queryByRole("status")).toBeNull();
   });
+
+  it("registers canvases under the project live root id and reloads on stale", async () => {
+    const baseId = projectLiveRootId(PROJECT_ROOT);
+    const url = makeModuleDataUrl(`
+      export function mount(el) {
+        el.setAttribute("data-test-canvas", "canvases");
+        return () => {};
+      }
+      export default function App() { return null; }
+    `);
+    const compile = vi.fn(async () => ({
+      graph: [],
+      moduleId: "smoke/hello.canvas.tsx",
+      ok: true as const,
+      url,
+    }));
+    let staleCb:
+      | ((event: { moduleId: string; rootId: string; type: "stale" }) => void)
+      | null = null;
+    const onChanged = vi.fn((cb: typeof staleCb) => {
+      staleCb = cb;
+      return () => {
+        staleCb = null;
+      };
+    });
+    const registerRoot = vi.fn(async (spec: { id: string }) => ({
+      rootId: spec.id,
+    }));
+
+    render(
+      <FileCanvasPreview
+        context={createContext({ compile, onChanged, registerRoot })}
+        path={CANVAS_PATH}
+        root={PROJECT_ROOT}
+        t={t}
+      />
+    );
+
+    await waitFor(() => {
+      expect(
+        document.querySelector("[data-test-canvas='canvases']")
+      ).toBeTruthy();
+    });
+    expect(registerRoot).toHaveBeenCalled();
+    const registeredId = (
+      registerRoot.mock.calls[0]?.[0] as { id: string } | undefined
+    )?.id;
+    expect(registeredId).toBe(baseId);
+
+    await act(async () => {
+      staleCb?.({
+        moduleId: "smoke/hello.canvas.tsx",
+        rootId: baseId,
+        type: "stale",
+      });
+    });
+
+    await waitFor(() => {
+      expect(compile.mock.calls.length).toBeGreaterThanOrEqual(2);
+    });
+  });
 });

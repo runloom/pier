@@ -1,10 +1,19 @@
 {
   "commands": {
-    "pier.files.openSelectionPath": {
-      "title": "Open Path"
-    },
     "pier.files.openSelectionAsMarkdown": {
       "title": "Preview Selected Text"
+    },
+    "pier.files.quickOpen": {
+      "title": "Go to File"
+    },
+    "pier.files.openDirectory": {
+      "title": "Open Directory"
+    },
+    "pier.files.searchContents": {
+      "title": "Search in Files"
+    },
+    "pier.files.searchInFolder": {
+      "title": "Find in Folder…"
     }
   },
   "messages": {
@@ -116,7 +125,6 @@
     "filePanel.view.source": "Source",
     "filePanel.view.switchToPreview": "Switch to preview",
     "filePanel.view.switchToSource": "Switch to source",
-    "files.actions.openSelectionPath.title": "Open Path",
     "files.actions.openSelectionAsMarkdown.title": "Preview Selected Text",
     "files.draftProtection.failed": "Unable to auto-save draft",
     "files.draftRecovery.failed": "Unable to restore saved drafts",
@@ -201,6 +209,9 @@
     "filePanel.quickOpen.noProject": "Open a project to search files.",
     "filePanel.quickOpen.queryFailed": "Unable to search files",
     "filePanel.quickOpen.truncated": "Results truncated to top matches",
+    "filePanel.openDirectory.title": "Open Directory",
+    "filePanel.openDirectory.noProject": "Open a project folder first to browse files.",
+    "filePanel.openDirectory.failed": "Unable to open project directory",
     "filePanel.search.close": "Close search",
     "filePanel.search.matchAnnouncement": "Matches: {{count}}",
     "filePanel.search.matchCase": "Match case",
@@ -231,7 +242,42 @@
     "files.notifications.terminalOpenUrl.invalid": "Couldn't open this path",
     "files.notifications.terminalOpenUrl.unsupportedScheme": "Couldn't open this link",
     "files.notifications.terminalOpenUrl.openFailed": "Couldn't open path",
-    "files.notifications.terminalOpenSelectionPath.notAPath": "Select a file path in the terminal first."
+    "filePanel.contentSearch.title": "Search in Files",
+    "filePanel.contentSearch.command": "Search in Files",
+    "filePanel.contentSearch.findInFolder": "Find in Folder…",
+    "filePanel.contentSearch.queryLabel": "Search",
+    "filePanel.contentSearch.placeholder": "Search in files",
+    "filePanel.contentSearch.matchCase": "Match case",
+    "filePanel.contentSearch.wholeWord": "Whole word",
+    "filePanel.contentSearch.regexp": "Regexp",
+    "filePanel.contentSearch.showOptions": "Filters",
+    "filePanel.contentSearch.hideOptions": "Hide filters",
+    "filePanel.contentSearch.stop": "Stop search",
+    "filePanel.contentSearch.include": "Files to include",
+    "filePanel.contentSearch.includeHint": "One or more globs, separated by commas. Leave empty to search all files.",
+    "filePanel.contentSearch.useGitIgnore": "Use Git ignore rules",
+    "filePanel.contentSearch.useExclude": "Use search exclude patterns",
+    "filePanel.contentSearch.scope": "Searching in folder: {{path}}",
+    "filePanel.contentSearch.clearScope": "Search whole project",
+    "filePanel.contentSearch.noProject": "Open a project to search file contents.",
+    "filePanel.contentSearch.noProjectTitle": "No project open",
+    "filePanel.contentSearch.searching": "Searching…",
+    "filePanel.contentSearch.failed": "Search failed",
+    "filePanel.contentSearch.failedBody": "Try again, or check that search tools are installed.",
+    "filePanel.contentSearch.runtimeMissing": "The built-in search engine is missing from this build. Rebuild resources or reinstall Pier.",
+    "filePanel.contentSearch.noResults": "No results",
+    "filePanel.contentSearch.noResultsHint": "Try different words, turn off match case, or widen the file filters.",
+    "filePanel.contentSearch.truncated": "Showing {{count}}+ results",
+    "filePanel.contentSearch.resultCount": "{{count}} results",
+    "filePanel.contentSearch.hint": "Enter text to search across the project.",
+    "filePanel.contentSearch.startFailed": "Unable to start content search.",
+    "filePanel.contentSearch.includePlaceholder": "*.ts, src/**/*.tsx",
+    "filePanel.contentSearch.runtimeMissingTitle": "Search unavailable",
+    "filePanel.contentSearch.resultsLabel": "Search results",
+    "filePanel.contentSearch.invalidRegexpTitle": "Invalid regular expression",
+    "filePanel.contentSearch.invalidRegexpBody": "Check the pattern, or turn off Regexp and search as plain text.",
+    "filePanel.contentSearch.invalidScopeTitle": "Folder not available",
+    "filePanel.contentSearch.invalidScopeBody": "The search folder was moved or is outside the project. Clear the folder filter and try again."
   },
   "terminalStatusItems": {
     "pier.files.project": {

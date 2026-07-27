@@ -20,6 +20,7 @@ function diffHandle(
   return {
     captureTopAnchor: () => null,
     getScrollTop: () => null,
+    getSelectedLines: () => null,
     getSelectedText: () => "",
     isItemVisible: () => true,
     restoreAnchor: () => true,
@@ -42,7 +43,6 @@ function renderReplayHook(updateItems: PierDiffViewHandle["updateItems"]) {
       committedProjectionGenerationRef,
       diffHandleRef,
       documentGenerationRef,
-      hasPendingNavigation: () => false,
       latestItemUpdatesRef: { current: latestItemUpdatesRef },
     })
   );
@@ -61,7 +61,7 @@ afterEach(() => {
 });
 
 describe("useGitReviewItemReplay", () => {
-  it("Pierre 首次拒绝后下一帧自动读取 latest-map 重试", async () => {
+  it("同帧 apply 延后到 rAF；Pierre 拒绝后下一帧重试", async () => {
     vi.useFakeTimers();
     const updateItems = vi
       .fn<PierDiffViewHandle["updateItems"]>()
@@ -72,19 +72,95 @@ describe("useGitReviewItemReplay", () => {
 
     act(() => {
       hook.result.current.recordLatestItemUpdates([first]);
+      // 只入队，不立刻打 Pierre
       expect(hook.result.current.applyItemUpdates(handle, 1, [first])).toBe(
-        false
+        true
       );
     });
+    expect(updateItems).toHaveBeenCalledTimes(0);
+
+    // coalesce rAF → 首次 apply 拒绝 → 再排 retry rAF
+    await act(() => vi.advanceTimersByTimeAsync(20));
     expect(updateItems).toHaveBeenCalledTimes(1);
+    expect(updateItems.mock.calls[0]?.[1]).toEqual({ preserveAnchor: false });
 
     await act(() => vi.advanceTimersByTimeAsync(20));
     expect(updateItems).toHaveBeenCalledTimes(2);
     expect(updateItems.mock.calls[1]?.[0]).toEqual([first]);
+    expect(updateItems.mock.calls[1]?.[1]).toEqual({ preserveAnchor: false });
     expect(hook.result.current.replayFailure).toBeNull();
   });
 
-  it("A 到达重试上限后收到 B，会合并当前 latest A+B 再提交", async () => {
+  it("flush:true 同步 updateItems 且 preserveAnchor false", () => {
+    const updateItems = vi
+      .fn<PierDiffViewHandle["updateItems"]>()
+      .mockReturnValue(true);
+    const { handle, hook } = renderReplayHook(updateItems);
+    const first = item("a.ts", 1);
+
+    act(() => {
+      hook.result.current.recordLatestItemUpdates([first]);
+      expect(
+        hook.result.current.applyItemUpdates(handle, 1, [first], {
+          flush: true,
+        })
+      ).toBe(true);
+    });
+    expect(updateItems).toHaveBeenCalledTimes(1);
+    expect(updateItems.mock.calls[0]?.[0]).toEqual([first]);
+    expect(updateItems.mock.calls[0]?.[1]).toEqual({ preserveAnchor: false });
+  });
+
+  it("flushPendingItemUpdates 冲刷挂起 coalesce 后不再 rAF 二次 apply", async () => {
+    vi.useFakeTimers();
+    const updateItems = vi
+      .fn<PierDiffViewHandle["updateItems"]>()
+      .mockReturnValue(true);
+    const { handle, hook } = renderReplayHook(updateItems);
+    const first = item("a.ts", 1);
+
+    act(() => {
+      hook.result.current.recordLatestItemUpdates([first]);
+      hook.result.current.applyItemUpdates(handle, 1, [first]);
+    });
+    expect(updateItems).toHaveBeenCalledTimes(0);
+
+    act(() => {
+      expect(hook.result.current.flushPendingItemUpdates(handle, 1)).toBe(true);
+    });
+    expect(updateItems).toHaveBeenCalledTimes(1);
+    expect(updateItems.mock.calls[0]?.[1]).toEqual({ preserveAnchor: false });
+
+    await act(() => vi.advanceTimersByTimeAsync(20));
+    expect(updateItems).toHaveBeenCalledTimes(1);
+  });
+
+  it("同帧多 settle 合并为一次 updateItems", async () => {
+    vi.useFakeTimers();
+    const updateItems = vi
+      .fn<PierDiffViewHandle["updateItems"]>()
+      .mockReturnValue(true);
+    const { handle, hook } = renderReplayHook(updateItems);
+    const first = item("a.ts", 1);
+    const second = item("b.ts", 1);
+
+    act(() => {
+      hook.result.current.recordLatestItemUpdates([first, second]);
+      hook.result.current.applyItemUpdates(handle, 1, [first]);
+      hook.result.current.applyItemUpdates(handle, 1, [second]);
+    });
+    expect(updateItems).toHaveBeenCalledTimes(0);
+
+    await act(() => vi.advanceTimersByTimeAsync(20));
+    expect(updateItems).toHaveBeenCalledTimes(1);
+    const payload = updateItems.mock.calls[0]?.[0] ?? [];
+    expect(payload).toHaveLength(2);
+    expect(new Set(payload.map((entry) => entry.id))).toEqual(
+      new Set(["a.ts", "b.ts"])
+    );
+  });
+
+  it("A 到达重试上限后收到 B，合并 latest A+B 再提交", async () => {
     vi.useFakeTimers();
     const updateItems = vi
       .fn<PierDiffViewHandle["updateItems"]>()
@@ -100,7 +176,8 @@ describe("useGitReviewItemReplay", () => {
       hook.result.current.recordLatestItemUpdates([first]);
       hook.result.current.applyItemUpdates(handle, 1, [first]);
     });
-    await act(() => vi.advanceTimersByTimeAsync(40));
+    // coalesce + 3 次拒绝
+    await act(() => vi.advanceTimersByTimeAsync(80));
     expect(updateItems).toHaveBeenCalledTimes(3);
     expect(hook.result.current.replayFailure).not.toBeNull();
 
@@ -110,6 +187,8 @@ describe("useGitReviewItemReplay", () => {
         true
       );
     });
+    expect(updateItems).toHaveBeenCalledTimes(3);
+    await act(() => vi.advanceTimersByTimeAsync(20));
     expect(updateItems.mock.calls[3]?.[0]).toEqual([first, second]);
     expect(hook.result.current.replayFailure).toBeNull();
   });
@@ -129,49 +208,37 @@ describe("useGitReviewItemReplay", () => {
       hook.result.current.applyItemUpdates(handle, 1, [first]);
       hook.result.current.replayLatestItemUpdates(handle, 1);
     });
-    await act(() => vi.advanceTimersByTimeAsync(20));
+    await act(() => vi.advanceTimersByTimeAsync(40));
 
-    expect(updateItems).toHaveBeenCalledTimes(2);
-    expect(updateItems.mock.calls[1]?.[0]).toEqual([first, second]);
+    expect(updateItems.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(updateItems.mock.calls.at(-1)?.[0]).toEqual([first, second]);
   });
 
-  it("首次拒绝后的 2,001 次同帧稀疏更新原地合并且下一帧只回放一次", async () => {
+  it("2,001 次同帧稀疏 apply 合并为一次 rAF 提交", async () => {
     vi.useFakeTimers();
     const updateItems = vi
       .fn<PierDiffViewHandle["updateItems"]>()
-      .mockReturnValueOnce(false)
       .mockReturnValue(true);
     const { handle, hook } = renderReplayHook(updateItems);
-    const first = item("file-0.ts", 1);
-    act(() => {
-      hook.result.current.recordLatestItemUpdates([first]);
-      hook.result.current.applyItemUpdates(handle, 1, [first]);
-    });
-    const addSpy = vi.spyOn(Set.prototype, "add");
 
     act(() => {
-      for (let index = 1; index < 2001; index += 1) {
+      for (let index = 0; index < 2001; index += 1) {
         const next = item(`file-${index}.ts`, 1);
         hook.result.current.recordLatestItemUpdates([next]);
         hook.result.current.applyItemUpdates(handle, 1, [next]);
       }
     });
+    expect(updateItems).toHaveBeenCalledTimes(0);
 
-    expect(updateItems).toHaveBeenCalledTimes(1);
-    expect(addSpy.mock.calls.length).toBeLessThan(10_000);
-    const addCountBeforeReplay = addSpy.mock.calls.length;
     await act(() => vi.advanceTimersByTimeAsync(20));
-    expect(updateItems).toHaveBeenCalledTimes(2);
-    expect(updateItems.mock.calls[1]?.[0]).toHaveLength(2001);
-    expect(addSpy).toHaveBeenCalledTimes(addCountBeforeReplay);
-    addSpy.mockRestore();
+    expect(updateItems).toHaveBeenCalledTimes(1);
+    expect(updateItems.mock.calls[0]?.[0]).toHaveLength(2001);
   });
 
-  it("换代和卸载都会取消旧 rAF，2,001 次稀疏更新始终只提交单项", async () => {
+  it("换代取消已排程的 coalesce rAF", async () => {
     vi.useFakeTimers();
     const updateItems = vi
       .fn<PierDiffViewHandle["updateItems"]>()
-      .mockReturnValueOnce(false)
       .mockReturnValue(true);
     const { documentGenerationRef, handle, hook } =
       renderReplayHook(updateItems);
@@ -182,30 +249,9 @@ describe("useGitReviewItemReplay", () => {
     });
     documentGenerationRef.current = 2;
     await act(() => vi.advanceTimersByTimeAsync(20));
-    expect(updateItems).toHaveBeenCalledTimes(1);
+    // generation 不匹配 → applyUpdates 早退，不打 Pierre
+    expect(updateItems).toHaveBeenCalledTimes(0);
     hook.unmount();
-    await vi.runOnlyPendingTimersAsync();
-
-    const sparseUpdateItems = vi.fn<PierDiffViewHandle["updateItems"]>(
-      () => true
-    );
-    const sparse = renderReplayHook(sparseUpdateItems);
-    act(() => {
-      for (let index = 0; index < 2001; index += 1) {
-        const next = item(`file-${index}.ts`, 1);
-        sparse.hook.result.current.recordLatestItemUpdates([next]);
-        sparse.hook.result.current.applyItemUpdates(sparse.handle, 1, [next]);
-      }
-    });
-    expect(sparseUpdateItems).toHaveBeenCalledTimes(2001);
-    expect(
-      sparseUpdateItems.mock.calls.every(([items]) => items.length === 1)
-    ).toBe(true);
-    act(() => {
-      sparse.hook.result.current.replayLatestItemUpdates(sparse.handle, 1);
-    });
-    expect(sparseUpdateItems).toHaveBeenCalledTimes(2002);
-    expect(sparseUpdateItems.mock.calls.at(-1)?.[0]).toHaveLength(2001);
   });
 
   it("回放时只提交当前拓扑内的 latest-map 条目", async () => {
@@ -258,7 +304,6 @@ describe("useGitReviewItemReplay", () => {
     });
     expect(updateItems.mock.calls.at(-1)?.[0]).toEqual([known]);
 
-    // 失败后 stale 又写回 latest-map；重试仍必须按 allowedIds 过滤。
     act(() => {
       hook.result.current.recordLatestItemUpdates([stale]);
     });

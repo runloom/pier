@@ -2,13 +2,16 @@ import type { GitReviewIndexEntry } from "@shared/contracts/git-review.ts";
 import { describe, expect, it } from "vitest";
 import {
   composeReviewDocumentDemand,
+  GIT_REVIEW_MAX_FULL_BODY_ENTRIES,
   GIT_REVIEW_SEED_BATCH_MAX,
   GIT_REVIEW_SEED_BATCH_MIN,
   gitReviewLookaheadEntryKeys,
   gitReviewSeedEntryKeys,
+  gitReviewSelectionRadiusEntryKeys,
   mergeReviewDocumentDemand,
   prioritizeReviewNavigationDemand,
   reviewDocumentDemandForRenderWindow,
+  selectBodyHydrationPriorityEntryKeys,
 } from "../../../src/plugins/builtin/git/renderer/git-review-document-demand.ts";
 
 function entry(index: number): GitReviewIndexEntry {
@@ -117,20 +120,20 @@ describe("reviewDocumentDemandForRenderWindow", () => {
     ).toEqual({ bufferedEntryKeys: [], visibleEntryKeys: ["entry:0"] });
   });
 
-  it("导航期间强制加载所选目标，即使它还不在 Pierre 当前窗口", () => {
+  it("导航期间 boost selected 到队首并保留 window demand", () => {
     const demand = {
       bufferedEntryKeys: ["entry:9", "entry:11"],
       visibleEntryKeys: ["entry:10", "entry:12"],
     };
 
     expect(prioritizeReviewNavigationDemand(demand, "entry:10", true)).toEqual({
-      bufferedEntryKeys: [],
-      visibleEntryKeys: ["entry:10"],
+      bufferedEntryKeys: ["entry:9", "entry:11"],
+      visibleEntryKeys: ["entry:10", "entry:12"],
     });
-    // 窗口外点击：目标不在 visible/buffered 时也必须进入可见需求。
+    // 窗口外点击：selected 插入 visible 队首，不丢 window。
     expect(prioritizeReviewNavigationDemand(demand, "entry:99", true)).toEqual({
-      bufferedEntryKeys: [],
-      visibleEntryKeys: ["entry:99"],
+      bufferedEntryKeys: ["entry:9", "entry:11"],
+      visibleEntryKeys: ["entry:99", "entry:10", "entry:12"],
     });
     expect(prioritizeReviewNavigationDemand(demand, "entry:10", false)).toBe(
       demand
@@ -139,13 +142,11 @@ describe("reviewDocumentDemandForRenderWindow", () => {
 });
 
 describe("gitReviewSeedEntryKeys", () => {
-  it("clamps seed size between 25 and 96", () => {
+  it("clamps seed size to viewport-first [MIN, MAX] using estimate slot height", () => {
     const keys = Array.from({ length: 200 }, (_, index) => `entry:${index}`);
+    // 默认 ~360px/槽 × 800px 视口 → 约 3+1，夹到 MIN
     expect(gitReviewSeedEntryKeys(keys)).toHaveLength(
-      Math.min(
-        GIT_REVIEW_SEED_BATCH_MAX,
-        Math.max(GIT_REVIEW_SEED_BATCH_MIN, Math.ceil(800 / 40))
-      )
+      GIT_REVIEW_SEED_BATCH_MIN
     );
     expect(
       gitReviewSeedEntryKeys(keys, {
@@ -155,13 +156,11 @@ describe("gitReviewSeedEntryKeys", () => {
     ).toHaveLength(GIT_REVIEW_SEED_BATCH_MAX);
     expect(
       gitReviewSeedEntryKeys(keys, {
-        itemHeightPx: 100,
+        itemHeightPx: 400,
         viewportHeightPx: 100,
       })
     ).toHaveLength(GIT_REVIEW_SEED_BATCH_MIN);
-    expect(gitReviewSeedEntryKeys(keys.slice(0, 10))).toEqual(
-      keys.slice(0, 10)
-    );
+    expect(gitReviewSeedEntryKeys(keys.slice(0, 4))).toEqual(keys.slice(0, 4));
   });
 });
 
@@ -186,32 +185,32 @@ describe("mergeReviewDocumentDemand", () => {
 });
 
 describe("gitReviewLookaheadEntryKeys", () => {
-  it("appends unsticky successors after demand∩sticky max index", () => {
+  it("prefetches both sides of the window demand span", () => {
     const keys = Array.from({ length: 10 }, (_, index) => `entry:${index}`);
-    // demand 0,1 与 sticky 2 无交集 → 无 lookahead
+    // window span 0..1 → after 2,3；before 无
     expect(
       gitReviewLookaheadEntryKeys(
         keys,
-        new Set(["entry:2"]),
+        new Set(),
         {
           bufferedEntryKeys: ["entry:1"],
           visibleEntryKeys: ["entry:0"],
         },
         2
       )
-    ).toEqual([]);
-    // demand∩sticky = entry:2 → 取后续 3,4
+    ).toEqual(["entry:2", "entry:3"]);
+    // span 仅 entry:2 → after 3,4；before 1,0（prefetch 不再过滤邻项）
     expect(
       gitReviewLookaheadEntryKeys(
         keys,
-        new Set(["entry:1", "entry:2"]),
+        new Set(["entry:1"]),
         {
           bufferedEntryKeys: ["entry:2"],
-          visibleEntryKeys: ["entry:0"],
+          visibleEntryKeys: [],
         },
         2
       )
-    ).toEqual(["entry:3", "entry:4"]);
+    ).toEqual(["entry:3", "entry:1", "entry:4", "entry:0"]);
     expect(
       gitReviewLookaheadEntryKeys(keys, new Set(), {
         bufferedEntryKeys: [],
@@ -221,8 +220,174 @@ describe("gitReviewLookaheadEntryKeys", () => {
   });
 });
 
+describe("gitReviewSelectionRadiusEntryKeys", () => {
+  it("returns neighbors around the selection", () => {
+    const keys = Array.from({ length: 10 }, (_, index) => `entry:${index}`);
+    expect(gitReviewSelectionRadiusEntryKeys(keys, "entry:5", 2)).toEqual([
+      "entry:4",
+      "entry:6",
+      "entry:3",
+      "entry:7",
+    ]);
+    expect(gitReviewSelectionRadiusEntryKeys(keys, null, 2)).toEqual([]);
+  });
+});
+
+describe("selectBodyHydrationPriorityEntryKeys", () => {
+  it("emits stable index order, not pin-first", () => {
+    const keys = Array.from({ length: 200 }, (_, index) => `entry:${index}`);
+    const selected = selectBodyHydrationPriorityEntryKeys({
+      candidateEntryKeys: keys,
+      demand: {
+        bufferedEntryKeys: ["entry:50"],
+        visibleEntryKeys: ["entry:10"],
+      },
+      entryKeysInOrder: keys,
+      maxMembers: 5,
+      selectedEntryKey: "entry:99",
+    });
+    // pin = 10,50,99 → |pin|=3，再按 index 填 0,1 → 0,1,10,50,99
+    expect(selected).toEqual([
+      "entry:0",
+      "entry:1",
+      "entry:10",
+      "entry:50",
+      "entry:99",
+    ]);
+  });
+
+  it("never truncates pin set even when larger than maxMembers", () => {
+    const keys = Array.from({ length: 10 }, (_, index) => `entry:${index}`);
+    const selected = selectBodyHydrationPriorityEntryKeys({
+      candidateEntryKeys: keys,
+      demand: {
+        bufferedEntryKeys: keys.slice(3, 8),
+        visibleEntryKeys: keys.slice(0, 3),
+      },
+      entryKeysInOrder: keys,
+      maxMembers: 2,
+      selectedEntryKey: "entry:9",
+    });
+    expect(selected.length).toBeGreaterThan(2);
+    expect(selected).toContain("entry:9");
+    expect(selected).toContain("entry:0");
+  });
+
+  it("tree-nav keeps sticky members and does not set-swap by index prefix", () => {
+    const keys = Array.from({ length: 20 }, (_, index) => `entry:${index}`);
+    const previous = ["entry:10", "entry:11", "entry:12"];
+    const selected = selectBodyHydrationPriorityEntryKeys({
+      candidateEntryKeys: keys,
+      demand: {
+        bufferedEntryKeys: [],
+        visibleEntryKeys: ["entry:15"],
+      },
+      entryKeysInOrder: keys,
+      maxMembers: 5,
+      navigationPending: true,
+      navigationReason: "tree",
+      previousMemberEntryKeys: previous,
+      selectedEntryKey: "entry:15",
+    });
+    // pin={15} + sticky={10,11,12}；保护期禁止 fill，不得插 entry:0 改拓扑
+    // index 序：10,11,12,15
+    expect(selected).toEqual(["entry:10", "entry:11", "entry:12", "entry:15"]);
+    for (const key of previous) {
+      expect(selected).toContain(key);
+    }
+  });
+
+  it("tree-nav retains all sticky even when pin∪sticky exceeds maxMembers", () => {
+    const keys = Array.from({ length: 20 }, (_, index) => `entry:${index}`);
+    const previous = [
+      "entry:10",
+      "entry:11",
+      "entry:12",
+      "entry:13",
+      "entry:14",
+    ];
+    const selected = selectBodyHydrationPriorityEntryKeys({
+      candidateEntryKeys: keys,
+      demand: {
+        bufferedEntryKeys: [],
+        visibleEntryKeys: ["entry:15", "entry:16"],
+      },
+      entryKeysInOrder: keys,
+      maxMembers: 3,
+      navigationPending: true,
+      navigationReason: "tree",
+      previousMemberEntryKeys: previous,
+      selectedEntryKey: "entry:15",
+    });
+    // pin={15,16} + sticky={10..14} → 可暂超 cap；fill 预算为 0，无 entry:0 前缀
+    expect(selected).toEqual([
+      "entry:10",
+      "entry:11",
+      "entry:12",
+      "entry:13",
+      "entry:14",
+      "entry:15",
+      "entry:16",
+    ]);
+  });
+
+  it("userScrolling keeps pinnedPrefix even when over maxMembers", () => {
+    const keys = Array.from({ length: 30 }, (_, index) => `entry:${index}`);
+    const pinnedPrefix = [
+      "entry:5",
+      "entry:6",
+      "entry:7",
+      "entry:8",
+      "entry:9",
+    ];
+    const selected = selectBodyHydrationPriorityEntryKeys({
+      candidateEntryKeys: keys,
+      demand: {
+        bufferedEntryKeys: [],
+        visibleEntryKeys: ["entry:20"],
+      },
+      entryKeysInOrder: keys,
+      maxMembers: 2,
+      pinnedPrefixEntryKeys: pinnedPrefix,
+      previousMemberEntryKeys: pinnedPrefix,
+      readingMode: "userScrolling",
+      selectedEntryKey: "entry:20",
+    });
+    expect(selected.length).toBeGreaterThan(2);
+    for (const key of pinnedPrefix) {
+      expect(selected).toContain(key);
+    }
+    expect(selected).toContain("entry:20");
+    // 不得裁 pin 换成纯前缀 fill
+    expect(selected).not.toEqual(keys.slice(0, 2));
+  });
+
+  it("idle may drop sticky-only members back to maxMembers", () => {
+    const keys = Array.from({ length: 20 }, (_, index) => `entry:${index}`);
+    const previous = keys.slice(0, 10);
+    const selected = selectBodyHydrationPriorityEntryKeys({
+      candidateEntryKeys: keys,
+      demand: {
+        bufferedEntryKeys: [],
+        visibleEntryKeys: ["entry:0"],
+      },
+      entryKeysInOrder: keys,
+      maxMembers: 3,
+      previousMemberEntryKeys: previous,
+      readingMode: "idle",
+      selectedEntryKey: "entry:0",
+    });
+    expect(selected.length).toBeLessThanOrEqual(3);
+    expect(selected).toContain("entry:0");
+  });
+
+  it("exposes a stable product default cap", () => {
+    expect(GIT_REVIEW_MAX_FULL_BODY_ENTRIES).toBe(128);
+  });
+});
+
 describe("composeReviewDocumentDemand", () => {
-  it("keeps seed, window and lookahead together, but nav pending is selected only", () => {
+  it("uses seed only before window; then window + lookahead + selection radius", () => {
     const keys = Array.from({ length: 40 }, (_, index) => `entry:${index}`);
     const seed = gitReviewSeedEntryKeys(keys);
     const sticky = new Set(["entry:5", "entry:30"]);
@@ -230,36 +395,47 @@ describe("composeReviewDocumentDemand", () => {
       entryKeysInOrder: keys,
       navigationPending: false,
       seedEntryKeys: seed,
-      selectedEntryKey: null,
+      selectedEntryKey: "entry:5",
       demandPrefetchEntryKeys: sticky,
       windowDemand: {
         bufferedEntryKeys: ["entry:30"],
         visibleEntryKeys: ["entry:5"],
       },
+      lookahead: 2,
+      selectionRadius: 1,
     });
-    expect(composed.visibleEntryKeys).toEqual(
-      expect.arrayContaining(["entry:0", "entry:5"])
-    );
-    // 窗口∩sticky 最大下标 30 → lookahead 31/32；seed 不参与连锁。
+    // window 已 active：seed 不再钉 visible
+    expect(composed.visibleEntryKeys).toEqual(["entry:5"]);
+    expect(composed.visibleEntryKeys).not.toContain("entry:0");
+    // window∩sticky span 5..30 → after 31,32；before of min(5)=4,3；selection radius 4,6
     expect(composed.bufferedEntryKeys).toEqual(
-      expect.arrayContaining(["entry:30", "entry:31", "entry:32"])
+      expect.arrayContaining(["entry:30", "entry:31", "entry:4", "entry:6"])
     );
-    expect(
-      composeReviewDocumentDemand({
-        entryKeysInOrder: keys,
-        navigationPending: true,
-        seedEntryKeys: seed,
-        selectedEntryKey: "entry:39",
-        demandPrefetchEntryKeys: new Set(),
-        windowDemand: {
-          bufferedEntryKeys: ["entry:6"],
-          visibleEntryKeys: ["entry:5"],
-        },
-      })
-    ).toEqual({
-      bufferedEntryKeys: [],
-      visibleEntryKeys: ["entry:39"],
+    // 无 window 时仍 seed
+    const seeded = composeReviewDocumentDemand({
+      entryKeysInOrder: keys,
+      navigationPending: false,
+      seedEntryKeys: seed,
+      selectedEntryKey: null,
+      demandPrefetchEntryKeys: new Set(),
+      windowDemand: { bufferedEntryKeys: [], visibleEntryKeys: [] },
     });
+    expect(seeded.visibleEntryKeys).toEqual(seed);
+    // nav：boost selected，保留 window（非仅 selected）
+    const nav = composeReviewDocumentDemand({
+      entryKeysInOrder: keys,
+      navigationPending: true,
+      seedEntryKeys: seed,
+      selectedEntryKey: "entry:39",
+      demandPrefetchEntryKeys: new Set(),
+      windowDemand: {
+        bufferedEntryKeys: ["entry:6"],
+        visibleEntryKeys: ["entry:5"],
+      },
+    });
+    expect(nav.visibleEntryKeys[0]).toBe("entry:39");
+    expect(nav.visibleEntryKeys).toContain("entry:5");
+    expect(nav.bufferedEntryKeys).toContain("entry:6");
   });
 });
 

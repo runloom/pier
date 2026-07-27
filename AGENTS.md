@@ -92,6 +92,24 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - `context.overlays` **已删除**：历史“插件自挂 Dialog 壳”通道不再存在；新代码与存量一律 `dialogs.open`。
 - 检查点在 `tests/unit/renderer/plugin-product-dialog-governance.test.ts` 与 content dialog 单测。
 
+#### 弹窗表单规范（交互 + 字段布局，禁止再发明第三套）
+
+弹窗里一旦出现输入控件，只允许下列两种交互模型；壳、footer、字段方向都由模型决定。共享 class 单一来源：`packages/ui/src/dialog-form-layout.ts`（`@pier/ui/dialog-form-layout.ts`）。
+
+| 模型 | 何时用 | 壳 | 字段方向 | Footer | 保存时机 |
+|------|--------|----|----------|--------|----------|
+| **提交型（commit form）** | 创建/写入/有草稿可取消（新建 worktree、建 skill、SSH host、账号添加主路径） | `AppContentDialogHost` / `dialogs.open` | **垂直** `Field`（Label → 全宽控件 → Description/Error；`DIALOG_COMMIT_FORM_CLASS` + `DIALOG_COMMIT_FIELD_GROUP_CLASS`） | **必须** `setFooter` / `useContentDialogFooter`：右簇 `取消 \| 主按钮`（`DIALOG_FOOTER_ACTIONS_CLASS`）；宿主可复用 `ContentDialogFooterActions` | 点主按钮才提交；取消/ Esc 丢弃草稿 |
+| **即时偏好（live preference）** | 改了即生效、无独立「保存」语义 | **设置页** 内：水平 `*Row`（密度）；**物料 `settingsComponent` / WorkbenchSettingsDialog**：字段布局 **与提交型相同**（垂直 Label → 全宽控件），仅保存时机不同 | 物料设置用 `DIALOG_COMMIT_FORM_CLASS`；**禁止** 再套 Card/`rounded-xl border` 表单壳；禁止左标签右窄控件的「设置行」伪装 dialog 表单 | **默认无「保存」footer**；物料主操作可经 `setFooter` 挂可选底栏（如「添加区块」），关窗用 Header X | `onChange` / `updateParams` 即时写 |
+
+硬规则：
+
+1. **禁止 body 内仿 footer**：content dialog 的取消/主按钮不得写在滚动 body 底部（`flex justify-end` 一排冒充 footer）；一律 `setFooter`，由宿主 sticky `DialogFooter` 承载。行内次要动作（列表「添加」、授权「打开浏览器」）除外。
+2. **禁止嵌套产品壳**：Dialog body 内不得再挂 `@pier/ui/dialog` / `Card` 当表单分区；分区用 `FieldSet` + `FieldLegend` 或扁平 `DIALOG_SECTION_TITLE_CLASS`（对齐 skill 详情）。
+3. **控件密度**：弹窗表单主路径 Select / Input / Button 用默认 28px 密度；**禁止**为「显得紧凑」给主表单 `SelectTrigger size="sm"` / footer `Button size="sm"`。列表内图标排序等次要 hit 可用 `icon-xs`。
+4. **物料设置**：`configurable` widget 的 `settingsComponent` 只渲染 **即时偏好**（改即写），但 **字段布局必须与提交型 dialog 一致**（垂直堆叠、全宽 Select/Input，参考 worktree）；宿主壳固定 `WorkbenchSettingsDialog`（Header + 可滚 body + **可选 sticky footer**，经 `setFooter` 注册，与 content dialog 同壳）。主面主操作（如「添加区块」）放 **footer**，不要散在 body 底。不得自挂 Dialog，不得用设置页水平 `SelectRow` 样式塞进物料弹窗。多实例列表用 `Item outline` 表达块边界。**添加/创建类草稿** 走 **二级 content dialog**（`openAppContentDialog` + sticky `取消|确认`）。
+5. **校验**：提交型在 submit 时校验并用 `FieldError`；`prompt` 走 `validate`。即时偏好以合法枚举/开关为主，避免半填草稿。
+6. **检查点**：`tests/unit/renderer/dialog-form-governance.test.ts`（与本节标题绑定）。
+
 ### 浮层后打开 Dialog / 设置
 
 从 DropdownMenu / ContextMenu / Select 等 Radix overlay 的菜单项打开 Dialog 或设置时，业务代码写普通 controlled state 即可：
@@ -125,7 +143,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 硬规则：
 
-1. **toast 双形态**：确认型（用户动作即时反馈，不进消息中心）维持 **触发窗** sonner 反色胶囊；消息型（系统/后台事件，进消息中心）仅经 main 单投 → `NotificationMessageToastBridge` → `lib/notifications/show-notification-toast.tsx` 标准 shadcn sonner 卡片——**标题 + 详情（必备，必须由调用方提供友好内容：下一步/上下文/摘要；类型行回退仅为防御兜底，不得作为常态）+ ≤1 outline 操作 + 关闭 X（右上），无前置状态图标**。消息中心卡片唯一实现是 `components/common/notification-card.tsx` 的 `NotificationCard`（无前置图标；标题/详情/时间 + 未读红点 + 操作），**仅 Popover 列表使用**（无 dockview panel），禁止另写一套卡片样式。action 统一走 `lib/notifications/notification-actions.ts` 分发（同一 id 各载体行为一致；toast 副本按 dedupeKey 标已读）。
+1. **toast 双形态**：确认型（用户动作即时反馈，不进消息中心）维持 **触发窗** sonner 反色胶囊（默认 Toaster `position="top-center"`）；消息型（系统/后台事件，进消息中心）仅经 main 单投 → `NotificationMessageToastBridge` → `lib/notifications/show-notification-toast.tsx` 标准 shadcn sonner 卡片（同 Toaster，per-call `position: "top-right"`）——**标题 + 详情（必备，必须由调用方提供友好内容：下一步/上下文/摘要；类型行回退仅为防御兜底，不得作为常态）+ ≤1 outline 操作 + 关闭 X（右上），无前置状态图标**。消息中心卡片唯一实现是 `components/common/notification-card.tsx` 的 `NotificationCard`（无前置图标；标题/详情/时间 + 未读红点 + 操作），**仅 Popover 列表使用**（无 dockview panel），禁止另写一套卡片样式。action 统一走 `lib/notifications/notification-actions.ts` 分发（同一 id 各载体行为一致；toast 副本按 dedupeKey 标已读）。
 2. **状态图标的归属**：StatusIcon 只出现在确认型 toast（结果确认着色）与 Alert 等即时反馈中；**消息型 toast 与消息中心条目一律无前置状态图标**。severity 只驱动行为：徽标只计 warning/error 未读（`attentionUnreadCount`）、toast 时长 error 10s / warning 6s / success·info 4s、DND 仅 error 弹出。不要给 inbox 条目重新引入 severity 图标。
 3. **路由单一实现**：toast / inbox / OS 通知的投递判定只走 `src/shared/notification-delivery.ts` 的 `routeDelivery`（mutedKinds → DND（error 除外）→ suppressToast）；业务代码不得手写 DND 判断。
 4. **去重下沉**：同 `dedupeKey` 窗口（24h，`NOTIFICATION_DEDUPE_WINDOW_MS`，契约单一来源）内由 NCS 合并（`repeatCount`），调用方不维护版本/runId 级记录去重；toast 同步连发节流（会话内）是门面与调用方仅有的例外。dedupe 判定依赖镜像水合（`hydrated`），启动期未水合时门面延后判定。

@@ -1,5 +1,9 @@
 import { MENU_LIMITS } from "@shared/contracts/menu.ts";
 import { clipboard, type IpcMain } from "electron";
+import {
+  beginClipboardImageSuppress,
+  endClipboardImageSuppress,
+} from "./clipboard-image-suppress.ts";
 
 /**
  * Renderer 经 preload 写系统剪贴板。
@@ -17,5 +21,14 @@ export function registerClipboardIpc(ipcMain: IpcMain): void {
       );
     }
     clipboard.writeText(text);
+  });
+
+  // Agent TUI enhanced-input send: drop clipboard raster so Grok does not
+  // attach a leftover screenshot on short bracketed pastes (e.g. "你好").
+  ipcMain.handle("pier:clipboard:beginImageSuppress", () => {
+    beginClipboardImageSuppress();
+  });
+  ipcMain.handle("pier:clipboard:endImageSuppress", () => {
+    endClipboardImageSuppress();
   });
 }

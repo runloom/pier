@@ -19,7 +19,12 @@ import {
   liveModuleTicketFromUrl,
   liveModuleUrlForTicket,
 } from "@shared/live-module-url.ts";
+import {
+  PIER_CANVAS_COMPONENT_EXPORT_NAMES,
+  PIER_CANVAS_VALUE_EXPORT_NAMES,
+} from "@shared/pier-canvas-export-names.ts";
 import { describe, expect, it } from "vitest";
+import { pierCanvasStubSource } from "../../../src/main/services/live-modules/compile.ts";
 
 const SAMPLE_TICKET = "abcdefghijklmnopqrstuv";
 
@@ -171,6 +176,37 @@ describe("live-modules contract", () => {
       PIER_BROADCAST.LIVE_MODULES_CHANGED
     );
     expect(LIVE_MODULES_CHANGED_CHANNEL).toBe("pier://live-modules:changed");
+  });
+});
+
+describe("pier/canvas stub source", () => {
+  const source = pierCanvasStubSource();
+
+  it("renders component exports through createElement", () => {
+    expect(source).toContain('import { createElement } from "react";');
+    for (const name of ["Button", "Card", "Text"] as const) {
+      expect(PIER_CANVAS_COMPONENT_EXPORT_NAMES).toContain(name);
+      expect(source).toContain(`export function ${name}(props) {`);
+      expect(source).toContain("return createElement(Comp, props);");
+    }
+  });
+
+  it("passes value exports through so hooks keep args and return value", () => {
+    for (const name of PIER_CANVAS_VALUE_EXPORT_NAMES) {
+      expect(source).toContain(`export function ${name}(...args) {`);
+      expect(source).toContain("return fn(...args);");
+      expect(source).not.toContain(`createElement(getCanvas().${name}`);
+    }
+  });
+
+  it("exports every whitelisted name exactly once", () => {
+    for (const name of [
+      ...PIER_CANVAS_COMPONENT_EXPORT_NAMES,
+      ...PIER_CANVAS_VALUE_EXPORT_NAMES,
+    ]) {
+      const occurrences = source.split(`export function ${name}(`).length - 1;
+      expect(occurrences).toBe(1);
+    }
   });
 });
 

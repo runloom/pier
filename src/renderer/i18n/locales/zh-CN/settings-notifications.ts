@@ -73,10 +73,7 @@ export const settingsNotifications = {
   contentTitle: "提醒内容",
   contentDesc: "选择哪些事情需要提醒你。",
   agentGroup: "智能体",
-  taskSystemGroup: "任务与系统",
-  taskRunFinished: "后台任务完成时弹出",
-  taskRunFinishedDesc:
-    "构建、脚本等后台任务结束后弹出结果；关闭后仍记录在消息中心。",
+  taskSystemGroup: "系统",
   appUpdate: "应用更新提醒",
   appUpdateDesc: "新版本下载完成后提醒你重启更新；关闭后仍记录在消息中心。",
   deliveryTitle: "提醒方式",

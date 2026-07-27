@@ -1045,7 +1045,7 @@ describe("PierFileTree", () => {
       },
       {
         kind: "file",
-        path: "\u0003Changes/templates/kit.canvas.tsx",
+        path: "\u0003Changes/templates/blank.canvas.tsx",
         gitStatus: "added",
       },
       {
@@ -1065,9 +1065,9 @@ describe("PierFileTree", () => {
     );
 
     const tree = within(getFileTree(container));
-    fireEvent.click(tree.getByRole("treeitem", { name: /kit\.canvas/ }));
+    fireEvent.click(tree.getByRole("treeitem", { name: /blank\.canvas/ }));
     expect(onOpenPath).toHaveBeenCalledWith(
-      "\u0003Changes/templates/kit.canvas.tsx"
+      "\u0003Changes/templates/blank.canvas.tsx"
     );
     onOpenPath.mockClear();
 

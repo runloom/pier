@@ -297,6 +297,8 @@
     },
     "pier.git.viewChanges": {
       "aliases": [
+        "打开审查",
+        "审查",
         "查看变更",
         "打开变更",
         "变更",
@@ -306,11 +308,14 @@
         "diff",
         "changes",
         "view changes",
-        "cha kan bian geng"
+        "open review",
+        "review",
+        "cha kan bian geng",
+        "da kai shen cha"
       ],
       "category": "Git",
-      "description": "打开当前仓库的变更审阅面板。",
-      "title": "Git: 查看变更"
+      "description": "打开当前仓库的变更审查面板。",
+      "title": "Git: 打开审查"
     }
   },
   "description": "提供 Git 命令面板入口和终端状态栏支持。",
@@ -339,6 +344,19 @@
     "ui.reviewHeaderRestore": "放弃更改",
     "ui.reviewHeaderStage": "暂存",
     "ui.reviewHeaderUnstage": "取消暂存",
+    "ui.reviewHunkStage": "暂存",
+    "ui.reviewHunkUnstage": "取消暂存",
+    "ui.reviewHunkRevert": "还原",
+    "ui.reviewRevertHunkTitle": "还原此更改块？",
+    "ui.reviewRevertHunkBody": "将从工作区丢弃此更改块，此操作无法撤销。",
+    "ui.reviewRevertHunkConfirm": "还原",
+    "ui.reviewStageHunkFailed": "无法暂存更改块",
+    "ui.reviewUnstageHunkFailed": "无法取消暂存更改块",
+    "ui.reviewRevertHunkFailed": "无法还原更改块",
+    "ui.reviewHunkPatchBuildFailed": "无法为此更改生成补丁",
+    "ui.reviewRevertHunkPartialFailed": "已从暂存区撤出，但无法从工作区丢弃该更改",
+    "ui.reviewHunkNotReady": "此更改仍在加载，请稍后再试。",
+
     "ui.reviewDetails": "详情",
     "ui.reviewInvalidSource": "Git 变更来源无效",
     "ui.reviewLoadFailed": "加载变更失败",

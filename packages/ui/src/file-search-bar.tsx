@@ -1,5 +1,5 @@
 import { ArrowDown, ArrowUp, CornerDownLeft, Search, X } from "lucide-react";
-import { useEffect, useRef } from "react";
+import { type CSSProperties, useEffect, useRef } from "react";
 import { Badge } from "./badge.tsx";
 import { Button } from "./button.tsx";
 import { Input } from "./input.tsx";
@@ -50,6 +50,7 @@ export function FileSearchBar({
   options,
   readOnly = false,
   replaceValue = "",
+  style,
   surface = "popover",
   testId,
   submitDisabled = false,
@@ -74,6 +75,8 @@ export function FileSearchBar({
   options?: FileSearchOptions;
   readOnly?: boolean;
   replaceValue?: string;
+  /** Optional layout overrides (e.g. markdown outline right inset). */
+  style?: CSSProperties;
   surface?: "popover" | "sidebar";
   testId?: string;
   submitDisabled?: boolean;
@@ -104,6 +107,7 @@ export function FileSearchBar({
           : "bg-popover text-popover-foreground shadow-background/40 shadow-lg",
         className
       )}
+      style={style}
       {...(testId ? { "data-testid": testId } : {})}
     >
       <div className="flex min-w-0 flex-wrap items-center gap-1">

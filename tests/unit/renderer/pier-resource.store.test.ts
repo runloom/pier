@@ -22,6 +22,7 @@ const SNAPSHOT = {
   sampledAt: 1000,
   sessions: [],
   summary: {
+    hostLogicalCpuCount: 10,
     hostMemoryFreeBytes: 4 * 1024 * 1024 * 1024,
     hostMemoryTotalBytes: 16 * 1024 * 1024 * 1024,
     hotCount: 0,

@@ -71,6 +71,11 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     keys: "Mod+KeyP",
     scope: "global",
   },
+  {
+    commandId: "pier.files.searchContents",
+    keys: "Mod+Shift+KeyF",
+    scope: "global",
+  },
 
   {
     // 不用 Mod+Shift+Enter：与增强输入/聊天「换行」撞车。M ≈ Maximize。

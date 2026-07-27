@@ -9,6 +9,7 @@ import type {
 } from "@shared/contracts/terminal.ts";
 import { resolveAgentResumeLaunch } from "../services/agents/agent-resume-adapters.ts";
 import { getTerminalPanelTransfer } from "../services/panel-transfer/terminal-panel-transfer.ts";
+import { createTerminalAndSeedResource } from "../services/pier-resource/claim-login-after-create.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
 import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-gate.ts";
 import type { TaskService } from "../services/tasks/task-service-types.ts";
@@ -374,20 +375,25 @@ export async function handleTerminalCreate(args: {
     }
     let ok: boolean;
     try {
-      ok = addon.createTerminal(
-        handle,
-        nativePanelId,
-        createArgs.frame,
-        createArgs.font.family,
-        createArgs.font.size,
-        withPanelStatusEnv(
-          launchForNative,
-          createArgs.panelId,
-          String(win.id),
-          foregroundActivityService.hookEnv()
-        ),
-        lifecycleId
-      );
+      ok = await createTerminalAndSeedResource({
+        create: () =>
+          addon.createTerminal(
+            handle,
+            nativePanelId,
+            createArgs.frame,
+            createArgs.font.family,
+            createArgs.font.size,
+            withPanelStatusEnv(
+              launchForNative,
+              createArgs.panelId,
+              String(win.id),
+              foregroundActivityService.hookEnv()
+            ),
+            lifecycleId
+          ),
+        panelId: createArgs.panelId,
+        windowId: String(win.id),
+      });
     } catch (error) {
       await abandonAuthorizedSpawnAttempt({
         attemptId: spawnedUnderAttemptId,

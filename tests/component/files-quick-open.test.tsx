@@ -220,6 +220,7 @@ describe("files quick open", () => {
         { path: "src/main/ipc/theme.ts", score: 90 },
       ],
       kind: "batch",
+      mode: "path",
       queryId,
     });
     query.emit({

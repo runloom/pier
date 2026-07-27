@@ -19,7 +19,6 @@ export function useGitReviewDocumentDemand({
   renderWindowRef,
   seedEntryKeysRef,
   demandPrefetchEntryKeysRef,
-  demandPrefetchVersion,
 }: {
   readonly currentDemandRef: RefObject<ReviewDocumentDemand>;
   readonly entries: readonly GitReviewIndexEntry[];
@@ -31,7 +30,6 @@ export function useGitReviewDocumentDemand({
   readonly renderWindowRef: RefObject<PierDiffViewRenderWindow | null>;
   readonly seedEntryKeysRef: RefObject<readonly string[]>;
   readonly demandPrefetchEntryKeysRef: RefObject<ReadonlySet<string>>;
-  readonly demandPrefetchVersion: number;
 }): (window: PierDiffViewRenderWindow) => void {
   const entryKeysInOrder = useMemo(
     () => entries.map((entry) => entry.entryKey),
@@ -86,11 +84,7 @@ export function useGitReviewDocumentDemand({
     [applyRenderWindow, hasPendingNavigation]
   );
   useEffect(() => {
-    // demandPrefetchVersion 是 membership epoch：变化时重算 lookahead demand。
-    const prefetchEpoch = demandPrefetchVersion;
-    if (prefetchEpoch < 0) {
-      return;
-    }
+    // navigationPending / entries 变化时重算 demand；prefetch 覆盖只走 ref，不触发 React。
     const window = renderWindowRef.current;
     if (window !== null) {
       applyRenderWindow(window, navigationPending);
@@ -101,12 +95,6 @@ export function useGitReviewDocumentDemand({
       { bufferedEntryKeys: [], visibleEntryKeys: [] },
       navigationPending
     );
-  }, [
-    applyDemand,
-    applyRenderWindow,
-    navigationPending,
-    renderWindowRef,
-    demandPrefetchVersion,
-  ]);
+  }, [applyDemand, applyRenderWindow, navigationPending, renderWindowRef]);
   return requestRenderWindow;
 }

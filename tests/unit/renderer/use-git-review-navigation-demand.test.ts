@@ -39,6 +39,7 @@ function setup(options?: {
     })),
     isSettled: () => true,
     setProtectedEntryKey: vi.fn(),
+    setStickyMemberEntryKeys: vi.fn(),
   };
   const refs = {
     applyNavigationDemand,
@@ -78,7 +79,23 @@ async function flushFrames(): Promise<void> {
 }
 
 describe("useGitReviewNavigation demand sync", () => {
-  it("beginNavigation applies exclusive demand immediately", () => {
+  it("beginNavigation arms pending before applyNavigationDemand (sticky gate)", () => {
+    const { applyNavigationDemand, hook } = setup();
+    applyNavigationDemand.mockImplementation(() => {
+      expect(hook.result.current.hasPendingNavigation()).toBe(true);
+    });
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+    });
+    expect(applyNavigationDemand).toHaveBeenCalledWith("entry:a");
+    expect(hook.result.current.navigationPending).toBe(true);
+    expect(hook.result.current.getNavigationMemberReason()).toBe("tree");
+  });
+
+  it("beginNavigation applies boost demand immediately", () => {
     const { applyNavigationDemand, hook } = setup();
     act(() => {
       hook.result.current.beginNavigation({
@@ -90,7 +107,7 @@ describe("useGitReviewNavigation demand sync", () => {
     expect(hook.result.current.navigationPending).toBe(true);
   });
 
-  it("beginGeneration keep-selected reapplies exclusive demand", () => {
+  it("beginGeneration keep-selected reapplies boost demand with rebind reason", () => {
     const { applyNavigationDemand, hook } = setup();
     act(() => {
       hook.result.current.beginNavigation({
@@ -103,6 +120,25 @@ describe("useGitReviewNavigation demand sync", () => {
       hook.result.current.beginGeneration(new Set(["entry:a"]), 2);
     });
     expect(applyNavigationDemand).toHaveBeenCalledWith("entry:a");
+    expect(hook.result.current.getNavigationMemberReason()).toBe("rebind");
+  });
+
+  it("tryPendingNavigation scrolls at most once then verify does not rescroll", async () => {
+    const scrollToItem = vi.fn(() => true);
+    const { hook } = setup({ scrollToItem });
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+    });
+    act(() => {
+      hook.result.current.tryPendingNavigation();
+    });
+    expect(scrollToItem).toHaveBeenCalledTimes(1);
+    await flushFrames();
+    await flushFrames();
+    expect(scrollToItem).toHaveBeenCalledTimes(1);
   });
 
   it("resumeSelectedNavigation only advances the settled watermark while the target stays visible", async () => {
@@ -210,6 +246,7 @@ describe("useGitReviewNavigation demand sync", () => {
       })),
       isSettled: () => true,
       setProtectedEntryKey: vi.fn(),
+      setStickyMemberEntryKeys: vi.fn(),
     };
     const refs = {
       applyNavigationDemand,
@@ -255,8 +292,14 @@ describe("useGitReviewNavigation demand sync", () => {
     act(() => {
       hook.result.current.tryPendingNavigation();
     });
-    expect(scrollToItem).toHaveBeenCalledWith("section:s");
-    expect(scrollToItem).not.toHaveBeenCalledWith("section:u");
+    // 树导航统一 smooth（远近一致）
+    expect(scrollToItem).toHaveBeenCalledWith("section:s", {
+      behavior: "smooth",
+    });
+    expect(scrollToItem).not.toHaveBeenCalledWith(
+      "section:u",
+      expect.anything()
+    );
     expect(applyNavigationDemand).toHaveBeenCalledWith("entry:a");
   });
 

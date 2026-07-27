@@ -20,13 +20,15 @@ import {
 } from "react";
 import { pluginText } from "./git-plugin-text.ts";
 import type { ReviewRenderFeedback } from "./git-review-code-view.tsx";
-import type { ReviewDocumentDemand } from "./git-review-document-demand.ts";
+import {
+  prioritizeReviewNavigationDemand,
+  type ReviewDocumentDemand,
+} from "./git-review-document-demand.ts";
 import type { GitReviewDocumentGeneration } from "./git-review-document-generation.ts";
 import type { GitReviewDocumentLoader } from "./git-review-document-loader.ts";
 import {
   EMPTY_DOCUMENT_VIEW_STATE,
   type PendingReviewAnchor,
-  resolveReviewAnchor,
 } from "./git-review-document-projection.ts";
 import {
   EMPTY_LOADER_SNAPSHOT,
@@ -37,16 +39,21 @@ import {
 } from "./git-review-document-ui-state.ts";
 import { GitReviewDocumentView } from "./git-review-document-view.tsx";
 import { useReviewFailureSummary } from "./git-review-failure-state.ts";
+import type { ReviewReadingSide } from "./git-review-reading-anchor.ts";
+import { createGitReviewReadingSession } from "./git-review-reading-session.ts";
 import { GitReviewToolbar } from "./git-review-toolbar.tsx";
 import type { gitReviewTreeModel } from "./git-review-tree.tsx";
 import { useGitReviewDocumentDemand } from "./use-git-review-document-demand.ts";
 import { useGitReviewDocumentSession } from "./use-git-review-document-session.ts";
+import { useGitReviewGenerationCallbacks } from "./use-git-review-generation-callbacks.ts";
 import { useGitReviewItemReplay } from "./use-git-review-item-replay.ts";
 import { useGitReviewLocaleProjection } from "./use-git-review-locale-projection.ts";
 import { useGitReviewNavigation } from "./use-git-review-navigation.ts";
 import { useGitReviewProjectionCommit } from "./use-git-review-projection-commit.ts";
+import { useGitReviewReadingCallbacks } from "./use-git-review-reading-callbacks.ts";
 import { useGitReviewRetentionSync } from "./use-git-review-retention-sync.ts";
 import { useGitReviewTreeOpen } from "./use-git-review-tree-open.ts";
+import { useGitReviewViewportEffects } from "./use-git-review-viewport-effects.ts";
 
 function ReviewDocumentsComponent({
   context,
@@ -89,6 +96,7 @@ function ReviewDocumentsComponent({
   const documentGenerationRef = useRef(0);
   const diffHandleRef = useRef<PierDiffViewHandle | null>(null);
   const entryKeyBySectionIdRef = useRef<ReadonlyMap<string, string>>(new Map());
+  const sideBySectionIdRef = useRef(new Map<string, ReviewReadingSide>());
   const firstSectionIdByEntryKeyRef = useRef<ReadonlyMap<string, string>>(
     new Map()
   );
@@ -109,12 +117,13 @@ function ReviewDocumentsComponent({
     bufferedEntryKeys: [],
     visibleEntryKeys: [],
   });
+  const readingSessionRef = useRef(createGitReviewReadingSession());
   const scopeKeyRef = useRef<string | null>(null);
   const viewStateRef = useRef(EMPTY_DOCUMENT_VIEW_STATE);
   const [viewState, setViewState] = useState(EMPTY_DOCUMENT_VIEW_STATE);
   const [projection, setProjection] = useState(EMPTY_REVIEW_PROJECTION);
   const [projectionGeneration, setProjectionGeneration] = useState(0);
-  const [demandPrefetchVersion, setDemandPrefetchVersion] = useState(0);
+
   const {
     selectedEntryKey,
     selectedSectionKey,
@@ -146,22 +155,52 @@ function ReviewDocumentsComponent({
       loaderRef,
     });
   const applyNavigationDemand = useCallback((entryKey: string) => {
-    const demand = {
-      bufferedEntryKeys: [] as const,
-      visibleEntryKeys: [entryKey],
-    };
+    // full-alignment：boost selected，保留 window/seed（禁止 pin-only exclusive replace）
+    const current = currentDemandRef.current;
+    const hasWindow =
+      current.visibleEntryKeys.length > 0 ||
+      current.bufferedEntryKeys.length > 0;
+    const base = hasWindow
+      ? current
+      : {
+          bufferedEntryKeys: [] as const,
+          visibleEntryKeys:
+            seedEntryKeysRef.current.length > 0
+              ? seedEntryKeysRef.current
+              : ([entryKey] as const),
+        };
+    const demand = prioritizeReviewNavigationDemand(base, entryKey, true);
     currentDemandRef.current = demand;
+    // 先 demand（含 selected boost）再 protect，避免无 window 时 protect 误开读
     loaderRef.current?.setWindowDemand(demand);
+    loaderRef.current?.setProtectedEntryKey(entryKey);
   }, []);
+  const {
+    beginReadingNavigating,
+    beginReadingRefresh,
+    endReadingNavigating,
+    endReadingRefresh,
+    getReadingMode,
+    noteUserScrollReading,
+    onNavigationSettled,
+    onNavigationStarted,
+    syncReadingPinnedPrefix,
+  } = useGitReviewReadingCallbacks({
+    itemIdsRef,
+    pendingAnchorRef,
+    readingSessionRef,
+  });
   const {
     beginGeneration,
     beginNavigation,
     cancelVerification,
     clearForUserIntent,
+    getNavigationMemberReason,
     getSelectedEntryKey,
     getSelectedSectionKey,
     hasPendingNavigation,
     navigationError,
+    navigationEpoch,
     navigationPending,
     notifyProjectionChanged,
     resumeSelectedNavigation,
@@ -169,6 +208,8 @@ function ReviewDocumentsComponent({
     tryPendingNavigation,
   } = useGitReviewNavigation({
     applyNavigationDemand,
+    onNavigationSettled,
+    onNavigationStarted,
     diffHandleRef,
     documentGenerationRef,
     entryKeyBySectionIdRef,
@@ -213,11 +254,11 @@ function ReviewDocumentsComponent({
     renderWindowRef,
     seedEntryKeysRef,
     demandPrefetchEntryKeysRef,
-    demandPrefetchVersion,
   });
   const {
     applyItemUpdates,
     clearLatestItemUpdates,
+    flushPendingItemUpdates,
     replayFailure,
     recordLatestItemUpdates,
     replayLatestItemUpdates,
@@ -226,39 +267,32 @@ function ReviewDocumentsComponent({
     committedProjectionGenerationRef,
     diffHandleRef,
     documentGenerationRef,
-    hasPendingNavigation,
     latestItemUpdatesRef,
   });
-  const generationCallbacksRef = useRef({
+  const generationCallbacksRef = useGitReviewGenerationCallbacks({
     applyFailureChanges,
     applyItemUpdates,
     beginGeneration,
+    beginReadingNavigating,
+    beginReadingRefresh,
     cancelRetentionSync,
     clearLatestItemUpdates,
+    endReadingNavigating,
+    endReadingRefresh,
+    flushPendingItemUpdates,
+    getNavigationMemberReason,
+    getReadingMode,
     getSelectedEntryKey,
     getSelectedSectionKey,
     hasPendingNavigation,
+    noteUserScrollReading,
     notifyProjectionChanged,
     recordLatestItemUpdates,
     resetGenerationFailures,
+    syncReadingPinnedPrefix,
     syncRetentionLimits,
     tryPendingNavigation,
   });
-  generationCallbacksRef.current = {
-    applyFailureChanges,
-    applyItemUpdates,
-    beginGeneration,
-    cancelRetentionSync,
-    clearLatestItemUpdates,
-    getSelectedEntryKey,
-    getSelectedSectionKey,
-    hasPendingNavigation,
-    notifyProjectionChanged,
-    recordLatestItemUpdates,
-    resetGenerationFailures,
-    syncRetentionLimits,
-    tryPendingNavigation,
-  };
   useGitReviewDocumentSession({
     committedProjectionGenerationRef,
     context,
@@ -284,9 +318,9 @@ function ReviewDocumentsComponent({
     seedEntryKeysRef,
     setProjection,
     setProjectionGeneration,
-    setDemandPrefetchVersion,
     setViewState,
     demandPrefetchEntryKeysRef,
+    sideBySectionIdRef,
     viewStateRef,
   });
   useGitReviewProjectionCommit({
@@ -307,14 +341,10 @@ function ReviewDocumentsComponent({
     resumeSelectedNavigation,
     tryPendingNavigation,
   });
-  useLayoutEffect(() => {
-    viewStateRef.current = viewState;
-    resumeSelectedNavigation();
-    generationCallbacksRef.current.tryPendingNavigation();
-  }, [resumeSelectedNavigation, viewState]);
   useGitReviewLocaleProjection({
     context,
     controllerRef: documentControllerRef,
+    entries,
     loaderRef,
     locale: appearance.locale,
     projectedLocaleRef,
@@ -322,63 +352,27 @@ function ReviewDocumentsComponent({
     setProjection,
   });
 
-  const setDiffHandle = useCallback(
-    (handle: PierDiffViewHandle | null) => {
-      diffHandleRef.current = handle;
-      if (
-        handle &&
-        committedProjectionGenerationRef.current ===
-          documentGenerationRef.current
-      ) {
-        replayLatestItemUpdates(handle, documentGenerationRef.current);
-        generationCallbacksRef.current.tryPendingNavigation();
-      }
-    },
-    [replayLatestItemUpdates]
-  );
-
-  const tryPendingAnchor = useCallback(() => {
-    if (hasPendingNavigation()) {
-      return;
-    }
-    const pending = pendingAnchorRef.current;
-    if (!pending || pending.generation !== renderedGenerationRef.current) {
-      return;
-    }
-    const anchor = resolveReviewAnchor(pending, itemIdsRef.current);
-    if (anchor && diffHandleRef.current?.restoreAnchor(anchor)) {
-      if (viewStateRef.current.settled) {
-        pendingAnchorRef.current = null;
-      } else {
-        pendingAnchorRef.current = { ...pending, restored: true };
-      }
-    } else if (viewStateRef.current.settled) {
-      pendingAnchorRef.current = null;
-    }
-  }, [hasPendingNavigation]);
-
-  useEffect(() => {
-    generationCallbacksRef.current.tryPendingNavigation();
-    tryPendingAnchor();
+  const { setDiffHandle } = useGitReviewViewportEffects({
+    cancelVerification,
+    committedProjectionGenerationRef,
+    context,
+    diffHandleRef,
+    documentGenerationRef,
+    entryKeyBySectionIdRef,
+    generationCallbacksRef,
+    hasPendingNavigation,
+    itemIdsRef,
+    navigationEpoch,
+    navigationPending,
+    panelId,
+    pendingAnchorRef,
+    renderedGenerationRef,
+    replayLatestItemUpdates,
+    resumeSelectedNavigation,
+    sideBySectionIdRef,
+    viewState,
+    viewStateRef,
   });
-
-  useEffect(() => cancelVerification, [cancelVerification]);
-
-  useEffect(() => {
-    const disposeText = context.contextMenu.registerSelectionTextProvider(
-      panelId,
-      () => diffHandleRef.current?.getSelectedText() ?? ""
-    );
-    const disposeSelectAll =
-      context.contextMenu.registerSelectionSelectAllProvider(
-        panelId,
-        () => diffHandleRef.current?.selectAll() ?? false
-      );
-    return () => {
-      disposeText();
-      disposeSelectAll();
-    };
-  }, [context, panelId]);
 
   const { isActiveOpenPath, onContextMenuSession, openTreeNode } =
     useGitReviewTreeOpen({
@@ -389,7 +383,6 @@ function ReviewDocumentsComponent({
       getSelectedSectionKey,
       setSelectedTreeTarget,
       treeModel,
-      tryPendingNavigation,
     });
   const retryFailure = useCallback(
     (entryKey: string) => {
@@ -403,8 +396,8 @@ function ReviewDocumentsComponent({
         return;
       }
       setSelectedTreeTarget({ entryKey, sectionKey });
+      // scroll 由 navigationPending layout 触发（子 apply 之后）
       beginNavigation({ entryKey, sectionKey });
-      generationCallbacksRef.current.tryPendingNavigation();
     },
     [beginNavigation, selectedSectionKey, setSelectedTreeTarget]
   );
@@ -446,6 +439,7 @@ function ReviewDocumentsComponent({
       failureSummary={failureSummary}
       gitRootPath={scope.gitRootPath}
       {...(headerLeading === undefined ? {} : { headerLeading })}
+      getSuppressMembershipScrollRestore={hasPendingNavigation}
       headerTrailing={toolbar}
       indexFailure={indexRefreshFailure}
       isActiveOpenPath={isActiveOpenPath}
@@ -457,7 +451,10 @@ function ReviewDocumentsComponent({
       onRetryFailure={retryFailure}
       onRetryIndex={onRetryIndex}
       onScroll={() => {
+        // 用户滚动意图（已在 DiffView 手势级合并）；只做轻量工作
+        noteUserScrollReading();
         clearForUserIntent();
+        // setSelectedTreeTarget(null) 内部对 entry/section 有 previous===next 短路
         setSelectedTreeTarget(null);
         if (pendingAnchorRef.current?.restored) {
           pendingAnchorRef.current = null;
@@ -478,6 +475,7 @@ function ReviewDocumentsComponent({
       selectedTreePath={selectedTreeEntry?.path ?? null}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
+      suppressMembershipScrollRestore={navigationPending}
       {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
       {...(sidebarHeader === undefined ? {} : { sidebarHeader })}
       sourcePanelId={panelId}

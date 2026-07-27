@@ -31,6 +31,10 @@ export function createTaskPanelReuseRegistry() {
       }
     },
 
+    hasPanel(panelId: string, windowId?: string | undefined): boolean {
+      return keysByPanel.has(panelRefKey(panelId, windowId));
+    },
+
     remember(panelId: string, windowId: string | undefined, key: string): void {
       const panelKey = panelRefKey(panelId, windowId);
       const existing = panelByKey.get(key);

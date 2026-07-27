@@ -1,26 +1,13 @@
 import type { TaskRunControlEntry } from "@shared/contracts/tasks.ts";
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { clearTaskRunFinishedNotificationsForTests } from "@/panel-kits/terminal/notify-task-run-finished.ts";
 import {
   currentTaskRunsByLogicalTask,
   RUNTIME_CONTROL_EXIT_MS,
   useTerminalRuntimeControlPresentation,
 } from "@/panel-kits/terminal/use-terminal-runtime-control-presentation.ts";
+import { useTaskRunControlDismissStore } from "@/stores/task-run-control-dismiss.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
-
-vi.mock("sonner", () => ({
-  toast: Object.assign(vi.fn(), {
-    dismiss: vi.fn(),
-    error: vi.fn(),
-    success: vi.fn(),
-  }),
-}));
-
-vi.mock("@/lib/actions/task-run-operations.ts", () => ({
-  openTaskRunOutput: vi.fn(async () => undefined),
-  revealTaskRun: vi.fn(async () => true),
-}));
 
 function run(
   status: TaskRunControlEntry["status"],
@@ -73,7 +60,7 @@ describe("terminal runtime control presentation", () => {
   beforeEach(() => {
     vi.useFakeTimers();
     vi.setSystemTime(5000);
-    clearTaskRunFinishedNotificationsForTests();
+    useTaskRunControlDismissStore.getState().clearForTests();
   });
 
   afterEach(() => {
@@ -82,12 +69,12 @@ describe("terminal runtime control presentation", () => {
       initialized: false,
       snapshot: { runs: {}, version: 0 },
     });
-    clearTaskRunFinishedNotificationsForTests();
+    useTaskRunControlDismissStore.getState().clearForTests();
     vi.useRealTimers();
     vi.unstubAllGlobals();
   });
 
-  it("exits finished runs immediately and unmounts after the exit animation", () => {
+  it("keeps finished terminal-tab runs mounted until dismissed", () => {
     expect(RUNTIME_CONTROL_EXIT_MS).toBe(180);
 
     publish(run("running"));
@@ -104,45 +91,48 @@ describe("terminal runtime control presentation", () => {
     });
     expect(result.current).toMatchObject({
       mounted: true,
-      phase: "exiting",
+      phase: "visible",
     });
     expect(result.current.runs[0]?.status).toBe("succeeded");
 
     act(() => {
       vi.advanceTimersByTime(RUNTIME_CONTROL_EXIT_MS);
     });
-    expect(result.current.mounted).toBe(false);
+    expect(result.current.mounted).toBe(true);
   });
 
-  it("exits failures immediately without a linger window", () => {
-    publish(run("running"));
+  it("keeps finished background runs mounted until dismissed", () => {
+    publish(run("running", { mode: "background" }));
     const { result } = renderHook(() =>
       useTerminalRuntimeControlPresentation("terminal-task")
     );
 
     act(() => {
-      publish(run("failed"), 2);
+      publish(run("succeeded", { mode: "background" }), 2);
     });
     expect(result.current).toMatchObject({
       mounted: true,
-      phase: "exiting",
+      phase: "visible",
     });
-    expect(result.current.runs[0]?.status).toBe("failed");
 
+    act(() => {
+      result.current.dismissRun("run-1");
+    });
+    expect(result.current.phase).toBe("exiting");
     act(() => {
       vi.advanceTimersByTime(RUNTIME_CONTROL_EXIT_MS);
     });
     expect(result.current.mounted).toBe(false);
   });
 
-  it("does not present a finished run that arrives without an active phase", () => {
+  it("presents a finished run that arrives without an active phase", () => {
     publish(run("failed"));
     const { result } = renderHook(() =>
       useTerminalRuntimeControlPresentation("terminal-task")
     );
 
-    expect(result.current.mounted).toBe(false);
-    expect(result.current.runs).toHaveLength(0);
+    expect(result.current.mounted).toBe(true);
+    expect(result.current.runs[0]?.status).toBe("failed");
   });
 
   it("does not present runtime controls in a task output panel", () => {
@@ -156,29 +146,65 @@ describe("terminal runtime control presentation", () => {
     expect(result.current.runs).toHaveLength(0);
   });
 
-  it("cancels an in-flight exit when a new active run arrives", () => {
-    publish(run("running"));
+  it("shows a new runId after dismiss without undismissing the old id", () => {
+    publish(run("succeeded"));
     const { result } = renderHook(() =>
       useTerminalRuntimeControlPresentation("terminal-task")
     );
     act(() => {
-      publish(run("succeeded"), 2);
+      result.current.dismissRun("run-1");
     });
-    expect(result.current.phase).toBe("exiting");
+    act(() => {
+      vi.advanceTimersByTime(RUNTIME_CONTROL_EXIT_MS);
+    });
+    expect(result.current.mounted).toBe(false);
 
     act(() => {
-      publish({ ...run("running"), runId: "run-2", updatedAt: Date.now() }, 3);
+      publish({ ...run("running"), runId: "run-2", updatedAt: Date.now() }, 2);
     });
     expect(result.current).toMatchObject({
       mounted: true,
       phase: "visible",
     });
     expect(result.current.runs[0]?.runId).toBe("run-2");
+  });
 
+  it("keeps graceful-stop dismiss while the same run stays stopping across snapshot bumps", () => {
+    publish(run("running"));
+    const { result } = renderHook(() =>
+      useTerminalRuntimeControlPresentation("terminal-task")
+    );
+
+    act(() => {
+      result.current.dismissRun("run-1");
+    });
+    expect(result.current.phase).toBe("exiting");
+
+    // 优雅停止后常见：同一 runId 仍为 stopping，随后又有 snapshot 版本推进。
+    act(() => {
+      publish(
+        run("stopping", {
+          runId: "run-1",
+          updatedAt: 6000,
+        }),
+        2
+      );
+    });
     act(() => {
       vi.advanceTimersByTime(RUNTIME_CONTROL_EXIT_MS);
     });
-    expect(result.current.mounted).toBe(true);
+    expect(result.current.mounted).toBe(false);
+
+    act(() => {
+      publish(
+        run("cancelled", {
+          runId: "run-1",
+          updatedAt: 7000,
+        }),
+        3
+      );
+    });
+    expect(result.current.mounted).toBe(false);
   });
 
   it("shows only the current terminal run after repeated reruns", () => {
@@ -192,7 +218,7 @@ describe("terminal runtime control presentation", () => {
       useTerminalRuntimeControlPresentation("terminal-task")
     );
 
-    expect(result.current.runs).toHaveLength(0);
+    expect(result.current.runs.map((entry) => entry.runId)).toEqual(["run-3"]);
     expect(
       currentTaskRunsByLogicalTask([
         run("failed", { runId: "run-1", updatedAt: 1000 }),
@@ -200,29 +226,6 @@ describe("terminal runtime control presentation", () => {
         run("failed", { runId: "run-3", updatedAt: 3000 }),
       ]).map((entry) => entry.runId)
     ).toEqual(["run-3"]);
-  });
-
-  it("does not restore an older failure after a newer success exits", () => {
-    publish(run("running", { runId: "run-2", updatedAt: 5000 }));
-    const { result } = renderHook(() =>
-      useTerminalRuntimeControlPresentation("terminal-task")
-    );
-
-    act(() => {
-      publish(
-        [
-          run("failed", { runId: "run-1", updatedAt: 0 }),
-          run("succeeded", { runId: "run-2", updatedAt: 5000 }),
-        ],
-        2
-      );
-    });
-    expect(result.current.phase).toBe("exiting");
-    expect(result.current.runs.map((entry) => entry.runId)).toEqual(["run-2"]);
-    act(() => {
-      vi.advanceTimersByTime(RUNTIME_CONTROL_EXIT_MS);
-    });
-    expect(result.current.runs).toHaveLength(0);
   });
 
   it("keeps different tasks and concurrent active runs independently controllable", () => {
@@ -242,25 +245,5 @@ describe("terminal runtime control presentation", () => {
       "active-1",
       "other-task",
     ]);
-  });
-
-  it("removes the presentation immediately when reduced motion is requested", () => {
-    vi.stubGlobal(
-      "matchMedia",
-      vi.fn(() => ({ matches: true }))
-    );
-    publish(run("running"));
-    const { result } = renderHook(() =>
-      useTerminalRuntimeControlPresentation("terminal-task")
-    );
-
-    act(() => {
-      publish(run("succeeded"), 2);
-    });
-    expect(result.current.phase).toBe("exiting");
-    act(() => {
-      vi.runOnlyPendingTimers();
-    });
-    expect(result.current.mounted).toBe(false);
   });
 });

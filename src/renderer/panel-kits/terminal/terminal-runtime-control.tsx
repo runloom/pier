@@ -13,6 +13,7 @@ import {
   RotateCcw,
   Square,
   SquareTerminal,
+  X,
 } from "lucide-react";
 import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
@@ -24,6 +25,8 @@ import {
   stopTaskRun,
   taskRunActionTargetFromRun,
 } from "@/lib/actions/task-run-operations.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import {
   TerminalRunSelector,
   taskRunPanelNode,
@@ -83,10 +86,13 @@ function ActionButton({
 }
 
 export function TerminalRuntimeControl({
+  dismissRun,
   now,
   panelId,
   runs,
 }: {
+  /** 后台终态「关闭」：只收起控制条，不关发起终端。 */
+  dismissRun(runId: string): void;
   now: number;
   panelId: string;
   runs: readonly TaskRunControlEntry[];
@@ -96,9 +102,9 @@ export function TerminalRuntimeControl({
     panelId,
     runs
   );
-  const [pendingAction, setPendingAction] = useState<"restart" | "stop" | null>(
-    null
-  );
+  const [pendingAction, setPendingAction] = useState<
+    "close" | "restart" | "stop" | null
+  >(null);
 
   const run =
     runs.find((candidate) => candidate.runId === selectedRunId) ?? runs[0];
@@ -123,7 +129,30 @@ export function TerminalRuntimeControl({
   const stop = async () => {
     setPendingAction("stop");
     try {
-      await stopTaskRun(run, force);
+      const outcome = await stopTaskRun(run, force);
+      if (outcome === "dismiss") {
+        // 优雅停止成功：直接收条，不进入「关闭」态。
+        dismissRun(run.runId);
+      }
+    } finally {
+      setPendingAction(null);
+    }
+  };
+
+  const close = async () => {
+    setPendingAction("close");
+    try {
+      if (run.mode === "background") {
+        // 方案 A：只收控制条，不关发起终端。
+        dismissRun(run.runId);
+        return;
+      }
+      await useWorkspaceStore.getState().closePanel(panelId);
+    } catch (error) {
+      await showAppAlert({
+        body: error instanceof Error ? error.message : String(error),
+        title: t("terminal.closeFailed"),
+      });
     } finally {
       setPendingAction(null);
     }
@@ -231,7 +260,21 @@ export function TerminalRuntimeControl({
             onClick={stop}
             testId="terminal-runtime-control-stop"
           />
-        ) : null}
+        ) : (
+          <ActionButton
+            disabled={pendingAction !== null}
+            icon={X}
+            label={t(
+              run.mode === "background"
+                ? "terminal.runtimeControl.dismiss"
+                : "terminal.runtimeControl.close"
+            )}
+            loading={pendingAction === "close"}
+            onClick={close}
+            testId="terminal-runtime-control-close"
+            tone="muted"
+          />
+        )}
         {!active || run.status === "running" ? (
           <ActionButton
             className={cn(

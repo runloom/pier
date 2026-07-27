@@ -6,5 +6,4 @@ export {
   loadPeerAvailability,
   notifyPeerSyncFailures,
   openSwitchConfirmDialog,
-  protocolTargetsFor,
 } from "./switch-confirm-dialog.tsx";

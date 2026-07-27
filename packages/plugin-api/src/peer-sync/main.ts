@@ -9,9 +9,14 @@ export {
   isOmpSyncReady,
   isOpencodeSyncReady,
   isPeerTargetAvailable,
+  isPiOauthCapable,
   isPiSyncReady,
+  isPiVersionAtLeast,
   type PeerAvailability,
   type PeerAvailabilityOptions,
   type PeerSyncTarget,
+  PI_XAI_OAUTH_MIN_VERSION,
+  parsePiVersion,
   partitionPeerTargets,
 } from "./availability.ts";
+export { effectivePeerAvailabilityForKind } from "./shared.ts";

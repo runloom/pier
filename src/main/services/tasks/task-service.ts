@@ -34,6 +34,7 @@ import {
   type RestartPreparation,
   type RunningTaskInstance,
 } from "./task-spawn-restart.ts";
+import { shouldRetainTaskSurfaceOnProcessExit } from "./task-surface-retain.ts";
 
 export type {
   CreateTaskServiceOptions,
@@ -351,6 +352,14 @@ export function createTaskService({
         taskRuns,
       });
       markPanelActuallyClosed(panelId, windowId);
+    },
+    shouldRetainSurfaceOnProcessExit(panelId, windowId) {
+      return shouldRetainTaskSurfaceOnProcessExit({
+        hasDedicatedPanel: dedicatedPanels.hasPanel,
+        panelId,
+        snapshot: taskRuns.runsSnapshot(windowId),
+        windowId,
+      });
     },
     moveRunningOwnerWindow(input) {
       taskRuns.moveRunningOwnerWindow(input);

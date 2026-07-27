@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import {
   canFillFromOpenRouter,
   catalogKeyFor,
+  finalizeCatalogDiff,
   openRouterModelToEntry,
   shouldInclude,
 } from "../../../scripts/update-model-pricing.mjs";
@@ -12,6 +13,64 @@ describe("model pricing updater", () => {
     expect(catalogKeyFor("gpt-4o-2024-05-13")).toBe("gpt-4o-2024-05-13");
     expect(catalogKeyFor("gpt-4o-latest")).toBe("gpt-4o");
     expect(catalogKeyFor("openai/gpt-4o-2024-05-13")).toBe("gpt-4o-2024-05-13");
+  });
+
+  it("finalizeCatalogDiff reports no-op and reuses previous entry objects", () => {
+    const current = {
+      "gpt-4o": {
+        aliases: ["openai/gpt-4o"],
+        cachedInputMicrousd: 1,
+        inputMicrousd: 2,
+        outputMicrousd: 6,
+      },
+    };
+    // Same values, different key order / fresh object (merge noise).
+    const next = {
+      "gpt-4o": {
+        inputMicrousd: 2,
+        outputMicrousd: 6,
+        cachedInputMicrousd: 1,
+        aliases: ["openai/gpt-4o"],
+      },
+    };
+
+    const result = finalizeCatalogDiff(current, next);
+
+    expect(result.added).toEqual([]);
+    expect(result.changed).toEqual([]);
+    expect(result.unchanged).toBe(1);
+    // Keep disk entry so rewrite does not churn property order.
+    expect(next["gpt-4o"]).toBe(current["gpt-4o"]);
+  });
+
+  it("finalizeCatalogDiff detects price and alias changes", () => {
+    const current = {
+      "gpt-4o": {
+        aliases: ["openai/gpt-4o"],
+        inputMicrousd: 2,
+        outputMicrousd: 6,
+      },
+    };
+    const next = {
+      "gpt-4o": {
+        aliases: ["openai/gpt-4o", "openrouter/openai/gpt-4o"],
+        inputMicrousd: 3,
+        outputMicrousd: 6,
+      },
+      "new-model": {
+        inputMicrousd: 1,
+        outputMicrousd: 2,
+      },
+    };
+
+    const result = finalizeCatalogDiff(current, next);
+
+    expect(result.unchanged).toBe(0);
+    expect(result.changed).toHaveLength(1);
+    expect(result.changed[0]).toContain("gpt-4o");
+    expect(result.added).toHaveLength(1);
+    expect(result.added[0]).toContain("new-model");
+    expect(next["gpt-4o"]).not.toBe(current["gpt-4o"]);
   });
 
   it("unprefixes xAI LiteLLM keys into canonical grok ids", () => {

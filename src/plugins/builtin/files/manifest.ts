@@ -13,8 +13,6 @@ export const FILES_FILE_PANEL_ID = "pier.files.filePanel";
 export const FILES_GROUP_VIEW_CONTENT_ID = "pier.files.groupView";
 export const FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID =
   "pier.files.openSelectionAsMarkdown";
-export const FILES_OPEN_SELECTION_PATH_COMMAND_ID =
-  "pier.files.openSelectionPath";
 export const FILES_NEW_FILE_COMMAND_ID = "pier.files.newFile";
 export const FILES_NEW_FOLDER_COMMAND_ID = "pier.files.newFolder";
 export const FILES_RENAME_COMMAND_ID = "pier.files.rename";
@@ -31,6 +29,10 @@ export const FILES_REVEAL_COMMAND_ID = "pier.files.revealInFinder";
 export const FILES_DUPLICATE_COMMAND_ID = "pier.files.duplicate";
 export const FILES_TREE_SEARCH_COMMAND_ID = "pier.files.treeSearch";
 export const FILES_QUICK_OPEN_COMMAND_ID = "pier.files.quickOpen";
+export const FILES_OPEN_DIRECTORY_COMMAND_ID = "pier.files.openDirectory";
+export const FILES_SEARCH_CONTENTS_COMMAND_ID = "pier.files.searchContents";
+export const FILES_SEARCH_IN_FOLDER_COMMAND_ID = "pier.files.searchInFolder";
+export const FILES_SEARCH_PANEL_ID = "pier.files.searchPanel";
 
 export const FILES_EDITOR_CUT_COMMAND_ID = "pier.files.editor.cut";
 export const FILES_EDITOR_COPY_COMMAND_ID = "pier.files.editor.copy";
@@ -46,12 +48,6 @@ export const FILES_PROJECT_STATUS_ITEM_ID = "pier.files.project";
 export const FILES_PLUGIN_MANIFEST = {
   apiVersion: 1,
   commands: [
-    {
-      category: "file",
-      id: FILES_OPEN_SELECTION_PATH_COMMAND_ID,
-      permissions: ["terminal:read", "file:read", "panel:open"],
-      title: "Open Path",
-    },
     {
       category: "file",
       id: FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
@@ -141,6 +137,24 @@ export const FILES_PLUGIN_MANIFEST = {
       id: FILES_QUICK_OPEN_COMMAND_ID,
       permissions: ["file:read", "panel:open"],
       title: "Go to File",
+    },
+    {
+      category: "file",
+      id: FILES_OPEN_DIRECTORY_COMMAND_ID,
+      permissions: ["file:read", "panel:open"],
+      title: "Open Directory",
+    },
+    {
+      category: "file",
+      id: FILES_SEARCH_CONTENTS_COMMAND_ID,
+      permissions: ["file:read", "panel:open"],
+      title: "Search in Files",
+    },
+    {
+      category: "file",
+      id: FILES_SEARCH_IN_FOLDER_COMMAND_ID,
+      permissions: ["file:read", "panel:open"],
+      title: "Find in Folder…",
     },
 
     {
@@ -244,6 +258,12 @@ export const FILES_PLUGIN_MANIFEST = {
       id: FILES_FILE_PANEL_ID,
       permissions: ["file:read", "file:write"],
       title: "File",
+    },
+    {
+      component: FILES_SEARCH_PANEL_ID,
+      id: FILES_SEARCH_PANEL_ID,
+      permissions: ["file:read", "panel:open"],
+      title: "Search in Files",
     },
   ],
   permissions: [

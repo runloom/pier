@@ -76,7 +76,9 @@ export const terminal = {
   runtimeControl: {
     blocked: "已阻塞",
     cancelled: "已取消",
+    close: "关闭任务面板",
     controlLabel: "任务运行控制：{{label}}",
+    dismiss: "收起任务控制条",
     duration: "已运行：{{duration}}",
     failed: "失败",
     finishedBlocked: "任务已阻塞",

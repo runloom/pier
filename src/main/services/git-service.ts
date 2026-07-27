@@ -1,5 +1,6 @@
 import type { z } from "zod";
 import type {
+  GitApplyPatchResult,
   GitBranchRef,
   GitCommit,
   GitCommitSearchResult,
@@ -32,6 +33,10 @@ import type {
   gitSearchCommitsOptionsSchema,
   listBranchesOptionsSchema,
 } from "../../shared/contracts/git.ts";
+import {
+  type GitApplyPatchRequest,
+  applyPatch as runApplyPatch,
+} from "./git-apply-patch.ts";
 import { listBranches as listGitBranches } from "./git-branch-list.ts";
 import { searchBranches as searchGitBranches } from "./git-branch-search.ts";
 import { assertSafeBranchName, switchBranch } from "./git-branch-switch.ts";
@@ -86,6 +91,7 @@ import {
   popStash,
   stashChanges,
 } from "./git-stash-operations.ts";
+
 import {
   assembleGitStatus,
   type PrefetchedStatus,
@@ -119,6 +125,11 @@ export interface GitService {
   abortMerge(cwd: string): Promise<GitMergeAbortResult>;
   abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
   abortRevert(cwd: string): Promise<GitSequencerAbortResult>;
+  // —— 写(需 git:write capability) ——
+  applyPatch(
+    cwd: string,
+    request: GitApplyPatchRequest
+  ): Promise<GitApplyPatchResult>;
   applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
   checkoutBranch(cwd: string, name: string): Promise<void>;
   cherryPick(cwd: string, oid: string): Promise<GitSequencerResult>;
@@ -169,7 +180,6 @@ export interface GitService {
     cwd: string,
     options?: GitSearchCommitsOptions
   ): Promise<GitCommitSearchResult>;
-  // —— 写(需 git:write capability) ——
   stage(cwd: string, request: GitPathsRequest): Promise<void>;
   stash(
     cwd: string,
@@ -353,6 +363,7 @@ export function createGitService({
       }
     },
     // —— 写操作:全部传 timeoutMs 60s ——
+    applyPatch: (cwd, request) => runApplyPatch(runGit, cwd, request),
     stage: async (cwd, request) => {
       if (request.paths.length === 0) {
         throw new Error("stage requires at least one path");

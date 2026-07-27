@@ -4,6 +4,11 @@ import type {
 } from "@pier/plugin-api/renderer";
 import { Button } from "@pier/ui/button.tsx";
 import {
+  DIALOG_COMMIT_FIELD_GROUP_CLASS,
+  DIALOG_COMMIT_FORM_CLASS,
+  DIALOG_FOOTER_ACTIONS_CLASS,
+} from "@pier/ui/dialog-form-layout.ts";
+import {
   Field,
   FieldDescription,
   FieldError,
@@ -11,11 +16,18 @@ import {
   FieldLabel,
 } from "@pier/ui/field.tsx";
 import { Input } from "@pier/ui/input.tsx";
-import { type FormEvent, type JSX, useId, useState } from "react";
+import {
+  type FormEvent,
+  type JSX,
+  useId,
+  useLayoutEffect,
+  useState,
+} from "react";
 import { SSH_MAX_PORT, type SshHost } from "../shared/hosts.ts";
 import type { Translate } from "./translate.ts";
 
 const FORM_DIALOG_ID = "hosts.form";
+const FORM_ID = "pier-ssh-host-form";
 
 interface HostFormContentProps extends RendererPluginContentDialogRenderProps {
   context: ExternalRendererPluginContext;
@@ -65,6 +77,7 @@ function HostFormContent({
   context,
   initial,
   onError,
+  setFooter,
   t,
 }: HostFormContentProps): JSX.Element {
   const [name, setName] = useState(initial?.name ?? "");
@@ -81,6 +94,27 @@ function HostFormContent({
   const userId = useId();
   const portId = useId();
   const identityFileId = useId();
+
+  useLayoutEffect(() => {
+    setFooter(
+      <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
+        <Button
+          disabled={saving}
+          onClick={() => close(null)}
+          type="button"
+          variant="outline"
+        >
+          {t("pier.ssh.hosts.settings.cancel", "Cancel")}
+        </Button>
+        <Button disabled={saving} form={FORM_ID} type="submit">
+          {t("pier.ssh.hosts.settings.save", "Save")}
+        </Button>
+      </div>
+    );
+    return () => {
+      setFooter(null);
+    };
+  }, [close, saving, setFooter, t]);
 
   const handleSubmit = (event: FormEvent): void => {
     event.preventDefault();
@@ -113,8 +147,13 @@ function HostFormContent({
   };
 
   return (
-    <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-      <FieldGroup>
+    <form
+      className={DIALOG_COMMIT_FORM_CLASS}
+      data-slot="dialog-commit-form"
+      id={FORM_ID}
+      onSubmit={handleSubmit}
+    >
+      <FieldGroup className={DIALOG_COMMIT_FIELD_GROUP_CLASS}>
         <Field data-invalid={errors.host ? true : undefined}>
           <FieldLabel htmlFor={hostId}>
             {t("pier.ssh.form.host", "Host")}
@@ -192,19 +231,6 @@ function HostFormContent({
           />
         </Field>
       </FieldGroup>
-      <div className="flex justify-end gap-2">
-        <Button
-          disabled={saving}
-          onClick={() => close(null)}
-          type="button"
-          variant="outline"
-        >
-          {t("pier.ssh.hosts.settings.cancel", "Cancel")}
-        </Button>
-        <Button disabled={saving} type="submit">
-          {t("pier.ssh.hosts.settings.save", "Save")}
-        </Button>
-      </div>
     </form>
   );
 }

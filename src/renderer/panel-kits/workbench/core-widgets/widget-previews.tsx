@@ -26,12 +26,20 @@ export function ActivityWidgetPreview() {
         <PreviewTile />
       </div>
       <div className="flex items-center gap-1.5 px-0.5">
-        <div className="size-1.5 rounded-full bg-success/70" />
-        <div className="h-1.5 flex-1 rounded-full bg-muted-foreground/20" />
+        <div className="size-3.5 shrink-0 rounded-sm bg-warning/40" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="h-1.5 w-3/4 rounded-full bg-muted-foreground/30" />
+          <div className="h-1 w-1/3 rounded-full bg-warning/50" />
+        </div>
+        <div className="h-1 w-6 shrink-0 rounded-full bg-muted-foreground/20" />
       </div>
       <div className="flex items-center gap-1.5 px-0.5">
-        <div className="size-1.5 rounded-full bg-warning/70" />
-        <div className="h-1.5 flex-1 rounded-full bg-muted-foreground/20" />
+        <div className="size-3.5 shrink-0 rounded-sm bg-success/40" />
+        <div className="flex min-w-0 flex-1 flex-col gap-0.5">
+          <div className="h-1.5 w-2/3 rounded-full bg-muted-foreground/25" />
+          <div className="h-1 w-1/4 rounded-full bg-success/50" />
+        </div>
+        <div className="h-1 w-5 shrink-0 rounded-full bg-muted-foreground/15" />
       </div>
     </div>
   );
@@ -131,16 +139,90 @@ export function CostOverviewWidgetPreview() {
 
 export function CustomCardWidgetPreview() {
   return (
-    <div className="flex h-full flex-col gap-1.5 p-2.5">
-      <PreviewTile />
-      <div className="flex flex-col gap-1 rounded-sm border border-border/50 bg-muted/40 p-1.5">
-        <div className="h-1 w-10 rounded-full bg-muted-foreground/25" />
-        <div className="h-1 w-full overflow-hidden rounded-full bg-muted-foreground/15">
-          <div className="h-full w-4/5 rounded-full bg-primary/50" />
-        </div>
-        <div className="h-1 w-full overflow-hidden rounded-full bg-muted-foreground/15">
-          <div className="h-full w-1/2 rounded-full bg-primary/50" />
-        </div>
+    <div className="flex h-full flex-col gap-2 p-2.5">
+      <div className="rounded-sm border border-border/50 bg-muted/30 px-2 py-1.5">
+        <div className="mb-0.5 h-1 w-8 rounded-full bg-muted-foreground/30" />
+        <div className="h-3.5 w-12 rounded-sm bg-foreground/60" />
+      </div>
+      <div className="flex items-center gap-1.5 rounded-sm border border-border/50 bg-muted/30 px-2 py-1.5">
+        <svg
+          aria-hidden="true"
+          className="shrink-0 -rotate-90 text-primary/70"
+          height="20"
+          viewBox="0 0 20 20"
+          width="20"
+        >
+          <circle
+            className="fill-none stroke-muted/40"
+            cx="10"
+            cy="10"
+            r="7"
+            strokeWidth="2.5"
+          />
+          <circle
+            className="fill-none stroke-current"
+            cx="10"
+            cy="10"
+            r="7"
+            strokeDasharray="44"
+            strokeDashoffset="13"
+            strokeLinecap="round"
+            strokeWidth="2.5"
+          />
+        </svg>
+        <div className="h-2.5 w-8 rounded-sm bg-foreground/50" />
+      </div>
+      <svg
+        aria-hidden="true"
+        className="h-8 w-full text-primary/60"
+        preserveAspectRatio="none"
+        viewBox="0 0 80 24"
+      >
+        <defs>
+          <linearGradient
+            id="custom-card-preview-trend"
+            x1="0"
+            x2="0"
+            y1="0"
+            y2="1"
+          >
+            <stop
+              className="text-primary"
+              offset="0%"
+              stopColor="currentColor"
+              stopOpacity={0.25}
+            />
+            <stop
+              className="text-primary"
+              offset="100%"
+              stopColor="currentColor"
+              stopOpacity={0.02}
+            />
+          </linearGradient>
+        </defs>
+        <path
+          d="M0 18 L16 14 L32 16 L48 8 L64 10 L80 4 L80 24 L0 24 Z"
+          fill="url(#custom-card-preview-trend)"
+        />
+        <path
+          className="stroke-current"
+          d="M0 18 L16 14 L32 16 L48 8 L64 10 L80 4"
+          fill="none"
+          strokeWidth="1.5"
+        />
+        <circle className="fill-current" cx="80" cy="4" r="1.8" />
+      </svg>
+      <div className="flex flex-col gap-1 rounded-sm border border-border/50 bg-muted/30 px-2 py-1.5">
+        {[0.85, 0.55, 0.3].map((w, i) => (
+          <div className="flex flex-col gap-0.5" key={String(i)}>
+            <div className="h-1 w-full overflow-hidden rounded-full bg-muted-foreground/15">
+              <div
+                className="h-full rounded-full bg-primary/55"
+                style={{ width: `${w * 100}%` }}
+              />
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );

@@ -153,6 +153,21 @@ describe("terminal task lifecycle wiring", () => {
     expect(forwardToWindowMock).toHaveBeenCalledOnce();
   });
 
+  it("does not request panel close for retained task result surfaces", () => {
+    const callbacks: NativeAddonCallbackHarness = {};
+    completeFromNativeProcessCloseMock.mockResolvedValue(true);
+    registerTerminalTaskLifecycleForwarding(addonHarness(callbacks), {
+      shouldRetainSurfaceOnProcessExit: (panelId) =>
+        panelId === "terminal-task" || panelId.startsWith("task-output-"),
+    });
+
+    callbacks.processClosed?.(42, "native::terminal-task", "", false);
+    callbacks.processClosed?.(42, "native::task-output-ctx-build", "", false);
+
+    expect(forwardToWindowMock).not.toHaveBeenCalled();
+    expect(completeFromNativeProcessCloseMock).toHaveBeenCalledTimes(2);
+  });
+
   it("normalizes negative command-finished exit codes before recording hints", () => {
     const callbacks: NativeAddonCallbackHarness = {};
     registerTerminalTaskLifecycleForwarding(addonHarness(callbacks));

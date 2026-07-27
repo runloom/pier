@@ -3,13 +3,14 @@ import type {
   RendererPluginContext,
   RendererPluginModule,
 } from "@plugins/api/renderer.ts";
-import { FileText, FolderTree } from "lucide-react";
+import { FileText, FolderSearch, FolderTree } from "lucide-react";
 import {
   FILES_FILE_PANEL_ID,
   FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
   FILES_PLUGIN_ID,
   FILES_SAVE_AS_COMMAND_ID,
   FILES_SAVE_COMMAND_ID,
+  FILES_SEARCH_PANEL_ID,
   FILES_TREE_SEARCH_COMMAND_ID,
 } from "../manifest.ts";
 import { FileEditorController } from "./file-editor-controller.ts";
@@ -18,6 +19,11 @@ import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
 import { createSaveAllAction } from "./file-save-all-action.ts";
 import { createFilesTreeActions } from "./file-tree-actions.ts";
 import { filePanelProjectRoot } from "./file-tree-preferences.ts";
+import {
+  createSearchContentsAction,
+  createSearchInFolderAction,
+} from "./files-content-search-actions.ts";
+import { createFilesContentSearchPanel } from "./files-content-search-panel.tsx";
 import {
   abortFilesDraftSuspend,
   commitFilesDraftSuspend,
@@ -39,13 +45,13 @@ import { createFilesEditorActions } from "./files-editor-actions.ts";
 import { createFilesMarkdownPreviewActions } from "./files-markdown-preview-actions.ts";
 import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
 import { clearFilesNavHistory } from "./files-nav-history.ts";
+import { createFilesOpenDirectoryAction } from "./files-open-directory-action.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
 import { filesPanelTabChrome } from "./files-panel-tab.ts";
 import { createFilesPanelTransferRegistration } from "./files-panel-transfer.ts";
 import { readFilesPanelViewMode } from "./files-panel-transfer-state.ts";
 import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
 import { createFilesQuickOpenAction } from "./files-quick-open.ts";
-import { createOpenSelectionPathAction } from "./files-terminal-open-selection-path.ts";
 import { registerFilesTerminalOpenUrlHandler } from "./files-terminal-open-url-handler.ts";
 import {
   clearFileTreeSidebarCache,
@@ -153,16 +159,15 @@ function createSaveAction(
   return {
     category: "file",
     handler: async () => {
-      // 只有 files 面板处于 active 时 keybinding scope 才会 resolve 到这里,
-      // 但 command-palette 也能触发 —— 那种场景下 activeInstanceId 可能为 null
-      // (用户在别的 panel 里),此时静默 no-op。
+      // 只有 files 面板处于 active 时 keybinding scope 才会 resolve 到这里；
+      // 其它 panel active 时 activeInstanceId 可能为 null，静默 no-op。
       const panelId = context.panels.getActiveInstanceId(FILES_FILE_PANEL_ID);
       await controller.savePanel(panelId);
     },
     id: FILES_SAVE_COMMAND_ID,
     metadata: { group: "5_save", sortOrder: 1 },
-    // command-palette 里能查到,但主要触发方式是 Cmd+S。
-    surfaces: ["command-palette"],
+    // 快捷键 Cmd+S 主路径；不进命令面板（文件类仅保留转到文件 / 打开目录）。
+    surfaces: [],
     title: () => t("filePanel.save", "Save"),
   };
 }
@@ -182,7 +187,8 @@ function createSaveAsAction(
     },
     id: FILES_SAVE_AS_COMMAND_ID,
     metadata: { group: "5_save", sortOrder: 2 },
-    surfaces: ["command-palette"],
+    // 快捷键路径；不进命令面板。
+    surfaces: [],
     title: () => t("filePanel.saveAs", "Save As…"),
   };
 }
@@ -214,7 +220,8 @@ function createTreeSearchAction(
     },
     id: FILES_TREE_SEARCH_COMMAND_ID,
     metadata: { group: "2_view", sortOrder: 1 },
-    surfaces: ["command-palette"],
+    // 树内快捷键 / 控件触发；不进命令面板。
+    surfaces: [],
     title: () => t("filePanel.tree.action.search", "Find in File Tree"),
   };
 }
@@ -372,8 +379,14 @@ export const filesRendererPlugin: RendererPluginModule = {
           });
         })(),
       }),
+      context.panels.register({
+        component: createFilesContentSearchPanel(context, editorController),
+        icon: FolderSearch,
+        id: FILES_SEARCH_PANEL_ID,
+        kind: "web",
+        title: () => t("filePanel.contentSearch.title", "Search in Files"),
+      }),
       registerDirtyCloseGuard(context, editorController),
-      context.actions.register(createOpenSelectionPathAction(context)),
       context.actions.register(
         withFilesMutationGate(
           createOpenSelectionAsMarkdownAction(context, editorController),
@@ -399,6 +412,9 @@ export const filesRendererPlugin: RendererPluginModule = {
         )
       ),
       context.actions.register(createFilesQuickOpenAction(context)),
+      context.actions.register(createFilesOpenDirectoryAction(context)),
+      context.actions.register(createSearchContentsAction(context)),
+      context.actions.register(createSearchInFolderAction(context)),
       context.actions.register(
         withFilesMutationGate(createTreeSearchAction(context), editorController)
       ),

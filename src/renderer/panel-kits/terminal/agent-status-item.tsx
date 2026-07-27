@@ -1,9 +1,9 @@
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type {
   AgentActivity,
   ForegroundActivity,
 } from "@shared/contracts/foreground-activity.ts";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { AgentStatusLabel } from "@/components/agent-status/agent-status-label.tsx";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { CORE_AGENT_STATUS_ITEM_ID } from "./core-terminal-status-items.ts";

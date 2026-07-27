@@ -90,6 +90,85 @@ const WORKTREE_ACTION_IDS = [
   "pier.worktree.list",
 ] as const;
 
+/**
+ * 主操作 + 变体（abort/continue/apply…）共享 `git <verb>` compact 前缀。
+ * progressiveFrom 为 en 主 alias 去分隔符后的串；前缀从长度 4 起（跳过裸 `git`，
+ * 那是类目级查询，不是 verb 缩写）。
+ */
+const GIT_VERB_FAMILIES = [
+  {
+    family: "merge",
+    primary: "pier.git.merge",
+    variants: ["pier.git.mergeAbort"],
+    progressiveFrom: "gitmerge",
+    /** 用户常用缩写：主操作还应是全表第一 */
+    headQueries: ["gm", "gitm", "gitme"],
+  },
+  {
+    family: "stash",
+    primary: "pier.git.stash",
+    variants: [
+      "pier.git.stashApply",
+      "pier.git.stashDrop",
+      "pier.git.stashIncludeUntracked",
+      "pier.git.stashPop",
+    ],
+    progressiveFrom: "gitstash",
+    headQueries: [] as string[],
+  },
+  {
+    family: "rebase",
+    primary: "pier.git.rebase",
+    variants: ["pier.git.rebaseAbort", "pier.git.rebaseContinue"],
+    progressiveFrom: "gitrebase",
+    headQueries: [] as string[],
+  },
+  {
+    family: "cherryPick",
+    primary: "pier.git.cherryPick",
+    variants: ["pier.git.cherryPickAbort", "pier.git.cherryPickContinue"],
+    progressiveFrom: "gitcherrypick",
+    headQueries: [] as string[],
+  },
+  {
+    family: "revert",
+    primary: "pier.git.revert",
+    variants: ["pier.git.revertAbort", "pier.git.revertContinue"],
+    progressiveFrom: "gitrevert",
+    headQueries: [] as string[],
+  },
+] as const;
+
+function progressiveCompactQueries(compact: string, minLen = 4): string[] {
+  const queries: string[] = [];
+  for (let len = minLen; len <= compact.length; len += 1) {
+    queries.push(compact.slice(0, len));
+  }
+  return queries;
+}
+
+function expectPrimaryBeforeVariants(
+  ranked: readonly string[],
+  primary: string,
+  variants: readonly string[]
+): void {
+  const primaryIndex = ranked.indexOf(primary);
+  expect(
+    primaryIndex,
+    `expected primary ${primary} to be recalled`
+  ).toBeGreaterThanOrEqual(0);
+  for (const variant of variants) {
+    const variantIndex = ranked.indexOf(variant);
+    if (variantIndex < 0) {
+      continue;
+    }
+    expect(
+      primaryIndex,
+      `expected ${primary} before ${variant} (got primary@${primaryIndex}, variant@${variantIndex})`
+    ).toBeLessThan(variantIndex);
+  }
+}
+
 function contributedActionIdsFor(query: string): string[] {
   const documents = ALL_ACTION_CONTRIBUTIONS.map((contribution) =>
     buildActionSearchDocument(
@@ -282,6 +361,64 @@ describe("action search", () => {
     expect(rankActionSearchDocuments(docs, query)[0]?.document.id).toBe(
       "pier.git.merge"
     );
+  });
+
+  // compact 缩写会同时命中主 alias（git merge）与变体（git merge abort）。
+  // 平局必须用「命中字段长度」，不能用展示标题长度（中止类标题更短会误抢位）。
+  const gitVerbFamilyCases = GIT_VERB_FAMILIES.flatMap((family) => {
+    const progressive = progressiveCompactQueries(family.progressiveFrom);
+    const queries = [...new Set([...progressive, ...family.headQueries])];
+    return (["en", "zh-CN"] as const).flatMap((titleLocale) =>
+      queries.map((query) => ({
+        expectHead: (family.headQueries as readonly string[]).includes(query),
+        family: family.family,
+        primary: family.primary,
+        query,
+        titleLocale,
+        variants: family.variants,
+      }))
+    );
+  });
+
+  it.each(
+    gitVerbFamilyCases
+  )("ranks $family primary before variants for $titleLocale / $query", ({
+    expectHead,
+    primary,
+    query,
+    titleLocale,
+    variants,
+  }) => {
+    const docs = titleLocale === "zh-CN" ? gitCommandDocsZh : gitCommandDocs;
+    const ranked = rankActionSearchDocuments(docs, query).map(
+      (result) => result.document.id
+    );
+    expectPrimaryBeforeVariants(ranked, primary, variants);
+    if (expectHead) {
+      expect(ranked[0]).toBe(primary);
+    }
+  });
+
+  it("prefers shorter matched alias over shorter display title at same tier", () => {
+    const docs = [
+      buildActionSearchDocument(
+        action("pier.git.mergeAbort", "Git: 中止合并", [
+          "中止合并",
+          "git merge abort",
+        ]),
+        { categoryLabel: "Git" }
+      ),
+      buildActionSearchDocument(
+        action("pier.git.merge", "Git: 合并分支...", ["合并分支", "git merge"]),
+        { categoryLabel: "Git" }
+      ),
+    ];
+
+    expect(
+      rankActionSearchDocuments(docs, "gitm").map(
+        (result) => result.document.id
+      )
+    ).toEqual(["pier.git.merge", "pier.git.mergeAbort"]);
   });
 
   it.each([

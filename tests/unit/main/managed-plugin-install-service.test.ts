@@ -529,6 +529,97 @@ describe("managed plugin install service", () => {
     );
   });
 
+  it("update(id) promotes a newer bundled package when official latest is already installed", async () => {
+    // Repro: formal package ships bundled 1.1.0 while the signed index still
+    // lists 1.0.0 as latest. Catalog offers update to 1.1.0; update must not
+    // no-op on official latest and leave the Update button stuck.
+    const seedV1 = await createSeedArchive("1.0.0");
+    const { service: firstSession } = await createService({
+      bundledArchive: seedV1,
+      bundledVersion: "1.0.0",
+      runtimeMode: "production",
+    });
+    await firstSession.install("pier.codex");
+
+    const seedBundled = await createSeedArchive("1.1.0");
+    const assetFetcher = vi.fn(async () => {
+      throw new Error("should not download when bundled is newer");
+    });
+    const { service, operationLog } = await createService({
+      assetFetcher,
+      bundledArchive: seedBundled,
+      bundledVersion: "1.1.0",
+      officialIndex: officialIndexFor("1.0.0", seedV1),
+      officialIndexRefresh: vi.fn().mockResolvedValue(undefined),
+      runtimeMode: "production",
+    });
+
+    expect((await service.listCatalogSnapshot()).plugins[0]?.update).toEqual({
+      version: "1.1.0",
+    });
+
+    const result = await service.update("pier.codex");
+
+    expect(result).toMatchObject({
+      ok: true,
+      pluginId: "pier.codex",
+      requiresRestart: true,
+      version: "1.1.0",
+    });
+    expect(assetFetcher).not.toHaveBeenCalled();
+    expect(service.getIndex().plugins["pier.codex"]).toMatchObject({
+      activeVersion: "1.1.0",
+      pendingRestart: { kind: "update", version: "1.1.0" },
+    });
+    expect((await service.listCatalogSnapshot()).plugins[0]).toMatchObject({
+      desired: { version: "1.1.0" },
+      pendingRestart: { kind: "update", version: "1.1.0" },
+      update: null,
+    });
+    expect(operationLog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        fromVersion: "1.0.0",
+        operation: "update",
+        pluginId: "pier.codex",
+        result: "success",
+        sha256: seedBundled.sha256,
+        toVersion: "1.1.0",
+      })
+    );
+  });
+
+  it("update(id) falls back to bundled when official download fails at the same target version", async () => {
+    const seedV1 = await createSeedArchive("1.0.0");
+    const { service: firstSession } = await createService({
+      bundledArchive: seedV1,
+      bundledVersion: "1.0.0",
+      runtimeMode: "production",
+    });
+    await firstSession.install("pier.codex");
+
+    const seedV2 = await createSeedArchive("1.0.1");
+    const assetFetcher = vi.fn(async () => {
+      throw new Error("network down");
+    });
+    const { service } = await createService({
+      assetFetcher,
+      bundledArchive: seedV2,
+      bundledVersion: "1.0.1",
+      officialIndex: officialIndexFor("1.0.1", seedV2),
+      officialIndexRefresh: vi.fn().mockResolvedValue(undefined),
+      runtimeMode: "production",
+    });
+
+    await expect(service.update("pier.codex")).resolves.toMatchObject({
+      ok: true,
+      version: "1.0.1",
+      requiresRestart: true,
+    });
+    expect(service.getIndex().plugins["pier.codex"]?.activeVersion).toBe(
+      "1.0.1"
+    );
+  });
+
   it("update(id) immediately switches runtime when the target package declares hot reload", async () => {
     const seedV1 = await createSeedArchive("1.0.0");
     const { service: firstSession } = await createService({
@@ -578,7 +669,9 @@ describe("managed plugin install service", () => {
     });
   });
 
-  it("update(id) fails without falling back to bundled archives when official asset verification fails", async () => {
+  it("update(id) fails without falling back to an older bundled archive when official asset verification fails", async () => {
+    // Target is official 1.0.1; bundled is still 1.0.0 (older). Integrity
+    // failure must not silently re-promote the older bundle as "updated".
     const seedV1 = await createSeedArchive("1.0.0");
     const { service: firstSession } = await createService({
       bundledArchive: seedV1,
@@ -597,7 +690,7 @@ describe("managed plugin install service", () => {
     const { service, operationLog } = await createService({
       assetFetcher,
       bundledArchive: seedV1,
-      bundledVersion: "9.9.9",
+      bundledVersion: "1.0.0",
       officialIndex: officialIndexFor("1.0.1", seedV2),
       officialIndexRefresh: vi.fn().mockResolvedValue(undefined),
       runtimeMode: "production",
@@ -615,7 +708,7 @@ describe("managed plugin install service", () => {
     });
     expect(
       service.getIndex().plugins["pier.codex"]?.installedVersions
-    ).not.toHaveProperty("9.9.9");
+    ).not.toHaveProperty("1.0.1");
     expect(operationLog).toHaveBeenCalledWith(
       expect.objectContaining({
         operation: "update",

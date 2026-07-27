@@ -533,7 +533,7 @@ describe("live-modules service", () => {
     expect(events).toContain("changed");
   });
 
-  it("compiles in-repo .pier/canvases templates (kit / composition / docs)", async () => {
+  it("compiles in-repo smoke + blank templates", async () => {
     const projectRoot = fileURLToPath(new URL("../../..", import.meta.url));
     const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
     const service = createService(homeRoot);
@@ -544,9 +544,7 @@ describe("live-modules service", () => {
 
     for (const relPath of [
       "smoke/hello.canvas.tsx",
-      "templates/kit.canvas.tsx",
-      "templates/composition-checkout.canvas.tsx",
-      "templates/docs-button.canvas.tsx",
+      "templates/blank.canvas.tsx",
     ] as const) {
       const result = await service.compile(spec.id, relPath);
       expect(result.ok, `${relPath}: ${JSON.stringify(result)}`).toBe(true);
@@ -557,38 +555,7 @@ describe("live-modules service", () => {
         service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
       ).toString("utf8");
       // Named export `canvas` meta must survive the ESM bundle for Viewer chrome.
-      expect(source).toMatch(/kind:\s*["']?(kit|composition|docs)/u);
+      expect(source).toMatch(/kind:\s*["']?composition/u);
     }
-  });
-
-  it("compiles stress demo with multi-file graph and react hooks", async () => {
-    const projectRoot = fileURLToPath(new URL("../../..", import.meta.url));
-    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
-    const service = createService(homeRoot);
-    const spec = projectLiveRootSpec({
-      projectRootPath: projectRoot,
-    });
-    service.registerRoot(spec);
-
-    const relPath = "stress/workbench-proposal.canvas.tsx";
-    const result = await service.compile(spec.id, relPath);
-    expect(result.ok, `${relPath}: ${JSON.stringify(result)}`).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    expect(result.graph.some((path) => path.includes("proposal-math"))).toBe(
-      true
-    );
-    expect(result.graph.some((path) => path.includes("proposal-form"))).toBe(
-      true
-    );
-    expect(result.graph.some((path) => path.includes("demo-chip"))).toBe(true);
-
-    const source = Buffer.from(
-      service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
-    ).toString("utf8");
-    expect(source).toMatch(/useState|useMemo/u);
-    expect(source).toContain("pier-live://runtime/react");
-    expect(source).toMatch(/kind:\s*["']?composition/u);
   });
 });

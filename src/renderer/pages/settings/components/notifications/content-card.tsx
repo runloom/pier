@@ -113,15 +113,6 @@ export function ContentCard(): ReactNode {
             {t("settings.notifications.taskSystemGroup")}
           </FieldLegend>
           <SwitchRow
-            checked={!prefs.mutedKinds.includes("task-run.finished")}
-            description={t("settings.notifications.taskRunFinishedDesc")}
-            id="settings-nc-task-run-finished"
-            label={t("settings.notifications.taskRunFinished")}
-            onCheckedChange={(checked) => {
-              patchMutedKind("task-run.finished", !checked);
-            }}
-          />
-          <SwitchRow
             checked={!prefs.mutedKinds.includes("app.update")}
             description={t("settings.notifications.appUpdateDesc")}
             id="settings-nc-app-update"

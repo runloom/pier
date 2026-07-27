@@ -1,44 +1,37 @@
 # Project Live Modules (`.pier/canvases`)
 
-Dogfood + verification layout for Pier Live Modules. Entries must live under this
-directory with a canvas suffix (`.canvas.tsx` / `.vue` / `.svelte` / `.canvas.solid.tsx`).
+Engineering samples for Pier Live Modules — the framework acceptance path for
+compile → protocol → mount. Product canvases generated later by `/canvas`
+should land here too.
 
 ## Layout
 
 ```text
 .pier/canvases/
-  README.md
-  smoke/                         pipeline smoke only
-    hello.canvas.tsx             React
-    hello.canvas.vue             Vue
-    hello.canvas.solid.tsx       Solid
-    hello.canvas.svelte          Svelte
-  templates/                     product-shaped examples (React + pier/canvas)
-  stress/                        multi-file + hooks quality stress
-    workbench-proposal.canvas.tsx
-    components/  lib/
-  shared/                        helpers shared across entries (not canvas entries)
-    demo-chip.tsx
+  smoke/                 pipeline smoke (all frameworks) — keep
+    hello.canvas.tsx     React
+    hello.canvas.vue     Vue
+    hello.canvas.solid.tsx
+    hello.canvas.svelte
+  templates/
+    blank.canvas.tsx     minimal React composition scaffold
 ```
 
 | Folder | Role |
 |--------|------|
-| **smoke/** | Prove compile → protocol → mount (all frameworks, flat) |
-| **templates/** | Product form (kit / composition / docs) |
-| **stress/** | Multi-file graph + interactive hooks |
-| **shared/** | Local non-entry helpers |
+| **smoke/** | Compile → protocol → mount (four frameworks) |
+| **templates/** | Thin AI/human start scaffolds only |
 
 ## Conventions
 
-1. **Entries** only: `*.canvas.*` (and framework suffixes). Helpers are plain modules under `shared/` or a feature folder’s `components/` / `lib/`.
-2. **React** uses `pier/canvas`. **Vue / Solid / Svelte** use host `pier-c-*` shell classes or project components.
-3. Prefer relative imports within this tree for dogfood.
+1. Entries only: `*.canvas.*` (and framework suffixes).
+2. React uses `pier/canvas`. Vue / Solid / Svelte use host `pier-c-*` shell classes.
+3. Do not import Pier monorepo `src/**` from canvases — user projects will not have that path.
+4. Prefer system materials (`pier/canvas`) plus project-relative / tsconfig-path components.
 
 ## Quick open
 
 ```text
 smoke/hello.canvas.tsx
-smoke/hello.canvas.vue
-templates/kit.canvas.tsx
-stress/workbench-proposal.canvas.tsx
+templates/blank.canvas.tsx
 ```

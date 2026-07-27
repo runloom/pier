@@ -184,6 +184,7 @@ describe("Codex plugin RPC handlers", () => {
         omp: expect.any(Boolean),
         opencode: expect.any(Boolean),
         pi: expect.any(Boolean),
+        piOauthCapable: expect.any(Boolean),
       })
     );
   });

@@ -275,6 +275,36 @@ export const gitPathsSchema = z.object({
   paths: z.array(z.string().min(1)).min(1),
 });
 
+/**
+ * Codex-style review patch apply: write a unified diff to a temp file and run
+ * `git apply` with target/revert flags (not VS Code update-index line staging).
+ *
+ * Mapping (Codex Vx):
+ * - stage   → { target: "staged", revert: false }  → git apply --cached
+ * - unstage → { target: "staged", revert: true }   → git apply -R --cached
+ * - revert (unstaged view) → { target: "unstaged", revert: true }
+ * - revert (staged view)   → staged reverse then unstaged reverse
+ */
+export const gitApplyPatchOptionsSchema = z.object({
+  /** When true (review default), never use --3way; failure is all-or-nothing. */
+  atomic: z.boolean().optional(),
+  /** Full unified patch text (single file or single hunk extracted client-side). */
+  diff: z.string().min(1).max(8_000_000),
+  revert: z.boolean().optional(),
+  target: z.enum(["staged", "unstaged", "staged-and-unstaged"]),
+});
+export type GitApplyPatchOptions = z.infer<typeof gitApplyPatchOptionsSchema>;
+
+export const gitApplyPatchResultSchema = z.object({
+  appliedPaths: z.array(z.string()),
+  conflictedPaths: z.array(z.string()),
+  errorCode: z.enum(["not-git-repo", "apply-failed"]).optional(),
+  message: z.string().optional(),
+  skippedPaths: z.array(z.string()),
+  status: z.enum(["success", "partial-success", "error"]),
+});
+export type GitApplyPatchResult = z.infer<typeof gitApplyPatchResultSchema>;
+
 export const gitCommitOptionsSchema = z.object({
   allowEmpty: z.boolean().optional(),
   message: z.string().min(1),

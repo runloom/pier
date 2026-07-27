@@ -1,5 +1,5 @@
 /**
- * Preload facade for main-process file path query.
+ * Preload facade for main-process file path + content query.
  *
  * Renderer surface:
  *   - `window.pier.fileQuery.start(request) → Promise<boolean>`
@@ -8,11 +8,12 @@
  *
  * A single `ipcRenderer.on(FILE_QUERY_EVENT)` hub multiplexes to the local
  * listener set — one listener per document is enough; higher-level fanout
- * (per queryId) is a renderer concern.
+ * (per queryId) is a renderer concern. Path and content queries share the
+ * same event channel and are distinguished by `mode` / `queryId`.
  */
 import type {
-  FilePathQueryStartInput,
   FileQueryEvent,
+  FileQueryStartInput,
 } from "@shared/contracts/file-query.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { type IpcRendererEvent, ipcRenderer } from "electron";
@@ -20,7 +21,7 @@ import { type IpcRendererEvent, ipcRenderer } from "electron";
 export interface PierFileQueryAPI {
   cancel(queryId: string): Promise<boolean>;
   onEvent(listener: (event: FileQueryEvent) => void): () => void;
-  start(request: FilePathQueryStartInput): Promise<boolean>;
+  start(request: FileQueryStartInput): Promise<boolean>;
 }
 
 const listeners = new Set<(event: FileQueryEvent) => void>();

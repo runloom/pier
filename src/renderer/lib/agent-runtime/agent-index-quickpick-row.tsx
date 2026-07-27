@@ -1,10 +1,10 @@
 import { formatDurationShort } from "@pier/ui/format.tsx";
 import { cn } from "@pier/ui/utils.ts";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import type { AgentRuntimeIndexEntry } from "@shared/contracts/agent-runtime-index.ts";
 import { isAgentIndexNeedsYou } from "@shared/contracts/agent-runtime-index.ts";
 import i18next from "i18next";
 import { type ReactNode, useEffect, useState } from "react";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { AgentStatusLabel } from "@/components/agent-status/agent-status-label.tsx";
 import { resolveAgentIndexDisplayStatus } from "@/lib/agent-runtime/agent-index-display-status.ts";
 import type { QuickPickItem } from "@/lib/command-palette/types.ts";

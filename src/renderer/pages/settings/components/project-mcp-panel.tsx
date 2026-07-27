@@ -23,6 +23,7 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
+import { AgentIcon } from "@plugins/api/components/agent-icons/index.tsx";
 import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
@@ -33,7 +34,6 @@ import type {
 } from "@shared/contracts/agent-assets.ts";
 import { Cable, ChevronDown } from "lucide-react";
 import { useEffect, useState } from "react";
-import { AgentIcon } from "@/components/agent-icons/index.tsx";
 import { useT } from "@/i18n/use-t.ts";
 import { openAbsoluteInPierEditor } from "@/lib/files/shell-path-actions.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";

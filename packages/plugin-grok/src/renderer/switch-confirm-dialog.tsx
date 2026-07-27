@@ -1,4 +1,5 @@
 import {
+  effectivePeerAvailabilityForKind,
   notifyPeerSyncFailures as notifySharedPeerSyncFailures,
   partitionPeerTargets,
 } from "@pier/plugin-api/peer-sync";
@@ -8,7 +9,8 @@ import type {
 } from "@pier/plugin-api/renderer";
 import { Button } from "@pier/ui/button.tsx";
 import { Checkbox } from "@pier/ui/checkbox.tsx";
-import { type JSX, useState } from "react";
+import { DIALOG_FOOTER_ACTIONS_CLASS } from "@pier/ui/dialog-form-layout.ts";
+import { type JSX, useLayoutEffect, useState } from "react";
 import {
   ALL_SYNC_TARGETS,
   type CrossToolSyncTarget,
@@ -33,7 +35,8 @@ function isPeerAvailability(value: unknown): value is PeerAvailability {
   return (
     typeof record.omp === "boolean" &&
     typeof record.opencode === "boolean" &&
-    typeof record.pi === "boolean"
+    typeof record.pi === "boolean" &&
+    typeof record.piOauthCapable === "boolean"
   );
 }
 
@@ -51,15 +54,6 @@ export async function loadPeerAvailability(
     // Fail closed: do not default-select peers we could not probe.
     return EMPTY_PEER_AVAILABILITY;
   }
-}
-
-export function protocolTargetsFor(
-  accountKind: "api_key" | "oidc"
-): readonly PeerSyncTarget[] {
-  // pi has no xAI OAuth support, so OIDC accounts never offer it as a peer target.
-  return accountKind === "api_key"
-    ? ALL_SYNC_TARGETS
-    : ALL_SYNC_TARGETS.filter((target) => target !== "pi");
 }
 
 /**
@@ -85,17 +79,17 @@ function SwitchConfirmContent({
   mode,
   t,
   close,
+  setFooter,
 }: {
   accountKind: "api_key" | "oidc";
   availability: PeerAvailability;
   mode: PeerSyncDialogMode;
   t: Translate;
   close: RendererPluginContentDialogRenderProps<SwitchConfirmResult>["close"];
+  setFooter: RendererPluginContentDialogRenderProps<SwitchConfirmResult>["setFooter"];
 }): JSX.Element {
-  const { available } = partitionPeerTargets(
-    protocolTargetsFor(accountKind),
-    availability
-  );
+  const effective = effectivePeerAvailabilityForKind(accountKind, availability);
+  const { available } = partitionPeerTargets(ALL_SYNC_TARGETS, effective);
   const showSyncSection = available.length > 0;
   // Switch defaults to unchecked: overwriting credentials in other tools the
   // user may have deliberately pointed at a different account must be opt-in.
@@ -137,8 +131,44 @@ function SwitchConfirmContent({
       ? t("pier.grok.accounts.settings.syncPeersAction", "Sync")
       : t("pier.grok.accounts.settings.switchConfirmAction", "Confirm");
 
+  // Login accounts need pi ≥ 0.80.8 for xAI OAuth. When pi is installed but
+  // not oauth-capable, hide the checkbox (via effective availability) and
+  // explain why so the user does not assume a silent skip.
+  const showPiOauthHint =
+    accountKind === "oidc" && availability.pi && !availability.piOauthCapable;
+
+  useLayoutEffect(() => {
+    setFooter(
+      <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
+        <Button
+          onClick={() => close({ confirmed: false, syncTargets: [] })}
+          type="button"
+          variant="outline"
+        >
+          {t("pier.grok.accounts.settings.cancel", "Cancel")}
+        </Button>
+        <Button
+          disabled={mode === "sync" && syncTargets.size === 0}
+          onClick={() =>
+            close({ confirmed: true, syncTargets: [...syncTargets] })
+          }
+          type="button"
+        >
+          {confirmLabel}
+        </Button>
+      </div>
+    );
+    return () => {
+      setFooter(null);
+    };
+  }, [close, confirmLabel, mode, setFooter, syncTargets, t]);
+
   return (
-    <div className="flex flex-col gap-4" data-pier-grok-scope="">
+    <div
+      className="flex flex-col gap-4"
+      data-pier-grok-scope=""
+      data-slot="dialog-commit-form"
+    >
       {showSyncSection ? (
         <div className="flex flex-col gap-3">
           <p className="font-medium text-sm">{sectionLabel}</p>
@@ -165,24 +195,14 @@ function SwitchConfirmContent({
           </div>
         </div>
       ) : null}
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          onClick={() => close({ confirmed: false, syncTargets: [] })}
-          type="button"
-          variant="outline"
-        >
-          {t("pier.grok.accounts.settings.cancel", "Cancel")}
-        </Button>
-        <Button
-          disabled={mode === "sync" && syncTargets.size === 0}
-          onClick={() =>
-            close({ confirmed: true, syncTargets: [...syncTargets] })
-          }
-          type="button"
-        >
-          {confirmLabel}
-        </Button>
-      </div>
+      {showPiOauthHint ? (
+        <p className="text-muted-foreground text-xs">
+          {t(
+            "pier.grok.accounts.settings.syncPeersPiOauthHint",
+            "Pi is installed but needs version 0.80.8 or later to receive login accounts. API-key accounts can still sync to older Pi."
+          )}
+        </p>
+      ) : null}
     </div>
   );
 }
@@ -196,10 +216,8 @@ export async function openSwitchConfirmDialog(options: {
   const mode = options.mode ?? "switch";
   const { accountKind, context, t } = options;
   const availability = await loadPeerAvailability(context);
-  const { available } = partitionPeerTargets(
-    protocolTargetsFor(accountKind),
-    availability
-  );
+  const effective = effectivePeerAvailabilityForKind(accountKind, availability);
+  const { available } = partitionPeerTargets(ALL_SYNC_TARGETS, effective);
 
   // Dedicated sync entry with no installed peers should not open an empty dialog.
   // The settings Share button is hidden in that case; keep this as a silent guard.
@@ -228,7 +246,8 @@ export async function openSwitchConfirmDialog(options: {
           "New Grok sessions will use this account. Restart any Grok sessions that are already running for the change to take effect."
         );
 
-  // No peer checkboxes → plain confirm. Custom content is only for multi-select.
+  // No peer checkboxes → plain confirm. Custom content is only for multi-select
+  // (and optional Pi version hint when other peers are listed).
   if (available.length === 0) {
     const confirmed = await context.dialogs.confirm({
       body: description,
@@ -249,6 +268,7 @@ export async function openSwitchConfirmDialog(options: {
         availability={availability}
         close={props.close}
         mode={mode}
+        setFooter={props.setFooter}
         t={t}
       />
     ),

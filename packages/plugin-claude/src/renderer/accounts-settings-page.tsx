@@ -1,3 +1,4 @@
+import { partitionPeerTargets } from "@pier/plugin-api/peer-sync";
 import type { ExternalRendererPluginContext } from "@pier/plugin-api/renderer";
 import { Alert, AlertDescription, AlertTitle } from "@pier/ui/alert.tsx";
 import { Badge } from "@pier/ui/badge.tsx";
@@ -27,15 +28,14 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import {
-  Tooltip,
-  TooltipContent,
-  TooltipProvider,
-  TooltipTrigger,
-} from "@pier/ui/tooltip.tsx";
 import { cn } from "@pier/ui/utils";
-import { CircleUserRound, RefreshCw, Trash2 } from "lucide-react";
-import { Fragment, type JSX, useCallback, useState } from "react";
+import { CircleUserRound, RefreshCw } from "lucide-react";
+import { Fragment, type JSX, useCallback, useEffect, useState } from "react";
+import {
+  ALL_SYNC_TARGETS,
+  EMPTY_PEER_AVAILABILITY,
+  type PeerAvailability,
+} from "../shared/accounts.ts";
 import {
   AccountAvatar,
   accountDisplayLabel,
@@ -43,12 +43,29 @@ import {
   OtherAccount,
   QuotaGroup,
 } from "./account-display.tsx";
-import { confirmSwitch } from "./account-switch.ts";
+import {
+  loadPeerAvailability,
+  notifyPeerSyncFailures,
+  openSwitchConfirmDialog,
+} from "./account-switch.ts";
+import { ActiveCardActions } from "./active-card-actions.tsx";
 import { AddAccountDialog } from "./add-account-dialog.tsx";
 import { formatAccountError, type Translate } from "./format-account-error.ts";
 import { useAccountsRefresh } from "./use-accounts-refresh.ts";
 import { useClaudeAccountsSnapshot } from "./use-accounts-snapshot.ts";
 import { useUsagePollingLease } from "./use-usage-polling-lease.ts";
+
+function samePeerAvailability(
+  left: PeerAvailability,
+  right: PeerAvailability
+): boolean {
+  return (
+    left.omp === right.omp &&
+    left.opencode === right.opencode &&
+    left.pi === right.pi &&
+    left.piOauthCapable === right.piOauthCapable
+  );
+}
 
 export interface AccountsSettingsPageProps {
   context: ExternalRendererPluginContext;
@@ -76,6 +93,9 @@ export function AccountsSettingsPage({
     [context]
   );
   const [busyAccountId, setBusyAccountId] = useState<string | null>(null);
+  const [peerAvailability, setPeerAvailability] = useState<PeerAvailability>(
+    EMPTY_PEER_AVAILABILITY
+  );
 
   const reportError = useCallback(
     (err: unknown): void => {
@@ -99,6 +119,37 @@ export function AccountsSettingsPage({
       onAccountError: reportError,
       t,
     });
+
+  useEffect(() => {
+    const activeAccountId = snapshot?.activeAccountId ?? null;
+    if (!activeAccountId) {
+      setPeerAvailability((prev) =>
+        samePeerAvailability(prev, EMPTY_PEER_AVAILABILITY)
+          ? prev
+          : EMPTY_PEER_AVAILABILITY
+      );
+      return;
+    }
+    let cancelled = false;
+    loadPeerAvailability(context)
+      .then((availability) => {
+        if (cancelled) return;
+        setPeerAvailability((prev) =>
+          samePeerAvailability(prev, availability) ? prev : availability
+        );
+      })
+      .catch(() => {
+        if (cancelled) return;
+        setPeerAvailability((prev) =>
+          samePeerAvailability(prev, EMPTY_PEER_AVAILABILITY)
+            ? prev
+            : EMPTY_PEER_AVAILABILITY
+        );
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [context, snapshot?.activeAccountId]);
 
   const handleRemove = async (
     accountId: string,
@@ -135,14 +186,52 @@ export function AccountsSettingsPage({
   };
 
   const handleSelect = (accountId: string): void => {
-    confirmSwitch({ context, t })
-      .then((confirmed) => {
-        if (!confirmed) {
+    openSwitchConfirmDialog({ context, mode: "switch", t })
+      .then((result) => {
+        if (!result.confirmed) {
           return;
         }
         setBusyAccountId(accountId);
         context.rpc
-          .invoke("accounts.select", { accountId })
+          .invoke("accounts.select", {
+            accountId,
+            syncTargets: result.syncTargets.filter(
+              (target) => target !== "claude"
+            ),
+          })
+          .then((selectResult) => {
+            notifyPeerSyncFailures(context, t, selectResult);
+          })
+          .catch(reportError)
+          .finally(() => {
+            setBusyAccountId(null);
+          });
+      })
+      .catch(reportError);
+  };
+
+  const handleSyncPeers = (accountId: string): void => {
+    openSwitchConfirmDialog({ context, mode: "sync", t })
+      .then((result) => {
+        if (!result.confirmed || result.syncTargets.length === 0) {
+          return;
+        }
+        setBusyAccountId(accountId);
+        context.rpc
+          .invoke("accounts.syncToPeers", {
+            accountId,
+            syncTargets: result.syncTargets.filter(
+              (target) => target !== "claude"
+            ),
+          })
+          .then(() => {
+            context.notifications.success(
+              t(
+                "pier.claude.accounts.settings.syncPeersSuccess",
+                "Credentials synced"
+              )
+            );
+          })
           .catch(reportError)
           .finally(() => {
             setBusyAccountId(null);
@@ -224,57 +313,21 @@ export function AccountsSettingsPage({
               )}
             </CardTitle>
             <CardAction className="flex items-center gap-2">
-              <TooltipProvider delayDuration={200}>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      aria-busy={refreshingAll || activeRefreshing || undefined}
-                      aria-label={t(
-                        "pier.claude.accounts.settings.refreshUsage",
-                        "Refresh usage"
-                      )}
-                      disabled={refreshingAll || activeRefreshing}
-                      onClick={() => refreshUsage(active.id)}
-                      size="icon-sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <RefreshCw
-                        className={cn(
-                          (refreshingAll || activeRefreshing) &&
-                            "animate-spin motion-reduce:animate-none"
-                        )}
-                        data-icon="inline-start"
-                      />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent data-pier-claude-scope="">
-                    {t(
-                      "pier.claude.accounts.settings.refreshUsage",
-                      "Refresh usage"
-                    )}
-                  </TooltipContent>
-                </Tooltip>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Button
-                      aria-label={`${t("pier.claude.accounts.settings.remove", "Remove")}: ${accountDisplayLabel(active)}`}
-                      disabled={busyAccountId === active.id}
-                      onClick={() => {
-                        handleRemove(active.id, true).catch(() => undefined);
-                      }}
-                      size="icon-sm"
-                      type="button"
-                      variant="ghost"
-                    >
-                      <Trash2 data-icon="inline-start" />
-                    </Button>
-                  </TooltipTrigger>
-                  <TooltipContent data-pier-claude-scope="">
-                    {t("pier.claude.accounts.settings.remove", "Remove")}
-                  </TooltipContent>
-                </Tooltip>
-              </TooltipProvider>
+              <ActiveCardActions
+                activeLabel={accountDisplayLabel(active)}
+                onRefresh={() => refreshUsage(active.id)}
+                onRemove={() => {
+                  handleRemove(active.id, true).catch(() => undefined);
+                }}
+                onSyncPeers={() => handleSyncPeers(active.id)}
+                refreshing={refreshingAll || activeRefreshing}
+                removeDisabled={busyAccountId === active.id}
+                showSyncPeers={
+                  partitionPeerTargets(ALL_SYNC_TARGETS, peerAvailability)
+                    .available.length > 0
+                }
+                t={t}
+              />
             </CardAction>
           </CardHeader>
           <CardContent className="flex flex-col gap-4">

@@ -4,13 +4,15 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   type CSSProperties,
   type MouseEvent as ReactMouseEvent,
-  useDeferredValue,
   useEffect,
   useMemo,
   useRef,
   useState,
 } from "react";
-import { FilesSearchBar } from "./files-search-bar.tsx";
+import {
+  FILES_IN_FILE_SEARCH_BAR_CLASSNAME,
+  FilesSearchBar,
+} from "./files-search-bar.tsx";
 import type { MarkdownCodeHighlighter } from "./markdown/markdown-code-highlighter.ts";
 import {
   type MarkdownPagination,
@@ -45,9 +47,10 @@ import {
   MARKDOWN_TOC_INSET_PX,
 } from "./markdown-preview-toc-layout.ts";
 import {
-  findMarkdownSearchMatches,
-  type MarkdownSearchMatch,
-} from "./markdown-search.ts";
+  DEFAULT_MARKDOWN_PREVIEW_SEARCH_LABELS,
+  type MarkdownPreviewSearchLabels,
+  useMarkdownPreviewSearch,
+} from "./use-markdown-preview-search.ts";
 import "./markdown-prose.css";
 
 interface MarkdownPreviewProps {
@@ -82,15 +85,6 @@ interface MarkdownPreviewProps {
   zoomLabels?: MarkdownPreviewZoomLabels | undefined;
 }
 
-interface MarkdownPreviewSearchLabels {
-  close: string;
-  matchAnnouncement: string;
-  next: string;
-  noMatches: string;
-  placeholder: string;
-  previous: string;
-}
-
 interface MarkdownPreviewTocLabels {
   title: string;
 }
@@ -122,15 +116,6 @@ const DEFAULT_RENDERER_LABELS: MarkdownRendererLabels = {
   openFullscreen: "View fullscreen",
 };
 
-const DEFAULT_SEARCH_LABELS: MarkdownPreviewSearchLabels = {
-  close: "Close",
-  matchAnnouncement: "Matches: {{count}}",
-  next: "Next match",
-  noMatches: "No matches",
-  placeholder: "Find",
-  previous: "Previous match",
-};
-
 const DEFAULT_TOC_LABELS: MarkdownPreviewTocLabels = {
   title: "Outline",
 };
@@ -141,7 +126,6 @@ const DEFAULT_ZOOM_LABELS: MarkdownPreviewZoomLabels = {
   zoomOut: "Decrease text size",
 };
 
-const EMPTY_SEARCH_MATCHES: readonly MarkdownSearchMatch[] = [];
 const EMPTY_HEADING_IDS: readonly string[] = [];
 
 export function MarkdownPreview({
@@ -162,7 +146,7 @@ export function MarkdownPreview({
   panelId,
   registerSelectionSelectAllProvider,
   runtime = markdownRuntime,
-  searchLabels = DEFAULT_SEARCH_LABELS,
+  searchLabels = DEFAULT_MARKDOWN_PREVIEW_SEARCH_LABELS,
   searchRequest,
   sessionId,
   source,
@@ -174,11 +158,6 @@ export function MarkdownPreview({
   const [appearanceCodeTheme, setAppearanceCodeTheme] = useState(
     () => appearance?.current().codeTheme ?? "github-dark"
   );
-  const [searchOpen, setSearchOpen] = useState(false);
-  const [searchValue, setSearchValue] = useState("");
-  const deferredSearchValue = useDeferredValue(searchValue);
-  const [searchFocusSignal, setSearchFocusSignal] = useState(0);
-  const [activeSearchIndex, setActiveSearchIndex] = useState(0);
   const fontScale = useMarkdownPreviewPrefsStore((state) => state.fontScale);
   const measureMode = useMarkdownPreviewPrefsStore(
     (state) => state.measureMode
@@ -186,18 +165,7 @@ export function MarkdownPreview({
   const [tocAnchor, setTocAnchor] = useState<string | undefined>(undefined);
   const [tocAnchorRequestId, setTocAnchorRequestId] = useState(0);
   const rootRef = useRef<HTMLDivElement | null>(null);
-  const handledSearchRequestRef = useRef(searchRequest);
   const revisionRef = useRef(0);
-  const searchMatches = useMemo(
-    () =>
-      searchOpen &&
-      deferredSearchValue &&
-      deferredSearchValue === searchValue &&
-      state.status === "ready"
-        ? findMarkdownSearchMatches(state.pagination, deferredSearchValue)
-        : EMPTY_SEARCH_MATCHES,
-    [deferredSearchValue, searchOpen, searchValue, state]
-  );
   const headings =
     state.status === "ready" ? state.pagination.headings : undefined;
   const headingIds = useMemo(
@@ -217,13 +185,13 @@ export function MarkdownPreview({
     ready: state.status === "ready",
   });
   const activeHeadingId = useMarkdownHeadingScrollSpy(scrollRoot, headingIds);
-  const activeSearchMatch = searchMatches[activeSearchIndex];
-  const searchMatchText = (() => {
-    if (!searchValue) return "";
-    if (deferredSearchValue !== searchValue) return "";
-    if (searchMatches.length === 0) return searchLabels.noMatches;
-    return `${activeSearchIndex + 1}/${searchMatches.length}`;
-  })();
+  const search = useMarkdownPreviewSearch({
+    labels: searchLabels,
+    pagination: state.status === "ready" ? state.pagination : null,
+    scrollRoot,
+    searchRequest,
+    surfaceRef: rootRef,
+  });
   const effectiveAnchor = tocAnchor ?? initialAnchor;
   const effectiveAnchorRequestId = tocAnchor
     ? String(tocAnchorRequestId)
@@ -300,28 +268,6 @@ export function MarkdownPreview({
     );
   }, [panelId, registerSelectionSelectAllProvider]);
 
-  useEffect(() => {
-    if (handledSearchRequestRef.current === searchRequest) return;
-    handledSearchRequestRef.current = searchRequest;
-    if (searchRequest) {
-      setSearchOpen(true);
-      setSearchFocusSignal((current) => current + 1);
-    }
-  }, [searchRequest]);
-
-  useEffect(() => {
-    if (activeSearchIndex >= searchMatches.length) setActiveSearchIndex(0);
-  }, [activeSearchIndex, searchMatches.length]);
-
-  const navigateSearch = (direction: "next" | "previous") => {
-    if (searchMatches.length === 0) return;
-    setActiveSearchIndex((current) =>
-      direction === "next"
-        ? (current + 1) % searchMatches.length
-        : (current - 1 + searchMatches.length) % searchMatches.length
-    );
-  };
-
   const outlineToc = hasOutline ? (
     <MarkdownPreviewToc
       activeHeadingId={activeHeadingId}
@@ -340,31 +286,35 @@ export function MarkdownPreview({
     <div
       className="relative flex h-full min-h-0 overflow-hidden bg-background text-foreground text-sm"
       onContextMenu={onContextMenu}
+      onKeyDown={search.handlePreviewKeyDown}
+      onPointerDown={search.handlePreviewPointerDown}
       ref={rootRef}
     >
-      {searchOpen ? (
+      {search.searchOpen ? (
         <FilesSearchBar
-          className="absolute top-2 left-3 z-30 max-w-[calc(100%-1.5rem)]"
-          focusSignal={searchFocusSignal}
+          className={FILES_IN_FILE_SEARCH_BAR_CLASSNAME}
+          focusSignal={search.searchFocusSignal}
           labels={searchLabels}
           matchAnnouncement={
-            searchMatches.length === 0
+            search.searchMatches.length === 0
               ? searchLabels.noMatches
               : searchLabels.matchAnnouncement.replace(
                   "{{count}}",
-                  searchMatchText
+                  search.searchMatchText
                 )
           }
-          matchText={searchMatchText}
-          navigationDisabled={searchMatches.length === 0}
-          onChange={(next) => {
-            setSearchValue(next);
-            setActiveSearchIndex(0);
-          }}
-          onClose={() => setSearchOpen(false)}
-          onNavigate={navigateSearch}
+          matchText={search.searchMatchText}
+          navigationDisabled={search.searchMatches.length === 0}
+          onChange={search.handleSearchChange}
+          onClose={search.closeSearch}
+          onNavigate={search.navigateSearch}
+          // Clear the right tick rail when the outline is present so find and
+          // outline chrome do not share the same top-right strip.
+          {...(hasOutline
+            ? { style: { right: MARKDOWN_TOC_CONTENT_INSET_PX } }
+            : {})}
           testId="files-markdown-search-bar"
-          value={searchValue}
+          value={search.searchValue}
         />
       ) : null}
       <div
@@ -372,7 +322,7 @@ export function MarkdownPreview({
         ref={previewFrameRef}
       >
         <div
-          className="min-h-0 flex-1 overflow-auto pb-6"
+          className="min-h-0 flex-1 overflow-auto pb-6 outline-none"
           data-scrollbar="stable"
           data-slot="markdown-preview"
           ref={scrollRootRef}
@@ -384,6 +334,7 @@ export function MarkdownPreview({
               : MARKDOWN_PREVIEW_SCROLL_PAD_X_PX,
             paddingTop: MARKDOWN_TOC_INSET_PX,
           }}
+          tabIndex={-1}
         >
           {state.status === "loading" ? (
             <div className="flex flex-col gap-3" data-slot="markdown-loading">
@@ -407,8 +358,8 @@ export function MarkdownPreview({
                 }
               >
                 <MarkdownIrRenderer
-                  activeSearchMatchId={activeSearchMatch?.id}
-                  activeSearchPageIndex={activeSearchMatch?.pageIndex}
+                  activeSearchMatchId={search.activeSearchMatch?.id}
+                  activeSearchPageIndex={search.activeSearchMatch?.pageIndex}
                   charts={charts}
                   codeHighlighter={codeHighlighter}
                   codeTheme={codeTheme ?? appearanceCodeTheme}
@@ -421,7 +372,7 @@ export function MarkdownPreview({
                   onOpenExternal={openExternal}
                   onOpenInternal={openInternal}
                   pagination={state.pagination}
-                  searchMatches={searchMatches}
+                  searchMatches={search.searchMatches}
                   source={source}
                 />
               </div>

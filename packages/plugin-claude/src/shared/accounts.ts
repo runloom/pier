@@ -74,8 +74,49 @@ export interface ClaudeAccountsSnapshot {
   schemaVersion: 1;
 }
 
+/**
+ * Peer tools that can receive a mirrored Claude/Anthropic OAuth credential.
+ * - `"claude"` is the primary switch (materialize), not a peer write target.
+ * - opencode / pi / omp accept Anthropic oauth under tool-specific keys.
+ */
+export type CrossToolSyncTarget = "claude" | "opencode" | "pi" | "omp";
+
+export const ALL_SYNC_TARGETS: readonly Exclude<
+  CrossToolSyncTarget,
+  "claude"
+>[] = ["opencode", "pi", "omp"];
+
+export type PeerSyncTarget = (typeof ALL_SYNC_TARGETS)[number];
+
+export interface PeerSyncResult {
+  error?: string | undefined;
+  ok: boolean;
+  target: CrossToolSyncTarget;
+}
+
+export interface PeerAvailability {
+  omp: boolean;
+  opencode: boolean;
+  pi: boolean;
+  piOauthCapable: boolean;
+}
+
+export const EMPTY_PEER_AVAILABILITY: PeerAvailability = {
+  omp: false,
+  opencode: false,
+  pi: false,
+  piOauthCapable: false,
+};
+
+export interface SyncToPeersPayload {
+  accountId?: string | undefined;
+  syncTargets: readonly PeerSyncTarget[];
+}
+
 export interface SelectAccountPayload {
   accountId: string;
+  /** Optional peer tools to mirror credentials into. Defaults to none. */
+  syncTargets?: readonly PeerSyncTarget[] | undefined;
 }
 
 export interface RemoveAccountPayload {
@@ -97,6 +138,7 @@ export interface UsagePollingPayload {
 }
 
 const nonEmptyStringSchema = z.string().check(z.minLength(1));
+const peerSyncTargetSchema = z.enum(["opencode", "pi", "omp"]);
 
 export const addAccountPayloadSchema = z.strictObject({
   kind: z.optional(z.enum(["oauth", "import"])),
@@ -108,6 +150,12 @@ export const completeLoginPayloadSchema = z.strictObject({
 
 export const selectAccountPayloadSchema = z.strictObject({
   accountId: nonEmptyStringSchema,
+  syncTargets: z.optional(z.array(peerSyncTargetSchema)),
+});
+
+export const syncToPeersPayloadSchema = z.strictObject({
+  accountId: z.optional(nonEmptyStringSchema),
+  syncTargets: z.array(peerSyncTargetSchema).check(z.minLength(1)),
 });
 
 export const removeAccountPayloadSchema = z.strictObject({

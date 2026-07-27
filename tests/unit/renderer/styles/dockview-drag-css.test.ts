@@ -65,6 +65,27 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain("font-weight: 600 !important");
   });
 
+  it("sizes idle tabs to content instead of a fixed 280px ellipsis cap", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const idleTabRuleStart = css.indexOf(
+      ".dockview-theme-pier .dv-tab .dv-default-tab,"
+    );
+    expect(idleTabRuleStart).toBeGreaterThanOrEqual(0);
+    // Idle tab rule ends before the content-title rule.
+    const idleTabRule = css.slice(
+      idleTabRuleStart,
+      css.indexOf(
+        ".dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-content",
+        idleTabRuleStart
+      )
+    );
+    expect(idleTabRule).toContain("max-width: none");
+    expect(idleTabRule).not.toContain("max-width: 280px");
+  });
+
   it("keeps tab shortcut hint metrics aligned with the normal icon slot", () => {
     const css = readFileSync(
       join(process.cwd(), "src/renderer/app/globals.css"),
@@ -76,6 +97,21 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain(".dv-tab-ghost-drag .pier-panel-tab-index-hint");
     expect(css).toContain("height: 14px;");
     expect(css).toMatch(TAB_HINT_MIN_WIDTH_RE);
+  });
+
+  it("reserves a left gutter for the absolute active-task presence dot", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+
+    expect(css).toContain('&[data-pier-tab-has-active-task="true"]');
+    expect(css).toContain("padding-left: 18px");
+    // drag/ghost 的 padding-inline !important 不得盖掉 gutter
+    expect(css).toContain(
+      '.dv-default-tab[data-pier-tab-has-active-task="true"]'
+    );
+    expect(css).toContain("padding-left: 20px !important");
   });
 
   it("keeps tab close actions always visible with circular hover", () => {

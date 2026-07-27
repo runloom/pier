@@ -8,7 +8,8 @@ import type {
 } from "@pier/plugin-api/renderer";
 import { Button } from "@pier/ui/button.tsx";
 import { Checkbox } from "@pier/ui/checkbox.tsx";
-import { type JSX, useState } from "react";
+import { DIALOG_FOOTER_ACTIONS_CLASS } from "@pier/ui/dialog-form-layout.ts";
+import { type JSX, useLayoutEffect, useState } from "react";
 import {
   ALL_SYNC_TARGETS,
   type CrossToolSyncTarget,
@@ -33,7 +34,8 @@ function isPeerAvailability(value: unknown): value is PeerAvailability {
   return (
     typeof record.omp === "boolean" &&
     typeof record.opencode === "boolean" &&
-    typeof record.pi === "boolean"
+    typeof record.pi === "boolean" &&
+    typeof record.piOauthCapable === "boolean"
   );
 }
 
@@ -75,11 +77,13 @@ function SwitchConfirmContent({
   mode,
   t,
   close,
+  setFooter,
 }: {
   availability: PeerAvailability;
   mode: PeerSyncDialogMode;
   t: Translate;
   close: RendererPluginContentDialogRenderProps<SwitchConfirmResult>["close"];
+  setFooter: RendererPluginContentDialogRenderProps<SwitchConfirmResult>["setFooter"];
 }): JSX.Element {
   const { available } = partitionPeerTargets(ALL_SYNC_TARGETS, availability);
   const showSyncSection = available.length > 0;
@@ -120,8 +124,38 @@ function SwitchConfirmContent({
       ? t("pier.codex.accounts.settings.syncPeersAction", "Sync")
       : t("pier.codex.accounts.settings.switchConfirmAction", "Confirm");
 
+  useLayoutEffect(() => {
+    setFooter(
+      <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
+        <Button
+          onClick={() => close({ confirmed: false, syncTargets: [] })}
+          type="button"
+          variant="outline"
+        >
+          {t("pier.codex.accounts.settings.cancel", "Cancel")}
+        </Button>
+        <Button
+          disabled={mode === "sync" && syncTargets.size === 0}
+          onClick={() =>
+            close({ confirmed: true, syncTargets: [...syncTargets] })
+          }
+          type="button"
+        >
+          {confirmLabel}
+        </Button>
+      </div>
+    );
+    return () => {
+      setFooter(null);
+    };
+  }, [close, confirmLabel, mode, setFooter, syncTargets, t]);
+
   return (
-    <div className="flex flex-col gap-4" data-pier-codex-scope="">
+    <div
+      className="flex flex-col gap-4"
+      data-pier-codex-scope=""
+      data-slot="dialog-commit-form"
+    >
       {showSyncSection ? (
         <div className="flex flex-col gap-3">
           <p className="font-medium text-sm">{sectionLabel}</p>
@@ -148,24 +182,6 @@ function SwitchConfirmContent({
           </div>
         </div>
       ) : null}
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          onClick={() => close({ confirmed: false, syncTargets: [] })}
-          type="button"
-          variant="outline"
-        >
-          {t("pier.codex.accounts.settings.cancel", "Cancel")}
-        </Button>
-        <Button
-          disabled={mode === "sync" && syncTargets.size === 0}
-          onClick={() =>
-            close({ confirmed: true, syncTargets: [...syncTargets] })
-          }
-          type="button"
-        >
-          {confirmLabel}
-        </Button>
-      </div>
     </div>
   );
 }
@@ -227,6 +243,7 @@ export async function openSwitchConfirmDialog(options: {
         availability={availability}
         close={props.close}
         mode={mode}
+        setFooter={props.setFooter}
         t={t}
       />
     ),

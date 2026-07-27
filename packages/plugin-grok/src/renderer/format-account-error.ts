@@ -133,12 +133,11 @@ export function formatAccountError(err: unknown, t: Translate): string {
   }
   if (
     /(^|;\s*)pi:/.test(raw) ||
-    lower.includes("pi does not support xai oauth") ||
     (lower.includes("pi ") && lower.includes("not found"))
   ) {
     return t(
       "pier.grok.accounts.settings.syncPeersFailedPi",
-      "Couldn't sync credentials to Pi. Make sure Pi is installed on this device. For login accounts, Pi needs a Grok API-key account (or XAI_API_KEY) because it has no xAI OAuth support."
+      "Couldn't sync credentials to Pi. Make sure Pi is installed on this device (0.80.8+ for login accounts)."
     );
   }
   if (lower.includes("no active managed account")) {

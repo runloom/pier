@@ -4,7 +4,12 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from "@pier/ui/accordion.tsx";
-import { Alert } from "@pier/ui/alert.tsx";
+import {
+  Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
+} from "@pier/ui/alert.tsx";
 import { AspectRatio } from "@pier/ui/aspect-ratio.tsx";
 import {
   Avatar,
@@ -165,6 +170,7 @@ import {
 import type { PierCanvasExportName } from "@shared/pier-canvas-export-names.ts";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { createElement } from "react";
+import { useCanvasFile } from "./canvas-file-facade.ts";
 
 /**
  * `pier/canvas` whitelist — host primitives + curated `@pier/ui` re-exports.
@@ -346,6 +352,9 @@ export const pierCanvasExports = {
   AccordionItem,
   AccordionTrigger,
   Alert,
+  AlertAction,
+  AlertDescription,
+  AlertTitle,
   AspectRatio,
   Avatar,
   AvatarBadge,
@@ -484,6 +493,7 @@ export const pierCanvasExports = {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useCanvasFile,
 } as const satisfies Record<PierCanvasExportName, unknown>;
 
 export type PierCanvasExports = typeof pierCanvasExports;
