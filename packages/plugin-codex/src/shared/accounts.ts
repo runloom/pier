@@ -103,12 +103,15 @@ export interface PeerAvailability {
   omp: boolean;
   opencode: boolean;
   pi: boolean;
+  /** Present for shared probe parity; Codex OpenAI oauth does not gate on it. */
+  piOauthCapable: boolean;
 }
 
 export const EMPTY_PEER_AVAILABILITY: PeerAvailability = {
   omp: false,
   opencode: false,
   pi: false,
+  piOauthCapable: false,
 };
 
 export interface SelectAccountPayload {

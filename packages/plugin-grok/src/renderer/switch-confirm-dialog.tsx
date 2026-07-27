@@ -1,4 +1,5 @@
 import {
+  effectivePeerAvailabilityForKind,
   notifyPeerSyncFailures as notifySharedPeerSyncFailures,
   partitionPeerTargets,
 } from "@pier/plugin-api/peer-sync";
@@ -33,7 +34,8 @@ function isPeerAvailability(value: unknown): value is PeerAvailability {
   return (
     typeof record.omp === "boolean" &&
     typeof record.opencode === "boolean" &&
-    typeof record.pi === "boolean"
+    typeof record.pi === "boolean" &&
+    typeof record.piOauthCapable === "boolean"
   );
 }
 
@@ -51,15 +53,6 @@ export async function loadPeerAvailability(
     // Fail closed: do not default-select peers we could not probe.
     return EMPTY_PEER_AVAILABILITY;
   }
-}
-
-export function protocolTargetsFor(
-  accountKind: "api_key" | "oidc"
-): readonly PeerSyncTarget[] {
-  // pi has no xAI OAuth support, so OIDC accounts never offer it as a peer target.
-  return accountKind === "api_key"
-    ? ALL_SYNC_TARGETS
-    : ALL_SYNC_TARGETS.filter((target) => target !== "pi");
 }
 
 /**
@@ -92,10 +85,8 @@ function SwitchConfirmContent({
   t: Translate;
   close: RendererPluginContentDialogRenderProps<SwitchConfirmResult>["close"];
 }): JSX.Element {
-  const { available } = partitionPeerTargets(
-    protocolTargetsFor(accountKind),
-    availability
-  );
+  const effective = effectivePeerAvailabilityForKind(accountKind, availability);
+  const { available } = partitionPeerTargets(ALL_SYNC_TARGETS, effective);
   const showSyncSection = available.length > 0;
   // Switch defaults to unchecked: overwriting credentials in other tools the
   // user may have deliberately pointed at a different account must be opt-in.
@@ -137,6 +128,12 @@ function SwitchConfirmContent({
       ? t("pier.grok.accounts.settings.syncPeersAction", "Sync")
       : t("pier.grok.accounts.settings.switchConfirmAction", "Confirm");
 
+  // Login accounts need pi ≥ 0.80.8 for xAI OAuth. When pi is installed but
+  // not oauth-capable, hide the checkbox (via effective availability) and
+  // explain why so the user does not assume a silent skip.
+  const showPiOauthHint =
+    accountKind === "oidc" && availability.pi && !availability.piOauthCapable;
+
   return (
     <div className="flex flex-col gap-4" data-pier-grok-scope="">
       {showSyncSection ? (
@@ -164,6 +161,14 @@ function SwitchConfirmContent({
             })}
           </div>
         </div>
+      ) : null}
+      {showPiOauthHint ? (
+        <p className="text-muted-foreground text-xs">
+          {t(
+            "pier.grok.accounts.settings.syncPeersPiOauthHint",
+            "Pi is installed but needs version 0.80.8 or later to receive login accounts. API-key accounts can still sync to older Pi."
+          )}
+        </p>
       ) : null}
       <div className="flex flex-wrap justify-end gap-2">
         <Button
@@ -196,10 +201,8 @@ export async function openSwitchConfirmDialog(options: {
   const mode = options.mode ?? "switch";
   const { accountKind, context, t } = options;
   const availability = await loadPeerAvailability(context);
-  const { available } = partitionPeerTargets(
-    protocolTargetsFor(accountKind),
-    availability
-  );
+  const effective = effectivePeerAvailabilityForKind(accountKind, availability);
+  const { available } = partitionPeerTargets(ALL_SYNC_TARGETS, effective);
 
   // Dedicated sync entry with no installed peers should not open an empty dialog.
   // The settings Share button is hidden in that case; keep this as a silent guard.
@@ -228,7 +231,8 @@ export async function openSwitchConfirmDialog(options: {
           "New Grok sessions will use this account. Restart any Grok sessions that are already running for the change to take effect."
         );
 
-  // No peer checkboxes → plain confirm. Custom content is only for multi-select.
+  // No peer checkboxes → plain confirm. Custom content is only for multi-select
+  // (and optional Pi version hint when other peers are listed).
   if (available.length === 0) {
     const confirmed = await context.dialogs.confirm({
       body: description,

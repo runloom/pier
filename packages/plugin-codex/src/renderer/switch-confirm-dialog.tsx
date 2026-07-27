@@ -33,7 +33,8 @@ function isPeerAvailability(value: unknown): value is PeerAvailability {
   return (
     typeof record.omp === "boolean" &&
     typeof record.opencode === "boolean" &&
-    typeof record.pi === "boolean"
+    typeof record.pi === "boolean" &&
+    typeof record.piOauthCapable === "boolean"
   );
 }
 

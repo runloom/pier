@@ -73,7 +73,8 @@ function samePeerAvailability(
   return (
     left.omp === right.omp &&
     left.opencode === right.opencode &&
-    left.pi === right.pi
+    left.pi === right.pi &&
+    left.piOauthCapable === right.piOauthCapable
   );
 }
 

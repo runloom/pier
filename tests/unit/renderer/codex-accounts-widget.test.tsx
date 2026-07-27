@@ -118,7 +118,12 @@ function contextWithSnapshot(snapshot: CodexAccountsSnapshot): {
       return snapshot as T;
     }
     if (method === "accounts.peerAvailability") {
-      return { omp: true, opencode: true, pi: true } as T;
+      return {
+        omp: true,
+        opencode: true,
+        pi: true,
+        piOauthCapable: true,
+      } as T;
     }
     return null as T;
   };

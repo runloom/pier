@@ -9,14 +9,15 @@ import type { CrossToolSyncTarget } from "../shared/accounts.ts";
 /**
  * Cross-tool Grok/xAI credential sync.
  *
- * Verified local shapes (2026-07-15):
+ * Verified shapes (pi OAuth re-verified on 2026-07-27 / pi ≥ 0.80.8):
  * - Grok `~/.grok/auth.json` OIDC entry: `{ key, refresh_token, expires_at, user_id, email, ... }`
  * - OpenCode `~/.local/share/opencode/auth.json`: provider key `xai`
  *   - oauth: `{ type: "oauth", access, refresh, expires, accountId? }`
  *   - api: `{ type: "api", key }`
  * - pi `~/.pi/agent/auth.json`: provider key `xai`
- *   - api only: `{ type: "api_key", key }`
- *   - no xAI OAuth handler; OIDC sync must not write a fake oauth entry
+ *   - oauth (pi ≥ 0.80.8): `{ type: "oauth", access, refresh, expires, accountId? }`
+ *     same xAI client_id as Grok CLI (`b1a00492-073a-47ea-816f-4c329264a828`)
+ *   - api: `{ type: "api_key", key }` (not OpenCode's `"api"`)
  * - omp `~/.omp/agent/agent.db` `auth_credentials`:
  *   - provider `xai-oauth`, credential_type `oauth`,
  *     identity_key `account:<user_id>`,
@@ -117,11 +118,10 @@ function opencodeAuthEntry(credential: GrokSyncCredential) {
 
 function piAuthEntry(credential: GrokSyncCredential) {
   if (credential.kind === "oauth") {
-    throw new Error(
-      "pi does not support xAI OAuth; sync a Grok API-key account or set XAI_API_KEY"
-    );
+    // Same shape as OpenCode oauth; pi ≥ 0.80.8 refreshes with the Grok CLI client_id.
+    return oauthAuthEntry(credential);
   }
-  // pi AuthStorage only accepts type "api_key" (not OpenCode's "api").
+  // pi AuthStorage uses type "api_key" (not OpenCode's "api").
   return {
     type: "api_key",
     key: credential.apiKey,
