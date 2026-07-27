@@ -84,7 +84,7 @@ export const terminal = {
     cancelled: "Cancelled",
     close: "Close task panel",
     controlLabel: "Task run controls: {{label}}",
-    dismiss: "Dismiss task controls",
+    dismiss: "Close",
     duration: "Elapsed time: {{duration}}",
     failed: "Failed",
     finishedBlocked: "Task blocked",

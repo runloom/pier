@@ -173,46 +173,52 @@ export function ActivityWidget({
   const runningRows = rowsInLimit(grouped.running, allowedPanelIds);
   const otherRows = rowsInLimit(grouped.other, allowedPanelIds);
 
+  // 列表滚动容器必须贴卡片内容区右缘：根节点只保留纵向 padding，
+  // 横向间距下放到 KPI / 列表内容 / footer，避免 scrollbar 被 p-3 顶离右边缘。
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3 p-3">
-      <div className="shrink-0">
+    <div className="flex h-full min-h-0 flex-col gap-3 py-3">
+      <div className="shrink-0 px-3">
         <ActivitySummary counts={counts} density={density} />
       </div>
 
       {/* 仅列表区在内容超出时滚动；根节点不 min-h-full 叠高 */}
-      <div className="flex min-h-0 flex-1 flex-col gap-2 overflow-y-auto">
-        {needsYouRows.length > 0 ? (
-          <Section
-            title={t("workbench.widget.activityOverview.section.needsYou")}
-          >
-            {needsYouRows.map(renderRow)}
-          </Section>
-        ) : null}
-        {runningRows.length > 0 ? (
-          <Section
-            title={t("workbench.widget.activityOverview.section.running")}
-          >
-            {runningRows.map(renderRow)}
-          </Section>
-        ) : null}
-        {otherRows.length > 0 ? (
-          <Section title={t("workbench.widget.activityOverview.section.other")}>
-            {otherRows.map(renderRow)}
-          </Section>
-        ) : null}
+      <div className="min-h-0 flex-1 overflow-y-auto">
+        <div className="flex flex-col gap-2 px-3">
+          {needsYouRows.length > 0 ? (
+            <Section
+              title={t("workbench.widget.activityOverview.section.needsYou")}
+            >
+              {needsYouRows.map(renderRow)}
+            </Section>
+          ) : null}
+          {runningRows.length > 0 ? (
+            <Section
+              title={t("workbench.widget.activityOverview.section.running")}
+            >
+              {runningRows.map(renderRow)}
+            </Section>
+          ) : null}
+          {otherRows.length > 0 ? (
+            <Section
+              title={t("workbench.widget.activityOverview.section.other")}
+            >
+              {otherRows.map(renderRow)}
+            </Section>
+          ) : null}
 
-        {truncated ? (
-          <p className="px-1 text-[11px] text-muted-foreground">
-            {t("workbench.widget.activityOverview.moreRows", {
-              count: flat.length - limited.length,
-            })}
-          </p>
-        ) : null}
+          {truncated ? (
+            <p className="px-1 text-[11px] text-muted-foreground">
+              {t("workbench.widget.activityOverview.moreRows", {
+                count: flat.length - limited.length,
+              })}
+            </p>
+          ) : null}
+        </div>
       </div>
 
       {showFooter && otherWindowAgentCount > 0 ? (
         <button
-          className="shrink-0 rounded-md px-1 py-1 text-left text-muted-foreground text-xs transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mx-3 shrink-0 rounded-md px-1 py-1 text-left text-muted-foreground text-xs transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
           data-testid="activity-index-footer"
           onClick={handleOpenIndex}
           type="button"

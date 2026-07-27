@@ -78,7 +78,7 @@ export const terminal = {
     cancelled: "已取消",
     close: "关闭任务面板",
     controlLabel: "任务运行控制：{{label}}",
-    dismiss: "收起任务控制条",
+    dismiss: "关闭",
     duration: "已运行：{{duration}}",
     failed: "失败",
     finishedBlocked: "任务已阻塞",

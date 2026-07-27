@@ -351,7 +351,7 @@ describe("terminal runtime control", () => {
     renderControl({ current });
 
     const dismiss = screen.getByRole("button", {
-      name: "Dismiss task controls",
+      name: "Close",
     });
     const restart = screen.getByRole("button", { name: "Restart task" });
     const output = screen.getByRole("button", { name: "Open task output" });
@@ -375,9 +375,7 @@ describe("terminal runtime control", () => {
     });
 
     renderControl({ current, dismissRun });
-    fireEvent.click(
-      screen.getByRole("button", { name: "Dismiss task controls" })
-    );
+    fireEvent.click(screen.getByRole("button", { name: "Close" }));
 
     await waitFor(() => {
       expect(dismissRun).toHaveBeenCalledWith("run-1");
