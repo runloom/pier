@@ -1,4 +1,3 @@
-import { Button } from "@pier/ui/button.tsx";
 import {
   Item,
   ItemContent,
@@ -10,29 +9,30 @@ import { ExternalLink } from "lucide-react";
 import type { JSX } from "react";
 import type { Translate } from "./format-account-error.ts";
 
+/** Waiting-stage body only — parent owns sticky footer (single setFooter owner). */
 export function AddAccountWaiting({
   deviceCode,
   deviceVerificationUrl,
-  onCancel,
   onOpenVerificationUrl,
-  onRestart,
-  pendingAction,
   t,
 }: {
   deviceCode?: string | undefined;
   deviceVerificationUrl?: string | undefined;
   loginActive?: boolean;
-  onCancel: () => void;
-  /** Opens the verification URL via the host (`app.openExternal`) — the host
-   *  denies renderer window.open, so a plain anchor would be a dead link. */
+  onCancel?: () => void;
   onOpenVerificationUrl?: (url: string) => void;
-  onRestart: () => void;
-  pendingAction: "cancel" | "restart" | null;
+  onRestart?: () => void;
+  pendingAction?: "cancel" | "restart" | null;
   t: Translate;
 }): JSX.Element {
   const hasDeviceInfo = Boolean(deviceCode || deviceVerificationUrl);
+
   return (
-    <div className="flex flex-col gap-4" data-pier-grok-scope="">
+    <div
+      className="flex flex-col gap-4"
+      data-pier-grok-scope=""
+      data-slot="dialog-commit-form"
+    >
       <Item size="sm" variant="muted">
         <ItemMedia variant="icon">
           <Spinner />
@@ -74,35 +74,6 @@ export function AddAccountWaiting({
           ) : null}
         </div>
       ) : null}
-      <div className="flex flex-wrap justify-end gap-2">
-        <Button
-          aria-busy={pendingAction === "cancel" || undefined}
-          disabled={pendingAction !== null}
-          onClick={onCancel}
-          type="button"
-          variant="outline"
-        >
-          {pendingAction === "cancel" ? (
-            <Spinner data-icon="inline-start" />
-          ) : null}
-          {t("pier.grok.accounts.settings.cancelLogin", "Cancel login")}
-        </Button>
-        <Button
-          aria-busy={pendingAction === "restart" || undefined}
-          disabled={pendingAction !== null}
-          onClick={onRestart}
-          type="button"
-          variant="secondary"
-        >
-          {pendingAction === "restart" ? (
-            <Spinner data-icon="inline-start" />
-          ) : null}
-          {t(
-            "pier.grok.accounts.settings.addDialogRestartDevice",
-            "Request a new code"
-          )}
-        </Button>
-      </div>
     </div>
   );
 }

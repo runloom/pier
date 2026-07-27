@@ -40,6 +40,12 @@ export interface WorkbenchWidgetComponentProps {
 export interface WorkbenchWidgetSettingsProps {
   instanceId: string;
   params: Readonly<Record<string, JsonValue>>;
+  /**
+   * Sticky DialogFooter slot owned by the host WorkbenchSettingsDialog.
+   * Host always provides this; pass null to hide. Use for primary panel
+   * actions (e.g. add block).
+   */
+  setFooter: (footer: ReactNode | null) => void;
   updateParams: (patch: Record<string, JsonValue>) => void;
 }
 

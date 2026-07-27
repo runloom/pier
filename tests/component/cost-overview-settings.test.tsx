@@ -143,6 +143,7 @@ describe("CostOverviewSettings", () => {
       <CostOverviewSettings
         instanceId="core.cost-overview"
         params={{}}
+        setFooter={vi.fn()}
         updateParams={updateParams}
       />
     );
@@ -162,6 +163,7 @@ describe("CostOverviewSettings", () => {
       <CostOverviewSettings
         instanceId="core.cost-overview"
         params={costOverviewParamsToJson(paramsFromPreset("overview"))}
+        setFooter={vi.fn()}
         updateParams={updateParams}
       />
     );
@@ -182,6 +184,7 @@ describe("CostOverviewSettings", () => {
       <CostOverviewSettings
         instanceId="core.cost-overview"
         params={{}}
+        setFooter={vi.fn()}
         updateParams={vi.fn()}
       />
     );
@@ -206,6 +209,7 @@ describe("CostOverviewSettings", () => {
       <CostOverviewSettings
         instanceId="core.cost-overview"
         params={{}}
+        setFooter={vi.fn()}
         updateParams={updateParams}
       />
     );
@@ -230,6 +234,7 @@ describe("CostOverviewSettings", () => {
       <CostOverviewSettings
         instanceId="core.cost-overview"
         params={costOverviewParamsToJson(paramsFromPreset("overview"))}
+        setFooter={vi.fn()}
         updateParams={updateParams}
       />
     );
@@ -253,6 +258,7 @@ describe("CostOverviewSettings", () => {
           ...paramsFromPreset("overview"),
           sources: ["codex-local-sessions"],
         })}
+        setFooter={vi.fn()}
         updateParams={updateParams}
       />
     );

@@ -179,9 +179,14 @@ export const workbench = {
       waiting: "Needs you",
     },
     customCard: {
-      addBlock: "Add Block",
+      addBlock: "Add block",
+      addConfirm: "Add",
+      addDialogDescription:
+        "Pick a block type and metric, then confirm to add it to the card.",
+      addDialogTitle: "Add block",
       addSection: "Add a block",
       blocksSection: "Blocks",
+      blockOrdinal: "Block {{n}}",
       blockType: {
         gauge: "Gauge",
         kpi: "KPI Number",
@@ -201,7 +206,7 @@ export const workbench = {
         "Remove this block in settings, or re-enable its metric provider.",
       moveDown: "Move down",
       moveUp: "Move up",
-      noBlocks: "No blocks. Add one below.",
+      noBlocks: "No blocks yet. Use Add block in the footer.",
       removeBlock: "Remove block",
       title: "Custom Card",
       allBlocksHidden: "No visible blocks at this size",

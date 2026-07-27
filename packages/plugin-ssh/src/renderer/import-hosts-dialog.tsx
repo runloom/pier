@@ -4,6 +4,7 @@ import type {
 } from "@pier/plugin-api/renderer";
 import { Button } from "@pier/ui/button.tsx";
 import { Checkbox } from "@pier/ui/checkbox.tsx";
+import { DIALOG_FOOTER_ACTIONS_CLASS } from "@pier/ui/dialog-form-layout.ts";
 import {
   Item,
   ItemContent,
@@ -12,7 +13,7 @@ import {
   ItemSeparator,
   ItemTitle,
 } from "@pier/ui/item.tsx";
-import { Fragment, type JSX, useState } from "react";
+import { Fragment, type JSX, useLayoutEffect, useRef, useState } from "react";
 import { describeSshTarget, type SshHost } from "../shared/hosts.ts";
 import type { Translate } from "./translate.ts";
 
@@ -30,12 +31,15 @@ function ImportContent({
   close,
   context,
   onError,
+  setFooter,
   t,
 }: ImportContentProps): JSX.Element {
   const [selectedIds, setSelectedIds] = useState<ReadonlySet<string>>(
     new Set(candidates.map((candidate) => candidate.id))
   );
   const [importing, setImporting] = useState(false);
+  const selectedIdsRef = useRef(selectedIds);
+  selectedIdsRef.current = selectedIds;
 
   const toggle = (hostId: string, checked: boolean): void => {
     setSelectedIds((prev) => {
@@ -49,28 +53,60 @@ function ImportContent({
     });
   };
 
-  const handleImport = (): void => {
-    const hosts = candidates.filter((candidate) =>
-      selectedIds.has(candidate.id)
+  useLayoutEffect(() => {
+    setFooter(
+      <div className={DIALOG_FOOTER_ACTIONS_CLASS}>
+        <Button
+          disabled={importing}
+          onClick={() => close(null)}
+          type="button"
+          variant="outline"
+        >
+          {t("pier.ssh.hosts.settings.cancel", "Cancel")}
+        </Button>
+        <Button
+          disabled={importing || selectedIds.size === 0}
+          onClick={() => {
+            const hosts = candidates.filter((candidate) =>
+              selectedIdsRef.current.has(candidate.id)
+            );
+            if (hosts.length === 0) {
+              close(null);
+              return;
+            }
+            setImporting(true);
+            context.rpc
+              .invoke("hosts.import", { hosts })
+              .then(() => {
+                close(hosts.length);
+              })
+              .catch((error: unknown) => {
+                setImporting(false);
+                onError(error);
+              });
+          }}
+          type="button"
+        >
+          {t("pier.ssh.import.confirm", "Import selected")}
+        </Button>
+      </div>
     );
-    if (hosts.length === 0) {
-      close(null);
-      return;
-    }
-    setImporting(true);
-    context.rpc
-      .invoke("hosts.import", { hosts })
-      .then(() => {
-        close(hosts.length);
-      })
-      .catch((error: unknown) => {
-        setImporting(false);
-        onError(error);
-      });
-  };
+    return () => {
+      setFooter(null);
+    };
+  }, [
+    candidates,
+    close,
+    context.rpc,
+    importing,
+    onError,
+    selectedIds.size,
+    setFooter,
+    t,
+  ]);
 
   return (
-    <div className="flex flex-col gap-4">
+    <div className="flex flex-col gap-4" data-slot="dialog-commit-form">
       <ItemGroup className="max-h-72 gap-0 overflow-y-auto rounded-md border">
         {candidates.map((candidate, index) => (
           <Fragment key={candidate.id}>
@@ -95,23 +131,6 @@ function ImportContent({
           </Fragment>
         ))}
       </ItemGroup>
-      <div className="flex justify-end gap-2">
-        <Button
-          disabled={importing}
-          onClick={() => close(null)}
-          type="button"
-          variant="outline"
-        >
-          {t("pier.ssh.hosts.settings.cancel", "Cancel")}
-        </Button>
-        <Button
-          disabled={importing || selectedIds.size === 0}
-          onClick={handleImport}
-          type="button"
-        >
-          {t("pier.ssh.import.confirm", "Import selected")}
-        </Button>
-      </div>
     </div>
   );
 }
