@@ -1,8 +1,5 @@
 {
   "commands": {
-    "pier.files.openSelectionPath": {
-      "title": "打开路径"
-    },
     "pier.files.openSelectionAsMarkdown": {
       "title": "预览选中文本"
     },
@@ -122,7 +119,6 @@
     "filePanel.view.source": "源码",
     "filePanel.view.switchToPreview": "切换到预览",
     "filePanel.view.switchToSource": "切换到源码",
-    "files.actions.openSelectionPath.title": "打开路径",
     "files.actions.openSelectionAsMarkdown.title": "预览选中文本",
     "files.draftProtection.failed": "无法自动保存草稿",
     "files.draftRecovery.failed": "无法恢复已保存的草稿",
@@ -237,7 +233,6 @@
     "files.notifications.terminalOpenUrl.invalid": "无法打开该路径",
     "files.notifications.terminalOpenUrl.unsupportedScheme": "无法打开该链接",
     "files.notifications.terminalOpenUrl.openFailed": "无法打开路径",
-    "files.notifications.terminalOpenSelectionPath.notAPath": "请先在终端中选中文件路径。",
     "filePanel.contentSearch.title": "在文件中搜索",
     "filePanel.contentSearch.command": "在文件中搜索",
     "filePanel.contentSearch.findInFolder": "在文件夹中查找…",

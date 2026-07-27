@@ -1,8 +1,5 @@
 {
   "commands": {
-    "pier.files.openSelectionPath": {
-      "title": "Open Path"
-    },
     "pier.files.openSelectionAsMarkdown": {
       "title": "Preview Selected Text"
     },
@@ -122,7 +119,6 @@
     "filePanel.view.source": "Source",
     "filePanel.view.switchToPreview": "Switch to preview",
     "filePanel.view.switchToSource": "Switch to source",
-    "files.actions.openSelectionPath.title": "Open Path",
     "files.actions.openSelectionAsMarkdown.title": "Preview Selected Text",
     "files.draftProtection.failed": "Unable to auto-save draft",
     "files.draftRecovery.failed": "Unable to restore saved drafts",
@@ -237,7 +233,6 @@
     "files.notifications.terminalOpenUrl.invalid": "Couldn't open this path",
     "files.notifications.terminalOpenUrl.unsupportedScheme": "Couldn't open this link",
     "files.notifications.terminalOpenUrl.openFailed": "Couldn't open path",
-    "files.notifications.terminalOpenSelectionPath.notAPath": "Select a file path in the terminal first.",
     "filePanel.contentSearch.title": "Search in Files",
     "filePanel.contentSearch.command": "Search in Files",
     "filePanel.contentSearch.findInFolder": "Find in Folder…",
