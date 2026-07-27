@@ -240,4 +240,54 @@ describe("registerFileQueryIpc", () => {
     expect(ok).toBe(true);
     expect(serviceMock.cancel).toHaveBeenCalledWith(42, "q1");
   });
+
+  it("forwards a validated content start with mode content", async () => {
+    registerFileQueryIpc();
+    const start = electronMock.handlers.get(PIER.FILE_QUERY_START);
+    if (!start) throw new Error("missing start handler");
+
+    const sender = makeSender();
+    const result = await start(
+      { sender },
+      {
+        mode: "content",
+        owner: "content-search:p1",
+        query: "TODO",
+        queryId: "c1",
+        root: "/repo",
+        options: { caseSensitive: true, maxResults: 100 },
+      }
+    );
+
+    expect(result).toBe(true);
+    expect(serviceMock.start).toHaveBeenCalledOnce();
+    const [, parsed] = serviceMock.start.mock.calls[0] ?? [];
+    expect(parsed).toMatchObject({
+      mode: "content",
+      owner: "content-search:p1",
+      query: "TODO",
+      queryId: "c1",
+      root: "/repo",
+      options: { caseSensitive: true, maxResults: 100 },
+    });
+  });
+
+  it("rejects malformed content start without touching the service", async () => {
+    registerFileQueryIpc();
+    const start = electronMock.handlers.get(PIER.FILE_QUERY_START);
+    if (!start) throw new Error("missing start handler");
+
+    const sender = makeSender();
+    expect(
+      await start(
+        { sender },
+        {
+          mode: "content",
+          // missing owner/root/query
+          queryId: "c1",
+        }
+      )
+    ).toBe(false);
+    expect(serviceMock.start).not.toHaveBeenCalled();
+  });
 });

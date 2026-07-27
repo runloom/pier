@@ -1,0 +1,18 @@
+{
+  "generatedAt": "2026-07-27T03:03:04.316Z",
+  "platform": "darwin",
+  "hostArch": "arm64",
+  "rgVersion": "14.1.1",
+  "binaries": {
+    "arm64": {
+      "path": "search/arm64/rg",
+      "sha256": "0e0cb83f5195f1f51bb8feef1fff5b0b171e82bd1db6bd35deee701a3e7102f8",
+      "size": 4375216
+    },
+    "x64": {
+      "path": "search/x64/rg",
+      "sha256": "923dcc25cab57d33f4e7dd0476d4b74a554401a38817e246a8d6101dcd51c50f",
+      "size": 5162504
+    }
+  }
+}

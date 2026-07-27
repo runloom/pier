@@ -11,7 +11,7 @@ export function attachFileEditorView(input: {
   minimapEnabled: boolean;
   parent: HTMLElement;
   pathMutationGuards: FilePathMutationGuardCoordinator;
-  pendingReveals: Map<string, number>;
+  pendingReveals: Map<string, { from: number; to: number }>;
   presentation: FileEditorViewPresentation;
   views: FileEditorViewCoordinator;
 }): void {
@@ -33,7 +33,7 @@ export function attachFileEditorView(input: {
     const pendingReveal = input.pendingReveals.get(input.editorSessionId);
     if (pendingReveal !== undefined) {
       input.pendingReveals.delete(input.editorSessionId);
-      session.revealOffset(pendingReveal);
+      session.revealRange(pendingReveal.from, pendingReveal.to);
     }
   }
   input.pathMutationGuards.syncSessions();

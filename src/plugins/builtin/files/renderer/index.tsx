@@ -3,13 +3,14 @@ import type {
   RendererPluginContext,
   RendererPluginModule,
 } from "@plugins/api/renderer.ts";
-import { FileText, FolderTree } from "lucide-react";
+import { FileText, FolderSearch, FolderTree } from "lucide-react";
 import {
   FILES_FILE_PANEL_ID,
   FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
   FILES_PLUGIN_ID,
   FILES_SAVE_AS_COMMAND_ID,
   FILES_SAVE_COMMAND_ID,
+  FILES_SEARCH_PANEL_ID,
   FILES_TREE_SEARCH_COMMAND_ID,
 } from "../manifest.ts";
 import { FileEditorController } from "./file-editor-controller.ts";
@@ -18,6 +19,11 @@ import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
 import { createSaveAllAction } from "./file-save-all-action.ts";
 import { createFilesTreeActions } from "./file-tree-actions.ts";
 import { filePanelProjectRoot } from "./file-tree-preferences.ts";
+import {
+  createSearchContentsAction,
+  createSearchInFolderAction,
+} from "./files-content-search-actions.ts";
+import { createFilesContentSearchPanel } from "./files-content-search-panel.tsx";
 import {
   abortFilesDraftSuspend,
   commitFilesDraftSuspend,
@@ -372,6 +378,13 @@ export const filesRendererPlugin: RendererPluginModule = {
           });
         })(),
       }),
+      context.panels.register({
+        component: createFilesContentSearchPanel(context, editorController),
+        icon: FolderSearch,
+        id: FILES_SEARCH_PANEL_ID,
+        kind: "web",
+        title: () => t("filePanel.contentSearch.title", "Search in Files"),
+      }),
       registerDirtyCloseGuard(context, editorController),
       context.actions.register(createOpenSelectionPathAction(context)),
       context.actions.register(
@@ -399,6 +412,8 @@ export const filesRendererPlugin: RendererPluginModule = {
         )
       ),
       context.actions.register(createFilesQuickOpenAction(context)),
+      context.actions.register(createSearchContentsAction(context)),
+      context.actions.register(createSearchInFolderAction(context)),
       context.actions.register(
         withFilesMutationGate(createTreeSearchAction(context), editorController)
       ),

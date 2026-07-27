@@ -236,6 +236,7 @@ function createMockContext(overrides?: {
   notifyInfo?: RendererPluginContext["notifications"]["info"];
   onPathQueryEvent?: RendererPluginContext["files"]["onPathQueryEvent"];
   openExternal?: RendererPluginContext["externalNavigation"]["open"];
+  queryContents?: RendererPluginContext["files"]["queryContents"];
   queryPaths?: RendererPluginContext["files"]["queryPaths"];
   releasePreview?: RendererPluginContext["filePreviews"]["release"];
   openInstance?: RendererPluginContext["panels"]["openInstance"];
@@ -418,6 +419,13 @@ function createMockContext(overrides?: {
       list: overrides?.list ?? vi.fn(async () => []),
       onPathQueryEvent:
         overrides?.onPathQueryEvent ?? vi.fn(() => () => undefined),
+      queryContents:
+        overrides?.queryContents ??
+        vi.fn(() => ({
+          cancel: vi.fn(),
+          queryId: "unused-content-query",
+          started: Promise.resolve(true),
+        })),
       queryPaths:
         overrides?.queryPaths ??
         vi.fn(() => ({
@@ -3481,6 +3489,7 @@ describe("Files file-panel", () => {
     act(() => {
       pathQuery.emit({
         kind: "batch",
+        mode: "path",
         queryId,
         items: [
           {
@@ -3591,6 +3600,7 @@ describe("Files file-panel", () => {
     act(() => {
       pathQuery.emit({
         kind: "batch",
+        mode: "path",
         queryId,
         items: [
           {
@@ -3684,6 +3694,7 @@ describe("Files file-panel", () => {
     act(() => {
       pathQuery.emit({
         kind: "batch",
+        mode: "path",
         queryId,
         items: [{ path: "README.md", score: 10 }],
       });

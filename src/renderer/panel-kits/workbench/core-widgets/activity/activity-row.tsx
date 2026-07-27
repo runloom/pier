@@ -3,7 +3,7 @@ import { cn } from "@pier/ui/utils.ts";
 import {
   agentSessionTitleInput,
   resolveAgentSessionTitle,
-} from "@shared/agent-session-title.ts";
+} from "@shared/agent-session-title/index.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import type {
   TaskRunNodeStatus,

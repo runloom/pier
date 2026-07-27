@@ -76,7 +76,7 @@ export function createComposerPathQueryClient(): {
         if (disposed || event.queryId !== nextId) {
           return;
         }
-        if (event.kind === "batch") {
+        if (event.kind === "batch" && event.mode === "path") {
           items = [...items, ...event.items];
           input.onUpdate({ items: [...items], status: "loading" });
           return;

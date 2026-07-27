@@ -44,6 +44,7 @@ import type {
   FileWriteTextResult,
 } from "@shared/contracts/file.ts";
 import type {
+  FileContentQueryStartInput,
   FilePathQueryStartInput,
   FileQueryEvent,
 } from "@shared/contracts/file-query.ts";
@@ -134,7 +135,10 @@ export interface RendererPluginFilesFacade {
   ): Promise<FileListResult>;
   mkdir(request: FileMkdirRequest): Promise<FileMkdirResult>;
   move(request: FileMoveRequest): Promise<FileMoveResult>;
-  /** Subscribe to path query events (started/batch/done/error) for this document. */
+  /**
+   * Subscribe to file query events (path + content: started/batch/done/error).
+   * Filter by `queryId` (and batch `mode`) on the caller side.
+   */
   onPathQueryEvent(listener: (event: FileQueryEvent) => void): () => void;
   /**
    * 在 files 面板内打开磁盘文件（宿主跨插件入口）。
@@ -148,6 +152,16 @@ export interface RendererPluginFilesFacade {
   }): boolean;
   openPath(request: FileOpenPathRequest): Promise<FileOpenPathResult>;
   pickSaveTarget(request: FileSaveTargetRequest): Promise<FileSaveTargetResult>;
+  /**
+   * Start a cancellable content query against the main-process file query service.
+   * Same session/cancel rules as `queryPaths` (`owner` isolation). Design:
+   * docs/superpowers/specs/2026-07-27-files-content-search-design.md
+   */
+  queryContents(
+    request: Omit<FileContentQueryStartInput, "queryId" | "mode"> & {
+      queryId?: string;
+    }
+  ): { cancel(): void; queryId: string; started: Promise<boolean> };
   /**
    * Start a cancellable path query against the main-process file query service.
    * `queryId` is generated if omitted so the returned handle is available

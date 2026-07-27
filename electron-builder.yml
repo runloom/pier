@@ -24,6 +24,12 @@ extraResources:
     to: fonts
   - from: resources/notification-sounds
     to: notification-sounds
+  # Content search runtime (rg). Layout: search/<arch>/rg
+  - from: resources/search
+    to: search
+    filter:
+      - "**/*"
+      - "!README.md"
   - from: packages/plugin-codex/dist-pkg
     to: plugin-packages/pier.codex
     filter:

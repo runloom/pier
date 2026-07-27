@@ -5,6 +5,12 @@
     },
     "pier.files.openSelectionAsMarkdown": {
       "title": "预览选中文本"
+    },
+    "pier.files.searchContents": {
+      "title": "在文件中搜索"
+    },
+    "pier.files.searchInFolder": {
+      "title": "在文件夹中查找…"
     }
   },
   "messages": {
@@ -231,7 +237,43 @@
     "files.notifications.terminalOpenUrl.invalid": "无法打开该路径",
     "files.notifications.terminalOpenUrl.unsupportedScheme": "无法打开该链接",
     "files.notifications.terminalOpenUrl.openFailed": "无法打开路径",
-    "files.notifications.terminalOpenSelectionPath.notAPath": "请先在终端中选中文件路径。"
+    "files.notifications.terminalOpenSelectionPath.notAPath": "请先在终端中选中文件路径。",
+    "filePanel.contentSearch.title": "在文件中搜索",
+    "filePanel.contentSearch.command": "在文件中搜索",
+    "filePanel.contentSearch.findInFolder": "在文件夹中查找…",
+    "filePanel.contentSearch.queryLabel": "搜索",
+    "filePanel.contentSearch.placeholder": "在文件中搜索",
+    "filePanel.contentSearch.matchCase": "区分大小写",
+    "filePanel.contentSearch.wholeWord": "整词匹配",
+    "filePanel.contentSearch.regexp": "正则表达式",
+    "filePanel.contentSearch.showOptions": "筛选",
+    "filePanel.contentSearch.hideOptions": "隐藏筛选",
+    "filePanel.contentSearch.stop": "停止搜索",
+    "filePanel.contentSearch.include": "包含的文件",
+    "filePanel.contentSearch.includeHint": "可填多个通配符，用英文逗号分隔。留空则搜索全部文件。",
+    "filePanel.contentSearch.useGitIgnore": "使用 Git 忽略规则",
+    "filePanel.contentSearch.useExclude": "使用搜索排除规则",
+    "filePanel.contentSearch.scope": "正在搜索文件夹：{{path}}",
+    "filePanel.contentSearch.clearScope": "搜索整个项目",
+    "filePanel.contentSearch.noProject": "请先打开项目以搜索文件内容。",
+    "filePanel.contentSearch.noProjectTitle": "未打开项目",
+    "filePanel.contentSearch.searching": "正在搜索…",
+    "filePanel.contentSearch.failed": "搜索失败",
+    "filePanel.contentSearch.failedBody": "请重试，或检查搜索功能是否可用。",
+    "filePanel.contentSearch.runtimeMissing": "当前环境缺少内置搜索引擎。请重新安装应用，或在开发模式下确认 resources/search 已就绪。",
+    "filePanel.contentSearch.noResults": "无结果",
+    "filePanel.contentSearch.noResultsHint": "可换关键词、关闭区分大小写，或放宽文件筛选。",
+    "filePanel.contentSearch.truncated": "已显示 {{count}}+ 条结果",
+    "filePanel.contentSearch.resultCount": "{{count}} 条结果",
+    "filePanel.contentSearch.hint": "输入文本以在项目中搜索。",
+    "filePanel.contentSearch.startFailed": "无法开始内容搜索。",
+    "filePanel.contentSearch.includePlaceholder": "*.ts, src/**/*.tsx",
+    "filePanel.contentSearch.runtimeMissingTitle": "无法搜索",
+    "filePanel.contentSearch.resultsLabel": "搜索结果",
+    "filePanel.contentSearch.invalidRegexpTitle": "正则表达式无效",
+    "filePanel.contentSearch.invalidRegexpBody": "请检查表达式，或关闭正则后按普通文本搜索。",
+    "filePanel.contentSearch.invalidScopeTitle": "文件夹不可用",
+    "filePanel.contentSearch.invalidScopeBody": "搜索目录已移动或不在项目内。请清除文件夹范围后重试。"
   },
   "terminalStatusItems": {
     "pier.files.project": {

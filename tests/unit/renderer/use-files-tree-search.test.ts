@@ -206,6 +206,7 @@ describe("useFilesTreeSearch path query", () => {
     await act(async () => {
       query.emit({
         kind: "batch",
+        mode: "path",
         queryId,
         items: [
           {
@@ -303,7 +304,12 @@ describe("useFilesTreeSearch path query", () => {
       score: 200 - index,
     }));
     await act(async () => {
-      query.emit({ kind: "batch", queryId: secondId, items: many });
+      query.emit({
+        kind: "batch",
+        mode: "path",
+        queryId: secondId,
+        items: many,
+      });
       query.emit({
         kind: "done",
         queryId: secondId,
