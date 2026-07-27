@@ -139,7 +139,7 @@ export function EmptyFileState({
               )
             : t(
                 "filePanel.empty.noTree.description",
-                "Open a file or a terminal Markdown preview to start editing."
+                "Open a file to start editing."
               )}
         </EmptyDescription>
       </EmptyHeader>

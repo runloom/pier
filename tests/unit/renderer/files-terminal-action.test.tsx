@@ -4,7 +4,6 @@ import type {
 } from "@plugins/api/renderer.ts";
 import {
   FILES_FILE_PANEL_ID,
-  FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
   FILES_PLUGIN_MANIFEST,
   FILES_SAVE_COMMAND_ID,
   FILES_SEARCH_PANEL_ID,
@@ -26,24 +25,17 @@ import { cleanup, render, waitFor } from "@testing-library/react";
 import type { ComponentType } from "react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-const sourcePanelContext: PanelContext = {
-  branch: "feature/files",
-  contextId: "ctx-source",
-  cwd: "/repo/source",
-  gitRoot: "/repo/source",
-  openedPath: "/repo/source",
-  projectRootPath: "/repo/source",
-  source: "panel",
-  updatedAt: 1_772_100_000_000,
-  worktreeKey: "/repo/source",
-  worktreeRoot: "/repo/source",
-};
 const activePanelContext: PanelContext = {
-  ...sourcePanelContext,
+  branch: "feature/files",
   contextId: "ctx-active",
   cwd: "/repo/active",
+  gitRoot: "/repo/source",
+  openedPath: "/repo/source",
   projectRootPath: "/repo/active",
+  source: "panel",
+  updatedAt: 1_772_100_000_000,
   worktreeKey: "/repo/active",
+  worktreeRoot: "/repo/source",
 };
 const PROJECT_ROOT = activePanelContext.projectRootPath;
 
@@ -62,8 +54,6 @@ function markLoadedText(documentId: string, contents: string): void {
     writable: true,
   });
 }
-const UNTITLED_FILE_PANEL_INSTANCE_RE = /^pier\.files\.filePanel:untitled:/;
-
 interface CapturedRegistrations {
   actionDisposers: ReturnType<typeof vi.fn>[];
   actions: RendererPluginAction[];
@@ -80,7 +70,6 @@ interface CapturedRegistrations {
 function createMockContext(overrides?: {
   activePanelId?: string | null;
   activePanelContext?: PanelContext | null;
-  readSelectionText?: RendererPluginContext["terminal"]["readSelectionText"];
   translate?: RendererPluginContext["i18n"]["t"];
 }): RendererPluginContext & { captured: CapturedRegistrations } {
   const captured: CapturedRegistrations = {
@@ -267,15 +256,10 @@ function createMockContext(overrides?: {
       language: vi.fn(() => "zh-CN"),
       t:
         overrides?.translate ??
-        vi.fn((key: string, _values?: unknown, fallback?: string) => {
-          if (key === "files.actions.openSelectionAsMarkdown.title") {
-            return "预览选中文本";
-          }
-          if (key === "files.notifications.noTerminalSelection") {
-            return "请先在终端中选中文本。";
-          }
-          return fallback ?? key;
-        }),
+        vi.fn(
+          (_key: string, _values?: unknown, fallback?: string) =>
+            fallback ?? _key
+        ),
     },
     lifecycle: {
       beforeSuspend: vi.fn((participant) => {
@@ -313,12 +297,10 @@ function createMockContext(overrides?: {
       activePanelId: vi.fn(() => overrides?.activePanelId ?? "terminal-active"),
       getPanelContext: vi.fn(() => null),
       onOpenUrl: vi.fn(() => vi.fn()),
-      readSelectionText:
-        overrides?.readSelectionText ??
-        vi.fn(async () => ({
-          kind: "ok",
-          text: "# Selected\n\nfrom terminal",
-        })),
+      readSelectionText: vi.fn(async () => ({
+        kind: "ok",
+        text: "",
+      })),
     },
     terminalStatusItems: {
       register: vi.fn(() => vi.fn()),
@@ -326,14 +308,6 @@ function createMockContext(overrides?: {
   } as unknown as RendererPluginContext & { captured: CapturedRegistrations };
 
   return context;
-}
-
-function findOpenSelectionAction(context: { captured: CapturedRegistrations }) {
-  const action = context.captured.actions.find(
-    (candidate) => candidate.id === FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID
-  );
-  expect(action).toBeDefined();
-  return action as RendererPluginAction;
 }
 
 function findTreeSearchAction(context: { captured: CapturedRegistrations }) {
@@ -405,8 +379,8 @@ afterEach(() => {
   vi.restoreAllMocks();
 });
 
-describe("files terminal selection action", () => {
-  it("declares the shared file panels and terminal selection commands in the manifest", () => {
+describe("files plugin activation", () => {
+  it("declares the shared file panels in the manifest", () => {
     expect(FILES_PLUGIN_MANIFEST.panels).toEqual(
       expect.arrayContaining([
         expect.objectContaining({
@@ -420,15 +394,11 @@ describe("files terminal selection action", () => {
       ])
     );
     expect(FILES_PLUGIN_MANIFEST.panels).toHaveLength(2);
-
-    const command = FILES_PLUGIN_MANIFEST.commands.find(
-      (candidate) =>
-        candidate.id === FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID
-    );
-    expect(command).toBeDefined();
-    expect(command?.permissions).toEqual(
-      expect.arrayContaining(["terminal:read", "panel:open"])
-    );
+    expect(
+      FILES_PLUGIN_MANIFEST.commands.some(
+        (candidate) => candidate.id === "pier.files.openSelectionAsMarkdown"
+      )
+    ).toBe(false);
     expect(
       FILES_PLUGIN_MANIFEST.commands.some(
         (candidate) => candidate.id === "pier.files.openSelectionPath"
@@ -446,7 +416,7 @@ describe("files terminal selection action", () => {
     );
   });
 
-  it("registers the shared file-panel and the terminal/content context-menu actions", () => {
+  it("registers the shared file panels without terminal selection actions", () => {
     const context = createMockContext();
 
     filesRendererPlugin.activate(context);
@@ -457,109 +427,19 @@ describe("files terminal selection action", () => {
     ]);
     expect(
       context.captured.actions.some(
+        (candidate) => candidate.id === "pier.files.openSelectionAsMarkdown"
+      )
+    ).toBe(false);
+    expect(
+      context.captured.actions.some(
         (candidate) => candidate.id === "pier.files.openSelectionPath"
       )
     ).toBe(false);
-
-    const action = findOpenSelectionAction(context);
-    expect(action.surfaces).toEqual(["terminal/content"]);
-    expect(action.metadata).toMatchObject({ group: "0_edit", sortOrder: 6 });
-    expect(action.title()).toBe("预览选中文本");
-  });
-
-  it("opens the source terminal selection as an untitled Markdown file-panel", async () => {
-    const selection = "# Selected\n\nsecret body from terminal";
-    const readSelectionText = vi.fn(async () => ({
-      kind: "ok" as const,
-      text: selection,
-    }));
-    const context = createMockContext({
-      activePanelContext,
-      activePanelId: "terminal-active",
-      readSelectionText,
-    });
-    filesRendererPlugin.activate(context);
-
-    await findOpenSelectionAction(context).handler({
-      sourcePanelComponent: "terminal",
-      sourcePanelContext,
-      sourcePanelGroupId: "group-terminal-source",
-      sourcePanelId: "terminal-source",
-      surface: "terminal/content",
-    });
-
-    expect(context.terminal.activePanelId).not.toHaveBeenCalled();
-    expect(context.panels.getActiveContext).not.toHaveBeenCalled();
-    expect(readSelectionText).toHaveBeenCalledWith("terminal-source");
-    expect(context.panels.openInstance).toHaveBeenCalledOnce();
-    expect(context.panels.openInstance).toHaveBeenCalledWith(
-      expect.objectContaining({
-        componentId: FILES_FILE_PANEL_ID,
-        context: sourcePanelContext,
-        title: "Untitled-1.md",
-      })
-    );
-
-    const openOptions = vi.mocked(context.panels.openInstance).mock
-      .calls[0]?.[0];
-    expect(openOptions?.instanceId).toMatch(UNTITLED_FILE_PANEL_INSTANCE_RE);
-    expect(openOptions?.instanceId).not.toBe("pier.files.untitled:1");
-    expect(openOptions?.targetGroupId).toBe("group-terminal-source");
-    expect(openOptions?.params).toEqual({
-      // untitled Markdown 面板天然 pinned,防止 preview 语义关掉时把 localStorage
-      // 草稿一起删。
-      pinned: true,
-      source: {
-        id: expect.stringMatching(/^pier\.files\.untitled:[0-9a-f-]{36}$/),
-        kind: "untitled",
-        name: "Untitled-1.md",
-      },
-    });
-    expect(JSON.stringify(openOptions?.params)).not.toContain(selection);
-    const source = openOptions?.params?.source;
     expect(
-      source && typeof source === "object" && "id" in source
-        ? getDocument(String(source.id))?.currentContents
-        : null
-    ).toBe(selection);
-  });
-
-  it.each([
-    [
-      "missing source panel",
-      undefined,
-      { kind: "ok" as const, text: "# Text" },
-    ],
-    [
-      "empty selection",
-      "terminal-source",
-      { kind: "ok" as const, text: "  \n\t" },
-    ],
-    ["empty selection result", "terminal-source", { kind: "empty" as const }],
-    [
-      "selection read error",
-      "terminal-source",
-      { kind: "error" as const, message: "missing" },
-    ],
-  ])("notifies without opening when there is no usable selection: %s", async (_caseName, sourcePanelId, selectionResult) => {
-    const readSelectionText = vi.fn(async () => selectionResult);
-    const context = createMockContext({ readSelectionText });
-    filesRendererPlugin.activate(context);
-
-    await findOpenSelectionAction(context).handler({
-      ...(sourcePanelId ? { sourcePanelId } : {}),
-      surface: "terminal/content",
-    });
-
-    if (sourcePanelId) {
-      expect(readSelectionText).toHaveBeenCalledWith(sourcePanelId);
-    } else {
-      expect(readSelectionText).not.toHaveBeenCalled();
-    }
-    expect(context.panels.openInstance).not.toHaveBeenCalled();
-    expect(context.notifications.info).toHaveBeenCalledWith(
-      "请先在终端中选中文本。"
-    );
+      context.captured.actions.some((candidate) =>
+        candidate.surfaces?.includes("terminal/content")
+      )
+    ).toBe(false);
   });
 
   it("clears file documents and disposes registrations on deactivate", () => {

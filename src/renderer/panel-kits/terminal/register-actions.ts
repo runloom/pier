@@ -112,7 +112,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       const id = activeTerminalPanelId();
       return id == null || !isAgentComposerEligibleForPanel(id);
     },
-    // After Find(4), Clear(5), Preview Selected Text(6).
+    // After Find(4), Clear(5).
     sortOrder: 7,
     surfaces: ["terminal/content", "command-palette"],
     titleKey: "contextMenu.action.openRichInput",

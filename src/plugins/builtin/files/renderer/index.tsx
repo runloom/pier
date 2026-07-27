@@ -6,7 +6,6 @@ import type {
 import { FileText, FolderSearch, FolderTree } from "lucide-react";
 import {
   FILES_FILE_PANEL_ID,
-  FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
   FILES_PLUGIN_ID,
   FILES_SAVE_AS_COMMAND_ID,
   FILES_SAVE_COMMAND_ID,
@@ -15,7 +14,6 @@ import {
 } from "../manifest.ts";
 import { FileEditorController } from "./file-editor-controller.ts";
 import { createFilePanel as createFilesFilePanel } from "./file-panel.tsx";
-import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
 import { createSaveAllAction } from "./file-save-all-action.ts";
 import { createFilesTreeActions } from "./file-tree-actions.ts";
 import { filePanelProjectRoot } from "./file-tree-preferences.ts";
@@ -76,77 +74,6 @@ function withFilesMutationGate(
         }
       }
     },
-  };
-}
-
-function createOpenSelectionAsMarkdownAction(
-  context: RendererPluginContext,
-  controller: FileEditorController
-): RendererPluginAction {
-  const t = (key: string, fallback?: string) =>
-    context.i18n.t(key, undefined, fallback);
-
-  return {
-    category: "file",
-    handler: async (invocation) => {
-      const sourcePanelId = invocation?.sourcePanelId;
-      if (!sourcePanelId) {
-        context.notifications.info(
-          t(
-            "files.notifications.noTerminalSelection",
-            "Select some text in the terminal first."
-          )
-        );
-        return;
-      }
-
-      const result = await context.terminal.readSelectionText(sourcePanelId);
-      if (result.kind !== "ok" || result.text.trim().length === 0) {
-        context.notifications.info(
-          t(
-            "files.notifications.noTerminalSelection",
-            "Select some text in the terminal first."
-          )
-        );
-        return;
-      }
-
-      const document = controller.createUntitledDocument({
-        contents: result.text,
-        origin: { panelId: sourcePanelId, source: "terminal-selection" },
-      });
-      if (document.source.kind !== "untitled") {
-        return;
-      }
-      const source = {
-        id: document.source.id,
-        kind: "untitled" as const,
-        name: document.name,
-      };
-
-      context.panels.openInstance({
-        componentId: FILES_FILE_PANEL_ID,
-        ...(invocation?.sourcePanelContext
-          ? { context: invocation.sourcePanelContext }
-          : {}),
-        instanceId: createFileFilePanelInstanceId(source),
-        params: {
-          // untitled = 用户产生的临时草稿,天然 pinned,不能被 preview 语义
-          // 顶掉,否则受保护草稿会随 panel 关闭一并 remove。
-          pinned: true,
-          source,
-        },
-        ...(invocation?.sourcePanelGroupId
-          ? { targetGroupId: invocation.sourcePanelGroupId }
-          : {}),
-        title: document.name,
-      });
-    },
-    id: FILES_OPEN_SELECTION_AS_MARKDOWN_COMMAND_ID,
-    metadata: { group: "0_edit", sortOrder: 6 },
-    surfaces: ["terminal/content"],
-    title: () =>
-      t("files.actions.openSelectionAsMarkdown.title", "Preview Selected Text"),
   };
 }
 
@@ -387,12 +314,6 @@ export const filesRendererPlugin: RendererPluginModule = {
         title: () => t("filePanel.contentSearch.title", "Search in Files"),
       }),
       registerDirtyCloseGuard(context, editorController),
-      context.actions.register(
-        withFilesMutationGate(
-          createOpenSelectionAsMarkdownAction(context, editorController),
-          editorController
-        )
-      ),
       context.actions.register(
         withFilesMutationGate(
           createSaveAction(context, editorController),

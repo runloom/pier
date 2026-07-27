@@ -1,8 +1,5 @@
 {
   "commands": {
-    "pier.files.openSelectionAsMarkdown": {
-      "title": "Preview Selected Text"
-    },
     "pier.files.quickOpen": {
       "title": "Go to File"
     },
@@ -21,7 +18,7 @@
     "filePanel.breadcrumbLabel": "File location",
     "filePanel.empty.title": "No file selected",
     "filePanel.empty.withTree.description": "Select a file from the project tree to open it in this tab.",
-    "filePanel.empty.noTree.description": "Open a file, or select text in the terminal to preview as Markdown.",
+    "filePanel.empty.noTree.description": "Open a file to start editing.",
     "filePanel.image.actualSize": "Actual size",
     "filePanel.image.controlsLabel": "Image controls",
     "filePanel.image.fit": "Fit to window",
@@ -128,10 +125,8 @@
     "filePanel.view.source": "Source",
     "filePanel.view.switchToPreview": "Switch to preview",
     "filePanel.view.switchToSource": "Switch to source",
-    "files.actions.openSelectionAsMarkdown.title": "Preview Selected Text",
     "files.draftProtection.failed": "Unable to auto-save draft",
     "files.draftRecovery.failed": "Unable to restore saved drafts",
-    "files.notifications.noTerminalSelection": "Select text in the terminal first",
     "panel.title": "Files",
     "panel.noProjectContext.title": "No project open",
     "panel.noProjectContext.description": "Open a project folder to browse files.",

@@ -623,7 +623,7 @@ describe("terminal content context menu actions", () => {
     expect(ids).not.toContain("pier.terminal.composerAttach");
     const search = actionRegistry.get("pier.terminal.search");
     const clear = actionRegistry.get("pier.terminal.clearScreen");
-    // Find(4) → Clear(5) → Preview Selected Text(6, files plugin) → Rich Input(7)
+    // Find(4) → Clear(5) → Rich Input(7)
     expect(search?.metadata?.sortOrder).toBe(4);
     expect(clear?.metadata?.sortOrder).toBe(5);
     expect(action.metadata?.sortOrder).toBe(7);

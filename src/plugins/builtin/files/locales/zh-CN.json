@@ -1,8 +1,5 @@
 {
   "commands": {
-    "pier.files.openSelectionAsMarkdown": {
-      "title": "预览选中文本"
-    },
     "pier.files.quickOpen": {
       "title": "转到文件"
     },
@@ -21,7 +18,7 @@
     "filePanel.breadcrumbLabel": "文件位置",
     "filePanel.empty.title": "未选择文件",
     "filePanel.empty.withTree.description": "从项目目录树中选择一个文件，在当前标签页打开。",
-    "filePanel.empty.noTree.description": "打开文件，或从终端选中文本后预览 Markdown。",
+    "filePanel.empty.noTree.description": "打开文件以开始编辑。",
     "filePanel.image.actualSize": "原始尺寸",
     "filePanel.image.controlsLabel": "图片控制",
     "filePanel.image.fit": "适应窗口",
@@ -128,10 +125,8 @@
     "filePanel.view.source": "源码",
     "filePanel.view.switchToPreview": "切换到预览",
     "filePanel.view.switchToSource": "切换到源码",
-    "files.actions.openSelectionAsMarkdown.title": "预览选中文本",
     "files.draftProtection.failed": "无法自动保存草稿",
     "files.draftRecovery.failed": "无法恢复已保存的草稿",
-    "files.notifications.noTerminalSelection": "请先在终端中选中文本",
     "panel.title": "文件",
     "panel.noProjectContext.title": "未打开项目",
     "panel.noProjectContext.description": "请先打开项目文件夹以浏览文件。",
