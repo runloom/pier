@@ -87,7 +87,13 @@ export interface CreateWindowServiceArgs {
     closeError: unknown;
     feedbackError: unknown;
     windowId: string;
-  }) => Promise<void> | void;
+  }) =>
+    | Promise<
+        | import("../windows/native-window-close-failure.ts").NativeWindowCloseFailureDecision
+        | undefined
+      >
+    | import("../windows/native-window-close-failure.ts").NativeWindowCloseFailureDecision
+    | undefined;
   runWhenPluginTransitionsIdle?: <T>(operation: () => Promise<T>) => Promise<T>;
   settlePanelTransferBeforeClose?: (
     lease: WindowTransitionLease,

@@ -18,6 +18,7 @@ const electronMock = vi.hoisted(() => {
     loadFile: vi.fn(async () => undefined),
     loadURL: vi.fn(async () => undefined),
     mainFrame,
+    forcefullyCrashRenderer: vi.fn(),
     reload: vi.fn(),
     setBackgroundThrottling: vi.fn(),
     off: vi.fn((event: string) => {
@@ -550,6 +551,10 @@ describeMockedMacOSWindowManager(
         true
       );
 
+      const navigationCount = () =>
+        electronMock.webContents.loadURL.mock.calls.length +
+        electronMock.webContents.loadFile.mock.calls.length;
+      const navigationsAtCreate = navigationCount();
       await vi.waitFor(() =>
         expect(electronMock.showMessageBox).toHaveBeenCalledWith(
           expect.objectContaining({
@@ -559,8 +564,9 @@ describeMockedMacOSWindowManager(
         )
       );
       await vi.waitFor(() =>
-        expect(electronMock.webContents.reload).toHaveBeenCalledOnce()
+        expect(navigationCount()).toBeGreaterThan(navigationsAtCreate)
       );
+      const navigationsAfterFirstRetry = navigationCount();
       electronMock.webListeners.get("did-fail-load")?.(
         {},
         -6,
@@ -572,7 +578,7 @@ describeMockedMacOSWindowManager(
         expect(electronMock.showMessageBox).toHaveBeenCalledTimes(2)
       );
       await vi.waitFor(() =>
-        expect(electronMock.webContents.reload).toHaveBeenCalledTimes(2)
+        expect(navigationCount()).toBeGreaterThan(navigationsAfterFirstRetry)
       );
       expect(electronMock.baseWindow.show).not.toHaveBeenCalled();
     });
@@ -747,7 +753,10 @@ describeMockedMacOSWindowManager(
 
       resolvePrompt?.({ response: 0 });
       await vi.waitFor(() =>
-        expect(electronMock.webContents.reload).toHaveBeenCalledOnce()
+        expect(
+          electronMock.webContents.loadURL.mock.calls.length +
+            electronMock.webContents.loadFile.mock.calls.length
+        ).toBeGreaterThan(1)
       );
       electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.(
         { sender: electronMock.webContents },
@@ -796,7 +805,10 @@ describeMockedMacOSWindowManager(
 
       resolvePrompt?.({ response: 0 });
       await vi.waitFor(() =>
-        expect(electronMock.webContents.reload).toHaveBeenCalledOnce()
+        expect(
+          electronMock.webContents.loadURL.mock.calls.length +
+            electronMock.webContents.loadFile.mock.calls.length
+        ).toBeGreaterThan(1)
       );
       electronMock.ipcMainListeners.get("pier://window:renderer-ready")?.(
         { sender: electronMock.webContents },

@@ -43,7 +43,13 @@ export function wireAppCoreWindowAndPanelTransfer(input: {
     closeError: unknown;
     feedbackError: unknown;
     windowId: string;
-  }) => Promise<void> | void;
+  }) =>
+    | Promise<
+        | import("../windows/native-window-close-failure.ts").NativeWindowCloseFailureDecision
+        | undefined
+      >
+    | import("../windows/native-window-close-failure.ts").NativeWindowCloseFailureDecision
+    | undefined;
   workspace: WorkspaceService;
 }): {
   panelTransfer: PanelTransferService;

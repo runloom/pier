@@ -247,7 +247,29 @@ class WindowManager {
     if (opts.startup?.kind === "panel-transfer") {
       rendererShowGate.holdUntilReleased("panel-transfer");
     }
-    const rendererFailure = installRendererFailureRecovery({
+    let rendererFailure: ReturnType<typeof installRendererFailureRecovery>;
+    const loadAppEntry = (options?: { rearmBoot?: boolean }): void => {
+      if (window.isDestroyed() || window.webContents.isDestroyed()) {
+        return;
+      }
+      if (options?.rearmBoot !== false) {
+        rendererShowGate.rearmBoot();
+      }
+      const rendererUrl = process.env.ELECTRON_RENDERER_URL;
+      if (isDev && rendererUrl) {
+        window.webContents.loadURL(rendererUrl).catch((error: unknown) => {
+          reportRendererLoadError(rendererFailure, error);
+        });
+        return;
+      }
+      window.webContents
+        .loadFile(join(import.meta.dirname, "../renderer/index.html"))
+        .catch((error: unknown) => {
+          reportRendererLoadError(rendererFailure, error);
+        });
+    };
+
+    rendererFailure = installRendererFailureRecovery({
       beforeLoadFailure: rendererShowGate.cancel,
       beforeRendererGone: () => {
         rendererShowGate.cancel();
@@ -258,8 +280,10 @@ class WindowManager {
           // ignore: window 即将销毁/已销毁
         }
       },
+      isContentVisible: () => rendererShowGate.hasShown(),
       isQuitting: () => this.isDestroyingAllForQuit,
-      retryRenderer: rendererShowGate.retry,
+      reloadAppEntry: () =>
+        loadAppEntry({ rearmBoot: !rendererShowGate.hasShown() }),
       window,
     });
     if (isMac) {
@@ -297,16 +321,15 @@ class WindowManager {
     });
 
     window.webContents.setWindowOpenHandler(() => ({ action: "deny" }));
-    window.webContents.on("will-navigate", (event) => {
-      event.preventDefault();
-    });
+    // will-navigate deny + pier-recovery:// is installed inside
+    // installRendererFailureRecovery (installRendererNavigationGuard).
 
-    if (isDev) {
-      installDetachedDevToolsHandlers(window, () => {
-        terminalFocusCoordinator.setWindowFocused(window, true, "window-focus");
-        sendWindowFocusChanged(window, true);
-      });
-    }
+    // Production also gets ⌘⌥I / Ctrl+Alt+I detached DevTools for field
+    // diagnosis when a window is unresponsive or partially broken.
+    installDetachedDevToolsHandlers(window, () => {
+      terminalFocusCoordinator.setWindowFocused(window, true, "window-focus");
+      sendWindowFocusChanged(window, true);
+    });
 
     window.host.on("close", (event: Electron.Event) => {
       const context = findWindowContext(window);
@@ -385,18 +408,8 @@ class WindowManager {
       }
     });
 
-    const rendererUrl = process.env.ELECTRON_RENDERER_URL;
-    if (isDev && rendererUrl) {
-      window.webContents.loadURL(rendererUrl).catch((error: unknown) => {
-        reportRendererLoadError(rendererFailure, error);
-      });
-    } else {
-      window.webContents
-        .loadFile(join(import.meta.dirname, "../renderer/index.html"))
-        .catch((error: unknown) => {
-          reportRendererLoadError(rendererFailure, error);
-        });
-    }
+    // First load: show-gate already armed boot listeners in createRendererShowGate.
+    loadAppEntry({ rearmBoot: false });
 
     this.windows.set(id, window);
     for (const cb of this.onCreateCallbacks) {

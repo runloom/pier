@@ -1,12 +1,21 @@
+import { createLogger } from "@shared/logger.ts";
 import {
   app,
   dialog,
   type MessageBoxOptions,
   type MessageBoxReturnValue,
+  type WebContents,
 } from "electron";
 import type { AppWindow } from "./app-window.ts";
+import {
+  buildRendererRecoveryCopy,
+  isRendererRecoveryCloseUrl,
+  isRendererRecoveryReloadUrl,
+  loadRendererRecoveryPage,
+  type RendererRecoveryKind,
+} from "./renderer-recovery-page.ts";
 
-export type RendererFailureKind = "crash" | "load" | "preload";
+export type RendererFailureKind = RendererRecoveryKind;
 
 interface RendererFailure {
   detail: string;
@@ -17,6 +26,8 @@ interface RendererFailure {
 export interface RendererFailureRecovery {
   report(failure: RendererFailure): void;
 }
+
+const log = createLogger("renderer.failure");
 
 export function reportRendererLoadError(
   recovery: RendererFailureRecovery,
@@ -38,8 +49,10 @@ export function reportRendererLoadError(
 interface InstallRendererFailureRecoveryArgs {
   beforeLoadFailure(): void;
   beforeRendererGone(): void;
+  isContentVisible(): boolean;
   isQuitting(): boolean;
-  retryRenderer(): void;
+  /** Load the real app entry (not recovery data URL / not bare reload). */
+  reloadAppEntry(): void;
   window: AppWindow;
 }
 
@@ -47,21 +60,12 @@ function failureCopy(kind: RendererFailureKind): {
   message: string;
   title: string;
 } {
-  const isChinese = app.getLocale().toLowerCase().startsWith("zh");
-  const labels = isChinese
-    ? {
-        crash: "界面进程意外退出。",
-        load: "界面资源加载失败。",
-        preload: "安全桥接脚本加载失败。",
-        title: "Pier 界面不可用",
-      }
-    : {
-        crash: "The interface process exited unexpectedly.",
-        load: "The interface resources failed to load.",
-        preload: "The secure preload bridge failed to load.",
-        title: "Pier interface unavailable",
-      };
-  return { message: labels[kind], title: labels.title };
+  const copy = buildRendererRecoveryCopy({
+    detail: "",
+    isChinese: app.getLocale().toLowerCase().startsWith("zh"),
+    kind,
+  });
+  return { message: copy.message, title: copy.title };
 }
 
 function failurePromptOptions(failure: RendererFailure): MessageBoxOptions {
@@ -158,63 +162,187 @@ export class RendererResourceFailureCoordinator {
 
 const rendererResourceFailures = new RendererResourceFailureCoordinator();
 
+async function presentInPageRecovery(
+  window: AppWindow,
+  failure: RendererFailure
+): Promise<boolean> {
+  if (window.isDestroyed() || window.webContents.isDestroyed()) {
+    return false;
+  }
+  try {
+    const copy = buildRendererRecoveryCopy({
+      detail: failure.detail,
+      isChinese: app.getLocale().toLowerCase().startsWith("zh"),
+      kind: failure.kind,
+    });
+    await loadRendererRecoveryPage(window.webContents, copy);
+    log.info("recovery-page-loaded", {
+      kind: failure.kind,
+      windowId: window.id,
+    });
+    // Recovery page may be the only interactive surface; ensure the shell is
+    // visible so the user can click Reload / Close.
+    try {
+      window.host.setOpacity(1);
+      if (!window.isMinimized()) {
+        window.host.show();
+      }
+      window.focus();
+    } catch {
+      // ignore chrome visibility failures; page may still be usable
+    }
+    return true;
+  } catch (error) {
+    log.error("recovery-page-load-failed", {
+      kind: failure.kind,
+      message: error instanceof Error ? error.message : String(error),
+      windowId: window.id,
+    });
+    return false;
+  }
+}
+
 /** renderer 尚未能渲染错误页时，由 main 提供唯一的重试/关窗兜底。 */
 function createRendererFailureRecovery(
   window: AppWindow,
   isQuitting: () => boolean,
+  isContentVisible: () => boolean,
   beforeLoadFailure: () => void,
-  retryRenderer: () => void
+  reloadAppEntry: () => void
 ): RendererFailureRecovery {
   let promptPending = false;
+  let recoveryPagePending = false;
+
+  const presentNative = (failure: RendererFailure): void => {
+    if (promptPending || isExpectedFailure(failure, window, isQuitting)) {
+      return;
+    }
+    promptPending = true;
+    dialog
+      .showMessageBox(failurePromptOptions(failure))
+      .then(({ response }) => {
+        promptPending = false;
+        if (window.isDestroyed()) return;
+        if (response === 0) {
+          reloadAppEntry();
+        } else {
+          window.destroy();
+        }
+      })
+      .catch((error: unknown) => {
+        promptPending = false;
+        console.error("[renderer-failure-feedback] failed:", error);
+        if (!window.isDestroyed()) window.destroy();
+      });
+  };
+
+  const present = (failure: RendererFailure): void => {
+    log.error("renderer-failure", {
+      detail: failure.detail.slice(0, 2000),
+      kind: failure.kind,
+      visible: isContentVisible(),
+      windowId: window.id,
+    });
+    if (isExpectedFailure(failure, window, isQuitting)) {
+      return;
+    }
+
+    // load/preload are shared product-bundle failures — keep multi-window
+    // coalesced native prompt so one decision retries all affected shells.
+    if (failure.kind === "load" || failure.kind === "preload") {
+      beforeLoadFailure();
+      rendererResourceFailures.report(
+        { isQuitting, retry: reloadAppEntry, window },
+        failure
+      );
+      return;
+    }
+
+    // crash / unresponsive: prefer in-page recovery when the shell is already
+    // visible so users get Reload without depending on JS in the dead app.
+    if (isContentVisible() && !recoveryPagePending) {
+      recoveryPagePending = true;
+      presentInPageRecovery(window, failure)
+        .then((ok) => {
+          recoveryPagePending = false;
+          if (!ok) {
+            presentNative(failure);
+          }
+        })
+        .catch(() => {
+          recoveryPagePending = false;
+          presentNative(failure);
+        });
+      return;
+    }
+
+    presentNative(failure);
+  };
 
   return {
     report(failure) {
-      if (failure.kind !== "crash") {
-        if (isExpectedFailure(failure, window, isQuitting)) return;
-        beforeLoadFailure();
-        rendererResourceFailures.report(
-          { isQuitting, retry: retryRenderer, window },
-          failure
-        );
-        return;
-      }
-      if (promptPending || isExpectedFailure(failure, window, isQuitting)) {
-        return;
-      }
-      promptPending = true;
-      dialog
-        .showMessageBox(failurePromptOptions(failure))
-        .then(({ response }) => {
-          promptPending = false;
-          if (window.isDestroyed()) return;
-          if (response === 0) {
-            retryRenderer();
-          } else {
-            window.destroy();
-          }
-        })
-        .catch((error: unknown) => {
-          promptPending = false;
-          console.error("[renderer-failure-feedback] failed:", error);
-          if (!window.isDestroyed()) window.destroy();
-        });
+      present(failure);
     },
   };
+}
+
+/**
+ * Compose will-navigate: allow pier-recovery:// actions, deny everything else.
+ * Call from window-manager so recovery page links work after load.
+ */
+export function installRendererNavigationGuard(
+  webContents: WebContents,
+  handlers: {
+    onRecoveryClose(): void;
+    onRecoveryReload(): void;
+  }
+): void {
+  webContents.on("will-navigate", (event, url) => {
+    if (isRendererRecoveryReloadUrl(url)) {
+      event.preventDefault();
+      handlers.onRecoveryReload();
+      return;
+    }
+    if (isRendererRecoveryCloseUrl(url)) {
+      event.preventDefault();
+      handlers.onRecoveryClose();
+      return;
+    }
+    event.preventDefault();
+  });
 }
 
 export function installRendererFailureRecovery({
   beforeLoadFailure,
   beforeRendererGone,
+  isContentVisible,
   isQuitting,
-  retryRenderer,
+  reloadAppEntry,
   window,
 }: InstallRendererFailureRecoveryArgs): RendererFailureRecovery {
   const recovery = createRendererFailureRecovery(
     window,
     isQuitting,
+    isContentVisible,
     beforeLoadFailure,
-    retryRenderer
+    reloadAppEntry
   );
+
+  installRendererNavigationGuard(window.webContents, {
+    onRecoveryClose: () => {
+      if (!(window.isDestroyed() || isQuitting())) {
+        log.info("recovery-close-via-guard", { windowId: window.id });
+        window.destroy();
+      }
+    },
+    onRecoveryReload: () => {
+      if (!(window.isDestroyed() || isQuitting())) {
+        log.info("recovery-reload-via-guard", { windowId: window.id });
+        reloadAppEntry();
+      }
+    },
+  });
+
   window.webContents.on(
     "did-fail-load",
     (_event, errorCode, errorDescription, validatedUrl, isMainFrame) => {
@@ -223,6 +351,13 @@ export function installRendererFailureRecovery({
         errorCode === -3 ||
         isQuitting() ||
         window.isDestroyed()
+      ) {
+        return;
+      }
+      // Recovery data-URL navigations should not re-enter failure handling.
+      if (
+        typeof validatedUrl === "string" &&
+        validatedUrl.startsWith("data:text/html")
       ) {
         return;
       }
@@ -244,6 +379,29 @@ export function installRendererFailureRecovery({
         kind: "crash",
       });
     }
+  });
+  window.webContents.on("unresponsive", () => {
+    if (isQuitting() || window.isDestroyed()) {
+      return;
+    }
+    log.error("renderer-unresponsive", { windowId: window.id });
+    try {
+      // Kill the hung process so we can load a recovery document that the
+      // user can interact with (reload / close) without waiting forever.
+      window.webContents.forcefullyCrashRenderer();
+    } catch (error) {
+      log.error("force-crash-failed", {
+        message: error instanceof Error ? error.message : String(error),
+        windowId: window.id,
+      });
+      recovery.report({
+        detail: "renderer unresponsive (force crash failed)",
+        kind: "unresponsive",
+      });
+    }
+  });
+  window.webContents.on("responsive", () => {
+    log.info("renderer-responsive", { windowId: window.id });
   });
   window.webContents.on("preload-error", (_event, preloadPath, error) => {
     if (isQuitting() || window.isDestroyed()) return;

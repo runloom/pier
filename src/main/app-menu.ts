@@ -240,9 +240,11 @@ export function buildAppMenuTemplate({
             separator(),
             { label: t.reload, role: "reload" },
             { label: t.forceReload, role: "forceReload" },
-            createDetachedDevToolsMenuItem(() => getTargetWindow(), t.devTools),
           ] satisfies MenuItemConstructorOptions[])
         : []),
+      separator(),
+      // Available in production too (same chord as installDetachedDevToolsHandlers).
+      createDetachedDevToolsMenuItem(() => getTargetWindow(), t.devTools),
       separator(),
       appCommandMenuItem(
         "pier.view.resetZoom",

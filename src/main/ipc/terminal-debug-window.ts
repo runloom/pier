@@ -69,8 +69,9 @@ export function registerTerminalDebugWindowIpc(
       const recovery = installRendererFailureRecovery({
         beforeLoadFailure: showGate.cancel,
         beforeRendererGone: showGate.cancel,
+        isContentVisible: () => showGate.hasShown(),
         isQuitting: options.isQuitting,
-        retryRenderer: showGate.retry,
+        reloadAppEntry: showGate.retry,
         window: appWindow,
       });
       showGate.setReadyTimeoutHandler(() => {

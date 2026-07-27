@@ -198,10 +198,14 @@ vi.mock("@main/windows/window-identity.ts", () => ({
 }));
 
 describe("WindowService", () => {
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     mocks.resetLiveWindowCount();
     mocks.isQuitting.mockReturnValue(false);
+    const { __resetWindowCloseForceCandidatesForTests } = await import(
+      "@main/services/window-close-preparation.ts"
+    );
+    __resetWindowCloseForceCandidatesForTests();
   });
 
   it("creates Cmd+N windows from a new durable window record", async () => {
@@ -469,6 +473,36 @@ describe("WindowService", () => {
     );
   });
 
+  it("auto force-closes on renderer command timeout without a native prompt", async () => {
+    const prepareRendererClose = vi.fn(async () => {
+      throw new Error("renderer command timed out");
+    });
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    const reportCloseFailure = vi.fn(async () => {
+      throw new Error("should not be called for unreachable renderer");
+    });
+    const reportCloseFailureFallback = vi.fn(async () => "dismiss" as const);
+    const { createWindowService } = await import(
+      "@main/services/window-service.ts"
+    );
+
+    createWindowService({
+      prepareRendererClose,
+      reportCloseFailure,
+      reportCloseFailureFallback,
+      flushCriticalState: vi.fn(async () => undefined),
+    });
+    const decision = await mocks.getBeforeCloseCallback()?.({
+      recordId: "record-1",
+      windowId: "main",
+    });
+
+    expect(decision).toBe("allow");
+    expect(reportCloseFailure).not.toHaveBeenCalled();
+    expect(reportCloseFailureFallback).not.toHaveBeenCalled();
+    expect(mocks.flushWindowRecordState).toHaveBeenCalled();
+  });
+
   it("falls back to native feedback when the renderer report fails", async () => {
     const prepareRendererClose = vi.fn(async () => {
       throw new Error("draft flush failed");
@@ -477,7 +511,7 @@ describe("WindowService", () => {
     const reportCloseFailure = vi.fn(async () => {
       throw new Error("renderer feedback failed");
     });
-    const reportCloseFailureFallback = vi.fn();
+    const reportCloseFailureFallback = vi.fn(async () => "dismiss" as const);
     const { createWindowService } = await import(
       "@main/services/window-service.ts"
     );

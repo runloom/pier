@@ -57,7 +57,7 @@ describe("app menu", () => {
     expect(resolveAppMenuLanguage("system", () => "fr-FR")).toBe("en");
   });
 
-  it("builds a Chinese production menu without development actions", () => {
+  it("builds a Chinese production menu without reload, but with DevTools", () => {
     const template = buildAppMenuTemplate({
       appName: "Pier",
       getTargetWindow: () => null,
@@ -78,7 +78,8 @@ describe("app menu", () => {
     expect(labels(submenu(itemAt(template, 3)))).toContain("命令面板");
     expect(labels(submenu(itemAt(template, 3)))).not.toContain("重新加载");
     expect(labels(submenu(itemAt(template, 3)))).not.toContain("强制重新加载");
-    expect(labels(submenu(itemAt(template, 3)))).not.toContain("开发者工具");
+    // Field diagnosis: production also exposes detached DevTools (⌘⌥I).
+    expect(labels(submenu(itemAt(template, 3)))).toContain("开发者工具");
   });
 
   it("builds an English development menu with development actions", () => {
