@@ -340,6 +340,7 @@ function noticeFileDiff(input: PierDiffViewItem): FileDiffMetadata {
     cacheKey: input.cacheKey,
     deletionLines: [],
     hunks: [],
+    isPartial: false,
     name: display.path,
     ...(display.previousPath === undefined
       ? {}

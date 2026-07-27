@@ -214,7 +214,9 @@ describe("activityOverviewCounts", () => {
     const groupedLocal = groupActivityOverviewRows({}, taskRuns, {
       windowId: "w1",
     });
-    expect(groupedLocal.running.map((r) => r.runId)).toEqual(["run-local"]);
+    expect(
+      groupedLocal.running.filter((r) => r.kind === "task").map((r) => r.runId)
+    ).toEqual(["run-local"]);
     expect(groupedLocal.needsYou).toEqual([]);
   });
 });

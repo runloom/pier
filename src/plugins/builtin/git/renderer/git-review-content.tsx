@@ -454,8 +454,8 @@ function ReviewDocumentsComponent({
         // 用户滚动意图（已在 DiffView 手势级合并）；只做轻量工作
         noteUserScrollReading();
         clearForUserIntent();
-        // 已无树选中时避免 setState(null) 造成无意义重渲染
-        setSelectedTreeTarget((current) => (current === null ? current : null));
+        // setSelectedTreeTarget(null) 内部对 entry/section 有 previous===next 短路
+        setSelectedTreeTarget(null);
         if (pendingAnchorRef.current?.restored) {
           pendingAnchorRef.current = null;
         }

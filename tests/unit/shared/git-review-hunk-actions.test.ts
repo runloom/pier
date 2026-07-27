@@ -3,7 +3,34 @@ import {
   applyHunkGitAction,
   tryExtractChangeBlockPatch,
 } from "../../../src/plugins/builtin/git/renderer/git-review-hunk-actions.ts";
+import type {
+  GitApplyPatchOptions,
+  GitApplyPatchResult,
+} from "../../../src/shared/contracts/git.ts";
 import { extractHunkPatch } from "../../../src/shared/git-patch-hunk.ts";
+
+const APPLY_SUCCESS: GitApplyPatchResult = {
+  appliedPaths: [],
+  conflictedPaths: [],
+  skippedPaths: [],
+  status: "success",
+};
+
+type ApplyPatchFn = (
+  cwd: string,
+  options: GitApplyPatchOptions
+) => Promise<GitApplyPatchResult>;
+
+function applyError(message: string): GitApplyPatchResult {
+  return {
+    appliedPaths: [],
+    conflictedPaths: [],
+    errorCode: "apply-failed",
+    message,
+    skippedPaths: [],
+    status: "error",
+  };
+}
 
 const SAMPLE_PATCH = `diff --git a/src/a.ts b/src/a.ts
 index 1111111..2222222 100644
@@ -55,9 +82,7 @@ describe("tryExtractChangeBlockPatch", () => {
 
 describe("applyHunkGitAction", () => {
   it("maps stage to apply --cached (target staged, revert false)", async () => {
-    const applyPatch = vi.fn(async () => ({
-      status: "success" as const,
-    }));
+    const applyPatch = vi.fn<ApplyPatchFn>(async () => APPLY_SUCCESS);
     const result = await applyHunkGitAction({
       action: "stage",
       applyPatch,
@@ -77,9 +102,7 @@ describe("applyHunkGitAction", () => {
   });
 
   it("returns extract-failed without English product string", async () => {
-    const applyPatch = vi.fn(async () => ({
-      status: "success" as const,
-    }));
+    const applyPatch = vi.fn<ApplyPatchFn>(async () => APPLY_SUCCESS);
     const result = await applyHunkGitAction({
       action: "stage",
       applyPatch,
@@ -96,13 +119,10 @@ describe("applyHunkGitAction", () => {
 
   it("restages when staged revert worktree step fails", async () => {
     const applyPatch = vi
-      .fn()
-      .mockResolvedValueOnce({ status: "success" as const })
-      .mockResolvedValueOnce({
-        status: "error" as const,
-        message: "worktree reject",
-      })
-      .mockResolvedValueOnce({ status: "success" as const });
+      .fn<ApplyPatchFn>(async () => APPLY_SUCCESS)
+      .mockResolvedValueOnce(APPLY_SUCCESS)
+      .mockResolvedValueOnce(applyError("worktree reject"))
+      .mockResolvedValueOnce(APPLY_SUCCESS);
     const result = await applyHunkGitAction({
       action: "revert",
       applyPatch,
@@ -122,16 +142,10 @@ describe("applyHunkGitAction", () => {
 
   it("reports partial-revert-worktree when restage also fails", async () => {
     const applyPatch = vi
-      .fn()
-      .mockResolvedValueOnce({ status: "success" as const })
-      .mockResolvedValueOnce({
-        status: "error" as const,
-        message: "worktree reject",
-      })
-      .mockResolvedValueOnce({
-        status: "error" as const,
-        message: "restage reject",
-      });
+      .fn<ApplyPatchFn>(async () => APPLY_SUCCESS)
+      .mockResolvedValueOnce(APPLY_SUCCESS)
+      .mockResolvedValueOnce(applyError("worktree reject"))
+      .mockResolvedValueOnce(applyError("restage reject"));
     const result = await applyHunkGitAction({
       action: "revert",
       applyPatch,
@@ -145,9 +159,7 @@ describe("applyHunkGitAction", () => {
   });
 
   it("stages only the clicked change block in a multi-island @@", async () => {
-    const applyPatch = vi.fn(async () => ({
-      status: "success" as const,
-    }));
+    const applyPatch = vi.fn<ApplyPatchFn>(async () => APPLY_SUCCESS);
     await applyHunkGitAction({
       action: "stage",
       applyPatch,
@@ -157,15 +169,13 @@ describe("applyHunkGitAction", () => {
       hunkIndex: 0,
       variant: "unstaged",
     });
-    const diff = applyPatch.mock.calls[0]?.[1]?.diff as string;
+    const diff = applyPatch.mock.calls[0]?.[1]?.diff;
     expect(diff).toContain("+new-two");
     expect(diff).not.toContain("+new-one");
   });
 
   it("maps unstage to reverse --cached", async () => {
-    const applyPatch = vi.fn(async () => ({
-      status: "success" as const,
-    }));
+    const applyPatch = vi.fn<ApplyPatchFn>(async () => APPLY_SUCCESS);
     await applyHunkGitAction({
       action: "unstage",
       applyPatch,
@@ -183,9 +193,7 @@ describe("applyHunkGitAction", () => {
   });
 
   it("maps staged revert to two apply steps", async () => {
-    const applyPatch = vi.fn(async () => ({
-      status: "success" as const,
-    }));
+    const applyPatch = vi.fn<ApplyPatchFn>(async () => APPLY_SUCCESS);
     await applyHunkGitAction({
       action: "revert",
       applyPatch,

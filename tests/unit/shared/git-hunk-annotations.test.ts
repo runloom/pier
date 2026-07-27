@@ -261,6 +261,7 @@ describe("hunkAnnotationAnchor (Codex wa)", () => {
           deletions: 2,
         }),
       ],
+      isPartial: false,
       name: "src/a.ts",
       splitLineCount: 8,
       type: "change" as const,

@@ -1,12 +1,13 @@
+import type { PierCodeViewHandle } from "@pier/ui/diff-view-item-sync.ts";
 import {
   acceptDiffViewItem,
   planPathAlignedIdRenames,
   syncCodeViewItems,
 } from "@pier/ui/diff-view-item-sync.ts";
-import type { CodeViewHandle, CodeViewItem } from "@pierre/diffs/react";
+import type { PierDiffCodeViewItem } from "@pier/ui/diff-view-items.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-type Item = CodeViewItem<undefined>;
+type Item = PierDiffCodeViewItem;
 
 function makeItem(id: string, version = 1, path = id): Item {
   return {
@@ -19,7 +20,7 @@ function makeItem(id: string, version = 1, path = id): Item {
 
 function mockHandle(options?: { readonly items?: Item[] }): {
   readonly addItems: ReturnType<typeof vi.fn>;
-  readonly handle: CodeViewHandle<undefined>;
+  readonly handle: PierCodeViewHandle;
   readonly setItems: ReturnType<typeof vi.fn>;
   readonly updateItem: ReturnType<typeof vi.fn>;
   readonly updateItemId: ReturnType<typeof vi.fn>;
@@ -66,7 +67,7 @@ function mockHandle(options?: { readonly items?: Item[] }): {
     setSelectedLines: vi.fn(),
     updateItem,
     updateItemId,
-  } as unknown as CodeViewHandle<undefined>;
+  } as unknown as PierCodeViewHandle;
   return { addItems, handle, setItems, updateItem, updateItemId };
 }
 

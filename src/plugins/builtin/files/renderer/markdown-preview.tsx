@@ -310,9 +310,9 @@ export function MarkdownPreview({
           onNavigate={search.navigateSearch}
           // Clear the right tick rail when the outline is present so find and
           // outline chrome do not share the same top-right strip.
-          style={
-            hasOutline ? { right: MARKDOWN_TOC_CONTENT_INSET_PX } : undefined
-          }
+          {...(hasOutline
+            ? { style: { right: MARKDOWN_TOC_CONTENT_INSET_PX } }
+            : {})}
           testId="files-markdown-search-bar"
           value={search.searchValue}
         />

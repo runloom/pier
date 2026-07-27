@@ -370,7 +370,7 @@ describe("action search", () => {
     const queries = [...new Set([...progressive, ...family.headQueries])];
     return (["en", "zh-CN"] as const).flatMap((titleLocale) =>
       queries.map((query) => ({
-        expectHead: family.headQueries.includes(query),
+        expectHead: (family.headQueries as readonly string[]).includes(query),
         family: family.family,
         primary: family.primary,
         query,

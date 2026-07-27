@@ -104,8 +104,8 @@ export async function performUpdate(
         id,
         overwrite: true,
         sha256: source.sha256,
-        size: source.size,
         version: source.version,
+        ...(source.size === undefined ? {} : { size: source.size }),
       }
     );
   } catch (err) {

@@ -133,9 +133,11 @@ export function useDiffViewItemApply({
         : new Set(previousOrdered.map((item) => item.id));
 
     const shouldFlushLayout = shouldFlushMembershipLayout({
-      getSuppressMembershipScrollRestore,
       membershipChanged,
       suppressMembershipScrollRestore,
+      ...(getSuppressMembershipScrollRestore === undefined
+        ? {}
+        : { getSuppressMembershipScrollRestore }),
     });
 
     const accepted = syncCodeViewItems(handle, codeViewItems, previousOrdered);
