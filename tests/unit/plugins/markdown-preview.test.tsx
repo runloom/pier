@@ -747,6 +747,7 @@ describe("MarkdownPreview", () => {
   it("applies markdown-prose root without heading underlines and scales via --md-scale", async () => {
     localStorage.removeItem("pier.files.markdown.fontScale");
     localStorage.removeItem("pier.files.markdown.measureMode");
+    localStorage.removeItem("pier.files.markdown.readingAppearance");
     const openImage = vi.fn();
     const registerSelectionSelectAllProvider = vi.fn<
       (surface: string, selectAll: () => boolean) => () => void
@@ -827,9 +828,10 @@ describe("MarkdownPreview", () => {
       expect(scaled.style.getPropertyValue("--md-scale")).toBe("1.15");
     });
 
-    const { writeMarkdownMeasureMode } = await import(
-      "@plugins/builtin/files/renderer/markdown-preview-preferences.ts"
-    );
+    const { writeMarkdownMeasureMode, writeMarkdownReadingAppearance } =
+      await import(
+        "@plugins/builtin/files/renderer/markdown-preview-preferences.ts"
+      );
     writeMarkdownMeasureMode("wide");
     await waitFor(() => {
       expect(
@@ -840,7 +842,22 @@ describe("MarkdownPreview", () => {
       ).toHaveAttribute("data-side", "right");
     });
 
+    const previewRoot = container.querySelector(
+      '[data-slot="markdown-preview-root"]'
+    );
+    expect(previewRoot).not.toBeNull();
+    expect(previewRoot).not.toHaveAttribute("data-reading-appearance");
+
+    writeMarkdownReadingAppearance("light");
+    await waitFor(() => {
+      expect(
+        container.querySelector('[data-slot="markdown-preview-root"]')
+      ).toHaveAttribute("data-reading-appearance", "light");
+    });
+
+    writeMarkdownReadingAppearance("auto");
     localStorage.removeItem("pier.files.markdown.fontScale");
     localStorage.removeItem("pier.files.markdown.measureMode");
+    localStorage.removeItem("pier.files.markdown.readingAppearance");
   });
 });

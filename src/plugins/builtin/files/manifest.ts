@@ -43,6 +43,12 @@ export const FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID =
   "pier.files.markdown.measureComfortable";
 export const FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID =
   "pier.files.markdown.measureWide";
+export const FILES_MARKDOWN_APPEARANCE_AUTO_COMMAND_ID =
+  "pier.files.markdown.appearanceAuto";
+export const FILES_MARKDOWN_APPEARANCE_LIGHT_COMMAND_ID =
+  "pier.files.markdown.appearanceLight";
+export const FILES_MARKDOWN_APPEARANCE_DARK_COMMAND_ID =
+  "pier.files.markdown.appearanceDark";
 
 export const FILES_PROJECT_STATUS_ITEM_ID = "pier.files.project";
 export const FILES_PLUGIN_MANIFEST = {
@@ -192,6 +198,24 @@ export const FILES_PLUGIN_MANIFEST = {
       id: FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID,
       permissions: [],
       title: "Wide reading",
+    },
+    {
+      category: "file",
+      id: FILES_MARKDOWN_APPEARANCE_AUTO_COMMAND_ID,
+      permissions: [],
+      title: "Match app appearance",
+    },
+    {
+      category: "file",
+      id: FILES_MARKDOWN_APPEARANCE_LIGHT_COMMAND_ID,
+      permissions: [],
+      title: "Light reading",
+    },
+    {
+      category: "file",
+      id: FILES_MARKDOWN_APPEARANCE_DARK_COMMAND_ID,
+      permissions: [],
+      title: "Dark reading",
     },
   ],
   configuration: {

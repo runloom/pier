@@ -4,10 +4,12 @@ import {
   readMarkdownFontScale,
   readMarkdownMeasureMode,
   readMarkdownOpenMode,
+  readMarkdownReadingAppearance,
   useMarkdownPreviewPrefsStore,
   writeMarkdownFontScale,
   writeMarkdownMeasureMode,
   writeMarkdownOpenMode,
+  writeMarkdownReadingAppearance,
 } from "../../../src/plugins/builtin/files/renderer/markdown-preview-preferences.ts";
 
 describe("markdown-preview-preferences", () => {
@@ -25,6 +27,7 @@ describe("markdown-preview-preferences", () => {
     useMarkdownPreviewPrefsStore.setState({
       fontScale: 1,
       measureMode: "comfortable",
+      readingAppearance: "auto",
     });
   });
 
@@ -53,5 +56,18 @@ describe("markdown-preview-preferences", () => {
     expect(localStorage.getItem("pier.files.markdown.measureMode")).toBe(
       "wide"
     );
+  });
+
+  it("defaults reading appearance to auto and persists light/dark", () => {
+    expect(readMarkdownReadingAppearance()).toBe("auto");
+    writeMarkdownReadingAppearance("light");
+    expect(readMarkdownReadingAppearance()).toBe("light");
+    expect(localStorage.getItem("pier.files.markdown.readingAppearance")).toBe(
+      "light"
+    );
+    writeMarkdownReadingAppearance("dark");
+    expect(readMarkdownReadingAppearance()).toBe("dark");
+    writeMarkdownReadingAppearance("auto");
+    expect(readMarkdownReadingAppearance()).toBe("auto");
   });
 });

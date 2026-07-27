@@ -33,6 +33,7 @@ import {
 } from "./markdown-preview-article-layout.tsx";
 import { MarkdownPreviewFontScaleControl } from "./markdown-preview-font-scale.tsx";
 import {
+  type MarkdownReadingAppearance,
   useMarkdownPreviewPrefsStore,
   writeMarkdownFontScale,
 } from "./markdown-preview-preferences.ts";
@@ -128,6 +129,29 @@ const DEFAULT_ZOOM_LABELS: MarkdownPreviewZoomLabels = {
 
 const EMPTY_HEADING_IDS: readonly string[] = [];
 
+const FALLBACK_LIGHT_CODE_THEME = "github-light";
+const FALLBACK_DARK_CODE_THEME = "github-dark";
+
+function resolvePreviewCodeTheme(options: {
+  appearanceCodeTheme: string;
+  appearanceTheme: "light" | "dark" | undefined;
+  codeTheme: string | undefined;
+  readingAppearance: MarkdownReadingAppearance;
+}): string {
+  if (options.codeTheme) return options.codeTheme;
+  if (options.readingAppearance === "light") {
+    return options.appearanceTheme === "light"
+      ? options.appearanceCodeTheme
+      : FALLBACK_LIGHT_CODE_THEME;
+  }
+  if (options.readingAppearance === "dark") {
+    return options.appearanceTheme === "dark"
+      ? options.appearanceCodeTheme
+      : FALLBACK_DARK_CODE_THEME;
+  }
+  return options.appearanceCodeTheme;
+}
+
 export function MarkdownPreview({
   appearance,
   charts,
@@ -156,12 +180,24 @@ export function MarkdownPreview({
 }: MarkdownPreviewProps) {
   const [state, setState] = useState<PreviewState>({ status: "loading" });
   const [appearanceCodeTheme, setAppearanceCodeTheme] = useState(
-    () => appearance?.current().codeTheme ?? "github-dark"
+    () => appearance?.current().codeTheme ?? FALLBACK_DARK_CODE_THEME
   );
+  const [appearanceTheme, setAppearanceTheme] = useState<
+    "light" | "dark" | undefined
+  >(() => appearance?.current().theme);
   const fontScale = useMarkdownPreviewPrefsStore((state) => state.fontScale);
   const measureMode = useMarkdownPreviewPrefsStore(
     (state) => state.measureMode
   );
+  const readingAppearance = useMarkdownPreviewPrefsStore(
+    (state) => state.readingAppearance
+  );
+  const resolvedCodeTheme = resolvePreviewCodeTheme({
+    appearanceCodeTheme,
+    appearanceTheme,
+    codeTheme,
+    readingAppearance,
+  });
   const [tocAnchor, setTocAnchor] = useState<string | undefined>(undefined);
   const [tocAnchorRequestId, setTocAnchorRequestId] = useState(0);
   const rootRef = useRef<HTMLDivElement | null>(null);
@@ -229,9 +265,12 @@ export function MarkdownPreview({
 
   useEffect(() => {
     if (!appearance) return;
-    setAppearanceCodeTheme(appearance.current().codeTheme);
+    const current = appearance.current();
+    setAppearanceCodeTheme(current.codeTheme);
+    setAppearanceTheme(current.theme);
     return appearance.onDidChange((next) => {
       setAppearanceCodeTheme(next.codeTheme);
+      setAppearanceTheme(next.theme);
     });
   }, [appearance]);
 
@@ -285,6 +324,10 @@ export function MarkdownPreview({
     // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: markdown preview is a native context-menu surface with no accurate interactive ARIA role
     <div
       className="relative flex h-full min-h-0 overflow-hidden bg-background text-foreground text-sm"
+      data-reading-appearance={
+        readingAppearance === "auto" ? undefined : readingAppearance
+      }
+      data-slot="markdown-preview-root"
       onContextMenu={onContextMenu}
       onKeyDown={search.handlePreviewKeyDown}
       onPointerDown={search.handlePreviewPointerDown}
@@ -362,7 +405,7 @@ export function MarkdownPreview({
                   activeSearchPageIndex={search.activeSearchMatch?.pageIndex}
                   charts={charts}
                   codeHighlighter={codeHighlighter}
-                  codeTheme={codeTheme ?? appearanceCodeTheme}
+                  codeTheme={resolvedCodeTheme}
                   copyCode={copyCode}
                   fileResources={fileResources}
                   initialAnchor={effectiveAnchor}

@@ -334,6 +334,61 @@
   --toast-action-bg: color-mix(in oklab, var(--toast-foreground) 14%, transparent);
 }
 
+/*
+ * Markdown preview paper appearance (files plugin).
+ * Independent of app chrome: only the preview root sets
+ * data-reading-appearance="light"|"dark". "auto" omits the attribute and
+ * inherits app tokens. Values mirror :root / :root.light neutral shells so
+ * prose, code chrome, TOC, and zoom controls stay consistent.
+ */
+[data-slot="markdown-preview-root"][data-reading-appearance="light"] {
+  color-scheme: light;
+  --background: oklch(1 0 0);
+  --foreground: oklch(0.145 0 0);
+  --card: oklch(1 0 0);
+  --card-foreground: oklch(0.145 0 0);
+  --popover: oklch(1 0 0);
+  --popover-foreground: oklch(0.145 0 0);
+  --primary: oklch(0.205 0 0);
+  --primary-foreground: oklch(0.985 0 0);
+  --secondary: oklch(0.97 0 0);
+  --secondary-foreground: oklch(0.205 0 0);
+  --muted: oklch(0.97 0 0);
+  --muted-foreground: oklch(0.55 0 0);
+  --accent: oklch(0.97 0 0);
+  --accent-foreground: oklch(0.205 0 0);
+  --border: oklch(0.92 0 0);
+  --input: oklch(0.92 0 0);
+  --ring: oklch(0.708 0 0);
+  --action-accent: var(--primary);
+  --action-accent-foreground: var(--primary-foreground);
+  --action-muted: var(--muted-foreground);
+}
+
+[data-slot="markdown-preview-root"][data-reading-appearance="dark"] {
+  color-scheme: dark;
+  --background: oklch(0.13 0 0);
+  --foreground: oklch(0.985 0 0);
+  --card: oklch(0.18 0 0);
+  --card-foreground: oklch(0.985 0 0);
+  --popover: oklch(0.205 0 0);
+  --popover-foreground: oklch(0.985 0 0);
+  --primary: oklch(0.985 0 0);
+  --primary-foreground: oklch(0.145 0 0);
+  --secondary: oklch(0.25 0 0);
+  --secondary-foreground: oklch(0.985 0 0);
+  --muted: oklch(0.22 0 0);
+  --muted-foreground: oklch(0.65 0 0);
+  --accent: oklch(0.25 0 0);
+  --accent-foreground: oklch(0.985 0 0);
+  --border: oklch(1 0 0 / 0.1);
+  --input: oklch(1 0 0 / 0.15);
+  --ring: oklch(0.55 0 0);
+  --action-accent: var(--primary);
+  --action-accent-foreground: var(--primary-foreground);
+  --action-muted: var(--muted-foreground);
+}
+
 :root:not(.light) {
   --elevation-border: color-mix(in oklab, var(--foreground) 16%, transparent);
   --elevation-shadow-color: color-mix(in oklab, var(--background) 66%, black);

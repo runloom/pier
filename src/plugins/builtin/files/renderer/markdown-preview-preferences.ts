@@ -2,10 +2,13 @@ import { create } from "zustand";
 
 export type MarkdownOpenMode = "preview" | "source";
 export type MarkdownMeasureMode = "comfortable" | "wide";
+/** Preview paper appearance, independent of app chrome. Default auto = follow app. */
+export type MarkdownReadingAppearance = "auto" | "light" | "dark";
 
 const OPEN_MODE_KEY = "pier.files.markdown.openMode";
 const FONT_SCALE_KEY = "pier.files.markdown.fontScale";
 const MEASURE_MODE_KEY = "pier.files.markdown.measureMode";
+const READING_APPEARANCE_KEY = "pier.files.markdown.readingAppearance";
 
 /** Broader reading zoom; 1 = body matches fenced code at 13px. */
 const FONT_SCALES = [0.75, 0.85, 1, 1.15, 1.35, 1.6, 2] as const;
@@ -16,6 +19,7 @@ export const MARKDOWN_PREFS_CHANGED_EVENT = "pier:files:markdown-prefs-changed";
 export interface MarkdownPrefsSnapshot {
   fontScale: MarkdownFontScale;
   measureMode: MarkdownMeasureMode;
+  readingAppearance: MarkdownReadingAppearance;
 }
 
 type PrefsListener = (snapshot: MarkdownPrefsSnapshot) => void;
@@ -59,10 +63,17 @@ function readStoredMeasureMode(): MarkdownMeasureMode {
     : "comfortable";
 }
 
+function readStoredReadingAppearance(): MarkdownReadingAppearance {
+  const raw = preferenceStorage()?.getItem(READING_APPEARANCE_KEY);
+  if (raw === "light" || raw === "dark") return raw;
+  return "auto";
+}
+
 function loadPrefsSnapshot(): MarkdownPrefsSnapshot {
   return {
     fontScale: readStoredFontScale(),
     measureMode: readStoredMeasureMode(),
+    readingAppearance: readStoredReadingAppearance(),
   };
 }
 
@@ -82,6 +93,7 @@ function emitPrefsChanged(snapshot: MarkdownPrefsSnapshot): void {
 interface MarkdownPreviewPrefsState extends MarkdownPrefsSnapshot {
   setFontScale: (scale: MarkdownFontScale) => void;
   setMeasureMode: (mode: MarkdownMeasureMode) => void;
+  setReadingAppearance: (appearance: MarkdownReadingAppearance) => void;
 }
 
 /**
@@ -101,6 +113,12 @@ export const useMarkdownPreviewPrefsStore = create<MarkdownPreviewPrefsState>(
     setMeasureMode(mode) {
       preferenceStorage()?.setItem(MEASURE_MODE_KEY, mode);
       set({ measureMode: mode });
+      emitPrefsChanged(get());
+    },
+
+    setReadingAppearance(appearance) {
+      preferenceStorage()?.setItem(READING_APPEARANCE_KEY, appearance);
+      set({ readingAppearance: appearance });
       emitPrefsChanged(get());
     },
   })
@@ -132,6 +150,7 @@ export function readMarkdownPrefsSnapshot(): MarkdownPrefsSnapshot {
   return {
     fontScale: state.fontScale,
     measureMode: state.measureMode,
+    readingAppearance: state.readingAppearance,
   };
 }
 
@@ -176,6 +195,16 @@ export function toggleMarkdownMeasureMode(
   current: MarkdownMeasureMode
 ): MarkdownMeasureMode {
   return current === "wide" ? "comfortable" : "wide";
+}
+
+export function readMarkdownReadingAppearance(): MarkdownReadingAppearance {
+  return useMarkdownPreviewPrefsStore.getState().readingAppearance;
+}
+
+export function writeMarkdownReadingAppearance(
+  appearance: MarkdownReadingAppearance
+): void {
+  useMarkdownPreviewPrefsStore.getState().setReadingAppearance(appearance);
 }
 
 export const MARKDOWN_FONT_SCALES = FONT_SCALES;
