@@ -396,7 +396,19 @@ describe("file-tree-actions", () => {
     expect(openInstance).toHaveBeenCalled();
   });
 
-  it("creates a nested path from the command palette prompt without inline create", async () => {
+  it("does not expose new-file / new-folder on the command palette", () => {
+    const { context } = makeContext();
+    const actions = treeActions(context);
+    for (const id of [FILES_NEW_FILE_COMMAND_ID, FILES_NEW_FOLDER_COMMAND_ID]) {
+      const action = actionById(actions, id);
+      expect(action.surfaces ?? []).not.toContain("command-palette");
+      expect(action.surfaces).toEqual(
+        expect.arrayContaining(["files/tree-item", "files/tree-background"])
+      );
+    }
+  });
+
+  it("creates a nested path from the tree-background prompt without inline create", async () => {
     const { context, files } = makeContext();
     showFilesNamePromptMock.mockResolvedValueOnce({
       cancelled: false,
@@ -404,7 +416,10 @@ describe("file-tree-actions", () => {
     });
     const action = actionById(treeActions(context), FILES_NEW_FILE_COMMAND_ID);
 
-    await action.handler({ surface: "command-palette" });
+    await action.handler({
+      metadata: { root: ROOT, treeId: "group-1" },
+      surface: "files/tree-background",
+    });
 
     expect(showFilesNamePromptMock).toHaveBeenCalled();
     expect(files.writeDocument).toHaveBeenCalledWith({

@@ -297,6 +297,8 @@
     },
     "pier.git.viewChanges": {
       "aliases": [
+        "打开审查",
+        "审查",
         "查看变更",
         "打开变更",
         "变更",
@@ -306,11 +308,14 @@
         "diff",
         "changes",
         "view changes",
-        "cha kan bian geng"
+        "open review",
+        "review",
+        "cha kan bian geng",
+        "da kai shen cha"
       ],
       "category": "Git",
-      "description": "打开当前仓库的变更审阅面板。",
-      "title": "Git: 查看变更"
+      "description": "打开当前仓库的变更审查面板。",
+      "title": "Git: 打开审查"
     }
   },
   "description": "提供 Git 命令面板入口和终端状态栏支持。",

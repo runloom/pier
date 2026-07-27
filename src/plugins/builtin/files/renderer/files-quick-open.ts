@@ -271,7 +271,11 @@ export function createFilesQuickOpenAction(
       openAsyncQuickPick(context, root, panelContext);
     },
     id: FILES_QUICK_OPEN_COMMAND_ID,
-    metadata: { group: "2_view", sortOrder: 0 },
+    metadata: {
+      categoryKey: "file",
+      group: "2_view",
+      sortOrder: 0,
+    },
     surfaces: ["command-palette"],
     title: () => t("filePanel.quickOpen.title", "Go to File"),
   };

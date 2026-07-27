@@ -3,6 +3,12 @@
     "pier.files.openSelectionAsMarkdown": {
       "title": "Preview Selected Text"
     },
+    "pier.files.quickOpen": {
+      "title": "Go to File"
+    },
+    "pier.files.openDirectory": {
+      "title": "Open Directory"
+    },
     "pier.files.searchContents": {
       "title": "Search in Files"
     },
@@ -203,6 +209,9 @@
     "filePanel.quickOpen.noProject": "Open a project to search files.",
     "filePanel.quickOpen.queryFailed": "Unable to search files",
     "filePanel.quickOpen.truncated": "Results truncated to top matches",
+    "filePanel.openDirectory.title": "Open Directory",
+    "filePanel.openDirectory.noProject": "Open a project folder first to browse files.",
+    "filePanel.openDirectory.failed": "Unable to open project directory",
     "filePanel.search.close": "Close search",
     "filePanel.search.matchAnnouncement": "Matches: {{count}}",
     "filePanel.search.matchCase": "Match case",

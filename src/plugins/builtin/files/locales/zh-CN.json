@@ -3,6 +3,12 @@
     "pier.files.openSelectionAsMarkdown": {
       "title": "预览选中文本"
     },
+    "pier.files.quickOpen": {
+      "title": "转到文件"
+    },
+    "pier.files.openDirectory": {
+      "title": "打开目录"
+    },
     "pier.files.searchContents": {
       "title": "在文件中搜索"
     },
@@ -203,6 +209,9 @@
     "filePanel.quickOpen.noProject": "请先打开项目再搜索文件。",
     "filePanel.quickOpen.queryFailed": "无法搜索文件",
     "filePanel.quickOpen.truncated": "结果已截断为前若干匹配项",
+    "filePanel.openDirectory.title": "打开目录",
+    "filePanel.openDirectory.noProject": "请先打开项目文件夹以浏览文件。",
+    "filePanel.openDirectory.failed": "无法打开项目目录",
     "filePanel.search.close": "关闭搜索",
     "filePanel.search.matchAnnouncement": "匹配项：{{count}}",
     "filePanel.search.matchCase": "区分大小写",

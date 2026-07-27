@@ -118,7 +118,8 @@ export function createSearchContentsAction(
     },
     id: FILES_SEARCH_CONTENTS_COMMAND_ID,
     metadata: { group: "2_view", sortOrder: 2 },
-    surfaces: ["command-palette"],
+    // 快捷键主路径；不进命令面板（文件类仅保留转到文件 / 打开目录）。
+    surfaces: [],
     title: () => t("filePanel.contentSearch.command", "Search in Files"),
   };
 }
@@ -180,7 +181,7 @@ export function createSearchInFolderAction(
     },
     id: FILES_SEARCH_IN_FOLDER_COMMAND_ID,
     metadata: { group: "2_view", sortOrder: 3 },
-    surfaces: ["files/tree-item", "files/tree-background", "command-palette"],
+    surfaces: ["files/tree-item", "files/tree-background"],
     title: () => t("filePanel.contentSearch.findInFolder", "Find in Folder…"),
   };
 }

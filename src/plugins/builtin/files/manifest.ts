@@ -29,6 +29,7 @@ export const FILES_REVEAL_COMMAND_ID = "pier.files.revealInFinder";
 export const FILES_DUPLICATE_COMMAND_ID = "pier.files.duplicate";
 export const FILES_TREE_SEARCH_COMMAND_ID = "pier.files.treeSearch";
 export const FILES_QUICK_OPEN_COMMAND_ID = "pier.files.quickOpen";
+export const FILES_OPEN_DIRECTORY_COMMAND_ID = "pier.files.openDirectory";
 export const FILES_SEARCH_CONTENTS_COMMAND_ID = "pier.files.searchContents";
 export const FILES_SEARCH_IN_FOLDER_COMMAND_ID = "pier.files.searchInFolder";
 export const FILES_SEARCH_PANEL_ID = "pier.files.searchPanel";
@@ -136,6 +137,12 @@ export const FILES_PLUGIN_MANIFEST = {
       id: FILES_QUICK_OPEN_COMMAND_ID,
       permissions: ["file:read", "panel:open"],
       title: "Go to File",
+    },
+    {
+      category: "file",
+      id: FILES_OPEN_DIRECTORY_COMMAND_ID,
+      permissions: ["file:read", "panel:open"],
+      title: "Open Directory",
     },
     {
       category: "file",

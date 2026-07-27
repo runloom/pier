@@ -65,6 +65,27 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain("font-weight: 600 !important");
   });
 
+  it("sizes idle tabs to content instead of a fixed 280px ellipsis cap", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+    const idleTabRuleStart = css.indexOf(
+      ".dockview-theme-pier .dv-tab .dv-default-tab,"
+    );
+    expect(idleTabRuleStart).toBeGreaterThanOrEqual(0);
+    // Idle tab rule ends before the content-title rule.
+    const idleTabRule = css.slice(
+      idleTabRuleStart,
+      css.indexOf(
+        ".dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-content",
+        idleTabRuleStart
+      )
+    );
+    expect(idleTabRule).toContain("max-width: none");
+    expect(idleTabRule).not.toContain("max-width: 280px");
+  });
+
   it("keeps tab shortcut hint metrics aligned with the normal icon slot", () => {
     const css = readFileSync(
       join(process.cwd(), "src/renderer/app/globals.css"),

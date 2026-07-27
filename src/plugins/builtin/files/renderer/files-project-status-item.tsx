@@ -40,7 +40,12 @@ function FilesProjectStatusItem({
     <Tooltip>
       {/* Button 未 forwardRef，asChild 需落在 span 上才能锚定。 */}
       <TooltipTrigger asChild>
-        <span className="inline-flex min-w-0 max-w-40">
+        {/*
+          不设固定 max-w-*：状态栏溢出由 host 整项 hide（priority）处理。
+          硬上限会在条带仍有空位时提前 ellipsis（如 feature-git-plugin-capabilities）。
+          min-w-0 + 文案 truncate 仅作 pinned 仍放不下时的最后兜底。
+        */}
+        <span className="inline-flex min-w-0">
           <Button
             aria-label={openLabel}
             className={cn(STATUS_BAR_ITEM_TRIGGER_CLASS, "max-w-full")}

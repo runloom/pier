@@ -174,7 +174,7 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       category: "Git",
       id: "pier.git.viewChanges",
       permissions: ["git:read", "panel:open"],
-      title: "Git: View Changes",
+      title: "Git: Open Review",
     },
     {
       category: "Git",
