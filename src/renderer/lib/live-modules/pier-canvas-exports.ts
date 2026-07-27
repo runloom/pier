@@ -170,6 +170,7 @@ import {
 import type { PierCanvasExportName } from "@shared/pier-canvas-export-names.ts";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { createElement } from "react";
+import { useCanvasFile } from "./canvas-file-facade.ts";
 
 /**
  * `pier/canvas` whitelist — host primitives + curated `@pier/ui` re-exports.
@@ -492,6 +493,7 @@ export const pierCanvasExports = {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useCanvasFile,
 } as const satisfies Record<PierCanvasExportName, unknown>;
 
 export type PierCanvasExports = typeof pierCanvasExports;

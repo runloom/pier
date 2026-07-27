@@ -2,7 +2,6 @@ import { Badge, Frame, Stack, Text } from "pier/canvas";
 
 /**
  * Smoke-only canvas. Thin scaffolds: templates/blank.canvas.tsx.
- * Design-time plan dogfood: .pier/plans/.../plan.canvas.tsx.
  * Open: `.pier/canvases/smoke/hello.canvas.tsx`
  */
 export const canvas = {
@@ -17,8 +16,7 @@ export default function HelloCanvas() {
       <Stack gap={10}>
         <Text as="h2">Smoke</Text>
         <Text tone="secondary">
-          Pipeline ok. Scaffold: templates/blank.canvas.tsx. Plan dogfood (multi-file
-          + tabs): .pier/plans/canvas-capabilities-v1/plan.canvas.tsx.
+          Pipeline ok. Scaffold: templates/blank.canvas.tsx.
         </Text>
         <Badge variant="neutral">smoke only</Badge>
       </Stack>

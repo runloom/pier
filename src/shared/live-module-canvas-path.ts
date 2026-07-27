@@ -1,7 +1,4 @@
-import {
-  LIVE_MODULE_DEFAULT_PLANS_DIRECTORY,
-  LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY,
-} from "@shared/contracts/live-modules.ts";
+import { LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY } from "@shared/contracts/live-modules.ts";
 import {
   detectLiveModuleFrameworkFromFileName,
   isLiveModuleCanvasFileName,
@@ -11,7 +8,6 @@ import {
 /** Live-module content roots under a project (relative to project root). */
 export const LIVE_MODULE_PROJECT_CONTENT_DIRECTORIES = [
   LIVE_MODULE_DEFAULT_PROJECT_DIRECTORY,
-  LIVE_MODULE_DEFAULT_PLANS_DIRECTORY,
 ] as const;
 
 /** @deprecated Use isLiveModuleCanvasFileName — kept for call-site clarity. */
@@ -27,7 +23,7 @@ export function isCanvasFileName(fileName: string): boolean {
 }
 
 export interface ProjectCanvasLocation {
-  /** Root-relative content directory, e.g. `.pier/canvases` or `.pier/plans`. */
+  /** Root-relative content directory, e.g. `.pier/canvases`. */
   directory: string;
   /** Path relative to `directory` for `liveModules.compile`. */
   relPath: string;
@@ -35,7 +31,7 @@ export interface ProjectCanvasLocation {
 
 /**
  * Project-relative path is a Live Module canvas under a known project content
- * directory (canvases or plans) with a known framework suffix.
+ * directory with a known framework suffix.
  */
 export function isProjectCanvasPath(projectRelativePath: string): boolean {
   return projectCanvasLocation(projectRelativePath) !== null;
@@ -100,4 +96,47 @@ export function canvasRelPathFromProjectPath(
 export function canvasBasename(relPath: string): string {
   const segments = relPath.split("/").filter(Boolean);
   return segments.at(-1) ?? relPath;
+}
+
+/** Project-relative directory holding a canvas (`""` when at a root). */
+export function canvasDirectoryFromProjectPath(
+  projectRelativePath: string
+): string | null {
+  if (!isProjectCanvasPath(projectRelativePath)) {
+    return null;
+  }
+  const normalized = normalizeProjectRelativePath(projectRelativePath);
+  const cut = normalized.lastIndexOf("/");
+  return cut < 0 ? "" : normalized.slice(0, cut);
+}
+
+/**
+ * Resolve `fileName` as a sibling of a canvas, or null when it is not one.
+ *
+ * A canvas may only address plain file names in its own directory: no path
+ * separators, no `..`, no absolute or drive paths, no NUL, no dot entries. The
+ * lexical check runs before any IPC; the file service still applies its own
+ * realpath fence on the resulting project-relative path.
+ */
+export function canvasSiblingProjectPath(
+  canvasProjectRelativePath: string,
+  fileName: string
+): string | null {
+  const directory = canvasDirectoryFromProjectPath(canvasProjectRelativePath);
+  if (directory === null) {
+    return null;
+  }
+  if (
+    fileName.length === 0 ||
+    fileName.length > 255 ||
+    fileName === "." ||
+    fileName === ".." ||
+    fileName.includes("\0") ||
+    fileName.includes("/") ||
+    fileName.includes("\\") ||
+    /^[A-Za-z]:/u.test(fileName)
+  ) {
+    return null;
+  }
+  return directory.length > 0 ? `${directory}/${fileName}` : fileName;
 }

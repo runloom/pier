@@ -2,11 +2,16 @@
  * Canonical `pier/canvas` named exports.
  * Keep in sync with `pierCanvasExports` (renderer) — unit tests enforce equality.
  *
+ * Two kinds, because the compile-time stub wraps them differently:
+ * - {@link PIER_CANVAS_COMPONENT_EXPORT_NAMES}: rendered via `createElement`.
+ * - {@link PIER_CANVAS_VALUE_EXPORT_NAMES}: called straight through, so hooks
+ *   keep their arguments and return value.
+ *
  * Scope: general product primitives from `@pier/ui` + host layout (Frame/Row/Stack/Text).
  * Excludes domain UI (file-tree, diff-view, widgets), app chrome (command/menubar),
  * and host-owned modals (dialog/sheet).
  */
-export const PIER_CANVAS_EXPORT_NAMES = [
+export const PIER_CANVAS_COMPONENT_EXPORT_NAMES = [
   "Accordion",
   "AccordionContent",
   "AccordionItem",
@@ -154,5 +159,26 @@ export const PIER_CANVAS_EXPORT_NAMES = [
   "TooltipProvider",
   "TooltipTrigger",
 ] as const;
+
+/**
+ * Non-component exports: hooks and plain functions the host passes through.
+ *
+ * `useCanvasFile` lets a canvas read and write sibling files in its own
+ * directory (e.g. saving a nearby `data.json`). It is deliberately not a
+ * general file API: the host resolves the root and the directory, the canvas
+ * only names a sibling.
+ */
+export const PIER_CANVAS_VALUE_EXPORT_NAMES = ["useCanvasFile"] as const;
+
+export const PIER_CANVAS_EXPORT_NAMES = [
+  ...PIER_CANVAS_COMPONENT_EXPORT_NAMES,
+  ...PIER_CANVAS_VALUE_EXPORT_NAMES,
+] as const;
+
+export type PierCanvasComponentExportName =
+  (typeof PIER_CANVAS_COMPONENT_EXPORT_NAMES)[number];
+
+export type PierCanvasValueExportName =
+  (typeof PIER_CANVAS_VALUE_EXPORT_NAMES)[number];
 
 export type PierCanvasExportName = (typeof PIER_CANVAS_EXPORT_NAMES)[number];

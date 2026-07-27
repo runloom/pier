@@ -4,7 +4,7 @@ import { Badge, Button, Frame, Stack, Text } from "pier/canvas";
  * Minimal React composition scaffold for AI / human drafts.
  * Open: `.pier/canvases/templates/blank.canvas.tsx`
  *
- * Engineering smoke lives in `../smoke/`. Design-time plans live in `.pier/plans/`.
+ * Engineering smoke lives in `../smoke/`.
  */
 export const canvas = {
   description: "Blank composition scaffold — pier/canvas only.",

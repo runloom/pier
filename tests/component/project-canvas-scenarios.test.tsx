@@ -6,29 +6,21 @@ import { afterEach, describe, expect, it } from "vitest";
 import * as pierCanvasModule from "../support/pier-canvas.ts";
 
 /**
- * Renders every React canvas under `.pier/canvases` and `.pier/plans` for real.
+ * Renders every React canvas under `.pier/canvases` for real.
  *
  * Compiling a canvas only proves its imports resolve. Mounting it catches the
  * failures authors actually hit: a primitive used outside its required parent,
  * a hook misuse, a component rendered with props it does not accept.
  */
-const CANVAS_MODULES = {
-  ...import.meta.glob<Record<string, unknown>>(
-    "../../.pier/canvases/**/*.canvas.tsx",
-    { eager: true }
-  ),
-  ...import.meta.glob<Record<string, unknown>>(
-    "../../.pier/plans/**/*.canvas.tsx",
-    { eager: true }
-  ),
-};
+const CANVAS_MODULES = import.meta.glob<Record<string, unknown>>(
+  "../../.pier/canvases/**/*.canvas.tsx",
+  { eager: true }
+);
 
 afterEach(cleanup);
 
 function displayPath(path: string): string {
-  return path
-    .replace("../../.pier/canvases/", "canvases/")
-    .replace("../../.pier/plans/", "plans/");
+  return path.replace("../../.pier/canvases/", "canvases/");
 }
 
 describe("project canvases render", () => {
@@ -38,10 +30,9 @@ describe("project canvases render", () => {
     );
   });
 
-  it("finds the in-repo React canvases (smoke + blank + plans)", () => {
+  it("finds the in-repo React canvases (smoke + blank)", () => {
     // Solid entries also end in .canvas.tsx and are excluded below.
-    // hello + blank + plan (solid hello is excluded from mount loop by suffix).
-    expect(Object.keys(CANVAS_MODULES).length).toBeGreaterThanOrEqual(3);
+    expect(Object.keys(CANVAS_MODULES).length).toBeGreaterThanOrEqual(2);
   });
 
   for (const [path, module] of Object.entries(CANVAS_MODULES)) {

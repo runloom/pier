@@ -14,12 +14,6 @@ describe("languageForPath canvas", () => {
     );
   });
 
-  it("treats plan canvases under .pier/plans as canvas", () => {
-    expect(
-      languageForPath(".pier/plans/canvas-capabilities-v1/plan.canvas.tsx")
-    ).toBe("canvas");
-  });
-
   it("does not mis-label other tsx or misplaced *.canvas.tsx", () => {
     expect(languageForPath("src/app.tsx")).toBe("typescript");
     expect(languageForPath("src/ui/Button.tsx")).toBe("typescript");
@@ -28,6 +22,9 @@ describe("languageForPath canvas", () => {
       "typescript"
     );
     expect(languageForPath("docs/hello.canvas.tsx")).toBe("typescript");
+    expect(languageForPath(".pier/plans/demo/plan.canvas.tsx")).toBe(
+      "typescript"
+    );
     // Bare name under canvases without compound suffix.
     expect(languageForPath(".pier/canvases/helper.tsx")).toBe("typescript");
   });

@@ -1,14 +1,5 @@
-import { Button } from "@pier/ui/button.tsx";
-import {
-  Empty,
-  EmptyContent,
-  EmptyDescription,
-  EmptyHeader,
-  EmptyMedia,
-  EmptyTitle,
-} from "@pier/ui/empty.tsx";
-import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { cn } from "@pier/ui/utils.ts";
+import { liveModuleCanvasFileScopeWrapper } from "@plugins/api/live-module-canvas-file.tsx";
 import { mountLiveModuleExport } from "@plugins/api/live-module-mount.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
@@ -22,12 +13,18 @@ import {
   parsePierCanvasMeta,
 } from "@shared/contracts/pier-canvas.ts";
 import {
+  canvasDirectoryFromProjectPath,
   detectProjectCanvasFramework,
   projectCanvasLocation,
 } from "@shared/live-module-canvas-path.ts";
 import type { LiveModuleFramework } from "@shared/live-module-framework.ts";
-import { FileQuestion } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import {
+  CanvasCompileErrorEmpty,
+  CanvasLoadingSkeleton,
+  CanvasSoftErrorBanner,
+  CanvasUnavailableEmpty,
+} from "./file-canvas-preview-states.tsx";
 import type { FilesTranslate } from "./files-i18n.ts";
 
 /** Only show skeleton if compile still pending after this delay (avoids flash). */
@@ -60,7 +57,7 @@ function moduleIdentity(
   relPath: string,
   framework: LiveModuleFramework
 ): string {
-  // Include content directory so .pier/canvases vs .pier/plans never share a
+  // Include content directory so distinct content roots never share a
   // hot-reload identity when relative paths collide.
   return `${root}\0${contentDirectory}\0${relPath}\0${framework}`;
 }
@@ -119,7 +116,7 @@ export function FileCanvasPreview(props: {
         kind: "error",
         message: props.t(
           "filePanel.canvas.notUnderCanvases",
-          "Open a canvas under .pier/canvases or .pier/plans (e.g. *.canvas.tsx)."
+          "Open a canvas under .pier/canvases (e.g. *.canvas.tsx)."
         ),
       });
       return;
@@ -187,8 +184,8 @@ export function FileCanvasPreview(props: {
       try {
         const spec = projectLiveRootSpec({
           directory: contentDirectory,
-          // Distinct root id per content directory so plans/ and canvases/
-          // registrations do not clobber each other (id charset: a-z0-9._-).
+          // Distinct root id per content directory so alternate registered
+          // roots never clobber each other (id charset: a-z0-9._-).
           id: rootId,
           projectRootPath: props.root,
         });
@@ -251,7 +248,18 @@ export function FileCanvasPreview(props: {
         unmountRef.current?.();
         unmountRef.current = null;
         hostEl.replaceChildren();
-        const nextUnmount = await mountLiveModuleExport(hostEl, framework, mod);
+        const nextUnmount = await mountLiveModuleExport(
+          hostEl,
+          framework,
+          mod,
+          {
+            wrap: liveModuleCanvasFileScopeWrapper({
+              directory: canvasDirectoryFromProjectPath(props.path) ?? "",
+              path: props.path,
+              root: props.root,
+            }),
+          }
+        );
         if (!stillOwner()) {
           nextUnmount();
           return;
@@ -329,40 +337,19 @@ export function FileCanvasPreview(props: {
     framework,
     liveModules,
     nonce,
+    props.path,
     props.root,
     props.t,
     relPath,
   ]);
 
   if (!relPath) {
-    return (
-      <Empty className="min-h-64 py-12">
-        <EmptyHeader>
-          <EmptyMedia variant="icon">
-            <FileQuestion />
-          </EmptyMedia>
-          <EmptyTitle>
-            {props.t(
-              "filePanel.canvas.unavailableTitle",
-              "Can’t preview canvas"
-            )}
-          </EmptyTitle>
-          <EmptyDescription>
-            {props.t(
-              "filePanel.canvas.notUnderCanvases",
-              "Open a canvas under .pier/canvases or .pier/plans (e.g. *.canvas.tsx)."
-            )}
-          </EmptyDescription>
-        </EmptyHeader>
-      </Empty>
-    );
+    return <CanvasUnavailableEmpty t={props.t} />;
   }
 
-  const compilingLabel = props.t(
-    "filePanel.canvas.compiling",
-    "Compiling canvas…"
-  );
-  const showSkeleton = state.kind === "loading";
+  const reload = () => {
+    setNonce((value) => value + 1);
+  };
   const showHost = state.kind === "pending" || state.kind === "ready";
   const isBusy = state.kind === "pending" || state.kind === "loading";
   const softError = state.kind === "ready" ? state.softError : undefined;
@@ -375,108 +362,26 @@ export function FileCanvasPreview(props: {
       data-slot="file-canvas-preview"
     >
       {softError ? (
-        <div
-          className="border-border border-b bg-muted/40 px-6 py-3"
-          data-slot="file-canvas-soft-error"
-          role="alert"
-        >
-          <p className="font-medium text-sm">
-            {props.t(
-              "filePanel.canvas.compileFailed",
-              "Couldn’t compile canvas"
-            )}
-          </p>
-          <p className="mt-1 text-muted-foreground text-xs">
-            {softError.message.trim().length > 0
-              ? softError.message
-              : props.t(
-                  "filePanel.canvas.compileFailedHint",
-                  "Fix the canvas file or its imports, then reload."
-                )}
-          </p>
-          <div className="mt-2">
-            <Button
-              onClick={() => {
-                setNonce((value) => value + 1);
-              }}
-              size="sm"
-              type="button"
-              variant="outline"
-            >
-              {props.t("filePanel.canvas.reload", "Reload")}
-            </Button>
-          </div>
-        </div>
+        <CanvasSoftErrorBanner
+          message={softError.message}
+          onReload={reload}
+          t={props.t}
+        />
       ) : null}
 
       {state.kind === "error" ? (
-        <Empty className="min-h-64 py-12">
-          <EmptyHeader>
-            <EmptyMedia variant="icon">
-              <FileQuestion />
-            </EmptyMedia>
-            <EmptyTitle>
-              {props.t(
-                "filePanel.canvas.compileFailed",
-                "Couldn’t compile canvas"
-              )}
-            </EmptyTitle>
-            <EmptyDescription>
-              {state.message.trim().length > 0
-                ? state.message
-                : props.t(
-                    "filePanel.canvas.compileFailedHint",
-                    "Fix the canvas file or its imports, then reload."
-                  )}
-            </EmptyDescription>
-          </EmptyHeader>
-          {state.diagnostics.length > 1 ? (
-            <div
-              className="mx-auto w-full max-w-lg px-6 text-left"
-              data-slot="file-canvas-diagnostics"
-            >
-              <p className="mb-2 font-medium text-muted-foreground text-xs">
-                {props.t("filePanel.canvas.diagnosticsHeading", "Details")}
-              </p>
-              <ul className="flex list-disc flex-col gap-1.5 pl-4 text-muted-foreground text-xs">
-                {state.diagnostics.map((diagnostic) => {
-                  const line = diagnostic.file
-                    ? `${diagnostic.file}: ${diagnostic.message}`
-                    : diagnostic.message;
-                  return <li key={line}>{line}</li>;
-                })}
-              </ul>
-            </div>
-          ) : null}
-          <EmptyContent>
-            <Button
-              onClick={() => {
-                setNonce((value) => value + 1);
-              }}
-              type="button"
-              variant="outline"
-            >
-              {props.t("filePanel.canvas.reload", "Reload")}
-            </Button>
-          </EmptyContent>
-        </Empty>
+        <CanvasCompileErrorEmpty
+          diagnostics={state.diagnostics}
+          message={state.message}
+          onReload={reload}
+          t={props.t}
+        />
       ) : null}
 
-      {showSkeleton ? (
-        <div
-          className="mx-auto w-full max-w-5xl px-6 py-5"
-          data-slot="file-canvas-loading"
-          role="status"
-        >
-          <span className="sr-only">{compilingLabel}</span>
-          {/* Geometry aligned with markdown-preview loading skeleton. */}
-          <div className="flex flex-col gap-3">
-            <Skeleton className="h-8 w-1/3 rounded-md" />
-            <Skeleton className="h-4 w-full rounded-md" />
-            <Skeleton className="h-4 w-4/5 rounded-md" />
-            <Skeleton className="h-28 w-full rounded-md" />
-          </div>
-        </div>
+      {state.kind === "loading" ? (
+        <CanvasLoadingSkeleton
+          label={props.t("filePanel.canvas.compiling", "Compiling canvas…")}
+        />
       ) : null}
 
       {/* Host stays mounted (incl. error) so Reload / remount always has a node. */}

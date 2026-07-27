@@ -558,31 +558,4 @@ describe("live-modules service", () => {
       expect(source).toMatch(/kind:\s*["']?composition/u);
     }
   });
-
-  it("compiles plan dogfood dag with multi-file graph (plan-model + json)", async () => {
-    const projectRoot = fileURLToPath(new URL("../../..", import.meta.url));
-    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
-    const service = createService(homeRoot);
-    const spec = projectLiveRootSpec({
-      directory: ".pier/plans",
-      id: "pier.canvas.project.plans-service-test",
-      projectRootPath: projectRoot,
-    });
-    service.registerRoot(spec);
-
-    const relPath = "canvas-capabilities-v1/plan.canvas.tsx";
-    const result = await service.compile(spec.id, relPath);
-    expect(result.ok, `${relPath}: ${JSON.stringify(result)}`).toBe(true);
-    if (!result.ok) {
-      return;
-    }
-    expect(result.graph.some((path) => path.includes("plan-model"))).toBe(true);
-    expect(result.graph.some((path) => path.includes("plan.json"))).toBe(true);
-
-    const source = Buffer.from(
-      service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
-    ).toString("utf8");
-    expect(source).toContain("pier-live://runtime/react");
-    expect(source).toMatch(/kind:\s*["']?composition/u);
-  });
 });

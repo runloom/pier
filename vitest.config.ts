@@ -13,8 +13,8 @@ export default defineConfig({
       "@preload": resolve(import.meta.dirname, "src/preload"),
       "@plugins": resolve(import.meta.dirname, "src/plugins"),
       "@pier/ui": resolve(import.meta.dirname, "packages/ui/src"),
-      // 画布源码里的 `pier/canvas` 在应用里是编译期桩；组件测试指向真实实现，
-      // 这样 .pier/canvases 下的画布可以直接 import 并渲染。
+      // 画布源码里的 `pier/canvas` 在应用里是编译期桩；
+      // 组件测试指向真实实现，这样 .pier 下的画布可以直接 import 并渲染。
       "pier/canvas": resolve(
         import.meta.dirname,
         "tests/support/pier-canvas.ts"

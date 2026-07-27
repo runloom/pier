@@ -335,20 +335,18 @@ describe("FileCanvasPreview", () => {
     expect(screen.queryByRole("status")).toBeNull();
   });
 
-  it("registers plans canvases with distinct root id and reloads on that id's stale", async () => {
-    const plansPath = ".pier/plans/canvas-capabilities-v1/plan.canvas.tsx";
+  it("registers canvases under the project live root id and reloads on stale", async () => {
     const baseId = projectLiveRootId(PROJECT_ROOT);
-    const plansRootId = `${baseId}.pier-plans`;
     const url = makeModuleDataUrl(`
       export function mount(el) {
-        el.setAttribute("data-test-canvas", "plan");
+        el.setAttribute("data-test-canvas", "canvases");
         return () => {};
       }
       export default function App() { return null; }
     `);
     const compile = vi.fn(async () => ({
       graph: [],
-      moduleId: "canvas-capabilities-v1/plan.canvas.tsx",
+      moduleId: "smoke/hello.canvas.tsx",
       ok: true as const,
       url,
     }));
@@ -368,26 +366,27 @@ describe("FileCanvasPreview", () => {
     render(
       <FileCanvasPreview
         context={createContext({ compile, onChanged, registerRoot })}
-        path={plansPath}
+        path={CANVAS_PATH}
         root={PROJECT_ROOT}
         t={t}
       />
     );
 
     await waitFor(() => {
-      expect(document.querySelector("[data-test-canvas='plan']")).toBeTruthy();
+      expect(
+        document.querySelector("[data-test-canvas='canvases']")
+      ).toBeTruthy();
     });
     expect(registerRoot).toHaveBeenCalled();
     const registeredId = (
       registerRoot.mock.calls[0]?.[0] as { id: string } | undefined
     )?.id;
-    expect(registeredId).toBe(plansRootId);
-    expect(registeredId).not.toBe(baseId);
+    expect(registeredId).toBe(baseId);
 
     await act(async () => {
       staleCb?.({
-        moduleId: "canvas-capabilities-v1/plan.canvas.tsx",
-        rootId: plansRootId,
+        moduleId: "smoke/hello.canvas.tsx",
+        rootId: baseId,
         type: "stale",
       });
     });

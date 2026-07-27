@@ -156,4 +156,5 @@ export const {
   TooltipContent,
   TooltipProvider,
   TooltipTrigger,
+  useCanvasFile,
 } = pierCanvasExports;

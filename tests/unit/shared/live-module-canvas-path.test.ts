@@ -1,6 +1,8 @@
 import { describe, expect, it } from "vitest";
 import {
+  canvasDirectoryFromProjectPath,
   canvasRelPathFromProjectPath,
+  canvasSiblingProjectPath,
   detectProjectCanvasFramework,
   isCanvasFileName,
   isProjectCanvasPath,
@@ -30,23 +32,8 @@ describe("live-module-canvas-path", () => {
     ).toBe("nested/demo.canvas.tsx");
   });
 
-  it("accepts plan canvases under .pier/plans", () => {
-    expect(
-      isProjectCanvasPath(".pier/plans/canvas-capabilities-v1/plan.canvas.tsx")
-    ).toBe(true);
-    expect(
-      canvasRelPathFromProjectPath(
-        ".pier/plans/canvas-capabilities-v1/plan.canvas.tsx"
-      )
-    ).toBe("canvas-capabilities-v1/plan.canvas.tsx");
-    expect(
-      detectProjectCanvasFramework(
-        ".pier/plans/canvas-capabilities-v1/plan.canvas.tsx"
-      )
-    ).toBe("react");
-  });
-
-  it("rejects non-canvas names and out-of-root paths", () => {
+  it("rejects canvases outside .pier/canvases", () => {
+    expect(isProjectCanvasPath(".pier/plans/demo/plan.canvas.tsx")).toBe(false);
     expect(isProjectCanvasPath("src/foo.tsx")).toBe(false);
     expect(isProjectCanvasPath(".pier/canvases/hello.tsx")).toBe(false);
     expect(isProjectCanvasPath("elsewhere/hello.canvas.tsx")).toBe(false);
@@ -56,6 +43,40 @@ describe("live-module-canvas-path", () => {
     expect(
       canvasRelPathFromProjectPath(".pier/canvases/../secret.canvas.tsx")
     ).toBeNull();
+  });
+
+  it("resolves sibling files inside the canvas directory", () => {
+    const canvas = ".pier/canvases/demo/hello.canvas.tsx";
+    expect(canvasDirectoryFromProjectPath(canvas)).toBe(".pier/canvases/demo");
+    expect(canvasSiblingProjectPath(canvas, "data.json")).toBe(
+      ".pier/canvases/demo/data.json"
+    );
+    expect(
+      canvasSiblingProjectPath(".pier/canvases/a.canvas.tsx", "b.json")
+    ).toBe(".pier/canvases/b.json");
+  });
+
+  it("refuses sibling names that leave the canvas directory", () => {
+    const canvas = ".pier/canvases/demo/hello.canvas.tsx";
+    for (const name of [
+      "",
+      ".",
+      "..",
+      "../data.json",
+      "nested/data.json",
+      "nested\\data.json",
+      "/etc/passwd",
+      "C:/secret.json",
+      "plan\0.json",
+      "x".repeat(256),
+    ]) {
+      expect(canvasSiblingProjectPath(canvas, name)).toBeNull();
+    }
+  });
+
+  it("refuses sibling resolution for paths that are not project canvases", () => {
+    expect(canvasSiblingProjectPath("src/app.tsx", "data.json")).toBeNull();
+    expect(canvasDirectoryFromProjectPath("src/app.tsx")).toBeNull();
   });
 
   it("isCanvasFileName / framework detect compound suffixes", () => {

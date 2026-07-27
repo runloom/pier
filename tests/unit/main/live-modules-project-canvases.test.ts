@@ -71,30 +71,4 @@ describe("in-repo project canvases", () => {
       ).toBe(true);
     }
   }, 120_000);
-
-  it("compiles dogfood plan canvases under .pier/plans", async () => {
-    const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
-    const service = createLiveModulesService({
-      resolveHomeRoot: () => homeRoot,
-    });
-    services.push(service);
-    const spec = projectLiveRootSpec({
-      directory: ".pier/plans",
-      id: "pier.canvas.project.plans-test",
-      projectRootPath: PROJECT_ROOT,
-    });
-    service.registerRoot(spec);
-
-    for (const relPath of ["canvas-capabilities-v1/plan.canvas.tsx"]) {
-      const result = await service.compile(spec.id, relPath);
-      expect(result.ok, `${relPath}: ${JSON.stringify(result)}`).toBe(true);
-      if (!result.ok) {
-        continue;
-      }
-      const bytes = Buffer.from(
-        service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!.bytes
-      ).toString("utf8");
-      expect(/\bcanvas\b/m.test(bytes)).toBe(true);
-    }
-  }, 60_000);
 });

@@ -6,7 +6,10 @@ import {
   type LiveModuleRuntimeId,
   liveModuleRuntimeUrl,
 } from "@shared/live-module-url.ts";
-import { PIER_CANVAS_EXPORT_NAMES } from "@shared/pier-canvas-export-names.ts";
+import {
+  PIER_CANVAS_COMPONENT_EXPORT_NAMES,
+  PIER_CANVAS_VALUE_EXPORT_NAMES,
+} from "@shared/pier-canvas-export-names.ts";
 // Type-only: erased at runtime. esbuild reads ESBUILD_BINARY_PATH once at
 // module load and caches it (node_modules/esbuild/lib/main.js), so a static
 // `import * as esbuild` would capture the env before we can set it. The value
@@ -82,6 +85,11 @@ export function nodeBuiltinStubSource(specifier: string): string {
 /**
  * Stub module inlined into each canvas bundle. Named exports always exist;
  * implementations are read from `globalThis.__PIER_LIVE_CANVAS__` at render time.
+ *
+ * Components become `createElement` wrappers. Value exports (hooks) are called
+ * through with their own arguments and return value — wrapping those in
+ * `createElement` would drop both. The wrapper keeps the `useX` name so React's
+ * hook rules still apply at the canvas call site.
  */
 export function pierCanvasStubSource(): string {
   const lines = [
@@ -94,7 +102,7 @@ export function pierCanvasStubSource(): string {
     "  return canvas;",
     "}",
   ];
-  for (const name of PIER_CANVAS_EXPORT_NAMES) {
+  for (const name of PIER_CANVAS_COMPONENT_EXPORT_NAMES) {
     lines.push(
       `export function ${name}(props) {`,
       `  const Comp = getCanvas().${name};`,
@@ -102,6 +110,17 @@ export function pierCanvasStubSource(): string {
       `    throw new Error("pier/canvas export missing: ${name}");`,
       "  }",
       "  return createElement(Comp, props);",
+      "}"
+    );
+  }
+  for (const name of PIER_CANVAS_VALUE_EXPORT_NAMES) {
+    lines.push(
+      `export function ${name}(...args) {`,
+      `  const fn = getCanvas().${name};`,
+      '  if (typeof fn !== "function") {',
+      `    throw new Error("pier/canvas export missing: ${name}");`,
+      "  }",
+      "  return fn(...args);",
       "}"
     );
   }
