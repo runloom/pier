@@ -21,6 +21,7 @@ export const workspace = {
     title: "界面出现错误",
   },
   tab: {
+    activeTask: "有任务正在运行",
     create: "新建",
     maximize: "最大化",
     restore: "还原",

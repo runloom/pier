@@ -25,6 +25,7 @@ export const workspace = {
     title: "Interface error",
   },
   tab: {
+    activeTask: "Task running",
     create: "New",
     maximize: "Maximize",
     restore: "Restore",

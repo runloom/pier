@@ -704,6 +704,10 @@ body {
   &[data-pier-tab-kind="file"] {
     max-width: none;
   }
+  /* 活跃任务圆点占左缘槽位：6px 点 + 6px 与 flex gap 对齐的间距 */
+  &[data-pier-tab-has-active-task="true"] {
+    padding-left: 18px;
+  }
 }
 
 .dockview-theme-pier .dv-tab .dv-default-tab .dv-default-tab-content,
@@ -868,6 +872,15 @@ body {
   overflow: hidden !important;
   padding-inline: 10px 12px !important;
   width: fit-content !important;
+}
+
+/* drag/ghost 的 padding-inline !important 会盖掉常态 gutter；active-task 再抬左 inset */
+.dockview-theme-pier
+  .dv-tab.dv-tab-dragging
+  .dv-default-tab[data-pier-tab-has-active-task="true"],
+.dv-tab.dv-tab-dragging .dv-default-tab[data-pier-tab-has-active-task="true"],
+.dv-tab-ghost-drag .dv-default-tab[data-pier-tab-has-active-task="true"] {
+  padding-left: 20px !important;
 }
 
 .dockview-theme-pier .dv-tab-ghost-drag::after,

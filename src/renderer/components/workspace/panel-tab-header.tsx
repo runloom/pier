@@ -36,6 +36,10 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
 import { ensureTuiInputFocus } from "@/panel-kits/terminal/tui-input-focus.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
+import {
+  panelHasActiveTaskRun,
+  useTaskRunsStore,
+} from "@/stores/task-runs.store.ts";
 import { useTabShortcutHintsStore } from "@/stores/terminal.store.ts";
 import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
 import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
@@ -95,6 +99,9 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const wasActiveOnPointerDownRef = useRef(false);
   const descriptor = usePanelDescriptorStore(
     (state) => state.descriptors[props.api.id]
+  );
+  const showActiveTaskDot = useTaskRunsStore((state) =>
+    panelHasActiveTaskRun(state.snapshot, props.api.id)
   );
   const tab = descriptor?.tab;
   const { Icon, iconId } = resolvePanelTabIcon(tab, props.api.component);
@@ -308,6 +315,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
       className="dv-default-tab relative"
       data-panel-tab-id={props.api.id}
+      data-pier-tab-has-active-task={showActiveTaskDot ? "true" : undefined}
       data-pier-tab-kind={
         props.api.component === FILE_PANEL_COMPONENT_ID ? "file" : undefined
       }
@@ -322,6 +330,14 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       role="tab"
       tabIndex={0}
     >
+      {showActiveTaskDot ? (
+        <span
+          aria-label={t("workspace.tab.activeTask")}
+          className="pointer-events-none absolute top-1/2 left-1.5 z-10 size-1.5 -translate-y-1/2 rounded-full bg-status-info-fg"
+          data-pier-tab-active-task="true"
+          role="status"
+        />
+      ) : null}
       {leadingVisual}
       <span className="dv-default-tab-content">{displayTitle}</span>
       {isDirty ? (

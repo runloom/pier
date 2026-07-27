@@ -1,3 +1,4 @@
+import { isActiveTaskRunNodeStatus } from "@shared/contracts/task-run-status.ts";
 import {
   emptyTaskRunsSnapshot,
   type TaskRunControlEntry,
@@ -73,4 +74,27 @@ export function taskRunsForPanel(
         b.startedAt - a.startedAt ||
         a.runId.localeCompare(b.runId)
     );
+}
+
+/**
+ * Tab 活跃任务 presence：RC 作用域内是否仍有任一活跃 run。
+ * 与选中 run / owned-only tab chrome 无关；不跟 dismiss store。
+ * 与 taskRunsForPanel 同作用域谓词，但 O(n) 短路扫描，不做排序。
+ */
+export function panelHasActiveTaskRun(
+  snapshot: TaskRunsSnapshot,
+  panelId: string
+): boolean {
+  for (const run of Object.values(snapshot.runs)) {
+    if (!isActiveTaskRunNodeStatus(run.status)) {
+      continue;
+    }
+    if (
+      run.originPanelId === panelId ||
+      Object.values(run.nodes).some((node) => node.panelId === panelId)
+    ) {
+      return true;
+    }
+  }
+  return false;
 }

@@ -78,6 +78,21 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toMatch(TAB_HINT_MIN_WIDTH_RE);
   });
 
+  it("reserves a left gutter for the absolute active-task presence dot", () => {
+    const css = readFileSync(
+      join(process.cwd(), "src/renderer/app/globals.css"),
+      "utf8"
+    );
+
+    expect(css).toContain('&[data-pier-tab-has-active-task="true"]');
+    expect(css).toContain("padding-left: 18px");
+    // drag/ghost 的 padding-inline !important 不得盖掉 gutter
+    expect(css).toContain(
+      '.dv-default-tab[data-pier-tab-has-active-task="true"]'
+    );
+    expect(css).toContain("padding-left: 20px !important");
+  });
+
   it("keeps tab close actions always visible with circular hover", () => {
     const css = readFileSync(
       join(process.cwd(), "src/renderer/app/globals.css"),
