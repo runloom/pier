@@ -4,6 +4,39 @@
 
 ## [Unreleased]
 
+## [0.1.10] - 2026-07-27
+
+### Added
+
+- **Git Review 稳定账本与变更块 stage。** 阅读连续性（reading session / anchor）、
+  稳定 ledger、hunk / change-block 级 stage·unstage·revert，以及 DiffView
+  生命周期与 virtual-scroll 阅读稳定治理。
+- **项目级内容搜索。** Files 插件 content search 面板与命令入口。
+- **工作台对话框表单布局。** 统一 sticky footer / dialog form layout；自定义
+  卡片编辑拆分为独立弹窗与区块编辑器。
+- **Canvas 框架纠偏。** live-module 框架核与 sibling file API；样例与 dogfood
+  路径收敛。
+- **账号跨工具同步增强。** Claude OAuth 同步到 OpenCode / Pi / OMP；Grok OIDC
+  同步到 Pi（版本感知 peer readiness）；切换确认对话框与 peer 可用性探测。
+- **任务脚本 frecency 跨 worktree 共享。** package-script 最近使用排序按
+  仓库身份共享。
+- **面板标签活跃任务点。** tab 上显示进行中任务存在指示。
+
+### Fixed
+
+- **确认 toast 与消息 toast 位置分层。** 确认型 top-center，消息型 top-right。
+- **命令面板共享 git 前缀排序。** 按命中字段长度排序，避免缩写抢位。
+- **文件标签过早截断。** 停止过早 label truncation，精简 file palette 条目。
+- **托管插件更新目标。** managed update 与 catalog bundled max 对齐。
+- **终端 agent 发送误附剪贴板图。** 文本发送路径不再夹带 clipboard images。
+- **Git review / coverage / e2e 门禁对齐。** 性能预算 CI slack、治理测试与
+  覆盖率 floor 跟进 develop 大面。
+
+### Plugins
+
+- 官方插件 patch：`pier.claude` 1.3.5、`pier.codex` 1.4.6、`pier.grok` 1.1.6、
+  `pier.ssh` 1.0.4。
+
 ## [0.1.9] - 2026-07-26
 
 ### Added
