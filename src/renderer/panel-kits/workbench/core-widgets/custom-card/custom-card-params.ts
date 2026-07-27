@@ -1,3 +1,4 @@
+import type { WidgetDensity } from "@pier/ui/collection-auto-layout.ts";
 import { z } from "zod";
 import type { MetricDescriptor } from "@/lib/workbench/metric-registry.ts";
 
@@ -62,4 +63,61 @@ export function blockAcceptsMetric(
     default:
       return false;
   }
+}
+
+/** compact 只留 kpi/gauge；medium 省略 trend；full 全开。 */
+export function blockVisibleAtDensity(
+  type: CustomCardBlockType,
+  density: WidgetDensity
+): boolean {
+  switch (density) {
+    case "compact":
+      return type === "kpi" || type === "gauge";
+    case "full":
+      return true;
+    case "medium":
+      return type !== "trend";
+    default:
+      return true;
+  }
+}
+
+/** ranking 条数上限：compact 0、medium 4/6、full 6/10。 */
+export function rankingLimitForDensity(
+  density: WidgetDensity,
+  height: number
+): number {
+  if (density === "compact") return 0;
+  if (density === "medium") return height <= 3 ? 4 : 6;
+  return height >= 5 ? 10 : 6;
+}
+
+/** 轻量块（kpi/gauge）聚组成 auto-fit 网格，重量块（trend/ranking）各占满宽行。保留原始顺序。 */
+export function groupBlocks(
+  blocks: readonly CustomCardBlock[]
+): readonly (
+  | { blocks: readonly CustomCardBlock[]; kind: "compact" }
+  | { block: CustomCardBlock; kind: "full" }
+)[] {
+  const groups: (
+    | { blocks: readonly CustomCardBlock[]; kind: "compact" }
+    | { block: CustomCardBlock; kind: "full" }
+  )[] = [];
+  let run: CustomCardBlock[] = [];
+  const flushRun = (): void => {
+    if (run.length > 0) {
+      groups.push({ blocks: run, kind: "compact" });
+      run = [];
+    }
+  };
+  for (const block of blocks) {
+    if (block.type === "kpi" || block.type === "gauge") {
+      run.push(block);
+    } else {
+      flushRun();
+      groups.push({ block, kind: "full" });
+    }
+  }
+  flushRun();
+  return groups;
 }
