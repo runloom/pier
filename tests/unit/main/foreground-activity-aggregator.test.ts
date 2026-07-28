@@ -1,6 +1,7 @@
 import type {
   AgentHookEventPayload,
   AgentHookEventPayloadV1,
+  AgentHookEventPayloadV2,
 } from "@shared/contracts/agent-session.ts";
 import type {
   AgentActivity,
@@ -70,6 +71,23 @@ function agentHookEvent(
     agent: "claude",
     panelId: "p1",
     windowId: "1",
+    ...args,
+  };
+}
+
+/** v2 payload：`actorHint` / `parentSessionId` 只在 v2 上存在（v1 schema 无此字段）。 */
+function agentHookEventV2(
+  args: Partial<AgentHookEventPayloadV2> & {
+    event: string;
+  }
+): AgentHookEventPayload {
+  return {
+    v: 2,
+    kind: "agentEvent",
+    agent: "claude",
+    panelId: "p1",
+    windowId: "1",
+    nativeEvent: args.event,
     ...args,
   };
 }
@@ -148,6 +166,94 @@ describe("ForegroundActivityAggregator", () => {
     const a = snap.activities[0] as AgentActivity;
     expect(a.kind).toBe("agent");
     expect(a.source).toBe("hook");
+    agg.dispose();
+  });
+
+  it("身份只由主会话事件推进：子会话事件不得改写面板行身份", () => {
+    // 标题可以不准，身份不能被猜。子会话（actorHint / parentSessionId /
+    // Subagent*）的会话号不是面板主会话的身份，多 agent 调度要靠它区分。
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "PromptSubmit", sessionId: "main-1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        event: "ToolStart",
+        parentSessionId: "main-1",
+        sessionId: "sub-9",
+      })
+    );
+    const a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.sessionId).toBe("main-1");
+    expect(a.actorHint).toBeUndefined();
+    expect(a.parentSessionId).toBeUndefined();
+    expect(a.status).toBe("processing");
+    agg.dispose();
+  });
+
+  it("子会话细节事件先到时不建父面板活动", () => {
+    // 子会话 ToolStart 既不是父状态，也不是子会话计数边界；没有父层时必须丢弃，
+    // 否则会凭空出现一个没有身份、看起来像主会话的活动行。
+    const agg = createForegroundActivityAggregator({ now });
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          event: "ToolStart",
+          parentSessionId: "main-1",
+          sessionId: "sub-9",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("持久化规范标题水合会修正竞态留下的低优先级槽位", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "PromptSubmit", sessionId: "session-1" })
+    );
+    agg.setAgentSessionTitle("1", "p1", {
+      sessionId: "session-1",
+      source: "provider",
+      title: "错误的自动标题",
+    });
+
+    agg.hydrateAgentSessionTitle("1", "p1", {
+      sessionId: "session-1",
+      source: "user",
+      title: "磁盘中的用户标题",
+    });
+
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionTitle: "磁盘中的用户标题",
+      sessionTitleSource: "user",
+    });
+    agg.dispose();
+  });
+
+  it("SessionStart 换会话：旧 sessionId 不得残留成错误身份", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "PromptSubmit", sessionId: "old-1" })
+    );
+    agg.ingestAgentEvent(agentHookEventV2({ event: "SessionStart" }));
+    advance(250);
+    const a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.sessionId).toBeUndefined();
+    agg.dispose();
+  });
+
+  it("launch 先验不带身份字段（没有 hook 事实可依据）", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.agentLaunched("1", "p1", "codex");
+    advance(250);
+    const a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.sessionId).toBeUndefined();
+    expect(a.actorHint).toBeUndefined();
+    expect(a.parentSessionId).toBeUndefined();
     agg.dispose();
   });
 

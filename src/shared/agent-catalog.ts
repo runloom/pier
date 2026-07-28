@@ -11,18 +11,6 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     iconId: "claude",
     homepageUrl: "https://claude.com/claude-code",
     oneShotArgs: (prompt) => ["-p", prompt],
-    // `haiku` 别名解析到当前最便宜/最快的 Haiku，比钉死版本号耐版本变化；
-    // 空 --mcp-config + --strict-mcp-config 掐掉 MCP 冷启动（冷启动是这条
-    // 链路的主要延迟来源，不是推理本身）。
-    titleArgs: (prompt) => [
-      "-p",
-      prompt,
-      "--model",
-      "haiku",
-      "--strict-mcp-config",
-      "--mcp-config",
-      "{}",
-    ],
   },
   {
     id: "codex",

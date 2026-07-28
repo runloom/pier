@@ -1,7 +1,10 @@
+import {
+  isSubagentHookEvent,
+  SUBAGENT_HOOK_EVENTS,
+} from "@shared/agent-session-actor.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import {
   activityStatusForHookEvent,
-  type ForegroundActivity,
   type ForegroundActivityBroadcast,
 } from "@shared/contracts/foreground-activity.ts";
 import {
@@ -15,9 +18,14 @@ import {
   retainWindowPanels,
 } from "./aggregator-retain-panels.ts";
 import {
+  clearPanelSlotSessionTitle,
   hydratePanelSlotSessionTitle,
   setPanelSlotSessionTitle,
 } from "./aggregator-session-title.ts";
+import {
+  buildForegroundActivityBroadcast,
+  createPanelSlotRegistry,
+} from "./aggregator-slots.ts";
 import {
   logAgentEventDropped,
   logClearForeignHook,
@@ -45,7 +53,6 @@ import {
   newShellLayer,
   newTaskLayer,
   type PanelSlot,
-  projectSlot,
   SESSION_CREATING_EVENTS,
   SESSION_END_COOLDOWN_MS,
   SUSPENDED_JOB_EXIT_CODES,
@@ -75,14 +82,7 @@ export function createForegroundActivityAggregator(
 
   function buildBroadcast(): ForegroundActivityBroadcast {
     broadcastSeq += 1;
-    const activities: ForegroundActivity[] = [];
-    for (const slot of slots.values()) {
-      const activity = projectSlot(slot.panelId, slot);
-      if (activity) {
-        activities.push(activity);
-      }
-    }
-    return { activities, ts: broadcastSeq };
+    return buildForegroundActivityBroadcast(slots, broadcastSeq);
   }
 
   function scheduleEmit(): void {
@@ -100,20 +100,7 @@ export function createForegroundActivityAggregator(
 
   const timerCtx: TimerCtx = { now, scheduleEmit, slots };
 
-  function slotFor(key: string, panelId: string): PanelSlot {
-    let slot = slots.get(key);
-    if (!slot) {
-      slot = { command: null, hook: null, panelId };
-      slots.set(key, slot);
-    }
-    return slot;
-  }
-  function dropSlotIfEmpty(key: string): void {
-    const slot = slots.get(key);
-    if (slot && !slot.command && !slot.hook) {
-      slots.delete(key);
-    }
-  }
+  const { dropSlotIfEmpty, slotFor } = createPanelSlotRegistry(slots);
 
   function commandOwnedAgent(slot: PanelSlot | undefined) {
     return slot?.command?.kind === "agent-launch" ? slot.command.agentId : null;
@@ -311,6 +298,14 @@ export function createForegroundActivityAggregator(
         });
         return false;
       }
+      if (
+        isSubagentHookEvent(event) &&
+        !SUBAGENT_HOOK_EVENTS.has(event.event) &&
+        event.event !== "SessionEnd"
+      ) {
+        logAgentEventDropped("subagent-detail-ignored", key, event.event);
+        return false;
+      }
       const identity = hookScopeIdentity(event);
       if (!hookScopes.allowsAgentEventAfterCooldowns(key, event, identity)) {
         return false;
@@ -457,6 +452,13 @@ export function createForegroundActivityAggregator(
         windowId,
         panelId,
         input
+      );
+    },
+    clearAgentSessionTitle(windowId, panelId) {
+      clearPanelSlotSessionTitle(
+        { disposed, scheduleEmit, slotFor },
+        windowId,
+        panelId
       );
     },
     onChange(cb) {

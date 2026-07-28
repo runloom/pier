@@ -1,3 +1,4 @@
+import type { PanelTransferResult } from "@shared/contracts/panel-transfer.ts";
 import {
   PANEL_TRANSFER_MIME,
   PANEL_TRANSFER_TEXT_PREFIX,
@@ -142,7 +143,9 @@ function createApi(panels: ReturnType<typeof panel>[]) {
 function installPier(overrides: Record<string, unknown> = {}) {
   const offer = vi.fn(async () => undefined);
   const drop = vi.fn(async () => undefined);
-  const finishDrag = vi.fn(async () => null);
+  const finishDrag = vi.fn(
+    async (): Promise<PanelTransferResult | null> => null
+  );
   const cancel = vi.fn(async () => undefined);
   const bootstrap = vi.fn(async () => ({ pending: [] }));
   const ready = vi.fn(async () => ({ ok: true as const }));

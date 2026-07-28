@@ -1,7 +1,10 @@
 /**
  * Agent 会话标题——纯函数层唯一对外入口。
  *
- * 三层收敛：占位 → 规则派生(T1) → 模型精修(T2) → 冻结（仅用户改名可再动）。
+ * 三层收敛：占位 → 首条 prompt 确定性派生(prompt) → agent 自己的会话名
+ * (provider) → 用户改名(user)。
+ * 没有启发式改写层，也没有模型精修层：标题只是可读性信号，身份由
+ * agentId + 项目路径 + panelId + actorHint 承担。
  * 写入裁决见 precedence.ts；main 侧编排见 services/agents/session-title/。
  */
 
@@ -10,16 +13,12 @@ export {
   MAX_AGENT_SESSION_TITLE_LENGTH,
   MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH,
   MAX_PROMPT_SNIPPET_LENGTH,
-  MAX_REFINE_CHANGED_FILES,
-  MAX_REFINE_PROMPT_CHARS,
-  TARGET_AUTO_TITLE_LENGTH,
 } from "./constants.ts";
 export { deriveAgentSessionTitleFromPrompt } from "./derive.ts";
 export {
-  GREETING_ONLY_SOURCE,
-  isNoiseTitleInput,
-  TRIVIAL_TITLE_SOURCE,
-} from "./noise.ts";
+  type AgentSessionTitleDisambiguationEntry,
+  disambiguateAgentSessionTitles,
+} from "./disambiguate.ts";
 export {
   normalizeAgentSessionTitle,
   truncateTerminalTitleForTooltip,
@@ -36,5 +35,8 @@ export {
   type ResolvedAgentSessionTitle,
   resolveAgentSessionTitle,
 } from "./resolve.ts";
-export { titleChangedFileNames } from "./signals.ts";
-export { stripAgentPromptMarkup } from "./strip.ts";
+export {
+  firstAgentPromptLine,
+  stripAgentPromptMarkup,
+  unwrapAgentPromptMarkup,
+} from "./strip.ts";

@@ -10,11 +10,16 @@ import {
 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import { MAX_PROMPT_SNIPPET_LENGTH } from "@shared/agent-session-title/index.ts";
 import {
-  GREETING_ONLY_SOURCE,
-  MAX_AGENT_SESSION_TITLE_LENGTH,
-  MAX_PROMPT_SNIPPET_LENGTH,
-} from "@shared/agent-session-title/index.ts";
+  buildDeriveClaudeSessionTitleScript,
+  PIER_HOOK_COMMAND_GENERATION,
+} from "./agent-hooks-title-script.ts";
+
+export {
+  buildDeriveClaudeSessionTitleScript,
+  PIER_HOOK_COMMAND_GENERATION,
+} from "./agent-hooks-title-script.ts";
 
 /**
  * 实例私有事件日志目录名（相对 userData）。
@@ -49,20 +54,6 @@ export const PIER_HOOKS_GENERATION_FILE = "GENERATION";
 
 /** 当前运行时 symlink 名 → `v{N}`。 */
 export const PIER_HOOKS_CURRENT_NAME = "current";
-
-/**
- * hooks 命令 + 共享运行时世代（只增不减）。
- * 2 = PromptSubmit 命名所需的 prompt → promptSnippet。
- * 3 = 世代标记改为赋值（禁止 `#` 注释，避免 `;` 拼接后整行被注释掉）。
- * 4 = stdin 身份字段补 camelCase（toolUseId / toolName / turnId / agentId /
- *     agentType / transcriptPath）；Grok 等 provider 官方 envelope 为 camelCase。
- * 5 = 全局 hooks 命令去掉 process.execPath 内联 fallback；只引用
- *     `${PIER_AGENT_HOOKS_DIR}/…`。共享运行时迁入 `~/.pier/hooks/vN`，
- *     只允许更高（或相等刷新）世代写入；旧客户端不得降级。
- * 6 = extract/derive 改为 `#!/usr/bin/env node` 纯脚本，运行时不再绑定
- *     Electron 绝对路径（金标准：同 gen 多实例零路径互盖）。
- */
-export const PIER_HOOK_COMMAND_GENERATION = 6;
 
 /**
  * emit 脚本内容——保留 v1 agentEvent，并以 agentEventV2 承载新协议。
@@ -280,81 +271,6 @@ process.stdin.on("end", () => {
       o.promptSnippet = prompt.slice(0, MAX_SNIPPET);
     }
     process.stdout.write(Buffer.from(JSON.stringify(o)).toString("base64"));
-  } catch {
-    // best-effort
-  }
-});
-`;
-}
-
-/**
- * derive-claude-session-title：`#!/usr/bin/env node` 纯脚本。
- * stdin JSON → stdout hookSpecificOutput.sessionTitle。
- * 只做 strip + 寒暄挡 + 硬截断（与历史内联逻辑一致）。
- * **不绑定** Electron/process.execPath。
- */
-export function buildDeriveClaudeSessionTitleScript(): string {
-  const greetingLiteral = JSON.stringify(GREETING_ONLY_SOURCE);
-  const cap = MAX_AGENT_SESSION_TITLE_LENGTH;
-  const snippetCap = MAX_PROMPT_SNIPPET_LENGTH;
-  return `#!/usr/bin/env node
-// pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}
-// Managed by Pier. Do not edit.
-"use strict";
-const GREETING_ONLY_SOURCE = ${greetingLiteral};
-const MAX_TITLE = ${cap};
-const MAX_SNIPPET = ${snippetCap};
-let s = "";
-process.stdin.on("data", (d) => {
-  s += d;
-});
-process.stdin.on("end", () => {
-  try {
-    const p = JSON.parse(s);
-    const raw = [p.prompt, p.user_prompt, p.content, p.message].find(
-      (v) => typeof v === "string"
-    );
-    if (typeof raw !== "string") {
-      return;
-    }
-    let t = String(raw)
-      .slice(0, MAX_SNIPPET)
-      .replace(/\\r\\n/g, "\\n")
-      .replace(/\\r/g, "\\n");
-    const m =
-      /<(user_query|user_message|user_prompt|human|query)\\b[^>]*>([\\s\\S]*?)<\\/\\1>/i.exec(
-        t
-      );
-    if (m && m[2].trim()) {
-      t = m[2];
-    }
-    t = t
-      .replace(
-        /<\\/?(?:user_query|user_message|user_prompt|human|query|system|assistant)\\b[^>]*>/gi,
-        " "
-      )
-      .replace(/\\[Image\\s*#?\\d*\\]/gi, " ")
-      .replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, " ")
-      .replace(/\\s+/g, " ")
-      .trim();
-    if (!t || new RegExp(GREETING_ONLY_SOURCE, "i").test(t)) {
-      return;
-    }
-    if (t.length > MAX_TITLE) {
-      t = t.slice(0, MAX_TITLE - 1).trimEnd() + "…";
-    }
-    if (!t || t.includes("\\n")) {
-      return;
-    }
-    process.stdout.write(
-      JSON.stringify({
-        hookSpecificOutput: {
-          hookEventName: "UserPromptSubmit",
-          sessionTitle: t,
-          suppressOutput: true,
-        },
-      })
-    );
   } catch {
     // best-effort
   }

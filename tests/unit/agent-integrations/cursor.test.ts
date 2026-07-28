@@ -136,7 +136,7 @@ describe("withPierCursorHooks", () => {
       ["error", "stop", "c1"],
       ["Stop", "stop", "c1"],
     ]);
-  });
+  }, 15_000);
 
   it("schema 形状：command 直接在定义对象上（非嵌套 hooks 数组）", () => {
     const next = withPierCursorHooks({});

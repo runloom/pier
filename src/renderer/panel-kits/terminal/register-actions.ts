@@ -1,8 +1,3 @@
-import {
-  agentSessionTitleInput,
-  normalizeAgentSessionTitle,
-  resolveAgentSessionTitle,
-} from "@shared/agent-session-title/index.ts";
 import type { TerminalOperation } from "@shared/contracts/terminal.ts";
 import i18next from "i18next";
 import { Paperclip, Pencil, PenLine, Search, X } from "lucide-react";
@@ -14,8 +9,10 @@ import {
   activeTerminalPanelId,
   rendererActionContributionRuntime,
 } from "@/lib/actions/renderer-action-runtime.ts";
-import { showAppAlert, showAppPrompt } from "@/stores/app-dialog.store.ts";
-import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
+import {
+  canRenameAgentSession,
+  promptRenameAgentSession,
+} from "@/lib/agent-runtime/rename-agent-session.ts";
 import {
   dispatchTerminalComposerAttach,
   dispatchTerminalOpenComposer,
@@ -151,11 +148,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     categoryKey: "terminal",
     enabled: () => {
       const id = activeTerminalPanelId();
-      if (!id) {
-        return false;
-      }
-      const activity = useForegroundActivityStore.getState().activities[id];
-      return activity?.kind === "agent";
+      return id != null && canRenameAgentSession(id);
     },
     group: "0_edit",
     handler: async () => {
@@ -163,67 +156,16 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       if (!panelId) {
         return;
       }
-      const activity =
-        useForegroundActivityStore.getState().activities[panelId];
-      if (activity?.kind !== "agent") {
-        return;
-      }
-      const current = resolveAgentSessionTitle(
-        agentSessionTitleInput({
-          agentId: activity.agentId,
-          sessionTitle: activity.sessionTitle,
-          sessionTitleSource: activity.sessionTitleSource,
-        })
-      ).primary;
-      const next = await showAppPrompt({
-        initialValue: current,
-        intent: "default",
-        placeholder: i18next.t("contextMenu.action.renameAgentSessionPrompt"),
-        title: i18next.t("contextMenu.action.renameAgentSession"),
-        validate: (value) => {
-          const normalized = normalizeAgentSessionTitle(value);
-          if (!normalized) {
-            return i18next.t("contextMenu.action.renameAgentSessionPrompt");
-          }
-          return null;
-        },
-      });
-      if (next == null) {
-        return;
-      }
-      const normalized = normalizeAgentSessionTitle(next);
-      if (!normalized) {
-        return;
-      }
-      try {
-        const result = await window.pier.terminal.setSessionTitle(panelId, {
-          source: "user",
-          title: normalized,
-        });
-        if (!(result.ok && result.applied)) {
-          showAppAlert({
-            title: i18next.t("contextMenu.action.renameAgentSessionFailed"),
-          });
-        }
-      } catch (error) {
-        showAppAlert({
-          body: error instanceof Error ? error.message : String(error),
-          title: i18next.t("contextMenu.action.renameAgentSessionFailed"),
-        });
-      }
+      await promptRenameAgentSession({ panelId });
     },
     iconComponent: Pencil,
     id: "pier.terminal.renameAgentSession",
     menuHidden: () => {
       const id = activeTerminalPanelId();
-      if (!id) {
-        return true;
-      }
-      const activity = useForegroundActivityStore.getState().activities[id];
-      return activity?.kind !== "agent";
+      return id == null || !canRenameAgentSession(id);
     },
     sortOrder: 6,
-    surfaces: ["dockview-tab", "command-palette"],
+    surfaces: ["terminal/content", "dockview-tab", "command-palette"],
     titleKey: "contextMenu.action.renameAgentSession",
     when: "terminal.hasActivePanel",
   },

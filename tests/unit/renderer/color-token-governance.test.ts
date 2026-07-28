@@ -18,6 +18,8 @@ const RAW_COLOR_WHOLE_FILE_OWNERS = new Set([
   "src/renderer/lib/theme/derive-tokens.ts",
   "src/renderer/lib/theme/oklch.ts",
   "src/shared/theme-colors.ts",
+  // renderer 已不可用时加载的独立 data URL，无法消费 globals.css 语义令牌。
+  "src/main/windows/renderer-recovery-page.ts",
 ]);
 const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
   ["packages/ui/src/chart.tsx", /#(?:ccc|fff)\b/gi],
@@ -38,6 +40,8 @@ const COLOR_MIX_OWNERS = new Set([
   // (shadow DOM cannot consume Tailwind opacity utilities).
   "src/renderer/app/globals.css",
   "src/renderer/lib/plugins/mermaid-render.worker.ts",
+  // renderer 崩溃后的独立 data URL，只能在内嵌 CSS 中自带中性色混合。
+  "src/main/windows/renderer-recovery-page.ts",
 ]);
 
 function sourceFiles(dir: string): string[] {

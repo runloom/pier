@@ -1,3 +1,4 @@
+import { isSubagentHookEvent } from "@shared/agent-session-actor.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 
 export interface AgentEventEffects {
@@ -13,11 +14,7 @@ export interface AgentEventEffects {
 export function effectsForAcceptedAgentEvent(
   event: AgentHookEventPayload
 ): AgentEventEffects {
-  const isSubagent =
-    event.event === "SubagentStart" ||
-    event.event === "SubagentStop" ||
-    ("actorHint" in event && event.actorHint === "subagent") ||
-    ("parentSessionId" in event && event.parentSessionId !== undefined);
+  const isSubagent = isSubagentHookEvent(event);
   return {
     markPanelExited: !isSubagent && event.event === "SessionEnd",
     observeTranscript: !isSubagent,

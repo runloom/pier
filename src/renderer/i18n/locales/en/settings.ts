@@ -475,12 +475,6 @@ export const settings = {
       env: "Launch environment",
       envDesc: "Environment variables applied to this agent",
     },
-    sessionTitleRefine: {
-      label: "Name sessions automatically",
-      description:
-        "After the first exchange, rewrite the tab title into a closer task name. When off, sessions are still named from your first message — no agent is called and no quota is spent.",
-      failed: "Could not update session naming",
-    },
     statusHooks: {
       label: "Agent status alerts",
       description:

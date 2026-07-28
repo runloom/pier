@@ -1,3 +1,4 @@
+import { isSubagentHookEvent } from "@shared/agent-session-actor.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import type {
@@ -62,8 +63,10 @@ export const SESSION_CREATING_EVENTS = new Set([
   "processing",
   "running",
 ]);
-/** 子代理事件只做计数, 不改父状态（防 tool→processing 闪跳）。 */
-export const SUBAGENT_EVENTS = new Set(["SubagentStart", "SubagentStop"]);
+/**
+ * 子代理事件只做计数, 不改父状态（防 tool→processing 闪跳）。
+ * 判据单一来源是 shared/agent-session-actor.ts，本模块不复制一份。
+ */
 /**
  * 这些集成在 agent 扩展运行时内直接写 JSONL, `pid` 是扩展宿主进程号。
  * Claude/Codex 等 JSON command hook 里的 `pid` 来自 Pier emit 脚本 `$$`,
@@ -90,6 +93,39 @@ export function isSuspendedJobExitCode(code: number | undefined): boolean {
 export interface HookScopeIdentity {
   isolated: boolean;
   key: string;
+}
+
+/**
+ * 会话身份——provider 原样上报的事实，不做任何推断。
+ * 与 status / sessionTitle 隔离：标题可以缺席或不准，身份不能被猜。
+ */
+export interface HookIdentityFacts {
+  actorHint?: "main" | "subagent";
+  parentSessionId?: string;
+  sessionId?: string;
+}
+
+/**
+ * hook 事件 → 身份事实（缺席即缺席，不补默认值）。
+ * 子会话事件一律返回空：面板行身份只能由主会话事件推进。
+ */
+export function hookIdentityFacts(
+  event: AgentHookEventPayload
+): HookIdentityFacts {
+  if (isSubagentHookEvent(event)) {
+    return {};
+  }
+  const sessionId = event.sessionId?.trim();
+  const actorHint = "actorHint" in event ? event.actorHint : undefined;
+  // 现判据下带父会话号即算子会话（上面已返回），这里只有判据收窄后
+  // 「主会话自己被委派」的场景才会命中：委派边照原样记录。
+  const parentSessionId =
+    "parentSessionId" in event ? event.parentSessionId?.trim() : undefined;
+  return {
+    ...(actorHint ? { actorHint } : {}),
+    ...(parentSessionId ? { parentSessionId } : {}),
+    ...(sessionId ? { sessionId } : {}),
+  };
 }
 
 export interface HookScope {
@@ -123,6 +159,11 @@ export interface HookLayer {
   agentId: AgentKind;
   /** SessionStart 消抖隐藏期为 true——不参与投影。 */
   hidden: boolean;
+  /**
+   * 面板主会话的身份事实。子会话事件不写此处——面板行代表主会话，
+   * 子会话只进 subagentCount。
+   */
+  identity: HookIdentityFacts;
   scopes: Map<string, HookScope>;
   spawnedAt: number;
   stateStartedAt: number | undefined;
@@ -175,6 +216,8 @@ export interface PanelSlot {
   panelId: string;
   /** 产品会话名（与 status 隔离；挂 panel 而非 hook 层）。 */
   sessionTitle?: string;
+  /** 标题所属的 provider 主会话；不向 renderer 投影。 */
+  sessionTitleSessionId?: string;
   sessionTitleSource?: AgentSessionTitleSource;
 }
 
@@ -270,6 +313,7 @@ export function newHookLayer(
   return {
     agentId: event.agent,
     hidden: event.event === "SessionStart",
+    identity: hookIdentityFacts(event),
     spawnedAt: at,
     stateStartedAt: at,
     status: "ready",
@@ -359,6 +403,7 @@ export function projectSlot(
       kind: "agent",
       panelId,
       source: "hook",
+      ...hook.identity,
       spawnedAt: hook.spawnedAt,
       ...(hook.status === undefined
         ? {}
@@ -374,6 +419,8 @@ export function projectSlot(
         : { sessionTitleSource: slot.sessionTitleSource }),
     };
   }
+  // launch 先验没有任何 hook 事实 → 不带身份字段（缺席即证据不足，
+  // 消费方按主会话处理）。不得从 launch 命令行反推会话号。
   if (command?.kind === "agent-launch" && !command.hidden) {
     return {
       agentId: command.agentId,

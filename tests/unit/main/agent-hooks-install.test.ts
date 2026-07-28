@@ -300,7 +300,7 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     expect(meta.promptSnippet).toBe(prompt.slice(0, MAX_PROMPT_SNIPPET_LENGTH));
   });
 
-  it("derive-claude-session-title spawn：标题 / 寒暄 / 超长截断", async () => {
+  it("derive-claude-session-title spawn：标题 / 原样保留 / 超长截断", async () => {
     const root = await makeTempDir();
     const { hooksHome } = await installPair(root);
     const script = deriveClaudeSessionTitleScriptPath(hooksHome);
@@ -320,11 +320,15 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
       "帮我修一下 parser 崩溃"
     );
 
+    // 确定性派生：不判断寒暄。用户写 "hi" 就叫 "hi"，随时可改名。
     const greeting = run("hi");
     expect(greeting.status).toBe(0);
-    expect(greeting.stdout.trim()).toBe("");
+    const greetingBody = JSON.parse(greeting.stdout) as {
+      hookSpecificOutput?: { sessionTitle?: string };
+    };
+    expect(greetingBody.hookSpecificOutput?.sessionTitle).toBe("hi");
 
-    const long = "a".repeat(60);
+    const long = "a".repeat(MAX_AGENT_SESSION_TITLE_LENGTH + 20);
     const capped = run(long);
     expect(capped.status).toBe(0);
     const capBody = JSON.parse(capped.stdout) as {

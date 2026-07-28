@@ -1,8 +1,23 @@
 import { type Stats, unwatchFile, watchFile } from "node:fs";
 import { open, realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
-import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type {
+  TranscriptTailReconciler,
+  TranscriptTailReconcilerConfig,
+  TranscriptTerminalRecord,
+} from "./transcript-tail-contracts.ts";
+import { processTranscriptTitleLine } from "./transcript-title-routing.ts";
+
+export type {
+  TranscriptTailReconciler,
+  TranscriptTailReconcilerConfig,
+  TranscriptTerminalRecord,
+} from "./transcript-tail-contracts.ts";
+export type {
+  TranscriptTitleListener,
+  TranscriptTitleRecord,
+} from "./transcript-title-routing.ts";
 
 const POLL_INTERVAL_MS = 250;
 const MAX_READ_BYTES = 1024 * 1024;
@@ -11,19 +26,12 @@ const MAX_TURN_CONTEXTS = 64;
 const MAX_PENDING_TERMINALS = 64;
 const MAX_SEEN_TERMINALS = 256;
 
-/** 一条 transcript 行分类出的可信终态记录。 */
-export interface TranscriptTerminalRecord {
-  /** 诊断用原生事件名（如 `codex.transcript.turn_aborted`）。 */
-  nativeEvent: string;
-  pierEvent: "TurnCompleted" | "TurnInterrupted";
-  /** provider 无回合身份时为空串（走单 owner + 增量区间回退）。 */
-  turnId: string;
-}
-
 interface TranscriptEntry {
   contextsByTurnId: Map<string, AgentHookEventPayload>;
   disposed: boolean;
   initialScanEnd: number;
+  /** 每个 owner 最近一次派发过的 provider 标题（同值连发直接丢弃）。 */
+  lastTitleByScope: Map<string, string>;
   offset: number;
   owners: Map<string, AgentHookEventPayload>;
   pending: boolean;
@@ -31,35 +39,6 @@ interface TranscriptEntry {
   processing: boolean;
   seenTerminalEvents: Set<string>;
   watcher: (curr: Stats, prev: Stats) => void;
-}
-
-export interface TranscriptTailReconciler {
-  dispose(): void;
-  observe(event: AgentHookEventPayload): Promise<void>;
-  releasePanel(panelId: string, windowId?: string): void;
-  releasePanelsWhere(
-    predicate: (panelId: string, windowId: string) => boolean
-  ): void;
-  releaseWindow(windowId: string): void;
-  /** 跨窗口拖拽后把 panel 作用域迁到目标窗口（保留 pending / owner / 回合上下文）。 */
-  transferPanelOwnership(input: {
-    panelId: string;
-    sourceWindowId: string;
-    targetWindowId: string;
-  }): void;
-}
-
-export interface TranscriptTailReconcilerConfig {
-  /** 只消费该 agent 的 hook 事件；其他 agent 直接忽略。 */
-  agent: AgentKind;
-  /**
-   * transcript 单行 → 终态记录；非终态行返回 null。可以直接抛错
-   * （坏行/格式升级由核心捕获后静默忽略）。
-   */
-  classifyLine: (line: string) => TranscriptTerminalRecord | null;
-  onTerminalEvent: (event: AgentHookEventPayload) => void;
-  /** transcript 必须位于该根目录内（realpath 后再校验）。 */
-  transcriptRoot: string;
 }
 
 /**
@@ -139,6 +118,23 @@ export function createTranscriptTailReconciler(
   ): void {
     if (disposed || entry.disposed || !line.trim()) {
       return;
+    }
+    if (allowOwnerFallback) {
+      try {
+        const classifyTitleLine = config.classifyTitleLine;
+        const listener = config.onTitleRecord;
+        if (classifyTitleLine && listener) {
+          processTranscriptTitleLine({
+            classifyLine: classifyTitleLine,
+            lastTitleByScope: entry.lastTitleByScope,
+            line,
+            listener,
+            owners: entry.owners,
+          });
+        }
+      } catch {
+        // 标题是纯装饰通路，坏行不得连带影响终态对账。
+      }
     }
     try {
       const record = config.classifyLine(line);
@@ -248,6 +244,9 @@ export function createTranscriptTailReconciler(
           entry.contextsByTurnId.delete(turnId);
         }
       }
+      for (const key of releasedKeys) {
+        entry.lastTitleByScope.delete(key);
+      }
       if (entry.owners.size === 0) disposeEntry(path, entry);
     }
   }
@@ -272,6 +271,7 @@ export function createTranscriptTailReconciler(
       contextsByTurnId: new Map(),
       disposed: false,
       initialScanEnd: initial.size,
+      lastTitleByScope: new Map(),
       // 首次绑定有限回扫尾部，覆盖 terminal 已写入、watcher 稍后建立的竞态。
       // 起点可能落在一行中间；processLine 的 JSON 解析失败会安全忽略该残片。
       offset: Math.max(0, initial.size - MAX_READ_BYTES),
@@ -365,6 +365,7 @@ export function createTranscriptTailReconciler(
             otherEntry.contextsByTurnId.delete(turnId);
           }
         }
+        otherEntry.lastTitleByScope.delete(key);
         if (otherEntry.owners.size === 0) disposeEntry(otherPath, otherEntry);
       }
       entry.owners.set(key, event);
@@ -444,6 +445,11 @@ export function createTranscriptTailReconciler(
         entry.owners.delete(sourceKey);
         const moved = { ...owner, windowId: targetWindowId };
         entry.owners.set(targetKey, moved);
+        const lastTitle = entry.lastTitleByScope.get(sourceKey);
+        if (lastTitle !== undefined) {
+          entry.lastTitleByScope.delete(sourceKey);
+          entry.lastTitleByScope.set(targetKey, lastTitle);
+        }
         for (const [turnId, context] of entry.contextsByTurnId) {
           if (scopeKey(context) === sourceKey) {
             entry.contextsByTurnId.set(turnId, {

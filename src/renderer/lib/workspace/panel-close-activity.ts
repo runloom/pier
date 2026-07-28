@@ -19,7 +19,8 @@ function isActiveAgentStatus(status: ActivityStatus | undefined): boolean {
 }
 
 function summarizeActiveAgent(
-  activity: ForegroundActivity
+  activity: ForegroundActivity,
+  projectPath: string | undefined
 ): QuitActivitySummary | null {
   if (activity.kind !== "agent") {
     return null;
@@ -29,9 +30,11 @@ function summarizeActiveAgent(
   }
   return {
     kind: "agent",
+    // 路径锚点必传：确认弹窗里两个同 agent 面板不能显示成同一个名字。
     label: resolveAgentSessionTitle(
       agentSessionTitleInput({
         agentId: activity.agentId,
+        projectRootPath: projectPath,
         sessionTitle: activity.sessionTitle,
         sessionTitleSource: activity.sessionTitleSource,
       })
@@ -100,7 +103,8 @@ export function activeTaskRunsToStopForPanel(
 export function dangerousActivitySummariesForPanel(
   panelId: string,
   activities: Record<string, ForegroundActivity>,
-  taskRuns: TaskRunsSnapshot
+  taskRuns: TaskRunsSnapshot,
+  projectPath?: string | undefined
 ): QuitActivitySummary[] {
   const summaries: QuitActivitySummary[] = [];
   const seenTaskKeys = new Set<string>();
@@ -108,7 +112,7 @@ export function dangerousActivitySummariesForPanel(
   const fallbackWindowId = activity?.windowId;
 
   if (activity) {
-    const agentSummary = summarizeActiveAgent(activity);
+    const agentSummary = summarizeActiveAgent(activity, projectPath);
     if (agentSummary) {
       summaries.push(agentSummary);
     }

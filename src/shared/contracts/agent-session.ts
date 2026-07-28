@@ -86,9 +86,10 @@ const agentEventPayloadV2Schema = z
   .strict();
 
 export type AgentHookEventPayloadV1 = z.infer<typeof agentEventPayloadV1Schema>;
+export type AgentHookEventPayloadV2 = z.infer<typeof agentEventPayloadV2Schema>;
 export type AgentHookEventPayload =
   | AgentHookEventPayloadV1
-  | z.infer<typeof agentEventPayloadV2Schema>;
+  | AgentHookEventPayloadV2;
 
 export const agentHookEventSchema = z.union([
   commandStartEventSchema,

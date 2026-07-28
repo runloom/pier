@@ -10,6 +10,7 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 const activateMock = vi.fn();
 const toastError = vi.fn();
+const promptRename = vi.fn((_args: unknown) => Promise.resolve(true));
 
 vi.mock("sonner", () => ({
   toast: {
@@ -30,6 +31,11 @@ vi.mock("@/lib/agent-runtime/current-window-id.ts", () => ({
   currentElectronWindowId: () => "win-local",
 }));
 
+vi.mock("@/lib/agent-runtime/rename-agent-session.ts", () => ({
+  canRenameAgentSession: () => true,
+  promptRenameAgentSession: (args: unknown) => promptRename(args),
+}));
+
 beforeAll(async () => {
   await initI18n();
 });
@@ -37,6 +43,7 @@ beforeAll(async () => {
 beforeEach(async () => {
   await i18next.changeLanguage("en");
   toastError.mockReset();
+  promptRename.mockClear();
   activateMock.mockReset();
   activateMock.mockReturnValue({ ok: true });
   useForegroundActivityStore.setState({ activities: {}, ts: 0 });
@@ -243,6 +250,84 @@ describe("ActivityWidget", () => {
     expect(toastError).toHaveBeenCalledWith(
       i18next.t("workbench.widget.activityOverview.panelGone")
     );
+  });
+
+  it("exposes agent identity (which agent, subagent role) in the accessible name", () => {
+    // 标题只是可读性信号；「在调哪个 agent 会话」必须能从无障碍名字读出来，
+    // 否则同名/无名会话在读屏与列表里无法区分。
+    useForegroundActivityStore.setState({
+      ts: 4,
+      activities: {
+        "panel-run": {
+          actorHint: "subagent",
+          agentId: "claude",
+          kind: "agent",
+          panelId: "panel-run",
+          parentSessionId: "sess-parent",
+          sessionId: "sess-child",
+          source: "hook",
+          spawnedAt: 1,
+          status: "processing",
+          subagentCount: 0,
+          updatedAt: 100,
+          windowId: "win-local",
+        },
+      },
+    });
+
+    render(<ActivityWidget {...widgetProps()} />);
+
+    const label =
+      screen.getByTestId("activity-row-panel-run").getAttribute("aria-label") ??
+      "";
+    expect(label).toContain("Claude");
+    expect(label).toContain(
+      i18next.t("workbench.widget.activityOverview.identity.subagent")
+    );
+  });
+
+  it("offers inline rename on agent rows only, seeded with the undisambiguated title", () => {
+    // 用户改名是唯一永远可信的标题来源，必须在活动总览里直接够得着；
+    // 初值用未消歧的原始标题——同屏序号只是歧义提示，不该写进用户标题。
+    useForegroundActivityStore.setState({
+      ts: 5,
+      activities: {
+        "panel-run": {
+          agentId: "claude",
+          kind: "agent",
+          panelId: "panel-run",
+          sessionTitle: "Review PR",
+          sessionTitleSource: "provider",
+          source: "hook",
+          spawnedAt: 1,
+          status: "processing",
+          subagentCount: 0,
+          updatedAt: 100,
+          windowId: "win-local",
+        },
+        "panel-wait": {
+          commandLine: "pnpm dev",
+          kind: "shell",
+          panelId: "panel-wait",
+          spawnedAt: 1,
+          updatedAt: 2,
+          windowId: "win-local",
+        },
+      },
+    });
+
+    render(<ActivityWidget {...widgetProps({ h: 5, w: 6 })} />);
+
+    expect(
+      screen.queryByTestId("activity-row-rename-panel-wait")
+    ).not.toBeInTheDocument();
+    fireEvent.click(screen.getByTestId("activity-row-rename-panel-run"));
+    expect(promptRename).toHaveBeenCalledWith({
+      initialTitle: "Review PR",
+      panelId: "panel-run",
+    });
+    // 改名钮不能顺带触发整行的「聚焦面板」。
+    expect(activateMock).not.toHaveBeenCalled();
   });
 
   it("shows other-window footer when Index has remote agents", () => {

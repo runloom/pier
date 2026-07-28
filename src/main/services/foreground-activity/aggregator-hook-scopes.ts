@@ -1,3 +1,7 @@
+import {
+  isSubagentHookEvent,
+  SUBAGENT_HOOK_EVENTS,
+} from "@shared/agent-session-actor.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import {
@@ -10,9 +14,9 @@ import {
   type HookLayer,
   type HookScope,
   type HookScopeIdentity,
+  hookIdentityFacts,
   type PanelSlot,
   SESSION_END_COOLDOWN_MS,
-  SUBAGENT_EVENTS,
 } from "./entry.ts";
 import type { AgentStopAuthority } from "./types.ts";
 
@@ -175,8 +179,16 @@ export function createHookScopeCoordinator({
     stopAuthority: AgentStopAuthority
   ): void {
     hook.agentId = event.agent;
+    // 身份只由主会话事件推进；子会话事件只记数，不得改写面板行身份。
+    // SessionStart 是**换会话**：同一面板 resume / clear 后会话号会变，
+    // 此时整体替换，否则旧 sessionId 残留成错误身份。其余事件按事实叠加。
+    if (!isSubagentHookEvent(event)) {
+      const facts = hookIdentityFacts(event);
+      hook.identity =
+        event.event === "SessionStart" ? facts : { ...hook.identity, ...facts };
+    }
     if (
-      SUBAGENT_EVENTS.has(event.event) &&
+      SUBAGENT_HOOK_EVENTS.has(event.event) &&
       !scope.stale &&
       !(event.event === "SubagentStart" && scope.status === undefined)
     ) {

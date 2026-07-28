@@ -38,6 +38,7 @@ export function logAgentEventDropped(
     | "suppressed-panel-cooldown"
     | "suppressed-hook-cooldown"
     | "foreign-agent-hook"
+    | "subagent-detail-ignored"
     | "ghost-rejected"
     | "absorbed"
     | "status-null",

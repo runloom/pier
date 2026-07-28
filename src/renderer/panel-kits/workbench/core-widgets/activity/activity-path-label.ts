@@ -21,3 +21,13 @@ export function activityRowMetaText(
   const short = shortProjectLabel(projectPath);
   return short ? `${kindLabel} · ${short}` : kindLabel;
 }
+
+/**
+ * 身份副行：标题可以缺席或重名，身份不能。把「哪个智能体 · 哪个项目 ·
+ * 是否隶属别的会话」拼成一行，缺席的部分直接不出现，不补占位。
+ */
+export function activityIdentityMetaText(
+  parts: readonly (string | undefined)[]
+): string {
+  return parts.filter((part) => part !== undefined && part !== "").join(" · ");
+}

@@ -451,7 +451,13 @@ export async function handleTerminalCreate(args: {
         foregroundActivityService.hydrateAgentSessionTitle(
           String(win.id),
           createArgs.panelId,
-          { source, title }
+          {
+            source,
+            ...(session.sessionTitleSessionId
+              ? { sessionId: session.sessionTitleSessionId }
+              : {}),
+            title,
+          }
         );
       }
     }

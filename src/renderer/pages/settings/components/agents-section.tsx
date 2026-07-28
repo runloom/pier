@@ -164,30 +164,6 @@ function AgentStatusHooksRow() {
   );
 }
 
-function AgentSessionTitleRefineRow() {
-  const t = useT();
-  const enabled = useAgentPreferencesStore((s) => s.agentSessionTitleRefine);
-  const setEnabled = useAgentPreferencesStore(
-    (s) => s.setAgentSessionTitleRefine
-  );
-  return (
-    <SwitchRow
-      checked={enabled}
-      description={t("settings.agents.sessionTitleRefine.description")}
-      id="agent-session-title-refine"
-      label={t("settings.agents.sessionTitleRefine.label")}
-      onCheckedChange={(next) => {
-        setEnabled(next).catch((err: unknown) => {
-          showAppAlert({
-            body: err instanceof Error ? err.message : String(err),
-            title: t("settings.agents.sessionTitleRefine.failed"),
-          }).catch(() => undefined);
-        });
-      }}
-    />
-  );
-}
-
 function AgentListCard() {
   const t = useT();
   const detectedIds = useAgentDetectStore((s) => s.detectedIds);
@@ -274,7 +250,6 @@ export function AgentsSection() {
               <PermissionModeRow />
               <FieldSeparator />
               <AgentStatusHooksRow />
-              <AgentSessionTitleRefineRow />
             </FieldSet>
           </CardContent>
         </Card>

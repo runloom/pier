@@ -1,4 +1,7 @@
 import { z } from "zod";
+// 直接引 schema 叶子文件：agent-session-title/index.ts 反过来引本文件的类型，
+// 走 barrel 会成环。
+import { agentSessionTitleValueSchema } from "../agent-session-title/schema.ts";
 import { agentKindSchema } from "./agent.ts";
 import type { PanelTabStatus } from "./panel.ts";
 /**
@@ -50,11 +53,23 @@ const baseActivityFields = {
 };
 
 /**
- * 标题来源即优先级秩：rule(1) < model(2) < user(3)。
- * 历史值 `auto` 等价 `rule`，读取期由 normalizeAgentSessionTitleSource 归一，
- * 永不写回。
+ * 标题来源即优先级秩：prompt(1) < provider(2) < user(3)。
+ *
+ * 三个来源都是「已经存在的事实」，宿主不额外推断：
+ * - `prompt`：会话自己的首条 prompt，确定性截断。
+ * - `provider`：agent 自己写出的会话名（如 Claude transcript 的 `ai-title`）。
+ *   属于「尽量用 agent 自身能力」——不起进程、不花 token、接不到就没有。
+ * - `user`：用户改名，永远最高。
+ *
+ * 仍然没有模型精修层：宿主不为了标题去调模型。历史值 `auto` / `rule` /
+ * `model` 一律等价 `prompt`，读取期由 normalizeAgentSessionTitleSource
+ * 归一，永不写回。
  */
-export const agentSessionTitleSourceSchema = z.enum(["rule", "model", "user"]);
+export const agentSessionTitleSourceSchema = z.enum([
+  "prompt",
+  "provider",
+  "user",
+]);
 
 const agentActivitySchema = z
   .object({
@@ -66,6 +81,19 @@ const agentActivitySchema = z
     source: z.enum(["hook", "launch"]),
     subagentCount: z.number().int().nonnegative(),
     /**
+     * 会话身份（identity）——区分「这是哪个 agent 会话」的确定性依据，
+     * 与 sessionTitle 完全独立：标题是尽力而为的可读性信号，身份不可推断、
+     * 不可被用户改名影响。
+     *
+     * `sessionId` 由 provider 自己给出（hook 事件原样上报）；缺席只说明该
+     * 集成没上报会话号，此时身份退回 `agentId` + `panelId`。
+     * `actorHint` 缺席 = 无足够证据断言角色，消费方按主会话处理。
+     * `parentSessionId` 是 agent 之间的委派边（后续多 agent 调度的最小记录）。
+     */
+    sessionId: z.string().max(128).optional(),
+    actorHint: z.enum(["main", "subagent"]).optional(),
+    parentSessionId: z.string().max(128).optional(),
+    /**
      * 状态最近一次「变化」的时刻（同状态内的心跳事件不重置, 供 UI 计时）。
      * 与 status 同生同灭：无可信状态投影时缺席。
      */
@@ -74,7 +102,7 @@ const agentActivitySchema = z
      * 产品会话名（≠ OSC terminalTitle）。P0 契约预留；P1 起由宿主写入。
      * status 映射禁止读/写本字段。
      */
-    sessionTitle: z.string().min(1).max(40).optional(),
+    sessionTitle: agentSessionTitleValueSchema.optional(),
     sessionTitleSource: agentSessionTitleSourceSchema.optional(),
   })
   .strict();

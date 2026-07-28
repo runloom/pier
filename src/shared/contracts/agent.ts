@@ -77,15 +77,6 @@ export interface AgentCatalogEntry {
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>;
   /** Headless 一次性调用:append 在 launchCmd/defaultArgs 之后的 argv(含 prompt)。 */
   oneShotArgs?: (prompt: string, context: { cwd: string }) => readonly string[];
-  /**
-   * 会话标题专用的轻量一次性调用。与 oneShotArgs 有意分离——标题要的是
-   * 小模型、禁 MCP、快冷启动，且**不继承** agentDefaultArgs / permissionMode
-   * （那两个是交互式会话的配置）。
-   *
-   * 缺席 = 该 agent 不参与模型精修，标题降级为纯规则派生。推理型 CLI
-   * （如 codex exec）故意不声明：用 75 秒量级的调用写一个 20 字标题是错配。
-   */
-  titleArgs?: (prompt: string) => readonly string[];
 }
 
 /** 探测结果（IPC 返回）。 */

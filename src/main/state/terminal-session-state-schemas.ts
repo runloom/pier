@@ -1,7 +1,5 @@
-import {
-  MAX_AGENT_SESSION_TITLE_LENGTH,
-  normalizeAgentSessionTitleSource,
-} from "@shared/agent-session-title/index.ts";
+import { normalizeAgentSessionTitleSource } from "@shared/agent-session-title/index.ts";
+import { agentSessionTitleValueSchema } from "@shared/agent-session-title/schema.ts";
 import { agentKindSchema } from "@shared/contracts/agent.ts";
 import { agentSessionTitleSourceSchema } from "@shared/contracts/foreground-activity.ts";
 import {
@@ -56,12 +54,10 @@ export const terminalPanelSessionSchema = z.object({
   /** OSC / 终端装饰标题（≠ 产品 sessionTitle）。 */
   title: z.string().optional(),
   /** 产品会话名（Agent sessionTitle 金标准字段）。 */
-  sessionTitle: z
-    .string()
-    .min(1)
-    .max(MAX_AGENT_SESSION_TITLE_LENGTH)
-    .optional(),
-  /** v1 落盘过 `auto`；读取期归一为 `rule`，永不写回。 */
+  sessionTitle: agentSessionTitleValueSchema.optional(),
+  /** 标题所属的 provider 主会话；缺席表示历史数据尚未绑定。 */
+  sessionTitleSessionId: z.string().min(1).max(128).optional(),
+  /** 历史落盘过 `auto` / `rule` / `model`；读取期归一为 `prompt`，永不写回。 */
   sessionTitleSource: z.preprocess(
     normalizeAgentSessionTitleSource,
     agentSessionTitleSourceSchema.optional()

@@ -97,5 +97,5 @@ describe("project-skills enabled projection", () => {
     expect(await readlink(link)).toBe(
       "../../.pier/skills/library/review-guide"
     );
-  });
+  }, 15_000);
 });

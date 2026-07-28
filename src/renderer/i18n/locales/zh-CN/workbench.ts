@@ -140,6 +140,9 @@ export const workbench = {
       description: "本窗口正在进行的智能体、任务和终端命令",
       empty: "本窗口暂无活动",
       emptyHint: "启动智能体，或在终端运行命令后，会出现在这里。",
+      identity: {
+        subagent: "子智能体",
+      },
       inProgress: "进行中",
       kind: {
         agent: "智能体",
@@ -151,6 +154,7 @@ export const workbench = {
       needsYou: "需要你处理",
       otherWindowsAgents: "其他窗口还有 {{count}} 个智能体",
       panelGone: "对应面板已关闭",
+      renameSession: "重命名会话",
       running: "运行中",
       section: {
         needsYou: "需要你处理",

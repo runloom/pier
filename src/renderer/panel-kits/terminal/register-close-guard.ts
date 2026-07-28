@@ -9,7 +9,9 @@ import {
 import { registerPanelCloseGuard } from "@/lib/workspace/panel-close-guards.ts";
 import { showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
+import { projectPathFromContext } from "@/stores/workspace-panel-helpers.ts";
 
 const MAX_VISIBLE_ACTIVITY_NAMES = 3;
 const MAX_ACTIVITY_NAME_LENGTH = 72;
@@ -76,7 +78,10 @@ export function registerTerminalPanelCloseGuard(): () => void {
     const summaries = dangerousActivitySummariesForPanel(
       panelId,
       useForegroundActivityStore.getState().activities,
-      taskRuns
+      taskRuns,
+      projectPathFromContext(
+        usePanelDescriptorStore.getState().descriptors[panelId]?.context
+      )
     );
     if (summaries.length === 0) {
       return true;

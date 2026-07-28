@@ -133,11 +133,6 @@ export const projectPreferencesSchema = z.object({
   worktreeRootPath: z.string().max(1024).default(""),
   /** 是否向已安装 agent 的官方 hook 配置里注入 Pier agent 状态 hook (opt-out, 默认开; 关闭即卸载)。 */
   agentStatusHooks: z.boolean().default(true),
-  /**
-   * 是否允许在首轮结束后用小模型精修会话标题（opt-out, 默认开）。
-   * 关闭后标题只走规则派生——离线可用、不消耗智能体额度。
-   */
-  agentSessionTitleRefine: z.boolean().default(true),
   agentAttention: agentAttentionSettingsSchema.default(
     DEFAULT_AGENT_ATTENTION_SETTINGS
   ),

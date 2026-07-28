@@ -5,6 +5,7 @@ import {
   flattenGroupedActivityRows,
   groupActivityOverviewRows,
 } from "@shared/activity-overview.ts";
+import { disambiguateAgentSessionTitles } from "@shared/agent-session-title/index.ts";
 import type { ForegroundActivity } from "@shared/contracts/foreground-activity.ts";
 import { revealPanelIdForTaskActivity } from "@shared/task-activity-sources.ts";
 import { PanelsTopLeft } from "lucide-react";
@@ -13,6 +14,7 @@ import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";
 import { currentElectronWindowId } from "@/lib/agent-runtime/current-window-id.ts";
 import { openAgentIndexQuickPick } from "@/lib/agent-runtime/open-agent-index-quickpick.tsx";
+import { promptRenameAgentSession } from "@/lib/agent-runtime/rename-agent-session.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { useAgentRuntimeIndexStore } from "@/stores/agent-runtime-index.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
@@ -30,7 +32,7 @@ import {
   activityShowList,
   activityShowRowMeta,
 } from "./activity-density.ts";
-import { ActivityRow } from "./activity-row.tsx";
+import { ActivityRow, agentActivityRowPrimary } from "./activity-row.tsx";
 import { ActivitySummary } from "./activity-summary.tsx";
 
 function Section({ children, title }: { children: ReactNode; title: string }) {
@@ -100,6 +102,25 @@ export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
     }
   }
 
+  // 同名会话消歧：只在同一屏里确有重复时追加序号，否则原样显示。
+  // 范围必须与**实际渲染**的行一致（limited）：若按 flat 计算，被截断掉的
+  // 那行会占掉 (1)，用户在屏幕上只看到一个孤零零的「(2)」。
+  const agentDisplayTitles = disambiguateAgentSessionTitles(
+    limited
+      .filter(
+        (row): row is ForegroundActivity & { kind: "agent" } =>
+          row.kind === "agent"
+      )
+      .map((row) => ({
+        panelId: row.panelId,
+        primary: agentActivityRowPrimary(
+          row,
+          projectPathForActivity(row, descriptors, indexProjectByPanel)
+        ),
+        spawnedAt: row.spawnedAt,
+      }))
+  );
+
   const handleReveal = (activity: ForegroundActivity): void => {
     if (!workspaceApi) {
       return;
@@ -135,7 +156,26 @@ export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
   const renderRow = (activity: ForegroundActivity): ReactNode => (
     <ActivityRow
       activity={activity}
+      displayTitle={agentDisplayTitles.get(activity.panelId)}
       key={activity.panelId}
+      onRename={
+        activity.kind === "agent"
+          ? () => {
+              // 初值用未消歧的原始标题：序号只是同屏歧义提示，不该写进用户标题。
+              promptRenameAgentSession({
+                initialTitle: agentActivityRowPrimary(
+                  activity,
+                  projectPathForActivity(
+                    activity,
+                    descriptors,
+                    indexProjectByPanel
+                  )
+                ),
+                panelId: activity.panelId,
+              }).catch(() => undefined);
+            }
+          : undefined
+      }
       onReveal={() => handleReveal(activity)}
       projectPath={projectPathForActivity(
         activity,
