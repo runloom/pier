@@ -111,8 +111,10 @@ function parseSafeSvg(source: string): SVGElement | null {
   const svg = document.documentElement;
   if (svg.localName !== "svg" || document.querySelector("parsererror"))
     return null;
+  // Official Mermaid uses sanitized XHTML labels in foreignObject. The host
+  // renderer already rejects active attributes and non-local URLs.
   for (const forbidden of svg.querySelectorAll(
-    "script, foreignObject, iframe, object, embed"
+    "script, iframe, object, embed"
   )) {
     forbidden.remove();
   }

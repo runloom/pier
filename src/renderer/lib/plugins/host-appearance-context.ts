@@ -3,11 +3,11 @@ import type {
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
 import i18next from "i18next";
+import { officialMermaidRenderer } from "@/lib/live-modules/official-mermaid-renderer.ts";
 import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
 import { useFontStore } from "@/stores/font.store.ts";
 import { useLocaleStore } from "@/stores/locale.store.ts";
 import { useThemeStore } from "@/stores/theme.store.ts";
-import { mermaidRenderer } from "./mermaid-renderer.ts";
 
 function currentPluginAppearance(): RendererPluginAppearance {
   const theme = useThemeStore.getState();
@@ -58,6 +58,18 @@ export function createPluginAppearanceContext(): RendererPluginContext["appearan
 
 export function createPluginChartsContext(): RendererPluginContext["charts"] {
   return {
-    renderMermaid: (source) => mermaidRenderer.render(source),
+    renderMermaid: async (source) => {
+      const result = await officialMermaidRenderer.render(
+        source,
+        useThemeStore.getState().resolvedTheme
+      );
+      if (result.ok) {
+        return { ok: true, svg: result.svg };
+      }
+      return {
+        ok: false,
+        reason: result.reason === "too-large" ? "too-large" : "render-failed",
+      };
+    },
   };
 }

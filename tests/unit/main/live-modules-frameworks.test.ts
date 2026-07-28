@@ -129,6 +129,88 @@ const x = Button;
     }
   });
 
+  it("allows one shared visualization runtime from every canvas framework", async () => {
+    const { mkdir, writeFile, unlink } = await import("node:fs/promises");
+    await mkdir(join(PROJECT_ROOT, ".pier/canvases/smoke"), {
+      recursive: true,
+    });
+    const samples = [
+      {
+        content: `import { mountDiagram } from "pier/visualizations";
+export default function Demo() {
+  void mountDiagram;
+  return <div />;
+}`,
+        rel: "smoke/__pier-visualizations.canvas.tsx",
+      },
+      {
+        content: `<script setup>
+import { mountDiagram } from "pier/visualizations";
+const sharedMount = mountDiagram;
+</script>
+<template><div :data-shared="typeof sharedMount" /></template>
+`,
+        rel: "smoke/__pier-visualizations.canvas.vue",
+      },
+      {
+        content: `import { mountDiagram } from "pier/visualizations";
+export function mount(element: HTMLElement) {
+  void mountDiagram;
+  element.textContent = "solid";
+  return () => element.replaceChildren();
+}
+export default function Demo() {
+  return null;
+}`,
+        rel: "smoke/__pier-visualizations.canvas.solid.tsx",
+      },
+      {
+        content: `<script>
+import { mountDiagram } from "pier/visualizations";
+const sharedMount = mountDiagram;
+</script>
+<div data-shared={typeof sharedMount}>svelte</div>
+`,
+        rel: "smoke/__pier-visualizations.canvas.svelte",
+      },
+    ] as const;
+    const absolutePaths: string[] = [];
+    try {
+      for (const sample of samples) {
+        const absolutePath = join(PROJECT_ROOT, ".pier/canvases", sample.rel);
+        absolutePaths.push(absolutePath);
+        await writeFile(absolutePath, sample.content);
+      }
+      const homeRoot = await mkdtemp(join(tmpdir(), "pier-live-home-"));
+      const service = createLiveModulesService({
+        resolveHomeRoot: () => homeRoot,
+      });
+      services.push(service);
+      const spec = projectLiveRootSpec({ projectRootPath: PROJECT_ROOT });
+      service.registerRoot(spec);
+      for (const sample of samples) {
+        const result = await service.compile(spec.id, sample.rel);
+        expect(result.ok, `${sample.rel}: ${JSON.stringify(result)}`).toBe(
+          true
+        );
+        if (!result.ok) {
+          continue;
+        }
+        const source = Buffer.from(
+          service.getArtifactByTicket(liveModuleTicketFromUrl(result.url)!)!
+            .bytes
+        ).toString("utf8");
+        expect(source).toContain("__PIER_LIVE_VISUALIZATIONS__");
+      }
+    } finally {
+      await Promise.all(
+        absolutePaths.map((absolutePath) =>
+          unlink(absolutePath).catch(() => undefined)
+        )
+      );
+    }
+  });
+
   it("stubs node: builtins for non-React frameworks instead of denying", async () => {
     const { mkdir, writeFile, unlink } = await import("node:fs/promises");
     const rel = "smoke/__node-stub.canvas.svelte";

@@ -25,6 +25,7 @@ import {
 } from "@shared/pier-canvas-export-names.ts";
 import { describe, expect, it } from "vitest";
 import { pierCanvasStubSource } from "../../../src/main/services/live-modules/compile.ts";
+import { pierVisualizationsStubSource } from "../../../src/main/services/live-modules/visualizations-stub.ts";
 
 const SAMPLE_TICKET = "abcdefghijklmnopqrstuv";
 
@@ -207,6 +208,16 @@ describe("pier/canvas stub source", () => {
       const occurrences = source.split(`export function ${name}(`).length - 1;
       expect(occurrences).toBe(1);
     }
+  });
+});
+
+describe("pier/visualizations stub source", () => {
+  it("forwards the framework-neutral mount controller to the host runtime", () => {
+    const source = pierVisualizationsStubSource();
+    expect(source).toContain("__PIER_LIVE_VISUALIZATIONS__");
+    expect(source).toContain("export function mountDiagram(...args)");
+    expect(source).toContain("getVisualizations().mountDiagram(...args)");
+    expect(source).not.toContain('from "react"');
   });
 });
 

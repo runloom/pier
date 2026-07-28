@@ -33,6 +33,7 @@ import {
   toProjectRelative,
   tryResolveFile,
 } from "./resolve.ts";
+import { registerVisualizationsStub } from "./visualizations-stub.ts";
 
 export const LIVE_MODULE_COMPILE_TIMEOUT_MS = 15_000;
 export const LIVE_MODULE_MAX_OUTPUT_BYTES = 2 * 1024 * 1024;
@@ -190,6 +191,8 @@ export async function compileLiveModule(
   const resolvePlugin: esbuild.Plugin = {
     name: "pier-live-modules",
     setup(build) {
+      registerVisualizationsStub(build);
+
       if (input.framework === "react") {
         build.onResolve({ filter: /^pier\/canvas$/ }, () => ({
           namespace: PIER_CANVAS_STUB_NAMESPACE,

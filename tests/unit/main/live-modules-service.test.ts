@@ -52,6 +52,7 @@ describe("live-modules fence", () => {
     expect(isDeniedBareSpecifier("react-dom/client", false)).toBe(false);
     expect(isDeniedBareSpecifier("react-dom/server", false)).toBe(true);
     expect(isDeniedBareSpecifier("pier/canvas", false)).toBe(false);
+    expect(isDeniedBareSpecifier("pier/visualizations", false)).toBe(false);
   });
 });
 
