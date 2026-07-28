@@ -8,22 +8,22 @@ import {
 } from "@pier/ui/tooltip.tsx";
 import { ArrowUp } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
-import type { TuiSendBlockReason } from "./tui-input-focus.ts";
+import type { TuiInputFocusRisk } from "./use-tui-input-focus-risk.ts";
 
 /**
- * 发送按钮 + 光标门禁提示。
- * 阻断时用受控 Tooltip 锚在按钮上（Portal，不裁切；箭头指向发送按钮）。
+ * 发送按钮 + 输入聚焦风险提示。
+ * 有风险时用受控 Tooltip 锚在按钮上（Portal，不裁切；箭头指向发送按钮）。
  * Esc 关增强输入由 composer 自理（不再因 defaultPrevented 放弃关闭）。
  */
 export function SendButtonWithBlockHint({
-  blockReason,
   canSend,
   compact,
+  inputFocusRisk,
   onSend,
 }: {
-  blockReason: TuiSendBlockReason | null;
   canSend: boolean;
   compact: boolean;
+  inputFocusRisk: TuiInputFocusRisk | null;
   onSend: () => void;
 }) {
   const t = useT();
@@ -56,7 +56,7 @@ export function SendButtonWithBlockHint({
     </Button>
   );
 
-  if (blockReason === null) {
+  if (inputFocusRisk === null) {
     return button;
   }
 

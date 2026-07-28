@@ -141,6 +141,9 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     faviconDomain: "x.ai",
     homepageUrl: "https://x.ai/cli",
     oneShotArgs: (prompt) => ["-p", prompt],
+    // 实测（pty 探测）：首帧后硬件光标保持 `?25h`，浏览态（提示行为
+    // `Space:prompt | Enter:open`）与聚焦态可区分，等价关系成立，故启用光标探针。
+    inputFocusProbe: "cursor",
   },
   {
     id: "mimo-code",
@@ -212,6 +215,9 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     // Tab 在 chat/main 态必定重新 Focus 编辑器（ui.go:2553），符合
     // inputFocusKey 的确定性要求。
     inputFocusKey: { keycode: APPKIT_KEYCODE.tab },
+    // 实测（v0.86.0，pty 探测）：进入 chat 后编辑器聚焦 → `?25h`，Tab 切走
+    // → `?25l`，切回 → `?25h`，等价关系成立，故启用光标探针。
+    inputFocusProbe: "cursor",
     label: "Charm",
     launchCmd: "crush",
     detectCmd: "crush",

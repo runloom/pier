@@ -14,9 +14,10 @@ import {
   TerminalComposer,
 } from "@/panel-kits/terminal/terminal-composer.tsx";
 import { resetTerminalEscapeShortcutForTests } from "@/panel-kits/terminal/terminal-escape-shortcut.ts";
+import { resetTuiCursorSemanticsForTests } from "@/panel-kits/terminal/tui-cursor-semantics.ts";
 import { resetTuiInputFocusForTests } from "@/panel-kits/terminal/tui-input-focus.ts";
 import { resetTerminalComposerAttachmentsForTests } from "@/panel-kits/terminal/use-terminal-composer-attachments.ts";
-import { showAppAlert } from "@/stores/app-dialog.store.ts";
+import { showAppAlert, showAppConfirm } from "@/stores/app-dialog.store.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import {
   resetTerminalStoreForTests,
@@ -34,6 +35,7 @@ import {
 
 vi.mock("@/stores/app-dialog.store.ts", () => ({
   showAppAlert: vi.fn(async () => undefined),
+  showAppConfirm: vi.fn(async () => false),
 }));
 
 const activeTerminalPanelIdMock = vi.fn(() => "t-1");
@@ -50,6 +52,7 @@ vi.mock("@/lib/actions/renderer-action-runtime.ts", async (importOriginal) => {
 
 function setAgentActivity(overrides: {
   agentId?: string;
+  spawnedAt?: number;
   status?: string;
 }): void {
   useForegroundActivityStore.setState({
@@ -61,7 +64,7 @@ function setAgentActivity(overrides: {
         source: "hook",
         status: overrides.status ?? "ready",
         subagentCount: 0,
-        spawnedAt: 1,
+        spawnedAt: overrides.spawnedAt ?? 1,
         updatedAt: 1,
         windowId: "w-1",
       },
@@ -157,8 +160,11 @@ beforeEach(async () => {
   toastError.mockClear();
   useForegroundActivityStore.setState({ activities: {} });
   resetTuiInputFocusForTests();
+  resetTuiCursorSemanticsForTests();
   resetTerminalEscapeShortcutForTests();
   vi.mocked(showAppAlert).mockClear();
+  vi.mocked(showAppConfirm).mockClear();
+  vi.mocked(showAppConfirm).mockResolvedValue(false);
   resetTerminalComposerDraftsForTests();
   resetTerminalComposerAttachmentsForTests();
   resetComposerEditorsForTests();
@@ -204,6 +210,18 @@ function renderComposer(
     />
   );
   return { onClose, onHeightChange, view };
+}
+
+/**
+ * 会话观察（arming）：只有本会话读到过 visible，hidden 才显示风险提示。
+ * 先给一轮 visible 让轮询 arm，再切 hidden 模拟可能失焦。
+ */
+async function armCursorGate(): Promise<void> {
+  cursorVisible.mockResolvedValue("visible");
+  await vi.waitFor(() => {
+    expect(cursorVisible).toHaveBeenCalled();
+  });
+  cursorVisible.mockResolvedValue("hidden");
 }
 
 describe("TerminalComposer", () => {
@@ -361,11 +379,11 @@ describe("TerminalComposer", () => {
     });
   });
 
-  it("TUI 输入光标 hidden：硬禁用发送 + 未聚焦输入框提示", async () => {
+  it("TUI 输入光标 hidden（已观察过 visible）：提示风险但保留发送入口", async () => {
     const onClose = vi.fn();
     setAgentActivity({ status: "ready" });
-    cursorVisible.mockResolvedValue("hidden");
     renderComposer({ onClose });
+    await armCursorGate();
 
     await vi.waitFor(() => {
       expect(
@@ -373,21 +391,19 @@ describe("TerminalComposer", () => {
       ).toHaveTextContent(i18next.t("terminal.composer.blockedUnfocused"));
     });
     setComposerDraftText("fix bug");
-    expect(screen.getByTestId("terminal-composer-send")).toBeDisabled();
-    fireEvent.keyDown(composerInput(), { key: "Enter" });
-    expect(sendText).not.toHaveBeenCalled();
+    expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
 
-    // 光标恢复 → 解除门禁并可发送
+    // 光标恢复 → 风险提示解除，发送入口始终保持可用。
     cursorVisible.mockResolvedValue("visible");
     await vi.waitFor(
       () => {
-        expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
+        expect(
+          screen.queryByTestId("terminal-composer-send-block")
+        ).not.toBeInTheDocument();
       },
       { timeout: 2000 }
     );
-    expect(
-      screen.queryByTestId("terminal-composer-send-block")
-    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
 
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     await vi.waitFor(() => {
@@ -399,7 +415,7 @@ describe("TerminalComposer", () => {
     });
   });
 
-  it("探针 unknown：不阻断 UI；发送确认失败时保留草稿并给出反馈", async () => {
+  it("探针 unknown：不阻断 UI，也不弹确认，照常发送", async () => {
     const onClose = vi.fn();
     setAgentActivity({ status: "ready" });
     cursorVisible.mockResolvedValue("unknown");
@@ -415,19 +431,43 @@ describe("TerminalComposer", () => {
     setComposerDraftText("fix bug");
     fireEvent.keyDown(composerInput(), { key: "Enter" });
     await vi.waitFor(() => {
-      expect(toastError).toHaveBeenCalledWith(
-        i18next.t("terminal.composer.sendStateUnknown")
-      );
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        submit: true,
+        text: "fix bug",
+      });
     });
-    expect(sendText).not.toHaveBeenCalled();
-    expect(onClose).not.toHaveBeenCalled();
-    expect(readComposerDraftText()).toBe("fix bug");
+    expect(showAppConfirm).not.toHaveBeenCalled();
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("只读到 hidden、未见过 visible：不提示风险，照常发送", async () => {
+    setAgentActivity({ status: "ready" });
+    cursorVisible.mockResolvedValue("hidden");
+    renderComposer();
+
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 30);
+    });
+    expect(
+      screen.queryByTestId("terminal-composer-send-block")
+    ).not.toBeInTheDocument();
+
+    setComposerDraftText("fix bug");
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        submit: true,
+        text: "fix bug",
+      });
+    });
   });
 
   it("光标 hidden 时空草稿 Enter 透传被截住", async () => {
     setAgentActivity({ status: "ready" });
-    cursorVisible.mockResolvedValue("hidden");
     renderComposer();
+    await armCursorGate();
 
     await vi.waitFor(() => {
       expect(
@@ -442,10 +482,37 @@ describe("TerminalComposer", () => {
     expect(sendText).not.toHaveBeenCalled();
   });
 
-  it("非白名单 agent（如 grok）光标 hidden 同样硬拦发送", async () => {
-    setAgentActivity({ agentId: "grok", status: "processing" });
+  it("未核实光标语义的 agent（claude）：hidden 不阻断，照常发送", async () => {
+    setAgentActivity({ agentId: "claude", status: "ready" });
     cursorVisible.mockResolvedValue("hidden");
     renderComposer();
+
+    setComposerDraftText("fix bug");
+    await new Promise((resolve) => {
+      window.setTimeout(resolve, 30);
+    });
+    // claude 自绘光标，全程 ?25l：探针对它无意义，不得据此禁用发送。
+    expect(cursorVisible).not.toHaveBeenCalled();
+    expect(
+      screen.queryByTestId("terminal-composer-send-block")
+    ).not.toBeInTheDocument();
+    expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
+
+    fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        submit: true,
+        text: "fix bug",
+      });
+    });
+    expect(toastError).not.toHaveBeenCalled();
+  });
+
+  it("声明探针的 agent（crush）光标 hidden 时提示但不禁用发送", async () => {
+    setAgentActivity({ agentId: "crush", status: "processing" });
+    renderComposer();
+    await armCursorGate();
 
     setComposerDraftText("fix bug");
     await vi.waitFor(() => {
@@ -453,9 +520,78 @@ describe("TerminalComposer", () => {
         screen.getByTestId("terminal-composer-send-block")
       ).toHaveTextContent(i18next.t("terminal.composer.blockedUnfocused"));
     });
-    expect(screen.getByTestId("terminal-composer-send")).toBeDisabled();
+    expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
+  });
+
+  it("同面板重启同一种 agent：立即清除上一会话的风险提示", async () => {
+    setAgentActivity({ agentId: "crush", status: "ready" });
+    renderComposer();
+    await armCursorGate();
+    await vi.waitFor(() => {
+      expect(
+        screen.getByTestId("terminal-composer-send-block")
+      ).toBeInTheDocument();
+    });
+
+    setAgentActivity({ agentId: "crush", spawnedAt: 2, status: "ready" });
+    await vi.waitFor(() => {
+      expect(
+        screen.queryByTestId("terminal-composer-send-block")
+      ).not.toBeInTheDocument();
+    });
+  });
+
+  it("声明探针的 agent（grok）光标 hidden 时取消确认会保留草稿", async () => {
+    setAgentActivity({ agentId: "grok", status: "ready" });
+    renderComposer();
+    await armCursorGate();
+
+    setComposerDraftText("你好");
+    await vi.waitFor(() => {
+      expect(
+        screen.getByTestId("terminal-composer-send-block")
+      ).toHaveTextContent(i18next.t("terminal.composer.blockedUnfocused"));
+    });
+    expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
     fireEvent.keyDown(composerInput(), { key: "Enter" });
+    await vi.waitFor(() => {
+      expect(showAppConfirm).toHaveBeenCalledWith({
+        body: i18next.t("terminal.composer.blockedUnfocusedBody"),
+        confirmLabel: i18next.t("terminal.composer.sendAnyway"),
+        intent: "default",
+        title: i18next.t("terminal.composer.blockedUnfocusedTitle"),
+      });
+    });
     expect(sendText).not.toHaveBeenCalled();
+    expect(readComposerDraftText()).toBe("你好");
+  });
+
+  it("声明探针的 agent（grok）光标 hidden 时确认后仍可发送", async () => {
+    vi.mocked(showAppConfirm).mockResolvedValue(true);
+    setAgentActivity({ agentId: "grok", status: "ready" });
+    const onClose = vi.fn();
+    renderComposer({ onClose });
+    await armCursorGate();
+
+    setComposerDraftText("继续发送");
+    await vi.waitFor(() => {
+      expect(
+        screen.getByTestId("terminal-composer-send-block")
+      ).toBeInTheDocument();
+    });
+    fireEvent.click(screen.getByTestId("terminal-composer-send"));
+
+    await vi.waitFor(() => {
+      expect(sendText).toHaveBeenCalledWith({
+        panelId: "t-1",
+        submit: true,
+        text: "继续发送",
+      });
+    });
+    expect(showAppConfirm).toHaveBeenCalledTimes(1);
+    await vi.waitFor(() => {
+      expect(onClose).toHaveBeenCalledTimes(1);
+    });
   });
 
   it("settle 窗口内双击发送只提交一次（in-flight 守卫）", async () => {
@@ -723,16 +859,19 @@ describe("TerminalComposer", () => {
     expect(readComposerDraftText()).toBe("drafted");
   });
 
-  it("surface click re-probes cursor so send unblocks after TUI input focus", async () => {
+  it("surface click re-probes cursor so the focus warning clears immediately", async () => {
     setAgentActivity({ status: "ready" });
-    cursorVisible.mockResolvedValue("hidden");
     const onClose = vi.fn();
     renderComposer({ onClose, panelId: "t-1" });
+    await armCursorGate();
 
     setComposerDraftText("fix bug");
     await vi.waitFor(() => {
-      expect(screen.getByTestId("terminal-composer-send")).toBeDisabled();
+      expect(
+        screen.getByTestId("terminal-composer-send-block")
+      ).toBeInTheDocument();
     });
+    expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
 
     // 用户点终端输入区 → TUI 聚焦 → 立刻重探
     cursorVisible.mockResolvedValue("visible");
@@ -740,11 +879,10 @@ describe("TerminalComposer", () => {
     expect(onClose).not.toHaveBeenCalled();
 
     await vi.waitFor(() => {
-      expect(screen.getByTestId("terminal-composer-send")).toBeEnabled();
+      expect(
+        screen.queryByTestId("terminal-composer-send-block")
+      ).not.toBeInTheDocument();
     });
-    expect(
-      screen.queryByTestId("terminal-composer-send-block")
-    ).not.toBeInTheDocument();
   });
 
   it("activate takeover refocuses the textarea and does not close", () => {

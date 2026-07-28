@@ -31,8 +31,11 @@ export const terminal = {
   composer: {
     attachFailed: "无法添加文件",
     attachFile: "添加文件",
-    // 门禁只认 TUI 输入光标：hidden = 未聚焦输入框（非 FA waiting）。
-    blockedUnfocused: "未聚焦输入框",
+    // 仅对已核实的 TUI 提示输入聚焦风险；不会直接禁用发送。
+    blockedUnfocused: "终端输入框可能未聚焦",
+    blockedUnfocusedBody:
+      "Pier 无法确认终端中的输入位置。请先点一下会话的输入框；若你确认它可以接收输入，也可以继续发送。",
+    blockedUnfocusedTitle: "终端输入框可能未聚焦",
     invalidAttachmentRef: "存在无效的附件引用",
     keyHint: "⇧⏎ 换行 · {{attach}} 添加文件 · Esc 关闭",
     label: "增强输入",
@@ -45,12 +48,12 @@ export const terminal = {
     mentionNoResults: "没有匹配的文件",
     mentionPlaceholder: "提及文件或文件夹…",
     noActiveTerminal: "请先切换到目标终端标签页，再打开增强输入。",
-    sendStateUnknown: "无法确认会话输入状态，发送已取消。请重试。",
     pasteInsertAnyway: "仍插入正文",
     pathUnreadable: "无法读取该文件路径",
     placeholder: "在此输入，发送到终端中的会话",
     removeAttachment: "移除附件",
     send: "发送",
+    sendAnyway: "仍然发送",
     sendFailed: "发送到终端失败",
     sendTooLong: "内容过长，无法发送",
     skillEmptyProjectBody: "请先打开项目文件夹，再输入 / 插入技能。",

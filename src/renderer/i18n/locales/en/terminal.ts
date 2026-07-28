@@ -32,8 +32,11 @@ export const terminal = {
   composer: {
     attachFailed: "Couldn’t add file",
     attachFile: "Add file",
-    // Gate is cursor-only: hidden = terminal input not focused (not FA waiting).
-    blockedUnfocused: "Input not focused",
+    // Only warn for verified TUIs; cursor risk never disables sending by itself.
+    blockedUnfocused: "Terminal input may not be focused",
+    blockedUnfocusedBody:
+      "Pier can’t confirm the input position in the terminal. Click the session’s input box first, or continue if you’re sure it can accept input.",
+    blockedUnfocusedTitle: "Terminal input may not be focused",
     invalidAttachmentRef: "Invalid attachment reference",
     keyHint: "⇧⏎ newline · {{attach}} attach · Esc close",
     label: "Rich Input",
@@ -49,13 +52,12 @@ export const terminal = {
     mentionPlaceholder: "Mention a file or folder…",
     noActiveTerminal:
       "Switch to the target terminal tab first, then open Rich Input.",
-    sendStateUnknown:
-      "Couldn’t confirm the session input state. Sending cancelled — try again.",
     pasteInsertAnyway: "Insert into message anyway",
     pathUnreadable: "Couldn’t read that file path",
     placeholder: "Type here; sends into the terminal session",
     removeAttachment: "Remove attachment",
     send: "Send",
+    sendAnyway: "Send anyway",
     sendFailed: "Failed to send to terminal",
     sendTooLong: "Message is too long to send",
     skillEmptyProjectBody:
