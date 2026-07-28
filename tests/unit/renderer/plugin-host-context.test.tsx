@@ -51,9 +51,9 @@ vi.mock("@/lib/workspace/panel-activation.ts", () => ({
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { useCommandPaletteController } from "@/lib/command-palette/controller.ts";
+import { officialMermaidRenderer } from "@/lib/live-modules/official-mermaid-renderer.ts";
 import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
 import { clearHostGroupContentForTests } from "@/lib/plugins/host-group-content-context.tsx";
-import { mermaidRenderer } from "@/lib/plugins/mermaid-renderer.ts";
 import { pluginLifecycleBarriers } from "@/lib/plugins/plugin-lifecycle-barriers.ts";
 import { clearPluginPanelsForTests } from "@/lib/plugins/plugin-panel-registry.ts";
 import {
@@ -1869,8 +1869,12 @@ describe("createRendererPluginContext", () => {
     });
     await i18next.changeLanguage("zh-CN");
     const renderMermaid = vi
-      .spyOn(mermaidRenderer, "render")
-      .mockResolvedValue({ ok: true, svg: "<svg />" });
+      .spyOn(officialMermaidRenderer, "render")
+      .mockResolvedValue({
+        diagramType: "flowchart-v2",
+        ok: true,
+        svg: "<svg />",
+      });
     const context = createRendererPluginContext(pluginEntry);
 
     expect(context.appearance.current()).toMatchObject({
@@ -1911,7 +1915,7 @@ describe("createRendererPluginContext", () => {
     await expect(
       context.charts.renderMermaid("graph TD;A-->B")
     ).resolves.toEqual({ ok: true, svg: "<svg />" });
-    expect(renderMermaid).toHaveBeenCalledWith("graph TD;A-->B");
+    expect(renderMermaid).toHaveBeenCalledWith("graph TD;A-->B", "light");
   });
 
   it("acquires a main-owned runtime lease for file preview ticket calls", async () => {

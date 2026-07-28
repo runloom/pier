@@ -47,3 +47,23 @@ if (
     value: () => new DOMRect(0, 0, 0, 0),
   });
 }
+
+// Mermaid 的官方渲染器会读取 SVG 文本几何。jsdom 不实现 getBBox，
+// 组件测试只验证图型覆盖与安全输出，不依赖真实排版像素。
+if (
+  typeof globalThis.SVGElement !== "undefined" &&
+  !("getBBox" in SVGElement.prototype)
+) {
+  Object.defineProperty(SVGElement.prototype, "getBBox", {
+    value: () => new DOMRect(0, 0, 120, 24),
+  });
+}
+
+if (
+  typeof globalThis.SVGElement !== "undefined" &&
+  !("getComputedTextLength" in SVGElement.prototype)
+) {
+  Object.defineProperty(SVGElement.prototype, "getComputedTextLength", {
+    value: () => 120,
+  });
+}

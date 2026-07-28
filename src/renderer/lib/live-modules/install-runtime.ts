@@ -1,9 +1,14 @@
 import { ensurePierCanvasShellStyles } from "./ensure-pier-canvas-shell.ts";
 import { pierCanvasExports } from "./pier-canvas-exports.ts";
+import { pierVisualizationsRuntime } from "./pier-visualizations-runtime.tsx";
 
 declare global {
   // eslint-disable-next-line no-var
   var __PIER_LIVE_CANVAS__: typeof pierCanvasExports | undefined;
+  // eslint-disable-next-line no-var
+  var __PIER_LIVE_VISUALIZATIONS__:
+    | typeof pierVisualizationsRuntime
+    | undefined;
 }
 
 /**
@@ -17,5 +22,6 @@ declare global {
  */
 export function installLiveModuleRuntime(): void {
   globalThis.__PIER_LIVE_CANVAS__ = pierCanvasExports;
+  globalThis.__PIER_LIVE_VISUALIZATIONS__ = pierVisualizationsRuntime;
   ensurePierCanvasShellStyles();
 }

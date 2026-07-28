@@ -171,14 +171,9 @@ import type { PierCanvasExportName } from "@shared/pier-canvas-export-names.ts";
 import type { ComponentProps, CSSProperties, ReactNode } from "react";
 import { createElement } from "react";
 import { useCanvasFile } from "./canvas-file-facade.ts";
+import { pierCanvasVisualizationExports } from "./pier-canvas-visualization-exports.ts";
 
-/**
- * `pier/canvas` whitelist — host primitives + curated `@pier/ui` re-exports.
- * Typography/layout primitives use CSS variables so canvases look correct
- * without depending on Tailwind scanning `.pier/canvases`.
- *
- * Named keys must match `PIER_CANVAS_EXPORT_NAMES` (shared).
- */
+/** Host primitives and curated UI exports; keys match `PIER_CANVAS_EXPORT_NAMES`. */
 
 type TextTone = "default" | "secondary" | "tertiary";
 
@@ -380,6 +375,7 @@ export const pierCanvasExports = {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
+  ...pierCanvasVisualizationExports,
   DropdownMenu,
   DropdownMenuCheckboxItem,
   DropdownMenuContent,
