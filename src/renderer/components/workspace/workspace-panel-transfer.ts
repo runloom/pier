@@ -37,8 +37,13 @@ import {
   setPanelRelocationSuppressed,
 } from "./panel-transfer-runtime.ts";
 import {
+  clearFrozenOfferParamsForTests,
+  discardFrozenOfferParams,
+  frozenOfferParamsSizeForTests,
   getActiveDrag,
+  mergeDragStartPanelParams,
   setActiveDrag,
+  takeFrozenOfferParams,
 } from "./workspace-panel-transfer-dnd.ts";
 import {
   positionToDirection,
@@ -51,7 +56,10 @@ export {
   runPanelTransferRendererCommand,
 } from "./workspace-panel-transfer-commands.ts";
 export type { WorkspacePanelTransferHandlers } from "./workspace-panel-transfer-dnd.ts";
-export { createWorkspacePanelTransferHandlers } from "./workspace-panel-transfer-dnd.ts";
+export {
+  createWorkspacePanelTransferHandlers,
+  mergeDragStartPanelParams,
+} from "./workspace-panel-transfer-dnd.ts";
 export {
   resolvePlacementFromClientPoint,
   resolvePlacementFromDidDrop,
@@ -61,6 +69,11 @@ export {
 export const __panelTransferInternals = {
   setActiveDrag,
   getActiveDrag,
+  takeFrozenOfferParams,
+  discardFrozenOfferParams,
+  frozenOfferParamsSizeForTests,
+  clearFrozenOfferParamsForTests,
+  mergeDragStartPanelParams,
   resolvePlacementFromDidDrop,
   positionToDirection,
   setPanelRelocationSuppressed,

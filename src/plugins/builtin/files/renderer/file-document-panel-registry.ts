@@ -60,6 +60,14 @@ export class FileDocumentPanelRegistry {
     return this.#panels.get(panelId)?.documentId ?? null;
   }
 
+  /**
+   * Live source binding for an acquired panel. Used by cross-window transfer
+   * when dockview `params.source` is missing or fails schema parse.
+   */
+  source(panelId: string): FilesDocumentPanelSource | null {
+    return this.#panels.get(panelId)?.source ?? null;
+  }
+
   documentIds(): Set<string> {
     const documentIds = new Set<string>();
     for (const panel of this.#panels.values()) {

@@ -16,7 +16,10 @@ import { flushWorkspaceLayout } from "@/lib/workspace/workspace-layout-persisten
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { clearCurrentWindowLayout } from "@/stores/workspace-panel-helpers.ts";
 import { panelKindOf } from "./panel-registry.ts";
-import { panelTransferRegistrationOf } from "./panel-transfer-adapters.ts";
+import {
+  type JsonValue,
+  panelTransferRegistrationOf,
+} from "./panel-transfer-adapters.ts";
 import {
   clearFinalizeRecord,
   clearFrozenSourceSnapshot,
@@ -31,11 +34,14 @@ import {
   setStagedTargetPanel,
   takeStagedTargetPanel,
 } from "./panel-transfer-runtime.ts";
+import {
+  mergeDragStartPanelParams,
+  takeFrozenOfferParams,
+} from "./workspace-panel-transfer-dnd.ts";
 import { resolvePlacementFromClientPoint } from "./workspace-panel-transfer-placement.ts";
 import {
   type DockviewPanel,
   panelComponentOf,
-  panelJsonParamsOf,
   panelParamsOf,
   panelTitleOf,
   pierPanelTransfer,
@@ -56,13 +62,16 @@ function findPanel(api: DockviewApi, panelId: string): DockviewPanel | null {
 function buildRendererSourceSnapshot(
   panel: DockviewPanel,
   component: string,
-  prepared: PanelTransferPreparedSource
+  prepared: PanelTransferPreparedSource,
+  resolvedParams: Readonly<Record<string, unknown>>
 ): PanelTransferRendererSourceSnapshot {
   return {
     panel: {
       componentId: component,
       panelId: panel.id,
-      params: panelJsonParamsOf(panel),
+      // Use the same live+freeze merge as prepareSource so stageTarget base
+      // params keep context/pinned/source when dockview mid-drag drops keys.
+      params: resolvedParams as Record<string, JsonValue>,
       title: panelTitleOf(panel),
     },
     runtimeKind: component === "terminal" ? "terminal" : "web",
@@ -115,15 +124,40 @@ async function handlePrepareSource(
     );
   }
   const revision = computeAdapterRevision();
+  const liveParams = panelParamsOf(panel);
+  const frozenParams = takeFrozenOfferParams(transferId);
+  const { params: resolvedParams, usedFrozenSource } = mergeDragStartPanelParams(
+    liveParams,
+    frozenParams
+  );
+  if (usedFrozenSource) {
+    console.warn(
+      "[panelTransfer] prepareSource using drag-start frozen source",
+      `transferId=${transferId}`,
+      `panelId=${sourcePanelId}`,
+      `component=${component}`,
+      `liveKeys=${Object.keys(liveParams).sort().join(",") || "(none)"}`,
+      `frozenKeys=${
+        frozenParams
+          ? Object.keys(frozenParams).sort().join(",") || "(none)"
+          : "(none)"
+      }`
+    );
+  }
   let prepared: PanelTransferPreparedSource = { drafts: [] };
   if (reg.kind === "custom") {
     prepared = await reg.prepareSource({
       panelId: sourcePanelId,
-      params: panelParamsOf(panel),
+      params: resolvedParams,
       transferId,
     });
   }
-  const snapshot = buildRendererSourceSnapshot(panel, component, prepared);
+  const snapshot = buildRendererSourceSnapshot(
+    panel,
+    component,
+    prepared,
+    resolvedParams
+  );
   setFrozenSourceSnapshot(transferId, snapshot, revision);
   setPanelRelocationSuppressed(true);
   return snapshot;

@@ -166,6 +166,7 @@ describe("workspace panel transfer", () => {
     resetPanelTransferRuntimeForTests();
     clearCorePanelTransferForTests();
     __panelTransferInternals.setActiveDrag(null);
+    __panelTransferInternals.clearFrozenOfferParamsForTests();
     installDragGlobals();
     useWorkspaceStore.getState().setApi(null);
   });
@@ -174,6 +175,7 @@ describe("workspace panel transfer", () => {
     resetPanelTransferRuntimeForTests();
     clearCorePanelTransferForTests();
     __panelTransferInternals.setActiveDrag(null);
+    __panelTransferInternals.clearFrozenOfferParamsForTests();
     useWorkspaceStore.getState().setApi(null);
     Reflect.deleteProperty(window, "pier");
   });
@@ -399,6 +401,7 @@ describe("workspace panel transfer", () => {
       __panelTransferInternals.setActiveDrag({
         capability: "movable",
         componentId: "welcome",
+        params: {},
         panelId: "welcome-1",
         transferId: TRANSFER_ID,
       });
@@ -542,6 +545,7 @@ describe("workspace panel transfer", () => {
       __panelTransferInternals.setActiveDrag({
         capability: "movable",
         componentId: "welcome",
+        params: {},
         panelId: "welcome-1",
         transferId: TRANSFER_ID,
       });
@@ -583,6 +587,7 @@ describe("workspace panel transfer", () => {
       __panelTransferInternals.setActiveDrag({
         capability: "movable",
         componentId: "welcome",
+        params: {},
         panelId: "welcome-1",
         transferId: TRANSFER_ID,
       });
@@ -937,6 +942,223 @@ describe("workspace panel transfer", () => {
       )["missing-1"];
       expect(panelState?.contentComponent).toBe("pier.missing.plugin");
       expect(panelState?.params).toEqual({ path: "/tmp/a" });
+    });
+  });
+
+  describe("drag-start frozen params", () => {
+    it("mergeDragStartPanelParams restores missing/null source from freeze", () => {
+      const frozen = {
+        context: { contextId: "ctx" },
+        pinned: true,
+        source: { kind: "disk", path: "a.md", root: "/repo" },
+      };
+      expect(
+        __panelTransferInternals.mergeDragStartPanelParams(
+          { pinned: false, source: undefined },
+          frozen
+        )
+      ).toMatchObject({
+        params: {
+          context: { contextId: "ctx" },
+          pinned: false,
+          source: frozen.source,
+        },
+        usedFrozenSource: true,
+      });
+      expect(
+        __panelTransferInternals.mergeDragStartPanelParams(
+          { source: null },
+          frozen
+        ).usedFrozenSource
+      ).toBe(true);
+    });
+
+    it("mergeDragStartPanelParams keeps live object source (even if corrupt)", () => {
+      const liveSource = { kind: "disk", path: "/abs", root: "/repo" };
+      const result = __panelTransferInternals.mergeDragStartPanelParams(
+        { source: liveSource },
+        {
+          source: { kind: "disk", path: "ok.md", root: "/repo" },
+        }
+      );
+      expect(result.params.source).toBe(liveSource);
+      expect(result.usedFrozenSource).toBe(false);
+    });
+
+    it("prepareSource restores frozen source and puts merged params on snapshot", async () => {
+      installPier();
+      const prepareSource = vi.fn(async () => ({ drafts: [] }));
+      registerCorePanelTransfer("pier.test.frozen", {
+        finalize: vi.fn(async () => undefined),
+        kind: "custom",
+        prepareSource,
+        restore: vi.fn(async () => undefined),
+        stageTarget: vi.fn(async () => undefined),
+      });
+      const frozenSource = { kind: "disk", path: "README.md", root: "/repo" };
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "pier.test.frozen",
+        params: {
+          context: { contextId: "ctx-1", projectRootPath: "/repo" },
+          pinned: true,
+          source: frozenSource,
+        },
+        panelId: "frozen-1",
+        transferId: TRANSFER_ID,
+      });
+      // Live lost source and context mid-drag; only dirty flag remains.
+      const custom = panel({
+        component: "pier.test.frozen",
+        id: "frozen-1",
+        params: { dirty: true },
+      });
+      const api = createApi([custom]);
+      useWorkspaceStore.getState().setApi(api as never);
+
+      await runPanelTransferRendererCommand({
+        command: {
+          sourcePanelId: "frozen-1",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.prepareSource",
+        },
+        requestId: "prepare-frozen",
+      } as RendererCommandEnvelope);
+
+      expect(prepareSource).toHaveBeenCalledWith({
+        panelId: "frozen-1",
+        params: {
+          context: { contextId: "ctx-1", projectRootPath: "/repo" },
+          dirty: true,
+          pinned: true,
+          source: frozenSource,
+        },
+        transferId: TRANSFER_ID,
+      });
+      expect(getFrozenSourceSnapshot(TRANSFER_ID)?.panel.params).toEqual({
+        context: { contextId: "ctx-1", projectRootPath: "/repo" },
+        dirty: true,
+        pinned: true,
+        source: frozenSource,
+      });
+      expect(__panelTransferInternals.frozenOfferParamsSizeForTests()).toBe(0);
+    });
+
+    it("prepareSource prefers live source when present", async () => {
+      installPier();
+      const prepareSource = vi.fn(async () => ({ drafts: [] }));
+      registerCorePanelTransfer("pier.test.frozen-live", {
+        finalize: vi.fn(async () => undefined),
+        kind: "custom",
+        prepareSource,
+        restore: vi.fn(async () => undefined),
+        stageTarget: vi.fn(async () => undefined),
+      });
+      const liveSource = { kind: "disk", path: "live.md", root: "/repo" };
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "pier.test.frozen-live",
+        params: {
+          source: { kind: "disk", path: "frozen.md", root: "/repo" },
+        },
+        panelId: "live-1",
+        transferId: TRANSFER_ID,
+      });
+      const custom = panel({
+        component: "pier.test.frozen-live",
+        id: "live-1",
+        params: { source: liveSource },
+      });
+      useWorkspaceStore.getState().setApi(createApi([custom]) as never);
+
+      await runPanelTransferRendererCommand({
+        command: {
+          sourcePanelId: "live-1",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.prepareSource",
+        },
+        requestId: "prepare-live",
+      } as RendererCommandEnvelope);
+
+      expect(prepareSource).toHaveBeenCalledWith({
+        panelId: "live-1",
+        params: { source: liveSource },
+        transferId: TRANSFER_ID,
+      });
+    });
+
+    it("params-only prepareSource still consumes frozen entry", async () => {
+      installPier();
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "welcome",
+        params: { note: "frozen" },
+        panelId: "welcome-1",
+        transferId: TRANSFER_ID,
+      });
+      expect(__panelTransferInternals.frozenOfferParamsSizeForTests()).toBe(1);
+      const welcome = panel({
+        component: "welcome",
+        id: "welcome-1",
+        params: { note: "live" },
+      });
+      useWorkspaceStore.getState().setApi(createApi([welcome]) as never);
+
+      await runPanelTransferRendererCommand({
+        command: {
+          sourcePanelId: "welcome-1",
+          transferId: TRANSFER_ID,
+          type: "panelTransfer.prepareSource",
+        },
+        requestId: "prepare-welcome",
+      });
+
+      expect(__panelTransferInternals.frozenOfferParamsSizeForTests()).toBe(0);
+      expect(getFrozenSourceSnapshot(TRANSFER_ID)?.panel.params).toEqual({
+        note: "live",
+      });
+    });
+
+    it("onDragEnd clears freeze when finishDrag returns null (no claim)", async () => {
+      const pier = installPier();
+      pier.finishDrag.mockResolvedValue(null);
+      const handlers = createWorkspacePanelTransferHandlers(() => null);
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "welcome",
+        params: { source: { kind: "disk" } },
+        panelId: "welcome-1",
+        transferId: TRANSFER_ID,
+      });
+      expect(__panelTransferInternals.frozenOfferParamsSizeForTests()).toBe(1);
+
+      handlers.onDragEnd(TRANSFER_ID);
+      await vi.waitFor(() =>
+        expect(__panelTransferInternals.frozenOfferParamsSizeForTests()).toBe(0)
+      );
+      expect(pier.finishDrag).toHaveBeenCalledWith(TRANSFER_ID);
+    });
+
+    it("onDragEnd keeps freeze when finishDrag returns already_claimed", async () => {
+      const pier = installPier();
+      pier.finishDrag.mockResolvedValue({
+        code: "already_claimed",
+        message: "peer",
+        ok: false,
+      });
+      const handlers = createWorkspacePanelTransferHandlers(() => null);
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "welcome",
+        params: { keep: true },
+        panelId: "welcome-1",
+        transferId: TRANSFER_ID,
+      });
+
+      handlers.onDragEnd(TRANSFER_ID);
+      await vi.waitFor(() => expect(pier.finishDrag).toHaveBeenCalled());
+      // Peer claim still needs prepareSource to take the freeze.
+      expect(__panelTransferInternals.frozenOfferParamsSizeForTests()).toBe(1);
     });
   });
 

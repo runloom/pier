@@ -203,6 +203,10 @@ export class FileDocumentLifecycle {
     return this.#panels.documentId(panelId);
   }
 
+  getPanelSource(panelId: string): FilesDocumentPanelSource | null {
+    return this.#panels.source(panelId);
+  }
+
   discardDocument(documentId: string): void {
     const document = getDocument(documentId);
     if (!document) {

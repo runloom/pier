@@ -367,6 +367,8 @@ export const filesRendererPlugin: RendererPluginModule = {
             flushFilesDraftWrites,
             getDocument,
             getDocumentForPanelSource,
+            getPanelSource: (panelId) =>
+              editorController.getPanelSource(panelId),
             hydrateDraftKey: hydrateFilesDraftRecordFromBackend,
             persistFilesDraftRecord,
             readFilesPanelViewMode,

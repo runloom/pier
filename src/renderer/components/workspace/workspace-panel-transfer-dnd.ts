@@ -29,6 +29,7 @@ import {
   isRealDragEvent,
   panelComponentOf,
   panelJsonParamsOf,
+  panelParamsOf,
   panelTitleOf,
   pierPanelTransfer,
   readPanelTransferId,
@@ -50,18 +51,104 @@ export interface WorkspacePanelTransferHandlers {
 interface TransferDragState {
   capability: "movable" | "unsupported";
   componentId: string;
+  /**
+   * Frozen dockview params at drag-start. prepareSource re-reads live params
+   * first; this is a fallback when live params lose `source` mid-drag.
+   */
+  params: Readonly<Record<string, unknown>>;
   panelId: string;
   transferId: string;
 }
 
 let activeDrag: TransferDragState | null = null;
 
+/** Frozen offer params for an in-flight transfer (by transferId). */
+const frozenOfferParamsByTransferId = new Map<
+  string,
+  Readonly<Record<string, unknown>>
+>();
+
 export function setActiveDrag(state: TransferDragState | null): void {
+  if (state) {
+    frozenOfferParamsByTransferId.set(state.transferId, state.params);
+  }
   activeDrag = state;
 }
 
 export function getActiveDrag(): TransferDragState | null {
   return activeDrag;
+}
+
+/**
+ * Params captured at `onWillDragPanel` for this transferId. Survives past
+ * dragend so prepareSource (which runs after drop/claim) can still fall back
+ * when live dockview params are empty or corrupt.
+ */
+export function takeFrozenOfferParams(
+  transferId: string
+): Readonly<Record<string, unknown>> | null {
+  const params = frozenOfferParamsByTransferId.get(transferId) ?? null;
+  frozenOfferParamsByTransferId.delete(transferId);
+  return params;
+}
+
+/** Drop freeze without reading (finishDrag null / terminal failure). */
+export function discardFrozenOfferParams(transferId: string): void {
+  frozenOfferParamsByTransferId.delete(transferId);
+}
+
+export function frozenOfferParamsSizeForTests(): number {
+  return frozenOfferParamsByTransferId.size;
+}
+
+export function clearFrozenOfferParamsForTests(): void {
+  frozenOfferParamsByTransferId.clear();
+}
+
+/**
+ * Merge drag-start freeze under live dockview params for prepareSource and
+ * the renderer source snapshot.
+ *
+ * - Defined live keys win over freeze.
+ * - `undefined` live keys do not wipe freeze (partial updates).
+ * - `source` uses freeze when live is missing/null/non-object; a live object
+ *   (even schema-invalid) is kept so adapter/registry recovery can run.
+ */
+export function mergeDragStartPanelParams(
+  live: Readonly<Record<string, unknown>>,
+  frozen: Readonly<Record<string, unknown>> | null
+): {
+  params: Record<string, unknown>;
+  usedFrozenSource: boolean;
+} {
+  if (frozen == null) {
+    return { params: { ...live }, usedFrozenSource: false };
+  }
+  const params: Record<string, unknown> = { ...frozen };
+  for (const [key, value] of Object.entries(live)) {
+    if (value !== undefined) {
+      params[key] = value;
+    }
+  }
+  const liveSource = live.source;
+  const frozenSource = frozen.source;
+  const liveSourceUsable =
+    liveSource !== undefined &&
+    liveSource !== null &&
+    typeof liveSource === "object";
+  let usedFrozenSource = false;
+  if (!liveSourceUsable) {
+    if (frozenSource !== undefined && frozenSource !== null) {
+      params.source = frozenSource;
+      usedFrozenSource = true;
+    } else if (liveSource === null) {
+      // Explicit null and no freeze: keep null so adapters can treat as empty.
+      params.source = null;
+    }
+  } else {
+    params.source = liveSource;
+  }
+  return { params, usedFrozenSource };
 }
 
 function hasPanelTransferType(dataTransfer: DataTransfer): boolean {
@@ -96,9 +183,11 @@ export function createWorkspacePanelTransferHandlers(
           component
         );
       }
+      const dragParams = panelParamsOf(panel);
       setActiveDrag({
         capability,
         componentId: component,
+        params: dragParams,
         panelId: panel.id,
         transferId,
       });
@@ -230,6 +319,17 @@ export function createWorkspacePanelTransferHandlers(
       pierPanelTransfer()
         .finishDrag(id)
         .then((result) => {
+          // prepareSource only runs after a claim is accepted. When finishDrag
+          // ends with no claim (null) or a terminal failure (not peer
+          // already_claimed), drop the drag-start freeze so same-window
+          // reorder/cancel cannot grow the map unbounded.
+          // already_claimed / ok: claim path owns takeFrozenOfferParams.
+          if (
+            result == null ||
+            (result && !result.ok && result.code !== "already_claimed")
+          ) {
+            discardFrozenOfferParams(id);
+          }
           if (result) {
             console.info(
               "[panelTransfer] channel=bounds-finishDrag transfer=%s ok=%s",
@@ -246,6 +346,7 @@ export function createWorkspacePanelTransferHandlers(
           }
         })
         .catch((err) => {
+          discardFrozenOfferParams(id);
           console.error("[panelTransfer] finishDrag failed:", err);
         });
     },
