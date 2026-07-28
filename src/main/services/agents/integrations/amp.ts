@@ -1,10 +1,15 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import {
+  isPierManagedPluginContent,
+  pierManagedPluginMarker,
+  writeManagedPluginFile,
+} from "./managed-plugin-file.ts";
 import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
-import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
+import { commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
@@ -14,7 +19,7 @@ const AGENT_ID: AgentKind = "amp";
 const AMP_PLUGIN_FILE = "pier-agent-status.ts";
 
 /** 托管标记：写在插件源码内, install 幂等比对 + uninstall 删除前必查。 */
-const AMP_PLUGIN_MARKER = "pier-agent-status:v1 (managed by Pier)";
+const AMP_PLUGIN_MARKER = pierManagedPluginMarker();
 
 /**
  * amp.on 原生事件 → pier 规范事件名。
@@ -135,10 +140,6 @@ export default function (amp) {
 `;
 }
 
-function isManagedAmpPlugin(content: string): boolean {
-  return content.includes(AMP_PLUGIN_MARKER);
-}
-
 async function readPluginFile(path: string): Promise<string | null> {
   try {
     return await readFile(path, "utf8");
@@ -148,26 +149,16 @@ async function readPluginFile(path: string): Promise<string | null> {
 }
 
 /**
- * install：非托管同名文件绝不覆盖（console.warn 跳过）；
- * 字节相同则不落盘（幂等重装零写入）。
+ * install：非托管跳过；磁盘更高世代跳过；字节相同不落盘。
  */
 export async function installAmpHooks(
   pluginPath: string = ampPluginPath()
 ): Promise<void> {
-  const existing = await readPluginFile(pluginPath);
-  if (existing !== null && !isManagedAmpPlugin(existing)) {
-    console.warn(
-      `[agent-hooks:${AGENT_ID}] unmanaged plugin file present, skip install:`,
-      pluginPath
-    );
-    return;
-  }
-  const source = buildAmpPluginSource();
-  if (existing === source) {
-    return;
-  }
-  await mkdir(dirname(pluginPath), { recursive: true });
-  await atomicWriteFile(pluginPath, source);
+  await writeManagedPluginFile({
+    path: pluginPath,
+    source: buildAmpPluginSource(),
+    label: AGENT_ID,
+  });
 }
 
 /**
@@ -181,7 +172,7 @@ export async function uninstallAmpHooks(
   if (existing === null) {
     return;
   }
-  if (!isManagedAmpPlugin(existing)) {
+  if (!isPierManagedPluginContent(existing)) {
     console.warn(
       `[agent-hooks:${AGENT_ID}] unmanaged plugin file present, skip uninstall:`,
       pluginPath

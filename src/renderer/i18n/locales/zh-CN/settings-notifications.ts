@@ -37,7 +37,7 @@ export const settingsNotifications = {
   saveFailed: "无法保存通知设置",
   hooksOffTitle: "智能体状态提示已关闭",
   hooksOffBody:
-    "关闭后不会发送“需要你处理”的系统通知。已在运行的智能体会话可能仍会上报，重开会话后完全生效。",
+    "关闭后不会发送「需要你处理」的系统通知，也不会再安装状态上报。可在「智能体」设置中重新打开。",
   permission: {
     deniedTitle: "系统通知未授权",
     deniedBody: "请在系统设置中为 Pier 开启通知，然后发送测试通知验证。",

@@ -19,7 +19,7 @@ import {
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import type { ForegroundActivityAggregator } from "../../foreground-activity/types.ts";
-import { installAllAgentHooks } from "../integrations/registry.ts";
+import { installAgentHooksStack } from "../integrations/registry.ts";
 import { logTitleTier } from "./log.ts";
 import { refineAgentSessionTitle } from "./refine-one-shot.ts";
 import { agentSessionTitleDeps } from "./refine-port.ts";
@@ -96,12 +96,15 @@ function promptSnippetOf(event: AgentHookEventPayload): string | undefined {
 
 let hooksSelfHealInFlight: Promise<void> | null = null;
 
-/** PromptSubmit 无文案时重装 hooks 一次（旧 worktree 可能盖掉 prompt 提取）。 */
+/**
+ * PromptSubmit 无文案时重装 hooks 栈一次（运行时 + 全局配置）。
+ * 旧实例可能盖掉 extract 脚本或全局条目；栈安装只前进、内容相同不落盘。
+ */
 function selfHealAgentHooksIfNeeded(): void {
   if (hooksSelfHealInFlight) {
     return;
   }
-  hooksSelfHealInFlight = installAllAgentHooks()
+  hooksSelfHealInFlight = installAgentHooksStack()
     .catch(() => undefined)
     .finally(() => {
       hooksSelfHealInFlight = null;

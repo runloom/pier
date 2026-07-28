@@ -1,9 +1,14 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
+import {
+  isPierManagedPluginContent,
+  pierManagedPluginMarker,
+  writeManagedPluginFile,
+} from "./managed-plugin-file.ts";
+import { commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
@@ -13,7 +18,7 @@ const AGENT_ID: AgentKind = "kilo";
 const PLUGIN_FILE = "pier-agent-status.ts";
 
 /** 托管标记：写在插件源码内, install 幂等比对 + uninstall 删除前必查。 */
-const PLUGIN_MARKER = "pier-agent-status:v1 (managed by Pier)";
+const PLUGIN_MARKER = pierManagedPluginMarker();
 
 /**
  * Kilo Code CLI 插件 — 依据官方文档 kilo.ai/docs/automate/extending/plugins：
@@ -193,10 +198,6 @@ export default { id: "${pluginId}-agent-status", server };
 `;
 }
 
-function isManagedPlugin(content: string): boolean {
-  return content.includes(PLUGIN_MARKER);
-}
-
 async function readPluginFile(path: string): Promise<string | null> {
   try {
     return await readFile(path, "utf8");
@@ -208,19 +209,11 @@ async function readPluginFile(path: string): Promise<string | null> {
 export async function installKiloHooks(
   pluginPath: string = kiloPluginPath()
 ): Promise<void> {
-  const source = buildKiloPluginSource();
-  const existing = await readPluginFile(pluginPath);
-  if (existing !== null && !isManagedPlugin(existing)) {
-    console.warn(
-      `[agent-hooks:${AGENT_ID}] unmanaged plugin file present, skip install:`,
-      pluginPath
-    );
-    return;
-  }
-  if (existing !== source) {
-    await mkdir(dirname(pluginPath), { recursive: true });
-    await atomicWriteFile(pluginPath, source);
-  }
+  await writeManagedPluginFile({
+    path: pluginPath,
+    source: buildKiloPluginSource(),
+    label: AGENT_ID,
+  });
 }
 
 /**
@@ -233,7 +226,7 @@ export async function uninstallKiloHooks(
   if (existing === null) {
     return;
   }
-  if (!isManagedPlugin(existing)) {
+  if (!isPierManagedPluginContent(existing)) {
     console.warn(
       `[agent-hooks:${AGENT_ID}] unmanaged plugin file present, skip uninstall:`,
       pluginPath

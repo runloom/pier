@@ -8,9 +8,8 @@ import { createLogger } from "@shared/logger.ts";
 import { app, type IpcMain } from "electron";
 import { effectsForAcceptedAgentEvent } from "../services/agents/agent-event-effects.ts";
 import {
-  agentHooksDir,
   eventsJsonlPath,
-  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
 } from "../services/agents/agent-hooks-install.ts";
 import {
   isAgentStatusHooksIngestEnabled,
@@ -18,7 +17,7 @@ import {
 } from "../services/agents/agent-status-hooks-gate.ts";
 import {
   getAgentHookIntegration,
-  installAllAgentHooks,
+  installAgentHooksStack,
   uninstallAllAgentHooks,
 } from "../services/agents/integrations/registry.ts";
 import {
@@ -204,7 +203,9 @@ export const foregroundActivityService = {
   hookEnv(): Record<string, string> {
     const userData = app.getPath("userData");
     return {
-      PIER_AGENT_HOOKS_DIR: agentHooksDir(userData),
+      // 共享运行时（~/.pier/hooks/current）；跨 worktree / 版本稳定。
+      PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(),
+      // 事件日志仍按实例 userData 隔离，避免多窗抢同一 JSONL。
       PIER_AGENT_EVENT_LOG: eventsJsonlPath(userData),
     };
   },
@@ -322,7 +323,11 @@ export const foregroundActivityService = {
   },
 };
 
-/** app 退出时释放 JSONL observer 等副资源。 */
+/**
+ * app 退出时释放 JSONL observer 等副资源。
+ * **不得**卸载全局 agent hooks 或删除 `~/.pier/hooks`——运行时与 pier 条目
+ * 跨版本/channel 共享，退出不等于用户关闭「智能体状态提示」。
+ */
 export function closeForegroundActivityResources(): void {
   jsonlObserver?.dispose();
   jsonlObserver = null;
@@ -332,10 +337,6 @@ export function closeForegroundActivityResources(): void {
 
 export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
   foregroundActivityAggregator.onChange(handleBroadcast);
-  // emit 脚本安装（一次性）——fire-and-forget，失败仅告警。
-  installAgentHooksEmitScript(app.getPath("userData")).catch((err) => {
-    log.error("emit script install failed", { err });
-  });
   // JSONL 尾读（spec §4.4 主路径）：hooks.json 系集成通过 emit 脚本
   // append 到 events.jsonl，observer 250ms 轮询 → 按 kind 分派到
   // aggregator 对应 hook。commandStart/commandFinished hook 目前无消费者
@@ -414,13 +415,15 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
     return foregroundActivityService.snapshot(String(win.id));
   });
 
-  // 启动时按偏好双向对齐 hook 安装状态（幂等）：开→装, 关→卸。
-  // 关闭态必须主动卸载, 防止旧版本/外部同步写回的 hook 静默复活。
+  // 启动时按偏好双向对齐 hook 安装状态（幂等）：
+  // 开 → installAgentHooksStack（运行时 + 各 agent 全局配置，同事务顺序）；
+  // 关 → 仅卸 pier 条目（保留 ~/.pier/hooks 运行时）。
+  // 关闭态必须主动卸载 pier 条目, 防止旧版本/外部同步写回的 hook 静默复活。
   readPreferences()
     .then((prefs) => {
       setAgentStatusHooksIngestEnabled(prefs.agentStatusHooks);
       return prefs.agentStatusHooks
-        ? installAllAgentHooks()
+        ? installAgentHooksStack()
         : uninstallAllAgentHooks();
     })
     .catch((err) => {

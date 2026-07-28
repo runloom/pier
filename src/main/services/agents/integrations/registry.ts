@@ -1,4 +1,9 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { app } from "electron";
+import {
+  type InstallAgentHooksOptions,
+  installAgentHooksEmitScript,
+} from "../agent-hooks-install.ts";
 import { setAgentStatusHooksIngestEnabled } from "../agent-status-hooks-gate.ts";
 import { aiderIntegration } from "./aider.ts";
 import { ampIntegration } from "./amp.ts";
@@ -82,6 +87,9 @@ export function getAgentHookIntegration(
 /**
  * 幂等安装全部已检测到的集成。单个失败不影响其他（逐个隔离告警）——
  * 一家 agent 的配置异常不应拖垮整个状态功能 / 偏好切换。
+ *
+ * 各集成 transformJsonConfig 在语义无变化时不落盘，避免无谓改写
+ * ~/.codex/hooks.json 等触发 Codex 再次「hooks need review」。
  */
 export async function installAllAgentHooks(): Promise<void> {
   await Promise.allSettled(
@@ -99,9 +107,24 @@ export async function installAllAgentHooks(): Promise<void> {
 }
 
 /**
+ * 完整安装栈（终态 P2）：先共享运行时 `~/.pier/hooks`，再写各 agent 全局配置。
+ * 顺序固定——全局 hooks 命令依赖 `${PIER_AGENT_HOOKS_DIR}/…` 脚本已就位。
+ */
+export async function installAgentHooksStack(
+  options: InstallAgentHooksOptions & { userData?: string } = {}
+): Promise<void> {
+  const userData = options.userData ?? app.getPath("userData");
+  await installAgentHooksEmitScript(userData, options);
+  await installAllAgentHooks();
+}
+
+/**
  * 卸载全部集成。不设 detect 门控——二进制已卸但配置残留时也要能清干净；
  * 对从未安装过的目标, 变换无变化不落盘, 零副作用。
  * 单个失败不影响其他，也不回滚偏好 / 摄入门闸。
+ *
+ * **不删除** `~/.pier/hooks/vN` 运行时——关偏好只撤全局 pier 条目；
+ * 退出 App 也不得调用本函数（多版本/多 channel 共享运行时）。
  */
 export async function uninstallAllAgentHooks(): Promise<void> {
   await Promise.allSettled(
@@ -119,5 +142,5 @@ export async function applyAgentStatusHooksPreference(
   enabled: boolean
 ): Promise<void> {
   setAgentStatusHooksIngestEnabled(enabled);
-  await (enabled ? installAllAgentHooks() : uninstallAllAgentHooks());
+  await (enabled ? installAgentHooksStack() : uninstallAllAgentHooks());
 }

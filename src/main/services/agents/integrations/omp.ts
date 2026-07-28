@@ -3,14 +3,19 @@ import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import {
+  isPierManagedPluginContent,
+  pierManagedPluginMarker,
+  writeManagedPluginFile,
+} from "./managed-plugin-file.ts";
 import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
-import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
+import { commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
 const AGENT_ID: AgentKind = "omp";
 const EXTENSION_FILE_NAME = "pier-agent-status.ts";
-const MARKER = "pier-agent-status:v1 (managed by Pier)";
+const MARKER = pierManagedPluginMarker();
 
 /**
  * omp 主会话事件 → pier 事件名。
@@ -135,8 +140,7 @@ function subscriptionLines(): string {
  * 子实例事件直发打穿主状态, 正是本次修的 bug。
  */
 export function buildOmpExtensionSource(): string {
-  return `// pier-agent-status:v1 (managed by Pier). Safe to leave in place.
-// ${MARKER}
+  return `// ${MARKER}. Safe to leave in place.
 // Deliberately no top-level import declarations: electron-vite scans
 // template literals in main's bundle and can otherwise inject an invalid
 // CommonJS shim into the ESM output. process.getBuiltinModule is a runtime
@@ -241,10 +245,6 @@ ${subscriptionLines()}
 `;
 }
 
-function isManagedByPier(raw: string): boolean {
-  return raw.includes(MARKER);
-}
-
 async function readExtensionRaw(path: string): Promise<string | null> {
   try {
     return await readFile(path, "utf8");
@@ -254,8 +254,8 @@ async function readExtensionRaw(path: string): Promise<string | null> {
 }
 
 /**
- * 整文件 overwrite；仅当文件缺失或已由 pier 管理时才写。非托管文件
- * （用户/其他工具自带的同名扩展）一律跳过并 warn, 不覆盖。
+ * 整文件 overwrite；仅当文件缺失或已由 pier 管理时才写。
+ * 非托管 / 更高世代跳过。
  */
 export async function installOmpExtension(
   path: string = ompExtensionPath()
@@ -263,19 +263,11 @@ export async function installOmpExtension(
   if (!ompDetect()) {
     return;
   }
-  const existing = await readExtensionRaw(path);
-  if (existing !== null && !isManagedByPier(existing)) {
-    console.warn(
-      "[agent-hooks:omp] existing unmanaged extension file, skip install:",
-      path
-    );
-    return;
-  }
-  const next = buildOmpExtensionSource();
-  if (existing === next) {
-    return;
-  }
-  await atomicWriteFile(path, next);
+  await writeManagedPluginFile({
+    path,
+    source: buildOmpExtensionSource(),
+    label: AGENT_ID,
+  });
 }
 
 /** 仅删除含 marker 的托管文件；非托管/不存在时零副作用。 */
@@ -283,7 +275,7 @@ export async function uninstallOmpExtension(
   path: string = ompExtensionPath()
 ): Promise<void> {
   const existing = await readExtensionRaw(path);
-  if (existing === null || !isManagedByPier(existing)) {
+  if (existing === null || !isPierManagedPluginContent(existing)) {
     return;
   }
   await rm(path, { force: true });

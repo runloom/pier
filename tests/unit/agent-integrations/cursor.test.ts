@@ -4,9 +4,9 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import {
-  agentHooksDir,
   eventsJsonlPath,
   installAgentHooksEmitScript,
+  pierHooksCurrentDir,
 } from "../../../src/main/services/agents/agent-hooks-install.ts";
 import {
   CURSOR_EVENTS,
@@ -97,9 +97,10 @@ describe("withPierCursorHooks", () => {
   });
 
   it("stop 命令经真实 /bin/sh + emit 执行, 三种 status 与缺省各落正确事件", async () => {
-    const userData = await mkdtemp(join(tmpdir(), "pier-cursor-e2e-"));
-    await installAgentHooksEmitScript(userData);
-    const dir = agentHooksDir(userData);
+    const root = await mkdtemp(join(tmpdir(), "pier-cursor-e2e-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
     const logPath = eventsJsonlPath(userData);
     const hooks = withPierCursorHooks({}).hooks as Record<
       string,
@@ -111,7 +112,7 @@ describe("withPierCursorHooks", () => {
         env: {
           ...process.env,
           PIER_AGENT_EVENT_LOG: logPath,
-          PIER_AGENT_HOOKS_DIR: dir,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
           PIER_PANEL_ID: "p1",
           PIER_WINDOW_ID: "w1",
         },

@@ -95,9 +95,12 @@ describe("openclaudeIntegration", () => {
         Array<{ hooks: Array<{ command: string }> }>
       >
     ).UserPromptSubmit?.[0]?.hooks?.[0]?.command;
-    expect(ups).toContain("sessionTitle");
-    expect(ups).toContain("promptSnippet");
-    expect(ups).toContain("hookSpecificOutput");
+    // sessionTitle 派生在共享运行时 derive-claude-session-title 内；
+    // 全局 hooks 命令只引用 ${PIER_AGENT_HOOKS_DIR}/…，不嵌 Electron 路径。
+    const hooksDirRef = ["$", "{PIER_AGENT_HOOKS_DIR}"].join("");
+    expect(ups).toContain(`${hooksDirRef}/derive-claude-session-title`);
+    expect(ups).toContain(`${hooksDirRef}/extract-stdin-meta`);
+    expect(ups).not.toContain("ELECTRON_RUN_AS_NODE");
   });
 
   it("幂等：重复安装不产生重复条目", async () => {

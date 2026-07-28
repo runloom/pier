@@ -1,9 +1,24 @@
-import { mkdir, writeFile } from "node:fs/promises";
+import {
+  chmod,
+  lstat,
+  mkdir,
+  readFile,
+  rename,
+  rm,
+  symlink,
+  writeFile,
+} from "node:fs/promises";
+import { homedir } from "node:os";
 import { join } from "node:path";
+import {
+  GREETING_ONLY_SOURCE,
+  MAX_AGENT_SESSION_TITLE_LENGTH,
+  MAX_PROMPT_SNIPPET_LENGTH,
+} from "@shared/agent-session-title/index.ts";
 
 /**
- * emit 脚本安装目录名（相对 userData）。
- * hooks.json command 模板、PTY env、observer 均引用此常量。
+ * 实例私有事件日志目录名（相对 userData）。
+ * 仅 events.jsonl / offset 落在此；可执行 hook 脚本不在此（见 pierHooksHomeDir）。
  */
 export const AGENT_HOOKS_DIR_NAME = "agent-hooks";
 
@@ -12,22 +27,43 @@ export const EMIT_SCRIPT_NAME = "emit";
 
 /**
  * stdin → metadataBase64 提取脚本（含 promptSnippet）。
- * hooks.json 经 `${PIER_AGENT_HOOKS_DIR}/extract-stdin-meta` 调用，能力跟
- * **当前 Pier 的 userData** 走，避免全局 hooks 被旧 worktree 覆盖后丢命名字段。
+ * hooks.json 经 `${PIER_AGENT_HOOKS_DIR}/extract-stdin-meta` 调用。
  */
 export const EXTRACT_STDIN_META_SCRIPT_NAME = "extract-stdin-meta";
 
-/** events.jsonl 文件名。 */
+/**
+ * Claude UserPromptSubmit 会话标题派生脚本。
+ * hooks.json 只引用 `${PIER_AGENT_HOOKS_DIR}/derive-claude-session-title`。
+ */
+export const DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME =
+  "derive-claude-session-title";
+
+/** events.jsonl 文件名（实例私有，在 userData/agent-hooks/）。 */
 export const EVENTS_JSONL_NAME = "events.jsonl";
 
+/** 用户级共享 hooks 运行时根：`~/.pier/hooks`。 */
+export const PIER_HOOKS_HOME_SEGMENTS = [".pier", "hooks"] as const;
+
+/** 世代指针文件名（内容为十进制世代号）。 */
+export const PIER_HOOKS_GENERATION_FILE = "GENERATION";
+
+/** 当前运行时 symlink 名 → `v{N}`。 */
+export const PIER_HOOKS_CURRENT_NAME = "current";
+
 /**
- * hooks 命令世代：嵌入 extract-stdin-meta / stdin 命令，安装时拒绝用更低世代覆盖。
+ * hooks 命令 + 共享运行时世代（只增不减）。
  * 2 = PromptSubmit 命名所需的 prompt → promptSnippet。
  * 3 = 世代标记改为赋值（禁止 `#` 注释，避免 `;` 拼接后整行被注释掉）。
  * 4 = stdin 身份字段补 camelCase（toolUseId / toolName / turnId / agentId /
  *     agentType / transcriptPath）；Grok 等 provider 官方 envelope 为 camelCase。
+ * 5 = 全局 hooks 命令去掉 process.execPath 内联 fallback；只引用
+ *     `${PIER_AGENT_HOOKS_DIR}/…`。共享运行时迁入 `~/.pier/hooks/vN`，
+ *     只允许更高（或相等刷新）世代写入；旧客户端不得降级。
+ * 6 = extract/derive 改为 `#!/usr/bin/env node` 纯脚本，运行时不再绑定
+ *     Electron 绝对路径（金标准：同 gen 多实例零路径互盖）。
  */
-export const PIER_HOOK_COMMAND_GENERATION = 4;
+export const PIER_HOOK_COMMAND_GENERATION = 6;
+
 /**
  * emit 脚本内容——保留 v1 agentEvent，并以 agentEventV2 承载新协议。
  *
@@ -116,65 +152,329 @@ esac
 trap - EXIT HUP INT TERM
 `;
 
-/** 返回 agent-hooks 目录绝对路径。 */
+export interface InstallAgentHooksOptions {
+  /**
+   * 共享运行时根目录。默认 `~/.pier/hooks`。
+   * 测试可注入临时目录，避免污染开发机 home。
+   */
+  hooksHome?: string;
+}
+
+/** 用户级共享 hooks 运行时根目录。 */
+export function pierHooksHomeDir(home: string = homedir()): string {
+  return join(home, ...PIER_HOOKS_HOME_SEGMENTS);
+}
+
+/** `current` 目录（symlink 到 `v{N}`）；PTY 的 PIER_AGENT_HOOKS_DIR 指向此路径。 */
+export function pierHooksCurrentDir(
+  hooksHome: string = pierHooksHomeDir()
+): string {
+  return join(hooksHome, PIER_HOOKS_CURRENT_NAME);
+}
+
+/** 版本化运行时目录 `…/v{N}`。 */
+export function pierHooksVersionDir(
+  generation: number,
+  hooksHome: string = pierHooksHomeDir()
+): string {
+  return join(hooksHome, `v${generation}`);
+}
+
+/**
+ * 实例私有 agent-hooks 目录（仅事件日志等）。
+ * 可执行脚本请用 pierHooksCurrentDir / emitScriptPath(hooksHome)。
+ */
 export function agentHooksDir(userData: string): string {
   return join(userData, AGENT_HOOKS_DIR_NAME);
 }
 
-/** 返回 emit 脚本绝对路径。 */
-export function emitScriptPath(userData: string): string {
-  return join(agentHooksDir(userData), EMIT_SCRIPT_NAME);
+/** emit 脚本路径（经 current）。 */
+export function emitScriptPath(hooksHome: string = pierHooksHomeDir()): string {
+  return join(pierHooksCurrentDir(hooksHome), EMIT_SCRIPT_NAME);
 }
 
-/** 返回 extract-stdin-meta 脚本绝对路径。 */
-export function extractStdinMetaScriptPath(userData: string): string {
-  return join(agentHooksDir(userData), EXTRACT_STDIN_META_SCRIPT_NAME);
+/** extract-stdin-meta 路径（经 current）。 */
+export function extractStdinMetaScriptPath(
+  hooksHome: string = pierHooksHomeDir()
+): string {
+  return join(pierHooksCurrentDir(hooksHome), EXTRACT_STDIN_META_SCRIPT_NAME);
 }
 
-/** 返回 events.jsonl 绝对路径。 */
+/** derive-claude-session-title 路径（经 current）。 */
+export function deriveClaudeSessionTitleScriptPath(
+  hooksHome: string = pierHooksHomeDir()
+): string {
+  return join(
+    pierHooksCurrentDir(hooksHome),
+    DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME
+  );
+}
+
+/** 返回实例私有 events.jsonl 绝对路径。 */
 export function eventsJsonlPath(userData: string): string {
   return join(agentHooksDir(userData), EVENTS_JSONL_NAME);
 }
 
-function shellDoubleQuote(value: string): string {
-  return value
-    .replaceAll("\\", "\\\\")
-    .replaceAll('"', '\\"')
-    .replaceAll("$", "\\$")
-    .replaceAll("`", "\\`");
+/** 读取磁盘上已安装的共享运行时世代；缺失/损坏 → 0。 */
+export async function readInstalledHookRuntimeGeneration(
+  hooksHome: string = pierHooksHomeDir()
+): Promise<number> {
+  try {
+    const raw = await readFile(
+      join(hooksHome, PIER_HOOKS_GENERATION_FILE),
+      "utf8"
+    );
+    const value = Number(raw.trim());
+    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
+  } catch {
+    return 0;
+  }
 }
 
 /**
- * 安装期生成 extract-stdin-meta：用当前 Electron 以 node 模式跑内联提取。
- * 输出：stdin JSON → stdout base64(metadata)，含 promptSnippet（≤512）。
+ * extract-stdin-meta：`#!/usr/bin/env node` 纯脚本。
+ * stdin JSON → stdout base64(metadata)，含 promptSnippet（截断长度用
+ * MAX_PROMPT_SNIPPET_LENGTH）。
+ * 键表与 hook-stdin-commands 的 sed 提取保持同步（snake + camel）。
+ * **不绑定** Electron/process.execPath——PATH 上的 node 即可。
  */
-export function buildExtractStdinMetaScript(
-  electronExecutable: string = process.execPath
-): string {
-  const nodeExecutable = shellDoubleQuote(electronExecutable);
-  // JS 内避免单引号，便于包进 sh -e '...'。
-  // 与 shared.stdinIdentityExtractionLines 的键表保持同步（snake + camel）。
-  const extractJs =
-    'let s="";process.stdin.on("data",d=>s+=d).on("end",()=>{try{const p=JSON.parse(s),o={};for(const k of ["session_id","sessionId","turn_id","turnId","tool_use_id","toolUseId","tool_name","toolName","agent_id","agentId","agent_type","agentType","transcript_path","transcriptPath"])if(typeof p[k]==="string")o[k]=p[k];const prompt=[p.prompt,p.user_prompt,p.content,p.message].find(v=>typeof v==="string");if(typeof prompt==="string"&&prompt.trim())o.promptSnippet=prompt.slice(0,512);process.stdout.write(Buffer.from(JSON.stringify(o)).toString("base64"))}catch{}})';
-  return `#!/bin/sh
-# pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}
-ELECTRON_RUN_AS_NODE=1 "${nodeExecutable}" -e '${extractJs}'
+export function buildExtractStdinMetaScript(): string {
+  return `#!/usr/bin/env node
+// pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}
+// Managed by Pier. Do not edit.
+"use strict";
+const MAX_SNIPPET = ${MAX_PROMPT_SNIPPET_LENGTH};
+const KEYS = [
+  "session_id",
+  "sessionId",
+  "turn_id",
+  "turnId",
+  "tool_use_id",
+  "toolUseId",
+  "tool_name",
+  "toolName",
+  "agent_id",
+  "agentId",
+  "agent_type",
+  "agentType",
+  "transcript_path",
+  "transcriptPath",
+];
+let s = "";
+process.stdin.on("data", (d) => {
+  s += d;
+});
+process.stdin.on("end", () => {
+  try {
+    const p = JSON.parse(s);
+    const o = {};
+    for (const k of KEYS) {
+      if (typeof p[k] === "string") {
+        o[k] = p[k];
+      }
+    }
+    const prompt = [p.prompt, p.user_prompt, p.content, p.message].find(
+      (v) => typeof v === "string"
+    );
+    if (typeof prompt === "string" && prompt.trim()) {
+      o.promptSnippet = prompt.slice(0, MAX_SNIPPET);
+    }
+    process.stdout.write(Buffer.from(JSON.stringify(o)).toString("base64"));
+  } catch {
+    // best-effort
+  }
+});
 `;
 }
 
 /**
- * 幂等安装 emit + extract-stdin-meta 到 `${userData}/agent-hooks/`。
- * 每次启动覆盖写入（内容随版本演进），chmod 755。
+ * derive-claude-session-title：`#!/usr/bin/env node` 纯脚本。
+ * stdin JSON → stdout hookSpecificOutput.sessionTitle。
+ * 只做 strip + 寒暄挡 + 硬截断（与历史内联逻辑一致）。
+ * **不绑定** Electron/process.execPath。
+ */
+export function buildDeriveClaudeSessionTitleScript(): string {
+  const greetingLiteral = JSON.stringify(GREETING_ONLY_SOURCE);
+  const cap = MAX_AGENT_SESSION_TITLE_LENGTH;
+  const snippetCap = MAX_PROMPT_SNIPPET_LENGTH;
+  return `#!/usr/bin/env node
+// pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}
+// Managed by Pier. Do not edit.
+"use strict";
+const GREETING_ONLY_SOURCE = ${greetingLiteral};
+const MAX_TITLE = ${cap};
+const MAX_SNIPPET = ${snippetCap};
+let s = "";
+process.stdin.on("data", (d) => {
+  s += d;
+});
+process.stdin.on("end", () => {
+  try {
+    const p = JSON.parse(s);
+    const raw = [p.prompt, p.user_prompt, p.content, p.message].find(
+      (v) => typeof v === "string"
+    );
+    if (typeof raw !== "string") {
+      return;
+    }
+    let t = String(raw)
+      .slice(0, MAX_SNIPPET)
+      .replace(/\\r\\n/g, "\\n")
+      .replace(/\\r/g, "\\n");
+    const m =
+      /<(user_query|user_message|user_prompt|human|query)\\b[^>]*>([\\s\\S]*?)<\\/\\1>/i.exec(
+        t
+      );
+    if (m && m[2].trim()) {
+      t = m[2];
+    }
+    t = t
+      .replace(
+        /<\\/?(?:user_query|user_message|user_prompt|human|query|system|assistant)\\b[^>]*>/gi,
+        " "
+      )
+      .replace(/\\[Image\\s*#?\\d*\\]/gi, " ")
+      .replace(/!\\[[^\\]]*\\]\\([^)]*\\)/g, " ")
+      .replace(/\\s+/g, " ")
+      .trim();
+    if (!t || new RegExp(GREETING_ONLY_SOURCE, "i").test(t)) {
+      return;
+    }
+    if (t.length > MAX_TITLE) {
+      t = t.slice(0, MAX_TITLE - 1).trimEnd() + "…";
+    }
+    if (!t || t.includes("\\n")) {
+      return;
+    }
+    process.stdout.write(
+      JSON.stringify({
+        hookSpecificOutput: {
+          hookEventName: "UserPromptSubmit",
+          sessionTitle: t,
+          suppressOutput: true,
+        },
+      })
+    );
+  } catch {
+    // best-effort
+  }
+});
+`;
+}
+
+async function writeExecutable(path: string, body: string): Promise<void> {
+  await writeFile(path, body, { mode: 0o755 });
+  // writeFile 的 mode 仅在创建时生效；覆盖写时显式 chmod 保证 +x。
+  await chmod(path, 0o755);
+}
+
+/** 内容相同则跳过字节写入，但仍确保 +x（同 gen 多实例 / 自愈可恢复权限）。 */
+async function writeExecutableIfChanged(
+  path: string,
+  body: string
+): Promise<void> {
+  try {
+    const existing = await readFile(path, "utf8");
+    if (existing === body) {
+      await chmod(path, 0o755);
+      return;
+    }
+  } catch {
+    // missing → write
+  }
+  await writeExecutable(path, body);
+}
+
+/**
+ * 将 `current` 原子切换为指向相对目标（如 `v5`）。
+ * staging + rename，避免半更新。
+ */
+export async function atomicReplaceSymlink(
+  linkPath: string,
+  relativeTarget: string
+): Promise<void> {
+  const staging = `${linkPath}.tmp.${process.pid}.${Date.now()}`;
+  await symlink(relativeTarget, staging);
+  try {
+    await rename(staging, linkPath);
+  } catch {
+    // 目标若为非空目录等无法 rename 覆盖，先移除再换。
+    await rm(linkPath, { force: true, recursive: true });
+    await rename(staging, linkPath);
+  }
+}
+
+/**
+ * 安装共享 hook 运行时 + 确保实例事件日志目录存在。
+ *
+ * 布局：
+ * ```
+ * ~/.pier/hooks/
+ *   GENERATION          # 当前世代
+ *   v6/emit             # 纯 shell
+ *   v6/extract-…        # #!/usr/bin/env node（无 Electron 路径）
+ *   v6/derive-…         # #!/usr/bin/env node
+ *   current → v6        # PTY 注入 PIER_AGENT_HOOKS_DIR
+ * {userData}/agent-hooks/events.jsonl   # 实例私有日志
+ * ```
+ *
+ * 只前进规则：
+ * - 磁盘世代 > 本进程 → 跳过（旧客户端不得降级）
+ * - 磁盘世代 < 本进程 → 写入 `v{本世代}`、切换 current、更新 GENERATION
+ * - 磁盘世代 == 本进程 → 仅当脚本内容变化时重写（同 gen 多实例内容相同则零 IO）
  */
 export async function installAgentHooksEmitScript(
-  userData: string
+  userData: string,
+  options: InstallAgentHooksOptions = {}
 ): Promise<void> {
-  const dir = agentHooksDir(userData);
-  await mkdir(dir, { recursive: true });
-  await writeFile(emitScriptPath(userData), EMIT_SCRIPT, { mode: 0o755 });
-  await writeFile(
-    extractStdinMetaScriptPath(userData),
-    buildExtractStdinMetaScript(),
-    { mode: 0o755 }
+  const hooksHome = options.hooksHome ?? pierHooksHomeDir();
+  const gen = PIER_HOOK_COMMAND_GENERATION;
+
+  // 实例私有日志目录（observer / PIER_AGENT_EVENT_LOG）
+  await mkdir(agentHooksDir(userData), { recursive: true });
+
+  const installed = await readInstalledHookRuntimeGeneration(hooksHome);
+  if (installed > gen) {
+    return;
+  }
+
+  await mkdir(hooksHome, { recursive: true });
+  const versionDir = pierHooksVersionDir(gen, hooksHome);
+  await mkdir(versionDir, { recursive: true });
+
+  const extractBody = buildExtractStdinMetaScript();
+  const deriveBody = buildDeriveClaudeSessionTitleScript();
+  await writeExecutableIfChanged(
+    join(versionDir, EMIT_SCRIPT_NAME),
+    EMIT_SCRIPT
   );
+  await writeExecutableIfChanged(
+    join(versionDir, EXTRACT_STDIN_META_SCRIPT_NAME),
+    extractBody
+  );
+  await writeExecutableIfChanged(
+    join(versionDir, DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME),
+    deriveBody
+  );
+
+  await atomicReplaceSymlink(pierHooksCurrentDir(hooksHome), `v${gen}`);
+  if (installed !== gen) {
+    await writeFile(
+      join(hooksHome, PIER_HOOKS_GENERATION_FILE),
+      `${gen}\n`,
+      "utf8"
+    );
+  }
+}
+
+/** 测试/诊断：current 是否为指向 vN 的 symlink。 */
+export async function isPierHooksCurrentSymlink(
+  hooksHome: string = pierHooksHomeDir()
+): Promise<boolean> {
+  try {
+    const st = await lstat(pierHooksCurrentDir(hooksHome));
+    return st.isSymbolicLink();
+  } catch {
+    return false;
+  }
 }

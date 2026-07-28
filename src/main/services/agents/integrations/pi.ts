@@ -3,14 +3,19 @@ import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import {
+  isPierManagedPluginContent,
+  pierManagedPluginMarker,
+  writeManagedPluginFile,
+} from "./managed-plugin-file.ts";
 import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
-import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
+import { commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
 const AGENT_ID: AgentKind = "pi";
 const EXTENSION_FILE_NAME = "pier-agent-status.ts";
-const MARKER = "pier-agent-status:v1 (managed by Pier)";
+const MARKER = pierManagedPluginMarker();
 
 /**
  * pi 事件 → pier 事件名（capability "coarse"——pi 无工具/权限粒度, 仅回合级
@@ -61,8 +66,7 @@ export function piDetect(): boolean {
  * 三 PIER_ 环境变量缺任一即静默 no-op。
  */
 export function buildPiExtensionSource(): string {
-  return `// pier-agent-status:v1 (managed by Pier). Safe to leave in place.
-// ${MARKER}
+  return `// ${MARKER}. Safe to leave in place.
 // Deliberately no top-level import declarations: electron-vite scans
 // template literals in main's bundle and can otherwise inject an invalid
 // CommonJS shim into the ESM output. process.getBuiltinModule is a runtime
@@ -152,10 +156,6 @@ export default function PierAgentStatus(pi) {
 `;
 }
 
-function isManagedByPier(raw: string): boolean {
-  return raw.includes(MARKER);
-}
-
 async function readExtensionRaw(path: string): Promise<string | null> {
   try {
     return await readFile(path, "utf8");
@@ -165,8 +165,8 @@ async function readExtensionRaw(path: string): Promise<string | null> {
 }
 
 /**
- * 整文件 overwrite；仅当文件缺失或已由 pier 管理时才写。非托管文件一律
- * 跳过并 warn, 不覆盖。
+ * 整文件 overwrite；仅当文件缺失或已由 pier 管理时才写。
+ * 非托管 / 更高世代跳过。
  */
 export async function installPiExtension(
   path: string = piExtensionPath()
@@ -174,19 +174,11 @@ export async function installPiExtension(
   if (!piDetect()) {
     return;
   }
-  const existing = await readExtensionRaw(path);
-  if (existing !== null && !isManagedByPier(existing)) {
-    console.warn(
-      "[agent-hooks:pi] existing unmanaged extension file, skip install:",
-      path
-    );
-    return;
-  }
-  const next = buildPiExtensionSource();
-  if (existing === next) {
-    return;
-  }
-  await atomicWriteFile(path, next);
+  await writeManagedPluginFile({
+    path,
+    source: buildPiExtensionSource(),
+    label: AGENT_ID,
+  });
 }
 
 /** 仅删除含 marker 的托管文件；非托管/不存在时零副作用。 */
@@ -194,7 +186,7 @@ export async function uninstallPiExtension(
   path: string = piExtensionPath()
 ): Promise<void> {
   const existing = await readExtensionRaw(path);
-  if (existing === null || !isManagedByPier(existing)) {
+  if (existing === null || !isPierManagedPluginContent(existing)) {
     return;
   }
   await rm(path, { force: true });

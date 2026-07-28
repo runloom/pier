@@ -1,12 +1,14 @@
 import { existsSync } from "node:fs";
-import { chmod, mkdir, readFile, rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
-  atomicWriteFile,
-  pierHookCommandWithStdinSessionId,
-} from "./shared.ts";
+  isPierManagedPluginContent,
+  pierManagedPluginMarker,
+  writeManagedPluginFile,
+} from "./managed-plugin-file.ts";
+import { pierHookCommandWithStdinSessionId } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 
 const AGENT_ID: AgentKind = "cline";
@@ -39,7 +41,7 @@ const AGENT_ID: AgentKind = "cline";
  * 安装/卸载，互不影响）。uninstall 只删含 marker 的文件。
  */
 
-const CLINE_MARKER = "pier-agent-status:v1 (managed by Pier)";
+const CLINE_MARKER = pierManagedPluginMarker();
 
 const CLINE_EVENTS: ReadonlyArray<{
   fileName: string;
@@ -73,10 +75,6 @@ ${pierHookCommandWithStdinSessionId(AGENT_ID, pierEvent, nativeEvent)}
 `;
 }
 
-function isManagedScript(content: string): boolean {
-  return content.includes(CLINE_MARKER);
-}
-
 async function readScriptFile(path: string): Promise<string | null> {
   try {
     return await readFile(path, "utf8");
@@ -86,8 +84,7 @@ async function readScriptFile(path: string): Promise<string | null> {
 }
 
 /**
- * 部署单个事件脚本：非托管同名文件绝不覆盖（warn 跳过）；字节相同不落盘
- * （幂等重装零写入）；写入后 chmod 0o755。
+ * 部署单个事件脚本：非托管/更高世代跳过；字节相同不落盘；写入后 chmod 0o755。
  */
 async function deployEventScript(
   dir: string,
@@ -96,19 +93,12 @@ async function deployEventScript(
 ): Promise<void> {
   const path = join(dir, fileName);
   const source = buildClineHookScript(pierEvent, fileName);
-  const existing = await readScriptFile(path);
-  if (existing !== null && !isManagedScript(existing)) {
-    console.warn(
-      `[agent-hooks:${AGENT_ID}] unmanaged hook file present, skip install:`,
-      path
-    );
-    return;
-  }
-  if (existing !== source) {
-    await mkdir(dir, { recursive: true });
-    await atomicWriteFile(path, source);
-  }
-  await chmod(path, 0o755);
+  await writeManagedPluginFile({
+    path,
+    source,
+    label: AGENT_ID,
+    mode: 0o755,
+  });
 }
 
 /**
@@ -121,7 +111,7 @@ async function removeEventScript(dir: string, fileName: string): Promise<void> {
   if (existing === null) {
     return;
   }
-  if (!isManagedScript(existing)) {
+  if (!isPierManagedPluginContent(existing)) {
     console.warn(
       `[agent-hooks:${AGENT_ID}] unmanaged hook file present, skip uninstall:`,
       path
