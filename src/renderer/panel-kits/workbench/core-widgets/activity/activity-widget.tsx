@@ -63,10 +63,7 @@ function projectPathForActivity(
   return projectPathFromContext(descriptors[activity.panelId]?.context);
 }
 
-export function ActivityWidget({
-  size,
-  visible = true,
-}: WorkbenchWidgetComponentProps) {
+export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
   const t = useT();
   const activities = useForegroundActivityStore((s) => s.activities);
   const taskRuns = useTaskRunsStore((s) => s.snapshot);
@@ -147,7 +144,6 @@ export function ActivityWidget({
       )}
       showMeta={showMeta}
       taskRuns={taskRuns}
-      visible={visible}
     />
   );
 

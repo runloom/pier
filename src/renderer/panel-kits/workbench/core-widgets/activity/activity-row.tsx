@@ -97,14 +97,12 @@ export function ActivityRow({
   projectPath,
   showMeta,
   taskRuns,
-  visible = true,
 }: {
   activity: ForegroundActivity;
   onReveal: () => void;
   projectPath?: string | undefined;
   showMeta: boolean;
   taskRuns: TaskRunsSnapshot;
-  visible?: boolean;
 }) {
   const t = useT();
   const title = rowTitle(activity, t);
@@ -116,14 +114,15 @@ export function ActivityRow({
     activity.kind === "agent" ? activity.stateStartedAt : undefined;
   const [nowMs, setNowMs] = useState(() => Date.now());
 
+  // 持续时间计时器（每秒刷新）
+  // 原依赖 [visible] 会导致 visible=false 时完全不计时（这是本次 bug）
+  // 改为 [] 依赖，保证计时器始终运行（仅在组件挂载时启动一次）
+  // 即使 widget 可见性状态有小问题，活动总览打开时也能正常显示时间
   useEffect(() => {
-    if (!visible) {
-      return;
-    }
     setNowMs(Date.now());
     const id = setInterval(() => setNowMs(Date.now()), DURATION_TICK_MS);
     return () => clearInterval(id);
-  }, [visible]);
+  }, []);
 
   const locale =
     typeof document !== "undefined" &&
