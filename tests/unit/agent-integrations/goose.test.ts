@@ -288,6 +288,56 @@ describe("install/uninstallGooseHooks (文件 IO)", () => {
     warnSpy.mockRestore();
   });
 
+  it("磁盘更高世代 manifest 时不降级 hooks.json", async () => {
+    const mod = await withDetectTrue();
+    const { pierManagedPluginMarker, PIER_MANAGED_PLUGIN_GENERATION } =
+      await import(
+        "../../../src/main/services/agents/integrations/managed-plugin-file.ts"
+      );
+    const dir = await mkdtemp(join(tmpdir(), "pier-goose-io-test-"));
+    const pluginDir = join(dir, "plugins", "pier");
+    const settingsPath = join(dir, "settings.json");
+    const hooksDir = join(pluginDir, "hooks");
+    await mkdir(hooksDir, { recursive: true });
+    const high = PIER_MANAGED_PLUGIN_GENERATION + 2;
+    const highManifest = `${JSON.stringify(
+      {
+        description: `Pier hooks (${pierManagedPluginMarker(high)})`,
+        name: "pier",
+        version: "9.9.9",
+      },
+      null,
+      2
+    )}\n`;
+    await writeFile(join(pluginDir, "plugin.json"), highManifest, "utf8");
+    const highHooks = `${JSON.stringify(
+      {
+        hooks: {
+          SessionStart: [
+            {
+              hooks: [
+                {
+                  type: "command",
+                  command: `_pier_hook_gen=pier-hook-gen=${high}; echo high-gen; [ -x "\${PIER_AGENT_HOOKS_DIR}/emit" ] && true || true`,
+                },
+              ],
+            },
+          ],
+        },
+      },
+      null,
+      2
+    )}\n`;
+    await writeFile(join(hooksDir, "hooks.json"), highHooks, "utf8");
+    await mod.installGooseHooks(pluginDir, settingsPath);
+    expect(await readFile(join(pluginDir, "plugin.json"), "utf8")).toBe(
+      highManifest
+    );
+    expect(await readFile(join(hooksDir, "hooks.json"), "utf8")).toBe(
+      highHooks
+    );
+  });
+
   it("卸载非托管插件目录不删除, 发出告警", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-goose-io-test-"));
     const pluginDir = join(dir, "plugins", "pier");

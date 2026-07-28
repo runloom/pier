@@ -31,14 +31,14 @@ import {
   passthroughKeyPressForKey,
 } from "./terminal-composer-passthrough.ts";
 import { TerminalComposerView } from "./terminal-composer-view.tsx";
-import {
-  requestComposerCursorProbe,
-  useTuiSendBlock,
-} from "./tui-input-focus.ts";
 import { useTerminalComposerAttachments } from "./use-terminal-composer-attachments.ts";
 import { useTerminalComposerClose } from "./use-terminal-composer-close.ts";
 import { useTerminalComposerEscape } from "./use-terminal-composer-escape.ts";
 import { useTerminalComposerSend } from "./use-terminal-composer-send.ts";
+import {
+  requestComposerCursorProbe,
+  useTuiInputFocusRisk,
+} from "./use-tui-input-focus-risk.ts";
 
 export {
   resetTerminalComposerDraftsForTests,
@@ -171,10 +171,10 @@ export function TerminalComposer({
     t,
   });
 
-  const sendBlock = useTuiSendBlock(panelId, isActive);
-  // 硬门禁只认光标探针（unfocused）；不认 FA waiting。
-  const canSend =
-    !disabled && sendBlock === null && attachments.canSendWithDraft(value);
+  const inputFocusRisk = useTuiInputFocusRisk(panelId, isActive);
+  // 光标探针只提示风险，不禁用发送：发送时会实时恢复焦点，恢复失败再由用户确认。
+  // 真正禁用按钮的只有终端不可用或草稿/附件本身不可发送。
+  const canSend = !disabled && attachments.canSendWithDraft(value);
 
   useLayoutEffect(() => {
     const root = rootRef.current;
@@ -355,7 +355,6 @@ export function TerminalComposer({
       onCloseRef.current();
     },
     panelId,
-    sendBlock,
     t,
     value,
   });
@@ -394,8 +393,11 @@ export function TerminalComposer({
       shiftKey: event.shiftKey,
     });
     if (keyPress !== null) {
-      // 光标门禁期间截住空草稿 Enter 透传（避免误触 TUI dialog）。
-      if (sendBlock !== null && keyPress.keycode === APPKIT_KEYCODE.return) {
+      // 存在聚焦风险时截住空草稿 Enter 透传（避免误触 TUI dialog）。
+      if (
+        inputFocusRisk !== null &&
+        keyPress.keycode === APPKIT_KEYCODE.return
+      ) {
         event.preventDefault();
         return;
       }
@@ -466,7 +468,6 @@ export function TerminalComposer({
     <TerminalComposerView
       agentKind={agentKind}
       attachments={attachments.attachments}
-      blockReason={sendBlock}
       bottomOffsetPx={bottomOffsetPx}
       canSend={canSend}
       compact={compact}
@@ -474,6 +475,7 @@ export function TerminalComposer({
       disabled={disabled}
       editorRef={editorRef}
       hasAttachments={hasAttachments}
+      inputFocusRisk={inputFocusRisk}
       onChromeMouseDown={focusInputFromChrome}
       onDragOver={attachments.onDragOver}
       onDrop={attachments.onDrop}

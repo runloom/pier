@@ -31,7 +31,18 @@ export function installWorkspaceRendererCommandListener(): () => void {
     }
     if (isPanelTransferCommand(envelope.command.type)) {
       runPanelTransferRendererCommand(envelope).catch((error) => {
-        console.error("[workspace] panelTransfer command failed:", error);
+        const command = envelope.command as {
+          transferId?: unknown;
+          type: string;
+        };
+        const parts = [
+          "[workspace] panelTransfer command failed:",
+          `type=${command.type}`,
+        ];
+        if (typeof command.transferId === "string") {
+          parts.push(`transferId=${command.transferId}`);
+        }
+        console.error(...parts, error);
       });
       return;
     }

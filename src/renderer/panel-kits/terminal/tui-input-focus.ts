@@ -1,16 +1,29 @@
-import { AGENT_CATALOG } from "@shared/agent-catalog.ts";
-import { useEffect, useState } from "react";
+import { getAgentCatalogEntry } from "@shared/agent-catalog.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
+import type { AgentActivity } from "@shared/contracts/foreground-activity.ts";
+import type { TerminalCursorVisibility } from "@shared/contracts/terminal.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
+import { recordCursorVisibility } from "./tui-cursor-semantics.ts";
 
 /**
  * TUI 输入聚焦：cursor-visible 探针 +（可选）catalog 恢复键。
  *
- * 发送门禁与自动恢复键职责拆分：
- * - **门禁**：凡 agent 面板都探针；光标 hidden → 未聚焦输入框 → 硬拦发送。
- *   不认 FA waiting；busy 也探（思考中无光标时同样不可发）。
- * - **恢复键**：仅 catalog 声明了 `inputFocusKey` 的 agent（crush=Tab 等）
- *   在 ensure 路径注入；未声明的只探针、不注键。
- * - unknown 不当作失焦（不拦、不注键当失败）。
+ * **两级适用面**（缺一不提示、不恢复）：
+ * 1. 先验：catalog 声明 `inputFocusProbe: "cursor"`（人工核实过「硬件光标可见
+ *    ⇔ 输入框聚焦」，当前 grok / crush）。部分现代 TUI 自绘光标、首帧后恒
+ *    `?25l`（实测 claude / gemini / opencode / droid / cursor-agent 聚焦时同样
+ *    隐藏硬件光标），对它们探针恒 hidden。
+ * 2. 会话观察：当前 agent 活动会话观察到过 `visible`（见
+ *    `tui-cursor-semantics.ts`）。上游改版翻转语义时最坏退化成「只提示或放行」，
+ *    不会据此禁用发送。
+ *
+ * 判定不变量（两处消费者必须一致）：
+ * - `visible` → 可发送，并 arm 该面板。
+ * - `hidden` + 已 arm → 标记「可能未聚焦」；运行中也观察，但不禁用发送按钮。
+ * - `hidden` + 未 arm → 放行（语义证据不足，不能据此限制功能）。
+ * - `unknown`（surface 未建 / addon 未加载）→ **放行**，不得当作失焦。
+ * - 恢复键：另需 `inputFocusKey`（crush=Tab）才在 ensure 路径注入，且只在已 arm
+ *   时注入（避免对语义未知的会话盲发 toggle 键）。
  */
 
 /** 恢复键确认轮询：TUI 处理按键 → 发 ?25h → 模式位更新是异步回路。 */
@@ -23,35 +36,56 @@ function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function agentInputFocusKey(agentId: string | undefined) {
+/** 该 agent 的硬件光标是否可作聚焦信号（catalog 逐一核实后声明的先验）。 */
+export function agentUsesCursorProbe(agentId: AgentKind | undefined): boolean {
   if (agentId === undefined) {
-    return;
+    return false;
   }
-  return AGENT_CATALOG.find((candidate) => candidate.id === agentId)
-    ?.inputFocusKey;
+  return getAgentCatalogEntry(agentId)?.inputFocusProbe === "cursor";
 }
 
-async function doEnsureTuiInputFocus(panelId: string): Promise<boolean> {
-  const activity = useForegroundActivityStore.getState().activities[panelId];
-  if (activity?.kind !== "agent") {
-    return false;
-  }
-
+/** 读一次探针并登记会话观察；返回读数与该面板是否已 arm。 */
+export async function probeCursor(
+  panelId: string,
+  agentId: AgentKind,
+  activitySpawnedAt: number
+): Promise<{
+  armed: boolean;
+  currentSession: boolean;
+  visibility: TerminalCursorVisibility;
+}> {
   const visibility = await window.pier.terminal.cursorVisible(panelId);
-  if (visibility === "visible") {
-    return true;
+  const currentSession = isCurrentAgentSession({
+    activitySpawnedAt,
+    agentId,
+    panelId,
+  });
+  if (!currentSession) {
+    // 异步探针返回时面板已经重启或换了智能体：旧结果不得污染新会话。
+    return { armed: false, currentSession, visibility };
   }
-  if (visibility === "unknown") {
-    // 读不到：不把「读不到」当失焦，也不注键。
+  const armed = recordCursorVisibility({
+    activitySpawnedAt,
+    agentId,
+    panelId,
+    visibility,
+  });
+  return { armed, currentSession, visibility };
+}
+
+async function tryRecoveryKey(input: {
+  activitySpawnedAt: number;
+  agentId: AgentKind;
+  panelId: string;
+}): Promise<boolean> {
+  const { activitySpawnedAt, agentId, panelId } = input;
+  if (!canInjectRecoveryKey(input)) {
     return false;
   }
-
-  // hidden：仅白名单可确定性恢复；其余 agent 无恢复键 → 明确失败。
-  const focusKey = agentInputFocusKey(activity.agentId);
+  const focusKey = getAgentCatalogEntry(agentId)?.inputFocusKey;
   if (!focusKey) {
     return false;
   }
-
   const sendResult = await window.pier.terminal.sendKeyPress({
     keycode: focusKey.keycode,
     panelId,
@@ -65,126 +99,104 @@ async function doEnsureTuiInputFocus(panelId: string): Promise<boolean> {
   const deadline = Date.now() + CONFIRM_TIMEOUT_MS;
   while (Date.now() < deadline) {
     await sleep(CONFIRM_POLL_INTERVAL_MS);
-    const confirmed = await window.pier.terminal.cursorVisible(panelId);
-    if (confirmed === "visible") {
+    if (!canInjectRecoveryKey(input)) {
+      return false;
+    }
+    const confirmed = await probeCursor(panelId, agentId, activitySpawnedAt);
+    if (confirmed.visibility === "visible") {
       return true;
     }
-    if (confirmed === "unknown") {
-      return false;
+    // 读不到：与门禁同一不变量，不当作失焦 → 放行（键已发，不再重试）。
+    if (confirmed.visibility === "unknown") {
+      return true;
     }
   }
   return false;
 }
 
+function canInjectRecoveryKey(input: {
+  activitySpawnedAt: number;
+  agentId: AgentKind;
+  panelId: string;
+}): boolean {
+  const activity =
+    useForegroundActivityStore.getState().activities[input.panelId];
+  return (
+    activity?.kind === "agent" &&
+    activity.agentId === input.agentId &&
+    activity.spawnedAt === input.activitySpawnedAt &&
+    activity.status !== "waiting"
+  );
+}
+
+function isCurrentAgentSession(input: {
+  activitySpawnedAt: number;
+  agentId: AgentKind;
+  panelId: string;
+}): boolean {
+  const activity =
+    useForegroundActivityStore.getState().activities[input.panelId];
+  return (
+    activity?.kind === "agent" &&
+    activity.agentId === input.agentId &&
+    activity.spawnedAt === input.activitySpawnedAt
+  );
+}
+
+async function doEnsureTuiInputFocus(
+  panelId: string,
+  activity: AgentActivity
+): Promise<boolean> {
+  const { agentId, spawnedAt } = activity;
+  // 未核实等价关系的 agent：探针无意义，直接放行（行为等同无探针）。
+  if (!agentUsesCursorProbe(agentId)) {
+    return true;
+  }
+
+  const { armed, currentSession, visibility } = await probeCursor(
+    panelId,
+    agentId,
+    spawnedAt
+  );
+  if (!currentSession) {
+    return false;
+  }
+  if (visibility === "visible") {
+    return true;
+  }
+  // 读不到 / 会话内证据不足：不限制发送（与风险提示共用同一不变量）。
+  if (visibility === "unknown" || !armed) {
+    return true;
+  }
+
+  return await tryRecoveryKey({
+    activitySpawnedAt: spawnedAt,
+    agentId,
+    panelId,
+  });
+}
+
 export function ensureTuiInputFocus(panelId: string): Promise<boolean> {
-  const existing = inflight.get(panelId);
+  const activity = useForegroundActivityStore.getState().activities[panelId];
+  if (activity?.kind !== "agent") {
+    return Promise.resolve(false);
+  }
+  // 互斥绑定活动会话而非面板：同一面板快速重启时，不能复用上一进程的恢复结果。
+  const sessionKey = `${panelId}\u0000${activity.agentId}\u0000${activity.spawnedAt}`;
+  const existing = inflight.get(sessionKey);
   if (existing) {
     return existing;
   }
-  const pending = doEnsureTuiInputFocus(panelId).finally(() => {
-    if (inflight.get(panelId) === pending) {
-      inflight.delete(panelId);
+  const pending = doEnsureTuiInputFocus(panelId, activity).finally(() => {
+    if (inflight.get(sessionKey) === pending) {
+      inflight.delete(sessionKey);
     }
   });
-  inflight.set(panelId, pending);
+  inflight.set(sessionKey, pending);
   return pending;
 }
 
 /** 测试专用：清空 in-flight 状态。 */
 export function resetTuiInputFocusForTests(): void {
   inflight.clear();
-}
-
-// ---------------------------------------------------------------------------
-// 发送阻断态（增强输入 UI：仅光标探针，全 agent）
-// ---------------------------------------------------------------------------
-
-/** 唯一阻断原因：TUI 输入光标不可见（未聚焦输入框）。 */
-export type TuiSendBlockReason = "unfocused";
-
-/** 阻断态探针轮询间隔（仅增强输入挂载期间运行）。 */
-const SEND_BLOCK_POLL_INTERVAL_MS = 500;
-
-/** 点终端后立刻重探：用户点输入区复原焦点，不必干等 500ms 轮询。 */
-type CursorProbeListener = (panelId: string) => void;
-const cursorProbeListeners = new Set<CursorProbeListener>();
-
-/**
- * 请求对指定面板立刻刷新发送门禁探针（例如用户点了终端内容区）。
- * 鼠标已把 TUI 焦点点回输入框时，用于尽快解除「未聚焦输入框」。
- */
-export function requestComposerCursorProbe(panelId: string): void {
-  for (const listener of cursorProbeListeners) {
-    listener(panelId);
-  }
-}
-
-/** 测试专用：清空探针订阅。 */
-export function resetComposerCursorProbeListenersForTests(): void {
-  cursorProbeListeners.clear();
-}
-
-/**
- * 增强输入发送阻断原因（null = 可发送）。
- *
- * **只**认 cursor-visible：
- * - hidden → `unfocused`（硬禁用发送 + 提示 + 截空 Enter）
- * - unknown → 不阻断（禁止把「读不到」当「失焦」）
- * - 全 agent、含 busy（思考中无光标也应拦）
- * - 后台 tab 停轮询；点终端会 `requestComposerCursorProbe` 立刻再探
- *
- * 用户复原路径：点终端里的输入框 → TUI 聚焦 → 探针 visible → 可发送。
- */
-export function useTuiSendBlock(
-  panelId: string,
-  isPanelActive: boolean
-): TuiSendBlockReason | null {
-  const kind = useForegroundActivityStore(
-    (state) => state.activities[panelId]?.kind
-  );
-  const isAgent = kind === "agent";
-  const probeable = isAgent && isPanelActive;
-  const [probeHidden, setProbeHidden] = useState(false);
-
-  useEffect(() => {
-    if (!probeable) {
-      setProbeHidden(false);
-      return;
-    }
-    let cancelled = false;
-    const poll = async () => {
-      try {
-        const visibility = await window.pier.terminal.cursorVisible(panelId);
-        if (!cancelled) {
-          setProbeHidden(visibility === "hidden");
-        }
-      } catch {
-        if (!cancelled) {
-          setProbeHidden(false);
-        }
-      }
-    };
-    poll().catch(() => undefined);
-    const timer = window.setInterval(() => {
-      poll().catch(() => undefined);
-    }, SEND_BLOCK_POLL_INTERVAL_MS);
-
-    const onDemand: CursorProbeListener = (targetPanelId) => {
-      if (targetPanelId === panelId) {
-        poll().catch(() => undefined);
-      }
-    };
-    cursorProbeListeners.add(onDemand);
-
-    return () => {
-      cancelled = true;
-      window.clearInterval(timer);
-      cursorProbeListeners.delete(onDemand);
-    };
-  }, [panelId, probeable]);
-
-  if (!probeable) {
-    return null;
-  }
-  return probeHidden ? "unfocused" : null;
 }

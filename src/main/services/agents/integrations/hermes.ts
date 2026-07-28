@@ -1,14 +1,19 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import {
+  isPierManagedPluginContent,
+  pierManagedPluginMarker,
+  writeManagedPluginFile,
+} from "./managed-plugin-file.ts";
 import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 
 const AGENT_ID: AgentKind = "hermes";
 const PLUGIN_NAME = "pier-status";
-const MARKER = "pier-agent-status:v1 (managed by Pier)";
+const MARKER = pierManagedPluginMarker();
 
 /**
  * hermes 事件 → pier 事件名（capability "coarse"——无真回合结束信号）。
@@ -198,10 +203,6 @@ def register(ctx: Any) -> None:
 `;
 }
 
-function isManagedByPier(raw: string): boolean {
-  return raw.includes(MARKER);
-}
-
 async function readFileRaw(path: string): Promise<string | null> {
   try {
     return await readFile(path, "utf8");
@@ -222,14 +223,30 @@ async function pluginManagedState(): Promise<{
   }
   return {
     present: true,
-    managed: isManagedByPier(manifest) && isManagedByPier(init),
+    managed:
+      isPierManagedPluginContent(manifest) && isPierManagedPluginContent(init),
   };
 }
 
-async function writePluginFiles(): Promise<void> {
-  await mkdir(hermesPluginDir(), { recursive: true });
-  await atomicWriteFile(hermesManifestPath(), buildHermesPluginManifest());
-  await atomicWriteFile(hermesInitPath(), buildHermesPluginInit());
+/**
+ * 写入 manifest + init。任一侧 non-managed / 更高世代 → false（勿改 config enable）。
+ */
+async function writePluginFiles(): Promise<boolean> {
+  const results = await Promise.all([
+    writeManagedPluginFile({
+      path: hermesManifestPath(),
+      source: buildHermesPluginManifest(),
+      label: AGENT_ID,
+    }),
+    writeManagedPluginFile({
+      path: hermesInitPath(),
+      source: buildHermesPluginInit(),
+      label: AGENT_ID,
+    }),
+  ]);
+  return results.every(
+    (result) => result === "written" || result === "unchanged"
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -395,7 +412,11 @@ export async function installHermesPlugin(
     );
     return;
   }
-  await writePluginFiles();
+  const pluginsOk = await writePluginFiles();
+  if (!pluginsOk) {
+    // 更高世代或非托管插件文件：不写 plugins.enabled，避免混世代半启用。
+    return;
+  }
   if (next !== raw) {
     await atomicWriteFile(configPath, next);
   }

@@ -1,8 +1,9 @@
 /**
- * 内联 hook 脚本 ≡ 宿主纯函数（stripAgentPromptMarkup + 噪声表 + 硬截断）。
+ * 安装脚本 derive-claude-session-title ≡ 宿主 strip 子集。
  *
- * hook-stdin-commands.ts 里的 pierClaudeUserPromptSubmitCommand 内联了一段
- * node -e 脚本，用来给 Claude 自己的会话列表写标题。它只复刻 strip +
+ * Claude UserPromptSubmit 标题派生落在 userData
+ * `derive-claude-session-title`（agent-hooks-install 启动时装），
+ * hooks 命令只经 `${PIER_AGENT_HOOKS_DIR}/…` 调用。脚本只复刻 strip +
  * 寒暄挡 + 硬截断这个**便宜子集**（不复刻规则层的首句/前缀/名词化——
  * 那些是 Pier tab 走的 FA 通道，不是这里）。
  *
@@ -10,15 +11,23 @@
  * 或 MAX 常量时，两边同时变，漂移即红灯。
  */
 
+import { spawnSync } from "node:child_process";
+import { rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import {
   GREETING_ONLY_SOURCE,
   MAX_AGENT_SESSION_TITLE_LENGTH,
 } from "@shared/agent-session-title/index.ts";
-import { describe, expect, it } from "vitest";
+import { afterEach, describe, expect, it } from "vitest";
+import {
+  deriveClaudeSessionTitleScriptPath,
+  installAgentHooksEmitScript,
+} from "../../src/main/services/agents/agent-hooks-install.ts";
 
 /**
- * 宿主侧的 strip 子集——与内联脚本里的逻辑保持一致。
- * 这里不 import stripAgentPromptMarkup，因为内联脚本只复刻了它的一个
+ * 宿主侧的 strip 子集——与 derive-claude-session-title 里的逻辑保持一致。
+ * 这里不 import stripAgentPromptMarkup，因为脚本只复刻了它的一个
  * 子集（包装标签 / 图片 / 围栏），我们验证的是这个子集，不是全量。
  */
 function hostSubset(raw: string): string | null {
@@ -47,6 +56,23 @@ function hostSubset(raw: string): string | null {
   return t;
 }
 
+function scriptSessionTitle(scriptPath: string, prompt: string): string | null {
+  // 直接执行（#!/usr/bin/env node），与 hooks 调用方式一致
+  const r = spawnSync(scriptPath, [], {
+    input: JSON.stringify({ prompt }),
+    encoding: "utf8",
+  });
+  expect(r.status).toBe(0);
+  const out = r.stdout.trim();
+  if (!out) {
+    return null;
+  }
+  const body = JSON.parse(out) as {
+    hookSpecificOutput?: { sessionTitle?: string };
+  };
+  return body.hookSpecificOutput?.sessionTitle ?? null;
+}
+
 const CORPUS = [
   "帮我修一下 parser 崩溃",
   "hi",
@@ -60,17 +86,21 @@ const CORPUS = [
 ];
 
 describe("hook inline parity", () => {
+  let baseDir: string | null = null;
+
+  afterEach(async () => {
+    if (baseDir) {
+      await rm(baseDir, { force: true, recursive: true });
+      baseDir = null;
+    }
+  });
+
   it("host subset matches expected for each corpus entry", () => {
-    // 这是自洽性测试：hostSubset 就是内联脚本复刻的子集本身。
-    // 它的价值在于：改 GREETING_ONLY_SOURCE 或 MAX 常量时，这里会
-    // 提醒你同步改内联脚本（它们从 shared 插值，应该自动一致）。
     for (const input of CORPUS) {
       const result = hostSubset(input);
-      // 寒暄必须被挡掉。
       if (/^(hi|你好|继续|ok|thanks)$/i.test(input.trim())) {
         expect(result).toBeNull();
       }
-      // 截断后的结果不超过 MAX。
       if (result) {
         expect(result.length).toBeLessThanOrEqual(
           MAX_AGENT_SESSION_TITLE_LENGTH
@@ -79,8 +109,19 @@ describe("hook inline parity", () => {
     }
   });
 
+  it("installed derive-claude-session-title matches hostSubset on CORPUS", async () => {
+    const { mkdtemp } = await import("node:fs/promises");
+    baseDir = await mkdtemp(join(tmpdir(), "pier-title-parity-"));
+    const userData = join(baseDir, "userData");
+    const hooksHome = join(baseDir, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const script = deriveClaudeSessionTitleScriptPath(hooksHome);
+    for (const input of CORPUS) {
+      expect(scriptSessionTitle(script, input)).toBe(hostSubset(input));
+    }
+  });
+
   it("GREETING_ONLY_SOURCE covers the inline script's greeting set", () => {
-    // 内联脚本从 shared 插值这张表——这里锁死表里有这些词。
     const source = GREETING_ONLY_SOURCE;
     expect(source).toContain("hi");
     expect(source).toContain("你好");

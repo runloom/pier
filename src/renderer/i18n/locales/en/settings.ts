@@ -484,7 +484,7 @@ export const settings = {
     statusHooks: {
       label: "Agent status alerts",
       description:
-        "Show live agent run or wait status in panels. Turning this off stops automatic status reporting and “Needs you” system notifications. Running sessions may still report until reopened.",
+        "Show live agent run or wait status in panels. Turning this off removes Pier’s status reporting and “Needs you” system notifications. Multiple Pier versions share one on-device hook runtime (newer wins); quitting the app does not uninstall hooks. If Codex asks to review hooks, choose Trust all and continue — usually once is enough.",
       failed: "Could not update agent status alerts",
     },
   },

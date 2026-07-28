@@ -206,11 +206,17 @@ export function createPanelTransferService(
     };
     queueMicrotask(() => {
       startClaimRunner(live).catch((error: unknown) => {
+        const message =
+          error instanceof Error ? error.message : String(error);
+        console.error(
+          "[panelTransfer] claim runner rejected",
+          `transferId=${live.transferId}`,
+          `panelId=${live.offer.panel.panelId}`,
+          `component=${live.offer.panel.componentId}`,
+          message
+        );
         live.claim?.deferred.resolve(
-          panelTransferFailure(
-            "transfer_failed",
-            error instanceof Error ? error.message : String(error)
-          )
+          panelTransferFailure("transfer_failed", message)
         );
       });
     });
@@ -286,10 +292,18 @@ export function createPanelTransferService(
       rememberTombstone(live.transferId, result);
       claim.deferred.resolve(result);
     } catch (error) {
-      const result = panelTransferFailure(
-        "transfer_failed",
-        error instanceof Error ? error.message : String(error)
+      const message = error instanceof Error ? error.message : String(error);
+      // Production packages rarely have DevTools open — main log is the
+      // durable trail for cross-window transfer failures (console + crash logs).
+      console.error(
+        "[panelTransfer] claim failed",
+        `transferId=${live.transferId}`,
+        `panelId=${live.offer.panel.panelId}`,
+        `component=${live.offer.panel.componentId}`,
+        `targetKind=${claim.kind}`,
+        message
       );
+      const result = panelTransferFailure("transfer_failed", message);
       rememberTombstone(live.transferId, result);
       claim.deferred.resolve(result);
     } finally {

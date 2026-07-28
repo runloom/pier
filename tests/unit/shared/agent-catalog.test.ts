@@ -48,6 +48,21 @@ describe("AGENT_CATALOG 完整性", () => {
     expect(oc?.iconId).toBeUndefined();
     expect(oc?.faviconDomain).toBeUndefined();
   });
+  it("光标探针只在逐一核实的 agent 上声明（grok / crush）", () => {
+    const probed = AGENT_CATALOG.filter(
+      (e) => e.inputFocusProbe === "cursor"
+    ).map((e) => e.id);
+    // 自绘光标 TUI（claude / gemini / opencode / droid / cursor-agent 实测
+    // 恒 ?25l）声明探针会持续误报，故必须逐一核实后才加白。
+    expect(probed).toEqual(["grok", "crush"]);
+  });
+  it("声明 inputFocusKey 的 agent 必须同时声明光标探针", () => {
+    for (const e of AGENT_CATALOG) {
+      if (e.inputFocusKey) {
+        expect(e.inputFocusProbe, `${e.id} 有恢复键但无探针`).toBe("cursor");
+      }
+    }
+  });
   it("带参 launchCmd 与 detectCmd 分离（kiro/hermes/command-code）", () => {
     expect(getAgentCatalogEntry("kiro")?.detectCmd).toBe("kiro-cli");
     expect(getAgentCatalogEntry("kiro")?.launchCmd).toBe("kiro-cli chat --tui");

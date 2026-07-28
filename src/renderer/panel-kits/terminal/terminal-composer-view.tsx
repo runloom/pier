@@ -23,7 +23,7 @@ import {
   TERMINAL_COMPOSER_GAP_PX,
 } from "./terminal-composer-helpers.ts";
 import { SendButtonWithBlockHint } from "./terminal-composer-send-button.tsx";
-import type { TuiSendBlockReason } from "./tui-input-focus.ts";
+import type { TuiInputFocusRisk } from "./use-tui-input-focus-risk.ts";
 
 const COMPOSER_ATTACH_CHORD = "Mod+Shift+KeyA";
 
@@ -63,7 +63,6 @@ export interface TerminalComposerViewProps {
   /** Foreground agent kind for skill suggest (`/` / `$`). */
   agentKind?: string | null;
   attachments: readonly ComposerAttachment[];
-  blockReason: TuiSendBlockReason | null;
   bottomOffsetPx: number;
   canSend: boolean;
   compact: boolean;
@@ -71,6 +70,7 @@ export interface TerminalComposerViewProps {
   disabled: boolean;
   editorRef: Ref<StructuredComposerEditorHandle>;
   hasAttachments: boolean;
+  inputFocusRisk: TuiInputFocusRisk | null;
   onChromeMouseDown: (event: ReactMouseEvent<HTMLDivElement>) => void;
   onDragOver: (event: DragEvent) => void;
   onDrop: (event: DragEvent) => void;
@@ -92,7 +92,7 @@ export interface TerminalComposerViewProps {
 export function TerminalComposerView({
   agentKind = null,
   attachments,
-  blockReason,
+  inputFocusRisk,
   bottomOffsetPx,
   canSend,
   compact,
@@ -236,9 +236,9 @@ export function TerminalComposerView({
 
         {compact ? (
           <SendButtonWithBlockHint
-            blockReason={blockReason}
             canSend={canSend}
             compact
+            inputFocusRisk={inputFocusRisk}
             onSend={onSend}
           />
         ) : (
@@ -256,9 +256,9 @@ export function TerminalComposerView({
               {t("terminal.composer.keyHint", { attach: attachShortcut })}
             </span>
             <SendButtonWithBlockHint
-              blockReason={blockReason}
               canSend={canSend}
               compact={false}
+              inputFocusRisk={inputFocusRisk}
               onSend={onSend}
             />
           </div>

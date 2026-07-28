@@ -1,10 +1,15 @@
 import { existsSync } from "node:fs";
-import { mkdir, readFile, rm } from "node:fs/promises";
+import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { dirname, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import {
+  isPierManagedPluginContent,
+  pierManagedPluginMarker,
+  writeManagedPluginFile,
+} from "./managed-plugin-file.ts";
 import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
-import { atomicWriteFile, transformJsonConfig } from "./shared.ts";
+import { transformJsonConfig } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
@@ -33,7 +38,7 @@ const PLUGIN_FILE = "pier-agent-status.js";
 const LEGACY_PLUGIN_FILE = "opencode-agent-status.js";
 
 /** 托管标记：写在插件源码内, install 幂等比对 + uninstall 删除前必查。 */
-const PLUGIN_MARKER = "pier-agent-status:v1 (managed by Pier)";
+const PLUGIN_MARKER = pierManagedPluginMarker();
 
 /** 自动发现目录内的插件路径：跟随实际存在的 config 根目录。 */
 export function opencodePluginPath(): string {
@@ -226,10 +231,6 @@ export const PierAgentStatus = () => {
 `;
 }
 
-function isManagedPlugin(content: string): boolean {
-  return content.includes(PLUGIN_MARKER);
-}
-
 async function readPluginFile(path: string): Promise<string | null> {
   try {
     return await readFile(path, "utf8");
@@ -239,27 +240,19 @@ async function readPluginFile(path: string): Promise<string | null> {
 }
 
 /**
- * 部署插件文件：非托管同名文件绝不覆盖（console.warn 跳过）；字节相同
- * 不落盘（幂等重装零写入）。返回 true 表示可以（或已经）安全部署——
- * 供 config 注册步骤判断是否继续写 plugin 数组。
+ * 部署插件文件：非托管/更高世代跳过；字节相同不落盘。
+ * 返回 true 表示可以（或已经）安全部署——供 config 注册步骤继续。
  */
 async function deployPluginFile(
   pluginPath: string,
   source: string
 ): Promise<boolean> {
-  const existing = await readPluginFile(pluginPath);
-  if (existing !== null && !isManagedPlugin(existing)) {
-    console.warn(
-      `[agent-hooks:${AGENT_ID}] unmanaged plugin file present, skip install:`,
-      pluginPath
-    );
-    return false;
-  }
-  if (existing !== source) {
-    await mkdir(dirname(pluginPath), { recursive: true });
-    await atomicWriteFile(pluginPath, source);
-  }
-  return true;
+  const result = await writeManagedPluginFile({
+    path: pluginPath,
+    source,
+    label: AGENT_ID,
+  });
+  return result !== "skipped-unmanaged" && result !== "skipped-newer";
 }
 
 function pluginArray(config: Record<string, unknown>): unknown[] {
@@ -313,7 +306,7 @@ async function cleanupOpencodeLegacy(configPath: string): Promise<void> {
     await transformJsonConfig(configPath, withoutPierOpencodePlugin, AGENT_ID);
   }
   const legacy = await readPluginFile(legacyPluginPath());
-  if (legacy !== null && isManagedPlugin(legacy)) {
+  if (legacy !== null && isPierManagedPluginContent(legacy)) {
     await rm(legacyPluginPath(), { force: true });
   }
 }
@@ -339,7 +332,7 @@ export async function uninstallOpencodeHooks(
   if (existing === null) {
     return;
   }
-  if (!isManagedPlugin(existing)) {
+  if (!isPierManagedPluginContent(existing)) {
     console.warn(
       `[agent-hooks:${AGENT_ID}] unmanaged plugin file present, skip uninstall:`,
       pluginPath

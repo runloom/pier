@@ -53,12 +53,3 @@ export function isPierHookCommand(command: unknown): boolean {
     typeof command === "string" && command.includes(PIER_AGENT_HOOKS_DIR_MARK)
   );
 }
-
-/** shell 双引号转义（hook 内联 node -e 路径等）。 */
-export function shellDoubleQuote(value: string): string {
-  return value
-    .replaceAll("\\", "\\\\")
-    .replaceAll('"', '\\"')
-    .replaceAll("$", "\\$")
-    .replaceAll("`", "\\`");
-}

@@ -39,7 +39,7 @@ export const settingsNotifications = {
   saveFailed: "Could not save notification settings",
   hooksOffTitle: "Agent status alerts are off",
   hooksOffBody:
-    "“Needs you” system notifications will not appear until agent status alerts are enabled. Running agent sessions may still report until reopened.",
+    "“Needs you” system notifications and status reporting stay off until you re-enable Agent status alerts in Settings → Agents.",
   permission: {
     deniedTitle: "System notifications are blocked",
     deniedBody:

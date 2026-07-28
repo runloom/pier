@@ -212,6 +212,10 @@ export class FileEditorController {
     return release;
   }
 
+  getPanelSource(panelId: string): FilesDocumentPanelSource | null {
+    return this.#documents.getPanelSource(panelId);
+  }
+
   closePanel(input: {
     hasOtherOpenInstance: boolean;
     panelId: string;

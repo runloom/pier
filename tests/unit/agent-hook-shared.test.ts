@@ -1,9 +1,15 @@
+import { spawnSync } from "node:child_process";
 import { describe, expect, it } from "vitest";
+import { PIER_HOOK_COMMAND_GENERATION } from "../../src/main/services/agents/agent-hooks-install.ts";
 import {
   isPierHookCommand,
+  maxPierHookGenerationInSettings,
+  pierClaudeUserPromptSubmitCommand,
   pierHookCommand,
+  pierHookCommandWithStdinSessionId,
   pierHookCommandWithStdinStatusDispatch,
   removePierTextBlock,
+  transformPierHooksUnlessNewer,
   upsertPierTextBlock,
   withoutPierNestedHooks,
   withPierNestedHooks,
@@ -94,7 +100,26 @@ describe("withPierNestedHooks（matcher 约定）", () => {
     expect(cmd).toContain("tool_name");
     expect(cmd).toContain("turnId");
     expect(cmd).toContain("transcriptPath");
-    expect(cmd).toContain("pier-hook-gen=4");
+    expect(cmd).toContain(`pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}`);
+  });
+
+  it("stdin hook 命令不嵌 Electron 绝对路径（跨 worktree 信任稳定）", () => {
+    const cmds = [
+      pierHookCommandWithStdinSessionId("codex", "Stop", "Stop"),
+      pierHookCommandWithStdinStatusDispatch("codex", "Stop", "Stop", [
+        { nativeStatus: "completed", pierEvent: "TurnCompleted" },
+      ]),
+      pierClaudeUserPromptSubmitCommand("claude"),
+    ];
+    // 拼接避免 biome noTemplateCurlyInString / noUnusedTemplateLiteral 互搏。
+    const hooksDirRef = ["$", "{PIER_AGENT_HOOKS_DIR}"].join("");
+    for (const cmd of cmds) {
+      expect(cmd).toContain(`${hooksDirRef}/extract-stdin-meta`);
+      expect(cmd).not.toContain("ELECTRON_RUN_AS_NODE");
+      expect(cmd).not.toContain(process.execPath);
+      expect(cmd).not.toMatch(/\/Users\/|\/home\/|\/Applications\//);
+    }
+    expect(cmds[2]).toContain(`${hooksDirRef}/derive-claude-session-title`);
   });
 
   it("幂等 + 保留用户条目 + 卸载还原", () => {
@@ -125,5 +150,80 @@ describe("文本块注入（TOML/YAML marker 模式）", () => {
     const removed = removePierTextBlock(v1, "kimi");
     expect(removed).toBe(raw);
     expect(removePierTextBlock(raw, "kimi")).toBe(raw);
+  });
+});
+
+describe("transformPierHooksUnlessNewer（世代门控）", () => {
+  function nestedPierSettings(gen: number): Record<string, unknown> {
+    return {
+      hooks: {
+        Stop: [
+          {
+            hooks: [
+              {
+                type: "command",
+                command: `_pier_hook_gen=pier-hook-gen=${gen}; [ -x "\${PIER_AGENT_HOOKS_DIR}/emit" ] && "\${PIER_AGENT_HOOKS_DIR}/emit" || true`,
+              },
+            ],
+          },
+        ],
+      },
+    };
+  }
+
+  it("磁盘世代更高时保留原引用（防旧 worktree 降级）", () => {
+    const settings = nestedPierSettings(PIER_HOOK_COMMAND_GENERATION + 1);
+    let rewriteCalls = 0;
+    const out = transformPierHooksUnlessNewer(settings, (s) => {
+      rewriteCalls += 1;
+      return { ...s, rewritten: true };
+    });
+    expect(rewriteCalls).toBe(0);
+    expect(out).toBe(settings);
+    expect(maxPierHookGenerationInSettings(settings)).toBe(
+      PIER_HOOK_COMMAND_GENERATION + 1
+    );
+  });
+
+  it("磁盘世代 ≤ 当前时执行 rewrite，且新命令无 execPath", () => {
+    const settings = nestedPierSettings(PIER_HOOK_COMMAND_GENERATION - 1);
+    const out = transformPierHooksUnlessNewer(settings, () =>
+      withPierNestedHooks(
+        {},
+        {
+          agentId: "codex",
+          capability: "full",
+          configPath: () => "/dev/null",
+          runtime: { stopAuthority: "advisory" },
+          events: [{ nativeEvent: "Stop", pierEvent: "Stop" }],
+        }
+      )
+    );
+    expect(out).not.toBe(settings);
+    const cmd = (
+      out.hooks as Record<string, Array<{ hooks: Array<{ command: string }> }>>
+    ).Stop?.[0]?.hooks?.[0]?.command;
+    expect(cmd).toContain(`pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}`);
+    expect(cmd).not.toContain("ELECTRON_RUN_AS_NODE");
+    expect(cmd).not.toContain(process.execPath);
+    expect(maxPierHookGenerationInSettings(out)).toBe(
+      PIER_HOOK_COMMAND_GENERATION
+    );
+  });
+});
+
+describe("stdin hook 缺脚本时不阻断 agent", () => {
+  it("PIER_AGENT_HOOKS_DIR 指向空目录时 hook 命令 exit 0", () => {
+    const cmd = pierHookCommandWithStdinSessionId("codex", "Stop", "Stop");
+    const r = spawnSync("/bin/sh", ["-c", cmd], {
+      input: JSON.stringify({ prompt: "hello", session_id: "s1" }),
+      encoding: "utf8",
+      env: {
+        ...process.env,
+        PIER_AGENT_HOOKS_DIR:
+          "/tmp/pier-hooks-missing-dir-that-should-not-exist",
+      },
+    });
+    expect(r.status).toBe(0);
   });
 });

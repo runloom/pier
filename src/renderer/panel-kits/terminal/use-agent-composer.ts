@@ -65,8 +65,9 @@ export function useAgentComposer({
     }
     setComposerOpen(true);
     setComposerFocusRequest((value) => value + 1);
-    // crush 等 TUI 输入框可能处于失焦态（其失焦时 paste/Enter 会被静默
-    // 丢弃）：打开增强输入时按探针+白名单恢复，保证随后发送必达。
+    // crush 等**声明了光标探针**的 TUI 输入框可能处于失焦态（其失焦时
+    // paste/Enter 会被静默丢弃）：打开增强输入时按探针+白名单尝试恢复，降低
+    // 随后发送丢失的风险。未声明探针的 agent（claude 等）该调用是 no-op。
     ensureTuiInputFocus(panelId).catch(() => undefined);
   }, [panelId]);
   const closeComposer = useCallback(() => {

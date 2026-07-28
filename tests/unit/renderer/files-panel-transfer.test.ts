@@ -16,7 +16,9 @@ import { FilesMutationSuspendCoordinator } from "@plugins/builtin/files/renderer
 import {
   clearFilesPanelTransferBookkeepingForTests,
   createFilesPanelTransferRegistration,
+  describeFilesPanelSourceParams,
   type FilesPanelTransferDeps,
+  resolveFilesPanelTransferSource,
 } from "@plugins/builtin/files/renderer/files-panel-transfer.ts";
 import {
   clearFilesPanelTransferViewSeedsForTests,
@@ -356,6 +358,143 @@ describe("files-panel-transfer", () => {
       })
     ).rejects.toThrow(/missing/i);
     expect(deps.resumeTransferMutations).toHaveBeenCalled();
+  });
+
+  it("allows params-only transfer for empty project shell panels", async () => {
+    const deps = createDeps();
+    const reg = createFilesPanelTransferRegistration(deps);
+    if (reg.kind !== "custom") {
+      throw new Error("expected custom");
+    }
+
+    const prepared = await reg.prepareSource({
+      panelId: "panel-project-shell",
+      params: {
+        context: {
+          contextId: "ctx-1",
+          projectRootPath: ROOT,
+          updatedAt: 1,
+        },
+      },
+      transferId: TRANSFER_ID,
+    });
+
+    expect(prepared).toEqual({ drafts: [] });
+    expect(deps.suspendTransferMutations).not.toHaveBeenCalled();
+    await expect(
+      reg.stageTarget({
+        panelId: "panel-project-shell",
+        params: {},
+        prepared,
+        transferId: TRANSFER_ID,
+      })
+    ).resolves.toBeUndefined();
+  });
+
+  it("recovers source from panel registry when params.source is missing", async () => {
+    const document = diskDocument({ dirty: false });
+    const deps = createDeps({
+      documents: new Map([[document.id, document]]),
+    });
+    deps.getPanelSource = vi.fn(() => ({
+      kind: "disk" as const,
+      path: PATH,
+      root: ROOT,
+    }));
+    const reg = createFilesPanelTransferRegistration(deps);
+    if (reg.kind !== "custom") {
+      throw new Error("expected custom");
+    }
+
+    const prepared = await reg.prepareSource({
+      panelId: "panel-recovered",
+      params: { pinned: true },
+      transferId: TRANSFER_ID,
+    });
+
+    expect(deps.getPanelSource).toHaveBeenCalledWith("panel-recovered");
+    const state = parseFilesPanelTransferPreparedState(prepared.state);
+    expect(state).not.toBeNull();
+    expect(state!.sourceDocumentId).toBe(document.id);
+    expect(state!.targetSource).toMatchObject({
+      kind: "disk",
+      path: PATH,
+      root: ROOT,
+    });
+  });
+
+  it("recovers source from registry when params.source fails schema", async () => {
+    const document = diskDocument({ dirty: false });
+    const deps = createDeps({
+      documents: new Map([[document.id, document]]),
+    });
+    deps.getPanelSource = vi.fn(() => ({
+      kind: "disk" as const,
+      path: PATH,
+      root: ROOT,
+    }));
+    const reg = createFilesPanelTransferRegistration(deps);
+    if (reg.kind !== "custom") {
+      throw new Error("expected custom");
+    }
+
+    const prepared = await reg.prepareSource({
+      panelId: "panel-corrupt-recover",
+      params: {
+        // Absolute path fails nonEmptyFileRootRelativePathSchema.
+        source: { kind: "disk", path: "/absolute/bad", root: ROOT },
+      },
+      transferId: TRANSFER_ID,
+    });
+
+    expect(deps.getPanelSource).toHaveBeenCalledWith("panel-corrupt-recover");
+    const state = parseFilesPanelTransferPreparedState(prepared.state);
+    expect(state).not.toBeNull();
+    expect(state!.sourceDocumentId).toBe(document.id);
+    expect(state!.targetSource).toMatchObject({
+      kind: "disk",
+      path: PATH,
+      root: ROOT,
+    });
+  });
+
+  it("still rejects corrupt non-null source params that cannot be recovered", async () => {
+    const deps = createDeps();
+    deps.getPanelSource = vi.fn(() => null);
+    const reg = createFilesPanelTransferRegistration(deps);
+    if (reg.kind !== "custom") {
+      throw new Error("expected custom");
+    }
+
+    await expect(
+      reg.prepareSource({
+        panelId: "panel-corrupt",
+        params: {
+          source: { kind: "disk", path: "/absolute/bad", root: ROOT },
+        },
+        transferId: TRANSFER_ID,
+      })
+    ).rejects.toThrow(/invalid panel source params.*kind=disk.*schema=fail/i);
+  });
+
+  it("describes source params without body text for diagnostics", () => {
+    expect(describeFilesPanelSourceParams({})).toContain("source=missing");
+    expect(
+      describeFilesPanelSourceParams({
+        source: { kind: "disk", path: PATH, root: ROOT },
+      })
+    ).toMatch(/schema=ok/);
+    expect(
+      describeFilesPanelSourceParams({
+        source: { kind: "disk", path: "/abs", root: ROOT },
+      })
+    ).toMatch(/schema=fail/);
+    expect(
+      resolveFilesPanelTransferSource({
+        panelId: "p1",
+        params: {},
+      })
+    ).toEqual({ kind: "empty" });
   });
 
   it("stages dual dirty same-path targets with explicit document ids", async () => {

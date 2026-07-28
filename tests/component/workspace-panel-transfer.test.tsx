@@ -247,6 +247,7 @@ describe("workspace panel transfer (component)", () => {
     __panelTransferInternals.setActiveDrag({
       capability: "movable",
       componentId: "welcome",
+      params: {},
       panelId: "welcome-1",
       transferId: TRANSFER_ID,
     });
@@ -259,6 +260,7 @@ describe("workspace panel transfer (component)", () => {
     __panelTransferInternals.setActiveDrag({
       capability: "movable",
       componentId: "welcome",
+      params: {},
       panelId: "welcome-1",
       transferId: TRANSFER_ID,
     });
