@@ -47,6 +47,7 @@ import {
   SidebarProvider,
 } from "@/components/primitives/sidebar.tsx";
 import { useT } from "@/i18n/use-t.ts";
+import { useBlockingKeybindingScope } from "@/lib/keybindings/use-blocking-keybinding-scope.ts";
 import {
   collectLibraryFilters,
   filterLibraryItems,
@@ -59,6 +60,8 @@ const SIDEBAR_STYLE: CSSProperties = {
   "--sidebar-width": "10rem",
   "--sidebar": "none",
 } as CSSProperties;
+
+const WORKBENCH_LIBRARY_KEYBINDING_SCOPE = "overlay:workbench-library" as const;
 
 const CATEGORY_ICONS: Record<WorkbenchWidgetCategory, LucideIcon> = {
   agent: Bot,
@@ -232,6 +235,8 @@ export function WorkbenchLibraryDialog({
       setQuery("");
     }
   }, [open]);
+
+  useBlockingKeybindingScope(open, WORKBENCH_LIBRARY_KEYBINDING_SCOPE);
 
   const filters = useMemo(() => collectLibraryFilters(items), [items]);
   // 选中的插件分类可能随插件禁用消失 → 回退"全部"（对齐设置弹窗的 fallback）

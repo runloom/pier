@@ -153,6 +153,33 @@ describe("keybinding engine", () => {
     );
   });
 
+  it("blocks global chords while an overlay scope is active", () => {
+    // Use unique chords so cumulative registerDefaults does not poison later cases.
+    keybindingRegistry.registerDefaults([
+      { commandId: "pier.test.globalClose", keys: "Mod+KeyY" },
+      {
+        commandId: "pier.test.overlayAction",
+        keys: "Mod+KeyU",
+        scope: "overlay:settings-dialog",
+      },
+    ]);
+    const closeChord = parseChord("Mod+KeyY", false);
+    const overlayChord = parseChord("Mod+KeyU", false);
+    const withSettings: ResolveScopeState = {
+      activePanelComponent: "terminal",
+      overlayStack: ["overlay:settings-dialog"],
+    };
+    expect(keybindingRegistry.resolve(closeChord, GLOBAL_SCOPE)).toBe(
+      "pier.test.globalClose"
+    );
+    // Overlay is blocking: global close must not fall through.
+    expect(keybindingRegistry.resolve(closeChord, withSettings)).toBeNull();
+    // Overlay-scoped bindings still resolve (no double "overlay:" prefix).
+    expect(keybindingRegistry.resolve(overlayChord, withSettings)).toBe(
+      "pier.test.overlayAction"
+    );
+  });
+
   it("returns null for unregistered chord", () => {
     keybindingRegistry.registerDefaults([
       { commandId: "pier.test.action", keys: "Mod+KeyW" },

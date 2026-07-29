@@ -5,6 +5,7 @@ import { afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import { SettingsDialog } from "@/pages/settings/settings-dialog.tsx";
+import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import {
   registerTerminalElementWebOverlay,
@@ -35,6 +36,7 @@ describe("SettingsDialog input routing", () => {
     vi.unstubAllGlobals();
     resetTerminalInputRoutingForTests();
     useSettingsDialogStore.setState({ isOpen: false });
+    useKeybindingScope.setState({ overlayStack: [] });
   });
 
   it("keeps the default settings backdrop without hiding native terminal surfaces", () => {
@@ -94,6 +96,31 @@ describe("SettingsDialog input routing", () => {
       })
     );
     expect(applyHostSnapshot).toHaveBeenCalled();
+  });
+
+  it("blocks global keybindings while the settings dialog is open", () => {
+    vi.stubGlobal("matchMedia", () => ({
+      addEventListener: vi.fn(),
+      matches: false,
+      removeEventListener: vi.fn(),
+    }));
+    Object.defineProperty(window, "pier", {
+      configurable: true,
+      value: { terminal: { applyHostSnapshot: vi.fn() } },
+    });
+    useSettingsDialogStore.setState({ isOpen: true });
+
+    const view = render(<SettingsDialog />);
+
+    expect(useKeybindingScope.getState().overlayStack).toContain(
+      "overlay:settings-dialog"
+    );
+
+    view.unmount();
+
+    expect(useKeybindingScope.getState().overlayStack).not.toContain(
+      "overlay:settings-dialog"
+    );
   });
 
   it("does not autofocus the first settings navigation item on open", () => {

@@ -29,6 +29,7 @@ import {
   SidebarProvider,
 } from "@/components/primitives/sidebar.tsx";
 import { useT } from "@/i18n/use-t.ts";
+import { useBlockingKeybindingScope } from "@/lib/keybindings/use-blocking-keybinding-scope.ts";
 import {
   getPluginSettingsPage,
   getPluginSettingsPageRevision,
@@ -57,6 +58,8 @@ import {
 import { usePluginRegistryStore } from "@/stores/plugin-registry.store.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 import { requestTerminalWebFocus } from "@/stores/terminal-input-routing-slice.ts";
+
+const SETTINGS_KEYBINDING_SCOPE = "overlay:settings-dialog" as const;
 
 const SIDEBAR_STYLE: CSSProperties = {
   "--sidebar-width": "10rem",
@@ -135,6 +138,9 @@ export function SettingsDialog() {
     plugins,
     i18next.language
   );
+
+  // Modal shell: block global layout chords (⌘W close panel, etc.) while open.
+  useBlockingKeybindingScope(open, SETTINGS_KEYBINDING_SCOPE);
 
   useEffect(() => {
     if (!open) {

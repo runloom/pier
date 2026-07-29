@@ -9,7 +9,11 @@ import {
 import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import { type ReactNode, useCallback, useLayoutEffect, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
+import { useBlockingKeybindingScope } from "@/lib/keybindings/use-blocking-keybinding-scope.ts";
 import type { ResolvedWorkbenchWidget } from "./workbench-merge.ts";
+
+const WORKBENCH_SETTINGS_KEYBINDING_SCOPE =
+  "overlay:workbench-widget-settings" as const;
 
 interface WorkbenchSettingsDialogProps {
   onOpenChange: (open: boolean) => void;
@@ -58,6 +62,11 @@ export function WorkbenchSettingsDialog({
         ? t(presentedWidget.title)
         : presentedWidget.title;
   }
+
+  useBlockingKeybindingScope(
+    widget !== null,
+    WORKBENCH_SETTINGS_KEYBINDING_SCOPE
+  );
 
   return (
     <Dialog onOpenChange={onOpenChange} open={widget !== null}>
