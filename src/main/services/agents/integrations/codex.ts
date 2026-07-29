@@ -62,7 +62,8 @@ const codexConfigPath = () => join(codexHomeDir(), "hooks.json");
  * 需要在 codex 内确认信任该 hooks.json，不代表集成出错。
  *
  * 当前事件集合以官方 hooks 文档与 openai/codex 源码为准。SessionEnd 已正式
- * 发布。PermissionRequest 输入没有请求 ID，且 hooks 没有用户批准、拒绝或
+ * 发布。SessionEnd 的 `timeout` 必须 ≤3s（官方 cap；写 5 会 clamp 并警告）。
+ * PermissionRequest 输入没有请求 ID，且 hooks 没有用户批准、拒绝或
  * 取消后的结果事件，因此不进入 waiting；具名交互只归 transcript 对账器所有。
  *
  * **补装**：PreCompact/PostCompact 官方源码级存在, 先前版本漏装。
@@ -135,6 +136,9 @@ const CODEX_SPEC: NestedJsonIntegrationSpec = {
       buildCommand: codexStandardCommand("SessionEnd", "SessionEnd"),
       nativeEvent: "SessionEnd",
       pierEvent: "SessionEnd",
+      // Codex SessionEnd：官方默认 ~1s、上限 3s；写 >3 会 clamp 并打警告。
+      // 见 developers.openai.com/codex/hooks（SessionEnd timeout cap）。
+      timeout: 3,
     },
   ],
 };

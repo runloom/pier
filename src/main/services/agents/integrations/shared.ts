@@ -162,6 +162,9 @@ export async function transformJsonConfig(
 // qwen-code 等）共用, 差异仅在配置路径/事件表/matcher 约定。
 // ---------------------------------------------------------------------------
 
+/** 嵌套 hooks.json 工厂默认 timeout（多数 Claude 系为「秒」）。 */
+export const DEFAULT_NESTED_HOOK_TIMEOUT = 5;
+
 interface NestedHookEventBase {
   /** 工具类事件的 matcher；undefined = 不写 matcher 字段。 */
   matcher?: string;
@@ -169,6 +172,12 @@ interface NestedHookEventBase {
   nativeEvent: string;
   /** 安装时写入命令的 pier 规范事件名（activityStatusForHookEvent 词汇）。 */
   pierEvent: string;
+  /**
+   * 写入 hook 配置的 `timeout` 数值。单位由各 agent 运行时解释：
+   * Claude / Codex / Grok / Droid 等多为**秒**；Gemini / Qwen / Aug 为**毫秒**。
+   * 未设则用 `spec.timeoutSeconds ?? {@link DEFAULT_NESTED_HOOK_TIMEOUT}`。
+   */
+  timeout?: number;
 }
 
 interface NestedSingleHookEventSpec extends NestedHookEventBase {
@@ -200,7 +209,19 @@ export interface NestedJsonIntegrationSpec {
   runtime: Omit<AgentRuntimeSemantics, "emittedMappings">;
   /** 兼容宿主设置这些变量时不执行本提供方的 Pier hook。 */
   skipWhenEnvPresent?: readonly string[];
+  /**
+   * 事件未单独声明 `timeout` 时的默认值（字段名历史遗留；单位因 agent 而异）。
+   * 例：Claude/Codex 默认秒；Gemini/Qwen 传 10_000 表示毫秒。
+   */
   timeoutSeconds?: number;
+}
+
+/** 解析嵌套 hook 写入配置的 timeout：事件级 > spec 默认 > 工厂默认。 */
+export function resolveNestedHookTimeout(
+  event: NestedHookEventBase,
+  spec: Pick<NestedJsonIntegrationSpec, "timeoutSeconds">
+): number {
+  return event.timeout ?? spec.timeoutSeconds ?? DEFAULT_NESTED_HOOK_TIMEOUT;
 }
 
 interface NestedHookMatcher {
@@ -340,7 +361,7 @@ export function withPierNestedHooks(
             command,
             spec.skipWhenEnvPresent
           ),
-          timeout: spec.timeoutSeconds ?? 5,
+          timeout: resolveNestedHookTimeout(event, spec),
           type: "command",
         },
       ],

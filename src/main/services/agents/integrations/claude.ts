@@ -43,6 +43,8 @@ function claudeStandardCommand(
  *   （不闪 error, error 态只留给回合级失败）。
  * - PermissionDenied 是自动权限模式分类器，不能伪装成人工拒绝结果。
  * - PreCompact：长压缩期间无其他 hook, 不装则被 30min TTL 误衰减。
+ * - SessionEnd timeout：工厂默认 5s。Claude 默认预算 ~1.5s，settings 可抬高至
+ *   60s；5s 在合法范围内，不会像 Codex 那样被 clamp 警告。
  */
 const CLAUDE_SPEC: NestedJsonIntegrationSpec = {
   agentId: "claude",
