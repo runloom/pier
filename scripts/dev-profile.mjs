@@ -22,6 +22,7 @@ import { createRequire } from "node:module";
 import { homedir } from "node:os";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
+import { withoutEsbuildBinaryOverride } from "./esbuild-process-env.mjs";
 
 const require = createRequire(import.meta.url);
 
@@ -429,8 +430,8 @@ export function withDevProfileEnv(
   baseEnv = process.env,
   profile = resolveDevProfile({ env: baseEnv })
 ) {
-  return {
-    ...baseEnv,
+  const env = {
+    ...withoutEsbuildBinaryOverride(baseEnv),
     PIER_DEV_PROFILE: profile.profile,
     PIER_DEV_PORT: String(profile.devPort),
     PIER_HMR_PORT: String(profile.hmrPort),
@@ -438,6 +439,7 @@ export function withDevProfileEnv(
     ELECTRON_RENDERER_URL: profile.rendererUrl,
     ELECTRON_USER_DATA_DIR: profile.electronUserDataDir,
   };
+  return env;
 }
 
 /**

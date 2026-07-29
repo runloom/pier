@@ -11,6 +11,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import {
+  type ElectronApplication,
   _electron as electron,
   expect,
   type Locator,
@@ -23,6 +24,35 @@ const PROJECT_ROOT = join(import.meta.dirname, "..", "..");
 const OUT_MAIN = join(PROJECT_ROOT, "out", "main", "index.js");
 const PIER_CLI = join(PROJECT_ROOT, "bin", "pier.mjs");
 const execFileAsync = promisify(execFile);
+// Native menu selection crosses Chromium ↔ Electron main in the harness.
+// Keep the real interaction within the RAIL 100ms response budget while the
+// inline button path remains under the stricter 50ms long-task budget.
+const NATIVE_MENU_MUTATION_LONG_TASK_BUDGET_MS = 100;
+// The 10,000-line fixture intentionally forces a full worker projection and
+// real Git mutation; keep continuity assertions strict while budgeting that
+// one large-document commit separately from normal 50ms interactions.
+const LARGE_FILE_MUTATION_LONG_TASK_BUDGET_MS = 300;
+
+async function autoPickNextNativeMenuAction(
+  application: ElectronApplication,
+  actionId: string
+): Promise<void> {
+  await application.evaluate(({ ipcMain }, nextActionId) => {
+    const state = globalThis as typeof globalThis & {
+      __pierE2EMenuAction?: string;
+      __pierE2EMenuHandlerInstalled?: boolean;
+    };
+    state.__pierE2EMenuAction = nextActionId;
+    if (state.__pierE2EMenuHandlerInstalled) {
+      return;
+    }
+    state.__pierE2EMenuHandlerInstalled = true;
+    ipcMain.removeHandler("pier:menu:popup");
+    ipcMain.handle("pier:menu:popup", async () => ({
+      actionId: state.__pierE2EMenuAction ?? null,
+    }));
+  }, actionId);
+}
 
 function createTemporaryDirectory(prefix: string): string {
   return realpathSync(mkdtempSync(join(tmpdir(), prefix)));
@@ -38,10 +68,132 @@ function reviewTreeFileItem(
   name: RegExp,
   group: "staged" | "unstaged" = "unstaged"
 ): Locator {
-  const items = page
+  const items = activeReviewSurface(page)
     .getByTestId("git-review-tree")
     .getByRole("treeitem", { name });
   return group === "staged" ? items.first() : items.last();
+}
+
+function activeReviewSurface(page: Page): Locator {
+  return page.locator('[data-git-review-surface][aria-hidden="false"]:visible');
+}
+
+async function selectReviewSurface(
+  page: Page,
+  surface: "index" | "staged"
+): Promise<void> {
+  const tabs = activeReviewSurface(page)
+    .getByTestId("git-review-surface-switcher")
+    .getByRole("tab");
+  await tabs.nth(surface === "staged" ? 0 : 1).click();
+  await expect(activeReviewSurface(page)).toHaveAttribute(
+    "data-git-review-surface",
+    surface
+  );
+  await expect(
+    page.locator("[data-git-review-navigation-surface]")
+  ).toHaveAttribute("data-git-review-navigation-surface", "");
+}
+
+async function waitForReviewMutationRelease(page: Page): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(() => {
+          const surface = document.querySelector<HTMLElement>(
+            '[data-git-review-surface][aria-hidden="false"]'
+          );
+          if (
+            surface === null ||
+            surface.querySelector(
+              '[data-git-review-mutation-blocked="true"]'
+            ) !== null
+          ) {
+            return false;
+          }
+          return (
+            surface.querySelector(
+              '[data-git-review-mutation-blocked="false"], [data-git-review-document-content="empty"]'
+            ) !== null
+          );
+        }),
+      { timeout: 30_000 }
+    )
+    .toBe(true);
+}
+
+async function markReviewSurfaceIdentity(
+  page: Page,
+  surface: "index" | "staged",
+  token: string,
+  requestedScrollTop = 0
+): Promise<number> {
+  const root = page.locator(
+    `[data-git-review-surface="${surface}"] [data-testid="pierre-diff-root"]`
+  );
+  await expect(root).toBeAttached({ timeout: 30_000 });
+  await root.evaluate((element, marker) => {
+    element.dataset.e2eSurfaceIdentity = marker;
+  }, token);
+  if (requestedScrollTop > 0) {
+    const scroller = root.locator(".cv-scrollbar");
+    await expect
+      .poll(
+        () =>
+          scroller.evaluate((element) =>
+            Boolean(
+              element.scrollHeight > element.clientHeight &&
+                element.clientHeight > 0
+            )
+          ),
+        { timeout: 30_000 }
+      )
+      .toBe(true);
+    // Use a real user wheel gesture so the product clears any pending semantic
+    // navigation before the test captures its reading anchor. Programmatic
+    // scroll is intentionally not user intent and may be superseded.
+    await scroller.hover();
+    await page.mouse.wheel(0, requestedScrollTop);
+    await expect
+      .poll(() => scroller.evaluate((element) => element.scrollTop), {
+        timeout: 10_000,
+      })
+      .toBeGreaterThan(0);
+  }
+  return root.evaluate(async (element) => {
+    const scroller = element.querySelector<HTMLElement>(".cv-scrollbar");
+    if (!scroller) {
+      throw new Error("Review surface scroller is unavailable");
+    }
+    await new Promise<void>((resolve) => {
+      let remainingFrames = 8;
+      const settle = () => {
+        remainingFrames -= 1;
+        if (remainingFrames === 0) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(settle);
+      };
+      requestAnimationFrame(settle);
+    });
+    return scroller.scrollTop;
+  });
+}
+
+async function reviewSurfaceIdentity(
+  page: Page,
+  surface: "index" | "staged"
+): Promise<{ readonly scrollTop: number; readonly token: string | undefined }> {
+  return page
+    .locator(
+      `[data-git-review-surface="${surface}"] [data-testid="pierre-diff-root"]`
+    )
+    .evaluate((element) => ({
+      scrollTop:
+        element.querySelector<HTMLElement>(".cv-scrollbar")?.scrollTop ?? 0,
+      token: element.dataset.e2eSurfaceIdentity,
+    }));
 }
 
 /**
@@ -60,6 +212,99 @@ async function clickReviewTreeFile(
   await item.click({ force: true });
 }
 
+async function expandReviewTreeDirectory(
+  page: Page,
+  name: RegExp,
+  group: "staged" | "unstaged"
+): Promise<void> {
+  const directories = activeReviewSurface(page)
+    .getByTestId("git-review-tree")
+    .getByRole("treeitem", { name });
+  const directory =
+    group === "staged" ? directories.first() : directories.last();
+  await expect(directory).toBeVisible({ timeout: 30_000 });
+  if ((await directory.getAttribute("aria-expanded")) !== "true") {
+    await directory.click({ force: true });
+    await expect(directory).toHaveAttribute("aria-expanded", "true");
+  }
+}
+
+async function expandReviewTreeGroup(
+  page: Page,
+  group: "staged" | "unstaged"
+): Promise<void> {
+  const name =
+    group === "staged"
+      ? /Staged Changes|已暂存更改/u
+      : /Unstaged Changes|Changes|更改/u;
+  const root = activeReviewSurface(page)
+    .getByTestId("git-review-tree")
+    .getByRole("treeitem", { name })
+    .first();
+  await expect(root).toBeVisible({ timeout: 30_000 });
+  if ((await root.getAttribute("aria-expanded")) !== "true") {
+    await root.click({ force: true });
+    await expect(root).toHaveAttribute("aria-expanded", "true");
+  }
+}
+
+async function waitForReviewPathViewportSettle(
+  page: Page,
+  path: string
+): Promise<void> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(async (expectedPath) => {
+          const sample = (): number | null => {
+            const surface = document.querySelector<HTMLElement>(
+              '[data-git-review-surface][aria-hidden="false"]'
+            );
+            const scroller = surface?.querySelector<HTMLElement>(
+              '[data-testid="pierre-diff-root"] .cv-scrollbar'
+            );
+            if (!(surface && scroller)) {
+              return null;
+            }
+            const viewport = scroller.getBoundingClientRect();
+            const matching = [...surface.querySelectorAll("diffs-container")]
+              .filter((container) =>
+                `${container.textContent ?? ""}${container.shadowRoot?.textContent ?? ""}`.includes(
+                  expectedPath
+                )
+              )
+              .sort(
+                (left, right) =>
+                  Math.abs(left.getBoundingClientRect().top - viewport.top) -
+                  Math.abs(right.getBoundingClientRect().top - viewport.top)
+              );
+            const target = matching[0];
+            const line = target?.shadowRoot?.querySelector("[data-line]");
+            return (line ?? target)?.getBoundingClientRect().top ?? null;
+          };
+          const before = sample();
+          await new Promise<void>((resolve) => {
+            let frames = 0;
+            const next = () => {
+              frames += 1;
+              if (frames >= 8) {
+                resolve();
+                return;
+              }
+              requestAnimationFrame(next);
+            };
+            requestAnimationFrame(next);
+          });
+          const after = sample();
+          return before !== null && after !== null
+            ? Math.abs(after - before)
+            : null;
+        }, path),
+      { timeout: 5000 }
+    )
+    .toBeLessThanOrEqual(0.5);
+}
+
 /** `.bin` uses kind copy ("Binary binary"); generic fallback stays "Binary file". */
 const BINARY_STATE_NOTICE = /Binary (?:file|binary)|二进制文件/u;
 
@@ -74,6 +319,8 @@ const REVIEW_LARGE_FIRST_PAINT_MS_BUDGET = process.env.CI ? 8000 : 5000;
 
 /** Already-loaded file navigation (tree click → viewport text). */
 const REVIEW_LOADED_NAVIGATION_MS_BUDGET = process.env.CI ? 1500 : 500;
+/** Device-pixel rounding only; visible post-materialization movement fails. */
+const REVIEW_NAVIGATION_ANCHOR_JITTER_PX = 0.5;
 
 /**
  * Strip the review group-root prefix (`Changes/…`, `Staged Changes/…`, zh
@@ -106,7 +353,10 @@ async function createReviewRepository(root: string): Promise<void> {
   );
   const largeSource = Array.from(
     { length: 10_000 },
-    (_, index) => `export const line${String(index).padStart(5, "0")} = 0;`
+    (_, index) =>
+      `export const line${String(index).padStart(5, "0")} = 0;${
+        index === 10 ? ` // ${"long-line-".repeat(120)}` : ""
+      }`
   );
   writeFileSync(
     join(sourceDirectory, "large.ts"),
@@ -217,9 +467,12 @@ async function isDiffTextInViewport(
   text: string
 ): Promise<boolean> {
   return page
-    .locator("diffs-container")
+    .locator('[data-git-review-surface][aria-hidden="false"] diffs-container')
     .evaluateAll((containers, expectedText) => {
-      const scroller = document.querySelector<HTMLElement>(
+      const surface = document.querySelector<HTMLElement>(
+        '[data-git-review-surface][aria-hidden="false"]'
+      );
+      const scroller = surface?.querySelector<HTMLElement>(
         '[data-testid="pierre-diff-root"] .cv-scrollbar'
       );
       if (!scroller) {
@@ -235,6 +488,849 @@ async function isDiffTextInViewport(
         );
       });
     }, text);
+}
+
+interface NavigationAnchorProbeResult {
+  blankFrames: number;
+  done: boolean;
+  firstAnchorOffsetPx: number | null;
+  geometryChanges: {
+    readonly height: number;
+    readonly itemTop: number;
+    readonly lineCount: number;
+    readonly offset: number;
+    readonly viewportAnchorText: string;
+    readonly viewportAnchorTop: number;
+    readonly scrollTop: number;
+  }[];
+  maxAnchorDeltaPx: number;
+  maxAnchorOffsetPx: number;
+  minAnchorOffsetPx: number;
+  missingAfterSeenFrames: number;
+  offscreenFrames: number;
+  targetFrames: number;
+}
+
+async function installNavigationAnchorProbe(
+  page: Page,
+  text: string,
+  frameCount = 90
+): Promise<void> {
+  await page.evaluate(
+    ({ expectedText, frames }) => {
+      const result: NavigationAnchorProbeResult = {
+        blankFrames: 0,
+        done: false,
+        firstAnchorOffsetPx: null,
+        geometryChanges: [],
+        maxAnchorDeltaPx: 0,
+        maxAnchorOffsetPx: Number.NEGATIVE_INFINITY,
+        missingAfterSeenFrames: 0,
+        minAnchorOffsetPx: Number.POSITIVE_INFINITY,
+        offscreenFrames: 0,
+        targetFrames: 0,
+      };
+      Reflect.set(window, "__pierGitReviewNavigationAnchorProbe", result);
+      let hasSeenTarget = false;
+      const sample = () => {
+        const surface = document.querySelector<HTMLElement>(
+          '[data-git-review-surface][aria-hidden="false"]'
+        );
+        const scroller = surface?.querySelector<HTMLElement>(
+          '[data-testid="pierre-diff-root"] .cv-scrollbar'
+        );
+        const containers = [
+          ...(surface?.querySelectorAll<HTMLElement>("diffs-container") ?? []),
+        ];
+        if (!(scroller && containers.length > 0)) {
+          result.blankFrames += 1;
+        }
+        const target = containers.find((container) =>
+          container.shadowRoot?.textContent?.includes(expectedText)
+        );
+        if (scroller && target) {
+          hasSeenTarget = true;
+          const viewport = scroller.getBoundingClientRect();
+          const bounds = target.getBoundingClientRect();
+          const anchor =
+            [
+              ...(target.shadowRoot?.querySelectorAll("[data-line]") ?? []),
+            ].find((line) => line.textContent?.includes(expectedText)) ??
+            target;
+          const visibleLines = [
+            ...(target.shadowRoot?.querySelectorAll<HTMLElement>(
+              "[data-line]"
+            ) ?? []),
+          ]
+            .map((line) => ({
+              element: line,
+              top: line.getBoundingClientRect().top - viewport.top,
+            }))
+            .filter(({ element }) => {
+              const lineBounds = element.getBoundingClientRect();
+              return (
+                lineBounds.bottom > viewport.top &&
+                lineBounds.top < viewport.bottom
+              );
+            })
+            .sort((left, right) => Math.abs(left.top) - Math.abs(right.top));
+          const viewportAnchor = visibleLines[0];
+          const offset = anchor.getBoundingClientRect().top - viewport.top;
+          const previous = result.geometryChanges.at(-1);
+          if (
+            previous === undefined ||
+            previous.offset !== offset ||
+            previous.height !== bounds.height ||
+            previous.itemTop !== bounds.top - viewport.top ||
+            previous.lineCount !==
+              (target.shadowRoot?.querySelectorAll("[data-line]").length ??
+                0) ||
+            previous.viewportAnchorText !==
+              (viewportAnchor?.element.textContent ?? "") ||
+            previous.viewportAnchorTop !== (viewportAnchor?.top ?? 0) ||
+            previous.scrollTop !== scroller.scrollTop
+          ) {
+            result.geometryChanges.push({
+              height: bounds.height,
+              itemTop: bounds.top - viewport.top,
+              lineCount:
+                target.shadowRoot?.querySelectorAll("[data-line]").length ?? 0,
+              offset,
+              scrollTop: scroller.scrollTop,
+              viewportAnchorText: viewportAnchor?.element.textContent ?? "",
+              viewportAnchorTop: viewportAnchor?.top ?? 0,
+            });
+          }
+          result.firstAnchorOffsetPx ??= offset;
+          result.maxAnchorDeltaPx = Math.max(
+            result.maxAnchorDeltaPx,
+            Math.abs(offset - result.firstAnchorOffsetPx)
+          );
+          result.maxAnchorOffsetPx = Math.max(result.maxAnchorOffsetPx, offset);
+          result.minAnchorOffsetPx = Math.min(result.minAnchorOffsetPx, offset);
+          result.targetFrames += 1;
+          if (bounds.bottom <= viewport.top || bounds.top >= viewport.bottom) {
+            result.offscreenFrames += 1;
+          }
+        } else if (hasSeenTarget) {
+          result.missingAfterSeenFrames += 1;
+        }
+        if (result.targetFrames >= frames) {
+          Reflect.set(window, "__pierGitReviewNavigationAnchorProbe", {
+            ...result,
+            done: true,
+          });
+          return;
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    },
+    { expectedText: text, frames: frameCount }
+  );
+}
+
+async function readNavigationAnchorProbe(
+  page: Page
+): Promise<NavigationAnchorProbeResult> {
+  await expect
+    .poll(
+      () =>
+        page.evaluate(
+          () =>
+            (
+              Reflect.get(
+                window,
+                "__pierGitReviewNavigationAnchorProbe"
+              ) as NavigationAnchorProbeResult
+            ).done
+        ),
+      { timeout: 30_000 }
+    )
+    .toBe(true);
+  return page.evaluate(
+    () =>
+      Reflect.get(
+        window,
+        "__pierGitReviewNavigationAnchorProbe"
+      ) as NavigationAnchorProbeResult
+  );
+}
+
+/**
+ * Stronger than mere visibility: the section containing `text` must be the
+ * CodeView item nearest the viewport top. This distinguishes adjacent staged
+ * and unstaged sections of the same file.
+ */
+async function isDiffTextAtViewportAnchor(
+  page: Page,
+  text: string
+): Promise<boolean> {
+  return page
+    .locator('[data-git-review-surface][aria-hidden="false"] diffs-container')
+    .evaluateAll((containers, marker) => {
+      const surface = document.querySelector<HTMLElement>(
+        '[data-git-review-surface][aria-hidden="false"]'
+      );
+      const scroller = surface?.querySelector<HTMLElement>(
+        '[data-testid="pierre-diff-root"] .cv-scrollbar'
+      );
+      if (!scroller) {
+        return false;
+      }
+      const viewport = scroller.getBoundingClientRect();
+      const ranked = containers
+        .map((container) => ({
+          container,
+          distance: Math.abs(
+            container.getBoundingClientRect().top - viewport.top
+          ),
+        }))
+        .sort((left, right) => left.distance - right.distance);
+      const target = ranked.find(({ container }) =>
+        (container.shadowRoot?.textContent ?? "").includes(marker)
+      );
+      return target !== undefined && ranked[0]?.container === target.container;
+    }, text);
+}
+
+interface ReviewMutationProbeResult {
+  readonly activeBlankFrames: number;
+  readonly anchorDeltaPx: number;
+  readonly anchorKind: "semantic" | "viewport";
+  readonly anchorOffsetAfterPx: number;
+  readonly anchorOffsetBeforePx: number;
+  readonly blankFrames: number;
+  readonly busyFrame: number | null;
+  readonly contentAfterEmptyFrames: number;
+  readonly emptyFrames: number;
+  readonly emptySemanticMismatchFrames: number;
+  readonly endedEmpty: boolean;
+  readonly expandedTreeStable: boolean;
+  readonly fallbackPath: string | null;
+  readonly fallbackTopDeltaPx: number;
+  readonly longTasks: readonly {
+    readonly afterClickMs: number;
+    readonly durationMs: number;
+  }[];
+  readonly maxLongTaskMs: number;
+  readonly overlayBlankFrames: number;
+  readonly overlayFrames: number;
+  readonly rootStable: boolean;
+  readonly surfaceStable: boolean;
+  readonly treeScrollDeltaPx: number;
+  readonly workerCountStable: boolean;
+}
+
+async function startReviewMutationProbe(
+  action: Locator,
+  path: string
+): Promise<void> {
+  await action.evaluate((button, expectedPath) => {
+    const surface = document.querySelector<HTMLElement>(
+      '[data-git-review-surface][aria-hidden="false"]'
+    );
+    const scroller = surface?.querySelector<HTMLElement>(
+      '[data-testid="pierre-diff-root"] .cv-scrollbar'
+    );
+    const root = surface?.querySelector<HTMLElement>(
+      '[data-testid="pierre-diff-root"]'
+    );
+    const viewportBounds = scroller?.getBoundingClientRect();
+    const viewportAnchor =
+      viewportBounds === undefined
+        ? undefined
+        : [...(surface?.querySelectorAll("diffs-container") ?? [])].find(
+            (container) => {
+              const bounds = container.getBoundingClientRect();
+              return (
+                bounds.bottom > viewportBounds.top &&
+                bounds.top < viewportBounds.bottom
+              );
+            }
+          );
+    const actionAnchor =
+      button.closest("diffs-container") ??
+      surface?.querySelector(
+        `diffs-container[data-pier-file-path="${CSS.escape(expectedPath)}"]`
+      ) ??
+      viewportAnchor;
+    if (!(surface && scroller && root && actionAnchor instanceof HTMLElement)) {
+      throw new Error("Git review mutation probe is missing stable geometry");
+    }
+    const deepElements = (start: ParentNode): Element[] => {
+      const found: Element[] = [];
+      for (const element of start.querySelectorAll("*")) {
+        found.push(element);
+        if (element.shadowRoot) {
+          found.push(...deepElements(element.shadowRoot));
+        }
+      }
+      return found;
+    };
+    const treeElements = deepElements(
+      surface?.querySelector('[data-testid="git-review-tree"]') ?? document
+    );
+    const treeScroller = treeElements.find(
+      (element): element is HTMLElement =>
+        element instanceof HTMLElement &&
+        element.scrollHeight > element.clientHeight + 1
+    );
+    const expandedTree = JSON.stringify(
+      treeElements
+        .filter((element) => element.hasAttribute("aria-expanded"))
+        .map((element) => [
+          element.getAttribute("data-path") ??
+            element.getAttribute("aria-label") ??
+            element.textContent,
+          element.getAttribute("aria-expanded"),
+        ])
+        .sort()
+    );
+    const viewport = scroller.getBoundingClientRect();
+    const anchor = actionAnchor;
+    const anchorLine = anchor.shadowRoot?.querySelector("[data-line]");
+    const state = {
+      activeBlankFrames: 0,
+      anchorOffset:
+        (anchorLine ?? anchor).getBoundingClientRect().top - viewport.top,
+      blankFrames: 0,
+      busyFrame: null as number | null,
+      button: button as HTMLElement,
+      clicked: false,
+      clickedAt: null as number | null,
+      contentAfterEmptyFrames: 0,
+      emptyFrames: 0,
+      emptySemanticMismatchFrames: 0,
+      expandedTree,
+      finished: false,
+      frame: 0,
+      longTasks: [] as {
+        afterClickMs: number;
+        durationMs: number;
+      }[],
+      observer: null as PerformanceObserver | null,
+      overlayBlankFrames: 0,
+      overlayFrames: 0,
+      path: expectedPath,
+      root,
+      seenEmpty: false,
+      scrollTop: scroller.scrollTop,
+      surface: surface.dataset.gitReviewSurface,
+      treeScrollTop: treeScroller?.scrollTop ?? 0,
+      workerCount: (
+        Reflect.get(window, "__pierGitReviewWorkerStats") as {
+          created: number;
+        }
+      ).created,
+    };
+    const observer = new PerformanceObserver((list) => {
+      const clickedAt = state.clickedAt;
+      if (clickedAt === null) {
+        return;
+      }
+      state.longTasks.push(
+        ...list
+          .getEntries()
+          .filter((entry) => entry.startTime >= clickedAt)
+          .map((entry) => ({
+            afterClickMs: entry.startTime - clickedAt,
+            durationMs: entry.duration,
+          }))
+      );
+    });
+    observer.observe({ entryTypes: ["longtask"] });
+    state.observer = observer;
+    const begin = () => {
+      if (state.clicked) {
+        return;
+      }
+      state.clicked = true;
+      state.clickedAt = performance.now();
+      state.frame = 0;
+      state.longTasks.length = 0;
+    };
+    state.button.addEventListener("click", begin, {
+      capture: true,
+      once: true,
+    });
+    state.button.addEventListener("contextmenu", begin, {
+      capture: true,
+      once: true,
+    });
+    Reflect.set(window, "__pierGitReviewMutationProbe", state);
+    const sample = () => {
+      if (state.clicked) {
+        state.frame += 1;
+        if (
+          state.busyFrame === null &&
+          (!state.button.isConnected ||
+            state.button.matches(":disabled") ||
+            state.button.closest("[inert]") !== null ||
+            state.root.closest("[inert]") !== null ||
+            state.root.closest('[data-git-review-mutation-blocked="true"]') !==
+              null)
+        ) {
+          state.busyFrame = state.frame;
+        }
+        const currentActiveSurface = document.querySelector<HTMLElement>(
+          '[data-git-review-surface][aria-hidden="false"]'
+        );
+        const visibleSurfaces = [
+          ...document.querySelectorAll<HTMLElement>(
+            "[data-git-review-surface]"
+          ),
+        ].filter((candidate) => {
+          const style = getComputedStyle(candidate);
+          return (
+            style.visibility !== "hidden" &&
+            style.display !== "none" &&
+            Number.parseFloat(style.opacity || "1") > 0
+          );
+        });
+        const hasVisibleLine = (candidate: HTMLElement): boolean => {
+          const currentScroller = candidate.querySelector<HTMLElement>(
+            '[data-testid="pierre-diff-root"] .cv-scrollbar'
+          );
+          if (!currentScroller) {
+            return false;
+          }
+          const scrollerBounds = currentScroller.getBoundingClientRect();
+          return [...candidate.querySelectorAll("diffs-container")].some(
+            (container) =>
+              [
+                ...(container.shadowRoot?.querySelectorAll<HTMLElement>(
+                  "[data-line]"
+                ) ?? []),
+              ].some((line) => {
+                const bounds = line.getBoundingClientRect();
+                return (
+                  bounds.width > 0 &&
+                  bounds.height > 0 &&
+                  bounds.bottom > scrollerBounds.top &&
+                  bounds.top < scrollerBounds.bottom &&
+                  bounds.right > scrollerBounds.left &&
+                  bounds.left < scrollerBounds.right
+                );
+              })
+          );
+        };
+        const activeHasVisibleLine =
+          currentActiveSurface !== null && hasVisibleLine(currentActiveSurface);
+        const activeSurfaceName =
+          currentActiveSurface?.dataset.gitReviewSurface;
+        const activeEmpty =
+          currentActiveSurface?.querySelector<HTMLElement>(
+            '[data-git-review-document-content="empty"]'
+          ) ?? null;
+        let activeHasVisibleDocumentEmpty = false;
+        if (activeEmpty !== null) {
+          const bounds = activeEmpty.getBoundingClientRect();
+          const expectedTitle = activeEmpty.dataset.gitReviewEmptyTitle;
+          activeHasVisibleDocumentEmpty = bounds.width > 0 && bounds.height > 0;
+          if (activeHasVisibleDocumentEmpty) {
+            const semanticMatch =
+              activeSurfaceName !== undefined &&
+              activeEmpty.dataset.gitReviewEmptySurface === activeSurfaceName &&
+              expectedTitle !== undefined &&
+              expectedTitle.length > 0 &&
+              (activeEmpty.textContent ?? "").includes(expectedTitle);
+            if (semanticMatch) {
+              state.emptyFrames += 1;
+              state.seenEmpty = true;
+            } else {
+              state.emptySemanticMismatchFrames += 1;
+            }
+          }
+        }
+        if (state.seenEmpty && activeHasVisibleLine) {
+          state.contentAfterEmptyFrames += 1;
+        }
+        const handoffOverlays = visibleSurfaces.filter(
+          (candidate) => candidate !== currentActiveSurface
+        );
+        const overlayHasVisibleLine = handoffOverlays.some(hasVisibleLine);
+        state.overlayFrames += handoffOverlays.length > 0 ? 1 : 0;
+        if (!(activeHasVisibleLine || activeHasVisibleDocumentEmpty)) {
+          state.activeBlankFrames += 1;
+        }
+        if (
+          handoffOverlays.length > 0 &&
+          handoffOverlays.some((candidate) => !hasVisibleLine(candidate))
+        ) {
+          state.overlayBlankFrames += 1;
+        }
+        if (
+          !(
+            activeHasVisibleLine ||
+            activeHasVisibleDocumentEmpty ||
+            overlayHasVisibleLine
+          )
+        ) {
+          state.blankFrames += 1;
+        }
+      }
+      if (!state.finished) {
+        requestAnimationFrame(sample);
+      }
+    };
+    requestAnimationFrame(sample);
+  }, path);
+}
+
+async function finishReviewMutationProbe(
+  page: Page
+): Promise<ReviewMutationProbeResult> {
+  return await page.evaluate(async () => {
+    const state = Reflect.get(window, "__pierGitReviewMutationProbe") as {
+      activeBlankFrames: number;
+      anchorOffset: number;
+      blankFrames: number;
+      busyFrame: number | null;
+      contentAfterEmptyFrames: number;
+      emptyFrames: number;
+      emptySemanticMismatchFrames: number;
+      expandedTree: string;
+      finished: boolean;
+      longTasks: {
+        afterClickMs: number;
+        durationMs: number;
+      }[];
+      observer: PerformanceObserver;
+      overlayBlankFrames: number;
+      overlayFrames: number;
+      path: string;
+      root: HTMLElement;
+      seenEmpty: boolean;
+      scrollTop: number;
+      surface: string | undefined;
+      treeScrollTop: number;
+      workerCount: number;
+    };
+    await new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve()))
+    );
+    state.finished = true;
+    state.observer.disconnect();
+    const deepElements = (start: ParentNode): Element[] => {
+      const found: Element[] = [];
+      for (const element of start.querySelectorAll("*")) {
+        found.push(element);
+        if (element.shadowRoot) {
+          found.push(...deepElements(element.shadowRoot));
+        }
+      }
+      return found;
+    };
+    const surface = document.querySelector<HTMLElement>(
+      '[data-git-review-surface][aria-hidden="false"]'
+    );
+    if (surface === null) {
+      throw new Error("Git review mutation probe lost the active surface");
+    }
+    const scroller = surface.querySelector<HTMLElement>(
+      '[data-testid="pierre-diff-root"] .cv-scrollbar'
+    );
+    const root = surface.querySelector<HTMLElement>(
+      '[data-testid="pierre-diff-root"]'
+    );
+    const activeSurfaceName = surface.dataset.gitReviewSurface;
+    const empty =
+      activeSurfaceName === undefined
+        ? null
+        : surface.querySelector<HTMLElement>(
+            `[data-git-review-document-content="empty"][data-git-review-empty-surface="${CSS.escape(activeSurfaceName)}"]`
+          );
+    const emptyBounds = empty?.getBoundingClientRect();
+    const expectedEmptyTitle = empty?.dataset.gitReviewEmptyTitle;
+    const endedEmpty =
+      emptyBounds !== undefined &&
+      emptyBounds.width > 0 &&
+      emptyBounds.height > 0 &&
+      expectedEmptyTitle !== undefined &&
+      expectedEmptyTitle.length > 0 &&
+      (empty?.textContent ?? "").includes(expectedEmptyTitle);
+    if (!(endedEmpty || (scroller !== null && root !== null))) {
+      throw new Error("Git review mutation probe lost visible content");
+    }
+    const viewport = scroller?.getBoundingClientRect();
+    const matching =
+      viewport === undefined
+        ? []
+        : [...surface.querySelectorAll("diffs-container")].filter(
+            (container) =>
+              container.getAttribute("data-pier-file-path") === state.path ||
+              `${container.textContent ?? ""}${container.shadowRoot?.textContent ?? ""}`.includes(
+                state.path
+              )
+          );
+    const anchor = matching.sort((left, right) => {
+      const leftLine = left.shadowRoot?.querySelector("[data-line]");
+      const rightLine = right.shadowRoot?.querySelector("[data-line]");
+      return (
+        Math.abs(
+          (leftLine ?? left).getBoundingClientRect().top -
+            (viewport?.top ?? 0) -
+            state.anchorOffset
+        ) -
+        Math.abs(
+          (rightLine ?? right).getBoundingClientRect().top -
+            (viewport?.top ?? 0) -
+            state.anchorOffset
+        )
+      );
+    })[0];
+    const anchorLine = anchor?.shadowRoot?.querySelector("[data-line]");
+    const firstVisibleContainer =
+      viewport === undefined
+        ? undefined
+        : [...surface.querySelectorAll("diffs-container")]
+            .filter((container) => {
+              const bounds = container.getBoundingClientRect();
+              return (
+                bounds.width > 0 &&
+                bounds.height > 0 &&
+                bounds.bottom > viewport.top &&
+                bounds.top < viewport.bottom
+              );
+            })
+            .sort(
+              (left, right) =>
+                left.getBoundingClientRect().top -
+                right.getBoundingClientRect().top
+            )[0];
+    const treeElements = deepElements(
+      surface.querySelector('[data-testid="git-review-tree"]') ?? document
+    );
+    const treeScroller = treeElements.find(
+      (element): element is HTMLElement =>
+        element instanceof HTMLElement &&
+        element.scrollHeight > element.clientHeight + 1
+    );
+    const expandedTree = JSON.stringify(
+      treeElements
+        .filter((element) => element.hasAttribute("aria-expanded"))
+        .map((element) => [
+          element.getAttribute("data-path") ??
+            element.getAttribute("aria-label") ??
+            element.textContent,
+          element.getAttribute("aria-expanded"),
+        ])
+        .sort()
+    );
+    const previousExpansion = new Map(
+      JSON.parse(state.expandedTree) as [string, string][]
+    );
+    const currentExpansion = new Map(
+      JSON.parse(expandedTree) as [string, string][]
+    );
+    const expandedTreeStable = [...previousExpansion].every(
+      ([path, expanded]) =>
+        currentExpansion.has(path) && currentExpansion.get(path) === expanded
+    );
+    const anchorOffsetAfter = anchor
+      ? (anchorLine ?? anchor).getBoundingClientRect().top -
+        (viewport?.top ?? 0)
+      : state.anchorOffset;
+    const expectedScrollTop =
+      scroller === null
+        ? state.scrollTop
+        : Math.min(
+            state.scrollTop,
+            Math.max(0, scroller.scrollHeight - scroller.clientHeight)
+          );
+    let anchorDeltaPx = 0;
+    if (anchor !== undefined) {
+      anchorDeltaPx = Math.abs(anchorOffsetAfter - state.anchorOffset);
+    } else if (scroller !== null) {
+      anchorDeltaPx = Math.abs(scroller.scrollTop - expectedScrollTop);
+    }
+    return {
+      activeBlankFrames: state.activeBlankFrames,
+      anchorKind: anchor ? ("semantic" as const) : ("viewport" as const),
+      anchorDeltaPx,
+      anchorOffsetAfterPx: anchorOffsetAfter,
+      anchorOffsetBeforePx: state.anchorOffset,
+      blankFrames: state.blankFrames,
+      busyFrame: state.busyFrame,
+      contentAfterEmptyFrames: state.contentAfterEmptyFrames,
+      emptyFrames: state.emptyFrames,
+      emptySemanticMismatchFrames: state.emptySemanticMismatchFrames,
+      endedEmpty,
+      expandedTreeStable,
+      fallbackPath:
+        firstVisibleContainer?.getAttribute("data-pier-file-path") ?? null,
+      fallbackTopDeltaPx:
+        firstVisibleContainer === undefined || viewport === undefined
+          ? 0
+          : Math.abs(
+              firstVisibleContainer.getBoundingClientRect().top - viewport.top
+            ),
+      longTasks: state.longTasks,
+      maxLongTaskMs: Math.max(
+        0,
+        ...state.longTasks.map((entry) => entry.durationMs)
+      ),
+      overlayBlankFrames: state.overlayBlankFrames,
+      overlayFrames: state.overlayFrames,
+      rootStable: root === state.root,
+      surfaceStable: surface.dataset.gitReviewSurface === state.surface,
+      treeScrollDeltaPx: Math.abs(
+        (treeScroller?.scrollTop ?? 0) - state.treeScrollTop
+      ),
+      workerCountStable:
+        (
+          Reflect.get(window, "__pierGitReviewWorkerStats") as {
+            created: number;
+          }
+        ).created === state.workerCount,
+    };
+  });
+}
+
+function expectStableReviewMutation(
+  result: ReviewMutationProbeResult,
+  options: {
+    readonly expectedAnchorDisposition?: "fallback-top" | "preserved";
+    readonly expectedFinalContent?: "code" | "empty";
+    readonly expectedRootStable?: boolean;
+    readonly maximumBusyFrame?: number;
+    readonly maximumLongTaskMs?: number;
+  } = {}
+): void {
+  const expectedFinalContent = options.expectedFinalContent ?? "code";
+  const expectedAnchorDisposition =
+    options.expectedAnchorDisposition ?? "preserved";
+  expect(result).toMatchObject({
+    expandedTreeStable: true,
+    overlayBlankFrames: 0,
+    overlayFrames: 0,
+    rootStable: options.expectedRootStable ?? expectedFinalContent === "code",
+    surfaceStable: true,
+    workerCountStable: true,
+  });
+  expect(result.activeBlankFrames, JSON.stringify(result)).toBe(0);
+  expect(result.blankFrames, JSON.stringify(result)).toBe(0);
+  expect(result.emptySemanticMismatchFrames, JSON.stringify(result)).toBe(0);
+  if (expectedFinalContent === "empty") {
+    expect(result.endedEmpty).toBe(true);
+    expect(result.emptyFrames).toBeGreaterThan(0);
+    expect(result.contentAfterEmptyFrames).toBe(0);
+  } else {
+    expect(result.endedEmpty).toBe(false);
+    expect(result.emptyFrames).toBe(0);
+  }
+  expect(result.busyFrame).not.toBeNull();
+  expect(result.busyFrame ?? Number.POSITIVE_INFINITY).toBeLessThanOrEqual(
+    options.maximumBusyFrame ?? 1
+  );
+  if (expectedAnchorDisposition === "fallback-top") {
+    expect(result.anchorKind).toBe("viewport");
+    expect(
+      result.fallbackTopDeltaPx,
+      `fallback item missed viewport top: ${JSON.stringify(result)}`
+    ).toBeLessThanOrEqual(4);
+  } else {
+    expect(
+      result.anchorDeltaPx,
+      `semantic anchor moved: ${JSON.stringify(result)}`
+    ).toBeLessThanOrEqual(4);
+  }
+  expect(result.treeScrollDeltaPx).toBeLessThanOrEqual(1);
+  expect(
+    result.maxLongTaskMs,
+    `long tasks: ${JSON.stringify(result.longTasks)}`
+  ).toBeLessThanOrEqual(options.maximumLongTaskMs ?? 50);
+}
+
+async function probeActiveReviewScrollContinuity(page: Page): Promise<{
+  readonly maxConsecutiveBlankFrames: number;
+  readonly sampledFrames: number;
+  readonly scrollDeltaPx: number;
+}> {
+  return await activeReviewSurface(page).evaluate(async (surface) => {
+    const scroller = surface.querySelector<HTMLElement>(
+      '[data-testid="pierre-diff-root"] .cv-scrollbar'
+    );
+    if (scroller === null) {
+      throw new Error("Active review surface has no CodeView scroller");
+    }
+    const hasVisibleLine = (): boolean => {
+      const scrollerBounds = scroller.getBoundingClientRect();
+      return [...surface.querySelectorAll("diffs-container")].some(
+        (container) =>
+          [
+            ...(container.shadowRoot?.querySelectorAll<HTMLElement>(
+              "[data-line]"
+            ) ?? []),
+          ].some((line) => {
+            const bounds = line.getBoundingClientRect();
+            return (
+              bounds.width > 0 &&
+              bounds.height > 0 &&
+              bounds.bottom > scrollerBounds.top &&
+              bounds.top < scrollerBounds.bottom &&
+              bounds.right > scrollerBounds.left &&
+              bounds.left < scrollerBounds.right
+            );
+          })
+      );
+    };
+    const initialScrollTop = scroller.scrollTop;
+    const downSlack =
+      scroller.scrollHeight - scroller.clientHeight - initialScrollTop;
+    const delta =
+      downSlack >= 240 ? 240 : -Math.min(Math.max(initialScrollTop, 0), 240);
+    scroller.dispatchEvent(
+      new WheelEvent("wheel", { bubbles: true, deltaY: delta })
+    );
+    scroller.scrollTop = initialScrollTop + delta;
+    scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+
+    let sampledFrames = 0;
+    let consecutiveBlankFrames = 0;
+    let maxConsecutiveBlankFrames = 0;
+    await new Promise<void>((resolve) => {
+      const sample = () => {
+        sampledFrames += 1;
+        if (hasVisibleLine()) {
+          consecutiveBlankFrames = 0;
+        } else {
+          consecutiveBlankFrames += 1;
+          maxConsecutiveBlankFrames = Math.max(
+            maxConsecutiveBlankFrames,
+            consecutiveBlankFrames
+          );
+        }
+        if (sampledFrames >= 12) {
+          resolve();
+          return;
+        }
+        requestAnimationFrame(sample);
+      };
+      requestAnimationFrame(sample);
+    });
+    return {
+      maxConsecutiveBlankFrames,
+      sampledFrames,
+      scrollDeltaPx: scroller.scrollTop - initialScrollTop,
+    };
+  });
+}
+
+async function appDiffState(repository: string): Promise<{
+  readonly staged: string;
+  readonly worktree: string;
+}> {
+  const [{ stdout: worktree }, { stdout: staged }] = await Promise.all([
+    execFileAsync("git", ["diff", "--", "src/app.tsx"], {
+      cwd: repository,
+    }),
+    execFileAsync("git", ["diff", "--cached", "--", "src/app.tsx"], {
+      cwd: repository,
+    }),
+  ]);
+  return { staged, worktree };
 }
 
 async function openTerminal(userDataDir: string, repository: string) {
@@ -273,6 +1369,22 @@ async function forceClose(child: ChildProcess): Promise<void> {
     exited,
     new Promise<void>((resolve) => setTimeout(resolve, 3000)),
   ]);
+}
+
+async function closeApplicationWithin(
+  application: ElectronApplication,
+  timeoutMs = 3000
+): Promise<void> {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  await Promise.race([
+    application.close().catch(() => undefined),
+    new Promise<void>((resolve) => {
+      timeout = setTimeout(resolve, timeoutMs);
+    }),
+  ]);
+  if (timeout !== null) {
+    clearTimeout(timeout);
+  }
 }
 
 function groupForPanel(page: Page, panelId: string) {
@@ -550,7 +1662,9 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
       timeout: 20_000,
     });
-    await expect(page.getByTestId("pierre-diff-root")).toBeVisible({
+    await expect(
+      activeReviewSurface(page).getByTestId("pierre-diff-root")
+    ).toBeVisible({
       timeout: 30_000,
     });
     const reviewHeader = page.locator('[data-slot="file-panel-header"]');
@@ -682,7 +1796,9 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await terminalTab.click();
     await expect(page.getByTestId("pierre-diff-root")).toHaveCount(0);
     await changesTab.click();
-    await expect(page.getByTestId("pierre-diff-root")).toBeVisible();
+    await expect(
+      activeReviewSurface(page).getByTestId("pierre-diff-root")
+    ).toBeVisible();
     await expect(
       page.getByRole("button", {
         name: /Collapse changed files|收起变更文件/u,
@@ -710,7 +1826,9 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       page.locator('file-tree-container[data-slot="pier-file-tree"]')
     ).toHaveCount(0);
     await expect(reviewTreePanel).toHaveAttribute("aria-hidden", "true");
-    await expect(page.getByTestId("pierre-diff-root")).toBeVisible();
+    await expect(
+      activeReviewSurface(page).getByTestId("pierre-diff-root")
+    ).toBeVisible();
     await page
       .getByRole("button", {
         name: /Find in changed files|在变更文件中查找/u,
@@ -743,6 +1861,11 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(
       page.getByRole("treeitem", { name: /script\.py/u, selected: true })
     ).toBeVisible();
+    await expect
+      .poll(() => isDiffTextInViewport(page, "return 2"), {
+        timeout: 20_000,
+      })
+      .toBe(true);
     await splitTerminalTab.click();
     const inactiveReviewState = await page.evaluate(
       async (reviewPanelId) => {
@@ -759,16 +1882,37 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       resourceMode: "visible",
     });
     await expect(page.getByTestId("git-review-tree")).toBeVisible();
-    await expect(page.getByTestId("pierre-diff-root")).toBeVisible();
+    await expect(
+      activeReviewSurface(page).getByTestId("pierre-diff-root")
+    ).toBeVisible();
     await expect
       .poll(() => isDiffTextInViewport(page, "return 2"), {
         timeout: 10_000,
       })
       .toBe(true);
     await changesTab.click();
+    const changesPanelId = await changesTab.getAttribute("data-panel-tab-id");
+    await expect
+      .poll(async () => {
+        const snapshot = await page.evaluate(() =>
+          window.pier.terminal.debugSnapshot()
+        );
+        return (
+          snapshot.renderer?.panels.find(
+            (panel) => panel.panelId === changesPanelId
+          )?.dockviewActive ?? false
+        );
+      })
+      .toBe(true);
+    await page.evaluate(
+      () =>
+        new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
+    );
     // Demand-loaded review may not keep binary sections mounted after viewing
     // another file — navigate via the tree so the binary state patch is loaded.
-    await clickReviewTreeFile(page, /binary-6\\special\.bin/u);
+    const binaryTreeItem = reviewTreeFileItem(page, /binary-6\\special\.bin/u);
+    await binaryTreeItem.focus();
+    await binaryTreeItem.press("Enter");
     await expect
       .poll(
         () =>
@@ -806,7 +1950,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(
       page.getByText(/additional files could not be rendered|个文件无法显示/u)
     ).toHaveCount(0);
-    const shortDiffHeight = await page
+    const shortDiffHeight = await activeReviewSurface(page)
       .getByTestId("pierre-diff-root")
       .evaluate((root) => root.getBoundingClientRect().height);
     expect(shortDiffHeight).toBeGreaterThan(0);
@@ -835,27 +1979,53 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await appTreeSearch.press("Escape").catch(() => undefined);
 
     const diffContainers = page.locator("diffs-container");
+    await expect(activeReviewSurface(page)).toHaveAttribute(
+      "data-git-review-surface",
+      "index"
+    );
     await expect
       .poll(
         () =>
-          diffContainers.evaluateAll((containers) => {
-            const sectionTexts = containers.map(
-              (container) => container.shadowRoot?.textContent ?? ""
-            );
-            return {
-              hasStagedSection: sectionTexts.some(
-                (text) =>
-                  text.includes("value = 1") && text.includes("value = 2")
-              ),
-              hasWorktreeSection: sectionTexts.some(
-                (text) =>
-                  text.includes("value = 2") && text.includes("value = 3")
-              ),
-            };
-          }),
+          activeReviewSurface(page)
+            .locator("diffs-container")
+            .evaluateAll((containers) => {
+              const sectionTexts = containers.map(
+                (container) => container.shadowRoot?.textContent ?? ""
+              );
+              return {
+                hasStagedSection: sectionTexts.some(
+                  (text) =>
+                    text.includes("value = 1") && text.includes("value = 2")
+                ),
+                hasWorktreeSection: sectionTexts.some(
+                  (text) =>
+                    text.includes("value = 2") && text.includes("value = 3")
+                ),
+              };
+            }),
         { timeout: 30_000 }
       )
-      .toEqual({ hasStagedSection: true, hasWorktreeSection: true });
+      .toEqual({ hasStagedSection: false, hasWorktreeSection: true });
+    await clickReviewTreeFile(page, /app\.tsx/u, "staged");
+    await expect(
+      activeReviewSurface(page).locator(
+        '[data-git-review-document-settled="true"]'
+      )
+    ).toBeAttached({ timeout: 30_000 });
+    await expect
+      .poll(
+        () =>
+          activeReviewSurface(page)
+            .locator("diffs-container")
+            .evaluateAll((containers) =>
+              containers.some((container) => {
+                const text = container.shadowRoot?.textContent ?? "";
+                return text.includes("value = 1") && text.includes("value = 2");
+              })
+            ),
+        { timeout: 30_000 }
+      )
+      .toBe(true);
     const firstWorkerCount = await page.evaluate(
       () =>
         (
@@ -956,7 +2126,9 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       )
       .toEqual({ live: firstWorkerCount, terminated: 0 });
     await changesTab.click();
-    await expect(page.getByTestId("pierre-diff-root")).toBeVisible({
+    await expect(
+      activeReviewSurface(page).getByTestId("pierre-diff-root")
+    ).toBeVisible({
       timeout: 30_000,
     });
     await clickReviewTreeFile(page, /app\.tsx/u);
@@ -1043,7 +2215,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
         { timeout: 30_000 }
       )
       .toBeGreaterThan(1);
-    const codeTypography = await page
+    const codeTypography = await activeReviewSurface(page)
       .locator('[data-testid="pierre-diff-root"] .cv-scrollbar')
       .evaluate((element) => ({
         actual: getComputedStyle(element)
@@ -1057,40 +2229,123 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     expect(codeTypography.actual).toBe(codeTypography.expected);
 
     await page.evaluate(() => {
-      const durations: number[] = [];
-      Reflect.set(window, "__pierGitReviewLongTasks", durations);
+      const records: Array<{
+        readonly duration: number;
+        readonly startTime: number;
+      }> = [];
+      Reflect.set(window, "__pierGitReviewLongTasks", records);
+      Reflect.set(window, "__pierGitReviewLongTaskMarks", {
+        observerStarted: performance.now(),
+      });
       new PerformanceObserver((list) => {
-        durations.push(...list.getEntries().map((entry) => entry.duration));
+        records.push(
+          ...list.getEntries().map((entry) => ({
+            duration: entry.duration,
+            startTime: entry.startTime,
+          }))
+        );
       }).observe({ entryTypes: ["longtask"] });
     });
     const largeStartedAt = performance.now();
+    await page.evaluate(() => {
+      const marks = Reflect.get(
+        window,
+        "__pierGitReviewLongTaskMarks"
+      ) as Record<string, number>;
+      marks.beforeTreeClick = performance.now();
+    });
     await clickReviewTreeFile(page, /large\.ts/u);
+    const largeContainer = page.locator(
+      'diffs-container[data-pier-file-path="src/large.ts"]'
+    );
     await expect
       .poll(
         () =>
-          diffContainers.evaluateAll((containers) =>
-            containers.some((container) =>
-              (container.shadowRoot?.textContent ?? "").includes("line00000")
-            )
+          largeContainer.evaluate((container) =>
+            (
+              container.shadowRoot?.querySelector("[data-line]")?.textContent ??
+              ""
+            ).includes("line00000")
           ),
         { timeout: 30_000 }
       )
       .toBe(true);
-    const largeContainer = diffContainers
-      .filter({ hasText: "large.ts" })
-      .first();
+    await page.evaluate(() => {
+      const marks = Reflect.get(
+        window,
+        "__pierGitReviewLongTaskMarks"
+      ) as Record<string, number>;
+      marks.afterFirstPaint = performance.now();
+    });
     const initialVirtualWindow = await largeContainer.evaluate((container) => ({
+      hasLastLine: [
+        ...(container.shadowRoot?.querySelectorAll("[data-line]") ?? []),
+      ].some((line) => (line.textContent ?? "").includes("line09998")),
       lineCount:
         container.shadowRoot?.querySelectorAll("[data-line]").length ?? 0,
-      text: container.shadowRoot?.textContent ?? "",
     }));
-    expect(initialVirtualWindow.text).not.toContain("line09998");
+    expect(initialVirtualWindow.hasLastLine).toBe(false);
     expect(initialVirtualWindow.lineCount).toBeGreaterThan(0);
     expect(initialVirtualWindow.lineCount).toBeLessThan(1000);
+    await largeContainer.dispatchEvent("pointerover");
+    await expect
+      .poll(() =>
+        largeContainer
+          .getByTestId("pier-hunk-actions")
+          .first()
+          .evaluate((action) => Number(getComputedStyle(action).opacity))
+      )
+      .toBe(1);
+    const visibleHunkActionGeometry = await largeContainer.evaluate(
+      (container) => {
+        const containerBounds = container.getBoundingClientRect();
+        const candidates = [
+          ...container.querySelectorAll<HTMLElement>(
+            "[data-pier-hunk-actions]"
+          ),
+        ];
+        const action = candidates.find((candidate) => {
+          const bounds = candidate.getBoundingClientRect();
+          return (
+            bounds.bottom > containerBounds.top &&
+            bounds.top < containerBounds.bottom
+          );
+        });
+        if (!action) {
+          return null;
+        }
+        const bounds = action.getBoundingClientRect();
+        return {
+          containerLeft: containerBounds.left,
+          containerRight: containerBounds.right,
+          pointerWithin: container.hasAttribute("data-pier-pointer-within"),
+          left: bounds.left,
+          opacity: getComputedStyle(action).opacity,
+          right: bounds.right,
+        };
+      }
+    );
+    expect(visibleHunkActionGeometry).not.toBeNull();
+    expect(visibleHunkActionGeometry?.pointerWithin).toBe(true);
+    expect(
+      visibleHunkActionGeometry?.opacity,
+      JSON.stringify(visibleHunkActionGeometry)
+    ).toBe("1");
+    expect(visibleHunkActionGeometry?.left).toBeGreaterThanOrEqual(
+      (visibleHunkActionGeometry?.containerLeft ?? 0) - 1
+    );
+    expect(visibleHunkActionGeometry?.right).toBeLessThanOrEqual(
+      (visibleHunkActionGeometry?.containerRight ?? 0) + 1
+    );
     const largeFirstPaintMs = performance.now() - largeStartedAt;
     expect(largeFirstPaintMs).toBeLessThan(REVIEW_LARGE_FIRST_PAINT_MS_BUDGET);
     const blankFrameMetrics = await largeContainer.evaluate(
       async (container) => {
+        const marks = Reflect.get(
+          window,
+          "__pierGitReviewLongTaskMarks"
+        ) as Record<string, number>;
+        marks.beforeBottomScroll = performance.now();
         const scroller = document.querySelector<HTMLElement>(
           '[data-testid="pierre-diff-root"] .cv-scrollbar'
         );
@@ -1200,17 +2455,42 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
           container.shadowRoot?.querySelectorAll("[data-line]").length ?? 0
       )
     ).toBeLessThan(1000);
-    const longTasks = await page.evaluate(
-      () => (Reflect.get(window, "__pierGitReviewLongTasks") as number[]) ?? []
-    );
-    expect(Math.max(0, ...longTasks)).toBeLessThan(REVIEW_LONGTASK_MS_BUDGET);
+    const longTaskDiagnostics = await page.evaluate(() => ({
+      marks:
+        (Reflect.get(window, "__pierGitReviewLongTaskMarks") as Record<
+          string,
+          number
+        >) ?? {},
+      records:
+        (Reflect.get(window, "__pierGitReviewLongTasks") as Array<{
+          readonly duration: number;
+          readonly startTime: number;
+        }>) ?? [],
+    }));
+    const longTaskEvidence = {
+      blankFrameMetrics,
+      initialVirtualWindow,
+      ...longTaskDiagnostics,
+    };
+    expect(
+      Math.max(
+        0,
+        ...longTaskDiagnostics.records.map((record) => record.duration)
+      ),
+      JSON.stringify(longTaskEvidence)
+    ).toBeLessThan(REVIEW_LONGTASK_MS_BUDGET);
+    expect(
+      await largeContainer.getByTestId("pier-hunk-stage").count()
+    ).toBeGreaterThan(256);
 
     const cycleReviewResource = async (count: number) => {
       for (let index = 0; index < count; index += 1) {
         await terminalTab.click();
         await expect(page.getByTestId("pierre-diff-root")).toHaveCount(0);
         await changesTab.click();
-        await expect(page.getByTestId("pierre-diff-root")).toBeVisible({
+        await expect(
+          activeReviewSurface(page).getByTestId("pierre-diff-root")
+        ).toBeVisible({
           timeout: 30_000,
         });
       }
@@ -1279,7 +2559,440 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     expect(relevantConsoleErrors).toEqual([]);
     expect(pageErrors).toEqual([]);
   } finally {
-    await application.close().catch(() => undefined);
+    await closeApplicationWithin(application);
+    await forceClose(child);
+    rmSync(userDataDir, { force: true, recursive: true });
+    rmSync(repository, { force: true, recursive: true });
+  }
+});
+
+test("keeps the reading viewport stable through real stage and unstage", async () => {
+  test.setTimeout(90_000);
+  const userDataDir = createTemporaryDirectory("pier-git-stage-e2e-");
+  const repository = createTemporaryDirectory("pier-git-stage-repo-");
+  await createReviewRepository(repository);
+  const application = await electron.launch({
+    args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    cwd: PROJECT_ROOT,
+    env: { ...process.env, CODEX_HOME: join(userDataDir, "codex-home") },
+  });
+  const child = application.process();
+
+  try {
+    const page = await application.firstWindow();
+    await page.addInitScript(() => {
+      const NativeWorker = window.Worker;
+      const stats = { created: 0 };
+      const TrackedWorker = new Proxy(NativeWorker, {
+        construct(target, args) {
+          stats.created += 1;
+          return Reflect.construct(target, args) as Worker;
+        },
+      });
+      Object.defineProperty(window, "Worker", {
+        configurable: true,
+        value: TrackedWorker,
+        writable: true,
+      });
+      Reflect.set(window, "__pierGitReviewWorkerStats", stats);
+    });
+    await page.reload();
+    await page
+      .locator(
+        '[data-testid="workspace-host-root"][data-workspace-ready="true"]'
+      )
+      .waitFor({ state: "visible", timeout: 30_000 });
+    await expect(async () => {
+      await setWindowSize(application, page, 1400, 800);
+    }).toPass({ timeout: 10_000 });
+
+    const opened = await openTerminalWhenReady(userDataDir, repository);
+    const terminalPanelId = opened.data?.panelId ?? "";
+    expect(terminalPanelId).not.toBe("");
+    await openReviewFromTerminal(page, terminalPanelId);
+    await expect
+      .poll(() => reviewPanelIds(page), { timeout: 20_000 })
+      .toHaveLength(1);
+    await clickReviewTreeFile(page, /app\.tsx/u);
+    await expect(activeReviewSurface(page)).toHaveAttribute(
+      "data-git-review-surface",
+      "index"
+    );
+    await expect(
+      activeReviewSurface(page).locator(
+        '[data-git-review-document-settled="true"]'
+      )
+    ).toBeAttached({ timeout: 30_000 });
+    await markReviewSurfaceIdentity(page, "index", "index-surface");
+
+    // Tree group owns the target surface: staged and unstaged never share a
+    // mixed reading model, and returning keeps the original surface instance.
+    await expandReviewTreeDirectory(page, /^src$/u, "staged");
+    await clickReviewTreeFile(page, /app\.tsx/u, "staged");
+    await expect(activeReviewSurface(page)).toHaveAttribute(
+      "data-git-review-surface",
+      "staged"
+    );
+    await expect(
+      activeReviewSurface(page).locator(
+        '[data-git-review-document-settled="true"]'
+      )
+    ).toBeAttached({ timeout: 30_000 });
+    await markReviewSurfaceIdentity(page, "staged", "staged-surface");
+    await clickReviewTreeFile(page, /app\.tsx/u, "unstaged");
+    expect((await reviewSurfaceIdentity(page, "index")).token).toBe(
+      "index-surface"
+    );
+    await waitForReviewPathViewportSettle(page, "app.tsx");
+    const indexScrollTop = await markReviewSurfaceIdentity(
+      page,
+      "index",
+      "index-surface",
+      160
+    );
+    expect(indexScrollTop).toBeGreaterThan(0);
+
+    await expect(
+      activeReviewSurface(page).locator(
+        '[data-git-review-document-settled="true"]'
+      )
+    ).toBeAttached({ timeout: 30_000 });
+    let appDiff = activeReviewSurface(page)
+      .locator('diffs-container[data-pier-file-path="src/app.tsx"]')
+      .first();
+
+    // Real Pierre change-island action: mutation updates both reading models
+    // atomically, but only an explicit tree/tab action may change the active
+    // surface. If the operated path leaves the source model, preserve the
+    // source viewport instead of following that path into the target model.
+    const hunkStageButton = appDiff.getByTestId("pier-hunk-stage").first();
+    await expect(hunkStageButton).toBeEnabled({ timeout: 30_000 });
+    await waitForReviewMutationRelease(page);
+    await hunkStageButton.scrollIntoViewIfNeeded();
+    await expect(hunkStageButton).toBeVisible();
+    await waitForReviewPathViewportSettle(page, "app.tsx");
+    await startReviewMutationProbe(hunkStageButton, "app.tsx");
+    await hunkStageButton.evaluate((button) =>
+      (button as HTMLButtonElement).click()
+    );
+    await expect
+      .poll(
+        async () => {
+          const state = await appDiffState(repository);
+          return {
+            stagedLatest: state.staged.includes("value = 3"),
+            worktreeClean: state.worktree.length === 0,
+          };
+        },
+        { timeout: 30_000 }
+      )
+      .toEqual({ stagedLatest: true, worktreeClean: true });
+    await expect(activeReviewSurface(page)).toHaveAttribute(
+      "data-git-review-surface",
+      "index"
+    );
+    await waitForReviewMutationRelease(page);
+    expectStableReviewMutation(await finishReviewMutationProbe(page));
+    await selectReviewSurface(page, "staged");
+    appDiff = activeReviewSurface(page)
+      .locator('diffs-container[data-pier-file-path="src/app.tsx"]')
+      .first();
+    const hunkRoundTripUnstageButton = appDiff.getByTestId(
+      "pier-diff-unstage-button"
+    );
+    await expect(hunkRoundTripUnstageButton).toBeEnabled({ timeout: 30_000 });
+    await waitForReviewMutationRelease(page);
+    await hunkRoundTripUnstageButton.scrollIntoViewIfNeeded();
+    await expect(hunkRoundTripUnstageButton).toBeVisible();
+    await waitForReviewPathViewportSettle(page, "app.tsx");
+    await startReviewMutationProbe(hunkRoundTripUnstageButton, "app.tsx");
+    await hunkRoundTripUnstageButton.click({ force: true });
+    await expect
+      .poll(
+        async () => {
+          const state = await appDiffState(repository);
+          return {
+            stagedClean: state.staged.length === 0,
+            worktreeLatest: state.worktree.includes("value = 3"),
+          };
+        },
+        { timeout: 30_000 }
+      )
+      .toEqual({ stagedClean: true, worktreeLatest: true });
+    await waitForReviewMutationRelease(page);
+    await expect(activeReviewSurface(page)).toHaveAttribute(
+      "data-git-review-surface",
+      "staged"
+    );
+    expectStableReviewMutation(await finishReviewMutationProbe(page), {
+      expectedFinalContent: "empty",
+    });
+    await selectReviewSurface(page, "index");
+    appDiff = activeReviewSurface(page)
+      .locator('diffs-container[data-pier-file-path="src/app.tsx"]')
+      .first();
+    await expect(appDiff.getByTestId("pier-hunk-stage").first()).toBeEnabled({
+      timeout: 30_000,
+    });
+    const stageButton = appDiff.getByTestId("pier-diff-stage-button");
+    await expect(stageButton).toBeEnabled({ timeout: 30_000 });
+    await stageButton.scrollIntoViewIfNeeded();
+    await waitForReviewPathViewportSettle(page, "app.tsx");
+    await startReviewMutationProbe(stageButton, "app.tsx");
+    await stageButton.click({ force: true });
+    await expect
+      .poll(
+        async () => {
+          const state = await appDiffState(repository);
+          return {
+            stagedLatest: state.staged.includes("value = 3"),
+            worktreeClean: state.worktree.length === 0,
+          };
+        },
+        { timeout: 30_000 }
+      )
+      .toEqual({ stagedLatest: true, worktreeClean: true });
+    await expect(activeReviewSurface(page)).toHaveAttribute(
+      "data-git-review-surface",
+      "index"
+    );
+    await waitForReviewMutationRelease(page);
+    expectStableReviewMutation(await finishReviewMutationProbe(page));
+    const postStageScroll = await probeActiveReviewScrollContinuity(page);
+    expect(
+      postStageScroll.maxConsecutiveBlankFrames,
+      JSON.stringify(postStageScroll)
+    ).toBe(0);
+    expect(postStageScroll.sampledFrames).toBe(12);
+    expect(Math.abs(postStageScroll.scrollDeltaPx)).toBeGreaterThan(0);
+    await selectReviewSurface(page, "staged");
+    appDiff = activeReviewSurface(page)
+      .locator('diffs-container[data-pier-file-path="src/app.tsx"]')
+      .first();
+    const unstageButton = appDiff.getByTestId("pier-diff-unstage-button");
+    await expect(unstageButton).toBeEnabled({ timeout: 30_000 });
+    await unstageButton.scrollIntoViewIfNeeded();
+    await waitForReviewPathViewportSettle(page, "app.tsx");
+    await startReviewMutationProbe(unstageButton, "app.tsx");
+    await unstageButton.click({ force: true });
+    await expect
+      .poll(
+        async () => {
+          const state = await appDiffState(repository);
+          return {
+            stagedClean: state.staged.length === 0,
+            worktreeLatest: state.worktree.includes("value = 3"),
+          };
+        },
+        { timeout: 30_000 }
+      )
+      .toEqual({ stagedClean: true, worktreeLatest: true });
+    await expect(activeReviewSurface(page)).toHaveAttribute(
+      "data-git-review-surface",
+      "staged"
+    );
+    await waitForReviewMutationRelease(page);
+    const unstageProbe = await finishReviewMutationProbe(page);
+    expectStableReviewMutation(unstageProbe, {
+      expectedFinalContent: "empty",
+    });
+    await selectReviewSurface(page, "index");
+    appDiff = activeReviewSurface(page)
+      .locator('diffs-container[data-pier-file-path="src/app.tsx"]')
+      .first();
+    await expect(appDiff.getByTestId("pier-diff-stage-button")).toBeEnabled({
+      timeout: 30_000,
+    });
+    // Real tree context-menu actions use the same repository-scoped
+    // transaction/barrier as the inline controls. The E2E main process only
+    // substitutes the native OS menu picker; the renderer command, IPC,
+    // atomic mutation and refresh path remain production code.
+    await clickReviewTreeFile(page, /app\.tsx/u, "unstaged");
+    await autoPickNextNativeMenuAction(
+      application,
+      "pier.git.review.stageFile"
+    );
+    const unstagedTreeItem = reviewTreeFileItem(page, /app\.tsx/, "unstaged");
+    await expect(unstagedTreeItem).toBeVisible({ timeout: 30_000 });
+    await waitForReviewPathViewportSettle(page, "src/app.tsx");
+    const unstagedTreeItemBox = await unstagedTreeItem.boundingBox();
+    if (unstagedTreeItemBox === null) {
+      throw new Error("Unstaged tree item has no stable click geometry");
+    }
+    await startReviewMutationProbe(unstagedTreeItem, "src/app.tsx");
+    await page.mouse.click(
+      unstagedTreeItemBox.x + unstagedTreeItemBox.width / 2,
+      unstagedTreeItemBox.y + unstagedTreeItemBox.height / 2,
+      { button: "right" }
+    );
+    await expect
+      .poll(
+        async () => {
+          const state = await appDiffState(repository);
+          return {
+            stagedLatest: state.staged.includes("value = 3"),
+            worktreeClean: state.worktree.length === 0,
+          };
+        },
+        { timeout: 30_000 }
+      )
+      .toEqual({ stagedLatest: true, worktreeClean: true });
+    await expect(activeReviewSurface(page)).toHaveAttribute(
+      "data-git-review-surface",
+      "index"
+    );
+    await waitForReviewMutationRelease(page);
+    expectStableReviewMutation(await finishReviewMutationProbe(page), {
+      maximumBusyFrame: 2,
+      // Playwright's synthetic native-menu round trip contributes to the
+      // observed task; geometry/blank-frame assertions remain strict.
+      maximumLongTaskMs: NATIVE_MENU_MUTATION_LONG_TASK_BUDGET_MS,
+    });
+
+    await selectReviewSurface(page, "staged");
+    await expandReviewTreeGroup(page, "staged");
+    await expandReviewTreeDirectory(page, /^src$/u, "staged");
+    await autoPickNextNativeMenuAction(
+      application,
+      "pier.git.review.unstageFile"
+    );
+    const stagedTreeItem = reviewTreeFileItem(page, /app\.tsx/, "staged");
+    await expect(stagedTreeItem).toBeVisible({ timeout: 30_000 });
+    const treeUnstageSource = await activeReviewSurface(page).getAttribute(
+      "data-git-review-surface"
+    );
+    if (treeUnstageSource !== "index" && treeUnstageSource !== "staged") {
+      throw new Error("Tree unstage has no active reading surface");
+    }
+    const stagedTreeItemBox = await stagedTreeItem.boundingBox();
+    if (stagedTreeItemBox === null) {
+      throw new Error("Staged tree item has no stable click geometry");
+    }
+    await startReviewMutationProbe(stagedTreeItem, "src/app.tsx");
+    await page.mouse.click(
+      stagedTreeItemBox.x + stagedTreeItemBox.width / 2,
+      stagedTreeItemBox.y + stagedTreeItemBox.height / 2,
+      { button: "right" }
+    );
+    await expect
+      .poll(
+        async () => {
+          const state = await appDiffState(repository);
+          return {
+            stagedClean: state.staged.length === 0,
+            worktreeLatest: state.worktree.includes("value = 3"),
+          };
+        },
+        { timeout: 30_000 }
+      )
+      .toEqual({ stagedClean: true, worktreeLatest: true });
+    await expect(activeReviewSurface(page)).toHaveAttribute(
+      "data-git-review-surface",
+      treeUnstageSource
+    );
+    await waitForReviewMutationRelease(page);
+    expectStableReviewMutation(await finishReviewMutationProbe(page), {
+      expectedFinalContent: "empty",
+      maximumBusyFrame: 2,
+      maximumLongTaskMs: NATIVE_MENU_MUTATION_LONG_TASK_BUDGET_MS,
+    });
+    // The surviving non-empty surface keeps its own model/root and reading
+    // position; an authoritative empty surface removes its CodeView.
+    const finalIndexIdentity = await reviewSurfaceIdentity(page, "index");
+    expect(finalIndexIdentity.token).toBe("index-surface");
+    expect(finalIndexIdentity.scrollTop).toBeGreaterThanOrEqual(0);
+    await expect(
+      activeReviewSurface(page).getByText(/No staged changes|没有已暂存更改/u)
+    ).toBeVisible();
+    await expect(
+      activeReviewSurface(page).getByTestId("pierre-diff-root")
+    ).toHaveCount(0);
+
+    // Exercise the integration path that the unit anchor mock cannot cover:
+    // remove a real, deeply scrolled Pierre item and verify that its internal
+    // depth is not transferred to the neighboring file.
+    await selectReviewSurface(page, "index");
+    await clickReviewTreeFile(page, /large\.ts/u, "unstaged");
+    const largeDiff = activeReviewSurface(page)
+      .locator('diffs-container[data-pier-file-path="src/large.ts"]')
+      .first();
+    await expect(largeDiff).toBeAttached({ timeout: 30_000 });
+    const largeStageButton = largeDiff.getByTestId("pier-diff-stage-button");
+    await expect(largeStageButton).toBeEnabled({ timeout: 30_000 });
+    const deepVisibleLine = await largeDiff.evaluate(async (container) => {
+      const scroller = container
+        .closest('[data-git-review-surface][aria-hidden="false"]')
+        ?.querySelector<HTMLElement>(
+          '[data-testid="pierre-diff-root"] .cv-scrollbar'
+        );
+      if (scroller === null || scroller === undefined) {
+        throw new Error("large diff scroller missing");
+      }
+      const viewport = scroller.getBoundingClientRect();
+      const bounds = container.getBoundingClientRect();
+      const itemTop = bounds.top - viewport.top + scroller.scrollTop;
+      scroller.scrollTop = itemTop + 5000;
+      scroller.dispatchEvent(new Event("scroll", { bubbles: true }));
+      await new Promise<void>((resolve) => {
+        let frames = 8;
+        const sample = () => {
+          frames -= 1;
+          if (frames === 0) {
+            resolve();
+            return;
+          }
+          requestAnimationFrame(sample);
+        };
+        requestAnimationFrame(sample);
+      });
+      const currentViewport = scroller.getBoundingClientRect();
+      const visibleLine = [
+        ...(container.shadowRoot?.querySelectorAll<HTMLElement>(
+          "[data-line]"
+        ) ?? []),
+      ].find((line) => {
+        const lineBounds = line.getBoundingClientRect();
+        return (
+          lineBounds.height > 0 &&
+          lineBounds.bottom > currentViewport.top &&
+          lineBounds.top < currentViewport.bottom
+        );
+      });
+      const match = /line(\d+)/u.exec(visibleLine?.textContent ?? "");
+      return match?.[1] === undefined ? -1 : Number(match[1]);
+    });
+    expect(deepVisibleLine).toBeGreaterThan(100);
+    await expect(largeStageButton).toBeVisible();
+    await startReviewMutationProbe(largeStageButton, "src/large.ts");
+    await largeStageButton.click({ force: true });
+    await expect
+      .poll(
+        async () => {
+          const [{ stdout: worktree }, { stdout: staged }] = await Promise.all([
+            execFileAsync("git", ["diff", "--", "src/large.ts"], {
+              cwd: repository,
+            }),
+            execFileAsync("git", ["diff", "--cached", "--", "src/large.ts"], {
+              cwd: repository,
+            }),
+          ]);
+          return {
+            staged: staged.includes("line00000"),
+            worktreeClean: worktree.length === 0,
+          };
+        },
+        { timeout: 30_000 }
+      )
+      .toEqual({ staged: true, worktreeClean: true });
+    await waitForReviewMutationRelease(page);
+    const deepRemovalProbe = await finishReviewMutationProbe(page);
+    expectStableReviewMutation(deepRemovalProbe, {
+      expectedAnchorDisposition: "fallback-top",
+      maximumLongTaskMs: LARGE_FILE_MUTATION_LONG_TASK_BUDGET_MS,
+    });
+    expect(deepRemovalProbe.fallbackPath).not.toBe("src/large.ts");
+  } finally {
+    await closeApplicationWithin(application);
     await forceClose(child);
     rmSync(userDataDir, { force: true, recursive: true });
     rmSync(repository, { force: true, recursive: true });
@@ -1343,7 +3056,9 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
     await expect(
       page.getByRole("treeitem", { name: /file-0000\.ts/u })
     ).toBeVisible({ timeout: 30_000 });
-    await expect(page.getByTestId("pierre-diff-root")).toBeVisible({
+    await expect(
+      activeReviewSurface(page).getByTestId("pierre-diff-root")
+    ).toBeVisible({
       timeout: 30_000,
     });
     await expect(page.locator("diffs-container").first()).toBeVisible({
@@ -1381,7 +3096,23 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         { once: true }
       );
     });
+    const navigationHost = activeReviewSurface(page).locator("..");
+    const navigationNonceBefore = Number(
+      await navigationHost.getAttribute("data-git-review-navigation-nonce")
+    );
+    await installNavigationAnchorProbe(page, "value2000");
     await target.click();
+    await expect
+      .poll(
+        async () =>
+          Number(
+            await navigationHost.getAttribute(
+              "data-git-review-navigation-nonce"
+            )
+          ),
+        { timeout: 5000 }
+      )
+      .toBeGreaterThan(navigationNonceBefore);
     await expect
       .poll(() => isDiffTextInViewport(page, "value2000"), {
         timeout: 30_000,
@@ -1393,6 +3124,44 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         Number(Reflect.get(window, "__pierGitReviewNavigationStartedAt"))
     );
     expect(navigationDuration).toBeLessThan(2000);
+
+    const postNavigationStability = await readNavigationAnchorProbe(page);
+    expect(
+      postNavigationStability.offscreenFrames,
+      JSON.stringify(postNavigationStability)
+    ).toBe(0);
+    expect(postNavigationStability).toEqual({
+      maxAnchorDeltaPx: expect.any(Number),
+      maxAnchorOffsetPx: expect.any(Number),
+      minAnchorOffsetPx: expect.any(Number),
+      missingAfterSeenFrames: 0,
+      blankFrames: 0,
+      done: true,
+      firstAnchorOffsetPx: expect.any(Number),
+      geometryChanges: expect.any(Array),
+      offscreenFrames: 0,
+      targetFrames: 90,
+    });
+    expect(
+      postNavigationStability.maxAnchorDeltaPx,
+      JSON.stringify(postNavigationStability)
+    ).toBeLessThanOrEqual(REVIEW_NAVIGATION_ANCHOR_JITTER_PX);
+    expect(
+      postNavigationStability.missingAfterSeenFrames,
+      JSON.stringify(postNavigationStability)
+    ).toBe(0);
+    expect(
+      postNavigationStability.geometryChanges,
+      JSON.stringify(postNavigationStability)
+    ).toHaveLength(1);
+    expect(
+      new Set(
+        postNavigationStability.geometryChanges.map(
+          ({ viewportAnchorText }) => viewportAnchorText
+        )
+      ).size,
+      JSON.stringify(postNavigationStability)
+    ).toBe(1);
 
     const indexPath = join(repository, ".git", "index");
     const validIndex = readFileSync(indexPath);
@@ -1406,39 +3175,36 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
         /Failed to refresh changes|刷新变更失败/u
       );
       await expect(refreshFailure).toBeVisible({ timeout: 30_000 });
-      // 刷新失败时保留树与 panel；正文是否仍在虚拟化 DOM 中不作为 e2e 硬条件
-      // （同代 retention 由 unit 覆盖）。这里验证失败详情与恢复后导航。
+      // 刷新失败时保留树与 panel，并用不参与正文布局的 toast 反馈。
+      // 正文是否仍在虚拟化 DOM 中不作为 e2e 硬条件（同代 retention 由 unit 覆盖）。
       await expect(
         page.getByRole("treeitem", { name: /file-2000\.ts/u })
       ).toBeVisible();
 
-      const failureAlert = refreshFailure.locator(
-        'xpath=ancestor::*[@role="alert"][1]'
+      const failureToast = refreshFailure.locator(
+        "xpath=ancestor::*[@data-sonner-toast][1]"
       );
-      await failureAlert.getByRole("button", { name: /Details|详情/u }).click();
-      const detailsDialog = page.getByRole("alertdialog");
-      await expect(detailsDialog).toBeVisible();
-      await expect(detailsDialog).toContainText(/index|Git|fatal|error/iu);
-      await detailsDialog.getByRole("button", { name: /OK|确定/u }).click();
-
+      await expect(failureToast).toBeVisible();
+      await expect(
+        activeReviewSurface(page).locator('[data-slot="alert"]')
+      ).toHaveCount(0);
       writeFileSync(indexPath, validIndex);
-      // 恢复 index 后应能 on-demand 打开其它文件。
+      await failureToast.getByRole("button", { name: /Retry|重试/u }).click();
+      await expect(failureToast).toHaveCount(0, { timeout: 5000 });
+      // 必须读到故障期间改写的新正文；相邻预取或旧 retention 无法满足该断言。
+      const recoveredTarget = page.getByRole("treeitem", {
+        name: /file-0000\.ts/u,
+      });
+      await expect(async () => {
+        await page.locator('[data-slot="pier-file-tree-bridge"]').hover();
+        await page.mouse.wheel(0, -100_000);
+        await expect(recoveredTarget).toBeVisible({ timeout: 1000 });
+      }).toPass({ timeout: 20_000 });
+      await recoveredTarget.click();
       await expect
-        .poll(
-          async () => {
-            const onDemandTarget = page.getByRole("treeitem", {
-              name: /file-1999\.ts/u,
-            });
-            if ((await onDemandTarget.count()) === 0) {
-              await page.locator('[data-slot="pier-file-tree-bridge"]').hover();
-              await page.mouse.wheel(0, 50_000);
-              return false;
-            }
-            await onDemandTarget.click();
-            return isDiffTextInViewport(page, "value1999");
-          },
-          { timeout: 45_000 }
-        )
+        .poll(() => isDiffTextInViewport(page, "value0000 = 2"), {
+          timeout: 45_000,
+        })
         .toBe(true);
     } finally {
       writeFileSync(indexPath, validIndex);
@@ -1487,7 +3253,7 @@ test("keeps 35-file first content and 2,001-file on-demand navigation bounded", 
     ).toHaveCount(1);
     expect(pageErrors).toEqual([]);
   } finally {
-    await application.close().catch(() => undefined);
+    await closeApplicationWithin(application);
     await forceClose(child);
     rmSync(userDataDir, { force: true, recursive: true });
     rmSync(repository, { force: true, recursive: true });
@@ -1606,7 +3372,7 @@ test("reuses Review in its actual Dockview group after a drag", async () => {
       true
     );
   } finally {
-    await application.close().catch(() => undefined);
+    await closeApplicationWithin(application);
     await forceClose(child);
     rmSync(userDataDir, { force: true, recursive: true });
     rmSync(repository, { force: true, recursive: true });
@@ -1755,7 +3521,7 @@ test("opens POSIX backslash paths through the real tree keyboard flow", async ()
       )
       .toBe(true);
   } finally {
-    await application.close().catch(() => undefined);
+    await closeApplicationWithin(application);
     await forceClose(child);
     rmSync(userDataDir, { force: true, recursive: true });
     rmSync(repository, { force: true, recursive: true });
@@ -1803,6 +3569,20 @@ test("same-group tab switch restores Changes tree and diff immediately", async (
     await expect(reviewTreeFileItem(page, /app\.tsx/u)).toBeVisible({
       timeout: 20_000,
     });
+    // app.tsx exists in both groups. Each click must anchor the exact section,
+    // not merely keep the neighbouring section of the same file visible.
+    await clickReviewTreeFile(page, /app\.tsx/u, "staged");
+    await expect
+      .poll(() => isDiffTextAtViewportAnchor(page, "value = 1"), {
+        timeout: 5000,
+      })
+      .toBe(true);
+    await clickReviewTreeFile(page, /app\.tsx/u, "unstaged");
+    await expect
+      .poll(() => isDiffTextAtViewportAnchor(page, "value = 3"), {
+        timeout: 5000,
+      })
+      .toBe(true);
     await clickReviewTreeFile(page, /script\.py/u);
     await expect
       .poll(() => isDiffTextInViewport(page, "return 2"), { timeout: 30_000 })
@@ -1833,9 +3613,11 @@ test("same-group tab switch restores Changes tree and diff immediately", async (
     const secondTerminalId = secondTerminal.data?.panelId ?? "";
     expect(secondTerminalId).not.toBe("");
     await page.locator(`[data-panel-tab-id="${reviewId}"]`).click();
-    await expect(page.getByTestId("pierre-diff-root")).toBeVisible();
+    await expect(
+      activeReviewSurface(page).getByTestId("pierre-diff-root")
+    ).toBeVisible();
   } finally {
-    await application.close().catch(() => undefined);
+    await closeApplicationWithin(application);
     await forceClose(child);
     rmSync(userDataDir, { force: true, recursive: true });
     rmSync(repository, { force: true, recursive: true });

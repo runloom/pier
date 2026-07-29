@@ -15,8 +15,12 @@ const FAILURE_TEXT = {
     fallback: "Git review is busy. Try again.",
     key: "reviewFailureBusy",
   },
+  changeNotFound: {
+    fallback: "This change moved or was updated. Refresh and try again.",
+    key: "reviewFailureChangeNotFound",
+  },
   commandFailed: {
-    fallback: "Git could not read this change.",
+    fallback: "Git could not complete this operation. Try again.",
     key: "reviewFailureCommandFailed",
   },
   duplicateOperation: {
@@ -24,7 +28,7 @@ const FAILURE_TEXT = {
     key: "reviewFailureDuplicateOperation",
   },
   internal: {
-    fallback: "An internal error occurred while reading the change.",
+    fallback: "An internal error occurred while processing the change.",
     key: "reviewFailureInternal",
   },
   invalidSource: {

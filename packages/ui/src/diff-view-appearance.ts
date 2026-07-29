@@ -190,14 +190,13 @@ ${SCROLLBAR_SYSTEM_CSS}
   }
 
   /*
-   * Codex Tn sits absolute over a line-level annotation slot. Keep a normal
-   * relative containing block; only disable sticky + left offset that would
-   * detach the pill from the change line while scrolling.
+   * Codex Tn sits absolute over a line-level annotation slot. Pierre keeps
+   * this content sticky at the visible code-column inset in scroll mode and
+   * measures its width from the viewport column. Do not override position,
+   * left or width here: right-aligning against the full long-line canvas puts
+   * the action pill outside the horizontal viewport.
    */
   :host([data-pier-file-host]) [data-annotation-content] {
-    position: relative;
-    left: auto;
-    width: 100%;
     min-height: 0;
     overflow: visible;
   }
@@ -229,8 +228,9 @@ ${SCROLLBAR_SYSTEM_CSS}
  * Document-level CSS for light-DOM annotation pills (React portals on
  * <diffs-container>). Shadow unsafeCSS cannot style these descendants.
  *
- * Host is marked data-pier-file-host in onPostRender. Hovering any shadow
- * child of the host still matches :hover on the host element.
+ * Host is marked data-pier-file-host in onPostRender. Pierre renders the code
+ * in shadow DOM, so onPostRender also mirrors pointer entry to
+ * data-pier-pointer-within; :hover remains a browser fallback.
  */
 export const PIER_DIFF_LIGHT_DOM_CSS = `
   diffs-container[data-pier-file-host] [data-pier-hunk-actions] {
@@ -239,6 +239,7 @@ export const PIER_DIFF_LIGHT_DOM_CSS = `
     transition: opacity 120ms ease;
   }
 
+  diffs-container[data-pier-file-host][data-pier-pointer-within] [data-pier-hunk-actions],
   diffs-container[data-pier-file-host]:hover [data-pier-hunk-actions],
   diffs-container[data-pier-file-host]:focus-within [data-pier-hunk-actions],
   diffs-container[data-pier-file-host] [data-pier-hunk-actions]:focus-within {

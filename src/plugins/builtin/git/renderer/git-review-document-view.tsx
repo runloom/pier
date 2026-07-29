@@ -4,6 +4,12 @@ import type {
   PierDiffViewPresentation,
   PierDiffViewRenderWindow,
 } from "@pier/ui/diff-view.tsx";
+import {
+  Empty,
+  EmptyDescription,
+  EmptyHeader,
+  EmptyTitle,
+} from "@pier/ui/empty.tsx";
 import type {
   RendererPluginAppearance,
   RendererPluginContext,
@@ -12,6 +18,7 @@ import type {
   GitReviewFailure,
   GitReviewIndexEntry,
   GitReviewIndexOk,
+  GitReviewMutationOk,
 } from "@shared/contracts/git-review.ts";
 import { pluginText } from "./git-plugin-text.ts";
 import {
@@ -26,22 +33,34 @@ import type { ReviewFailureSummary } from "./git-review-failure-state.ts";
 import { ReviewFeedback, ReviewLoading } from "./git-review-feedback.tsx";
 import { gitReviewWarningMessage } from "./git-review-message.ts";
 import { GitReviewPanelLayout } from "./git-review-panel-layout.tsx";
+import type {
+  GitReviewMutationLease,
+  GitReviewMutationTransition,
+  GitReviewReadingSurface,
+} from "./git-review-reading-surface.ts";
 import type { gitReviewTreeModel } from "./git-review-tree.tsx";
 
 interface GitReviewDocumentViewProps {
   readonly appearance: RendererPluginAppearance;
+  readonly authoritativeEmpty: boolean;
   readonly context: RendererPluginContext;
   readonly contextId: string;
   readonly diffRef: (handle: PierDiffViewHandle | null) => void;
+  readonly emptyDescription: string;
+  readonly emptySurface: GitReviewReadingSurface;
+  readonly emptyTitle: string;
   /** Uncommitted entries enable header stage checkbox. */
   readonly entries?: readonly GitReviewIndexEntry[];
   readonly failureSummary: ReviewFailureSummary;
+  readonly feedbackEnabled: boolean;
   readonly getSuppressMembershipScrollRestore?: () => boolean;
   readonly gitRootPath: string;
   readonly headerLeading?: React.ReactNode;
   readonly headerTrailing?: React.ReactNode;
   readonly indexFailure: GitReviewFailure | null;
   readonly isActiveOpenPath?: (path: string) => boolean;
+  readonly mutationAuthorityBlocked: boolean;
+  readonly onAcquireMutationAuthority: () => GitReviewMutationLease | null;
   readonly onContextMenuSession?: (
     phase: "begin" | "end",
     detail: {
@@ -51,6 +70,10 @@ interface GitReviewDocumentViewProps {
   ) => void;
   readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
   readonly onItemError: (id: string, error: Error | null) => void;
+  readonly onMutationCommitted: (
+    result: GitReviewMutationOk | null,
+    transition?: GitReviewMutationTransition
+  ) => Promise<void>;
   readonly onOpenPath: (path: string) => void;
   readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
   readonly onRetryFailure: (entryKey: string) => void;
@@ -59,7 +82,6 @@ interface GitReviewDocumentViewProps {
   readonly presentation?: PierDiffViewPresentation;
   readonly projection: ReviewDocumentProjection;
   readonly renderFeedback: ReviewRenderFeedback | null;
-  readonly selectedTreePath: string | null;
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
   readonly sidebarFooter?: React.ReactNode;
@@ -73,10 +95,15 @@ interface GitReviewDocumentViewProps {
 
 export function GitReviewDocumentView({
   appearance,
+  authoritativeEmpty,
   context,
   diffRef,
+  emptyDescription,
+  emptySurface,
+  emptyTitle,
   entries,
   failureSummary,
+  feedbackEnabled,
   contextId,
   gitRootPath,
   headerLeading,
@@ -84,6 +111,9 @@ export function GitReviewDocumentView({
   indexFailure,
   onItemError,
   onFeedbackChange,
+  onAcquireMutationAuthority,
+  onMutationCommitted,
+  mutationAuthorityBlocked,
   onOpenPath,
   isActiveOpenPath,
   onContextMenuSession,
@@ -94,7 +124,6 @@ export function GitReviewDocumentView({
   presentation,
   projection,
   renderFeedback,
-  selectedTreePath,
   sourcePanelId,
   setSidebarCollapsed,
   sidebarCollapsed,
@@ -108,13 +137,20 @@ export function GitReviewDocumentView({
 }: GitReviewDocumentViewProps): React.JSX.Element {
   const diffContent = documentContent({
     appearance,
+    authoritativeEmpty,
     context,
     contextId,
     diffRef,
+    emptyDescription,
+    emptySurface,
+    emptyTitle,
     ...(entries === undefined ? {} : { entries }),
     gitRootPath,
     onItemError,
     onFeedbackChange,
+    onAcquireMutationAuthority,
+    onMutationCommitted,
+    mutationAuthorityBlocked,
     onRenderWindowChange,
     onScroll,
     ...(presentation === undefined ? {} : { presentation }),
@@ -132,12 +168,12 @@ export function GitReviewDocumentView({
       context={context}
       contextId={contextId}
       gitRootPath={gitRootPath}
+      mutationAuthorityBlocked={mutationAuthorityBlocked}
       {...(headerLeading === undefined ? {} : { headerLeading })}
       {...(headerTrailing === undefined ? {} : { headerTrailing })}
       onOpenPath={onOpenPath}
       {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
       {...(onContextMenuSession ? { onContextMenuSession } : {})}
-      selectedTreePath={selectedTreePath}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
       {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
@@ -145,7 +181,10 @@ export function GitReviewDocumentView({
       {...(sourcePanelId ? { sourcePanelId } : {})}
       treeModel={treeModel}
     >
-      <div className="flex h-full min-w-0 flex-col bg-background">
+      <div
+        className="flex h-full min-w-0 flex-col bg-background"
+        data-git-review-document-settled={viewState.settled}
+      >
         {warnings.length > 0 ? (
           <Alert className="m-2">
             <AlertTitle>
@@ -160,6 +199,7 @@ export function GitReviewDocumentView({
         ) : null}
         <ReviewFeedback
           context={context}
+          enabled={feedbackEnabled}
           failures={failureSummary.visibleFailures}
           hasHiddenFailures={failureSummary.hasHiddenFailures}
           indexFailure={indexFailure}
@@ -179,13 +219,23 @@ export function GitReviewDocumentView({
 
 function documentContent(options: {
   readonly appearance: RendererPluginAppearance;
+  readonly authoritativeEmpty: boolean;
   readonly context: RendererPluginContext;
   readonly contextId: string;
   readonly diffRef: (handle: PierDiffViewHandle | null) => void;
+  readonly emptyDescription: string;
+  readonly emptySurface: GitReviewReadingSurface;
+  readonly emptyTitle: string;
   readonly entries?: readonly GitReviewIndexEntry[];
   readonly gitRootPath: string;
   readonly onItemError: (id: string, error: Error | null) => void;
   readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
+  readonly onAcquireMutationAuthority: () => GitReviewMutationLease | null;
+  readonly onMutationCommitted: (
+    result: GitReviewMutationOk | null,
+    transition?: GitReviewMutationTransition
+  ) => Promise<void>;
+  readonly mutationAuthorityBlocked: boolean;
   readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
   readonly onScroll: () => void;
   readonly presentation?: PierDiffViewPresentation;
@@ -205,7 +255,7 @@ function documentContent(options: {
         };
   if (options.projection.items.length > 0) {
     return (
-      <div className="min-h-0 flex-1">
+      <div className="min-h-0 flex-1" data-git-review-document-content="code">
         <ReviewCodeView
           appearance={options.appearance}
           context={options.context}
@@ -216,10 +266,14 @@ function documentContent(options: {
             : { entries: options.entries })}
           {...(options.gitRootPath ? { gitRootPath: options.gitRootPath } : {})}
           items={options.projection.items}
+          mutationAuthorityBlocked={options.mutationAuthorityBlocked}
+          onAcquireMutationAuthority={options.onAcquireMutationAuthority}
           onFeedbackChange={options.onFeedbackChange}
           onItemError={options.onItemError}
+          onMutationCommitted={options.onMutationCommitted}
           onRenderWindowChange={options.onRenderWindowChange}
           onScroll={options.onScroll}
+          revisionBySectionId={options.projection.revisionBySectionId}
           {...(options.presentation === undefined
             ? {}
             : { presentation: options.presentation })}
@@ -232,34 +286,20 @@ function documentContent(options: {
       </div>
     );
   }
-  // 终态：未 materialize 完成时 skeleton；settled 仍无成员则保持 CodeView 空壳路径
-  // （上层 index 空态另有 Empty）。避免把「空成员」当成永久全页 loading。
-  if (!options.settled) {
+  if (!(options.settled || options.authoritativeEmpty)) {
     return <ReviewLoading context={options.context} />;
   }
   return (
-    <div className="min-h-0 flex-1">
-      <ReviewCodeView
-        appearance={options.appearance}
-        context={options.context}
-        contextId={options.contextId}
-        diffRef={options.diffRef}
-        {...(options.entries === undefined ? {} : { entries: options.entries })}
-        {...(options.gitRootPath ? { gitRootPath: options.gitRootPath } : {})}
-        items={[]}
-        onFeedbackChange={options.onFeedbackChange}
-        onItemError={options.onItemError}
-        onRenderWindowChange={options.onRenderWindowChange}
-        onScroll={options.onScroll}
-        {...(options.presentation === undefined
-          ? {}
-          : { presentation: options.presentation })}
-        {...(options.sourcePanelId === undefined
-          ? {}
-          : { sourcePanelId: options.sourcePanelId })}
-        {...suppressGetter}
-        suppressMembershipScrollRestore={suppress}
-      />
-    </div>
+    <Empty
+      className="min-h-0 flex-1"
+      data-git-review-document-content="empty"
+      data-git-review-empty-surface={options.emptySurface}
+      data-git-review-empty-title={options.emptyTitle}
+    >
+      <EmptyHeader>
+        <EmptyTitle>{options.emptyTitle}</EmptyTitle>
+        <EmptyDescription>{options.emptyDescription}</EmptyDescription>
+      </EmptyHeader>
+    </Empty>
   );
 }

@@ -2,7 +2,7 @@ import { createHash } from "node:crypto";
 import type { GitReviewGroup } from "../../../shared/contracts/git-review.ts";
 
 export function createGitReviewSectionKey(
-  group: GitReviewGroup,
+  group: GitReviewGroup | "working",
   oldPath: string | null,
   targetPath: string
 ): string {

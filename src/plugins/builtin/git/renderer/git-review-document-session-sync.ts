@@ -1,12 +1,15 @@
 import type { PierDiffViewHandle } from "@pier/ui/diff-view.tsx";
+import type { PierDiffViewItem } from "@pier/ui/diff-view-items.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitReviewIndexEntry } from "@shared/contracts/git-review.ts";
 import type { Dispatch, RefObject, SetStateAction } from "react";
-import type { ReviewDocumentDemand } from "./git-review-document-demand.ts";
+import {
+  type ReviewDocumentDemand,
+  selectBodyHydrationPriorityEntryKeys,
+} from "./git-review-document-demand.ts";
 import type { GitReviewDocumentGeneration } from "./git-review-document-generation.ts";
 import type { GitReviewDocumentLoader } from "./git-review-document-loader.ts";
 import {
-  isCodeViewMemberResource,
   projectReviewLedger,
   type ReviewDocumentProjection,
   type ReviewDocumentViewState,
@@ -19,10 +22,7 @@ import {
   nextDemandPrefetchEntryKeys,
   sameStringSet,
 } from "./git-review-materialization.ts";
-import {
-  type ReviewReadingSide,
-  readingSideFromStageState,
-} from "./git-review-reading-anchor.ts";
+import type { GitReviewReadingSurface } from "./git-review-reading-surface.ts";
 import type { GitReviewGenerationCallbacks } from "./use-git-review-document-session.ts";
 
 export interface ReviewDocumentSyncContext {
@@ -33,34 +33,26 @@ export interface ReviewDocumentSyncContext {
   readonly demandPrefetchEntryKeysRef: {
     current: ReadonlySet<string>;
   };
+  readonly diffBase: GitReviewReadingSurface;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
   readonly entries: readonly GitReviewIndexEntry[];
   readonly entryKeysInOrder: readonly string[];
   readonly generation: number;
   readonly generationCallbacksRef: RefObject<GitReviewGenerationCallbacks>;
+  readonly indexGeneration: number;
   readonly itemCacheKeysRef: RefObject<Map<string, string>>;
   readonly itemIdsRef: RefObject<readonly string[]>;
   readonly loader: GitReviewDocumentLoader;
-  previousCacheKeys: Map<string, string>;
+  readonly measuredEstimateLinesByPath: Map<string, number>;
+  previousItemsById: Map<string, PierDiffViewItem>;
   previousMemberIds: Set<string>;
+  previousRevisionBySectionId: ReadonlyMap<string, string>;
   previousStickyBodyEntryKeys: string[];
   readonly projectionLocaleRef: RefObject<string>;
   readonly resourceByEntryKey: Map<string, GitReviewDocumentResource>;
   readonly setProjection: Dispatch<SetStateAction<ReviewDocumentProjection>>;
   readonly setViewState: Dispatch<SetStateAction<ReviewDocumentViewState>>;
-  readonly sideBySectionIdRef: RefObject<Map<string, ReviewReadingSide>>;
   readonly viewStateRef: RefObject<ReviewDocumentViewState>;
-}
-
-function syncSideBySectionId(
-  sideBySectionIdRef: RefObject<Map<string, ReviewReadingSide>>,
-  projection: ReviewDocumentProjection
-): void {
-  const next = new Map<string, ReviewReadingSide>();
-  for (const item of projection.items) {
-    next.set(item.id, readingSideFromStageState(item.stageControl?.state));
-  }
-  sideBySectionIdRef.current = next;
 }
 
 export function createReviewDocumentSyncHandler(
@@ -74,18 +66,20 @@ export function createReviewDocumentSyncHandler(
       currentDemandRef,
       demandPrefetchEntryKeysRef,
       diffHandleRef,
+      diffBase,
       entries,
       entryKeysInOrder,
       generation,
       generationCallbacksRef,
       itemCacheKeysRef,
       itemIdsRef,
+      indexGeneration,
       loader,
+      measuredEstimateLinesByPath,
       projectionLocaleRef,
       resourceByEntryKey,
       setProjection,
       setViewState,
-      sideBySectionIdRef,
       viewStateRef,
     } = ctx;
     const protectedKey = generationCallbacksRef.current.getSelectedEntryKey();
@@ -127,10 +121,9 @@ export function createReviewDocumentSyncHandler(
       demandPrefetchEntryKeysRef.current = prefetchSet;
     }
     // 全量账本：id 集 = index 槽；demand 只影响读与 retention sticky
-    const bodyCandidateKeys = entryKeysInOrder.filter((entryKey) => {
-      const resource = resourceByEntryKey.get(entryKey);
-      return resource !== undefined && isCodeViewMemberResource(resource);
-    });
+    const bodyCandidateKeys = entryKeysInOrder.filter(
+      (entryKey) => resourceByEntryKey.get(entryKey)?.kind === "loaded"
+    );
     const navigationPending =
       generationCallbacksRef.current.hasPendingNavigation();
     const demand = currentDemandRef.current;
@@ -143,6 +136,20 @@ export function createReviewDocumentSyncHandler(
         selectedEntryKey: protectedKey,
         viewportEntryKeys: demand.visibleEntryKeys,
       });
+    const allowedBodyEntryKeys = new Set(
+      selectBodyHydrationPriorityEntryKeys({
+        candidateEntryKeys: bodyCandidateKeys,
+        demand,
+        entryKeysInOrder,
+        navigationPending,
+        navigationReason:
+          generationCallbacksRef.current.getNavigationMemberReason(),
+        pinnedPrefixEntryKeys,
+        previousMemberEntryKeys: ctx.previousStickyBodyEntryKeys,
+        readingMode,
+        selectedEntryKey: protectedKey,
+      })
+    );
     const demandPinKeys = new Set<string>();
     if (protectedKey !== null) {
       demandPinKeys.add(protectedKey);
@@ -160,52 +167,56 @@ export function createReviewDocumentSyncHandler(
           ...new Set([
             ...pinnedPrefixEntryKeys.filter(
               (entryKey) =>
-                bodyCandidateSet.has(entryKey) && !demandPinKeys.has(entryKey)
+                allowedBodyEntryKeys.has(entryKey) &&
+                !demandPinKeys.has(entryKey)
             ),
             ...ctx.previousStickyBodyEntryKeys.filter(
               (entryKey) =>
-                bodyCandidateSet.has(entryKey) && !demandPinKeys.has(entryKey)
+                allowedBodyEntryKeys.has(entryKey) &&
+                !demandPinKeys.has(entryKey)
             ),
           ]),
         ]
       : [];
     loader.setStickyMemberEntryKeys(stickyOnly);
-    ctx.previousStickyBodyEntryKeys = bodyCandidateKeys;
+    ctx.previousStickyBodyEntryKeys = [...allowedBodyEntryKeys];
 
-    const changedBodyEntryKeys = new Set(
-      next.changedResources
-        .filter(isCodeViewMemberResource)
-        .map((resource) => resource.entry.entryKey)
-    );
     // 滚动热路径：无 body 变更时仍可能只需跳过（账本 id 随 index 固定）
     const nextProjection = projectReviewLedger({
+      allowedBodyEntryKeys,
+      authoritativeEntryKeys: controller.authoritativeEntryKeys(),
       context,
+      diffBase,
       entries,
       locale: projectionLocaleRef.current,
+      measuredEstimateLinesByPath,
       resourceByEntryKey,
+      sourceIndexGeneration: indexGeneration,
     });
     const contentUpdates = nextProjection.items.filter((item) => {
-      if (!ctx.previousMemberIds.has(item.id)) {
-        return false;
-      }
-      if (ctx.previousCacheKeys.get(item.id) !== item.cacheKey) {
-        return true;
-      }
-      const entryKey = nextProjection.entryKeyBySectionId.get(item.id);
-      return entryKey !== undefined && changedBodyEntryKeys.has(entryKey);
+      const previous = ctx.previousItemsById.get(item.id);
+      return (
+        previous !== undefined && !areReviewProjectionItemsEqual(previous, item)
+      );
     });
     const nextMemberIds = nextProjection.items.map((item) => item.id);
     const previousIdList = itemIdsRef.current;
     const membershipOrOrderChanged =
       nextMemberIds.length !== previousIdList.length ||
       nextMemberIds.some((id, index) => id !== previousIdList[index]);
+    const revisionChanged = !sameStringMap(
+      ctx.previousRevisionBySectionId,
+      nextProjection.revisionBySectionId
+    );
     const needsReactProjection =
-      membershipOrOrderChanged || contentUpdates.length > 0;
+      membershipOrOrderChanged || contentUpdates.length > 0 || revisionChanged;
+    ctx.previousMemberIds = new Set(nextMemberIds);
+    ctx.previousItemsById = new Map(
+      nextProjection.items.map((item) => [item.id, item])
+    );
+    ctx.previousRevisionBySectionId = nextProjection.revisionBySectionId;
     // 无拓扑/正文变化：仍更新 viewState 元数据，跳过 setProjection
-    if (
-      !(needsReactProjection || changedBodyEntryKeys.size > 0) &&
-      next.changedResources.length === 0
-    ) {
+    if (!needsReactProjection) {
       const nextViewStateOnly: ReviewDocumentViewState = {
         generation,
         retainedEntryKeys,
@@ -238,18 +249,13 @@ export function createReviewDocumentSyncHandler(
       }
       return;
     }
-    ctx.previousMemberIds = new Set(nextMemberIds);
-    ctx.previousCacheKeys.clear();
     for (const item of nextProjection.items) {
-      ctx.previousCacheKeys.set(item.id, item.cacheKey);
       itemCacheKeysRef.current.set(item.id, item.cacheKey);
     }
     if (needsReactProjection) {
       itemIdsRef.current = nextMemberIds;
       setProjection(nextProjection);
     }
-    // 始终刷新 side 图（含仅 contentUpdates 的路径）
-    syncSideBySectionId(sideBySectionIdRef, nextProjection);
     if (contentUpdates.length > 0) {
       generationCallbacksRef.current.recordLatestItemUpdates(contentUpdates);
       generationCallbacksRef.current.notifyProjectionChanged(
@@ -262,7 +268,12 @@ export function createReviewDocumentSyncHandler(
           handle,
           generation,
           contentUpdates,
-          next.settled ? { flush: true } : undefined
+          next.settled || navigationPending
+            ? {
+                ...(next.settled ? { flush: true } : {}),
+                ...(navigationPending ? { preserveAnchor: true } : {}),
+              }
+            : undefined
         );
       }
     }
@@ -300,4 +311,67 @@ export function createReviewDocumentSyncHandler(
       generationCallbacksRef.current.endReadingRefresh();
     }
   };
+}
+
+export function areReviewProjectionItemsEqual(
+  left: PierDiffViewItem,
+  right: PierDiffViewItem
+): boolean {
+  return (
+    left.cacheKey === right.cacheKey &&
+    left.estimateLines === right.estimateLines &&
+    left.id === right.id &&
+    left.kind === right.kind &&
+    left.patch === right.patch &&
+    left.stateNotice === right.stateNotice &&
+    left.fileDisplay?.path === right.fileDisplay?.path &&
+    left.fileDisplay?.previousPath === right.fileDisplay?.previousPath &&
+    left.fileDisplay?.status === right.fileDisplay?.status &&
+    left.stageControl?.busy === right.stageControl?.busy &&
+    left.stageControl?.canDiscard === right.stageControl?.canDiscard &&
+    left.stageControl?.state === right.stageControl?.state &&
+    left.stageControl?.targetSectionKey ===
+      right.stageControl?.targetSectionKey &&
+    sameChangeControls(left.changeControls, right.changeControls)
+  );
+}
+
+function sameChangeControls(
+  left: PierDiffViewItem["changeControls"],
+  right: PierDiffViewItem["changeControls"]
+): boolean {
+  if (left === right) {
+    return true;
+  }
+  if (left?.length !== right?.length) {
+    return false;
+  }
+  return (left ?? []).every((control, index) => {
+    const candidate = right?.[index];
+    return (
+      candidate !== undefined &&
+      control.busy === candidate.busy &&
+      control.canRevert === candidate.canRevert &&
+      control.changeBlockIndex === candidate.changeBlockIndex &&
+      control.changeKey === candidate.changeKey &&
+      control.hunkIndex === candidate.hunkIndex &&
+      control.state === candidate.state &&
+      control.targetSectionKey === candidate.targetSectionKey
+    );
+  });
+}
+
+function sameStringMap(
+  left: ReadonlyMap<string, string>,
+  right: ReadonlyMap<string, string>
+): boolean {
+  if (left.size !== right.size) {
+    return false;
+  }
+  for (const [key, value] of left) {
+    if (right.get(key) !== value) {
+      return false;
+    }
+  }
+  return true;
 }

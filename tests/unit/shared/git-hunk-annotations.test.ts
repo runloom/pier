@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { primaryHunkActionForVariant } from "../../../packages/ui/src/diff-view-hunk-actions.tsx";
+import {
+  canRevertHunkForVariant,
+  primaryHunkActionForVariant,
+} from "../../../packages/ui/src/diff-view-hunk-actions.tsx";
 import {
   buildHunkActionAnnotations,
   hunkAnnotationAnchor,
@@ -94,6 +97,12 @@ describe("primaryHunkActionForVariant (Codex)", () => {
   it("maps unstaged → stage and staged → unstage", () => {
     expect(primaryHunkActionForVariant("unstaged")).toBe("stage");
     expect(primaryHunkActionForVariant("staged")).toBe("unstage");
+  });
+
+  it("只允许未暂存变更显示还原动作", () => {
+    expect(canRevertHunkForVariant("unstaged")).toBe(true);
+    expect(canRevertHunkForVariant("partial")).toBe(true);
+    expect(canRevertHunkForVariant("staged")).toBe(false);
   });
 });
 
@@ -267,9 +276,27 @@ describe("hunkAnnotationAnchor (Codex wa)", () => {
       type: "change" as const,
       unifiedLineCount: 10,
     };
-    const annotations = buildHunkActionAnnotations(fileDiff, {
-      state: "unstaged",
-    });
+    const annotations = buildHunkActionAnnotations(fileDiff, [
+      {
+        canRevert: false,
+        changeBlockIndex: 0,
+        changeKey: "change:0:0",
+        hunkIndex: 0,
+        state: "unstaged",
+      },
+      {
+        changeBlockIndex: 1,
+        changeKey: "change:0:1",
+        hunkIndex: 0,
+        state: "unstaged",
+      },
+      {
+        changeBlockIndex: 0,
+        changeKey: "change:1:0",
+        hunkIndex: 1,
+        state: "unstaged",
+      },
+    ]);
     // 2 change blocks in first hunk + 1 in second
     expect(annotations).toHaveLength(3);
     expect(annotations?.map((a) => a.metadata.hunkIndex)).toEqual([0, 0, 1]);
@@ -277,6 +304,39 @@ describe("hunkAnnotationAnchor (Codex wa)", () => {
       0, 1, 0,
     ]);
     expect(annotations?.map((a) => a.lineNumber)).toEqual([1, 3, 21]);
+    expect(annotations?.[0]?.metadata.canRevert).toBe(false);
+  });
+
+  it("keeps inline actions for every fragmented change", () => {
+    const hunks = Array.from({ length: 300 }, (_, index) =>
+      makeHunk({
+        additionStart: index + 1,
+        additions: 1,
+        deletionStart: index + 1,
+        deletions: 1,
+      })
+    );
+    expect(
+      buildHunkActionAnnotations(
+        {
+          additionLines: [],
+          cacheKey: "large",
+          deletionLines: [],
+          hunks,
+          isPartial: true,
+          name: "src/large.ts",
+          splitLineCount: hunks.length,
+          type: "change",
+          unifiedLineCount: hunks.length * 2,
+        },
+        hunks.map((_hunk, hunkIndex) => ({
+          changeBlockIndex: 0,
+          changeKey: `change:${hunkIndex}:0`,
+          hunkIndex,
+          state: "unstaged" as const,
+        }))
+      )
+    ).toHaveLength(hunks.length);
   });
 
   it("falls back to additionLines when hunkContent is empty", () => {

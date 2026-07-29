@@ -10,11 +10,14 @@ import {
   indexReviewSectionEntries,
   type ReviewDocumentProjection,
 } from "./git-review-document-projection.ts";
+import type { GitReviewReadingSurface } from "./git-review-reading-surface.ts";
 
 /** 将 React 投影一次性提交给导航索引、cacheKey 索引和当前 Pierre handle。 */
 export function useGitReviewProjectionCommit({
+  active,
   committedProjectionGenerationRef,
   diffHandleRef,
+  diffBase,
   documentGenerationRef,
   entries,
   entryKeyBySectionIdRef,
@@ -30,8 +33,10 @@ export function useGitReviewProjectionCommit({
   resumeSelectedNavigation,
   tryPendingNavigation,
 }: {
+  readonly active: boolean;
   readonly committedProjectionGenerationRef: RefObject<number>;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
+  readonly diffBase: GitReviewReadingSurface;
   readonly documentGenerationRef: RefObject<number>;
   readonly entries: readonly GitReviewIndexEntry[];
   readonly entryKeyBySectionIdRef: RefObject<ReadonlyMap<string, string>>;
@@ -56,14 +61,17 @@ export function useGitReviewProjectionCommit({
     [projection]
   );
   const entrySectionIndex = useMemo(
-    () => indexReviewEntrySections(entries),
-    [entries]
+    () => indexReviewEntrySections(entries, diffBase),
+    [diffBase, entries]
   );
   // 全量 section→entry（含未 materialize），供 demand / failure 解析。
-  const fullSectionIndex = useMemo(
-    () => indexReviewSectionEntries(entries),
-    [entries]
-  );
+  const fullSectionIndex = useMemo(() => {
+    const merged = new Map(indexReviewSectionEntries(entries, diffBase));
+    for (const [sectionId, entryKey] of projection.entryKeyBySectionId) {
+      merged.set(sectionId, entryKey);
+    }
+    return merged;
+  }, [diffBase, entries, projection.entryKeyBySectionId]);
 
   useLayoutEffect(() => {
     committedProjectionGenerationRef.current = projectionGeneration;
@@ -77,7 +85,7 @@ export function useGitReviewProjectionCommit({
     }
     itemCacheKeysRef.current = cacheKeys;
     itemIdsRef.current = projectionIndex.itemIds;
-    if (projectionGeneration !== documentGenerationRef.current) {
+    if (!active || projectionGeneration !== documentGenerationRef.current) {
       return;
     }
     const handle = diffHandleRef.current;
@@ -93,6 +101,7 @@ export function useGitReviewProjectionCommit({
     resumeSelectedNavigation();
     tryPendingNavigation();
   }, [
+    active,
     committedProjectionGenerationRef,
     diffHandleRef,
     documentGenerationRef,

@@ -1,25 +1,25 @@
 import { act, renderHook } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 import { useGitReviewNavigation } from "../../../src/plugins/builtin/git/renderer/use-git-review-navigation.ts";
+import { patchDocument } from "./git-review-document-fixture.ts";
 
 function setup(options?: {
+  readonly itemCacheKey?: string;
+  readonly initialSelection?: boolean;
+  readonly getViewportLayoutKey?: () => string | null;
   readonly isItemVisible?: () => boolean;
+  readonly isViewportReady?: () => boolean;
   readonly scrollToItem?: () => boolean;
 }) {
   const applyNavigationDemand = vi.fn();
   const loader = {
     getResource: vi.fn(() => ({
-      document: {
-        kind: "ok" as const,
+      document: patchDocument({
+        entryKey: "entry:a",
+        patch: "diff",
         revision: "document:a",
-        sections: [
-          {
-            kind: "patch" as const,
-            patch: "diff",
-            sectionKey: "section:a",
-          },
-        ],
-      },
+        sectionKey: "section:a",
+      }),
       entry: {
         entryKey: "entry:a",
         oldPaths: [],
@@ -45,7 +45,25 @@ function setup(options?: {
     applyNavigationDemand,
     diffHandleRef: {
       current: {
+        getViewportLayoutKey:
+          options?.getViewportLayoutKey ?? (() => "layout:stable"),
         isItemVisible: options?.isItemVisible ?? (() => true),
+        isViewportReady: options?.isViewportReady ?? (() => true),
+        requestViewportLayoutSettled: (
+          _targetItemId: string,
+          _stableFrames: number,
+          callback: () => void
+        ) => {
+          let cancelled = false;
+          queueMicrotask(() => {
+            if (!cancelled) {
+              callback();
+            }
+          });
+          return () => {
+            cancelled = true;
+          };
+        },
         scrollToItem: options?.scrollToItem ?? (() => true),
       },
     },
@@ -57,11 +75,18 @@ function setup(options?: {
       current: new Map([["entry:a", "section:a"]]),
     },
     itemCacheKeysRef: {
-      current: new Map([["section:a", "document:a:section:a"]]),
+      current: new Map([
+        ["section:a", options?.itemCacheKey ?? "document:a:section:a"],
+      ]),
     },
     itemIndexByIdRef: { current: new Map([["section:a", 0]]) },
+    ...(options?.initialSelection === true
+      ? {
+          initialSelectedEntryKey: "entry:a",
+          initialSelectedSectionKey: "section:a",
+        }
+      : {}),
     loaderRef: { current: loader },
-    pendingAnchorRef: { current: null },
     renderedGenerationRef: { current: 1 },
   };
   const hook = renderHook(() => useGitReviewNavigation(refs as never));
@@ -74,6 +99,18 @@ async function flushFrames(): Promise<void> {
       requestAnimationFrame(() => {
         requestAnimationFrame(() => resolve());
       });
+    });
+  });
+}
+
+function acknowledgeTargetWindow(
+  hook: ReturnType<typeof setup>["hook"],
+  sectionKey = "section:a"
+): void {
+  act(() => {
+    hook.result.current.notifyRenderWindowApplied({
+      bufferedItemIds: [],
+      visibleItemIds: [sectionKey],
     });
   });
 }
@@ -107,7 +144,35 @@ describe("useGitReviewNavigation demand sync", () => {
     expect(hook.result.current.navigationPending).toBe(true);
   });
 
-  it("beginGeneration keep-selected reapplies boost demand with rebind reason", () => {
+  it("does not settle against an estimate before loaded content is committed", async () => {
+    const scrollToItem = vi.fn(() => true);
+    const { hook, refs } = setup({
+      itemCacheKey: "estimate:section:a",
+      isItemVisible: () => true,
+      scrollToItem,
+    });
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+      hook.result.current.tryPendingNavigation();
+    });
+    await flushFrames();
+    expect(scrollToItem).not.toHaveBeenCalled();
+    expect(hook.result.current.navigationPending).toBe(true);
+
+    refs.itemCacheKeysRef.current = new Map([
+      ["section:a", "document:a:section:a"],
+    ]);
+    act(() => hook.result.current.tryPendingNavigation());
+    acknowledgeTargetWindow(hook);
+    await flushFrames();
+    expect(scrollToItem).toHaveBeenCalledTimes(1);
+    expect(hook.result.current.navigationPending).toBe(false);
+  });
+
+  it("beginGeneration keeps settled selection without turning refresh into navigation", async () => {
     const { applyNavigationDemand, hook } = setup();
     act(() => {
       hook.result.current.beginNavigation({
@@ -117,10 +182,31 @@ describe("useGitReviewNavigation demand sync", () => {
     });
     applyNavigationDemand.mockClear();
     act(() => {
+      hook.result.current.tryPendingNavigation();
+    });
+    acknowledgeTargetWindow(hook);
+    await flushFrames();
+    applyNavigationDemand.mockClear();
+    act(() => {
       hook.result.current.beginGeneration(new Set(["entry:a"]), 2);
     });
+    expect(applyNavigationDemand).not.toHaveBeenCalled();
+    expect(hook.result.current.getNavigationMemberReason()).toBeNull();
+    expect(hook.result.current.navigationPending).toBe(false);
+  });
+
+  it("remount generation restores the persisted selection without changing refresh policy", () => {
+    const { applyNavigationDemand, hook } = setup({
+      initialSelection: true,
+    });
+    act(() => {
+      hook.result.current.beginGeneration(new Set(["entry:a"]), 2, {
+        restoreSelection: true,
+      });
+    });
     expect(applyNavigationDemand).toHaveBeenCalledWith("entry:a");
-    expect(hook.result.current.getNavigationMemberReason()).toBe("rebind");
+    expect(hook.result.current.getNavigationMemberReason()).toBe("restore");
+    expect(hook.result.current.navigationPending).toBe(true);
   });
 
   it("tryPendingNavigation scrolls at most once then verify does not rescroll", async () => {
@@ -135,10 +221,133 @@ describe("useGitReviewNavigation demand sync", () => {
     act(() => {
       hook.result.current.tryPendingNavigation();
     });
+    acknowledgeTargetWindow(hook);
     expect(scrollToItem).toHaveBeenCalledTimes(1);
     await flushFrames();
     await flushFrames();
     expect(scrollToItem).toHaveBeenCalledTimes(1);
+  });
+
+  it("waits for a visible non-zero viewport before restoring a selected item", async () => {
+    let viewportReady = false;
+    const scrollToItem = vi.fn(() => true);
+    const { hook } = setup({
+      isViewportReady: () => viewportReady,
+      scrollToItem,
+    });
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+      hook.result.current.tryPendingNavigation();
+    });
+    expect(scrollToItem).not.toHaveBeenCalled();
+    expect(hook.result.current.navigationPending).toBe(true);
+
+    viewportReady = true;
+    await flushFrames();
+    expect(scrollToItem).toHaveBeenCalledOnce();
+  });
+
+  it("re-arms the semantic selection when later layout removes it from the viewport", async () => {
+    const { hook } = setup();
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+      hook.result.current.tryPendingNavigation();
+    });
+    acknowledgeTargetWindow(hook);
+    await flushFrames();
+    expect(hook.result.current.navigationPending).toBe(false);
+
+    act(() => {
+      hook.result.current.notifyRenderWindowApplied({
+        bufferedItemIds: [],
+        visibleItemIds: [],
+      });
+    });
+    expect(hook.result.current.navigationPending).toBe(true);
+    expect(hook.result.current.getNavigationMemberReason()).toBe("restore");
+  });
+
+  it("does not resubmit a restore scroll when predecessor measurement changes", () => {
+    let layoutKey = "layout:before";
+    const scrollToItem = vi.fn(() => true);
+    const { hook, refs } = setup({
+      getViewportLayoutKey: () => layoutKey,
+      initialSelection: true,
+      scrollToItem,
+    });
+    refs.documentGenerationRef.current = 2;
+    refs.renderedGenerationRef.current = 2;
+    act(() => {
+      hook.result.current.beginGeneration(new Set(["entry:a"]), 2, {
+        restoreSelection: true,
+      });
+      hook.result.current.tryPendingNavigation();
+    });
+    expect(scrollToItem).toHaveBeenCalledOnce();
+
+    layoutKey = "layout:after";
+    act(() => hook.result.current.tryPendingNavigation());
+    expect(scrollToItem).toHaveBeenCalledOnce();
+  });
+
+  it("keeps explicit tree navigation pending until the requested item is visible", async () => {
+    let visible = false;
+    const scrollToItem = vi.fn(() => true);
+    const { hook } = setup({
+      isItemVisible: () => visible,
+      scrollToItem,
+    });
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+      hook.result.current.tryPendingNavigation();
+    });
+    acknowledgeTargetWindow(hook);
+    expect(hook.result.current.navigationPending).toBe(true);
+    expect(scrollToItem).toHaveBeenCalledTimes(1);
+
+    visible = true;
+    await flushFrames();
+    expect(hook.result.current.navigationPending).toBe(false);
+    expect(scrollToItem).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not resubmit explicit navigation when an earlier projection changes", async () => {
+    let visible = true;
+    const scrollToItem = vi.fn(() => true);
+    const { hook } = setup({
+      isItemVisible: () => visible,
+      scrollToItem,
+    });
+    act(() => {
+      hook.result.current.beginNavigation({
+        entryKey: "entry:a",
+        sectionKey: "section:a",
+      });
+      hook.result.current.tryPendingNavigation();
+    });
+    acknowledgeTargetWindow(hook);
+    expect(hook.result.current.navigationPending).toBe(true);
+
+    visible = false;
+    act(() => {
+      hook.result.current.notifyProjectionChanged(["section:a"]);
+      hook.result.current.tryPendingNavigation();
+    });
+    expect(scrollToItem).toHaveBeenCalledOnce();
+    expect(hook.result.current.navigationPending).toBe(true);
+
+    visible = true;
+    await flushFrames();
+    expect(hook.result.current.navigationPending).toBe(false);
   });
 
   it("resumeSelectedNavigation only advances the settled watermark while the target stays visible", async () => {
@@ -152,6 +361,7 @@ describe("useGitReviewNavigation demand sync", () => {
     act(() => {
       hook.result.current.tryPendingNavigation();
     });
+    acknowledgeTargetWindow(hook);
     await flushFrames();
     expect(hook.result.current.navigationPending).toBe(false);
 
@@ -183,6 +393,7 @@ describe("useGitReviewNavigation demand sync", () => {
     act(() => {
       hook.result.current.tryPendingNavigation();
     });
+    acknowledgeTargetWindow(hook);
     await flushFrames();
     expect(hook.result.current.navigationPending).toBe(false);
 
@@ -199,27 +410,17 @@ describe("useGitReviewNavigation demand sync", () => {
     expect(hook.result.current.navigationPending).toBe(false);
   });
 
-  it("beginNavigation scrolls the requested sectionKey not the first section", async () => {
+  it("beginNavigation scrolls to the exact staged/unstaged tree section", async () => {
     const applyNavigationDemand = vi.fn();
     const scrollToItem = vi.fn(() => true);
     const loader = {
       getResource: vi.fn(() => ({
-        document: {
-          kind: "ok" as const,
+        document: patchDocument({
+          entryKey: "entry:a",
+          patch: "diff-u",
           revision: "document:a",
-          sections: [
-            {
-              kind: "patch" as const,
-              patch: "diff-u",
-              sectionKey: "section:u",
-            },
-            {
-              kind: "patch" as const,
-              patch: "diff-s",
-              sectionKey: "section:s",
-            },
-          ],
-        },
+          sectionKey: "section:s",
+        }),
         entry: {
           entryKey: "entry:a",
           oldPaths: [],
@@ -252,7 +453,18 @@ describe("useGitReviewNavigation demand sync", () => {
       applyNavigationDemand,
       diffHandleRef: {
         current: {
+          getViewportLayoutKey: (targetItemId?: string) =>
+            `layout:${targetItemId ?? "none"}`,
           isItemVisible: () => true,
+          isViewportReady: () => true,
+          requestViewportLayoutSettled: (
+            _targetItemId: string,
+            _stableFrames: number,
+            callback: () => void
+          ) => {
+            queueMicrotask(callback);
+            return () => undefined;
+          },
           scrollToItem,
         },
       },
@@ -279,7 +491,6 @@ describe("useGitReviewNavigation demand sync", () => {
         ]),
       },
       loaderRef: { current: loader },
-      pendingAnchorRef: { current: null },
       renderedGenerationRef: { current: 1 },
     };
     const hook = renderHook(() => useGitReviewNavigation(refs as never));
@@ -292,18 +503,14 @@ describe("useGitReviewNavigation demand sync", () => {
     act(() => {
       hook.result.current.tryPendingNavigation();
     });
-    // 树导航统一 smooth（远近一致）
+    // 树导航只提交一次即时定位，不再启动动画后的纠正链。
     expect(scrollToItem).toHaveBeenCalledWith("section:s", {
-      behavior: "smooth",
+      behavior: "instant",
     });
-    expect(scrollToItem).not.toHaveBeenCalledWith(
-      "section:u",
-      expect.anything()
-    );
     expect(applyNavigationDemand).toHaveBeenCalledWith("entry:a");
   });
 
-  it("resume rebinds sectionKey when stage moves the selected slot", async () => {
+  it("refresh rebinds selected section identity without scrolling", async () => {
     let visible = true;
     const scrollToItem = vi.fn(() => true);
     const { applyNavigationDemand, hook, refs } = setup({
@@ -319,6 +526,7 @@ describe("useGitReviewNavigation demand sync", () => {
     act(() => {
       hook.result.current.tryPendingNavigation();
     });
+    acknowledgeTargetWindow(hook);
     await flushFrames();
     expect(hook.result.current.navigationPending).toBe(false);
 
@@ -341,7 +549,7 @@ describe("useGitReviewNavigation demand sync", () => {
       hook.result.current.resumeSelectedNavigation();
     });
     expect(applyNavigationDemand).not.toHaveBeenCalled();
-    expect(scrollToItem).toHaveBeenCalledWith("section:a-staged");
+    expect(scrollToItem).not.toHaveBeenCalled();
     expect(hook.result.current.getSelectedSectionKey()).toBe(
       "section:a-staged"
     );

@@ -106,10 +106,7 @@ export class GitReviewDocumentLoader {
     return this.#disposed || this.#isSettled();
   }
 
-  /**
-   * 从 session 缓存灌入已 loaded 正文；仅当 entry 仍在 loader 且 slots 匹配时保留。
-   * 不发网络；结束只 #emit 一次。
-   */
+  /** 从 session 灌入仍匹配的正文；不发网络，结束只 #emit 一次。 */
   hydrateLoaded(
     loaded: ReadonlyMap<
       string,
@@ -149,19 +146,21 @@ export class GitReviewDocumentLoader {
     if (this.#disposed) {
       return;
     }
-    if (entryKey !== null && !this.#resources.has(entryKey)) {
-      throw new Error(`Git Review 保护目标不存在: ${entryKey}`);
-    }
-    if (this.#selectedEntryKey === entryKey) {
+    // 暂存会让条目跨阅读面移动；旧语义锚应取消，而不是升级为 renderer 致命错误。
+    const protectedEntryKey =
+      entryKey !== null && this.#resources.has(entryKey) ? entryKey : null;
+    if (this.#selectedEntryKey === protectedEntryKey) {
       return;
     }
-    this.#selectedEntryKey = entryKey;
+    this.#selectedEntryKey = protectedEntryKey;
     // 仅 protect 不构成 demand（无 window 时不得开读）；
     // 已在 visible/buffered 时 boost 为 selectedDemanded 队首。
     this.#selectedDemandedEntryKey =
-      entryKey !== null &&
-      [...this.#visibleEntryKeys, ...this.#bufferedEntryKeys].includes(entryKey)
-        ? entryKey
+      protectedEntryKey !== null &&
+      [...this.#visibleEntryKeys, ...this.#bufferedEntryKeys].includes(
+        protectedEntryKey
+      )
+        ? protectedEntryKey
         : null;
     if (this.#selectedDemandedEntryKey !== null) {
       this.#budgetDeferredEntryKeys.delete(this.#selectedDemandedEntryKey);

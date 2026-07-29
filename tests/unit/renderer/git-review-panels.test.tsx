@@ -11,13 +11,15 @@ import type {
 } from "@plugins/api/renderer.ts";
 import { createGitChangesPanel } from "@plugins/builtin/git/renderer/git-changes-panel.tsx";
 import { GitReviewDocumentGeneration } from "@plugins/builtin/git/renderer/git-review-document-generation.ts";
+import { reconcileReviewDocumentSnapshot } from "@plugins/builtin/git/renderer/git-review-document-projection.ts";
 import {
-  reconcileReviewDocumentSnapshot,
-  resolveReviewAnchor,
-} from "@plugins/builtin/git/renderer/git-review-document-projection.ts";
+  beginGitReviewMutationTransition,
+  commitGitReviewMutationTransition,
+} from "@plugins/builtin/git/renderer/git-review-mutation-transitions.ts";
 import {
   clearAllReviewSessionsForTests,
   readReviewSession,
+  reviewSurfaceSessionKey,
 } from "@plugins/builtin/git/renderer/git-review-session-cache.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type {
@@ -37,6 +39,7 @@ import {
   within,
 } from "@testing-library/react";
 import type { ReactElement, ReactNode } from "react";
+import { patchDocument, stateDocument } from "./git-review-document-fixture.ts";
 
 function render(ui: ReactElement, options?: Parameters<typeof renderBase>[1]) {
   const wrapped = (
@@ -75,6 +78,7 @@ const isItemVisible = vi.hoisted(() => vi.fn(() => true));
 const diffViewRuntime = vi.hoisted(() => ({
   error: null as Error | null,
   bufferedItemIds: [] as string[],
+  instanceSequence: 0,
   mounts: 0,
   onScroll: null as (() => void) | null,
   reportWindowOnScroll: true,
@@ -109,6 +113,7 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
   }) => {
     const [renderedItems, setRenderedItems] = useState(props.items);
     const renderedItemsRef = useRef(props.items);
+    const instanceIdRef = useRef(++diffViewRuntime.instanceSequence);
     useLayoutEffect(() => {
       renderedItemsRef.current = props.items;
       setRenderedItems(props.items);
@@ -156,7 +161,25 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
         getScrollTop: () => null,
         getSelectedLines: () => null,
         getSelectedText: () => "",
+        getViewportLayoutKey: (targetItemId?: string) =>
+          `layout:${targetItemId ?? "none"}`,
         isItemVisible,
+        isViewportReady: () => true,
+        requestViewportLayoutSettled: (
+          _targetItemId: string,
+          _stableFrames: number,
+          callback: () => void
+        ) => {
+          let cancelled = false;
+          queueMicrotask(() => {
+            if (!cancelled) {
+              callback();
+            }
+          });
+          return () => {
+            cancelled = true;
+          };
+        },
         restoreAnchor,
         scrollToItem(id) {
           const result = scrollToItem(id);
@@ -206,9 +229,13 @@ vi.mock("@pier/ui/diff-view.tsx", () => ({
           .join(",")}
         data-item-count={renderedItems.length}
         data-item-ids={renderedItems.map((item) => item.id).join(",")}
+        data-pierre-instance-id={instanceIdRef.current}
         data-previous-paths={renderedItems
           .map((item) => item.fileDisplay?.previousPath ?? "")
           .join(",")}
+        data-stage-control-count={
+          renderedItems.filter((item) => item.stageControl != null).length
+        }
         data-testid="pierre-diff"
         data-theme={props.appearance.codeTheme}
       >
@@ -247,7 +274,7 @@ function entry(
   ]
 ): GitReviewIndexEntry {
   return {
-    entryKey: `entry:${index}:${path}`,
+    entryKey: `entry:${index}`,
     oldPaths: [],
     path,
     renderSlots,
@@ -261,18 +288,89 @@ function indexResult(entries = [entry(0)]): GitReviewIndexOk {
 
 function documentResult(
   index: number,
-  sections: GitReviewFileDocumentOk["sections"] = [
+  sections: readonly (
+    | {
+        readonly kind: "patch";
+        readonly patch: string;
+        readonly sectionKey: string;
+      }
+    | {
+        readonly kind: "state";
+        readonly oldPath: string | null;
+        readonly reason:
+          | "binary"
+          | "conflict"
+          | "invalidEncoding"
+          | "readError"
+          | "submodule"
+          | "symlink"
+          | "tooLarge";
+        readonly sectionKey: string;
+        readonly status: GitReviewIndexEntry["status"];
+        readonly targetPath: string;
+      }
+  )[] = [
     {
       kind: "patch",
       patch: `diff --git a/src/file-${index}.ts b/src/file-${index}.ts\n@@ -1 +1 @@\n-old\n+new\n`,
       sectionKey: `section:${index}`,
     },
-  ]
+  ],
+  surfaceOverrides?: Partial<GitReviewFileDocumentOk["surfaceSections"]>
 ): GitReviewFileDocumentOk {
+  const entryKey = `entry:${index}`;
+  const documentSections = sections.flatMap((content) => {
+    if (content.kind === "state") {
+      return stateDocument({
+        entryKey,
+        oldPath: content.oldPath,
+        path: content.targetPath,
+        reason: content.reason,
+        revision: `document:${index}`,
+        sectionKey: content.sectionKey,
+        status: content.status,
+      }).sections;
+    }
+    return patchDocument({
+      entryKey,
+      patch: content.patch,
+      revision: `document:${index}`,
+      sectionKey: content.sectionKey,
+      stageState:
+        content.sectionKey.includes("staged") &&
+        !content.sectionKey.includes("unstaged")
+          ? "staged"
+          : "unstaged",
+    }).sections;
+  });
+  const sectionKeys = documentSections.map((section) => section.sectionKey);
+  const single = sectionKeys.length === 1 ? (sectionKeys[0] ?? null) : null;
   return {
+    entryKey,
     kind: "ok",
     revision: `document:${index}`,
-    sections,
+    sections: documentSections,
+    surfaceSections: {
+      committed:
+        sectionKeys.find((sectionKey) => sectionKey.includes("committed")) ??
+        null,
+      head:
+        sectionKeys.find(
+          (sectionKey) =>
+            sectionKey.includes("head:") || sectionKey.includes("conflict")
+        ) ?? null,
+      index:
+        sectionKeys.find(
+          (sectionKey) =>
+            sectionKey.includes("unstaged") || sectionKey.startsWith("section:")
+        ) ?? single,
+      staged:
+        sectionKeys.find(
+          (sectionKey) =>
+            sectionKey.includes("staged") && !sectionKey.includes("unstaged")
+        ) ?? null,
+      ...surfaceOverrides,
+    },
   };
 }
 
@@ -473,6 +571,18 @@ function pluginContext(input: {
   } as unknown as RendererPluginContext;
 }
 
+function latestNotificationAction(
+  context: RendererPluginContext,
+  label: string
+): () => void {
+  const action = [...vi.mocked(context.notifications.error).mock.calls]
+    .reverse()
+    .map(([, options]) => options?.action)
+    .find((candidate) => candidate?.label === label);
+  expect(action).toBeDefined();
+  return action?.onClick ?? (() => undefined);
+}
+
 function fileTree(container: HTMLElement): ShadowRoot {
   const host = container.querySelector(
     'file-tree-container[data-slot="pier-file-tree"]'
@@ -489,11 +599,21 @@ function findTreeItem(container: HTMLElement, name: string): Element {
   return item as Element;
 }
 
+function activeDiff(container: HTMLElement): HTMLElement {
+  const activeSurface = container.querySelector(
+    '[data-git-review-surface][aria-hidden="false"]'
+  );
+  const output = activeSurface?.querySelector('[data-testid="pierre-diff"]');
+  expect(output).toBeInstanceOf(HTMLElement);
+  return output as HTMLElement;
+}
+
 afterEach(() => {
   globalThis.localStorage.clear();
   vi.restoreAllMocks();
   diffViewRuntime.error = null;
   diffViewRuntime.bufferedItemIds = [];
+  diffViewRuntime.instanceSequence = 0;
   diffViewRuntime.mounts = 0;
   diffViewRuntime.onScroll = null;
   diffViewRuntime.reportWindowOnScroll = true;
@@ -514,6 +634,33 @@ afterEach(() => {
 });
 
 describe("Git review panel", () => {
+  it("未提交页签复用目录树文案和顺序，并只展示树中存在的分组", async () => {
+    const context = pluginContext({
+      getReviewFileDocument: vi.fn(async () => documentResult(0)),
+      getReviewIndex: vi.fn(async () => indexResult([entry(0)])),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    const switcher = await view.findByTestId("git-review-surface-switcher");
+    const tabs = within(switcher).getAllByRole("tab");
+    expect(tabs).toHaveLength(1);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(["Changes"]);
+    expect(within(switcher).queryByRole("tab", { name: "Merge Changes" })).toBe(
+      null
+    );
+    expect(
+      within(switcher).getByRole("tab", { name: "Changes" })
+    ).toHaveAttribute("aria-selected", "true");
+    expect(within(switcher).getByRole("tab", { name: "Changes" })).toHaveClass(
+      "text-xs"
+    );
+    expect(
+      within(switcher).queryByRole("tab", { name: "Staged Changes" })
+    ).toBeNull();
+    expect(within(switcher).queryByText("All Changes")).toBeNull();
+  });
+
   it("复用 Files 的 header、可折叠侧栏与树内搜索交互", async () => {
     const entries = [entry(0), entry(1)];
     const getReviewIndex = vi.fn(async () => indexResult(entries));
@@ -646,6 +793,88 @@ describe("Git review panel", () => {
     ).toHaveLength(1);
   });
 
+  it("当前阅读面没有成员时显示明确空态而不是空 CodeView", async () => {
+    const path = "src/staged-only.ts";
+    const stagedSectionKey = "staged:only";
+    const stagedEntry = entry(0, path, [
+      {
+        group: "staged",
+        oldPath: null,
+        sectionKey: stagedSectionKey,
+        status: "modified",
+        targetPath: path,
+      },
+    ]);
+    const context = pluginContext({
+      getReviewIndex: vi.fn(async () => indexResult([stagedEntry])),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await expect(view.findByText("No unstaged changes")).resolves.toBeVisible();
+    const activeSurface = view.container.querySelector(
+      '[data-git-review-surface="index"][aria-hidden="false"]'
+    );
+    expect(activeSurface).toBeInstanceOf(HTMLElement);
+    expect(
+      activeSurface?.querySelector('[data-testid="pierre-diff"]')
+    ).toBeNull();
+    expect(
+      activeSurface?.querySelector('[data-git-review-document-content="empty"]')
+    ).toHaveAttribute("data-git-review-empty-surface", "index");
+  });
+
+  it("外部 Git 操作清空当前阅读面时接受权威空态", async () => {
+    const path = "src/externally-cleared.ts";
+    const sectionKey = "unstaged:external";
+    const initialEntry = entry(0, path, [
+      {
+        group: "unstaged",
+        oldPath: null,
+        sectionKey,
+        status: "modified",
+        targetPath: path,
+      },
+    ]);
+    let notify: () => void = () => undefined;
+    const getReviewIndex = vi
+      .fn()
+      .mockResolvedValueOnce(indexResult([initialEntry]))
+      .mockResolvedValueOnce(indexResult([]));
+    const context = pluginContext({
+      getReviewFileDocument: vi.fn(async () =>
+        documentResult(0, [
+          {
+            kind: "patch",
+            patch: `diff --git a/${path} b/${path}\n@@ -1 +1 @@\n-old\n+new\n`,
+            sectionKey,
+          },
+        ])
+      ),
+      getReviewIndex,
+      watch: (_gitRoot, listener) => {
+        notify = () => listener({ changeKind: "worktree", gitRoot: ROOT });
+        return () => undefined;
+      },
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        sectionKey
+      )
+    );
+    act(() => notify());
+    await waitForRefreshWindow();
+    await waitFor(() => expect(getReviewIndex).toHaveBeenCalledTimes(2));
+    await expect(view.findByText("No changes")).resolves.toBeVisible();
+    expect(
+      view.container.querySelector('[data-testid="pierre-diff"]')
+    ).toBeNull();
+  });
+
   it("初次 index 读取失败时可重试并进入 Review 正文", async () => {
     const getReviewIndex = vi
       .fn()
@@ -661,7 +890,7 @@ describe("Git review panel", () => {
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
     await expect(
-      view.findByText("Git could not read this change.")
+      view.findByText("Git could not complete this operation. Try again.")
     ).resolves.toBeVisible();
     // 初次加载失败没有正文可看:错误是主体状态,用 Empty 呈现而非 Alert 横条。
     expect(
@@ -703,20 +932,20 @@ describe("Git review panel", () => {
 
     act(() => notify());
     await waitForRefreshWindow();
-    await expect(
-      view.findByText("Failed to refresh changes")
-    ).resolves.toBeVisible();
-    expect(
-      view
-        .getByText("Failed to refresh changes")
-        .closest('[data-slot="scroll-area"]')
-    ).toHaveClass("max-h-[40%]");
+    await waitFor(() =>
+      expect(context.notifications.error).toHaveBeenCalledWith(
+        "Failed to refresh changes",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Retry" }),
+        })
+      )
+    );
+    expect(view.queryByRole("alert")).toBeNull();
     expect(view.getByText("No changes")).toBeVisible();
 
-    fireEvent.click(view.getByRole("button", { name: "Retry" }));
+    act(() => latestNotificationAction(context, "Retry")());
     await waitForRefreshWindow();
     await waitFor(() => {
-      expect(view.queryByText("Failed to refresh changes")).toBeNull();
       expect(getReviewIndex).toHaveBeenCalledTimes(3);
     });
   });
@@ -777,12 +1006,7 @@ describe("Git review panel", () => {
     const view = render(<Panel {...props} />);
     await waitFor(() => expect(view.getByTestId("pierre-diff")).toBeVisible());
     fireEvent.click(findTreeItem(view.container, "file-0.ts"));
-    await waitFor(() =>
-      expect(isItemVisible).toHaveBeenCalledWith(
-        "section:0",
-        expect.stringMatching(/^document:0:section:0:/)
-      )
-    );
+    await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:0"));
     scrollToItem.mockClear();
 
     const nextSource = {
@@ -805,68 +1029,82 @@ describe("Git review panel", () => {
     expect(scrollToItem).not.toHaveBeenCalled();
   });
 
-  it("锚点移除时：操作侧优先；否则邻域后继/前驱（P0）", () => {
-    // 同 entry 的 unstaged 侧仍在 → 不落到 staged
-    expect(
-      resolveReviewAnchor(
-        {
-          anchor: { id: "section:2", offset: -12 },
-          entryKey: "entry:2",
-          generation: 2,
-          preferredSide: "unstaged",
-          previousItemIds: [
-            "section:0",
-            "section:1",
-            "section:2",
-            "section:3",
-            "section:4",
-          ],
-          restored: false,
-          scrollTop: 120,
-        },
-        ["section:1", "section:2b", "section:4"],
-        new Map([
-          ["section:1", "entry:1"],
-          ["section:2b", "entry:2"],
-          ["section:4", "entry:4"],
-        ]),
-        new Map([
-          ["section:1", "unstaged"],
-          ["section:2b", "unstaged"],
-          ["section:4", "unstaged"],
-        ])
-      )
-    ).toEqual({ id: "section:2b", offset: -12 });
+  it("同仓 target 切换会重建 CodeView，并只读取新 target 的正文", async () => {
+    const committedEntry = entry(1, "src/committed.ts", [
+      {
+        group: "committed",
+        oldPath: null,
+        sectionKey: "committed:1",
+        status: "modified",
+        targetPath: "src/committed.ts",
+      },
+    ]);
+    const getReviewIndex = vi
+      .fn()
+      .mockResolvedValueOnce(indexResult([entry(0)]))
+      .mockResolvedValueOnce(indexResult([committedEntry]));
+    const getReviewFileDocument = vi.fn(async (request) =>
+      request.source.target.kind === "commit"
+        ? documentResult(
+            1,
+            [
+              {
+                kind: "patch",
+                patch:
+                  "diff --git a/src/committed.ts b/src/committed.ts\n@@ -1 +1 @@\n-old\n+commit\n",
+                sectionKey: "committed:1",
+              },
+            ],
+            { committed: "committed:1", head: null, index: null, staged: null }
+          )
+        : documentResult(0)
+    );
+    const context = pluginContext({
+      getReviewFileDocument,
+      getReviewIndex,
+    });
+    const Panel = createGitChangesPanel(context);
+    const props = panelProps(createPanelHarness().api);
+    const view = render(<Panel {...props} />);
+    const oldRoot = await view.findByTestId("pierre-diff");
+    fireEvent.click(findTreeItem(view.container, "file-0.ts"));
+    await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:0"));
+    scrollToItem.mockClear();
 
-    // 操作侧消失 → 邻域后继
-    expect(
-      resolveReviewAnchor(
-        {
-          anchor: { id: "section:2", offset: -12 },
-          entryKey: "entry:2",
-          generation: 2,
-          preferredSide: "unstaged",
-          previousItemIds: [
-            "section:0",
-            "section:1",
-            "section:2",
-            "section:3",
-            "section:4",
-          ],
-          restored: false,
-          scrollTop: null,
-        },
-        ["section:1", "section:4"],
-        new Map([
-          ["section:1", "entry:1"],
-          ["section:4", "entry:4"],
-        ]),
-        new Map([
-          ["section:1", "unstaged"],
-          ["section:4", "unstaged"],
-        ])
+    const commitOid = "a".repeat(40);
+    const commitSource = {
+      contextId: panelContext.contextId,
+      gitRootPath: ROOT,
+      target: { kind: "commit" as const, oid: commitOid },
+    };
+    view.rerender(
+      <Panel
+        {...({
+          ...props,
+          params: { context: panelContext, source: commitSource },
+        } as IDockviewPanelProps)}
+      />
+    );
+
+    await waitFor(() =>
+      expect(getReviewIndex).toHaveBeenLastCalledWith(
+        expect.objectContaining({ source: commitSource })
       )
-    ).toEqual({ id: "section:4", offset: 0 });
+    );
+    await waitFor(() =>
+      expect(getReviewFileDocument).toHaveBeenLastCalledWith(
+        expect.objectContaining({
+          source: expect.objectContaining({
+            target: { kind: "commit", oid: commitOid },
+          }),
+        })
+      )
+    );
+    const newRoot = await view.findByTestId("pierre-diff");
+    expect(newRoot).not.toBe(oldRoot);
+    expect(newRoot).toHaveAttribute("data-item-ids", "committed:1");
+    expect(newRoot).not.toHaveAttribute("data-item-ids", "section:0");
+    expect(scrollToItem).not.toHaveBeenCalled();
   });
 
   it("刷新双缓冲不按文件数量截断旧代与新代正文", () => {
@@ -1141,9 +1379,14 @@ describe("Git review panel", () => {
         retryable: true,
       })
     );
-    await expect(
-      view.findByText("An internal error occurred while reading the change.")
-    ).resolves.toBeVisible();
+    await waitFor(() =>
+      expect(context.notifications.error).toHaveBeenCalledWith(
+        "Additional changes could not be displayed.",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Retry" }),
+        })
+      )
+    );
     expect(view.getByTestId("pierre-diff")).toHaveAttribute(
       "data-item-ids",
       expect.stringContaining("section:199")
@@ -1264,10 +1507,420 @@ describe("Git review panel", () => {
     await waitFor(() =>
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
         "data-item-ids",
-        `${stagedSlot.sectionKey},${unstagedSlot.sectionKey}`
+        unstagedSlot.sectionKey
+      )
+    );
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Staged Changes" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        stagedSlot.sectionKey
       )
     );
     expect(diffViewRuntime.unknownItemUpdates).toEqual([]);
+  });
+
+  it.each([
+    {
+      initialGroup: "unstaged" as const,
+      initialSectionKey: "unstaged:only",
+      targetGroup: "staged" as const,
+      targetSectionKey: "staged:only",
+      targetSurface: "staged" as const,
+    },
+    {
+      initialGroup: "staged" as const,
+      initialSectionKey: "staged:only",
+      targetGroup: "unstaged" as const,
+      targetSectionKey: "unstaged:only",
+      targetSurface: "index" as const,
+    },
+  ])("暂存状态迁移使源分组为空时原子切换 $initialGroup → $targetGroup", async ({
+    initialGroup,
+    initialSectionKey,
+    targetGroup,
+    targetSectionKey,
+    targetSurface,
+  }) => {
+    const sourceSurface = targetSurface === "staged" ? "index" : "staged";
+    const path = "src/single-surface.ts";
+    const initialEntry = entry(0, path, [
+      {
+        group: initialGroup,
+        oldPath: null,
+        sectionKey: initialSectionKey,
+        status: "modified",
+        targetPath: path,
+      },
+    ]);
+    const targetEntry = entry(0, path, [
+      {
+        group: targetGroup,
+        oldPath: null,
+        sectionKey: targetSectionKey,
+        status: "modified",
+        targetPath: path,
+      },
+    ]);
+    let notify: () => void = () => undefined;
+    const getReviewIndex = vi
+      .fn()
+      .mockResolvedValueOnce(indexResult([initialEntry]))
+      .mockResolvedValueOnce(indexResult([targetEntry]));
+    let documentRead = 0;
+    const getReviewFileDocument = vi.fn(async () => {
+      documentRead += 1;
+      const sectionKey =
+        documentRead === 1 ? initialSectionKey : targetSectionKey;
+      return documentResult(
+        0,
+        [
+          {
+            kind: "patch",
+            patch: `diff --git a/${path} b/${path}\n@@ -1 +1 @@\n-old\n+${sectionKey}\n`,
+            sectionKey,
+          },
+        ],
+        {
+          index: targetSurface === "index" ? sectionKey : null,
+          staged: targetSurface === "staged" ? sectionKey : null,
+        }
+      );
+    });
+    const context = pluginContext({
+      getReviewFileDocument,
+      getReviewIndex,
+      watch: (_gitRoot, listener) => {
+        notify = () => listener({ changeKind: "worktree", gitRoot: ROOT });
+        return () => undefined;
+      },
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    if (initialGroup === "staged") {
+      fireEvent.mouseDown(
+        await view.findByRole("tab", { name: "Staged Changes" }),
+        {
+          button: 0,
+          ctrlKey: false,
+        }
+      );
+    }
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        initialSectionKey
+      )
+    );
+    const transitionId = crypto.randomUUID();
+    act(() =>
+      beginGitReviewMutationTransition({
+        contextId: panelContext.contextId,
+        gitRootPath: ROOT,
+        path,
+        targetSurface,
+        transitionId,
+      })
+    );
+    act(() => notify());
+    await waitForRefreshWindow();
+    await waitFor(() => expect(getReviewIndex).toHaveBeenCalledTimes(2));
+    act(() => commitGitReviewMutationTransition(transitionId));
+
+    await waitFor(() => expect(documentRead).toBeGreaterThanOrEqual(2));
+    await waitFor(() =>
+      expect(
+        view.container.querySelector("[data-git-review-navigation-surface]")
+      ).toHaveAttribute("data-git-review-navigation-surface", "")
+    );
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(
+          `[data-git-review-surface="${targetSurface}"][aria-hidden="false"]`
+        )
+      ).toBeInTheDocument()
+    );
+    expect(getReviewIndex).toHaveBeenCalledTimes(2);
+    const targetTabName =
+      targetSurface === "staged" ? "Staged Changes" : "Changes";
+    const sourceTabName =
+      sourceSurface === "staged" ? "Staged Changes" : "Changes";
+    const activeTarget = view.container.querySelector(
+      `[data-git-review-surface="${targetSurface}"][aria-hidden="false"]`
+    );
+    expect(
+      within(activeTarget as HTMLElement).getByRole("tab", {
+        name: targetTabName,
+      })
+    ).toBeVisible();
+    expect(
+      within(activeTarget as HTMLElement).queryByRole("tab", {
+        name: sourceTabName,
+      })
+    ).toBeNull();
+    expect(activeDiff(view.container)).toHaveAttribute(
+      "data-item-ids",
+      targetSectionKey
+    );
+  });
+
+  it("目标阅读面仍在后台准备时，当前阅读面独立提交权威投影", async () => {
+    const movedPath = "src/moved.ts";
+    const stablePath = "src/stable.ts";
+    const movedUnstaged = "unstaged:moved";
+    const movedStaged = "staged:moved";
+    const stableUnstaged = "unstaged:stable";
+    const initialEntries = [
+      entry(0, movedPath, [
+        {
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: movedUnstaged,
+          status: "modified",
+          targetPath: movedPath,
+        },
+      ]),
+      entry(1, stablePath, [
+        {
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: stableUnstaged,
+          status: "modified",
+          targetPath: stablePath,
+        },
+      ]),
+    ];
+    const refreshedEntries = [
+      entry(0, movedPath, [
+        {
+          group: "staged",
+          oldPath: null,
+          sectionKey: movedStaged,
+          status: "modified",
+          targetPath: movedPath,
+        },
+      ]),
+      initialEntries[1] as GitReviewIndexEntry,
+    ];
+    const targetDocument = deferred<GitReviewFileDocumentResult>();
+    let notify: () => void = () => undefined;
+    let stableReads = 0;
+    let movedReads = 0;
+    const getReviewFileDocument = vi.fn(async (request) => {
+      if (request.source.path === movedPath) {
+        movedReads += 1;
+        if (movedReads > 1) {
+          return targetDocument.promise;
+        }
+        return documentResult(
+          0,
+          [
+            {
+              kind: "patch",
+              patch: `diff --git a/${movedPath} b/${movedPath}\n@@ -1 +1 @@\n-old\n+old-moved\n`,
+              sectionKey: movedUnstaged,
+            },
+          ],
+          { index: movedUnstaged, staged: null }
+        );
+      }
+      stableReads += 1;
+      return documentResult(
+        1,
+        [
+          {
+            kind: "patch",
+            patch: `diff --git a/${stablePath} b/${stablePath}\n@@ -1 +1 @@\n-old\n+${stableReads === 1 ? "old-stable" : "fresh-stable"}\n`,
+            sectionKey: stableUnstaged,
+          },
+        ],
+        { index: stableUnstaged, staged: null }
+      );
+    });
+    const context = pluginContext({
+      getReviewFileDocument,
+      getReviewIndex: vi
+        .fn()
+        .mockResolvedValueOnce(indexResult(initialEntries))
+        .mockResolvedValueOnce(indexResult(refreshedEntries)),
+      watch: (_gitRoot, listener) => {
+        notify = () => listener({ changeKind: "worktree", gitRoot: ROOT });
+        return () => undefined;
+      },
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        `${movedUnstaged},${stableUnstaged}`
+      )
+    );
+    const transitionId = crypto.randomUUID();
+    act(() =>
+      beginGitReviewMutationTransition({
+        contextId: panelContext.contextId,
+        gitRootPath: ROOT,
+        path: movedPath,
+        targetSurface: "staged",
+        transitionId,
+      })
+    );
+    act(() => commitGitReviewMutationTransition(transitionId));
+    act(() => notify());
+    await waitForRefreshWindow();
+
+    await waitFor(() => expect(stableReads).toBeGreaterThanOrEqual(2));
+    expect(
+      view.container.querySelector("[data-git-review-navigation-surface]")
+    ).toHaveAttribute("data-git-review-navigation-surface", "staged");
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        stableUnstaged
+      )
+    );
+    expect(activeDiff(view.container)).toHaveTextContent("fresh-stable");
+
+    act(() => {
+      targetDocument.resolve(
+        documentResult(
+          0,
+          [
+            {
+              kind: "patch",
+              patch: `diff --git a/${movedPath} b/${movedPath}\n@@ -1 +1 @@\n-old\n+fresh-moved\n`,
+              sectionKey: movedStaged,
+            },
+          ],
+          { index: null, staged: movedStaged }
+        )
+      );
+    });
+    await waitFor(() =>
+      expect(
+        view.container.querySelector("[data-git-review-navigation-surface]")
+      ).toHaveAttribute("data-git-review-navigation-surface", "")
+    );
+  });
+
+  it("mutation 前旧读取不能越过 ack stateSequence 因果屏障", async () => {
+    const path = "src/causal-barrier.ts";
+    const unstagedSectionKey = "unstaged:causal";
+    const stagedSectionKey = "staged:causal";
+    const bothSurfacesEntry = entry(0, path, [
+      {
+        group: "unstaged",
+        oldPath: null,
+        sectionKey: unstagedSectionKey,
+        status: "modified",
+        targetPath: path,
+      },
+      {
+        group: "staged",
+        oldPath: null,
+        sectionKey: stagedSectionKey,
+        status: "modified",
+        targetPath: path,
+      },
+    ]);
+    const indexAt = (stateSequence: number, indexRevision: string) => ({
+      ...indexResult([bothSurfacesEntry]),
+      indexRevision,
+      stateSequence,
+    });
+    let notify: () => void = () => undefined;
+    const getReviewIndex = vi
+      .fn()
+      .mockResolvedValueOnce(indexAt(1, "index:initial"))
+      .mockResolvedValueOnce(indexAt(2, "index:old-in-flight"))
+      .mockResolvedValueOnce(indexAt(3, "index:after-mutation"));
+    const context = pluginContext({
+      getReviewFileDocument: vi.fn(async () =>
+        documentResult(
+          0,
+          [
+            {
+              kind: "patch",
+              patch: `diff --git a/${path} b/${path}\n@@ -1 +1 @@\n-old\n+unstaged\n`,
+              sectionKey: unstagedSectionKey,
+            },
+            {
+              kind: "patch",
+              patch: `diff --git a/${path} b/${path}\n@@ -1 +1 @@\n-old\n+staged\n`,
+              sectionKey: stagedSectionKey,
+            },
+          ],
+          { index: unstagedSectionKey, staged: stagedSectionKey }
+        )
+      ),
+      getReviewIndex,
+      watch: (_gitRoot, listener) => {
+        notify = () => listener({ changeKind: "worktree", gitRoot: ROOT });
+        return () => undefined;
+      },
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        unstagedSectionKey
+      )
+    );
+    const transitionId = crypto.randomUUID();
+    act(() =>
+      beginGitReviewMutationTransition({
+        contextId: panelContext.contextId,
+        gitRootPath: ROOT,
+        path,
+        targetSurface: "staged",
+        transitionId,
+      })
+    );
+
+    act(() => notify());
+    await waitForRefreshWindow();
+    await waitFor(() => expect(getReviewIndex).toHaveBeenCalledTimes(2));
+    act(() => commitGitReviewMutationTransition(transitionId, 3));
+
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(
+          '[data-git-review-surface="staged"][aria-hidden="true"]'
+        )
+      ).toBeInTheDocument()
+    );
+    expect(
+      view.container.querySelector(
+        '[data-git-review-surface="index"][aria-hidden="false"]'
+      )
+    ).toBeInTheDocument();
+
+    act(() => notify());
+    await waitForRefreshWindow();
+    await waitFor(() => expect(getReviewIndex).toHaveBeenCalledTimes(3));
+    await waitFor(() =>
+      expect(
+        view.container.querySelector("[data-git-review-navigation-surface]")
+      ).toHaveAttribute("data-git-review-navigation-surface", "")
+    );
+    expect(
+      view.container.querySelector(
+        '[data-git-review-surface="staged"][aria-hidden="true"]'
+      )
+    ).toBeInTheDocument();
+    expect(
+      view.container.querySelector(
+        '[data-git-review-surface="index"][aria-hidden="false"]'
+      )
+    ).toBeInTheDocument();
   });
 
   it("在同一 Review 内显示目录树和多文件 CodeView，不打开第二个 panel", async () => {
@@ -1294,7 +1947,7 @@ describe("Git review panel", () => {
     expect(context.panels.openInstance).not.toHaveBeenCalled();
   });
 
-  it("同一路径 staged 与 unstaged 各保留一个树项和两个正文 item", async () => {
+  it("同一路径 staged 与 unstaged 保留两个树项并路由到独立阅读面", async () => {
     const path = "src/app.ts";
     const context = pluginContext({
       getReviewFileDocument: vi.fn(async () =>
@@ -1337,12 +1990,12 @@ describe("Git review panel", () => {
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
-    await waitFor(() => {
+    await waitFor(() =>
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
         "data-item-ids",
-        "staged:app,unstaged:app"
-      );
-    });
+        "unstaged:app"
+      )
+    );
     const appRows = [
       ...fileTree(view.container).querySelectorAll('[role="treeitem"]'),
     ].filter((element) => element.textContent?.includes("app.ts"));
@@ -1351,7 +2004,11 @@ describe("Git review panel", () => {
     for (const row of appRows) {
       scrollToItem.mockClear();
       fireEvent.click(row);
-      const sectionId = scrollToItem.mock.calls[0]?.[0];
+      const sectionId = await waitFor(() => {
+        const next = scrollToItem.mock.calls[0]?.[0];
+        expect(next).toBeTruthy();
+        return next;
+      });
       if (typeof sectionId === "string") {
         scrolledSectionIds.push(sectionId);
       }
@@ -1361,7 +2018,225 @@ describe("Git review panel", () => {
     );
   });
 
-  it("远树点击：estimate 已在账本即可定位，正文稍后水合", async () => {
+  it("冲突树条目保留语义选中态，并只定位一次真实正文", async () => {
+    const path = "src/conflict.ts";
+    const conflictEntry = entry(0, path, [
+      {
+        group: "conflict",
+        oldPath: null,
+        sectionKey: "conflict:app",
+        status: "conflicted",
+        targetPath: path,
+      },
+    ]);
+    const context = pluginContext({
+      getReviewFileDocument: vi.fn(async () =>
+        documentResult(
+          0,
+          [
+            {
+              kind: "patch",
+              patch:
+                "diff --git a/src/conflict.ts b/src/conflict.ts\n@@ -1 +1 @@\n-a\n+b\n",
+              sectionKey: "conflict:app",
+            },
+          ],
+          { head: "conflict:app", index: null, staged: null }
+        )
+      ),
+      getReviewIndex: vi.fn(async () => indexResult([conflictEntry])),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    const row = await waitFor(() => {
+      const next = findTreeItem(view.container, "conflict.ts");
+      expect(next).toBeVisible();
+      return next;
+    });
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(
+          '[data-git-review-surface="conflict"][aria-hidden="false"]'
+        )
+      ).toBeInTheDocument()
+    );
+    const activeConflict = view.container.querySelector(
+      '[data-git-review-surface="conflict"][aria-hidden="false"]'
+    );
+    const switcher = within(activeConflict as HTMLElement).getByTestId(
+      "git-review-surface-switcher"
+    );
+    expect(
+      within(switcher)
+        .getAllByRole("tab")
+        .map((tab) => tab.textContent)
+    ).toEqual(["Merge Changes"]);
+    scrollToItem.mockClear();
+    fireEvent.click(row);
+
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        "conflict:app"
+      )
+    );
+    await waitFor(() =>
+      expect(scrollToItem).toHaveBeenCalledWith("conflict:app")
+    );
+    expect(
+      scrollToItem.mock.calls.filter(([id]) => id === "conflict:app")
+    ).toHaveLength(1);
+    expect(
+      view.container.querySelector(
+        '[data-git-review-surface="conflict"][aria-hidden="false"]'
+      )
+    ).toBeInTheDocument();
+    expect(activeDiff(view.container)).toHaveAttribute(
+      "data-item-ids",
+      "conflict:app"
+    );
+    expect(row).toHaveAttribute("aria-selected", "true");
+  });
+
+  it("冲突分组消失时先物化同文件普通更改，再切换活动阅读面", async () => {
+    const path = "src/resolved.ts";
+    const conflictEntry = entry(0, path, [
+      {
+        group: "conflict",
+        oldPath: null,
+        sectionKey: "conflict:resolved",
+        status: "conflicted",
+        targetPath: path,
+      },
+    ]);
+    const resolvedEntry = entry(0, path, [
+      {
+        group: "unstaged",
+        oldPath: null,
+        sectionKey: "unstaged:resolved",
+        status: "modified",
+        targetPath: path,
+      },
+    ]);
+    let notify: () => void = () => undefined;
+    let documentRead = 0;
+    const resolvedDocument = deferred<GitReviewFileDocumentResult>();
+    const context = pluginContext({
+      getReviewFileDocument: vi.fn(async () => {
+        documentRead += 1;
+        if (documentRead > 1) {
+          return resolvedDocument.promise;
+        }
+        return documentResult(
+          0,
+          [
+            {
+              kind: "patch",
+              patch: `diff --git a/${path} b/${path}\n@@ -1 +1 @@\n-old\n+conflict\n`,
+              sectionKey: "conflict:resolved",
+            },
+          ],
+          {
+            head: "conflict:resolved",
+            index: null,
+            staged: null,
+          }
+        );
+      }),
+      getReviewIndex: vi
+        .fn()
+        .mockResolvedValueOnce(indexResult([conflictEntry]))
+        .mockResolvedValueOnce(indexResult([resolvedEntry])),
+      watch: (_gitRoot, listener) => {
+        notify = () => listener({ changeKind: "worktree", gitRoot: ROOT });
+        return () => undefined;
+      },
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    fireEvent.click(
+      await waitFor(() => {
+        const row = findTreeItem(view.container, "resolved.ts");
+        expect(row).toBeVisible();
+        return row;
+      })
+    );
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        "conflict:resolved"
+      )
+    );
+
+    act(() => notify());
+    await waitForRefreshWindow();
+    await waitFor(() => expect(documentRead).toBeGreaterThanOrEqual(2));
+
+    expect(
+      view.container.querySelector(
+        '[data-git-review-surface="conflict"][aria-hidden="false"]'
+      )
+    ).toBeInTheDocument();
+    expect(activeDiff(view.container)).toHaveAttribute(
+      "data-item-ids",
+      "conflict:resolved"
+    );
+    expect(
+      view.container.querySelector(
+        '[data-git-review-surface="index"][aria-hidden="true"]'
+      )
+    ).toBeInTheDocument();
+
+    await act(async () =>
+      resolvedDocument.resolve(
+        documentResult(
+          0,
+          [
+            {
+              kind: "patch",
+              patch: `diff --git a/${path} b/${path}\n@@ -1 +1 @@\n-old\n+resolved\n`,
+              sectionKey: "unstaged:resolved",
+            },
+          ],
+          {
+            head: "unstaged:resolved",
+            index: "unstaged:resolved",
+            staged: null,
+          }
+        )
+      )
+    );
+
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(
+          '[data-git-review-surface="index"][aria-hidden="false"]'
+        )
+      ).toBeInTheDocument()
+    );
+    expect(activeDiff(view.container)).toHaveAttribute(
+      "data-item-ids",
+      "unstaged:resolved"
+    );
+    const activeSurface = view.container.querySelector(
+      '[data-git-review-surface="index"][aria-hidden="false"]'
+    );
+    expect(activeSurface).toBeInstanceOf(HTMLElement);
+    expect(
+      within(activeSurface as HTMLElement)
+        .getByTestId("git-review-surface-switcher")
+        .querySelectorAll('[role="tab"]')
+    ).toHaveLength(1);
+    expect(
+      [...(activeSurface as HTMLElement).querySelectorAll('[role="tab"]')].map(
+        (tab) => tab.textContent
+      )
+    ).toEqual(["Changes"]);
+  });
+
+  it("远树点击：正文水合前保留当前视口，水合后只定位一次", async () => {
     const entries = [
       ...Array.from({ length: 40 }, (_, index) => entry(index)),
       entry(79, "src/aaa-far.ts"),
@@ -1396,19 +2271,108 @@ describe("Git review panel", () => {
     ).toContain("section:79");
 
     fireEvent.click(findTreeItem(view.container, "aaa-far.ts"));
-    // 账本已有 id → 可立即 scroll；同时 demand 开读
-    await waitFor(() =>
-      expect(scrollToItem).toHaveBeenCalledWith("section:79")
-    );
     await waitFor(() => expect(farRequested).toBe(true));
+    expect(
+      scrollToItem.mock.calls.filter(([id]) => id === "section:79")
+    ).toHaveLength(0);
 
     act(() => farPending.resolve(documentResult(79)));
     await waitFor(() =>
       expect(
         view.getByTestId("pierre-diff").getAttribute("data-cache-keys")
-      ).toMatch(/document:79/)
+      ).toMatch(/git-review-section:section:79/)
+    );
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === "section:79")
+      ).toHaveLength(1)
     );
     expect(diffViewRuntime.unmounts).toBe(unmountsBefore);
+  });
+
+  it("跨阅读面点击：目标正文水合前保留当前阅读面，水合后原子切换并定位", async () => {
+    const stagedPath = "src/far-staged.ts";
+    const stagedSectionKey = "staged:far";
+    const stagedEntry = entry(1, stagedPath, [
+      {
+        group: "staged",
+        oldPath: null,
+        sectionKey: stagedSectionKey,
+        status: "modified",
+        targetPath: stagedPath,
+      },
+    ]);
+    const stagedPending = deferred<GitReviewFileDocumentResult>();
+    let stagedRequested = false;
+    const context = pluginContext({
+      getReviewFileDocument: vi.fn(async (request) => {
+        if (request.source.path === stagedPath) {
+          stagedRequested = true;
+          return stagedPending.promise;
+        }
+        return documentResult(0);
+      }),
+      getReviewIndex: vi.fn(async () => indexResult([entry(0), stagedEntry])),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-item-ids",
+        "section:0"
+      )
+    );
+    scrollToItem.mockClear();
+    fireEvent.click(findTreeItem(view.container, "far-staged.ts"));
+    await waitFor(() => expect(stagedRequested).toBe(true));
+
+    expect(
+      view.container.querySelector(
+        '[data-git-review-surface="index"][aria-hidden="false"]'
+      )
+    ).toBeInTheDocument();
+    expect(activeDiff(view.container)).toHaveAttribute(
+      "data-item-ids",
+      "section:0"
+    );
+    expect(
+      scrollToItem.mock.calls.filter(([id]) => id === stagedSectionKey)
+    ).toHaveLength(0);
+
+    act(() =>
+      stagedPending.resolve(
+        documentResult(
+          1,
+          [
+            {
+              kind: "patch",
+              patch:
+                "diff --git a/src/far-staged.ts b/src/far-staged.ts\n@@ -1 +1 @@\n-old\n+staged\n",
+              sectionKey: stagedSectionKey,
+            },
+          ],
+          { head: stagedSectionKey, index: null, staged: stagedSectionKey }
+        )
+      )
+    );
+
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(
+          '[data-git-review-surface="staged"][aria-hidden="false"]'
+        )
+      ).toBeInTheDocument()
+    );
+    expect(activeDiff(view.container)).toHaveAttribute(
+      "data-item-ids",
+      stagedSectionKey
+    );
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === stagedSectionKey)
+      ).toHaveLength(1)
+    );
   });
 
   it("连续点击不同树文件时 boost demand 并定位最新目标", async () => {
@@ -1528,6 +2492,44 @@ describe("Git review panel", () => {
     await waitFor(() => expect(pending.has("src/file-2.ts")).toBe(true));
   });
 
+  it("导航正文仍在读取时用户滚动会接管，迟到结果不得把视口拉回", async () => {
+    const entries = [0, 1, 2, 3].map((index) => entry(index));
+    const pending = new Map<
+      string,
+      ReturnType<typeof deferred<GitReviewFileDocumentResult>>
+    >();
+    const getReviewFileDocument = vi.fn((request) => {
+      const next = deferred<GitReviewFileDocumentResult>();
+      pending.set(request.source.path, next);
+      return next.promise;
+    });
+    const context = pluginContext({
+      cancelReviewRequest: vi.fn(async () => undefined),
+      getReviewFileDocument,
+      getReviewIndex: vi.fn(async () => indexResult(entries)),
+    });
+    const Panel = createGitChangesPanel(context);
+    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+
+    await waitFor(() => expect(getReviewFileDocument).toHaveBeenCalledTimes(2));
+    fireEvent.click(findTreeItem(view.container, "file-3.ts"));
+    act(() => pending.get("src/file-0.ts")?.resolve(documentResult(0)));
+    await waitFor(() => expect(pending.has("src/file-3.ts")).toBe(true));
+
+    scrollToItem.mockClear();
+    act(() => diffViewRuntime.onScroll?.());
+    act(() => pending.get("src/file-3.ts")?.resolve(documentResult(3)));
+    await waitFor(() => {
+      expect(
+        view.getByTestId("pierre-diff").getAttribute("data-cache-keys")
+      ).not.toContain("estimate:section:3");
+    });
+    expect(scrollToItem).not.toHaveBeenCalledWith("section:3");
+
+    fireEvent.click(findTreeItem(view.container, "file-3.ts"));
+    await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:3"));
+  });
+
   it("已取消的旧窗口正文迟到时不发布也不重复定位", async () => {
     const entries = [0, 1, 2, 3].map((index) => entry(index));
     const pending = new Map<
@@ -1557,12 +2559,6 @@ describe("Git review panel", () => {
     await waitFor(() => expect(pending.has("src/file-3.ts")).toBe(true));
     act(() => pending.get("src/file-3.ts")?.resolve(documentResult(3)));
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:3"));
-    await waitFor(() =>
-      expect(isItemVisible).toHaveBeenCalledWith(
-        "section:3",
-        expect.stringMatching(/^document:3:section:3:/)
-      )
-    );
     const callsAfterFirstVisibility = scrollToItem.mock.calls.filter(
       ([sectionId]) => sectionId === "section:3"
     ).length;
@@ -1602,12 +2598,6 @@ describe("Git review panel", () => {
     );
     fireEvent.click(findTreeItem(view.container, "file-0.ts"));
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:0"));
-    await waitFor(() =>
-      expect(isItemVisible).toHaveBeenCalledWith(
-        "section:0",
-        expect.stringMatching(/^document:0:section:0:/)
-      )
-    );
     const callsAfterFirstVisibility = scrollToItem.mock.calls.filter(
       ([sectionId]) => sectionId === "section:0"
     ).length;
@@ -1617,68 +2607,6 @@ describe("Git review panel", () => {
     expect(
       scrollToItem.mock.calls.filter(([sectionId]) => sectionId === "section:0")
     ).toHaveLength(callsAfterFirstVisibility);
-  });
-
-  it("导航超时后增量投影不静默清错或自动重启定位", async () => {
-    const entries = [0, 1, 2].map((index) => entry(index));
-    const frames: FrameRequestCallback[] = [];
-    let now = 0;
-    vi.spyOn(performance, "now").mockImplementation(() => now);
-    vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation(
-      (callback) => {
-        frames.push(callback);
-        return frames.length;
-      }
-    );
-    vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation(
-      () => undefined
-    );
-    isItemVisible.mockReturnValue(false);
-    // 终态：同步 materialize 全部真 item 后点选，再模拟不可见超时。
-    const getReviewFileDocument = vi.fn(async (request) => {
-      const match = request.source.path.match(/file-(\d+)\.ts$/u);
-      return documentResult(Number(match?.[1] ?? 0));
-    });
-    const context = pluginContext({
-      getReviewFileDocument,
-      getReviewIndex: vi.fn(async () => indexResult(entries)),
-    });
-    const Panel = createGitChangesPanel(context);
-    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
-
-    await waitFor(() =>
-      expect(view.getByTestId("pierre-diff")).toHaveAttribute(
-        "data-item-count",
-        "3"
-      )
-    );
-    fireEvent.click(findTreeItem(view.container, "file-2.ts"));
-    await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:2"));
-
-    now = 5000;
-    act(() => {
-      for (let frame = frames.shift(); frame; frame = frames.shift()) {
-        frame(now);
-      }
-    });
-    // 目标已投影但未进 isItemVisible：静默结束，不弹 banner/alert。
-    await waitFor(() => {
-      expect(view.queryByText("Failed to navigate to file")).toBeNull();
-    });
-    const callsAfterTimeout = scrollToItem.mock.calls.filter(
-      ([sectionId]) => sectionId === "section:2"
-    ).length;
-
-    // 用户滚动 / 其它项更新：不得重启已超时导航。
-    act(() => diffViewRuntime.onScroll?.());
-    await act(async () => {
-      await Promise.resolve();
-    });
-
-    expect(view.queryByText("Failed to navigate to file")).toBeNull();
-    expect(
-      scrollToItem.mock.calls.filter(([sectionId]) => sectionId === "section:2")
-    ).toHaveLength(callsAfterTimeout);
   });
 
   it("通过显式入口重试瞬时读取失败的文件并在成功后定位", async () => {
@@ -1694,17 +2622,16 @@ describe("Git review panel", () => {
     const context = pluginContext({ getReviewFileDocument });
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
-    await expect(
-      view.findByText("An internal error occurred while reading the change.")
-    ).resolves.toBeVisible();
+    await waitFor(() =>
+      expect(context.notifications.error).toHaveBeenCalledWith(
+        "Additional changes could not be displayed.",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Retry" }),
+        })
+      )
+    );
     expect(view.queryByText("temporary document failure")).toBeNull();
-    fireEvent.click(view.getByRole("button", { name: "Details" }));
-    expect(context.dialogs.alert).toHaveBeenCalledWith({
-      body: "temporary document failure",
-      title: "src/file-0.ts",
-    });
-
-    fireEvent.click(view.getByRole("button", { name: "Retry" }));
+    act(() => latestNotificationAction(context, "Retry")());
 
     await waitFor(() => expect(getReviewFileDocument).toHaveBeenCalledTimes(2));
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:0"));
@@ -1730,7 +2657,7 @@ describe("Git review panel", () => {
       getReviewIndex: vi.fn(async () => indexResult(entries)),
     });
     const Panel = createGitChangesPanel(context);
-    const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
+    render(<Panel {...panelProps(createPanelHarness().api)} />);
 
     await waitFor(() => expect(getReviewFileDocument).toHaveBeenCalledTimes(2));
     act(() =>
@@ -1742,9 +2669,15 @@ describe("Git review panel", () => {
       })
     );
     await waitFor(() => expect(getReviewFileDocument).toHaveBeenCalledTimes(3));
-    await view.findByRole("button", { name: "Retry" });
-
-    fireEvent.click(view.getByRole("button", { name: "Retry" }));
+    await waitFor(() =>
+      expect(context.notifications.error).toHaveBeenCalledWith(
+        "Additional changes could not be displayed.",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Retry" }),
+        })
+      )
+    );
+    act(() => latestNotificationAction(context, "Retry")());
     // loading 占位不 scroll；ready 后再定位。为 retry 目标可抢占并发 cancel 非目标 loading。
     await waitFor(() =>
       expect(cancelReviewRequest.mock.calls.length).toBeGreaterThanOrEqual(1)
@@ -1755,12 +2688,6 @@ describe("Git review panel", () => {
     act(() => requests.get("src/file-0.ts")?.[1]?.resolve(documentResult(0)));
 
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("section:0"));
-    await waitFor(() =>
-      expect(isItemVisible).toHaveBeenCalledWith(
-        "section:0",
-        expect.stringMatching(/^document:0:section:0:/)
-      )
-    );
   });
 
   it("请求完成顺序颠倒时正文仍按 index 顺序排列", async () => {
@@ -2015,7 +2942,7 @@ describe("Git review panel", () => {
     );
   });
 
-  it("2,000 项刷新时优先重读并重新定位当前树选择", async () => {
+  it("2,000 项刷新时重读当前文件并由 CodeView 原位更新，不重新导航", async () => {
     const entries = [
       ...Array.from({ length: 1999 }, (_, index) =>
         entry(index, `src/z-file-${String(index).padStart(4, "0")}.ts`)
@@ -2071,16 +2998,10 @@ describe("Git review panel", () => {
     await waitFor(() =>
       expect(scrollToItem).toHaveBeenCalledWith("section:1999")
     );
-    await waitFor(() =>
-      expect(isItemVisible).toHaveBeenCalledWith(
-        "section:1999",
-        expect.stringMatching(/^document:1999:section:1999:/)
-      )
-    );
     const navigationCount = scrollToItem.mock.calls.filter(
       ([sectionId]) => sectionId === "section:1999"
     ).length;
-    captureTopAnchor.mockReturnValue({ id: "section:1999", offset: -20 });
+    captureTopAnchor.mockClear();
 
     act(() => notify());
     await waitForRefreshWindow();
@@ -2089,7 +3010,7 @@ describe("Git review panel", () => {
       scrollToItem.mock.calls.filter(
         ([sectionId]) => sectionId === "section:1999"
       ).length
-    ).toBeGreaterThan(navigationCount);
+    ).toBe(navigationCount);
     act(() => {
       refreshedCurrent.resolve({
         ...documentResult(1999, [
@@ -2111,14 +3032,10 @@ describe("Git review panel", () => {
         scrollToItem.mock.calls.filter(
           ([sectionId]) => sectionId === "section:1999"
         ).length
-      ).toBeGreaterThan(navigationCount);
+      ).toBe(navigationCount);
     });
-    await waitFor(() =>
-      expect(isItemVisible).toHaveBeenCalledWith(
-        "section:1999",
-        expect.stringMatching(/^document:fresh-current:section:1999:/)
-      )
-    );
+    // renderer 不再采集或恢复滚动；同一稳定槽位由 CodeView 原位更新。
+    expect(captureTopAnchor).not.toHaveBeenCalled();
     expect(restoreAnchor).not.toHaveBeenCalled();
   }, 15_000);
 
@@ -2171,17 +3088,9 @@ describe("Git review panel", () => {
     );
     fireEvent.click(findTreeItem(view.container, "file-1.ts"));
     await waitFor(() => expect(scrollToItem).toHaveBeenCalledWith("state:1"));
-    const stateCacheKey = view
-      .getByTestId("pierre-diff")
-      .getAttribute("data-cache-keys")
-      ?.split("|")[1];
-    expect(stateCacheKey).toBeTruthy();
-    await waitFor(() =>
-      expect(isItemVisible).toHaveBeenCalledWith("state:1", stateCacheKey)
-    );
   });
 
-  it("状态 section 使用各自的变更状态和旧路径，不复用聚合树状态", async () => {
+  it("状态文件使用单一 HEAD→Working Tree 文件事实", async () => {
     const path = "src/current.bin";
     const currentEntry: GitReviewIndexEntry = {
       ...entry(0, path),
@@ -2233,20 +3142,34 @@ describe("Git review panel", () => {
     await waitFor(() =>
       expect(view.getByTestId("pierre-diff")).toHaveAttribute(
         "data-item-ids",
-        "staged:binary,unstaged:binary"
+        "unstaged:binary"
       )
     );
     expect(view.getByTestId("pierre-diff")).toHaveAttribute(
       "data-file-statuses",
-      "renamed,modified"
+      "modified"
     );
     expect(view.getByTestId("pierre-diff")).toHaveAttribute(
       "data-file-paths",
-      "src/staged-current.bin,src/current.bin"
+      "src/current.bin"
     );
     expect(view.getByTestId("pierre-diff")).toHaveAttribute(
       "data-previous-paths",
-      "src/old.bin,"
+      ""
+    );
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Staged Changes" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    await waitFor(() =>
+      expect(activeDiff(view.container)).toHaveAttribute(
+        "data-file-paths",
+        "src/staged-current.bin"
+      )
+    );
+    expect(activeDiff(view.container)).toHaveAttribute(
+      "data-previous-paths",
+      "src/old.bin"
     );
   });
 
@@ -2273,22 +3196,20 @@ describe("Git review panel", () => {
         return () => undefined;
       },
       getReviewFileDocument: vi.fn(async () =>
-        documentResult(0, [
-          {
-            kind: "patch",
-            patch:
-              "diff --git a/src/file-0.ts b/src/file-0.ts\n@@ -1 +1 @@\n-old\n+new\n",
-            sectionKey: "patch:localized",
-          },
-          {
-            kind: "state",
-            oldPath: null,
-            reason: "binary",
-            sectionKey: "state:localized",
-            status: "modified",
-            targetPath: "src/file-0.ts",
-          },
-        ])
+        documentResult(
+          0,
+          [
+            {
+              kind: "state",
+              oldPath: null,
+              reason: "binary",
+              sectionKey: "state:localized",
+              status: "modified",
+              targetPath: "src/file-0.ts",
+            },
+          ],
+          { index: null, staged: "state:localized" }
+        )
       ),
       getReviewIndex: vi.fn(async () =>
         indexResult([
@@ -2323,11 +3244,16 @@ describe("Git review panel", () => {
     });
     const Panel = createGitChangesPanel(context);
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
-    const output = await view.findByTestId("pierre-diff");
+    await view.findByTestId("git-review-surface-switcher");
+    fireEvent.mouseDown(view.getByRole("tab", { name: "Staged Changes" }), {
+      button: 0,
+      ctrlKey: false,
+    });
+    await waitFor(() => expect(activeDiff(view.container)).toBeInTheDocument());
+    const output = activeDiff(view.container);
     await waitFor(() =>
       expect(output).toHaveTextContent("Binary file — content not shown")
     );
-    expect(output).toHaveTextContent("+new");
     const englishCacheKeys = output.getAttribute("data-cache-keys")?.split("|");
 
     language = "zh";
@@ -2343,13 +3269,10 @@ describe("Git review panel", () => {
       expect(output).toHaveTextContent("二进制文件 — 不显示内容")
     );
     expect(output).not.toHaveTextContent("Binary file — content not shown");
-    expect(output).toHaveTextContent("+new");
     const localizedCacheKeys = output
       .getAttribute("data-cache-keys")
       ?.split("|");
-    // Item order is staged then unstaged; patch (index 1) is locale-stable,
-    // state section (index 0) embeds localized copy in its cache key.
-    expect(localizedCacheKeys?.[1]).toBe(englishCacheKeys?.[1]);
+    // 单一状态正文的缓存身份包含本地化说明。
     expect(localizedCacheKeys?.[0]).not.toBe(englishCacheKeys?.[0]);
   });
 
@@ -2393,13 +3316,17 @@ describe("Git review panel", () => {
     act(() => notify());
     await waitForRefreshWindow();
     await waitFor(() => {
-      expect(view.getByText("Failed to refresh changes")).toBeVisible();
+      expect(context.notifications.error).toHaveBeenCalledWith(
+        "Failed to refresh changes",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Retry" }),
+        })
+      );
     });
     expect(fileTree(view.container).textContent).toContain(
       "deferred-after-failure.ts"
     );
     expect(view.getByTestId("pierre-diff")).toHaveTextContent("+new");
-    expect(view.queryByRole("button", { name: "Retry" })).toBeNull();
     fireEvent.click(findTreeItem(view.container, "deferred-after-failure.ts"));
     await waitFor(() => expect(deferredReads).toBe(1));
     await waitFor(() =>
@@ -2449,15 +3376,20 @@ describe("Git review panel", () => {
 
     act(() => notify());
     await waitForRefreshWindow();
-    await expect(
-      view.findByText("Failed to refresh changes")
-    ).resolves.toBeVisible();
+    await waitFor(() =>
+      expect(context.notifications.error).toHaveBeenCalledWith(
+        "Failed to refresh changes",
+        expect.objectContaining({
+          action: expect.objectContaining({ label: "Retry" }),
+        })
+      )
+    );
     fireEvent.click(findTreeItem(view.container, "aaa-deferred.ts"));
     await waitFor(() => expect(deferredReads).toBe(1));
     await waitFor(() =>
       expect(scrollToItem).toHaveBeenCalledWith("section:200")
     );
-    fireEvent.click(view.getByRole("button", { name: "Retry" }));
+    act(() => latestNotificationAction(context, "Retry")());
 
     await waitFor(() => expect(getReviewIndex).toHaveBeenCalledTimes(3));
   }, 15_000);
@@ -2537,11 +3469,12 @@ describe("Git review panel", () => {
     act(() => {
       harness.api.setVisible(false);
     });
-    expect(view.queryByTestId("pierre-diff")).toBeNull();
-    expect(readReviewSession(sourceKey)?.index.kind).toBe("loaded");
-    expect(readReviewSession(sourceKey)?.loadedByEntryKey.size).toBeGreaterThan(
-      0
+    expect(view.getByTestId("pierre-diff")).toBeInTheDocument();
+    expect(view.container.firstElementChild).toHaveAttribute(
+      "aria-hidden",
+      "true"
     );
+    expect(readReviewSession(sourceKey)?.index.kind).toBe("loaded");
 
     act(() => {
       harness.api.setVisible(true);
@@ -2604,6 +3537,9 @@ describe("Git review panel", () => {
       harness.containerApi.removePanel();
     });
     expect(readReviewSession(sourceKey)).toBeNull();
+    expect(
+      readReviewSession(reviewSurfaceSessionKey(scope, "index"))
+    ).toBeNull();
     first.unmount();
 
     const second = render(<Panel {...panelProps(createPanelHarness())} />);

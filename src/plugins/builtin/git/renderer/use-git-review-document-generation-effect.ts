@@ -13,6 +13,7 @@ import {
   gitReviewSeedEntryKeys,
   type ReviewDocumentDemand,
   reviewDocumentDemandForRenderWindow,
+  selectBodyHydrationPriorityEntryKeys,
 } from "./git-review-document-demand.ts";
 import { GitReviewDocumentGeneration } from "./git-review-document-generation.ts";
 import { GitReviewDocumentLoader } from "./git-review-document-loader.ts";
@@ -20,11 +21,10 @@ import {
   EMPTY_DOCUMENT_VIEW_STATE,
   indexReviewEntrySections,
   indexReviewSectionEntries,
-  isCodeViewMemberResource,
-  type PendingReviewAnchor,
   projectReviewLedger,
   type ReviewDocumentProjection,
   type ReviewDocumentViewState,
+  recordReviewRenderedHeightEstimates,
 } from "./git-review-document-projection.ts";
 import type { GitReviewDocumentResource } from "./git-review-document-resource.ts";
 import {
@@ -36,11 +36,9 @@ import {
   EMPTY_REVIEW_PROJECTION,
 } from "./git-review-document-ui-state.ts";
 import { nextDemandPrefetchEntryKeys } from "./git-review-materialization.ts";
+import type { GitReviewReadingSurface } from "./git-review-reading-surface.ts";
 import {
-  type ReviewReadingSide,
-  readingSideFromStageState,
-} from "./git-review-reading-anchor.ts";
-import {
+  ensureReviewSurfaceSession,
   patchReviewSession,
   readReviewSession,
 } from "./git-review-session-cache.ts";
@@ -53,6 +51,7 @@ export interface GitReviewDocumentGenerationMountOptions {
   readonly demandPrefetchEntryKeysRef: {
     current: ReadonlySet<string>;
   };
+  readonly diffBase: GitReviewReadingSurface;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
   readonly documentControllerRef: RefObject<GitReviewDocumentGeneration | null>;
   readonly documentGenerationRef: RefObject<number>;
@@ -64,7 +63,6 @@ export interface GitReviewDocumentGenerationMountOptions {
   readonly itemCacheKeysRef: RefObject<Map<string, string>>;
   readonly itemIdsRef: RefObject<readonly string[]>;
   readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
-  readonly pendingAnchorRef: RefObject<PendingReviewAnchor | null>;
   readonly previousSnapshotRef: {
     current: typeof EMPTY_LOADER_SNAPSHOT;
   };
@@ -77,7 +75,6 @@ export interface GitReviewDocumentGenerationMountOptions {
   readonly setProjection: Dispatch<SetStateAction<ReviewDocumentProjection>>;
   readonly setProjectionGeneration: Dispatch<SetStateAction<number>>;
   readonly setViewState: Dispatch<SetStateAction<ReviewDocumentViewState>>;
-  readonly sideBySectionIdRef: RefObject<Map<string, ReviewReadingSide>>;
   readonly viewStateRef: RefObject<ReviewDocumentViewState>;
 }
 
@@ -93,6 +90,7 @@ export function mountGitReviewDocumentGeneration(
     context,
     currentDemandRef,
     diffHandleRef,
+    diffBase,
     documentControllerRef,
     documentGenerationRef,
     entries,
@@ -103,7 +101,6 @@ export function mountGitReviewDocumentGeneration(
     itemCacheKeysRef,
     itemIdsRef,
     loaderRef,
-    pendingAnchorRef,
     previousSnapshotRef,
     projectedLocaleRef,
     projectionLocaleRef,
@@ -115,17 +112,8 @@ export function mountGitReviewDocumentGeneration(
     setProjectionGeneration,
     setViewState,
     demandPrefetchEntryKeysRef,
-    sideBySectionIdRef,
     viewStateRef,
   } = options;
-
-  const syncSideBySectionId = (projection: ReviewDocumentProjection): void => {
-    const next = new Map<string, ReviewReadingSide>();
-    for (const item of projection.items) {
-      next.set(item.id, readingSideFromStageState(item.stageControl?.state));
-    }
-    sideBySectionIdRef.current = next;
-  };
 
   generationCallbacksRef.current.beginReadingRefresh();
   const generation = Math.max(
@@ -133,16 +121,20 @@ export function mountGitReviewDocumentGeneration(
     indexGeneration + 1
   );
   documentGenerationRef.current = generation;
-  const sourceKey = JSON.stringify(scope);
+  const sourceKey = ensureReviewSurfaceSession(scope, diffBase);
   // target 变化必须整代重建：entryKey 只含路径，跨 target 的正文不可复用。
   const scopeKey = JSON.stringify([
     scope.contextId,
     scope.gitRootPath,
     scope.target,
+    diffBase,
   ]);
   const retainPrevious = scopeKeyRef.current === scopeKey;
   scopeKeyRef.current = scopeKey;
   const session = readReviewSession(sourceKey);
+  const measuredEstimateLinesByPath = new Map(
+    session?.measuredEstimateLinesByPath ?? []
+  );
   const entryKeysInOrder = entries.map((entry) => entry.entryKey);
   const currentEntryKeys = new Set(entryKeysInOrder);
   const seedEntryKeys = gitReviewSeedEntryKeys(entryKeysInOrder);
@@ -152,16 +144,24 @@ export function mountGitReviewDocumentGeneration(
     bufferedEntryKeys: [],
     visibleEntryKeys: [],
   };
-  // 采锚必须用换代前的 section→entry 映射；新 index 写入后旧 sectionKey 可能已消失。
-  const previousEntryKeyBySectionId = entryKeyBySectionIdRef.current;
-  const previousItemIdsForAnchor = itemIdsRef.current;
+  // 视口所有权在 packages/ui 的 anchored apply；renderer 不采集或回放 scroll。
   // beginGeneration 依赖 section 映射；须先于其调用用新 index 预热，
   // 避免 layout commit 前用旧/空 map 误清选择或武装 orphan sectionKey。
-  entryKeyBySectionIdRef.current = indexReviewSectionEntries(entries);
-  firstSectionIdByEntryKeyRef.current = indexReviewEntrySections(entries);
+  entryKeyBySectionIdRef.current = indexReviewSectionEntries(entries, diffBase);
+  firstSectionIdByEntryKeyRef.current = indexReviewEntrySections(
+    entries,
+    diffBase
+  );
   const selectedEntryKey = generationCallbacksRef.current.beginGeneration(
     retainPrevious || session?.selectedEntryKey ? currentEntryKeys : new Set(),
-    generation
+    generation,
+    {
+      restoreSelection:
+        !retainPrevious &&
+        session?.selectedEntryKey !== null &&
+        session?.selectedEntryKey !== undefined &&
+        session?.anchor == null,
+    }
   );
   const previousSnapshot = previousSnapshotRef.current;
   previousSnapshotRef.current = EMPTY_LOADER_SNAPSHOT;
@@ -192,39 +192,6 @@ export function mountGitReviewDocumentGeneration(
       )
     );
   }
-  const liveAnchor =
-    retainPrevious && !generationCallbacksRef.current.hasPendingNavigation()
-      ? diffHandleRef.current?.captureTopAnchor()
-      : null;
-  const liveScrollTop =
-    retainPrevious && !generationCallbacksRef.current.hasPendingNavigation()
-      ? (diffHandleRef.current?.getScrollTop() ?? null)
-      : null;
-  const sessionAnchor =
-    !retainPrevious &&
-    session?.anchor &&
-    !generationCallbacksRef.current.hasPendingNavigation()
-      ? session.anchor
-      : null;
-  const anchor = liveAnchor ?? sessionAnchor;
-  // P0：仅真实内容锚；禁止 capture 失败时用 ledger 首 id 冒充（会误跟 staged 第一槽）
-  pendingAnchorRef.current =
-    anchor == null
-      ? null
-      : {
-          anchor,
-          entryKey:
-            previousEntryKeyBySectionId.get(anchor.id) ??
-            entryKeyBySectionIdRef.current.get(anchor.id) ??
-            (sessionAnchor && session?.selectedEntryKey
-              ? session.selectedEntryKey
-              : null),
-          generation,
-          preferredSide: sideBySectionIdRef.current.get(anchor.id) ?? "other",
-          previousItemIds: previousItemIdsForAnchor,
-          restored: false,
-          scrollTop: liveScrollTop,
-        };
   if (!retainPrevious) {
     viewStateRef.current = EMPTY_DOCUMENT_VIEW_STATE;
     setViewState(EMPTY_DOCUMENT_VIEW_STATE);
@@ -238,6 +205,13 @@ export function mountGitReviewDocumentGeneration(
     load: (entry, operationId) =>
       context.git.getReviewFileDocument({
         operationId,
+        ...(previousByEntryKey.get(entry.entryKey)?.document.revision ===
+        undefined
+          ? {}
+          : {
+              previousRevision: previousByEntryKey.get(entry.entryKey)?.document
+                .revision,
+            }),
         source: {
           ...scope,
           oldPaths: entry.oldPaths,
@@ -245,7 +219,14 @@ export function mountGitReviewDocumentGeneration(
         },
       }),
   });
-  if (!retainPrevious && session && session.loadedByEntryKey.size > 0) {
+  // previousByEntryKey 仅供 controller 暂留换代首帧，禁止灌入新 loader：
+  // 同路径/同槽位的正文也可能已因 stage 或编辑而改变，必须重新取权威文档。
+  if (
+    !retainPrevious &&
+    scope.target.kind !== "uncommitted" &&
+    session &&
+    session.loadedByEntryKey.size > 0
+  ) {
     loader.hydrateLoaded(session.loadedByEntryKey);
   }
   loaderRef.current = loader;
@@ -266,17 +247,36 @@ export function mountGitReviewDocumentGeneration(
       resource,
     ])
   );
+  const initialDemand: ReviewDocumentDemand = {
+    bufferedEntryKeys: [],
+    visibleEntryKeys: seedEntryKeys,
+  };
+  const initialBodyCandidates = entryKeysInOrder.filter(
+    (entryKey) => initialResourceByEntryKey.get(entryKey)?.kind === "loaded"
+  );
+  const initialAllowedBodyEntryKeys = new Set(
+    selectBodyHydrationPriorityEntryKeys({
+      candidateEntryKeys: initialBodyCandidates,
+      demand: initialDemand,
+      entryKeysInOrder,
+      previousMemberEntryKeys: [],
+      selectedEntryKey,
+    })
+  );
   // stable-ledger：全 index 槽进账本（estimate|loaded|error|ready-notice）
   const initialProjection = projectReviewLedger({
+    allowedBodyEntryKeys: initialAllowedBodyEntryKeys,
+    authoritativeEntryKeys: controller.authoritativeEntryKeys(),
     context,
+    diffBase,
     entries,
     locale: projectionLocaleRef.current,
+    measuredEstimateLinesByPath,
     resourceByEntryKey: initialResourceByEntryKey,
+    sourceIndexGeneration: indexGeneration,
   });
   // retention sticky 仅保护已 materialize 的 entry（不再裁投影 id）
-  const previousStickyBodyEntryKeys = initialSnapshot.resources
-    .filter(isCodeViewMemberResource)
-    .map((resource) => resource.entry.entryKey);
+  const previousStickyBodyEntryKeys = [...initialAllowedBodyEntryKeys];
   demandPrefetchEntryKeysRef.current = new Set(
     nextDemandPrefetchEntryKeys({
       demand: {
@@ -291,7 +291,6 @@ export function mountGitReviewDocumentGeneration(
     })
   );
   projectedLocaleRef.current = projectionLocaleRef.current;
-  syncSideBySectionId(initialProjection);
   const uiViewState: ReviewDocumentViewState = {
     generation: initialViewState.generation,
     retainedEntryKeys: initialViewState.retainedEntryKeys,
@@ -310,12 +309,10 @@ export function mountGitReviewDocumentGeneration(
   const previousMemberIds = new Set(
     initialProjection.items.map((item) => item.id)
   );
-  const previousCacheKeys = new Map(
-    initialProjection.items.map((item) => [item.id, item.cacheKey] as const)
-  );
   const syncCtx: ReviewDocumentSyncContext = {
     committedProjectionGenerationRef,
     context,
+    diffBase,
     controller,
     currentDemandRef,
     demandPrefetchEntryKeysRef,
@@ -323,18 +320,22 @@ export function mountGitReviewDocumentGeneration(
     entries,
     entryKeysInOrder,
     generation,
+    indexGeneration,
     generationCallbacksRef,
     itemCacheKeysRef,
     itemIdsRef,
     loader,
+    measuredEstimateLinesByPath,
     projectionLocaleRef,
     resourceByEntryKey,
     setProjection,
     setViewState,
-    sideBySectionIdRef,
     viewStateRef,
-    previousCacheKeys,
+    previousItemsById: new Map(
+      initialProjection.items.map((item) => [item.id, item])
+    ),
     previousMemberIds,
+    previousRevisionBySectionId: initialProjection.revisionBySectionId,
     previousStickyBodyEntryKeys,
   };
   const sync = createReviewDocumentSyncHandler(syncCtx);
@@ -354,12 +355,19 @@ export function mountGitReviewDocumentGeneration(
     navigationPending: generationCallbacksRef.current.hasPendingNavigation(),
     seedEntryKeys,
     selectedEntryKey,
+    protectSelectedAnchor: selectedEntryKey !== null,
     demandPrefetchEntryKeys: demandPrefetchEntryKeysRef.current,
     windowDemand,
   });
   currentDemandRef.current = finalDemand;
   loader.setWindowDemand(finalDemand);
   return () => {
+    recordReviewRenderedHeightEstimates(
+      entries,
+      diffHandleRef.current?.getRenderedItemHeights?.() ?? new Map(),
+      measuredEstimateLinesByPath,
+      diffBase
+    );
     const snap = controller.snapshot(loader.getRetainedEntryKeys());
     previousSnapshotRef.current = snap;
     const loaded = new Map(
@@ -376,11 +384,12 @@ export function mountGitReviewDocumentGeneration(
     );
     patchReviewSession(sourceKey, {
       loadedByEntryKey: loaded,
+      measuredEstimateLinesByPath,
       retainedEntryKeys: loader.getRetainedEntryKeys(),
       selectedEntryKey: generationCallbacksRef.current.getSelectedEntryKey(),
       selectedSectionKey:
         generationCallbacksRef.current.getSelectedSectionKey(),
-      anchor: diffHandleRef.current?.captureTopAnchor() ?? null,
+      anchor: null,
     });
     unsubscribe();
     loader.dispose();

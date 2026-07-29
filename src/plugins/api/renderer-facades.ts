@@ -85,6 +85,9 @@ import type {
   GitReviewFileDocumentResult,
   GitReviewIndexRequest,
   GitReviewIndexResult,
+  GitReviewMutationRequest,
+  GitReviewMutationResult,
+  GitReviewPathMutationRequest,
 } from "@shared/contracts/git-review.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type {
@@ -224,6 +227,12 @@ export interface RendererPluginGitFacade {
       target: "staged" | "unstaged" | "staged-and-unstaged";
     }
   ): Promise<GitApplyPatchResult>;
+  applyReviewMutation(
+    request: GitReviewMutationRequest
+  ): Promise<GitReviewMutationResult>;
+  applyReviewPathMutation(
+    request: GitReviewPathMutationRequest
+  ): Promise<GitReviewMutationResult>;
   applyStash(cwd: string, index?: number): Promise<GitStashApplyResult>;
 
   cancelReviewRequest(request: GitReviewCancelRequest): Promise<void>;

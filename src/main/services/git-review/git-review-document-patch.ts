@@ -71,9 +71,9 @@ export async function readGitReviewPatch(
   options: ReadGitReviewPatchOptions
 ): Promise<GitReviewPatchMaterial> {
   if (options.fact.origin === "untracked") {
-    if (options.group !== "unstaged") {
+    if (options.group !== "unstaged" && options.group !== "working") {
       throw new GitReviewDocumentProtocolError(
-        "untracked fact 只能生成 unstaged section"
+        "untracked fact 只能生成工作区 patch"
       );
     }
     return readUntrackedPatch(options);
@@ -85,7 +85,7 @@ export async function readGitReviewPatch(
   }
   let before: GitReviewFileFingerprint | null = null;
   if (
-    options.group === "unstaged" &&
+    (options.group === "unstaged" || options.group === "working") &&
     options.fact.status !== "deleted" &&
     options.fact.statsExpected
   ) {
@@ -123,7 +123,7 @@ async function collectSelectedPatch(
   let selectorError: unknown;
   let result: GitExecRawResult;
   try {
-    result = await options.execGitRaw(createTrackedPatchArgs(options), {
+    result = await options.execGitRaw(await createTrackedPatchArgs(options), {
       budget: options.budget,
       cwd: options.gitRootPath,
       env: { GIT_DIFF_OPTS: "" },
@@ -316,9 +316,9 @@ async function hashObject(
   return oid;
 }
 
-function createTrackedPatchArgs(
+async function createTrackedPatchArgs(
   options: ReadGitReviewPatchOptions
-): readonly string[] {
+): Promise<readonly string[]> {
   const paths = uniquePaths(options.fact.oldPath, options.fact.targetPath);
   const pathspecConflict = hasGitReviewExactPathspecConflict(paths);
   const pathspecs = pathspecConflict
@@ -344,6 +344,19 @@ function createTrackedPatchArgs(
       "--cached",
       ...(options.headOid === null ? [] : [options.headOid]),
       ...movementFilter,
+      "--",
+      ...pathspecs,
+    ];
+  }
+  if (options.group === "working") {
+    const baseOid =
+      options.headOid ??
+      (await hashObject(options, {}, Buffer.alloc(0), ["-t", "tree"]));
+    return [
+      "diff",
+      ...PATCH_MACHINE_ARGS,
+      ...movementFilter,
+      baseOid,
       "--",
       ...pathspecs,
     ];

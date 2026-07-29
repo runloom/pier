@@ -1,7 +1,9 @@
-import type { PierDiffViewHandle } from "@pier/ui/diff-view.tsx";
+import type {
+  PierDiffViewHandle,
+  PierDiffViewRenderWindow,
+} from "@pier/ui/diff-view.tsx";
 import type { RefObject } from "react";
 import type { GitReviewDocumentLoader } from "./git-review-document-loader.ts";
-import type { PendingReviewAnchor } from "./git-review-document-projection.ts";
 
 export interface UseGitReviewNavigationOptions {
   readonly applyNavigationDemand: (entryKey: string) => void;
@@ -18,14 +20,14 @@ export interface UseGitReviewNavigationOptions {
   readonly onNavigationSettled?: () => void;
   /** 树导航开始时通知阅读会话（pin 保护） */
   readonly onNavigationStarted?: (entryKey: string) => void;
-  readonly pendingAnchorRef: RefObject<PendingReviewAnchor | null>;
   readonly renderedGenerationRef: RefObject<number>;
 }
 
 export interface GitReviewNavigationApi {
   readonly beginGeneration: (
     entryKeys: ReadonlySet<string>,
-    generation: number
+    generation: number,
+    options?: { readonly restoreSelection?: boolean }
   ) => string | null;
   readonly beginNavigation: (target: {
     readonly entryKey: string;
@@ -41,6 +43,10 @@ export interface GitReviewNavigationApi {
   readonly notifyProjectionChanged: (
     changedItemIds?: readonly string[]
   ) => void;
+  readonly notifyRenderWindowApplied: (
+    window: PierDiffViewRenderWindow
+  ) => void;
+  readonly restoreSelectedNavigation: () => void;
   readonly resumeSelectedNavigation: () => void;
   readonly retryNavigation: () => void;
   readonly tryPendingNavigation: () => void;

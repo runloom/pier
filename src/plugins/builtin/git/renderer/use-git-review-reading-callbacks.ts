@@ -1,7 +1,5 @@
 import type { RefObject } from "react";
 import { useCallback } from "react";
-import type { PendingReviewAnchor } from "./git-review-document-projection.ts";
-import { shouldRestoreReadingAnchorExternally } from "./git-review-reading-anchor.ts";
 import type {
   createGitReviewReadingSession,
   ReviewReadingMode,
@@ -10,8 +8,6 @@ import type {
 type ReviewReadingSession = ReturnType<typeof createGitReviewReadingSession>;
 
 export function useGitReviewReadingCallbacks(options: {
-  readonly itemIdsRef: RefObject<readonly string[]>;
-  readonly pendingAnchorRef: RefObject<PendingReviewAnchor | null>;
   readonly readingSessionRef: RefObject<ReviewReadingSession>;
 }): {
   readonly beginReadingNavigating: (entryKey: string) => void;
@@ -29,7 +25,7 @@ export function useGitReviewReadingCallbacks(options: {
     readonly viewportEntryKeys: readonly string[];
   }) => readonly string[];
 } {
-  const { itemIdsRef, pendingAnchorRef, readingSessionRef } = options;
+  const { readingSessionRef } = options;
 
   const onNavigationStarted = useCallback(
     (entryKey: string) => {
@@ -59,18 +55,7 @@ export function useGitReviewReadingCallbacks(options: {
 
   const endReadingRefresh = useCallback(() => {
     readingSessionRef.current.endRefreshing();
-    // 同 id 存活：外层不 restore，可清 pending（Pierre 行锚）。
-    // identity 丢失：禁止在 loader 同步路径 restore——此时 DiffView 可能尚未
-    // setItems，neighborhood 会对旧拓扑误成功并清 pending（R4 半/整 stage 洞）。
-    // 真正 restore 只在 layout tryPendingAnchor（子 DiffView apply 之后）。
-    const pending = pendingAnchorRef.current;
-    if (!pending) {
-      return;
-    }
-    if (!shouldRestoreReadingAnchorExternally(pending, itemIdsRef.current)) {
-      pendingAnchorRef.current = null;
-    }
-  }, [itemIdsRef, pendingAnchorRef, readingSessionRef]);
+  }, [readingSessionRef]);
 
   const getReadingMode = useCallback(
     () => readingSessionRef.current.getMode(),

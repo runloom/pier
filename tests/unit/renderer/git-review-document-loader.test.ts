@@ -7,6 +7,11 @@ import type {
 import { describe, expect, it, vi } from "vitest";
 import { GitReviewDocumentLoader } from "../../../src/plugins/builtin/git/renderer/git-review-document-loader.ts";
 import type { GitReviewDocumentResource } from "../../../src/plugins/builtin/git/renderer/git-review-document-resource.ts";
+import {
+  patchDocument,
+  patchDocumentForEntry,
+  stateDocument,
+} from "./git-review-document-fixture.ts";
 
 function entry(
   index: number,
@@ -32,23 +37,7 @@ function documentFor(
   item: GitReviewIndexEntry,
   content = "const value = 1;"
 ): GitReviewFileDocumentOk {
-  return {
-    kind: "ok",
-    revision: `revision:${item.entryKey}:${content.length}`,
-    sections: item.renderSlots.map((slot) => ({
-      kind: "patch" as const,
-      patch: [
-        `diff --git a/${slot.targetPath} b/${slot.targetPath}`,
-        `--- a/${slot.targetPath}`,
-        `+++ b/${slot.targetPath}`,
-        "@@ -1 +1 @@",
-        `-${content}`,
-        `+${content} changed`,
-        "",
-      ].join("\n"),
-      sectionKey: slot.sectionKey,
-    })),
-  };
+  return patchDocumentForEntry(item, content);
 }
 
 function stateDocumentFor(item: GitReviewIndexEntry): GitReviewFileDocumentOk {
@@ -56,20 +45,13 @@ function stateDocumentFor(item: GitReviewIndexEntry): GitReviewFileDocumentOk {
   if (!slot) {
     throw new Error("missing slot");
   }
-  return {
-    kind: "ok",
+  return stateDocument({
+    entryKey: item.entryKey,
+    path: slot.targetPath,
+    reason: "binary",
     revision: `revision:${item.entryKey}:state`,
-    sections: [
-      {
-        kind: "state",
-        oldPath: null,
-        reason: "binary",
-        sectionKey: slot.sectionKey,
-        status: slot.status,
-        targetPath: slot.targetPath,
-      },
-    ],
-  };
+    status: slot.status,
+  });
 }
 
 function deferred<T>(): {
@@ -96,6 +78,32 @@ async function flush(): Promise<void> {
 }
 
 describe("GitReviewDocumentLoader", () => {
+  it("cancels a protected anchor that left the surface membership", async () => {
+    const loader = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries: [entry(0)],
+      load: vi.fn(async (item: GitReviewIndexEntry) => documentFor(item)),
+      maxRetainedBytes: 1024,
+      maxRetainedLines: 100,
+    });
+
+    loader.setWindowDemand({
+      bufferedEntryKeys: [],
+      visibleEntryKeys: ["entry:0"],
+    });
+    await flush();
+    loader.setProtectedEntryKey("entry:0");
+    loader.setWindowDemand({ bufferedEntryKeys: [], visibleEntryKeys: [] });
+    loader.setRetentionLimits({ maxRetainedBytes: 1, maxRetainedLines: 1 });
+    expect(loader.getSnapshot().retainedEntryKeys).toEqual(["entry:0"]);
+
+    expect(() =>
+      loader.setProtectedEntryKey("entry:moved-to-other-surface")
+    ).not.toThrow();
+    expect(loader.getSnapshot().retainedEntryKeys).toEqual([]);
+    expect(loader.getSnapshot().resources[0]?.kind).toBe("idle");
+  });
+
   it("does not load any document before demand is set", () => {
     const entries = Array.from({ length: 2001 }, (_, index) => entry(index));
     const load = vi.fn(async (item: GitReviewIndexEntry) => documentFor(item));
@@ -341,12 +349,11 @@ describe("GitReviewDocumentLoader", () => {
     expect(load).toHaveBeenCalledTimes(2);
   });
 
-  it("validates that document sections match the index slots", async () => {
+  it("validates that document entryKey matches the index entry", async () => {
     const item = entry(0, ["unstaged", "staged"]);
-    const load = vi.fn(async () => ({
-      ...documentFor(item),
-      sections: documentFor(item).sections.slice(0, 1),
-    }));
+    const load = vi.fn(async () =>
+      patchDocument({ entryKey: "entry:other", patch: "diff --git a/x b/x\n" })
+    );
     const loader = new GitReviewDocumentLoader({
       cancel: vi.fn(async () => undefined),
       entries: [item],
@@ -365,17 +372,17 @@ describe("GitReviewDocumentLoader", () => {
     });
   });
 
-  it("remaps state slot metadata from the index when document drifts", async () => {
+  it("keeps canonical state metadata returned by main", async () => {
     const item = entry(0);
     const load = vi.fn(async () => {
       const document = stateDocumentFor(item);
-      return {
-        ...document,
-        sections: document.sections.map((section) => ({
-          ...section,
-          targetPath: "src/other.ts",
-        })),
-      } satisfies GitReviewFileDocumentResult;
+      return stateDocument({
+        entryKey: document.entryKey,
+        path: "src/other.ts",
+        reason: "binary",
+        revision: document.revision,
+        status: "modified",
+      }) satisfies GitReviewFileDocumentResult;
     });
     const loader = new GitReviewDocumentLoader({
       cancel: vi.fn(async () => undefined),
@@ -395,8 +402,7 @@ describe("GitReviewDocumentLoader", () => {
       throw new Error("expected remapped loaded");
     }
     expect(resource.document.sections[0]).toMatchObject({
-      sectionKey: item.renderSlots[0]?.sectionKey,
-      targetPath: item.path,
+      targetPath: "src/other.ts",
     });
   });
 
@@ -716,7 +722,7 @@ describe("GitReviewDocumentLoader", () => {
     if (resource?.kind !== "loaded") {
       throw new Error("expected remapped loaded");
     }
-    expect(resource.document.sections[0]?.sectionKey).toBe("section:changed");
+    expect(resource.document.entryKey).toBe(original.entryKey);
     expect(resource.entry.renderSlots[0]?.group).toBe("staged");
     expect(load).not.toHaveBeenCalled();
     loader.dispose();
@@ -743,11 +749,7 @@ describe("GitReviewDocumentLoader", () => {
     if (resource?.kind !== "loaded") {
       throw new Error("expected soft-remapped loaded");
     }
-    const unstagedKey = halfStaged.renderSlots.find(
-      (slot) => slot.group === "unstaged"
-    )?.sectionKey;
-    expect(resource.document.sections).toHaveLength(1);
-    expect(resource.document.sections[0]?.sectionKey).toBe(unstagedKey);
+    expect(resource.document.entryKey).toBe(original.entryKey);
     expect(load).not.toHaveBeenCalled();
     loader.dispose();
   });

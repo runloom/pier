@@ -1,6 +1,6 @@
 import type { DiffLineAnnotation, FileDiffMetadata, Hunk } from "@pierre/diffs";
 import type { PierHunkAnnotationMetadata } from "./diff-view-hunk-actions.tsx";
-import type { PierDiffViewStageControl } from "./diff-view-items.ts";
+import type { PierDiffViewChangeControl } from "./diff-view-items.ts";
 
 export interface HunkAnnotationAnchor {
   readonly lineNumber: number;
@@ -154,10 +154,19 @@ export function hunkAnnotationAnchor(
 
 export function buildHunkActionAnnotations(
   fileDiff: FileDiffMetadata,
-  stageControl: PierDiffViewStageControl | null | undefined
+  changeControls: readonly PierDiffViewChangeControl[] | undefined
 ): DiffLineAnnotation<PierHunkAnnotationMetadata>[] | undefined {
-  if (!stageControl || fileDiff.hunks.length === 0) {
+  if (!changeControls || fileDiff.hunks.length === 0) {
     return;
+  }
+  const controls = new Map(
+    changeControls.map((control) => [
+      `${control.hunkIndex}:${control.changeBlockIndex}`,
+      control,
+    ])
+  );
+  if (controls.size !== changeControls.length) {
+    throw new Error("Duplicate diff change controls");
   }
   const annotations: DiffLineAnnotation<PierHunkAnnotationMetadata>[] = [];
   // Pierre slots are named annotation-{side}-{lineNumber}; keep one pill per slot.
@@ -177,6 +186,10 @@ export function buildHunkActionAnnotations(
       if (!anchor) {
         continue;
       }
+      const control = controls.get(`${hunkIndex}:${changeBlockIndex}`);
+      if (control === undefined) {
+        throw new Error("Diff change control does not match rendered patch");
+      }
       const slotKey = `${anchor.side}:${anchor.lineNumber}`;
       if (seenSlots.has(slotKey)) {
         continue;
@@ -185,15 +198,22 @@ export function buildHunkActionAnnotations(
       annotations.push({
         lineNumber: anchor.lineNumber,
         metadata: {
+          ...(control.canRevert === undefined
+            ? {}
+            : { canRevert: control.canRevert }),
           changeBlockIndex,
+          changeKey: control.changeKey,
           hunkIndex,
           kind: "hunk-actions",
           path: fileDiff.name,
-          variant: stageControl.state,
+          stageState: control.state,
         },
         side: anchor.side,
       });
     }
+  }
+  if (annotations.length !== changeControls.length) {
+    throw new Error("Diff change controls were not fully rendered");
   }
   return annotations.length > 0 ? annotations : undefined;
 }

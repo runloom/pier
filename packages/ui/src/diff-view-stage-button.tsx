@@ -2,6 +2,7 @@ import { Minus, Plus, Undo2 } from "lucide-react";
 import { Button } from "./button.tsx";
 import type { PierDiffViewLabels } from "./diff-view-collapse.tsx";
 import type { PierDiffViewStageControl } from "./diff-view-items.ts";
+import { Spinner } from "./spinner.tsx";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip.tsx";
 
 /**
@@ -34,6 +35,7 @@ export function DiffHeaderActions({
         busy={busy}
         label={labels.unstageChanges}
         onClick={onToggleStage}
+        pending={stageControl.pendingAction === "unstage"}
         testId="pier-diff-unstage-button"
       >
         <Minus data-icon="inline-start" />
@@ -51,6 +53,7 @@ export function DiffHeaderActions({
           busy={busy}
           label={labels.discardChanges}
           onClick={onDiscard}
+          pending={stageControl.pendingAction === "discard"}
           testId="pier-diff-discard-button"
         >
           <Undo2 data-icon="inline-start" />
@@ -60,6 +63,7 @@ export function DiffHeaderActions({
         busy={busy}
         label={labels.stageChanges}
         onClick={onToggleStage}
+        pending={stageControl.pendingAction === "stage"}
         testId="pier-diff-stage-button"
       >
         <Plus data-icon="inline-start" />
@@ -73,12 +77,14 @@ function HeaderIconButton({
   children,
   label,
   onClick,
+  pending,
   testId,
 }: {
   readonly busy: boolean;
   readonly children: React.ReactNode;
   readonly label: string;
   readonly onClick: () => void;
+  readonly pending: boolean;
   readonly testId: string;
 }): React.JSX.Element {
   return (
@@ -90,6 +96,7 @@ function HeaderIconButton({
       <TooltipTrigger asChild>
         <span className="inline-flex">
           <Button
+            aria-busy={pending || undefined}
             aria-label={label}
             data-testid={testId}
             disabled={busy}
@@ -109,7 +116,15 @@ function HeaderIconButton({
             type="button"
             variant="ghost"
           >
-            {children}
+            {pending ? (
+              <Spinner
+                aria-hidden="true"
+                className="size-3.5"
+                data-icon="inline-start"
+              />
+            ) : (
+              children
+            )}
           </Button>
         </span>
       </TooltipTrigger>

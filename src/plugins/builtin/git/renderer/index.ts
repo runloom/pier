@@ -8,6 +8,7 @@ import { registerGitActions } from "./git-actions.ts";
 import { createGitChangesPanel } from "./git-changes-panel.tsx";
 import { gitChangesPanelTabChrome } from "./git-changes-tab-title.ts";
 import { createGitPanelTransferRegistration } from "./git-panel-transfer.ts";
+import { GitReviewMutationAuthority } from "./git-review-mutation-authority.ts";
 import { registerGitReviewTreeActions } from "./git-review-tree-actions.ts";
 import { registerGitStatusItem } from "./git-status-item.tsx";
 import { registerWorktreeActions } from "./worktree-list-action.ts";
@@ -47,9 +48,10 @@ function gitChangesTabChromeLabels(context: RendererPluginContext) {
 export function registerGitPluginContributions(
   context: RendererPluginContext
 ): () => void {
+  const mutationAuthority = new GitReviewMutationAuthority();
   const disposers = [
     context.panels.register({
-      component: createGitChangesPanel(context),
+      component: createGitChangesPanel(context, mutationAuthority),
       icon: Diff,
       id: GIT_CHANGES_PANEL_ID,
       kind: "web",
@@ -62,13 +64,14 @@ export function registerGitPluginContributions(
     }),
     registerWorktreeActions(context),
     registerGitActions(context),
-    registerGitReviewTreeActions(context),
+    registerGitReviewTreeActions(context, mutationAuthority),
     registerGitStatusItem(context),
   ];
   return () => {
     for (const dispose of disposers) {
       dispose();
     }
+    mutationAuthority.dispose();
   };
 }
 

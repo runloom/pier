@@ -9,7 +9,10 @@ import type {
   RendererPluginAppearance,
   RendererPluginContext,
 } from "@plugins/api/renderer.ts";
-import type { GitReviewIndexEntry } from "@shared/contracts/git-review.ts";
+import type {
+  GitReviewIndexEntry,
+  GitReviewMutationOk,
+} from "@shared/contracts/git-review.ts";
 import {
   Component,
   type LazyExoticComponent,
@@ -24,6 +27,10 @@ import {
 } from "react";
 import { pluginText } from "./git-plugin-text.ts";
 import { ReviewErrorEmpty, ReviewLoading } from "./git-review-feedback.tsx";
+import type {
+  GitReviewMutationLease,
+  GitReviewMutationTransition,
+} from "./git-review-reading-surface.ts";
 import { useGitReviewCodeMutations } from "./use-git-review-code-mutations.ts";
 import { usePluginLanguage } from "./use-plugin-language.ts";
 
@@ -83,6 +90,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
         revertHunk?: string;
         stageChanges: string;
         stageHunk?: string;
+        stageRemainingHunk?: string;
         unstageChanges: string;
         unstageHunk?: string;
       };
@@ -113,11 +121,15 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     entries,
     gitRootPath,
     items,
+    mutationAuthorityBlocked,
     onFeedbackChange,
+    onAcquireMutationAuthority,
     onItemError,
+    onMutationCommitted,
     onRenderWindowChange,
     onScroll,
     presentation,
+    revisionBySectionId,
     getSuppressMembershipScrollRestore,
     suppressMembershipScrollRestore = false,
   }: {
@@ -129,11 +141,18 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     readonly entries?: readonly GitReviewIndexEntry[];
     readonly gitRootPath?: string;
     readonly items: readonly PierDiffViewItem[];
+    readonly mutationAuthorityBlocked: boolean;
     readonly onFeedbackChange: (feedback: ReviewRenderFeedback | null) => void;
+    readonly onAcquireMutationAuthority: () => GitReviewMutationLease | null;
     readonly onItemError?: (id: string, error: Error | null) => void;
+    readonly onMutationCommitted?: (
+      result: GitReviewMutationOk | null,
+      transition?: GitReviewMutationTransition
+    ) => Promise<void>;
     readonly onRenderWindowChange: (window: PierDiffViewRenderWindow) => void;
     readonly onScroll: () => void;
     readonly presentation?: PierDiffViewPresentation;
+    readonly revisionBySectionId: ReadonlyMap<string, string>;
     readonly sourcePanelId?: string;
     readonly getSuppressMembershipScrollRestore?: () => boolean;
     readonly suppressMembershipScrollRestore?: boolean;
@@ -170,9 +189,15 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       onOpenFile,
       onToggleStage,
     } = useGitReviewCodeMutations({
+      captureReadingAnchor: (itemId) =>
+        handleRef.current?.captureItemAnchor?.(itemId) ?? null,
       context,
       contextId,
       items,
+      mutationBlocked: mutationAuthorityBlocked,
+      onMutationStart: onAcquireMutationAuthority,
+      revisionBySectionId,
+      ...(onMutationCommitted === undefined ? {} : { onMutationCommitted }),
       ...(entries === undefined ? {} : { entries }),
       ...(gitRootPath === undefined ? {} : { gitRootPath }),
     });
@@ -204,6 +229,11 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
         revertHunk: pluginText(context, "reviewHunkRevert", "Revert"),
         stageChanges: pluginText(context, "reviewHeaderStage", "Stage"),
         stageHunk: pluginText(context, "reviewHunkStage", "Stage"),
+        stageRemainingHunk: pluginText(
+          context,
+          "reviewHunkStageRemaining",
+          "Stage Remaining Changes"
+        ),
         unstageChanges: pluginText(context, "reviewHeaderUnstage", "Unstage"),
         unstageHunk: pluginText(context, "reviewHunkUnstage", "Unstage"),
       }),
@@ -211,7 +241,12 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
     );
 
     return (
-      <div className="h-full min-h-0">
+      <fieldset
+        aria-busy={mutationAuthorityBlocked}
+        className="m-0 h-full min-h-0 min-w-0 border-0 p-0"
+        data-git-review-mutation-blocked={mutationAuthorityBlocked}
+        disabled={mutationAuthorityBlocked}
+      >
         {runtimeError ? (
           // 渲染层崩溃时正文全空白:错误就是内容本身,用 Empty 全区呈现。
           <ReviewErrorEmpty
@@ -263,7 +298,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
             </Suspense>
           </ReviewCodeViewLoadBoundary>
         )}
-      </div>
+      </fieldset>
     );
   };
 }

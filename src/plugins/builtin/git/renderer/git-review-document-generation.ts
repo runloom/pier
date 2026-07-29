@@ -46,6 +46,7 @@ export class GitReviewDocumentGeneration {
   readonly #indexByEntryKey = new Map<string, number>();
   readonly #previousByEntryKey: Map<string, LoadedResource>;
   readonly #refreshFailures = new Map<string, ReviewFailedResource>();
+  readonly #authoritativeEntryKeys = new Set<string>();
   readonly #staleEntryKeys = new Set<string>();
   readonly #generation: number;
   #previousRetainedBytes = 0;
@@ -90,6 +91,13 @@ export class GitReviewDocumentGeneration {
       this.#previousRetainedLines += metrics.lines;
     }
     for (const resource of options.current.resources) {
+      if (
+        resource.kind === "loaded" ||
+        (resource.kind === "unchanged" &&
+          this.#previousByEntryKey.has(resource.entry.entryKey))
+      ) {
+        this.#authoritativeEntryKeys.add(resource.entry.entryKey);
+      }
       if (this.#previousByEntryKey.has(resource.entry.entryKey)) {
         if (resource.kind === "error") {
           this.#refreshFailures.set(resource.entry.entryKey, resource);
@@ -98,6 +106,10 @@ export class GitReviewDocumentGeneration {
         }
       }
     }
+  }
+
+  authoritativeEntryKeys(): ReadonlySet<string> {
+    return new Set(this.#authoritativeEntryKeys);
   }
 
   apply(
@@ -297,6 +309,14 @@ export class GitReviewDocumentGeneration {
     if (!current) {
       return;
     }
+    if (
+      current.kind === "loaded" ||
+      (current.kind === "unchanged" && this.#previousByEntryKey.has(entryKey))
+    ) {
+      this.#authoritativeEntryKeys.add(entryKey);
+    } else {
+      this.#authoritativeEntryKeys.delete(entryKey);
+    }
     const previous = this.#previousByEntryKey.get(entryKey);
     const index = this.#indexByEntryKey.get(entryKey);
     const effective =
@@ -318,11 +338,9 @@ export class GitReviewDocumentGeneration {
       } else {
         this.#refreshFailures.delete(entryKey);
       }
-      if (current.kind === "unchanged") {
-        this.#staleEntryKeys.add(entryKey);
-      } else {
-        this.#staleEntryKeys.delete(entryKey);
-      }
+      // `unchanged` is an authoritative previousRevision match, not stale
+      // content. Keep the exact document identity without surfacing recovery UI.
+      this.#staleEntryKeys.delete(entryKey);
       // 已是同 entry + 同 document 的 soft retain：复用 effective 身份，避免 idle 空转发 change。
       const reuseEffective =
         effective?.kind === "loaded" &&

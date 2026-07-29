@@ -1,4 +1,4 @@
-export type GitReviewOperationKind = "document" | "index";
+export type GitReviewOperationKind = "document" | "index" | "mutation";
 
 export type GitReviewCancellationReason =
   | "caller"

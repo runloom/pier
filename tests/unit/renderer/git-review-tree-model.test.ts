@@ -101,12 +101,13 @@ describe("gitReviewTreeModel grouped", () => {
       ["sec:s:a", "sec:u:a", "sec:u:new"].sort()
     );
     expect(model.groupCounts).toEqual({ conflict: 0, unstaged: 2, staged: 1 });
+    expect(model.visibleGroups).toEqual(["staged", "unstaged"]);
   });
 
   it("keeps conflict→staged→unstaged root order under zh labels", () => {
     const zhLabels = {
       conflict: "合并更改",
-      staged: "暂存的更改",
+      staged: "已暂存更改",
       unstaged: "更改",
     } as const;
     const model = gitReviewTreeModel(
@@ -141,8 +142,40 @@ describe("gitReviewTreeModel grouped", () => {
       "staged",
       "unstaged",
     ]);
-    expect(sorted[1]?.path.endsWith("暂存的更改")).toBe(true);
+    expect(model.visibleGroups).toEqual(["conflict", "staged", "unstaged"]);
+    expect(sorted[1]?.path.endsWith("已暂存更改")).toBe(true);
     expect(sorted[2]?.path.endsWith("更改")).toBe(true);
+  });
+
+  it("只创建实际包含内容的未提交分组根", () => {
+    const model = gitReviewTreeModel(
+      [
+        entry({
+          path: "only-staged.ts",
+          slots: [{ group: "staged", sectionKey: "sec:s:only" }],
+        }),
+      ],
+      (name) => name,
+      labels
+    );
+    const roots = model.items.filter(
+      (item) => item.kind === "directory" && !item.path.includes("/")
+    );
+    const staged = roots.find(
+      (item) => model.getGroupForTreePath(item.path) === "staged"
+    );
+    const unstaged = roots.find(
+      (item) => model.getGroupForTreePath(item.path) === "unstaged"
+    );
+
+    expect(staged).toMatchObject({ hasChildren: true, loadState: "loaded" });
+    expect(unstaged).toBeUndefined();
+    expect(model.groupCounts).toEqual({
+      conflict: 0,
+      staged: 1,
+      unstaged: 0,
+    });
+    expect(model.visibleGroups).toEqual(["staged"]);
   });
 
   it("keeps full path segments under group roots (library flattens visually)", () => {

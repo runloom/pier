@@ -1,4 +1,6 @@
 import { createHash } from "node:crypto";
+import { lstat } from "node:fs/promises";
+import { resolve } from "node:path";
 import {
   type GitReviewFailure,
   type GitReviewGroup,
@@ -148,8 +150,19 @@ export class GitReviewIndexReader {
               paths,
               scope.target
             );
+      const indexRevision = bindGitReviewIndexRevision(
+        read.assembled.revision,
+        read.rangeBounds?.headOid ?? identity.headOid,
+        scope.target.kind === "uncommitted"
+          ? await createWorkingTreeRevision(
+              canonicalRoot,
+              read.assembled.resolvedEntries
+            )
+          : null
+      );
       const result = gitReviewIndexOkSchema.parse({
         entries: read.assembled.entries,
+        indexRevision,
         kind: "ok",
         warnings: read.assembled.warnings,
       });
@@ -159,10 +172,7 @@ export class GitReviewIndexReader {
         metadata: Object.freeze({
           canonicalRoot,
           headOid: identity.headOid,
-          indexRevision: bindGitReviewIndexRevision(
-            read.assembled.revision,
-            read.rangeBounds?.headOid ?? identity.headOid
-          ),
+          indexRevision,
           rangeBounds: read.rangeBounds ?? null,
         }),
         resolvedEntries: read.assembled.resolvedEntries,
@@ -220,10 +230,29 @@ export class GitReviewIndexReader {
     if (paths !== undefined) {
       primary = filterCommittedPrimaryEntries(primary, paths);
     }
+    const statParser = new GitReviewNumstatParser("committed");
+    await runGitReviewIndexParser(
+      this.#execGitRaw,
+      [
+        "--literal-pathspecs",
+        "diff",
+        ...DIFF_MACHINE_ARGS,
+        "--numstat",
+        "-z",
+        rangeBounds.baseOid,
+        rangeBounds.headOid,
+        "--",
+      ],
+      identity.canonicalRoot,
+      budget,
+      signal,
+      (record) => statParser.push(record)
+    );
+    const committedStats = statParser.finish();
     assertGitReviewIndexExecutionActive(budget, signal);
     const assembled = assembleGitReviewIndex({
       primary,
-      statsByGroup: {},
+      statsByGroup: { committed: committedStats },
     });
     assertGitReviewIndexExecutionActive(budget, signal);
     return { assembled, rangeBounds };
@@ -379,16 +408,64 @@ function parseGitReviewIndexRequest(request: ReadGitReviewIndexRequest): {
 
 function bindGitReviewIndexRevision(
   contentRevision: string,
-  headOid: string | null
+  headOid: string | null,
+  workingTreeRevision: string | null
 ): string {
   const digest = createHash("sha256");
   for (const part of [
     "pier.git-review.index-revision.v1",
     contentRevision,
     headOid ?? "unborn",
+    workingTreeRevision ?? "immutable",
   ]) {
     digest.update(part, "utf8");
     digest.update("\0", "utf8");
+  }
+  return `sha256:${digest.digest("hex")}`;
+}
+
+async function createWorkingTreeRevision(
+  canonicalRoot: string,
+  entries: readonly GitReviewIndexResolvedEntry[]
+): Promise<string> {
+  const paths = [
+    ...new Set(
+      entries.flatMap((entry) => {
+        const unstaged = entry.groupFacts.unstaged;
+        return unstaged === undefined ? [] : [unstaged.targetPath];
+      })
+    ),
+  ].sort();
+  const digest = createHash("sha256");
+  digest.update("pier.git-review.working-tree.v1\0", "utf8");
+  const batchSize = 64;
+  for (let offset = 0; offset < paths.length; offset += batchSize) {
+    const batch = paths.slice(offset, offset + batchSize);
+    const facts = await Promise.all(
+      batch.map(async (path) => {
+        try {
+          const stat = await lstat(resolve(canonicalRoot, path), {
+            bigint: true,
+          });
+          return `${stat.mode}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
+        } catch (error) {
+          const code =
+            typeof error === "object" &&
+            error !== null &&
+            "code" in error &&
+            typeof error.code === "string"
+              ? error.code
+              : "unknown";
+          return `missing:${code}`;
+        }
+      })
+    );
+    for (const [index, path] of batch.entries()) {
+      digest.update(path, "utf8");
+      digest.update("\0", "utf8");
+      digest.update(facts[index] ?? "missing:unknown", "utf8");
+      digest.update("\0", "utf8");
+    }
   }
   return `sha256:${digest.digest("hex")}`;
 }

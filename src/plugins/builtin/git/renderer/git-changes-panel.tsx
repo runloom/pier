@@ -8,44 +8,28 @@ import { usePanelSidebarCollapsed } from "@pier/ui/use-panel-sidebar-preference.
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import {
-  type GitReviewIndexEntry,
   type GitReviewScope,
   type GitReviewTarget,
   gitReviewScopeSchema,
 } from "@shared/contracts/git-review.ts";
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useRef,
-  useState,
-  useSyncExternalStore,
-} from "react";
+import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
 import { gitChangesPanelTitle } from "./git-changes-tab-title.ts";
 import { pluginText } from "./git-plugin-text.ts";
-import { preloadReviewCodeView } from "./git-review-code-view.tsx";
-import { ReviewDocuments } from "./git-review-content.tsx";
 import {
   ReviewErrorEmpty,
   ReviewFailureEmpty,
   ReviewFeedback,
   ReviewLoading,
 } from "./git-review-feedback.tsx";
-import {
-  GitReviewIndexLoader,
-  type GitReviewIndexLoaderSnapshot,
-} from "./git-review-index-loader.ts";
+import { GitReviewMutationAuthority } from "./git-review-mutation-authority.ts";
 import { GitReviewPanelLayout } from "./git-review-panel-layout.tsx";
 import { GitReviewScopeSwitcher } from "./git-review-scope-switcher.tsx";
-import {
-  clearReviewSession,
-  patchReviewSession,
-  readReviewSession,
-} from "./git-review-session-cache.ts";
+import { clearReviewSessionsForScope } from "./git-review-session-cache.ts";
+import { ReviewDocuments } from "./git-review-surfaces.tsx";
 import { gitReviewTreeModel } from "./git-review-tree.tsx";
+import { useGitChangesPanelIndexState } from "./use-git-changes-panel-index-state.ts";
 import { usePluginLanguage } from "./use-plugin-language.ts";
 
-const EMPTY_REVIEW_ENTRIES: readonly GitReviewIndexEntry[] = [];
 const REVIEW_TREE_COLLAPSED_STORAGE_PREFIX = "pier.git.review.treeCollapsed:";
 
 /** loading/error/空态下侧栏树为空,打开路径无目标可导航。 */
@@ -76,10 +60,13 @@ function useDockviewPanelVisible(api: IDockviewPanelProps["api"]): boolean {
 
 /**
  * Shell 在 panel 存活期始终挂载：
- * - 同组切 tab（hidden）：只卸载 Body，session 保留
+ * - 同组切 tab（hidden）：保留 Body 与三个阅读面实例，停止非活动交互
  * - 关闭 panel：dockview onDidRemovePanel 回收 session
  */
-export function createGitChangesPanel(context: RendererPluginContext) {
+export function createGitChangesPanel(
+  context: RendererPluginContext,
+  authority = new GitReviewMutationAuthority()
+) {
   return function GitChangesPanel(props: IDockviewPanelProps) {
     const source = useMemo(() => readSource(props.params), [props.params]);
     const sourceKey = source ? JSON.stringify(source) : null;
@@ -98,7 +85,7 @@ export function createGitChangesPanel(context: RendererPluginContext) {
     }, [props.api, source]);
 
     useEffect(() => {
-      if (!sourceKey) {
+      if (!(source && sourceKey)) {
         return;
       }
       const containerApi = props.containerApi;
@@ -115,7 +102,7 @@ export function createGitChangesPanel(context: RendererPluginContext) {
       const disposable = containerApi.onDidRemovePanel(
         (panel: { id?: string }) => {
           if (panel?.id === panelId) {
-            clearReviewSession(sourceKey);
+            clearReviewSessionsForScope(source);
           }
         }
       );
@@ -129,79 +116,64 @@ export function createGitChangesPanel(context: RendererPluginContext) {
           disposable.dispose();
         }
       };
-    }, [panelId, props.containerApi, sourceKey]);
-
-    if (!visible) {
-      return null;
-    }
+    }, [panelId, props.containerApi, source, sourceKey]);
 
     return (
-      <GitChangesPanelBody
-        context={context}
-        onSelectTarget={(target) => {
-          if (!source) {
-            return;
-          }
-          props.api.updateParameters({
-            source: { ...source, target } satisfies GitReviewScope,
-          });
-        }}
-        panelId={panelId}
-        source={source}
-        sourceKey={sourceKey}
-      />
+      <div
+        aria-hidden={!visible}
+        className="h-full min-h-0"
+        inert={visible ? undefined : true}
+      >
+        <GitChangesPanelBody
+          authority={authority}
+          context={context}
+          onSelectTarget={(target) => {
+            if (!source) {
+              return;
+            }
+            props.api.updateParameters({
+              source: { ...source, target } satisfies GitReviewScope,
+            });
+          }}
+          panelId={panelId}
+          source={source}
+          sourceKey={sourceKey}
+          visible={visible}
+        />
+      </div>
     );
   };
 }
 
 function GitChangesPanelBody({
+  authority,
   context,
   onSelectTarget,
   panelId,
   source,
   sourceKey,
+  visible,
 }: {
+  readonly authority: GitReviewMutationAuthority;
   readonly context: RendererPluginContext;
   readonly onSelectTarget: (target: GitReviewTarget) => void;
   readonly panelId: string;
   readonly source: GitReviewScope | null;
   readonly sourceKey: string | null;
+  readonly visible: boolean;
 }) {
   const [sidebarCollapsed, setSidebarCollapsed] = usePanelSidebarCollapsed(
     REVIEW_TREE_COLLAPSED_STORAGE_PREFIX,
     source?.gitRootPath ?? null
   );
-  const indexLoaderRef = useRef<GitReviewIndexLoader | null>(null);
-  const [boundState, setBoundState] = useState<{
-    readonly snapshot: GitReviewIndexLoaderSnapshot;
-    readonly sourceKey: string | null;
-  }>(() => {
-    if (!sourceKey) {
-      return { snapshot: { kind: "loading" }, sourceKey };
-    }
-    const session = readReviewSession(sourceKey);
-    return {
-      snapshot: session?.index ?? { kind: "loading" },
-      sourceKey,
-    };
-  });
-  const state = ((): GitReviewIndexLoaderSnapshot => {
-    if (boundState.sourceKey === sourceKey) {
-      if (boundState.snapshot.kind !== "loading") {
-        return boundState.snapshot;
-      }
-      if (sourceKey) {
-        return readReviewSession(sourceKey)?.index ?? boundState.snapshot;
-      }
-      return boundState.snapshot;
-    }
-    if (!sourceKey) {
-      return { kind: "loading" };
-    }
-    return readReviewSession(sourceKey)?.index ?? { kind: "loading" };
-  })();
-  const entries =
-    state.kind === "loaded" ? state.result.entries : EMPTY_REVIEW_ENTRIES;
+  const {
+    acquireMutationAuthority,
+    entries,
+    mutationAuthorityBlocked,
+    retryIndex,
+    state,
+    waitForAuthoritativeIndex,
+  } = useGitChangesPanelIndexState({ authority, context, source, sourceKey });
   const language = usePluginLanguage();
   // language 驱动文案；context 在 panel 生命周期内稳定。
   // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable for the factory instance
@@ -236,64 +208,14 @@ function GitChangesPanelBody({
     };
   }, [language]);
   const treeModel = useMemo(
-    () => gitReviewTreeModel(entries, collidingFileLabel, treeGroupLabels),
-    [collidingFileLabel, entries, treeGroupLabels]
+    () =>
+      gitReviewTreeModel(entries, collidingFileLabel, treeGroupLabels, {
+        expectedIndexRevision:
+          state.kind === "loaded" ? (state.result.indexRevision ?? null) : null,
+        uncommitted: source?.target.kind === "uncommitted",
+      }),
+    [collidingFileLabel, entries, source?.target.kind, state, treeGroupLabels]
   );
-
-  // index loader 只随 source 重建；git facade 随 context 稳定。
-  // biome-ignore lint/correctness/useExhaustiveDependencies: generation lifecycle is source-driven
-  useEffect(() => {
-    if (!source) {
-      return;
-    }
-    preloadReviewCodeView();
-    const loader = new GitReviewIndexLoader({
-      cancel: (operationId) => context.git.cancelReviewRequest({ operationId }),
-      load: (operationId) =>
-        context.git.getReviewIndex({ operationId, source }),
-      watch: (listener, onStartFailure, onReady) =>
-        context.git.watch(
-          source.gitRootPath,
-          listener,
-          onStartFailure,
-          onReady
-        ),
-    });
-    indexLoaderRef.current = loader;
-    const sync = () => {
-      const snapshot = loader.getSnapshot();
-      if (snapshot.kind === "loaded" && sourceKey) {
-        patchReviewSession(sourceKey, { index: snapshot });
-      }
-      setBoundState((prev) => {
-        if (snapshot.kind === "loading") {
-          let retained: GitReviewIndexLoaderSnapshot | null = null;
-          if (prev.sourceKey === sourceKey && prev.snapshot.kind === "loaded") {
-            retained = prev.snapshot;
-          } else if (sourceKey) {
-            retained = readReviewSession(sourceKey)?.index ?? null;
-          }
-          if (retained) {
-            return { snapshot: retained, sourceKey };
-          }
-        }
-        return { snapshot, sourceKey };
-      });
-    };
-    const unsubscribe = loader.subscribe(sync);
-    sync();
-    return () => {
-      const finalSnapshot = loader.getSnapshot();
-      if (finalSnapshot.kind === "loaded" && sourceKey) {
-        patchReviewSession(sourceKey, { index: finalSnapshot });
-      }
-      unsubscribe();
-      loader.dispose();
-      if (indexLoaderRef.current === loader) {
-        indexLoaderRef.current = null;
-      }
-    };
-  }, [source, sourceKey]);
 
   const scopeSwitcher = source ? (
     <GitReviewScopeSwitcher
@@ -353,7 +275,7 @@ function GitChangesPanelBody({
         <ReviewFailureEmpty
           context={context}
           failure={state.failure}
-          onRetry={() => indexLoaderRef.current?.retry()}
+          onRetry={retryIndex}
           title={pluginText(
             context,
             "reviewLoadFailed",
@@ -373,8 +295,13 @@ function GitChangesPanelBody({
           indexGeneration={state.generation}
           indexRefreshFailure={state.refreshFailure}
           indexRefreshing={state.refreshing}
-          onRetryIndex={() => indexLoaderRef.current?.retry()}
+          key={sourceKey}
+          mutationAuthorityBlocked={mutationAuthorityBlocked}
+          onAcquireMutationAuthority={acquireMutationAuthority}
+          onMutationCommitted={waitForAuthoritativeIndex}
+          onRetryIndex={retryIndex}
           panelId={panelId}
+          panelVisible={visible}
           scope={source}
           setSidebarCollapsed={setSidebarCollapsed}
           sidebarCollapsed={sidebarCollapsed}
@@ -403,7 +330,7 @@ function GitChangesPanelBody({
           context={context}
           failures={[]}
           indexFailure={state.refreshFailure}
-          onRetryIndex={() => indexLoaderRef.current?.retry()}
+          onRetryIndex={retryIndex}
         />
         <Empty className="h-full">
           <EmptyHeader>

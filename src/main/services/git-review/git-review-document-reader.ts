@@ -5,7 +5,10 @@ import type {
   GitReviewFileDocumentResult,
 } from "../../../shared/contracts/git-review.ts";
 import type { ExecGitRaw } from "../git-exec.ts";
-import { buildGitReviewDocument } from "./git-review-document.ts";
+import {
+  buildGitReviewDocumentWithEvidence,
+  type GitReviewDocumentEvidence,
+} from "./git-review-document.ts";
 import { GitReviewDocumentStaleError } from "./git-review-document-patch.ts";
 import type {
   GitReviewIndexReader,
@@ -25,12 +28,17 @@ interface CreateGitReviewDocumentReaderOptions {
 }
 
 export class GitReviewDocumentReader {
+  readonly #evidenceByRevision = new Map<string, GitReviewDocumentEvidence>();
   readonly #execGitRaw: ExecGitRaw;
   readonly #indexReader: Pick<GitReviewIndexReader, "resolve">;
 
   constructor(options: CreateGitReviewDocumentReaderOptions) {
     this.#execGitRaw = options.execGitRaw;
     this.#indexReader = options.indexReader;
+  }
+
+  getEvidence(revision: string): GitReviewDocumentEvidence | null {
+    return this.#evidenceByRevision.get(revision) ?? null;
   }
 
   async execute(
@@ -66,14 +74,25 @@ export class GitReviewDocumentReader {
         }
         let document: GitReviewFileDocumentOk;
         try {
-          document = await buildGitReviewDocument({
+          const built = await buildGitReviewDocumentWithEvidence({
             budget,
+            entry: selected.entry,
             execGitRaw: this.#execGitRaw,
             metadata: before.metadata,
-            resolvedEntry: selected,
+            resolvedEntry: selected.resolvedEntry,
             signal,
             source: request.source,
           });
+          document = built.document;
+          this.#evidenceByRevision.delete(document.revision);
+          this.#evidenceByRevision.set(document.revision, built.evidence);
+          while (this.#evidenceByRevision.size > 128) {
+            const oldest = this.#evidenceByRevision.keys().next().value;
+            if (typeof oldest !== "string") {
+              break;
+            }
+            this.#evidenceByRevision.delete(oldest);
+          }
         } catch (error) {
           if (
             error instanceof GitReviewDocumentStaleError &&
@@ -91,6 +110,9 @@ export class GitReviewDocumentReader {
           continue;
         }
         assertActive(budget, signal);
+        if (request.previousRevision === document.revision) {
+          return { kind: "unchanged" };
+        }
         return document;
       }
       return failure(
@@ -128,7 +150,10 @@ export class GitReviewDocumentReader {
 function selectGitReviewEntry(
   resolution: Extract<GitReviewIndexResolution, { kind: "ok" }>,
   path: string
-): (typeof resolution.resolvedEntries)[number] | null {
+): {
+  readonly entry: (typeof resolution.result.entries)[number];
+  readonly resolvedEntry: (typeof resolution.resolvedEntries)[number];
+} | null {
   const index = resolution.result.entries.findIndex(
     (entry) => entry.path === path
   );
@@ -144,7 +169,7 @@ function selectGitReviewEntry(
   ) {
     throw new Error("Git Review public/resolved index 未对齐");
   }
-  return resolvedEntry;
+  return { entry, resolvedEntry };
 }
 
 function assertActive(

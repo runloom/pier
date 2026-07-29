@@ -114,8 +114,10 @@ export type RendererPluginActionInvocation = ActionInvocation;
 
 export interface RendererPluginAction {
   category: string;
-  disabledReason?: () => null | string | undefined;
-  enabled?: () => boolean;
+  disabledReason?: (
+    invocation?: RendererPluginActionInvocation
+  ) => null | string | undefined;
+  enabled?: (invocation?: RendererPluginActionInvocation) => boolean;
   handler: (
     invocation?: RendererPluginActionInvocation
   ) => Promise<void> | void;

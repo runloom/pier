@@ -1,6 +1,9 @@
-import type { PierDiffViewHandle } from "@pier/ui/diff-view.tsx";
+import type { GitReviewGroup } from "@shared/contracts/git-review.ts";
 import { type RefObject, useCallback, useRef } from "react";
-import type { gitReviewTreeModel } from "./git-review-tree.tsx";
+import type {
+  GitReviewTreeFileRef,
+  gitReviewTreeModel,
+} from "./git-review-tree.tsx";
 
 /**
  * 树点击 / 右键 Inspect·Command：B-Select 打开 + Command 会话禁导航与 CodeView freeze。
@@ -11,9 +14,10 @@ export function useGitReviewTreeOpen(options: {
     readonly sectionKey: string;
   }) => void;
   readonly cancelVerification: () => void;
-  readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
   readonly getSelectedEntryKey: () => string | null;
   readonly getSelectedSectionKey: () => string | null;
+  readonly onActivateGroup?: (group: GitReviewGroup) => void;
+  readonly onRequestOpen?: (fileRef: GitReviewTreeFileRef) => void;
   readonly setSelectedTreeTarget: (
     target: {
       readonly entryKey: string;
@@ -36,9 +40,10 @@ export function useGitReviewTreeOpen(options: {
   const {
     beginNavigation,
     cancelVerification,
-    diffHandleRef,
     getSelectedEntryKey,
     getSelectedSectionKey,
+    onActivateGroup,
+    onRequestOpen,
     setSelectedTreeTarget,
     treeModel,
   } = options;
@@ -56,6 +61,10 @@ export function useGitReviewTreeOpen(options: {
       if (!fileRef) {
         return;
       }
+      if (onRequestOpen) {
+        onRequestOpen(fileRef);
+        return;
+      }
       const alreadyOpen =
         getSelectedEntryKey() === fileRef.entryKey &&
         getSelectedSectionKey() === fileRef.sectionKey;
@@ -67,6 +76,7 @@ export function useGitReviewTreeOpen(options: {
         entryKey: fileRef.entryKey,
         sectionKey: fileRef.sectionKey,
       });
+      onActivateGroup?.(fileRef.group);
       // 只标 pending + boost demand；scroll 在 projection-commit / pending layout
       beginNavigation({
         entryKey: fileRef.entryKey,
@@ -77,6 +87,8 @@ export function useGitReviewTreeOpen(options: {
       beginNavigation,
       getSelectedEntryKey,
       getSelectedSectionKey,
+      onActivateGroup,
+      onRequestOpen,
       setSelectedTreeTarget,
       treeModel,
     ]
@@ -95,66 +107,23 @@ export function useGitReviewTreeOpen(options: {
     },
     [getSelectedEntryKey, getSelectedSectionKey, treeModel]
   );
-  /**
-   * Command 菜单：持续 rAF 钉 CodeView raw scrollTop，挡住 sticky/nav 任意回顶。
-   * Inspect：不 freeze。
-   */
-  const codeViewScrollFreezeRef = useRef<{
-    top: number;
-    stop: () => void;
-  } | null>(null);
   const onContextMenuSession = useCallback(
     (
       phase: "begin" | "end",
       detail: { readonly intent: "inspect" | "command"; readonly path: string }
     ) => {
       if (detail.intent !== "command") {
-        codeViewScrollFreezeRef.current?.stop();
-        codeViewScrollFreezeRef.current = null;
         commandMenuSessionRef.current = false;
         return;
       }
-      const handle = diffHandleRef.current;
       if (phase === "begin") {
         commandMenuSessionRef.current = true;
         cancelVerification();
-        const top = handle?.getScrollTop();
-        if (top === null || top === undefined || !handle) {
-          codeViewScrollFreezeRef.current = null;
-          return;
-        }
-        let active = true;
-        const pin = () => {
-          if (!active) {
-            return;
-          }
-          handle.setScrollTop(top);
-          requestAnimationFrame(pin);
-        };
-        requestAnimationFrame(pin);
-        codeViewScrollFreezeRef.current = {
-          top,
-          stop: () => {
-            active = false;
-            handle.setScrollTop(top);
-          },
-        };
         return;
       }
       commandMenuSessionRef.current = false;
-      const session = codeViewScrollFreezeRef.current;
-      codeViewScrollFreezeRef.current = null;
-      session?.stop();
-      if (session && handle) {
-        requestAnimationFrame(() => {
-          handle.setScrollTop(session.top);
-          requestAnimationFrame(() => {
-            handle.setScrollTop(session.top);
-          });
-        });
-      }
     },
-    [cancelVerification, diffHandleRef]
+    [cancelVerification]
   );
   return {
     commandMenuSessionRef,

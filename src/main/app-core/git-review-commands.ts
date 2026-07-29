@@ -69,6 +69,25 @@ export async function executeGitReviewCommand(
         await services.gitReview.getFileDocument(command.request, options)
       );
     }
+    case "git.applyReviewMutation": {
+      const result = await services.gitReview.applyMutation(command.request, {
+        ...options,
+        onCommitted: (gitRootPath) => services.gitWatch.pulse(gitRootPath),
+        writer: services.git,
+      });
+      return success(requestId, result);
+    }
+    case "git.applyReviewPathMutation": {
+      const result = await services.gitReview.applyPathMutation(
+        command.request,
+        {
+          ...options,
+          onCommitted: (gitRootPath) => services.gitWatch.pulse(gitRootPath),
+          writer: services.git,
+        }
+      );
+      return success(requestId, result);
+    }
     default: {
       const exhaustive: never = command;
       return exhaustive;
@@ -81,12 +100,16 @@ function isGitReviewCommand(command: PierCommand): command is Extract<
   {
     type:
       | "git.cancelReviewRequest"
+      | "git.applyReviewMutation"
+      | "git.applyReviewPathMutation"
       | "git.getReviewFileDocument"
       | "git.getReviewIndex";
   }
 > {
   return (
     command.type === "git.cancelReviewRequest" ||
+    command.type === "git.applyReviewMutation" ||
+    command.type === "git.applyReviewPathMutation" ||
     command.type === "git.getReviewFileDocument" ||
     command.type === "git.getReviewIndex"
   );

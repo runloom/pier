@@ -1,13 +1,17 @@
 import {
   GitReviewIndexProtocolError,
+  type GitReviewIndexStat,
   type GitReviewIndexStatParseResult,
 } from "./git-review-index-contract.ts";
 import {
+  decodeGitReviewPath,
   GitReviewRecordDigest,
   parseSafeCount,
 } from "./git-review-index-protocol.ts";
 
 interface PendingNumstat {
+  readonly additions: number | null;
+  readonly deletions: number | null;
   readonly header: Buffer;
   oldPath: Buffer | null;
 }
@@ -16,6 +20,7 @@ export class GitReviewNumstatParser {
   readonly #digest: GitReviewRecordDigest;
   #finished = false;
   #pending: PendingNumstat | null = null;
+  readonly #stats: GitReviewIndexStat[] = [];
 
   constructor(channel: string) {
     this.#digest = new GitReviewRecordDigest(
@@ -36,6 +41,12 @@ export class GitReviewNumstatParser {
       if (oldPath === null) {
         throw new GitReviewIndexProtocolError("numstat rename/copy 缺少旧路径");
       }
+      this.#acceptStat({
+        additions: pending.additions,
+        deletions: pending.deletions,
+        oldPath,
+        targetPath: record,
+      });
       return this.#accept([pending.header, oldPath, record]);
     }
 
@@ -60,11 +71,19 @@ export class GitReviewNumstatParser {
     const path = record.subarray(secondTab + 1);
     if (path.length === 0) {
       this.#pending = {
+        additions,
+        deletions,
         header: Buffer.from(record),
         oldPath: null,
       };
       return "continue";
     }
+    this.#acceptStat({
+      additions,
+      deletions,
+      oldPath: null,
+      targetPath: path,
+    });
     return this.#accept([record]);
   }
 
@@ -80,7 +99,31 @@ export class GitReviewNumstatParser {
     this.#finished = true;
     return Object.freeze({
       digest: this.#digest.digest(),
+      stats: Object.freeze(this.#stats),
     });
+  }
+
+  #acceptStat(input: {
+    readonly additions: number | null;
+    readonly deletions: number | null;
+    readonly oldPath: Buffer | null;
+    readonly targetPath: Buffer;
+  }): void {
+    const targetPath = decodeGitReviewPath(input.targetPath);
+    const oldPath =
+      input.oldPath === null ? null : decodeGitReviewPath(input.oldPath);
+    if (targetPath === null || (input.oldPath !== null && oldPath === null)) {
+      return;
+    }
+    this.#stats.push(
+      Object.freeze({
+        additions: input.additions,
+        binary: input.additions === null,
+        deletions: input.deletions,
+        oldPath,
+        targetPath,
+      })
+    );
   }
 
   #accept(records: readonly Buffer[]): "continue" | "stop" {

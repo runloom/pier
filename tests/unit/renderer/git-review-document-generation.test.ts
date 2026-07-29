@@ -8,6 +8,7 @@ import type {
   GitReviewIndexEntry,
 } from "@shared/contracts/git-review.ts";
 import { describe, expect, it } from "vitest";
+import { patchDocument } from "./git-review-document-fixture.ts";
 
 function entry(index: number): GitReviewIndexEntry {
   const path = `src/file-${index}.ts`;
@@ -30,17 +31,11 @@ function entry(index: number): GitReviewIndexEntry {
 
 function document(index: number): GitReviewFileDocumentOk {
   const path = `src/file-${index}.ts`;
-  return {
-    kind: "ok",
+  return patchDocument({
+    entryKey: `entry:${index}`,
+    patch: `diff --git a/${path} b/${path}\n`,
     revision: `document:${index}`,
-    sections: [
-      {
-        kind: "patch",
-        patch: `diff --git a/${path} b/${path}\n`,
-        sectionKey: `section:${index}`,
-      },
-    ],
-  };
+  });
 }
 
 describe("GitReviewDocumentGeneration", () => {
@@ -185,17 +180,11 @@ describe("GitReviewDocumentGeneration", () => {
         },
       ],
     };
-    const previousDoc: GitReviewFileDocumentOk = {
-      kind: "ok",
+    const previousDoc: GitReviewFileDocumentOk = patchDocument({
+      entryKey: previousEntry.entryKey,
+      patch: "diff --git a/src/file-0.ts b/src/file-0.ts\n",
       revision: "document:0",
-      sections: [
-        {
-          kind: "patch",
-          patch: "diff --git a/src/file-0.ts b/src/file-0.ts\n",
-          sectionKey: "section:0",
-        },
-      ],
-    };
+    });
     const controller = new GitReviewDocumentGeneration({
       current: {
         resources: [{ entry: stagedEntry, kind: "idle" }],
@@ -223,7 +212,22 @@ describe("GitReviewDocumentGeneration", () => {
       throw new Error("expected remapped soft retain");
     }
     expect(resource.entry.renderSlots[0]?.sectionKey).toBe("section:0:staged");
-    expect(resource.document.sections[0]?.sectionKey).toBe("section:0:staged");
+    expect(resource.document).toBe(previousDoc);
+    expect(controller.authoritativeEntryKeys()).not.toContain(
+      previousEntry.entryKey
+    );
+
+    const unchanged = controller.apply(
+      {
+        resources: [{ entry: stagedEntry, kind: "unchanged" }],
+        settled: true,
+      },
+      previousEntry.entryKey
+    );
+    expect(controller.authoritativeEntryKeys()).toContain(
+      previousEntry.entryKey
+    );
+    expect(unchanged.staleRetainedCount).toBe(0);
   });
 
   it("同代 soft budget 回收 idle 时仍保留已 loaded 正文", () => {

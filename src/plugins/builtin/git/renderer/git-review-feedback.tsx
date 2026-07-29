@@ -1,16 +1,8 @@
-import {
-  Alert,
-  AlertAction,
-  AlertDescription,
-  AlertTitle,
-} from "@pier/ui/alert.tsx";
-import { Button } from "@pier/ui/button.tsx";
 import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
-import { ScrollArea } from "@pier/ui/scroll-area.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitReviewFailure } from "@shared/contracts/git-review.ts";
-import { Ellipsis, RefreshCw } from "lucide-react";
+import { useEffect, useRef } from "react";
 import { pluginText } from "./git-plugin-text.ts";
 import type { ReviewFailedResource } from "./git-review-document-generation.ts";
 import { gitReviewFailureMessage } from "./git-review-message.ts";
@@ -106,94 +98,23 @@ export function ReviewFailureEmpty({
   );
 }
 
-function FeedbackActions({
-  context,
-  detail,
-  onRetry,
-  title,
-}: {
-  readonly context: RendererPluginContext;
-  readonly detail: string | null;
-  readonly onRetry: (() => void) | undefined;
-  readonly title: string;
-}): React.JSX.Element | null {
-  const hasDetail = (detail?.trim().length ?? 0) > 0;
-  if (!(hasDetail || onRetry)) {
-    return null;
-  }
-  return (
-    <AlertAction className="flex gap-1">
-      {hasDetail ? (
-        <Button
-          aria-label={pluginText(context, "reviewDetails", "Details")}
-          onClick={() => {
-            context.dialogs
-              .alert({
-                body: detail ?? "",
-                title,
-              })
-              .catch(() => undefined);
-          }}
-          size="icon-xs"
-          type="button"
-          variant="outline"
-        >
-          <Ellipsis data-icon />
-        </Button>
-      ) : null}
-      {onRetry ? (
-        <Button
-          aria-label={pluginText(context, "reviewRetry", "Retry")}
-          onClick={onRetry}
-          size="icon-xs"
-          type="button"
-          variant="outline"
-        >
-          <RefreshCw data-icon />
-        </Button>
-      ) : null}
-    </AlertAction>
-  );
-}
-
-function ReviewFailureActions({
-  context,
-  failure,
-  onRetry,
-  title,
-}: {
-  readonly context: RendererPluginContext;
-  readonly failure: GitReviewFailure;
-  readonly onRetry: (() => void) | undefined;
-  readonly title: string;
-}): React.JSX.Element | null {
-  return (
-    <FeedbackActions
-      context={context}
-      detail={failure.message}
-      onRetry={failure.retryable ? onRetry : undefined}
-      title={title}
-    />
-  );
-}
-
 /**
- * 仅 index/资源/渲染失败横条。
- * 导航失败不在此展示：内容已可见时静默；真失败由 content toast。
+ * 已有正文时只负责把刷新/渲染失败投递到 toast，不参与正文布局。
+ * 单文件失败由对应 diff 项承载；首次加载完全失败则由 ReviewFailureEmpty 承载。
  */
 export function ReviewFeedback({
   context,
+  enabled = true,
   failures,
-  hasHiddenFailures = false,
   indexFailure = null,
   indexFailureTitle,
   runtimeError = null,
-  onRetryIndex,
   onRetryFailure,
+  onRetryIndex,
   onRetryRender,
-  staleRetainedCount = 0,
 }: {
   readonly context: RendererPluginContext;
+  readonly enabled?: boolean;
   readonly failures: readonly ReviewFailedResource[];
   readonly hasHiddenFailures?: boolean;
   readonly indexFailure?: GitReviewFailure | null;
@@ -204,17 +125,13 @@ export function ReviewFeedback({
   readonly runtimeError?: Error | null;
   readonly staleRetainedCount?: number;
 }): React.JSX.Element | null {
-  if (
-    !(
-      runtimeError ||
-      indexFailure ||
-      failures.length > 0 ||
-      hasHiddenFailures ||
-      staleRetainedCount > 0
-    )
-  ) {
-    return null;
-  }
+  const documentFailureCycleNotifiedRef = useRef(false);
+  const latestDocumentFailuresRef = useRef(failures);
+  const latestRetryFailureRef = useRef(onRetryFailure);
+  const lastIndexFailureRef = useRef<string | null>(null);
+  const lastRuntimeErrorRef = useRef<string | null>(null);
+  latestDocumentFailuresRef.current = failures;
+  latestRetryFailureRef.current = onRetryFailure;
   const refreshFailureTitle = pluginText(
     context,
     "reviewRefreshFailed",
@@ -226,77 +143,125 @@ export function ReviewFeedback({
     "reviewRenderFailed",
     "Failed to render diff"
   );
-  return (
-    <ScrollArea className="max-h-[40%] shrink-0">
-      <div className="flex flex-col gap-2 p-2">
-        {indexFailure ? (
-          <Alert variant="destructive">
-            <AlertTitle>{displayedIndexFailureTitle}</AlertTitle>
-            <AlertDescription>
-              {gitReviewFailureMessage(context, indexFailure)}
-            </AlertDescription>
-            <ReviewFailureActions
-              context={context}
-              failure={indexFailure}
-              onRetry={onRetryIndex}
-              title={displayedIndexFailureTitle}
-            />
-          </Alert>
-        ) : null}
-        {runtimeError && onRetryRender ? (
-          <Alert variant="destructive">
-            <AlertTitle>{renderFailureTitle}</AlertTitle>
-            <FeedbackActions
-              context={context}
-              detail={runtimeError.message}
-              onRetry={onRetryRender}
-              title={renderFailureTitle}
-            />
-          </Alert>
-        ) : null}
-        {failures.map((resource) => (
-          <Alert key={resource.entry.entryKey} variant="destructive">
-            <AlertTitle className="min-w-0 break-all font-mono">
-              {resource.entry.path}
-            </AlertTitle>
-            <AlertDescription>
-              {gitReviewFailureMessage(context, resource.failure)}
-            </AlertDescription>
-            <ReviewFailureActions
-              context={context}
-              failure={resource.failure}
-              onRetry={
-                onRetryFailure
-                  ? () => onRetryFailure(resource.entry.entryKey)
-                  : undefined
-              }
-              title={resource.entry.path}
-            />
-          </Alert>
-        ))}
-        {hasHiddenFailures ? (
-          <Alert>
-            <AlertTitle>
-              {pluginText(
-                context,
-                "reviewAdditionalIssues",
-                "Additional changes could not be displayed."
-              )}
-            </AlertTitle>
-          </Alert>
-        ) : null}
-        {staleRetainedCount > 0 ? (
-          <Alert>
-            <AlertTitle>
-              {pluginText(
-                context,
-                "reviewRefreshStale",
-                "Some files changed again while refreshing. Their previous diff remains visible until the next Git update."
-              )}
-            </AlertTitle>
-          </Alert>
-        ) : null}
-      </div>
-    </ScrollArea>
-  );
+
+  useEffect(() => {
+    if (!indexFailure) {
+      lastIndexFailureRef.current = null;
+      return;
+    }
+    if (!enabled) {
+      return;
+    }
+    const indexFailureMessage =
+      indexFailure.message ?? gitReviewFailureMessage(context, indexFailure);
+    const signature = `${indexFailure.reason}\u0000${indexFailureMessage}`;
+    if (lastIndexFailureRef.current === signature) {
+      return;
+    }
+    lastIndexFailureRef.current = signature;
+    context.notifications.error(displayedIndexFailureTitle, {
+      action: onRetryIndex
+        ? {
+            label: pluginText(context, "reviewRetry", "Retry"),
+            onClick: onRetryIndex,
+          }
+        : {
+            label: pluginText(context, "reviewDetails", "Details"),
+            onClick: () => {
+              context.dialogs
+                .alert({
+                  body: indexFailureMessage,
+                  title: displayedIndexFailureTitle,
+                })
+                .catch(() => undefined);
+            },
+          },
+    });
+  }, [
+    context,
+    displayedIndexFailureTitle,
+    enabled,
+    indexFailure,
+    onRetryIndex,
+  ]);
+
+  useEffect(() => {
+    if (failures.length === 0) {
+      documentFailureCycleNotifiedRef.current = false;
+      return;
+    }
+    if (!enabled || documentFailureCycleNotifiedRef.current) {
+      return;
+    }
+    documentFailureCycleNotifiedRef.current = true;
+    const retryableFailures = onRetryFailure
+      ? failures.filter(({ failure }) => failure.retryable)
+      : [];
+    const title = pluginText(
+      context,
+      "reviewAdditionalIssues",
+      "Additional changes could not be displayed."
+    );
+    context.notifications.error(title, {
+      action:
+        retryableFailures.length > 0
+          ? {
+              label: pluginText(context, "reviewRetry", "Retry"),
+              onClick: () => {
+                for (const {
+                  entry,
+                  failure,
+                } of latestDocumentFailuresRef.current) {
+                  if (failure.retryable) {
+                    latestRetryFailureRef.current?.(entry.entryKey);
+                  }
+                }
+              },
+            }
+          : {
+              label: pluginText(context, "reviewDetails", "Details"),
+              onClick: () => {
+                context.dialogs
+                  .alert({
+                    body: latestDocumentFailuresRef.current
+                      .map(
+                        ({ entry, failure }) =>
+                          `${entry.path}\n${failure.message}`
+                      )
+                      .join("\n\n"),
+                    title,
+                  })
+                  .catch(() => undefined);
+              },
+            },
+    });
+  }, [context, enabled, failures, onRetryFailure]);
+
+  useEffect(() => {
+    if (!runtimeError) {
+      lastRuntimeErrorRef.current = null;
+      return;
+    }
+    if (!enabled) {
+      return;
+    }
+    const signature = `${runtimeError.name}\u0000${runtimeError.message}`;
+    if (lastRuntimeErrorRef.current === signature) {
+      return;
+    }
+    lastRuntimeErrorRef.current = signature;
+    context.notifications.error(
+      renderFailureTitle,
+      onRetryRender
+        ? {
+            action: {
+              label: pluginText(context, "reviewRetry", "Retry"),
+              onClick: onRetryRender,
+            },
+          }
+        : undefined
+    );
+  }, [context, enabled, onRetryRender, renderFailureTitle, runtimeError]);
+
+  return null;
 }

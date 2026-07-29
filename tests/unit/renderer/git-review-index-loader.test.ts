@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const EMPTY_INDEX: GitReviewIndexOk = {
   entries: [],
+  indexRevision: "index:empty",
   kind: "ok",
   warnings: [],
 };
@@ -29,6 +30,174 @@ afterEach(() => {
 });
 
 describe("GitReviewIndexLoader", () => {
+  it("用户 mutation 刷新绕过 debounce，并在权威 index 落定后完成", async () => {
+    vi.useFakeTimers();
+    const requests: ReturnType<typeof deferred<GitReviewIndexResult>>[] = [];
+    const loader = new GitReviewIndexLoader({
+      cancel: vi.fn(async () => undefined),
+      load: () => {
+        const request = deferred<GitReviewIndexResult>();
+        requests.push(request);
+        return request.promise;
+      },
+      watch: () => () => undefined,
+    });
+    requests[0]?.resolve(EMPTY_INDEX);
+    await flush();
+
+    let settled = false;
+    const refresh = loader.refreshNow().then(() => {
+      settled = true;
+    });
+    expect(requests).toHaveLength(2);
+    expect(settled).toBe(false);
+    requests[1]?.resolve({
+      ...EMPTY_INDEX,
+      entries: [
+        {
+          entryKey: "changed",
+          oldPaths: [],
+          path: "changed.ts",
+          renderSlots: [
+            {
+              group: "staged",
+              oldPath: null,
+              sectionKey: "section:changed",
+              status: "modified",
+              targetPath: "changed.ts",
+            },
+          ],
+          status: "modified",
+        },
+      ],
+      indexRevision: "index:changed",
+    });
+    await refresh;
+
+    expect(settled).toBe(true);
+    expect(loader.getSnapshot()).toMatchObject({
+      kind: "loaded",
+      refreshing: false,
+      result: { entries: [{ entryKey: "changed" }] },
+    });
+    expect(vi.getTimerCount()).toBe(0);
+  });
+
+  it("mutation 刷新失败不解除提交屏障，retry 成功后才完成", async () => {
+    vi.useFakeTimers();
+    const requests: ReturnType<typeof deferred<GitReviewIndexResult>>[] = [];
+    const loader = new GitReviewIndexLoader({
+      cancel: vi.fn(async () => undefined),
+      load: () => {
+        const request = deferred<GitReviewIndexResult>();
+        requests.push(request);
+        return request.promise;
+      },
+      watch: () => () => undefined,
+    });
+    requests[0]?.resolve(EMPTY_INDEX);
+    await flush();
+
+    let settled = false;
+    const refresh = loader.refreshNow().then(() => {
+      settled = true;
+    });
+    requests[1]?.resolve({
+      kind: "error",
+      message: "fatal: unable to read index",
+      reason: "commandFailed",
+      retryable: true,
+    });
+    await flush();
+
+    expect(settled).toBe(false);
+    expect(loader.getSnapshot()).toMatchObject({
+      kind: "loaded",
+      refreshFailure: { reason: "commandFailed" },
+    });
+
+    loader.retry();
+    await vi.advanceTimersByTimeAsync(120);
+    expect(requests).toHaveLength(3);
+    requests[2]?.resolve({
+      ...EMPTY_INDEX,
+      indexRevision: "index:recovered",
+    });
+    await refresh;
+    expect(settled).toBe(true);
+    expect(loader.getSnapshot()).toMatchObject({
+      kind: "loaded",
+      refreshFailure: null,
+      result: { indexRevision: "index:recovered" },
+    });
+  });
+
+  it("重复 watcher 结果不推进 generation，避免第二轮文档布局", async () => {
+    vi.useFakeTimers();
+    let notify: () => void = () => undefined;
+    const loader = new GitReviewIndexLoader({
+      cancel: vi.fn(async () => undefined),
+      load: async () => EMPTY_INDEX,
+      watch: (listener) => {
+        notify = listener;
+        return () => undefined;
+      },
+    });
+    await flush();
+    const initial = loader.getSnapshot();
+    expect(initial.kind).toBe("loaded");
+    if (initial.kind !== "loaded") {
+      throw new Error("expected loaded index");
+    }
+
+    notify();
+    await vi.advanceTimersByTimeAsync(120);
+    await flush();
+
+    expect(loader.getSnapshot()).toMatchObject({
+      generation: initial.generation,
+      kind: "loaded",
+      refreshing: false,
+    });
+  });
+
+  it("同一 revision 的更高状态序列仍作为 mutation 权威发布", async () => {
+    vi.useFakeTimers();
+    let notify: () => void = () => undefined;
+    const results: GitReviewIndexResult[] = [
+      { ...EMPTY_INDEX, stateSequence: 1 },
+      { ...EMPTY_INDEX, stateSequence: 2 },
+    ];
+    const loader = new GitReviewIndexLoader({
+      cancel: vi.fn(async () => undefined),
+      load: async () => results.shift() as GitReviewIndexResult,
+      watch: (listener) => {
+        notify = listener;
+        return () => undefined;
+      },
+    });
+    await flush();
+    const initial = loader.getSnapshot();
+    expect(initial).toMatchObject({
+      generation: 1,
+      kind: "loaded",
+      result: { stateSequence: 1 },
+    });
+
+    notify();
+    await vi.advanceTimersByTimeAsync(120);
+    await flush();
+
+    const authoritative = loader.getSnapshot();
+    expect(authoritative).toMatchObject({
+      kind: "loaded",
+      result: { stateSequence: 2 },
+    });
+    if (initial.kind === "loaded" && authoritative.kind === "loaded") {
+      expect(authoritative.generation).toBeGreaterThan(initial.generation);
+    }
+  });
+
   it("把在飞期间的一百个事件合并为一轮尾随刷新", async () => {
     vi.useFakeTimers();
     const requests: ReturnType<typeof deferred<GitReviewIndexResult>>[] = [];
@@ -148,6 +317,52 @@ describe("GitReviewIndexLoader", () => {
       refreshFailure: { message: "refresh failed" },
       result: EMPTY_INDEX,
     });
+  });
+
+  it("失败恢复后的同修订结果仍推进 generation 以清理文档错误", async () => {
+    vi.useFakeTimers();
+    const results: GitReviewIndexResult[] = [
+      EMPTY_INDEX,
+      {
+        kind: "error",
+        message: "refresh failed",
+        reason: "commandFailed",
+        retryable: true,
+      },
+      EMPTY_INDEX,
+    ];
+    let notify: () => void = () => undefined;
+    const loader = new GitReviewIndexLoader({
+      cancel: vi.fn(async () => undefined),
+      load: async () => results.shift() as GitReviewIndexResult,
+      watch: (listener) => {
+        notify = listener;
+        return () => undefined;
+      },
+    });
+    await flush();
+    const initial = loader.getSnapshot();
+    expect(initial.kind).toBe("loaded");
+    if (initial.kind !== "loaded") {
+      throw new Error("expected loaded index");
+    }
+
+    notify();
+    await vi.advanceTimersByTimeAsync(120);
+    await flush();
+    notify();
+    await vi.advanceTimersByTimeAsync(120);
+    await flush();
+
+    expect(loader.getSnapshot()).toMatchObject({
+      kind: "loaded",
+      refreshFailure: null,
+    });
+    const recovered = loader.getSnapshot();
+    expect(recovered.kind).toBe("loaded");
+    if (recovered.kind === "loaded") {
+      expect(recovered.generation).toBeGreaterThan(initial.generation);
+    }
   });
 
   it("初次失败重试后立即进入 loading 并只启动一轮请求", async () => {

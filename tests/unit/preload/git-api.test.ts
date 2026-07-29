@@ -50,7 +50,7 @@ describe("gitApi Review command boundary", () => {
     });
   });
 
-  it("严格转发 index、document 和 cancel 三个只读命令", async () => {
+  it("严格转发 index、document、cancel 和语义写入命令", async () => {
     const indexRequest = { operationId, source };
     const documentRequest = {
       operationId,
@@ -61,10 +61,30 @@ describe("gitApi Review command boundary", () => {
       },
     };
     const cancelRequest = { operationId };
+    const mutationRequest = {
+      action: "stage" as const,
+      expectedRevision: `sha256:${"0".repeat(64)}`,
+      operationId,
+      source: documentRequest.source,
+      target: {
+        changeKey: `sha256:${"1".repeat(64)}`,
+        kind: "change" as const,
+        sectionKey: "section:unstaged",
+      },
+    };
+    const pathMutationRequest = {
+      action: "stage" as const,
+      expectedIndexRevision: `sha256:${"2".repeat(64)}`,
+      operationId,
+      paths: ["src/app.ts"],
+      source,
+    };
 
     await gitApi.getReviewIndex(indexRequest);
     await gitApi.getReviewFileDocument(documentRequest);
     await gitApi.cancelReviewRequest(cancelRequest);
+    await gitApi.applyReviewMutation(mutationRequest);
+    await gitApi.applyReviewPathMutation(pathMutationRequest);
 
     expect(invokeMock.mock.calls).toEqual([
       [
@@ -78,6 +98,17 @@ describe("gitApi Review command boundary", () => {
       [
         PIER.COMMAND_EXECUTE,
         { request: cancelRequest, type: "git.cancelReviewRequest" },
+      ],
+      [
+        PIER.COMMAND_EXECUTE,
+        { request: mutationRequest, type: "git.applyReviewMutation" },
+      ],
+      [
+        PIER.COMMAND_EXECUTE,
+        {
+          request: pathMutationRequest,
+          type: "git.applyReviewPathMutation",
+        },
       ],
     ]);
   });

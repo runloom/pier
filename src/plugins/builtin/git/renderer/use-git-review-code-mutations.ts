@@ -1,124 +1,143 @@
 import type {
-  PierDiffViewItem,
+  PierDiffViewChangeControl,
+  PierDiffViewStageControl,
   PierHunkActionEvent,
 } from "@pier/ui/diff-view.tsx";
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { GitReviewIndexEntry } from "@shared/contracts/git-review.ts";
-import { useCallback, useMemo, useState } from "react";
+import { useCallback, useMemo, useRef, useState } from "react";
 import { notifyError } from "./git-command-helpers.ts";
 import { pluginText } from "./git-plugin-text.ts";
+import {
+  displayReviewItemsWithMutationPending,
+  resolveReviewMutationSection,
+  reviewMutationSource,
+  showReviewMutationFailure,
+  withReviewMutationPending,
+} from "./git-review-code-mutation-helpers.ts";
+import type {
+  UseGitReviewCodeMutationsOptions,
+  UseGitReviewCodeMutationsResult,
+} from "./git-review-code-mutation-types.ts";
 import {
   confirmGitDiscard,
   partitionDiscardPaths,
 } from "./git-review-discard.ts";
-import { applyHunkGitAction } from "./git-review-hunk-actions.ts";
+import type { GitReviewMutationLease } from "./git-review-reading-surface.ts";
+import { useGitReviewOpenFile } from "./use-git-review-open-file.ts";
 
-function basename(path: string): string {
-  const segments = path.split("/").filter(Boolean);
-  return segments.at(-1) ?? path;
-}
+const ALWAYS_ACQUIRE_MUTATION_AUTHORITY = (): GitReviewMutationLease => ({
+  minimumIndexGeneration: 0,
+});
 
-export function useGitReviewCodeMutations(options: {
-  readonly context: RendererPluginContext;
-  readonly contextId: string;
-  readonly entries?: readonly GitReviewIndexEntry[];
-  readonly gitRootPath?: string;
-  readonly items: readonly PierDiffViewItem[];
-}): {
-  readonly canMutate: boolean;
-  readonly displayItems: readonly PierDiffViewItem[];
-  readonly onDiscardFile: (itemId: string) => void;
-  readonly onHunkAction: (event: PierHunkActionEvent) => void;
-  readonly onOpenFile: (itemId: string) => void;
-  readonly onToggleStage: (itemId: string) => void;
-} {
-  const { context, contextId, entries, gitRootPath, items } = options;
-  const [busySectionKeys, setBusySectionKeys] = useState(
-    () => new Set<string>()
+export function useGitReviewCodeMutations(
+  options: UseGitReviewCodeMutationsOptions
+): UseGitReviewCodeMutationsResult {
+  const {
+    captureReadingAnchor,
+    context,
+    contextId,
+    entries,
+    gitRootPath,
+    items,
+    mutationBlocked = false,
+    onMutationStart = ALWAYS_ACQUIRE_MUTATION_AUTHORITY,
+    onMutationCommitted,
+    revisionBySectionId,
+  } = options;
+  const [pendingFileActions, setPendingFileActions] = useState(
+    () =>
+      new Map<string, NonNullable<PierDiffViewStageControl["pendingAction"]>>()
   );
-
-  const displayItems = useMemo(() => {
-    if (busySectionKeys.size === 0) {
-      return items;
-    }
-    return items.map((item) => {
-      if (!(item.stageControl && busySectionKeys.has(item.id))) {
-        return item;
-      }
-      return {
-        ...item,
-        stageControl: { ...item.stageControl, busy: true },
-      };
-    });
-  }, [busySectionKeys, items]);
-
-  const resolveSlot = useCallback(
-    (itemId: string) => {
-      if (!entries) {
-        return null;
-      }
-      for (const entry of entries) {
-        const slot = entry.renderSlots.find(
-          (candidate) => candidate.sectionKey === itemId
-        );
-        if (slot) {
-          return { entry, slot };
-        }
-      }
-      return null;
-    },
-    [entries]
+  const [pendingChangeActions, setPendingChangeActions] = useState(
+    () =>
+      new Map<string, NonNullable<PierDiffViewChangeControl["pendingAction"]>>()
   );
+  const entriesRef = useRef(entries);
+  const captureReadingAnchorRef = useRef(captureReadingAnchor);
+  const itemsRef = useRef(items);
+  const onMutationCommittedRef = useRef(onMutationCommitted);
+  const revisionBySectionIdRef = useRef(revisionBySectionId);
+  const pendingFileActionsRef = useRef(pendingFileActions);
+  const pendingChangeActionsRef = useRef(pendingChangeActions);
+  const mutationBlockedRef = useRef(mutationBlocked);
+  const onMutationStartRef = useRef(onMutationStart);
+  entriesRef.current = entries;
+  captureReadingAnchorRef.current = captureReadingAnchor;
+  itemsRef.current = items;
+  onMutationCommittedRef.current = onMutationCommitted;
+  revisionBySectionIdRef.current = revisionBySectionId;
+  pendingFileActionsRef.current = pendingFileActions;
+  pendingChangeActionsRef.current = pendingChangeActions;
+  mutationBlockedRef.current = mutationBlocked;
+  onMutationStartRef.current = onMutationStart;
 
-  const withBusy = useCallback((itemId: string, run: Promise<unknown>) => {
-    // 正文高度变化交给 Pierre 行级 scroll anchoring；勿钉 raw scrollTop。
-    setBusySectionKeys((prev) => {
-      const next = new Set(prev);
-      next.add(itemId);
-      return next;
-    });
-    return run.finally(() => {
-      setBusySectionKeys((prev) => {
-        if (!prev.has(itemId)) {
-          return prev;
-        }
-        const next = new Set(prev);
-        next.delete(itemId);
-        return next;
-      });
-    });
-  }, []);
+  const displayItems = useMemo(
+    () =>
+      displayReviewItemsWithMutationPending(
+        items,
+        pendingFileActions,
+        pendingChangeActions
+      ),
+    [items, pendingChangeActions, pendingFileActions]
+  );
 
   const onToggleStage = useCallback(
     (itemId: string) => {
-      if (!(entries && gitRootPath) || busySectionKeys.has(itemId)) {
+      if (
+        mutationBlockedRef.current ||
+        !(entriesRef.current && gitRootPath) ||
+        pendingFileActionsRef.current.has(itemId)
+      ) {
         return;
       }
-      const item = items.find((candidate) => candidate.id === itemId);
+      const item = itemsRef.current.find(
+        (candidate) => candidate.id === itemId
+      );
       const stageState = item?.stageControl?.state;
       if (!stageState) {
         return;
       }
-      const resolved = resolveSlot(itemId);
-      if (!resolved) {
+      const targetSectionKey = item.stageControl?.targetSectionKey ?? itemId;
+      const resolved = resolveReviewMutationSection(
+        entriesRef.current,
+        itemsRef.current,
+        targetSectionKey
+      );
+      const expectedRevision = revisionBySectionIdRef.current.get(itemId);
+      if (!(resolved && expectedRevision)) {
         return;
       }
-      const { entry, slot } = resolved;
-      const paths = [
-        slot.targetPath,
-        ...entry.oldPaths.filter((path) => path !== slot.targetPath),
-      ];
-      withBusy(
+      const source = reviewMutationSource(
+        contextId,
+        gitRootPath,
+        resolved.entry
+      );
+      if (source === null) {
+        return;
+      }
+      const action = stageState === "staged" ? "unstage" : "stage";
+      const anchor = captureReadingAnchorRef.current?.(itemId);
+      const lease = onMutationStartRef.current();
+      if (lease === null) {
+        return;
+      }
+      withReviewMutationPending(
+        setPendingFileActions,
+        pendingFileActionsRef,
         itemId,
-        (async () => {
+        action,
+        async () => {
           try {
-            const ok =
-              stageState === "staged"
-                ? await context.git.unstage(gitRootPath, paths)
-                : await context.git.stage(gitRootPath, paths);
-            // 成功路径静默：watch/index 以 delta 对齐；不 toast、不抬 failure 面。
-            if (!ok) {
-              notifyError(
+            const result = await context.git.applyReviewMutation({
+              action,
+              expectedRevision,
+              operationId: crypto.randomUUID(),
+              source,
+              target: { kind: "file", sectionKey: targetSectionKey },
+            });
+            if (result.kind !== "ok") {
+              const authorityRefresh =
+                onMutationCommittedRef.current?.(null) ?? Promise.resolve();
+              await showReviewMutationFailure(
                 context,
                 stageState === "staged"
                   ? pluginText(
@@ -130,12 +149,31 @@ export function useGitReviewCodeMutations(options: {
                       context,
                       "reviewTreeStageFailed",
                       "Unable to Stage"
-                    )
+                    ),
+                result
               );
+              await authorityRefresh;
+              return;
             }
+            await onMutationCommittedRef.current?.(result, {
+              ...(anchor === undefined || anchor === null
+                ? {}
+                : {
+                    anchorOffset: anchor.offset,
+                    sourceItemId: anchor.id,
+                  }),
+              entryKey: resolved.entry.entryKey,
+              minimumIndexGeneration: Math.max(
+                lease.minimumIndexGeneration,
+                result.stateSequence ?? 0
+              ),
+              path: resolved.entry.path,
+              targetSurface: action === "stage" ? "staged" : "index",
+            });
           } catch (error) {
-            // 仅 write 真失败时一次稳定错误（终态：禁止中间态闪错）。
-            notifyError(
+            const authorityRefresh =
+              onMutationCommittedRef.current?.(null) ?? Promise.resolve();
+            await showReviewMutationFailure(
               context,
               stageState === "staged"
                 ? pluginText(
@@ -150,35 +188,48 @@ export function useGitReviewCodeMutations(options: {
                   ),
               error
             );
+            await authorityRefresh;
           }
-        })()
-      ).catch(() => undefined);
+        }
+      ).catch((error) => {
+        console.error("Failed to report Git review mutation.", error);
+      });
     },
-    [
-      busySectionKeys,
-      context,
-      entries,
-      gitRootPath,
-      items,
-      resolveSlot,
-      withBusy,
-    ]
+    [context, gitRootPath, contextId]
   );
 
+  // Capability owns callback presence. The authority barrier is a transient
+  // busy state: keep controls mounted and disable them through displayItems.
   const canMutate = Boolean(entries && gitRootPath);
 
-  /**
-   * Codex review path: per-hunk toolbar → extract hunk patch → git.applyPatch.
-   */
+  /** Stable changeKey → main-side semantic mutation; renderer never rebuilds a patch. */
   const onHunkAction = useCallback(
     (event: PierHunkActionEvent) => {
-      if (!(canMutate && gitRootPath) || busySectionKeys.has(event.itemId)) {
+      if (
+        mutationBlockedRef.current ||
+        !(entriesRef.current && gitRootPath) ||
+        pendingFileActionsRef.current.has(event.itemId) ||
+        pendingChangeActionsRef.current.has(event.changeKey)
+      ) {
         return;
       }
-      const item = items.find((candidate) => candidate.id === event.itemId);
-      const stageState = item?.stageControl?.state;
-      const patch = item?.patch;
-      if (!(item && stageState && patch && patch.length > 0)) {
+      const item = itemsRef.current.find(
+        (candidate) => candidate.id === event.itemId
+      );
+      const changeControl = item?.changeControls?.find(
+        (candidate) => candidate.changeKey === event.changeKey
+      );
+      const resolved = resolveReviewMutationSection(
+        entriesRef.current,
+        itemsRef.current,
+        event.itemId
+      );
+      const expectedRevision = revisionBySectionIdRef.current.get(event.itemId);
+      const source =
+        resolved === null
+          ? null
+          : reviewMutationSource(contextId, gitRootPath, resolved.entry);
+      if (!(item && changeControl && resolved && expectedRevision && source)) {
         notifyError(
           context,
           pluginText(
@@ -189,7 +240,6 @@ export function useGitReviewCodeMutations(options: {
         );
         return;
       }
-
       const failedTitle = (action: typeof event.action): string => {
         if (action === "revert") {
           return pluginText(
@@ -210,27 +260,6 @@ export function useGitReviewCodeMutations(options: {
           "reviewStageHunkFailed",
           "Unable to stage hunk"
         );
-      };
-
-      const resultTitle = (
-        action: typeof event.action,
-        errorCode: string | undefined
-      ): string => {
-        if (errorCode === "extract-failed") {
-          return pluginText(
-            context,
-            "reviewHunkPatchBuildFailed",
-            "Unable to build patch for this change"
-          );
-        }
-        if (errorCode === "partial-revert-worktree") {
-          return pluginText(
-            context,
-            "reviewRevertHunkPartialFailed",
-            "Unstaged from the index, but could not discard from the working tree"
-          );
-        }
-        return failedTitle(action);
       };
 
       const run = async () => {
@@ -257,63 +286,122 @@ export function useGitReviewCodeMutations(options: {
             return;
           }
         }
+        const lease = onMutationStartRef.current();
+        if (lease === null) {
+          return;
+        }
+        const anchor = captureReadingAnchorRef.current?.(event.itemId);
 
-        await withBusy(
-          event.itemId,
-          (async () => {
+        await withReviewMutationPending(
+          setPendingChangeActions,
+          pendingChangeActionsRef,
+          event.changeKey,
+          event.action,
+          async () => {
             try {
-              const result = await applyHunkGitAction({
+              const result = await context.git.applyReviewMutation({
                 action: event.action,
-                applyPatch: context.git.applyPatch.bind(context.git),
-                changeBlockIndex: event.changeBlockIndex,
-                cwd: gitRootPath,
-                filePatch: patch,
-                hunkIndex: event.hunkIndex,
-                variant: stageState,
+                expectedRevision,
+                operationId: crypto.randomUUID(),
+                source,
+                target: {
+                  changeKey: changeControl.changeKey,
+                  kind: "change",
+                  sectionKey: changeControl.targetSectionKey ?? event.itemId,
+                },
               });
-              if (!result.ok) {
-                const title = resultTitle(event.action, result.errorCode);
-                if (result.message) {
-                  await context.dialogs.alert({
-                    body: result.message,
-                    title,
-                  });
-                } else {
-                  notifyError(context, title);
-                }
+              if (result.kind !== "ok") {
+                const authorityRefresh =
+                  onMutationCommittedRef.current?.(null) ?? Promise.resolve();
+                await showReviewMutationFailure(
+                  context,
+                  failedTitle(event.action),
+                  result
+                );
+                await authorityRefresh;
+                return;
               }
+              await onMutationCommittedRef.current?.(
+                result,
+                event.action === "revert"
+                  ? undefined
+                  : {
+                      ...(anchor === undefined || anchor === null
+                        ? {}
+                        : {
+                            anchorOffset: anchor.offset,
+                            sourceItemId: anchor.id,
+                          }),
+                      entryKey: resolved.entry.entryKey,
+                      minimumIndexGeneration: Math.max(
+                        lease.minimumIndexGeneration,
+                        result.stateSequence ?? 0
+                      ),
+                      path: resolved.entry.path,
+                      targetSurface:
+                        event.action === "stage" ? "staged" : "index",
+                    }
+              );
             } catch (error) {
-              notifyError(context, failedTitle(event.action), error);
+              const authorityRefresh =
+                onMutationCommittedRef.current?.(null) ?? Promise.resolve();
+              await showReviewMutationFailure(
+                context,
+                failedTitle(event.action),
+                error
+              );
+              await authorityRefresh;
             }
-          })()
+          }
         );
       };
 
-      run().catch(() => undefined);
+      run().catch((error) => {
+        console.error("Failed to report Git review mutation.", error);
+      });
     },
-    [busySectionKeys, canMutate, context, gitRootPath, items, withBusy]
+    [context, gitRootPath, contextId]
   );
 
   const onDiscardFile = useCallback(
     (itemId: string) => {
-      if (!(entries && gitRootPath) || busySectionKeys.has(itemId)) {
+      if (
+        mutationBlockedRef.current ||
+        !(entriesRef.current && gitRootPath) ||
+        pendingFileActionsRef.current.has(itemId)
+      ) {
         return;
       }
-      const item = items.find((candidate) => candidate.id === itemId);
+      const item = itemsRef.current.find(
+        (candidate) => candidate.id === itemId
+      );
       if (
         item?.stageControl?.state !== "unstaged" ||
         item.stageControl.canDiscard !== true
       ) {
         return;
       }
-      const resolved = resolveSlot(itemId);
-      if (!resolved) {
+      const targetSectionKey = item.stageControl.targetSectionKey ?? itemId;
+      const resolved = resolveReviewMutationSection(
+        entriesRef.current,
+        itemsRef.current,
+        targetSectionKey
+      );
+      const expectedRevision = revisionBySectionIdRef.current.get(itemId);
+      if (!(resolved && expectedRevision)) {
         return;
       }
-      const path = resolved.slot.targetPath;
+      const source = reviewMutationSource(
+        contextId,
+        gitRootPath,
+        resolved.entry
+      );
+      if (source === null) {
+        return;
+      }
       const selection = partitionDiscardPaths({
-        paths: [path],
-        uniformStatus: resolved.slot.status,
+        paths: [resolved.entry.path],
+        uniformStatus: resolved.slot?.status ?? resolved.entry.status,
       });
       // Confirm first (no busy chrome); busy only during the write.
       (async () => {
@@ -321,25 +409,46 @@ export function useGitReviewCodeMutations(options: {
         if (decision.kind !== "proceed" || decision.paths.length === 0) {
           return;
         }
-        await withBusy(
+        if (onMutationStartRef.current() === null) {
+          return;
+        }
+        await withReviewMutationPending(
+          setPendingFileActions,
+          pendingFileActionsRef,
           itemId,
-          (async () => {
+          "discard",
+          async () => {
             try {
-              const ok = await context.git.discardChanges(gitRootPath, [
-                ...decision.paths,
-              ]);
-              if (!ok) {
-                notifyError(
+              const result = await context.git.applyReviewMutation({
+                action: "revert",
+                expectedRevision,
+                operationId: crypto.randomUUID(),
+                source,
+                target: {
+                  kind: "file",
+                  sectionKey: targetSectionKey,
+                },
+              });
+              if (result.kind !== "ok") {
+                const authorityRefresh =
+                  onMutationCommittedRef.current?.(null) ?? Promise.resolve();
+                await showReviewMutationFailure(
                   context,
                   pluginText(
                     context,
                     "reviewDiscardFailed",
                     "Unable to discard changes"
-                  )
+                  ),
+                  result
                 );
+                await authorityRefresh;
+                return;
               }
+              await onMutationCommittedRef.current?.(result);
             } catch (error) {
-              notifyError(
+              const authorityRefresh =
+                onMutationCommittedRef.current?.(null) ?? Promise.resolve();
+              await showReviewMutationFailure(
                 context,
                 pluginText(
                   context,
@@ -348,52 +457,23 @@ export function useGitReviewCodeMutations(options: {
                 ),
                 error
               );
+              await authorityRefresh;
             }
-          })()
+          }
         );
-      })().catch(() => undefined);
+      })().catch((error) => {
+        console.error("Failed to report Git review mutation.", error);
+      });
     },
-    [
-      busySectionKeys,
-      context,
-      entries,
-      gitRootPath,
-      items,
-      resolveSlot,
-      withBusy,
-    ]
+    [context, gitRootPath, contextId]
   );
 
-  const onOpenFile = useCallback(
-    (itemId: string) => {
-      if (!gitRootPath) {
-        return;
-      }
-      const item = items.find((entry) => entry.id === itemId);
-      const path = item?.fileDisplay?.path;
-      if (!path) {
-        return;
-      }
-      const opened = context.files.openInEditor({
-        context: {
-          contextId,
-          gitRoot: gitRootPath,
-          projectRootPath: gitRootPath,
-          source: "panel",
-          updatedAt: Date.now(),
-        },
-        path,
-        root: gitRootPath,
-        title: basename(path),
-      });
-      if (!opened) {
-        context.notifications.error(
-          pluginText(context, "reviewTreeOpenFileFailed", "Unable to open file")
-        );
-      }
-    },
-    [context, contextId, gitRootPath, items]
-  );
+  const onOpenFile = useGitReviewOpenFile({
+    context,
+    contextId,
+    ...(gitRootPath === undefined ? {} : { gitRootPath }),
+    itemsRef,
+  });
 
   return {
     canMutate,

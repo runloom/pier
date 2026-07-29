@@ -120,20 +120,19 @@ describe("reviewDocumentDemandForRenderWindow", () => {
     ).toEqual({ bufferedEntryKeys: [], visibleEntryKeys: ["entry:0"] });
   });
 
-  it("导航期间 boost selected 到队首并保留 window demand", () => {
+  it("导航期间只读取 selected，避免旧窗口正文改变目标前序高度", () => {
     const demand = {
       bufferedEntryKeys: ["entry:9", "entry:11"],
       visibleEntryKeys: ["entry:10", "entry:12"],
     };
 
     expect(prioritizeReviewNavigationDemand(demand, "entry:10", true)).toEqual({
-      bufferedEntryKeys: ["entry:9", "entry:11"],
-      visibleEntryKeys: ["entry:10", "entry:12"],
+      bufferedEntryKeys: [],
+      visibleEntryKeys: ["entry:10"],
     });
-    // 窗口外点击：selected 插入 visible 队首，不丢 window。
     expect(prioritizeReviewNavigationDemand(demand, "entry:99", true)).toEqual({
-      bufferedEntryKeys: ["entry:9", "entry:11"],
-      visibleEntryKeys: ["entry:99", "entry:10", "entry:12"],
+      bufferedEntryKeys: [],
+      visibleEntryKeys: ["entry:99"],
     });
     expect(prioritizeReviewNavigationDemand(demand, "entry:10", false)).toBe(
       demand
@@ -421,7 +420,7 @@ describe("composeReviewDocumentDemand", () => {
       windowDemand: { bufferedEntryKeys: [], visibleEntryKeys: [] },
     });
     expect(seeded.visibleEntryKeys).toEqual(seed);
-    // nav：boost selected，保留 window（非仅 selected）
+    // nav：旧 window 退出正文调度，只读取目标。
     const nav = composeReviewDocumentDemand({
       entryKeysInOrder: keys,
       navigationPending: true,
@@ -433,9 +432,33 @@ describe("composeReviewDocumentDemand", () => {
         visibleEntryKeys: ["entry:5"],
       },
     });
-    expect(nav.visibleEntryKeys[0]).toBe("entry:39");
-    expect(nav.visibleEntryKeys).toContain("entry:5");
-    expect(nav.bufferedEntryKeys).toContain("entry:6");
+    expect(nav).toEqual({
+      bufferedEntryKeys: [],
+      visibleEntryKeys: ["entry:39"],
+    });
+  });
+
+  it("导航完成但选择仍受保护时只允许目标及其后序窗口水合", () => {
+    const keys = Array.from({ length: 10 }, (_, index) => `entry:${index}`);
+    expect(
+      composeReviewDocumentDemand({
+        entryKeysInOrder: keys,
+        navigationPending: false,
+        protectSelectedAnchor: true,
+        seedEntryKeys: [],
+        selectedEntryKey: "entry:5",
+        demandPrefetchEntryKeys: new Set(),
+        windowDemand: {
+          bufferedEntryKeys: ["entry:3", "entry:7"],
+          visibleEntryKeys: ["entry:4", "entry:5", "entry:6"],
+        },
+        lookahead: 0,
+        selectionRadius: 0,
+      })
+    ).toEqual({
+      bufferedEntryKeys: ["entry:7"],
+      visibleEntryKeys: ["entry:5", "entry:6"],
+    });
   });
 });
 

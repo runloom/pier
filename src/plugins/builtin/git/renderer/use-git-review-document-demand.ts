@@ -48,6 +48,7 @@ export function useGitReviewDocumentDemand({
       const demand = composeReviewDocumentDemand({
         entryKeysInOrder,
         navigationPending: pending,
+        protectSelectedAnchor: getSelectedEntryKey() !== null,
         seedEntryKeys: seedEntryKeysRef.current,
         selectedEntryKey: getSelectedEntryKey(),
         demandPrefetchEntryKeys: demandPrefetchEntryKeysRef.current,

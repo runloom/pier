@@ -36,6 +36,15 @@ export interface GitReviewIndexPrimaryParseResult {
 
 export interface GitReviewIndexStatParseResult {
   readonly digest: string;
+  readonly stats: readonly GitReviewIndexStat[];
+}
+
+export interface GitReviewIndexStat {
+  readonly additions: number | null;
+  readonly binary: boolean;
+  readonly deletions: number | null;
+  readonly oldPath: string | null;
+  readonly targetPath: string;
 }
 
 export class GitReviewIndexProtocolError extends Error {

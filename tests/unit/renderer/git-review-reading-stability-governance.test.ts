@@ -1,142 +1,171 @@
-/**
- * P0 阅读稳定门禁：禁止内容变更主路径 scrollTop freeze / 外层 item 级 scrollTo 抢 Pierre。
- * 实现已拆到 viewport / reading-callbacks / generation-effect / viewport-effects。
- */
 import { readFileSync } from "node:fs";
 import { join } from "node:path";
+import { GIT_REVIEW_GROUP_ORDER } from "@shared/contracts/git-review.ts";
 import { describe, expect, it } from "vitest";
+import { GIT_REVIEW_PRESENTATION_GROUP_ORDER } from "../../../src/plugins/builtin/git/renderer/git-review-surface-group.ts";
 
 const ROOT = join(import.meta.dirname, "../../..");
 
-function read(rel: string): string {
-  return readFileSync(join(ROOT, rel), "utf8");
+function read(relativePath: string): string {
+  return readFileSync(join(ROOT, relativePath), "utf8");
 }
 
-describe("git-review reading stability governance (P0)", () => {
-  it("forbids scroll freeze API on content mutation path", () => {
-    const handle = read("packages/ui/src/use-diff-view-handle.ts");
-    expect(handle).not.toContain("beginScrollFreeze");
-    expect(handle).not.toContain("endScrollFreeze");
-    expect(handle).not.toContain("reapplyScrollFreeze");
-
-    const codeView = read(
-      "src/plugins/builtin/git/renderer/git-review-code-view.tsx"
+describe("Git 变更阅读稳定性治理", () => {
+  it("产品展示顺序完整且不重复地覆盖协议分组", () => {
+    expect(new Set(GIT_REVIEW_PRESENTATION_GROUP_ORDER).size).toBe(
+      GIT_REVIEW_PRESENTATION_GROUP_ORDER.length
     );
-    expect(codeView).not.toContain("beginScrollFreeze");
-    expect(codeView).not.toContain("endScrollFreeze");
+    expect([...GIT_REVIEW_PRESENTATION_GROUP_ORDER].sort()).toEqual(
+      [...GIT_REVIEW_GROUP_ORDER].sort()
+    );
+  });
 
+  it("renderer 不持有滚动位置，也不通过帧循环或定时器补偿导航", () => {
+    const runtime = [
+      "src/plugins/builtin/git/renderer/git-review-content.tsx",
+      "src/plugins/builtin/git/renderer/git-review-surface-view.tsx",
+      "src/plugins/builtin/git/renderer/git-review-surfaces.tsx",
+      "src/plugins/builtin/git/renderer/use-git-review-document-generation-effect.ts",
+      "src/plugins/builtin/git/renderer/use-git-review-navigation.ts",
+      "src/plugins/builtin/git/renderer/use-git-review-navigation-try.ts",
+      "src/plugins/builtin/git/renderer/use-git-review-navigation-targets.ts",
+      "src/plugins/builtin/git/renderer/use-git-review-tree-open.ts",
+      "src/plugins/builtin/git/renderer/use-git-review-viewport-effects.ts",
+    ]
+      .map(read)
+      .join("\n");
+
+    expect(runtime).not.toMatch(/\bgetScrollTop\b/);
+    expect(runtime).not.toMatch(/\bsetScrollTop\b/);
+    expect(runtime).not.toMatch(/\brestoreAnchor\b/);
+    expect(runtime).not.toMatch(/\bcaptureTopAnchor\b/);
+    expect(runtime).not.toMatch(/\brequestAnimationFrame\b/);
+    expect(runtime).not.toMatch(/\bsetTimeout\b/);
+  });
+
+  it("成员更新只有 packages/ui 的锚定事务可以读取滚动坐标", () => {
+    const apply = read("packages/ui/src/use-diff-view-item-apply.ts");
+    const sync = read("packages/ui/src/diff-view-item-sync.ts");
+
+    expect(apply).toContain("applyCodeViewItemsAnchored");
+    expect(apply).not.toMatch(/\brequestAnimationFrame\b/);
+    expect(apply).not.toMatch(/\bgetScrollTop\b/);
+    expect(apply).not.toMatch(/\bsetScrollTop\b/);
+    expect(sync).toContain("captureCodeViewItemAnchor");
+    expect(sync).toContain("deletedAnchorFallbackId");
+    expect(sync).toContain('behavior: "instant"');
+  });
+
+  it("暂存写入以无防抖权威读取作为提交屏障，不依赖 watch 序号", () => {
+    const commit = read(
+      "src/plugins/builtin/git/renderer/use-git-review-mutation-commit.ts"
+    );
+    const panelState = read(
+      "src/plugins/builtin/git/renderer/use-git-changes-panel-index-state.ts"
+    );
+
+    expect(commit).toContain("waitForAuthoritativeState");
+    expect(commit).not.toContain("hydrateLoaded");
+    expect(commit).not.toContain("refreshIndex");
+    expect(commit).not.toContain("requestAnimationFrame");
+    expect(panelState).toContain("refreshNow");
+    expect(panelState).not.toContain("stateSequence");
+  });
+
+  it("冲突、未暂存与已暂存是隔离阅读面，跨面导航等待真实正文后再切换", () => {
+    const surfaces = read(
+      "src/plugins/builtin/git/renderer/git-review-surfaces.tsx"
+    );
     const content = read(
       "src/plugins/builtin/git/renderer/git-review-content.tsx"
     );
-    expect(content).not.toContain("beginScrollFreeze");
-    // content 委托 viewport-effects；restore 实现在 document-viewport
-    const viewport = read(
-      "src/plugins/builtin/git/renderer/git-review-document-viewport.ts"
+    const handoff = read(
+      "src/plugins/builtin/git/renderer/use-git-review-surface-navigation-handoff.ts"
     );
-    expect(viewport).toContain("restoreReviewReadingViewport");
+    const surfaceView = read(
+      "src/plugins/builtin/git/renderer/git-review-surface-view.tsx"
+    );
+    const switcher = read(
+      "src/plugins/builtin/git/renderer/git-review-surface-switcher.tsx"
+    );
+    const projection = read(
+      "src/plugins/builtin/git/renderer/git-review-document-ledger-projection.ts"
+    );
+    const surfaceGroups = read(
+      "src/plugins/builtin/git/renderer/git-review-surface-group.ts"
+    );
+    const sessionCache = read(
+      "src/plugins/builtin/git/renderer/git-review-session-cache.ts"
+    );
+    const tree = read("src/plugins/builtin/git/renderer/git-review-tree.tsx");
+
+    expect(surfaces).toContain("GIT_REVIEW_UNCOMMITTED_READING_SURFACES");
+    expect(surfaces).not.toContain('["conflict", "staged", "index"]');
+    expect(surfaces).not.toContain('["head", "index", "staged"]');
+    expect(surfaces).toContain("mountedSurfaces");
+    expect(surfaces).toContain("navigationRequestRef");
+    expect(surfaces).toContain("onNavigationMaterialized");
+    expect(surfaces).toContain("data-git-review-surface");
+    expect(surfaces).toContain("inert={active ? undefined : true}");
+    expect(surfaceView).toContain("projection={projection}");
+    expect(surfaceView).not.toContain("renderedProjectionRef");
+    expect(surfaceView).not.toContain("readOnlyReviewProjection");
+    expect(content).toContain("enabledRef: activeRef");
+    expect(content).toContain("useGitReviewSurfaceNavigationHandoff");
+    expect(handoff).toContain("isReviewEstimateCacheKey");
+    expect(handoff).toContain("isReviewPlaceholderCacheKey");
+    expect(handoff).toContain("useLayoutEffect(() =>");
+    expect(projection).not.toContain('options.diffBase === "head"');
+    expect(projection).toContain("reviewGroupsForSurface(diffBase)");
+    expect(surfaceGroups).toContain(
+      'surface === "index" ? ["unstaged"] : [surface]'
+    );
+    expect(tree).toContain("GIT_REVIEW_PRESENTATION_GROUP_ORDER");
+    expect(sessionCache).toContain("GIT_REVIEW_READING_SURFACES");
+    expect(switcher).toContain("groups.map((group)");
+    expect(switcher).toContain("{labels[group]}");
+    expect(switcher).not.toContain("UNCOMMITTED_SURFACES");
+    expect(switcher).not.toContain("reviewSurfaceIndex");
+    expect(switcher).not.toContain("reviewSurfaceStaged");
   });
 
-  it("item replay defaults to preserveAnchor false (Pierre line anchor)", () => {
+  it("非活动阅读面保留模型但不更新隐藏的 Pierre DOM", () => {
     const replay = read(
       "src/plugins/builtin/git/renderer/use-git-review-item-replay.ts"
     );
-    expect(replay).toContain("preserveAnchor: false");
+    const projectionCommit = read(
+      "src/plugins/builtin/git/renderer/use-git-review-projection-commit.ts"
+    );
+
+    expect(replay).toContain("if (!enabledRef.current)");
+    expect(replay).toContain("latestItemUpdatesRef.current.set");
+    expect(projectionCommit).toContain("!active");
   });
 
-  it("reading anchor policy: same-id never external restore; id-lost remaps", () => {
-    const policy = read(
-      "src/plugins/builtin/git/renderer/git-review-reading-anchor.ts"
+  it("刷新不能合成树导航或第二条定位链路", () => {
+    const navigation = read(
+      "src/plugins/builtin/git/renderer/use-git-review-navigation.ts"
     );
-    expect(policy).toContain("preferredSide");
-    expect(policy).toContain("neighborhood");
-    expect(policy).toContain("resolveReviewReadingAnchor");
-    expect(policy).toContain("shouldRestoreReadingAnchorExternally");
-    // 同 id 存活（含半暂存）禁止外层 restore
-    expect(policy).toContain(
-      "return !currentItemIds.includes(pending.anchor.id)"
+    const selectionSync = read(
+      "src/plugins/builtin/git/renderer/use-git-review-navigation-resume.ts"
     );
-    expect(policy).toContain("禁止对同 id 外层 scrollTo");
+    const treeLayout = read(
+      "src/plugins/builtin/git/renderer/git-review-panel-layout.tsx"
+    );
+
+    expect(navigation).not.toContain('"rebind"');
+    expect(selectionSync).not.toContain("scrollToItem");
+    expect(selectionSync).not.toContain("applyNavigationDemand");
+    expect(treeLayout).not.toContain("revealPath");
   });
 
-  it("R7: membership apply forbids raw scrollTop pin and item-level scrollTo restore", () => {
-    const apply = read("packages/ui/src/use-diff-view-item-apply.ts");
-    expect(apply).not.toMatch(/scrollTopBefore/);
-    expect(apply).not.toMatch(/container\.scrollTop\s*=/);
-    // 禁止 membership 后 scrollTo 抢行锚
-    expect(apply).not.toContain("captureMembershipContentAnchor");
-    expect(apply).not.toContain("restoreMembershipContentAnchor");
-    // 拓扑变后 paint 前同步 layout + Pierre 行锚
-    expect(apply).toContain("render(true)");
-    expect(apply).toContain("shouldFlushMembershipLayout");
-  });
-
-  it("settle path only external-restores on identity loss", () => {
-    const viewport = read(
-      "src/plugins/builtin/git/renderer/git-review-document-viewport.ts"
-    );
-    expect(viewport).toContain("shouldRestoreReadingAnchorExternally");
-    expect(viewport).toContain("restoreReviewReadingViewport");
-    const restoreStart = viewport.indexOf(
-      "export function restoreReviewReadingViewport"
-    );
-    const restoreEnd = viewport.indexOf(
-      "export function restoreReviewViewportFreeze",
-      restoreStart
-    );
-    const restoreFn = viewport.slice(
-      restoreStart,
-      restoreEnd > restoreStart ? restoreEnd : restoreStart + 800
-    );
-    expect(restoreFn).not.toContain("setScrollTop");
-    // re-export still available from projection barrel
-    const projection = read(
-      "src/plugins/builtin/git/renderer/git-review-document-projection.ts"
-    );
-    expect(projection).toContain("restoreReviewReadingViewport");
-  });
-
-  it("session captures preferredSide + previous entryKey before index reassignment", () => {
+  it("新 index 代际的首次正文需求沿用当前树选择的锚点保护", () => {
     const generation = read(
       "src/plugins/builtin/git/renderer/use-git-review-document-generation-effect.ts"
     );
-    expect(generation).toContain("previousEntryKeyBySectionId");
-    expect(generation).toContain("preferredSide");
-    expect(generation).toContain("previousItemIds");
-    const replay = read(
-      "src/plugins/builtin/git/renderer/use-git-review-item-replay.ts"
-    );
-    expect(replay).toContain("flush: true");
-  });
 
-  it("content pending lifecycle defers identity restore to layout tryPendingAnchor", () => {
-    const callbacks = read(
-      "src/plugins/builtin/git/renderer/use-git-review-reading-callbacks.ts"
+    expect(generation).toContain(
+      "protectSelectedAnchor: selectedEntryKey !== null"
     );
-    // endReadingRefresh must not call restoreReviewReadingViewport (race)
-    const endStart = callbacks.indexOf("const endReadingRefresh = useCallback");
-    const endEnd = callbacks.indexOf("const getReadingMode", endStart);
-    const endBody = callbacks.slice(
-      endStart,
-      endEnd > endStart ? endEnd : endStart + 800
-    );
-    expect(endBody).toContain("shouldRestoreReadingAnchorExternally");
-    expect(endBody).not.toContain("restoreReviewReadingViewport");
-    // layout path still restores via viewport-effects
-    const viewportEffects = read(
-      "src/plugins/builtin/git/renderer/use-git-review-viewport-effects.ts"
-    );
-    expect(viewportEffects).toContain("tryPendingAnchor");
-    expect(viewportEffects).toContain("restoreReviewReadingViewport");
-  });
-
-  it("git review content path forbids preserveAnchor true", () => {
-    const replay = read(
-      "src/plugins/builtin/git/renderer/use-git-review-item-replay.ts"
-    );
-    expect(replay).not.toMatch(/preserveAnchor:\s*true/);
-    const content = read(
-      "src/plugins/builtin/git/renderer/git-review-content.tsx"
-    );
-    expect(content).not.toMatch(/preserveAnchor:\s*true/);
   });
 });

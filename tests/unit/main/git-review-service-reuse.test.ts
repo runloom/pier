@@ -98,7 +98,9 @@ describe("GitReviewService reuse", () => {
     );
 
     expect(results.every((result) => result.kind === "ok")).toBe(true);
-    expect(counter.patchCount()).toBe(1);
+    // 同一次文档构建读取 Index→Working Tree 与 HEAD→Working Tree 两个基线；
+    // 100 个并发请求仍只共享这一轮构建。
+    expect(counter.patchCount()).toBe(2);
   });
 
   it("未提交文档 settled 后不长期缓存", async () => {
@@ -114,7 +116,30 @@ describe("GitReviewService reuse", () => {
     const second = await service.getFileDocument(request(documentSource));
     expect(first.kind).toBe("ok");
     expect(second.kind).toBe("ok");
-    expect(counter.patchCount()).toBe(2);
+    expect(counter.patchCount()).toBe(4);
+  });
+
+  it("不同 previousRevision 条件的并发文档读取不共享响应", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "file.ts"), "base\n", "utf8");
+    await commitAll(root, "base");
+    await writeFile(join(root, "file.ts"), "next\n", "utf8");
+    const service = new GitReviewService();
+    const documentSource = source(root);
+    const first = await service.getFileDocument(request(documentSource));
+    expectOk(first);
+
+    const [conditional, unconditional] = await Promise.all([
+      service.getFileDocument({
+        operationId: randomUUID(),
+        previousRevision: first.revision,
+        source: documentSource,
+      }),
+      service.getFileDocument(request(documentSource)),
+    ]);
+
+    expect(conditional.kind).toBe("unchanged");
+    expect(unconditional.kind).toBe("ok");
   });
 
   it("显式 --unified=20 覆盖 GIT_DIFF_OPTS", async () => {

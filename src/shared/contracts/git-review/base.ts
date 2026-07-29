@@ -90,6 +90,9 @@ export function getGitReviewFileSourceIdentity(
 }
 
 export const gitReviewRenderSlotSchema = z.strictObject({
+  additions: z.number().int().nonnegative().nullable().optional(),
+  binary: z.boolean().optional(),
+  deletions: z.number().int().nonnegative().nullable().optional(),
   group: z.enum(GIT_REVIEW_GROUP_ORDER),
   oldPath: gitReviewRelativePathSchema.nullable(),
   sectionKey: gitReviewSectionKeySchema,
@@ -159,7 +162,14 @@ export type GitReviewIndexEntry = z.infer<typeof gitReviewIndexEntrySchema>;
 
 export const gitReviewIndexOkSchema = z.strictObject({
   entries: z.array(gitReviewIndexEntrySchema),
+  /**
+   * main 解析出的 Git 内容修订号。可选字段用于兼容旧协议快照；
+   * 当前 main 侧读取器始终提供，用于合并重复 watch 刷新。
+   */
+  indexRevision: z.string().min(1).max(256).optional(),
   kind: z.literal("ok"),
+  /** main 为每个仓库分配的单调状态序列；旧快照可缺省。 */
+  stateSequence: z.number().int().nonnegative().optional(),
   warnings: z
     .array(gitReviewWarningSchema)
     .max(4)

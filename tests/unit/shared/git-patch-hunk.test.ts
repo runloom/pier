@@ -1,6 +1,7 @@
 import { describe, expect, it } from "vitest";
 import {
   extractChangeBlockPatch,
+  extractChangeBlocksPatch,
   extractHunkPatch,
   hunkIndexesForLineRange,
   parseHunkBoundsFromPatch,
@@ -164,6 +165,16 @@ describe("splitHunkChangeBlocks / extractChangeBlockPatch", () => {
     expect(only).toContain(" line1");
     expect(only).toContain("+new");
     expect(only).toContain(" line3");
+  });
+
+  it("多个相邻变更岛合并时保留原始完整 hunk，且不复制共享上下文", () => {
+    const combined = extractChangeBlocksPatch(MULTI_BLOCK_PATCH, [
+      { changeBlockIndex: 0, hunkIndex: 0 },
+      { changeBlockIndex: 1, hunkIndex: 0 },
+    ]);
+    expect(combined).toBe(MULTI_BLOCK_PATCH);
+    expect(combined.match(/ mid-context/g)).toHaveLength(1);
+    expect(splitUnifiedFilePatch(combined).hunks).toHaveLength(1);
   });
 
   it("preserves 0 starts when recomputing multi-island pure-add headers", () => {

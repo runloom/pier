@@ -1,4 +1,5 @@
 import type { PierDiffViewAnchor } from "@pier/ui/diff-view.tsx";
+import type { GitReviewScope } from "@shared/contracts/git-review.ts";
 import {
   GIT_REVIEW_MAX_RETAINED_BYTES,
   GIT_REVIEW_MAX_RETAINED_LINES,
@@ -7,6 +8,8 @@ import {
 } from "./git-review-document-limits.ts";
 import type { GitReviewDocumentResource } from "./git-review-document-resource.ts";
 import type { GitReviewIndexLoaderSnapshot } from "./git-review-index-loader.ts";
+import type { GitReviewReadingSurface } from "./git-review-reading-surface.ts";
+import { GIT_REVIEW_READING_SURFACES } from "./git-review-surface-group.ts";
 
 /** JSON.stringify(GitReviewScope) — 与 panel sourceKey 一致。 */
 export type ReviewSessionSourceKey = string;
@@ -24,6 +27,8 @@ export interface ReviewSessionCacheEntry {
   readonly anchor: PierDiffViewAnchor | null;
   readonly index: LoadedReviewIndex;
   readonly loadedByEntryKey: ReadonlyMap<string, LoadedReviewDocument>;
+  /** 旧会话快照可缺省；新写入会补为空映射。 */
+  readonly measuredEstimateLinesByPath?: ReadonlyMap<string, number>;
   readonly retainedEntryKeys: readonly string[];
   readonly selectedEntryKey: string | null;
   readonly selectedSectionKey: string | null;
@@ -78,7 +83,12 @@ function trimLoadedDocuments(
   const nextRetained = [...retainedEntryKeys];
 
   for (const [entryKey, resource] of nextLoaded) {
-    if (!isGitReviewDocumentReservable(resource.document)) {
+    if (
+      !(
+        isCanonicalLoadedDocument(entryKey, resource) &&
+        isGitReviewDocumentReservable(resource.document)
+      )
+    ) {
       nextLoaded.delete(entryKey);
       const index = nextRetained.indexOf(entryKey);
       if (index >= 0) {
@@ -134,6 +144,45 @@ function trimLoadedDocuments(
   };
 }
 
+function isCanonicalLoadedDocument(
+  entryKey: string,
+  resource: LoadedReviewDocument
+): boolean {
+  const document: unknown = resource.document;
+  return (
+    typeof document === "object" &&
+    document !== null &&
+    "sections" in document &&
+    "entryKey" in document &&
+    document.entryKey === entryKey &&
+    resource.entry.entryKey === entryKey
+  );
+}
+
+function normalizeAnchor(
+  entry: ReviewSessionCacheEntry
+): PierDiffViewAnchor | null {
+  if (entry.anchor === null) {
+    return null;
+  }
+  for (const indexEntry of entry.index.result.entries) {
+    if (indexEntry.entryKey === entry.anchor.id) {
+      const firstSectionKey = indexEntry.renderSlots[0]?.sectionKey;
+      return firstSectionKey === undefined
+        ? entry.anchor
+        : { ...entry.anchor, id: firstSectionKey };
+    }
+    if (
+      indexEntry.renderSlots.some(
+        (slot) => slot.sectionKey === entry.anchor?.id
+      )
+    ) {
+      return entry.anchor;
+    }
+  }
+  return entry.anchor;
+}
+
 function normalizeEntry(
   entry: ReviewSessionCacheEntry
 ): ReviewSessionCacheEntry {
@@ -143,9 +192,10 @@ function normalizeEntry(
     entry.selectedEntryKey
   );
   return {
-    anchor: entry.anchor,
+    anchor: normalizeAnchor(entry),
     index: entry.index,
     loadedByEntryKey: trimmed.loadedByEntryKey,
+    measuredEstimateLinesByPath: entry.measuredEstimateLinesByPath ?? new Map(),
     retainedEntryKeys: trimmed.retainedEntryKeys,
     selectedEntryKey: entry.selectedEntryKey,
     selectedSectionKey: entry.selectedSectionKey,
@@ -189,6 +239,8 @@ export function patchReviewSession(
       anchor: patch.anchor ?? null,
       index,
       loadedByEntryKey: patch.loadedByEntryKey ?? new Map(),
+      measuredEstimateLinesByPath:
+        patch.measuredEstimateLinesByPath ?? new Map(),
       retainedEntryKeys: patch.retainedEntryKeys ?? [],
       selectedEntryKey: patch.selectedEntryKey ?? null,
       selectedSectionKey: patch.selectedSectionKey ?? null,
@@ -206,6 +258,10 @@ export function patchReviewSession(
       patch.loadedByEntryKey === undefined
         ? existing.loadedByEntryKey
         : patch.loadedByEntryKey,
+    measuredEstimateLinesByPath:
+      patch.measuredEstimateLinesByPath === undefined
+        ? (existing.measuredEstimateLinesByPath ?? new Map())
+        : patch.measuredEstimateLinesByPath,
     retainedEntryKeys:
       patch.retainedEntryKeys === undefined
         ? existing.retainedEntryKeys
@@ -227,6 +283,49 @@ export function patchReviewSession(
 
 export function clearReviewSession(sourceKey: ReviewSessionSourceKey): void {
   sessionsStore().delete(sourceKey);
+}
+
+export function reviewSurfaceSessionKey(
+  scope: GitReviewScope,
+  diffBase: GitReviewReadingSurface
+): ReviewSessionSourceKey {
+  return JSON.stringify([scope, diffBase]);
+}
+
+/**
+ * 阅读面第一次挂载时从同一 scope 的 index 会话建立独立状态槽。
+ * 后续选择、正文缓存和测量值只写入自己的表面，互不覆盖。
+ */
+export function ensureReviewSurfaceSession(
+  scope: GitReviewScope,
+  diffBase: GitReviewReadingSurface
+): ReviewSessionSourceKey {
+  const sourceKey = reviewSurfaceSessionKey(scope, diffBase);
+  if (sessionsStore().has(sourceKey)) {
+    return sourceKey;
+  }
+  const base = sessionsStore().get(JSON.stringify(scope));
+  if (base === undefined) {
+    return sourceKey;
+  }
+  writeReviewSession({
+    ...base,
+    anchor: null,
+    loadedByEntryKey: new Map(),
+    measuredEstimateLinesByPath: new Map(),
+    retainedEntryKeys: [],
+    selectedEntryKey: null,
+    selectedSectionKey: null,
+    sourceKey,
+  });
+  return sourceKey;
+}
+
+export function clearReviewSessionsForScope(scope: GitReviewScope): void {
+  clearReviewSession(JSON.stringify(scope));
+  for (const diffBase of GIT_REVIEW_READING_SURFACES) {
+    clearReviewSession(reviewSurfaceSessionKey(scope, diffBase));
+  }
 }
 
 export function clearAllReviewSessionsForTests(): void {

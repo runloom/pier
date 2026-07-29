@@ -10,12 +10,10 @@ import {
   PIER_CANVAS_COMPONENT_EXPORT_NAMES,
   PIER_CANVAS_VALUE_EXPORT_NAMES,
 } from "@shared/pier-canvas-export-names.ts";
-// Type-only: erased at runtime. esbuild reads ESBUILD_BINARY_PATH once at
-// module load and caches it (node_modules/esbuild/lib/main.js), so a static
-// `import * as esbuild` would capture the env before we can set it. The value
-// is loaded lazily below, AFTER ensureEsbuildBinaryPath() runs.
+// Type-only: erased at runtime. Packaged mode synchronously loads esbuild under
+// a narrowly scoped ESBUILD_BINARY_PATH in esbuild-binary.ts.
 import type * as esbuild from "esbuild";
-import { ensureEsbuildBinaryPath } from "./esbuild-binary.ts";
+import { loadEsbuildModule } from "./esbuild-binary.ts";
 import {
   assertNotNodeModulesPath,
   assertPathInsideRoot,
@@ -178,12 +176,7 @@ function diagnosticFromError(
 export async function compileLiveModule(
   input: CompileLiveModuleInput
 ): Promise<CompileLiveModuleResult> {
-  // esbuild caches process.env.ESBUILD_BINARY_PATH into a module-level variable
-  // the first time its module loads. Loading esbuild lazily here (after setting
-  // the env) is what makes the packaged fix work — a static top-level import
-  // would have already captured `undefined` at app startup.
-  ensureEsbuildBinaryPath();
-  const esbuild = await import("esbuild");
+  const esbuild = await loadEsbuildModule();
   const graph = new Set<string>();
   const fenceRoot = input.projectRoot ?? input.contentRoot;
   const entryDir = dirname(input.entryAbsolutePath);

@@ -45,39 +45,58 @@ export function resolveEsbuildBinaryPath(input: {
   return input.unpackedExists ? unpacked : null;
 }
 
-let ensured = false;
+export function withTemporaryEsbuildBinaryPath<T>(input: {
+  readonly binaryPath: string | null;
+  readonly env?: NodeJS.ProcessEnv;
+  readonly load: () => T;
+}): T {
+  const env = input.env ?? process.env;
+  if (input.binaryPath === null) {
+    return input.load();
+  }
+  const previous = env.ESBUILD_BINARY_PATH;
+  env.ESBUILD_BINARY_PATH = input.binaryPath;
+  try {
+    return input.load();
+  } finally {
+    if (previous === undefined) {
+      Reflect.deleteProperty(env, "ESBUILD_BINARY_PATH");
+    } else {
+      env.ESBUILD_BINARY_PATH = previous;
+    }
+  }
+}
 
 /**
- * Point esbuild at the unpacked binary before its first compile.
+ * Load esbuild with the unpacked packaged binary without leaking the internal
+ * override into terminals or any other child process.
  *
- * esbuild caches `process.env.ESBUILD_BINARY_PATH` into a module-level variable
- * the first time its module loads (node_modules/esbuild/lib/main.js), so this
- * MUST run before `esbuild` is imported. `compile.ts` loads esbuild lazily via
- * `await import("esbuild")` after calling this.
+ * esbuild caches `process.env.ESBUILD_BINARY_PATH` the first time its CommonJS
+ * entry loads. The require must stay synchronous so no concurrent child process
+ * can inherit the packaged-only override.
  *
  * No-op in dev: esbuild resolves its own binary from node_modules, and the
  * platform package is not reachable from the host module graph under pnpm.
  */
-export function ensureEsbuildBinaryPath(): void {
-  if (ensured) {
-    return;
-  }
-  ensured = true;
+export function loadEsbuildModule(): typeof import("esbuild") {
+  const moduleRequire = createRequire(import.meta.url);
+  let binaryPath: string | null = null;
   try {
-    const resolvedPlatformBinary = createRequire(import.meta.url).resolve(
+    const resolvedPlatformBinary = moduleRequire.resolve(
       `@esbuild/${process.platform}-${process.arch}/bin/esbuild`
     );
-    const unpacked = resolveEsbuildBinaryPath({
+    binaryPath = resolveEsbuildBinaryPath({
       currentEnvPath: process.env.ESBUILD_BINARY_PATH,
       resolvedPlatformBinary,
       unpackedExists: existsSync(
         unpackedEsbuildBinaryPath(resolvedPlatformBinary)
       ),
     });
-    if (unpacked) {
-      process.env.ESBUILD_BINARY_PATH = unpacked;
-    }
   } catch {
-    // Dev layout: leave esbuild's own resolution alone.
+    // Dev layout: let esbuild resolve its own binary from node_modules.
   }
+  return withTemporaryEsbuildBinaryPath({
+    binaryPath,
+    load: () => moduleRequire("esbuild") as typeof import("esbuild"),
+  });
 }

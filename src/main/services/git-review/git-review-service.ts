@@ -5,25 +5,39 @@ import {
   type GitReviewFileDocumentResult,
   type GitReviewIndexRequest,
   type GitReviewIndexResult,
+  type GitReviewMutationRequest,
+  type GitReviewMutationResult,
+  type GitReviewPathMutationRequest,
   type GitReviewScope,
   getGitReviewFileSourceIdentity,
   gitReviewCancelRequestSchema,
-  gitReviewFailureSchema,
   gitReviewFileDocumentRequestSchema,
   gitReviewIndexRequestSchema,
+  gitReviewMutationRequestSchema,
+  gitReviewPathMutationRequestSchema,
 } from "../../../shared/contracts/git-review.ts";
 import { type ExecGitRaw, execGitRaw } from "../git-exec.ts";
 import type { GitReviewBudget } from "./git-review-budget.ts";
 import { GitReviewDocumentReader } from "./git-review-document-reader.ts";
 import { GitReviewIndexReader } from "./git-review-index.ts";
-import { toGitReviewIndexFailure } from "./git-review-index-execution.ts";
+import {
+  applyGitReviewMutation,
+  type GitReviewMutationWriter,
+} from "./git-review-mutation.ts";
+import { applyGitReviewPathMutation } from "./git-review-path-mutation.ts";
+import { GitReviewRepositoryCoordinator } from "./git-review-repository-coordinator.ts";
 import {
   createGitReviewScheduler,
   type GitReviewExecutionBudget,
   type GitReviewOperationOwner,
   type GitReviewScheduler,
-  GitReviewSchedulerError,
 } from "./git-review-scheduler.ts";
+import {
+  gitReviewServiceFailure as failure,
+  parseGitReviewServiceRequest as parseRequest,
+  rememberGitReviewMutationResult,
+  settleGitReviewServiceLease as settleReadLease,
+} from "./git-review-service-helpers.ts";
 
 type GitReviewServiceScheduler = Pick<
   GitReviewScheduler,
@@ -40,6 +54,8 @@ interface CreateGitReviewServiceOptions {
   readonly indexReader?: GitReviewIndexReaderDependency;
   readonly scheduler?: GitReviewServiceScheduler;
 }
+
+export type { GitReviewMutationWriter } from "./git-review-mutation.ts";
 
 interface GitReviewSourceResolutionControl {
   readonly budget: GitReviewExecutionBudget;
@@ -60,7 +76,15 @@ export interface GitReviewRequestOptions {
 /** main-only Git Review 门面。公开请求必须从命令入口传入 owner、统一预算与路径授权器。 */
 export class GitReviewService {
   readonly #documentReader: GitReviewDocumentReader;
+  readonly #completedMutations = new Map<
+    string,
+    {
+      readonly requestIdentity: string;
+      readonly result: GitReviewMutationResult;
+    }
+  >();
   readonly #indexReader: GitReviewIndexReaderDependency;
+  readonly #repositoryCoordinator = new GitReviewRepositoryCoordinator();
   readonly #scheduler: GitReviewServiceScheduler;
 
   constructor(options: CreateGitReviewServiceOptions = {}) {
@@ -121,11 +145,16 @@ export class GitReviewService {
             "Git Review canonical index source 非法"
           );
         }
-        return this.#indexReader.read(
-          {
-            scope: canonicalRequest.data.source,
-          },
-          { budget: context.budget, signal: context.signal }
+        return this.#repositoryCoordinator.runConsistentIndexRead(
+          canonicalRequest.data.source.gitRootPath,
+          context.signal,
+          () =>
+            this.#indexReader.read(
+              {
+                scope: canonicalRequest.data.source,
+              },
+              { budget: context.budget, signal: context.signal }
+            )
         );
       },
     });
@@ -146,7 +175,10 @@ export class GitReviewService {
       return prepared.failure;
     }
     const { request } = prepared;
-    const requestIdentity = getGitReviewFileSourceIdentity(request.source);
+    const requestIdentity = JSON.stringify([
+      getGitReviewFileSourceIdentity(request.source),
+      request.previousRevision ?? null,
+    ]);
     const lease = this.#scheduler.schedule<GitReviewFileDocumentResult>({
       budget: options.budget,
       key: {
@@ -177,14 +209,221 @@ export class GitReviewService {
             "Git Review canonical document source 非法"
           );
         }
-        return this.#documentReader.execute(
-          canonicalRequest.data,
-          context.budget,
-          context.signal
+        return this.#repositoryCoordinator.runConsistentRead(
+          canonicalRequest.data.source.gitRootPath,
+          context.signal,
+          () =>
+            this.#documentReader.execute(
+              canonicalRequest.data,
+              context.budget,
+              context.signal
+            )
         );
       },
     });
     return settleReadLease(lease);
+  }
+
+  async applyMutation(
+    input: GitReviewMutationRequest,
+    options: GitReviewRequestOptions & {
+      readonly onCommitted?: (canonicalGitRootPath: string) => void;
+      readonly writer: GitReviewMutationWriter;
+    }
+  ): Promise<GitReviewMutationResult> {
+    const prepared = parseRequest(
+      gitReviewMutationRequestSchema,
+      input,
+      options.budget,
+      "Git Review mutation 请求非法"
+    );
+    if (prepared.kind === "failure") {
+      return prepared.failure;
+    }
+    const { request } = prepared;
+    const requestIdentity = getGitReviewFileSourceIdentity(request.source);
+    const mutationIdentity = JSON.stringify(request);
+    const completed = this.#completedMutations.get(request.operationId);
+    if (completed !== undefined) {
+      options.budget.dispose();
+      return completed.requestIdentity === mutationIdentity
+        ? completed.result
+        : failure(
+            "duplicateOperation",
+            false,
+            "The operation id was already used for a different Git change"
+          );
+    }
+    const lease = this.#scheduler.schedule<GitReviewMutationResult>({
+      budget: options.budget,
+      key: {
+        canonicalRequestKey: request.operationId,
+        operationKind: "mutation",
+        repositoryKey: request.source.contextId,
+        sourceKey: requestIdentity,
+      },
+      operationId: request.operationId,
+      owner: options.owner,
+      run: async (context) => {
+        const resolved = await options.resolveSource(request.source, context);
+        if (resolved.kind === "error") {
+          return resolved;
+        }
+        if (resolved.value.target.kind !== "uncommitted") {
+          return failure(
+            "invalidSource",
+            false,
+            "Only uncommitted Git review can be changed"
+          );
+        }
+        const canonicalRequest = gitReviewMutationRequestSchema.safeParse({
+          ...request,
+          source: resolved.value,
+        });
+        if (!canonicalRequest.success) {
+          return failure(
+            "invalidSource",
+            false,
+            "Git Review canonical mutation source 非法"
+          );
+        }
+        return this.#repositoryCoordinator.runMutation(
+          resolved.value.gitRootPath,
+          context.signal,
+          async () => {
+            const result = await applyGitReviewMutation({
+              budget: context.budget,
+              documentReader: this.#documentReader,
+              indexReader: this.#indexReader,
+              request: canonicalRequest.data,
+              signal: context.signal,
+              writer: options.writer,
+            });
+            if (result.kind !== "ok") {
+              return result;
+            }
+            const committed = {
+              ...result,
+              stateSequence: this.#repositoryCoordinator.recordMutation(
+                resolved.value.gitRootPath
+              ),
+            };
+            options.onCommitted?.(resolved.value.gitRootPath);
+            return committed;
+          }
+        );
+      },
+    });
+    const result = await settleReadLease(lease);
+    rememberGitReviewMutationResult(
+      this.#completedMutations,
+      request.operationId,
+      mutationIdentity,
+      result
+    );
+    return result;
+  }
+
+  async applyPathMutation(
+    input: GitReviewPathMutationRequest,
+    options: GitReviewRequestOptions & {
+      readonly onCommitted?: (canonicalGitRootPath: string) => void;
+      readonly writer: GitReviewMutationWriter;
+    }
+  ): Promise<GitReviewMutationResult> {
+    const prepared = parseRequest(
+      gitReviewPathMutationRequestSchema,
+      input,
+      options.budget,
+      "Git Review path mutation 请求非法"
+    );
+    if (prepared.kind === "failure") {
+      return prepared.failure;
+    }
+    const { request } = prepared;
+    const mutationIdentity = JSON.stringify(request);
+    const completed = this.#completedMutations.get(request.operationId);
+    if (completed !== undefined) {
+      options.budget.dispose();
+      return completed.requestIdentity === mutationIdentity
+        ? completed.result
+        : failure(
+            "duplicateOperation",
+            false,
+            "The operation id was already used for a different Git change"
+          );
+    }
+    const lease = this.#scheduler.schedule<GitReviewMutationResult>({
+      budget: options.budget,
+      key: {
+        canonicalRequestKey: request.operationId,
+        operationKind: "mutation",
+        repositoryKey: request.source.contextId,
+        sourceKey: JSON.stringify([
+          request.source.contextId,
+          request.source.gitRootPath,
+          request.source.target,
+        ]),
+      },
+      operationId: request.operationId,
+      owner: options.owner,
+      run: async (context) => {
+        const resolved = await options.resolveSource(request.source, context);
+        if (resolved.kind === "error") {
+          return resolved;
+        }
+        if (resolved.value.target.kind !== "uncommitted") {
+          return failure(
+            "invalidSource",
+            false,
+            "Only uncommitted Git review can be changed"
+          );
+        }
+        const canonicalRequest = gitReviewPathMutationRequestSchema.safeParse({
+          ...request,
+          source: resolved.value,
+        });
+        if (!canonicalRequest.success) {
+          return failure(
+            "invalidSource",
+            false,
+            "Git Review canonical path mutation source 非法"
+          );
+        }
+        return this.#repositoryCoordinator.runMutation(
+          resolved.value.gitRootPath,
+          context.signal,
+          async () => {
+            const result = await applyGitReviewPathMutation({
+              budget: context.budget,
+              indexReader: this.#indexReader,
+              request: canonicalRequest.data,
+              signal: context.signal,
+              writer: options.writer,
+            });
+            if (result.kind !== "ok") {
+              return result;
+            }
+            const committed = {
+              ...result,
+              stateSequence: this.#repositoryCoordinator.recordMutation(
+                resolved.value.gitRootPath
+              ),
+            };
+            options.onCommitted?.(resolved.value.gitRootPath);
+            return committed;
+          }
+        );
+      },
+    });
+    const result = await settleReadLease(lease);
+    rememberGitReviewMutationResult(
+      this.#completedMutations,
+      request.operationId,
+      mutationIdentity,
+      result
+    );
+    return result;
   }
 
   cancelReviewRequest(
@@ -203,73 +442,4 @@ export class GitReviewService {
   ): void {
     this.#scheduler.releaseOwner(owner, reason);
   }
-}
-
-function parseRequest<T>(
-  schema: {
-    safeParse: (
-      input: unknown
-    ) =>
-      | { readonly success: false }
-      | { readonly data: T; readonly success: true };
-  },
-  input: unknown,
-  budget: GitReviewBudget,
-  invalidMessage: string
-):
-  | { readonly failure: GitReviewFailure; readonly kind: "failure" }
-  | { readonly kind: "ready"; readonly request: T } {
-  const parsed = schema.safeParse(input);
-  if (parsed.success) {
-    return { kind: "ready", request: parsed.data };
-  }
-  budget.dispose();
-  return {
-    failure: failure("invalidSource", false, invalidMessage),
-    kind: "failure",
-  };
-}
-
-async function settleReadLease<T>(lease: {
-  readonly promise: Promise<T>;
-}): Promise<T | GitReviewFailure> {
-  try {
-    return await lease.promise;
-  } catch (error) {
-    if (error instanceof GitReviewSchedulerError) {
-      return toGitReviewSchedulerFailure(error);
-    }
-    return gitReviewFailureSchema.parse(toGitReviewIndexFailure(error));
-  }
-}
-
-function toGitReviewSchedulerFailure(
-  error: GitReviewSchedulerError
-): GitReviewFailure {
-  if (error.reason === "busy") {
-    return failure("busy", true, error.message);
-  }
-  if (error.reason === "duplicate-operation") {
-    return failure("duplicateOperation", false, error.message);
-  }
-  if (error.reason === "timeout") {
-    return failure("timeout", true, error.message);
-  }
-  if (error.reason === "output-limit") {
-    return failure("outputLimit", true, error.message);
-  }
-  return failure("aborted", true, error.message);
-}
-
-function failure(
-  reason: GitReviewFailure["reason"],
-  retryable: boolean,
-  message: string | null
-): GitReviewFailure {
-  return gitReviewFailureSchema.parse({
-    kind: "error",
-    message,
-    reason,
-    retryable,
-  });
 }

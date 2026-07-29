@@ -2,8 +2,17 @@ import { z } from "zod";
 
 export const gitReviewOperationIdSchema = z.string().uuid();
 export const gitReviewRevisionSchema = z.string().min(1).max(256);
+export const gitReviewChangeKeySchema = z.string().min(1).max(512);
 export const gitReviewSectionKeySchema = z.string().min(1).max(512);
 export const GIT_REVIEW_MAX_SECTIONS = 3;
+export const GIT_REVIEW_DIFF_BASES = [
+  "head",
+  "index",
+  "staged",
+  "committed",
+] as const;
+export const gitReviewDiffBaseSchema = z.enum(GIT_REVIEW_DIFF_BASES);
+export type GitReviewDiffBase = z.infer<typeof gitReviewDiffBaseSchema>;
 /**
  * unstaged/staged/conflict 属于 uncommitted scope;committed 是 commit/branch
  * scope 的单一分组(range diff),两类分组不会出现在同一个 index 里。
@@ -15,6 +24,13 @@ export const GIT_REVIEW_GROUP_ORDER = [
   "committed",
 ] as const;
 export type GitReviewGroup = (typeof GIT_REVIEW_GROUP_ORDER)[number];
+
+export const gitReviewStageStateSchema = z.enum([
+  "unstaged",
+  "partial",
+  "staged",
+]);
+export type GitReviewStageState = z.infer<typeof gitReviewStageStateSchema>;
 
 export const GIT_REVIEW_STATUS_PRIORITY = [
   "conflicted",
@@ -30,6 +46,7 @@ export const gitReviewFailureReasonSchema = z.enum([
   "notRepository",
   "invalidSource",
   "staleRevision",
+  "changeNotFound",
   "busy",
   "duplicateOperation",
   "aborted",

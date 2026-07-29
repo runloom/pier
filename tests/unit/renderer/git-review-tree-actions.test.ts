@@ -1,5 +1,9 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
+  type ScopedGitReviewMutationTransitionEvent,
+  subscribeGitReviewMutationTransition,
+} from "@plugins/builtin/git/renderer/git-review-mutation-transitions.ts";
+import {
   GIT_REVIEW_OPEN_FILE_COMMAND_ID,
   GIT_REVIEW_TREE_ITEM_SURFACE,
   registerGitReviewTreeActions,
@@ -26,6 +30,10 @@ describe("git review tree actions", () => {
   const openInEditor = vi.fn(() => true);
   const error = vi.fn();
   const info = vi.fn();
+  const applyReviewPathMutation = vi.fn(async () => ({
+    kind: "ok" as const,
+    operationId: "operation:path",
+  }));
   const stage = vi.fn(async () => true);
   const unstage = vi.fn(async () => true);
   let dispose: (() => void) | undefined;
@@ -36,6 +44,7 @@ describe("git review tree actions", () => {
     openInEditor.mockReturnValue(true);
     error.mockClear();
     info.mockClear();
+    applyReviewPathMutation.mockClear();
     stage.mockClear();
     unstage.mockClear();
     const context = {
@@ -44,11 +53,16 @@ describe("git review tree actions", () => {
           actionRegistry.register(action),
       },
       files: { openInEditor },
-      git: { stage, unstage },
+      git: { applyReviewPathMutation, stage, unstage },
       i18n: {
         t: (_key: string, _values: unknown, fallback: string) => fallback,
       },
       notifications: { error, info },
+      dialogs: {
+        alert: vi.fn(async () => undefined),
+        choice: vi.fn(async () => "cancel"),
+        confirm: vi.fn(async () => false),
+      },
       panels: {
         getActiveInstanceId: () => "panel-1",
       },
@@ -65,6 +79,7 @@ describe("git review tree actions", () => {
     const fileMenu = buildMenuEntries(GIT_REVIEW_TREE_ITEM_SURFACE, {
       metadata: {
         contextId: "ctx",
+        expectedIndexRevision: "index:1",
         gitRootPath: "/repo",
         kind: "file",
         path: "src/a.ts",
@@ -78,6 +93,7 @@ describe("git review tree actions", () => {
     const directoryMenu = buildMenuEntries(GIT_REVIEW_TREE_ITEM_SURFACE, {
       metadata: {
         contextId: "ctx",
+        expectedIndexRevision: "index:1",
         gitRootPath: "/repo",
         kind: "directory",
         path: "src",
@@ -93,6 +109,7 @@ describe("git review tree actions", () => {
     const directoryMenu = buildMenuEntries(GIT_REVIEW_TREE_ITEM_SURFACE, {
       metadata: {
         contextId: "ctx",
+        expectedIndexRevision: "index:1",
         gitRootPath: "/repo",
         hasStaged: true,
         hasUnstaged: true,
@@ -100,6 +117,7 @@ describe("git review tree actions", () => {
         path: "src",
         stagePaths: ["src/a.ts"],
         unstagePaths: ["src/b.ts"],
+        uncommitted: true,
       },
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
@@ -116,12 +134,14 @@ describe("git review tree actions", () => {
     const fileMenu = buildMenuEntries(GIT_REVIEW_TREE_ITEM_SURFACE, {
       metadata: {
         contextId: "ctx",
+        expectedIndexRevision: "index:1",
         gitRootPath: "/repo",
         hasUnstaged: true,
         kind: "file",
         path: "src/a.ts",
         stagePaths: ["src/a.ts"],
         unstagedStatus: "modified",
+        uncommitted: true,
       },
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
@@ -131,6 +151,34 @@ describe("git review tree actions", () => {
       "pier.git.review.stageFile",
       "pier.git.review.discardFile",
     ]);
+  });
+
+  it("keeps reading available while disabling every mutation during a repository write", () => {
+    const menu = buildMenuEntries(GIT_REVIEW_TREE_ITEM_SURFACE, {
+      metadata: {
+        contextId: "ctx",
+        discardTrackedPaths: ["src/a.ts"],
+        expectedIndexRevision: "index:1",
+        gitRootPath: "/repo",
+        hasUnstaged: true,
+        kind: "file",
+        mutationBlocked: true,
+        path: "src/a.ts",
+        stagePaths: ["src/a.ts"],
+        unstagedStatus: "modified",
+        uncommitted: true,
+      },
+      surface: GIT_REVIEW_TREE_ITEM_SURFACE,
+    });
+    const enabledById = new Map(
+      menu
+        .filter((entry) => entry.type === "action")
+        .map((entry) => [entry.id, entry.enabled])
+    );
+
+    expect(enabledById.get(GIT_REVIEW_OPEN_FILE_COMMAND_ID)).toBe(true);
+    expect(enabledById.get("pier.git.review.stageFile")).toBe(false);
+    expect(enabledById.get("pier.git.review.discardFile")).toBe(false);
   });
 
   it("opens the file in the files panel", async () => {
@@ -155,6 +203,104 @@ describe("git review tree actions", () => {
       root: "/repo",
       title: "a.ts",
     });
+  });
+
+  it("routes tree stage through the atomic path mutation command", async () => {
+    const action = actionRegistry.get("pier.git.review.stageFile");
+    await action?.handler({
+      metadata: {
+        contextId: "ctx",
+        expectedIndexRevision: "index:1",
+        gitRootPath: "/repo",
+        hasUnstaged: true,
+        kind: "directory",
+        path: "src",
+        stagePaths: ["src/a.ts", "src/b.ts"],
+        uncommitted: true,
+      },
+      surface: GIT_REVIEW_TREE_ITEM_SURFACE,
+    });
+
+    expect(applyReviewPathMutation).toHaveBeenCalledOnce();
+    expect(applyReviewPathMutation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: "stage",
+        expectedIndexRevision: "index:1",
+        paths: ["src/a.ts", "src/b.ts"],
+        source: {
+          contextId: "ctx",
+          gitRootPath: "/repo",
+          target: { kind: "uncommitted" },
+        },
+      })
+    );
+    expect(stage).not.toHaveBeenCalled();
+    expect(unstage).not.toHaveBeenCalled();
+  });
+
+  it("reports a stale native-menu race when another mutation acquired authority", async () => {
+    let finishFirst!: (value: {
+      kind: "ok";
+      operationId: string;
+      stateSequence?: number;
+    }) => void;
+    applyReviewPathMutation.mockImplementationOnce(
+      () =>
+        new Promise((resolve) => {
+          finishFirst = resolve;
+        })
+    );
+    const action = actionRegistry.get("pier.git.review.stageFile");
+    const transitionEvents: ScopedGitReviewMutationTransitionEvent[] = [];
+    const unsubscribeTransition = subscribeGitReviewMutationTransition(
+      (event) => transitionEvents.push(event)
+    );
+    const invocation = {
+      metadata: {
+        contextId: "ctx",
+        expectedIndexRevision: "index:1",
+        gitRootPath: "/repo",
+        hasUnstaged: true,
+        kind: "file",
+        path: "src/a.ts",
+        stagePaths: ["src/a.ts"],
+        uncommitted: true,
+      },
+      surface: GIT_REVIEW_TREE_ITEM_SURFACE,
+    };
+
+    const first = action?.handler(invocation);
+    await Promise.resolve();
+    expect(transitionEvents).toHaveLength(1);
+    expect(transitionEvents[0]).toMatchObject({
+      kind: "begin",
+      transition: {
+        contextId: "ctx",
+        gitRootPath: "/repo",
+        path: "src/a.ts",
+        targetSurface: "staged",
+      },
+    });
+    await action?.handler(invocation);
+
+    expect(applyReviewPathMutation).toHaveBeenCalledOnce();
+    expect(error).toHaveBeenCalledWith("Another change is still being applied");
+    finishFirst({
+      kind: "ok",
+      operationId: "operation:path",
+      stateSequence: 9,
+    });
+    await first;
+    expect(transitionEvents).toHaveLength(2);
+    expect(transitionEvents[1]).toEqual({
+      kind: "commit",
+      stateSequence: 9,
+      transitionId:
+        transitionEvents[0]?.kind === "begin"
+          ? transitionEvents[0].transition.transitionId
+          : "",
+    });
+    unsubscribeTransition();
   });
 
   it("notifies when files panel is unavailable", async () => {

@@ -34,8 +34,8 @@ export const GIT_REVIEW_MAX_FULL_BODY_ENTRIES = 128;
 /** @deprecated Use {@link GIT_REVIEW_MAX_FULL_BODY_ENTRIES}. */
 export const GIT_REVIEW_MAX_CODEVIEW_MEMBERS = GIT_REVIEW_MAX_FULL_BODY_ENTRIES;
 
-/** 成员策略用的导航原因：树点击 vs 代际 rebind。 */
-export type ReviewNavigationMemberReason = "tree" | "rebind";
+/** 正文成员策略用的定位原因：树点击或面板重挂载恢复。 */
+export type ReviewNavigationMemberReason = "restore" | "tree";
 
 const DEFAULT_VIEWPORT_HEIGHT_PX = 800;
 /**
@@ -44,10 +44,7 @@ const DEFAULT_VIEWPORT_HEIGHT_PX = 800;
  */
 const DEFAULT_ITEM_HEIGHT_PX = 360;
 
-/**
- * 导航时 boost selected 到 visible 队首，**保留** window/lookahead。
- * 禁止 replace 为「仅 selected」（full-alignment K3）。
- */
+/** 导航事务只读取目标，避免旧窗口的迟到正文改变目标前序几何。 */
 export function prioritizeReviewNavigationDemand(
   demand: ReviewDocumentDemand,
   selectedEntryKey: string | null,
@@ -56,21 +53,9 @@ export function prioritizeReviewNavigationDemand(
   if (!(navigationPending && selectedEntryKey)) {
     return demand;
   }
-  const withoutSelectedBuffered = demand.bufferedEntryKeys.filter(
-    (entryKey) => entryKey !== selectedEntryKey
-  );
-  if (demand.visibleEntryKeys[0] === selectedEntryKey) {
-    return {
-      bufferedEntryKeys: withoutSelectedBuffered,
-      visibleEntryKeys: demand.visibleEntryKeys,
-    };
-  }
-  const restVisible = demand.visibleEntryKeys.filter(
-    (entryKey) => entryKey !== selectedEntryKey
-  );
   return {
-    bufferedEntryKeys: withoutSelectedBuffered,
-    visibleEntryKeys: [selectedEntryKey, ...restVisible],
+    bufferedEntryKeys: [],
+    visibleEntryKeys: [selectedEntryKey],
   };
 }
 
@@ -249,7 +234,7 @@ export function selectBodyHydrationPriorityEntryKeys(options: {
     options.navigationReason ?? (pending ? ("tree" as const) : null);
   const readingMode: ReviewReadingMode =
     options.readingMode ??
-    (pending && (reason === "tree" || reason === "rebind")
+    (pending && (reason === "tree" || reason === "restore")
       ? "navigating"
       : "idle");
   const readingProtected = isReadingProtectedMode(readingMode);
@@ -292,7 +277,7 @@ export function selectBodyHydrationPriorityEntryKeys(options: {
 
   if (
     readingProtected ||
-    (pending && (reason === "tree" || reason === "rebind"))
+    (pending && (reason === "tree" || reason === "restore"))
   ) {
     // 阅读/导航保护：demand pin + reading pin + sticky 全保留，可暂超 cap。
     // **禁止 fill**：避免点树/滚动中邻文件 load 插队改拓扑 → 高度抖、定位漂。
@@ -365,11 +350,12 @@ export function mergeReviewDocumentDemand(
  * - 无 window window：seed
  * - 有 window：seed 退出
  * - window ∪ 双向 lookahead ∪ 选中邻域
- * - nav：boost selected，**保留** window（非仅 selected）
+ * - nav：只读取 selected；完成后到用户接管滚动前，只水合 selected 及其后序
  */
 export function composeReviewDocumentDemand(options: {
   readonly entryKeysInOrder: readonly string[];
   readonly navigationPending: boolean;
+  readonly protectSelectedAnchor?: boolean;
   readonly selectedEntryKey: string | null;
   readonly seedEntryKeys: readonly string[];
   /** demand 预取覆盖（非 CodeView 成员）。 */
@@ -386,7 +372,6 @@ export function composeReviewDocumentDemand(options: {
     options.windowDemand,
     options.lookahead
   );
-  // nav 时仍保留 window；邻域由 boost selected 覆盖，避免与 exclusive 混用
   const selectionRadiusKeys =
     options.navigationPending || options.selectedEntryKey === null
       ? []
@@ -401,11 +386,43 @@ export function composeReviewDocumentDemand(options: {
     { visibleEntryKeys: [], bufferedEntryKeys: lookaheadKeys },
     { visibleEntryKeys: [], bufferedEntryKeys: selectionRadiusKeys }
   );
-  return prioritizeReviewNavigationDemand(
+  const prioritized = prioritizeReviewNavigationDemand(
     base,
     options.selectedEntryKey,
     options.navigationPending
   );
+  if (
+    options.navigationPending ||
+    options.protectSelectedAnchor !== true ||
+    options.selectedEntryKey === null
+  ) {
+    return prioritized;
+  }
+  const selectedIndex = options.entryKeysInOrder.indexOf(
+    options.selectedEntryKey
+  );
+  if (selectedIndex < 0) {
+    return prioritized;
+  }
+  const order = new Map(
+    options.entryKeysInOrder.map((entryKey, index) => [entryKey, index])
+  );
+  const isStableFollower = (entryKey: string): boolean =>
+    (order.get(entryKey) ?? -1) >= selectedIndex;
+  const visibleEntryKeys = [
+    options.selectedEntryKey,
+    ...prioritized.visibleEntryKeys.filter(
+      (entryKey) =>
+        entryKey !== options.selectedEntryKey && isStableFollower(entryKey)
+    ),
+  ];
+  const visible = new Set(visibleEntryKeys);
+  return {
+    bufferedEntryKeys: prioritized.bufferedEntryKeys.filter(
+      (entryKey) => !visible.has(entryKey) && isStableFollower(entryKey)
+    ),
+    visibleEntryKeys,
+  };
 }
 
 function mapUniqueEntryKeys(

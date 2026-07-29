@@ -859,6 +859,32 @@ describe("PierDiffView", () => {
     });
   });
 
+  it("instant 定位在返回前完成两阶段虚拟窗口布局", async () => {
+    const ref = createRef<PierDiffViewHandle>();
+    const renderNow = vi.spyOn(PierreCodeView.prototype, "render");
+    render(
+      <PierDiffView
+        appearance={appearance}
+        items={items}
+        labels={labels}
+        onError={vi.fn()}
+        ref={ref}
+      />
+    );
+
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    renderNow.mockClear();
+    act(() => {
+      expect(
+        ref.current?.scrollToItem("file.ts", { behavior: "instant" })
+      ).toBe(true);
+    });
+    expect(renderNow).toHaveBeenCalledTimes(3);
+    expect(renderNow).toHaveBeenNthCalledWith(1);
+    expect(renderNow).toHaveBeenNthCalledWith(2, true);
+    expect(renderNow).toHaveBeenNthCalledWith(3, true);
+  });
+
   it("可见性必须同时匹配当前 cacheKey 与官方受控 version", async () => {
     const ref = createRef<PierDiffViewHandle>();
     const container = document.createElement("div");
@@ -953,8 +979,9 @@ describe("PierDiffView", () => {
     });
   });
 
-  it("同拓扑正文首次被 Pierre 拒绝时下一帧自动重试，接受前不推进缓存", async () => {
+  it("同拓扑正文被 Pierre 拒绝时在同一事务对账且不启动定时重试", async () => {
     const ref = createRef<PierDiffViewHandle>();
+    const setItems = vi.spyOn(PierreCodeView.prototype, "setItems");
     const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
     const onError = vi.fn();
     const view = render(
@@ -968,6 +995,7 @@ describe("PierDiffView", () => {
     );
     await waitFor(() => expect(ref.current).not.toBeNull());
     const updatedItems = [{ ...items[0], cacheKey: "revision-retry:file.ts" }];
+    const setCallsBeforeReconcile = setItems.mock.calls.length;
     updateItem.mockClear();
     updateItem.mockReturnValueOnce(false);
     vi.useFakeTimers();
@@ -984,19 +1012,13 @@ describe("PierDiffView", () => {
       );
     });
     expect(updateItem).toHaveBeenCalledTimes(1);
-    expect(ref.current?.updateItems(items)).toBe(true);
-
-    await act(() => vi.advanceTimersByTimeAsync(20));
-    expect(updateItem).toHaveBeenCalledTimes(2);
-    expect(updateItem.mock.calls[1]?.[0]).toBe(updateItem.mock.calls[0]?.[0]);
-    act(() => {
-      expect(ref.current?.updateItems(updatedItems)).toBe(true);
-    });
-    expect(updateItem).toHaveBeenCalledTimes(2);
+    expect(setItems.mock.calls.length).toBe(setCallsBeforeReconcile + 1);
+    await act(() => vi.runAllTimersAsync());
+    expect(updateItem).toHaveBeenCalledTimes(1);
     expect(onError).not.toHaveBeenCalled();
   });
 
-  it("稀疏 updateItems 遇到未知拓扑 id 时跳过并返回 false，不抛错拖垮整树", async () => {
+  it("稀疏 updateItems 遇到未知拓扑 id 时整批拒绝，不提交部分正文", async () => {
     const ref = createRef<PierDiffViewHandle>();
     const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
     const onError = vi.fn();
@@ -1032,9 +1054,42 @@ describe("PierDiffView", () => {
     }).not.toThrow();
 
     expect(accepted).toBe(false);
-    expect(updateItem).toHaveBeenCalledTimes(1);
-    expect(updateItem.mock.calls[0]?.[0].id).toBe("file.ts");
+    expect(updateItem).not.toHaveBeenCalled();
     expect(onError).not.toHaveBeenCalled();
+  });
+
+  it("稀疏 updateItems 被 Pierre 拒绝时在同一事务回退全量快照", async () => {
+    const ref = createRef<PierDiffViewHandle>();
+    const setItems = vi.spyOn(PierreCodeView.prototype, "setItems");
+    const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
+    render(
+      <PierDiffView
+        appearance={appearance}
+        items={items}
+        labels={labels}
+        onError={vi.fn()}
+        ref={ref}
+      />
+    );
+    await waitFor(() => expect(ref.current).not.toBeNull());
+    const setCallsBeforeUpdate = setItems.mock.calls.length;
+    updateItem.mockClear();
+    updateItem.mockReturnValueOnce(false);
+
+    let accepted: boolean | undefined;
+    act(() => {
+      accepted = ref.current?.updateItems([
+        {
+          cacheKey: "revision:file.ts:atomic",
+          id: "file.ts",
+          patch: items[0].patch.replace("+new", "+atomic"),
+        },
+      ]);
+    });
+
+    expect(accepted).toBe(true);
+    expect(updateItem).toHaveBeenCalledTimes(1);
+    expect(setItems.mock.calls.length).toBe(setCallsBeforeUpdate + 1);
   });
 
   it("单项解析失败保留完整拓扑，并且不触发全局运行时错误", async () => {
@@ -1260,6 +1315,7 @@ describe("PierDiffView", () => {
       Object.assign(document.createElement("div"), { scrollTop: 92 })
     );
     const scrollTo = vi.spyOn(PierreCodeView.prototype, "scrollTo");
+    const renderNow = vi.spyOn(PierreCodeView.prototype, "render");
     const updateItem = vi.spyOn(PierreCodeView.prototype, "updateItem");
     render(
       <PierDiffView
@@ -1287,6 +1343,7 @@ describe("PierDiffView", () => {
     expect(scrollTo).not.toHaveBeenCalled();
 
     scrollTo.mockClear();
+    renderNow.mockClear();
     act(() =>
       ref.current?.updateItems(
         [
@@ -1307,6 +1364,7 @@ describe("PierDiffView", () => {
       offset: -12,
       type: "item",
     });
+    expect(renderNow).toHaveBeenCalledWith(true);
   });
 
   it("放弃的删除渲染不会让同 id 新正文复用旧 version", async () => {
@@ -1484,6 +1542,84 @@ describe("PierDiffView", () => {
     expect(getRenderedItems).toHaveBeenCalled();
   });
 
+  it("布局稳定适配器跟踪目标位置、连续稳定帧并支持取消", async () => {
+    vi.useFakeTimers();
+    const ref = createRef<PierDiffViewHandle>();
+    const container = document.createElement("div");
+    let targetTop = 100;
+    Object.defineProperties(container, {
+      checkVisibility: { value: () => true },
+      clientHeight: { value: 600 },
+      clientWidth: { value: 900 },
+      scrollHeight: { value: 1200 },
+    });
+    document.body.append(container);
+    const instance = {} as never;
+    vi.spyOn(PierreCodeView.prototype, "getContainerElement").mockReturnValue(
+      container
+    );
+    vi.spyOn(PierreCodeView.prototype, "getRenderedItems").mockReturnValue([
+      {
+        element: document.createElement("diffs-container"),
+        id: "file.ts",
+        instance,
+        item: {} as never,
+        type: "diff",
+        version: 0,
+      },
+    ]);
+    vi.spyOn(
+      PierreCodeView.prototype,
+      "getLocalTopForInstance"
+    ).mockImplementation(() => targetTop);
+    render(
+      <PierDiffView
+        appearance={appearance}
+        items={items}
+        labels={labels}
+        onError={vi.fn()}
+        ref={ref}
+      />
+    );
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(1);
+    });
+    expect(ref.current).not.toBeNull();
+    expect(ref.current?.isViewportReady()).toBe(true);
+
+    const firstKey = ref.current?.getViewportLayoutKey("file.ts");
+    targetTop = 140;
+    expect(ref.current?.getViewportLayoutKey("file.ts")).not.toBe(firstKey);
+
+    const settled = vi.fn();
+    ref.current?.requestViewportLayoutSettled("file.ts", 3, settled);
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16);
+    });
+    targetTop = 180;
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(32);
+    });
+    expect(settled).not.toHaveBeenCalled();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(16);
+    });
+    expect(settled).toHaveBeenCalledOnce();
+
+    const cancelled = vi.fn();
+    const cancel = ref.current?.requestViewportLayoutSettled(
+      "file.ts",
+      2,
+      cancelled
+    );
+    cancel?.();
+    await act(async () => {
+      await vi.advanceTimersByTimeAsync(64);
+    });
+    expect(cancelled).not.toHaveBeenCalled();
+    container.remove();
+  });
+
   it("官方迟到滚动不冒充用户输入，只有明确交互意图取消锚点", async () => {
     const ref = createRef<PierDiffViewHandle>();
     const onScroll = vi.fn();
@@ -1515,10 +1651,105 @@ describe("PierDiffView", () => {
 
     act(() => emitOfficialScroll());
     expect(onScroll).not.toHaveBeenCalled();
-    fireEvent.wheel(view.getByTestId("pierre-diff-root"));
+    const root = view.getByTestId("pierre-diff-root");
+    const scroller = root.querySelector<HTMLElement>(".cv-scrollbar");
+    expect(scroller).not.toBeNull();
+    const action = document.createElement("button");
+    root.append(action);
+    fireEvent.pointerDown(scroller as HTMLElement, { button: 0 });
+    expect(onScroll).toHaveBeenCalledOnce();
+    fireEvent.pointerDown(action);
+    fireEvent.keyDown(action, { key: " " });
+    expect(onScroll).toHaveBeenCalledOnce();
+    fireEvent.wheel(root);
     expect(onScroll).toHaveBeenCalledOnce();
     act(() => emitOfficialScroll());
     expect(onScroll).toHaveBeenCalledOnce();
+  });
+
+  it("视口滚动键会接管导航，交互控件按键不会", () => {
+    const onScroll = vi.fn();
+    const view = render(
+      <PierDiffView
+        appearance={appearance}
+        items={items}
+        labels={labels}
+        onError={vi.fn()}
+        onScroll={onScroll}
+      />
+    );
+    const root = view.getByTestId("pierre-diff-root");
+    const scroller = root.querySelector<HTMLElement>(".cv-scrollbar");
+    expect(scroller).not.toBeNull();
+    const action = document.createElement("button");
+    root.append(action);
+
+    fireEvent.keyDown(action, { key: "PageDown" });
+    expect(onScroll).not.toHaveBeenCalled();
+    fireEvent.keyDown(scroller as HTMLElement, { key: "PageDown" });
+    expect(onScroll).toHaveBeenCalledOnce();
+  });
+
+  it("正文左键拖选会接管导航，右键不会", async () => {
+    const onScroll = vi.fn();
+    const renderedElement = document.createElement("diffs-container");
+    const line = document.createElement("span");
+    line.setAttribute("data-additions", "");
+    line.setAttribute("data-code", "");
+    line.setAttribute("data-line", "1");
+    renderedElement.append(line);
+    vi.spyOn(PierreCodeView.prototype, "getRenderedItems").mockReturnValue([
+      {
+        element: renderedElement,
+        id: "file.ts",
+        instance: {} as never,
+        item: {} as never,
+        type: "diff",
+        version: 0,
+      },
+    ]);
+    const view = render(
+      <PierDiffView
+        appearance={appearance}
+        items={items}
+        labels={labels}
+        onError={vi.fn()}
+        onScroll={onScroll}
+      />
+    );
+    const root = view.getByTestId("pierre-diff-root");
+    root.append(renderedElement);
+
+    fireEvent.pointerDown(line, { button: 2 });
+    expect(onScroll).not.toHaveBeenCalled();
+    fireEvent.pointerDown(line, { button: 0 });
+    expect(onScroll).toHaveBeenCalledOnce();
+  });
+
+  it("触摸轻点控件不接管导航，实际触摸滚动才接管", async () => {
+    vi.useFakeTimers();
+    const onScroll = vi.fn();
+    const view = render(
+      <PierDiffView
+        appearance={appearance}
+        items={items}
+        labels={labels}
+        onError={vi.fn()}
+        onScroll={onScroll}
+      />
+    );
+    const root = view.getByTestId("pierre-diff-root");
+    const action = document.createElement("button");
+    root.append(action);
+
+    fireEvent.touchStart(action);
+    expect(onScroll).not.toHaveBeenCalled();
+    fireEvent.touchMove(action);
+    expect(onScroll).toHaveBeenCalledOnce();
+
+    await vi.advanceTimersByTimeAsync(161);
+    fireEvent.touchMove(root);
+    expect(onScroll).toHaveBeenCalledTimes(2);
   });
 
   it("header 空白点击折叠，文件名点击打开文件", async () => {

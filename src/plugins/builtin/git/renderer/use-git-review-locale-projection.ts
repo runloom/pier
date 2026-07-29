@@ -13,11 +13,14 @@ import {
   projectReviewLedger,
   type ReviewDocumentProjection,
 } from "./git-review-document-projection.ts";
+import type { GitReviewReadingSurface } from "./git-review-reading-surface.ts";
 
 export function useGitReviewLocaleProjection({
   context,
   controllerRef,
+  diffBase,
   entries,
+  indexGeneration,
   loaderRef,
   locale,
   recordLatestItemUpdates,
@@ -26,7 +29,9 @@ export function useGitReviewLocaleProjection({
 }: {
   readonly context: RendererPluginContext;
   readonly controllerRef: RefObject<GitReviewDocumentGeneration | null>;
+  readonly diffBase: GitReviewReadingSurface;
   readonly entries: readonly GitReviewIndexEntry[];
+  readonly indexGeneration: number;
   readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
   readonly locale: string;
   readonly recordLatestItemUpdates: (
@@ -52,17 +57,22 @@ export function useGitReviewLocaleProjection({
       )
     );
     const localized = projectReviewLedger({
+      authoritativeEntryKeys: controller.authoritativeEntryKeys(),
       context,
+      diffBase,
       entries,
       locale,
       resourceByEntryKey,
+      sourceIndexGeneration: indexGeneration,
     });
     recordLatestItemUpdates(localized.items);
     setProjection(localized);
   }, [
     context,
     controllerRef,
+    diffBase,
     entries,
+    indexGeneration,
     loaderRef,
     locale,
     recordLatestItemUpdates,

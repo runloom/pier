@@ -254,6 +254,14 @@ const COMMAND_METADATA: Record<PierCommand["type"], CommandMetadata> = {
     allowedClientKinds: ["desktop-renderer"],
     capabilities: ["git:read"],
   },
+  "git.applyReviewMutation": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["git:read", "git:write"],
+  },
+  "git.applyReviewPathMutation": {
+    allowedClientKinds: ["desktop-renderer"],
+    capabilities: ["git:read", "git:write"],
+  },
   "git.listIgnored": { capabilities: ["git:read"] },
   "git.isWorkingTreeClean": { capabilities: ["git:read"] },
   "git.listBranches": { capabilities: ["git:read"] },

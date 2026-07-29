@@ -22,6 +22,7 @@ import { GitReviewIndexReader } from "@main/services/git-review/git-review-index
 import type {
   GitReviewFileDocumentRequest,
   GitReviewFileDocumentResult,
+  GitReviewFileSection,
   GitReviewFileSource,
 } from "@shared/contracts/git-review.ts";
 import { afterEach, describe, expect, it } from "vitest";
@@ -79,8 +80,47 @@ function expectOk(
   expect(result.kind).toBe("ok");
 }
 
+function contents(
+  result: Extract<GitReviewFileDocumentResult, { kind: "ok" }>
+): readonly GitReviewFileSection[] {
+  return result.sections.length === 1
+    ? result.sections
+    : result.sections.filter(
+        (section) => section.sectionKey !== result.surfaceSections.head
+      );
+}
+
 describe("GitReviewService document", () => {
-  it("以未暂存→已暂存顺序返回两个 patch section", async () => {
+  it("其他文件暂存不会使已持有的单文件正文失效", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "app.ts"), "export const app = 1;\n", "utf8");
+    await writeFile(
+      join(root, "large.ts"),
+      "export const large = 1;\n",
+      "utf8"
+    );
+    await commitAll(root, "base");
+    await writeFile(join(root, "app.ts"), "export const app = 2;\n", "utf8");
+    await writeFile(
+      join(root, "large.ts"),
+      "export const large = 2;\n",
+      "utf8"
+    );
+    const service = new GitReviewService();
+    const largeSource = source(root, "large.ts");
+    const first = await service.getFileDocument(request(largeSource));
+    expectOk(first);
+
+    await execGit(["add", "--", "app.ts"], { cwd: root });
+    const second = await service.getFileDocument({
+      ...request(largeSource),
+      previousRevision: first.revision,
+    });
+
+    expect(second).toEqual({ kind: "unchanged" });
+  });
+
+  it("未提交文件分别返回 staged 与 unstaged patch", async () => {
     const root = await createRepository();
     await writeFile(join(root, "file.ts"), "base\n", "utf8");
     await commitAll(root, "base");
@@ -95,15 +135,46 @@ describe("GitReviewService document", () => {
     expectOk(result);
     expect(Object.isFrozen(result)).toBe(true);
     expect(Object.isFrozen(result.sections)).toBe(true);
-    expect(Object.isFrozen(result.sections[0])).toBe(true);
-    expect(result.sections).toHaveLength(2);
-    expect(result.sections.map((section) => section.kind)).toEqual([
-      "patch",
-      "patch",
-    ]);
-    const [unstaged, staged] = result.sections;
-    expect(unstaged?.kind === "patch" && unstaged.patch).toContain("+worktree");
+    expect(contents(result)).toHaveLength(2);
+    expect(result.surfaceSections).toMatchObject({
+      committed: null,
+      head: expect.any(String),
+      index: expect.any(String),
+      staged: expect.any(String),
+    });
+    const staged = result.sections.find(
+      (section) =>
+        section.kind === "patch" &&
+        section.changeBlocks.some((block) => block.stageState === "staged")
+    );
+    const unstaged = result.sections.find(
+      (section) =>
+        section.kind === "patch" &&
+        section.changeBlocks.some((block) => block.stageState === "unstaged")
+    );
     expect(staged?.kind === "patch" && staged.patch).toContain("+staged");
+    expect(staged?.kind === "patch" && staged.patch).not.toContain("+worktree");
+    expect(unstaged?.kind === "patch" && unstaged.patch).toContain("+worktree");
+    expect(
+      staged?.kind === "patch"
+        ? staged.changeBlocks.map((block) => block.stageState)
+        : []
+    ).toEqual(["staged"]);
+    expect(
+      unstaged?.kind === "patch"
+        ? unstaged.changeBlocks.map((block) => block.stageState)
+        : []
+    ).toEqual(["unstaged"]);
+    const head = result.sections.find(
+      (section) => section.sectionKey === result.surfaceSections.head
+    );
+    expect(head?.kind === "patch" && head.patch).toContain("+staged");
+    expect(head?.kind === "patch" && head.patch).toContain("+worktree");
+    expect(
+      head?.kind === "patch"
+        ? head.changeBlocks.map((block) => block.stageState)
+        : []
+    ).toEqual(["partial"]);
   });
 
   it("commit 目标返回该提交的 committed patch section", async () => {
@@ -123,8 +194,8 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    expect(result.sections).toHaveLength(1);
-    const [committed] = result.sections;
+    expect(contents(result)).toHaveLength(1);
+    const [committed] = contents(result);
     expect(committed?.kind === "patch" && committed.patch).toContain(
       "+committed"
     );
@@ -150,14 +221,14 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    expect(result.sections).toHaveLength(1);
-    const [committed] = result.sections;
+    expect(contents(result)).toHaveLength(1);
+    const [committed] = contents(result);
     expect(committed?.kind === "patch" && committed.patch).toContain(
       "+feature"
     );
   });
 
-  it("链式 a→b→c 为每个 group 使用自己的 old/target path", async () => {
+  it("链式 a→b→c 分别保留 staged 与 unstaged 路径", async () => {
     const root = await createRepository();
     await writeFile(join(root, "a.ts"), "base\n", "utf8");
     await commitAll(root, "base");
@@ -170,13 +241,21 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    const [unstaged, staged] = result.sections;
-    expect(unstaged?.kind === "patch" && unstaged.patch).toContain(
-      "diff --git a/b.ts b/c.ts"
-    );
-    expect(staged?.kind === "patch" && staged.patch).toContain(
-      "diff --git a/a.ts b/b.ts"
-    );
+    expect(contents(result)).toHaveLength(2);
+    expect(
+      contents(result).some(
+        (section) =>
+          section.kind === "patch" &&
+          section.patch.includes("diff --git a/a.ts b/b.ts")
+      )
+    ).toBe(true);
+    expect(
+      contents(result).some(
+        (section) =>
+          section.kind === "patch" &&
+          section.patch.includes("diff --git a/b.ts b/c.ts")
+      )
+    ).toBe(true);
   });
 
   it("副本源在同一范围修改时只返回副本条目 patch", async () => {
@@ -192,7 +271,7 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    expect(result.sections).toEqual([
+    expect(contents(result)).toEqual([
       expect.objectContaining({ kind: "patch" }),
     ]);
     const section = result.sections[0];
@@ -248,7 +327,7 @@ describe("GitReviewService document", () => {
     for (const path of paths) {
       const result = await service.getFileDocument(request(source(root, path)));
       expectOk(result);
-      expect(result.sections).toEqual([
+      expect(contents(result)).toEqual([
         expect.objectContaining({ kind: "patch" }),
       ]);
     }
@@ -287,7 +366,7 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    expect(result.sections).toEqual([
+    expect(contents(result)).toEqual([
       expect.objectContaining({ kind: "patch" }),
     ]);
   });
@@ -311,7 +390,7 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    expect(result.sections).toHaveLength(1);
+    expect(contents(result)).toHaveLength(1);
     expect(result.sections[0]).toMatchObject({ kind: "patch" });
     if (result.sections[0]?.kind === "patch") {
       expect(result.sections[0].patch).toContain("rename from a");
@@ -338,7 +417,7 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    expect(result.sections).toHaveLength(1);
+    expect(contents(result)).toHaveLength(1);
     expect(result.sections[0]).toMatchObject({ kind: "patch" });
     if (result.sections[0]?.kind === "patch") {
       expect(result.sections[0].patch).toContain("rename from a");
@@ -366,7 +445,7 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    expect(result.sections).toEqual([
+    expect(contents(result)).toEqual([
       expect.objectContaining({
         kind: "patch",
       }),
@@ -434,7 +513,7 @@ describe("GitReviewService document", () => {
     }).getFileDocument(request(source(root, "untracked.ts")));
 
     expectOk(result);
-    expect(result.sections).toEqual([
+    expect(contents(result)).toEqual([
       expect.objectContaining({ kind: "patch" }),
     ]);
   });
@@ -464,7 +543,7 @@ describe("GitReviewService document", () => {
 
     expectOk(binary);
     expectOk(invalid);
-    expect(binary.sections).toEqual([
+    expect(contents(binary)).toEqual([
       expect.objectContaining({
         kind: "state",
         oldPath: null,
@@ -473,20 +552,20 @@ describe("GitReviewService document", () => {
         targetPath: "binary.dat",
       }),
     ]);
-    expect(invalid.sections).toEqual([
+    expect(contents(invalid)).toEqual([
       expect.objectContaining({ kind: "state", reason: "invalidEncoding" }),
     ]);
     expectOk(mixedUntracked);
     expectOk(mixedStaged);
-    expect(mixedUntracked.sections).toEqual([
+    expect(contents(mixedUntracked)).toEqual([
       expect.objectContaining({ kind: "state", reason: "binary" }),
     ]);
-    expect(mixedStaged.sections).toEqual([
+    expect(contents(mixedStaged)).toEqual([
       expect.objectContaining({ kind: "state", reason: "binary" }),
     ]);
   });
 
-  it("二进制 staged rename 与 unstaged modify 保留各 section 事实", async () => {
+  it("二进制 staged rename 与 unstaged modify 分别返回状态", async () => {
     const root = await createRepository();
     const base = Buffer.alloc(100);
     await writeFile(join(root, "old.dat"), base);
@@ -505,23 +584,25 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    expect(result.sections).toEqual([
-      expect.objectContaining({
-        kind: "state",
-        oldPath: null,
-        reason: "binary",
-        status: "modified",
-      }),
-      expect.objectContaining({
-        kind: "state",
-        oldPath: "old.dat",
-        reason: "binary",
-        status: "renamed",
-      }),
-    ]);
+    expect(contents(result)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "state",
+          oldPath: "old.dat",
+          reason: "binary",
+          status: "renamed",
+        }),
+        expect.objectContaining({
+          kind: "state",
+          oldPath: null,
+          reason: "binary",
+          status: "modified",
+        }),
+      ])
+    );
   });
 
-  it("二进制链式重命名保留各 section 的目标路径", async () => {
+  it("二进制链式重命名分别保留 staged 与 unstaged 路径", async () => {
     const root = await createRepository();
     const base = Buffer.alloc(100);
     await writeFile(join(root, "a.dat"), base);
@@ -542,22 +623,24 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(result);
-    expect(result.sections).toEqual([
-      expect.objectContaining({
-        kind: "state",
-        oldPath: "b.dat",
-        reason: "binary",
-        status: "renamed",
-        targetPath: "c.dat",
-      }),
-      expect.objectContaining({
-        kind: "state",
-        oldPath: "a.dat",
-        reason: "binary",
-        status: "renamed",
-        targetPath: "b.dat",
-      }),
-    ]);
+    expect(contents(result)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          kind: "state",
+          oldPath: "a.dat",
+          reason: "binary",
+          status: "renamed",
+          targetPath: "b.dat",
+        }),
+        expect.objectContaining({
+          kind: "state",
+          oldPath: "b.dat",
+          reason: "binary",
+          status: "renamed",
+          targetPath: "c.dat",
+        }),
+      ])
+    );
   });
 
   it("deleted 文件返回 patch", async () => {
@@ -571,7 +654,7 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(deleted);
-    expect(deleted.sections).toEqual([
+    expect(contents(deleted)).toEqual([
       expect.objectContaining({ kind: "patch" }),
     ]);
   });
@@ -588,7 +671,7 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(link);
-    expect(link.sections).toEqual([
+    expect(contents(link)).toEqual([
       expect.objectContaining({ kind: "state", reason: "symlink" }),
     ]);
   });
@@ -606,7 +689,7 @@ describe("GitReviewService document", () => {
     );
 
     expectOk(large);
-    expect(large.sections).toEqual([
+    expect(contents(large)).toEqual([
       expect.objectContaining({ kind: "state", reason: "tooLarge" }),
     ]);
   });
@@ -736,7 +819,7 @@ describe("GitReviewService document", () => {
       request(source(conflictRoot, "conflict.ts"))
     );
     expectOk(conflict);
-    expect(conflict.sections).toEqual([
+    expect(contents(conflict)).toEqual([
       expect.objectContaining({
         kind: "state",
         reason: "conflict",
@@ -767,7 +850,7 @@ describe("GitReviewService document", () => {
       request(source(parent, "sub"))
     );
     expectOk(submodule);
-    expect(submodule.sections).toEqual([
+    expect(contents(submodule)).toEqual([
       expect.objectContaining({
         kind: "state",
         reason: "submodule",

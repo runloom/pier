@@ -10,37 +10,40 @@ import {
   useState,
 } from "react";
 
-const MAX_REPLAY_ATTEMPTS = 3;
-
 interface PendingReplay {
   readonly allowedIds: ReadonlySet<string> | null;
-  attempts: number;
   readonly generation: number;
   readonly handle: PierDiffViewHandle;
   readonly ids: Set<string> | null;
-  readonly revision: number;
+  readonly preserveAnchor: boolean;
 }
 
 /**
- * 稀疏正文以 latest-map 为唯一回放源。Pierre 瞬时拒绝时，下一帧读取最新值重试，
- * 避免捕获旧 patch；换代、换 handle 和卸载都会使迟到重试失效。
+ * 稀疏正文以 latest-map 为唯一回放源。Pierre 拒绝时保留最新快照供显式重试；
+ * 不跨帧自动补写，避免一次暂存产生两次可见正文提交。
  */
 export function useGitReviewItemReplay({
   committedProjectionGenerationRef,
   diffHandleRef,
   documentGenerationRef,
+  enabledRef,
   latestItemUpdatesRef,
 }: {
   readonly committedProjectionGenerationRef: RefObject<number>;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
   readonly documentGenerationRef: RefObject<number>;
+  /** 非活动阅读面保留 latest-map，但不触碰隐藏的 Pierre DOM。 */
+  readonly enabledRef: RefObject<boolean>;
   readonly latestItemUpdatesRef: RefObject<Map<string, PierDiffViewItem>>;
 }): {
   readonly applyItemUpdates: (
     handle: PierDiffViewHandle,
     generation: number,
     items: readonly PierDiffViewItem[],
-    options?: { readonly flush?: boolean }
+    options?: {
+      readonly flush?: boolean;
+      readonly preserveAnchor?: boolean;
+    }
   ) => boolean;
   /** settle 前冲刷挂起的 coalesce rAF，避免 restore 后再被晚到 updateItems 推视口 */
   readonly flushPendingItemUpdates: (
@@ -60,22 +63,17 @@ export function useGitReviewItemReplay({
   readonly retryLatestItemUpdates: () => void;
 } {
   const pendingRef = useRef<PendingReplay | null>(null);
-  const frameRef = useRef<number | null>(null);
   /** 同帧多 settle 合并：ids + generation + handle */
   const coalesceRef = useRef<{
     readonly generation: number;
     readonly handle: PierDiffViewHandle;
     readonly ids: Set<string>;
     frameId: number | null;
+    preserveAnchor: boolean;
   } | null>(null);
-  const revisionRef = useRef(0);
   const [replayFailure, setReplayFailure] = useState<Error | null>(null);
 
   const cancelFrame = useCallback(() => {
-    if (frameRef.current !== null) {
-      cancelAnimationFrame(frameRef.current);
-      frameRef.current = null;
-    }
     const coalesce = coalesceRef.current;
     if (coalesce?.frameId != null) {
       cancelAnimationFrame(coalesce.frameId);
@@ -87,7 +85,6 @@ export function useGitReviewItemReplay({
     cancelFrame();
     latestItemUpdatesRef.current.clear();
     pendingRef.current = null;
-    revisionRef.current += 1;
     setReplayFailure(null);
   }, [cancelFrame, latestItemUpdatesRef]);
 
@@ -99,7 +96,6 @@ export function useGitReviewItemReplay({
       for (const item of items) {
         latestItemUpdatesRef.current.set(item.id, item);
       }
-      revisionRef.current += 1;
     },
     [latestItemUpdatesRef]
   );
@@ -109,8 +105,14 @@ export function useGitReviewItemReplay({
       handle: PierDiffViewHandle,
       generation: number,
       requestedIds: Set<string> | null,
-      allowedIds?: ReadonlySet<string> | null
+      allowedIds?: ReadonlySet<string> | null,
+      preserveAnchor = false
     ): boolean {
+      if (!enabledRef.current) {
+        pendingRef.current = null;
+        cancelFrame();
+        return true;
+      }
       if (
         handle !== diffHandleRef.current ||
         generation !== documentGenerationRef.current ||
@@ -125,11 +127,11 @@ export function useGitReviewItemReplay({
           }
         }
       }
-      const revision = revisionRef.current;
       const pending = pendingRef.current;
       let ids = requestedIds;
-      let previousAttempts = 0;
+      let shouldPreserveAnchor = preserveAnchor;
       if (pending?.handle === handle && pending.generation === generation) {
+        shouldPreserveAnchor ||= pending.preserveAnchor;
         if (pending.ids === null || requestedIds === null) {
           ids = null;
         } else {
@@ -139,23 +141,6 @@ export function useGitReviewItemReplay({
             }
           }
           ids = pending.ids;
-        }
-        if (pending.revision === revision) {
-          previousAttempts = pending.attempts;
-          if (pending.attempts >= MAX_REPLAY_ATTEMPTS) {
-            return false;
-          }
-        }
-        if (frameRef.current !== null) {
-          pendingRef.current = {
-            allowedIds: allowedIds ?? null,
-            attempts: previousAttempts,
-            generation,
-            handle,
-            ids,
-            revision,
-          };
-          return false;
         }
       }
       const candidateIds =
@@ -172,9 +157,8 @@ export function useGitReviewItemReplay({
         cancelFrame();
         return true;
       }
-      const attempts = previousAttempts + 1;
       // preserveAnchor:false → Pierre CodeView 内置行级 scroll anchoring。
-      if (handle.updateItems(items, { preserveAnchor: false })) {
+      if (handle.updateItems(items, { preserveAnchor: shouldPreserveAnchor })) {
         pendingRef.current = null;
         cancelFrame();
         setReplayFailure(null);
@@ -182,25 +166,14 @@ export function useGitReviewItemReplay({
       }
       pendingRef.current = {
         allowedIds: allowedIds ?? null,
-        attempts,
         generation,
         handle,
         ids,
-        revision,
+        preserveAnchor,
       };
-      if (attempts >= MAX_REPLAY_ATTEMPTS) {
-        setReplayFailure(
-          new Error("Pierre did not accept the latest review document.")
-        );
-        return false;
-      }
-      frameRef.current = requestAnimationFrame(() => {
-        frameRef.current = null;
-        const current = pendingRef.current;
-        if (current?.handle === handle && current.generation === generation) {
-          apply(handle, generation, current.ids, current.allowedIds);
-        }
-      });
+      setReplayFailure(
+        new Error("Pierre did not accept the latest review document.")
+      );
       return false;
     },
     [
@@ -208,6 +181,7 @@ export function useGitReviewItemReplay({
       committedProjectionGenerationRef,
       diffHandleRef,
       documentGenerationRef,
+      enabledRef,
       latestItemUpdatesRef,
     ]
   );
@@ -223,7 +197,10 @@ export function useGitReviewItemReplay({
       handle: PierDiffViewHandle,
       generation: number,
       items: readonly PierDiffViewItem[],
-      options?: { readonly flush?: boolean }
+      options?: {
+        readonly flush?: boolean;
+        readonly preserveAnchor?: boolean;
+      }
     ): boolean => {
       if (items.length === 0) {
         return true;
@@ -240,11 +217,19 @@ export function useGitReviewItemReplay({
             existing.ids.add(id);
           }
           const merged = existing.ids;
+          const preserveAnchor =
+            existing.preserveAnchor || options.preserveAnchor === true;
           coalesceRef.current = null;
-          return applyUpdates(handle, generation, merged);
+          return applyUpdates(handle, generation, merged, null, preserveAnchor);
         }
         coalesceRef.current = null;
-        return applyUpdates(handle, generation, new Set(ids));
+        return applyUpdates(
+          handle,
+          generation,
+          new Set(ids),
+          null,
+          options.preserveAnchor === true
+        );
       }
       const existing = coalesceRef.current;
       if (
@@ -252,6 +237,7 @@ export function useGitReviewItemReplay({
         existing.handle === handle &&
         existing.generation === generation
       ) {
+        existing.preserveAnchor ||= options?.preserveAnchor === true;
         for (const id of ids) {
           existing.ids.add(id);
         }
@@ -265,6 +251,7 @@ export function useGitReviewItemReplay({
         generation,
         handle,
         ids: new Set(ids),
+        preserveAnchor: options?.preserveAnchor === true,
       };
       coalesceRef.current = bucket;
       bucket.frameId = requestAnimationFrame(() => {
@@ -279,7 +266,13 @@ export function useGitReviewItemReplay({
         ) {
           return;
         }
-        applyUpdates(handle, generation, current.ids);
+        applyUpdates(
+          handle,
+          generation,
+          current.ids,
+          null,
+          current.preserveAnchor
+        );
       });
       return true;
     },
@@ -302,8 +295,9 @@ export function useGitReviewItemReplay({
         cancelAnimationFrame(existing.frameId);
       }
       const ids = existing.ids;
+      const { preserveAnchor } = existing;
       coalesceRef.current = null;
-      return applyUpdates(handle, generation, ids);
+      return applyUpdates(handle, generation, ids, null, preserveAnchor);
     },
     [applyUpdates]
   );
@@ -327,11 +321,18 @@ export function useGitReviewItemReplay({
     const pending = pendingRef.current;
     const ids = pending?.ids ?? null;
     const allowedIds = pending?.allowedIds ?? null;
+    const preserveAnchor = pending?.preserveAnchor ?? false;
     pendingRef.current = null;
     setReplayFailure(null);
     const handle = diffHandleRef.current;
     if (handle) {
-      applyUpdates(handle, documentGenerationRef.current, ids, allowedIds);
+      applyUpdates(
+        handle,
+        documentGenerationRef.current,
+        ids,
+        allowedIds,
+        preserveAnchor
+      );
     }
   }, [applyUpdates, diffHandleRef, documentGenerationRef]);
 

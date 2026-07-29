@@ -1,8 +1,48 @@
-import type { CodeViewHandle, CodeViewItem } from "@pierre/diffs/react";
+import type { CodeViewHandle, SelectionSide } from "@pierre/diffs/react";
+import { DIFF_HEADER_HEIGHT_PX } from "./diff-view-appearance.ts";
 import type { PierHunkAnnotationMetadata } from "./diff-view-hunk-actions.tsx";
+import {
+  hasSameCodeViewItemIdOrder,
+  planDiffViewItemTransition,
+  planPathAlignedIdRenames,
+} from "./diff-view-item-transition.ts";
 import type { PierDiffCodeViewItem } from "./diff-view-items.ts";
 
 export type PierCodeViewHandle = CodeViewHandle<PierHunkAnnotationMetadata>;
+
+export type { DiffViewItemTransitionPlan } from "./diff-view-item-transition.ts";
+export {
+  codeViewItemPath,
+  planDiffViewItemTransition,
+  planPathAlignedIdRenames,
+} from "./diff-view-item-transition.ts";
+
+export type DiffViewAnchoredDisposition =
+  | "empty"
+  | "focused"
+  | "noop"
+  | "preserved";
+
+export interface DiffViewAnchoredApplyResult {
+  readonly accepted: boolean;
+  readonly disposition: DiffViewAnchoredDisposition;
+}
+
+const MEMBERSHIP_LAYOUT_PASSES = 2;
+
+type CapturedCodeViewAnchor =
+  | {
+      readonly id: string;
+      readonly type: "item";
+      readonly viewportOffset: number;
+    }
+  | {
+      readonly id: string;
+      readonly lineNumber: number;
+      readonly side?: SelectionSide;
+      readonly type: "line";
+      readonly viewportOffset: number;
+    };
 
 /**
  * version 是「内容版本 + 折叠修订」的单调计数:同 id 同 version 意味着
@@ -24,90 +64,6 @@ export function acceptDiffViewItem(
 }
 
 /**
- * stage 换 sectionKey 且路径 1:1 可对齐时，返回 updateItemId 对；
- * 槽位数变化 / 同 path 多槽 → null，走 setItems reconcile。
- */
-export function planPathAlignedIdRenames(
-  previousItems: readonly PierDiffCodeViewItem[],
-  nextItems: readonly PierDiffCodeViewItem[]
-): readonly (readonly [string, string])[] | null {
-  if (previousItems.length !== nextItems.length || previousItems.length === 0) {
-    return null;
-  }
-  const previousByPath = new Map<string, PierDiffCodeViewItem[]>();
-  const nextByPath = new Map<string, PierDiffCodeViewItem[]>();
-  for (const item of previousItems) {
-    const path = codeViewItemPath(item);
-    if (path === null) {
-      return null;
-    }
-    const bucket = previousByPath.get(path) ?? [];
-    bucket.push(item);
-    previousByPath.set(path, bucket);
-  }
-  for (const item of nextItems) {
-    const path = codeViewItemPath(item);
-    if (path === null) {
-      return null;
-    }
-    const bucket = nextByPath.get(path) ?? [];
-    bucket.push(item);
-    nextByPath.set(path, bucket);
-  }
-  if (previousByPath.size !== nextByPath.size) {
-    return null;
-  }
-  const renames: (readonly [string, string])[] = [];
-  for (const [path, prevBucket] of previousByPath) {
-    const nextBucket = nextByPath.get(path);
-    // 同 path 多槽（半暂存双 section）无法安全 1:1 rename
-    if (
-      nextBucket === undefined ||
-      prevBucket.length !== 1 ||
-      nextBucket.length !== 1
-    ) {
-      return null;
-    }
-    const prevItem = prevBucket[0];
-    const nextItem = nextBucket[0];
-    if (prevItem === undefined || nextItem === undefined) {
-      return null;
-    }
-    if (prevItem.id !== nextItem.id) {
-      renames.push([prevItem.id, nextItem.id]);
-    }
-  }
-  // 目标 id 不得与仍保留的旧 id 冲突
-  const nextIds = new Set(nextItems.map((item) => item.id));
-  const prevIds = new Set(previousItems.map((item) => item.id));
-  for (const [oldId, newId] of renames) {
-    if (prevIds.has(newId) && oldId !== newId) {
-      // newId 仍被另一 previous 占用 → 需交换或 setItems
-      const stillOwned = previousItems.some(
-        (item) => item.id === newId && item.id !== oldId
-      );
-      if (stillOwned) {
-        return null;
-      }
-    }
-    if (!nextIds.has(newId)) {
-      return null;
-    }
-  }
-  return renames;
-}
-
-export function codeViewItemPath(item: PierDiffCodeViewItem): string | null {
-  if (item.type === "diff") {
-    return item.fileDiff.name.length > 0 ? item.fileDiff.name : null;
-  }
-  if (item.type === "file") {
-    return item.file.name.length > 0 ? item.file.name : null;
-  }
-  return null;
-}
-
-/**
  * DiffsHub 风格：同一 CodeView 实例内消化成员与正文变更。
  * - 前缀 id 不变 → 前缀 updateItem + 尾部 addItems
  * - 同序同成员 → 仅 updateItem
@@ -123,67 +79,295 @@ export function syncCodeViewItems(
   if (!instance) {
     return false;
   }
-
-  if (nextItems.length === 0) {
-    if ((previousItems?.length ?? 0) === 0) {
+  const plan = planDiffViewItemTransition(previousItems, nextItems);
+  switch (plan.kind) {
+    case "update": {
+      if (applyContentUpdates(handle, nextItems, previousItems ?? [])) {
+        return true;
+      }
+      instance.setItems([...nextItems]);
       return true;
     }
-    instance.setItems([]);
-    return true;
-  }
-
-  if (previousItems == null || previousItems.length === 0) {
-    if (instanceAlreadyMatches(handle, nextItems)) {
-      return applyContentUpdates(handle, nextItems, previousItems ?? []);
-    }
-    instance.setItems([...nextItems]);
-    return true;
-  }
-
-  if (isSameIdOrder(previousItems, nextItems)) {
-    return applyContentUpdates(handle, nextItems, previousItems);
-  }
-
-  if (isStrictIdPrefix(previousItems, nextItems)) {
-    if (
-      !applyContentUpdates(
-        handle,
-        nextItems.slice(0, previousItems.length),
-        previousItems
-      )
-    ) {
-      return false;
-    }
-    const tail = nextItems.slice(previousItems.length);
-    if (tail.length > 0) {
-      handle.addItems(tail);
-    }
-    return true;
-  }
-
-  // stage 换 sectionKey：路径 1:1 时 updateItemId 保 instance
-  const renames = planPathAlignedIdRenames(previousItems, nextItems);
-  if (renames !== null) {
-    for (const [oldId, newId] of renames) {
-      if (!handle.updateItemId(oldId, newId)) {
+    case "clear":
+      instance.setItems([]);
+      return true;
+    case "initialize":
+      if (instanceAlreadyMatches(handle, nextItems)) {
+        return applyContentUpdates(handle, nextItems, previousItems ?? []);
+      }
+      instance.setItems([...nextItems]);
+      return true;
+    case "append": {
+      const stablePrefix = previousItems ?? [];
+      if (
+        !applyContentUpdates(
+          handle,
+          nextItems.slice(0, stablePrefix.length),
+          stablePrefix
+        )
+      ) {
         instance.setItems([...nextItems]);
         return true;
       }
+      const tail = nextItems.slice(stablePrefix.length);
+      if (tail.length > 0) {
+        handle.addItems(tail);
+      }
+      return true;
     }
-    // rename 后按 next 顺序：若 id 序已对齐则只更正文，否则 reconcile
-    const renamedPrevious = previousItems.map((item) => {
-      const hit = renames.find(([oldId]) => oldId === item.id);
-      return hit === undefined ? item : { ...item, id: hit[1] };
-    });
-    if (isSameIdOrder(renamedPrevious, nextItems)) {
-      return applyContentUpdates(handle, nextItems, renamedPrevious);
+    case "rename": {
+      for (const [oldId, newId] of plan.renames) {
+        if (handle.updateItemId(oldId, newId)) {
+          continue;
+        }
+        instance.setItems([...nextItems]);
+        return true;
+      }
+      const renamedPrevious = (previousItems ?? []).map((item) => {
+        const hit = plan.renames.find(([oldId]) => oldId === item.id);
+        return hit === undefined ? item : { ...item, id: hit[1] };
+      });
+      if (hasSameCodeViewItemIdOrder(renamedPrevious, nextItems)) {
+        if (applyContentUpdates(handle, nextItems, renamedPrevious)) {
+          return true;
+        }
+        instance.setItems([...nextItems]);
+        return true;
+      }
+      instance.setItems([...nextItems]);
+      return true;
     }
-    instance.setItems([...nextItems]);
-    return true;
+    case "reconcile":
+      instance.setItems([...nextItems]);
+      return true;
+    default: {
+      const exhaustive: never = plan;
+      return exhaustive;
+    }
   }
+}
 
-  instance.setItems([...nextItems]);
-  return true;
+/**
+ * CodeView 拓扑和正文的唯一提交入口。
+ *
+ * Pierre 在 `setItems/updateItem` 后的同步 render 中，以变更前仍存活的行记录
+ * 计算锚点；这里保证一次同步提交，不允许 renderer 再补 raw scrollTop、
+ * 延迟纠正或第二次 item 定位。
+ */
+export function applyCodeViewItemsAnchored(
+  handle: PierCodeViewHandle,
+  nextItems: readonly PierDiffCodeViewItem[],
+  previousItems: readonly PierDiffCodeViewItem[] | null,
+  options: {
+    readonly focusId?: string;
+    readonly flushLayout?: boolean;
+  } = {}
+): DiffViewAnchoredApplyResult {
+  const instanceBefore = handle.getInstance();
+  const viewportAnchor = captureCodeViewItemAnchor(instanceBefore);
+  const accepted = syncCodeViewItems(handle, nextItems, previousItems);
+  if (!accepted) {
+    return { accepted: false, disposition: "noop" };
+  }
+  const instance = handle.getInstance();
+  if (options.focusId !== undefined) {
+    if (handle.getItem(options.focusId) === undefined) {
+      if (options.flushLayout === true) {
+        flushCodeViewMembershipLayout(instance);
+      }
+      return { accepted: false, disposition: "noop" };
+    }
+    handle.scrollTo({
+      align: "start",
+      behavior: "instant",
+      id: options.focusId,
+      type: "item",
+    });
+    if (options.flushLayout === true) {
+      flushCodeViewMembershipLayout(instance);
+    }
+    return { accepted: true, disposition: "focused" };
+  }
+  if (
+    viewportAnchor !== null &&
+    handle.getItem(viewportAnchor.id) === undefined
+  ) {
+    const nextId = resolveAnchoredItemId(
+      viewportAnchor.id,
+      previousItems ?? [],
+      nextItems
+    );
+    if (nextId !== null) {
+      scrollToResolvedAnchor(
+        handle,
+        viewportAnchor,
+        nextId,
+        previousItems ?? [],
+        nextItems
+      );
+    }
+  }
+  if (options.flushLayout === true) {
+    flushCodeViewMembershipLayout(instance);
+  }
+  return {
+    accepted: true,
+    disposition: nextItems.length === 0 ? "empty" : "preserved",
+  };
+}
+
+function flushCodeViewMembershipLayout(
+  instance: ReturnType<PierCodeViewHandle["getInstance"]>
+): void {
+  // Pierre 1.2.x flushes item render managers after its first height
+  // reconciliation. A second immediate pass measures the populated DOM and
+  // commits the final virtual window before the browser can paint it.
+  for (let pass = 0; pass < MEMBERSHIP_LAYOUT_PASSES; pass += 1) {
+    instance?.render(true);
+  }
+}
+
+/**
+ * 锚点 id 消失时先识别同路径 1:1 身份迁移，再按旧拓扑选择后继/前驱。
+ * 该规则与成员提交处于同一模块，renderer 不得自行猜测新的落点。
+ */
+export function resolveAnchoredItemId(
+  anchorId: string,
+  previousItems: readonly PierDiffCodeViewItem[],
+  nextItems: readonly PierDiffCodeViewItem[]
+): string | null {
+  const nextIds = new Set(nextItems.map((item) => item.id));
+  if (nextIds.has(anchorId)) {
+    return anchorId;
+  }
+  const renamed = planPathAlignedIdRenames(previousItems, nextItems)?.find(
+    ([oldId]) => oldId === anchorId
+  )?.[1];
+  if (renamed !== undefined && nextIds.has(renamed)) {
+    return renamed;
+  }
+  return deletedAnchorFallbackId(
+    anchorId,
+    previousItems.map((item) => item.id),
+    nextIds
+  );
+}
+
+function captureCodeViewItemAnchor(
+  instance: ReturnType<PierCodeViewHandle["getInstance"]>
+): CapturedCodeViewAnchor | null {
+  if (instance === undefined) {
+    return null;
+  }
+  const rendered = instance.getRenderedItems();
+  if (rendered.length === 0) {
+    return null;
+  }
+  const scrollTop = instance.getScrollTop();
+  const stickyHeaderOffset = codeViewHeaderHeight(instance);
+  for (const item of rendered) {
+    // `getRenderedItems()` may briefly retain a recycled virtualized instance.
+    // Resolve geometry through the stable item id so anchor capture cannot race
+    // Pierre's instance pool.
+    const top = instance.getTopForItem(item.id);
+    if (top === undefined) {
+      continue;
+    }
+    if (top >= scrollTop) {
+      return {
+        id: item.id,
+        type: "item",
+        viewportOffset: top - scrollTop,
+      };
+    }
+    const line = item.instance.getNumericScrollAnchor(
+      scrollTop - top + stickyHeaderOffset
+    );
+    if (line !== undefined) {
+      return {
+        id: item.id,
+        lineNumber: line.lineNumber,
+        ...(line.side === undefined ? {} : { side: line.side }),
+        type: "line",
+        viewportOffset: top + line.top - scrollTop - stickyHeaderOffset,
+      };
+    }
+  }
+  return null;
+}
+
+function codeViewHeaderHeight(instance: unknown): number {
+  if (!instance || typeof instance !== "object") {
+    return DIFF_HEADER_HEIGHT_PX;
+  }
+  const metrics = (
+    instance as {
+      readonly itemMetricsCache?: { readonly diffHeaderHeight?: unknown };
+    }
+  ).itemMetricsCache;
+  const height = metrics?.diffHeaderHeight;
+  return typeof height === "number" && Number.isFinite(height) && height > 0
+    ? height
+    : DIFF_HEADER_HEIGHT_PX;
+}
+
+function scrollToResolvedAnchor(
+  handle: PierCodeViewHandle,
+  anchor: CapturedCodeViewAnchor,
+  nextId: string,
+  previousItems: readonly PierDiffCodeViewItem[],
+  nextItems: readonly PierDiffCodeViewItem[]
+): void {
+  const isIdentityMigration =
+    anchor.id === nextId ||
+    planPathAlignedIdRenames(previousItems, nextItems)?.some(
+      ([oldId, newId]) => oldId === anchor.id && newId === nextId
+    ) === true;
+  if (isIdentityMigration && anchor.type === "line") {
+    handle.scrollTo({
+      align: "start",
+      behavior: "instant",
+      id: nextId,
+      lineNumber: anchor.lineNumber,
+      offset: anchor.viewportOffset,
+      ...(anchor.side === undefined ? {} : { side: anchor.side }),
+      type: "line",
+    });
+    return;
+  }
+  handle.scrollTo({
+    align: "start",
+    behavior: "instant",
+    id: nextId,
+    // Never transfer a deleted file's internal scroll depth to a neighboring
+    // file. A surviving/renamed item may retain its item-level viewport inset.
+    offset: isIdentityMigration ? anchor.viewportOffset : 0,
+    type: "item",
+  });
+}
+
+export function deletedAnchorFallbackId(
+  anchorId: string,
+  previousIds: readonly string[],
+  nextIds: ReadonlySet<string>
+): string | null {
+  const anchorIndex = previousIds.indexOf(anchorId);
+  if (anchorIndex < 0) {
+    return null;
+  }
+  for (let index = anchorIndex + 1; index < previousIds.length; index += 1) {
+    const id = previousIds[index];
+    if (id !== undefined && nextIds.has(id)) {
+      return id;
+    }
+  }
+  for (let index = anchorIndex - 1; index >= 0; index -= 1) {
+    const id = previousIds[index];
+    if (id !== undefined && nextIds.has(id)) {
+      return id;
+    }
+  }
+  return null;
 }
 
 function instanceAlreadyMatches(
@@ -196,36 +380,6 @@ function instanceAlreadyMatches(
     }
   }
   return nextItems.length > 0;
-}
-
-function isSameIdOrder(
-  previous: readonly CodeViewItem<PierHunkAnnotationMetadata>[],
-  next: readonly CodeViewItem<PierHunkAnnotationMetadata>[]
-): boolean {
-  if (previous.length !== next.length) {
-    return false;
-  }
-  for (let index = 0; index < previous.length; index += 1) {
-    if (previous[index]?.id !== next[index]?.id) {
-      return false;
-    }
-  }
-  return true;
-}
-
-function isStrictIdPrefix(
-  previous: readonly CodeViewItem<PierHunkAnnotationMetadata>[],
-  next: readonly CodeViewItem<PierHunkAnnotationMetadata>[]
-): boolean {
-  if (next.length <= previous.length) {
-    return false;
-  }
-  for (let index = 0; index < previous.length; index += 1) {
-    if (previous[index]?.id !== next[index]?.id) {
-      return false;
-    }
-  }
-  return true;
 }
 
 function applyContentUpdates(

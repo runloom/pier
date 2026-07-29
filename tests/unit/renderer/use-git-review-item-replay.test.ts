@@ -22,7 +22,13 @@ function diffHandle(
     getScrollTop: () => null,
     getSelectedLines: () => null,
     getSelectedText: () => "",
+    getViewportLayoutKey: () => "layout:stable",
     isItemVisible: () => true,
+    isViewportReady: () => true,
+    requestViewportLayoutSettled: (_targetItemId, _stableFrames, callback) => {
+      queueMicrotask(callback);
+      return () => undefined;
+    },
     restoreAnchor: () => true,
     scrollToItem: () => true,
     selectAll: () => false,
@@ -32,8 +38,12 @@ function diffHandle(
   };
 }
 
-function renderReplayHook(updateItems: PierDiffViewHandle["updateItems"]) {
+function renderReplayHook(
+  updateItems: PierDiffViewHandle["updateItems"],
+  enabled = true
+) {
   const handle = diffHandle(updateItems);
+  const enabledRef = { current: enabled };
   const committedProjectionGenerationRef = { current: 1 };
   const diffHandleRef = { current: handle as PierDiffViewHandle | null };
   const documentGenerationRef = { current: 1 };
@@ -43,6 +53,7 @@ function renderReplayHook(updateItems: PierDiffViewHandle["updateItems"]) {
       committedProjectionGenerationRef,
       diffHandleRef,
       documentGenerationRef,
+      enabledRef,
       latestItemUpdatesRef: { current: latestItemUpdatesRef },
     })
   );
@@ -50,6 +61,7 @@ function renderReplayHook(updateItems: PierDiffViewHandle["updateItems"]) {
     committedProjectionGenerationRef,
     diffHandleRef,
     documentGenerationRef,
+    enabledRef,
     handle,
     hook,
   };
@@ -61,7 +73,32 @@ afterEach(() => {
 });
 
 describe("useGitReviewItemReplay", () => {
-  it("同帧 apply 延后到 rAF；Pierre 拒绝后下一帧重试", async () => {
+  it("非活动阅读面只记录最新正文，激活后一次回放", () => {
+    const updateItems = vi
+      .fn<PierDiffViewHandle["updateItems"]>()
+      .mockReturnValue(true);
+    const { enabledRef, handle, hook } = renderReplayHook(updateItems, false);
+    const first = item("a.ts", 1);
+
+    act(() => {
+      hook.result.current.recordLatestItemUpdates([first]);
+      expect(
+        hook.result.current.applyItemUpdates(handle, 1, [first], {
+          flush: true,
+        })
+      ).toBe(true);
+    });
+    expect(updateItems).not.toHaveBeenCalled();
+
+    enabledRef.current = true;
+    act(() => {
+      expect(hook.result.current.replayLatestItemUpdates(handle, 1)).toBe(true);
+    });
+    expect(updateItems).toHaveBeenCalledOnce();
+    expect(updateItems.mock.calls[0]?.[0]).toEqual([first]);
+  });
+
+  it("同帧 apply 延后到 rAF；Pierre 拒绝后不跨帧自动补写", async () => {
     vi.useFakeTimers();
     const updateItems = vi
       .fn<PierDiffViewHandle["updateItems"]>()
@@ -79,15 +116,18 @@ describe("useGitReviewItemReplay", () => {
     });
     expect(updateItems).toHaveBeenCalledTimes(0);
 
-    // coalesce rAF → 首次 apply 拒绝 → 再排 retry rAF
+    // coalesce rAF → 首次 apply 拒绝；后续帧不得再提交第二个可见状态。
     await act(() => vi.advanceTimersByTimeAsync(20));
     expect(updateItems).toHaveBeenCalledTimes(1);
     expect(updateItems.mock.calls[0]?.[1]).toEqual({ preserveAnchor: false });
+    expect(hook.result.current.replayFailure).not.toBeNull();
 
     await act(() => vi.advanceTimersByTimeAsync(20));
+    expect(updateItems).toHaveBeenCalledTimes(1);
+
+    act(() => hook.result.current.retryLatestItemUpdates());
     expect(updateItems).toHaveBeenCalledTimes(2);
     expect(updateItems.mock.calls[1]?.[0]).toEqual([first]);
-    expect(updateItems.mock.calls[1]?.[1]).toEqual({ preserveAnchor: false });
     expect(hook.result.current.replayFailure).toBeNull();
   });
 
@@ -109,6 +149,27 @@ describe("useGitReviewItemReplay", () => {
     expect(updateItems).toHaveBeenCalledTimes(1);
     expect(updateItems.mock.calls[0]?.[0]).toEqual([first]);
     expect(updateItems.mock.calls[0]?.[1]).toEqual({ preserveAnchor: false });
+  });
+
+  it("导航保护期把 preserveAnchor 透传给同帧正文提交", () => {
+    const updateItems = vi
+      .fn<PierDiffViewHandle["updateItems"]>()
+      .mockReturnValue(true);
+    const { handle, hook } = renderReplayHook(updateItems);
+    const first = item("a.ts", 1);
+
+    act(() => {
+      hook.result.current.recordLatestItemUpdates([first]);
+      expect(
+        hook.result.current.applyItemUpdates(handle, 1, [first], {
+          flush: true,
+          preserveAnchor: true,
+        })
+      ).toBe(true);
+    });
+    expect(updateItems).toHaveBeenCalledWith([first], {
+      preserveAnchor: true,
+    });
   });
 
   it("flushPendingItemUpdates 冲刷挂起 coalesce 后不再 rAF 二次 apply", async () => {
@@ -160,12 +221,10 @@ describe("useGitReviewItemReplay", () => {
     );
   });
 
-  it("A 到达重试上限后收到 B，合并 latest A+B 再提交", async () => {
+  it("A 被拒绝后收到 B，合并 latest A+B 在下一次请求内提交", async () => {
     vi.useFakeTimers();
     const updateItems = vi
       .fn<PierDiffViewHandle["updateItems"]>()
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(false)
       .mockReturnValueOnce(false)
       .mockReturnValue(true);
     const { handle, hook } = renderReplayHook(updateItems);
@@ -176,9 +235,8 @@ describe("useGitReviewItemReplay", () => {
       hook.result.current.recordLatestItemUpdates([first]);
       hook.result.current.applyItemUpdates(handle, 1, [first]);
     });
-    // coalesce + 3 次拒绝
-    await act(() => vi.advanceTimersByTimeAsync(80));
-    expect(updateItems).toHaveBeenCalledTimes(3);
+    await act(() => vi.advanceTimersByTimeAsync(20));
+    expect(updateItems).toHaveBeenCalledTimes(1);
     expect(hook.result.current.replayFailure).not.toBeNull();
 
     act(() => {
@@ -187,9 +245,9 @@ describe("useGitReviewItemReplay", () => {
         true
       );
     });
-    expect(updateItems).toHaveBeenCalledTimes(3);
+    expect(updateItems).toHaveBeenCalledTimes(1);
     await act(() => vi.advanceTimersByTimeAsync(20));
-    expect(updateItems.mock.calls[3]?.[0]).toEqual([first, second]);
+    expect(updateItems.mock.calls[1]?.[0]).toEqual([first, second]);
     expect(hook.result.current.replayFailure).toBeNull();
   });
 
@@ -208,9 +266,9 @@ describe("useGitReviewItemReplay", () => {
       hook.result.current.applyItemUpdates(handle, 1, [first]);
       hook.result.current.replayLatestItemUpdates(handle, 1);
     });
-    await act(() => vi.advanceTimersByTimeAsync(40));
+    await act(() => vi.advanceTimersByTimeAsync(20));
 
-    expect(updateItems.mock.calls.length).toBeGreaterThanOrEqual(2);
+    expect(updateItems).toHaveBeenCalledTimes(2);
     expect(updateItems.mock.calls.at(-1)?.[0]).toEqual([first, second]);
   });
 

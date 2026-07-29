@@ -1,115 +1,47 @@
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import { type Ref, type RefObject, useImperativeHandle, useMemo } from "react";
+import type {
+  DiffViewCollapsedItemState,
+  DiffViewRenderItemIdentity,
+  PierDiffViewAnchor,
+  PierDiffViewHandle,
+  PierDiffViewLineSelection,
+  PierDiffViewUpdateOptions,
+} from "./diff-view-handle-types.ts";
 import type { PierHunkAnnotationMetadata } from "./diff-view-hunk-actions.tsx";
-import { acceptDiffViewItem } from "./diff-view-item-sync.ts";
-import type { PierDiffCodeViewItem } from "./diff-view-items.ts";
 import {
-  type ParsedItemCacheEntry,
-  type PierDiffViewItem,
-  toCodeViewItem,
+  captureDiffViewItemAnchor,
+  captureDiffViewTopAnchor,
+} from "./diff-view-item-anchor.ts";
+import { applyCodeViewItemsAnchored } from "./diff-view-item-sync.ts";
+import type {
+  ParsedItemCacheEntry,
+  PierDiffCodeViewItem,
+  PierDiffViewItem,
 } from "./diff-view-items.ts";
+import { toCodeViewItem } from "./diff-view-items.ts";
 import { isRenderedItemVisible } from "./diff-view-render-watchdog.ts";
+import {
+  type DiffViewScrollOptions,
+  resolveCodeViewScrollElement,
+} from "./diff-view-scroll-behavior.ts";
 import {
   fullSelectionRangeForCodeViewItem,
   selectedLinesTextFromCodeViewItem,
 } from "./diff-view-selection-text.ts";
+import { waitForStableViewportLayout } from "./diff-view-viewport-layout.ts";
 
+const INSTANT_SCROLL_LAYOUT_PASSES = 2;
+
+export type {
+  DiffViewCollapsedItemState,
+  DiffViewRenderItemIdentity,
+  PierDiffViewAnchor,
+  PierDiffViewHandle,
+  PierDiffViewLineSelection,
+  PierDiffViewUpdateOptions,
+} from "./diff-view-handle-types.ts";
 export { acceptDiffViewItem } from "./diff-view-item-sync.ts";
-
-export interface PierDiffViewAnchor {
-  readonly id: string;
-  readonly offset: number;
-}
-
-export interface PierDiffViewLineSelection {
-  readonly id: string;
-  readonly range: {
-    readonly end: number;
-    readonly endSide?: "additions" | "deletions";
-    readonly side?: "additions" | "deletions";
-    readonly start: number;
-  };
-}
-
-export interface PierDiffViewHandle {
-  captureTopAnchor(): PierDiffViewAnchor | null;
-  /** 当前 CodeView 容器 raw scrollTop；无容器时 null。 */
-  getScrollTop(): number | null;
-  /**
-   * Pierre 行选区（item id + range）；无选区时 null。
-   * 供 partial stage 映射到 hunk index。
-   */
-  getSelectedLines(): PierDiffViewLineSelection | null;
-  /** Pierre 行选区文本；无选区时返回空串。 */
-  getSelectedText(): string;
-  isItemVisible(id: string, cacheKey?: string): boolean;
-  restoreAnchor(anchor: PierDiffViewAnchor): boolean;
-  /**
-   * 定位到 item。behavior 缺省对齐 DiffsHub：
-   * 新建/刚展开 → instant；已在场 → smooth。
-   * 调用方可强制 `instant` | `smooth`。
-   *
-   * 注意：不可用 getTopForItem 硬写 scrollTop「纠正」——估高错误时 top 与
-   * scrollTo 同源，会把错误落点钉死（表现为首次点树偏、再点才准）。
-   */
-  scrollToItem(
-    id: string,
-    options?: { readonly behavior?: "instant" | "smooth" }
-  ): boolean;
-  /** 全选当前（或最近）diff/file item 的全部行。 */
-  selectAll(): boolean;
-  /** 折叠/展开当前拓扑内的全部 diff item。 */
-  setAllCollapsed(collapsed: boolean): void;
-  /** 写回 raw scrollTop（菜单 Freeze 用；禁止用 item scrollTo 代替）。 */
-  setScrollTop(scrollTop: number): boolean;
-  updateItems(
-    items: readonly PierDiffViewItem[],
-    options?: PierDiffViewUpdateOptions
-  ): boolean;
-}
-
-export interface PierDiffViewUpdateOptions {
-  /**
-   * 显式 true 时在 updateItems 后做一次 item 级 restore。
-   * 默认 false：正文高度变化交给 Pierre CodeView 内置行级 scroll anchoring
-   *（getScrollAnchor → resolveAnchoredScrollTop），外层勿钉 raw scrollTop。
-   */
-  readonly preserveAnchor?: boolean;
-}
-
-/**
- * CodeView 真实滚动节点可能是 getContainerElement，也可能是带 overflow 的祖先/自身。
- * 取 scrollHeight 明显大于 clientHeight 且 scrollTop 可写的那个。
- */
-function resolveCodeViewScrollElement(
-  start: HTMLElement | null | undefined
-): HTMLElement | null {
-  if (!start) {
-    return null;
-  }
-  let best: HTMLElement | null = null;
-  let bestSlack = 0;
-  let node: HTMLElement | null = start;
-  for (let depth = 0; node && depth < 6; depth += 1) {
-    const slack = node.scrollHeight - node.clientHeight;
-    if (slack > bestSlack) {
-      best = node;
-      bestSlack = slack;
-    }
-    node = node.parentElement;
-  }
-  return best ?? start;
-}
-
-export interface DiffViewCollapsedItemState {
-  readonly collapsed: boolean;
-  readonly revision: number;
-}
-
-export type DiffViewRenderItemIdentity = Pick<
-  ParsedItemCacheEntry,
-  "cacheKey" | "version"
->;
 
 interface UseDiffViewHandleOptions {
   readonly appliedItemsRef: RefObject<{
@@ -228,30 +160,28 @@ function createDiffViewHandle({
     resolveCodeViewScrollElement(
       codeViewRef.current?.getInstance()?.getContainerElement()
     );
-  const captureTopAnchor = (): PierDiffViewAnchor | null => {
+  const getViewportLayoutKey = (targetItemId?: string): string | null => {
     const viewer = codeViewRef.current?.getInstance();
-    const container = viewer?.getContainerElement();
-    const rendered = viewer?.getRenderedItems() ?? [];
-    if (!(viewer && container && rendered.length > 0)) {
+    const container = resolveScrollContainer();
+    if (!(viewer && container)) {
       return null;
     }
-    const scrollTop = container.scrollTop;
-    let candidate = rendered[0];
-    for (const item of rendered) {
-      const top = viewer.getLocalTopForInstance(item.instance);
-      if (top > scrollTop) {
-        break;
-      }
-      candidate = item;
+    const target =
+      targetItemId === undefined
+        ? undefined
+        : viewer
+            .getRenderedItems()
+            .find((rendered) => rendered.id === targetItemId);
+    let targetTop: number | "none" | "unrendered" = "none";
+    if (targetItemId !== undefined) {
+      targetTop = target
+        ? viewer.getLocalTopForInstance(target.instance)
+        : "unrendered";
     }
-    if (!candidate) {
-      return null;
-    }
-    return {
-      id: candidate.id,
-      offset: viewer.getLocalTopForInstance(candidate.instance) - scrollTop,
-    };
+    return `${container.clientWidth}:${container.clientHeight}:${container.scrollHeight}:${targetTop}`;
   };
+  const captureTopAnchor = (): PierDiffViewAnchor | null =>
+    captureDiffViewTopAnchor(codeViewRef.current?.getInstance());
   const restoreAnchor = (anchor: PierDiffViewAnchor): boolean => {
     const viewer = codeViewRef.current;
     if (!viewer?.getItem(anchor.id)) {
@@ -267,12 +197,49 @@ function createDiffViewHandle({
     return true;
   };
   return {
+    captureItemAnchor: (id) =>
+      captureDiffViewItemAnchor(codeViewRef.current?.getInstance(), id),
     captureTopAnchor(): PierDiffViewAnchor | null {
       return captureTopAnchor();
+    },
+    getRenderedItemHeights(): ReadonlyMap<string, number> {
+      const rendered =
+        codeViewRef.current?.getInstance()?.getRenderedItems() ?? [];
+      return new Map(
+        rendered
+          .map(
+            (item) =>
+              [item.id, item.element.getBoundingClientRect().height] as const
+          )
+          .filter((entry) => Number.isFinite(entry[1]) && entry[1] > 0)
+      );
     },
     getScrollTop(): number | null {
       const container = resolveScrollContainer();
       return container ? container.scrollTop : null;
+    },
+    getViewportLayoutKey(targetItemId?: string): string | null {
+      return getViewportLayoutKey(targetItemId);
+    },
+    isViewportReady(): boolean {
+      const container = resolveScrollContainer();
+      return Boolean(
+        container?.isConnected &&
+          container.clientWidth > 0 &&
+          container.clientHeight > 0 &&
+          container.checkVisibility({ visibilityProperty: true })
+      );
+    },
+    requestViewportLayoutSettled(
+      targetItemId: string,
+      stableFrames: number,
+      callback: () => void
+    ): () => void {
+      return waitForStableViewportLayout(
+        () => getViewportLayoutKey(targetItemId),
+        stableFrames,
+        callback
+      );
     },
     getSelectedLines(): PierDiffViewLineSelection | null {
       const selection = codeViewRef.current?.getSelectedLines();
@@ -343,16 +310,13 @@ function createDiffViewHandle({
       container.scrollTop = scrollTop;
       return true;
     },
-    scrollToItem(
-      id: string,
-      options?: { readonly behavior?: "instant" | "smooth" }
-    ): boolean {
+    scrollToItem(id: string, options?: DiffViewScrollOptions): boolean {
       const viewer = codeViewRef.current;
       const item = viewer?.getItem(id);
       if (!(viewer && item)) {
         return false;
       }
-      // 显式 behavior 优先（树导航主路径恒传 smooth）。
+      // 显式 behavior 优先（树导航主路径恒传 instant）。
       // 未指定时：新建/刚展开 instant，已在场 smooth（与 DiffsHub 默认一致）。
       const wasCollapsed = item.collapsed === true;
       const firstLayout =
@@ -368,8 +332,19 @@ function createDiffViewHandle({
         align: "start",
         behavior,
         id,
+        ...(options?.offset === undefined ? {} : { offset: options.offset }),
         type: "item",
       });
+      if (behavior === "instant") {
+        // Distant virtual items expand their rendered line window during the
+        // first CodeView pass. Flush that same semantic scroll before paint so
+        // users never see the estimate-sized target followed by its measured
+        // geometry one frame later.
+        const instance = viewer.getInstance();
+        for (let pass = 0; pass < INSTANT_SCROLL_LAYOUT_PASSES; pass += 1) {
+          instance?.render(true);
+        }
+      }
       firstLayoutItemIdsRef.current.delete(id);
       return true;
     },
@@ -426,19 +401,20 @@ function createDiffViewHandle({
       if (!handle) {
         return false;
       }
-      // 默认 false：Pierre updateItem 内置行级 scroll anchoring。
-      // 仅显式 preserveAnchor:true 时做 item 级 restore（identity 迁移等兜底）。
-      const anchor =
-        options?.preserveAnchor === true ? captureTopAnchor() : null;
-      let allAccepted = true;
-      let changed = false;
+      const nextItemList = [...parsedItemListRef.current];
+      const acceptedEntries: {
+        readonly input: PierDiffViewItem;
+        readonly item: PierDiffCodeViewItem;
+        readonly itemIndex: number;
+        readonly parsedItem: ParsedItemCacheEntry;
+        readonly error: Error | null;
+      }[] = [];
       for (const input of items) {
         const itemIndex = parsedItemIndexesRef.current.get(input.id);
         if (itemIndex === undefined) {
-          // 拓扑换代 / Pierre 尚未接受新 initialItems 时，latest-map 可能短暂
-          // 含有未知 id。跳过并返回 false，让上层下一帧重试，绝不能 throw 拖垮整树。
-          allAccepted = false;
-          continue;
+          // 稀疏更新必须全有或全无。未知 id 表示调用方持有旧拓扑，不能先提交
+          // 其余已知项再跨帧补写，否则同一次暂存会产生两个可见正文状态。
+          return false;
         }
         const previous = parsedItemsRef.current.get(input.id);
         if (previous?.cacheKey === input.cacheKey) {
@@ -461,28 +437,44 @@ function createDiffViewHandle({
               collapsed.revision,
           };
         }
-        if (!acceptDiffViewItem(handle, item)) {
-          allAccepted = false;
-          continue;
-        }
-        parsedItemsRef.current.set(input.id, parsedItem.entry);
-        parsedItemListRef.current[itemIndex] = item;
-        renderItemIdentitiesRef.current.set(input.id, {
-          cacheKey: input.cacheKey,
-          version: item.version ?? 0,
+        nextItemList[itemIndex] = item;
+        acceptedEntries.push({
+          error: parsedItem.error,
+          input,
+          item,
+          itemIndex,
+          parsedItem: parsedItem.entry,
         });
-        appliedItemsRef.current?.items.set(input.id, item);
-        if (parsedItem.error) {
-          itemErrorIdsRef.current.add(input.id);
-        } else {
-          itemErrorIdsRef.current.delete(input.id);
-        }
-        onItemErrorRef.current?.(input.id, parsedItem.error);
-        expectItemRender(input.id, item.version);
-        changed = true;
       }
-      if (!changed) {
-        return allAccepted;
+      if (acceptedEntries.length === 0) {
+        return true;
+      }
+      const anchor =
+        options?.preserveAnchor === true ? captureTopAnchor() : null;
+      const result = applyCodeViewItemsAnchored(
+        handle,
+        nextItemList,
+        parsedItemListRef.current,
+        { flushLayout: anchor !== null }
+      );
+      if (!result.accepted) {
+        return false;
+      }
+      for (const entry of acceptedEntries) {
+        parsedItemsRef.current.set(entry.input.id, entry.parsedItem);
+        parsedItemListRef.current[entry.itemIndex] = entry.item;
+        renderItemIdentitiesRef.current.set(entry.input.id, {
+          cacheKey: entry.input.cacheKey,
+          version: entry.item.version ?? 0,
+        });
+        appliedItemsRef.current?.items.set(entry.input.id, entry.item);
+        if (entry.error) {
+          itemErrorIdsRef.current.add(entry.input.id);
+        } else {
+          itemErrorIdsRef.current.delete(entry.input.id);
+        }
+        onItemErrorRef.current?.(entry.input.id, entry.error);
+        expectItemRender(entry.input.id, entry.item.version);
       }
       bumpItemEpoch();
       if (anchor) {
@@ -490,7 +482,7 @@ function createDiffViewHandle({
       }
       auditVisibleItems();
       scheduleRenderWindowReport();
-      return allAccepted;
+      return true;
     },
   };
 }

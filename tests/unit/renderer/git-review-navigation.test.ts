@@ -3,36 +3,10 @@ import {
   findReviewNavigationTarget,
   isReviewNavigationContentReady,
   isReviewNavigationTerminal,
-  NAVIGATION_MAX_RESCROLL_ATTEMPTS,
   resolveReviewSectionKey,
-  scheduleReviewNavigationVerification,
-  shouldScrollReviewNavigation,
 } from "@plugins/builtin/git/renderer/git-review-navigation.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-
-function frameHarness(): {
-  flushFrame(): void;
-} {
-  const frames: FrameRequestCallback[] = [];
-  vi.spyOn(globalThis, "requestAnimationFrame").mockImplementation(
-    (callback) => {
-      frames.push(callback);
-      return frames.length;
-    }
-  );
-  vi.spyOn(globalThis, "cancelAnimationFrame").mockImplementation(
-    () => undefined
-  );
-  return {
-    flushFrame() {
-      const pending = [...frames];
-      frames.length = 0;
-      for (const frame of pending) {
-        frame(0);
-      }
-    },
-  };
-}
+import { patchDocument, stateDocument } from "./git-review-document-fixture.ts";
 
 afterEach(() => vi.restoreAllMocks());
 
@@ -42,20 +16,12 @@ describe("Review navigation verification", () => {
       retainedEntryKeys: ["entry:binary"],
       resources: [
         {
-          document: {
-            kind: "ok",
+          document: stateDocument({
+            entryKey: "entry:binary",
+            path: "src/binary.dat",
+            reason: "binary",
             revision: "document:binary",
-            sections: [
-              {
-                kind: "state",
-                oldPath: null,
-                reason: "binary",
-                sectionKey: "state:binary",
-                status: "modified",
-                targetPath: "src/binary.dat",
-              },
-            ],
-          },
+          }),
           entry: {
             entryKey: "entry:binary",
             oldPaths: [],
@@ -76,7 +42,7 @@ describe("Review navigation verification", () => {
       ],
       settled: true,
     } satisfies GitReviewDocumentLoaderSnapshot;
-    const cacheKey = '["document:binary","state:binary","en"]';
+    const cacheKey = '["document:binary","entry:binary","en"]';
 
     expect(
       findReviewNavigationTarget(
@@ -128,17 +94,11 @@ describe("Review navigation verification", () => {
       status: "modified" as const,
     };
     const loaded = {
-      document: {
-        kind: "ok" as const,
+      document: patchDocument({
+        entryKey: entry.entryKey,
+        patch: "diff",
         revision: "r",
-        sections: [
-          {
-            kind: "patch" as const,
-            patch: "diff",
-            sectionKey: "section:staged",
-          },
-        ],
-      },
+      }),
       entry,
       kind: "loaded" as const,
     };
@@ -164,24 +124,13 @@ describe("Review navigation verification", () => {
     ).toBe(false);
   });
 
-  it("findReviewNavigationTarget prefers explicit sectionKey over first section", () => {
+  it("findReviewNavigationTarget resolves the requested staged/unstaged section", () => {
     const resource = {
-      document: {
-        kind: "ok" as const,
+      document: patchDocument({
+        entryKey: "entry:a",
+        patch: "u",
         revision: "document:a",
-        sections: [
-          {
-            kind: "patch" as const,
-            patch: "u",
-            sectionKey: "section:u",
-          },
-          {
-            kind: "patch" as const,
-            patch: "s",
-            sectionKey: "section:s",
-          },
-        ],
-      },
+      }),
       entry: {
         entryKey: "entry:a",
         oldPaths: [],
@@ -216,154 +165,14 @@ describe("Review navigation verification", () => {
     });
     expect(
       findReviewNavigationTarget(resource, cacheKeys, "section:s")
-    ).toEqual({
-      cacheKey: "cache:s",
-      sectionId: "section:s",
-    });
-  });
-
-  it("locks product default maxRescrollAttempts at 0", () => {
-    expect(NAVIGATION_MAX_RESCROLL_ATTEMPTS).toBe(0);
-  });
-
-  it("默认不重发 scrollTo，仅观测可见性直至进入视口", () => {
-    const frames = frameHarness();
-    const onVisible = vi.fn();
-    const scrollToItem = vi.fn(() => true);
-    const isVisible = vi.fn().mockReturnValueOnce(false).mockReturnValue(true);
-
-    // 主路径 scrollTo 由调用方触发一次；verify 默认 maxRescroll=0
-    scheduleReviewNavigationVerification({
-      getSectionId: () => "section:1999",
-      isCurrent: () => true,
-      isTerminal: () => false,
-      isVisible,
-      onTerminal: vi.fn(),
-      onTimeout: vi.fn(),
-      onVisible,
-      scrollToItem,
-    });
-    frames.flushFrame();
-    frames.flushFrame();
-    expect(scrollToItem).not.toHaveBeenCalled();
-    expect(onVisible).not.toHaveBeenCalled();
-
-    frames.flushFrame();
-    frames.flushFrame();
-    expect(scrollToItem).not.toHaveBeenCalled();
-    expect(onVisible).toHaveBeenCalledOnce();
-  });
-
-  it("显式 maxRescroll 时才有界重发定位", () => {
-    const frames = frameHarness();
-    const onTimeout = vi.fn();
-    const onVisible = vi.fn();
-    const scrollToItem = vi.fn(() => true);
-    let checks = 0;
-    const isVisible = vi.fn(() => {
-      checks += 1;
-      return checks > 3;
-    });
-
-    scheduleReviewNavigationVerification({
-      getSectionId: () => "section:2000",
-      isCurrent: () => true,
-      isTerminal: () => false,
-      isVisible,
-      maxRescrollAttempts: 2,
-      onTerminal: vi.fn(),
-      onTimeout,
-      onVisible,
-      scrollToItem,
-    });
-    for (let frame = 0; frame < 20; frame += 1) {
-      frames.flushFrame();
-    }
-
-    expect(scrollToItem.mock.calls.length).toBeLessThanOrEqual(2);
-    expect(onVisible).toHaveBeenCalledOnce();
-    expect(onTimeout).not.toHaveBeenCalled();
-  });
-
-  it("超过截止时间后停止重试并交给 UI 反馈", () => {
-    const frames = frameHarness();
-    vi.spyOn(performance, "now").mockReturnValueOnce(0).mockReturnValue(5000);
-    const onTimeout = vi.fn();
-
-    scheduleReviewNavigationVerification({
-      getSectionId: () => "section:1",
-      isCurrent: () => true,
-      isTerminal: () => false,
-      isVisible: () => false,
-      onTerminal: vi.fn(),
-      onTimeout,
-      onVisible: vi.fn(),
-      scrollToItem: vi.fn(() => true),
-    });
-    frames.flushFrame();
-    frames.flushFrame();
-
-    expect(onTimeout).toHaveBeenCalledOnce();
+    ).toEqual({ cacheKey: "cache:s", sectionId: "section:s" });
+    expect(
+      findReviewNavigationTarget(resource, cacheKeys, "section:orphan")
+    ).toBeNull();
   });
 });
 
 describe("Review navigation content readiness", () => {
-  it("scrolls when ledger has estimate or loaded cacheKey (stable-ledger)", () => {
-    expect(
-      shouldScrollReviewNavigation({
-        projectedCacheKey: "git-review-placeholder:section:1",
-        resource: {
-          entry: {
-            entryKey: "entry:1",
-            oldPaths: [],
-            path: "a.ts",
-            renderSlots: [],
-            status: "modified",
-          },
-          kind: "loading",
-          operationId: "op-1",
-        },
-      })
-    ).toBe(false);
-    // estimate 账本可滚（不要求 body loaded）
-    expect(
-      shouldScrollReviewNavigation({
-        projectedCacheKey: "estimate:section:1",
-        resource: {
-          entry: {
-            entryKey: "entry:1",
-            oldPaths: [],
-            path: "a.ts",
-            renderSlots: [],
-            status: "modified",
-          },
-          kind: "loading",
-          operationId: "op-1",
-        },
-      })
-    ).toBe(true);
-    expect(
-      shouldScrollReviewNavigation({
-        projectedCacheKey: "document:1:section:1",
-        resource: {
-          document: {
-            kind: "ok",
-            revision: "r1",
-            sections: [],
-          },
-          entry: {
-            entryKey: "entry:1",
-            oldPaths: [],
-            path: "a.ts",
-            renderSlots: [],
-            status: "modified",
-          },
-          kind: "loaded",
-        },
-      })
-    ).toBe(true);
-  });
-
   it("treats only loaded/error documents as navigation-ready content", () => {
     expect(isReviewNavigationContentReady(undefined)).toBe(false);
     expect(
@@ -380,10 +189,11 @@ describe("Review navigation content readiness", () => {
     ).toBe(false);
     expect(
       isReviewNavigationContentReady({
-        document: {
+        document: patchDocument({
+          entryKey: "entry:1",
+          patch: "diff",
           revision: "r1",
-          sections: [],
-        },
+        }),
         entry: {
           entryKey: "entry:1",
           oldPaths: [],

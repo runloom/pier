@@ -25,16 +25,10 @@ import type {
   GitStatus,
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
-import type {
-  GitReviewCancelRequest,
-  GitReviewFileDocumentRequest,
-  GitReviewFileDocumentResult,
-  GitReviewIndexRequest,
-  GitReviewIndexResult,
-} from "@shared/contracts/git-review.ts";
 import { gitWatchLeaseSchema } from "@shared/contracts/git-watch.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
+import { gitReviewApi, type PierGitReviewAPI } from "./git-review-api.ts";
 import { invokePierCommand } from "./ipc-envelope.ts";
 
 // 注意:branch 单独增删(createBranch/deleteBranch)仍保留在 main 命令表,
@@ -90,14 +84,14 @@ export interface GitStashOptionsValue {
   message?: string;
 }
 
-export interface PierGitAPI {
+export interface PierGitAPI extends PierGitReviewAPI {
   abortCherryPick: (cwd: string) => Promise<GitSequencerAbortResult>;
   abortMerge: (cwd: string) => Promise<GitMergeAbortResult>;
   abortRebase: (cwd: string) => Promise<GitRebaseAbortResult>;
   abortRevert: (cwd: string) => Promise<GitSequencerAbortResult>;
   /**
-   * Codex review apply-patch: `git apply` with target/revert.
-   * Client extracts single-file or single-hunk unified patch first.
+   * Low-level generic `git apply` bridge retained for non-review workflows.
+   * Git Review must use applyReviewMutation so patch selection stays in main.
    */
   applyPatch: (
     cwd: string,
@@ -109,8 +103,6 @@ export interface PierGitAPI {
     }
   ) => Promise<GitApplyPatchResult>;
   applyStash: (cwd: string, index?: number) => Promise<GitStashApplyResult>;
-
-  cancelReviewRequest: (request: GitReviewCancelRequest) => Promise<void>;
   checkoutBranch: (cwd: string, name: string) => Promise<boolean>;
   cherryPick: (cwd: string, oid: string) => Promise<GitSequencerResult>;
   commit: (cwd: string, options: GitCommitOptionsValue) => Promise<boolean>;
@@ -138,12 +130,6 @@ export interface PierGitAPI {
   ) => Promise<string>;
   getLog: (cwd: string, options?: GitLogOptionsValue) => Promise<GitCommit[]>;
   getRepoInfo: (cwd: string) => Promise<GitRepoInfo>;
-  getReviewFileDocument: (
-    request: GitReviewFileDocumentRequest
-  ) => Promise<GitReviewFileDocumentResult>;
-  getReviewIndex: (
-    request: GitReviewIndexRequest
-  ) => Promise<GitReviewIndexResult>;
   getStatus: (cwd: string) => Promise<GitStatus>;
   isWorkingTreeClean: (cwd: string) => Promise<boolean>;
   listBranches: (
@@ -188,27 +174,13 @@ export interface PierGitAPI {
 }
 
 export const gitApi: PierGitAPI = {
-  cancelReviewRequest: (request) =>
-    invokePierCommand<void>({
-      request,
-      type: "git.cancelReviewRequest",
-    }),
+  ...gitReviewApi,
   getStatus: (cwd) =>
     invokePierCommand<GitStatus>({ cwd, type: "git.getStatus" }),
   listIgnored: (cwd) =>
     invokePierCommand<string[]>({ cwd, type: "git.listIgnored" }),
   getRepoInfo: (cwd) =>
     invokePierCommand<GitRepoInfo>({ cwd, type: "git.getRepoInfo" }),
-  getReviewIndex: (request) =>
-    invokePierCommand<GitReviewIndexResult>({
-      request,
-      type: "git.getReviewIndex",
-    }),
-  getReviewFileDocument: (request) =>
-    invokePierCommand<GitReviewFileDocumentResult>({
-      request,
-      type: "git.getReviewFileDocument",
-    }),
   isWorkingTreeClean: (cwd) =>
     invokePierCommand<boolean>({ cwd, type: "git.isWorkingTreeClean" }),
   getDiffText: (cwd, options) =>

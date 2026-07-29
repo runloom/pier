@@ -1,11 +1,7 @@
 import type { GitReviewDocumentResource } from "./git-review-document-resource.ts";
 
-const NAVIGATION_TIMEOUT_MS = 4000;
-/** full-alignment：生产主路径禁止多轮 scrollTo（默认 0）。 */
-export const NAVIGATION_MAX_RESCROLL_ATTEMPTS = 0;
-const NAVIGATION_MAX_ATTEMPTS = 120;
-
 export interface PendingReviewNavigation {
+  readonly anchorOffset?: number;
   readonly entryKey: string;
   readonly generation: number;
   readonly sectionKey: string;
@@ -14,6 +10,15 @@ export interface PendingReviewNavigation {
 interface ReviewNavigationTarget {
   readonly cacheKey: string;
   readonly sectionId: string;
+}
+
+function entryHasReviewSection(
+  resource: GitReviewDocumentResource,
+  sectionKey: string
+): boolean {
+  return resource.entry.renderSlots.some(
+    (slot) => slot.sectionKey === sectionKey
+  );
 }
 
 export function reviewNavigationKey(
@@ -71,15 +76,11 @@ export function isReviewPlaceholderCacheKey(
   );
 }
 
-/**
- * 允许 scroll：投影已有非历史-placeholder 的 cacheKey（含 estimate）。
- * resource 参数保留兼容；不再要求 loaded。
- */
-export function shouldScrollReviewNavigation(options: {
-  readonly projectedCacheKey: string | undefined;
-  readonly resource?: GitReviewDocumentResource | undefined;
-}): boolean {
-  return !isReviewPlaceholderCacheKey(options.projectedCacheKey);
+/** estimate 是稳定账本成员，但不代表真实正文已经提交给 CodeView。 */
+export function isReviewEstimateCacheKey(
+  cacheKey: string | undefined
+): boolean {
+  return cacheKey?.startsWith("estimate:") === true;
 }
 
 export function findReviewNavigationTarget(
@@ -90,47 +91,15 @@ export function findReviewNavigationTarget(
   if (!isReviewNavigationContentReady(resource)) {
     return null;
   }
-  if (sectionKey !== undefined) {
-    if (resource.kind === "loaded") {
-      if (
-        !resource.document.sections.some(
-          (candidate) => candidate.sectionKey === sectionKey
-        )
-      ) {
-        return null;
-      }
-    } else if (
-      !resource.entry.renderSlots.some((slot) => slot.sectionKey === sectionKey)
-    ) {
-      return null;
-    }
-    const cacheKey = projectedCacheKeys.get(sectionKey);
-    return cacheKey === undefined || isReviewPlaceholderCacheKey(cacheKey)
-      ? null
-      : { cacheKey, sectionId: sectionKey };
-  }
-  if (resource.kind === "loaded") {
-    const section = resource.document.sections.find((candidate) =>
-      projectedCacheKeys.has(candidate.sectionKey)
-    );
-    if (!section) {
-      return null;
-    }
-    const cacheKey = projectedCacheKeys.get(section.sectionKey);
-    return cacheKey === undefined || isReviewPlaceholderCacheKey(cacheKey)
-      ? null
-      : { cacheKey, sectionId: section.sectionKey };
-  }
-  const slot = resource.entry.renderSlots.find((candidate) =>
-    projectedCacheKeys.has(candidate.sectionKey)
-  );
-  if (!slot) {
+  const sectionId =
+    sectionKey ?? resource.entry.renderSlots[0]?.sectionKey ?? null;
+  if (sectionId === null || !entryHasReviewSection(resource, sectionId)) {
     return null;
   }
-  const cacheKey = projectedCacheKeys.get(slot.sectionKey);
+  const cacheKey = projectedCacheKeys.get(sectionId);
   return cacheKey === undefined || isReviewPlaceholderCacheKey(cacheKey)
     ? null
-    : { cacheKey, sectionId: slot.sectionKey };
+    : { cacheKey, sectionId };
 }
 
 export function isReviewNavigationTerminal(
@@ -149,98 +118,9 @@ export function isReviewNavigationTerminal(
     resource !== undefined &&
     resource.kind !== "loading" &&
     resource.kind !== "cancelling" &&
-    !resource.entry.renderSlots.some((slot) => slot.sectionKey === sectionKey)
+    !entryHasReviewSection(resource, sectionKey)
   ) {
     return true;
   }
   return false;
-}
-
-interface ReviewNavigationVerificationOptions {
-  readonly getSectionId: () => string | undefined;
-  readonly isCurrent: () => boolean;
-  readonly isTerminal: () => boolean;
-  readonly isVisible: (sectionId: string) => boolean;
-  /** 默认 0：只观察可见性，不重发 scrollTo（DiffsHub 对齐）。 */
-  readonly maxRescrollAttempts?: number;
-  readonly onTerminal: () => void;
-  readonly onTimeout: () => void;
-  readonly onVisible: () => void;
-  readonly scrollToItem: (sectionId: string) => boolean;
-}
-
-/**
- * 观察 scrollTo 是否落定。主路径 scrollTo 只应在调用方触发一次；
- * 默认 maxRescrollAttempts=0，双 rAF 仅用于 isVisible 观测。
- */
-export function scheduleReviewNavigationVerification({
-  getSectionId,
-  isCurrent,
-  isTerminal,
-  isVisible,
-  onTerminal,
-  onTimeout,
-  onVisible,
-  scrollToItem,
-  maxRescrollAttempts = NAVIGATION_MAX_RESCROLL_ATTEMPTS,
-}: ReviewNavigationVerificationOptions): () => void {
-  const deadline = performance.now() + NAVIGATION_TIMEOUT_MS;
-  let attempts = 0;
-  let cancelled = false;
-  let firstFrame: number | null = null;
-  let secondFrame: number | null = null;
-
-  const cancel = (): void => {
-    cancelled = true;
-    if (firstFrame !== null) {
-      cancelAnimationFrame(firstFrame);
-    }
-    if (secondFrame !== null) {
-      cancelAnimationFrame(secondFrame);
-    }
-    firstFrame = null;
-    secondFrame = null;
-  };
-
-  const schedule = (): void => {
-    firstFrame = requestAnimationFrame(() => {
-      firstFrame = null;
-      secondFrame = requestAnimationFrame(() => {
-        secondFrame = null;
-        if (cancelled || !isCurrent()) {
-          return;
-        }
-        const sectionId = getSectionId();
-        if (sectionId && isVisible(sectionId)) {
-          onVisible();
-          return;
-        }
-        if (isTerminal()) {
-          onTerminal();
-          return;
-        }
-        if (performance.now() >= deadline) {
-          onTimeout();
-          return;
-        }
-        if (attempts >= NAVIGATION_MAX_ATTEMPTS) {
-          onTimeout();
-          return;
-        }
-        attempts += 1;
-        // 主路径 maxRescroll=0：只 poll 可见性。显式放开时才有界补偿 scrollTo。
-        if (
-          maxRescrollAttempts > 0 &&
-          attempts <= maxRescrollAttempts &&
-          sectionId
-        ) {
-          scrollToItem(sectionId);
-        }
-        schedule();
-      });
-    });
-  };
-
-  schedule();
-  return cancel;
 }

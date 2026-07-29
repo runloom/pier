@@ -7,7 +7,11 @@ import type { GitReviewRangeBounds } from "./git-review-index-range.ts";
 
 export const GIT_REVIEW_PATCH_MAX_BYTES = 8 * 1024 * 1024;
 
-export type GitReviewRenderableGroup = "committed" | "staged" | "unstaged";
+export type GitReviewRenderableGroup =
+  | "committed"
+  | "staged"
+  | "unstaged"
+  | "working";
 
 export type GitReviewPatchStateReason =
   | "binary"

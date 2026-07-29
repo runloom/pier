@@ -21,7 +21,25 @@ export interface PierDiffViewStageControl {
   readonly busy?: boolean;
   /** Unstaged modified/deleted may offer discard (restore). */
   readonly canDiscard?: boolean;
-  readonly state: "staged" | "unstaged";
+  /** 精确标识触发等待态的按钮；busy 可仅表示全局禁用。 */
+  readonly pendingAction?: "discard" | "stage" | "unstage";
+  readonly state: "partial" | "staged" | "unstaged";
+  /** 视图稳定 id 与 Git 语义 sectionKey 不同时使用。 */
+  readonly targetSectionKey?: string;
+}
+
+/** Per-change Git state; hunk indexes are presentation coordinates only. */
+export interface PierDiffViewChangeControl {
+  readonly busy?: boolean;
+  readonly canRevert?: boolean;
+  readonly changeBlockIndex: number;
+  readonly changeKey: string;
+  readonly hunkIndex: number;
+  /** 精确标识触发等待态的按钮；busy 可仅表示全局禁用。 */
+  readonly pendingAction?: "revert" | "stage" | "unstage";
+  readonly state: "partial" | "staged" | "unstaged";
+  /** 视图稳定 id 与 Git 语义 sectionKey 不同时使用。 */
+  readonly targetSectionKey?: string;
 }
 
 /**
@@ -73,6 +91,7 @@ export function estimateLinesForFileStatus(
 
 export interface PierDiffViewItem {
   readonly cacheKey: string;
+  readonly changeControls?: readonly PierDiffViewChangeControl[];
   /** estimate 估高行数（可选覆盖默认）。 */
   readonly estimateLines?: number;
   readonly fileDisplay?: PierDiffViewFileDisplay;
@@ -154,7 +173,7 @@ export function toCodeViewItem(
     const version = (previous?.version ?? -1) + 1;
     const annotations =
       kind === "loaded"
-        ? buildHunkActionAnnotations(fileDiff, input.stageControl)
+        ? buildHunkActionAnnotations(fileDiff, input.changeControls)
         : undefined;
     const item: PierDiffCodeViewItem = {
       fileDiff,

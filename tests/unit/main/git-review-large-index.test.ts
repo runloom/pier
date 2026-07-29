@@ -89,7 +89,9 @@ describe("Git Review large index document probes", () => {
       });
       expect(document).toMatchObject({
         kind: "ok",
-        sections: [expect.objectContaining({ kind: "patch" })],
+        sections: expect.arrayContaining([
+          expect.objectContaining({ kind: "patch" }),
+        ]),
       });
       if (document.kind === "ok" && document.sections[0]?.kind === "patch") {
         expect(document.sections[0].patch).toContain(entry.path);

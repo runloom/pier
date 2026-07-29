@@ -3,66 +3,68 @@ import type {
   PierDiffViewItem,
   PierDiffViewRenderWindow,
 } from "@pier/ui/diff-view.tsx";
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type {
-  GitReviewFailure,
-  GitReviewIndexEntry,
-  GitReviewIndexOk,
-  GitReviewScope,
-} from "@shared/contracts/git-review.ts";
 import {
   memo,
   useCallback,
-  useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
-import { pluginText } from "./git-plugin-text.ts";
-import type { ReviewRenderFeedback } from "./git-review-code-view.tsx";
 import {
   prioritizeReviewNavigationDemand,
   type ReviewDocumentDemand,
 } from "./git-review-document-demand.ts";
 import type { GitReviewDocumentGeneration } from "./git-review-document-generation.ts";
 import type { GitReviewDocumentLoader } from "./git-review-document-loader.ts";
-import {
-  EMPTY_DOCUMENT_VIEW_STATE,
-  type PendingReviewAnchor,
-} from "./git-review-document-projection.ts";
+import { EMPTY_DOCUMENT_VIEW_STATE } from "./git-review-document-projection.ts";
+import { reviewTreeSectionKeyForSurface } from "./git-review-document-projection-index.ts";
 import {
   EMPTY_LOADER_SNAPSHOT,
   EMPTY_REVIEW_PROJECTION,
   useReviewAppearance,
   useReviewSelection,
-  useReviewViewOptions,
 } from "./git-review-document-ui-state.ts";
-import { GitReviewDocumentView } from "./git-review-document-view.tsx";
 import { useReviewFailureSummary } from "./git-review-failure-state.ts";
-import type { ReviewReadingSide } from "./git-review-reading-anchor.ts";
 import { createGitReviewReadingSession } from "./git-review-reading-session.ts";
-import { GitReviewToolbar } from "./git-review-toolbar.tsx";
-import type { gitReviewTreeModel } from "./git-review-tree.tsx";
+import { reviewGroupsForSurface } from "./git-review-surface-group.ts";
+import type { ReviewSurfaceProps } from "./git-review-surface-types.ts";
+import { GitReviewSurfaceView } from "./git-review-surface-view.tsx";
 import { useGitReviewDocumentDemand } from "./use-git-review-document-demand.ts";
 import { useGitReviewDocumentSession } from "./use-git-review-document-session.ts";
 import { useGitReviewGenerationCallbacks } from "./use-git-review-generation-callbacks.ts";
 import { useGitReviewItemReplay } from "./use-git-review-item-replay.ts";
 import { useGitReviewLocaleProjection } from "./use-git-review-locale-projection.ts";
+import { useGitReviewMutationCommit } from "./use-git-review-mutation-commit.ts";
 import { useGitReviewNavigation } from "./use-git-review-navigation.ts";
+import { useGitReviewNavigationError } from "./use-git-review-navigation-error.ts";
 import { useGitReviewProjectionCommit } from "./use-git-review-projection-commit.ts";
 import { useGitReviewReadingCallbacks } from "./use-git-review-reading-callbacks.ts";
 import { useGitReviewRetentionSync } from "./use-git-review-retention-sync.ts";
+import { useGitReviewSurfaceNavigationHandoff } from "./use-git-review-surface-navigation-handoff.ts";
 import { useGitReviewTreeOpen } from "./use-git-review-tree-open.ts";
 import { useGitReviewViewportEffects } from "./use-git-review-viewport-effects.ts";
 
-function ReviewDocumentsComponent({
+function ReviewSurfaceComponent({
+  active,
+  activeSurface,
   context,
+  diffBase,
   entries,
   headerLeading,
   indexGeneration,
   indexRefreshFailure,
   indexRefreshing = false,
+  mutationAuthorityBlocked,
+  navigationRequest,
+  onAcquireMutationAuthority,
+  onMutationCommitted,
+  onMutationTransition,
+  onNavigationMaterialized,
+  onSurfaceNavigationSettled,
+  onRequestTreeOpen,
   onRetryIndex,
+  onSelectSurface,
   panelId,
   scope,
   setSidebarCollapsed,
@@ -71,23 +73,31 @@ function ReviewDocumentsComponent({
   sidebarHeader,
   treeModel,
   warnings,
-}: {
-  readonly context: RendererPluginContext;
-  readonly entries: readonly GitReviewIndexEntry[];
-  readonly headerLeading?: React.ReactNode;
-  readonly indexGeneration: number;
-  readonly indexRefreshFailure: GitReviewFailure | null;
-  readonly indexRefreshing?: boolean;
-  readonly onRetryIndex: () => void;
-  readonly panelId: string;
-  readonly scope: GitReviewScope;
-  readonly setSidebarCollapsed: (collapsed: boolean) => void;
-  readonly sidebarCollapsed: boolean;
-  readonly sidebarFooter?: React.ReactNode;
-  readonly sidebarHeader?: React.ReactNode;
-  readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
-  readonly warnings: GitReviewIndexOk["warnings"];
-}): React.JSX.Element {
+}: ReviewSurfaceProps): React.JSX.Element {
+  const surfaceEntries = useMemo(
+    () =>
+      entries.filter((entry) =>
+        entry.renderSlots.some((slot) =>
+          reviewGroupsForSurface(diffBase).includes(slot.group)
+        )
+      ),
+    [diffBase, entries]
+  );
+  const freezeSourceMembership = active && mutationAuthorityBlocked;
+  const preparingNavigationTarget =
+    !active &&
+    navigationRequest !== null &&
+    navigationRequest.surface === diffBase;
+  const retainedSurfaceEntriesRef = useRef(surfaceEntries);
+  const refreshSurfaceMembership =
+    (active && !freezeSourceMembership) || preparingNavigationTarget;
+  if (refreshSurfaceMembership) {
+    retainedSurfaceEntriesRef.current = surfaceEntries;
+  }
+  const sessionEntries = refreshSurfaceMembership
+    ? surfaceEntries
+    : retainedSurfaceEntriesRef.current;
+  const renderUpdatesActive = active && !freezeSourceMembership;
   const appearance = useReviewAppearance(context, entries.length > 0);
   const documentControllerRef = useRef<GitReviewDocumentGeneration | null>(
     null
@@ -96,14 +106,12 @@ function ReviewDocumentsComponent({
   const documentGenerationRef = useRef(0);
   const diffHandleRef = useRef<PierDiffViewHandle | null>(null);
   const entryKeyBySectionIdRef = useRef<ReadonlyMap<string, string>>(new Map());
-  const sideBySectionIdRef = useRef(new Map<string, ReviewReadingSide>());
   const firstSectionIdByEntryKeyRef = useRef<ReadonlyMap<string, string>>(
     new Map()
   );
   const itemCacheKeysRef = useRef(new Map<string, string>());
   const itemIndexByIdRef = useRef<ReadonlyMap<string, number>>(new Map());
   const itemIdsRef = useRef<readonly string[]>([]);
-  const pendingAnchorRef = useRef<PendingReviewAnchor | null>(null);
   const latestItemUpdatesRef = useRef(new Map<string, PierDiffViewItem>());
   const previousSnapshotRef = useRef(EMPTY_LOADER_SNAPSHOT);
   const projectedLocaleRef = useRef(appearance.locale);
@@ -123,20 +131,28 @@ function ReviewDocumentsComponent({
   const [viewState, setViewState] = useState(EMPTY_DOCUMENT_VIEW_STATE);
   const [projection, setProjection] = useState(EMPTY_REVIEW_PROJECTION);
   const [projectionGeneration, setProjectionGeneration] = useState(0);
+  const handleMutationCommitted = useGitReviewMutationCommit(
+    onMutationCommitted,
+    onMutationTransition
+  );
 
-  const {
-    selectedEntryKey,
-    selectedSectionKey,
-    selectedTreeEntry,
-    setSelectedTreeTarget,
-  } = useReviewSelection(scope, treeModel);
+  const { selectedEntryKey, selectedSectionKey, setSelectedTreeTarget } =
+    useReviewSelection(scope, diffBase, treeModel);
+  const getSelectedTreeEntryKey = useCallback(
+    () => selectedEntryKey,
+    [selectedEntryKey]
+  );
+  const getSelectedTreeSectionKey = useCallback(
+    () => selectedSectionKey,
+    [selectedSectionKey]
+  );
   const {
     applyGenerationChanges: applyFailureChanges,
     resetGenerationFailures,
     summary: failureSummary,
     updateRenderItemError,
   } = useReviewFailureSummary({
-    entries,
+    entries: sessionEntries,
     entryKeyBySectionIdRef,
     selectedEntryKey,
   });
@@ -144,10 +160,7 @@ function ReviewDocumentsComponent({
     projectionLocaleRef.current = appearance.locale;
   }, [appearance.locale]);
   // 渲染层崩溃由 ReviewCodeView 自身以 Empty 呈现,这里无需再镜像状态。
-  const updateRenderFeedback = useCallback(
-    (_feedback: ReviewRenderFeedback | null) => undefined,
-    []
-  );
+  const updateRenderFeedback = useCallback(() => undefined, []);
   const { cancelRetentionSync, syncRetentionLimits } =
     useGitReviewRetentionSync({
       controllerRef: documentControllerRef,
@@ -186,8 +199,6 @@ function ReviewDocumentsComponent({
     onNavigationStarted,
     syncReadingPinnedPrefix,
   } = useGitReviewReadingCallbacks({
-    itemIdsRef,
-    pendingAnchorRef,
     readingSessionRef,
   });
   const {
@@ -202,8 +213,10 @@ function ReviewDocumentsComponent({
     navigationError,
     navigationEpoch,
     navigationPending,
+    notifyRenderWindowApplied,
     notifyProjectionChanged,
     resumeSelectedNavigation,
+    restoreSelectedNavigation,
     retryNavigation,
     tryPendingNavigation,
   } = useGitReviewNavigation({
@@ -219,33 +232,12 @@ function ReviewDocumentsComponent({
     initialSelectedEntryKey: selectedEntryKey,
     initialSelectedSectionKey: selectedSectionKey,
     loaderRef,
-    pendingAnchorRef,
     renderedGenerationRef,
   });
-  // 真正无法定位时 toast + Retry；已可见内容的超时在 hook 内静默。
-  useEffect(() => {
-    if (!navigationError) {
-      return;
-    }
-    context.notifications.error(
-      pluginText(
-        context,
-        "reviewNavigationFailed",
-        "Failed to navigate to file"
-      ),
-      {
-        action: {
-          label: pluginText(context, "reviewRetry", "Retry"),
-          onClick: () => {
-            retryNavigation();
-          },
-        },
-      }
-    );
-  }, [context, navigationError, retryNavigation]);
+  useGitReviewNavigationError(context, navigationError, retryNavigation);
   const requestRenderWindow = useGitReviewDocumentDemand({
     currentDemandRef,
-    entries,
+    entries: sessionEntries,
     entryKeyBySectionIdRef,
     getSelectedEntryKey,
     hasPendingNavigation,
@@ -255,6 +247,19 @@ function ReviewDocumentsComponent({
     seedEntryKeysRef,
     demandPrefetchEntryKeysRef,
   });
+  const activeRef = useRef(renderUpdatesActive);
+  const requestRenderWindowRef = useRef(requestRenderWindow);
+  activeRef.current = renderUpdatesActive;
+  requestRenderWindowRef.current = requestRenderWindow;
+  const handleRenderWindowChange = useCallback(
+    (window: PierDiffViewRenderWindow) => {
+      if (activeRef.current) {
+        requestRenderWindowRef.current(window);
+        notifyRenderWindowApplied(window);
+      }
+    },
+    [notifyRenderWindowApplied]
+  );
   const {
     applyItemUpdates,
     clearLatestItemUpdates,
@@ -267,6 +272,7 @@ function ReviewDocumentsComponent({
     committedProjectionGenerationRef,
     diffHandleRef,
     documentGenerationRef,
+    enabledRef: activeRef,
     latestItemUpdatesRef,
   });
   const generationCallbacksRef = useGitReviewGenerationCallbacks({
@@ -298,9 +304,10 @@ function ReviewDocumentsComponent({
     context,
     currentDemandRef,
     diffHandleRef,
+    diffBase,
     documentControllerRef,
     documentGenerationRef,
-    entries,
+    entries: sessionEntries,
     entryKeyBySectionIdRef,
     firstSectionIdByEntryKeyRef,
     generationCallbacksRef,
@@ -308,7 +315,6 @@ function ReviewDocumentsComponent({
     itemCacheKeysRef,
     itemIdsRef,
     loaderRef,
-    pendingAnchorRef,
     previousSnapshotRef,
     projectedLocaleRef,
     projectionLocaleRef,
@@ -320,14 +326,15 @@ function ReviewDocumentsComponent({
     setProjectionGeneration,
     setViewState,
     demandPrefetchEntryKeysRef,
-    sideBySectionIdRef,
     viewStateRef,
   });
   useGitReviewProjectionCommit({
+    active: renderUpdatesActive,
     committedProjectionGenerationRef,
     diffHandleRef,
+    diffBase,
     documentGenerationRef,
-    entries,
+    entries: sessionEntries,
     entryKeyBySectionIdRef,
     firstSectionIdByEntryKeyRef,
     itemCacheKeysRef,
@@ -344,7 +351,9 @@ function ReviewDocumentsComponent({
   useGitReviewLocaleProjection({
     context,
     controllerRef: documentControllerRef,
-    entries,
+    diffBase,
+    entries: sessionEntries,
+    indexGeneration,
     loaderRef,
     locale: appearance.locale,
     projectedLocaleRef,
@@ -353,6 +362,7 @@ function ReviewDocumentsComponent({
   });
 
   const { setDiffHandle } = useGitReviewViewportEffects({
+    active: renderUpdatesActive,
     cancelVerification,
     committedProjectionGenerationRef,
     context,
@@ -361,15 +371,13 @@ function ReviewDocumentsComponent({
     entryKeyBySectionIdRef,
     generationCallbacksRef,
     hasPendingNavigation,
-    itemIdsRef,
     navigationEpoch,
     navigationPending,
     panelId,
-    pendingAnchorRef,
     renderedGenerationRef,
     replayLatestItemUpdates,
     resumeSelectedNavigation,
-    sideBySectionIdRef,
+    restoreSelectedNavigation,
     viewState,
     viewStateRef,
   });
@@ -378,112 +386,105 @@ function ReviewDocumentsComponent({
     useGitReviewTreeOpen({
       beginNavigation,
       cancelVerification,
-      diffHandleRef,
-      getSelectedEntryKey,
-      getSelectedSectionKey,
+      getSelectedEntryKey: getSelectedTreeEntryKey,
+      getSelectedSectionKey: getSelectedTreeSectionKey,
+      onRequestOpen: (fileRef) => {
+        onRequestTreeOpen(fileRef.entryKey, fileRef.sectionKey, fileRef.group);
+      },
       setSelectedTreeTarget,
       treeModel,
     });
+  useGitReviewSurfaceNavigationHandoff({
+    active,
+    applyNavigationDemand,
+    beginNavigation,
+    diffBase,
+    hasPendingNavigation,
+    navigationPending,
+    navigationRequest,
+    onNavigationMaterialized,
+    onSurfaceNavigationSettled,
+    projection,
+    setSelectedTreeTarget,
+  });
   const retryFailure = useCallback(
     (entryKey: string) => {
       loaderRef.current?.retry(entryKey);
-      const sectionKey =
+      const retryEntry =
+        entries.find((entry) => entry.entryKey === entryKey) ??
+        sessionEntries.find((entry) => entry.entryKey === entryKey);
+      let treeSectionKey: string | null = null;
+      if (
         selectedSectionKey &&
         entryKeyBySectionIdRef.current.get(selectedSectionKey) === entryKey
-          ? selectedSectionKey
-          : firstSectionIdByEntryKeyRef.current.get(entryKey);
-      if (!sectionKey) {
+      ) {
+        treeSectionKey = selectedSectionKey;
+      } else if (retryEntry) {
+        treeSectionKey = reviewTreeSectionKeyForSurface(retryEntry, diffBase);
+      }
+      const itemId = firstSectionIdByEntryKeyRef.current.get(entryKey);
+      if (!(treeSectionKey && itemId)) {
         return;
       }
-      setSelectedTreeTarget({ entryKey, sectionKey });
+      setSelectedTreeTarget({ entryKey, sectionKey: treeSectionKey });
       // scroll 由 navigationPending layout 触发（子 apply 之后）
-      beginNavigation({ entryKey, sectionKey });
+      beginNavigation({ entryKey, sectionKey: itemId });
     },
-    [beginNavigation, selectedSectionKey, setSelectedTreeTarget]
-  );
-  const handleRenderItemError = useCallback(
-    (id: string, error: Error | null) => {
-      // 终态：仅 settled 后的 parse 错误进失败面，避免 materialize/stage 闪错。
-      updateRenderItemError(viewState.generation, id, error, viewState.settled);
-    },
-    [updateRenderItemError, viewState.generation, viewState.settled]
-  );
-  const { options: viewOptions, setOptions: setViewOptions } =
-    useReviewViewOptions();
-  const [allCollapsed, setAllCollapsed] = useState(false);
-  const onToggleCollapseAll = useCallback(() => {
-    setAllCollapsed((current) => {
-      const next = !current;
-      diffHandleRef.current?.setAllCollapsed(next);
-      return next;
-    });
-  }, []);
-  const toolbar = (
-    <GitReviewToolbar
-      allCollapsed={allCollapsed}
-      context={context}
-      onRefresh={onRetryIndex}
-      onToggleCollapseAll={onToggleCollapseAll}
-      refreshing={indexRefreshing}
-      setViewOptions={setViewOptions}
-      viewOptions={viewOptions}
-    />
+    [
+      beginNavigation,
+      diffBase,
+      entries,
+      selectedSectionKey,
+      setSelectedTreeTarget,
+      sessionEntries,
+    ]
   );
   return (
-    <GitReviewDocumentView
+    <GitReviewSurfaceView
+      active={active}
+      activeRef={activeRef}
+      activeSurface={activeSurface}
       appearance={appearance}
+      authoritativeEmpty={surfaceEntries.length === 0}
+      clearForUserIntent={clearForUserIntent}
       context={context}
-      contextId={scope.contextId}
-      diffRef={setDiffHandle}
-      {...(scope.target.kind === "uncommitted" ? { entries } : {})}
+      diffHandleRef={diffHandleRef}
+      entries={entries}
       failureSummary={failureSummary}
-      gitRootPath={scope.gitRootPath}
+      handleMutationCommitted={handleMutationCommitted}
+      handleRenderWindowChange={handleRenderWindowChange}
+      hasPendingNavigation={hasPendingNavigation}
       {...(headerLeading === undefined ? {} : { headerLeading })}
-      getSuppressMembershipScrollRestore={hasPendingNavigation}
-      headerTrailing={toolbar}
-      indexFailure={indexRefreshFailure}
+      indexRefreshFailure={indexRefreshFailure}
+      indexRefreshing={indexRefreshing}
       isActiveOpenPath={isActiveOpenPath}
+      mutationAuthorityBlocked={mutationAuthorityBlocked}
+      navigationPending={navigationPending}
+      noteUserScrollReading={noteUserScrollReading}
+      onAcquireMutationAuthority={onAcquireMutationAuthority}
       onContextMenuSession={onContextMenuSession}
-      onFeedbackChange={updateRenderFeedback}
-      onItemError={handleRenderItemError}
-      onOpenPath={openTreeNode}
-      onRenderWindowChange={requestRenderWindow}
-      onRetryFailure={retryFailure}
       onRetryIndex={onRetryIndex}
-      onScroll={() => {
-        // 用户滚动意图（已在 DiffView 手势级合并）；只做轻量工作
-        noteUserScrollReading();
-        clearForUserIntent();
-        // setSelectedTreeTarget(null) 内部对 entry/section 有 previous===next 短路
-        setSelectedTreeTarget(null);
-        if (pendingAnchorRef.current?.restored) {
-          pendingAnchorRef.current = null;
-        }
-      }}
-      presentation={{
-        diffStyle: viewOptions.diffStyle,
-        wrapLines: viewOptions.wrapLines,
-      }}
+      onSelectSurface={onSelectSurface}
+      openTreeNode={openTreeNode}
+      panelId={panelId}
       projection={projection}
-      // 渲染层崩溃(renderFeedback)由 ReviewCodeView 自身以 Empty 呈现;
-      // 这里只把「正文仍可见但最新更新被拒」的 replay 失败交给横条。
-      renderFeedback={
-        replayFailure
-          ? { error: replayFailure, retry: retryLatestItemUpdates }
-          : null
-      }
-      selectedTreePath={selectedTreeEntry?.path ?? null}
+      replayFailure={replayFailure}
+      retryFailure={retryFailure}
+      retryLatestItemUpdates={retryLatestItemUpdates}
+      scope={scope}
+      setDiffHandle={setDiffHandle}
+      setSelectedTreeTarget={setSelectedTreeTarget}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
-      suppressMembershipScrollRestore={navigationPending}
       {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
       {...(sidebarHeader === undefined ? {} : { sidebarHeader })}
-      sourcePanelId={panelId}
       treeModel={treeModel}
+      updateRenderFeedback={updateRenderFeedback}
+      updateRenderItemError={updateRenderItemError}
       viewState={viewState}
       warnings={warnings}
     />
   );
 }
 
-export const ReviewDocuments = memo(ReviewDocumentsComponent);
+export const ReviewSurface = memo(ReviewSurfaceComponent);

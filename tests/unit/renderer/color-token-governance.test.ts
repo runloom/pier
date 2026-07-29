@@ -12,6 +12,8 @@ const FIXED_TAILWIND_COLOR_VAR_RE =
   /--color-(?:amber|blue|cyan|emerald|fuchsia|gray|green|indigo|lime|neutral|orange|pink|purple|red|rose|sky|slate|stone|teal|violet|yellow|zinc)-\d{2,3}\b/;
 const SKIPPED_DIRECTORIES = new Set(["build", "dist", "node_modules", "out"]);
 const RAW_COLOR_WHOLE_FILE_OWNERS = new Set([
+  // Native data-URL fallback loads when the renderer/theme pipeline is unavailable.
+  "src/main/windows/renderer-recovery-page.ts",
   "src/renderer/app/globals.css",
   "src/plugins/api/components/agent-icons/glyphs.tsx",
   "src/renderer/lib/theme/derive-terminal-colors.ts",
@@ -25,6 +27,8 @@ const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
 ]);
 const COLOR_MIX_OWNERS = new Set([
   "packages/ui/src/diff-view-appearance.ts",
+  // Native data-URL fallback cannot consume renderer theme tokens.
+  "src/main/windows/renderer-recovery-page.ts",
   "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts",
   // Shared source-editor chrome (files + settings Rules/Skills); semantic token mixes only.
   "src/shared/source-editor/editor-theme.ts",

@@ -5,6 +5,7 @@ import {
   isActiveReviewResource,
   nextDemandPrefetchEntryKeys,
 } from "../../../src/plugins/builtin/git/renderer/git-review-materialization.ts";
+import { patchDocument } from "./git-review-document-fixture.ts";
 
 function entry(index: number): GitReviewIndexEntry {
   return {
@@ -30,11 +31,11 @@ function resource(
 ): GitReviewDocumentResource {
   if (kind === "loaded") {
     return {
-      document: {
-        kind: "ok",
+      document: patchDocument({
+        entryKey: `entry:${index}`,
+        patch: `diff --git a/src/file-${index}.ts b/src/file-${index}.ts\n`,
         revision: `document:${index}`,
-        sections: [],
-      },
+      }),
       entry: entry(index),
       kind,
     };

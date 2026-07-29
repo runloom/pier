@@ -34,7 +34,9 @@ describe("renderer-recovery-page", () => {
   });
 
   it("loads the recovery page as a data URL", async () => {
-    const loadURL = vi.fn(async () => undefined);
+    const loadURL = vi.fn<(url: string) => Promise<void>>(
+      async () => undefined
+    );
     await loadRendererRecoveryPage(
       { isDestroyed: () => false, loadURL },
       buildRendererRecoveryCopy({

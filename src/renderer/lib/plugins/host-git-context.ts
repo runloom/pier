@@ -12,6 +12,16 @@ export function createPluginGitContext(
   assertPluginCapability: AssertPluginCapability
 ): RendererPluginContext["git"] {
   return {
+    applyReviewPathMutation: (request) => {
+      assertPluginCapability(entry, "git:read");
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.applyReviewPathMutation(request);
+    },
+    applyReviewMutation: (request) => {
+      assertPluginCapability(entry, "git:read");
+      assertPluginCapability(entry, "git:write");
+      return window.pier.git.applyReviewMutation(request);
+    },
     abortCherryPick: (cwd) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.abortCherryPick(cwd);

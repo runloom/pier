@@ -8,6 +8,10 @@ import type {
   GitReviewIndexEntry,
 } from "@shared/contracts/git-review.ts";
 import {
+  GIT_REVIEW_PRESENTATION_GROUP_ORDER,
+  type GitReviewUncommittedGroup,
+} from "./git-review-surface-group.ts";
+import {
   type GitReviewTreeFileRef,
   makeReviewTreeNodeId,
 } from "./git-review-tree-section.ts";
@@ -19,27 +23,24 @@ export {
 } from "./git-review-tree-section.ts";
 
 /**
- * Tree + diff display order for uncommitted groups (VS Code SCM):
- * conflict → staged → unstaged. committed is commit/branch scope only.
- */
-const TREE_GROUP_ORDER = [
-  "conflict",
-  "staged",
-  "unstaged",
-  "committed",
-] as const satisfies readonly GitReviewGroup[];
-
-/**
  * Invisible sort key so pierre path sort keeps TREE_GROUP_ORDER even when the
- * visible basename is a localized label (e.g. 暂存的更改 before 更改 in zh).
+ * visible basename is a localized label (e.g. 已暂存更改 before 更改 in zh).
  * Basename for display is still the full string; control chars typically render empty.
  */
-const GROUP_SORT_PREFIX: Record<GitReviewGroup, string> = {
-  conflict: "\u0001",
-  staged: "\u0002",
-  unstaged: "\u0003",
-  committed: "\u0004",
-};
+const GROUP_SORT_PREFIX = Object.fromEntries(
+  GIT_REVIEW_PRESENTATION_GROUP_ORDER.map((group, index) => [
+    group,
+    String.fromCharCode(index + 1),
+  ])
+);
+
+function groupSortPrefix(group: GitReviewGroup): string {
+  const prefix = GROUP_SORT_PREFIX[group];
+  if (prefix === undefined) {
+    throw new Error(`Missing Git review tree sort prefix for ${group}`);
+  }
+  return prefix;
+}
 
 export interface GitReviewTreeGroupLabels {
   /** commit/branch scope only; falls back when omitted. */
@@ -65,7 +66,14 @@ export interface GitReviewTreeModel {
     unstaged: number;
     staged: number;
   };
+  groupLabels: GitReviewTreeGroupLabels;
   items: PierFileTreeItem[];
+  mutation: {
+    expectedIndexRevision: string | null;
+    uncommitted: boolean;
+  };
+  /** Ordered uncommitted group roots that are actually present in `items`. */
+  visibleGroups: readonly GitReviewUncommittedGroup[];
 }
 
 function treeStatus(status: GitReviewFileStatus): PierFileTreeGitStatus {
@@ -87,11 +95,15 @@ interface SlotRow {
 export function gitReviewTreeModel(
   entries: readonly GitReviewIndexEntry[],
   collidingFileLabel: (name: string) => string,
-  groupLabels: GitReviewTreeGroupLabels
+  groupLabels: GitReviewTreeGroupLabels,
+  mutation: GitReviewTreeModel["mutation"] = {
+    expectedIndexRevision: null,
+    uncommitted: false,
+  }
 ): GitReviewTreeModel {
   const entryByKey = new Map<string, GitReviewIndexEntry>();
   const slotsByGroup = new Map<GitReviewGroup, SlotRow[]>();
-  for (const group of TREE_GROUP_ORDER) {
+  for (const group of GIT_REVIEW_PRESENTATION_GROUP_ORDER) {
     slotsByGroup.set(group, []);
   }
 
@@ -116,32 +128,35 @@ export function gitReviewTreeModel(
   const fileRefByTreePath = new Map<string, GitReviewTreeFileRef>();
   const groupRootByGroup = new Map<GitReviewGroup, string>();
   const groupCounts = { conflict: 0, unstaged: 0, staged: 0 };
+  const visibleGroups: GitReviewUncommittedGroup[] = [];
 
-  for (const group of TREE_GROUP_ORDER) {
+  for (const group of GIT_REVIEW_PRESENTATION_GROUP_ORDER) {
     const rows = slotsByGroup.get(group) ?? [];
     if (rows.length === 0) {
       continue;
     }
     if (group === "conflict" || group === "unstaged" || group === "staged") {
       groupCounts[group] = rows.length;
+      visibleGroups.push(group);
     }
     // Visible name = last path segment. Prefix with an invisible sort key so
-    // localized labels (zh: 暂存的更改 vs 更改) cannot invert group order.
+    // localized labels (zh: 已暂存更改 vs 更改) cannot invert group order.
     const baseLabel = sanitizeTreeSegment(
       group === "committed"
         ? (groupLabels.committed ?? "Files")
         : groupLabels[group]
     );
-    let groupRoot = `${GROUP_SORT_PREFIX[group]}${baseLabel}`;
+    const sortPrefix = groupSortPrefix(group);
+    let groupRoot = `${sortPrefix}${baseLabel}`;
     if (
       items.has(groupRoot) ||
       [...groupRootByGroup.values()].includes(groupRoot)
     ) {
-      groupRoot = `${GROUP_SORT_PREFIX[group]}${baseLabel} (${group})`;
+      groupRoot = `${sortPrefix}${baseLabel} (${group})`;
     }
     groupRootByGroup.set(group, groupRoot);
     items.set(groupRoot, {
-      hasChildren: true,
+      hasChildren: rows.length > 0,
       kind: "directory",
       loadState: "loaded",
       path: groupRoot,
@@ -225,7 +240,7 @@ export function gitReviewTreeModel(
       return refs;
     },
     getGroupForTreePath: (path: string) => {
-      for (const group of TREE_GROUP_ORDER) {
+      for (const group of GIT_REVIEW_PRESENTATION_GROUP_ORDER) {
         const root = groupRootByGroup.get(group);
         if (root === undefined) {
           continue;
@@ -237,7 +252,10 @@ export function gitReviewTreeModel(
       return;
     },
     groupCounts,
+    groupLabels,
     items: [...items.values()],
+    mutation,
+    visibleGroups,
   };
 }
 

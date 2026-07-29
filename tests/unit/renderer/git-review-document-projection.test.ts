@@ -5,14 +5,22 @@ import type {
 } from "@shared/contracts/git-review.ts";
 import { describe, expect, it, vi } from "vitest";
 import {
+  estimateLinesForReviewSlot,
   indexReviewDocumentProjection,
   indexReviewEntrySections,
   indexReviewSectionEntries,
   isCodeViewMemberResource,
+  projectReviewDocumentResource,
   projectReviewDocuments,
   projectReviewLedger,
+  recordReviewRenderedHeightEstimates,
 } from "../../../src/plugins/builtin/git/renderer/git-review-document-projection.ts";
 import type { GitReviewDocumentResource } from "../../../src/plugins/builtin/git/renderer/git-review-document-resource.ts";
+import {
+  patchDocument,
+  patchDocumentForEntry,
+  stateDocument,
+} from "./git-review-document-fixture.ts";
 
 function entry(index: number): GitReviewIndexEntry {
   const path = `src/file-${index}.ts`;
@@ -35,17 +43,16 @@ function entry(index: number): GitReviewIndexEntry {
 
 function loaded(index: number): GitReviewDocumentResource {
   const item = entry(index);
-  const document: GitReviewFileDocumentOk = {
-    kind: "ok",
+  const slot = item.renderSlots[0];
+  if (slot === undefined) {
+    throw new Error("missing review slot");
+  }
+  const document: GitReviewFileDocumentOk = patchDocument({
+    entryKey: item.entryKey,
+    patch: `diff --git a/${item.path} b/${item.path}\n@@ -1 +1 @@\n-old\n+new\n`,
     revision: `document:${index}`,
-    sections: [
-      {
-        kind: "patch",
-        patch: `diff --git a/${item.path} b/${item.path}\n@@ -1 +1 @@\n-old\n+new\n`,
-        sectionKey: `section:${index}`,
-      },
-    ],
-  };
+    sectionKey: slot.sectionKey,
+  });
   return { document, entry: item, kind: "loaded" };
 }
 
@@ -60,6 +67,121 @@ function context(): RendererPluginContext {
 }
 
 describe("projectReviewLedger stable-ledger", () => {
+  it("reuses immutable loaded projection for the same document and entry semantics", () => {
+    const resource = loaded(2);
+    if (resource.kind !== "loaded") {
+      throw new Error("expected loaded resource");
+    }
+    const pluginContext = context();
+    const first = projectReviewDocumentResource(resource, pluginContext, "en");
+    const second = projectReviewDocumentResource(
+      { ...resource, entry: structuredClone(resource.entry) },
+      pluginContext,
+      "en"
+    );
+
+    expect(second).toBe(first);
+  });
+
+  it("projects Conflict, Index and Staged as isolated renderer surfaces", () => {
+    const item: GitReviewIndexEntry = {
+      entryKey: "entry:partial",
+      oldPaths: [],
+      path: "src/partial.ts",
+      renderSlots: [
+        {
+          group: "conflict",
+          oldPath: null,
+          sectionKey: "section:conflict",
+          status: "conflicted",
+          targetPath: "src/partial.ts",
+        },
+        {
+          group: "staged",
+          oldPath: null,
+          sectionKey: "section:staged",
+          status: "modified",
+          targetPath: "src/partial.ts",
+        },
+        {
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: "section:unstaged",
+          status: "modified",
+          targetPath: "src/partial.ts",
+        },
+      ],
+      status: "modified",
+    };
+    const patch =
+      "diff --git a/src/partial.ts b/src/partial.ts\n@@ -1 +1 @@\n-old\n+new\n";
+    const staged = patchDocument({
+      entryKey: item.entryKey,
+      patch,
+      sectionKey: "section:staged",
+      stageState: "staged",
+    }).sections[0];
+    const conflict = patchDocument({
+      entryKey: item.entryKey,
+      patch,
+      sectionKey: "section:conflict",
+      stageState: "partial",
+    }).sections[0];
+    const unstaged = patchDocument({
+      entryKey: item.entryKey,
+      patch,
+      sectionKey: "section:unstaged",
+      stageState: "unstaged",
+    }).sections[0];
+    const head = patchDocument({
+      entryKey: item.entryKey,
+      patch,
+      sectionKey: "section:head",
+      stageState: "partial",
+    }).sections[0];
+    if (!(conflict && staged && unstaged && head)) {
+      throw new Error("missing test sections");
+    }
+    const document: GitReviewFileDocumentOk = {
+      entryKey: item.entryKey,
+      kind: "ok",
+      revision: "revision:partial",
+      sections: [conflict, staged, unstaged, head],
+      surfaceSections: {
+        committed: null,
+        head: head.sectionKey,
+        index: unstaged.sectionKey,
+        staged: staged.sectionKey,
+      },
+    };
+    const resourceByEntryKey = new Map<string, GitReviewDocumentResource>([
+      [item.entryKey, { document, entry: item, kind: "loaded" }],
+    ]);
+    const rendererContext = context();
+    const project = (diffBase: "conflict" | "index" | "staged") =>
+      projectReviewLedger({
+        context: rendererContext,
+        diffBase,
+        entries: [item],
+        locale: "en",
+        resourceByEntryKey,
+      });
+
+    expect(project("conflict").items.map(({ id }) => id)).toEqual([
+      "section:conflict",
+    ]);
+    expect(project("index").items.map(({ id }) => id)).toEqual([
+      "section:unstaged",
+    ]);
+    expect(project("index").items[0]?.changeControls?.[0]).toMatchObject({
+      canRevert: true,
+      state: "unstaged",
+    });
+    expect(project("staged").items.map(({ id }) => id)).toEqual([
+      "section:staged",
+    ]);
+  });
+
   it("projects every index slot; idle/loading become estimate", () => {
     const entries = [entry(0), entry(1), entry(2), entry(3), entry(4)];
     const resourceByEntryKey = new Map<string, GitReviewDocumentResource>([
@@ -107,13 +229,107 @@ describe("projectReviewLedger stable-ledger", () => {
         (item) => !item.cacheKey.startsWith("git-review-placeholder:")
       )
     ).toBe(true);
-    expect([...projection.entryKeyBySectionId.keys()].sort()).toEqual([
-      "section:0",
-      "section:1",
-      "section:2",
-      "section:3",
-      "section:4",
+    expect(projection.entryKeyBySectionId.get("section:2")).toBe("entry:2");
+    expect(projection.revisionBySectionId.get("section:2")).toBe("document:2");
+  });
+
+  it("keeps controls visible and rejects writes until the retained document is authoritative", () => {
+    const item = entry(2);
+    const resource = loaded(2);
+    const pending = projectReviewLedger({
+      authoritativeEntryKeys: new Set(),
+      context: context(),
+      entries: [item],
+      locale: "en",
+      resourceByEntryKey: new Map([[item.entryKey, resource]]),
+    });
+    expect(pending.items[0]?.stageControl).toMatchObject({ busy: true });
+    expect(pending.items[0]?.changeControls?.[0]?.busy).toBeUndefined();
+    expect(pending.revisionBySectionId.has("section:2")).toBe(false);
+
+    const ready = projectReviewLedger({
+      authoritativeEntryKeys: new Set([item.entryKey]),
+      context: context(),
+      entries: [item],
+      locale: "en",
+      resourceByEntryKey: new Map([[item.entryKey, resource]]),
+    });
+    expect(ready.items[0]?.stageControl?.busy).toBeUndefined();
+    expect(ready.items[0]?.changeControls?.[0]?.busy).toBeUndefined();
+    expect(ready.revisionBySectionId.get("section:2")).toBe("document:2");
+  });
+
+  it("keeps capped loaded entries as the same estimated slot", () => {
+    const item = entry(2);
+    const projection = projectReviewLedger({
+      allowedBodyEntryKeys: new Set(),
+      context: context(),
+      entries: [item],
+      locale: "en",
+      measuredEstimateLinesByPath: new Map([[item.path, 37]]),
+      resourceByEntryKey: new Map([["entry:2", loaded(2)]]),
+    });
+
+    expect(projection.items).toMatchObject([
+      {
+        estimateLines: 37,
+        id: "section:2",
+        kind: "estimate",
+        patch: null,
+        stageControl: { busy: true, state: "unstaged" },
+      },
     ]);
+    expect(projection.items[0]?.changeControls).toBeUndefined();
+    expect(projection.revisionBySectionId.has("section:2")).toBe(false);
+  });
+
+  it("uses per-slot numstat before the status fallback", () => {
+    expect(
+      estimateLinesForReviewSlot({
+        additions: 12,
+        binary: false,
+        deletions: 7,
+        group: "unstaged",
+        oldPath: null,
+        sectionKey: "section:stats",
+        status: "modified",
+        targetPath: "stats.ts",
+      })
+    ).toBe(19);
+  });
+
+  it("records visible measured heights by stable repository path", () => {
+    const estimates = new Map<string, number>();
+    recordReviewRenderedHeightEstimates(
+      [entry(0)],
+      new Map([["section:0", 720]]),
+      estimates
+    );
+    expect(estimates.get("src/file-0.ts")).toBe(32);
+  });
+
+  it("records staged measured height through its section id", () => {
+    const estimates = new Map<string, number>();
+    const unstagedEntry = entry(0);
+    const stagedEntry: GitReviewIndexEntry = {
+      ...unstagedEntry,
+      renderSlots: [
+        {
+          group: "staged",
+          oldPath: null,
+          sectionKey: "staged:entry:0",
+          status: "modified",
+          targetPath: unstagedEntry.path,
+        },
+      ],
+    };
+    recordReviewRenderedHeightEstimates(
+      [stagedEntry],
+      new Map([["staged:entry:0", 540]]),
+      estimates,
+      "staged"
+    );
+    expect(estimates.get("src/file-0.ts")).toBe(24);
   });
 });
 
@@ -156,10 +372,7 @@ describe("projectReviewDocuments end-state membership (legacy subset)", () => {
         (item) => !item.cacheKey.startsWith("git-review-placeholder:")
       )
     ).toBe(true);
-    expect([...projection.entryKeyBySectionId.keys()]).toEqual([
-      "section:2",
-      "section:3",
-    ]);
+    expect(projection.entryKeyBySectionId.get("section:2")).toBe("entry:2");
   });
 
   it("classifies code-view membership", () => {
@@ -210,16 +423,21 @@ describe("projectReviewDocuments end-state membership (legacy subset)", () => {
         })),
         status: "modified",
       };
+      const firstSlot = partial.slots[0];
+      if (firstSlot === undefined) {
+        throw new Error("missing mixed review slot");
+      }
       return {
-        document: {
-          kind: "ok",
-          revision: `rev:${partial.entryKey}`,
-          sections: partial.slots.map((slot) => ({
-            kind: "patch" as const,
-            patch: `diff --git a/${partial.path} b/${partial.path}\n@@ -1 +1 @@\n-a\n+b\n`,
-            sectionKey: slot.sectionKey,
-          })),
-        },
+        document: partial.slots.some((slot) => slot.group === "conflict")
+          ? stateDocument({
+              entryKey: partial.entryKey,
+              path: partial.path,
+              reason: "conflict",
+              revision: `rev:${partial.entryKey}`,
+              sectionKey: firstSlot.sectionKey,
+              status: "conflicted",
+            })
+          : patchDocumentForEntry(item),
         entry: item,
         kind: "loaded",
       };
@@ -264,20 +482,18 @@ describe("projectReviewDocuments end-state membership (legacy subset)", () => {
       "sec:u:b",
       "sec:m:z",
     ]);
-    const stagedA = projection.items.find((item) => item.id === "sec:s:a");
-    const unstagedA = projection.items.find((item) => item.id === "sec:u:a");
-    expect(stagedA?.stageControl).toEqual({ state: "staged" });
-    expect(unstagedA?.stageControl).toEqual({
-      canDiscard: true,
+    expect(projection.items[0]?.stageControl).toBeUndefined();
+    expect(projection.items[1]?.stageControl).toEqual({ state: "staged" });
+    expect(projection.items[3]?.stageControl).toMatchObject({
       state: "unstaged",
     });
   });
 });
 
 describe("indexReviewEntrySections", () => {
-  it("indexes first section from full entries independent of projection", () => {
+  it("indexes the section owned by each reading surface", () => {
     const entries = [entry(0), entry(1), entry(2)];
-    expect([...indexReviewEntrySections(entries).entries()]).toEqual([
+    expect([...indexReviewEntrySections(entries, "index").entries()]).toEqual([
       ["entry:0", "section:0"],
       ["entry:1", "section:1"],
       ["entry:2", "section:2"],
@@ -300,11 +516,37 @@ describe("indexReviewEntrySections", () => {
 });
 
 describe("indexReviewSectionEntries", () => {
-  it("maps every section of the full index", () => {
-    const entries = [entry(0), entry(1)];
-    expect([...indexReviewSectionEntries(entries).entries()]).toEqual([
-      ["section:0", "entry:0"],
-      ["section:1", "entry:1"],
-    ]);
+  it("maps only sections owned by the requested reading surface", () => {
+    const mixedEntry: GitReviewIndexEntry = {
+      ...entry(0),
+      renderSlots: [
+        {
+          group: "conflict",
+          oldPath: null,
+          sectionKey: "conflict:0",
+          status: "conflicted",
+          targetPath: "src/file-0.ts",
+        },
+        {
+          group: "unstaged",
+          oldPath: null,
+          sectionKey: "unstaged:0",
+          status: "modified",
+          targetPath: "src/file-0.ts",
+        },
+      ],
+    };
+    expect([
+      ...indexReviewSectionEntries([mixedEntry], "conflict").entries(),
+    ]).toEqual([["conflict:0", "entry:0"]]);
+    expect([
+      ...indexReviewSectionEntries([mixedEntry], "index").entries(),
+    ]).toEqual([["unstaged:0", "entry:0"]]);
+    expect([
+      ...indexReviewSectionEntries([mixedEntry], "staged").entries(),
+    ]).toEqual([]);
+    expect([
+      ...indexReviewSectionEntries([entry(1)], "index").entries(),
+    ]).toEqual([["section:1", "entry:1"]]);
   });
 });

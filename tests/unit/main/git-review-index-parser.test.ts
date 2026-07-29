@@ -129,7 +129,7 @@ describe("Git review index byte protocol", () => {
     expect(parser.finish()).toMatchObject({ entries: { length: 4001 } });
   });
 
-  it("parses numstat plain/rename/binary records into a stable digest", () => {
+  it("parses numstat plain/rename/binary records into stable slot stats", () => {
     const parser = new GitReviewNumstatParser("staged");
     parser.push(Buffer.from("12\t3\tplain\tpath.ts"));
     parser.push(Buffer.from("4\t5\t"));
@@ -139,6 +139,29 @@ describe("Git review index byte protocol", () => {
 
     expect(parser.finish()).toMatchObject({
       digest: expect.stringMatching(/^sha256:/u),
+      stats: [
+        {
+          additions: 12,
+          binary: false,
+          deletions: 3,
+          oldPath: null,
+          targetPath: "plain\tpath.ts",
+        },
+        {
+          additions: 4,
+          binary: false,
+          deletions: 5,
+          oldPath: "old\npath.ts",
+          targetPath: "new\npath.ts",
+        },
+        {
+          additions: null,
+          binary: true,
+          deletions: null,
+          oldPath: null,
+          targetPath: "binary.dat",
+        },
+      ],
     });
   });
 

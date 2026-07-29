@@ -21,13 +21,12 @@ import type {
 } from "./git-review-document-generation.ts";
 import type { GitReviewDocumentLoader } from "./git-review-document-loader.ts";
 import type {
-  PendingReviewAnchor,
   ReviewDocumentProjection,
   ReviewDocumentViewState,
 } from "./git-review-document-projection.ts";
 import type { GitReviewDocumentLoaderSnapshot } from "./git-review-document-resource.ts";
-import type { ReviewReadingSide } from "./git-review-reading-anchor.ts";
 import type { ReviewReadingMode } from "./git-review-reading-session.ts";
+import type { GitReviewReadingSurface } from "./git-review-reading-surface.ts";
 import { mountGitReviewDocumentGeneration } from "./use-git-review-document-generation-effect.ts";
 
 // 与 content 中 generationCallbacksRef 形状对齐；回调实现保留在 content。
@@ -42,11 +41,15 @@ export interface GitReviewGenerationCallbacks {
     handle: PierDiffViewHandle,
     generation: number,
     items: readonly PierDiffViewItem[],
-    options?: { readonly flush?: boolean }
+    options?: {
+      readonly flush?: boolean;
+      readonly preserveAnchor?: boolean;
+    }
   ) => boolean;
   beginGeneration: (
     entryKeys: ReadonlySet<string>,
-    generation: number
+    generation: number,
+    options?: { readonly restoreSelection?: boolean }
   ) => string | null;
   beginReadingNavigating: (entryKey: string) => void;
   beginReadingRefresh: () => void;
@@ -58,7 +61,7 @@ export interface GitReviewGenerationCallbacks {
     handle: PierDiffViewHandle,
     generation: number
   ) => boolean;
-  getNavigationMemberReason: () => "tree" | "rebind" | null;
+  getNavigationMemberReason: () => "restore" | "tree" | null;
   getReadingMode: () => ReviewReadingMode;
   getSelectedEntryKey: () => string | null;
   getSelectedSectionKey: () => string | null;
@@ -86,6 +89,7 @@ export function useGitReviewDocumentSession(options: {
   readonly context: RendererPluginContext;
   readonly currentDemandRef: RefObject<ReviewDocumentDemand>;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
+  readonly diffBase: GitReviewReadingSurface;
   readonly documentControllerRef: RefObject<GitReviewDocumentGeneration | null>;
   readonly documentGenerationRef: RefObject<number>;
   readonly entries: readonly GitReviewIndexEntry[];
@@ -96,7 +100,6 @@ export function useGitReviewDocumentSession(options: {
   readonly itemCacheKeysRef: RefObject<Map<string, string>>;
   readonly itemIdsRef: RefObject<readonly string[]>;
   readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
-  readonly pendingAnchorRef: RefObject<PendingReviewAnchor | null>;
   readonly previousSnapshotRef: {
     current: GitReviewDocumentLoaderSnapshot;
   };
@@ -112,16 +115,14 @@ export function useGitReviewDocumentSession(options: {
   readonly demandPrefetchEntryKeysRef: {
     current: ReadonlySet<string>;
   };
-  /** sectionKey → reading side；P0 半暂存锚点用。 */
-  readonly sideBySectionIdRef: RefObject<Map<string, ReviewReadingSide>>;
   readonly viewStateRef: RefObject<ReviewDocumentViewState>;
 }): void {
-  const { context, entries, indexGeneration, scope } = options;
+  const { context, diffBase, entries, indexGeneration, scope } = options;
 
   // 代际 effect 只随 index/scope 重建；refs/setState 故意不进 deps。
   // biome-ignore lint/correctness/useExhaustiveDependencies: generation lifecycle is ref-driven
   useEffect(
     () => mountGitReviewDocumentGeneration(options),
-    [context, entries, indexGeneration, scope]
+    [context, diffBase, entries, indexGeneration, scope]
   );
 }

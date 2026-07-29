@@ -20,9 +20,14 @@ const source = {
 const normalizedSource = gitReviewFileSourceSchema.parse(source);
 
 const patch = "@@ -1 +1 @@\n-old\n+new\n";
-const sectionBase = {
-  sectionKey: "unstaged:src/index.ts",
-} as const;
+const changeBlock = {
+  changeBlockIndex: 0,
+  changeKey: `sha256:${"0".repeat(64)}`,
+  headRange: { count: 1, start: 1 },
+  hunkIndex: 0,
+  stageState: "unstaged" as const,
+  workingRange: { count: 1, start: 1 },
+};
 
 describe("Git review shared contract", () => {
   it("首批 source 不接受范围选择或其它预实现查询", () => {
@@ -152,9 +157,11 @@ describe("Git review shared contract", () => {
   it("公共 index 不回传 main 内部解析元数据", () => {
     const result = gitReviewIndexOkSchema.parse({
       entries: [],
+      indexRevision: "index:test",
       kind: "ok",
       warnings: [],
     });
+    expect(result.indexRevision).toBe("index:test");
     for (const internalField of ["gitRootPath", "query", "revision"] as const) {
       expect(
         gitReviewIndexOkSchema.safeParse({
@@ -168,26 +175,27 @@ describe("Git review shared contract", () => {
   it("keeps patch, conflict state, and unknown fields mutually exclusive", () => {
     expect(
       gitReviewFileSectionSchema.parse({
-        ...sectionBase,
+        changeBlocks: [changeBlock],
         kind: "patch",
         patch,
+        sectionKey: "section:unstaged",
       }).kind
     ).toBe("patch");
     expect(
       gitReviewFileSectionSchema.parse({
-        ...sectionBase,
         kind: "state",
         oldPath: null,
         reason: "conflict",
+        sectionKey: "section:conflict",
         status: "conflicted",
         targetPath: "src/app.ts",
       }).kind
     ).toBe("state");
     const validState = {
-      ...sectionBase,
       kind: "state" as const,
       oldPath: null,
       reason: "binary" as const,
+      sectionKey: "section:state",
       status: "modified" as const,
       targetPath: "src/app.ts",
     };
@@ -224,9 +232,10 @@ describe("Git review shared contract", () => {
     ).toBe(false);
     expect(
       gitReviewFileSectionSchema.safeParse({
-        ...sectionBase,
+        changeBlocks: [changeBlock],
         kind: "patch",
         patch,
+        sectionKey: "section:unstaged",
         sourceRevision: "internal",
       }).success
     ).toBe(false);
@@ -248,20 +257,30 @@ describe("Git review shared contract", () => {
         source,
       }).success
     ).toBe(false);
-    const patchSection = {
-      ...sectionBase,
+    const patchContent = {
+      changeBlocks: [changeBlock],
       kind: "patch",
       patch,
+      sectionKey: "section:unstaged",
     } as const;
     expect(
       gitReviewFileDocumentResultSchema.parse({
+        entryKey: "src/index.ts",
         kind: "ok",
         revision: "document-v1",
-        sections: [patchSection],
+        sections: [patchContent],
+        surfaceSections: {
+          committed: null,
+          head: null,
+          index: "section:unstaged",
+          staged: null,
+        },
       }).kind
     ).toBe("ok");
     expect(
       gitReviewFileDocumentResultSchema.safeParse({
+        content: { changeBlocks: [], kind: "patch", patch },
+        entryKey: "src/index.ts",
         kind: "ok",
         revision: "document-v1",
         sections: [],

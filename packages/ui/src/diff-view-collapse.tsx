@@ -32,6 +32,7 @@ export interface PierDiffViewLabels {
   readonly revertHunk?: string;
   readonly stageChanges: string;
   readonly stageHunk?: string;
+  readonly stageRemainingHunk?: string;
   readonly unstageChanges: string;
   readonly unstageHunk?: string;
 }

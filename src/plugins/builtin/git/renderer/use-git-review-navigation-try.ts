@@ -4,14 +4,11 @@ import type { GitReviewDocumentLoader } from "./git-review-document-loader.ts";
 import {
   isReviewNavigationTerminal,
   type PendingReviewNavigation,
-  reviewNavigationKey,
 } from "./git-review-navigation.ts";
 
-/** 树导航统一 smooth（对齐 DiffsHub ReviewUI）；任意远近同一行为、同一套耗时。 */
-export const TREE_NAV_SCROLL_BEHAVIOR = "smooth" as const;
-
+/** 树导航只提交一次定位意图；正文 ready 后同步定位，不做动画后纠正。 */
+export const TREE_NAV_SCROLL_BEHAVIOR = "instant" as const;
 export function tryGitReviewPendingNavigation(options: {
-  readonly activeNavigationKeyRef: RefObject<string | null>;
   readonly currentLoadedTarget: (
     navigation: PendingReviewNavigation
   ) => { readonly cacheKey: string; readonly sectionId: string } | null;
@@ -20,39 +17,40 @@ export function tryGitReviewPendingNavigation(options: {
   ) => { readonly cacheKey: string; readonly sectionId: string } | null;
   readonly diffHandleRef: RefObject<PierDiffViewHandle | null>;
   readonly finishTerminal: () => void;
+  readonly acknowledgedTargetWindowRevisionRef: RefObject<number>;
   readonly lastScrolledCacheKeyRef: RefObject<string | null>;
+  readonly lastScrolledLayoutKeyRef: RefObject<string | null>;
+  readonly lastScrolledProjectionRevisionRef: RefObject<number>;
   readonly lastScrolledSectionRef: RefObject<string | null>;
   readonly loaderRef: RefObject<GitReviewDocumentLoader | null>;
   readonly pendingNavigationRef: RefObject<PendingReviewNavigation | null>;
-  readonly schedulePrecisionCorrectives: (
-    navigation: PendingReviewNavigation,
-    sectionId: string
-  ) => void;
-  readonly scheduleScrollRetry: () => void;
-  readonly scrollRetryCountRef: RefObject<number>;
-  readonly verify: (navigation: PendingReviewNavigation) => void;
+  readonly projectionRevisionRef: RefObject<number>;
+  readonly requiredRenderWindowRevisionRef: RefObject<number>;
+  readonly scheduleVerification: () => void;
+  readonly viewportLayoutSettledRef: RefObject<boolean>;
 }): void {
   const {
-    activeNavigationKeyRef,
+    acknowledgedTargetWindowRevisionRef,
     currentLoadedTarget,
     currentScrollTarget,
     diffHandleRef,
     finishTerminal,
     lastScrolledCacheKeyRef,
+    lastScrolledLayoutKeyRef,
+    lastScrolledProjectionRevisionRef,
     lastScrolledSectionRef,
     loaderRef,
     pendingNavigationRef,
-    schedulePrecisionCorrectives,
-    scheduleScrollRetry,
-    scrollRetryCountRef,
-    verify,
+    projectionRevisionRef,
+    requiredRenderWindowRevisionRef,
+    scheduleVerification,
+    viewportLayoutSettledRef,
   } = options;
 
   const navigation = pendingNavigationRef.current;
   if (!navigation) {
     return;
   }
-  const navigationKey = reviewNavigationKey(navigation);
   const target = currentScrollTarget(navigation);
   if (!target) {
     const loader = loaderRef.current;
@@ -66,40 +64,70 @@ export function tryGitReviewPendingNavigation(options: {
       )
     ) {
       finishTerminal();
-    } else {
-      scheduleScrollRetry();
+    }
+    return;
+  }
+  // Dockview 会保留隐藏标签页中的 CodeView 实例，但其容器此时为 0×0。
+  // 必须等待真实布局恢复后再提交 scrollTo；否则 Pierre 会接受定位意图，
+  // 随后的可见布局却按旧虚拟窗口重排，造成“切回后选中项跳走”。
+  if (diffHandleRef.current?.isViewportReady() === false) {
+    scheduleVerification();
+    return;
+  }
+
+  const alreadyScrolledTarget =
+    lastScrolledSectionRef.current === target.sectionId &&
+    lastScrolledCacheKeyRef.current === target.cacheKey;
+
+  // 每个内容版本只提交一次定位。Pierre 会让 pendingScrollTarget 跟随
+  // 后续测量修正；每帧重复 scrollTo 反而会持续重置它的收敛过程。
+  if (alreadyScrolledTarget) {
+    const loadedTarget = currentLoadedTarget(navigation);
+    const targetVisible =
+      loadedTarget !== null &&
+      diffHandleRef.current?.isItemVisible(
+        loadedTarget.sectionId,
+        loadedTarget.cacheKey
+      ) === true;
+    if (targetVisible) {
+      const windowAcknowledged =
+        acknowledgedTargetWindowRevisionRef.current >=
+        requiredRenderWindowRevisionRef.current;
+      const loaderSettled = loaderRef.current?.isSettled() === true;
+      if (
+        windowAcknowledged &&
+        loaderSettled &&
+        viewportLayoutSettledRef.current
+      ) {
+        finishTerminal();
+        return;
+      }
     }
     return;
   }
 
-  const alreadyScrolledSection =
-    lastScrolledSectionRef.current === target.sectionId;
-
-  // 已发过主 smooth：不再因 cacheKey 变化 instant 重跳（正文展开不是定位失败）
-  // 顶部未贴准的纠正只交给 schedulePrecisionCorrectives（smooth 结束后）
-  if (alreadyScrolledSection) {
-    lastScrolledCacheKeyRef.current = target.cacheKey;
-    if (activeNavigationKeyRef.current !== navigationKey) {
-      verify(navigation);
-    }
-    return;
-  }
-
-  // 主路径：一律 1× smooth（远近一致）；中途不 instant
+  // 先记录意图再调用外部 handle：测试适配器和 Pierre 都可能在
+  // scrollTo 内同步回报 render window，必须避免重入时重复提交。
+  viewportLayoutSettledRef.current = false;
+  lastScrolledSectionRef.current = target.sectionId;
+  lastScrolledCacheKeyRef.current = target.cacheKey;
+  lastScrolledProjectionRevisionRef.current = projectionRevisionRef.current;
+  lastScrolledLayoutKeyRef.current =
+    diffHandleRef.current?.getViewportLayoutKey(target.sectionId) ?? null;
   const scrolled =
     diffHandleRef.current?.scrollToItem(target.sectionId, {
       behavior: TREE_NAV_SCROLL_BEHAVIOR,
+      ...(navigation.anchorOffset === undefined
+        ? {}
+        : { offset: navigation.anchorOffset }),
     }) === true;
   if (!scrolled) {
-    scheduleScrollRetry();
+    lastScrolledSectionRef.current = null;
+    lastScrolledCacheKeyRef.current = null;
+    lastScrolledProjectionRevisionRef.current = -1;
+    lastScrolledLayoutKeyRef.current = null;
     return;
   }
 
-  scrollRetryCountRef.current = 0;
-  lastScrolledSectionRef.current = target.sectionId;
-  lastScrolledCacheKeyRef.current = target.cacheKey;
-  schedulePrecisionCorrectives(navigation, target.sectionId);
-  if (activeNavigationKeyRef.current !== navigationKey) {
-    verify(navigation);
-  }
+  scheduleVerification();
 }

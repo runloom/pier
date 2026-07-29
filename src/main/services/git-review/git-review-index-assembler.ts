@@ -60,6 +60,7 @@ export function assembleGitReviewIndex({
   const merged = mergePrimaryEntries(primary, allGroups);
 
   const sortable: SortableEntry[] = [];
+  const statByGroupAndPath = indexStatsByGroupAndPath(statsByGroup);
   for (const mergedEntry of merged.values()) {
     const groups = GIT_REVIEW_GROUP_ORDER.filter(
       (group) => mergedEntry.groupFacts[group] !== undefined
@@ -96,7 +97,19 @@ export function assembleGitReviewIndex({
           );
         }
         const oldPath = group === "conflict" ? null : fact.oldPath;
+        const candidateStat = statByGroupAndPath[group]?.get(fact.targetPath);
+        const stat =
+          candidateStat !== undefined && candidateStat.oldPath === fact.oldPath
+            ? candidateStat
+            : undefined;
         return {
+          ...(stat === undefined
+            ? {}
+            : {
+                additions: stat.additions,
+                binary: stat.binary,
+                deletions: stat.deletions,
+              }),
           group,
           oldPath,
           sectionKey: createGitReviewSectionKey(
@@ -162,6 +175,39 @@ export function assembleGitReviewIndex({
     revision: createIndexRevision(primary, statsByGroup),
     warnings: Object.freeze(warnings),
   });
+}
+
+function indexStatsByGroupAndPath(
+  statsByGroup: Readonly<
+    Partial<Record<GitReviewGroup, GitReviewIndexStatParseResult>>
+  >
+): Partial<
+  Record<
+    GitReviewGroup,
+    ReadonlyMap<string, GitReviewIndexStatParseResult["stats"][number]>
+  >
+> {
+  const indexed: Partial<
+    Record<
+      GitReviewGroup,
+      ReadonlyMap<string, GitReviewIndexStatParseResult["stats"][number]>
+    >
+  > = {};
+  for (const group of GIT_REVIEW_GROUP_ORDER) {
+    const stats = statsByGroup[group];
+    if (stats === undefined) {
+      continue;
+    }
+    const byPath = new Map<
+      string,
+      GitReviewIndexStatParseResult["stats"][number]
+    >();
+    for (const stat of stats.stats) {
+      byPath.set(stat.targetPath, stat);
+    }
+    indexed[group] = byPath;
+  }
+  return indexed;
 }
 
 function mergePrimaryEntries(

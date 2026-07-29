@@ -11,6 +11,45 @@ afterEach(() => {
 });
 
 describe("process environment service", () => {
+  it("does not expose Pier's packaged esbuild binary to terminal shells", async () => {
+    const service = createProcessEnvironmentService({
+      baseEnv: {
+        ESBUILD_BINARY_PATH:
+          "/Applications/Pier.app/Contents/Resources/app.asar.unpacked/node_modules/@esbuild/darwin-arm64/bin/esbuild",
+        PATH: "/app/bin",
+      },
+      loadShellEnv: async () => ({
+        env: {},
+        status: "resolved",
+      }),
+      platform: "darwin",
+      shell: "/bin/zsh",
+    });
+
+    const result = await service.resolve({ source: "terminal" });
+
+    expect(result.env.ESBUILD_BINARY_PATH).toBeUndefined();
+  });
+
+  it("preserves an explicitly configured non-Pier esbuild binary", async () => {
+    const service = createProcessEnvironmentService({
+      baseEnv: {
+        ESBUILD_BINARY_PATH: "/custom/esbuild",
+        PATH: "/app/bin",
+      },
+      loadShellEnv: async () => ({
+        env: {},
+        status: "resolved",
+      }),
+      platform: "darwin",
+      shell: "/bin/zsh",
+    });
+
+    const result = await service.resolve({ source: "terminal" });
+
+    expect(result.env.ESBUILD_BINARY_PATH).toBe("/custom/esbuild");
+  });
+
   it("merges process, shell, CLI, profile and explicit env by precedence", async () => {
     const service = createProcessEnvironmentService({
       baseEnv: {

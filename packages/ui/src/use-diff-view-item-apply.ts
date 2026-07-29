@@ -1,27 +1,13 @@
 import type { CodeViewHandle } from "@pierre/diffs/react";
-import {
-  type RefObject,
-  useEffect,
-  useLayoutEffect,
-  useRef,
-  useState,
-} from "react";
+import { type RefObject, useLayoutEffect } from "react";
 import type { PierHunkAnnotationMetadata } from "./diff-view-hunk-actions.tsx";
-import { syncCodeViewItems } from "./diff-view-item-sync.ts";
+import { applyCodeViewItemsAnchored } from "./diff-view-item-sync.ts";
 import type {
   ParsedItemCacheEntry,
   PierDiffCodeViewItem,
   PierDiffViewItem,
 } from "./diff-view-items.ts";
 import type { DiffViewRenderItemIdentity } from "./use-diff-view-handle.ts";
-
-const MAX_ITEM_APPLY_ATTEMPTS = 3;
-
-interface ItemApplyRetryState {
-  attempts: number;
-  readonly items: readonly PierDiffCodeViewItem[];
-  lastRevision: number;
-}
 
 /**
  * membership 拓扑变更后是否应在 apply 后做即时 layout flush（`render(true)`）。
@@ -50,7 +36,8 @@ export const shouldRestoreMembershipScrollTop = shouldFlushMembershipLayout;
 
 /**
  * 成员与正文变更在同一 CodeView 实例内同步（addItems / updateItem / setItems）。
- * 瞬时拒绝下一帧重试；三次仍失败才上报。不因 id 集合变化 remount。
+ * Pierre 拒绝时立即上报并保留旧缓存，等待下一次权威输入重新提交；
+ * 禁止通过下一帧或定时器重试。不因 id 集合变化 remount。
  *
  * membership 拓扑变后：禁止外层 item 级 scrollTo（会清 Pierre 行锚并闪一下）。
  * 改为 instance.render(true) 在 paint 前同步 recompute + 行级 anchoring。
@@ -98,10 +85,6 @@ export function useDiffViewItemApply({
   /** 树导航 pending 时禁止 membership 后即时 layout flush。 */
   readonly suppressMembershipScrollRestore?: boolean;
 }): void {
-  const retryRef = useRef<ItemApplyRetryState | null>(null);
-  const retryFrameRef = useRef<number | null>(null);
-  const [revision, setRevision] = useState(0);
-
   useLayoutEffect(() => {
     const handle = codeViewRef.current;
     if (!handle) {
@@ -140,51 +123,15 @@ export function useDiffViewItemApply({
         : { getSuppressMembershipScrollRestore }),
     });
 
-    const accepted = syncCodeViewItems(handle, codeViewItems, previousOrdered);
-    if (!accepted) {
-      const retry = retryRef.current;
-      if (retry?.items === codeViewItems) {
-        if (retry.lastRevision !== revision) {
-          retry.lastRevision = revision;
-          retry.attempts += 1;
-        }
-      } else {
-        retryRef.current = {
-          attempts: 1,
-          items: codeViewItems,
-          lastRevision: revision,
-        };
-      }
-      if ((retryRef.current?.attempts ?? 0) >= MAX_ITEM_APPLY_ATTEMPTS) {
-        onError(new Error("Pierre did not accept the current diff items."));
-        return;
-      }
-      if (retryFrameRef.current === null) {
-        retryFrameRef.current = requestAnimationFrame(() => {
-          retryFrameRef.current = null;
-          setRevision((current) => current + 1);
-        });
-      }
+    const applyResult = applyCodeViewItemsAnchored(
+      handle,
+      codeViewItems,
+      previousOrdered,
+      { flushLayout: shouldFlushLayout }
+    );
+    if (!applyResult.accepted) {
+      onError(new Error("Pierre did not accept the current diff items."));
       return;
-    }
-
-    retryRef.current = null;
-    if (retryFrameRef.current !== null) {
-      cancelAnimationFrame(retryFrameRef.current);
-      retryFrameRef.current = null;
-    }
-
-    // membership 拓扑变：setItems 默认 queueRender(rAF)，paint 前未 recompute 会闪。
-    // render(true) 同步 layout + Pierre 行级 scroll anchoring；禁止外层 scrollTo。
-    if (shouldFlushLayout) {
-      const instance = handle.getInstance();
-      if (
-        instance &&
-        typeof (instance as { render?: (immediate?: boolean) => void })
-          .render === "function"
-      ) {
-        (instance as { render: (immediate?: boolean) => void }).render(true);
-      }
     }
 
     // 记录本次 membership apply 新建成员，供 scrollToItem 选 instant。
@@ -237,18 +184,8 @@ export function useDiffViewItemApply({
     parsedItemListRef,
     parsedItemsRef,
     renderItemIdentitiesRef,
-    revision,
     scheduleRenderWindowReport,
     getSuppressMembershipScrollRestore,
     suppressMembershipScrollRestore,
   ]);
-
-  useEffect(
-    () => () => {
-      if (retryFrameRef.current !== null) {
-        cancelAnimationFrame(retryFrameRef.current);
-      }
-    },
-    []
-  );
 }

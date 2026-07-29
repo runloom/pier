@@ -1,13 +1,22 @@
 import { Loader2Icon } from "lucide-react";
 import { cn } from "./utils.ts";
 
-function Spinner({ className, ...props }: React.ComponentProps<"svg">) {
+function Spinner({
+  "aria-hidden": ariaHidden,
+  "aria-label": ariaLabel,
+  className,
+  role,
+  ...props
+}: React.ComponentProps<"svg">) {
+  const hidden = ariaHidden === true || ariaHidden === "true";
   return (
     <Loader2Icon
-      aria-label="Loading"
+      aria-hidden={ariaHidden}
       className={cn("size-4 animate-spin", className)}
       data-slot="spinner"
-      role="status"
+      {...(hidden
+        ? {}
+        : { "aria-label": ariaLabel ?? "Loading", role: role ?? "status" })}
       {...props}
     />
   );

@@ -6,15 +6,10 @@ import {
   ReviewFeedback,
   ReviewLoading,
 } from "@plugins/builtin/git/renderer/git-review-feedback.tsx";
-import {
-  cleanup,
-  fireEvent,
-  render,
-  screen,
-  within,
-} from "@testing-library/react";
+import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
+const notifyError = vi.fn();
 const context = {
   dialogs: {
     alert: vi.fn(async () => undefined),
@@ -29,6 +24,9 @@ const context = {
         fallback
       );
     }),
+  },
+  notifications: {
+    error: notifyError,
   },
 } as unknown as RendererPluginContext;
 
@@ -112,7 +110,160 @@ describe("Git Review feedback", () => {
     expect(screen.getByRole("button", { name: "Details" })).toBeVisible();
   });
 
-  it("文件加载失败最多显示五项，技术详情不内联并保留高度边界", () => {
+  it("已有正文时的 index 刷新失败只发一次 toast，详情走对话框且不插入 Alert", () => {
+    const failure = {
+      kind: "error" as const,
+      message: "invalid source after mutation",
+      reason: "invalidSource" as const,
+      retryable: false,
+    };
+    const view = render(
+      <ReviewFeedback context={context} failures={[]} indexFailure={failure} />
+    );
+
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(view.container).toBeEmptyDOMElement();
+    expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notifyError).toHaveBeenCalledWith(
+      "Failed to refresh changes",
+      expect.objectContaining({
+        action: {
+          label: "Details",
+          onClick: expect.any(Function),
+        },
+      })
+    );
+
+    view.rerender(
+      <ReviewFeedback context={context} failures={[]} indexFailure={failure} />
+    );
+    expect(notifyError).toHaveBeenCalledTimes(1);
+
+    const notificationOptions = notifyError.mock.calls[0]?.[1];
+    notificationOptions?.action?.onClick();
+    expect(context.dialogs.alert).toHaveBeenCalledWith({
+      body: "invalid source after mutation",
+      title: "Failed to refresh changes",
+    });
+  });
+
+  it("刷新恢复后，同一错误再次发生会重新提示", () => {
+    const failure = {
+      kind: "error" as const,
+      message: "index diagnostic",
+      reason: "commandFailed" as const,
+      retryable: true,
+    };
+    const view = render(
+      <ReviewFeedback context={context} failures={[]} indexFailure={failure} />
+    );
+    expect(notifyError).toHaveBeenCalledTimes(1);
+
+    view.rerender(<ReviewFeedback context={context} failures={[]} />);
+    view.rerender(
+      <ReviewFeedback context={context} failures={[]} indexFailure={failure} />
+    );
+
+    expect(notifyError).toHaveBeenCalledTimes(2);
+  });
+
+  it("渲染失败走可重试 toast，不插入顶部 Alert", () => {
+    const onRetryRender = vi.fn();
+    const view = render(
+      <ReviewFeedback
+        context={context}
+        failures={[]}
+        onRetryRender={onRetryRender}
+        runtimeError={new Error("render diagnostic")}
+      />
+    );
+
+    expect(view.container).toBeEmptyDOMElement();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(notifyError).toHaveBeenCalledWith("Failed to render diff", {
+      action: {
+        label: "Retry",
+        onClick: onRetryRender,
+      },
+    });
+  });
+
+  it("隐藏阅读面不投递反馈，切为活动面后只投递一次", () => {
+    const failure = {
+      kind: "error" as const,
+      message: "index diagnostic",
+      reason: "commandFailed" as const,
+      retryable: true,
+    };
+    const onRetryIndex = vi.fn();
+    const view = render(
+      <ReviewFeedback
+        context={context}
+        enabled={false}
+        failures={[]}
+        indexFailure={failure}
+        onRetryIndex={onRetryIndex}
+      />
+    );
+    expect(notifyError).not.toHaveBeenCalled();
+
+    view.rerender(
+      <ReviewFeedback
+        context={context}
+        failures={[]}
+        indexFailure={failure}
+        onRetryIndex={onRetryIndex}
+      />
+    );
+
+    expect(notifyError).toHaveBeenCalledTimes(1);
+  });
+
+  it("同一文档失败周期只投递一次，Retry 使用点击时的最新失败集合", () => {
+    const onRetryFailure = vi.fn();
+    const firstFailure = {
+      entry: entry(0),
+      failure: {
+        kind: "error" as const,
+        message: "first",
+        reason: "commandFailed" as const,
+        retryable: true,
+      },
+      kind: "error" as const,
+    } satisfies ReviewFailedResource;
+    const secondFailure = {
+      entry: entry(1),
+      failure: {
+        kind: "error" as const,
+        message: "second",
+        reason: "commandFailed" as const,
+        retryable: true,
+      },
+      kind: "error" as const,
+    } satisfies ReviewFailedResource;
+    const view = render(
+      <ReviewFeedback
+        context={context}
+        failures={[firstFailure]}
+        onRetryFailure={onRetryFailure}
+      />
+    );
+    view.rerender(
+      <ReviewFeedback
+        context={context}
+        failures={[firstFailure, secondFailure]}
+        onRetryFailure={onRetryFailure}
+      />
+    );
+
+    expect(notifyError).toHaveBeenCalledTimes(1);
+    const notificationOptions = notifyError.mock.calls[0]?.[1];
+    notificationOptions?.action?.onClick();
+    expect(onRetryFailure).toHaveBeenNthCalledWith(1, "entry:0");
+    expect(onRetryFailure).toHaveBeenNthCalledWith(2, "entry:1");
+  });
+
+  it("文件加载失败由对应文件项承载，不在正文顶部重复堆叠", () => {
     const failures = Array.from({ length: 7 }, (_, index) => ({
       entry: entry(index),
       failure: {
@@ -142,33 +293,17 @@ describe("Git Review feedback", () => {
       />
     );
 
-    expect(view.container.firstElementChild).toHaveClass(
-      "max-h-[40%]",
-      "shrink-0"
-    );
-    expect(screen.getAllByRole("alert")).toHaveLength(9);
-    expect(
-      screen.queryByText("3 more files will load when selected.")
-    ).toBeNull();
-    expect(
-      screen.getByText("Additional changes could not be displayed.")
-    ).toBeVisible();
-    expect(screen.queryByText("main diagnostic must not be shown")).toBeNull();
-    const resourceTitle = screen.getByText("very/long/path/0/file.ts");
-    const resourceAlert = resourceTitle.closest('[role="alert"]');
-    if (!(resourceAlert instanceof HTMLElement)) {
-      throw new Error("missing resource alert");
-    }
-    fireEvent.click(
-      within(resourceAlert).getByRole("button", { name: "Details" })
-    );
-    expect(context.dialogs.alert).toHaveBeenCalledWith({
-      body: "main diagnostic must not be shown",
-      title: "very/long/path/0/file.ts",
-    });
-    expect(screen.getAllByText(/very\/long\/path/u)[0]).toHaveClass(
-      "break-all",
-      "font-mono"
+    expect(view.container).toBeEmptyDOMElement();
+    expect(screen.queryByRole("alert")).toBeNull();
+    expect(notifyError).toHaveBeenCalledTimes(3);
+    expect(notifyError).toHaveBeenCalledWith(
+      "Additional changes could not be displayed.",
+      {
+        action: {
+          label: "Retry",
+          onClick: expect.any(Function),
+        },
+      }
     );
   });
 });

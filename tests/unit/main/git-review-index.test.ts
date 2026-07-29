@@ -189,7 +189,25 @@ describe("GitReviewIndexReader", () => {
     });
 
     expect(result).toMatchObject({
-      entries: [{ path: "src/a.ts" }],
+      entries: [
+        {
+          path: "src/a.ts",
+          renderSlots: [
+            {
+              additions: 1,
+              binary: false,
+              deletions: 2,
+              group: "unstaged",
+            },
+            {
+              additions: 1,
+              binary: false,
+              deletions: 2,
+              group: "staged",
+            },
+          ],
+        },
+      ],
       kind: "ok",
     });
     expect(execGitRaw).toHaveBeenCalledTimes(3);
@@ -270,7 +288,7 @@ describe("GitReviewIndexReader", () => {
     });
   });
 
-  it("HEAD 与 index fence 只保留在 main 私有解析结果", async () => {
+  it("HEAD 等解析元数据留在 main，仅公开不透明 indexRevision", async () => {
     const execGitRaw = createRecordExec((args) => ({
       records: args.includes("status")
         ? [
@@ -302,6 +320,8 @@ describe("GitReviewIndexReader", () => {
       expect(first.metadata.indexRevision).not.toBe(
         second.metadata.indexRevision
       );
+      expect(first.result.indexRevision).toBe(first.metadata.indexRevision);
+      expect(second.result.indexRevision).toBe(second.metadata.indexRevision);
       expect(first.result).not.toHaveProperty("query");
       expect(first.result).not.toHaveProperty("revision");
     }
@@ -915,6 +935,33 @@ describe("GitReviewIndexReader", () => {
       entries: [expect.objectContaining({ path: "staged.ts" })],
       kind: "ok",
     });
+  });
+
+  it("工作区内容同增删行数变化时仍推进 indexRevision", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "same-size.ts"), "aaaa\n", "utf8");
+    await commitAll(root, "base");
+    const reader = new GitReviewIndexReader();
+    const reviewScope = {
+      contextId: "worktree:same-size",
+      gitRootPath: root,
+      target: { kind: "uncommitted" as const },
+    };
+
+    await writeFile(join(root, "same-size.ts"), "bbbb\n", "utf8");
+    const first = await reader.read({ scope: reviewScope });
+    await writeFile(join(root, "same-size.ts"), "cccc\n", "utf8");
+    const second = await reader.read({ scope: reviewScope });
+
+    expect(first.kind).toBe("ok");
+    expect(second.kind).toBe("ok");
+    if (first.kind === "ok" && second.kind === "ok") {
+      expect(second.indexRevision).not.toBe(first.indexRevision);
+      expect(second.entries[0]?.renderSlots[0]).toMatchObject({
+        additions: 1,
+        deletions: 1,
+      });
+    }
   });
 
   it("commit 目标返回该提交相对首父的 committed 分组(根提交相对空树)", async () => {

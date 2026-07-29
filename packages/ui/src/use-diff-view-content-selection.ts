@@ -1,5 +1,9 @@
 import type { CodeViewHandle } from "@pierre/diffs/react";
 import { type RefObject, useCallback } from "react";
+import {
+  composedHtmlPath,
+  isInteractiveControlTarget,
+} from "./diff-view-header-events.ts";
 import type { PierHunkAnnotationMetadata } from "./diff-view-hunk-actions.tsx";
 import type {
   ParsedItemCacheEntry,
@@ -22,6 +26,7 @@ export function useDiffViewContentSelection(input: {
   readonly contentDragAnchorRef: RefObject<DiffPointerLineHit | null>;
   readonly parsedItemsRef: RefObject<Map<string, ParsedItemCacheEntry>>;
   readonly selectedTextRef: RefObject<string>;
+  readonly onPointerIntent?: () => void;
 }): {
   readonly handlePointerDownCapture: (
     event: React.PointerEvent<HTMLDivElement>
@@ -34,6 +39,7 @@ export function useDiffViewContentSelection(input: {
     contentDragAnchorRef,
     parsedItemsRef,
     selectedTextRef,
+    onPointerIntent,
   } = input;
 
   const snapshotSelectedText = useCallback(() => {
@@ -66,6 +72,14 @@ export function useDiffViewContentSelection(input: {
       if (event.button !== 0) {
         return;
       }
+      if (isInteractiveControlTarget(composedHtmlPath(event.nativeEvent))) {
+        return;
+      }
+
+      // 主键按在阅读视口即表示用户接管当前位置。这里必须早于行命中：
+      // 原生滚动条 / gutter / diff 空白不会命中 data-line，但拖动它们同样会
+      // 取消宿主尚未完成的语义导航。交互控件已在上方过滤，不会误清暂存锚点。
+      onPointerIntent?.();
 
       const hit = resolveDiffPointerLineHit(event.nativeEvent, viewer);
       if (!hit) {
@@ -121,7 +135,7 @@ export function useDiffViewContentSelection(input: {
       window.addEventListener("pointerup", handleUp, true);
       window.addEventListener("pointercancel", handleUp, true);
     },
-    [codeViewRef, contentDragAnchorRef, snapshotSelectedText]
+    [codeViewRef, contentDragAnchorRef, onPointerIntent, snapshotSelectedText]
   );
 
   return { handlePointerDownCapture, snapshotSelectedText };

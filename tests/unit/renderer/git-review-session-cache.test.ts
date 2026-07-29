@@ -8,8 +8,11 @@ import type { GitReviewIndexLoaderSnapshot } from "../../../src/plugins/builtin/
 import {
   clearAllReviewSessionsForTests,
   clearReviewSession,
+  clearReviewSessionsForScope,
+  ensureReviewSurfaceSession,
   patchReviewSession,
   readReviewSession,
+  reviewSurfaceSessionKey,
   writeReviewSession,
 } from "../../../src/plugins/builtin/git/renderer/git-review-session-cache.ts";
 import type {
@@ -17,6 +20,7 @@ import type {
   GitReviewIndexEntry,
   GitReviewIndexOk,
 } from "../../../src/shared/contracts/git-review.ts";
+import { patchDocument } from "./git-review-document-fixture.ts";
 
 type LoadedDocument = Extract<GitReviewDocumentResource, { kind: "loaded" }>;
 function entry(index: number): GitReviewIndexEntry {
@@ -46,17 +50,12 @@ function documentFor(
   if (!slot) {
     throw new Error("missing patch slot");
   }
-  return {
-    kind: "ok",
+  return patchDocument({
+    entryKey: item.entryKey,
+    patch: content,
     revision: `document:${item.entryKey}`,
-    sections: [
-      {
-        kind: "patch",
-        patch: content,
-        sectionKey: slot.sectionKey,
-      },
-    ],
-  };
+    sectionKey: slot.sectionKey,
+  });
 }
 
 function loadedIndex(
@@ -86,6 +85,27 @@ function loadedDoc(item: GitReviewIndexEntry, content: string): LoadedDocument {
 }
 
 describe("git-review-session-cache", () => {
+  it("drops invalid legacy documents and preserves a valid section anchor", () => {
+    clearAllReviewSessionsForTests();
+    const item = entry(0);
+    const legacy = loadedDoc(item, "diff\n");
+    Reflect.deleteProperty(legacy.document, "sections");
+    writeReviewSession({
+      anchor: { id: "section:0", offset: -12 },
+      index: loadedIndex([item]),
+      loadedByEntryKey: new Map([[item.entryKey, legacy]]),
+      retainedEntryKeys: [item.entryKey],
+      selectedEntryKey: item.entryKey,
+      selectedSectionKey: "section:0",
+      sourceKey: "legacy-source",
+    });
+
+    const restored = readReviewSession("legacy-source");
+    expect(restored?.anchor).toEqual({ id: "section:0", offset: -12 });
+    expect(restored?.loadedByEntryKey.size).toBe(0);
+    expect(restored?.retainedEntryKeys).toEqual([]);
+  });
+
   it("writes and reads a session; hit moves to LRU tail", () => {
     clearAllReviewSessionsForTests();
     const first = entry(0);
@@ -176,6 +196,45 @@ describe("git-review-session-cache", () => {
     clearReviewSession("drop");
     expect(readReviewSession("drop")).toBeNull();
     expect(readReviewSession("keep")?.sourceKey).toBe("keep");
+  });
+
+  it("keeps surface selection isolated and clears the whole scope together", () => {
+    clearAllReviewSessionsForTests();
+    const scope = {
+      contextId: "ctx:surface",
+      gitRootPath: "/workspace/surface",
+      target: { kind: "uncommitted" as const },
+    };
+    const baseKey = JSON.stringify(scope);
+    writeReviewSession({
+      anchor: null,
+      index: loadedIndex([entry(0)]),
+      loadedByEntryKey: new Map(),
+      retainedEntryKeys: [],
+      selectedEntryKey: null,
+      selectedSectionKey: null,
+      sourceKey: baseKey,
+    });
+    const indexKey = ensureReviewSurfaceSession(scope, "index");
+    const conflictKey = ensureReviewSurfaceSession(scope, "conflict");
+    const stagedKey = ensureReviewSurfaceSession(scope, "staged");
+    patchReviewSession(indexKey, {
+      selectedEntryKey: "entry:index",
+      selectedSectionKey: "section:index",
+    });
+
+    expect(readReviewSession(indexKey)?.selectedEntryKey).toBe("entry:index");
+    expect(readReviewSession(conflictKey)?.selectedEntryKey).toBeNull();
+    expect(readReviewSession(stagedKey)?.selectedEntryKey).toBeNull();
+    expect(conflictKey).toBe(reviewSurfaceSessionKey(scope, "conflict"));
+    expect(conflictKey).not.toBe(indexKey);
+    expect(stagedKey).toBe(reviewSurfaceSessionKey(scope, "staged"));
+
+    clearReviewSessionsForScope(scope);
+    expect(readReviewSession(baseKey)).toBeNull();
+    expect(readReviewSession(conflictKey)).toBeNull();
+    expect(readReviewSession(indexKey)).toBeNull();
+    expect(readReviewSession(stagedKey)).toBeNull();
   });
 
   it("evicts oldest retained docs under budget but protects selected", () => {

@@ -20,11 +20,15 @@ export function useGitReviewGenerationCallbacks(sources: {
     handle: PierDiffViewHandle,
     generation: number,
     items: readonly PierDiffViewItem[],
-    options?: { readonly flush?: boolean }
+    options?: {
+      readonly flush?: boolean;
+      readonly preserveAnchor?: boolean;
+    }
   ) => boolean;
   readonly beginGeneration: (
     entryKeys: ReadonlySet<string>,
-    generation: number
+    generation: number,
+    options?: { readonly restoreSelection?: boolean }
   ) => string | null;
   readonly beginReadingNavigating: (entryKey: string) => void;
   readonly beginReadingRefresh: () => void;
@@ -38,7 +42,7 @@ export function useGitReviewGenerationCallbacks(sources: {
     handle: PierDiffViewHandle,
     generation: number
   ) => boolean;
-  readonly getNavigationMemberReason: () => "tree" | "rebind" | null;
+  readonly getNavigationMemberReason: () => "restore" | "tree" | null;
   readonly getReadingMode: () => ReviewReadingMode;
   readonly getSelectedEntryKey: () => string | null;
   readonly getSelectedSectionKey: () => string | null;

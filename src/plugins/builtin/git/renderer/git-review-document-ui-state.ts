@@ -16,8 +16,11 @@ import {
   useState,
 } from "react";
 import type { ReviewDocumentProjection } from "./git-review-document-projection.ts";
+import { reviewTreeSectionKeyForSurface } from "./git-review-document-projection-index.ts";
 import type { GitReviewDocumentLoaderSnapshot } from "./git-review-document-resource.ts";
+import type { GitReviewReadingSurface } from "./git-review-reading-surface.ts";
 import {
+  ensureReviewSurfaceSession,
   patchReviewSession,
   readReviewSession,
 } from "./git-review-session-cache.ts";
@@ -26,6 +29,8 @@ import type { gitReviewTreeModel } from "./git-review-tree.tsx";
 export const EMPTY_REVIEW_PROJECTION: ReviewDocumentProjection = {
   entryKeyBySectionId: new Map(),
   items: [],
+  revisionBySectionId: new Map(),
+  sourceIndexGeneration: 0,
 };
 
 export const EMPTY_LOADER_SNAPSHOT: GitReviewDocumentLoaderSnapshot = {
@@ -118,6 +123,7 @@ export function useReviewAppearance(
 
 export function useReviewSelection(
   scope: GitReviewScope,
+  diffBase: GitReviewReadingSurface,
   treeModel: ReturnType<typeof gitReviewTreeModel>
 ): {
   readonly selectedEntryKey: string | null;
@@ -136,7 +142,8 @@ export function useReviewSelection(
     } | null
   ) => void;
 } {
-  const sourceKey = JSON.stringify(scope);
+  // 三个阅读面各自持有选择，切换表面不能让隐藏实例改写当前表面的目标。
+  const sourceKey = ensureReviewSurfaceSession(scope, diffBase);
   const session = readReviewSession(sourceKey);
   const [selectedEntryKey, setSelectedEntryKeyState] = useState<string | null>(
     () => session?.selectedEntryKey ?? null
@@ -229,10 +236,13 @@ export function useReviewSelection(
     if (!(selectedEntryKey || selectedSectionKey) || selectedTreeEntry) {
       return;
     }
-    // stage 换 group 会换 sectionKey：entry 仍在时 rebind 到首个 slot，勿清空选择。
+    // 只允许在当前阅读面内重绑；目标移到另一面时清空，禁止跨面选中。
     if (selectedEntryKey) {
       const entry = treeModel.entryByKey.get(selectedEntryKey);
-      const rebound = entry?.renderSlots[0]?.sectionKey;
+      const rebound =
+        entry === undefined
+          ? null
+          : reviewTreeSectionKeyForSurface(entry, diffBase);
       if (rebound) {
         setSelectedTreeTarget({
           entryKey: selectedEntryKey,
@@ -246,6 +256,7 @@ export function useReviewSelection(
     selectedEntryKey,
     selectedSectionKey,
     selectedTreeEntry,
+    diffBase,
     setSelectedTreeTarget,
     treeModel.entryByKey,
   ]);

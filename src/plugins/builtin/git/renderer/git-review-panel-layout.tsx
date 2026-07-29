@@ -27,10 +27,10 @@ function GitReviewTreeSidebarComponent({
   context,
   contextId,
   gitRootPath,
+  mutationAuthorityBlocked,
   onOpenPath,
   isActiveOpenPath,
   onContextMenuSession,
-  revealPath,
   sidebarFooter,
   sidebarHeader,
   sourcePanelId,
@@ -40,6 +40,7 @@ function GitReviewTreeSidebarComponent({
   context: RendererPluginContext;
   contextId: string;
   gitRootPath: string;
+  mutationAuthorityBlocked: boolean;
   onOpenPath: (path: string) => void;
   isActiveOpenPath?: (path: string) => boolean;
   onContextMenuSession?: (
@@ -49,7 +50,6 @@ function GitReviewTreeSidebarComponent({
       readonly path: string;
     }
   ) => void;
-  revealPath: string | null;
   sidebarFooter?: ReactNode;
   sidebarHeader?: ReactNode;
   sourcePanelId?: string;
@@ -60,6 +60,7 @@ function GitReviewTreeSidebarComponent({
     context,
     contextId,
     gitRootPath,
+    mutationAuthorityBlocked,
     ...(sourcePanelId ? { sourcePanelId } : {}),
     treeModel,
   });
@@ -135,7 +136,6 @@ function GitReviewTreeSidebarComponent({
           {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
           {...(onContextMenuSession ? { onContextMenuSession } : {})}
           onSearchMatchStateChange={treeSearch.updateMatchState}
-          revealPath={revealPath}
           stickyFolders
           treeApiRef={treeSearch.attachTreeApi}
         />
@@ -180,12 +180,12 @@ export function GitReviewPanelLayout({
   context,
   contextId,
   gitRootPath,
+  mutationAuthorityBlocked = false,
   headerLeading,
   headerTrailing,
   onOpenPath,
   isActiveOpenPath,
   onContextMenuSession,
-  selectedTreePath,
   setSidebarCollapsed,
   sidebarCollapsed,
   sidebarFooter,
@@ -197,6 +197,7 @@ export function GitReviewPanelLayout({
   context: RendererPluginContext;
   contextId?: string | null;
   gitRootPath: string | null;
+  mutationAuthorityBlocked?: boolean;
   headerLeading?: ReactNode;
   headerTrailing?: ReactNode;
   onOpenPath?: (path: string) => void;
@@ -208,7 +209,6 @@ export function GitReviewPanelLayout({
       readonly path: string;
     }
   ) => void;
-  selectedTreePath?: string | null;
   setSidebarCollapsed: (collapsed: boolean) => void;
   sidebarCollapsed: boolean;
   sidebarFooter?: ReactNode;
@@ -245,10 +245,10 @@ export function GitReviewPanelLayout({
         context={context}
         contextId={contextId}
         gitRootPath={gitRootPath}
+        mutationAuthorityBlocked={mutationAuthorityBlocked}
         onOpenPath={onOpenPath}
         {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
         {...(onContextMenuSession ? { onContextMenuSession } : {})}
-        revealPath={selectedTreePath ?? null}
         {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
         {...(sidebarHeader === undefined ? {} : { sidebarHeader })}
         {...(sourcePanelId ? { sourcePanelId } : {})}

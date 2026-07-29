@@ -22,6 +22,7 @@ import type {
   PierHunkActionEvent,
   PierHunkAnnotationMetadata,
 } from "./diff-view-hunk-actions.tsx";
+import { useDiffViewInputStore } from "./diff-view-input-store.ts";
 import {
   type ParsedItemCacheEntry,
   type PierDiffViewItem,
@@ -60,6 +61,7 @@ export interface PierDiffViewAppearance {
 }
 
 export type {
+  PierDiffViewChangeControl,
   PierDiffViewFileDisplay,
   PierDiffViewItem,
   PierDiffViewStageControl,
@@ -68,6 +70,7 @@ export {
   estimateLinesForFileStatus,
   PIER_DIFF_DEFAULT_ESTIMATE_LINES,
   PIER_DIFF_ESTIMATE_SLOT_HEIGHT_PX,
+  PIER_DIFF_MAX_ESTIMATE_BODY_LINES,
 } from "./diff-view-items.ts";
 export type { PierDiffViewRenderWindow } from "./diff-view-render-window.ts";
 export {
@@ -99,11 +102,10 @@ export interface PierDiffViewProps {
   readonly labels: PierDiffViewLabels;
   /** Discard unstaged working-tree changes for a multi-diff item id. */
   readonly onDiscardFile?: (itemId: string) => void;
-
   readonly onError: (error: Error) => void;
   /**
    * Codex-style per-hunk Stage / Unstage / Revert (Pierre annotations +
-   * renderAnnotation). When set, items with stageControl get hunk toolbars.
+   * renderAnnotation). When set, items with changeControls get block toolbars.
    */
   readonly onHunkAction?: (event: PierHunkActionEvent) => void;
   readonly onItemError?: (id: string, error: Error | null) => void;
@@ -111,7 +113,7 @@ export interface PierDiffViewProps {
   readonly onOpenFile?: (itemId: string) => void;
   readonly onRenderWindowChange?: (window: PierDiffViewRenderWindow) => void;
   readonly onScroll?: () => void;
-  /** Toggle uncommitted stage for a multi-diff item id (sectionKey). */
+  /** Toggle uncommitted stage for a canonical multi-diff item id (entryKey). */
   readonly onToggleStage?: (itemId: string) => void;
   /** 缺省 split + 不换行(既有行为)。变更会强制 CodeView 重建。 */
   readonly presentation?: PierDiffViewPresentation;
@@ -197,6 +199,7 @@ export function PierDiffView({
     () => toCodeViewItems(inputs, parsedItemsRef.current),
     [inputs]
   );
+  const inputStore = useDiffViewInputStore(inputs);
   useLayoutEffect(() => {
     onItemErrorRef.current = onItemError;
   }, [onItemError]);
@@ -288,20 +291,13 @@ export function PierDiffView({
     getRenderedItems,
     onRenderWindowChange
   );
-  const { handlePointerDownCapture } = useDiffViewContentSelection({
-    appliedItemsRef,
-    codeViewRef,
-    contentDragAnchorRef,
-    parsedItemsRef,
-    selectedTextRef,
-  });
   const { options, renderAnnotation, style } = useDiffViewCodeOptions({
     appearance,
     codeViewRef,
     diffStyle,
     fileHoverCleanupsRef,
     fileHoverHostsRef,
-    inputs,
+    inputStore,
     labels,
     markRendered,
     metrics,
@@ -337,7 +333,7 @@ export function PierDiffView({
     codeViewRef,
     collapsedItemsRef,
     expectItemRender,
-    inputs,
+    inputStore,
     labels,
     onScroll,
     ...(onDiscardFile === undefined ? {} : { onDiscardFile }),
@@ -348,6 +344,14 @@ export function PierDiffView({
     parsedItemsRef,
     renderItemIdentitiesRef,
     scheduleRenderWindowReport,
+  });
+  const { handlePointerDownCapture } = useDiffViewContentSelection({
+    appliedItemsRef,
+    codeViewRef,
+    contentDragAnchorRef,
+    onPointerIntent: handleUserScrollIntent,
+    parsedItemsRef,
+    selectedTextRef,
   });
 
   // membership 拓扑变：apply 内 render(true) 同步 Pierre 行锚；禁止 item 级 scrollTo。
@@ -477,7 +481,7 @@ export function PierDiffView({
       onClickCapture={handleHeaderClickCapture}
       onKeyDownCapture={handleUserScrollKey}
       onPointerDownCapture={handlePointerDownCapture}
-      onTouchStartCapture={handleUserScrollIntent}
+      onTouchMoveCapture={handleUserScrollIntent}
       onWheelCapture={handleUserScrollIntent}
     >
       {workerUnavailable ? (

@@ -1,17 +1,7 @@
-import { describe, expect, it, vi } from "vitest";
-import {
-  remapDocumentSectionsToEntry,
-  retainLoadedDocumentForEntry,
-  softRemapDocumentSectionsToEntry,
-} from "../../../src/plugins/builtin/git/renderer/git-review-document-loader-utils.ts";
-import {
-  type PendingReviewAnchor,
-  restoreReviewReadingViewport,
-} from "../../../src/plugins/builtin/git/renderer/git-review-document-projection.ts";
-import type {
-  GitReviewFileDocumentOk,
-  GitReviewIndexEntry,
-} from "../../../src/shared/contracts/git-review.ts";
+import { describe, expect, it } from "vitest";
+import { retainLoadedDocumentForEntry } from "../../../src/plugins/builtin/git/renderer/git-review-document-loader-utils.ts";
+import type { GitReviewIndexEntry } from "../../../src/shared/contracts/git-review.ts";
+import { patchDocument } from "./git-review-document-fixture.ts";
 
 function makeEntry(
   slots: readonly {
@@ -36,235 +26,52 @@ function makeEntry(
   };
 }
 
-function makeDoc(
-  sections: readonly { sectionKey: string; patch: string }[]
-): GitReviewFileDocumentOk {
-  return {
-    kind: "ok",
-    revision: "rev-1",
-    sections: sections.map((section) => ({
-      kind: "patch" as const,
-      patch: section.patch,
-      sectionKey: section.sectionKey,
-    })),
-  };
-}
-
-describe("softRemapDocumentSectionsToEntry", () => {
-  it("strict-remaps when slot count matches (group migration)", () => {
+describe("canonical document retention", () => {
+  it("retains the same document across stage-group migration", () => {
     const entry = makeEntry([{ group: "staged", sectionKey: "key-staged" }]);
-    const doc = makeDoc([
-      { sectionKey: "key-unstaged", patch: "diff --git a" },
-    ]);
-    const remapped = softRemapDocumentSectionsToEntry(entry, doc);
-    expect(remapped?.sections).toEqual([
-      { kind: "patch", patch: "diff --git a", sectionKey: "key-staged" },
-    ]);
-    expect(remapped?.revision).toContain("slot-remap");
+    const doc = patchDocument({
+      entryKey: entry.entryKey,
+      patch: "diff --git a/src/a.ts b/src/a.ts\n",
+    });
+    expect(retainLoadedDocumentForEntry(entry, doc)?.document).toBe(doc);
   });
 
-  it("keeps exact sectionKey and soft-fills new half-stage slot", () => {
+  it("does not duplicate the document when a file becomes partially staged", () => {
     const entry = makeEntry([
       { group: "staged", sectionKey: "key-staged" },
       { group: "unstaged", sectionKey: "key-unstaged" },
     ]);
-    const doc = makeDoc([
-      { sectionKey: "key-unstaged", patch: "diff --git unstaged-body" },
-    ]);
-    const remapped = softRemapDocumentSectionsToEntry(entry, doc);
-    expect(remapped).not.toBeNull();
-    expect(remapped?.sections.map((s) => s.sectionKey)).toEqual([
-      "key-unstaged",
-    ]);
-    expect(remapped?.sections[0]).toMatchObject({
-      patch: "diff --git unstaged-body",
-      sectionKey: "key-unstaged",
+    const doc = patchDocument({
+      entryKey: entry.entryKey,
+      patch: "diff --git a/src/a.ts b/src/a.ts\n",
     });
-    expect(remapDocumentSectionsToEntry(entry, doc)).toBeNull();
+    const retained = retainLoadedDocumentForEntry(entry, doc);
+    expect(retained?.document).toBe(doc);
+    expect(retained?.document.entryKey).toBe(entry.entryKey);
   });
 
-  it("soft-bridges 1→2 free body onto unstaged residual (not staged first slot)", () => {
-    // R2：旧 body 键全变时，优先挂操作侧 unstaged，禁止 staged 第一槽吞残体
-    const entry = makeEntry([
-      { group: "staged", sectionKey: "key-staged-new" },
-      { group: "unstaged", sectionKey: "key-unstaged-new" },
-    ]);
-    const doc = makeDoc([
-      { sectionKey: "key-old-only", patch: "diff --git old" },
-    ]);
-    const remapped = softRemapDocumentSectionsToEntry(entry, doc);
-    expect(remapped?.sections).toHaveLength(1);
-    expect(remapped?.sections[0]).toMatchObject({
-      patch: "diff --git old",
-      sectionKey: "key-unstaged-new",
+  it("rejects a cached document owned by another entry", () => {
+    const entry = makeEntry([{ group: "unstaged", sectionKey: "key" }]);
+    const doc = patchDocument({
+      entryKey: "entry:other",
+      patch: "diff --git a/src/a.ts b/src/a.ts\n",
     });
-    expect(remapped?.revision).toContain("slot-soft-remap");
+    expect(retainLoadedDocumentForEntry(entry, doc)).toBeNull();
   });
 
-  it("retainLoadedDocumentForEntry uses soft remap for half-stage", () => {
+  it("retains a matching document without changing its revision", () => {
     const entry = makeEntry([
       { group: "staged", sectionKey: "key-staged" },
       { group: "unstaged", sectionKey: "key-unstaged" },
     ]);
-    const doc = makeDoc([
-      { sectionKey: "key-unstaged", patch: "diff --git unstaged-body" },
-    ]);
+    const doc = patchDocument({
+      entryKey: entry.entryKey,
+      patch: "diff --git a/src/a.ts b/src/a.ts\n",
+      revision: "rev-1",
+    });
     const retained = retainLoadedDocumentForEntry(entry, doc);
     expect(retained?.kind).toBe("loaded");
-    expect(retained?.document.sections).toHaveLength(1);
-    expect(retained?.document.sections[0]?.sectionKey).toBe("key-unstaged");
-  });
-});
-
-describe("restoreReviewReadingViewport (P0)", () => {
-  it("R1: same id + same membership order → skipped (no external restore)", () => {
-    const restoreAnchor = vi.fn(() => true);
-    const pending: PendingReviewAnchor = {
-      anchor: { id: "unstaged-key", offset: -8 },
-      entryKey: "entry:a",
-      generation: 3,
-      preferredSide: "unstaged",
-      // 纯高度：membership 序不变
-      previousItemIds: ["unstaged-key", "unstaged-other"],
-      restored: false,
-      scrollTop: 420,
-    };
-    expect(
-      restoreReviewReadingViewport(
-        { restoreAnchor },
-        pending,
-        ["unstaged-key", "unstaged-other"],
-        new Map([
-          ["unstaged-key", "entry:a"],
-          ["unstaged-other", "entry:b"],
-        ]),
-        new Map([
-          ["unstaged-key", "unstaged"],
-          ["unstaged-other", "unstaged"],
-        ])
-      )
-    ).toBe("skipped");
-    expect(restoreAnchor).not.toHaveBeenCalled();
-  });
-
-  it("R1b: same id + topology insert-above → skipped (Pierre line anchor)", () => {
-    const restoreAnchor = vi.fn(() => true);
-    const pending: PendingReviewAnchor = {
-      anchor: { id: "unstaged-key", offset: -8 },
-      entryKey: "entry:a",
-      generation: 3,
-      preferredSide: "unstaged",
-      previousItemIds: ["unstaged-key"],
-      restored: false,
-      scrollTop: 420,
-    };
-    expect(
-      restoreReviewReadingViewport(
-        { restoreAnchor },
-        pending,
-        ["staged-key", "unstaged-key"],
-        new Map([
-          ["staged-key", "entry:a"],
-          ["unstaged-key", "entry:a"],
-        ]),
-        new Map([
-          ["staged-key", "staged"],
-          ["unstaged-key", "unstaged"],
-        ])
-      )
-    ).toBe("skipped");
-    expect(restoreAnchor).not.toHaveBeenCalled();
-  });
-
-  it("R2: half-stage remaps to unstaged operation side not staged first", () => {
-    const restoreAnchor = vi.fn(() => true);
-    const pending: PendingReviewAnchor = {
-      anchor: { id: "old-unstaged", offset: -24 },
-      entryKey: "entry:a",
-      generation: 3,
-      preferredSide: "unstaged",
-      previousItemIds: ["old-unstaged"],
-      restored: false,
-      scrollTop: 420,
-    };
-    expect(
-      restoreReviewReadingViewport(
-        { restoreAnchor },
-        pending,
-        ["staged-key", "unstaged-key"],
-        new Map([
-          ["staged-key", "entry:a"],
-          ["unstaged-key", "entry:a"],
-        ]),
-        new Map([
-          ["staged-key", "staged"],
-          ["unstaged-key", "unstaged"],
-        ])
-      )
-    ).toBe("restored");
-    expect(restoreAnchor).toHaveBeenCalledWith({
-      id: "unstaged-key",
-      offset: -24,
-    });
-  });
-
-  it("R4: full stage lands neighborhood not same-entry staged", () => {
-    const restoreAnchor = vi.fn(() => true);
-    const pending: PendingReviewAnchor = {
-      anchor: { id: "unstaged:a", offset: -30 },
-      entryKey: "entry:a",
-      generation: 3,
-      preferredSide: "unstaged",
-      previousItemIds: ["unstaged:a", "unstaged:b"],
-      restored: false,
-      scrollTop: null,
-    };
-    expect(
-      restoreReviewReadingViewport(
-        { restoreAnchor },
-        pending,
-        ["staged:a", "unstaged:b"],
-        new Map([
-          ["staged:a", "entry:a"],
-          ["unstaged:b", "entry:b"],
-        ]),
-        new Map([
-          ["staged:a", "staged"],
-          ["unstaged:b", "unstaged"],
-        ])
-      )
-    ).toBe("restored");
-    expect(restoreAnchor).toHaveBeenCalledWith({
-      id: "unstaged:b",
-      offset: 0,
-    });
-  });
-
-  it("failed restore when CodeView rejects target keeps result for retry", () => {
-    const restoreAnchor = vi.fn(() => false);
-    const pending: PendingReviewAnchor = {
-      anchor: { id: "old-unstaged", offset: -10 },
-      entryKey: "entry:a",
-      generation: 3,
-      preferredSide: "unstaged",
-      previousItemIds: ["old-unstaged"],
-      restored: false,
-      scrollTop: null,
-    };
-    expect(
-      restoreReviewReadingViewport(
-        { restoreAnchor },
-        pending,
-        ["staged-key", "unstaged-key"],
-        new Map([
-          ["staged-key", "entry:a"],
-          ["unstaged-key", "entry:a"],
-        ]),
-        new Map([
-          ["staged-key", "staged"],
-          ["unstaged-key", "unstaged"],
-        ])
-      )
-    ).toBe("failed");
+    expect(retained?.document).toBe(doc);
+    expect(retained?.document.revision).toBe("rev-1");
   });
 });

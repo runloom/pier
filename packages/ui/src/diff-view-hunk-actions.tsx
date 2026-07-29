@@ -7,50 +7,57 @@
  * - Geometry: `absolute -top-8.5 right-0.5` (Codex `Tn`) over the line-level
  *   annotation slot — not block bottom-right, not bottom-full / translate hacks
  * - Reveal: per-file hover (`visible` from PierDiffView), like `group/file-diff`
- * - Buttons: icon-xs + ghost + Tooltip (Pier file-header density)
+ * - Buttons: icon-xs + ghost；原生 title 避免碎片化大差异为每个按钮挂 Tooltip portal
  */
 import { Minus, Plus, RotateCcw } from "lucide-react";
 import type { ReactNode } from "react";
 import { Button } from "./button.tsx";
-import { Tooltip, TooltipContent, TooltipTrigger } from "./tooltip.tsx";
+import { Spinner } from "./spinner.tsx";
 import { cn } from "./utils.ts";
 
 export interface PierHunkAnnotationMetadata {
+  readonly canRevert?: boolean;
   /**
    * 0-based change island inside the @@ hunk (multiple green/red blocks per @@).
    * Stage/unstage extract only this island, not the whole @@.
    */
   readonly changeBlockIndex: number;
+  readonly changeKey: string;
   readonly hunkIndex: number;
   readonly kind: "hunk-actions";
   readonly path: string;
-  /** Codex hunkActionsVariant: drives Stage vs Unstage primary action. */
-  readonly variant: "staged" | "unstaged";
+  readonly stageState: "partial" | "staged" | "unstaged";
 }
 
 export type PierHunkAction = "stage" | "unstage" | "revert";
 
 export interface PierHunkActionEvent {
   readonly action: PierHunkAction;
-  readonly changeBlockIndex: number;
-  readonly hunkIndex: number;
+  readonly changeKey: string;
   readonly itemId: string;
   readonly path: string;
   readonly scope: "hunk";
-  readonly variant: "staged" | "unstaged";
 }
 
 export interface PierHunkActionLabels {
   readonly revertHunk: string;
   readonly stageHunk: string;
+  readonly stageRemainingHunk?: string;
   readonly unstageHunk: string;
 }
 
 /** Codex Vx primary action for the current review section. */
 export function primaryHunkActionForVariant(
-  variant: "staged" | "unstaged"
+  variant: "partial" | "staged" | "unstaged"
 ): "stage" | "unstage" {
   return variant === "staged" ? "unstage" : "stage";
+}
+
+/** Zed-style section capability: staged hunks can only be unstaged. */
+export function canRevertHunkForVariant(
+  variant: "partial" | "staged" | "unstaged"
+): boolean {
+  return variant !== "staged";
 }
 
 export function isPierHunkAnnotationMetadata(
@@ -64,8 +71,12 @@ export function isPierHunkAnnotationMetadata(
     record.kind === "hunk-actions" &&
     typeof record.hunkIndex === "number" &&
     typeof record.changeBlockIndex === "number" &&
+    typeof record.changeKey === "string" &&
     typeof record.path === "string" &&
-    (record.variant === "staged" || record.variant === "unstaged")
+    (record.canRevert === undefined || typeof record.canRevert === "boolean") &&
+    (record.stageState === "partial" ||
+      record.stageState === "staged" ||
+      record.stageState === "unstaged")
   );
 }
 
@@ -78,16 +89,24 @@ export function PierHunkActionToolbar({
   labels,
   metadata,
   onAction,
+  pendingAction,
+  stageState = metadata.stageState,
 }: {
   readonly disabled?: boolean;
   readonly fileItemId: string;
   readonly labels: PierHunkActionLabels;
   readonly metadata: PierHunkAnnotationMetadata;
   readonly onAction: (action: PierHunkAction) => void;
+  readonly pendingAction?: PierHunkAction;
+  readonly stageState?: "partial" | "staged" | "unstaged";
 }): React.JSX.Element {
-  const primaryAction = primaryHunkActionForVariant(metadata.variant);
-  const primaryLabel =
-    primaryAction === "unstage" ? labels.unstageHunk : labels.stageHunk;
+  const primaryAction = primaryHunkActionForVariant(stageState);
+  let primaryLabel = labels.stageHunk;
+  if (primaryAction === "unstage") {
+    primaryLabel = labels.unstageHunk;
+  } else if (stageState === "partial") {
+    primaryLabel = labels.stageRemainingHunk ?? labels.stageHunk;
+  }
   const PrimaryIcon = primaryAction === "unstage" ? Minus : Plus;
 
   return (
@@ -104,25 +123,29 @@ export function PierHunkActionToolbar({
         )}
         data-file-item-id={fileItemId}
         data-pier-hunk-actions=""
+        data-stage-state={stageState}
         data-testid="pier-hunk-actions"
-        data-variant={metadata.variant}
       >
-        <HunkIconButton
-          disabled={disabled}
-          label={labels.revertHunk}
-          onClick={() => {
-            onAction("revert");
-          }}
-          testId="pier-hunk-revert"
-        >
-          <RotateCcw data-icon="inline-start" />
-        </HunkIconButton>
+        {(metadata.canRevert ?? canRevertHunkForVariant(stageState)) ? (
+          <HunkIconButton
+            disabled={disabled}
+            label={labels.revertHunk}
+            onClick={() => {
+              onAction("revert");
+            }}
+            pending={pendingAction === "revert"}
+            testId="pier-hunk-revert"
+          >
+            <RotateCcw data-icon="inline-start" />
+          </HunkIconButton>
+        ) : null}
         <HunkIconButton
           disabled={disabled}
           label={primaryLabel}
           onClick={() => {
             onAction(primaryAction);
           }}
+          pending={pendingAction === primaryAction}
           testId={
             primaryAction === "unstage"
               ? "pier-hunk-unstage"
@@ -141,46 +164,49 @@ function HunkIconButton({
   disabled = false,
   label,
   onClick,
+  pending,
   testId,
 }: {
   readonly children: React.ReactNode;
   readonly disabled?: boolean;
   readonly label: string;
   readonly onClick: () => void;
+  readonly pending: boolean;
   readonly testId: string;
 }): React.JSX.Element {
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <span className="inline-flex">
-          <Button
-            aria-label={label}
-            data-testid={testId}
-            disabled={disabled}
-            onClick={(event) => {
-              event.preventDefault();
-              event.stopPropagation();
-              if (disabled) {
-                return;
-              }
-              onClick();
-            }}
-            onPointerDown={(event) => {
-              event.stopPropagation();
-            }}
-            size="icon-xs"
-            tone="muted"
-            type="button"
-            variant="ghost"
-          >
-            {children}
-          </Button>
-        </span>
-      </TooltipTrigger>
-      <TooltipContent align="center" side="top" sideOffset={6}>
-        {label}
-      </TooltipContent>
-    </Tooltip>
+    <Button
+      aria-busy={pending || undefined}
+      aria-label={label}
+      data-testid={testId}
+      disabled={disabled}
+      onClick={(event) => {
+        event.preventDefault();
+        event.stopPropagation();
+        if (disabled) {
+          return;
+        }
+        onClick();
+      }}
+      onPointerDown={(event) => {
+        event.stopPropagation();
+      }}
+      size="icon-xs"
+      title={label}
+      tone="muted"
+      type="button"
+      variant="ghost"
+    >
+      {pending ? (
+        <Spinner
+          aria-hidden="true"
+          className="size-3.5"
+          data-icon="inline-start"
+        />
+      ) : (
+        children
+      )}
+    </Button>
   );
 }
 
@@ -192,8 +218,18 @@ export function renderPierHunkAnnotation(options: {
   readonly itemId: string;
   readonly labels: PierHunkActionLabels;
   readonly onHunkAction?: (event: PierHunkActionEvent) => void;
+  readonly pendingAction?: PierHunkAction;
+  readonly stageState?: "partial" | "staged" | "unstaged";
 }): ReactNode {
-  const { annotation, disabled, itemId, labels, onHunkAction } = options;
+  const {
+    annotation,
+    disabled,
+    itemId,
+    labels,
+    onHunkAction,
+    pendingAction,
+    stageState,
+  } = options;
   if (!(onHunkAction && isPierHunkAnnotationMetadata(annotation.metadata))) {
     return null;
   }
@@ -207,14 +243,14 @@ export function renderPierHunkAnnotation(options: {
       onAction={(action) => {
         onHunkAction({
           action,
-          changeBlockIndex: metadata.changeBlockIndex,
-          hunkIndex: metadata.hunkIndex,
+          changeKey: metadata.changeKey,
           itemId,
           path: metadata.path,
           scope: "hunk",
-          variant: metadata.variant,
         });
       }}
+      {...(pendingAction === undefined ? {} : { pendingAction })}
+      {...(stageState === undefined ? {} : { stageState })}
     />
   );
 }

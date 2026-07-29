@@ -209,6 +209,7 @@ interface GitReviewTreeContextMenuOptions {
   context: RendererPluginContext;
   contextId: string;
   gitRootPath: string;
+  mutationAuthorityBlocked: boolean;
   sourcePanelId?: string;
   treeModel: GitReviewTreeModel;
 }
@@ -217,6 +218,7 @@ export function useGitReviewTreeContextMenu({
   context,
   contextId,
   gitRootPath,
+  mutationAuthorityBlocked,
   sourcePanelId,
   treeModel,
 }: GitReviewTreeContextMenuOptions) {
@@ -255,16 +257,19 @@ export function useGitReviewTreeContextMenu({
             discardPaths: flags.discardPaths,
             discardTrackedPaths: flags.discardTrackedPaths,
             discardUntrackedPaths: flags.discardUntrackedPaths,
+            expectedIndexRevision: treeModel.mutation.expectedIndexRevision,
             gitRootPath,
             hasConflict: flags.hasConflict,
             hasStaged: flags.hasStaged,
             hasUnstaged: flags.hasUnstaged,
             kind: item.kind,
+            mutationBlocked: mutationAuthorityBlocked,
             oldPaths: entry?.oldPaths ?? [],
             path,
             stagePaths: flags.stagePaths,
             unstagePaths: flags.unstagePaths,
             unstagedStatus: flags.unstagedStatus,
+            uncommitted: treeModel.mutation.uncommitted,
           },
           sourcePanelComponent: GIT_CHANGES_PANEL_ID,
           ...(sourcePanelId ? { sourcePanelId } : {}),
@@ -284,6 +289,13 @@ export function useGitReviewTreeContextMenu({
           context.notifications.error(title);
         });
     },
-    [context, contextId, gitRootPath, sourcePanelId, treeModel]
+    [
+      context,
+      contextId,
+      gitRootPath,
+      mutationAuthorityBlocked,
+      sourcePanelId,
+      treeModel,
+    ]
   );
 }

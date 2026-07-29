@@ -6,6 +6,7 @@ import { execGit } from "../../../src/main/services/git-exec.ts";
 import { createGitService } from "../../../src/main/services/git-service.ts";
 import {
   extractChangeBlockPatch,
+  extractChangeBlocksPatch,
   extractHunkPatch,
 } from "../../../src/shared/git-patch-hunk.ts";
 
@@ -221,5 +222,79 @@ describe("git.applyPatch (Codex-style)", () => {
     });
     expect(cached).toContain("+INSERT_A");
     expect(cached).toContain("+INSERT_B");
+  });
+
+  it("stages multiple islands from one hunk with one atomic git apply", async () => {
+    const root = await initRepo();
+    temps.push(root);
+    await writeFile(
+      join(root, "file.txt"),
+      `${[
+        "line1",
+        "INSERT_A",
+        "line2",
+        "line3",
+        "INSERT_B",
+        ...Array.from({ length: 40 }, () => "pad"),
+      ].join("\n")}\n`,
+      "utf8"
+    );
+    const patch = await execGit(["diff", "--", "file.txt"], { cwd: root });
+    const combined = extractChangeBlocksPatch(patch, [
+      { changeBlockIndex: 0, hunkIndex: 0 },
+      { changeBlockIndex: 1, hunkIndex: 0 },
+    ]);
+
+    const git = createGitService();
+    const result = await git.applyPatch(root, {
+      atomic: true,
+      diff: combined,
+      target: "staged",
+    });
+
+    expect(result.status).toBe("success");
+    expect(await execGit(["diff", "--", "file.txt"], { cwd: root })).toBe("");
+  });
+
+  it("unstages selected non-adjacent islands with one atomic reverse apply", async () => {
+    const root = await initRepo();
+    temps.push(root);
+    await writeFile(
+      join(root, "file.txt"),
+      `${[
+        "line1",
+        "INSERT_A",
+        "line2",
+        "INSERT_B",
+        "line3",
+        "INSERT_C",
+        ...Array.from({ length: 40 }, () => "pad"),
+      ].join("\n")}\n`,
+      "utf8"
+    );
+    await execGit(["add", "--", "file.txt"], { cwd: root });
+    const cached = await execGit(["diff", "--cached", "--", "file.txt"], {
+      cwd: root,
+    });
+    const combined = extractChangeBlocksPatch(cached, [
+      { changeBlockIndex: 0, hunkIndex: 0 },
+      { changeBlockIndex: 2, hunkIndex: 0 },
+    ]);
+
+    const git = createGitService();
+    const result = await git.applyPatch(root, {
+      atomic: true,
+      diff: combined,
+      revert: true,
+      target: "staged",
+    });
+
+    expect(result.status).toBe("success");
+    const stillStaged = await execGit(["diff", "--cached", "--", "file.txt"], {
+      cwd: root,
+    });
+    expect(stillStaged).toContain("+INSERT_B");
+    expect(stillStaged).not.toContain("+INSERT_A");
+    expect(stillStaged).not.toContain("+INSERT_C");
   });
 });
