@@ -33,11 +33,18 @@ describe("managed-plugin-file", () => {
     );
   });
 
-  it("解析版本化 marker 与历史 loose marker", () => {
+  it("只把版本化 pier-agent-status marker 识别为受管文件", () => {
     expect(
       pierManagedPluginGeneration("x pier-agent-status:v5 (managed by Pier) y")
     ).toBe(5);
-    expect(pierManagedPluginGeneration("managed by Pier")).toBe(1);
+    expect(
+      pierManagedPluginGeneration("// pier-agent-status:v1 (managed by Pier)")
+    ).toBe(1);
+    expect(
+      pierManagedPluginGeneration(
+        "// This custom plugin is managed by Pier's platform team."
+      )
+    ).toBeNull();
     expect(pierManagedPluginGeneration("// not managed by pier\n")).toBeNull();
     expect(pierManagedPluginGeneration("user plugin")).toBeNull();
     expect(isPierManagedPluginContent(pierManagedPluginMarker(3))).toBe(true);
@@ -53,6 +60,21 @@ describe("managed-plugin-file", () => {
     });
     expect(result).toBe("skipped-unmanaged");
     expect(await readFile(path, "utf8")).toBe("// user owned\n");
+  });
+
+  it("自然语言肯定语境中的 managed by Pier 不授予文件所有权", async () => {
+    const path = await tempPath("plugin.ts");
+    const userOwned =
+      "// This custom plugin is managed by Pier's platform team.\nexport {};\n";
+    await writeFile(path, userOwned, "utf8");
+    const result = await writeManagedPluginFile({
+      path,
+      source: `// ${pierManagedPluginMarker()}\nexport {};\n`,
+      label: "test",
+    });
+    expect(result).toBe("skipped-unmanaged");
+    expect(isPierManagedPluginContent(userOwned)).toBe(false);
+    expect(await readFile(path, "utf8")).toBe(userOwned);
   });
 
   it("磁盘更高世代不降级", async () => {

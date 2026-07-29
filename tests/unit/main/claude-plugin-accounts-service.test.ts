@@ -468,7 +468,7 @@ describe("pier.claude accounts service", () => {
     const usage = service.snapshot().activeUsage;
     expect(usage?.status).toBe("error");
     // Last-good meters retained instead of blanking the dashboard.
-    expect(usage?.windows[0]).toMatchObject({ usedPercent: 42 });
+    expect(usage?.metrics[0]).toMatchObject({ usedPercent: 42 });
   });
 
   it("re-detects API-key mode on drift and broadcasts only on change", async () => {
@@ -548,8 +548,9 @@ describe("pier.claude accounts service", () => {
     await service.refreshUsage({ force: true });
     const usage = service.snapshot().activeUsage;
     expect(usage?.status).toBe("ok");
-    expect(usage?.windows[0]).toMatchObject({
-      limitId: "session",
+    expect(usage?.metrics[0]).toMatchObject({
+      groupId: "claude:session",
+      kind: "quota",
       usedPercent: 5,
     });
   });

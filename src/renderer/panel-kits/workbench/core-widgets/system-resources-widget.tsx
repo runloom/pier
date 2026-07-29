@@ -28,12 +28,14 @@ import {
   workbenchKpiLayoutMode,
 } from "@/lib/workbench/kpi-auto-layout.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
+import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import {
   acquirePierResourcePolling,
   pollPierResourceOnce,
   usePierResourceStore,
 } from "@/stores/pier-resource.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { projectPathFromContext } from "@/stores/workspace-panel-helpers.ts";
 import {
   densityFor,
   processRowLimitFor,
@@ -127,13 +129,16 @@ function kpiValue(
 
 function sessionTitle(
   identity: SessionIdentity,
+  projectPath: string | undefined,
   t: ReturnType<typeof useT>
 ): string {
   switch (identity.kind) {
     case "agent":
+      // 路径锚点必传：否则无标题会话塌成裸 catalog 标签，多面板无法区分。
       return resolveAgentSessionTitle(
         agentSessionTitleInput({
           agentId: identity.agentId,
+          projectRootPath: projectPath,
           sessionTitle: identity.sessionTitle,
         })
       ).primary;
@@ -177,6 +182,7 @@ export function SystemResourcesWidget({
   const locale = i18next.language || "en";
   const previousRefreshTokenRef = useRef(refreshToken);
   const workspaceApi = useWorkspaceStore((s) => s.api);
+  const descriptors = usePanelDescriptorStore((s) => s.descriptors);
 
   useEffect(() => {
     if (!visible) {
@@ -315,7 +321,13 @@ export function SystemResourcesWidget({
                         )}
                       />
                       <span className="min-w-0 truncate font-medium text-foreground">
-                        {sessionTitle(session.identity, t)}
+                        {sessionTitle(
+                          session.identity,
+                          projectPathFromContext(
+                            descriptors[session.panelId]?.context
+                          ),
+                          t
+                        )}
                       </span>
                     </span>
                     <span className="flex shrink-0 items-center gap-2 text-muted-foreground tabular-nums">

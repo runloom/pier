@@ -14,6 +14,7 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import { WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import type {
   RendererWorkbenchWidgetAction,
@@ -247,6 +248,7 @@ export function WorkbenchWidgetCard({
       </WidgetErrorBoundary>
     );
   };
+  const contentMode = widget.registration?.contentMode ?? "host-scroll";
 
   return (
     <Card
@@ -294,8 +296,11 @@ export function WorkbenchWidgetCard({
         </CardAction>
       </CardHeader>
       <CardContent
-        className="@container flex min-h-0 flex-1 flex-col overflow-y-auto p-0"
-        data-scrollbar="stable"
+        className={cn(
+          "@container flex min-h-0 flex-1 flex-col p-0",
+          contentMode === "contained" ? "overflow-hidden" : "overflow-y-auto"
+        )}
+        data-scrollbar={contentMode === "host-scroll" ? "stable" : undefined}
       >
         {/* 子物料用 h-full/flex-1 铺满内容区；flex 列保证小卡 KPI 能贴底吃高度 */}
         <div className="flex min-h-0 min-w-0 flex-1 flex-col">

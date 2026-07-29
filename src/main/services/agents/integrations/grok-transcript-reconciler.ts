@@ -1,7 +1,7 @@
 import { readdir, stat } from "node:fs/promises";
-import { homedir } from "node:os";
 import { join, resolve } from "node:path";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import { resolveGrokSessionsRoot } from "../grok-paths.ts";
 import {
   createTranscriptTailReconciler,
   type TranscriptTailReconciler,
@@ -9,6 +9,17 @@ import {
 } from "./transcript-tail-reconciler.ts";
 
 export type GrokTranscriptReconciler = TranscriptTailReconciler;
+
+export const GROK_TRANSCRIPT_TERMINAL_EVIDENCE = [
+  {
+    nativeEvent: "grok.updates.turn_completed.cancelled",
+    pierEvent: "TurnInterrupted",
+  },
+  {
+    nativeEvent: "grok.updates.turn_completed.end_turn",
+    pierEvent: "TurnCompleted",
+  },
+] as const;
 
 interface GrokTranscriptReconcilerOpts {
   onTerminalEvent: Parameters<
@@ -21,15 +32,18 @@ interface GrokTranscriptReconcilerOpts {
 /**
  * Grok Build CLI 终态对账器。
  *
- * 官方 hooks 文档（v0.2.112）：Esc/Ctrl+C、refused、max-turns 与 Stop 门禁
- * 满 8 次强制结束 **不触发 Stop hook**。可信终态写在会话
+ * 当前运行证据来自 v0.2.114 签名二进制及随附 hooks 文档/变更日志：
+ * Esc/Ctrl+C、refused、max-turns 与 Stop 门禁满 8 次强制结束
+ * **不触发 Stop hook**。公开 v0.2.112 源码快照只用于核验
+ * `updates.jsonl` 字段和写入调用点。可信终态写在会话
  * `updates.jsonl` 的 `sessionUpdate: turn_completed`：
  * - `stop_reason: cancelled` → TurnInterrupted（用户中断）
  * - `stop_reason: end_turn` → TurnCompleted（正常完成；与 advisory Stop 双轨，
  *   覆盖强制结束/漏报 Stop）
  * - `error` / `rate_limit` 不在此映射（优先 StopFailure→error；避免谎报 ready）
  *
- * 路径：`~/.grok/sessions/<encoded-cwd>/<sessionId>/updates.jsonl`。
+ * 路径：`<GROK_HOME>/sessions/<encoded-cwd>/<sessionId>/updates.jsonl`
+ * （未设置时 `GROK_HOME` 为 `~/.grok`）。
  * hook 当前通常不带 transcriptPath，observe 时按 sessionId 在 sessions 根下解析。
  * 只补终态，不投影 tool / waiting / 内容。
  */
@@ -37,7 +51,7 @@ export function createGrokTranscriptReconciler(
   opts: GrokTranscriptReconcilerOpts
 ): GrokTranscriptReconciler {
   const sessionsRoot = resolve(opts.sessionsRoot ?? defaultGrokSessionsRoot());
-  const pathCache = new Map<string, string | null>();
+  const pathCache = new Map<string, string>();
   const inner = createTranscriptTailReconciler({
     agent: "grok",
     classifyLine: classifyGrokUpdatesLine,
@@ -86,11 +100,7 @@ export function createGrokTranscriptReconciler(
 export function defaultGrokSessionsRoot(
   env: NodeJS.ProcessEnv = process.env
 ): string {
-  const grokHome = env.GROK_HOME?.trim();
-  if (grokHome) {
-    return join(grokHome, "sessions");
-  }
-  return join(env.HOME ?? homedir(), ".grok", "sessions");
+  return resolveGrokSessionsRoot(env);
 }
 
 /**
@@ -124,15 +134,13 @@ export function classifyGrokUpdatesLine(
   const reason = update.stop_reason;
   if (reason === "cancelled") {
     return {
-      nativeEvent: "grok.updates.turn_completed.cancelled",
-      pierEvent: "TurnInterrupted",
+      ...GROK_TRANSCRIPT_TERMINAL_EVIDENCE[0],
       turnId: "",
     };
   }
   if (reason === "end_turn") {
     return {
-      nativeEvent: "grok.updates.turn_completed.end_turn",
-      pierEvent: "TurnCompleted",
+      ...GROK_TRANSCRIPT_TERMINAL_EVIDENCE[1],
       turnId: "",
     };
   }
@@ -142,7 +150,7 @@ export function classifyGrokUpdatesLine(
 async function resolveGrokUpdatesPath(
   event: AgentHookEventPayload,
   sessionsRoot: string,
-  cache: Map<string, string | null>
+  cache: Map<string, string>
 ): Promise<string | null> {
   const explicit = event.transcriptPath?.trim();
   if (explicit) {
@@ -152,15 +160,24 @@ async function resolveGrokUpdatesPath(
   if (!sessionId) {
     return null;
   }
-  if (cache.has(sessionId)) {
-    return cache.get(sessionId) ?? null;
+  const cached = cache.get(sessionId);
+  if (cached) {
+    const cachedStat = await stat(cached).catch(() => null);
+    if (cachedStat?.isFile()) {
+      return cached;
+    }
+    cache.delete(sessionId);
   }
   const resolved = await findUpdatesJsonlForSession(sessionsRoot, sessionId);
-  cache.set(sessionId, resolved);
-  if (cache.size > 256) {
-    const first = cache.keys().next().value;
-    if (first !== undefined) {
-      cache.delete(first);
+  // SessionStart 先于 updates.jsonl 创建是正常竞态；只缓存成功路径，
+  // 让后续 observe 能重新扫描。已缓存路径也会在上方失效后重找。
+  if (resolved) {
+    cache.set(sessionId, resolved);
+    if (cache.size > 256) {
+      const first = cache.keys().next().value;
+      if (first !== undefined) {
+        cache.delete(first);
+      }
     }
   }
   return resolved;

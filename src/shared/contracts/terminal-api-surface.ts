@@ -40,6 +40,7 @@ import type {
 } from "./terminal-debug.ts";
 import type { TerminalEndState } from "./terminal-end-state.ts";
 import type { TerminalPanelSessionSnapshot } from "./terminal-panel-session.ts";
+import type { TerminalFrameCommittedEvent } from "./terminal-presentation.ts";
 
 export interface TerminalAPI {
   applyHostSnapshot(snapshot: TerminalHostSnapshot): void;
@@ -108,6 +109,10 @@ export interface TerminalAPI {
   onEndStateChanged(cb: (end: TerminalEndState) => void): () => void;
   /** native terminal 内容区收到左键聚焦意图时, 通知 renderer 激活对应 dockview tab. */
   onFocusRequest: (cb: (req: TerminalFocusRequest) => void) => () => void;
+  /** 当前 native 实例、当前像素尺寸的首帧已提交到 Core Animation 图层树。 */
+  onFrameCommitted(
+    cb: (event: TerminalFrameCommittedEvent) => void
+  ): () => void;
   onOpenUrl(cb: (event: TerminalOpenUrlEvent) => void): () => void;
   /** renderer 下发的 presentation 已被 native 同步应用, 用于 resize 撤占位的精确握手. */
   onPresentationApplied(

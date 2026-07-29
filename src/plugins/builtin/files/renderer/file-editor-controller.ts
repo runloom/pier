@@ -24,6 +24,7 @@ import type {
   FileDocumentSettleResult,
   FileSaveOutcome,
 } from "./file-save-outcome.ts";
+import { showFilesDraftProtectionError } from "./files-dialog-feedback.ts";
 import { getDocument, normalizeDocumentEol } from "./files-document-store.ts";
 import type {
   FilesDocument,
@@ -380,14 +381,7 @@ export class FileEditorController extends FileEditorControllerViewFacade {
   }
 
   async showDraftProtectionError(message: string): Promise<void> {
-    await this.#context.dialogs.alert({
-      body: message,
-      title: this.#context.i18n.t(
-        "files.draftProtection.failed",
-        undefined,
-        "Unable to auto-save draft"
-      ),
-    });
+    await showFilesDraftProtectionError(this.#context, message);
   }
 
   async beginPathMutation(

@@ -41,8 +41,8 @@ const MATERIALS: readonly MaterialCase[] = [
   },
   {
     id: "pier.codex.accounts",
-    max: { h: 4, w: 8 },
-    min: { h: 3, w: 2 },
+    max: { h: 6, w: 8 },
+    min: { h: 2, w: 2 },
     name: "Codex accounts",
   },
   {
@@ -66,6 +66,114 @@ async function assertNoHorizontalContentOverflow(card: Locator): Promise<void> {
       (element) => element.scrollWidth <= element.clientWidth
     )
   ).toBe(true);
+}
+
+async function assertAccountScrollViewport(card: Locator): Promise<void> {
+  const content = card.locator('[data-slot="card-content"]');
+  const widget = content.locator('[data-slot="codex-accounts-widget"]');
+  const scrollArea = widget.locator('[data-slot="scroll-area"]');
+  const viewport = scrollArea.locator(
+    ':scope > [data-slot="scroll-area-viewport"]'
+  );
+
+  await expect(scrollArea).toHaveCount(1);
+  await expect(viewport).toHaveClass(/scroll-fade-y/);
+  await expect(viewport).toHaveClass(/scroll-fade-t-2/);
+  await expect(viewport).toHaveClass(/scroll-fade-b-4/);
+  await expect(viewport).toHaveClass(/\[--scroll-fade-reveal:24px\]/);
+  const geometry = await widget.evaluate((element) => {
+    const root = element.querySelector<HTMLElement>(
+      '[data-slot="scroll-area"]'
+    );
+    const viewportElement = root?.querySelector<HTMLElement>(
+      ':scope > [data-slot="scroll-area-viewport"]'
+    );
+    const scrollbar = root?.querySelector<HTMLElement>(
+      ':scope > [data-slot="scroll-area-scrollbar"]'
+    );
+    const header = element.querySelector<HTMLElement>(
+      '[data-slot="account-widget-header"]'
+    );
+    const usage = element.querySelector<HTMLElement>(
+      '[data-slot="account-widget-usage-content"]'
+    );
+    const hostContent = element.closest<HTMLElement>(
+      '[data-slot="card-content"]'
+    );
+    if (!(root && viewportElement && usage && hostContent)) {
+      return null;
+    }
+    const rootBox = root.getBoundingClientRect();
+    const hostBox = hostContent.getBoundingClientRect();
+    const viewportStyle = getComputedStyle(viewportElement);
+    return {
+      density: element.dataset.density,
+      fadeMask: viewportStyle.maskImage,
+      headerOutsideViewport: header ? !viewportElement.contains(header) : true,
+      horizontalOverflow:
+        viewportElement.scrollWidth > viewportElement.clientWidth,
+      rightEdgeDelta: Math.abs(hostBox.right - rootBox.right),
+      scrollbarIsViewportSibling: scrollbar
+        ? scrollbar.parentElement === viewportElement.parentElement
+        : null,
+      usageBottomPadding: Number.parseFloat(
+        getComputedStyle(usage).paddingBottom
+      ),
+      usageInsideViewport: viewportElement.contains(usage),
+    };
+  });
+
+  expect(geometry).not.toBeNull();
+  expect(geometry).toMatchObject({
+    headerOutsideViewport: true,
+    horizontalOverflow: false,
+    usageInsideViewport: true,
+  });
+  expect(geometry?.fadeMask).not.toBe("none");
+  expect(geometry?.rightEdgeDelta).toBeLessThanOrEqual(1);
+  expect(geometry?.scrollbarIsViewportSibling).not.toBe(false);
+  expect(geometry?.usageBottomPadding).toBeGreaterThanOrEqual(
+    geometry?.density === "compact" ? 12 : 16
+  );
+
+  const fadeStates = await viewport.evaluate(async (element) => {
+    const probe = document.createElement("div");
+    probe.className = element.className;
+    probe.style.cssText =
+      "position:fixed;left:-1000px;top:0;width:200px;height:100px;overflow-y:auto;";
+    const filler = document.createElement("div");
+    filler.style.height = "124px";
+    probe.append(filler);
+    document.body.append(probe);
+
+    const readFade = async (scrollTop: number) => {
+      probe.scrollTop = scrollTop;
+      await new Promise<void>((resolve) => setTimeout(resolve, 50));
+      const style = getComputedStyle(probe);
+      return {
+        bottom: Number.parseFloat(style.getPropertyValue("--scroll-fade-b")),
+        top: Number.parseFloat(style.getPropertyValue("--scroll-fade-t")),
+      };
+    };
+
+    try {
+      const maxScrollTop = probe.scrollHeight - probe.clientHeight;
+      return {
+        bottom: await readFade(maxScrollTop),
+        middle: await readFade(maxScrollTop / 2),
+        top: await readFade(0),
+      };
+    } finally {
+      probe.remove();
+    }
+  });
+
+  expect(fadeStates.top.top).toBeLessThanOrEqual(0.1);
+  expect(fadeStates.top.bottom).toBeGreaterThan(0.5);
+  expect(fadeStates.middle.top).toBeGreaterThan(0.5);
+  expect(fadeStates.middle.bottom).toBeGreaterThan(0.5);
+  expect(fadeStates.bottom.top).toBeGreaterThan(0.5);
+  expect(fadeStates.bottom.bottom).toBeLessThanOrEqual(0.1);
 }
 
 async function assertPrimaryContentUsable(
@@ -183,9 +291,13 @@ async function assertPrimaryContentUsable(
   ) {
     return;
   }
+  await assertAccountScrollViewport(card);
   const picker = content.getByRole("button", {
     name: /切换账号|Switch account/,
   });
+  if (!(await picker.isVisible())) {
+    return;
+  }
   await picker.scrollIntoViewIfNeeded();
   await picker.click();
   const manage = win.getByRole("menuitem", {

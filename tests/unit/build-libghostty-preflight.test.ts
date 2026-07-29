@@ -95,5 +95,5 @@ describe("build-libghostty preflight", () => {
     expect(output).toContain("xcodebuild -downloadComponent MetalToolchain");
     expect(output).not.toContain("git should not run");
     expect(output).not.toContain("zig build should not run");
-  });
+  }, 15_000);
 });

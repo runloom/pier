@@ -2,11 +2,12 @@ import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent-session.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,
-  pierHookCommandWithStdinSessionId,
-  pierHookCommandWithStdinStatusDispatch,
+  pierHookCommandV3WithStdin,
+  pierHookCommandV3WithStdinStatusDispatch,
   type StdinStatusDispatchCase,
   transformJsonConfig,
   transformPierHooksUnlessNewer,
@@ -17,6 +18,11 @@ const AGENT_ID: AgentKind = "cursor";
 const TIMEOUT_SECONDS = 10;
 
 const configPath = () => join(homedir(), ".cursor", "hooks.json");
+
+type StandardV3Event = Exclude<
+  AgentHookEventPayloadV3["event"],
+  "InteractionRequested" | "InteractionResolved"
+>;
 
 /**
  * Cursor hook 事件 → pier 事件名（cursor.com/docs/hooks 语义为准）。
@@ -38,7 +44,7 @@ const configPath = () => join(homedir(), ".cursor", "hooks.json");
  */
 export const CURSOR_EVENTS: ReadonlyArray<{
   nativeEvent: string;
-  pierEvent: string;
+  pierEvent: StandardV3Event;
 }> = [
   { nativeEvent: "sessionStart", pierEvent: "SessionStart" },
   { nativeEvent: "beforeSubmitPrompt", pierEvent: "PromptSubmit" },
@@ -88,11 +94,84 @@ function hooksRecord(
   return {};
 }
 
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!(value && typeof value === "object") || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isCursorInstallShapeSupported(
+  settings: Record<string, unknown>
+): boolean {
+  if (
+    Object.hasOwn(settings, "version") &&
+    typeof settings.version !== "number"
+  ) {
+    return false;
+  }
+  if (!Object.hasOwn(settings, "hooks")) {
+    return true;
+  }
+  const hooks = settings.hooks;
+  if (!isPlainObject(hooks)) {
+    return false;
+  }
+  for (const nativeEvent of [
+    ...CURSOR_EVENTS.map((event) => event.nativeEvent),
+    CURSOR_STOP_NATIVE_EVENT,
+  ]) {
+    if (
+      Object.hasOwn(hooks, nativeEvent) &&
+      !Array.isArray(hooks[nativeEvent])
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+function warnUnsupportedCursorShape(): void {
+  console.warn(
+    `[agent-hooks:${AGENT_ID}] hooks/version has unrecognized structure, skip install`
+  );
+}
+
 function isPierCursorEntry(entry: unknown): boolean {
   if (!entry || typeof entry !== "object") {
     return false;
   }
   return isPierHookCommand((entry as CursorHookEntry).command);
+}
+
+function cursorHookCommand(
+  nativeEvent: string,
+  event: StandardV3Event
+): string {
+  const subagent =
+    nativeEvent === "subagentStart" || nativeEvent === "subagentStop";
+  return pierHookCommandV3WithStdin({
+    ...(subagent
+      ? {
+          actorHintFromAgentId: true,
+          agentInstanceIdFields: ["subagent_id", "subagentId"],
+          agentTypeFields: ["subagent_type", "subagentType"],
+          parentSessionIdFields: [
+            "parent_conversation_id",
+            "parentConversationId",
+            "conversation_id",
+            "conversationId",
+          ],
+          sessionIdAsParent: true,
+          suppressTurnId: true,
+        }
+      : {}),
+    agentId: AGENT_ID,
+    event,
+    nativeEvent,
+    turnIdFields: ["generation_id", "generationId"],
+  });
 }
 
 /**
@@ -103,6 +182,10 @@ function isPierCursorEntry(entry: unknown): boolean {
 export function withPierCursorHooks(
   settings: Record<string, unknown>
 ): Record<string, unknown> {
+  if (!isCursorInstallShapeSupported(settings)) {
+    warnUnsupportedCursorShape();
+    return settings;
+  }
   const hooks = hooksRecord(settings);
   const install = (nativeEvent: string, command: string): void => {
     const current = hooks[nativeEvent];
@@ -114,21 +197,18 @@ export function withPierCursorHooks(
   for (const event of CURSOR_EVENTS) {
     install(
       event.nativeEvent,
-      pierHookCommandWithStdinSessionId(
-        AGENT_ID,
-        event.pierEvent,
-        event.nativeEvent
-      )
+      cursorHookCommand(event.nativeEvent, event.pierEvent)
     );
   }
   install(
     CURSOR_STOP_NATIVE_EVENT,
-    pierHookCommandWithStdinStatusDispatch(
-      AGENT_ID,
-      "Stop",
-      CURSOR_STOP_NATIVE_EVENT,
-      CURSOR_STOP_STATUS_CASES
-    )
+    pierHookCommandV3WithStdinStatusDispatch({
+      agentId: AGENT_ID,
+      cases: CURSOR_STOP_STATUS_CASES,
+      fallbackPierEvent: "Stop",
+      nativeEvent: CURSOR_STOP_NATIVE_EVENT,
+      turnIdFields: ["generation_id", "generationId"],
+    })
   );
   return {
     ...settings,
@@ -173,10 +253,15 @@ export async function installCursorHooks(
   // 若磁盘已有更高 pier-hook-gen，跳过以免旧 worktree 降级命名提取。
   await transformJsonConfig(
     settingsPath,
-    (s) =>
-      transformPierHooksUnlessNewer(s, (current) =>
+    (s) => {
+      if (!isCursorInstallShapeSupported(s)) {
+        warnUnsupportedCursorShape();
+        return s;
+      }
+      return transformPierHooksUnlessNewer(s, (current) =>
         withPierCursorHooks(withoutPierCursorHooks(current))
-      ),
+      );
+    },
     AGENT_ID
   );
 }
@@ -188,13 +273,21 @@ export async function uninstallCursorHooks(
 }
 
 export const cursorIntegration: AgentHookIntegration = {
-  capability: "full",
   detect: () => existsSync(configPath()) || commandExistsOnPath("cursor-agent"),
   id: AGENT_ID,
   // 正常回合终态经 stop.status 分发为 TurnCompleted/TurnInterrupted/error
   // （可信终态, 不经 Stop 通道）；advisory 只约束 status 缺失/未知时的
   // 回落 `Stop`——旧版 cursor CLI 或 payload 变更时退化为候选终态。
-  runtime: { stopAuthority: "advisory" },
+  runtime: {
+    emittedMappings: [
+      ...CURSOR_EVENTS,
+      ...CURSOR_STOP_STATUS_CASES.map(({ nativeStatus, pierEvent }) => ({
+        nativeEvent: `stop.status=${nativeStatus}`,
+        pierEvent,
+      })),
+    ],
+    stopAuthority: "advisory",
+  },
   install: () => installCursorHooks(),
   uninstall: () => uninstallCursorHooks(),
 };

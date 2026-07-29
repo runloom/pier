@@ -61,6 +61,8 @@ export const terminalApi: TerminalAPI = {
     };
   },
   onFocusRequest: (cb) => subscribeIpc("pier:terminal:focus-request", cb),
+  onFrameCommitted: (cb) =>
+    subscribeIpc(PIER_BROADCAST.TERMINAL_FRAME_COMMITTED, cb),
   onSearchOpenRequest: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_SEARCH_OPEN_REQUEST, cb),
   onSearchState: (cb) => subscribeIpc("pier:terminal:search-state", cb),

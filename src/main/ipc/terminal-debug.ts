@@ -240,6 +240,9 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
           cursorSuppressed: booleanValue(surface.cursorSuppressed),
           drawPending: optionalBooleanValue(surface.drawPending),
           drawSequence: optionalNonNegativeNumber(surface.drawSequence),
+          framePresentationRequestSequence: optionalNonNegativeNumber(
+            surface.framePresentationRequestSequence
+          ),
           frame: frameValue(surface.frame),
           ghosttyRenderReadySequence: optionalNonNegativeNumber(
             surface.ghosttyRenderReadySequence
@@ -262,6 +265,10 @@ function normalizeNativeSnapshot(rawJson: string): TerminalDebugNativeSnapshot {
           ),
           nativePanelId,
           panelId: fromNativePanelKey(nativePanelId),
+          presentationCovered: optionalBooleanValue(
+            surface.presentationCovered
+          ),
+          presentationId: optionalNonNegativeNumber(surface.presentationId),
           refreshPending: optionalBooleanValue(surface.refreshPending),
           surfaceVisible: booleanValue(surface.surfaceVisible),
           surfaceGeneration: optionalNonNegativeNumber(

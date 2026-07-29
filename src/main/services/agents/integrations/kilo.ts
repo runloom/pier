@@ -1,18 +1,58 @@
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { join } from "node:path";
+import { isAbsolute, join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   isPierManagedPluginContent,
   pierManagedPluginMarker,
   writeManagedPluginFile,
 } from "./managed-plugin-file.ts";
+import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
 import { commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
 const AGENT_ID: AgentKind = "kilo";
+const KILO_EMITTED_MAPPINGS = [
+  { nativeEvent: "session.created", pierEvent: "SessionStart" },
+  { nativeEvent: "session.idle", pierEvent: "Stop" },
+  { nativeEvent: "session.error", pierEvent: "error" },
+  { nativeEvent: "session.deleted", pierEvent: "SessionEnd" },
+  { nativeEvent: "session.status=busy", pierEvent: "running" },
+  { nativeEvent: "session.status=retry", pierEvent: "running" },
+  { nativeEvent: "session.status=idle", pierEvent: "Stop" },
+  { nativeEvent: "chat.message", pierEvent: "PromptSubmit" },
+  { nativeEvent: "permission.asked", pierEvent: "InteractionRequested" },
+  { nativeEvent: "permission.replied", pierEvent: "InteractionResolved" },
+  {
+    nativeEvent: "question.asked.blocking",
+    pierEvent: "InteractionRequested",
+  },
+  { nativeEvent: "question.replied", pierEvent: "InteractionResolved" },
+  { nativeEvent: "question.rejected", pierEvent: "InteractionResolved" },
+  { nativeEvent: "session.status=offline", pierEvent: "InteractionRequested" },
+  { nativeEvent: "session.network.replied", pierEvent: "InteractionResolved" },
+  { nativeEvent: "session.network.rejected", pierEvent: "InteractionResolved" },
+  { nativeEvent: "session.network.restored", pierEvent: "InteractionResolved" },
+  {
+    nativeEvent: "session.status=busy.offline",
+    pierEvent: "InteractionResolved",
+  },
+  {
+    nativeEvent: "session.status=retry.offline",
+    pierEvent: "InteractionResolved",
+  },
+  { nativeEvent: "tool.execute.before", pierEvent: "ToolStart" },
+  { nativeEvent: "tool.execute.after", pierEvent: "ToolComplete" },
+  { nativeEvent: "message.part.updated=completed", pierEvent: "ToolComplete" },
+  { nativeEvent: "message.part.updated=error", pierEvent: "ToolComplete" },
+  { nativeEvent: "session.status=busy.child", pierEvent: "SubagentStart" },
+  { nativeEvent: "session.status=retry.child", pierEvent: "SubagentStart" },
+  { nativeEvent: "session.status=idle.child", pierEvent: "SubagentStop" },
+  { nativeEvent: "session.error.child", pierEvent: "SubagentStop" },
+  { nativeEvent: "session.deleted.child", pierEvent: "SubagentStop" },
+] as const;
 
 /** Pier 部署的独立插件文件（不放 kilo 自身安装目录下, opencode 同款布局）。 */
 const PLUGIN_FILE = "pier-agent-status.ts";
@@ -22,7 +62,7 @@ const PLUGIN_MARKER = pierManagedPluginMarker();
 
 /**
  * Kilo Code CLI 插件 — 依据官方文档 kilo.ai/docs/automate/extending/plugins：
- * - 插件目录**自动加载**、无需 config 注册：`~/.config/kilo/plugin/` 下每个
+ * - 插件目录**自动加载**、无需 config 注册：`<configRoot>/plugin/` 下每个
  *   `.ts`/`.js` 文件在启动时自动注册（也存在 `.kilo/plugin/` 与旧版
  *   `.kilocode/plugin/` 项目级目录, 但 pier 只装全局目录, 与其余「一次
  *   安装全局生效」的集成纪律一致）。
@@ -31,7 +71,10 @@ const PLUGIN_MARKER = pierManagedPluginMarker();
  *   `async (ctx) => ({ ...hook 实现... })`——不是 prompt 猜测的
  *   `export default { event: async ({event}) => {...} }` 直接形状（那是
  *   server 工厂*返回值*里的一个 hook 键, 不是顶层导出）。本文件按官方
- *   真实形状生成源码。
+ *   真实形状生成源码。已核对 v7.4.17 发布提交 a0364858 与当前同版本
+ *   main 提交 a76aea71；配置根解析与插件扫描另核对固定提交 c0ebf987
+ *   的 `ConfigPaths` / `ConfigPlugin`。Kilo 默认入口直接是
+ *   `kilo`，没有 `--v3` 门槛；该门槛属于 Kiro CLI 3.0 early access。
  * - 事件总线映射（Events 参考页确认的事件名, SOURCE 证据）：
  *   session.created→SessionStart, session.idle→Stop, session.error→error,
  *   session.deleted→SessionEnd, session.status(busy/retry)→running、
@@ -42,20 +85,32 @@ const PLUGIN_MARKER = pierManagedPluginMarker();
  *   permission 事件官方名 `permission.asked`/`permission.replied`
  *   （Events 参考页 Permission 分类明确列出; opencode SDK 里叫
  *   permission.updated, kilo fork 重命名了此事件, SOURCE）。
- *   用户消息提交事件：Events 页列有 `command.executed`, 但 payload
- *   形状未确认是否含 prompt.submit 动作——拿不准的宁缺毋滥,
- *   不装 PromptSubmit; session.status(busy) 已提供 TURN_RESET,
- *   PromptSubmit 缺失不影响正确性。
+ *   用户消息提交走官方插件的 direct `chat.message` hook；其 input/output
+ *   提供 session/message/parts，生成 PromptSubmit 并从输出 parts 提取
+ *   可读提示摘要。`session.status=busy` 仍是 Stop 后推进新回合的
+ *   TURN_RESET，不能用它替代用户消息事实。
  *   tool：tool.execute.before→ToolStart, tool.execute.after→ToolComplete
  *   （与 opencode 集成同名事件, SOURCE 确认一致）。
  * - emit 用 appendFileSync（pierAppend 模板; Bun 宿主
  *   process.getBuiltinModule 可用, 旧 Node 退化异步 best-effort）。
  *   无顶层 import 声明（electron-vite 模板字面量扫描陷阱）。
  *   三 PIER_ 环境变量任一缺失即静默 no-op, 吞异常。
- * capability "full"。
+ * 状态证据由事件矩阵统一声明。
  */
+export function kiloConfigDir(): string {
+  const configured = process.env.KILO_CONFIG_DIR;
+  if (configured && isAbsolute(configured)) {
+    return configured;
+  }
+  const xdgConfigHome = process.env.XDG_CONFIG_HOME;
+  if (xdgConfigHome && isAbsolute(xdgConfigHome)) {
+    return join(xdgConfigHome, "kilo");
+  }
+  return join(homedir(), ".config", "kilo");
+}
+
 export function kiloPluginPath(): string {
-  return join(homedir(), ".config", "kilo", "plugin", PLUGIN_FILE);
+  return join(kiloConfigDir(), "plugin", PLUGIN_FILE);
 }
 
 export function buildKiloPluginSource(pluginId: AgentKind = AGENT_ID): string {
@@ -68,6 +123,7 @@ export function buildKiloPluginSource(pluginId: AgentKind = AGENT_ID): string {
 // Bun (kilo's host) and Node >= 20.16.
 
 ${JAVASCRIPT_LOCKED_APPEND_SOURCE}
+${JAVASCRIPT_PROMPT_SNIPPET_SOURCE}
 
 function pierSessionIdFrom(event) {
 	const values = Array.isArray(event) ? [...event] : [event];
@@ -99,8 +155,25 @@ function pierToolIdFrom(event) {
 }
 
 const pierParentSessionIds = new Map();
+const pierOfflineRequests = new Map();
+const pierBlockingQuestionIds = new Map();
 
-function pierEmit(pierEvent, nativeEvent, rawEvent) {
+function pierRememberBlockingQuestion(properties) {
+	const sessionId = properties.sessionID || "";
+	const ids = pierBlockingQuestionIds.get(sessionId) || new Set();
+	ids.add(properties.id);
+	pierBlockingQuestionIds.set(sessionId, ids);
+}
+
+function pierTakeBlockingQuestion(properties) {
+	const sessionId = properties.sessionID || "";
+	const ids = pierBlockingQuestionIds.get(sessionId);
+	if (!ids || !ids.delete(properties.requestID)) return false;
+	if (ids.size === 0) pierBlockingQuestionIds.delete(sessionId);
+	return true;
+}
+
+function pierEmit(pierEvent, nativeEvent, rawEvent, extra = {}) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
@@ -128,7 +201,7 @@ function pierEmit(pierEvent, nativeEvent, rawEvent) {
 		: undefined;
 	const isSubagent = parentSessionId !== undefined;
 	const line = JSON.stringify({
-		v: 2,
+		v: 3,
 		kind: "agentEvent",
 		ts: Date.now() * 1_000_000,
 		panelId,
@@ -144,6 +217,7 @@ function pierEmit(pierEvent, nativeEvent, rawEvent) {
 			: {}),
 		...(sessionId ? { sessionId } : {}),
 		...(toolUseId ? { toolUseId } : {}),
+		...extra,
 	}) + "\\n";
 	try {
 		pierAppend(log, line);
@@ -173,23 +247,140 @@ function mapPierEvent(event) {
 		if (statusType === "idle") return "Stop";
 		return null;
 	}
-	if (event.type === "permission.asked") return "PermissionRequest";
-	if (event.type === "permission.replied") return "processing";
 	return null;
+}
+
+function pierInteraction(event, kind, outcome, nativeEvent = event.type) {
+	const p = event.properties || {};
+	pierEmit(
+		outcome ? "InteractionResolved" : "InteractionRequested",
+		nativeEvent,
+		event,
+		{
+			interactionId: p.id || p.requestID,
+			interactionKind: kind,
+			...(outcome ? { interactionOutcome: outcome } : {}),
+		}
+	);
 }
 
 const server = async () => {
 	// session.created 提供真实 SessionStart 信号, 不再合成。
 	return {
 		event: async ({ event }) => {
+			const p = event && event.properties || {};
+			const sessionId = pierSessionIdFrom(event);
+			if (event.type === "session.created") {
+				const parent = p.info && p.info.parentID;
+				if (sessionId && parent) {
+					pierParentSessionIds.set(sessionId, parent);
+					return;
+				}
+			}
+			if (event.type === "session.status") {
+				const state = p.status && p.status.type;
+				const child = sessionId && pierParentSessionIds.has(sessionId);
+				if (child && (state === "busy" || state === "retry")) {
+					pierEmit("SubagentStart", "session.status=" + state + ".child", event, { agentInstanceId: sessionId, nativeState: state });
+					return;
+				}
+				if (child && state === "idle") {
+					pierEmit("SubagentStop", "session.status=idle.child", event, { agentInstanceId: sessionId, nativeState: state });
+					return;
+				}
+				if (state === "offline") {
+					const requestID = p.status.requestID;
+					if (sessionId && requestID) pierOfflineRequests.set(sessionId, requestID);
+					pierEmit("InteractionRequested", "session.status=offline", event, {
+						interactionId: requestID,
+						interactionKind: "external-block",
+						nativeState: "offline",
+					});
+					return;
+				}
+				const offline = sessionId && pierOfflineRequests.get(sessionId);
+				if (offline && (state === "busy" || state === "retry")) {
+					pierEmit("InteractionResolved", "session.status=" + state + ".offline", event, {
+						interactionId: offline,
+						interactionKind: "external-block",
+						interactionOutcome: "completed",
+						nativeState: state,
+					});
+					pierOfflineRequests.delete(sessionId);
+				}
+			}
+			if (event.type === "permission.asked") return pierInteraction(event, "permission");
+			if (event.type === "permission.replied")
+				return pierInteraction(event, "permission", p.reply === "reject" ? "rejected" : "accepted");
+			if (event.type === "question.asked") {
+				if (p.blocking === false) return;
+				if (p.id) pierRememberBlockingQuestion(p);
+				return pierInteraction(event, "question", undefined, "question.asked.blocking");
+			}
+			if (event.type === "question.replied" || event.type === "question.rejected") {
+				if (!pierTakeBlockingQuestion(p)) return;
+				return pierInteraction(
+					event,
+					"question",
+					event.type === "question.replied" ? "completed" : "rejected"
+				);
+			}
+			if (
+				event.type === "session.network.replied" ||
+				event.type === "session.network.rejected" ||
+				event.type === "session.network.restored"
+			) {
+				const offline = sessionId && pierOfflineRequests.get(sessionId);
+				if (!offline || offline !== p.requestID) return;
+				pierEmit("InteractionResolved", event.type, event, {
+					interactionId: p.requestID,
+					interactionKind: "external-block",
+					interactionOutcome: event.type.endsWith("rejected") ? "rejected" : "completed",
+				});
+				if (sessionId) pierOfflineRequests.delete(sessionId);
+				return;
+			}
+			if (event.type === "message.part.updated") {
+				const part = p.part;
+				const state = part && part.type === "tool" && part.state && part.state.status;
+				if (state === "completed" || state === "error") {
+					pierEmit("ToolComplete", "message.part.updated=" + state, event, {
+						toolUseId: part.callID,
+						toolName: part.tool,
+						nativeState: state,
+					});
+				}
+				return;
+			}
+			if (event.type === "session.error" && sessionId && pierParentSessionIds.has(sessionId)) {
+				pierEmit("SubagentStop", "session.error.child", event, { agentInstanceId: sessionId, nativeState: "error" });
+				return;
+			}
+			if (event.type === "session.deleted" && sessionId && pierParentSessionIds.has(sessionId)) {
+				pierOfflineRequests.delete(sessionId);
+				pierBlockingQuestionIds.delete(sessionId);
+				pierEmit("SubagentStop", "session.deleted.child", event, { agentInstanceId: sessionId });
+				pierParentSessionIds.delete(sessionId);
+				return;
+			}
+			if (event.type === "session.deleted" && sessionId) {
+				pierOfflineRequests.delete(sessionId);
+				pierBlockingQuestionIds.delete(sessionId);
+			}
 			const mapped = mapPierEvent(event);
 			if (mapped) pierEmit(mapped, event.type, event);
 		},
-		"tool.execute.before": async (...args) => {
-			pierEmit("ToolStart", "tool.execute.before", args);
+		"chat.message": async (input, output) => {
+			pierEmit("PromptSubmit", "chat.message", input, {
+				turnId: input.messageID || (output.message && output.message.id),
+				promptSnippet: pierPromptSnippetFrom({ content: output.parts }, output.message),
+			});
 		},
-		"tool.execute.after": async (...args) => {
-			pierEmit("ToolComplete", "tool.execute.after", args);
+		"tool.execute.before": async (input) => {
+			pierEmit("ToolStart", "tool.execute.before", input, { toolUseId: input.callID, toolName: input.tool });
+		},
+		"tool.execute.after": async (input) => {
+			pierEmit("ToolComplete", "tool.execute.after", input, { toolUseId: input.callID, toolName: input.tool });
 		},
 	};
 };
@@ -238,17 +429,21 @@ export async function uninstallKiloHooks(
 
 function kiloDetect(): boolean {
   return (
-    existsSync(join(homedir(), ".config", "kilo")) ||
+    existsSync(kiloConfigDir()) ||
+    existsSync(join(homedir(), ".kilo")) ||
     existsSync(join(homedir(), ".kilocode")) ||
-    commandExistsOnPath("kilo")
+    commandExistsOnPath("kilo") ||
+    commandExistsOnPath("kilocode")
   );
 }
 
 export const kiloIntegration: AgentHookIntegration = {
-  capability: "full",
   detect: kiloDetect,
   id: AGENT_ID,
-  runtime: { stopAuthority: "authoritative" },
+  runtime: {
+    emittedMappings: KILO_EMITTED_MAPPINGS,
+    stopAuthority: "authoritative",
+  },
   install: () => installKiloHooks(),
   uninstall: () => uninstallKiloHooks(),
 };

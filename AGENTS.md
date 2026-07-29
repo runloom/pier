@@ -292,6 +292,22 @@ section 根节点下的裸子节点。
 - 模块内不 import `services/agents/`（agent 只是 activity 的一种 kind，边界单向）
 - Agent 提供方（Provider）原生 session / transcript 只可作为对应适配器内部的兼容输入；宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放
 
+#### Agent 会话标题与身份（标题 ≠ 身份）
+
+标题是**尽力而为的可读性信号**：来源不可靠（不同 agent 的 hook 能力不一致）、用户随时可改、永不全覆盖。**多 agent 调度要用的身份必须确定性**，不得从标题反推。
+
+- **身份四件套**：`agentId` + 项目路径锚点（`projectRootPath` / `cwd`）+ `panelId` + 角色（`actorHint` 主/子会话，`parentSessionId` 记委派边，`sessionId` 由 provider 原样上报）。这些字段在 `agentActivitySchema`（`.strict()`）里，缺席只表示证据不足，消费方按主会话处理。
+- **身份只由主会话事件推进**：主/子会话判据唯一实现在 `src/shared/agent-session-actor.ts`（`isSubagentHookEvent` / `SUBAGENT_HOOK_EVENTS`），main 与 foreground-activity 都必须消费它，不得各写一份。子会话事件只累加计数，永不写面板行身份；`SessionStart` 是**换会话**（resume / clear 后会话号会变），身份整体替换而非叠加，否则旧 `sessionId` 会残留成错误身份；`agent-launch` 先验没有任何 hook 事实，因此不带身份字段，也不得从命令行反推会话号。
+- **标题只有三层**：`prompt`(1) < `provider`(2) < `user`(3)。`prompt` 来自首条 prompt 的**确定性截断**（`deriveAgentSessionTitleFromPrompt`：清协议标记 → 取首行 → 规范化 + 软断点硬截断）；`provider` 是 **agent 自己算好的会话名**，从其原生 transcript 读出后原样采信；`user` 是改名。历史 `auto` / `rule` / `model` 在读取期归一为 `prompt`，**不回写**。
+- **provider 秩是「尽量用 agent 自身能力」的唯一正确形态**：通路在 `transcript-tail-reconciler.ts` 的 `classifyTitleLine` / `onTitleRecord`（逐 agent 增量接入，当前只有 Claude 的 `ai-title`），宿主侧消费在 `session-title/index.ts` 的 `applyProviderAgentSessionTitle`。硬约束：**不额外起进程、不花 token、不需要 `titleArgs`**；**只收 agent 真正自己生成的标题**——Claude 的 `custom-title` / `agent-name` 装的是 Pier 经 `derive-claude-session-title` 双写回去的 prompt 派生（逐字相同，含 `…` 截断标记），收下等于把自己的截断洗成更高的秩，且它们先到会把随后真正的 `ai-title` 永久挡在门外；只在增量区消费（初始 tail 回扫的旧标题不得占空槽）；`sessionId` 对不上且 transcript 有多个 owner 时**放弃**而非猜；同秩不覆盖，所以每回合重算的 `ai-title` 只有第一条生效，标题不抖。**接不到就不接**——静默降级回 `prompt` 地板，不报错、不影响终态对账。
+- **没有启发式改写层，也没有模型精修层**：不判断寒暄、不剥前缀、不名词化、不猜「这条 prompt 值不值得当标题」。那类规则在中文口语输入下不可复现也无法解释，标题会随措辞抖动。宁可原样呈现用户写的第一句话。`titleArgs`（标题专用模型调用入口）与 refine 偏好开关均已删除，不得复活。
+- **写入裁决**在 `precedence.ts`：空槽可写；`user` 永远可写；否则要求 rank 严格递增。
+- **标题按主会话绑定**：持久化同时保存 `sessionTitleSessionId`。主会话 `SessionStart` 会统一对账作用域：首次可靠会话可接管历史未绑定标题；会话号变化必须清除旧标题。写入被拒时，运行投影只能水合持久化返回的最终真值，禁止继续使用本次尝试值。
+- **长度**：存全（上限 `MAX_AGENT_SESSION_TITLE_LENGTH` = 120 code points，唯一来源 `agent-session-title/constants.ts`，各 schema 引常量而非字面量），视觉截断交给 CSS（tab / 行内 `truncate`）。
+- **展示层硬规则**：产品标题唯一入口是 `resolveAgentSessionTitle`，**不接收 OSC / terminalTitle**（OSC 只能做 tooltip）。每个 `agentSessionTitleInput` 调用点**必须传路径锚点**——否则无标题会话的 placeholder 塌成裸 catalog 标签，同 agent 的多个面板行完全一样。同名会话经 `disambiguateAgentSessionTitles` 追加序号。列表行的无障碍名字要能读出「哪个 agent · 哪个项目 · 是否子会话」。
+- **hook 同构**：下发的 `derive-claude-session-title` 脚本必须与 shared 侧 `deriveAgentSessionTitleFromPrompt` 行为逐字一致（治理测试按严格相等校验）；改脚本必须同时 bump `PIER_HOOK_COMMAND_GENERATION`。
+- 检查点在 `tests/unit/agent-session-title-governance.test.ts`、`tests/unit/agent-session-title-hook-parity.test.ts`、`tests/unit/agent-session-title.test.ts`、`tests/unit/main/foreground-activity-aggregator.test.ts`（身份闸门）与 `tests/component/activity-widget.test.tsx`。
+
 ### 路径锚点上下文 `src/main/services/panel-context-resolver.ts` + `src/shared/contracts/panel.ts`
 
 - `PanelContext.projectRootPath` 是当前工作区路径锚点：Git 项目优先为 `gitRoot`，非 Git 目录为 `cwd`。
@@ -364,6 +380,24 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 7. 无障碍：图标按钮有 `aria-label`；拖拽只从显式抓手开始，交互元素必须在拖拽 `cancel` 名单内（`button/a/input/...`），特殊容器用 `[data-no-drag]` 逃生舱。
 8. 尺寸适配：`size` prop 做结构决策（是否渲染某区块、图表显示天数/范围），container query 做布局密度（列数、横排↔纵排）；两者不可互换。禁止用 container query `display: none` 静默删除有意义内容（时间戳、余额、次要指标等）——compact 尺寸应摘要化或重排，辅以 tooltip / 渐进式披露保留可访问性。`minSize` 必须能容纳物料核心信息（至少一个指标 + 状态），不得声明小于核心内容所需的最小格数。
 9. 重复指标自适应：重复指标是同构且均有意义的数据项，必须保留数据契约中的源顺序和语义标识；只有存在独立标题、操作或说明时才拆成占整行的可见分区，普通指标不得仅因数据分组键不同而强制换行。指标集合优先使用浏览器原生内在尺寸网格 `repeat(auto-fit, minmax(min(100%, var(--item-min-width)), 1fr))`：集合只有单项时占满整行，多项在核心内容最小宽度允许时横排，否则纵向重排。`--item-min-width` 由标签、数值、状态和操作等核心内容共同决定，不得从宿主 `size.w` 换算像素，也不得用固定列数留下空轨道。所有数据必须进入可访问的 DOM，不得按尺寸丢弃、用 `hidden` 隐藏或只保留部分数据；高度不足时保持 `min-content` 并交由宿主滚动，高度富余时按内容自然高度顶部对齐，不得靠居中或拉大项目内部间距伪造填满效果。重复指标之间留白优先于分割线，只有存在无法由标题、标签或间距表达的独立语义章节时才使用 `Separator`。
+
+#### 工作台滚动区域
+
+- 每张卡遵守单一滚动所有者原则，只允许一个实际纵向滚动容器。注册项 `contentMode` 省略或为
+  `host-scroll` 时由宿主正文滚动；需要固定头部或自主管理滚动区时必须声明
+  `contained`，此时宿主只裁切溢出，组件负责自己的 viewport。
+- 外部插件注册经宿主适配时必须透传 `contentMode`，不得在重建注册对象时丢失布局语义并
+  静默回退到 `host-scroll`。
+- 可见渐隐统一使用 `@pier/ui/scroll-area.tsx` 的 `viewportFade`。渐隐 class 只能落在
+  Radix viewport，圆角、背景和边框归外层壳，ScrollBar 保持为 viewport 的兄弟节点。
+- 固定区与滚动区的内边距归各自内容层；滚动 viewport 必须全宽贴卡片内容区边缘。
+  禁止使用负边距、超宽度或绝对偏移把滚动条拉到边框，也禁止宿主与组件嵌套
+  `overflow-y-auto`。
+- 检查点在 `tests/unit/renderer/workbench-scroll-governance.test.ts`、
+  `tests/unit/renderer/scroll-area.test.tsx`、
+  `tests/unit/renderer/external-plugin-workbench-contract.test.ts` 与
+  `tests/component/workbench-panel.test.tsx`。
+
 - 网格几何：`CELL_WIDTH = 88`、`ROW_HEIGHT = 88`、`MARGIN = [12, 12]` 为目标节奏；容器宽度自动换算为 `2..12` 列。布局严格按实例数组做 Z 字逐行排布，当前行放不下即换行，行高取本行最高物料，不用后续小物料回填纵向空洞。删除后由同一派生算法立即压实；添加和复制追加到数组末尾；拖拽只修改数组顺序。
 - Dockview 宽度变化只重新派生列数与 `x/y`，不得写 panel params。窄容器可把卡片显示宽度临时夹到当前列数，容器恢复后继续使用原 `w/h` 偏好；普通布局禁止横向滚动。
 - 调整尺寸仍由 RGL 处理，停止时只持久化目标实例的 `w/h`；不得把 RGL compactor 与自定义排序求解器混用。全局菜单不提供“整理布局”“锁定布局”或新增方向，自动布局始终生效。

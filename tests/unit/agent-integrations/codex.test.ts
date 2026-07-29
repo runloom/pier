@@ -1,7 +1,7 @@
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { homedir, tmpdir } from "node:os";
 import { join } from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   CODEX_FA_ERROR_REACHABILITY,
   CODEX_HOOK_EVENTS,
@@ -19,12 +19,12 @@ const CODEX_EVENTS = [
   "UserPromptSubmit",
   "PreToolUse",
   "PostToolUse",
-  "PermissionRequest",
   "PreCompact",
   "PostCompact",
   "SubagentStart",
   "SubagentStop",
   "Stop",
+  "SessionEnd",
 ];
 
 function hookCommands(settings: Record<string, unknown>): string[] {
@@ -67,11 +67,21 @@ describe("withPierCodexHooks", () => {
     }
   });
 
-  it("不安装 SessionEnd（Codex 上游无此 hook 事件）", () => {
+  it("安装当前官方 SessionEnd hook", () => {
     const next = withPierCodexHooks({});
     const hooks = next.hooks as Record<string, unknown>;
-    expect(hooks.SessionEnd).toBeUndefined();
-    expect("SessionEnd" in hooks).toBe(false);
+    expect(hooks.SessionEnd).toHaveLength(1);
+  });
+
+  it("不安装缺少请求 ID 与结果事件的 PermissionRequest waiting", () => {
+    const hooks = withPierCodexHooks({}).hooks as Record<string, unknown>;
+    expect(hooks.PermissionRequest).toBeUndefined();
+    expect(CODEX_HOOK_EVENTS).not.toContainEqual(
+      expect.objectContaining({
+        nativeEvent: "PermissionRequest",
+        pierEvent: "InteractionRequested",
+      })
+    );
   });
 
   it("Ev5: FA error unsupported — hook map has no error pierEvent", () => {
@@ -184,6 +194,34 @@ describe("install/uninstallCodexHooks (文件 IO)", () => {
     expect(await readFile(path, "utf8")).toBe("{ not json");
   });
 
+  it("目标键异常时不先清理另一键旧 Pier，整文件字节不变", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-codex-shape-test-"));
+    const path = join(dir, "hooks.json");
+    const raw = JSON.stringify({
+      hooks: {
+        LegacyEvent: [
+          {
+            hooks: [
+              {
+                command: `pier-hook-gen=9; "\${PIER_AGENT_HOOKS_DIR}/emit" legacy`,
+              },
+            ],
+          },
+        ],
+        Stop: { custom: true },
+      },
+    });
+    await writeFile(path, raw, "utf8");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await installCodexHooks(path);
+      expect(await readFile(path, "utf8")).toBe(raw);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
+  });
+
   it("目录存在但 hooks.json 尚不存在时, 安装仍正常创建文件(seed)", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-codex-test-"));
     const path = join(dir, "hooks.json");
@@ -209,7 +247,7 @@ describe("安装遗留更新（spec 事件表更迭后替换旧 pier 条目）",
           {
             hooks: [
               {
-                command: `echo test && ${MARK}=1 curl -X POST http://x/agent-event`,
+                command: `pier-hook-gen=1; "\${${MARK}}/emit" legacy-start`,
                 timeout: 5,
                 type: "command",
               },
@@ -223,7 +261,7 @@ describe("安装遗留更新（spec 事件表更迭后替换旧 pier 条目）",
           {
             hooks: [
               {
-                command: `${MARK} sneaky pier entry`,
+                command: `pier-hook-gen=1; "\${${MARK}}/emit" legacy-stop`,
                 timeout: 5,
                 type: "command",
               },

@@ -5,7 +5,6 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,
-  pierHookCommandWithStdinSessionId,
   transformJsonConfig,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
@@ -21,7 +20,8 @@ const configPath = () => join(homedir(), ".config", "crush", "crush.json");
 
 /**
  * Crush hook 面很小：官方原文明言 "currently supports just one hook"——
- * 只有 `PreToolUse`（映射 pier 的 ToolStart）。此前版本装的
+ * 只有策略型 `PreToolUse`。它发生在工具执行前，既没有执行完成事实，也可能
+ * 阻止或改写工具，因此不能映射为 Pier 五态事件。此前版本装的
  * `tool_call_before`/`tool_call_after` 两个事件名均不存在于官方文档，
  * 已删除。
  *
@@ -29,11 +29,9 @@ const configPath = () => join(homedir(), ".config", "crush", "crush.json");
  * `[{name?, matcher?, command, timeout?}]`——每个条目是扁平对象，没有
  * `type` 字段，也没有 claude 家族那种内层 `hooks: [...]` 包装。
  *
- * capability 保持 "coarse"（单事件、粗粒度）；参见官方 FUTURE.md 中对
- * 后续扩展更多事件的路线图描述。
+ * 当前安装入口只清理历史 Pier 条目；在上游提供观察型生命周期事件前不再写入。
  */
 const CRUSH_NATIVE_EVENT = "PreToolUse";
-const CRUSH_PIER_EVENT = "ToolStart";
 
 interface CrushHookEntry {
   command: string;
@@ -60,25 +58,12 @@ function isPierCrushEntry(entry: unknown): boolean {
 }
 
 /**
- * 纯函数：往 `hooks.PreToolUse` 对象数组注入一条 pier 条目（幂等——先剔旧
- * 再加新）。
+ * 纯函数：安装阶段只剔除历史 Pier 条目，不再向策略 hook 写状态观察命令。
  */
 export function withPierCrushHooks(
   settings: Record<string, unknown>
 ): Record<string, unknown> {
-  const hooks = hooksRecord(settings);
-  const current = hooks[CRUSH_NATIVE_EVENT];
-  const existing = Array.isArray(current) ? current : [];
-  const kept = existing.filter((entry) => !isPierCrushEntry(entry));
-  const pierEntry: CrushHookEntry = {
-    command: pierHookCommandWithStdinSessionId(
-      AGENT_ID,
-      CRUSH_PIER_EVENT,
-      CRUSH_NATIVE_EVENT
-    ),
-  };
-  hooks[CRUSH_NATIVE_EVENT] = [...kept, pierEntry];
-  return { ...settings, hooks };
+  return withoutPierCrushHooks(settings);
 }
 
 /**
@@ -116,10 +101,12 @@ export async function uninstallCrushHooks(
 }
 
 export const crushIntegration: AgentHookIntegration = {
-  capability: "coarse",
   detect: () => existsSync(configPath()) || commandExistsOnPath("crush"),
   id: AGENT_ID,
-  runtime: { stopAuthority: "none" },
+  runtime: {
+    emittedMappings: [],
+    stopAuthority: "none",
+  },
   install: () => installCrushHooks(),
   uninstall: () => uninstallCrushHooks(),
 };

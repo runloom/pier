@@ -5,6 +5,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import { createClineUsageCollector } from "../../../../src/main/services/agents/usage-collectors/cline.ts";
 import { createCopilotUsageCollector } from "../../../../src/main/services/agents/usage-collectors/copilot.ts";
 import { createDroidUsageCollector } from "../../../../src/main/services/agents/usage-collectors/droid.ts";
+import { createGrokUsageCollector } from "../../../../src/main/services/agents/usage-collectors/grok.ts";
 import { createLogger } from "../../../../src/shared/logger.ts";
 
 const tempDirs: string[] = [];
@@ -22,7 +23,90 @@ async function tempHome(): Promise<string> {
   return dir;
 }
 
+async function writeGrokUsageFixture(sessionsRoot: string): Promise<string> {
+  const date = new Date().toISOString().slice(0, 10);
+  const epoch = Math.floor(Date.parse(`${date}T12:00:00Z`) / 1000);
+  const sessionDir = join(sessionsRoot, "cwd-a", "session-1");
+  await mkdir(sessionDir, { recursive: true });
+  await writeFile(
+    join(sessionDir, "updates.jsonl"),
+    `${JSON.stringify({
+      method: "_x.ai/session/update",
+      params: {
+        sessionId: "session-1",
+        update: {
+          prompt_id: "prompt-1",
+          sessionUpdate: "turn_completed",
+          usage: {
+            cachedReadTokens: 10,
+            inputTokens: 100,
+            modelUsage: {
+              "grok-4.5-build": {
+                inputTokens: 100,
+                outputTokens: 20,
+              },
+            },
+            outputTokens: 20,
+            reasoningTokens: 5,
+          },
+        },
+        _meta: { agentTimestampMs: epoch * 1000, eventId: "ev-1" },
+      },
+      timestamp: epoch,
+    })}\n`,
+    "utf8"
+  );
+  return date;
+}
+
 describe("multi-agent usage collectors", () => {
+  it("Grok 用量采集使用去除两端空白后的 GROK_HOME", async () => {
+    const home = await tempHome();
+    const customGrokHome = join(home, "custom-grok");
+    const date = await writeGrokUsageFixture(join(customGrokHome, "sessions"));
+    const collector = createGrokUsageCollector({
+      env: {
+        GROK_HOME: `  ${customGrokHome}  `,
+        HOME: home,
+      } as NodeJS.ProcessEnv,
+      logger,
+      userDataDir: join(home, "ud"),
+    });
+
+    expect(collector.detect()).toBe(true);
+    expect((await collector.rescan())?.observations).toEqual([
+      {
+        cachedInputTokens: 10,
+        date,
+        inputTokens: 100,
+        modelId: "grok-4.5-build",
+        outputTokens: 20,
+        reasoningTokens: 5,
+      },
+    ]);
+  });
+
+  it("Grok 用量采集在空白 GROK_HOME 时回落 HOME/.grok", async () => {
+    const home = await tempHome();
+    const date = await writeGrokUsageFixture(join(home, ".grok", "sessions"));
+    const collector = createGrokUsageCollector({
+      env: { GROK_HOME: "   ", HOME: home } as NodeJS.ProcessEnv,
+      logger,
+      userDataDir: join(home, "ud"),
+    });
+
+    expect((await collector.rescan())?.observations).toEqual([
+      {
+        cachedInputTokens: 10,
+        date,
+        inputTokens: 100,
+        modelId: "grok-4.5-build",
+        outputTokens: 20,
+        reasoningTokens: 5,
+      },
+    ]);
+  });
+
   it("reads Copilot session.shutdown modelMetrics", async () => {
     const home = await tempHome();
     const sessionDir = join(home, ".copilot", "session-state", "s1");

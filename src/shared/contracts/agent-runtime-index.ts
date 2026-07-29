@@ -4,6 +4,7 @@
  * @see docs/superpowers/specs/2026-07-15-agent-runtime-index-and-attention-design.md
  */
 import { z } from "zod";
+import { agentSessionTitleValueSchema } from "../agent-session-title/schema.ts";
 import { agentKindSchema } from "./agent.ts";
 import {
   activityStatusSchema,
@@ -28,7 +29,7 @@ export const agentRuntimeIndexEntrySchema = z
     projectRootPath: z.string().min(1).optional(),
     worktreeKey: z.string().min(1).optional(),
     /** 产品会话名（透传 FA；≠ OSC）。P0 通常缺席。 */
-    sessionTitle: z.string().min(1).max(40).optional(),
+    sessionTitle: agentSessionTitleValueSchema.optional(),
     sessionTitleSource: agentSessionTitleSourceSchema.optional(),
   })
   .strict();

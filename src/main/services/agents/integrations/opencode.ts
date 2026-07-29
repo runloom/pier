@@ -1,30 +1,54 @@
 import { existsSync } from "node:fs";
 import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
-import { dirname, join } from "node:path";
+import { dirname, isAbsolute, join, normalize } from "node:path";
+import { fileURLToPath } from "node:url";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { applyEdits, modify, type ParseError, parse } from "jsonc-parser";
 import {
   isPierManagedPluginContent,
   pierManagedPluginMarker,
   writeManagedPluginFile,
 } from "./managed-plugin-file.ts";
 import { JAVASCRIPT_PROMPT_SNIPPET_SOURCE } from "./prompt-snippet-source.ts";
-import { transformJsonConfig } from "./shared.ts";
+import { atomicWriteFile, commandExistsOnPath } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 import { JAVASCRIPT_LOCKED_APPEND_SOURCE } from "./writer-lock-source.ts";
 
 const AGENT_ID: AgentKind = "opencode";
+const OPENCODE_EMITTED_MAPPINGS = [
+  { nativeEvent: "session.created", pierEvent: "SessionStart" },
+  { nativeEvent: "session.idle", pierEvent: "Stop" },
+  { nativeEvent: "session.error", pierEvent: "error" },
+  { nativeEvent: "session.deleted", pierEvent: "SessionEnd" },
+  { nativeEvent: "session.status=busy", pierEvent: "running" },
+  { nativeEvent: "session.status=retry", pierEvent: "running" },
+  { nativeEvent: "session.status=idle", pierEvent: "Stop" },
+  { nativeEvent: "chat.message", pierEvent: "PromptSubmit" },
+  { nativeEvent: "permission.asked", pierEvent: "InteractionRequested" },
+  { nativeEvent: "permission.replied", pierEvent: "InteractionResolved" },
+  { nativeEvent: "question.asked", pierEvent: "InteractionRequested" },
+  { nativeEvent: "question.replied", pierEvent: "InteractionResolved" },
+  { nativeEvent: "question.rejected", pierEvent: "InteractionResolved" },
+  { nativeEvent: "tool.execute.before", pierEvent: "ToolStart" },
+  { nativeEvent: "tool.execute.after", pierEvent: "ToolComplete" },
+  { nativeEvent: "message.part.updated=completed", pierEvent: "ToolComplete" },
+  { nativeEvent: "message.part.updated=error", pierEvent: "ToolComplete" },
+  { nativeEvent: "session.status=busy.child", pierEvent: "SubagentStart" },
+  { nativeEvent: "session.status=retry.child", pierEvent: "SubagentStart" },
+  { nativeEvent: "session.status=idle.child", pierEvent: "SubagentStop" },
+  { nativeEvent: "session.error.child", pierEvent: "SubagentStop" },
+  { nativeEvent: "session.deleted.child", pierEvent: "SubagentStop" },
+] as const;
 
 /** Host-side evidence table for S1 gates (mirrors plugin mapPierEvent). */
-export const OPENCODE_PERMISSION_NATIVE_EVENTS = [
-  "permission.updated",
-] as const;
+export const OPENCODE_PERMISSION_NATIVE_EVENTS = ["permission.asked"] as const;
 
 export function mapOpenCodeNativeEventToPier(
   nativeType: string
 ): string | null {
-  if (nativeType === "permission.updated") return "PermissionRequest";
-  if (nativeType === "permission.replied") return "processing";
+  if (nativeType === "permission.asked") return "InteractionRequested";
+  if (nativeType === "permission.replied") return "InteractionResolved";
   return null;
 }
 
@@ -40,7 +64,7 @@ const LEGACY_PLUGIN_FILE = "opencode-agent-status.js";
 /** 托管标记：写在插件源码内, install 幂等比对 + uninstall 删除前必查。 */
 const PLUGIN_MARKER = pierManagedPluginMarker();
 
-/** 自动发现目录内的插件路径：跟随实际存在的 config 根目录。 */
+/** 官方全局自动发现目录内的插件路径。项目级 `.opencode` 不属于全局安装位。 */
 export function opencodePluginPath(): string {
   return join(dirname(opencodeConfigPath()), "plugins", PLUGIN_FILE);
 }
@@ -49,12 +73,18 @@ function legacyPluginPath(): string {
   return join(homedir(), ".pier", "plugins", LEGACY_PLUGIN_FILE);
 }
 
-/** opencode config 路径候选：两者取已存在者, 都不存在时默认第一个。 */
+/**
+ * OpenCode v1.18.9 官方全局配置路径。JSONC 是宿主创建与写回时的首选；
+ * `~/.opencode` 仅可能是主目录作为项目时的项目级配置，不能作为全局安装根。
+ */
 function candidateConfigPaths(): string[] {
-  return [
-    join(homedir(), ".config", "opencode", "opencode.json"),
-    join(homedir(), ".opencode", "opencode.json"),
-  ];
+  const configured = process.env.XDG_CONFIG_HOME;
+  const xdgConfigHome =
+    configured && isAbsolute(configured)
+      ? configured
+      : join(homedir(), ".config");
+  const root = join(xdgConfigHome, "opencode");
+  return [join(root, "opencode.jsonc"), join(root, "opencode.json")];
 }
 
 export function opencodeConfigPath(): string {
@@ -67,22 +97,20 @@ export function opencodeConfigPath(): string {
 }
 
 /**
- * 插件源码：opencode plugin factory 返回事件表 + tool.execute 钩子。
+ * 插件源码：固定支持 OpenCode 1.x 插件接口，已核对 v1.18.9
+ * （4da7bb44c84e013fa53e9c5d02ac753d1435c81a）。该稳定版仍兼容命名
+ * factory 导出；尚未发布的 v2 插件接口改为 default `{id, setup|effect}`，
+ * 无法用同一事件插件兼容，升级到 v2 前必须另做适配。
+ *
  * emit 用 `process.getBuiltinModule("node:fs")` 同步 append（同 omp 先例：
  * 同步既保文件序——聚合器按 JSONL 文件序消费, 也保证宿主退出前
  * session.idle 落盘；opencode fire-and-forget 行为下尤为关键——handler
  * 返回的 promise 被 runtime 丢弃, 异步 append 可能永远完不成）；
  * 旧 Node 宿主退化为异步 best-effort。env 三要素任一缺失即静默 no-op。
- * 事件映射（anomalyco/opencode SDK 生成类型 packages/sdk/js/src/gen/
- * types.gen.ts 为准, 以下两处此前对不上官方类型, 已修正）：
+ * 事件映射以该稳定版官方插件文档和运行时事件桥为准：
  * session.created→SessionStart, session.idle→Stop, session.error→error,
- * tui.command.execute(prompt.submit)→PromptSubmit（原以为键位名是
- * "input_submit"——那是 keybinds 配置里的动作 id, 但 tui.command.execute
- * 事件 payload 的 command 字段实际值是 "prompt.submit"，EventTuiCommandExecute
- * 类型的 command 联合里没有 "input_submit"），permission.updated→
- * PermissionRequest（SDK 类型只有 EventPermissionUpdated /
- * EventPermissionReplied 两种, 没有 "permission.asked"——旧文档页过时）,
- * permission.replied→processing, session.status(busy/retry)→running、
+ * chat.message→PromptSubmit，permission.asked/replied 与 question.*
+ * 分别闭合交互，session.status(busy/retry)→running、
  * (idle)→Stop（EventSessionStatus——模型忙碌/重试中的推进心跳）,
  * tool.execute.before→ToolStart, tool.execute.after→ToolComplete。
  */
@@ -91,6 +119,7 @@ export function buildOpencodePluginSource(
 ): string {
   return `// ${PLUGIN_MARKER}
 // Do not edit; this file is regenerated by Pier and any changes may be lost.
+// Targets the OpenCode 1.x plugin API (validated with v1.18.9).
 // No top-level import declarations: process.getBuiltinModule is a runtime
 // call — not an ImportDeclaration; older Node falls back to async best-effort.
 // (Exception to ts-no-dynamic-import: generated file for a foreign host.)
@@ -98,133 +127,117 @@ export function buildOpencodePluginSource(
 ${JAVASCRIPT_LOCKED_APPEND_SOURCE}
 ${JAVASCRIPT_PROMPT_SNIPPET_SOURCE}
 
-function pierSessionIdFrom(event) {
-  const values = Array.isArray(event) ? [...event] : [event];
-  values.push(...values.map((value) => value && value.properties));
-  for (const value of values) {
-    if (!value || typeof value !== "object") continue;
-    for (const key of ["sessionId", "sessionID", "session_id"]) {
-      if (typeof value[key] === "string" && value[key]) return value[key];
-    }
-    const session = value.info || value.session || value.thread;
-    if (session && typeof session === "object") {
-      for (const key of ["id", "sessionId", "sessionID", "session_id"]) {
-        if (typeof session[key] === "string" && session[key]) return session[key];
-      }
-    }
-  }
-  return undefined;
+const pierChildren = new Map();
+function pierProps(raw) {
+  return raw && !Array.isArray(raw) && raw.properties || {};
 }
-
-function pierToolIdFrom(event) {
-  const values = Array.isArray(event) ? event : [event];
-  for (const value of values) {
+function pierSessionId(raw) {
+  for (const value of [raw, pierProps(raw), ...(Array.isArray(raw) ? raw : [])]) {
     if (!value || typeof value !== "object") continue;
-    for (const key of ["callID", "callId", "toolCallID", "toolCallId", "toolUseId", "tool_use_id"]) {
-      if (typeof value[key] === "string" && value[key]) return value[key];
-    }
+    const info = value.info || value.message;
+    const id = value.sessionID || value.sessionId || value.session_id ||
+      (info && (info.sessionID || info.sessionId || info.id));
+    if (typeof id === "string" && id) return id;
   }
-  return undefined;
 }
-
-const pierParentSessionIds = new Map();
-
-function emitPierEvent(pierEvent, nativeEvent, rawEvent) {
+function pierEmit(event, nativeEvent, raw, extra = {}) {
   const log = process.env.PIER_AGENT_EVENT_LOG;
   const panelId = process.env.PIER_PANEL_ID;
   const windowId = process.env.PIER_WINDOW_ID;
   if (!log || !panelId || !windowId) return;
-  const sessionId = pierSessionIdFrom(rawEvent);
-  const toolUseId = pierToolIdFrom(rawEvent);
-  const properties = rawEvent && !Array.isArray(rawEvent) && rawEvent.properties;
-  const info = properties && (properties.info || properties.session);
-  const nativeState =
-    properties && properties.status && typeof properties.status.type === "string"
-      ? properties.status.type
-      : undefined;
-  const discoveredParentSessionId =
-    (info && (info.parentID || info.parentId || info.parent_id)) ||
-    (properties && (properties.parentID || properties.parentId || properties.parent_id));
-  if (
-    sessionId &&
-    typeof discoveredParentSessionId === "string" &&
-    discoveredParentSessionId
-  ) {
-    pierParentSessionIds.set(sessionId, discoveredParentSessionId);
-  }
-  const parentSessionId = sessionId
-    ? pierParentSessionIds.get(sessionId)
-    : undefined;
-  const isSubagent = parentSessionId !== undefined;
-  const promptSnippet =
-    pierEvent === "PromptSubmit" ? pierPromptSnippetFrom(rawEvent) : undefined;
+  const sessionId = extra.sessionId || pierSessionId(raw);
+  const parentSessionId = sessionId && pierChildren.get(sessionId);
   const line = JSON.stringify({
-    v: 2,
+    v: 3,
     kind: "agentEvent",
     ts: Date.now() * 1_000_000,
     panelId,
     windowId,
     pid: process.pid,
     agent: "${pluginId}",
-    event: pierEvent,
+    event,
     nativeEvent,
-    ...(nativeState ? { nativeState } : {}),
-    ...(isSubagent ? { actorHint: "subagent" } : {}),
-    ...(typeof parentSessionId === "string" && parentSessionId
-      ? { parentSessionId }
-      : {}),
+    ...(parentSessionId ? { actorHint: "subagent", parentSessionId } : {}),
     ...(sessionId ? { sessionId } : {}),
-    ...(toolUseId ? { toolUseId } : {}),
-    ...(promptSnippet ? { promptSnippet } : {}),
+    ...extra,
   }) + "\\n";
   try {
     pierAppend(log, line);
   } catch {
     // Pier status reporting must never affect the agent run.
   }
-  if (nativeEvent === "session.deleted" && sessionId) {
-    pierParentSessionIds.delete(sessionId);
-  }
 }
-
-function mapPierEvent(event) {
-  if (!event || typeof event.type !== "string") return null;
-  if (event.type === "session.created") return "SessionStart";
-  if (event.type === "session.idle") return "Stop";
-  if (event.type === "session.error") return "error";
-  if (event.type === "session.deleted") return "SessionEnd";
-  if (event.type === "session.status") {
-    // SDK EventSessionStatus: properties.status.type = busy/retry/idle
-    // （sst/opencode packages/sdk/js/src/gen/types.gen.ts SessionStatus 联合）。
-    // busy/retry 是模型推进/重试中——缺了它长回合只剩 prompt.submit 一跳。
-    const statusType =
-      event.properties && event.properties.status && event.properties.status.type;
-    if (statusType === "busy" || statusType === "retry") return "running";
-    if (statusType === "idle") return "Stop";
-    return null;
-  }
-  if (event.type === "tui.command.execute") {
-    const command = event.properties && event.properties.command;
-    return command === "prompt.submit" ? "PromptSubmit" : null;
-  }
-  if (event.type === "permission.updated") return "PermissionRequest";
-  if (event.type === "permission.replied") return "processing";
-  return null;
+function pierInteraction(event, kind, outcome) {
+  const p = pierProps(event);
+  pierEmit(
+    outcome ? "InteractionResolved" : "InteractionRequested",
+    event.type,
+    event,
+    {
+      interactionId: p.id || p.requestID,
+      interactionKind: kind,
+      ...(outcome ? { interactionOutcome: outcome } : {}),
+    }
+  );
 }
-
 export const PierAgentStatus = () => {
-  // 不做加载合成 SessionStart：session.created→SessionStart 是真实信号；
-  // 合成版在工厂按会话/子代理多次执行的宿主上会打穿主状态（omp 教训）。
   return {
     event: ({ event }) => {
-      const mapped = mapPierEvent(event);
-      if (mapped) emitPierEvent(mapped, event.type, event);
+      if (!event || typeof event.type !== "string") return;
+      const p = pierProps(event);
+      const sessionId = pierSessionId(event);
+      if (event.type === "session.created") {
+        const parent = p.info && p.info.parentID;
+        if (sessionId && parent) pierChildren.set(sessionId, parent);
+        else pierEmit("SessionStart", event.type, event);
+      } else if (event.type === "session.status") {
+        const state = p.status && p.status.type;
+        const child = sessionId && pierChildren.has(sessionId);
+        if (child && (state === "busy" || state === "retry"))
+          pierEmit("SubagentStart", event.type + "=" + state + ".child", event, { agentInstanceId: sessionId, nativeState: state });
+        else if (child && state === "idle")
+          pierEmit("SubagentStop", event.type + "=idle.child", event, { agentInstanceId: sessionId, nativeState: state });
+        else if (state === "busy" || state === "retry")
+          pierEmit("running", event.type + "=" + state, event, { nativeState: state });
+        else if (state === "idle")
+          pierEmit("Stop", event.type + "=idle", event, { nativeState: state });
+      } else if (event.type === "session.idle") {
+        if (sessionId && pierChildren.has(sessionId))
+          pierEmit("SubagentStop", "session.status=idle.child", event, { agentInstanceId: sessionId });
+        else pierEmit("Stop", event.type, event);
+      } else if (event.type === "session.error") {
+        if (sessionId && pierChildren.has(sessionId))
+          pierEmit("SubagentStop", "session.error.child", event, { agentInstanceId: sessionId, nativeState: "error" });
+        else pierEmit("error", event.type, event, { nativeState: "error" });
+      } else if (event.type === "session.deleted") {
+        if (sessionId && pierChildren.has(sessionId)) {
+          pierEmit("SubagentStop", "session.deleted.child", event, { agentInstanceId: sessionId });
+          pierChildren.delete(sessionId);
+        } else pierEmit("SessionEnd", event.type, event);
+      } else if (event.type === "permission.asked") pierInteraction(event, "permission");
+      else if (event.type === "permission.replied")
+        pierInteraction(event, "permission", p.reply === "reject" ? "rejected" : "accepted");
+      else if (event.type === "question.asked") pierInteraction(event, "question");
+      else if (event.type === "question.replied") pierInteraction(event, "question", "completed");
+      else if (event.type === "question.rejected") pierInteraction(event, "question", "rejected");
+      else if (event.type === "message.part.updated") {
+        const part = p.part;
+        const state = part && part.type === "tool" && part.state && part.state.status;
+        if (state === "completed" || state === "error")
+          pierEmit("ToolComplete", "message.part.updated=" + state, event, { toolUseId: part.callID, toolName: part.tool, nativeState: state });
+      }
     },
-    "tool.execute.before": (...args) => {
-      emitPierEvent("ToolStart", "tool.execute.before", args);
+    "chat.message": (input, output) => {
+      pierEmit("PromptSubmit", "chat.message", input, {
+        turnId: input.messageID || (output.message && output.message.id),
+        promptSnippet: pierPromptSnippetFrom({ content: output.parts }, output.message),
+      });
     },
-    "tool.execute.after": (...args) => {
-      emitPierEvent("ToolComplete", "tool.execute.after", args);
+    "tool.execute.before": (input) => {
+      pierEmit("ToolStart", "tool.execute.before", input, { toolUseId: input.callID, toolName: input.tool });
+    },
+    "tool.execute.after": (input) => {
+      pierEmit("ToolComplete", "tool.execute.after", input, { toolUseId: input.callID, toolName: input.tool });
     },
   };
 };
@@ -246,13 +259,12 @@ async function readPluginFile(path: string): Promise<string | null> {
 async function deployPluginFile(
   pluginPath: string,
   source: string
-): Promise<boolean> {
-  const result = await writeManagedPluginFile({
+): Promise<void> {
+  await writeManagedPluginFile({
     path: pluginPath,
     source,
     label: AGENT_ID,
   });
-  return result !== "skipped-unmanaged" && result !== "skipped-newer";
 }
 
 function pluginArray(config: Record<string, unknown>): unknown[] {
@@ -274,10 +286,25 @@ function pluginSpec(entry: unknown): string | null {
  * opencode-agent-status.js 文件名（部署在 ~/.loomdesk/plugins/）, 误删会
  * 破坏用户的 loomdesk 集成。
  */
-function isPierPluginSpec(spec: string): boolean {
-  return (
-    spec.includes(`.pier/plugins/${LEGACY_PLUGIN_FILE}`) ||
-    spec.includes("pier-agent-status")
+function normalizedPluginPath(spec: string): string | null {
+  try {
+    const path = spec.startsWith("file:") ? fileURLToPath(spec) : spec;
+    return normalize(path).replaceAll("\\", "/");
+  } catch {
+    return null;
+  }
+}
+
+function isPierPluginSpec(
+  spec: string,
+  ownedPluginPaths: readonly string[]
+): boolean {
+  const normalized = normalizedPluginPath(spec);
+  if (normalized === null) {
+    return false;
+  }
+  return ownedPluginPaths.some(
+    (ownedPath) => normalizedPluginPath(ownedPath) === normalized
   );
 }
 
@@ -287,12 +314,13 @@ function isPierPluginSpec(spec: string): boolean {
  * plugin 数组清空时保留空数组（不凭空删除用户已有的键结构）。
  */
 export function withoutPierOpencodePlugin(
-  config: Record<string, unknown>
+  config: Record<string, unknown>,
+  ownedPluginPaths: readonly string[] = []
 ): Record<string, unknown> {
   const plugin = pluginArray(config);
   const filtered = plugin.filter((entry) => {
     const spec = pluginSpec(entry);
-    return spec === null || !isPierPluginSpec(spec);
+    return spec === null || !isPierPluginSpec(spec, ownedPluginPaths);
   });
   if (filtered.length === plugin.length) {
     return config;
@@ -300,14 +328,79 @@ export function withoutPierOpencodePlugin(
   return { ...config, plugin: filtered };
 }
 
-/** 清旧布局：config 数组注册条目 + ~/.pier/plugins 下的旧插件文件。 */
-async function cleanupOpencodeLegacy(configPath: string): Promise<void> {
-  if (existsSync(configPath)) {
-    await transformJsonConfig(configPath, withoutPierOpencodePlugin, AGENT_ID);
+async function cleanupLegacyConfig(
+  configPath: string,
+  ownedPluginPaths: readonly string[]
+): Promise<void> {
+  let raw: string;
+  try {
+    raw = await readFile(configPath, "utf8");
+  } catch {
+    return;
   }
-  const legacy = await readPluginFile(legacyPluginPath());
-  if (legacy !== null && isPierManagedPluginContent(legacy)) {
-    await rm(legacyPluginPath(), { force: true });
+
+  const errors: ParseError[] = [];
+  const parsed: unknown = parse(raw, errors, { allowTrailingComma: true });
+  if (
+    errors.length > 0 ||
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed)
+  ) {
+    console.warn(
+      `[agent-hooks:${AGENT_ID}] config unparsable, skip:`,
+      configPath
+    );
+    return;
+  }
+
+  const plugin = pluginArray(parsed as Record<string, unknown>);
+  const indices = plugin.flatMap((entry, index) => {
+    const spec = pluginSpec(entry);
+    return spec !== null && isPierPluginSpec(spec, ownedPluginPaths)
+      ? [index]
+      : [];
+  });
+  if (indices.length === 0) {
+    return;
+  }
+
+  let updated = raw;
+  for (const index of indices.toReversed()) {
+    updated = applyEdits(
+      updated,
+      modify(updated, ["plugin", index], undefined, {
+        formattingOptions: { insertSpaces: true, tabSize: 2 },
+      })
+    );
+  }
+  await atomicWriteFile(configPath, updated);
+}
+
+/**
+ * 只把文件内容 marker 已证明为 Pier 托管的路径交给 config 清理。
+ * 同名路径本身不是所有权证据；非托管文件及其用户注册必须原样保留。
+ */
+async function cleanupOwnedOpencodeConfig(
+  configPath: string,
+  managedPluginPath: string
+): Promise<void> {
+  const legacyPath = legacyPluginPath();
+  const [legacy, current] = await Promise.all([
+    readPluginFile(legacyPath),
+    readPluginFile(managedPluginPath),
+  ]);
+  const legacyOwned = legacy !== null && isPierManagedPluginContent(legacy);
+  const currentOwned = current !== null && isPierManagedPluginContent(current);
+  const ownedPluginPaths = [
+    ...(legacyOwned ? [legacyPath] : []),
+    ...(currentOwned ? [managedPluginPath] : []),
+  ];
+  if (ownedPluginPaths.length > 0 && existsSync(configPath)) {
+    await cleanupLegacyConfig(configPath, ownedPluginPaths);
+  }
+  if (legacyOwned) {
+    await rm(legacyPath, { force: true });
   }
 }
 
@@ -315,8 +408,8 @@ export async function installOpencodeHooks(
   configPath: string = opencodeConfigPath(),
   pluginPath: string = opencodePluginPath()
 ): Promise<void> {
-  await cleanupOpencodeLegacy(configPath);
   await deployPluginFile(pluginPath, buildOpencodePluginSource());
+  await cleanupOwnedOpencodeConfig(configPath, pluginPath);
 }
 
 /**
@@ -327,7 +420,7 @@ export async function uninstallOpencodeHooks(
   configPath: string = opencodeConfigPath(),
   pluginPath: string = opencodePluginPath()
 ): Promise<void> {
-  await cleanupOpencodeLegacy(configPath);
+  await cleanupOwnedOpencodeConfig(configPath, pluginPath);
   const existing = await readPluginFile(pluginPath);
   if (existing === null) {
     return;
@@ -343,14 +436,19 @@ export async function uninstallOpencodeHooks(
 }
 
 function opencodeDetect(): boolean {
-  return candidateConfigPaths().some((p) => existsSync(p));
+  return (
+    existsSync(dirname(candidateConfigPaths()[0] as string)) ||
+    commandExistsOnPath("opencode")
+  );
 }
 
 export const opencodeIntegration: AgentHookIntegration = {
-  capability: "full",
   detect: opencodeDetect,
   id: AGENT_ID,
-  runtime: { stopAuthority: "authoritative" },
+  runtime: {
+    emittedMappings: OPENCODE_EMITTED_MAPPINGS,
+    stopAuthority: "authoritative",
+  },
   install: () => installOpencodeHooks(),
   uninstall: () => uninstallOpencodeHooks(),
 };

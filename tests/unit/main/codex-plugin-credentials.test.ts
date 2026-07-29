@@ -35,6 +35,122 @@ afterEach(async () => {
 });
 
 describe("pier.codex credential lifecycle", () => {
+  it("falls back for quota metrics while retaining HTTP metadata", async () => {
+    const values = new Map<string, string>();
+    const managedHome = join(dir, "runtime-homes", "codex", "account-a");
+    const idToken = JSON.parse(authJson()).tokens.id_token as string;
+    const accessClaims = Buffer.from(
+      JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })
+    ).toString("base64url");
+    const auth = JSON.stringify({
+      tokens: {
+        access_token: `header.${accessClaims}.signature`,
+        account_id: "acct-1",
+        id_token: idToken,
+        refresh_token: "refresh-token",
+      },
+    });
+    await mkdir(managedHome, { recursive: true });
+    await writeFile(join(managedHome, "auth.json"), auth, { mode: 0o600 });
+    const fetchUsageImpl = vi.fn(async () => ({
+      metrics: [
+        {
+          groupId: "codex",
+          id: "codex:primary",
+          kind: "quota" as const,
+          usedPercent: 18,
+        },
+      ],
+      status: "ok" as const,
+    }));
+    const provider = createCodexProvider({
+      credentials: {
+        delete: vi.fn(async (key: string) => {
+          values.delete(key);
+        }),
+        get: vi.fn(async (key: string) => values.get(key) ?? null),
+        set: vi.fn(async (key: string, value: string) => {
+          values.set(key, value);
+        }),
+      },
+      fetchImpl: vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            plan_type: "pro",
+            rate_limit_reset_credits: { available_count: 2 },
+          }),
+      })) as unknown as typeof fetch,
+      fetchUsageImpl,
+      realCodexHome: join(dir, "real-codex"),
+    });
+
+    await provider.readIdentity(managedHome);
+    await expect(
+      provider.fetchUsage(managedHome, new AbortController().signal)
+    ).resolves.toEqual({
+      metrics: [
+        {
+          groupId: "codex",
+          id: "codex:primary",
+          kind: "quota",
+          usedPercent: 18,
+        },
+        {
+          format: "count",
+          id: "codex:reset-credits",
+          kind: "scalar",
+          value: 2,
+        },
+      ],
+      planType: "pro",
+      status: "ok",
+    });
+    expect(fetchUsageImpl).toHaveBeenCalledOnce();
+  });
+
+  it("does not retry a failed app-server fallback for unmanaged auth", async () => {
+    const accountHome = join(dir, "unmanaged-codex");
+    const idToken = JSON.parse(authJson()).tokens.id_token as string;
+    const accessClaims = Buffer.from(
+      JSON.stringify({ exp: Math.floor(Date.now() / 1000) + 3600 })
+    ).toString("base64url");
+    await mkdir(accountHome, { recursive: true });
+    await writeFile(
+      join(accountHome, "auth.json"),
+      JSON.stringify({
+        tokens: {
+          access_token: `header.${accessClaims}.signature`,
+          account_id: "acct-1",
+          id_token: idToken,
+          refresh_token: "refresh-token",
+        },
+      }),
+      { mode: 0o600 }
+    );
+    const fetchUsageImpl = vi.fn(async () => {
+      throw new Error("app-server failed");
+    });
+    const provider = createCodexProvider({
+      fetchImpl: vi.fn(async () => ({
+        ok: true,
+        status: 200,
+        text: async () =>
+          JSON.stringify({
+            rate_limit_reset_credits: { available_count: 2 },
+          }),
+      })) as unknown as typeof fetch,
+      fetchUsageImpl,
+      realCodexHome: join(dir, "real-codex"),
+    });
+
+    await expect(
+      provider.fetchUsage(accountHome, new AbortController().signal)
+    ).rejects.toThrow("app-server failed");
+    expect(fetchUsageImpl).toHaveBeenCalledOnce();
+  });
+
   it("moves managed auth into scoped secrets and materializes only on demand", async () => {
     const values = new Map<string, string>();
     const credentials = {
@@ -135,7 +251,7 @@ describe("pier.codex credential lifecycle", () => {
             mode: 0o600,
           });
         }
-        return { status: "ok", windows: [] };
+        return { status: "ok", metrics: [] };
       },
       realCodexHome: join(dir, "real-codex"),
     });
@@ -171,7 +287,7 @@ describe("pier.codex credential lifecycle", () => {
     });
     provider.fetchUsage = vi.fn(async () => ({
       status: "ok" as const,
-      windows: [],
+      metrics: [],
     }));
     provider.watchExternalAuth = vi.fn(() => () => undefined);
     const stateStore = createCodexAccountsStateStore(

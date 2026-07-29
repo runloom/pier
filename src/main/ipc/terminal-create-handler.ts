@@ -28,6 +28,10 @@ import {
   withPanelStatusEnv,
 } from "./terminal-create-launch.ts";
 import { sendInitialTerminalInput } from "./terminal-create-post-actions.ts";
+import {
+  abandonAuthorizedSpawnAttempt,
+  resolveTerminalTransferCreateAction,
+} from "./terminal-create-transfer-guard.ts";
 import { recordRendererTerminalRoute } from "./terminal-debug.ts";
 import { terminalFocusCoordinator } from "./terminal-focus-coordinator.ts";
 import {
@@ -48,40 +52,6 @@ function isStringRecord(value: unknown): value is Record<string, string> {
     value !== null &&
     Object.values(value).every((entry) => typeof entry === "string")
   );
-}
-
-type TerminalTransferCreateAction = "proceed" | "skip" | "adopt";
-
-/**
- * Panel-transfer create disposition for this window/panel.
- * Call again after any await (skills gate) — lease state can change mid-flight.
- */
-function resolveTerminalTransferCreateAction(
-  transfer: ReturnType<typeof getTerminalPanelTransfer>,
-  runtimeWindowId: string | undefined,
-  panelId: string
-): TerminalTransferCreateAction {
-  if (!(transfer && runtimeWindowId)) {
-    return "proceed";
-  }
-  if (transfer.shouldSkipTargetCreate(runtimeWindowId, panelId)) {
-    return "skip";
-  }
-  if (transfer.shouldAdoptMovedSurface(runtimeWindowId, panelId)) {
-    return "adopt";
-  }
-  return "proceed";
-}
-
-async function abandonAuthorizedSpawnAttempt(args: {
-  attemptId: string | null;
-  launchGate: ManagedAgentLaunchGate | null | undefined;
-}): Promise<void> {
-  const { attemptId, launchGate } = args;
-  if (!(attemptId && launchGate)) {
-    return;
-  }
-  await launchGate.recordSpawnResult(attemptId, false).catch(() => undefined);
 }
 
 export async function handleTerminalCreate(args: {
@@ -141,7 +111,8 @@ export async function handleTerminalCreate(args: {
         nativePanelId,
         createArgs.frame,
         createArgs.font.family,
-        createArgs.font.size
+        createArgs.font.size,
+        createArgs.presentationId
       );
       if (!ok) {
         return { ok: false, error: "createOutputTerminal returned false" };
@@ -238,10 +209,27 @@ export async function handleTerminalCreate(args: {
     );
     if (transferBeforeGate === "skip") {
       // Target is inert during lease — do not create a competing surface.
+      if (
+        !transfer?.registerTargetPresentation(
+          runtimeWindowId ?? "",
+          createArgs.panelId,
+          createArgs.presentationId
+        )
+      ) {
+        return { ok: false, error: "terminal transfer presentation rejected" };
+      }
       return { ok: true };
     }
     if (transferBeforeGate === "adopt") {
-      // Surface already moved under this native key — register focus only.
+      if (
+        !transfer?.registerTargetPresentation(
+          runtimeWindowId ?? "",
+          createArgs.panelId,
+          createArgs.presentationId
+        )
+      ) {
+        return { ok: false, error: "terminal transfer presentation rejected" };
+      }
       terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
       return { ok: true };
     }
@@ -363,6 +351,15 @@ export async function handleTerminalCreate(args: {
         attemptId: spawnedUnderAttemptId,
         launchGate,
       });
+      if (
+        !transfer?.registerTargetPresentation(
+          runtimeWindowId ?? "",
+          createArgs.panelId,
+          createArgs.presentationId
+        )
+      ) {
+        return { ok: false, error: "terminal transfer presentation rejected" };
+      }
       return { ok: true };
     }
     if (transferAfterGate === "adopt") {
@@ -370,6 +367,15 @@ export async function handleTerminalCreate(args: {
         attemptId: spawnedUnderAttemptId,
         launchGate,
       });
+      if (
+        !transfer?.registerTargetPresentation(
+          runtimeWindowId ?? "",
+          createArgs.panelId,
+          createArgs.presentationId
+        )
+      ) {
+        return { ok: false, error: "terminal transfer presentation rejected" };
+      }
       terminalFocusCoordinator.surfaceCreated(win, createArgs.panelId);
       return { ok: true };
     }
@@ -389,7 +395,8 @@ export async function handleTerminalCreate(args: {
               String(win.id),
               foregroundActivityService.hookEnv()
             ),
-            lifecycleId
+            lifecycleId,
+            createArgs.presentationId
           ),
         panelId: createArgs.panelId,
         windowId: String(win.id),
@@ -453,7 +460,13 @@ export async function handleTerminalCreate(args: {
         foregroundActivityService.hydrateAgentSessionTitle(
           String(win.id),
           createArgs.panelId,
-          { source, title }
+          {
+            source,
+            ...(session.sessionTitleSessionId
+              ? { sessionId: session.sessionTitleSessionId }
+              : {}),
+            title,
+          }
         );
       }
     }

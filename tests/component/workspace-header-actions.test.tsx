@@ -676,6 +676,96 @@ describe("WorkspaceHeaderActions", () => {
     header.remove();
   });
 
+  it("keeps a running indicator visible beside a two-line hidden tab title", async () => {
+    const header = document.createElement("div");
+    const tabsContainer = document.createElement("div");
+    const visibleTab = document.createElement("div");
+    const visibleContent = document.createElement("div");
+    const overflowTab = document.createElement("div");
+    const overflowContent = document.createElement("div");
+    const actionsContainer = document.createElement("div");
+    const longTitle =
+      "项目特别是刚启动的时候需要等待初始化完成才能继续执行后续操作";
+
+    header.className = "dv-tabs-and-actions-container";
+    tabsContainer.className = "dv-tabs-container";
+    visibleTab.className = "dv-tab";
+    overflowTab.className = "dv-tab";
+    visibleContent.dataset.panelTabId = "terminal-1";
+    overflowContent.dataset.panelTabId = "terminal-2";
+    visibleTab.append(visibleContent);
+    overflowTab.append(overflowContent);
+    tabsContainer.append(visibleTab, overflowTab);
+    header.append(tabsContainer, actionsContainer);
+    document.body.append(header);
+
+    setRect(tabsContainer, { bottom: 34, left: 0, right: 120, top: 0 });
+    setRect(visibleTab, { bottom: 34, left: 0, right: 80, top: 0 });
+    setRect(overflowTab, { bottom: 34, left: 120, right: 200, top: 0 });
+
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "terminal-2": {
+          display: { short: longTitle },
+          tab: {
+            icon: { id: "agent:codex" },
+            state: { label: "Running", status: "running" },
+            title: longTitle,
+          },
+        },
+      },
+    });
+
+    render(
+      <WorkspaceHeaderActions
+        {...createProps([
+          createPanel("terminal-1", "Terminal 1"),
+          createPanel("terminal-2", "Terminal 2"),
+        ])}
+      />,
+      { container: actionsContainer }
+    );
+
+    const trigger = await screen.findByRole("combobox", {
+      name: "Hidden tabs",
+    });
+    fireEvent.pointerDown(trigger, {
+      button: 0,
+      ctrlKey: false,
+      pointerType: "mouse",
+    });
+
+    const titleText = await screen.findByText(longTitle);
+    const item = titleText.closest('[role="option"]');
+    expect(item).not.toBeNull();
+    const title = item?.querySelector("[data-panel-overflow-title]");
+    const loading = item?.querySelector(
+      '[data-panel-tab-state-indicator="running"]'
+    );
+
+    expect(title).toHaveClass(
+      "min-w-0",
+      "flex-1",
+      "line-clamp-2",
+      "whitespace-normal"
+    );
+    expect(title).not.toHaveClass("truncate");
+    expect(loading).not.toBeNull();
+    expect(loading).toHaveClass("text-status-info-fg!");
+    expect(item).toHaveClass("pr-2");
+    expect(item).not.toHaveClass("pr-8");
+    expect(
+      loading?.querySelector('[data-panel-tab-state-icon="running"]')
+    ).toHaveClass(
+      "animate-spin",
+      "motion-reduce:animate-none",
+      "text-status-info-fg!"
+    );
+
+    header.remove();
+  });
+
   it("reveals the hidden tab when selecting it from the overflow list", async () => {
     const header = document.createElement("div");
     const tabsContainer = document.createElement("div");

@@ -17,7 +17,6 @@ import {
   EmptyMedia,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
-import { formatRelativeTime } from "@pier/ui/format.tsx";
 import {
   Item,
   ItemContent,
@@ -38,8 +37,8 @@ import {
 } from "../shared/accounts.ts";
 import {
   AccountAvatar,
+  AccountBadges,
   accountDisplayLabel,
-  accountMembershipSummary,
   OtherAccount,
   QuotaGroup,
 } from "./account-display.tsx";
@@ -355,18 +354,18 @@ export function AccountsSettingsPage({
                 <ItemTitle title={accountDisplayLabel(active)}>
                   {accountDisplayLabel(active)}
                 </ItemTitle>
-                <ItemDescription>
-                  {[
-                    active.error
-                      ? formatAccountError(active.error, t)
-                      : accountMembershipSummary(active, language, t),
-                    activeUsage
-                      ? `${t("pier.claude.accounts.settings.updated", "Updated")} ${formatRelativeTime(activeUsage.fetchedAt, Date.now(), language)}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </ItemDescription>
+                {active.error ? (
+                  <ItemDescription>
+                    {formatAccountError(active.error, t)}
+                  </ItemDescription>
+                ) : (
+                  <AccountBadges
+                    account={active}
+                    includeScalars
+                    language={language}
+                    t={t}
+                  />
+                )}
               </ItemContent>
             </Item>
             <ItemSeparator className="my-0" />
@@ -382,8 +381,16 @@ export function AccountsSettingsPage({
               }
               language={language}
               loading={!activeUsage}
+              metrics={
+                activeUsage?.metrics.filter(
+                  (metric) => metric.kind === "quota"
+                ) ?? []
+              }
+              status={activeUsage?.status ?? "ok"}
               t={t}
-              windows={activeUsage?.windows ?? []}
+              {...(activeUsage?.updatedAt === undefined
+                ? {}
+                : { updatedAt: activeUsage.updatedAt })}
             />
           </CardContent>
         </Card>

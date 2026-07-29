@@ -20,6 +20,7 @@ import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { panelKindOf } from "./panel-registry.ts";
 import { PanelTabLeadingIcon } from "./panel-tab-leading-icon.tsx";
+import { tabStatusIndicator } from "./panel-tab-tooltip.tsx";
 
 const CLIP_EPSILON_PX = 1;
 const OVERFLOW_ANCHOR_CLASS = "h-full w-0 shrink-0 overflow-hidden";
@@ -189,11 +190,22 @@ function PanelMenuItem({ panel }: { panel: HeaderPanel }) {
   // 与 PanelTabHeader 共用 leading 图标 + 语义色 class，避免 overflow 菜单
   // 落到 Select 默认 foreground 而 tab 仍是 status / file-icon 色。
   const title = tab?.title ?? panel.title ?? "Panel";
+  const statusIndicator = tab?.state?.status
+    ? tabStatusIndicator(tab.state.status, tab.state.label, {
+        preserveSemanticColor: true,
+      })
+    : null;
 
   return (
-    <SelectItem textValue={title} value={panel.id}>
+    <SelectItem showIndicator={false} textValue={title} value={panel.id}>
       <PanelTabLeadingIcon component={component} tab={tab} />
-      <span className="truncate">{title}</span>
+      <span
+        className="line-clamp-2 min-w-0 flex-1 whitespace-normal break-words text-left"
+        data-panel-overflow-title
+      >
+        {title}
+      </span>
+      {statusIndicator}
     </SelectItem>
   );
 }

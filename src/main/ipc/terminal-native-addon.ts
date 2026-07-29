@@ -28,7 +28,8 @@ export interface NativeAddon {
     panelId: string,
     frame: TerminalFrame,
     fontFamilies: string[],
-    fontSize: number
+    fontSize: number,
+    presentationId: number
   ): boolean;
   createTerminal(
     parentHandle: Buffer,
@@ -37,7 +38,8 @@ export interface NativeAddon {
     fontFamilies: string[],
     fontSize: number,
     launch: ResolvedTerminalLaunchOptions | undefined,
-    lifecycleId: string
+    lifecycleId: string,
+    presentationId: number
   ): boolean;
   debugSnapshot(parentHandle: Buffer): string;
   /** Window 真正销毁时调用一次: closeAll + 卸 EventRouter + 卸 NSEvent monitor */
@@ -86,6 +88,15 @@ export interface NativeAddon {
   reconcileTerminals(parentHandle: Buffer, activeIds: string[]): void;
   /** 把打包字体 ttf 的绝对路径注册给 CoreText (.process scope)，让 ghostty 能找到。启动时调一次。 */
   registerFonts(paths: string[]): void;
+  /**
+   * Rebind an existing native surface to a renderer presentation lifecycle and
+   * request a verified frame. Returns the previous presentation id, or null
+   * when the surface does not exist.
+   */
+  requestTerminalPresentation(input: {
+    nativePanelId: string;
+    presentationId: number;
+  }): number | null;
   /** 重建同一 panelId 的 host-managed surface，保留 dockview 几何和可见性。 */
   resetTerminalOutput(panelId: string): boolean;
   /**
@@ -130,6 +141,20 @@ export interface NativeAddon {
           panelId: string,
           lifecycleId: string,
           commandLine: string
+        ) => void)
+      | null
+  ): void;
+  setFrameCommittedCallback?(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          presentationId: number,
+          surfaceGeneration: number,
+          requestSequence: number,
+          drawSequence: number,
+          pixelWidth: number,
+          pixelHeight: number
         ) => void)
       | null
   ): void;

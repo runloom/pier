@@ -85,16 +85,104 @@ const agentEventPayloadV2Schema = z
   })
   .strict();
 
+const agentEventPayloadV3BaseFields = {
+  kind: z.literal("agentEvent"),
+  ...baseHookIdentityFields,
+  v: z.literal(3),
+  agent: agentKindSchema,
+  nativeEvent: z.string().min(1).max(128),
+  nativeState: z.string().min(1).max(64).optional(),
+  actorHint: z.enum(["main", "subagent"]).optional(),
+  parentSessionId: z.string().max(128).optional(),
+  metadataBase64: z.string().max(16_384).optional(),
+  agentInstanceId: z.string().max(128).optional(),
+  agentType: z.string().max(128).optional(),
+  sessionId: z.string().max(128).optional(),
+  toolName: z.string().max(256).optional(),
+  toolUseId: z.string().max(128).optional(),
+  transcriptPath: z.string().max(8192).optional(),
+  turnId: z.string().max(128).optional(),
+  promptSnippet: z.string().max(512).optional(),
+};
+
+const interactionKindSchema = z.enum([
+  "permission",
+  "question",
+  "external-block",
+]);
+
+/**
+ * 严格 v3 的非交互事件。旧单边 `PermissionRequest` 只由 v1/v2 宽松 schema
+ * 兼容读取；v3 producer 必须用带 kind 的 InteractionRequested/Resolved。
+ */
+const standardAgentEventV3Schema = z
+  .object({
+    ...agentEventPayloadV3BaseFields,
+    event: z.enum([
+      "SessionStart",
+      "PromptSubmit",
+      "ToolStart",
+      "ToolComplete",
+      "SubagentStart",
+      "SubagentStop",
+      "processing",
+      "running",
+      "Stop",
+      "TurnCompleted",
+      "TurnInterrupted",
+      "SessionEnd",
+      "error",
+    ]),
+  })
+  .strict();
+
+const interactionRequestedEventV3Schema = z
+  .object({
+    ...agentEventPayloadV3BaseFields,
+    event: z.literal("InteractionRequested"),
+    interactionId: z.string().max(128).optional(),
+    interactionKind: interactionKindSchema,
+  })
+  .strict();
+
+const interactionOutcomeSchema = z.enum([
+  "accepted",
+  "rejected",
+  "cancelled",
+  "failed",
+  "completed",
+  "unknown",
+]);
+
+const interactionResolvedEventV3Schema = z
+  .object({
+    ...agentEventPayloadV3BaseFields,
+    event: z.literal("InteractionResolved"),
+    interactionId: z.string().max(128).optional(),
+    interactionKind: interactionKindSchema,
+    interactionOutcome: interactionOutcomeSchema.optional(),
+  })
+  .strict();
+
 export type AgentHookEventPayloadV1 = z.infer<typeof agentEventPayloadV1Schema>;
+export type AgentHookEventPayloadV2 = z.infer<typeof agentEventPayloadV2Schema>;
+export type AgentHookEventPayloadV3 =
+  | z.infer<typeof standardAgentEventV3Schema>
+  | z.infer<typeof interactionRequestedEventV3Schema>
+  | z.infer<typeof interactionResolvedEventV3Schema>;
 export type AgentHookEventPayload =
   | AgentHookEventPayloadV1
-  | z.infer<typeof agentEventPayloadV2Schema>;
+  | AgentHookEventPayloadV2
+  | AgentHookEventPayloadV3;
 
 export const agentHookEventSchema = z.union([
   commandStartEventSchema,
   commandFinishedEventSchema,
   agentEventPayloadV1Schema,
   agentEventPayloadV2Schema,
+  standardAgentEventV3Schema,
+  interactionRequestedEventV3Schema,
+  interactionResolvedEventV3Schema,
 ]);
 export type AgentHookEvent = z.infer<typeof agentHookEventSchema>;
 

@@ -113,6 +113,7 @@ describe("external plugin Workbench contract", () => {
 
     const dispose = context.workbenchWidgets.register({
       component,
+      contentMode: "contained",
       id: EXTERNAL_WIDGET_ID,
       settingsComponent,
     });
@@ -121,6 +122,7 @@ describe("external plugin Workbench contract", () => {
       getPluginWorkbenchWidgetRegistrations().get(EXTERNAL_WIDGET_ID)
     ).toMatchObject({
       component,
+      contentMode: "contained",
       id: EXTERNAL_WIDGET_ID,
       settingsComponent,
     });

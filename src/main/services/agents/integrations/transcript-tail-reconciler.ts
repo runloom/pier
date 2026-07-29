@@ -1,65 +1,48 @@
 import { type Stats, unwatchFile, watchFile } from "node:fs";
 import { open, realpath, stat } from "node:fs/promises";
 import { isAbsolute, relative, resolve } from "node:path";
-import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type {
+  TranscriptTailReconciler,
+  TranscriptTailReconcilerConfig,
+  TranscriptTerminalRecord,
+} from "./transcript-tail-contracts.ts";
+import { emitTranscriptEvent } from "./transcript-tail-event.ts";
+import { processTranscriptTitleLine } from "./transcript-title-routing.ts";
+
+export type {
+  TranscriptTailReconciler,
+  TranscriptTailReconcilerConfig,
+  TranscriptTerminalRecord,
+} from "./transcript-tail-contracts.ts";
+export type {
+  TranscriptTitleListener,
+  TranscriptTitleRecord,
+} from "./transcript-title-routing.ts";
 
 const POLL_INTERVAL_MS = 250;
 const MAX_READ_BYTES = 1024 * 1024;
 const MAX_TRANSCRIPTS = 32;
 const MAX_TURN_CONTEXTS = 64;
-const MAX_PENDING_TERMINALS = 64;
-const MAX_SEEN_TERMINALS = 256;
-
-/** 一条 transcript 行分类出的可信终态记录。 */
-export interface TranscriptTerminalRecord {
-  /** 诊断用原生事件名（如 `codex.transcript.turn_aborted`）。 */
-  nativeEvent: string;
-  pierEvent: "TurnCompleted" | "TurnInterrupted";
-  /** provider 无回合身份时为空串（走单 owner + 增量区间回退）。 */
-  turnId: string;
-}
-
+const MAX_PENDING_TRANSCRIPT_RECORDS = 64;
+type TranscriptLineClassifier = (
+  line: string
+) => TranscriptTerminalRecord | null;
 interface TranscriptEntry {
+  classifyLine: TranscriptLineClassifier | null;
   contextsByTurnId: Map<string, AgentHookEventPayload>;
   disposed: boolean;
   initialScanEnd: number;
+  /** 每个 owner 最近一次派发过的 provider 标题（同值连发直接丢弃）。 */
+  lastTitleByScope: Map<string, string>;
   offset: number;
   owners: Map<string, AgentHookEventPayload>;
   pending: boolean;
-  pendingTerminalsByTurnId: Map<string, TranscriptTerminalRecord>;
+  pendingRecords: TranscriptTerminalRecord[];
   processing: boolean;
   seenTerminalEvents: Set<string>;
+  seenTranscriptEvents: Set<string>;
   watcher: (curr: Stats, prev: Stats) => void;
-}
-
-export interface TranscriptTailReconciler {
-  dispose(): void;
-  observe(event: AgentHookEventPayload): Promise<void>;
-  releasePanel(panelId: string, windowId?: string): void;
-  releasePanelsWhere(
-    predicate: (panelId: string, windowId: string) => boolean
-  ): void;
-  releaseWindow(windowId: string): void;
-  /** 跨窗口拖拽后把 panel 作用域迁到目标窗口（保留 pending / owner / 回合上下文）。 */
-  transferPanelOwnership(input: {
-    panelId: string;
-    sourceWindowId: string;
-    targetWindowId: string;
-  }): void;
-}
-
-export interface TranscriptTailReconcilerConfig {
-  /** 只消费该 agent 的 hook 事件；其他 agent 直接忽略。 */
-  agent: AgentKind;
-  /**
-   * transcript 单行 → 终态记录；非终态行返回 null。可以直接抛错
-   * （坏行/格式升级由核心捕获后静默忽略）。
-   */
-  classifyLine: (line: string) => TranscriptTerminalRecord | null;
-  onTerminalEvent: (event: AgentHookEventPayload) => void;
-  /** transcript 必须位于该根目录内（realpath 后再校验）。 */
-  transcriptRoot: string;
 }
 
 /**
@@ -79,6 +62,14 @@ export function createTranscriptTailReconciler(
   const transcriptRoot = resolve(config.transcriptRoot);
   let disposed = false;
 
+  function createEntryLineClassifier(): TranscriptLineClassifier {
+    const classifyLine = config.createLineClassifier?.() ?? config.classifyLine;
+    if (!classifyLine) {
+      throw new Error("transcript reconciler requires a line classifier");
+    }
+    return classifyLine;
+  }
+
   async function drain(path: string, entry: TranscriptEntry): Promise<void> {
     do {
       entry.pending = false;
@@ -89,8 +80,10 @@ export function createTranscriptTailReconciler(
       if (current.size < entry.offset) {
         entry.initialScanEnd = current.size;
         entry.offset = Math.max(0, current.size - MAX_READ_BYTES);
-        entry.pendingTerminalsByTurnId.clear();
+        entry.classifyLine = createEntryLineClassifier();
+        entry.pendingRecords.length = 0;
         entry.seenTerminalEvents.clear();
+        entry.seenTranscriptEvents.clear();
       }
       if (current.size === entry.offset) {
         continue;
@@ -140,8 +133,25 @@ export function createTranscriptTailReconciler(
     if (disposed || entry.disposed || !line.trim()) {
       return;
     }
+    if (allowOwnerFallback) {
+      try {
+        const classifyTitleLine = config.classifyTitleLine;
+        const listener = config.onTitleRecord;
+        if (classifyTitleLine && listener) {
+          processTranscriptTitleLine({
+            classifyLine: classifyTitleLine,
+            lastTitleByScope: entry.lastTitleByScope,
+            line,
+            listener,
+            owners: entry.owners,
+          });
+        }
+      } catch {
+        // 标题是纯装饰通路，坏行不得连带影响终态对账。
+      }
+    }
     try {
-      const record = config.classifyLine(line);
+      const record = entry.classifyLine?.(line);
       if (!record) {
         return;
       }
@@ -151,49 +161,18 @@ export function createTranscriptTailReconciler(
         context = entry.owners.values().next().value;
       }
       if (!context) {
-        if (
-          record.turnId &&
-          !entry.pendingTerminalsByTurnId.has(record.turnId)
-        ) {
-          entry.pendingTerminalsByTurnId.set(record.turnId, record);
-          if (entry.pendingTerminalsByTurnId.size > MAX_PENDING_TERMINALS) {
-            entry.pendingTerminalsByTurnId.delete(
-              entry.pendingTerminalsByTurnId.keys().next().value ?? ""
-            );
+        if (record.turnId) {
+          entry.pendingRecords.push(record);
+          if (entry.pendingRecords.length > MAX_PENDING_TRANSCRIPT_RECORDS) {
+            entry.pendingRecords.shift();
           }
         }
         return;
       }
-      emitTerminalEvent(entry, context, record);
+      emitTranscriptEvent(entry, context, record, config.onTerminalEvent);
     } catch {
       // transcript 是兼容性对账源；坏行和格式升级不得影响主 hook 通路。
     }
-  }
-
-  function emitTerminalEvent(
-    entry: TranscriptEntry,
-    context: AgentHookEventPayload,
-    record: TranscriptTerminalRecord
-  ): void {
-    if (record.turnId) {
-      // 同一 turn 第一个可信终态获胜；complete/abort 冲突不得二次迁移。
-      if (entry.seenTerminalEvents.has(record.turnId)) return;
-      entry.seenTerminalEvents.add(record.turnId);
-      if (entry.seenTerminalEvents.size > MAX_SEEN_TERMINALS) {
-        entry.seenTerminalEvents.delete(
-          entry.seenTerminalEvents.values().next().value ?? ""
-        );
-      }
-      entry.contextsByTurnId.delete(record.turnId);
-      entry.pendingTerminalsByTurnId.delete(record.turnId);
-    }
-    config.onTerminalEvent({
-      ...context,
-      event: record.pierEvent,
-      nativeEvent: record.nativeEvent,
-      ...(record.turnId ? { turnId: record.turnId } : {}),
-      v: 2,
-    });
   }
 
   function scheduleDrain(path: string, entry: TranscriptEntry): void {
@@ -213,6 +192,8 @@ export function createTranscriptTailReconciler(
   function disposeEntry(path: string, entry: TranscriptEntry): void {
     if (entries.get(path) === entry) {
       entry.disposed = true;
+      entry.classifyLine = null;
+      entry.pendingRecords.length = 0;
       unwatchFile(path, entry.watcher);
       entries.delete(path);
     }
@@ -248,6 +229,9 @@ export function createTranscriptTailReconciler(
           entry.contextsByTurnId.delete(turnId);
         }
       }
+      for (const key of releasedKeys) {
+        entry.lastTitleByScope.delete(key);
+      }
       if (entry.owners.size === 0) disposeEntry(path, entry);
     }
   }
@@ -269,17 +253,20 @@ export function createTranscriptTailReconciler(
       }
     };
     const entry: TranscriptEntry = {
+      classifyLine: createEntryLineClassifier(),
       contextsByTurnId: new Map(),
       disposed: false,
       initialScanEnd: initial.size,
+      lastTitleByScope: new Map(),
       // 首次绑定有限回扫尾部，覆盖 terminal 已写入、watcher 稍后建立的竞态。
       // 起点可能落在一行中间；processLine 的 JSON 解析失败会安全忽略该残片。
       offset: Math.max(0, initial.size - MAX_READ_BYTES),
       owners: new Map(),
       pending: false,
-      pendingTerminalsByTurnId: new Map(),
+      pendingRecords: [],
       processing: false,
       seenTerminalEvents: new Set(),
+      seenTranscriptEvents: new Set(),
       watcher,
     };
     entries.set(canonicalPath, entry);
@@ -307,6 +294,8 @@ export function createTranscriptTailReconciler(
       disposed = true;
       for (const [path, entry] of entries) {
         entry.disposed = true;
+        entry.classifyLine = null;
+        entry.pendingRecords.length = 0;
         unwatchFile(path, entry.watcher);
       }
       entries.clear();
@@ -365,6 +354,7 @@ export function createTranscriptTailReconciler(
             otherEntry.contextsByTurnId.delete(turnId);
           }
         }
+        otherEntry.lastTitleByScope.delete(key);
         if (otherEntry.owners.size === 0) disposeEntry(otherPath, otherEntry);
       }
       entry.owners.set(key, event);
@@ -376,9 +366,21 @@ export function createTranscriptTailReconciler(
             entry.contextsByTurnId.keys().next().value ?? ""
           );
         }
-        const pendingTerminal = entry.pendingTerminalsByTurnId.get(turnId);
-        if (pendingTerminal) {
-          emitTerminalEvent(entry, event, pendingTerminal);
+        const pendingForTurn = entry.pendingRecords.filter(
+          (record) => record.turnId === turnId
+        );
+        if (pendingForTurn.length > 0) {
+          entry.pendingRecords = entry.pendingRecords.filter(
+            (record) => record.turnId !== turnId
+          );
+        }
+        for (const pendingRecord of pendingForTurn) {
+          emitTranscriptEvent(
+            entry,
+            event,
+            pendingRecord,
+            config.onTerminalEvent
+          );
         }
       }
       scheduleDrain(canonicalPath, entry);
@@ -444,6 +446,11 @@ export function createTranscriptTailReconciler(
         entry.owners.delete(sourceKey);
         const moved = { ...owner, windowId: targetWindowId };
         entry.owners.set(targetKey, moved);
+        const lastTitle = entry.lastTitleByScope.get(sourceKey);
+        if (lastTitle !== undefined) {
+          entry.lastTitleByScope.delete(sourceKey);
+          entry.lastTitleByScope.set(targetKey, lastTitle);
+        }
         for (const [turnId, context] of entry.contextsByTurnId) {
           if (scopeKey(context) === sourceKey) {
             entry.contextsByTurnId.set(turnId, {

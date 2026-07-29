@@ -315,6 +315,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
         font: { family: "Menlo", size: 13 },
         frame: { height: 400, width: 600, x: 0, y: 0 },
         panelId: "restored-agent-terminal",
+        presentationId: 1,
       }
     );
 
@@ -351,6 +352,7 @@ describe("Swift terminal state consistency via main IPC paths", () => {
         font: { family: "Menlo", size: 13 },
         frame: { height: 400, width: 600, x: 0, y: 0 },
         panelId: "restored-agent-terminal",
+        presentationId: 2,
       }
     );
 
@@ -367,7 +369,8 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       expect.objectContaining({
         command: "claude --dangerously-skip-permissions --resume session-123",
       }),
-      ""
+      "",
+      2
     );
     expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
       "main",

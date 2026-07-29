@@ -1244,6 +1244,14 @@ body {
   /* 保证落在终端 NSView 之上的命中层语义清晰；实际命中靠 webOverlayRects。 */
   pointer-events: auto;
   z-index: 100;
+
+  /* 水平居中：强制 Sonner 的 center positioning 在终端/特殊上下文下也生效 */
+  display: flex !important;
+  justify-content: center !important;
+  align-items: flex-start !important;
+  width: min(420px, calc(100vw - 32px)) !important;
+  left: 50% !important;
+  transform: translateX(-50%) !important;
 }
 
 /* ── 形态 A · 确认型胶囊（.pier-toast 默认即胶囊）────────────────────

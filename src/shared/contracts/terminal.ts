@@ -212,6 +212,7 @@ export type {
   TerminalAgentResumeMetadata,
   TerminalPanelSessionSnapshot,
 } from "./terminal-panel-session.ts";
+export type { TerminalFrameCommittedEvent } from "./terminal-presentation.ts";
 
 export interface TerminalContextMenuRequest {
   panelId: string;

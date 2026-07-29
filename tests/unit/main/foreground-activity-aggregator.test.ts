@@ -1,6 +1,8 @@
 import type {
   AgentHookEventPayload,
   AgentHookEventPayloadV1,
+  AgentHookEventPayloadV2,
+  AgentHookEventPayloadV3,
 } from "@shared/contracts/agent-session.ts";
 import type {
   AgentActivity,
@@ -13,6 +15,14 @@ import {
 } from "@shared/logger.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createForegroundActivityAggregator as createRawForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import {
+  newHookLayer,
+  newHookScope,
+} from "../../../src/main/services/foreground-activity/entry.ts";
+import {
+  commitSubagentWorkPlan,
+  planSubagentWork,
+} from "../../../src/main/services/foreground-activity/subagent-work-associations.ts";
 import type {
   AgentStopAuthority,
   ForegroundActivityAggregator,
@@ -73,6 +83,116 @@ function agentHookEvent(
     ...args,
   };
 }
+
+/** v2 payload：`actorHint` / `parentSessionId` 只在 v2 上存在（v1 schema 无此字段）。 */
+function agentHookEventV2(
+  args: Partial<AgentHookEventPayloadV2> & {
+    event: string;
+  }
+): AgentHookEventPayload {
+  return {
+    v: 2,
+    kind: "agentEvent",
+    agent: "claude",
+    panelId: "p1",
+    windowId: "1",
+    nativeEvent: args.event,
+    ...args,
+  };
+}
+
+function interactionEvent(
+  event: "InteractionRequested" | "InteractionResolved",
+  args: {
+    interactionId?: string;
+    interactionKind?: "external-block" | "permission" | "question";
+    interactionOutcome?:
+      | "accepted"
+      | "cancelled"
+      | "completed"
+      | "failed"
+      | "rejected"
+      | "unknown";
+  } = {}
+): AgentHookEventPayloadV3 {
+  const base = {
+    v: 3 as const,
+    kind: "agentEvent" as const,
+    agent: "claude" as const,
+    nativeEvent: event,
+    panelId: "p1",
+    windowId: "1",
+  };
+  const interaction = {
+    ...(args.interactionId ? { interactionId: args.interactionId } : {}),
+    interactionKind: args.interactionKind ?? "permission",
+  };
+  if (event === "InteractionRequested") {
+    return { ...base, ...interaction, event };
+  }
+  return {
+    ...base,
+    ...interaction,
+    event,
+    ...(args.interactionOutcome
+      ? { interactionOutcome: args.interactionOutcome }
+      : {}),
+  };
+}
+
+const scopeCreatingEventCases: [string, AgentHookEventPayload][] = [
+  [
+    "PromptSubmit",
+    agentHookEventV2({
+      agent: "pi",
+      event: "PromptSubmit",
+      sessionId: "session-A",
+    }),
+  ],
+  [
+    "ToolStart",
+    agentHookEventV2({
+      agent: "pi",
+      event: "ToolStart",
+      sessionId: "session-A",
+      toolUseId: "tool-A",
+    }),
+  ],
+  [
+    "InteractionRequested",
+    {
+      ...interactionEvent("InteractionRequested", {
+        interactionId: "ask-A",
+      }),
+      agent: "pi",
+      sessionId: "session-A",
+    },
+  ],
+  [
+    "processing",
+    agentHookEventV2({
+      agent: "pi",
+      event: "processing",
+      sessionId: "session-A",
+    }),
+  ],
+  [
+    "running",
+    agentHookEventV2({
+      agent: "pi",
+      event: "running",
+      sessionId: "session-A",
+    }),
+  ],
+  [
+    "PermissionRequest",
+    agentHookEventV2({
+      agent: "pi",
+      event: "PermissionRequest",
+      sessionId: "session-A",
+    }),
+  ],
+];
 
 describe("ForegroundActivityAggregator", () => {
   let clock = 0;
@@ -148,6 +268,1088 @@ describe("ForegroundActivityAggregator", () => {
     const a = snap.activities[0] as AgentActivity;
     expect(a.kind).toBe("agent");
     expect(a.source).toBe("hook");
+    expect(a.status).toBeUndefined();
+    expect(a.stateStartedAt).toBeUndefined();
+    agg.dispose();
+  });
+
+  it("身份只由主会话事件推进：子会话事件不得改写面板行身份", () => {
+    // 标题可以不准，身份不能被猜。子会话（actorHint / parentSessionId /
+    // Subagent*）的会话号不是面板主会话的身份，多 agent 调度要靠它区分。
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "PromptSubmit", sessionId: "main-1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        event: "ToolStart",
+        parentSessionId: "main-1",
+        sessionId: "sub-9",
+      })
+    );
+    const a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.sessionId).toBe("main-1");
+    expect(a.actorHint).toBeUndefined();
+    expect(a.parentSessionId).toBeUndefined();
+    expect(a.status).toBe("processing");
+    agg.dispose();
+  });
+
+  it("子智能体生命周期按 parentSessionId 归入主 scope，不参与状态与身份竞选", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "SessionStart", sessionId: "main-1" })
+    );
+    advance(250);
+
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agentInstanceId: "worker-1",
+        event: "SubagentStart",
+        parentSessionId: "main-1",
+        sessionId: "child-1",
+      })
+    );
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-1",
+      subagentCount: 1,
+    });
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity).status
+    ).toBeUndefined();
+
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agentInstanceId: "worker-1",
+        event: "SubagentStop",
+        parentSessionId: "main-1",
+        sessionId: "child-1",
+      })
+    );
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-1",
+      subagentCount: 0,
+    });
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity).status
+    ).toBeUndefined();
+    agg.dispose();
+  });
+
+  it("仅有 child sessionId 的子智能体生命周期复用唯一主 scope", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "SessionStart", sessionId: "main-1" })
+    );
+    advance(250);
+
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agentInstanceId: "worker-1",
+        event: "SubagentStart",
+        sessionId: "child-1",
+      })
+    );
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-1",
+      subagentCount: 1,
+    });
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity).status
+    ).toBeUndefined();
+    agg.dispose();
+  });
+
+  it("子工作项可用 Start 的 sessionId 别名结算，不要求 Stop 重复 agentInstanceId", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "SessionStart", sessionId: "main-A" })
+    );
+    advance(250);
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agentInstanceId: "worker-1",
+        event: "SubagentStart",
+        parentSessionId: "main-A",
+        sessionId: "child-1",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          event: "SubagentStop",
+          sessionId: "child-1",
+        })
+      )
+    ).toBe(true);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(0);
+    agg.dispose();
+  });
+
+  it("Start 只有 sessionId 时，不得把陌生 agentInstanceId 的 Stop 猜成同一工作项", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "SessionStart", sessionId: "main-A" })
+    );
+    advance(250);
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        event: "SubagentStart",
+        parentSessionId: "main-A",
+        sessionId: "child-1",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agentInstanceId: "worker-1",
+          event: "SubagentStop",
+        })
+      )
+    ).toBe(false);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(1);
+    agg.dispose();
+  });
+
+  it("无 parent 时多个别名分别属于不同活跃工作项则拒绝冲突 Start", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    for (const sessionId of ["main-A", "main-B"]) {
+      agg.ingestAgentEvent(
+        agentHookEventV2({ agent: "pi", event: "PromptSubmit", sessionId })
+      );
+    }
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        agentInstanceId: "worker-A",
+        event: "SubagentStart",
+        parentSessionId: "main-A",
+        sessionId: "child-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        agentInstanceId: "worker-B",
+        event: "SubagentStart",
+        parentSessionId: "main-B",
+        sessionId: "child-B",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-B",
+          event: "SubagentStart",
+          sessionId: "child-A",
+        })
+      )
+    ).toBe(false);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(2);
+    agg.dispose();
+  });
+
+  it("显式 parent 先限定 scope：共享 instance 时可按 child 别名只结束 A", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    for (const sessionId of ["main-A", "main-B"]) {
+      agg.ingestAgentEvent(
+        agentHookEventV2({ agent: "pi", event: "PromptSubmit", sessionId })
+      );
+    }
+    for (const parent of ["A", "B"]) {
+      expect(
+        agg.ingestAgentEvent(
+          agentHookEventV2({
+            actorHint: "subagent",
+            agent: "pi",
+            agentInstanceId: "worker-shared",
+            event: "SubagentStart",
+            parentSessionId: `main-${parent}`,
+            sessionId: `child-${parent}`,
+          })
+        )
+      ).toBe(true);
+    }
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-shared",
+          event: "SubagentStop",
+          parentSessionId: "main-A",
+          sessionId: "child-A",
+        })
+      )
+    ).toBe(true);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(1);
+    agg.dispose();
+  });
+
+  it("完全相同 instance 可由显式不同 parent 建立两个工作项并分别结束", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    for (const sessionId of ["main-A", "main-B"]) {
+      agg.ingestAgentEvent(
+        agentHookEventV2({ agent: "pi", event: "PromptSubmit", sessionId })
+      );
+      expect(
+        agg.ingestAgentEvent(
+          agentHookEventV2({
+            actorHint: "subagent",
+            agent: "pi",
+            agentInstanceId: "worker-shared",
+            event: "SubagentStart",
+            parentSessionId: sessionId,
+          })
+        )
+      ).toBe(true);
+    }
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(2);
+
+    for (const [parentSessionId, count] of [
+      ["main-A", 1],
+      ["main-B", 0],
+    ] as const) {
+      expect(
+        agg.ingestAgentEvent(
+          agentHookEventV2({
+            actorHint: "subagent",
+            agent: "pi",
+            agentInstanceId: "worker-shared",
+            event: "SubagentStop",
+            parentSessionId,
+          })
+        )
+      ).toBe(true);
+      expect(
+        (agg.snapshot().activities[0] as AgentActivity | undefined)
+          ?.subagentCount
+      ).toBe(count);
+    }
+    agg.dispose();
+  });
+
+  it("单工作项轮换 1000 个同类别名时索引有界，旧别名进入保守保护", () => {
+    const mainEvent = agentHookEventV2({
+      agent: "pi",
+      event: "PromptSubmit",
+      sessionId: "main-A",
+    });
+    const hook = newHookLayer(mainEvent, 0);
+    const scope = newHookScope("session:main-A", 0, {
+      sessionId: "main-A",
+    });
+    hook.scopes.set(scope.key, scope);
+
+    for (let index = 0; index < 1000; index += 1) {
+      const event = agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        agentInstanceId: `worker-${index}`,
+        event: "SubagentStart",
+        parentSessionId: "main-A",
+        sessionId: "child-1",
+      });
+      const plan = planSubagentWork(hook, scope, event);
+      expect(plan).not.toBeNull();
+      commitSubagentWorkPlan(hook, scope, plan ?? undefined);
+    }
+
+    expect(hook.activeSubagentWorks.size).toBe(1);
+    expect(hook.subagentWorkIdsByAlias.size).toBeLessThanOrEqual(2);
+    expect([...hook.activeSubagentWorks.values()][0]?.aliases.size).toBe(2);
+    expect(hook.subagentAssociationHistoryIncomplete).toBe(true);
+    expect(
+      planSubagentWork(
+        hook,
+        scope,
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-0",
+          event: "SubagentStop",
+          parentSessionId: "main-A",
+        })
+      )
+    ).toBeNull();
+    expect(
+      planSubagentWork(
+        hook,
+        scope,
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-999",
+          event: "SubagentStop",
+          parentSessionId: "main-A",
+          sessionId: "child-1",
+        })
+      )
+    ).not.toBeNull();
+
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(mainEvent);
+    for (let index = 0; index < 1000; index += 1) {
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: `worker-${index}`,
+          event: "SubagentStart",
+          parentSessionId: "main-A",
+          sessionId: "child-1",
+        })
+      );
+    }
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        event: "SubagentStart",
+        parentSessionId: "main-A",
+      })
+    );
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-0",
+          event: "SubagentStop",
+          parentSessionId: "main-A",
+        })
+      )
+    ).toBe(false);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(2);
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-999",
+          event: "SubagentStop",
+          parentSessionId: "main-A",
+          sessionId: "child-1",
+        })
+      )
+    ).toBe(true);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(1);
+    agg.dispose();
+  });
+
+  it("超过 128 个双别名活跃子工作项时不淘汰，均可按 sessionId 结算", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "SessionStart", sessionId: "main-A" })
+    );
+    advance(250);
+    for (let index = 0; index < 140; index += 1) {
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agentInstanceId: `worker-${index}`,
+          event: "SubagentStart",
+          parentSessionId: "main-A",
+          sessionId: `child-${index}`,
+        })
+      );
+    }
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(140);
+
+    for (let index = 0; index < 140; index += 1) {
+      expect(
+        agg.ingestAgentEvent(
+          agentHookEventV2({
+            actorHint: "subagent",
+            event: "SubagentStop",
+            sessionId: `child-${index}`,
+          })
+        )
+      ).toBe(true);
+    }
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(0);
+    agg.dispose();
+  });
+
+  it("旧 scope 退休后的迟到具名 Stop 不得扣减新 scope 的匿名子工作项", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        agentInstanceId: "old-worker",
+        event: "SubagentStart",
+        parentSessionId: "main-A",
+        sessionId: "old-child",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-B",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "SessionEnd",
+        sessionId: "main-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        event: "SubagentStart",
+        parentSessionId: "main-B",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "old-worker",
+          event: "SubagentStop",
+          sessionId: "old-child",
+        })
+      )
+    ).toBe(false);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(1);
+    agg.dispose();
+  });
+
+  it("子工作项墓碑超过上限后仍拒绝把旧 Stop 配给新匿名工作项", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+      })
+    );
+    for (let index = 0; index < 300; index += 1) {
+      const lifecycle = {
+        actorHint: "subagent" as const,
+        agent: "pi" as const,
+        agentInstanceId: `worker-${index}`,
+        parentSessionId: "main-A",
+        sessionId: `child-${index}`,
+      };
+      agg.ingestAgentEvent(
+        agentHookEventV2({ ...lifecycle, event: "SubagentStart" })
+      );
+      agg.ingestAgentEvent(
+        agentHookEventV2({ ...lifecycle, event: "SubagentStop" })
+      );
+    }
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-B",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "SessionEnd",
+        sessionId: "main-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        event: "SubagentStart",
+        parentSessionId: "main-B",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-0",
+          event: "SubagentStop",
+          sessionId: "child-0",
+        })
+      )
+    ).toBe(false);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(1);
+    agg.dispose();
+  });
+
+  it("无 parent 的具名子 Stop 沿用 Start 时确定的主 scope", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        agentInstanceId: "worker-1",
+        event: "SubagentStart",
+        sessionId: "child-1",
+      })
+    );
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(1);
+
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-B",
+      })
+    );
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-1",
+          event: "SubagentStop",
+          sessionId: "child-1",
+        })
+      )
+    ).toBe(true);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-B",
+      status: "processing",
+      subagentCount: 0,
+    });
+    agg.dispose();
+  });
+
+  it("子实例所属主 scope 已删除时迟到 Stop 不得归给剩余唯一 scope", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        agentInstanceId: "worker-1",
+        event: "SubagentStart",
+        sessionId: "child-1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-B",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "SessionEnd",
+        sessionId: "main-A",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-1",
+          event: "SubagentStop",
+          sessionId: "child-1",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-B",
+      status: "processing",
+      subagentCount: 0,
+    });
+    agg.dispose();
+  });
+
+  it("新回合清理后的迟到具名子 Stop 不得复用旧归属", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+        turnId: "turn-1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        agentInstanceId: "worker-1",
+        event: "SubagentStart",
+        sessionId: "child-1",
+        turnId: "turn-1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+        turnId: "turn-2",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-1",
+          event: "SubagentStop",
+          sessionId: "child-1",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-A",
+      status: "processing",
+      subagentCount: 0,
+    });
+    agg.dispose();
+  });
+
+  it("可信终态清理后的迟到具名子 Stop 不得复用旧归属", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        agentInstanceId: "worker-1",
+        event: "SubagentStart",
+        sessionId: "child-1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "TurnCompleted",
+        sessionId: "main-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-1",
+          event: "SubagentStop",
+          sessionId: "child-1",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-A",
+      status: "processing",
+      subagentCount: 0,
+    });
+    agg.dispose();
+  });
+
+  it("相同 agentInstanceId 同时属于多个主 scope 时无 parent 的 Stop 不得猜测", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-B",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        agentInstanceId: "worker-shared",
+        event: "SubagentStart",
+        parentSessionId: "main-A",
+        sessionId: "child-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        actorHint: "subagent",
+        agent: "pi",
+        agentInstanceId: "worker-shared",
+        event: "SubagentStart",
+        parentSessionId: "main-B",
+        sessionId: "child-B",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-shared",
+          event: "SubagentStop",
+        })
+      )
+    ).toBe(false);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity | undefined)?.subagentCount
+    ).toBe(2);
+    agg.dispose();
+  });
+
+  it("子智能体显式 parentSessionId 不存在时不得回退到唯一主 scope", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-B",
+          event: "SubagentStart",
+          parentSessionId: "main-B",
+          sessionId: "child-B",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-A",
+      status: "processing",
+      subagentCount: 0,
+    });
+    agg.dispose();
+  });
+
+  it("子智能体无 parentSessionId 且存在多个主 scope 时不得猜 panel scope", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ agent: "pi", event: "PromptSubmit" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-B",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          agentInstanceId: "worker-1",
+          event: "SubagentStart",
+          sessionId: "child-1",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-B",
+      status: "processing",
+      subagentCount: 0,
+    });
+    agg.dispose();
+  });
+
+  it("缺少 child sessionId 的子 SessionEnd 不得删除主活动", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "PromptSubmit", sessionId: "main-1" })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          event: "SessionEnd",
+          parentSessionId: "main-1",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-1",
+      status: "processing",
+    });
+    agg.dispose();
+  });
+
+  it("具名 child SessionEnd 无 child scope 时安全 no-op，不删除主活动", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "PromptSubmit", sessionId: "main-1" })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          event: "SessionEnd",
+          parentSessionId: "main-1",
+          sessionId: "child-1",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-1",
+      status: "processing",
+    });
+    agg.dispose();
+  });
+
+  it("子 SessionEnd 的 child sessionId 与主 scope 碰撞时不得删除主活动", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "PromptSubmit", sessionId: "main-A" })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          event: "SessionEnd",
+          parentSessionId: "main-A",
+          sessionId: "main-A",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-A",
+      status: "processing",
+    });
+    agg.dispose();
+  });
+
+  it("进程级多 scope 中子 SessionEnd 的编号碰撞也不得删除主 scope", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "main-A",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "ToolStart",
+        sessionId: "main-B",
+        toolUseId: "tool-B",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          agent: "pi",
+          event: "SessionEnd",
+          parentSessionId: "main-A",
+          sessionId: "main-A",
+        })
+      )
+    ).toBe(false);
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "SessionEnd",
+        sessionId: "main-B",
+      })
+    );
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "main-A",
+      status: "processing",
+    });
+    agg.dispose();
+  });
+
+  it("子会话细节事件先到时不建父面板活动", () => {
+    // 子会话 ToolStart 既不是父状态，也不是子会话计数边界；没有父层时必须丢弃，
+    // 否则会凭空出现一个没有身份、看起来像主会话的活动行。
+    const agg = createForegroundActivityAggregator({ now });
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          actorHint: "subagent",
+          event: "ToolStart",
+          parentSessionId: "main-1",
+          sessionId: "sub-9",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("持久化规范标题水合会修正竞态留下的低优先级槽位", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "PromptSubmit", sessionId: "session-1" })
+    );
+    agg.setAgentSessionTitle("1", "p1", {
+      sessionId: "session-1",
+      source: "provider",
+      title: "错误的自动标题",
+    });
+
+    agg.hydrateAgentSessionTitle("1", "p1", {
+      sessionId: "session-1",
+      source: "user",
+      title: "磁盘中的用户标题",
+    });
+
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionTitle: "磁盘中的用户标题",
+      sessionTitleSource: "user",
+    });
+    agg.dispose();
+  });
+
+  it("SessionStart 换会话：旧 sessionId 不得残留成错误身份", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({ event: "PromptSubmit", sessionId: "old-1" })
+    );
+    agg.ingestAgentEvent(agentHookEventV2({ event: "SessionStart" }));
+    advance(250);
+    const a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.sessionId).toBeUndefined();
+    agg.dispose();
+  });
+
+  it("非进程作用域提供方的新主 SessionStart 退休旧 session scope", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        event: "ToolStart",
+        sessionId: "old-session",
+        toolUseId: "old-tool",
+      })
+    );
+
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        event: "SessionStart",
+        sessionId: "new-session",
+      })
+    );
+    advance(250);
+
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "new-session",
+    });
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity).status
+    ).toBeUndefined();
+    agg.dispose();
+  });
+
+  it("launch 先验不带身份字段（没有 hook 事实可依据）", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.agentLaunched("1", "p1", "codex");
+    advance(250);
+    const a = agg.snapshot().activities[0] as AgentActivity;
+    expect(a.sessionId).toBeUndefined();
+    expect(a.actorHint).toBeUndefined();
+    expect(a.parentSessionId).toBeUndefined();
     agg.dispose();
   });
 
@@ -160,12 +1362,294 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("PermissionRequest → status=waiting", () => {
+  it("v1 PermissionRequest 兼容映射为 waiting", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
     agg.ingestAgentEvent(hookEvent("PermissionRequest"));
     const a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.status).toBe("waiting");
+    agg.dispose();
+  });
+
+  it("具名交互全部解除后才离开 waiting，并恢复仍在执行的工具", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "tool-1" })
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "ask-1" })
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "ask-2" })
+    );
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", {
+        interactionId: "ask-1",
+        interactionOutcome: "accepted",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", {
+        interactionId: "ask-2",
+        interactionOutcome: "completed",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("未解除交互优先于随后开始的工具，解除后再投影 tool", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "ask-1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "tool-1" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", { interactionId: "ask-1" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("InteractionRequested 是可建立 hook scope 的正向信号", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    expect(
+      agg.ingestAgentEvent(
+        interactionEvent("InteractionRequested", {
+          interactionId: "question-1",
+          interactionKind: "question",
+        })
+      )
+    ).toBe(true);
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+    agg.dispose();
+  });
+
+  it("匿名交互支持计数，并可由首次出现 ID 的 resolved 兼容配对", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(interactionEvent("InteractionRequested"));
+    agg.ingestAgentEvent(interactionEvent("InteractionRequested"));
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", {
+        interactionId: "late-interaction-id",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+
+    agg.ingestAgentEvent(interactionEvent("InteractionResolved"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("重复具名 InteractionResolved 不得再次消耗匿名交互", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "ask-1" })
+    );
+    agg.ingestAgentEvent(interactionEvent("InteractionRequested"));
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", { interactionId: "ask-1" })
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", { interactionId: "ask-1" })
+    );
+
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+    agg.ingestAgentEvent(interactionEvent("InteractionResolved"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("跨回合迟到的旧具名 InteractionResolved 不得消耗当前匿名交互", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", {
+        interactionId: "old-ask",
+      })
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", { interactionId: "old-ask" })
+    );
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(interactionEvent("InteractionRequested"));
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", { interactionId: "old-ask" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+
+    agg.ingestAgentEvent(interactionEvent("InteractionResolved"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("跨回合旧匿名交互首次带 ID Resolved 不得消耗当前匿名交互", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(interactionEvent("InteractionRequested"));
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(interactionEvent("InteractionRequested"));
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", {
+        interactionId: "late-old-ask",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+
+    agg.ingestAgentEvent(interactionEvent("InteractionResolved"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("具名交互结算历史超过容量后旧 Resolved 不得消耗匿名交互", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    for (let index = 0; index < 257; index += 1) {
+      const interactionId = `settled-ask-${index}`;
+      agg.ingestAgentEvent(
+        interactionEvent("InteractionRequested", { interactionId })
+      );
+      agg.ingestAgentEvent(
+        interactionEvent("InteractionResolved", { interactionId })
+      );
+    }
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", {
+        interactionId: "settled-ask-0",
+      })
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", {
+        interactionId: "settled-ask-0",
+      })
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", {
+        interactionId: "settled-ask-0",
+      })
+    );
+    agg.ingestAgentEvent(interactionEvent("InteractionRequested"));
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", {
+        interactionId: "settled-ask-1",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+
+    agg.ingestAgentEvent(interactionEvent("InteractionResolved"));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("新回合清理旧交互事实", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "old-ask" })
+    );
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "new-ask" })
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", { interactionId: "new-ask" })
+    );
+
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("可信终态清理交互并保持 ready", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "ask-1" })
+    );
+    agg.ingestAgentEvent(hookEvent("TurnCompleted"));
+
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
+  it("TTL 只标记陈旧，不清空未解除交互事实", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "old-ask" })
+    );
+    advance(30 * 60 * 1000);
+    expect(
+      (agg.snapshot().activities[0] as AgentActivity).status
+    ).toBeUndefined();
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "new-ask" })
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", { interactionId: "new-ask" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", { interactionId: "old-ask" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("v1 PermissionRequest 兼容 waiting，但不伪造 v3 交互计数", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PermissionRequest"));
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "ask-1" })
+    );
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionResolved", { interactionId: "ask-1" })
+    );
+
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
     agg.dispose();
   });
 
@@ -193,6 +1677,121 @@ describe("ForegroundActivityAggregator", () => {
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
     agg.ingestAgentEvent(agentHookEvent({ event: "ToolComplete" }));
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolComplete" }));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("匿名 ToolStart 可由首次出现 ID 的 ToolComplete 配对", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolStart" }));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "late-tool-id" })
+    );
+
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("重复具名 ToolComplete 不得再次消耗匿名工具", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "tool-1" })
+    );
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolStart" }));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "tool-1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "tool-1" })
+    );
+
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolComplete" }));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("跨回合迟到的旧具名 ToolComplete 不得消耗当前匿名工具", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "old-tool" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "old-tool" })
+    );
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolStart" }));
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "old-tool" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolComplete" }));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("跨回合旧匿名工具首次带 ID Complete 不得消耗当前匿名工具", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolStart" }));
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolStart" }));
+
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        event: "ToolComplete",
+        toolUseId: "late-old-tool",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolComplete" }));
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "processing"
+    );
+    agg.dispose();
+  });
+
+  it("具名工具结算历史超过容量后旧 Complete 不得消耗匿名工具", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    for (let index = 0; index < 257; index += 1) {
+      const toolUseId = `settled-tool-${index}`;
+      agg.ingestAgentEvent(agentHookEvent({ event: "ToolStart", toolUseId }));
+      agg.ingestAgentEvent(
+        agentHookEvent({ event: "ToolComplete", toolUseId })
+      );
+    }
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "settled-tool-0" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "settled-tool-0" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "settled-tool-0" })
+    );
+    agg.ingestAgentEvent(agentHookEvent({ event: "ToolStart" }));
+
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        event: "ToolComplete",
+        toolUseId: "settled-tool-1",
+      })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+
     agg.ingestAgentEvent(agentHookEvent({ event: "ToolComplete" }));
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
       "processing"
@@ -330,6 +1929,21 @@ describe("ForegroundActivityAggregator", () => {
     });
     a = agg.snapshot().activities[0] as AgentActivity;
     expect(a.status).toBe("tool");
+    agg.dispose();
+  });
+
+  it("advisory Stop 后 InteractionRequested 恢复 waiting", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(hookEvent("Stop"), { stopAuthority: "advisory" });
+
+    agg.ingestAgentEvent(
+      interactionEvent("InteractionRequested", { interactionId: "ask-1" }),
+      { stopAuthority: "advisory" }
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "waiting"
+    );
     agg.dispose();
   });
 
@@ -628,6 +2242,162 @@ describe("ForegroundActivityAggregator", () => {
       agentHookEvent({ agent: "pi", event: "SessionEnd", pid: 1002 })
     );
     expect(agg.snapshot().activities).toHaveLength(0);
+    agg.dispose();
+  });
+
+  it("A scope 删除且冷却过期后，迟到 ToolComplete 不得借 B layer 重建 A", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    for (const sessionId of ["session-A", "session-B"]) {
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          agent: "pi",
+          event: "PromptSubmit",
+          sessionId,
+        })
+      );
+    }
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          agent: "pi",
+          event: "SessionEnd",
+          sessionId: "session-A",
+        })
+      )
+    ).toBe(true);
+    advance(1501);
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          agent: "pi",
+          event: "ToolComplete",
+          sessionId: "session-A",
+          toolUseId: "late-tool-A",
+        })
+      )
+    ).toBe(false);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "session-B",
+      status: "processing",
+    });
+    agg.dispose();
+  });
+
+  it("未知 scope 的 InteractionResolved 不得借已有 B layer 建立 A", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "session-B",
+      })
+    );
+
+    expect(
+      agg.ingestAgentEvent({
+        ...interactionEvent("InteractionResolved", {
+          interactionId: "late-ask-A",
+        }),
+        agent: "pi",
+        sessionId: "session-A",
+      })
+    ).toBe(false);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "session-B",
+      status: "processing",
+    });
+    agg.dispose();
+  });
+
+  it.each(
+    scopeCreatingEventCases
+  )("不存在的隔离 scope 可由正向 %s 建立", (_eventName, event) => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "session-B",
+      })
+    );
+
+    expect(agg.ingestAgentEvent(event)).toBe(true);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "session-A",
+    });
+    agg.dispose();
+  });
+
+  it("SessionStart 可正常建立新 scope，后续非创建事件复用该 scope", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "session-B",
+      })
+    );
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          agent: "pi",
+          event: "SessionStart",
+          sessionId: "session-A",
+        })
+      )
+    ).toBe(true);
+
+    expect(
+      agg.ingestAgentEvent(
+        agentHookEventV2({
+          agent: "pi",
+          event: "ToolComplete",
+          sessionId: "session-A",
+          toolUseId: "tool-A",
+        })
+      )
+    ).toBe(true);
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "session-A",
+      status: "processing",
+    });
+    agg.dispose();
+  });
+
+  it("进程级多 scope 切换投影时同步切换 scope-local identity", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "PromptSubmit",
+        sessionId: "session-1",
+      })
+    );
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "ToolStart",
+        sessionId: "session-2",
+        toolUseId: "tool-2",
+      })
+    );
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "session-2",
+      status: "tool",
+    });
+
+    agg.ingestAgentEvent(
+      agentHookEventV2({
+        agent: "pi",
+        event: "SessionEnd",
+        sessionId: "session-2",
+      })
+    );
+    expect(agg.snapshot().activities[0]).toMatchObject({
+      sessionId: "session-1",
+      status: "processing",
+    });
     agg.dispose();
   });
 
@@ -999,7 +2769,7 @@ describe("ForegroundActivityAggregator", () => {
     agg.dispose();
   });
 
-  it("advisory Stop 后 SubagentStart 恢复 processing 并计数", () => {
+  it("advisory Stop 后 SubagentStart / Stop 只计数，不恢复主状态", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
     agg.ingestAgentEvent(hookEvent("Stop"), { stopAuthority: "advisory" });
@@ -1010,13 +2780,20 @@ describe("ForegroundActivityAggregator", () => {
     agg.ingestAgentEvent(hookEvent("SubagentStart"), {
       stopAuthority: "advisory",
     });
-    const activity = agg.snapshot().activities[0] as AgentActivity;
-    expect(activity.status).toBe("processing");
+    let activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBeUndefined();
     expect(activity.subagentCount).toBe(1);
+
+    agg.ingestAgentEvent(hookEvent("SubagentStop"), {
+      stopAuthority: "advisory",
+    });
+    activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBeUndefined();
+    expect(activity.subagentCount).toBe(0);
     agg.dispose();
   });
 
-  it("TTL stale 后 SubagentStart 恢复 processing", () => {
+  it("TTL stale 后 SubagentStart / Stop 只更新时间和计数，不清除 stale", () => {
     const agg = createForegroundActivityAggregator({ now });
     agg.ingestAgentEvent(hookEvent("PromptSubmit"));
     advance(30 * 60 * 1000);
@@ -1025,9 +2802,14 @@ describe("ForegroundActivityAggregator", () => {
     ).toBeUndefined();
 
     agg.ingestAgentEvent(hookEvent("SubagentStart"));
-    const activity = agg.snapshot().activities[0] as AgentActivity;
-    expect(activity.status).toBe("processing");
+    let activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBeUndefined();
     expect(activity.subagentCount).toBe(1);
+
+    agg.ingestAgentEvent(hookEvent("SubagentStop"));
+    activity = agg.snapshot().activities[0] as AgentActivity;
+    expect(activity.status).toBeUndefined();
+    expect(activity.subagentCount).toBe(0);
     agg.dispose();
   });
 
@@ -1050,6 +2832,47 @@ describe("ForegroundActivityAggregator", () => {
     );
     activity = agg.snapshot().activities[0] as AgentActivity;
     expect(activity.subagentCount).toBe(0);
+    agg.dispose();
+  });
+
+  it("匿名 SubagentStart 可由首次出现 ID 的 SubagentStop 配对", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(agentHookEvent({ event: "SubagentStart" }));
+    agg.ingestAgentEvent(
+      agentHookEvent({
+        event: "SubagentStop",
+        agentInstanceId: "late-subagent-id",
+      })
+    );
+
+    expect((agg.snapshot().activities[0] as AgentActivity).subagentCount).toBe(
+      0
+    );
+    agg.dispose();
+  });
+
+  it("重复具名 SubagentStop 不得再次消耗匿名子智能体", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SubagentStart", agentInstanceId: "worker-1" })
+    );
+    agg.ingestAgentEvent(agentHookEvent({ event: "SubagentStart" }));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SubagentStop", agentInstanceId: "worker-1" })
+    );
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "SubagentStop", agentInstanceId: "worker-1" })
+    );
+
+    expect((agg.snapshot().activities[0] as AgentActivity).subagentCount).toBe(
+      1
+    );
+    agg.ingestAgentEvent(agentHookEvent({ event: "SubagentStop" }));
+    expect((agg.snapshot().activities[0] as AgentActivity).subagentCount).toBe(
+      0
+    );
     agg.dispose();
   });
 

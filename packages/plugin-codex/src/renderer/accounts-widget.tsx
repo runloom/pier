@@ -1,16 +1,15 @@
-import { createAccountsWidgetRefreshAction } from "@pier/plugin-api/account-usage/renderer";
+import {
+  AccountWidgetFrame,
+  createAccountsWidgetRefreshAction,
+  resolveAccountWidgetPresentation,
+} from "@pier/plugin-api/account-usage/renderer";
 import type {
   ExternalRendererPluginContext,
   RendererWorkbenchWidgetAction,
   WorkbenchWidgetActionContext,
   WorkbenchWidgetComponentProps,
 } from "@pier/plugin-api/renderer";
-import { Badge } from "@pier/ui/badge.tsx";
-import {
-  widgetDensityFor,
-  widgetShellClassName,
-} from "@pier/ui/collection-auto-layout.ts";
-import { formatRelativeTime } from "@pier/ui/format.tsx";
+import { widgetDensityFor } from "@pier/ui/collection-auto-layout.ts";
 import {
   Item,
   ItemActions,
@@ -20,14 +19,13 @@ import {
   ItemTitle,
 } from "@pier/ui/item.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import { cn } from "@pier/ui/utils.ts";
 import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import { RefreshCw } from "lucide-react";
 import type { JSX } from "react";
 import {
   AccountAvatar,
-  accountPlanSummary,
-  resetCredits,
+  AccountBadges,
+  codexAccountMembership,
 } from "./account-display.tsx";
 import { AccountPicker } from "./account-picker.tsx";
 import { UsageMeter } from "./usage-meter.tsx";
@@ -80,36 +78,40 @@ export function AccountsWidget({
     (account) => account.id !== snapshot.activeAccountId
   );
   const usage = snapshot.activeUsage;
-  const fetchedLabel = usage
-    ? formatRelativeTime(usage.fetchedAt, Date.now(), context.i18n.language())
-    : null;
-  const creditsLabel = activeAccount
-    ? resetCredits(activeAccount, context.i18n.language(), t)
-    : null;
   const accountLabel =
     activeAccount?.label ??
     t("pier.codex.widget.noActiveAccount", "No active account");
-  // 小卡整段隐藏账号区，把高度留给额度
-  const showAccountHeader = density !== "compact";
-  // size 做结构：宽卡才在标题行露出 credits / 更新时间
-  const showCredits = showAccountHeader && Boolean(creditsLabel) && size.w >= 4;
-  const showFetchedInline =
-    showAccountHeader && Boolean(fetchedLabel) && size.w >= 4;
-  // 账号区可见时展示 plan；异常时也强制展示
-  const showPlanSummary = showAccountHeader || Boolean(activeAccount?.error);
+  const membership = activeAccount
+    ? codexAccountMembership(
+        activeAccount,
+        activeAccount.usage?.updatedAt ?? usage?.updatedAt ?? 0
+      )
+    : undefined;
+  const presentation = resolveAccountWidgetPresentation({
+    accountCount: snapshot.accounts.length,
+    density,
+    hasAccountError: Boolean(activeAccount?.error),
+    hasActiveAccount: Boolean(activeAccount),
+    ...(membership ? { membership } : {}),
+  });
 
   let usageContent: JSX.Element;
   if (!usage) {
     usageContent = (
       <Skeleton className="min-h-20 w-full" data-slot="codex-usage-loading" />
     );
-  } else if (usage.status === "ok" || usage.windows.length > 0) {
+  } else if (usage.status === "ok" || usage.metrics.length > 0) {
     // last-good 窗口保留展示（对齐 Grok；瞬时刷新失败不清空进度）
     usageContent = (
       <UsageMeter
+        density={density}
         language={context.i18n.language()}
+        metrics={usage.metrics}
+        status={usage.status}
         t={t}
-        windows={usage.windows}
+        {...(usage.updatedAt === undefined
+          ? {}
+          : { updatedAt: usage.updatedAt })}
       />
     );
   } else {
@@ -123,71 +125,61 @@ export function AccountsWidget({
     );
   }
 
+  let accountMetadata: JSX.Element | null = null;
+  if (activeAccount?.error) {
+    accountMetadata = (
+      <ItemDescription>
+        {t("pier.codex.widget.accountUnavailable", "Account unavailable")}
+      </ItemDescription>
+    );
+  } else if (activeAccount) {
+    accountMetadata = (
+      <AccountBadges
+        account={activeAccount}
+        language={context.i18n.language()}
+        mode={presentation.metadataMode}
+        t={t}
+      />
+    );
+  }
+
   return (
-    <div
-      className={cn(
-        "pier-codex-account-quota-widget text-sm",
-        widgetShellClassName(density)
-      )}
+    <AccountWidgetFrame
+      className="pier-codex-account-quota-widget text-sm"
       data-density={density}
       data-size-h={size.h}
       data-size-w={size.w}
       data-slot="codex-accounts-widget"
-    >
-      {showAccountHeader ? (
-        <Item className="shrink-0 flex-nowrap px-0 py-0" size="xs">
-          <ItemMedia align="center">
-            <AccountAvatar label={accountLabel} />
-          </ItemMedia>
-          <ItemContent className="min-w-0 basis-0">
-            <ItemTitle className="block w-full truncate" title={accountLabel}>
-              {accountLabel}
-            </ItemTitle>
-            {showPlanSummary ? (
-              <ItemDescription>
-                <span>
-                  {(activeAccount
-                    ? accountPlanSummary(
-                        activeAccount,
-                        context.i18n.language(),
-                        t
-                      )
-                    : null) ??
-                    t(
-                      "pier.codex.widget.accountUnavailable",
-                      "Account unavailable"
-                    )}
-                </span>
-                {showFetchedInline ? (
-                  <span>
-                    {" · "}
-                    {fetchedLabel}
-                  </span>
-                ) : null}
-              </ItemDescription>
+      density={density}
+      header={
+        presentation.showHeader ? (
+          <Item className="shrink-0 flex-nowrap px-0 py-0" size="xs">
+            {presentation.showAvatar ? (
+              <ItemMedia align="center">
+                <AccountAvatar label={accountLabel} />
+              </ItemMedia>
             ) : null}
-          </ItemContent>
-          {showCredits ? (
-            <Badge className="shrink-0" size="xs" variant="neutral">
-              {creditsLabel}
-            </Badge>
-          ) : null}
-          {switchableAccounts.length > 0 ? (
-            <ItemActions>
-              <AccountPicker
-                accounts={switchableAccounts}
-                context={context}
-                t={t}
-              />
-            </ItemActions>
-          ) : null}
-        </Item>
-      ) : null}
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col content-start">
-        {usageContent}
-      </div>
-    </div>
+            <ItemContent className="min-w-0 basis-0">
+              <ItemTitle className="block w-full truncate" title={accountLabel}>
+                {accountLabel}
+              </ItemTitle>
+              {accountMetadata}
+            </ItemContent>
+            {presentation.showSwitcher && switchableAccounts.length > 0 ? (
+              <ItemActions>
+                <AccountPicker
+                  accounts={switchableAccounts}
+                  context={context}
+                  t={t}
+                />
+              </ItemActions>
+            ) : null}
+          </Item>
+        ) : undefined
+      }
+    >
+      {usageContent}
+    </AccountWidgetFrame>
   );
 }
 

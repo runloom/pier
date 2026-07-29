@@ -167,6 +167,11 @@
             core.resizeAndRenderSynchronously()
         }
 
+        public func requestHostPresentationFrame() {
+            updateMetalLayerMetrics()
+            core.requestHostPresentationFrame()
+        }
+
         public func synchronizeHostFocusState() {
             // Ghostty focus 跟随「逻辑键盘归属」而非 AppKit first responder 瞬态。
             // 转场期间 FR 在 WKWebView ⇄ 终端之间迁移存在竞态（Chromium resign

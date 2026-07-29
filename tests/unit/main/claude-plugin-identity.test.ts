@@ -29,6 +29,7 @@ const CREDENTIAL = JSON.stringify({
     accessToken: "sk-access",
     expiresAt: 1_900_000_000_000,
     refreshToken: "sk-refresh",
+    rateLimitTier: "default_claude_max_5x",
     scopes: ["user:inference"],
     subscriptionType: "max",
   },
@@ -47,7 +48,7 @@ describe("claude identity", () => {
       organizationName: "Acme Corp",
       organizationUuid: "org-uuid-1",
       providerAccountId: "acc-uuid-1",
-      subscriptionType: "max",
+      subscriptionType: "max-5x",
     });
   });
 
@@ -75,8 +76,26 @@ describe("claude identity", () => {
   });
 
   it("reads subscriptionType from a credential envelope", () => {
-    expect(subscriptionTypeFromCredential(CREDENTIAL)).toBe("max");
+    expect(subscriptionTypeFromCredential(CREDENTIAL)).toBe("max-5x");
     expect(subscriptionTypeFromCredential("garbage")).toBeUndefined();
+  });
+
+  it("normalizes Claude rate-limit tiers before broad subscription labels", () => {
+    expect(
+      subscriptionTypeFromCredential(
+        JSON.stringify({
+          claudeAiOauth: {
+            rateLimitTier: "default_claude_max_20x",
+            subscriptionType: "max",
+          },
+        })
+      )
+    ).toBe("max-20x");
+    expect(
+      subscriptionTypeFromCredential(
+        JSON.stringify({ claudeAiOauth: { subscriptionType: "pro" } })
+      )
+    ).toBe("pro");
   });
 
   it("round-trips a managed credential record", () => {

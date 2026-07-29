@@ -17,54 +17,25 @@ const AGENT_ID: AgentKind = "omp";
 const EXTENSION_FILE_NAME = "pier-agent-status.ts";
 const MARKER = pierManagedPluginMarker();
 
-/**
- * omp 主会话事件 → pier 事件名。
- *
- * 映射依据为 omp 事件流实测（2026-07-05 probe：-p 多轮工具 / RPC abort /
- * -p task subagent 三场景）, 非 loomdesk eventStatusMap 照搬——其
- * `turn_end → Stop` 是错的：
- * - omp 的 `turn_start`/`turn_end` 是 agent loop 内**每轮 LLM round** 的
- *   边界, 一次用户提问发 N 次；映射 Stop 会在多轮工具循环中途谎报
- *   「等待输入」, 且 Stop 置 turnEnded 后还会吸收后续真实工具事件。
- * - 回合真边界是 `agent_start`/`agent_end`（每个 prompt 各发一次；abort/
- *   ESC 中断同样收 agent_end, 无「卡在思考中」风险）。
- * - `tool_approval_requested`/`tool_approval_resolved` 补 waiting
- *   （等待确认）态；resolved 不辨批准/拒绝一律回 ToolStart——批准路径
- *   （绝大多数）立即准确；拒绝路径短暂错标 tool, 由后续事件在本轮 loop
- *   收敛内纠正（denial 作为 tool result 喂回模型, loop 必以 agent_end
- *   收敛——abort 这一更极端路径都发 agent_end, 已实证）, 不值得解析载荷。
- *
- * Ev5 / FA `error`：probe 未观测到独立失败事件；abort/ESC 仍走
- * `agent_end→Stop`。禁止把 `agent_end`/`Stop` 假装成 `error`
- * （用户中断 ≠ 出错）。结论见 `OMP_FA_ERROR_REACHABILITY`。
- */
+/** 固定提交 cc00ab1 的公开扩展事件。 */
 const OMP_EVENTS: ReadonlyArray<{ nativeEvent: string; pierEvent: string }> = [
   { nativeEvent: "session_start", pierEvent: "SessionStart" },
-  { nativeEvent: "agent_start", pierEvent: "PromptSubmit" },
-  { nativeEvent: "tool_call", pierEvent: "ToolStart" },
-  { nativeEvent: "tool_result", pierEvent: "ToolComplete" },
-  { nativeEvent: "tool_approval_requested", pierEvent: "PermissionRequest" },
-  { nativeEvent: "tool_approval_resolved", pierEvent: "ToolStart" },
-  { nativeEvent: "agent_end", pierEvent: "Stop" },
+  { nativeEvent: "before_agent_start", pierEvent: "PromptSubmit" },
+  { nativeEvent: "tool_execution_start", pierEvent: "ToolStart" },
+  { nativeEvent: "tool_execution_end", pierEvent: "ToolComplete" },
+  {
+    nativeEvent: "tool_approval_requested",
+    pierEvent: "InteractionRequested",
+  },
+  {
+    nativeEvent: "tool_approval_resolved",
+    pierEvent: "InteractionResolved",
+  },
+  { nativeEvent: "agent_end.willContinue", pierEvent: "processing" },
+  { nativeEvent: "agent_end.error", pierEvent: "error" },
+  { nativeEvent: "agent_end.aborted", pierEvent: "TurnInterrupted" },
+  { nativeEvent: "session_stop", pierEvent: "Stop" },
   { nativeEvent: "session_shutdown", pierEvent: "SessionEnd" },
-];
-
-/**
- * omp task subagent 实例事件 → pier 子代理计数事件。
- *
- * task subagent 与主会话同进程、各自执行一遍扩展工厂（实测同 pid 多次
- * factory 调用, 子实例 ctx.hasUI === false）。子实例事件若按主表直发会
- * 打穿主状态：turn/agent 结束 → 谎报「等待输入」, session_shutdown →
- * 拆层 + 1.5s 冷却吞掉主会话后续事件。故子实例只上报
- * SubagentStart/SubagentStop——聚合器仅计数（badge「N 个子代理」）,
- * 不改父状态。
- */
-const OMP_SUBAGENT_EVENTS: ReadonlyArray<{
-  nativeEvent: string;
-  pierEvent: string;
-}> = [
-  { nativeEvent: "agent_start", pierEvent: "SubagentStart" },
-  { nativeEvent: "agent_end", pierEvent: "SubagentStop" },
 ];
 
 /**
@@ -91,30 +62,6 @@ export function ompExtensionPath(): string {
 
 export function ompDetect(): boolean {
   return existsSync(ompHome()) || commandExistsOnPath("omp");
-}
-
-/** 生成逐事件订阅行：主/子映射合一, 每个原生事件单次订阅、按角色分派。 */
-function subscriptionLines(): string {
-  const byNative: Record<string, { main?: string; sub?: string }> = {};
-  for (const { nativeEvent, pierEvent } of OMP_EVENTS) {
-    const entry = byNative[nativeEvent] ?? {};
-    entry.main = pierEvent;
-    byNative[nativeEvent] = entry;
-  }
-  for (const { nativeEvent, pierEvent } of OMP_SUBAGENT_EVENTS) {
-    const entry = byNative[nativeEvent] ?? {};
-    entry.sub = pierEvent;
-    byNative[nativeEvent] = entry;
-  }
-  // JSON.stringify 兼作转义与 null 序列化——表内值现为纯 ASCII 标识符,
-  // 但生成器不赌未来（未转义的 `"` 会让生成源码整体语法错误、静默失活）。
-  const quote = (v: string | undefined) => JSON.stringify(v ?? null);
-  return Object.entries(byNative)
-    .map(
-      ([nativeEvent, m]) =>
-        `\tpi.on(${quote(nativeEvent)}, (event, ctx) => pierDispatch(ctx, ${quote(nativeEvent)}, ${quote(m.main)}, ${quote(m.sub)}, event));`
-    )
-    .join("\n");
 }
 
 /**
@@ -149,8 +96,6 @@ export function buildOmpExtensionSource(): string {
 
 ${JAVASCRIPT_LOCKED_APPEND_SOURCE}
 ${JAVASCRIPT_PROMPT_SNIPPET_SOURCE}
-
-let pierInstanceCount = 0;
 
 function pierSessionIdFrom(values) {
 	for (const value of values) {
@@ -189,16 +134,44 @@ function pierSessionIdFrom(values) {
 	return undefined;
 }
 
-function pierEmit(event, nativeEvent, actorHint, ...values) {
+function pierLastAssistantStopReason(event) {
+	const messages = event && Array.isArray(event.messages) ? event.messages : [];
+	for (let index = messages.length - 1; index >= 0; index--) {
+		const message = messages[index];
+		if (
+			message &&
+			typeof message === "object" &&
+			message.role === "assistant" &&
+			typeof message.stopReason === "string"
+		) {
+			return message.stopReason;
+		}
+	}
+	return undefined;
+}
+
+function pierEmit(event, nativeEvent, nativePayload, ctx, details = {}) {
 	const log = process.env.PIER_AGENT_EVENT_LOG;
 	const panelId = process.env.PIER_PANEL_ID;
 	const windowId = process.env.PIER_WINDOW_ID;
 	if (!log || !panelId || !windowId) return;
-	const sessionId = pierSessionIdFrom(values);
+	const sessionId = pierSessionIdFrom([nativePayload, ctx]);
 	const promptSnippet =
-		event === "PromptSubmit" ? pierPromptSnippetFrom(...values) : undefined;
+		event === "PromptSubmit"
+			? pierPromptSnippetFrom(nativePayload, ctx)
+			: undefined;
+	const toolUseId =
+		details.toolUseId ||
+		(nativePayload && typeof nativePayload.toolCallId === "string"
+			? nativePayload.toolCallId
+			: undefined);
+	const toolName =
+		details.toolName ||
+		(nativePayload && typeof nativePayload.toolName === "string"
+			? nativePayload.toolName
+			: undefined);
 	const line = JSON.stringify({
-		v: 2,
+		v: 3,
 		kind: "agentEvent",
 		ts: Date.now() * 1_000_000,
 		panelId,
@@ -207,40 +180,71 @@ function pierEmit(event, nativeEvent, actorHint, ...values) {
 		agent: "omp",
 		event,
 		nativeEvent,
-		...(actorHint ? { actorHint } : {}),
 		...(sessionId ? { sessionId } : {}),
+		...(toolUseId ? { toolUseId } : {}),
+		...(toolName ? { toolName } : {}),
+		...(details.nativeState ? { nativeState: details.nativeState } : {}),
+		...(details.interactionId
+			? { interactionId: details.interactionId }
+			: {}),
+		...(details.interactionKind
+			? { interactionKind: details.interactionKind }
+			: {}),
+		...(details.interactionOutcome
+			? { interactionOutcome: details.interactionOutcome }
+			: {}),
 		...(promptSnippet ? { promptSnippet } : {}),
 	}) + "\\n";
 	pierAppend(log, line);
 }
 
 export default function PierAgentStatus(pi) {
-	// Main session vs task subagent: subagents run in-process with their own
-	// extension instance (ctx.hasUI === false). Main = has UI (TUI/RPC), or
-	// first instance in this process (print/headless main loads before any
-	// subagent can spawn). Subagent instances only report Subagent counters;
-	// forwarding their session/turn events would corrupt the main status.
-	const isFirstInstance = pierInstanceCount === 0;
-	pierInstanceCount += 1;
-	let role = null;
-	function pierDispatch(ctx, nativeEvent, mainEvent, subEvent, ...values) {
-		if (role === null) {
-			role =
-				(ctx && ctx.hasUI === true) || isFirstInstance ? "main" : "sub";
+	pi.on("session_start", (event, ctx) =>
+		pierEmit("SessionStart", "session_start", event, ctx));
+	pi.on("before_agent_start", (event, ctx) =>
+		pierEmit("PromptSubmit", "before_agent_start", event, ctx));
+	pi.on("tool_execution_start", (event, ctx) =>
+		pierEmit("ToolStart", "tool_execution_start", event, ctx));
+	pi.on("tool_execution_end", (event, ctx) =>
+		pierEmit("ToolComplete", "tool_execution_end", event, ctx, {
+			nativeState: event && event.isError === true ? "error" : "completed",
+		}));
+	pi.on("tool_approval_requested", (event, ctx) =>
+		pierEmit("InteractionRequested", "tool_approval_requested", event, ctx, {
+			interactionId: event && event.toolCallId,
+			interactionKind: "permission",
+		}));
+	pi.on("tool_approval_resolved", (event, ctx) => {
+		const approved = event && event.approved === true;
+		pierEmit("InteractionResolved", "tool_approval_resolved", event, ctx, {
+			interactionId: event && event.toolCallId,
+			interactionKind: "permission",
+			interactionOutcome: approved ? "accepted" : "rejected",
+			nativeState: approved ? "accepted" : "rejected",
+		});
+	});
+	pi.on("agent_end", (event, ctx) => {
+		if (event && event.willContinue === true) {
+			pierEmit("processing", "agent_end.willContinue", event, ctx, {
+				nativeState: "will_continue",
+			});
+			return;
 		}
-		const event = role === "main" ? mainEvent : subEvent;
-		if (event) {
-			pierEmit(
-				event,
-				nativeEvent,
-				role === "sub" ? "subagent" : undefined,
-				...values,
-				ctx,
-			);
+		const stopReason = pierLastAssistantStopReason(event);
+		if (stopReason === "error") {
+			pierEmit("error", "agent_end.error", event, ctx, {
+				nativeState: stopReason,
+			});
+		} else if (stopReason === "aborted") {
+			pierEmit("TurnInterrupted", "agent_end.aborted", event, ctx, {
+				nativeState: stopReason,
+			});
 		}
-	}
-
-${subscriptionLines()}
+	});
+	pi.on("session_stop", (event, ctx) =>
+		pierEmit("Stop", "session_stop", event, ctx));
+	pi.on("session_shutdown", (event, ctx) =>
+		pierEmit("SessionEnd", "session_shutdown", event, ctx));
 }
 `;
 }
@@ -282,19 +286,18 @@ export async function uninstallOmpExtension(
 }
 
 export const ompIntegration: AgentHookIntegration = {
-  capability: "full",
   detect: ompDetect,
   id: AGENT_ID,
-  runtime: { stopAuthority: "authoritative" },
+  runtime: {
+    emittedMappings: OMP_EVENTS,
+    stopAuthority: "authoritative",
+  },
   install: () => installOmpExtension(),
   uninstall: () => uninstallOmpExtension(),
 };
 
 /** 事件表导出（测试断言映射完整性用）。 */
 export const OMP_EVENT_MAP = OMP_EVENTS;
-
-/** 子代理事件表导出（测试断言用）。 */
-export const OMP_SUBAGENT_EVENT_MAP = OMP_SUBAGENT_EVENTS;
 
 /** marker 常量导出（测试断言用）。 */
 export const OMP_MARKER = MARKER;
@@ -303,4 +306,4 @@ export const OMP_MARKER = MARKER;
  * Ev5 诚实结论：omp 无原生回合失败语义可映射 FA `error`。
  * 证据：2026-07-05 probe（abort 仍 `agent_end`）；映射表无独立失败事件。
  */
-export const OMP_FA_ERROR_REACHABILITY = "unsupported" as const;
+export const OMP_FA_ERROR_REACHABILITY = "native" as const;

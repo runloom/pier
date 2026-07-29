@@ -123,6 +123,7 @@ export const CORE_WORKBENCH_WIDGET_COMPONENTS: ReadonlyMap<
     CORE_ACTIVITY_OVERVIEW_WIDGET_ID,
     {
       component: ActivityWidget,
+      contentMode: "contained",
       icon: Activity,
       id: CORE_ACTIVITY_OVERVIEW_WIDGET_ID,
       previewComponent: ActivityWidgetPreview,
@@ -132,6 +133,7 @@ export const CORE_WORKBENCH_WIDGET_COMPONENTS: ReadonlyMap<
     CORE_SYSTEM_RESOURCES_WIDGET_ID,
     {
       component: SystemResourcesWidget,
+      contentMode: "contained",
       icon: Cpu,
       id: CORE_SYSTEM_RESOURCES_WIDGET_ID,
       previewComponent: SystemResourcesWidgetPreview,
@@ -141,6 +143,7 @@ export const CORE_WORKBENCH_WIDGET_COMPONENTS: ReadonlyMap<
     CORE_CUSTOM_CARD_WIDGET_ID,
     {
       component: CustomCardWidget,
+      contentMode: "contained",
       icon: Blocks,
       id: CORE_CUSTOM_CARD_WIDGET_ID,
       previewComponent: CustomCardWidgetPreview,
@@ -152,6 +155,7 @@ export const CORE_WORKBENCH_WIDGET_COMPONENTS: ReadonlyMap<
     {
       actions: costOverviewWidgetActions,
       component: CostOverviewWidget,
+      contentMode: "contained",
       icon: DollarSign,
       id: CORE_COST_OVERVIEW_WIDGET_ID,
       previewComponent: CostOverviewWidgetPreview,

@@ -3,12 +3,13 @@ import { readdir, readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent-session.ts";
 import {
   atomicWriteFile,
   commandExistsOnPath,
-  pierHookCommandWithStdinSessionId,
+  pierHookCommandV3WithStdin,
   removePierTextBlock,
-  upsertPierTextBlock,
+  upsertPierTextBlockUnlessNewer,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
 
@@ -40,21 +41,42 @@ const AGENT_ID: AgentKind = "kimi";
  * "正在做什么" 的状态语义无关, 装了会让状态栏抖动。刻意跳过。
  */
 const KIMI_HOOK_EVENTS: ReadonlyArray<{
+  agentTypeFields?: readonly string[];
   matcher?: string;
+  nativeStateFields?: readonly string[];
   nativeEvent: string;
-  pierEvent: string;
+  pierEvent: Exclude<
+    AgentHookEventPayloadV3["event"],
+    "InteractionRequested" | "InteractionResolved"
+  >;
 }> = [
   { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
   { nativeEvent: "UserPromptSubmit", pierEvent: "PromptSubmit" },
   { nativeEvent: "PreToolUse", pierEvent: "ToolStart" },
   { nativeEvent: "PostToolUse", pierEvent: "ToolComplete" },
-  { nativeEvent: "PostToolUseFailure", pierEvent: "ToolComplete" },
+  {
+    nativeEvent: "PostToolUseFailure",
+    nativeStateFields: ["error"],
+    pierEvent: "ToolComplete",
+  },
   { nativeEvent: "PreCompact", pierEvent: "processing" },
   { nativeEvent: "PostCompact", pierEvent: "processing" },
   { nativeEvent: "Stop", pierEvent: "Stop" },
-  { nativeEvent: "StopFailure", pierEvent: "error" },
-  { nativeEvent: "SubagentStart", pierEvent: "SubagentStart" },
-  { nativeEvent: "SubagentStop", pierEvent: "SubagentStop" },
+  {
+    nativeEvent: "StopFailure",
+    nativeStateFields: ["error_type", "error_message"],
+    pierEvent: "error",
+  },
+  {
+    agentTypeFields: ["agent_name"],
+    nativeEvent: "SubagentStart",
+    pierEvent: "SubagentStart",
+  },
+  {
+    agentTypeFields: ["agent_name"],
+    nativeEvent: "SubagentStop",
+    pierEvent: "SubagentStop",
+  },
   { nativeEvent: "SessionEnd", pierEvent: "SessionEnd" },
 ];
 
@@ -95,11 +117,17 @@ const TRAILING_NEWLINES_RE = /\n+$/;
 function buildKimiHooksBlock(): string {
   const lines: string[] = [];
   for (const event of KIMI_HOOK_EVENTS) {
-    const command = pierHookCommandWithStdinSessionId(
-      AGENT_ID,
-      event.pierEvent,
-      event.nativeEvent
-    );
+    const command = pierHookCommandV3WithStdin({
+      agentId: AGENT_ID,
+      ...(event.agentTypeFields
+        ? { agentTypeFields: event.agentTypeFields }
+        : {}),
+      event: event.pierEvent,
+      nativeEvent: event.nativeEvent,
+      ...(event.nativeStateFields
+        ? { nativeStateFields: event.nativeStateFields }
+        : {}),
+    });
     lines.push("[[hooks]]");
     lines.push(`event = ${JSON.stringify(event.nativeEvent)}`);
     if (event.matcher !== undefined) {
@@ -114,7 +142,7 @@ function buildKimiHooksBlock(): string {
 
 /** 纯函数：向 TOML 原文注入/替换 pier marker 块。 */
 export function withPierKimiHooks(raw: string): string {
-  return upsertPierTextBlock(raw, AGENT_ID, buildKimiHooksBlock());
+  return upsertPierTextBlockUnlessNewer(raw, AGENT_ID, buildKimiHooksBlock());
 }
 
 /** 纯函数：从 TOML 原文剔除 pier marker 块。 */
@@ -186,10 +214,15 @@ export async function cleanupLegacyAgentHooksDir(): Promise<void> {
 }
 
 export const kimiIntegration: AgentHookIntegration = {
-  capability: "full",
   detect: kimiDetect,
   id: AGENT_ID,
-  runtime: { stopAuthority: "advisory" },
+  runtime: {
+    emittedMappings: KIMI_HOOK_EVENTS.map(({ nativeEvent, pierEvent }) => ({
+      nativeEvent,
+      pierEvent,
+    })),
+    stopAuthority: "advisory",
+  },
   install: () => installKimiHooks(),
   uninstall: () => uninstallKimiHooks(),
 };

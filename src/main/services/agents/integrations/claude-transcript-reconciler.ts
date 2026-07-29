@@ -4,14 +4,25 @@ import {
   createTranscriptTailReconciler,
   type TranscriptTailReconciler,
   type TranscriptTerminalRecord,
+  type TranscriptTitleListener,
+  type TranscriptTitleRecord,
 } from "./transcript-tail-reconciler.ts";
 
 export type ClaudeTranscriptReconciler = TranscriptTailReconciler;
+
+/** Claude transcript supplies only the Esc/Ctrl+C interruption terminal fact. */
+export const CLAUDE_TRANSCRIPT_TERMINAL_EVIDENCE = [
+  {
+    nativeEvent: "claude.transcript.user_interrupt",
+    pierEvent: "TurnInterrupted",
+  },
+] as const;
 
 interface ClaudeTranscriptReconcilerOpts {
   onTerminalEvent: Parameters<
     typeof createTranscriptTailReconciler
   >[0]["onTerminalEvent"];
+  onTitleRecord?: TranscriptTitleListener;
   transcriptRoot?: string;
 }
 
@@ -39,10 +50,64 @@ export function createClaudeTranscriptReconciler(
   return createTranscriptTailReconciler({
     agent: "claude",
     classifyLine: classifyClaudeTranscriptLine,
+    classifyTitleLine: classifyClaudeTranscriptTitleLine,
     onTerminalEvent: opts.onTerminalEvent,
+    ...(opts.onTitleRecord ? { onTitleRecord: opts.onTitleRecord } : {}),
     transcriptRoot:
       opts.transcriptRoot ?? resolve(join(homedir(), ".claude", "projects")),
   });
+}
+
+/**
+ * Claude Code 自己写进 transcript 的会话名——这就是「尽量用 agent 自身能力」
+ * 的正确形态：不起进程、不花 token、不需要标题专用模型入口。
+ *
+ * **只收 `ai-title`**——CLI 自己生成的摘要，是这里唯一真正属于 agent 的标题。
+ *
+ * `custom-title` / `agent-name` 明确**不收**：实测它们装的是 Pier 自己经
+ * `derive-claude-session-title` 双写回去的 `hookSpecificOutput.sessionTitle`，
+ * 值与我方派生逐字相同（含 `…` 截断标记，也含 `·` / `继续` / 裸临时路径 /
+ * `<task-notification>` 这类只有我方截断器会产出的退化值），两者之间也彼此同值。
+ * 收下等于把自己的 prompt 截断洗成更高的 provider 秩；又因为它们**先到**
+ * （实测 79 个会话里 71 个先出现 custom-title），同秩不覆盖会把随后真正的
+ * `ai-title` 永久挡在门外——比不接 provider 秩更糟。
+ *
+ * 纪律边界：这里只做 provider 秩（介于 prompt 与 user 之间），仍然低于 Pier 侧
+ * 用户改名；同秩不覆盖，所以 `ai-title` 反复重算不会让标题一直抖动。
+ * 格式变化 / 上游删字段 → 静默失效，标题退回首条 prompt 派生。
+ */
+function classifyClaudeTranscriptTitleLine(
+  line: string
+): TranscriptTitleRecord | null {
+  // 廉价预筛：与终态分类同理，避免逐行全量 JSON.parse。
+  if (!line.includes("ai-title")) {
+    return null;
+  }
+  const parsed = JSON.parse(line) as {
+    aiTitle?: unknown;
+    sessionId?: unknown;
+    type?: unknown;
+  };
+  if (!(parsed.type === "ai-title" && typeof parsed.aiTitle === "string")) {
+    return null;
+  }
+  return titleRecord(
+    "claude.transcript.ai_title",
+    typeof parsed.sessionId === "string" ? parsed.sessionId.trim() : "",
+    parsed.aiTitle
+  );
+}
+
+function titleRecord(
+  nativeEvent: string,
+  sessionId: string,
+  raw: string
+): TranscriptTitleRecord | null {
+  const title = raw.trim();
+  if (!title) {
+    return null;
+  }
+  return { nativeEvent, sessionId, title };
 }
 
 const INTERRUPT_MARKERS = new Set([
@@ -70,8 +135,7 @@ function classifyClaudeTranscriptLine(
     return null;
   }
   return {
-    nativeEvent: "claude.transcript.user_interrupt",
-    pierEvent: "TurnInterrupted",
+    ...CLAUDE_TRANSCRIPT_TERMINAL_EVIDENCE[0],
     turnId: "",
   };
 }

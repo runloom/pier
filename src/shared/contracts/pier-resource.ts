@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { agentSessionTitleValueSchema } from "../agent-session-title/schema.ts";
 import { agentKindSchema } from "./agent.ts";
 
 /**
@@ -33,7 +34,7 @@ export const sessionIdentitySchema = z.discriminatedUnion("kind", [
     .object({
       agentId: agentKindSchema,
       kind: z.literal("agent"),
-      sessionTitle: z.string().min(1).max(40).optional(),
+      sessionTitle: agentSessionTitleValueSchema.optional(),
       status: z.string().optional(),
     })
     .strict(),

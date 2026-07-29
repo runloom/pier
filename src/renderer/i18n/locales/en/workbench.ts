@@ -148,6 +148,9 @@ export const workbench = {
       empty: "No activity in this window",
       emptyHint:
         "Start an agent or run a command in a terminal to see it here.",
+      identity: {
+        subagent: "Subagent",
+      },
       inProgress: "Active",
       kind: {
         agent: "Agent",
@@ -159,6 +162,7 @@ export const workbench = {
       needsYou: "Needs you",
       otherWindowsAgents: "{{count}} more agents in other windows",
       panelGone: "That panel is no longer open",
+      renameSession: "Rename session",
       running: "Running",
       section: {
         needsYou: "Needs you",

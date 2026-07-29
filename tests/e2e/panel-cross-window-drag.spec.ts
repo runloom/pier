@@ -1333,11 +1333,17 @@ test.describe("Panel cross-window drag (Path B)", () => {
           (
             window as unknown as { __pierCwdReplay: unknown[] }
           ).__pierCwdReplay = sink;
+          const frameSink: unknown[] = [];
+          (
+            window as unknown as { __pierFrameCommits: unknown[] }
+          ).__pierFrameCommits = frameSink;
           window.pier.terminal.onCwdChange((event) => {
             sink.push(event);
           });
+          window.pier.terminal.onFrameCommitted((event) => {
+            frameSink.push(event);
+          });
         });
-
         const result = await transferPanel(source, target, {
           panelId: terminalInfo.panelId,
           componentId: "terminal",
@@ -1352,6 +1358,70 @@ test.describe("Panel cross-window drag (Path B)", () => {
         await expectPanelGone(source, terminalId);
         await expectPanelOn(target, terminalId);
         await expectPanelActiveOn(target, terminalId);
+
+        // Adoption is not complete until the moved surface commits a frame for
+        // the target renderer's presentation lifecycle. A plain `create: ok`
+        // assertion would miss a stale source presentation ID and the target
+        // would fail its frame wait ten seconds later.
+        await expect
+          .poll(
+            async () => {
+              const targetState = await target.evaluate(
+                async (movedPanelId) => {
+                  const snapshot = await window.pier.terminal.debugSnapshot({});
+                  const rendererPanel = snapshot.renderer?.panels.find(
+                    (panel) => panel.panelId === movedPanelId
+                  );
+                  const nativeSurface = snapshot.native.surfaces.find(
+                    (surface) => surface.panelId === movedPanelId
+                  );
+                  const frameEvents =
+                    (
+                      window as unknown as {
+                        __pierFrameCommits?: Array<{
+                          panelId: string;
+                          presentationId: number;
+                        }>;
+                      }
+                    ).__pierFrameCommits ?? [];
+                  return {
+                    lifecycleError:
+                      rendererPanel?.terminalLifecycle?.error ?? null,
+                    lifecyclePhase:
+                      rendererPanel?.terminalLifecycle?.phase ?? null,
+                    matchingFrameObserved: frameEvents.some(
+                      (event) =>
+                        event.panelId === movedPanelId &&
+                        event.presentationId ===
+                          rendererPanel?.terminalLifecycle?.presentationId
+                    ),
+                    presentationIdsMatch:
+                      rendererPanel?.terminalLifecycle?.presentationId ===
+                      nativeSurface?.presentationId,
+                    nativePresentationCommitted:
+                      (nativeSurface?.presentationId ?? 0) > 0 &&
+                      nativeSurface?.presentationCovered === false &&
+                      nativeSurface?.surfaceVisible === true,
+                    rendererReady:
+                      rendererPanel?.terminalLifecycle?.nativeTerminalReady ===
+                        true &&
+                      rendererPanel.terminalLifecycle.phase === "ready",
+                  };
+                },
+                terminalId
+              );
+              return targetState;
+            },
+            { timeout: 15_000 }
+          )
+          .toEqual({
+            lifecycleError: null,
+            lifecyclePhase: "ready",
+            matchingFrameObserved: true,
+            nativePresentationCommitted: true,
+            presentationIdsMatch: true,
+            rendererReady: true,
+          });
 
         await expect
           .poll(

@@ -49,6 +49,20 @@ export function formatAccountError(err: unknown, t: Translate): string {
   if (lower.includes("login timed out")) {
     return t("pier.grok.errors.loginTimedOut", "Login timed out");
   }
+  const loginFailurePrefix = /^grok login failed \(exit code \d+\):\s*/i;
+  if (loginFailurePrefix.test(raw)) {
+    const reason = raw.replace(loginFailurePrefix, "").trim();
+    return t(
+      "pier.grok.errors.loginFailedWithReason",
+      "Grok sign-in did not complete: {reason}. Confirm this account can use Grok Build, then try again."
+    ).replace("{reason}", reason);
+  }
+  if (lower.includes("grok login exited with code")) {
+    return t(
+      "pier.grok.errors.loginFailed",
+      "Grok sign-in did not complete. Confirm this account can use Grok Build, then try again."
+    );
+  }
   if (lower.includes("no identity found")) {
     return t(
       "pier.grok.errors.noIdentity",

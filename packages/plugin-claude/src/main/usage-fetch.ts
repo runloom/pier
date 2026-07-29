@@ -1,9 +1,10 @@
 import {
+  type AccountUsageMetric,
+  type AccountUsageQuotaMetric,
   createTimeoutSignal,
   isTimeoutOrAbortError,
   mergeAbortSignals,
 } from "@pier/plugin-api/account-usage";
-import type { ClaudeUsageWindow } from "../shared/accounts.ts";
 import {
   CLAUDE_CODE_USER_AGENT,
   CLAUDE_OAUTH_BETA_HEADER,
@@ -22,8 +23,8 @@ export const TOKEN_REFRESH_SKEW_MS = 60_000;
 
 export interface AccountUsageResult {
   error?: string;
+  metrics: AccountUsageMetric[];
   status: "error" | "ok";
-  windows: ClaudeUsageWindow[];
 }
 
 function asRecord(value: unknown): Record<string, unknown> | null {
@@ -45,33 +46,67 @@ function parseResetsAt(value: unknown): number | undefined {
   return;
 }
 
+function slug(value: string): string {
+  return (
+    value
+      .trim()
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, "-")
+      .replace(/^-|-$/g, "") || "quota"
+  );
+}
+
+function humanize(value: string): string {
+  return value
+    .replace(/[_-]+/g, " ")
+    .replace(/\b\w/g, (character) => character.toUpperCase());
+}
+
 function windowFromBucket(
   bucket: unknown,
-  limitId: string,
-  limitName: string,
-  windowMinutes: number
-): ClaudeUsageWindow | null {
+  groupId: string,
+  name: string,
+  windowMinutes?: number
+): AccountUsageQuotaMetric | null {
   const record = asRecord(bucket);
-  const utilization = record?.utilization;
+  const utilization = record?.utilization ?? record?.percent;
   if (typeof utilization !== "number" || !Number.isFinite(utilization)) {
     return null;
   }
   const resetsAt = parseResetsAt(record?.resets_at);
   return {
-    id: `claude:${limitId}`,
-    limitId,
-    limitName,
-    usedPercent: utilization,
-    windowMinutes,
+    groupId,
+    id: groupId,
+    kind: "quota",
+    name,
+    usedPercent: Math.min(100, Math.max(0, utilization)),
+    ...(windowMinutes === undefined ? {} : { windowMinutes }),
     ...(resetsAt === undefined ? {} : { resetsAt }),
   };
 }
 
-function windowsFromLimitsArray(limits: unknown): ClaudeUsageWindow[] {
+function explicitWindowMinutes(
+  record: Record<string, unknown>
+): number | undefined {
+  const direct =
+    record.window_duration_mins ??
+    record.window_duration_minutes ??
+    record.window_minutes;
+  if (typeof direct === "number" && Number.isFinite(direct) && direct > 0) {
+    return direct;
+  }
+  const seconds = record.window_seconds ?? record.window_duration_seconds;
+  if (typeof seconds === "number" && Number.isFinite(seconds) && seconds > 0) {
+    return Math.ceil(seconds / 60);
+  }
+  return;
+}
+
+function windowsFromLimitsArray(limits: unknown): AccountUsageQuotaMetric[] {
   if (!Array.isArray(limits)) {
     return [];
   }
-  const windows: ClaudeUsageWindow[] = [];
+  const windows: AccountUsageQuotaMetric[] = [];
   for (const entry of limits) {
     const record = asRecord(entry);
     if (!record) {
@@ -85,31 +120,36 @@ function windowsFromLimitsArray(limits: unknown): ClaudeUsageWindow[] {
     const scope = asRecord(asRecord(record.scope)?.model);
     const scopeName =
       typeof scope?.display_name === "string" ? scope.display_name : undefined;
-    let limitId: string;
-    let limitName: string;
+    let groupId: string;
+    let name: string;
     let windowMinutes: number | undefined;
     if (kind === "session") {
-      limitId = "session";
-      limitName = "Session";
+      groupId = "claude:session";
+      name = "Session";
       windowMinutes = 300;
     } else if (kind === "weekly_all") {
-      limitId = "weekly";
-      limitName = "Weekly limit";
+      groupId = "claude:weekly";
+      name = "Weekly limit";
       windowMinutes = 10_080;
     } else if (kind === "weekly_scoped") {
-      const scopeKey = (scopeName ?? "model").toLowerCase();
-      limitId = `weekly:${scopeKey}`;
-      limitName = scopeName ?? "Weekly limit";
+      const scopeKey = slug(scopeName ?? "model");
+      groupId = `claude:weekly:${scopeKey}`;
+      name = scopeName ?? "Weekly limit";
       windowMinutes = 10_080;
     } else {
-      continue;
+      const kindKey = slug(kind || "quota");
+      const scopeKey = scopeName ? `:${slug(scopeName)}` : "";
+      groupId = `claude:${kindKey}${scopeKey}`;
+      name = scopeName ?? humanize(kind || "quota");
+      windowMinutes = explicitWindowMinutes(record);
     }
     const resetsAt = parseResetsAt(record.resets_at);
     windows.push({
-      id: `claude:${limitId}`,
-      limitId,
-      limitName,
-      usedPercent: percent,
+      groupId,
+      id: groupId,
+      kind: "quota",
+      name,
+      usedPercent: Math.min(100, Math.max(0, percent)),
       ...(windowMinutes === undefined ? {} : { windowMinutes }),
       ...(resetsAt === undefined ? {} : { resetsAt }),
     });
@@ -118,48 +158,87 @@ function windowsFromLimitsArray(limits: unknown): ClaudeUsageWindow[] {
 }
 
 /** Parse the OAuth usage payload (flat buckets and/or `limits` array). */
-export function parseUsagePayload(payload: unknown): ClaudeUsageWindow[] {
+export function parseUsagePayload(payload: unknown): AccountUsageMetric[] {
   const root = asRecord(payload);
   if (!root) {
     return [];
   }
   const fromLimits = windowsFromLimitsArray(root.limits);
-  if (fromLimits.length > 0) {
-    return fromLimits;
+  const metrics: AccountUsageMetric[] = [...fromLimits];
+  const existingIds = new Set(metrics.map((metric) => metric.id));
+  const knownFlat: Record<
+    string,
+    { groupId: string; name: string; windowMinutes: number }
+  > = {
+    five_hour: {
+      groupId: "claude:session",
+      name: "Session",
+      windowMinutes: 300,
+    },
+    seven_day: {
+      groupId: "claude:weekly",
+      name: "Weekly limit",
+      windowMinutes: 10_080,
+    },
+    seven_day_opus: {
+      groupId: "claude:weekly:opus",
+      name: "Opus",
+      windowMinutes: 10_080,
+    },
+    seven_day_sonnet: {
+      groupId: "claude:weekly:sonnet",
+      name: "Sonnet",
+      windowMinutes: 10_080,
+    },
+  };
+  for (const [key, value] of Object.entries(root)) {
+    if (key === "limits") continue;
+    const known = knownFlat[key];
+    const record = asRecord(value);
+    const groupId = known?.groupId ?? `claude:${slug(key)}`;
+    if (
+      existingIds.has(groupId) ||
+      !record ||
+      (typeof record.utilization !== "number" &&
+        typeof record.percent !== "number")
+    ) {
+      continue;
+    }
+    const metric = windowFromBucket(
+      value,
+      groupId,
+      known?.name ?? humanize(key),
+      known?.windowMinutes ?? explicitWindowMinutes(record)
+    );
+    if (metric) {
+      metrics.push(metric);
+      existingIds.add(metric.id);
+    }
   }
-  const windows: ClaudeUsageWindow[] = [];
-  const session = windowFromBucket(root.five_hour, "session", "Session", 300);
-  if (session) {
-    windows.push(session);
+  const extraUsage = asRecord(root.extra_usage);
+  const usedCredits = extraUsage?.used_credits;
+  if (typeof usedCredits === "number" && Number.isFinite(usedCredits)) {
+    metrics.push({
+      currency: "USD",
+      format: "currency",
+      id: "claude:extra-usage-used",
+      kind: "scalar",
+      name: "Extra usage",
+      value: usedCredits / 100,
+    });
   }
-  const weekly = windowFromBucket(
-    root.seven_day,
-    "weekly",
-    "Weekly limit",
-    10_080
-  );
-  if (weekly) {
-    windows.push(weekly);
+  const monthlyLimit = extraUsage?.monthly_limit;
+  if (typeof monthlyLimit === "number" && Number.isFinite(monthlyLimit)) {
+    metrics.push({
+      currency: "USD",
+      format: "currency",
+      id: "claude:extra-usage-limit",
+      kind: "scalar",
+      name: "Extra usage limit",
+      value: monthlyLimit / 100,
+    });
   }
-  const opus = windowFromBucket(
-    root.seven_day_opus,
-    "weekly:opus",
-    "Opus",
-    10_080
-  );
-  if (opus) {
-    windows.push(opus);
-  }
-  const sonnet = windowFromBucket(
-    root.seven_day_sonnet,
-    "weekly:sonnet",
-    "Sonnet",
-    10_080
-  );
-  if (sonnet) {
-    windows.push(sonnet);
-  }
-  return windows;
+  return metrics;
 }
 
 function requestUsage(opts: {
@@ -198,8 +277,8 @@ export async function fetchClaudeUsage(opts: {
   if (!parsed) {
     return {
       error: "Stored Claude credential is invalid",
+      metrics: [],
       status: "error",
-      windows: [],
     };
   }
 
@@ -225,7 +304,7 @@ export async function fetchClaudeUsage(opts: {
       parsed.expiresAt <= now() + TOKEN_REFRESH_SKEW_MS &&
       !(await refreshEnvelope())
     ) {
-      return { error: LOGIN_EXPIRED_ERROR, status: "error", windows: [] };
+      return { error: LOGIN_EXPIRED_ERROR, metrics: [], status: "error" };
     }
 
     let response = await requestUsage({
@@ -241,35 +320,42 @@ export async function fetchClaudeUsage(opts: {
       });
     }
     if (response.status === 401 || response.status === 403) {
-      return { error: LOGIN_EXPIRED_ERROR, status: "error", windows: [] };
+      return { error: LOGIN_EXPIRED_ERROR, metrics: [], status: "error" };
     }
     if (response.status === 429) {
       return {
         error: "Claude usage is rate limited — try again later",
+        metrics: [],
         status: "error",
-        windows: [],
       };
     }
     if (!response.ok) {
       return {
         error: `Claude usage request failed (HTTP ${response.status})`,
+        metrics: [],
         status: "error",
-        windows: [],
       };
     }
-    return { status: "ok", windows: parseUsagePayload(await response.json()) };
+    const metrics = parseUsagePayload(await response.json());
+    return metrics.length > 0
+      ? { metrics, status: "ok" }
+      : {
+          error: "No supported usage metrics in Claude response",
+          metrics: [],
+          status: "error",
+        };
   } catch (error) {
     if (isTimeoutOrAbortError(error)) {
       return {
         error: opts.signal.aborted ? "Aborted" : USAGE_TIMEOUT_ERROR,
+        metrics: [],
         status: "error",
-        windows: [],
       };
     }
     return {
       error: error instanceof Error ? error.message : String(error),
+      metrics: [],
       status: "error",
-      windows: [],
     };
   }
 }

@@ -9,6 +9,7 @@ import { FileDocumentPanelRegistry } from "./file-document-panel-registry.ts";
 import { FileDocumentSaver } from "./file-document-saver.ts";
 import type { FileSaveFeedback } from "./file-save-feedback.ts";
 import type { FileSaveOutcome } from "./file-save-outcome.ts";
+import { showFileDurabilityError } from "./files-dialog-feedback.ts";
 import { isSamePathOrDescendant } from "./files-document-paths.ts";
 import {
   claimLegacyDraftForPanelSource,
@@ -375,14 +376,7 @@ export class FileDocumentLifecycle {
   }
 
   async #showDurabilityError(message: string): Promise<void> {
-    await this.#context.dialogs.alert({
-      body: message,
-      title: this.#context.i18n.t(
-        "filePanel.durability.confirmFailed",
-        undefined,
-        "Unable to confirm that the file was saved"
-      ),
-    });
+    await showFileDurabilityError(this.#context, message);
   }
 
   dispose(options: { clearDocuments?: boolean } = {}): void {

@@ -94,7 +94,7 @@ describe("grok usage availability contract", () => {
     });
 
     expect(result.status).toBe("ok");
-    expect(result.windows[0]?.usedPercent).toBe(40);
+    expect(result.metrics[0]).toMatchObject({ usedPercent: 40 });
     // first attempt: credits + fallback; retry: credits success
     expect(fetchImpl.mock.calls.length).toBeGreaterThanOrEqual(3);
   });
@@ -118,7 +118,7 @@ describe("grok usage availability contract", () => {
     expect(result).toEqual({
       status: "error",
       error: "Aborted",
-      windows: [],
+      metrics: [],
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });

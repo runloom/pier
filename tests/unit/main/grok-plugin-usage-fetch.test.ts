@@ -119,8 +119,8 @@ describe("fetchGrokUsage", () => {
     });
     expect(result).toEqual({
       error: API_KEY_QUOTA_ERROR,
+      metrics: [],
       status: "error",
-      windows: [],
     });
   });
 
@@ -162,8 +162,8 @@ describe("fetchGrokUsage", () => {
       })
     );
     expect(result.status).toBe("ok");
-    expect(result.windows[0]).toMatchObject({
-      limitName: "Monthly spend",
+    expect(result.metrics[0]).toMatchObject({
+      name: "Monthly spend",
       usedPercent: expect.closeTo((4112 / 15_000) * 100, 5),
     });
   });
@@ -212,8 +212,8 @@ describe("fetchGrokUsage", () => {
     });
 
     expect(result).toMatchObject({ status: "ok" });
-    expect(result.windows[0]).toMatchObject({
-      limitName: "Weekly limit",
+    expect(result.metrics[0]).toMatchObject({
+      name: "Weekly limit",
       usedPercent: 9,
     });
     expect(creditsCalls).toBe(2);
@@ -244,7 +244,7 @@ describe("fetchGrokUsage", () => {
     });
 
     expect(result).toMatchObject({ status: "ok" });
-    expect(result.windows[0]?.limitName).toBe("Monthly spend");
+    expect(result.metrics[0]).toMatchObject({ name: "Monthly spend" });
     // credits attempt + credits retry + cash
     expect(
       fetchImpl.mock.calls.filter(
@@ -293,8 +293,8 @@ describe("fetchGrokUsage", () => {
     });
 
     expect(result.status).toBe("ok");
-    // credits timeout + credits retry + cash + soft subscription
-    expect(fetchImpl).toHaveBeenCalledTimes(4);
+    // credits timeout + credits retry + cash + membership fallbacks + task usage
+    expect(fetchImpl).toHaveBeenCalledTimes(6);
     expect(fetchImpl).toHaveBeenNthCalledWith(
       1,
       GROK_BILLING_CREDITS_URL,
@@ -325,11 +325,11 @@ describe("fetchGrokUsage", () => {
     expect(result).toEqual({
       status: "error",
       error: BILLING_TIMEOUT_ERROR,
-      windows: [],
+      metrics: [],
     });
     // Per attempt: credits + credits-retry + cash; two attempts via silent
-    // retry, plus one membership fetch after all billing hops time out.
-    expect(fetchImpl).toHaveBeenCalledTimes(7);
+    // retry, plus subscription and user membership fallbacks.
+    expect(fetchImpl).toHaveBeenCalledTimes(8);
     expect(USAGE_RETRY_OVERALL_DEADLINE_MS).toBeGreaterThan(0);
   });
 
@@ -351,8 +351,8 @@ describe("fetchGrokUsage", () => {
       status: "error",
       error: "Grok billing request failed (403)",
     });
-    // plain 403: credits once + cash once + outer subscription fallback
-    expect(fetchImpl).toHaveBeenCalledTimes(3);
+    // plain 403: credits + cash + subscription + user fallback
+    expect(fetchImpl).toHaveBeenCalledTimes(4);
   });
 
   it("treats a permissionDenied 403 response as an access failure, not re-login", async () => {
@@ -392,11 +392,11 @@ describe("fetchGrokUsage", () => {
     expect(result).toEqual({
       status: "error",
       error: `${ACCESS_DENIED_ERROR} (access_denied)`,
-      windows: [],
+      metrics: [],
     });
     expect(result.error).not.toMatch(/re-?login|session expired/i);
-    // Access denial returns immediately; outer subscription fallback tries once.
-    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    // Access denial returns immediately; both membership fallbacks still run.
+    expect(fetchImpl).toHaveBeenCalledTimes(3);
   });
 
   it("does not fall back after an aborted transport", async () => {
@@ -416,7 +416,7 @@ describe("fetchGrokUsage", () => {
     expect(result).toEqual({
       status: "error",
       error: "Aborted",
-      windows: [],
+      metrics: [],
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
@@ -442,7 +442,7 @@ describe("fetchGrokUsage", () => {
     expect(result).toEqual({
       status: "error",
       error: "Aborted",
-      windows: [],
+      metrics: [],
     });
     expect(fetchImpl).toHaveBeenCalledTimes(1);
   });
@@ -487,7 +487,7 @@ describe("fetchGrokUsage", () => {
       expect.any(Object)
     );
     expect(result.status).toBe("ok");
-    expect(result.windows[0]?.usedPercent).toBe(40);
+    expect(result.metrics[0]).toMatchObject({ usedPercent: 40 });
   });
 
   it("refreshes expired OIDC session before billing and persists new auth", async () => {
@@ -831,7 +831,7 @@ describe("fetchGrokUsage subscription soft-attach", () => {
     });
 
     expect(result.status).toBe("ok");
-    expect(result.windows[0]?.usedPercent).toBe(12);
+    expect(result.metrics[0]).toMatchObject({ usedPercent: 12 });
     expect(result.subscription).toEqual({
       planType: "pro",
       status: "active",
@@ -883,20 +883,21 @@ describe("fetchGrokUsage subscription soft-attach", () => {
     });
 
     expect(result.status).toBe("ok");
-    expect(result.windows[0]?.usedPercent).toBe(8);
+    expect(result.metrics[0]).toMatchObject({ usedPercent: 8 });
     expect(result.subscription).toBeUndefined();
   });
 });
 
 describe("createUsageCacheEntry subscription retention", () => {
-  it("drops previous membership when ok result omits subscription", () => {
+  it("retains previous membership when a successful quota fetch cannot resolve membership", () => {
     const cached = createUsageCacheEntry(
       {
         status: "ok",
-        windows: [
+        metrics: [
           {
+            groupId: "grok:period",
             id: "grok:period",
-            limitId: "period",
+            kind: "quota",
             usedPercent: 10,
           },
         ],
@@ -912,10 +913,11 @@ describe("createUsageCacheEntry subscription retention", () => {
     const next = createUsageCacheEntry(
       {
         status: "ok",
-        windows: [
+        metrics: [
           {
+            groupId: "grok:period",
             id: "grok:period",
-            limitId: "period",
+            kind: "quota",
             usedPercent: 20,
           },
         ],
@@ -923,18 +925,43 @@ describe("createUsageCacheEntry subscription retention", () => {
       cached,
       200
     );
-    expect(next.subscription).toBeUndefined();
-    expect(next.windows[0]?.usedPercent).toBe(20);
+    expect(next.subscription).toEqual({
+      planType: "pro",
+      status: "active",
+      expiresAt: 1,
+    });
+    expect(next.metrics[0]).toMatchObject({ usedPercent: 20 });
+  });
+
+  it("replaces previous membership after an authoritative free response", () => {
+    const next = createUsageCacheEntry(
+      {
+        metrics: [],
+        status: "ok",
+        subscription: { planType: "free", status: "none" },
+        subscriptionResolved: true,
+      },
+      {
+        attemptedAt: 100,
+        metrics: [],
+        status: "ok",
+        subscription: { planType: "pro", status: "active" },
+        updatedAt: 100,
+      },
+      200
+    );
+    expect(next.subscription).toEqual({ planType: "free", status: "none" });
   });
 
   it("retains previous membership when usage itself errors", () => {
     const cached = createUsageCacheEntry(
       {
         status: "ok",
-        windows: [
+        metrics: [
           {
+            groupId: "grok:period",
             id: "grok:period",
-            limitId: "period",
+            kind: "quota",
             usedPercent: 10,
           },
         ],
@@ -951,7 +978,7 @@ describe("createUsageCacheEntry subscription retention", () => {
       {
         status: "error",
         error: "timeout",
-        windows: [],
+        metrics: [],
       },
       cached,
       200

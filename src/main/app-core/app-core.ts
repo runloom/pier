@@ -30,7 +30,6 @@ import { createCodexLegacyMigrationAdapter } from "../services/agent-accounts/le
 import { createAgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
 import { createAgentDetectionService } from "../services/agents/agent-detection-service.ts";
 import { createAgentUsageService } from "../services/agents/agent-usage-service.ts";
-import { wireAgentSessionTitleDeps } from "../services/agents/session-title/wire-deps.ts";
 import { createAiService } from "../services/ai/ai-service.ts";
 import { createCommandPaletteMruService } from "../services/command-palette-service.ts";
 import { createFileDraftsService } from "../services/file-drafts-service.ts";
@@ -462,8 +461,6 @@ function createPierAppCore(): PierAppCore {
       };
     })(),
   };
-
-  wireAgentSessionTitleDeps({ git: services.git, preferences });
 
   return {
     clients,

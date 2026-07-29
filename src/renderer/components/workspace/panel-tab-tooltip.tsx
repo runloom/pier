@@ -9,6 +9,7 @@ import type {
 } from "@shared/contracts/panel.ts";
 import type { ReactNode } from "react";
 import {
+  runtimeStatusColorClassName,
   runtimeStatusLabel,
   runtimeStatusVisual,
 } from "@/components/common/runtime-status-visual.ts";
@@ -116,7 +117,8 @@ export function tabAriaLabel(
 
 export function tabStatusIndicator(
   status: PanelTabStatus,
-  label: string | undefined
+  label: string | undefined,
+  options?: { preserveSemanticColor?: boolean }
 ): ReactNode {
   if (status === "idle") {
     return null;
@@ -124,12 +126,15 @@ export function tabStatusIndicator(
   const displayLabel = label ?? runtimeStatusLabel(status);
   const visual = runtimeStatusVisual(status);
   const Icon = visual.Icon;
+  const textClassName = options?.preserveSemanticColor
+    ? runtimeStatusColorClassName(status, "important")
+    : visual.textClassName;
   return (
     <span
       aria-label={displayLabel}
       className={cn(
         "inline-flex size-4 shrink-0 items-center justify-center",
-        visual.textClassName
+        textClassName
       )}
       data-panel-tab-state-indicator={status}
       data-tab-status={status}
@@ -138,7 +143,11 @@ export function tabStatusIndicator(
     >
       <Icon
         aria-hidden="true"
-        className={cn("size-3 shrink-0", visual.iconClassName)}
+        className={cn(
+          "size-3 shrink-0",
+          visual.iconClassName,
+          options?.preserveSemanticColor && textClassName
+        )}
         data-panel-tab-state-icon={status}
       />
     </span>

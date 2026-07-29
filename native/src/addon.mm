@@ -1,6 +1,7 @@
 // native/src/addon.mm — N-API bridge: JS ↔ C ABI (GhosttyBridge.swift)
 #import <AppKit/AppKit.h>
 #import <napi.h>
+#include <cstdint>
 #include <string>
 #include <vector>
 
@@ -14,10 +15,12 @@ extern "C" {
                                          const char** envKeys,
                                          const char** envValues,
                                          long envCount,
-                                         const char* lifecycleId);
+                                         const char* lifecycleId,
+                                         unsigned long long presentationId);
     bool ghostty_bridge_create_output_terminal(void* nsWindow, const char* panelId,
                                                 double x, double y, double w, double h,
-                                                const char* fontFamily, float fontSize);
+                                                const char* fontFamily, float fontSize,
+                                                unsigned long long presentationId);
     bool ghostty_bridge_write_output(const char* panelId, const uint8_t* bytes, long count);
     bool ghostty_bridge_finish_output(const char* panelId, uint32_t exitCode,
                                       uint64_t runtimeMilliseconds);
@@ -32,6 +35,10 @@ extern "C" {
                                      const char* toNativePanelId,
                                      void* toNsWindow,
                                      long toBrowserWindowId);
+    unsigned long long ghostty_bridge_request_terminal_presentation(
+        const char* panelId,
+        unsigned long long presentationId
+    );
     bool ghostty_bridge_close(const char* panelId);
     bool ghostty_bridge_perform_binding_action(const char* panelId, const char* action);
     bool ghostty_bridge_send_text(const char* panelId, const char* text);
@@ -61,6 +68,17 @@ extern "C" {
     void ghostty_bridge_set_mouse_forward_callback(MouseForwardFn cb);
     typedef void (*TerminalFocusRequestFn)(long browserWindowId, const char* panelId);
     void ghostty_bridge_set_terminal_focus_request_callback(TerminalFocusRequestFn cb);
+    typedef void (*FrameCommittedFn)(
+        long browserWindowId,
+        const char* panelId,
+        unsigned long long presentationId,
+        unsigned long long surfaceGeneration,
+        unsigned long long requestSequence,
+        unsigned long long drawSequence,
+        uint32_t pixelWidth,
+        uint32_t pixelHeight
+    );
+    void ghostty_bridge_set_frame_committed_callback(FrameCommittedFn cb);
     // PWD forward: swift TerminalSurfacePwdDelegate 收到 OSC 7 → 此 trampoline → JS.
     // 签名 (browserWindowId, panelId UTF-8, cwd UTF-8). 与 keyboard forward 同模式.
     typedef void (*PwdForwardFn)(long browserWindowId, const char* panelId, const char* cwd);
@@ -207,6 +225,12 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
     if (info.Length() > 6 && info[6].IsString()) {
         lifecycleId = info[6].As<Napi::String>().Utf8Value();
     }
+    unsigned long long presentationId = 0;
+    if (info.Length() > 7 && info[7].IsNumber()) {
+        presentationId = static_cast<unsigned long long>(
+            info[7].As<Napi::Number>().Int64Value()
+        );
+    }
     bool ok = ghostty_bridge_create_terminal(
         (__bridge void*)win, panelId.c_str(),
         x, y, w, h,
@@ -216,7 +240,8 @@ static Napi::Value JsCreateTerminal(const Napi::CallbackInfo& info) {
         envKeys.empty() ? nullptr : envKeys.data(),
         envValues.empty() ? nullptr : envValues.data(),
         static_cast<long>(envKeys.size()),
-        lifecycleId.c_str()
+        lifecycleId.c_str(),
+        presentationId
     );
     return Napi::Boolean::New(info.Env(), ok);
 }
@@ -240,9 +265,15 @@ static Napi::Value JsCreateOutputTerminal(const Napi::CallbackInfo& info) {
         }
     }
     float fontSize = info[4].As<Napi::Number>().FloatValue();
+    unsigned long long presentationId = 0;
+    if (info.Length() > 5 && info[5].IsNumber()) {
+        presentationId = static_cast<unsigned long long>(
+            info[5].As<Napi::Number>().Int64Value()
+        );
+    }
     bool ok = ghostty_bridge_create_output_terminal(
         (__bridge void*)win, panelId.c_str(), x, y, w, h,
-        fontFamily.c_str(), fontSize
+        fontFamily.c_str(), fontSize, presentationId
     );
     return Napi::Boolean::New(info.Env(), ok);
 }
@@ -322,6 +353,34 @@ static Napi::Value JsMoveTerminal(const Napi::CallbackInfo& info) {
         toBrowserWindowId
     );
     return Napi::Boolean::New(env, ok);
+}
+
+static Napi::Value JsRequestTerminalPresentation(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 1 || !info[0].IsObject()) {
+        return env.Null();
+    }
+    Napi::Object input = info[0].As<Napi::Object>();
+    Napi::Value panelValue = input.Get("nativePanelId");
+    Napi::Value presentationValue = input.Get("presentationId");
+    if (!panelValue.IsString() || !presentationValue.IsNumber()) {
+        return env.Null();
+    }
+    std::string panelId = panelValue.As<Napi::String>().Utf8Value();
+    auto presentationId = static_cast<unsigned long long>(
+        presentationValue.As<Napi::Number>().Int64Value()
+    );
+    auto previousPresentationId = ghostty_bridge_request_terminal_presentation(
+        panelId.c_str(),
+        presentationId
+    );
+    if (previousPresentationId == UINT64_MAX) {
+        return env.Null();
+    }
+    return Napi::Number::New(
+        env,
+        static_cast<double>(previousPresentationId)
+    );
 }
 
 static Napi::Value JsClose(const Napi::CallbackInfo& info) {
@@ -629,6 +688,62 @@ static Napi::Value JsSetTerminalFocusRequestCallback(const Napi::CallbackInfo& i
     return JsSetForwardCallback(info, g_terminalFocusRequestChannel,
                                 ghostty_bridge_set_terminal_focus_request_callback,
                                 &g_terminalFocusRequestTrampoline);
+}
+
+// ---- Frame commit forward (validated IOSurface → renderer readiness) ----
+struct FrameCommittedPayload {
+    long windowId;
+    std::string panelId;
+    unsigned long long presentationId;
+    unsigned long long surfaceGeneration;
+    unsigned long long requestSequence;
+    unsigned long long drawSequence;
+    uint32_t pixelWidth;
+    uint32_t pixelHeight;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::Number::New(env, static_cast<double>(presentationId)),
+            Napi::Number::New(env, static_cast<double>(surfaceGeneration)),
+            Napi::Number::New(env, static_cast<double>(requestSequence)),
+            Napi::Number::New(env, static_cast<double>(drawSequence)),
+            Napi::Number::New(env, static_cast<double>(pixelWidth)),
+            Napi::Number::New(env, static_cast<double>(pixelHeight)),
+        });
+    }
+};
+static ForwardChannel<FrameCommittedPayload> g_frameCommittedChannel(
+    "PierFrameCommitted"
+);
+static void g_frameCommittedTrampoline(
+    long windowId,
+    const char* panelId,
+    unsigned long long presentationId,
+    unsigned long long surfaceGeneration,
+    unsigned long long requestSequence,
+    unsigned long long drawSequence,
+    uint32_t pixelWidth,
+    uint32_t pixelHeight
+) {
+    g_frameCommittedChannel.emit({
+        windowId,
+        std::string(panelId),
+        presentationId,
+        surfaceGeneration,
+        requestSequence,
+        drawSequence,
+        pixelWidth,
+        pixelHeight,
+    });
+}
+static Napi::Value JsSetFrameCommittedCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(
+        info,
+        g_frameCommittedChannel,
+        ghostty_bridge_set_frame_committed_callback,
+        &g_frameCommittedTrampoline
+    );
 }
 
 // ---- Open URL forward (Ghostty OPEN_URL → renderer / main policy) ----
@@ -1091,6 +1206,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("createTerminal",  Napi::Function::New(env, JsCreateTerminal));
     exports.Set("createOutputTerminal", Napi::Function::New(env, JsCreateOutputTerminal));
     exports.Set("moveTerminal", Napi::Function::New(env, JsMoveTerminal));
+    exports.Set("requestTerminalPresentation", Napi::Function::New(env, JsRequestTerminalPresentation));
     exports.Set("closeTerminal",   Napi::Function::New(env, JsClose));
     exports.Set("performTerminalBindingAction", Napi::Function::New(env, JsPerformBindingAction));
     exports.Set("sendText", Napi::Function::New(env, JsSendText));
@@ -1121,6 +1237,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("applyTerminalWindowState", Napi::Function::New(env, JsApplyTerminalWindowState));
     exports.Set("setMouseForwardCallback", Napi::Function::New(env, JsSetMouseForwardCallback));
     exports.Set("setTerminalFocusRequestCallback", Napi::Function::New(env, JsSetTerminalFocusRequestCallback));
+    exports.Set("setFrameCommittedCallback", Napi::Function::New(env, JsSetFrameCommittedCallback));
     exports.Set("applyTerminalTheme", Napi::Function::New(env, JsApplyTerminalTheme));
     exports.Set("setTerminalFont", Napi::Function::New(env, JsSetFontConfig));
     exports.Set("setTerminalConfig", Napi::Function::New(env, JsSetTerminalConfig));

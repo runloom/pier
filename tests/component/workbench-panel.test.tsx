@@ -1,6 +1,7 @@
 import { fireEvent, render, screen } from "@testing-library/react";
 import i18next from "i18next";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { CORE_WORKBENCH_WIDGET_COMPONENTS } from "@/panel-kits/workbench/core-workbench-widgets.ts";
 import { WorkbenchPanel } from "@/panel-kits/workbench/workbench-panel.tsx";
 import {
   installWorkbenchTestHarness,
@@ -102,6 +103,49 @@ describe("WorkbenchPanel responsive ordered grid", () => {
     expect(
       container.querySelector("[data-slot='card-content']")?.className
     ).toContain("@container");
+  });
+
+  it("lets contained widgets own their viewport without a nested host scroller", () => {
+    const { container } = render(
+      <WorkbenchPanel
+        {...makeProps({
+          layoutVersion: 3,
+          widgets: [{ h: 3, id: "core.activity-overview", w: 4 }],
+        })}
+      />
+    );
+
+    const content = container.querySelector(
+      '[data-testid="workbench-widget-core.activity-overview"] [data-slot="card-content"]'
+    );
+    expect(content).toHaveClass("overflow-hidden");
+    expect(content).not.toHaveClass("overflow-y-auto");
+    expect(content).not.toHaveAttribute("data-scrollbar");
+  });
+
+  it("declares every built-in widget as a contained layout", () => {
+    expect(
+      [...CORE_WORKBENCH_WIDGET_COMPONENTS.values()].map(
+        (registration) => registration.contentMode
+      )
+    ).toEqual(["contained", "contained", "contained", "contained"]);
+  });
+
+  it("keeps host scrolling as the compatibility default", () => {
+    const { container } = render(
+      <WorkbenchPanel
+        {...makeProps({
+          layoutVersion: 3,
+          widgets: [{ h: 3, id: "missing.widget", w: 4 }],
+        })}
+      />
+    );
+
+    const content = container.querySelector(
+      '[data-testid="workbench-widget-missing.widget"] [data-slot="card-content"]'
+    );
+    expect(content).toHaveClass("overflow-y-auto");
+    expect(content).toHaveAttribute("data-scrollbar", "stable");
   });
 
   it("migrates legacy geometry in memory without writing on mount", () => {

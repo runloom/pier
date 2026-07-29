@@ -30,6 +30,8 @@ export interface TerminalPanelSessionSnapshot {
   context?: PanelContext | undefined;
   /** 产品会话名（≠ OSC title）。 */
   sessionTitle?: string | undefined;
+  /** 标题所属的 provider 主会话；仅用于跨 SessionStart 保持正确归属。 */
+  sessionTitleSessionId?: string | undefined;
   sessionTitleSource?: AgentSessionTitleSource | undefined;
   tab?: PanelTabChrome | undefined;
   task?: TaskPanelMetadata | undefined;

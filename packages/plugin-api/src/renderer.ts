@@ -72,11 +72,18 @@ export interface RendererWorkbenchWidgetAction {
   priority?: number;
 }
 
+export type WorkbenchWidgetContentMode = "contained" | "host-scroll";
+
 export interface RendererWorkbenchWidgetRegistration {
   actions?(
     context: WorkbenchWidgetActionContext
   ): readonly RendererWorkbenchWidgetAction[];
   component: ComponentType<WorkbenchWidgetComponentProps>;
+  /**
+   * `host-scroll` keeps the compatible host-owned scroller. `contained`
+   * clips the card body so the widget can own pinned and scrollable regions.
+   */
+  contentMode?: WorkbenchWidgetContentMode;
   icon?: ComponentType<{ size?: number | string }>;
   id: string;
   /** 物料库预览卡（样例数据静态渲染，宿主以 pointer-events-none 展示）。 */

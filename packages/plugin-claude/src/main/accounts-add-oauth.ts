@@ -4,6 +4,7 @@ import {
   buildAccountRecord,
   mergeIdentityIntoAccount,
 } from "./accounts-records.ts";
+import { normalizeClaudeMembershipTier } from "./claude-membership.ts";
 import type { ClaudeAccountProvider } from "./claude-provider.ts";
 import type { AccountIdentity } from "./identity.ts";
 import {
@@ -54,6 +55,7 @@ function postExchangeError(cause: unknown): Error {
 }
 
 function identityFromProfile(profile: OauthProfile): AccountIdentity {
+  const subscriptionType = normalizeClaudeMembershipTier(profile);
   return {
     email: profile.email,
     providerAccountId: profile.accountUuid,
@@ -63,9 +65,7 @@ function identityFromProfile(profile: OauthProfile): AccountIdentity {
     ...(profile.organizationUuid
       ? { organizationUuid: profile.organizationUuid }
       : {}),
-    ...(profile.subscriptionType
-      ? { subscriptionType: profile.subscriptionType }
-      : {}),
+    ...(subscriptionType ? { subscriptionType } : {}),
   };
 }
 
@@ -81,6 +81,12 @@ function oauthAccountFromProfile(
       : {}),
     ...(profile.organizationUuid
       ? { organizationUuid: profile.organizationUuid }
+      : {}),
+    ...(profile.rateLimitTier
+      ? { organizationRateLimitTier: profile.rateLimitTier }
+      : {}),
+    ...(profile.subscriptionType
+      ? { organizationType: profile.subscriptionType }
       : {}),
   };
 }
@@ -136,7 +142,11 @@ async function storeAndActivate(
     signal,
   });
   const identity = identityFromProfile(profile);
-  const envelope = buildCredentialEnvelope(tokens, profile.subscriptionType);
+  const envelope = buildCredentialEnvelope(
+    tokens,
+    profile.subscriptionType,
+    profile.rateLimitTier
+  );
   const oauthAccount = oauthAccountFromProfile(profile);
 
   const state = deps.stateStore.get();

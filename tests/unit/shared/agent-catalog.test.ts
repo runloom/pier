@@ -68,4 +68,11 @@ describe("AGENT_CATALOG 完整性", () => {
     expect(getAgentCatalogEntry("kiro")?.launchCmd).toBe("kiro-cli chat --tui");
     expect(getAgentCatalogEntry("hermes")?.launchCmd).toBe("hermes --tui");
   });
+  it("Rovo Dev 使用当前 ACLI 入口，检测命令与子命令分离", () => {
+    const rovo = getAgentCatalogEntry("rovo");
+    expect(rovo?.launchCmd).toBe("acli rovodev run");
+    expect(rovo?.launchCommandPrefix).toEqual(["acli", "rovodev", "run"]);
+    expect(rovo?.detectCmd).toBe("acli");
+    expect(rovo?.expectedProcess).toBe("acli");
+  });
 });

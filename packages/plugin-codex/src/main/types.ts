@@ -1,3 +1,4 @@
+import type { AccountUsageMetric } from "@pier/plugin-api/account-usage";
 import type { AccountIdentity } from "./identity.ts";
 
 export type AgentAccountProviderId = "codex";
@@ -30,16 +31,12 @@ export interface AgentAccountProvider {
 
 export interface AccountUsageResult {
   error?: string;
+  /** True when accounts/check or subscriptions resolved membership. */
+  membershipResolved?: boolean;
+  metrics: AccountUsageMetric[];
   /** Live ChatGPT plan from account/rateLimits/read (authoritative over JWT). */
   planType?: string;
-  resetCreditsAvailable?: number;
   status: "error" | "ok";
-  windows: Array<{
-    id: string;
-    limitId: string;
-    limitName?: string;
-    resetsAt?: number;
-    usedPercent: number;
-    windowMinutes?: number;
-  }>;
+  /** Live ChatGPT subscription period end (ms epoch). */
+  subscriptionExpiresAt?: number;
 }

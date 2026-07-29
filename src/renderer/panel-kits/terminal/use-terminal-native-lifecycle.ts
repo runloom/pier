@@ -11,6 +11,7 @@ import type { IDockviewPanelProps } from "dockview-react";
 import { type RefObject, useEffect, useLayoutEffect, useRef } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { resolveSkillsLaunchBlock } from "@/lib/skills/launch-block.ts";
+import { isWindowKeyFocused } from "@/lib/window-focus-attribute.ts";
 import {
   confirmTerminalLaunch,
   rejectTerminalLaunch,
@@ -25,8 +26,15 @@ import {
   type TerminalLifecycleDebugPatch,
   updateTerminalPanelLifecycleDebug,
 } from "./terminal-lifecycle-debug.ts";
+import {
+  allocateTerminalPresentationId,
+  TerminalNativeFrameGate,
+} from "./terminal-native-frame-gate.ts";
+import { waitForRealSize } from "./terminal-native-frame-wait.ts";
 import { requestTerminalPresentation } from "./terminal-presentation-reconciler.ts";
 import { readTerminalAnchorFrame } from "./terminal-viewport.ts";
+
+const TERMINAL_FRAME_COMMIT_TIMEOUT_MS = 10_000;
 
 interface UseTerminalNativeLifecycleArgs {
   anchorRef: RefObject<HTMLDivElement | null>;
@@ -45,29 +53,6 @@ interface UseTerminalNativeLifecycleArgs {
   setCreateError: (error: string) => void;
   setNativeTerminalReady: (ready: boolean) => void;
   skipNativeCreate: boolean;
-}
-
-function waitForRealSize(
-  anchor: HTMLDivElement,
-  shouldStop: () => boolean
-): Promise<CreateTerminalArgs["frame"] | null> {
-  const { promise, resolve } = Promise.withResolvers<
-    CreateTerminalArgs["frame"] | null
-  >();
-  const check = () => {
-    if (shouldStop()) {
-      resolve(null);
-      return;
-    }
-    const frame = readTerminalAnchorFrame(anchor);
-    if (frame) {
-      resolve(frame);
-      return;
-    }
-    requestAnimationFrame(check);
-  };
-  check();
-  return promise;
 }
 
 export function useTerminalNativeLifecycle({
@@ -107,6 +92,8 @@ export function useTerminalNativeLifecycle({
     let disposed = false;
     const lifecycleVersion = lifecycleVersionRef.current + retryNonce + 1;
     lifecycleVersionRef.current = lifecycleVersion;
+    const presentationId = allocateTerminalPresentationId();
+    const frameGate = new TerminalNativeFrameGate(panelId, presentationId);
     const subscriptions: Array<{ dispose(): void }> = [];
     let layoutRegistration: TerminalLayoutRegistration | null = null;
     let renderableAnchorObserver: ResizeObserver | null = null;
@@ -114,9 +101,21 @@ export function useTerminalNativeLifecycle({
     let createPromise: Promise<void> | null = null;
     let createAttemptCount = 0;
     let createFailureLatched = false;
+    let frameCommitTimeout: ReturnType<typeof setTimeout> | null = null;
+    let frameCommitWaiting = false;
     let lifecycleError: string | null = null;
     let lifecycleNativeTerminalReady = false;
+    let panelVisible = api.isVisible;
+    let windowFocused = isWindowKeyFocused();
     setNativeTerminalReady(false);
+
+    const clearFrameCommitTimeout = (): void => {
+      if (!frameCommitTimeout) {
+        return;
+      }
+      clearTimeout(frameCommitTimeout);
+      frameCommitTimeout = null;
+    };
 
     const markLifecycle = (patch: TerminalLifecycleDebugPatch): void => {
       if (patch.error !== undefined) {
@@ -136,12 +135,29 @@ export function useTerminalNativeLifecycle({
       });
     };
 
+    const markNativeTerminalReady = (): void => {
+      if (disposed || createFailureLatched || lifecycleNativeTerminalReady) {
+        return;
+      }
+      frameCommitWaiting = false;
+      clearFrameCommitTimeout();
+      setNativeTerminalReady(true);
+      markLifecycle({
+        createPending: false,
+        didCreateNativeTerminal: true,
+        error: null,
+        nativeTerminalReady: true,
+        phase: "ready",
+      });
+    };
+
     markLifecycle({
       createPending: false,
       didCreateNativeTerminal: false,
       error: null,
       nativeTerminalReady: false,
       phase: "mounted",
+      presentationId,
     });
 
     if (!sessionLoaded) {
@@ -166,6 +182,14 @@ export function useTerminalNativeLifecycle({
       };
     }
 
+    subscriptions.push({
+      dispose: window.pier.terminal.onFrameCommitted((event) => {
+        if (frameGate.acceptFrame(event)) {
+          markNativeTerminalReady();
+        }
+      }),
+    });
+
     const sendFrameNow = () => {
       if (disposed || !didCreateNativeTerminal) {
         return;
@@ -174,6 +198,8 @@ export function useTerminalNativeLifecycle({
     };
 
     const markCreateFailure = (message: string) => {
+      frameCommitWaiting = false;
+      clearFrameCommitTimeout();
       createFailureLatched = true;
       rejectTerminalLaunch(initialLaunchId, message);
       setCreateError(message);
@@ -190,6 +216,42 @@ export function useTerminalNativeLifecycle({
     };
 
     const hasRenderableAnchor = () => readTerminalAnchorFrame(anchor) !== null;
+
+    const canWaitForCommittedFrame = (): boolean =>
+      panelVisible &&
+      windowFocused &&
+      document.visibilityState !== "hidden" &&
+      hasRenderableAnchor();
+
+    const syncFrameCommitTimeout = (): void => {
+      if (
+        disposed ||
+        createFailureLatched ||
+        lifecycleNativeTerminalReady ||
+        !frameCommitWaiting ||
+        !canWaitForCommittedFrame()
+      ) {
+        clearFrameCommitTimeout();
+        return;
+      }
+      if (frameCommitTimeout) {
+        return;
+      }
+      frameCommitTimeout = setTimeout(() => {
+        frameCommitTimeout = null;
+        if (!canWaitForCommittedFrame()) {
+          return;
+        }
+        markCreateFailure(translateRef.current("terminal.frameWaitFailed"));
+      }, TERMINAL_FRAME_COMMIT_TIMEOUT_MS);
+    };
+
+    subscriptions.push({
+      dispose: window.pier.window.onFocusChanged(({ focused }) => {
+        windowFocused = focused;
+        syncFrameCommitTimeout();
+      }),
+    });
 
     const isDisposed = () =>
       disposed || lifecycleVersionRef.current !== lifecycleVersion;
@@ -235,6 +297,7 @@ export function useTerminalNativeLifecycle({
           continuation?: string
         ): CreateTerminalArgs => ({
           panelId,
+          presentationId,
           frame,
           font: {
             family: computeMonoFontFamilyList(monoFontFamilyRef.current),
@@ -278,19 +341,24 @@ export function useTerminalNativeLifecycle({
 
         didCreateNativeTerminal = true;
         confirmTerminalLaunch(initialLaunchId);
-        setNativeTerminalReady(true);
-        markLifecycle({
-          createPending: false,
-          didCreateNativeTerminal: true,
-          error: null,
-          nativeTerminalReady: true,
-          phase: "ready",
-        });
         layoutRegistration = registerTerminalLayoutAnchor(panelId, anchor);
         renderableAnchorObserver?.disconnect();
         renderableAnchorObserver = null;
         layoutRegistration.flushTrailing("visibility");
         requestTerminalPresentation("visibility");
+        if (frameGate.markCreated()) {
+          markNativeTerminalReady();
+        } else {
+          frameCommitWaiting = true;
+          markLifecycle({
+            createPending: false,
+            didCreateNativeTerminal: true,
+            error: null,
+            nativeTerminalReady: false,
+            phase: "waiting_for_frame",
+          });
+          syncFrameCommitTimeout();
+        }
       })().finally(() => {
         createPromise = null;
       });
@@ -316,6 +384,8 @@ export function useTerminalNativeLifecycle({
 
     subscriptions.push(
       api.onDidVisibilityChange((e) => {
+        panelVisible = e.isVisible;
+        syncFrameCommitTimeout();
         if (e.isVisible) {
           ensureNativeTerminal()
             .then(() => {
@@ -334,6 +404,7 @@ export function useTerminalNativeLifecycle({
 
     subscriptions.push(
       api.onDidActiveChange((e) => {
+        syncFrameCommitTimeout();
         if (e.isActive) {
           ensureNativeTerminal()
             .then(() => {
@@ -364,9 +435,19 @@ export function useTerminalNativeLifecycle({
 
     subscriptions.push(
       api.onDidDimensionsChange(() => {
+        syncFrameCommitTimeout();
         ensureNativeTerminalIfRenderable();
         sendFrameNow();
       })
+    );
+
+    const handleDocumentVisibilityChange = (): void => {
+      syncFrameCommitTimeout();
+    };
+    document.addEventListener(
+      "visibilitychange",
+      handleDocumentVisibilityChange,
+      true
     );
 
     ensureNativeTerminalIfRenderable();
@@ -385,6 +466,13 @@ export function useTerminalNativeLifecycle({
         );
       }
       disposeTerminalPanelLifecycleDebug(panelId);
+      frameCommitWaiting = false;
+      clearFrameCommitTimeout();
+      document.removeEventListener(
+        "visibilitychange",
+        handleDocumentVisibilityChange,
+        true
+      );
       for (const s of subscriptions) {
         s.dispose();
       }

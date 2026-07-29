@@ -30,14 +30,12 @@ const WIDGET_SOURCES = [
   "packages/plugin-grok/src/renderer/usage-meter.tsx",
 ] as const;
 
-/** Settings + widget quota grids that must force single-window full width. */
-const QUOTA_LAYOUT_SOURCES = [
-  "packages/plugin-claude/src/renderer/account-display.tsx",
-  "packages/plugin-claude/src/renderer/usage-meter.tsx",
-  "packages/plugin-codex/src/renderer/account-display.tsx",
-  "packages/plugin-codex/src/renderer/usage-meter.tsx",
-  "packages/plugin-grok/src/renderer/account-display.tsx",
-  "packages/plugin-grok/src/renderer/usage-meter.tsx",
+const SHARED_QUOTA_LAYOUT_SOURCE =
+  "packages/plugin-api/src/account-usage/account-usage-metrics.tsx";
+const ACCOUNT_WIDGET_REGISTRATION_SOURCES = [
+  "packages/plugin-codex/src/renderer/index.tsx",
+  "packages/plugin-claude/src/renderer/index.tsx",
+  "packages/plugin-grok/src/renderer/index.tsx",
 ] as const;
 
 describe("widget size adaptation governance", () => {
@@ -82,10 +80,10 @@ describe("widget size adaptation governance", () => {
   });
 
   it("keeps the Codex quota collection intrinsic and complete", () => {
-    const contents = source(WIDGET_SOURCES[1]);
+    const contents = source(SHARED_QUOTA_LAYOUT_SOURCE);
     const shared = source("packages/ui/src/collection-auto-layout.ts");
 
-    expect(contents).toContain("data-limit-id");
+    expect(contents).toContain("data-metric-id");
     expect(contents).toContain("collectionAutoFitStyle");
     expect(contents).toContain("COLLECTION_QUOTA_ITEM_MIN_WIDTH");
     expect(shared).toContain("content-start");
@@ -120,26 +118,27 @@ describe("widget size adaptation governance", () => {
     }
   });
 
+  it("declares account widgets as contained so the host does not also scroll", () => {
+    for (const path of ACCOUNT_WIDGET_REGISTRATION_SOURCES) {
+      expect(
+        source(path),
+        `${path} should opt into contained content`
+      ).toContain('contentMode: "contained"');
+    }
+  });
+
   it("forces single-window quota meters to full width without auto-fit grid", () => {
     const shared = source("packages/ui/src/collection-auto-layout.ts");
     expect(shared).toContain('"single"');
     expect(shared).toContain("singleAs");
     expect(shared).toContain("auto-fit");
 
-    for (const path of QUOTA_LAYOUT_SOURCES) {
-      const contents = source(path);
-      expect(
-        contents,
-        `${path} must branch via collectionLayoutMode`
-      ).toContain("collectionLayoutMode");
-      expect(
-        contents,
-        `${path} must emit data-layout for the full-width path`
-      ).toContain("data-layout={");
-      // 单项满宽：block 或 flex 列；多列走 inline style auto-fit
-      expect(contents).toMatch(/singleAs:\s*"(block|flex)"/);
-      expect(contents).toContain("collectionAutoFitStyle");
-      expect(contents).toContain("w-full");
-    }
+    const contents = source(SHARED_QUOTA_LAYOUT_SOURCE);
+    expect(contents).toContain("collectionLayoutMode");
+    expect(contents).toContain("data-layout={");
+    // 单项满宽：block 或 flex 列；多列走 inline style auto-fit
+    expect(contents).toMatch(/singleAs:\s*"(block|flex)"/);
+    expect(contents).toContain("collectionAutoFitStyle");
+    expect(contents).toContain("w-full");
   });
 });

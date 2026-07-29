@@ -52,7 +52,6 @@ const DEFAULTS: ProjectPreferences = {
   agentCommandOverrides: {},
   worktreeRootPath: "",
   agentStatusHooks: true,
-  agentSessionTitleRefine: true,
   agentAttention: { ...DEFAULT_AGENT_ATTENTION_SETTINGS },
   notificationCenter: { ...DEFAULT_NOTIFICATION_CENTER_PREFS },
   gitAutoFetchEnabled: DEFAULT_GIT_AUTO_FETCH_ENABLED,

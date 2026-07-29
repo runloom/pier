@@ -1,15 +1,15 @@
-import { createAccountsWidgetRefreshAction } from "@pier/plugin-api/account-usage/renderer";
+import {
+  AccountWidgetFrame,
+  createAccountsWidgetRefreshAction,
+  resolveAccountWidgetPresentation,
+} from "@pier/plugin-api/account-usage/renderer";
 import type {
   ExternalRendererPluginContext,
   RendererWorkbenchWidgetAction,
   WorkbenchWidgetActionContext,
   WorkbenchWidgetComponentProps,
 } from "@pier/plugin-api/renderer";
-import {
-  widgetDensityFor,
-  widgetShellClassName,
-} from "@pier/ui/collection-auto-layout.ts";
-import { formatRelativeTime } from "@pier/ui/format.tsx";
+import { widgetDensityFor } from "@pier/ui/collection-auto-layout.ts";
 import {
   Item,
   ItemActions,
@@ -18,14 +18,14 @@ import {
   ItemMedia,
   ItemTitle,
 } from "@pier/ui/item.tsx";
-import { cn } from "@pier/ui/utils.ts";
 import { WidgetError, WidgetSkeleton } from "@pier/ui/widget-state.tsx";
 import { RefreshCw } from "lucide-react";
 import type { JSX } from "react";
 import {
   AccountAvatar,
+  AccountBadges,
   accountDisplayLabel,
-  accountMembershipSummary,
+  grokAccountMembership,
 } from "./account-display.tsx";
 import { AccountPicker } from "./account-picker.tsx";
 import {
@@ -72,29 +72,38 @@ export function AccountsWidget({
     (account) => account.id !== snapshot.activeAccountId
   );
   const usage = snapshot.activeUsage;
-  const fetchedLabel = usage
-    ? formatRelativeTime(usage.fetchedAt, Date.now(), context.i18n.language())
-    : null;
   const accountLabel = activeAccount
     ? accountDisplayLabel(activeAccount)
     : t("pier.grok.widget.noActiveAccount", "No active account");
-  const showFetchedInline = Boolean(fetchedLabel) && size.w >= 4;
-  // 小卡整段隐藏账号区，把高度留给额度；中/大卡再展示身份
-  const showAccountHeader = density !== "compact";
-  // 账号区可见时展示 membership；异常时也强制展示
-  const showMembershipSummary =
-    showAccountHeader || Boolean(activeAccount?.error);
+  const membership = activeAccount
+    ? grokAccountMembership(
+        activeAccount,
+        activeAccount.usage?.updatedAt ?? usage?.updatedAt ?? 0
+      )
+    : undefined;
+  const presentation = resolveAccountWidgetPresentation({
+    accountCount: snapshot.accounts.length,
+    density,
+    hasAccountError: Boolean(activeAccount?.error),
+    hasActiveAccount: Boolean(activeAccount),
+    ...(membership ? { membership } : {}),
+  });
 
   let usageContent: JSX.Element;
   if (!usage) {
     usageContent = <WidgetSkeleton data-slot="grok-usage-loading" />;
-  } else if (usage.status === "ok" || usage.windows.length > 0) {
+  } else if (usage.status === "ok" || usage.metrics.length > 0) {
     // 有 last-good 窗口时继续展示进度条（含 transient error 不清空）
     usageContent = (
       <UsageMeter
+        density={density}
         language={context.i18n.language()}
+        metrics={usage.metrics}
+        status={usage.status}
         t={t}
-        windows={usage.windows}
+        {...(usage.updatedAt === undefined
+          ? {}
+          : { updatedAt: usage.updatedAt })}
       />
     );
   } else if (isTransientUsageError(usage.error)) {
@@ -121,65 +130,61 @@ export function AccountsWidget({
     );
   }
 
+  let accountMetadata: JSX.Element | null = null;
+  if (activeAccount?.error) {
+    accountMetadata = (
+      <ItemDescription>
+        {t("pier.grok.widget.accountUnavailable", "Account unavailable")}
+      </ItemDescription>
+    );
+  } else if (activeAccount) {
+    accountMetadata = (
+      <AccountBadges
+        account={activeAccount}
+        language={context.i18n.language()}
+        mode={presentation.metadataMode}
+        t={t}
+      />
+    );
+  }
+
   return (
-    <div
-      className={cn(
-        "pier-grok-accounts-widget text-sm",
-        widgetShellClassName(density)
-      )}
+    <AccountWidgetFrame
+      className="pier-grok-accounts-widget text-sm"
       data-density={density}
       data-size-h={size.h}
       data-size-w={size.w}
       data-slot="grok-accounts-widget"
-    >
-      {showAccountHeader ? (
-        <Item className="shrink-0 flex-nowrap px-0 py-0" size="xs">
-          <ItemMedia align="center">
-            <AccountAvatar label={accountLabel} />
-          </ItemMedia>
-          <ItemContent className="min-w-0 basis-0">
-            <ItemTitle className="block w-full truncate" title={accountLabel}>
-              {accountLabel}
-            </ItemTitle>
-            {showMembershipSummary ? (
-              <ItemDescription>
-                <span>
-                  {activeAccount
-                    ? accountMembershipSummary(
-                        activeAccount,
-                        context.i18n.language(),
-                        t
-                      )
-                    : t(
-                        "pier.grok.widget.noActiveAccount",
-                        "No active account"
-                      )}
-                </span>
-                {showFetchedInline ? (
-                  <span>
-                    {" · "}
-                    {fetchedLabel}
-                  </span>
-                ) : null}
-              </ItemDescription>
+      density={density}
+      header={
+        presentation.showHeader ? (
+          <Item className="shrink-0 flex-nowrap px-0 py-0" size="xs">
+            {presentation.showAvatar ? (
+              <ItemMedia align="center">
+                <AccountAvatar label={accountLabel} />
+              </ItemMedia>
             ) : null}
-          </ItemContent>
-          {switchableAccounts.length > 0 ? (
-            <ItemActions>
-              <AccountPicker
-                accounts={switchableAccounts}
-                context={context}
-                t={t}
-              />
-            </ItemActions>
-          ) : null}
-        </Item>
-      ) : null}
-
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col content-start">
-        {usageContent}
-      </div>
-    </div>
+            <ItemContent className="min-w-0 basis-0">
+              <ItemTitle className="block w-full truncate" title={accountLabel}>
+                {accountLabel}
+              </ItemTitle>
+              {accountMetadata}
+            </ItemContent>
+            {presentation.showSwitcher && switchableAccounts.length > 0 ? (
+              <ItemActions>
+                <AccountPicker
+                  accounts={switchableAccounts}
+                  context={context}
+                  t={t}
+                />
+              </ItemActions>
+            ) : null}
+          </Item>
+        ) : undefined
+      }
+    >
+      {usageContent}
+    </AccountWidgetFrame>
   );
 }
 

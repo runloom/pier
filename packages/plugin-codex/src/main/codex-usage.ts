@@ -38,7 +38,7 @@ export function fetchCodexUsage(
   opts?: { accountHomeDir?: string; spawnImpl?: SpawnFn }
 ): Promise<AccountUsageResult> {
   if (signal.aborted) {
-    return Promise.resolve({ status: "error", error: "Aborted", windows: [] });
+    return Promise.resolve({ status: "error", error: "Aborted", metrics: [] });
   }
   const spawnImpl = opts?.spawnImpl ?? spawn;
 
@@ -90,7 +90,7 @@ export function fetchCodexUsage(
 
     function onAbort(): void {
       settle(
-        { status: "error", error: "Aborted", windows: [] },
+        { status: "error", error: "Aborted", metrics: [] },
         { kill: true }
       );
     }
@@ -102,14 +102,14 @@ export function fetchCodexUsage(
     // 炸掉 Electron main —— 收敛为 usage error 态。
     child.stdin?.on("error", () => {
       settle(
-        { status: "error", error: "stdin write failed", windows: [] },
+        { status: "error", error: "stdin write failed", metrics: [] },
         { kill: true }
       );
     });
 
     timeout = setTimeout(() => {
       settle(
-        { status: "error", error: "RPC timeout", windows: [] },
+        { status: "error", error: "RPC timeout", metrics: [] },
         { kill: true }
       );
     }, RPC_TIMEOUT_MS);
@@ -137,7 +137,7 @@ export function fetchCodexUsage(
       // 用户只看到笼统的 "RPC process exited unexpectedly"，真实错误被吞。
       if (error) {
         settle(
-          { status: "error", error: error.message, windows: [] },
+          { status: "error", error: error.message, metrics: [] },
           { kill: true }
         );
         return;
@@ -152,7 +152,7 @@ export function fetchCodexUsage(
     ): void {
       if (error) {
         settle(
-          { status: "error", error: error.message, windows: [] },
+          { status: "error", error: error.message, metrics: [] },
           { kill: true }
         );
         return;
@@ -202,7 +202,7 @@ export function fetchCodexUsage(
       settle({
         status: "error",
         error: isEnoent ? "Codex CLI not found" : err.message,
-        windows: [],
+        metrics: [],
       });
     });
 
@@ -210,7 +210,7 @@ export function fetchCodexUsage(
       settle({
         status: "error",
         error: "RPC process exited unexpectedly",
-        windows: [],
+        metrics: [],
       });
     });
   });

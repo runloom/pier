@@ -7,7 +7,10 @@
 
 import type { AgentSessionTitleSource } from "@shared/contracts/foreground-activity.ts";
 import { readTerminalPanelSession } from "../../../state/terminal-session-state.ts";
-import { setTerminalPanelSessionTitle } from "../../../state/terminal-session-title.ts";
+import {
+  reconcileTerminalPanelSessionTitleScope,
+  setTerminalPanelSessionTitle,
+} from "../../../state/terminal-session-title.ts";
 import {
   findAppWindowByElectronId,
   findWindowContext,
@@ -43,6 +46,7 @@ export async function writeAgentSessionTitle(args: {
   aggregator: ForegroundActivityAggregator;
   panelId: string;
   source: AgentSessionTitleSource;
+  sessionId?: string | undefined;
   title: string;
   windowId: string;
 }): Promise<{ applied: boolean; ok: boolean }> {
@@ -54,7 +58,11 @@ export async function writeAgentSessionTitle(args: {
     const persisted = await setTerminalPanelSessionTitle(
       sessionScope,
       args.panelId,
-      { source: args.source, title: args.title }
+      {
+        source: args.source,
+        title: args.title,
+        ...(args.sessionId ? { sessionId: args.sessionId } : {}),
+      }
     );
     if (!persisted.ok) {
       return { applied: false, ok: false };
@@ -62,16 +70,55 @@ export async function writeAgentSessionTitle(args: {
     if (persisted.applied && persisted.title) {
       args.aggregator.setAgentSessionTitle(args.windowId, args.panelId, {
         source: persisted.source ?? args.source,
+        ...(persisted.sessionId ? { sessionId: persisted.sessionId } : {}),
         title: persisted.title,
       });
       return { applied: true, ok: true };
     }
-    args.aggregator.hydrateAgentSessionTitle(args.windowId, args.panelId, {
-      source: args.source,
-      title: args.title,
-    });
+    if (persisted.title && persisted.source) {
+      args.aggregator.hydrateAgentSessionTitle(args.windowId, args.panelId, {
+        source: persisted.source,
+        ...(persisted.sessionId ? { sessionId: persisted.sessionId } : {}),
+        title: persisted.title,
+      });
+    }
     return { applied: false, ok: true };
   } catch {
     return { applied: false, ok: false };
+  }
+}
+
+/** 将持久化标题切换到新的主会话作用域，并同步 FA 的规范镜像。 */
+export async function reconcileAgentSessionTitleScope(args: {
+  aggregator: ForegroundActivityAggregator;
+  panelId: string;
+  sessionId?: string | undefined;
+  windowId: string;
+}): Promise<boolean> {
+  try {
+    const sessionScope = sessionScopeForFaWindowId(args.windowId);
+    if (!sessionScope) {
+      return false;
+    }
+    const persisted = await reconcileTerminalPanelSessionTitleScope(
+      sessionScope,
+      args.panelId,
+      args.sessionId
+    );
+    if (!persisted.ok) {
+      return false;
+    }
+    if (persisted.title && persisted.source) {
+      args.aggregator.hydrateAgentSessionTitle(args.windowId, args.panelId, {
+        source: persisted.source,
+        ...(persisted.sessionId ? { sessionId: persisted.sessionId } : {}),
+        title: persisted.title,
+      });
+    } else {
+      args.aggregator.clearAgentSessionTitle(args.windowId, args.panelId);
+    }
+    return true;
+  } catch {
+    return false;
   }
 }

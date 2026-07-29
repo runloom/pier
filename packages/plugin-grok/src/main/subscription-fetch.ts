@@ -2,7 +2,9 @@ import type { FetchImpl } from "./grok-usage-types.ts";
 import {
   type GrokSubscriptionInfo,
   parseGrokSubscriptionResult,
+  parseGrokUserSubscriptionResult,
 } from "./subscription-parse.ts";
+import { parseGrokTaskUsage } from "./task-usage.ts";
 import type { AccountUsageResult } from "./types.ts";
 import {
   createTimeoutSignal,
@@ -11,6 +13,9 @@ import {
 
 /** Web membership endpoint (not cli-chat-proxy). Soft-fail only. */
 export const GROK_SUBSCRIPTIONS_URL = "https://grok.com/rest/subscriptions";
+export const GROK_USER_URL =
+  "https://cli-chat-proxy.grok.com/v1/user?include=subscription";
+export const GROK_RATE_LIMITS_URL = "https://grok.com/rest/rate-limits";
 
 /** Keep short so billing remains the critical path. */
 export const SUBSCRIPTION_HOP_TIMEOUT_MS = 8000;
@@ -66,6 +71,69 @@ export async function fetchGrokSubscriptionSoft(options: {
   }
 }
 
+async function fetchGrokUserSubscriptionSoft(options: {
+  fetchImpl: FetchImpl;
+  overall?: AbortSignal | null;
+  sessionKey: string;
+  signal: AbortSignal;
+  userId?: string | null;
+}): Promise<GrokSubscriptionInfo | null> {
+  if (options.signal.aborted || options.overall?.aborted) return null;
+  try {
+    const response = await options.fetchImpl(GROK_USER_URL, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${options.sessionKey}`,
+        "User-Agent": CLI_USER_AGENT,
+        "x-xai-token-auth": "xai-grok-cli",
+        "x-grok-client-mode": "cli",
+        "x-grok-client-version": "pier-plugin-grok/1.0.0",
+        ...(options.userId ? { "x-userid": options.userId } : {}),
+      },
+      method: "GET",
+      signal: mergeAbortSignals([
+        options.signal,
+        options.overall,
+        createTimeoutSignal(SUBSCRIPTION_HOP_TIMEOUT_MS),
+      ]),
+    });
+    if (!response.ok || options.signal.aborted || options.overall?.aborted) {
+      return null;
+    }
+    return parseGrokUserSubscriptionResult(JSON.parse(await response.text()));
+  } catch {
+    return null;
+  }
+}
+
+async function fetchGrokTaskUsageSoft(options: {
+  fetchImpl: FetchImpl;
+  sessionKey: string;
+  signal: AbortSignal;
+  userId?: string | null;
+}): Promise<ReturnType<typeof parseGrokTaskUsage>> {
+  try {
+    const response = await options.fetchImpl(GROK_RATE_LIMITS_URL, {
+      headers: {
+        Accept: "application/json",
+        Authorization: `Bearer ${options.sessionKey}`,
+        "User-Agent": CLI_USER_AGENT,
+        "x-xai-token-auth": "xai-grok-cli",
+        ...(options.userId ? { "x-userid": options.userId } : {}),
+      },
+      method: "GET",
+      signal: mergeAbortSignals([
+        options.signal,
+        createTimeoutSignal(SUBSCRIPTION_HOP_TIMEOUT_MS),
+      ]),
+    });
+    if (!response.ok || options.signal.aborted) return [];
+    return parseGrokTaskUsage(JSON.parse(await response.text()));
+  } catch {
+    return [];
+  }
+}
+
 /**
  * Attach best-effort membership to a billing result. Never fails the usage
  * pipeline: a soft-null subscription leaves the result untouched.
@@ -83,13 +151,50 @@ export async function withSoftSubscription(
   if (options.caller.aborted || options.overall?.aborted) {
     return result;
   }
-  const subscription = await fetchGrokSubscriptionSoft({
-    fetchImpl: options.fetchImpl,
-    overall: options.overall,
-    sessionKey: options.sessionKey,
-    signal: options.caller,
-    ...(options.userId ? { userId: options.userId } : {}),
-  });
-  if (!subscription) return result;
-  return { ...result, subscription };
+  const membershipPromise = (async (): Promise<GrokSubscriptionInfo | null> => {
+    // Start both independent probes together. Await the authoritative endpoint
+    // first, but reuse the already-running fallback when the direct probe
+    // soft-fails so their timeout windows never add up.
+    const directPromise = fetchGrokSubscriptionSoft({
+      fetchImpl: options.fetchImpl,
+      overall: options.overall,
+      sessionKey: options.sessionKey,
+      signal: options.caller,
+      ...(options.userId ? { userId: options.userId } : {}),
+    });
+    const fallbackAbort = new AbortController();
+    const fallbackPromise = fetchGrokUserSubscriptionSoft({
+      fetchImpl: options.fetchImpl,
+      overall: options.overall,
+      sessionKey: options.sessionKey,
+      signal: mergeAbortSignals([options.caller, fallbackAbort.signal]),
+      ...(options.userId ? { userId: options.userId } : {}),
+    });
+    const direct = await directPromise;
+    if (direct) {
+      fallbackAbort.abort();
+      return direct;
+    }
+    return await fallbackPromise;
+  })();
+  const taskMetricsPromise =
+    result.status === "ok"
+      ? fetchGrokTaskUsageSoft({
+          fetchImpl: options.fetchImpl,
+          sessionKey: options.sessionKey,
+          signal: options.caller,
+          ...(options.userId ? { userId: options.userId } : {}),
+        })
+      : Promise.resolve([]);
+  const [subscription, taskMetrics] = await Promise.all([
+    membershipPromise,
+    taskMetricsPromise,
+  ]);
+  return {
+    ...result,
+    metrics: [...result.metrics, ...taskMetrics],
+    ...(subscription
+      ? { subscription, subscriptionResolved: true as const }
+      : {}),
+  };
 }

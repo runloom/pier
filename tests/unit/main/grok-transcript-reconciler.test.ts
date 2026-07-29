@@ -6,10 +6,12 @@ import type {
   AgentHookEventPayload,
   AgentHookEventPayloadV1,
 } from "@shared/contracts/agent-session.ts";
+import { agentHookEventSchema } from "@shared/contracts/agent-session.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   classifyGrokUpdatesLine,
   createGrokTranscriptReconciler,
+  defaultGrokSessionsRoot,
 } from "../../../src/main/services/agents/integrations/grok-transcript-reconciler.ts";
 
 function hookEvent(
@@ -87,6 +89,26 @@ describe("classifyGrokUpdatesLine", () => {
   });
 });
 
+describe("defaultGrokSessionsRoot", () => {
+  it("使用去除两端空白后的 GROK_HOME", () => {
+    expect(
+      defaultGrokSessionsRoot({
+        GROK_HOME: "  /custom/grok  ",
+        HOME: "/home/test",
+      })
+    ).toBe("/custom/grok/sessions");
+  });
+
+  it("空白 GROK_HOME 回落 HOME/.grok", () => {
+    expect(
+      defaultGrokSessionsRoot({
+        GROK_HOME: "   ",
+        HOME: "/home/test",
+      })
+    ).toBe("/home/test/.grok/sessions");
+  });
+});
+
 describe("createGrokTranscriptReconciler", () => {
   let dir: string;
   let sessionsRoot: string;
@@ -123,9 +145,10 @@ describe("createGrokTranscriptReconciler", () => {
       nativeEvent: "grok.updates.turn_completed.cancelled",
       panelId: "panel-1",
       sessionId: "session-1",
-      v: 2,
+      v: 3,
       windowId: "1",
     });
+    expect(agentHookEventSchema.safeParse(received[0]).success).toBe(true);
     reconciler.dispose();
   });
 
@@ -166,6 +189,51 @@ describe("createGrokTranscriptReconciler", () => {
 
     await vi.waitFor(() => expect(received).toHaveLength(1));
     expect(received[0]?.event).toBe("TurnInterrupted");
+    reconciler.dispose();
+  });
+
+  it("首次扫描缺失不会永久缓存，文件稍后创建仍可建立终态对账", async () => {
+    await rm(updatesPath);
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createGrokTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      sessionsRoot,
+    });
+
+    await reconciler.observe(hookEvent({ sessionId: "session-1" }));
+    writeFileSync(updatesPath, '{"method":"session/update","params":{}}\n');
+    await reconciler.observe(hookEvent({ sessionId: "session-1" }));
+    appendFileSync(updatesPath, turnCompletedLine("cancelled"));
+
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(received[0]).toMatchObject({
+      event: "TurnInterrupted",
+      nativeEvent: "grok.updates.turn_completed.cancelled",
+    });
+    reconciler.dispose();
+  });
+
+  it("缓存路径消失后重新扫描同 session 的替代 updates.jsonl", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createGrokTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      sessionsRoot,
+    });
+    await reconciler.observe(hookEvent({ sessionId: "session-1" }));
+    await rm(updatesPath);
+    const replacementDir = join(sessionsRoot, "replacement-cwd", "session-1");
+    await mkdir(replacementDir, { recursive: true });
+    const replacementPath = join(replacementDir, "updates.jsonl");
+    writeFileSync(replacementPath, '{"method":"session/update","params":{}}\n');
+
+    await reconciler.observe(hookEvent({ sessionId: "session-1" }));
+    appendFileSync(replacementPath, turnCompletedLine("end_turn"));
+
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    expect(received[0]).toMatchObject({
+      event: "TurnCompleted",
+      nativeEvent: "grok.updates.turn_completed.end_turn",
+    });
     reconciler.dispose();
   });
 

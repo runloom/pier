@@ -44,6 +44,9 @@ final class TerminalSurfaceCoordinator {
     var platformSetup: ((inout ghostty_surface_config_s) -> Void)?
     var onMetricsUpdate: (() -> Void)?
     var onCellSizeDidChange: (() -> Void)?
+    var onPresentationRequested: ((TerminalFramePresentationRequest) -> Void)?
+    var beginFramePresentationTransaction: (() -> Void)?
+    var endFramePresentationTransaction: (() -> Void)?
 
     /// Called after every presented frame.
     ///
@@ -59,7 +62,7 @@ final class TerminalSurfaceCoordinator {
     /// Platform views use this hook to silently enforce the correct
     /// `contentsScale` and `frame` on sublayers after each render,
     /// correcting any drift introduced by ghostty within a single frame.
-    var onPostRender: (() -> Void)?
+    var onPostRender: ((TerminalFramePresentation) -> Void)?
 
     private var lastMetrics: TerminalViewportMetrics?
     private var isDisplayVisible = true
@@ -77,11 +80,14 @@ final class TerminalSurfaceCoordinator {
     private var lastDrawnGhosttyRenderReadySequence: UInt64 = 0
     private var lastRenderReadyUptime: TimeInterval?
     private var lastDrawUptime: TimeInterval?
+    private var presentationRequestSequence: UInt64 = 0
+    private var currentPresentationRequest: TerminalFramePresentationRequest?
 
     var pierDiagnostics: TerminalSurfaceRenderDiagnostics {
         TerminalSurfaceRenderDiagnostics(
             drawPending: drawPending,
             drawSequence: drawSequence,
+            framePresentationRequestSequence: presentationRequestSequence,
             ghosttyRenderReadySequence: ghosttyRenderReadySequence,
             hostRefreshRequestSequence: hostRefreshRequestSequence,
             lastDrawUptime: lastDrawUptime,
@@ -224,6 +230,20 @@ final class TerminalSurfaceCoordinator {
 
         surface.setContentScale(x: scale, y: scale)
         surface.setSize(width: pixelWidth, height: pixelHeight)
+        if currentPresentationRequest?.surfaceGeneration != surfaceGeneration
+            || currentPresentationRequest?.pixelWidth != pixelWidth
+            || currentPresentationRequest?.pixelHeight != pixelHeight
+        {
+            presentationRequestSequence &+= 1
+            let request = TerminalFramePresentationRequest(
+                pixelHeight: pixelHeight,
+                pixelWidth: pixelWidth,
+                requestSequence: presentationRequestSequence,
+                surfaceGeneration: surfaceGeneration
+            )
+            currentPresentationRequest = request
+            onPresentationRequested?(request)
+        }
 
         guard let surfaceSize = surface.size(),
               surfaceSize.columns > 0, surfaceSize.rows > 0
@@ -273,7 +293,18 @@ final class TerminalSurfaceCoordinator {
 
     func resizeAndRenderSynchronously() {
         synchronizeMetrics()
-        renderImmediately()
+        requestSurfaceRefresh(
+            generation: surfaceGeneration,
+            reason: "host-resize"
+        )
+    }
+
+    func requestHostPresentationFrame() {
+        renewCurrentPresentationRequest()
+        requestSurfaceRefresh(
+            generation: surfaceGeneration,
+            reason: "host-presentation"
+        )
     }
 
     func setDisplayVisible(_ visible: Bool) {
@@ -286,6 +317,7 @@ final class TerminalSurfaceCoordinator {
         surface?.setOcclusion(effectiveSurfaceVisible)
 
         if canRenderFrame {
+            renewCurrentPresentationRequest()
             requestSurfaceRefresh(
                 generation: surfaceGeneration,
                 reason: "visibility-restored"
@@ -379,6 +411,7 @@ final class TerminalSurfaceCoordinator {
         surface?.free()
         surface = nil
         lastMetrics = nil
+        currentPresentationRequest = nil
         if let previousBridge {
             controller?.remove(previousBridge)
         }
@@ -412,6 +445,24 @@ final class TerminalSurfaceCoordinator {
         refreshPending = true
         TerminalDebugLog.log(.render, "refresh requested reason=\(reason)")
         scheduleRefreshIfNeeded(generation: generation)
+    }
+
+    private func renewCurrentPresentationRequest() {
+        guard let currentPresentationRequest,
+              currentPresentationRequest.surfaceGeneration == surfaceGeneration
+        else {
+            synchronizeMetrics()
+            return
+        }
+        presentationRequestSequence &+= 1
+        let request = TerminalFramePresentationRequest(
+            pixelHeight: currentPresentationRequest.pixelHeight,
+            pixelWidth: currentPresentationRequest.pixelWidth,
+            requestSequence: presentationRequestSequence,
+            surfaceGeneration: surfaceGeneration
+        )
+        self.currentPresentationRequest = request
+        onPresentationRequested?(request)
     }
 
     private func scheduleRefreshIfNeeded(generation: UInt64) {
@@ -458,8 +509,7 @@ final class TerminalSurfaceCoordinator {
             lastDrawnGhosttyRenderReadySequence = ghosttyRenderReadySequence
             lastDrawUptime = ProcessInfo.processInfo.systemUptime
             TerminalDebugLog.log(.render, "surface draw ready frame")
-            surface?.draw()
-            onPostRender?()
+            drawCurrentSurface()
         }
     }
 
@@ -491,7 +541,22 @@ final class TerminalSurfaceCoordinator {
         lastDrawUptime = ProcessInfo.processInfo.systemUptime
         TerminalDebugLog.log(.render, "surface synchronous refresh and draw")
         surface?.refresh()
+        drawCurrentSurface()
+    }
+
+    private func drawCurrentSurface() {
+        beginFramePresentationTransaction?()
+        defer { endFramePresentationTransaction?() }
         surface?.draw()
-        onPostRender?()
+        guard let request = currentPresentationRequest else { return }
+        onPostRender?(
+            TerminalFramePresentation(
+                drawSequence: drawSequence,
+                pixelHeight: request.pixelHeight,
+                pixelWidth: request.pixelWidth,
+                requestSequence: request.requestSequence,
+                surfaceGeneration: request.surfaceGeneration
+            )
+        )
     }
 }

@@ -47,6 +47,7 @@ export const plugin: ExternalRendererPluginModule = {
           <AccountsWidgetImpl context={context} {...props} />
         </CodexRendererRoot>
       ),
+      contentMode: "contained",
     });
     const disposeSettings = context.settingsPages.register({
       id: "pier.codex.accounts",

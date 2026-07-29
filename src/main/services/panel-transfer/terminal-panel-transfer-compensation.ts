@@ -36,9 +36,11 @@ export interface StagedTransfer {
   phase: TerminalPanelTransferPhase;
   sessionToken: TerminalPanelOwnershipRollbackToken | null;
   sourceElectronWindowId: string;
+  sourcePresentationId: number | null;
   sourceRecordId: string;
   sourceRuntimeWindowId: string;
   targetElectronWindowId: string;
+  targetPresentationId: number | null;
   targetRecordId: string;
   targetRuntimeWindowId: string;
   transferId: string;
@@ -152,12 +154,18 @@ export function createTransferCompensation(
       case "native":
         if (sourceWin && targetWin) {
           const addon = deps.getAddon();
-          addon?.moveTerminal({
+          const movedBack = addon?.moveTerminal({
             fromNativePanelId: scopedNativeKey(targetWin.id, staged.panelId),
             toNativePanelId: scopedNativeKey(sourceWin.id, staged.panelId),
             toParentHandle: sourceWin.getNativeWindowHandle(),
             toBrowserWindowId: sourceWin.id,
           });
+          if (movedBack && staged.sourcePresentationId !== null) {
+            addon?.requestTerminalPresentation({
+              nativePanelId: scopedNativeKey(sourceWin.id, staged.panelId),
+              presentationId: staged.sourcePresentationId,
+            });
+          }
         }
         break;
       default:

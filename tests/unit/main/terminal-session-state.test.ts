@@ -2,6 +2,7 @@ import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type * as TerminalSessionStateModule from "@main/state/terminal-session-state.ts";
+import type * as TerminalSessionTitleModule from "@main/state/terminal-session-title.ts";
 import type * as TerminalSessionTransferModule from "@main/state/terminal-session-transfer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
@@ -37,12 +38,15 @@ function context(root: string, updatedAt = 1_772_000_000_000): PanelContext {
 }
 
 async function loadTerminalSessionState(): Promise<
-  typeof TerminalSessionStateModule & typeof TerminalSessionTransferModule
+  typeof TerminalSessionStateModule &
+    typeof TerminalSessionTitleModule &
+    typeof TerminalSessionTransferModule
 > {
   // Dynamic import is required because each test resets modules and mocks electron app.getPath before this state module resolves userData.
   const state = await import("@main/state/terminal-session-state.ts");
+  const title = await import("@main/state/terminal-session-title.ts");
   const transfer = await import("@main/state/terminal-session-transfer.ts");
-  return { ...state, ...transfer };
+  return { ...state, ...title, ...transfer };
 }
 
 describe("terminal session state", () => {
@@ -100,6 +104,100 @@ describe("terminal session state", () => {
     ).resolves.toMatchObject({
       context: pier,
       title: "Claude Code",
+    });
+  });
+
+  it("returns the canonical higher-rank title when a lower-rank write is rejected", async () => {
+    const { ensureTerminalPanelSession, setTerminalPanelSessionTitle } =
+      await loadTerminalSessionState();
+    await ensureTerminalPanelSession("main", "terminal-title");
+    await setTerminalPanelSessionTitle("main", "terminal-title", {
+      sessionId: "session-1",
+      source: "user",
+      title: "用户标题",
+    });
+
+    await expect(
+      setTerminalPanelSessionTitle("main", "terminal-title", {
+        sessionId: "session-1",
+        source: "provider",
+        title: "自动标题",
+      })
+    ).resolves.toEqual({
+      applied: false,
+      ok: true,
+      sessionId: "session-1",
+      source: "user",
+      title: "用户标题",
+    });
+  });
+
+  it("clears a title when SessionStart switches to a different known session", async () => {
+    const {
+      ensureTerminalPanelSession,
+      readTerminalPanelSession,
+      reconcileTerminalPanelSessionTitleScope,
+      setTerminalPanelSessionTitle,
+    } = await loadTerminalSessionState();
+    await ensureTerminalPanelSession("main", "terminal-title");
+    await setTerminalPanelSessionTitle("main", "terminal-title", {
+      sessionId: "session-old",
+      source: "provider",
+      title: "旧会话",
+    });
+
+    await expect(
+      reconcileTerminalPanelSessionTitleScope(
+        "main",
+        "terminal-title",
+        "session-new"
+      )
+    ).resolves.toEqual({ applied: true, ok: true });
+    await expect(
+      readTerminalPanelSession("main", "terminal-title")
+    ).resolves.not.toMatchObject({
+      sessionTitle: expect.anything(),
+      sessionTitleSource: expect.anything(),
+    });
+
+    await expect(
+      setTerminalPanelSessionTitle("main", "terminal-title", {
+        sessionId: "session-new",
+        source: "prompt",
+        title: "新会话",
+      })
+    ).resolves.toMatchObject({
+      applied: true,
+      sessionId: "session-new",
+      source: "prompt",
+      title: "新会话",
+    });
+  });
+
+  it("binds a legacy unscoped title to the first reliable session without rewriting it", async () => {
+    const {
+      ensureTerminalPanelSession,
+      reconcileTerminalPanelSessionTitleScope,
+      setTerminalPanelSessionTitle,
+    } = await loadTerminalSessionState();
+    await ensureTerminalPanelSession("main", "terminal-legacy");
+    await setTerminalPanelSessionTitle("main", "terminal-legacy", {
+      source: "user",
+      title: "历史标题",
+    });
+
+    await expect(
+      reconcileTerminalPanelSessionTitleScope(
+        "main",
+        "terminal-legacy",
+        "session-1"
+      )
+    ).resolves.toEqual({
+      applied: true,
+      ok: true,
+      sessionId: "session-1",
+      source: "user",
+      title: "历史标题",
     });
   });
 

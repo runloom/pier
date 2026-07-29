@@ -478,12 +478,6 @@ export const settings = {
       env: "启动环境变量",
       envDesc: "启动此智能体时附加的环境变量",
     },
-    sessionTitleRefine: {
-      label: "自动命名会话",
-      description:
-        "首轮对话结束后，把标签页标题改写成更贴切的任务名。关闭后仍会按你的第一句话命名，只是不再调用智能体，也不消耗额度。",
-      failed: "无法更新会话命名设置",
-    },
     statusHooks: {
       label: "智能体状态提示",
       description:

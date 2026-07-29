@@ -22,8 +22,8 @@ const AMP_PLUGIN_FILE = "pier-agent-status.ts";
 const AMP_PLUGIN_MARKER = pierManagedPluginMarker();
 
 /**
- * amp.on 原生事件 → pier 规范事件名。
- * amp 只有会话/回合/工具五个事件, 无 subagent/permission 细分。
+ * amp.on 原生事件 → Pier 规范事件名。
+ * `agent.end` 的 status 是真实回合结果，必须分支保存，不能压成权威 Stop。
  */
 const AMP_EVENT_MAP: ReadonlyArray<{
   nativeEvent: string;
@@ -31,9 +31,24 @@ const AMP_EVENT_MAP: ReadonlyArray<{
 }> = [
   { nativeEvent: "session.start", pierEvent: "SessionStart" },
   { nativeEvent: "agent.start", pierEvent: "PromptSubmit" },
-  { nativeEvent: "tool.call", pierEvent: "ToolStart" },
-  { nativeEvent: "tool.result", pierEvent: "ToolComplete" },
-  { nativeEvent: "agent.end", pierEvent: "Stop" },
+  { nativeEvent: "thread.state.running", pierEvent: "running" },
+  {
+    nativeEvent: "thread.state.awaiting-approval",
+    pierEvent: "InteractionRequested",
+  },
+  {
+    nativeEvent: "thread.state.running.resolved",
+    pierEvent: "InteractionResolved",
+  },
+  { nativeEvent: "thread.state.idle", pierEvent: "InteractionResolved" },
+  {
+    nativeEvent: "thread.state.error.resolved",
+    pierEvent: "InteractionResolved",
+  },
+  { nativeEvent: "thread.state.error", pierEvent: "error" },
+  { nativeEvent: "agent.end.done", pierEvent: "TurnCompleted" },
+  { nativeEvent: "agent.end.error", pierEvent: "error" },
+  { nativeEvent: "agent.end.cancelled", pierEvent: "TurnInterrupted" },
 ];
 
 export function ampPluginPath(): string {
@@ -82,7 +97,25 @@ function pierSessionIdFrom(values) {
   return undefined;
 }
 
+function pierFirstString(values, directKeys, nestedKeys) {
+  for (const value of values) {
+    if (!value || typeof value !== "object") continue;
+    for (const key of directKeys) {
+      if (typeof value[key] === "string" && value[key]) return value[key];
+    }
+    for (const nestedKey of nestedKeys) {
+      const nested = value[nestedKey];
+      if (!nested || typeof nested !== "object") continue;
+      if (typeof nested.id === "string" && nested.id) return nested.id;
+    }
+  }
+  return undefined;
+}
+
 function emitPierEvent(nativeEvent, ...values) {
+  const nativeState = nativeEvent.startsWith("thread.state.")
+    ? nativeEvent.split(".")[2]
+    : pierFirstString(values, ["status"], []);
   const pierEvent = PIER_EVENT_MAP[nativeEvent];
   if (!pierEvent) return;
   const log = process.env.PIER_AGENT_EVENT_LOG;
@@ -90,10 +123,15 @@ function emitPierEvent(nativeEvent, ...values) {
   const windowId = process.env.PIER_WINDOW_ID;
   if (!log || !panelId || !windowId) return;
   const sessionId = pierSessionIdFrom(values);
+  const turnId = pierFirstString(
+    values,
+    ["id", "turnId", "turnID", "turn_id", "messageId", "messageID", "message_id"],
+    []
+  );
   const promptSnippet =
     pierEvent === "PromptSubmit" ? pierPromptSnippetFrom(...values) : undefined;
   const line = JSON.stringify({
-    v: 2,
+    v: 3,
     kind: "agentEvent",
     ts: Date.now() * 1_000_000,
     panelId,
@@ -103,6 +141,18 @@ function emitPierEvent(nativeEvent, ...values) {
     event: pierEvent,
     nativeEvent,
     ...(sessionId ? { sessionId } : {}),
+    ...(turnId ? { turnId } : {}),
+    ...(nativeState ? { nativeState } : {}),
+    ...(pierEvent === "InteractionRequested" ||
+    pierEvent === "InteractionResolved"
+      ? { interactionKind: "external-block" }
+      : {}),
+    ...(pierEvent === "InteractionResolved"
+      ? {
+          interactionOutcome:
+            nativeState === "error" ? "failed" : "completed",
+        }
+      : {}),
     ...(promptSnippet ? { promptSnippet } : {}),
   }) + "\\n";
   try {
@@ -116,25 +166,110 @@ export default function (amp) {
   // 不做加载合成 SessionStart：amp 自身的 session.start 是真实会话开始
   // 信号（下方订阅）；合成版在插件工厂按会话/子代理多次执行的宿主上会
   // 打穿主状态（omp task subagent 教训）。图标点亮由 launch 先验层承担。
-  amp.on("session.start", (...args) => {
-    emitPierEvent("session.start", ...args);
+  const blockedThreads = new Set();
+  const threadGenerations = new Map();
+  const threadSubscriptions = new Map();
+  let disposed = false;
+  let nextGeneration = 0;
+
+  function applyThreadState(thread, state) {
+    const values = [{ thread: { id: thread.id } }];
+    if (state === "awaiting-approval") {
+      if (blockedThreads.has(thread.id)) return;
+      blockedThreads.add(thread.id);
+      emitPierEvent("thread.state.awaiting-approval", ...values);
+      return;
+    }
+    if (blockedThreads.delete(thread.id)) {
+      emitPierEvent("thread.state." + state + (state === "idle" ? "" : ".resolved"), ...values);
+    }
+    if (state === "running" || state === "error") {
+      emitPierEvent("thread.state." + state, ...values);
+    }
+  }
+
+  function isCurrentObservation(threadId, generation) {
+    return (
+      !disposed &&
+      threadGenerations.get(threadId) === generation
+    );
+  }
+
+  function observeThread(thread) {
+    if (
+      disposed ||
+      !thread ||
+      typeof thread.id !== "string" ||
+      !thread.state
+    ) return;
+    if (threadSubscriptions.has(thread.id)) return;
+    const generation = ++nextGeneration;
+    threadGenerations.set(thread.id, generation);
+    let seenUpdate = false;
+    let subscription;
+    try {
+      subscription = thread.state.subscribe((state) => {
+        if (!isCurrentObservation(thread.id, generation)) return;
+        seenUpdate = true;
+        applyThreadState(thread, state);
+      });
+    } catch {
+      if (threadGenerations.get(thread.id) === generation) {
+        threadGenerations.delete(thread.id);
+      }
+      return;
+    }
+    threadSubscriptions.set(thread.id, subscription);
+    if (typeof thread.state.get === "function") {
+      let snapshot;
+      try {
+        snapshot = thread.state.get();
+      } catch {
+        return;
+      }
+      Promise.resolve(snapshot).then(
+        (state) => {
+          if (
+            isCurrentObservation(thread.id, generation) &&
+            !seenUpdate
+          ) {
+            applyThreadState(thread, state);
+          }
+        },
+        () => {
+          // ThreadState 水合是尽力而为；订阅仍保持有效。
+        }
+      );
+    }
+  }
+
+  amp.on("session.start", (event, ctx) => {
+    emitPierEvent("session.start", event, ctx);
+    observeThread(ctx.thread);
   });
 
-  amp.on("agent.start", (...args) => {
-    emitPierEvent("agent.start", ...args);
+  amp.on("agent.start", (event, ctx) => {
+    emitPierEvent("agent.start", event, ctx);
+    observeThread(ctx.thread);
   });
 
-  amp.on("tool.call", (...args) => {
-    emitPierEvent("tool.call", ...args);
-    return { action: "allow" };
+  amp.on("agent.end", (event, ctx) => {
+    emitPierEvent("agent.end." + event.status, event, ctx);
+    observeThread(ctx.thread);
   });
 
-  amp.on("tool.result", (...args) => {
-    emitPierEvent("tool.result", ...args);
-  });
-
-  amp.on("agent.end", (...args) => {
-    emitPierEvent("agent.end", ...args);
+  amp.onDispose(() => {
+    disposed = true;
+    threadGenerations.clear();
+    for (const subscription of threadSubscriptions.values()) {
+      try {
+        subscription.unsubscribe();
+      } catch {
+        // 一个订阅清理失败时仍继续释放其他订阅。
+      }
+    }
+    threadSubscriptions.clear();
+    blockedThreads.clear();
   });
 }
 `;
@@ -189,10 +324,12 @@ export function ampDetect(): boolean {
 }
 
 export const ampIntegration: AgentHookIntegration = {
-  capability: "full",
   detect: ampDetect,
   id: AGENT_ID,
-  runtime: { stopAuthority: "authoritative" },
+  runtime: {
+    emittedMappings: AMP_EVENT_MAP,
+    stopAuthority: "none",
+  },
   install: () => installAmpHooks(),
   uninstall: () => uninstallAmpHooks(),
 };

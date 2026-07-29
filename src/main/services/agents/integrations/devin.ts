@@ -2,10 +2,21 @@ import { existsSync } from "node:fs";
 import { readFile } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { AgentKind } from "@shared/contracts/agent.ts";
+import {
+  applyEdits,
+  type FormattingOptions,
+  modify,
+  type ParseError,
+  parse,
+} from "jsonc-parser";
 import {
   atomicWriteFile,
   commandExistsOnPath,
   type NestedJsonIntegrationSpec,
+  pierHookCommandV3WithStdin,
+  preflightPierNestedHooksInstall,
+  transformPierHooksUnlessNewer,
   withoutPierNestedHooks,
   withPierNestedHooks,
 } from "./shared.ts";
@@ -14,33 +25,81 @@ import type { AgentHookIntegration } from "./types.ts";
 const devinConfigPath = () =>
   join(homedir(), ".config", "devin", "config.json");
 
+function devinCommand(
+  agentId: AgentKind,
+  nativeEvent: string,
+  event:
+    | "SessionStart"
+    | "PromptSubmit"
+    | "Stop"
+    | "processing"
+    | "SessionEnd"
+    | "ToolStart"
+    | "ToolComplete"
+): string {
+  return pierHookCommandV3WithStdin({
+    agentId,
+    event,
+    nativeEvent,
+    turnIdFields: ["prompt_id"],
+  });
+}
+
 /**
  * Devin hook 事件 → pier 事件名。
  * 全部不写 matcher：Devin 把 matcher 当正则，Claude 惯用的 "*" 是非法
  * 正则，写了会导致 hook 注册失败。
- *
- * 已知重叠（不做处理，仅记录）：Devin 默认 `read_config_from` 会导入
- * ~/.claude 的 hooks，若用户同时装了 claude 集成，会出现同一事件双报。
- * 有的实现用 skipWhenDevinImportsClaude 守卫规避；Pier v1 不做该守卫——
- * 聚合器对同 key（agentId+event+panelId）幂等去重，双报不影响最终状态
- * 展示，仅接受、不特殊处理。
  */
 const DEVIN_SPEC: NestedJsonIntegrationSpec = {
   agentId: "devin",
-  capability: "full",
   runtime: { stopAuthority: "advisory" },
   configPath: devinConfigPath,
   events: [
-    { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
-    { nativeEvent: "UserPromptSubmit", pierEvent: "PromptSubmit" },
-    { nativeEvent: "Stop", pierEvent: "Stop" },
-    { nativeEvent: "PostCompaction", pierEvent: "processing" },
-    { nativeEvent: "SessionEnd", pierEvent: "SessionEnd" },
-    { nativeEvent: "PreToolUse", pierEvent: "ToolStart" },
-    { nativeEvent: "PostToolUse", pierEvent: "ToolComplete" },
-    { nativeEvent: "PermissionRequest", pierEvent: "PermissionRequest" },
+    {
+      buildCommand: (agentId) =>
+        devinCommand(agentId, "SessionStart", "SessionStart"),
+      nativeEvent: "SessionStart",
+      pierEvent: "SessionStart",
+    },
+    {
+      buildCommand: (agentId) =>
+        devinCommand(agentId, "UserPromptSubmit", "PromptSubmit"),
+      nativeEvent: "UserPromptSubmit",
+      pierEvent: "PromptSubmit",
+    },
+    {
+      buildCommand: (agentId) => devinCommand(agentId, "Stop", "Stop"),
+      nativeEvent: "Stop",
+      pierEvent: "Stop",
+    },
+    {
+      buildCommand: (agentId) =>
+        devinCommand(agentId, "PostCompaction", "processing"),
+      nativeEvent: "PostCompaction",
+      pierEvent: "processing",
+    },
+    {
+      buildCommand: (agentId) =>
+        devinCommand(agentId, "SessionEnd", "SessionEnd"),
+      nativeEvent: "SessionEnd",
+      pierEvent: "SessionEnd",
+    },
+    {
+      buildCommand: (agentId) =>
+        devinCommand(agentId, "PreToolUse", "ToolStart"),
+      nativeEvent: "PreToolUse",
+      pierEvent: "ToolStart",
+    },
+    {
+      buildCommand: (agentId) =>
+        devinCommand(agentId, "PostToolUse", "ToolComplete"),
+      nativeEvent: "PostToolUse",
+      pierEvent: "ToolComplete",
+    },
   ],
 };
+
+export const DEVIN_HOOK_EVENTS = DEVIN_SPEC.events;
 
 /** 消费字符串字面量（起始引号已确认），返回消费后的输出片段与新下标。 */
 function consumeStringLiteral(
@@ -97,8 +156,8 @@ function skipBlockComment(
  * 提前误判字符串已结束）。输出仍是合法 JSON 文本（注释位置用等长空白
  * 占位，保持行号/列号不变，便于报错定位；不追求还原注释本身）。
  *
- * 写回配置时输出纯 JSON（注释丢失）——这是接受行为，用户
- * 原有的 JSONC 注释在 Pier 写入后不会保留。
+ * 该函数只用于兼容测试和诊断；安装写回使用 jsonc-parser 的局部编辑，
+ * 不会借由剥注释后的对象重写整个用户文件。
  */
 export function stripJsonComments(input: string): string {
   let out = "";
@@ -135,56 +194,116 @@ export function stripJsonComments(input: string): string {
   return out;
 }
 
-/** 读 JSONC 配置：不存在 → {}；剥注释后解析失败/非对象 → null（损坏）。 */
+interface DevinConfigDocument {
+  raw: string;
+  settings: Record<string, unknown>;
+}
+
+/** 读 JSONC 配置：不存在 → 空对象；注释、尾随逗号均按 JSONC 解析。 */
 async function readDevinConfig(
   path: string
-): Promise<Record<string, unknown> | null> {
-  let raw: string;
+): Promise<DevinConfigDocument | null> {
+  let raw = "{}\n";
   try {
     raw = await readFile(path, "utf8");
   } catch {
-    return {};
+    // missing → empty document
   }
-  try {
-    const parsed: unknown = JSON.parse(stripJsonComments(raw));
-    return parsed && typeof parsed === "object" && !Array.isArray(parsed)
-      ? (parsed as Record<string, unknown>)
-      : null;
-  } catch {
+  const errors: ParseError[] = [];
+  const parsed: unknown = parse(raw, errors, {
+    allowTrailingComma: true,
+    disallowComments: false,
+  });
+  if (
+    errors.length > 0 ||
+    !parsed ||
+    typeof parsed !== "object" ||
+    Array.isArray(parsed)
+  ) {
     return null;
   }
+  return { raw, settings: parsed as Record<string, unknown> };
 }
 
 /**
- * JSONC 配置变换落盘（devin 专用，不复用工厂的 transformJsonConfig，因为
- * 后者用 readJsonConfig 会把带注释的合法 JSONC 判为损坏而跳过）。
- * 语义无变化不落盘；写回为纯 JSON（注释丢失，模块头注释已说明）。
+ * JSONC 配置变换落盘（Devin 专用）：只编辑发生变化的 `hooks.<Event>`
+ * 值，保留顶层未知字段、用户注释、键顺序和未触及的格式。
  */
 async function transformDevinConfig(
   path: string,
   transform: (s: Record<string, unknown>) => Record<string, unknown>
 ): Promise<void> {
-  const settings = await readDevinConfig(path);
-  if (settings === null) {
+  const document = await readDevinConfig(path);
+  if (document === null) {
     console.warn("[agent-hooks:devin] config unparsable, skip:", path);
     return;
   }
-  const next = transform(settings);
-  if (next === settings || JSON.stringify(next) === JSON.stringify(settings)) {
+  const next = transform(document.settings);
+  if (
+    next === document.settings ||
+    JSON.stringify(next) === JSON.stringify(document.settings)
+  ) {
     return;
   }
-  await atomicWriteFile(path, `${JSON.stringify(next, null, 2)}\n`);
+
+  const currentHooks = hooksRecordForJsonc(document.settings);
+  const nextHooks = hooksRecordForJsonc(next);
+  const eventNames = new Set([
+    ...Object.keys(currentHooks),
+    ...Object.keys(nextHooks),
+  ]);
+  const formatting: FormattingOptions = {
+    eol: "\n",
+    insertSpaces: true,
+    tabSize: 2,
+  };
+  let updated = document.raw;
+  for (const eventName of eventNames) {
+    const currentValue = currentHooks[eventName];
+    const nextValue = nextHooks[eventName];
+    if (JSON.stringify(currentValue) === JSON.stringify(nextValue)) {
+      continue;
+    }
+    updated = applyEdits(
+      updated,
+      modify(updated, ["hooks", eventName], nextValue, {
+        formattingOptions: formatting,
+      })
+    );
+  }
+  if (updated !== document.raw) {
+    await atomicWriteFile(path, updated);
+  }
+}
+
+function hooksRecordForJsonc(
+  settings: Record<string, unknown>
+): Record<string, unknown> {
+  const hooks = settings.hooks;
+  return hooks && typeof hooks === "object" && !Array.isArray(hooks)
+    ? (hooks as Record<string, unknown>)
+    : {};
 }
 
 export const devinIntegration: AgentHookIntegration = {
-  capability: DEVIN_SPEC.capability,
   detect: () => existsSync(devinConfigPath()) || commandExistsOnPath("devin"),
   id: DEVIN_SPEC.agentId,
-  runtime: { stopAuthority: "advisory" },
+  runtime: {
+    emittedMappings: DEVIN_SPEC.events.map(({ nativeEvent, pierEvent }) => ({
+      nativeEvent,
+      pierEvent,
+    })),
+    stopAuthority: "advisory",
+  },
   install: () =>
-    transformDevinConfig(devinConfigPath(), (s) =>
-      withPierNestedHooks(s, DEVIN_SPEC)
-    ),
+    transformDevinConfig(devinConfigPath(), (s) => {
+      if (!preflightPierNestedHooksInstall(s, DEVIN_SPEC)) {
+        return s;
+      }
+      return transformPierHooksUnlessNewer(s, (current) =>
+        withPierNestedHooks(withoutPierNestedHooks(current), DEVIN_SPEC)
+      );
+    }),
   uninstall: () =>
     transformDevinConfig(devinConfigPath(), withoutPierNestedHooks),
 };

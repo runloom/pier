@@ -44,7 +44,7 @@ function createProvider(
       apiKeys.delete(accountId);
     }),
     deleteCredential: vi.fn(async () => undefined),
-    fetchUsage: vi.fn(async () => ({ status: "ok" as const, windows: [] })),
+    fetchUsage: vi.fn(async () => ({ status: "ok" as const, metrics: [] })),
     login: vi.fn(async () => undefined),
     materializeApiKey: vi.fn(async () => undefined),
     materializeEmptyAuth: vi.fn(async () => undefined),

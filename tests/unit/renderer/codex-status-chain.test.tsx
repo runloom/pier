@@ -2,7 +2,7 @@ import { appendFileSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type { AgentHookEventPayloadV2 } from "@shared/contracts/agent-session.ts";
 import { act, cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
@@ -40,7 +40,7 @@ describe("Codex transcript → aggregator → store → status DOM", () => {
     await rm(dir, { force: true, recursive: true });
   });
 
-  function promptEvent(): AgentHookEventPayload {
+  function promptEvent(): AgentHookEventPayloadV2 {
     return {
       agent: "codex",
       event: "PromptSubmit",

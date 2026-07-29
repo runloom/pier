@@ -1,3 +1,4 @@
+import { isSubagentHookEvent } from "@shared/agent-session-actor.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import type {
@@ -5,6 +6,10 @@ import type {
   AgentSessionTitleSource,
   ForegroundActivity,
 } from "@shared/contracts/foreground-activity.ts";
+import type {
+  SubagentWorkAssociation,
+  SubagentWorkPlan,
+} from "./subagent-work-associations.ts";
 
 /**
  * ForegroundActivity 聚合器的模型层：常量、双层 slot 结构、层工厂与
@@ -58,12 +63,14 @@ export const SESSION_CREATING_EVENTS = new Set([
   "SessionStart",
   "PromptSubmit",
   "ToolStart",
-  "PermissionRequest",
+  "InteractionRequested",
   "processing",
   "running",
 ]);
-/** 子代理事件只做计数, 不改父状态（防 tool→processing 闪跳）。 */
-export const SUBAGENT_EVENTS = new Set(["SubagentStart", "SubagentStop"]);
+/**
+ * 子代理事件只做计数, 不改父状态（防 tool→processing 闪跳）。
+ * 判据单一来源是 shared/agent-session-actor.ts，本模块不复制一份。
+ */
 /**
  * 这些集成在 agent 扩展运行时内直接写 JSONL, `pid` 是扩展宿主进程号。
  * Claude/Codex 等 JSON command hook 里的 `pid` 来自 Pier emit 脚本 `$$`,
@@ -90,11 +97,48 @@ export function isSuspendedJobExitCode(code: number | undefined): boolean {
 export interface HookScopeIdentity {
   isolated: boolean;
   key: string;
+  retainsPeerScopes: boolean;
+  subagentWorkPlan?: SubagentWorkPlan;
+}
+
+/**
+ * 会话身份——provider 原样上报的事实，不做任何推断。
+ * 与 status / sessionTitle 隔离：标题可以缺席或不准，身份不能被猜。
+ */
+export interface HookIdentityFacts {
+  actorHint?: "main" | "subagent";
+  parentSessionId?: string;
+  sessionId?: string;
+}
+
+/**
+ * hook 事件 → 身份事实（缺席即缺席，不补默认值）。
+ * 子会话事件一律返回空：面板行身份只能由主会话事件推进。
+ */
+export function hookIdentityFacts(
+  event: AgentHookEventPayload
+): HookIdentityFacts {
+  if (isSubagentHookEvent(event)) {
+    return {};
+  }
+  const sessionId = event.sessionId?.trim();
+  const actorHint = "actorHint" in event ? event.actorHint : undefined;
+  // 现判据下带父会话号即算子会话（上面已返回），这里只有判据收窄后
+  // 「主会话自己被委派」的场景才会命中：委派边照原样记录。
+  const parentSessionId =
+    "parentSessionId" in event ? event.parentSessionId?.trim() : undefined;
+  return {
+    ...(actorHint ? { actorHint } : {}),
+    ...(parentSessionId ? { parentSessionId } : {}),
+    ...(sessionId ? { sessionId } : {}),
+  };
 }
 
 export interface HookScope {
+  activeInteractionIds: Set<string>;
   activeSubagentIds: Set<string>;
   activeToolIds: Set<string>;
+  anonymousInteractionCount: number;
   anonymousSubagentCount: number;
   anonymousToolCount: number;
   completionObserved: boolean;
@@ -104,12 +148,19 @@ export interface HookScope {
    */
   completionObservedAt: number | undefined;
   currentTurnId: string | undefined;
+  /** 当前 scope 的主会话身份事实；hook.identity 只是选中 scope 的镜像。 */
+  identity: HookIdentityFacts;
+  interactionHistoryIncomplete: boolean;
   key: string;
   recentSettledTurnIds: Set<string>;
+  settledInteractionIds: Set<string>;
+  settledSubagentIds: Set<string>;
+  settledToolIds: Set<string>;
   stale: boolean;
-  stateStartedAt: number;
+  stateStartedAt: number | undefined;
   status: ActivityStatus | undefined;
   subagentCount: number;
+  toolHistoryIncomplete: boolean;
   turnEnded: boolean;
   /** 可信终态落定时刻（TurnCompleted / 权威 Stop 等）。 */
   turnEndedAt: number | undefined;
@@ -120,14 +171,21 @@ export interface HookScope {
 
 /** hook 层——agent 会话证据。字段只由 hook 事件（及 TTL 衰减）改写。 */
 export interface HookLayer {
+  activeSubagentWorks: Map<string, SubagentWorkAssociation>;
   agentId: AgentKind;
   /** SessionStart 消抖隐藏期为 true——不参与投影。 */
   hidden: boolean;
+  /** 当前选中 scope 的身份镜像；事实所有权在 HookScope.identity。 */
+  identity: HookIdentityFacts;
+  nextSubagentWorkId: number;
   scopes: Map<string, HookScope>;
+  settledSubagentWorks: Map<string, SubagentWorkAssociation>;
   spawnedAt: number;
   stateStartedAt: number | undefined;
   status: ActivityStatus | undefined;
+  subagentAssociationHistoryIncomplete: boolean;
   subagentCount: number;
+  subagentWorkIdsByAlias: Map<string, Set<string>>;
   ttlTimer: NodeJS.Timeout | null;
   updatedAt: number;
   visibilityTimer: NodeJS.Timeout | null;
@@ -175,6 +233,8 @@ export interface PanelSlot {
   panelId: string;
   /** 产品会话名（与 status 隔离；挂 panel 而非 hook 层）。 */
   sessionTitle?: string;
+  /** 标题所属的 provider 主会话；不向 renderer 投影。 */
+  sessionTitleSessionId?: string;
   sessionTitleSource?: AgentSessionTitleSource;
 }
 
@@ -214,37 +274,59 @@ export function clearSlotTimers(slot: PanelSlot): void {
 export function hookScopeIdentity(
   event: AgentHookEventPayload
 ): HookScopeIdentity {
+  const retainsPeerScopes = PROCESS_SCOPED_HOOK_AGENTS.has(event.agent);
   const sessionId = event.sessionId?.trim();
   if (sessionId) {
-    return { isolated: true, key: `session:${sessionId}` };
+    return {
+      isolated: true,
+      key: `session:${sessionId}`,
+      retainsPeerScopes,
+    };
   }
-  if (
-    PROCESS_SCOPED_HOOK_AGENTS.has(event.agent) &&
-    typeof event.pid === "number"
-  ) {
-    return { isolated: true, key: `process:${event.pid}` };
+  if (retainsPeerScopes && typeof event.pid === "number") {
+    return {
+      isolated: true,
+      key: `process:${event.pid}`,
+      retainsPeerScopes,
+    };
   }
-  return { isolated: false, key: PANEL_HOOK_SCOPE_KEY };
+  return {
+    isolated: false,
+    key: PANEL_HOOK_SCOPE_KEY,
+    retainsPeerScopes,
+  };
 }
 
-export function newHookScope(key: string, at: number): HookScope {
+export function newHookScope(
+  key: string,
+  at: number,
+  identity: HookIdentityFacts = {}
+): HookScope {
   return {
+    activeInteractionIds: new Set(),
     activeSubagentIds: new Set(),
     activeToolIds: new Set(),
+    anonymousInteractionCount: 0,
     anonymousSubagentCount: 0,
     anonymousToolCount: 0,
     completionObserved: false,
     completionObservedAt: undefined,
     currentTurnId: undefined,
+    identity,
+    interactionHistoryIncomplete: false,
     key,
     recentSettledTurnIds: new Set(),
+    settledInteractionIds: new Set(),
+    settledSubagentIds: new Set(),
+    settledToolIds: new Set(),
     stale: false,
-    stateStartedAt: at,
-    status: "ready",
+    stateStartedAt: undefined,
+    status: undefined,
     subagentCount: 0,
     turnEnded: false,
     turnEndedAt: undefined,
     turnResetAt: undefined,
+    toolHistoryIncomplete: false,
     updatedAt: at,
   };
 }
@@ -252,13 +334,14 @@ export function newHookScope(key: string, at: number): HookScope {
 export function getOrCreateHookScope(
   hook: HookLayer,
   identity: HookScopeIdentity,
+  event: AgentHookEventPayload,
   at: number
 ): HookScope {
   const existing = hook.scopes.get(identity.key);
   if (existing) {
     return existing;
   }
-  const scope = newHookScope(identity.key, at);
+  const scope = newHookScope(identity.key, at, hookIdentityFacts(event));
   hook.scopes.set(identity.key, scope);
   return scope;
 }
@@ -270,11 +353,17 @@ export function newHookLayer(
   return {
     agentId: event.agent,
     hidden: event.event === "SessionStart",
+    identity: {},
     spawnedAt: at,
-    stateStartedAt: at,
-    status: "ready",
+    stateStartedAt: undefined,
+    status: undefined,
     scopes: new Map(),
     subagentCount: 0,
+    activeSubagentWorks: new Map(),
+    nextSubagentWorkId: 0,
+    settledSubagentWorks: new Map(),
+    subagentAssociationHistoryIncomplete: false,
+    subagentWorkIdsByAlias: new Map(),
     ttlTimer: null,
     updatedAt: at,
     visibilityTimer: null,
@@ -359,6 +448,7 @@ export function projectSlot(
       kind: "agent",
       panelId,
       source: "hook",
+      ...hook.identity,
       spawnedAt: hook.spawnedAt,
       ...(hook.status === undefined
         ? {}
@@ -374,6 +464,8 @@ export function projectSlot(
         : { sessionTitleSource: slot.sessionTitleSource }),
     };
   }
+  // launch 先验没有任何 hook 事实 → 不带身份字段（缺席即证据不足，
+  // 消费方按主会话处理）。不得从 launch 命令行反推会话号。
   if (command?.kind === "agent-launch" && !command.hidden) {
     return {
       agentId: command.agentId,

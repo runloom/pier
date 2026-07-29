@@ -5,6 +5,7 @@ import {
   commandExistsOnPath,
   createNestedJsonIntegration,
   type NestedJsonIntegrationSpec,
+  pierHookCommandV3WithStdin,
 } from "./shared.ts";
 
 const commandCodeConfigPath = () =>
@@ -12,27 +13,56 @@ const commandCodeConfigPath = () =>
 
 /**
  * Command Code hook 事件 → pier 事件名。
- * capability "coarse"：仅装 4 个事件（会话开始 +
+ * 状态证据仅覆盖 4 个事件（会话开始 +
  * 工具起止 + 回合结束）。不补 UserPromptSubmit 并非我们主动弃装——产品
  * 根本没有这个事件，官方共 4 事件（不含 UserPromptSubmit）。
- * matcher 保持 ".*" 不动；此前版本注释里 "裸 * 非法/必须用 .*" 的断言
- * 无据，已删除，仅保留实际约定的写法。
- * 补装官方真实存在的 SessionStart→SessionStart。
+ * 当前官方文档明确公共 session_id 稳定，真实工具调用都带稳定
+ * tool_use_id，因此工具使用具名闭环。Stop 可要求智能体重试，保持 advisory。
+ * matcher 保持 ".*" 以匹配全部工具；SessionStart/Stop 必须省略 matcher。
  */
+function commandCodeCommand(
+  nativeEvent: string,
+  event: "SessionStart" | "ToolStart" | "ToolComplete" | "Stop"
+): string {
+  return pierHookCommandV3WithStdin({
+    agentId: "command-code",
+    event,
+    nativeEvent,
+  });
+}
+
 const COMMAND_CODE_SPEC: NestedJsonIntegrationSpec = {
   agentId: "command-code",
-  capability: "coarse",
   runtime: { stopAuthority: "advisory" },
   configPath: commandCodeConfigPath,
   detect: () =>
     existsSync(commandCodeConfigPath()) || commandExistsOnPath("command-code"),
   events: [
-    { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
-    { matcher: ".*", nativeEvent: "PreToolUse", pierEvent: "ToolStart" },
-    { matcher: ".*", nativeEvent: "PostToolUse", pierEvent: "ToolComplete" },
-    { nativeEvent: "Stop", pierEvent: "Stop" },
+    {
+      buildCommand: () => commandCodeCommand("SessionStart", "SessionStart"),
+      nativeEvent: "SessionStart",
+      pierEvent: "SessionStart",
+    },
+    {
+      buildCommand: () => commandCodeCommand("PreToolUse", "ToolStart"),
+      matcher: ".*",
+      nativeEvent: "PreToolUse",
+      pierEvent: "ToolStart",
+    },
+    {
+      buildCommand: () => commandCodeCommand("PostToolUse", "ToolComplete"),
+      matcher: ".*",
+      nativeEvent: "PostToolUse",
+      pierEvent: "ToolComplete",
+    },
+    {
+      buildCommand: () => commandCodeCommand("Stop", "Stop"),
+      nativeEvent: "Stop",
+      pierEvent: "Stop",
+    },
   ],
 };
 
 export const commandCodeIntegration =
   createNestedJsonIntegration(COMMAND_CODE_SPEC);
+export const COMMAND_CODE_HOOK_EVENTS = COMMAND_CODE_SPEC.events;

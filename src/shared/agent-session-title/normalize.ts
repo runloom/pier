@@ -10,22 +10,24 @@ import {
 const TITLE_SOFT_BREAK = /[\s，。、；：,.!?;:：]/u;
 
 function truncateAgentSessionTitle(text: string): string {
-  if (text.length <= MAX_AGENT_SESSION_TITLE_LENGTH) {
+  const points = Array.from(text);
+  if (points.length <= MAX_AGENT_SESSION_TITLE_LENGTH) {
     return text;
   }
-  const budget = MAX_AGENT_SESSION_TITLE_LENGTH - TITLE_ELLIPSIS.length;
-  let cut = text.slice(0, budget);
+  const ellipsisLength = Array.from(TITLE_ELLIPSIS).length;
+  const budget = MAX_AGENT_SESSION_TITLE_LENGTH - ellipsisLength;
+  let cutPoints = points.slice(0, budget);
   const minKeep = Math.max(0, budget - TITLE_SOFT_BREAK_LOOKBACK);
-  for (let index = cut.length - 1; index >= minKeep; index -= 1) {
-    const ch = cut[index];
+  for (let index = cutPoints.length - 1; index >= minKeep; index -= 1) {
+    const ch = cutPoints[index];
     if (ch && TITLE_SOFT_BREAK.test(ch)) {
-      cut = cut.slice(0, index);
+      cutPoints = cutPoints.slice(0, index);
       break;
     }
   }
-  cut = cut.trimEnd();
-  if (cut.length < 2) {
-    cut = text.slice(0, budget).trimEnd();
+  let cut = cutPoints.join("").trimEnd();
+  if (Array.from(cut).length < 2) {
+    cut = points.slice(0, budget).join("").trimEnd();
   }
   return `${cut}${TITLE_ELLIPSIS}`;
 }
@@ -38,7 +40,7 @@ export function normalizeAgentSessionTitle(
   if (!trimmed || trimmed.includes("\n")) {
     return null;
   }
-  if (trimmed.length > MAX_AGENT_SESSION_TITLE_LENGTH) {
+  if (Array.from(trimmed).length > MAX_AGENT_SESSION_TITLE_LENGTH) {
     return truncateAgentSessionTitle(trimmed);
   }
   return trimmed;
@@ -52,8 +54,11 @@ export function truncateTerminalTitleForTooltip(
   if (!trimmed || trimmed.includes("\n")) {
     return;
   }
-  if (trimmed.length <= MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH) {
+  const points = Array.from(trimmed);
+  if (points.length <= MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH) {
     return trimmed;
   }
-  return `${trimmed.slice(0, MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH - 1)}${TITLE_ELLIPSIS}`;
+  return `${points
+    .slice(0, MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH - 1)
+    .join("")}${TITLE_ELLIPSIS}`;
 }

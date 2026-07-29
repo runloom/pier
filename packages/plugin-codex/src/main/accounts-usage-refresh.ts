@@ -1,4 +1,5 @@
 import {
+  type AccountUsageMetric,
   activeUsageCacheKey,
   createInflightCoalescer,
   createUsageCacheEntry,
@@ -6,14 +7,11 @@ import {
   type UsageCacheEntryBase,
 } from "@pier/plugin-api/account-usage";
 import { refreshManagedAccountIdentity } from "./accounts-identity-refresh.ts";
-import { applyLivePlanType } from "./accounts-records.ts";
+import { applyLiveMembership, applyLivePlanType } from "./accounts-records.ts";
 import type { CodexAccountsStateStore } from "./state.ts";
 import type { AccountUsageResult, AgentAccountProvider } from "./types.ts";
 
-type UsageCache = Record<
-  string,
-  UsageCacheEntryBase<AccountUsageResult["windows"][number]>
->;
+type UsageCache = Record<string, UsageCacheEntryBase<AccountUsageMetric>>;
 
 /**
  * Shared refresh body for Codex accounts service: min-refetch gate, inflight
@@ -53,7 +51,7 @@ export function createCodexUsageRefreshRunner(options: {
     if (
       !refreshOptions.force &&
       cached &&
-      now() - cached.fetchedAt < USAGE_MIN_REFETCH_MS
+      now() - cached.attemptedAt < USAGE_MIN_REFETCH_MS
     ) {
       return;
     }
@@ -64,7 +62,7 @@ export function createCodexUsageRefreshRunner(options: {
       if (
         !refreshOptions.force &&
         latestCached &&
-        now() - latestCached.fetchedAt < USAGE_MIN_REFETCH_MS
+        now() - latestCached.attemptedAt < USAGE_MIN_REFETCH_MS
       ) {
         return;
       }
@@ -96,8 +94,8 @@ export function createCodexUsageRefreshRunner(options: {
       } catch (error) {
         result = {
           error: error instanceof Error ? error.message : String(error),
+          metrics: [],
           status: "error" as const,
-          windows: [],
         };
       }
       if (signal?.aborted) return;
@@ -119,7 +117,18 @@ export function createCodexUsageRefreshRunner(options: {
           .get()
           .accounts.find((entry) => entry.id === targetId);
         if (current) {
-          const next = applyLivePlanType(current, result.planType, now());
+          const next = result.membershipResolved
+            ? applyLiveMembership(
+                current,
+                {
+                  planType: result.planType,
+                  ...(result.subscriptionExpiresAt === undefined
+                    ? {}
+                    : { expiresAt: result.subscriptionExpiresAt }),
+                },
+                now()
+              )
+            : applyLivePlanType(current, result.planType, now());
           if (next !== current) {
             stateStore.mutate((state) => ({
               ...state,

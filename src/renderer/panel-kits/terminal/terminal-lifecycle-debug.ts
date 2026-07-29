@@ -28,6 +28,7 @@ function defaultLifecycle(
     nativeTerminalReady: false,
     phase,
     placeholderVisible: true,
+    presentationId: null,
     updatedAt: now(),
   };
 }

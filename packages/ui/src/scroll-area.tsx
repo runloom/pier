@@ -5,11 +5,24 @@ import type * as React from "react";
 
 import { cn } from "./utils.ts";
 
+type ScrollAreaViewportFade = "horizontal" | "vertical";
+type ScrollAreaViewportFadeProfile = "short";
+
+interface ScrollAreaProps
+  extends React.ComponentProps<typeof ScrollAreaPrimitive.Root> {
+  viewportClassName?: string;
+  viewportFade?: ScrollAreaViewportFade;
+  viewportFadeProfile?: ScrollAreaViewportFadeProfile;
+}
+
 function ScrollArea({
   className,
   children,
+  viewportClassName,
+  viewportFade,
+  viewportFadeProfile,
   ...props
-}: React.ComponentProps<typeof ScrollAreaPrimitive.Root>) {
+}: ScrollAreaProps) {
   return (
     <ScrollAreaPrimitive.Root
       className={cn("relative", className)}
@@ -17,7 +30,14 @@ function ScrollArea({
       {...props}
     >
       <ScrollAreaPrimitive.Viewport
-        className="size-full rounded-[inherit] outline-none transition-[color,box-shadow] focus-visible:outline-1 focus-visible:ring-[3px] focus-visible:ring-ring/50"
+        className={cn(
+          "size-full rounded-[inherit] outline-none transition-[color,box-shadow] focus-visible:outline-1 focus-visible:ring-[3px] focus-visible:ring-ring/50",
+          viewportFade === "vertical" && "scroll-fade-y",
+          viewportFade === "horizontal" && "scroll-fade-x",
+          viewportFadeProfile === "short" &&
+            "scroll-fade-t-2 scroll-fade-b-4 [--scroll-fade-reveal:24px]",
+          viewportClassName
+        )}
         data-slot="scroll-area-viewport"
       >
         {children}
@@ -36,7 +56,7 @@ function ScrollBar({
   return (
     <ScrollAreaPrimitive.ScrollAreaScrollbar
       className={cn(
-        "flex touch-none select-none p-px transition-colors data-horizontal:h-2.5 data-vertical:h-full data-vertical:w-2.5 data-horizontal:flex-col data-horizontal:border-t data-horizontal:border-t-transparent data-vertical:border-l data-vertical:border-l-transparent",
+        "flex touch-none select-none p-px transition-colors data-horizontal:h-(--shell-scrollbar-width-legacy) data-vertical:h-full data-vertical:w-(--shell-scrollbar-width-legacy) data-horizontal:flex-col data-horizontal:border-t data-horizontal:border-t-transparent data-vertical:border-l data-vertical:border-l-transparent",
         className
       )}
       data-orientation={orientation}
@@ -45,11 +65,17 @@ function ScrollBar({
       {...props}
     >
       <ScrollAreaPrimitive.ScrollAreaThumb
-        className="relative flex-1 rounded-full bg-border"
+        className="relative flex-1 rounded-full bg-(--shell-scrollbar-thumb)"
         data-slot="scroll-area-thumb"
       />
     </ScrollAreaPrimitive.ScrollAreaScrollbar>
   );
 }
 
-export { ScrollArea, ScrollBar };
+export {
+  ScrollArea,
+  type ScrollAreaProps,
+  type ScrollAreaViewportFade,
+  type ScrollAreaViewportFadeProfile,
+  ScrollBar,
+};

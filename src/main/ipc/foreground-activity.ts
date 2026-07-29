@@ -1,3 +1,4 @@
+import { isSubagentHookEvent } from "@shared/agent-session-actor.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AgentSessionTitleSource,
@@ -26,7 +27,7 @@ import {
 } from "../services/agents/integrations/terminal-reconciliation.ts";
 import {
   applyAgentSessionTitleFromHookEvent,
-  forgetPanelTitleState,
+  applyProviderAgentSessionTitle,
 } from "../services/agents/session-title/index.ts";
 import { isWindowDetaching } from "../services/agents/window-detaching-guard.ts";
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
@@ -274,9 +275,6 @@ export const foregroundActivityService = {
   },
   panelClosed(panelId: string, windowId?: string): void {
     agentTerminalReconciler?.releasePanel(panelId, windowId);
-    if (windowId) {
-      forgetPanelTitleState(windowId, panelId);
-    }
     foregroundActivityAggregator.panelClosed(panelId, windowId);
   },
   ptyExited(panelId: string, windowId?: string): void {
@@ -310,7 +308,11 @@ export const foregroundActivityService = {
   setAgentSessionTitle(
     windowId: string,
     panelId: string,
-    input: { title: string; source: AgentSessionTitleSource }
+    input: {
+      title: string;
+      source: AgentSessionTitleSource;
+      sessionId?: string | undefined;
+    }
   ): boolean {
     return foregroundActivityAggregator.setAgentSessionTitle(
       windowId,
@@ -321,13 +323,20 @@ export const foregroundActivityService = {
   hydrateAgentSessionTitle(
     windowId: string,
     panelId: string,
-    input: { title: string; source: AgentSessionTitleSource }
+    input: {
+      title: string;
+      source: AgentSessionTitleSource;
+      sessionId?: string | undefined;
+    }
   ): void {
     foregroundActivityAggregator.hydrateAgentSessionTitle(
       windowId,
       panelId,
       input
     );
+  },
+  clearAgentSessionTitle(windowId: string, panelId: string): void {
+    foregroundActivityAggregator.clearAgentSessionTitle(windowId, panelId);
   },
 };
 
@@ -353,6 +362,26 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
     onTerminalEvent: (event) => {
       foregroundActivityAggregator.ingestAgentEvent(event, {
         stopAuthority: "authoritative",
+      });
+    },
+    // provider 原生会话名（`provider` 秩）：只有能从自家 transcript 读出标题的
+    // agent 会走到这里；读不到就没有，标题退回首条 prompt 派生。
+    onTitleRecord: ({ context, record }) => {
+      if (isSubagentHookEvent(context)) {
+        return;
+      }
+      applyProviderAgentSessionTitle({
+        aggregator: foregroundActivityAggregator,
+        agentId: context.agent,
+        nativeEvent: record.nativeEvent,
+        panelId: context.panelId,
+        ...(context.sessionId?.trim()
+          ? { sessionId: context.sessionId.trim() }
+          : {}),
+        title: record.title,
+        windowId: context.windowId,
+      }).catch((err) => {
+        log.warn("agent session title effect failed", { err });
       });
     },
   });
@@ -391,12 +420,14 @@ export function registerForegroundActivityIpc(ipcMain: IpcMain): void {
           windowId: routed.windowId,
         });
       }
-      applyAgentSessionTitleFromHookEvent({
-        aggregator: foregroundActivityAggregator,
-        event: routed,
-      }).catch((err) => {
-        log.warn("agent session title effect failed", { err });
-      });
+      if (!isSubagentHookEvent(routed)) {
+        applyAgentSessionTitleFromHookEvent({
+          aggregator: foregroundActivityAggregator,
+          event: routed,
+        }).catch((err) => {
+          log.warn("agent session title effect failed", { err });
+        });
+      }
     },
     onCommandFinished: (event) => {
       const routed = withResolvedOwner(event);

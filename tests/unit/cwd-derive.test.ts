@@ -96,7 +96,7 @@ describe("activityTabChromeOverlay", () => {
         {
           ...agentActivity,
           sessionTitle: "Fix parser crash",
-          sessionTitleSource: "rule",
+          sessionTitleSource: "prompt",
         },
         { projectRootPath: "/Users/x/ABC/pier" }
       )

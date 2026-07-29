@@ -1,9 +1,18 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
+} from "../../../src/main/services/agents/agent-hooks-install.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
+const ORIGINAL_PATH = process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin";
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -39,9 +48,8 @@ function configPath(): string {
 }
 
 describe("qwenCodeIntegration", () => {
-  it("capability 为 full，id 为 qwen-code", async () => {
+  it("id 为 qwen-code", async () => {
     const integration = await loadIntegration();
-    expect(integration.capability).toBe("full");
     expect(integration.id).toBe("qwen-code");
   });
 
@@ -54,7 +62,7 @@ describe("qwenCodeIntegration", () => {
     expect(integration.detect()).toBe(true);
   });
 
-  it("14 个事件各一条命令，工具事件无 matcher，新增 4 事件映射正确", async () => {
+  it("只安装 12 个有确定状态语义的当前官方事件", async () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = JSON.parse(await readFile(configPath(), "utf8"));
@@ -73,8 +81,6 @@ describe("qwenCodeIntegration", () => {
       "PreToolUse",
       "PostToolUse",
       "PostToolUseFailure",
-      "PermissionRequest",
-      "PermissionDenied",
       "PreCompact",
       "PostCompact",
       "SubagentStart",
@@ -86,6 +92,9 @@ describe("qwenCodeIntegration", () => {
     }
     // 不是 "Error"（官方文档零命中该名，真名是 StopFailure）
     expect(hooks.Error).toBeUndefined();
+    expect(hooks.PermissionRequest).toBeUndefined();
+    expect(hooks.PermissionDenied).toBeUndefined();
+    expect(hooks.Notification).toBeUndefined();
 
     for (const cmd of hookCommands(installed)) {
       expect(cmd).toContain(MARK);
@@ -105,9 +114,6 @@ describe("qwenCodeIntegration", () => {
     expect(typedHooks.UserPromptSubmit?.[0]?.hooks[0]?.command).toContain(
       '"PromptSubmit"'
     );
-    expect(typedHooks.PermissionDenied?.[0]?.hooks[0]?.command).toContain(
-      '"processing"'
-    );
     expect(typedHooks.PreCompact?.[0]?.hooks[0]?.command).toContain(
       '"processing"'
     );
@@ -115,6 +121,157 @@ describe("qwenCodeIntegration", () => {
       '"processing"'
     );
   });
+
+  it("官方载荷：工具与子智能体具名闭环，权限请求不伪造等待，工具失败保持局部", async () => {
+    const integration = await loadIntegration();
+    await integration.install();
+    const installed = JSON.parse(await readFile(configPath(), "utf8"));
+    const hooks = installed.hooks as Record<
+      string,
+      Array<{ hooks: Array<{ command: string }> }>
+    >;
+    const command = (event: string) =>
+      hooks[event]?.[0]?.hooks[0]?.command ?? "";
+    const root = await mkdtemp(join(tmpdir(), "pier-qwen-code-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const common = {
+      cwd: "/repo",
+      session_id: "qwen-session-1",
+      transcript_path: "/tmp/qwen-session-1.jsonl",
+    };
+    for (const [event, payload] of [
+      ["SessionStart", { ...common, hook_event_name: "SessionStart" }],
+      [
+        "UserPromptSubmit",
+        {
+          ...common,
+          hook_event_name: "UserPromptSubmit",
+          prompt: "Fix the parser",
+        },
+      ],
+      [
+        "PreToolUse",
+        {
+          ...common,
+          hook_event_name: "PreToolUse",
+          tool_input: { command: "pnpm test" },
+          tool_name: "Bash",
+          tool_use_id: "tool-qwen-1",
+        },
+      ],
+      [
+        "PostToolUseFailure",
+        {
+          ...common,
+          error: "tests failed",
+          hook_event_name: "PostToolUseFailure",
+          is_interrupt: false,
+          tool_input: { command: "pnpm test" },
+          tool_name: "Bash",
+          tool_use_id: "tool-qwen-1",
+        },
+      ],
+      [
+        "SubagentStart",
+        {
+          ...common,
+          agent_id: "subagent-qwen-1",
+          agent_type: "Explorer",
+          hook_event_name: "SubagentStart",
+        },
+      ],
+      [
+        "SubagentStop",
+        {
+          ...common,
+          agent_id: "subagent-qwen-1",
+          agent_transcript_path: "/tmp/subagent-qwen-1.jsonl",
+          agent_type: "Explorer",
+          hook_event_name: "SubagentStop",
+          stop_hook_active: false,
+        },
+      ],
+      ["Stop", { ...common, hook_event_name: "Stop" }],
+      [
+        "StopFailure",
+        {
+          ...common,
+          error: "rate_limit",
+          error_details: "try later",
+          hook_event_name: "StopFailure",
+        },
+      ],
+      ["SessionEnd", { ...common, hook_event_name: "SessionEnd" }],
+    ] as const) {
+      const result = spawnSync("/bin/sh", ["-c", command(event)], {
+        env: {
+          ...process.env,
+          PATH: ORIGINAL_PATH,
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+          PIER_PANEL_ID: "panel-1",
+          PIER_WINDOW_ID: "window-1",
+        },
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      { event: "SessionStart", sessionId: "qwen-session-1", v: 3 },
+      { event: "PromptSubmit", sessionId: "qwen-session-1", v: 3 },
+      {
+        event: "ToolStart",
+        toolName: "Bash",
+        toolUseId: "tool-qwen-1",
+        v: 3,
+      },
+      {
+        event: "ToolComplete",
+        nativeEvent: "PostToolUseFailure",
+        toolName: "Bash",
+        toolUseId: "tool-qwen-1",
+        v: 3,
+      },
+      {
+        actorHint: "subagent",
+        agentInstanceId: "subagent-qwen-1",
+        agentType: "Explorer",
+        event: "SubagentStart",
+        parentSessionId: "qwen-session-1",
+        v: 3,
+      },
+      {
+        actorHint: "subagent",
+        agentInstanceId: "subagent-qwen-1",
+        agentType: "Explorer",
+        event: "SubagentStop",
+        parentSessionId: "qwen-session-1",
+        v: 3,
+      },
+      { event: "Stop", v: 3 },
+      { event: "error", nativeState: "rate_limit", v: 3 },
+      { event: "SessionEnd", v: 3 },
+    ]);
+
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: Array<string | undefined> = [];
+    for (const row of rows.slice(0, 4)) {
+      if (row.kind !== "agentEvent") {
+        continue;
+      }
+      aggregator.ingestAgentEvent(row, integration.runtime);
+      const activity = aggregator.snapshot().activities[0];
+      statuses.push(activity?.kind === "agent" ? activity.status : undefined);
+    }
+    expect(statuses).toEqual([undefined, "processing", "tool", "processing"]);
+  }, 15_000);
 
   it("幂等：重复安装不产生重复条目", async () => {
     const integration = await loadIntegration();

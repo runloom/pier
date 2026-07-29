@@ -121,6 +121,9 @@ export function createExternalRendererPluginContext(
             : {}),
           component:
             registration.component as FunctionComponent<HostWorkbenchWidgetComponentProps>,
+          ...(registration.contentMode
+            ? { contentMode: registration.contentMode }
+            : {}),
           icon: (registration.icon ?? KeyRound) as LucideIcon,
           id: registration.id,
           ...(registration.previewComponent

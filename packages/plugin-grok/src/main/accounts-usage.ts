@@ -1,4 +1,5 @@
 import {
+  type AccountUsageMetric,
   createUsageCacheEntry as createSharedUsageCacheEntry,
   type UsageCacheEntryBase,
 } from "@pier/plugin-api/account-usage";
@@ -13,24 +14,22 @@ export {
   USAGE_POLL_INTERVAL_MS,
 } from "@pier/plugin-api/account-usage";
 
-export type UsageCacheEntry = UsageCacheEntryBase<
-  AccountUsageResult["windows"][number]
-> & {
+export type UsageCacheEntry = UsageCacheEntryBase<AccountUsageMetric> & {
   subscription?: GrokSubscriptionInfo | undefined;
 };
 
 export function createUsageCacheEntry(
   result: AccountUsageResult,
   cached: UsageCacheEntry | undefined,
-  fetchedAt: number
+  attemptedAt: number
 ): UsageCacheEntry {
-  const base = createSharedUsageCacheEntry(result, cached, fetchedAt);
-  // Retain last-good membership only when usage itself failed. An ok fetch
-  // that soft-omits subscription must not freeze a previous paid tier after
-  // a real free downgrade (membership 403/timeout).
+  const base = createSharedUsageCacheEntry(result, cached, attemptedAt);
+  // Membership is an independent soft hop: quota success does not prove a
+  // free downgrade. Replace last-good only after an authoritative membership
+  // response (including an explicit free result).
   const subscription =
     result.subscription ??
-    (result.status === "error" ? cached?.subscription : undefined);
+    (result.subscriptionResolved ? undefined : cached?.subscription);
   return {
     ...base,
     ...(subscription ? { subscription } : {}),
@@ -39,11 +38,11 @@ export function createUsageCacheEntry(
 
 export function toUsageSnapshot(entry: UsageCacheEntry): GrokUsageSnapshot {
   return {
-    fetchedAt: entry.fetchedAt,
+    attemptedAt: entry.attemptedAt,
+    metrics: entry.metrics,
     status: entry.status,
-    windows: entry.windows,
+    ...(entry.updatedAt === undefined ? {} : { updatedAt: entry.updatedAt }),
     ...(entry.error ? { error: entry.error } : {}),
-    ...(entry.raw === undefined ? {} : { raw: entry.raw }),
     ...(entry.subscription ? { subscription: entry.subscription } : {}),
   };
 }

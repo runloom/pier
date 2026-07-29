@@ -2,9 +2,14 @@ import { appendFileSync, writeFileSync } from "node:fs";
 import { mkdir, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import {
+  type AgentHookEventPayload,
+  agentHookEventSchema,
+} from "@shared/contracts/agent-session.ts";
+import type { AgentActivity } from "@shared/contracts/foreground-activity.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createCodexTranscriptReconciler } from "../../../src/main/services/agents/integrations/codex-transcript-reconciler.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
 
 function hookEvent(
   transcriptPath: string,
@@ -68,9 +73,10 @@ describe("codex transcript reconciler", () => {
       nativeEvent: "codex.transcript.turn_aborted",
       panelId: "panel-1",
       turnId: "turn-1",
-      v: 2,
+      v: 3,
       windowId: "1",
     });
+    expect(agentHookEventSchema.safeParse(received[0]).success).toBe(true);
     reconciler.dispose();
   });
 
@@ -91,6 +97,585 @@ describe("codex transcript reconciler", () => {
       expect(received).toHaveLength(1);
     });
     expect(received[0]?.event).toBe("TurnCompleted");
+    reconciler.dispose();
+  });
+
+  it("官方 rollout function_call/output 形状形成提问与权限交互闭环", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path, "turn-interaction"));
+    appendFileSync(
+      path,
+      `${[
+        {
+          payload: {
+            turn_id: "turn-interaction",
+          },
+          type: "turn_context",
+        },
+        {
+          payload: {
+            call_id: "question-1",
+            questions: [{ id: "confirm", question: "Continue?" }],
+            turn_id: "turn-interaction",
+            type: "request_user_input",
+          },
+          type: "event_msg",
+        },
+        {
+          payload: {
+            call_id: "question-1",
+            output: '{"answers":{"confirm":{"answers":["yes"]}}}',
+            type: "function_call_output",
+          },
+          type: "response_item",
+        },
+        {
+          payload: {
+            call_id: "permission-1",
+            permissions: { file_system: { write: ["/tmp"] } },
+            reason: "write",
+            turn_id: "turn-interaction",
+            type: "request_permissions",
+          },
+          type: "event_msg",
+        },
+        {
+          payload: {
+            call_id: "permission-1",
+            output:
+              '{"permissions":{"file_system":{"write":["/tmp"]}},"scope":"turn"}',
+            type: "function_call_output",
+          },
+          type: "response_item",
+        },
+      ]
+        .map((line) => JSON.stringify(line))
+        .join("\n")}\n`
+    );
+
+    await vi.waitFor(() => expect(received).toHaveLength(4));
+    expect(received).toMatchObject([
+      {
+        event: "InteractionRequested",
+        interactionId: "question-1",
+        interactionKind: "question",
+        nativeEvent: "codex.transcript.request_user_input",
+        turnId: "turn-interaction",
+        v: 3,
+      },
+      {
+        event: "InteractionResolved",
+        interactionId: "question-1",
+        interactionKind: "question",
+        interactionOutcome: "completed",
+        nativeEvent: "codex.transcript.request_user_input.output",
+        turnId: "turn-interaction",
+        v: 3,
+      },
+      {
+        event: "InteractionRequested",
+        interactionId: "permission-1",
+        interactionKind: "permission",
+        nativeEvent: "codex.transcript.request_permissions",
+        turnId: "turn-interaction",
+        v: 3,
+      },
+      {
+        event: "InteractionResolved",
+        interactionId: "permission-1",
+        interactionKind: "permission",
+        interactionOutcome: "accepted",
+        nativeEvent: "codex.transcript.request_permissions.output",
+        turnId: "turn-interaction",
+        v: 3,
+      },
+    ]);
+    for (const event of received) {
+      expect(agentHookEventSchema.safeParse(event).success).toBe(true);
+    }
+    reconciler.dispose();
+  });
+
+  it("两个 transcript 的相同 call_id 与 turn_id 只解除各自 entry", async () => {
+    const secondPath = join(transcriptRoot, "rollout-second.jsonl");
+    writeFileSync(secondPath, '{"type":"session_meta"}\n');
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await Promise.all([
+      reconciler.observe({
+        ...hookEvent(path, "turn-shared"),
+        panelId: "panel-a",
+      }),
+      reconciler.observe({
+        ...hookEvent(secondPath, "turn-shared"),
+        panelId: "panel-b",
+      }),
+    ]);
+    const request = `${JSON.stringify({
+      payload: {
+        call_id: "call-shared",
+        turn_id: "turn-shared",
+        type: "request_user_input",
+      },
+      type: "event_msg",
+    })}\n`;
+    appendFileSync(path, request);
+    appendFileSync(secondPath, request);
+    await vi.waitFor(() =>
+      expect(
+        received.filter((event) => event.event === "InteractionRequested")
+      ).toHaveLength(2)
+    );
+    const output = `${JSON.stringify({
+      payload: {
+        call_id: "call-shared",
+        output: '{"answers":{"confirm":{"answers":["yes"]}}}',
+        type: "function_call_output",
+      },
+      type: "response_item",
+    })}\n`;
+    appendFileSync(path, output);
+    await vi.waitFor(() =>
+      expect(
+        received.filter((event) => event.event === "InteractionResolved")
+      ).toHaveLength(1)
+    );
+    expect(received.at(-1)?.panelId).toBe("panel-a");
+
+    appendFileSync(secondPath, output);
+    await vi.waitFor(() =>
+      expect(
+        received.filter((event) => event.event === "InteractionResolved")
+      ).toHaveLength(2)
+    );
+    expect(received.at(-1)?.panelId).toBe("panel-b");
+    reconciler.dispose();
+  });
+
+  it("transcript 截断会清理该 entry 的未决 interaction", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path, "turn-truncated-interaction"));
+    appendFileSync(
+      path,
+      '{"type":"event_msg","payload":{"call_id":"stale-call","turn_id":"turn-truncated-interaction","type":"request_user_input"}}\n'
+    );
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+
+    writeFileSync(path, '{"type":"session_meta"}\n');
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 350));
+    appendFileSync(
+      path,
+      '{"type":"response_item","payload":{"call_id":"stale-call","output":"{}","type":"function_call_output"}}\n'
+    );
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 350));
+
+    expect(received).toHaveLength(1);
+    reconciler.dispose();
+  });
+
+  it("entry 释放后旧 interaction 不会在新 transcript 中闭合", async () => {
+    const secondPath = join(transcriptRoot, "rollout-after-dispose.jsonl");
+    writeFileSync(secondPath, '{"type":"session_meta"}\n');
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path, "turn-disposed"));
+    appendFileSync(
+      path,
+      '{"type":"event_msg","payload":{"call_id":"disposed-call","turn_id":"turn-disposed","type":"request_user_input"}}\n'
+    );
+    await vi.waitFor(() => expect(received).toHaveLength(1));
+    reconciler.releasePanel("panel-1", "1");
+
+    await reconciler.observe(hookEvent(secondPath, "turn-disposed"));
+    appendFileSync(
+      secondPath,
+      '{"type":"response_item","payload":{"call_id":"disposed-call","output":"{}","type":"function_call_output"}}\n'
+    );
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 350));
+
+    expect(received).toHaveLength(1);
+    reconciler.dispose();
+  });
+
+  it("未决 Codex interaction 超限时丢弃最旧匹配状态", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    const pendingLimit = 128;
+    await reconciler.observe(hookEvent(path, "turn-capacity"));
+    appendFileSync(
+      path,
+      `${Array.from({ length: pendingLimit + 1 }, (_, index) =>
+        JSON.stringify({
+          payload: {
+            call_id: `call-${index}`,
+            turn_id: "turn-capacity",
+            type: "request_user_input",
+          },
+          type: "event_msg",
+        })
+      ).join("\n")}\n`
+    );
+    await vi.waitFor(() => expect(received).toHaveLength(pendingLimit + 1));
+    appendFileSync(
+      path,
+      `${[
+        {
+          payload: {
+            call_id: "call-0",
+            output: "{}",
+            type: "function_call_output",
+          },
+          type: "response_item",
+        },
+        {
+          payload: {
+            call_id: `call-${pendingLimit}`,
+            output: "{}",
+            type: "function_call_output",
+          },
+          type: "response_item",
+        },
+      ]
+        .map((line) => JSON.stringify(line))
+        .join("\n")}\n`
+    );
+    await vi.waitFor(() =>
+      expect(
+        received.filter((event) => event.event === "InteractionResolved")
+      ).toHaveLength(1)
+    );
+    expect(received.at(-1)).toMatchObject({
+      event: "InteractionResolved",
+      interactionId: `call-${pendingLimit}`,
+    });
+    reconciler.dispose();
+  });
+
+  it("上下文晚到时按 transcript 原顺序重放交互与终态", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path, "turn-owner"));
+    appendFileSync(
+      path,
+      `${[
+        {
+          payload: {
+            call_id: "late-call",
+            turn_id: "turn-late",
+            type: "request_user_input",
+          },
+          type: "event_msg",
+        },
+        {
+          payload: {
+            call_id: "late-call",
+            output: "{}",
+            type: "function_call_output",
+          },
+          type: "response_item",
+        },
+        {
+          payload: { turn_id: "turn-late", type: "task_complete" },
+          type: "event_msg",
+        },
+      ]
+        .map((line) => JSON.stringify(line))
+        .join("\n")}\n`
+    );
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 350));
+    expect(received).toHaveLength(0);
+
+    await reconciler.observe(hookEvent(path, "turn-late"));
+
+    expect(received.map((event) => event.event)).toEqual([
+      "InteractionRequested",
+      "InteractionResolved",
+      "TurnCompleted",
+    ]);
+    reconciler.dispose();
+  });
+
+  it("晚到上下文暂存队列超限时只保留最近记录", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    const pendingRecordLimit = 64;
+    await reconciler.observe(hookEvent(path, "turn-owner"));
+    appendFileSync(
+      path,
+      `${Array.from({ length: pendingRecordLimit + 1 }, (_, index) =>
+        JSON.stringify({
+          payload: {
+            call_id: `late-${index}`,
+            turn_id: `turn-late-${index}`,
+            type: "request_user_input",
+          },
+          type: "event_msg",
+        })
+      ).join("\n")}\n`
+    );
+    await new Promise<void>((resolveDelay) => setTimeout(resolveDelay, 350));
+
+    await reconciler.observe(hookEvent(path, "turn-late-0"));
+    expect(received).toHaveLength(0);
+    await reconciler.observe(
+      hookEvent(path, `turn-late-${pendingRecordLimit}`)
+    );
+    expect(received).toMatchObject([
+      {
+        event: "InteractionRequested",
+        interactionId: `late-${pendingRecordLimit}`,
+      },
+    ]);
+    reconciler.dispose();
+  });
+
+  it("权限接受、拒绝、取消都以同一 call_id 立即解除 waiting", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    const turnId = "turn-permission-outcomes";
+    await reconciler.observe(hookEvent(path, turnId));
+    const cases = [
+      {
+        callId: "permission-accepted",
+        output:
+          '{"permissions":{"file_system":{"write":["/tmp"]}},"scope":"turn"}',
+        outcome: "accepted",
+      },
+      {
+        callId: "permission-rejected",
+        output: '{"permissions":{},"scope":"turn"}',
+        outcome: "rejected",
+      },
+      {
+        callId: "permission-cancelled",
+        output: "request_permissions was cancelled before receiving a response",
+        outcome: "cancelled",
+      },
+    ] as const;
+    appendFileSync(
+      path,
+      `${cases
+        .flatMap(({ callId, output }) => [
+          {
+            payload: {
+              call_id: callId,
+              permissions: { file_system: { write: ["/tmp"] } },
+              reason: "write",
+              turn_id: turnId,
+              type: "request_permissions",
+            },
+            type: "event_msg",
+          },
+          {
+            payload: {
+              call_id: callId,
+              output,
+              type: "function_call_output",
+            },
+            type: "response_item",
+          },
+        ])
+        .map((line) => JSON.stringify(line))
+        .join("\n")}\n`
+    );
+
+    await vi.waitFor(() => expect(received).toHaveLength(6));
+    expect(
+      received
+        .filter((event) => event.event === "InteractionResolved")
+        .map((event) =>
+          "interactionOutcome" in event ? event.interactionOutcome : undefined
+        )
+    ).toEqual(cases.map(({ outcome }) => outcome));
+    expect(
+      received.map((event) =>
+        "interactionId" in event ? event.interactionId : undefined
+      )
+    ).toEqual(cases.flatMap(({ callId }) => [callId, callId]));
+
+    const aggregator = createForegroundActivityAggregator();
+    aggregator.ingestAgentEvent(hookEvent(path, turnId), {
+      stopAuthority: "advisory",
+    });
+    const statuses: Array<string | undefined> = [];
+    for (const event of received) {
+      aggregator.ingestAgentEvent(event, { stopAuthority: "advisory" });
+      statuses.push(
+        (aggregator.snapshot().activities[0] as AgentActivity | undefined)
+          ?.status
+      );
+    }
+    expect(statuses).toEqual([
+      "waiting",
+      "processing",
+      "waiting",
+      "processing",
+      "waiting",
+      "processing",
+    ]);
+    reconciler.dispose();
+    aggregator.dispose();
+  });
+
+  it("Codex 中断在可信终态解除未响应提问，不伪造 function output", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    await reconciler.observe(hookEvent(path, "turn-cancel"));
+    appendFileSync(
+      path,
+      `${[
+        {
+          payload: { turn_id: "turn-cancel" },
+          type: "turn_context",
+        },
+        {
+          payload: {
+            call_id: "question-cancel",
+            questions: [],
+            turn_id: "turn-cancel",
+            type: "request_user_input",
+          },
+          type: "event_msg",
+        },
+        {
+          payload: {
+            reason: "interrupted",
+            turn_id: "turn-cancel",
+            type: "turn_aborted",
+          },
+          type: "event_msg",
+        },
+      ]
+        .map((line) => JSON.stringify(line))
+        .join("\n")}\n`
+    );
+
+    await vi.waitFor(() => expect(received).toHaveLength(2));
+    expect(received.map((event) => event.event)).toEqual([
+      "InteractionRequested",
+      "TurnInterrupted",
+    ]);
+    expect(received).not.toContainEqual(
+      expect.objectContaining({ event: "InteractionResolved" })
+    );
+    reconciler.dispose();
+  });
+
+  it("v3 交互上下文对账为标准终态时只保留公共字段", async () => {
+    const received: AgentHookEventPayload[] = [];
+    const reconciler = createCodexTranscriptReconciler({
+      onTerminalEvent: (event) => received.push(event),
+      transcriptRoot,
+    });
+    const common = {
+      actorHint: "subagent" as const,
+      agent: "codex" as const,
+      agentInstanceId: "worker-1",
+      agentType: "researcher",
+      kind: "agentEvent" as const,
+      metadataBase64: Buffer.from('{"source":"hook"}').toString("base64"),
+      nativeState: "waiting",
+      panelId: "panel-1",
+      parentSessionId: "parent-1",
+      pid: 42,
+      promptSnippet: "保留这段提示摘要",
+      sessionId: "session-1",
+      toolName: "Shell",
+      toolUseId: "tool-1",
+      transcriptPath: path,
+      ts: 123,
+      v: 3 as const,
+      windowId: "1",
+    };
+    const contexts: AgentHookEventPayload[] = [
+      {
+        ...common,
+        event: "InteractionRequested",
+        interactionId: "permission-requested",
+        interactionKind: "permission",
+        nativeEvent: "PermissionRequest",
+        turnId: "turn-requested",
+      },
+      {
+        ...common,
+        event: "InteractionResolved",
+        interactionId: "permission-resolved",
+        interactionKind: "permission",
+        interactionOutcome: "accepted",
+        nativeEvent: "PermissionResult",
+        turnId: "turn-resolved",
+      },
+    ];
+
+    for (const [index, context] of contexts.entries()) {
+      await reconciler.observe(context);
+      appendFileSync(
+        path,
+        `${JSON.stringify({
+          type: "event_msg",
+          payload: {
+            turn_id: context.turnId,
+            type: "task_complete",
+          },
+        })}\n`
+      );
+      await vi.waitFor(() => expect(received).toHaveLength(index + 1));
+    }
+
+    for (const event of received) {
+      expect(agentHookEventSchema.safeParse(event).success).toBe(true);
+      expect(event).toMatchObject({
+        actorHint: "subagent",
+        agentInstanceId: "worker-1",
+        agentType: "researcher",
+        event: "TurnCompleted",
+        metadataBase64: common.metadataBase64,
+        nativeEvent: "codex.transcript.task_complete",
+        nativeState: "waiting",
+        panelId: "panel-1",
+        parentSessionId: "parent-1",
+        pid: 42,
+        promptSnippet: "保留这段提示摘要",
+        sessionId: "session-1",
+        toolName: "Shell",
+        toolUseId: "tool-1",
+        ts: 123,
+        v: 3,
+        windowId: "1",
+      });
+      expect(event).not.toHaveProperty("interactionId");
+      expect(event).not.toHaveProperty("interactionKind");
+      expect(event).not.toHaveProperty("interactionOutcome");
+    }
     reconciler.dispose();
   });
 

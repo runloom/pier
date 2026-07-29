@@ -51,7 +51,7 @@ function createProvider(
     fetchUsage: vi.fn(
       async (): Promise<AccountUsageResult> => ({
         status: "ok",
-        windows: [],
+        metrics: [],
       })
     ),
     login: vi.fn(async () => undefined),
@@ -82,10 +82,11 @@ function usageWindow(
   usedPercent: number,
   windowMinutes = 300,
   position: "primary" | "secondary" = "primary"
-): AccountUsageResult["windows"][number] {
+): AccountUsageResult["metrics"][number] {
   return {
+    groupId: "codex",
     id: `codex:${position}`,
-    limitId: "codex",
+    kind: "quota",
     usedPercent,
     windowMinutes,
   };
@@ -468,7 +469,7 @@ describe("pier.codex accounts service", () => {
       fetchUsage: vi.fn(
         async (): Promise<AccountUsageResult> => ({
           status: "ok",
-          windows: [usageWindow(32), usageWindow(12, 10_080, "secondary")],
+          metrics: [usageWindow(32), usageWindow(12, 10_080, "secondary")],
         })
       ),
       readCurrentIdentity: vi.fn(async () => null),
@@ -489,7 +490,9 @@ describe("pier.codex accounts service", () => {
     expect(snap.activeAccountId).toBeNull();
     expect(snap.activeUsage?.status).toBe("ok");
     expect(
-      snap.activeUsage?.windows.map((window) => window.usedPercent)
+      snap.activeUsage?.metrics.map((metric) =>
+        metric.kind === "quota" ? metric.usedPercent : undefined
+      )
     ).toEqual([32, 12]);
     expect(provider.fetchUsage).toHaveBeenCalled();
     service.dispose();
@@ -499,7 +502,7 @@ describe("pier.codex accounts service", () => {
     const { provider, service } = await seedManagedActiveAccount(dir);
     vi.mocked(provider.fetchUsage).mockResolvedValue({
       status: "ok",
-      windows: [usageWindow(55)],
+      metrics: [usageWindow(55)],
     });
 
     await service.refreshUsage({ force: true });
@@ -508,8 +511,10 @@ describe("pier.codex accounts service", () => {
     const activeAccount = snap.accounts.find(
       (account) => account.id === "managed-active"
     );
-    expect(activeAccount?.usage?.windows[0]?.usedPercent).toBe(55);
-    expect(snap.activeUsage?.windows[0]?.usedPercent).toBe(55);
+    expect(activeAccount?.usage?.metrics[0]).toMatchObject({
+      usedPercent: 55,
+    });
+    expect(snap.activeUsage?.metrics[0]).toMatchObject({ usedPercent: 55 });
     service.dispose();
   });
 
@@ -548,7 +553,7 @@ describe("pier.codex accounts service", () => {
     const provider = createProvider({
       fetchUsage: vi.fn(async () => ({
         status: "ok" as const,
-        windows: [usageWindow(42)],
+        metrics: [usageWindow(42)],
       })),
     });
     const service = createCodexAccountsService({
@@ -569,8 +574,8 @@ describe("pier.codex accounts service", () => {
     expect(snapshot.activeAccountId).toBe("account-1");
     expect(
       snapshot.accounts.find((account) => account.id === "account-2")?.usage
-        ?.windows[0]?.usedPercent
-    ).toBe(42);
+        ?.metrics[0]
+    ).toMatchObject({ usedPercent: 42 });
     expect(
       snapshot.accounts.find((account) => account.id === "account-2")?.planType
     ).toBe("pro");
@@ -605,7 +610,7 @@ describe("pier.codex accounts service", () => {
     const provider = createProvider({
       fetchUsage: vi.fn(async () => ({
         status: "ok" as const,
-        windows: [usageWindow(11)],
+        metrics: [usageWindow(11)],
       })),
       readIdentity: vi.fn(async () => ({
         email: "legacy@example.com",
@@ -664,7 +669,7 @@ describe("pier.codex accounts service", () => {
       fetchUsage: vi.fn(async () => ({
         planType: "free",
         status: "ok" as const,
-        windows: [usageWindow(5)],
+        metrics: [usageWindow(5)],
       })),
       readIdentity: vi.fn(async () => ({
         email: "downgraded@example.com",
@@ -719,7 +724,7 @@ describe("pier.codex accounts service", () => {
       fetchUsage: vi.fn(async () => ({
         planType: "free",
         status: "ok" as const,
-        windows: [usageWindow(8)],
+        metrics: [usageWindow(8)],
       })),
       readIdentity: vi.fn(async () => ({
         email: "stale-jwt@example.com",
@@ -775,7 +780,7 @@ describe("pier.codex accounts service", () => {
         maxInFlight = Math.max(maxInFlight, inFlight);
         await new Promise((resolve) => setTimeout(resolve, 5));
         inFlight -= 1;
-        return { status: "ok", windows: [usageWindow(10)] };
+        return { status: "ok", metrics: [usageWindow(10)] };
       }
     );
     const service = createCodexAccountsService({
@@ -800,7 +805,7 @@ describe("pier.codex accounts service", () => {
     );
     expect(maxInFlight).toBeLessThanOrEqual(USAGE_REFRESH_CONCURRENCY);
     for (const account of service.snapshot().accounts) {
-      expect(account.usage?.windows[0]?.usedPercent).toBe(10);
+      expect(account.usage?.metrics[0]).toMatchObject({ usedPercent: 10 });
     }
     service.dispose();
   });
@@ -850,12 +855,12 @@ describe("pier.codex accounts service", () => {
     vi.mocked(provider.fetchUsage)
       .mockResolvedValueOnce({
         status: "ok",
-        windows: [usageWindow(25)],
+        metrics: [usageWindow(25)],
       })
       .mockResolvedValueOnce({
         error: "token expired",
         status: "error",
-        windows: [],
+        metrics: [],
       });
 
     await service.refreshUsage({ accountId: "managed-active", force: true });
@@ -865,7 +870,7 @@ describe("pier.codex accounts service", () => {
     expect(usage).toMatchObject({
       error: "token expired",
       status: "error",
-      windows: [{ usedPercent: 25 }],
+      metrics: [{ usedPercent: 25 }],
     });
     service.dispose();
   });
