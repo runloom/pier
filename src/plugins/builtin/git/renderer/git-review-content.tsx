@@ -3,14 +3,8 @@ import type {
   PierDiffViewItem,
   PierDiffViewRenderWindow,
 } from "@pier/ui/diff-view.tsx";
-import {
-  memo,
-  useCallback,
-  useLayoutEffect,
-  useMemo,
-  useRef,
-  useState,
-} from "react";
+import { memo, useCallback, useLayoutEffect, useRef, useState } from "react";
+import type { ReviewRenderFeedback } from "./git-review-code-view.tsx";
 import {
   prioritizeReviewNavigationDemand,
   type ReviewDocumentDemand,
@@ -27,7 +21,6 @@ import {
 } from "./git-review-document-ui-state.ts";
 import { useReviewFailureSummary } from "./git-review-failure-state.ts";
 import { createGitReviewReadingSession } from "./git-review-reading-session.ts";
-import { reviewGroupsForSurface } from "./git-review-surface-group.ts";
 import type { ReviewSurfaceProps } from "./git-review-surface-types.ts";
 import { GitReviewSurfaceView } from "./git-review-surface-view.tsx";
 import { useGitReviewDocumentDemand } from "./use-git-review-document-demand.ts";
@@ -40,8 +33,10 @@ import { useGitReviewNavigation } from "./use-git-review-navigation.ts";
 import { useGitReviewNavigationError } from "./use-git-review-navigation-error.ts";
 import { useGitReviewProjectionCommit } from "./use-git-review-projection-commit.ts";
 import { useGitReviewReadingCallbacks } from "./use-git-review-reading-callbacks.ts";
+import { useGitReviewRenderWindowReady } from "./use-git-review-render-window-ready.ts";
 import { useGitReviewRetentionSync } from "./use-git-review-retention-sync.ts";
 import { useGitReviewSurfaceNavigationHandoff } from "./use-git-review-surface-navigation-handoff.ts";
+import { useGitReviewSurfaceSessionEntries } from "./use-git-review-surface-session-entries.ts";
 import { useGitReviewTreeOpen } from "./use-git-review-tree-open.ts";
 import { useGitReviewViewportEffects } from "./use-git-review-viewport-effects.ts";
 
@@ -51,6 +46,7 @@ function ReviewSurfaceComponent({
   context,
   diffBase,
   entries,
+  groupSummaries,
   headerLeading,
   indexGeneration,
   indexRefreshFailure,
@@ -71,33 +67,18 @@ function ReviewSurfaceComponent({
   sidebarCollapsed,
   sidebarFooter,
   sidebarHeader,
+  targetSelectionPending = false,
   treeModel,
   warnings,
 }: ReviewSurfaceProps): React.JSX.Element {
-  const surfaceEntries = useMemo(
-    () =>
-      entries.filter((entry) =>
-        entry.renderSlots.some((slot) =>
-          reviewGroupsForSurface(diffBase).includes(slot.group)
-        )
-      ),
-    [diffBase, entries]
-  );
-  const freezeSourceMembership = active && mutationAuthorityBlocked;
-  const preparingNavigationTarget =
-    !active &&
-    navigationRequest !== null &&
-    navigationRequest.surface === diffBase;
-  const retainedSurfaceEntriesRef = useRef(surfaceEntries);
-  const refreshSurfaceMembership =
-    (active && !freezeSourceMembership) || preparingNavigationTarget;
-  if (refreshSurfaceMembership) {
-    retainedSurfaceEntriesRef.current = surfaceEntries;
-  }
-  const sessionEntries = refreshSurfaceMembership
-    ? surfaceEntries
-    : retainedSurfaceEntriesRef.current;
-  const renderUpdatesActive = active && !freezeSourceMembership;
+  const { renderUpdatesActive, sessionEntries, surfaceEntries } =
+    useGitReviewSurfaceSessionEntries({
+      active,
+      diffBase,
+      entries,
+      mutationAuthorityBlocked,
+      navigationRequest,
+    });
   const appearance = useReviewAppearance(context, entries.length > 0);
   const documentControllerRef = useRef<GitReviewDocumentGeneration | null>(
     null
@@ -131,6 +112,8 @@ function ReviewSurfaceComponent({
   const [viewState, setViewState] = useState(EMPTY_DOCUMENT_VIEW_STATE);
   const [projection, setProjection] = useState(EMPTY_REVIEW_PROJECTION);
   const [projectionGeneration, setProjectionGeneration] = useState(0);
+  const [renderFeedback, setRenderFeedback] =
+    useState<ReviewRenderFeedback | null>(null);
   const handleMutationCommitted = useGitReviewMutationCommit(
     onMutationCommitted,
     onMutationTransition
@@ -159,8 +142,11 @@ function ReviewSurfaceComponent({
   useLayoutEffect(() => {
     projectionLocaleRef.current = appearance.locale;
   }, [appearance.locale]);
-  // 渲染层崩溃由 ReviewCodeView 自身以 Empty 呈现,这里无需再镜像状态。
-  const updateRenderFeedback = useCallback(() => undefined, []);
+  // 首屏估算正文保持隐藏时，仍需把渲染错误同步到外层，确保错误主体不会被骨架遮住。
+  const updateRenderFeedback = useCallback(
+    (feedback: ReviewRenderFeedback | null) => setRenderFeedback(feedback),
+    []
+  );
   const { cancelRetentionSync, syncRetentionLimits } =
     useGitReviewRetentionSync({
       controllerRef: documentControllerRef,
@@ -248,18 +234,13 @@ function ReviewSurfaceComponent({
     demandPrefetchEntryKeysRef,
   });
   const activeRef = useRef(renderUpdatesActive);
-  const requestRenderWindowRef = useRef(requestRenderWindow);
   activeRef.current = renderUpdatesActive;
-  requestRenderWindowRef.current = requestRenderWindow;
-  const handleRenderWindowChange = useCallback(
-    (window: PierDiffViewRenderWindow) => {
-      if (activeRef.current) {
-        requestRenderWindowRef.current(window);
-        notifyRenderWindowApplied(window);
-      }
-    },
-    [notifyRenderWindowApplied]
-  );
+  const { handleRenderWindowChange, renderWindowReady } =
+    useGitReviewRenderWindowReady({
+      activeRef,
+      notifyRenderWindowApplied,
+      requestRenderWindow,
+    });
   const {
     applyItemUpdates,
     clearLatestItemUpdates,
@@ -439,6 +420,9 @@ function ReviewSurfaceComponent({
       sessionEntries,
     ]
   );
+  const headerSummary = targetSelectionPending
+    ? undefined
+    : groupSummaries[activeSurface === "index" ? "unstaged" : activeSurface];
   return (
     <GitReviewSurfaceView
       active={active}
@@ -451,6 +435,7 @@ function ReviewSurfaceComponent({
       diffHandleRef={diffHandleRef}
       entries={entries}
       failureSummary={failureSummary}
+      {...(headerSummary === undefined ? {} : { headerSummary })}
       handleMutationCommitted={handleMutationCommitted}
       handleRenderWindowChange={handleRenderWindowChange}
       hasPendingNavigation={hasPendingNavigation}
@@ -468,6 +453,8 @@ function ReviewSurfaceComponent({
       openTreeNode={openTreeNode}
       panelId={panelId}
       projection={projection}
+      renderFeedback={renderFeedback}
+      renderWindowReady={renderWindowReady}
       replayFailure={replayFailure}
       retryFailure={retryFailure}
       retryLatestItemUpdates={retryLatestItemUpdates}
@@ -478,6 +465,7 @@ function ReviewSurfaceComponent({
       sidebarCollapsed={sidebarCollapsed}
       {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
       {...(sidebarHeader === undefined ? {} : { sidebarHeader })}
+      targetSelectionPending={targetSelectionPending}
       treeModel={treeModel}
       updateRenderFeedback={updateRenderFeedback}
       updateRenderItemError={updateRenderItemError}

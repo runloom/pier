@@ -40,6 +40,7 @@ import {
 import { listBranches as listGitBranches } from "./git-branch-list.ts";
 import { searchBranches as searchGitBranches } from "./git-branch-search.ts";
 import { assertSafeBranchName, switchBranch } from "./git-branch-switch.ts";
+import { GIT_STATUS_ARGS } from "./git-change-summary.ts";
 import { searchCommits as searchGitCommits } from "./git-commit-search.ts";
 import {
   discardChanges as discardWorkingTreeChanges,
@@ -91,7 +92,6 @@ import {
   popStash,
   stashChanges,
 } from "./git-stash-operations.ts";
-
 import {
   assembleGitStatus,
   type PrefetchedStatus,
@@ -327,10 +327,7 @@ export function createGitService({
     },
     getStatus: (cwd, prefetched) => assembleGitStatus(runGit, cwd, prefetched),
     isWorkingTreeClean: async (cwd) => {
-      const output = await runGit(
-        ["status", "--porcelain=v2", "--branch", "-z"],
-        cwd
-      );
+      const output = await runGit(GIT_STATUS_ARGS, cwd);
       return parseGitStatus(output).files.length === 0;
     },
     listBranches: (cwd, options) => listGitBranches(runGit, cwd, options),

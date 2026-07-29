@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { gitChangeSummarySchema } from "../git.ts";
 import {
   GIT_REVIEW_GROUP_ORDER,
   GIT_REVIEW_MAX_SECTIONS,
@@ -162,6 +163,14 @@ export type GitReviewIndexEntry = z.infer<typeof gitReviewIndexEntrySchema>;
 
 export const gitReviewIndexOkSchema = z.strictObject({
   entries: z.array(gitReviewIndexEntrySchema),
+  groupSummaries: z
+    .strictObject({
+      committed: gitChangeSummarySchema.optional(),
+      conflict: gitChangeSummarySchema.optional(),
+      staged: gitChangeSummarySchema.optional(),
+      unstaged: gitChangeSummarySchema.optional(),
+    })
+    .default({}),
   /**
    * main 解析出的 Git 内容修订号。可选字段用于兼容旧协议快照；
    * 当前 main 侧读取器始终提供，用于合并重复 watch 刷新。

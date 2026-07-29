@@ -32,8 +32,14 @@ function fakeStatus(): GitStatus {
       upstreamGone: false,
       mergedIntoDefault: null,
     },
+    changeSummary: {
+      changedFiles: 0,
+      deletions: 0,
+      excludedFiles: 0,
+      insertions: 0,
+      kind: "lineDelta",
+    },
     counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
-    delta: null,
     files: [],
     remoteSync: null,
     repoState: { kind: "clean" },
@@ -978,16 +984,16 @@ describe("createGitWatchService", () => {
   // A4: numstat 瞬时失败不吞信号——失败态签名 ≠ 前后成功态
   it("numstat 瞬时失败产生独立签名（失败 ≠ 成功且成功前后一致）", async () => {
     let call = 0;
-    // 每次 defaultWorktreeSignature 会调 1 次 status + 2 次 numstat。
-    // 让第二轮的两条 numstat 失败，其余成功。
+    // 每次 defaultWorktreeSignature 会调 1 次 status + 1 次工作树 numstat。
+    // 让第二轮 numstat 失败，其余成功。
     const execFake = (args: readonly string[]): Promise<string> => {
-      if (args[0] === "status") {
-        return Promise.resolve("# branch.head main\0");
+      if (args.includes("status")) {
+        return Promise.resolve("# branch.oid abc123\0# branch.head main\0");
       }
       // numstat
       call += 1;
-      // 第 2 轮（call 3、4）失败
-      if (call === 3 || call === 4) {
+      // 第 2 轮（call 2）失败
+      if (call === 2) {
         return Promise.reject(new Error("index.lock"));
       }
       return Promise.resolve("");

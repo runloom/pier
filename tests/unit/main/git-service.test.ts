@@ -289,26 +289,24 @@ describe("parseGitBranchRefs", () => {
 });
 
 describe("createGitService", () => {
-  it("getStatus 汇总 status + delta + stash + repoState + upstreamGone", async () => {
+  it("getStatus 汇总完整 changeSummary，并以一致性双取样避免 staged/unstaged 双算", async () => {
     const argSets: Array<readonly string[]> = [];
     const service = createGitService({
       execGit: (args, cwd) => {
         argSets.push(args);
-        if (args[0] === "status") {
+        if (args.includes("status")) {
           expect(cwd).toBe("/repo");
           return Promise.resolve(
             `${[
               "# branch.head main",
+              "# branch.oid abc123",
               "# branch.upstream origin/main",
               "1 .M N... 100644 100644 100644 a b src/foo.ts",
             ].join("\0")}\0`
           );
         }
         if (args[0] === "diff") {
-          // staged 与 unstaged 都返回 numstat
-          return Promise.resolve(
-            args.includes("--cached") ? "5\t2\ta.ts\0" : "3\t1\tb.ts\0"
-          );
+          return Promise.resolve("3\t1\tb.ts\0");
         }
         if (args[0] === "rev-list") {
           // stash count
@@ -328,12 +326,17 @@ describe("createGitService", () => {
 
     const status = await service.getStatus("/repo");
 
-    expect(argSets.some((a) => a[0] === "status")).toBe(true);
-    expect(argSets.some((a) => a[0] === "diff" && a.includes("--cached"))).toBe(
-      true
-    );
+    expect(argSets.some((a) => a.includes("status"))).toBe(true);
     expect(
-      argSets.some((a) => a[0] === "diff" && !a.includes("--cached"))
+      argSets.some(
+        (a) =>
+          a[0] === "diff" &&
+          a.includes("HEAD") &&
+          a.includes("--no-ext-diff") &&
+          a.includes("--find-copies=50%") &&
+          !a.includes("--cached") &&
+          !a.includes("--no-renames")
+      )
     ).toBe(true);
     expect(argSets.some((a) => a[0] === "rev-list")).toBe(true);
     expect(argSets.some((a) => a[0] === "for-each-ref")).toBe(true);
@@ -346,31 +349,109 @@ describe("createGitService", () => {
       staged: 0,
       untracked: 0,
     });
-    expect(status.delta).toEqual({ deletions: 3, insertions: 8 });
+    expect(status.changeSummary).toEqual({
+      changedFiles: 1,
+      deletions: 1,
+      excludedFiles: 0,
+      insertions: 3,
+      kind: "lineDelta",
+    });
     expect(status.stashCount).toBe(2);
     expect(status.repoState).toEqual({ kind: "clean" });
+    expect(
+      argSets.filter((args) => args[0] === "diff" && args.includes("--numstat"))
+    ).toHaveLength(2);
   });
 
-  // A7: 传 prefetched 时跳过 status 与两条 numstat spawn，结果与不传等价
+  it("getStatus 取样期间状态变化时整体降级为文件数", async () => {
+    let statusReads = 0;
+    const service = createGitService({
+      execGit: (args) => {
+        if (args.includes("status")) {
+          statusReads += 1;
+          const path = statusReads === 1 ? "src/a.ts" : "src/b.ts";
+          return Promise.resolve(
+            `${[
+              "# branch.head main",
+              "# branch.oid abc123",
+              `1 .M N... 100644 100644 100644 a b ${path}`,
+            ].join("\0")}\0`
+          );
+        }
+        if (args[0] === "diff") return Promise.resolve("3\t1\tsrc/a.ts\0");
+        if (args[0] === "rev-list") return Promise.resolve("0\n");
+        if (args[0] === "rev-parse")
+          return Promise.resolve("/tmp/nonexistent-gitdir\n");
+        if (args[0] === "for-each-ref") return Promise.resolve("");
+        return Promise.resolve("");
+      },
+    });
+
+    const status = await service.getStatus("/repo");
+
+    expect(status.changeSummary).toEqual({
+      changedFiles: 1,
+      kind: "filesOnly",
+      omittedFiles: 1,
+      reasons: ["inconsistent"],
+    });
+  });
+
+  it("getStatus 两次 numstat 不一致时整体降级为文件数", async () => {
+    let numstatReads = 0;
+    const service = createGitService({
+      execGit: (args) => {
+        if (args.includes("status"))
+          return Promise.resolve(
+            `${[
+              "# branch.head main",
+              "# branch.oid abc123",
+              "1 .M N... 100644 100644 100644 a b src/a.ts",
+            ].join("\0")}\0`
+          );
+        if (args[0] === "diff") {
+          numstatReads += 1;
+          return Promise.resolve(
+            numstatReads === 1 ? "3\t1\tsrc/a.ts\0" : "4\t1\tsrc/a.ts\0"
+          );
+        }
+        if (args[0] === "rev-list") return Promise.resolve("0\n");
+        if (args[0] === "rev-parse")
+          return Promise.resolve("/tmp/nonexistent-gitdir\n");
+        if (args[0] === "for-each-ref") return Promise.resolve("");
+        return Promise.resolve("");
+      },
+    });
+
+    const status = await service.getStatus("/repo");
+
+    expect(numstatReads).toBe(2);
+    expect(status.changeSummary).toEqual({
+      changedFiles: 1,
+      kind: "filesOnly",
+      omittedFiles: 1,
+      reasons: ["inconsistent"],
+    });
+  });
+
+  // A7: 传 prefetched 时跳过 status 与一次工作树 numstat spawn，结果与不传等价
   it("getStatus 传 prefetched 时不再 spawn status/numstat，结果与不传等价", async () => {
     const statusOut = `${[
       "# branch.head main",
+      "# branch.oid abc123",
       "# branch.upstream origin/main",
       "1 .M N... 100644 100644 100644 a b src/foo.ts",
     ].join("\0")}\0`;
-    const unstagedNumstat = "3\t1\tb.ts\0";
-    const stagedNumstat = "5\t2\ta.ts\0";
+    const workingTreeNumstat = "3\t1\tb.ts\0";
     const makeExec =
       (record: Array<readonly string[]>) =>
       (args: readonly string[]): Promise<string> => {
         record.push(args);
-        if (args[0] === "status") {
+        if (args.includes("status")) {
           return Promise.resolve(statusOut);
         }
         if (args[0] === "diff") {
-          return Promise.resolve(
-            args.includes("--cached") ? stagedNumstat : unstagedNumstat
-          );
+          return Promise.resolve(workingTreeNumstat);
         }
         if (args[0] === "rev-list") {
           return Promise.resolve("2\n");
@@ -393,15 +474,14 @@ describe("createGitService", () => {
       execGit: makeExec(prefetchedCalls),
     });
     const prefetched = await prefetchedService.getStatus("/repo", {
-      stagedNumstat,
       statusOut,
-      unstagedNumstat,
+      workingTreeNumstat,
     });
 
     // 等价
     expect(prefetched).toEqual(plain);
     // 预取路径不再调 status
-    expect(prefetchedCalls.some((a) => a[0] === "status")).toBe(false);
+    expect(prefetchedCalls.some((a) => a.includes("status"))).toBe(false);
     // 预取路径不再调 numstat（diff --numstat）
     expect(
       prefetchedCalls.some((a) => a[0] === "diff" && a.includes("--numstat"))

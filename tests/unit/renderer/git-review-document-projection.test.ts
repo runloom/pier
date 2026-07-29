@@ -4,6 +4,7 @@ import type {
   GitReviewIndexEntry,
 } from "@shared/contracts/git-review.ts";
 import { describe, expect, it, vi } from "vitest";
+import { toCodeViewItems } from "../../../packages/ui/src/diff-view-items.ts";
 import {
   estimateLinesForReviewSlot,
   indexReviewDocumentProjection,
@@ -67,6 +68,48 @@ function context(): RendererPluginContext {
 }
 
 describe("projectReviewLedger stable-ledger", () => {
+  it("omits mutation controls when projecting a read-only committed patch", () => {
+    const path = "src/committed.ts";
+    const item: GitReviewIndexEntry = {
+      entryKey: "entry:committed",
+      oldPaths: [],
+      path,
+      renderSlots: [
+        {
+          group: "committed",
+          oldPath: null,
+          sectionKey: "section:committed",
+          status: "added",
+          targetPath: path,
+        },
+      ],
+      status: "added",
+    };
+    const document = patchDocument({
+      entryKey: item.entryKey,
+      patch: [
+        `diff --git a/${path} b/${path}`,
+        "new file mode 100644",
+        "index 0000000..1111111",
+        "--- /dev/null",
+        `+++ b/${path}`,
+        "@@ -0,0 +1 @@",
+        "+export const committed = true;",
+        "",
+      ].join("\n"),
+      sectionKey: "section:committed",
+      stageState: null,
+    });
+    const projection = projectReviewDocumentResource(
+      { document, entry: item, kind: "loaded" },
+      context(),
+      "en"
+    );
+
+    expect(projection.items[0]).not.toHaveProperty("changeControls");
+    expect(toCodeViewItems(projection.items, new Map()).errors).toEqual([]);
+  });
+
   it("reuses immutable loaded projection for the same document and entry semantics", () => {
     const resource = loaded(2);
     if (resource.kind !== "loaded") {

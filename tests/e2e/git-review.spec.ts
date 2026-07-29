@@ -1669,6 +1669,12 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     });
     const reviewHeader = page.locator('[data-slot="file-panel-header"]');
     await expect(reviewHeader).toBeVisible();
+    const initialChangeSummary = activeReviewSurface(page).getByTestId(
+      "git-review-change-summary"
+    );
+    await expect(initialChangeSummary).toBeVisible();
+    await expect(initialChangeSummary).toContainText("+5002");
+    await expect(initialChangeSummary).toContainText("−5002");
     expect(
       await reviewHeader.evaluate((header) =>
         Math.round(header.getBoundingClientRect().height)
@@ -2012,6 +2018,12 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
         '[data-git-review-document-settled="true"]'
       )
     ).toBeAttached({ timeout: 30_000 });
+    const stagedChangeSummary = activeReviewSurface(page).getByTestId(
+      "git-review-change-summary"
+    );
+    await expect(stagedChangeSummary).toContainText("+1");
+    await expect(stagedChangeSummary).toContainText("−1");
+    await expect(stagedChangeSummary).not.toContainText("+5002");
     await expect
       .poll(
         () =>

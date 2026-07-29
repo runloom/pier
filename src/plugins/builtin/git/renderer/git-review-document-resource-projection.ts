@@ -125,22 +125,26 @@ function projectLoadedReviewDocumentResource(
           },
         ];
       }
+      const changeControls =
+        stageControl === null
+          ? []
+          : section.changeBlocks.flatMap((block) =>
+              block.stageState === null
+                ? []
+                : [
+                    {
+                      canRevert: block.stageState !== "staged",
+                      changeBlockIndex: block.changeBlockIndex,
+                      changeKey: block.changeKey,
+                      hunkIndex: block.hunkIndex,
+                      state: block.stageState,
+                    },
+                  ]
+            );
       return [
         {
           cacheKey: `git-review-section:${section.sectionKey}:${section.patch.length}:${fnv1a32(section.patch)}`,
-          changeControls: section.changeBlocks.flatMap((block) =>
-            block.stageState === null
-              ? []
-              : [
-                  {
-                    canRevert: block.stageState !== "staged",
-                    changeBlockIndex: block.changeBlockIndex,
-                    changeKey: block.changeKey,
-                    hunkIndex: block.hunkIndex,
-                    state: block.stageState,
-                  },
-                ]
-          ),
+          ...(changeControls.length === 0 ? {} : { changeControls }),
           fileDisplay: fileDisplayForSlot(slot),
           id: section.sectionKey,
           kind: "loaded",

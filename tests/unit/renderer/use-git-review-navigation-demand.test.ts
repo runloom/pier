@@ -110,6 +110,7 @@ function acknowledgeTargetWindow(
   act(() => {
     hook.result.current.notifyRenderWindowApplied({
       bufferedItemIds: [],
+      estimatedItemIds: [],
       visibleItemIds: [sectionKey],
     });
   });
@@ -266,6 +267,7 @@ describe("useGitReviewNavigation demand sync", () => {
     act(() => {
       hook.result.current.notifyRenderWindowApplied({
         bufferedItemIds: [],
+        estimatedItemIds: [],
         visibleItemIds: [],
       });
     });

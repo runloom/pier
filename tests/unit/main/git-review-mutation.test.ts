@@ -622,6 +622,7 @@ describe("GitReviewService semantic mutation", () => {
       ],
       result: {
         entries: [indexEntry],
+        groupSummaries: {},
         indexRevision: "index:rename",
         kind: "ok",
         warnings: [],
@@ -726,6 +727,7 @@ describe("GitReviewService semantic mutation", () => {
       ],
       result: {
         entries: [indexEntry],
+        groupSummaries: {},
         indexRevision: "index:copy",
         kind: "ok",
         warnings: [],

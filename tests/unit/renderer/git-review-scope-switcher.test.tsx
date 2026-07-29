@@ -86,15 +86,17 @@ function switcherContext(git: {
 
 function renderSwitcher(context: RendererPluginContext) {
   const onSelectTarget = vi.fn();
+  const onTargetSelectionPendingChange = vi.fn();
   render(
     <GitReviewScopeSwitcher
       context={context}
       gitRootPath="/repo"
       onSelectTarget={onSelectTarget}
+      onTargetSelectionPendingChange={onTargetSelectionPendingChange}
       target={{ kind: "uncommitted" }}
     />
   );
-  return { onSelectTarget };
+  return { onSelectTarget, onTargetSelectionPendingChange };
 }
 
 async function selectScope(name: string) {
@@ -124,7 +126,8 @@ describe("GitReviewScopeSwitcher 自动选取", () => {
           { author: "dev", date: "2026-07-20", hash: HASH, message: "feat" },
         ]),
     });
-    const { onSelectTarget } = renderSwitcher(context);
+    const { onSelectTarget, onTargetSelectionPendingChange } =
+      renderSwitcher(context);
 
     await selectScope("Commit");
 
@@ -134,6 +137,8 @@ describe("GitReviewScopeSwitcher 自动选取", () => {
         oid: HASH,
       });
     });
+    expect(onTargetSelectionPendingChange).toHaveBeenCalledWith(true);
+    expect(onTargetSelectionPendingChange).toHaveBeenLastCalledWith(false);
     expect(notifyError).not.toHaveBeenCalled();
   });
 
@@ -141,7 +146,8 @@ describe("GitReviewScopeSwitcher 自动选取", () => {
     const { context, notifyError } = switcherContext({
       searchCommits: async () => commitsResult([], "error"),
     });
-    const { onSelectTarget } = renderSwitcher(context);
+    const { onSelectTarget, onTargetSelectionPendingChange } =
+      renderSwitcher(context);
 
     await selectScope("Commit");
 
@@ -151,6 +157,7 @@ describe("GitReviewScopeSwitcher 自动选取", () => {
       );
     });
     expect(onSelectTarget).not.toHaveBeenCalled();
+    expect(onTargetSelectionPendingChange).toHaveBeenLastCalledWith(false);
     expect(screen.getByTestId("git-review-scope-switcher")).toHaveTextContent(
       "Uncommitted"
     );
@@ -181,7 +188,8 @@ describe("GitReviewScopeSwitcher 自动选取", () => {
       searchBranches: async () =>
         branchesResult([branchOption("feature", true), branchOption("main")]),
     });
-    const { onSelectTarget } = renderSwitcher(context);
+    const { onSelectTarget, onTargetSelectionPendingChange } =
+      renderSwitcher(context);
 
     await selectScope("Branch");
 
@@ -191,6 +199,8 @@ describe("GitReviewScopeSwitcher 自动选取", () => {
         ref: "main",
       });
     });
+    expect(onTargetSelectionPendingChange).toHaveBeenCalledWith(true);
+    expect(onTargetSelectionPendingChange).toHaveBeenLastCalledWith(false);
     expect(notifyError).not.toHaveBeenCalled();
   });
 

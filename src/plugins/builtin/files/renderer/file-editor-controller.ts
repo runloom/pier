@@ -134,18 +134,15 @@ export class FileEditorController {
       views: this.#views,
     });
   }
-
   async initialize(): Promise<void> {
     await this.#documents.initialize();
   }
-
   async runMutation<T>(
     operation: () => Promise<T> | T,
     scope?: { documentId?: string; panelId?: string }
   ): Promise<T> {
     return await this.#mutationSuspend.run(operation, scope);
   }
-
   async suspendMutations(signal: AbortSignal): Promise<void> {
     await this.#mutationSuspend.suspend({ kind: "all" }, signal);
     try {
@@ -233,7 +230,6 @@ export class FileEditorController {
     }
     this.#documents.discardDocument(documentId);
   }
-
   async moveDiskDocumentSource(
     root: string,
     oldPath: string,
@@ -243,7 +239,6 @@ export class FileEditorController {
     await this.#pathMutations.move(root, oldPath, newPath, affectedDocuments);
     await this.#documents.reconcileMovedPath(root, newPath);
   }
-
   async movePath(
     root: string,
     oldPath: string,

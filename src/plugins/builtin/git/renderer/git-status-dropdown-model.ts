@@ -1,6 +1,6 @@
 import type {
+  GitChangeSummary,
   GitCounts,
-  GitDelta,
   GitRepoState,
   GitStatus,
 } from "@shared/contracts/git.ts";
@@ -125,12 +125,10 @@ const EMPTY_COUNTS: GitCounts = {
 
 const LINE_DELETION_SIGN = "\u2212";
 
-function totalChanges(counts: GitCounts): number {
-  return counts.conflict + counts.modified + counts.staged + counts.untracked;
-}
-
-function hasLineDelta(delta: GitDelta | null): boolean {
-  return Boolean(delta && (delta.insertions > 0 || delta.deletions > 0));
+function hasLineDelta(
+  summary: GitChangeSummary
+): summary is Extract<GitChangeSummary, { kind: "lineDelta" }> {
+  return summary.kind === "lineDelta";
 }
 
 function operationIcon(
@@ -190,9 +188,7 @@ export function resolveRemoteSyncActionId(
   if (ahead === 0 && behind === 0) {
     return null;
   }
-  const counts = status.counts ?? EMPTY_COUNTS;
-  const hasLocalChanges =
-    totalChanges(counts) > 0 || hasLineDelta(status.delta);
+  const hasLocalChanges = status.changeSummary.changedFiles > 0;
   if (behind > 0 && hasLocalChanges) {
     return null;
   }
@@ -230,13 +226,13 @@ function syncAssistiveLabel(
   return parts.join(", ");
 }
 
-function isLargeChange(counts: GitCounts, delta: GitDelta | null): boolean {
-  if (totalChanges(counts) >= GIT_LARGE_CHANGE_FILE_THRESHOLD) {
+function isLargeChange(summary: GitChangeSummary): boolean {
+  if (summary.changedFiles >= GIT_LARGE_CHANGE_FILE_THRESHOLD) {
     return true;
   }
   return Boolean(
-    delta &&
-      delta.insertions + delta.deletions >= GIT_LARGE_CHANGE_LINE_THRESHOLD
+    summary.kind === "lineDelta" &&
+      summary.insertions + summary.deletions >= GIT_LARGE_CHANGE_LINE_THRESHOLD
   );
 }
 
@@ -284,25 +280,23 @@ function operationRows(
 
 function changesRow(
   status: GitStatus,
-  counts: GitCounts,
   text: GitStatusDropdownText
 ): GitStatusDropdownRow {
-  const total = totalChanges(counts);
-  const delta = status.delta;
-  const deltaValue = hasLineDelta(delta)
-    ? ` · +${delta?.insertions ?? 0} ${LINE_DELETION_SIGN}${delta?.deletions ?? 0}`
+  const summary = status.changeSummary;
+  const deltaValue = hasLineDelta(summary)
+    ? ` · +${summary.insertions} ${LINE_DELETION_SIGN}${summary.deletions}`
     : "";
-  const large = isLargeChange(counts, delta);
+  const large = isLargeChange(summary);
   return {
     action: "viewChanges",
     icon: "changed",
     id: "changes",
     label: text.changes,
     tone: large ? "warning" : "default",
-    value: `${total}${deltaValue}`,
-    ...(hasLineDelta(delta)
+    value: `${summary.changedFiles}${deltaValue}`,
+    ...(hasLineDelta(summary)
       ? {
-          assistiveLabel: `${delta?.insertions ?? 0} ${text.insertions}, ${delta?.deletions ?? 0} ${text.deletions}`,
+          assistiveLabel: `${summary.insertions} ${text.insertions}, ${summary.deletions} ${text.deletions}`,
         }
       : {}),
     ...(large ? { title: text.largeChange } : {}),
@@ -324,11 +318,10 @@ function syncRow(
   const caveat =
     isSyncUncertain(status) && remoteSyncLabel ? remoteSyncLabel : null;
   if (actionId === null) {
-    const counts = status.counts ?? EMPTY_COUNTS;
     const blockedByLocalChanges =
       canUseUpstream(status) &&
       behind > 0 &&
-      (totalChanges(counts) > 0 || hasLineDelta(status.delta));
+      status.changeSummary.changedFiles > 0;
     const title = blockedByLocalChanges ? text.pullBlocked : caveat;
     return {
       action: null,
@@ -451,8 +444,8 @@ export function deriveGitStatusDropdownModel(
     if (status.repoState.kind !== "bisecting") {
       operationKind = status.repoState.kind;
     }
-  } else if (totalChanges(counts) > 0 || hasLineDelta(status.delta)) {
-    rows.push(changesRow(status, counts, text));
+  } else if (status.changeSummary.changedFiles > 0) {
+    rows.push(changesRow(status, text));
   } else {
     rows.push({
       action: null,

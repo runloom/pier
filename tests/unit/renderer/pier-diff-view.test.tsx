@@ -164,6 +164,7 @@ describe("PierDiffView", () => {
       y: 0,
     }));
     const bufferedElement = document.createElement("diffs-container");
+    bufferedElement.setAttribute("data-pier-estimate", "true");
     bufferedElement.getBoundingClientRect = vi.fn(() => ({
       bottom: 160,
       height: 40,
@@ -218,6 +219,7 @@ describe("PierDiffView", () => {
     await waitFor(() =>
       expect(onRenderWindowChange).toHaveBeenCalledWith({
         bufferedItemIds: ["second.ts"],
+        estimatedItemIds: ["second.ts"],
         visibleItemIds: ["file.ts"],
       })
     );

@@ -58,6 +58,13 @@ const ZH_TEXT: GitStatusDropdownText = {
 };
 
 function makeStatus(overrides: Partial<GitStatus> = {}): GitStatus {
+  const counts = {
+    conflict: 0,
+    modified: 0,
+    staged: 0,
+    untracked: 0,
+    ...overrides.counts,
+  };
   return {
     branch: {
       ahead: 0,
@@ -69,14 +76,15 @@ function makeStatus(overrides: Partial<GitStatus> = {}): GitStatus {
       upstreamGone: false,
       ...overrides.branch,
     },
-    counts: {
-      conflict: 0,
-      modified: 0,
-      staged: 0,
-      untracked: 0,
-      ...overrides.counts,
+    changeSummary: overrides.changeSummary ?? {
+      changedFiles:
+        counts.conflict + counts.modified + counts.staged + counts.untracked,
+      deletions: 0,
+      excludedFiles: 0,
+      insertions: 0,
+      kind: "lineDelta",
     },
-    delta: null,
+    counts,
     files: [],
     remoteSync: null,
     repoState: { kind: "clean" },
@@ -142,7 +150,13 @@ describe("deriveGitStatusDropdownModel", () => {
           upstreamGone: false,
         },
         counts: { conflict: 0, modified: 4, staged: 2, untracked: 1 },
-        delta: { deletions: 42, insertions: 128 },
+        changeSummary: {
+          changedFiles: 7,
+          deletions: 42,
+          excludedFiles: 0,
+          insertions: 128,
+          kind: "lineDelta",
+        },
       }),
       { remoteSyncLabel: "Remote fetched 1 min ago" }
     );
@@ -153,6 +167,23 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(changes.value).toBe("7 · +128 −42");
     expect(changes.tone).toBe("default");
     expect(model.contextLine).toBe("pier · Remote fetched 1 min ago");
+  });
+
+  it("uses the canonical unique file count when line totals are unavailable", () => {
+    const model = derive(
+      makeStatus({
+        changeSummary: {
+          changedFiles: 1,
+          kind: "filesOnly",
+          omittedFiles: 1,
+          reasons: ["invalidEncoding"],
+        },
+        // MM 同时进入两个分类，但仍然只是一个文件。
+        counts: { conflict: 0, modified: 1, staged: 1, untracked: 0 },
+      })
+    );
+
+    expect(row(model, "changes").value).toBe("1");
   });
 
   it("escalates the changes row for large changes", () => {
@@ -172,9 +203,12 @@ describe("deriveGitStatusDropdownModel", () => {
     const byLines = derive(
       makeStatus({
         counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
-        delta: {
+        changeSummary: {
+          changedFiles: 1,
           deletions: 0,
+          excludedFiles: 0,
           insertions: GIT_LARGE_CHANGE_LINE_THRESHOLD,
+          kind: "lineDelta",
         },
       })
     );
@@ -433,7 +467,13 @@ describe("deriveGitStatusDropdownModel", () => {
   it("does not treat zero line delta as dirty", () => {
     const model = derive(
       makeStatus({
-        delta: { deletions: 0, insertions: 0 },
+        changeSummary: {
+          changedFiles: 0,
+          deletions: 0,
+          excludedFiles: 0,
+          insertions: 0,
+          kind: "lineDelta",
+        },
       })
     );
 
@@ -441,11 +481,37 @@ describe("deriveGitStatusDropdownModel", () => {
     expect(row(model, "clean").action).toBeNull();
   });
 
+  it("完整行统计的下拉行同时保留新增和删除零值", () => {
+    const model = derive(
+      makeStatus({
+        changeSummary: {
+          changedFiles: 1,
+          deletions: 3,
+          excludedFiles: 0,
+          insertions: 0,
+          kind: "lineDelta",
+        },
+        counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
+      })
+    );
+
+    expect(row(model, "changes").value).toBe("1 · +0 −3");
+    expect(row(model, "changes").assistiveLabel).toBe(
+      "0 insertions, 3 deletions"
+    );
+  });
+
   it("formats rows with injected localized text", () => {
     const model = derive(
       makeStatus({
         counts: { conflict: 0, modified: 1, staged: 0, untracked: 0 },
-        delta: { deletions: 1, insertions: 2 },
+        changeSummary: {
+          changedFiles: 1,
+          deletions: 1,
+          excludedFiles: 0,
+          insertions: 2,
+          kind: "lineDelta",
+        },
       }),
       { text: ZH_TEXT }
     );

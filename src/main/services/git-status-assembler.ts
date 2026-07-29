@@ -1,4 +1,10 @@
 import type { GitStatus } from "../../shared/contracts/git.ts";
+import {
+  buildGitChangeSummary,
+  GIT_STATUS_ARGS,
+  GIT_WORKING_TREE_NUMSTAT_ARGS,
+  gitChangeSummaryCommandFailureReason,
+} from "./git-change-summary.ts";
 import { detectMergedIntoDefault } from "./git-merged-detector.ts";
 import {
   deriveCounts,
@@ -15,7 +21,6 @@ import { getRemoteSync } from "./git-remote-sync-registry.ts";
 import {
   detectRepoState,
   type ExecGitFn,
-  getLineDelta,
   getStashCount,
 } from "./git-status-detectors.ts";
 
@@ -27,9 +32,65 @@ import {
  */
 export interface PrefetchedStatus {
   refsTable?: RefsTable;
-  stagedNumstat: string;
   statusOut: string;
-  unstagedNumstat: string;
+  workingTreeNumstat: string;
+}
+
+interface ConsistentStatusSnapshot {
+  readonly statusOut: string;
+  readonly unavailableReason?: "commandFailed" | "inconsistent" | "timeout";
+  readonly workingTreeNumstat: string;
+}
+
+async function readConsistentStatusSnapshot(
+  execGit: ExecGitFn,
+  cwd: string
+): Promise<ConsistentStatusSnapshot> {
+  const statusBefore = await execGit(GIT_STATUS_ARGS, cwd);
+  const hasHead = parseGitStatus(statusBefore).branch.oid !== null;
+  let numstatBefore = "";
+  try {
+    if (hasHead)
+      numstatBefore = await execGit(
+        [...GIT_WORKING_TREE_NUMSTAT_ARGS, "HEAD"],
+        cwd
+      );
+  } catch (error) {
+    return {
+      statusOut: statusBefore,
+      unavailableReason: gitChangeSummaryCommandFailureReason(error),
+      workingTreeNumstat: "",
+    };
+  }
+  const statusAfter = await execGit(GIT_STATUS_ARGS, cwd);
+  if (statusBefore !== statusAfter) {
+    return {
+      statusOut: statusAfter,
+      unavailableReason: "inconsistent",
+      workingTreeNumstat: numstatBefore,
+    };
+  }
+  let numstatAfter = "";
+  try {
+    if (hasHead)
+      numstatAfter = await execGit(
+        [...GIT_WORKING_TREE_NUMSTAT_ARGS, "HEAD"],
+        cwd
+      );
+  } catch (error) {
+    return {
+      statusOut: statusAfter,
+      unavailableReason: gitChangeSummaryCommandFailureReason(error),
+      workingTreeNumstat: numstatBefore,
+    };
+  }
+  return {
+    statusOut: statusAfter,
+    ...(numstatBefore === numstatAfter
+      ? {}
+      : { unavailableReason: "inconsistent" as const }),
+    workingTreeNumstat: numstatAfter,
+  };
 }
 
 /**
@@ -41,33 +102,35 @@ export async function assembleGitStatus(
   cwd: string,
   prefetched?: PrefetchedStatus
 ): Promise<GitStatus> {
-  // wave 1：可并发的独立 op（status 输出 + 增删 + stash + gitDir 解析 + refs 表）
-  const [statusOut, delta, stashCount, gitDirOut, refsTable] =
-    await Promise.all([
-      prefetched === undefined
-        ? execGit(["status", "--porcelain=v2", "--branch", "-z"], cwd)
-        : Promise.resolve(prefetched.statusOut),
-      getLineDelta(
-        execGit,
-        cwd,
-        prefetched === undefined
-          ? undefined
-          : {
-              stagedNumstat: prefetched.stagedNumstat,
-              unstagedNumstat: prefetched.unstagedNumstat,
-            }
-      ),
-      getStashCount(execGit, cwd),
-      execGit(
-        ["rev-parse", "--path-format=absolute", "--absolute-git-dir"],
-        cwd
-      ),
-      prefetched?.refsTable === undefined
-        ? fetchRefsTable(execGit, cwd)
-        : Promise.resolve(prefetched.refsTable),
-    ]);
+  const statusSnapshotPromise: Promise<ConsistentStatusSnapshot> =
+    prefetched === undefined
+      ? readConsistentStatusSnapshot(execGit, cwd)
+      : Promise.resolve({
+          statusOut: prefetched.statusOut,
+          workingTreeNumstat: prefetched.workingTreeNumstat,
+        });
+  // wave 1：可并发的独立 op（status 输出 + stash + gitDir 解析 + refs 表）
+  const [statusSnapshot, stashCount, gitDirOut, refsTable] = await Promise.all([
+    statusSnapshotPromise,
+    getStashCount(execGit, cwd),
+    execGit(["rev-parse", "--path-format=absolute", "--absolute-git-dir"], cwd),
+    prefetched?.refsTable === undefined
+      ? fetchRefsTable(execGit, cwd)
+      : Promise.resolve(prefetched.refsTable),
+  ]);
+  const statusOut = statusSnapshot.statusOut;
   const parsed = parseGitStatus(statusOut);
   const counts = deriveCounts(parsed.files);
+  const changeSummary = await buildGitChangeSummary({
+    cwd,
+    execGit,
+    files: parsed.files,
+    hasHead: parsed.branch.oid !== null,
+    ...(statusSnapshot.unavailableReason === undefined
+      ? {}
+      : { unavailableReason: statusSnapshot.unavailableReason }),
+    workingTreeNumstat: statusSnapshot.workingTreeNumstat,
+  });
   // wave 2：依赖 wave 1 派生值的图查询（gitDir + conflictCount / branch + oid + refs 表）
   const gitDir = splitNonEmptyLines(gitDirOut)[0] ?? "";
   const branchName = parsed.branch.branch;
@@ -97,7 +160,7 @@ export async function assembleGitStatus(
       upstreamGone,
     },
     counts,
-    delta,
+    changeSummary,
     files: parsed.files,
     remoteSync: getRemoteSync(cwd),
     repoState,

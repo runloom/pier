@@ -1,3 +1,4 @@
+import { gitStatusSchema } from "@shared/contracts/git.ts";
 import {
   getGitReviewFileSourceIdentity,
   gitReviewFileDocumentRequestSchema,
@@ -30,6 +31,35 @@ const changeBlock = {
 };
 
 describe("Git review shared contract", () => {
+  it("Git 状态使用唯一文件数与净行变化联合摘要", () => {
+    const changeSummary = {
+      changedFiles: 2,
+      deletions: 3,
+      excludedFiles: 1,
+      insertions: 5,
+      kind: "lineDelta",
+    } as const;
+    const parsed = gitStatusSchema.parse({
+      branch: {
+        ahead: 0,
+        behind: 0,
+        branch: "main",
+        mergedIntoDefault: null,
+        oid: "a".repeat(40),
+        upstream: null,
+        upstreamGone: false,
+      },
+      changeSummary,
+      counts: { conflict: 0, modified: 1, staged: 1, untracked: 0 },
+      files: [],
+      remoteSync: null,
+      repoState: { kind: "clean" },
+      stashCount: 0,
+    });
+
+    expect(parsed.changeSummary).toEqual(changeSummary);
+  });
+
   it("首批 source 不接受范围选择或其它预实现查询", () => {
     expect(
       gitReviewFileSourceSchema.safeParse({
@@ -157,11 +187,27 @@ describe("Git review shared contract", () => {
   it("公共 index 不回传 main 内部解析元数据", () => {
     const result = gitReviewIndexOkSchema.parse({
       entries: [],
+      groupSummaries: {
+        committed: {
+          changedFiles: 1,
+          deletions: 2,
+          excludedFiles: 0,
+          insertions: 4,
+          kind: "lineDelta",
+        },
+      },
       indexRevision: "index:test",
       kind: "ok",
       warnings: [],
     });
     expect(result.indexRevision).toBe("index:test");
+    expect(result.groupSummaries.committed).toEqual({
+      changedFiles: 1,
+      deletions: 2,
+      excludedFiles: 0,
+      insertions: 4,
+      kind: "lineDelta",
+    });
     for (const internalField of ["gitRootPath", "query", "revision"] as const) {
       expect(
         gitReviewIndexOkSchema.safeParse({

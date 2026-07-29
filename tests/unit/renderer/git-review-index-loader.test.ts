@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const EMPTY_INDEX: GitReviewIndexOk = {
   entries: [],
+  groupSummaries: {},
   indexRevision: "index:empty",
   kind: "ok",
   warnings: [],
@@ -132,7 +133,7 @@ describe("GitReviewIndexLoader", () => {
     });
   });
 
-  it("重复 watcher 结果不推进 generation，避免第二轮文档布局", async () => {
+  it("相同 revision 与相同摘要的重复 watcher 结果不推进 generation", async () => {
     vi.useFakeTimers();
     let notify: () => void = () => undefined;
     const loader = new GitReviewIndexLoader({
@@ -159,6 +160,66 @@ describe("GitReviewIndexLoader", () => {
       kind: "loaded",
       refreshing: false,
     });
+  });
+
+  it("同一 revision 的摘要从 filesOnly 恢复时接收新结果", async () => {
+    vi.useFakeTimers();
+    let notify: () => void = () => undefined;
+    const results: GitReviewIndexResult[] = [
+      {
+        ...EMPTY_INDEX,
+        groupSummaries: {
+          unstaged: {
+            changedFiles: 1,
+            kind: "filesOnly",
+            omittedFiles: 1,
+            reasons: ["timeout"],
+          },
+        },
+      },
+      {
+        ...EMPTY_INDEX,
+        groupSummaries: {
+          unstaged: {
+            changedFiles: 1,
+            deletions: 0,
+            excludedFiles: 0,
+            insertions: 2,
+            kind: "lineDelta",
+          },
+        },
+      },
+    ];
+    const loader = new GitReviewIndexLoader({
+      cancel: vi.fn(async () => undefined),
+      load: async () => results.shift() as GitReviewIndexResult,
+      watch: (listener) => {
+        notify = listener;
+        return () => undefined;
+      },
+    });
+    await flush();
+    const initial = loader.getSnapshot();
+
+    notify();
+    await vi.advanceTimersByTimeAsync(120);
+    await flush();
+
+    expect(loader.getSnapshot()).toMatchObject({
+      kind: "loaded",
+      result: {
+        groupSummaries: {
+          unstaged: {
+            insertions: 2,
+            kind: "lineDelta",
+          },
+        },
+      },
+    });
+    const refreshed = loader.getSnapshot();
+    if (initial.kind === "loaded" && refreshed.kind === "loaded") {
+      expect(refreshed.generation).toBeGreaterThan(initial.generation);
+    }
   });
 
   it("同一 revision 的更高状态序列仍作为 mutation 权威发布", async () => {

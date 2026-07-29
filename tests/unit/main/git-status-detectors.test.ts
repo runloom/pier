@@ -15,7 +15,6 @@ import {
 import {
   detectRepoState,
   type ExecGitFn,
-  getLineDelta,
   getStashCount,
 } from "@main/services/git-status-detectors.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
@@ -212,31 +211,6 @@ describe("detectRepoState", () => {
     const bogus = join(tmpdir(), "pier-detect-not-exist-12345");
     const state = await detectRepoState(bogus, 0);
     expect(state).toEqual({ kind: "clean" });
-  });
-});
-
-describe("getLineDelta", () => {
-  it("汇总 staged + unstaged 增删；binary 不计入", async () => {
-    const execGit: ExecGitFn = (args) => {
-      if (args.includes("--cached")) {
-        return Promise.resolve("10\t3\tfile1.ts\0-\t-\tbinary.png\0");
-      }
-      return Promise.resolve("5\t2\tfile2.ts\0");
-    };
-    const delta = await getLineDelta(execGit, "/repo");
-    expect(delta).toEqual({ deletions: 5, insertions: 15 });
-  });
-
-  it("execGit 抛出 → null", async () => {
-    const execGit: ExecGitFn = () => Promise.reject(new Error("boom"));
-    const delta = await getLineDelta(execGit, "/repo");
-    expect(delta).toBeNull();
-  });
-
-  it("空输出 → 0/0", async () => {
-    const execGit: ExecGitFn = () => Promise.resolve("");
-    const delta = await getLineDelta(execGit, "/repo");
-    expect(delta).toEqual({ deletions: 0, insertions: 0 });
   });
 });
 

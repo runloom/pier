@@ -1,6 +1,7 @@
-import { mkdtemp, rename, rm, writeFile } from "node:fs/promises";
+import { lstat, mkdtemp, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { gitChangeSummaryStatToken } from "@main/services/git-change-summary.ts";
 import {
   type ExecGitRaw,
   execGit,
@@ -964,6 +965,77 @@ describe("GitReviewIndexReader", () => {
     }
   });
 
+  it("未跟踪摘要从暂时 filesOnly 恢复不使 mutation revision 过期", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "notes.txt"), "note\n", "utf8");
+    let reads = 0;
+    const stableStatTokens = new Map([
+      [
+        "notes.txt",
+        gitChangeSummaryStatToken(
+          await lstat(join(root, "notes.txt"), { bigint: true })
+        ),
+      ],
+    ]);
+    const reader = new GitReviewIndexReader({
+      execGitRaw: createRecordExec((args) => ({
+        records: args.includes("status") ? [Buffer.from("? notes.txt")] : [],
+      })),
+      identityResolver: fakeIdentityResolver({
+        ...repositoryIdentity(),
+        canonicalRoot: root,
+      }),
+      readUntrackedPathStats: async () => {
+        reads += 1;
+        return reads === 1
+          ? {
+              excludedFiles: 0,
+              insertions: 0,
+              omittedFiles: 1,
+              reasons: ["invalidEncoding" as const],
+            }
+          : {
+              excludedFiles: 0,
+              insertions: 2,
+              omittedFiles: 0,
+              reasons: [],
+              stableStatTokens,
+            };
+      },
+    });
+
+    const reviewScope = { ...scope, gitRootPath: root };
+    const first = await reader.read({ scope: reviewScope });
+    const second = await reader.read({ scope: reviewScope });
+
+    expect(first).toMatchObject({
+      groupSummaries: {
+        unstaged: {
+          changedFiles: 1,
+          kind: "filesOnly",
+          omittedFiles: 1,
+          reasons: ["invalidEncoding"],
+        },
+      },
+      kind: "ok",
+    });
+    expect(second).toMatchObject({
+      groupSummaries: {
+        unstaged: {
+          changedFiles: 1,
+          deletions: 0,
+          excludedFiles: 0,
+          insertions: 2,
+          kind: "lineDelta",
+        },
+      },
+      kind: "ok",
+    });
+    if (first.kind === "ok" && second.kind === "ok") {
+      expect(second.indexRevision).toBe(first.indexRevision);
+    }
+  });
+
   it("commit 目标返回该提交相对首父的 committed 分组(根提交相对空树)", async () => {
     const root = await createRepository();
     await writeFile(join(root, "base.ts"), "base\n", "utf8");
@@ -991,6 +1063,15 @@ describe("GitReviewIndexReader", () => {
         }),
         expect.objectContaining({ path: "base.ts", status: "modified" }),
       ],
+      groupSummaries: {
+        committed: {
+          changedFiles: 2,
+          deletions: 1,
+          excludedFiles: 0,
+          insertions: 2,
+          kind: "lineDelta",
+        },
+      },
       kind: "ok",
       warnings: [],
     });
@@ -1004,6 +1085,15 @@ describe("GitReviewIndexReader", () => {
     });
     expect(first).toMatchObject({
       entries: [expect.objectContaining({ path: "base.ts", status: "added" })],
+      groupSummaries: {
+        committed: {
+          changedFiles: 1,
+          deletions: 0,
+          excludedFiles: 0,
+          insertions: 1,
+          kind: "lineDelta",
+        },
+      },
       kind: "ok",
     });
   });
@@ -1038,6 +1128,15 @@ describe("GitReviewIndexReader", () => {
           status: "added",
         }),
       ],
+      groupSummaries: {
+        committed: {
+          changedFiles: 1,
+          deletions: 0,
+          excludedFiles: 0,
+          insertions: 1,
+          kind: "lineDelta",
+        },
+      },
       kind: "ok",
       warnings: [],
     });
@@ -1111,6 +1210,235 @@ describe("GitReviewIndexReader", () => {
       kind: "error",
       reason: "internal",
       retryable: false,
+    });
+  });
+
+  it("分别汇总同一文件的 unstaged 与 staged render slots", async () => {
+    const execGitRaw = createRecordExec((args) => {
+      if (args.includes("status")) {
+        return {
+          records: [
+            Buffer.from(
+              `1 MM N... 100644 100644 100644 ${sha1} ${sha1} src/a.ts`
+            ),
+          ],
+        };
+      }
+      return {
+        records: [
+          Buffer.from(
+            args.includes("--cached") ? "3\t1\tsrc/a.ts" : "2\t4\tsrc/a.ts"
+          ),
+        ],
+      };
+    });
+
+    const result = await new GitReviewIndexReader({
+      execGitRaw,
+      identityResolver: fakeIdentityResolver(),
+    }).read({ scope });
+
+    expect(result).toMatchObject({
+      groupSummaries: {
+        staged: {
+          changedFiles: 1,
+          deletions: 1,
+          excludedFiles: 0,
+          insertions: 3,
+          kind: "lineDelta",
+        },
+        unstaged: {
+          changedFiles: 1,
+          deletions: 4,
+          excludedFiles: 0,
+          insertions: 2,
+          kind: "lineDelta",
+        },
+      },
+      kind: "ok",
+    });
+  });
+
+  it("将 conflict 与未提供统计的 gitlink 作为 excluded files", async () => {
+    const execGitRaw = createRecordExec((args) => ({
+      records: args.includes("status")
+        ? [
+            Buffer.from(
+              `u UU N... 100644 100644 100644 100644 ${sha1} ${sha1New} ${zeroSha1} conflict.ts`
+            ),
+            Buffer.from(
+              `1 .M S.M. 160000 160000 160000 ${sha1} ${sha1} submodule`
+            ),
+          ]
+        : [],
+    }));
+
+    const result = await new GitReviewIndexReader({
+      execGitRaw,
+      identityResolver: fakeIdentityResolver(),
+    }).read({ scope });
+
+    expect(result).toMatchObject({
+      groupSummaries: {
+        conflict: {
+          changedFiles: 1,
+          deletions: 0,
+          excludedFiles: 1,
+          insertions: 0,
+          kind: "lineDelta",
+        },
+        unstaged: {
+          changedFiles: 1,
+          deletions: 0,
+          excludedFiles: 1,
+          insertions: 0,
+          kind: "lineDelta",
+        },
+      },
+      kind: "ok",
+    });
+  });
+
+  it("缺少本应存在的 tracked numstat 时仅降级该分组", async () => {
+    const execGitRaw = createRecordExec((args) => ({
+      records: args.includes("status")
+        ? [
+            Buffer.from(
+              `1 .M N... 100644 100644 100644 ${sha1} ${sha1} src/missing-stat.ts`
+            ),
+          ]
+        : [],
+    }));
+
+    const result = await new GitReviewIndexReader({
+      execGitRaw,
+      identityResolver: fakeIdentityResolver(),
+    }).read({ scope });
+
+    expect(result).toMatchObject({
+      groupSummaries: {
+        unstaged: {
+          changedFiles: 1,
+          kind: "filesOnly",
+          omittedFiles: 1,
+          reasons: ["commandFailed"],
+        },
+      },
+      kind: "ok",
+    });
+  });
+
+  it("纯 rename 仍按一个文件汇总且不虚构行数", async () => {
+    const execGitRaw = createRecordExec((args) => ({
+      records: args.includes("status")
+        ? [
+            Buffer.from(
+              `2 R. N... 100644 100644 100644 ${sha1} ${sha1New} R100 renamed.ts`
+            ),
+            Buffer.from("source.ts"),
+          ]
+        : [
+            Buffer.from("0\t0\t"),
+            Buffer.from("source.ts"),
+            Buffer.from("renamed.ts"),
+          ],
+    }));
+
+    const result = await new GitReviewIndexReader({
+      execGitRaw,
+      identityResolver: fakeIdentityResolver(),
+    }).read({ scope });
+
+    expect(result).toMatchObject({
+      groupSummaries: {
+        staged: {
+          changedFiles: 1,
+          deletions: 0,
+          excludedFiles: 0,
+          insertions: 0,
+          kind: "lineDelta",
+        },
+      },
+      kind: "ok",
+    });
+  });
+
+  it("真实未跟踪 UTF-8 文本使用安全读取结果计算新增行", async () => {
+    const root = await createRepository();
+    await writeFile(join(root, "notes.txt"), "first\nsecond\n", "utf8");
+
+    const result = await new GitReviewIndexReader().read({
+      scope: {
+        contextId: "worktree:untracked-text",
+        gitRootPath: root,
+        target: { kind: "uncommitted" },
+      },
+    });
+
+    expect(result).toMatchObject({
+      groupSummaries: {
+        unstaged: {
+          changedFiles: 1,
+          deletions: 0,
+          excludedFiles: 0,
+          insertions: 2,
+          kind: "lineDelta",
+        },
+      },
+      kind: "ok",
+    });
+  });
+
+  it("未跟踪二进制文件计为 excluded，而无效 UTF-8 降级整个组", async () => {
+    const binaryRoot = await createRepository();
+    await writeFile(
+      join(binaryRoot, "asset.bin"),
+      Buffer.from([0x61, 0, 0x62])
+    );
+    const binary = await new GitReviewIndexReader().read({
+      scope: {
+        contextId: "worktree:untracked-binary",
+        gitRootPath: binaryRoot,
+        target: { kind: "uncommitted" },
+      },
+    });
+
+    expect(binary).toMatchObject({
+      groupSummaries: {
+        unstaged: {
+          changedFiles: 1,
+          deletions: 0,
+          excludedFiles: 1,
+          insertions: 0,
+          kind: "lineDelta",
+        },
+      },
+      kind: "ok",
+    });
+
+    const invalidRoot = await createRepository();
+    await writeFile(
+      join(invalidRoot, "invalid.txt"),
+      Buffer.from([0xc3, 0x28])
+    );
+    const invalid = await new GitReviewIndexReader().read({
+      scope: {
+        contextId: "worktree:untracked-invalid",
+        gitRootPath: invalidRoot,
+        target: { kind: "uncommitted" },
+      },
+    });
+
+    expect(invalid).toMatchObject({
+      groupSummaries: {
+        unstaged: {
+          changedFiles: 1,
+          kind: "filesOnly",
+          omittedFiles: 1,
+          reasons: ["invalidEncoding"],
+        },
+      },
+      kind: "ok",
     });
   });
 });

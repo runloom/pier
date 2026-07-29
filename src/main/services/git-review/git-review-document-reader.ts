@@ -135,6 +135,7 @@ export class GitReviewDocumentReader {
   ): Promise<GitReviewIndexResolution> {
     return this.#indexReader.resolve(
       {
+        includeGroupSummaries: false,
         paths: [request.source.path, ...request.source.oldPaths],
         scope: {
           contextId: request.source.contextId,

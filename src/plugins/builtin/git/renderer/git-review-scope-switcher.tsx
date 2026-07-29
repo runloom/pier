@@ -50,11 +50,13 @@ export function GitReviewScopeSwitcher({
   context,
   gitRootPath,
   onSelectTarget,
+  onTargetSelectionPendingChange,
   target,
 }: {
   readonly context: RendererPluginContext;
   readonly gitRootPath: string;
   readonly onSelectTarget: (target: GitReviewTarget) => void;
+  readonly onTargetSelectionPendingChange?: (pending: boolean) => void;
   readonly target: GitReviewTarget;
 }): React.JSX.Element {
   // 切到 commit/branch 后 target 尚未变化(自动/手动选定目标前);pending 驱动 UI。
@@ -84,6 +86,7 @@ export function GitReviewScopeSwitcher({
         return;
       }
       setPendingKind(null);
+      onTargetSelectionPendingChange?.(false);
       context.notifications.error(pluginText(context, key, fallback));
     };
     context.git
@@ -108,6 +111,7 @@ export function GitReviewScopeSwitcher({
           return;
         }
         setPendingKind(null);
+        onTargetSelectionPendingChange?.(false);
         onSelectTargetRef.current({ kind: "commit", oid: latest.hash });
       })
       .catch(() => {
@@ -119,7 +123,7 @@ export function GitReviewScopeSwitcher({
     return () => {
       cancelled = true;
     };
-  }, [context, gitRootPath, pendingKind]);
+  }, [context, gitRootPath, onTargetSelectionPendingChange, pendingKind]);
 
   // 对齐 loomdesk:切到 branch scope 未选目标时自动选默认分支(main/master 系)。
   // 失败回退语义同上方 commit 效果。
@@ -133,6 +137,7 @@ export function GitReviewScopeSwitcher({
         return;
       }
       setPendingKind(null);
+      onTargetSelectionPendingChange?.(false);
       context.notifications.error(pluginText(context, key, fallback));
     };
     context.git
@@ -161,6 +166,7 @@ export function GitReviewScopeSwitcher({
           return;
         }
         setPendingKind(null);
+        onTargetSelectionPendingChange?.(false);
         onSelectTargetRef.current({ kind: "branch", ref: preferred.name });
       })
       .catch(() => {
@@ -172,7 +178,7 @@ export function GitReviewScopeSwitcher({
     return () => {
       cancelled = true;
     };
-  }, [context, gitRootPath, pendingKind]);
+  }, [context, gitRootPath, onTargetSelectionPendingChange, pendingKind]);
 
   return (
     <div className="flex min-w-0 items-center gap-1.5">
@@ -180,13 +186,16 @@ export function GitReviewScopeSwitcher({
         onValueChange={(value) => {
           if (value === "uncommitted") {
             setPendingKind(null);
+            onTargetSelectionPendingChange?.(false);
             if (target.kind !== "uncommitted") {
               onSelectTarget({ kind: "uncommitted" });
             }
             return;
           }
           if (value === "commit" || value === "branch") {
-            setPendingKind(value === target.kind ? null : value);
+            const nextPendingKind = value === target.kind ? null : value;
+            setPendingKind(nextPendingKind);
+            onTargetSelectionPendingChange?.(nextPendingKind !== null);
           }
         }}
         value={kind}
@@ -227,6 +236,7 @@ export function GitReviewScopeSwitcher({
           gitRootPath={gitRootPath}
           onPick={(commit) => {
             setPendingKind(null);
+            onTargetSelectionPendingChange?.(false);
             onSelectTarget({ kind: "commit", oid: commit.hash });
           }}
           selectedOid={target.kind === "commit" ? target.oid : null}
@@ -238,6 +248,7 @@ export function GitReviewScopeSwitcher({
           gitRootPath={gitRootPath}
           onPick={(branch) => {
             setPendingKind(null);
+            onTargetSelectionPendingChange?.(false);
             onSelectTarget({ kind: "branch", ref: branch.name });
           }}
           selectedRef={target.kind === "branch" ? target.ref : null}

@@ -1,4 +1,12 @@
 import { z } from "zod";
+import { gitChangeSummarySchema } from "./git-change-summary.ts";
+
+export {
+  type GitChangeSummary,
+  type GitChangeSummaryUnavailableReason,
+  gitChangeSummarySchema,
+  gitChangeSummaryUnavailableReasonSchema,
+} from "./git-change-summary.ts";
 
 /**
  * 单个变更文件的状态。
@@ -45,13 +53,6 @@ export const gitCountsSchema = z.object({
 });
 export type GitCounts = z.infer<typeof gitCountsSchema>;
 
-/** 行级增删汇总（staged + unstaged）。binary 文件不计入。 */
-export const gitDeltaSchema = z.object({
-  deletions: z.number(),
-  insertions: z.number(),
-});
-export type GitDelta = z.infer<typeof gitDeltaSchema>;
-
 /**
  * 仓库特殊操作状态。检测方式：
  * - merging: `.git/MERGE_HEAD` 存在
@@ -91,9 +92,8 @@ export type GitRemoteSync = z.infer<typeof gitRemoteSyncSchema>;
 /** 工作区整体状态：分支信息 + 变更文件列表 + 聚合派生字段。 */
 export const gitStatusSchema = z.object({
   branch: gitBranchInfoSchema,
+  changeSummary: gitChangeSummarySchema,
   counts: gitCountsSchema,
-  /** null 表示 diff --numstat 失败（非致命）。 */
-  delta: gitDeltaSchema.nullable(),
   files: z.array(gitFileStatusSchema),
   /** null = 该仓库尚无 autofetch 记录（禁用或未跑过）。 */
   remoteSync: gitRemoteSyncSchema.nullable(),

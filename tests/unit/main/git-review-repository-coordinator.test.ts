@@ -34,6 +34,7 @@ describe("GitReviewRepositoryCoordinator", () => {
         result,
         stamped: coordinator.stampIndexResult("repo", {
           entries: [],
+          groupSummaries: {},
           indexRevision: "revision:1",
           kind: "ok" as const,
           warnings: [],
@@ -99,6 +100,7 @@ describe("GitReviewRepositoryCoordinator", () => {
         }
         return {
           entries: [],
+          groupSummaries: {},
           indexRevision: `revision:${calls}`,
           kind: "ok" as const,
           warnings: [],

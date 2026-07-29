@@ -1,7 +1,6 @@
 import { access, readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { GitDelta, GitRepoState } from "../../shared/contracts/git.ts";
-import { parseGitNumstat } from "./git-parsers.ts";
+import type { GitRepoState } from "../../shared/contracts/git.ts";
 
 /** git-service.ts 注入进来；测试可传 fake。 */
 export type ExecGitFn = (
@@ -110,47 +109,6 @@ export async function detectRepoState(
   }
 
   return { kind: "clean" };
-}
-
-/** getLineDelta 可复用的预取 numstat 原始输出（A7）。 */
-export interface PrefetchedNumstat {
-  stagedNumstat: string;
-  unstagedNumstat: string;
-}
-
-/**
- * 汇总当前 worktree 的行级增删（staged + unstaged）。binary 文件不计入。
- * 任一 diff 失败返回 null（非致命，UI 层降级显示）。
- * 提供 prefetched 时直接解析已有输出，跳过两条 numstat spawn（A7）。
- */
-export async function getLineDelta(
-  execGit: ExecGitFn,
-  cwd: string,
-  prefetched?: PrefetchedNumstat
-): Promise<GitDelta | null> {
-  try {
-    let unstagedOut: string;
-    let stagedOut: string;
-    if (prefetched === undefined) {
-      [unstagedOut, stagedOut] = await Promise.all([
-        execGit(["diff", "--numstat", "-z", "--no-renames"], cwd),
-        execGit(["diff", "--cached", "--numstat", "-z", "--no-renames"], cwd),
-      ]);
-    } else {
-      unstagedOut = prefetched.unstagedNumstat;
-      stagedOut = prefetched.stagedNumstat;
-    }
-    const stats = [
-      ...parseGitNumstat(unstagedOut),
-      ...parseGitNumstat(stagedOut),
-    ];
-    return {
-      deletions: stats.reduce((sum, stat) => sum + stat.deletions, 0),
-      insertions: stats.reduce((sum, stat) => sum + stat.insertions, 0),
-    };
-  } catch {
-    return null;
-  }
 }
 
 /**

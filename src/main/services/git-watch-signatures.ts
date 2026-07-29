@@ -1,6 +1,10 @@
 import { createHash } from "node:crypto";
 import { lstat } from "node:fs/promises";
 import { join } from "node:path";
+import {
+  GIT_STATUS_ARGS,
+  GIT_WORKING_TREE_NUMSTAT_ARGS,
+} from "./git-change-summary.ts";
 import { execGit } from "./git-exec.ts";
 import { parseGitStatus } from "./git-parsers.ts";
 import { parseGitSinglePathOutput } from "./git-path-output.ts";
@@ -22,6 +26,7 @@ import { GitWatchPathCache } from "./git-watch-path-cache.ts";
  * 因此每次非基线刷新都会保守广播，恢复成功后再回到正常签名去重。
  */
 const NUMSTAT_ERROR_SENTINEL = "numstat-unavailable";
+const STATUS_ERROR_SENTINEL = "status-unavailable";
 
 /** 文件系统探测不得耗尽 libuv 队列；迟到操作也最多保留这一批。 */
 const CONTENT_SIGNAL_STAT_CONCURRENCY = 16;
@@ -113,9 +118,8 @@ export async function changedFilesStatSignal(
 
 /** 一次签名计算期间捕获的原始 git 输出，供 getStatus 复用（A7）。 */
 export interface RawWorktreeSnapshot {
-  stagedNumstat: string;
   statusOut: string;
-  unstagedNumstat: string;
+  workingTreeNumstat: string;
 }
 
 export interface WorktreeSnapshot {
@@ -130,11 +134,12 @@ type WorktreeExecGit = (
 ) => Promise<string>;
 
 /**
- * worktree 签名：status porcelain(--branch) + numstat(unstaged/staged) +
- * 变更文件 stat 信号(mtimeMs+size)拼接后 hash。stat 信号补齐 porcelain 的内容盲区
+ * worktree 签名：以 status/stat 前后夹住 HEAD→working tree numstat，只有两侧
+ * 完全一致时才发布可复用原始摘要；随后将 status + numstat + stat 信号拼接后 hash。
+ * stat 信号补齐 porcelain 的内容盲区
  *（原 spec 缺口③）：已修改文件继续编辑但增删行数不变时，status/numstat 全文不变，
  * 唯 mtime/size 变——否则 diff 预览漏更新。
- * status、任一 numstat 或整批 stat 信号不可用时，快照标记 `reliable=false`。
+ * status、numstat 或整批 stat 信号不可用时，快照标记 `reliable=false`。
  * 基线只记录该结果；后续每次刷新都保守广播，避免固定哨兵让更新永久静默。
  * 恢复成功后重新使用真实签名去重。
  *
@@ -148,7 +153,7 @@ export async function defaultWorktreeSnapshot(
 ): Promise<WorktreeSnapshot> {
   let statusOut: string;
   try {
-    statusOut = await exec(["status", "--porcelain=v2", "--branch", "-z"], {
+    statusOut = await exec(GIT_STATUS_ARGS, {
       cwd: gitRoot,
       timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
       ...(context === undefined ? {} : { signal: context.signal }),
@@ -156,45 +161,52 @@ export async function defaultWorktreeSnapshot(
   } catch {
     return { reliable: false, signature: "" };
   }
-  let unstagedFailed = false;
-  let stagedFailed = false;
-  const [unstaged, staged, statSignal] = await Promise.all([
-    exec(["diff", "--numstat", "-z", "--no-renames"], {
-      cwd: gitRoot,
-      timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
-      ...(context === undefined ? {} : { signal: context.signal }),
-    }).catch(() => {
-      unstagedFailed = true;
-      return NUMSTAT_ERROR_SENTINEL;
-    }),
-    exec(["diff", "--cached", "--numstat", "-z", "--no-renames"], {
-      cwd: gitRoot,
-      timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
-      ...(context === undefined ? {} : { signal: context.signal }),
-    }).catch(() => {
-      stagedFailed = true;
-      return NUMSTAT_ERROR_SENTINEL;
-    }),
-    // 解析/整批 stat 失败不阻塞签名：写哨兵并把快照标为不可靠。
-    changedFilesStatSignal(gitRoot, statusOut, {
-      ...(context === undefined ? {} : { signal: context.signal }),
-    }).catch(() => STAT_SIGNAL_UNAVAILABLE),
-  ]);
+  const hasHead = parseGitStatus(statusOut).branch.oid !== null;
+  const statBefore = await changedFilesStatSignal(gitRoot, statusOut, {
+    ...(context === undefined ? {} : { signal: context.signal }),
+  }).catch(() => STAT_SIGNAL_UNAVAILABLE);
+  let numstatFailed = false;
+  const workingTreeNumstat = hasHead
+    ? await exec([...GIT_WORKING_TREE_NUMSTAT_ARGS, "HEAD"], {
+        cwd: gitRoot,
+        timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+        ...(context === undefined ? {} : { signal: context.signal }),
+      }).catch(() => {
+        numstatFailed = true;
+        return NUMSTAT_ERROR_SENTINEL;
+      })
+    : "";
+  let statusAfterFailed = false;
+  const statusAfter = await exec(GIT_STATUS_ARGS, {
+    cwd: gitRoot,
+    timeoutMs: GIT_WATCH_COMMAND_TIMEOUT_MS,
+    ...(context === undefined ? {} : { signal: context.signal }),
+  }).catch(() => {
+    statusAfterFailed = true;
+    return STATUS_ERROR_SENTINEL;
+  });
+  const statAfter = statusAfterFailed
+    ? STAT_SIGNAL_UNAVAILABLE
+    : await changedFilesStatSignal(gitRoot, statusAfter, {
+        ...(context === undefined ? {} : { signal: context.signal }),
+      }).catch(() => STAT_SIGNAL_UNAVAILABLE);
+  const coherent =
+    !statusAfterFailed &&
+    statusOut === statusAfter &&
+    statBefore === statAfter &&
+    statBefore !== STAT_SIGNAL_UNAVAILABLE;
   const raw =
-    unstagedFailed || stagedFailed
+    numstatFailed || !coherent
       ? undefined
       : {
-          stagedNumstat: staged,
-          statusOut,
-          unstagedNumstat: unstaged,
+          statusOut: statusAfter,
+          workingTreeNumstat,
         };
   return {
-    reliable:
-      !(unstagedFailed || stagedFailed) &&
-      statSignal !== STAT_SIGNAL_UNAVAILABLE,
+    reliable: !numstatFailed && coherent,
     ...(raw === undefined ? {} : { raw }),
     signature: createHash("sha256")
-      .update(`${statusOut}\0${unstaged}\0${staged}\0${statSignal}`)
+      .update(`${statusAfter}\0${workingTreeNumstat}\0${statAfter}`)
       .digest("hex"),
   };
 }

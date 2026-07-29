@@ -244,7 +244,6 @@ export class FileDocumentLifecycle {
     this.#clearSaveTimer(documentId);
     this.#lastContents.delete(documentId);
   }
-
   async reconcileMovedPath(root: string, path: string): Promise<void> {
     const documents = listOpenDiskDocuments().filter(
       (document) =>
@@ -274,7 +273,6 @@ export class FileDocumentLifecycle {
       );
     }
   }
-
   async savePanel(panelId: string | null): Promise<FileSaveOutcome> {
     if (!panelId) {
       return "noop";
@@ -282,7 +280,6 @@ export class FileDocumentLifecycle {
     const documentId = this.getPanelDocumentId(panelId);
     return documentId ? await this.saveDocument(documentId, panelId) : "noop";
   }
-
   async saveDocument(
     documentId: string,
     panelId?: string

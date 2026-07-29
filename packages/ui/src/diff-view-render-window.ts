@@ -10,6 +10,8 @@ interface RenderedWindowItem {
 export interface PierDiffViewRenderWindow {
   /** Pierre 已渲染但位于真实视口外的官方缓冲项。 */
   readonly bufferedItemIds: readonly string[];
+  /** 当前真实 DOM 中仍使用估算内容的可见或缓冲项。 */
+  readonly estimatedItemIds: readonly string[];
   /** 与 CodeView 滚动容器真实视口相交的项。 */
   readonly visibleItemIds: readonly string[];
 }
@@ -31,13 +33,17 @@ export function useDiffRenderWindowReport(
       const container = getContainer();
       const visibleItemIds: string[] = [];
       const bufferedItemIds: string[] = [];
+      const estimatedItemIds: string[] = [];
       for (const item of getRenderedItems()) {
         (isRenderedItemVisible(container, [item], item.id)
           ? visibleItemIds
           : bufferedItemIds
         ).push(item.id);
+        if (item.element.getAttribute("data-pier-estimate") === "true") {
+          estimatedItemIds.push(item.id);
+        }
       }
-      const window = { bufferedItemIds, visibleItemIds };
+      const window = { bufferedItemIds, estimatedItemIds, visibleItemIds };
       const key = JSON.stringify(window);
       if (previousKeyRef.current === key) {
         return;

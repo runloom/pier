@@ -17,16 +17,21 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const DIRTY_STATUS = {
   branch: { ahead: 0, behind: 0, branch: "main", upstream: null },
+  changeSummary: {
+    changedFiles: 3,
+    deletions: 3,
+    excludedFiles: 0,
+    insertions: 5,
+    kind: "lineDelta" as const,
+  },
   counts: { conflict: 0, modified: 2, staged: 1, untracked: 0 },
-  delta: { deletions: 3, insertions: 5 },
   repoState: { kind: "clean" },
   stashCount: 0,
 };
 
 function makeContext(
   showDirtyIndicator: boolean,
-  getStatus: () => Promise<typeof DIRTY_STATUS> = () =>
-    Promise.resolve(DIRTY_STATUS),
+  getStatus: () => Promise<unknown> = () => Promise.resolve(DIRTY_STATUS),
   options: {
     showChangesStatus?: boolean;
     showSyncStatus?: boolean;
@@ -70,7 +75,15 @@ function makeContext(
       commandDescription: () => undefined,
       commandTitle: (id: string) => id,
       language: () => "en",
-      t: vi.fn((_key: string, _values?: unknown, fallback = "") => fallback),
+      t: vi.fn((_key: string, values?: unknown, fallback = "") => {
+        let text = fallback;
+        if (values && typeof values === "object") {
+          for (const [key, value] of Object.entries(values)) {
+            text = text.replaceAll(`{{${key}}}`, String(value));
+          }
+        }
+        return text;
+      }),
     },
     notifications: { error: vi.fn() },
     panels: {
@@ -213,6 +226,79 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
     });
   });
 
+  it("行统计不完整时只显示唯一文件数，不展示部分增删行", async () => {
+    const filesOnly = {
+      ...DIRTY_STATUS,
+      changeSummary: {
+        changedFiles: 2,
+        kind: "filesOnly" as const,
+        omittedFiles: 1,
+        reasons: ["invalidEncoding" as const],
+      },
+      // 同一文件可同时计入 modified 与 staged；展示不能把分类数直接相加。
+      counts: { conflict: 0, modified: 2, staged: 1, untracked: 0 },
+    };
+    const { context, registered } = makeContext(true, () =>
+      Promise.resolve(filesOnly)
+    );
+    registerGitStatusItem(context);
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => null,
+      panelId: "panel-1",
+      title: null,
+    });
+
+    const changesTrigger = await screen.findByTestId(
+      "git-changes-status-trigger"
+    );
+    expect(changesTrigger).toHaveTextContent("2");
+    expect(changesTrigger).not.toHaveTextContent("+");
+    expect(changesTrigger).not.toHaveTextContent("−");
+    expect(changesTrigger).toHaveAttribute(
+      "aria-label",
+      expect.stringContaining("2 changed files")
+    );
+    expect(changesTrigger.querySelector("[title]")).toHaveAttribute(
+      "title",
+      "Line totals are incomplete. Showing the changed file count."
+    );
+  });
+
+  it("完整行统计始终同时显示新增和删除两侧的零值", async () => {
+    const { context, registered } = makeContext(true, () =>
+      Promise.resolve({
+        ...DIRTY_STATUS,
+        changeSummary: {
+          changedFiles: 1,
+          deletions: 3,
+          excludedFiles: 0,
+          insertions: 0,
+          kind: "lineDelta" as const,
+        },
+      })
+    );
+    registerGitStatusItem(context);
+    renderRegistered(registered(), {
+      context: PANEL_CONTEXT,
+      cwd: "/repo",
+      getGroupId: () => null,
+      panelId: "panel-1",
+      title: null,
+    });
+
+    const changesTrigger = await screen.findByTestId(
+      "git-changes-status-trigger"
+    );
+    expect(
+      changesTrigger.querySelector('[data-git-delta="insertions"]')
+    ).toHaveTextContent("+0");
+    expect(
+      changesTrigger.querySelector('[data-git-delta="deletions"]')
+    ).toHaveTextContent("−3");
+  });
+
   it("showChangesStatus=false 时隐藏更改项且 isVisible 为 false", async () => {
     const { context, registered } = makeContext(
       true,
@@ -248,8 +334,14 @@ describe("git status item — showDirtyIndicator 设置消费", () => {
   it("干净仓库不渲染更改项空壳", async () => {
     const clean = {
       ...DIRTY_STATUS,
+      changeSummary: {
+        changedFiles: 0,
+        deletions: 0,
+        excludedFiles: 0,
+        insertions: 0,
+        kind: "lineDelta" as const,
+      },
       counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
-      delta: { deletions: 0, insertions: 0 },
     };
     const { context, registered } = makeContext(true, () =>
       Promise.resolve(clean)

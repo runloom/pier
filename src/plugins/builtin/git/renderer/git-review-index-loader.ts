@@ -1,7 +1,8 @@
-import type {
-  GitReviewFailure,
-  GitReviewIndexOk,
-  GitReviewIndexResult,
+import {
+  GIT_REVIEW_GROUP_ORDER,
+  type GitReviewFailure,
+  type GitReviewIndexOk,
+  type GitReviewIndexResult,
 } from "@shared/contracts/git-review.ts";
 
 export type GitReviewIndexLoaderSnapshot =
@@ -250,6 +251,10 @@ export class GitReviewIndexLoader {
       !this.#recoveryPending &&
       result.indexRevision !== undefined &&
       this.#snapshot.result.indexRevision === result.indexRevision &&
+      hasSameGroupSummaries(
+        this.#snapshot.result.groupSummaries,
+        result.groupSummaries
+      ) &&
       (result.stateSequence ?? 0) <= (this.#snapshot.result.stateSequence ?? 0)
     ) {
       this.#snapshot = {
@@ -352,4 +357,50 @@ export class GitReviewIndexLoader {
       this.#pump();
     }
   }
+}
+
+function hasSameGroupSummaries(
+  left: GitReviewIndexOk["groupSummaries"],
+  right: GitReviewIndexOk["groupSummaries"]
+): boolean {
+  return GIT_REVIEW_GROUP_ORDER.every((group) => {
+    const leftSummary = left[group];
+    const rightSummary = right[group];
+    if (leftSummary === undefined || rightSummary === undefined) {
+      return leftSummary === rightSummary;
+    }
+    if (
+      leftSummary.kind !== rightSummary.kind ||
+      leftSummary.changedFiles !== rightSummary.changedFiles
+    ) {
+      return false;
+    }
+    if (leftSummary.kind === "lineDelta" && rightSummary.kind === "lineDelta") {
+      return (
+        leftSummary.deletions === rightSummary.deletions &&
+        leftSummary.excludedFiles === rightSummary.excludedFiles &&
+        leftSummary.insertions === rightSummary.insertions
+      );
+    }
+    if (leftSummary.kind !== "filesOnly" || rightSummary.kind !== "filesOnly") {
+      return false;
+    }
+    return (
+      leftSummary.omittedFiles === rightSummary.omittedFiles &&
+      sameSummaryReasons(leftSummary.reasons, rightSummary.reasons)
+    );
+  });
+}
+
+function sameSummaryReasons(
+  left: readonly string[],
+  right: readonly string[]
+): boolean {
+  if (left.length !== right.length) {
+    return false;
+  }
+  const sortedRight = right.toSorted();
+  return left
+    .toSorted()
+    .every((reason, index) => reason === sortedRight[index]);
 }

@@ -8,8 +8,14 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 const STATUS = {
   branch: { ahead: 0, behind: 0, branch: "main", upstream: null },
+  changeSummary: {
+    changedFiles: 0,
+    deletions: 0,
+    excludedFiles: 0,
+    insertions: 0,
+    kind: "lineDelta" as const,
+  },
   counts: { conflict: 0, modified: 0, staged: 0, untracked: 0 },
-  delta: { deletions: 0, insertions: 0 },
   repoState: { kind: "clean" as const },
   stashCount: 0,
 };

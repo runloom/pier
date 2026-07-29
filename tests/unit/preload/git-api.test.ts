@@ -190,6 +190,7 @@ describe("gitApi Review command boundary", () => {
           status: "modified",
         },
       ],
+      groupSummaries: {},
       kind: "ok",
       warnings: [],
     };
@@ -211,6 +212,7 @@ describe("gitApi Review command boundary", () => {
           status: "modified",
         },
       ],
+      groupSummaries: {},
       kind: "ok",
       warnings: [],
     };

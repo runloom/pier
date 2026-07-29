@@ -776,9 +776,11 @@ describe("GitReviewService document", () => {
     await writeFile(join(root, "file.ts"), "changed\n", "utf8");
     const delegate = new GitReviewIndexReader();
     let generation = 0;
+    const includeGroupSummaries: Array<boolean | undefined> = [];
     const indexReader: Pick<GitReviewIndexReader, "read" | "resolve"> = {
       read: delegate.read.bind(delegate),
       resolve: async (indexRequest, options) => {
+        includeGroupSummaries.push(indexRequest.includeGroupSummaries);
         const result = await delegate.resolve(indexRequest, options);
         await writeFile(
           join(root, `noise-${generation}.txt`),
@@ -796,6 +798,7 @@ describe("GitReviewService document", () => {
 
     expectOk(result);
     expect(generation).toBe(2);
+    expect(includeGroupSummaries).toEqual([false, false]);
   });
 
   it("conflict 不伪造文本统计", async () => {

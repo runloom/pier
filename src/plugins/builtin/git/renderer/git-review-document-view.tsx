@@ -10,6 +10,7 @@ import {
   EmptyHeader,
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type {
   RendererPluginAppearance,
   RendererPluginContext,
@@ -55,6 +56,7 @@ interface GitReviewDocumentViewProps {
   readonly feedbackEnabled: boolean;
   readonly getSuppressMembershipScrollRestore?: () => boolean;
   readonly gitRootPath: string;
+  readonly headerCenter?: React.ReactNode;
   readonly headerLeading?: React.ReactNode;
   readonly headerTrailing?: React.ReactNode;
   readonly indexFailure: GitReviewFailure | null;
@@ -82,12 +84,14 @@ interface GitReviewDocumentViewProps {
   readonly presentation?: PierDiffViewPresentation;
   readonly projection: ReviewDocumentProjection;
   readonly renderFeedback: ReviewRenderFeedback | null;
+  readonly renderWindowReady: boolean;
   readonly setSidebarCollapsed: (collapsed: boolean) => void;
   readonly sidebarCollapsed: boolean;
   readonly sidebarFooter?: React.ReactNode;
   readonly sidebarHeader?: React.ReactNode;
   readonly sourcePanelId?: string;
   readonly suppressMembershipScrollRestore?: boolean;
+  readonly targetSelectionPending?: boolean;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly viewState: ReviewDocumentViewState;
   readonly warnings: GitReviewIndexOk["warnings"];
@@ -106,6 +110,7 @@ export function GitReviewDocumentView({
   feedbackEnabled,
   contextId,
   gitRootPath,
+  headerCenter,
   headerLeading,
   headerTrailing,
   indexFailure,
@@ -124,6 +129,7 @@ export function GitReviewDocumentView({
   presentation,
   projection,
   renderFeedback,
+  renderWindowReady,
   sourcePanelId,
   setSidebarCollapsed,
   sidebarCollapsed,
@@ -131,44 +137,54 @@ export function GitReviewDocumentView({
   sidebarHeader,
   getSuppressMembershipScrollRestore,
   suppressMembershipScrollRestore = false,
+  targetSelectionPending = false,
   treeModel,
   viewState,
   warnings,
 }: GitReviewDocumentViewProps): React.JSX.Element {
-  const diffContent = documentContent({
-    appearance,
-    authoritativeEmpty,
-    context,
-    contextId,
-    diffRef,
-    emptyDescription,
-    emptySurface,
-    emptyTitle,
-    ...(entries === undefined ? {} : { entries }),
-    gitRootPath,
-    onItemError,
-    onFeedbackChange,
-    onAcquireMutationAuthority,
-    onMutationCommitted,
-    mutationAuthorityBlocked,
-    onRenderWindowChange,
-    onScroll,
-    ...(presentation === undefined ? {} : { presentation }),
-    projection,
-    settled: viewState.settled,
-    ...(sourcePanelId === undefined ? {} : { sourcePanelId }),
-    ...(getSuppressMembershipScrollRestore === undefined
-      ? {}
-      : { getSuppressMembershipScrollRestore }),
-    suppressMembershipScrollRestore,
-  });
+  const diffContent = targetSelectionPending ? (
+    <ReviewLoading context={context} />
+  ) : (
+    documentContent({
+      appearance,
+      authoritativeEmpty,
+      context,
+      contextId,
+      diffRef,
+      emptyDescription,
+      emptySurface,
+      emptyTitle,
+      ...(entries === undefined ? {} : { entries }),
+      gitRootPath,
+      onItemError,
+      onFeedbackChange,
+      onAcquireMutationAuthority,
+      onMutationCommitted,
+      mutationAuthorityBlocked,
+      onRenderWindowChange,
+      onScroll,
+      ...(presentation === undefined ? {} : { presentation }),
+      projection,
+      renderErrorVisible: renderFeedback !== null,
+      renderWindowReady,
+      settled: viewState.settled,
+      ...(sourcePanelId === undefined ? {} : { sourcePanelId }),
+      ...(getSuppressMembershipScrollRestore === undefined
+        ? {}
+        : { getSuppressMembershipScrollRestore }),
+      suppressMembershipScrollRestore,
+    })
+  );
 
   return (
     <GitReviewPanelLayout
       context={context}
       contextId={contextId}
       gitRootPath={gitRootPath}
-      mutationAuthorityBlocked={mutationAuthorityBlocked}
+      mutationAuthorityBlocked={
+        mutationAuthorityBlocked || targetSelectionPending
+      }
+      {...(headerCenter === undefined ? {} : { headerCenter })}
       {...(headerLeading === undefined ? {} : { headerLeading })}
       {...(headerTrailing === undefined ? {} : { headerTrailing })}
       onOpenPath={onOpenPath}
@@ -179,13 +195,13 @@ export function GitReviewDocumentView({
       {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
       {...(sidebarHeader === undefined ? {} : { sidebarHeader })}
       {...(sourcePanelId ? { sourcePanelId } : {})}
-      treeModel={treeModel}
+      treeModel={targetSelectionPending ? null : treeModel}
     >
       <div
         className="flex h-full min-w-0 flex-col bg-background"
         data-git-review-document-settled={viewState.settled}
       >
-        {warnings.length > 0 ? (
+        {!targetSelectionPending && warnings.length > 0 ? (
           <Alert className="m-2">
             <AlertTitle>
               {pluginText(context, "reviewPartialTitle", "Partial results")}
@@ -197,20 +213,22 @@ export function GitReviewDocumentView({
             </AlertDescription>
           </Alert>
         ) : null}
-        <ReviewFeedback
-          context={context}
-          enabled={feedbackEnabled}
-          failures={failureSummary.visibleFailures}
-          hasHiddenFailures={failureSummary.hasHiddenFailures}
-          indexFailure={indexFailure}
-          onRetryFailure={onRetryFailure}
-          onRetryIndex={onRetryIndex}
-          {...(renderFeedback === null
-            ? {}
-            : { onRetryRender: renderFeedback.retry })}
-          runtimeError={renderFeedback?.error ?? null}
-          staleRetainedCount={viewState.staleRetainedCount}
-        />
+        {targetSelectionPending ? null : (
+          <ReviewFeedback
+            context={context}
+            enabled={feedbackEnabled}
+            failures={failureSummary.visibleFailures}
+            hasHiddenFailures={failureSummary.hasHiddenFailures}
+            indexFailure={indexFailure}
+            onRetryFailure={onRetryFailure}
+            onRetryIndex={onRetryIndex}
+            {...(renderFeedback === null
+              ? {}
+              : { onRetryRender: renderFeedback.retry })}
+            runtimeError={renderFeedback?.error ?? null}
+            staleRetainedCount={viewState.staleRetainedCount}
+          />
+        )}
         {diffContent}
       </div>
     </GitReviewPanelLayout>
@@ -240,12 +258,25 @@ function documentContent(options: {
   readonly onScroll: () => void;
   readonly presentation?: PierDiffViewPresentation;
   readonly projection: ReviewDocumentProjection;
+  readonly renderErrorVisible: boolean;
+  readonly renderWindowReady: boolean;
   readonly settled: boolean;
   readonly sourcePanelId?: string;
   readonly getSuppressMembershipScrollRestore?: () => boolean;
   readonly suppressMembershipScrollRestore?: boolean;
 }): React.JSX.Element {
   const suppress = options.suppressMembershipScrollRestore === true;
+  const firstProjectionItem = options.projection.items[0];
+  const firstItemRenderable =
+    firstProjectionItem !== undefined &&
+    firstProjectionItem.kind !== "estimate";
+  // 未提交视图需要让隐藏的 Pierre 尽早提交首屏 window demand，并保留
+  // stable-ledger 导航；但 estimate 只能作为内部高度预算，不能成为可见正文。
+  const canMountProjection =
+    firstItemRenderable ||
+    (options.entries !== undefined && options.projection.items.length > 0);
+  const projectionVisible =
+    options.renderWindowReady || options.renderErrorVisible;
   const suppressGetter =
     options.getSuppressMembershipScrollRestore === undefined
       ? {}
@@ -253,36 +284,54 @@ function documentContent(options: {
           getSuppressMembershipScrollRestore:
             options.getSuppressMembershipScrollRestore,
         };
-  if (options.projection.items.length > 0) {
+  if (canMountProjection) {
     return (
-      <div className="min-h-0 flex-1" data-git-review-document-content="code">
-        <ReviewCodeView
-          appearance={options.appearance}
-          context={options.context}
-          contextId={options.contextId}
-          diffRef={options.diffRef}
-          {...(options.entries === undefined
-            ? {}
-            : { entries: options.entries })}
-          {...(options.gitRootPath ? { gitRootPath: options.gitRootPath } : {})}
-          items={options.projection.items}
-          mutationAuthorityBlocked={options.mutationAuthorityBlocked}
-          onAcquireMutationAuthority={options.onAcquireMutationAuthority}
-          onFeedbackChange={options.onFeedbackChange}
-          onItemError={options.onItemError}
-          onMutationCommitted={options.onMutationCommitted}
-          onRenderWindowChange={options.onRenderWindowChange}
-          onScroll={options.onScroll}
-          revisionBySectionId={options.projection.revisionBySectionId}
-          {...(options.presentation === undefined
-            ? {}
-            : { presentation: options.presentation })}
-          {...(options.sourcePanelId === undefined
-            ? {}
-            : { sourcePanelId: options.sourcePanelId })}
-          {...suppressGetter}
-          suppressMembershipScrollRestore={suppress}
-        />
+      <div
+        className="relative min-h-0 flex-1"
+        data-git-review-document-content={
+          projectionVisible ? "code" : "loading"
+        }
+      >
+        <div
+          aria-hidden={!projectionVisible}
+          className={cn("h-full", !projectionVisible && "invisible")}
+          inert={projectionVisible ? undefined : true}
+        >
+          <ReviewCodeView
+            appearance={options.appearance}
+            context={options.context}
+            contextId={options.contextId}
+            diffRef={options.diffRef}
+            {...(options.entries === undefined
+              ? {}
+              : { entries: options.entries })}
+            {...(options.gitRootPath
+              ? { gitRootPath: options.gitRootPath }
+              : {})}
+            items={options.projection.items}
+            mutationAuthorityBlocked={options.mutationAuthorityBlocked}
+            onAcquireMutationAuthority={options.onAcquireMutationAuthority}
+            onFeedbackChange={options.onFeedbackChange}
+            onItemError={options.onItemError}
+            onMutationCommitted={options.onMutationCommitted}
+            onRenderWindowChange={options.onRenderWindowChange}
+            onScroll={options.onScroll}
+            revisionBySectionId={options.projection.revisionBySectionId}
+            {...(options.presentation === undefined
+              ? {}
+              : { presentation: options.presentation })}
+            {...(options.sourcePanelId === undefined
+              ? {}
+              : { sourcePanelId: options.sourcePanelId })}
+            {...suppressGetter}
+            suppressMembershipScrollRestore={suppress}
+          />
+        </div>
+        {projectionVisible ? null : (
+          <div className="absolute inset-0">
+            <ReviewLoading context={options.context} />
+          </div>
+        )}
       </div>
     );
   }

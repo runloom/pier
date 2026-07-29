@@ -37,6 +37,7 @@ export interface ReviewSurfaceProps {
   readonly context: RendererPluginContext;
   readonly diffBase: GitReviewReadingSurface;
   readonly entries: readonly GitReviewIndexEntry[];
+  readonly groupSummaries: GitReviewIndexOk["groupSummaries"];
   readonly headerLeading?: React.ReactNode;
   readonly indexGeneration: number;
   readonly indexRefreshFailure: GitReviewFailure | null;
@@ -70,6 +71,7 @@ export interface ReviewSurfaceProps {
   readonly sidebarCollapsed: boolean;
   readonly sidebarFooter?: React.ReactNode;
   readonly sidebarHeader?: React.ReactNode;
+  readonly targetSelectionPending?: boolean;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly warnings: GitReviewIndexOk["warnings"];
 }

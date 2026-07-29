@@ -1,5 +1,6 @@
 import type { PierDiffViewHandle } from "@pier/ui/diff-view.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { GitChangeSummary } from "@shared/contracts/git.ts";
 import type {
   GitReviewFailure,
   GitReviewIndexEntry,
@@ -8,6 +9,7 @@ import type {
   GitReviewScope,
 } from "@shared/contracts/git-review.ts";
 import { useCallback, useRef, useState } from "react";
+import { GitChangeSummaryInline } from "./git-change-summary-display.tsx";
 import { pluginText } from "./git-plugin-text.ts";
 import type { ReviewRenderFeedback } from "./git-review-code-view.tsx";
 import type {
@@ -50,6 +52,7 @@ interface GitReviewSurfaceViewProps {
   >["onRenderWindowChange"];
   readonly hasPendingNavigation: () => boolean;
   readonly headerLeading?: React.ReactNode;
+  readonly headerSummary?: GitChangeSummary;
   readonly indexRefreshFailure: GitReviewFailure | null;
   readonly indexRefreshing: boolean;
   readonly isActiveOpenPath: React.ComponentProps<
@@ -69,6 +72,8 @@ interface GitReviewSurfaceViewProps {
   >["onOpenPath"];
   readonly panelId: string;
   readonly projection: ReviewDocumentProjection;
+  readonly renderFeedback: ReviewRenderFeedback | null;
+  readonly renderWindowReady: boolean;
   readonly replayFailure: Error | null;
   readonly retryFailure: (entryKey: string) => void;
   readonly retryLatestItemUpdates: () => void;
@@ -83,6 +88,7 @@ interface GitReviewSurfaceViewProps {
   readonly sidebarCollapsed: boolean;
   readonly sidebarFooter?: React.ReactNode;
   readonly sidebarHeader?: React.ReactNode;
+  readonly targetSelectionPending: boolean;
   readonly treeModel: ReturnType<typeof gitReviewTreeModel>;
   readonly updateRenderFeedback: (
     feedback: ReviewRenderFeedback | null
@@ -112,6 +118,7 @@ export function GitReviewSurfaceView({
   handleRenderWindowChange,
   hasPendingNavigation,
   headerLeading,
+  headerSummary,
   indexRefreshFailure,
   indexRefreshing,
   isActiveOpenPath,
@@ -125,6 +132,8 @@ export function GitReviewSurfaceView({
   openTreeNode,
   panelId,
   projection,
+  renderFeedback,
+  renderWindowReady,
   replayFailure,
   retryFailure,
   retryLatestItemUpdates,
@@ -135,6 +144,7 @@ export function GitReviewSurfaceView({
   sidebarCollapsed,
   sidebarFooter,
   sidebarHeader,
+  targetSelectionPending,
   treeModel,
   updateRenderFeedback,
   updateRenderItemError,
@@ -230,6 +240,19 @@ export function GitReviewSurfaceView({
       failureSummary={failureSummary}
       feedbackEnabled={active}
       gitRootPath={scope.gitRootPath}
+      {...(headerSummary === undefined
+        ? {}
+        : {
+            headerCenter: (
+              <GitChangeSummaryInline
+                className="text-xs"
+                context={context}
+                filesWithUnit
+                summary={headerSummary}
+                testId="git-review-change-summary"
+              />
+            ),
+          })}
       {...(surfaceHeader === undefined ? {} : { headerLeading: surfaceHeader })}
       getSuppressMembershipScrollRestore={hasPendingNavigation}
       headerTrailing={toolbar}
@@ -252,16 +275,19 @@ export function GitReviewSurfaceView({
       }}
       projection={projection}
       renderFeedback={
-        replayFailure
+        renderFeedback ??
+        (replayFailure
           ? { error: replayFailure, retry: retryLatestItemUpdates }
-          : null
+          : null)
       }
+      renderWindowReady={renderWindowReady}
       setSidebarCollapsed={setSidebarCollapsed}
       sidebarCollapsed={sidebarCollapsed}
       suppressMembershipScrollRestore={navigationPending}
       {...(sidebarFooter === undefined ? {} : { sidebarFooter })}
       {...(sidebarHeader === undefined ? {} : { sidebarHeader })}
       sourcePanelId={panelId}
+      targetSelectionPending={targetSelectionPending}
       treeModel={treeModel}
       viewState={viewState}
       warnings={warnings}

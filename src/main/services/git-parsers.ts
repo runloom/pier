@@ -26,7 +26,7 @@ export function splitNonEmptyLines(output: string): string[] {
 
 /**
  * `parseGitStatus` 输出的中间形态：只含 `git status --porcelain=v2` 能直接解析出的信息。
- * `upstreamGone / counts / delta / repoState / stashCount` 由 service 端合成到最终 GitStatus。
+ * `upstreamGone / counts / changeSummary / repoState / stashCount` 由 service 端合成到最终 GitStatus。
  */
 export interface ParsedGitStatus {
   branch: {

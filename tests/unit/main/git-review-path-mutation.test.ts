@@ -46,6 +46,7 @@ function harness(entries: readonly GitReviewIndexEntry[]) {
     indexReader: {
       read: vi.fn(async () => ({
         entries: [...entries],
+        groupSummaries: {},
         indexRevision: "index:1",
         kind: "ok" as const,
         warnings: [],

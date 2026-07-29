@@ -1,6 +1,3 @@
-import { createHash } from "node:crypto";
-import { lstat } from "node:fs/promises";
-import { resolve } from "node:path";
 import {
   type GitReviewFailure,
   type GitReviewGroup,
@@ -13,6 +10,7 @@ import {
   gitReviewRootPathSchema,
   gitReviewScopeSchema,
 } from "../../../shared/contracts/git-review.ts";
+import { readGitUntrackedPathStats } from "../git-change-summary.ts";
 import { type ExecGitRaw, execGitRaw } from "../git-exec.ts";
 import {
   GitReviewIdentityResolver,
@@ -44,10 +42,18 @@ import {
   resolveGitReviewRangeBounds,
 } from "./git-review-index-range.ts";
 import {
+  createGitReviewIndexRevision,
+  createGitReviewWorkingTreeRevision,
+} from "./git-review-index-revision.ts";
+import {
   applyScopedMovements,
   GitReviewScopedMovementParser,
   mergeScopedPrimaryReads,
 } from "./git-review-index-scoped.ts";
+import {
+  buildGitReviewGroupSummaries,
+  type GitReviewUntrackedPathStatsReader,
+} from "./git-review-index-summary.ts";
 import {
   createGitReviewExactPathspecs,
   hasGitReviewExactPathspecConflict,
@@ -64,6 +70,8 @@ const DIFF_MACHINE_ARGS = [
 ] as const;
 
 export interface ReadGitReviewIndexRequest {
+  /** document 稳定性检查只需 entries/revision；跳过可能读取工作区正文的摘要。 */
+  readonly includeGroupSummaries?: boolean;
   /** main-only 单文件探测；公开 index 请求不设置。 */
   readonly paths?: readonly string[];
   readonly scope: GitReviewScope;
@@ -77,6 +85,7 @@ export interface ReadGitReviewIndexOptions {
 interface CreateGitReviewIndexReaderOptions {
   execGitRaw?: ExecGitRaw;
   identityResolver?: Pick<GitReviewIdentityResolver, "resolveRepository">;
+  readUntrackedPathStats?: GitReviewUntrackedPathStatsReader;
 }
 
 export type GitReviewIndexResolution =
@@ -105,11 +114,14 @@ export class GitReviewIndexReader {
     GitReviewIdentityResolver,
     "resolveRepository"
   >;
+  readonly #readUntrackedPathStats: GitReviewUntrackedPathStatsReader;
 
   constructor(options: CreateGitReviewIndexReaderOptions = {}) {
     this.#execGitRaw = options.execGitRaw ?? execGitRaw;
     this.#identityResolver =
       options.identityResolver ?? new GitReviewIdentityResolver();
+    this.#readUntrackedPathStats =
+      options.readUntrackedPathStats ?? readGitUntrackedPathStats;
   }
 
   async read(
@@ -150,18 +162,36 @@ export class GitReviewIndexReader {
               paths,
               scope.target
             );
-      const indexRevision = bindGitReviewIndexRevision(
+      const summaryResult =
+        request.includeGroupSummaries === false
+          ? {
+              groupSummaries: {},
+              stableUntrackedStatTokens: new Map<string, string>(),
+            }
+          : await buildGitReviewGroupSummaries({
+              budget,
+              canonicalRoot,
+              entries: read.assembled.entries,
+              readUntrackedPathStats: this.#readUntrackedPathStats,
+              resolvedEntries: read.assembled.resolvedEntries,
+              signal,
+            });
+      const indexRevision = createGitReviewIndexRevision(
         read.assembled.revision,
         read.rangeBounds?.headOid ?? identity.headOid,
         scope.target.kind === "uncommitted"
-          ? await createWorkingTreeRevision(
+          ? await createGitReviewWorkingTreeRevision(
               canonicalRoot,
-              read.assembled.resolvedEntries
+              read.assembled.resolvedEntries,
+              summaryResult.stableUntrackedStatTokens,
+              budget,
+              signal
             )
           : null
       );
       const result = gitReviewIndexOkSchema.parse({
         entries: read.assembled.entries,
+        groupSummaries: summaryResult.groupSummaries,
         indexRevision,
         kind: "ok",
         warnings: read.assembled.warnings,
@@ -404,70 +434,6 @@ function parseGitReviewIndexRequest(request: ReadGitReviewIndexRequest): {
     paths,
     scope: scope.data,
   };
-}
-
-function bindGitReviewIndexRevision(
-  contentRevision: string,
-  headOid: string | null,
-  workingTreeRevision: string | null
-): string {
-  const digest = createHash("sha256");
-  for (const part of [
-    "pier.git-review.index-revision.v1",
-    contentRevision,
-    headOid ?? "unborn",
-    workingTreeRevision ?? "immutable",
-  ]) {
-    digest.update(part, "utf8");
-    digest.update("\0", "utf8");
-  }
-  return `sha256:${digest.digest("hex")}`;
-}
-
-async function createWorkingTreeRevision(
-  canonicalRoot: string,
-  entries: readonly GitReviewIndexResolvedEntry[]
-): Promise<string> {
-  const paths = [
-    ...new Set(
-      entries.flatMap((entry) => {
-        const unstaged = entry.groupFacts.unstaged;
-        return unstaged === undefined ? [] : [unstaged.targetPath];
-      })
-    ),
-  ].sort();
-  const digest = createHash("sha256");
-  digest.update("pier.git-review.working-tree.v1\0", "utf8");
-  const batchSize = 64;
-  for (let offset = 0; offset < paths.length; offset += batchSize) {
-    const batch = paths.slice(offset, offset + batchSize);
-    const facts = await Promise.all(
-      batch.map(async (path) => {
-        try {
-          const stat = await lstat(resolve(canonicalRoot, path), {
-            bigint: true,
-          });
-          return `${stat.mode}:${stat.size}:${stat.mtimeNs}:${stat.ctimeNs}`;
-        } catch (error) {
-          const code =
-            typeof error === "object" &&
-            error !== null &&
-            "code" in error &&
-            typeof error.code === "string"
-              ? error.code
-              : "unknown";
-          return `missing:${code}`;
-        }
-      })
-    );
-    for (const [index, path] of batch.entries()) {
-      digest.update(path, "utf8");
-      digest.update("\0", "utf8");
-      digest.update(facts[index] ?? "missing:unknown", "utf8");
-      digest.update("\0", "utf8");
-    }
-  }
-  return `sha256:${digest.digest("hex")}`;
 }
 
 function scopedRangePaths(

@@ -181,6 +181,7 @@ export function GitReviewPanelLayout({
   contextId,
   gitRootPath,
   mutationAuthorityBlocked = false,
+  headerCenter,
   headerLeading,
   headerTrailing,
   onOpenPath,
@@ -198,6 +199,7 @@ export function GitReviewPanelLayout({
   contextId?: string | null;
   gitRootPath: string | null;
   mutationAuthorityBlocked?: boolean;
+  headerCenter?: ReactNode;
   headerLeading?: ReactNode;
   headerTrailing?: ReactNode;
   onOpenPath?: (path: string) => void;
@@ -262,7 +264,7 @@ export function GitReviewPanelLayout({
       contentPanelId="git-review-diff"
       header={
         <FilePanelHeader
-          center={null}
+          center={headerCenter ?? null}
           {...(headerTrailing === undefined
             ? {}
             : { trailing: headerTrailing })}

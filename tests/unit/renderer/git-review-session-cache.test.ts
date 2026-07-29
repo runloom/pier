@@ -64,6 +64,7 @@ function loadedIndex(
 ): Extract<GitReviewIndexLoaderSnapshot, { kind: "loaded" }> {
   const result: GitReviewIndexOk = {
     entries: [...entries],
+    groupSummaries: {},
     kind: "ok",
     warnings: [],
   };

@@ -12,7 +12,13 @@ import {
   type GitReviewTarget,
   gitReviewScopeSchema,
 } from "@shared/contracts/git-review.ts";
-import { useCallback, useEffect, useMemo, useSyncExternalStore } from "react";
+import {
+  useCallback,
+  useEffect,
+  useMemo,
+  useState,
+  useSyncExternalStore,
+} from "react";
 import { gitChangesPanelTitle } from "./git-changes-tab-title.ts";
 import { pluginText } from "./git-plugin-text.ts";
 import {
@@ -166,6 +172,26 @@ function GitChangesPanelBody({
     REVIEW_TREE_COLLAPSED_STORAGE_PREFIX,
     source?.gitRootPath ?? null
   );
+  const [targetSelectionSourceKey, setTargetSelectionSourceKey] = useState<
+    string | null
+  >(null);
+  // sourceKey 切走后丢弃挂起标记，避免同一 key 被恢复时误进无限 loading。
+  useEffect(() => {
+    if (
+      targetSelectionSourceKey !== null &&
+      targetSelectionSourceKey !== sourceKey
+    ) {
+      setTargetSelectionSourceKey(null);
+    }
+  }, [sourceKey, targetSelectionSourceKey]);
+  const targetSelectionPending =
+    sourceKey !== null && targetSelectionSourceKey === sourceKey;
+  const onTargetSelectionPendingChange = useCallback(
+    (pending: boolean) => {
+      setTargetSelectionSourceKey(pending ? sourceKey : null);
+    },
+    [sourceKey]
+  );
   const {
     acquireMutationAuthority,
     entries,
@@ -222,6 +248,7 @@ function GitChangesPanelBody({
       context={context}
       gitRootPath={source.gitRootPath}
       onSelectTarget={onSelectTarget}
+      onTargetSelectionPendingChange={onTargetSelectionPendingChange}
       target={source.target}
     />
   ) : undefined;
@@ -291,6 +318,7 @@ function GitChangesPanelBody({
         <ReviewDocuments
           context={context}
           entries={entries}
+          groupSummaries={state.result.groupSummaries}
           headerLeading={scopeSwitcher}
           indexGeneration={state.generation}
           indexRefreshFailure={state.refreshFailure}
@@ -305,6 +333,7 @@ function GitChangesPanelBody({
           scope={source}
           setSidebarCollapsed={setSidebarCollapsed}
           sidebarCollapsed={sidebarCollapsed}
+          targetSelectionPending={targetSelectionPending}
           treeModel={treeModel}
           warnings={state.result.warnings}
         />
