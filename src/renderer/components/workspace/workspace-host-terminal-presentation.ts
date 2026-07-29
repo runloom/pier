@@ -7,7 +7,6 @@ import {
   type TerminalPresentationWorkspaceState,
   updateTerminalPresentationWorkspace,
 } from "@/panel-kits/terminal/terminal-presentation-reconciler.ts";
-import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { panelKindOf } from "./panel-registry.ts";
 
 function buildTerminalWorkspacePresentationState(
@@ -42,7 +41,6 @@ export function syncTerminalPresentation(
   api: DockviewReadyEvent["api"],
   flushReason: TerminalLayoutFlushReason
 ): void {
-  useWorkspaceStore.getState().syncTabShortcutHints();
   updateTerminalPresentationWorkspace(
     buildTerminalWorkspacePresentationState(api),
     flushReason

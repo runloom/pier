@@ -6,8 +6,6 @@ const SUBTLE_DROP_TARGET_BACKGROUND_RE =
   /--dv-drag-over-background-color:\s*color-mix\(\s*in oklab,\s*var\(--primary\) 10%,\s*transparent\s*\)/;
 const SUBTLE_DROP_TARGET_BORDER_RE =
   /--dv-drag-over-border:\s*1px solid\s*color-mix\(in oklab, var\(--primary\) 55%, transparent\)/;
-const TAB_HINT_MIN_WIDTH_RE = /min-width:\s*14px(?:\s*!important)?;/;
-
 describe("Pier dockview drag CSS", () => {
   it("keeps drop targets subtle over native terminal content", () => {
     const css = readFileSync(
@@ -84,19 +82,6 @@ describe("Pier dockview drag CSS", () => {
     );
     expect(idleTabRule).toContain("max-width: none");
     expect(idleTabRule).not.toContain("max-width: 280px");
-  });
-
-  it("keeps tab shortcut hint metrics aligned with the normal icon slot", () => {
-    const css = readFileSync(
-      join(process.cwd(), "src/renderer/app/globals.css"),
-      "utf8"
-    );
-
-    expect(css).toContain(".dockview-theme-pier .pier-panel-tab-index-hint");
-    expect(css).toContain(".dv-tab.dv-tab-dragging .pier-panel-tab-index-hint");
-    expect(css).toContain(".dv-tab-ghost-drag .pier-panel-tab-index-hint");
-    expect(css).toContain("height: 14px;");
-    expect(css).toMatch(TAB_HINT_MIN_WIDTH_RE);
   });
 
   it("reserves a left gutter for the absolute active-task presence dot", () => {

@@ -37,7 +37,6 @@ import {
   panelHasActiveTaskRun,
   useTaskRunsStore,
 } from "@/stores/task-runs.store.ts";
-import { useTabShortcutHintsStore } from "@/stores/terminal.store.ts";
 import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
 import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
 import { PanelTabLeadingIcon } from "./panel-tab-leading-icon.tsx";
@@ -112,28 +111,10 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   const statusIndicator = status
     ? tabStatusIndicator(status, tab?.state?.label)
     : null;
-  const commandKeyDown = useTabShortcutHintsStore(
-    (state) => state.commandKeyDown
+  // Chrome/VS Code model: ⌘1–9 works with no hold-to-reveal chrome.
+  const leadingVisual: ReactNode = (
+    <PanelTabLeadingIcon component={props.api.component} tab={tab} />
   );
-  const shortcutIndex = useTabShortcutHintsStore((state) =>
-    commandKeyDown ? state.activeGroupTabHints[props.api.id] : undefined
-  );
-  let leadingVisual: ReactNode = null;
-  if (shortcutIndex) {
-    leadingVisual = (
-      <span
-        aria-hidden="true"
-        className="pier-panel-tab-index-hint shrink-0 font-semibold text-[10px] text-primary"
-        data-panel-tab-index-hint={shortcutIndex}
-      >
-        ⌘{shortcutIndex}
-      </span>
-    );
-  } else {
-    leadingVisual = (
-      <PanelTabLeadingIcon component={props.api.component} tab={tab} />
-    );
-  }
   useEffect(() => {
     // dockview onDidTitleChange fire 时把新 title 写入 state, 触发 tab 重渲.
     const disposable = props.api.onDidTitleChange((e) => {
@@ -336,7 +317,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     </div>
   );
 
-  if (!(tooltipText && !commandKeyDown)) {
+  if (!tooltipText) {
     return tabContent;
   }
 

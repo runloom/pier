@@ -188,14 +188,6 @@ function hasFlag(modifierFlags: number, flag: number): boolean {
   return (modifierFlags & flag) !== 0;
 }
 
-function setCommandKeyDown(commandKeyDown: boolean): void {
-  useTerminalStore.getState().setCommandKeyDown(commandKeyDown);
-}
-
-function isCommandKeyEvent(e: KeyboardEvent): boolean {
-  return e.code === "MetaLeft" || e.code === "MetaRight" || e.key === "Meta";
-}
-
 function chordFromNativeForward(
   modifierFlags: number,
   chars: string
@@ -221,9 +213,6 @@ export function useKeyboardShortcuts(): void {
       if (isImePending(e)) {
         return;
       }
-      if (isCommandKeyEvent(e) || e.metaKey) {
-        setCommandKeyDown(true);
-      }
       const action = pickAction(chordFromEvent(e), e.target);
       if (!action) {
         return;
@@ -233,14 +222,6 @@ export function useKeyboardShortcuts(): void {
       runAction(action);
     };
     window.addEventListener("keydown", onKeydown, true);
-    const onKeyup = (e: KeyboardEvent) => {
-      if (isCommandKeyEvent(e)) {
-        setCommandKeyDown(false);
-      }
-    };
-    window.addEventListener("keyup", onKeyup, true);
-    const onBlur = () => setCommandKeyDown(false);
-    window.addEventListener("blur", onBlur);
 
     // 路径 2: swift IPC forward (terminal NSView 占 firstResponder 时)
     const unsubscribeForward = window.pier?.keybinding?.onForward?.(
@@ -254,19 +235,10 @@ export function useKeyboardShortcuts(): void {
         }
       }
     );
-    const unsubscribeModifierState = window.pier?.keybinding?.onModifierState?.(
-      ({ modifierFlags }) => {
-        setCommandKeyDown(hasFlag(modifierFlags, NS_FLAG_COMMAND));
-      }
-    );
 
     return () => {
       window.removeEventListener("keydown", onKeydown, true);
-      window.removeEventListener("keyup", onKeyup, true);
-      window.removeEventListener("blur", onBlur);
       unsubscribeForward?.();
-      unsubscribeModifierState?.();
-      setCommandKeyDown(false);
     };
   }, []);
 }

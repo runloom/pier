@@ -23,13 +23,11 @@ import {
   it,
   vi,
 } from "vitest";
-import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
 import { PanelTabHeader } from "@/components/workspace/panel-tab-header.tsx";
 import { initI18n } from "@/i18n/index.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
-import { useTerminalStore } from "@/stores/terminal.store.ts";
 import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
 
 type ActiveChangeHandler = (event: { isActive: boolean }) => void;
@@ -134,7 +132,6 @@ describe("PanelTabHeader", () => {
       initialized: false,
       snapshot: emptyTaskRunsSnapshot(),
     });
-    useTerminalStore.getState().resetShortcutHints();
   });
 
   it("replays terminal ownership when its selected tab is clicked", () => {
@@ -496,96 +493,6 @@ describe("PanelTabHeader", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("does not open the metadata tooltip while Command is held", () => {
-    vi.useFakeTimers();
-    usePanelDescriptorStore.setState({
-      activeId: null,
-      descriptors: {
-        "terminal-1": {
-          display: { short: "pier" },
-          tab: {
-            title: "dev",
-            tooltip: {
-              lines: [{ label: "Command", value: "bun run dev" }],
-              title: "dev",
-            },
-          },
-        },
-      },
-    });
-    useTerminalStore.setState({
-      activeGroupTabHints: { "terminal-1": 1 },
-      commandKeyDown: true,
-    });
-
-    const { container } = render(
-      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
-    );
-    const tabElement = container.querySelector(".dv-default-tab");
-    expect(tabElement).not.toBeNull();
-    if (!tabElement) {
-      return;
-    }
-
-    act(() => {
-      fireEvent.pointerMove(tabElement, {
-        pointerType: "mouse",
-      });
-    });
-    advanceTooltipDelay(1000);
-
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    expect(
-      container.querySelector("[data-panel-tab-index-hint]")
-    ).toHaveTextContent("⌘1");
-  });
-
-  it("closes an open metadata tooltip when Command is pressed", () => {
-    vi.useFakeTimers();
-    usePanelDescriptorStore.setState({
-      activeId: null,
-      descriptors: {
-        "terminal-1": {
-          display: { short: "pier" },
-          tab: {
-            title: "dev",
-            tooltip: {
-              lines: [{ label: "Command", value: "bun run dev" }],
-              title: "dev",
-            },
-          },
-        },
-      },
-    });
-    useTerminalStore.getState().setActiveGroupPanels([{ id: "terminal-1" }]);
-
-    const { container } = render(
-      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
-    );
-    const tabElement = container.querySelector(".dv-default-tab");
-    expect(tabElement).not.toBeNull();
-    if (!tabElement) {
-      return;
-    }
-
-    act(() => {
-      fireEvent.pointerMove(tabElement, {
-        pointerType: "mouse",
-      });
-    });
-    advanceTooltipDelay(1000);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("dev");
-
-    act(() => {
-      useTerminalStore.getState().setCommandKeyDown(true);
-    });
-
-    expect(screen.queryByRole("tooltip")).toBeNull();
-    expect(
-      container.querySelector("[data-panel-tab-index-hint]")
-    ).toHaveTextContent("⌘1");
-  });
-
   it("does not reopen the previous tab tooltip during pointer-driven tab focus handoff", () => {
     vi.useFakeTimers();
     usePanelDescriptorStore.setState({
@@ -817,101 +724,6 @@ describe("PanelTabHeader", () => {
     );
 
     expect(container.querySelector("[data-panel-tab-icon]")).toBeNull();
-  });
-
-  it("replaces the active group tab icon with its shortcut number while Command is held", () => {
-    usePanelDescriptorStore.setState({
-      activeId: null,
-      descriptors: {
-        "terminal-1": {
-          display: { short: "pier" },
-          tab: {
-            state: { label: "Running", status: "running" },
-            title: "test",
-          },
-        },
-      },
-    });
-    useTerminalStore.setState({
-      activeGroupTabHints: { "terminal-1": 1 },
-      commandKeyDown: true,
-    });
-
-    const { container } = render(
-      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
-    );
-
-    expect(container.querySelector("[data-panel-tab-icon]")).toBeNull();
-    expect(
-      container.querySelector("[data-panel-tab-index-hint]")
-    ).toHaveTextContent("⌘1");
-    expect(
-      container.querySelector("[data-panel-tab-state-indicator]")
-    ).toHaveAttribute("data-tab-status", "running");
-  });
-
-  it("keeps the original icon for tabs outside the active group while Command is held", () => {
-    useTerminalStore.setState({
-      activeGroupTabHints: { "terminal-1": 1 },
-      commandKeyDown: true,
-    });
-
-    const { container } = render(
-      <PanelTabHeader
-        {...createHeaderProps("terminal", "Terminal", undefined, "terminal-2")}
-      />
-    );
-
-    expect(
-      container.querySelector('[data-panel-tab-icon="terminal"]')
-    ).not.toBeNull();
-    expect(container.querySelector("[data-panel-tab-index-hint]")).toBeNull();
-  });
-
-  it("toggles the active group tab shortcut hint from web Command key events", () => {
-    usePanelDescriptorStore.setState({
-      activeId: null,
-      descriptors: {
-        "file-1": {
-          display: { short: "file.ts" },
-          tab: { icon: { id: "pier.file:file.ts" }, title: "file.ts" },
-        },
-      },
-    });
-    useTerminalStore.getState().setActiveGroupPanels([{ id: "file-1" }]);
-
-    const { container } = render(
-      <>
-        <ShellKeybindings />
-        <PanelTabHeader
-          {...createHeaderProps(
-            "pier.files.filePanel",
-            "file.ts",
-            undefined,
-            "file-1"
-          )}
-        />
-      </>
-    );
-
-    expect(container.querySelector("[data-panel-tab-index-hint]")).toBeNull();
-
-    fireEvent.keyDown(window, { code: "MetaLeft", metaKey: true });
-    expect(
-      container.querySelector("[data-panel-tab-index-hint]")
-    ).toHaveTextContent("⌘1");
-
-    fireEvent.keyDown(window, { code: "Digit1", metaKey: true });
-    fireEvent.keyUp(window, { code: "Digit1", metaKey: false });
-    expect(
-      container.querySelector("[data-panel-tab-index-hint]")
-    ).toHaveTextContent("⌘1");
-
-    fireEvent.keyUp(window, { code: "MetaLeft", metaKey: false });
-    expect(container.querySelector("[data-panel-tab-index-hint]")).toBeNull();
-    expect(
-      container.querySelector('[data-panel-tab-icon="pier.file:file.ts"]')
-    ).not.toBeNull();
   });
 
   it("marks only file preview tabs with preview chrome", () => {

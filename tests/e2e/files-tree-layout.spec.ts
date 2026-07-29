@@ -192,12 +192,6 @@ test("uses available file-tree width and shares file icons and the sidebar searc
     await fileTab.click();
     await expect(fileChrome).toBeVisible();
 
-    await page.keyboard.down("Meta");
-    await expect(tabFileIcon).toBeHidden();
-    await expect(fileTab.locator("[data-panel-tab-index-hint]")).toContainText(
-      "⌘"
-    );
-    await page.keyboard.up("Meta");
     await expect(tabFileIcon).toBeVisible();
     await fileTab.dblclick();
     await dirty.click();

@@ -39,36 +39,10 @@ interface TerminalResizeSlice {
 }
 
 // ===========================================================================
-// slice.shortcutHints — zustand
-// ===========================================================================
-
-interface PanelLike {
-  id: string;
-}
-
-interface TabShortcutHintsSlice {
-  activeGroupTabHints: Record<string, number>;
-  commandKeyDown: boolean;
-  resetShortcutHints(): void;
-  setActiveGroupPanels(panels: readonly PanelLike[]): void;
-  setCommandKeyDown(commandKeyDown: boolean): void;
-}
-
-function tabHintsForPanels(
-  panels: readonly PanelLike[]
-): Record<string, number> {
-  return Object.fromEntries(
-    panels.slice(0, 9).map((panel, index) => [panel.id, index + 1])
-  );
-}
-
-// ===========================================================================
 // 合并 store
 // ===========================================================================
 
-type TerminalStoreState = TerminalOverlayFocusSlice &
-  TerminalResizeSlice &
-  TabShortcutHintsSlice;
+type TerminalStoreState = TerminalOverlayFocusSlice & TerminalResizeSlice;
 
 /**
  * 单一 web 焦点请求的释放句柄。共存型浮层（如终端搜索）任一时刻只有一个能持有
@@ -110,15 +84,6 @@ export const useTerminalStore = create<TerminalStoreState>((set, get) => ({
   placeholderVisible: false,
   suppressTerminals: false,
   suppressedPanelIds: EMPTY_SET,
-
-  // --- shortcutHints ---
-  activeGroupTabHints: {},
-  commandKeyDown: false,
-  resetShortcutHints: () =>
-    set({ activeGroupTabHints: {}, commandKeyDown: false }),
-  setActiveGroupPanels: (panels) =>
-    set({ activeGroupTabHints: tabHintsForPanels(panels) }),
-  setCommandKeyDown: (commandKeyDown) => set({ commandKeyDown }),
 }));
 
 // ===========================================================================
@@ -133,12 +98,6 @@ export function useTerminalOverlayFocus<T>(
 
 export function useTerminalResizeStore<T>(
   selector: (state: TerminalResizeSlice) => T
-): T {
-  return useTerminalStore(selector);
-}
-
-export function useTabShortcutHintsStore<T>(
-  selector: (state: TabShortcutHintsSlice) => T
 ): T {
   return useTerminalStore(selector);
 }
@@ -161,7 +120,5 @@ export function resetTerminalStoreForTests(): void {
     placeholderVisible: false,
     suppressTerminals: false,
     suppressedPanelIds: EMPTY_SET,
-    activeGroupTabHints: {},
-    commandKeyDown: false,
   });
 }

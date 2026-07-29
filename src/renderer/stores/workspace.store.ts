@@ -9,7 +9,6 @@ import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { runPanelCloseGuards } from "@/lib/workspace/panel-close-guards.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
-import { useTerminalStore } from "@/stores/terminal.store.ts";
 import {
   clearFreshTerminalPanel,
   markFreshTerminalPanel,
@@ -69,7 +68,6 @@ interface WorkspaceState {
     panelId: string,
     direction: "right" | "below" | "left" | "above"
   ) => void;
-  syncTabShortcutHints: () => void;
   toggleActivePanelMaximized: () => void;
 }
 
@@ -78,11 +76,6 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
   hasMaximizedGroup: false,
   setApi: (api) => set({ api, hasMaximizedGroup: false }),
   setHasMaximizedGroup: (hasMaximizedGroup) => set({ hasMaximizedGroup }),
-  syncTabShortcutHints: () => {
-    useTerminalStore
-      .getState()
-      .setActiveGroupPanels(get().api?.activeGroup?.panels ?? []);
-  },
   activateTabInActiveGroup: (index) => {
     const api = get().api;
     if (!(api && Number.isInteger(index) && index >= 0)) {
