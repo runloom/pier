@@ -414,6 +414,33 @@ describe("WorkspaceHeaderActions", () => {
     expect(panel.api.exitMaximized).toHaveBeenCalledOnce();
   });
 
+  it("shows the restore tooltip immediately while a panel is maximized", async () => {
+    const panel = createPanel("terminal-1", "Terminal 1");
+    vi.mocked(panel.api.isMaximized).mockReturnValue(true);
+    const props = createProps([panel]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderRightActions {...props} />);
+
+    await waitFor(() => {
+      const content = document.querySelector('[data-slot="tooltip-content"]');
+      expect(content).not.toBeNull();
+      expect(content).toHaveTextContent("Restore");
+    });
+  });
+
+  it("does not force-open the maximize tooltip when the panel is not maximized", () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderRightActions {...props} />);
+
+    expect(
+      screen.getByRole("button", { name: "Maximize" })
+    ).toBeInTheDocument();
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+  });
+
   it("renders a select trigger for clipped tabs", async () => {
     const header = document.createElement("div");
     const tabsContainer = document.createElement("div");

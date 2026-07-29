@@ -71,7 +71,9 @@ export function WorkspaceHeaderRightActions(
   return (
     <div className="flex h-full items-center justify-center gap-1 px-1">
       {toggleAction ? (
-        <Tooltip>
+        // Maximized: force-open so restore affordance is visible without hover
+        // (click-to-maximize also soft-suppresses hover tooltips until pointermove).
+        <Tooltip open={isMaximized ? true : undefined}>
           <TooltipTrigger asChild>
             <Button
               aria-label={toggleLabel}
