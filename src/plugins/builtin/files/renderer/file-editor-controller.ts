@@ -1,27 +1,20 @@
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type {
-  EditorSearchOptions,
-  EditorSearchState,
-} from "./code-mirror-search-state.ts";
+  RendererPluginContext,
+  RendererPluginFilesFacade,
+} from "@plugins/api/renderer.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import { FileDocumentLifecycle } from "./file-document-lifecycle.ts";
+import { FileEditorControllerViewFacade } from "./file-editor-controller-view-commands.ts";
 import { showFileEditorDiffMode } from "./file-editor-mode-handlers.ts";
 import { moveEditorPath } from "./file-editor-move-path.ts";
 import { FileEditorPathMutations } from "./file-editor-path-mutations.ts";
-import { FileEditorPendingReveals } from "./file-editor-pending-reveals.ts";
 import { FileEditorSaveCommands } from "./file-editor-save-commands.ts";
 import { FileEditorSaveCoordinator } from "./file-editor-save-coordinator.ts";
+import { createFileEditorSessionId } from "./file-editor-session-id.ts";
 import { createFileEditorTransferSupport } from "./file-editor-transfer-support.ts";
 import { attachFileEditorView } from "./file-editor-view-attach.ts";
-import { FileEditorViewCoordinator } from "./file-editor-view-coordinator.ts";
-import {
-  bindCodeFontAppearance,
-  bindMinimapSetting,
-  readMinimapEnabled,
-} from "./file-editor-view-prefs.ts";
-import type {
-  FileEditorCommand,
-  FileEditorViewPresentation,
-} from "./file-editor-view-session.ts";
+import { FileEditorViewPreferences } from "./file-editor-view-prefs.ts";
+import type { FileEditorViewPresentation } from "./file-editor-view-session.ts";
 import {
   type FilePathMutationGuard,
   FilePathMutationGuardCoordinator,
@@ -44,8 +37,10 @@ import { FilesMutationSuspendCoordinator } from "./files-mutation-suspend-coordi
 import { preserveDocumentsAsUntitledAndRebind } from "./files-preserve-as-untitled.ts";
 import type { FilesWatchHub } from "./files-watch-hub.ts";
 
+export type { FileEditorNavigationResult } from "./file-editor-controller-view-commands.ts";
+
 /** Documents + CodeMirror lifecycle for the files plugin. */
-export class FileEditorController {
+export class FileEditorController extends FileEditorControllerViewFacade {
   readonly #context: RendererPluginContext;
   readonly #documents: FileDocumentLifecycle;
   readonly #gitGutter: FilesEditorGitGutterController;
@@ -57,27 +52,27 @@ export class FileEditorController {
   readonly #pathMutationGuards: FilePathMutationGuardCoordinator;
   readonly #pathMutations: FileEditorPathMutations;
   readonly #pendingModes = new Map<string, FileViewMode>();
-  readonly #pendingReveals = new FileEditorPendingReveals();
   readonly #saveCoordinator: FileEditorSaveCoordinator;
-  readonly #views = new FileEditorViewCoordinator();
   #editingSuspended = false;
-  #appearanceDispose: (() => void) | null = null;
-  #minimapConfigDispose: (() => void) | null = null;
-  #minimapEnabled: boolean;
-  #lastCodeFontFamily: string;
-  #lastCodeFontSize: string;
+  readonly #preferences: FileEditorViewPreferences;
+  readonly readDocument: RendererPluginFilesFacade["readDocument"];
 
   constructor(context: RendererPluginContext, watchHub: FilesWatchHub) {
+    super();
     this.#context = context;
+    this.readDocument = (request) => this.#context.files.readDocument(request);
     this.#gitGutter = new FilesEditorGitGutterController(context);
     this.#pathMutationGuards = new FilePathMutationGuardCoordinator({
       context,
       isEditingSuspended: () => this.#editingSuspended,
-      sessions: () => this.#views.values(),
+      sessions: () => this.views.values(),
     });
     this.#documents = new FileDocumentLifecycle({
       context,
-      onDocumentsChanged: () => this.#views.syncDocuments(),
+      onDocumentsChanged: () => {
+        this.views.syncDocuments();
+        this.viewCommands.consumePendingLocations();
+      },
       onShowDiff: (documentId, panelId) => {
         showFileEditorDiffMode({
           documentId,
@@ -93,7 +88,7 @@ export class FileEditorController {
       documents: this.#documents,
       onRemoveDocuments: (documentIds) => {
         for (const documentId of documentIds) {
-          this.#views.disposeDocument(documentId);
+          this.viewCommands.disposeDocument(documentId);
         }
       },
       onPreserveAsUntitled: async (documents) =>
@@ -110,29 +105,13 @@ export class FileEditorController {
         this.#documents.getPanelDocumentId(panelId),
       saveCommands,
     });
-    this.#minimapEnabled = readMinimapEnabled(context);
-    this.#minimapConfigDispose = bindMinimapSetting({
-      context,
-      onEnabled: (enabled) => {
-        this.#minimapEnabled = enabled;
-      },
-      views: this.#views,
-    });
-    const initialTypography = context.appearance.current().typography;
-    this.#lastCodeFontFamily = initialTypography.codeFontFamily;
-    this.#lastCodeFontSize = initialTypography.codeFontSize;
-    this.#appearanceDispose = bindCodeFontAppearance({
-      context,
-      getLast: () => ({
-        family: this.#lastCodeFontFamily,
-        size: this.#lastCodeFontSize,
-      }),
-      setLast: (family, size) => {
-        this.#lastCodeFontFamily = family;
-        this.#lastCodeFontSize = size;
-      },
-      views: this.#views,
-    });
+    this.#preferences = new FileEditorViewPreferences(context, this.views);
+  }
+
+  protected override getPanelDocumentIdForViewCommands(
+    panelId: string
+  ): string | null {
+    return this.#documents.getPanelDocumentId(panelId);
   }
   async initialize(): Promise<void> {
     await this.#documents.initialize();
@@ -161,36 +140,16 @@ export class FileEditorController {
   createTransferSupport() {
     return createFileEditorTransferSupport({
       mutationSuspend: this.#mutationSuspend,
-      views: this.#views,
+      views: this.views,
     });
-  }
-
-  applyViewSnapshot(
-    editorSessionId: string,
-    snapshot: Parameters<FileEditorViewCoordinator["applySnapshot"]>[1]
-  ): void {
-    this.#views.applySnapshot(editorSessionId, snapshot);
-  }
-
-  revealOffset(editorSessionId: string, offset: number): void {
-    this.revealRange(editorSessionId, offset, offset);
-  }
-
-  /**
-   * Reveal a selection range. Returns true when applied to a live session;
-   * false when queued for attach (caller may keep retrying).
-   */
-  revealRange(editorSessionId: string, from: number, to: number): boolean {
-    return this.#pendingReveals.revealRange(
-      this.#views.getSession(editorSessionId),
-      editorSessionId,
-      from,
-      to
-    );
   }
 
   documentId(source: FilesDocumentPanelSource): string {
     return this.#documents.documentId(source);
+  }
+
+  documentIdForPanel(panelId: string): string | null {
+    return this.#documents.getPanelDocumentId(panelId);
   }
 
   createUntitledDocument(input: {
@@ -201,8 +160,15 @@ export class FileEditorController {
   }
 
   acquirePanel(panelId: string, source: FilesDocumentPanelSource): () => void {
+    const previousDocumentId = this.#documents.getPanelDocumentId(panelId);
+    const documentId = this.documentId(source);
+    this.viewCommands.prepareDocumentReplacement(
+      createFileEditorSessionId(panelId),
+      previousDocumentId,
+      documentId
+    );
     const release = this.#documents.acquirePanel(panelId, source);
-    const document = getDocument(this.documentId(source));
+    const document = getDocument(documentId);
     if (document) {
       this.#pathMutationGuards.syncDocument(document);
     }
@@ -218,6 +184,13 @@ export class FileEditorController {
     panelId: string;
     source: FilesDocumentPanelSource;
   }): void {
+    const documentId =
+      this.#documents.getPanelDocumentId(input.panelId) ??
+      this.documentId(input.source);
+    this.viewCommands.clearOwnerDocument(
+      createFileEditorSessionId(input.panelId),
+      documentId
+    );
     this.#modeHandlers.delete(input.panelId);
     this.#pendingModes.delete(input.panelId);
     this.#documents.closePanel(input);
@@ -226,7 +199,7 @@ export class FileEditorController {
   discardDocument(documentId: string): void {
     const document = getDocument(documentId);
     if (document) {
-      this.#views.disposeDocument(document.id);
+      this.viewCommands.disposeDocument(document.id);
     }
     this.#documents.discardDocument(documentId);
   }
@@ -282,6 +255,16 @@ export class FileEditorController {
     };
   }
 
+  showSourceMode(panelId: string): void {
+    const handler = this.#modeHandlers.get(panelId);
+    if (handler) {
+      handler("source");
+      this.#pendingModes.delete(panelId);
+      return;
+    }
+    this.#pendingModes.set(panelId, "source");
+  }
+
   registerPanelSaveAsHandler(
     panelId: string,
     handler: (feedback: FileSaveFeedback) => Promise<FileSaveOutcome>
@@ -305,81 +288,35 @@ export class FileEditorController {
   attachView(input: {
     documentId: string;
     editorSessionId: string;
+    panelContext?: PanelContext;
     parent: HTMLElement;
     presentation: FileEditorViewPresentation;
   }): void {
+    this.viewCommands.prepareDocumentReplacement(
+      input.editorSessionId,
+      this.views.getSession(input.editorSessionId)?.documentId,
+      input.documentId
+    );
     attachFileEditorView({
       documentId: input.documentId,
+      editorPrefs: this.#preferences.editorPrefs,
       editorSessionId: input.editorSessionId,
       gitGutter: this.#gitGutter,
-      minimapEnabled: this.#minimapEnabled,
+      minimapEnabled: this.#preferences.minimapEnabled,
+      ...(input.panelContext ? { panelContext: input.panelContext } : {}),
       parent: input.parent,
       pathMutationGuards: this.#pathMutationGuards,
-      pendingReveals: this.#pendingReveals.map,
+      viewCommands: this.viewCommands,
       presentation: input.presentation,
-      views: this.#views,
+      views: this.views,
     });
   }
 
-  updateViewPresentation(
-    editorSessionId: string,
-    presentation: FileEditorViewPresentation
-  ): void {
-    this.#views.updatePresentation(editorSessionId, presentation);
-  }
-
   detachView(editorSessionId: string, parent?: HTMLElement): void {
-    const detached = this.#views.detach(editorSessionId, parent);
+    const detached = this.views.detach(editorSessionId, parent);
     if (detached) {
       this.#gitGutter.detach(editorSessionId);
     }
-  }
-
-  applySearchQuery(
-    editorSessionId: string,
-    search: string,
-    replace: string,
-    options: EditorSearchOptions,
-    navigate = false
-  ): EditorSearchState {
-    return this.#views.applySearchQuery(
-      editorSessionId,
-      search,
-      replace,
-      options,
-      navigate
-    );
-  }
-
-  clearSearch(
-    editorSessionId: string,
-    replace: string,
-    options: EditorSearchOptions
-  ): EditorSearchState {
-    return this.#views.clearSearch(editorSessionId, replace, options);
-  }
-
-  navigateSearch(
-    editorSessionId: string,
-    direction: "next" | "previous"
-  ): EditorSearchState {
-    return this.#views.navigateSearch(editorSessionId, direction);
-  }
-
-  replaceSearch(editorSessionId: string, all: boolean): EditorSearchState {
-    return this.#views.replaceSearch(editorSessionId, all);
-  }
-
-  selectAllMatches(editorSessionId: string): EditorSearchState {
-    return this.#views.selectAllMatches(editorSessionId);
-  }
-
-  async executeEditorCommand(
-    documentId: string,
-    editorSessionId: string,
-    command: FileEditorCommand
-  ): Promise<void> {
-    await this.#views.execute(documentId, editorSessionId, command);
   }
 
   async savePanel(
@@ -483,17 +420,14 @@ export class FileEditorController {
 
   dispose(options: { clearDocuments?: boolean } = {}): void {
     this.#mutationSuspend.resumeAll();
-    this.#appearanceDispose?.();
-    this.#appearanceDispose = null;
-    this.#minimapConfigDispose?.();
-    this.#minimapConfigDispose = null;
+    this.#preferences.dispose();
     this.#gitGutter.dispose();
     this.#documents.dispose(options);
-    this.#views.dispose();
+    this.views.dispose();
     this.#modeHandlers.clear();
     this.#saveCoordinator.dispose();
     this.#pendingModes.clear();
-    this.#pendingReveals.clear();
+    this.viewCommands.clear();
     this.#pathMutationGuards.dispose();
   }
 }

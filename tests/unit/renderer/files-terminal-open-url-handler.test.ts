@@ -1,6 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { FileEditorController } from "../../../src/plugins/builtin/files/renderer/file-editor-controller.ts";
 import { handleFilesTerminalOpenUrl } from "../../../src/plugins/builtin/files/renderer/files-terminal-open-url-handler.ts";
 
 function panelContext(partial: Partial<PanelContext> = {}): PanelContext {
@@ -232,6 +233,188 @@ describe("handleFilesTerminalOpenUrl", () => {
       })
     );
     expect(openPath).not.toHaveBeenCalled();
+  });
+
+  it("reveals line and column after opening a path with :line:col", async () => {
+    const goToLine = vi.fn(() => true);
+    const documentId = vi.fn(() => "doc-1");
+    const showSourceMode = vi.fn();
+    const controller = {
+      documentId,
+      goToLine,
+      showSourceMode,
+    } as unknown as FileEditorController;
+
+    await expect(
+      handleFilesTerminalOpenUrl(
+        context,
+        {
+          kind: "text",
+          panelId: "t1",
+          url: "/repo/README.md:12:3",
+        },
+        controller
+      )
+    ).resolves.toBe(true);
+
+    expect(openInstance).toHaveBeenCalled();
+    expect(documentId).toHaveBeenCalledWith({
+      kind: "disk",
+      path: "README.md",
+      root: "/repo",
+    });
+    expect(goToLine).toHaveBeenCalledWith(expect.any(String), "doc-1", 12, 3);
+    expect(showSourceMode).toHaveBeenCalledWith(
+      openInstance.mock.calls[0]?.[0].instanceId
+    );
+  });
+
+  it("keeps a newer navigation from being overwritten by an older retry", async () => {
+    vi.useFakeTimers();
+    const goToLine = vi.fn(
+      (_editorSessionId: string, _documentId: string, line: number) =>
+        line === 40
+    );
+    const controller = {
+      documentId: vi.fn(() => "doc-1"),
+      goToLine,
+      showSourceMode: vi.fn(),
+    } as unknown as FileEditorController;
+
+    try {
+      await handleFilesTerminalOpenUrl(
+        context,
+        {
+          kind: "text",
+          line: 10,
+          panelId: "t1",
+          url: "/repo/README.md",
+        },
+        controller
+      );
+      await handleFilesTerminalOpenUrl(
+        context,
+        {
+          kind: "text",
+          line: 40,
+          panelId: "t1",
+          url: "/repo/README.md",
+        },
+        controller
+      );
+
+      expect(goToLine.mock.calls.map((call) => call[2])).toEqual([10, 40]);
+      await vi.advanceTimersByTimeAsync(100);
+      expect(goToLine.mock.calls.map((call) => call[2])).toEqual([10, 40]);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+
+  it("applies the latest location when the same path opens concurrently", async () => {
+    const statResult = {
+      exists: true,
+      isDirectory: false,
+      mtimeMs: 1,
+      path: "README.md",
+      root: "/repo",
+      size: 2,
+    };
+    const statGate = Promise.withResolvers<typeof statResult>();
+    stat.mockReturnValueOnce(statGate.promise);
+    const goToLine = vi.fn(
+      (_editorSessionId: string, _documentId: string, _line: number) => true
+    );
+    const controller = {
+      documentId: vi.fn(() => "doc-1"),
+      goToLine,
+      showSourceMode: vi.fn(),
+    } as unknown as FileEditorController;
+
+    const first = handleFilesTerminalOpenUrl(
+      context,
+      {
+        kind: "text",
+        line: 10,
+        panelId: "t1",
+        url: "/repo/README.md",
+      },
+      controller
+    );
+    const second = handleFilesTerminalOpenUrl(
+      context,
+      {
+        kind: "text",
+        line: 40,
+        panelId: "t1",
+        url: "/repo/README.md",
+      },
+      controller
+    );
+    statGate.resolve(statResult);
+
+    await expect(Promise.all([first, second])).resolves.toEqual([true, true]);
+    expect(goToLine.mock.calls.map((call) => call[2])).toEqual([10, 40]);
+  });
+
+  it("serializes three concurrent opens for the same path", async () => {
+    const gates = [
+      Promise.withResolvers<void>(),
+      Promise.withResolvers<void>(),
+      Promise.withResolvers<void>(),
+    ];
+    let activeStats = 0;
+    let maxActiveStats = 0;
+    let nextGate = 0;
+    stat.mockImplementation(async () => {
+      const gate = gates[nextGate];
+      nextGate += 1;
+      activeStats += 1;
+      maxActiveStats = Math.max(maxActiveStats, activeStats);
+      await gate?.promise;
+      activeStats -= 1;
+      return {
+        exists: true,
+        isDirectory: false,
+        mtimeMs: 1,
+        path: "README.md",
+        root: "/repo",
+        size: 2,
+      };
+    });
+    const controller = {
+      documentId: vi.fn(() => "doc-1"),
+      goToLine: vi.fn(() => true),
+      showSourceMode: vi.fn(),
+    } as unknown as FileEditorController;
+    const requests = [10, 20, 30].map((line) =>
+      handleFilesTerminalOpenUrl(
+        context,
+        {
+          kind: "text",
+          line,
+          panelId: "t1",
+          url: "/repo/README.md",
+        },
+        controller
+      )
+    );
+
+    try {
+      await vi.waitFor(() => expect(stat).toHaveBeenCalledTimes(1));
+      gates[0]?.resolve();
+      await vi.waitFor(() =>
+        expect(stat.mock.calls.length).toBeGreaterThanOrEqual(2)
+      );
+      expect(stat).toHaveBeenCalledTimes(2);
+      expect(maxActiveStats).toBe(1);
+    } finally {
+      for (const gate of gates) {
+        gate.resolve();
+      }
+      await Promise.allSettled(requests);
+    }
   });
 
   it("reuses an already-open same-source file tab", async () => {

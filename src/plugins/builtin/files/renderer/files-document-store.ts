@@ -1,3 +1,8 @@
+import type {
+  FileDocumentFormat,
+  FileDocumentWriteResult,
+  FileWritableDocumentEol,
+} from "@shared/contracts/file.ts";
 import {
   claimLegacyDraft,
   clearPersistedDiskDrafts,
@@ -318,6 +323,38 @@ export function ensureDiskDocument(input: {
   }
   notify();
   return document;
+}
+
+export function recordCreatedDiskDocument(input: {
+  eol: FileWritableDocumentEol;
+  format: FileDocumentFormat;
+  path: string;
+  result: Extract<FileDocumentWriteResult, { kind: "written" }>;
+  root: string;
+}): FilesDocument {
+  const document = ensureDiskDocument({
+    path: input.path,
+    root: input.root,
+  });
+  markDocumentReadResult(document.id, {
+    canonicalPath: input.result.canonicalPath,
+    contents: "",
+    eol: input.eol,
+    format: input.format,
+    kind: "text",
+    mode: input.result.mode,
+    path: input.path,
+    revision: input.result.revision,
+    root: input.root,
+    size: input.result.size,
+    writable: true,
+  });
+  markDocumentWritten(document.id, "", input.result);
+  replaceDocument(document.id, (createdDocument) => ({
+    ...createdDocument,
+    createdEmptyEol: input.eol,
+  }));
+  return getDocument(document.id) ?? document;
 }
 
 export function getDocument(documentId: string): FilesDocument | null {

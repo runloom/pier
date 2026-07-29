@@ -20,6 +20,8 @@ const RAW_COLOR_WHOLE_FILE_OWNERS = new Set([
   "src/renderer/lib/theme/derive-tokens.ts",
   "src/renderer/lib/theme/oklch.ts",
   "src/shared/theme-colors.ts",
+  // Native recovery page renders before product CSS is available.
+  "src/main/windows/renderer-recovery-page.ts",
 ]);
 const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
   ["packages/ui/src/chart.tsx", /#(?:ccc|fff)\b/gi],
@@ -42,6 +44,8 @@ const COLOR_MIX_OWNERS = new Set([
   // (shadow DOM cannot consume Tailwind opacity utilities).
   "src/renderer/app/globals.css",
   "src/renderer/lib/plugins/mermaid-render.worker.ts",
+  // Native recovery page cannot consume the renderer theme stylesheet.
+  "src/main/windows/renderer-recovery-page.ts",
 ]);
 
 function sourceFiles(dir: string): string[] {

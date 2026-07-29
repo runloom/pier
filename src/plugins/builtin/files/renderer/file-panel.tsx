@@ -14,6 +14,7 @@ import {
 } from "react";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import type { FileEditorController } from "./file-editor-controller.ts";
+import { createFileEditorSessionId } from "./file-editor-session-id.ts";
 import { ResolvedFilePanelActions } from "./file-panel-actions.tsx";
 import { ResolvedFilePanel } from "./file-panel-body.tsx";
 import { revealDiskBreadcrumbInTree } from "./file-panel-breadcrumb-reveal.ts";
@@ -89,6 +90,7 @@ function FilePanelContent({
   const panelSessionIdRef = useRef<string | null>(null);
   panelSessionIdRef.current ??= `inline-panel:${nextInlinePanelSessionId++}`;
   const panelSessionId = props.api?.id ?? panelSessionIdRef.current;
+  const editorSessionId = createFileEditorSessionId(panelSessionId);
   const sourceAllowed =
     stableSource?.kind === "untitled" ||
     (stableSource?.kind === "disk" &&
@@ -449,6 +451,7 @@ function FilePanelContent({
           trailing={
             <ResolvedFilePanelActions
               controller={controller}
+              editorSessionId={editorSessionId}
               mode={mode}
               onModeChange={setMode}
               panelId={props.api?.id}
@@ -462,6 +465,7 @@ function FilePanelContent({
       <ResolvedFilePanel
         context={runtimeContext}
         controller={controller}
+        editorSessionId={editorSessionId}
         markdownAnchor={props.params?.markdownAnchor}
         markdownAnchorRequestId={props.params?.markdownAnchorRequestId}
         mode={mode}

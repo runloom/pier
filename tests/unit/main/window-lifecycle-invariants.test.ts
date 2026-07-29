@@ -30,6 +30,8 @@ const FLUSH_BEFORE_QUIT_EXTERNAL_PLUGINS_RE =
   /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,1600}?appCore\.flushExternalPluginsBeforeQuit\(\)/;
 const FLUSH_BEFORE_QUIT_SHUTDOWN_TASKS_RE =
   /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,2200}?appCore\.services\.tasks\.shutdownForQuit\(\)/;
+const FLUSH_BEFORE_QUIT_AWAITS_LSP_RE =
+  /async function flushBeforeQuitConfirmed\(\): Promise<void> \{[\s\S]{0,2200}?await\s+disposeLspIpcHost\(\)[\s\S]{0,800}?windowManager\.destroyAllForQuit\(\)/;
 const FINAL_CLEANUP_DESTROYS_WINDOWS_RE =
   /createAppQuitController\(\{[\s\S]{0,2500}?finalCleanup:\s*\(\)\s*=>\s*\{[\s\S]{0,500}?windowManager\.destroyAllForQuit\(\)/;
 const FINAL_CLEANUP_DISPOSES_TASKS_RE =
@@ -70,6 +72,11 @@ describe("window lifecycle persistence invariants", () => {
   it("injects a flushBeforeQuit path that shuts down background tasks", () => {
     expect(MAIN_SOURCE).toMatch(APP_QUIT_CONTROLLER_FLUSH_INJECTION_RE);
     expect(MAIN_SOURCE).toMatch(FLUSH_BEFORE_QUIT_SHUTDOWN_TASKS_RE);
+  });
+
+  it("awaits LSP tree disposal in the pre-quit pipeline before windows are destroyed", () => {
+    expect(MAIN_SOURCE).toContain("disposeLspIpcHost");
+    expect(MAIN_SOURCE).toMatch(FLUSH_BEFORE_QUIT_AWAITS_LSP_RE);
   });
 
   it("injects finalCleanup that destroys all windows for quit", () => {

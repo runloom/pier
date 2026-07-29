@@ -1,13 +1,22 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import { FileDocumentLoader } from "@plugins/builtin/files/renderer/file-document-loader.ts";
+import { FileDocumentSaver } from "@plugins/builtin/files/renderer/file-document-saver.ts";
 import { validateRelativePath } from "@plugins/builtin/files/renderer/file-tree-action-utils.ts";
+import {
+  clearFilesDocumentStore,
+  ensureDiskDocument,
+  getDocument,
+  updateDocumentContents,
+} from "@plugins/builtin/files/renderer/files-document-store.ts";
+import { resolveDiskDocumentId } from "@plugins/builtin/files/renderer/files-document-types.ts";
 import { createFilesTranslate } from "@plugins/builtin/files/renderer/files-i18n.ts";
 import {
-  allocateUniqueChildName,
   beginInlineCreate,
   cancelInlineCreate,
   commitCreatedPath,
   commitInlineCreate,
 } from "@plugins/builtin/files/renderer/files-tree-create.ts";
+import { allocateUniqueChildName } from "@plugins/builtin/files/renderer/files-tree-create-name.ts";
 import {
   clearFileTreeSidebarCache,
   peekPendingCreate,
@@ -19,11 +28,14 @@ import {
   clearFilesTreeStore,
   getFilesTreeSnapshot,
 } from "@plugins/builtin/files/renderer/files-tree-store.ts";
+import { FILES_EDITOR_DEFAULT_EOL_SETTING_KEY } from "@plugins/builtin/files/settings.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const ROOT = "/repo";
 
 function makeContext(overrides?: {
+  defaultEol?: "crlf" | "lf";
+  readDocument?: RendererPluginContext["files"]["readDocument"];
   existsPaths?: ReadonlySet<string>;
   writeText?: RendererPluginContext["files"]["writeText"];
   mkdir?: RendererPluginContext["files"]["mkdir"];
@@ -58,6 +70,9 @@ function makeContext(overrides?: {
         path: request.path,
         root: request.root,
       })),
+    readDocument:
+      overrides?.readDocument ??
+      vi.fn<RendererPluginContext["files"]["readDocument"]>(),
     writeDocument: vi.fn<RendererPluginContext["files"]["writeDocument"]>(
       async (request) => {
         const result = await writeText({
@@ -91,6 +106,13 @@ function makeContext(overrides?: {
     system: vi.fn(async () => ({ shown: true })),
   };
   const context = {
+    configuration: {
+      get: vi.fn((key: string) =>
+        key === FILES_EDITOR_DEFAULT_EOL_SETTING_KEY
+          ? overrides?.defaultEol
+          : undefined
+      ),
+    },
     dialogs: {
       alert: vi.fn(async () => undefined),
     },
@@ -122,6 +144,7 @@ function makeContext(overrides?: {
 
 afterEach(() => {
   clearFilesTreeStore();
+  clearFilesDocumentStore();
   clearFileTreeSidebarCache();
   vi.restoreAllMocks();
 });
@@ -184,6 +207,168 @@ describe("commitCreatedPath", () => {
         targetGroupId: "group-1",
       })
     );
+  });
+
+  it("uses the configured line ending for a new file", async () => {
+    const { context, files } = makeContext({ defaultEol: "crlf" });
+    await commitCreatedPath({
+      context,
+      kind: "file",
+      openAfter: false,
+      path: "windows.txt",
+      root: ROOT,
+    });
+
+    expect(files.writeDocument).toHaveBeenCalledWith(
+      expect.objectContaining({ eol: "crlf", path: "windows.txt" })
+    );
+  });
+
+  it("retains explicit CRLF through a clean empty reload before first content save", async () => {
+    const readDocument = vi.fn<RendererPluginContext["files"]["readDocument"]>(
+      async () => ({
+        canonicalPath: "/repo/windows.txt",
+        contents: "",
+        eol: "none",
+        format: { bom: false, encoding: "utf8" },
+        kind: "text",
+        mode: 0o644,
+        mtimeMs: 1,
+        path: "windows.txt",
+        revision: "revision-1",
+        root: ROOT,
+        size: 0,
+        writable: true,
+      })
+    );
+    const { context, files } = makeContext({
+      defaultEol: "crlf",
+      readDocument,
+    });
+    await commitCreatedPath({
+      context,
+      kind: "file",
+      openAfter: true,
+      path: "windows.txt",
+      root: ROOT,
+    });
+    const documentId = resolveDiskDocumentId({
+      path: "windows.txt",
+      root: ROOT,
+    });
+    const loader = new FileDocumentLoader(context);
+    loader.start(documentId, true);
+    await loader.waitForIdle(AbortSignal.timeout(1000));
+    expect(getDocument(documentId)?.eol).toBe("crlf");
+
+    updateDocumentContents(documentId, "first line\nsecond line\n");
+    const saver = new FileDocumentSaver({
+      context,
+      onShowDiff: vi.fn(),
+    });
+    await expect(saver.save(documentId)).resolves.toBe("saved");
+    expect(files.writeDocument).toHaveBeenLastCalledWith(
+      expect.objectContaining({
+        contents: "first line\nsecond line\n",
+        eol: "crlf",
+        expected: { kind: "revision", revision: "revision-1" },
+        path: "windows.txt",
+      })
+    );
+  });
+
+  it.each([
+    {
+      contents: "",
+      eol: "none",
+      name: "the empty file revision changes",
+      revision: "revision-2",
+    },
+    {
+      contents: "external\n",
+      eol: "lf",
+      name: "the file contents change",
+      revision: "revision-1",
+    },
+  ] as const)("uses disk EOL after $name", async ({
+    contents,
+    eol,
+    revision,
+  }) => {
+    const readDocument = vi.fn<RendererPluginContext["files"]["readDocument"]>(
+      async () => ({
+        canonicalPath: "/repo/windows.txt",
+        contents,
+        eol,
+        format: { bom: false, encoding: "utf8" },
+        kind: "text",
+        mode: 0o644,
+        mtimeMs: 2,
+        path: "windows.txt",
+        revision,
+        root: ROOT,
+        size: contents.length,
+        writable: true,
+      })
+    );
+    const { context } = makeContext({
+      defaultEol: "crlf",
+      readDocument,
+    });
+    await commitCreatedPath({
+      context,
+      kind: "file",
+      openAfter: true,
+      path: "windows.txt",
+      root: ROOT,
+    });
+    const documentId = resolveDiskDocumentId({
+      path: "windows.txt",
+      root: ROOT,
+    });
+
+    const loader = new FileDocumentLoader(context);
+    loader.start(documentId, true);
+    await loader.waitForIdle(AbortSignal.timeout(1000));
+
+    expect(getDocument(documentId)).toMatchObject({
+      currentContents: contents,
+      eol,
+      revision,
+    });
+  });
+
+  it("uses detected EOL for an ordinary pre-existing empty file", async () => {
+    const readDocument = vi.fn<RendererPluginContext["files"]["readDocument"]>(
+      async () => ({
+        canonicalPath: "/repo/existing.txt",
+        contents: "",
+        eol: "none",
+        format: { bom: false, encoding: "utf8" },
+        kind: "text",
+        mode: 0o644,
+        mtimeMs: 1,
+        path: "existing.txt",
+        revision: "existing-revision",
+        root: ROOT,
+        size: 0,
+        writable: true,
+      })
+    );
+    const { context } = makeContext({
+      defaultEol: "crlf",
+      readDocument,
+    });
+    const document = ensureDiskDocument({
+      path: "existing.txt",
+      root: ROOT,
+    });
+
+    const loader = new FileDocumentLoader(context);
+    loader.start(document.id, false);
+    await loader.waitForIdle(AbortSignal.timeout(1000));
+
+    expect(getDocument(document.id)?.eol).toBe("none");
   });
 
   it("marks a new folder as empty in directoryStates", async () => {

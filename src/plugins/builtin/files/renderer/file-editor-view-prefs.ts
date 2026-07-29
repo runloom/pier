@@ -4,6 +4,11 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FILES_EDITOR_MINIMAP_SETTING_KEY } from "../settings.ts";
 import type { FileEditorViewCoordinator } from "./file-editor-view-coordinator.ts";
+import {
+  bindFilesEditorPrefs,
+  type FilesEditorPrefs,
+  readFilesEditorPrefs,
+} from "./files-editor-prefs.ts";
 
 export function readMinimapEnabled(
   context: Pick<RendererPluginContext, "configuration">
@@ -48,4 +53,63 @@ export function bindCodeFontAppearance(input: {
     input.setLast(codeFontFamily, codeFontSize);
     input.views.requestMeasureAll();
   });
+}
+
+/** Aggregates editor preference subscriptions and their current values. */
+export class FileEditorViewPreferences {
+  readonly #disposers: Array<() => void>;
+  #editorPrefs: FilesEditorPrefs;
+  #lastTypography: { family: string; size: string };
+  #minimapEnabled: boolean;
+
+  constructor(
+    context: RendererPluginContext,
+    views: FileEditorViewCoordinator
+  ) {
+    this.#editorPrefs = readFilesEditorPrefs(context);
+    this.#minimapEnabled = readMinimapEnabled(context);
+    const typography = context.appearance.current().typography;
+    this.#lastTypography = {
+      family: typography.codeFontFamily,
+      size: typography.codeFontSize,
+    };
+    this.#disposers = [
+      bindMinimapSetting({
+        context,
+        onEnabled: (enabled) => {
+          this.#minimapEnabled = enabled;
+        },
+        views,
+      }),
+      bindFilesEditorPrefs({
+        context,
+        onChange: (prefs) => {
+          this.#editorPrefs = prefs;
+        },
+        views,
+      }),
+      bindCodeFontAppearance({
+        context,
+        getLast: () => this.#lastTypography,
+        setLast: (family, size) => {
+          this.#lastTypography = { family, size };
+        },
+        views,
+      }),
+    ];
+  }
+
+  get editorPrefs(): FilesEditorPrefs {
+    return this.#editorPrefs;
+  }
+
+  get minimapEnabled(): boolean {
+    return this.#minimapEnabled;
+  }
+
+  dispose(): void {
+    for (const dispose of this.#disposers) {
+      dispose();
+    }
+  }
 }

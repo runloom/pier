@@ -143,7 +143,6 @@ export class FileDocumentLifecycle {
       ? source.id
       : resolveDiskDocumentId(source);
   }
-
   ensureDocument(source: FilesDocumentPanelSource): FilesDocument | null {
     if (source.kind === "untitled") {
       const document =
@@ -163,7 +162,6 @@ export class FileDocumentLifecycle {
     this.#claimLegacySource(source);
     return document;
   }
-
   createUntitledDocument(input: {
     contents: string;
     origin?: FilesDocumentOrigin;
@@ -198,11 +196,9 @@ export class FileDocumentLifecycle {
       this.discardDocument(document.id);
     }
   }
-
   getPanelDocumentId(panelId: string): string | null {
     return this.#panels.documentId(panelId);
   }
-
   getPanelSource(panelId: string): FilesDocumentPanelSource | null {
     return this.#panels.source(panelId);
   }

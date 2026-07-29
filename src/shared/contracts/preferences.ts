@@ -10,6 +10,7 @@ import {
   agentAttentionSettingsSchema,
   DEFAULT_AGENT_ATTENTION_SETTINGS,
 } from "./agent-attention.ts";
+import { DEFAULT_LSP_POLICY_PREFS, lspPolicyPrefsSchema } from "./lsp.ts";
 import {
   DEFAULT_NOTIFICATION_CENTER_PREFS,
   notificationCenterPrefsSchema,
@@ -82,6 +83,10 @@ export const MIN_WINDOW_ZOOM_LEVEL = -3;
 export const MAX_WINDOW_ZOOM_LEVEL = 5;
 export const DEFAULT_GIT_AUTO_FETCH_ENABLED = true;
 export const DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES = 5;
+export const DEFAULT_LSP_WORKTREES_ENABLED = false;
+export const DEFAULT_LSP_MAX_LOCAL_WORKSPACES = 3;
+export const DEFAULT_LSP_MAX_REMOTE_WORKSPACES = 2;
+export const DEFAULT_LSP_IDLE_RELEASE_MS = 1_800_000;
 
 export const projectPreferencesSchema = z.object({
   theme: themePreferenceSchema.default("system"),
@@ -151,6 +156,7 @@ export const projectPreferencesSchema = z.object({
     .min(1)
     .max(120)
     .default(DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES),
+  lsp: lspPolicyPrefsSchema.default(DEFAULT_LSP_POLICY_PREFS),
 });
 
 export type ThemePreference = z.infer<typeof themePreferenceSchema>;

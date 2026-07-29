@@ -53,6 +53,7 @@ const PATCHABLE_KEYS = [
   "userKeymap",
   "windowZoomLevel",
   "worktreeRootPath",
+  "lsp",
 ] as const satisfies readonly (keyof ProjectPreferencesPatch)[];
 
 function stripUndefinedPatch(

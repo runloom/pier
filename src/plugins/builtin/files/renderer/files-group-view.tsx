@@ -11,6 +11,7 @@ import {
   useState,
 } from "react";
 import type { FileEditorController } from "./file-editor-controller.ts";
+import { createFileEditorSessionId } from "./file-editor-session-id.ts";
 import { ResolvedFilePanelActions } from "./file-panel-actions.tsx";
 import { ResolvedFilePanel } from "./file-panel-body.tsx";
 import { revealDiskBreadcrumbInTree } from "./file-panel-breadcrumb-reveal.ts";
@@ -98,6 +99,9 @@ export function FilesGroupView({
         pinned: activeParams?.pinned === true,
         source: parsedSource,
       }
+    : null;
+  const editorSessionId = activeTab
+    ? createFileEditorSessionId(activeTab.panelId)
     : null;
 
   const panelContext = activeTab?.context;
@@ -350,7 +354,7 @@ export function FilesGroupView({
         title={sourceState.title}
       />
     );
-  } else if (selectedSource) {
+  } else if (selectedSource && editorSessionId) {
     const handleBreadcrumbClick = (index: number) => {
       if (!root || selectedSource.kind !== "disk") {
         return;
@@ -377,6 +381,7 @@ export function FilesGroupView({
     trailing = (
       <ResolvedFilePanelActions
         controller={controller}
+        editorSessionId={editorSessionId}
         mode={mode}
         onModeChange={setMode}
         panelId={activeTab?.panelId}
@@ -391,6 +396,7 @@ export function FilesGroupView({
       <ResolvedFilePanel
         context={context}
         controller={controller}
+        editorSessionId={editorSessionId}
         markdownAnchor={activeTab?.markdownAnchor}
         markdownAnchorRequestId={activeTab?.markdownAnchorRequestId}
         mode={mode}

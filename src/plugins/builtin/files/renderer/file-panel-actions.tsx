@@ -7,6 +7,7 @@ import {
   DocumentFormatBadge,
   DocumentStatusDot,
   LanguageBadge,
+  LanguageServiceStatus,
 } from "./file-panel-status.tsx";
 import type {
   FilesDocumentPanelSource,
@@ -19,6 +20,7 @@ import { useFilesDocument } from "./use-files-document.ts";
 // 顶部 chrome 的右侧信息与视图集群：状态、语言、格式和视图切换。保存由
 // Cmd+S、自动保存与关闭保护链负责，不在编辑区重复提供按钮。
 export function ResolvedFilePanelActions({
+  editorSessionId,
   controller,
   mode,
   onModeChange,
@@ -27,6 +29,7 @@ export function ResolvedFilePanelActions({
   t,
 }: {
   controller: FileEditorController;
+  editorSessionId: string;
   mode: FileViewMode;
   onModeChange: (mode: FileViewMode) => void;
   panelId: string | undefined;
@@ -88,6 +91,11 @@ export function ResolvedFilePanelActions({
         t={t}
       />
       <LanguageBadge document={document} t={t} />
+      <LanguageServiceStatus
+        documentId={document.id}
+        ownerId={editorSessionId}
+        t={t}
+      />
       <DocumentFormatBadge document={document} />
       {supportsPreview ? (
         <Button

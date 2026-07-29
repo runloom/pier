@@ -46,17 +46,18 @@ export interface WorkspacePanelTransferHandlers {
   onUnhandledDragOver(event: UnhandledDragOverEventLike): void;
   onWillDragPanel(event: TabDragEventLike): string | null;
   onWillDrop(event: WillDropEventLike): void;
+  onWindowDrop(event: DragEvent): void;
 }
 
 interface TransferDragState {
   capability: "movable" | "unsupported";
   componentId: string;
+  panelId: string;
   /**
    * Frozen dockview params at drag-start. prepareSource re-reads live params
    * first; this is a fallback when live params lose `source` mid-drag.
    */
   params: Readonly<Record<string, unknown>>;
-  panelId: string;
   transferId: string;
 }
 
@@ -137,16 +138,14 @@ export function mergeDragStartPanelParams(
     liveSource !== null &&
     typeof liveSource === "object";
   let usedFrozenSource = false;
-  if (!liveSourceUsable) {
-    if (frozenSource !== undefined && frozenSource !== null) {
-      params.source = frozenSource;
-      usedFrozenSource = true;
-    } else if (liveSource === null) {
-      // Explicit null and no freeze: keep null so adapters can treat as empty.
-      params.source = null;
-    }
-  } else {
+  if (liveSourceUsable) {
     params.source = liveSource;
+  } else if (frozenSource !== undefined && frozenSource !== null) {
+    params.source = frozenSource;
+    usedFrozenSource = true;
+  } else if (liveSource === null) {
+    // Explicit null and no freeze: keep null so adapters can treat as empty.
+    params.source = null;
   }
   return { params, usedFrozenSource };
 }
@@ -220,6 +219,18 @@ export function createWorkspacePanelTransferHandlers(
           console.error("[panelTransfer] offer failed:", err);
         });
       return transferId;
+    },
+
+    onWindowDrop(event) {
+      const drag = getActiveDrag();
+      if (
+        drag?.capability === "movable" &&
+        readPanelTransferId(event.dataTransfer) === drag.transferId
+      ) {
+        // Keep Dockview's same-window split/reorder, but suppress the browser
+        // text/plain fallback from inserting the transfer token into editors.
+        event.preventDefault();
+      }
     },
 
     onUnhandledDragOver(event) {

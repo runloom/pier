@@ -14,6 +14,9 @@ importers:
 
   .:
     dependencies:
+      '@codemirror/autocomplete':
+        specifier: ^6.20.3
+        version: 6.20.3
       '@codemirror/lang-cpp':
         specifier: 6.0.3
         version: 6.0.3
@@ -56,6 +59,9 @@ importers:
       '@codemirror/lint':
         specifier: ^6.9.7
         version: 6.9.7
+      '@codemirror/lsp-client':
+        specifier: 6.2.5
+        version: 6.2.5
       '@codemirror/search':
         specifier: 6.7.1
         version: 6.7.1
@@ -131,6 +137,9 @@ importers:
       dockview-react:
         specifier: 7.0.2
         version: 7.0.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      dompurify:
+        specifier: 3.4.12
+        version: 3.4.12
       electron-updater:
         specifier: 6.8.9
         version: 6.8.9
@@ -224,6 +233,12 @@ importers:
       tar-stream:
         specifier: 3.2.0
         version: 3.2.0
+      typescript:
+        specifier: 6.0.3
+        version: 6.0.3
+      typescript-language-server:
+        specifier: 5.3.0
+        version: 5.3.0
       unified:
         specifier: ^11.0.5
         version: 11.0.5
@@ -309,6 +324,9 @@ importers:
       lint-staged:
         specifier: 17.0.8
         version: 17.0.8
+      node-gyp:
+        specifier: 12.4.0
+        version: 12.4.0
       playwright:
         specifier: 1.61.1
         version: 1.61.1
@@ -327,9 +345,6 @@ importers:
       tw-animate-css:
         specifier: 1.4.0
         version: 1.4.0
-      typescript:
-        specifier: 6.0.3
-        version: 6.0.3
       ultracite:
         specifier: 7.8.3
         version: 7.8.3
@@ -801,6 +816,9 @@ packages:
 
   '@codemirror/lint@6.9.7':
     resolution: {integrity: sha512-28/+iWLYxKxsvGYhSYL7zaCZqLz5+FFFDq9tVsvGv9kv8RY4fFAchJ5WX9M3YrrRlTIsECjsXPqeNgnSmNP2dg==}
+
+  '@codemirror/lsp-client@6.2.5':
+    resolution: {integrity: sha512-1EqhGRmCZOV7Me+rRuwwkTuvkNoD4Nz6UcE1yx5gdwTVTLD4D9xIy48MJc0LeBQGFLn/HNRW/pHmet4EAEkJFQ==}
 
   '@codemirror/search@6.7.1':
     resolution: {integrity: sha512-uMe5UO6PamJtSHrXhhHOzSX3ReWtiJrva6GnPMwSOrZtiExb5X5eExhr2OUZQVvdxPsKpY3Ro2mFbQadpPWmHA==}
@@ -4868,6 +4886,11 @@ packages:
   markdown-table@3.0.4:
     resolution: {integrity: sha512-wiYz4+JrLyb/DqW2hkFJxP7Vd7JuTDm77fvbM8VfEQdmSMqcImWeeRbHwZjBjIFki/VaMK2BhFi7oUUZeM5bqw==}
 
+  marked@15.0.12:
+    resolution: {integrity: sha512-8dD6FusOQSrpv9Z1rdNMdlSgQOIP880DHqnohobOmYLElGEqAL/JvxvuxZO16r4HtjTlfPRDC1hbvxC9dPN2nA==}
+    engines: {node: '>= 18'}
+    hasBin: true
+
   marked@16.4.2:
     resolution: {integrity: sha512-TI3V8YYWvkVf3KJe1dRkpnjs68JUPyEa5vjKrp1XEEJUAOaQc+Qj+L1qWbPd0SJuAdQkFU0h73sXXqwDYxsiDA==}
     engines: {node: '>= 20'}
@@ -6117,6 +6140,11 @@ packages:
     resolution: {integrity: sha512-faYHw0anBbc/kWF3zFTEnxSFOAGUX9GFbOBthvDdLsIlEoWOFOtS0zgCiQYwIskL9iGXZL3kAXD8OoZ4GmMATA==}
     engines: {node: '>= 18'}
 
+  typescript-language-server@5.3.0:
+    resolution: {integrity: sha512-5puofxZHgFdAYtfNpmwCAvgtaYgg8wrUnH30m7Ze3QuguId5RNRadKASpOpyDxTyUdAF51FjhTdjntLw/EuWcQ==}
+    engines: {node: '>=20'}
+    hasBin: true
+
   typescript@6.0.3:
     resolution: {integrity: sha512-y2TvuxSZPDyQakkFRPZHKFm+KKVqIisdg9/CZwm9ftvKXLP8NRWj38/ODjNbr43SsoXqNuAisEf1GdCxqWcdBw==}
     engines: {node: '>=14.17'}
@@ -6335,6 +6363,20 @@ packages:
         optional: true
       jsdom:
         optional: true
+
+  vscode-jsonrpc@5.0.1:
+    resolution: {integrity: sha512-JvONPptw3GAQGXlVV2utDcHx0BiY34FupW/kI6mZ5x06ER5DdPG/tXWMVHjTNULF5uKPOUUD0SaXg5QaubJL0A==}
+    engines: {node: '>=8.0.0 || >=10.0.0'}
+
+  vscode-jsonrpc@9.0.1:
+    resolution: {integrity: sha512-rfuA6T75H6m5EkbhtEPzre9pT0HPcDI2MMy4+nPFIBks5J8JBAUHD4tRYSgaBOijIEC7SRkC1kKyXTLqbmh9jw==}
+    engines: {node: '>=14.0.0'}
+
+  vscode-languageserver-protocol@3.18.2:
+    resolution: {integrity: sha512-XRyDbT0Pp3sSNti3JmxVEUMySWCSi1hhM+/KUlCy1hV1zmrqpM1OwO12EAki8blhmLuIMpaJrYbo0OzGVfK2Qg==}
+
+  vscode-languageserver-types@3.18.0:
+    resolution: {integrity: sha512-8TsGPNMIMiiBdkORgRSvLjuiEIiAFtO+KssmYWxQ+uSVvlf7RjK8YKCOjPzZ+YA04jXEV7+7LvkSmHkhpNS99g==}
 
   vue@3.5.13:
     resolution: {integrity: sha512-wmeiSMxkZCSc+PM2w2VRsOYAZC8GdipNFRTsLSfodVqI9mbejKeXEGr8SckuLnrQPGe3oJN5c3K0vpoU9q/wCQ==}
@@ -6929,6 +6971,17 @@ snapshots:
       '@codemirror/state': 6.7.1
       '@codemirror/view': 6.43.6
       crelt: 1.0.7
+
+  '@codemirror/lsp-client@6.2.5':
+    dependencies:
+      '@codemirror/autocomplete': 6.20.3
+      '@codemirror/language': 6.12.4
+      '@codemirror/lint': 6.9.7
+      '@codemirror/state': 6.7.1
+      '@codemirror/view': 6.43.6
+      '@lezer/highlight': 1.2.3
+      marked: 15.0.12
+      vscode-languageserver-protocol: 3.18.2
 
   '@codemirror/search@6.7.1':
     dependencies:
@@ -11146,6 +11199,8 @@ snapshots:
 
   markdown-table@3.0.4: {}
 
+  marked@15.0.12: {}
+
   marked@16.4.2: {}
 
   matcher@3.0.0:
@@ -12826,6 +12881,11 @@ snapshots:
       media-typer: 1.1.0
       mime-types: 3.0.2
 
+  typescript-language-server@5.3.0:
+    dependencies:
+      vscode-jsonrpc: 5.0.1
+      vscode-languageserver-protocol: 3.18.2
+
   typescript@6.0.3: {}
 
   ultracite@7.8.3:
@@ -13015,6 +13075,17 @@ snapshots:
       jsdom: 29.1.1(@noble/hashes@2.2.0)
     transitivePeerDependencies:
       - msw
+
+  vscode-jsonrpc@5.0.1: {}
+
+  vscode-jsonrpc@9.0.1: {}
+
+  vscode-languageserver-protocol@3.18.2:
+    dependencies:
+      vscode-jsonrpc: 9.0.1
+      vscode-languageserver-types: 3.18.0
+
+  vscode-languageserver-types@3.18.0: {}
 
   vue@3.5.13(typescript@6.0.3):
     dependencies:

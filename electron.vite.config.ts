@@ -20,7 +20,19 @@ export default defineConfig({
   main: {
     plugins: [externalizeDepsPlugin()],
     build: {
-      lib: { entry: resolve(import.meta.dirname, "src/main/index.ts") },
+      lib: {
+        entry: {
+          index: resolve(import.meta.dirname, "src/main/index.ts"),
+          "lsp-windows-runtime": resolve(
+            import.meta.dirname,
+            "src/main/services/lsp/lsp-process-termination.ts"
+          ),
+          "lsp-windows-process-supervisor": resolve(
+            import.meta.dirname,
+            "src/main/lsp-windows-process-supervisor.ts"
+          ),
+        },
+      },
     },
     resolve: {
       alias: {

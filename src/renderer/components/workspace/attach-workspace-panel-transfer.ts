@@ -40,6 +40,10 @@ export function attachWorkspacePanelTransfer(api: DockviewApi): () => void {
     transferHandlers.onDragEnd(activeTransferId);
     activeTransferId = null;
   };
+  const handleWindowDrop = (event: DragEvent): void => {
+    transferHandlers.onWindowDrop(event);
+  };
+  window.addEventListener("drop", handleWindowDrop, { capture: true });
   // Capture phase: dockview droptargets stopPropagation() on dragend when
   // they commit a sticky overlay (root edge ring is on the dragged tab's
   // ancestor chain), which would silently eat the bubble-phase listener and
@@ -52,5 +56,6 @@ export function attachWorkspacePanelTransfer(api: DockviewApi): () => void {
     didDropDispose?.dispose();
     willDropDispose?.dispose();
     window.removeEventListener("dragend", handleDragEnd, { capture: true });
+    window.removeEventListener("drop", handleWindowDrop, { capture: true });
   };
 }

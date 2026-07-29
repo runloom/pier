@@ -5,7 +5,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { isProjectCanvasPath } from "@shared/live-module-canvas-path.ts";
 import { FolderSearch } from "lucide-react";
-import { type ReactNode, useCallback, useEffect, useRef } from "react";
+import { type ReactNode, useCallback, useEffect } from "react";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import { FileEditorAdapter } from "./file-editor-adapter.tsx";
 import type { FileEditorController } from "./file-editor-controller.ts";
@@ -32,17 +32,12 @@ import type { FilesTranslate } from "./files-i18n.ts";
 import { useFilePanelMarkdownChrome } from "./use-file-panel-markdown-chrome.ts";
 import { useFilesDocument } from "./use-files-document.ts";
 
-let nextInlineEditorOwnerId = 1;
-
-function createEditorSessionId(ownerId: string): string {
-  return JSON.stringify([ownerId]);
-}
-
 export function ResolvedFilePanel({
   context,
   markdownAnchor,
   markdownAnchorRequestId,
   controller,
+  editorSessionId,
   mode,
   onModeChange,
   panelContext,
@@ -55,6 +50,7 @@ export function ResolvedFilePanel({
   markdownAnchor?: string | undefined;
   markdownAnchorRequestId?: string | undefined;
   controller: FileEditorController;
+  editorSessionId: string;
   mode: FileViewMode;
   onModeChange?: ((mode: FileViewMode) => void) | undefined;
   panelContext: PanelContext | undefined;
@@ -65,13 +61,6 @@ export function ResolvedFilePanel({
 }) {
   const documentId = controller.documentId(source);
   const document = useFilesDocument(documentId);
-  const inlineEditorOwnerIdRef = useRef<string | null>(null);
-  if (inlineEditorOwnerIdRef.current === null) {
-    inlineEditorOwnerIdRef.current = `inline:${nextInlineEditorOwnerId}`;
-    nextInlineEditorOwnerId += 1;
-  }
-  const editorOwnerId = panelId ?? inlineEditorOwnerIdRef.current;
-  const editorSessionId = document ? createEditorSessionId(editorOwnerId) : "";
   const {
     handleCopyMarkdownCode,
     handleMarkdownPreviewContextMenu,
@@ -358,13 +347,14 @@ export function ResolvedFilePanel({
             onModeChange
               ? (offset) => {
                   onModeChange("source");
-                  controller.revealOffset(editorSessionId, offset);
+                  controller.revealOffset(editorSessionId, offset, document.id);
                 }
               : undefined
           }
           onMarkdownPreviewContextMenu={handleMarkdownPreviewContextMenu}
           onOpenMarkdownInternal={handleOpenMarkdownInternal}
           openExternal={handleOpenExternal}
+          panelContext={panelContext}
           panelId={panelId}
           readOnly={document.readOnly || document.loadState === "loading"}
           registerSelectionSelectAllProvider={

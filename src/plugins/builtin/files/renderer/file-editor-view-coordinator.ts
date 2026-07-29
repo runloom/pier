@@ -1,3 +1,4 @@
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import {
   type EditorSearchOptions,
   type EditorSearchState,
@@ -5,11 +6,13 @@ import {
 } from "./code-mirror-search-state.ts";
 import {
   type FileEditorCommand,
+  type FileEditorLspHoverResult,
   type FileEditorViewPresentation,
   FileEditorViewSession,
 } from "./file-editor-view-session.ts";
 import { getDocument, updateDocumentContents } from "./files-document-store.ts";
 import type { FilesDocument } from "./files-document-types.ts";
+import type { FilesEditorPrefs } from "./files-editor-prefs.ts";
 
 /** 管理 CodeMirror 视图实例，文档状态仍由 files-document-store 唯一持有。 */
 export class FileEditorViewCoordinator {
@@ -48,8 +51,10 @@ export class FileEditorViewCoordinator {
 
   attach(input: {
     document: FilesDocument;
+    editorPrefs: FilesEditorPrefs;
     editorSessionId: string;
     minimapEnabled: boolean;
+    panelContext?: PanelContext;
     parent: HTMLElement;
     presentation: FileEditorViewPresentation;
   }): void {
@@ -62,9 +67,12 @@ export class FileEditorViewCoordinator {
     if (session) {
       session.updatePresentation(input.presentation);
       session.setMinimapEnabled(input.minimapEnabled);
+      session.setEditorPrefs(input.editorPrefs);
+      session.setPanelContext(input.panelContext);
     } else {
       session = new FileEditorViewSession({
         documentId: input.document.id,
+        editorPrefs: input.editorPrefs,
         editorSessionId: input.editorSessionId,
         minimapEnabled: input.minimapEnabled,
         onChange: (documentId, contents) => {
@@ -73,6 +81,7 @@ export class FileEditorViewCoordinator {
             updateDocumentContents(latest.id, contents);
           }
         },
+        ...(input.panelContext ? { panelContext: input.panelContext } : {}),
         presentation: input.presentation,
       });
       this.#sessions.set(input.editorSessionId, session);
@@ -89,6 +98,17 @@ export class FileEditorViewCoordinator {
 
   detach(editorSessionId: string, parent?: HTMLElement): boolean {
     return this.#sessions.get(editorSessionId)?.detach(parent) ?? false;
+  }
+
+  cancelQueuedLspHovers(): void {
+    for (const session of this.#sessions.values()) {
+      session.cancelQueuedLspHover();
+    }
+  }
+
+  showLspHover(editorSessionId: string): Promise<FileEditorLspHoverResult> {
+    const session = this.#sessions.get(editorSessionId);
+    return session ? session.showLspHover() : Promise.resolve("unavailable");
   }
 
   applySearchQuery(

@@ -297,6 +297,21 @@ export const settings = {
     worktreeRootPath: "工作树目录",
     worktreeRootPathDesc: "留空时使用与主项目同级的 {项目名}.worktree 目录。",
     worktreeRootPathPlaceholder: "~/Projects/pier.worktree",
+    lspEnabled: "启用语言服务",
+    lspEnabledDesc: "为支持的文件提供诊断、补全和跳转定义",
+    lspIdleReleaseMinutes: "空闲释放时间（分钟）",
+    lspIdleReleaseMinutesDesc:
+      "语言服务空闲达到此时长后释放资源（1–1440 分钟）",
+    lspMaxLocalWorkspaces: "本地工作区上限",
+    lspMaxLocalWorkspacesDesc:
+      "可同时运行语言服务的本地项目数上限（设为 0 将停用本地语言服务）",
+    lspMaxRemoteWorkspaces: "远程工作区上限",
+    lspMaxRemoteWorkspacesDesc:
+      "可同时运行语言服务的远程项目数上限（设为 0 将停用远程语言服务）",
+    lspUpdateFailed: "无法更新语言服务设置",
+    lspWorktreesEnabled: "在工作树中启用",
+    lspWorktreesEnabledDesc:
+      "允许在智能体工作树中运行语言服务（默认关闭以节省资源）",
     defaultAgent: "默认智能体",
     defaultAgentDesc: "“启动默认智能体”动作启动的默认智能体程序",
     agentPermissionMode: "权限确认方式",

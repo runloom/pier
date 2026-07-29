@@ -6,8 +6,16 @@ import {
   validateName,
   validateRelativePath,
 } from "./file-tree-action-utils.ts";
+import { recordCreatedDiskDocument } from "./files-document-store.ts";
 import type { FilesDocumentPanelSource } from "./files-document-types.ts";
+import { readFilesEditorDefaultEol } from "./files-editor-prefs.ts";
 import { createFilesTranslate } from "./files-i18n.ts";
+import {
+  allocateUniqueChildName,
+  defaultFilesTreeBaseName,
+  joinFilesTreeRelativePath,
+  waitForFilesTreePaint,
+} from "./files-tree-create-name.ts";
 import {
   type FilesPendingCreateKind,
   findFilesTreeInstanceId,
@@ -30,59 +38,6 @@ import { filesTreeVisibilityForContext } from "./files-tree-visibility.ts";
 import { showFilesNamePrompt } from "./name-prompt.tsx";
 
 export type FilesCreateKind = FilesPendingCreateKind;
-
-function waitForPaint(): Promise<void> {
-  return new Promise((resolve) => {
-    if (typeof requestAnimationFrame === "function") {
-      requestAnimationFrame(() => {
-        requestAnimationFrame(() => resolve());
-      });
-      return;
-    }
-    queueMicrotask(() => resolve());
-  });
-}
-
-function joinRelative(parentDir: string, name: string): string {
-  return parentDir.length > 0 ? `${parentDir}/${name}` : name;
-}
-
-function defaultBaseName(kind: FilesCreateKind): string {
-  return kind === "file" ? "untitled.ts" : "New Folder";
-}
-
-function nextCandidateName(base: string, attempt: number): string {
-  if (attempt <= 1) {
-    return base;
-  }
-  const dot = base.lastIndexOf(".");
-  if (dot > 0 && kindLooksLikeFileBase(base)) {
-    return `${base.slice(0, dot)} ${attempt}${base.slice(dot)}`;
-  }
-  return `${base} ${attempt}`;
-}
-
-function kindLooksLikeFileBase(base: string): boolean {
-  const dot = base.lastIndexOf(".");
-  return dot > 0 && !base.includes("/");
-}
-
-export async function allocateUniqueChildName(
-  root: string,
-  parentDir: string,
-  base: string,
-  exists: RendererPluginContext["files"]["exists"]
-): Promise<string> {
-  for (let attempt = 1; attempt <= 50; attempt += 1) {
-    const name = nextCandidateName(base, attempt);
-    const path = joinRelative(parentDir, name);
-    const result = await exists({ path, root });
-    if (!result.exists) {
-      return name;
-    }
-  }
-  return nextCandidateName(base, Date.now());
-}
 
 async function ensureParentDirectoryReady(
   context: RendererPluginContext,
@@ -163,24 +118,34 @@ function discardCreateAttempt(options: {
 async function createEmptyFile(
   context: RendererPluginContext,
   root: string,
-  path: string
+  path: string,
+  preserveForOpen: boolean
 ): Promise<void> {
+  const eol = readFilesEditorDefaultEol(context);
+  const format = { bom: false, encoding: "utf8" } as const;
   const result = await context.files.writeDocument({
     contents: "",
-    eol: "lf",
+    eol,
     expected: { kind: "absent" },
-    format: { bom: false, encoding: "utf8" },
+    format,
     path,
     root,
   });
   if (result.kind === "written") {
+    let written = result;
     if (result.durability === "unknown") {
       const confirmation = await context.files.confirmDurability({
         expectedRevision: result.revision,
         path,
         root,
       });
-      if (confirmation.kind !== "confirmed") {
+      if (confirmation.kind === "confirmed") {
+        written = {
+          ...result,
+          durability: "confirmed",
+          revision: confirmation.revision,
+        };
+      } else {
         const t = createFilesTranslate(context);
         await context.dialogs.alert({
           body:
@@ -196,6 +161,15 @@ async function createEmptyFile(
           ),
         });
       }
+    }
+    if (preserveForOpen) {
+      recordCreatedDiskDocument({
+        eol,
+        format,
+        path,
+        result: written,
+        root,
+      });
     }
     return;
   }
@@ -218,7 +192,7 @@ export async function commitCreatedPath(options: {
   const t = createFilesTranslate(context);
   try {
     if (kind === "file") {
-      await createEmptyFile(context, root, path);
+      await createEmptyFile(context, root, path, openAfter);
     } else {
       await context.files.mkdir({ path, root });
     }
@@ -299,7 +273,12 @@ export async function commitInlineCreate(options: {
       return true;
     }
     if (pending.kind === "file") {
-      await createEmptyFile(options.context, options.root, options.to);
+      await createEmptyFile(
+        options.context,
+        options.root,
+        options.to,
+        pending.openAfter
+      );
     } else {
       await options.context.files.mkdir({
         path: options.to,
@@ -378,10 +357,10 @@ export async function beginInlineCreate(options: {
   const name = await allocateUniqueChildName(
     root,
     parentDir,
-    defaultBaseName(kind),
+    defaultFilesTreeBaseName(kind),
     context.files.exists
   );
-  const placeholderPath = joinRelative(parentDir, name);
+  const placeholderPath = joinFilesTreeRelativePath(parentDir, name);
   addFilesTreeEntry(root, {
     kind: kind === "file" ? "file" : "directory",
     path: placeholderPath,
@@ -400,7 +379,7 @@ export async function beginInlineCreate(options: {
     root,
   });
 
-  await waitForPaint();
+  await waitForFilesTreePaint();
 
   const started = startFilesTreeInlineRename({
     ...(treeId ? { instanceId: treeId } : {}),
@@ -435,7 +414,7 @@ export async function createViaPrompt(options: {
       kind === "file"
         ? t("filePanel.tree.placeholder.newFile", "example.ts")
         : t("filePanel.tree.placeholder.newFolder", "components"),
-    initialValue: defaultBaseName(kind),
+    initialValue: defaultFilesTreeBaseName(kind),
     validate: async (value) => {
       const trimmed = value.trim();
       if (allowNestedPath && trimmed.includes("/")) {
@@ -443,7 +422,7 @@ export async function createViaPrompt(options: {
         if (pathInvalid) {
           return pathInvalid;
         }
-        const targetPath = joinRelative(parentDir, trimmed);
+        const targetPath = joinFilesTreeRelativePath(parentDir, trimmed);
         const { exists } = await context.files.exists({
           path: targetPath,
           root,
@@ -456,7 +435,7 @@ export async function createViaPrompt(options: {
       if (invalid) {
         return invalid;
       }
-      const targetPath = joinRelative(parentDir, trimmed);
+      const targetPath = joinFilesTreeRelativePath(parentDir, trimmed);
       const { exists } = await context.files.exists({
         path: targetPath,
         root,
@@ -470,7 +449,7 @@ export async function createViaPrompt(options: {
     return;
   }
   const relative = outcome.value.trim();
-  const targetPath = joinRelative(parentDir, relative);
+  const targetPath = joinFilesTreeRelativePath(parentDir, relative);
   await commitCreatedPath({
     context,
     kind,

@@ -214,6 +214,24 @@ describe("workspace panel transfer", () => {
       );
     });
 
+    it("prevents the transfer text fallback from mutating editor contents", () => {
+      installPier();
+      const welcome = panel({ component: "welcome", id: "welcome-1" });
+      const handlers = createWorkspacePanelTransferHandlers(() => null);
+      const dataTransfer = new FakeDataTransfer();
+      handlers.onWillDragPanel({
+        nativeEvent: new FakeDragEvent("dragstart", {
+          dataTransfer,
+        }) as unknown as DragEvent,
+        panel: welcome as never,
+      });
+      const drop = new FakeDragEvent("drop", { dataTransfer });
+
+      handlers.onWindowDrop(drop as unknown as DragEvent);
+
+      expect(drop.defaultPrevented).toBe(true);
+    });
+
     it("does not write tokens for unsupported panels", async () => {
       const pier = installPier();
       const external = panel({

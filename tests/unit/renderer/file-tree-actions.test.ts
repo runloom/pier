@@ -209,6 +209,9 @@ function makeContext() {
   };
   const openInstance = vi.fn<RendererPluginContext["panels"]["openInstance"]>();
   const context = {
+    configuration: {
+      get: vi.fn(() => undefined),
+    },
     dialogs,
     files,
     i18n: {

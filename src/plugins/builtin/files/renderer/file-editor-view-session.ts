@@ -1,25 +1,25 @@
-import { syntaxHighlighting } from "@codemirror/language";
-import { search as codeMirrorSearch } from "@codemirror/search";
 import {
   Compartment,
   EditorState,
-  Prec,
   type StateEffect,
   Transaction,
 } from "@codemirror/state";
-import { basicSetup, EditorView } from "codemirror";
-import { filesSyntaxHighlightStyle } from "./cm-highlight-style.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
+import { EditorView } from "codemirror";
 import { cmLanguageExtension } from "./cm-language.ts";
-import { EDITOR_THEME } from "./code-mirror-editor-theme.ts";
 import type {
   EditorSearchOptions,
   EditorSearchState,
 } from "./code-mirror-search-state.ts";
+import type {
+  FileEditorLspHoverResult,
+  FileEditorViewPresentation,
+} from "./file-editor-adapter-types.ts";
+import { FileEditorLanguageTools } from "./file-editor-language-tools.ts";
+import { createFileEditorViewExtensions } from "./file-editor-view-extensions.ts";
 import {
   applyEditorSearchQuery,
   clearEditorSearch,
-  currentEditorSearchState,
-  editorViewRanges,
   executeEditorViewCommand,
   type FileEditorCommand,
   navigateEditorSearch,
@@ -27,33 +27,32 @@ import {
   resetEditorSearch,
   selectAllEditorMatches,
 } from "./file-editor-view-operations.ts";
+import { restoreFileEditorScroll } from "./file-editor-view-scroll.ts";
 import type {
-  EditorRange,
   FilesDocument,
   FilesDocumentLanguage,
 } from "./files-document-types.ts";
 import {
   clearGitGutterMarkers,
-  createGitGutterExtension,
   setGitGutterMarkers,
 } from "./files-editor-git-gutter.ts";
 import type { GitGutterLineMarker } from "./files-editor-git-markers.ts";
 import { createMinimapExtension } from "./files-editor-minimap.ts";
+import {
+  type FilesEditorPrefs,
+  resolveFilesEditorLanguage,
+} from "./files-editor-prefs.ts";
+import {
+  cancelQueuedFilesLspHover,
+  clearFilesLspHover,
+  showFilesLspHover,
+} from "./files-lsp-hover.ts";
 
+export type {
+  FileEditorLspHoverResult,
+  FileEditorViewPresentation,
+} from "./file-editor-adapter-types.ts";
 export type { FileEditorCommand } from "./file-editor-view-operations.ts";
-
-export interface FileEditorViewPresentation {
-  ariaLabel: string;
-  onContextMenu?: (event: MouseEvent, ranges: readonly EditorRange[]) => void;
-  onOpenSearch: () => void;
-  onSearchStateChange: (state: EditorSearchState) => void;
-}
-
-interface ScrollSnapshot {
-  left: number;
-  top: number;
-}
-
 export class FileEditorViewSession {
   readonly documentId: string;
   readonly editorSessionId: string;
@@ -61,56 +60,85 @@ export class FileEditorViewSession {
   readonly #editableCompartment = new Compartment();
   readonly #languageCompartment = new Compartment();
   readonly #minimapCompartment = new Compartment();
+  readonly #languageTools: FileEditorLanguageTools;
   #minimapEnabled: boolean;
   readonly #onChange: (documentId: string, contents: string) => void;
   #presentation: FileEditorViewPresentation;
-  #configuredLanguage: FilesDocumentLanguage | null = null;
-  #configuredPath: string | undefined;
   #configuredReadOnly: boolean | null = null;
   #documentReadOnly = false;
+  #document: FilesDocument | null = null;
+  #editorPrefs: FilesEditorPrefs;
   #hostReadOnly = false;
+  #configuredLanguage: FilesDocumentLanguage | null = null;
+  #configuredPath: string | undefined;
   #savedState: EditorState | null = null;
-  #scroll: ScrollSnapshot = { left: 0, top: 0 };
+  #scroll = { left: 0, top: 0 };
   #syncingDocument = false;
   #view: EditorView | null = null;
-
   constructor(input: {
     documentId: string;
+    editorPrefs: FilesEditorPrefs;
     editorSessionId: string;
     minimapEnabled: boolean;
     onChange: (documentId: string, contents: string) => void;
+    panelContext?: PanelContext;
     presentation: FileEditorViewPresentation;
   }) {
     this.documentId = input.documentId;
     this.editorSessionId = input.editorSessionId;
+    this.#editorPrefs = input.editorPrefs;
+    this.#presentation = input.presentation;
+    this.#languageTools = new FileEditorLanguageTools({
+      getOpenExternal: () => this.#presentation.openExternal,
+      ...(input.presentation.getLspHoverLabels
+        ? { getLabels: input.presentation.getLspHoverLabels }
+        : {}),
+      ...(input.presentation.notifyLspError
+        ? {
+            notifyError: (message: string) =>
+              this.#presentation.notifyLspError?.(message),
+          }
+        : {}),
+      ownerId: input.editorSessionId,
+      prefs: input.editorPrefs,
+      ...(input.presentation.readDocument
+        ? { readDocument: input.presentation.readDocument }
+        : {}),
+    });
+    this.#languageTools.setPanelContext(input.panelContext);
     this.#minimapEnabled = input.minimapEnabled;
     this.#onChange = input.onChange;
-    this.#presentation = input.presentation;
   }
-
   mount(parent: HTMLElement, document: FilesDocument): void {
     if (this.#view) {
-      // 跨 group 拖拽时新旧共享视图可能共用同一 editorSessionId。
-      // 已挂载则把 CM DOM 迁到新 parent，避免旧组延迟 unmount 把新组内容拆掉。
+      // Reparent a shared mounted view before an old group can clean it up.
       if (this.#view.dom.parentElement !== parent) {
         parent.appendChild(this.#view.dom);
       }
       this.syncDocument(document);
       return;
     }
-
-    const state =
-      this.#savedState ??
-      EditorState.create({
+    let state = this.#savedState;
+    if (state) {
+      const pendingEffects = [
+        ...this.#languageTools.syncPrefs(),
+        ...this.#languageTools.syncDocument(document),
+      ];
+      if (pendingEffects.length > 0) {
+        state = state.update({ effects: pendingEffects }).state;
+      }
+      this.#languageTools.commitPendingStatus();
+    } else {
+      state = EditorState.create({
         doc: document.currentContents,
         extensions: this.#extensions(document),
       });
+    }
     this.#view = new EditorView({ parent, state });
     this.#view.scrollDOM.dataset.scrollbar = "overlay";
     this.syncDocument(document);
-    this.#restoreScroll();
+    restoreFileEditorScroll(this.#view!, this.#scroll);
   }
-
   updatePresentation(presentation: FileEditorViewPresentation): void {
     this.#presentation = presentation;
     const view = this.#view;
@@ -124,7 +152,6 @@ export class FileEditorViewSession {
       });
     }
   }
-
   setHostReadOnly(readOnly: boolean): void {
     if (this.#hostReadOnly === readOnly) {
       return;
@@ -139,14 +166,24 @@ export class FileEditorViewSession {
       });
     }
   }
-
   syncDocument(document: FilesDocument): void {
+    this.#document = document;
+    const languageToolEffects = this.#languageTools.syncDocument(document);
     const view = this.#view;
     if (!view) {
+      if (this.#savedState && languageToolEffects.length > 0) {
+        this.#savedState = this.#savedState.update({
+          effects: languageToolEffects,
+        }).state;
+      }
+      this.#languageTools.commitPendingStatus();
       return;
     }
 
-    const language = document.language;
+    const language = resolveFilesEditorLanguage(
+      document.language,
+      this.#editorPrefs.defaultLanguage
+    );
     const path =
       document.source.kind === "disk" ? document.source.path : undefined;
     const documentReadOnly =
@@ -171,8 +208,10 @@ export class FileEditorViewSession {
       this.#configuredLanguage = language;
       this.#configuredPath = path;
     }
+    effects.push(...languageToolEffects);
     if (effects.length > 0) {
       view.dispatch({ effects });
+      this.#languageTools.commitPendingStatus();
     }
 
     const currentValue = view.state.doc.toString();
@@ -193,12 +232,7 @@ export class FileEditorViewSession {
       this.#syncingDocument = false;
     }
   }
-
-  /**
-   * 卸载视图。传 parent 时仅当当前 view 仍挂在该 parent 下才销毁，
-   * 避免旧 group 共享视图的 cleanup 误拆已 reparent 到新 group 的编辑器。
-   * @returns 是否真正销毁了 view
-   */
+  /** Detaches only while the view still belongs to the optional parent. */
   detach(parent?: HTMLElement): boolean {
     const view = this.#view;
     if (!view) {
@@ -207,6 +241,7 @@ export class FileEditorViewSession {
     if (parent && view.dom.parentElement !== parent) {
       return false;
     }
+    clearFilesLspHover(view);
     resetEditorSearch(view);
     this.#savedState = view.state;
     this.#scroll = {
@@ -220,6 +255,7 @@ export class FileEditorViewSession {
 
   dispose(): void {
     this.detach();
+    this.#languageTools.dispose();
     this.#savedState = null;
     this.#scroll = { left: 0, top: 0 };
   }
@@ -277,7 +313,7 @@ export class FileEditorViewSession {
       });
     }
     if (snapshot.scroll) {
-      this.#restoreScroll();
+      restoreFileEditorScroll(this.#view!, this.#scroll);
     }
   }
 
@@ -293,6 +329,24 @@ export class FileEditorViewSession {
     this.applySnapshot({
       selection: { anchor, head },
     });
+  }
+
+  currentLine(): number | null {
+    const view = this.#view;
+    if (!view) {
+      return null;
+    }
+    const head = view.state.selection.main.head;
+    return view.state.doc.lineAt(head).number;
+  }
+
+  cancelQueuedLspHover(): void {
+    if (this.#view) cancelQueuedFilesLspHover(this.#view);
+  }
+  showLspHover(): Promise<FileEditorLspHoverResult> {
+    return this.#view
+      ? showFilesLspHover(this.#view)
+      : Promise.resolve("unavailable");
   }
 
   /** Recompute line geometry after external CSS font-size / family changes. */
@@ -368,8 +422,47 @@ export class FileEditorViewSession {
     });
   }
 
+  setPanelContext(panelContext: PanelContext | undefined): void {
+    const effect = this.#languageTools.setPanelContext(panelContext);
+    if (!effect) {
+      return;
+    }
+    if (this.#view) {
+      this.#view.dispatch({ effects: effect });
+      this.#languageTools.commitPendingStatus();
+    } else if (this.#savedState) {
+      this.#savedState = this.#savedState.update({ effects: effect }).state;
+      this.#languageTools.commitPendingStatus();
+    }
+  }
+
+  setEditorPrefs(prefs: FilesEditorPrefs): void {
+    const defaultLanguageChanged =
+      this.#editorPrefs.defaultLanguage !== prefs.defaultLanguage;
+    this.#editorPrefs = prefs;
+    const view = this.#view;
+    const document = this.#document;
+    if (defaultLanguageChanged && view && document?.language === "text") {
+      const language = prefs.defaultLanguage ?? "text";
+      const path =
+        document.source.kind === "disk" ? document.source.path : undefined;
+      view.dispatch({
+        effects: this.#languageCompartment.reconfigure(
+          cmLanguageExtension(language, path) ?? []
+        ),
+      });
+      this.#configuredLanguage = language;
+      this.#configuredPath = path;
+    }
+    this.#languageTools.setPrefs(view, prefs);
+  }
+
   #extensions(document: FilesDocument) {
-    const language = document.language;
+    this.#document = document;
+    const language = resolveFilesEditorLanguage(
+      document.language,
+      this.#editorPrefs.defaultLanguage
+    );
     const path =
       document.source.kind === "disk" ? document.source.path : undefined;
     const documentReadOnly =
@@ -380,74 +473,22 @@ export class FileEditorViewSession {
     this.#configuredLanguage = language;
     this.#configuredPath = path;
     this.#configuredReadOnly = readOnly;
-    return [
-      createGitGutterExtension(),
-      Prec.highest(
-        EditorView.domEventHandlers({
-          keydown: (event) => {
-            if (
-              (event.metaKey || event.ctrlKey) &&
-              !event.altKey &&
-              !event.shiftKey &&
-              event.key.toLowerCase() === "f"
-            ) {
-              event.preventDefault();
-              this.#presentation.onOpenSearch();
-              return true;
-            }
-            return false;
-          },
-        })
-      ),
-      codeMirrorSearch(),
-      basicSetup,
-      this.#ariaCompartment.of(
-        EditorView.contentAttributes.of({
-          "aria-label": this.#presentation.ariaLabel,
-        })
-      ),
-      EditorView.editorAttributes.of({ class: "h-full" }),
-      EDITOR_THEME,
-      this.#minimapCompartment.of(
-        this.#minimapEnabled ? createMinimapExtension() : []
-      ),
-      syntaxHighlighting(filesSyntaxHighlightStyle),
-      EditorView.updateListener.of((update) => {
-        if (!update.docChanged) {
-          return;
-        }
-        this.#presentation.onSearchStateChange(
-          currentEditorSearchState(update.view)
-        );
-        if (!this.#syncingDocument) {
-          this.#onChange(this.documentId, update.state.doc.toString());
-        }
-      }),
-      EditorView.domEventHandlers({
-        contextmenu: (event, view) => {
-          const handler = this.#presentation.onContextMenu;
-          if (!handler) {
-            return false;
-          }
-          handler(event, editorViewRanges(view));
-          return true;
-        },
-      }),
-      this.#editableCompartment.of(EditorView.editable.of(!readOnly)),
-      this.#languageCompartment.of(languageExtension ?? []),
-    ];
-  }
-
-  #restoreScroll(): void {
-    const view = this.#view;
-    if (!view) {
-      return;
-    }
-    const apply = () => {
-      view.scrollDOM.scrollLeft = this.#scroll.left;
-      view.scrollDOM.scrollTop = this.#scroll.top;
-    };
-    apply();
-    view.requestMeasure({ read: () => undefined, write: apply });
+    return createFileEditorViewExtensions({
+      ariaCompartment: this.#ariaCompartment,
+      ariaLabel: this.#presentation.ariaLabel,
+      editableCompartment: this.#editableCompartment,
+      languageCompartment: this.#languageCompartment,
+      languageExtension,
+      languageToolExtensions: this.#languageTools.extensions(document),
+      minimapCompartment: this.#minimapCompartment,
+      minimapEnabled: this.#minimapEnabled,
+      getContextMenuHandler: () => this.#presentation.onContextMenu,
+      isDocumentSyncing: () => this.#syncingDocument,
+      onContentsChange: (contents) => this.#onChange(this.documentId, contents),
+      onOpenSearch: () => this.#presentation.onOpenSearch(),
+      onSearchStateChange: (state) =>
+        this.#presentation.onSearchStateChange(state),
+      readOnly,
+    });
   }
 }

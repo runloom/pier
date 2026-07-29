@@ -1,5 +1,7 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { MouseEvent as ReactMouseEvent } from "react";
+import type { EditorSearchState } from "./code-mirror-search-state.ts";
 import type { FileEditorController } from "./file-editor-controller.ts";
 import type {
   EditorRange,
@@ -7,6 +9,10 @@ import type {
   FileViewMode,
 } from "./files-document-types.ts";
 import type { FilesTranslate } from "./files-i18n.ts";
+import type {
+  FilesLspHoverInput,
+  FilesLspHoverLabels,
+} from "./files-lsp-hover-types.ts";
 import type {
   MarkdownDiskSource,
   MarkdownFileResources,
@@ -16,6 +22,7 @@ import type {
 
 export interface FileEditorAdapterLabels {
   diffUnsupported: string;
+  lspHover: FilesLspHoverLabels;
   sourceEditor: string;
 }
 
@@ -33,6 +40,19 @@ export interface FilesEditorSearchLabels {
   replacePlaceholder?: string;
   selectAll?: string;
   wholeWord?: string;
+}
+
+export type FileEditorLspHoverResult = "shown" | "queued" | "unavailable";
+
+export interface FileEditorViewPresentation {
+  ariaLabel: string;
+  getLspHoverLabels?: FilesLspHoverInput["getLabels"];
+  notifyLspError?: FilesLspHoverInput["notifyError"];
+  onContextMenu?: (event: MouseEvent, ranges: readonly EditorRange[]) => void;
+  onOpenSearch: () => void;
+  onSearchStateChange: (state: EditorSearchState) => void;
+  openExternal: (url: string) => void;
+  readDocument?: FilesLspHoverInput["readDocument"];
 }
 
 export interface FileEditorAdapterProps {
@@ -78,6 +98,8 @@ export interface FileEditorAdapterProps {
     | undefined;
   openExternal: (url: string) => void;
   originalValue?: string;
+  /** Workspace context for LSP worktree policy. */
+  panelContext?: PanelContext | undefined;
   panelId?: string | undefined;
   readOnly?: boolean;
   registerSelectionSelectAllProvider?:

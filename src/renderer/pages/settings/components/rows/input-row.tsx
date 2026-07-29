@@ -9,6 +9,7 @@ import type { KeyboardEvent, ReactNode } from "react";
 
 export interface InputRowProps {
   description?: ReactNode;
+  disabled?: boolean;
   id: string;
   inputClassName?: string;
   inputMode?: "numeric";
@@ -25,6 +26,7 @@ export interface InputRowProps {
 
 export function InputRow({
   id,
+  disabled = false,
   inputClassName = "w-[240px]",
   inputMode,
   label,
@@ -52,6 +54,7 @@ export function InputRow({
       </FieldContent>
       <Input
         className={inputClassName}
+        disabled={disabled}
         id={id}
         inputMode={inputMode}
         max={max}

@@ -126,10 +126,8 @@ async function handlePrepareSource(
   const revision = computeAdapterRevision();
   const liveParams = panelParamsOf(panel);
   const frozenParams = takeFrozenOfferParams(transferId);
-  const { params: resolvedParams, usedFrozenSource } = mergeDragStartPanelParams(
-    liveParams,
-    frozenParams
-  );
+  const { params: resolvedParams, usedFrozenSource } =
+    mergeDragStartPanelParams(liveParams, frozenParams);
   if (usedFrozenSource) {
     console.warn(
       "[panelTransfer] prepareSource using drag-start frozen source",

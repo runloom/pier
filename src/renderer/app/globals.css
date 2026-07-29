@@ -182,6 +182,53 @@
     var(--background) 80%,
     var(--diff-modification-fg)
   );
+  /*
+   * Editor decoration layer (CodeMirror selection / occurrence / find).
+   * Separate from product status hues used as syntax foregrounds
+   * (--success strings, --warning types, --info functions, --done keywords).
+   * Recipe: translucent washes so syntax color stays the primary signal
+   * (VS Code/Zed: selectionHighlight & document highlight must not be opaque).
+   * Relative to --foreground/--background/--info so every style preset that
+   * rewrites those shells inherits usable decorations without per-theme CSS.
+   * Hierarchy (weak → strong): selection-match < selection-match-main
+   *   < text selection < search-match < search-match-active.
+   */
+  --editor-selection-bg: color-mix(in oklab, var(--info) 30%, transparent);
+  --editor-selection-match-bg: color-mix(
+    in oklab,
+    var(--foreground) 16%,
+    transparent
+  );
+  --editor-selection-match-main-bg: color-mix(
+    in oklab,
+    var(--foreground) 22%,
+    transparent
+  );
+  --editor-search-match-bg: color-mix(
+    in oklab,
+    var(--foreground) 14%,
+    transparent
+  );
+  --editor-search-match-border: color-mix(
+    in oklab,
+    var(--foreground) 42%,
+    transparent
+  );
+  --editor-search-match-active-bg: color-mix(
+    in oklab,
+    var(--foreground) 22%,
+    transparent
+  );
+  --editor-search-match-active-border: color-mix(
+    in oklab,
+    var(--foreground) 72%,
+    transparent
+  );
+  --editor-active-line-bg: color-mix(
+    in oklab,
+    var(--foreground) 6%,
+    transparent
+  );
   --status-solid-foreground: oklch(0.985 0 0);
   --action-accent: var(--primary);
   --action-accent-foreground: var(--primary-foreground);
@@ -318,6 +365,43 @@
     in oklab,
     var(--background) 88%,
     var(--diff-modification-fg)
+  );
+  /* Light canvas: dark foreground wash needs slightly lower alpha to stay calm. */
+  --editor-selection-bg: color-mix(in oklab, var(--info) 24%, transparent);
+  --editor-selection-match-bg: color-mix(
+    in oklab,
+    var(--foreground) 10%,
+    transparent
+  );
+  --editor-selection-match-main-bg: color-mix(
+    in oklab,
+    var(--foreground) 14%,
+    transparent
+  );
+  --editor-search-match-bg: color-mix(
+    in oklab,
+    var(--foreground) 9%,
+    transparent
+  );
+  --editor-search-match-border: color-mix(
+    in oklab,
+    var(--foreground) 32%,
+    transparent
+  );
+  --editor-search-match-active-bg: color-mix(
+    in oklab,
+    var(--foreground) 14%,
+    transparent
+  );
+  --editor-search-match-active-border: color-mix(
+    in oklab,
+    var(--foreground) 55%,
+    transparent
+  );
+  --editor-active-line-bg: color-mix(
+    in oklab,
+    var(--foreground) 5%,
+    transparent
   );
   --chart-1: var(--info);
   --chart-2: var(--success);

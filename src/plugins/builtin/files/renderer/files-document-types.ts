@@ -2,6 +2,7 @@ import {
   type FileDocumentEol,
   type FileDocumentFormat,
   type FilePreviewImageMime,
+  type FileWritableDocumentEol,
   nonEmptyFileRootRelativePathSchema,
 } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
@@ -156,6 +157,7 @@ export interface FilesDocument {
   capabilities: readonly FilesDocumentCapability[];
   /** 冲突 Compare 拉取的磁盘快照;非冲突态为 null。 */
   conflictDiskContents: string | null;
+  createdEmptyEol: FileWritableDocumentEol | null;
   currentContents: string;
   deletedOnDisk: boolean;
   dirty: boolean;

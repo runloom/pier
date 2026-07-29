@@ -1,5 +1,6 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FileEditorController } from "@plugins/builtin/files/renderer/file-editor-controller.ts";
+import { FileEditorViewSession } from "@plugins/builtin/files/renderer/file-editor-view-session.ts";
 import { flushFilesDraftWrites } from "@plugins/builtin/files/renderer/files-document-drafts.ts";
 import {
   clearFilesDocumentStore,
@@ -301,6 +302,12 @@ function createHarness(
     writeText,
   };
 }
+
+const viewPresentationDefaults = {
+  onOpenSearch: vi.fn(),
+  onSearchStateChange: vi.fn(),
+  openExternal: () => undefined,
+};
 
 afterEach(async () => {
   await flushFilesDraftWrites();
@@ -1062,6 +1069,122 @@ describe("FileEditorController", () => {
       error: "fsync failed",
     });
     release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
+  it("queues a line target while its document is still loading", async () => {
+    const harness = createHarness();
+    harness.setDisk("one\ntwo\nthree\n", 1);
+    const release = harness.controller.acquirePanel("panel-1", SOURCE);
+    const documentId = harness.controller.documentId(SOURCE);
+    const editorSessionId = JSON.stringify(["panel-1"]);
+
+    expect(
+      harness.controller.goToLineResult(editorSessionId, documentId, 2, 2)
+    ).toBe("queued");
+    harness.controller.attachView({
+      documentId,
+      editorSessionId,
+      parent: document.createElement("div"),
+      presentation: {
+        ...viewPresentationDefaults,
+        ariaLabel: "Source editor",
+      },
+    });
+    await flushPromises();
+
+    expect(harness.controller.currentLineForSession(editorSessionId)).toBe(2);
+    release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
+  it("reveals a line target only after its intended source session mounts", async () => {
+    const harness = createHarness();
+    harness.setDisk("one\ntwo\nthree\n", 1);
+    const release = harness.controller.acquirePanel("panel-1", SOURCE);
+    await flushPromises();
+    const documentId = harness.controller.documentId(SOURCE);
+    const editorSessionId = JSON.stringify(["panel-1"]);
+    const revealRange = vi.spyOn(
+      FileEditorViewSession.prototype,
+      "revealRange"
+    );
+
+    expect(
+      harness.controller.goToLineResult(editorSessionId, documentId, 2, 2)
+    ).toBe("queued");
+    expect(harness.controller.goToLine(editorSessionId, documentId, 2, 2)).toBe(
+      false
+    );
+    expect(
+      harness.controller.currentLineForSession(editorSessionId)
+    ).toBeNull();
+
+    harness.controller.attachView({
+      documentId,
+      editorSessionId,
+      parent: document.createElement("div"),
+      presentation: {
+        ...viewPresentationDefaults,
+        ariaLabel: "Source editor",
+      },
+    });
+
+    expect(harness.controller.currentLineForSession(editorSessionId)).toBe(2);
+    expect(revealRange).toHaveBeenCalledWith(5, 5);
+    release();
+    harness.controller.dispose();
+    harness.watchHub.dispose();
+  });
+
+  it("does not reveal a stale line target in a replacement document", async () => {
+    const replacement = {
+      kind: "disk" as const,
+      path: "replacement.md",
+      root: ROOT,
+    };
+    const harness = createHarness({ panelSources: [SOURCE, replacement] });
+    harness.setDisk("one\ntwo\nthree\n", 1);
+    const releaseSource = harness.controller.acquirePanel("panel-1", SOURCE);
+    const releaseReplacement = harness.controller.acquirePanel(
+      "panel-2",
+      replacement
+    );
+    await flushPromises();
+    const editorSessionId = JSON.stringify(["panel-1"]);
+
+    expect(
+      harness.controller.goToLine(
+        editorSessionId,
+        harness.controller.documentId(SOURCE),
+        2,
+        2
+      )
+    ).toBe(false);
+
+    harness.controller.attachView({
+      documentId: harness.controller.documentId(replacement),
+      editorSessionId,
+      parent: document.createElement("div"),
+      presentation: {
+        ...viewPresentationDefaults,
+        ariaLabel: "Replacement editor",
+      },
+    });
+
+    expect(
+      harness.controller.goToLineResult(
+        editorSessionId,
+        harness.controller.documentId(SOURCE),
+        2,
+        2
+      )
+    ).toBe("rejected");
+    expect(harness.controller.currentLineForSession(editorSessionId)).toBe(1);
+    releaseSource();
+    releaseReplacement();
     harness.controller.dispose();
     harness.watchHub.dispose();
   });
