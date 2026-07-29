@@ -4,7 +4,11 @@ import type {
   TaskOutputPanelParams,
   TaskPanelMetadata,
 } from "@shared/contracts/tasks.ts";
-import type { TerminalPanelSessionSnapshot } from "@shared/contracts/terminal.ts";
+import type {
+  CreateTerminalArgs,
+  TerminalFrameCommittedEvent,
+  TerminalPanelSessionSnapshot,
+} from "@shared/contracts/terminal.ts";
 import {
   act,
   fireEvent,
@@ -317,6 +321,8 @@ describe("TerminalPanel lifecycle", () => {
   let emitWindowLayoutPulse:
     | ((pulse: { reason: "resize" | "view-zoom" | "zoom" }) => void)
     | null = null;
+  let emitWindowFocusChanged: ((payload: { focused: boolean }) => void) | null =
+    null;
   let cwdChangeListeners: Array<{
     cb: (event: { context: PanelContext; panelId: string }) => void;
   }> = [];
@@ -326,10 +332,27 @@ describe("TerminalPanel lifecycle", () => {
   let surfaceCloseListeners: Array<{
     cb: (event: { panelId: string }) => void;
   }> = [];
+  let frameCommittedListeners: Array<{
+    cb: (event: TerminalFrameCommittedEvent) => void;
+  }> = [];
 
   let searchStateListeners: Array<{
     cb: (event: { panelId: string; selected: number; total: number }) => void;
   }> = [];
+
+  const emitCommittedFrame = (args: CreateTerminalArgs): void => {
+    for (const { cb } of frameCommittedListeners) {
+      cb({
+        drawSequence: 1,
+        panelId: args.panelId,
+        pixelHeight: Math.max(1, Math.round(args.frame.height * 2)),
+        pixelWidth: Math.max(1, Math.round(args.frame.width * 2)),
+        presentationId: args.presentationId,
+        requestSequence: 1,
+        surfaceGeneration: 1,
+      });
+    }
+  };
 
   beforeAll(async () => {
     await initI18n();
@@ -343,11 +366,13 @@ describe("TerminalPanel lifecycle", () => {
       x: 10,
       y: 20,
     };
+    emitWindowFocusChanged = null;
     emitWindowLayoutPulse = null;
     searchStateListeners = [];
     cwdChangeListeners = [];
     titleChangeListeners = [];
     surfaceCloseListeners = [];
+    frameCommittedListeners = [];
     terminalRelaunchStoreMock.reset();
     resetTerminalLaunchConfirmationsForTest();
     resetFreshTerminalPanelsForTests();
@@ -410,6 +435,14 @@ describe("TerminalPanel lifecycle", () => {
             return vi.fn();
           }
         ),
+        window: {
+          onFocusChanged: vi.fn(
+            (cb: (payload: { focused: boolean }) => void) => {
+              emitWindowFocusChanged = cb;
+              return vi.fn();
+            }
+          ),
+        },
         agents: {
           prepareLaunchFromSpec: vi.fn(async () => ({
             launchId: "launch-from-spec",
@@ -418,7 +451,10 @@ describe("TerminalPanel lifecycle", () => {
         terminal: {
           applyHostSnapshot: vi.fn(),
           close: vi.fn(),
-          create: vi.fn(async () => ({ ok: true })),
+          create: vi.fn(async (args: CreateTerminalArgs) => {
+            queueMicrotask(() => emitCommittedFrame(args));
+            return { ok: true };
+          }),
           endSearch: vi.fn(async () => ({ ok: true })),
           hide: vi.fn(),
           navigateSearch: vi.fn(async () => ({ ok: true })),
@@ -429,6 +465,15 @@ describe("TerminalPanel lifecycle", () => {
             cwdChangeListeners.push(listener);
             return () => {
               cwdChangeListeners = cwdChangeListeners.filter(
+                (entry) => entry !== listener
+              );
+            };
+          }),
+          onFrameCommitted: vi.fn((cb) => {
+            const listener = { cb };
+            frameCommittedListeners.push(listener);
+            return () => {
+              frameCommittedListeners = frameCommittedListeners.filter(
                 (entry) => entry !== listener
               );
             };
@@ -905,6 +950,135 @@ describe("TerminalPanel lifecycle", () => {
     await expect(confirmation).rejects.toThrow("native create failed");
   });
 
+  it("does not count hidden panel time toward the committed-frame timeout", async () => {
+    vi.useFakeTimers();
+    vi.mocked(window.pier.terminal.create).mockResolvedValue({ ok: true });
+    const props = createPanelProps();
+
+    try {
+      render(<TerminalPanel {...props} />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(window.pier.terminal.create).toHaveBeenCalledOnce();
+
+      act(() => {
+        props.emitVisibility({ isVisible: false });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(
+        screen.queryByText(i18next.t("terminal.frameWaitFailed"))
+      ).not.toBeInTheDocument();
+
+      act(() => {
+        props.emitVisibility({ isVisible: true });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(9999);
+      });
+      expect(
+        screen.queryByText(i18next.t("terminal.frameWaitFailed"))
+      ).not.toBeInTheDocument();
+
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(1);
+      });
+      expect(
+        screen.getByText(i18next.t("terminal.frameWaitFailed"))
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not count document-hidden time toward the committed-frame timeout", async () => {
+    vi.useFakeTimers();
+    vi.mocked(window.pier.terminal.create).mockResolvedValue({ ok: true });
+    const originalVisibilityState = document.visibilityState;
+
+    try {
+      render(<TerminalPanel {...createPanelProps()} />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(window.pier.terminal.create).toHaveBeenCalledOnce();
+
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "hidden",
+      });
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(
+        screen.queryByText(i18next.t("terminal.frameWaitFailed"))
+      ).not.toBeInTheDocument();
+
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: "visible",
+      });
+      act(() => {
+        document.dispatchEvent(new Event("visibilitychange"));
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(
+        screen.getByText(i18next.t("terminal.frameWaitFailed"))
+      ).toBeInTheDocument();
+    } finally {
+      Object.defineProperty(document, "visibilityState", {
+        configurable: true,
+        value: originalVisibilityState,
+      });
+      vi.useRealTimers();
+    }
+  });
+
+  it("does not count an unfocused window toward the committed-frame timeout", async () => {
+    vi.useFakeTimers();
+    vi.mocked(window.pier.terminal.create).mockResolvedValue({ ok: true });
+
+    try {
+      render(<TerminalPanel {...createPanelProps()} />);
+      await act(async () => {
+        await Promise.resolve();
+        await Promise.resolve();
+      });
+      expect(window.pier.terminal.create).toHaveBeenCalledOnce();
+
+      act(() => {
+        emitWindowFocusChanged?.({ focused: false });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(20_000);
+      });
+      expect(
+        screen.queryByText(i18next.t("terminal.frameWaitFailed"))
+      ).not.toBeInTheDocument();
+
+      act(() => {
+        emitWindowFocusChanged?.({ focused: true });
+      });
+      await act(async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(
+        screen.getByText(i18next.t("terminal.frameWaitFailed"))
+      ).toBeInTheDocument();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
   it("does not replay initial input from persisted panel params", async () => {
     render(
       <TerminalPanel
@@ -1285,6 +1459,14 @@ describe("TerminalPanel lifecycle", () => {
       firstCreate.resolve({ ok: true });
       await firstCreate.promise;
     });
+    const firstCreateArgs = vi.mocked(window.pier.terminal.create).mock
+      .calls[0]?.[0];
+    if (!firstCreateArgs) {
+      throw new Error("first terminal create args were not captured");
+    }
+    act(() => {
+      emitCommittedFrame(firstCreateArgs);
+    });
 
     expect(
       container.querySelector('[data-testid="terminal-placeholder"]')
@@ -1295,6 +1477,14 @@ describe("TerminalPanel lifecycle", () => {
     await act(async () => {
       secondCreate.resolve({ ok: true });
       await secondCreate.promise;
+    });
+    const secondCreateArgs = vi.mocked(window.pier.terminal.create).mock
+      .calls[1]?.[0];
+    if (!secondCreateArgs) {
+      throw new Error("second terminal create args were not captured");
+    }
+    act(() => {
+      emitCommittedFrame(secondCreateArgs);
     });
 
     await waitFor(() => {
@@ -1816,7 +2006,20 @@ describe("TerminalPanel lifecycle", () => {
         expect.objectContaining({ panelId: "terminal-1" })
       );
     });
-    resolveCreate({ ok: true });
+    await act(async () => {
+      resolveCreate({ ok: true });
+    });
+    expect(
+      container.querySelector('[data-testid="terminal-placeholder"]')
+    ).not.toBeNull();
+    const createArgs = vi.mocked(window.pier.terminal.create).mock
+      .calls[0]?.[0];
+    if (!createArgs) {
+      throw new Error("terminal create args were not captured");
+    }
+    act(() => {
+      emitCommittedFrame(createArgs);
+    });
 
     await waitFor(() => {
       expect(

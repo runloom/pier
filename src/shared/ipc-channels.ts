@@ -104,6 +104,8 @@ export const PIER_BROADCAST = {
   // renderer 下发的 presentation 已被 native 同步应用 (main → renderer,
   // payload { rendererSequence })，用于 resize 撤占位的精确握手。
   TERMINAL_PRESENTATION_APPLIED: "pier:terminal:presentation-applied",
+  // Ghostty 已把当前实例、当前尺寸的 IOSurface 与原生遮罩原子提交。
+  TERMINAL_FRAME_COMMITTED: "pier://terminal:frame-committed",
   // 终端状态栏用户覆盖变更后广播完整快照 (main → renderer, payload TerminalStatusBarPrefs).
   TERMINAL_STATUS_BAR_PREFS_CHANGED: "pier://terminal-status-bar:prefs-changed",
   // 全部 task run 的窗口级控制快照（运行控制浮层唯一数据源）。

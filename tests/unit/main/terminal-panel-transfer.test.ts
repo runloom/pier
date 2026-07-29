@@ -83,6 +83,7 @@ describe("TerminalPanelTransfer", () => {
     const moveOwner = vi.fn();
     const moveNativeKey = vi.fn(() => ({ ok: true as const }));
     const moveTaskOwner = vi.fn();
+    const requestTerminalPresentation = vi.fn(() => 41);
     const transferScopes = vi.fn();
     const surfaceWillClose = vi.fn();
     const surfaceCreated = vi.fn();
@@ -94,7 +95,7 @@ describe("TerminalPanelTransfer", () => {
         runSerial: async (op) => await op(),
         transferScopes,
       },
-      getAddon: () => ({ moveTerminal }) as never,
+      getAddon: () => ({ moveTerminal, requestTerminalPresentation }) as never,
       getTaskLifecycle: () =>
         ({
           getCurrentLifecycleId: () => lifecycleId,
@@ -119,6 +120,7 @@ describe("TerminalPanelTransfer", () => {
       moveOwner,
       moveTaskOwner,
       moveTerminal,
+      requestTerminalPresentation,
       replayMovedSession,
       surfaceCreated,
       surfaceWillClose,
@@ -219,6 +221,71 @@ describe("TerminalPanelTransfer", () => {
     });
     expect(transfer.shouldAdoptMovedSurface("target", "panel-1")).toBe(true);
     expect(transfer.shouldSkipTargetCreate("target", "panel-1")).toBe(false);
+  });
+
+  it("requests the target renderer presentation registered before native move", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    const { requestTerminalPresentation, transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      sourceWin: fakeWin(1),
+      targetWin: fakeWin(2),
+    });
+
+    await transfer.stageLease({
+      lifecycleId: "",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-presentation-before",
+    });
+    expect(transfer.registerTargetPresentation("target", "panel-1", 73)).toBe(
+      true
+    );
+
+    await transfer.commitMove({
+      lifecycleId: "",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-presentation-before",
+    });
+
+    expect(requestTerminalPresentation).toHaveBeenCalledWith({
+      nativePanelId: "2::panel-1",
+      presentationId: 73,
+    });
+  });
+
+  it("requests a target presentation when renderer adoption follows native move", async () => {
+    const { createTerminalPanelTransfer } = await load();
+    const { requestTerminalPresentation, transfer } = baseDeps({
+      createTerminalPanelTransfer,
+      sourceWin: fakeWin(1),
+      targetWin: fakeWin(2),
+    });
+
+    await transfer.stageLease({
+      lifecycleId: "",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-presentation-after",
+    });
+    await transfer.commitMove({
+      lifecycleId: "",
+      panelId: "panel-1",
+      sourceWindowId: "source",
+      targetWindowId: "target",
+      transferId: "t-presentation-after",
+    });
+
+    expect(transfer.registerTargetPresentation("target", "panel-1", 89)).toBe(
+      true
+    );
+    expect(requestTerminalPresentation).toHaveBeenCalledWith({
+      nativePanelId: "2::panel-1",
+      presentationId: 89,
+    });
   });
 
   it("reverses completed substeps on pre-commit failure", async () => {
@@ -351,7 +418,7 @@ describe("TerminalPanelTransfer", () => {
   it("rollback after commitMove still reverses before journal commit point", async () => {
     const { createTerminalPanelTransfer, resolveOwner } = await load();
     const moveTerminal = vi.fn((..._args: unknown[]) => true);
-    const { transfer } = baseDeps({
+    const { requestTerminalPresentation, transfer } = baseDeps({
       createTerminalPanelTransfer,
       moveTerminal,
       sourceWin: fakeWin(5),
@@ -365,6 +432,9 @@ describe("TerminalPanelTransfer", () => {
       targetWindowId: "target",
       transferId: "t-4",
     });
+    expect(transfer.registerTargetPresentation("target", "panel-1", 101)).toBe(
+      true
+    );
     await transfer.commitMove({
       lifecycleId: "",
       panelId: "panel-1",
@@ -379,6 +449,14 @@ describe("TerminalPanelTransfer", () => {
       fromNativePanelId: "6::panel-1",
       toNativePanelId: "5::panel-1",
       toBrowserWindowId: 5,
+    });
+    expect(requestTerminalPresentation).toHaveBeenNthCalledWith(1, {
+      nativePanelId: "6::panel-1",
+      presentationId: 101,
+    });
+    expect(requestTerminalPresentation).toHaveBeenNthCalledWith(2, {
+      nativePanelId: "5::panel-1",
+      presentationId: 41,
     });
     expect(rollbackSession).toHaveBeenCalledTimes(1);
     expect(resolveOwner("5", "panel-1").windowId).toBe("5");

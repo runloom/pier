@@ -3,96 +3,27 @@
  * ownership move across Pier windows without killing the PTY.
  */
 
-import type { PanelContext } from "@shared/contracts/panel.ts";
-import type { TerminalFocusCoordinator } from "../../ipc/terminal-focus-coordinator.ts";
-import type { NativeAddon } from "../../ipc/terminal-native-addon.ts";
 import { toNativePanelKey } from "../../ipc/terminal-panel-id.ts";
-import type { RegisteredTerminalTaskLifecycle } from "../../ipc/terminal-task-lifecycle-wiring.ts";
-import type { TaskOutputTerminalBindings } from "../../ipc/terminal-task-output-bindings.ts";
 import { ensureTerminalPanelSession } from "../../state/terminal-session-state.ts";
 import {
   getTransferSession,
   transferPanelOwnership as transferSessionPanelOwnership,
 } from "../../state/terminal-session-transfer.ts";
-import type { AppWindow } from "../../windows/app-window.ts";
-import type { TaskService } from "../tasks/task-service-types.ts";
-import type { PanelTransferTerminalPort } from "./panel-transfer-types.ts";
 import { activateAlias } from "./terminal-hook-owner-routing.ts";
+import type {
+  TerminalPanelTransfer,
+  TerminalPanelTransferDeps,
+} from "./terminal-panel-transfer-api.ts";
 import {
   createTransferCompensation,
   type StagedTransfer,
 } from "./terminal-panel-transfer-compensation.ts";
 
+export type {
+  TerminalPanelTransfer,
+  TerminalPanelTransferDeps,
+} from "./terminal-panel-transfer-api.ts";
 export type { TerminalPanelTransferPhase } from "./terminal-panel-transfer-compensation.ts";
-
-export interface TerminalPanelTransferDeps {
-  broadcastTransfer?:
-    | ((input: {
-        panelId: string;
-        sourceWindowId: string;
-        targetWindowId: string;
-        transferId: string;
-      }) => void)
-    | undefined;
-  focusCoordinator: TerminalFocusCoordinator;
-  foreground: {
-    runSerial: <T>(operation: () => Promise<T> | T) => Promise<T>;
-    transferScopes: (input: {
-      panelId: string;
-      sourceWindowId: string;
-      targetWindowId: string;
-    }) => void;
-  };
-  getAddon: () => NativeAddon | null;
-  getTaskLifecycle: () => RegisteredTerminalTaskLifecycle | null;
-  getTaskOutputBindings: () => TaskOutputTerminalBindings | null;
-  getTaskService: () => TaskService | null;
-  /**
-   * Replay the moved panel's persisted context/title to the target window
-   * renderer. The target panel mounts during stage — before the session entry
-   * moves under the target record — so its mount-time readSession misses and
-   * it would otherwise fall back to creation-time params until the next OSC
-   * cwd/title event (idle shells: never).
-   */
-  replayMovedSession?:
-    | ((input: {
-        context?: PanelContext | undefined;
-        panelId: string;
-        targetElectronWindowId: number;
-        title?: string | undefined;
-      }) => void)
-    | undefined;
-  resolveWindow: (runtimeWindowId: string) => {
-    recordId: string;
-    win: AppWindow;
-  } | null;
-}
-
-export interface TerminalPanelTransfer extends PanelTransferTerminalPort {
-  acknowledgeSourceCloseIdempotent(
-    runtimeWindowId: string,
-    panelId: string
-  ): boolean;
-  isNativeKeyLeased(nativePanelId: string): boolean;
-  isPanelLeased(runtimeWindowId: string, panelId: string): boolean;
-  resolveTransferIdentity(input: {
-    expectedLifecycleId: string;
-    panelId: string;
-    recordId: string;
-    runtimeWindowId: string;
-  }): {
-    lifecycleId: string;
-    ok: boolean;
-    reason?: string;
-  };
-  /** Active + leased panel ids that reconcile/retain must keep alive. */
-  retainedPanelIdsForWindow(
-    runtimeWindowId: string,
-    activePanelIds: readonly string[]
-  ): string[];
-  shouldAdoptMovedSurface(runtimeWindowId: string, panelId: string): boolean;
-  shouldSkipTargetCreate(runtimeWindowId: string, panelId: string): boolean;
-}
 
 let activeTransferApi: TerminalPanelTransfer | null = null;
 
@@ -142,6 +73,26 @@ export function createTerminalPanelTransfer(
     deps,
     scopedNativeKey
   );
+
+  const requestTargetPresentation = (staged: StagedTransfer): boolean => {
+    if (staged.targetPresentationId === null) {
+      return true;
+    }
+    const target = deps.resolveWindow(staged.targetRuntimeWindowId);
+    const addon = deps.getAddon();
+    if (!(target && addon)) {
+      return false;
+    }
+    const previousPresentationId = addon.requestTerminalPresentation({
+      nativePanelId: scopedNativeKey(target.win.id, staged.panelId),
+      presentationId: staged.targetPresentationId,
+    });
+    if (previousPresentationId === null) {
+      return false;
+    }
+    staged.sourcePresentationId ??= previousPresentationId;
+    return true;
+  };
 
   const api: TerminalPanelTransfer = {
     getCurrentLifecycleId(input) {
@@ -201,9 +152,11 @@ export function createTerminalPanelTransfer(
         phase: "leased",
         sessionToken: null,
         sourceElectronWindowId: String(source.win.id),
+        sourcePresentationId: null,
         sourceRecordId: source.recordId,
         sourceRuntimeWindowId: input.sourceWindowId,
         targetElectronWindowId: String(target.win.id),
+        targetPresentationId: null,
         targetRecordId: target.recordId,
         targetRuntimeWindowId: input.targetWindowId,
         transferId: input.transferId,
@@ -351,6 +304,9 @@ export function createTerminalPanelTransfer(
           }
         }
 
+        if (!requestTargetPresentation(staged)) {
+          throw new Error("moved terminal presentation request failed");
+        }
         staged.phase = "moved";
       } catch (error) {
         await reverseCompleted(staged);
@@ -378,6 +334,22 @@ export function createTerminalPanelTransfer(
     isPanelLeased(runtimeWindowId, panelId) {
       const staged = findByLease(runtimeWindowId, panelId);
       return staged !== null && staged.phase !== "rolled-back";
+    },
+
+    registerTargetPresentation(runtimeWindowId, panelId, presentationId) {
+      const staged = findByLease(runtimeWindowId, panelId);
+      if (
+        !staged ||
+        staged.targetRuntimeWindowId !== runtimeWindowId ||
+        !Number.isSafeInteger(presentationId) ||
+        presentationId < 0
+      ) {
+        return false;
+      }
+      staged.targetPresentationId = presentationId;
+      return staged.phase === "moved"
+        ? requestTargetPresentation(staged)
+        : staged.phase !== "rolled-back";
     },
 
     isNativeKeyLeased(nativePanelId) {

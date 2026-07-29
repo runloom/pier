@@ -75,6 +75,7 @@ export interface TerminalDebugNativeSurfaceSnapshot {
   drawPending?: boolean | undefined;
   drawSequence?: number | undefined;
   frame: TerminalFrame;
+  framePresentationRequestSequence?: number | undefined;
   ghosttyRenderReadySequence?: number | undefined;
   hasRouterTarget: boolean;
   hostKeyboardActive?: boolean | undefined;
@@ -88,6 +89,8 @@ export interface TerminalDebugNativeSurfaceSnapshot {
   lastRenderReadyUptime?: number | undefined;
   nativePanelId: string;
   panelId: string;
+  presentationCovered?: boolean | undefined;
+  presentationId?: number | undefined;
   refreshPending?: boolean | undefined;
   surfaceGeneration?: number | undefined;
   surfaceVisible?: boolean | undefined;
@@ -137,7 +140,8 @@ export type TerminalDebugRendererTerminalPhase =
   | "ready"
   | "skipped_restored_result"
   | "waiting_for_session"
-  | "waiting_for_anchor";
+  | "waiting_for_anchor"
+  | "waiting_for_frame";
 
 export interface TerminalDebugRendererTerminalLifecycleSnapshot {
   createAttemptCount: number;
@@ -148,6 +152,7 @@ export interface TerminalDebugRendererTerminalLifecycleSnapshot {
   nativeTerminalReady: boolean;
   phase: TerminalDebugRendererTerminalPhase;
   placeholderVisible: boolean;
+  presentationId: number | null;
   updatedAt: number;
 }
 

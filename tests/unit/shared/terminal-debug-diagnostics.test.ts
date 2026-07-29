@@ -127,6 +127,7 @@ describe("terminal debug diagnostics", () => {
               nativeTerminalReady: false,
               phase: "mounted",
               placeholderVisible: true,
+              presentationId: 11,
               updatedAt: 12,
             },
           },

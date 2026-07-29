@@ -1,5 +1,7 @@
 export const terminal = {
   closeFailed: "Couldn't close terminal",
+  frameWaitFailed:
+    "The terminal view didn't appear. Try again, or reopen this terminal if the problem continues.",
   openPathFailed: "Couldn't open path",
   agentSession: {
     coldStart: "Couldn’t resume the previous session. Started a fresh agent.",

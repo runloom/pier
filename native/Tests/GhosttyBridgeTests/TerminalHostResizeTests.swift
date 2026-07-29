@@ -143,10 +143,401 @@ final class TerminalHostResizeTests: XCTestCase {
         container.applyHostFrame(hostFrame)
 
         XCTAssertEqual(container.frame, hostFrame)
-        XCTAssertEqual(container.subviews.count, 1)
+        XCTAssertEqual(container.subviews.count, 2)
         let scrollView = try XCTUnwrap(container.subviews.first as? AppTerminalScrollView)
         XCTAssertEqual(scrollView.frame, NSRect(x: 0, y: 0, width: 480, height: 320))
         XCTAssertEqual(terminalView.frame, NSRect(x: 0, y: 0, width: 480, height: 320))
+        XCTAssertEqual(container.subviews.last?.frame, container.bounds)
+    }
+
+    func testPresentationGateStartsCoveredAndRejectsStaleFrame() {
+        var gate = TerminalPresentationGate()
+        let initial = TerminalFramePresentationRequest(
+            pixelHeight: 600,
+            pixelWidth: 960,
+            requestSequence: 1,
+            surfaceGeneration: 3
+        )
+        gate.request(initial)
+
+        XCTAssertTrue(gate.isCovered)
+        XCTAssertFalse(
+            gate.commit(
+                TerminalFramePresentation(
+                    drawSequence: 8,
+                    pixelHeight: 600,
+                    pixelWidth: 960,
+                    requestSequence: 1,
+                    surfaceGeneration: 2
+                )
+            )
+        )
+        XCTAssertTrue(gate.isCovered)
+    }
+
+    func testPresentationGateOnlyRevealsLatestMatchingFrame() {
+        var gate = TerminalPresentationGate()
+        gate.request(
+            TerminalFramePresentationRequest(
+                pixelHeight: 600,
+                pixelWidth: 960,
+                requestSequence: 1,
+                surfaceGeneration: 3
+            )
+        )
+        gate.request(
+            TerminalFramePresentationRequest(
+                pixelHeight: 720,
+                pixelWidth: 1_200,
+                requestSequence: 2,
+                surfaceGeneration: 3
+            )
+        )
+
+        XCTAssertFalse(
+            gate.commit(
+                TerminalFramePresentation(
+                    drawSequence: 9,
+                    pixelHeight: 600,
+                    pixelWidth: 960,
+                    requestSequence: 1,
+                    surfaceGeneration: 3
+                )
+            )
+        )
+        XCTAssertTrue(gate.isCovered)
+        XCTAssertTrue(
+            gate.commit(
+                TerminalFramePresentation(
+                    drawSequence: 10,
+                    pixelHeight: 720,
+                    pixelWidth: 1_200,
+                    requestSequence: 2,
+                    surfaceGeneration: 3
+                )
+            )
+        )
+        XCTAssertFalse(gate.isCovered)
+    }
+
+    func testPresentationGateRearmsForSameSurfaceVisibilityCycle() {
+        var gate = TerminalPresentationGate()
+        let firstRequest = TerminalFramePresentationRequest(
+            pixelHeight: 600,
+            pixelWidth: 960,
+            requestSequence: 1,
+            surfaceGeneration: 3
+        )
+        gate.request(firstRequest)
+        XCTAssertTrue(
+            gate.commit(
+                TerminalFramePresentation(
+                    drawSequence: 10,
+                    pixelHeight: 600,
+                    pixelWidth: 960,
+                    requestSequence: 1,
+                    surfaceGeneration: 3
+                )
+            )
+        )
+        XCTAssertFalse(gate.isCovered)
+
+        gate.rearm()
+
+        XCTAssertTrue(gate.isCovered)
+        XCTAssertFalse(
+            gate.commit(
+                TerminalFramePresentation(
+                    drawSequence: 11,
+                    pixelHeight: 600,
+                    pixelWidth: 960,
+                    requestSequence: 1,
+                    surfaceGeneration: 3
+                )
+            )
+        )
+        XCTAssertTrue(gate.isCovered)
+
+        gate.request(
+            TerminalFramePresentationRequest(
+                pixelHeight: 600,
+                pixelWidth: 960,
+                requestSequence: 2,
+                surfaceGeneration: 3
+            )
+        )
+        XCTAssertTrue(
+            gate.commit(
+                TerminalFramePresentation(
+                    drawSequence: 12,
+                    pixelHeight: 600,
+                    pixelWidth: 960,
+                    requestSequence: 2,
+                    surfaceGeneration: 3
+                )
+            )
+        )
+        XCTAssertFalse(gate.isCovered)
+    }
+
+    func testPresentationGateRecoversCoverForRebuiltSurface() {
+        var gate = TerminalPresentationGate()
+        let firstRequest = TerminalFramePresentationRequest(
+            pixelHeight: 600,
+            pixelWidth: 960,
+            requestSequence: 1,
+            surfaceGeneration: 3
+        )
+        gate.request(firstRequest)
+        XCTAssertTrue(
+            gate.commit(
+                TerminalFramePresentation(
+                    drawSequence: 1,
+                    pixelHeight: 600,
+                    pixelWidth: 960,
+                    requestSequence: 1,
+                    surfaceGeneration: 3
+                )
+            )
+        )
+
+        gate.request(
+            TerminalFramePresentationRequest(
+                pixelHeight: 600,
+                pixelWidth: 960,
+                requestSequence: 2,
+                surfaceGeneration: 5
+            )
+        )
+
+        XCTAssertTrue(gate.isCovered)
+    }
+
+    func testContainerKeepsPresentationCoverUntilMatchingFrame() {
+        let terminalView = TerminalView(frame: .zero)
+        let container = TerminalContainerView(
+            frame: NSRect(x: 0, y: 0, width: 480, height: 320),
+            terminalView: terminalView,
+            panelId: "terminal-1",
+            browserWindowId: 42
+        )
+        let request = TerminalFramePresentationRequest(
+            pixelHeight: 640,
+            pixelWidth: 960,
+            requestSequence: 4,
+            surfaceGeneration: 7
+        )
+
+        container.handlePresentationRequest(request)
+        container.handleFramePresentation(
+            TerminalFramePresentation(
+                drawSequence: 10,
+                pixelHeight: 600,
+                pixelWidth: 900,
+                requestSequence: 3,
+                surfaceGeneration: 7
+            )
+        )
+
+        XCTAssertTrue(container.isPresentationCovered)
+
+        container.handleFramePresentation(
+            TerminalFramePresentation(
+                drawSequence: 11,
+                pixelHeight: 640,
+                pixelWidth: 960,
+                requestSequence: 4,
+                surfaceGeneration: 7
+            )
+        )
+
+        XCTAssertFalse(container.isPresentationCovered)
+    }
+
+    func testContainerPreparesCoverBeforeRestoringVisibility() {
+        let terminalView = TerminalView(frame: .zero)
+        let container = TerminalContainerView(
+            frame: NSRect(x: 0, y: 0, width: 480, height: 320),
+            terminalView: terminalView,
+            panelId: "terminal-1",
+            browserWindowId: 42
+        )
+        let request = TerminalFramePresentationRequest(
+            pixelHeight: 640,
+            pixelWidth: 960,
+            requestSequence: 1,
+            surfaceGeneration: 3
+        )
+        container.handlePresentationRequest(request)
+        container.handleFramePresentation(
+            TerminalFramePresentation(
+                drawSequence: 10,
+                pixelHeight: 640,
+                pixelWidth: 960,
+                requestSequence: 1,
+                surfaceGeneration: 3
+            )
+        )
+        XCTAssertFalse(container.isPresentationCovered)
+
+        container.prepareForVisibilityPresentation()
+
+        XCTAssertTrue(container.isPresentationCovered)
+    }
+
+    func testContainerRecoversPresentationCoverForNewSurfaceGeneration() {
+        let terminalView = TerminalView(frame: .zero)
+        let container = TerminalContainerView(
+            frame: NSRect(x: 0, y: 0, width: 480, height: 320),
+            terminalView: terminalView,
+            panelId: "terminal-1",
+            browserWindowId: 42
+        )
+        let firstRequest = TerminalFramePresentationRequest(
+            pixelHeight: 640,
+            pixelWidth: 960,
+            requestSequence: 1,
+            surfaceGeneration: 1
+        )
+        container.handlePresentationRequest(firstRequest)
+        container.handleFramePresentation(
+            TerminalFramePresentation(
+                drawSequence: 1,
+                pixelHeight: 640,
+                pixelWidth: 960,
+                requestSequence: 1,
+                surfaceGeneration: 1
+            )
+        )
+        XCTAssertFalse(container.isPresentationCovered)
+
+        container.handlePresentationRequest(
+            TerminalFramePresentationRequest(
+                pixelHeight: 640,
+                pixelWidth: 960,
+                requestSequence: 2,
+                surfaceGeneration: 3
+            )
+        )
+
+        XCTAssertTrue(container.isPresentationCovered)
+    }
+
+    func testContainerAutomaticallyRevealsAfterMatchingRealFrame() async throws {
+        let terminalView = TerminalView(frame: .zero)
+        terminalView.configuration = TerminalSurfaceOptions(
+            backend: .inMemory(
+                InMemoryTerminalSession(write: { _ in }, resize: { _ in })
+            )
+        )
+        terminalView.controller = TerminalController()
+        let container = TerminalContainerView(
+            frame: NSRect(x: 0, y: 0, width: 480, height: 320),
+            terminalView: terminalView,
+            panelId: "terminal-1",
+            browserWindowId: 42
+        )
+        let window = TestKeyWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 480, height: 320),
+            styleMask: [.borderless],
+            backing: .buffered,
+            defer: false
+        )
+        try XCTUnwrap(window.contentView).addSubview(container)
+        terminalView.setSurfaceVisible(true)
+        defer { window.orderOut(nil) }
+
+        let revealed = await waitUntil {
+            !container.isPresentationCovered
+        }
+
+        XCTAssertTrue(revealed)
+    }
+
+    func testContainerForwardsOnlyCommittedCurrentFrame() {
+        let terminalView = TerminalView(frame: .zero)
+        let container = TerminalContainerView(
+            frame: NSRect(x: 0, y: 0, width: 480, height: 320),
+            terminalView: terminalView,
+            panelId: "terminal-1",
+            browserWindowId: 42,
+            presentationId: 17
+        )
+        let request = TerminalFramePresentationRequest(
+            pixelHeight: 640,
+            pixelWidth: 960,
+            requestSequence: 4,
+            surfaceGeneration: 7
+        )
+        var forwarded:
+            (browserWindowId: Int, panelId: String, presentationId: UInt64,
+             presentation: TerminalFramePresentation)?
+        let previousCallback = TerminalContainerView.forwardFrameCommittedCallback
+        TerminalContainerView.forwardFrameCommittedCallback = {
+            browserWindowId, panelId, presentationId, presentation in
+            forwarded = (browserWindowId, panelId, presentationId, presentation)
+        }
+        defer {
+            TerminalContainerView.forwardFrameCommittedCallback = previousCallback
+        }
+
+        container.handlePresentationRequest(request)
+        container.handleFramePresentation(
+            TerminalFramePresentation(
+                drawSequence: 11,
+                pixelHeight: 640,
+                pixelWidth: 960,
+                requestSequence: 4,
+                surfaceGeneration: 7
+            )
+        )
+
+        XCTAssertEqual(forwarded?.browserWindowId, 42)
+        XCTAssertEqual(forwarded?.panelId, "terminal-1")
+        XCTAssertEqual(forwarded?.presentationId, 17)
+        XCTAssertEqual(forwarded?.presentation.requestSequence, 4)
+    }
+
+    func testContainerForwardsOneCommittedFramePerPresentationLifecycle() {
+        let terminalView = TerminalView(frame: .zero)
+        let container = TerminalContainerView(
+            frame: NSRect(x: 0, y: 0, width: 480, height: 320),
+            terminalView: terminalView,
+            panelId: "terminal-1",
+            browserWindowId: 42,
+            presentationId: 17
+        )
+        let request = TerminalFramePresentationRequest(
+            pixelHeight: 640,
+            pixelWidth: 960,
+            requestSequence: 4,
+            surfaceGeneration: 7
+        )
+        let presentation = TerminalFramePresentation(
+            drawSequence: 11,
+            pixelHeight: 640,
+            pixelWidth: 960,
+            requestSequence: 4,
+            surfaceGeneration: 7
+        )
+        var forwardedPresentationIds: [UInt64] = []
+        let previousCallback = TerminalContainerView.forwardFrameCommittedCallback
+        TerminalContainerView.forwardFrameCommittedCallback = {
+            _, _, presentationId, _ in
+            forwardedPresentationIds.append(presentationId)
+        }
+        defer {
+            TerminalContainerView.forwardFrameCommittedCallback = previousCallback
+        }
+
+        container.handlePresentationRequest(request)
+        container.handleFramePresentation(presentation)
+        container.handleFramePresentation(presentation)
+        container.updatePresentationId(17)
+        container.handleFramePresentation(presentation)
+        container.handleFramePresentation(presentation)
+
+        XCTAssertEqual(forwardedPresentationIds, [17, 17])
     }
 
     func testScrollbarStateIsForwardedToSPMScrollView() throws {
@@ -156,7 +547,7 @@ final class TerminalHostResizeTests: XCTestCase {
         container.terminalScrollbarStateDidChange(state)
 
         XCTAssertEqual(scrollView.scrollbarState, state)
-        XCTAssertEqual(container.subviews.count, 1)
+        XCTAssertEqual(container.subviews.count, 2)
     }
 
     func testSPMScrollViewOwnsNativeOverlayScroller() throws {
@@ -231,5 +622,23 @@ final class TerminalHostResizeTests: XCTestCase {
         ))
         cgEvent.location = CGPoint(x: 200, y: 160)
         return try XCTUnwrap(NSEvent(cgEvent: cgEvent))
+    }
+
+    private func waitUntil(
+        timeout: TimeInterval = 2,
+        condition: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        while ProcessInfo.processInfo.systemUptime < deadline {
+            if condition() {
+                return true
+            }
+            await withCheckedContinuation { continuation in
+                DispatchQueue.main.async {
+                    continuation.resume()
+                }
+            }
+        }
+        return condition()
     }
 }

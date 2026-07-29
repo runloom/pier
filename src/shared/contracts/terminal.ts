@@ -179,6 +179,8 @@ export interface CreateTerminalArgs {
   initialInput?: string | undefined;
   launchId?: string | undefined;
   panelId: string;
+  /** renderer 为本次 native 挂载分配的唯一令牌，用于隔离旧实例的帧回执。 */
+  presentationId: number;
   /**
    * 受管启动重试握手（design v8 §5.2.7）：携带处于 SPAWN_INTENT 授权窗口内的
    * attempt id 时，跳过重新校正直接放行；窗口外拒绝且不 replay。
@@ -207,6 +209,7 @@ export type {
   TerminalAgentResumeMetadata,
   TerminalPanelSessionSnapshot,
 } from "./terminal-panel-session.ts";
+export type { TerminalFrameCommittedEvent } from "./terminal-presentation.ts";
 
 export interface TerminalContextMenuRequest {
   panelId: string;
@@ -409,6 +412,10 @@ export interface TerminalAPI {
   ) => () => void;
   /** native terminal 内容区收到左键聚焦意图时, 通知 renderer 激活对应 dockview tab. */
   onFocusRequest: (cb: (req: TerminalFocusRequest) => void) => () => void;
+  /** 当前 native 实例、当前像素尺寸的首帧已提交到 Core Animation 图层树。 */
+  onFrameCommitted(
+    cb: (event: TerminalFrameCommittedEvent) => void
+  ): () => void;
   onOpenUrl(cb: (event: TerminalOpenUrlEvent) => void): () => void;
   /** renderer 下发的 presentation 已被 native 同步应用, 用于 resize 撤占位的精确握手. */
   onPresentationApplied(

@@ -18,6 +18,7 @@ function createArgs(
     font: { family: ["Monaco"], size: 13 },
     frame: { height: 300, width: 400, x: 0, y: 0 },
     panelId: "task-1",
+    presentationId: 1,
     ...overrides,
   };
 }

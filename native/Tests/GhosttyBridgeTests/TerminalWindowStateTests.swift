@@ -172,4 +172,88 @@ final class TerminalWindowStateTests: XCTestCase {
         XCTAssertEqual(surfaces.first?["hostKeyboardActive"] as? Bool, false)
         XCTAssertEqual(surfaces.first?["isSurfaceFocused"] as? Bool, false)
     }
+
+    func testRestoringVisibleTerminalRearmsPresentationCoverBeforeUnhide() async throws {
+        let window = makeWindow(browserWindowId: 4104)
+        window.orderFront(nil)
+        defer { impl.detachWindow(parent: window) }
+        createTerminal("terminal-a", in: window)
+        let visibleTerminal = """
+        [{ "focused": true, "frame": { "height": 200, "width": 300, "x": 10, "y": 20 }, "panelId": "terminal-a", "visible": true }]
+        """
+        let hiddenTerminal = visibleTerminal.replacingOccurrences(
+            of: "\"visible\": true",
+            with: "\"visible\": false"
+        ).replacingOccurrences(
+            of: "\"focused\": true",
+            with: "\"focused\": false"
+        )
+
+        XCTAssertEqual(
+            impl.applyWindowState(
+                parent: window,
+                json: stateJSON(
+                    sequence: 1,
+                    keyboardTarget: "terminal",
+                    targetPanelId: "terminal-a",
+                    terminals: visibleTerminal
+                )
+            ),
+            .applied
+        )
+        let initiallyPresented = await waitUntil {
+            (try? self.presentationCovered(window)) == false
+        }
+        XCTAssertTrue(initiallyPresented)
+
+        XCTAssertEqual(
+            impl.applyWindowState(
+                parent: window,
+                json: stateJSON(
+                    sequence: 2,
+                    keyboardTarget: "web",
+                    terminals: hiddenTerminal
+                )
+            ),
+            .applied
+        )
+        XCTAssertFalse(try presentationCovered(window))
+
+        XCTAssertEqual(
+            impl.applyWindowState(
+                parent: window,
+                json: stateJSON(
+                    sequence: 3,
+                    keyboardTarget: "terminal",
+                    targetPanelId: "terminal-a",
+                    terminals: visibleTerminal
+                )
+            ),
+            .applied
+        )
+        XCTAssertTrue(try presentationCovered(window))
+    }
+
+    private func presentationCovered(_ window: NSWindow) throws -> Bool {
+        let snapshot = try debugSnapshot(window)
+        let surfaces = try XCTUnwrap(snapshot["surfaces"] as? [[String: Any]])
+        let surface = try XCTUnwrap(
+            surfaces.first { $0["panelId"] as? String == "terminal-a" }
+        )
+        return try XCTUnwrap(surface["presentationCovered"] as? Bool)
+    }
+
+    private func waitUntil(
+        timeout: TimeInterval = 3,
+        condition: @escaping @MainActor () -> Bool
+    ) async -> Bool {
+        let deadline = ProcessInfo.processInfo.systemUptime + timeout
+        while ProcessInfo.processInfo.systemUptime < deadline {
+            if condition() {
+                return true
+            }
+            try? await Task.sleep(for: .milliseconds(10))
+        }
+        return condition()
+    }
 }

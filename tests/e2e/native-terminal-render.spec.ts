@@ -25,10 +25,13 @@ interface TerminalOpenData {
 interface RenderSurfaceSnapshot {
   drawPending?: boolean;
   drawSequence?: number;
+  framePresentationRequestSequence?: number;
   ghosttyRenderReadySequence?: number;
   lastDrawnGhosttyRenderReadySequence?: number;
   panelId: string;
+  presentationCovered?: boolean;
   refreshPending?: boolean;
+  surfaceGeneration?: number;
   surfaceVisible?: boolean;
 }
 
@@ -104,6 +107,15 @@ test.describe("Native terminal target rendering", () => {
         timeout: 10_000,
       });
       await expect(win.locator("vite-error-overlay")).toHaveCount(0);
+      await expect
+        .poll(async () => {
+          const surfaces = (await renderSnapshot(win)).native.surfaces;
+          return (
+            surfaces.length === 1 &&
+            surfaces.every((surface) => surface.presentationCovered === false)
+          );
+        })
+        .toBe(true);
       await win.evaluate(async () => {
         await window.pier.terminal.setConfig({
           cursorBlink: false,
@@ -138,10 +150,13 @@ test.describe("Native terminal target rendering", () => {
       }
 
       await expect
-        .poll(
-          async () =>
-            surfaceByPanelId(await renderSnapshot(win), panelId)?.surfaceVisible
-        )
+        .poll(async () => {
+          const surface = surfaceByPanelId(await renderSnapshot(win), panelId);
+          return (
+            surface?.surfaceVisible === true &&
+            surface.presentationCovered === false
+          );
+        })
         .toBe(true);
       const initialSnapshot = await renderSnapshot(win);
       const initialSurface = surfaceByPanelId(initialSnapshot, panelId);
@@ -202,6 +217,123 @@ test.describe("Native terminal target rendering", () => {
       await killAndWait(app.process());
       removeDirectory(userDataDir);
       removeDirectory(commandDir);
+    }
+  });
+
+  test("tab restoration commits a new presentation before reveal", async () => {
+    test.setTimeout(120_000);
+    const userDataDir = mkdtempSync(join(tmpdir(), "pier-tab-render-e2e-"));
+    const app = await electron.launch({
+      args: [OUT_MAIN, `--user-data-dir=${userDataDir}`],
+    });
+    try {
+      const win = await app.firstWindow();
+      await win.waitForLoadState("domcontentloaded");
+      await expect(win.locator(".terminal-anchor")).toHaveCount(1, {
+        timeout: 10_000,
+      });
+      await expect
+        .poll(async () => {
+          const surfaces = (await renderSnapshot(win)).native.surfaces;
+          return (
+            surfaces.length === 1 &&
+            surfaces[0]?.surfaceVisible === true &&
+            surfaces[0]?.presentationCovered === false
+          );
+        })
+        .toBe(true);
+
+      const initialSnapshot = await renderSnapshot(win);
+      const first = initialSnapshot.native.surfaces[0];
+      expect(first).toBeDefined();
+      if (!first) {
+        throw new Error("initial terminal surface was not created");
+      }
+
+      let opened: CliResult<TerminalOpenData> | undefined;
+      await expect
+        .poll(
+          async () => {
+            opened = await runPierCliJson<TerminalOpenData>(userDataDir, [
+              "terminal",
+              "open",
+            ]).catch(() => undefined);
+            return opened?.ok ?? false;
+          },
+          { timeout: 15_000 }
+        )
+        .toBe(true);
+      expect(opened?.data?.panelId).toEqual(expect.any(String));
+      await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
+        2,
+        {
+          timeout: 10_000,
+        }
+      );
+      await expect
+        .poll(async () => {
+          const surfaces = (await renderSnapshot(win)).native.surfaces;
+          return (
+            surfaces.length === 2 &&
+            surfaces.filter((surface) => surface.surfaceVisible).length === 1 &&
+            surfaces.every(
+              (surface) =>
+                !surface.surfaceVisible || surface.presentationCovered === false
+            )
+          );
+        })
+        .toBe(true);
+
+      const twoTabsSnapshot = await renderSnapshot(win);
+      const second = twoTabsSnapshot.native.surfaces.find(
+        (surface) => surface.panelId !== first.panelId
+      );
+      expect(second).toBeDefined();
+      if (!second) {
+        throw new Error("second terminal surface was not created");
+      }
+      expect(first.framePresentationRequestSequence).toEqual(
+        expect.any(Number)
+      );
+      expect(second.framePresentationRequestSequence).toEqual(
+        expect.any(Number)
+      );
+
+      const switchAndWaitForPresentation = async (
+        target: RenderSurfaceSnapshot,
+        other: RenderSurfaceSnapshot
+      ) => {
+        const before = surfaceByPanelId(
+          await renderSnapshot(win),
+          target.panelId
+        );
+        const beforeRequestSequence =
+          before?.framePresentationRequestSequence ?? -1;
+        const surfaceGeneration = before?.surfaceGeneration;
+        await win.locator(`[data-panel-tab-id="${target.panelId}"]`).click();
+        await expect
+          .poll(async () => {
+            const snapshot = await renderSnapshot(win);
+            const restored = surfaceByPanelId(snapshot, target.panelId);
+            const hidden = surfaceByPanelId(snapshot, other.panelId);
+            return Boolean(
+              restored?.surfaceVisible === true &&
+                restored.presentationCovered === false &&
+                restored.surfaceGeneration === surfaceGeneration &&
+                (restored.framePresentationRequestSequence ?? -1) >
+                  beforeRequestSequence &&
+                hidden?.surfaceVisible === false
+            );
+          })
+          .toBe(true);
+      };
+
+      await switchAndWaitForPresentation(first, second);
+      await switchAndWaitForPresentation(second, first);
+      await switchAndWaitForPresentation(first, second);
+    } finally {
+      await killAndWait(app.process());
+      removeDirectory(userDataDir);
     }
   });
 });

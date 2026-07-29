@@ -47,6 +47,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
       detachWindow: vi.fn(),
       reconcileTerminals: vi.fn(),
       setKeyboardForwardCallback: vi.fn(),
+      setFrameCommittedCallback: vi.fn(),
       setModifierForwardCallback: vi.fn(),
       setMouseForwardCallback: vi.fn(),
       setPwdForwardCallback: vi.fn(),
@@ -261,6 +262,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
         font: { family: "Menlo", size: 13 },
         frame: { x: 0, y: 0, width: 800, height: 600 },
         panelId: "terminal-1",
+        presentationId: 11,
       }
     );
     await invokeHandlers.get("pier:terminal:create")?.(
@@ -269,6 +271,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
         font: { family: "Menlo", size: 13 },
         frame: { x: 0, y: 0, width: 800, height: 600 },
         panelId: "terminal-1",
+        presentationId: 12,
       }
     );
 
@@ -286,7 +289,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_WINDOW_ID: "1",
         }),
       },
-      ""
+      "",
+      11
     );
     expect(fakeAddon.createTerminal).toHaveBeenNthCalledWith(
       2,
@@ -301,7 +305,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_WINDOW_ID: "2",
         }),
       },
-      ""
+      "",
+      12
     );
   });
 
@@ -313,6 +318,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
         font: { family: "Menlo", size: 13 },
         frame: { x: 0, y: 0, width: 1, height: 1 },
         panelId: "panel-a",
+        presentationId: 13,
       }
     );
     handlers.get("pier:terminal:apply-host-snapshot")?.(
@@ -360,7 +366,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_WINDOW_ID: "7",
         }),
       },
-      ""
+      "",
+      13
     );
   });
 
@@ -381,6 +388,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
         frame: { x: 0, y: 0, width: 1, height: 1 },
         launchId: "launch-1",
         panelId: "panel-a",
+        presentationId: 14,
       }
     );
 
@@ -400,7 +408,8 @@ describe("multi-window panel id scoping (#16 #30)", () => {
           PIER_WINDOW_ID: "7",
         }),
       },
-      ""
+      "",
+      14
     );
     expect(consumeLaunch).toHaveBeenCalledWith("launch-1");
   });
@@ -430,6 +439,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     // 用 "terminal-1", 事件 filter (`req.panelId !== panelId`) 永远不命中, 全部 drop.
     const { fakeAddon, handlers, win } = await setupHarness(5);
     const mouseFwd = fakeAddon.setMouseForwardCallback.mock.calls[0]?.[0];
+    const frameFwd = fakeAddon.setFrameCommittedCallback.mock.calls[0]?.[0];
     const focusFwd =
       fakeAddon.setTerminalFocusRequestCallback.mock.calls[0]?.[0];
     const pwdFwd = fakeAddon.setPwdForwardCallback.mock.calls[0]?.[0];
@@ -461,6 +471,7 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     terminalFocusCoordinator.surfaceCreated(win as never, "terminal-3");
 
     mouseFwd?.(win.id, "5::terminal-2", 100, 200);
+    frameFwd?.(win.id, "5::terminal-6", 17, 4, 2, 3, 900, 600);
     focusFwd?.(win.id, "5::terminal-3");
     pwdFwd?.(win.id, "5::terminal-4", "/some/path");
     titleFwd?.(win.id, "5::terminal-5", "", "My Terminal");
@@ -485,6 +496,18 @@ describe("multi-window panel id scoping (#16 #30)", () => {
     expect(win.webContents.send).toHaveBeenCalledWith(
       "pier://terminal:title-changed",
       { panelId: "terminal-5", title: "My Terminal" }
+    );
+    expect(win.webContents.send).toHaveBeenCalledWith(
+      "pier://terminal:frame-committed",
+      {
+        drawSequence: 3,
+        panelId: "terminal-6",
+        pixelHeight: 600,
+        pixelWidth: 900,
+        presentationId: 17,
+        requestSequence: 2,
+        surfaceGeneration: 4,
+      }
     );
   });
 

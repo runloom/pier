@@ -1,5 +1,6 @@
 export const terminal = {
   closeFailed: "无法关闭终端",
+  frameWaitFailed: "终端画面未能显示。请重试；如果问题持续，请重新打开该终端。",
   openPathFailed: "无法打开路径",
   agentSession: {
     coldStart: "未能恢复上次会话，已重新打开智能体。",

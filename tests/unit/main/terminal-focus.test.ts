@@ -311,6 +311,7 @@ describe("terminal focus restoration", () => {
         font: { family: "Menlo", size: 13 },
         frame: { x: 1, y: 2, width: 300, height: 200 },
         panelId: "terminal-1",
+        presentationId: 1,
       }
     );
 
@@ -328,7 +329,8 @@ describe("terminal focus restoration", () => {
           PIER_WINDOW_ID: "7",
         }),
       },
-      ""
+      "",
+      1
     );
   });
 
@@ -422,6 +424,7 @@ describe("terminal focus restoration", () => {
         font: { family: "Menlo", size: 13 },
         frame: { x: 1, y: 2, width: 300, height: 200 },
         panelId: "terminal-1",
+        presentationId: 2,
       }
     );
 
@@ -441,7 +444,8 @@ describe("terminal focus restoration", () => {
           OPENAI_API_KEY: "sk-restored",
         }),
       }),
-      ""
+      "",
+      2
     );
     expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
       "main",
@@ -492,6 +496,7 @@ describe("terminal focus restoration", () => {
         font: { family: "Menlo", size: 13 },
         frame: { x: 1, y: 2, width: 300, height: 200 },
         panelId: "terminal-1",
+        presentationId: 3,
       }
     );
 
@@ -505,7 +510,8 @@ describe("terminal focus restoration", () => {
       expect.objectContaining({
         command: "claude --dangerously-skip-permissions --resume session-123",
       }),
-      ""
+      "",
+      3
     );
     expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(
       "main",
@@ -566,6 +572,7 @@ describe("terminal focus restoration", () => {
         font: { family: "Menlo", size: 13 },
         frame: { x: 1, y: 2, width: 300, height: 200 },
         panelId: "terminal-1",
+        presentationId: 4,
       }
     );
 
@@ -675,6 +682,7 @@ describe("terminal focus restoration", () => {
         font: { family: "Menlo", size: 13 },
         frame: { x: 1, y: 2, width: 300, height: 200 },
         panelId: "terminal-1",
+        presentationId: 4,
       }
     );
 
@@ -692,7 +700,8 @@ describe("terminal focus restoration", () => {
           PIER_WINDOW_ID: "7",
         }),
       },
-      ""
+      "",
+      4
     );
   });
 
@@ -716,6 +725,7 @@ describe("terminal focus restoration", () => {
         frame: { x: 1, y: 2, width: 300, height: 200 },
         launchId: "launch-rerun",
         panelId: "terminal-1",
+        presentationId: 5,
       }
     );
 
@@ -735,7 +745,8 @@ describe("terminal focus restoration", () => {
           SECRET: "token",
         }),
       },
-      ""
+      "",
+      5
     );
     expect(consumeLaunch).toHaveBeenCalledWith("launch-rerun");
   });
@@ -753,6 +764,7 @@ describe("terminal focus restoration", () => {
         frame: { x: 1, y: 2, width: 300, height: 200 },
         launchId: "launch-restore",
         panelId: "terminal-1",
+        presentationId: 6,
       }
     );
 
@@ -770,7 +782,8 @@ describe("terminal focus restoration", () => {
           PIER_WINDOW_ID: "7",
         }),
       },
-      ""
+      "",
+      6
     );
   });
 
