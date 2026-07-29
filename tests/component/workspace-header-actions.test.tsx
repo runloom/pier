@@ -366,8 +366,19 @@ afterEach(() => {
 });
 
 describe("WorkspaceHeaderActions", () => {
-  it("renders the panel size control in the right header action area", () => {
+  it("hides maximize when the workspace has no split groups", () => {
     const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+    useWorkspaceStore.getState().setApi(props.containerApi as never);
+
+    render(<WorkspaceHeaderRightActions {...props} />);
+
+    expect(
+      screen.queryByRole("button", { name: "Maximize" })
+    ).not.toBeInTheDocument();
+  });
+
+  it("renders the panel size control in the right header action area for split layouts", () => {
+    const props = createProps([createPanel("terminal-1", "Terminal 1")], 2);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderRightActions {...props} />);
@@ -379,7 +390,7 @@ describe("WorkspaceHeaderActions", () => {
 
   it("toggles the group active panel from the right header action area", () => {
     const panel = createPanel("terminal-1", "Terminal 1");
-    const props = createProps([panel]);
+    const props = createProps([panel], 2);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderRightActions {...props} />);
@@ -404,7 +415,7 @@ describe("WorkspaceHeaderActions", () => {
   it("renders minimize in the right header action area for a maximized panel", () => {
     const panel = createPanel("terminal-1", "Terminal 1");
     vi.mocked(panel.api.isMaximized).mockReturnValue(true);
-    const props = createProps([panel]);
+    const props = createProps([panel], 2);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderRightActions {...props} />);
@@ -414,30 +425,33 @@ describe("WorkspaceHeaderActions", () => {
     expect(panel.api.exitMaximized).toHaveBeenCalledOnce();
   });
 
-  it("shows the restore tooltip immediately while a panel is maximized", async () => {
+  it("keeps restore available while maximized even if split groups collapse", () => {
     const panel = createPanel("terminal-1", "Terminal 1");
     vi.mocked(panel.api.isMaximized).mockReturnValue(true);
-    const props = createProps([panel]);
+    // Single group in props, but panel reports maximized — still show restore.
+    const props = createProps([panel], 1);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
 
     render(<WorkspaceHeaderRightActions {...props} />);
 
-    await waitFor(() => {
-      const content = document.querySelector('[data-slot="tooltip-content"]');
-      expect(content).not.toBeNull();
-      expect(content).toHaveTextContent("Restore");
-    });
+    expect(screen.getByRole("button", { name: "Restore" })).toBeInTheDocument();
   });
 
-  it("does not force-open the maximize tooltip when the panel is not maximized", () => {
-    const props = createProps([createPanel("terminal-1", "Terminal 1")]);
+  it("does not force-open tooltips for maximize or restore", () => {
+    const panel = createPanel("terminal-1", "Terminal 1");
+    const props = createProps([panel], 2);
     useWorkspaceStore.getState().setApi(props.containerApi as never);
 
-    render(<WorkspaceHeaderRightActions {...props} />);
-
+    const view = render(<WorkspaceHeaderRightActions {...props} />);
     expect(
       screen.getByRole("button", { name: "Maximize" })
     ).toBeInTheDocument();
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+
+    vi.mocked(panel.api.isMaximized).mockReturnValue(true);
+    view.unmount();
+    render(<WorkspaceHeaderRightActions {...props} />);
+    expect(screen.getByRole("button", { name: "Restore" })).toBeInTheDocument();
     expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
   });
 

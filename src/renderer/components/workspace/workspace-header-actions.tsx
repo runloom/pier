@@ -62,6 +62,10 @@ export function WorkspaceHeaderRightActions(
   }
 
   const isMaximized = panel.api.isMaximized();
+  // Maximize only matters with 2+ split groups (same gate as equalize). Keep
+  // the control while maximized so restore remains reachable from the header.
+  const groupCount = props.containerApi.groups.length;
+  const canToggleMaximize = groupCount > 1 || isMaximized;
   const Icon = isMaximized ? Minimize2 : Maximize2;
   const variant = isMaximized ? "default" : "secondary";
   const toggleLabel = isMaximized
@@ -70,10 +74,8 @@ export function WorkspaceHeaderRightActions(
 
   return (
     <div className="flex h-full items-center justify-center gap-1 px-1">
-      {toggleAction ? (
-        // Maximized: force-open so restore affordance is visible without hover
-        // (click-to-maximize also soft-suppresses hover tooltips until pointermove).
-        <Tooltip open={isMaximized ? true : undefined}>
+      {toggleAction && canToggleMaximize ? (
+        <Tooltip>
           <TooltipTrigger asChild>
             <Button
               aria-label={toggleLabel}

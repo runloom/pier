@@ -126,9 +126,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       handler: () => useWorkspaceStore.getState().toggleActivePanelMaximized(),
       id: "pier.panel.toggleMaximized",
       // 最大化只走 header 按钮 / 命令面板 / 快捷键，不进任何右键菜单。
+      // 无分屏时最大化无意义（与 equalize / 组导航同一门槛）。
       surfaces: ["command-palette"],
       titleKey: "commandPalette.action.togglePanelMaximize",
-      when: "workspace.hasActivePanel",
+      when: "workspace.groupCount > 1",
     },
     {
       categoryKey: "panel",
