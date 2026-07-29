@@ -20,8 +20,9 @@ import {
  * 8 = derive 真正取首行（换行不再被折成空格），且只提取**用户**包装标签内文
  *     （system / assistant 只删标签），与 shared unwrap + firstLine 同构。
  * 9 = 标题长度按 Unicode 码点计算，禁止在代理对中间截断。
+ * 10 = 严格 v3 状态事件、交互身份与提供方字段提取链路。
  */
-export const PIER_HOOK_COMMAND_GENERATION = 9;
+export const PIER_HOOK_COMMAND_GENERATION = 10;
 
 /**
  * derive-claude-session-title：`#!/usr/bin/env node` 纯脚本。

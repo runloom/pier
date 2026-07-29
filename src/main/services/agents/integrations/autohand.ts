@@ -5,7 +5,7 @@ import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,
-  pierHookCommandWithStdinSessionId,
+  pierHookCommandV3WithStdin,
   transformJsonConfig,
 } from "./shared.ts";
 import type { AgentHookIntegration } from "./types.ts";
@@ -31,22 +31,30 @@ const AGENT_ID: AgentKind = "autohand";
  *     stop          → Stop（官方 stop 与 post-response 互为别名, 取规范名
  *                     "stop"；不重复安装 post-response, 避免同一回合触发
  *                     两次 Stop 上报）
- *     permission-request → PermissionRequest
  *     pre-tool      → ToolStart
  *     post-tool     → ToolComplete
+ * - permission-request 没有对应的结果事件；若上报等待会一直悬挂到回合结束，
+ *   因而等待维度明确不支持。ask_followup_question 也只是工具名，不是完整
+ *   问题请求/响应生命周期。subagent 只有 stop，没有 start，计数同样不支持。
  * - `enabled` 恒写 true（pier 装的 hook 不应被配置关闭）；`async` 不设置
  *   （沿用官方默认 false, 与 pier 其余同步 hook 上报的语义一致）。
  */
 const AUTOHAND_HOOK_EVENTS: ReadonlyArray<{
   nativeEvent: string;
-  pierEvent: string;
+  pierEvent:
+    | "SessionStart"
+    | "SessionEnd"
+    | "error"
+    | "PromptSubmit"
+    | "Stop"
+    | "ToolStart"
+    | "ToolComplete";
 }> = [
   { nativeEvent: "session-start", pierEvent: "SessionStart" },
   { nativeEvent: "session-end", pierEvent: "SessionEnd" },
   { nativeEvent: "session-error", pierEvent: "error" },
   { nativeEvent: "pre-prompt", pierEvent: "PromptSubmit" },
   { nativeEvent: "stop", pierEvent: "Stop" },
-  { nativeEvent: "permission-request", pierEvent: "PermissionRequest" },
   { nativeEvent: "pre-tool", pierEvent: "ToolStart" },
   { nativeEvent: "post-tool", pierEvent: "ToolComplete" },
 ];
@@ -58,6 +66,38 @@ interface AutohandHookEntry {
   enabled: boolean;
   event: string;
   timeout: number;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!(value && typeof value === "object") || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isAutohandInstallShapeSupported(
+  settings: Record<string, unknown>
+): boolean {
+  if (!Object.hasOwn(settings, "hooks")) {
+    return true;
+  }
+  const section = settings.hooks;
+  if (!isPlainObject(section)) {
+    return false;
+  }
+  if (Object.hasOwn(section, "hooks") && !Array.isArray(section.hooks)) {
+    return false;
+  }
+  return !(
+    Object.hasOwn(section, "enabled") && typeof section.enabled !== "boolean"
+  );
+}
+
+function warnUnsupportedAutohandShape(): void {
+  console.warn(
+    `[agent-hooks:${AGENT_ID}] hooks has unrecognized structure, skip install`
+  );
 }
 
 function autohandHomeDir(): string {
@@ -90,17 +130,26 @@ function hooksArray(section: Record<string, unknown>): AutohandHookEntry[] {
 export function withPierAutohandHooks(
   settings: Record<string, unknown>
 ): Record<string, unknown> {
+  if (!isAutohandInstallShapeSupported(settings)) {
+    warnUnsupportedAutohandShape();
+    return settings;
+  }
   const section = hooksSection(settings);
   const kept = hooksArray(section).filter(
     (entry) => !isPierHookCommand(entry?.command)
   );
   const pierEntries: AutohandHookEntry[] = AUTOHAND_HOOK_EVENTS.map(
     (event) => ({
-      command: pierHookCommandWithStdinSessionId(
-        AGENT_ID,
-        event.pierEvent,
-        event.nativeEvent
-      ),
+      command: pierHookCommandV3WithStdin({
+        agentId: AGENT_ID,
+        event: event.pierEvent,
+        nativeEvent: event.nativeEvent,
+        ...(event.nativeEvent === "post-tool"
+          ? { nativeStateFields: ["status"] }
+          : {}),
+        toolNamePaths: ["tool_name"],
+        toolUseIdPaths: ["tool_use_id"],
+      }),
       enabled: true,
       event: event.nativeEvent,
       timeout: AUTOHAND_HOOK_TIMEOUT_MS,
@@ -141,7 +190,17 @@ export function withoutPierAutohandHooks(
 export async function installAutohandHooks(
   configPath: string = autohandConfigPath()
 ): Promise<void> {
-  await transformJsonConfig(configPath, withPierAutohandHooks, AGENT_ID);
+  await transformJsonConfig(
+    configPath,
+    (settings) => {
+      if (!isAutohandInstallShapeSupported(settings)) {
+        warnUnsupportedAutohandShape();
+        return settings;
+      }
+      return withPierAutohandHooks(settings);
+    },
+    AGENT_ID
+  );
 }
 
 export async function uninstallAutohandHooks(
@@ -151,8 +210,10 @@ export async function uninstallAutohandHooks(
 }
 
 export const autohandIntegration: AgentHookIntegration = {
-  capability: "full",
-  runtime: { stopAuthority: "advisory" },
+  runtime: {
+    emittedMappings: AUTOHAND_HOOK_EVENTS,
+    stopAuthority: "authoritative",
+  },
   detect: autohandDetect,
   id: AGENT_ID,
   install: () => installAutohandHooks(),

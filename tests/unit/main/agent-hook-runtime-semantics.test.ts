@@ -22,7 +22,6 @@ describe("agent hook runtime semantics", () => {
       advisory: [
         "antigravity",
         "aug",
-        "autohand",
         "claude",
         "codebuddy",
         "command-code",
@@ -34,23 +33,13 @@ describe("agent hook runtime semantics", () => {
         "goose",
         "grok",
         "kimi",
-        "kiro",
+        "mistral-vibe",
         "openclaude",
         "qodercli",
         "qwen-code",
       ],
-      authoritative: [
-        "amp",
-        "cline",
-        "kilo",
-        "mimo-code",
-        "mistral-vibe",
-        "omp",
-        "opencode",
-        "pi",
-      ],
-      none: ["aider", "crush"],
-      "reset-only": ["hermes"],
+      authoritative: ["autohand", "kilo", "mimo-code", "omp", "opencode", "pi"],
+      none: ["aider", "amp", "cline", "crush", "hermes", "kiro"],
     } as const;
 
     for (const [authority, agentIds] of Object.entries(expected)) {

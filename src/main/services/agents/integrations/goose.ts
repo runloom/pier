@@ -11,6 +11,7 @@ import {
   atomicWriteFile,
   commandExistsOnPath,
   type NestedHookEventSpec,
+  pierHookCommandV3WithStdin,
   readJsonConfig,
   removePierTextBlock,
   transformPierHooksUnlessNewer,
@@ -36,8 +37,8 @@ const AGENT_ID: AgentKind = "goose";
  *   `name()`/`from_name()` 双向映射确认）：SessionStart、SessionEnd、
  *   UserPromptSubmit、PreToolUse、PostToolUse、PostToolUseFailure、Stop
  *   （另有 BeforeReadFile/AfterFileEdit/BeforeShellExecution/
- *   AfterShellExecution, pier 暂不用）。capability 因此升级为 "full"
- *   （旧实现仅接 2 个工具事件, 定级 "coarse" 已过时）。
+ *   AfterShellExecution，Pier 暂不用）。状态证据因此覆盖完整的已接入事件。
+ *   （旧实现仅接 2 个工具事件，状态证据已补全）。
  * - 插件发现路径：`~/.agents/plugins/<name>/`（用户级）或
  *   `<project>/.agents/plugins/<name>/`（项目级）——本集成仅装用户级,
  *   与其余 pier agent 集成的落盘惯例一致。
@@ -48,7 +49,16 @@ const AGENT_ID: AgentKind = "goose";
  *   跳过并告警（用户显式关闭, 不应静默覆盖）。
  */
 
-const GOOSE_HOOK_EVENTS: readonly NestedHookEventSpec[] = [
+const GOOSE_HOOK_EVENT_FACTS: ReadonlyArray<{
+  nativeEvent: string;
+  pierEvent:
+    | "SessionStart"
+    | "SessionEnd"
+    | "PromptSubmit"
+    | "ToolStart"
+    | "ToolComplete"
+    | "Stop";
+}> = [
   { nativeEvent: "SessionStart", pierEvent: "SessionStart" },
   { nativeEvent: "SessionEnd", pierEvent: "SessionEnd" },
   { nativeEvent: "UserPromptSubmit", pierEvent: "PromptSubmit" },
@@ -57,6 +67,20 @@ const GOOSE_HOOK_EVENTS: readonly NestedHookEventSpec[] = [
   { nativeEvent: "PostToolUseFailure", pierEvent: "ToolComplete" },
   { nativeEvent: "Stop", pierEvent: "Stop" },
 ];
+
+const GOOSE_HOOK_EVENTS: readonly NestedHookEventSpec[] =
+  GOOSE_HOOK_EVENT_FACTS.map((event) => ({
+    ...event,
+    buildCommand: (agentId: AgentKind) =>
+      pierHookCommandV3WithStdin({
+        agentId,
+        event: event.pierEvent,
+        nativeEvent: event.nativeEvent,
+        toolNamePaths: ["tool_name"],
+      }),
+  }));
+
+export { GOOSE_HOOK_EVENTS };
 
 const PLUGIN_NAME = "pier";
 const PLUGIN_VERSION = "1.0.0";
@@ -118,7 +142,6 @@ export function withPierGooseHooks(
 ): Record<string, unknown> {
   return withPierNestedHooks(hooksJson, {
     agentId: AGENT_ID,
-    capability: "full",
     configPath: gooseHooksJsonPath,
     events: GOOSE_HOOK_EVENTS,
     runtime: { stopAuthority: "advisory" },
@@ -277,10 +300,12 @@ export async function cleanupLegacyGooseConfig(
 }
 
 export const gooseIntegration: AgentHookIntegration = {
-  capability: "full",
   detect: gooseDetect,
   id: AGENT_ID,
-  runtime: { stopAuthority: "advisory" },
+  runtime: {
+    emittedMappings: GOOSE_HOOK_EVENT_FACTS,
+    stopAuthority: "advisory",
+  },
   install: () => installGooseHooks(),
   uninstall: () => uninstallGooseHooks(),
 };

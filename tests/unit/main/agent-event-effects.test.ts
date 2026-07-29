@@ -1,10 +1,10 @@
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type { AgentHookEventPayloadV2 } from "@shared/contracts/agent-session.ts";
 import { describe, expect, it } from "vitest";
 import { effectsForAcceptedAgentEvent } from "../../../src/main/services/agents/agent-event-effects.ts";
 
 function event(
-  overrides: Partial<AgentHookEventPayload> = {}
-): AgentHookEventPayload {
+  overrides: Partial<AgentHookEventPayloadV2> = {}
+): AgentHookEventPayloadV2 {
   return {
     agent: "opencode",
     event: "SessionEnd",

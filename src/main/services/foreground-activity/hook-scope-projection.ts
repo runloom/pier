@@ -91,6 +91,7 @@ export function refreshHookProjection(hook: HookLayer, at?: number): void {
   if (!selected) {
     return;
   }
+  hook.identity = { ...selected.identity };
   const selectedStatus = projectedScopeStatus(selected);
   const previousStatus = hook.status;
   hook.status = selectedStatus;

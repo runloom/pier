@@ -5,14 +5,35 @@ import type {
   TranscriptTitleRecord,
 } from "./transcript-title-routing.ts";
 
-/** 一条 transcript 行分类出的可信终态记录。 */
-export interface TranscriptTerminalRecord {
+interface TranscriptRecordBase {
   /** 诊断用原生事件名（如 `codex.transcript.turn_aborted`）。 */
   nativeEvent: string;
-  pierEvent: "TurnCompleted" | "TurnInterrupted";
   /** provider 无回合身份时为空串（走单 owner + 增量区间回退）。 */
   turnId: string;
 }
+
+/** 一条 transcript 行分类出的可信终态或显式交互事实。 */
+export type TranscriptTerminalRecord =
+  | (TranscriptRecordBase & {
+      pierEvent: "TurnCompleted" | "TurnInterrupted";
+    })
+  | (TranscriptRecordBase & {
+      interactionId?: string;
+      interactionKind: "permission" | "question";
+      pierEvent: "InteractionRequested";
+    })
+  | (TranscriptRecordBase & {
+      interactionId?: string;
+      interactionKind: "permission" | "question";
+      interactionOutcome?:
+        | "accepted"
+        | "rejected"
+        | "cancelled"
+        | "failed"
+        | "completed"
+        | "unknown";
+      pierEvent: "InteractionResolved";
+    });
 
 export interface TranscriptTailReconciler {
   dispose(): void;
@@ -34,15 +55,22 @@ export interface TranscriptTailReconcilerConfig {
   /** 只消费该 agent 的 hook 事件；其他 agent 直接忽略。 */
   agent: AgentKind;
   /**
-   * transcript 单行 → 终态记录；非终态行返回 null。可以直接抛错
+   * transcript 单行 → 可信终态或交互记录；无事实的行返回 null。可以直接抛错
    * （坏行/格式升级由核心捕获后静默忽略）。
    */
-  classifyLine: (line: string) => TranscriptTerminalRecord | null;
+  classifyLine?: (line: string) => TranscriptTerminalRecord | null;
   /**
    * transcript 单行 → provider 原生会话名；不是标题行返回 null。
    * 缺席即该 agent 不提供原生标题（静默降级，标题仍走首条 prompt）。
    */
   classifyTitleLine?: (line: string) => TranscriptTitleRecord | null;
+  /**
+   * 为每个 transcript entry 创建独立分类器。仅当分类需要跨行状态时使用；
+   * entry 截断时会重新创建，释放时会连同闭包状态一起丢弃。
+   */
+  createLineClassifier?: () => (
+    line: string
+  ) => TranscriptTerminalRecord | null;
   onTerminalEvent: (event: AgentHookEventPayload) => void;
   /** 只在 classifyTitleLine 命中时调用。 */
   onTitleRecord?: TranscriptTitleListener;

@@ -1,33 +1,51 @@
 import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
-import { delimiter, join } from "node:path";
+import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import { PIER_HOOK_COMMAND_GENERATION } from "../agent-hooks-install.ts";
 import {
   isPierHookCommand,
   pierHookCommandGeneration,
+  skipHookCommandWhenEnvPresent,
 } from "./hook-command-core.ts";
 import { pierHookCommandWithStdinSessionId } from "./hook-stdin-commands.ts";
-import type {
-  AgentHookCapability,
-  AgentHookIntegration,
-  AgentRuntimeSemantics,
-} from "./types.ts";
+import type { AgentHookIntegration, AgentRuntimeSemantics } from "./types.ts";
 
+export { commandExistsOnPath } from "./command-path.ts";
 // 兼容再导出：历史集成与测试从 shared 取 hook 命令原语。
 export {
   isPierHookCommand,
   PIER_AGENT_HOOKS_DIR_MARK,
   PIER_HOOK_GEN_MARK,
+  type PierHookCommandV3Spec,
   pierHookCommand,
   pierHookCommandGeneration,
+  pierHookCommandV3,
 } from "./hook-command-core.ts";
 export {
+  type PierHookCommandV3WithStdinSpec,
   pierClaudeUserPromptSubmitCommand,
+  pierClaudeUserPromptSubmitCommandV3,
+  pierHookCommandV3WithStdin,
+  pierHookCommandV3WithStdinOutcomeDispatch,
+  pierHookCommandV3WithStdinStatusDispatch,
+  pierHookCommandV3WithStdinValueDispatch,
   pierHookCommandWithStdinSessionId,
   pierHookCommandWithStdinStatusDispatch,
+  type StdinInteractionOutcomeDispatchCase,
   type StdinStatusDispatchCase,
+  type StdinV3StatusDispatchSpec,
+  type StdinV3ValueDispatchSpec,
+  type StdinValueDispatchCase,
 } from "./hook-stdin-commands.ts";
+export { pierHookCommandV3WithStdinPermissionAcceptedThenToolStart } from "./hook-stdin-sequences.ts";
+export {
+  pierBlockMarkers,
+  pierTextBlockGeneration,
+  removePierTextBlock,
+  upsertPierTextBlock,
+  upsertPierTextBlockUnlessNewer,
+} from "./text-block.ts";
 
 /** 扫描 settings.hooks 下全部 pier command 的最大世代。 */
 export function maxPierHookGenerationInSettings(
@@ -82,20 +100,6 @@ export function transformPierHooksUnlessNewer(
     return settings;
   }
   return rewrite(settings);
-}
-
-/**
- * PATH 扫描探测二进制是否存在（loomdesk commandExists 同款, 集成 detect()
- * 的兜底手段）。仅安装/卸载时调用, 频率极低。
- */
-export function commandExistsOnPath(command: string): boolean {
-  const pathEnv = process.env.PATH ?? "";
-  for (const dir of pathEnv.split(delimiter)) {
-    if (dir.length > 0 && existsSync(join(dir, command))) {
-      return true;
-    }
-  }
-  return false;
 }
 
 /**
@@ -158,12 +162,7 @@ export async function transformJsonConfig(
 // qwen-code 等）共用, 差异仅在配置路径/事件表/matcher 约定。
 // ---------------------------------------------------------------------------
 
-export interface NestedHookEventSpec {
-  /**
-   * 覆盖默认 stdin emit 命令（例如 Claude UserPromptSubmit 双写 sessionTitle）。
-   * 未设则 `pierHookCommandWithStdinSessionId`。
-   */
-  buildCommand?: (agentId: AgentKind) => string;
+interface NestedHookEventBase {
   /** 工具类事件的 matcher；undefined = 不写 matcher 字段。 */
   matcher?: string;
   /** 该 agent 的原生事件名。 */
@@ -172,20 +171,86 @@ export interface NestedHookEventSpec {
   pierEvent: string;
 }
 
+interface NestedSingleHookEventSpec extends NestedHookEventBase {
+  /**
+   * 覆盖默认 stdin emit 命令（例如 Claude UserPromptSubmit 双写 sessionTitle）。
+   * 未设则 `pierHookCommandWithStdinSessionId`。
+   */
+  buildCommand?: (agentId: AgentKind) => string;
+  emittedPierEvents?: never;
+}
+
+interface NestedMultiHookEventSpec extends NestedHookEventBase {
+  /** 实际发出声明中全部事件的构造器。 */
+  buildCommand: (agentId: AgentKind) => string;
+  /** buildCommand 实际可发出的完整 Pier 事件集合。 */
+  emittedPierEvents: readonly [string, string, ...string[]];
+}
+
+export type NestedHookEventSpec =
+  | NestedSingleHookEventSpec
+  | NestedMultiHookEventSpec;
+
 export interface NestedJsonIntegrationSpec {
   agentId: AgentKind;
-  capability: AgentHookCapability;
   configPath: () => string;
   /** 默认：配置文件已存在才安装（loomdesk 语义）。 */
   detect?: () => boolean;
   events: readonly NestedHookEventSpec[];
-  runtime: AgentRuntimeSemantics;
+  runtime: Omit<AgentRuntimeSemantics, "emittedMappings">;
+  /** 兼容宿主设置这些变量时不执行本提供方的 Pier hook。 */
+  skipWhenEnvPresent?: readonly string[];
   timeoutSeconds?: number;
 }
 
 interface NestedHookMatcher {
-  hooks: Array<{ command: string; timeout?: number; type: "command" }>;
+  hooks: Array<{ command?: unknown; timeout?: number; type?: unknown }>;
   matcher?: string;
+}
+
+function isPlainObject(value: unknown): value is Record<string, unknown> {
+  if (!(value && typeof value === "object") || Array.isArray(value)) {
+    return false;
+  }
+  const prototype = Object.getPrototypeOf(value);
+  return prototype === Object.prototype || prototype === null;
+}
+
+function isNestedHooksInstallShapeSupported(
+  settings: Record<string, unknown>,
+  spec: NestedJsonIntegrationSpec
+): boolean {
+  if (!Object.hasOwn(settings, "hooks")) {
+    return true;
+  }
+  const hooks = settings.hooks;
+  if (!isPlainObject(hooks)) {
+    return false;
+  }
+  for (const nativeEvent of new Set(
+    spec.events.map((event) => event.nativeEvent)
+  )) {
+    if (
+      Object.hasOwn(hooks, nativeEvent) &&
+      !Array.isArray(hooks[nativeEvent])
+    ) {
+      return false;
+    }
+  }
+  return true;
+}
+
+export function preflightPierNestedHooksInstall(
+  settings: Record<string, unknown>,
+  spec: NestedJsonIntegrationSpec
+): boolean {
+  const supported = isNestedHooksInstallShapeSupported(settings, spec);
+  if (!supported) {
+    console.warn(
+      `[agent-hooks:${spec.agentId}] hooks has unrecognized structure, skip install`
+    );
+  }
+  return supported;
 }
 
 function hooksRecord(
@@ -198,14 +263,44 @@ function hooksRecord(
   return {};
 }
 
-function isPierNestedEntry(entry: unknown): boolean {
+function withoutPierNestedHandlers(entry: unknown): {
+  changed: boolean;
+  entry: unknown | null;
+} {
   if (!entry || typeof entry !== "object") {
-    return false;
+    return { changed: false, entry };
   }
   const hooks = (entry as NestedHookMatcher).hooks;
-  return (
-    Array.isArray(hooks) && hooks.some((h) => isPierHookCommand(h?.command))
-  );
+  if (!Array.isArray(hooks)) {
+    return { changed: false, entry };
+  }
+  const kept = hooks.filter((hook) => !isPierHookCommand(hook?.command));
+  if (kept.length === hooks.length) {
+    return { changed: false, entry };
+  }
+  if (kept.length === 0) {
+    return { changed: true, entry: null };
+  }
+  return {
+    changed: true,
+    entry: { ...(entry as Record<string, unknown>), hooks: kept },
+  };
+}
+
+function withoutPierNestedEntries(entries: unknown[]): {
+  changed: boolean;
+  entries: unknown[];
+} {
+  const kept: unknown[] = [];
+  let changed = false;
+  for (const entry of entries) {
+    const result = withoutPierNestedHandlers(entry);
+    changed ||= result.changed;
+    if (result.entry !== null) {
+      kept.push(result.entry);
+    }
+  }
+  return { changed, entries: kept };
 }
 
 /** 纯函数：注入 pier hook 条目（幂等——先剔旧再加新）。 */
@@ -213,28 +308,44 @@ export function withPierNestedHooks(
   settings: Record<string, unknown>,
   spec: NestedJsonIntegrationSpec
 ): Record<string, unknown> {
+  if (!preflightPierNestedHooksInstall(settings, spec)) {
+    return settings;
+  }
   const hooks = hooksRecord(settings);
+  // 同一原生事件可以按 matcher 拆成多条规范事实（例如 Gemini ask_user）。
+  // 先按键统一剔除旧 Pier 条目，再依次追加当前 spec；若在循环内逐条剔除，
+  // 后一 matcher 会误删同一轮刚写入的前一 matcher。
+  for (const nativeEvent of new Set(
+    spec.events.map((event) => event.nativeEvent)
+  )) {
+    const current = hooks[nativeEvent];
+    const existing = Array.isArray(current) ? current : [];
+    hooks[nativeEvent] = withoutPierNestedEntries(existing).entries;
+  }
   for (const event of spec.events) {
     const current = hooks[event.nativeEvent];
     const existing = Array.isArray(current) ? current : [];
-    const kept = existing.filter((entry) => !isPierNestedEntry(entry));
+    const command =
+      event.buildCommand?.(spec.agentId) ??
+      pierHookCommandWithStdinSessionId(
+        spec.agentId,
+        event.pierEvent,
+        event.nativeEvent
+      );
     const pierEntry: NestedHookMatcher = {
       ...(event.matcher === undefined ? {} : { matcher: event.matcher }),
       hooks: [
         {
-          command:
-            event.buildCommand?.(spec.agentId) ??
-            pierHookCommandWithStdinSessionId(
-              spec.agentId,
-              event.pierEvent,
-              event.nativeEvent
-            ),
+          command: skipHookCommandWhenEnvPresent(
+            command,
+            spec.skipWhenEnvPresent
+          ),
           timeout: spec.timeoutSeconds ?? 5,
           type: "command",
         },
       ],
     };
-    hooks[event.nativeEvent] = [...kept, pierEntry];
+    hooks[event.nativeEvent] = [...existing, pierEntry];
   }
   return { ...settings, hooks };
 }
@@ -250,13 +361,13 @@ export function withoutPierNestedHooks(
   let changed = false;
   for (const key of Object.keys(hooks)) {
     const entries = Array.isArray(hooks[key]) ? hooks[key] : [];
-    const kept = entries.filter((entry) => !isPierNestedEntry(entry));
-    if (kept.length === entries.length) {
+    const cleaned = withoutPierNestedEntries(entries);
+    if (!cleaned.changed) {
       continue;
     }
     changed = true;
-    if (kept.length > 0) {
-      hooks[key] = kept;
+    if (cleaned.entries.length > 0) {
+      hooks[key] = cleaned.entries;
     } else {
       delete hooks[key];
     }
@@ -271,20 +382,34 @@ export function createNestedJsonIntegration(
   spec: NestedJsonIntegrationSpec
 ): AgentHookIntegration {
   return {
-    capability: spec.capability,
     detect: spec.detect ?? (() => existsSync(spec.configPath())),
     id: spec.agentId,
-    runtime: spec.runtime,
+    runtime: {
+      ...spec.runtime,
+      emittedMappings: spec.events.flatMap(
+        ({ emittedPierEvents, nativeEvent, pierEvent }) =>
+          (emittedPierEvents ?? [pierEvent]).map((emittedPierEvent) => ({
+            nativeEvent,
+            pierEvent: emittedPierEvent,
+          }))
+      ),
+    },
     // install 先剔全部 pier 条目再按当前 spec 写入——覆盖「上一版 spec 装过
     // 但本版已移出」的遗留；withPierNestedHooks 只处理当前 spec 内事件，
     // 不会自行清理已经废弃的事件键。
     install: () =>
       transformJsonConfig(
         spec.configPath(),
-        (s) =>
-          transformPierHooksUnlessNewer(s, (current) =>
+        (s) => {
+          // 必须在 legacy Pier 条目清理前先确认所有权形状；否则异常用户
+          // 结构可能被清理步骤部分改写，再由安装步骤覆盖。
+          if (!preflightPierNestedHooksInstall(s, spec)) {
+            return s;
+          }
+          return transformPierHooksUnlessNewer(s, (current) =>
             withPierNestedHooks(withoutPierNestedHooks(current), spec)
-          ),
+          );
+        },
         spec.agentId
       ),
     uninstall: () =>
@@ -294,54 +419,4 @@ export function createNestedJsonIntegration(
         spec.agentId
       ),
   };
-}
-
-// ---------------------------------------------------------------------------
-// 文本块注入（TOML/YAML 等无解析器场景, loomdesk 的 marker 块模式）。
-// ---------------------------------------------------------------------------
-
-const TRAILING_NEWLINES_RE = /\n+$/;
-
-export function pierBlockMarkers(agentId: AgentKind): {
-  begin: string;
-  end: string;
-} {
-  return {
-    begin: `# >>> pier-agent-status:${agentId} (managed by Pier; do not edit) >>>`,
-    end: `# <<< pier-agent-status:${agentId} <<<`,
-  };
-}
-
-/** 纯函数：替换/追加 marker 块。block 不含 marker 行本身。 */
-export function upsertPierTextBlock(
-  raw: string,
-  agentId: AgentKind,
-  block: string
-): string {
-  const { begin, end } = pierBlockMarkers(agentId);
-  const stripped = removePierTextBlock(raw, agentId);
-  const body = `${begin}\n${block}\n${end}\n`;
-  if (stripped.length === 0) {
-    return body;
-  }
-  return `${stripped.endsWith("\n") ? stripped : `${stripped}\n`}${body}`;
-}
-
-/** 纯函数：移除 marker 块；无块时原样返回输入引用。 */
-export function removePierTextBlock(raw: string, agentId: AgentKind): string {
-  const { begin, end } = pierBlockMarkers(agentId);
-  const beginIdx = raw.indexOf(begin);
-  if (beginIdx === -1) {
-    return raw;
-  }
-  const endIdx = raw.indexOf(end, beginIdx);
-  if (endIdx === -1) {
-    return raw;
-  }
-  const afterEnd = endIdx + end.length;
-  const tail = raw.startsWith("\n", afterEnd)
-    ? raw.slice(afterEnd + 1)
-    : raw.slice(afterEnd);
-  const head = raw.slice(0, beginIdx).replace(TRAILING_NEWLINES_RE, "\n");
-  return head === "\n" ? tail : head + tail;
 }

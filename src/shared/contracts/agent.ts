@@ -75,6 +75,11 @@ export interface AgentCatalogEntry {
   label: string;
   launchCmd: string;
   launchCmdByPlatform?: Partial<Record<NodeJS.Platform, string>>;
+  /**
+   * OSC 133 命令识别必须匹配的完整 argv 前缀。用于多个产品共享同一可执行体的
+   * 场景；声明后 detectCmd / expectedProcess 不参与 shell launch 词元匹配。
+   */
+  launchCommandPrefix?: readonly [string, ...string[]];
   /** Headless 一次性调用:append 在 launchCmd/defaultArgs 之后的 argv(含 prompt)。 */
   oneShotArgs?: (prompt: string, context: { cwd: string }) => readonly string[];
 }

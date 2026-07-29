@@ -22,6 +22,7 @@ import {
   OPENCODE_PERMISSION_NATIVE_EVENTS,
 } from "@main/services/agents/integrations/opencode.ts";
 import { getAgentHookIntegration } from "@main/services/agents/integrations/registry.ts";
+import { activityStatusForAgentHookEvent } from "@main/services/foreground-activity/agent-hook-compatibility.ts";
 import { agentKindSchema } from "@shared/contracts/agent.ts";
 import {
   agentIndexCounts,
@@ -34,14 +35,15 @@ import {
 } from "@shared/contracts/foreground-activity.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
-function hasPermissionMapping(
+function hasWaitingMapping(
   events: ReadonlyArray<{ nativeEvent: string; pierEvent: string }>,
   nativeEvent: string
 ): boolean {
   return events.some(
     (event) =>
       event.nativeEvent === nativeEvent &&
-      event.pierEvent === "PermissionRequest"
+      (event.pierEvent === "PermissionRequest" ||
+        event.pierEvent === "InteractionRequested")
   );
 }
 
@@ -66,53 +68,74 @@ function nestedHookCommands(settings: Record<string, unknown>): string[] {
 }
 
 describe("S1 top A waiting evidence", () => {
-  it("maps PermissionRequest to waiting in the shared FA contract", () => {
-    expect(activityStatusForHookEvent("PermissionRequest")).toBe("waiting");
+  it("旧 PermissionRequest 只在 v1/v2 兼容边界映射 waiting", () => {
+    expect(activityStatusForHookEvent("PermissionRequest")).toBeNull();
+    expect(
+      activityStatusForAgentHookEvent({
+        agent: "claude",
+        event: "PermissionRequest",
+        kind: "agentEvent",
+        nativeEvent: "PermissionRequest",
+        panelId: "p1",
+        v: 2,
+        windowId: "1",
+      })
+    ).toBe("waiting");
   });
 
-  it("Claude maps native PermissionRequest → PermissionRequest", () => {
-    expect(hasPermissionMapping(CLAUDE_HOOK_EVENTS, "PermissionRequest")).toBe(
-      true
-    );
-  });
-
-  it("Codex maps native PermissionRequest → PermissionRequest", () => {
-    expect(hasPermissionMapping(CODEX_HOOK_EVENTS, "PermissionRequest")).toBe(
-      true
-    );
-  });
-
-  it("Copilot maps permissionRequest → PermissionRequest", () => {
-    expect(hasPermissionMapping(COPILOT_EVENTS, "permissionRequest")).toBe(
-      true
-    );
-  });
-
-  it("OpenCode maps permission.updated → PermissionRequest", () => {
-    for (const native of OPENCODE_PERMISSION_NATIVE_EVENTS) {
-      expect(mapOpenCodeNativeEventToPier(native)).toBe("PermissionRequest");
+  it("Claude 不为缺少完整结果闭环的事件建立 waiting", () => {
+    for (const nativeEvent of [
+      "PermissionRequest",
+      "Elicitation",
+      "ElicitationResult",
+    ]) {
+      expect(hasWaitingMapping(CLAUDE_HOOK_EVENTS, nativeEvent)).toBe(false);
     }
   });
 
-  it("Claude installed hooks emit PermissionRequest pier event", () => {
+  it("Codex hook 不与 transcript 重复建立 PermissionRequest waiting", () => {
+    expect(hasWaitingMapping(CODEX_HOOK_EVENTS, "PermissionRequest")).toBe(
+      false
+    );
+  });
+
+  it("Copilot fire-and-forget 通知不映射 waiting", () => {
+    expect(hasWaitingMapping(COPILOT_EVENTS, "permissionRequest")).toBe(false);
+    expect(
+      hasWaitingMapping(COPILOT_EVENTS, "notification.permission_prompt")
+    ).toBe(false);
+    expect(
+      hasWaitingMapping(COPILOT_EVENTS, "notification.elicitation_dialog")
+    ).toBe(false);
+  });
+
+  it("OpenCode maps permission.asked → InteractionRequested", () => {
+    for (const native of OPENCODE_PERMISSION_NATIVE_EVENTS) {
+      expect(mapOpenCodeNativeEventToPier(native)).toBe("InteractionRequested");
+    }
+  });
+
+  it("Claude installed hooks do not emit unpaired interaction events", () => {
     const commands = nestedHookCommands(withPierClaudeHooks({}));
-    expect(commands.some((cmd) => cmd.includes('"PermissionRequest"'))).toBe(
-      true
+    expect(commands.some((cmd) => cmd.includes('"InteractionRequested"'))).toBe(
+      false
+    );
+    expect(commands.some((cmd) => cmd.includes('"InteractionResolved"'))).toBe(
+      false
     );
   });
 
-  it("Codex installed hooks emit PermissionRequest pier event", () => {
+  it("Codex installed hooks leave named interactions to transcript", () => {
     const commands = nestedHookCommands(withPierCodexHooks({}));
-    expect(commands.some((cmd) => cmd.includes('"PermissionRequest"'))).toBe(
-      true
+    expect(commands.some((cmd) => cmd.includes('"InteractionRequested"'))).toBe(
+      false
     );
   });
 
-  it("OpenCode plugin source maps permission.updated to PermissionRequest", () => {
+  it("OpenCode plugin source maps permission.asked to named interaction", () => {
     const source = buildOpencodePluginSource();
-    expect(source).toContain(
-      'if (event.type === "permission.updated") return "PermissionRequest";'
-    );
+    expect(source).toContain('event.type === "permission.asked"');
+    expect(source).toContain('"InteractionRequested"');
   });
 
   it("projects waiting agent into Index needsYou and Attention candidate", async () => {
@@ -189,19 +212,21 @@ describe("S3 agentStatusHooks ingest gate", () => {
 });
 
 describe("B-tier permission-adjacent mappings retained after review", () => {
-  it("Gemini Notification → PermissionRequest (ToolPermission signal)", () => {
-    expect(hasPermissionMapping(GEMINI_HOOK_EVENTS, "Notification")).toBe(true);
+  it("Gemini ToolPermission 与 ask_user 缺少完整结果闭环，不映射 waiting", () => {
+    expect(hasWaitingMapping(GEMINI_HOOK_EVENTS, "Notification")).toBe(false);
+    expect(hasWaitingMapping(GEMINI_HOOK_EVENTS, "BeforeTool")).toBe(false);
+    expect(hasWaitingMapping(GEMINI_HOOK_EVENTS, "AfterTool")).toBe(false);
   });
 
   it("Grok 不装 Notification→PermissionRequest（Turn complete 会假 waiting）", () => {
-    expect(hasPermissionMapping(GROK_HOOK_EVENTS, "Notification")).toBe(false);
+    expect(hasWaitingMapping(GROK_HOOK_EVENTS, "Notification")).toBe(false);
     expect(
       GROK_HOOK_EVENTS.some((event) => event.nativeEvent === "Notification")
     ).toBe(false);
   });
 
-  it("Droid Notification → PermissionRequest", () => {
-    expect(hasPermissionMapping(DROID_HOOK_EVENTS, "Notification")).toBe(true);
+  it("Droid Notification 缺少结果事件，不映射 waiting", () => {
+    expect(hasWaitingMapping(DROID_HOOK_EVENTS, "Notification")).toBe(false);
   });
 
   it("Cursor shell/MCP 闸门事件不装——自动放行也触发（假 waiting）且无 tool_use_id（无法配对）", () => {

@@ -1,17 +1,17 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentStopAuthority } from "../../foreground-activity/types.ts";
-
-/**
- * agent hook 集成能力档位：
- * - full：完整生命周期事件（prompt/tool/permission/stop）
- * - coarse：粗粒度（仅回合级或工具级少数事件）
- * - none：无 hook 机制，仅 L1 shell integration 命令行检测兜底（此类不注册集成模块）
- */
-export type AgentHookCapability = "coarse" | "full";
+import type { AgentStatusEvidence } from "./evidence-matrix.ts";
 
 export interface AgentRuntimeSemantics {
+  /** 实际安装的 hook / 插件可发出的原生事件与 Pier 规范事件的精确对应。 */
+  emittedMappings: readonly AgentRuntimeEventMapping[];
   /** 当前集成映射出的 canonical Stop 是否足以结算用户回合。 */
   stopAuthority: AgentStopAuthority;
+}
+
+export interface AgentRuntimeEventMapping {
+  readonly nativeEvent: string;
+  readonly pierEvent: string;
 }
 
 /**
@@ -23,10 +23,14 @@ export interface AgentRuntimeSemantics {
  * - detect() false 时 install/uninstall 均跳过（不视为错误）。
  */
 export interface AgentHookIntegration {
-  readonly capability: AgentHookCapability;
   detect(): boolean;
   readonly id: AgentKind;
   install(): Promise<void>;
   readonly runtime: AgentRuntimeSemantics;
   uninstall(): Promise<void>;
+}
+
+/** A registry entry is the integration implementation plus its audited facts. */
+export interface RegisteredAgentHookIntegration extends AgentHookIntegration {
+  readonly statusEvidence: AgentStatusEvidence;
 }

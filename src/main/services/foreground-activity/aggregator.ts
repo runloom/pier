@@ -3,10 +3,11 @@ import {
   SUBAGENT_HOOK_EVENTS,
 } from "@shared/agent-session-actor.ts";
 import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
 import {
-  activityStatusForHookEvent,
-  type ForegroundActivityBroadcast,
-} from "@shared/contracts/foreground-activity.ts";
+  activityStatusForAgentHookEvent,
+  isSessionCreatingAgentHookEvent,
+} from "./agent-hook-compatibility.ts";
 import {
   createHookScopeCoordinator,
   isInCooldown,
@@ -53,7 +54,6 @@ import {
   newShellLayer,
   newTaskLayer,
   type PanelSlot,
-  SESSION_CREATING_EVENTS,
   SESSION_END_COOLDOWN_MS,
   SUSPENDED_JOB_EXIT_CODES,
   type TimerCtx,
@@ -79,7 +79,6 @@ export function createForegroundActivityAggregator(
   let emitTimer: NodeJS.Timeout | null = null;
   let disposed = false;
   let broadcastSeq = 0;
-
   function buildBroadcast(): ForegroundActivityBroadcast {
     broadcastSeq += 1;
     return buildForegroundActivityBroadcast(slots, broadcastSeq);
@@ -99,9 +98,7 @@ export function createForegroundActivityAggregator(
   }
 
   const timerCtx: TimerCtx = { now, scheduleEmit, slots };
-
   const { dropSlotIfEmpty, slotFor } = createPanelSlotRegistry(slots);
-
   function commandOwnedAgent(slot: PanelSlot | undefined) {
     return slot?.command?.kind === "agent-launch" ? slot.command.agentId : null;
   }
@@ -140,10 +137,7 @@ export function createForegroundActivityAggregator(
     slots,
   });
 
-  /**
-   * SessionEnd 干净收尾：只清 hook 层（command 层等 OSC D 自己收），
-   * 1.5s 短冷却拦迟到事件。
-   */
+  /** SessionEnd 只清 hook 层，并用 1.5s 短冷却拦截迟到事件。 */
   function endHookSession(key: string): void {
     const slot = slots.get(key);
     const hook = slot?.hook ?? null;
@@ -176,10 +170,7 @@ export function createForegroundActivityAggregator(
     slots,
   });
 
-  /**
-   * 取得/新建 hook 层。幽灵门控：终结类迟到事件（Stop/ToolComplete/
-   * SubagentStop/error）不得凭空建会话——返回 null 表示事件应被丢弃。
-   */
+  /** 取得/新建 hook 层；只有正向事件可越过层级幽灵门控。 */
   function acquireHookLayer(
     key: string,
     event: AgentHookEventPayload,
@@ -193,7 +184,7 @@ export function createForegroundActivityAggregator(
       }
       return existing;
     }
-    if (!SESSION_CREATING_EVENTS.has(event.event)) {
+    if (!isSessionCreatingAgentHookEvent(event)) {
       dropSlotIfEmpty(key);
       return null;
     }
@@ -306,7 +297,12 @@ export function createForegroundActivityAggregator(
         logAgentEventDropped("subagent-detail-ignored", key, event.event);
         return false;
       }
-      const identity = hookScopeIdentity(event);
+      const identity = hookScopes.resolveEventIdentity(
+        slotBefore?.hook ?? null,
+        event,
+        hookScopeIdentity(event)
+      );
+      if (!identity) return false;
       if (!hookScopes.allowsAgentEventAfterCooldowns(key, event, identity)) {
         return false;
       }
@@ -318,7 +314,7 @@ export function createForegroundActivityAggregator(
       if (sessionEndHandled !== null) {
         return sessionEndHandled;
       }
-      const status = activityStatusForHookEvent(event.event);
+      const status = activityStatusForAgentHookEvent(event);
       if (status === null) {
         logAgentEventDropped("status-null", key, event.event);
         return false;
@@ -329,13 +325,19 @@ export function createForegroundActivityAggregator(
         logAgentEventDropped("ghost-rejected", key, event.event);
         return false;
       }
-      const existingScope = hook.scopes.get(identity.key);
-      if (event.event === "SessionStart" && existingScope) {
+      if (hookScopes.prepareSessionStartScope(hook, event, identity)) {
         return true;
       }
-      const scope = getOrCreateHookScope(hook, identity, at);
+      const canUseScope =
+        hook.scopes.has(identity.key) || isSessionCreatingAgentHookEvent(event);
+      if (!canUseScope) {
+        logAgentEventDropped("ghost-rejected", key, event.event);
+        return false;
+      }
+      const scope = getOrCreateHookScope(hook, identity, event, at);
       const stopAuthority = options.stopAuthority;
-      if (!applyTurnBookkeeping(scope, event, stopAuthority, at)) {
+      const workId = identity.subagentWorkPlan?.id;
+      if (!applyTurnBookkeeping(scope, event, stopAuthority, at, workId)) {
         logAgentEventDropped("absorbed", key, event.event, {
           ...(scope.status === undefined ? {} : { frozenStatus: scope.status }),
         });
@@ -346,6 +348,7 @@ export function createForegroundActivityAggregator(
         key,
         hook,
         scope,
+        identity,
         event,
         nextStatus,
         at,

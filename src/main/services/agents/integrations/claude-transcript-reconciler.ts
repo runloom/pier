@@ -10,6 +10,14 @@ import {
 
 export type ClaudeTranscriptReconciler = TranscriptTailReconciler;
 
+/** Claude transcript supplies only the Esc/Ctrl+C interruption terminal fact. */
+export const CLAUDE_TRANSCRIPT_TERMINAL_EVIDENCE = [
+  {
+    nativeEvent: "claude.transcript.user_interrupt",
+    pierEvent: "TurnInterrupted",
+  },
+] as const;
+
 interface ClaudeTranscriptReconcilerOpts {
   onTerminalEvent: Parameters<
     typeof createTranscriptTailReconciler
@@ -127,8 +135,7 @@ function classifyClaudeTranscriptLine(
     return null;
   }
   return {
-    nativeEvent: "claude.transcript.user_interrupt",
-    pierEvent: "TurnInterrupted",
+    ...CLAUDE_TRANSCRIPT_TERMINAL_EVIDENCE[0],
     turnId: "",
   };
 }

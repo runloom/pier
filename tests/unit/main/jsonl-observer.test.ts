@@ -468,4 +468,85 @@ describe("jsonl-observer", () => {
     });
     observer.dispose();
   });
+
+  it("v3 metadata 中已审计别名补全会话、工具和父会话字段", async () => {
+    writeFileSync(jsonlPath, "");
+    const received: AgentHookEventPayload[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent: (event) => received.push(event),
+      onCommandFinished() {},
+      onCommandStart() {},
+    });
+    const metadata = {
+      conversation_id: "conversation-1",
+      parent_session_id: "parent-1",
+      promptSnippet: "fix the parser",
+      tool_call_id: "tool-call-1",
+    };
+    appendFileSync(
+      jsonlPath,
+      `${JSON.stringify({
+        agent: "claude",
+        event: "ToolStart",
+        kind: "agentEvent",
+        metadataBase64: Buffer.from(JSON.stringify(metadata)).toString(
+          "base64"
+        ),
+        nativeEvent: "PreToolUse",
+        panelId: "panel-1",
+        v: 3,
+        windowId: "1",
+      })}\n`
+    );
+    await observer.pollNow();
+
+    expect(received[0]).toMatchObject({
+      parentSessionId: "parent-1",
+      promptSnippet: "fix the parser",
+      sessionId: "conversation-1",
+      toolUseId: "tool-call-1",
+      v: 3,
+    });
+    observer.dispose();
+  });
+
+  it("v1 metadata 含 promptSnippet 时仍补全身份且不写入 v1 未声明字段", async () => {
+    writeFileSync(jsonlPath, "");
+    const received: AgentHookEventPayload[] = [];
+    const observer = createJsonlObserver({
+      filePath: jsonlPath,
+      onAgentEvent: (event) => received.push(event),
+      onCommandFinished() {},
+      onCommandStart() {},
+    });
+    const metadata = {
+      promptSnippet: "legacy prompt",
+      session_id: "session-top",
+      tool_call_id: "tool-call-top",
+    };
+    appendFileSync(
+      jsonlPath,
+      `${JSON.stringify({
+        agent: "claude",
+        event: "ToolStart",
+        kind: "agentEvent",
+        metadataBase64: Buffer.from(JSON.stringify(metadata)).toString(
+          "base64"
+        ),
+        panelId: "panel-1",
+        v: 1,
+        windowId: "1",
+      })}\n`
+    );
+    await observer.pollNow();
+
+    expect(received[0]).toMatchObject({
+      sessionId: "session-top",
+      toolUseId: "tool-call-top",
+      v: 1,
+    });
+    expect(received[0]).not.toHaveProperty("promptSnippet");
+    observer.dispose();
+  });
 });

@@ -1,21 +1,36 @@
+import { randomUUID } from "node:crypto";
+import { constants } from "node:fs";
 import {
+  access,
   chmod,
   lstat,
   mkdir,
   readFile,
+  readlink,
   rename,
   rm,
+  stat,
   symlink,
   writeFile,
 } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
-import { MAX_PROMPT_SNIPPET_LENGTH } from "@shared/agent-session-title/index.ts";
+import {
+  type AgentHooksInstallLockOptions,
+  withAgentHooksInstallLock,
+} from "./agent-hooks-install-lock.ts";
+import { buildExtractStdinMetaScript } from "./agent-hooks-stdin-script.ts";
 import {
   buildDeriveClaudeSessionTitleScript,
   PIER_HOOK_COMMAND_GENERATION,
 } from "./agent-hooks-title-script.ts";
 
+export {
+  AgentHooksInstallLockBusy,
+  type AgentHooksInstallLockOptions,
+  withAgentHooksInstallLock,
+} from "./agent-hooks-install-lock.ts";
+export { buildExtractStdinMetaScript } from "./agent-hooks-stdin-script.ts";
 export {
   buildDeriveClaudeSessionTitleScript,
   PIER_HOOK_COMMAND_GENERATION,
@@ -56,10 +71,11 @@ export const PIER_HOOKS_GENERATION_FILE = "GENERATION";
 export const PIER_HOOKS_CURRENT_NAME = "current";
 
 /**
- * emit 脚本内容——保留 v1 agentEvent，并以 agentEventV2 承载新协议。
+ * emit 脚本内容——保留 v1 / v2 位置参数，并为新配置提供严格 v3 发射。
  *
  * 位置参数：
- * - `$1` = kind（commandStart | commandFinished | agentEvent | agentEventV2）
+ * - `$1` = kind（commandStart | commandFinished | agentEvent | agentEventV2 |
+ *   agentEventV3）
  * - commandStart: `$2` = 命令行文本
  * - commandFinished: `$2` = 退出码（整数字符串）
  * - agentEvent（旧协议）: `$2` = agent id，`$3` = pierEvent 名，`$4..$11`
@@ -68,6 +84,10 @@ export const PIER_HOOKS_CURRENT_NAME = "current";
  *   `$5..$12` 依次为
  *   sessionId / turnId / toolUseId / toolName / agentInstanceId / agentType /
  *   transcriptPath / 已筛选身份元数据的 base64（均可为空，不含 prompt/tool input）。
+ * - agentEventV3: `$2..$12` 与 v2 相同；`$13..$19` 依次为
+ *   parentSessionId / actorHint / nativeState / interactionId /
+ *   interactionKind / interactionOutcome / promptSnippet。
+ *   可选字段为空时不写入 JSON，避免空字符串绕过严格 v3 schema。
  *
  * 要点：
  * - PIER_PANEL_ID / PIER_WINDOW_ID 缺失时 exit 0（非 Pier 启动的 agent 静默跳过）
@@ -103,6 +123,9 @@ while ! ln "$_lock_candidate" "$_lock" 2>/dev/null; do
 done
 rm -f "$_lock_candidate"
 trap '[ "$(cat "$_lock" 2>/dev/null || true)" = "$_lock_token" ] && rm -f "$_lock"; rm -f "$_lock_candidate"' EXIT HUP INT TERM
+_pier_json_string() {
+  printf '%s' "$1" | head -c "$2" | iconv -c -f UTF-8 -t UTF-8 2>/dev/null | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g'
+}
 case "$1" in
   commandStart)
     _cmd=$(printf '%s' "$2" | head -c 4096 | LC_ALL=C tr -d '\\000-\\037\\177' | sed 's/\\\\/\\\\\\\\/g; s/"/\\\\"/g')
@@ -138,6 +161,52 @@ case "$1" in
     printf '{"v":2,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","nativeEvent":"%s","sessionId":"%s","turnId":"%s","toolUseId":"%s","toolName":"%s","agentInstanceId":"%s","agentType":"%s","transcriptPath":"%s","metadataBase64":"%s"}\\n' \\
       "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$2" "$3" "$_native" "$_sid" "$_turn" "$_tool_id" "$_tool_name" "$_agent_instance" "$_agent_type" "$_transcript" "$_metadata_b64" >> "$PIER_AGENT_EVENT_LOG"
     ;;
+  agentEventV3)
+    _agent=$(_pier_json_string "$2" 64)
+    _event=$(_pier_json_string "$3" 64)
+    _native=$(_pier_json_string "$4" 128)
+    _sid=$(_pier_json_string "$5" 128)
+    _turn=$(_pier_json_string "$6" 128)
+    _tool_id=$(_pier_json_string "$7" 128)
+    _tool_name=$(_pier_json_string "$8" 256)
+    _agent_instance=$(_pier_json_string "$9" 128)
+    _agent_type=$(_pier_json_string "\${10}" 128)
+    _transcript=$(_pier_json_string "\${11}" 8192)
+    _metadata_b64=$(printf '%s' "\${12}" | head -c 16384 | LC_ALL=C tr -cd 'A-Za-z0-9+/=')
+    _parent_sid=$(_pier_json_string "\${13}" 128)
+    _actor_hint=$(_pier_json_string "\${14}" 16)
+    _native_state=$(_pier_json_string "\${15}" 64)
+    _interaction_id=$(_pier_json_string "\${16}" 128)
+    _interaction_kind=$(_pier_json_string "\${17}" 32)
+    _interaction_outcome=$(_pier_json_string "\${18}" 32)
+    _prompt_snippet=$(_pier_json_string "\${19}" 512)
+    _json=$(printf '{"v":3,"kind":"agentEvent","ts":%s,"panelId":"%s","windowId":"%s","pid":%s,"agent":"%s","event":"%s","nativeEvent":"%s"' \\
+      "$_ts" "$PIER_PANEL_ID" "$PIER_WINDOW_ID" "$$" "$_agent" "$_event" "$_native")
+    [ -n "$_sid" ] && _json="\${_json},\\"sessionId\\":\\"\${_sid}\\""
+    [ -n "$_turn" ] && _json="\${_json},\\"turnId\\":\\"\${_turn}\\""
+    [ -n "$_tool_id" ] && _json="\${_json},\\"toolUseId\\":\\"\${_tool_id}\\""
+    [ -n "$_tool_name" ] && _json="\${_json},\\"toolName\\":\\"\${_tool_name}\\""
+    [ -n "$_agent_instance" ] && _json="\${_json},\\"agentInstanceId\\":\\"\${_agent_instance}\\""
+    [ -n "$_agent_type" ] && _json="\${_json},\\"agentType\\":\\"\${_agent_type}\\""
+    [ -n "$_transcript" ] && _json="\${_json},\\"transcriptPath\\":\\"\${_transcript}\\""
+    [ -n "$_metadata_b64" ] && _json="\${_json},\\"metadataBase64\\":\\"\${_metadata_b64}\\""
+    [ -n "$_parent_sid" ] && _json="\${_json},\\"parentSessionId\\":\\"\${_parent_sid}\\""
+    [ -n "$_actor_hint" ] && _json="\${_json},\\"actorHint\\":\\"\${_actor_hint}\\""
+    [ -n "$_native_state" ] && _json="\${_json},\\"nativeState\\":\\"\${_native_state}\\""
+    case "$3" in
+      InteractionRequested)
+        [ -n "$_interaction_id" ] && _json="\${_json},\\"interactionId\\":\\"\${_interaction_id}\\""
+        [ -n "$_interaction_kind" ] && _json="\${_json},\\"interactionKind\\":\\"\${_interaction_kind}\\""
+        ;;
+      InteractionResolved)
+        [ -n "$_interaction_id" ] && _json="\${_json},\\"interactionId\\":\\"\${_interaction_id}\\""
+        [ -n "$_interaction_kind" ] && _json="\${_json},\\"interactionKind\\":\\"\${_interaction_kind}\\""
+        [ -n "$_interaction_outcome" ] && _json="\${_json},\\"interactionOutcome\\":\\"\${_interaction_outcome}\\""
+        ;;
+    esac
+    [ -n "$_prompt_snippet" ] && _json="\${_json},\\"promptSnippet\\":\\"\${_prompt_snippet}\\""
+    printf '%s}\\n' "$_json" >> "$PIER_AGENT_EVENT_LOG"
+    ;;
 esac
 [ "$(cat "$_lock" 2>/dev/null || true)" = "$_lock_token" ] && rm -f "$_lock"
 trap - EXIT HUP INT TERM
@@ -149,7 +218,11 @@ export interface InstallAgentHooksOptions {
    * 测试可注入临时目录，避免污染开发机 home。
    */
   hooksHome?: string;
+  /** 安装锁策略；仅测试注入 delay/时钟，生产使用默认跨进程文件锁。 */
+  lockOptions?: AgentHooksInstallLockOptions;
 }
+
+export type InstallAgentHooksResult = "installed" | "skipped-newer";
 
 /** 用户级共享 hooks 运行时根目录。 */
 export function pierHooksHomeDir(home: string = homedir()): string {
@@ -210,78 +283,38 @@ export function eventsJsonlPath(userData: string): string {
 export async function readInstalledHookRuntimeGeneration(
   hooksHome: string = pierHooksHomeDir()
 ): Promise<number> {
-  try {
-    const raw = await readFile(
-      join(hooksHome, PIER_HOOKS_GENERATION_FILE),
-      "utf8"
-    );
-    const value = Number(raw.trim());
-    return Number.isFinite(value) && value > 0 ? Math.floor(value) : 0;
-  } catch {
-    return 0;
-  }
+  const [generationFile, currentTarget] = await Promise.all([
+    readFile(join(hooksHome, PIER_HOOKS_GENERATION_FILE), "utf8").catch(
+      () => ""
+    ),
+    readlink(pierHooksCurrentDir(hooksHome)).catch(() => ""),
+  ]);
+  const generationValue = Number(generationFile.trim());
+  const generation =
+    Number.isFinite(generationValue) && generationValue > 0
+      ? Math.floor(generationValue)
+      : 0;
+  const currentMatch = /^v(\d+)$/.exec(currentTarget);
+  const current = currentMatch ? Number(currentMatch[1]) : 0;
+  // current 先于 GENERATION 发布；崩溃窗口内取两者最大值，旧进程也不能回退。
+  return Math.max(generation, current);
 }
 
-/**
- * extract-stdin-meta：`#!/usr/bin/env node` 纯脚本。
- * stdin JSON → stdout base64(metadata)，含 promptSnippet（截断长度用
- * MAX_PROMPT_SNIPPET_LENGTH）。
- * 键表与 hook-stdin-commands 的 sed 提取保持同步（snake + camel）。
- * **不绑定** Electron/process.execPath——PATH 上的 node 即可。
- */
-export function buildExtractStdinMetaScript(): string {
-  return `#!/usr/bin/env node
-// pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}
-// Managed by Pier. Do not edit.
-"use strict";
-const MAX_SNIPPET = ${MAX_PROMPT_SNIPPET_LENGTH};
-const KEYS = [
-  "session_id",
-  "sessionId",
-  "turn_id",
-  "turnId",
-  "tool_use_id",
-  "toolUseId",
-  "tool_name",
-  "toolName",
-  "agent_id",
-  "agentId",
-  "agent_type",
-  "agentType",
-  "transcript_path",
-  "transcriptPath",
-];
-let s = "";
-process.stdin.on("data", (d) => {
-  s += d;
-});
-process.stdin.on("end", () => {
+async function atomicWrite(
+  path: string,
+  body: string,
+  mode?: number
+): Promise<void> {
+  const staging = `${path}.tmp.${process.pid}.${randomUUID()}`;
   try {
-    const p = JSON.parse(s);
-    const o = {};
-    for (const k of KEYS) {
-      if (typeof p[k] === "string") {
-        o[k] = p[k];
-      }
+    await writeFile(staging, body, mode === undefined ? "utf8" : { mode });
+    if (mode !== undefined) {
+      await chmod(staging, mode);
     }
-    const prompt = [p.prompt, p.user_prompt, p.content, p.message].find(
-      (v) => typeof v === "string"
-    );
-    if (typeof prompt === "string" && prompt.trim()) {
-      o.promptSnippet = prompt.slice(0, MAX_SNIPPET);
-    }
-    process.stdout.write(Buffer.from(JSON.stringify(o)).toString("base64"));
-  } catch {
-    // best-effort
+    await rename(staging, path);
+  } finally {
+    await rm(staging, { force: true });
   }
-});
-`;
-}
-
-async function writeExecutable(path: string, body: string): Promise<void> {
-  await writeFile(path, body, { mode: 0o755 });
-  // writeFile 的 mode 仅在创建时生效；覆盖写时显式 chmod 保证 +x。
-  await chmod(path, 0o755);
 }
 
 /** 内容相同则跳过字节写入，但仍确保 +x（同 gen 多实例 / 自愈可恢复权限）。 */
@@ -298,7 +331,21 @@ async function writeExecutableIfChanged(
   } catch {
     // missing → write
   }
-  await writeExecutable(path, body);
+  await atomicWrite(path, body, 0o755);
+}
+
+async function assertRuntimeFileReady(
+  path: string,
+  expectedBody: string
+): Promise<void> {
+  const [actualBody, fileStat] = await Promise.all([
+    readFile(path, "utf8"),
+    stat(path),
+    access(path, constants.X_OK),
+  ]);
+  if (actualBody !== expectedBody || !fileStat.isFile()) {
+    throw new Error(`agent hook runtime file is incomplete: ${path}`);
+  }
 }
 
 /**
@@ -339,22 +386,16 @@ export async function atomicReplaceSymlink(
  * - 磁盘世代 < 本进程 → 写入 `v{本世代}`、切换 current、更新 GENERATION
  * - 磁盘世代 == 本进程 → 仅当脚本内容变化时重写（同 gen 多实例内容相同则零 IO）
  */
-export async function installAgentHooksEmitScript(
-  userData: string,
-  options: InstallAgentHooksOptions = {}
-): Promise<void> {
-  const hooksHome = options.hooksHome ?? pierHooksHomeDir();
+async function installAgentHooksRuntimeUnderLock(
+  hooksHome: string
+): Promise<InstallAgentHooksResult> {
   const gen = PIER_HOOK_COMMAND_GENERATION;
-
-  // 实例私有日志目录（observer / PIER_AGENT_EVENT_LOG）
-  await mkdir(agentHooksDir(userData), { recursive: true });
-
-  const installed = await readInstalledHookRuntimeGeneration(hooksHome);
-  if (installed > gen) {
-    return;
+  const installedUnderLock =
+    await readInstalledHookRuntimeGeneration(hooksHome);
+  if (installedUnderLock > gen) {
+    return "skipped-newer";
   }
 
-  await mkdir(hooksHome, { recursive: true });
   const versionDir = pierHooksVersionDir(gen, hooksHome);
   await mkdir(versionDir, { recursive: true });
 
@@ -373,14 +414,70 @@ export async function installAgentHooksEmitScript(
     deriveBody
   );
 
+  // 所有脚本内容与执行位完整后，才允许发布 current/GENERATION。
+  await Promise.all([
+    assertRuntimeFileReady(join(versionDir, EMIT_SCRIPT_NAME), EMIT_SCRIPT),
+    assertRuntimeFileReady(
+      join(versionDir, EXTRACT_STDIN_META_SCRIPT_NAME),
+      extractBody
+    ),
+    assertRuntimeFileReady(
+      join(versionDir, DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME),
+      deriveBody
+    ),
+  ]);
+
   await atomicReplaceSymlink(pierHooksCurrentDir(hooksHome), `v${gen}`);
-  if (installed !== gen) {
-    await writeFile(
-      join(hooksHome, PIER_HOOKS_GENERATION_FILE),
-      `${gen}\n`,
-      "utf8"
-    );
+  if (installedUnderLock !== gen) {
+    await atomicWrite(join(hooksHome, PIER_HOOKS_GENERATION_FILE), `${gen}\n`);
   }
+  return "installed";
+}
+
+/**
+ * 在共享运行时安装锁内完成 runtime 发布与依赖它的后续操作。
+ * callback 仅在本进程世代仍可写时执行，且直到 callback 完成才释放锁。
+ */
+export async function withInstalledAgentHooksRuntime(
+  userData: string,
+  operation: () => Promise<void>,
+  options: InstallAgentHooksOptions = {}
+): Promise<InstallAgentHooksResult> {
+  const hooksHome = options.hooksHome ?? pierHooksHomeDir();
+  const gen = PIER_HOOK_COMMAND_GENERATION;
+
+  // 实例私有日志目录（observer / PIER_AGENT_EVENT_LOG）
+  await mkdir(agentHooksDir(userData), { recursive: true });
+
+  const installed = await readInstalledHookRuntimeGeneration(hooksHome);
+  if (installed > gen) {
+    return "skipped-newer";
+  }
+
+  return await withAgentHooksInstallLock(
+    hooksHome,
+    async () => {
+      // 跨进程等待后必须重读：等待期间可能已有更高世代完成发布。
+      const runtimeResult = await installAgentHooksRuntimeUnderLock(hooksHome);
+      if (runtimeResult === "skipped-newer") {
+        return runtimeResult;
+      }
+      await operation();
+      return runtimeResult;
+    },
+    options.lockOptions
+  );
+}
+
+export async function installAgentHooksEmitScript(
+  userData: string,
+  options: InstallAgentHooksOptions = {}
+): Promise<InstallAgentHooksResult> {
+  return await withInstalledAgentHooksRuntime(
+    userData,
+    async () => undefined,
+    options
+  );
 }
 
 /** 测试/诊断：current 是否为指向 vN 的 symlink。 */

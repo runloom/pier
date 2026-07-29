@@ -6,6 +6,10 @@ import type {
   AgentSessionTitleSource,
   ForegroundActivity,
 } from "@shared/contracts/foreground-activity.ts";
+import type {
+  SubagentWorkAssociation,
+  SubagentWorkPlan,
+} from "./subagent-work-associations.ts";
 
 /**
  * ForegroundActivity 聚合器的模型层：常量、双层 slot 结构、层工厂与
@@ -59,7 +63,7 @@ export const SESSION_CREATING_EVENTS = new Set([
   "SessionStart",
   "PromptSubmit",
   "ToolStart",
-  "PermissionRequest",
+  "InteractionRequested",
   "processing",
   "running",
 ]);
@@ -93,6 +97,8 @@ export function isSuspendedJobExitCode(code: number | undefined): boolean {
 export interface HookScopeIdentity {
   isolated: boolean;
   key: string;
+  retainsPeerScopes: boolean;
+  subagentWorkPlan?: SubagentWorkPlan;
 }
 
 /**
@@ -129,8 +135,10 @@ export function hookIdentityFacts(
 }
 
 export interface HookScope {
+  activeInteractionIds: Set<string>;
   activeSubagentIds: Set<string>;
   activeToolIds: Set<string>;
+  anonymousInteractionCount: number;
   anonymousSubagentCount: number;
   anonymousToolCount: number;
   completionObserved: boolean;
@@ -140,12 +148,19 @@ export interface HookScope {
    */
   completionObservedAt: number | undefined;
   currentTurnId: string | undefined;
+  /** 当前 scope 的主会话身份事实；hook.identity 只是选中 scope 的镜像。 */
+  identity: HookIdentityFacts;
+  interactionHistoryIncomplete: boolean;
   key: string;
   recentSettledTurnIds: Set<string>;
+  settledInteractionIds: Set<string>;
+  settledSubagentIds: Set<string>;
+  settledToolIds: Set<string>;
   stale: boolean;
-  stateStartedAt: number;
+  stateStartedAt: number | undefined;
   status: ActivityStatus | undefined;
   subagentCount: number;
+  toolHistoryIncomplete: boolean;
   turnEnded: boolean;
   /** 可信终态落定时刻（TurnCompleted / 权威 Stop 等）。 */
   turnEndedAt: number | undefined;
@@ -156,19 +171,21 @@ export interface HookScope {
 
 /** hook 层——agent 会话证据。字段只由 hook 事件（及 TTL 衰减）改写。 */
 export interface HookLayer {
+  activeSubagentWorks: Map<string, SubagentWorkAssociation>;
   agentId: AgentKind;
   /** SessionStart 消抖隐藏期为 true——不参与投影。 */
   hidden: boolean;
-  /**
-   * 面板主会话的身份事实。子会话事件不写此处——面板行代表主会话，
-   * 子会话只进 subagentCount。
-   */
+  /** 当前选中 scope 的身份镜像；事实所有权在 HookScope.identity。 */
   identity: HookIdentityFacts;
+  nextSubagentWorkId: number;
   scopes: Map<string, HookScope>;
+  settledSubagentWorks: Map<string, SubagentWorkAssociation>;
   spawnedAt: number;
   stateStartedAt: number | undefined;
   status: ActivityStatus | undefined;
+  subagentAssociationHistoryIncomplete: boolean;
   subagentCount: number;
+  subagentWorkIdsByAlias: Map<string, Set<string>>;
   ttlTimer: NodeJS.Timeout | null;
   updatedAt: number;
   visibilityTimer: NodeJS.Timeout | null;
@@ -257,37 +274,59 @@ export function clearSlotTimers(slot: PanelSlot): void {
 export function hookScopeIdentity(
   event: AgentHookEventPayload
 ): HookScopeIdentity {
+  const retainsPeerScopes = PROCESS_SCOPED_HOOK_AGENTS.has(event.agent);
   const sessionId = event.sessionId?.trim();
   if (sessionId) {
-    return { isolated: true, key: `session:${sessionId}` };
+    return {
+      isolated: true,
+      key: `session:${sessionId}`,
+      retainsPeerScopes,
+    };
   }
-  if (
-    PROCESS_SCOPED_HOOK_AGENTS.has(event.agent) &&
-    typeof event.pid === "number"
-  ) {
-    return { isolated: true, key: `process:${event.pid}` };
+  if (retainsPeerScopes && typeof event.pid === "number") {
+    return {
+      isolated: true,
+      key: `process:${event.pid}`,
+      retainsPeerScopes,
+    };
   }
-  return { isolated: false, key: PANEL_HOOK_SCOPE_KEY };
+  return {
+    isolated: false,
+    key: PANEL_HOOK_SCOPE_KEY,
+    retainsPeerScopes,
+  };
 }
 
-export function newHookScope(key: string, at: number): HookScope {
+export function newHookScope(
+  key: string,
+  at: number,
+  identity: HookIdentityFacts = {}
+): HookScope {
   return {
+    activeInteractionIds: new Set(),
     activeSubagentIds: new Set(),
     activeToolIds: new Set(),
+    anonymousInteractionCount: 0,
     anonymousSubagentCount: 0,
     anonymousToolCount: 0,
     completionObserved: false,
     completionObservedAt: undefined,
     currentTurnId: undefined,
+    identity,
+    interactionHistoryIncomplete: false,
     key,
     recentSettledTurnIds: new Set(),
+    settledInteractionIds: new Set(),
+    settledSubagentIds: new Set(),
+    settledToolIds: new Set(),
     stale: false,
-    stateStartedAt: at,
-    status: "ready",
+    stateStartedAt: undefined,
+    status: undefined,
     subagentCount: 0,
     turnEnded: false,
     turnEndedAt: undefined,
     turnResetAt: undefined,
+    toolHistoryIncomplete: false,
     updatedAt: at,
   };
 }
@@ -295,13 +334,14 @@ export function newHookScope(key: string, at: number): HookScope {
 export function getOrCreateHookScope(
   hook: HookLayer,
   identity: HookScopeIdentity,
+  event: AgentHookEventPayload,
   at: number
 ): HookScope {
   const existing = hook.scopes.get(identity.key);
   if (existing) {
     return existing;
   }
-  const scope = newHookScope(identity.key, at);
+  const scope = newHookScope(identity.key, at, hookIdentityFacts(event));
   hook.scopes.set(identity.key, scope);
   return scope;
 }
@@ -313,12 +353,17 @@ export function newHookLayer(
   return {
     agentId: event.agent,
     hidden: event.event === "SessionStart",
-    identity: hookIdentityFacts(event),
+    identity: {},
     spawnedAt: at,
-    stateStartedAt: at,
-    status: "ready",
+    stateStartedAt: undefined,
+    status: undefined,
     scopes: new Map(),
     subagentCount: 0,
+    activeSubagentWorks: new Map(),
+    nextSubagentWorkId: 0,
+    settledSubagentWorks: new Map(),
+    subagentAssociationHistoryIncomplete: false,
+    subagentWorkIdsByAlias: new Map(),
     ttlTimer: null,
     updatedAt: at,
     visibilityTimer: null,

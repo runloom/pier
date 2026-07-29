@@ -1,9 +1,18 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import {
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
+} from "../../../src/main/services/agents/agent-hooks-install.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
+const ORIGINAL_PATH = process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin";
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -39,9 +48,8 @@ function configPath(): string {
 }
 
 describe("commandCodeIntegration", () => {
-  it("capability 为 coarse，id 为 command-code", async () => {
+  it("id 为 command-code", async () => {
     const integration = await loadIntegration();
-    expect(integration.capability).toBe("coarse");
     expect(integration.id).toBe("command-code");
   });
 
@@ -94,6 +102,117 @@ describe("commandCodeIntegration", () => {
       '"SessionStart"'
     );
   });
+
+  it("官方载荷：稳定 session_id 与 tool_use_id 通过严格 v3 进入聚合器", async () => {
+    const integration = await loadIntegration();
+    await integration.install();
+    const installed = JSON.parse(await readFile(configPath(), "utf8"));
+    const hooks = installed.hooks as Record<
+      string,
+      Array<{ hooks: Array<{ command: string }> }>
+    >;
+    const command = (event: string) =>
+      hooks[event]?.[0]?.hooks[0]?.command ?? "";
+    const root = await mkdtemp(join(tmpdir(), "pier-command-code-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const common = {
+      cwd: "/repo",
+      permission_mode: "default",
+      session_id: "command-session-1",
+      transcript_path: "/tmp/command-session-1.jsonl",
+    };
+    for (const [event, payload] of [
+      [
+        "SessionStart",
+        { ...common, hook_event_name: "SessionStart", source: "startup" },
+      ],
+      [
+        "PreToolUse",
+        {
+          ...common,
+          hook_event_name: "PreToolUse",
+          tool_display_name: "SHELL",
+          tool_input: { command: "pnpm test" },
+          tool_name: "shell_command",
+          tool_use_id: "tool-command-1",
+        },
+      ],
+      [
+        "PostToolUse",
+        {
+          ...common,
+          hook_event_name: "PostToolUse",
+          tool_display_name: "SHELL",
+          tool_input: { command: "pnpm test" },
+          tool_name: "shell_command",
+          tool_response: "ok",
+          tool_use_id: "tool-command-1",
+        },
+      ],
+      [
+        "Stop",
+        {
+          ...common,
+          hook_event_name: "Stop",
+          stop_hook_active: false,
+        },
+      ],
+    ] as const) {
+      const result = spawnSync("/bin/sh", ["-c", command(event)], {
+        env: {
+          ...process.env,
+          PATH: ORIGINAL_PATH,
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+          PIER_PANEL_ID: "panel-1",
+          PIER_WINDOW_ID: "window-1",
+        },
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    }
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      {
+        event: "SessionStart",
+        sessionId: "command-session-1",
+        v: 3,
+      },
+      {
+        event: "ToolStart",
+        sessionId: "command-session-1",
+        toolName: "shell_command",
+        toolUseId: "tool-command-1",
+        v: 3,
+      },
+      {
+        event: "ToolComplete",
+        sessionId: "command-session-1",
+        toolName: "shell_command",
+        toolUseId: "tool-command-1",
+        v: 3,
+      },
+      { event: "Stop", sessionId: "command-session-1", v: 3 },
+    ]);
+
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: Array<string | undefined> = [];
+    for (const row of rows) {
+      if (row.kind !== "agentEvent") {
+        continue;
+      }
+      aggregator.ingestAgentEvent(row, integration.runtime);
+      const activity = aggregator.snapshot().activities[0];
+      statuses.push(activity?.kind === "agent" ? activity.status : undefined);
+    }
+    expect(statuses).toEqual([undefined, "tool", "processing", undefined]);
+  }, 15_000);
 
   it("幂等：重复安装不产生重复条目", async () => {
     const integration = await loadIntegration();

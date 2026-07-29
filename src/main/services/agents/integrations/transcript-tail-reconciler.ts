@@ -7,6 +7,7 @@ import type {
   TranscriptTailReconcilerConfig,
   TranscriptTerminalRecord,
 } from "./transcript-tail-contracts.ts";
+import { emitTranscriptEvent } from "./transcript-tail-event.ts";
 import { processTranscriptTitleLine } from "./transcript-title-routing.ts";
 
 export type {
@@ -23,10 +24,12 @@ const POLL_INTERVAL_MS = 250;
 const MAX_READ_BYTES = 1024 * 1024;
 const MAX_TRANSCRIPTS = 32;
 const MAX_TURN_CONTEXTS = 64;
-const MAX_PENDING_TERMINALS = 64;
-const MAX_SEEN_TERMINALS = 256;
-
+const MAX_PENDING_TRANSCRIPT_RECORDS = 64;
+type TranscriptLineClassifier = (
+  line: string
+) => TranscriptTerminalRecord | null;
 interface TranscriptEntry {
+  classifyLine: TranscriptLineClassifier | null;
   contextsByTurnId: Map<string, AgentHookEventPayload>;
   disposed: boolean;
   initialScanEnd: number;
@@ -35,9 +38,10 @@ interface TranscriptEntry {
   offset: number;
   owners: Map<string, AgentHookEventPayload>;
   pending: boolean;
-  pendingTerminalsByTurnId: Map<string, TranscriptTerminalRecord>;
+  pendingRecords: TranscriptTerminalRecord[];
   processing: boolean;
   seenTerminalEvents: Set<string>;
+  seenTranscriptEvents: Set<string>;
   watcher: (curr: Stats, prev: Stats) => void;
 }
 
@@ -58,6 +62,14 @@ export function createTranscriptTailReconciler(
   const transcriptRoot = resolve(config.transcriptRoot);
   let disposed = false;
 
+  function createEntryLineClassifier(): TranscriptLineClassifier {
+    const classifyLine = config.createLineClassifier?.() ?? config.classifyLine;
+    if (!classifyLine) {
+      throw new Error("transcript reconciler requires a line classifier");
+    }
+    return classifyLine;
+  }
+
   async function drain(path: string, entry: TranscriptEntry): Promise<void> {
     do {
       entry.pending = false;
@@ -68,8 +80,10 @@ export function createTranscriptTailReconciler(
       if (current.size < entry.offset) {
         entry.initialScanEnd = current.size;
         entry.offset = Math.max(0, current.size - MAX_READ_BYTES);
-        entry.pendingTerminalsByTurnId.clear();
+        entry.classifyLine = createEntryLineClassifier();
+        entry.pendingRecords.length = 0;
         entry.seenTerminalEvents.clear();
+        entry.seenTranscriptEvents.clear();
       }
       if (current.size === entry.offset) {
         continue;
@@ -137,7 +151,7 @@ export function createTranscriptTailReconciler(
       }
     }
     try {
-      const record = config.classifyLine(line);
+      const record = entry.classifyLine?.(line);
       if (!record) {
         return;
       }
@@ -147,49 +161,18 @@ export function createTranscriptTailReconciler(
         context = entry.owners.values().next().value;
       }
       if (!context) {
-        if (
-          record.turnId &&
-          !entry.pendingTerminalsByTurnId.has(record.turnId)
-        ) {
-          entry.pendingTerminalsByTurnId.set(record.turnId, record);
-          if (entry.pendingTerminalsByTurnId.size > MAX_PENDING_TERMINALS) {
-            entry.pendingTerminalsByTurnId.delete(
-              entry.pendingTerminalsByTurnId.keys().next().value ?? ""
-            );
+        if (record.turnId) {
+          entry.pendingRecords.push(record);
+          if (entry.pendingRecords.length > MAX_PENDING_TRANSCRIPT_RECORDS) {
+            entry.pendingRecords.shift();
           }
         }
         return;
       }
-      emitTerminalEvent(entry, context, record);
+      emitTranscriptEvent(entry, context, record, config.onTerminalEvent);
     } catch {
       // transcript 是兼容性对账源；坏行和格式升级不得影响主 hook 通路。
     }
-  }
-
-  function emitTerminalEvent(
-    entry: TranscriptEntry,
-    context: AgentHookEventPayload,
-    record: TranscriptTerminalRecord
-  ): void {
-    if (record.turnId) {
-      // 同一 turn 第一个可信终态获胜；complete/abort 冲突不得二次迁移。
-      if (entry.seenTerminalEvents.has(record.turnId)) return;
-      entry.seenTerminalEvents.add(record.turnId);
-      if (entry.seenTerminalEvents.size > MAX_SEEN_TERMINALS) {
-        entry.seenTerminalEvents.delete(
-          entry.seenTerminalEvents.values().next().value ?? ""
-        );
-      }
-      entry.contextsByTurnId.delete(record.turnId);
-      entry.pendingTerminalsByTurnId.delete(record.turnId);
-    }
-    config.onTerminalEvent({
-      ...context,
-      event: record.pierEvent,
-      nativeEvent: record.nativeEvent,
-      ...(record.turnId ? { turnId: record.turnId } : {}),
-      v: 2,
-    });
   }
 
   function scheduleDrain(path: string, entry: TranscriptEntry): void {
@@ -209,6 +192,8 @@ export function createTranscriptTailReconciler(
   function disposeEntry(path: string, entry: TranscriptEntry): void {
     if (entries.get(path) === entry) {
       entry.disposed = true;
+      entry.classifyLine = null;
+      entry.pendingRecords.length = 0;
       unwatchFile(path, entry.watcher);
       entries.delete(path);
     }
@@ -268,6 +253,7 @@ export function createTranscriptTailReconciler(
       }
     };
     const entry: TranscriptEntry = {
+      classifyLine: createEntryLineClassifier(),
       contextsByTurnId: new Map(),
       disposed: false,
       initialScanEnd: initial.size,
@@ -277,9 +263,10 @@ export function createTranscriptTailReconciler(
       offset: Math.max(0, initial.size - MAX_READ_BYTES),
       owners: new Map(),
       pending: false,
-      pendingTerminalsByTurnId: new Map(),
+      pendingRecords: [],
       processing: false,
       seenTerminalEvents: new Set(),
+      seenTranscriptEvents: new Set(),
       watcher,
     };
     entries.set(canonicalPath, entry);
@@ -307,6 +294,8 @@ export function createTranscriptTailReconciler(
       disposed = true;
       for (const [path, entry] of entries) {
         entry.disposed = true;
+        entry.classifyLine = null;
+        entry.pendingRecords.length = 0;
         unwatchFile(path, entry.watcher);
       }
       entries.clear();
@@ -377,9 +366,21 @@ export function createTranscriptTailReconciler(
             entry.contextsByTurnId.keys().next().value ?? ""
           );
         }
-        const pendingTerminal = entry.pendingTerminalsByTurnId.get(turnId);
-        if (pendingTerminal) {
-          emitTerminalEvent(entry, event, pendingTerminal);
+        const pendingForTurn = entry.pendingRecords.filter(
+          (record) => record.turnId === turnId
+        );
+        if (pendingForTurn.length > 0) {
+          entry.pendingRecords = entry.pendingRecords.filter(
+            (record) => record.turnId !== turnId
+          );
+        }
+        for (const pendingRecord of pendingForTurn) {
+          emitTranscriptEvent(
+            entry,
+            event,
+            pendingRecord,
+            config.onTerminalEvent
+          );
         }
       }
       scheduleDrain(canonicalPath, entry);

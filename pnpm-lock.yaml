@@ -152,6 +152,9 @@ importers:
       input-otp:
         specifier: ^1.4.2
         version: 1.4.2(react-dom@19.2.7(react@19.2.7))(react@19.2.7)
+      jsonc-parser:
+        specifier: 3.3.1
+        version: 3.3.1
       katex:
         specifier: 0.16.47
         version: 0.16.47

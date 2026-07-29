@@ -1,13 +1,20 @@
+import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import {
+  eventsJsonlPath,
+  installAgentHooksEmitScript,
+  pierHooksCurrentDir,
+} from "../../../src/main/services/agents/agent-hooks-install.ts";
 import {
   installGeminiHooks,
   uninstallGeminiHooks,
   withoutPierGeminiHooks,
   withPierGeminiHooks,
 } from "../../../src/main/services/agents/integrations/gemini.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 
@@ -16,7 +23,6 @@ const GEMINI_EVENTS = [
   "SessionEnd",
   "BeforeAgent",
   "AfterAgent",
-  "Notification",
   "PreCompress",
   "BeforeTool",
   "AfterTool",
@@ -50,7 +56,7 @@ function allHookEntries(
 }
 
 describe("withPierGeminiHooks", () => {
-  it("为 8 个 Gemini hook 事件各注入一条 pier 命令", () => {
+  it("只为 7 个有完整状态语义的 Gemini hook 键注入命令", () => {
     const next = withPierGeminiHooks({});
     const hooks = next.hooks as Record<string, unknown[]>;
     for (const evt of GEMINI_EVENTS) {
@@ -61,11 +67,13 @@ describe("withPierGeminiHooks", () => {
     }
   });
 
-  it('BeforeTool / AfterTool 条目携带 matcher: ""', () => {
+  it("BeforeTool / AfterTool 对 ask_user 也只报告普通工具生命周期", () => {
     const next = withPierGeminiHooks({});
     const hooks = hookMatchers(next);
-    expect(hooks.BeforeTool?.[0]?.matcher).toBe("");
-    expect(hooks.AfterTool?.[0]?.matcher).toBe("");
+    expect(hooks.BeforeTool?.map((entry) => entry.matcher)).toEqual([
+      undefined,
+    ]);
+    expect(hooks.AfterTool?.map((entry) => entry.matcher)).toEqual([undefined]);
   });
 
   it("所有注入的 hook 条目 timeout 字段严格等于 10000（毫秒陷阱）", () => {
@@ -77,18 +85,16 @@ describe("withPierGeminiHooks", () => {
     }
   });
 
-  it("Notification 映射 PermissionRequest；PreCompress 映射 processing；hooks 键集 = 8 个指定事件全集", () => {
+  it("不安装缺少请求 ID 与结果事件的 Notification waiting", () => {
     const next = withPierGeminiHooks({});
     const hooks = hookMatchers(next);
     const keys = Object.keys(hooks);
     expect(keys).toHaveLength(GEMINI_EVENTS.length);
     expect(keys.sort()).toEqual([...GEMINI_EVENTS].sort());
-    const notification = hooks.Notification ?? [];
-    expect(notification).toHaveLength(1);
-    expect(notification[0]?.matcher).toBeUndefined();
-    const cmds = notification.flatMap((m) => m.hooks.map((h) => h.command));
-    expect(cmds).toHaveLength(1);
-    expect(cmds[0]).toContain('"PermissionRequest"');
+    expect(hooks.Notification).toBeUndefined();
+    expect(hookCommands(next).join("\n")).not.toContain(
+      '"InteractionRequested"'
+    );
     // PreCompress → processing（压缩期间保持活跃状态）
     const preCompress = hooks.PreCompress ?? [];
     expect(preCompress).toHaveLength(1);
@@ -98,6 +104,79 @@ describe("withPierGeminiHooks", () => {
     );
     expect(compressCmds[0]).toContain('"processing"');
   });
+
+  it("真实 ask_user 输入只形成普通工具生命周期，不伪造 waiting", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-gemini-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const hooks = hookMatchers(withPierGeminiHooks({}));
+    const commandFor = (nativeEvent: string) =>
+      hooks[nativeEvent]?.[0]?.hooks[0]?.command ?? "";
+    const env = {
+      ...process.env,
+      PIER_AGENT_EVENT_LOG: logPath,
+      PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+      PIER_PANEL_ID: "p1",
+      PIER_WINDOW_ID: "w1",
+    };
+    const run = (nativeEvent: string, payload: Record<string, unknown>) => {
+      const result = spawnSync("/bin/sh", ["-c", commandFor(nativeEvent)], {
+        env,
+        input: JSON.stringify(payload),
+      });
+      expect(result.status, result.stderr.toString()).toBe(0);
+    };
+
+    run("BeforeTool", {
+      cwd: "/workspace",
+      hook_event_name: "BeforeTool",
+      session_id: "session-1",
+      timestamp: "2026-07-29T00:00:00Z",
+      tool_input: {
+        questions: [{ question: "Continue?", type: "choice" }],
+      },
+      tool_name: "ask_user",
+      transcript_path: "/tmp/gemini-transcript.json",
+    });
+    run("AfterTool", {
+      cwd: "/workspace",
+      hook_event_name: "AfterTool",
+      session_id: "session-1",
+      timestamp: "2026-07-29T00:00:01Z",
+      tool_input: {
+        questions: [{ question: "Continue?", type: "choice" }],
+      },
+      tool_name: "ask_user",
+      tool_response: {
+        llmContent: "User dismissed ask_user dialog without answering.",
+        returnDisplay: "User dismissed dialog",
+      },
+      transcript_path: "/tmp/gemini-transcript.json",
+    });
+
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      {
+        event: "ToolStart",
+        nativeEvent: "BeforeTool",
+        sessionId: "session-1",
+        toolName: "ask_user",
+        v: 3,
+      },
+      {
+        event: "ToolComplete",
+        nativeEvent: "AfterTool",
+        sessionId: "session-1",
+        toolName: "ask_user",
+        v: 3,
+      },
+    ]);
+  }, 15_000);
 
   it("幂等：重复安装不产生重复条目", () => {
     const once = withPierGeminiHooks({});
@@ -153,6 +232,34 @@ describe("install/uninstallGeminiHooks (文件 IO)", () => {
     await writeFile(path, "{ not json", "utf8");
     await installGeminiHooks(path);
     expect(await readFile(path, "utf8")).toBe("{ not json");
+  });
+
+  it("目标键异常时不先清理另一键旧 Pier，整文件字节不变", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-gemini-shape-test-"));
+    const path = join(dir, "settings.json");
+    const raw = JSON.stringify({
+      hooks: {
+        LegacyEvent: [
+          {
+            hooks: [
+              {
+                command: `pier-hook-gen=9; "\${PIER_AGENT_HOOKS_DIR}/emit" legacy`,
+              },
+            ],
+          },
+        ],
+        AfterAgent: { custom: true },
+      },
+    });
+    await writeFile(path, raw, "utf8");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await installGeminiHooks(path);
+      expect(await readFile(path, "utf8")).toBe(raw);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

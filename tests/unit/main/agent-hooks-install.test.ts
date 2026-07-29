@@ -1,14 +1,24 @@
 import { spawnSync } from "node:child_process";
-import { readFile, readlink, rm, stat } from "node:fs/promises";
+import {
+  mkdir,
+  readFile,
+  readlink,
+  rm,
+  stat,
+  writeFile,
+} from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import {
   MAX_AGENT_SESSION_TITLE_LENGTH,
   MAX_PROMPT_SNIPPET_LENGTH,
 } from "@shared/agent-session-title/index.ts";
+import { agentHookEventSchema } from "@shared/contracts/agent-session.ts";
 import { afterEach, describe, expect, it } from "vitest";
+import * as agentHooksInstallModule from "../../../src/main/services/agents/agent-hooks-install.ts";
 import {
   agentHooksDir,
+  atomicReplaceSymlink,
   buildDeriveClaudeSessionTitleScript,
   buildExtractStdinMetaScript,
   DERIVE_CLAUDE_SESSION_TITLE_SCRIPT_NAME,
@@ -26,7 +36,42 @@ import {
   readInstalledHookRuntimeGeneration,
 } from "../../../src/main/services/agents/agent-hooks-install.ts";
 
+type RuntimeInstallLock = <T>(
+  hooksHome: string,
+  operation: () => Promise<T>,
+  options?: {
+    acquireTimeoutMs?: number;
+    delay?: (ms: number) => Promise<void>;
+  }
+) => Promise<T>;
+
+function runtimeInstallLock(): RuntimeInstallLock {
+  return (
+    agentHooksInstallModule as typeof agentHooksInstallModule & {
+      withAgentHooksInstallLock?: RuntimeInstallLock;
+    }
+  ).withAgentHooksInstallLock as RuntimeInstallLock;
+}
+
 describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () => {
+  it("严格 v3 运行时使用受管世代 10", () => {
+    expect(PIER_HOOK_COMMAND_GENERATION).toBe(10);
+  });
+
+  it("返回可区分的安装结果", async () => {
+    const root = await makeTempDir();
+    const hooksHome = join(root, "hooks");
+    await expect(
+      installAgentHooksEmitScript(join(root, "userData"), { hooksHome })
+    ).resolves.toBe("installed");
+    await mkdir(join(hooksHome, "v11"), { recursive: true });
+    await atomicReplaceSymlink(join(hooksHome, "current"), "v11");
+    await writeFile(join(hooksHome, "GENERATION"), "11\n", "utf8");
+    await expect(
+      installAgentHooksEmitScript(join(root, "userData"), { hooksHome })
+    ).resolves.toBe("skipped-newer");
+  });
+
   let baseDir: string | null = null;
 
   async function makeTempDir(): Promise<string> {
@@ -48,6 +93,113 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
       await rm(baseDir, { force: true, recursive: true });
       baseDir = null;
     }
+  });
+
+  it("跨进程文件锁串行化同一 hooksHome，等待由受控闸门驱动", async () => {
+    const root = await makeTempDir();
+    const hooksHome = join(root, "hooks");
+    const withLock = runtimeInstallLock();
+    expect(withLock).toBeTypeOf("function");
+    const firstEntered = Promise.withResolvers<void>();
+    const releaseFirst = Promise.withResolvers<void>();
+    const secondContended = Promise.withResolvers<void>();
+    const retrySecond = Promise.withResolvers<void>();
+    const order: string[] = [];
+
+    const first = withLock(hooksHome, async () => {
+      order.push("first-enter");
+      firstEntered.resolve();
+      await releaseFirst.promise;
+      order.push("first-exit");
+    });
+    await firstEntered.promise;
+
+    const second = withLock(
+      hooksHome,
+      async () => {
+        order.push("second-enter");
+      },
+      {
+        acquireTimeoutMs: 30_000,
+        delay: async () => {
+          secondContended.resolve();
+          await retrySecond.promise;
+        },
+      }
+    );
+    await secondContended.promise;
+    expect(order).toEqual(["first-enter"]);
+
+    releaseFirst.resolve();
+    await first;
+    retrySecond.resolve();
+    await second;
+    expect(order).toEqual(["first-enter", "first-exit", "second-enter"]);
+  });
+
+  it("并发较高世代发布后，v10 在锁内重读并拒绝降级", async () => {
+    const root = await makeTempDir();
+    const hooksHome = join(root, "hooks");
+    const userData = join(root, "userData");
+    const withLock = runtimeInstallLock();
+    const firstEntered = Promise.withResolvers<void>();
+    const publishHigher = Promise.withResolvers<void>();
+    const secondContended = Promise.withResolvers<void>();
+    const retrySecond = Promise.withResolvers<void>();
+
+    const higherInstall = withLock(hooksHome, async () => {
+      firstEntered.resolve();
+      await publishHigher.promise;
+      await mkdir(join(hooksHome, "v11"), { recursive: true });
+      await atomicReplaceSymlink(join(hooksHome, "current"), "v11");
+      await writeFile(join(hooksHome, "GENERATION"), "11\n", "utf8");
+    });
+    await firstEntered.promise;
+
+    const lowerInstall = installAgentHooksEmitScript(userData, {
+      hooksHome,
+      lockOptions: {
+        acquireTimeoutMs: 30_000,
+        delay: async () => {
+          secondContended.resolve();
+          await retrySecond.promise;
+        },
+      },
+    } as {
+      hooksHome: string;
+      lockOptions: {
+        acquireTimeoutMs: number;
+        delay: () => Promise<void>;
+      };
+    });
+    const firstOutcome = await Promise.race([
+      secondContended.promise.then(() => "contended" as const),
+      lowerInstall.then(() => "finished" as const),
+    ]);
+
+    publishHigher.resolve();
+    await higherInstall;
+    retrySecond.resolve();
+    await expect(lowerInstall).resolves.toBe("skipped-newer");
+
+    expect(firstOutcome).toBe("contended");
+    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(11);
+    expect(await readlink(join(hooksHome, "current"))).toBe("v11");
+  });
+
+  it("较高世代已切换 current 但 GENERATION 尚未落盘时仍不可降级", async () => {
+    const root = await makeTempDir();
+    const hooksHome = join(root, "hooks");
+    await mkdir(join(hooksHome, "v11"), { recursive: true });
+    await atomicReplaceSymlink(join(hooksHome, "current"), "v11");
+    await writeFile(join(hooksHome, "GENERATION"), "10\n", "utf8");
+
+    await expect(
+      installAgentHooksEmitScript(join(root, "userData"), { hooksHome })
+    ).resolves.toBe("skipped-newer");
+
+    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(11);
+    expect(await readlink(join(hooksHome, "current"))).toBe("v11");
   });
 
   it("emit 脚本写入 current 且 chmod 755，current 为指向 vN 的 symlink", async () => {
@@ -110,7 +262,9 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     expect(content).toContain(">> ");
   });
 
-  it("agentEvent kind spawn 写出合法 JSONL 行", async () => {
+  it("旧 agentEventV2 位置参数继续写出可解析的 v2 行", {
+    timeout: 15_000,
+  }, async () => {
     const root = await makeTempDir();
     const { userData, hooksHome } = await installPair(root);
     const logPath = eventsJsonlPath(userData);
@@ -128,21 +282,219 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     );
     expect(r.status).toBe(0);
     const line = (await readFile(logPath, "utf8")).trim();
-    const row = JSON.parse(line) as {
-      v: number;
-      kind: string;
-      panelId: string;
-      agent: string;
-      event: string;
-    };
-    expect(row.v).toBe(2);
-    expect(row.kind).toBe("agentEvent");
-    expect(row.panelId).toBe("p1");
-    expect(row.agent).toBe("claude");
-    expect(row.event).toBe("Stop");
+    expect(agentHookEventSchema.parse(JSON.parse(line))).toMatchObject({
+      agent: "claude",
+      event: "Stop",
+      kind: "agentEvent",
+      panelId: "p1",
+      v: 2,
+    });
   });
 
-  it("commandStart / commandFinished spawn 写 JSONL", async () => {
+  it("旧 agentEvent 位置参数继续写出可解析的 v1 行", {
+    timeout: 15_000,
+  }, async () => {
+    const root = await makeTempDir();
+    const { userData, hooksHome } = await installPair(root);
+    const logPath = eventsJsonlPath(userData);
+    const result = spawnSync(
+      "/bin/sh",
+      [
+        emitScriptPath(hooksHome),
+        "agentEvent",
+        "claude",
+        "ToolStart",
+        "session-1",
+        "turn-1",
+        "tool-1",
+        "Shell",
+        "worker-1",
+        "researcher",
+        "/tmp/transcript.jsonl",
+        Buffer.from("{}").toString("base64"),
+      ],
+      {
+        env: {
+          ...process.env,
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+        },
+      }
+    );
+    expect(result.status).toBe(0);
+    expect(
+      agentHookEventSchema.parse(
+        JSON.parse((await readFile(logPath, "utf8")).trim())
+      )
+    ).toMatchObject({
+      event: "ToolStart",
+      sessionId: "session-1",
+      toolUseId: "tool-1",
+      v: 1,
+    });
+  });
+
+  it("agentEventV3 spawn 写出可被严格 schema 解析的标准与交互事件", {
+    timeout: 15_000,
+  }, async () => {
+    const root = await makeTempDir();
+    const { userData, hooksHome } = await installPair(root);
+    const logPath = eventsJsonlPath(userData);
+    const env = {
+      ...process.env,
+      PIER_AGENT_EVENT_LOG: logPath,
+      PIER_PANEL_ID: "p1",
+      PIER_WINDOW_ID: "w1",
+    };
+    const run = (...args: string[]) =>
+      spawnSync("/bin/sh", [emitScriptPath(hooksHome), ...args], { env });
+
+    expect(
+      run(
+        "agentEventV3",
+        "claude",
+        "ToolStart",
+        "PreToolUse",
+        'session-"quoted"\\value\n',
+        "turn-1",
+        "tool-1",
+        "Shell",
+        "worker-1",
+        "researcher",
+        "/tmp/transcript.jsonl",
+        Buffer.from('{"promptSnippet":"hello"}').toString("base64"),
+        "parent-1",
+        "subagent",
+        "busy",
+        "must-be-removed",
+        "permission",
+        "accepted",
+        "hello"
+      ).status
+    ).toBe(0);
+    expect(
+      run(
+        "agentEventV3",
+        "claude",
+        "InteractionRequested",
+        "PermissionRequest",
+        "session-1",
+        "turn-1",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "main",
+        "",
+        "permission-1",
+        "permission",
+        "accepted-must-be-removed",
+        ""
+      ).status
+    ).toBe(0);
+    expect(
+      run(
+        "agentEventV3",
+        "claude",
+        "InteractionResolved",
+        "PermissionResult",
+        "session-1",
+        "turn-1",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "",
+        "main",
+        "",
+        "permission-1",
+        "permission",
+        "accepted",
+        ""
+      ).status
+    ).toBe(0);
+
+    const raw = await readFile(logPath, "utf8").catch(() => "");
+    expect(raw).not.toBe("");
+    const rows = raw
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toHaveLength(3);
+    expect(rows[0]).toMatchObject({
+      actorHint: "subagent",
+      event: "ToolStart",
+      nativeEvent: "PreToolUse",
+      nativeState: "busy",
+      parentSessionId: "parent-1",
+      promptSnippet: "hello",
+      sessionId: 'session-"quoted"\\value',
+      toolUseId: "tool-1",
+      v: 3,
+    });
+    expect(rows[1]).toMatchObject({
+      event: "InteractionRequested",
+      interactionId: "permission-1",
+      interactionKind: "permission",
+      v: 3,
+    });
+    expect(rows[2]).toMatchObject({
+      event: "InteractionResolved",
+      interactionId: "permission-1",
+      interactionKind: "permission",
+      interactionOutcome: "accepted",
+      v: 3,
+    });
+    expect(rows[0]).not.toHaveProperty("interactionId");
+    expect(rows[1]).not.toHaveProperty("interactionOutcome");
+    expect(rows[2]).not.toHaveProperty("toolName");
+  });
+
+  it("agentEventV3 字段按 UTF-8 边界截断，不写入替换字符", {
+    timeout: 15_000,
+  }, async () => {
+    const root = await makeTempDir();
+    const { userData, hooksHome } = await installPair(root);
+    const logPath = eventsJsonlPath(userData);
+    const result = spawnSync(
+      "/bin/sh",
+      [
+        emitScriptPath(hooksHome),
+        "agentEventV3",
+        "claude",
+        "PromptSubmit",
+        "UserPromptSubmit",
+        `${"x".repeat(126)}😀`,
+      ],
+      {
+        env: {
+          ...process.env,
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+        },
+      }
+    );
+    expect(result.status).toBe(0);
+    const event = agentHookEventSchema.parse(
+      JSON.parse((await readFile(logPath, "utf8")).trim())
+    );
+    expect(event).toMatchObject({
+      sessionId: "x".repeat(126),
+      v: 3,
+    });
+    expect(JSON.stringify(event)).not.toContain("\uFFFD");
+  });
+
+  it("commandStart / commandFinished spawn 写 JSONL", {
+    timeout: 15_000,
+  }, async () => {
     const root = await makeTempDir();
     const { userData, hooksHome } = await installPair(root);
     const logPath = eventsJsonlPath(userData);
@@ -178,7 +530,7 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     expect(fin.exitCode).toBe(137);
   });
 
-  it("未知 kind 静默 no-op 且不写日志", async () => {
+  it("未知 kind 静默 no-op 且不写日志", { timeout: 15_000 }, async () => {
     const root = await makeTempDir();
     const { userData, hooksHome } = await installPair(root);
     const logPath = eventsJsonlPath(userData);
@@ -276,7 +628,9 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     expect(pierHooksVersionDir(5, "/h")).toBe(join("/h", "v5"));
   });
 
-  it("extract-stdin-meta spawn：抽出 session_id + promptSnippet", async () => {
+  it("extract-stdin-meta spawn：抽出 session_id + promptSnippet", {
+    timeout: 15_000,
+  }, async () => {
     const root = await makeTempDir();
     const { hooksHome } = await installPair(root);
     const prompt = "帮我分析下当前未提交的修改";
@@ -300,7 +654,44 @@ describe("installAgentHooksEmitScript（共享 ~/.pier/hooks 运行时）", () =
     expect(meta.promptSnippet).toBe(prompt.slice(0, MAX_PROMPT_SNIPPET_LENGTH));
   });
 
-  it("derive-claude-session-title spawn：标题 / 原样保留 / 超长截断", async () => {
+  it("extract-stdin-meta spawn：保留已审计身份别名但不收任意 id", async () => {
+    const root = await makeTempDir();
+    const { hooksHome } = await installPair(root);
+    const input = {
+      conversation_id: "conversation-1",
+      conversationId: "conversation-2",
+      id: "generic-id",
+      parent_session_id: "parent-1",
+      parentSessionId: "parent-2",
+      task_id: "task-1",
+      taskId: "task-2",
+      tool_call_id: "tool-call-1",
+      toolCallId: "tool-call-2",
+    };
+    const result = spawnSync(extractStdinMetaScriptPath(hooksHome), [], {
+      encoding: "utf8",
+      input: JSON.stringify(input),
+    });
+    expect(result.status).toBe(0);
+    const metadata = JSON.parse(
+      Buffer.from(result.stdout.trim(), "base64").toString("utf8")
+    ) as Record<string, unknown>;
+    expect(metadata).toMatchObject({
+      conversation_id: "conversation-1",
+      conversationId: "conversation-2",
+      parent_session_id: "parent-1",
+      parentSessionId: "parent-2",
+      task_id: "task-1",
+      taskId: "task-2",
+      tool_call_id: "tool-call-1",
+      toolCallId: "tool-call-2",
+    });
+    expect(metadata).not.toHaveProperty("id");
+  }, 15_000);
+
+  it("derive-claude-session-title spawn：标题 / 原样保留 / 超长截断", {
+    timeout: 15_000,
+  }, async () => {
     const root = await makeTempDir();
     const { hooksHome } = await installPair(root);
     const script = deriveClaudeSessionTitleScriptPath(hooksHome);

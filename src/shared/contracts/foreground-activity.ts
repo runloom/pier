@@ -24,7 +24,7 @@ export type ActivityKind = z.infer<typeof activityKindSchema>;
  * - `ready`      — 进程存活但无活跃工作（回合结束, 等待输入）
  * - `processing` — 主循环推进中
  * - `tool`       — 调用工具
- * - `waiting`    — 等用户输入（PermissionRequest）
+ * - `waiting`    — 等用户输入（v3 `InteractionRequested`）
  * - `error`      — 最近事件是失败信号
  *
  * status 的唯一来源是 hook 证据。launch 先验（OSC 133 / launcher）只能
@@ -158,26 +158,26 @@ export type ForegroundActivityBroadcast = z.infer<
 >;
 
 /**
- * hook 事件名 → activity status。null = 未知事件，调用方应忽略。
+ * hook 事件名 → activity status。null = 事件不提供状态事实；可能是已知的
+ * 生命周期事件，也可能是未知事件，调用方应按事件类别决定是否继续处理。
  * 单源真理表：foreground-activity 的唯一权威映射。
  */
 export function activityStatusForHookEvent(
   event: string
 ): ActivityStatus | null {
   switch (event) {
-    case "PermissionRequest":
+    case "InteractionRequested":
       return "waiting";
     case "ToolStart":
       return "tool";
     case "error":
       return "error";
-    case "SessionStart":
     case "Stop":
     case "TurnCompleted":
     case "TurnInterrupted":
-    case "SessionEnd":
       return "ready";
     case "PromptSubmit":
+    case "InteractionResolved":
     case "ToolComplete":
     case "SubagentStart":
     case "SubagentStop":

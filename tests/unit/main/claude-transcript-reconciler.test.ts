@@ -6,6 +6,7 @@ import type {
   AgentHookEventPayload,
   AgentHookEventPayloadV1,
 } from "@shared/contracts/agent-session.ts";
+import { agentHookEventSchema } from "@shared/contracts/agent-session.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createClaudeTranscriptReconciler } from "../../../src/main/services/agents/integrations/claude-transcript-reconciler.ts";
 import type { TranscriptTitleRecord } from "../../../src/main/services/agents/integrations/transcript-tail-reconciler.ts";
@@ -83,9 +84,10 @@ describe("claude transcript reconciler", () => {
       nativeEvent: "claude.transcript.user_interrupt",
       panelId: "panel-1",
       sessionId: "session-1",
-      v: 2,
+      v: 3,
       windowId: "1",
     });
+    expect(agentHookEventSchema.safeParse(received[0]).success).toBe(true);
     reconciler.dispose();
   });
 

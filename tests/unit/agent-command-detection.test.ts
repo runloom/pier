@@ -81,4 +81,29 @@ describe("matchAgentCommand (只匹配可执行体, 不扫参数)", () => {
   ])("非 agent 命令 → null: %s", (commandLine) => {
     expect(matchAgentCommand(commandLine)).toBeNull();
   });
+
+  it.each([
+    "acli rovodev run",
+    "acli rovodev run --profile work",
+    "/opt/homebrew/bin/acli rovodev run",
+    '"/Applications/Atlassian CLI/bin/acli" "rovodev" "run"',
+    "ATLASSIAN_TOKEN=x acli rovodev run",
+    "env ATLASSIAN_TOKEN=x acli rovodev run",
+    "exec acli rovodev run",
+    "sudo -u me acli rovodev run",
+    "mise exec -- acli rovodev run",
+  ])("Rovo 完整启动签名 → rovo: %s", (commandLine) => {
+    expect(matchAgentCommand(commandLine)).toBe("rovo");
+  });
+
+  it.each([
+    "acli",
+    "acli jira issue list",
+    "acli rovodev",
+    "acli rovodev runbook",
+    "/opt/homebrew/bin/acli confluence page list",
+    "env ATLASSIAN_TOKEN=x acli jira issue list",
+  ])("非 Rovo 的通用 acli 命令 → null: %s", (commandLine) => {
+    expect(matchAgentCommand(commandLine)).toBeNull();
+  });
 });

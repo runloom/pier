@@ -21,8 +21,8 @@ const VERSIONED_MARKER_RE = /pier-agent-status:v(\d+)\s*\(managed by Pier\)/;
 /**
  * 从托管文件内容解析世代。
  * - `pier-agent-status:v5 (managed by Pier)` → 5
- * - 仅有历史短语 `managed by Pier`（无 vN）→ 1
- * - 文案含 “not managed by pier” 不算托管（测试/用户文件常见否定句）
+ * - 历史 v1 文件仍有相同 `pier-agent-status:v1` 确证 marker
+ * - 任意自然语言 “managed by Pier” 不授予文件所有权
  * - 非托管 → null
  */
 export function pierManagedPluginGeneration(content: string): number | null {
@@ -30,11 +30,6 @@ export function pierManagedPluginGeneration(content: string): number | null {
   if (versioned) {
     const value = Number(versioned[1]);
     return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
-  }
-  // 去掉否定短语后再匹配，避免 “// not managed by pier” 被误判为托管。
-  const withoutNegation = content.replace(/not\s+managed by Pier/gi, "");
-  if (/managed by Pier/i.test(withoutNegation)) {
-    return 1;
   }
   return null;
 }

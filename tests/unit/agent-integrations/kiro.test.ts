@@ -3,7 +3,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
-const MARK = "PIER_AGENT_HOOKS_DIR";
+const HISTORICAL_PIER_COMMAND = `[ -x "\${PIER_AGENT_HOOKS_DIR}/emit" ] && "\${PIER_AGENT_HOOKS_DIR}/emit" "agentEventV2" "kiro" "Stop" "stop" || true`;
 
 let homeDir: string;
 
@@ -26,10 +26,17 @@ function agentsDir(): string {
 }
 
 describe("kiroIntegration 契约", () => {
-  it("capability 为 full，id 为 kiro", async () => {
+  it("id 为 kiro", async () => {
     const { kiroIntegration } = await loadIntegration();
-    expect(kiroIntegration.capability).toBe("full");
     expect(kiroIntegration.id).toBe("kiro");
+  });
+
+  it("cleanup-only 集成不声明事件映射或 Stop 权威", async () => {
+    const { kiroIntegration } = await loadIntegration();
+    expect(kiroIntegration.runtime).toEqual({
+      emittedMappings: [],
+      stopAuthority: "none",
+    });
   });
 
   it("detect(): ~/.kiro 存在时为 true", async () => {
@@ -40,93 +47,37 @@ describe("kiroIntegration 契约", () => {
     expect(kiroIntegration.detect()).toBe(true);
   });
 
-  it("detect(): commandExistsOnPath 兜底——PATH 上有 kiro 二进制时即使无 ~/.kiro 也为 true", async () => {
+  it("detect(): commandExistsOnPath 兜底——PATH 上有 kiro-cli 时即使无 ~/.kiro 也为 true", async () => {
     const dir = await mkdtemp(join(tmpdir(), "pier-kiro-bin-"));
-    await writeFile(join(dir, "kiro"), "#!/bin/sh\n", { mode: 0o755 });
+    await writeFile(join(dir, "kiro-cli"), "#!/bin/sh\n", { mode: 0o755 });
     vi.stubEnv("PATH", dir);
     const { kiroIntegration } = await loadIntegration();
     expect(kiroIntegration.detect()).toBe(true);
   });
+
+  it("detect(): 不把旧的 kiro 命令误判为当前 Kiro CLI", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-kiro-legacy-bin-"));
+    await writeFile(join(dir, "kiro"), "#!/bin/sh\n", { mode: 0o755 });
+    vi.stubEnv("PATH", dir);
+    const { kiroIntegration } = await loadIntegration();
+    expect(kiroIntegration.detect()).toBe(false);
+  });
 });
 
-describe("withPierKiroHooks / withoutPierKiroHooks (纯函数)", () => {
-  it("扁平数组 schema：hooks.<event> 直接是 {command, matcher?} 数组", async () => {
-    const { withPierKiroHooks } = await loadIntegration();
-    const next = withPierKiroHooks({});
-    const hooks = next.hooks as Record<
-      string,
-      Array<{ command: string; matcher?: string }>
-    >;
-    expect(Array.isArray(hooks.agentSpawn)).toBe(true);
-    expect(hooks.agentSpawn?.[0]).not.toHaveProperty("hooks");
-    expect(typeof hooks.agentSpawn?.[0]?.command).toBe("string");
-  });
-
-  it("五事件齐全，工具事件带 matcher，其余不带", async () => {
-    const { withPierKiroHooks } = await loadIntegration();
-    const next = withPierKiroHooks({});
-    const hooks = next.hooks as Record<
-      string,
-      Array<{ command: string; matcher?: string }>
-    >;
-    for (const evt of ["agentSpawn", "userPromptSubmit", "stop"]) {
-      expect(hooks[evt], evt).toHaveLength(1);
-      expect(hooks[evt]?.[0]?.matcher).toBeUndefined();
-    }
-    for (const evt of ["preToolUse", "postToolUse"]) {
-      expect(hooks[evt], evt).toHaveLength(1);
-      expect(hooks[evt]?.[0]?.matcher).toBe("*");
-    }
-  });
-
-  it("命令内容从 stdin payload 抽取 session_id 并上报正确事件名", async () => {
-    const { withPierKiroHooks } = await loadIntegration();
-    const next = withPierKiroHooks({});
-    const hooks = next.hooks as Record<
-      string,
-      Array<{ command: string; matcher?: string }>
-    >;
-    const stopCmd = hooks.stop?.[0]?.command ?? "";
-    expect(stopCmd).toContain("session_id");
-    expect(stopCmd).toContain("sessionId");
-    expect(stopCmd).toContain(MARK);
-    expect(stopCmd).toContain('"kiro"');
-    expect(stopCmd).toContain('"Stop"');
-    expect(hooks.agentSpawn?.[0]?.command).toContain('"SessionStart"');
-    expect(hooks.userPromptSubmit?.[0]?.command).toContain('"PromptSubmit"');
-    expect(hooks.preToolUse?.[0]?.command).toContain('"ToolStart"');
-    expect(hooks.postToolUse?.[0]?.command).toContain('"ToolComplete"');
-  });
-
-  it("幂等：重复注入不产生重复条目", async () => {
-    const { withPierKiroHooks } = await loadIntegration();
-    const once = withPierKiroHooks({});
-    const twice = withPierKiroHooks(once);
-    const hooks = twice.hooks as Record<string, unknown[]>;
-    expect(hooks.stop).toHaveLength(1);
-  });
-
-  it("保留用户已有的无关 hook 条目与顶层配置", async () => {
-    const { withPierKiroHooks } = await loadIntegration();
-    const user = {
-      name: "my-agent",
-      hooks: { stop: [{ command: "say done" }] },
-    };
-    const next = withPierKiroHooks(user);
-    expect(next.name).toBe("my-agent");
-    const hooks = next.hooks as Record<string, Array<{ command: string }>>;
-    expect(hooks.stop).toHaveLength(2);
-    expect(hooks.stop?.[0]?.command).toBe("say done");
-  });
-
+describe("withoutPierKiroHooks（纯清理）", () => {
   it("withoutPierKiroHooks 只移除 pier 条目，保留用户 hook", async () => {
-    const { withPierKiroHooks, withoutPierKiroHooks } = await loadIntegration();
-    const user = { hooks: { stop: [{ command: "say done" }] } };
-    const installed = withPierKiroHooks(user);
-    const cleaned = withoutPierKiroHooks(installed);
+    const { withoutPierKiroHooks } = await loadIntegration();
+    const cleaned = withoutPierKiroHooks({
+      name: "my-agent",
+      hooks: {
+        agentSpawn: [{ command: HISTORICAL_PIER_COMMAND }],
+        stop: [{ command: "say done" }, { command: HISTORICAL_PIER_COMMAND }],
+      },
+    });
     const hooks = cleaned.hooks as Record<string, unknown[]>;
     expect(hooks.stop).toEqual([{ command: "say done" }]);
     expect(hooks.agentSpawn).toBeUndefined();
+    expect(cleaned.name).toBe("my-agent");
   });
 
   it("withoutPierKiroHooks 无 pier 条目时原样返回输入引用", async () => {
@@ -136,27 +87,42 @@ describe("withPierKiroHooks / withoutPierKiroHooks (纯函数)", () => {
   });
 });
 
-describe("install/uninstallKiroHooks (文件 IO, 对目录下所有既存 *.json 注入)", () => {
-  it("对 ~/.kiro/agents/ 下所有既存 agent 文件注入", async () => {
+describe("install/uninstallKiroHooks（文件 IO，仅清理历史条目）", () => {
+  it("install 对所有既存 agent 文件只移除历史 pier 条目", async () => {
     await mkdir(agentsDir(), { recursive: true });
     await writeFile(
       join(agentsDir(), "general-assistant.json"),
-      JSON.stringify({ name: "general-assistant" }),
+      JSON.stringify({
+        name: "general-assistant",
+        hooks: {
+          stop: [{ command: "say done" }, { command: HISTORICAL_PIER_COMMAND }],
+        },
+      }),
       "utf8"
     );
     await writeFile(
       join(agentsDir(), "code-reviewer.json"),
-      JSON.stringify({ name: "code-reviewer" }),
+      JSON.stringify({
+        name: "code-reviewer",
+        hooks: {
+          preToolUse: [{ command: HISTORICAL_PIER_COMMAND, matcher: "*" }],
+        },
+      }),
       "utf8"
     );
     const { installKiroHooks } = await loadIntegration();
     await installKiroHooks();
-    for (const file of ["general-assistant.json", "code-reviewer.json"]) {
-      const parsed = JSON.parse(
-        await readFile(join(agentsDir(), file), "utf8")
-      );
-      expect(parsed.hooks.stop).toHaveLength(1);
-    }
+    const generalAssistant = JSON.parse(
+      await readFile(join(agentsDir(), "general-assistant.json"), "utf8")
+    );
+    expect(generalAssistant).toEqual({
+      name: "general-assistant",
+      hooks: { stop: [{ command: "say done" }] },
+    });
+    const codeReviewer = JSON.parse(
+      await readFile(join(agentsDir(), "code-reviewer.json"), "utf8")
+    );
+    expect(codeReviewer).toEqual({ name: "code-reviewer", hooks: {} });
   });
 
   it("目录不存在时 install 是 no-op（不主动新建 agent 文件）", async () => {
@@ -170,25 +136,32 @@ describe("install/uninstallKiroHooks (文件 IO, 对目录下所有既存 *.json
     await mkdir(agentsDir(), { recursive: true });
     await writeFile(
       join(agentsDir(), "general-assistant.json"),
-      JSON.stringify({ name: "general-assistant" }),
+      JSON.stringify({
+        name: "general-assistant",
+        hooks: {
+          stop: [{ command: "say done" }, { command: HISTORICAL_PIER_COMMAND }],
+        },
+      }),
       "utf8"
     );
-    const { installKiroHooks, uninstallKiroHooks } = await loadIntegration();
-    await installKiroHooks();
+    const { uninstallKiroHooks } = await loadIntegration();
     await uninstallKiroHooks();
     const parsed = JSON.parse(
       await readFile(join(agentsDir(), "general-assistant.json"), "utf8")
     );
     expect(parsed.name).toBe("general-assistant");
-    expect(parsed.hooks).toEqual({});
+    expect(parsed.hooks).toEqual({ stop: [{ command: "say done" }] });
   });
 
-  it("单个文件损坏不影响其他文件安装", async () => {
+  it("单个文件损坏不影响其他文件清理", async () => {
     await mkdir(agentsDir(), { recursive: true });
     await writeFile(join(agentsDir(), "broken.json"), "{ not json", "utf8");
     await writeFile(
       join(agentsDir(), "ok.json"),
-      JSON.stringify({ name: "ok" }),
+      JSON.stringify({
+        name: "ok",
+        hooks: { stop: [{ command: HISTORICAL_PIER_COMMAND }] },
+      }),
       "utf8"
     );
     const { installKiroHooks } = await loadIntegration();
@@ -199,23 +172,16 @@ describe("install/uninstallKiroHooks (文件 IO, 对目录下所有既存 *.json
     const parsed = JSON.parse(
       await readFile(join(agentsDir(), "ok.json"), "utf8")
     );
-    expect(parsed.hooks.stop).toHaveLength(1);
+    expect(parsed).toEqual({ name: "ok", hooks: {} });
   });
 
-  it("重复安装第二次不改变文件字节", async () => {
+  it("没有历史 pier 条目时 install 不改变文件字节", async () => {
     await mkdir(agentsDir(), { recursive: true });
-    await writeFile(
-      join(agentsDir(), "a.json"),
-      JSON.stringify({ name: "a" }),
-      "utf8"
-    );
+    const original = JSON.stringify({ name: "a" });
+    await writeFile(join(agentsDir(), "a.json"), original, "utf8");
     const { installKiroHooks } = await loadIntegration();
     await installKiroHooks();
-    const afterFirst = await readFile(join(agentsDir(), "a.json"), "utf8");
-    await installKiroHooks();
-    expect(await readFile(join(agentsDir(), "a.json"), "utf8")).toBe(
-      afterFirst
-    );
+    expect(await readFile(join(agentsDir(), "a.json"), "utf8")).toBe(original);
   });
 
   it("忽略非 .json 文件", async () => {

@@ -2,7 +2,7 @@ import { spawnSync } from "node:child_process";
 import { mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
@@ -15,6 +15,9 @@ import {
   withoutPierCursorHooks,
   withPierCursorHooks,
 } from "../../../src/main/services/agents/integrations/cursor.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
+import type { AgentActivity } from "../../../src/shared/contracts/foreground-activity.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 
@@ -120,22 +123,109 @@ describe("withPierCursorHooks", () => {
       });
       expect(result.status).toBe(0);
     };
-    runStop('{"session_id":"c1","status":"completed","loop_count":0}');
-    runStop('{"session_id":"c1","status":"aborted"}');
-    runStop('{"session_id":"c1","status":"error"}');
-    runStop('{"session_id":"c1"}');
+    runStop(
+      '{"conversation_id":"c1","generation_id":"g1","status":"completed","loop_count":0}'
+    );
+    runStop('{"conversation_id":"c1","generation_id":"g2","status":"aborted"}');
+    runStop('{"conversation_id":"c1","generation_id":"g3","status":"error"}');
+    runStop('{"conversation_id":"c1","generation_id":"g4"}');
     const lines = (await readFile(logPath, "utf8"))
       .trim()
       .split("\n")
-      .map((line) => JSON.parse(line));
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)))
+      .map((entry) => {
+        if (entry.kind !== "agentEvent" || entry.v !== 3) {
+          throw new Error("expected v3 agent event");
+        }
+        return entry;
+      });
     expect(
-      lines.map((entry) => [entry.event, entry.nativeEvent, entry.sessionId])
+      lines.map((entry) => [
+        entry.event,
+        entry.nativeEvent,
+        entry.sessionId,
+        entry.turnId,
+        entry.v,
+      ])
     ).toEqual([
-      ["TurnCompleted", "stop", "c1"],
-      ["TurnInterrupted", "stop", "c1"],
-      ["error", "stop", "c1"],
-      ["Stop", "stop", "c1"],
+      ["TurnCompleted", "stop", "c1", "g1", 3],
+      ["TurnInterrupted", "stop", "c1", "g2", 3],
+      ["error", "stop", "c1", "g3", 3],
+      ["Stop", "stop", "c1", "g4", 3],
     ]);
+  }, 15_000);
+
+  it("Cursor 子智能体重复的父 conversation/generation 不冒充独立子会话身份", async () => {
+    const root = await mkdtemp(join(tmpdir(), "pier-cursor-subagent-v3-"));
+    const userData = join(root, "userData");
+    const hooksHome = join(root, "hooks");
+    await installAgentHooksEmitScript(userData, { hooksHome });
+    const logPath = eventsJsonlPath(userData);
+    const hooks = withPierCursorHooks({}).hooks as Record<
+      string,
+      Array<{ command: string }>
+    >;
+    const result = spawnSync(
+      "/bin/sh",
+      ["-c", hooks.subagentStart?.[0]?.command ?? ""],
+      {
+        env: {
+          ...process.env,
+          PIER_AGENT_EVENT_LOG: logPath,
+          PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
+          PIER_PANEL_ID: "p1",
+          PIER_WINDOW_ID: "w1",
+        },
+        input: JSON.stringify({
+          conversation_id: "parent-conversation-1",
+          generation_id: "parent-generation-1",
+          hook_event_name: "subagentStart",
+          parent_conversation_id: "parent-conversation-1",
+          subagent_id: "subagent-1",
+          subagent_type: "explore",
+          tool_call_id: "call-1",
+        }),
+      }
+    );
+    expect(result.status, result.stderr.toString()).toBe(0);
+    const event = agentHookEventSchema.parse(
+      JSON.parse((await readFile(logPath, "utf8")).trim())
+    );
+    if (event.kind !== "agentEvent") {
+      throw new Error("expected agent event");
+    }
+    expect(event).toMatchObject({
+      actorHint: "subagent",
+      agentInstanceId: "subagent-1",
+      event: "SubagentStart",
+      nativeEvent: "subagentStart",
+      parentSessionId: "parent-conversation-1",
+      toolUseId: "call-1",
+      v: 3,
+    });
+    expect(event).not.toHaveProperty("sessionId");
+    expect(event).not.toHaveProperty("turnId");
+
+    const aggregator = createForegroundActivityAggregator();
+    aggregator.ingestAgentEvent(
+      {
+        agent: "cursor",
+        event: "PromptSubmit",
+        kind: "agentEvent",
+        nativeEvent: "beforeSubmitPrompt",
+        panelId: "p1",
+        sessionId: "parent-conversation-1",
+        turnId: "parent-generation-1",
+        v: 3,
+        windowId: "w1",
+      },
+      { stopAuthority: "advisory" }
+    );
+    aggregator.ingestAgentEvent(event, { stopAuthority: "advisory" });
+    expect(aggregator.snapshot().activities[0]).toMatchObject({
+      sessionId: "parent-conversation-1",
+      subagentCount: 1,
+    } satisfies Partial<AgentActivity>);
   }, 15_000);
 
   it("schema 形状：command 直接在定义对象上（非嵌套 hooks 数组）", () => {
@@ -222,7 +312,10 @@ describe("install/uninstallCursorHooks (文件 IO)", () => {
     const legacy = {
       hooks: {
         afterAgentResponse: [
-          { command: `[ -x "\${${MARK}}/emit" ] && old || true`, timeout: 10 },
+          {
+            command: `[ -x "\${${MARK}}/emit" ] && "\${${MARK}}/emit" legacy || true`,
+            timeout: 10,
+          },
         ],
         stop: [{ command: "say done" }],
       },
@@ -243,6 +336,24 @@ describe("install/uninstallCursorHooks (文件 IO)", () => {
     await writeFile(path, "{ not json", "utf8");
     await installCursorHooks(path);
     expect(await readFile(path, "utf8")).toBe("{ not json");
+  });
+
+  it.each([
+    '{"hooks":"user-value"}',
+    '{"hooks":{"stop":{"custom":true}}}',
+    '{"hooks":{},"version":"user-version"}',
+  ])("合法 JSON 的异常 Cursor shape 安装时保持字节不变：%s", async (raw) => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-cursor-shape-test-"));
+    const path = join(dir, "hooks.json");
+    await writeFile(path, raw, "utf8");
+    const warn = vi.spyOn(console, "warn").mockImplementation(() => undefined);
+    try {
+      await installCursorHooks(path);
+      expect(await readFile(path, "utf8")).toBe(raw);
+      expect(warn).toHaveBeenCalled();
+    } finally {
+      warn.mockRestore();
+    }
   });
 });
 

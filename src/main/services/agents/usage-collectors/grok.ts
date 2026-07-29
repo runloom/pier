@@ -1,6 +1,6 @@
 import { existsSync } from "node:fs";
-import { homedir } from "node:os";
 import { join } from "node:path";
+import { resolveGrokHome, resolveGrokSessionsRoot } from "../grok-paths.ts";
 import {
   createGrokUsageScanner,
   GROK_USAGE_SOURCE_ID,
@@ -17,14 +17,6 @@ import type {
  * `sessions/<encoded-cwd>/<sessionId>/updates.jsonl` 的 turn_completed usage。
  */
 
-function resolveGrokSessionsRoot(env: NodeJS.ProcessEnv): string {
-  const override = env.GROK_HOME;
-  if (override && override.length > 0) {
-    return join(override, "sessions");
-  }
-  return join(env.HOME ?? homedir(), ".grok", "sessions");
-}
-
 export const createGrokUsageCollector: AgentUsageCollectorFactory = (
   context
 ): AgentUsageCollector => {
@@ -38,8 +30,7 @@ export const createGrokUsageCollector: AgentUsageCollectorFactory = (
   return {
     agentId: "grok",
     detect: () =>
-      existsSync(sessionsRoot) ||
-      existsSync(join(context.env.HOME ?? homedir(), ".grok")),
+      existsSync(sessionsRoot) || existsSync(resolveGrokHome(context.env)),
     async rescan() {
       const result = await scanner.scan();
       if (result.diagnostics.failedFiles > 0) {

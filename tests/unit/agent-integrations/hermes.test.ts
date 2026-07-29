@@ -1,3 +1,4 @@
+import { spawnSync } from "node:child_process";
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -20,6 +21,12 @@ import {
   withHermesPluginEnabled,
   withoutHermesPluginEnabled,
 } from "../../../src/main/services/agents/integrations/hermes.ts";
+import {
+  PIER_MANAGED_PLUGIN_GENERATION,
+  pierManagedPluginMarker,
+} from "../../../src/main/services/agents/integrations/managed-plugin-file.ts";
+import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
 
 const EXCEPT_PASS_RE = /except[^\n]*:\s*(?:\n\s*#[^\n]*)*\s*\n\s*pass/;
 
@@ -33,6 +40,8 @@ const NATIVE_EVENTS = [
   "on_session_end",
   "on_session_finalize",
   "on_session_reset",
+  "subagent_start",
+  "subagent_stop",
 ];
 
 describe("buildHermesPluginManifest", () => {
@@ -40,7 +49,41 @@ describe("buildHermesPluginManifest", () => {
     const manifest = buildHermesPluginManifest();
     expect(manifest).toContain(HERMES_MARKER);
     expect(manifest).toContain(`name: ${HERMES_PLUGIN_NAME}`);
-    expect(HERMES_EVENT_MAP).toHaveLength(NATIVE_EVENTS.length);
+    expect(HERMES_EVENT_MAP).toEqual([
+      { nativeEvent: "on_session_start", pierEvent: "SessionStart" },
+      { nativeEvent: "pre_llm_call", pierEvent: "PromptSubmit" },
+      { nativeEvent: "pre_tool_call", pierEvent: "ToolStart" },
+      {
+        nativeEvent: "pre_tool_call.clarify",
+        pierEvent: "InteractionRequested",
+      },
+      { nativeEvent: "post_tool_call", pierEvent: "ToolComplete" },
+      {
+        nativeEvent: "post_tool_call.clarify",
+        pierEvent: "InteractionResolved",
+      },
+      {
+        nativeEvent: "pre_approval_request",
+        pierEvent: "InteractionRequested",
+      },
+      {
+        nativeEvent: "post_approval_response",
+        pierEvent: "InteractionResolved",
+      },
+      {
+        nativeEvent: "on_session_end.completed",
+        pierEvent: "TurnCompleted",
+      },
+      { nativeEvent: "on_session_end.failed", pierEvent: "error" },
+      {
+        nativeEvent: "on_session_end.interrupted",
+        pierEvent: "TurnInterrupted",
+      },
+      { nativeEvent: "on_session_finalize", pierEvent: "SessionEnd" },
+      { nativeEvent: "on_session_reset", pierEvent: "SessionStart" },
+      { nativeEvent: "subagent_start", pierEvent: "SubagentStart" },
+      { nativeEvent: "subagent_stop", pierEvent: "SubagentStop" },
+    ]);
     for (const evt of NATIVE_EVENTS) {
       expect(manifest).toContain(`  - ${evt}`);
     }
@@ -79,25 +122,181 @@ describe("buildHermesPluginInit", () => {
       "ctx.register_hook(event_name, _make_hook(event_name))"
     );
     expect(init).toContain("def _make_hook(event_name: str)");
-    expect(init).toContain(
-      "def _pier_emit(pier_event: str, native_event: str, payload: dict[str, Any]) -> None:"
-    );
+    expect(init).toContain("def _pier_emit(");
+    expect(init).toContain("payload: dict[str, Any],");
     expect(init).toContain('"nativeEvent": native_event');
   });
 
-  it("事件映射齐全：EVENT_MAP 覆盖全部原生事件, 值为正确 pier 事件名", () => {
+  it("事件分派使用真实终态与交互结果，不把回合结束写成 SessionEnd", () => {
     const init = buildHermesPluginInit();
     expect(init).toContain('"on_session_start": "SessionStart"');
-    expect(init).toContain('"pre_llm_call": "processing"');
+    expect(init).toContain('"pre_llm_call": "PromptSubmit"');
     expect(init).toContain('"pre_tool_call": "ToolStart"');
     expect(init).toContain('"post_tool_call": "ToolComplete"');
-    expect(init).toContain('"pre_approval_request": "PermissionRequest"');
-    expect(init).toContain('"post_approval_response": "ToolStart"');
-    expect(init).toContain('"on_session_end": "SessionEnd"');
+    expect(init).toContain("InteractionRequested");
+    expect(init).toContain("InteractionResolved");
+    expect(init).toContain("TurnCompleted");
+    expect(init).toContain("TurnInterrupted");
     expect(init).toContain('"on_session_finalize": "SessionEnd"');
-    expect(init).toContain('"on_session_reset": "Stop"');
-    // post_llm_call 不映射——每轮 LLM 调用都发, 映射 Stop 会谎报 ready
+    expect(init).toContain('"on_session_reset": "SessionStart"');
+    expect(init).toContain('"subagent_start": "SubagentStart"');
+    expect(init).toContain('"subagent_stop": "SubagentStop"');
     expect(init).not.toContain("post_llm_call");
+  });
+
+  it("真实 kwargs 生成严格 v3，工具失败不升全局错误，终态与子智能体身份闭环", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-hermes-runtime-"));
+    const initPath = join(dir, "pier_status.py");
+    const logPath = join(dir, "events.jsonl");
+    await writeFile(initPath, buildHermesPluginInit(), "utf8");
+    const runner = `
+import importlib.util
+spec = importlib.util.spec_from_file_location("pier_status", ${JSON.stringify(initPath)})
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+class Ctx:
+    def __init__(self): self.hooks = {}
+    def register_hook(self, name, callback): self.hooks[name] = callback
+ctx = Ctx()
+mod.register(ctx)
+ctx.hooks["on_session_start"](session_id="parent")
+ctx.hooks["pre_llm_call"](session_id="parent", turn_id="turn-1", user_message="Fix it")
+ctx.hooks["pre_tool_call"](session_id="parent", turn_id="turn-1", tool_name="terminal", tool_call_id="tool-1")
+ctx.hooks["post_tool_call"](session_id="parent", turn_id="turn-1", tool_name="terminal", tool_call_id="tool-1", status="error")
+ctx.hooks["pre_approval_request"](session_key="parent", pattern_key="approval-1", command="rm x")
+ctx.hooks["post_approval_response"](session_key="parent", pattern_key="approval-1", command="rm x", choice="deny")
+# 固定提交 tools/delegate_tool.py 的两个真实调用点都传同一个
+# getattr(child, "session_id", None)：start 1469-1478，stop 2490-2502。
+ctx.hooks["subagent_start"](parent_session_id="parent", parent_turn_id="turn-1", child_session_id="child", child_subagent_id="sub-1", child_role="researcher")
+ctx.hooks["subagent_stop"](parent_session_id="parent", parent_turn_id="turn-1", child_session_id="child", child_role="researcher", child_status="completed")
+ctx.hooks["on_session_end"](session_id="parent", turn_id="turn-1", completed=True, failed=False, interrupted=False)
+`;
+    const result = spawnSync("python3", ["-c", runner], {
+      env: {
+        ...process.env,
+        PIER_AGENT_EVENT_LOG: logPath,
+        PIER_PANEL_ID: "panel-1",
+        PIER_WINDOW_ID: "window-1",
+      },
+    });
+    expect(result.status, result.stderr.toString()).toBe(0);
+    const rows = (await readFile(logPath, "utf8"))
+      .trim()
+      .split("\n")
+      .map((line) => agentHookEventSchema.parse(JSON.parse(line)));
+    expect(rows).toMatchObject([
+      { event: "SessionStart", sessionId: "parent", v: 3 },
+      {
+        event: "PromptSubmit",
+        promptSnippet: "Fix it",
+        sessionId: "parent",
+        turnId: "turn-1",
+      },
+      {
+        event: "ToolStart",
+        toolName: "terminal",
+        toolUseId: "tool-1",
+      },
+      {
+        event: "ToolComplete",
+        nativeState: "error",
+        toolUseId: "tool-1",
+      },
+      {
+        event: "InteractionRequested",
+        interactionId: "approval-1",
+        interactionKind: "permission",
+      },
+      {
+        event: "InteractionResolved",
+        interactionId: "approval-1",
+        interactionKind: "permission",
+        interactionOutcome: "rejected",
+      },
+      {
+        actorHint: "subagent",
+        agentInstanceId: "child",
+        event: "SubagentStart",
+        parentSessionId: "parent",
+        sessionId: "child",
+      },
+      {
+        actorHint: "subagent",
+        agentInstanceId: "child",
+        event: "SubagentStop",
+        parentSessionId: "parent",
+        sessionId: "child",
+      },
+      { event: "TurnCompleted", nativeEvent: "on_session_end.completed" },
+    ]);
+    expect(
+      rows.some((row) => row.kind === "agentEvent" && row.event === "error")
+    ).toBe(false);
+    const aggregator = createForegroundActivityAggregator();
+    const statuses: string[] = [];
+    for (const row of rows) {
+      if (row.kind !== "agentEvent") continue;
+      aggregator.ingestAgentEvent(row, { stopAuthority: "none" });
+      const activity = aggregator.snapshot().activities[0];
+      if (activity?.kind === "agent" && activity.status) {
+        statuses.push(activity.status);
+      }
+    }
+    expect(statuses).toEqual([
+      "processing",
+      "tool",
+      "processing",
+      "waiting",
+      "processing",
+      "processing",
+      "processing",
+      "ready",
+    ]);
+  });
+
+  it("_DEFAULT_PAYLOADS 式 stop 缺 child_session_id 时保持匿名，不伪造稳定身份", async () => {
+    const dir = await mkdtemp(join(tmpdir(), "pier-hermes-default-stop-"));
+    const initPath = join(dir, "pier_status.py");
+    const logPath = join(dir, "events.jsonl");
+    await writeFile(initPath, buildHermesPluginInit(), "utf8");
+    const runner = `
+import importlib.util
+spec = importlib.util.spec_from_file_location("pier_status", ${JSON.stringify(initPath)})
+mod = importlib.util.module_from_spec(spec)
+spec.loader.exec_module(mod)
+class Ctx:
+    def __init__(self): self.hooks = {}
+    def register_hook(self, name, callback): self.hooks[name] = callback
+ctx = Ctx()
+mod.register(ctx)
+ctx.hooks["subagent_stop"](
+    parent_session_id="parent-sess",
+    child_role=None,
+    child_summary="Synthetic summary for hooks test",
+    child_status="completed",
+    duration_ms=1234,
+)
+`;
+    const result = spawnSync("python3", ["-c", runner], {
+      env: {
+        ...process.env,
+        PIER_AGENT_EVENT_LOG: logPath,
+        PIER_PANEL_ID: "panel-1",
+        PIER_WINDOW_ID: "window-1",
+      },
+    });
+    expect(result.status, result.stderr.toString()).toBe(0);
+    const row = agentHookEventSchema.parse(
+      JSON.parse((await readFile(logPath, "utf8")).trim())
+    );
+    expect(row).toMatchObject({
+      actorHint: "subagent",
+      event: "SubagentStop",
+      parentSessionId: "parent-sess",
+      v: 3,
+    });
+    expect(row).not.toHaveProperty("agentInstanceId");
+    expect(row).not.toHaveProperty("sessionId");
   });
 
   it("agent 字段为 hermes", () => {
@@ -224,6 +423,22 @@ describe("withHermesPluginEnabled (文本级 YAML 插入)", () => {
     const raw = "plugins:\n  enabled:\n    foo: bar\n";
     expect(withHermesPluginEnabled(raw)).toBeNull();
   });
+
+  it("enabled 与 disabled 共存时只解析 enabled 子块", () => {
+    const raw =
+      "plugins:\n  enabled:\n    - other-plugin\n  disabled:\n    - blocked-plugin\n";
+    expect(withHermesPluginEnabled(raw)).toBe(
+      "plugins:\n  enabled:\n    - other-plugin\n    - pier-status\n  disabled:\n    - blocked-plugin\n"
+    );
+  });
+
+  it("相似缩进块不会被并入 plugins.enabled", () => {
+    const raw =
+      "profiles:\n  enabled:\n    - pier-status\nplugins:\n  disabled:\n    - blocked-plugin\n";
+    expect(withHermesPluginEnabled(raw)).toBe(
+      "profiles:\n  enabled:\n    - pier-status\nplugins:\n  enabled:\n    - pier-status\n  disabled:\n    - blocked-plugin\n"
+    );
+  });
 });
 
 describe("withoutHermesPluginEnabled", () => {
@@ -242,6 +457,20 @@ describe("withoutHermesPluginEnabled", () => {
 
   it("空文件原样返回", () => {
     expect(withoutHermesPluginEnabled("")).toBe("");
+  });
+
+  it("只移除 plugins.enabled 内的同名项，保留其它列表", () => {
+    const raw =
+      "profiles:\n  enabled:\n    - pier-status\nplugins:\n  enabled:\n    - pier-status\n  disabled:\n    - pier-status\n";
+    expect(withoutHermesPluginEnabled(raw)).toBe(
+      "profiles:\n  enabled:\n    - pier-status\nplugins:\n  disabled:\n    - pier-status\n"
+    );
+  });
+
+  it("malformed enabled 安全放弃，不误删其它相似列表", () => {
+    const raw =
+      "profiles:\n  enabled:\n    - pier-status\nplugins:\n  enabled: [pier-status]\n";
+    expect(withoutHermesPluginEnabled(raw)).toBe(raw);
   });
 });
 
@@ -331,6 +560,109 @@ describe("install/uninstallHermesPlugin (文件 IO)", () => {
     );
   });
 
+  it("任一文件非托管时整组预检失败，另一缺失文件与 config 都零写入", async () => {
+    await setup();
+    const pluginDir = join(dir, "plugins", "pier-status");
+    const manifestPath = join(pluginDir, "plugin.yaml");
+    const initPath = join(pluginDir, "__init__.py");
+    const rawConfig = "provider: anthropic\n";
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(manifestPath, "name: user-plugin\n", "utf8");
+    await writeFile(configPath, rawConfig, "utf8");
+
+    await installHermesPlugin(configPath);
+
+    expect(await readFile(manifestPath, "utf8")).toBe("name: user-plugin\n");
+    await expect(readFile(initPath, "utf8")).rejects.toThrow();
+    expect(await readFile(configPath, "utf8")).toBe(rawConfig);
+  });
+
+  it("任一文件世代更新时整组拒绝，另一旧文件不升级且 config 不启用", async () => {
+    await setup();
+    const pluginDir = join(dir, "plugins", "pier-status");
+    const manifestPath = join(pluginDir, "plugin.yaml");
+    const initPath = join(pluginDir, "__init__.py");
+    const newer = `# ${pierManagedPluginMarker(
+      PIER_MANAGED_PLUGIN_GENERATION + 1
+    )}\nnewer manifest\n`;
+    const older = `# ${pierManagedPluginMarker(
+      Math.max(1, PIER_MANAGED_PLUGIN_GENERATION - 1)
+    )}\nolder init\n`;
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(manifestPath, newer, "utf8");
+    await writeFile(initPath, older, "utf8");
+
+    await installHermesPlugin(configPath);
+
+    expect(await readFile(manifestPath, "utf8")).toBe(newer);
+    expect(await readFile(initPath, "utf8")).toBe(older);
+    await expect(readFile(configPath, "utf8")).rejects.toThrow();
+  });
+
+  it("非托管同名插件启用项在卸载时保持不变", async () => {
+    await setup();
+    const pluginDir = join(dir, "plugins", "pier-status");
+    const manifestPath = join(pluginDir, "plugin.yaml");
+    const initPath = join(pluginDir, "__init__.py");
+    const rawConfig = "plugins:\n  enabled:\n    - pier-status\n";
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(manifestPath, "name: user-plugin\n", "utf8");
+    await writeFile(initPath, "# user plugin\n", "utf8");
+    await writeFile(configPath, rawConfig, "utf8");
+
+    await uninstallHermesPlugin(configPath);
+
+    expect(await readFile(manifestPath, "utf8")).toBe("name: user-plugin\n");
+    expect(await readFile(initPath, "utf8")).toBe("# user plugin\n");
+    expect(await readFile(configPath, "utf8")).toBe(rawConfig);
+  });
+
+  it("单侧历史 Pier 残留可完整恢复后再启用 config", async () => {
+    await setup();
+    const pluginDir = join(dir, "plugins", "pier-status");
+    const manifestPath = join(pluginDir, "plugin.yaml");
+    const initPath = join(pluginDir, "__init__.py");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      manifestPath,
+      `# ${pierManagedPluginMarker(1)}\nold manifest\n`,
+      "utf8"
+    );
+
+    await installHermesPlugin(configPath);
+
+    expect(await readFile(manifestPath, "utf8")).toBe(
+      buildHermesPluginManifest()
+    );
+    expect(await readFile(initPath, "utf8")).toBe(buildHermesPluginInit());
+    expect(await readFile(configPath, "utf8")).toContain("    - pier-status");
+  });
+
+  it("卸载只清理可证明托管的历史残留，保留同目录未知文件", async () => {
+    await setup();
+    const pluginDir = join(dir, "plugins", "pier-status");
+    const manifestPath = join(pluginDir, "plugin.yaml");
+    const sentinelPath = join(pluginDir, "user-note.txt");
+    await mkdir(pluginDir, { recursive: true });
+    await writeFile(
+      manifestPath,
+      `# ${pierManagedPluginMarker(1)}\nold manifest\n`,
+      "utf8"
+    );
+    await writeFile(sentinelPath, "keep me\n", "utf8");
+    await writeFile(
+      configPath,
+      "plugins:\n  enabled:\n    - pier-status\n",
+      "utf8"
+    );
+
+    await uninstallHermesPlugin(configPath);
+
+    await expect(readFile(manifestPath, "utf8")).rejects.toThrow();
+    expect(await readFile(sentinelPath, "utf8")).toBe("keep me\n");
+    expect(await readFile(configPath, "utf8")).not.toContain("pier-status");
+  });
+
   it("detect 为假时（无 home 目录、无 hermes 命令）install 不写入任何文件", async () => {
     const emptyDir = await mkdtemp(join(tmpdir(), "pier-hermes-nodetect-"));
     delete process.env.HERMES_HOME;
@@ -356,8 +688,7 @@ describe("install/uninstallHermesPlugin (文件 IO)", () => {
 });
 
 describe("hermesIntegration 契约", () => {
-  it("capability 为 coarse, id 为 hermes", () => {
-    expect(hermesIntegration.capability).toBe("coarse");
+  it("id 为 hermes", () => {
     expect(hermesIntegration.id).toBe("hermes");
   });
 });

@@ -11,6 +11,7 @@ import {
   installAmpHooks,
   uninstallAmpHooks,
 } from "../../../src/main/services/agents/integrations/amp.ts";
+import { runAmpPluginScenario } from "./amp-test-runtime.ts";
 
 const MARK = "PIER_AGENT_EVENT_LOG";
 
@@ -54,8 +55,8 @@ describe("buildAmpPluginSource", () => {
     expect(source).not.toContain("1500");
   });
 
-  it("JSONL 行字段：v/kind/agent/event/panelId/windowId/pid/ts", () => {
-    expect(source).toContain("v: 2");
+  it("JSONL 行字段使用严格 v3，并保留会话、回合与原生状态", () => {
+    expect(source).toContain("v: 3");
     expect(source).toContain('kind: "agentEvent"');
     expect(source).toContain('agent: "amp"');
     expect(source).toContain("event: pierEvent");
@@ -64,25 +65,27 @@ describe("buildAmpPluginSource", () => {
     expect(source).toContain("windowId,");
     expect(source).toContain("pid: process.pid");
     expect(source).toContain("ts: Date.now() * 1_000_000");
+    expect(source).toContain("turnId");
+    expect(source).toContain("nativeState");
   });
 
-  it("事件映射齐全：session.start/agent.start/tool.call/tool.result/agent.end", () => {
+  it("只监听不要求观察者返回决策的生命周期事件，并订阅正式 ThreadState", () => {
     expect(source).toContain('amp.on("session.start"');
     expect(source).toContain('amp.on("agent.start"');
-    expect(source).toContain('amp.on("tool.call"');
-    expect(source).toContain('amp.on("tool.result"');
     expect(source).toContain('amp.on("agent.end"');
+    expect(source).not.toContain('amp.on("tool.call"');
+    expect(source).not.toContain('amp.on("tool.result"');
+    expect(source).toContain("thread.state.subscribe");
     expect(source).toContain('"session.start": "SessionStart"');
     expect(source).toContain('"agent.start": "PromptSubmit"');
-    expect(source).toContain('"tool.call": "ToolStart"');
-    expect(source).toContain('"tool.result": "ToolComplete"');
-    expect(source).toContain('"agent.end": "Stop"');
+    expect(source).toContain(
+      '"thread.state.awaiting-approval": "InteractionRequested"'
+    );
+    expect(source).toContain('"agent.end.done": "TurnCompleted"');
+    expect(source).toContain('"agent.end.error": "error"');
+    expect(source).toContain('"agent.end.cancelled": "TurnInterrupted"');
     expect(source).toContain("pierPromptSnippetFrom");
     expect(source).toContain("promptSnippet");
-  });
-
-  it("tool.call 拦截返回 allow（不拦截真实工具调用）", () => {
-    expect(source).toContain('return { action: "allow" }');
   });
 
   it("无加载合成 SessionStart：session.start 只在真实事件订阅回调内 emit", () => {
@@ -93,13 +96,248 @@ describe("buildAmpPluginSource", () => {
     );
     expect(functionStart).toBeGreaterThanOrEqual(0);
     expect(firstSubscription).toBeGreaterThan(functionStart);
-    // 工厂体到首个订阅之间不得有独立 emitPierEvent 调用（合成版在工厂按
-    // 会话/子代理多次执行的宿主上会打穿主状态, omp task subagent 教训）。
-    const betweenFnAndSubscription = source.slice(
-      functionStart,
-      firstSubscription
+    // session.start 的发射只能出现在该原生事件回调之后。
+    expect(
+      source.indexOf('emitPierEvent("session.start"', functionStart)
+    ).toBeGreaterThan(firstSubscription);
+  });
+
+  it("官方 Amp 事件与 ThreadState 经过生成插件形成严格 v3 状态闭环", async () => {
+    const rows = await runAmpPluginScenario(
+      buildAmpPluginSource(),
+      async (handlers) => {
+        let stateObserver: ((state: string) => void) | undefined;
+        const thread = {
+          id: "thread-1",
+          state: {
+            subscribe(observer: (state: string) => void) {
+              stateObserver = observer;
+              return { unsubscribe() {} };
+            },
+          },
+        };
+        const eventThread = { id: "thread-1" };
+        const context = { thread };
+        await handlers.get("session.start")?.({ thread: eventThread }, context);
+        await handlers.get("agent.start")?.(
+          {
+            id: "message-1",
+            message: "Fix the test",
+            thread: eventThread,
+          },
+          context
+        );
+        stateObserver?.("running");
+        stateObserver?.("awaiting-approval");
+        stateObserver?.("running");
+        stateObserver?.("awaiting-approval");
+        stateObserver?.("idle");
+        stateObserver?.("awaiting-approval");
+        stateObserver?.("error");
+        for (const status of ["done", "error", "cancelled"]) {
+          await handlers.get("agent.end")?.(
+            {
+              id: "message-1",
+              message: "Fix the test",
+              messages: [],
+              status,
+              thread: eventThread,
+            },
+            context
+          );
+        }
+        expect(handlers.has("tool.call")).toBe(false);
+        expect(handlers.has("tool.result")).toBe(false);
+      }
     );
-    expect(betweenFnAndSubscription).not.toContain("emitPierEvent(");
+    expect(rows).toHaveLength(14);
+    expect(rows[1]).toMatchObject({
+      event: "PromptSubmit",
+      sessionId: "thread-1",
+      turnId: "message-1",
+      v: 3,
+    });
+    expect(rows[2]).toMatchObject({
+      event: "running",
+      nativeEvent: "thread.state.running",
+      nativeState: "running",
+      sessionId: "thread-1",
+      v: 3,
+    });
+    expect(rows[3]).toMatchObject({
+      event: "InteractionRequested",
+      interactionKind: "external-block",
+      nativeEvent: "thread.state.awaiting-approval",
+      nativeState: "awaiting-approval",
+      sessionId: "thread-1",
+    });
+    expect(rows[3]).not.toHaveProperty("interactionId");
+    expect(rows[4]).toMatchObject({
+      event: "InteractionResolved",
+      interactionKind: "external-block",
+      interactionOutcome: "completed",
+      nativeEvent: "thread.state.running.resolved",
+      nativeState: "running",
+      sessionId: "thread-1",
+    });
+    expect(rows[4]).not.toHaveProperty("interactionId");
+    expect(rows[5]).toMatchObject({
+      event: "running",
+      nativeEvent: "thread.state.running",
+      nativeState: "running",
+      sessionId: "thread-1",
+    });
+    expect(rows[6]).toMatchObject({
+      event: "InteractionRequested",
+      nativeEvent: "thread.state.awaiting-approval",
+    });
+    expect(rows[7]).toMatchObject({
+      event: "InteractionResolved",
+      interactionKind: "external-block",
+      interactionOutcome: "completed",
+      nativeEvent: "thread.state.idle",
+      nativeState: "idle",
+      sessionId: "thread-1",
+    });
+    expect(rows[7]).not.toHaveProperty("interactionId");
+    expect(rows.slice(8, 11)).toMatchObject([
+      {
+        event: "InteractionRequested",
+        nativeEvent: "thread.state.awaiting-approval",
+      },
+      {
+        event: "InteractionResolved",
+        interactionKind: "external-block",
+        interactionOutcome: "failed",
+        nativeEvent: "thread.state.error.resolved",
+      },
+      {
+        event: "error",
+        nativeEvent: "thread.state.error",
+        nativeState: "error",
+      },
+    ]);
+    expect(rows.slice(-3)).toMatchObject([
+      {
+        event: "TurnCompleted",
+        nativeEvent: "agent.end.done",
+        nativeState: "done",
+      },
+      {
+        event: "error",
+        nativeEvent: "agent.end.error",
+        nativeState: "error",
+      },
+      {
+        event: "TurnInterrupted",
+        nativeEvent: "agent.end.cancelled",
+        nativeState: "cancelled",
+      },
+    ]);
+  });
+
+  it("session.start 时同步当前 awaiting-approval 状态进入等待", async () => {
+    const rows = await runAmpPluginScenario(
+      buildAmpPluginSource(),
+      async (handlers) => {
+        const thread = {
+          id: "thread-hydrated",
+          state: {
+            get: () => "awaiting-approval",
+            subscribe() {
+              return { unsubscribe() {} };
+            },
+          },
+        };
+        await handlers.get("session.start")?.(
+          { thread: { id: thread.id } },
+          { thread }
+        );
+      }
+    );
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        event: "InteractionRequested",
+        interactionKind: "external-block",
+        nativeEvent: "thread.state.awaiting-approval",
+        sessionId: "thread-hydrated",
+      })
+    );
+  });
+
+  it("订阅先收到更新时丢弃稍后返回的旧 ThreadState 快照", async () => {
+    const rows = await runAmpPluginScenario(
+      buildAmpPluginSource(),
+      async (handlers) => {
+        let resolveSnapshot: (state: string) => void = () => {};
+        const snapshot = new Promise<string>((resolve) => {
+          resolveSnapshot = resolve;
+        });
+        let stateObserver: ((state: string) => void) | undefined;
+        const thread = {
+          id: "thread-race",
+          state: {
+            get: () => snapshot,
+            subscribe(observer: (state: string) => void) {
+              stateObserver = observer;
+              return { unsubscribe() {} };
+            },
+          },
+        };
+        const pending = Promise.resolve(
+          handlers.get("session.start")?.(
+            { thread: { id: thread.id } },
+            { thread }
+          )
+        );
+        stateObserver?.("running");
+        resolveSnapshot("awaiting-approval");
+        await pending;
+      }
+    );
+    expect(
+      rows.filter((row) => row.nativeEvent?.startsWith("thread.state."))
+    ).toMatchObject([
+      {
+        event: "running",
+        nativeEvent: "thread.state.running",
+        sessionId: "thread-race",
+      },
+    ]);
+  });
+
+  it("ThreadState.get 异常不阻断 session.start", async () => {
+    const rows = await runAmpPluginScenario(
+      buildAmpPluginSource(),
+      async (handlers) => {
+        const thread = {
+          id: "thread-get-error",
+          state: {
+            get() {
+              throw new Error("state unavailable");
+            },
+            subscribe() {
+              return { unsubscribe() {} };
+            },
+          },
+        };
+        await expect(
+          Promise.resolve(
+            handlers.get("session.start")?.(
+              { thread: { id: thread.id } },
+              { thread }
+            )
+          )
+        ).resolves.toBeUndefined();
+      }
+    );
+    expect(rows).toContainEqual(
+      expect.objectContaining({
+        event: "SessionStart",
+        nativeEvent: "session.start",
+        sessionId: "thread-get-error",
+      })
+    );
   });
 });
 
@@ -220,8 +458,31 @@ describe("ampDetect / ampIntegration 契约", () => {
     expect(ampDetect()).toBe(true);
   });
 
-  it("capability 为 full, id 为 amp", () => {
-    expect(ampIntegration.capability).toBe("full");
+  it("id 为 amp", () => {
     expect(ampIntegration.id).toBe("amp");
+  });
+
+  it("agent.end 按官方 status 分流，且没有虚构的权威 Stop", () => {
+    expect(ampIntegration.runtime.stopAuthority).toBe("none");
+    expect(ampIntegration.runtime.emittedMappings).toEqual(
+      expect.arrayContaining([
+        { nativeEvent: "agent.end.done", pierEvent: "TurnCompleted" },
+        { nativeEvent: "agent.end.error", pierEvent: "error" },
+        {
+          nativeEvent: "agent.end.cancelled",
+          pierEvent: "TurnInterrupted",
+        },
+      ])
+    );
+  });
+
+  it("不宣称工具观察能力，等待能力来自 ThreadState", () => {
+    expect(ampIntegration.runtime.emittedMappings).not.toContainEqual(
+      expect.objectContaining({ pierEvent: "ToolStart" })
+    );
+    expect(ampIntegration.runtime.emittedMappings).toContainEqual({
+      nativeEvent: "thread.state.awaiting-approval",
+      pierEvent: "InteractionRequested",
+    });
   });
 });

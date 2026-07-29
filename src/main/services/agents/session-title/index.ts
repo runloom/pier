@@ -124,8 +124,10 @@ function promptSnippetFromMetadata(
   }
 }
 
-function promptSnippetOf(event: AgentHookEventPayload): string | undefined {
-  if ("v" in event && event.v === 2 && event.promptSnippet?.trim()) {
+export function promptSnippetForAgentSessionTitle(
+  event: AgentHookEventPayload
+): string | undefined {
+  if ("promptSnippet" in event && event.promptSnippet?.trim()) {
     return event.promptSnippet.slice(0, MAX_PROMPT_SNIPPET_LENGTH);
   }
   return promptSnippetFromMetadata(event.metadataBase64);
@@ -155,7 +157,7 @@ async function deriveFromPromptSubmit(
   aggregator: ForegroundActivityAggregator,
   event: AgentHookEventPayload
 ): Promise<void> {
-  const snippet = promptSnippetOf(event);
+  const snippet = promptSnippetForAgentSessionTitle(event);
   if (!snippet) {
     selfHealAgentHooksIfNeeded();
     logTitleTier({ outcome: "empty", panelId: event.panelId, tier: "prompt" });

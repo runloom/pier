@@ -1,4 +1,5 @@
 import {
+  type AgentHookEventPayloadV3,
   agentHookEventSchema,
   agentKindFromTabIconId,
   agentTabIconId,
@@ -7,7 +8,8 @@ import {
   activityStatusForHookEvent,
   tabStatusForActivityStatus,
 } from "@shared/contracts/foreground-activity.ts";
-import { describe, expect, it } from "vitest";
+import { describe, expect, expectTypeOf, it } from "vitest";
+import type { PierHookCommandV3Spec } from "../../src/main/services/agents/integrations/shared.ts";
 
 describe("agentHookEventSchema", () => {
   it("接受合法 agentEvent 分支", () => {
@@ -30,6 +32,95 @@ describe("agentHookEventSchema", () => {
         agent: "cline",
         event: "Stop",
         nativeEvent: "TaskCancel",
+        panelId: "panel-1",
+        windowId: "3",
+      }).success
+    ).toBe(true);
+  });
+
+  it("v2 兼容读取旧 PermissionRequest，v3 严格拒绝", () => {
+    const base = {
+      kind: "agentEvent",
+      agent: "claude",
+      event: "PermissionRequest",
+      nativeEvent: "PermissionRequest",
+      panelId: "panel-1",
+      windowId: "3",
+    };
+    expect(agentHookEventSchema.safeParse({ ...base, v: 2 }).success).toBe(
+      true
+    );
+    expect(agentHookEventSchema.safeParse({ ...base, v: 3 }).success).toBe(
+      false
+    );
+  });
+
+  it("v3 payload 与生成器类型均不接受旧 PermissionRequest", () => {
+    expectTypeOf<
+      "PermissionRequest" extends AgentHookEventPayloadV3["event"]
+        ? true
+        : false
+    >().toEqualTypeOf<false>();
+    expectTypeOf<
+      "PermissionRequest" extends PierHookCommandV3Spec["event"] ? true : false
+    >().toEqualTypeOf<false>();
+  });
+
+  it("接受带具名交互事实的 v3 InteractionRequested", () => {
+    expect(
+      agentHookEventSchema.safeParse({
+        v: 3,
+        kind: "agentEvent",
+        agent: "claude",
+        event: "InteractionRequested",
+        nativeEvent: "PermissionRequest",
+        interactionId: "permission-1",
+        interactionKind: "permission",
+        panelId: "panel-1",
+        windowId: "3",
+      }).success
+    ).toBe(true);
+  });
+
+  it("接受带结果的 v3 InteractionResolved", () => {
+    expect(
+      agentHookEventSchema.safeParse({
+        v: 3,
+        kind: "agentEvent",
+        agent: "claude",
+        event: "InteractionResolved",
+        nativeEvent: "PermissionResult",
+        interactionId: "permission-1",
+        interactionKind: "permission",
+        interactionOutcome: "accepted",
+        panelId: "panel-1",
+        windowId: "3",
+      }).success
+    ).toBe(true);
+  });
+
+  it.each([
+    "SessionStart",
+    "PromptSubmit",
+    "ToolStart",
+    "ToolComplete",
+    "SubagentStart",
+    "SubagentStop",
+    "processing",
+    "running",
+    "Stop",
+    "TurnCompleted",
+    "TurnInterrupted",
+    "SessionEnd",
+    "error",
+  ])("接受 v3 标准非交互事件 %s", (event) => {
+    expect(
+      agentHookEventSchema.safeParse({
+        v: 3,
+        kind: "agentEvent",
+        agent: "claude",
+        event,
+        nativeEvent: event,
         panelId: "panel-1",
         windowId: "3",
       }).success
@@ -113,27 +204,78 @@ describe("agentHookEventSchema", () => {
       }).success
     ).toBe(false);
   });
+
+  it("v3 非交互事件拒绝携带交互字段", () => {
+    expect(
+      agentHookEventSchema.safeParse({
+        v: 3,
+        kind: "agentEvent",
+        agent: "claude",
+        event: "ToolStart",
+        nativeEvent: "PreToolUse",
+        interactionId: "not-an-interaction",
+        interactionKind: "permission",
+        panelId: "panel-1",
+        windowId: "3",
+      }).success
+    ).toBe(false);
+  });
+
+  it("v3 交互事件拒绝非法种类和结果", () => {
+    const base = {
+      v: 3,
+      kind: "agentEvent",
+      agent: "claude",
+      event: "InteractionResolved",
+      nativeEvent: "PermissionResult",
+      panelId: "panel-1",
+      windowId: "3",
+    };
+    expect(
+      agentHookEventSchema.safeParse({
+        ...base,
+        interactionKind: "tool",
+      }).success
+    ).toBe(false);
+    expect(
+      agentHookEventSchema.safeParse({
+        ...base,
+        interactionKind: "permission",
+        interactionOutcome: "approved",
+      }).success
+    ).toBe(false);
+  });
 });
 
 describe("activityStatusForHookEvent", () => {
   it.each([
-    ["PermissionRequest", "waiting"],
     ["ToolStart", "tool"],
     ["ToolComplete", "processing"],
     ["error", "error"],
-    ["SessionStart", "ready"],
     ["Stop", "ready"],
     ["TurnCompleted", "ready"],
-    ["SessionEnd", "ready"],
     ["PromptSubmit", "processing"],
     ["SubagentStart", "processing"],
     ["SubagentStop", "processing"],
+    ["InteractionRequested", "waiting"],
+    ["InteractionResolved", "processing"],
   ] as const)("%s → %s", (event, status) => {
     expect(activityStatusForHookEvent(event)).toBe(status);
   });
 
   it("未知事件 → null", () => {
     expect(activityStatusForHookEvent("SomethingElse")).toBeNull();
+  });
+
+  it.each([
+    "SessionStart",
+    "SessionEnd",
+  ])("%s 只提供生命周期证据，不映射为 ready", (event) => {
+    expect(activityStatusForHookEvent(event)).toBeNull();
+  });
+
+  it("严格 v3 状态词汇不接受旧 PermissionRequest", () => {
+    expect(activityStatusForHookEvent("PermissionRequest")).toBeNull();
   });
 });
 

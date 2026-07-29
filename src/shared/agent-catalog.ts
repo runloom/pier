@@ -290,9 +290,10 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
   {
     id: "rovo",
     label: "Rovo Dev",
-    launchCmd: "rovo",
-    detectCmd: "rovo",
-    expectedProcess: "rovo",
+    launchCmd: "acli rovodev run",
+    launchCommandPrefix: ["acli", "rovodev", "run"],
+    detectCmd: "acli",
+    expectedProcess: "acli",
     faviconDomain: "atlassian.com",
     homepageUrl:
       "https://support.atlassian.com/rovo/docs/install-and-run-rovo-dev-cli-on-your-device/",
