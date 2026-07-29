@@ -452,6 +452,100 @@ describe("terminal session state", () => {
     });
   });
 
+  it("migrates legacy agent success tabs on disk", async () => {
+    const {
+      migrateLegacyAgentSuccessTabs,
+      patchTerminalPanelTab,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelTab,
+    } = await loadTerminalSessionState();
+    await updateTerminalPanelAgent("main", "terminal-legacy", {
+      agentId: "claude",
+      finishedAt: 1_772_000_001_000,
+      launch: {
+        agentId: "claude",
+        command: "claude",
+        cwd: "/repo",
+      },
+      startedAt: 1_772_000_000_000,
+      status: "exited",
+    });
+    await updateTerminalPanelTab("main", "terminal-legacy", {
+      icon: { id: "agent:claude" },
+      state: {
+        colorToken: "success",
+        label: "Exited",
+        status: "succeeded",
+      },
+      title: "pier",
+    });
+    // Direct tab patch can reintroduce success after clean exit — migrate cleans.
+    await patchTerminalPanelTab("main", "terminal-legacy", {
+      state: {
+        colorToken: "success",
+        label: "Exited",
+        status: "succeeded",
+      },
+    });
+
+    await expect(migrateLegacyAgentSuccessTabs()).resolves.toBeGreaterThan(0);
+    const after = await readTerminalPanelSession("main", "terminal-legacy");
+    expect(after?.tab?.state).toBeUndefined();
+    expect(after?.tab?.icon?.id).toBe("agent:claude");
+  });
+
+  it("does not mark clean agent exit as succeeded (no green check)", async () => {
+    const {
+      patchTerminalPanelAgentStatus,
+      patchTerminalPanelTab,
+      readTerminalPanelSession,
+      updateTerminalPanelAgent,
+      updateTerminalPanelTab,
+    } = await loadTerminalSessionState();
+    await updateTerminalPanelAgent("main", "terminal-1", {
+      agentId: "claude",
+      launch: {
+        agentId: "claude",
+        command: "claude",
+        cwd: "/repo",
+      },
+      startedAt: 1_772_000_000_000,
+      status: "running",
+    });
+    await updateTerminalPanelTab("main", "terminal-1", {
+      icon: { id: "agent:claude" },
+      state: { label: "Running", status: "running" },
+      title: "pier",
+    });
+
+    await expect(
+      patchTerminalPanelAgentStatus("main", "terminal-1", {
+        exitCode: 0,
+        finishedAt: 1_772_000_001_000,
+        status: "exited",
+      })
+    ).resolves.toBe(true);
+
+    const afterClean = await readTerminalPanelSession("main", "terminal-1");
+    expect(afterClean?.agent?.status).toBe("exited");
+    expect(afterClean?.agent?.exitCode).toBe(0);
+    expect(afterClean?.tab?.state).toBeUndefined();
+    expect(afterClean?.tab?.icon?.id).toBe("agent:claude");
+    expect(afterClean?.tab?.title).toBe("pier");
+
+    // Legacy disk: success chrome must be sanitized on read.
+    await patchTerminalPanelTab("main", "terminal-1", {
+      state: {
+        colorToken: "success",
+        label: "Exited",
+        status: "succeeded",
+      },
+    });
+    const afterLegacy = await readTerminalPanelSession("main", "terminal-1");
+    expect(afterLegacy?.tab?.state).toBeUndefined();
+  });
+
   it("persists task exit reason and source with terminal task status", async () => {
     const {
       patchTerminalPanelTaskStatus,

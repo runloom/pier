@@ -28,6 +28,7 @@ import {
 import { registerTerminalDebugSnapshotIpc } from "./terminal-debug-snapshot.ts";
 import { terminalFocusCoordinator } from "./terminal-focus-coordinator.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
+import { registerTerminalHostCopyIpc } from "./terminal-host-copy-ipc.ts";
 import { isTerminalHostSnapshot } from "./terminal-host-snapshot-validation.ts";
 import { signalPromptReady } from "./terminal-initial-input-gate.ts";
 import { registerTerminalInputIpc } from "./terminal-input-ipc.ts";
@@ -128,9 +129,12 @@ export function registerTerminalIpc(
       deps.taskService?.isStopRequested(panelId, windowId) ?? false,
     markTaskPanelClosed: (panelId, windowId) =>
       deps.taskService?.markPanelClosed(panelId, windowId),
-    shouldRetainSurfaceOnProcessExit: (panelId, windowId) =>
-      deps.taskService?.shouldRetainSurfaceOnProcessExit(panelId, windowId) ??
-      false,
+    shouldRetainSurfaceOnProcessExit: (panelId, windowId, sessionWindowId) =>
+      deps.taskService?.shouldRetainSurfaceOnProcessExit(
+        panelId,
+        windowId,
+        sessionWindowId
+      ) ?? false,
   });
   bindTerminalTransferRuntime({
     addon,
@@ -251,6 +255,12 @@ export function registerTerminalIpc(
       win: windowFromWebContents(event.sender),
     })
   );
+
+  registerTerminalHostCopyIpc({
+    addon,
+    ipcMain,
+    windowFromWebContents,
+  });
 
   registerTerminalTaskOutputRebindIpc({
     addon,

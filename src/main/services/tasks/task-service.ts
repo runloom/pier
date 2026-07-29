@@ -353,10 +353,11 @@ export function createTaskService({
       });
       markPanelActuallyClosed(panelId, windowId);
     },
-    shouldRetainSurfaceOnProcessExit(panelId, windowId) {
+    shouldRetainSurfaceOnProcessExit(panelId, windowId, sessionWindowId) {
       return shouldRetainTaskSurfaceOnProcessExit({
         hasDedicatedPanel: dedicatedPanels.hasPanel,
         panelId,
+        sessionWindowId,
         snapshot: taskRuns.runsSnapshot(windowId),
         windowId,
       });

@@ -415,6 +415,8 @@ export async function handleTerminalCreate(args: {
       }
       return { ok: false, error: "createTerminal returned false" };
     }
+    // exitPresentation lives on panel params; renderer resolves final copy on
+    // child-exited and calls injectDisplayText (native does not i18n).
     sendInitialTerminalInput({
       addon,
       initialInput: createArgs.initialInput,

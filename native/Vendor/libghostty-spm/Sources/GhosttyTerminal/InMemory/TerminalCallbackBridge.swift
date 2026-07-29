@@ -185,6 +185,18 @@ final class TerminalCallbackBridge {
                     .terminalDidChangeWorkingDirectory(pwd)
             }
 
+        case GHOSTTY_ACTION_SHOW_CHILD_EXITED:
+            let payload = action.action.child_exited
+            TerminalDebugLog.log(
+                .actions,
+                "callback action=show_child_exited exit=\(payload.exit_code) runtime_ms=\(payload.timetime_ms)"
+            )
+            (delegate as? any TerminalSurfaceChildExitedDelegate)?
+                .terminalDidExitChild(
+                    exitCode: payload.exit_code,
+                    runtimeMilliseconds: payload.timetime_ms
+                )
+
         default:
             TerminalDebugLog.log(
                 .actions,

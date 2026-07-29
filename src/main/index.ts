@@ -73,7 +73,10 @@ import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
 import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
 import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
 import { migrateTerminalSessionScopesToRecordIds } from "./state/terminal-session-scope-migration.ts";
-import { reconcileOrphanedRunningTasks } from "./state/terminal-session-state.ts";
+import {
+  migrateLegacyAgentSuccessTabs,
+  reconcileOrphanedRunningTasks,
+} from "./state/terminal-session-state.ts";
 import { readPreferredOpenWindowRecordIds } from "./state/window-record-state.ts";
 import type { AppWindow } from "./windows/app-window.ts";
 import { windowManager } from "./windows/window-manager.ts";
@@ -419,6 +422,11 @@ if (gotTheLock) {
       });
       await reconcileOrphanedRunningTasks().catch((error: unknown) => {
         terminalSessionLog.error("orphan task sweep failed", { error });
+      });
+      await migrateLegacyAgentSuccessTabs().catch((error: unknown) => {
+        terminalSessionLog.error("legacy agent success tab migrate failed", {
+          error,
+        });
       });
       const restored = await appCore.services.window.restoreOpenWindows();
       if (restored.length === 0) {

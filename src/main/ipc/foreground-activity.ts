@@ -49,6 +49,7 @@ import {
   listAppWindowIds,
 } from "../windows/window-identity.ts";
 import { materializeForegroundActivityPublications } from "./foreground-activity-publication.ts";
+import { broadcastAgentEndStateForPanel } from "./terminal-end-state-broadcast.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import { windowRecordIdFor } from "./terminal-window-scope.ts";
 
@@ -93,13 +94,20 @@ function markAgentSessionExited(args: {
   ) {
     return;
   }
-  patchTerminalPanelAgentStatus(windowRecordIdFor(win), args.panelId, {
+  const sessionWindowId = windowRecordIdFor(win);
+  patchTerminalPanelAgentStatus(sessionWindowId, args.panelId, {
     ...(args.exitCode === undefined ? {} : { exitCode: args.exitCode }),
     finishedAt: Date.now(),
     status: "exited",
-  }).catch((err) => {
-    log.error("agent session exit persist failed", { err });
-  });
+  })
+    .then((ok) => {
+      if (ok) {
+        broadcastAgentEndStateForPanel(win, sessionWindowId, args.panelId);
+      }
+    })
+    .catch((err) => {
+      log.error("agent session exit persist failed", { err });
+    });
 }
 
 function recordAgentResumeSession(args: {

@@ -132,4 +132,42 @@ export const terminal = {
     },
     manage: "管理状态栏…",
   },
+  /**
+   * Ghostty / native 宿主文案（见 ghostty-host-copy 目录）。
+   * 面向用户时避免直出 Ghostty 品牌与实现词。
+   */
+  ghosttyHost: {
+    processExited: "进程已退出",
+    processExitedFailed: "进程已退出，退出码 {{code}}",
+    processExitedAbnormal:
+      "命令很快就退出了（{{duration}}），可能未能正常启动。",
+    agentExited: "智能体会话已结束",
+    agentExitedFailed: "智能体会话已结束，退出码 {{code}}",
+    agentExitedAbnormal:
+      "智能体很快就退出了（{{duration}}），可能未能正常启动。",
+    taskExited: "任务已结束",
+    taskExitedFailed: "任务失败，退出码 {{code}}",
+    taskExitedAbnormal: "任务很快就退出了（{{duration}}），可能未能正常启动。",
+    taskOutputExited: "任务输出已结束",
+    taskOutputExitedFailed: "任务输出已结束，退出码 {{code}}",
+    taskOutputExitedAbnormal:
+      "任务输出很快就结束了（{{duration}}），进程可能未能正常启动。",
+    dismissAnyKey: "按任意键关闭",
+    dismissExplicit: "查看结束后可关闭标签页",
+    injectExitFailed: "无法在终端中显示会话结束提示。查看结束后可关闭标签页。",
+    launchFailedTitle: "无法启动命令",
+    launchFailedRuntime: "运行时长：{{duration}}",
+    launchFailedExitCode: "退出码：{{code}}",
+    launchFailedDismiss: "按任意键关闭",
+    ptyExhausted:
+      "当前无法再打开终端。请先关闭不用的终端或其他占用终端会话的应用，然后重试。",
+    inputPathFailed:
+      "配置的启动输入文件不存在或无法读取。请检查终端输入设置后重试。",
+    ioThreadFailed: "无法启动终端会话（{{error}}）。请关闭此标签页后重试。",
+    ioThreadOom: "内存不足，无法启动终端。请关闭此标签页后重试。",
+    pasteConfirmTitle: "粘贴到终端？",
+    pasteConfirmBody: "这段内容包含 {{lines}} 行，可能会直接执行命令。",
+    pasteConfirmAccept: "粘贴",
+    pasteConfirmCancel: "取消",
+  },
 } as const;

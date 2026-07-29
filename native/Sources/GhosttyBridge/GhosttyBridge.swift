@@ -502,6 +502,7 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     TerminalSurfaceCommandFinishedDelegate,
     TerminalSurfaceCommandStartedDelegate,
     TerminalSurfaceCloseDelegate,
+    TerminalSurfaceChildExitedDelegate,
     TerminalSurfaceScrollbarDelegate
 {
     var panelId: String
@@ -540,6 +541,11 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
     /// 全局 callback: Ghostty surface close → main process.
     /// processAlive=false 表示底层进程已自然退出；true 表示 surface 关闭时进程仍存活。
     static var forwardProcessClosedCallback: ((Int, String, String, Bool) -> Void)?
+
+    /// 全局 callback: Ghostty SHOW_CHILD_EXITED → main process（宿主已消费 action）。
+    /// 宿主返回 true 抑制英文 printString；本地化串由 renderer 解析后 injectDisplayText。
+    /// (browserWindowId, panelId, lifecycleId, exitCode, runtimeMs)
+    static var forwardChildExitedCallback: ((Int, String, String, UInt32, UInt64) -> Void)?
 
     init(panelId: String, browserWindowId: Int, lifecycleId: String) {
         self.panelId = panelId
@@ -595,6 +601,18 @@ final class TerminalEventDelegate: TerminalSurfacePwdDelegate,
             panelId,
             lifecycleId,
             processAlive
+        )
+    }
+
+    func terminalDidExitChild(exitCode: UInt32, runtimeMilliseconds: UInt64) {
+        // Action callback already returned true → Ghostty skips English printString.
+        // Renderer resolves final copy and calls injectDisplayText (single path).
+        TerminalEventDelegate.forwardChildExitedCallback?(
+            browserWindowId,
+            panelId,
+            lifecycleId,
+            exitCode,
+            runtimeMilliseconds
         )
     }
 
@@ -1401,6 +1419,17 @@ final class GhosttyBridgeImpl {
             return false
         }
         session.receive(data)
+        return true
+    }
+
+    /// Inject UTF-8 into the terminal **display** (any surface), not the PTY.
+    /// Caller must pass the fully localized final text (no further i18n here).
+    @discardableResult
+    func injectDisplayText(panelId: String, text: String) -> Bool {
+        guard let term = terminals[panelId], !text.isEmpty else {
+            return false
+        }
+        term.terminalView.injectDisplayText(text)
         return true
     }
 
@@ -2267,6 +2296,80 @@ public func ghosttyBridgeSetTerminalConfig(
     }
 }
 
+/// Push UI language for host-owned terminal copy (paste confirm). Empty clears override.
+@_cdecl("ghostty_bridge_set_host_language")
+public func ghosttyBridgeSetHostLanguage(_ languageTagPtr: UnsafePointer<CChar>?) {
+    let tag = languageTagPtr.map { String(cString: $0) } ?? ""
+    TerminalHostCopy.setLanguageOverride(tag)
+}
+
+/// JSON object of fully localized host messages: `{ "processExited": "...", "ptyExhausted": "..." }`.
+@_cdecl("ghostty_bridge_set_host_copy_catalog")
+public func ghosttyBridgeSetHostCopyCatalog(_ jsonPtr: UnsafePointer<CChar>?) {
+    guard let jsonPtr else {
+        TerminalHostCopy.setCatalog([:])
+        return
+    }
+    let json = String(cString: jsonPtr)
+    guard let data = json.data(using: .utf8),
+          let obj = try? JSONSerialization.jsonObject(with: data) as? [String: String]
+    else {
+        return
+    }
+    TerminalHostCopy.setCatalog(obj)
+}
+
+/// Inject fully localized text into the terminal display buffer (not PTY).
+@_cdecl("ghostty_bridge_inject_display_text")
+public func ghosttyBridgeInjectDisplayText(
+    _ panelIdPtr: UnsafePointer<CChar>,
+    _ textPtr: UnsafePointer<CChar>?
+) -> Bool {
+    guard let textPtr else { return false }
+    let panelId = String(cString: panelIdPtr)
+    let text = String(cString: textPtr)
+    return MainActor.assumeIsolated {
+        GhosttyBridgeImpl.shared.injectDisplayText(panelId: panelId, text: text)
+    }
+}
+
+// C ABI consumed by libghostty Thread.zig / Surface.zig (0105 patch).
+// Storage lives in TerminalHostCopy (Pier renderer pushes full catalog).
+
+@_cdecl("ghostty_host_messages_set")
+public func ghosttyHostMessagesSet(
+    _ keyPtr: UnsafePointer<CChar>?,
+    _ valuePtr: UnsafePointer<CChar>?
+) {
+    guard let keyPtr else { return }
+    let key = String(cString: keyPtr)
+    if let valuePtr {
+        let value = String(cString: valuePtr)
+        var next = TerminalHostCopy.snapshotCatalog()
+        next[key] = value
+        TerminalHostCopy.setCatalog(next)
+    } else {
+        var next = TerminalHostCopy.snapshotCatalog()
+        next.removeValue(forKey: key)
+        TerminalHostCopy.setCatalog(next)
+    }
+}
+
+@_cdecl("ghostty_host_messages_clear")
+public func ghosttyHostMessagesClear() {
+    TerminalHostCopy.setCatalog([:])
+}
+
+/// Returned pointer is valid until the next catalog mutation.
+@_cdecl("ghostty_host_messages_get")
+public func ghosttyHostMessagesGet(
+    _ keyPtr: UnsafePointer<CChar>?
+) -> UnsafePointer<CChar>? {
+    guard let keyPtr else { return nil }
+    let key = String(cString: keyPtr)
+    return TerminalHostCopy.cStringPointer(for: key)
+}
+
 
 
 @_cdecl("ghostty_bridge_move_terminal")
@@ -2429,6 +2532,13 @@ public typealias SearchForwardCallback = @convention(c) (Int, UnsafePointer<CCha
 public typealias TitleForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, UnsafePointer<CChar>) -> Void
 public typealias CommandFinishedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, Int, UInt64) -> Void
 public typealias ProcessClosedForwardCallback = @convention(c) (Int, UnsafePointer<CChar>, UnsafePointer<CChar>, Bool) -> Void
+public typealias ChildExitedForwardCallback = @convention(c) (
+    Int,
+    UnsafePointer<CChar>,
+    UnsafePointer<CChar>,
+    UInt32,
+    UInt64
+) -> Void
 
 @_cdecl("ghostty_bridge_set_keyboard_forward_callback")
 public func ghosttyBridgeSetKeyboardForwardCallback(_ cb: KeyboardForwardCallback?) {
@@ -2602,6 +2712,28 @@ public func ghosttyBridgeSetCommandStartedForwardCallback(_ cb: CommandStartedFo
             }
         } else {
             TerminalEventDelegate.forwardCommandStartedCallback = nil
+        }
+    }
+}
+
+@_cdecl("ghostty_bridge_set_child_exited_forward_callback")
+public func ghosttyBridgeSetChildExitedForwardCallback(_ cb: ChildExitedForwardCallback?) {
+    MainActor.assumeIsolated {
+        if let cb {
+            TerminalEventDelegate.forwardChildExitedCallback = {
+                wid,
+                panelId,
+                lifecycleId,
+                exitCode,
+                runtimeMs in
+                panelId.withCString { pidPtr in
+                    lifecycleId.withCString { lifecyclePtr in
+                        cb(wid, pidPtr, lifecyclePtr, exitCode, runtimeMs)
+                    }
+                }
+            }
+        } else {
+            TerminalEventDelegate.forwardChildExitedCallback = nil
         }
     }
 }

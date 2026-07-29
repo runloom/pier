@@ -58,16 +58,14 @@ import {
   useTerminalStatusBarItems,
 } from "./terminal-status-bar.tsx";
 import {
-  activityTabChromeOverlay,
   agentPanelDisplayPrimary,
-  mergeTabChrome,
   tabChromeFromParams,
-  taskOutputTabChromeOverlay,
-  taskRunTabChromeOverlay,
 } from "./terminal-tab-chrome.ts";
 import { useAgentComposer } from "./use-agent-composer.ts";
 import { useRestartRestoredAgent } from "./use-restart-restored-agent.ts";
-import { useTaskOutputKeyDismiss } from "./use-task-output-key-dismiss.ts";
+import { useTaskResultKeyboardRetain } from "./use-task-result-keyboard-retain.ts";
+import { useTerminalChildExitedInject } from "./use-terminal-child-exited-inject.ts";
+import { useTerminalEndStateTab } from "./use-terminal-end-state-tab.ts";
 import { useTerminalFloatingLayoutRevision } from "./use-terminal-floating-layout-revision.ts";
 import { useTerminalNativeLifecycle } from "./use-terminal-native-lifecycle.ts";
 import { useTerminalPanelDescriptor } from "./use-terminal-panel-descriptor.ts";
@@ -195,27 +193,18 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     sessionTitle: savedSession?.sessionTitle,
     sessionTitleSource: savedSession?.sessionTitleSource,
   });
-  const effectiveTab = mergeTabChrome(
-    mergeTabChrome(
-      mergeTabChrome(
-        savedSession?.tab ?? activeLaunch.tab,
-        activityTabChromeOverlay(activity, {
-          cwd: effectiveCwd,
-          projectRootPath: effectiveContext?.projectRootPath,
-          sessionTitle: savedSession?.sessionTitle,
-          sessionTitleSource: savedSession?.sessionTitleSource,
-          taskRuns: taskRunsSnapshot,
-        })
-      ),
-      taskRunTabChromeOverlay(
-        panelId,
-        taskRunsSnapshot,
-        savedSession?.task ?? activeLaunch.task,
-        selectedTaskRunId
-      )
-    ),
-    taskOutputTabChromeOverlay(currentTaskOutput, taskRunsSnapshot)
-  );
+  const { effectiveTab, endState } = useTerminalEndStateTab({
+    activeLaunchTab: activeLaunch.tab,
+    activeLaunchTask: activeLaunch.task,
+    activity,
+    currentTaskOutput,
+    effectiveCwd,
+    panelId,
+    projectRootPath: effectiveContext?.projectRootPath,
+    savedSession,
+    selectedTaskRunId,
+    taskRunsSnapshot,
+  });
   const statusContext = {
     context: effectiveContext,
     cwd: effectiveCwd,
@@ -362,7 +351,20 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     setActive: activatePanel,
   });
   useTerminalSurfaceClose(panelId, props.params);
-  useTaskOutputKeyDismiss(panelId, props.params, api.isActive);
+  useTaskResultKeyboardRetain(
+    panelId,
+    props.params,
+    api.isActive,
+    panelRootRef,
+    { hasAgentSession: savedSession?.agent != null }
+  );
+  useTerminalChildExitedInject(panelId, props.params, {
+    agentIdHint:
+      endState?.agentId ??
+      savedSession?.agent?.agentId ??
+      (activity?.kind === "agent" ? activity.agentId : undefined),
+    titleHint: savedSession?.tab?.title ?? activeLaunch.tab?.title,
+  });
 
   useEffect(() => {
     const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {
@@ -395,7 +397,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     "absolute inset-x-0 top-0 bottom-[var(--terminal-content-bottom)]";
   return (
     <div
-      className="relative h-full min-h-0 w-full min-w-0 overflow-hidden"
+      className="relative h-full min-h-0 w-full min-w-0 overflow-hidden outline-none"
       data-testid="terminal-panel-root"
       ref={panelRootRef}
       style={
@@ -403,6 +405,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           "--terminal-content-bottom": `${terminalContentBottomPx}px`,
         } as CSSProperties
       }
+      tabIndex={-1}
     >
       <TerminalPanelBody
         activeTask={activeLaunch.task}

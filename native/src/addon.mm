@@ -90,6 +90,14 @@ extern "C" {
     typedef void (*ProcessClosedForwardFn)(long browserWindowId, const char* panelId,
                                            const char* lifecycleId, bool processAlive);
     void ghostty_bridge_set_process_closed_forward_callback(ProcessClosedForwardFn cb);
+    // Child exited: SHOW_CHILD_EXITED (host-consumed) → i18n banner.
+    typedef void (*ChildExitedForwardFn)(long browserWindowId, const char* panelId,
+                                         const char* lifecycleId, uint32_t exitCode,
+                                         uint64_t runtimeMs);
+    void ghostty_bridge_set_child_exited_forward_callback(ChildExitedForwardFn cb);
+    void ghostty_bridge_set_host_language(const char* languageTag); // empty/null clears
+    void ghostty_bridge_set_host_copy_catalog(const char* json); // null clears
+    bool ghostty_bridge_inject_display_text(const char* panelId, const char* text);
     int32_t ghostty_bridge_apply_window_state(void* nsWindow, const char* json);
     // 应用 Pier 主题派生的终端配色. cursor / selection 可空 (NULL = 不设置).
     // palette 是 16 槽 const char* 数组, 每槽 #RRGGBB hex (含 #). 调用同步, swift 同步
@@ -522,6 +530,39 @@ static Napi::Value JsSetModifierForwardCallback(const Napi::CallbackInfo& info) 
                                 &g_modifierForwardTrampoline);
 }
 
+static Napi::Value JsSetHostLanguage(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() == 0 || !info[0].IsString()) {
+        ghostty_bridge_set_host_language("");
+        return env.Undefined();
+    }
+    std::string tag = info[0].As<Napi::String>().Utf8Value();
+    ghostty_bridge_set_host_language(tag.c_str());
+    return env.Undefined();
+}
+
+static Napi::Value JsSetHostCopyCatalog(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() == 0 || !info[0].IsString()) {
+        ghostty_bridge_set_host_copy_catalog(nullptr);
+        return env.Undefined();
+    }
+    std::string json = info[0].As<Napi::String>().Utf8Value();
+    ghostty_bridge_set_host_copy_catalog(json.c_str());
+    return env.Undefined();
+}
+
+static Napi::Value JsInjectDisplayText(const Napi::CallbackInfo& info) {
+    Napi::Env env = info.Env();
+    if (info.Length() < 2 || !info[0].IsString() || !info[1].IsString()) {
+        return Napi::Boolean::New(env, false);
+    }
+    std::string panelId = info[0].As<Napi::String>().Utf8Value();
+    std::string text = info[1].As<Napi::String>().Utf8Value();
+    bool ok = ghostty_bridge_inject_display_text(panelId.c_str(), text.c_str());
+    return Napi::Boolean::New(env, ok);
+}
+
 static Napi::Value JsSetAppShortcutKeys(const Napi::CallbackInfo& info) {
     Napi::Env env = info.Env();
     if (info.Length() == 0 || !info[0].IsArray()) {
@@ -799,6 +840,45 @@ static Napi::Value JsSetProcessClosedForwardCallback(const Napi::CallbackInfo& i
                                 &g_processClosedForwardTrampoline);
 }
 
+// ---- Child exited forward (SHOW_CHILD_EXITED → i18n banner) ----
+struct ChildExitedForwardPayload {
+    long windowId;
+    std::string panelId;
+    std::string lifecycleId;
+    uint32_t exitCode;
+    uint64_t runtimeMs;
+    void callJs(Napi::Env env, Napi::Function jsCallback) {
+        jsCallback.Call({
+            Napi::Number::New(env, static_cast<double>(windowId)),
+            Napi::String::New(env, panelId),
+            Napi::String::New(env, lifecycleId),
+            Napi::Number::New(env, static_cast<double>(exitCode)),
+            Napi::Number::New(env, static_cast<double>(runtimeMs)),
+        });
+    }
+};
+static ForwardChannel<ChildExitedForwardPayload> g_childExitedChannel("PierChildExitedForward");
+static void g_childExitedForwardTrampoline(
+    long windowId,
+    const char* panelId,
+    const char* lifecycleId,
+    uint32_t exitCode,
+    uint64_t runtimeMs
+) {
+    g_childExitedChannel.emit({
+        windowId,
+        std::string(panelId),
+        std::string(lifecycleId),
+        exitCode,
+        runtimeMs,
+    });
+}
+static Napi::Value JsSetChildExitedForwardCallback(const Napi::CallbackInfo& info) {
+    return JsSetForwardCallback(info, g_childExitedChannel,
+                                ghostty_bridge_set_child_exited_forward_callback,
+                                &g_childExitedForwardTrampoline);
+}
+
 static Napi::Value JsApplyTerminalTheme(const Napi::CallbackInfo& info) {
     NSWindow* win = WindowFromHandle(info[0]);
     if (!win) return info.Env().Undefined();
@@ -1027,6 +1107,9 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setKeyboardForwardCallback", Napi::Function::New(env, JsSetKeyboardForwardCallback));
     exports.Set("setModifierForwardCallback", Napi::Function::New(env, JsSetModifierForwardCallback));
     exports.Set("setAppShortcutKeys", Napi::Function::New(env, JsSetAppShortcutKeys));
+    exports.Set("setHostLanguage", Napi::Function::New(env, JsSetHostLanguage));
+    exports.Set("setHostCopyCatalog", Napi::Function::New(env, JsSetHostCopyCatalog));
+    exports.Set("injectDisplayText", Napi::Function::New(env, JsInjectDisplayText));
     exports.Set("setOpenUrlForwardCallback", Napi::Function::New(env, JsSetOpenUrlForwardCallback));
     exports.Set("setPwdForwardCallback", Napi::Function::New(env, JsSetPwdForwardCallback));
     exports.Set("setSearchForwardCallback", Napi::Function::New(env, JsSetSearchForwardCallback));
@@ -1034,6 +1117,7 @@ static Napi::Object Init(Napi::Env env, Napi::Object exports) {
     exports.Set("setCommandFinishedForwardCallback", Napi::Function::New(env, JsSetCommandFinishedForwardCallback));
     exports.Set("setCommandStartedForwardCallback", Napi::Function::New(env, JsSetCommandStartedForwardCallback));
     exports.Set("setProcessClosedForwardCallback", Napi::Function::New(env, JsSetProcessClosedForwardCallback));
+    exports.Set("setChildExitedForwardCallback", Napi::Function::New(env, JsSetChildExitedForwardCallback));
     exports.Set("applyTerminalWindowState", Napi::Function::New(env, JsApplyTerminalWindowState));
     exports.Set("setMouseForwardCallback", Napi::Function::New(env, JsSetMouseForwardCallback));
     exports.Set("setTerminalFocusRequestCallback", Napi::Function::New(env, JsSetTerminalFocusRequestCallback));

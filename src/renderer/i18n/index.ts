@@ -1,9 +1,26 @@
 import i18next from "i18next";
+import { pushHostCopyCatalog } from "@/lib/terminal/push-host-copy-catalog.ts";
 import { FALLBACK_LOCALE, resolveLanguagePreference } from "./language.ts";
 import { en } from "./locales/en/index.ts";
 import { zhCN } from "./locales/zh-CN/index.ts";
 
 let initialized = false;
+
+function pushHostLanguage(languageTag: string): void {
+  const api = window.pier?.terminal;
+  if (!api?.setHostLanguage) {
+    return;
+  }
+  api.setHostLanguage(languageTag).catch((err: unknown) => {
+    console.error("[i18n] setHostLanguage failed:", err);
+  });
+}
+
+function pushHostCopy(): void {
+  pushHostCopyCatalog().catch((err: unknown) => {
+    console.error("[i18n] setHostCopyCatalog failed:", err);
+  });
+}
 
 export async function initI18n(): Promise<void> {
   if (initialized) {
@@ -19,6 +36,14 @@ export async function initI18n(): Promise<void> {
       "zh-CN": { translation: zhCN },
       en: { translation: en },
     },
+  });
+  const lang = i18next.resolvedLanguage ?? initialLocale;
+  pushHostLanguage(lang);
+  pushHostCopy();
+  i18next.on("languageChanged", (lng) => {
+    document.documentElement.lang = lng;
+    pushHostLanguage(lng);
+    pushHostCopy();
   });
   initialized = true;
 }

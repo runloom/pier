@@ -14,6 +14,7 @@ import {
 } from "../windows/window-identity.ts";
 import { foregroundActivityService } from "./foreground-activity.ts";
 import { recordNativeTerminalRoute } from "./terminal-debug.ts";
+import { broadcastAgentEndStateForPanel } from "./terminal-end-state-broadcast.ts";
 import { forwardToWindow } from "./terminal-forwarding.ts";
 import type { NativeAddon } from "./terminal-native-addon.ts";
 import { fromNativePanelKey } from "./terminal-panel-id.ts";
@@ -79,7 +80,11 @@ export function registerTerminalTaskLifecycleForwarding(
       | ((panelId: string, windowId?: string | undefined) => void)
       | undefined;
     shouldRetainSurfaceOnProcessExit?:
-      | ((panelId: string, windowId?: string | undefined) => boolean)
+      | ((
+          panelId: string,
+          windowId?: string | undefined,
+          sessionWindowId?: string | undefined
+        ) => boolean)
       | undefined;
   } = {}
 ): RegisteredTerminalTaskLifecycle {
@@ -139,17 +144,24 @@ export function registerTerminalTaskLifecycleForwarding(
         !isWindowDetaching(windowRecordIdFor(targetWindow)) &&
         !isWindowDetaching(String(id))
       ) {
-        patchTerminalPanelAgentStatus(
-          windowRecordIdFor(targetWindow),
-          rawPanelId,
-          {
-            exitCode,
-            finishedAt: Date.now(),
-            status: "exited",
-          }
-        ).catch((err) => {
-          console.error("[pier-agent-session:command-finished] failed:", err);
-        });
+        const sessionScope = windowRecordIdFor(targetWindow);
+        patchTerminalPanelAgentStatus(sessionScope, rawPanelId, {
+          exitCode,
+          finishedAt: Date.now(),
+          status: "exited",
+        })
+          .then((ok) => {
+            if (ok) {
+              broadcastAgentEndStateForPanel(
+                targetWindow,
+                sessionScope,
+                rawPanelId
+              );
+            }
+          })
+          .catch((err) => {
+            console.error("[pier-agent-session:command-finished] failed:", err);
+          });
       }
       if (exitCode >= 0) {
         lifecycle
@@ -219,6 +231,39 @@ export function registerTerminalTaskLifecycleForwarding(
     }
   );
 
+  addon?.setChildExitedForwardCallback?.(
+    (id, panelId, lifecycleId, exitCode, runtimeMs) => {
+      recordNativeTerminalRoute(id, "child-exited", panelId, {
+        exitCode,
+        runtimeMs,
+      });
+      const rawPanelId = fromNativePanelKey(panelId);
+      const targetWindow = findAppWindowByElectronId(id);
+      const windowId = targetWindow
+        ? (findInternalWindowId(targetWindow) ?? undefined)
+        : undefined;
+      if (
+        !lifecycle.isCurrentLifecycle({
+          lifecycleId,
+          panelId: rawPanelId,
+          windowId,
+        })
+      ) {
+        return;
+      }
+      forwardToWindow(
+        id,
+        PIER_BROADCAST.TERMINAL_CHILD_EXITED,
+        {
+          exitCode,
+          panelId: rawPanelId,
+          runtimeMs,
+        },
+        "pier-child-exited"
+      );
+    }
+  );
+
   addon?.setProcessClosedForwardCallback?.(
     (id, panelId, lifecycleId, processAlive) => {
       recordNativeTerminalRoute(id, "process-closed", panelId, {
@@ -249,24 +294,38 @@ export function registerTerminalTaskLifecycleForwarding(
         !isWindowDetaching(windowRecordIdFor(targetWindow)) &&
         !isWindowDetaching(String(id))
       ) {
-        patchTerminalPanelAgentStatus(
-          windowRecordIdFor(targetWindow),
-          rawPanelId,
-          {
-            finishedAt: Date.now(),
-            status: "exited",
-          }
-        ).catch((err) => {
-          console.error("[pier-agent-session:process-closed] failed:", err);
-        });
+        const sessionScope = windowRecordIdFor(targetWindow);
+        patchTerminalPanelAgentStatus(sessionScope, rawPanelId, {
+          finishedAt: Date.now(),
+          status: "exited",
+        })
+          .then((ok) => {
+            if (ok) {
+              broadcastAgentEndStateForPanel(
+                targetWindow,
+                sessionScope,
+                rawPanelId
+              );
+            }
+          })
+          .catch((err) => {
+            console.error("[pier-agent-session:process-closed] failed:", err);
+          });
       }
       // 普通 shell：转发 SURFACE_CLOSE，由 renderer 关 panel。
       // 任务结果 panel：保留终态，不转发。
       // processAlive=true 是宿主主动关闭 native surface 的回声，不得再次请求关闭。
+      const sessionWindowId = targetWindow
+        ? windowRecordIdFor(targetWindow)
+        : undefined;
       if (
         processAlive === false &&
         !suppressedSurfaceClosePanelIds.delete(panelId) &&
-        !options.shouldRetainSurfaceOnProcessExit?.(rawPanelId, windowId)
+        !options.shouldRetainSurfaceOnProcessExit?.(
+          rawPanelId,
+          windowId,
+          sessionWindowId
+        )
       ) {
         forwardToWindow(
           id,

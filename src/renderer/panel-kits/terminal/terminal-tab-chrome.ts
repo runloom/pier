@@ -3,6 +3,7 @@ import {
   resolveAgentSessionTitle,
   truncateTerminalTitleForTooltip,
 } from "@shared/agent-session-title/index.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import { agentTabIconId } from "@shared/contracts/agent-session.ts";
 import {
   type AgentSessionTitleSource,
@@ -24,6 +25,11 @@ import {
   type TaskRunsSnapshot,
   taskRunTabState,
 } from "@shared/contracts/tasks.ts";
+import {
+  agentEndResultTabChrome,
+  stripPanelTabChromeState,
+  tabChromeForAgentEndBase,
+} from "@shared/contracts/terminal-end-state.ts";
 import { taskRunsOwnedByPanel } from "@/stores/task-runs.store.ts";
 
 /**
@@ -46,6 +52,26 @@ export function tabChromeFromParams(
     return;
   }
   return normalizePanelTabChromeInput(params.tab);
+}
+
+/** @deprecated Use stripPanelTabChromeState from terminal-end-state — re-export for call sites. */
+export const stripTabChromeState = stripPanelTabChromeState;
+
+/**
+ * Base tab for agent result view — shared tabChromeForAgentEndBase.
+ */
+export function tabChromeForAgentResultBase(
+  tab: PanelTabChrome | undefined,
+  options?: {
+    exitCode?: number | undefined;
+    /** true when process has exited (session, latch, or child-exited) */
+    exited?: boolean | undefined;
+  }
+): PanelTabChrome | undefined {
+  return tabChromeForAgentEndBase(tab, {
+    exitCode: options?.exitCode,
+    exited: options?.exited === true,
+  });
 }
 
 export function mergeTabChrome(
@@ -186,6 +212,28 @@ export function activityTabChromeOverlay(
     return { title: activity.label };
   }
   return null;
+}
+
+/**
+ * Agent 进程退出后 FA activity 会被清掉，tab 若只依赖 activity overlay 会丢
+ * agent icon 回退成默认方块。结果查看态用 session / latch 的 agentId 补 icon。
+ *
+ * 语义：shared `agentEndResultTabChrome`（干净退出不写 state；失败 failed）。
+ * 调用方须先 `tabChromeForAgentResultBase` 剥 base success。
+ */
+export function agentResultTabChromeOverlay(
+  agentId: AgentKind | undefined,
+  options?: {
+    exitCode?: number | undefined;
+    /** true when process has exited and panel is retained for review */
+    exited?: boolean | undefined;
+    title?: string | null | undefined;
+  }
+): Partial<PanelTabChrome> | null {
+  if (!agentId) {
+    return null;
+  }
+  return agentEndResultTabChrome(agentId, options);
 }
 
 function taskOutputTabState(status: TaskRunNodeStatus, exitCode?: number) {

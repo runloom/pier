@@ -82,3 +82,18 @@ export function peekTerminalPanelContext(
   }
   return s.get().windows[windowId]?.panels[panelId]?.context ?? null;
 }
+
+/** Sync peek of agent session metadata (running or exited). Null if store cold. */
+export function peekTerminalPanelAgent(
+  windowId: string,
+  panelId: string
+): TerminalSessionState["windows"][string]["panels"][string]["agent"] | null {
+  if (windowId.trim().length === 0 || panelId.trim().length === 0) {
+    return null;
+  }
+  const s = tryGetTerminalSessionStore();
+  if (!s) {
+    return null;
+  }
+  return s.get().windows[windowId]?.panels[panelId]?.agent ?? null;
+}

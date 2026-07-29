@@ -138,4 +138,47 @@ export const terminal = {
     },
     manage: "Manage Status Bar…",
   },
+  /**
+   * Ghostty / native host messages (see ghostty-host-copy catalog).
+   * Prefer product wording over Ghostty brand for user-facing copy.
+   */
+  ghosttyHost: {
+    processExited: "Process exited",
+    processExitedFailed: "Process exited with code {{code}}",
+    processExitedAbnormal:
+      "The command exited too quickly ({{duration}}). It may have failed to start.",
+    agentExited: "Agent session ended",
+    agentExitedFailed: "Agent session ended with code {{code}}",
+    agentExitedAbnormal:
+      "The agent exited too quickly ({{duration}}). It may have failed to start.",
+    taskExited: "Task finished",
+    taskExitedFailed: "Task failed with code {{code}}",
+    taskExitedAbnormal:
+      "The task exited too quickly ({{duration}}). It may have failed to start.",
+    taskOutputExited: "Task output ended",
+    taskOutputExitedFailed: "Task output ended with code {{code}}",
+    taskOutputExitedAbnormal:
+      "Task output ended too quickly ({{duration}}). The process may have failed to start.",
+    dismissAnyKey: "Press any key to close",
+    dismissExplicit: "Close the tab when you’re done reviewing",
+    injectExitFailed:
+      "Couldn’t show the session end message in the terminal. Close the tab when you’re done.",
+    launchFailedTitle: "Couldn’t start the command",
+    launchFailedRuntime: "Runtime: {{duration}}",
+    launchFailedExitCode: "Exit code: {{code}}",
+    launchFailedDismiss: "Press any key to close",
+    ptyExhausted:
+      "This Mac can’t open another terminal right now. Close unused terminals or other apps that use terminal sessions, then try again.",
+    inputPathFailed:
+      "A configured startup input file is missing or unreadable. Check your terminal input settings and try again.",
+    ioThreadFailed:
+      "Couldn’t start the terminal session ({{error}}). Close this tab and try again.",
+    ioThreadOom:
+      "Not enough memory to start the terminal. Close this tab and try again.",
+    pasteConfirmTitle: "Paste into the terminal?",
+    pasteConfirmBody:
+      "This paste has {{lines}} lines and may run commands immediately.",
+    pasteConfirmAccept: "Paste",
+    pasteConfirmCancel: "Cancel",
+  },
 } as const;

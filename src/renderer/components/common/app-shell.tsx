@@ -16,6 +16,7 @@ import { ShellKeybindings } from "@/components/common/shell-keybindings.tsx";
 import { TaskOutputSyncBridge } from "@/components/common/task-output-sync-bridge.tsx";
 import { TaskRunsErrorBridge } from "@/components/common/task-runs-error-bridge.tsx";
 import { TerminalDebugSnapshotBridge } from "@/components/common/terminal-debug-snapshot-bridge.tsx";
+import { TerminalEndStateBridge } from "@/components/common/terminal-end-state-bridge.tsx";
 import { TitleBar } from "@/components/common/title-bar.tsx";
 import { UsageDataBridge } from "@/components/common/usage-data-bridge.tsx";
 import { Toaster } from "@/components/primitives/sonner.tsx";
@@ -43,6 +44,7 @@ export function AppShell() {
       <ContentPreviewHost />
       <TerminalDebugSnapshotBridge />
       <ForegroundActivityBridge />
+      <TerminalEndStateBridge />
       <NotificationCenterBridge />
       <NotificationMessageToastBridge />
       <AppUpdateBridge />

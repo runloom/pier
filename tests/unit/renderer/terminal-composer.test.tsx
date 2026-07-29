@@ -1135,8 +1135,60 @@ describe("TerminalComposer", () => {
         screen.queryByTestId("terminal-composer-attachment-2")
       ).not.toBeInTheDocument();
     });
+    // Single remaining attachment: rail hides #n (only multi needs ordinal).
+    expect(
+      screen.getByTestId("terminal-composer-attachment-1")
+    ).not.toHaveTextContent("#1");
+  });
+
+  it("shows #n badges only when multiple attachments are on the rail", async () => {
+    pickComposerFiles.mockResolvedValue({
+      ok: true,
+      paths: ["/tmp/a.txt", "/tmp/b.txt"],
+    });
+    resolveComposerPaths.mockResolvedValue({
+      attachments: [
+        {
+          id: "a",
+          kind: "file",
+          name: "a.txt",
+          path: "/tmp/a.txt",
+        },
+        {
+          id: "b",
+          kind: "file",
+          name: "b.txt",
+          path: "/tmp/b.txt",
+        },
+      ],
+      failures: [],
+    });
+
+    renderComposer();
+
+    fireEvent.click(screen.getByTestId("terminal-composer-attach"));
+    await vi.waitFor(() => {
+      expect(screen.getByTestId("terminal-composer-attachment-1")).toBeTruthy();
+      expect(screen.getByTestId("terminal-composer-attachment-2")).toBeTruthy();
+    });
+
     expect(
       screen.getByTestId("terminal-composer-attachment-1")
     ).toHaveTextContent("#1");
+    expect(
+      screen.getByTestId("terminal-composer-attachment-2")
+    ).toHaveTextContent("#2");
+
+    fireEvent.click(
+      screen.getByTestId("terminal-composer-attachment-remove-2")
+    );
+    await vi.waitFor(() => {
+      expect(
+        screen.queryByTestId("terminal-composer-attachment-2")
+      ).not.toBeInTheDocument();
+    });
+    expect(
+      screen.getByTestId("terminal-composer-attachment-1")
+    ).not.toHaveTextContent("#1");
   });
 });

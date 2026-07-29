@@ -451,6 +451,8 @@ describe("TerminalPanel lifecycle", () => {
               );
             };
           }),
+          onChildExited: vi.fn(() => () => undefined),
+          injectDisplayText: vi.fn(async () => ({ ok: true })),
           onTitleChange: vi.fn((cb) => {
             const listener = { cb };
             titleChangeListeners.push(listener);

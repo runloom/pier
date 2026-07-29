@@ -48,6 +48,11 @@ export interface NativeAddon {
     runtimeMilliseconds: number
   ): boolean;
   /**
+   * Inject fully localized text into the terminal display buffer (not PTY).
+   * `panelId` is the native-scoped key (`${browserWindowId}::${panelId}`).
+   */
+  injectDisplayText?(panelId: string, text: string): boolean;
+  /**
    * Path B panel-transfer: true when the primary (left) mouse button is
    * currently pressed. Queried at dragend to distinguish Escape/system cancel
    * from a real mouse-up. Optional — absent / non-macOS → treat as released.
@@ -96,6 +101,17 @@ export interface NativeAddon {
   ): boolean;
   sendText(panelId: string, text: string): boolean;
   setAppShortcutKeys(keys: string[]): void;
+  setChildExitedForwardCallback?(
+    cb:
+      | ((
+          browserWindowId: number,
+          panelId: string,
+          lifecycleId: string,
+          exitCode: number,
+          runtimeMs: number
+        ) => void)
+      | null
+  ): void;
   setCommandFinishedForwardCallback?(
     cb:
       | ((
@@ -117,6 +133,10 @@ export interface NativeAddon {
         ) => void)
       | null
   ): void;
+  /** JSON object of fully localized host messages (leaf keys). */
+  setHostCopyCatalog?(json: string): void;
+  /** BCP-47 UI language for host-owned copy (paste confirm). Empty = system. */
+  setHostLanguage?(languageTag: string): void;
   setKeyboardForwardCallback(
     cb:
       | ((

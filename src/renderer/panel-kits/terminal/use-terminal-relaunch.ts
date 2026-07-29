@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { syncTaskPanelParams } from "@/lib/workspace/task-panel-params-sync.ts";
 import { rejectTerminalLaunch } from "@/lib/workspace/terminal-launch-confirmation.ts";
+import { useTerminalEndStateStore } from "@/stores/terminal-end-state.store.ts";
 import type { TerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
 import type { ActiveTerminalLaunch } from "./terminal-panel-params.ts";
 
@@ -57,6 +58,7 @@ export function useTerminalRelaunch({
           taskOutput: undefined,
         });
         setSavedSession(null);
+        useTerminalEndStateStore.getState().clear(panelId);
         if (relaunchRequest.task) {
           syncTaskPanelParams(panelId, {
             ...(relaunchRequest.tab ? { tab: relaunchRequest.tab } : {}),

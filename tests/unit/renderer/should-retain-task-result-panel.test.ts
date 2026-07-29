@@ -2,6 +2,10 @@ import type { TaskRunControlEntry } from "@shared/contracts/tasks.ts";
 import { afterEach, describe, expect, it } from "vitest";
 import { shouldRetainTaskResultPanel } from "@/panel-kits/terminal/should-retain-task-result-panel.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
+import {
+  resetTerminalEndStateStoreForTests,
+  useTerminalEndStateStore,
+} from "@/stores/terminal-end-state.store.ts";
 
 afterEach(() => {
   useTaskRunsStore.setState({
@@ -9,6 +13,7 @@ afterEach(() => {
     initialized: false,
     snapshot: { runs: {}, version: 0 },
   });
+  resetTerminalEndStateStoreForTests();
 });
 
 describe("shouldRetainTaskResultPanel", () => {
@@ -65,6 +70,16 @@ describe("shouldRetainTaskResultPanel", () => {
   it("does not retain plain shell panels", () => {
     expect(shouldRetainTaskResultPanel("terminal-shell", undefined)).toBe(
       false
+    );
+  });
+
+  it("retains panels with TerminalEndState (agent result)", () => {
+    useTerminalEndStateStore.getState().upsertAgentEnd({
+      agentId: "omp",
+      panelId: "terminal-agent-1",
+    });
+    expect(shouldRetainTaskResultPanel("terminal-agent-1", undefined)).toBe(
+      true
     );
   });
 });

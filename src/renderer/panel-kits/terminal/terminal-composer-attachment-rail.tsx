@@ -77,12 +77,15 @@ function AttachmentTile({
   onOpen,
   onRemove,
   ordinal,
+  showOrdinal,
 }: {
   attachment: ComposerAttachment;
   disabled: boolean;
   onOpen: (attachment: ComposerAttachment) => void;
   onRemove: (id: string) => void;
   ordinal: number;
+  /** Multi-attachment only: correlates rail tile with body [#n] chips. */
+  showOrdinal: boolean;
 }) {
   const t = useT();
   const preview = attachment.previewDataUrl;
@@ -118,18 +121,20 @@ function AttachmentTile({
               aria-hidden="true"
               className="size-6 text-muted-foreground"
             />
-            <span
-              className={cn(
-                "shrink-0 rounded bg-primary/10 px-1 font-mono text-[9px]",
-                "font-semibold text-primary leading-none"
-              )}
-            >
-              #{ordinal}
-            </span>
+            {showOrdinal ? (
+              <span
+                className={cn(
+                  "shrink-0 rounded bg-primary/10 px-1 font-mono text-[9px]",
+                  "font-semibold text-primary leading-none"
+                )}
+              >
+                #{ordinal}
+              </span>
+            ) : null}
           </div>
         )}
 
-        {preview && isImage ? (
+        {preview && isImage && showOrdinal ? (
           <span
             className={cn(
               // Opaque badge — avoid translucent blur overlays. Blur samples
@@ -146,8 +151,11 @@ function AttachmentTile({
       <Button
         aria-label={t("terminal.composer.removeAttachment")}
         className={cn(
+          // Solid disc over busy thumbnails — never translucent bg/muted glyph.
           "absolute -top-1 -right-1 z-20 size-4.5 rounded-full p-0",
-          "bg-background/80 text-muted-foreground shadow-sm",
+          "border border-border bg-background text-foreground shadow-sm",
+          // outline dark default is transparent; force opaque on both themes.
+          "dark:bg-background dark:hover:bg-muted",
           "opacity-0 transition-opacity duration-150",
           "focus-visible:opacity-100 group-hover/att:opacity-100",
           "hover:bg-muted hover:text-foreground"
@@ -159,7 +167,7 @@ function AttachmentTile({
           onRemove(attachment.id);
         }}
         size="icon-xs"
-        variant="ghost"
+        variant="outline"
       >
         <X aria-hidden="true" data-icon />
       </Button>
@@ -199,6 +207,8 @@ export function TerminalComposerAttachmentRail({
     onReveal(attachment.path);
   };
 
+  const showOrdinal = attachments.length > 1;
+
   return (
     <div
       className="flex w-full min-w-0 flex-wrap gap-2 pt-1 pr-1"
@@ -212,6 +222,7 @@ export function TerminalComposerAttachmentRail({
           onOpen={openAttachment}
           onRemove={onRemove}
           ordinal={index + 1}
+          showOrdinal={showOrdinal}
         />
       ))}
     </div>

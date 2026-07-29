@@ -108,7 +108,9 @@ export interface TaskService {
   /** 进程自然退出时是否保留 terminal surface（任务结果 panel 不自动关）。 */
   shouldRetainSurfaceOnProcessExit(
     panelId: string,
-    windowId?: string | undefined
+    windowId?: string | undefined,
+    /** terminal-session record UUID for agent retain peek */
+    sessionWindowId?: string | undefined
   ): boolean;
   shutdownForQuit(graceMs?: number): Promise<void>;
   startBackgroundRun(args: {

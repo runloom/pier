@@ -33,13 +33,13 @@ private enum TerminalCallbacks {
         @MainActor
         private static func runUnsafePasteAlert(text: String) -> Bool {
             let lineCount = TerminalInputText.lineCount(in: text)
+            let copy = TerminalHostCopy.pasteConfirm(lineCount: lineCount)
             let alert = NSAlert()
             alert.alertStyle = .warning
-            alert.messageText = "确认粘贴到终端？"
-            alert.informativeText =
-                "这段内容包含 \(lineCount) 行，可能会直接执行命令。"
-            alert.addButton(withTitle: "粘贴")
-            alert.addButton(withTitle: "取消")
+            alert.messageText = copy.title
+            alert.informativeText = copy.body
+            alert.addButton(withTitle: copy.accept)
+            alert.addButton(withTitle: copy.cancel)
             return alert.runModal() == .alertFirstButtonReturn
         }
 
@@ -168,12 +168,12 @@ private enum TerminalCallbacks {
             bridge.handleAction(action)
         }
 
-        // Returning true tells Ghostty the host consumed the action. OPEN_URL
-        // must be handled here: a false return triggers
-        // "apprt did not handle open URL action, falling back to default opener"
-        // and dual-opens the target (Pier files tab + system default app).
+        // Returning true tells Ghostty the host consumed the action.
+        // - OPEN_URL: false falls back to the OS opener (dual-open with Pier).
+        // - SHOW_CHILD_EXITED: false prints hardcoded English into the terminal
+        //   buffer; true lets Pier show an i18n banner instead.
         switch action.tag {
-        case GHOSTTY_ACTION_OPEN_URL:
+        case GHOSTTY_ACTION_OPEN_URL, GHOSTTY_ACTION_SHOW_CHILD_EXITED:
             return true
         default:
             return false

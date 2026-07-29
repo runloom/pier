@@ -66,8 +66,17 @@ export const terminalApi: TerminalAPI = {
   onSearchState: (cb) => subscribeIpc("pier:terminal:search-state", cb),
   onSurfaceCloseRequest: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_SURFACE_CLOSE_REQUEST, cb),
+  onChildExited: (cb) => subscribeIpc(PIER_BROADCAST.TERMINAL_CHILD_EXITED, cb),
+  onEndStateChanged: (cb) =>
+    subscribeIpc(PIER_BROADCAST.TERMINAL_END_STATE_CHANGED, cb),
   onTitleChange: (cb) =>
     subscribeIpc(PIER_BROADCAST.TERMINAL_TITLE_CHANGED, cb),
+  setHostLanguage: (languageTag) =>
+    ipcRenderer.invoke("pier:terminal:set-host-language", languageTag),
+  setHostCopyCatalog: (messages) =>
+    ipcRenderer.invoke("pier:terminal:set-host-copy-catalog", messages),
+  injectDisplayText: (panelId, text) =>
+    ipcRenderer.invoke("pier:terminal:inject-display-text", panelId, text),
   materializeComposerClipboardImage: () =>
     ipcRenderer.invoke("pier:terminal:composer-materialize-clipboard-image"),
   materializeComposerImageBytes: (data) =>

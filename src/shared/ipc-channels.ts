@@ -92,6 +92,10 @@ export const PIER_BROADCAST = {
   TERMINAL_TITLE_CHANGED: "pier://terminal:title-changed",
   // Ghostty 在已退出进程的 surface 上收到用户关闭确认。
   TERMINAL_SURFACE_CLOSE_REQUEST: "pier://terminal:surface-close-request",
+  // Ghostty SHOW_CHILD_EXITED（宿主已拦截英文 buffer 文案）→ renderer inject。
+  TERMINAL_CHILD_EXITED: "pier://terminal:child-exited",
+  // 终端结果查看终态（agent/task end）→ renderer EndState store。
+  TERMINAL_END_STATE_CHANGED: "pier://terminal:end-state-changed",
   // 命令面板 MRU 变更广播 (main → renderer, payload MruState).
   COMMAND_PALETTE_MRU_CHANGED: "pier://command-palette-mru:changed",
   // git 变更广播 (main → renderer, payload GitChangeEvent).
