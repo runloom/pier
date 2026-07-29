@@ -85,6 +85,13 @@ export function applyLivePlanType(
 ): CodexAccountRecord {
   const normalized = planType.trim();
   if (normalized.length === 0) return account;
+  const currentPlan = account.planType?.toLowerCase();
+  if (
+    normalized.toLowerCase() === "pro" &&
+    (currentPlan === "pro-5x" || currentPlan === "pro-20x")
+  ) {
+    return account;
+  }
   const isFree = normalized.toLowerCase() === "free";
   // Plan switch (pro→plus, free→pro, …) invalidates the previous paid period.
   // Keep expiry only when the live plan label is unchanged and still paid.
@@ -110,5 +117,33 @@ export function applyLivePlanType(
     ...(nextExpires === undefined
       ? {}
       : { subscriptionExpiresAt: nextExpires }),
+  };
+}
+
+export function applyLiveMembership(
+  account: CodexAccountRecord,
+  membership: { expiresAt?: number; planType: string },
+  now: number
+): CodexAccountRecord {
+  const normalized = membership.planType.trim();
+  if (normalized.length === 0) return account;
+  const isFree = normalized.toLowerCase() === "free";
+  const expiresAt = isFree ? undefined : membership.expiresAt;
+  if (
+    account.planType === normalized &&
+    account.subscriptionExpiresAt === expiresAt
+  ) {
+    return account;
+  }
+  const {
+    planType: _previousPlanType,
+    subscriptionExpiresAt: _previousSubscriptionExpiresAt,
+    ...retained
+  } = account;
+  return {
+    ...retained,
+    planType: normalized,
+    updatedAt: now,
+    ...(expiresAt === undefined ? {} : { subscriptionExpiresAt: expiresAt }),
   };
 }

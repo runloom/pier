@@ -12,4 +12,17 @@ describe("Grok formatAccountError", () => {
       formatAccountError(new Error("No valid login found at auth.json"), t)
     ).toBe("No valid local Grok login found. Sign in with the Grok CLI first.");
   });
+
+  it("keeps a safe CLI reason and adds an actionable next step", () => {
+    expect(
+      formatAccountError(
+        new Error(
+          "Grok login failed (exit code 1): This account does not have Grok Build access"
+        ),
+        t
+      )
+    ).toBe(
+      "Grok sign-in did not complete: This account does not have Grok Build access. Confirm this account can use Grok Build, then try again."
+    );
+  });
 });

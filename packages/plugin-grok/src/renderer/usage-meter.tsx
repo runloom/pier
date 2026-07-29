@@ -1,34 +1,13 @@
-import { Badge } from "@pier/ui/badge.tsx";
-import {
-  COLLECTION_QUOTA_ITEM_MIN_WIDTH,
-  collectionAutoFitClassName,
-  collectionAutoFitStyle,
-  collectionLayoutMode,
-} from "@pier/ui/collection-auto-layout.ts";
-import {
-  formatCount,
-  formatDurationShort,
-  formatPercent,
-} from "@pier/ui/format.tsx";
-import { Progress } from "@pier/ui/progress.tsx";
-import { cn } from "@pier/ui/utils";
-import { WidgetEmpty } from "@pier/ui/widget-state.tsx";
+import type {
+  AccountUsageMetric,
+  AccountUsageQuotaMetric,
+} from "@pier/plugin-api/account-usage";
+import { AccountUsageMetrics } from "@pier/plugin-api/account-usage/renderer";
+import type { WidgetDensity } from "@pier/ui/collection-auto-layout.ts";
+import { formatCount } from "@pier/ui/format.tsx";
 import type { JSX } from "react";
-import type { GrokUsageWindow } from "../shared/accounts.ts";
-import {
-  remainingPercent,
-  type UsageRisk,
-  usageRisk,
-} from "../shared/usage.ts";
 
 export type Translate = (key: string, fallback: string) => string;
-
-export interface UsageProgressProps {
-  label: string;
-  language: string;
-  t: Translate;
-  window: GrokUsageWindow;
-}
 
 function replace(template: string, values: Record<string, string>): string {
   return Object.entries(values).reduce(
@@ -37,7 +16,7 @@ function replace(template: string, values: Record<string, string>): string {
   );
 }
 
-function localizeLimitName(name: string, t: Translate): string {
+function localizeName(name: string, t: Translate): string {
   if (name === "Weekly limit") {
     return t("pier.grok.usage.period.weekly", "Weekly limit");
   }
@@ -54,15 +33,21 @@ function localizeLimitName(name: string, t: Translate): string {
   if (name === "On-demand") {
     return t("pier.grok.usage.onDemand", "On-demand");
   }
+  if (name === "Frequent tasks") {
+    return t("pier.grok.usage.frequentTasks", "Frequent tasks");
+  }
+  if (name === "Occasional tasks") {
+    return t("pier.grok.usage.occasionalTasks", "Occasional tasks");
+  }
   return name;
 }
 
 export function usageWindowLabel(
-  window: GrokUsageWindow,
+  metric: AccountUsageQuotaMetric,
   language: string,
   t: Translate
 ): string {
-  const minutes = window.windowMinutes;
+  const minutes = metric.windowMinutes;
   let quota: string;
   if (!(minutes && Number.isFinite(minutes) && minutes > 0)) {
     quota = t("pier.grok.usage.quota", "Quota");
@@ -79,168 +64,73 @@ export function usageWindowLabel(
       count: formatCount(minutes, language),
     });
   }
-  return window.limitName
+  return metric.name
     ? replace(t("pier.grok.usage.namedQuota", "{name} · {quota}"), {
-        name: localizeLimitName(window.limitName, t),
+        name: localizeName(metric.name, t),
         quota,
       })
     : quota;
 }
 
-function resetsLabel(
-  window: GrokUsageWindow,
-  now: number,
-  language: string
-): string | null {
-  if (!window.resetsAt || window.resetsAt <= now) return null;
-  return formatDurationShort(window.resetsAt - now, language);
-}
-
-export function usageProgressVariant(
-  risk: UsageRisk
-): "destructive" | "success" | "warning" {
-  if (risk === "critical") return "destructive";
-  if (risk === "warning") return "warning";
-  return "success";
-}
-
-function riskLabel(risk: UsageRisk, t: Translate): string {
-  if (risk === "critical") {
-    return t("pier.grok.usage.risk.critical", "Critical");
+export function usageMetricLabel(
+  metric: AccountUsageMetric,
+  language: string,
+  t: Translate
+): string {
+  if (metric.kind === "quota") {
+    return usageWindowLabel(metric, language, t);
   }
-  if (risk === "warning") {
-    return t("pier.grok.usage.risk.warning", "Warning");
+  if (metric.id === "grok:prepaid-balance") {
+    return t("pier.grok.usage.prepaidBalance", "Prepaid balance");
   }
-  return t("pier.grok.usage.risk.normal", "Normal");
-}
-
-export function UsageProgress({
-  label,
-  language,
-  t,
-  window,
-}: UsageProgressProps): JSX.Element {
-  const remaining = remainingPercent(window.usedPercent);
-  const remainingLabel = formatPercent(remaining / 100, language);
-  const risk = usageRisk(window.usedPercent);
-  const reset = resetsLabel(window, Date.now(), language);
-
-  return (
-    <div
-      className="flex w-full min-w-0 flex-col gap-1.5"
-      data-limit-id={window.limitId}
-      data-risk={risk}
-      data-slot="grok-usage-progress"
-    >
-      <div className="flex items-center justify-between gap-3">
-        <span className="min-w-0 truncate font-medium text-xs" title={label}>
-          {label}
-        </span>
-        <span className="shrink-0 font-semibold text-lg tabular-nums tracking-tight">
-          {remainingLabel}
-        </span>
-      </div>
-      <Progress
-        aria-label={`${label}: ${t("pier.grok.widget.remaining", "remaining")} ${remainingLabel}, ${riskLabel(risk, t)}`}
-        className="h-1"
-        value={remaining}
-        variant={usageProgressVariant(risk)}
-      />
-      {reset ? (
-        <div className="flex min-w-0 items-center justify-between gap-2 text-muted-foreground text-xs">
-          {risk === "normal" ? (
-            <span />
-          ) : (
-            <Badge
-              size="xs"
-              variant={risk === "critical" ? "danger" : "warning"}
-            >
-              {riskLabel(risk, t)}
-            </Badge>
-          )}
-          <span className="truncate text-right tabular-nums">
-            {t("pier.grok.widget.resetsIn", "Resets in")} {reset}
-          </span>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-export interface UsageMeterProps {
-  className?: string;
-  language: string;
-  t: Translate;
-  windows: GrokUsageWindow[];
-}
-
-export function sortUsageWindows(
-  windows: readonly GrokUsageWindow[]
-): GrokUsageWindow[] {
-  const firstLimitId = windows[0]?.limitId;
-  const limitOrder = new Map<string, number>();
-  for (const window of windows) {
-    if (!limitOrder.has(window.limitId)) {
-      limitOrder.set(window.limitId, limitOrder.size);
-    }
-  }
-  return windows
-    .map((window, index) => ({ index, window }))
-    .sort((left, right) => {
-      const leftPrimary = left.window.limitId === firstLimitId;
-      const rightPrimary = right.window.limitId === firstLimitId;
-      if (leftPrimary !== rightPrimary) return leftPrimary ? -1 : 1;
-      const bucketOrder =
-        (limitOrder.get(left.window.limitId) ?? 0) -
-        (limitOrder.get(right.window.limitId) ?? 0);
-      if (bucketOrder !== 0) return bucketOrder;
-      const durationOrder =
-        (left.window.windowMinutes ?? Number.POSITIVE_INFINITY) -
-        (right.window.windowMinutes ?? Number.POSITIVE_INFINITY);
-      return durationOrder || left.index - right.index;
-    })
-    .map(({ window }) => window);
+  return metric.name
+    ? localizeName(metric.name, t)
+    : t("pier.grok.usage.value", "Usage value");
 }
 
 export function UsageMeter({
   className,
+  density,
   language,
+  metrics,
+  status,
   t,
-  windows,
-}: UsageMeterProps): JSX.Element {
-  if (windows.length === 0) {
-    return (
-      <WidgetEmpty
-        title={t("pier.grok.widget.noUsage", "No usage data available yet.")}
-      />
-    );
-  }
-
-  const sorted = sortUsageWindows(windows);
-  const count = sorted.length;
-  const layout = collectionLayoutMode(count);
-
+  updatedAt,
+}: {
+  className?: string;
+  density?: WidgetDensity;
+  language: string;
+  metrics: readonly AccountUsageMetric[];
+  status: "error" | "ok";
+  t: Translate;
+  updatedAt?: number;
+}): JSX.Element {
   return (
-    <div
-      className={cn(
-        collectionAutoFitClassName(count, { singleAs: "flex" }),
-        "pier-grok-usage-meter",
-        className
-      )}
-      data-count={count}
-      data-layout={layout}
-      data-slot="grok-usage-meter"
-      style={collectionAutoFitStyle(count, COLLECTION_QUOTA_ITEM_MIN_WIDTH)}
-    >
-      {sorted.map((window) => (
-        <UsageProgress
-          key={window.id}
-          label={usageWindowLabel(window, language, t)}
-          language={language}
-          t={t}
-          window={window}
-        />
-      ))}
-    </div>
+    <AccountUsageMetrics
+      {...(className === undefined ? {} : { className })}
+      {...(density === undefined ? {} : { density })}
+      copy={{
+        noUsage: t("pier.grok.widget.noUsage", "No usage data available yet."),
+        remaining: t("pier.grok.widget.remaining", "remaining"),
+        resetsIn: (duration) =>
+          replace(t("pier.grok.widget.resetsIn", "Resets in {duration}"), {
+            duration,
+          }),
+        risk: {
+          critical: t("pier.grok.usage.risk.critical", "Critical"),
+          warning: t("pier.grok.usage.risk.warning", "Warning"),
+        },
+        stale: (duration) =>
+          replace(
+            t("pier.grok.widget.stale", "Showing data from {duration} ago"),
+            { duration }
+          ),
+      }}
+      language={language}
+      metricLabel={(metric) => usageMetricLabel(metric, language, t)}
+      metrics={metrics}
+      status={status}
+      {...(updatedAt === undefined ? {} : { updatedAt })}
+    />
   );
 }

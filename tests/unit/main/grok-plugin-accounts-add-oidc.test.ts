@@ -66,7 +66,7 @@ function createProvider(
     id: "grok",
     deleteApiKey: vi.fn(async () => undefined),
     deleteCredential: vi.fn(async () => undefined),
-    fetchUsage: vi.fn(async () => ({ status: "ok" as const, windows: [] })),
+    fetchUsage: vi.fn(async () => ({ status: "ok" as const, metrics: [] })),
     login: vi.fn(async () => undefined),
     materializeApiKey: vi.fn(async () => undefined),
     materializeEmptyAuth: vi.fn(async () => undefined),
@@ -150,6 +150,32 @@ async function captureRejection(promise: Promise<unknown>): Promise<Error> {
 }
 
 describe("addOidcAccount", () => {
+  it("commits a valid identity written before the login process exits non-zero", async () => {
+    const provider = createProvider({
+      login: vi.fn(async () => {
+        throw new Error(
+          "Grok login failed (exit code 1): account access check failed"
+        );
+      }),
+      readIdentity: vi.fn(async () => IDENTITY),
+    });
+    const stateStore = createStateStore({
+      accounts: [],
+      activeAccountId: null,
+      revision: 0,
+      schemaVersion: 1,
+    });
+    const { host, ui } = createHost({ provider, stateStore });
+
+    await addOidcAccount(host, "oauth");
+
+    expect(stateStore.get().accounts).toHaveLength(1);
+    expect(stateStore.get().accounts[0]?.providerAccountId).toBe(
+      IDENTITY.providerAccountId
+    );
+    expect(ui.lastLoginError).toBeNull();
+  });
+
   it("publishes cancellation before the managed directory finishes", async () => {
     const directory = deferred<string>();
     const login = vi.fn(async () => undefined);
@@ -281,6 +307,7 @@ describe("addOidcAccount", () => {
       login: vi.fn(async () => {
         throw new Error("login failed");
       }),
+      readIdentity: vi.fn(async () => null),
     });
     const { host, ui } = createHost({
       ensureManagedDir: async (accountId) => {

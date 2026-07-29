@@ -93,9 +93,10 @@ describe("grok membership persistence", () => {
       },
       usageCache: {
         "acc-1": {
-          fetchedAt: 9,
+          attemptedAt: 9,
+          metrics: [],
           status: "ok",
-          windows: [],
+          updatedAt: 9,
           subscription: {
             planType: "super_grok_pro",
             status: "active",

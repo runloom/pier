@@ -348,7 +348,7 @@ export function createGrokProvider(
           status: "error",
           error:
             "Grok session expired — re-login required (session token missing)",
-          windows: [],
+          metrics: [],
         };
       }
       const accountHomeDir = options.accountHomeDir;
@@ -367,7 +367,7 @@ export function createGrokProvider(
             error: `${USAGE_TEMPORARILY_UNAVAILABLE_ERROR} (credential read failed: ${
               error instanceof Error ? error.message : String(error)
             })`,
-            windows: [],
+            metrics: [],
           };
         }
       }

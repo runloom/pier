@@ -23,7 +23,6 @@ import {
   accountsWidgetActions,
 } from "../../../packages/plugin-codex/src/renderer/accounts-widget.tsx";
 import { plugin } from "../../../packages/plugin-codex/src/renderer/index.tsx";
-import { sortUsageWindows } from "../../../packages/plugin-codex/src/renderer/usage-meter.tsx";
 import type { CodexAccountsSnapshot } from "../../../packages/plugin-codex/src/shared/accounts.ts";
 
 function baseProps(
@@ -49,24 +48,27 @@ function usageSnapshot(
     ],
     activeAccountId: "acc-1",
     activeUsage: {
-      fetchedAt: Date.now(),
-      status: "ok",
-      windows: [
+      attemptedAt: Date.now(),
+      metrics: [
         {
+          groupId: "codex",
           id: "codex:primary",
-          limitId: "codex",
+          kind: "quota",
           resetsAt: Date.now() + 3_600_000,
           usedPercent: 32,
           windowMinutes: 300,
         },
         {
+          groupId: "codex",
           id: "codex:secondary",
-          limitId: "codex",
+          kind: "quota",
           resetsAt: Date.now() + 86_400_000,
           usedPercent: 68,
           windowMinutes: 10_080,
         },
       ],
+      status: "ok",
+      updatedAt: Date.now(),
     },
     login: null,
     revision: 1,
@@ -80,23 +82,26 @@ function noActiveAccountSnapshot(): CodexAccountsSnapshot {
     accounts: [],
     activeAccountId: null,
     activeUsage: {
-      fetchedAt: Date.now(),
-      status: "ok",
-      windows: [
+      attemptedAt: Date.now(),
+      metrics: [
         {
+          groupId: "codex",
           id: "codex:primary",
-          limitId: "codex",
+          kind: "quota",
           resetsAt: Date.now() + 3_600_000,
           usedPercent: 10,
           windowMinutes: 300,
         },
         {
+          groupId: "codex",
           id: "codex:secondary",
-          limitId: "codex",
+          kind: "quota",
           usedPercent: 45,
           windowMinutes: 10_080,
         },
       ],
+      status: "ok",
+      updatedAt: Date.now(),
     },
     login: null,
     revision: 1,
@@ -209,6 +214,27 @@ function openDropdown(triggerName: string): void {
 }
 
 describe("AccountsWidget (usage)", () => {
+  it("keeps account identity outside one faded usage viewport", async () => {
+    const { context } = contextWithSnapshot(usageSnapshot());
+    const { container } = render(
+      <AccountsWidget context={context} {...baseProps()} />
+    );
+
+    const accountLabel = await screen.findByText("test@codex.dev");
+    const viewport = container.querySelector(
+      '[data-slot="scroll-area-viewport"]'
+    );
+
+    expect(
+      container.querySelectorAll('[data-slot="scroll-area"]')
+    ).toHaveLength(1);
+    expect(viewport).toHaveClass("scroll-fade-y", "overscroll-contain");
+    expect(viewport?.contains(accountLabel)).toBe(false);
+    expect(
+      viewport?.querySelector('[data-slot="account-widget-usage-content"]')
+    ).not.toBeNull();
+  });
+
   afterEach(() => {
     cleanup();
     resetAppContentDialogForTests();
@@ -228,7 +254,7 @@ describe("AccountsWidget (usage)", () => {
     expect(screen.getByText("7-day quota")).toBeDefined();
     expect(container.textContent).toContain("32%");
     expect(container.textContent).toContain("68%");
-    expect(container.textContent).not.toContain("remaining");
+    expect(screen.getAllByText("remaining")).toHaveLength(2);
   });
 
   it("hides the account switcher when no alternative account exists", async () => {
@@ -561,25 +587,28 @@ describe("AccountsWidget (usage)", () => {
   it("keeps every quota visible and identifiable at compact size", async () => {
     const snapshot = usageSnapshot({
       activeUsage: {
-        fetchedAt: Date.now(),
-        status: "ok",
-        windows: [
+        attemptedAt: Date.now(),
+        metrics: [
           {
+            groupId: "codex",
             id: "codex:secondary",
-            limitId: "codex",
+            kind: "quota",
             resetsAt: Date.now() + 86_400_000,
             usedPercent: 32,
             windowMinutes: 10_080,
           },
           {
+            groupId: "spark",
             id: "spark:secondary",
-            limitId: "spark",
-            limitName: "GPT-5.3-Codex-Spark",
+            kind: "quota",
+            name: "GPT-5.3-Codex-Spark",
             resetsAt: Date.now() + 86_400_000,
             usedPercent: 0,
             windowMinutes: 10_080,
           },
         ],
+        status: "ok",
+        updatedAt: Date.now(),
       },
     });
     const { context } = contextWithSnapshot(snapshot);
@@ -593,12 +622,11 @@ describe("AccountsWidget (usage)", () => {
     await screen.findByText("7-day quota");
     expect(screen.getByText("GPT-5.3-Codex-Spark · 7-day quota")).toBeDefined();
 
-    const meter = container.querySelector('[data-slot="codex-usage-meter"]');
+    const meter = container.querySelector('[data-slot="account-usage-quotas"]');
     const windows = container.querySelectorAll(
-      '[data-slot="codex-usage-progress"]'
+      '[data-slot="account-usage-quota"]'
     );
-    expect(meter?.className).toContain("pier-codex-usage-meter");
-    expect(meter?.getAttribute("data-layout")).toBe("auto-fit");
+    expect(meter?.getAttribute("data-count")).toBe("2");
     expect(meter?.className).toContain("grid");
     expect(meter?.className).toContain("content-start");
     // 列定义走 inline style，不依赖 Tailwind 任意值
@@ -609,12 +637,12 @@ describe("AccountsWidget (usage)", () => {
     });
     expect(windows).toHaveLength(2);
     expect(
-      Array.from(windows, (window) => window.getAttribute("data-limit-id"))
+      Array.from(windows, (window) => window.getAttribute("data-group-id"))
     ).toEqual(["codex", "spark"]);
     expect(container.querySelector('[data-slot="separator"]')).toBeNull();
     expect(
       container.querySelectorAll(
-        '[data-slot="codex-usage-progress"] [data-slot="progress"]'
+        '[data-slot="account-usage-quota"] [data-slot="progress"]'
       )
     ).toHaveLength(2);
   });
@@ -622,17 +650,19 @@ describe("AccountsWidget (usage)", () => {
   it("forces a single quota meter onto a full-width column", async () => {
     const snapshot = usageSnapshot({
       activeUsage: {
-        fetchedAt: Date.now(),
-        status: "ok",
-        windows: [
+        attemptedAt: Date.now(),
+        metrics: [
           {
+            groupId: "codex",
             id: "codex:primary",
-            limitId: "codex",
+            kind: "quota",
             resetsAt: Date.now() + 3_600_000,
             usedPercent: 10,
             windowMinutes: 300,
           },
         ],
+        status: "ok",
+        updatedAt: Date.now(),
       },
     });
     const { context } = contextWithSnapshot(snapshot);
@@ -642,7 +672,7 @@ describe("AccountsWidget (usage)", () => {
 
     await screen.findByText("5-hour quota");
     const meter = container.querySelector(
-      '[data-slot="codex-usage-meter"][data-layout="single"]'
+      '[data-slot="account-usage-quotas"][data-count="1"]'
     );
     expect(meter).not.toBeNull();
     expect(meter?.className).toContain("flex");
@@ -653,24 +683,26 @@ describe("AccountsWidget (usage)", () => {
       ""
     );
     expect(
-      container.querySelectorAll('[data-slot="codex-usage-progress"]')
+      container.querySelectorAll('[data-slot="account-usage-quota"]')
     ).toHaveLength(1);
   });
 
   it("keeps last-good quota meters when usage status is error", async () => {
     const snapshot = usageSnapshot({
       activeUsage: {
+        attemptedAt: Date.now(),
         error: "network timeout",
-        fetchedAt: Date.now(),
-        status: "error",
-        windows: [
+        metrics: [
           {
+            groupId: "codex",
             id: "codex:primary",
-            limitId: "codex",
+            kind: "quota",
             usedPercent: 40,
             windowMinutes: 300,
           },
         ],
+        status: "error",
+        updatedAt: Date.now(),
       },
     });
     const { context } = contextWithSnapshot(snapshot);
@@ -679,7 +711,7 @@ describe("AccountsWidget (usage)", () => {
     );
     await screen.findByText("5-hour quota");
     expect(
-      container.querySelector('[data-slot="codex-usage-meter"]')
+      container.querySelector('[data-slot="account-usage-quotas"]')
     ).not.toBeNull();
     expect(container.querySelector('[data-slot="widget-error"]')).toBeNull();
   });
@@ -700,34 +732,86 @@ describe("AccountsWidget (usage)", () => {
     expect(container.querySelector('[data-slot="item"]')).toBeNull();
   });
 
-  it("keeps primary quota windows before model-specific windows", () => {
-    const ordered = sortUsageWindows([
-      {
-        id: "codex:secondary",
-        limitId: "codex",
-        usedPercent: 10,
-        windowMinutes: 10_080,
-      },
-      {
-        id: "spark:primary",
-        limitId: "spark",
-        limitName: "GPT-5.3-Codex-Spark",
-        usedPercent: 0,
-        windowMinutes: 300,
-      },
-      {
-        id: "codex:primary",
-        limitId: "codex",
-        usedPercent: 20,
-        windowMinutes: 300,
-      },
-    ]);
+  it("keeps a compact account switcher when more than one account exists", async () => {
+    const snapshot = usageSnapshot({
+      accounts: [
+        {
+          error: null,
+          id: "acc-1",
+          label: "active@codex.dev",
+          planType: "pro",
+          status: "active",
+        },
+        {
+          error: null,
+          id: "acc-2",
+          label: "other@codex.dev",
+          planType: "pro",
+          status: "available",
+        },
+      ],
+      activeAccountId: "acc-1",
+    });
+    const { context } = contextWithSnapshot(snapshot);
+    const { container } = render(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ size: { w: 4, h: 2 } })}
+      />
+    );
 
-    expect(ordered.map((window) => window.id)).toEqual([
-      "codex:primary",
-      "codex:secondary",
-      "spark:primary",
-    ]);
+    await screen.findByText("active@codex.dev");
+    expect(screen.getByRole("button", { name: "Switch account" })).toBeTruthy();
+    expect(container.querySelector('[data-slot="avatar"]')).toBeNull();
+    expect(screen.queryByText("PRO")).toBeNull();
+  });
+
+  it("promotes an expiring membership in a compact single-account widget", async () => {
+    const snapshot = usageSnapshot({
+      accounts: [
+        {
+          error: null,
+          id: "acc-1",
+          label: "active@codex.dev",
+          planType: "pro",
+          status: "active",
+          subscriptionExpiresAt: Date.now() + 86_400_000,
+        },
+      ],
+      activeAccountId: "acc-1",
+    });
+    const { context } = contextWithSnapshot(snapshot);
+    render(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ size: { w: 4, h: 2 } })}
+      />
+    );
+
+    expect(await screen.findByText(/Expires/)).toBeTruthy();
+  });
+
+  it("promotes an account error in a compact single-account widget", async () => {
+    const snapshot = usageSnapshot({
+      accounts: [
+        {
+          error: "credential missing",
+          id: "acc-1",
+          label: "active@codex.dev",
+          status: "error",
+        },
+      ],
+      activeAccountId: "acc-1",
+    });
+    const { context } = contextWithSnapshot(snapshot);
+    render(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ size: { w: 4, h: 2 } })}
+      />
+    );
+
+    expect(await screen.findByText("Account unavailable")).toBeTruthy();
   });
 
   it("registers only the account/quota widget (cost owns host core.cost-overview)", () => {

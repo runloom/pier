@@ -144,6 +144,27 @@ afterEach(() => {
 });
 
 describe("Claude accounts widget", () => {
+  it("keeps account identity outside one faded usage viewport", async () => {
+    const { context } = contextWithSnapshot(activeSnapshot());
+    const { container } = render(
+      <AccountsWidget context={context} {...baseProps()} />
+    );
+
+    const accountLabel = await screen.findByText("user@example.com");
+    const viewport = container.querySelector(
+      '[data-slot="scroll-area-viewport"]'
+    );
+
+    expect(
+      container.querySelectorAll('[data-slot="scroll-area"]')
+    ).toHaveLength(1);
+    expect(viewport).toHaveClass("scroll-fade-y", "overscroll-contain");
+    expect(viewport?.contains(accountLabel)).toBe(false);
+    expect(
+      viewport?.querySelector('[data-slot="account-widget-usage-content"]')
+    ).not.toBeNull();
+  });
+
   it("shows the active account label", async () => {
     const { context } = contextWithSnapshot(activeSnapshot());
     await act(async () => {
@@ -162,6 +183,21 @@ describe("Claude accounts widget", () => {
     });
     expect(await screen.findByText("user@example.com")).toBeTruthy();
     expect(screen.queryByRole("button", { name: "Switch account" })).toBeNull();
+  });
+
+  it("keeps only the account label and switcher in compact multi-account mode", async () => {
+    const { context } = contextWithSnapshot(activeSnapshot());
+    const { container } = render(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ size: { w: 4, h: 2 } })}
+      />
+    );
+
+    expect(await screen.findByText("user@example.com")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Switch account" })).toBeTruthy();
+    expect(container.querySelector('[data-slot="avatar"]')).toBeNull();
+    expect(screen.queryByText(/MAX/)).toBeNull();
   });
 
   it("shows unavailable copy when the active account has an error", async () => {

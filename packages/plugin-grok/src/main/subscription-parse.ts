@@ -28,10 +28,27 @@ function normalizePlanType(tier: unknown): string | null {
     value = value.slice("SUBSCRIPTION_TIER_".length);
   }
   return value
-    .replace(/^GROK_/i, "")
     .replace(/([a-z0-9])([A-Z])/g, "$1_$2")
+    .replace(/^GROK_/i, "")
     .replace(/[-\s]+/g, "_")
     .toLowerCase();
+}
+
+export function parseGrokUserSubscriptionResult(
+  payload: unknown
+): GrokSubscriptionInfo | null {
+  const root = asRecord(payload);
+  const user = asRecord(root?.user) ?? root;
+  if (!user) return null;
+  const planType = normalizePlanType(
+    user.subscriptionTier ?? user.subscription_tier
+  );
+  if (!planType) return null;
+  const isFree = planType === "free" || planType === "none";
+  return {
+    planType: isFree ? "free" : planType,
+    status: isFree ? "none" : "active",
+  };
 }
 
 function normalizeStatus(

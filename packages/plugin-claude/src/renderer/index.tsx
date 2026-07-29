@@ -36,6 +36,7 @@ export const plugin: ExternalRendererPluginModule = {
           <AccountsWidgetImpl context={context} {...props} />
         </ClaudeRendererRoot>
       ),
+      contentMode: "contained",
     });
     const disposeSettings = context.settingsPages.register({
       id: "pier.claude.accounts",

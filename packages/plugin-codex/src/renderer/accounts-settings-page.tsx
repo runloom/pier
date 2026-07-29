@@ -17,11 +17,9 @@ import {
   EmptyTitle,
 } from "@pier/ui/empty.tsx";
 import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
-import { formatRelativeTime } from "@pier/ui/format.tsx";
 import {
   Item,
   ItemContent,
-  ItemDescription,
   ItemGroup,
   ItemMedia,
   ItemSeparator,
@@ -45,10 +43,9 @@ import {
 } from "../shared/accounts.ts";
 import {
   AccountAvatar,
-  accountPlanSummary,
+  AccountBadges,
   OtherAccount,
   QuotaGroup,
-  resetCredits,
 } from "./account-display.tsx";
 import {
   loadPeerAvailability,
@@ -389,17 +386,12 @@ export function AccountsSettingsPage({
               </ItemMedia>
               <ItemContent className="min-w-0">
                 <ItemTitle title={active.label}>{active.label}</ItemTitle>
-                <ItemDescription>
-                  {[
-                    accountPlanSummary(active, language, t),
-                    resetCredits(active, language, t),
-                    active.usage
-                      ? `${t("pier.codex.accounts.settings.updated", "Updated")} ${formatRelativeTime(active.usage.fetchedAt, Date.now(), language)}`
-                      : null,
-                  ]
-                    .filter(Boolean)
-                    .join(" · ")}
-                </ItemDescription>
+                <AccountBadges
+                  account={active}
+                  includeScalars
+                  language={language}
+                  t={t}
+                />
               </ItemContent>
             </Item>
             <ItemSeparator className="my-0" />
@@ -407,8 +399,16 @@ export function AccountsSettingsPage({
               error={active.usage?.error}
               language={language}
               loading={!active.usage}
+              metrics={
+                active.usage?.metrics.filter(
+                  (metric) => metric.kind === "quota"
+                ) ?? []
+              }
+              status={active.usage?.status ?? "ok"}
               t={t}
-              windows={active.usage?.windows ?? []}
+              {...(active.usage?.updatedAt === undefined
+                ? {}
+                : { updatedAt: active.usage.updatedAt })}
             />
           </CardContent>
         </Card>

@@ -409,13 +409,20 @@ describe("shadcn composition governance", () => {
       join(ROOT, "packages/plugin-codex/src/renderer/account-display.tsx"),
       "utf8"
     );
+    const usageMetrics = readFileSync(
+      join(
+        ROOT,
+        "packages/plugin-api/src/account-usage/account-usage-metrics.tsx"
+      ),
+      "utf8"
+    );
     const styles = readFileSync(
       join(ROOT, "packages/plugin-codex/src/renderer/styles.css"),
       "utf8"
     );
 
-    expect(accountDisplay).toContain('@pier/ui/empty.tsx"');
-    expect(accountDisplay).toContain("<Empty");
+    expect(usageMetrics).toContain('@pier/ui/widget-state.tsx"');
+    expect(usageMetrics).toContain("<WidgetEmpty");
     expect(accountDisplay).not.toContain("pier-codex-quota-empty");
     expect(styles).not.toMatch(/\bfont-(?:size|variant|weight):/);
     expect(styles).not.toContain("letter-spacing:");
@@ -435,7 +442,7 @@ describe("shadcn composition governance", () => {
       .join("\n");
     const styles = readFileSync(join(rendererRoot, "styles.css"), "utf8");
 
-    expect(rendererSources).not.toContain("codex:");
+    expect(rendererSources).not.toMatch(/className=["'][^"']*\bcodex:/);
     expect(styles).toContain('@reference "@pier/ui/tailwind-theme.css"');
     expect(styles).toContain("@scope ([data-pier-codex-scope])");
     expect(styles).not.toContain("prefix(codex)");

@@ -51,17 +51,35 @@ const SPARSE_CREDITS_FIXTURE = {
 };
 
 describe("parseGrokBillingResult", () => {
+  it("maps prepaid balance cents into a currency metric", () => {
+    expect(
+      parseGrokBillingResult({
+        config: {
+          creditUsagePercent: 10,
+          prepaidBalance: { val: 1250 },
+        },
+      }).metrics
+    ).toContainEqual({
+      currency: "USD",
+      format: "currency",
+      id: "grok:prepaid-balance",
+      kind: "scalar",
+      value: 12.5,
+    });
+  });
+
   it("maps period and product windows from credits format when populated", () => {
     const result = parseGrokBillingResult(CREDITS_FIXTURE);
     expect(result.status).toBe("ok");
-    expect(result.windows.map((w) => w.id)).toEqual([
+    expect(result.metrics.map((metric) => metric.id)).toEqual([
       "grok:period",
       "grok:product:Api",
       "grok:product:GrokBuild",
     ]);
-    expect(result.windows[0]).toMatchObject({
-      limitId: "period",
-      limitName: "Weekly limit",
+    expect(result.metrics[0]).toMatchObject({
+      groupId: "grok:period",
+      kind: "quota",
+      name: "Weekly limit",
       usedPercent: 100,
       windowMinutes: 10_080,
     });
@@ -70,12 +88,12 @@ describe("parseGrokBillingResult", () => {
   it("maps used/monthlyLimit cents from default billing as monthly spend", () => {
     const result = parseGrokBillingResult(DEFAULT_FIXTURE);
     expect(result.status).toBe("ok");
-    expect(result.windows).toHaveLength(1);
-    expect(result.windows[0]).toMatchObject({
+    expect(result.metrics).toHaveLength(1);
+    expect(result.metrics[0]).toMatchObject({
       id: "grok:period",
-      limitId: "period",
+      kind: "quota",
       // Cash path must not be labeled as credit "limit".
-      limitName: "Monthly spend",
+      name: "Monthly spend",
       usedPercent: expect.closeTo((4112 / 15_000) * 100, 5),
       windowMinutes: 44_640,
     });
@@ -99,17 +117,19 @@ describe("parseGrokBillingResult", () => {
       },
     });
     expect(result.status).toBe("ok");
-    expect(result.windows[0]).toMatchObject({
+    expect(result.metrics[0]).toMatchObject({
       id: "grok:period",
-      limitName: "Weekly limit",
+      name: "Weekly limit",
       usedPercent: 91,
       windowMinutes: 10_080,
     });
     // Must not surface cash monthly as the period meter.
-    expect(result.windows.some((w) => w.limitName === "Monthly spend")).toBe(
-      false
-    );
-    expect(result.windows.map((w) => w.id)).toEqual([
+    expect(
+      result.metrics.some(
+        (metric) => metric.kind === "quota" && metric.name === "Monthly spend"
+      )
+    ).toBe(false);
+    expect(result.metrics.map((metric) => metric.id)).toEqual([
       "grok:period",
       "grok:product:GrokBuild",
       "grok:product:Api",
@@ -120,7 +140,7 @@ describe("parseGrokBillingResult", () => {
     expect(parseGrokBillingResult(SPARSE_CREDITS_FIXTURE)).toMatchObject({
       status: "error",
       error: "No Grok quota windows in billing response",
-      windows: [],
+      metrics: [],
     });
   });
 
@@ -141,7 +161,7 @@ describe("parseGrokBillingResult", () => {
     });
 
     expect(result.status).toBe("ok");
-    expect(result.windows.map((window) => window.id)).toEqual(["grok:period"]);
+    expect(result.metrics.map((metric) => metric.id)).toEqual(["grok:period"]);
   });
 
   it("keeps a single product window when no period total is present", () => {
@@ -151,7 +171,7 @@ describe("parseGrokBillingResult", () => {
       })
     ).toMatchObject({
       status: "ok",
-      windows: [{ id: "grok:product:Api", usedPercent: 73 }],
+      metrics: [{ id: "grok:product:Api", usedPercent: 73 }],
     });
   });
 
@@ -163,10 +183,11 @@ describe("parseGrokBillingResult", () => {
         onDemandUsed: { val: "5000" },
       },
     });
-    expect(result.windows.at(-1)).toMatchObject({
+    expect(result.metrics.at(-1)).toMatchObject({
       id: "grok:on-demand",
-      limitId: "on-demand",
-      limitName: "On-demand",
+      groupId: "grok:on-demand",
+      kind: "quota",
+      name: "On-demand",
       usedPercent: 25,
     });
   });

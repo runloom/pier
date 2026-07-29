@@ -16,6 +16,7 @@ import {
   resetAppContentDialogForTests,
   updateAppContentDialog,
 } from "@/stores/app-content-dialog.store.ts";
+import type { AccountUsageQuotaMetric } from "../../../packages/plugin-api/src/account-usage/usage-cache.ts";
 import type { ExternalRendererPluginContext } from "../../../packages/plugin-api/src/renderer.ts";
 import pluginManifest from "../../../packages/plugin-codex/plugin.json" with {
   type: "json",
@@ -23,10 +24,7 @@ import pluginManifest from "../../../packages/plugin-codex/plugin.json" with {
 import { AccountsSettingsPage } from "../../../packages/plugin-codex/src/renderer/accounts-settings-page.tsx";
 import { AddAccountDialog } from "../../../packages/plugin-codex/src/renderer/add-account-dialog.tsx";
 import { usageWindowLabel } from "../../../packages/plugin-codex/src/renderer/usage-meter.tsx";
-import type {
-  CodexAccountsSnapshot,
-  CodexUsageWindow,
-} from "../../../packages/plugin-codex/src/shared/accounts.ts";
+import type { CodexAccountsSnapshot } from "../../../packages/plugin-codex/src/shared/accounts.ts";
 
 function emptySnapshot(): CodexAccountsSnapshot {
   return {
@@ -66,13 +64,14 @@ function usageWindow(
   windowMinutes = 300,
   position: "primary" | "secondary" = "primary",
   limitName?: string
-): CodexUsageWindow {
+): AccountUsageQuotaMetric {
   return {
+    groupId: "codex",
     id: `codex:${position}`,
-    limitId: "codex",
+    kind: "quota",
     usedPercent,
     windowMinutes,
-    ...(limitName ? { limitName } : {}),
+    ...(limitName ? { name: limitName } : {}),
   };
 }
 
@@ -397,10 +396,10 @@ describe("AccountsSettingsPage", () => {
             planType: "team",
             status: "active",
             usage: {
-              fetchedAt: Date.now(),
-              resetCreditsAvailable: 0,
+              attemptedAt: Date.now(),
+              metrics: [usageWindow(5)],
               status: "ok",
-              windows: [usageWindow(5)],
+              updatedAt: Date.now(),
             },
           },
         ],
@@ -413,7 +412,8 @@ describe("AccountsSettingsPage", () => {
       </>
     );
 
-    expect(await screen.findByText(/^TEAM · Updated/)).toBeDefined();
+    expect(await screen.findByText("TEAM")).toBeDefined();
+    expect(screen.queryByText(/^Updated/)).toBeNull();
     expect(screen.queryByText(/quota resets/)).toBeNull();
     expect(screen.getByText("5-hour quota")).toBeDefined();
     expect(screen.getByText("95%")).toBeDefined();
@@ -424,10 +424,10 @@ describe("AccountsSettingsPage", () => {
     ).not.toBeNull();
     // Single meter must force 1-col full width — do not leave half-row via auto-fit.
     const grid = container.querySelector(
-      '[data-slot="codex-quota-grid"][data-layout="single"]'
+      '[data-slot="account-usage-quotas"][data-count="1"]'
     );
     expect(grid).not.toBeNull();
-    expect(grid?.className).toContain("block");
+    expect(grid?.className).toContain("flex");
     expect(grid?.className).toContain("w-full");
     expect(grid?.className).not.toContain("auto-fit");
     expect(grid?.className).not.toContain("grid-cols");
@@ -444,9 +444,10 @@ describe("AccountsSettingsPage", () => {
             planType: "team",
             status: "active",
             usage: {
-              fetchedAt: Date.now(),
+              attemptedAt: Date.now(),
+              metrics: [usageWindow(5, 43_200, "primary", "Code review")],
               status: "ok",
-              windows: [usageWindow(5, 43_200, "primary", "Code review")],
+              updatedAt: Date.now(),
             },
           },
         ],
@@ -475,10 +476,10 @@ describe("AccountsSettingsPage", () => {
             planType: "plus",
             status: "active",
             usage: {
+              attemptedAt: Date.now(),
               error: "refresh token expired",
-              fetchedAt: Date.now(),
+              metrics: [],
               status: "error",
-              windows: [],
             },
           },
         ],
@@ -1170,9 +1171,10 @@ describe("AccountsSettingsPage", () => {
           status: "active",
           error: null,
           usage: {
-            fetchedAt: now,
+            attemptedAt: now,
+            metrics: [usageWindow(32), usageWindow(68, 10_080, "secondary")],
             status: "ok",
-            windows: [usageWindow(32), usageWindow(68, 10_080, "secondary")],
+            updatedAt: now,
           },
         },
         {
@@ -1181,9 +1183,10 @@ describe("AccountsSettingsPage", () => {
           status: "available",
           error: null,
           usage: {
-            fetchedAt: now,
+            attemptedAt: now,
+            metrics: [usageWindow(15), usageWindow(40, 10_080, "secondary")],
             status: "ok",
-            windows: [usageWindow(15), usageWindow(40, 10_080, "secondary")],
+            updatedAt: now,
           },
         },
       ],
@@ -1199,11 +1202,12 @@ describe("AccountsSettingsPage", () => {
     await screen.findByText("first@codex.dev");
     expect(screen.getByText("second@codex.dev")).toBeDefined();
     expect(
-      container.querySelectorAll('[data-slot="codex-usage-progress"]')
+      container.querySelectorAll('[data-slot="account-usage-quota"]')
     ).toHaveLength(4);
-    expect(
-      container.querySelector('[data-risk="normal"] [data-slot="progress"]')
-    ).toHaveAttribute("data-variant", "success");
+    expect(screen.getAllByRole("progressbar")[0]).toHaveAttribute(
+      "data-variant",
+      "success"
+    );
     expect(container.textContent).toContain("68%");
     expect(container.textContent).toContain("32%");
     expect(container.textContent).toContain("5-hour quota");
@@ -1219,9 +1223,10 @@ describe("AccountsSettingsPage", () => {
           status: "active",
           error: null,
           usage: {
-            fetchedAt: now,
+            attemptedAt: now,
+            metrics: [usageWindow(75), usageWindow(90, 10_080, "secondary")],
             status: "ok",
-            windows: [usageWindow(75), usageWindow(90, 10_080, "secondary")],
+            updatedAt: now,
           },
         },
       ],
@@ -1236,19 +1241,23 @@ describe("AccountsSettingsPage", () => {
 
     await screen.findByText("thresholds@codex.dev");
     expect(
-      container.querySelector('[data-risk="warning"] [data-slot="progress"]')
+      screen.getByRole("progressbar", {
+        name: "5-hour quota: remaining 25%",
+      })
     ).toHaveAttribute("data-variant", "warning");
     expect(
-      container.querySelector('[data-risk="critical"] [data-slot="progress"]')
+      screen.getByRole("progressbar", {
+        name: "7-day quota: remaining 10%",
+      })
     ).toHaveAttribute("data-variant", "destructive");
     expect(
       screen.getByRole("progressbar", {
-        name: "5-hour quota 25%",
+        name: "5-hour quota: remaining 25%",
       })
     ).toBeDefined();
     expect(
       screen.getByRole("progressbar", {
-        name: "7-day quota 10%",
+        name: "7-day quota: remaining 10%",
       })
     ).toBeDefined();
     expect(container.textContent).toContain("25%");
@@ -1271,9 +1280,10 @@ describe("AccountsSettingsPage", () => {
           status: "available",
           error: null,
           usage: {
-            fetchedAt: now,
+            attemptedAt: now,
+            metrics: [],
             status: "ok",
-            windows: [],
+            updatedAt: now,
           },
         },
         {
@@ -1282,10 +1292,10 @@ describe("AccountsSettingsPage", () => {
           status: "error",
           error: null,
           usage: {
+            attemptedAt: now,
             error: "network unavailable",
-            fetchedAt: now,
+            metrics: [],
             status: "error",
-            windows: [],
           },
         },
       ],
@@ -1302,7 +1312,7 @@ describe("AccountsSettingsPage", () => {
     expect(
       document.querySelectorAll('[data-slot="codex-usage-loading"]')
     ).toHaveLength(1);
-    expect(screen.getAllByText("No usage data")).toHaveLength(1);
+    expect(screen.getAllByText("No usage data available yet.")).toHaveLength(1);
     expect(screen.getAllByText("Usage update failed")).toHaveLength(1);
   });
 });

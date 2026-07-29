@@ -10,6 +10,7 @@ import {
   parseDeviceLoginOutput,
 } from "./device-login-output.ts";
 import type { GrokAccountProvider } from "./grok-provider.ts";
+import type { AccountIdentity } from "./identity.ts";
 import { classifyLoginError } from "./login-error.ts";
 import type { GrokAccountRecord, GrokAccountsStateStore } from "./state.ts";
 
@@ -183,9 +184,20 @@ export async function addOidcAccount(
     dir = await host.ensureManagedDir(id);
     throwIfAborted(abort.signal);
 
-    await host.provider.login(dir, abort.signal, mode, handleLoginOutput);
+    let identity: AccountIdentity | null = null;
+    try {
+      await host.provider.login(dir, abort.signal, mode, handleLoginOutput);
+    } catch (loginError) {
+      throwIfAborted(abort.signal);
+      // Some Grok CLI versions persist a valid auth.json before a trailing
+      // account-access check exits non-zero. The credential is the durable
+      // completion evidence; a brand-new managed directory prevents stale
+      // credentials from turning an unrelated failure into success.
+      identity = await host.provider.readIdentity(dir).catch(() => null);
+      if (!identity) throw loginError;
+    }
     throwIfAborted(abort.signal);
-    const identity = await host.provider.readIdentity(dir);
+    identity ??= await host.provider.readIdentity(dir);
     throwIfAborted(abort.signal);
     if (!identity) {
       throw new Error("Login completed but no identity found");

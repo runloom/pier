@@ -189,6 +189,7 @@ export interface OauthProfile {
   email: string;
   organizationName?: string | undefined;
   organizationUuid?: string | undefined;
+  rateLimitTier?: string | undefined;
   subscriptionType?: string | undefined;
 }
 
@@ -225,7 +226,13 @@ export async function fetchOauthProfile(opts: {
     subscriptionType = root.subscriptionType;
   } else if (typeof account?.subscription_type === "string") {
     subscriptionType = account.subscription_type;
+  } else if (typeof organization?.organization_type === "string") {
+    subscriptionType = organization.organization_type;
   }
+  const rateLimitTier =
+    typeof organization?.rate_limit_tier === "string"
+      ? organization.rate_limit_tier
+      : undefined;
   return {
     accountUuid,
     email,
@@ -235,6 +242,7 @@ export async function fetchOauthProfile(opts: {
     ...(typeof organization?.uuid === "string"
       ? { organizationUuid: organization.uuid }
       : {}),
+    ...(rateLimitTier ? { rateLimitTier } : {}),
     ...(subscriptionType ? { subscriptionType } : {}),
   };
 }
@@ -242,7 +250,8 @@ export async function fetchOauthProfile(opts: {
 /** Build the `{claudeAiOauth: {...}}` envelope Claude Code stores. */
 export function buildCredentialEnvelope(
   tokens: OauthTokens,
-  subscriptionType?: string
+  subscriptionType?: string,
+  rateLimitTier?: string
 ): string {
   return JSON.stringify({
     claudeAiOauth: {
@@ -250,6 +259,7 @@ export function buildCredentialEnvelope(
       expiresAt: tokens.expiresAt,
       refreshToken: tokens.refreshToken,
       scopes: tokens.scopes,
+      ...(rateLimitTier ? { rateLimitTier } : {}),
       ...(subscriptionType ? { subscriptionType } : {}),
     },
   });
@@ -258,6 +268,7 @@ export function buildCredentialEnvelope(
 export interface ParsedEnvelope {
   accessToken: string;
   expiresAt?: number | undefined;
+  rateLimitTier?: string | undefined;
   refreshToken?: string | undefined;
   scopes: string[];
   subscriptionType?: string | undefined;
@@ -283,6 +294,9 @@ export function parseCredentialEnvelope(
         : {}),
       ...(typeof oauth?.refreshToken === "string"
         ? { refreshToken: oauth.refreshToken }
+        : {}),
+      ...(typeof oauth?.rateLimitTier === "string"
+        ? { rateLimitTier: oauth.rateLimitTier }
         : {}),
       ...(typeof oauth?.subscriptionType === "string"
         ? { subscriptionType: oauth.subscriptionType }

@@ -1,48 +1,30 @@
+import type { AccountUsageQuotaMetric } from "@pier/plugin-api/account-usage";
 import { describe, expect, it } from "vitest";
-import {
-  sortUsageWindows,
-  usageWindowLabel,
-} from "../../../packages/plugin-claude/src/renderer/usage-meter.tsx";
-import type { ClaudeUsageWindow } from "../../../packages/plugin-claude/src/shared/accounts.ts";
+import { usageMetricLabel } from "../../../packages/plugin-claude/src/renderer/usage-meter.tsx";
 
 const t = (_key: string, fallback: string) => fallback;
 
-function window(
-  limitId: string,
-  overrides: Partial<ClaudeUsageWindow> = {}
-): ClaudeUsageWindow {
+function quota(groupId: string, name?: string): AccountUsageQuotaMetric {
   return {
-    id: `claude:${limitId}`,
-    limitId,
+    groupId,
+    id: groupId,
+    kind: "quota",
     usedPercent: 10,
-    ...overrides,
+    ...(name ? { name } : {}),
   };
 }
 
-describe("Claude usage meter helpers", () => {
-  it("labels the fixed Claude quota buckets", () => {
-    expect(usageWindowLabel(window("session"), t)).toBe("Current session (5h)");
-    expect(usageWindowLabel(window("weekly"), t)).toBe("Weekly limit");
-    expect(
-      usageWindowLabel(window("weekly:opus", { limitName: "Opus" }), t)
-    ).toBe("Opus · Weekly");
-    expect(usageWindowLabel(window("custom", { limitName: "Custom" }), t)).toBe(
-      "Custom"
+describe("Claude usage metric labels", () => {
+  it("labels known and future quota buckets", () => {
+    expect(usageMetricLabel(quota("claude:session"), t)).toBe(
+      "Current session (5h)"
     );
-  });
-
-  it("sorts session first, then weekly, then per-model in API order", () => {
-    const sorted = sortUsageWindows([
-      window("weekly:sonnet", { limitName: "Sonnet" }),
-      window("weekly"),
-      window("session"),
-      window("weekly:opus", { limitName: "Opus" }),
-    ]);
-    expect(sorted.map((w) => w.limitId)).toEqual([
-      "session",
-      "weekly",
-      "weekly:sonnet",
-      "weekly:opus",
-    ]);
+    expect(usageMetricLabel(quota("claude:weekly"), t)).toBe("Weekly limit");
+    expect(usageMetricLabel(quota("claude:weekly:opus", "Opus"), t)).toBe(
+      "Opus · Weekly"
+    );
+    expect(
+      usageMetricLabel(quota("claude:monthly-next", "Claude Next"), t)
+    ).toBe("Claude Next");
   });
 });

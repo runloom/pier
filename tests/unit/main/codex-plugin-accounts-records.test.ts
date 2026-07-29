@@ -93,6 +93,11 @@ describe("applyLivePlanType", () => {
     expect(paid).toBe(baseAccount);
   });
 
+  it("does not downgrade a precise entitlement from a broad wham pro label", () => {
+    const precise = { ...baseAccount, planType: "pro-20x" };
+    expect(applyLivePlanType(precise, "pro", 200)).toBe(precise);
+  });
+
   it("clears previous expiry when live paid plan changes", () => {
     const next = applyLivePlanType(baseAccount, "plus", 200);
     expect(next.planType).toBe("plus");

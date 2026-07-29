@@ -39,6 +39,7 @@ function Progress({
       )}
       data-slot="progress"
       data-variant={variant}
+      value={value}
       {...props}
     >
       <ProgressPrimitive.Indicator

@@ -75,7 +75,12 @@ describe("claude oauth", () => {
     const fetchImpl = vi.fn(async () =>
       jsonResponse({
         account: { email_address: "a@example.com", uuid: "uuid-a" },
-        organization: { name: "Acme", uuid: "org-1" },
+        organization: {
+          name: "Acme",
+          organization_type: "claude_max",
+          rate_limit_tier: "default_claude_max_5x",
+          uuid: "org-1",
+        },
         subscriptionType: "max",
       })
     );
@@ -86,6 +91,7 @@ describe("claude oauth", () => {
       email: "a@example.com",
       organizationName: "Acme",
       organizationUuid: "org-1",
+      rateLimitTier: "default_claude_max_5x",
       subscriptionType: "max",
     });
   });
@@ -98,13 +104,15 @@ describe("claude oauth", () => {
         refreshToken: "rt-1",
         scopes: ["user:inference"],
       },
-      "pro"
+      "pro",
+      "default_claude_pro"
     );
     const parsed = parseCredentialEnvelope(envelope);
     expect(parsed).toMatchObject({
       accessToken: "at-1",
       expiresAt: 111,
       refreshToken: "rt-1",
+      rateLimitTier: "default_claude_pro",
       subscriptionType: "pro",
     });
 

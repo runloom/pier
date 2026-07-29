@@ -41,6 +41,31 @@ function defaultRealCodexHome(): string {
   return process.env.CODEX_HOME ?? join(homedir(), ".codex");
 }
 
+function hasQuotaMetric(result: AccountUsageResult): boolean {
+  return (
+    result.status === "ok" &&
+    result.metrics.some((metric) => metric.kind === "quota")
+  );
+}
+
+function mergeHttpMetadata(
+  fallback: AccountUsageResult,
+  http: AccountUsageResult
+): AccountUsageResult {
+  if (fallback.status !== "ok") {
+    return fallback;
+  }
+  const metricIds = new Set(fallback.metrics.map((metric) => metric.id));
+  const httpScalars = http.metrics.filter(
+    (metric) => metric.kind === "scalar" && !metricIds.has(metric.id)
+  );
+  return {
+    ...fallback,
+    metrics: [...fallback.metrics, ...httpScalars],
+    ...(http.planType ? { planType: http.planType } : {}),
+  };
+}
+
 /**
  * 默认 spawn login 实现——真 spawn `codex login`。
  * 生产环境使用；单测通过 opts.spawnLogin 替换。
@@ -393,30 +418,34 @@ export function createCodexProvider(
             ...(fetchImpl ? { fetchImpl } : {}),
             signal,
           });
-          if (httpResult.status === "ok" && httpResult.windows.length > 0) {
+          if (hasQuotaMetric(httpResult)) {
             return httpResult;
           }
           // Fallback to app-server JSON-RPC when HTTP fails or returns empty.
-          return await fetchUsageImpl(signal, { accountHomeDir });
+          const fallback = await fetchUsageImpl(signal, { accountHomeDir });
+          return mergeHttpMetadata(fallback, httpResult);
         });
       }
       // No managed home — try HTTP if we can read auth.json directly.
       if (accountHomeDir) {
+        let httpResult: AccountUsageResult | undefined;
         try {
           const authContent = await readFile(
             join(accountHomeDir, "auth.json"),
             "utf-8"
           );
-          const httpResult = await fetchCodexUsageHttp(authContent, {
+          httpResult = await fetchCodexUsageHttp(authContent, {
             ...(fetchImpl ? { fetchImpl } : {}),
             signal,
           });
-          if (httpResult.status === "ok" && httpResult.windows.length > 0) {
+          if (hasQuotaMetric(httpResult)) {
             return httpResult;
           }
         } catch {
           // No auth.json — fall through to app-server.
         }
+        const fallback = await fetchUsageImpl(signal, { accountHomeDir });
+        return httpResult ? mergeHttpMetadata(fallback, httpResult) : fallback;
       }
       return await fetchUsageImpl(signal, {
         ...(accountHomeDir ? { accountHomeDir } : {}),

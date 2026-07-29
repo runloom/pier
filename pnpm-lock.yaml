@@ -345,6 +345,9 @@ importers:
 
   packages/plugin-api:
     dependencies:
+      '@pier/ui':
+        specifier: workspace:*
+        version: link:../ui
       react:
         specifier: 19.2.7
         version: 19.2.7

@@ -168,11 +168,15 @@ export async function installCodexPlugin(context: AppContext): Promise<void> {
     timeout: 10_000,
   });
   await win.locator('[data-testid="settings-nav-plugins"]').click();
-  await win.getByRole("tab", { name: /未安装|Available/ }).click();
   const row = win.locator('[data-testid="plugin-row-pier.codex"]');
-  await expect(row).toBeVisible({ timeout: 10_000 });
-  await row.getByRole("button", { name: /安装|Install/ }).click();
-  await win.getByRole("tab", { name: /已安装|Installed/ }).click();
+  const installedTab = win.getByRole("tab", { name: /已安装|Installed/ });
+  await installedTab.click();
+  if (!(await row.isVisible())) {
+    await win.getByRole("tab", { name: /未安装|Available/ }).click();
+    await expect(row).toBeVisible({ timeout: 10_000 });
+    await row.getByRole("button", { name: /安装|Install/ }).click();
+    await installedTab.click();
+  }
   await expect(
     win.locator('[data-testid="plugin-row-pier.codex"]')
   ).toBeVisible({ timeout: 30_000 });

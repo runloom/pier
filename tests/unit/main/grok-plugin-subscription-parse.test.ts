@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import { parseGrokSubscriptionResult } from "../../../packages/plugin-grok/src/main/subscription-parse.ts";
+import {
+  parseGrokSubscriptionResult,
+  parseGrokUserSubscriptionResult,
+} from "../../../packages/plugin-grok/src/main/subscription-parse.ts";
 
 describe("parseGrokSubscriptionResult", () => {
   it("maps active Grok Pro trial to planType, expiry, and trial end", () => {
@@ -71,5 +74,21 @@ describe("parseGrokSubscriptionResult", () => {
     expect(parseGrokSubscriptionResult(null)).toBeNull();
     expect(parseGrokSubscriptionResult({})).toBeNull();
     expect(parseGrokSubscriptionResult({ subscriptions: "nope" })).toBeNull();
+  });
+});
+
+describe("parseGrokUserSubscriptionResult", () => {
+  it("uses the user subscription tier as a paid fallback", () => {
+    expect(
+      parseGrokUserSubscriptionResult({ subscriptionTier: "GrokPro" })
+    ).toEqual({ planType: "pro", status: "active" });
+  });
+
+  it("treats an explicit free tier as authoritative free membership", () => {
+    expect(
+      parseGrokUserSubscriptionResult({
+        user: { subscriptionTier: "SUBSCRIPTION_TIER_FREE" },
+      })
+    ).toEqual({ planType: "free", status: "none" });
   });
 });

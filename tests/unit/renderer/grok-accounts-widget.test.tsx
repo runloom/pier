@@ -38,24 +38,27 @@ function activeSnapshot(): GrokAccountsSnapshot {
         label: "user@example.com",
         status: "active",
         usage: {
-          fetchedAt: Date.now(),
-          status: "ok",
-          windows: [
+          attemptedAt: Date.now(),
+          metrics: [
             {
+              groupId: "grok:period",
               id: "grok:period",
-              limitId: "period",
-              limitName: "Weekly limit",
+              kind: "quota",
+              name: "Weekly limit",
               usedPercent: 40,
               windowMinutes: 10_080,
             },
             {
+              groupId: "grok:product",
               id: "grok:product:Api",
-              limitId: "product",
-              limitName: "API",
+              kind: "quota",
+              name: "API",
               usedPercent: 40,
               windowMinutes: 10_080,
             },
           ],
+          status: "ok",
+          updatedAt: Date.now(),
         },
       },
       {
@@ -68,17 +71,19 @@ function activeSnapshot(): GrokAccountsSnapshot {
     ],
     activeAccountId: "acc-1",
     activeUsage: {
-      fetchedAt: Date.now(),
-      status: "ok",
-      windows: [
+      attemptedAt: Date.now(),
+      metrics: [
         {
+          groupId: "grok:period",
           id: "grok:period",
-          limitId: "period",
-          limitName: "Weekly limit",
+          kind: "quota",
+          name: "Weekly limit",
           usedPercent: 40,
           windowMinutes: 10_080,
         },
       ],
+      status: "ok",
+      updatedAt: Date.now(),
     },
     login: null,
     revision: 1,
@@ -177,6 +182,27 @@ afterEach(() => {
 });
 
 describe("Grok accounts widget", () => {
+  it("keeps account identity outside one faded usage viewport", async () => {
+    const { context } = contextWithSnapshot(activeSnapshot());
+    const { container } = render(
+      <AccountsWidget context={context} {...baseProps()} />
+    );
+
+    const accountLabel = await screen.findByText("user@example.com");
+    const viewport = container.querySelector(
+      '[data-slot="scroll-area-viewport"]'
+    );
+
+    expect(
+      container.querySelectorAll('[data-slot="scroll-area"]')
+    ).toHaveLength(1);
+    expect(viewport).toHaveClass("scroll-fade-y", "overscroll-contain");
+    expect(viewport?.contains(accountLabel)).toBe(false);
+    expect(
+      viewport?.querySelector('[data-slot="account-widget-usage-content"]')
+    ).not.toBeNull();
+  });
+
   it("shows active account with quota meters", async () => {
     const { context } = contextWithSnapshot(activeSnapshot());
     await act(async () => {
@@ -185,14 +211,14 @@ describe("Grok accounts widget", () => {
     expect(await screen.findByText("user@example.com")).toBeTruthy();
     // 工作台卡对齐 Codex/Claude：UsageMeter（非设置页 QuotaGroup）
     expect(
-      document.querySelector("[data-slot='grok-usage-meter']")
+      document.querySelector("[data-slot='account-usage-quotas']")
     ).toBeTruthy();
     expect(
-      document.querySelector("[data-slot='grok-usage-progress']")
+      document.querySelector("[data-slot='account-usage-quota']")
     ).toBeTruthy();
     // activeUsage has one window → full-width single column (not half-row auto-fit).
     const meter = document.querySelector(
-      '[data-slot="grok-usage-meter"][data-layout="single"]'
+      '[data-slot="account-usage-quotas"][data-count="1"]'
     );
     expect(meter).toBeTruthy();
     expect(meter?.className).toContain("flex");
@@ -227,13 +253,27 @@ describe("Grok accounts widget", () => {
     });
   });
 
+  it("keeps only the account label and switcher in compact multi-account mode", async () => {
+    const { context } = contextWithSnapshot(activeSnapshot());
+    const { container } = render(
+      <AccountsWidget
+        context={context}
+        {...baseProps({ size: { w: 4, h: 2 } })}
+      />
+    );
+
+    expect(await screen.findByText("user@example.com")).toBeTruthy();
+    expect(screen.getByRole("button", { name: "Switch account" })).toBeTruthy();
+    expect(container.querySelector('[data-slot="avatar"]')).toBeNull();
+  });
+
   it("renders usage failure via borderless WidgetError, not badge or nested alert card", async () => {
     const snap = activeSnapshot();
     snap.activeUsage = {
+      attemptedAt: Date.now(),
       error: "Grok session expired — re-login required",
-      fetchedAt: Date.now(),
+      metrics: [],
       status: "error",
-      windows: [],
     };
     if (snap.accounts[0]) {
       snap.accounts[0] = {
@@ -261,18 +301,20 @@ describe("Grok accounts widget", () => {
   it("keeps last-good meters without alarm on transient usage failure", async () => {
     const snap = activeSnapshot();
     snap.activeUsage = {
+      attemptedAt: Date.now(),
       error: "Grok usage temporarily unavailable (HTTP 503)",
-      fetchedAt: Date.now(),
-      status: "error",
-      windows: [
+      metrics: [
         {
+          groupId: "grok:period",
           id: "grok:period",
-          limitId: "period",
-          limitName: "Weekly limit",
+          kind: "quota",
+          name: "Weekly limit",
           usedPercent: 40,
           windowMinutes: 10_080,
         },
       ],
+      status: "error",
+      updatedAt: Date.now(),
     };
     const { context } = contextWithSnapshot(snap);
     await act(async () => {
@@ -280,10 +322,10 @@ describe("Grok accounts widget", () => {
     });
     // Stale data stays on screen; no destructive banner, no alert role.
     expect(
-      document.querySelector("[data-slot='grok-usage-meter']")
+      document.querySelector("[data-slot='account-usage-quotas']")
     ).toBeTruthy();
     expect(
-      document.querySelector("[data-slot='grok-usage-progress']")
+      document.querySelector("[data-slot='account-usage-quota']")
     ).toBeTruthy();
     expect(screen.queryByRole("alert")).toBeNull();
     expect(screen.queryByText(/usage update failed/i)).toBeNull();
@@ -292,10 +334,10 @@ describe("Grok accounts widget", () => {
   it("shows a muted note instead of a red banner when a transient failure has no data", async () => {
     const snap = activeSnapshot();
     snap.activeUsage = {
+      attemptedAt: Date.now(),
       error: "Grok usage temporarily unavailable (HTTP 503)",
-      fetchedAt: Date.now(),
+      metrics: [],
       status: "error",
-      windows: [],
     };
     const { context } = contextWithSnapshot(snap);
     await act(async () => {

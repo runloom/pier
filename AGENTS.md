@@ -380,6 +380,24 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 7. 无障碍：图标按钮有 `aria-label`；拖拽只从显式抓手开始，交互元素必须在拖拽 `cancel` 名单内（`button/a/input/...`），特殊容器用 `[data-no-drag]` 逃生舱。
 8. 尺寸适配：`size` prop 做结构决策（是否渲染某区块、图表显示天数/范围），container query 做布局密度（列数、横排↔纵排）；两者不可互换。禁止用 container query `display: none` 静默删除有意义内容（时间戳、余额、次要指标等）——compact 尺寸应摘要化或重排，辅以 tooltip / 渐进式披露保留可访问性。`minSize` 必须能容纳物料核心信息（至少一个指标 + 状态），不得声明小于核心内容所需的最小格数。
 9. 重复指标自适应：重复指标是同构且均有意义的数据项，必须保留数据契约中的源顺序和语义标识；只有存在独立标题、操作或说明时才拆成占整行的可见分区，普通指标不得仅因数据分组键不同而强制换行。指标集合优先使用浏览器原生内在尺寸网格 `repeat(auto-fit, minmax(min(100%, var(--item-min-width)), 1fr))`：集合只有单项时占满整行，多项在核心内容最小宽度允许时横排，否则纵向重排。`--item-min-width` 由标签、数值、状态和操作等核心内容共同决定，不得从宿主 `size.w` 换算像素，也不得用固定列数留下空轨道。所有数据必须进入可访问的 DOM，不得按尺寸丢弃、用 `hidden` 隐藏或只保留部分数据；高度不足时保持 `min-content` 并交由宿主滚动，高度富余时按内容自然高度顶部对齐，不得靠居中或拉大项目内部间距伪造填满效果。重复指标之间留白优先于分割线，只有存在无法由标题、标签或间距表达的独立语义章节时才使用 `Separator`。
+
+#### 工作台滚动区域
+
+- 每张卡遵守单一滚动所有者原则，只允许一个实际纵向滚动容器。注册项 `contentMode` 省略或为
+  `host-scroll` 时由宿主正文滚动；需要固定头部或自主管理滚动区时必须声明
+  `contained`，此时宿主只裁切溢出，组件负责自己的 viewport。
+- 外部插件注册经宿主适配时必须透传 `contentMode`，不得在重建注册对象时丢失布局语义并
+  静默回退到 `host-scroll`。
+- 可见渐隐统一使用 `@pier/ui/scroll-area.tsx` 的 `viewportFade`。渐隐 class 只能落在
+  Radix viewport，圆角、背景和边框归外层壳，ScrollBar 保持为 viewport 的兄弟节点。
+- 固定区与滚动区的内边距归各自内容层；滚动 viewport 必须全宽贴卡片内容区边缘。
+  禁止使用负边距、超宽度或绝对偏移把滚动条拉到边框，也禁止宿主与组件嵌套
+  `overflow-y-auto`。
+- 检查点在 `tests/unit/renderer/workbench-scroll-governance.test.ts`、
+  `tests/unit/renderer/scroll-area.test.tsx`、
+  `tests/unit/renderer/external-plugin-workbench-contract.test.ts` 与
+  `tests/component/workbench-panel.test.tsx`。
+
 - 网格几何：`CELL_WIDTH = 88`、`ROW_HEIGHT = 88`、`MARGIN = [12, 12]` 为目标节奏；容器宽度自动换算为 `2..12` 列。布局严格按实例数组做 Z 字逐行排布，当前行放不下即换行，行高取本行最高物料，不用后续小物料回填纵向空洞。删除后由同一派生算法立即压实；添加和复制追加到数组末尾；拖拽只修改数组顺序。
 - Dockview 宽度变化只重新派生列数与 `x/y`，不得写 panel params。窄容器可把卡片显示宽度临时夹到当前列数，容器恢复后继续使用原 `w/h` 偏好；普通布局禁止横向滚动。
 - 调整尺寸仍由 RGL 处理，停止时只持久化目标实例的 `w/h`；不得把 RGL compactor 与自定义排序求解器混用。全局菜单不提供“整理布局”“锁定布局”或新增方向，自动布局始终生效。

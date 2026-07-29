@@ -13,21 +13,28 @@ describe("Codex App Server usage parsing", () => {
         },
       })
     ).toEqual({
-      resetCreditsAvailable: 3,
       status: "ok",
-      windows: [
+      metrics: [
         {
+          groupId: "codex",
           id: "codex:primary",
-          limitId: "codex",
+          kind: "quota",
           resetsAt: 100_000,
           usedPercent: 38,
           windowMinutes: 300,
         },
         {
+          groupId: "codex",
           id: "codex:secondary",
-          limitId: "codex",
+          kind: "quota",
           usedPercent: 64,
           windowMinutes: 10_080,
+        },
+        {
+          format: "count",
+          id: "codex:reset-credits",
+          kind: "scalar",
+          value: 3,
         },
       ],
     });
@@ -60,11 +67,12 @@ describe("Codex App Server usage parsing", () => {
           primary: { usedPercent: 5, windowDurationMins },
           secondary: null,
         },
-      }).windows
+      }).metrics
     ).toEqual([
       {
+        groupId: "codex",
         id,
-        limitId: "codex",
+        kind: "quota",
         usedPercent: 5,
         windowMinutes: windowDurationMins,
       },
@@ -90,19 +98,21 @@ describe("Codex App Server usage parsing", () => {
             primary: { usedPercent: 17, windowDurationMins: 540 },
           },
         },
-      }).windows
+      }).metrics
     ).toEqual([
       {
+        groupId: "codex",
         id: "codex:primary",
-        limitId: "codex",
-        limitName: "Codex",
+        kind: "quota",
+        name: "Codex",
         usedPercent: 17,
         windowMinutes: 540,
       },
       {
+        groupId: "review",
         id: "review:primary",
-        limitId: "review",
-        limitName: "Code review",
+        kind: "quota",
+        name: "Code review",
         usedPercent: 43,
         windowMinutes: 43_200,
       },
@@ -128,7 +138,11 @@ describe("Codex App Server usage parsing", () => {
             primary: { usedPercent: 17, windowDurationMins: 300 },
           },
         },
-      }).windows.map((window) => `${window.id}:${window.windowMinutes}`)
+      }).metrics.map((metric) =>
+        metric.kind === "quota"
+          ? `${metric.id}:${metric.windowMinutes}`
+          : metric.id
+      )
     ).toEqual([
       "codex:primary:300",
       "codex:secondary:10080",
@@ -156,7 +170,11 @@ describe("Codex App Server usage parsing", () => {
             secondary: { usedPercent: 21, windowDurationMins: 10_080 },
           },
         },
-      }).windows.map((window) => `${window.limitId}:${window.windowMinutes}`)
+      }).metrics.map((metric) =>
+        metric.kind === "quota"
+          ? `${metric.groupId}:${metric.windowMinutes}`
+          : metric.id
+      )
     ).toEqual(["codex:300", "codex:10080", "spark:300", "spark:10080"]);
   });
 
@@ -169,12 +187,13 @@ describe("Codex App Server usage parsing", () => {
             primary: { usedPercent: 20, windowDurationMins: 43_200 },
           },
         },
-      }).windows
+      }).metrics
     ).toEqual([
       {
+        groupId: "review",
         id: "review:primary",
-        limitId: "review",
-        limitName: "Code review",
+        kind: "quota",
+        name: "Code review",
         usedPercent: 20,
         windowMinutes: 43_200,
       },
@@ -188,7 +207,9 @@ describe("Codex App Server usage parsing", () => {
           primary: { usedPercent: 43, windowDurationMins: 10_080 },
           secondary: { usedPercent: 17, windowDurationMins: 540 },
         },
-      }).windows.map((window) => window.windowMinutes)
+      }).metrics.map((metric) =>
+        metric.kind === "quota" ? metric.windowMinutes : undefined
+      )
     ).toEqual([540, 10_080]);
   });
 
@@ -203,10 +224,11 @@ describe("Codex App Server usage parsing", () => {
       })
     ).toEqual({
       status: "ok",
-      windows: [
+      metrics: [
         {
+          groupId: "codex",
           id: "codex:secondary",
-          limitId: "codex",
+          kind: "quota",
           usedPercent: 17,
         },
       ],

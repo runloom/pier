@@ -25,6 +25,66 @@ function envelope(overrides: Record<string, unknown> = {}): string {
 }
 
 describe("claude usage fetch", () => {
+  it("keeps unknown structured quota kinds as stable metrics", () => {
+    expect(
+      parseUsagePayload({
+        limits: [
+          {
+            kind: "monthly_scoped",
+            percent: 27,
+            scope: { model: { display_name: "Claude Next" } },
+          },
+        ],
+      })
+    ).toEqual([
+      {
+        groupId: "claude:monthly-scoped:claude-next",
+        id: "claude:monthly-scoped:claude-next",
+        kind: "quota",
+        name: "Claude Next",
+        usedPercent: 27,
+      },
+    ]);
+  });
+
+  it("combines structured limits with newly added flat buckets", () => {
+    expect(
+      parseUsagePayload({
+        limits: [{ kind: "session", percent: 41 }],
+        monthly_bonus: { utilization: 9 },
+      }).map((metric) => metric.id)
+    ).toEqual(["claude:session", "claude:monthly-bonus"]);
+  });
+
+  it("exposes extra-usage spend and limit as scalar metrics", () => {
+    expect(
+      parseUsagePayload({
+        extra_usage: {
+          monthly_limit: 2500,
+          used_credits: 425,
+          utilization: 17,
+        },
+      })
+    ).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          currency: "USD",
+          format: "currency",
+          id: "claude:extra-usage-used",
+          kind: "scalar",
+          value: 4.25,
+        }),
+        expect.objectContaining({
+          currency: "USD",
+          format: "currency",
+          id: "claude:extra-usage-limit",
+          kind: "scalar",
+          value: 25,
+        }),
+      ])
+    );
+  });
+
   it("parses flat five_hour / seven_day buckets", () => {
     const windows = parseUsagePayload({
       five_hour: { resets_at: "2026-07-20T18:00:00Z", utilization: 33 },
@@ -32,17 +92,21 @@ describe("claude usage fetch", () => {
       seven_day_opus: null,
       seven_day_sonnet: { resets_at: null, utilization: 1 },
     });
-    expect(windows.map((w) => w.limitId)).toEqual([
-      "session",
-      "weekly",
-      "weekly:sonnet",
+    expect(windows.map((w) => w.id)).toEqual([
+      "claude:session",
+      "claude:weekly",
+      "claude:weekly:sonnet",
     ]);
     expect(windows[0]).toMatchObject({
-      limitName: "Session",
+      groupId: "claude:session",
+      kind: "quota",
+      name: "Session",
       usedPercent: 33,
       windowMinutes: 300,
     });
-    expect(windows[0]?.resetsAt).toBe(Date.parse("2026-07-20T18:00:00Z"));
+    expect(windows[0]).toMatchObject({
+      resetsAt: Date.parse("2026-07-20T18:00:00Z"),
+    });
   });
 
   it("prefers the structured limits array when present", () => {
@@ -58,13 +122,13 @@ describe("claude usage fetch", () => {
         },
       ],
     });
-    expect(windows.map((w) => w.limitId)).toEqual([
-      "session",
-      "weekly",
-      "weekly:opus",
+    expect(windows.map((w) => w.id)).toEqual([
+      "claude:session",
+      "claude:weekly",
+      "claude:weekly:opus",
     ]);
     // Unix seconds get normalized to ms.
-    expect(windows[0]?.resetsAt).toBe(1_790_000_000_000);
+    expect(windows[0]).toMatchObject({ resetsAt: 1_790_000_000_000 });
   });
 
   it("fetches usage with the required headers", async () => {
@@ -83,7 +147,7 @@ describe("claude usage fetch", () => {
       signal: new AbortController().signal,
     });
     expect(result.status).toBe("ok");
-    expect(result.windows).toHaveLength(1);
+    expect(result.metrics).toHaveLength(1);
   });
 
   it("refreshes a rotated token on 401 and persists the new envelope", async () => {

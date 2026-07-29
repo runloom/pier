@@ -14,6 +14,14 @@ export {
 } from "./drift-watch.ts";
 export { createInflightCoalescer } from "./inflight-coalescer.ts";
 export {
+  type AccountMembershipSnapshot,
+  type AccountMembershipStatus,
+  type AccountMembershipValue,
+  createMembershipCacheEntry,
+  type MembershipCacheEntry,
+  type MembershipFetchResult,
+} from "./membership-cache.ts";
+export {
   assertMultiHopBudget,
   createMultiHopBudgetPolicy,
   type MultiHopBudgetPolicy,
@@ -24,6 +32,9 @@ export {
   type UsageRefreshSchedulerOptions,
 } from "./refresh-scheduler.ts";
 export {
+  type AccountUsageMetric,
+  type AccountUsageQuotaMetric,
+  type AccountUsageScalarMetric,
   activeUsageCacheKey,
   createUsageCacheEntry,
   SYSTEM_USAGE_CACHE_KEY,
