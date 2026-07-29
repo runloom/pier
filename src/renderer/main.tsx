@@ -48,6 +48,7 @@ import { initFont } from "./stores/font.store.ts";
 import { initKeybindingPreferences } from "./stores/keybinding-preferences.store.ts";
 import { initLocalEnvironments } from "./stores/local-environments.store.ts";
 import { initLocale } from "./stores/locale.store.ts";
+import { initLspPreferences } from "./stores/lsp-preferences.store.ts";
 import { initPluginSettingsStore } from "./stores/plugin-settings.store.ts";
 import { initTaskRunsStore } from "./stores/task-runs.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
@@ -126,6 +127,7 @@ async function bootstrap() {
       initTerminalStatusBarPrefs(),
       initTaskRunsStore(),
       initWorktreePreferences(),
+      initLspPreferences(),
       initLocalEnvironments(),
     ]);
   } catch (err) {

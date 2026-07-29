@@ -40,13 +40,14 @@ import {
 } from "./files-document-store.ts";
 import { parseFilesDocumentPanelSource } from "./files-document-types.ts";
 import { createFilesEditorActions } from "./files-editor-actions.ts";
+import { registerFilesLspNavigationDeps } from "./files-lsp-navigation.ts";
 import { createFilesMarkdownPreviewActions } from "./files-markdown-preview-actions.ts";
 import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
 import { clearFilesNavHistory } from "./files-nav-history.ts";
 import { createFilesOpenDirectoryAction } from "./files-open-directory-action.ts";
 import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
 import { filesPanelTabChrome } from "./files-panel-tab.ts";
-import { createFilesPanelTransferRegistration } from "./files-panel-transfer.ts";
+import { createFilesPanelTransferRegistration } from "./files-panel-transfer-registration.ts";
 import { readFilesPanelViewMode } from "./files-panel-transfer-state.ts";
 import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
 import { createFilesQuickOpenAction } from "./files-quick-open.ts";
@@ -355,7 +356,11 @@ export const filesRendererPlugin: RendererPluginModule = {
         context.actions.register(action)
       ),
       registerFilesProjectStatusItem(context),
-      registerFilesTerminalOpenUrlHandler(context),
+      registerFilesTerminalOpenUrlHandler(context, editorController),
+      registerFilesLspNavigationDeps({
+        context,
+        controller: editorController,
+      }),
     ];
 
     return () => {

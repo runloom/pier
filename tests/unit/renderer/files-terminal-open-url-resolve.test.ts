@@ -3,6 +3,7 @@ import {
   listTerminalPathResolveRoots,
   normalizeTerminalPathText,
   parseTerminalOpenUrl,
+  parseTerminalPathLocation,
   resolveTerminalLocalPathTargets,
 } from "../../../src/plugins/builtin/files/renderer/files-terminal-open-url-resolve.ts";
 import type { PanelContext } from "../../../src/shared/contracts/panel.ts";
@@ -29,6 +30,34 @@ describe("normalizeTerminalPathText", () => {
 
   it("uses the first non-empty line", () => {
     expect(normalizeTerminalPathText("\n  docs/a.md\nnext")).toBe("docs/a.md");
+  });
+});
+
+describe("parseTerminalPathLocation", () => {
+  it("keeps path-only text without location", () => {
+    expect(parseTerminalPathLocation("docs/a.md")).toEqual({
+      path: "docs/a.md",
+    });
+  });
+
+  it("extracts :line and :line:col", () => {
+    expect(parseTerminalPathLocation("docs/a.md:12")).toEqual({
+      line: 12,
+      path: "docs/a.md",
+    });
+    expect(parseTerminalPathLocation("docs/a.md:12:3")).toEqual({
+      column: 3,
+      line: 12,
+      path: "docs/a.md",
+    });
+  });
+
+  it("strips wrappers before reading location", () => {
+    expect(parseTerminalPathLocation("`docs/a.md:10:2`")).toEqual({
+      column: 2,
+      line: 10,
+      path: "docs/a.md",
+    });
   });
 });
 
@@ -201,6 +230,15 @@ describe("parseTerminalOpenUrl", () => {
   it("strips wrappers when parsing", () => {
     expect(parseTerminalOpenUrl("`docs/a.md`", "/repo")).toEqual({
       kind: "local-path",
+      path: "/repo/docs/a.md",
+    });
+  });
+
+  it("preserves line and column from path suffixes", () => {
+    expect(parseTerminalOpenUrl("docs/a.md:12:3", "/repo")).toEqual({
+      column: 3,
+      kind: "local-path",
+      line: 12,
       path: "/repo/docs/a.md",
     });
   });

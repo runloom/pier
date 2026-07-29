@@ -11,6 +11,12 @@
     },
     "pier.files.searchInFolder": {
       "title": "Find in Folder…"
+    },
+    "pier.files.editor.goToLine": {
+      "title": "Go to Line…"
+    },
+    "pier.files.editor.showHover": {
+      "title": "Show Symbol Information"
     }
   },
   "messages": {
@@ -95,6 +101,34 @@
     "filePanel.status.saving": "Saving…",
     "filePanel.status.temporary": "Temporary file",
     "filePanel.status.unsaved": "Unsaved changes",
+    "filePanel.languageService.state.disabled": "Disabled",
+    "filePanel.languageService.state.unsupported": "Unsupported",
+    "filePanel.languageService.state.starting": "Starting",
+    "filePanel.languageService.state.ready": "Ready",
+    "filePanel.languageService.state.retrying": "Retrying",
+    "filePanel.languageService.state.paused": "Paused",
+    "filePanel.languageService.state.error": "Error",
+    "filePanel.languageService.description.disabled.editorDisabled": "Enable editor language features in Settings.",
+    "filePanel.languageService.description.disabled.globallyDisabled": "Enable Language Services in Settings.",
+    "filePanel.languageService.description.disabled.worktreesDisabled": "Enable language services for worktrees in Settings.",
+    "filePanel.languageService.description.unsupported.nonDisk": "Save this file to the workspace to use language features.",
+    "filePanel.languageService.description.unsupported.noProvider": "Install or configure the language server for this file type.",
+    "filePanel.languageService.description.unsupported.unsupportedRoot": "Open a supported local workspace to use language features.",
+    "filePanel.languageService.description.starting": "Language features are starting.",
+    "filePanel.languageService.description.ready": "Language features are ready.",
+    "filePanel.languageService.description.retrying.exited": "The language server exited. Pier will retry automatically.",
+    "filePanel.languageService.description.retrying.failed": "The language server failed. Pier will retry automatically.",
+    "filePanel.languageService.description.retrying.sendFailed": "Pier could not contact the language server. Pier will retry automatically.",
+    "filePanel.languageService.description.retrying.initializeFailed": "The language server could not initialize. Pier will retry automatically.",
+    "filePanel.languageService.description.paused.idleRelease": "Focus the editor to resume language features.",
+    "filePanel.languageService.description.paused.workspaceEvicted": "This workspace was paused to free resources. Focus the editor to resume language features.",
+    "filePanel.languageService.description.error.limitReached": "Close another workspace or adjust the language service limit in Settings.",
+    "filePanel.languageService.description.error.serverUnavailable": "Check that the language server for this file type is installed.",
+    "filePanel.languageService.description.error.launchFailed": "Check that the language server for this file type is installed, then try again.",
+    "filePanel.languageService.description.error.initializeFailed": "Check the language server installation and try again.",
+    "filePanel.languageService.description.error.cleanupFailed": "The language service process could not be closed. Restart Pier and try again.",
+    "filePanel.languageService.description.error.bridgeUnavailable": "Pier could not reach the language service. Restart Pier and try again.",
+    "filePanel.languageService.description.error.retryExhausted": "The language server stopped repeatedly. Restart Pier, then check the language server installation if the problem continues.",
     "filePanel.temporary.missing.title": "Temporary file cannot be restored",
     "filePanel.temporary.missing.description": "Temporary contents are restored from a local draft when possible, and cleared when the tab closes.",
     "filePanel.unsupported.title": "This file cannot be edited",
@@ -275,7 +309,26 @@
     "filePanel.contentSearch.invalidRegexpTitle": "Invalid regular expression",
     "filePanel.contentSearch.invalidRegexpBody": "Check the pattern, or turn off Regexp and search as plain text.",
     "filePanel.contentSearch.invalidScopeTitle": "Folder not available",
-    "filePanel.contentSearch.invalidScopeBody": "The search folder was moved or is outside the project. Clear the folder filter and try again."
+    "filePanel.contentSearch.invalidScopeBody": "The search folder was moved or is outside the project. Clear the folder filter and try again.",
+    "filePanel.editor.goToLine.title": "Go to Line…",
+    "filePanel.editor.goToLine.body": "Enter a line number, or line:column.",
+    "filePanel.editor.goToLine.confirm": "Go",
+    "filePanel.editor.goToLine.invalid": "Use a line number, or line:column.",
+    "filePanel.editor.goToLine.failed": "Unable to jump to that line.",
+    "filePanel.editor.goToDefinition.failed": "Unable to open that definition.",
+    "filePanel.editor.goToDefinition.unavailable": "Go to Definition is unavailable here.",
+    "filePanel.editor.showHover.title": "Show Symbol Information",
+    "filePanel.editor.showHover.noActiveFile": "Open a file in the editor first.",
+    "filePanel.editor.showHover.unavailable": "Symbol information is unavailable here.",
+    "filePanel.editor.hover.contentTruncated": "Documentation was truncated",
+    "filePanel.editor.hover.definitionsTitle": "Definitions",
+    "filePanel.editor.hover.definitionsTruncated": "Only the first definitions are shown",
+    "filePanel.editor.hover.documentationTitle": "Documentation",
+    "filePanel.editor.hover.lineTruncated": "Line truncated",
+    "filePanel.editor.hover.noInformation": "No symbol information is available here.",
+    "filePanel.editor.hover.previewUnavailable": "Preview unavailable",
+    "filePanel.editor.hover.symbolTitle": "Symbol information",
+    "filePanel.editor.hover.unavailable": "Symbol information is temporarily unavailable."
   },
   "terminalStatusItems": {
     "pier.files.project": {
@@ -297,6 +350,51 @@
     "pier.files.editor.minimap": {
       "description": "Show a minimap overview on the right side of the source editor.",
       "label": "Minimap"
+    },
+    "pier.files.editor.wordWrap": {
+      "description": "Wrap long lines in the source editor.",
+      "label": "Word wrap"
+    },
+    "pier.files.editor.tabSize": {
+      "description": "Number of spaces used for a tab character in the source editor.",
+      "enumDescriptions": ["2 spaces", "4 spaces", "8 spaces"],
+      "label": "Tab size"
+    },
+    "pier.files.editor.defaultLanguage": {
+      "description": "Syntax language used for extensionless or unrecognized files.",
+      "enumDescriptions": [
+        "Auto",
+        "Plain Text",
+        "Markdown",
+        "JavaScript",
+        "TypeScript",
+        "JSON",
+        "CSS",
+        "HTML",
+        "XML",
+        "YAML",
+        "Python",
+        "Shell",
+        "C/C++",
+        "Go",
+        "Java",
+        "Kotlin",
+        "Ruby",
+        "Rust",
+        "SQL",
+        "Swift",
+        "TOML"
+      ],
+      "label": "Default language"
+    },
+    "pier.files.editor.defaultEol": {
+      "enumDescriptions": ["Auto", "LF", "CRLF"],
+      "description": "Line ending used when creating new files.",
+      "label": "Default line ending"
+    },
+    "pier.files.editor.lspEnabled": {
+      "description": "Show diagnostics, completions, and go to definition for supported files. Language services must also be enabled for the workspace.",
+      "label": "Editor language features"
     },
     "pier.files.tree.showExcludedFiles": {
       "description": "Show paths matched by the exclusion patterns below.",

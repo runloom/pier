@@ -46,6 +46,7 @@ import {
   registerForegroundActivityIpc,
 } from "./ipc/foreground-activity.ts";
 import { registerGitWatchIpc } from "./ipc/git-watch.ts";
+import { disposeLspIpcHost, registerLspIpc } from "./ipc/lsp.ts";
 import { registerMediaPreviewIpc } from "./ipc/media-preview.ts";
 import { registerMenuIpc } from "./ipc/menu.ts";
 import {
@@ -160,6 +161,7 @@ async function flushBeforeQuitConfirmed(): Promise<void> {
   // Clean quit：在销毁窗口前对 background 任务做 TERM→grace→KILL。
   await appCore.services.tasks.shutdownForQuit();
   await localControlRegistration.close();
+  await disposeLspIpcHost();
 }
 
 const appQuitRendererTransport = createAppQuitRendererTransport({
@@ -390,6 +392,7 @@ if (gotTheLock) {
       registerGitWatchIpc();
       registerFileWatchIpc();
       registerFileQueryIpc();
+      registerLspIpc();
       localControlRegistration.start();
       // Legacy terminal session keys (runtime window ids) → record UUIDs.
       // Must run before transfer recovery / task reconcile / window restore,

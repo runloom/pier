@@ -248,7 +248,10 @@ export const terminalOpenUrlKindSchema = z.enum(["text", "html", "unknown"]);
 export type TerminalOpenUrlKind = z.infer<typeof terminalOpenUrlKindSchema>;
 
 export const terminalOpenUrlEventSchema = z.object({
+  column: z.number().int().positive().optional(),
   kind: terminalOpenUrlKindSchema,
+  /** 1-based line for editor reveal after open (e.g. path:10:5). */
+  line: z.number().int().positive().optional(),
   panelId: z.string().min(1),
   url: z.string().min(1).max(16_384),
 });

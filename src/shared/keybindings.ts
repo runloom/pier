@@ -188,6 +188,16 @@ export const DEFAULT_KEYMAP: readonly SharedKeybindingInput[] = [
     keys: "Mod+Alt+KeyS",
     scope: "panel:pier.files.filePanel",
   },
+  {
+    commandId: "pier.files.editor.goToLine",
+    keys: "Mod+Shift+KeyG",
+    scope: "panel:pier.files.filePanel",
+  },
+  {
+    commandId: "pier.files.editor.showHover",
+    keys: "Mod+KeyI",
+    scope: "panel:pier.files.filePanel",
+  },
 ];
 
 const CODE_TO_ELECTRON: Readonly<Record<string, string>> = {

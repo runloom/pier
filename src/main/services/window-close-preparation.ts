@@ -3,6 +3,7 @@ import { createLogger } from "@shared/logger.ts";
 import { flushPanelContextState } from "../state/panel-context-state.ts";
 import { flushPluginSettings } from "../state/plugin-settings.ts";
 import { flushPluginState } from "../state/plugin-state.ts";
+import { flushPreferences } from "../state/preferences.ts";
 import {
   detachAgentsForWindow,
   flushTerminalSessionState,
@@ -269,6 +270,7 @@ export async function flushAllStoresSettled(): Promise<void> {
     ["plugin-state", flushPluginState],
     ["plugin-settings", flushPluginSettings],
     ["panel-context-state", flushPanelContextState],
+    ["preferences", flushPreferences],
     ["terminal-session-state", flushTerminalSessionState],
     ["terminal-status-bar-prefs", flushTerminalStatusBarPrefs],
     ["window-record-state", flushWindowRecordState],

@@ -9,6 +9,7 @@ import type { FileContentQueryItem } from "@shared/contracts/file-query.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { FILES_FILE_PANEL_ID } from "../manifest.ts";
 import type { FileEditorController } from "./file-editor-controller.ts";
+import { createFileEditorSessionId } from "./file-editor-session-id.ts";
 import { createFileFilePanelInstanceId } from "./file-panel-id.ts";
 import { sourceTitle } from "./file-panel-source.ts";
 import { getDocument } from "./files-document-store.ts";
@@ -16,10 +17,6 @@ import {
   parseFilesDocumentPanelSource,
   sameFilesDocumentPanelSource,
 } from "./files-document-types.ts";
-
-function createEditorSessionId(ownerId: string): string {
-  return JSON.stringify([ownerId]);
-}
 
 /**
  * Map 1-based line + 0-based char index to an offset in LF-normalized text.
@@ -88,6 +85,7 @@ export function openContentSearchHit(input: {
     ? { ...existingInstance.params }
     : { pinned: false, source };
 
+  input.controller.showSourceMode(instanceId);
   input.context.panels.openInstance({
     componentId: FILES_FILE_PANEL_ID,
     ...(!existingInstance && input.panelContext
@@ -101,7 +99,7 @@ export function openContentSearchHit(input: {
   });
 
   const documentId = input.controller.documentId(source);
-  const editorSessionId = createEditorSessionId(instanceId);
+  const editorSessionId = createFileEditorSessionId(instanceId);
 
   const applyReveal = (): boolean => {
     const document = getDocument(documentId);
@@ -129,7 +127,8 @@ export function openContentSearchHit(input: {
     return input.controller.revealRange(
       editorSessionId,
       from,
-      Math.max(from, to)
+      Math.max(from, to),
+      documentId
     );
   };
 

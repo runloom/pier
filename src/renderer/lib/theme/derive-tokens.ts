@@ -1,6 +1,7 @@
 // 派生引擎：Shiki 主题 → UI semantic token
 import pierreDark from "@pierre/theme/pierre-dark";
 import pierreLight from "@pierre/theme/pierre-light";
+import { deriveEditorDecorationTokens } from "./derive-editor-decoration-tokens.ts";
 import {
   adjustOklchForContrasts,
   chromaOf,
@@ -26,6 +27,18 @@ export interface DerivedUITokens {
   "chart-3": string;
   "chart-4": string;
   "chart-5": string;
+  "editor-active-line-bg": string;
+  /** Find-in-file current match (cm-searchMatch-selected). */
+  "editor-search-match-active-bg": string;
+  "editor-search-match-active-border": string;
+  /** Find-in-file other matches (cm-searchMatch). */
+  "editor-search-match-bg": string;
+  "editor-search-match-border": string;
+  /** Translucent text selection (CodeMirror selection layer). */
+  "editor-selection-bg": string;
+  /** Same-word occurrence wash (cm-selectionMatch). Neutral / low chroma. */
+  "editor-selection-match-bg": string;
+  "editor-selection-match-main-bg": string;
   foreground: string;
   input: string;
   muted: string;
@@ -368,6 +381,7 @@ export function deriveAppStyleTokens(
   );
 
   const mutedFg = neutralReadableText(bg, fg, chrome.muted);
+  const editorDecorations = deriveEditorDecorationTokens(get, fg, mode);
 
   return {
     "accent-foreground": readableText(chrome.accent, fg),
@@ -400,5 +414,6 @@ export function deriveAppStyleTokens(
     radius: "0.625rem",
     ring: chrome.ring,
     secondary: chrome.secondary,
+    ...editorDecorations,
   };
 }

@@ -1,6 +1,7 @@
 import { join } from "node:path";
 import { resolvePermissionMode } from "@shared/contracts/agent.ts";
 import { DEFAULT_AGENT_ATTENTION_SETTINGS } from "@shared/contracts/agent-attention.ts";
+import { DEFAULT_LSP_POLICY_PREFS } from "@shared/contracts/lsp.ts";
 import { DEFAULT_NOTIFICATION_CENTER_PREFS } from "@shared/contracts/notification-center.ts";
 import {
   DEFAULT_APP_QUIT_CONFIRMATION_MODE,
@@ -56,6 +57,7 @@ const DEFAULTS: ProjectPreferences = {
   notificationCenter: { ...DEFAULT_NOTIFICATION_CENTER_PREFS },
   gitAutoFetchEnabled: DEFAULT_GIT_AUTO_FETCH_ENABLED,
   gitAutoFetchIntervalMinutes: DEFAULT_GIT_AUTO_FETCH_INTERVAL_MINUTES,
+  lsp: { ...DEFAULT_LSP_POLICY_PREFS },
 };
 
 let store: DebouncedJsonStore<ProjectPreferences> | undefined;
@@ -145,4 +147,9 @@ export async function updatePreferences(
 ): Promise<ProjectPreferences> {
   const s = await ensureStore();
   return s.mutate((current) => ({ ...current, ...patch }));
+}
+
+export async function flushPreferences(): Promise<void> {
+  const s = await ensureStore();
+  await s.flush();
 }

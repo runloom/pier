@@ -38,6 +38,11 @@ import {
 import type { FilesDocumentPanelSource } from "@plugins/builtin/files/renderer/files-document-types.ts";
 import { createFilesEditorActions } from "@plugins/builtin/files/renderer/files-editor-actions.ts";
 import {
+  type FilesLanguageServiceStatus,
+  publishFilesLanguageServiceStatus,
+  resetFilesLanguageServiceStatusForTests,
+} from "@plugins/builtin/files/renderer/files-language-service-status.ts";
+import {
   clearFilesNavHistory,
   pushFilesNavEntry,
 } from "@plugins/builtin/files/renderer/files-nav-history.ts";
@@ -696,6 +701,7 @@ beforeEach(() => {
   window.localStorage.clear();
   window.sessionStorage.clear();
   clearFilesDocumentStore();
+  resetFilesLanguageServiceStatusForTests();
   clearFilesNavHistory();
   clearFilesTreeStore();
   clearFileTreeSidebarCache();
@@ -705,6 +711,7 @@ beforeEach(() => {
 afterEach(() => {
   clearHostGroupContentForTests();
   clearFilesDocumentStore();
+  resetFilesLanguageServiceStatusForTests();
   clearFilesNavHistory();
   clearFilesTreeStore();
   clearFileTreeSidebarCache();
@@ -1896,7 +1903,23 @@ describe("Files file-panel", () => {
         | { documentId?: string; editorSessionId?: string }
         | undefined;
       expect(metadata?.documentId).toBe(document.id);
-      expect(metadata?.editorSessionId).toContain("left-file-panel");
+      expect(metadata?.editorSessionId).toBe(
+        JSON.stringify(["left-file-panel"])
+      );
+      act(() => {
+        publishFilesLanguageServiceStatus(
+          JSON.stringify(["left-file-panel"]),
+          document.id,
+          { reason: "idle-release", state: "paused" }
+        );
+      });
+      await waitFor(() => {
+        expect(
+          left.container.querySelector(
+            '[data-language-service-status="paused"]'
+          )
+        ).toBeInstanceOf(HTMLElement);
+      });
 
       const copyAction = createFilesEditorActions(
         context,
@@ -1919,6 +1942,90 @@ describe("Files file-panel", () => {
         Reflect.deleteProperty(globalThis.navigator, "clipboard");
       }
     }
+  });
+
+  it("keeps one parent-owned editor identity for inline actions and body across rerenders", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "inline-owner.ts",
+      root: PROJECT_ROOT,
+    };
+    const contents = "export const inlineOwner = true;\n";
+    const document = ensureDiskDocument(source);
+    markDocumentLoaded(document.id, contents, 10);
+    const popup = vi.fn<RendererPluginContext["contextMenu"]["popup"]>(
+      async () => undefined
+    );
+    const context = createMockContext({
+      readText: vi.fn(async () => contents),
+    });
+    context.contextMenu = {
+      popup,
+      registerSelectionSelectAllProvider: () => () => undefined,
+      registerSelectionTextProvider: () => () => undefined,
+    };
+    const Panel = createFilePanel(context);
+    const params = { context: panelContext, source };
+    const rendered = render(
+      <Panel {...makeProps(params, { id: undefined })} />
+    );
+
+    await waitFor(() => {
+      expect(findCodeMirrorView(rendered.container).state.doc.toString()).toBe(
+        contents
+      );
+    });
+    fireEvent.contextMenu(
+      rendered.container.querySelector(".cm-content") as HTMLElement
+    );
+
+    const firstInvocation = popup.mock.calls.at(-1)?.[2] as
+      | RendererPluginActionInvocation
+      | undefined;
+    const firstSessionId = (
+      firstInvocation?.metadata as { editorSessionId?: unknown } | undefined
+    )?.editorSessionId;
+    expect(typeof firstSessionId).toBe("string");
+    expect(JSON.parse(firstSessionId as string)).toEqual([
+      expect.stringMatching(/^inline-panel:/),
+    ]);
+
+    act(() => {
+      publishFilesLanguageServiceStatus(firstSessionId as string, document.id, {
+        reason: "idle-release",
+        state: "paused",
+      });
+    });
+    await waitFor(() => {
+      expect(
+        rendered.container.querySelector(
+          '[data-language-service-status="paused"]'
+        )
+      ).toBeInstanceOf(HTMLElement);
+    });
+
+    rendered.rerender(<Panel {...makeProps(params, { id: undefined })} />);
+    await waitFor(() => {
+      expect(findCodeMirrorView(rendered.container).state.doc.toString()).toBe(
+        contents
+      );
+    });
+    fireEvent.contextMenu(
+      rendered.container.querySelector(".cm-content") as HTMLElement
+    );
+    const secondInvocation = popup.mock.calls.at(-1)?.[2] as
+      | RendererPluginActionInvocation
+      | undefined;
+    const secondSessionId = (
+      secondInvocation?.metadata as { editorSessionId?: unknown } | undefined
+    )?.editorSessionId;
+
+    expect(secondSessionId).toBe(firstSessionId);
+    expect(
+      rendered.container.querySelector(
+        '[data-language-service-status="paused"]'
+      )
+    ).toBeInstanceOf(HTMLElement);
   });
 
   it("routes editor actions to the source group editor session when the same file is open in two groups", async () => {
@@ -2018,7 +2125,21 @@ describe("Files file-panel", () => {
         | { documentId?: string; editorSessionId?: string }
         | undefined;
       expect(metadata?.documentId).toBe(document.id);
-      expect(metadata?.editorSessionId).toContain("same-file-panel-a");
+      expect(metadata?.editorSessionId).toBe(
+        JSON.stringify(["same-file-panel-a"])
+      );
+      act(() => {
+        publishFilesLanguageServiceStatus(
+          JSON.stringify(["same-file-panel-a"]),
+          document.id,
+          { reason: "idle-release", state: "paused" }
+        );
+      });
+      await waitFor(() => {
+        expect(
+          containerA?.querySelector('[data-language-service-status="paused"]')
+        ).toBeInstanceOf(HTMLElement);
+      });
 
       const copyAction = createFilesEditorActions(
         context,
@@ -2793,6 +2914,12 @@ describe("Files file-panel", () => {
         ] satisfies FileEntry[]
     );
     const context = createMockContext({ list });
+    const documentId = filesRuntimeFor(context).controller.documentId({
+      kind: "disk",
+      path: "README.md",
+      root: PROJECT_ROOT,
+    });
+    const editorSessionId = JSON.stringify(["dragged-file-panel"]);
     const Panel = createFilePanel(context);
     const groupA = createFakeGroup("drag-source-group");
     const groupB = createFakeGroup("drag-target-group");
@@ -2828,6 +2955,17 @@ describe("Files file-panel", () => {
       ).toBeInstanceOf(HTMLElement);
     });
     expect(containerB?.querySelector(FILES_GROUP_VIEW_SELECTOR)).toBeNull();
+    act(() => {
+      publishFilesLanguageServiceStatus(editorSessionId, documentId, {
+        reason: "idle-release",
+        state: "paused",
+      });
+    });
+    await waitFor(() => {
+      expect(
+        containerA?.querySelector('[data-language-service-status="paused"]')
+      ).toBeInstanceOf(HTMLElement);
+    });
 
     // 模拟 dockview 拖拽跨组:api.group 换成目标 group + 触发 onDidGroupChange。
     // 组件不 remount(dockview 只 reparent 内容 DOM)。
@@ -2853,6 +2991,17 @@ describe("Files file-panel", () => {
         (viewB as HTMLElement).querySelector(
           '[data-testid="files-code-mirror-editor"] .cm-content'
         )
+      ).toBeInstanceOf(HTMLElement);
+    });
+    act(() => {
+      publishFilesLanguageServiceStatus(editorSessionId, documentId, {
+        reason: "workspace-evicted",
+        state: "paused",
+      });
+    });
+    await waitFor(() => {
+      expect(
+        containerB?.querySelector('[data-language-service-status="paused"]')
       ).toBeInstanceOf(HTMLElement);
     });
 
@@ -4965,6 +5114,319 @@ describe("Files file-panel", () => {
     expect(screen.getByText("Saved")).toBeInTheDocument();
   });
 
+  it("keeps document save status out of the language-only badge", async () => {
+    const source = {
+      kind: "disk" as const,
+      path: "src/status-header.ts",
+      root: PROJECT_ROOT,
+    };
+    const { container } = renderFilePanel(
+      { context: panelContext, source },
+      createMockContext({
+        readText: vi.fn(async () => "export const status = true;\n"),
+      })
+    );
+
+    const languageBadge = await waitFor(() => {
+      const badge = container.querySelector('[data-language="typescript"]');
+      expect(badge).toBeInstanceOf(HTMLElement);
+      return badge as HTMLElement;
+    });
+    const documentStatus = screen.getByRole("status", { name: "Saved" });
+    const savedLabel = within(documentStatus).getByText("Saved");
+
+    expect(savedLabel).toHaveClass("sr-only");
+    expect(languageBadge).toHaveTextContent(/^TypeScript$/);
+    expect(within(languageBadge).queryByText("Saved")).toBeNull();
+  });
+
+  it("renders the panel owner's language status immediately after the language badge", async () => {
+    const panelId = "language-service-header-panel";
+    const source = {
+      kind: "disk" as const,
+      path: "src/language-service.ts",
+      root: PROJECT_ROOT,
+    };
+    const context = createMockContext({
+      readText: vi.fn(async () => "export const languageService = true;\n"),
+    });
+    const Panel = createFilePanel(context);
+    const { container } = render(
+      <Panel
+        {...makeProps({ context: panelContext, source }, { id: panelId })}
+      />
+    );
+    const languageBadge = await waitFor(() => {
+      const badge = container.querySelector('[data-language="typescript"]');
+      expect(badge).toBeInstanceOf(HTMLElement);
+      return badge as HTMLElement;
+    });
+    const document = ensureDiskDocument(source);
+    const ownerId = JSON.stringify([panelId]);
+
+    // Ready is silent; only non-ready states render a chip after the language badge.
+    act(() => {
+      publishFilesLanguageServiceStatus(ownerId, document.id, {
+        state: "ready",
+        serverId: "typescript-language-server",
+      });
+    });
+    await waitFor(() => {
+      expect(
+        container.querySelector("[data-language-service-status]")
+      ).toBeNull();
+    });
+
+    act(() => {
+      publishFilesLanguageServiceStatus(ownerId, document.id, {
+        state: "starting",
+      });
+    });
+
+    const languageStatus = await waitFor(() => {
+      const status = container.querySelector(
+        '[data-language-service-status="starting"]'
+      );
+      expect(status).toBeInstanceOf(HTMLElement);
+      return status as HTMLElement;
+    });
+    expect(languageBadge.nextElementSibling).toBe(languageStatus);
+    expect(languageStatus).toHaveAttribute("role", "status");
+    expect(languageStatus).toHaveAttribute("aria-live", "polite");
+    expect(languageStatus).toHaveAttribute("tabindex", "0");
+    expect(languageStatus).toHaveAttribute("data-tone", "info");
+    expect(languageStatus).toHaveTextContent("Starting");
+    expect(languageStatus).toBeVisible();
+    expect(languageStatus.tagName).not.toBe("BUTTON");
+    expect(
+      screen.queryByRole("button", { name: /language service/i })
+    ).toBeNull();
+  });
+
+  it("shows semantic language-service states and actionable reason copy on focus", async () => {
+    const panelId = "language-service-state-panel";
+    const source = {
+      kind: "disk" as const,
+      path: "src/language-service-states.ts",
+      root: PROJECT_ROOT,
+    };
+    const context = createMockContext({
+      readText: vi.fn(async () => "export const states = true;\n"),
+    });
+    const Panel = createFilePanel(context);
+    const { container } = render(
+      <Panel
+        {...makeProps({ context: panelContext, source }, { id: panelId })}
+      />
+    );
+    await screen.findByText("TypeScript");
+    const fileDocument = ensureDiskDocument(source);
+    const ownerId = JSON.stringify([panelId]);
+    const cases = [
+      {
+        label: "Disabled",
+        status: { state: "disabled", reason: "editor-disabled" },
+        tone: "neutral",
+        tooltip: "Enable editor language features in Settings.",
+      },
+      {
+        label: "Disabled",
+        status: { state: "disabled", reason: "globally-disabled" },
+        tone: "neutral",
+        tooltip: "Enable Language Services in Settings.",
+      },
+      {
+        label: "Disabled",
+        status: { state: "disabled", reason: "worktrees-disabled" },
+        tone: "neutral",
+        tooltip: "Enable language services for worktrees in Settings.",
+      },
+      {
+        label: "Unsupported",
+        status: { state: "unsupported", reason: "non-disk" },
+        tone: "neutral",
+        tooltip: "Save this file to the workspace to use language features.",
+      },
+      {
+        label: "Unsupported",
+        status: { state: "unsupported", reason: "no-provider" },
+        tone: "neutral",
+        tooltip: "Install or configure the language server for this file type.",
+      },
+      {
+        label: "Unsupported",
+        status: { state: "unsupported", reason: "unsupported-root" },
+        tone: "neutral",
+        tooltip: "Open a supported local workspace to use language features.",
+      },
+      {
+        label: "Starting",
+        status: { state: "starting" },
+        tone: "info",
+        tooltip: "Language features are starting.",
+      },
+      {
+        label: "Retrying",
+        status: {
+          state: "retrying",
+          serverId: "typescript-language-server",
+          attempt: 1,
+          delayMs: 250,
+          reason: "exited",
+        },
+        tone: "warning",
+        tooltip: "The language server exited. Pier will retry automatically.",
+      },
+      {
+        label: "Retrying",
+        status: {
+          state: "retrying",
+          serverId: "typescript-language-server",
+          attempt: 2,
+          delayMs: 1000,
+          reason: "failed",
+        },
+        tone: "warning",
+        tooltip: "The language server failed. Pier will retry automatically.",
+      },
+      {
+        label: "Retrying",
+        status: {
+          state: "retrying",
+          serverId: "typescript-language-server",
+          attempt: 3,
+          delayMs: 4000,
+          reason: "send-failed",
+        },
+        tone: "warning",
+        tooltip:
+          "Pier could not contact the language server. Pier will retry automatically.",
+      },
+      {
+        label: "Retrying",
+        status: {
+          state: "retrying",
+          serverId: "typescript-language-server",
+          attempt: 1,
+          delayMs: 250,
+          reason: "initialize-failed",
+        },
+        tone: "warning",
+        tooltip:
+          "The language server could not initialize. Pier will retry automatically.",
+      },
+      {
+        label: "Paused",
+        status: { state: "paused", reason: "idle-release" },
+        tone: "neutral",
+        tooltip: "Focus the editor to resume language features.",
+      },
+      {
+        label: "Paused",
+        status: {
+          state: "paused",
+          serverId: "typescript-language-server",
+          reason: "workspace-evicted",
+        },
+        tone: "neutral",
+        tooltip:
+          "This workspace was paused to free resources. Focus the editor to resume language features.",
+      },
+      {
+        label: "Error",
+        status: { state: "error", reason: "limit-reached" },
+        tone: "danger",
+        tooltip:
+          "Close another workspace or adjust the language service limit in Settings.",
+      },
+      {
+        label: "Error",
+        status: { state: "error", reason: "server-unavailable" },
+        tone: "danger",
+        tooltip:
+          "Check that the language server for this file type is installed.",
+      },
+      {
+        label: "Error",
+        status: { state: "error", reason: "launch-failed" },
+        tone: "danger",
+        tooltip:
+          "Check that the language server for this file type is installed, then try again.",
+      },
+      {
+        label: "Error",
+        status: { state: "error", reason: "initialize-failed" },
+        tone: "danger",
+        tooltip: "Check the language server installation and try again.",
+      },
+      {
+        label: "Error",
+        status: { state: "error", reason: "cleanup-failed" },
+        tone: "danger",
+        tooltip:
+          "The language service process could not be closed. Restart Pier and try again.",
+      },
+      {
+        label: "Error",
+        status: { state: "error", reason: "bridge-unavailable" },
+        tone: "danger",
+        tooltip:
+          "Pier could not reach the language service. Restart Pier and try again.",
+      },
+      {
+        label: "Error",
+        status: { state: "error", reason: "retry-exhausted" },
+        tone: "danger",
+        tooltip:
+          "The language server stopped repeatedly. Restart Pier, then check the language server installation if the problem continues.",
+      },
+    ] satisfies readonly {
+      label: string;
+      status: FilesLanguageServiceStatus;
+      tone: "danger" | "info" | "neutral" | "success" | "warning";
+      tooltip: string;
+    }[];
+
+    for (const testCase of cases) {
+      act(() => {
+        publishFilesLanguageServiceStatus(
+          ownerId,
+          fileDocument.id,
+          testCase.status
+        );
+      });
+      const languageStatus = await waitFor(() => {
+        const status = container.querySelector(
+          `[data-language-service-status="${testCase.status.state}"]`
+        );
+        expect(status).toBeInstanceOf(HTMLElement);
+        return status as HTMLElement;
+      });
+
+      expect(languageStatus).toHaveAttribute("data-tone", testCase.tone);
+      expect(languageStatus).toHaveTextContent(testCase.label);
+      expect(languageStatus).toBeVisible();
+      fireEvent.keyDown(document.body, { key: "Tab" });
+      fireEvent.focus(languageStatus);
+      await waitFor(() => {
+        expect(screen.getByRole("tooltip")).toHaveTextContent(testCase.tooltip);
+      });
+    }
+
+    act(() => {
+      publishFilesLanguageServiceStatus(ownerId, fileDocument.id, {
+        state: "ready",
+        serverId: "typescript-language-server",
+      });
+    });
+    await waitFor(() => {
+      expect(
+        container.querySelector("[data-language-service-status]")
+      ).toBeNull();
+    });
+    expect(screen.queryByText("Ready")).toBeNull();
+  });
+
   it("hides the Markdown mode toggle for non-Markdown documents", async () => {
     renderFilePanel(
       {
@@ -5182,19 +5644,20 @@ describe("Files file-panel", () => {
     const editorSource = await readFile(
       join(
         process.cwd(),
-        "src/plugins/builtin/files/renderer/file-editor-view-session.ts"
+        "src/plugins/builtin/files/renderer/file-editor-view-extensions.ts"
       ),
       "utf8"
     );
 
     const overrideMatch = CM_SEARCH_DOM_HANDLER_OVERRIDE.exec(editorSource);
     const overrideIndex = overrideMatch?.index ?? -1;
-    const setupIndex = editorSource.indexOf("      basicSetup");
+    const setupMatch = /^\s*basicSetup,$/m.exec(editorSource);
+    const setupIndex = setupMatch?.index ?? -1;
     expect(overrideIndex).toBeGreaterThanOrEqual(0);
     expect(setupIndex).toBeGreaterThanOrEqual(0);
     expect(overrideIndex).toBeLessThan(setupIndex);
     expect(editorSource).toContain("keydown: (event)");
-    expect(editorSource).toContain("this.#presentation.onOpenSearch()");
+    expect(editorSource).toContain("input.onOpenSearch()");
   });
 
   it("promotes a preview panel to pinned when the user first modifies the document", async () => {

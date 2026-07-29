@@ -15,11 +15,11 @@ import { FilesMutationGate } from "@plugins/builtin/files/renderer/files-mutatio
 import { FilesMutationSuspendCoordinator } from "@plugins/builtin/files/renderer/files-mutation-suspend-coordinator.ts";
 import {
   clearFilesPanelTransferBookkeepingForTests,
-  createFilesPanelTransferRegistration,
   describeFilesPanelSourceParams,
   type FilesPanelTransferDeps,
   resolveFilesPanelTransferSource,
 } from "@plugins/builtin/files/renderer/files-panel-transfer.ts";
+import { createFilesPanelTransferRegistration } from "@plugins/builtin/files/renderer/files-panel-transfer-registration.ts";
 import {
   clearFilesPanelTransferViewSeedsForTests,
   parseFilesPanelTransferPreparedState,

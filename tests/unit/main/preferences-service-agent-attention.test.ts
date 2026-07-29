@@ -50,6 +50,21 @@ describe("preferences-service agentAttention whitelist", () => {
     );
   });
 
+  it("preserves the workspace worktree directory patch", async () => {
+    const current = basePreferences();
+    const updatePreferences = vi.fn(
+      async (patch: Partial<ProjectPreferences>) =>
+        basePreferences({ ...current, ...patch })
+    );
+    const service = createPreferencesService({ updatePreferences });
+
+    await service.update({ worktreeRootPath: "/projects/worktrees" });
+
+    expect(updatePreferences).toHaveBeenCalledWith({
+      worktreeRootPath: "/projects/worktrees",
+    });
+  });
+
   it("defaults agentAttention when preferences parse empty object", () => {
     expect(basePreferences({}).agentAttention).toEqual(
       DEFAULT_AGENT_ATTENTION_SETTINGS

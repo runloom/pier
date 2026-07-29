@@ -198,6 +198,22 @@ describe("DEFAULT_KEYMAP", () => {
     });
   });
 
+  it("shows symbol information with Mod+I only in Files panels", () => {
+    expect(
+      DEFAULT_KEYMAP.filter(
+        (binding) =>
+          binding.commandId === "pier.files.editor.showHover" ||
+          binding.keys === "Mod+KeyI"
+      )
+    ).toEqual([
+      {
+        commandId: "pier.files.editor.showHover",
+        keys: "Mod+KeyI",
+        scope: "panel:pier.files.filePanel",
+      },
+    ]);
+  });
+
   it("contains the rich-input attach shortcut", () => {
     expect(DEFAULT_KEYMAP).toContainEqual({
       commandId: "pier.terminal.composerAttach",

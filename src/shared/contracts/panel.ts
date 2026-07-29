@@ -23,6 +23,7 @@ export const panelContextSchema = z.object({
   contextId: z.string().min(1),
   cwd: z.string().min(1).optional(),
   gitCommonDir: z.string().min(1).optional(),
+  gitDir: z.string().min(1).optional(),
   gitRoot: z.string().min(1).optional(),
   head: z.string().min(1).optional(),
   openedPath: z.string().min(1).optional(),

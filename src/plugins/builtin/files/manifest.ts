@@ -1,7 +1,14 @@
 import type { PluginManifest } from "@shared/contracts/plugin.ts";
 import {
   FILES_AUTO_SAVE_SETTING_KEY,
+  FILES_EDITOR_DEFAULT_EOL_SETTING_KEY,
+  FILES_EDITOR_DEFAULT_LANGUAGE_SETTING_KEY,
+  FILES_EDITOR_DEFAULT_LANGUAGE_VALUES,
+  FILES_EDITOR_LSP_ENABLED_SETTING_KEY,
   FILES_EDITOR_MINIMAP_SETTING_KEY,
+  FILES_EDITOR_TAB_SIZE_SETTING_KEY,
+  FILES_EDITOR_TAB_SIZE_VALUES,
+  FILES_EDITOR_WORD_WRAP_SETTING_KEY,
   FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
   FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
   FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
@@ -36,6 +43,8 @@ export const FILES_EDITOR_CUT_COMMAND_ID = "pier.files.editor.cut";
 export const FILES_EDITOR_COPY_COMMAND_ID = "pier.files.editor.copy";
 export const FILES_EDITOR_PASTE_COMMAND_ID = "pier.files.editor.paste";
 export const FILES_EDITOR_SELECT_ALL_COMMAND_ID = "pier.files.editor.selectAll";
+export const FILES_EDITOR_GO_TO_LINE_COMMAND_ID = "pier.files.editor.goToLine";
+export const FILES_EDITOR_SHOW_HOVER_COMMAND_ID = "pier.files.editor.showHover";
 
 export const FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID =
   "pier.files.markdown.measureComfortable";
@@ -181,6 +190,18 @@ export const FILES_PLUGIN_MANIFEST = {
     },
     {
       category: "file",
+      id: FILES_EDITOR_GO_TO_LINE_COMMAND_ID,
+      permissions: [],
+      title: "Go to Line…",
+    },
+    {
+      category: "file",
+      id: FILES_EDITOR_SHOW_HOVER_COMMAND_ID,
+      permissions: [],
+      title: "Show Symbol Information",
+    },
+    {
+      category: "file",
       id: FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID,
       permissions: [],
       title: "Comfortable reading",
@@ -224,6 +245,66 @@ export const FILES_PLUGIN_MANIFEST = {
         description:
           "Show a minimap overview on the right side of the source editor.",
         order: 15,
+        type: "boolean",
+      },
+      [FILES_EDITOR_WORD_WRAP_SETTING_KEY]: {
+        default: false,
+        description: "Wrap long lines in the source editor.",
+        order: 16,
+        type: "boolean",
+      },
+      [FILES_EDITOR_TAB_SIZE_SETTING_KEY]: {
+        default: FILES_EDITOR_TAB_SIZE_VALUES[0],
+        description:
+          "Number of spaces used for a tab character in the source editor.",
+        enum: [...FILES_EDITOR_TAB_SIZE_VALUES],
+        enumDescriptions: ["2 spaces", "4 spaces", "8 spaces"],
+        order: 17,
+        type: "string",
+      },
+      [FILES_EDITOR_DEFAULT_EOL_SETTING_KEY]: {
+        default: "auto",
+        description: "Line ending used when creating new files.",
+        enum: ["auto", "lf", "crlf"],
+        enumDescriptions: ["Auto", "LF", "CRLF"],
+        type: "string",
+      },
+      [FILES_EDITOR_DEFAULT_LANGUAGE_SETTING_KEY]: {
+        default: "auto",
+        description:
+          "Syntax language used for extensionless or unrecognized files.",
+        enum: [...FILES_EDITOR_DEFAULT_LANGUAGE_VALUES],
+        enumDescriptions: [
+          "Auto",
+          "Plain Text",
+          "Markdown",
+          "JavaScript",
+          "TypeScript",
+          "JSON",
+          "CSS",
+          "HTML",
+          "XML",
+          "YAML",
+          "Python",
+          "Shell",
+          "C/C++",
+          "Go",
+          "Java",
+          "Kotlin",
+          "Ruby",
+          "Rust",
+          "SQL",
+          "Swift",
+          "TOML",
+        ],
+        order: 19,
+        type: "string",
+      },
+      [FILES_EDITOR_LSP_ENABLED_SETTING_KEY]: {
+        default: true,
+        description:
+          "Show diagnostics, completions, and go to definition when workspace language services are enabled.",
+        order: 20,
         type: "boolean",
       },
       [FILES_TREE_SHOW_EXCLUDED_SETTING_KEY]: {

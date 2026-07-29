@@ -206,8 +206,7 @@ export function createPanelTransferService(
     };
     queueMicrotask(() => {
       startClaimRunner(live).catch((error: unknown) => {
-        const message =
-          error instanceof Error ? error.message : String(error);
+        const message = error instanceof Error ? error.message : String(error);
         console.error(
           "[panelTransfer] claim runner rejected",
           `transferId=${live.transferId}`,

@@ -159,6 +159,15 @@ export async function resolvePanelContextForPath(
     ),
     realpath
   );
+  const gitDir = await realGitPath(
+    await safeGitPath(
+      ["rev-parse", "--path-format=absolute", "--git-dir"],
+      cwd,
+      execGit,
+      control
+    ),
+    realpath
+  );
   const branch = await safeGitScalar(
     ["branch", "--show-current"],
     cwd,
@@ -185,6 +194,7 @@ export async function resolvePanelContextForPath(
     updatedAt: now(),
     worktreeKey,
     ...(branch ? { branch } : {}),
+    ...(gitDir ? { gitDir } : {}),
     ...(gitCommonDir ? { gitCommonDir } : {}),
     ...(gitRoot ? { gitRoot } : {}),
     ...(head ? { head } : {}),

@@ -8,17 +8,11 @@
  * copied draft into the client store before ensuring the document.
  */
 
-import type { PanelTransferRegistration } from "@plugins/api/panel-transfer-registration.ts";
-import type {
-  JsonValue,
-  PanelTransferPreparedSource,
-} from "@shared/contracts/panel-transfer.ts";
 import {
   diskDraftHasRecoverableState,
   diskDraftStorageKey,
   serializeDiskDraft,
   serializeUntitledDocument,
-  transferStagingDraftKey,
   untitledDraftStorageKey,
 } from "./files-document-draft-records.ts";
 import { allocateExplicitDiskDocumentId } from "./files-document-paths.ts";
@@ -30,11 +24,8 @@ import {
   sameFilesDocumentPanelSource,
 } from "./files-document-types.ts";
 import {
-  type FilesPanelTransferPreparedState,
   type FilesPanelTransferViewSeed,
-  parseFilesPanelTransferPreparedState,
   readFilesPanelViewMode,
-  seedFilesPanelView,
 } from "./files-panel-transfer-state.ts";
 import { nextUntitledIdentity } from "./files-untitled-identity.ts";
 
@@ -98,9 +89,7 @@ export interface FilesPanelTransferDeps {
 
 function hasRawPanelSource(params: Readonly<Record<string, unknown>>): boolean {
   return (
-    "source" in params &&
-    params.source !== null &&
-    params.source !== undefined
+    "source" in params && params.source !== null && params.source !== undefined
   );
 }
 
@@ -134,8 +123,7 @@ export function describeFilesPanelSourceParams(
       typeof record.root === "string" && record.root.length > 0
         ? "set"
         : `bad(${typeof record.root})`;
-    const documentId =
-      typeof record.documentId === "string" ? "set" : "absent";
+    const documentId = typeof record.documentId === "string" ? "set" : "absent";
     const parsed = parseFilesDocumentPanelSource(params);
     return `paramsKeys=${keys}; kind=disk; path=${pathOk}; root=${rootOk}; documentId=${documentId}; schema=${parsed ? "ok" : "fail"}`;
   }
@@ -189,7 +177,7 @@ export function resolveFilesPanelTransferSource(input: {
   };
 }
 
-function logFilesPanelTransfer(
+export function logFilesPanelTransfer(
   level: "info" | "warn" | "error",
   message: string,
   fields: Record<string, string | number | boolean | undefined>
@@ -210,7 +198,7 @@ function logFilesPanelTransfer(
   }
 }
 
-interface TransferBookkeeping {
+export interface TransferBookkeeping {
   createdTarget: boolean;
   originalDraftKey?: string;
   sourceDocumentId: string;
@@ -223,7 +211,7 @@ interface TransferBookkeeping {
 
 const bookkeepingByTransferId = new Map<string, TransferBookkeeping>();
 
-function rewritePersistedDraftId(
+export function rewritePersistedDraftId(
   raw: string,
   targetDocumentId: string
 ): string {
@@ -237,7 +225,7 @@ function rewritePersistedDraftId(
   });
 }
 
-function allocateTargetSource(
+export function allocateTargetSource(
   document: FilesDocument,
   deps: FilesPanelTransferDeps
 ): {
@@ -279,7 +267,7 @@ function allocateTargetSource(
   };
 }
 
-function captureViewSeed(
+export function captureViewSeed(
   deps: FilesPanelTransferDeps,
   panelId: string,
   documentId: string
@@ -294,27 +282,27 @@ function captureViewSeed(
   };
 }
 
-function needsDraftMigration(document: FilesDocument): boolean {
+export function needsDraftMigration(document: FilesDocument): boolean {
   return (
     document.source.kind === "untitled" ||
     diskDraftHasRecoverableState(document)
   );
 }
 
-function originalDraftKeyFor(document: FilesDocument): string {
+export function originalDraftKeyFor(document: FilesDocument): string {
   return document.source.kind === "untitled"
     ? untitledDraftStorageKey(document.id)
     : diskDraftStorageKey(document.id);
 }
 
-function targetDraftKeyFor(source: FilesDocumentPanelSource): string {
+export function targetDraftKeyFor(source: FilesDocumentPanelSource): string {
   if (source.kind === "untitled") {
     return untitledDraftStorageKey(source.id);
   }
   return diskDraftStorageKey(resolveDiskDocumentId(source));
 }
 
-function serializeForStaging(document: FilesDocument): string {
+export function serializeForStaging(document: FilesDocument): string {
   if (document.source.kind === "untitled") {
     const raw = serializeUntitledDocument(document);
     if (!raw) {
@@ -329,7 +317,7 @@ function serializeForStaging(document: FilesDocument): string {
   return raw;
 }
 
-function remainingReferencesSource(
+export function remainingReferencesSource(
   remainingParams: readonly Readonly<Record<string, unknown>>[],
   sourceDocumentId: string,
   sourcePanelSource: FilesDocumentPanelSource | null
@@ -358,311 +346,31 @@ function remainingReferencesSource(
   return false;
 }
 
-function rememberBookkeeping(
+export function rememberBookkeeping(
   transferId: string,
   entry: TransferBookkeeping
 ): void {
   bookkeepingByTransferId.set(transferId, entry);
 }
 
-function takeBookkeeping(transferId: string): TransferBookkeeping | undefined {
+export function takeBookkeeping(
+  transferId: string
+): TransferBookkeeping | undefined {
   const entry = bookkeepingByTransferId.get(transferId);
   bookkeepingByTransferId.delete(transferId);
   return entry;
 }
 
-function getBookkeeping(transferId: string): TransferBookkeeping | undefined {
+export function getBookkeeping(
+  transferId: string
+): TransferBookkeeping | undefined {
   return bookkeepingByTransferId.get(transferId);
+}
+
+export function forgetBookkeeping(transferId: string): void {
+  bookkeepingByTransferId.delete(transferId);
 }
 
 export function clearFilesPanelTransferBookkeepingForTests(): void {
   bookkeepingByTransferId.clear();
-}
-
-/**
- * Build the `kind: "custom"` transfer registration for the Files file panel.
- */
-export function createFilesPanelTransferRegistration(
-  deps: FilesPanelTransferDeps
-): PanelTransferRegistration {
-  const seedView = deps.seedFilesPanelView ?? seedFilesPanelView;
-
-  return {
-    kind: "custom",
-
-    async prepareSource({ panelId, params, transferId }) {
-      const resolved = resolveFilesPanelTransferSource({
-        ...(deps.getPanelSource
-          ? { getPanelSource: deps.getPanelSource }
-          : {}),
-        panelId,
-        params,
-      });
-      if (resolved.kind === "empty") {
-        // Project explorer shell / empty file tab: no document to migrate.
-        // Params-only move (context + title) — same shape as Git when scope
-        // is absent.
-        logFilesPanelTransfer("info", "prepareSource empty-shell", {
-          panelId,
-          transferId,
-          detail: describeFilesPanelSourceParams(params),
-        });
-        return { drafts: [] };
-      }
-      if (resolved.kind === "invalid") {
-        logFilesPanelTransfer("error", "prepareSource invalid source params", {
-          panelId,
-          transferId,
-          detail: resolved.detail,
-        });
-        throw new Error(
-          `Files panel transfer: invalid panel source params (${resolved.detail})`
-        );
-      }
-      if (resolved.kind === "registry") {
-        // Live dockview params failed schema / missing source — recovered
-        // from the acquirePanel registry. Worth a warn so release builds
-        // still leave a breadcrumb when params drift.
-        logFilesPanelTransfer(
-          "warn",
-          "prepareSource recovered source from registry",
-          {
-            panelId,
-            transferId,
-            sourceKind: resolved.source.kind,
-            detail: describeFilesPanelSourceParams(params),
-          }
-        );
-      }
-      const source = resolved.source;
-      const sourceDocumentId =
-        source.kind === "untitled" ? source.id : resolveDiskDocumentId(source);
-      const transferScope = { documentId: sourceDocumentId, panelId };
-      const abort = new AbortController();
-      await deps.suspendTransferMutations(transferScope, abort.signal);
-      try {
-        const document = deps.getDocumentForPanelSource(source);
-        if (!document) {
-          logFilesPanelTransfer("error", "prepareSource document missing", {
-            panelId,
-            transferId,
-            sourceKind: source.kind,
-            sourceDocumentId,
-          });
-          throw new Error(
-            `Files panel transfer: source document missing (panelId=${panelId}; sourceKind=${source.kind}; documentId=${sourceDocumentId})`
-          );
-        }
-        if (document.source.kind === "untitled") {
-          const untitledPayload = serializeUntitledDocument(document);
-          if (!untitledPayload) {
-            throw new Error(
-              "Files panel transfer: untitled document has no recoverable draft"
-            );
-          }
-        }
-
-        const view = captureViewSeed(deps, panelId, document.id);
-        const { targetDocumentId, targetSource } = allocateTargetSource(
-          document,
-          deps
-        );
-
-        let drafts: NonNullable<PanelTransferPreparedSource["drafts"]> = [];
-        let originalDraftKey: string | undefined;
-        if (needsDraftMigration(document)) {
-          originalDraftKey = originalDraftKeyFor(document);
-          const stagingKey = transferStagingDraftKey(
-            transferId,
-            originalDraftKey
-          );
-          const stagedPayload = rewritePersistedDraftId(
-            serializeForStaging(document),
-            targetDocumentId
-          );
-          deps.persistFilesDraftRecord(stagingKey, stagedPayload);
-          await deps.flushFilesDraftWrites();
-          const targetKey = targetDraftKeyFor(targetSource);
-          drafts = [{ sourceKey: stagingKey, targetKey }];
-        }
-
-        const state: FilesPanelTransferPreparedState = {
-          ...(originalDraftKey ? { originalDraftKey } : {}),
-          sourceDocumentId: document.id,
-          targetDocumentId,
-          targetSource,
-          view,
-        };
-
-        rememberBookkeeping(transferId, {
-          createdTarget: false,
-          ...(originalDraftKey ? { originalDraftKey } : {}),
-          sourceDocumentId: document.id,
-          targetDocumentId,
-          ...(drafts[0] ? { targetDraftKey: drafts[0].targetKey } : {}),
-          targetSource,
-          transferScope,
-          view,
-        });
-
-        // Release the scoped transfer barrier; host freeze keeps this panel
-        // inert. Other tabs of the same document remain editable.
-        deps.resumeTransferMutations(transferScope);
-        const entry = getBookkeeping(transferId);
-        if (entry) {
-          entry.transferScope = null;
-        }
-
-        logFilesPanelTransfer("info", "prepareSource ok", {
-          panelId,
-          transferId,
-          via: resolved.kind,
-          sourceKind: source.kind,
-          drafts: drafts.length,
-          dirty: document.dirty,
-        });
-
-        return {
-          drafts,
-          state: state as unknown as JsonValue,
-        };
-      } catch (error) {
-        deps.resumeTransferMutations(transferScope);
-        bookkeepingByTransferId.delete(transferId);
-        logFilesPanelTransfer("error", "prepareSource failed", {
-          panelId,
-          transferId,
-          message: error instanceof Error ? error.message : String(error),
-        });
-        throw error;
-      }
-    },
-
-    async stageTarget({ panelId, prepared, transferId }) {
-      // Params-only empty shell: prepareSource returned no prepared state.
-      if (prepared.state == null) {
-        return;
-      }
-      const state = parseFilesPanelTransferPreparedState(prepared.state);
-      if (!state) {
-        throw new Error("Files panel transfer: invalid prepared state");
-      }
-
-      const drafts = prepared.drafts ?? [];
-      for (const mapping of drafts) {
-        const hydrated = await deps.hydrateDraftKey(mapping.targetKey);
-        if (hydrated === null) {
-          throw new Error(
-            `Files panel transfer: target draft missing: ${mapping.targetKey}`
-          );
-        }
-      }
-
-      let createdTarget = false;
-      if (state.targetSource.kind === "untitled") {
-        const existing = deps.getDocument(state.targetDocumentId);
-        if (!existing) {
-          const restored = deps.restoreUntitledDocumentFromPanelSource(
-            state.targetSource
-          );
-          if (!restored) {
-            throw new Error(
-              "Files panel transfer: untitled target missing draft"
-            );
-          }
-          createdTarget = true;
-        }
-      } else {
-        const existing = deps.getDocument(state.targetDocumentId);
-        if (!existing) {
-          deps.ensureDiskDocument({
-            documentId: state.targetDocumentId,
-            path: state.targetSource.path,
-            root: state.targetSource.root,
-          });
-          createdTarget = true;
-        }
-      }
-
-      seedView({
-        documentId: state.targetDocumentId,
-        panelId,
-        view: state.view,
-      });
-
-      const prior = getBookkeeping(transferId);
-      rememberBookkeeping(transferId, {
-        createdTarget: prior?.createdTarget || createdTarget,
-        ...(state.originalDraftKey
-          ? { originalDraftKey: state.originalDraftKey }
-          : {}),
-        sourceDocumentId: state.sourceDocumentId,
-        targetDocumentId: state.targetDocumentId,
-        ...(drafts[0] ? { targetDraftKey: drafts[0].targetKey } : {}),
-        targetSource: state.targetSource,
-        transferScope: prior?.transferScope ?? null,
-        view: state.view,
-      });
-
-      return {
-        params: {
-          source: state.targetSource as unknown as JsonValue,
-        },
-      };
-    },
-
-    async restore({ panelId, role, snapshot }) {
-      const state = parseFilesPanelTransferPreparedState(
-        snapshot.prepared.state
-      );
-      if (!state) {
-        return;
-      }
-      // Idempotent: re-apply view seed if needed; do not duplicate watchers
-      // (panel mount / acquirePanel owns watches).
-      if (role === "target") {
-        seedView({
-          documentId: state.targetDocumentId,
-          panelId,
-          view: state.view,
-        });
-      }
-    },
-
-    async releaseSource({ remainingParams, transferId }) {
-      const entry = getBookkeeping(transferId);
-      if (!entry?.originalDraftKey) {
-        return;
-      }
-      if (
-        remainingReferencesSource(remainingParams, entry.sourceDocumentId, null)
-      ) {
-        return;
-      }
-      // Only the original draft key — staging is owned by main commit/rollback.
-      deps.removeFilesDraftRecord(entry.originalDraftKey);
-    },
-
-    async finalize({ outcome, role, transferId }) {
-      const entry = getBookkeeping(transferId);
-      if (entry?.transferScope) {
-        deps.resumeTransferMutations(entry.transferScope);
-        entry.transferScope = null;
-      }
-
-      if (outcome === "abort" && role === "target") {
-        const targetEntry = takeBookkeeping(transferId);
-        if (targetEntry?.createdTarget) {
-          deps.discardDocument(targetEntry.targetDocumentId);
-        } else if (targetEntry?.targetDraftKey) {
-          deps.removeFilesDraftRecord(targetEntry.targetDraftKey);
-        }
-        return;
-      }
-
-      // commit (either role) or abort(source): clear bookkeeping. Watch starts
-      // via existing acquirePanel on the target panel mount path.
-      takeBookkeeping(transferId);
-    },
-  };
 }

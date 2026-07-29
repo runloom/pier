@@ -56,6 +56,11 @@ describe("resolvePanelContextForPath", () => {
       "--path-format=absolute",
       "--git-common-dir",
     ]);
+    const gitDir = await git(repo, [
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-dir",
+    ]);
 
     await expect(
       resolvePanelContextForPath(filePath, { now: () => NOW })
@@ -63,6 +68,7 @@ describe("resolvePanelContextForPath", () => {
       branch,
       cwd: dirname(filePath),
       gitCommonDir,
+      gitDir,
       gitRoot: repo,
       head,
       openedPath: filePath,
@@ -91,6 +97,11 @@ describe("resolvePanelContextForPath", () => {
       "--path-format=absolute",
       "--git-common-dir",
     ]);
+    const gitDir = await git(worktree, [
+      "rev-parse",
+      "--path-format=absolute",
+      "--git-dir",
+    ]);
 
     await expect(
       resolvePanelContextForPath(worktree, { now: () => NOW })
@@ -98,6 +109,7 @@ describe("resolvePanelContextForPath", () => {
       branch: "feature/panel-context",
       cwd: worktree,
       gitCommonDir,
+      gitDir,
       gitRoot: worktree,
       openedPath: worktree,
       projectRootPath: worktree,

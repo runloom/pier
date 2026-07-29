@@ -46,6 +46,7 @@ const mocks = vi.hoisted(() => {
     ),
     destroyForTransfer: vi.fn(async () => undefined),
     createWindowRecord: vi.fn(async () => ({ id: "record-new" })),
+    flushPreferences: vi.fn(async () => undefined),
     flushPluginSettings: vi.fn(async () => undefined),
     flushPluginState: vi.fn(async () => undefined),
     detachAgentsForWindow: vi.fn(async () => undefined),
@@ -163,6 +164,10 @@ vi.mock("@main/state/terminal-status-bar-prefs.ts", () => ({
 
 vi.mock("@main/state/panel-context-state.ts", () => ({
   flushPanelContextState: mocks.flushPanelContextState,
+}));
+
+vi.mock("@main/state/preferences.ts", () => ({
+  flushPreferences: mocks.flushPreferences,
 }));
 
 vi.mock("@main/windows/window-manager.ts", () => ({
@@ -336,6 +341,7 @@ describe("WindowService", () => {
     expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-1");
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
+    expect(mocks.flushPreferences).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
     expect(mocks.flushTerminalStatusBarPrefs).toHaveBeenCalled();
     expect(mocks.flushWindowRecordState).toHaveBeenCalled();
@@ -381,6 +387,7 @@ describe("WindowService", () => {
     expect(mocks.detachAgentsForWindow).toHaveBeenCalledWith("record-w-1");
     expect(mocks.flushPluginState).toHaveBeenCalled();
     expect(mocks.flushPluginSettings).toHaveBeenCalled();
+    expect(mocks.flushPreferences).toHaveBeenCalled();
     expect(mocks.flushTerminalSessionState).toHaveBeenCalled();
     expect(mocks.flushTerminalStatusBarPrefs).toHaveBeenCalled();
     expect(mocks.flushWindowRecordState).toHaveBeenCalled();

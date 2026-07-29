@@ -17,6 +17,19 @@ function unsupportedReadOnlyReason(
   }
   return result.kind === "too-large" ? "too-large" : "unsupported-file";
 }
+function createdEmptyEolAfterRead(
+  document: FilesDocument,
+  result: FileDocumentReadResult
+): FilesDocument["createdEmptyEol"] {
+  return document.createdEmptyEol !== null &&
+    result.kind === "text" &&
+    document.currentContents === "" &&
+    document.savedContents === "" &&
+    result.contents === "" &&
+    result.revision === document.revision
+    ? document.createdEmptyEol
+    : null;
+}
 
 export function withDocumentContents(
   document: FilesDocument,
@@ -28,6 +41,7 @@ export function withDocumentContents(
   return {
     ...document,
     currentContents: contents,
+    createdEmptyEol: null,
     dirty: true,
   };
 }
@@ -51,6 +65,7 @@ export function withDocumentLoaded(
   if (document.dirty) {
     return {
       ...document,
+      createdEmptyEol: null,
       error: null,
       loadState: "loaded",
     };
@@ -58,6 +73,7 @@ export function withDocumentLoaded(
   return {
     ...document,
     baseMtimeMs,
+    createdEmptyEol: null,
     currentContents: contents,
     dirty: false,
     conflictDiskContents: null,
@@ -72,11 +88,13 @@ export function withDocumentReadResult(
   document: FilesDocument,
   result: FileDocumentReadResult
 ): FilesDocument {
+  const createdEmptyEol = createdEmptyEolAfterRead(document, result);
   if (result.kind === "image") {
     if (document.dirty || document.durabilityUnknown) {
       return {
         ...document,
         capabilities: [],
+        createdEmptyEol,
         diskConflict: true,
         error: null,
         loadState: "loaded",
@@ -92,6 +110,7 @@ export function withDocumentReadResult(
       capabilities: [],
       canonicalPath: result.canonicalPath,
       currentContents: "",
+      createdEmptyEol,
       deletedOnDisk: false,
       dirty: false,
       eol: null,
@@ -118,6 +137,7 @@ export function withDocumentReadResult(
       return {
         ...document,
         capabilities: [],
+        createdEmptyEol,
         diskConflict: true,
         error: null,
         loadState: "loaded",
@@ -132,6 +152,7 @@ export function withDocumentReadResult(
       ...document,
       capabilities: [],
       canonicalPath: null,
+      createdEmptyEol,
       currentContents: "",
       dirty: false,
       eol: null,
@@ -160,6 +181,7 @@ export function withDocumentReadResult(
     return {
       ...document,
       canonicalPath: result.canonicalPath,
+      createdEmptyEol,
       diskConflict: true,
       error: null,
       loadState: "loaded",
@@ -169,9 +191,10 @@ export function withDocumentReadResult(
   }
   const metadata = {
     capabilities: readOnlyReason ? [] : DISK_SAVE_CAPABILITIES,
+    createdEmptyEol,
     canonicalPath: result.canonicalPath,
     deletedOnDisk: false,
-    eol: result.eol,
+    eol: createdEmptyEol ?? result.eol,
     error: null,
     format: result.format,
     hasBackingStore: true,
@@ -203,6 +226,7 @@ export function withDocumentPathReconciled(
   if (result.kind !== "text") {
     return withDocumentReadResult(document, result);
   }
+  const createdEmptyEol = createdEmptyEolAfterRead(document, result);
   const protectedContents = document.dirty || document.durabilityUnknown;
   const diskConflict =
     protectedContents && document.savedContents !== result.contents;
@@ -215,6 +239,7 @@ export function withDocumentPathReconciled(
   return {
     ...document,
     canonicalPath: result.canonicalPath,
+    createdEmptyEol,
     capabilities: readOnlyReason ? [] : DISK_SAVE_CAPABILITIES,
     ...(protectedContents
       ? {}
@@ -224,7 +249,7 @@ export function withDocumentPathReconciled(
           savedContents: result.contents,
         }),
     diskConflict,
-    eol: result.eol,
+    eol: createdEmptyEol ?? result.eol,
     error: null,
     format: result.format,
     loadState: "loaded",
@@ -258,6 +283,7 @@ export function withDocumentSaved(
   return {
     ...document,
     baseMtimeMs: nextBaseMtime,
+    createdEmptyEol: null,
     dirty,
     deletedOnDisk: false,
     conflictDiskContents: null,
@@ -277,6 +303,7 @@ export function withDocumentWritten(
   return {
     ...document,
     baseMtimeMs: result.mtimeMs,
+    createdEmptyEol: null,
     conflictDiskContents: null,
     dirty,
     deletedOnDisk: false,
@@ -319,11 +346,14 @@ export function withDocumentNormalizedEol(
   eol: "crlf" | "lf"
 ): FilesDocument {
   if (document.readOnlyReason !== "mixed-eol") {
-    return document;
+    return document.createdEmptyEol === null
+      ? document
+      : { ...document, createdEmptyEol: null };
   }
   return {
     ...document,
     capabilities: DISK_SAVE_CAPABILITIES,
+    createdEmptyEol: null,
     dirty: true,
     eol,
     readOnly: false,
@@ -383,11 +413,12 @@ export function withDocumentConflictContents(
 export function withDocumentDiskConflict(
   document: FilesDocument
 ): FilesDocument {
-  if (document.diskConflict) {
+  if (document.diskConflict && document.createdEmptyEol === null) {
     return document;
   }
   return {
     ...document,
+    createdEmptyEol: null,
     diskConflict: true,
   };
 }
@@ -400,6 +431,7 @@ export function withDocumentDeletedOnDisk(
     // Keep the in-memory buffer; clear revision so Save recreates with
     // expected: absent instead of treating deletion as a revision conflict.
     conflictDiskContents: null,
+    createdEmptyEol: null,
     deletedOnDisk: true,
     dirty: true,
     diskConflict: true,

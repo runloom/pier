@@ -2,6 +2,7 @@ import {
   useCallback,
   useEffect,
   useLayoutEffect,
+  useMemo,
   useRef,
   useState,
 } from "react";
@@ -13,6 +14,7 @@ import {
   EMPTY_EDITOR_SEARCH_STATE,
 } from "./code-mirror-search-state.ts";
 import type { FileEditorAdapterProps } from "./file-editor-adapter-types.ts";
+import { DEFAULT_FILES_LSP_HOVER_LABELS } from "./file-panel-markdown-labels.ts";
 import { takeFilesPanelViewSeed } from "./files-panel-transfer-state.ts";
 import {
   FILES_IN_FILE_SEARCH_BAR_CLASSNAME,
@@ -26,15 +28,22 @@ export function CodeMirrorEditor({
   editorSessionId,
   labels,
   onEditorContextMenu,
+  openExternal,
+  panelContext,
   readOnly = false,
   searchLabels,
   searchRequest,
+  context,
 }: FileEditorAdapterProps) {
   const contextMenuRef = useRef(onEditorContextMenu);
   const handledSearchRequestRef = useRef(searchRequest);
-  const labelRef = useRef(labels?.sourceEditor ?? "Source editor");
+  const labelsRef = useRef(labels);
   const lastHostRef = useRef<HTMLDivElement | null>(null);
   const surfaceRef = useRef<HTMLDivElement | null>(null);
+  const openExternalRef = useRef(openExternal);
+  const notifyErrorRef = useRef<(message: string) => void>((message) => {
+    context?.notifications.error(message);
+  });
   const openSearchRef = useRef<() => void>(() => undefined);
   const [searchOpen, setSearchOpen] = useState(false);
   const [searchValue, setSearchValue] = useState("");
@@ -48,8 +57,12 @@ export function CodeMirrorEditor({
   );
 
   contextMenuRef.current = onEditorContextMenu;
+  notifyErrorRef.current = (message: string) => {
+    context?.notifications.error(message);
+  };
+  labelsRef.current = labels;
+  openExternalRef.current = openExternal;
   const sourceEditorLabel = labels?.sourceEditor ?? "Source editor";
-  labelRef.current = sourceEditorLabel;
 
   const openSearch = useCallback(() => {
     setSearchOpen(true);
@@ -67,7 +80,11 @@ export function CodeMirrorEditor({
 
   const presentation = useCallback(
     () => ({
-      ariaLabel: labelRef.current,
+      ariaLabel: labelsRef.current?.sourceEditor ?? "Source editor",
+      getLspHoverLabels: () =>
+        labelsRef.current?.lspHover ?? DEFAULT_FILES_LSP_HOVER_LABELS,
+      notifyLspError: (message: string) => notifyErrorRef.current(message),
+      openExternal: (url: string) => openExternalRef.current(url),
       onContextMenu: (
         event: MouseEvent,
         ranges: Parameters<
@@ -76,17 +93,21 @@ export function CodeMirrorEditor({
       ) => contextMenuRef.current?.(event, ranges),
       onOpenSearch: () => openSearchRef.current(),
       onSearchStateChange: setSearchState,
+      readDocument: controller.readDocument,
     }),
-    []
+    [controller.readDocument]
   );
 
-  const bindEditorHost = useCallback(
-    (parent: HTMLDivElement | null) => {
+  const bindEditorHost = useMemo(() => {
+    let attachedHost: HTMLDivElement | null = null;
+    return (parent: HTMLDivElement | null) => {
       if (parent) {
+        attachedHost = parent;
         lastHostRef.current = parent;
         controller.attachView({
           documentId,
           editorSessionId,
+          ...(panelContext ? { panelContext } : {}),
           parent,
           presentation: presentation(),
         });
@@ -99,13 +120,17 @@ export function CodeMirrorEditor({
         }
         return;
       }
-      // 仅当 view 仍挂在本 host 时销毁；已 reparent 到新 group 的 view 跳过。
-      const host = lastHostRef.current;
-      lastHostRef.current = null;
-      controller.detachView(editorSessionId, host ?? undefined);
-    },
-    [controller, documentId, editorSessionId, presentation]
-  );
+      const host = attachedHost;
+      attachedHost = null;
+      if (!host) {
+        return;
+      }
+      if (lastHostRef.current === host) {
+        lastHostRef.current = null;
+      }
+      controller.detachView(editorSessionId, host);
+    };
+  }, [controller, documentId, editorSessionId, panelContext, presentation]);
 
   useLayoutEffect(() => {
     controller.updateViewPresentation(editorSessionId, {

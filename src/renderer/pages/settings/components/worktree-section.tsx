@@ -4,6 +4,7 @@ import { useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { InputRow } from "@/pages/settings/components/rows/input-row.tsx";
 import { useWorktreePreferencesStore } from "@/stores/worktree-preferences.store.ts";
+import { LspSettingsCard } from "./lsp-settings-card.tsx";
 
 function WorktreeRootPathRow() {
   const t = useT();
@@ -54,6 +55,9 @@ export function WorkspaceSection() {
           </FieldSet>
         </CardContent>
       </Card>
+      <div className="mt-4">
+        <LspSettingsCard />
+      </div>
     </div>
   );
 }

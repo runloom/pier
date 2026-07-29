@@ -27,6 +27,14 @@ export const PIER = {
   FILE_QUERY_START: "pier://file-query:start",
   FILE_QUERY_CANCEL: "pier://file-query:cancel",
   FILE_QUERY_EVENT: "pier://file-query:event",
+  // LSP stdio host (typescript-language-server): ensure/send/close + directed messages.
+  LSP_SESSION_ENSURE: "pier://lsp:session-ensure",
+  LSP_SESSION_SEND: "pier://lsp:session-send",
+  LSP_SESSION_CLOSE: "pier://lsp:session-close",
+  LSP_SESSION_CLOSED: "pier://lsp:session-closed",
+  LSP_SESSION_MESSAGE: "pier://lsp:session-message",
+  LSP_POLICY_CHANGED: "pier://lsp:policy-changed",
+  LSP_LANGUAGE_TOOLS_REQUEST: "pier://lsp:language-tools-request",
   // window
   WINDOW_CLOSE_CURRENT: "pier://window:close-current",
   WINDOW_CONTEXT: "pier://window:context",

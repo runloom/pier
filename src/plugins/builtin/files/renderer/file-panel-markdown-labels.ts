@@ -3,7 +3,22 @@ import type {
   FilesEditorSearchLabels,
 } from "./file-editor-adapter-types.ts";
 import type { FilesTranslate } from "./files-i18n.ts";
+import type { FilesLspHoverLabels } from "./files-lsp-hover-types.ts";
 import type { MarkdownRendererLabels } from "./markdown-ir-renderer.tsx";
+
+export const DEFAULT_FILES_LSP_HOVER_LABELS: FilesLspHoverLabels = {
+  contentTruncated: "Documentation was truncated",
+  definitionsTitle: "Definitions",
+  definitionsTruncated: "Only the first definitions are shown",
+  documentationTitle: "Documentation",
+  goToDefinitionFailed: "Unable to open that definition.",
+  goToDefinitionUnavailable: "Go to Definition is unavailable here.",
+  lineTruncated: "Line truncated",
+  noInformation: "No symbol information is available here.",
+  previewUnavailable: "Preview unavailable",
+  symbolTitle: "Symbol information",
+  unavailable: "Symbol information is temporarily unavailable.",
+};
 
 export function createFileEditorAdapterLabels(
   t: FilesTranslate
@@ -13,6 +28,52 @@ export function createFileEditorAdapterLabels(
       "filePanel.view.diffUnsupported",
       "No disk contents available to compare."
     ),
+    lspHover: {
+      contentTruncated: t(
+        "filePanel.editor.hover.contentTruncated",
+        DEFAULT_FILES_LSP_HOVER_LABELS.contentTruncated
+      ),
+      definitionsTitle: t(
+        "filePanel.editor.hover.definitionsTitle",
+        DEFAULT_FILES_LSP_HOVER_LABELS.definitionsTitle
+      ),
+      definitionsTruncated: t(
+        "filePanel.editor.hover.definitionsTruncated",
+        DEFAULT_FILES_LSP_HOVER_LABELS.definitionsTruncated
+      ),
+      documentationTitle: t(
+        "filePanel.editor.hover.documentationTitle",
+        DEFAULT_FILES_LSP_HOVER_LABELS.documentationTitle
+      ),
+      goToDefinitionFailed: t(
+        "filePanel.editor.goToDefinition.failed",
+        DEFAULT_FILES_LSP_HOVER_LABELS.goToDefinitionFailed
+      ),
+      goToDefinitionUnavailable: t(
+        "filePanel.editor.goToDefinition.unavailable",
+        DEFAULT_FILES_LSP_HOVER_LABELS.goToDefinitionUnavailable
+      ),
+      lineTruncated: t(
+        "filePanel.editor.hover.lineTruncated",
+        DEFAULT_FILES_LSP_HOVER_LABELS.lineTruncated
+      ),
+      noInformation: t(
+        "filePanel.editor.hover.noInformation",
+        DEFAULT_FILES_LSP_HOVER_LABELS.noInformation
+      ),
+      previewUnavailable: t(
+        "filePanel.editor.hover.previewUnavailable",
+        DEFAULT_FILES_LSP_HOVER_LABELS.previewUnavailable
+      ),
+      symbolTitle: t(
+        "filePanel.editor.hover.symbolTitle",
+        DEFAULT_FILES_LSP_HOVER_LABELS.symbolTitle
+      ),
+      unavailable: t(
+        "filePanel.editor.hover.unavailable",
+        DEFAULT_FILES_LSP_HOVER_LABELS.unavailable
+      ),
+    },
     sourceEditor: t("filePanel.editor.sourceLabel", "Source editor"),
   };
 }

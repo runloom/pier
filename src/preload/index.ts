@@ -41,6 +41,7 @@ import {
 import { gitApi, type PierGitAPI } from "./git-api.ts";
 import { invokePierCommand, subscribeIpc } from "./ipc-envelope.ts";
 import { liveModulesApi, type PierLiveModulesAPI } from "./live-modules-api.ts";
+import { lspApi, type PierLspAPI } from "./lsp-api.ts";
 import {
   createMediaPreviewApi,
   type PierMediaPreviewApi,
@@ -162,6 +163,7 @@ export interface PierWindowAPI {
   keybinding: PierKeybindingAPI;
   listWindows: () => Promise<WindowInfo[]>;
   liveModules: PierLiveModulesAPI;
+  lsp: PierLspAPI;
   managedPlugins: ManagedPluginsPreloadApi;
   mediaPreviews: PierMediaPreviewApi;
   menu: PierMenuAPI;
@@ -361,6 +363,7 @@ const api: PierWindowAPI = {
     invokePierCommand<void>({ type: "window.focus", windowId }),
   files: filesApi,
   fileQuery: fileQueryApi,
+  lsp: lspApi,
   environments: environmentsApi,
   externalNavigation: externalNavigationApi,
   filePreviews: filePreviewApi,
