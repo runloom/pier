@@ -24,6 +24,7 @@ import {
   createSystemSkillsChannel,
   type SystemSkillsChannel,
 } from "../services/project-skills/system-skills.ts";
+import { bundledSystemSkillContributions } from "./bundled-system-skills.ts";
 
 const execFileAsync = promisify(execFile);
 
@@ -78,6 +79,8 @@ async function inspectGitState(
 export function wireProjectSkills(args: {
   userData: string;
   isProduction: boolean;
+  appVersion: string;
+  resourcesRoot: string;
   transactionLock: FilePathTransactionLock;
   panelContexts: PanelContextService;
   localEnvironments: LocalEnvironmentService;
@@ -98,9 +101,11 @@ export function wireProjectSkills(args: {
   const systemSkills = createSystemSkillsChannel({
     userData: args.userData,
     isProduction: args.isProduction,
-    // First contribution consumer: official capability plugins (e.g. the
-    // canvas skill) register here via the managed-plugin discipline chain.
-    contributions: [],
+    // First real contribution: bundled pier-canvas authoring skill.
+    contributions: bundledSystemSkillContributions({
+      appVersion: args.appVersion,
+      resourcesRoot: args.resourcesRoot,
+    }),
   });
 
   const pierBindings = createPierBindingsChannel({

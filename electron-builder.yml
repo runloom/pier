@@ -24,6 +24,10 @@ extraResources:
     to: fonts
   - from: resources/notification-sounds
     to: notification-sounds
+  - from: resources/system-skills
+    to: system-skills
+    filter:
+      - "**/*"
   # Content search runtime (rg). Layout: search/<arch>/rg
   - from: resources/search
     to: search

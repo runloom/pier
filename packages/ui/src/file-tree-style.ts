@@ -51,6 +51,11 @@ export const TREE_SCROLLBAR_CSS = `
   display: none;
 }
 
+/* Pier canvas token is not in @pierre/trees built-in colored-icon CSS. */
+[data-file-tree-colored-icons="true"] [data-icon-token="canvas"] {
+  color: var(--trees-file-icon-color-canvas);
+}
+
 ${SCROLLBAR_SYSTEM_CSS}
 `;
 

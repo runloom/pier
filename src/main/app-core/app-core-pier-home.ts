@@ -16,6 +16,7 @@ import { wireProjectSkills } from "./project-skills-wiring.ts";
 import { broadcastEnvironmentsChanged } from "./window-broadcasts.ts";
 
 export function wireAppCorePierHomeAndSkills(input: {
+  appVersion: string;
   isProduction: boolean;
   listInstalledAgents: () => Promise<string[]>;
   onProjectSkillsInvalidated: (
@@ -23,6 +24,8 @@ export function wireAppCorePierHomeAndSkills(input: {
   ) => void;
   panelContexts: PanelContextService;
   processEnvironment: ProcessEnvironmentService;
+  /** Electron resources root (`…/resources` in dev, `process.resourcesPath` in prod). */
+  resourcesRoot: string;
   transactionLock: FilePathTransactionLock;
   userDataPath: string;
 }): {
@@ -67,6 +70,8 @@ export function wireAppCorePierHomeAndSkills(input: {
   const { projectSkills, agentLaunchGate, pierBindings } = wireProjectSkills({
     userData: input.userDataPath,
     isProduction: input.isProduction,
+    appVersion: input.appVersion,
+    resourcesRoot: input.resourcesRoot,
     transactionLock: input.transactionLock,
     panelContexts: input.panelContexts,
     localEnvironments,

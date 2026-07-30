@@ -345,12 +345,17 @@ function createPierAppCore(): PierAppCore {
     pierHome,
     projectSkills,
   } = wireAppCorePierHomeAndSkills({
+    appVersion: app.getVersion(),
     isProduction: runtimeMode === "production",
     listInstalledAgents: async () =>
       (await agentDetection.detect()).detectedIds,
     onProjectSkillsInvalidated: broadcastProjectSkillsInvalidated,
     panelContexts,
     processEnvironment,
+    resourcesRoot:
+      runtimeMode === "development"
+        ? join(process.cwd(), "resources")
+        : process.resourcesPath,
     transactionLock: filePathTransactionLock,
     userDataPath: app.getPath("userData"),
   });

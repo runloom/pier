@@ -1,4 +1,8 @@
 import {
+  PIER_CANVAS_FILE_ICON_SYMBOL_ID,
+  PIER_CANVAS_FILE_ICON_TOKEN,
+} from "@pier/ui/file-icon-config.ts";
+import {
   PierFileTree,
   type PierFileTreeApi,
   type PierFileTreeGitStatus,
@@ -105,6 +109,35 @@ describe("PierFileTree", () => {
     const bridge = container.firstElementChild;
     expect(bridge?.getAttribute("data-slot")).toBe("pier-file-tree-bridge");
     expect(bridge?.firstElementChild).toBe(host);
+  });
+
+  it("renders the Pier canvas glyph for *.canvas.* rows in the tree shadow DOM", () => {
+    const canvasPath = ".pier/canvases/smoke/hello.canvas.tsx";
+    const { container } = render(
+      <PierFileTree
+        items={[{ kind: "file", path: canvasPath }]}
+        label="Project files"
+      />
+    );
+
+    const host = getFileTreeHost(container);
+    const shadow = host.shadowRoot;
+    expect(shadow).not.toBeNull();
+
+    const canvasRow = within(getFileTree(container)).getByRole("treeitem", {
+      name: /hello\.canvas\.tsx/,
+    });
+    const icon = canvasRow.querySelector(
+      `[data-item-section="icon"] svg[data-icon-token="${PIER_CANVAS_FILE_ICON_TOKEN}"]`
+    );
+    expect(icon).not.toBeNull();
+    expect(icon?.querySelector("use")).toHaveAttribute(
+      "href",
+      `#${PIER_CANVAS_FILE_ICON_SYMBOL_ID}`
+    );
+    expect(
+      shadow?.querySelector(`#${PIER_CANVAS_FILE_ICON_SYMBOL_ID}`)
+    ).not.toBeNull();
   });
 
   it("keeps navigation-only trees free of rename and drag capabilities", () => {

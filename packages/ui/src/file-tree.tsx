@@ -4,6 +4,7 @@ import type {
 } from "@pierre/trees";
 import { FileTree as PierreFileTree, useFileTree } from "@pierre/trees/react";
 import * as React from "react";
+import { PIER_FILE_TREE_ICONS } from "./file-icon-config.ts";
 import {
   fileTreeContextMenuOption,
   itemsToGitStatusEntries,
@@ -148,6 +149,7 @@ export function PierFileTree({
   const { model } = useFileTree({
     ...fileTreeContextMenuOption(onOpenItemContextMenu != null, refs),
     density: "compact",
+    icons: PIER_FILE_TREE_ICONS,
     unsafeCSS: TREE_SCROLLBAR_CSS,
     // 只读调用方不配置模型写能力；Files 传入回调时才开启官方拖拽。
     ...(onMovePaths

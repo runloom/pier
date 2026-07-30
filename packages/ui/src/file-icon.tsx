@@ -3,13 +3,18 @@ import {
   getBuiltInSpriteSheet,
 } from "@pierre/trees";
 import { type CSSProperties, type SVGProps, useLayoutEffect } from "react";
+import {
+  mergeCanvasFileIconIntoBuiltInSpriteSheet,
+  PIER_FILE_TREE_ICONS,
+} from "./file-icon-config.ts";
 import { PIER_FILE_ICON_COLOR_BY_TOKEN } from "./file-icon-theme.ts";
 import { cn } from "./utils.ts";
 
 const FILE_ICON_PREFIX = "pier.file:";
-const FILE_ICON_SET = "complete" as const;
-const fileIconResolver = createFileTreeIconResolver(FILE_ICON_SET);
-const fileIconSpriteSheet = getBuiltInSpriteSheet(FILE_ICON_SET);
+const fileIconResolver = createFileTreeIconResolver(PIER_FILE_TREE_ICONS);
+const fileIconSpriteSheet = mergeCanvasFileIconIntoBuiltInSpriteSheet(
+  getBuiltInSpriteSheet(PIER_FILE_TREE_ICONS.set)
+);
 
 function ensureFileIconSpriteSheet(): void {
   if (document.querySelector('[data-pier-file-icon-sprite="true"]')) {

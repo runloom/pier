@@ -7,6 +7,7 @@ export const PIER_FILE_ICON_COLOR_BY_TOKEN: Readonly<Record<string, string>> = {
   browserslist: "var(--pier-file-icon-yellow)",
   bun: "var(--pier-file-icon-mauve)",
   c: "var(--pier-file-icon-blue)",
+  canvas: "var(--pier-file-icon-indigo)",
   claude: "var(--pier-file-icon-orange)",
   cpp: "var(--pier-file-icon-blue)",
   css: "var(--pier-file-icon-indigo)",
