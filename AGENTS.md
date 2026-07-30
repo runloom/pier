@@ -416,9 +416,26 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - Lint + Format：`pnpm lint` / `pnpm lint:fix`
 - 完整检查：`pnpm check`（typecheck + lint + depcruise + file-size + unit + component 测试）
 - 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`
-- E2E 测试：`pnpm test:e2e`
+- E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
 - 图标重建：`pnpm build:icons`（改 `build/app-icon-*.svg` 后跑一次，产出 `build/icon.{icns,ico,png}`）
+
+### E2E 执行优先级（编码助手硬约定）
+
+Pier e2e 会启动真实 Electron 窗，**在主力开发机上跑会打扰当前使用**。存在闲置 Mac runner 时：
+
+1. **默认**执行：`pnpm test:e2e:auto` 或  
+   `bash scripts/e2e-runner/run-e2e.sh [playwright 路径/参数…]`  
+   脚本先探测 SSH Host `pier-e2e`（`PIER_E2E_SSH_HOST` 可覆盖）。可达则在远端跑；不可达再回退本机。  
+   主力机须已配置 `~/.ssh/config` 的 `Host pier-e2e`（见 `scripts/e2e-runner/FIRST-BOOT.txt`「主力机 SSH Host」）。
+2. **远端会同步本机 git HEAD**（`git bundle`，不必先 push），在闲置机 `checkout --detach` 同一 SHA 再测。  
+   **验证未提交改动**必须 `--local` / `pnpm test:e2e:local`（远端默认拒绝 dirty 工作区，避免假绿）。
+3. **强制只走远端**（不可达则失败、不回退）：  
+   `bash scripts/e2e-runner/run-e2e.sh --remote …`
+4. 强制重建：`--rebuild`。SHA 变化或缺少 `out/main` 时远端也会自动 rebuild。
+5. 禁止在未探测闲置机的情况下，把「全量 e2e」默认打在主力机上；unit/component/integration 仍本机即可。
+
+闲置机装机与 runner：`scripts/e2e-runner/FIRST-BOOT.txt`、`setup-mac.sh`、`install-actions-runner.sh`。
 
 ### 新机首次 clone → dev 一键：`pnpm bootstrap`
 

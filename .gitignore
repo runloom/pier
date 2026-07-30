@@ -55,6 +55,9 @@ playwright-report/
 # Per-worktree dev profile
 .pier-dev/
 
+# e2e runner remote build marker (scripts/e2e-runner/run-e2e.sh)
+.pier-e2e-last-build-sha
+
 
 .superpowers/
 
