@@ -42,8 +42,13 @@ export const spawnBackgroundTask: SpawnBackgroundTask = ({
   onExit,
   onOutput,
 }) => {
-  const shell = env.SHELL ?? process.env.SHELL ?? "/bin/sh";
-  const child = spawn(shell, ["-lc", command], {
+  // Non-login + POSIX sh: processEnvironment.resolve() already captured the
+  // full login+interactive env (-lic). A login flag would re-run .zprofile/
+  // .profile and clobber the resolved PATH (e.g. brew overriding nvm).
+  // /bin/sh (not env.SHELL) keeps task command semantics independent of the
+  // user's interactive shell (zsh/fish/nushell) and matches the inner
+  // /bin/sh -c wrapper in task-execution-plan.
+  const child = spawn("/bin/sh", ["-c", command], {
     cwd,
     detached: process.platform !== "win32",
     env,

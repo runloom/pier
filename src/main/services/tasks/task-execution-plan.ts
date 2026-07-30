@@ -150,7 +150,7 @@ function buildCommand(
 }
 
 function shellCommand(script: string): string {
-  return `/bin/sh -lc ${shellQuote(script)}`;
+  return `/bin/sh -c ${shellQuote(script)}`;
 }
 
 function withPresentation(command: string, task: TaskCandidate): string {
