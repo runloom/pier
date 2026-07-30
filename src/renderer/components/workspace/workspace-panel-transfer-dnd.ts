@@ -14,10 +14,9 @@
  *   claims managed/internal targets itself, resolving placement in the
  *   target renderer via `resolvePlacementFromClientPoint` (a mirror of
  *   Dockview's overlay activation model).
- *
- * `tryClaim` in main is single-claimant: whichever channel arrives first
- * wins, the other resolves against the existing claim (drop returns
- * `already_claimed`, finishDrag returns the claim's result or null).
+ * - `tryClaim` in main is single-claimant: whichever channel arrives first
+ *   wins. The losing peer gets `already_claimed` (HTML5 drop or finishDrag)
+ *   so the source keeps drag-start freeze params for prepareSource.
  */
 
 import { PANEL_TRANSFER_MIME } from "@shared/contracts/panel-transfer.ts";
@@ -69,9 +68,32 @@ const frozenOfferParamsByTransferId = new Map<
   Readonly<Record<string, unknown>>
 >();
 
+/**
+ * Snapshot panel params at drag-start. Panel params are JSON-serializable by
+ * contract (same payload as the offer); JSON round-trip deep-clones without
+ * throwing on non-cloneable values the way structuredClone can.
+ */
+function freezeOfferParams(
+  params: Readonly<Record<string, unknown>>
+): Readonly<Record<string, unknown>> {
+  try {
+    return JSON.parse(JSON.stringify(params)) as Record<string, unknown>;
+  } catch {
+    // Circular / exotic values: shallow top-level copy is better than aborting
+    // drag setup after MIME is already stamped.
+    return { ...params };
+  }
+}
+
 export function setActiveDrag(state: TransferDragState | null): void {
   if (state) {
-    frozenOfferParamsByTransferId.set(state.transferId, state.params);
+    // Deep snapshot: dockview/panel effects may mutate live params after
+    // dragstart (updateParameters replaces keys; nested source must stay
+    // the willDrag snapshot).
+    frozenOfferParamsByTransferId.set(
+      state.transferId,
+      freezeOfferParams(state.params)
+    );
   }
   activeDrag = state;
 }
@@ -331,10 +353,12 @@ export function createWorkspacePanelTransferHandlers(
         .finishDrag(id)
         .then((result) => {
           // prepareSource only runs after a claim is accepted. When finishDrag
-          // ends with no claim (null) or a terminal failure (not peer
-          // already_claimed), drop the drag-start freeze so same-window
-          // reorder/cancel cannot grow the map unbounded.
-          // already_claimed / ok: claim path owns takeFrozenOfferParams.
+          // ends with no claim (null = same-window / cancel / peer terminal
+          // failure) or a terminal failure (not peer already_claimed), drop
+          // the drag-start freeze so reorder/cancel cannot grow the map.
+          // already_claimed / ok: claim path owns takeFrozenOfferParams —
+          // peer HTML5 wins return already_claimed only after prepareSource
+          // has consumed the freeze (or is guaranteed to).
           if (
             result == null ||
             (result && !result.ok && result.code !== "already_claimed")

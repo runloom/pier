@@ -224,12 +224,12 @@ describe("PanelTransferService", () => {
     expect(createForTransfer).not.toHaveBeenCalled();
   });
 
-  it("finishDrag returns null when managed drop already claimed", async () => {
+  it("finishDrag returns already_claimed after peer managed claim succeeds", async () => {
     let releaseDrop!: () => void;
     const dropGate = new Promise<void>((resolve) => {
       releaseDrop = resolve;
     });
-    // Keep runner blocked so claim stays live during finishDrag.
+    // Keep runner blocked so claim stays live while finishDrag joins.
     runExclusive.mockImplementationOnce(async (operation) => {
       await dropGate;
       return operation(lease);
@@ -243,12 +243,43 @@ describe("PanelTransferService", () => {
       transferId: TRANSFER_A,
     });
     await Promise.resolve();
-    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toBeNull();
+    const finishPromise = service.finishDrag(source, TRANSFER_A);
+    // finishDrag joins the live claim — must not resolve already_claimed
+    // before prepareSource runs (otherwise freeze retention is wrong and
+    // early peer failures would leak freeze forever).
     releaseDrop();
-    await dropPromise;
+    await expect(finishPromise).resolves.toEqual({
+      code: "already_claimed",
+      message: "transfer already claimed",
+      ok: false,
+    });
+    await expect(dropPromise).resolves.toMatchObject({
+      ok: true,
+      targetPanelId: "panel-1",
+    });
   });
 
-  it("finishDrag returns null when HTML5 claims during resolvePlacement await", async () => {
+  it("finishDrag returns null when peer managed claim fails before prepareSource", async () => {
+    workspace.hasPanelId = vi.fn(async () => true); // target_conflict before prepare
+    const service = createService();
+    const source = caller("main", "record-main", 1);
+    const target = caller("w-1", "record-w1", 2);
+    await service.offer(source, movableOffer(TRANSFER_A));
+    const dropPromise = service.drop(target, {
+      placement: { kind: "root" },
+      transferId: TRANSFER_A,
+    });
+    await Promise.resolve();
+    // Peer fails pre-prepare; source must get null so renderer discards freeze
+    // (not already_claimed, which would retain it forever).
+    await expect(service.finishDrag(source, TRANSFER_A)).resolves.toBeNull();
+    await expect(dropPromise).resolves.toMatchObject({
+      code: "target_conflict",
+      ok: false,
+    });
+  });
+
+  it("finishDrag returns already_claimed when HTML5 claims during resolvePlacement await", async () => {
     cursor = { x: 1500, y: 400 }; // inside w-1
     let releaseResolve!: () => void;
     const resolveGate = new Promise<void>((resolve) => {
@@ -283,14 +314,6 @@ describe("PanelTransferService", () => {
       }
       return { data: null, ok: true, requestId: "r1" };
     });
-    let releaseDrop!: () => void;
-    const dropGate = new Promise<void>((resolve) => {
-      releaseDrop = resolve;
-    });
-    runExclusive.mockImplementationOnce(async (operation) => {
-      await dropGate;
-      return operation(lease);
-    });
 
     const service = createService();
     const source = caller("main", "record-main", 1);
@@ -306,8 +329,11 @@ describe("PanelTransferService", () => {
     });
     await Promise.resolve();
     releaseResolve();
-    await expect(finishPromise).resolves.toBeNull();
-    releaseDrop();
+    await expect(finishPromise).resolves.toEqual({
+      code: "already_claimed",
+      message: "transfer already claimed",
+      ok: false,
+    });
     await expect(dropPromise).resolves.toMatchObject({
       ok: true,
       targetPanelId: "panel-1",

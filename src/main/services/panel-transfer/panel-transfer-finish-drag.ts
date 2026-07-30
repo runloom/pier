@@ -50,20 +50,6 @@ export interface FinishDragContext {
   windows: PanelTransferWindowPort;
 }
 
-/**
- * Peer channel (HTML5 drop ↔ finishDrag) may win the race. `already_claimed`
- * means the transfer is already running — silent for the losing caller.
- */
-async function claimOrJoinPeer(
-  result: Promise<PanelTransferResult> | PanelTransferResult
-): Promise<PanelTransferResult | null> {
-  const resolved = await result;
-  if (!resolved.ok && resolved.code === "already_claimed") {
-    return null;
-  }
-  return resolved;
-}
-
 async function resolveManagedPlacement(
   renderer: ReturnType<typeof createPanelTransferRendererPort>,
   geometry: PanelTransferGeometryPort,
@@ -149,10 +135,19 @@ export async function finishPanelTransferDrag(
   }
 
   if (live.claim) {
-    if (live.claim.kind === "managed") {
-      return null;
+    // Always join the claim owner. Immediate already_claimed would retain
+    // source freeze forever when the peer fails before prepareSource
+    // (e.g. target_conflict). Await the deferred:
+    // - ok → already_claimed (prepareSource already took freeze; source stays silent)
+    // - fail → null (source discards freeze silently; target owns the failure UI)
+    const claimResult = await live.claim.deferred.promise;
+    if (claimResult.ok) {
+      return panelTransferFailure(
+        "already_claimed",
+        "transfer already claimed"
+      );
     }
-    return await live.claim.deferred.promise;
+    return null;
   }
 
   const classification = classifyTransferCursor(
@@ -187,38 +182,38 @@ export async function finishPanelTransferDrag(
       live.transferId,
       classification.windowId
     );
-    // HTML5 drop may claim during the placement await; join silently.
-    // 经宽化引用重读：上方 151 行的检查已把 live.claim 窄化为 undefined，
-    // 而 claim 是 await 期间由外部写入同一对象的。
+    // HTML5 drop may claim during the placement await; join that claim.
+    // Re-read via widened ref: the earlier live.claim check narrowed to
+    // undefined, but claim can be written onto the same object during await.
     const liveAfterPlacement: FinishDragLiveOffer = live;
     if (liveAfterPlacement.claim) {
-      if (liveAfterPlacement.claim.kind === "managed") {
-        return null;
+      const claimResult = await liveAfterPlacement.claim.deferred.promise;
+      if (claimResult.ok) {
+        return panelTransferFailure(
+          "already_claimed",
+          "transfer already claimed"
+        );
       }
-      return await liveAfterPlacement.claim.deferred.promise;
+      return null;
     }
-    return await claimOrJoinPeer(
-      ctx.tryClaim(
-        live,
-        {
-          kind: "managed",
-          runtimeWindowId: classification.windowId,
-          windowRecordId: classification.recordId,
-        },
-        placement
-      )
+    return await ctx.tryClaim(
+      live,
+      {
+        kind: "managed",
+        runtimeWindowId: classification.windowId,
+        windowRecordId: classification.recordId,
+      },
+      placement
     );
   }
 
-  return await claimOrJoinPeer(
-    ctx.tryClaim(
-      live,
-      {
-        kind: "internal",
-        runtimeWindowId: `pending:${transferId}`,
-        windowRecordId: `pending:${transferId}`,
-      },
-      { kind: "root" }
-    )
+  return await ctx.tryClaim(
+    live,
+    {
+      kind: "internal",
+      runtimeWindowId: `pending:${transferId}`,
+      windowRecordId: `pending:${transferId}`,
+    },
+    { kind: "root" }
   );
 }

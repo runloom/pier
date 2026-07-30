@@ -1181,6 +1181,52 @@ describe("workspace panel transfer", () => {
       // Peer claim still needs prepareSource to take the freeze.
       expect(__panelTransferInternals.frozenOfferParamsSizeForTests()).toBe(1);
     });
+
+    it("setActiveDrag deep-clones params so later mutation cannot poison freeze", () => {
+      const liveSource = { kind: "disk", path: "ok.md", root: "/repo" };
+      const liveContext = { contextId: "ctx-1", projectRootPath: "/repo" };
+      const liveParams: Record<string, unknown> = {
+        context: liveContext,
+        source: liveSource,
+      };
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "welcome",
+        params: liveParams,
+        panelId: "welcome-1",
+        transferId: TRANSFER_ID,
+      });
+      // Nested in-place mutation would poison a shallow { ...params } freeze.
+      liveSource.path = "/absolute/bad";
+      liveContext.contextId = "mutated";
+      const frozen =
+        __panelTransferInternals.takeFrozenOfferParams(TRANSFER_ID);
+      expect(frozen).toEqual({
+        context: { contextId: "ctx-1", projectRootPath: "/repo" },
+        source: { kind: "disk", path: "ok.md", root: "/repo" },
+      });
+    });
+
+    it("onDragEnd clears freeze when finishDrag returns null after peer failure", async () => {
+      const pier = installPier();
+      // Peer claim failed before prepareSource — main returns null so source
+      // discards freeze without a second failure dialog.
+      pier.finishDrag.mockResolvedValue(null);
+      const handlers = createWorkspacePanelTransferHandlers(() => null);
+      __panelTransferInternals.setActiveDrag({
+        capability: "movable",
+        componentId: "welcome",
+        params: { source: { kind: "disk", path: "a.md", root: "/repo" } },
+        panelId: "welcome-1",
+        transferId: TRANSFER_ID,
+      });
+      expect(__panelTransferInternals.frozenOfferParamsSizeForTests()).toBe(1);
+
+      handlers.onDragEnd(TRANSFER_ID);
+      await vi.waitFor(() =>
+        expect(__panelTransferInternals.frozenOfferParamsSizeForTests()).toBe(0)
+      );
+    });
   });
 
   describe("custom registration prepare", () => {
