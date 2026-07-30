@@ -80,6 +80,7 @@ describe("preferences state", () => {
       terminalScrollbackMb: 64,
       terminalPasteProtection: true,
       terminalNewCwdPolicy: "activeTerminal",
+      panelCloseFocusPolicy: "adjacent",
       windowZoomLevel: 0,
     });
     expect(prefs).not.toHaveProperty("worktreeBranchPrefix");
@@ -98,6 +99,7 @@ describe("preferences state", () => {
 
     await expect(readPreferences()).resolves.toMatchObject({
       confirmOnQuit: "hasActivity",
+      panelCloseFocusPolicy: "adjacent",
     });
   });
 

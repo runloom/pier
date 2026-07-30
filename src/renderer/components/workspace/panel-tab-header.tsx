@@ -5,10 +5,8 @@
  * 在没传该 prop 时 early-return 不 preventDefault, 事件冒泡到这里的 onContextMenu
  * (dockview-react@6.6.1, components/tab/tab.js:116 + contextMenu.js:118-132).
  *
- * 右键 → 显式 setActive 确保 actions 拿到的 activePanel 就是被右键的 tab. dockview
- * onPointerDown 在 contextmenu 之前 fire 时本会顺带激活, 但 macOS 上鼠标右键的
- * pointerdown→contextmenu 顺序与 dockview tab 内部 setActive 触发条件未必每次都满
- * (单 group 内已 active 的 tab 上再右键不会重新 setActive, 但行为也无需变更, 安全).
+ * 右键菜单经 invocation.sourcePanelId 锚定目标 tab，**不**在打开菜单时 setActive：
+ * 关 inactive tab 须保持当前 active（与 × 路径、panelCloseFocusPolicy=adjacent 一致）。
  *
  * 样式: 用 dockview 默认 `.dv-default-tab` class 维持 hover/active 状态. 若样式与
  * 改前不一致, inspect DOM 取 dockview 实际默认 tab 的 class 对齐.
@@ -183,14 +181,9 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       props.api.id,
     ]
   );
-  const baseOnContextMenu = useContextMenu("dockview-tab", contextMenuOptions);
-  const onContextMenu = useCallback(
-    (event: MouseEvent) => {
-      props.api.setActive();
-      baseOnContextMenu(event);
-    },
-    [baseOnContextMenu, props.api]
-  );
+  // 不包一层 setActive：useContextMenu(dockview-tab) 也不再预激活；关闭等动作走
+  // sourcePanelId。需要聚焦的动作在 handler 内自行 setActive。
+  const onContextMenu = useContextMenu("dockview-tab", contextMenuOptions);
   const publishTerminalFocusIntent = useCallback(() => {
     if (props.api.component !== "terminal") {
       return;
@@ -306,8 +299,12 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
         onClick={(e) => {
           e.preventDefault();
           e.stopPropagation();
-          props.api.setActive();
-          actionRegistry.get("pier.panel.close")?.handler();
+          // 关本 tab，不先 setActive：关 inactive 时保持当前 active（VS Code 语义）；
+          // 关 active 时由 closePanel 内邻接 successor 接管。
+          actionRegistry.get("pier.panel.close")?.handler({
+            sourcePanelId: props.api.id,
+            surface: "dockview-tab",
+          });
         }}
         onPointerDown={(e) => e.preventDefault()}
         type="button"

@@ -310,6 +310,9 @@ export const settings = {
     worktreeRootPathDesc:
       "Leave empty to use a {project}.worktree directory next to the main project.",
     worktreeRootPathPlaceholder: "~/Projects/pier.worktree",
+    panelCloseFocusPolicy: "After Closing a Tab",
+    panelCloseFocusPolicyDesc:
+      "When you close the active tab, activate a neighboring tab or the most recently used one.",
     lspEnabled: "Enable Language Services",
     lspEnabledDesc:
       "Provide diagnostics, completions, and go-to-definition for supported files",
@@ -346,6 +349,10 @@ export const settings = {
     hasActivity: "When activity is running",
     always: "Always",
     never: "Never",
+  },
+  panelCloseFocusPolicy: {
+    adjacent: "Adjacent tab",
+    recent: "Most recently used",
   },
   keybindings: {
     change: "Change Shortcut",

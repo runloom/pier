@@ -13,6 +13,7 @@ import {
   canRenameAgentSession,
   promptRenameAgentSession,
 } from "@/lib/agent-runtime/rename-agent-session.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import {
   dispatchTerminalComposerAttach,
   dispatchTerminalOpenComposer,
@@ -146,22 +147,27 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   }),
   {
     categoryKey: "terminal",
-    enabled: () => {
-      const id = activeTerminalPanelId();
+    enabled: (invocation) => {
+      const id = invocation?.sourcePanelId ?? activeTerminalPanelId();
       return id != null && canRenameAgentSession(id);
     },
     group: "0_edit",
-    handler: async () => {
-      const panelId = activeTerminalPanelId();
+    handler: async (invocation) => {
+      const panelId = invocation?.sourcePanelId ?? activeTerminalPanelId();
       if (!panelId) {
         return;
       }
+      // tab 右键可不预激活；改名前显式聚焦目标终端。
+      const panel = useWorkspaceStore
+        .getState()
+        .api?.panels.find((candidate) => candidate.id === panelId);
+      panel?.api.setActive();
       await promptRenameAgentSession({ panelId });
     },
     iconComponent: Pencil,
     id: "pier.terminal.renameAgentSession",
-    menuHidden: () => {
-      const id = activeTerminalPanelId();
+    menuHidden: (invocation) => {
+      const id = invocation?.sourcePanelId ?? activeTerminalPanelId();
       return id == null || !canRenameAgentSession(id);
     },
     sortOrder: 6,
