@@ -234,4 +234,15 @@ describe("Codex App Server usage parsing", () => {
       ],
     });
   });
+
+  it("omits zero reset credits so the UI does not show a useless zero", () => {
+    expect(
+      parseRateLimitsResult({
+        rateLimitResetCredits: { availableCount: 0 },
+        rateLimits: {
+          primary: { usedPercent: 12, windowDurationMins: 300 },
+        },
+      }).metrics.some((metric) => metric.id === "codex:reset-credits")
+    ).toBe(false);
+  });
 });

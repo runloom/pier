@@ -257,13 +257,13 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
     },
     [promotePreview, props.api.isActive]
   );
-  // biome a11y noStaticElementInteractions / noNoninteractiveElementInteractions 要求
-  // onContextMenu div 有 role. dockview 外层 .dv-tab 已有 tabIndex=0, 两层重叠影响有限:
-  // 外层是 dockview 自己渲染的 DOM, 不受此 React 树控制.
+  // biome a11y: onContextMenu 需要 role。
+  // dockview 外层 .dv-tab 是主 Tab 停靠（CSS focus-visible ring 见 globals.css）；
+  // 内层保留 role=tab + tabIndex=0 + Enter/Space 合约（终端 refocus），outline 清掉避免双环脏描边。
   const tabContent = (
     <div
       aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
-      className="dv-default-tab relative"
+      className="dv-default-tab relative outline-none"
       data-panel-tab-id={props.api.id}
       data-pier-tab-has-active-task={showActiveTaskDot ? "true" : undefined}
       data-pier-tab-kind={

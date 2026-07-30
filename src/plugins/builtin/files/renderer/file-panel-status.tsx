@@ -103,17 +103,18 @@ export function LanguageServiceStatus({
 
   const { label, tone } = languageServiceStatePresentation(status, t);
   const description = languageServiceDescription(status, t);
+  // 状态徽标不进 Tab 序：短标签可见 + aria-label 带说明；hover tooltip 给鼠标用户。
   return (
     <TooltipProvider>
       <Tooltip>
         <TooltipTrigger asChild>
           <Badge
+            aria-label={`${label}. ${description}`}
             aria-live="polite"
             data-language-service-status={status.state}
             data-tone={tone}
             role="status"
             size="xs"
-            tabIndex={0}
             variant={tone}
           >
             {label}

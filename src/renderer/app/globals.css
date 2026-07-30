@@ -515,6 +515,16 @@
   * {
     border-color: var(--border);
   }
+
+  /*
+   * Focus 纪律（与 chart / 控件 focus-visible ring 配套）：
+   * - 鼠标点中：不画 UA outline（避免 Electron/macOS 系统橙粗环）
+   * - 键盘导航：:focus-visible 仍由 Button/Input 等产品 ring 承担
+   * - 展示型图/只读表面：不进 Tab 序（见 ChartContainer accessibilityLayer 默认 false）
+   */
+  :focus:not(:focus-visible) {
+    outline: none;
+  }
 }
 
 /*
@@ -828,6 +838,16 @@ body {
 .dockview-theme-pier .dv-tab.dv-inactive-tab:hover {
   background-color: color-mix(in oklab, var(--foreground) 5%, transparent);
   color: var(--foreground);
+}
+
+/* dockview 外层 .dv-tab 是实际 Tab 停靠：产品 focus-visible ring（非系统 UA 橙环） */
+.dockview-theme-pier .dv-tab:focus {
+  outline: none;
+}
+.dockview-theme-pier .dv-tab:focus-visible {
+  outline: none;
+  box-shadow: inset 0 0 0 2px
+    color-mix(in oklab, var(--ring) 40%, transparent);
 }
 
 .dockview-theme-pier .dv-tab .dv-default-tab,

@@ -218,7 +218,7 @@ export function ActivityRow({
         aria-label={`${title}, ${metaText}, ${ariaStatus}`}
         className={cn(
           "flex min-w-0 flex-1 items-center gap-2.5 rounded-md px-1 py-1.5 text-left",
-          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          "focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
         )}
         data-testid={`activity-row-${activity.panelId}`}
         onClick={onReveal}

@@ -154,7 +154,7 @@ export function DataChart({
         role="img"
         style={{ height }}
       >
-        <PieChart accessibilityLayer>
+        <PieChart accessibilityLayer={false}>
           {tooltip}
           {showLegend ? <Legend verticalAlign="bottom" /> : null}
           <Pie
@@ -181,8 +181,9 @@ export function DataChart({
     );
   }
 
+  // 展示/点选图：不进 Tab 序；hover tooltip + onClick 仍可用。键盘读图另开。
   const common = {
-    accessibilityLayer: true,
+    accessibilityLayer: false,
     data: data as DataChartDatum[],
     margin: { bottom: showLegend ? 4 : 0, left: 0, right: 8, top: 8 },
     onClick: handleChartClick,

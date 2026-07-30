@@ -218,6 +218,41 @@ Pier 桌面端的单行交互控件统一使用 28px 高度：
 - Textarea、卡片内容、头像、骨架内容块、导航分组标题等非单行交互控件不适用本规则。
 - 检查点在 `tests/unit/renderer/interactive-density-governance.test.ts`；新增通用交互原语必须接入统一密度定义，例外必须在测试中说明原因。
 
+### 焦点与 Tab 序规范
+
+桌面工作台的 focus 纪律：**去掉不该 focus 的脏环；该 focus 的只用产品 `focus-visible` ring。**  
+不要为了「干净」全局消灭键盘焦点指示。
+
+硬规则：
+
+1. **鼠标点中不画 UA outline。** 底座在 `src/renderer/app/globals.css`：
+   `:focus:not(:focus-visible) { outline: none; }`。禁止依赖 Electron/macOS 系统强调色
+   的 `outline: auto` 粗环。
+2. **真正可操作控件**（Button / Input / Select / Toggle / 菜单项 / 拖拽把手等）使用
+   **`focus-visible:ring-*` + `outline-none`（或等价）**；token 优先 `ring-ring/30~50`，
+   禁止用 `ring-primary` 当 focus 铬（主题橙会像脏 focus 环）。
+3. **展示型 / 只读表面不进 Tab 序**：图表（`ChartContainer` 默认注入
+   `accessibilityLayer={false}`，子节点经 `Children.map`/Fragment 处理）、
+   纯展示节点图（无 `onSelectNode`/`editable` 时 `focusable=false`、`role="img"`；
+   有选择/编辑合约时节点可键盘聚焦并带产品 `ring-ring`）、
+   状态徽标（短标签 + 完整 `aria-label`，不要为 tooltip 硬挂 `tabIndex={0}`）、
+   装饰 SVG。hover tooltip / 点击选点仍可用。
+4. **业务高亮 ≠ focus。** 工作台新加/缩放物料用轻量 `ring-1 ring-ring/40`（或阴影），
+   短时反馈即可；禁止与 focus 环共用 `ring-primary/50` 粗描边。
+5. **`tabIndex={0}` 白名单**（产品源码；新增必须在治理测试里登记理由）：
+   - 图片预览画布（缩放/平移快捷键）
+   - 工作台网格（Shift+F10 原生右键菜单合约）
+   - dockview panel tab 内容（标签激活）
+   - 设置「项目」列表行（`role="button"` 打开项目；须处理 Enter/Space）
+6. **`role="button"` 的非 button 元素**必须同时具备：键盘激活（Enter/Space）、
+   `tabIndex={0}`、以及可见的 `focus-visible` 环（或复用已带 ring 的 `Item` 等原语）。
+   能改成真正 `<button>` / `Button` 时优先改。
+7. 菜单/列表的 `:focus` 背景高亮（Radix roving focus）保留；那是选中态，不是 UA outline。
+
+检查点在 `tests/unit/renderer/chart-focus-governance.test.ts`（锁定本节标题、全局
+outline 抑制、Chart/DataChart/NodeGraph 默认、状态徽标不进 Tab、`tabIndex={0}` 白名单、
+禁止 `ring-primary` focus 铬）。
+
 ### 颜色使用规范
 
 产品界面颜色按“主题原色 → 语义令牌 → 组件变体 → 业务映射”单向使用：
