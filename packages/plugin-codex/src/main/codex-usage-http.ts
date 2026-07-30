@@ -259,10 +259,11 @@ export function parseWhamUsageResult(json: unknown): AccountUsageResult {
   }
 
   const availableCount = data.rate_limit_reset_credits?.available_count;
+  // 0 表示没有可用重置次数：不进指标列表，避免 UI 展示「额度重置次数 0」
   if (
     typeof availableCount === "number" &&
     Number.isInteger(availableCount) &&
-    availableCount >= 0
+    availableCount > 0
   ) {
     const resetCredits: AccountUsageMetric = {
       format: "count",

@@ -226,7 +226,8 @@ describe("PanelTabHeader", () => {
         })
       );
     });
-    expect(props.api.setActive).toHaveBeenCalledTimes(1);
+    // 右键不预激活：关 inactive tab 时保持当前 active（adjacent 策略）。
+    expect(props.api.setActive).not.toHaveBeenCalled();
   });
 
   it("does not reveal its own dockview tab when it becomes active", async () => {

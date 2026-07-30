@@ -106,9 +106,15 @@ async function popupAndDispatch(
     typeof invocation?.metadata?.selectedText === "string"
       ? invocation.metadata.selectedText
       : captureDomSelectionText(sourcePanelId);
-  // dockview-tab 等仍可能依赖 activePanel；仅当调用方未带 selectedText 且
-  // surface 不是 panel/content 时才激活。
-  if (sourcePanelId && surface !== "panel/content") {
+  // panel/content：保留选区，不抢 active。
+  // dockview-tab：菜单带 sourcePanelId，关 inactive tab 须保持当前 active
+  // （adjacent 策略下先 setActive 会错误地把焦点切到邻接 tab）。
+  // 其它 surface 若仍依赖 activePanel，在打开菜单时激活 source。
+  if (
+    sourcePanelId &&
+    surface !== "panel/content" &&
+    surface !== "dockview-tab"
+  ) {
     const panel = useWorkspaceStore
       .getState()
       .api?.panels.find((candidate) => candidate.id === sourcePanelId);

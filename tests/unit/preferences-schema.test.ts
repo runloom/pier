@@ -136,6 +136,34 @@ describe("projectPreferencesSchema — terminal preferences", () => {
   });
 });
 
+describe("projectPreferencesSchema - panel close focus", () => {
+  it("defaults to adjacent tab after close", () => {
+    expect(projectPreferencesSchema.parse({}).panelCloseFocusPolicy).toBe(
+      "adjacent"
+    );
+  });
+
+  it("accepts adjacent and recent policies", () => {
+    expect(
+      projectPreferencesSchema.parse({ panelCloseFocusPolicy: "adjacent" })
+        .panelCloseFocusPolicy
+    ).toBe("adjacent");
+    expect(
+      projectPreferencesSchema.parse({ panelCloseFocusPolicy: "recent" })
+        .panelCloseFocusPolicy
+    ).toBe("recent");
+  });
+
+  it("rejects unsupported panel close focus policies", () => {
+    expect(() =>
+      projectPreferencesSchema.parse({ panelCloseFocusPolicy: "left" })
+    ).toThrow();
+    expect(() =>
+      projectPreferencesSchema.parse({ panelCloseFocusPolicy: true })
+    ).toThrow();
+  });
+});
+
 describe("projectPreferencesSchema - app quit", () => {
   it("defaults quit confirmation to running activity", () => {
     expect(projectPreferencesSchema.parse({}).confirmOnQuit).toBe(

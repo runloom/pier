@@ -117,13 +117,15 @@ function GraphNode({ data, selected }: NodeProps<Node<GraphNodeData>>) {
 const NODE_TYPES = { pier: GraphNode };
 
 function initialFlowNodes(
-  nodes: readonly NodeGraphNode[]
+  nodes: readonly NodeGraphNode[],
+  /** 有 onSelectNode / editable 时节点进 Tab，便于键盘选中 */
+  keyboardSelectable: boolean
 ): Node<GraphNodeData>[] {
   return nodes.map((node) => ({
     ariaLabel: `${node.id} ${node.title}`,
     data: { ...node, dimmed: false },
     draggable: false,
-    focusable: true,
+    focusable: keyboardSelectable,
     id: node.id,
     position: node.position ?? { x: 0, y: 0 },
     selectable: true,
@@ -192,14 +194,18 @@ function NodeGraphInner({
   onSelectNode,
   selectedId,
 }: NodeGraphProps) {
-  const [flowNodes, setFlowNodes] = useState(() => initialFlowNodes(nodes));
+  // 纯展示：不进 Tab。有选择/编辑合约时节点可键盘聚焦（产品 ring，非 UA 橙环）。
+  const keyboardSelectable = editable || onSelectNode !== undefined;
+  const [flowNodes, setFlowNodes] = useState(() =>
+    initialFlowNodes(nodes, keyboardSelectable)
+  );
   const flowEdges = useMemo(() => initialFlowEdges(edges), [edges]);
   const { fitView } = useReactFlow();
 
   useEffect(() => {
     let active = true;
     let frame: number | undefined;
-    const next = initialFlowNodes(nodes);
+    const next = initialFlowNodes(nodes, keyboardSelectable);
     setFlowNodes(next);
     layoutNodes(nodes, edges, direction).then((positions) => {
       if (!active) {
@@ -226,7 +232,7 @@ function NodeGraphInner({
         cancelAnimationFrame(frame);
       }
     };
-  }, [direction, edges, fitView, nodes]);
+  }, [direction, edges, fitView, keyboardSelectable, nodes]);
 
   useEffect(() => {
     setFlowNodes((current) =>
@@ -240,10 +246,11 @@ function NodeGraphInner({
             selectedId !== undefined,
         },
         draggable: editable,
+        focusable: keyboardSelectable,
         selected: node.id === selectedId,
       }))
     );
-  }, [editable, highlightedIds, selectedId]);
+  }, [editable, highlightedIds, keyboardSelectable, selectedId]);
 
   if (nodes.length === 0) {
     return (
@@ -262,21 +269,24 @@ function NodeGraphInner({
   }
 
   return (
+    // biome-ignore lint/a11y/useAriaPropsSupportedByRole: role 在 application|img 间切换，二者均支持 aria-label
     <div
       aria-label={ariaLabel}
       className={cn(
         "relative h-80 min-w-0 overflow-hidden rounded-lg border bg-muted/20",
+        // xyflow 聚焦节点时用产品 ring，避免系统 UA outline
+        "[&_.react-flow__node:focus-visible]:ring-2 [&_.react-flow__node:focus-visible]:ring-ring/40 [&_.react-flow__node:focus]:outline-none",
         className
       )}
       data-slot="node-graph"
-      role="application"
+      role={keyboardSelectable ? "application" : "img"}
     >
       <ReactFlow
         aria-label={ariaLabel}
-        autoPanOnNodeFocus
+        autoPanOnNodeFocus={keyboardSelectable}
         colorMode="system"
         edges={flowEdges}
-        edgesFocusable
+        edgesFocusable={false}
         elementsSelectable
         fitView
         fitViewOptions={FIT_VIEW_OPTIONS}
@@ -284,7 +294,7 @@ function NodeGraphInner({
         nodes={flowNodes}
         nodesConnectable={editable}
         nodesDraggable={editable}
-        nodesFocusable
+        nodesFocusable={keyboardSelectable}
         nodeTypes={NODE_TYPES}
         onConnect={(connection) => {
           if (connection.source && connection.target) {

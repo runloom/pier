@@ -8,6 +8,7 @@ import { isWorkspaceBootstrapGateActive } from "@/components/workspace/workspace
 import { closeCurrentWindow } from "@/lib/ipc/window-ipc.ts";
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { runPanelCloseGuards } from "@/lib/workspace/panel-close-guards.ts";
+import { activatePanelCloseSuccessor } from "@/lib/workspace/panel-close-successor.ts";
 import { scheduleRevealDockviewTabByPanelId } from "@/lib/workspace/tab-visibility.ts";
 import {
   clearFreshTerminalPanel,
@@ -26,6 +27,7 @@ import {
   uniquePanelId,
   type WorkspaceGroupRef,
 } from "@/stores/workspace-panel-helpers.ts";
+import { useWorkspacePreferencesStore } from "@/stores/workspace-preferences.store.ts";
 import { closeNativeTerminalPanel } from "@/stores/workspace-terminal-close.ts";
 
 interface WorkspaceState {
@@ -242,6 +244,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       });
       return true;
     }
+    // adjacent：关 active 时先切邻接 tab；recent：交给 dockview 组内 MRU。
+    activatePanelCloseSuccessor({
+      activePanelId: api.activePanel?.id,
+      closingPanelId: panel.id,
+      groupPanels: panelsInSameGroup(api, panel.id),
+      policy: useWorkspacePreferencesStore.getState().panelCloseFocusPolicy,
+    });
     // 主动先发 native close IPC, 再 removePanel；不把 React unmount 当显式关闭.
     // 用 contentComponent 而非 params?.component: 前者是 dockview stable key.
     if (panel.view.contentComponent === "terminal") {
@@ -281,6 +290,13 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
       });
       return true;
     }
+    // 关 inactive：不改 active。关 active：按 panelCloseFocusPolicy 选 successor。
+    activatePanelCloseSuccessor({
+      activePanelId: api.activePanel?.id,
+      closingPanelId: panel.id,
+      groupPanels: panelsInSameGroup(api, panel.id),
+      policy: useWorkspacePreferencesStore.getState().panelCloseFocusPolicy,
+    });
     if (panel.view.contentComponent === "terminal") {
       closeNativeTerminalPanel(panel.id);
     }

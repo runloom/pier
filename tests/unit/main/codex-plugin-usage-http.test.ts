@@ -83,6 +83,21 @@ describe("parseWhamUsageResult", () => {
     ]);
   });
 
+  it("omits zero reset credits so the UI does not show a useless zero", () => {
+    const result = parseWhamUsageResult({
+      rate_limit: {
+        primary_window: {
+          limit_window_seconds: 18_000,
+          used_percent: 12,
+        },
+      },
+      rate_limit_reset_credits: { available_count: 0 },
+    });
+    expect(
+      result.metrics.some((metric) => metric.id === "codex:reset-credits")
+    ).toBe(false);
+  });
+
   it("maps plan_type and primary/secondary windows with minute durations", () => {
     const nowSeconds = Math.floor(Date.now() / 1000);
     const result = parseWhamUsageResult({

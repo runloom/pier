@@ -254,7 +254,7 @@ export function ActivityWidget({ size }: WorkbenchWidgetComponentProps) {
 
       {showFooter && otherWindowAgentCount > 0 ? (
         <button
-          className="mx-3 shrink-0 rounded-md px-1 py-1 text-left text-muted-foreground text-xs transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+          className="mx-3 shrink-0 rounded-md px-1 py-1 text-left text-muted-foreground text-xs transition-colors hover:bg-accent/50 hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring/40"
           data-testid="activity-index-footer"
           onClick={handleOpenIndex}
           type="button"

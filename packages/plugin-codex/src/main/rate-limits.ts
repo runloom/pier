@@ -116,10 +116,11 @@ export function parseRateLimitsResult(result: unknown): AccountUsageResult {
   const resetCredits = rl.rateLimitResetCredits ?? obj.rateLimitResetCredits;
   if (resetCredits && typeof resetCredits === "object") {
     const available = (resetCredits as Record<string, unknown>).availableCount;
+    // 0 表示没有可用重置次数：不进指标列表，避免 UI 展示「额度重置次数 0」
     if (
       typeof available === "number" &&
       Number.isInteger(available) &&
-      available >= 0
+      available > 0
     ) {
       resetCreditsMetric = {
         format: "count",

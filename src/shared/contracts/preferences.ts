@@ -23,6 +23,12 @@ export const terminalNewCwdPolicySchema = z.enum([
   "activeTerminal",
   "shellDefault",
 ]);
+/**
+ * 关闭当前 active 标签后激活谁（同 group 内）。
+ * - adjacent：右侧优先，否则左侧（浏览器式 / VS Code 关 focusRecent 时）
+ * - recent：组内最近使用（dockview 默认 / VS Code 默认）
+ */
+export const panelCloseFocusPolicySchema = z.enum(["adjacent", "recent"]);
 export const appQuitConfirmationModeSchema = z.enum([
   "always",
   "hasActivity",
@@ -77,6 +83,8 @@ export const DEFAULT_TERMINAL_CURSOR_BLINK = true;
 export const DEFAULT_TERMINAL_SCROLLBACK_MB = 64;
 export const DEFAULT_TERMINAL_PASTE_PROTECTION = true;
 export const DEFAULT_TERMINAL_NEW_CWD_POLICY = "activeTerminal";
+/** 默认邻接：顺序关 tab 时更稳；需要 VS Code 默认可改 recent。 */
+export const DEFAULT_PANEL_CLOSE_FOCUS_POLICY = "adjacent";
 export const DEFAULT_APP_QUIT_CONFIRMATION_MODE = "hasActivity";
 export const DEFAULT_WINDOW_ZOOM_LEVEL = 0;
 export const MIN_WINDOW_ZOOM_LEVEL = -3;
@@ -111,6 +119,9 @@ export const projectPreferencesSchema = z.object({
     .default(DEFAULT_TERMINAL_PASTE_PROTECTION),
   terminalNewCwdPolicy: terminalNewCwdPolicySchema.default(
     DEFAULT_TERMINAL_NEW_CWD_POLICY
+  ),
+  panelCloseFocusPolicy: panelCloseFocusPolicySchema.default(
+    DEFAULT_PANEL_CLOSE_FOCUS_POLICY
   ),
   confirmOnQuit: appQuitConfirmationModeSchema.default(
     DEFAULT_APP_QUIT_CONFIRMATION_MODE
@@ -159,6 +170,7 @@ export type ResolvedTheme = z.infer<typeof resolvedThemeSchema>;
 export type StylePresetId = z.infer<typeof stylePresetIdSchema>;
 export type TerminalCursorStyle = z.infer<typeof terminalCursorStyleSchema>;
 export type TerminalNewCwdPolicy = z.infer<typeof terminalNewCwdPolicySchema>;
+export type PanelCloseFocusPolicy = z.infer<typeof panelCloseFocusPolicySchema>;
 export type AppQuitConfirmationMode = z.infer<
   typeof appQuitConfirmationModeSchema
 >;

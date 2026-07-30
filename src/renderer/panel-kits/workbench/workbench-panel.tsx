@@ -303,8 +303,9 @@ export function WorkbenchPanel(props: IDockviewPanelProps) {
         "[&_.react-grid-placeholder]:rounded-xl! [&_.react-grid-placeholder]:bg-primary/10! [&_.react-grid-placeholder]:opacity-100!",
         "[&_.react-grid-item.react-draggable-dragging]:z-30",
         "[&_.react-grid-item.react-draggable-dragging_[data-slot=card]]:shadow-lg",
-        "[&_.react-grid-item.resizing_[data-slot=card]]:ring-2 [&_.react-grid-item.resizing_[data-slot=card]]:ring-ring/50",
-        "[&_[data-highlighted=true]_[data-slot=card]]:ring-2 [&_[data-highlighted=true]_[data-slot=card]]:ring-primary/50",
+        // 缩放 / 新加高亮：轻量 ring，不用 primary（主题橙会像脏 focus 环）
+        "[&_.react-grid-item.resizing_[data-slot=card]]:ring-1 [&_.react-grid-item.resizing_[data-slot=card]]:ring-ring/40",
+        "[&_[data-highlighted=true]_[data-slot=card]]:ring-1 [&_[data-highlighted=true]_[data-slot=card]]:ring-ring/40",
       ].join(" ")}
       data-layout-transitions={layoutTransitionsReady ? "ready" : "settling"}
     >

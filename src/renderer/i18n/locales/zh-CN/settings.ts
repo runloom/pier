@@ -297,6 +297,9 @@ export const settings = {
     worktreeRootPath: "工作树目录",
     worktreeRootPathDesc: "留空时使用与主项目同级的 {项目名}.worktree 目录。",
     worktreeRootPathPlaceholder: "~/Projects/pier.worktree",
+    panelCloseFocusPolicy: "关闭标签后激活",
+    panelCloseFocusPolicyDesc:
+      "关闭当前标签时，优先激活相邻标签，还是最近使用过的标签。",
     lspEnabled: "启用语言服务",
     lspEnabledDesc: "为支持的文件提供诊断、补全和跳转定义",
     lspIdleReleaseMinutes: "空闲释放时间（分钟）",
@@ -332,6 +335,10 @@ export const settings = {
     hasActivity: "有运行中活动时确认",
     always: "总是确认",
     never: "从不确认",
+  },
+  panelCloseFocusPolicy: {
+    adjacent: "相邻标签",
+    recent: "最近使用的标签",
   },
   keybindings: {
     change: "更改快捷键",

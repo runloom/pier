@@ -145,8 +145,9 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       group: "9_close",
-      handler: async () => {
-        const panelId = activePanelId();
+      handler: async (invocation) => {
+        // tab × / 右键菜单带 sourcePanelId；快捷键无 invocation 时退回 active。
+        const panelId = invocation?.sourcePanelId ?? activePanelId();
         if (panelId) {
           await useWorkspaceStore.getState().closePanel(panelId);
         }
@@ -161,8 +162,8 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       group: "9_close",
-      handler: async () => {
-        const panelId = activePanelId();
+      handler: async (invocation) => {
+        const panelId = invocation?.sourcePanelId ?? activePanelId();
         if (panelId) {
           await useWorkspaceStore.getState().closeOthers(panelId);
         }

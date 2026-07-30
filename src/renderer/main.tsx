@@ -54,6 +54,7 @@ import { initTaskRunsStore } from "./stores/task-runs.store.ts";
 import { initTerminalPreferences } from "./stores/terminal-preferences.store.ts";
 import { initTerminalStatusBarPrefs } from "./stores/terminal-status-bar-prefs.store.ts";
 import { initTheme } from "./stores/theme.store.ts";
+import { initWorkspacePreferences } from "./stores/workspace-preferences.store.ts";
 import { initWorktreePreferences } from "./stores/worktree-preferences.store.ts";
 import { initZoom } from "./stores/zoom.store.ts";
 
@@ -127,6 +128,7 @@ async function bootstrap() {
       initTerminalStatusBarPrefs(),
       initTaskRunsStore(),
       initWorktreePreferences(),
+      initWorkspacePreferences(),
       initLspPreferences(),
       initLocalEnvironments(),
     ]);
