@@ -9,12 +9,12 @@ if (!requestedCommand) {
   process.exit(2);
 }
 
-const command =
-  process.platform === "win32" && !requestedCommand.endsWith(".cmd")
-    ? `${requestedCommand}.cmd`
-    : requestedCommand;
-const child = spawn(command, args, {
+// Node 20.12+/24 on Windows refuses to spawn .cmd/.bat without shell:true
+// (CVE-era spawn hardening → EINVAL). Prefer shell:true on win32 rather than
+// rewriting the command name.
+const child = spawn(requestedCommand, args, {
   env: withoutEsbuildBinaryOverride(),
+  shell: process.platform === "win32",
   stdio: "inherit",
 });
 
