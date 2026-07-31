@@ -1,3 +1,5 @@
+import { readFileSync } from "node:fs";
+import { join } from "node:path";
 import { cleanup, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ForegroundActivityBridge } from "@/components/common/foreground-activity-bridge.tsx";
@@ -7,6 +9,7 @@ import {
   CORE_TERMINAL_STATUS_ITEMS,
 } from "@/panel-kits/terminal/core-terminal-status-items.ts";
 import {
+  TERMINAL_STATUS_BAR_TOOLTIP_DELAY_MS,
   TerminalStatusBar,
   terminalStatusItemRegistry,
 } from "@/panel-kits/terminal/status-bar.tsx";
@@ -49,6 +52,19 @@ describe("core terminal status items declarations", () => {
     expect(ids).toEqual([CORE_AGENT_STATUS_ITEM_ID]);
     expect(ids).not.toContain("core.task-status");
     expect(ids).not.toContain("core.environment-status");
+  });
+});
+
+describe("terminal status bar tooltip delay", () => {
+  it("uses a non-zero provider delay so chips do not flash at App root 0ms", () => {
+    expect(TERMINAL_STATUS_BAR_TOOLTIP_DELAY_MS).toBeGreaterThanOrEqual(400);
+    const source = readFileSync(
+      join(process.cwd(), "src/renderer/panel-kits/terminal/status-bar.tsx"),
+      "utf8"
+    );
+    expect(source).toContain(
+      "delayDuration={TERMINAL_STATUS_BAR_TOOLTIP_DELAY_MS}"
+    );
   });
 });
 

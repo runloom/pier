@@ -24,9 +24,10 @@ import {
 
 export type TerminalStatusItemContext = RendererTerminalStatusItemContext;
 export type TerminalStatusItem = RendererTerminalStatusItem;
-
 /** Matches `h-7` on the status bar root — keep composer / floating insets in sync. */
 export const TERMINAL_STATUS_BAR_HEIGHT_PX = 28;
+/** Status chips are dense; avoid App root delayDuration={0} instant flash on skim. */
+export const TERMINAL_STATUS_BAR_TOOLTIP_DELAY_MS = 400;
 
 class TerminalStatusItemRegistry extends Notifier {
   private readonly items = new Map<string, TerminalStatusItem>();
@@ -220,7 +221,7 @@ export function TerminalStatusBar(statusContext: TerminalStatusItemContext) {
       }}
       ref={rootRef}
     >
-      <TooltipProvider>
+      <TooltipProvider delayDuration={TERMINAL_STATUS_BAR_TOOLTIP_DELAY_MS}>
         {renderStatusGroup(visible.left, statusContext, hiddenIds)}
         <div
           className="min-w-0 flex-1"

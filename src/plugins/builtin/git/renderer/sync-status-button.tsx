@@ -123,12 +123,6 @@ export function GitSyncStatusButton({
   const { ahead, behind, upstream } = status.branch;
   const actionId = resolveRemoteSyncActionId(status);
   const detail = syncDetail(pluginContext, ahead, behind);
-  const ariaLabel = [
-    pluginText(pluginContext, "statusSyncLabel", "Sync changes"),
-    detail,
-  ]
-    .filter(Boolean)
-    .join(", ");
   const blockedHint =
     actionId === null && !busy
       ? pluginText(
@@ -147,6 +141,15 @@ export function GitSyncStatusButton({
   const busyHint = busy
     ? pluginText(pluginContext, "statusDropdownSyncing", "Syncing changes…")
     : null;
+  // openOnFocus=false：动作/阻塞/caveat 并入 aria，避免键盘用户只听见泛化「同步」。
+  const ariaLabel = [
+    pluginText(pluginContext, "statusSyncLabel", "Sync changes"),
+    detail,
+    busyHint ?? actionHint ?? blockedHint,
+    syncCaveat,
+  ]
+    .filter(Boolean)
+    .join(", ");
   const onClick = (): void => {
     if (busy || actionId === null) {
       return;
@@ -162,7 +165,7 @@ export function GitSyncStatusButton({
   };
   return (
     <Tooltip>
-      <TooltipTrigger asChild>
+      <TooltipTrigger asChild openOnFocus={false}>
         <span className="inline-flex shrink-0">
           <Button
             aria-busy={busy || undefined}

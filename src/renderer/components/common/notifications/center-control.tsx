@@ -22,7 +22,13 @@ import {
   PopoverTrigger,
 } from "@pier/ui/popover.tsx";
 import { Separator } from "@pier/ui/separator.tsx";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
+import {
+  releaseTooltipSuppression,
+  suppressTooltips,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@pier/ui/tooltip.tsx";
 import { Bell, BellOff, Inbox } from "lucide-react";
 import {
   type ReactNode,
@@ -248,6 +254,8 @@ export function NotificationCenterControl(): ReactNode {
     // popover 生命周期内键盘钉在 web：全局快捷键（命令面板/设置）与 Escape 关闭
     // 保持可用。刻意不 pushBlockingScope（参照设置页）——不吞全局快捷键。
     const releaseWebFocus = requestTerminalWebFocus("notification-center");
+    // open 可能经 store 旁路关闭（Dialog/命令面板订阅），hard suppress 必须绑 open 生命周期。
+    suppressTooltips();
     // @pier/ui Dialog 的 deferred-open 把 DOM 中仍存在的 popover-content 视为
     // 打开阻塞（schedule-after-overlay）：不收起则 Dialog 等 1s 后放弃挂载，
     // 命令面板/设置快捷键看似失效。任何 Dialog 打开信号出现时立即收起。
@@ -279,13 +287,13 @@ export function NotificationCenterControl(): ReactNode {
       }
       releaseOverlayRoute.dispose();
       releaseWebFocus();
+      releaseTooltipSuppression();
       // 仅终端向 outside 关闭后补聚焦；Dialog/Esc/trigger 不 mark。
       if (consumeWebOverlayOutsideDismiss(NOTIFICATION_CENTER_OVERLAY_ID)) {
         restoreTerminalFocusAfterWebOverlayDismiss();
       }
     };
   }, [open, setOpen]);
-
   return (
     <Popover onOpenChange={setOpen} open={open}>
       <Tooltip>

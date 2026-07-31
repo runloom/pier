@@ -5207,7 +5207,7 @@ describe("Files file-panel", () => {
     ).toBeNull();
   });
 
-  it("shows semantic language-service states and actionable reason copy on focus", async () => {
+  it("shows semantic language-service states and actionable reason copy on hover", async () => {
     const panelId = "language-service-state-panel";
     const source = {
       kind: "disk" as const,
@@ -5410,8 +5410,17 @@ describe("Files file-panel", () => {
       expect(languageStatus).toHaveAttribute("data-tone", testCase.tone);
       expect(languageStatus).toHaveTextContent(testCase.label);
       expect(languageStatus).toBeVisible();
+      // 状态徽标不进 Tab 序；tip 仅 hover。
       fireEvent.keyDown(document.body, { key: "Tab" });
       fireEvent.focus(languageStatus);
+      expect(screen.queryByRole("tooltip")).toBeNull();
+      const trigger =
+        languageStatus.closest("[data-slot='tooltip-trigger']") ??
+        languageStatus;
+      // keydown dismiss soft-suppress 需 pointermove 释放后再 hover。
+      fireEvent.pointerMove(document.body);
+      fireEvent.pointerLeave(trigger);
+      fireEvent.pointerMove(trigger);
       await waitFor(() => {
         expect(screen.getByRole("tooltip")).toHaveTextContent(testCase.tooltip);
       });

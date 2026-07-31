@@ -267,7 +267,8 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
         tab?.ariaLabel,
         displayTitle,
         tab?.state?.label,
-        trailingAria
+        trailingAria,
+        tooltipText
       )}
       className="dv-default-tab relative outline-none"
       data-panel-tab-id={props.api.id}
@@ -287,7 +288,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       {showActiveTaskDot ? (
         <span
           aria-label={t("workspace.tab.activeTask")}
-          className="pointer-events-none absolute top-1/2 left-1.5 z-10 size-1.5 -translate-y-1/2 rounded-full bg-status-info-fg"
+          className="pointer-events-none absolute top-1/2 left-1 z-10 size-1.5 -translate-y-1/2 rounded-full bg-status-info-fg"
           data-pier-tab-active-task="true"
           role="status"
         />
@@ -301,7 +302,6 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
           className="size-1.5 shrink-0 rounded-full bg-warning"
           data-pier-tab-dirty="true"
           role="status"
-          title={t("workspace.tab.unsaved")}
         />
       ) : null}
       {statusIndicator}
@@ -332,7 +332,13 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
 
   return (
     <Tooltip delayDuration={PANEL_TAB_TOOLTIP_DELAY_MS}>
-      <TooltipTrigger asChild>{tabContent}</TooltipTrigger>
+      {/*
+       * Tab 条只走 hover delay。Radix focus 会即时 open，快捷键切 tab /
+       * 程序化 focus 会误弹出；tooltip 明细已并入 aria-label。
+       */}
+      <TooltipTrigger asChild openOnFocus={false}>
+        {tabContent}
+      </TooltipTrigger>
       <TooltipContent align="center" side="bottom" sideOffset={8}>
         <span className="whitespace-pre-line">{tooltipText}</span>
       </TooltipContent>

@@ -105,15 +105,29 @@ export function tabAriaLabel(
   explicit: string | undefined,
   title: string,
   stateLabel: string | undefined,
-  trailingLabel?: string | undefined
+  trailingLabel?: string | undefined,
+  /**
+   * Hover-only tooltip body (may include title/state). Extra lines are folded
+   * into aria so keyboard/SR keep Command/CWD/path after openOnFocus=false.
+   */
+  tooltipDetail?: string | null
 ): string | undefined {
   if (explicit) {
     return explicit;
   }
-  const parts = [title, stateLabel, trailingLabel].filter(
+  const seen = new Set(
+    [title, stateLabel, trailingLabel].filter((part): part is string =>
+      Boolean(part)
+    )
+  );
+  const tooltipParts = (tooltipDetail ?? "")
+    .split("\n")
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0 && !seen.has(line));
+  const parts = [title, stateLabel, trailingLabel, ...tooltipParts].filter(
     (part): part is string => Boolean(part)
   );
-  // 无 state / trailing 时不要强塞 aria-label（留给外层 title 文本即可）。
+  // 无 state / trailing / tooltip 明细时不要强塞 aria-label（留给外层 title 文本即可）。
   if (parts.length <= 1) {
     return;
   }
@@ -144,7 +158,6 @@ export function tabStatusIndicator(
       data-panel-tab-state-indicator={status}
       data-tab-status={status}
       role="img"
-      title={displayLabel}
     >
       <Icon
         aria-hidden="true"
