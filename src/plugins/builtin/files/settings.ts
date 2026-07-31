@@ -7,6 +7,8 @@ export const FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY =
   "pier.files.tree.excludePatterns";
 export const FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY =
   "pier.files.tree.showGitIgnoredFiles";
+export const FILES_TREE_COMPACT_FOLDERS_SETTING_KEY =
+  "pier.files.tree.compactFolders";
 
 export { FILES_TREE_DEFAULT_EXCLUDE_PATTERNS } from "@shared/contracts/file/tree-exclude.ts";
 

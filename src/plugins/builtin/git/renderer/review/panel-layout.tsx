@@ -12,14 +12,19 @@ import {
   FilePanelSidebarToggleButton,
 } from "@pier/ui/file/panel-layout.tsx";
 import { FileSearchBar } from "@pier/ui/file/search-bar.tsx";
-import { PierFileTree } from "@pier/ui/file/tree.tsx";
+import {
+  getTreeExpansionAuthority,
+  gitReviewTreeExpansionScopeId,
+  PierFileTree,
+} from "@pier/ui/file/tree.tsx";
 import { useFileTreeSearch } from "@pier/ui/file/use-tree-search.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { SearchX } from "lucide-react";
-import { memo, type ReactNode } from "react";
+import { memo, type ReactNode, useEffect, useMemo } from "react";
 import { pluginText } from "../plugin-text.ts";
 import { ReviewTreeLoading } from "./feedback.tsx";
 import type { gitReviewTreeModel } from "./tree.tsx";
+import { registerGitReviewTreeFolderHandlers } from "./tree-collapse-registry.ts";
 import { useGitReviewTreeContextMenu } from "./tree-context-menu.ts";
 
 const REVIEW_TREE_WIDTH_STORAGE_KEY = "pier.git.review.treeWidthPx";
@@ -67,6 +72,13 @@ function GitReviewTreeSidebarComponent({
     ...(sourcePanelId ? { sourcePanelId } : {}),
     treeModel,
   });
+  const expansionAuthority = useMemo(
+    () =>
+      getTreeExpansionAuthority(
+        gitReviewTreeExpansionScopeId(contextId, gitRootPath)
+      ),
+    [contextId, gitRootPath]
+  );
   const hasQuery = treeSearch.value.trim().length > 0;
   const searchHasNoResults =
     treeSearch.open &&
@@ -133,6 +145,8 @@ function GitReviewTreeSidebarComponent({
         ) : (
           <PierFileTree
             className="min-h-0 w-full flex-1"
+            expansionAuthority={expansionAuthority}
+            expansionSeed="file-ancestors"
             flattenEmptyDirectories
             flattenMinDepth={2}
             items={treeModel.items}
@@ -143,7 +157,7 @@ function GitReviewTreeSidebarComponent({
             {...(onContextMenuSession ? { onContextMenuSession } : {})}
             onSearchMatchStateChange={treeSearch.updateMatchState}
             stickyFolders
-            treeApiRef={treeSearch.attachTreeApi}
+            treeApiRef={treeSearch.treeApiRef}
           />
         )}
         {searchHasNoResults && treeLoading !== true ? (
@@ -230,6 +244,30 @@ export function GitReviewPanelLayout({
 }) {
   const treeSearch = useFileTreeSearch();
   const hasTree = Boolean((treeModel || treeLoading) && onOpenPath);
+
+  useEffect(() => {
+    if (!(hasTree && !sidebarCollapsed && treeLoading !== true)) {
+      return;
+    }
+    return registerGitReviewTreeFolderHandlers({
+      collapseAll: (rootPath) => {
+        const api = treeSearch.treeApiRef.current;
+        if (api) {
+          api.collapseAll(rootPath ? { rootPath } : undefined);
+          return;
+        }
+        treeSearch.collapseAllFolders();
+      },
+      expandAll: (rootPath) => {
+        const api = treeSearch.treeApiRef.current;
+        if (api) {
+          api.expandAll(rootPath ? { rootPath } : undefined);
+          return;
+        }
+        treeSearch.expandAllFolders();
+      },
+    });
+  }, [hasTree, sidebarCollapsed, treeLoading, treeSearch]);
 
   const toggleSearch = () => {
     if (!hasTree || treeLoading) {

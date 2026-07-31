@@ -200,6 +200,18 @@ export const GIT_PLUGIN_MANIFEST: PluginManifest = {
       permissions: ["git:write"],
       title: "Git: Discard Changes",
     },
+    {
+      category: "Git",
+      id: "pier.git.review.expandAll",
+      permissions: [],
+      title: "Expand Folders",
+    },
+    {
+      category: "Git",
+      id: "pier.git.review.collapseFolders",
+      permissions: [],
+      title: "Collapse Folders",
+    },
   ],
 
   configuration: {

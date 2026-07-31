@@ -1,6 +1,11 @@
-import type { PierFileTreeApi } from "@pier/ui/file/tree.tsx";
+import type {
+  PierFileTreeApi,
+  PierFileTreeRevealOptions,
+} from "@pier/ui/file/tree.tsx";
 
 export interface FilesTreeRegistryEntry {
+  collapseAll: () => void;
+  expandKnownDirectories: () => void;
   getApi: () => PierFileTreeApi | null;
   openSearch: () => void;
   root: string;
@@ -33,9 +38,8 @@ function findTreeEntry(target: {
     if (byId) {
       return byId;
     }
-    // Explicit instance id that is not mounted must not steal another same-root
-    // tree (e.g. open-search targeting a closed sidebar instance).
-    return null;
+    // Fall through to root match when treeId is stale (panel remount / group id
+    // drift). Prefer same-root live tree over silent no-op.
   }
   if (target.root) {
     let lastMatch: FilesTreeRegistryEntry | null = null;
@@ -103,30 +107,108 @@ export function toggleFilesTreeSearch(target: {
   return true;
 }
 
-export function revealFilesTreePath(target: {
+/** Bumped to cancel in-flight reveal timeout batches. */
+let revealRetryGeneration = 0;
+
+/**
+ * Single attempt: true only when the tree API is mounted and the path is
+ * selectable. Does not schedule retries (callers that poll should use this).
+ */
+export function tryRevealFilesTreePathOnce(target: {
   instanceId?: string | undefined;
+  options?: PierFileTreeRevealOptions | undefined;
   path: string;
   root: string;
 }): boolean {
-  const tryReveal = (): boolean => {
-    const entry = findTreeEntry(target);
-    const api = entry?.getApi();
-    if (!api) {
-      return false;
-    }
-    api.revealPath(target.path);
-    return true;
-  };
-  if (tryReveal()) {
+  const entry = findTreeEntry(target);
+  const api = entry?.getApi();
+  if (!api) {
+    return false;
+  }
+  return api.revealPath(target.path, target.options) === true;
+}
+
+export function revealFilesTreePath(target: {
+  instanceId?: string | undefined;
+  options?: PierFileTreeRevealOptions | undefined;
+  path: string;
+  root: string;
+}): boolean {
+  if (tryRevealFilesTreePathOnce(target)) {
     return true;
   }
-  // Tree may still be mounting after sidebar expand.
-  for (const delayMs of [32, 80, 160, 320]) {
+  // Tree may still be mounting after sidebar expand / items→model sync.
+  // Cancel prior batches so slow after-ancestors loops do not stack timers.
+  revealRetryGeneration += 1;
+  const generation = revealRetryGeneration;
+  for (const delayMs of [32, 80, 160, 320, 640]) {
     window.setTimeout(() => {
-      tryReveal();
+      if (generation !== revealRetryGeneration) {
+        return;
+      }
+      if (tryRevealFilesTreePathOnce(target)) {
+        revealRetryGeneration += 1;
+      }
     }, delayMs);
   }
   return false;
+}
+
+function runTreeFolderAction(
+  target: {
+    instanceId?: string | undefined;
+    /** Directory path when action was invoked from a folder row; omit for whole tree. */
+    path?: string | undefined;
+    root?: string | undefined;
+  },
+  action: "collapseAll" | "expandAll"
+): boolean {
+  const rootPath =
+    target.path && target.path.length > 0 ? target.path : undefined;
+  const invoke = (): boolean => {
+    const entry = findTreeEntry(target);
+    if (!entry) {
+      return false;
+    }
+    const api = entry.getApi();
+    // Never fall back to whole-tree entry helpers when scoped — that would
+    // expand/collapse siblings if the API is briefly null after mount.
+    if (!api) {
+      return false;
+    }
+    if (action === "collapseAll") {
+      api.collapseAll(rootPath ? { rootPath } : undefined);
+    } else {
+      api.expandAll(rootPath ? { rootPath } : undefined);
+    }
+    return true;
+  };
+  if (invoke()) {
+    return true;
+  }
+  // Tree API may not be attached for a frame after mount / menu focus.
+  for (const delayMs of [0, 32, 80, 160]) {
+    window.setTimeout(() => {
+      invoke();
+    }, delayMs);
+  }
+  return false;
+}
+
+export function collapseFilesTreeFolders(target: {
+  instanceId?: string | undefined;
+  path?: string | undefined;
+  root?: string | undefined;
+}): boolean {
+  return runTreeFolderAction(target, "collapseAll");
+}
+
+export function expandFilesTreeKnownFolders(target: {
+  instanceId?: string | undefined;
+  path?: string | undefined;
+  root?: string | undefined;
+}): boolean {
+  return runTreeFolderAction(target, "expandAll");
 }
 
 export function findFilesTreeInstanceId(root: string): string | null {

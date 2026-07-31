@@ -1,4 +1,7 @@
 {
+  // Node-only peer-sync probes (availability.ts / main.ts) are typechecked by
+  // src/peer-sync/tsconfig.json so the IDE + CI get @types/node without pulling
+  // Node into the renderer-safe package graph.
   "extends": "../../tsconfig.json",
   "include": ["src/**/*.ts", "src/**/*.tsx"],
   "exclude": ["src/peer-sync/availability.ts", "src/peer-sync/main.ts"]

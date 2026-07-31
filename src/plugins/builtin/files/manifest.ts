@@ -9,6 +9,7 @@ import {
   FILES_EDITOR_TAB_SIZE_SETTING_KEY,
   FILES_EDITOR_TAB_SIZE_VALUES,
   FILES_EDITOR_WORD_WRAP_SETTING_KEY,
+  FILES_TREE_COMPACT_FOLDERS_SETTING_KEY,
   FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
   FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
   FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
@@ -33,6 +34,9 @@ export const FILES_SAVE_ALL_COMMAND_ID = "pier.files.saveAll";
 export const FILES_REVEAL_COMMAND_ID = "pier.files.revealInFinder";
 export const FILES_DUPLICATE_COMMAND_ID = "pier.files.duplicate";
 export const FILES_TREE_SEARCH_COMMAND_ID = "pier.files.treeSearch";
+export const FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID =
+  "pier.files.tree.collapseFolders";
+export const FILES_TREE_EXPAND_ALL_COMMAND_ID = "pier.files.tree.expandAll";
 export const FILES_QUICK_OPEN_COMMAND_ID = "pier.files.quickOpen";
 export const FILES_OPEN_DIRECTORY_COMMAND_ID = "pier.files.openDirectory";
 export const FILES_SEARCH_CONTENTS_COMMAND_ID = "pier.files.searchContents";
@@ -138,6 +142,18 @@ export const FILES_PLUGIN_MANIFEST = {
       id: FILES_TREE_SEARCH_COMMAND_ID,
       permissions: [],
       title: "Find in File Tree",
+    },
+    {
+      category: "file",
+      id: FILES_TREE_EXPAND_ALL_COMMAND_ID,
+      permissions: [],
+      title: "Expand Folders",
+    },
+    {
+      category: "file",
+      id: FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID,
+      permissions: [],
+      title: "Collapse Folders",
     },
     {
       category: "file",
@@ -326,6 +342,13 @@ export const FILES_PLUGIN_MANIFEST = {
         description:
           "Show files and folders matched by Git ignore rules. This is separate from the file tree exclusion patterns.",
         order: 30,
+        type: "boolean",
+      },
+      [FILES_TREE_COMPACT_FOLDERS_SETTING_KEY]: {
+        default: true,
+        description:
+          "Merge single-child folder chains into one row in the file tree (like VS Code Compact Folders).",
+        order: 31,
         type: "boolean",
       },
     },

@@ -26,12 +26,17 @@ import {
   cancelGitReviewMutationTransition,
   commitGitReviewMutationTransition,
 } from "./mutation-transitions.ts";
+import { registerGitReviewTreeFolderActions } from "./tree-folder-actions.ts";
 
 export const GIT_REVIEW_TREE_ITEM_SURFACE = "git/review-tree-item";
 export const GIT_REVIEW_OPEN_FILE_COMMAND_ID = "pier.git.review.openFile";
 export const GIT_REVIEW_STAGE_FILE_COMMAND_ID = "pier.git.review.stageFile";
 export const GIT_REVIEW_UNSTAGE_FILE_COMMAND_ID = "pier.git.review.unstageFile";
 export const GIT_REVIEW_DISCARD_FILE_COMMAND_ID = "pier.git.review.discardFile";
+export {
+  GIT_REVIEW_COLLAPSE_FOLDERS_COMMAND_ID,
+  GIT_REVIEW_EXPAND_ALL_COMMAND_ID,
+} from "./tree-folder-actions.ts";
 
 const reviewTreeItemMetadataSchema = z.object({
   allDiscardTrackedDeleted: z.boolean().default(false),
@@ -88,32 +93,22 @@ function panelContextFromReviewItem(
 }
 
 function canStage(item: GitReviewTreeItemMetadata | null): boolean {
-  if (!isMutableReviewItem(item)) {
-    return false;
-  }
-  if (item.stagePaths.length > 0) {
-    return true;
-  }
+  if (!isMutableReviewItem(item)) return false;
+  if (item.stagePaths.length > 0) return true;
   return (
     item.kind === "file" && (item.hasUnstaged || item.hasConflict === true)
   );
 }
 
 function canUnstage(item: GitReviewTreeItemMetadata | null): boolean {
-  if (!isMutableReviewItem(item)) {
-    return false;
-  }
-  if (item.unstagePaths.length > 0) {
-    return true;
-  }
+  if (!isMutableReviewItem(item)) return false;
+  if (item.unstagePaths.length > 0) return true;
   return item.kind === "file" && item.hasStaged;
 }
 
 /** Tracked modified/deleted + untracked added; rename 仍不提供（语义歧义）。 */
 function canDiscard(item: GitReviewTreeItemMetadata | null): boolean {
-  if (!isMutableReviewItem(item)) {
-    return false;
-  }
+  if (!isMutableReviewItem(item)) return false;
   if (
     item.discardTrackedPaths.length > 0 ||
     item.discardUntrackedPaths.length > 0 ||
@@ -484,6 +479,11 @@ export function registerGitReviewTreeActions(
       surfaces: [GIT_REVIEW_TREE_ITEM_SURFACE],
       title: () =>
         pluginText(context, "reviewTreeDiscardFile", "Discard Changes"),
+    }),
+    registerGitReviewTreeFolderActions({
+      context,
+      parseItem: parseGitReviewTreeItemMetadata,
+      surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     }),
   ];
   return () => {

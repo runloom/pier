@@ -1,6 +1,12 @@
 import type { FileTree } from "@pierre/trees";
 import * as React from "react";
 import {
+  collectKnownDirectoryPaths,
+  resolveExpandedPaths,
+  type TreeExpansionSeed,
+} from "./tree-expansion-apply.ts";
+import type { TreeExpansionAuthority } from "./tree-expansion-authority.ts";
+import {
   cloneCompositionForRedraw,
   collectPreservedExpandedDirectoryPaths,
   pathSetMutation,
@@ -18,6 +24,8 @@ interface UseFileTreePathSyncInput {
   captureSnapshot: PierFileTreeScrollController["captureSnapshot"];
   directoryStates: ReadonlyMap<string, PierDirectoryLoadState> | undefined;
   expandedDirectoriesRef: React.MutableRefObject<Map<string, boolean>>;
+  expansionAuthority?: TreeExpansionAuthority | undefined;
+  expansionSeed?: TreeExpansionSeed | undefined;
   items: readonly PierFileTreeItem[];
   model: FileTree;
   modelAheadMovesRef: React.MutableRefObject<Map<string, string>>;
@@ -35,6 +43,8 @@ export function useFileTreePathSync({
   captureSnapshot,
   directoryStates,
   expandedDirectoriesRef,
+  expansionAuthority,
+  expansionSeed = "none",
   items,
   model,
   modelAheadMovesRef,
@@ -45,12 +55,17 @@ export function useFileTreePathSync({
   const didMountRef = React.useRef(false);
   const previousPathsRef = React.useRef<readonly string[]>(paths);
   const previousRenderSignatureRef = React.useRef(renderSignature);
+  const previousKnownDirsRef = React.useRef(collectKnownDirectoryPaths(items));
 
   React.useEffect(() => {
     if (!didMountRef.current) {
       didMountRef.current = true;
       previousPathsRef.current = paths;
       previousRenderSignatureRef.current = renderSignature;
+      // Cold start: keep restored nested intents even when only the root listing
+      // is projected. resolveExpandedPaths filters to currently known dirs for
+      // the model; do not prune "unknown because not loaded yet."
+      previousKnownDirsRef.current = collectKnownDirectoryPaths(items);
       return;
     }
 
@@ -72,6 +87,25 @@ export function useFileTreePathSync({
       return;
     }
 
+    const nextKnown = collectKnownDirectoryPaths(items);
+    if (expansionAuthority) {
+      for (const op of mutation) {
+        if (op.type === "move") {
+          expansionAuthority.remapPath(
+            stripTrailingSlash(op.from),
+            stripTrailingSlash(op.to)
+          );
+        }
+      }
+      // Only drop intents for dirs that were known and are now gone (delete),
+      // not for nested paths still waiting on lazy list.
+      expansionAuthority.reconcileKnownDirectories(
+        previousKnownDirsRef.current,
+        nextKnown
+      );
+    }
+    previousKnownDirsRef.current = nextKnown;
+
     const scrollSnapshot = captureSnapshot();
 
     const aheadMoves = modelAheadMovesRef.current;
@@ -80,6 +114,26 @@ export function useFileTreePathSync({
       mutation[0]?.type === "move" &&
       aheadMoves.get(stripTrailingSlash(mutation[0].from)) ===
         stripTrailingSlash(mutation[0].to);
+
+    const resolveExpandedForReset = (): string[] => {
+      if (expansionAuthority) {
+        return resolveExpandedPaths(items, expansionAuthority.getIntent(), {
+          ...(directoryStates === undefined ? {} : { directoryStates }),
+          propagateCompactChains: true,
+          // After first interaction, intent is non-empty; never re-seed over it.
+          seed:
+            expansionAuthority.getIntent().expanded.size === 0 &&
+            expansionAuthority.getIntent().collapsed.size === 0
+              ? expansionSeed
+              : "none",
+        });
+      }
+      return collectPreservedExpandedDirectoryPaths(
+        items,
+        expandedDirectoriesRef.current,
+        directoryStates
+      );
+    };
 
     try {
       if (alreadyAppliedByModel && mutation[0]?.type === "move") {
@@ -101,11 +155,7 @@ export function useFileTreePathSync({
       }
     } catch {
       // batch failed — residual full replacement with search clear/replay
-      const expandedPaths = collectPreservedExpandedDirectoryPaths(
-        items,
-        expandedDirectoriesRef.current,
-        directoryStates
-      );
+      const expandedPaths = resolveExpandedForReset();
       const activeSearch = activeSearchRef.current;
       if (activeSearch != null) {
         model.setSearch(null);
@@ -129,6 +179,8 @@ export function useFileTreePathSync({
     captureSnapshot,
     directoryStates,
     expandedDirectoriesRef,
+    expansionAuthority,
+    expansionSeed,
     items,
     model,
     modelAheadMovesRef,

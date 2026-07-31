@@ -63,3 +63,60 @@ describe("source editor decoration chrome contract", () => {
     );
   });
 });
+
+/**
+ * Lint / serverDiagnostics hover chrome must match LSP hover metrics so long
+ * TypeScript messages wrap and use product tokens (not CM #d11 defaults).
+ */
+describe("source editor diagnostic tooltip contract", () => {
+  const themeSource = readFileSync(THEME_PATH, "utf8");
+
+  it("styles lint tooltips with editor mono metrics and wrap constraints", () => {
+    for (const selector of [
+      ".cm-tooltip-lint",
+      ".cm-diagnostic",
+      ".cm-diagnosticText",
+      ".cm-diagnostic-error",
+      ".cm-diagnostic-warning",
+      ".cm-diagnostic-info",
+      ".cm-diagnostic-hint",
+    ] as const) {
+      expect(themeSource, `missing ${selector}`).toContain(`"${selector}"`);
+    }
+
+    expect(themeSource).toContain('".cm-tooltip-lint"');
+    // Same chrome as .cm-lsp-hover-tooltip
+    expect(themeSource).toMatch(
+      /\.cm-tooltip-lint"[\s\S]{0,400}?fontFamily:\s*"var\(--font-mono\)"/u
+    );
+    expect(themeSource).toMatch(
+      /\.cm-tooltip-lint"[\s\S]{0,400}?fontSize:\s*"var\(--pier-code-font-size/u
+    );
+    expect(themeSource).toMatch(
+      /\.cm-tooltip-lint"[\s\S]{0,400}?maxWidth:\s*"min\(480px,\s*90vw\)"/u
+    );
+    expect(themeSource).toMatch(
+      /\.cm-diagnostic"[\s\S]{0,300}?whiteSpace:\s*"pre-wrap"/u
+    );
+    expect(themeSource).toMatch(
+      /\.cm-diagnostic"[\s\S]{0,300}?overflowWrap:\s*"anywhere"/u
+    );
+  });
+
+  it("maps diagnostic severity rails to semantic tokens only", () => {
+    expect(themeSource).toMatch(
+      /\.cm-diagnostic-error"[\s\S]{0,120}?var\(--destructive\)/u
+    );
+    expect(themeSource).toMatch(
+      /\.cm-diagnostic-warning"[\s\S]{0,120}?var\(--warning\)/u
+    );
+    expect(themeSource).toMatch(
+      /\.cm-diagnostic-info"[\s\S]{0,120}?var\(--info\)/u
+    );
+    // No CM lint baseTheme hard-coded severity colors.
+    expect(themeSource).not.toMatch(/#d11|#f11|#66d\b/iu);
+    expect(themeSource).not.toMatch(
+      /\.cm-diagnostic-(?:error|warning)"[\s\S]{0,80}?orange/iu
+    );
+  });
+});

@@ -6,6 +6,7 @@ import { FileTree as PierreFileTree, useFileTree } from "@pierre/trees/react";
 import * as React from "react";
 import { cn } from "../utils.ts";
 import { PIER_FILE_TREE_ICONS } from "./icon-config.ts";
+import { resolveExpandedPaths } from "./tree-expansion-apply.ts";
 import {
   fileTreeContextMenuOption,
   itemsToGitStatusEntries,
@@ -18,24 +19,33 @@ import {
   treeRenderSignature,
 } from "./tree-model.ts";
 import { FileTreeRenameSession } from "./tree-rename-session.ts";
-import { revealFileTreePath } from "./tree-reveal.ts";
 import { usePierFileTreeScrollController } from "./tree-scroll-controller.ts";
 import * as treeSearch from "./tree-search.ts";
 import { pierFileTreeStyle, TREE_SCROLLBAR_CSS } from "./tree-style.ts";
-import type {
-  PierFileTreeProps,
-  PierFileTreeRevealOptions,
-} from "./tree-types.ts";
+import type { PierFileTreeProps } from "./tree-types.ts";
 import {
   fileTreeDragAndDropConfig,
   fileTreeRenamingConfig,
 } from "./tree-write-options.ts";
 import { useFileTreeContextMenuComposition } from "./use-tree-context-menu.ts";
+import { useFileTreeExpandCollapse } from "./use-tree-expand-collapse.ts";
 import { useFileTreeLazyDirectoryLoad } from "./use-tree-lazy-directory-load.ts";
 import { useFileTreePathSync } from "./use-tree-path-sync.ts";
 import { useFileTreeRefs } from "./use-tree-refs.ts";
+import { useFileTreeRevealController } from "./use-tree-reveal-controller.ts";
 import { useFileTreeRowClickSalvage } from "./use-tree-row-click-salvage.ts";
 
+export {
+  collectKnownDirectoryPaths,
+  resolveExpandedPaths,
+} from "./tree-expansion-apply.ts";
+
+export {
+  filesTreeExpansionScopeId,
+  getTreeExpansionAuthority,
+  gitReviewTreeExpansionScopeId,
+  resetTreeExpansionAuthoritiesForTests,
+} from "./tree-expansion-authority.ts";
 export type {
   PierDirectoryLoadState,
   PierFileTreeApi,
@@ -50,11 +60,16 @@ export type {
   PierFileTreeScrollController,
   PierFileTreeScrollRestoreOptions,
   PierFileTreeScrollSnapshot,
+  TreeExpansionAuthority,
+  TreeExpansionIntent,
+  TreeExpansionSeed,
 } from "./tree-types.ts";
 
 export function PierFileTree({
   directoryErrorLabel,
   directoryStates,
+  expansionAuthority,
+  expansionSeed = "none",
   flattenEmptyDirectories = true,
   flattenMinDepth,
   items,
@@ -81,6 +96,12 @@ export function PierFileTree({
   const containerRef = React.useRef<HTMLDivElement>(null);
   const expandedDirectoriesRef = React.useRef(new Map<string, boolean>());
   const requestedLoadDirectoriesRef = React.useRef(new Set<string>());
+  const suppressAuthorityWriteRef = React.useRef(false);
+  const itemsRef = React.useRef(items);
+  itemsRef.current = items;
+  const directoryStatesRef = React.useRef(directoryStates);
+  directoryStatesRef.current = directoryStates;
+  const expandAllGenerationRef = React.useRef(0);
   const paths = React.useMemo(() => items.map(toOfficialPath), [items]);
   const renderSignature = React.useMemo(
     () => treeRenderSignature(items, directoryStates),
@@ -90,10 +111,49 @@ export function PierFileTree({
     () => itemsToGitStatusEntries(items),
     [items]
   );
-  const initialExpandedPaths = React.useMemo(
-    () => collectExpandedDirectoryPaths(items, directoryStates),
-    [directoryStates, items]
-  );
+  const didSeedScopeRef = React.useRef<string | null>(null);
+
+  // Cold-start Git seed: write file-ancestors into authority once when empty.
+  React.useEffect(() => {
+    if (!expansionAuthority || expansionSeed !== "file-ancestors") {
+      return;
+    }
+    if (
+      didSeedScopeRef.current === expansionAuthority.scopeId ||
+      items.length === 0
+    ) {
+      return;
+    }
+    const intent = expansionAuthority.getIntent();
+    if (intent.expanded.size > 0 || intent.collapsed.size > 0) {
+      didSeedScopeRef.current = expansionAuthority.scopeId;
+      return;
+    }
+    const seeded = resolveExpandedPaths(items, intent, {
+      ...(directoryStates === undefined ? {} : { directoryStates }),
+      propagateCompactChains: true,
+      seed: "file-ancestors",
+    });
+    if (seeded.length > 0) {
+      expansionAuthority.expandPaths(seeded, "seed");
+    }
+    didSeedScopeRef.current = expansionAuthority.scopeId;
+  }, [directoryStates, expansionAuthority, expansionSeed, items]);
+
+  const initialExpandedPaths = React.useMemo(() => {
+    if (expansionAuthority) {
+      const intent = expansionAuthority.getIntent();
+      return resolveExpandedPaths(items, intent, {
+        ...(directoryStates === undefined ? {} : { directoryStates }),
+        propagateCompactChains: true,
+        seed:
+          intent.expanded.size === 0 && intent.collapsed.size === 0
+            ? expansionSeed
+            : "none",
+      });
+    }
+    return collectExpandedDirectoryPaths(items, directoryStates);
+  }, [directoryStates, expansionAuthority, expansionSeed, items]);
 
   const { nextRefs, readRefs, refs } = useFileTreeRefs({
     directoryErrorLabel,
@@ -207,91 +267,47 @@ export function PierFileTree({
   useFileTreeContextMenuComposition(model, onOpenItemContextMenu != null, refs);
   treeSearch.useSearchMatchState(model, nextRefs, onSearchMatchStateChange);
   const activeSearchRef = React.useRef<string | null>(null);
-  const pendingRevealRef = React.useRef<{
-    options: PierFileTreeRevealOptions;
-    path: string;
-  } | null>(null);
-  // Explicit API/breadcrumb reveal must win over the active-file prop until the
-  // active path itself changes (otherwise expand/load churn re-asserts the file).
-  const suppressActiveRevealRef = React.useRef(false);
 
-  const runReveal = React.useCallback(
-    (path: string, options?: PierFileTreeRevealOptions): boolean =>
-      revealFileTreePath(
-        {
-          focusNearestPath: (candidate) => model.focusNearestPath(candidate),
-          focusPath: (candidate) => {
-            model.focusPath(candidate);
-          },
-          getFileTreeContainer: () =>
-            containerRef.current?.querySelector("file-tree-container") ??
-            undefined,
-          getItem: (candidate) => model.getItem(candidate),
-          getSelectedPaths: () => model.getSelectedPaths(),
-          scrollToPath: (candidate, scrollOptions) => {
-            model.scrollToPath(candidate, scrollOptions);
-          },
-          selectOnlyPath: (candidate) => {
-            model.selectOnlyPath(candidate);
-          },
-        },
-        readRefs,
-        programmaticSelectionRef,
-        path,
-        options
-      ),
-    [model, readRefs]
-  );
+  const { requestReveal, suppressActiveRevealRef } =
+    useFileTreeRevealController({
+      activeSearchRef,
+      containerRef,
+      directoryStates,
+      ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
+      model,
+      programmaticSelectionRef,
+      readRefs,
+      renderSignature,
+      revealPath,
+    });
 
-  const requestReveal = React.useCallback(
-    (path: string, options?: PierFileTreeRevealOptions) => {
-      const nextOptions: PierFileTreeRevealOptions = {
-        expandTarget: true,
-        scroll: "center",
-        ...options,
-      };
-      pendingRevealRef.current = {
-        options: nextOptions,
-        path,
-      };
-      if (runReveal(path, nextOptions)) {
-        pendingRevealRef.current = null;
-        return;
-      }
-      // Expand/lazy-load can leave the row unselectable for a frame or two.
-      const retryDelaysMs = [0, 32, 80, 160, 320];
-      for (const delayMs of retryDelaysMs) {
-        window.setTimeout(() => {
-          const pending = pendingRevealRef.current;
-          if (!pending || pending.path !== path) {
-            return;
-          }
-          if (runReveal(pending.path, pending.options)) {
-            pendingRevealRef.current = null;
-          }
-        }, delayMs);
-      }
-    },
-    [runReveal]
-  );
-
-  // Lazy directories: retry after items / directoryStates catch up.
-  // biome-ignore lint/correctness/useExhaustiveDependencies: directoryStates / model / renderSignature intentionally retrigger pending reveal after lazy loads sync into the tree.
-  React.useEffect(() => {
-    const pending = pendingRevealRef.current;
-    if (!pending) {
-      return;
-    }
-    if (runReveal(pending.path, pending.options)) {
-      pendingRevealRef.current = null;
-    }
-  }, [directoryStates, model, renderSignature, runReveal]);
+  const {
+    applyDirectoryExpansion,
+    collapseAllDirectories,
+    expandAllDirectories,
+  } = useFileTreeExpandCollapse({
+    activeSearchRef,
+    directoryStates,
+    directoryStatesRef,
+    expandAllGenerationRef,
+    expandedDirectoriesRef,
+    ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
+    items,
+    itemsRef,
+    model,
+    readRefs,
+    renderSignature,
+    suppressAuthorityWriteRef,
+  });
 
   React.useImperativeHandle(
     treeApiRef,
     () => ({
       activateFocusedSearchMatch: () =>
         treeSearch.activateFocusedMatch(model, readRefs()),
+      collapseAll: collapseAllDirectories,
+      expandAll: expandAllDirectories,
+      expandKnownDirectories: expandAllDirectories,
       focusSearchMatch: (direction) => {
         if (direction === "next") {
           model.focusNextSearchMatch();
@@ -299,18 +315,32 @@ export function PierFileTree({
           model.focusPreviousSearchMatch();
         }
       },
+      getExpansionIntent: () => expansionAuthority?.getIntent() ?? null,
       getSearchMatchCount: () => model.getSearchMatchingPaths().length,
       setSearch: (searchValue) => {
         // 记录激活中的查询:resetPaths(store 重建)会让库内搜索派生投影
         // (#searchVisiblePathSet 等)与新 store 脱节,路径同步 effect 需要
         // 先清后重放(见下方 resetPaths 分支)。
-        activeSearchRef.current =
+        const next =
           searchValue != null && searchValue.length > 0 ? searchValue : null;
+        const wasSearching = activeSearchRef.current != null;
+        activeSearchRef.current = next;
         model.setSearch(searchValue);
+        // Leaving search: re-apply authority so ephemeral search expands drop.
+        if (wasSearching && next == null && expansionAuthority) {
+          const desired = new Set(
+            resolveExpandedPaths(items, expansionAuthority.getIntent(), {
+              ...(directoryStates === undefined ? {} : { directoryStates }),
+              propagateCompactChains: true,
+              seed: "none",
+            })
+          );
+          applyDirectoryExpansion(desired);
+        }
       },
       revealPath: (path, options) => {
         suppressActiveRevealRef.current = true;
-        requestReveal(path, options);
+        return requestReveal(path, options);
       },
       removePaths: (pathsToRemove) => {
         for (const path of pathsToRemove) {
@@ -369,32 +399,20 @@ export function PierFileTree({
         return started;
       },
     }),
-    [model, readRefs, renameSession, requestReveal]
+    [
+      applyDirectoryExpansion,
+      collapseAllDirectories,
+      directoryStates,
+      expandAllDirectories,
+      expansionAuthority,
+      items,
+      model,
+      readRefs,
+      renameSession,
+      requestReveal,
+      suppressActiveRevealRef,
+    ]
   );
-
-  // Active file: select+focus+scroll nearest; expand ancestors only (not the
-  // folder itself). Programmatic select must not fire onOpenPath.
-  // Explicit breadcrumb/API reveals suppress this until the active path changes.
-  const lastRevealRef = React.useRef<string | null>(null);
-  React.useEffect(() => {
-    if (!revealPath) {
-      lastRevealRef.current = null;
-      suppressActiveRevealRef.current = false;
-      return;
-    }
-    if (revealPath !== lastRevealRef.current) {
-      lastRevealRef.current = revealPath;
-      suppressActiveRevealRef.current = false;
-      requestReveal(revealPath, {
-        expandTarget: false,
-        scroll: "nearest",
-      });
-      return;
-    }
-    if (suppressActiveRevealRef.current) {
-      return;
-    }
-  }, [requestReveal, revealPath]);
 
   React.useEffect(() => {
     model.setGitStatus(gitStatus);
@@ -403,9 +421,11 @@ export function PierFileTree({
   useFileTreeLazyDirectoryLoad({
     activeSearchRef,
     expandedDirectoriesRef,
+    ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
     model,
     readRefs,
     requestedLoadDirectoriesRef,
+    suppressAuthorityWriteRef,
   });
 
   const { captureSnapshot, restoreSnapshotSoon } =
@@ -420,6 +440,8 @@ export function PierFileTree({
     captureSnapshot,
     directoryStates,
     expandedDirectoriesRef,
+    ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
+    expansionSeed,
     items,
     model,
     modelAheadMovesRef,
