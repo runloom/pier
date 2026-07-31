@@ -81,7 +81,7 @@ jobs:
       - run: pnpm build:electron
       - run: >-
           pnpm exec playwright test --config playwright.config.ts
-          tests/e2e/native-terminal-render.spec.ts tests/e2e/git-review.spec.ts
+          tests/e2e/native/terminal-render.spec.ts tests/e2e/git/review.spec.ts
 
   windows-lsp:
     runs-on: windows-latest
@@ -95,8 +95,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm build:lsp-windows-job
       - run: >-
-          pnpm exec vitest run tests/unit/main/lsp-process-termination.test.ts
-          tests/unit/main/lsp-windows-job.integration.test.ts
+          pnpm exec vitest run tests/unit/main/lsp/process-termination.test.ts
+          tests/unit/main/lsp/windows-job.integration.test.ts
       - run: pnpm build:electron
       - name: Package both Windows architectures
         run: pnpm exec electron-builder --win --dir --x64 --arm64
