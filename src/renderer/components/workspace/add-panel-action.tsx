@@ -27,7 +27,13 @@ import {
   PopoverTitle,
   PopoverTrigger,
 } from "@pier/ui/popover.tsx";
-import { Tooltip, TooltipContent, TooltipTrigger } from "@pier/ui/tooltip.tsx";
+import {
+  releaseTooltipSuppression,
+  suppressTooltips,
+  Tooltip,
+  TooltipContent,
+  TooltipTrigger,
+} from "@pier/ui/tooltip.tsx";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import i18next from "i18next";
 import { Plus } from "lucide-react";
@@ -242,6 +248,17 @@ export function AddPanelAction(props: IDockviewHeaderActionsProps) {
       }
     };
   }, [open, props.activePanel, sourceActionInvocation]);
+
+  // executeAction 等路径会旁路 onOpenChange 直接 setOpen(false)；hard suppress 绑 open。
+  useEffect(() => {
+    if (!open) {
+      return;
+    }
+    suppressTooltips();
+    return () => {
+      releaseTooltipSuppression();
+    };
+  }, [open]);
 
   const executeAction = async (action: Action) => {
     props.activePanel?.api.setActive();

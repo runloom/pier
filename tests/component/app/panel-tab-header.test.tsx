@@ -308,7 +308,7 @@ describe("PanelTabHeader", () => {
     expect(container.querySelector("[data-tab-busy]")).toBeNull();
     expect(container.querySelector(".dv-default-tab")).toHaveAttribute(
       "aria-label",
-      "test, Running"
+      "test, Running, 来源：package.json, 命令：pnpm run test, 目录：$ZED_WORKTREE_ROOT"
     );
     expect(container.querySelector(".dv-default-tab")).toHaveAttribute(
       "data-tab-status",
@@ -342,6 +342,9 @@ describe("PanelTabHeader", () => {
     expect(container.querySelector(".dv-default-tab")).not.toHaveAttribute(
       "title"
     );
+    expect(
+      container.querySelector("[data-panel-tab-state-indicator]")
+    ).not.toHaveAttribute("title");
     expect(document.querySelector("[data-slot='tooltip-content']")).toBeNull();
 
     const tabElement = container.querySelector(".dv-default-tab");
@@ -494,7 +497,7 @@ describe("PanelTabHeader", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
-  it("does not reopen the previous tab tooltip during pointer-driven tab focus handoff", () => {
+  it("does not open tab tooltips from keyboard or pointer-driven focus", () => {
     vi.useFakeTimers();
     usePanelDescriptorStore.setState({
       activeId: "terminal-1",
@@ -529,14 +532,15 @@ describe("PanelTabHeader", () => {
       return;
     }
 
+    // 键盘/程序化 focus 不得即时开 tip（快捷键切 tab 主回归）。
     fireEvent.focus(firstTab);
-    expect(screen.getByRole("tooltip")).toHaveTextContent("one");
+    expect(screen.queryByRole("tooltip")).toBeNull();
 
+    // 指针切 tab 后的 focus handoff 也不得 reopen。
     fireEvent.pointerDown(secondTab, { button: 0, detail: 1 });
     fireEvent.pointerMove(secondTab, { pointerType: "mouse" });
     fireEvent.pointerLeave(secondTab, { pointerType: "mouse" });
     fireEvent.focus(firstTab);
-
     expect(screen.queryByRole("tooltip")).toBeNull();
   });
 
@@ -659,6 +663,40 @@ describe("PanelTabHeader", () => {
     expect(screen.queryByRole("tooltip")).toBeNull();
     advanceTooltipDelay(1);
     expect(screen.getByRole("tooltip")).toHaveTextContent("three");
+  });
+
+  it("does not attach native title on dirty dot or status indicator", () => {
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "file-1": {
+          display: { short: "draft.ts" },
+          tab: {
+            state: { label: "Running", status: "running" },
+            title: "draft.ts",
+          },
+        },
+      },
+    });
+    const { container } = render(
+      <PanelTabHeader
+        {...createHeaderProps(
+          "pier.files.filePanel",
+          "draft.ts",
+          undefined,
+          "file-1",
+          { dirty: true, pinned: true }
+        )}
+      />
+    );
+    const dirty = container.querySelector("[data-pier-tab-dirty='true']");
+    const indicator = container.querySelector(
+      "[data-panel-tab-state-indicator]"
+    );
+    expect(dirty).not.toBeNull();
+    expect(dirty).not.toHaveAttribute("title");
+    expect(indicator).not.toBeNull();
+    expect(indicator).not.toHaveAttribute("title");
   });
 
   it("falls back to the panel kit icon when tab chrome icon id is unknown", () => {
@@ -925,7 +963,7 @@ describe("PanelTabHeader", () => {
       "pointer-events-none",
       "absolute",
       "top-1/2",
-      "left-1.5",
+      "left-1",
       "-translate-y-1/2",
       "size-1.5",
       "rounded-full",

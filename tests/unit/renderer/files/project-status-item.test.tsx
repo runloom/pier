@@ -29,6 +29,18 @@ describe("files project status item width policy", () => {
     expect(source).not.toMatch(FIXED_STATUS_MAX_WIDTH_RE);
     expect(source).toContain("min-w-0 truncate");
   });
+
+  it("disables focus-open so full path only appears on hover", () => {
+    const source = readFileSync(
+      join(
+        process.cwd(),
+        "src/plugins/builtin/files/renderer/project/status-item.tsx"
+      ),
+      "utf8"
+    );
+    expect(source).toContain("openOnFocus={false}");
+    expect(source).toMatch(/aria-label=\{`\$\{openLabel\}: \$\{anchor\}`\}/);
+  });
 });
 
 describe("isFilesProjectStatusVisible", () => {

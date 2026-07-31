@@ -190,6 +190,37 @@ describe("Tooltip primitive", () => {
     await findTooltipContent();
   });
 
+  it("hard suppress blocks hover for the full suppress lifetime", async () => {
+    const { getByRole } = render(
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <button type="button">Trigger</button>
+          </TooltipTrigger>
+          <TooltipContent>Help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    const trigger = getByRole("button");
+
+    act(() => {
+      suppressTooltips();
+    });
+    fireEvent.pointerMove(document.body);
+    fireEvent.pointerLeave(trigger);
+    fireEvent.pointerMove(trigger);
+    await waitForDelay(20);
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+
+    act(() => {
+      releaseTooltipSuppression();
+    });
+    fireEvent.pointerMove(document.body);
+    fireEvent.pointerLeave(trigger);
+    fireEvent.pointerMove(trigger);
+    expect(await findTooltipContent()).toHaveTextContent("Help");
+  });
+
   it("suppresses pointer-driven focus reopen while preserving later hover", async () => {
     const { getByRole } = render(
       <TooltipProvider delayDuration={0}>
@@ -257,6 +288,28 @@ describe("Tooltip primitive", () => {
     fireEvent.keyDown(document.body, { key: "Tab" });
     fireEvent.focus(trigger);
 
+    expect(await findTooltipContent()).toHaveTextContent("Help");
+  });
+
+  it("does not open from focus when openOnFocus is false", async () => {
+    const { getByRole } = render(
+      <TooltipProvider delayDuration={0}>
+        <Tooltip>
+          <TooltipTrigger asChild openOnFocus={false}>
+            <button type="button">Trigger</button>
+          </TooltipTrigger>
+          <TooltipContent>Help</TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+    const trigger = getByRole("button");
+
+    fireEvent.keyDown(document.body, { key: "Tab" });
+    fireEvent.focus(trigger);
+    await waitForDelay(20);
+    expect(document.querySelector('[data-slot="tooltip-content"]')).toBeNull();
+
+    fireEvent.pointerMove(trigger);
     expect(await findTooltipContent()).toHaveTextContent("Help");
   });
 

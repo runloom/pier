@@ -41,7 +41,7 @@ describe("Pier dockview drag CSS", () => {
     expect(css).toContain("height: 32px !important");
     expect(css).toContain("max-width: 220px");
     expect(css).toContain("overflow: hidden");
-    expect(css).toContain("padding-inline: 10px 12px !important");
+    expect(css).toContain("padding-inline: 8px 10px !important");
     expect(css).toContain("width: fit-content !important");
     expect(css).toContain(".dockview-theme-pier .dv-tab-ghost-drag::after");
     expect(css).toContain(".dv-tab-ghost-drag::after");
@@ -83,6 +83,8 @@ describe("Pier dockview drag CSS", () => {
     );
     const idleTabRule = css.slice(idleTabRuleStart, contentRuleStart);
     expect(idleTabRule).toContain("max-width: none");
+    expect(idleTabRule).toContain("padding-inline: 6px 3px");
+    expect(idleTabRule).toContain("gap: 4px");
     expect(idleTabRule).not.toContain("max-width: 280px");
     // 标题文本槽单独限宽；与 panel-tab-layout.ts 常量交叉校验。
     expect(css).toContain(
@@ -113,12 +115,12 @@ describe("Pier dockview drag CSS", () => {
     );
 
     expect(css).toContain('&[data-pier-tab-has-active-task="true"]');
-    expect(css).toContain("padding-left: 18px");
+    expect(css).toContain("padding-left: 14px");
     // drag/ghost 的 padding-inline !important 不得盖掉 gutter
     expect(css).toContain(
       '.dv-default-tab[data-pier-tab-has-active-task="true"]'
     );
-    expect(css).toContain("padding-left: 20px !important");
+    expect(css).toContain("padding-left: 16px !important");
   });
 
   it("keeps tab close actions always visible with circular hover", () => {

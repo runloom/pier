@@ -94,31 +94,31 @@ export function LanguageServiceStatus({
   t: FilesTranslate;
 }) {
   const status = useFilesLanguageServiceStatus(ownerId, documentId);
-  // Ready is the quiet success path: the language badge already identifies
-  // the language, and a green "Ready" chip next to the save status dot only
-  // reads as redundant noise. Surface badges only for non-ready states.
+  // Ready 是安静成功态：语言 badge 已标识语言，不再叠绿 Ready 芯片。
   if (!status || status.state === "ready") {
     return null;
   }
 
   const { label, tone } = languageServiceStatePresentation(status, t);
   const description = languageServiceDescription(status, t);
-  // 状态徽标不进 Tab 序：短标签可见 + aria-label 带说明；hover tooltip 给鼠标用户。
+  // 徽标不进 Tab；span 做 trigger；openOnFocus=false 防 focus 误弹。
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          <Badge
-            aria-label={`${label}. ${description}`}
-            aria-live="polite"
-            data-language-service-status={status.state}
-            data-tone={tone}
-            role="status"
-            size="xs"
-            variant={tone}
-          >
-            {label}
-          </Badge>
+        <TooltipTrigger asChild openOnFocus={false}>
+          <span className="inline-flex">
+            <Badge
+              aria-label={`${label}. ${description}`}
+              aria-live="polite"
+              data-language-service-status={status.state}
+              data-tone={tone}
+              role="status"
+              size="xs"
+              variant={tone}
+            >
+              {label}
+            </Badge>
+          </span>
         </TooltipTrigger>
         <TooltipContent side="bottom">{description}</TooltipContent>
       </Tooltip>

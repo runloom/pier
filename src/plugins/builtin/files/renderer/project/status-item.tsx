@@ -36,15 +36,16 @@ function FilesProjectStatusItem({
   return (
     <Tooltip>
       {/* Button 未 forwardRef，asChild 需落在 span 上才能锚定。 */}
-      <TooltipTrigger asChild>
+      <TooltipTrigger asChild openOnFocus={false}>
         {/*
           不设固定 max-w-*：状态栏溢出由 host 整项 hide（priority）处理。
           硬上限会在条带仍有空位时提前 ellipsis（如 feature-git-plugin-capabilities）。
           min-w-0 + 文案 truncate 仅作 pinned 仍放不下时的最后兜底。
+          openOnFocus=false：完整路径只给 hover；focus/快捷键不得瞬时弹出。
         */}
         <span className="inline-flex min-w-0">
           <Button
-            aria-label={openLabel}
+            aria-label={`${openLabel}: ${anchor}`}
             className={cn(STATUS_BAR_ITEM_TRIGGER_CLASS, "max-w-full")}
             data-testid="files-project-status-trigger"
             onClick={() => {

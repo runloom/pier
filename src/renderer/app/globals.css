@@ -856,7 +856,7 @@ body {
 .dv-tab.dv-tab-dragging .dv-default-tab,
 .dv-tab-ghost-drag .dv-default-tab {
   box-sizing: border-box;
-  gap: 6px;
+  gap: 4px;
   /*
    * Tab 仍按内容定宽（整颗 tab 不设硬顶）；标题文本槽单独 max-width +
    * ellipsis。trailing / dirty / × 始终 shrink-0 可见。多 tab 超出时由
@@ -864,10 +864,10 @@ body {
    */
   max-width: none;
   min-width: 0;
-  padding-inline: 8px 4px;
-  /* 活跃任务圆点占左缘槽位：6px 点 + 6px 与 flex gap 对齐的间距 */
+  padding-inline: 6px 3px;
+  /* 活跃任务圆点占左缘槽位：4px left + 6px 点 + 4px gap = 14 */
   &[data-pier-tab-has-active-task="true"] {
-    padding-left: 18px;
+    padding-left: 14px;
   }
 }
 
@@ -1024,7 +1024,7 @@ body {
   height: 32px !important;
   max-width: 220px !important;
   overflow: hidden !important;
-  padding-inline: 10px 12px !important;
+  padding-inline: 8px 10px !important;
   width: fit-content !important;
 }
 
@@ -1034,7 +1034,7 @@ body {
   .dv-default-tab[data-pier-tab-has-active-task="true"],
 .dv-tab.dv-tab-dragging .dv-default-tab[data-pier-tab-has-active-task="true"],
 .dv-tab-ghost-drag .dv-default-tab[data-pier-tab-has-active-task="true"] {
-  padding-left: 20px !important;
+  padding-left: 16px !important;
 }
 
 .dockview-theme-pier .dv-tab-ghost-drag::after,
