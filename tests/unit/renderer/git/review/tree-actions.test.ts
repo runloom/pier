@@ -134,12 +134,15 @@ describe("git review tree actions", () => {
     expect(ids).toContain("pier.git.review.stageFile");
     expect(ids).toContain("pier.git.review.unstageFile");
     expect(ids).not.toContain(GIT_REVIEW_OPEN_FILE_COMMAND_ID);
+    // 1_review + 2_view + 6_path → separators between groups.
     expect(directoryMenu.some((entry) => entry.type === "separator")).toBe(
-      false
+      true
     );
+    expect(ids).toContain("pier.git.review.expandAll");
+    expect(ids).toContain("pier.git.review.copyPath");
   });
 
-  it("keeps review item actions in one group without separators", () => {
+  it("orders review / view / path groups for file rows", () => {
     const fileMenu = buildMenuEntries(GIT_REVIEW_TREE_ITEM_SURFACE, {
       metadata: {
         contextId: "ctx",
@@ -154,12 +157,19 @@ describe("git review tree actions", () => {
       },
       surface: GIT_REVIEW_TREE_ITEM_SURFACE,
     });
-    expect(fileMenu.some((entry) => entry.type === "separator")).toBe(false);
+    // File rows hide expand/collapse; still have path group after review.
+    expect(fileMenu.some((entry) => entry.type === "separator")).toBe(true);
     expect(collectActionIds(fileMenu)).toEqual([
       GIT_REVIEW_OPEN_FILE_COMMAND_ID,
       "pier.git.review.stageFile",
       "pier.git.review.discardFile",
+      "pier.git.review.copyPath",
+      "pier.git.review.copyRelativePath",
+      "pier.git.review.revealInFinder",
     ]);
+    expect(collectActionIds(fileMenu)).not.toContain(
+      "pier.git.review.expandAll"
+    );
   });
 
   it("keeps reading available while disabling every mutation during a repository write", () => {

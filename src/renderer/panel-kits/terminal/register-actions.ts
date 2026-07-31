@@ -9,10 +9,13 @@ import {
   activeTerminalPanelId,
   rendererActionContributionRuntime,
 } from "@/lib/actions/renderer-action-runtime.ts";
+import type { ActionInvocation } from "@/lib/actions/types.ts";
 import {
   canRenameAgentSession,
   promptRenameAgentSession,
 } from "@/lib/agent-runtime/rename-agent-session.ts";
+import { selectedTextFromInvocation } from "@/lib/context-menu/selection-text.ts";
+import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import {
   dispatchTerminalComposerAttach,
@@ -21,7 +24,29 @@ import {
 import { isAgentComposerEligibleForPanel } from "./composer-mount.ts";
 import { dispatchTerminalOpenSearch } from "./search-events.ts";
 
+function resolveTerminalPanelId(invocation?: ActionInvocation): string | null {
+  return invocation?.sourcePanelId ?? activeTerminalPanelId();
+}
+
+async function runTerminalOperation(
+  panelId: string,
+  operation: TerminalOperation
+): Promise<void> {
+  const result = await window.pier.terminal.performOperation(
+    panelId,
+    operation
+  );
+  if (result.ok) {
+    return;
+  }
+  await showAppAlert({
+    body: result.error,
+    title: i18next.t("contextMenu.action.terminalOperationFailed"),
+  });
+}
+
 function terminalOperationContribution(opts: {
+  enabled?: (invocation?: ActionInvocation) => boolean;
   id: string;
   operation: TerminalOperation;
   sortOrder: number;
@@ -29,19 +54,14 @@ function terminalOperationContribution(opts: {
 }): ActionContribution {
   return {
     categoryKey: "terminal",
+    ...(opts.enabled ? { enabled: opts.enabled } : {}),
     group: "0_edit",
-    handler: async () => {
-      const panelId = activeTerminalPanelId();
+    handler: async (invocation) => {
+      const panelId = resolveTerminalPanelId(invocation);
       if (!panelId) {
         return;
       }
-      const result = await window.pier.terminal.performOperation(
-        panelId,
-        opts.operation
-      );
-      if (!result.ok) {
-        console.error("[terminal-actions] operation failed:", result.error);
-      }
+      await runTerminalOperation(panelId, opts.operation);
     },
     id: opts.id,
     sortOrder: opts.sortOrder,
@@ -51,8 +71,14 @@ function terminalOperationContribution(opts: {
   };
 }
 
+function hasPinnedTerminalSelection(invocation?: ActionInvocation): boolean {
+  return selectedTextFromInvocation(invocation).length > 0;
+}
+
 export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   terminalOperationContribution({
+    // 无选区禁用；打开菜单时由 panel 钉 selectedText。
+    enabled: hasPinnedTerminalSelection,
     id: "pier.terminal.copy",
     operation: "copy",
     sortOrder: 1,
@@ -73,8 +99,8 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
     categoryKey: "terminal",
     group: "0_edit",
-    handler: () => {
-      const panelId = activeTerminalPanelId();
+    handler: (invocation) => {
+      const panelId = resolveTerminalPanelId(invocation);
       if (!panelId) {
         return;
       }
@@ -87,18 +113,51 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     titleKey: "contextMenu.action.find",
     when: "terminal.hasActivePanel",
   },
+  terminalOperationContribution({
+    id: "pier.terminal.clearScreen",
+    operation: "clearScreen",
+    sortOrder: 5,
+    titleKey: "contextMenu.action.clearScreen",
+  }),
+  {
+    categoryKey: "terminal",
+    enabled: hasPinnedTerminalSelection,
+    group: "0_edit",
+    handler: async (invocation) => {
+      const panelId = resolveTerminalPanelId(invocation);
+      const text = selectedTextFromInvocation(invocation);
+      if (!(panelId && text.length > 0)) {
+        return;
+      }
+      // paste 文本后注入 Return（sendText submit 语义）。
+      const result = await window.pier.terminal.sendText({
+        panelId,
+        submit: true,
+        text: text.replace(/\n+$/u, ""),
+      });
+      if (!result.ok) {
+        await showAppAlert({
+          body: result.error,
+          title: i18next.t("contextMenu.action.terminalOperationFailed"),
+        });
+      }
+    },
+    id: "pier.terminal.runSelection",
+    sortOrder: 6,
+    surfaces: ["terminal/content"],
+    titleKey: "contextMenu.action.runSelection",
+    when: "terminal.hasActivePanel",
+  },
   {
     categoryKey: "terminal",
     enabled: () => {
       const id = activeTerminalPanelId();
       return id != null && isAgentComposerEligibleForPanel(id);
     },
-    group: "0_edit",
+    group: "2_agent",
     handler: () => {
       const panelId = activeTerminalPanelId();
       if (!panelId) {
-        // 点击激活失败时 activePanel 可能不是终端；静默返回会让用户以为
-        // 快捷键失效，给出可操作的反馈。
         toast.error(i18next.t("terminal.composer.noActiveTerminal"));
         return;
       }
@@ -110,8 +169,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       const id = activeTerminalPanelId();
       return id == null || !isAgentComposerEligibleForPanel(id);
     },
-    // After Find(4), Clear(5).
-    sortOrder: 7,
+    sortOrder: 2,
     surfaces: ["terminal/content", "command-palette"],
     titleKey: "contextMenu.action.openRichInput",
     when: "terminal.hasActivePanel",
@@ -122,7 +180,7 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
       const id = activeTerminalPanelId();
       return id != null && isAgentComposerEligibleForPanel(id);
     },
-    group: "0_edit",
+    group: "2_agent",
     handler: () => {
       const panelId = activeTerminalPanelId();
       if (!panelId) {
@@ -132,32 +190,23 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     },
     iconComponent: Paperclip,
     id: "pier.terminal.composerAttach",
-    // Attach lives on the Rich Input paperclip + ⌘⇧A; keep command palette,
-    // but do not crowd the terminal context menu.
-    sortOrder: 8,
+    sortOrder: 3,
     surfaces: ["command-palette"],
     titleKey: "contextMenu.action.attachRichInputFile",
     when: "terminal.hasActivePanel",
   },
-  terminalOperationContribution({
-    id: "pier.terminal.clearScreen",
-    operation: "clearScreen",
-    sortOrder: 5,
-    titleKey: "contextMenu.action.clearScreen",
-  }),
   {
     categoryKey: "terminal",
     enabled: (invocation) => {
-      const id = invocation?.sourcePanelId ?? activeTerminalPanelId();
+      const id = resolveTerminalPanelId(invocation);
       return id != null && canRenameAgentSession(id);
     },
-    group: "0_edit",
+    group: "2_agent",
     handler: async (invocation) => {
-      const panelId = invocation?.sourcePanelId ?? activeTerminalPanelId();
+      const panelId = resolveTerminalPanelId(invocation);
       if (!panelId) {
         return;
       }
-      // tab 右键可不预激活；改名前显式聚焦目标终端。
       const panel = useWorkspaceStore
         .getState()
         .api?.panels.find((candidate) => candidate.id === panelId);
@@ -167,10 +216,10 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
     iconComponent: Pencil,
     id: "pier.terminal.renameAgentSession",
     menuHidden: (invocation) => {
-      const id = invocation?.sourcePanelId ?? activeTerminalPanelId();
+      const id = resolveTerminalPanelId(invocation);
       return id == null || !canRenameAgentSession(id);
     },
-    sortOrder: 6,
+    sortOrder: 1,
     surfaces: ["terminal/content", "dockview-tab", "command-palette"],
     titleKey: "contextMenu.action.renameAgentSession",
     when: "terminal.hasActivePanel",
@@ -178,13 +227,29 @@ export const TERMINAL_ACTION_CONTRIBUTIONS: readonly ActionContribution[] = [
   {
     categoryKey: "terminal",
     group: "9_close",
-    handler: () => {
-      actionRegistry.get("pier.panel.close")?.handler();
+    handler: (invocation) => {
+      const panelId = resolveTerminalPanelId(invocation);
+      if (panelId) {
+        useWorkspaceStore
+          .getState()
+          .closePanel(panelId)
+          .catch((err: unknown) => {
+            console.error("[terminal] closePanel failed:", err);
+          });
+        return;
+      }
+      const closeAction = actionRegistry.get("pier.panel.close");
+      if (!closeAction) {
+        return;
+      }
+      Promise.resolve(closeAction.handler(invocation)).catch((err: unknown) => {
+        console.error("[terminal] pier.panel.close failed:", err);
+      });
     },
     iconComponent: X,
     id: "pier.terminal.close",
     sortOrder: 1,
-    surfaces: ["terminal/content"],
+    surfaces: ["terminal/content", "terminal/restored"],
     titleKey: "contextMenu.action.closeTerminal",
     when: "terminal.hasActivePanel",
   },

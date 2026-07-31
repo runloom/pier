@@ -124,7 +124,8 @@ export interface RendererPluginAction {
   id: string;
   metadata?: RendererPluginActionMetadata;
   surfaces?: readonly (string & {})[];
-  title: () => string;
+  /** 可读取 invocation（如右键 metadata）生成动态标题。 */
+  title: (invocation?: RendererPluginActionInvocation) => string;
 }
 
 export interface RendererPluginQuickPickItemBadge {

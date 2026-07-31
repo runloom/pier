@@ -67,19 +67,27 @@ describe("action contributions", () => {
     const closeAction = dockviewTabActions.find(
       (action) => action.id === "pier.panel.close"
     );
-    const contentLayoutActions = PANEL_LAYOUT_ACTION_CONTRIBUTIONS.filter(
-      (action) => action.surfaces.includes("panel/content")
+    const editActions = PANEL_LAYOUT_ACTION_CONTRIBUTIONS.filter((action) =>
+      action.surfaces.includes("panel/edit")
+    );
+    const layoutActions = PANEL_LAYOUT_ACTION_CONTRIBUTIONS.filter((action) =>
+      action.surfaces.includes("panel/layout")
     );
 
     expect(dockviewTabActions.map((action) => action.id)).toEqual([
       "pier.panel.copyPath",
+      "pier.panel.keepOpen",
       "pier.panel.close",
       "pier.panel.closeOthers",
+      "pier.panel.closeToTheRight",
+      "pier.panel.closeGroup",
     ]);
     expect(closeAction?.shortcutSourceId).toBe("pier.panel.closeActive");
-    expect(contentLayoutActions.map((action) => action.id)).toEqual([
+    expect(editActions.map((action) => action.id)).toEqual([
       "pier.panel.copySelection",
       "pier.panel.selectAll",
+    ]);
+    expect(layoutActions.map((action) => action.id)).toEqual([
       "pier.panel.equalizeSplits",
       "pier.panel.focusRight",
       "pier.panel.focusDown",

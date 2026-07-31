@@ -53,6 +53,7 @@ export function registerGitReviewTreeFolderActions(options: {
       metadata: {
         categoryKey: "git",
         group: "2_view",
+        menuHidden: (invocation) => parseItem(invocation)?.kind === "file",
         sortOrder: 49,
       },
       surfaces: [surface],
@@ -71,6 +72,7 @@ export function registerGitReviewTreeFolderActions(options: {
       metadata: {
         categoryKey: "git",
         group: "2_view",
+        menuHidden: (invocation) => parseItem(invocation)?.kind === "file",
         sortOrder: 50,
       },
       surfaces: [surface],

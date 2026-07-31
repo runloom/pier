@@ -336,7 +336,21 @@
     "filePanel.editor.hover.noInformation": "No symbol information is available here.",
     "filePanel.editor.hover.previewUnavailable": "Preview unavailable",
     "filePanel.editor.hover.symbolTitle": "Symbol information",
-    "filePanel.editor.hover.unavailable": "Symbol information is temporarily unavailable."
+    "filePanel.editor.hover.unavailable": "Symbol information is temporarily unavailable.",
+    "filePanel.tree.action.cut": "Cut",
+    "filePanel.tree.action.copy": "Copy",
+    "filePanel.tree.action.paste": "Paste",
+    "filePanel.tree.cutReady": "Ready to move",
+    "filePanel.tree.copyReady": "Ready to paste",
+    "filePanel.tree.pasteDone": "Paste complete",
+    "filePanel.tree.pasteWrongProject": "Can only paste within the same project.",
+    "filePanel.tree.pasteFailed": "Couldn't paste",
+    "filePanel.tree.pastePartial": "Pasted {{done}} of {{total}}; some items failed.",
+    "filePanel.tree.pasteIntoSelf": "Can't paste a folder into itself.",
+    "filePanel.contentSearch.action.open": "Open",
+    "filePanel.contentSearch.action.copyMatch": "Copy Match Line",
+    "filePanel.contentSearch.matchCopied": "Match line copied",
+    "filePanel.contentSearch.contextMenuFailed": "Unable to open menu"
   },
   "terminalStatusItems": {
     "pier.files.project": {

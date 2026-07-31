@@ -336,7 +336,21 @@
     "filePanel.editor.hover.noInformation": "此处没有可用的符号信息。",
     "filePanel.editor.hover.previewUnavailable": "预览不可用",
     "filePanel.editor.hover.symbolTitle": "符号信息",
-    "filePanel.editor.hover.unavailable": "符号信息暂时不可用。"
+    "filePanel.editor.hover.unavailable": "符号信息暂时不可用。",
+    "filePanel.tree.action.cut": "剪切",
+    "filePanel.tree.action.copy": "复制",
+    "filePanel.tree.action.paste": "粘贴",
+    "filePanel.tree.cutReady": "已剪切，可粘贴",
+    "filePanel.tree.copyReady": "已复制，可粘贴",
+    "filePanel.tree.pasteDone": "粘贴完成",
+    "filePanel.tree.pasteWrongProject": "只能在同一项目内粘贴。",
+    "filePanel.tree.pasteFailed": "无法粘贴",
+    "filePanel.tree.pastePartial": "已粘贴 {{done}} / {{total}} 项，其余失败。",
+    "filePanel.tree.pasteIntoSelf": "不能将文件夹粘贴到自身内部。",
+    "filePanel.contentSearch.action.open": "打开",
+    "filePanel.contentSearch.action.copyMatch": "复制匹配行",
+    "filePanel.contentSearch.matchCopied": "已复制匹配行",
+    "filePanel.contentSearch.contextMenuFailed": "无法打开菜单"
   },
   "terminalStatusItems": {
     "pier.files.project": {

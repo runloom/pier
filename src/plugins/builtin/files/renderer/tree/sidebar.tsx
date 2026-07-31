@@ -58,6 +58,7 @@ export function FileTreeSidebar({
   controller,
   instanceId,
   onOpenFile,
+  projectRoot,
   root,
   sourcePanelId,
   watchHub,
@@ -309,6 +310,7 @@ export function FileTreeSidebar({
     instanceId,
     root,
     selectedPathsRef,
+    ...(projectRoot ? { projectRoot } : {}),
     ...(sourcePanelId ? { sourcePanelId } : {}),
     t,
   });

@@ -23,14 +23,14 @@ function actionTargetPanel(invocation?: ActionInvocation) {
 
 export function activeTerminalPanelId(): string | null {
   const panel = useWorkspaceStore.getState().api?.activePanel;
-  return panel?.view.contentComponent === "terminal" ? panel.id : null;
+  return panel?.view?.contentComponent === "terminal" ? panel.id : null;
 }
 
 /** 任务终端和后台任务输出面板都属于运行菜单的任务面板。 */
 export function activeIsTaskRunPanel(invocation?: ActionInvocation): boolean {
   const panel = actionTargetPanel(invocation);
   return Boolean(
-    panel?.view.contentComponent === "terminal" &&
+    panel?.view?.contentComponent === "terminal" &&
       isTaskRunPanelParams(panel.params)
   );
 }
@@ -50,11 +50,11 @@ export function rendererActionContext(
   return {
     terminal: {
       activeIsTaskPanel: activeIsTaskRunPanel(invocation),
-      hasActivePanel: targetPanel?.view.contentComponent === "terminal",
+      hasActivePanel: targetPanel?.view?.contentComponent === "terminal",
     },
     workspace: {
       activeGroupPanelCount:
-        targetGroup?.panels.length ?? api?.activeGroup?.panels?.length ?? 0,
+        targetGroup?.panels?.length ?? api?.activeGroup?.panels?.length ?? 0,
       groupCount: api?.groups?.length ?? 0,
       // 有 source 目标或当前 active 都算「有可操作 panel」。
       hasActivePanel: targetPanel != null || api?.activePanel != null,

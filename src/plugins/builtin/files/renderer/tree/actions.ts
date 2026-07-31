@@ -29,6 +29,11 @@ import {
   validateName,
   writeClipboardText,
 } from "./action-utils.ts";
+import {
+  createFileClipboardCopyAction,
+  createFileClipboardCutAction,
+  createFileClipboardPasteAction,
+} from "./actions-clipboard.ts";
 import { createDuplicateAction } from "./actions-duplicate.ts";
 import { beginInlineCreate, createViaPrompt } from "./create.ts";
 import { createDeleteAction } from "./delete-action.ts";
@@ -136,7 +141,19 @@ function createRenameAction(
   return pluginAction({
     id: FILES_RENAME_COMMAND_ID,
     category: "file",
-    metadata: { group: "5_edit", sortOrder: 1 },
+    metadata: {
+      group: "5_edit",
+      // 多选不支持批量重命名。
+      menuHidden: (invocation) => {
+        const target = parseTreeMetadata(invocation);
+        return Boolean(
+          target?.selectedPaths &&
+            target.selectedPaths.length > 1 &&
+            target.selectedPaths.includes(target.path)
+        );
+      },
+      sortOrder: 1,
+    },
     surfaces: ["files/tree-item"],
     title: () => t("filePanel.tree.action.rename", "Rename..."),
     handler: async (invocation) => {
@@ -218,23 +235,80 @@ function createCopyPathAction(
         : FILES_COPY_RELATIVE_PATH_COMMAND_ID,
     category: "file",
     metadata: {
-      group: "6_copypath",
+      group: "6_path",
       sortOrder: variant === "absolute" ? 1 : 2,
     },
-    surfaces: ["files/tree-item"],
+    surfaces: ["files/tree-item", "files/editor", "files/markdown-preview"],
     title: () =>
       variant === "absolute"
         ? t("filePanel.tree.action.copyPath", "Copy Path")
         : t("filePanel.tree.action.copyRelativePath", "Copy Relative Path"),
     handler: async (invocation) => {
-      const target = parseTreeMetadata(invocation);
-      if (!target) {
+      const treeTarget = parseTreeMetadata(invocation);
+      if (treeTarget) {
+        const paths =
+          treeTarget.selectedPaths &&
+          treeTarget.selectedPaths.length > 1 &&
+          treeTarget.selectedPaths.includes(treeTarget.path)
+            ? treeTarget.selectedPaths
+            : [treeTarget.path];
+        const value = paths
+          .map((path) =>
+            variant === "absolute"
+              ? joinAbsolutePath(treeTarget.root, path)
+              : relativeToProjectRoot(
+                  treeTarget.root,
+                  path,
+                  treeTarget.projectRoot
+                )
+          )
+          .join("\n");
+        try {
+          await writeClipboardText(value);
+          context.notifications.success(
+            t("filePanel.tree.pathCopied", "Path copied")
+          );
+        } catch (error) {
+          await context.dialogs.alert({
+            body: error instanceof Error ? error.message : String(error),
+            title: t("filePanel.tree.copyFailed", "Copy failed"),
+          });
+        }
+        return;
+      }
+      const editorTarget = parseEditorMetadata(invocation);
+      // Markdown preview 等 disk 源同样携带 path/root（可选 projectRoot）。
+      const diskTarget =
+        editorTarget ??
+        (() => {
+          const path =
+            typeof invocation?.metadata?.path === "string"
+              ? invocation.metadata.path
+              : null;
+          const root =
+            typeof invocation?.metadata?.root === "string"
+              ? invocation.metadata.root
+              : null;
+          if (!(path && root)) {
+            return null;
+          }
+          const projectRoot =
+            typeof invocation?.metadata?.projectRoot === "string"
+              ? invocation.metadata.projectRoot
+              : undefined;
+          return { path, projectRoot, root };
+        })();
+      if (!diskTarget) {
         return;
       }
       const value =
         variant === "absolute"
-          ? joinAbsolutePath(target.root, target.path)
-          : target.path;
+          ? joinAbsolutePath(diskTarget.root, diskTarget.path)
+          : relativeToProjectRoot(
+              diskTarget.root,
+              diskTarget.path,
+              diskTarget.projectRoot
+            );
       try {
         await writeClipboardText(value);
         context.notifications.success(
@@ -257,7 +331,7 @@ function createCopyPathWithRangeAction(
   return pluginAction({
     id: FILES_COPY_PATH_WITH_RANGE_COMMAND_ID,
     category: "file",
-    metadata: { group: "6_copypath", sortOrder: 3 },
+    metadata: { group: "6_path", sortOrder: 3 },
     surfaces: ["files/editor"],
     title: () =>
       t(
@@ -305,16 +379,29 @@ function createRevealAction(
   return pluginAction({
     id: FILES_REVEAL_COMMAND_ID,
     category: "file",
-    metadata: { group: "6_copypath", sortOrder: 4 },
-    surfaces: ["files/tree-item"],
+    metadata: { group: "6_path", sortOrder: 4 },
+    surfaces: ["files/tree-item", "files/editor", "files/markdown-preview"],
     title: () => t("filePanel.tree.action.reveal", "Reveal in Finder"),
     handler: async (invocation) => {
-      const target = parseTreeMetadata(invocation);
-      if (!target) {
+      const treeTarget = parseTreeMetadata(invocation);
+      const editorTarget = parseEditorMetadata(invocation);
+      const path =
+        treeTarget?.path ??
+        editorTarget?.path ??
+        (typeof invocation?.metadata?.path === "string"
+          ? invocation.metadata.path
+          : undefined);
+      const root =
+        treeTarget?.root ??
+        editorTarget?.root ??
+        (typeof invocation?.metadata?.root === "string"
+          ? invocation.metadata.root
+          : undefined);
+      if (!(path && root)) {
         return;
       }
       try {
-        await context.files.reveal({ path: target.path, root: target.root });
+        await context.files.reveal({ path, root });
       } catch (error) {
         await context.dialogs.alert({
           body: error instanceof Error ? error.message : String(error),
@@ -335,6 +422,9 @@ export function createFilesTreeActions(
     createNewChildAction("folder", FILES_NEW_FOLDER_COMMAND_ID, context, t),
     createRenameAction(context, t, controller),
     createDuplicateAction(context, t),
+    createFileClipboardCutAction(context, t),
+    createFileClipboardCopyAction(context, t),
+    createFileClipboardPasteAction(context, t),
     createDeleteAction(context, t, controller),
     createCopyPathAction(context, t, "absolute"),
     createCopyPathAction(context, t, "relative"),

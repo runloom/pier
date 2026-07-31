@@ -1,9 +1,9 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import {
   captureDomSelectionText,
+  hasSpecializedEditPipelineSurface,
   registerSelectionTextProvider,
   selectedTextFromInvocation,
-  surfaceHasLocalCopyAction,
 } from "@/lib/context-menu/selection-text.ts";
 
 describe("selection-text", () => {
@@ -54,12 +54,20 @@ describe("selection-text", () => {
     );
   });
 
-  it("hides shared copy on terminal, editor, and tree surfaces", () => {
-    expect(surfaceHasLocalCopyAction("terminal/content")).toBe(true);
-    expect(surfaceHasLocalCopyAction("files/editor")).toBe(true);
-    expect(surfaceHasLocalCopyAction("files/tree-item")).toBe(true);
-    expect(surfaceHasLocalCopyAction("files/tree-background")).toBe(true);
-    expect(surfaceHasLocalCopyAction("git/review-tree-item")).toBe(true);
-    expect(surfaceHasLocalCopyAction("panel/content")).toBe(false);
+  it("specialized edit pipeline is only terminal live and files editor", () => {
+    expect(hasSpecializedEditPipelineSurface("terminal/content")).toBe(true);
+    expect(hasSpecializedEditPipelineSurface("files/editor")).toBe(true);
+    // Trees are object surfaces: no specialized pipeline; they simply do not merge edit.
+    expect(hasSpecializedEditPipelineSurface("files/tree-item")).toBe(false);
+    expect(hasSpecializedEditPipelineSurface("files/tree-background")).toBe(
+      false
+    );
+    expect(hasSpecializedEditPipelineSurface("git/review-tree-item")).toBe(
+      false
+    );
+    expect(hasSpecializedEditPipelineSurface("panel/content")).toBe(false);
+    expect(hasSpecializedEditPipelineSurface("files/markdown-preview")).toBe(
+      false
+    );
   });
 });

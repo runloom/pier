@@ -34,6 +34,8 @@ export interface FileTreeSidebarProps {
   /** 注册表键:共享 group 视图传 groupId,内联回退传 panelId。 */
   instanceId: string;
   onOpenFile: (entry: FileEntry, options?: { pinned?: boolean }) => void;
+  /** 可选项目路径锚点；与 root 不同时用于复制相对路径。 */
+  projectRoot?: string | null;
   root: string;
   /** dockview panel id，供右键布局动作定位来源面板。 */
   sourcePanelId?: string;

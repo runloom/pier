@@ -6,7 +6,14 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 import type { FileContentQueryItem } from "@shared/contracts/file/query.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import {
+  type MouseEvent as ReactMouseEvent,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import {
   FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
   FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
@@ -23,6 +30,7 @@ import {
   type ContentQuerySnapshot,
   createFilesContentQueryClient,
 } from "./client.ts";
+import { popupSearchResultContextMenu } from "./context-actions.ts";
 import { openContentSearchHit } from "./open.ts";
 import {
   conditionsFromPanelParams,
@@ -195,6 +203,42 @@ export function createFilesContentSearchPanel(
       [conditions.root, props.params]
     );
 
+    const onResultContextMenu = useCallback(
+      (event: ReactMouseEvent, hit: FileContentQueryItem) => {
+        if (!conditions.root) {
+          return;
+        }
+        const pluginContext = contextRef.current;
+        const panelContext =
+          panelContextFromParams(props.params) ??
+          pluginContext.panels.getActiveContext();
+        popupSearchResultContextMenu(pluginContext, {
+          hit,
+          panelContext,
+          point: { x: event.clientX, y: event.clientY },
+          root: conditions.root,
+          ...(panelContext?.projectRootPath
+            ? { projectRoot: panelContext.projectRootPath }
+            : {}),
+          ...(typeof props.api.group?.id === "string"
+            ? { sourcePanelGroupId: props.api.group.id }
+            : {}),
+          sourcePanelId: props.api.id,
+        }).catch((error: unknown) => {
+          pluginContext.dialogs
+            .alert({
+              body: error instanceof Error ? error.message : String(error),
+              title: t(
+                "filePanel.contentSearch.contextMenuFailed",
+                "Unable to open menu"
+              ),
+            })
+            .catch(() => undefined);
+        });
+      },
+      [conditions.root, props.api, props.params, t]
+    );
+
     const patchConditions = useCallback(
       (patch: Partial<FilesContentSearchConditions>) => {
         setConditions((prev) => ({ ...prev, ...patch }));
@@ -243,6 +287,7 @@ export function createFilesContentSearchPanel(
             activeIndex={activeIndex}
             conditions={conditions}
             groups={groups}
+            onContextMenu={onResultContextMenu}
             onOpenHit={openHit}
             onSetActiveIndex={setActiveIndex}
             snapshot={snapshot}

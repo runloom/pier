@@ -118,8 +118,30 @@ describe("Git Review failure state", () => {
     accumulator.updateRenderError("section:0:1", null, undefined);
     expect(accumulator.summary(null)).toEqual({
       hasHiddenFailures: false,
+      softRetainedOnly: false,
       visibleFailures: [],
     });
+  });
+
+  it("仅 refresh 失败时 softRetainedOnly=true", () => {
+    const accumulator = new GitReviewFailureAccumulator();
+    const item = entry(0);
+    const refreshFailure = failure(item, "soft retain refresh");
+    accumulator.applyGenerationChanges(
+      [change(refreshFailure, item.entryKey, "refresh")],
+      { settled: true }
+    );
+    expect(accumulator.summary(null)).toEqual({
+      hasHiddenFailures: false,
+      softRetainedOnly: true,
+      visibleFailures: [refreshFailure],
+    });
+    const documentFailure = failure(item, "hard document");
+    accumulator.applyGenerationChanges(
+      [change(documentFailure, item.entryKey)],
+      { settled: true }
+    );
+    expect(accumulator.summary(null).softRetainedOnly).toBe(false);
   });
 
   it("settled=false 时忽略 refresh 失败与 render 闪错", () => {

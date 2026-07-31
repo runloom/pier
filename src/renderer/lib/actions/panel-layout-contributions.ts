@@ -13,17 +13,58 @@ import {
 import { toast } from "sonner";
 import {
   captureDomSelectionText,
+  hasSpecializedEditPipelineSurface,
   runSelectionSelectAll,
   selectedTextFromInvocation,
-  surfaceHasLocalCopyAction,
 } from "@/lib/context-menu/selection-text.ts";
+import {
+  PANEL_EDIT_SURFACE,
+  PANEL_LAYOUT_SURFACE,
+} from "@/lib/context-menu/surface-profiles.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
+import { panelsInSameGroup } from "@/stores/workspace-panel-helpers.ts";
 import type { ActionContribution } from "./contribution-types.ts";
 import { resolvePanelCopyPath } from "./panel-copy-path.ts";
+import type { ActionInvocation } from "./types.ts";
+
+const PANEL_TAB_FILE_COMPONENT_ID = "pier.files.filePanel";
+
+function resolveTabPanel(invocation?: ActionInvocation) {
+  const api = useWorkspaceStore.getState().api;
+  const panelId = invocation?.sourcePanelId ?? api?.activePanel?.id;
+  if (!(api && panelId)) {
+    return null;
+  }
+  return api.panels.find((panel) => panel.id === panelId) ?? null;
+}
+
+function isPreviewFileTab(invocation?: ActionInvocation): boolean {
+  const panel = resolveTabPanel(invocation);
+  if (!panel || panel.view?.contentComponent !== PANEL_TAB_FILE_COMPONENT_ID) {
+    return false;
+  }
+  const params = panel.params as { pinned?: unknown } | undefined;
+  return params?.pinned === false;
+}
 
 function activePanelId(): string | null {
   return useWorkspaceStore.getState().api?.activePanel?.id ?? null;
+}
+
+function hasPanelsToTheRight(invocation?: { sourcePanelId?: string }): boolean {
+  const api = useWorkspaceStore.getState().api;
+  const panelId = invocation?.sourcePanelId ?? activePanelId();
+  if (!(api && panelId)) {
+    return false;
+  }
+  try {
+    const groupPanels = panelsInSameGroup(api, panelId);
+    const index = groupPanels.findIndex((panel) => panel.id === panelId);
+    return index >= 0 && index < groupPanels.length - 1;
+  } catch {
+    return false;
+  }
 }
 
 async function writeClipboardText(text: string): Promise<void> {
@@ -66,9 +107,9 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
         return text.length > 0;
       },
       menuHidden: (invocation) =>
-        surfaceHasLocalCopyAction(invocation?.surface),
+        hasSpecializedEditPipelineSurface(invocation?.surface),
       sortOrder: 0,
-      surfaces: ["panel/content"],
+      surfaces: [PANEL_EDIT_SURFACE],
       titleKey: "contextMenu.action.copy",
     },
     {
@@ -99,14 +140,31 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
     {
       categoryKey: "panel",
       group: "0_edit",
+      handler: (invocation) => {
+        const panel = resolveTabPanel(invocation);
+        if (!panel) {
+          return;
+        }
+        // Preview → pinned（与双击 promote 同语义）。
+        panel.api.updateParameters({ pinned: true });
+      },
+      id: "pier.panel.keepOpen",
+      menuHidden: (invocation) => !isPreviewFileTab(invocation),
+      sortOrder: 3,
+      surfaces: ["dockview-tab"],
+      titleKey: "contextMenu.action.keepOpen",
+    },
+    {
+      categoryKey: "panel",
+      group: "0_edit",
       handler: async (invocation) => {
         runSelectionSelectAll(invocation?.sourcePanelId);
       },
       id: "pier.panel.selectAll",
       menuHidden: (invocation) =>
-        surfaceHasLocalCopyAction(invocation?.surface),
+        hasSpecializedEditPipelineSurface(invocation?.surface),
       sortOrder: 1,
-      surfaces: ["panel/content"],
+      surfaces: [PANEL_EDIT_SURFACE],
       titleKey: "contextMenu.action.selectAll",
     },
     {
@@ -137,8 +195,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
       handler: () => useWorkspaceStore.getState().equalizeSplits(),
       iconComponent: PanelsTopLeft,
       id: "pier.panel.equalizeSplits",
+      // 单 group 整行移除（非置灰）；命令面板仍走 when 置灰/拦截。
+      menuHiddenWhen: "!workspace.groupCount > 1",
       sortOrder: 1,
-      surfaces: ["panel/content", "command-palette"],
+      surfaces: [PANEL_LAYOUT_SURFACE, "command-palette"],
       titleKey: "commandPalette.action.equalizePanels",
       when: "workspace.groupCount > 1",
     },
@@ -169,10 +229,43 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
         }
       },
       id: "pier.panel.closeOthers",
+      // 单 tab 组整行移除，不置灰。
+      menuHiddenWhen: "!workspace.activeGroupPanelCount > 1",
       sortOrder: 2,
       surfaces: ["dockview-tab"],
       titleKey: "contextMenu.action.closeOthers",
       when: "workspace.activeGroupPanelCount > 1",
+    },
+    {
+      categoryKey: "panel",
+      group: "9_close",
+      handler: async (invocation) => {
+        const panelId = invocation?.sourcePanelId ?? activePanelId();
+        if (panelId) {
+          await useWorkspaceStore.getState().closeToTheRight(panelId);
+        }
+      },
+      id: "pier.panel.closeToTheRight",
+      menuHidden: (invocation) => !hasPanelsToTheRight(invocation),
+      sortOrder: 3,
+      surfaces: ["dockview-tab"],
+      titleKey: "contextMenu.action.closeToTheRight",
+    },
+    {
+      categoryKey: "panel",
+      group: "9_close",
+      handler: async (invocation) => {
+        // 关闭同组全部标签；sole-group 卸完后关窗（store.closeGroup）。
+        const panelId = invocation?.sourcePanelId ?? activePanelId();
+        if (panelId) {
+          await useWorkspaceStore.getState().closeGroup(panelId);
+        }
+      },
+      id: "pier.panel.closeGroup",
+      menuHiddenWhen: "!workspace.activeGroupPanelCount > 1",
+      sortOrder: 4,
+      surfaces: ["dockview-tab"],
+      titleKey: "contextMenu.action.closeGroup",
     },
     {
       categoryKey: "panel",
@@ -257,9 +350,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
           .focusGroup("right", invocation?.sourcePanelId),
       iconComponent: ArrowRight,
       id: "pier.panel.focusRight",
+      menuHiddenWhen: "!workspace.groupCount > 1",
       sortOrder: 1,
       submenuKey: "contextMenu.submenu.focus",
-      surfaces: ["panel/content"],
+      surfaces: [PANEL_LAYOUT_SURFACE],
       titleKey: "contextMenu.action.focusRight",
       when: "workspace.groupCount > 1",
     },
@@ -273,9 +367,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
           .focusGroup("down", invocation?.sourcePanelId),
       iconComponent: ArrowDown,
       id: "pier.panel.focusDown",
+      menuHiddenWhen: "!workspace.groupCount > 1",
       sortOrder: 2,
       submenuKey: "contextMenu.submenu.focus",
-      surfaces: ["panel/content"],
+      surfaces: [PANEL_LAYOUT_SURFACE],
       titleKey: "contextMenu.action.focusDown",
       when: "workspace.groupCount > 1",
     },
@@ -289,9 +384,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
           .focusGroup("left", invocation?.sourcePanelId),
       iconComponent: ArrowLeft,
       id: "pier.panel.focusLeft",
+      menuHiddenWhen: "!workspace.groupCount > 1",
       sortOrder: 3,
       submenuKey: "contextMenu.submenu.focus",
-      surfaces: ["panel/content"],
+      surfaces: [PANEL_LAYOUT_SURFACE],
       titleKey: "contextMenu.action.focusLeft",
       when: "workspace.groupCount > 1",
     },
@@ -305,9 +401,10 @@ export const PANEL_LAYOUT_ACTION_CONTRIBUTIONS: readonly ActionContribution[] =
           .focusGroup("up", invocation?.sourcePanelId),
       iconComponent: ArrowUp,
       id: "pier.panel.focusUp",
+      menuHiddenWhen: "!workspace.groupCount > 1",
       sortOrder: 4,
       submenuKey: "contextMenu.submenu.focus",
-      surfaces: ["panel/content"],
+      surfaces: [PANEL_LAYOUT_SURFACE],
       titleKey: "contextMenu.action.focusUp",
       when: "workspace.groupCount > 1",
     },

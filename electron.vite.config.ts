@@ -1,5 +1,5 @@
 import { createRequire } from "node:module";
-import { resolve } from "node:path";
+import { dirname, resolve } from "node:path";
 import tailwindcss from "@tailwindcss/vite";
 import react from "@vitejs/plugin-react";
 import { defineConfig, externalizeDepsPlugin } from "electron-vite";
@@ -14,6 +14,14 @@ const nodeRequire = createRequire(import.meta.url);
 // 没有 document，统一使用包的 default/worker-safe 入口。
 const workerSafeNamedCharacterReference = nodeRequire.resolve(
   "decode-named-character-reference"
+);
+// 强制 react / react-dom 收敛到宿主唯一物理副本。@pier/ui 源码 alias +
+// packages/ui/node_modules 软链 + @pierre/diffs 预打包并存时，仅靠 dedupe
+// 仍可能让 packages/ui 下的 import 与 .vite/deps 预打包图各取一份 React →
+// Invalid hook call / useRef of null（打开 diff 的 PierDiffView 即踩中）。
+const reactPackageRoot = dirname(nodeRequire.resolve("react/package.json"));
+const reactDomPackageRoot = dirname(
+  nodeRequire.resolve("react-dom/package.json")
 );
 
 export default defineConfig({
@@ -90,6 +98,21 @@ export default defineConfig({
           find: "decode-named-character-reference",
           replacement: workerSafeNamedCharacterReference,
         },
+        // 精确匹配：勿用字符串 "react"（会误伤 react-dom / react-grid-layout）。
+        { find: /^react$/, replacement: reactPackageRoot },
+        {
+          find: /^react\/jsx-runtime$/,
+          replacement: resolve(reactPackageRoot, "jsx-runtime.js"),
+        },
+        {
+          find: /^react\/jsx-dev-runtime$/,
+          replacement: resolve(reactPackageRoot, "jsx-dev-runtime.js"),
+        },
+        { find: /^react-dom$/, replacement: reactDomPackageRoot },
+        {
+          find: /^react-dom\/client$/,
+          replacement: resolve(reactDomPackageRoot, "client.js"),
+        },
         // 注意: 不要给 react-grid-layout 加 alias 或 optimizeDeps.exclude 让它
         // 绕过预打包生服 —— 其依赖 fast-equals@4(browser 字段指向 UMD)、
         // react-draggable / react-resizable(CJS)在 dev 原样服务时会直接
@@ -102,9 +125,19 @@ export default defineConfig({
       dedupe: ["react", "react-dom"],
     },
     optimizeDeps: {
-      // 固定预打包集合, 避免运行中"Re-optimizing dependencies"造成新旧
-      // chunk 混载(长驻 dev 会话叠加 HMR 时尤其致命)。
-      include: ["react", "react-dom", "react-grid-layout"],
+      // 启动即预打包关键 React 入口与 diff 引擎，避免首次打开 review 时
+      // "Re-optimizing dependencies" 造成新旧 chunk 混载（长驻 dev 会话 +
+      // 懒加载 PierDiffView 时尤其致命 → Invalid hook call）。
+      include: [
+        "react",
+        "react/jsx-runtime",
+        "react/jsx-dev-runtime",
+        "react-dom",
+        "react-dom/client",
+        "react-grid-layout",
+        "@pierre/diffs",
+        "@pierre/diffs/react",
+      ],
       rolldownOptions: {
         transform: {
           define: {

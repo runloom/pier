@@ -92,7 +92,7 @@ describe("panel maximize action", () => {
       const action = actionRegistry.get("pier.panel.equalizeSplits");
 
       expect(action).toBeDefined();
-      expect(action?.surfaces).toEqual(["panel/content", "command-palette"]);
+      expect(action?.surfaces).toEqual(["panel/layout", "command-palette"]);
       expect(action?.enabled?.()).toBe(true);
 
       action?.handler();

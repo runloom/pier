@@ -10,6 +10,7 @@ import { cleanup, fireEvent, render, screen } from "@testing-library/react";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const notifyError = vi.fn();
+const notifyInfo = vi.fn();
 const context = {
   dialogs: {
     alert: vi.fn(async () => undefined),
@@ -27,6 +28,7 @@ const context = {
   },
   notifications: {
     error: notifyError,
+    info: notifyInfo,
   },
 } as unknown as RendererPluginContext;
 
@@ -257,10 +259,119 @@ describe("Git Review feedback", () => {
     );
 
     expect(notifyError).toHaveBeenCalledTimes(1);
+    expect(notifyError).toHaveBeenCalledWith(
+      "Could not display file.ts.",
+      expect.objectContaining({
+        action: expect.objectContaining({ label: "Retry" }),
+      })
+    );
     const notificationOptions = notifyError.mock.calls[0]?.[1];
     notificationOptions?.action?.onClick();
-    expect(onRetryFailure).toHaveBeenNthCalledWith(1, "entry:0");
-    expect(onRetryFailure).toHaveBeenNthCalledWith(2, "entry:1");
+    // cycle 锁定后第二次失败不入 toast 集合；Retry 仅重试首波 entry。
+    expect(onRetryFailure).toHaveBeenCalledTimes(1);
+    expect(onRetryFailure).toHaveBeenCalledWith("entry:0");
+  });
+
+  it("stage/watch 竞态失败（staleRevision 等）不弹全局 toast", () => {
+    render(
+      <ReviewFeedback
+        context={context}
+        failures={[
+          {
+            entry: entry(0),
+            failure: {
+              kind: "error",
+              message: "index churned",
+              reason: "staleRevision",
+              retryable: true,
+            },
+            kind: "error",
+          },
+        ]}
+        onRetryFailure={vi.fn()}
+      />
+    );
+
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(notifyInfo).not.toHaveBeenCalled();
+  });
+
+  it("soft-retain 永久刷新失败用 info + 中性保留文案，不说无法显示", () => {
+    render(
+      <ReviewFeedback
+        context={context}
+        failures={[
+          {
+            entry: entry(0),
+            failure: {
+              kind: "error",
+              message: "refresh failed",
+              reason: "internal",
+              retryable: true,
+            },
+            kind: "error",
+          },
+        ]}
+        onRetryFailure={vi.fn()}
+        softRetainedOnly
+      />
+    );
+
+    expect(notifyError).not.toHaveBeenCalled();
+    expect(notifyInfo).toHaveBeenCalledWith(
+      "Couldn't refresh this diff. The previous view is still shown.",
+      expect.objectContaining({
+        action: expect.objectContaining({ label: "Retry" }),
+      })
+    );
+  });
+
+  it("soft-retain info 后升为 hard document 失败会再发 error toast", () => {
+    const softFailure = {
+      entry: entry(0),
+      failure: {
+        kind: "error" as const,
+        message: "soft",
+        reason: "internal" as const,
+        retryable: true,
+      },
+      kind: "error" as const,
+    } satisfies ReviewFailedResource;
+    const hardFailure = {
+      entry: entry(0),
+      failure: {
+        kind: "error" as const,
+        message: "hard",
+        reason: "commandFailed" as const,
+        retryable: true,
+      },
+      kind: "error" as const,
+    } satisfies ReviewFailedResource;
+    const onRetryFailure = vi.fn();
+    const view = render(
+      <ReviewFeedback
+        context={context}
+        failures={[softFailure]}
+        onRetryFailure={onRetryFailure}
+        softRetainedOnly
+      />
+    );
+    expect(notifyInfo).toHaveBeenCalledTimes(1);
+    expect(notifyError).not.toHaveBeenCalled();
+
+    view.rerender(
+      <ReviewFeedback
+        context={context}
+        failures={[hardFailure]}
+        onRetryFailure={onRetryFailure}
+      />
+    );
+    expect(notifyError).toHaveBeenCalledWith(
+      "Could not display file.ts.",
+      expect.objectContaining({
+        action: expect.objectContaining({ label: "Retry" }),
+      })
+    );
   });
 
   it("文件加载失败由对应文件项承载，不在正文顶部重复堆叠", () => {
@@ -297,7 +408,7 @@ describe("Git Review feedback", () => {
     expect(screen.queryByRole("alert")).toBeNull();
     expect(notifyError).toHaveBeenCalledTimes(3);
     expect(notifyError).toHaveBeenCalledWith(
-      "Additional changes could not be displayed.",
+      "5 files could not be displayed.",
       {
         action: {
           label: "Retry",

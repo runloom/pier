@@ -11,7 +11,8 @@ import { actionRegistry } from "@/lib/actions/registry.ts";
 import type { ActionInvocation } from "@/lib/actions/types.ts";
 import {
   buildMenuEntries,
-  PANEL_CONTENT_SURFACE,
+  PANEL_EDIT_SURFACE,
+  PANEL_LAYOUT_SURFACE,
 } from "@/lib/context-menu/build-entries.ts";
 import { captureDomSelectionText } from "@/lib/context-menu/selection-text.ts";
 import { popupMenuTemplateAt } from "@/lib/context-menu/use-menu.ts";
@@ -37,7 +38,8 @@ function selectionInvocation(sourcePanelId?: string): ActionInvocation {
   return {
     metadata: selectedText.length > 0 ? { selectedText } : {},
     ...(sourcePanelId ? { sourcePanelId } : {}),
-    surface: PANEL_CONTENT_SURFACE,
+    // 工作台画布 viewport：与 panel/content 同语义，edit + layout。
+    surface: PANEL_EDIT_SURFACE,
   };
 }
 
@@ -58,12 +60,27 @@ function buildTemplate(
       type: "action",
     },
   ];
-  // 工作台自管菜单并 stopPropagation，不经内容区 shell；显式并入共享布局项。
-  const shared = buildMenuEntries(PANEL_CONTENT_SURFACE, invocation);
-  if (shared.length === 0) {
+  // 工作台自管菜单并 stopPropagation，不经内容区 shell；显式并入 edit + layout。
+  const edit = buildMenuEntries(PANEL_EDIT_SURFACE, {
+    ...invocation,
+    surface: PANEL_EDIT_SURFACE,
+  });
+  const layout = buildMenuEntries(PANEL_LAYOUT_SURFACE, {
+    ...invocation,
+    surface: PANEL_LAYOUT_SURFACE,
+  });
+  let sharedFlat: MenuTemplate;
+  if (edit.length === 0) {
+    sharedFlat = layout;
+  } else if (layout.length === 0) {
+    sharedFlat = edit;
+  } else {
+    sharedFlat = [...edit, { type: "separator" }, ...layout];
+  }
+  if (sharedFlat.length === 0) {
     return local;
   }
-  return [...local, { type: "separator" }, ...shared];
+  return [...local, { type: "separator" }, ...sharedFlat];
 }
 
 async function dispatchAction(

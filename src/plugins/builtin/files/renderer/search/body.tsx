@@ -23,6 +23,7 @@ export function SearchPanelBody(props: {
   activeIndex: number;
   conditions: FilesContentSearchConditions;
   groups: ReturnType<typeof groupHitsByPath>;
+  onContextMenu?: (event: React.MouseEvent, hit: FileContentQueryItem) => void;
   onOpenHit: (hit: FileContentQueryItem) => void;
   onSetActiveIndex: (index: number) => void;
   snapshot: ContentQuerySnapshot;
@@ -32,6 +33,7 @@ export function SearchPanelBody(props: {
     activeIndex,
     conditions,
     groups,
+    onContextMenu,
     onOpenHit,
     onSetActiveIndex,
     snapshot,
@@ -166,6 +168,7 @@ export function SearchPanelBody(props: {
               hits={group.hits}
               indexOffset={offset}
               key={group.path}
+              {...(onContextMenu ? { onContextMenu } : {})}
               onOpenHit={onOpenHit}
               onSetActiveIndex={onSetActiveIndex}
               path={group.path}

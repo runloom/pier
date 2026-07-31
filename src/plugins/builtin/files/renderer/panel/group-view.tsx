@@ -286,6 +286,9 @@ export function FilesGroupView({
         controller={controller}
         instanceId={groupId}
         onOpenFile={handleOpenFileFromTree}
+        {...(panelContext?.projectRootPath
+          ? { projectRoot: panelContext.projectRootPath }
+          : {})}
         root={root}
         {...(activeTab?.panelId ? { sourcePanelId: activeTab.panelId } : {})}
         watchHub={watchHub}

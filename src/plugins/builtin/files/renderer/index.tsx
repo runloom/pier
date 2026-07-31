@@ -52,6 +52,7 @@ import {
   createSearchContentsAction,
   createSearchInFolderAction,
 } from "./search/actions.ts";
+import { createFilesSearchResultActions } from "./search/context-actions.ts";
 import { createFilesContentSearchPanel } from "./search/panel.tsx";
 import { createFilesQuickOpenAction } from "./search/quick-open.ts";
 import {
@@ -215,7 +216,13 @@ function createTreeExpandAllAction(
       return await Promise.resolve();
     },
     id: FILES_TREE_EXPAND_ALL_COMMAND_ID,
-    metadata: { group: "2_view", sortOrder: 1 },
+    metadata: {
+      group: "2_view",
+      // 文件行不显示展开/折叠（落到父目录语义不清晰）；空白与目录保留。
+      menuHidden: (invocation) =>
+        parseTreeMetadata(invocation)?.kind === "file",
+      sortOrder: 1,
+    },
     // Context menu only — no default keybinding, no command palette.
     surfaces: ["files/tree-item", "files/tree-background"],
     title: () => t("filePanel.tree.expandAll", "Expand Folders"),
@@ -239,7 +246,12 @@ function createTreeCollapseFoldersAction(
       return await Promise.resolve();
     },
     id: FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID,
-    metadata: { group: "2_view", sortOrder: 2 },
+    metadata: {
+      group: "2_view",
+      menuHidden: (invocation) =>
+        parseTreeMetadata(invocation)?.kind === "file",
+      sortOrder: 2,
+    },
     // Context menu only — no default keybinding, no command palette.
     surfaces: ["files/tree-item", "files/tree-background"],
     title: () => t("filePanel.tree.collapseAll", "Collapse Folders"),
@@ -431,6 +443,9 @@ export const filesRendererPlugin: RendererPluginModule = {
       context.actions.register(createFilesOpenDirectoryAction(context)),
       context.actions.register(createSearchContentsAction(context)),
       context.actions.register(createSearchInFolderAction(context)),
+      ...createFilesSearchResultActions(context, editorController).map(
+        (action) => context.actions.register(action)
+      ),
       context.actions.register(
         withFilesMutationGate(createTreeSearchAction(context), editorController)
       ),

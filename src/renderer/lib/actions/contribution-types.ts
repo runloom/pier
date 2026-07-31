@@ -13,6 +13,7 @@ export type ActionWhenClause =
   | `workspace.${WorkspaceWhenField}`
   | `!workspace.${WorkspaceWhenField}`
   | `workspace.${WorkspaceWhenField} > ${number}`
+  | `!workspace.${WorkspaceWhenField} > ${number}`
   | `terminal.${TerminalWhenField}`
   | `!terminal.${TerminalWhenField}`;
 
