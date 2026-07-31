@@ -10,7 +10,7 @@ function resolveWindowsFixturePath(): string {
     throw new Error("Windows LSP fixture path requested off win32");
   }
   return fileURLToPath(
-    new URL("../../fixtures/lsp-windows-job-child.cjs", import.meta.url)
+    new URL("../../../fixtures/lsp-windows-job-child.cjs", import.meta.url)
   );
 }
 
