@@ -32,7 +32,9 @@ import { parseFilesDocumentPanelSource } from "./document/types.ts";
 import { createFilesEditorActions } from "./editor/actions.ts";
 import { FileEditorController } from "./editor/controller.ts";
 import { registerFilesLspNavigationDeps } from "./lsp/navigation.ts";
+import { markdownCodeHighlighter } from "./markdown/code-highlighter.ts";
 import { createFilesMarkdownPreviewActions } from "./markdown/preview-actions.ts";
+import { markdownRuntime } from "./markdown/runtime.ts";
 import { FilesMutationSuspendedError } from "./mutation/gate.ts";
 import { registerFilesTerminalOpenUrlHandler } from "./open-url/handler.ts";
 import { createFilePanel as createFilesFilePanel } from "./panel/index.tsx";
@@ -374,6 +376,9 @@ export const filesRendererPlugin: RendererPluginModule = {
       clearFilesTreeStore();
       clearFilesNavHistory();
       clearFileTreeSidebarCache();
+      // 释放 markdown 单例 worker，避免插件重载时孤儿 Worker 累积。
+      markdownRuntime.dispose();
+      markdownCodeHighlighter.dispose();
     };
   },
   // 设置页(插件行/插件导航项)读取此图标;module 自描述,宿主不再按 id 特判。

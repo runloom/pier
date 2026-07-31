@@ -32,6 +32,7 @@ import {
   markDocumentSaveError,
   markDocumentWritten,
   moveDiskDocumentSource,
+  preserveDiskDocumentAsUntitled,
   removeDiskDocumentForPath,
   removeDocument,
   resetFilesDraftBackendForTests,
@@ -333,6 +334,39 @@ describe("files-document-store", () => {
       root: "/repo",
     });
     expect(differentSplit.id).not.toBe(originalSplit.id);
+  });
+
+  it("reopens a preserved disk path as a fresh disk document instead of a shadowed zombie", async () => {
+    await configureFilesDraftBackend(draftBackendFromMap(new Map()));
+    const disk = ensureDiskDocument({ path: "README.md", root: "/repo" });
+    markDocumentReadResult(disk.id, {
+      canonicalPath: "README.md",
+      contents: "first contents",
+      eol: "lf",
+      format: { bom: false, encoding: "utf8" },
+      kind: "text",
+      mode: 0o644,
+      path: "README.md",
+      revision: "rev-1",
+      root: "/repo",
+      size: 14,
+      writable: true,
+    });
+
+    const preserved = await preserveDiskDocumentAsUntitled(disk.id);
+    expect(preserved.source.kind).toBe("untitled");
+
+    // 再开同一磁盘路径：必须返回新的磁盘文档（别名被解除），而不是被
+    // 旧别名遮蔽、永远解析到 untitled 文档的僵尸条目。
+    const reopened = ensureDiskDocument({ path: "README.md", root: "/repo" });
+    expect(reopened).not.toBe(preserved);
+    expect(reopened.source).toEqual({
+      kind: "disk",
+      path: "README.md",
+      root: "/repo",
+    });
+    expect(getDocument(disk.id)).toBe(reopened);
+    expect(getDocument(preserved.id)).toBe(preserved);
   });
 
   it("uses stable identity keys for file panels while creating distinct tab instance ids", () => {

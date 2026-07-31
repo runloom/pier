@@ -200,6 +200,15 @@ export function MarkdownPreview({
   });
   const [tocAnchor, setTocAnchor] = useState<string | undefined>(undefined);
   const [tocAnchorRequestId, setTocAnchorRequestId] = useState(0);
+  // 外部锚点导航（initialAnchorRequestId 变化）会清除 TOC 点击留下的 tocAnchor，
+  // 否则 effectiveAnchor 被 tocAnchor 永久钉住，后续外部导航被静默丢弃。
+  const previousInitialAnchorRequestIdRef = useRef(initialAnchorRequestId);
+  useEffect(() => {
+    if (initialAnchorRequestId !== previousInitialAnchorRequestIdRef.current) {
+      previousInitialAnchorRequestIdRef.current = initialAnchorRequestId;
+      setTocAnchor(undefined);
+    }
+  }, [initialAnchorRequestId]);
   const rootRef = useRef<HTMLDivElement | null>(null);
   const revisionRef = useRef(0);
   const headings =
@@ -440,11 +449,4 @@ export function MarkdownPreview({
       </div>
     </div>
   );
-}
-
-/** Expose heading presence for context-menu metadata without re-parsing. */
-export function markdownPreviewHasHeadings(
-  headings: readonly { id: string }[] | undefined
-): boolean {
-  return (headings?.length ?? 0) > 0;
 }

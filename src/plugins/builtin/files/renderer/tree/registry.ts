@@ -194,6 +194,20 @@ export function removeFilesTreeModelPaths(target: {
   entry?.getApi()?.removePaths(target.paths);
 }
 
+/**
+ * 回滚库已先行应用的 rename/drag（磁盘移动失败时）：移除幽灵路径、恢复原路径。
+ * 树未挂载（面板折叠）时模型不渲染，跳过即可——重挂载时从 store 重建。
+ */
+export function rollbackFilesTreeModelMove(target: {
+  instanceId?: string | undefined;
+  removedPaths: readonly string[];
+  restoredPaths: readonly string[];
+  root: string;
+}): void {
+  const entry = findTreeEntry(target);
+  entry?.getApi()?.applyPathRollback(target.removedPaths, target.restoredPaths);
+}
+
 export function clearFileTreeSidebarCache(): void {
   treeRegistry.clear();
   pendingCreates.clear();

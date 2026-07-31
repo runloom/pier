@@ -1,9 +1,6 @@
 /** Expanded outline panel width (px). Hover panel lives inside this rail slot. */
 export const MARKDOWN_TOC_PANEL_WIDTH_PX = 224;
 
-/** @deprecated Alias for expanded panel width (historical rail name). */
-export const MARKDOWN_TOC_RAIL_WIDTH_PX = MARKDOWN_TOC_PANEL_WIDTH_PX;
-
 /** Notion-style tick visual width budget (longest tick + hit padding). */
 export const MARKDOWN_TOC_TICK_RAIL_WIDTH_PX = 20;
 
@@ -88,13 +85,6 @@ export function markdownOutlineHoverMaxHeightPx(frameHeightPx: number): number {
     frameHeightPx - topOffsetPx - MARKDOWN_TOC_BOTTOM_RESERVE_PX
   );
   return Math.max(0, Math.floor(2 * Math.min(abovePx, belowPx)));
-}
-
-/** @deprecated Prefer `markdownOutlineHoverMaxHeightPx` for the Notion rail. */
-export function markdownOutlineFrameHeightPx(
-  contentAreaHeightPx: number
-): number {
-  return markdownOutlineHoverMaxHeightPx(contentAreaHeightPx);
 }
 
 /** Notion-style tick width by heading depth (h1 longest). */

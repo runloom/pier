@@ -1,5 +1,4 @@
 import { SearchQuery } from "@codemirror/search";
-import { EditorSelection } from "@codemirror/state";
 import type { EditorView } from "codemirror";
 
 const SEARCH_MATCH_SCAN_LIMIT = 5000;
@@ -64,23 +63,4 @@ export function computeSearchState(
     }
   }
   return { currentIndex, total };
-}
-
-function clampPositionToDocument(pos: number, documentLength: number): number {
-  return Math.max(0, Math.min(pos, documentLength));
-}
-
-export function getRestorableSelection(
-  selection: EditorSelection,
-  documentLength: number
-): EditorSelection {
-  const isSelectionInsideDocument = selection.ranges.every(
-    (range) => range.from <= documentLength && range.to <= documentLength
-  );
-  if (isSelectionInsideDocument) {
-    return selection;
-  }
-  return EditorSelection.single(
-    clampPositionToDocument(selection.main.head, documentLength)
-  );
 }

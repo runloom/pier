@@ -7,6 +7,12 @@ import {
   refreshFilesTreeRootAfterPendingLoad,
 } from "./watch-refresh.ts";
 
+const TRAILING_SLASHES_PATTERN = /\/+$/;
+
+function normalizeRoot(root: string): string {
+  return root.replace(TRAILING_SLASHES_PATTERN, "");
+}
+
 function parentPathRefreshable(
   snapshot: ReturnType<typeof getFilesTreeSnapshot>,
   path: string
@@ -37,7 +43,7 @@ export function applyFilesTreeWatchEvent(
   list: FilesTreeList,
   fallbackError: string
 ): void {
-  if (event.root !== root) {
+  if (normalizeRoot(event.root) !== normalizeRoot(root)) {
     return;
   }
 

@@ -155,3 +155,11 @@ export function saveAsJournalForDocument(
   }
   return null;
 }
+
+/** 文档关闭/丢弃时清理其 save-as journal（含写入回执），防止孤儿记录滞留。 */
+export function removeSaveAsJournalForDocument(documentId: string): void {
+  const record = saveAsJournalForDocument(documentId);
+  if (record) {
+    removeSaveAsJournal(record);
+  }
+}

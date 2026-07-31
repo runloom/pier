@@ -61,9 +61,8 @@ describe("useFilesPanelTransferView", () => {
 
     expect(result.current.mode).toBe("preview");
     expect(readFilesPanelViewMode("panel-target")).toBe("preview");
-    expect(peekFilesPanelViewSeed({ panelId: "panel-target" })?.mode).toBe(
-      "preview"
-    );
+    // 种子被施加后必须消费，否则后续 tab 切换会重复强加传输模式。
+    expect(peekFilesPanelViewSeed({ panelId: "panel-target" })).toBeNull();
   });
 
   it("applies a late transfer seed after mount", async () => {

@@ -51,9 +51,11 @@ export function beginFilesTreeRootLoad(
   };
   emit();
 
+  let discarded = false;
   const rootLoadPromise = list(root, { path: "" })
     .then((entries) => {
       if (session.rootLoadGeneration !== loadGeneration) {
+        discarded = true;
         session.snapshot = { ...session.snapshot, rootLoading: false };
         emit();
         return;
@@ -89,6 +91,7 @@ export function beginFilesTreeRootLoad(
     })
     .catch((error: unknown) => {
       if (session.rootLoadGeneration !== loadGeneration) {
+        discarded = true;
         session.snapshot = { ...session.snapshot, rootLoading: false };
         emit();
         return;
@@ -107,6 +110,22 @@ export function beginFilesTreeRootLoad(
     .finally(() => {
       if (session.rootLoadPromise === rootLoadPromise) {
         session.rootLoadPromise = null;
+        if (
+          discarded &&
+          !session.snapshot.rootLoaded &&
+          !session.snapshot.rootLoading
+        ) {
+          // 被失效的加载丢弃且尚无根数据时重发一次，否则树会永久停在
+          // skeleton（watch 守卫在 rootLoaded=false 时丢弃所有事件）。
+          beginFilesTreeRootLoad(
+            session,
+            root,
+            list,
+            fallbackError,
+            false,
+            emit
+          ).catch(() => undefined);
+        }
       }
     });
   session.rootLoadPromise = rootLoadPromise;

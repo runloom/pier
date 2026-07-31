@@ -5743,7 +5743,9 @@ describe("Files file-panel", () => {
 
     expect(findCodeMirrorView(container).scrollDOM).toHaveAttribute(
       "data-scrollbar",
-      "overlay"
+      // 与 markdown 预览 / e2e 一致的滚动条策略：stable 槽 + 细滑条
+      // （view-session 挂载时写入；e2e markdown-scrollbar 亦接受两者）。
+      "stable"
     );
   });
 

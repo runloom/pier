@@ -52,11 +52,16 @@ const gitGutterField = StateField.define<RangeSet<GutterMarker>>({
 
 function buildMarkers(
   markers: ReadonlyMap<number, GitGutterLineMarker>,
-  doc: { line: (n: number) => { from: number } }
+  doc: { line: (n: number) => { from: number }; lines: number }
 ): RangeSet<GutterMarker> {
   const sorted = [...markers.entries()].sort((a, b) => a[0] - b[0]);
   const gutterBuilder = new RangeSetBuilder<GutterMarker>();
   for (const [line, marker] of sorted) {
+    // 标记基于磁盘 diff 的行号；脏缓冲可能比磁盘短（未保存的删除行）。
+    // 越界行直接跳过，避免 doc.line 抛 RangeError 导致整 root gutter 被清空。
+    if (line < 1 || line > doc.lines) {
+      continue;
+    }
     const lineObj = doc.line(line);
     gutterBuilder.add(lineObj.from, lineObj.from, markerFor(marker));
   }

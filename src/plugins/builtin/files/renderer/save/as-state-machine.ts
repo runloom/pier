@@ -356,9 +356,9 @@ export async function recoverDocumentSaveAs(input: {
   if (!journal) {
     return false;
   }
-  if (journal.panelId && journal.panelId !== input.panelId) {
-    return false;
-  }
+  // 不做 panelId 闸门：布局恢复后实例 id 可能变化，旧闸门会让 journal
+  // 永久阻塞 saveDocumentAs（返回 failed）。并发恢复由
+  // saveAsRecoveryOperations（按 operationId 去重）保护。
   const existing = saveAsRecoveryOperations.get(journal.operationId);
   if (existing) {
     return await existing;

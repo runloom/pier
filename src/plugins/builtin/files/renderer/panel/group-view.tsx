@@ -56,6 +56,7 @@ import {
   peekFilesPanelViewSeed,
   rememberFilesPanelViewMode,
   subscribeFilesPanelViewSeed,
+  takeFilesPanelViewSeed,
 } from "./transfer-state.ts";
 import { useFilesGroupNav } from "./use-group-nav.ts";
 
@@ -194,7 +195,9 @@ export function FilesGroupView({
     if (!(panelId && documentKey && selectedSource)) {
       return;
     }
-    const seed = peekFilesPanelViewSeed({
+    // take（而非 peek）：panelId 种子只应施加一次，否则每次切回该 tab
+    // 都会把传输捕获的模式强加回用户选择之上。
+    const seed = takeFilesPanelViewSeed({
       panelId,
       documentId: controller.documentId(selectedSource),
     });
@@ -217,7 +220,9 @@ export function FilesGroupView({
         if (!(matchesPanel || matchesDocument)) {
           return;
         }
-        writeMode(event.view.mode, panelId);
+        // 事件到达时消费 panelId 种子，避免后续 tab 切换重复施加。
+        const consumed = takeFilesPanelViewSeed({ panelId });
+        writeMode((consumed ?? event.view).mode, panelId);
       }),
     [activeTab?.panelId, controller, documentKey, selectedSource, writeMode]
   );

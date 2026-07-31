@@ -2,6 +2,11 @@ import {
   FILE_WRITE_COMMIT_RECEIPT_STORAGE_PREFIX,
   type FileDraftSnapshot,
 } from "@shared/contracts/file.ts";
+import {
+  DELETED_DRAFT_VALUE,
+  flushWithDraftRetries,
+  republishFailedDraftKeys,
+} from "./draft-client-retry.ts";
 import type {
   FilesDraftBackend,
   FilesDraftProtectionState,
@@ -25,7 +30,6 @@ export type {
   FilesDraftProtectionState,
 } from "./draft-client-types.ts";
 
-const DELETED_DRAFT_VALUE = "__pier_files_deleted_draft_v1__";
 const DRAFT_WRITE_DEBOUNCE_MS = 350;
 
 const IDLE_DRAFT_PROTECTION = { status: "idle" } as const;
@@ -75,7 +79,9 @@ function readDraftValue(key: string): string | null {
 }
 
 function writeDraftValue(key: string, value: string): void {
-  if (readDraftValue(key) === value) {
+  // 上次写失败时不得因值未变而跳过重试（backend 无该值，草稿只在 emergency 里）。
+  const protection = draftProtection.get(key);
+  if (protection?.status !== "failed" && readDraftValue(key) === value) {
     return;
   }
   hydratedDrafts.set(key, value);
@@ -187,6 +193,8 @@ function deleteDraftValue(key: string): void {
   }
   if (draftBackend) {
     hydratedDrafts.set(key, DELETED_DRAFT_VALUE);
+    // bump generation 使 in-flight 旧 set 完成回调失效，防止 delete 失败后 tombstone 被擦除。
+    draftGenerations.set(key, (draftGenerations.get(key) ?? 0) + 1);
     const operation = draftBackend
       .delete(key)
       .then(() => {
@@ -267,6 +275,8 @@ function retryBackendDeleteForTombstone(
       if (hydratedDrafts.get(key) === DELETED_DRAFT_VALUE) {
         hydratedDrafts.delete(key);
       }
+      // 重试成功即清掉 failed 保护，否则 commit 循环的失败检查会继续抛错。
+      setDraftProtection(key, null);
       removeEmergencyDraft(key);
     })
     .catch(() => undefined);
@@ -427,22 +437,27 @@ function publishDeferredWrites(): void {
   deferredWrites.clear();
 }
 
+const retryFailedDraftKeys = () =>
+  republishFailedDraftKeys({
+    backend: draftBackend,
+    generations: draftGenerations,
+    hydratedDrafts,
+    protection: draftProtection,
+    retryDelete: retryBackendDeleteForTombstone,
+    startWrite: startBackendWrite,
+  });
+
 export async function commitFilesDraftSuspend(
   signal?: AbortSignal
 ): Promise<void> {
   while (true) {
     publishDeferredWrites();
-    try {
-      await flushFilesDraftWrites(signal);
-    } catch (error) {
-      if (deferredWrites.size === 0) {
-        throw error;
-      }
-      continue;
-    }
-    if (deferredWrites.size === 0) {
-      return;
-    }
+    await flushWithDraftRetries(
+      flushFilesDraftWrites,
+      retryFailedDraftKeys,
+      signal
+    );
+    if (deferredWrites.size === 0) return;
   }
 }
 

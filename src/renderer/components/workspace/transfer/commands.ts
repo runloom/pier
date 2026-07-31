@@ -299,11 +299,21 @@ async function handleFinalize(command: FinalizeCommand): Promise<void> {
   const api = useWorkspaceStore.getState().api;
   let component: string | undefined;
   let panelId: string | undefined;
+  // 先取 staged target（下方激活用）；跨窗口时也用它反解 finalize 注册。
+  const stagedPanelId = takeStagedTargetPanel(transferId) ?? undefined;
   if (api) {
     const snapshot = getFrozenSourceSnapshot(transferId);
     if (snapshot) {
       component = snapshot.panel.componentId;
       panelId = snapshot.panel.panelId;
+    } else if (role === "target" && stagedPanelId) {
+      // 跨窗口 transfer：目标窗口没有 frozen source snapshot，从 staged
+      // target panel 反解注册，让自定义注册的 finalize（abort 清理等）对称执行。
+      const panel = findPanel(api, stagedPanelId);
+      if (panel) {
+        component = panelComponentOf(panel) ?? undefined;
+        panelId = stagedPanelId;
+      }
     }
   }
   if (component && panelId) {
@@ -317,7 +327,6 @@ async function handleFinalize(command: FinalizeCommand): Promise<void> {
       });
     }
   }
-  const stagedPanelId = takeStagedTargetPanel(transferId);
   if (role === "target" && outcome === "commit" && stagedPanelId && api) {
     // Moved panels land active (VS Code targetGroup.focus() semantics).
     // Without this, the sole panel of a fresh transfer window stays

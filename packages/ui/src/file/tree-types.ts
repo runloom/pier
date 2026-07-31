@@ -39,6 +39,14 @@ export interface PierFileTreeContextMenuPoint {
 export interface PierFileTreeApi {
   /** 打开当前聚焦的文件搜索匹配；无可打开文件时返回 false。 */
   activateFocusedSearchMatch: () => boolean;
+  /**
+   * 回滚一次库已先行应用的重命名/拖拽（业务侧磁盘操作失败时）：
+   * 从模型移除幽灵路径并恢复原路径，一步 batch 完成。
+   */
+  applyPathRollback: (
+    removedPaths: readonly string[],
+    restoredPaths: readonly string[]
+  ) => void;
   focusSearchMatch: (direction: "next" | "previous") => void;
   getSearchMatchCount: () => number;
   /** 从模型移除路径(新建落盘失败回滚幽灵节点用)。 */

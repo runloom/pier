@@ -107,10 +107,14 @@ export class FilesTreeGitIgnoredIndex {
     const gitApi = (this.#context as Partial<RendererPluginContext>).git;
     const load = (async () => {
       let index = EMPTY_GIT_IGNORED_INDEX;
+      let probeFailed = false;
       if (gitApi?.listIgnored) {
         try {
           index = createGitIgnoredIndex(await gitApi.listIgnored(root));
         } catch {
+          // 探针瞬时失败不得缓存空索引：缓存会让 current() 长期把忽略文件
+          // 当可见，且后续 list() 命中缓存不再重试。失败按「无索引」处理。
+          probeFailed = true;
           index = EMPTY_GIT_IGNORED_INDEX;
         }
       }
@@ -121,7 +125,9 @@ export class FilesTreeGitIgnoredIndex {
         }
         return this.current(root) ?? EMPTY_GIT_IGNORED_INDEX;
       }
-      this.#indexesByRoot.set(root, { generation, index });
+      if (!probeFailed) {
+        this.#indexesByRoot.set(root, { generation, index });
+      }
       return index;
     })();
     this.#loadsByRoot.set(root, { generation, promise: load });

@@ -41,6 +41,7 @@ import {
   hasPendingCreatePath,
   peekPendingCreate,
   registerFilesTreeInstance,
+  rollbackFilesTreeModelMove,
 } from "./registry.ts";
 import { handleFilesTreeSearchKeyDown } from "./search-keydown.ts";
 import {
@@ -227,6 +228,14 @@ export function FileTreeSidebar({
           }
         });
       } catch (error) {
+        // 库已先行把模型移到 to；磁盘失败时必须回滚模型，否则幽灵行残留
+        // 且 force reload 因条目集合不变无法自愈。
+        rollbackFilesTreeModelMove({
+          instanceId,
+          removedPaths: [to],
+          restoredPaths: [from],
+          root,
+        });
         if (error instanceof FilesMutationSuspendedError) {
           return;
         }
@@ -241,7 +250,7 @@ export function FileTreeSidebar({
         );
       }
     },
-    [context, controller, root, t, treeVisibility]
+    [context, controller, instanceId, root, t, treeVisibility]
   );
   const performMoveRef = useRef<typeof performMove | null>(null);
   performMoveRef.current = performMove;

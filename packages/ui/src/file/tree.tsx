@@ -328,6 +328,20 @@ export function PierFileTree({
           }
         }
       },
+      applyPathRollback: (removedPaths, restoredPaths) => {
+        try {
+          model.batch([
+            ...removedPaths.map((path) => ({
+              path,
+              recursive: true,
+              type: "remove" as const,
+            })),
+            ...restoredPaths.map((path) => ({ path, type: "add" as const })),
+          ]);
+        } catch {
+          // 模型可能已被 watch 刷新自愈;忽略回滚失败。
+        }
+      },
       startRenaming: (path, options) => {
         if (!readRefs().onRenamePath) {
           return false;

@@ -124,7 +124,10 @@ export function subscribeFilesPanelViewSeed(
 
 /**
  * Consume a one-shot view seed for the target panel (mode/selection/scroll).
- * Prefers panelId, then documentId.
+ *
+ * panelId 与 documentId 是两条独立记录：panelId 供模式应用（group-view /
+ * use-transfer-view）消费，documentId 供编辑器 attach（selection/scroll）消费，
+ * 互不删除，避免模式应用把选择/滚动种子一起吞掉。
  */
 export function takeFilesPanelViewSeed(input: {
   documentId?: string;
@@ -134,9 +137,6 @@ export function takeFilesPanelViewSeed(input: {
     const byPanel = viewSeedsByPanelId.get(input.panelId);
     if (byPanel) {
       viewSeedsByPanelId.delete(input.panelId);
-      if (input.documentId) {
-        viewSeedsByDocumentId.delete(input.documentId);
-      }
       return byPanel;
     }
   }
@@ -164,6 +164,18 @@ export function peekFilesPanelViewSeed(input: {
     return viewSeedsByDocumentId.get(input.documentId) ?? null;
   }
   return null;
+}
+
+/** 面板关闭时清理该面板的种子与记录模式，避免泄漏与过期模式被后续传输捕获。 */
+export function clearFilesPanelTransferState(input: {
+  documentId?: string;
+  panelId: string;
+}): void {
+  viewSeedsByPanelId.delete(input.panelId);
+  panelModes.delete(input.panelId);
+  if (input.documentId) {
+    viewSeedsByDocumentId.delete(input.documentId);
+  }
 }
 
 export function clearFilesPanelTransferViewSeedsForTests(): void {

@@ -19,6 +19,7 @@ import {
 } from "../mutation/path-guard.ts";
 import { FilesMutationSuspendCoordinator } from "../mutation/suspend-coordinator.ts";
 import { showFilesDraftProtectionError } from "../panel/dialog-feedback.ts";
+import { clearFilesPanelTransferState } from "../panel/transfer-state.ts";
 import type { FileSaveFeedback } from "../save/feedback.ts";
 import type {
   FileDocumentSettleResult,
@@ -188,6 +189,11 @@ export class FileEditorController extends FileEditorControllerViewFacade {
     const documentId =
       this.#documents.getPanelDocumentId(input.panelId) ??
       this.documentId(input.source);
+    // 面板关闭即清理传输种子与记录模式，避免泄漏与过期模式被后续传输捕获。
+    clearFilesPanelTransferState({
+      documentId,
+      panelId: input.panelId,
+    });
     this.viewCommands.clearOwnerDocument(
       createFileEditorSessionId(input.panelId),
       documentId

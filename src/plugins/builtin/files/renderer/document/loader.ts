@@ -11,6 +11,7 @@ import {
   markDocumentError,
   markDocumentLoading,
   markDocumentReadResult,
+  setDocumentConflictContents,
 } from "./store.ts";
 import type { FilesDocument } from "./types.ts";
 
@@ -110,6 +111,11 @@ export class FileDocumentLoader {
       if (input.reload && (latest.dirty || latest.durabilityUnknown)) {
         if (!("revision" in result && result.revision === latest.revision)) {
           markDocumentDiskConflict(latest.id);
+          // 同步捕获磁盘快照，让冲突 diff 视图能对比真实磁盘内容，而不是
+          // 停留在上一次保存的旧快照。
+          if (result.kind === "text") {
+            setDocumentConflictContents(latest.id, result.contents);
+          }
         }
       } else {
         markDocumentReadResult(latest.id, result);

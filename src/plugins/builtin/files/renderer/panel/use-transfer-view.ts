@@ -19,6 +19,7 @@ import {
   peekFilesPanelViewSeed,
   rememberFilesPanelViewMode,
   subscribeFilesPanelViewSeed,
+  takeFilesPanelViewSeed,
 } from "./transfer-state.ts";
 
 function resolveDocumentId(
@@ -109,27 +110,17 @@ export function useFilesPanelTransferView(input: {
       pinnedModeForSourceRef.current = false;
     }
 
-    const seeded = resolveSeedMode({
-      controller,
-      panelSessionId,
-      stableSource,
-    });
+    // take（而非 peek）：panelId 种子只施加一次，避免 tab 切回时重复强加。
+    const seeded = takeFilesPanelViewSeed({ panelId: panelSessionId });
     if (seeded) {
-      applySeedMode(seeded);
+      applySeedMode(seeded.mode);
       return;
     }
     if (!pinnedModeForSourceRef.current) {
       const fallback = defaultModeForSource(stableSource, language);
       setModeState((current) => (current === fallback ? current : fallback));
     }
-  }, [
-    applySeedMode,
-    controller,
-    language,
-    panelSessionId,
-    sourceKey,
-    stableSource,
-  ]);
+  }, [applySeedMode, language, panelSessionId, sourceKey, stableSource]);
 
   useEffect(
     () =>
@@ -141,7 +132,9 @@ export function useFilesPanelTransferView(input: {
         if (!(matchesPanel || matchesDocument)) {
           return;
         }
-        applySeedMode(event.view.mode);
+        // 事件到达时消费 panelId 种子，避免 tab 切换时重复施加。
+        const consumed = takeFilesPanelViewSeed({ panelId: panelSessionId });
+        applySeedMode((consumed ?? event.view).mode);
       }),
     [applySeedMode, controller, panelSessionId, stableSource]
   );

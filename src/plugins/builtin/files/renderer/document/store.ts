@@ -3,6 +3,7 @@ import type {
   FileDocumentWriteResult,
   FileWritableDocumentEol,
 } from "@shared/contracts/file.ts";
+import { removeSaveAsJournalForDocument } from "../save/as-journal.ts";
 import {
   claimLegacyDraft,
   clearPersistedDiskDrafts,
@@ -13,6 +14,7 @@ import {
   type FilesDraftBackend,
   flushFilesDraftWrites,
   isUntitledDocumentId,
+  legacyDiskDraftStorageKey,
   persistDiskDraft,
   persistUntitledDocument,
   quarantineCorruptDocumentDrafts,
@@ -84,7 +86,17 @@ export async function claimLegacyDraftForPanelSource(
     source.kind === "untitled"
       ? untitledDraftStorageKey(source.id)
       : diskDraftStorageKey(resolveDiskDocumentId(source));
-  if (!(await claimLegacyDraft(key))) {
+  let claimed = await claimLegacyDraft(key);
+  // v1 磁盘草稿的键格式是 diskDraft:<stableFileIdentityHash(root\0path)>，
+  // 与 v2 的 diskDraft:pier.files.file:<hash> 不同；claim 不到新键时必须
+  // 回退旧键，否则旧版未保存的磁盘编辑永远留在 legacy-unassigned。
+  if (!claimed && source.kind === "disk") {
+    const legacyKey = legacyDiskDraftStorageKey(source.root, source.path);
+    if (legacyKey !== key) {
+      claimed = await claimLegacyDraft(legacyKey);
+    }
+  }
+  if (!claimed) {
     return false;
   }
   applyHydratedDraftsToOpenDocuments({
@@ -304,6 +316,11 @@ export function ensureDiskDocument(input: {
   if (existingEntry) {
     return existingEntry.document;
   }
+  // preserve-as-untitled 会把 diskId 别名为未命名文档；此时再开同一磁盘路径
+  // 必须解除该别名，否则新磁盘文档会被遮蔽成不可达的僵尸条目。
+  if (resolveDocumentId(id) !== id) {
+    documentAliases.delete(id);
+  }
 
   const draft = readPersistedDiskDraft(id, {
     path: input.path,
@@ -388,6 +405,11 @@ export const { adoptDocumentSaveAsTarget } = createFilesDocumentSaveAsActions({
   getDocument,
   notify,
   setDocument: (documentId, document) => {
+    // 同 ensureDiskDocument：目标 id 若仍被别名占用，先解除别名再落盘，
+    // 避免 save-as 结果文档被旧别名遮蔽。
+    if (resolveDocumentId(documentId) !== documentId) {
+      documentAliases.delete(documentId);
+    }
     documents.set(documentId, document);
   },
 });
@@ -409,6 +431,9 @@ export function removeDocument(documentId: string): void {
       root: document.source.root,
     });
   }
+  // 中断的 save-as journal 随文档关闭一并清理，避免孤儿记录（含完整
+  // savedContents 与写入回执）永久滞留 drafts 存储。
+  removeSaveAsJournalForDocument(resolvedDocumentId);
   if (!documents.delete(resolvedDocumentId)) {
     return;
   }
