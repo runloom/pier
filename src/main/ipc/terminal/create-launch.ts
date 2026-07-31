@@ -13,12 +13,30 @@ import type { TerminalPanelSession } from "../../state/terminal-session-state.ts
 
 const SHELL_SAFE_RE = /^[A-Za-z0-9_./:@%+=,-]+$/;
 const RESTORED_TASK_SHELL_FALLBACK = "/bin/zsh";
+/** Already a shell/-c invocation or Ghostty shell:/direct: prefix — do not wrap again. */
+const ALREADY_SHELL_WRAPPED_RE =
+  /^(?:shell:|direct:|\/bin\/(?:ba)?sh\s+-l?c\s+)/u;
 
 function shellQuote(value: string): string {
   if (SHELL_SAFE_RE.test(value)) {
     return value;
   }
   return `'${value.replaceAll("'", "'\\''")}'`;
+}
+
+/**
+ * macOS Ghostty starts surface `command` as a login shell (argv0 = "-basename").
+ * That breaks some Node SEA agent CLIs (e.g. GitHub Copilot reports
+ * `-copilot: bad option: -copilot`). Run the agent under `/bin/sh -lc` so the
+ * login prefix applies to sh, not the agent binary. Idempotent for already-
+ * wrapped commands and Ghostty `shell:` / `direct:` prefixes.
+ */
+export function wrapAgentTerminalCommand(command: string): string {
+  const trimmed = command.trim();
+  if (!trimmed || ALREADY_SHELL_WRAPPED_RE.test(trimmed)) {
+    return trimmed;
+  }
+  return `/bin/sh -lc ${shellQuote(trimmed)}`;
 }
 
 function restoredTaskResultCommand(task: TaskPanelMetadata): string {
@@ -58,6 +76,9 @@ export function nativeLaunchOptions(
   cwd: string | undefined,
   options: { restoredSession?: boolean } = {}
 ): ResolvedTerminalLaunchOptions | undefined {
+  // Keep logical agent command unwrapped here: this object is also persisted
+  // for resume adapters (`agent.launch.command`). Login-shell wrap is last-mile
+  // only — see `withAgentLoginShellSafeCommand`.
   const nativeLaunch = {
     ...(options.restoredSession
       ? {}
@@ -69,6 +90,25 @@ export function nativeLaunchOptions(
     ...(cwd && { cwd }),
   };
   return Object.keys(nativeLaunch).length > 0 ? nativeLaunch : undefined;
+}
+
+/**
+ * Last-mile wrap before Ghostty create. Apply on every agent spawn (fresh,
+ * restored, resume) so login argv0 is not the agent binary. Do not persist the
+ * result into session/registry.
+ */
+export function withAgentLoginShellSafeCommand(
+  launch: ResolvedTerminalLaunchOptions | undefined,
+  agentId: AgentKind | undefined
+): ResolvedTerminalLaunchOptions | undefined {
+  if (!(launch && agentId && launch.command)) {
+    return launch;
+  }
+  const command = wrapAgentTerminalCommand(launch.command);
+  if (command === launch.command) {
+    return launch;
+  }
+  return { ...launch, command };
 }
 
 export function readCreateLaunch(

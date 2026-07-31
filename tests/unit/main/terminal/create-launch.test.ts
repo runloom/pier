@@ -5,6 +5,8 @@ import { join } from "node:path";
 import {
   nativeLaunchOptions,
   resolveCreateTerminalLaunch,
+  withAgentLoginShellSafeCommand,
+  wrapAgentTerminalCommand,
 } from "@main/ipc/terminal/create-launch.ts";
 import { terminalLaunchRegistry } from "@main/state/terminal-launch-state.ts";
 import type { TerminalPanelSession } from "@main/state/terminal-session-state.ts";
@@ -47,6 +49,25 @@ function savedRunningDevSession(): TerminalPanelSession {
   };
 }
 
+describe("wrapAgentTerminalCommand", () => {
+  it("wraps agent binary under /bin/sh -lc for login-safe argv0", () => {
+    expect(wrapAgentTerminalCommand("copilot --yolo")).toBe(
+      "/bin/sh -lc 'copilot --yolo'"
+    );
+  });
+
+  it("is idempotent for already-wrapped and Ghostty-prefixed commands", () => {
+    const wrapped = wrapAgentTerminalCommand("copilot --yolo");
+    expect(wrapAgentTerminalCommand(wrapped)).toBe(wrapped);
+    expect(wrapAgentTerminalCommand("shell:copilot --yolo")).toBe(
+      "shell:copilot --yolo"
+    );
+    expect(wrapAgentTerminalCommand("direct:copilot --yolo")).toBe(
+      "direct:copilot --yolo"
+    );
+  });
+});
+
 describe("terminal create launch options", () => {
   it("does not pass profileId through to native when it has no native effect", () => {
     expect(
@@ -64,6 +85,46 @@ describe("terminal create launch options", () => {
       cwd: "/tmp/pier",
       env: { PIER_MODE: "dev" },
     });
+  });
+
+  it("keeps agent command unwrapped in nativeLaunchOptions for session/resume", () => {
+    expect(
+      nativeLaunchOptions(
+        {
+          agentId: "copilot",
+          command: "copilot --yolo",
+          cwd: "/tmp/pier",
+        },
+        "/tmp/pier"
+      )
+    ).toEqual({
+      agentId: "copilot",
+      command: "copilot --yolo",
+      cwd: "/tmp/pier",
+    });
+  });
+
+  it("last-mile wraps agent spawn command without mutating non-agent launches", () => {
+    expect(
+      withAgentLoginShellSafeCommand(
+        {
+          agentId: "copilot",
+          command: "copilot --yolo",
+          cwd: "/tmp/pier",
+        },
+        "copilot"
+      )
+    ).toEqual({
+      agentId: "copilot",
+      command: "/bin/sh -lc 'copilot --yolo'",
+      cwd: "/tmp/pier",
+    });
+    expect(
+      withAgentLoginShellSafeCommand(
+        { command: "pnpm test", cwd: "/tmp/pier" },
+        undefined
+      )
+    ).toEqual({ command: "pnpm test", cwd: "/tmp/pier" });
   });
 
   it("restores a task panel as a task result instead of a default shell", () => {
@@ -353,5 +414,10 @@ describe("terminal create launch options", () => {
       command: "claude --dangerously-skip-permissions",
       cwd: "/tmp/pier",
     });
+    // Spawn boundary still wraps for Ghostty login argv0 safety.
+    expect(
+      withAgentLoginShellSafeCommand(result.nativeLaunch, result.launchAgentId)
+        ?.command
+    ).toBe("/bin/sh -lc 'claude --dangerously-skip-permissions'");
   });
 });

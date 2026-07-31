@@ -63,10 +63,21 @@ describe("AGENT_CATALOG 完整性", () => {
       }
     }
   });
-  it("带参 launchCmd 与 detectCmd 分离（kiro/hermes/command-code）", () => {
+  it("带参 launchCmd 与 detectCmd 分离（kiro）；hermes/qwen/kilo 探测对齐", () => {
     expect(getAgentCatalogEntry("kiro")?.detectCmd).toBe("kiro-cli");
     expect(getAgentCatalogEntry("kiro")?.launchCmd).toBe("kiro-cli chat --tui");
-    expect(getAgentCatalogEntry("hermes")?.launchCmd).toBe("hermes --tui");
+    // Hermes CLI v0.8+ 无子命令即交互会话，已移除不存在的 --tui。
+    expect(getAgentCatalogEntry("hermes")?.launchCmd).toBe("hermes");
+    expect(getAgentCatalogEntry("hermes")?.detectCmd).toBe("hermes");
+    // npm `@qwen-code/qwen-code` 二进制为 qwen。
+    expect(getAgentCatalogEntry("qwen-code")?.launchCmd).toBe("qwen");
+    expect(getAgentCatalogEntry("qwen-code")?.detectCmd).toBe("qwen");
+    expect(getAgentCatalogEntry("qwen-code")?.detectCmdAliases).toContain(
+      "qwen-code"
+    );
+    expect(getAgentCatalogEntry("kilo")?.detectCmdAliases).toContain(
+      "kilocode"
+    );
   });
   it("Rovo Dev 使用当前 ACLI 入口，检测命令与子命令分离", () => {
     const rovo = getAgentCatalogEntry("rovo");

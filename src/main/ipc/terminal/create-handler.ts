@@ -25,6 +25,7 @@ import { resolveRestoredAgentLaunchEnv } from "./create-env.ts";
 import {
   consumeCreateLaunch,
   resolveCreateTerminalLaunch,
+  withAgentLoginShellSafeCommand,
   withPanelStatusEnv,
 } from "./create-launch.ts";
 import { sendInitialTerminalInput } from "./create-post-actions.ts";
@@ -389,8 +390,12 @@ export async function handleTerminalCreate(args: {
             createArgs.frame,
             createArgs.font.family,
             createArgs.font.size,
+            // Last-mile agent login-shell wrap (do not persist this form).
             withPanelStatusEnv(
-              launchForNative,
+              withAgentLoginShellSafeCommand(
+                launchForNative,
+                launch.launchAgentId
+              ),
               createArgs.panelId,
               String(win.id),
               foregroundActivityService.hookEnv()

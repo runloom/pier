@@ -1527,6 +1527,10 @@ describe("WorkspaceHeaderActions", () => {
           id: "terminal-456",
           params: {
             context: DEFAULT_TEST_PANEL_CONTEXT,
+            exitPresentation: {
+              dismissMode: "explicit",
+              role: "agent",
+            },
             launchId: "launch-agent",
           },
           position: {

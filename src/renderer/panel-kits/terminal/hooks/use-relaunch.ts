@@ -3,6 +3,7 @@ import { syncTaskPanelParams } from "@/lib/workspace/task-panel-params-sync.ts";
 import { rejectTerminalLaunch } from "@/lib/workspace/terminal-launch-confirmation.ts";
 import { useTerminalEndStateStore } from "@/stores/terminal-end-state.store.ts";
 import type { TerminalRelaunchRequest } from "@/stores/terminal-relaunch.store.ts";
+import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import type { ActiveTerminalLaunch } from "../panel-params.ts";
 
 interface UseTerminalRelaunchArgs {
@@ -59,6 +60,15 @@ export function useTerminalRelaunch({
         });
         setSavedSession(null);
         useTerminalEndStateStore.getState().clear(panelId);
+        if (relaunchRequest.exitPresentation) {
+          const panel = useWorkspaceStore
+            .getState()
+            .api?.panels.find((candidate) => candidate.id === panelId);
+          panel?.api.updateParameters({
+            ...panel.params,
+            exitPresentation: relaunchRequest.exitPresentation,
+          });
+        }
         if (relaunchRequest.task) {
           syncTaskPanelParams(panelId, {
             ...(relaunchRequest.tab ? { tab: relaunchRequest.tab } : {}),

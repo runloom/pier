@@ -7,6 +7,7 @@ import {
   exitPresentationFromParams,
   formatGhosttyChildExitedBufferText,
   inferTerminalExitRole,
+  resolveChildExitedActivityKind,
 } from "@/panel-kits/terminal/format-ghostty-host-copy.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import {
@@ -68,16 +69,16 @@ export function useTerminalChildExitedInject(
       if (event.panelId !== panelId) {
         return;
       }
-      const current = activityKindRef.current;
-      const kind =
-        current === "agent" || current === "task"
-          ? current
-          : latchedKindRef.current;
       const live = useForegroundActivityStore.getState().activities[panelId];
       const agentId: AgentKind | undefined =
         (live?.kind === "agent" ? live.agentId : undefined) ??
         latchedAgentIdRef.current ??
         agentIdHintRef.current;
+      const kind = resolveChildExitedActivityKind({
+        agentId,
+        current: activityKindRef.current,
+        latched: latchedKindRef.current,
+      });
 
       const role = inferTerminalExitRole({
         activityKind: kind,

@@ -5,6 +5,7 @@ import type {
   PierCommandResult,
 } from "@shared/contracts/commands.ts";
 import type { PanelSnapshot, WindowInfo } from "@shared/contracts/events.ts";
+import { AGENT_TERMINAL_EXIT_PRESENTATION } from "@shared/contracts/ghostty-host-copy.ts";
 import {
   type PanelContext,
   panelContextSchema,
@@ -381,7 +382,12 @@ export async function executeTerminalOpenCommand(
         command,
         context,
         launchId,
-        options,
+        options: {
+          ...options,
+          ...(launch.agentId
+            ? { exitPresentation: AGENT_TERMINAL_EXIT_PRESENTATION }
+            : {}),
+        },
         windowId: target.window.id,
       })
     );

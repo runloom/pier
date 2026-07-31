@@ -67,7 +67,7 @@ describe("resolveAgentCommand", () => {
         agentId: "qwen-code",
         agentDefaultArgs: { "qwen-code": "--approval-mode yolo" },
       })
-    ).toBe("qwen-code --approval-mode yolo");
+    ).toBe("qwen --approval-mode yolo");
   });
   it("带参 launchCmd + yolo flag 拼接（kiro）", () => {
     expect(

@@ -18,6 +18,8 @@
  * 不做 web banner。native **不**做 role 矩阵 / i18n 插值（进程退出）。
  */
 
+import { z } from "zod";
+
 /** Ghostty 默认 abnormal 阈值（ms），对齐 Surface.zig / Config.zig。 */
 export const GHOSTTY_ABNORMAL_COMMAND_EXIT_RUNTIME_MS = 250;
 
@@ -187,6 +189,21 @@ export interface TerminalExitPresentation {
   messageOverride?: string;
   role?: TerminalExitRole;
 }
+
+/** 智能体终端默认退出文案策略：显式关 tab，不用「按任意键关闭」。 */
+export const AGENT_TERMINAL_EXIT_PRESENTATION: TerminalExitPresentation = {
+  dismissMode: "explicit",
+  role: "agent",
+};
+
+/** Zod：renderer command / IPC 可选透传 exitPresentation。 */
+export const terminalExitPresentationSchema = z
+  .object({
+    dismissMode: z.enum(["any-key", "explicit"]).optional(),
+    messageOverride: z.string().min(1).optional(),
+    role: z.enum(["shell", "agent", "task", "taskOutput"]).optional(),
+  })
+  .strict();
 
 export function classifyGhosttyChildExited(
   exitCode: number,

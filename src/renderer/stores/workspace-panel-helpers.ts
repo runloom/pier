@@ -1,3 +1,4 @@
+import type { TerminalExitPresentation } from "@shared/contracts/ghostty-host-copy.ts";
 import type { PanelContext, PanelTabChrome } from "@shared/contracts/panel.ts";
 import type { TaskPanelMetadata } from "@shared/contracts/tasks.ts";
 import type { DockviewApi } from "dockview-react";
@@ -6,6 +7,7 @@ import { useTerminalPreferencesStore } from "@/stores/terminal-preferences.store
 
 export interface TerminalPanelParams {
   context?: PanelContext;
+  exitPresentation?: TerminalExitPresentation;
   launchId?: string;
   tab?: PanelTabChrome;
   task?: TaskPanelMetadata;
@@ -30,15 +32,25 @@ export function terminalPanelContext(
 
 export function terminalPanelParams(args: {
   context: PanelContext | undefined;
+  exitPresentation?: TerminalExitPresentation | undefined;
   launchId: string | undefined;
   tab: PanelTabChrome | undefined;
   task: TaskPanelMetadata | undefined;
 }): TerminalPanelParams | undefined {
-  if (!(args.context || args.launchId || args.tab || args.task)) {
+  if (
+    !(
+      args.context ||
+      args.exitPresentation ||
+      args.launchId ||
+      args.tab ||
+      args.task
+    )
+  ) {
     return;
   }
   return {
     ...(args.context && { context: args.context }),
+    ...(args.exitPresentation && { exitPresentation: args.exitPresentation }),
     ...(args.launchId && { launchId: args.launchId }),
     ...(args.tab && { tab: args.tab }),
     ...(args.task && { task: args.task }),

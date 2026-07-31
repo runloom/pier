@@ -139,10 +139,19 @@ async function addTerminalForCommand(
       if (command.focus !== false) {
         focusPanel(command.panelId, "terminal");
       }
+      if (command.exitPresentation) {
+        panel.api.updateParameters({
+          ...panel.params,
+          exitPresentation: command.exitPresentation,
+        });
+      }
       requestTerminalRelaunch({
         panelId: command.panelId,
         launchId: command.launchId,
         ...(command.context && { context: command.context }),
+        ...(command.exitPresentation && {
+          exitPresentation: command.exitPresentation,
+        }),
         ...(command.initialInput && { initialInput: command.initialInput }),
         ...(command.tab && { tab: command.tab }),
         ...(command.task && { task: command.task }),
@@ -166,6 +175,9 @@ async function addTerminalForCommand(
         workspace.addTerminal({
           ...(command.context && {
             context: command.context,
+          }),
+          ...(command.exitPresentation && {
+            exitPresentation: command.exitPresentation,
           }),
           ...(command.initialInput && { initialInput: command.initialInput }),
           launchId: command.launchId,

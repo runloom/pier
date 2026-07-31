@@ -42,6 +42,7 @@ interface WorkspaceState {
   addTerminal: (opts?: {
     /** `null` forces no cwd; omit the key to inherit from the active terminal. */
     context?: PanelContext | null;
+    exitPresentation?: TerminalPanelParams["exitPresentation"];
     initialInput?: string;
     launchId?: string;
     placement?: PierCommandPlacement;
@@ -167,6 +168,7 @@ export const useWorkspaceStore = create<WorkspaceState>((set, get) => ({
         : inheritedActiveTerminalContext(api);
     const params = terminalPanelParams({
       context,
+      exitPresentation: opts?.exitPresentation,
       launchId: opts?.launchId,
       tab: opts?.tab,
       task: opts?.task,

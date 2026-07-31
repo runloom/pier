@@ -6,6 +6,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   formatGhosttyChildExitedBufferText,
   inferTerminalExitRole,
+  resolveChildExitedActivityKind,
   resolveDismissMode,
   resolveGhosttyChildExitedBanner,
 } from "@/panel-kits/terminal/format-ghostty-host-copy.ts";
@@ -19,6 +20,7 @@ vi.mock("i18next", () => ({
         "terminal.ghosttyHost.processExitedAbnormal": `The command exited too quickly (${String(options?.duration ?? "")}).`,
         "terminal.ghosttyHost.agentExited": "Agent session ended",
         "terminal.ghosttyHost.agentExitedFailed": `Agent session ended with code ${String(options?.code ?? "")}`,
+        "terminal.ghosttyHost.agentExitedAbnormal": `The agent exited too quickly (${String(options?.duration ?? "")}).`,
         "terminal.ghosttyHost.taskExited": "Task finished",
         "terminal.ghosttyHost.taskOutputExited": "Task output ended",
         "terminal.ghosttyHost.dismissAnyKey": "Press any key to close",
@@ -51,6 +53,37 @@ describe("classifyGhosttyChildExited", () => {
         GHOSTTY_ABNORMAL_COMMAND_EXIT_RUNTIME_MS + 1
       )
     ).toBe("failed");
+  });
+});
+
+describe("resolveChildExitedActivityKind", () => {
+  it("prefers live FA over latch and agentId", () => {
+    expect(
+      resolveChildExitedActivityKind({
+        agentId: "claude",
+        current: "task",
+        latched: "agent",
+      })
+    ).toBe("task");
+  });
+
+  it("falls back to agent when FA never latched but agentId is known", () => {
+    expect(
+      resolveChildExitedActivityKind({
+        agentId: "copilot",
+        current: undefined,
+        latched: undefined,
+      })
+    ).toBe("agent");
+  });
+
+  it("keeps shell path when no agent identity exists", () => {
+    expect(
+      resolveChildExitedActivityKind({
+        current: undefined,
+        latched: undefined,
+      })
+    ).toBeUndefined();
   });
 });
 
@@ -109,6 +142,24 @@ describe("resolveGhosttyChildExitedBanner", () => {
     expect(copy.role).toBe("agent");
     expect(copy.primary).toBe("Agent session ended");
     expect(copy.dismiss).toBe("Close the tab when you’re done reviewing");
+  });
+
+  it("uses agent abnormal copy and explicit dismiss from exitPresentation", () => {
+    const copy = resolveGhosttyChildExitedBanner({
+      exitCode: 9,
+      params: {
+        exitPresentation: {
+          dismissMode: "explicit",
+          role: "agent",
+        },
+      },
+      runtimeMs: 88,
+    });
+    expect(copy.role).toBe("agent");
+    expect(copy.variant).toBe("abnormal");
+    expect(copy.primary).toBe("The agent exited too quickly (88 ms).");
+    expect(copy.dismiss).toBe("Close the tab when you’re done reviewing");
+    expect(copy.dismiss).not.toBe("Press any key to close");
   });
 
   it("honors messageOverride from exitPresentation", () => {

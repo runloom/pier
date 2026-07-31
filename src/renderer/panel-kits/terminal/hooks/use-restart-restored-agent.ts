@@ -1,3 +1,4 @@
+import { AGENT_TERMINAL_EXIT_PRESENTATION } from "@shared/contracts/ghostty-host-copy.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type {
   TerminalAgentPanelMetadata,
@@ -42,6 +43,7 @@ export function useRestartRestoredAgent(args: {
         cwdFallbackContext(panelId, restoredAgentResult.launch.cwd);
       requestTerminalRelaunch({
         panelId,
+        exitPresentation: AGENT_TERMINAL_EXIT_PRESENTATION,
         launchId,
         ...(context
           ? {

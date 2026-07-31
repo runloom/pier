@@ -183,6 +183,7 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
     label: "Kilocode",
     launchCmd: "kilo",
     detectCmd: "kilo",
+    detectCmdAliases: ["kilocode"],
     expectedProcess: "kilo",
     iconId: "kilo",
     homepageUrl: "https://kilo.ai/docs/cli",
@@ -280,9 +281,11 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
   {
     id: "qwen-code",
     label: "Qwen Code",
-    launchCmd: "qwen-code",
-    detectCmd: "qwen-code",
-    expectedProcess: "qwen-code",
+    // npm `@qwen-code/qwen-code` 安装后二进制为 `qwen`（integration detect 亦同）。
+    launchCmd: "qwen",
+    detectCmd: "qwen",
+    detectCmdAliases: ["qwen-code"],
+    expectedProcess: "qwen",
     faviconDomain: "qwenlm.github.io",
     homepageUrl: "https://github.com/QwenLM/qwen-code",
     oneShotArgs: (prompt) => ["-p", prompt],
@@ -301,7 +304,8 @@ export const AGENT_CATALOG: readonly AgentCatalogEntry[] = [
   {
     id: "hermes",
     label: "Hermes",
-    launchCmd: "hermes --tui",
+    // Hermes CLI v0.8+：无子命令即交互会话；已无 `--tui`（会 unrecognized arguments）。
+    launchCmd: "hermes",
     detectCmd: "hermes",
     expectedProcess: "hermes",
     faviconDomain: "nousresearch.com",

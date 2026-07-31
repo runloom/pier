@@ -78,6 +78,27 @@ export function exitPresentationFromParams(
 }
 
 /**
+ * Prefer live FA, then latch, then agent identity so ultra-fast agent exits
+ * still resolve as agent when FA never committed.
+ */
+export function resolveChildExitedActivityKind(input: {
+  agentId?: string | undefined;
+  current?: string | undefined;
+  latched?: string | undefined;
+}): string | undefined {
+  if (input.current === "agent" || input.current === "task") {
+    return input.current;
+  }
+  if (input.latched === "agent" || input.latched === "task") {
+    return input.latched;
+  }
+  if (input.agentId) {
+    return "agent";
+  }
+  return input.latched;
+}
+
+/**
  * Infer exit role from explicit presentation, task params, then activity kind.
  */
 export function inferTerminalExitRole(input: {
