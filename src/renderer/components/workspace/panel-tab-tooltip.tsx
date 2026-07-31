@@ -104,15 +104,20 @@ export function tabTooltipText(
 export function tabAriaLabel(
   explicit: string | undefined,
   title: string,
-  stateLabel: string | undefined
+  stateLabel: string | undefined,
+  trailingLabel?: string | undefined
 ): string | undefined {
   if (explicit) {
     return explicit;
   }
-  if (!stateLabel) {
+  const parts = [title, stateLabel, trailingLabel].filter(
+    (part): part is string => Boolean(part)
+  );
+  // 无 state / trailing 时不要强塞 aria-label（留给外层 title 文本即可）。
+  if (parts.length <= 1) {
     return;
   }
-  return [title, stateLabel].filter(Boolean).join(", ");
+  return parts.join(", ");
 }
 
 export function tabStatusIndicator(

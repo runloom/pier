@@ -62,6 +62,28 @@ export const panelTabBadgeSchema = z
   .strict();
 export type PanelTabBadge = z.infer<typeof panelTabBadgeSchema>;
 
+/**
+ * Tab 标题旁的结构化后缀（与 title 字符串分离）。
+ * - git-line-delta：审查等场景的 +N −M（双色由渲染层负责）
+ * - text：单色短标签
+ */
+export const panelTabTrailingSchema = z.discriminatedUnion("kind", [
+  z
+    .object({
+      deletions: z.number().int().nonnegative(),
+      insertions: z.number().int().nonnegative(),
+      kind: z.literal("git-line-delta"),
+    })
+    .strict(),
+  z
+    .object({
+      kind: z.literal("text"),
+      label: z.string().min(1),
+    })
+    .strict(),
+]);
+export type PanelTabTrailing = z.infer<typeof panelTabTrailingSchema>;
+
 export const panelTabStatusSchema = z.enum([
   "idle",
   "running",
@@ -108,6 +130,7 @@ export const panelTabChromeSchema = z
     state: panelTabStateSchema.optional(),
     title: z.string().min(1).optional(),
     tooltip: panelTabTooltipSchema.optional(),
+    trailing: panelTabTrailingSchema.optional(),
   })
   .strict();
 export type PanelTabChrome = z.infer<typeof panelTabChromeSchema>;

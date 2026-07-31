@@ -6,6 +6,7 @@ import {
   SelectItem,
   SelectTrigger,
 } from "@pier/ui/select.tsx";
+import { cn } from "@pier/ui/utils.ts";
 import type { IDockviewHeaderActionsProps } from "dockview-react";
 import { ChevronDown } from "lucide-react";
 import {
@@ -19,8 +20,10 @@ import {
 import { activateWorkspacePanel } from "@/lib/workspace/panel-activation.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { panelKindOf } from "./panel-registry.ts";
+import { panelTabKind } from "./panel-tab-layout.ts";
 import { PanelTabLeadingIcon } from "./panel-tab-leading-icon.tsx";
 import { tabStatusIndicator } from "./panel-tab-tooltip.tsx";
+import { PanelTabTrailingView } from "./panel-tab-trailing.tsx";
 
 const CLIP_EPSILON_PX = 1;
 const OVERFLOW_ANCHOR_CLASS = "h-full w-0 shrink-0 overflow-hidden";
@@ -190,6 +193,7 @@ function PanelMenuItem({ panel }: { panel: HeaderPanel }) {
   // 与 PanelTabHeader 共用 leading 图标 + 语义色 class，避免 overflow 菜单
   // 落到 Select 默认 foreground 而 tab 仍是 status / file-icon 色。
   const title = tab?.title ?? panel.title ?? "Panel";
+  const kind = panelTabKind(component);
   const statusIndicator = tab?.state?.status
     ? tabStatusIndicator(tab.state.status, tab.state.label, {
         preserveSemanticColor: true,
@@ -200,11 +204,16 @@ function PanelMenuItem({ panel }: { panel: HeaderPanel }) {
     <SelectItem showIndicator={false} textValue={title} value={panel.id}>
       <PanelTabLeadingIcon component={component} tab={tab} />
       <span
-        className="line-clamp-2 min-w-0 flex-1 whitespace-normal break-words text-left"
+        className={cn(
+          "line-clamp-2 min-w-0 flex-1 whitespace-normal break-words text-left",
+          kind === "file" && "font-mono font-normal"
+        )}
         data-panel-overflow-title
+        data-pier-tab-kind={kind}
       >
         {title}
       </span>
+      <PanelTabTrailingView trailing={tab?.trailing} />
       {statusIndicator}
     </SelectItem>
   );

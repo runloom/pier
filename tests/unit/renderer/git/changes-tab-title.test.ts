@@ -1,6 +1,9 @@
 import {
+  GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM,
   gitChangesPanelTabChrome,
   gitChangesPanelTitle,
+  gitLineDeltaTrailingFromSummary,
+  gitReviewTabChangeSummary,
   gitRootFolderName,
   shortGitReviewRef,
 } from "@plugins/builtin/git/renderer/changes-tab-title.ts";
@@ -88,7 +91,156 @@ describe("gitChangesPanelTabChrome", () => {
     });
   });
 
+  it("attaches git-line-delta trailing from tabChangeSummary param", () => {
+    const chrome = gitChangesPanelTabChrome(
+      {
+        source: {
+          contextId: "worktree:repo",
+          gitRootPath: "/repo",
+          target: { kind: "uncommitted" },
+        },
+        [GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM]: {
+          changedFiles: 2,
+          deletions: 3,
+          excludedFiles: 0,
+          insertions: 12,
+          kind: "lineDelta",
+        },
+      },
+      LABELS
+    );
+
+    expect(chrome?.trailing).toEqual({
+      deletions: 3,
+      insertions: 12,
+      kind: "git-line-delta",
+    });
+    expect(chrome?.title).toBe("repo");
+  });
+
+  it("omits trailing for zero lineDelta or filesOnly summary", () => {
+    expect(
+      gitChangesPanelTabChrome(
+        {
+          source: {
+            contextId: "worktree:repo",
+            gitRootPath: "/repo",
+            target: { kind: "uncommitted" },
+          },
+          [GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM]: {
+            changedFiles: 0,
+            deletions: 0,
+            excludedFiles: 0,
+            insertions: 0,
+            kind: "lineDelta",
+          },
+        },
+        LABELS
+      )?.trailing
+    ).toBeUndefined();
+
+    expect(
+      gitChangesPanelTabChrome(
+        {
+          source: {
+            contextId: "worktree:repo",
+            gitRootPath: "/repo",
+            target: { kind: "uncommitted" },
+          },
+          [GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM]: {
+            changedFiles: 2,
+            kind: "filesOnly",
+            omittedFiles: 2,
+            reasons: ["tooLarge"],
+          },
+        },
+        LABELS
+      )?.trailing
+    ).toBeUndefined();
+  });
+
   it("returns undefined without a valid source", () => {
     expect(gitChangesPanelTabChrome({}, LABELS)).toBeUndefined();
+  });
+});
+
+describe("gitReviewTabChangeSummary", () => {
+  it("merges unstaged and staged lineDelta for uncommitted target", () => {
+    expect(
+      gitReviewTabChangeSummary(
+        { kind: "uncommitted" },
+        {
+          staged: {
+            changedFiles: 1,
+            deletions: 1,
+            excludedFiles: 0,
+            insertions: 2,
+            kind: "lineDelta",
+          },
+          unstaged: {
+            changedFiles: 2,
+            deletions: 4,
+            excludedFiles: 0,
+            insertions: 10,
+            kind: "lineDelta",
+          },
+        }
+      )
+    ).toEqual({
+      changedFiles: 3,
+      deletions: 5,
+      excludedFiles: 0,
+      insertions: 12,
+      kind: "lineDelta",
+    });
+  });
+
+  it("uses committed summary for commit target", () => {
+    expect(
+      gitReviewTabChangeSummary(
+        {
+          kind: "commit",
+          oid: "abcdef0123456789abcdef0123456789abcdef01",
+        },
+        {
+          committed: {
+            changedFiles: 1,
+            deletions: 2,
+            excludedFiles: 0,
+            insertions: 5,
+            kind: "lineDelta",
+          },
+        }
+      )
+    ).toEqual({
+      changedFiles: 1,
+      deletions: 2,
+      excludedFiles: 0,
+      insertions: 5,
+      kind: "lineDelta",
+    });
+  });
+});
+
+describe("gitLineDeltaTrailingFromSummary", () => {
+  it("returns trailing only for non-zero lineDelta", () => {
+    expect(
+      gitLineDeltaTrailingFromSummary({
+        changedFiles: 1,
+        deletions: 0,
+        excludedFiles: 0,
+        insertions: 4,
+        kind: "lineDelta",
+      })
+    ).toEqual({ deletions: 0, insertions: 4, kind: "git-line-delta" });
+    expect(
+      gitLineDeltaTrailingFromSummary({
+        changedFiles: 0,
+        deletions: 0,
+        excludedFiles: 0,
+        insertions: 0,
+        kind: "lineDelta",
+      })
+    ).toBeUndefined();
   });
 });

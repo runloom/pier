@@ -805,6 +805,78 @@ describe("PanelTabHeader", () => {
     expect(fileUpdateParameters).toHaveBeenCalledWith({ pinned: true });
   });
 
+  it("marks file tabs with data-pier-tab-kind=file for mono non-bold styling", () => {
+    const { container } = render(
+      <PanelTabHeader
+        {...createHeaderProps(
+          "pier.files.filePanel",
+          "README.md",
+          undefined,
+          "pier.files.filePanel:disk:kind"
+        )}
+      />
+    );
+
+    const tab = container.querySelector(
+      '[data-panel-tab-id="pier.files.filePanel:disk:kind"]'
+    );
+    expect(tab).toHaveAttribute("data-pier-tab-kind", "file");
+    expect(
+      container.querySelector(".dv-default-tab-content")
+    ).toHaveTextContent("README.md");
+  });
+
+  it("renders review git-line-delta trailing next to the title without baking it into title", () => {
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "pier.git.changes:1": {
+          display: { short: "pier" },
+          tab: {
+            title: "pier",
+            trailing: {
+              deletions: 3,
+              insertions: 12,
+              kind: "git-line-delta",
+            },
+          },
+        },
+      },
+    });
+
+    const { container } = render(
+      <PanelTabHeader
+        {...createHeaderProps(
+          "pier.git.changes",
+          "pier",
+          undefined,
+          "pier.git.changes:1"
+        )}
+      />
+    );
+
+    expect(
+      container.querySelector(".dv-default-tab-content")
+    ).toHaveTextContent("pier");
+    expect(
+      container.querySelector('[data-pier-tab-trailing="git-line-delta"]')
+    ).not.toBeNull();
+    expect(
+      container.querySelector('[data-git-delta="insertions"]')
+    ).toHaveTextContent("+12");
+    expect(
+      container.querySelector('[data-git-delta="deletions"]')
+    ).toHaveTextContent("−3");
+    expect(container.querySelector(".dv-default-tab")).toHaveAttribute(
+      "data-pier-tab-kind",
+      "review"
+    );
+    expect(container.querySelector(".dv-default-tab")).toHaveAttribute(
+      "aria-label",
+      "pier, +12 −3"
+    );
+  });
+
   it("shows a frontmost absolutely positioned active-task presence dot when RC-scoped runs are active", () => {
     useTaskRunsStore.setState({
       error: null,

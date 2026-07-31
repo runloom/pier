@@ -181,6 +181,12 @@ describe("Git diff renderer governance", () => {
     expect(/\$\{SCROLLBAR_SYSTEM_CSS\}/.test(customCss ?? "")).toBe(true);
     expect(appearanceSource).toContain("DIFF_HEADER_HEIGHT_PX = 32");
     expect(appearanceSource).toContain("min-height: 32px");
+    // 路径 hover 权威在 path-title-chrome postRender；CSS 仅 cursor 兜底
+    expect(appearanceSource).toContain("[data-header-content] [data-title]");
+    expect(appearanceSource).toContain("cursor: pointer");
+    expect(appearanceSource).not.toContain(
+      "[data-header-content] [data-title]:hover bdi"
+    );
     expect(adapterSource).toContain('from "./sticky-stabilize.ts"');
     // 挂载 layout 会 reapply；onPostRender 热路径 reapply:false 只 patch
     expect(adapterSource).toContain("stabilizeCodeViewStickyPositioning(");
@@ -253,6 +259,8 @@ describe("Git diff renderer governance", () => {
         join(ROOT, "packages/ui/src/diff-view/use-code-options.ts"),
         // estimate 骨架注入 shadowRoot（金标准 pending UI）
         join(ROOT, "packages/ui/src/diff-view/estimate-skeleton.ts"),
+        // 路径标题 mono + hover 下划线（shadow 内 [data-title]）
+        join(ROOT, "packages/ui/src/diff-view/path-title-chrome.ts"),
       ].includes(file);
       if (
         // 成员同步 API 仅适配层可用（\.setItems 避免误伤 React useState setItems）。
