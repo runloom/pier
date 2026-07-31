@@ -753,6 +753,8 @@ body {
   --dv-tab-margin: 0;
   --dv-tab-border-radius: 0;
   --dv-border-radius: 0;
+  /* 标题文本槽上限；数值与 panel-tab-layout.ts PANEL_TAB_TITLE_MAX_WIDTH_PX 对齐（治理测试交叉校验） */
+  --pier-tab-title-max: 160px;
 
   /* — 面板 / Tab 栏底色 — */
   --dv-group-view-background-color: var(--background);
@@ -856,11 +858,9 @@ body {
   box-sizing: border-box;
   gap: 6px;
   /*
-   * Tab 按内容定宽，不设固定 max-width。
-   * 有空位时展示完整标题（工作树名 / session 名等）；多 tab 超出时由
-   * dockview tabs 横向滚动承载，避免「条带仍空却 ellipsis」。
-   * 极端长标题（agent/OSC）仍可在被父级真正约束时由下方 content
-   * ellipsis 兜底。拖拽 ghost 另有 220px 上限（见下方 dragging 规则）。
+   * Tab 仍按内容定宽（整颗 tab 不设硬顶）；标题文本槽单独 max-width +
+   * ellipsis。trailing / dirty / × 始终 shrink-0 可见。多 tab 超出时由
+   * dockview tabs 横向滚动承载。拖拽 ghost 另有 220px 整 tab 上限。
    */
   max-width: none;
   min-width: 0;
@@ -876,6 +876,7 @@ body {
 .dv-tab-ghost-drag .dv-default-tab .dv-default-tab-content {
   font-weight: 600;
   margin-right: 0;
+  max-width: var(--pier-tab-title-max, 160px);
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -886,9 +887,29 @@ body {
   font-weight: 600 !important;
 }
 
+/* 文件 tab：文件名等宽、非粗体（路径标识符语义；preview 斜体仍叠加）。
+ * ghost 的 600 !important 必须被文件 kind 覆盖，否则拖动时文件名变粗。 */
+.dockview-theme-pier
+  .dv-tab
+  .dv-default-tab[data-pier-tab-kind="file"]
+  .dv-default-tab-content,
+.dv-tab.dv-tab-dragging
+  .dv-default-tab[data-pier-tab-kind="file"]
+  .dv-default-tab-content,
+.dv-tab-ghost-drag .dv-default-tab[data-pier-tab-kind="file"] .dv-default-tab-content {
+  font-family: var(--font-mono);
+  font-weight: 400;
+}
+
+.dv-tab-ghost-drag
+  .dv-default-tab[data-pier-tab-kind="file"]
+  .dv-default-tab-content {
+  font-weight: 400 !important;
+}
+
 /* Preview tab 视觉 —— 与 Cursor / VS Code 对齐:tab title 斜体、图标半透明,
  * 表示"这个 tab 是临时预览,再点其他文件会被替换";修改内容或双击后 params.pinned
- * 变 true,data-pier-tab-preview 消失,恢复正常粗体 tab。 */
+ * 变 true,data-pier-tab-preview 消失,恢复正常 tab。 */
 .dockview-theme-pier .dv-tab .dv-default-tab[data-pier-tab-preview="true"] .dv-default-tab-content {
   font-style: italic;
   font-weight: 400;

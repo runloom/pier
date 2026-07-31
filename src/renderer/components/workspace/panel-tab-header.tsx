@@ -37,6 +37,10 @@ import {
 } from "@/stores/task-runs.store.ts";
 import { terminalComposerTakeoverFocus } from "@/stores/terminal-composer-takeover.ts";
 import { requestTerminalFocusIntent } from "@/stores/terminal-input-routing-slice.ts";
+import {
+  PANEL_TAB_FILE_COMPONENT_ID,
+  panelTabKind,
+} from "./panel-tab-layout.ts";
 import { PanelTabLeadingIcon } from "./panel-tab-leading-icon.tsx";
 import {
   PANEL_TAB_TOOLTIP_DELAY_MS,
@@ -44,10 +48,12 @@ import {
   tabStatusIndicator,
   tabTooltipText,
 } from "./panel-tab-tooltip.tsx";
+import {
+  PanelTabTrailingView,
+  panelTabTrailingAriaSuffix,
+} from "./panel-tab-trailing.tsx";
 
 export { PANEL_TAB_TOOLTIP_DELAY_MS } from "./panel-tab-tooltip.tsx";
-
-const FILE_PANEL_COMPONENT_ID = "pier.files.filePanel";
 
 // dockview panel params 里可选 `pinned: boolean`。只有文件面板显式
 // pinned:false 才是 preview tab(Cursor / VS Code 语义:斜体 + 半透明);
@@ -61,7 +67,7 @@ function paramsIsPreview(
   component: string | undefined,
   params: PanelPreviewParams | undefined
 ): boolean {
-  return component === FILE_PANEL_COMPONENT_ID && params?.pinned === false;
+  return component === PANEL_TAB_FILE_COMPONENT_ID && params?.pinned === false;
 }
 
 // 文件面板未保存标记(VS Code 语义:tab 上的实心圆点)。dirty 由 files 插件
@@ -70,7 +76,7 @@ function paramsIsDirty(
   component: string | undefined,
   params: PanelPreviewParams | undefined
 ): boolean {
-  return component === FILE_PANEL_COMPONENT_ID && params?.dirty === true;
+  return component === PANEL_TAB_FILE_COMPONENT_ID && params?.dirty === true;
 }
 
 export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
@@ -99,6 +105,8 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   );
   const tab = descriptor?.tab;
   const displayTitle = tab?.title ?? title;
+  const kind = panelTabKind(props.api.component);
+  const trailingAria = panelTabTrailingAriaSuffix(tab?.trailing);
   const tooltipText = tabTooltipText(
     tab?.tooltip,
     descriptor?.display.long ?? descriptor?.display.terminalTitle,
@@ -255,13 +263,16 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
   // 内层保留 role=tab + tabIndex=0 + Enter/Space 合约（终端 refocus），outline 清掉避免双环脏描边。
   const tabContent = (
     <div
-      aria-label={tabAriaLabel(tab?.ariaLabel, displayTitle, tab?.state?.label)}
+      aria-label={tabAriaLabel(
+        tab?.ariaLabel,
+        displayTitle,
+        tab?.state?.label,
+        trailingAria
+      )}
       className="dv-default-tab relative outline-none"
       data-panel-tab-id={props.api.id}
       data-pier-tab-has-active-task={showActiveTaskDot ? "true" : undefined}
-      data-pier-tab-kind={
-        props.api.component === FILE_PANEL_COMPONENT_ID ? "file" : undefined
-      }
+      data-pier-tab-kind={kind}
       data-pier-tab-preview={isPreview ? "true" : undefined}
       data-tab-state-label={tab?.state?.label}
       data-tab-status={status}
@@ -283,6 +294,7 @@ export function PanelTabHeader(props: IDockviewPanelHeaderProps) {
       ) : null}
       {leadingVisual}
       <span className="dv-default-tab-content">{displayTitle}</span>
+      <PanelTabTrailingView trailing={tab?.trailing} />
       {isDirty ? (
         <span
           aria-label={t("workspace.tab.unsaved")}

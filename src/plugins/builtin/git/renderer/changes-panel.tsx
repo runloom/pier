@@ -15,11 +15,16 @@ import {
 import {
   useCallback,
   useEffect,
+  useLayoutEffect,
   useMemo,
+  useRef,
   useState,
   useSyncExternalStore,
 } from "react";
-import { gitChangesPanelTitle } from "./changes-tab-title.ts";
+import {
+  GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM,
+  gitChangesPanelTitle,
+} from "./changes-tab-title.ts";
 import { useGitChangesPanelIndexState } from "./hooks/use-changes-panel-index-state.ts";
 import { pluginText } from "./plugin-text.ts";
 import {
@@ -34,6 +39,7 @@ import { GitReviewScopeSwitcher } from "./review/scope-switcher.tsx";
 import { clearReviewSessionsForScope } from "./review/session-cache.ts";
 import { ReviewDocuments } from "./review/surfaces.tsx";
 import { gitReviewTreeModel } from "./review/tree.tsx";
+import { planTabChangeSummaryWrite } from "./tab-change-summary-sync.ts";
 import { usePluginLanguage } from "./use-plugin-language.ts";
 
 const REVIEW_TREE_COLLAPSED_STORAGE_PREFIX = "pier.git.review.treeCollapsed:";
@@ -137,11 +143,15 @@ export function createGitChangesPanel(
             if (!source) {
               return;
             }
+            // 与 source 同一次写清空摘要，避免新标题 + 旧 +/− 同帧。
             props.api.updateParameters({
               source: { ...source, target } satisfies GitReviewScope,
+              [GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM]: null,
             });
           }}
+          panelApi={props.api}
           panelId={panelId}
+          panelParams={props.params}
           source={source}
           sourceKey={sourceKey}
           visible={visible}
@@ -155,7 +165,9 @@ function GitChangesPanelBody({
   authority,
   context,
   onSelectTarget,
+  panelApi,
   panelId,
+  panelParams,
   source,
   sourceKey,
   visible,
@@ -163,7 +175,9 @@ function GitChangesPanelBody({
   readonly authority: GitReviewMutationAuthority;
   readonly context: RendererPluginContext;
   readonly onSelectTarget: (target: GitReviewTarget) => void;
+  readonly panelApi: IDockviewPanelProps["api"];
   readonly panelId: string;
+  readonly panelParams: IDockviewPanelProps["params"];
   readonly source: GitReviewScope | null;
   readonly sourceKey: string | null;
   readonly visible: boolean;
@@ -200,6 +214,38 @@ function GitChangesPanelBody({
     state,
     waitForAuthoritativeIndex,
   } = useGitChangesPanelIndexState({ authority, context, source, sourceKey });
+
+  // index 就绪后写 scope 级 +/−；sourceKey 变化时 layout 前清空（useLayoutEffect）。
+  // tabChangeSummary 为短暂呈现态，layout 落盘会 strip（strip-ephemeral-layout-params）。
+  const lastTabSummarySourceKeyRef = useRef<string | null>(null);
+  useLayoutEffect(() => {
+    const paramsRecord =
+      panelParams && typeof panelParams === "object"
+        ? (panelParams as Record<string, unknown>)
+        : {};
+    const current = paramsRecord[GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM];
+    let planState: Parameters<typeof planTabChangeSummaryWrite>[0]["state"];
+    if (state.kind === "loaded") {
+      planState = { kind: "loaded", result: state.result };
+    } else if (state.kind === "error") {
+      planState = { kind: "error" };
+    } else {
+      planState = { kind: "loading" };
+    }
+    const { nextLastSourceKey, plan } = planTabChangeSummaryWrite({
+      currentParam: current,
+      lastSourceKey: lastTabSummarySourceKeyRef.current,
+      source,
+      sourceKey,
+      state: planState,
+    });
+    lastTabSummarySourceKeyRef.current = nextLastSourceKey;
+    if (plan.action === "write") {
+      panelApi.updateParameters({
+        [GIT_CHANGES_TAB_CHANGE_SUMMARY_PARAM]: plan.summary,
+      });
+    }
+  }, [panelApi, panelParams, source, sourceKey, state]);
   const language = usePluginLanguage();
   // language 驱动文案；context 在 panel 生命周期内稳定。
   // biome-ignore lint/correctness/useExhaustiveDependencies: panel context is stable for the factory instance

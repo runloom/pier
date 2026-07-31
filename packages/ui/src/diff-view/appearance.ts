@@ -141,14 +141,13 @@ ${SCROLLBAR_SYSTEM_CSS}
     );
   }
 
-  /* Path is the open-file target; underline only on the title itself. */
+  /*
+   * Path open-file affordance：cursor 仅 CSS 兜底。
+   * mono + hover 下划线的**权威路径**是 path-title-chrome.ts（onPostRender）。
+   * 不在此用 text-decoration 画 hover——HMR/层叠下不可靠，且与 postRender 双轨会打架。
+   */
   [data-header-content] [data-title] {
     cursor: pointer;
-  }
-
-  [data-header-content] [data-title]:hover {
-    text-decoration: underline;
-    text-underline-offset: 2px;
   }
 
   @container sticky-header scroll-state(stuck: top) {

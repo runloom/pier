@@ -109,6 +109,11 @@ describe("shared panel contract", () => {
         ],
         title: "test",
       },
+      trailing: {
+        deletions: 3,
+        insertions: 12,
+        kind: "git-line-delta",
+      },
     });
 
     expect(tab).toMatchObject({
@@ -116,7 +121,17 @@ describe("shared panel contract", () => {
       icon: { id: "custom.anything.from.host.registry" },
       state: { label: "Running", status: "running" },
       title: "test",
+      trailing: { deletions: 3, insertions: 12, kind: "git-line-delta" },
     });
+  });
+
+  it("accepts text trailing on tab chrome", () => {
+    expect(
+      panelTabChromeSchema.parse({
+        title: "repo",
+        trailing: { kind: "text", label: "3" },
+      }).trailing
+    ).toEqual({ kind: "text", label: "3" });
   });
 
   it("does not accept busy as canonical tab state", () => {

@@ -105,6 +105,9 @@ export function mergeTabChrome(
           },
         }
       : {}),
+    // trailing：patch 里**有**字段则整体替换；**省略**则保留 current（不能靠
+    // trailing: undefined 清空——与 badge/state 同语义）。清空需 strip 或整段 resolveTab。
+    ...(normalizedPatch.trailing ? { trailing: normalizedPatch.trailing } : {}),
   };
   return normalizePanelTabChromeInput(next) ?? current;
 }

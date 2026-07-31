@@ -53,6 +53,7 @@ import {
   createPluginPanelCloserForWorkspace,
   createPluginPanelTitleUpdaterForWorkspace,
 } from "./plugin-panel-bridge.ts";
+import { stripEphemeralLayoutParams } from "./strip-ephemeral-layout-params.ts";
 import { pierTheme } from "./theme.ts";
 import { attachWorkspacePanelTransfer } from "./transfer/attach.ts";
 import {
@@ -214,7 +215,7 @@ export function WorkspaceHost() {
       };
 
       const saveCurrentLayout = async (): Promise<void> => {
-        const json = event.api.toJSON();
+        const json = stripEphemeralLayoutParams(event.api.toJSON());
         const windowContext = await windowContextPromise;
         await window.pier.workspace.saveLayout(json, windowContext.recordId);
       };
@@ -232,7 +233,7 @@ export function WorkspaceHost() {
           await window.pier.workspace.clearLayout(windowContext.recordId);
         } else {
           await window.pier.workspace.saveLayout(
-            event.api.toJSON(),
+            stripEphemeralLayoutParams(event.api.toJSON()),
             windowContext.recordId
           );
         }
@@ -284,7 +285,10 @@ export function WorkspaceHost() {
           return;
         }
         window.pier.workspace
-          .saveLayout(event.api.toJSON(), flushRecordId)
+          .saveLayout(
+            stripEphemeralLayoutParams(event.api.toJSON()),
+            flushRecordId
+          )
           .catch(() => {
             // teardown 期 response 通道可能已断; main 侧写盘不受影响。
           });

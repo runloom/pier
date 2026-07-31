@@ -25,6 +25,7 @@ import {
   type DiffViewInputStore,
   useDiffViewChangeControl,
 } from "./input-store.ts";
+import { syncPathTitleChrome } from "./path-title-chrome.ts";
 import { PIER_DIFF_LINE_DIFF_TYPE } from "./render-profile.ts";
 import { stabilizeCodeViewStickyPositioning } from "./sticky-stabilize.ts";
 
@@ -115,6 +116,7 @@ export function useDiffViewCodeOptions(options: {
           fileHoverCleanupsRef.current.delete(itemId);
           fileHoverHostsRef.current.delete(itemId);
           syncEstimateSkeleton(element, false);
+          syncPathTitleChrome(element, true);
         } else {
           markRendered(itemId, context.version, element);
           // 每帧重标 host：Pierre 可能复用 element 但清掉 attribute；
@@ -139,6 +141,8 @@ export function useDiffViewCodeOptions(options: {
           }
           // 真实 shadow 节点骨架（padding 可靠）；勿用 :host::after 画条
           syncEstimateSkeleton(element, isEstimate);
+          // 路径 mono + hover 下划线（shadow 内 DOM，不依赖可能过期的 unsafeCSS）
+          syncPathTitleChrome(element);
           if (fileHoverHostsRef.current.get(itemId) !== element) {
             fileHoverCleanupsRef.current.get(itemId)?.();
             const handlePointerOver = () => {
@@ -158,6 +162,7 @@ export function useDiffViewCodeOptions(options: {
               element.removeAttribute("data-pier-estimate");
               element.removeAttribute("data-pier-pointer-within");
               syncEstimateSkeleton(element, false);
+              syncPathTitleChrome(element, true);
             });
           }
         }
@@ -174,6 +179,8 @@ export function useDiffViewCodeOptions(options: {
       theme: appearance.codeTheme,
       themeType: appearance.colorMode,
       tokenizeMaxLength: PIER_DIFF_VIEW_TOKENIZE_MAX_LINES,
+      // 路径 hover/mono 权威在 path-title-chrome postRender；unsafeCSS 只承载其它壳样式。
+      // 常量不放 deps（lint：外层常量变更不触发 re-render）；dev 改 appearance 需硬重启。
       unsafeCSS: CODE_VIEW_CUSTOM_CSS,
     }),
     [
