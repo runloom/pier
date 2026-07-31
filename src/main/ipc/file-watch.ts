@@ -1,8 +1,8 @@
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { type IpcMainInvokeEvent, ipcMain, type WebContents } from "electron";
-import { appCore } from "../app-core/app-core.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import { appCore } from "../app-core/index.ts";
+import { windowManager } from "../windows/manager.ts";
 import { createFileWatchSubscriptions } from "./file-watch-subscriptions.ts";
 
 /**

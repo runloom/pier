@@ -1,9 +1,9 @@
-import type { AgentRuntimeIndexEntry } from "@shared/contracts/agent-runtime-index.ts";
-import { makeAgentRef } from "@shared/contracts/agent-runtime-index.ts";
+import type { AgentRuntimeIndexEntry } from "@shared/contracts/agent/runtime-index.ts";
+import { makeAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import { beforeEach, describe, expect, it } from "vitest";
 import { initI18n } from "@/i18n/index.ts";
 import { AGENT_RUNTIME_ACTION_CONTRIBUTIONS } from "@/lib/actions/agent-runtime-actions.ts";
-import { buildAgentIndexQuickPick } from "@/lib/agent-runtime/agent-index-quickpick.ts";
+import { buildAgentIndexQuickPick } from "@/lib/agent-runtime/index-quickpick.ts";
 
 function entry(
   overrides: Partial<AgentRuntimeIndexEntry> &

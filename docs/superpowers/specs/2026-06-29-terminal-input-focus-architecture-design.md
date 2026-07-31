@@ -176,7 +176,7 @@ useTerminalOverlay({ focus })   // 返回 callback ref，挂到 Radix Content；
 | 1 | `WebFocusScopeKind`（exclusive/transient）+ `TerminalKeyboardFocusTarget.scope` | `shared/contracts/terminal.ts` | web 请求就是 web 请求，种类区分只为 renderer 算 effective，下沉后无意义 |
 | 2 | `baseKeyboardFocusTarget` / `effectiveKeyboardFocusTarget` / `sameKeyboardFocusTarget` / `hasExclusiveWebFocusScope` / `releaseTransientWebFocusScopes` | `renderer/stores/terminal-input-routing.store.ts` | effective 计算移入 native |
 | 3 | `registerWebFocusScope` 的 Map 实现 | 同上 | 换成薄 IPC 意图发送器，无本地 map |
-| 4 | 搜索框 `onFocusCapture`/`onBlurCapture` 注册逻辑 | `renderer/panel-kits/terminal/terminal-search-bar.tsx` | Electron #42922 点名的闪烁反模式 |
+| 4 | 搜索框 `onFocusCapture`/`onBlurCapture` 注册逻辑 | `renderer/panel-kits/terminal/terminal-bar.tsx` | Electron #42922 点名的闪烁反模式 |
 | 5 | `use-terminal-search-keyboard-opening.ts`（opening transient 双 scope） | 整文件 | 与 keyboard scope 二选一冗余，合并成一次 `requestWebFocus` |
 | 6 | `onFocusRequest` 的焦点决策回环 | `renderer/components/workspace/workspace-host.tsx` | native 本地决策；renderer 仅收通知做 dockview active 同步 |
 | 7 | `setTerminalBaseKeyboardFocusTarget` 散落调用 | `workspace-host.tsx` 多处 | 统一成 `setBasePanel` 意图 |

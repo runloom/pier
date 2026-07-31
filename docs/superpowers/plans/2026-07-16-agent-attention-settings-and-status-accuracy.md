@@ -40,7 +40,7 @@ system-notification: stickyDenied + forceProbe(test) → permission status 广�
 | `src/shared/contracts/preferences.ts` | `agentAttention` 字段 |
 | `src/main/state/preferences.ts` | DEFAULTS |
 | **`src/main/services/preferences-service.ts`** | **`PATCHABLE_KEYS` + `agentAttention`** |
-| `src/main/services/agent-attention/attention-service.ts` | 触发矩阵 + enabled/suppress + 同步 settings |
+| `src/main/services/agent-attention/service.ts` | 触发矩阵 + enabled/suppress + 同步 settings |
 | `src/main/ipc/agent-attention.ts` | 缓存 settings；订阅 preferences.changed |
 | `src/main/services/system-notification.ts` | sticky + forceProbe + getPermissionSnapshot |
 | `src/shared/ipc-channels.ts` + preload | permission/test/openSettings |
@@ -121,7 +121,7 @@ Expected: PASS
 
 **Files:**
 
-- Modify: `src/main/services/agent-attention/attention-service.ts`
+- Modify: `src/main/services/agent-attention/service.ts`
 - Modify: `src/main/ipc/agent-attention.ts`
 - Modify: `tests/unit/main/agent-attention.test.ts`
 

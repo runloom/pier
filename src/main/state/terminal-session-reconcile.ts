@@ -8,7 +8,7 @@ import {
   taskPanelMetadataSchema,
   taskRunTabState,
 } from "@shared/contracts/tasks.ts";
-import { stripLegacyAgentSuccessTab } from "@shared/contracts/terminal-end-state.ts";
+import { stripLegacyAgentSuccessTab } from "@shared/contracts/terminal/end-state.ts";
 import { ensureTerminalSessionStore } from "./terminal-session-store.ts";
 
 function mergePanelTabChrome(

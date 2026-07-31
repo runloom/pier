@@ -2,13 +2,13 @@ import { appendFile, mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { CLAUDE_HOOK_EVENTS } from "@main/services/agents/integrations/claude.ts";
-import { createClaudeTranscriptReconciler } from "@main/services/agents/integrations/claude-transcript-reconciler.ts";
 import { CODEX_HOOK_EVENTS } from "@main/services/agents/integrations/codex.ts";
-import { createCodexTranscriptReconciler } from "@main/services/agents/integrations/codex-transcript-reconciler.ts";
 import { GROK_HOOK_EVENTS } from "@main/services/agents/integrations/grok.ts";
-import { createGrokTranscriptReconciler } from "@main/services/agents/integrations/grok-transcript-reconciler.ts";
 import type { NestedHookEventSpec } from "@main/services/agents/integrations/shared.ts";
-import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent-session.ts";
+import { createClaudeTranscriptReconciler } from "@main/services/agents/integrations/transcript/claude-reconciler.ts";
+import { createCodexTranscriptReconciler } from "@main/services/agents/integrations/transcript/codex-reconciler.ts";
+import { createGrokTranscriptReconciler } from "@main/services/agents/integrations/transcript/grok-reconciler.ts";
+import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
 import { createNestedHookCommandProducer } from "./hook-command-driver.ts";
 import type {
   AgentStatusTraceAction,

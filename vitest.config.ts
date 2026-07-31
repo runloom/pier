@@ -62,7 +62,7 @@ export default defineConfig({
             lines: 25,
             statements: 25,
           },
-        "src/main/plugins/{external-main-runtime,plugin-activation-ipc,plugin-rpc-bus,plugin-rpc-ipc,plugin-secrets}.ts":
+        "src/main/plugins/{external-main-runtime,activation-ipc,rpc-bus,rpc-ipc,secrets}.ts":
           {
             branches: 50,
             functions: 60,

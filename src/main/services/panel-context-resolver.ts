@@ -2,14 +2,14 @@ import { createHash } from "node:crypto";
 import type { Stats } from "node:fs";
 import { realpath as fsRealpath, stat as fsStat } from "node:fs/promises";
 import { dirname, isAbsolute, relative, resolve, sep } from "node:path";
-import type { FileSaveTarget } from "@shared/contracts/file-save-target.ts";
+import type { FileSaveTarget } from "@shared/contracts/file/save-target.ts";
 import type {
   PanelContext,
   PanelContextSource,
 } from "@shared/contracts/panel.ts";
-import { execGit } from "./git-exec.ts";
-import type { GitExecExecutionBudget } from "./git-exec-raw-contract.ts";
-import { parseGitSinglePathOutput } from "./git-path-output.ts";
+import { execGit } from "./git/exec.ts";
+import type { GitExecExecutionBudget } from "./git/exec-raw-contract.ts";
+import { parseGitSinglePathOutput } from "./git/path-output.ts";
 
 export interface PanelContextResolutionControl {
   budget?: GitExecExecutionBudget;

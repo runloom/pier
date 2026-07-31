@@ -3,7 +3,7 @@ import {
   type AttentionBuiltinSoundId,
 } from "@shared/attention-sound-catalog.ts";
 import { useEffect } from "react";
-import { playAttentionSound } from "@/lib/attention/play-attention-sound.ts";
+import { playAttentionSound } from "@/lib/attention/play-sound.ts";
 
 const BUILTIN_SOUND_IDS: ReadonlySet<AttentionBuiltinSoundId> = new Set(
   ATTENTION_BUILTIN_SOUND_IDS

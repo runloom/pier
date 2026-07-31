@@ -1,9 +1,9 @@
 import type { PierEventBus } from "@main/app-core/event-bus.ts";
-import { resolveAttentionLocale } from "@main/services/agent-attention/attention-locale.ts";
-import type { AgentAttentionService } from "@main/services/agent-attention/attention-service.ts";
-import { createAgentAttentionService } from "@main/services/agent-attention/attention-service.ts";
+import { resolveAttentionLocale } from "@main/services/agent-attention/locale.ts";
 import { maybePlayAfterShown } from "@main/services/agent-attention/notification-audio.ts";
 import { focusAgentFromNotificationClick } from "@main/services/agent-attention/notification-click-focus.ts";
+import type { AgentAttentionService } from "@main/services/agent-attention/service.ts";
+import { createAgentAttentionService } from "@main/services/agent-attention/service.ts";
 import {
   getAgentAttentionSettingsCached,
   initAgentAttentionSettingsCache,
@@ -18,10 +18,10 @@ import {
 } from "../app-core/window-broadcasts.ts";
 import { showSystemNotification } from "../services/system-notification.ts";
 import { readPreferences } from "../state/preferences.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import { windowManager } from "../windows/manager.ts";
 import { onForegroundActivityPublished } from "./foreground-activity.ts";
 import { ingestHostNotification } from "./notification-center.ts";
-import { terminalFocusCoordinator } from "./terminal-focus-coordinator.ts";
+import { terminalFocusCoordinator } from "./terminal/focus-coordinator.ts";
 
 const log = createLogger("agent-attention.ipc");
 

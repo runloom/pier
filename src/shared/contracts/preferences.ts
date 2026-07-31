@@ -3,13 +3,13 @@
  */
 import { z } from "zod";
 import {
+  agentAttentionSettingsSchema,
+  DEFAULT_AGENT_ATTENTION_SETTINGS,
+} from "./agent/attention.ts";
+import {
   agentKindSchema,
   agentPermissionModePreferenceSchema,
 } from "./agent.ts";
-import {
-  agentAttentionSettingsSchema,
-  DEFAULT_AGENT_ATTENTION_SETTINGS,
-} from "./agent-attention.ts";
 import { DEFAULT_LSP_POLICY_PREFS, lspPolicyPrefsSchema } from "./lsp.ts";
 import {
   DEFAULT_NOTIFICATION_CENTER_PREFS,

@@ -20,7 +20,7 @@ import {
   useState,
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
-import type { ComposerAttachment } from "../terminal-composer-attachments-model.ts";
+import type { ComposerAttachment } from "../composer-attachments-model.ts";
 import {
   ATTACHMENT_LISTBOX_ID,
   type AttachmentAutocompleteItem,

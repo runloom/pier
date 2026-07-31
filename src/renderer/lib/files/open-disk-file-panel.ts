@@ -1,8 +1,8 @@
 import { nonEmptyFileRootRelativePathSchema } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
-import { openPluginPanelInstance } from "../plugins/host-panel-instance-open.ts";
-import { getPluginPanelRegistrations } from "../plugins/plugin-panel-registry.ts";
+import { openPluginPanelInstance } from "../plugins/host/panel-instance-open.ts";
+import { getPluginPanelRegistrations } from "../plugins/panel-registry.ts";
 
 /** 与 files 插件 `FILES_FILE_PANEL_ID` 对齐；宿主不 import 插件包。 */
 export const FILES_FILE_PANEL_COMPONENT_ID = "pier.files.filePanel";

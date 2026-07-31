@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { collectTaskCandidates } from "@main/services/tasks/task-sources.ts";
+import { collectTaskCandidates } from "@main/services/tasks/sources.ts";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 
 describe("task sources", () => {

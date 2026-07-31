@@ -1,4 +1,4 @@
-import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
+import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/plugin/managed.ts";
 import { rejectFailedManagedPluginOperation } from "./managed-plugin-operation.ts";
 
 export interface UpdatableManagedPlugin {

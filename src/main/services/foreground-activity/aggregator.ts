@@ -2,7 +2,7 @@ import {
   isSubagentHookEvent,
   SUBAGENT_HOOK_EVENTS,
 } from "@shared/agent-session-actor.ts";
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
 import {
   activityStatusForAgentHookEvent,

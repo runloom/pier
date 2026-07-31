@@ -1,5 +1,5 @@
-import type { TaskService } from "@main/services/tasks/task-service.ts";
-import { createTaskService } from "@main/services/tasks/task-service.ts";
+import type { TaskService } from "@main/services/tasks/service.ts";
+import { createTaskService } from "@main/services/tasks/service.ts";
 import type {
   TaskCandidate,
   TaskLaunchPlan,
@@ -11,7 +11,7 @@ const { collectTaskCandidates } = vi.hoisted(() => ({
   collectTaskCandidates: vi.fn(),
 }));
 
-vi.mock("@main/services/tasks/task-sources.ts", async (importOriginal) => {
+vi.mock("@main/services/tasks/sources.ts", async (importOriginal) => {
   const actual = (await importOriginal()) as object;
   return {
     ...actual,

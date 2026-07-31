@@ -3,8 +3,8 @@ import { readFile, rm } from "node:fs/promises";
 import { homedir } from "node:os";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { EXTRACT_STDIN_META_SCRIPT_NAME } from "../agent-hooks-install.ts";
-import { stdinIdentityExtractionLines } from "./hook-stdin-commands.ts";
+import { EXTRACT_STDIN_META_SCRIPT_NAME } from "../hooks-install.ts";
+import { stdinIdentityExtractionLines } from "./hooks/stdin-commands.ts";
 import {
   isPierManagedPluginContent,
   pierManagedPluginMarker,

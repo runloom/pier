@@ -1,4 +1,4 @@
-import { useFilesInFileSearchEscape } from "@plugins/builtin/files/renderer/use-files-in-file-search-escape.ts";
+import { useFilesInFileSearchEscape } from "@plugins/builtin/files/renderer/search/use-in-file-search-escape.ts";
 import { fireEvent, render, screen } from "@testing-library/react";
 import { useRef, useState } from "react";
 import { describe, expect, it, vi } from "vitest";

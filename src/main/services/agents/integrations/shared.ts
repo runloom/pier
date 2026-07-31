@@ -2,13 +2,13 @@ import { existsSync } from "node:fs";
 import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
 import { join } from "node:path";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { PIER_HOOK_COMMAND_GENERATION } from "../agent-hooks-install.ts";
+import { PIER_HOOK_COMMAND_GENERATION } from "../hooks-install.ts";
 import {
   isPierHookCommand,
   pierHookCommandGeneration,
   skipHookCommandWhenEnvPresent,
-} from "./hook-command-core.ts";
-import { pierHookCommandWithStdinSessionId } from "./hook-stdin-commands.ts";
+} from "./hooks/command-core.ts";
+import { pierHookCommandWithStdinSessionId } from "./hooks/stdin-commands.ts";
 import type { AgentHookIntegration, AgentRuntimeSemantics } from "./types.ts";
 
 export { commandExistsOnPath } from "./command-path.ts";
@@ -21,7 +21,7 @@ export {
   pierHookCommand,
   pierHookCommandGeneration,
   pierHookCommandV3,
-} from "./hook-command-core.ts";
+} from "./hooks/command-core.ts";
 export {
   type PierHookCommandV3WithStdinSpec,
   pierClaudeUserPromptSubmitCommand,
@@ -37,8 +37,8 @@ export {
   type StdinV3StatusDispatchSpec,
   type StdinV3ValueDispatchSpec,
   type StdinValueDispatchCase,
-} from "./hook-stdin-commands.ts";
-export { pierHookCommandV3WithStdinPermissionAcceptedThenToolStart } from "./hook-stdin-sequences.ts";
+} from "./hooks/stdin-commands.ts";
+export { pierHookCommandV3WithStdinPermissionAcceptedThenToolStart } from "./hooks/stdin-sequences.ts";
 export {
   pierBlockMarkers,
   pierTextBlockGeneration,

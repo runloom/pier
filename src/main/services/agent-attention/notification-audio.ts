@@ -1,5 +1,5 @@
 import type { AttentionBuiltinSoundId } from "@shared/attention-sound-catalog.ts";
-import type { AgentAttentionSettings } from "@shared/contracts/agent-attention.ts";
+import type { AgentAttentionSettings } from "@shared/contracts/agent/attention.ts";
 
 export interface NotificationAudioDecision {
   /** 需要应用播音时的内置 id；否则 null */

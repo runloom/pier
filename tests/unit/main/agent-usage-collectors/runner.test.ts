@@ -1,5 +1,5 @@
 import { createAgentUsageCollectorRunner } from "@main/services/agents/usage-collectors/index.ts";
-import type { UsageDataService } from "@main/services/usage-data/usage-data-service.ts";
+import type { UsageDataService } from "@main/services/usage-data/service.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const { rescan } = vi.hoisted(() => ({

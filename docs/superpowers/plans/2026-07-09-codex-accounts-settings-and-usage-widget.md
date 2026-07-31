@@ -25,7 +25,7 @@
 ## File Structure
 
 **新增：**
-- `src/renderer/lib/plugins/plugin-settings-page-registry.ts` — settingsPage 运行时注册表
+- `src/renderer/lib/plugins/settings-page-registry.ts` — settingsPage 运行时注册表
 - `packages/plugin-codex/src/renderer/accounts-settings-page.tsx` — 图 1 设置页
 - `packages/plugin-codex/src/renderer/usage-meter.tsx` — 会话/每周进度条
 - `packages/plugin-codex/src/renderer/account-picker.tsx` — 物料内账号选择
@@ -38,7 +38,7 @@
 - `src/shared/contracts/plugin.ts` — `settingsPages` + locale
 - `src/shared/contracts/managed-plugin.ts` — package manifest `settingsPages`
 - `packages/plugin-api/src/renderer.ts` — `settingsPages` / `app` / `dialogs.confirm.intent`
-- `src/renderer/lib/plugins/external-plugin-context.ts` — 接线
+- `src/renderer/lib/plugins/external-context.ts` — 接线
 - `src/renderer/lib/plugins/host-context.ts` — 若 builtin 也暴露同 API 则对齐（external 必做；builtin 可选同构以免类型分叉）
 - `src/renderer/pages/settings/data/appearance-nav.ts` — 侧栏出现条件
 - `src/renderer/pages/settings/settings-dialog.tsx` — 优先渲染自定义页
@@ -131,9 +131,9 @@ Run: `pnpm test:unit -- tests/unit/shared/plugin-manifest-settings-pages.test.ts
 ### Task 2: Host settingsPage registry + external context APIs
 
 **Files:**
-- Create: `src/renderer/lib/plugins/plugin-settings-page-registry.ts`
+- Create: `src/renderer/lib/plugins/settings-page-registry.ts`
 - Modify: `packages/plugin-api/src/renderer.ts`
-- Modify: `src/renderer/lib/plugins/external-plugin-context.ts`
+- Modify: `src/renderer/lib/plugins/external-context.ts`
 - Create: `tests/unit/renderer/plugin-settings-page-registry.test.ts`
 - Modify: `tests/unit/renderer/codex-accounts-widget.test.tsx`（mock context 补 `settingsPages` / `app`，避免类型破）
 
@@ -163,7 +163,7 @@ dialogs: {
 };
 ```
 
-- Registry API 镜像 `plugin-workbench-widget-registry.ts`：
+- Registry API 镜像 `workbench-widget-registry.ts`：
   - `registerPluginSettingsPage(pluginId, registration)`
   - `getPluginSettingsPage(pluginId)`
   - `subscribePluginSettingsPageRegistry` / `getPluginSettingsPageRevision`
@@ -177,7 +177,7 @@ import {
   clearPluginSettingsPagesForTests,
   getPluginSettingsPage,
   registerPluginSettingsPage,
-} from "@/lib/plugins/plugin-settings-page-registry.ts";
+} from "@/lib/plugins/settings-page-registry.ts";
 
 describe("plugin settings page registry", () => {
   it("stores one page per plugin and dispose clears it", () => {
@@ -197,7 +197,7 @@ describe("plugin settings page registry", () => {
 
 - [ ] **Step 2: Run — expect FAIL**
 
-- [ ] **Step 3: Implement registry + wire `external-plugin-context.ts`**
+- [ ] **Step 3: Implement registry + wire `external-context.ts`**
 
 要点：
 - `assertDeclared` 扩展 kind `"settingsPage"`，读 `entry.manifest.settingsPages`。

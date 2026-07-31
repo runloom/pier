@@ -1,9 +1,9 @@
-import type { PluginConfigurationProperty } from "@shared/contracts/plugin.ts";
 import type {
   JsonValue,
   PluginSettingsChangedPayload,
   PluginSettingsState,
-} from "@shared/contracts/plugin-settings.ts";
+} from "@shared/contracts/plugin/settings.ts";
+import type { PluginConfigurationProperty } from "@shared/contracts/plugin.ts";
 import {
   collectEnabledConfigurationProperties,
   validateConfigurationValue,

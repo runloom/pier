@@ -38,7 +38,7 @@
 
 ```
 ┌─ 插件侧（src/plugins/builtin/git/renderer/）────────────────┐
-│  git-changes-panel.tsx  (React 组件, import 类型走 shared)    │
+│  changes-panel.tsx  (React 组件, import 类型走 shared)    │
 │  index.ts: context.panels.register({ id, component, icon,    │
 │            kind })  →  贡献一个 panel 类型                    │
 │  命令 handler: context.panels.open("pier.git.changes")       │
@@ -91,7 +91,7 @@
 ## git-changes 并入 git 插件
 
 - **移除** core 实现：`src/renderer/panel-kits/git-changes/`（panel + register-actions + open-git-changes）整目录删除；`panel-registry.ts` 去掉 `gitChanges` 静态条目；`workspace.store` 不再有 git-changes 相关 helper；`main.tsx` 去掉 `registerGitChangesActions`。
-- **新增** 插件实现：`src/plugins/builtin/git/renderer/` 下加 `git-changes-panel.tsx`（占位面板，类型走 `@shared/contracts/dockview.ts`）；`renderer/index.ts` 的 activate 里 `context.panels.register(git-changes)`；新增一条插件命令 `pier.git.changes.open`（manifest + action），handler 调 `context.panels.open`。
+- **新增** 插件实现：`src/plugins/builtin/git/renderer/` 下加 `changes-panel.tsx`（占位面板，类型走 `@shared/contracts/dockview.ts`）；`renderer/index.ts` 的 activate 里 `context.panels.register(git-changes)`；新增一条插件命令 `pier.git.changes.open`（manifest + action），handler 调 `context.panels.open`。
 - **manifest**：git 插件 `panels` 声明一条 git-changes；`permissions` 加 `panel:register`/`panel:open`。
 - **命令分类**：新命令 categoryKey 用 `git`（与 worktree 命令同分类）。
 

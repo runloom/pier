@@ -15,7 +15,7 @@ import { toast } from "sonner";
 import {
   isNotificationActionAvailable,
   runNotificationAction,
-} from "@/lib/notifications/notification-actions.ts";
+} from "@/lib/notifications/actions.ts";
 import { useAgentRuntimeIndexStore } from "@/stores/agent-runtime-index.store.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 

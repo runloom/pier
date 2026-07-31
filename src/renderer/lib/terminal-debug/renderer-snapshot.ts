@@ -1,11 +1,11 @@
-import type { TerminalDebugRendererSnapshot } from "@shared/contracts/terminal-debug.ts";
+import type { TerminalDebugRendererSnapshot } from "@shared/contracts/terminal/debug.ts";
 import { getLastTerminalHostSnapshot } from "@/lib/workspace/terminal-host-state-reconciler.ts";
 import {
   hasRegisteredTerminalAnchor,
   readRegisteredTerminalAnchorFrame,
-} from "@/panel-kits/terminal/terminal-layout-coordinator.ts";
-import { readTerminalPanelLifecycleDebug } from "@/panel-kits/terminal/terminal-lifecycle-debug.ts";
-import { readTerminalViewportFrame } from "@/panel-kits/terminal/terminal-viewport.ts";
+} from "@/panel-kits/terminal/layout-coordinator.ts";
+import { readTerminalPanelLifecycleDebug } from "@/panel-kits/terminal/lifecycle-debug.ts";
+import { readTerminalViewportFrame } from "@/panel-kits/terminal/viewport.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 
 export function buildRendererDebugSnapshot(): TerminalDebugRendererSnapshot {

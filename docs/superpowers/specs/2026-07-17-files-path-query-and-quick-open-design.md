@@ -164,7 +164,7 @@ v1 **不强制**长生命周期 path cache。若后续性能证据需要，仅�
 
 ### 5.2 MRU
 
-`files-quick-open-mru.ts`：
+`files-search/quick-open-mru.ts`：
 
 - 内存、按 `root` 分桶、最多 100 条  
 - 打开成功文件时记录  

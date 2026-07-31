@@ -1,6 +1,6 @@
 # Git 状态栏 v2 设计
 
-> **2026-07-23 修订**：底栏信息架构已按业界金标准收敛为 VS Code 双信号模型（flat 项 · 分支图标编码脏/冲突 · 可选 ↑↓ · 分项/±行/stash/upstream 只在下拉）。下文 Phase 目标中「分项计数 / ±行 / stash 上栏」等密集方案 **已废止**，以实现与 `git-status-item.tsx` StatusBody 为准。
+> **2026-07-23 修订**：底栏信息架构已按业界金标准收敛为 VS Code 双信号模型（flat 项 · 分支图标编码脏/冲突 · 可选 ↑↓ · 分项/±行/stash/upstream 只在下拉）。下文 Phase 目标中「分项计数 / ±行 / stash 上栏」等密集方案 **已废止**，以实现与 `status-item.tsx` StatusBody 为准。
 >
 > **2026-07-24 补充**：可选第三信号——独立 Changes 项（彩色 `+N −M`）；与分支/同步分项注册，窄屏由宿主按优先级**整项隐藏**（金标准），可见项内 CSS 截断长名。设置 `pier.git.statusItem.showChangesStatus` 可关。
 
@@ -8,7 +8,7 @@
 
 ## 背景与问题
 
-现状：git 状态栏只有 `WorktreeStatusItem`（[git-status-item.tsx:119-166](../../../src/plugins/builtin/git/renderer/git-status-item.tsx)）一块，显示 **分支名 + ahead/behind + 脏文件聚合数**，label 靠字符串拼接（`↑2↓1 ·5`）。
+现状：git 状态栏只有 `WorktreeStatusItem`（[status-item.tsx:119-166](../../../src/plugins/builtin/git/renderer/status-item.tsx)）一块，显示 **分支名 + ahead/behind + 脏文件聚合数**，label 靠字符串拼接（`↑2↓1 ·5`）。
 
 问题：
 
@@ -56,7 +56,7 @@ UI 已经过 5 轮迭代 + 2 轮业界对标（VSCode / JetBrains / GitHub Deskt
 
 ### Frontend
 
-- `WorktreeStatusItem`（[git-status-item.tsx:119-166](../../../src/plugins/builtin/git/renderer/git-status-item.tsx)）：一个 `<Button>` 包 `<GitBranch />` + 拼字符串 label。
+- `WorktreeStatusItem`（[status-item.tsx:119-166](../../../src/plugins/builtin/git/renderer/status-item.tsx)）：一个 `<Button>` 包 `<GitBranch />` + 拼字符串 label。
 - 数据源：`useGitStatus(pluginContext, gitRoot)` 用 `getStatus` + `watch` 广播刷新。
 - 点击行为：`openWorktreeListQuickPick(pluginContext, worktreePath)` —— 弹 worktree 列表，仅一个 target。
 
@@ -206,7 +206,7 @@ async function defaultWorktreeSignature(gitRoot: string, gitCommonDir: string): 
 
 ### 现存 bug
 
-**Bug 1 · Renderer 竞态**（[git-status-item.tsx:79-88](../../../src/plugins/builtin/git/renderer/git-status-item.tsx)）
+**Bug 1 · Renderer 竞态**（[status-item.tsx:79-88](../../../src/plugins/builtin/git/renderer/status-item.tsx)）
 
 `watch` 快速触发 N 次 → N 个 `getStatus` 并发 → 若响应乱序，旧结果的 `setState` 覆盖新结果，UI 停留在过时状态。现有的 `cancelled` 只覆盖 unmount 场景，救不了 in-flight 竞态。
 
@@ -495,8 +495,8 @@ function isLargeChange(counts: GitCounts, delta: GitDelta | null): boolean {
 - **旧 renderer 代码引用 `status.files.length`**：新 `status.counts` 字段引入前，`WorktreeStatusItem` 现有的 `${status.files.length}` 继续可算。Phase A 转到 `counts` 时逐点迁移。
 - **`GitStatus` schema 加字段引起序列化字节增加**：counts / delta / repoState / stashCount 加起来 ~50 字节 JSON，广播频率 400ms debounce 后可忽略。
 - **`repoState.kind` 未来加成员时的兼容**：discriminated union，renderer 里 `switch` 加 default → 显 fallback pill；无缝加新态。
-- **Phase B 交互层依赖 changes panel**：目前 changes panel 是空占位（`git-changes-panel.tsx:10-23`），点击后落地页面还需要另一 spec 落。Phase B tooltip 里说明"面板功能建设中"。
-- **架构边界**：`git-status-item.tsx` 属 `src/plugins/builtin/git/renderer/`，插件 renderer 边界不 import renderer 业务代码（走 `RendererPluginContext` 或 shared）。CVA / lucide 是外部依赖，OK。dockview 类型不 import。
+- **Phase B 交互层依赖 changes panel**：目前 changes panel 是空占位（`changes-panel.tsx:10-23`），点击后落地页面还需要另一 spec 落。Phase B tooltip 里说明"面板功能建设中"。
+- **架构边界**：`status-item.tsx` 属 `src/plugins/builtin/git/renderer/`，插件 renderer 边界不 import renderer 业务代码（走 `RendererPluginContext` 或 shared）。CVA / lucide 是外部依赖，OK。dockview 类型不 import。
 
 ## 验证方式
 
@@ -525,7 +525,7 @@ function isLargeChange(counts: GitCounts, delta: GitDelta | null): boolean {
 - `src/main/services/git-exec.ts` 加 `detectRepoState / getLineDelta / getStashCount / detectUpstreamGone`。
 - `src/main/services/git-watch-service.ts` 扩 `defaultWorktreeSignature`。
 - `src/main/services/git-service.ts`（获取 status 的地方）汇总新字段。
-- `git-status-item.tsx` 拆 6 个组件 + 渲染 v7 稿视觉（**只静态显示，无交互**）；`useGitStatus` seq 化 + 走 broadcast payload fast path。
+- `status-item.tsx` 拆 6 个组件 + 渲染 v7 稿视觉（**只静态显示，无交互**）；`useGitStatus` seq 化 + 走 broadcast payload fast path。
 - **实时同步修复**：`GitChangeEvent` schema 加可选 `status`；`refresh()` 变化路径一并算完整 status 随广播下发；`WatchEntry` 加 `firstEventAt` + max-wait 1500ms debounce；`DEFAULT_POLL_MS` 30s → 5s；`watcher.on("error")` 走 5s 冷却重建。
 - 单测 + 手动跑 5 种 repoState + 3 panel × 200 文件 burst 压测。
 

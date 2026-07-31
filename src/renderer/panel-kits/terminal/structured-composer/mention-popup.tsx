@@ -1,5 +1,5 @@
-import { PierFileIcon } from "@pier/ui/file-icon.tsx";
-import type { FilePathQueryItem } from "@shared/contracts/file-query.ts";
+import { PierFileIcon } from "@pier/ui/file/icon.tsx";
+import type { FilePathQueryItem } from "@shared/contracts/file/query.ts";
 import type { ComposerPathQueryStatus } from "./composer-path-query.ts";
 import {
   ComposerSuggestList,

@@ -1,7 +1,7 @@
 import {
   type AgentAttentionSettings,
   DEFAULT_AGENT_ATTENTION_SETTINGS,
-} from "@shared/contracts/agent-attention.ts";
+} from "@shared/contracts/agent/attention.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import { create } from "zustand";
 

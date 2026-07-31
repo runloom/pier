@@ -1,10 +1,10 @@
-import { gitReviewRootPathSchema } from "@shared/contracts/git-review.ts";
-import { execGit, type GitExecOptions } from "../services/git-exec.ts";
-import { parseGitSinglePathOutput } from "../services/git-path-output.ts";
+import { gitReviewRootPathSchema } from "@shared/contracts/git/review.ts";
+import { execGit, type GitExecOptions } from "../services/git/exec.ts";
+import { parseGitSinglePathOutput } from "../services/git/path-output.ts";
 import {
   type WatchFileSystemProbe,
   watchRealpathProbe,
-} from "../services/git-watch-file-system.ts";
+} from "../services/git/watch/file-system.ts";
 
 const GIT_WATCH_ROOT_FILE_SYSTEM_TIMEOUT_MS = 1500;
 const GIT_WATCH_ROOT_GIT_TIMEOUT_MS = 5000;

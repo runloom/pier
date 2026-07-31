@@ -6,12 +6,13 @@ import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
   pierHooksCurrentDir,
-} from "@main/services/agents/agent-hooks-install.ts";
+} from "@main/services/agents/hooks-install.ts";
 import {
   type NestedHookEventSpec,
   withPierNestedHooks,
 } from "@main/services/agents/integrations/shared.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { pathForHookSpawn } from "../hook-spawn-path.ts";
 import type {
   AgentStatusTraceAction,
   AgentStatusTraceProducer,
@@ -62,7 +63,7 @@ export async function createNestedHookCommandProducer(
       const result = spawnSync("/bin/sh", ["-c", command], {
         env: {
           ...process.env,
-          PATH: ORIGINAL_PATH,
+          PATH: pathForHookSpawn(ORIGINAL_PATH),
           PIER_AGENT_EVENT_LOG: logPath,
           PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
           PIER_PANEL_ID: "p1",

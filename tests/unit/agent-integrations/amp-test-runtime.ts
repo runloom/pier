@@ -4,7 +4,7 @@ import { join } from "node:path";
 import {
   type AgentHookEvent,
   agentHookEventSchema,
-} from "../../../src/shared/contracts/agent-session.ts";
+} from "../../../src/shared/contracts/agent/session.ts";
 
 export type AmpTestHandler = (...args: unknown[]) => unknown;
 type AmpAgentEvent = Extract<AgentHookEvent, { kind: "agentEvent"; v: 3 }>;

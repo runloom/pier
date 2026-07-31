@@ -10,7 +10,7 @@ import {
 } from "@shared/contracts/ghostty-host-copy.ts";
 import i18next from "i18next";
 import { taskPanelMetadataFromParams } from "@/lib/workspace/task-panel-metadata.ts";
-import { taskOutputFromParams } from "@/panel-kits/terminal/terminal-panel-params.ts";
+import { taskOutputFromParams } from "@/panel-kits/terminal/panel-params.ts";
 
 function terminalT(key: string, options?: Record<string, unknown>): string {
   // Nested under the default translation resource as `terminal.*`.

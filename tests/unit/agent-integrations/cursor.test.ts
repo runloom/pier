@@ -7,7 +7,7 @@ import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
   pierHooksCurrentDir,
-} from "../../../src/main/services/agents/agent-hooks-install.ts";
+} from "../../../src/main/services/agents/hooks-install.ts";
 import {
   CURSOR_EVENTS,
   installCursorHooks,
@@ -16,8 +16,9 @@ import {
   withPierCursorHooks,
 } from "../../../src/main/services/agents/integrations/cursor.ts";
 import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
-import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
 import type { AgentActivity } from "../../../src/shared/contracts/foreground-activity.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 
@@ -114,6 +115,7 @@ describe("withPierCursorHooks", () => {
       const result = spawnSync("/bin/sh", ["-c", stopCommand], {
         env: {
           ...process.env,
+          PATH: pathForHookSpawn(process.env.PATH),
           PIER_AGENT_EVENT_LOG: logPath,
           PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
           PIER_PANEL_ID: "p1",
@@ -171,6 +173,7 @@ describe("withPierCursorHooks", () => {
       {
         env: {
           ...process.env,
+          PATH: pathForHookSpawn(process.env.PATH),
           PIER_AGENT_EVENT_LOG: logPath,
           PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
           PIER_PANEL_ID: "p1",

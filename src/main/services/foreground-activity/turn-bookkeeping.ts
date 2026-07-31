@@ -1,4 +1,4 @@
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
 import type { HookScope } from "./entry.ts";
 import { TURN_BOUNDARY_EVENTS, TURN_RESET_EVENTS } from "./entry.ts";

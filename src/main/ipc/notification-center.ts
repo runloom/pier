@@ -26,7 +26,7 @@ import {
 } from "../services/notification-center/service.ts";
 import { createNotificationHistoryStore } from "../services/notification-center/store.ts";
 import { readPreferences, updatePreferences } from "../state/preferences.ts";
-import { findAppWindowByWebContents } from "../windows/window-identity.ts";
+import { findAppWindowByWebContents } from "../windows/identity.ts";
 
 const log = createLogger("notification-center.ipc");
 

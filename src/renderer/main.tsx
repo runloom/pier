@@ -10,15 +10,15 @@ import {
   installTerminalInputRoutingPointerDownListener,
 } from "@/stores/terminal-input-routing-slice.ts";
 import { installBundledFontFaces } from "./app/fonts.ts";
-import { AppContentDialogHost } from "./components/common/app-content-dialog-host.tsx";
-import { AppDialogHost } from "./components/common/app-dialog-host.tsx";
 import { AppRuntimeErrorBoundary } from "./components/common/app-runtime-error-boundary.tsx";
+import { AppContentDialogHost } from "./components/common/dialogs/content-host.tsx";
+import { AppDialogHost } from "./components/common/dialogs/host.tsx";
 import {
   StartupErrorScreen,
   StartupScreen,
 } from "./components/common/startup-error-screen.tsx";
-import { TerminalDebugWindow } from "./components/common/terminal-debug-window.tsx";
-import { installWorkspaceRendererCommandListener } from "./components/workspace/workspace-renderer-command-listener.ts";
+import { TerminalDebugWindow } from "./components/common/terminal-debug/window.tsx";
+import { installWorkspaceRendererCommandListener } from "./components/workspace/renderer-command-listener.ts";
 import { initI18n } from "./i18n/index.ts";
 import { registerAgentRuntimeActions } from "./lib/actions/agent-runtime-actions.ts";
 import { registerAgentStartActions } from "./lib/actions/agent-start-actions.ts";

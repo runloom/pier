@@ -11,10 +11,10 @@
 import { mkdtemp, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execGit } from "@main/services/git-exec.ts";
-import { createGitService } from "@main/services/git-service.ts";
-import { createGitWatchService } from "@main/services/git-watch-service.ts";
-import { resolveRepoAnchors } from "@main/services/git-watch-signatures.ts";
+import { execGit } from "@main/services/git/exec.ts";
+import { createGitService } from "@main/services/git/service.ts";
+import { createGitWatchService } from "@main/services/git/watch/service.ts";
+import { resolveRepoAnchors } from "@main/services/git/watch/signatures.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 const OID_RE = /^[0-9a-f]{40}$/;
@@ -79,6 +79,25 @@ describe("GitService 端到端(真临时仓库)", () => {
     // discard
     await git.discardChanges(repo, { paths: ["base.txt"] });
     expect(await git.isWorkingTreeClean(repo)).toBe(true);
+  });
+
+  it("unstage 把已暂存删除移到未暂存（删除路径不在 index 也能 restore）", async () => {
+    const repo = await makeRepo();
+    const git = createGitService();
+
+    // staged deletion：路径不在 index，只在 HEAD
+    await execGit(["rm", "base.txt"], { cwd: repo });
+    const afterRm = await git.getStatus(repo);
+    expect(
+      afterRm.files.some((f) => f.path === "base.txt" && f.index === "D")
+    ).toBe(true);
+
+    await git.unstage(repo, { paths: ["base.txt"] });
+    const afterUnstage = await git.getStatus(repo);
+    const deleted = afterUnstage.files.find((f) => f.path === "base.txt");
+    // 删除从 staged 移到 unstaged：工作区文件仍然不存在（worktree D）
+    expect(deleted?.worktree).toBe("D");
+    expect(deleted?.index).toBe(".");
   });
 
   it("stage + commit 真的产生新 commit,getLog 看见", async () => {

@@ -1,4 +1,4 @@
-import type { OfficialPluginIndex } from "@shared/contracts/managed-plugin.ts";
+import type { OfficialPluginIndex } from "@shared/contracts/plugin/managed.ts";
 import {
   type FetchOfficialPluginIndexOptions,
   fetchOfficialPluginIndex,

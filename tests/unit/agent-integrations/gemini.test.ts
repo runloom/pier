@@ -7,14 +7,15 @@ import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
   pierHooksCurrentDir,
-} from "../../../src/main/services/agents/agent-hooks-install.ts";
+} from "../../../src/main/services/agents/hooks-install.ts";
 import {
   installGeminiHooks,
   uninstallGeminiHooks,
   withoutPierGeminiHooks,
   withPierGeminiHooks,
 } from "../../../src/main/services/agents/integrations/gemini.ts";
-import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 
@@ -116,6 +117,7 @@ describe("withPierGeminiHooks", () => {
       hooks[nativeEvent]?.[0]?.hooks[0]?.command ?? "";
     const env = {
       ...process.env,
+      PATH: pathForHookSpawn(process.env.PATH),
       PIER_AGENT_EVENT_LOG: logPath,
       PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
       PIER_PANEL_ID: "p1",

@@ -1,9 +1,9 @@
-import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AgentHookEventPayload,
   CommandFinishedHookEvent,
   CommandStartHookEvent,
-} from "@shared/contracts/agent-session.ts";
+} from "@shared/contracts/agent/session.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import type {
   AgentSessionTitleSource,
   ForegroundActivityBroadcast,

@@ -3,7 +3,7 @@ import { FieldLegend, FieldSet } from "@pier/ui/field.tsx";
 import {
   TURN_NOTIFY_MODES,
   type TurnNotifyMode,
-} from "@shared/contracts/agent-attention.ts";
+} from "@shared/contracts/agent/attention.ts";
 import type { NotificationKind } from "@shared/contracts/notification-center.ts";
 import type { ReactNode } from "react";
 import { toast } from "sonner";

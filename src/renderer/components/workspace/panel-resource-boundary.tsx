@@ -18,7 +18,7 @@ import {
   panelContextFromPluginParams,
   pluginPanelDescriptor,
   resolveRegistrationTitle,
-} from "@/lib/plugins/host-panel-descriptors.ts";
+} from "@/lib/plugins/host/panel-descriptors.ts";
 import { PanelContentContextShell } from "./panel-content-context-shell.tsx";
 
 interface PanelResourceBoundaryProps {

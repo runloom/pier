@@ -8,8 +8,9 @@ import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
   pierHooksCurrentDir,
-} from "../../../src/main/services/agents/agent-hooks-install.ts";
-import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
+} from "../../../src/main/services/agents/hooks-install.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 
@@ -157,6 +158,7 @@ describe("install/uninstallClineHooks (文件 IO)", () => {
     const result = spawnSync("/bin/sh", ["-c", script], {
       env: {
         ...process.env,
+        PATH: pathForHookSpawn(process.env.PATH),
         PIER_AGENT_EVENT_LOG: logPath,
         PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
         PIER_PANEL_ID: "p1",

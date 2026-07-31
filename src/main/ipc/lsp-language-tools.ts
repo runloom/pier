@@ -6,15 +6,15 @@ import type {
 } from "@shared/contracts/lsp-language-tools.ts";
 import { fileUriFromAbsolutePath } from "@shared/lsp-uri.ts";
 import type { IpcMainInvokeEvent, WebContents } from "electron";
-import { appCore } from "../app-core/app-core.ts";
-import type { LspServerRegistry } from "../services/lsp/lsp-server-registry.ts";
-import type { LspSessionHost } from "../services/lsp/lsp-session-host.ts";
+import { appCore } from "../app-core/index.ts";
 import { normalizeFsRoot } from "../services/lsp/resolve-root.ts";
+import type { LspServerRegistry } from "../services/lsp/server-registry.ts";
+import type { LspSessionHost } from "../services/lsp/session-host.ts";
 import {
   deriveLspWorkspaceKey,
   type WorkspaceLspPolicy,
   waitForLspTreeCleanupWithRetry,
-} from "../services/lsp/workspace-lsp-policy.ts";
+} from "../services/lsp/workspace-policy.ts";
 
 interface LspLanguageToolsHandlerDeps {
   readonly deliverMessage: (

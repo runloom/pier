@@ -7,7 +7,7 @@
  * 的身份——那正是「身份必须确定」要防的事，所以判据只允许有一处。
  */
 
-import type { AgentHookEventPayload } from "./contracts/agent-session.ts";
+import type { AgentHookEventPayload } from "./contracts/agent/session.ts";
 
 /** 子代理生命周期事件（只做计数，不改父状态）。 */
 export const SUBAGENT_HOOK_EVENTS: ReadonlySet<string> = new Set([

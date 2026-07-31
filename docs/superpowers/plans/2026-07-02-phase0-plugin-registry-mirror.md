@@ -878,7 +878,7 @@
 **Files:**
 - Modify: `src/renderer/pages/settings/components/plugins-section.tsx`（imports L32–48；`PluginsListContent` L193–226；`PluginsSection` L228–312）
 - Modify: `src/renderer/lib/plugins/bootstrap.ts`（删除 Task 5 保留的 `refreshBuiltinPlugins`）
-- Modify: `src/renderer/lib/plugins/plugin-panel-registry.ts`（L59–63 doc 注释更新，消除对已删函数的引用）
+- Modify: `src/renderer/lib/plugins/panel-registry.ts`（L59–63 doc 注释更新，消除对已删函数的引用）
 - Test: `tests/unit/renderer/plugins-section.test.tsx`（新建，组件测试惯例参照 `tests/unit/renderer/agents-section.test.tsx`：`initI18n()` + store `setState` + `Object.defineProperty(window, "pier", …)` + testing-library）
 
 **Interfaces:**
@@ -1185,7 +1185,7 @@
 
   从 `src/renderer/lib/plugins/bootstrap.ts` 删除整个 `refreshBuiltinPlugins` 函数（Task 5 Step 3 中标注"过渡期兼容入口"的块，含其 doc 注释）。文件保留 `activeBuiltinPluginKey` 与 `bootstrapBuiltinPlugins` 两个导出。
 
-- [ ] **Step 5: 更新 `plugin-panel-registry.ts` 注释**
+- [ ] **Step 5: 更新 `panel-registry.ts` 注释**
 
   把 L59–63：
 
@@ -1221,7 +1221,7 @@
 
   ```bash
   pnpm check
-  git add src/renderer/pages/settings/components/plugins-section.tsx src/renderer/lib/plugins/bootstrap.ts src/renderer/lib/plugins/plugin-panel-registry.ts tests/unit/renderer/plugins-section.test.tsx
+  git add src/renderer/pages/settings/components/plugins-section.tsx src/renderer/lib/plugins/bootstrap.ts src/renderer/lib/plugins/panel-registry.ts tests/unit/renderer/plugins-section.test.tsx
   git diff --staged
   ```
 

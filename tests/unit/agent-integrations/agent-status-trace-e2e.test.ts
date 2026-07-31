@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { AGENT_STATUS_EVIDENCE } from "../../../src/main/services/agents/integrations/evidence-matrix.ts";
+import { AGENT_STATUS_EVIDENCE } from "../../../src/main/services/agents/integrations/evidence/matrix.ts";
 import {
   ACTIVE_AGENT_STATUS_TRACES,
   INACTIVE_AGENT_STATUS_TRACES,

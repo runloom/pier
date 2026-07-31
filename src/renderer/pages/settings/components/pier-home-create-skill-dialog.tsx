@@ -13,25 +13,22 @@ import { Input } from "@pier/ui/input.tsx";
 import { PIER_SYSTEM_SKILL_PREFIX } from "@shared/contracts/project-skills.ts";
 import i18next from "i18next";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { MarkdownSourceEditor } from "@/components/code-editor/markdown-source-editor.tsx";
-import { useContentDialogFooter } from "@/components/common/use-content-dialog-footer.ts";
+import { MarkdownSourceEditor } from "@/components/code-editor/markdown-source.tsx";
+import { useContentDialogFooter } from "@/components/common/dialogs/use-footer.ts";
 import { useT } from "@/i18n/use-t.ts";
 import {
   type AppContentDialogRenderProps,
   openAppContentDialog,
 } from "@/stores/app-content-dialog.store.ts";
 import { showAppAlert } from "@/stores/app-dialog.store.ts";
-import { SkillDetailSection } from "./skills/skill-detail-section.tsx";
-import {
-  blankSkillMd,
-  isValidSkillId,
-} from "./skills/skills-blank-skill-md.ts";
-import { skillsErrorMessage } from "./skills/skills-error-copy.ts";
+import { blankSkillMd, isValidSkillId } from "./skills/blank-md.ts";
+import { SkillDetailSection } from "./skills/detail-section.tsx";
+import { skillsErrorMessage } from "./skills/error-copy.ts";
 import {
   extractSkillMdDescription,
   replaceSkillMdName,
   skillMdNameMatchesId,
-} from "./skills/skills-skill-md-description.ts";
+} from "./skills/md-description.ts";
 
 /**
  * Pier Home add-skill dialog: nothing is written until the user confirms.

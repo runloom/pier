@@ -1,6 +1,6 @@
 import { act, renderHook } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
-import { useTaskResultKeyboardRetain } from "@/panel-kits/terminal/use-task-result-keyboard-retain.ts";
+import { useTaskResultKeyboardRetain } from "@/panel-kits/terminal/hooks/use-task-result-keyboard-retain.ts";
 import { useTaskRunsStore } from "@/stores/task-runs.store.ts";
 import {
   resetTerminalEndStateStoreForTests,

@@ -20,8 +20,8 @@
 
 **新建**
 - `src/shared/contracts/dockview.ts` — re-export `IDockviewPanelProps`，给受 depcruise 约束的插件代码提供 dockview 类型。
-- `src/renderer/lib/plugins/plugin-panel-registry.ts` — 插件 panel 注册表单例（register/get/clearForTests）。独立模块，避免 runtime ↔ host-context 循环。
-- `src/plugins/builtin/git/renderer/git-changes-panel.tsx` — git-changes 占位面板（插件版）。
+- `src/renderer/lib/plugins/panel-registry.ts` — 插件 panel 注册表单例（register/get/clearForTests）。独立模块，避免 runtime ↔ host-context 循环。
+- `src/plugins/builtin/git/renderer/changes-panel.tsx` — git-changes 占位面板（插件版）。
 - `src/plugins/builtin/git/renderer/git-changes-action.ts` — 「Git: 打开变更面板」插件命令。
 - 测试：`tests/unit/renderer/plugin-panel-registry.test.ts`、`tests/unit/renderer/panel-registry-merge.test.ts`、`tests/component/git-changes-plugin-panel.test.tsx`。
 
@@ -36,7 +36,7 @@
 - `src/plugins/builtin/git/locales/en.json` + `zh-CN.json` — git-changes panel 标题 + open 命令标题。
 
 **移除（第一期 core 实现）**
-- `src/renderer/panel-kits/git-changes/`（整目录：git-changes-panel.tsx、register-actions.ts、open-git-changes.ts）。
+- `src/renderer/panel-kits/git-changes/`（整目录：changes-panel.tsx、register-actions.ts、open-git-changes.ts）。
 - `panel-registry.ts` 的 `gitChanges` 静态条目（三张表）。
 - `main.tsx` 的 `registerGitChangesActions` import + 调用。
 - `src/renderer/i18n/locales/en.ts` + `zh-cn.ts` 的 `commandPalette.action.openGitChanges`（迁成插件命令，标题走插件 locales）。`commandPalette.category.git` **保留**（worktree 命令仍用）。
@@ -52,7 +52,7 @@
 
 **Files:**
 - Create: `src/shared/contracts/dockview.ts`
-- Create: `src/renderer/lib/plugins/plugin-panel-registry.ts`
+- Create: `src/renderer/lib/plugins/panel-registry.ts`
 - Modify: `src/plugins/api/renderer.ts`
 - Test: `tests/unit/renderer/plugin-panel-registry.test.ts`
 
@@ -66,7 +66,7 @@ import {
   clearPluginPanelsForTests,
   getPluginPanelRegistrations,
   registerPluginPanel,
-} from "@/lib/plugins/plugin-panel-registry.ts";
+} from "@/lib/plugins/panel-registry.ts";
 
 const reg = {
   component: () => null,
@@ -141,7 +141,7 @@ export interface PluginPanelRegistration {
 - [ ] **Step 5: 实现插件 panel 注册表单例**
 
 ```ts
-// src/renderer/lib/plugins/plugin-panel-registry.ts
+// src/renderer/lib/plugins/panel-registry.ts
 import type { PluginPanelRegistration } from "@plugins/api/renderer.ts";
 
 const registrations = new Map<string, PluginPanelRegistration>();
@@ -179,7 +179,7 @@ Expected: PASS（3 passed）。
 Run: `pnpm typecheck`（预期无错误）
 
 ```bash
-git add src/shared/contracts/dockview.ts src/renderer/lib/plugins/plugin-panel-registry.ts src/plugins/api/renderer.ts tests/unit/renderer/plugin-panel-registry.test.ts
+git add src/shared/contracts/dockview.ts src/renderer/lib/plugins/panel-registry.ts src/plugins/api/renderer.ts tests/unit/renderer/plugin-panel-registry.test.ts
 git commit -m "feat(plugins): add plugin panel registration mechanism foundation"
 ```
 
@@ -204,7 +204,7 @@ import { createRendererPluginContext } from "@/lib/plugins/host-context.ts";
 import {
   clearPluginPanelsForTests,
   getPluginPanelRegistrations,
-} from "@/lib/plugins/plugin-panel-registry.ts";
+} from "@/lib/plugins/panel-registry.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import type { PluginRegistryEntry } from "@shared/contracts/plugin.ts";
 
@@ -289,7 +289,7 @@ import 段加：
 import { activateWorkspacePanel } from "../workspace/panel-activation.ts";
 import { scheduleRevealDockviewTabByPanelId } from "../workspace/tab-visibility.ts";
 import { useWorkspaceStore } from "../../stores/workspace.store.ts";
-import { getPluginPanelRegistrations, registerPluginPanel } from "./plugin-panel-registry.ts";
+import { getPluginPanelRegistrations, registerPluginPanel } from "./panel-registry.ts";
 ```
 
 `assertDeclaredContribution` 的 `kind` 联合加 `"panel"`，并在 `declared` 计算里加分支：
@@ -398,7 +398,7 @@ import {
 import {
   clearPluginPanelsForTests,
   registerPluginPanel,
-} from "@/lib/plugins/plugin-panel-registry.ts";
+} from "@/lib/plugins/panel-registry.ts";
 
 describe("panel-registry dynamic merge", () => {
   afterEach(() => clearPluginPanelsForTests());
@@ -441,7 +441,7 @@ Expected: FAIL — `getPanelComponents` 未导出。
 import type { IDockviewPanelProps } from "dockview-react";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent } from "react";
-import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
+import { getPluginPanelRegistrations } from "@/lib/plugins/panel-registry.ts";
 import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel.tsx";
 import { welcomePanelKit } from "./welcome-panel.tsx";
 
@@ -593,7 +593,7 @@ git commit -m "feat(permissions): split panel capability into panel:register and
 把第一期的 core panel-kit 替换为 git 插件贡献的 panel + 插件命令。
 
 **Files:**
-- Create: `src/plugins/builtin/git/renderer/git-changes-panel.tsx`
+- Create: `src/plugins/builtin/git/renderer/changes-panel.tsx`
 - Create: `src/plugins/builtin/git/renderer/git-changes-action.ts`
 - Create: `tests/component/git-changes-plugin-panel.test.tsx`
 - Modify: `src/plugins/builtin/git/manifest.ts`
@@ -624,7 +624,7 @@ git rm tests/component/git-changes-panel.test.tsx tests/unit/renderer/git-change
 import { render, screen } from "@testing-library/react";
 import type { IDockviewPanelProps } from "dockview-react";
 import { describe, expect, it, vi } from "vitest";
-import { GitChangesPanel } from "@plugins/builtin/git/renderer/git-changes-panel.tsx";
+import { GitChangesPanel } from "@plugins/builtin/git/renderer/changes-panel.tsx";
 
 const mockProps = {
   api: { id: "pier.git.changes", setTitle: vi.fn() },
@@ -654,7 +654,7 @@ Expected: FAIL — 模块不存在。
 dockview 类型走 `@shared/contracts/dockview.ts`（插件不能直接 import dockview）。`usePanelDescriptor` 是 renderer hook——插件不能 import renderer，所以**插件 panel 不用 usePanelDescriptor**，标题靠 `addPanel` 的 title + dockview api。占位面板只渲染内容：
 
 ```tsx
-// src/plugins/builtin/git/renderer/git-changes-panel.tsx
+// src/plugins/builtin/git/renderer/changes-panel.tsx
 import type { IDockviewPanelProps } from "@shared/contracts/dockview.ts";
 
 export function GitChangesPanel(_props: IDockviewPanelProps) {
@@ -743,7 +743,7 @@ import 加：
 
 ```ts
 import { GitBranch } from "lucide-react";
-import { GitChangesPanel } from "./git-changes-panel.tsx";
+import { GitChangesPanel } from "./changes-panel.tsx";
 import { registerGitChangesAction } from "./git-changes-action.ts";
 ```
 
@@ -834,7 +834,7 @@ Run: `pnpm dev`
 ## 自检清单（执行前已核对）
 
 - **Spec 覆盖**：机制（dockview 类型=T1；注册表=T1；panels API=T2；动态合并=T3；permission=T4）+ git-changes 迁移=T5 + 验证=T6。设计「机制设计」7 改动点逐条有 task。
-- **循环 import 规避**：插件 panel 注册表是独立模块（plugin-panel-registry.ts），host-context 与 panel-registry 都依赖它，runtime.ts 不涉及——不触发 runtime↔host-context 循环。
+- **循环 import 规避**：插件 panel 注册表是独立模块（panel-registry.ts），host-context 与 panel-registry 都依赖它，runtime.ts 不涉及——不触发 runtime↔host-context 循环。
 - **主系统 panel 保留**：panel-registry 的 `panelKits`（terminal/welcome）保持静态，getPanelComponents 只「叠加」插件 panel，符合混合注册表终态。
 - **类型/命名一致**：`PluginPanelRegistration`、`registerPluginPanel`/`getPluginPanelRegistrations`/`clearPluginPanelsForTests`、`getPanelComponents`/`panelKindOf`/`panelIconOf`、`panel:register`/`panel:open`、panel id `pier.git.changes`、命令 id `pier.git.changes.open` 跨 task 一致。
 - **插件边界**：插件 panel 组件用 `@shared/contracts/dockview.ts` 取类型、不用 renderer 的 `usePanelDescriptor`；命令经 `context.panels.open`，不直接 import workspace.store——满足「插件不 import renderer/dockview」。

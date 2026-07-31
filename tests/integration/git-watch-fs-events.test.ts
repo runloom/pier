@@ -1,12 +1,12 @@
 import { mkdir, mkdtemp, rm, symlink, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { execGit } from "@main/services/git-exec.ts";
+import { execGit } from "@main/services/git/exec.ts";
 import {
   createGitWatchService,
   type GitWatchService,
-} from "@main/services/git-watch-service.ts";
-import { resolveRepoAnchors } from "@main/services/git-watch-signatures.ts";
+} from "@main/services/git/watch/service.ts";
+import { resolveRepoAnchors } from "@main/services/git/watch/signatures.ts";
 import type { GitChangeEvent } from "@shared/contracts/git.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

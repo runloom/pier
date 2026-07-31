@@ -1,4 +1,4 @@
-import type { AttentionSoundId } from "@shared/contracts/agent-attention.ts";
+import type { AttentionSoundId } from "@shared/contracts/agent/attention.ts";
 
 export const ATTENTION_BUILTIN_SOUND_IDS = [
   "abstract-sound1",

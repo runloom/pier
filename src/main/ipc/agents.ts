@@ -1,9 +1,9 @@
 import { rankAgents } from "@shared/agent-selection.ts";
+import type { AgentSelectionResult } from "@shared/contracts/agent/usage.ts";
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
-import type { AgentSelectionResult } from "@shared/contracts/agent-usage.ts";
 import type { IpcMain } from "electron";
-import { appCore } from "../app-core/app-core.ts";
-import { resolveAgentLaunch } from "../services/agents/agent-launch.ts";
+import { appCore } from "../app-core/index.ts";
+import { resolveAgentLaunch } from "../services/agents/launch.ts";
 import { terminalLaunchRegistry } from "../state/terminal-launch-state.ts";
 
 export function registerAgentsIpc(ipcMain: IpcMain): void {

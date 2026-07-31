@@ -38,7 +38,7 @@ describe("Pier scrollbar architecture", () => {
     const cmTheme = readFileSync(
       join(
         process.cwd(),
-        "src/plugins/builtin/files/renderer/code-mirror-editor-theme.ts"
+        "src/plugins/builtin/files/renderer/editor/cm-theme.ts"
       ),
       "utf8"
     );

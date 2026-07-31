@@ -14,7 +14,7 @@ import {
   uninstallOmpExtension,
 } from "../../../src/main/services/agents/integrations/omp.ts";
 import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
-import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
 
 const NATIVE_EVENTS = [
   "session_start",

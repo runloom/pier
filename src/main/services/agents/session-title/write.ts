@@ -14,7 +14,7 @@ import {
 import {
   findAppWindowByElectronId,
   findWindowContext,
-} from "../../../windows/window-identity.ts";
+} from "../../../windows/identity.ts";
 import type { ForegroundActivityAggregator } from "../../foreground-activity/types.ts";
 
 export function sessionScopeForFaWindowId(windowId: string): string | null {

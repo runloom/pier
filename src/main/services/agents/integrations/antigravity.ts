@@ -4,8 +4,8 @@ import { join } from "node:path";
 import {
   EXTRACT_STDIN_META_SCRIPT_NAME,
   PIER_HOOK_COMMAND_GENERATION,
-} from "../agent-hooks-install.ts";
-import { stdinIdentityExtractionLines } from "./hook-stdin-commands.ts";
+} from "../hooks-install.ts";
+import { stdinIdentityExtractionLines } from "./hooks/stdin-commands.ts";
 import {
   commandExistsOnPath,
   isPierHookCommand,

@@ -8,7 +8,7 @@ import {
   panelTabChromeSchema,
 } from "@shared/contracts/panel.ts";
 import { taskPanelMetadataSchema } from "@shared/contracts/tasks.ts";
-import { terminalAgentRestoreLaunchOptionsSchema } from "@shared/contracts/terminal-launch.ts";
+import { terminalAgentRestoreLaunchOptionsSchema } from "@shared/contracts/terminal/launch.ts";
 import { z } from "zod";
 
 function stripLaunchEnv(value: unknown): unknown {

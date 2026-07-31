@@ -9,7 +9,7 @@
 import type {
   JsonValue,
   PluginSettingsState,
-} from "@shared/contracts/plugin-settings.ts";
+} from "@shared/contracts/plugin/settings.ts";
 import { diffConfigurationValues } from "@shared/plugin-settings.ts";
 import { create } from "zustand";
 

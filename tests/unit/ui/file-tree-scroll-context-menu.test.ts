@@ -1,7 +1,7 @@
 import {
   fileTreeScrollElementFromNode,
   pinFileTreeScrollDuringContextMenu,
-} from "@pier/ui/file-tree-scroll.ts";
+} from "@pier/ui/file/tree-scroll.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 describe("file-tree context-menu scroll pin", () => {

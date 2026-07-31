@@ -2,7 +2,7 @@ import type {
   AgentRuntimeFocusResult,
   AgentRuntimeIndexSnapshot,
   SortAgentIndexEntriesOptions,
-} from "@shared/contracts/agent-runtime-index.ts";
+} from "@shared/contracts/agent/runtime-index.ts";
 import type { SystemNotificationUnavailableReason } from "@shared/contracts/notification.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";

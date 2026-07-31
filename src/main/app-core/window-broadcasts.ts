@@ -1,7 +1,7 @@
 import type {
   AgentRuntimeFocusResult,
   AgentRuntimeIndexSnapshot,
-} from "@shared/contracts/agent-runtime-index.ts";
+} from "@shared/contracts/agent/runtime-index.ts";
 import type { AppUpdateSnapshot } from "@shared/contracts/app-update.ts";
 import type { MruState } from "@shared/contracts/command-palette-mru.ts";
 import type { LocalEnvironmentState } from "@shared/contracts/environment.ts";
@@ -17,7 +17,7 @@ import type {
 import type { PluginRegistryListResult } from "@shared/contracts/plugin.ts";
 import type { ProjectSkillsInvalidatedEvent } from "@shared/contracts/project-skills.ts";
 import type { TaskRunsSnapshot } from "@shared/contracts/tasks.ts";
-import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal-status-bar.ts";
+import type { TerminalStatusBarPrefs } from "@shared/contracts/terminal/status-bar.ts";
 import type { UsageAggregateSnapshot } from "@shared/contracts/usage-data.ts";
 import type { WorktreeCreateProgress } from "@shared/contracts/worktree.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
@@ -26,8 +26,8 @@ import type { AppWindow } from "../windows/app-window.ts";
 import {
   findAppWindowByElectronId,
   findInternalWindowId,
-} from "../windows/window-identity.ts";
-import { windowManager } from "../windows/window-manager.ts";
+} from "../windows/identity.ts";
+import { windowManager } from "../windows/manager.ts";
 
 function broadcastToAllWindows(channel: string, payload: unknown): void {
   for (const win of windowManager.getAll()) {

@@ -1,5 +1,5 @@
-import type { AgentRuntimeFocusResult } from "@shared/contracts/agent-runtime-index.ts";
-import { parseAgentRef } from "@shared/contracts/agent-runtime-index.ts";
+import type { AgentRuntimeFocusResult } from "@shared/contracts/agent/runtime-index.ts";
+import { parseAgentRef } from "@shared/contracts/agent/runtime-index.ts";
 import type { RendererCommandResult } from "@shared/contracts/renderer-command.ts";
 
 export interface FocusAgentPanelArgs {

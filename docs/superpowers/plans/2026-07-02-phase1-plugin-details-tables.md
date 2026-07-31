@@ -4,7 +4,7 @@
 
 **Goal:** 把插件详情页（设置 → 插件 → 展开详情）的贡献点展示从 badge flex-wrap 瀑布重构为分区紧凑表格（命令表 / 面板表 / 终端状态项表，无贡献则整区隐藏）；元数据行补 homepage / repository 外链；命令新增可 i18n 的「分类」列；沉淀 Phase 3 复用的通用 `ContributionTable` 组件（硬接口 `{ headers: string[]; rows: ReactNode[][] }`，不可改）。
 
-**Architecture:** 纯 renderer UI 改动 + shared Zod schema 的向后兼容扩展 + 内置 git 插件数据补齐。数据流不变：`plugins-section.tsx` 经 `window.pier.plugins.list()` 拿 `PluginRegistryEntry`，用 `src/renderer/lib/plugins/display.ts` 的 resolve 函数做 manifest i18n，注入 `PluginDetails` 展示。新增 `contribution-table.tsx` 复用 `@pier/ui/table.tsx` 原语（`packages/ui/src/table.tsx` 已存在，压缩密度用 className 覆盖）。外链沿用现有机制：renderer 里 `<a target="_blank">`，main 侧 `window-manager.ts:281` 的 `setWindowOpenHandler` → `shell.openExternal`（参照 `agent-row.tsx:217-228` 先例），无需新增 IPC。不触碰 main/preload/dockview，depcruise 边界零风险。
+**Architecture:** 纯 renderer UI 改动 + shared Zod schema 的向后兼容扩展 + 内置 git 插件数据补齐。数据流不变：`plugins-section.tsx` 经 `window.pier.plugins.list()` 拿 `PluginRegistryEntry`，用 `src/renderer/lib/plugins/display.ts` 的 resolve 函数做 manifest i18n，注入 `PluginDetails` 展示。新增 `contribution-table.tsx` 复用 `@pier/ui/table.tsx` 原语（`packages/ui/src/table.tsx` 已存在，压缩密度用 className 覆盖）。外链沿用现有机制：renderer 里 `<a target="_blank">`，main 侧 `manager.ts:281` 的 `setWindowOpenHandler` → `shell.openExternal`（参照 `agent-row.tsx:217-228` 先例），无需新增 IPC。不触碰 main/preload/dockview，depcruise 边界零风险。
 
 **Tech Stack:** React 19 · TypeScript 6 strict（`exactOptionalPropertyTypes` + `noUncheckedIndexedAccess` 均开启）· Zod（shared contracts）· Tailwind v4 + `@pier/ui` shadcn 原语 · i18next · Vitest 4。
 
@@ -666,7 +666,7 @@
   - `resolvePluginCommandDisplay: (manifest, command, locale) => PluginCommandDisplayText`（Task 1）、`resolvePluginPanelDisplay` / `resolvePluginTerminalStatusItemDisplay: (manifest, item, locale) => PluginContributionDisplayText`（`display.ts:170,192`，不变）
   - i18n 键 `settings.plugins.homepage` / `repository` / `table.*`（Task 3）
   - `PluginRegistryEntry.manifest.homepage?` / `.repository?`（Task 2 起 pier.git 有值）
-  - 外链先例：`agent-row.tsx:217-228` 的 `<a target="_blank" rel="noreferrer">` + lucide `ExternalLink`（main 侧 `window-manager.ts:281-282` 已把新窗口请求转 `shell.openExternal`）
+  - 外链先例：`agent-row.tsx:217-228` 的 `<a target="_blank" rel="noreferrer">` + lucide `ExternalLink`（main 侧 `manager.ts:281-282` 已把新窗口请求转 `shell.openExternal`）
 - Produces（`plugin-details.tsx` 新导出面，替代原 `ContributionBadge` + `*ContributionBadges`）:
 
   ```ts

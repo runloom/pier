@@ -1,7 +1,7 @@
 import { pathToFileURL } from "node:url";
 import type { MainPluginUsageData } from "@pier/plugin-api/main";
 import type { ManagedPluginRuntimeSource } from "../services/managed-plugins/install-runtime.ts";
-import type { PluginRpcBus } from "./plugin-rpc-bus.ts";
+import type { PluginRpcBus } from "./rpc-bus.ts";
 
 /**
  * External main plugin runtime (plan Task 5).

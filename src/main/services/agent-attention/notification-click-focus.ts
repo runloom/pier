@@ -1,5 +1,5 @@
 import type { AgentRuntimeIndexService } from "@main/services/agent-runtime-index/index.ts";
-import { AGENT_ATTENTION_KIND } from "@shared/contracts/agent-attention.ts";
+import { AGENT_ATTENTION_KIND } from "@shared/contracts/agent/attention.ts";
 import type { SystemNotificationRequest } from "@shared/contracts/notification.ts";
 import { createLogger } from "@shared/logger.ts";
 import { broadcastAgentRuntimeFocusFeedback } from "../../app-core/window-broadcasts.ts";

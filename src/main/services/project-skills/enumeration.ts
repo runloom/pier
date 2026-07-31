@@ -10,7 +10,7 @@ import {
   listUserSkillRoots,
 } from "./adapters.ts";
 import { peekSkillMetadata } from "./frontmatter.ts";
-import type { OwnershipRecord } from "./store.ts";
+import type { OwnershipRecord } from "./store/index.ts";
 
 /**
  * Filesystem enumeration for the effective matrix and the unified list's

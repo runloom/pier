@@ -1,4 +1,4 @@
-import type { TerminalEndState } from "@shared/contracts/terminal-end-state.ts";
+import type { TerminalEndState } from "@shared/contracts/terminal/end-state.ts";
 import { useEffect } from "react";
 import { useTerminalEndStateStore } from "@/stores/terminal-end-state.store.ts";
 

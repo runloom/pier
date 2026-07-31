@@ -6,7 +6,7 @@ import {
 } from "react";
 import { PANEL_CONTENT_SURFACE } from "@/lib/context-menu/build-entries.ts";
 import { captureDomSelectionText } from "@/lib/context-menu/selection-text.ts";
-import { popupContextMenuAt } from "@/lib/context-menu/use-context-menu.ts";
+import { popupContextMenuAt } from "@/lib/context-menu/use-menu.ts";
 import { cssPointToContentViewPoint } from "@/lib/window-zoom/coordinates.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";

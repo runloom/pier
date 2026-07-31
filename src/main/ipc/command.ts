@@ -4,9 +4,9 @@ import { pierCommandSchema } from "@shared/contracts/commands.ts";
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import type { IpcMain } from "electron";
-import { appCore } from "../app-core/app-core.ts";
-import { findWindowContext } from "../windows/window-identity.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import { appCore } from "../app-core/index.ts";
+import { findWindowContext } from "../windows/identity.ts";
+import { windowManager } from "../windows/manager.ts";
 import { isTrustedMainFrame } from "./trusted-main-frame.ts";
 
 interface GitReviewSenderState {

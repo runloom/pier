@@ -1,0 +1,497 @@
+import type { RendererPluginContext } from "@plugins/api/renderer.ts";
+import type {
+  IDockviewPanelProps,
+  PierDockviewGroupHandle,
+} from "@shared/contracts/dockview.ts";
+import type { FileEntry } from "@shared/contracts/file.ts";
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
+import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
+import {
+  type FilesDocumentPanelSource,
+  isDiskSourceRootAllowed,
+  sameFilesDocumentPanelSource,
+} from "../document/types.ts";
+import { useFilesDocument } from "../document/use-document.ts";
+import type { FileEditorController } from "../editor/controller.ts";
+import { createFileEditorSessionId } from "../editor/session-id.ts";
+import { createFilesTranslate } from "../i18n.ts";
+import {
+  filePanelProjectRoot,
+  projectNameFromRoot,
+  useProjectFileTreeCollapsed,
+} from "../tree/preferences.ts";
+import { FileTreeSidebar } from "../tree/sidebar.tsx";
+import type { FilesWatchHub } from "../watch-hub.ts";
+import { ResolvedFilePanelActions } from "./actions.tsx";
+import { ResolvedFilePanel } from "./body.tsx";
+import { revealDiskBreadcrumbInTree } from "./breadcrumb-reveal.ts";
+import { createFileFilePanelInstanceId } from "./id.ts";
+import { hasOtherOpenFilesSourceInstance } from "./instance-utils.ts";
+import {
+  EmptyFileState,
+  FilePanelBreadcrumb,
+  FilePanelChrome,
+  FilePanelSearchButton,
+  FilePanelShell,
+  ReadOnlyErrorState,
+  SidebarToggleButton,
+} from "./parts.tsx";
+import {
+  asGroupHandle,
+  breadcrumbSegmentsForSource,
+  panelSourceForDocument,
+  parseSourceState,
+  sourceTitle,
+} from "./source.ts";
+import type { FilePanelRuntimeProps } from "./types.ts";
+import { useFilesGroupViewClaim } from "./use-group-view-claim.ts";
+import { useFilePanelSaveAs } from "./use-save-as.ts";
+import { useFilesPanelTransferView } from "./use-transfer-view.ts";
+
+let nextInlinePanelSessionId = 1;
+function FilePanelContent({
+  runtimeController,
+  runtimeContext,
+  runtimeWatchHub,
+  ...props
+}: FilePanelRuntimeProps) {
+  const controller = runtimeController;
+  const t = useMemo(
+    () => createFilesTranslate(runtimeContext),
+    [runtimeContext]
+  );
+  const sourceState = useMemo(
+    () => parseSourceState(props.params, t),
+    [props.params, t]
+  );
+  const sourceFromParams =
+    sourceState.kind === "source" ? sourceState.source : null;
+  const stableSourceRef = useRef<FilesDocumentPanelSource | null>(null);
+  if (
+    sourceFromParams &&
+    !sameFilesDocumentPanelSource(stableSourceRef.current, sourceFromParams)
+  ) {
+    stableSourceRef.current = sourceFromParams;
+  } else if (!sourceFromParams) {
+    stableSourceRef.current = null;
+  }
+  const stableSource = stableSourceRef.current;
+  const [searchRequest, setSearchRequest] = useState(0);
+  const root = filePanelProjectRoot(props.params?.context);
+  const [treeCollapsed, setTreeCollapsed] = useProjectFileTreeCollapsed(root);
+  const projectName = root ? projectNameFromRoot(root) : null;
+  const panelSessionIdRef = useRef<string | null>(null);
+  panelSessionIdRef.current ??= `inline-panel:${nextInlinePanelSessionId++}`;
+  const panelSessionId = props.api?.id ?? panelSessionIdRef.current;
+  const editorSessionId = createFileEditorSessionId(panelSessionId);
+  const sourceAllowed =
+    stableSource?.kind === "untitled" ||
+    (stableSource?.kind === "disk" &&
+      isDiskSourceRootAllowed(stableSource.root, props.params?.context));
+  const trackedDocumentIdForMode = stableSource
+    ? controller.documentId(stableSource)
+    : null;
+  const trackedDocumentForMode = useFilesDocument(
+    trackedDocumentIdForMode ?? ""
+  );
+  const { mode, setMode } = useFilesPanelTransferView({
+    controller,
+    language: trackedDocumentForMode?.language,
+    panelSessionId,
+    stableSource,
+  });
+  useLayoutEffect(() => {
+    if (!(stableSource && sourceAllowed)) {
+      return;
+    }
+    return controller.acquirePanel(panelSessionId, stableSource);
+  }, [controller, panelSessionId, sourceAllowed, stableSource]);
+
+  // group 绑定必须是「活的」:dockview 拖拽跨组不 remount 组件,只 reparent
+  // 内容 DOM。render 期快照会指向旧 group(薄壳空白 + 旧组视图泄漏),
+  // 所以经 onDidGroupChange 把 groupId 提升为 state,变化时靠下方 effect 的
+  // cleanup/setup 对称性自动完成「旧组注销 → 新组登记」迁移。
+  const [group, setGroup] = useState<PierDockviewGroupHandle | null>(() =>
+    asGroupHandle(props.api?.group)
+  );
+  useEffect(() => {
+    setGroup(asGroupHandle(props.api?.group));
+    const disposable = props.api?.onDidGroupChange?.(() => {
+      setGroup(asGroupHandle(props.api?.group));
+    });
+    return () => {
+      disposable?.dispose?.();
+    };
+  }, [props.api]);
+  useFilePanelSaveAs({
+    controller,
+    group,
+    props,
+    runtimeContext,
+    stableSource,
+  });
+  const ownerIdRef = useRef<symbol | null>(null);
+  if (ownerIdRef.current === null) {
+    ownerIdRef.current = Symbol(props.api?.id ?? "inline");
+  }
+  const prefersSharedGroupView = Boolean(
+    runtimeContext && group && props.api?.id && ownerIdRef.current
+  );
+  const inlineUntitledDocumentId =
+    !prefersSharedGroupView && sourceFromParams?.kind === "untitled"
+      ? sourceFromParams.id
+      : null;
+  useEffect(() => {
+    if (!inlineUntitledDocumentId) {
+      return;
+    }
+    return () => {
+      controller.discardDocument(inlineUntitledDocumentId);
+    };
+  }, [controller, inlineUntitledDocumentId]);
+
+  useFilesGroupViewClaim({
+    controller,
+    group,
+    ownerId: ownerIdRef.current,
+    panelApiId: props.api?.id,
+    prefersSharedGroupView,
+    runtimeContext,
+    runtimeWatchHub,
+  });
+
+  // tab 未保存圆点:document.dirty 变化时写进 params(与 preview 斜体同通道),
+  // panel-tab-header 经 onDidParametersChange 收到后渲染。dirty 同时并入
+  // preview→pinned promote(写在同一次 updateParameters,避免两个 effect
+  // 各自 spread 旧 params 相互覆盖)。
+  const trackedDocumentId = sourceFromParams
+    ? controller.documentId(sourceFromParams)
+    : null;
+  const trackedDocument = useFilesDocument(trackedDocumentId ?? "");
+  const trackedSource = panelSourceForDocument(trackedDocument);
+  const trackedDirty = trackedDocument?.dirty === true;
+  useEffect(() => {
+    if (
+      !(props.api && sourceFromParams && trackedSource) ||
+      sameFilesDocumentPanelSource(sourceFromParams, trackedSource)
+    ) {
+      return;
+    }
+    props.api.updateParameters({
+      ...(props.params ?? {}),
+      source: trackedSource,
+    });
+    props.api.setTitle(trackedDocument?.name ?? trackedSource.kind);
+  }, [
+    props.api,
+    props.params,
+    sourceFromParams,
+    trackedDocument,
+    trackedSource,
+  ]);
+  useEffect(() => {
+    if (!props.api) {
+      return;
+    }
+    const paramsDirty = props.params?.dirty === true;
+    if (paramsDirty === trackedDirty) {
+      return;
+    }
+    const promoteToPinned = trackedDirty && props.params?.pinned === false;
+    props.api.updateParameters({
+      ...(props.params ?? {}),
+      dirty: trackedDirty,
+      ...(promoteToPinned ? { pinned: true } : {}),
+    });
+  }, [props.api, props.params, trackedDirty]);
+
+  useEffect(() => {
+    const panelId = props.api?.id;
+    const containerApi = (
+      props as {
+        containerApi?: {
+          onDidRemovePanel?: (listener: (panel: { id?: string }) => void) => {
+            dispose?: () => void;
+          };
+        };
+      }
+    ).containerApi;
+    if (!(panelId && containerApi?.onDidRemovePanel)) {
+      return;
+    }
+    const disposable = containerApi.onDidRemovePanel((panel) => {
+      if (panel?.id === panelId && stableSource) {
+        controller.closePanel({
+          hasOtherOpenInstance: hasOtherOpenFilesSourceInstance({
+            context: runtimeContext,
+            panelId,
+            source: stableSource,
+          }),
+          panelId,
+          source: stableSource,
+        });
+      }
+    });
+    return () => {
+      disposable?.dispose?.();
+    };
+  }, [
+    controller,
+    props.api?.id,
+    props.containerApi,
+    runtimeContext,
+    stableSource,
+  ]);
+
+  const handleOpenFileFromTree = useCallback(
+    (entry: FileEntry, options?: { pinned?: boolean }) => {
+      if (!runtimeContext) {
+        return;
+      }
+      const nextSource: FilesDocumentPanelSource = {
+        kind: "disk",
+        path: entry.path,
+        root: entry.root,
+      };
+      const nextName = entry.path.split("/").at(-1) ?? entry.path;
+      const panelContext = props.params?.context;
+      const pinned = options?.pinned === true;
+      runtimeContext.panels.openInstance({
+        componentId: FILES_FILE_PANEL_ID,
+        ...(panelContext ? { context: panelContext } : {}),
+        dropUnpinnedInstances: !pinned,
+        instanceId: createFileFilePanelInstanceId(nextSource),
+        params: {
+          pinned,
+          source: nextSource,
+        },
+        title: nextName,
+      });
+    },
+    [props.params?.context, runtimeContext]
+  );
+
+  const handleOpenSearch = useCallback(() => {
+    setSearchRequest((r) => r + 1);
+  }, []);
+
+  const treeInstanceId = props.api?.id ?? "pier.files.inlineFilePanel";
+  const handleBreadcrumbClick = useCallback(
+    (index: number, source: FilesDocumentPanelSource) => {
+      if (!(root && runtimeContext) || source.kind !== "disk") {
+        return;
+      }
+      revealDiskBreadcrumbInTree({
+        context: runtimeContext,
+        index,
+        instanceId: treeInstanceId,
+        path: source.path,
+        projectName,
+        root,
+        setTreeCollapsed,
+        source,
+        treeCollapsed,
+      });
+    },
+    [
+      projectName,
+      root,
+      runtimeContext,
+      setTreeCollapsed,
+      treeCollapsed,
+      treeInstanceId,
+    ]
+  );
+
+  // 共享 group 视图已接管 chrome+树+编辑器;薄壳仅占位保持 dockview tab 生命周期。
+  if (prefersSharedGroupView) {
+    return <div aria-hidden="true" className="h-full w-full" />;
+  }
+
+  const sidebar =
+    runtimeContext && root && !treeCollapsed ? (
+      <FileTreeSidebar
+        context={runtimeContext}
+        controller={controller}
+        instanceId={props.api?.id ?? "pier.files.inlineFilePanel"}
+        onOpenFile={handleOpenFileFromTree}
+        root={root}
+        watchHub={runtimeWatchHub}
+      />
+    ) : null;
+
+  const chromeLeading = (
+    <>
+      <SidebarToggleButton
+        collapsed={treeCollapsed}
+        hidden={!root}
+        onToggle={() => setTreeCollapsed(!treeCollapsed)}
+        t={t}
+      />
+      <FilePanelSearchButton
+        label={t("filePanel.search", "Find in file")}
+        onOpenSearch={handleOpenSearch}
+        t={t}
+      />
+    </>
+  );
+
+  const selectedSource = sourceFromParams;
+  const outsideWorkspace =
+    selectedSource?.kind === "disk" &&
+    !isDiskSourceRootAllowed(selectedSource.root, props.params?.context);
+  const shellProps = {
+    onSidebarAutoCollapse: () => setTreeCollapsed(true),
+    sidebar,
+  };
+
+  if (outsideWorkspace && selectedSource) {
+    return (
+      <FilePanelShell
+        {...shellProps}
+        header={
+          <FilePanelChrome
+            center={
+              <FilePanelBreadcrumb
+                ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
+                onSegmentClick={(index) =>
+                  handleBreadcrumbClick(index, selectedSource)
+                }
+                segments={breadcrumbSegmentsForSource(
+                  selectedSource,
+                  projectName
+                )}
+              />
+            }
+            leading={chromeLeading}
+          />
+        }
+      >
+        <ReadOnlyErrorState
+          message={t(
+            "filePanel.errors.outsideWorkspace",
+            "This file is outside the current workspace and cannot be restored."
+          )}
+          t={t}
+          title={sourceTitle(selectedSource)}
+        />
+      </FilePanelShell>
+    );
+  }
+
+  if (sourceState.kind === "invalid") {
+    return (
+      <FilePanelShell
+        {...shellProps}
+        header={
+          <FilePanelChrome
+            center={
+              <span className="truncate font-mono text-muted-foreground text-xs">
+                {sourceState.title}
+              </span>
+            }
+            leading={chromeLeading}
+          />
+        }
+      >
+        <ReadOnlyErrorState
+          message={sourceState.message}
+          t={t}
+          title={sourceState.title}
+        />
+      </FilePanelShell>
+    );
+  }
+
+  if (!selectedSource) {
+    return (
+      <FilePanelShell
+        {...shellProps}
+        header={
+          <FilePanelChrome
+            center={
+              <span className="truncate font-mono text-muted-foreground text-xs">
+                {projectName ?? t("filePanel.title", "File")}
+              </span>
+            }
+            leading={chromeLeading}
+          />
+        }
+      >
+        <EmptyFileState hasProjectTree={Boolean(root)} t={t} />
+      </FilePanelShell>
+    );
+  }
+
+  return (
+    <FilePanelShell
+      {...shellProps}
+      header={
+        <FilePanelChrome
+          center={
+            <FilePanelBreadcrumb
+              ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
+              onSegmentClick={(index) =>
+                handleBreadcrumbClick(index, selectedSource)
+              }
+              segments={breadcrumbSegmentsForSource(
+                selectedSource,
+                projectName
+              )}
+            />
+          }
+          leading={chromeLeading}
+          trailing={
+            <ResolvedFilePanelActions
+              controller={controller}
+              editorSessionId={editorSessionId}
+              mode={mode}
+              onModeChange={setMode}
+              panelId={props.api?.id}
+              source={selectedSource}
+              t={t}
+            />
+          }
+        />
+      }
+    >
+      <ResolvedFilePanel
+        context={runtimeContext}
+        controller={controller}
+        editorSessionId={editorSessionId}
+        markdownAnchor={props.params?.markdownAnchor}
+        markdownAnchorRequestId={props.params?.markdownAnchorRequestId}
+        mode={mode}
+        onModeChange={setMode}
+        panelContext={props.params?.context}
+        panelId={props.api?.id}
+        searchRequest={searchRequest}
+        source={selectedSource}
+        t={t}
+      />
+    </FilePanelShell>
+  );
+}
+export function createFilePanel(
+  context: RendererPluginContext,
+  controller: FileEditorController,
+  watchHub: FilesWatchHub
+) {
+  return function FilesFilePanel(props: IDockviewPanelProps) {
+    return (
+      <FilePanelContent
+        {...(props as FilePanelRuntimeProps)}
+        runtimeContext={context}
+        runtimeController={controller}
+        runtimeWatchHub={watchHub}
+      />
+    );
+  };
+}

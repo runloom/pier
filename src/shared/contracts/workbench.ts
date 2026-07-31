@@ -1,7 +1,7 @@
 import type { RefinementCtx } from "zod";
 import { z } from "zod";
 import { pierCapabilitySchema } from "./permissions.ts";
-import { jsonValueSchema } from "./plugin-settings.ts";
+import { jsonValueSchema } from "./plugin/settings.ts";
 
 /** 工作台网格列数，也是贡献声明尺寸的单轴上限。 */
 export const WORKBENCH_GRID_COLS = 12;

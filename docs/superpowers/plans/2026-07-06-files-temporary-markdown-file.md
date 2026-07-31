@@ -43,10 +43,10 @@
 - `package.json`、`pnpm-lock.yaml`：新增编辑器和 Markdown 预览依赖。
 - `src/plugins/api/renderer.ts`：新增 `panels.openInstance`、`context.terminal` 和相关类型。
 - `src/renderer/lib/actions/types.ts`、`src/renderer/lib/actions/contribution-types.ts`、`src/renderer/lib/actions/contribution-runtime.ts`、`src/renderer/lib/actions/registry.ts`：让 action handler 接收并透传调用上下文。
-- `src/renderer/lib/context-menu/use-context-menu.ts`：弹出右键菜单时传递来源 panel 上下文。
+- `src/renderer/lib/context-menu/use-menu.ts`：弹出右键菜单时传递来源 panel 上下文。
 - `src/renderer/panel-kits/terminal/terminal-panel.tsx`：native 右键转发调用 `popupContextMenuAt` 时传入触发菜单的终端 panelId。
 - `src/renderer/lib/plugins/host-context.ts`：实现多实例 panel 打开和终端上下文注入。
-- `src/renderer/lib/plugins/plugin-panel-registry.ts`：支持按 component id 关闭所有插件 panel 实例。
+- `src/renderer/lib/plugins/panel-registry.ts`：支持按 component id 关闭所有插件 panel 实例。
 - `src/renderer/components/workspace/panel-registry.ts`、`workspace-host.tsx`：确保 dockview 按 component id 渲染插件 panel。
 - `src/shared/contracts/permissions.ts`：确认 `terminal:read`、`panel:open` 已存在；本期只更新 manifest、权限断言和测试。
 - `src/shared/contracts/terminal.ts`：新增读取选区文本的契约。
@@ -239,10 +239,10 @@ pnpm typecheck
 - 修改：`src/renderer/lib/actions/contribution-types.ts`
 - 修改：`src/renderer/lib/actions/contribution-runtime.ts`
 - 修改：`src/renderer/lib/actions/registry.ts`
-- 修改：`src/renderer/lib/context-menu/use-context-menu.ts`
+- 修改：`src/renderer/lib/context-menu/use-menu.ts`
 - 修改：`src/renderer/panel-kits/terminal/terminal-panel.tsx`
 - 修改：`src/renderer/lib/plugins/host-context.ts`
-- 修改：`src/renderer/lib/plugins/plugin-panel-registry.ts`
+- 修改：`src/renderer/lib/plugins/panel-registry.ts`
 - 修改：`src/renderer/components/workspace/panel-registry.ts`
 - 修改：`src/renderer/components/workspace/workspace-host.tsx`
 - 测试：`tests/unit/renderer/plugin-panel-instances.test.ts`

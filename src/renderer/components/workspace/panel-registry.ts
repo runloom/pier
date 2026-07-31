@@ -2,14 +2,14 @@ import type { IDockviewPanelProps } from "dockview-react";
 import type { LucideIcon } from "lucide-react";
 import { AlertTriangle } from "lucide-react";
 import type { FunctionComponent } from "react";
-import { getPluginPanelRegistrations } from "@/lib/plugins/plugin-panel-registry.ts";
-import { terminalPanelKit } from "@/panel-kits/terminal/terminal-panel-kit.ts";
-import { workbenchPanelKit } from "@/panel-kits/workbench/workbench-panel.tsx";
+import { getPluginPanelRegistrations } from "@/lib/plugins/panel-registry.ts";
+import { terminalPanelKit } from "@/panel-kits/terminal/panel-kit.ts";
+import { workbenchPanelKit } from "@/panel-kits/workbench/panel.tsx";
 import {
   withPanelResourceBoundary,
   withPluginPanelHostBoundary,
 } from "./panel-resource-boundary.tsx";
-import { PanelTransferUnavailablePanel } from "./panel-transfer-unavailable-panel.tsx";
+import { PanelTransferUnavailablePanel } from "./transfer/unavailable-panel.tsx";
 import { welcomePanelKit } from "./welcome-panel.tsx";
 
 type PanelKind = "terminal" | "web";

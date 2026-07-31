@@ -7,7 +7,7 @@ import type {
   GitReviewMutationRequest,
   GitReviewMutationResult,
   GitReviewPathMutationRequest,
-} from "@shared/contracts/git-review.ts";
+} from "@shared/contracts/git/review.ts";
 import { invokePierCommand } from "./ipc-envelope.ts";
 
 export interface PierGitReviewAPI {

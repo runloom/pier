@@ -97,14 +97,14 @@ manifest（`manifest.ts`）：
 
 - `WORKTREE_PLUGIN_ID = "pier.worktree"` 定义在 `src/shared/contracts/plugin.ts`，被 manifest、`builtin-catalog`（renderer 与 main 各一份）、`host-context.ts` 等引用。重命名为 `GIT_PLUGIN_ID = "pier.git"`，同步所有引用点。
 - i18n：`locales/en.json`、`locales/zh-CN.json` 的 key 命名空间与展示文案随插件名调整。
-- 文件内部模块名（`worktreeRendererPlugin`、`worktreeMainPlugin`、`registerWorktreePluginContributions` 等）随域名重命名为 git 前缀；`worktree-status-item.tsx` 重命名为 `git-status-item.tsx`。
+- 文件内部模块名（`worktreeRendererPlugin`、`worktreeMainPlugin`、`registerWorktreePluginContributions` 等）随域名重命名为 git 前缀；`worktree-status-item.tsx` 重命名为 `status-item.tsx`。
 - `worktree-list-action.ts` 作为 git 插件下的 worktree 子能力保留，命令逻辑不变。
 
 ### 2. git-changes panel-kit 骨架
 
 新目录：`src/renderer/panel-kits/git-changes/`。
 
-- `git-changes-panel.tsx`：照 `welcome-panel.tsx` 模式，最小空占位页面（面板标题 + 「变更预览即将到来」空状态），用 `usePanelDescriptor` 设置标题；导出 `gitChangesPanelKit = { component, icon, kind: "web" }`。
+- `changes-panel.tsx`：照 `welcome-panel.tsx` 模式，最小空占位页面（面板标题 + 「变更预览即将到来」空状态），用 `usePanelDescriptor` 设置标题；导出 `gitChangesPanelKit = { component, icon, kind: "web" }`。
 - 在 `panel-registry.ts` 登记三处：`panelKits.gitChanges`、`panelComponents.gitChanges`、`panelKinds.gitChanges`。`kind` 取 `"web"`（面板内是 web DOM，键盘路由用）。
 
 ### 3. 「Git: 打开变更面板」命令（核心侧）

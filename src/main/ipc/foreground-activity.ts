@@ -7,15 +7,11 @@ import type {
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import { app, type IpcMain } from "electron";
-import { effectsForAcceptedAgentEvent } from "../services/agents/agent-event-effects.ts";
+import { effectsForAcceptedAgentEvent } from "../services/agents/event-effects.ts";
 import {
   eventsJsonlPath,
   pierHooksCurrentDir,
-} from "../services/agents/agent-hooks-install.ts";
-import {
-  isAgentStatusHooksIngestEnabled,
-  setAgentStatusHooksIngestEnabled,
-} from "../services/agents/agent-status-hooks-gate.ts";
+} from "../services/agents/hooks-install.ts";
 import {
   getAgentHookIntegration,
   installAgentHooksStack,
@@ -29,6 +25,10 @@ import {
   applyAgentSessionTitleFromHookEvent,
   applyProviderAgentSessionTitle,
 } from "../services/agents/session-title/index.ts";
+import {
+  isAgentStatusHooksIngestEnabled,
+  setAgentStatusHooksIngestEnabled,
+} from "../services/agents/status-hooks-gate.ts";
 import { isWindowDetaching } from "../services/agents/window-detaching-guard.ts";
 import { createForegroundActivityAggregator } from "../services/foreground-activity/aggregator.ts";
 import { isBlankShellCommandLine } from "../services/foreground-activity/blank-command-line.ts";
@@ -48,11 +48,11 @@ import {
   findAppWindowByInternalId,
   findAppWindowByWebContents,
   listAppWindowIds,
-} from "../windows/window-identity.ts";
+} from "../windows/identity.ts";
 import { materializeForegroundActivityPublications } from "./foreground-activity-publication.ts";
-import { broadcastAgentEndStateForPanel } from "./terminal-end-state-broadcast.ts";
-import { forwardToWindow } from "./terminal-forwarding.ts";
-import { windowRecordIdFor } from "./terminal-window-scope.ts";
+import { broadcastAgentEndStateForPanel } from "./terminal/end-state-broadcast.ts";
+import { forwardToWindow } from "./terminal/forwarding.ts";
+import { windowRecordIdFor } from "./terminal/window-scope.ts";
 
 const log = createLogger("foreground-activity.ipc");
 

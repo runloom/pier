@@ -3,7 +3,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import {
   CANVAS_SKELETON_DELAY_MS,
   FileCanvasPreview,
-} from "@plugins/builtin/files/renderer/file-canvas-preview.tsx";
+} from "@plugins/builtin/files/renderer/preview/canvas.tsx";
 import { projectLiveRootId } from "@shared/contracts/live-modules.ts";
 import { act, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";

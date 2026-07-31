@@ -31,10 +31,10 @@ import {
 } from "./identity.ts";
 import { inspectLibraryContent } from "./library-state.ts";
 import type { createProjectSkillsPaths } from "./paths.ts";
-import type { PierBindingsChannel } from "./pier-bindings.ts";
+import type { PierBindingsChannel } from "./pier-bindings/index.ts";
 import { analyzeLibrarySkill } from "./risk.ts";
-import type { ProjectSkillsStore } from "./store.ts";
-import type { SystemSkillsChannel } from "./system-skills.ts";
+import type { ProjectSkillsStore } from "./store/index.ts";
+import type { SystemSkillsChannel } from "./system-skills/index.ts";
 
 /**
  * Snapshot assembly (design v8 §3.6 / §5.1), split from service.ts

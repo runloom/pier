@@ -13,12 +13,12 @@ import {
   readPreferredOpenWindowRecordIds,
   readWindowRecordLayout,
 } from "../state/window-record-state.ts";
-import { findWindowContext } from "../windows/window-identity.ts";
+import { findWindowContext } from "../windows/identity.ts";
 import {
   type WindowBounds,
   type WindowCloseResult,
   windowManager,
-} from "../windows/window-manager.ts";
+} from "../windows/manager.ts";
 import {
   armAndDetachAgentsBeforeClose,
   currentFinalizeRendererClose,
@@ -89,10 +89,10 @@ export interface CreateWindowServiceArgs {
     windowId: string;
   }) =>
     | Promise<
-        | import("../windows/native-window-close-failure.ts").NativeWindowCloseFailureDecision
+        | import("../windows/native-close-failure.ts").NativeWindowCloseFailureDecision
         | undefined
       >
-    | import("../windows/native-window-close-failure.ts").NativeWindowCloseFailureDecision
+    | import("../windows/native-close-failure.ts").NativeWindowCloseFailureDecision
     | undefined;
   runWhenPluginTransitionsIdle?: <T>(operation: () => Promise<T>) => Promise<T>;
   settlePanelTransferBeforeClose?: (

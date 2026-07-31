@@ -25,7 +25,7 @@ export default defineConfig({
           index: resolve(import.meta.dirname, "src/main/index.ts"),
           "lsp-windows-runtime": resolve(
             import.meta.dirname,
-            "src/main/services/lsp/lsp-process-termination.ts"
+            "src/main/services/lsp/process-termination.ts"
           ),
           "lsp-windows-process-supervisor": resolve(
             import.meta.dirname,

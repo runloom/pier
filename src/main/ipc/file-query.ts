@@ -19,7 +19,7 @@ import {
   fileContentQueryStartSchema,
   filePathQueryCancelSchema,
   filePathQueryStartSchema,
-} from "@shared/contracts/file-query.ts";
+} from "@shared/contracts/file/query.ts";
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import {
@@ -28,11 +28,11 @@ import {
   ipcMain,
   type WebContents,
 } from "electron";
-import { appCore } from "../app-core/app-core.ts";
+import { appCore } from "../app-core/index.ts";
 import { createRgContentSearchRunner } from "../services/file-query/content-search.ts";
-import { createFileQueryService } from "../services/file-query/file-query-service.ts";
 import { resolveSearchRuntime } from "../services/file-query/search-runtime.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import { createFileQueryService } from "../services/file-query/service.ts";
+import { windowManager } from "../windows/manager.ts";
 
 /**
  * Collect candidate roots that may own `resources/search/<arch>/rg`.

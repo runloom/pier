@@ -256,7 +256,7 @@ Service API 保持：`check | download | getStatus | quitAndInstall`。
 
 ## 10. 现状锚点（实施时以仓库为准）
 
-- `src/main/services/app-updates/app-update-service.ts`
+- `src/main/services/app-updates/service.ts`
 - `src/main/services/app-updates/electron-updater-adapter.ts`
 - `src/renderer/pages/settings/components/app-update-section.tsx`
 - `src/shared/contracts/app-update.ts`

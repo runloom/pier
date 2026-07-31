@@ -28,7 +28,7 @@ import {
 } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import { actionRegistry } from "@/lib/actions/registry.ts";
-import { useContextMenu } from "@/lib/context-menu/use-context-menu.ts";
+import { useContextMenu } from "@/lib/context-menu/use-menu.ts";
 import { ensureTuiInputFocus } from "@/panel-kits/terminal/tui-input-focus.ts";
 import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import {

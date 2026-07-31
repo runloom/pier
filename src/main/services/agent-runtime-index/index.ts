@@ -2,12 +2,12 @@ import type {
   AgentRuntimeFocusResult,
   AgentRuntimeIndexSnapshot,
   SortAgentIndexEntriesOptions,
-} from "@shared/contracts/agent-runtime-index.ts";
+} from "@shared/contracts/agent/runtime-index.ts";
 import {
   isAgentIndexNeedsYou,
   projectAgentActivities,
   sortAgentIndexEntries,
-} from "@shared/contracts/agent-runtime-index.ts";
+} from "@shared/contracts/agent/runtime-index.ts";
 import type { ForegroundActivityBroadcast } from "@shared/contracts/foreground-activity.ts";
 import type { RendererCommandResult } from "@shared/contracts/renderer-command.ts";
 import { peekTerminalPanelContext } from "../../state/terminal-session-state.ts";
@@ -15,7 +15,7 @@ import {
   findAppWindowByElectronId,
   findInternalWindowId,
   findWindowContext,
-} from "../../windows/window-identity.ts";
+} from "../../windows/identity.ts";
 import type { RendererCommandService } from "../renderer-command-service.ts";
 import { focusAgentByRef } from "./focus.ts";
 

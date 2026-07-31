@@ -1,12 +1,12 @@
 import type {
   MarkdownParseRequest,
   MarkdownParseResponse,
-} from "@plugins/builtin/files/renderer/markdown/markdown-ir.ts";
-import { parseMarkdownToIr } from "@plugins/builtin/files/renderer/markdown/markdown-parser.ts";
+} from "@plugins/builtin/files/renderer/markdown/ir.ts";
+import { parseMarkdownToIr } from "@plugins/builtin/files/renderer/markdown/parser.ts";
 import {
   createMarkdownRuntime,
   paginateMarkdownDocument,
-} from "@plugins/builtin/files/renderer/markdown/markdown-runtime.ts";
+} from "@plugins/builtin/files/renderer/markdown/runtime.ts";
 import { describe, expect, it, vi } from "vitest";
 
 class FakeMarkdownWorker {

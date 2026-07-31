@@ -8,7 +8,7 @@ export const FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY =
 export const FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY =
   "pier.files.tree.showGitIgnoredFiles";
 
-export { FILES_TREE_DEFAULT_EXCLUDE_PATTERNS } from "@shared/contracts/files-tree-exclude.ts";
+export { FILES_TREE_DEFAULT_EXCLUDE_PATTERNS } from "@shared/contracts/file/tree-exclude.ts";
 
 export const FILES_EDITOR_WORD_WRAP_SETTING_KEY = "pier.files.editor.wordWrap";
 export const FILES_EDITOR_TAB_SIZE_SETTING_KEY = "pier.files.editor.tabSize";

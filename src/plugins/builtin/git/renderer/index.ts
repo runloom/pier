@@ -4,14 +4,14 @@ import type {
 } from "@plugins/api/renderer.ts";
 import { Diff, GitBranch } from "lucide-react";
 import { GIT_CHANGES_PANEL_ID, GIT_PLUGIN_ID } from "../manifest.ts";
-import { registerGitActions } from "./git-actions.ts";
-import { createGitChangesPanel } from "./git-changes-panel.tsx";
-import { gitChangesPanelTabChrome } from "./git-changes-tab-title.ts";
-import { createGitPanelTransferRegistration } from "./git-panel-transfer.ts";
-import { GitReviewMutationAuthority } from "./git-review-mutation-authority.ts";
-import { registerGitReviewTreeActions } from "./git-review-tree-actions.ts";
-import { registerGitStatusItem } from "./git-status-item.tsx";
-import { registerWorktreeActions } from "./worktree-list-action.ts";
+import { registerGitActions } from "./actions.ts";
+import { createGitChangesPanel } from "./changes-panel.tsx";
+import { gitChangesPanelTabChrome } from "./changes-tab-title.ts";
+import { createGitPanelTransferRegistration } from "./panel-transfer.ts";
+import { GitReviewMutationAuthority } from "./review/mutation-authority.ts";
+import { registerGitReviewTreeActions } from "./review/tree-actions.ts";
+import { registerGitStatusItem } from "./status-item.tsx";
+import { registerWorktreeActions } from "./worktree/list-action.ts";
 
 function gitChangesTabChromeLabels(context: RendererPluginContext) {
   return {

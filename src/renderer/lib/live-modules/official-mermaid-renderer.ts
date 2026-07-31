@@ -1,5 +1,5 @@
 import type { MermaidConfig } from "mermaid";
-import { sanitizeMermaidSvg } from "@/lib/plugins/mermaid-svg-sanitizer.ts";
+import { sanitizeMermaidSvg } from "@/lib/plugins/mermaid/svg-sanitizer.ts";
 
 export type OfficialMermaidRenderResult =
   | { diagramType: string; ok: true; svg: string }

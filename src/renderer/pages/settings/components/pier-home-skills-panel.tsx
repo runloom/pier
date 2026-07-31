@@ -30,7 +30,7 @@ import {
   openPierHomeLibrarySkillDialog,
 } from "./pier-home-skill-detail.tsx";
 import { openPierHomeUserGlobalSkillDialog } from "./pier-home-user-global-skill-dialog.tsx";
-import { AgentEffectSummary, type Translate } from "./skills/skills-shared.tsx";
+import { AgentEffectSummary, type Translate } from "./skills/shared.tsx";
 
 export function isPierHomeSkillsDirty(): boolean {
   return isPierHomeLibrarySkillDialogDirty();

@@ -1,6 +1,7 @@
 import type { PierCommandResult } from "@shared/contracts/commands.ts";
-import { FileServiceError } from "../services/file-service.ts";
-import { GitExecError } from "../services/git-exec.ts";
+import { FileServiceError } from "../services/files/service.ts";
+import { GitExecError } from "../services/git/exec.ts";
+import { WorktreeServiceError } from "../services/git/worktree/service.ts";
 import {
   isLocalEnvironmentScriptError,
   LocalEnvironmentScriptError,
@@ -8,7 +9,6 @@ import {
 import { LocalEnvironmentServiceError } from "../services/local-environments-service.ts";
 import { PluginServiceError } from "../services/plugin-service.ts";
 import { PluginSettingsServiceError } from "../services/plugin-settings-service.ts";
-import { WorktreeServiceError } from "../services/worktree-service.ts";
 import { commandFailure as failure } from "./command-results.ts";
 
 export function mapCommandError(

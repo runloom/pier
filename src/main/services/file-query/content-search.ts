@@ -12,7 +12,7 @@ import {
   FILE_CONTENT_QUERY_RESULTS_DEFAULT,
   type FileContentQueryItem,
   type FileContentQueryStart,
-} from "@shared/contracts/file-query.ts";
+} from "@shared/contracts/file/query.ts";
 import { ContentSearchError } from "./content-search-error.ts";
 import { parseRgMatchLine } from "./content-search-parse.ts";
 import { resolveSearchRoot } from "./content-search-scope.ts";

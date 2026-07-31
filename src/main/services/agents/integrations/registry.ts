@@ -7,8 +7,8 @@ import {
   readInstalledHookRuntimeGeneration,
   withAgentHooksInstallLock,
   withInstalledAgentHooksRuntime,
-} from "../agent-hooks-install.ts";
-import { setAgentStatusHooksIngestEnabled } from "../agent-status-hooks-gate.ts";
+} from "../hooks-install.ts";
+import { setAgentStatusHooksIngestEnabled } from "../status-hooks-gate.ts";
 import { aiderIntegration } from "./aider.ts";
 import { ampIntegration } from "./amp.ts";
 import { antigravityIntegration } from "./antigravity.ts";
@@ -24,7 +24,7 @@ import { crushIntegration } from "./crush.ts";
 import { cursorIntegration } from "./cursor.ts";
 import { devinIntegration } from "./devin.ts";
 import { droidIntegration } from "./droid.ts";
-import { AGENT_STATUS_EVIDENCE } from "./evidence-matrix.ts";
+import { AGENT_STATUS_EVIDENCE } from "./evidence/matrix.ts";
 import { geminiIntegration } from "./gemini.ts";
 import { gooseIntegration } from "./goose.ts";
 import { grokIntegration } from "./grok.ts";

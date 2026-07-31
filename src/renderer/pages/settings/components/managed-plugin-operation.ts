@@ -1,4 +1,4 @@
-import type { ManagedPluginOperationResult } from "@shared/contracts/managed-plugin.ts";
+import type { ManagedPluginOperationResult } from "@shared/contracts/plugin/managed.ts";
 
 function isManagedOperationFailure(
   result: unknown

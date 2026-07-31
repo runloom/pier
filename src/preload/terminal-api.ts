@@ -1,8 +1,8 @@
-import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import type {
   TerminalDebugRendererSnapshotRequest,
   TerminalDebugRendererSnapshotResult,
-} from "@shared/contracts/terminal-debug.ts";
+} from "@shared/contracts/terminal/debug.ts";
+import type { TerminalAPI } from "@shared/contracts/terminal.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer, webUtils } from "electron";
 import { subscribeIpc } from "./ipc-envelope.ts";

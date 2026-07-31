@@ -1,6 +1,6 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
 import type { AgentStopAuthority } from "../../foreground-activity/types.ts";
-import type { AgentStatusEvidence } from "./evidence-matrix.ts";
+import type { AgentStatusEvidence } from "./evidence/matrix.ts";
 
 export interface AgentRuntimeSemantics {
   /** 实际安装的 hook / 插件可发出的原生事件与 Pier 规范事件的精确对应。 */

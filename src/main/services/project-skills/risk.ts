@@ -2,7 +2,7 @@ import type { Stats } from "node:fs";
 import { lstat, readdir, readFile } from "node:fs/promises";
 import { join, posix } from "node:path";
 import { parseSafeSkillFrontmatter } from "./frontmatter.ts";
-import { buildDirectorySummary } from "./import-limits.ts";
+import { buildDirectorySummary } from "./import/limits.ts";
 import {
   collectDynamicCommandTraces,
   computeRiskFingerprint,

@@ -4,18 +4,18 @@ import { homedir } from "node:os";
 import { join } from "node:path";
 import { promisify } from "node:util";
 import { dialog } from "electron";
-import type { FilePathTransactionLock } from "../services/file-path-transaction-lock.ts";
+import type { FilePathTransactionLock } from "../services/files/path-transaction-lock.ts";
 import type { LocalEnvironmentService } from "../services/local-environments-service.ts";
 import type { PanelContextService } from "../services/panel-context-service.ts";
 import type { PierHomeService } from "../services/pier-home/service.ts";
 import {
   createManagedAgentLaunchGate,
   type ManagedAgentLaunchGate,
-} from "../services/project-skills/launch-gate.ts";
+} from "../services/project-skills/launch-gate/index.ts";
 import {
   createPierBindingsChannel,
   type PierBindingsChannel,
-} from "../services/project-skills/pier-bindings.ts";
+} from "../services/project-skills/pier-bindings/index.ts";
 import {
   createProjectSkillsService,
   type ProjectSkillsService,
@@ -23,7 +23,7 @@ import {
 import {
   createSystemSkillsChannel,
   type SystemSkillsChannel,
-} from "../services/project-skills/system-skills.ts";
+} from "../services/project-skills/system-skills/index.ts";
 import { bundledSystemSkillContributions } from "./bundled-system-skills.ts";
 
 const execFileAsync = promisify(execFile);

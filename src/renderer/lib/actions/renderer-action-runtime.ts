@@ -43,8 +43,8 @@ export function rendererActionContext(
   // 右键 tab 时 active 可能仍在其它 panel：用目标 panel 所在组计数，避免
   // 「关闭其它」等 when 误读 activeGroup。
   const targetGroup = targetPanel
-    ? api?.groups.find((group) =>
-        group.panels.some((panel) => panel.id === targetPanel.id)
+    ? api?.groups?.find((group) =>
+        group.panels?.some((panel) => panel.id === targetPanel.id)
       )
     : undefined;
   return {

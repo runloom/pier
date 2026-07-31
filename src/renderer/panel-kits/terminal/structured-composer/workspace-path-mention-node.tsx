@@ -1,4 +1,4 @@
-import { PierFileIcon } from "@pier/ui/file-icon.tsx";
+import { PierFileIcon } from "@pier/ui/file/icon.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import {
   $applyNodeReplacement,

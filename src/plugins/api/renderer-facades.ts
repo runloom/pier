@@ -7,6 +7,16 @@ import type {
   LocalEnvironmentWorktreeBindingSnapshot,
 } from "@shared/contracts/environment.ts";
 import type {
+  FileContentQueryStartInput,
+  FilePathQueryStartInput,
+  FileQueryEvent,
+} from "@shared/contracts/file/query.ts";
+import type {
+  FileSaveTargetRequest,
+  FileSaveTargetResult,
+} from "@shared/contracts/file/save-target.ts";
+import type { FileWatchEvent } from "@shared/contracts/file/watch.ts";
+import type {
   FileConfirmDurabilityRequest,
   FileConfirmDurabilityResult,
   FileCopyRequest,
@@ -44,15 +54,15 @@ import type {
   FileWriteTextResult,
 } from "@shared/contracts/file.ts";
 import type {
-  FileContentQueryStartInput,
-  FilePathQueryStartInput,
-  FileQueryEvent,
-} from "@shared/contracts/file-query.ts";
-import type {
-  FileSaveTargetRequest,
-  FileSaveTargetResult,
-} from "@shared/contracts/file-save-target.ts";
-import type { FileWatchEvent } from "@shared/contracts/file-watch.ts";
+  GitReviewCancelRequest,
+  GitReviewFileDocumentRequest,
+  GitReviewFileDocumentResult,
+  GitReviewIndexRequest,
+  GitReviewIndexResult,
+  GitReviewMutationRequest,
+  GitReviewMutationResult,
+  GitReviewPathMutationRequest,
+} from "@shared/contracts/git/review.ts";
 import type {
   GitApplyPatchResult,
   GitBranchRef,
@@ -79,16 +89,6 @@ import type {
   GitStatus,
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
-import type {
-  GitReviewCancelRequest,
-  GitReviewFileDocumentRequest,
-  GitReviewFileDocumentResult,
-  GitReviewIndexRequest,
-  GitReviewIndexResult,
-  GitReviewMutationRequest,
-  GitReviewMutationResult,
-  GitReviewPathMutationRequest,
-} from "@shared/contracts/git-review.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type {
   WorktreeCheckRequest,

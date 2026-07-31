@@ -7,9 +7,9 @@ import type {
   McpCatalogSnapshot,
   McpServerListing,
   McpServerView,
-} from "@shared/contracts/agent-assets.ts";
+} from "@shared/contracts/agent/assets.ts";
 import { shell } from "electron";
-import { isMissingPathError } from "../file-path-identity.ts";
+import { isMissingPathError } from "../files/path-identity.ts";
 import type { LocalEnvironmentService } from "../local-environments-service.ts";
 import type { PierHomeService } from "../pier-home/service.ts";
 import {

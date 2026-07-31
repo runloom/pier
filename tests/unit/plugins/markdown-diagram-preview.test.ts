@@ -1,4 +1,4 @@
-import { bakeMermaidSvgForStandalonePreview } from "@plugins/builtin/files/renderer/markdown-diagram.tsx";
+import { bakeMermaidSvgForStandalonePreview } from "@plugins/builtin/files/renderer/markdown/diagram.tsx";
 import { describe, expect, it, vi } from "vitest";
 
 describe("bakeMermaidSvgForStandalonePreview", () => {

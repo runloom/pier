@@ -83,13 +83,13 @@
 | 能力 | 唯一所有者 |
 |---|---|
 | provider、策略、进程与 framing | main `services/lsp/` |
-| editor root 复用、generation 与重连 | `files-lsp-root-session.ts` |
-| CodeMirror compartment | `files-lsp-client.ts` + `FileEditorLanguageTools` |
-| 文档级服务状态 | `files-language-service-status.ts` |
-| 悬停请求、取消与定义跳转 | `files-lsp-hover.ts` |
-| 悬浮 UI | `files-lsp-hover-card.tsx` |
-| LSP HTML 清理 | `files-lsp-html-sanitizer.ts` |
-| CodeMirror hover 样式 | `src/shared/source-editor/editor-theme.ts` |
+| editor root 复用、generation 与重连 | `files-lsp/root-session.ts` |
+| CodeMirror compartment | `files-lsp/client.ts` + `FileEditorLanguageTools` |
+| 文档级服务状态 | `files-panel/language-service-status.ts` |
+| 悬停请求、取消与定义跳转 | `files-lsp/hover.ts` |
+| 悬浮 UI | `files-lsp/hover-card.tsx` |
+| LSP HTML 清理 | `files-lsp/html-sanitizer.ts` |
+| CodeMirror hover 样式 | `src/shared/source-editor/theme.ts` |
 
 禁止保留第二套 hover、root cache、状态点或旧导出 shim。
 
@@ -125,7 +125,7 @@ flowchart LR
 
 ### 5.1 状态类型
 
-新增 `src/plugins/builtin/files/renderer/files-language-service-status.ts`：
+新增 `src/plugins/builtin/files/renderer/files-panel/language-service-status.ts`：
 
 ```ts
 type FilesLanguageServiceStatus =
@@ -217,11 +217,11 @@ UI 不做跨 owner 聚合：header 必须读取本 view 的 `(ownerId, documentI
 
 ### 6.1 文件拆分和 identity
 
-当前 `files-lsp-client.ts` 已超过 500 行。先拆分：
+当前 `files-lsp/client.ts` 已超过 500 行。先拆分：
 
-- `files-lsp-workspace-client.ts`：移动 `PierFilesWorkspace`、多视图文档同步和 `displayFile()`，行为不变。
-- `files-lsp-root-session.ts`：facade、transport、root cache、attachment lease、generation、状态与 retry timer。
-- `files-lsp-client.ts`：只保留 CodeMirror adapter、connected compartment、navigation registration、`absoluteDiskPathForDocument()`。
+- `files-lsp/workspace-client.ts`：移动 `PierFilesWorkspace`、多视图文档同步和 `displayFile()`，行为不变。
+- `files-lsp/root-session.ts`：facade、transport、root cache、attachment lease、generation、状态与 retry timer。
+- `files-lsp/client.ts`：只保留 CodeMirror adapter、connected compartment、navigation registration、`absoluteDiskPathForDocument()`。
 
 root cache 最终 key：
 
@@ -309,7 +309,7 @@ const LSP_RECONNECT_RESET_MS = 30_000;
 ```
 
 不得包含 `hoverTooltips()`。补全、格式化、重命名、F12、引用、签名帮助和诊断必须保持。
-Pier hover 使用 CodeMirror 公共 API，不 patch package 私有函数：`files-lsp-hover.ts` 定义 typed `StateEffect` + `StateField<HoverCardState | null>`，通过 `showTooltip.from(field, value => value?.tooltip)` 提供唯一 tooltip；一个持久 `ViewPlugin` 负责 pointer/modifier/blur、timer、request cancellation、paused command queue 和 destroy。它通过 replaceable root accessor 获取当前 generation 的 `LSPPlugin/client`；paused 时插件仍存在但不发普通 pointer 请求。异步结果经 epoch guard 后 dispatch show effect，close effect 触发 `TooltipView.destroy()` 并 unmount React。`showFilesLspHover(view)` 定位该持久 ViewPlugin 并调用 manual-symbol 方法。
+Pier hover 使用 CodeMirror 公共 API，不 patch package 私有函数：`files-lsp/hover.ts` 定义 typed `StateEffect` + `StateField<HoverCardState | null>`，通过 `showTooltip.from(field, value => value?.tooltip)` 提供唯一 tooltip；一个持久 `ViewPlugin` 负责 pointer/modifier/blur、timer、request cancellation、paused command queue 和 destroy。它通过 replaceable root accessor 获取当前 generation 的 `LSPPlugin/client`；paused 时插件仍存在但不发普通 pointer 请求。异步结果经 epoch guard 后 dispatch show effect，close effect 触发 `TooltipView.destroy()` 并 unmount React。`showFilesLspHover(view)` 定位该持久 ViewPlugin 并调用 manual-symbol 方法。
 
 ### 7.2 三种模式
 
@@ -334,7 +334,7 @@ modifier 保持当前规则：macOS 只接受 Meta，其他平台只接受 Ctrl�
 
 ### 7.4 7 行源码预览
 
-新增 `files-lsp-definition-preview.ts`：
+新增 `files-lsp/definition-preview.ts`：
 
 - 同文件直接读取 `EditorView.state.doc`。
 - 跨文件只允许当前 server root 内的 `file:` URI；规范化分隔符并做完整路径段边界检查，拒绝 `..` 和 root 外目标。
@@ -346,7 +346,7 @@ modifier 保持当前规则：macOS 只接受 Meta，其他平台只接受 Ctrl�
 
 ### 7.5 React 卡片和无障碍
 
-`files-lsp-hover-card.tsx` 通过 `createRoot()` 挂载到 CodeMirror `TooltipView.dom`，销毁时同步 unmount；定义目标使用 `@pier/ui/Button`，不 imperative 创建原生按钮。
+`files-lsp/hover-card.tsx` 通过 `createRoot()` 挂载到 CodeMirror `TooltipView.dom`，销毁时同步 unmount；定义目标使用 `@pier/ui/Button`，不 imperative 创建原生按钮。
 
 - 文档卡按实际内容分区；定义卡按“Definitions (N) / 目标列表 / 源码预览”分区。每个 region/dialog 都由本地化可见标题通过 `aria-labelledby` 命名，dialog 显式 `aria-modal="false"`。
 - Pier 文档 wrapper 保留 package 既有 `.cm-lsp-documentation` semantic hook，使同一个 view-scoped external-link handler 覆盖自定义卡片；该 class 只用于行为边界/共享文档排版，不允许业务色彩。
@@ -604,7 +604,7 @@ closeWorkspace(workspaceKey, cause: "idle-release" | "workspace-evicted"): Promi
 
 - [ ] 先以现有 workspace 多视图测试保护提取，移动 `PierFilesWorkspace`，确认行为不变。
 - [ ] 新增相同 server root、不同 workspaceKey 不复用的失败测试。
-- [ ] 提取 `files-lsp-root-session.ts`，修正 cache key。
+- [ ] 提取 `files-lsp/root-session.ts`，修正 cache key。
 - [ ] 实现 attachment lease、generation 与迟到 ensure 关闭。
 - [ ] 跑 workspace/provider focused tests 和 file-size gate。
 
@@ -698,7 +698,7 @@ closeWorkspace(workspaceKey, cause: "idle-release" | "workspace-evicted"): Promi
 - `native/lsp-windows-job/{binding.gyp,package.json,src/addon.cc}`（新增，win32-only）
 - `scripts/build-windows-lsp-job.mjs`（新增）
 - `scripts/smoke-windows-lsp-package.mjs`（新增）
-- `src/main/services/lsp/workspace-lsp-policy.ts`
+- `src/main/services/lsp/workspace-policy.ts`
 - `src/main/services/lsp/lsp-e2e-observer.ts`（新增，仅环境门控）
 - `src/main/ipc/lsp.ts`
 - `src/preload/lsp-api.ts`
@@ -709,14 +709,14 @@ closeWorkspace(workspaceKey, cause: "idle-release" | "workspace-evicted"): Promi
 
 ### Files renderer
 
-- `files-lsp-client.ts`
-- `files-lsp-workspace-client.ts`（新增）
-- `files-lsp-root-session.ts`（新增）
-- `files-language-service-status.ts`（新增）
-- `files-lsp-hover.ts`（接管旧 definition-link）
-- `files-lsp-hover-card.tsx`（新增）
-- `files-lsp-definition-preview.ts`（新增）
-- `files-lsp-html-sanitizer.ts`（新增）
+- `files-lsp/client.ts`
+- `files-lsp/workspace-client.ts`（新增）
+- `files-lsp/root-session.ts`（新增）
+- `files-panel/language-service-status.ts`（新增）
+- `files-lsp/hover.ts`（接管旧 definition-link）
+- `files-lsp/hover-card.tsx`（新增）
+- `files-lsp/definition-preview.ts`（新增）
+- `files-lsp/html-sanitizer.ts`（新增）
 - `file-editor-language-tools.ts`
 - `file-editor-view-session.ts`
 - `file-editor-view-coordinator.ts`
@@ -730,12 +730,12 @@ closeWorkspace(workspaceKey, cause: "idle-release" | "workspace-evicted"): Promi
 - `file-panel.tsx`
 - `file-panel-body.tsx`
 - `files-group-view.tsx`
-- `files-editor-actions.ts`
+- `files-editor/actions.ts`
 - `files-content-search-open.ts`
-- `files-terminal-open-url-handler.ts`
+- `files-open-url/handler.ts`
 - `src/plugins/builtin/files/manifest.ts`
 - Files `locales/en.json`、`locales/zh-CN.json`
-- `src/shared/source-editor/editor-theme.ts`
+- `src/shared/source-editor/theme.ts`
 - `src/shared/keybindings.ts`
 - `package.json`、`pnpm-lock.yaml`
 

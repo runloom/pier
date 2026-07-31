@@ -1,4 +1,4 @@
-import { createTaskRecentLauncher } from "@main/services/tasks/task-recent-launcher.ts";
+import { createTaskRecentLauncher } from "@main/services/tasks/recent-launcher.ts";
 import type {
   TaskCandidate,
   TaskLaunchPlan,

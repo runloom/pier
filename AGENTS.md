@@ -49,7 +49,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 ### 宿主弹窗使用规范
 
-宿主级确认/提示弹窗统一走 `src/renderer/components/common/app-dialog-host.tsx`：
+宿主级确认/提示弹窗统一走 `src/renderer/components/common/dialogs/host.tsx`：
 
 - 业务代码不要直接 import `@pier/ui/alert-dialog.tsx`；宿主 renderer 使用 `showAppConfirm` / `showAppAlert` / `showAppChoice` / `showAppPrompt`，插件使用 `RendererPluginContext.dialogs` / `ExternalRendererPluginContext.dialogs`。
 - builtin 与 external 插件的简单弹窗 API **同构**：`alert` / `confirm` / `choice` / `prompt`；复杂内容另加 `open` / `update` / `close`。
@@ -72,7 +72,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
   - `choice`：作用在 **alt**（不保存/丢弃）；confirm 始终 default 样式
   - 若破坏动作落在 `choice.confirm`（如覆盖），`intent` 仍必须 `"default"`，不能为了“看起来危险”去染 alt
 - 取消按钮一律 `outline`（含 destructive 场景）；Esc / 点遮罩 = 取消
-- 检查点在 `tests/unit/renderer/app-dialog-governance.test.ts` 与 `tests/component/app-dialog-host.test.tsx`
+- 检查点在 `tests/unit/renderer/notifications/app-dialog-governance.test.ts` 与 `tests/component/app-dialog-host.test.tsx`
 
 复杂内容弹窗（表单、多步、等待态、带自定义 body）统一走宿主 `AppContentDialogHost`：
 
@@ -108,7 +108,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 3. **控件密度**：弹窗表单主路径 Select / Input / Button 用默认 28px 密度；**禁止**为「显得紧凑」给主表单 `SelectTrigger size="sm"` / footer `Button size="sm"`。列表内图标排序等次要 hit 可用 `icon-xs`。
 4. **物料设置**：`configurable` widget 的 `settingsComponent` 只渲染 **即时偏好**（改即写），但 **字段布局必须与提交型 dialog 一致**（垂直堆叠、全宽 Select/Input，参考 worktree）；宿主壳固定 `WorkbenchSettingsDialog`（Header + 可滚 body + **可选 sticky footer**，经 `setFooter` 注册，与 content dialog 同壳）。主面主操作（如「添加区块」）放 **footer**，不要散在 body 底。不得自挂 Dialog，不得用设置页水平 `SelectRow` 样式塞进物料弹窗。多实例列表用 `Item outline` 表达块边界。**添加/创建类草稿** 走 **二级 content dialog**（`openAppContentDialog` + sticky `取消|确认`）。
 5. **校验**：提交型在 submit 时校验并用 `FieldError`；`prompt` 走 `validate`。即时偏好以合法枚举/开关为主，避免半填草稿。
-6. **检查点**：`tests/unit/renderer/dialog-form-governance.test.ts`（与本节标题绑定）。
+6. **检查点**：`tests/unit/renderer/app/dialog-form-governance.test.ts`（与本节标题绑定）。
 
 ### 浮层后打开 Dialog / 设置
 
@@ -143,7 +143,7 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 
 硬规则：
 
-1. **toast 双形态**：确认型（用户动作即时反馈，不进消息中心）维持 **触发窗** sonner 反色胶囊（默认 Toaster `position="top-center"`）；消息型（系统/后台事件，进消息中心）仅经 main 单投 → `NotificationMessageToastBridge` → `lib/notifications/show-notification-toast.tsx` 标准 shadcn sonner 卡片（同 Toaster，per-call `position: "top-right"`）——**标题 + 详情（必备，必须由调用方提供友好内容：下一步/上下文/摘要；类型行回退仅为防御兜底，不得作为常态）+ ≤1 outline 操作 + 关闭 X（右上），无前置状态图标**。消息中心卡片唯一实现是 `components/common/notification-card.tsx` 的 `NotificationCard`（无前置图标；标题/详情/时间 + 未读红点 + 操作），**仅 Popover 列表使用**（无 dockview panel），禁止另写一套卡片样式。action 统一走 `lib/notifications/notification-actions.ts` 分发（同一 id 各载体行为一致；toast 副本按 dedupeKey 标已读）。
+1. **toast 双形态**：确认型（用户动作即时反馈，不进消息中心）维持 **触发窗** sonner 反色胶囊（默认 Toaster `position="top-center"`）；消息型（系统/后台事件，进消息中心）仅经 main 单投 → `NotificationMessageToastBridge` → `lib/notifications/show-notification-toast.tsx` 标准 shadcn sonner 卡片（同 Toaster，per-call `position: "top-right"`）——**标题 + 详情（必备，必须由调用方提供友好内容：下一步/上下文/摘要；类型行回退仅为防御兜底，不得作为常态）+ ≤1 outline 操作 + 关闭 X（右上），无前置状态图标**。消息中心卡片唯一实现是 `components/common/notification-card.tsx` 的 `NotificationCard`（无前置图标；标题/详情/时间 + 未读红点 + 操作），**仅 Popover 列表使用**（无 dockview panel），禁止另写一套卡片样式。action 统一走 `lib/notifications/actions.ts` 分发（同一 id 各载体行为一致；toast 副本按 dedupeKey 标已读）。
 2. **状态图标的归属**：StatusIcon 只出现在确认型 toast（结果确认着色）与 Alert 等即时反馈中；**消息型 toast 与消息中心条目一律无前置状态图标**。severity 只驱动行为：徽标只计 warning/error 未读（`attentionUnreadCount`）、toast 时长 error 10s / warning 6s / success·info 4s、DND 仅 error 弹出。不要给 inbox 条目重新引入 severity 图标。
 3. **路由单一实现**：toast / inbox / OS 通知的投递判定只走 `src/shared/notification-delivery.ts` 的 `routeDelivery`（mutedKinds → DND（error 除外）→ suppressToast）；业务代码不得手写 DND 判断。
 4. **去重下沉**：同 `dedupeKey` 窗口（24h，`NOTIFICATION_DEDUPE_WINDOW_MS`，契约单一来源）内由 NCS 合并（`repeatCount`），调用方不维护版本/runId 级记录去重；toast 同步连发节流（会话内）是门面与调用方仅有的例外。dedupe 判定依赖镜像水合（`hydrated`），启动期未水合时门面延后判定。
@@ -181,11 +181,11 @@ dev override 只允许开发/测试运行时使用；生产包默认不显示入
 - 中文界面出现 Agent、worktree、选区、上下文、耐久性、Needs you、DETACHED 等 → finding。
 - 业务代码 `toast.*("…")` / `showAppAlert({ title: "…" })` 内联用户串未走 i18n → finding。
 
-检查点在 `tests/unit/renderer/user-copy-governance.test.ts`：锁定本节存在，并扫描中英 locale 字符串值中的禁用实现词。
+检查点在 `tests/unit/renderer/app/user-copy-governance.test.ts`：锁定本节存在，并扫描中英 locale 字符串值中的禁用实现词。
 
 ### Markdown 预览大纲布局复用（最高优先级）
 
-`src/plugins/builtin/files/renderer/markdown-preview*.tsx` 的大纲与正文布局必须先复用，再分交互态。交互态差异只能落在**细轨 / hover 浮层**，不得复制第二套壳、高度或间距。
+`src/plugins/builtin/files/renderer/markdown/preview*.tsx` 的大纲与正文布局必须先复用，再分交互态。交互态差异只能落在**细轨 / hover 浮层**，不得复制第二套壳、高度或间距。
 
 硬规则：
 
@@ -299,7 +299,7 @@ outline 抑制、Chart/DataChart/NodeGraph 默认、状态徽标不进 Tab、`ta
 - 允许保留专用渲染：Dockview tab 原生动作、shadcn Sidebar 自身实现、终端/调试几何
   画布、图表及物料静态预览。这些例外不得扩展为普通业务表单或信息卡。
 
-检查点在 `tests/unit/renderer/shadcn-governance.test.ts`；新增例外必须写明组件边界和
+检查点在 `tests/unit/renderer/app/shadcn-governance.test.ts`；新增例外必须写明组件边界和
 无法使用现有 shadcn 原语的原因。
 
 ### 设置页状态提示布局
@@ -315,7 +315,7 @@ section 根节点下的裸子节点。
 - 参考：`plugins-section.tsx`（错误 Alert 在内容 Card 内）、
   `notifications-section.tsx`（权限/hooks Alert 在策略 Card 顶部）。
 - 一次性动作失败的详情仍走 `showAppAlert`（与本条不冲突）。
-- 检查点在 `tests/unit/renderer/settings-section-alert-layout-governance.test.ts`（仅扫描 `settings-dialog` 直接挂载的 `*-section.tsx`；嵌套在父 Card 内的子块不扫）。
+- 检查点在 `tests/unit/renderer/settings/section-alert-layout-governance.test.ts`（仅扫描 `settings-dialog` 直接挂载的 `*-section.tsx`；嵌套在父 Card 内的子块不扫）。
 
 ### 前台活动模块 `src/main/services/foreground-activity/`
 
@@ -391,7 +391,7 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 插件可经 manifest `workbenchWidgets` 声明 + renderer 运行时 `context.workbenchWidgets.register` 注册工作台卡片组件：
 
 - 纪律链与 `panels` / `terminalStatusItems` 一致：`assertDeclaredContribution("workbenchWidget")` → 运行时注册表 → 宿主容器渲染
-- 注册表在 `src/renderer/lib/plugins/plugin-workbench-widget-registry.ts`（镜像 `plugin-panel-registry.ts` 结构）
+- 注册表在 `src/renderer/lib/plugins/workbench-widget-registry.ts`（镜像 `panel-registry.ts` 结构）
 - Core-owned widget 走 `CORE_WORKBENCH_WIDGETS` 静态声明（平行于 `CORE_TERMINAL_STATUS_ITEMS`），不经插件通道
 - 工作台 panel 为 core panel kit（`component: "workbench"`，多实例 `workbench-<uuid>`），组装状态存 dockview panel params 随 layout 持久化
 
@@ -449,7 +449,9 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - Electron 桌面开发：`pnpm dev`（或 `pnpm electron:dev`）
 - 类型检查：`pnpm typecheck`
 - Lint + Format：`pnpm lint` / `pnpm lint:fix`
-- 完整检查：`pnpm check`（typecheck + lint + depcruise + file-size + unit + component 测试）
+- 完整检查：`pnpm check`（typecheck + lint + depcruise + file-size + dir-density + unit + component 测试）
+- 单文件行数：`pnpm check:file-size`（硬上限 500 行）
+- 目录密度：`pnpm check:dir-density`（单目录直接源码文件硬上限见 `.pier/dir-density.json`；资源目录 skip，过渡债 allowlist 棘轮）
 - 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`
 - E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
@@ -544,6 +546,37 @@ pnpm dev              # 否则 panel 内会报 "Cannot find module .../ghostty_n
    ```
    `<TEAM_ID>` 换成签名证书括号里的 10 位。
 4. `pnpm build:dist`。
+## 04b 目录密度与命名（强制门禁）
+
+与 `check:file-size` 并列的静态门禁：`pnpm check:dir-density`（已挂入 `check:static`）。
+
+### 密度
+
+- 配置：`.pier/dir-density.json`（`maxDirectSourceFiles` 硬上限默认 40；`softCap` 告警；`skipDirPatterns` 跳过资源目录；`allowlist` 仅过渡债且 `max` 为棘轮）。
+- 扫描：`src/`、`packages/*/src`、`tests/` 每个目录的**直接** `.ts/.tsx/.js/...` 文件数（不含子目录、不含 `.d.ts`）。
+- 超过硬上限且不在 allowlist → 失败；allowlist 条目的实际数量不得超过 `max`；数量已 ≤ 硬上限时必须删除该 allowlist 条目（防陈旧白名单）。
+- 资源类目录（`favicons`、`locales/**`、`status-traces`、`fixtures`、`resources` 等）走 skip，不计入。
+- 拆分优先按**领域/功能**分子目录，不要按技术层无限堆 `hooks/`/`utils/`。
+
+### 命名（去冗余）
+
+目录已经表达领域时，**文件名不得再重复父目录语义**：
+
+| 禁止 | 应为 |
+|------|------|
+| `services/git/git-service.ts` | `services/git/service.ts` |
+| `ipc/terminal/terminal-create-handler.ts` | `ipc/terminal/create-handler.ts` |
+| `review/git-review-document-loader.ts` | `review/document/loader.ts`（或 `review/document-loader.ts`） |
+| `diff-view/diff-view-items.ts` | `diff-view/items.ts` |
+| `host/host-context.ts` | `host/context.ts` |
+| `commands/file-commands.ts` | `commands/file.ts` |
+
+- 入口文件优先 `index.ts` / `index.tsx`，不要 `foo/foo.ts`。
+- React hooks 在 `hooks/` 下可保留 `use-` 前缀，但应去掉领域重复段（`hooks/use-git-review-x.ts` → `hooks/use-x.ts`）。
+- 角色与目录名不同时保留角色词（例如 `services/git/worktree-service.ts` 在迁入 `worktree/` 后变成 `worktree/service.ts`）。
+- 一次性迁移脚本已归档至 `scripts/archive/`（`reorg-*` / `rename-strip-*`）；日常只跑 `pnpm check:dir-density` 与治理单测，勿再依赖 one-shot 作为门禁。
+- 检查点：`tests/unit/scripts/dir-density-governance.test.ts`。
+
 ## 05 安全边界
 
 - Git 默认只读。除非用户明确要求，不创建 commit、分支、PR 或 push。

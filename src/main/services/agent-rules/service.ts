@@ -12,14 +12,14 @@ import type {
   RuleFileView,
   RulesReadResult,
   RulesSnapshot,
-} from "@shared/contracts/agent-assets.ts";
+} from "@shared/contracts/agent/assets.ts";
 import writeFileAtomic from "write-file-atomic";
 import {
   FilePathIdentityError,
   isMissingPathError,
   resolveExistingFileIdentity,
   resolveWritableFileIdentity,
-} from "../file-path-identity.ts";
+} from "../files/path-identity.ts";
 import type { LocalEnvironmentService } from "../local-environments-service.ts";
 import type { PierHomeService } from "../pier-home/service.ts";
 

@@ -1,4 +1,4 @@
-import type { PluginSettingsChangedPayload } from "@shared/contracts/plugin-settings.ts";
+import type { PluginSettingsChangedPayload } from "@shared/contracts/plugin/settings.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   initPluginSettingsStore,

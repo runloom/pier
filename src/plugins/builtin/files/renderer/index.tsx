@@ -12,16 +12,6 @@ import {
   FILES_SEARCH_PANEL_ID,
   FILES_TREE_SEARCH_COMMAND_ID,
 } from "../manifest.ts";
-import { FileEditorController } from "./file-editor-controller.ts";
-import { createFilePanel as createFilesFilePanel } from "./file-panel.tsx";
-import { createSaveAllAction } from "./file-save-all-action.ts";
-import { createFilesTreeActions } from "./file-tree-actions.ts";
-import { filePanelProjectRoot } from "./file-tree-preferences.ts";
-import {
-  createSearchContentsAction,
-  createSearchInFolderAction,
-} from "./files-content-search-actions.ts";
-import { createFilesContentSearchPanel } from "./files-content-search-panel.tsx";
 import {
   abortFilesDraftSuspend,
   commitFilesDraftSuspend,
@@ -31,34 +21,44 @@ import {
   prepareFilesDraftSuspend,
   releaseFilesDraftSuspendAfterDispose,
   removeFilesDraftRecord,
-} from "./files-document-drafts.ts";
+} from "./document/drafts.ts";
 import {
   ensureDiskDocument,
   getDocument,
   getDocumentForPanelSource,
   restoreUntitledDocumentFromPanelSource,
-} from "./files-document-store.ts";
-import { parseFilesDocumentPanelSource } from "./files-document-types.ts";
-import { createFilesEditorActions } from "./files-editor-actions.ts";
-import { registerFilesLspNavigationDeps } from "./files-lsp-navigation.ts";
-import { createFilesMarkdownPreviewActions } from "./files-markdown-preview-actions.ts";
-import { FilesMutationSuspendedError } from "./files-mutation-gate.ts";
-import { clearFilesNavHistory } from "./files-nav-history.ts";
-import { createFilesOpenDirectoryAction } from "./files-open-directory-action.ts";
-import { hasOtherOpenFilesSourceInstance } from "./files-panel-instance-utils.ts";
-import { filesPanelTabChrome } from "./files-panel-tab.ts";
-import { createFilesPanelTransferRegistration } from "./files-panel-transfer-registration.ts";
-import { readFilesPanelViewMode } from "./files-panel-transfer-state.ts";
-import { registerFilesProjectStatusItem } from "./files-project-status-item.tsx";
-import { createFilesQuickOpenAction } from "./files-quick-open.ts";
-import { registerFilesTerminalOpenUrlHandler } from "./files-terminal-open-url-handler.ts";
+} from "./document/store.ts";
+import { parseFilesDocumentPanelSource } from "./document/types.ts";
+import { createFilesEditorActions } from "./editor/actions.ts";
+import { FileEditorController } from "./editor/controller.ts";
+import { registerFilesLspNavigationDeps } from "./lsp/navigation.ts";
+import { createFilesMarkdownPreviewActions } from "./markdown/preview-actions.ts";
+import { FilesMutationSuspendedError } from "./mutation/gate.ts";
+import { registerFilesTerminalOpenUrlHandler } from "./open-url/handler.ts";
+import { createFilePanel as createFilesFilePanel } from "./panel/index.tsx";
+import { hasOtherOpenFilesSourceInstance } from "./panel/instance-utils.ts";
+import { clearFilesNavHistory } from "./panel/nav-history.ts";
+import { filesPanelTabChrome } from "./panel/tab.ts";
+import { createFilesPanelTransferRegistration } from "./panel/transfer-registration.ts";
+import { readFilesPanelViewMode } from "./panel/transfer-state.ts";
+import { createFilesOpenDirectoryAction } from "./project/open-directory-action.ts";
+import { registerFilesProjectStatusItem } from "./project/status-item.tsx";
+import { createSaveAllAction } from "./save/all-action.ts";
+import {
+  createSearchContentsAction,
+  createSearchInFolderAction,
+} from "./search/actions.ts";
+import { createFilesContentSearchPanel } from "./search/panel.tsx";
+import { createFilesQuickOpenAction } from "./search/quick-open.ts";
+import { createFilesTreeActions } from "./tree/actions.ts";
+import { filePanelProjectRoot } from "./tree/preferences.ts";
 import {
   clearFileTreeSidebarCache,
   openFilesTreeSearch,
-} from "./files-tree-registry.ts";
-import { clearFilesTreeStore } from "./files-tree-store.ts";
-import { clearFilesTreeWatchers } from "./files-tree-watch.ts";
-import { FilesWatchHub } from "./files-watch-hub.ts";
+} from "./tree/registry.ts";
+import { clearFilesTreeStore } from "./tree/store.ts";
+import { clearFilesTreeWatchers } from "./tree/watch.ts";
+import { FilesWatchHub } from "./watch-hub.ts";
 
 function withFilesMutationGate(
   action: RendererPluginAction,

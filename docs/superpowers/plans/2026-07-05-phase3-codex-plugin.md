@@ -1718,7 +1718,7 @@ import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 
 /**
  * 三个命令面板 action。注册形状对齐 git 插件先例
- * （git-stash-actions.ts:registerStashAction）：
+ * （stash-actions.ts:registerStashAction）：
  * category/handler/title thunk/surfaces/metadata.categoryKey。
  * title 用 context.i18n.commandTitle 解析 manifest.commands 本地化。
  */
@@ -2163,7 +2163,7 @@ Expected: PASS——大盘创建、widget 添加、重启恢复全链路通过�
 插件可经 manifest `dashboardWidgets` 声明 + renderer 运行时 `context.dashboardWidgets.register` 注册大盘卡片组件：
 
 - 纪律链与 `panels` / `terminalStatusItems` 一致：`assertDeclaredContribution("dashboardWidget")` → 运行时注册表 → 宿主容器渲染
-- 注册表在 `src/renderer/lib/plugins/plugin-dashboard-widget-registry.ts`（镜像 `plugin-panel-registry.ts` 结构）
+- 注册表在 `src/renderer/lib/plugins/plugin-dashboard-widget-registry.ts`（镜像 `panel-registry.ts` 结构）
 - Core-owned widget 走 `CORE_DASHBOARD_WIDGETS` 静态声明（平行于 `CORE_TERMINAL_STATUS_ITEMS`），不经插件通道
 - 大盘 panel 为 core panel kit（`component: "dashboard"`，多实例 `dashboard-<uuid>`），组装状态存 dockview panel params 随 layout 持久化
 ```

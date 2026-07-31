@@ -3,8 +3,8 @@ import {
   initPluginRegistry,
   usePluginRegistryStore,
 } from "@/stores/plugin-registry.store.ts";
-import { installPluginSharedRuntime } from "./plugin-shared-runtime.ts";
-import { rendererPluginRuntime } from "./runtime.ts";
+import { rendererPluginRuntime } from "./runtime/index.ts";
+import { installPluginSharedRuntime } from "./shared-runtime.ts";
 
 /**
  * runtime 关心「哪些插件（builtin + external）处于运行态」。广播快照的

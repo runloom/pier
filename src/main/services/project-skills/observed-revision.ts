@@ -9,7 +9,7 @@ import {
   inspectLibraryContent,
 } from "./library-state.ts";
 import { createProjectSkillsPaths } from "./paths.ts";
-import type { ProjectSkillsStore } from "./store.ts";
+import type { ProjectSkillsStore } from "./store/index.ts";
 
 /**
  * Real observedRevision derivation (design v8 §3.2): a deterministic digest

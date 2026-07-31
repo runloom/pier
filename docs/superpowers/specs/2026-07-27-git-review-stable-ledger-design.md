@@ -1,18 +1,24 @@
 # Git Review：稳定高度账本（路线 A）
 
 日期：2026-07-27  
-状态：**产品方向已批；本文为显示几何 / 账本 / 点树可滚 的唯一实施权威（A0 交叉 supersede 已写）**  
-产品约束：**始终多文件 CodeView**；**禁止** Codex 式大 diff 单文件降级。
+状态：**部分 supersede（2026-07-31）** — **终态唯一权威** 为  
+[`2026-07-31-git-review-gold-standard-endstate-design.md`](./2026-07-31-git-review-gold-standard-endstate-design.md)。  
+**SCM 体感 / 正文成员资格 / 点击定位 / 加载主路径** 以金标准为准（zed-feel 为细节补充）。  
+本文仍管辖：**已进入正文表面的** content 槽之高度编码、pending→loaded 几何、body LRU 字节/行闸。  
+**废止作体验模型：**「凡 index `sectionKey` 必进 CodeView 全量 estimate 账本」（见金标准 / zed-feel §0 K2、§3）。  
+产品约束：**始终多文件** Review 表面；**禁止** Codex 式大 diff 单文件降级。
 
-### 文档层级（冲突时以本文为准）
+### 文档层级（冲突时）
 
 | 文档 | 角色 | 与本文关系 |
 |---|---|---|
-| `2026-07-25-git-review-codeview-endstate-design.md` | 真正文、soft-retain、stage、failure | **§3.1 禁「假 patch 槽」仍成立**；**§4「仅 loaded 进 CodeView」整段作废**，改由本文 |
-| `2026-07-27-diffshub-full-alignment-design.md` | demand 调度、scroll 单写者 | demand 形状仍有效；**§4.3 members 裁 id /「未 materialize 不滚」作废** |
+| `2026-07-31-git-review-gold-standard-endstate-design.md` | **终态唯一权威** | **冲突时以金标准为准**；正文 id 集 = content-bearing |
+| `2026-07-31-git-review-zed-feel-design.md` | Zed 体感与 bodyClass 细节 | 被金标准吸收 |
+| `2026-07-25-git-review-codeview-endstate-design.md` | 真正文、soft-retain、stage、failure | **§3.1 禁「假 patch 槽」仍成立**；**§4「仅 loaded 进 CodeView」整段作废**，改由本文再经金标准收紧 |
+| `2026-07-27-diffshub-full-alignment-design.md` | demand 调度、scroll 单写者 | demand 形状降为重路径；**SCM 导航以金标准为准** |
 | `2026-07-27-diff-view-lifecycle-design.md` | remount / 常量 | **`MAX_CODEVIEW_MEMBERS` 作「id 上限」作废**；见本文 §4.4 |
 | `2026-07-27-git-review-virtual-scroll-reading-stability-design.md` | pin / ReadingSession | **降为辅助**；禁止 cap 裁 id / collapsed 伪加载作主路径 |
-| **本文** | **高度坐标系 + estimate 槽 + 正文 LRU** | — |
+| **本文** | **content 槽高度坐标系 + pending 编码 + 正文 LRU** | 仅适用于金标准允许进入正文的成员 |
 
 **保留且不得破坏：** hunk/file stage、双槽 sectionKey、session cache、soft-retain、failure settled-only、始终多文件。
 

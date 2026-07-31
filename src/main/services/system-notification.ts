@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import { formatAttentionTestNotificationCopy } from "@shared/agent-attention-copy.ts";
-import { AGENT_ATTENTION_TEST_KIND } from "@shared/contracts/agent-attention.ts";
+import { AGENT_ATTENTION_TEST_KIND } from "@shared/contracts/agent/attention.ts";
 import type {
   OpenSystemNotificationSettingsResult,
   SystemNotificationPermissionSnapshot,

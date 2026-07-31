@@ -1,5 +1,5 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
-import type { FilePathQueryItem } from "@shared/contracts/file-query.ts";
+import type { FilePathQueryItem } from "@shared/contracts/file/query.ts";
 import {
   $createTextNode,
   $getSelection,

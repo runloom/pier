@@ -28,7 +28,7 @@
 | `src/renderer/panel-kits/workbench/workbench-panel.tsx` | Mount toolbar; keep context menu; wire handlers. |
 | `src/renderer/panel-kits/workbench/workbench-widget-card.tsx` | Always-visible (low opacity) drag handle + menu; confirm before remove. |
 | `src/renderer/panel-kits/workbench/workbench-add-card.tsx` | Locked-empty copy path (no “go add widgets” CTA semantics). |
-| `src/renderer/panel-kits/workbench/use-workbench-panel-state.ts` | Arrange success toast; optional confirm helper used by card remove. |
+| `src/renderer/panel-kits/workbench/use-panel-state.ts` | Arrange success toast; optional confirm helper used by card remove. |
 | `src/renderer/panel-kits/workbench/workbench-widget-error-boundary.tsx` | i18n fallback message prop (no hardcoded English). |
 | `src/renderer/panel-kits/workbench/core-widgets/system-resources-widget.tsx` | Render `WidgetError` when store reports error and no snapshot. |
 | `src/renderer/stores/system-stats.store.ts` | Track `error`; clear on success; export `pollSystemStatsOnce` for retry. |
@@ -390,7 +390,7 @@ EOF
 
 **Files:**
 - Modify: `src/renderer/panel-kits/workbench/workbench-widget-card.tsx`
-- Modify: `src/renderer/panel-kits/workbench/use-workbench-panel-state.ts` (optional: keep remove sync; confirm stays in card/UI layer)
+- Modify: `src/renderer/panel-kits/workbench/use-panel-state.ts` (optional: keep remove sync; confirm stays in card/UI layer)
 - Test: `tests/component/workbench-panel.test.tsx`
 
 **Interfaces:**
@@ -486,7 +486,7 @@ EOF
 ### Task 5: Arrange layout success feedback (P0.6)
 
 **Files:**
-- Modify: `src/renderer/panel-kits/workbench/use-workbench-panel-state.ts`
+- Modify: `src/renderer/panel-kits/workbench/use-panel-state.ts`
 - Test: `tests/component/workbench-panel.test.tsx`
 
 **Interfaces:**
@@ -551,7 +551,7 @@ Expected: PASS
 
 ```bash
 git add \
-  src/renderer/panel-kits/workbench/use-workbench-panel-state.ts \
+  src/renderer/panel-kits/workbench/use-panel-state.ts \
   tests/component/workbench-panel.test.tsx
 git commit -m "$(cat <<'EOF'
 feat(workbench): toast when arrange layout persists

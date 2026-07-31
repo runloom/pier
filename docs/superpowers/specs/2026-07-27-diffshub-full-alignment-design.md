@@ -1,21 +1,26 @@
 # DiffsHub 全量对齐方案（含 Pier 增量能力）
 
 日期：2026-07-27  
-状态：**部分 supersede（同日 stable-ledger）** — **显示 id 集 / 点树是否可滚 / 裁 id 保滚动** 以  
-`2026-07-27-git-review-stable-ledger-design.md` **为准**。  
-本文仍管辖：demand **调度形状**、scroll **单写者意图**、updateItemId、stage 与导航交叉锁。  
-实现：禁止在未对照 **stable-ledger + 本文 demand/scroll** 的情况下继续症状补丁。
+状态：**部分 supersede（2026-07-31 金标准终态 + zed-feel + stable-ledger）** —  
+**终态唯一权威** 为  
+[`2026-07-31-git-review-gold-standard-endstate-design.md`](./2026-07-31-git-review-gold-standard-endstate-design.md)。  
+**SCM 体感标杆 / 正文成员 / 树点击定位** 以金标准为准（标杆 = **Zed**，不再是 DiffsHub）。  
+**content 槽显示几何** 以 `2026-07-27-git-review-stable-ledger-design.md` 为准（经金标准收紧 id 集）。  
+本文仍管辖：content **重路径** demand 形状灵感、scroll **单写者**（禁双意图）、updateItemId、stage 与导航交叉锁。  
+实现：禁止在未对照 **金标准 + stable-ledger + 本文单写者** 的情况下继续症状补丁。
 
 ### 文档层级（canonical）
 
 | 文档 | 角色 |
 |---|---|
-| `2026-07-27-git-review-stable-ledger-design.md` | **显示几何权威**：全量账本、estimate、正文 LRU、点树 instant |
+| `2026-07-31-git-review-gold-standard-endstate-design.md` | **终态唯一权威** |
+| `2026-07-31-git-review-zed-feel-design.md` | Zed 体感细节（被金标准吸收） |
+| `2026-07-27-git-review-stable-ledger-design.md` | **content 槽**高度 / pending 编码 / body LRU |
 | `2026-07-25-git-review-codeview-endstate-design.md` | 真正文、禁**假** placeholder、soft-retain、stage、failure |
 | `2026-07-27-diff-view-lifecycle-design.md` | remount；常量数字以 stable-ledger §4.4 改写 members 语义 |
-| **本文** | demand 调度、scroll 单写者；**§4.3 稀疏 members 公式作废** |
+| **本文** | 重路径 demand 形状、scroll 单写者；**§4.3 稀疏 members 公式作废**；**SCM 导航以金标准为准** |
 
-冲突时：**显示 id / 能否 scroll / 卸正文** → **stable-ledger**；demand 组合与 scroll 双意图禁令 → **本文**；soft-retain/stage → **07-25**。
+冲突时：**体感 / 正文资格 / 点击 / 加载 / 渲染** → **金标准**；**content 几何 / 卸正文** → **stable-ledger**；**scroll 双意图禁令** → **本文**；soft-retain/stage → **07-25**。
 
 > **历史警告：** 下文 §1.3 / §2 架构图 / §3.2 / **§4.3 全文** / §7 中「members 裁 id」「未 materialize 不滚」「firstLayout/smooth」「成员 cap 验收」均为 **历史叙述，禁止实现**。  
 > 显示与点树：**只读** `2026-07-27-git-review-stable-ledger-design.md`。  

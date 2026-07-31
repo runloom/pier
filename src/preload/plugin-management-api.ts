@@ -3,8 +3,8 @@ import type {
   ManagedPluginCatalogSnapshot,
   ManagedPluginOperationResult,
   ManagedPluginRendererActivationReport,
-} from "@shared/contracts/managed-plugin.ts";
-import type { PluginRpcEventPayload } from "@shared/contracts/plugin-rpc.ts";
+} from "@shared/contracts/plugin/managed.ts";
+import type { PluginRpcEventPayload } from "@shared/contracts/plugin/rpc.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 import { invokePierCommand } from "./ipc-envelope.ts";

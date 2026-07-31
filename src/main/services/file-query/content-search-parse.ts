@@ -7,8 +7,8 @@ import {
   FILE_CONTENT_QUERY_PREVIEW_MAX_CHARS,
   type FileContentQueryItem,
   type FileContentQueryStart,
-} from "@shared/contracts/file-query.ts";
-import { FILES_TREE_DEFAULT_EXCLUDE_PATTERNS } from "@shared/contracts/files-tree-exclude.ts";
+} from "@shared/contracts/file/query.ts";
+import { FILES_TREE_DEFAULT_EXCLUDE_PATTERNS } from "@shared/contracts/file/tree-exclude.ts";
 import { utf8ByteOffsetToStringIndex } from "@shared/text/utf8-byte-offset.ts";
 
 export { utf8ByteOffsetToStringIndex } from "@shared/text/utf8-byte-offset.ts";

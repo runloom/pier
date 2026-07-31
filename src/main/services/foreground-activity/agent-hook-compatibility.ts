@@ -1,4 +1,4 @@
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import {
   type ActivityStatus,
   activityStatusForHookEvent,

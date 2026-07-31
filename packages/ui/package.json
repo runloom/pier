@@ -11,7 +11,12 @@
     "./collection-auto-layout": "./src/collection-auto-layout.ts",
     "./collection-auto-layout.ts": "./src/collection-auto-layout.ts",
     "./dialog-form-layout": "./src/dialog-form-layout.ts",
-    "./dialog-form-layout.ts": "./src/dialog-form-layout.ts"
+    "./dialog-form-layout.ts": "./src/dialog-form-layout.ts",
+    "./diff-view/*": "./src/diff-view/*",
+    "./file/*": "./src/file/*",
+    "./image-preview/*": "./src/image-preview/*",
+    "./diff-view": "./src/diff-view/index.tsx",
+    "./diff-view.tsx": "./src/diff-view/index.tsx"
   },
   "dependencies": {
     "@pierre/diffs": "1.2.12",

@@ -365,7 +365,7 @@ error → idle（用户明确重试且该文件仍在窗口需求中）
 
 修改：
 
-- `src/plugins/builtin/git/renderer/git-changes-panel.tsx`
+- `src/plugins/builtin/git/renderer/changes-panel.tsx`
 - `src/plugins/builtin/git/renderer/git-review-content.tsx`
 - `src/plugins/builtin/git/renderer/git-review-code-view.tsx`
 - `src/plugins/builtin/git/renderer/git-review-feedback.tsx`
@@ -474,7 +474,7 @@ pnpm exec playwright test --config playwright.config.ts tests/e2e/git-review.spe
 - `src/main/services/git-watch-contract.ts`
 - `src/main/services/git-watch-internals.ts`
 - `src/main/services/git-watch-service.ts`
-- `src/plugins/builtin/git/renderer/git-changes-panel.tsx`
+- `src/plugins/builtin/git/renderer/changes-panel.tsx`
 - 现有 Git watch facade 和测试文件
 
 规则：

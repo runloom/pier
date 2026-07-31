@@ -8,9 +8,10 @@ import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
   pierHooksCurrentDir,
-} from "../../../src/main/services/agents/agent-hooks-install.ts";
+} from "../../../src/main/services/agents/hooks-install.ts";
 import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
-import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
 const ORIGINAL_PATH = process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin";
@@ -212,7 +213,7 @@ describe("augIntegration", () => {
           PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
           PIER_PANEL_ID: "panel-1",
           PIER_WINDOW_ID: "window-1",
-          PATH: ORIGINAL_PATH,
+          PATH: pathForHookSpawn(ORIGINAL_PATH),
         },
         input: JSON.stringify(payload),
       });

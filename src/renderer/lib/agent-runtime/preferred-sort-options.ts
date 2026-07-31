@@ -1,4 +1,4 @@
-import type { SortAgentIndexEntriesOptions } from "@shared/contracts/agent-runtime-index.ts";
+import type { SortAgentIndexEntriesOptions } from "@shared/contracts/agent/runtime-index.ts";
 import { currentElectronWindowId } from "@/lib/agent-runtime/current-window-id.ts";
 import { useKeybindingScope } from "@/stores/keybinding-scope.store.ts";
 import { terminalPanelContext } from "@/stores/workspace-panel-helpers.ts";

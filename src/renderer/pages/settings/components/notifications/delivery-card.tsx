@@ -9,7 +9,7 @@ import {
 import {
   AGENT_ATTENTION_COOLDOWN_MS,
   type AgentAttentionCooldownMs,
-} from "@shared/contracts/agent-attention.ts";
+} from "@shared/contracts/agent/attention.ts";
 import type {
   SystemNotificationPermissionSnapshot,
   SystemNotificationPermissionStatus,

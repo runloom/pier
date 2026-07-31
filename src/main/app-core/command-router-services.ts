@@ -3,45 +3,45 @@ import type { WindowInfo } from "@shared/contracts/events.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import type { ProjectPreferences } from "@shared/contracts/preferences.ts";
 import type { ProjectPreferencesPatch } from "@shared/contracts/preferences-patch.ts";
-import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
+import type { ResolvedTerminalLaunchOptions } from "@shared/contracts/terminal/launch.ts";
 import type {
   TerminalStatusBarItemOverridePatch,
   TerminalStatusBarOverridePatches,
   TerminalStatusBarPrefs,
-} from "@shared/contracts/terminal-status-bar.ts";
+} from "@shared/contracts/terminal/status-bar.ts";
 import type { WindowCreateOptions } from "@shared/contracts/window.ts";
 import type { AgentMcpCatalogService } from "../services/agent-mcp-catalog/service.ts";
 import type { AgentRulesService } from "../services/agent-rules/service.ts";
 import type { AgentRuntimeIndexService } from "../services/agent-runtime-index/index.ts";
-import type { AgentDetectionService } from "../services/agents/agent-detection-service.ts";
-import type { AgentUsageService } from "../services/agents/agent-usage-service.ts";
-import type { AiService } from "../services/ai/ai-service.ts";
-import type { AppUpdateService } from "../services/app-updates/app-update-service.ts";
-import type { FileDraftsService } from "../services/file-drafts-service.ts";
-import type { FileService } from "../services/file-service.ts";
-import type { FileWatchService } from "../services/file-watch-service.ts";
-import type { GitReviewService } from "../services/git-review/git-review-service.ts";
-import type { GitService } from "../services/git-service.ts";
-import type { GitWatchService } from "../services/git-watch-service.ts";
+import type { AgentDetectionService } from "../services/agents/detection-service.ts";
+import type { AgentUsageService } from "../services/agents/usage-service.ts";
+import type { AiService } from "../services/ai/service.ts";
+import type { AppUpdateService } from "../services/app-updates/service.ts";
+import type { FileDraftsService } from "../services/files/drafts-service.ts";
+import type { FileService } from "../services/files/service.ts";
+import type { FileWatchService } from "../services/files/watch-service.ts";
+import type { GitService } from "../services/git/service.ts";
+import type { GitWatchService } from "../services/git/watch/service.ts";
+import type { WorktreeService } from "../services/git/worktree/service.ts";
+import type { GitReviewService } from "../services/git-review/service.ts";
 import type { LiveModulesService } from "../services/live-modules/service.ts";
 import type { LocalEnvironmentService } from "../services/local-environments-service.ts";
 import type { ManagedPluginInstallService } from "../services/managed-plugins/install-service.ts";
 import type { PanelContextResolutionControl } from "../services/panel-context-resolver.ts";
-import type { PanelTransferService } from "../services/panel-transfer/panel-transfer-types.ts";
+import type { PanelTransferService } from "../services/panel-transfer/types.ts";
 import type { PierHomeService } from "../services/pier-home/service.ts";
 import type { PluginService } from "../services/plugin-service.ts";
 import type { PluginSettingsService } from "../services/plugin-settings-service.ts";
 import type { ProcessEnvironmentService } from "../services/process-environment-service.ts";
-import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-gate.ts";
-import type { PierBindingsChannel } from "../services/project-skills/pier-bindings.ts";
+import type { ManagedAgentLaunchGate } from "../services/project-skills/launch-gate/index.ts";
+import type { PierBindingsChannel } from "../services/project-skills/pier-bindings/index.ts";
 import type { ProjectSkillsService } from "../services/project-skills/service.ts";
 import type { RendererCommandService } from "../services/renderer-command-service.ts";
-import type { TaskService } from "../services/tasks/task-service.ts";
-import type { UsageDataService } from "../services/usage-data/usage-data-service.ts";
+import type { TaskService } from "../services/tasks/service.ts";
+import type { UsageDataService } from "../services/usage-data/service.ts";
 import type { WindowTransitionLease } from "../services/window-service.ts";
-import type { WorktreeService } from "../services/worktree-service.ts";
 import type { SecretsStore } from "../state/secrets-store.ts";
-import type { WindowBounds } from "../windows/window-manager.ts";
+import type { WindowBounds } from "../windows/manager.ts";
 import type { PluginDisableTransitionCoordinator } from "./plugin-disable-transition.ts";
 
 export interface PierCoreServices {

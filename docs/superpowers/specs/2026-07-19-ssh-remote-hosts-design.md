@@ -27,7 +27,7 @@
 
 - preload：`window.pier.terminals.open(request)`（`src/preload/terminals-api.ts`），走 `invokePierCommand`，main 侧解析 launch / profile / env 并路由窗口。
 - builtin context：`context.terminals.open`（`src/renderer/lib/plugins/host-terminals-context.ts`），capability 断言 `terminal:control`。
-- external context：`ExternalRendererPluginContext.terminals.open`（`external-plugin-context.ts` 内联断言 `terminal:control`）。
+- external context：`ExternalRendererPluginContext.terminals.open`（`external-context.ts` 内联断言 `terminal:control`）。
 - 命名区分：单数 `context.terminal` 是读路径（选区 / openUrl，`terminal:read`）；复数 `context.terminals` 是写路径（打开终端 panel，`terminal:control`）。
 - main 侧不改：`terminal.open` 带非空 `launch` 时按既有动态规则要求 `workspace:open` + `terminal:control`。
 

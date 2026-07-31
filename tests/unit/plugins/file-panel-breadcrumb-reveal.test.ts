@@ -1,7 +1,7 @@
 import {
   breadcrumbRevealPathForDiskSource,
   breadcrumbSegmentsForSource,
-} from "@plugins/builtin/files/renderer/file-panel-source.ts";
+} from "@plugins/builtin/files/renderer/panel/source.ts";
 import { describe, expect, it } from "vitest";
 
 describe("breadcrumbRevealPathForDiskSource", () => {

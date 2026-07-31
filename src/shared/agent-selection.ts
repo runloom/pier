@@ -1,5 +1,5 @@
+import type { AgentUsageEntry } from "./contracts/agent/usage.ts";
 import type { AgentKind } from "./contracts/agent.ts";
-import type { AgentUsageEntry } from "./contracts/agent-usage.ts";
 import { usageFrecency } from "./frecency.ts";
 
 // agent 自动选取优先序（claude 首位，去 claude-agent-teams）。

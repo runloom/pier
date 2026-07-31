@@ -3,7 +3,7 @@ import {
   type JsonValue,
   type PluginSettingsState,
   pluginSettingsStateSchema,
-} from "@shared/contracts/plugin-settings.ts";
+} from "@shared/contracts/plugin/settings.ts";
 import { app } from "electron";
 import {
   type DebouncedJsonStore,

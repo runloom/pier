@@ -27,7 +27,7 @@ import {
   type PopupOptions,
 } from "electron";
 import { MenuTemplateSchema } from "../menu/template-schema.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import { windowManager } from "../windows/manager.ts";
 
 function toMenuItem(
   item: PierMenuItem,

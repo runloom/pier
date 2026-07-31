@@ -66,7 +66,8 @@ pnpm typecheck           # 宿主 + packages
 pnpm lint / pnpm lint:fix
 pnpm depcruise           # 架构边界
 pnpm check:file-size
-pnpm check:static        # typecheck + lint + depcruise + file-size
+pnpm check:dir-density   # 单目录直接源码文件数（配置 .pier/dir-density.json）
+pnpm check:static        # typecheck + lint + depcruise + file-size + dir-density
 pnpm check               # static + unit + component + integration
 pnpm test:unit
 pnpm test:component

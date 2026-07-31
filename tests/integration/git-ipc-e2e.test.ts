@@ -15,12 +15,12 @@ import {
   type PierCoreServices,
 } from "@main/app-core/command-router.ts";
 import { PluginDisableTransitionCoordinator } from "@main/app-core/plugin-disable-transition.ts";
-import { execGit } from "@main/services/git-exec.ts";
-import { GitReviewService } from "@main/services/git-review/git-review-service.ts";
-import { createGitService } from "@main/services/git-service.ts";
-import { createGitWatchService } from "@main/services/git-watch-service.ts";
+import { execGit } from "@main/services/git/exec.ts";
+import { createGitService } from "@main/services/git/service.ts";
+import { createGitWatchService } from "@main/services/git/watch/service.ts";
+import { createWorktreeService } from "@main/services/git/worktree/service.ts";
+import { GitReviewService } from "@main/services/git-review/service.ts";
 import { createPanelContextService } from "@main/services/panel-context-service.ts";
-import { createWorktreeService } from "@main/services/worktree-service.ts";
 import type { PierCommand } from "@shared/contracts/commands.ts";
 import {
   DEFAULT_CAPABILITIES_BY_CLIENT_KIND,

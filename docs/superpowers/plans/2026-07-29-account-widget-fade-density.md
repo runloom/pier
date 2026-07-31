@@ -23,7 +23,7 @@
 - 修改：`tests/e2e/workbench-canvas.spec.ts`
 - 修改：`tests/unit/renderer/scroll-area.test.tsx`
 - 修改：`packages/ui/src/scroll-area.tsx`
-- 修改：`packages/plugin-api/src/account-usage/account-widget-frame.tsx`
+- 修改：`packages/plugin-api/src/account-usage/widget-frame.tsx`
 
 **接口：**
 - 产出：`ScrollAreaProps.viewportFadeProfile`
@@ -113,7 +113,7 @@ pnpm vitest run \
 
 ```bash
 pnpm exec ultracite check \
-  packages/plugin-api/src/account-usage/account-widget-frame.tsx \
+  packages/plugin-api/src/account-usage/widget-frame.tsx \
   packages/plugin-api/src/account-usage/account-usage-metrics.tsx \
   packages/plugin-codex/src/renderer/accounts-widget.tsx \
   packages/plugin-codex/src/renderer/usage-meter.tsx \
@@ -137,7 +137,7 @@ Electron 尺寸路径全部通过。
 
 **文件：**
 - 修改：`tests/e2e/workbench-canvas.spec.ts`
-- 修改：`packages/plugin-api/src/account-usage/account-widget-frame.tsx`
+- 修改：`packages/plugin-api/src/account-usage/widget-frame.tsx`
 
 **接口：**
 - 消费：`AccountWidgetFrameProps.density`

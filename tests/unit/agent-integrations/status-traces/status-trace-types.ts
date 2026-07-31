@@ -1,7 +1,7 @@
-import type { AgentStatusEvidenceDimension } from "@main/services/agents/integrations/evidence-matrix.ts";
+import type { AgentStatusEvidenceDimension } from "@main/services/agents/integrations/evidence/matrix.ts";
 import type { AgentStopAuthority } from "@main/services/foreground-activity/types.ts";
+import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent-session.ts";
 
 export interface AgentStatusTraceExpectedEventFields {
   readonly agentInstanceId?: string;

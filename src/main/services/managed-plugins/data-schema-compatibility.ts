@@ -4,7 +4,7 @@ import { join } from "node:path";
 import {
   type ManagedPluginPackageManifest,
   managedPluginDataSchemaMarkerSchema,
-} from "@shared/contracts/managed-plugin.ts";
+} from "@shared/contracts/plugin/managed.ts";
 
 function compare(actual: number, operator: string, expected: number): boolean {
   if (operator === ">=") return actual >= expected;

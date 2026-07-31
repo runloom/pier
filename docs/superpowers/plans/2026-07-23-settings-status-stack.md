@@ -263,7 +263,7 @@ git commit -m "feat(ui): add StatusStack for settings banners"
 ```ts
 import type { StatusStackItem } from "@pier/ui/status-stack.tsx";
 import type { PluginRegistryDiagnostic } from "@shared/contracts/plugin.ts";
-import type { RendererPluginRuntimeDiagnostic } from "@/lib/plugins/plugin-runtime-diagnostics.ts";
+import type { RendererPluginRuntimeDiagnostic } from "@/lib/plugins/runtime-diagnostics.ts";
 
 export function buildPluginStatusItems(input: {
   pageError: string | null; // toggleError ?? storeError

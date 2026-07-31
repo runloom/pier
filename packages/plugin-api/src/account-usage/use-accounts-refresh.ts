@@ -5,7 +5,7 @@ import {
   normalizeAccountId,
   refreshAccountUsage,
   refreshAllAccountUsage,
-} from "./refresh-account-usage.ts";
+} from "./refresh.ts";
 
 export interface AccountsRefreshI18n {
   refreshAllSuccess: { fallback: string; key: string };

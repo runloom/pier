@@ -2,7 +2,7 @@ import { z } from "zod";
 import type { TerminalExitPresentation } from "./ghostty-host-copy.ts";
 import type { PanelContext, PanelTabChrome } from "./panel.ts";
 import type { TaskOutputPanelParams, TaskPanelMetadata } from "./tasks.ts";
-import type { SkillsLaunchBlockedInfo } from "./terminal-skills-launch.ts";
+import type { SkillsLaunchBlockedInfo } from "./terminal/skills-launch.ts";
 
 export type {
   GhosttyChildExitedVariant,
@@ -27,11 +27,11 @@ export type {
   TerminalComposerPathsResult,
   TerminalComposerPickResult,
   TerminalComposerTextBytes,
-} from "./terminal-composer-attachments.ts";
+} from "./terminal/composer-attachments.ts";
 export type {
   SkillsLaunchBlockedInfo,
   SkillsLaunchContinueResult,
-} from "./terminal-skills-launch.ts";
+} from "./terminal/skills-launch.ts";
 
 export interface TerminalFrame {
   /** BrowserWindow contentView 坐标，top-left origin，已叠加 Electron page zoom。 */
@@ -185,6 +185,11 @@ export interface CreateTerminalArgs {
   launchId?: string | undefined;
   panelId: string;
   /**
+   * Native surface presentation generation for frame gate / create handoff.
+   * Renderer allocates per open; main passes through to Ghostty create.
+   */
+  presentationId?: number | undefined;
+  /**
    * 受管启动重试握手（design v8 §5.2.7）：携带处于 SPAWN_INTENT 授权窗口内的
    * attempt id 时，跳过重新校正直接放行；窗口外拒绝且不 replay。
    */
@@ -211,8 +216,8 @@ export type {
   TerminalAgentPanelMetadata,
   TerminalAgentResumeMetadata,
   TerminalPanelSessionSnapshot,
-} from "./terminal-panel-session.ts";
-export type { TerminalFrameCommittedEvent } from "./terminal-presentation.ts";
+} from "./terminal/panel-session.ts";
+export type { TerminalFrameCommittedEvent } from "./terminal/presentation.ts";
 
 export interface TerminalContextMenuRequest {
   panelId: string;
@@ -368,4 +373,4 @@ export interface TerminalCloseOptions {
   reason?: "relaunch" | "workspace" | undefined;
 }
 
-export type { TerminalAPI } from "./terminal-api-surface.ts";
+export type { TerminalAPI } from "./terminal/api-surface.ts";

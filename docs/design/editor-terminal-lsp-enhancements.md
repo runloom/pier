@@ -24,7 +24,7 @@
 ### 2.1 核心组件变更
 - **文件编辑器层**：`file-editor-view-session.ts` 与 `file-editor-language-tools.ts` 通过 `Compartment` 动态应用自动换行、制表符宽度、默认语言和 LSP 扩展。
 - **文件控制器层**：`file-editor-controller.ts` 暴露会话安全的 `goToLine(editorSessionId, documentId, line, column?)`。
-- **终端集成层**：`TerminalOpenUrlEvent`、`files-terminal-open-url-handler.ts` 和 `files-terminal-open-url-resolve.ts` 共同支持 `:line[:column]`。
+- **终端集成层**：`TerminalOpenUrlEvent`、`files-open-url/handler.ts` 和 `files-open-url/resolve.ts` 共同支持 `:line[:column]`。
 - **设置层**：Files 插件 configuration 持久化自动换行、制表符宽度、默认语言、默认换行符和编辑器语言功能开关；工作区设置管理语言服务进程策略。
 - **LSP 层**：main 侧 provider registry + `LspSessionHost` 管理本地语言服务器，preload 暴露受限 IPC，renderer 使用 `@codemirror/lsp-client`。
 

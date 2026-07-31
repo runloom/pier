@@ -6,8 +6,9 @@ import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
   pierHooksCurrentDir,
-} from "@main/services/agents/agent-hooks-install.ts";
+} from "@main/services/agents/hooks-install.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
+import { pathForHookSpawn } from "../hook-spawn-path.ts";
 import type { AgentStatusTraceProducer } from "./status-trace-types.ts";
 
 const ORIGINAL_PATH = process.env.PATH ?? "/usr/bin:/bin:/usr/sbin:/sbin";
@@ -33,7 +34,7 @@ export async function createInstalledCommandProducer(
       const result = spawnSync("/bin/sh", ["-c", command], {
         env: {
           ...process.env,
-          PATH: ORIGINAL_PATH,
+          PATH: pathForHookSpawn(ORIGINAL_PATH),
           PIER_AGENT_EVENT_LOG: logPath,
           PIER_AGENT_HOOKS_DIR: pierHooksCurrentDir(hooksHome),
           PIER_PANEL_ID: "p1",

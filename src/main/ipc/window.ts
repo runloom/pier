@@ -11,8 +11,8 @@ import { parseRendererRuntimeFailureReport } from "@shared/contracts/renderer-ru
 import { PIER } from "@shared/ipc-channels.ts";
 import { createLogger } from "@shared/logger.ts";
 import type { IpcMain } from "electron";
-import { findWindowContext } from "../windows/window-identity.ts";
-import { windowManager } from "../windows/window-manager.ts";
+import { findWindowContext } from "../windows/identity.ts";
+import { windowManager } from "../windows/manager.ts";
 
 const rendererRuntimeLog = createLogger("renderer-runtime");
 

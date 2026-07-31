@@ -1,4 +1,4 @@
-import { createTaskOutputBuffer } from "@main/services/tasks/task-output-buffer.ts";
+import { createTaskOutputBuffer } from "@main/services/tasks/output-buffer.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
 
 describe("task output buffer", () => {

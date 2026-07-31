@@ -10,8 +10,6 @@ import {
 } from "@shared/contracts/panel.ts";
 import type { WorktreeCreateProgress } from "@shared/contracts/worktree.ts";
 import { applyAgentStatusHooksPreference } from "../services/agents/integrations/registry.ts";
-import { executeAgentAssetsCommand } from "./agent-assets-commands.ts";
-import { executeAiCommand } from "./ai-commands.ts";
 import type { PierClientRegistry } from "./client-registry.ts";
 import { mapCommandError } from "./command-error-mapping.ts";
 import type { CommandExecutionContext } from "./command-execution-context.ts";
@@ -20,36 +18,38 @@ import {
   commandSuccess as success,
 } from "./command-results.ts";
 import type { PierCoreServices } from "./command-router-services.ts";
-import { executeEnvironmentCommand } from "./environment-commands.ts";
-import { executeFileCommand } from "./file-commands.ts";
-import { executeGitCommand } from "./git-commands.ts";
-import { executeGitReviewCommand } from "./git-review-commands.ts";
-import { executeLiveModulesCommand } from "./live-modules-commands.ts";
+import { executeAgentAssetsCommand } from "./commands/agent-assets.ts";
+import { executeAiCommand } from "./commands/ai.ts";
+import { executeEnvironmentCommand } from "./commands/environment.ts";
+import { executeFileCommand } from "./commands/file.ts";
+import { executeGitCommand } from "./commands/git.ts";
+import { executeGitReviewCommand } from "./commands/git-review.ts";
+import { executeLiveModulesCommand } from "./commands/live-modules.ts";
 import {
   executePanelFocusCommand,
   executePanelListCommand,
   executePanelOpenCommand,
   executeTerminalOpenCommand,
-} from "./panel-commands.ts";
-import { executePanelTransferCommand } from "./panel-transfer-commands.ts";
-import { authorizeCommand } from "./permissions.ts";
-import { executePierHomeCommand } from "./pier-home-commands.ts";
-import { executePluginCommand } from "./plugin-commands.ts";
-import { executeProjectSkillsCommand } from "./project-skills-commands.ts";
+} from "./commands/panel.ts";
+import { executePanelTransferCommand } from "./commands/panel-transfer.ts";
+import { executePierHomeCommand } from "./commands/pier-home.ts";
+import { executePluginCommand } from "./commands/plugin.ts";
+import { executeProjectSkillsCommand } from "./commands/project-skills.ts";
 import {
   executeRunCancelCommand,
   executeRunListCommand,
   executeRunRecentCommand,
   executeRunSpawnCommand,
   executeRunStatusCommand,
-} from "./run-commands.ts";
+} from "./commands/run.ts";
 import {
   executeRunBackgroundSnapshotCommand,
   executeRunRunsSnapshotCommand,
   executeRunStopCommand,
-} from "./run-control-commands.ts";
+} from "./commands/run-control.ts";
+import { executeWorktreeCommand } from "./commands/worktree.ts";
+import { authorizeCommand } from "./permissions.ts";
 import { orderedWindows } from "./window-routing.ts";
-import { executeWorktreeCommand } from "./worktree-commands.ts";
 
 export type { CommandExecutionContext } from "./command-execution-context.ts";
 export type { PierCoreServices } from "./command-router-services.ts";
@@ -135,14 +135,14 @@ async function executeAppStateCommand(
       }
       // 不直接调 updater：必须先走 before-quit flush（含 layout），
       // 否则更新安装会丢掉未落盘的工作区布局。
-      const { performProdQuitAndInstall } = await import("./app-relaunch.ts");
+      const { performProdQuitAndInstall } = await import("./relaunch.ts");
       await performProdQuitAndInstall();
       return success(requestId, services.appUpdates.getStatus());
     }
     case "app.relaunch": {
       const { isDevRuntime } = await import("../runtime-mode.ts");
       const { performDevSoftRelaunch, performProdRelaunch } = await import(
-        "./app-relaunch.ts"
+        "./relaunch.ts"
       );
       if (isDevRuntime()) {
         await performDevSoftRelaunch(services.managedPlugins);

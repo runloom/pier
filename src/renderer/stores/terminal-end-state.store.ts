@@ -4,7 +4,7 @@ import {
   materializeTaskEndState,
   mergeTerminalEndState,
   type TerminalEndState,
-} from "@shared/contracts/terminal-end-state.ts";
+} from "@shared/contracts/terminal/end-state.ts";
 import { create } from "zustand";
 
 interface TerminalEndStateStore {

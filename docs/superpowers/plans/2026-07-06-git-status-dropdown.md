@@ -12,11 +12,11 @@
 
 ## File Structure
 
-- Create `src/plugins/builtin/git/renderer/git-status-dropdown-model.ts`
+- Create `src/plugins/builtin/git/renderer/status-dropdown-model.ts`
   - Pure model only: status kind, summary rows, action availability, tracked-change gate, active operation labels.
-- Create `src/plugins/builtin/git/renderer/git-status-dropdown.tsx`
+- Create `src/plugins/builtin/git/renderer/status-dropdown.tsx`
   - `Popover` content, shadcn primitive composition, action handlers, notification/dialog feedback.
-- Modify `src/plugins/builtin/git/renderer/git-status-item.tsx`
+- Modify `src/plugins/builtin/git/renderer/status-item.tsx`
   - Preserve status-bar body and `useGitStatus`; replace left-click quick pick with `GitStatusDropdown`.
 - Create `tests/unit/renderer/git-status-dropdown-model.test.ts`
   - Fast unit coverage for decision rules.
@@ -28,7 +28,7 @@
 ## Task 1: Dropdown Model
 
 **Files:**
-- Create: `src/plugins/builtin/git/renderer/git-status-dropdown-model.ts`
+- Create: `src/plugins/builtin/git/renderer/status-dropdown-model.ts`
 - Test: `tests/unit/renderer/git-status-dropdown-model.test.ts`
 
 - [ ] **Step 1: Write failing model tests**
@@ -111,7 +111,7 @@ it("models clean merged upstream-gone branch without prune", () => {
 
 Run: `pnpm test tests/unit/renderer/git-status-dropdown-model.test.ts`
 
-Expected: fail because `git-status-dropdown-model.ts` does not exist.
+Expected: fail because `status-dropdown-model.ts` does not exist.
 
 - [ ] **Step 3: Implement the model**
 
@@ -157,7 +157,7 @@ Expected: all tests pass.
 ## Task 2: Dropdown Component And Git Actions
 
 **Files:**
-- Create: `src/plugins/builtin/git/renderer/git-status-dropdown.tsx`
+- Create: `src/plugins/builtin/git/renderer/status-dropdown.tsx`
 - Test: `tests/unit/renderer/git-status-dropdown.test.tsx`
 
 - [ ] **Step 1: Write failing component tests**
@@ -232,7 +232,7 @@ Expected: all tests pass.
 ## Task 3: Wire Status Item
 
 **Files:**
-- Modify: `src/plugins/builtin/git/renderer/git-status-item.tsx`
+- Modify: `src/plugins/builtin/git/renderer/status-item.tsx`
 - Modify: `tests/unit/renderer/git-status-item-config.test.tsx`
 
 - [ ] **Step 1: Write failing integration assertion**

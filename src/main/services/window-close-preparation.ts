@@ -14,15 +14,12 @@ import {
   markWindowRecordClosed,
   markWindowRecordFocused,
 } from "../state/window-record-state.ts";
+import { findWindowContext } from "../windows/identity.ts";
+import { type WindowCloseDecision, windowManager } from "../windows/manager.ts";
 import {
   isRendererUnreachableCloseError,
   type NativeWindowCloseFailureDecision,
-} from "../windows/native-window-close-failure.ts";
-import { findWindowContext } from "../windows/window-identity.ts";
-import {
-  type WindowCloseDecision,
-  windowManager,
-} from "../windows/window-manager.ts";
+} from "../windows/native-close-failure.ts";
 import { armDetaching } from "./agents/window-detaching-guard.ts";
 
 export interface WindowTransitionLease {

@@ -1,6 +1,6 @@
 import { join } from "node:path";
+import { DEFAULT_AGENT_ATTENTION_SETTINGS } from "@shared/contracts/agent/attention.ts";
 import { resolvePermissionMode } from "@shared/contracts/agent.ts";
-import { DEFAULT_AGENT_ATTENTION_SETTINGS } from "@shared/contracts/agent-attention.ts";
 import { DEFAULT_LSP_POLICY_PREFS } from "@shared/contracts/lsp.ts";
 import { DEFAULT_NOTIFICATION_CENTER_PREFS } from "@shared/contracts/notification-center.ts";
 import {

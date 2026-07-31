@@ -71,7 +71,7 @@ Run: `pnpm exec vitest run tests/unit/main/app-release-workflow.test.ts`
 
 **Files:**
 - Modify: `src/main/services/app-updates/electron-updater-adapter.ts`
-- Modify: `src/main/services/app-updates/app-update-service.ts`
+- Modify: `src/main/services/app-updates/service.ts`
 - Modify: `tests/unit/main/app-update-service.test.ts`
 
 **Interfaces:**
@@ -96,9 +96,9 @@ Run: `pnpm exec vitest run tests/unit/main/app-release-workflow.test.ts`
 ### Task 3: 生产调度器
 
 **Files:**
-- Create: `src/main/services/app-updates/app-update-scheduler.ts`
+- Create: `src/main/services/app-updates/scheduler.ts`
 - Modify: `src/main/index.ts`（或 app-core 启动后）接 `browser-window-focus` + start scheduler
-- Test: `tests/unit/main/app-update-scheduler.test.ts`
+- Test: `tests/unit/main/scheduler.test.ts`
 
 **Interfaces:**
 
@@ -165,7 +165,7 @@ Settings section 改读 store，去掉本地重复 status 订阅。
 
 ### Task 5: 收尾验收
 
-- [ ] `pnpm exec vitest run tests/unit/main/app-update-service.test.ts tests/unit/main/app-update-scheduler.test.ts tests/unit/main/app-release-workflow.test.ts tests/unit/shared/app-update-contracts.test.ts tests/unit/renderer/app-update-section.test.tsx tests/unit/renderer/app-update-control.test.tsx`
+- [ ] `pnpm exec vitest run tests/unit/main/app-update-service.test.ts tests/unit/main/scheduler.test.ts tests/unit/main/app-release-workflow.test.ts tests/unit/shared/app-update-contracts.test.ts tests/unit/renderer/app-update-section.test.tsx tests/unit/renderer/app-update-control.test.tsx`
 - [ ] `pnpm typecheck:host`（若耗时过长至少 tsc 改动相关无报错）
 - [ ] 自审：无自动 quitAndInstall；dev disabled；插件 Latest 隔离文档/测试仍在
 

@@ -13,7 +13,7 @@ Pier 后续要支持两类相近但数据源不同的树：
 
 - `packages/ui/package.json` 已引入 `@pierre/trees@1.0.0-beta.5`，`pnpm-lock.yaml` 已锁定 `packages/ui` importer。
 - `packages/ui/src/file-tree.tsx` 已有第一版 `PierFileTree` wrapper，但当前只覆盖静态 path 列表、尾部 text decoration、selection/open 回调。
-- `src/plugins/builtin/git/renderer/git-changes-panel.tsx` 已将 `GitStatus.files` 渲染为 tree，并覆盖 restored panel runtime Git API、watch snapshot、stale refresh generation、staged-only diff、rename/copy old-side content 等测试场景。
+- `src/plugins/builtin/git/renderer/changes-panel.tsx` 已将 `GitStatus.files` 渲染为 tree，并覆盖 restored panel runtime Git API、watch snapshot、stale refresh generation、staged-only diff、rename/copy old-side content 等测试场景。
 - `src/plugins/builtin/files/renderer/index.tsx` 已有 Files panel，但当前只调用 `context.files.list(root, { path: "" })` 读取 root direct children，尚未具备目录展开懒加载、ProjectTreeService session、watch/reveal/文件操作状态机。
 - `src/shared/contracts/file.ts`、`src/preload/file-api.ts`、`src/main/services/file-service.ts` 已覆盖基础 list/read/write/move/rename/trash 合同；Project Files Tree 需要在此之上新增 project-tree session 合同，不应把高层 tree 状态塞回低级 `FileService`。
 
@@ -542,7 +542,7 @@ src/plugins/builtin/files/renderer/project-files-panel.tsx
 ### Builtin Git plugin
 
 ```text
-src/plugins/builtin/git/renderer/git-changes-panel.tsx
+src/plugins/builtin/git/renderer/changes-panel.tsx
 ```
 
 责任：
@@ -869,7 +869,7 @@ loading
 `GitFileStatus[]` 映射为 paths，再由 `PierFileTree` 自动派生目录：
 
 ```text
-src/plugins/builtin/git/renderer/git-changes-panel.tsx
+src/plugins/builtin/git/renderer/changes-panel.tsx
 src/shared/contracts/git.ts
 ```
 
@@ -881,7 +881,7 @@ src/
     builtin/
       git/
         renderer/
-          git-changes-panel.tsx   M
+          changes-panel.tsx   M
   shared/
     contracts/
       git.ts                      M

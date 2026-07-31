@@ -27,7 +27,7 @@
 
 **新建**
 
-- `src/plugins/builtin/files/renderer/files-editor-minimap.ts`：`createMinimapExtension(): Extension`
+- `src/plugins/builtin/files/renderer/files-editor/minimap.ts`：`createMinimapExtension(): Extension`
 - `tests/unit/renderer/files-editor-minimap-settings.test.ts`：manifest + locale 契约
 
 **修改**
@@ -175,7 +175,7 @@ git add package.json pnpm-lock.yaml \
 ### Task 2: Minimap 扩展工厂 + Session Compartment
 
 **Files:**
-- Create: `src/plugins/builtin/files/renderer/files-editor-minimap.ts`
+- Create: `src/plugins/builtin/files/renderer/files-editor/minimap.ts`
 - Modify: `src/plugins/builtin/files/renderer/file-editor-view-session.ts`
 - Modify: `src/plugins/builtin/files/renderer/file-editor-view-coordinator.ts`
 
@@ -190,7 +190,7 @@ git add package.json pnpm-lock.yaml \
 - [ ] **Step 1: Create extension factory**
 
 ```ts
-// src/plugins/builtin/files/renderer/files-editor-minimap.ts
+// src/plugins/builtin/files/renderer/files-editor/minimap.ts
 import type { Extension } from "@codemirror/state";
 import { showMinimap } from "@replit/codemirror-minimap";
 
@@ -298,7 +298,7 @@ Expected: 仅剩 controller 未传 `minimapEnabled` 的错误（Task 3 修）；
 - [ ] **Step 5: Commit（用户确认后）**
 
 ```bash
-git add src/plugins/builtin/files/renderer/files-editor-minimap.ts \
+git add src/plugins/builtin/files/renderer/files-editor/minimap.ts \
   src/plugins/builtin/files/renderer/file-editor-view-session.ts \
   src/plugins/builtin/files/renderer/file-editor-view-coordinator.ts
 # feat(files): wire codemirror minimap compartment

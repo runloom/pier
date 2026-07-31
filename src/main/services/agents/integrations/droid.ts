@@ -1,9 +1,9 @@
 import { existsSync } from "node:fs";
 import { homedir } from "node:os";
 import { join } from "node:path";
+import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent-session.ts";
-import { PIER_HOOK_COMMAND_GENERATION } from "../agent-hooks-install.ts";
+import { PIER_HOOK_COMMAND_GENERATION } from "../hooks-install.ts";
 import {
   commandExistsOnPath,
   createNestedJsonIntegration,

@@ -1,4 +1,4 @@
-import { PierDiffWorkerHost } from "@pier/ui/diff-view-worker.tsx";
+import { PierDiffWorkerHost } from "@pier/ui/diff-view/worker.tsx";
 import type { ReactNode } from "react";
 import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
 import { useThemeStore } from "@/stores/theme.store.ts";

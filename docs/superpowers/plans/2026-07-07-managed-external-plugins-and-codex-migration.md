@@ -56,18 +56,18 @@
 - Create `src/main/services/managed-plugins/official-index.ts`: central index fetch/cache, override URL support, and latest compatible version selection.
 - Create `src/main/services/managed-plugins/operation-log.ts`: append-only security-relevant plugin operation log.
 - Create `src/main/services/managed-plugins/install-service.ts`: seed install, install, update, rollback, uninstall, enable, disable, dev override, boot-time runtime source snapshots, activation-result tracking, and `plugin-state.json` migration.
-- Create `src/main/plugins/plugin-rpc-bus.ts`: plugin-scoped handlers, invoke dispatch, event broadcast.
-- Create `src/main/plugins/plugin-asset-protocol.ts`: `pier-plugin://` scheme registration/handler for installed plugin renderer entries/assets.
+- Create `src/main/plugins/rpc-bus.ts`: plugin-scoped handlers, invoke dispatch, event broadcast.
+- Create `src/main/plugins/asset-protocol.ts`: `pier-plugin://` scheme registration/handler for installed plugin renderer entries/assets.
 - Create `src/main/plugins/external-main-runtime.ts`: dynamic import of external main plugins and lifecycle cleanup.
-- Modify `src/main/services/plugin-sources.ts`, `src/main/services/plugin-service.ts`, `src/main/plugins/runtime.ts`, `src/main/plugins/plugin-context.ts`, `src/main/csp.ts`, `src/main/index.ts`, and app-core wiring to compose builtin and external plugins after userData is finalized.
+- Modify `src/main/services/plugin-sources.ts`, `src/main/services/plugin-service.ts`, `src/main/plugins/runtime.ts`, `src/main/plugins/context.ts`, `src/main/csp.ts`, `src/main/index.ts`, and app-core wiring to compose builtin and external plugins after userData is finalized.
 
 ### Renderer and preload
 
 - Create `src/preload/plugin-management-api.ts`: plugin management preload facade, imported by `src/preload/index.ts` to avoid growing preload past file-size limits.
 - Create `src/preload/plugin-rpc-api.ts`: host-internal renderer-only plugin RPC bridge, imported by `src/preload/index.ts` without exposing arbitrary pluginId RPC in public plugin API.
 - Create `src/renderer/lib/plugins/external-renderer-loader.ts`: dynamic import for external renderer entries and plugin panel unavailable fallback handling.
-- Create `src/renderer/lib/plugins/plugin-shared-runtime.ts`: expose React/UI singleton bridge for external renderer bundles.
-- Create `src/renderer/lib/plugins/external-plugin-context.ts`: builds account-free external renderer contexts with `context.rpc`.
+- Create `src/renderer/lib/plugins/shared-runtime.ts`: expose React/UI singleton bridge for external renderer bundles.
+- Create `src/renderer/lib/plugins/external-context.ts`: builds account-free external renderer contexts with `context.rpc`.
 - Modify `src/renderer/lib/plugins/runtime.ts` and `bootstrap.ts`: activate external renderer modules using the new external context helper. Leave legacy `host-context.ts` account behavior intact until Task 11b.
 - Create `src/renderer/pages/settings/components/managed-plugins-section.tsx`: installed/available/update/dev override management UI.
 - Create `src/renderer/pages/settings/components/managed-plugin-card.tsx`: per-plugin card actions and trust warning UI.
@@ -735,7 +735,7 @@ Proposed commit message: `feat(plugins): manage installed external plugins`
 ### Task 4: `pier-plugin://` protocol, CSP, and startup ordering
 
 **Files:**
-- Create: `src/main/plugins/plugin-asset-protocol.ts`
+- Create: `src/main/plugins/asset-protocol.ts`
 - Create: `tests/fixtures/plugin-asset/fixture.plugin/plugin.json`
 - Create: `tests/fixtures/plugin-asset/fixture.plugin/dist/renderer.js`
 - Modify: `src/main/index.ts`
@@ -824,13 +824,13 @@ Proposed commit message: `feat(plugins): serve external plugin assets`
 ### Task 5: Plugin RPC bus and external main runtime
 
 **Files:**
-- Create: `src/main/plugins/plugin-rpc-bus.ts`
+- Create: `src/main/plugins/rpc-bus.ts`
 - Create: `src/main/plugins/external-main-runtime.ts`
-- Modify: `src/main/plugins/plugin-context.ts`
+- Modify: `src/main/plugins/context.ts`
 - Modify: `src/main/plugins/runtime.ts`
 - Modify: `src/plugins/api/main.ts`
 - Modify: `src/main/plugins/host-api.ts`
-- Create: `src/main/plugins/plugin-rpc-ipc.ts`
+- Create: `src/main/plugins/rpc-ipc.ts`
 - Test: `tests/unit/main/plugin-rpc-bus.test.ts`
 - Test: `tests/unit/main/plugin-rpc-ipc.test.ts`
 - Test: `tests/unit/main/external-main-runtime.test.ts`
@@ -891,7 +891,7 @@ Implement dynamic `import(pathToFileURL(entry.mainEntryPath).href)` for local fi
 
 - [ ] **Step 6: Wire renderer-only plugin RPC IPC**
 
-Register a main-process IPC handler for `PIER.PLUGIN_RPC_INVOKE` in `src/main/plugins/plugin-rpc-ipc.ts` that dispatches to `pluginRpcBus.invoke({ pluginId, method, payload })` only for renderer `webContents` owned by Pier windows. Do not route plugin RPC through the public `PierCommand` command router, CLI local-control, or capability-only command authorization. Add `tests/unit/main/plugin-rpc-ipc.test.ts` for the dedicated IPC handler and ownership check, `tests/unit/shared/command-schema-plugin-rpc-boundary.test.ts` asserting a raw `pluginRpc.invoke` PierCommand is rejected by the shared command schema, and extend `tests/unit/app-core/local-control.test.ts` asserting local-control cannot invoke plugin RPC. Renderer preload can invoke only the dedicated IPC handler. Do not expose cross-plugin method calls in `@pier/plugin-api`; renderer plugin contexts receive a scoped invoker that supplies their own plugin id. Document that this is a same-realm trusted-code discipline boundary, not a sandbox against malicious renderer code.
+Register a main-process IPC handler for `PIER.PLUGIN_RPC_INVOKE` in `src/main/plugins/rpc-ipc.ts` that dispatches to `pluginRpcBus.invoke({ pluginId, method, payload })` only for renderer `webContents` owned by Pier windows. Do not route plugin RPC through the public `PierCommand` command router, CLI local-control, or capability-only command authorization. Add `tests/unit/main/plugin-rpc-ipc.test.ts` for the dedicated IPC handler and ownership check, `tests/unit/shared/command-schema-plugin-rpc-boundary.test.ts` asserting a raw `pluginRpc.invoke` PierCommand is rejected by the shared command schema, and extend `tests/unit/app-core/local-control.test.ts` asserting local-control cannot invoke plugin RPC. Renderer preload can invoke only the dedicated IPC handler. Do not expose cross-plugin method calls in `@pier/plugin-api`; renderer plugin contexts receive a scoped invoker that supplies their own plugin id. Document that this is a same-realm trusted-code discipline boundary, not a sandbox against malicious renderer code.
 
 - [ ] **Step 7: Run runtime tests**
 
@@ -925,9 +925,9 @@ Proposed commit message: `feat(plugins): load external main plugins`
 - Create: `packages/plugin-api/src/react-dom-client.ts`
 - Create: `packages/plugin-api/src/build-preset.ts`
 - Modify: `pnpm-lock.yaml`
-- Create: `src/renderer/lib/plugins/plugin-shared-runtime.ts`
+- Create: `src/renderer/lib/plugins/shared-runtime.ts`
 - Create: `src/renderer/lib/plugins/external-renderer-loader.ts`
-- Create: `src/renderer/lib/plugins/external-plugin-context.ts`
+- Create: `src/renderer/lib/plugins/external-context.ts`
 - Create: `src/renderer/components/workspace/plugin-panel-unavailable.tsx`
 - Modify: `src/renderer/lib/plugins/runtime.ts`
 - Modify: `src/renderer/lib/plugins/bootstrap.ts`
@@ -979,7 +979,7 @@ Run the Task 0 boundary tests immediately after creating `packages/plugin-api`, 
 
 - [ ] **Step 4: Implement shared runtime bridge**
 
-In `plugin-shared-runtime.ts`, assign:
+In `shared-runtime.ts`, assign:
 
 ```ts
 // packages/plugin-api/src/react.ts — completeness is enforced by a fixture test
@@ -999,7 +999,7 @@ export const {
 export const { createRoot, hydrateRoot } = ReactDOMClient;
 ```
 
-In `plugin-shared-runtime.ts`, populate the shared runtime object with the full React and react-dom/client namespaces (not only JSX helpers), so shim files above can destructure without gaps:
+In `shared-runtime.ts`, populate the shared runtime object with the full React and react-dom/client namespaces (not only JSX helpers), so shim files above can destructure without gaps:
 
 ```ts
 globalThis.__PIER_PLUGIN_SHARED__ = {

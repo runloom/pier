@@ -40,7 +40,7 @@ import {
   useState,
   useSyncExternalStore,
 } from "react";
-import { ActionCommandItem } from "@/components/common/command-palette-action-rows.tsx";
+import { ActionCommandItem } from "@/components/common/command-palette/action-rows.tsx";
 import { groupCreateActions } from "@/components/workspace/add-panel-create-menu.ts";
 import { useT } from "@/i18n/use-t.ts";
 import {
@@ -58,7 +58,7 @@ import {
   keybindingRegistry,
   subscribeKeybindingRegistry,
 } from "@/lib/keybindings/registry.ts";
-import { useActionKeybindingLabel } from "@/lib/keybindings/use-action-keybinding-label.ts";
+import { useActionKeybindingLabel } from "@/lib/keybindings/use-action-label.ts";
 import { readVersionedSnapshot } from "@/lib/util/read-versioned-snapshot.ts";
 import {
   consumeWebOverlayOutsideDismiss,

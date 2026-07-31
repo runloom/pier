@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { link, mkdir, readFile, rm, utimes, writeFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { FilePathTransactionLock } from "../file-path-transaction-lock.ts";
+import type { FilePathTransactionLock } from "../files/path-transaction-lock.ts";
 import type { StableProjectIdentity } from "./identity.ts";
 
 export class ProjectSkillsLockBusy extends Error {

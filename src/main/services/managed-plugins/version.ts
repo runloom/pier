@@ -1,4 +1,4 @@
-import type { OfficialPluginEntry } from "@shared/contracts/managed-plugin.ts";
+import type { OfficialPluginEntry } from "@shared/contracts/plugin/managed.ts";
 import { rcompare, satisfies, valid, validRange } from "semver";
 
 /**

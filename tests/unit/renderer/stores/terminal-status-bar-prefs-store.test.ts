@@ -2,7 +2,7 @@ import type {
   TerminalStatusBarItemOverridePatch,
   TerminalStatusBarOverridePatches,
   TerminalStatusBarPrefs,
-} from "@shared/contracts/terminal-status-bar.ts";
+} from "@shared/contracts/terminal/status-bar.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 
 type ChangedCb = (prefs: TerminalStatusBarPrefs) => void;

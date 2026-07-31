@@ -169,7 +169,7 @@ provider transcript 增量行
 | 需求 | 代码证据 | 测试证据 |
 | --- | --- | --- |
 | 来源秩唯一 | `agent-session-title/precedence.ts` | `agent-session-title.test.ts`、治理测试 |
-| Unicode 120 码点 | `agent-session-title/schema.ts`、`normalize.ts`、`agent-hooks-title-script.ts` | `agent-session-title.test.ts`、hook 同构测试 |
+| Unicode 120 码点 | `agent-session-title/schema.ts`、`normalize.ts`、`hooks-title-script.ts` | `agent-session-title.test.ts`、hook 同构测试 |
 | 标题按会话绑定 | `terminal-session-state-schemas.ts`、`terminal-session-title.ts` | `main/terminal-session-state.test.ts` |
 | 写入冲突回到持久化真值 | `session-title/write.ts`、`ipc/terminal.ts` | `main/terminal-session-state.test.ts`、聚合器测试 |
 | 子会话不污染面板主行 | `agent-session-actor.ts`、`foreground-activity/aggregator.ts`、`ipc/foreground-activity.ts` | `main/foreground-activity-aggregator.test.ts` |

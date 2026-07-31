@@ -42,7 +42,7 @@
     "pricing:update": "node ./scripts/update-model-pricing.mjs",
     "probe:cursor-semantics": "node ./scripts/probe-agent-cursor-semantics.mjs",
     "check:plugin-index": "pnpm plugins:pack && node scripts/verify-plugin-index-assets.mjs --source=release",
-    "check:static": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size",
+    "check:static": "pnpm typecheck && pnpm lint && pnpm depcruise && pnpm check:file-size && pnpm check:dir-density",
     "check": "pnpm check:static && pnpm test:unit && pnpm test:component && pnpm test:integration",
     "test": "vitest",
     "test:unit": "vitest run tests/unit",
@@ -69,7 +69,8 @@
     "setup:worktree": "node ./scripts/setup-worktree.mjs",
     "bootstrap": "bash scripts/bootstrap.sh",
     "prepare": "husky && node scripts/husky-trim.mjs",
-    "postinstall": "node ./scripts/ensure-electron.mjs"
+    "postinstall": "node ./scripts/ensure-electron.mjs",
+    "check:dir-density": "node scripts/check-dir-density.mjs"
   },
   "dependencies": {
     "@codemirror/autocomplete": "^6.20.3",

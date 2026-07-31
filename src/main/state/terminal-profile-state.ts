@@ -3,7 +3,7 @@ import { dirname, join } from "node:path";
 import {
   type ResolvedTerminalLaunchOptions,
   resolvedTerminalLaunchOptionsSchema,
-} from "@shared/contracts/terminal-launch.ts";
+} from "@shared/contracts/terminal/launch.ts";
 import { app } from "electron";
 import { z } from "zod";
 

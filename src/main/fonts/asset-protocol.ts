@@ -1,7 +1,7 @@
 import { readFile } from "node:fs/promises";
 import { join, normalize } from "node:path";
 import { protocol } from "electron";
-import { resolveBundledSoundAbsolutePath } from "../sounds/sound-asset-paths.ts";
+import { resolveBundledSoundAbsolutePath } from "../sounds/asset-paths.ts";
 import { assetRootDir } from "./asset-paths.ts";
 
 export const ASSET_SCHEME = "pier-asset";

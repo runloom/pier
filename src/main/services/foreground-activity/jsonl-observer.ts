@@ -5,7 +5,7 @@ import {
   agentHookEventSchema,
   type CommandFinishedHookEvent,
   type CommandStartHookEvent,
-} from "@shared/contracts/agent-session.ts";
+} from "@shared/contracts/agent/session.ts";
 import { createLogger } from "@shared/logger.ts";
 import {
   acquireRotationLock,

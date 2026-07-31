@@ -6,7 +6,7 @@ import {
   ItemDescription,
   ItemTitle,
 } from "@pier/ui/item.tsx";
-import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
+import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/plugin/managed.ts";
 import i18next from "i18next";
 import { Loader2, Package } from "lucide-react";
 import { type JSX, useState } from "react";

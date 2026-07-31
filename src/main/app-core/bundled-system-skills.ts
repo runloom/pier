@@ -1,5 +1,5 @@
-import { systemSkillContentDir } from "../services/project-skills/system-skill-asset-paths.ts";
-import type { SystemSkillContribution } from "../services/project-skills/system-skills.ts";
+import { systemSkillContentDir } from "../services/project-skills/system-skills/asset-paths.ts";
+import type { SystemSkillContribution } from "../services/project-skills/system-skills/index.ts";
 
 /** Canonical id for the bundled Pier Canvas authoring skill. */
 export const PIER_CANVAS_SYSTEM_SKILL_ID = "pier-canvas";

@@ -187,7 +187,7 @@ flowchart TB
 
 实现落点（指导计划，非本阶段改码）：
 
-- `attention-service.ts`：拆开 waiting/error 触发与 ready 完成路径（或等价清晰分支）。  
+- `service.ts`：拆开 waiting/error 触发与 ready 完成路径（或等价清晰分支）。  
 - `agent-attention.ts`：schema + 默认值。  
 - `notifications-section.tsx`：三组策略 UI。  
 - 适配器目录：omp / codex error 映射。  

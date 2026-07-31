@@ -1,4 +1,4 @@
-import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/managed-plugin.ts";
+import type { ManagedPluginCatalogSnapshot } from "@shared/contracts/plugin/managed.ts";
 import { useCallback, useState } from "react";
 import { toast } from "sonner";
 import { useT } from "@/i18n/use-t.ts";

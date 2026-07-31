@@ -1,6 +1,6 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
-import type { ManagedPluginOperationResult } from "@shared/contracts/managed-plugin.ts";
+import type { ManagedPluginOperationResult } from "@shared/contracts/plugin/managed.ts";
 import type { OperationsContext } from "./install-operations.ts";
 import { validateManagedPluginPackage } from "./package-validation.ts";
 

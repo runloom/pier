@@ -20,7 +20,7 @@ import {
   MAX_PROMPT_SNIPPET_LENGTH,
   normalizeAgentSessionTitle,
 } from "@shared/agent-session-title/index.ts";
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import type { ForegroundActivityAggregator } from "../../foreground-activity/types.ts";
 import { installAgentHooksStack } from "../integrations/registry.ts";
 import { logTitleTier } from "./log.ts";

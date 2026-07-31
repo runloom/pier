@@ -8,7 +8,7 @@ import {
   type CreateProjectSkillsApplyServiceOptions,
   createProjectSkillsApplyService,
   type ProjectSkillsApplyService,
-} from "./apply-service.ts";
+} from "./apply/service.ts";
 import {
   type ProjectRootRef as MainProjectRootRef,
   resolveStableProjectIdentity,
@@ -20,7 +20,7 @@ import {
   createProjectSkillsStore,
   type OperationRecord,
   type ProjectSkillsStore,
-} from "./store.ts";
+} from "./store/index.ts";
 
 export type OperationStatusView =
   | {

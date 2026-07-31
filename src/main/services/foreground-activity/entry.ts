@@ -1,6 +1,6 @@
 import { isSubagentHookEvent } from "@shared/agent-session-actor.ts";
+import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
 import type {
   ActivityStatus,
   AgentSessionTitleSource,

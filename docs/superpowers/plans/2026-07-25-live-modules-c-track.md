@@ -65,7 +65,7 @@ src/renderer/lib/live-modules/
   mount.ts                                    # mount(el, mod.default) / unmount
   pier-canvas-exports.ts                      # pier/canvas 白名单 re-export 源（或 shared 包）
 
-src/main/plugins/plugin-context.ts            # context.liveModules（main 暴露面，若插件 main 需）
+src/main/plugins/context.ts            # context.liveModules（main 暴露面，若插件 main 需）
 src/renderer/lib/plugins/host-context.ts      # renderer 插件 context.liveModules
 packages/plugin-api/src/renderer.ts           # ExternalRenderer 类型（若 external 也要）
 
@@ -109,7 +109,7 @@ fixtures/live-modules/                        # Button + 纯 pier/canvas canvas 
 
 **Files:**
 - Create: `src/main/services/live-modules/{service,root-registry,ticket-registry,cache}.ts`
-- Create: `src/main/live-modules/live-module-protocol.ts`
+- Create: `src/main/live-modules/protocol.ts`
 - Update: `src/main/index.ts`（`app.whenReady` 前 `registerSchemesAsPrivileged`）
 - Update: `src/main/csp.ts`（允许 `pier-live:`）
 - Create: `tests/unit/main/live-modules-protocol.test.ts`

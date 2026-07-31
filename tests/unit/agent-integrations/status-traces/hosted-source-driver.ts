@@ -5,6 +5,7 @@ import { join } from "node:path";
 import { buildHermesPluginInit } from "@main/services/agents/integrations/hermes.ts";
 import { buildKiloPluginSource } from "@main/services/agents/integrations/kilo.ts";
 import { buildMimoCodePluginSource } from "@main/services/agents/integrations/mimo-code.ts";
+import { pathForHookSpawn } from "../hook-spawn-path.ts";
 import type {
   AgentStatusTraceAction,
   AgentStatusTraceProducer,
@@ -156,6 +157,7 @@ ctx.hooks[sys.argv[2]](**json.loads(sys.argv[3]))
         {
           env: {
             ...process.env,
+            PATH: pathForHookSpawn(process.env.PATH),
             PIER_AGENT_EVENT_LOG: logPath,
             PIER_PANEL_ID: "p1",
             PIER_WINDOW_ID: "w1",

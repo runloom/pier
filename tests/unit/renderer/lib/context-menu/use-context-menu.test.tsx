@@ -3,7 +3,7 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 import {
   popupContextMenuAt,
   useContextMenu,
-} from "@/lib/context-menu/use-context-menu.ts";
+} from "@/lib/context-menu/use-menu.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import { useZoomStore } from "@/stores/zoom.store.ts";
 

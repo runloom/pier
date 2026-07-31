@@ -12,7 +12,7 @@ import { cn } from "@pier/ui/utils.ts";
 import type {
   RuleFileId,
   RuleFileView,
-} from "@shared/contracts/agent-assets.ts";
+} from "@shared/contracts/agent/assets.ts";
 import { useEffect, useRef, useState } from "react";
 import { useT } from "@/i18n/use-t.ts";
 import {

@@ -1,8 +1,8 @@
 import type {
   FileSaveTargetRequest,
   FileSaveTargetResult,
-} from "@shared/contracts/file-save-target.ts";
-import { fileSaveTargetResultSchema } from "@shared/contracts/file-save-target.ts";
+} from "@shared/contracts/file/save-target.ts";
+import { fileSaveTargetResultSchema } from "@shared/contracts/file/save-target.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 

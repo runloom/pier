@@ -1,6 +1,6 @@
 import { chmod, mkdir, readFile } from "node:fs/promises";
 import { dirname } from "node:path";
-import { PIER_HOOK_COMMAND_GENERATION } from "../agent-hooks-install.ts";
+import { PIER_HOOK_COMMAND_GENERATION } from "../hooks-install.ts";
 import { atomicWriteFile } from "./shared.ts";
 
 /**

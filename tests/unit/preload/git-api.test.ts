@@ -1,5 +1,5 @@
-import { GitReviewIndexLoader } from "@plugins/builtin/git/renderer/git-review-index-loader.ts";
-import type { GitReviewIndexResult } from "@shared/contracts/git-review.ts";
+import { GitReviewIndexLoader } from "@plugins/builtin/git/renderer/review/index-loader.ts";
+import type { GitReviewIndexResult } from "@shared/contracts/git/review.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 

@@ -1,5 +1,5 @@
 import { join } from "node:path";
-import type { ManagedPluginOperationResult } from "@shared/contracts/managed-plugin.ts";
+import type { ManagedPluginOperationResult } from "@shared/contracts/plugin/managed.ts";
 import type { OperationsContext } from "./install-operations.ts";
 import { promoteArchiveToInstalled } from "./install-runtime.ts";
 import { resolveOfficialUpdateSource } from "./install-source-resolver.ts";

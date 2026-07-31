@@ -1,4 +1,4 @@
-import type { AgentSelectionResult } from "@shared/contracts/agent-usage.ts";
+import type { AgentSelectionResult } from "@shared/contracts/agent/usage.ts";
 import type {
   AiGenerateTextRequest,
   AiGenerateTextResult,
@@ -8,13 +8,13 @@ import type { ExternalNavigationResult } from "@shared/contracts/external-naviga
 import type {
   FilePreviewTicketIssueResult,
   FilePreviewTicketLocator,
-} from "@shared/contracts/file-preview-ticket.ts";
+} from "@shared/contracts/file/preview-ticket.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
+import type { TerminalLaunchOptions } from "@shared/contracts/terminal/launch.ts";
 import type {
   TerminalOpenUrlEvent,
   TerminalSelectionTextResult,
 } from "@shared/contracts/terminal.ts";
-import type { TerminalLaunchOptions } from "@shared/contracts/terminal-launch.ts";
 import type { LucideIcon } from "lucide-react";
 import type { ComponentType, ReactNode } from "react";
 import type { PluginConfigurationApi } from "./configuration.ts";

@@ -1,3 +1,4 @@
+import { gitWatchLeaseSchema } from "@shared/contracts/git/watch.ts";
 import type {
   GitApplyPatchResult,
   GitBranchRef,
@@ -25,7 +26,6 @@ import type {
   GitStatus,
   GitUndoCommitResult,
 } from "@shared/contracts/git.ts";
-import { gitWatchLeaseSchema } from "@shared/contracts/git-watch.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { ipcRenderer } from "electron";
 import { gitReviewApi, type PierGitReviewAPI } from "./git-review-api.ts";

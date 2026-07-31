@@ -1,10 +1,10 @@
 import { Card, CardContent } from "@pier/ui/card.tsx";
 import { FieldSeparator, FieldSet } from "@pier/ui/field.tsx";
+import type { JsonValue } from "@shared/contracts/plugin/settings.ts";
 import type {
   PluginConfigurationProperty,
   PluginRegistryEntry,
 } from "@shared/contracts/plugin.ts";
-import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
 import { effectiveConfigurationValue } from "@shared/plugin-settings.ts";
 import i18next from "i18next";
 import {

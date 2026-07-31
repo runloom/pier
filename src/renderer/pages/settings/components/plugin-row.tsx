@@ -19,7 +19,7 @@ import {
 } from "lucide-react";
 import { useT } from "@/i18n/use-t.ts";
 import { resolvePluginDisplay } from "@/lib/plugins/display.ts";
-import { resolvePluginIcon } from "@/lib/plugins/resolve-plugin-icon.tsx";
+import { resolvePluginIcon } from "@/lib/plugins/resolve-icon.tsx";
 import { pluginSectionId } from "@/pages/settings/data/appearance-nav.ts";
 import { useSettingsDialogStore } from "@/stores/settings-dialog.store.ts";
 

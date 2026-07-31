@@ -1,6 +1,6 @@
-import { shouldRetainTerminalResultPanel } from "@shared/contracts/terminal-end-state.ts";
+import { shouldRetainTerminalResultPanel } from "@shared/contracts/terminal/end-state.ts";
 import { taskPanelMetadataFromParams } from "@/lib/workspace/task-panel-metadata.ts";
-import { taskOutputFromParams } from "@/panel-kits/terminal/terminal-panel-params.ts";
+import { taskOutputFromParams } from "@/panel-kits/terminal/panel-params.ts";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import {
   taskRunsOwnedByPanel,

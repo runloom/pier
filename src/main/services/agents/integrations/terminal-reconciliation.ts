@@ -1,11 +1,11 @@
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
-import { createClaudeTranscriptReconciler } from "./claude-transcript-reconciler.ts";
-import { createCodexTranscriptReconciler } from "./codex-transcript-reconciler.ts";
-import { createGrokTranscriptReconciler } from "./grok-transcript-reconciler.ts";
+import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
+import { createClaudeTranscriptReconciler } from "./transcript/claude-reconciler.ts";
+import { createCodexTranscriptReconciler } from "./transcript/codex-reconciler.ts";
+import { createGrokTranscriptReconciler } from "./transcript/grok-reconciler.ts";
 import type {
   TranscriptTailReconciler,
   TranscriptTitleListener,
-} from "./transcript-tail-reconciler.ts";
+} from "./transcript/tail-reconciler.ts";
 
 /**
  * Agent 私有终态对账的统一宿主边界。foreground-activity 只投递已验收的

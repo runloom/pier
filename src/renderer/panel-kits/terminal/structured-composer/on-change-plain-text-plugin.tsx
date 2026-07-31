@@ -1,6 +1,6 @@
 import { useLexicalComposerContext } from "@lexical/react/LexicalComposerContext";
 import { useEffect } from "react";
-import { $readComposerPlainText } from "./structured-composer-serialize.ts";
+import { $readComposerPlainText } from "./serialize.ts";
 
 /** Push plain-text changes to the parent controlled draft. */
 export function OnChangePlainTextPlugin({

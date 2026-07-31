@@ -1,5 +1,5 @@
 import type { foregroundActivityService } from "../ipc/foreground-activity.ts";
-import type { TaskActivityCallbacks } from "../services/tasks/task-service-types.ts";
+import type { TaskActivityCallbacks } from "../services/tasks/service-types.ts";
 
 type ForegroundActivityService = typeof foregroundActivityService;
 

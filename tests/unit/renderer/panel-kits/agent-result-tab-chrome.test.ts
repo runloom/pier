@@ -1,11 +1,11 @@
 import type { PanelTabChrome } from "@shared/contracts/panel.ts";
-import { stripPanelTabChromeState } from "@shared/contracts/terminal-end-state.ts";
+import { stripPanelTabChromeState } from "@shared/contracts/terminal/end-state.ts";
 import { describe, expect, it } from "vitest";
 import {
   agentResultTabChromeOverlay,
   mergeTabChrome,
   tabChromeForAgentResultBase,
-} from "@/panel-kits/terminal/terminal-tab-chrome.ts";
+} from "@/panel-kits/terminal/tab-chrome.ts";
 
 describe("agent result tab chrome (no success check on clean exit)", () => {
   function succeededBase(): PanelTabChrome {

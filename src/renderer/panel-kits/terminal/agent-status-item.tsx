@@ -4,10 +4,10 @@ import type {
   AgentActivity,
   ForegroundActivity,
 } from "@shared/contracts/foreground-activity.ts";
-import { AgentStatusLabel } from "@/components/agent-status/agent-status-label.tsx";
+import { AgentStatusLabel } from "@/components/agent-status/label.tsx";
 import { useForegroundActivityStore } from "@/stores/foreground-activity.store.ts";
 import { CORE_AGENT_STATUS_ITEM_ID } from "./core-terminal-status-items.ts";
-import { terminalStatusItemRegistry } from "./terminal-status-bar.tsx";
+import { terminalStatusItemRegistry } from "./status-bar.tsx";
 
 function isAgentActivity(
   activity: ForegroundActivity | undefined

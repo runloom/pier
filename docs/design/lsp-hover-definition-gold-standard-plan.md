@@ -84,7 +84,7 @@
 
 | 项 | 内容 |
 |---|---|
-| **新文件** | `src/plugins/builtin/files/renderer/files-lsp-definition-navigate.ts` |
+| **新文件** | `src/plugins/builtin/files/renderer/files-lsp/definition-navigate.ts` |
 | **职责** | 给定 `plugin`、已准备的 `WorkspaceMapping`（或内部 `withMapping`）、归一化后的单个 `FilesLspPreparedDefinition` / 原始 response，执行打开 + 定位 + 选中 |
 | **API 草案** | 见下 |
 | **错误** | 返回判别联合，**不** swallow；调用方负责 i18n 反馈 |
@@ -121,10 +121,10 @@ export async function jumpToFilesLspDefinition(
 
 **改动文件：**
 
-- 新增 `files-lsp-definition-navigate.ts`  
-- `files-lsp-hover-controller.ts`：`#activateDefinition` 改为调用 navigate；删除内联 display/dispatch  
-- `files-lsp-client-config.ts`：移除 `jumpToDefinitionKeymap`，改为 Pier keymap（见 A2）  
-- 可选：`files-lsp-definitions.ts` 导出供 navigate 使用的类型，避免循环依赖
+- 新增 `files-lsp/definition-navigate.ts`  
+- `files-lsp/hover-controller.ts`：`#activateDefinition` 改为调用 navigate；删除内联 display/dispatch  
+- `files-lsp/client-config.ts`：移除 `jumpToDefinitionKeymap`，改为 Pier keymap（见 A2）  
+- 可选：`files-lsp/definitions.ts` 导出供 navigate 使用的类型，避免循环依赖
 
 **测试契约：**
 
@@ -140,7 +140,7 @@ export async function jumpToFilesLspDefinition(
 
 | 项 | 内容 |
 |---|---|
-| **文件** | `files-lsp-client-config.ts`、`files-lsp-definition-navigate.ts`、可选 `files-editor-actions.ts` |
+| **文件** | `files-lsp/client-config.ts`、`files-lsp/definition-navigate.ts`、可选 `files-editor/actions.ts` |
 | **做法** | `keymap.of([{ key: "F12", run: (view) => { void jumpToFilesLspDefinition(view); return true }, preventDefault: true }])` |
 | **能力检查** | `hasCapability("definitionProvider") === false` → 不请求，返回 unavailable |
 | **命令面板（建议本阶段做）** | 新增 `pier.files.editor.goToDefinition`（manifest + locale + 可选默认 F12 进共享 keybindings 表以便可发现）；若本阶段只做 CM keymap，在清单勾选「P2 可发现性」跟踪 |
@@ -156,7 +156,7 @@ export async function jumpToFilesLspDefinition(
 
 | 项 | 内容 |
 |---|---|
-| **文件** | `files-lsp-hover-controller.ts`（或 `files-lsp-click-definition.ts` 由 controller 挂载） |
+| **文件** | `files-lsp/hover-controller.ts`（或 `files-lsp-click-definition.ts` 由 controller 挂载） |
 | **事件** | 在 `contentDOM` 上 `click`（或 `mousedown` + click 防重；推荐 **click** 且 `exactFilesLspDefinitionModifier`） |
 | **流程** | `preventDefault` → sync → definition 请求 → parse → 单目标 `navigate`；多目标 `#begin`/`show` definition 卡并 prepared mapping |
 | **与 Cmd+悬停协调** | 已打开 definition 卡时：单击（带修饰键）在**同一 candidate** 上 → 若仅 1 目标则 navigate 并 clear；多目标保持卡。避免重复全量请求可用已有 prepared 结果（卡 session 已有 targets 时优先复用） |
@@ -184,7 +184,7 @@ export async function jumpToFilesLspDefinition(
 
 **改动：**
 
-- `files-lsp-hover-controller.ts` `#requestTransient`：documentation 在 contents 全空且 !error 时直接 return；error 时也不弹（被动）。  
+- `files-lsp/hover-controller.ts` `#requestTransient`：documentation 在 contents 全空且 !error 时直接 return；error 时也不弹（被动）。  
 - definition：`targets.length === 0` 时 destroy mapping、不 show（今天会 show 空 dialog）。  
 - `#runManual` 保持 show 空态/失败态。  
 - `createFilesLspHoverModel` 可增加 `hasContent` 纯函数便于测。
@@ -254,7 +254,7 @@ pnpm exec vitest run \
 
 | 项 | 内容 |
 |---|---|
-| **文件** | `files-lsp-hover-card.tsx` |
+| **文件** | `files-lsp/hover-card.tsx` |
 | **删除** | `@pier/ui/card` 的 Card/Header/Title/Description/Content |
 | **结构** | 根 `div[data-slot=files-lsp-hover-card]`：`role=region|dialog`、`aria-labelledby`、`aria-modal=false`（dialog） |
 | **标题** | documentation：**可见标题可选 sr-only**（a11y 保留名称）；definition/symbol：一行轻标题「定义 (N)」/「符号信息」，**去掉当前文件绝对路径副标题**（路径噪声；需要时仅定义目标行显示路径） |
@@ -305,7 +305,7 @@ pnpm exec vitest run \
 |---|---|
 | **DocumentationBlock** | 若 `html` 已来自 `plugin.docToHTML`（client sanitizeHTML），**禁止**再 `sanitizeFilesLspHtml`；仅在未走 docToHTML 的防御路径 purify |
 | **签名** | 尽量走与上游类似的代码高亮路径，或至少统一 mono 样式；不把签名 HTML 当 markdown 双渲染 |
-| **normalize** | 保持 `files-lsp-hover-content.ts`；不伪造 signature |
+| **normalize** | 保持 `files-lsp/hover-content.ts`；不伪造 signature |
 
 **测试：** `files-lsp-hover-card-review` 仍保证危险 HTML 不可进 DOM（在 model 构造层注入已净化/未净化边界写清）。
 
@@ -315,7 +315,7 @@ pnpm exec vitest run \
 
 | 项 | 内容 |
 |---|---|
-| **文件** | `files-lsp-hover-controller.ts`、`files-lsp-hover-data.ts`、`files-lsp-hover-preview.ts` |
+| **文件** | `files-lsp/hover-controller.ts`、`files-lsp/hover-data.ts`、`files-lsp/hover-preview.ts` |
 | **行为** | documentation 响应含 `range` 时，tooltip `pos/end` 用 range；否则回退 wordAt / 点击位置 |
 | **candidate 身份** | 防抖 identity 仍可用 word 或 range 规范化，避免微移重入 |
 
@@ -381,7 +381,7 @@ pnpm exec vitest run \
 
 | 路径 | Phase | 说明 |
 |---|---|---|
-| `files-lsp-definition-navigate.ts` | A | 唯一跳转出口 |
+| `files-lsp/definition-navigate.ts` | A | 唯一跳转出口 |
 | `tests/unit/renderer/files-lsp-definition-navigate.test.ts` | A | |
 | `tests/unit/renderer/files-lsp-click-definition.test.tsx` | A | |
 | 可选 `files-lsp-definition-affordance.ts` | B | 下划线 decoration |
@@ -390,19 +390,19 @@ pnpm exec vitest run \
 
 | 路径 | Phase | 要点 |
 |---|---|---|
-| `files-lsp-hover-controller.ts` | A+B | navigate、空结果、click、sticky、capability、range 锚定 |
-| `files-lsp-hover-card.tsx` | B | 去 Card、布局、class、sanitize |
-| `files-lsp-hover-preview.ts` | A/B | show 条件、tooltip pos |
-| `files-lsp-hover-data.ts` | A/B | hasContent、range helper |
-| `files-lsp-hover-content.ts` | — | 基本不动 |
-| `files-lsp-definitions.ts` | A | 类型导出供 navigate |
-| `files-lsp-client-config.ts` | A | 替换 F12 keymap |
-| `files-lsp-client.ts` | A | 若需注入 onNavigateError / labels |
-| `files-lsp-hover.ts` | A | 导出 click 相关若拆分 |
+| `files-lsp/hover-controller.ts` | A+B | navigate、空结果、click、sticky、capability、range 锚定 |
+| `files-lsp/hover-card.tsx` | B | 去 Card、布局、class、sanitize |
+| `files-lsp/hover-preview.ts` | A/B | show 条件、tooltip pos |
+| `files-lsp/hover-data.ts` | A/B | hasContent、range helper |
+| `files-lsp/hover-content.ts` | — | 基本不动 |
+| `files-lsp/definitions.ts` | A | 类型导出供 navigate |
+| `files-lsp/client-config.ts` | A | 替换 F12 keymap |
+| `files-lsp/client.ts` | A | 若需注入 onNavigateError / labels |
+| `files-lsp/hover.ts` | A | 导出 click 相关若拆分 |
 | `editor-theme.ts` | B | hover/documentation 样式 |
 | `file-panel-markdown-labels.ts` | A | 新 labels |
 | `locales/en.json`、`zh-CN.json` | A | 跳转失败等文案 |
-| `manifest.ts` / `keybindings.ts` / `files-editor-actions.ts` | A 可选 | goToDefinition 命令 |
+| `manifest.ts` / `keybindings.ts` / `files-editor/actions.ts` | A 可选 | goToDefinition 命令 |
 
 ### 4.3 修改（测试）
 
@@ -481,7 +481,7 @@ pnpm exec vitest run \
 
 若只开一个最小可合并单元，按此顺序编码：
 
-1. `files-lsp-definition-navigate.ts` + 单测  
+1. `files-lsp/definition-navigate.ts` + 单测  
 2. controller `#activateDefinition` 改调用  
 3. client-config F12 改 Pier jump  
 4. controller click 处理器  

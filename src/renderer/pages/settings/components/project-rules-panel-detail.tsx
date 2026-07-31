@@ -11,9 +11,9 @@ import {
 import type {
   RuleFileId,
   RuleFileView,
-} from "@shared/contracts/agent-assets.ts";
+} from "@shared/contracts/agent/assets.ts";
 import { FileQuestion, FileWarning, FolderOpen } from "lucide-react";
-import { MarkdownSourceEditor } from "@/components/code-editor/markdown-source-editor.tsx";
+import { MarkdownSourceEditor } from "@/components/code-editor/markdown-source.tsx";
 import type { useT } from "@/i18n/use-t.ts";
 
 export function ProjectRulesSelectedPane({

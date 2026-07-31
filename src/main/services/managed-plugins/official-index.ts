@@ -4,7 +4,7 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import {
   type OfficialPluginIndex,
   officialPluginIndexSchema,
-} from "@shared/contracts/managed-plugin.ts";
+} from "@shared/contracts/plugin/managed.ts";
 
 /**
  * Official index fetch + Ed25519 signature verification (design §5).

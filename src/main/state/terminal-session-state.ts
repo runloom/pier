@@ -12,11 +12,11 @@ import {
   type TaskPanelStatus,
   taskPanelMetadataSchema,
 } from "@shared/contracts/tasks.ts";
-import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
 import {
   applyAgentEndTabChrome,
   stripLegacyAgentSuccessTab,
-} from "@shared/contracts/terminal-end-state.ts";
+} from "@shared/contracts/terminal/end-state.ts";
+import type { TerminalAgentPanelMetadata } from "@shared/contracts/terminal.ts";
 import {
   type TerminalPanelSession,
   terminalAgentPanelMetadataSchema,

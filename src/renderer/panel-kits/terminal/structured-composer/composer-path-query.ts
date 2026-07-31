@@ -1,7 +1,7 @@
 import type {
   FilePathQueryItem,
   FileQueryEvent,
-} from "@shared/contracts/file-query.ts";
+} from "@shared/contracts/file/query.ts";
 
 const DEFAULT_DEBOUNCE_MS = 80;
 const DEFAULT_LIMIT = 40;

@@ -2,7 +2,7 @@ import type { PierEventBus } from "@main/app-core/event-bus.ts";
 import {
   type AgentAttentionSettings,
   DEFAULT_AGENT_ATTENTION_SETTINGS,
-} from "@shared/contracts/agent-attention.ts";
+} from "@shared/contracts/agent/attention.ts";
 
 /**
  * Attention settings 进程内缓存。

@@ -29,7 +29,7 @@
 | `src/renderer/lib/keybindings/types.ts` | 改 | T7 |
 | `src/renderer/lib/keybindings/parse.ts` | 改 | T7 |
 | `src/renderer/lib/keybindings/matcher.ts` | 改 | T7 |
-| `src/renderer/lib/keybindings/use-keybindings.ts` | 改 | T7 |
+| `src/renderer/lib/keybindings/use-registry.ts` | 改 | T7 |
 | `src/renderer/lib/keybindings/registry.ts` | 改 | T7 |
 | `tests/unit/keybindings.test.ts` | 改 | T7 |
 | `src/renderer/lib/keybindings/defaults.ts` | 改 | T8 |
@@ -1155,7 +1155,7 @@ EOF
 - Modify: `src/renderer/lib/keybindings/types.ts`(KeyChord 加 ctrl)
 - Modify: `src/renderer/lib/keybindings/parse.ts`(加 Ctrl+ 前缀,parseChord 加 isMac 参数)
 - Modify: `src/renderer/lib/keybindings/matcher.ts`(chordFromEvent + chordEquals 加 ctrl)
-- Modify: `src/renderer/lib/keybindings/use-keybindings.ts`(chordFromNativeForward 加 ctrl)
+- Modify: `src/renderer/lib/keybindings/use-registry.ts`(chordFromNativeForward 加 ctrl)
 - Modify: `src/renderer/lib/keybindings/registry.ts`(调 parseChord 处传 isMac())
 - Modify: `src/renderer/lib/context-menu/build-entries.ts`(toElectronAccelerator 加 ctrl → "Control")
 - Modify: `tests/unit/keybindings.test.ts`
@@ -1224,7 +1224,7 @@ export function chordEquals(a: KeyChord, b: KeyChord): boolean {
 
 - [ ] **Step 7.5: 改 `chordFromNativeForward` 加 ctrl**
 
-打开 `src/renderer/lib/keybindings/use-keybindings.ts:124-136`,替换 `chordFromNativeForward` 整个函数体:
+打开 `src/renderer/lib/keybindings/use-registry.ts:124-136`,替换 `chordFromNativeForward` 整个函数体:
 
 ```typescript
 function chordFromNativeForward(
@@ -1478,7 +1478,7 @@ Expected: 全绿。
 git add src/renderer/lib/keybindings/types.ts \
         src/renderer/lib/keybindings/parse.ts \
         src/renderer/lib/keybindings/matcher.ts \
-        src/renderer/lib/keybindings/use-keybindings.ts \
+        src/renderer/lib/keybindings/use-registry.ts \
         src/renderer/lib/keybindings/registry.ts \
         src/renderer/lib/context-menu/build-entries.ts \
         tests/unit/keybindings.test.ts

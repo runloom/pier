@@ -3,7 +3,7 @@ import { copyFile, readFile } from "node:fs/promises";
 import {
   type ManagedPluginInstallIndex,
   managedPluginInstallIndexSchema,
-} from "@shared/contracts/managed-plugin.ts";
+} from "@shared/contracts/plugin/managed.ts";
 import {
   type DebouncedJsonStore,
   debouncedJsonStore,

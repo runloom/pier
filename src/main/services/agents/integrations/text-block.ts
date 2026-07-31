@@ -1,5 +1,5 @@
 import type { AgentKind } from "@shared/contracts/agent.ts";
-import { PIER_HOOK_COMMAND_GENERATION } from "../agent-hooks-install.ts";
+import { PIER_HOOK_COMMAND_GENERATION } from "../hooks-install.ts";
 
 const TRAILING_NEWLINES_RE = /(?:\r?\n)+$/;
 

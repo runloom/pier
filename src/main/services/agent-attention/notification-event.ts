@@ -1,4 +1,4 @@
-import type { AgentAttentionSettings } from "@shared/contracts/agent-attention.ts";
+import type { AgentAttentionSettings } from "@shared/contracts/agent/attention.ts";
 import type { ActivityStatus } from "@shared/contracts/foreground-activity.ts";
 
 export type AgentNotificationEventKind = "waiting" | "ready" | "error";

@@ -1,8 +1,8 @@
-import type { AgentStatusEvidenceDimension } from "@main/services/agents/integrations/evidence-matrix.ts";
+import type { AgentStatusEvidenceDimension } from "@main/services/agents/integrations/evidence/matrix.ts";
 import { getAgentHookIntegration } from "@main/services/agents/integrations/registry.ts";
 import { createForegroundActivityAggregator } from "@main/services/foreground-activity/aggregator.ts";
-import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent-session.ts";
-import { agentHookEventSchema } from "@shared/contracts/agent-session.ts";
+import type { AgentHookEventPayloadV3 } from "@shared/contracts/agent/session.ts";
+import { agentHookEventSchema } from "@shared/contracts/agent/session.ts";
 import type { AgentActivity } from "@shared/contracts/foreground-activity.ts";
 import type {
   AgentStatusTraceCheckpoint,

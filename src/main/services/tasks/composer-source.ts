@@ -1,6 +1,6 @@
 import { join } from "node:path";
 import type { TaskCandidate } from "@shared/contracts/tasks.ts";
-import { taskCandidate as candidate } from "./task-candidate.ts";
+import { taskCandidate as candidate } from "./candidate.ts";
 import { asRecord, commandWithArgs, readTextIfExists } from "./utils.ts";
 
 export interface ComposerSourceOptions {

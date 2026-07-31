@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
 import { realpath, stat } from "node:fs/promises";
 import { isAbsolute } from "node:path";
-import type { AbsoluteFilePreviewTicketLocator } from "@shared/contracts/file-preview-ticket.ts";
-import { unsupportedFileType } from "../services/file-path-identity.ts";
+import type { AbsoluteFilePreviewTicketLocator } from "@shared/contracts/file/preview-ticket.ts";
+import { unsupportedFileType } from "../services/files/path-identity.ts";
 import {
   MAX_IMAGE_PREVIEW_FILE_BYTES,
   readFileWithinImagePreviewLimit,

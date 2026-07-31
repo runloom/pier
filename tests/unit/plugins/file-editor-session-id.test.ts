@@ -1,4 +1,4 @@
-import { createFileEditorSessionId } from "@plugins/builtin/files/renderer/file-editor-session-id.ts";
+import { createFileEditorSessionId } from "@plugins/builtin/files/renderer/editor/session-id.ts";
 import { describe, expect, it } from "vitest";
 
 describe("createFileEditorSessionId", () => {

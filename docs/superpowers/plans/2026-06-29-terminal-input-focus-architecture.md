@@ -33,7 +33,7 @@
 **renderer（TypeScript）**
 - 修改：`src/renderer/stores/terminal-input-routing.store.ts` — 删 effective/base-map/scope-kind，加薄意图发送器。
 - 新建：`src/renderer/panel-kits/terminal/use-terminal-web-focus.ts` — 浮层焦点契约 hook。
-- 修改：`src/renderer/panel-kits/terminal/terminal-search-bar.tsx` — 用新 hook，删 onFocus/onBlur 反馈。
+- 修改：`src/renderer/panel-kits/terminal/terminal-bar.tsx` — 用新 hook，删 onFocus/onBlur 反馈。
 - 删除：`src/renderer/panel-kits/terminal/use-terminal-search-keyboard-opening.ts`。
 - 修改：`src/renderer/components/workspace/workspace-host.tsx` — `onFocusRequest` 与活跃面板同步改用 `setBasePanel` 意图。
 
@@ -642,7 +642,7 @@ git commit -m "refactor(terminal): renderer input routing store sends base + web
 
 **Files:**
 - Create: `src/renderer/panel-kits/terminal/use-terminal-web-focus.ts`
-- Modify: `src/renderer/panel-kits/terminal/terminal-search-bar.tsx`
+- Modify: `src/renderer/panel-kits/terminal/terminal-bar.tsx`
 - Modify: `src/renderer/panel-kits/terminal/terminal-panel.tsx`（移除 opening hook 接线）
 - Delete: `src/renderer/panel-kits/terminal/use-terminal-search-keyboard-opening.ts`
 - Test: `tests/unit/renderer/...`（组件层若有现成 search 测试则同步）
@@ -668,7 +668,7 @@ export function useTerminalWebFocus(id: string, active: boolean): void {
 
 - [ ] **Step 2: 改搜索框**
 
-`terminal-search-bar.tsx`：
+`terminal-bar.tsx`：
 - 删除 `ensureSearchKeyboardFocus`/`releaseSearchKeyboardFocus`/`releaseSearchKeyboardRef` 与对应 `useLayoutEffect`/`useEffect`。
 - 删除 `<search>` 上的 `onBlurCapture`/`onFocusCapture`。
 - 用 `useTerminalWebFocus(\`terminal-search:${panelId}:keyboard\`, visible)` 替代。
@@ -686,7 +686,7 @@ Expected: PASS，无对已删 API 的引用。
 - [ ] **Step 5: 提交**
 
 ```bash
-git add src/renderer/panel-kits/terminal/use-terminal-web-focus.ts src/renderer/panel-kits/terminal/terminal-search-bar.tsx src/renderer/panel-kits/terminal/terminal-panel.tsx
+git add src/renderer/panel-kits/terminal/use-terminal-web-focus.ts src/renderer/panel-kits/terminal/terminal-bar.tsx src/renderer/panel-kits/terminal/terminal-panel.tsx
 git rm src/renderer/panel-kits/terminal/use-terminal-search-keyboard-opening.ts
 git commit -m "refactor(terminal): search bar uses lifecycle web-focus hook, drop focus-event feedback"
 ```

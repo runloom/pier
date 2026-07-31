@@ -1,4 +1,4 @@
-import type { JsonValue } from "@shared/contracts/plugin-settings.ts";
+import type { JsonValue } from "@shared/contracts/plugin/settings.ts";
 import type { WorkbenchGridSize } from "@shared/contracts/workbench.ts";
 import type { LucideIcon } from "lucide-react";
 import type { FunctionComponent, ReactNode } from "react";

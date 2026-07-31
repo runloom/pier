@@ -11,25 +11,25 @@ import {
 } from "electron";
 import { createLocalControlRegistrationOwner } from "./adapters/cli/local-control-registration.ts";
 import { registerCliLocalControl } from "./adapters/cli/register-local-control.ts";
-import { appCore } from "./app-core/app-core.ts";
+import { appCore } from "./app-core/index.ts";
 import {
   consumeIntentionalQuitAction,
   disarmIntentionalRelaunch,
   isIntentionalRelaunchArmed,
-} from "./app-core/app-relaunch.ts";
+} from "./app-core/relaunch.ts";
 import { configureMainAppIdentity } from "./app-identity.ts";
 import { installAppMenu } from "./app-menu.ts";
-import { showAppQuitConfirmation } from "./app-quit/quit-confirmation.ts";
-import { createAppQuitController } from "./app-quit/quit-controller.ts";
-import { formatQuitFailure } from "./app-quit/quit-failure-format.ts";
-import { createAppQuitRendererTransport } from "./app-quit/quit-renderer-transport.ts";
-import { shouldBypassQuitConfirmationForTests } from "./app-quit/quit-test-runtime.ts";
+import { showAppQuitConfirmation } from "./app-quit/confirmation.ts";
+import { createAppQuitController } from "./app-quit/controller.ts";
+import { formatQuitFailure } from "./app-quit/failure-format.ts";
+import { createAppQuitRendererTransport } from "./app-quit/renderer-transport.ts";
+import { shouldBypassQuitConfirmationForTests } from "./app-quit/test-runtime.ts";
 import { handleMainStartupFailure } from "./app-startup-failure.ts";
 import {
   attachPrivilegedProtocolHandlers,
   registerPrivilegedProtocolSchemes,
 } from "./bootstrap-privileged-protocols.ts";
-import { installMainDiagnosticsLogging } from "./diagnostics/app-diagnostics.ts";
+import { installMainDiagnosticsLogging } from "./diagnostics/app.ts";
 import { registerBundledFonts } from "./fonts/register-bundled-fonts.ts";
 import { registerAgentRuntimeHostIpc } from "./ipc/agent-runtime-host.ts";
 import { registerAgentsIpc } from "./ipc/agents.ts";
@@ -55,8 +55,8 @@ import {
 } from "./ipc/notification-center.ts";
 import { registerPierResourceIpc } from "./ipc/pier-resource.ts";
 import { registerRendererCommandIpc } from "./ipc/renderer-command.ts";
-import { registerTerminalIpc } from "./ipc/terminal.ts";
-import { registerTerminalDebugWindowIpc } from "./ipc/terminal-debug-window.ts";
+import { registerTerminalDebugWindowIpc } from "./ipc/terminal/debug-window.ts";
+import { registerTerminalIpc } from "./ipc/terminal/index.ts";
 import { registerThemeIpc } from "./ipc/theme.ts";
 import { registerUsageDataIpc } from "./ipc/usage-data.ts";
 import { registerWindowIpc } from "./ipc/window.ts";
@@ -65,12 +65,12 @@ import {
   openTerminalSearchFromMenu,
   prepareQuitDialogWindow,
   toggleCommandPaletteFromMenu,
-} from "./menu/menu-window-actions.ts";
+} from "./menu/window-actions.ts";
 import { handlePreferencesChangedForWindows } from "./preferences-broadcast.ts";
 import { isDevRuntime } from "./runtime-mode.ts";
-import { createAppUpdateScheduler } from "./services/app-updates/app-update-scheduler.ts";
+import { createAppUpdateScheduler } from "./services/app-updates/scheduler.ts";
 import { createExternalNavigationService } from "./services/external-navigation.ts";
-import { createGitAutofetchService } from "./services/git-autofetch-service.ts";
+import { createGitAutofetchService } from "./services/git/autofetch-service.ts";
 import { formatDevSingleInstanceLockFailure } from "./startup-diagnostics.ts";
 import { reconcileOrphanedBackgroundProcesses } from "./state/background-task-process-ledger.ts";
 import { migrateTerminalSessionScopesToRecordIds } from "./state/terminal-session-scope-migration.ts";
@@ -80,8 +80,8 @@ import {
 } from "./state/terminal-session-state.ts";
 import { readPreferredOpenWindowRecordIds } from "./state/window-record-state.ts";
 import type { AppWindow } from "./windows/app-window.ts";
-import { windowManager } from "./windows/window-manager.ts";
-import { createWindowZoomController } from "./windows/window-zoom.ts";
+import { windowManager } from "./windows/manager.ts";
+import { createWindowZoomController } from "./windows/zoom.ts";
 
 const isDev = isDevRuntime();
 const isMac = process.platform === "darwin";

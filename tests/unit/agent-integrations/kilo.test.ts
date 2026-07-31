@@ -1,7 +1,7 @@
 import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { agentHookEventSchema } from "@shared/contracts/agent-session.ts";
+import { agentHookEventSchema } from "@shared/contracts/agent/session.ts";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
 

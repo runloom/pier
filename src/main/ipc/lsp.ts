@@ -21,23 +21,23 @@ import {
 import { DEFAULT_CAPABILITIES_BY_CLIENT_KIND } from "@shared/contracts/permissions.ts";
 import { PIER } from "@shared/ipc-channels.ts";
 import { type IpcMainInvokeEvent, ipcMain, type WebContents } from "electron";
-import { appCore } from "../app-core/app-core.ts";
+import { appCore } from "../app-core/index.ts";
 import { createBootstrappedLspRegistry } from "../services/lsp/bootstrap-providers.ts";
 import {
   createLspE2eObserverFromEnvironment,
   installLspE2eObserverGlobal,
   removeLspE2eObserverGlobal,
-} from "../services/lsp/lsp-e2e-observer.ts";
-import { applyLspPrefsToPolicy } from "../services/lsp/lsp-prefs-wiring.ts";
-import { LspSessionHost } from "../services/lsp/lsp-session-host.ts";
+} from "../services/lsp/e2e-observer.ts";
+import { applyLspPrefsToPolicy } from "../services/lsp/prefs-wiring.ts";
 import { normalizeFsRoot } from "../services/lsp/resolve-root.ts";
+import { LspSessionHost } from "../services/lsp/session-host.ts";
 import {
   deriveLspWorkspaceKey,
   type LspWorkspaceRuntimeState,
   WorkspaceLspPolicy,
   waitForLspTreeCleanupWithRetry,
-} from "../services/lsp/workspace-lsp-policy.ts";
-import { windowManager } from "../windows/window-manager.ts";
+} from "../services/lsp/workspace-policy.ts";
+import { windowManager } from "../windows/manager.ts";
 import { createLspLanguageToolsRequestHandler } from "./lsp-language-tools.ts";
 import { isTrustedMainFrame } from "./trusted-main-frame.ts";
 

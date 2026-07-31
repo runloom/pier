@@ -1,4 +1,4 @@
-import { spawnBackgroundTask } from "@main/services/tasks/task-background-runner.ts";
+import { spawnBackgroundTask } from "@main/services/tasks/background-runner.ts";
 import { describe, expect, it } from "vitest";
 
 describe("task background runner", () => {

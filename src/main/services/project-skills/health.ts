@@ -14,12 +14,12 @@ import {
 } from "./identity.ts";
 import { inspectLibraryContent } from "./library-state.ts";
 import { createProjectSkillsPaths } from "./paths.ts";
-import { readManifestState } from "./repair-log.ts";
+import { readManifestState } from "./repair/log.ts";
 import {
   createProjectSkillsStore,
   ProjectSkillsLedgerCorrupt,
   type ProjectSkillsStore,
-} from "./store.ts";
+} from "./store/index.ts";
 
 export {
   buildProjectSkillsIssue,

@@ -17,9 +17,9 @@ import { useWorkspaceStore } from "@/stores/workspace.store.ts";
 import {
   dispatchTerminalComposerAttach,
   dispatchTerminalOpenComposer,
-} from "./terminal-composer-events.ts";
-import { isAgentComposerEligibleForPanel } from "./terminal-composer-mount.ts";
-import { dispatchTerminalOpenSearch } from "./terminal-search-events.ts";
+} from "./composer-events.ts";
+import { isAgentComposerEligibleForPanel } from "./composer-mount.ts";
+import { dispatchTerminalOpenSearch } from "./search-events.ts";
 
 function terminalOperationContribution(opts: {
   id: string;

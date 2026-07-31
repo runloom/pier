@@ -1,12 +1,12 @@
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { FILES_IN_FILE_SEARCH_BAR_CLASSNAME } from "@plugins/builtin/files/renderer/files-search-bar.tsx";
-import type { MarkdownCodeHighlighter } from "@plugins/builtin/files/renderer/markdown/markdown-code-highlighter.ts";
-import { parseMarkdownToIr } from "@plugins/builtin/files/renderer/markdown/markdown-parser.ts";
+import type { MarkdownCodeHighlighter } from "@plugins/builtin/files/renderer/markdown/code-highlighter.ts";
+import { parseMarkdownToIr } from "@plugins/builtin/files/renderer/markdown/parser.ts";
+import { MarkdownPreview } from "@plugins/builtin/files/renderer/markdown/preview.tsx";
 import {
   type MarkdownRuntime,
   paginateMarkdownDocument,
-} from "@plugins/builtin/files/renderer/markdown/markdown-runtime.ts";
-import { MarkdownPreview } from "@plugins/builtin/files/renderer/markdown-preview.tsx";
+} from "@plugins/builtin/files/renderer/markdown/runtime.ts";
+import { FILES_IN_FILE_SEARCH_BAR_CLASSNAME } from "@plugins/builtin/files/renderer/search/bar.tsx";
 import { fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { describe, expect, it, vi } from "vitest";
 
@@ -830,7 +830,7 @@ describe("MarkdownPreview", () => {
 
     const { writeMarkdownMeasureMode, writeMarkdownReadingAppearance } =
       await import(
-        "@plugins/builtin/files/renderer/markdown-preview-preferences.ts"
+        "@plugins/builtin/files/renderer/markdown/preview-preferences.ts"
       );
     writeMarkdownMeasureMode("wide");
     await waitFor(() => {

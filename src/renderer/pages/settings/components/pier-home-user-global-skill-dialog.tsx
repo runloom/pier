@@ -9,12 +9,12 @@ import {
   type AppContentDialogRenderProps,
   openAppContentDialog,
 } from "@/stores/app-content-dialog.store.ts";
-import { SkillDetailSection } from "./skills/skill-detail-section.tsx";
+import { SkillDetailSection } from "./skills/detail-section.tsx";
 import {
   SkillContentBody,
   SkillsEffectMatrixCard,
-} from "./skills/skills-readonly-detail.tsx";
-import { SkillMdScopeNotice } from "./skills/skills-shared.tsx";
+} from "./skills/readonly-detail.tsx";
+import { SkillMdScopeNotice } from "./skills/shared.tsx";
 
 /**
  * Home · agent-global skill: read-only secondary dialog.

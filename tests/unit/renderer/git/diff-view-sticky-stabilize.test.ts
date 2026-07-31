@@ -1,0 +1,113 @@
+import {
+  DIFF_HEADER_HEIGHT_PX,
+  diffFontMetrics,
+  pierDiffCodeViewKey,
+} from "@pier/ui/diff-view/appearance.ts";
+import { stabilizeCodeViewStickyPositioning } from "@pier/ui/diff-view/sticky-stabilize.ts";
+import { describe, expect, it, vi } from "vitest";
+
+describe("diff header metrics", () => {
+  it("uses the compact 32px multi-diff header chrome height", () => {
+    expect(DIFF_HEADER_HEIGHT_PX).toBe(32);
+    expect(diffFontMetrics("13px").diffHeaderHeight).toBe(32);
+    expect(diffFontMetrics("13px").lineHeight).toBeCloseTo(22.75);
+    expect(diffFontMetrics("16px").lineHeight).toBeCloseTo(28);
+  });
+
+  it("pierDiffCodeViewKey remounts when lineHeight (codeFontSize) changes", () => {
+    const base = {
+      diffStyle: "split",
+      overflow: "scroll",
+      renderMode: "worker",
+    } as const;
+    const small = pierDiffCodeViewKey({
+      ...base,
+      lineHeight: diffFontMetrics("13px").lineHeight,
+    });
+    const large = pierDiffCodeViewKey({
+      ...base,
+      lineHeight: diffFontMetrics("16px").lineHeight,
+    });
+    expect(small).not.toBe(large);
+    expect(small).toContain("lh=");
+    expect(large).toContain(`lh=${diffFontMetrics("16px").lineHeight}`);
+  });
+
+  it("pierDiffCodeViewKey does not include item membership (no topology remount)", () => {
+    const key = pierDiffCodeViewKey({
+      diffStyle: "split",
+      lineHeight: 22.75,
+      overflow: "scroll",
+      renderMode: "worker",
+    });
+    expect(key).not.toContain("topology");
+    expect(key).toBe(
+      pierDiffCodeViewKey({
+        diffStyle: "split",
+        lineHeight: 22.75,
+        overflow: "scroll",
+        renderMode: "worker",
+      })
+    );
+  });
+});
+
+describe("stabilizeCodeViewStickyPositioning", () => {
+  it("replaces random sticky top with a deterministic flush", () => {
+    const stickyContainer = document.createElement("div");
+    const stickyOffset = document.createElement("div");
+    const original = vi.fn();
+    const viewer = {
+      applyStickyPositioning: original,
+      getHeight: () => 400,
+      itemMetricsCache: { diffHeaderHeight: 32 },
+      renderState: { stickyBottom: 200, stickyHeight: 150, stickyTop: 50 },
+      stickyContainer,
+      stickyOffset,
+    };
+
+    stabilizeCodeViewStickyPositioning(viewer);
+    expect(viewer.applyStickyPositioning).not.toBe(original);
+
+    // height 400 - sticky span 150 => top 250; bottom 250 + header 32
+    expect(stickyOffset.style.height).toBe("50px");
+    expect(stickyContainer.style.top).toBe("250px");
+    expect(stickyContainer.style.bottom).toBe("282px");
+    expect(viewer.renderState).toMatchObject({
+      stickyBottom: 200,
+      stickyHeight: 150,
+      stickyTop: 50,
+    });
+
+    // Second call keeps the patched apply and re-flushes current bounds.
+    const patched = viewer.applyStickyPositioning;
+    stabilizeCodeViewStickyPositioning(viewer);
+    expect(viewer.applyStickyPositioning).toBe(patched);
+    expect(stickyContainer.style.top).toBe("250px");
+
+    // 虚拟化热路径：reapply:false 只保留 patch，不再写 style。
+    stickyContainer.style.top = "0px";
+    stabilizeCodeViewStickyPositioning(viewer, { reapply: false });
+    expect(viewer.applyStickyPositioning).toBe(patched);
+    expect(stickyContainer.style.top).toBe("0px");
+  });
+
+  it("patches without applying when sticky bounds are unset", () => {
+    const stickyContainer = document.createElement("div");
+    const stickyOffset = document.createElement("div");
+    const original = vi.fn();
+    const viewer = {
+      applyStickyPositioning: original,
+      getHeight: () => 400,
+      itemMetricsCache: { diffHeaderHeight: 32 },
+      renderState: { stickyBottom: -1, stickyHeight: 0, stickyTop: -1 },
+      stickyContainer,
+      stickyOffset,
+    };
+
+    stabilizeCodeViewStickyPositioning(viewer);
+    expect(viewer.applyStickyPositioning).not.toBe(original);
+    expect(stickyOffset.style.height).toBe("");
+    expect(stickyContainer.style.top).toBe("");
+  });
+});

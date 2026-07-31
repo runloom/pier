@@ -1,5 +1,5 @@
+import type { AgentSelectionResult } from "@shared/contracts/agent/usage.ts";
 import type { AgentKind, DetectAgentsResult } from "@shared/contracts/agent.ts";
-import type { AgentSelectionResult } from "@shared/contracts/agent-usage.ts";
 import type {
   AppQuitConfirmationRequest,
   AppQuitDecisionPayload,

@@ -6,7 +6,7 @@ import {
   rulesReadRequestSchema,
   rulesSnapshotRequestSchema,
   rulesWriteRequestSchema,
-} from "./agent-assets.ts";
+} from "./agent/assets.ts";
 import { aiGenerateTextRequestSchema } from "./ai.ts";
 import {
   environmentProjectRequestSchema,
@@ -14,8 +14,8 @@ import {
   environmentUpdateRequestSchema,
   environmentWorktreeBindingRequestSchema,
 } from "./environment.ts";
-import { fileCommandSchemas } from "./file-commands.ts";
-import { gitCommandSchemas } from "./git-commands.ts";
+import { fileCommandSchemas } from "./file/commands.ts";
+import { gitCommandSchemas } from "./git/commands.ts";
 import {
   liveModulesCompileRequestSchema,
   liveModulesGetUrlRequestSchema,
@@ -37,9 +37,9 @@ import {
   skillsPierBindingsListRequestSchema,
   skillsPierBindingsMutateRequestSchema,
 } from "./pier-home.ts";
+import { managedPluginCommandSchemas } from "./plugin/commands.ts";
+import { jsonValueSchema } from "./plugin/settings.ts";
 import { pluginInspectRequestSchema } from "./plugin.ts";
-import { managedPluginCommandSchemas } from "./plugin-commands.ts";
-import { jsonValueSchema } from "./plugin-settings.ts";
 import { projectPreferencesPatchSchema } from "./preferences-patch.ts";
 import { projectSkillsCommandSchemas } from "./project-skills-commands.ts";
 import { taskSpawnModeSchema } from "./tasks.ts";
@@ -47,11 +47,11 @@ import {
   resolvedTerminalLaunchOptionsSchema,
   terminalLaunchEnvKeySchema,
   terminalLaunchOptionsSchema,
-} from "./terminal-launch.ts";
+} from "./terminal/launch.ts";
 import {
   terminalStatusBarItemOverridePatchSchema,
   terminalStatusBarOverridePatchesSchema,
-} from "./terminal-status-bar.ts";
+} from "./terminal/status-bar.ts";
 import {
   type WorktreeOperationErrorReason,
   worktreeCheckRequestSchema,

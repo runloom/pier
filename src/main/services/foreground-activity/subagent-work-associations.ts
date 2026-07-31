@@ -1,4 +1,4 @@
-import type { AgentHookEventPayload } from "@shared/contracts/agent-session.ts";
+import type { AgentHookEventPayload } from "@shared/contracts/agent/session.ts";
 import type { HookLayer, HookScope } from "./entry.ts";
 
 const MAX_SETTLED_SUBAGENT_WORKS = 256;

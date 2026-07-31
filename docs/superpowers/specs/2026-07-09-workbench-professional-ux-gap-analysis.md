@@ -123,7 +123,7 @@ P0 做完后工作台应不再被误判为「功能藏在右键里的 demo」。
 | 面板壳 / 网格 / 右键 | `src/renderer/panel-kits/workbench/workbench-panel.tsx` |
 | 卡片 chrome | `src/renderer/panel-kits/workbench/workbench-widget-card.tsx` |
 | 添加入口 | `src/renderer/panel-kits/workbench/workbench-add-card.tsx` |
-| 状态写回 | `src/renderer/panel-kits/workbench/use-workbench-panel-state.ts` |
+| 状态写回 | `src/renderer/panel-kits/workbench/use-panel-state.ts` |
 | 物料库 | `src/renderer/panel-kits/workbench/workbench-library-dialog.tsx` |
 | 系统资源 | `src/renderer/panel-kits/workbench/core-widgets/system-resources-widget.tsx` |
 | 活动总览 | `src/renderer/panel-kits/workbench/core-widgets/activity-widget.tsx` |

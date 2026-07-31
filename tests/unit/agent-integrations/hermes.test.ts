@@ -26,7 +26,8 @@ import {
   pierManagedPluginMarker,
 } from "../../../src/main/services/agents/integrations/managed-plugin-file.ts";
 import { createForegroundActivityAggregator } from "../../../src/main/services/foreground-activity/aggregator.ts";
-import { agentHookEventSchema } from "../../../src/shared/contracts/agent-session.ts";
+import { agentHookEventSchema } from "../../../src/shared/contracts/agent/session.ts";
+import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const EXCEPT_PASS_RE = /except[^\n]*:\s*(?:\n\s*#[^\n]*)*\s*\n\s*pass/;
 
@@ -174,6 +175,7 @@ ctx.hooks["on_session_end"](session_id="parent", turn_id="turn-1", completed=Tru
     const result = spawnSync("python3", ["-c", runner], {
       env: {
         ...process.env,
+        PATH: pathForHookSpawn(process.env.PATH),
         PIER_AGENT_EVENT_LOG: logPath,
         PIER_PANEL_ID: "panel-1",
         PIER_WINDOW_ID: "window-1",
@@ -280,6 +282,7 @@ ctx.hooks["subagent_stop"](
     const result = spawnSync("python3", ["-c", runner], {
       env: {
         ...process.env,
+        PATH: pathForHookSpawn(process.env.PATH),
         PIER_AGENT_EVENT_LOG: logPath,
         PIER_PANEL_ID: "panel-1",
         PIER_WINDOW_ID: "window-1",

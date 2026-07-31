@@ -2,7 +2,7 @@ import { join } from "node:path";
 import type {
   ManagedPluginOperationResult,
   OfficialPluginIndex,
-} from "@shared/contracts/managed-plugin.ts";
+} from "@shared/contracts/plugin/managed.ts";
 import type { ManagedPluginIndexStore } from "./index-state.ts";
 import { promoteArchiveToInstalled } from "./install-runtime.ts";
 import { resolveInstallSource } from "./install-source-resolver.ts";

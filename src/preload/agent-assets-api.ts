@@ -5,7 +5,7 @@ import type {
   RuleFileId,
   RulesReadResult,
   RulesSnapshot,
-} from "@shared/contracts/agent-assets.ts";
+} from "@shared/contracts/agent/assets.ts";
 import { invokePierCommand } from "./ipc-envelope.ts";
 
 export interface PierAgentAssetsAPI {

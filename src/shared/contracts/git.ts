@@ -1,12 +1,12 @@
 import { z } from "zod";
-import { gitChangeSummarySchema } from "./git-change-summary.ts";
+import { gitChangeSummarySchema } from "./git/change-summary.ts";
 
 export {
   type GitChangeSummary,
   type GitChangeSummaryUnavailableReason,
   gitChangeSummarySchema,
   gitChangeSummaryUnavailableReasonSchema,
-} from "./git-change-summary.ts";
+} from "./git/change-summary.ts";
 
 /**
  * 单个变更文件的状态。
