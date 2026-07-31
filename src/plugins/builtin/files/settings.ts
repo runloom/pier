@@ -9,6 +9,21 @@ export const FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY =
   "pier.files.tree.showGitIgnoredFiles";
 export const FILES_TREE_COMPACT_FOLDERS_SETTING_KEY =
   "pier.files.tree.compactFolders";
+/** Active-file auto-reveal: on | select | off (VS Code explorer.autoReveal analogue). */
+export const FILES_TREE_AUTO_REVEAL_SETTING_KEY = "pier.files.tree.autoReveal";
+export const FILES_TREE_AUTO_REVEAL_VALUES = ["on", "select", "off"] as const;
+export type FilesTreeAutoRevealMode =
+  (typeof FILES_TREE_AUTO_REVEAL_VALUES)[number];
+/**
+ * Multiline globs: active-file auto-reveal skips matching paths.
+ * Explicit reveal (breadcrumb / command) ignores this list.
+ */
+export const FILES_TREE_AUTO_REVEAL_EXCLUDE_SETTING_KEY =
+  "pier.files.tree.autoRevealExcludePatterns";
+export const FILES_TREE_DEFAULT_AUTO_REVEAL_EXCLUDE_PATTERNS = [
+  "**/node_modules",
+  "**/bower_components",
+].join("\n");
 
 export { FILES_TREE_DEFAULT_EXCLUDE_PATTERNS } from "@shared/contracts/file/tree-exclude.ts";
 

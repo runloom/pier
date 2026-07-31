@@ -59,6 +59,7 @@ import {
   parseTreeMetadata,
 } from "./tree/action-utils.ts";
 import { createFilesTreeActions } from "./tree/actions.ts";
+import { registerFilesDiskOpenTreeReveal } from "./tree/open-disk-reveal.ts";
 import { filePanelProjectRoot } from "./tree/preferences.ts";
 import {
   clearFileTreeSidebarCache,
@@ -66,6 +67,7 @@ import {
   expandFilesTreeKnownFolders,
   openFilesTreeSearch,
 } from "./tree/registry.ts";
+import { createRevealActiveFileInTreeAction } from "./tree/reveal-active-action.ts";
 import { clearFilesTreeStore } from "./tree/store.ts";
 import { clearFilesTreeWatchers } from "./tree/watch.ts";
 import { FilesWatchHub } from "./watch-hub.ts";
@@ -432,6 +434,7 @@ export const filesRendererPlugin: RendererPluginModule = {
       context.actions.register(
         withFilesMutationGate(createTreeSearchAction(context), editorController)
       ),
+      context.actions.register(createRevealActiveFileInTreeAction(context)),
       context.actions.register(createTreeExpandAllAction(context)),
       context.actions.register(createTreeCollapseFoldersAction(context)),
       ...createFilesTreeActions(context, editorController).map((action) =>
@@ -453,6 +456,8 @@ export const filesRendererPlugin: RendererPluginModule = {
         context,
         controller: editorController,
       }),
+      // Git review / host openInEditor → project tree reveal (explicit center).
+      registerFilesDiskOpenTreeReveal(context),
     ];
 
     return () => {

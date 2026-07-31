@@ -20,12 +20,13 @@ import {
 import { useFileTreeSearch } from "@pier/ui/file/use-tree-search.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { SearchX } from "lucide-react";
-import { memo, type ReactNode, useEffect, useMemo } from "react";
+import { memo, type ReactNode, useCallback, useEffect, useMemo } from "react";
 import { pluginText } from "../plugin-text.ts";
 import { ReviewTreeLoading } from "./feedback.tsx";
 import type { gitReviewTreeModel } from "./tree.tsx";
 import { registerGitReviewTreeFolderHandlers } from "./tree-collapse-registry.ts";
 import { useGitReviewTreeContextMenu } from "./tree-context-menu.ts";
+import { revealGitReviewTreeSelection } from "./tree-reveal-selection.ts";
 
 const REVIEW_TREE_WIDTH_STORAGE_KEY = "pier.git.review.treeWidthPx";
 
@@ -86,6 +87,16 @@ function GitReviewTreeSidebarComponent({
     treeSearch.queryApplied &&
     treeSearch.matchCount === 0;
   const searchActionsDisabled = treeSearch.matchCount === 0;
+
+  // Explicit open: center the row in the tree viewport (sticky-aware via
+  // PierFileTree reveal). Not continuous active tracking.
+  const handleOpenPath = useCallback(
+    (path: string) => {
+      onOpenPath(path);
+      revealGitReviewTreeSelection(treeSearch.treeApiRef.current, path);
+    },
+    [onOpenPath, treeSearch.treeApiRef]
+  );
 
   return (
     <aside className="flex h-full min-h-0 w-full flex-col bg-sidebar">
@@ -152,7 +163,7 @@ function GitReviewTreeSidebarComponent({
             items={treeModel.items}
             label={pluginText(context, "reviewTreeLabel", "Changed files")}
             onOpenItemContextMenu={openItemContextMenu}
-            onOpenPath={onOpenPath}
+            onOpenPath={handleOpenPath}
             {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
             {...(onContextMenuSession ? { onContextMenuSession } : {})}
             onSearchMatchStateChange={treeSearch.updateMatchState}

@@ -47,14 +47,25 @@ export {
   resetTreeExpansionAuthoritiesForTests,
 } from "./tree-expansion-authority.ts";
 export type {
+  ResolvedRevealPolicy,
+  ResolveRevealPolicyInput,
+} from "./tree-reveal-policy.ts";
+export {
+  resolveRevealIntentForPath,
+  resolveRevealPolicy,
+} from "./tree-reveal-policy.ts";
+
+export type {
   PierDirectoryLoadState,
   PierFileTreeApi,
+  PierFileTreeAutoRevealMode,
   PierFileTreeContextMenuItem,
   PierFileTreeContextMenuPoint,
   PierFileTreeGitStatus,
   PierFileTreeItem,
   PierFileTreeMove,
   PierFileTreeProps,
+  PierFileTreeRevealIntent,
   PierFileTreeRevealOptions,
   PierFileTreeRevealScroll,
   PierFileTreeScrollController,
@@ -66,12 +77,14 @@ export type {
 } from "./tree-types.ts";
 
 export function PierFileTree({
+  autoReveal = "on",
   directoryErrorLabel,
   directoryStates,
   expansionAuthority,
   expansionSeed = "none",
   flattenEmptyDirectories = true,
   flattenMinDepth,
+  isAutoRevealExcluded,
   items,
   label,
   onLoadDirectory,
@@ -268,19 +281,6 @@ export function PierFileTree({
   treeSearch.useSearchMatchState(model, nextRefs, onSearchMatchStateChange);
   const activeSearchRef = React.useRef<string | null>(null);
 
-  const { requestReveal, suppressActiveRevealRef } =
-    useFileTreeRevealController({
-      activeSearchRef,
-      containerRef,
-      directoryStates,
-      ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
-      model,
-      programmaticSelectionRef,
-      readRefs,
-      renderSignature,
-      revealPath,
-    });
-
   const {
     applyDirectoryExpansion,
     collapseAllDirectories,
@@ -298,6 +298,49 @@ export function PierFileTree({
     readRefs,
     renderSignature,
     suppressAuthorityWriteRef,
+  });
+
+  const {
+    beginProgrammaticScroll,
+    captureSnapshot,
+    endProgrammaticScroll,
+    restoreSnapshotSoon,
+  } = usePierFileTreeScrollController({
+    containerRef,
+    onScrollSnapshotChange,
+    scrollControllerRef,
+  });
+
+  useFileTreePathSync({
+    activeSearchRef,
+    captureSnapshot,
+    directoryStates,
+    expandedDirectoriesRef,
+    ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
+    expansionSeed,
+    items,
+    model,
+    modelAheadMovesRef,
+    paths,
+    renderSignature,
+    restoreSnapshotSoon,
+  });
+
+  // After scroll + path-sync so reveal can suppress restore during cold open.
+  const { requestReveal } = useFileTreeRevealController({
+    activeSearchRef,
+    autoReveal,
+    beginProgrammaticScroll,
+    containerRef,
+    directoryStates,
+    endProgrammaticScroll,
+    ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
+    ...(isAutoRevealExcluded === undefined ? {} : { isAutoRevealExcluded }),
+    model,
+    programmaticSelectionRef,
+    readRefs,
+    renderSignature,
+    revealPath,
   });
 
   React.useImperativeHandle(
@@ -339,7 +382,7 @@ export function PierFileTree({
         }
       },
       revealPath: (path, options) => {
-        suppressActiveRevealRef.current = true;
+        // suppressActive is set inside requestReveal when policy.suppressActive.
         return requestReveal(path, options);
       },
       removePaths: (pathsToRemove) => {
@@ -410,7 +453,6 @@ export function PierFileTree({
       readRefs,
       renameSession,
       requestReveal,
-      suppressActiveRevealRef,
     ]
   );
 
@@ -426,28 +468,6 @@ export function PierFileTree({
     readRefs,
     requestedLoadDirectoriesRef,
     suppressAuthorityWriteRef,
-  });
-
-  const { captureSnapshot, restoreSnapshotSoon } =
-    usePierFileTreeScrollController({
-      containerRef,
-      onScrollSnapshotChange,
-      scrollControllerRef,
-    });
-
-  useFileTreePathSync({
-    activeSearchRef,
-    captureSnapshot,
-    directoryStates,
-    expandedDirectoriesRef,
-    ...(expansionAuthority === undefined ? {} : { expansionAuthority }),
-    expansionSeed,
-    items,
-    model,
-    modelAheadMovesRef,
-    paths,
-    renderSignature,
-    restoreSnapshotSoon,
   });
 
   return (

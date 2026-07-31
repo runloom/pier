@@ -23,6 +23,7 @@ import type { FileEditorController } from "../editor/controller.ts";
 import { createFileEditorSessionId } from "../editor/session-id.ts";
 import { createFilesTranslate } from "../i18n.ts";
 import {
+  activeFilePathForTree,
   filePanelProjectRoot,
   projectNameFromRoot,
   useProjectFileTreeCollapsed,
@@ -314,10 +315,10 @@ function FilePanelContent({
     return <div aria-hidden="true" className="h-full w-full" />;
   }
 
-  const activeFilePath =
-    sourceFromParams?.kind === "disk" && sourceFromParams.root === root
-      ? sourceFromParams.path
-      : null;
+  const activeFilePath = activeFilePathForTree({
+    root,
+    source: sourceFromParams,
+  });
   const sidebar = renderFilePanelSidebar({
     activeFilePath,
     controller,

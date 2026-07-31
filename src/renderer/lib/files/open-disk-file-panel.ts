@@ -72,6 +72,40 @@ function cloneParamsRecord(params: unknown): Record<string, unknown> | null {
   return { ...params };
 }
 
+export interface FilesDiskPathOpenedEvent {
+  instanceId: string;
+  path: string;
+  root: string;
+}
+
+type FilesDiskPathOpenedListener = (event: FilesDiskPathOpenedEvent) => void;
+
+const filesDiskPathOpenedListeners = new Set<FilesDiskPathOpenedListener>();
+
+/**
+ * Files plugin (and tests) subscribe to force project-tree reveal after a
+ * cross-plugin open (e.g. Git review "Open File"). Host must not import the
+ * files plugin tree registry.
+ */
+export function onFilesDiskPathOpened(
+  listener: FilesDiskPathOpenedListener
+): () => void {
+  filesDiskPathOpenedListeners.add(listener);
+  return () => {
+    filesDiskPathOpenedListeners.delete(listener);
+  };
+}
+
+function notifyFilesDiskPathOpened(event: FilesDiskPathOpenedEvent): void {
+  for (const listener of filesDiskPathOpenedListeners) {
+    try {
+      listener(event);
+    } catch {
+      // Listeners must not break open; failures are non-fatal.
+    }
+  }
+}
+
 /**
  * 宿主跨插件打开 files 磁盘文档面板。
  * files 未注册 / path 非法时返回 false；已打开同 source 时复用实例。
@@ -106,8 +140,10 @@ export function openFilesDiskPath(input: {
   });
 
   const existingParams = cloneParamsRecord(existing?.params);
-  const params = existingParams ?? {
-    pinned: true,
+  // Always refresh disk source on open so params match the request path even
+  // when reusing an instance (identity key is path-scoped today).
+  const params = {
+    ...(existingParams ?? { pinned: true }),
     source,
   };
   const identityKey = `${FILES_FILE_PANEL_COMPONENT_ID}:disk:${stableFileIdentityHash(
@@ -125,5 +161,12 @@ export function openFilesDiskPath(input: {
     params,
     title: input.title ?? basename(source.path),
   });
+  if (result.kind === "opened") {
+    notifyFilesDiskPathOpened({
+      instanceId,
+      path: source.path,
+      root: source.root,
+    });
+  }
   return result.kind === "opened";
 }

@@ -1,16 +1,21 @@
 import {
+  areRevealAncestorsExpanded,
   type PierFileTreeRevealModel,
   resolveCompactChainTerminalPath,
+  revealAncestorDirectoryPaths,
   revealFileTreePath,
 } from "@pier/ui/file/tree-reveal.ts";
 import type { PierFileTreeItem } from "@pier/ui/file/tree-types.ts";
 import { describe, expect, it, vi } from "vitest";
 
 function directoryHandle(expanded: boolean) {
+  let isExpanded = expanded;
   return {
-    expand: vi.fn(),
+    expand: vi.fn(() => {
+      isExpanded = true;
+    }),
     isDirectory: () => true,
-    isExpanded: () => expanded,
+    isExpanded: () => isExpanded,
   };
 }
 
@@ -193,14 +198,187 @@ describe("revealFileTreePath", () => {
     expect(selectOnlyPath).not.toHaveBeenCalled();
   });
 
-  it("focuses the revealed row DOM when getFileTreeContainer is provided", () => {
+  it("returns false when projected ancestors cannot expand (scroll would no-op)", () => {
+    const itemsByPath = new Map<string, PierFileTreeItem>([
+      ["scripts", { kind: "directory", path: "scripts" }],
+      ["scripts/e2e-runner", { kind: "directory", path: "scripts/e2e-runner" }],
+      [
+        "scripts/e2e-runner/setup-mac.sh",
+        { kind: "file", path: "scripts/e2e-runner/setup-mac.sh" },
+      ],
+    ]);
+    const { getItem, model, scrollToPath, selectOnlyPath } = createModel();
+    // Parent exists in items but model has no directory handle → cannot expand.
+    getItem.mockReturnValue(null);
+
+    const ok = revealFileTreePath(
+      model,
+      () => ({ itemsByPath }),
+      { current: null },
+      "scripts/e2e-runner/setup-mac.sh",
+      { expandTarget: false, scroll: "nearest" }
+    );
+
+    expect(ok).toBe(false);
+    // May still select for progressive UX, but must not report full success.
+    expect(scrollToPath).not.toHaveBeenCalled();
+    expect(selectOnlyPath).toHaveBeenCalled();
+  });
+
+  it("treats missing intermediate ancestors as ok when parent is expanded", () => {
+    // Compact/lazy: only parent of leaf is projected, not every segment.
+    const itemsByPath = new Map<string, PierFileTreeItem>([
+      ["scripts/e2e-runner", { kind: "directory", path: "scripts/e2e-runner" }],
+      [
+        "scripts/e2e-runner/setup-mac.sh",
+        { kind: "file", path: "scripts/e2e-runner/setup-mac.sh" },
+      ],
+    ]);
+    const { getItem, model, scrollToPath } = createModel();
+    const parentHandle = directoryHandle(false);
+    getItem.mockImplementation((path: string) => {
+      if (path === "scripts/e2e-runner/" || path === "scripts/e2e-runner") {
+        return parentHandle;
+      }
+      return { isDirectory: () => false, kind: "file" as const };
+    });
+
+    const ok = revealFileTreePath(
+      model,
+      () => ({ itemsByPath }),
+      { current: null },
+      "scripts/e2e-runner/setup-mac.sh",
+      { expandTarget: false, scroll: "nearest" }
+    );
+
+    expect(ok).toBe(true);
+    expect(parentHandle.expand).toHaveBeenCalled();
+    expect(scrollToPath).toHaveBeenCalled();
+  });
+
+  it("succeeds for deep paths after expanding collapsed ancestors", () => {
+    const itemsByPath = new Map<string, PierFileTreeItem>([
+      ["scripts", { kind: "directory", path: "scripts" }],
+      ["scripts/e2e-runner", { kind: "directory", path: "scripts/e2e-runner" }],
+      [
+        "scripts/e2e-runner/setup-mac.sh",
+        { kind: "file", path: "scripts/e2e-runner/setup-mac.sh" },
+      ],
+    ]);
+    const { getItem, model, scrollToPath } = createModel();
+    const scriptsHandle = directoryHandle(false);
+    const e2eHandle = directoryHandle(false);
+    getItem.mockImplementation((path: string) => {
+      if (path === "scripts/" || path === "scripts") {
+        return scriptsHandle;
+      }
+      if (path === "scripts/e2e-runner/" || path === "scripts/e2e-runner") {
+        return e2eHandle;
+      }
+      return { isDirectory: () => false, kind: "file" as const };
+    });
+
+    const ok = revealFileTreePath(
+      model,
+      () => ({ itemsByPath }),
+      { current: null },
+      "scripts/e2e-runner/setup-mac.sh",
+      { expandTarget: false, scroll: "nearest" }
+    );
+
+    expect(ok).toBe(true);
+    expect(scriptsHandle.expand).toHaveBeenCalled();
+    expect(e2eHandle.expand).toHaveBeenCalled();
+    expect(scrollToPath).toHaveBeenCalledWith(
+      "scripts/e2e-runner/setup-mac.sh",
+      { focus: false, offset: "nearest" }
+    );
+  });
+
+  it("lists reveal ancestor directories excluding the leaf", () => {
+    expect(
+      revealAncestorDirectoryPaths("scripts/e2e-runner/setup-mac.sh")
+    ).toEqual(["scripts", "scripts/e2e-runner"]);
+    expect(revealAncestorDirectoryPaths("README.md")).toEqual([]);
+  });
+
+  it("areRevealAncestorsExpanded is true for root-level paths", () => {
+    const { model } = createModel();
+    expect(
+      areRevealAncestorsExpanded(
+        model,
+        () => ({ itemsByPath: new Map() }),
+        "a.ts"
+      )
+    ).toBe(true);
+  });
+
+  it("selects and focuses without scrolling when scroll is none", () => {
     const itemsByPath = new Map<string, PierFileTreeItem>([
       ["src/app.tsx", { kind: "file", path: "src/app.tsx" }],
     ]);
-    const { getItem, model } = createModel();
+    const { focusPath, getItem, model, scrollToPath, selectOnlyPath } =
+      createModel();
     getItem.mockReturnValue({
       isDirectory: () => false,
       kind: "file" as const,
+    });
+
+    const ok = revealFileTreePath(
+      model,
+      () => ({ itemsByPath }),
+      { current: null },
+      "src/app.tsx",
+      { expandTarget: false, scroll: "none" }
+    );
+
+    expect(ok).toBe(true);
+    expect(selectOnlyPath).toHaveBeenCalledWith("src/app.tsx");
+    expect(focusPath).toHaveBeenCalledWith("src/app.tsx");
+    expect(scrollToPath).not.toHaveBeenCalled();
+  });
+
+  it("explicit center always requests center scroll (optimal reading zone)", () => {
+    const itemsByPath = new Map<string, PierFileTreeItem>([
+      ["src", { kind: "directory", path: "src" }],
+      ["src/app.tsx", { kind: "file", path: "src/app.tsx" }],
+    ]);
+    const { getItem, model, scrollToPath } = createModel();
+    const srcHandle = directoryHandle(false);
+    getItem.mockImplementation((path: string) => {
+      if (path === "src/" || path === "src") {
+        return srcHandle;
+      }
+      return { isDirectory: () => false, kind: "file" as const };
+    });
+
+    const ok = revealFileTreePath(
+      model,
+      () => ({ itemsByPath }),
+      { current: null },
+      "src/app.tsx",
+      { scroll: "center" }
+    );
+
+    expect(ok).toBe(true);
+    expect(scrollToPath).toHaveBeenCalledWith("src/app.tsx", {
+      focus: false,
+      offset: "center",
+    });
+  });
+
+  it("focuses the revealed row DOM when getFileTreeContainer is provided", () => {
+    const itemsByPath = new Map<string, PierFileTreeItem>([
+      ["src", { kind: "directory", path: "src" }],
+      ["src/app.tsx", { kind: "file", path: "src/app.tsx" }],
+    ]);
+    const { getItem, model } = createModel();
+    const srcHandle = directoryHandle(false);
+    getItem.mockImplementation((path: string) => {
+      if (path === "src/" || path === "src") {
+        return srcHandle;
+      }
+      return { isDirectory: () => false, kind: "file" as const };
     });
 
     const row = document.createElement("button");

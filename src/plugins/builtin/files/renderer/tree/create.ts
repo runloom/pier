@@ -218,6 +218,7 @@ export async function commitCreatedPath(options: {
   }
   revealFilesTreePath({
     ...(treeId ? { instanceId: treeId } : {}),
+    options: { intent: "explicit" },
     path,
     root,
   });
@@ -332,6 +333,7 @@ export async function commitInlineCreate(options: {
   }
   revealFilesTreePath({
     ...(pending.treeId ? { instanceId: pending.treeId } : {}),
+    options: { intent: "explicit" },
     path: options.to,
     root: options.root,
   });
@@ -375,6 +377,7 @@ export async function beginInlineCreate(options: {
   });
   revealFilesTreePath({
     ...(treeId ? { instanceId: treeId } : {}),
+    options: { intent: "explicit" },
     path: placeholderPath,
     root,
   });

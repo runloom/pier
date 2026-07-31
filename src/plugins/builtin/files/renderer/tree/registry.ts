@@ -42,9 +42,12 @@ function findTreeEntry(target: {
     // drift). Prefer same-root live tree over silent no-op.
   }
   if (target.root) {
+    const normalizeRoot = (value: string) =>
+      value.length > 1 ? value.replace(/\/+$/, "") : value;
+    const want = normalizeRoot(target.root);
     let lastMatch: FilesTreeRegistryEntry | null = null;
     for (const entry of treeRegistry.values()) {
-      if (entry.root === target.root) {
+      if (normalizeRoot(entry.root) === want) {
         lastMatch = entry;
       }
     }

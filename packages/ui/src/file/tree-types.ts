@@ -129,14 +129,41 @@ export interface PierFileTreeCollapseAllOptions {
   rootPath?: string;
 }
 
-export type PierFileTreeRevealScroll = "nearest" | "center" | "top";
+/**
+ * Scroll alignment for reveal.
+ * - `nearest` / `center` / `top`: passed to `@pierre/trees` scrollToPath
+ * - `none`: select + focus only (autoReveal `select`, inspect)
+ */
+export type PierFileTreeRevealScroll = "nearest" | "center" | "top" | "none";
+
+/**
+ * Why this reveal ran. Defaults come from `resolveRevealPolicy` (single owner).
+ * - explicit / search: user action → center
+ * - active-file: follow editor → nearest | select | off
+ * - root: project root → top
+ * - inspect: context-menu inspect (not full reveal pipeline)
+ */
+export type PierFileTreeRevealIntent =
+  | "explicit"
+  | "active-file"
+  | "root"
+  | "search"
+  | "inspect";
+
+/** Active-file auto-reveal mode (VS Code explorer.autoReveal analogue). */
+export type PierFileTreeAutoRevealMode = "on" | "select" | "off";
 
 export interface PierFileTreeRevealOptions {
-  /** Expand the target when it is a directory. Default true. */
+  /** Expand the target when it is a directory. Policy default depends on intent. */
   expandTarget?: boolean;
   /**
-   * Scroll alignment. Explicit breadcrumb/command reveal defaults to `center`
-   * (VS Code-like). Active-file auto-reveal should prefer `nearest`.
+   * Reveal intent. When omitted, empty path → `root`, else `explicit`
+   * (API / breadcrumb). Active-file prop always passes `active-file`.
+   */
+  intent?: PierFileTreeRevealIntent;
+  /**
+   * Scroll alignment. Defaults from `resolveRevealPolicy(intent)` when omitted.
+   * Prefer leaving unset so policy stays the single owner.
    */
   scroll?: PierFileTreeRevealScroll;
 }
@@ -159,7 +186,13 @@ export interface PierFileTreeScrollRestoreOptions {
 }
 
 export interface PierFileTreeScrollController {
+  /**
+   * While active, path-sync `restoreSnapshotSoon` is skipped and in-flight
+   * restore locks are cancelled so reveal/scrollToPath is not overwritten.
+   */
+  beginProgrammaticScroll: () => void;
   captureSnapshot: () => PierFileTreeScrollSnapshot | null;
+  endProgrammaticScroll: () => void;
   restoreSnapshot: (snapshot: PierFileTreeScrollSnapshot) => void;
   restoreSnapshotSoon: (
     snapshot: PierFileTreeScrollSnapshot | null,
@@ -169,6 +202,11 @@ export interface PierFileTreeScrollController {
 
 export interface PierFileTreeProps
   extends Omit<React.ComponentProps<"div">, "children" | "onSelect"> {
+  /**
+   * Active-file auto-reveal mode when `revealPath` changes.
+   * Default `"on"` (select + nearest scroll). Explicit `revealPath` API ignores this.
+   */
+  autoReveal?: PierFileTreeAutoRevealMode;
   /** 目录读取失败时的本地化行内标记；详细错误仍由业务层反馈。 */
   directoryErrorLabel?: string;
   directoryStates?: ReadonlyMap<string, PierDirectoryLoadState>;
@@ -198,6 +236,11 @@ export interface PierFileTreeProps
    * 为 true 时右键强制 Command（即使树 L-Select 暂时丢了）。
    */
   isActiveOpenPath?: (path: string) => boolean;
+  /**
+   * When true for a path, active-file auto-reveal is skipped (exclude globs).
+   * Explicit API reveal ignores this. Default: never excluded.
+   */
+  isAutoRevealExcluded?: (path: string) => boolean;
   items: readonly PierFileTreeItem[];
   label: string;
   /**

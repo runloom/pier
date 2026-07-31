@@ -27,6 +27,7 @@ import {
   writeMarkdownOpenMode,
 } from "../markdown/preview-preferences.ts";
 import {
+  activeFilePathForTree,
   filePanelProjectRoot,
   projectNameFromRoot,
   useProjectFileTreeCollapsed,
@@ -272,10 +273,10 @@ export function FilesGroupView({
     toggleFilesTreeSearch({ instanceId: groupId, root });
   }, [groupId, root, setTreeCollapsed, treeCollapsed]);
 
-  const activeFilePath =
-    selectedSource?.kind === "disk" && selectedSource.root === root
-      ? selectedSource.path
-      : null;
+  const activeFilePath = activeFilePathForTree({
+    root,
+    source: selectedSource,
+  });
 
   const sidebar =
     root && !treeCollapsed ? (

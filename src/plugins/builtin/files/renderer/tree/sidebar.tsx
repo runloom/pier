@@ -82,7 +82,12 @@ export function FileTreeSidebar({
     treeVisibility,
   });
 
-  const { compactFolders, expansionAuthority } = useFilesTreeSidebarPrefs({
+  const {
+    autoReveal,
+    compactFolders,
+    expansionAuthority,
+    isAutoRevealExcluded,
+  } = useFilesTreeSidebarPrefs({
     activeFilePath,
     context,
     list: treeVisibility.list,
@@ -346,12 +351,14 @@ export function FileTreeSidebar({
   } else {
     content = (
       <PierFileTree
+        autoReveal={autoReveal}
         className="min-h-0 w-full flex-1"
         directoryErrorLabel={t("filePanel.tree.directoryError", "Error")}
         directoryStates={snapshot.directoryStatesByPath}
         expansionAuthority={expansionAuthority}
         expansionSeed="none"
         flattenEmptyDirectories={compactFolders}
+        isAutoRevealExcluded={isAutoRevealExcluded}
         items={items}
         label={t("panel.tree.label", "Files")}
         onLoadDirectory={loadDirectory}

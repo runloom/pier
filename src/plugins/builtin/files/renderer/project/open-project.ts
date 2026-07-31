@@ -61,7 +61,11 @@ function findOpenProjectDirectory(
 function scheduleProjectReveal(anchor: string): void {
   ensureProjectFileTreeExpanded(anchor);
   globalThis.setTimeout(() => {
-    revealFilesTreePath({ path: "", root: anchor });
+    revealFilesTreePath({
+      options: { intent: "root" },
+      path: "",
+      root: anchor,
+    });
   }, REVEAL_DELAY_MS);
 }
 

@@ -9,10 +9,19 @@ import {
   resetFilesLspNavigationForTests,
 } from "@plugins/builtin/files/renderer/lsp/navigation.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
+import { openFilesDiskPath } from "@/lib/files/open-disk-file-panel.ts";
+
+vi.mock("@/lib/files/open-disk-file-panel.ts", () => ({
+  openFilesDiskPath: vi.fn(() => true),
+}));
 
 describe("files LSP navigation", () => {
+  const openDisk = vi.mocked(openFilesDiskPath);
+
   afterEach(() => {
     resetFilesLspNavigationForTests();
+    openDisk.mockClear();
+    openDisk.mockReturnValue(true);
     vi.useRealTimers();
   });
 
@@ -39,9 +48,8 @@ describe("files LSP navigation", () => {
     expect(getFilesLspEditorView("/repo/src/main.ts")).toBeNull();
   });
 
-  it("activates source mode before waiting for an existing preview or diff panel", async () => {
+  it("always opens the disk panel (activates tab + tree reveal) even when view exists", async () => {
     vi.useFakeTimers();
-    const openInstance = vi.fn();
     const context = {
       panels: {
         listInstances: vi.fn(() => [
@@ -52,8 +60,52 @@ describe("files LSP navigation", () => {
             },
           },
         ]),
-        openInstance,
       },
+    } as unknown as RendererPluginContext;
+    const showSourceMode = vi.fn();
+    const controller = { showSourceMode } as unknown as FileEditorController;
+    const unregisterDeps = registerFilesLspNavigationDeps({
+      context,
+      controller,
+    });
+
+    const view = { focus: vi.fn() } as unknown as EditorView;
+    const unregisterView = registerFilesLspEditorView(
+      "/repo/src/main.ts",
+      view
+    );
+
+    const opening = openFilesLspAbsolutePath("/repo/src/main.ts", "/repo");
+    await vi.advanceTimersByTimeAsync(0);
+    const resolved = await opening;
+
+    expect(openDisk).toHaveBeenCalledWith({
+      path: "src/main.ts",
+      root: "/repo",
+    });
+    expect(showSourceMode).toHaveBeenCalledWith("panel-1");
+    expect(resolved).toBe(view);
+    expect(view.focus).toHaveBeenCalled();
+
+    unregisterView();
+    unregisterDeps();
+  });
+
+  it("activates source mode and opens disk path for a cold panel", async () => {
+    vi.useFakeTimers();
+    const listInstances = vi
+      .fn()
+      .mockReturnValueOnce([])
+      .mockReturnValue([
+        {
+          id: "panel-new",
+          params: {
+            source: { kind: "disk", path: "src/main.ts", root: "/repo" },
+          },
+        },
+      ]);
+    const context = {
+      panels: { listInstances },
     } as unknown as RendererPluginContext;
     const showSourceMode = vi.fn();
     const controller = { showSourceMode } as unknown as FileEditorController;
@@ -64,8 +116,10 @@ describe("files LSP navigation", () => {
 
     const opening = openFilesLspAbsolutePath("/repo/src/main.ts", "/repo");
 
-    expect(showSourceMode).toHaveBeenCalledWith("panel-1");
-    expect(openInstance).toHaveBeenCalled();
+    expect(openDisk).toHaveBeenCalledWith({
+      path: "src/main.ts",
+      root: "/repo",
+    });
 
     const view = { focus: vi.fn() } as unknown as EditorView;
     const unregisterView = registerFilesLspEditorView(
@@ -74,6 +128,7 @@ describe("files LSP navigation", () => {
     );
     await vi.advanceTimersByTimeAsync(50);
     await expect(opening).resolves.toBe(view);
+    expect(showSourceMode).toHaveBeenCalledWith("panel-new");
 
     unregisterView();
     unregisterDeps();

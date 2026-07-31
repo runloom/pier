@@ -244,7 +244,11 @@ async function openDiskTarget(input: {
       return "opened";
     }
     globalThis.setTimeout(() => {
-      revealFilesTreePath({ path: "", root });
+      revealFilesTreePath({
+        options: { intent: "root" },
+        path: "",
+        root,
+      });
     }, 80);
     return "opened";
   }
@@ -273,6 +277,7 @@ async function openDiskTarget(input: {
     }
     globalThis.setTimeout(() => {
       revealFilesTreePath({
+        options: { intent: "explicit" },
         path: relativePath,
         root,
       });

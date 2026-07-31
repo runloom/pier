@@ -68,6 +68,27 @@ describe("openFilesDiskPath", () => {
     );
   });
 
+  it("notifies listeners after a successful open (Git open → tree reveal)", async () => {
+    const { onFilesDiskPathOpened } = await import(
+      "@/lib/files/open-disk-file-panel.ts"
+    );
+    const listener = vi.fn();
+    const dispose = onFilesDiskPathOpened(listener);
+    expect(
+      openFilesDiskPath({
+        path: "scripts/e2e-runner/setup-mac.sh",
+        root: "/repo",
+      })
+    ).toBe(true);
+    expect(listener).toHaveBeenCalledWith(
+      expect.objectContaining({
+        path: "scripts/e2e-runner/setup-mac.sh",
+        root: "/repo",
+      })
+    );
+    dispose();
+  });
+
   it("reuses an existing same-source files panel instance", () => {
     useWorkspaceStore.getState().setApi({
       panels: [

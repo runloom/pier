@@ -9,7 +9,11 @@ import {
   FILES_EDITOR_TAB_SIZE_SETTING_KEY,
   FILES_EDITOR_TAB_SIZE_VALUES,
   FILES_EDITOR_WORD_WRAP_SETTING_KEY,
+  FILES_TREE_AUTO_REVEAL_EXCLUDE_SETTING_KEY,
+  FILES_TREE_AUTO_REVEAL_SETTING_KEY,
+  FILES_TREE_AUTO_REVEAL_VALUES,
   FILES_TREE_COMPACT_FOLDERS_SETTING_KEY,
+  FILES_TREE_DEFAULT_AUTO_REVEAL_EXCLUDE_PATTERNS,
   FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
   FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
   FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
@@ -37,6 +41,9 @@ export const FILES_TREE_SEARCH_COMMAND_ID = "pier.files.treeSearch";
 export const FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID =
   "pier.files.tree.collapseFolders";
 export const FILES_TREE_EXPAND_ALL_COMMAND_ID = "pier.files.tree.expandAll";
+/** Force explicit reveal of the active editor file in the project tree. */
+export const FILES_REVEAL_ACTIVE_IN_TREE_COMMAND_ID =
+  "pier.files.revealActiveFileInTree";
 export const FILES_QUICK_OPEN_COMMAND_ID = "pier.files.quickOpen";
 export const FILES_OPEN_DIRECTORY_COMMAND_ID = "pier.files.openDirectory";
 export const FILES_SEARCH_CONTENTS_COMMAND_ID = "pier.files.searchContents";
@@ -142,6 +149,12 @@ export const FILES_PLUGIN_MANIFEST = {
       id: FILES_TREE_SEARCH_COMMAND_ID,
       permissions: [],
       title: "Find in File Tree",
+    },
+    {
+      category: "file",
+      id: FILES_REVEAL_ACTIVE_IN_TREE_COMMAND_ID,
+      permissions: ["panel:open"],
+      title: "Reveal Active File in File Tree",
     },
     {
       category: "file",
@@ -350,6 +363,27 @@ export const FILES_PLUGIN_MANIFEST = {
           "Merge single-child folder chains into one row in the file tree (like VS Code Compact Folders).",
         order: 31,
         type: "boolean",
+      },
+      [FILES_TREE_AUTO_REVEAL_SETTING_KEY]: {
+        default: "on",
+        description:
+          "When you switch tabs, automatically locate the active file in the project file tree. Open File, Go to Definition, and breadcrumb jumps still locate. Use Reveal Active File in File Tree anytime.",
+        enum: [...FILES_TREE_AUTO_REVEAL_VALUES],
+        enumDescriptions: [
+          "Select and scroll into view when needed",
+          "Select only, do not scroll",
+          "Do not track tab changes",
+        ],
+        order: 32,
+        type: "string",
+      },
+      [FILES_TREE_AUTO_REVEAL_EXCLUDE_SETTING_KEY]: {
+        default: FILES_TREE_DEFAULT_AUTO_REVEAL_EXCLUDE_PATTERNS,
+        description:
+          "Glob patterns skipped on tab auto-locate. Open File, Go to Definition, and Reveal Active File still locate. One pattern per line.",
+        multiline: true,
+        order: 33,
+        type: "string",
       },
     },
   },

@@ -48,7 +48,8 @@ export function revealDiskBreadcrumbInTree(options: {
   revealFilesTreePathAfterAncestors({
     instanceId,
     list,
-    options: { expandTarget: true, scroll: "center" },
+    // Policy defaults: explicit → center (smart-center at execute) + expandTarget.
+    options: { intent: "explicit" },
     path: revealTarget,
     root,
   });

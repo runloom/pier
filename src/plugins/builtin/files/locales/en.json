@@ -17,6 +17,9 @@
     },
     "pier.files.editor.showHover": {
       "title": "Show Symbol Information"
+    },
+    "pier.files.revealActiveFileInTree": {
+      "title": "Reveal Active File in File Tree"
     }
   },
   "messages": {
@@ -148,6 +151,7 @@
     "filePanel.tree.collapse": "Collapse file tree",
     "filePanel.tree.collapseAll": "Collapse Folders",
     "filePanel.tree.collapseFolders": "Collapse Folders",
+    "filePanel.tree.revealActiveFile": "Reveal Active File in File Tree",
     "filePanel.tree.expandAll": "Expand Folders",
     "filePanel.tree.expandKnownFolders": "Expand Folders",
     "filePanel.tree.expand": "Expand file tree",
@@ -411,6 +415,23 @@
     "pier.files.tree.showGitIgnoredFiles": {
       "description": "Show files and folders matched by .gitignore, .git/info/exclude and other Git ignore sources.",
       "label": "Show Git-ignored files"
+    },
+    "pier.files.tree.compactFolders": {
+      "description": "Merge single-child folder chains into one row in the file tree.",
+      "label": "Compact folders"
+    },
+    "pier.files.tree.autoReveal": {
+      "description": "When you switch tabs, automatically locate the active file in the project file tree. Does not apply to Open File / Go to Definition / breadcrumb jumps (those always locate). Use Reveal Active File in File Tree anytime.",
+      "enumDescriptions": [
+        "Locate and scroll into view when needed",
+        "Select only, do not scroll",
+        "Do not track tab changes"
+      ],
+      "label": "Auto-locate active file"
+    },
+    "pier.files.tree.autoRevealExcludePatterns": {
+      "description": "Paths matching these patterns are skipped when automatically locating the active file on tab change. Open File, Go to Definition, and Reveal Active File in File Tree still locate. One pattern per line; blank lines and lines beginning with # are ignored.",
+      "label": "Auto-locate exclude patterns"
     }
   }
 }
