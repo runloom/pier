@@ -174,6 +174,12 @@ describe("app dialog usage governance", () => {
     expect(alertDialog).toContain("gap-4");
     expect(alertDialog).toContain("p-5");
     expect(alertDialog).toContain("text-base");
+    // choice(default) stays slightly wider than confirm/alert(sm) for 3
+    // buttons, but converges to max-w-sm — not max-w-md — so the shell family
+    // feels one size step apart rather than a different card.
+    expect(alertDialog).toContain("data-[size=sm]:max-w-xs");
+    expect(alertDialog).toContain("data-[size=default]:sm:max-w-sm");
+    expect(alertDialog).not.toContain("data-[size=default]:sm:max-w-md");
     expect(alertDialog).not.toContain("grid-cols-2");
     expect(alertDialog).not.toContain("place-items-center");
     expect(alertDialog).not.toContain("size-16");

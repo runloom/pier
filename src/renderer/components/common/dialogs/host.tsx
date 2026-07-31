@@ -128,7 +128,7 @@ function ActiveAppDialog({
   }
 
   // 三选:默认 macOS 保存态 alt | 取消 | confirm；也可 confirm | alt | 取消。
-  // choice 一律 default 宽:三键 + 带文件名标题放不进 sm。
+  // choice 一律 default（max-w-sm）：三键 + 文件名标题；比 sm/max-w-xs 只大一阶。
   if (dialog.kind === "choice") {
     const cancelLabel = dialog.cancelLabel ?? t("dialog.cancel");
     const altButton = (

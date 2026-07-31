@@ -121,6 +121,59 @@ describe("FilesLspHoverCard review contracts", () => {
     previouslyFocused.remove();
   });
 
+  it("keeps the body scrollbar flush to the card chrome edge", () => {
+    const docs = renderCard(
+      cardModel({
+        documentation: [{ kind: "markdown", value: "docs" }],
+        mode: "documentation",
+        signatures: [{ language: "typescript", value: "const x = 1" }],
+      })
+    );
+    const docsBody = docs.card.querySelector<HTMLElement>(
+      '[data-slot="files-lsp-hover-body"]'
+    );
+    const docsGutter = docsBody?.firstElementChild;
+    const docsTitle = docs.card.querySelector<HTMLElement>(
+      '[data-slot="files-lsp-hover-title"]'
+    );
+
+    expect(docs.card.className).toMatch(/\bpy-2\b/);
+    expect(docs.card.className).not.toMatch(/\bp-2\b/);
+    expect(docs.card.className).not.toMatch(/\bpx-/);
+    expect(docsBody).toHaveClass("overflow-y-auto");
+    expect(docsBody?.className ?? "").not.toMatch(/\bpx-|\bp-/);
+    expect(docsGutter).toHaveClass("px-2");
+    // documentation title is sr-only; gutter only matters for body content.
+    expect(docsTitle?.className ?? "").toMatch(/\bsr-only\b/);
+    docs.unmount();
+
+    const target = definition("flush", 2);
+    const symbol = renderCard(
+      cardModel({
+        activePreviewTarget: target,
+        definitions: [target],
+        definitionsShown: 1,
+        definitionsTotal: 1,
+        mode: "symbol",
+      })
+    );
+    const symbolBody = symbol.card.querySelector<HTMLElement>(
+      '[data-slot="files-lsp-hover-body"]'
+    );
+    const symbolGutter = symbolBody?.firstElementChild;
+    const symbolTitle = symbol.card.querySelector<HTMLElement>(
+      '[data-slot="files-lsp-hover-title"]'
+    );
+
+    expect(symbol.card.className).toMatch(/\bpy-1\.5\b/);
+    expect(symbol.card.className).not.toMatch(/\bp-1\.5\b/);
+    expect(symbol.card.className).not.toMatch(/\bpx-/);
+    expect(symbolBody?.className ?? "").not.toMatch(/\bpx-|\bp-/);
+    expect(symbolGutter).toHaveClass("px-1.5");
+    expect(symbolTitle?.className ?? "").toMatch(/\bpx-1\.5\b/);
+    symbol.unmount();
+  });
+
   it("sanitizes composed symbol markdown at the final HTML sink", () => {
     const firstTarget = definition(
       "first",

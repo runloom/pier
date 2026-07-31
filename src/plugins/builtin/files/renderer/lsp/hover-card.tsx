@@ -72,7 +72,9 @@ export function FilesLspHoverCard({
       aria-modal={isDialog ? false : undefined}
       className={cn(
         "cm-lsp-hover-tooltip flex max-h-full min-h-0 w-max min-w-0 flex-col overflow-hidden text-sm",
-        model.mode === "documentation" ? "gap-0 p-2" : "gap-1.5 p-1.5"
+        // Vertical rhythm stays on chrome; horizontal gutter sinks into body
+        // content so the scrollbar sits on the card edge (activity widget).
+        model.mode === "documentation" ? "gap-0 py-2" : "gap-1.5 py-1.5"
       )}
       data-mode={model.mode}
       data-slot="files-lsp-hover-card"
@@ -107,7 +109,7 @@ export function FilesLspHoverCard({
       <div
         className={cn(
           "shrink-0 font-medium text-xs",
-          showVisibleTitle ? "px-1 text-muted-foreground" : "sr-only"
+          showVisibleTitle ? "px-1.5 text-muted-foreground" : "sr-only"
         )}
         data-slot="files-lsp-hover-title"
         id={titleId}
@@ -115,17 +117,24 @@ export function FilesLspHoverCard({
         {title}
       </div>
       <div
-        className="flex min-h-0 min-w-0 flex-1 flex-col gap-1.5 overflow-y-auto"
+        className="flex min-h-0 min-w-0 flex-1 flex-col overflow-y-auto"
         data-scrollbar="stable"
         data-slot="files-lsp-hover-body"
       >
-        <HoverBody
-          firstActionRef={firstActionRef}
-          layout={layout}
-          model={model}
-          onActivateDefinition={onActivateDefinition}
-          {...(onRequestPreview ? { onRequestPreview } : {})}
-        />
+        <div
+          className={cn(
+            "flex min-h-0 min-w-0 flex-col gap-1.5",
+            model.mode === "documentation" ? "px-2" : "px-1.5"
+          )}
+        >
+          <HoverBody
+            firstActionRef={firstActionRef}
+            layout={layout}
+            model={model}
+            onActivateDefinition={onActivateDefinition}
+            {...(onRequestPreview ? { onRequestPreview } : {})}
+          />
+        </div>
       </div>
     </div>
   );
