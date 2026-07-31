@@ -1,7 +1,7 @@
 import { spawn } from "node:child_process";
 import { once } from "node:events";
+import path from "node:path";
 import { createInterface } from "node:readline";
-import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
 import { loadWindowsJobAddon } from "../../../../src/main/services/lsp/process-termination.ts";
 
@@ -9,9 +9,9 @@ function resolveWindowsFixturePath(): string {
   if (process.platform !== "win32") {
     throw new Error("Windows LSP fixture path requested off win32");
   }
-  return fileURLToPath(
-    new URL("../../../fixtures/lsp-windows-job-child.cjs", import.meta.url)
-  );
+  // Resolve from repo root (vitest cwd). Avoid import.meta.url + fileURLToPath:
+  // Windows CI can surface non-file schemes for transformed modules.
+  return path.resolve("tests/fixtures/lsp-windows-job-child.cjs");
 }
 
 function isProcessAlive(pid: number): boolean {
