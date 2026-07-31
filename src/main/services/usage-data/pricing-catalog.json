@@ -1489,9 +1489,9 @@
       "outputMicrousd": 30
     },
     "gpt-5.6-luna": {
-      "cachedInputMicrousd": 0.1,
-      "inputMicrousd": 1,
-      "outputMicrousd": 6,
+      "cachedInputMicrousd": 0.02,
+      "inputMicrousd": 0.2,
+      "outputMicrousd": 1.2,
       "aliases": [
         "openai/gpt-5.6-luna"
       ],
@@ -1531,9 +1531,9 @@
       ]
     },
     "gpt-5.6-terra": {
-      "cachedInputMicrousd": 0.25,
-      "inputMicrousd": 2.5,
-      "outputMicrousd": 15,
+      "cachedInputMicrousd": 0.2,
+      "inputMicrousd": 2,
+      "outputMicrousd": 12,
       "aliases": [
         "openai/gpt-5.6-terra"
       ],
@@ -2887,6 +2887,15 @@
       "outputMicrousd": 1.365,
       "aliases": [
         "qwen/qwen3-vl-8b-thinking"
+      ]
+    },
+    "qwen3.7-max": {
+      "cachedInputMicrousd": 0.5,
+      "inputMicrousd": 2.5,
+      "outputMicrousd": 7.5,
+      "aliases": [
+        "dashscope/qwen3.7-max",
+        "qwen/qwen3.7-max"
       ]
     },
     "qwq-plus": {
