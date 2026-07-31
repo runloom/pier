@@ -5,7 +5,6 @@
 import type { EditorView } from "@codemirror/view";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { fileUriFromAbsolutePath } from "@shared/lsp-uri.ts";
-import { openFilesDiskPath } from "@/lib/files/open-disk-file-panel.ts";
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
 import { absoluteDiskSourcePath } from "../document/paths.ts";
 import {
@@ -135,7 +134,7 @@ export async function openFilesLspAbsolutePath(
     if (existingInstance) {
       deps.controller.showSourceMode(existingInstance.id);
     }
-    const opened = openFilesDiskPath({
+    const opened = deps.context.files.openInEditor({
       path: source.path,
       root: source.root,
     });

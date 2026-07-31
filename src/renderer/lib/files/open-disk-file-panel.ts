@@ -1,3 +1,4 @@
+import { notifyFilesDiskPathOpened } from "@plugins/api/files-disk-path-opened.ts";
 import { nonEmptyFileRootRelativePathSchema } from "@shared/contracts/file.ts";
 import type { PanelContext } from "@shared/contracts/panel.ts";
 import { useWorkspaceStore } from "@/stores/workspace.store.ts";
@@ -6,6 +7,12 @@ import { getPluginPanelRegistrations } from "../plugins/panel-registry.ts";
 
 /** 与 files 插件 `FILES_FILE_PANEL_ID` 对齐；宿主不 import 插件包。 */
 export const FILES_FILE_PANEL_COMPONENT_ID = "pier.files.filePanel";
+
+export type {
+  FilesDiskPathOpenedEvent,
+  FilesDiskPathOpenedListener,
+} from "@plugins/api/files-disk-path-opened.ts";
+export { onFilesDiskPathOpened } from "@plugins/api/files-disk-path-opened.ts";
 
 const HASH_MULTIPLIER = 33;
 const HASH_MODULUS = 2_147_483_647;
@@ -70,40 +77,6 @@ function cloneParamsRecord(params: unknown): Record<string, unknown> | null {
     return null;
   }
   return { ...params };
-}
-
-export interface FilesDiskPathOpenedEvent {
-  instanceId: string;
-  path: string;
-  root: string;
-}
-
-type FilesDiskPathOpenedListener = (event: FilesDiskPathOpenedEvent) => void;
-
-const filesDiskPathOpenedListeners = new Set<FilesDiskPathOpenedListener>();
-
-/**
- * Files plugin (and tests) subscribe to force project-tree reveal after a
- * cross-plugin open (e.g. Git review "Open File"). Host must not import the
- * files plugin tree registry.
- */
-export function onFilesDiskPathOpened(
-  listener: FilesDiskPathOpenedListener
-): () => void {
-  filesDiskPathOpenedListeners.add(listener);
-  return () => {
-    filesDiskPathOpenedListeners.delete(listener);
-  };
-}
-
-function notifyFilesDiskPathOpened(event: FilesDiskPathOpenedEvent): void {
-  for (const listener of filesDiskPathOpenedListeners) {
-    try {
-      listener(event);
-    } catch {
-      // Listeners must not break open; failures are non-fatal.
-    }
-  }
 }
 
 /**

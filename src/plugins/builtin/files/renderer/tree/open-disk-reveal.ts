@@ -1,5 +1,5 @@
+import { onFilesDiskPathOpened } from "@plugins/api/files-disk-path-opened.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import { onFilesDiskPathOpened } from "@/lib/files/open-disk-file-panel.ts";
 import { ensureProjectFileTreeExpanded } from "./preferences.ts";
 import { revealFilesTreePathAfterAncestors } from "./reveal.ts";
 import { filesTreeVisibilityForContext } from "./visibility.ts";
