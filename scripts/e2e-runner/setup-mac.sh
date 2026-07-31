@@ -88,10 +88,11 @@ install_brew_pkg() {
   brew install "$formula"
 }
 
-info "安装/确认依赖（git, gh, pnpm, node@24, zig@0.15）..."
+info "安装/确认依赖（git, gh, node@24, zig@0.15）..."
 install_brew_pkg git
 install_brew_pkg gh
-install_brew_pkg pnpm
+# 不依赖 brew pnpm：较新 brew pnpm 会拒绝 packageManager=pnpm@11.12.0。
+# 项目锁定版本由 ensure_project_pnpm 装到 ~/.local-pnpm-e2e。
 install_brew_pkg zig@0.15
 
 # Node 24：始终优先 brew node@24（已有旧 node 18/20 时也要装并前置 PATH）
@@ -156,6 +157,39 @@ if [ "${NODE_MAJOR:-0}" -lt 24 ]; then
   err "需要 Node 24+，当前 $NODE_VER。请: brew install node@24 && brew link node@24 --force --overwrite"
   exit 1
 fi
+
+# 按 package.json#packageManager 安装 pnpm 到独立 prefix（避开 brew 新版本互斥）
+ensure_project_pnpm() {
+  local want raw ver prefix
+  want=""
+  if [ -f package.json ]; then
+    raw="$(node -p "try{require('./package.json').packageManager||''}catch(e){''}" 2>/dev/null || true)"
+    case "${raw}" in
+      pnpm@*) want="${raw#pnpm@}" ;;
+    esac
+  fi
+  if [ -z "${want}" ]; then
+    want="11.12.0"
+  fi
+  prefix="${HOME}/.local-pnpm-e2e"
+  ver="$("${prefix}/bin/pnpm" -v 2>/dev/null || true)"
+  if [ "${ver}" != "${want}" ]; then
+    info "安装 pnpm@${want} → ${prefix}"
+    mkdir -p "${prefix}"
+    npm install -g "pnpm@${want}" --prefix "${prefix}"
+  fi
+  export PATH="${prefix}/bin:${PATH}"
+  hash -r 2>/dev/null || true
+  info "pnpm $(pnpm -v)（project packageManager）"
+  if ! grep -q 'local-pnpm-e2e\|Pier e2e-runner: pnpm' "${HOME}/.zprofile" 2>/dev/null; then
+    {
+      echo ''
+      echo '# Pier e2e-runner: project-locked pnpm'
+      echo "export PATH=\"${prefix}/bin:\$PATH\""
+    } >>"${HOME}/.zprofile"
+  fi
+}
+ensure_project_pnpm
 
 # ---------- 电源：尽量不睡（需要 sudo，失败只警告）----------
 POWER_SCRIPT="$REPO_ROOT/scripts/e2e-runner/configure-power.sh"

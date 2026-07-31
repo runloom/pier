@@ -100,19 +100,20 @@ D. 主力机日常（不打扰当前电脑）
   pnpm test:e2e:auto
   # 或
   bash scripts/e2e-runner/run-e2e.sh
-  bash scripts/e2e-runner/run-e2e.sh tests/e2e/startup-stability.spec.ts
+  bash scripts/e2e-runner/run-e2e.sh tests/e2e/app/startup-stability.spec.ts
 
 run-e2e.sh 远端会：
-  - 把本机 git HEAD 同步到闲置机（git bundle，不必先 push）
-  - checkout 同一 SHA 再跑 playwright
-  - 本机有未提交改动时默认拒绝远端（请 --local），避免假绿
+  - 把本机 tip 同步到闲置机（git bundle，不必先 push）
+  - clean → HEAD；dirty → 临时 worktree snapshot（含未提交改动）
+  - checkout --detach 后跑 playwright；tree 变化时自动 rebuild
 
 强制本机 / 强制远端：
   pnpm test:e2e:local
   pnpm test:e2e:remote
 
-仅测已提交 HEAD 且工作区 dirty：
-  bash scripts/e2e-runner/run-e2e.sh --allow-dirty-remote
+只要已提交 HEAD（工作区 dirty 时拒绝远端）：
+  bash scripts/e2e-runner/run-e2e.sh --committed-only
+
 
 手动 SSH：
   ssh pier-e2e 'cd ~/pier && git rev-parse --short HEAD'
@@ -127,3 +128,9 @@ E. 笔记本使用注意
 - 保持用户已登录桌面（锁屏可以，注销不行）
 - Electron e2e 会在笔记本上闪测试窗——不影响主力机
 - 勿在 runner 上同时登个人敏感会话当主力机用
+- native 终端键入类 e2e（`tests/e2e/native/terminal-focus*` 等）依赖 macOS
+  「辅助功能」权限。系统设置 → 隐私与安全性 → 辅助功能：给
+  `Electron`（`~/pier/node_modules/electron/dist/Electron.app`）和
+  `sshd-keygen-wrapper` / Terminal（若用本机终端触发）勾选允许。
+  未授权时这些用例会 skip（非 CI）或 fail（CI），不影响命令面板/文件树等路径。
+- 多路径参数：`bash scripts/e2e-runner/run-e2e.sh --remote a.spec.ts b.spec.ts` 已支持

@@ -465,11 +465,13 @@ Pier e2e 会启动真实 Electron 窗，**在主力开发机上跑会打扰当�
    `bash scripts/e2e-runner/run-e2e.sh [playwright 路径/参数…]`  
    脚本先探测 SSH Host `pier-e2e`（`PIER_E2E_SSH_HOST` 可覆盖）。可达则在远端跑；不可达再回退本机。  
    主力机须已配置 `~/.ssh/config` 的 `Host pier-e2e`（见 `scripts/e2e-runner/FIRST-BOOT.txt`「主力机 SSH Host」）。
-2. **远端会同步本机 git HEAD**（`git bundle`，不必先 push），在闲置机 `checkout --detach` 同一 SHA 再测。  
-   **验证未提交改动**必须 `--local` / `pnpm test:e2e:local`（远端默认拒绝 dirty 工作区，避免假绿）。
+2. **远端会同步本机 tip**（`git bundle`，不必先 push），在闲置机 `checkout --detach` 后跑 playwright。  
+   - clean 工作区 → 同步 git HEAD  
+   - dirty 工作区 → 同步临时 worktree snapshot（已跟踪改动 + 未忽略未跟踪文件），**开发中的未提交改动默认也能上闲置机**  
+   - 只要已提交 HEAD：`--committed-only`（工作区 dirty 时拒绝远端，避免误测）  
 3. **强制只走远端**（不可达则失败、不回退）：  
-   `bash scripts/e2e-runner/run-e2e.sh --remote …`
-4. 强制重建：`--rebuild`。SHA 变化或缺少 `out/main` 时远端也会自动 rebuild。
+   `bash scripts/e2e-runner/run-e2e.sh --remote …`  
+4. 强制重建：`--rebuild`。tree/SHA 变化或缺少 `out/main` 时远端也会自动 rebuild。  
 5. 禁止在未探测闲置机的情况下，把「全量 e2e」默认打在主力机上；unit/component/integration 仍本机即可。
 
 闲置机装机与 runner：`scripts/e2e-runner/FIRST-BOOT.txt`、`setup-mac.sh`、`install-actions-runner.sh`。

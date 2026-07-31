@@ -188,6 +188,22 @@ async function waitForTerminalPanelCount(
   return snapshot;
 }
 
+async function clickActiveTerminalSurfaceForAppChord(win: Page) {
+  // 不要固定点 index=0：split 后会把焦点抢回左侧 group。
+  // 优先点当前已存在的最后一个 terminal-anchor（通常是最近 active / 右侧）。
+  const anchors = win.locator(".terminal-anchor");
+  const count = await anchors.count();
+  if (count <= 0) {
+    return;
+  }
+  const box = await anchors.nth(count - 1).boundingBox();
+  if (!box) {
+    return;
+  }
+  await win.mouse.click(box.x + box.width / 2, box.y + box.height / 2);
+  await win.waitForTimeout(150);
+}
+
 async function createTerminalTabs(
   userDataDir: string,
   win: Page,
@@ -202,6 +218,7 @@ async function createTerminalTabs(
     nextCount <= count;
     nextCount++
   ) {
+    await clickActiveTerminalSurfaceForAppChord(win);
     await win.keyboard.press("Meta+KeyT");
     snapshot = await waitForTerminalPanelCount(userDataDir, nextCount);
     await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
@@ -209,6 +226,38 @@ async function createTerminalTabs(
     );
   }
   return snapshot;
+}
+
+/** 一直新建终端直到至少有一个 tab 在 strip 中不完全可见。 */
+async function createTerminalTabsUntilOverflow(
+  userDataDir: string,
+  win: Page,
+  options: { maxCount?: number } = {}
+): Promise<{ hiddenPanelId: string; snapshot: CliPanelList }> {
+  const maxCount = options.maxCount ?? 40;
+  let snapshot = await panelList(userDataDir);
+  await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
+    Math.max(terminalPanels(snapshot).length, 1)
+  );
+
+  for (let guard = 0; guard < maxCount; guard += 1) {
+    const tabs = await tabVisibilities(win);
+    const hidden = tabs.find((tab) => !tab.visible);
+    if (hidden) {
+      return { hiddenPanelId: hidden.panelId, snapshot };
+    }
+    const nextCount = terminalPanels(snapshot).length + 1;
+    await clickActiveTerminalSurfaceForAppChord(win);
+    await win.keyboard.press("Meta+KeyT");
+    snapshot = await waitForTerminalPanelCount(userDataDir, nextCount);
+    await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
+      nextCount
+    );
+  }
+
+  throw new Error(
+    `expected a hidden terminal tab after ${maxCount} creates, got ${JSON.stringify(await tabVisibilities(win))}`
+  );
 }
 
 function tabVisibilities(win: Page): Promise<TabVisibility[]> {
@@ -310,7 +359,83 @@ async function clickTerminalByHorizontalOrder(
   }
 }
 
-async function focusTerminalAt(win: Page, index: number) {
+async function readNativeKeyboardOwnedByTerminal(win: Page): Promise<boolean> {
+  return win.evaluate(async () => {
+    const pierValue = Reflect.get(window, "pier");
+    if (!pierValue || typeof pierValue !== "object") {
+      return false;
+    }
+    const terminal = Reflect.get(pierValue, "terminal");
+    if (!terminal || typeof terminal !== "object") {
+      return false;
+    }
+    const debugSnapshot = Reflect.get(terminal, "debugSnapshot");
+    if (typeof debugSnapshot !== "function") {
+      return false;
+    }
+    const snap = await debugSnapshot.call(terminal);
+    if (!snap || typeof snap !== "object") {
+      return false;
+    }
+
+    let kind: string | null = null;
+    const coordinator = Reflect.get(snap, "coordinator");
+    if (coordinator && typeof coordinator === "object") {
+      const effective = Reflect.get(coordinator, "effective");
+      if (effective && typeof effective === "object") {
+        const keyboardTarget = Reflect.get(effective, "keyboardTarget");
+        if (keyboardTarget && typeof keyboardTarget === "object") {
+          const value = Reflect.get(keyboardTarget, "kind");
+          if (typeof value === "string") {
+            kind = value;
+          }
+        }
+      }
+    }
+    if (kind === null) {
+      const native = Reflect.get(snap, "native");
+      if (native && typeof native === "object") {
+        const winState = Reflect.get(native, "window");
+        if (winState && typeof winState === "object") {
+          const keyboardTarget = Reflect.get(winState, "keyboardFocusTarget");
+          if (keyboardTarget && typeof keyboardTarget === "object") {
+            const value = Reflect.get(keyboardTarget, "kind");
+            if (typeof value === "string") {
+              kind = value;
+            }
+          }
+        }
+      }
+    }
+
+    let first = false;
+    let hostKb = false;
+    const native = Reflect.get(snap, "native");
+    if (native && typeof native === "object") {
+      const surfaces = Reflect.get(native, "surfaces");
+      if (Array.isArray(surfaces)) {
+        // 可能同时存在多个 surface；键盘目标不一定是 [0]
+        for (const surface of surfaces) {
+          if (!surface || typeof surface !== "object") {
+            continue;
+          }
+          if (
+            Reflect.get(surface, "isFirstResponder") === true &&
+            Reflect.get(surface, "hostKeyboardActive") === true
+          ) {
+            first = true;
+            hostKb = true;
+            break;
+          }
+        }
+      }
+    }
+
+    return kind === "terminal" && first && hostKb;
+  });
+}
+
+async function selectTerminalSurface(win: Page, index: number) {
   const anchor = win.locator(".terminal-anchor").nth(index);
   await expect(anchor).toBeAttached({ timeout: 10_000 });
   const box = await anchor.boundingBox();
@@ -321,14 +446,50 @@ async function focusTerminalAt(win: Page, index: number) {
   await win.waitForTimeout(300);
 }
 
+/**
+ * 恢复 OS 键入所需的 native first-responder。
+ * 不要在 Meta+T/W 等 app 快捷键前调用：Playwright 合成快捷键在
+ * keyboardTarget=terminal 时进不了 app chord。
+ */
+async function ensureNativeKeyboardOwnership(win: Page, index = 0) {
+  const activeTab = win
+    .locator(".dv-tab.dv-active-tab, .dv-tab[aria-selected='true']")
+    .first();
+  if ((await activeTab.count()) > 0) {
+    await activeTab.click({ force: true });
+  } else {
+    const tab = win.locator(".dv-default-tab, .dv-tab").nth(index);
+    if ((await tab.count()) > 0) {
+      await tab.click({ force: true });
+    }
+  }
+  await expect
+    .poll(() => readNativeKeyboardOwnedByTerminal(win), { timeout: 10_000 })
+    .toBe(true);
+  await win.waitForTimeout(200);
+}
+
+async function focusTerminalAt(win: Page, index: number) {
+  await selectTerminalSurface(win, index);
+}
+
 async function writeMarkerFromTerminal(
   app: ElectronApplication,
   win: Page,
   filePath: string,
   marker: string,
-  options: { focusDelayMs?: number; timeoutMs?: number } = {}
+  options: {
+    focusDelayMs?: number;
+    /** 跳过 active-tab 抢权：用于刚点过的目标 terminal 表面，避免多 group 误粘到左侧 */
+    skipOwnershipEnsure?: boolean;
+    tabIndex?: number;
+    timeoutMs?: number;
+  } = {}
 ) {
   const command = `printf ${shellQuote(marker)} > ${shellQuote(filePath)}`;
+  if (!options.skipOwnershipEnsure) {
+    await ensureNativeKeyboardOwnership(win, options.tabIndex ?? 0);
+  }
   await focusElectronApp(app);
   const focusDelayMs = options.focusDelayMs ?? 300;
   if (focusDelayMs > 0) {
@@ -592,9 +753,14 @@ test.describe("Native terminal focus e2e", () => {
       await waitForTerminalCount(win, 1);
       await focusTerminalAt(win, 0);
       await ensureKeystrokesDeliverable(app, win, markerDir);
-
+      // app 快捷键走 web chord：先点内容区，避免 native 吞键
+      await selectTerminalSurface(win, 0);
       await win.keyboard.press("Meta+KeyT");
-      await waitForTerminalCount(win, 2);
+      // 仅 active terminal 有 native anchor；新建后用 tab 计数
+      await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
+        2,
+        { timeout: 15_000 }
+      );
       await writeMarkerFromTerminal(
         app,
         win,
@@ -621,10 +787,18 @@ test.describe("Native terminal focus e2e", () => {
       await focusTerminalAt(win, 0);
       await ensureKeystrokesDeliverable(app, win, markerDir);
 
+      await selectTerminalSurface(win, 0);
       await win.keyboard.press("Meta+KeyT");
-      await waitForTerminalCount(win, 2);
+      await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
+        2,
+        { timeout: 15_000 }
+      );
+      await selectTerminalSurface(win, 0);
       await win.keyboard.press("Meta+KeyW");
-      await waitForTerminalCount(win, 1);
+      await expect(win.locator('[data-panel-tab-id^="terminal-"]')).toHaveCount(
+        1,
+        { timeout: 15_000 }
+      );
       await writeMarkerFromTerminal(
         app,
         win,
@@ -713,26 +887,27 @@ test.describe("Native terminal focus e2e", () => {
       const win = await app.firstWindow();
       await win.waitForLoadState("domcontentloaded");
       await app.evaluate(({ BrowserWindow }) => {
-        BrowserWindow.getAllWindows()[0]?.setSize(640, 520);
+        const browserWindow = BrowserWindow.getAllWindows()[0];
+        browserWindow?.unmaximize();
+        browserWindow?.setMinimumSize(320, 320);
+        browserWindow?.setSize(360, 400);
+        browserWindow?.setContentSize(360, 360);
       });
+      await win.waitForTimeout(500);
       await waitForPierCli(userDataDir);
       await waitForTerminalCount(win, 1);
       await focusTerminalAt(win, 0);
       await ensureKeystrokesDeliverable(app, win, markerDir);
 
-      const snapshot = await createTerminalTabs(userDataDir, win, 12);
-      const visibleTabs = await tabVisibilities(win);
-      const hiddenTarget = visibleTabs.find((tab) => !tab.visible);
-      if (!hiddenTarget) {
-        throw new Error(
-          `expected a hidden terminal tab, got ${JSON.stringify(visibleTabs)}`
-        );
-      }
+      const { hiddenPanelId, snapshot } = await createTerminalTabsUntilOverflow(
+        userDataDir,
+        win
+      );
       const targetSession = terminalPanels(snapshot).find(
-        (session) => session.id === hiddenTarget.panelId
+        (session) => session.id === hiddenPanelId
       );
       if (!targetSession) {
-        throw new Error(`terminal snapshot missing ${hiddenTarget.panelId}`);
+        throw new Error(`terminal snapshot missing ${hiddenPanelId}`);
       }
 
       await runPierCliJson(userDataDir, [
@@ -785,6 +960,7 @@ test.describe("Native terminal focus e2e", () => {
       await focusTerminalAt(win, 0);
       await ensureKeystrokesDeliverable(app, win, markerDir);
 
+      await selectTerminalSurface(win, 0);
       await win.keyboard.press("Meta+KeyD");
       await waitForTerminalPanelCount(userDataDir, 2);
       await clickTerminalByHorizontalOrder(win, "right");
@@ -823,7 +999,7 @@ test.describe("Native terminal focus e2e", () => {
         win,
         join(markerDir, "native-no-reveal.txt"),
         "native-no-reveal-ok",
-        { focusDelayMs: 0 }
+        { focusDelayMs: 0, skipOwnershipEnsure: true }
       );
     } finally {
       await app.close();
@@ -849,6 +1025,7 @@ test.describe("Native terminal focus e2e", () => {
       await focusTerminalAt(win, 0);
       await ensureKeystrokesDeliverable(app, win, markerDir);
 
+      await selectTerminalSurface(win, 0);
       await win.keyboard.press("Meta+KeyD");
       await waitForTerminalPanelCount(userDataDir, 2);
       await clickTerminalByHorizontalOrder(win, "right");
@@ -890,7 +1067,7 @@ test.describe("Native terminal focus e2e", () => {
         win,
         join(markerDir, "native-auxiliary-no-reveal.txt"),
         "native-auxiliary-no-reveal-ok",
-        { focusDelayMs: 0 }
+        { focusDelayMs: 0, skipOwnershipEnsure: true }
       );
     } finally {
       await app.close();
