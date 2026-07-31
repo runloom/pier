@@ -409,21 +409,52 @@ export function resolveWindowsJobAddonPath(): string {
       return packagedPath;
     }
   }
-  const bundledDevelopmentPath = fileURLToPath(
-    new URL(
-      `../../native/lsp-windows-job/artifacts/${process.arch}/Release/lsp_windows_job.node`,
-      import.meta.url
-    )
+
+  const artifactRelative = join(
+    "native",
+    "lsp-windows-job",
+    "artifacts",
+    process.arch,
+    "Release",
+    "lsp_windows_job.node"
   );
-  if (existsSync(bundledDevelopmentPath)) {
-    return bundledDevelopmentPath;
+  const candidates: string[] = [
+    // Vitest / electron-vite may rewrite import.meta.url; prefer repo cwd.
+    join(process.cwd(), artifactRelative),
+    join(
+      process.cwd(),
+      "native",
+      "lsp-windows-job",
+      "build",
+      "Release",
+      "lsp_windows_job.node"
+    ),
+  ];
+  try {
+    candidates.push(
+      fileURLToPath(
+        new URL(
+          `../../native/lsp-windows-job/artifacts/${process.arch}/Release/lsp_windows_job.node`,
+          import.meta.url
+        )
+      ),
+      fileURLToPath(
+        new URL(
+          `../../../../native/lsp-windows-job/artifacts/${process.arch}/Release/lsp_windows_job.node`,
+          import.meta.url
+        )
+      )
+    );
+  } catch {
+    // Non-file import.meta.url (transformed modules).
   }
-  return fileURLToPath(
-    new URL(
-      `../../../../native/lsp-windows-job/artifacts/${process.arch}/Release/lsp_windows_job.node`,
-      import.meta.url
-    )
-  );
+
+  for (const candidate of candidates) {
+    if (existsSync(candidate)) {
+      return candidate;
+    }
+  }
+  return candidates[0] ?? artifactRelative;
 }
 
 export function loadWindowsJobAddon(): WindowsJobAddon {
