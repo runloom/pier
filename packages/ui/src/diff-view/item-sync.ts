@@ -176,10 +176,20 @@ export function codeViewItemsContentChanged(
     if (previous === next) {
       continue;
     }
-    // 同 version 仍可能换 fileDiff 引用（防御）
-    if (previous.fileDiff !== next.fileDiff) {
-      return true;
+    // 同 version 仍可能换 fileDiff / file 引用（防御）
+    if (previous.type === "diff" && next.type === "diff") {
+      if (previous.fileDiff !== next.fileDiff) {
+        return true;
+      }
+      continue;
     }
+    if (previous.type === "file" && next.type === "file") {
+      if (previous.file !== next.file) {
+        return true;
+      }
+      continue;
+    }
+    return true;
   }
   return false;
 }

@@ -218,10 +218,7 @@ function ReviewDocumentsComponent(
     ) {
       return;
     }
-    if (
-      activeSurface !== "committed" &&
-      visibleGroups.includes(reviewGroupForSurface(activeSurface))
-    ) {
+    if (visibleGroups.includes(reviewGroupForSurface(activeSurface))) {
       return;
     }
     const fallbackSlots = visibleGroups.flatMap((group) =>

@@ -34,9 +34,9 @@ export function appDialogSizeForKind(
 }
 
 export interface AppAlertOptions {
-  body?: string;
-  confirmLabel?: string;
-  intent?: AppDialogIntent;
+  body?: string | undefined;
+  confirmLabel?: string | undefined;
+  intent?: AppDialogIntent | undefined;
   title: string;
 }
 

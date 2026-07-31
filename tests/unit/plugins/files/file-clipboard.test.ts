@@ -54,15 +54,16 @@ function mockContext(overrides?: {
 
 const t = (
   _key: string,
-  fallback: string,
+  fallback?: string,
   values?: Record<string, unknown>
 ) => {
+  const text = fallback ?? _key;
   if (!values) {
-    return fallback;
+    return text;
   }
   return Object.entries(values).reduce(
-    (text, [k, v]) => text.replace(`{{${k}}}`, String(v)),
-    fallback
+    (current, [k, v]) => current.replace(`{{${k}}}`, String(v)),
+    text
   );
 };
 

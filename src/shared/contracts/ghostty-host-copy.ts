@@ -185,9 +185,9 @@ export type TerminalExitDismissMode = "any-key" | "explicit";
  * messageOverride 必须是**已本地化**完整主句。
  */
 export interface TerminalExitPresentation {
-  dismissMode?: TerminalExitDismissMode;
-  messageOverride?: string;
-  role?: TerminalExitRole;
+  dismissMode?: TerminalExitDismissMode | undefined;
+  messageOverride?: string | undefined;
+  role?: TerminalExitRole | undefined;
 }
 
 /** 智能体终端默认退出文案策略：显式关 tab，不用「按任意键关闭」。 */

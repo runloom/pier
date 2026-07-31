@@ -450,6 +450,8 @@ describe("inline create commit/cancel", () => {
   it("discards the placeholder and reloads when create commit conflicts", async () => {
     const removePaths = vi.fn();
     registerFilesTreeInstance("g1", {
+      collapseAll: () => undefined,
+      expandKnownDirectories: () => undefined,
       getApi: () =>
         ({
           focusSearchMatch: () => undefined,
@@ -515,6 +517,8 @@ describe("inline create commit/cancel", () => {
   it("removes optimistic destination ghost when commit fails and to was not in store", async () => {
     const removePaths = vi.fn();
     registerFilesTreeInstance("g1", {
+      collapseAll: () => undefined,
+      expandKnownDirectories: () => undefined,
       getApi: () =>
         ({
           focusSearchMatch: () => undefined,
@@ -564,6 +568,8 @@ describe("beginInlineCreate", () => {
   it("falls back when the tree API cannot start renaming", async () => {
     const { context } = makeContext();
     registerFilesTreeInstance("g1", {
+      collapseAll: () => undefined,
+      expandKnownDirectories: () => undefined,
       getApi: () => null,
       openSearch: () => undefined,
       root: ROOT,

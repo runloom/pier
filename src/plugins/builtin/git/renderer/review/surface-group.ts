@@ -44,6 +44,12 @@ export function reviewGroupsForSurface(
 }
 
 export function reviewSurfaceForGroup(
+  group: GitReviewUncommittedGroup
+): Exclude<GitReviewReadingSurface, "committed">;
+export function reviewSurfaceForGroup(
+  group: GitReviewGroup
+): GitReviewReadingSurface;
+export function reviewSurfaceForGroup(
   group: GitReviewGroup
 ): GitReviewReadingSurface {
   if (group === "unstaged") {

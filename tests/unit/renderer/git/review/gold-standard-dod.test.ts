@@ -17,7 +17,10 @@ import {
   isReviewEstimateCacheKey,
   isReviewNavigationTerminal,
 } from "../../../../../src/plugins/builtin/git/renderer/review/navigation.ts";
-import type { GitReviewIndexEntry } from "../../../../../src/shared/contracts/git/review.ts";
+import type {
+  GitReviewFileDocumentResult,
+  GitReviewIndexEntry,
+} from "../../../../../src/shared/contracts/git/review.ts";
 
 /**
  * 金标准 S1–S9 DoD 机测（Z1 路径证明）。
@@ -137,7 +140,9 @@ describe("git review gold-standard DoD (S1–S9 on Z1)", () => {
     const loader = new GitReviewDocumentLoader({
       cancel: vi.fn(async () => undefined),
       entries: [item],
-      load: vi.fn(() => new Promise(() => undefined)),
+      load: vi.fn(
+        (): Promise<GitReviewFileDocumentResult> => new Promise(() => undefined)
+      ),
     });
     // first note: arm timer
     expect(watchdog.noteDemanded([item.entryKey], () => "loading")).toEqual([]);

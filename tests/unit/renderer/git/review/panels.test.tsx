@@ -3150,11 +3150,12 @@ describe("Git review panel", () => {
     const cancelReviewRequest = vi.fn(
       async (_request: { operationId: string }) => undefined
     );
+    const getReviewFileDocument = vi.fn(
+      () => new Promise<GitReviewFileDocumentResult>(() => undefined)
+    );
     const context = pluginContext({
       cancelReviewRequest,
-      getReviewFileDocument: vi.fn(
-        () => new Promise<GitReviewFileDocumentResult>(() => undefined)
-      ),
+      getReviewFileDocument,
       getReviewIndex: vi.fn(async () =>
         indexResult([entry(0), entry(1), entry(2)])
       ),
@@ -3163,9 +3164,7 @@ describe("Git review panel", () => {
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
 
     await waitFor(() => {
-      expect(
-        context.git.getReviewFileDocument.mock.calls.length
-      ).toBeGreaterThanOrEqual(2);
+      expect(getReviewFileDocument.mock.calls.length).toBeGreaterThanOrEqual(2);
     });
     view.unmount();
     // 在飞 document 请求数 = min(seed, concurrent)；不再钉死 2

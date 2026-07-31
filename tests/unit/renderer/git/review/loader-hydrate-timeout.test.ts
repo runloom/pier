@@ -1,6 +1,9 @@
 import { describe, expect, it, vi } from "vitest";
 import { GitReviewDocumentLoader } from "../../../../../src/plugins/builtin/git/renderer/review/document/loader.ts";
-import type { GitReviewIndexEntry } from "../../../../../src/shared/contracts/git/review.ts";
+import type {
+  GitReviewFileDocumentResult,
+  GitReviewIndexEntry,
+} from "../../../../../src/shared/contracts/git/review.ts";
 
 function entry(path: string): GitReviewIndexEntry {
   return {
@@ -28,7 +31,9 @@ describe("GitReviewDocumentLoader.failHydrateTimeout", () => {
     const loader = new GitReviewDocumentLoader({
       cancel: vi.fn(async () => undefined),
       entries: [item],
-      load: vi.fn(() => new Promise(() => undefined)),
+      load: vi.fn(
+        (): Promise<GitReviewFileDocumentResult> => new Promise(() => undefined)
+      ),
     });
     expect(loader.failHydrateTimeout([item.entryKey])).toBe(true);
     const resource = loader.getResource(item.entryKey);
@@ -62,7 +67,9 @@ describe("GitReviewDocumentLoader.failHydrateTimeout", () => {
     const loader = new GitReviewDocumentLoader({
       cancel: vi.fn(async () => undefined),
       entries: [pure],
-      load: vi.fn(() => new Promise(() => undefined)),
+      load: vi.fn(
+        (): Promise<GitReviewFileDocumentResult> => new Promise(() => undefined)
+      ),
     });
     expect(loader.failHydrateTimeout([pure.entryKey])).toBe(false);
     expect(loader.getResource(pure.entryKey)?.kind).toBe("idle");
@@ -74,9 +81,8 @@ describe("GitReviewDocumentLoader.failHydrateTimeout", () => {
     const loader = new GitReviewDocumentLoader({
       cancel: vi.fn(async () => undefined),
       entries: [item],
-      load: vi.fn(async () => ({
-        kind: "ok",
-        document: {
+      load: vi.fn(
+        async (): Promise<GitReviewFileDocumentResult> => ({
           entryKey: item.entryKey,
           kind: "ok",
           revision: "r1",
@@ -87,8 +93,8 @@ describe("GitReviewDocumentLoader.failHydrateTimeout", () => {
             index: null,
             staged: null,
           },
-        },
-      })),
+        })
+      ),
     });
     loader.hydrateLoaded(
       new Map([
