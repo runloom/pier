@@ -67,6 +67,7 @@ export function FilesContentSearchResultRow(props: {
   hit: FileContentQueryItem;
   isActive: boolean;
   onSelect: () => void;
+  onContextMenu?: (event: React.MouseEvent, hit: FileContentQueryItem) => void;
   /** When true, omit path/title chrome (used under a file group header). */
   compact?: boolean;
 }): React.JSX.Element {
@@ -87,6 +88,14 @@ export function FilesContentSearchResultRow(props: {
         aria-current={props.isActive ? "true" : undefined}
         data-testid="files-content-search-result-row"
         onClick={props.onSelect}
+        onContextMenu={(event) => {
+          if (!props.onContextMenu) {
+            return;
+          }
+          event.preventDefault();
+          event.stopPropagation();
+          props.onContextMenu(event, props.hit);
+        }}
         type="button"
       >
         {props.compact ? (
@@ -136,6 +145,7 @@ export function FilesContentSearchFileGroup(props: {
   hits: readonly FileContentQueryItem[];
   /** Global index of the first hit in this group within the flat result list. */
   indexOffset: number;
+  onContextMenu?: (event: React.MouseEvent, hit: FileContentQueryItem) => void;
   onOpenHit: (hit: FileContentQueryItem) => void;
   onSetActiveIndex: (index: number) => void;
   path: string;
@@ -171,6 +181,9 @@ export function FilesContentSearchFileGroup(props: {
               hit={hit}
               isActive={index === props.activeIndex}
               key={`${hit.path}:${hit.line}:${hit.matchByteStart}:${hit.matchByteEnd}`}
+              {...(props.onContextMenu
+                ? { onContextMenu: props.onContextMenu }
+                : {})}
               onSelect={() => {
                 props.onSetActiveIndex(index);
                 props.onOpenHit(hit);

@@ -117,10 +117,12 @@ function agentSessionStatusPresentation(exitCode: number | undefined): {
 export function RestoredAgentResultView({
   agent,
   className,
+  onContextMenu,
   onRestart,
 }: {
   agent: TerminalAgentPanelMetadata;
   className: string;
+  onContextMenu?: MouseEventHandler<HTMLDivElement>;
   onRestart?: () => void | Promise<void>;
 }) {
   const entry = getAgentCatalogEntry(agent.agentId);
@@ -135,6 +137,7 @@ export function RestoredAgentResultView({
       : Math.max(0, agent.finishedAt - agent.startedAt);
 
   return (
+    // biome-ignore lint/a11y/noStaticElementInteractions lint/a11y/noNoninteractiveElementInteractions: 恢复结果是原生右键菜单触发面
     <div
       className={cn(
         // 外壳只铺终端背景色，避免与产品 Empty/Card 前景 token 混用。
@@ -143,6 +146,7 @@ export function RestoredAgentResultView({
       )}
       data-scrollbar="stable"
       data-testid="terminal-agent-result"
+      onContextMenu={onContextMenu}
     >
       <Empty className="min-h-full rounded-none border-0 p-6" role="status">
         <EmptyHeader>

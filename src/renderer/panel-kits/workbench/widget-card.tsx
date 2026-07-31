@@ -38,6 +38,7 @@ import {
   type WidgetHeaderAction,
   WorkbenchWidgetActions,
 } from "./widget-actions.tsx";
+import { openWorkbenchWidgetContextMenu } from "./widget-context-menu.ts";
 import { WidgetErrorBoundary } from "./widget-error-boundary.tsx";
 
 interface WorkbenchWidgetCardProps {
@@ -255,6 +256,9 @@ export function WorkbenchWidgetCard({
       className="group h-full gap-0 rounded-xl py-0 [--card-spacing:--spacing(3)]"
       data-testid={`workbench-widget-${widget.instanceId}`}
       data-widget-id={widget.widgetId}
+      onContextMenu={(event) => {
+        openWorkbenchWidgetContextMenu(event, headerActions);
+      }}
     >
       <CardHeader className="min-h-9 select-none items-center gap-1 px-3 py-1.5">
         <CardTitle className="flex min-w-24 items-center gap-1.5 font-semibold text-sm">

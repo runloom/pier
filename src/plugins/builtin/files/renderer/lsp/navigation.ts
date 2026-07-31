@@ -5,6 +5,7 @@
 import type { EditorView } from "@codemirror/view";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { fileUriFromAbsolutePath } from "@shared/lsp-uri.ts";
+import { openFilesDiskPath } from "@/lib/files/open-disk-file-panel.ts";
 import { FILES_FILE_PANEL_ID } from "../../manifest.ts";
 import { absoluteDiskSourcePath } from "../document/paths.ts";
 import {
@@ -12,8 +13,6 @@ import {
   sameFilesDocumentPanelSource,
 } from "../document/types.ts";
 import type { FileEditorController } from "../editor/controller.ts";
-import { createFileFilePanelInstanceId } from "../panel/id.ts";
-import { sourceTitle } from "../panel/source.ts";
 
 const viewsByUri = new Map<string, Set<EditorView>>();
 
@@ -101,51 +100,72 @@ export async function openFilesLspAbsolutePath(
   absolutePath: string,
   preferredRoot?: string
 ): Promise<EditorView | null> {
-  const existing = getFilesLspEditorView(absolutePath);
-  if (existing) {
-    existing.focus();
-    return existing;
-  }
-  if (!deps) {
-    return null;
-  }
   const sourceParts = splitAbsoluteToSource(
     absolutePath,
     preferredRoot ?? null
   );
   if (!sourceParts || sourceParts.path.length === 0) {
+    // No project-relative source: only focus an already-registered view.
+    const existing = getFilesLspEditorView(absolutePath);
+    if (existing) {
+      existing.focus();
+      return existing;
+    }
     return null;
   }
+
   const source = {
     kind: "disk" as const,
     path: sourceParts.path,
     root: sourceParts.root,
   };
-  const existingInstance = deps.context.panels
-    .listInstances(FILES_FILE_PANEL_ID)
-    .find((instance) =>
-      sameFilesDocumentPanelSource(
-        parseFilesDocumentPanelSource(instance.params),
-        source
-      )
-    );
-  const instanceId =
-    existingInstance?.id ?? createFileFilePanelInstanceId(source);
-  const params = existingInstance?.params
-    ? { ...existingInstance.params }
-    : { pinned: true, source };
-  deps.controller.showSourceMode(instanceId);
-  deps.context.panels.openInstance({
-    componentId: FILES_FILE_PANEL_ID,
-    dropUnpinnedInstances: false,
-    instanceId,
-    params,
-    title: sourceTitle(
-      parseFilesDocumentPanelSource(existingInstance?.params) ?? source
-    ),
-  });
 
-  // Wait for the editor view to register after panel mount.
+  // Always activate the files tab + fire open-disk listeners (project tree
+  // reveal). Skipping open when a view already exists left Cmd/Ctrl+Click
+  // "no-op" when the tab was backgrounded or the tree never scrolled.
+  if (deps) {
+    const existingInstance = deps.context.panels
+      .listInstances(FILES_FILE_PANEL_ID)
+      .find((instance) =>
+        sameFilesDocumentPanelSource(
+          parseFilesDocumentPanelSource(instance.params),
+          source
+        )
+      );
+    if (existingInstance) {
+      deps.controller.showSourceMode(existingInstance.id);
+    }
+    const opened = openFilesDiskPath({
+      path: source.path,
+      root: source.root,
+    });
+    if (!(opened || existingInstance)) {
+      return null;
+    }
+    // After open, resolve instance again for showSourceMode on cold open.
+    if (!existingInstance) {
+      const created = deps.context.panels
+        .listInstances(FILES_FILE_PANEL_ID)
+        .find((instance) =>
+          sameFilesDocumentPanelSource(
+            parseFilesDocumentPanelSource(instance.params),
+            source
+          )
+        );
+      if (created) {
+        deps.controller.showSourceMode(created.id);
+      }
+    }
+  } else {
+    const existing = getFilesLspEditorView(absolutePath);
+    if (existing) {
+      existing.focus();
+      return existing;
+    }
+    return null;
+  }
+
+  // Wait for the editor view to register after panel activate/mount.
   for (let attempt = 0; attempt < 40; attempt += 1) {
     const view = getFilesLspEditorView(absolutePath);
     if (view) {

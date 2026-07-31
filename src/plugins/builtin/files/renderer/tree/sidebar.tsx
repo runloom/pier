@@ -12,8 +12,6 @@ import {
   type PierFileTreeMove,
 } from "@pier/ui/file/tree.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
-import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { GitStatus } from "@shared/contracts/git.ts";
 import {
   type MouseEvent as ReactMouseEvent,
   type ReactNode,
@@ -21,7 +19,6 @@ import {
   useEffect,
   useMemo,
   useRef,
-  useState,
 } from "react";
 import { createFilesTranslate } from "../i18n.ts";
 import { FilesMutationSuspendedError } from "../mutation/gate.ts";
@@ -30,13 +27,7 @@ import { recordFilesPathMru } from "../search/quick-open-mru.ts";
 import { useFilesTreeContextMenus } from "./context-menu.ts";
 import { cancelInlineCreate, commitInlineCreate } from "./create.ts";
 import { type DoubleClickTrack, detectDoubleClick } from "./double-click.ts";
-import {
-  buildGitStatusByPath,
-  EMPTY_GIT_DECORATIONS,
-  type FilesGitDecorations,
-  ignoredStatusFor,
-  splitIgnoredEntries,
-} from "./git-decorations.ts";
+import { ignoredStatusFor } from "./git-decorations.ts";
 import {
   hasPendingCreatePath,
   peekPendingCreate,
@@ -55,7 +46,9 @@ import {
   moveFilesTreeEntry,
   reloadFilesTreeRoot,
 } from "./store.ts";
+import { useFilesTreeGitDecorations } from "./use-git-decorations.ts";
 import { useFilesTreeSearch } from "./use-search.ts";
+import { useFilesTreeSidebarPrefs } from "./use-sidebar-prefs.ts";
 import { useFilesTreeVisibility } from "./use-visibility.ts";
 
 const TREE_DOUBLE_CLICK_WINDOW_MS = 400;
@@ -65,6 +58,7 @@ export function FileTreeSidebar({
   controller,
   instanceId,
   onOpenFile,
+  projectRoot,
   root,
   sourcePanelId,
   watchHub,
@@ -82,63 +76,24 @@ export function FileTreeSidebar({
     watchHub,
     treeVisibility.list
   );
-  const [gitDecorations, setGitDecorations] = useState<FilesGitDecorations>(
-    EMPTY_GIT_DECORATIONS
-  );
-  useEffect(() => {
-    const gitApi = (context as Partial<RendererPluginContext>).git;
-    if (!gitApi?.getStatus) {
-      return;
-    }
-    let disposed = false;
-    const applyStatus = (status: GitStatus | undefined) => {
-      if (!disposed && status) {
-        setGitDecorations((previous) => ({
-          ...previous,
-          changedByPath: buildGitStatusByPath(status.files),
-        }));
-      }
-    };
-    const refreshIgnored = () => {
-      treeVisibility
-        .refreshGitIgnored(root)
-        .then(({ changed, entries }) => {
-          if (!disposed) {
-            setGitDecorations((previous) => ({
-              ...previous,
-              ...splitIgnoredEntries(entries),
-            }));
-            if (changed && !treeVisibility.showsGitIgnoredFiles()) {
-              reloadTreeVisibility().catch(() => undefined);
-            }
-          }
-        })
-        .catch(() => undefined);
-    };
-    const refresh = () => {
-      gitApi
-        .getStatus(root)
-        .then(applyStatus)
-        .catch(() => undefined);
-      refreshIgnored();
-    };
-    refresh();
-    let unsubscribe: () => void = () => undefined;
-    try {
-      unsubscribe = gitApi.watch(root, (event) => {
-        if (event.status) {
-          applyStatus(event.status);
-          refreshIgnored();
-        } else {
-          refresh();
-        }
-      });
-    } catch {}
-    return () => {
-      disposed = true;
-      unsubscribe();
-    };
-  }, [context, reloadTreeVisibility, root, treeVisibility]);
+  const gitDecorations = useFilesTreeGitDecorations({
+    context,
+    reloadTreeVisibility,
+    root,
+    treeVisibility,
+  });
+
+  const {
+    autoReveal,
+    compactFolders,
+    expansionAuthority,
+    isAutoRevealExcluded,
+  } = useFilesTreeSidebarPrefs({
+    activeFilePath,
+    context,
+    list: treeVisibility.list,
+    root,
+  });
 
   const items = useMemo<PierFileTreeItem[]>(
     () =>
@@ -168,6 +123,12 @@ export function FileTreeSidebar({
 
   useEffect(() => {
     const entry = {
+      collapseAll: () => {
+        treeApiRef.current?.collapseAll();
+      },
+      expandKnownDirectories: () => {
+        treeApiRef.current?.expandAll();
+      },
       getApi: () => treeApiRef.current,
       openSearch: treeSearch.openSearch,
       root,
@@ -175,6 +136,7 @@ export function FileTreeSidebar({
     };
     return registerFilesTreeInstance(instanceId, entry);
   }, [instanceId, root, treeSearch.openSearch, treeSearch.toggleSearch]);
+
   const selectedPathsRef = useRef<readonly string[]>([]);
   const handleSelectPaths = useCallback((paths: string[]) => {
     selectedPathsRef.current = paths;
@@ -348,6 +310,7 @@ export function FileTreeSidebar({
     instanceId,
     root,
     selectedPathsRef,
+    ...(projectRoot ? { projectRoot } : {}),
     ...(sourcePanelId ? { sourcePanelId } : {}),
     t,
   });
@@ -390,9 +353,14 @@ export function FileTreeSidebar({
   } else {
     content = (
       <PierFileTree
+        autoReveal={autoReveal}
         className="min-h-0 w-full flex-1"
         directoryErrorLabel={t("filePanel.tree.directoryError", "Error")}
         directoryStates={snapshot.directoryStatesByPath}
+        expansionAuthority={expansionAuthority}
+        expansionSeed="none"
+        flattenEmptyDirectories={compactFolders}
+        isAutoRevealExcluded={isAutoRevealExcluded}
         items={items}
         label={t("panel.tree.label", "Files")}
         onLoadDirectory={loadDirectory}
@@ -405,7 +373,7 @@ export function FileTreeSidebar({
         onSelectPaths={handleSelectPaths}
         revealPath={activeFilePath ?? null}
         stickyFolders
-        treeApiRef={treeSearch.attachTreeApi}
+        treeApiRef={treeApiRef}
       />
     );
   }

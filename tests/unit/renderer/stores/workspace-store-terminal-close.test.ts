@@ -362,6 +362,62 @@ describe("workspace terminal close lifecycle", () => {
     expect(api.removePanel).not.toHaveBeenCalledWith(otherGroupTerminal);
   });
 
+  it("closeGroup removes only same-group panels and does not close window when other groups remain", async () => {
+    const a = terminalPanel("g1-a");
+    const b = webPanel("g1-b");
+    const other = terminalPanel("g2-a");
+    const panels = [a, b, other];
+    const api = {
+      activeGroup: { panels: [a, b] },
+      activePanel: a,
+      groups: [{ panels: [a, b] }, { panels: [other] }],
+      addPanel: vi.fn(),
+      panels,
+      removePanel: vi.fn((panel: { id: string }) => {
+        const index = panels.findIndex((p) => p.id === panel.id);
+        if (index >= 0) {
+          panels.splice(index, 1);
+        }
+      }),
+      totalPanels: 3,
+    };
+
+    useWorkspaceStore.getState().setApi(api as never);
+    await useWorkspaceStore.getState().closeGroup("g1-a");
+
+    expect(api.removePanel).toHaveBeenCalledWith(a);
+    expect(api.removePanel).toHaveBeenCalledWith(b);
+    expect(api.removePanel).not.toHaveBeenCalledWith(other);
+    expect(closeCurrentWindowMock).not.toHaveBeenCalled();
+  });
+
+  it("closeGroup closes the window when it empties the last group", async () => {
+    const a = terminalPanel("solo-a");
+    const b = webPanel("solo-b");
+    const panels = [a, b];
+    const api = {
+      activeGroup: { panels: [a, b] },
+      activePanel: a,
+      groups: [{ panels: [a, b] }],
+      addPanel: vi.fn(),
+      panels,
+      removePanel: vi.fn((panel: { id: string }) => {
+        const index = panels.findIndex((p) => p.id === panel.id);
+        if (index >= 0) {
+          panels.splice(index, 1);
+        }
+      }),
+      totalPanels: 2,
+    };
+
+    useWorkspaceStore.getState().setApi(api as never);
+    await useWorkspaceStore.getState().closeGroup("solo-a");
+
+    expect(api.removePanel).toHaveBeenCalledWith(a);
+    expect(api.removePanel).toHaveBeenCalledWith(b);
+    expect(closeCurrentWindowMock).toHaveBeenCalledOnce();
+  });
+
   it("clears layout after all panels close during closeAll", async () => {
     const terminal = terminalPanel("terminal-1");
     const web = webPanel("welcome-1");

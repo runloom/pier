@@ -18,29 +18,16 @@ import {
   captureDomSelectionText,
   selectedTextFromInvocation,
 } from "./selection-text.ts";
+import { expandContextMenuSurfaces } from "./surface-profiles.ts";
+
+export {
+  expandContextMenuSurfaces,
+  PANEL_CONTENT_SURFACE,
+  PANEL_EDIT_SURFACE,
+  PANEL_LAYOUT_SURFACE,
+} from "./surface-profiles.ts";
 
 const DEFAULT_GROUP = "9_other";
-
-/** 所有面板内容区共享的布局菜单 surface（拆分/聚焦/均分）。 */
-export const PANEL_CONTENT_SURFACE = "panel/content";
-
-const SURFACES_WITHOUT_SHARED_PANEL_CONTENT: Readonly<Record<string, true>> = {
-  "command-palette": true,
-  "create-menu": true,
-  "dockview-tab": true,
-  [PANEL_CONTENT_SURFACE]: true,
-};
-
-/**
- * 内容区菜单自动并入共享布局 actions；tab / 命令面板 / create-menu 不继承。
- * 这样 terminal/files/workbench 等本地 surface 不必各自声明均分/拆分/聚焦。
- */
-export function expandContextMenuSurfaces(surface: string): readonly string[] {
-  if (SURFACES_WITHOUT_SHARED_PANEL_CONTENT[surface]) {
-    return [surface];
-  }
-  return [surface, PANEL_CONTENT_SURFACE];
-}
 
 const CODE_TO_ELECTRON: Readonly<Record<string, string>> = {
   ArrowDown: "Down",

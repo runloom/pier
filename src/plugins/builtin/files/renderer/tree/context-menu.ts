@@ -13,6 +13,8 @@ interface FilesTreeContextMenuOptions {
   context: RendererPluginContext;
   entriesByPath: ReadonlyMap<string, FileEntry>;
   instanceId: string;
+  /** 可选；与 root 不同时供「复制相对路径」相对项目根。 */
+  projectRoot?: string;
   root: string;
   selectedPathsRef: { readonly current: readonly string[] };
   /** dockview panel id；group 共享树时与 instanceId(groupId) 不同。 */
@@ -24,6 +26,7 @@ export function useFilesTreeContextMenus({
   context,
   entriesByPath,
   instanceId,
+  projectRoot,
   root,
   sourcePanelId,
   selectedPathsRef,
@@ -60,14 +63,27 @@ export function useFilesTreeContextMenus({
         selection.length > 1 && selection.includes(entry.path)
           ? [...selection]
           : undefined;
+      const entryKinds: Record<string, "directory" | "file"> = {
+        [entry.path]: entry.kind,
+      };
+      if (selectedPaths) {
+        for (const path of selectedPaths) {
+          const selected = entriesByPath.get(path);
+          if (selected) {
+            entryKinds[path] = selected.kind;
+          }
+        }
+      }
       // sourcePanelId 必须是 dockview panel id，不能用 tree registry key(groupId)。
       context.contextMenu
         .popup("files/tree-item", point, {
           metadata: {
+            entryKinds,
             kind: entry.kind,
             path: entry.path,
             root: entry.root,
             treeId: instanceId,
+            ...(projectRoot ? { projectRoot } : {}),
             ...(selectedPaths ? { selectedPaths } : {}),
           },
           sourcePanelComponent: FILES_FILE_PANEL_ID,
@@ -79,6 +95,7 @@ export function useFilesTreeContextMenus({
       context,
       entriesByPath,
       instanceId,
+      projectRoot,
       reportFailure,
       selectedPathsRef,
       sourcePanelId,

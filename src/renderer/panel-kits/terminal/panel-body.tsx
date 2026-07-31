@@ -84,6 +84,7 @@ export function TerminalPanelBody({
       <RestoredAgentResultView
         agent={restoredAgentResult}
         className={terminalContentClassName}
+        onContextMenu={onContextMenu}
         {...(onRestartAgent ? { onRestart: onRestartAgent } : {})}
       />
     );

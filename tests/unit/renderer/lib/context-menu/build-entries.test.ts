@@ -9,6 +9,8 @@ import {
   buildMenuEntries,
   expandContextMenuSurfaces,
   PANEL_CONTENT_SURFACE,
+  PANEL_EDIT_SURFACE,
+  PANEL_LAYOUT_SURFACE,
 } from "@/lib/context-menu/build-entries.ts";
 import { keybindingRegistry } from "@/lib/keybindings/registry.ts";
 
@@ -174,13 +176,13 @@ describe("buildMenuEntries", () => {
     expect(accelerator).toBe("CmdOrCtrl+W");
   });
 
-  it("内容区 surface 自动并入 panel/content 布局 actions", () => {
+  it("viewport surface 按能力表并入 panel/edit 与 panel/layout", () => {
     actionRegistry.register({
       category: "T",
       handler: () => undefined,
       id: "t.local",
       metadata: { group: "0_edit", sortOrder: 1 },
-      surfaces: ["test/content-merge"],
+      surfaces: ["terminal/content"],
       title: () => "local",
     });
     actionRegistry.register({
@@ -188,22 +190,32 @@ describe("buildMenuEntries", () => {
       handler: () => undefined,
       id: "t.shared-layout",
       metadata: { group: "4_layout", sortOrder: 1 },
-      surfaces: [PANEL_CONTENT_SURFACE],
+      surfaces: [PANEL_LAYOUT_SURFACE],
       title: () => "shared",
     });
 
-    expect(expandContextMenuSurfaces("test/content-merge")).toEqual([
-      "test/content-merge",
-      PANEL_CONTENT_SURFACE,
+    expect(expandContextMenuSurfaces("terminal/content")).toEqual([
+      "terminal/content",
+      PANEL_LAYOUT_SURFACE,
     ]);
     expect(
-      buildMenuEntries("test/content-merge").map((e) =>
+      buildMenuEntries("terminal/content").map((e) =>
         e.type === "action" ? e.id : e.type
       )
     ).toEqual(["t.local", "separator", "t.shared-layout"]);
+
+    expect(expandContextMenuSurfaces("files/markdown-preview")).toEqual([
+      "files/markdown-preview",
+      PANEL_EDIT_SURFACE,
+    ]);
+    expect(expandContextMenuSurfaces(PANEL_CONTENT_SURFACE)).toEqual([
+      PANEL_CONTENT_SURFACE,
+      PANEL_EDIT_SURFACE,
+      PANEL_LAYOUT_SURFACE,
+    ]);
   });
 
-  it("dockview-tab / command-palette 不继承 panel/content", () => {
+  it("object / chrome surface 不并入 edit 或 layout", () => {
     actionRegistry.register({
       category: "T",
       handler: () => undefined,
@@ -217,18 +229,40 @@ describe("buildMenuEntries", () => {
       handler: () => undefined,
       id: "t.layout",
       metadata: { group: "4_layout", sortOrder: 1 },
-      surfaces: [PANEL_CONTENT_SURFACE],
+      surfaces: ["panel/layout"],
       title: () => "layout",
+    });
+    actionRegistry.register({
+      category: "T",
+      handler: () => undefined,
+      id: "t.tree",
+      metadata: { group: "1_new", sortOrder: 1 },
+      surfaces: ["files/tree-item"],
+      title: () => "new",
     });
 
     expect(expandContextMenuSurfaces("dockview-tab")).toEqual(["dockview-tab"]);
     expect(expandContextMenuSurfaces("command-palette")).toEqual([
       "command-palette",
     ]);
+    expect(expandContextMenuSurfaces("files/tree-item")).toEqual([
+      "files/tree-item",
+    ]);
+    expect(expandContextMenuSurfaces("git/review-tree-item")).toEqual([
+      "git/review-tree-item",
+    ]);
+    expect(expandContextMenuSurfaces("unknown/surface")).toEqual([
+      "unknown/surface",
+    ]);
     expect(
       buildMenuEntries("dockview-tab").map((e) =>
         e.type === "action" ? e.id : e.type
       )
     ).toEqual(["t.tab-only"]);
+    expect(
+      buildMenuEntries("files/tree-item").map((e) =>
+        e.type === "action" ? e.id : e.type
+      )
+    ).toEqual(["t.tree"]);
   });
 });

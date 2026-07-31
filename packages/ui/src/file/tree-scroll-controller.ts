@@ -25,9 +25,19 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
   containerRef,
   onScrollSnapshotChange,
   scrollControllerRef,
-}: PierFileTreeScrollControllerInput<TElement>) {
+}: PierFileTreeScrollControllerInput<TElement>): {
+  beginProgrammaticScroll: () => void;
+  captureSnapshot: () => PierFileTreeScrollSnapshot | null;
+  endProgrammaticScroll: () => void;
+  restoreSnapshotSoon: (
+    snapshot: PierFileTreeScrollSnapshot | null,
+    options?: PierFileTreeScrollRestoreOptions
+  ) => void;
+} {
   const lockedScrollTopRef = React.useRef<number | null>(null);
   const restoreRunRef = React.useRef(0);
+  /** Nested depth: path-sync restore is suppressed while > 0 (reveal in flight). */
+  const suppressRestoreDepthRef = React.useRef(0);
   const getHost = React.useCallback(
     () => fileTreeHost(containerRef.current),
     [containerRef]
@@ -47,12 +57,28 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
     },
     [applySnapshot]
   );
+  const beginProgrammaticScroll = React.useCallback(() => {
+    suppressRestoreDepthRef.current += 1;
+    // Cancel in-flight multi-frame restores and drop lock so scrollToPath sticks.
+    restoreRunRef.current += 1;
+    lockedScrollTopRef.current = null;
+  }, []);
+  const endProgrammaticScroll = React.useCallback(() => {
+    suppressRestoreDepthRef.current = Math.max(
+      0,
+      suppressRestoreDepthRef.current - 1
+    );
+  }, []);
   const restoreSnapshotSoon = React.useCallback(
     (
       snapshot: PierFileTreeScrollSnapshot | null,
       options: PierFileTreeScrollRestoreOptions = {}
     ) => {
       if (snapshot === null) {
+        return;
+      }
+      // Reveal / explicit scroll owns the viewport — do not pin pre-mutation scroll.
+      if (suppressRestoreDepthRef.current > 0) {
         return;
       }
 
@@ -72,7 +98,9 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
             lockedScrollTopRef.current = restoredScrollTop;
           }
         },
-        shouldContinue: () => restoreRunRef.current === restoreRun,
+        shouldContinue: () =>
+          restoreRunRef.current === restoreRun &&
+          suppressRestoreDepthRef.current === 0,
       });
     },
     [getHost]
@@ -81,11 +109,19 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
   React.useImperativeHandle(
     scrollControllerRef,
     () => ({
+      beginProgrammaticScroll,
       captureSnapshot,
+      endProgrammaticScroll,
       restoreSnapshot,
       restoreSnapshotSoon,
     }),
-    [captureSnapshot, restoreSnapshot, restoreSnapshotSoon]
+    [
+      beginProgrammaticScroll,
+      captureSnapshot,
+      endProgrammaticScroll,
+      restoreSnapshot,
+      restoreSnapshotSoon,
+    ]
   );
 
   React.useLayoutEffect(() => {
@@ -152,5 +188,10 @@ export function usePierFileTreeScrollController<TElement extends HTMLElement>({
     };
   }, [getHost, onScrollSnapshotChange]);
 
-  return { captureSnapshot, restoreSnapshotSoon };
+  return {
+    beginProgrammaticScroll,
+    captureSnapshot,
+    endProgrammaticScroll,
+    restoreSnapshotSoon,
+  };
 }

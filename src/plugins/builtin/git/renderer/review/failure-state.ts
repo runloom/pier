@@ -15,6 +15,8 @@ import type {
 
 const MAX_VISIBLE_REVIEW_FAILURES = 5;
 
+export type ReviewFailureActiveSource = "document" | "refresh" | "render";
+
 interface RenderFailure {
   readonly error: Error;
   readonly resource: ReviewFailedResource;
@@ -26,13 +28,24 @@ interface FailureSources {
   readonly renderBySectionId: Map<string, RenderFailure>;
 }
 
+interface ActiveFailure {
+  readonly resource: ReviewFailedResource;
+  readonly source: ReviewFailureActiveSource;
+}
+
 export interface ReviewFailureSummary {
   readonly hasHiddenFailures: boolean;
+  /**
+   * soft-retain 刷新失败：旧正文仍在显示。全局 toast 不得说「无法显示」，
+   * 且 stage/watch 竞态原因应静默（下一次 index 会再拉）。
+   */
+  readonly softRetainedOnly: boolean;
   readonly visibleFailures: readonly ReviewFailedResource[];
 }
 
 const EMPTY_FAILURE_SUMMARY: ReviewFailureSummary = {
   hasHiddenFailures: false,
+  softRetainedOnly: false,
   visibleFailures: [],
 };
 
@@ -41,7 +54,7 @@ const EMPTY_FAILURE_SUMMARY: ReviewFailureSummary = {
  * 热路径只修改对应 entry；反馈区固定显示前五项，并始终提升当前选择项。
  */
 export class GitReviewFailureAccumulator {
-  readonly #activeByEntryKey = new Map<string, ReviewFailedResource>();
+  readonly #activeByEntryKey = new Map<string, ActiveFailure>();
   readonly #entryKeyBySectionId = new Map<string, string>();
   readonly #sourcesByEntryKey = new Map<string, FailureSources>();
 
@@ -89,10 +102,10 @@ export class GitReviewFailureAccumulator {
     if (this.#activeByEntryKey.size === 0) {
       return EMPTY_FAILURE_SUMMARY;
     }
-    const visibleFailures: ReviewFailedResource[] = [];
-    for (const resource of this.#activeByEntryKey.values()) {
-      visibleFailures.push(resource);
-      if (visibleFailures.length === MAX_VISIBLE_REVIEW_FAILURES) {
+    const visibleActive: ActiveFailure[] = [];
+    for (const active of this.#activeByEntryKey.values()) {
+      visibleActive.push(active);
+      if (visibleActive.length === MAX_VISIBLE_REVIEW_FAILURES) {
         break;
       }
     }
@@ -102,18 +115,27 @@ export class GitReviewFailureAccumulator {
         : this.#activeByEntryKey.get(selectedEntryKey);
     if (
       selected &&
-      !visibleFailures.some(
-        (resource) => resource.entry.entryKey === selectedEntryKey
+      !visibleActive.some(
+        (active) => active.resource.entry.entryKey === selectedEntryKey
       )
     ) {
-      if (visibleFailures.length < MAX_VISIBLE_REVIEW_FAILURES) {
-        visibleFailures.push(selected);
+      if (visibleActive.length < MAX_VISIBLE_REVIEW_FAILURES) {
+        visibleActive.push(selected);
       } else {
-        visibleFailures[MAX_VISIBLE_REVIEW_FAILURES - 1] = selected;
+        visibleActive[MAX_VISIBLE_REVIEW_FAILURES - 1] = selected;
+      }
+    }
+    const visibleFailures = visibleActive.map((active) => active.resource);
+    let softRetainedOnly = this.#activeByEntryKey.size > 0;
+    for (const active of this.#activeByEntryKey.values()) {
+      if (active.source !== "refresh") {
+        softRetainedOnly = false;
+        break;
       }
     }
     return {
       hasHiddenFailures: this.#activeByEntryKey.size > visibleFailures.length,
+      softRetainedOnly,
       visibleFailures,
     };
   }
@@ -171,13 +193,15 @@ export class GitReviewFailureAccumulator {
     return true;
   }
 
-  #activeFailure(sources: FailureSources): ReviewFailedResource | null {
-    return (
-      sources.document ??
-      sources.refresh ??
-      sources.renderBySectionId.values().next().value?.resource ??
-      null
-    );
+  #activeFailure(sources: FailureSources): ActiveFailure | null {
+    if (sources.document) {
+      return { resource: sources.document, source: "document" };
+    }
+    if (sources.refresh) {
+      return { resource: sources.refresh, source: "refresh" };
+    }
+    const render = sources.renderBySectionId.values().next().value;
+    return render ? { resource: render.resource, source: "render" } : null;
   }
 
   #createSources(entryKey: string): FailureSources {
@@ -194,7 +218,10 @@ export class GitReviewFailureAccumulator {
     const previous = this.#activeByEntryKey.get(entryKey);
     const sources = this.#sourcesByEntryKey.get(entryKey);
     const next = sources ? this.#activeFailure(sources) : null;
-    if (previous === next) {
+    if (
+      previous?.resource === next?.resource &&
+      previous?.source === next?.source
+    ) {
       return;
     }
     if (next) {
@@ -231,6 +258,7 @@ function sameFailureSummary(
 ): boolean {
   if (
     left.hasHiddenFailures !== right.hasHiddenFailures ||
+    left.softRetainedOnly !== right.softRetainedOnly ||
     left.visibleFailures.length !== right.visibleFailures.length
   ) {
     return false;

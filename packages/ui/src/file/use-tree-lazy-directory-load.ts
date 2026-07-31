@@ -1,7 +1,9 @@
 import type { useFileTree } from "@pierre/trees/react";
 import * as React from "react";
+import type { TreeExpansionAuthority } from "./tree-expansion-authority.ts";
+import { normalizeExpansionPath } from "./tree-expansion-authority.ts";
 import type { FileTreeRefs } from "./tree-internal.ts";
-import { isDirectoryHandle } from "./tree-model.ts";
+import { isDirectoryHandle, stripTrailingSlash } from "./tree-model.ts";
 import type { PierFileTreeItem } from "./tree-types.ts";
 
 type FileTreeModel = ReturnType<typeof useFileTree>["model"];
@@ -38,6 +40,9 @@ function directoryHasChildEntries(
 export function useFileTreeLazyDirectoryLoad(options: {
   activeSearchRef: React.MutableRefObject<string | null>;
   expandedDirectoriesRef: React.MutableRefObject<Map<string, boolean>>;
+  expansionAuthority?: TreeExpansionAuthority | undefined;
+  /** When true, expansion deltas are programmatic (collapseAll / seed apply). */
+  suppressAuthorityWriteRef?: React.MutableRefObject<boolean> | undefined;
   model: FileTreeModel;
   readRefs: () => FileTreeRefs;
   requestedLoadDirectoriesRef: React.MutableRefObject<Set<string>>;
@@ -45,6 +50,8 @@ export function useFileTreeLazyDirectoryLoad(options: {
   const {
     activeSearchRef,
     expandedDirectoriesRef,
+    expansionAuthority,
+    suppressAuthorityWriteRef,
     model,
     readRefs,
     requestedLoadDirectoriesRef,
@@ -89,6 +96,10 @@ export function useFileTreeLazyDirectoryLoad(options: {
         }
       }
 
+      const writeAuthority =
+        expansionAuthority != null &&
+        suppressAuthorityWriteRef?.current !== true;
+
       for (const [officialPath, callerPath] of directoryPaths) {
         const itemHandle = model.getItem(officialPath);
         let isExpanded = false;
@@ -101,6 +112,15 @@ export function useFileTreeLazyDirectoryLoad(options: {
           expandedDirectoriesRef.current.get(officialPath) ?? false;
         expandedDirectoriesRef.current.set(officialPath, isExpanded);
         const newlyExpanded = !wasExpanded && isExpanded;
+        const newlyCollapsed = wasExpanded && !isExpanded;
+
+        if (writeAuthority && (newlyExpanded || newlyCollapsed)) {
+          expansionAuthority.setDirectoryExpanded(
+            normalizeExpansionPath(stripTrailingSlash(callerPath)),
+            isExpanded,
+            "user"
+          );
+        }
 
         if (!(notifyOnExpand && isExpanded)) {
           continue;
@@ -120,13 +140,20 @@ export function useFileTreeLazyDirectoryLoad(options: {
           readRefs().itemsByPath,
           callerPath
         );
-        // "loaded" with zero children is a stale stub (e.g. old
-        // ensureAncestorDirectoryEntries). Re-fetch once while expanded.
-        const staleLoadedEmpty = loadState === "loaded" && !hasChildEntries;
+        // Expanded chevron with no projected children: must list (or re-list
+        // stale "loaded" stubs). Confirmed "empty" after a real list stays put.
+        // Also covers Expand Folders paths that pre-set expandedDirectoriesRef
+        // so newlyExpanded is false while content is still missing.
         const shouldLoad =
-          staleLoadedEmpty ||
-          (newlyExpanded &&
-            (loadState === "error" || loadState === "unloaded"));
+          isExpanded &&
+          !hasChildEntries &&
+          loadState !== "loading" &&
+          loadState !== "empty" &&
+          (newlyExpanded ||
+            loadState === "unloaded" ||
+            loadState === "error" ||
+            loadState === "loaded" ||
+            loadState === "");
 
         if (
           !(
@@ -146,9 +173,11 @@ export function useFileTreeLazyDirectoryLoad(options: {
     [
       activeSearchRef,
       expandedDirectoriesRef,
+      expansionAuthority,
       model,
       readRefs,
       requestedLoadDirectoriesRef,
+      suppressAuthorityWriteRef,
     ]
   );
 

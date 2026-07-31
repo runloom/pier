@@ -102,6 +102,79 @@ export const pierEditorTheme = EditorView.theme({
     border: "1px solid var(--border)",
     borderRadius: "0.5rem",
   },
+  /*
+   * Lint / LSP serverDiagnostics tooltips: same chrome contract as
+   * .cm-lsp-hover-tooltip (mono, code size, wrap, semantic severity rail).
+   * Overrides @codemirror/lint baseTheme hard-coded severity colors.
+   */
+  ".cm-tooltip-lint": {
+    padding: "0",
+    margin: "0",
+    maxWidth: "min(480px, 90vw)",
+    fontFamily: "var(--font-mono)",
+    fontSize: "var(--pier-code-font-size, 13px)",
+    lineHeight: "1.75",
+    backgroundColor: "var(--popover)",
+    color: "var(--popover-foreground)",
+    border: "1px solid var(--border)",
+    borderRadius: "0.375rem",
+    boxShadow:
+      "0 4px 16px color-mix(in oklab, var(--foreground) 12%, transparent)",
+    overflow: "hidden",
+  },
+  ".cm-diagnostic": {
+    padding: "0.375rem 0.5rem 0.375rem 0.625rem",
+    marginLeft: "0",
+    display: "block",
+    maxWidth: "min(480px, 90vw)",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+    fontFamily: "inherit",
+    fontSize: "inherit",
+    lineHeight: "inherit",
+    borderLeft: "3px solid var(--muted-foreground)",
+  },
+  ".cm-diagnosticText": {
+    display: "block",
+    whiteSpace: "pre-wrap",
+    overflowWrap: "anywhere",
+    wordBreak: "break-word",
+  },
+  ".cm-diagnostic-error": {
+    borderLeftColor: "var(--destructive)",
+  },
+  ".cm-diagnostic-warning": {
+    borderLeftColor: "var(--warning)",
+  },
+  ".cm-diagnostic-info": {
+    borderLeftColor: "var(--info)",
+  },
+  ".cm-diagnostic-hint": {
+    borderLeftColor: "var(--muted-foreground)",
+  },
+  ".cm-diagnosticSource": {
+    marginTop: "0.25rem",
+    fontSize: "0.85em",
+    opacity: "0.75",
+    color: "var(--muted-foreground)",
+  },
+  ".cm-diagnosticAction": {
+    font: "inherit",
+    fontSize: "0.9em",
+    border: "1px solid var(--border)",
+    padding: "0.125rem 0.375rem",
+    marginLeft: "0.5rem",
+    marginTop: "0.25rem",
+    borderRadius: "0.25rem",
+    cursor: "pointer",
+    backgroundColor: "var(--secondary)",
+    color: "var(--secondary-foreground)",
+  },
+  ".cm-diagnosticAction:hover": {
+    backgroundColor:
+      "color-mix(in oklab, var(--secondary) 85%, var(--foreground))",
+  },
   /* Pier LSP hover mounts a transparent CM tooltip shell; chrome is on .cm-lsp-hover-tooltip. */
   ".cm-tooltip:has([data-slot='files-lsp-hover-tooltip-root'])": {
     backgroundColor: "transparent",

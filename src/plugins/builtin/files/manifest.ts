@@ -1,5 +1,13 @@
 import type { PluginManifest } from "@shared/contracts/plugin.ts";
 import {
+  FILES_FILE_PANEL_ID,
+  FILES_GROUP_VIEW_CONTENT_ID,
+  FILES_PLUGIN_ID,
+  FILES_PROJECT_STATUS_ITEM_ID,
+  FILES_SEARCH_PANEL_ID,
+} from "./command-ids.ts";
+import { FILES_PLUGIN_COMMANDS } from "./manifest-commands.ts";
+import {
   FILES_AUTO_SAVE_SETTING_KEY,
   FILES_EDITOR_DEFAULT_EOL_SETTING_KEY,
   FILES_EDITOR_DEFAULT_LANGUAGE_SETTING_KEY,
@@ -9,228 +17,22 @@ import {
   FILES_EDITOR_TAB_SIZE_SETTING_KEY,
   FILES_EDITOR_TAB_SIZE_VALUES,
   FILES_EDITOR_WORD_WRAP_SETTING_KEY,
+  FILES_TREE_AUTO_REVEAL_EXCLUDE_SETTING_KEY,
+  FILES_TREE_AUTO_REVEAL_SETTING_KEY,
+  FILES_TREE_AUTO_REVEAL_VALUES,
+  FILES_TREE_COMPACT_FOLDERS_SETTING_KEY,
+  FILES_TREE_DEFAULT_AUTO_REVEAL_EXCLUDE_PATTERNS,
   FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
   FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
   FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
   FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY,
 } from "./settings.ts";
 
-export const FILES_PLUGIN_ID = "pier.files";
-export const FILES_FILE_PANEL_ID = "pier.files.filePanel";
-export const FILES_GROUP_VIEW_CONTENT_ID = "pier.files.groupView";
-export const FILES_NEW_FILE_COMMAND_ID = "pier.files.newFile";
-export const FILES_NEW_FOLDER_COMMAND_ID = "pier.files.newFolder";
-export const FILES_RENAME_COMMAND_ID = "pier.files.rename";
-export const FILES_DELETE_COMMAND_ID = "pier.files.delete";
-export const FILES_COPY_PATH_COMMAND_ID = "pier.files.copyPath";
-export const FILES_COPY_RELATIVE_PATH_COMMAND_ID =
-  "pier.files.copyRelativePath";
-export const FILES_COPY_PATH_WITH_RANGE_COMMAND_ID =
-  "pier.files.copyPathWithRange";
-export const FILES_SAVE_COMMAND_ID = "pier.files.save";
-export const FILES_SAVE_AS_COMMAND_ID = "pier.files.saveAs";
-export const FILES_SAVE_ALL_COMMAND_ID = "pier.files.saveAll";
-export const FILES_REVEAL_COMMAND_ID = "pier.files.revealInFinder";
-export const FILES_DUPLICATE_COMMAND_ID = "pier.files.duplicate";
-export const FILES_TREE_SEARCH_COMMAND_ID = "pier.files.treeSearch";
-export const FILES_QUICK_OPEN_COMMAND_ID = "pier.files.quickOpen";
-export const FILES_OPEN_DIRECTORY_COMMAND_ID = "pier.files.openDirectory";
-export const FILES_SEARCH_CONTENTS_COMMAND_ID = "pier.files.searchContents";
-export const FILES_SEARCH_IN_FOLDER_COMMAND_ID = "pier.files.searchInFolder";
-export const FILES_SEARCH_PANEL_ID = "pier.files.searchPanel";
+export * from "./command-ids.ts";
 
-export const FILES_EDITOR_CUT_COMMAND_ID = "pier.files.editor.cut";
-export const FILES_EDITOR_COPY_COMMAND_ID = "pier.files.editor.copy";
-export const FILES_EDITOR_PASTE_COMMAND_ID = "pier.files.editor.paste";
-export const FILES_EDITOR_SELECT_ALL_COMMAND_ID = "pier.files.editor.selectAll";
-export const FILES_EDITOR_GO_TO_LINE_COMMAND_ID = "pier.files.editor.goToLine";
-export const FILES_EDITOR_SHOW_HOVER_COMMAND_ID = "pier.files.editor.showHover";
-
-export const FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID =
-  "pier.files.markdown.measureComfortable";
-export const FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID =
-  "pier.files.markdown.measureWide";
-export const FILES_MARKDOWN_APPEARANCE_AUTO_COMMAND_ID =
-  "pier.files.markdown.appearanceAuto";
-export const FILES_MARKDOWN_APPEARANCE_LIGHT_COMMAND_ID =
-  "pier.files.markdown.appearanceLight";
-export const FILES_MARKDOWN_APPEARANCE_DARK_COMMAND_ID =
-  "pier.files.markdown.appearanceDark";
-
-export const FILES_PROJECT_STATUS_ITEM_ID = "pier.files.project";
 export const FILES_PLUGIN_MANIFEST = {
   apiVersion: 1,
-  commands: [
-    {
-      category: "file",
-      id: FILES_NEW_FILE_COMMAND_ID,
-      permissions: ["file:read", "file:write", "panel:open"],
-      title: "New File...",
-    },
-    {
-      category: "file",
-      id: FILES_NEW_FOLDER_COMMAND_ID,
-      permissions: ["file:read", "file:write", "panel:open"],
-      title: "New Folder...",
-    },
-    {
-      category: "file",
-      id: FILES_RENAME_COMMAND_ID,
-      permissions: ["file:read", "file:write"],
-      title: "Rename...",
-    },
-    {
-      category: "file",
-      id: FILES_DELETE_COMMAND_ID,
-      permissions: ["file:write"],
-      title: "Delete",
-    },
-    {
-      category: "file",
-      id: FILES_COPY_PATH_COMMAND_ID,
-      permissions: [],
-      title: "Copy Path",
-    },
-    {
-      category: "file",
-      id: FILES_COPY_RELATIVE_PATH_COMMAND_ID,
-      permissions: [],
-      title: "Copy Relative Path",
-    },
-    {
-      category: "file",
-      id: FILES_COPY_PATH_WITH_RANGE_COMMAND_ID,
-      permissions: [],
-      title: "Copy Path and Selected Lines",
-    },
-    {
-      category: "file",
-      id: FILES_SAVE_COMMAND_ID,
-      permissions: ["file:write"],
-      title: "Save",
-    },
-    {
-      category: "file",
-      id: FILES_SAVE_AS_COMMAND_ID,
-      permissions: ["file:write"],
-      title: "Save As...",
-    },
-    {
-      category: "file",
-      id: FILES_SAVE_ALL_COMMAND_ID,
-      permissions: ["file:write"],
-      title: "Save All",
-    },
-    {
-      category: "file",
-      id: FILES_REVEAL_COMMAND_ID,
-      permissions: ["file:read"],
-      title: "Reveal in Finder",
-    },
-    {
-      category: "file",
-      id: FILES_DUPLICATE_COMMAND_ID,
-      permissions: ["file:read", "file:write"],
-      title: "Duplicate",
-    },
-    {
-      category: "file",
-      id: FILES_TREE_SEARCH_COMMAND_ID,
-      permissions: [],
-      title: "Find in File Tree",
-    },
-    {
-      category: "file",
-      id: FILES_QUICK_OPEN_COMMAND_ID,
-      permissions: ["file:read", "panel:open"],
-      title: "Go to File",
-    },
-    {
-      category: "file",
-      id: FILES_OPEN_DIRECTORY_COMMAND_ID,
-      permissions: ["file:read", "panel:open"],
-      title: "Open Directory",
-    },
-    {
-      category: "file",
-      id: FILES_SEARCH_CONTENTS_COMMAND_ID,
-      permissions: ["file:read", "panel:open"],
-      title: "Search in Files",
-    },
-    {
-      category: "file",
-      id: FILES_SEARCH_IN_FOLDER_COMMAND_ID,
-      permissions: ["file:read", "panel:open"],
-      title: "Find in Folder…",
-    },
-
-    {
-      category: "file",
-      id: FILES_EDITOR_CUT_COMMAND_ID,
-      permissions: [],
-      title: "Cut",
-    },
-    {
-      category: "file",
-      id: FILES_EDITOR_COPY_COMMAND_ID,
-      permissions: [],
-      title: "Copy",
-    },
-    {
-      category: "file",
-      id: FILES_EDITOR_PASTE_COMMAND_ID,
-      permissions: [],
-      title: "Paste",
-    },
-    {
-      category: "file",
-      id: FILES_EDITOR_SELECT_ALL_COMMAND_ID,
-      permissions: [],
-      title: "Select All",
-    },
-    {
-      category: "file",
-      id: FILES_EDITOR_GO_TO_LINE_COMMAND_ID,
-      permissions: [],
-      title: "Go to Line…",
-    },
-    {
-      category: "file",
-      id: FILES_EDITOR_SHOW_HOVER_COMMAND_ID,
-      permissions: [],
-      title: "Show Symbol Information",
-    },
-    {
-      category: "file",
-      id: FILES_MARKDOWN_MEASURE_COMFORTABLE_COMMAND_ID,
-      permissions: [],
-      title: "Comfortable reading",
-    },
-    {
-      category: "file",
-      id: FILES_MARKDOWN_MEASURE_WIDE_COMMAND_ID,
-      permissions: [],
-      title: "Wide reading",
-    },
-    {
-      category: "file",
-      id: FILES_MARKDOWN_APPEARANCE_AUTO_COMMAND_ID,
-      permissions: [],
-      title: "Match app appearance",
-    },
-    {
-      category: "file",
-      id: FILES_MARKDOWN_APPEARANCE_LIGHT_COMMAND_ID,
-      permissions: [],
-      title: "Light reading",
-    },
-    {
-      category: "file",
-      id: FILES_MARKDOWN_APPEARANCE_DARK_COMMAND_ID,
-      permissions: [],
-      title: "Dark reading",
-    },
-  ],
+  commands: FILES_PLUGIN_COMMANDS,
   configuration: {
     properties: {
       [FILES_AUTO_SAVE_SETTING_KEY]: {
@@ -327,6 +129,34 @@ export const FILES_PLUGIN_MANIFEST = {
           "Show files and folders matched by Git ignore rules. This is separate from the file tree exclusion patterns.",
         order: 30,
         type: "boolean",
+      },
+      [FILES_TREE_COMPACT_FOLDERS_SETTING_KEY]: {
+        default: true,
+        description:
+          "Merge single-child folder chains into one row in the file tree (like VS Code Compact Folders).",
+        order: 31,
+        type: "boolean",
+      },
+      [FILES_TREE_AUTO_REVEAL_SETTING_KEY]: {
+        default: "on",
+        description:
+          "When you switch tabs, automatically locate the active file in the project file tree. Open File, Go to Definition, and breadcrumb jumps still locate. Use Reveal Active File in File Tree anytime.",
+        enum: [...FILES_TREE_AUTO_REVEAL_VALUES],
+        enumDescriptions: [
+          "Select and scroll into view when needed",
+          "Select only, do not scroll",
+          "Do not track tab changes",
+        ],
+        order: 32,
+        type: "string",
+      },
+      [FILES_TREE_AUTO_REVEAL_EXCLUDE_SETTING_KEY]: {
+        default: FILES_TREE_DEFAULT_AUTO_REVEAL_EXCLUDE_PATTERNS,
+        description:
+          "Glob patterns skipped on tab auto-locate. Open File, Go to Definition, and Reveal Active File still locate. One pattern per line.",
+        multiline: true,
+        order: 33,
+        type: "string",
       },
     },
   },

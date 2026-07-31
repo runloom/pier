@@ -96,17 +96,17 @@ export function panelsInSameGroup(
   api: DockviewApi,
   panelId: string
 ): readonly WorkspacePanelRef[] {
-  const group = api.groups.find((candidate) =>
-    candidate.panels.some((panel) => panel.id === panelId)
+  const group = api.groups?.find((candidate) =>
+    candidate.panels?.some((panel) => panel.id === panelId)
   );
-  if (group) {
+  if (group?.panels) {
     return group.panels;
   }
   const activeGroupPanels = api.activeGroup?.panels;
   if (activeGroupPanels?.some((panel) => panel.id === panelId)) {
     return activeGroupPanels;
   }
-  return api.panels;
+  return api.panels ?? [];
 }
 
 /** Resolve a dockview group by its stable ID. */

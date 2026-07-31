@@ -23,11 +23,11 @@ import type { FileEditorController } from "../editor/controller.ts";
 import { createFileEditorSessionId } from "../editor/session-id.ts";
 import { createFilesTranslate } from "../i18n.ts";
 import {
+  activeFilePathForTree,
   filePanelProjectRoot,
   projectNameFromRoot,
   useProjectFileTreeCollapsed,
 } from "../tree/preferences.ts";
-import { FileTreeSidebar } from "../tree/sidebar.tsx";
 import type { FilesWatchHub } from "../watch-hub.ts";
 import { ResolvedFilePanelActions } from "./actions.tsx";
 import { ResolvedFilePanel } from "./body.tsx";
@@ -43,6 +43,7 @@ import {
   ReadOnlyErrorState,
   SidebarToggleButton,
 } from "./parts.tsx";
+import { renderFilePanelSidebar } from "./sidebar-slot.tsx";
 import {
   asGroupHandle,
   breadcrumbSegmentsForSource,
@@ -309,23 +310,25 @@ function FilePanelContent({
       treeInstanceId,
     ]
   );
-
-  // 共享 group 视图已接管 chrome+树+编辑器;薄壳仅占位保持 dockview tab 生命周期。
+  // 共享 group 视图已接管 chrome+树+编辑器。
   if (prefersSharedGroupView) {
     return <div aria-hidden="true" className="h-full w-full" />;
   }
 
-  const sidebar =
-    runtimeContext && root && !treeCollapsed ? (
-      <FileTreeSidebar
-        context={runtimeContext}
-        controller={controller}
-        instanceId={props.api?.id ?? "pier.files.inlineFilePanel"}
-        onOpenFile={handleOpenFileFromTree}
-        root={root}
-        watchHub={runtimeWatchHub}
-      />
-    ) : null;
+  const activeFilePath = activeFilePathForTree({
+    root,
+    source: sourceFromParams,
+  });
+  const sidebar = renderFilePanelSidebar({
+    activeFilePath,
+    controller,
+    instanceId: props.api?.id ?? "pier.files.inlineFilePanel",
+    onOpenFile: handleOpenFileFromTree,
+    root,
+    runtimeContext,
+    treeCollapsed,
+    watchHub: runtimeWatchHub,
+  });
 
   const chromeLeading = (
     <>
@@ -343,16 +346,15 @@ function FilePanelContent({
     </>
   );
 
-  const selectedSource = sourceFromParams;
   const outsideWorkspace =
-    selectedSource?.kind === "disk" &&
-    !isDiskSourceRootAllowed(selectedSource.root, props.params?.context);
+    sourceFromParams?.kind === "disk" &&
+    !isDiskSourceRootAllowed(sourceFromParams.root, props.params?.context);
   const shellProps = {
     onSidebarAutoCollapse: () => setTreeCollapsed(true),
     sidebar,
   };
 
-  if (outsideWorkspace && selectedSource) {
+  if (outsideWorkspace && sourceFromParams) {
     return (
       <FilePanelShell
         {...shellProps}
@@ -362,10 +364,10 @@ function FilePanelContent({
               <FilePanelBreadcrumb
                 ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
                 onSegmentClick={(index) =>
-                  handleBreadcrumbClick(index, selectedSource)
+                  handleBreadcrumbClick(index, sourceFromParams)
                 }
                 segments={breadcrumbSegmentsForSource(
-                  selectedSource,
+                  sourceFromParams,
                   projectName
                 )}
               />
@@ -380,7 +382,7 @@ function FilePanelContent({
             "This file is outside the current workspace and cannot be restored."
           )}
           t={t}
-          title={sourceTitle(selectedSource)}
+          title={sourceTitle(sourceFromParams)}
         />
       </FilePanelShell>
     );
@@ -410,7 +412,7 @@ function FilePanelContent({
     );
   }
 
-  if (!selectedSource) {
+  if (!sourceFromParams) {
     return (
       <FilePanelShell
         {...shellProps}
@@ -439,10 +441,10 @@ function FilePanelContent({
             <FilePanelBreadcrumb
               ariaLabel={t("filePanel.breadcrumbLabel", "File location")}
               onSegmentClick={(index) =>
-                handleBreadcrumbClick(index, selectedSource)
+                handleBreadcrumbClick(index, sourceFromParams)
               }
               segments={breadcrumbSegmentsForSource(
-                selectedSource,
+                sourceFromParams,
                 projectName
               )}
             />
@@ -455,7 +457,7 @@ function FilePanelContent({
               mode={mode}
               onModeChange={setMode}
               panelId={props.api?.id}
-              source={selectedSource}
+              source={sourceFromParams}
               t={t}
             />
           }
@@ -473,7 +475,7 @@ function FilePanelContent({
         panelContext={props.params?.context}
         panelId={props.api?.id}
         searchRequest={searchRequest}
-        source={selectedSource}
+        source={sourceFromParams}
         t={t}
       />
     </FilePanelShell>

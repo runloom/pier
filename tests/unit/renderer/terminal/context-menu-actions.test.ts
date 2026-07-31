@@ -245,9 +245,11 @@ describe("terminal content context menu actions", () => {
         "pier.terminal.search",
         "pier.terminal.clearScreen",
         "pier.panel.splitRight",
-        "pier.panel.focusRight",
       ])
     );
+    // 单 group：布局项整行隐藏（menuHiddenWhen），不再置灰露出。
+    expect(ids).not.toContain("pier.panel.focusRight");
+    expect(ids).not.toContain("pier.panel.equalizeSplits");
     expect(ids).not.toContain("pier.panel.copySelection");
     expect(ids).not.toContain("pier.panel.selectAll");
     expect(ids.slice(0, 5)).toEqual([
@@ -264,6 +266,26 @@ describe("terminal content context menu actions", () => {
       "查找",
       "清屏",
     ]);
+  });
+
+  it("includes focus/equalize on terminal content when multiple groups exist", async () => {
+    await registerActions();
+    const base = createApi(terminalPanel("terminal-1")) as {
+      groups: { id: string }[];
+    };
+    useWorkspaceStore.getState().setApi({
+      ...base,
+      groups: [{ id: "group-1" }, { id: "group-2" }],
+    } as never);
+
+    const ids = collectActionIds(
+      buildMenuEntries("terminal/content", {
+        sourcePanelId: "terminal-1",
+        surface: "terminal/content",
+      })
+    );
+    expect(ids).toContain("pier.panel.focusRight");
+    expect(ids).toContain("pier.panel.equalizeSplits");
   });
 
   it("replaces new-terminal/split with rerun on task panel menus", async () => {
@@ -623,10 +645,11 @@ describe("terminal content context menu actions", () => {
     expect(ids).not.toContain("pier.terminal.composerAttach");
     const search = actionRegistry.get("pier.terminal.search");
     const clear = actionRegistry.get("pier.terminal.clearScreen");
-    // Find(4) → Clear(5) → Rich Input(7)
+    // Find(4) → Clear(5) in 0_edit; Rich Input in 2_agent (sortOrder 2).
     expect(search?.metadata?.sortOrder).toBe(4);
     expect(clear?.metadata?.sortOrder).toBe(5);
-    expect(action.metadata?.sortOrder).toBe(7);
+    expect(action.metadata?.group).toBe("2_agent");
+    expect(action.metadata?.sortOrder).toBe(2);
     expect(ids.indexOf("pier.terminal.clearScreen")).toBe(
       ids.indexOf("pier.terminal.search") + 1
     );

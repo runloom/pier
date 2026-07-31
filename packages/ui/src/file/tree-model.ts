@@ -6,6 +6,10 @@ import type {
   FileTreeRowDecoration,
 } from "@pierre/trees";
 import type * as React from "react";
+import {
+  collectPreservedExpandedDirectoryPathsFromIntent,
+  intentFromExpansionMap,
+} from "./tree-expansion-apply.ts";
 import type { PierDirectoryLoadState, PierFileTreeItem } from "./tree-types.ts";
 
 const TRAILING_SLASHES_PATTERN = /\/+$/;
@@ -67,6 +71,9 @@ function toDirectoryLoadDecoration(
   switch (loadState) {
     case "error":
       return errorLabel ?? null;
+    case "loading":
+      // Official row decoration is text-only; keep height stable (no spinner DOM).
+      return "…";
     default:
       return null;
   }
@@ -177,81 +184,21 @@ export function collectExpandedDirectoryPaths(
  * resetPaths 会重建 @pierre/trees 内部 store。这里只恢复用户明确留下的展开态；
  * 新出现的单子目录链是唯一例外：压缩目录行的终点从父目录移动到新子目录时，
  * 把父目录的展开意图传到尚无用户状态的链尾，保证第一次展开即可看到内容。
+ *
+ * Prefer TreeExpansionAuthority + resolveExpandedPaths for new call sites.
+ * This Map adapter remains for path-sync fallback and tests.
  */
 export function collectPreservedExpandedDirectoryPaths(
   items: readonly PierFileTreeItem[],
   expansionByOfficialPath: ReadonlyMap<string, boolean>,
   directoryStates?: ReadonlyMap<string, PierDirectoryLoadState>
 ): string[] {
-  const normalizedExpansion = new Map<string, boolean>();
-  for (const [path, expanded] of expansionByOfficialPath) {
-    normalizedExpansion.set(stripTrailingSlash(path), expanded);
-  }
-
-  const childrenByParent = new Map<
-    string,
-    Array<{
-      kind: PierFileTreeItem["kind"];
-      loadState: PierDirectoryLoadState | undefined;
-      path: string;
-    }>
-  >();
-  for (const item of items) {
-    const path = stripTrailingSlash(item.path);
-    const slash = path.lastIndexOf("/");
-    const parent = slash < 0 ? "" : path.slice(0, slash);
-    const children = childrenByParent.get(parent) ?? [];
-    children.push({
-      kind: item.kind,
-      loadState: resolveDirectoryLoadState(item, directoryStates),
-      path,
-    });
-    childrenByParent.set(parent, children);
-  }
-
-  const hasCollapsedAncestor = (path: string): boolean => {
-    const segments = path.split("/");
-    for (let index = 1; index <= segments.length; index += 1) {
-      if (
-        normalizedExpansion.get(segments.slice(0, index).join("/")) === false
-      ) {
-        return true;
-      }
-    }
-    return false;
-  };
-
-  const expandedPaths = new Set<string>();
-  for (const [path, expanded] of normalizedExpansion) {
-    if (expanded) {
-      expandedPaths.add(path);
-    }
-  }
-  for (const path of collectExpandedDirectoryPaths(items, directoryStates)) {
-    if (normalizedExpansion.has(path) || hasCollapsedAncestor(path)) {
-      continue;
-    }
-    expandedPaths.add(path);
-  }
-
-  for (const headPath of [...expandedPaths]) {
-    let currentPath = headPath;
-    while (true) {
-      const children = childrenByParent.get(currentPath);
-      const onlyChild = children?.length === 1 ? children[0] : undefined;
-      if (onlyChild?.kind !== "directory" || onlyChild.loadState === "error") {
-        break;
-      }
-      const explicitState = normalizedExpansion.get(onlyChild.path);
-      if (explicitState === false) {
-        break;
-      }
-      expandedPaths.add(onlyChild.path);
-      currentPath = onlyChild.path;
-    }
-  }
-
-  return [...expandedPaths];
+  return collectPreservedExpandedDirectoryPathsFromIntent(
+    items,
+    intentFromExpansionMap(expansionByOfficialPath),
+    directoryStates,
+    "none"
+  );
 }
 
 export function isDirectoryHandle(

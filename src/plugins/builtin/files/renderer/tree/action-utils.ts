@@ -10,6 +10,8 @@ import { moveFilesTreeEntry } from "./store.ts";
 const treeItemMetadataSchema = z.object({
   kind: z.enum(["directory", "file"]),
   path: z.string().min(1),
+  /** 工作区路径锚点；与 root 不同时用于「复制相对路径」。 */
+  projectRoot: z.string().min(1).optional(),
   root: z.string().min(1),
   selectedPaths: z.array(z.string().min(1)).optional(),
   treeId: z.string().min(1).optional(),

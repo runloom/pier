@@ -41,6 +41,7 @@ import { useAgentComposer } from "./hooks/use-agent-composer.ts";
 import { useTerminalChildExitedInject } from "./hooks/use-child-exited-inject.ts";
 import { useTerminalEndStateTab } from "./hooks/use-end-state-tab.ts";
 import { useTerminalFloatingLayoutRevision } from "./hooks/use-floating-layout-revision.ts";
+import { useNativeTerminalContextMenuPopup } from "./hooks/use-native-context-menu-popup.ts";
 import { useTerminalNativeLifecycle } from "./hooks/use-native-lifecycle.ts";
 import { useTerminalPanelDescriptor } from "./hooks/use-panel-descriptor.ts";
 import { useTerminalRelaunch } from "./hooks/use-relaunch.ts";
@@ -58,7 +59,6 @@ import {
   panelContextFromParams,
   taskOutputFromParams,
 } from "./panel-params.ts";
-import { requestTerminalPresentation } from "./presentation-reconciler.ts";
 import {
   restoredAgentResultFromSession,
   restoredTaskResultFromSession,
@@ -235,8 +235,9 @@ export function TerminalPanel(props: IDockviewPanelProps) {
       event.preventDefault();
       event.stopPropagation();
       api.setActive();
+      // 恢复结果是 DOM 文本，走 terminal/restored（共享 edit），勿用 native 终端 copy。
       popupContextMenuAt(
-        "terminal/content",
+        "terminal/restored",
         cssPointToContentViewPoint(
           { x: event.clientX, y: event.clientY },
           windowZoomLevel
@@ -363,32 +364,11 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     titleHint: savedSession?.tab?.title ?? activeLaunch.tab?.title,
   });
 
-  useEffect(() => {
-    const unsubscribe = window.pier?.terminal?.onContextMenuRequest?.((req) => {
-      if (req.panelId !== panelId) {
-        return;
-      }
-      api.setActive();
-      requestTerminalPresentation("dockview-active-panel");
-      popupContextMenuAt(
-        "terminal/content",
-        { x: req.x, y: req.y },
-        {
-          sourcePanelComponent: "terminal",
-          ...(effectiveContext ? { sourcePanelContext: effectiveContext } : {}),
-          ...(typeof api.group?.id === "string"
-            ? { sourcePanelGroupId: api.group.id }
-            : {}),
-          sourcePanelId: panelId,
-        }
-      ).catch((err: unknown) => {
-        console.error(`[terminal-panel] popup ${req.panelId} failed:`, err);
-      });
-    });
-    return () => {
-      unsubscribe?.();
-    };
-  }, [panelId, api, effectiveContext]);
+  useNativeTerminalContextMenuPopup({
+    api,
+    effectiveContext,
+    panelId,
+  });
 
   const terminalContentClassName =
     "absolute inset-x-0 top-0 bottom-[var(--terminal-content-bottom)]";

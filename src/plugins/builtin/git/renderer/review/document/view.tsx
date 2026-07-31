@@ -216,6 +216,7 @@ export function GitReviewDocumentView({
             ? {}
             : { onRetryRender: renderFeedback.retry })}
           runtimeError={renderFeedback?.error ?? null}
+          softRetainedOnly={failureSummary.softRetainedOnly}
           staleRetainedCount={viewState.staleRetainedCount}
         />
       )}

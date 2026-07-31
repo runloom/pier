@@ -99,7 +99,7 @@ export function createDeleteAction(
   return pluginAction({
     id: FILES_DELETE_COMMAND_ID,
     category: "file",
-    metadata: { group: "9_close", sortOrder: 1 },
+    metadata: { group: "7_danger", sortOrder: 1 },
     surfaces: ["files/tree-item"],
     title: () => t("filePanel.tree.action.delete", "Delete"),
     handler: async (invocation) => {

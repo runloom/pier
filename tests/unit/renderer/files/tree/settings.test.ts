@@ -1,6 +1,10 @@
 import { FILES_PLUGIN_LOCALES } from "@plugins/builtin/files/locales/index.ts";
 import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
 import {
+  FILES_TREE_AUTO_REVEAL_EXCLUDE_SETTING_KEY,
+  FILES_TREE_AUTO_REVEAL_SETTING_KEY,
+  FILES_TREE_AUTO_REVEAL_VALUES,
+  FILES_TREE_DEFAULT_AUTO_REVEAL_EXCLUDE_PATTERNS,
   FILES_TREE_DEFAULT_EXCLUDE_PATTERNS,
   FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
   FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
@@ -30,6 +34,25 @@ describe("files tree settings", () => {
     );
   });
 
+  it("declares auto-reveal mode and exclude patterns (gold-standard end state)", () => {
+    const properties = FILES_PLUGIN_MANIFEST.configuration?.properties;
+
+    expect(properties?.[FILES_TREE_AUTO_REVEAL_SETTING_KEY]).toMatchObject({
+      default: "on",
+      enum: [...FILES_TREE_AUTO_REVEAL_VALUES],
+      order: 32,
+      type: "string",
+    });
+    expect(
+      properties?.[FILES_TREE_AUTO_REVEAL_EXCLUDE_SETTING_KEY]
+    ).toMatchObject({
+      default: FILES_TREE_DEFAULT_AUTO_REVEAL_EXCLUDE_PATTERNS,
+      multiline: true,
+      order: 33,
+      type: "string",
+    });
+  });
+
   it("provides complete English and Chinese setting labels", () => {
     for (const locale of ["en", "zh-CN"] as const) {
       const settings = FILES_PLUGIN_LOCALES[locale].settings;
@@ -37,10 +60,14 @@ describe("files tree settings", () => {
         FILES_TREE_SHOW_EXCLUDED_SETTING_KEY,
         FILES_TREE_EXCLUDE_PATTERNS_SETTING_KEY,
         FILES_TREE_SHOW_GIT_IGNORED_SETTING_KEY,
+        FILES_TREE_AUTO_REVEAL_SETTING_KEY,
+        FILES_TREE_AUTO_REVEAL_EXCLUDE_SETTING_KEY,
       ] as const) {
         expect(settings?.[key]?.label).toEqual(expect.any(String));
         expect(settings?.[key]?.description).toEqual(expect.any(String));
       }
+      const autoReveal = settings?.[FILES_TREE_AUTO_REVEAL_SETTING_KEY];
+      expect(autoReveal?.enumDescriptions).toHaveLength(3);
     }
   });
 });

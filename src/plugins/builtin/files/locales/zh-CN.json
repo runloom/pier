@@ -17,6 +17,9 @@
     },
     "pier.files.editor.showHover": {
       "title": "显示符号信息"
+    },
+    "pier.files.revealActiveFileInTree": {
+      "title": "在文件树中显示当前文件"
     }
   },
   "messages": {
@@ -146,6 +149,11 @@
     "filePanel.unsupported.revealUnavailable": "系统文件管理器未能显示该文件。",
     "filePanel.tree.blockedByDirtyDocument": "请先保存或处理当前文件，再从目录树打开其他文件。",
     "filePanel.tree.collapse": "折叠目录树",
+    "filePanel.tree.collapseAll": "折叠目录",
+    "filePanel.tree.collapseFolders": "折叠目录",
+    "filePanel.tree.revealActiveFile": "在文件树中显示当前文件",
+    "filePanel.tree.expandAll": "展开目录",
+    "filePanel.tree.expandKnownFolders": "展开目录",
     "filePanel.tree.expand": "展开目录树",
     "filePanel.canvas.compileFailed": "无法编译画布",
     "filePanel.canvas.compileFailedHint": "请修复画布文件或其引用，然后重新加载。",
@@ -328,7 +336,21 @@
     "filePanel.editor.hover.noInformation": "此处没有可用的符号信息。",
     "filePanel.editor.hover.previewUnavailable": "预览不可用",
     "filePanel.editor.hover.symbolTitle": "符号信息",
-    "filePanel.editor.hover.unavailable": "符号信息暂时不可用。"
+    "filePanel.editor.hover.unavailable": "符号信息暂时不可用。",
+    "filePanel.tree.action.cut": "剪切",
+    "filePanel.tree.action.copy": "复制",
+    "filePanel.tree.action.paste": "粘贴",
+    "filePanel.tree.cutReady": "已剪切，可粘贴",
+    "filePanel.tree.copyReady": "已复制，可粘贴",
+    "filePanel.tree.pasteDone": "粘贴完成",
+    "filePanel.tree.pasteWrongProject": "只能在同一项目内粘贴。",
+    "filePanel.tree.pasteFailed": "无法粘贴",
+    "filePanel.tree.pastePartial": "已粘贴 {{done}} / {{total}} 项，其余失败。",
+    "filePanel.tree.pasteIntoSelf": "不能将文件夹粘贴到自身内部。",
+    "filePanel.contentSearch.action.open": "打开",
+    "filePanel.contentSearch.action.copyMatch": "复制匹配行",
+    "filePanel.contentSearch.matchCopied": "已复制匹配行",
+    "filePanel.contentSearch.contextMenuFailed": "无法打开菜单"
   },
   "terminalStatusItems": {
     "pier.files.project": {
@@ -407,6 +429,23 @@
     "pier.files.tree.showGitIgnoredFiles": {
       "description": "显示被 .gitignore、.git/info/exclude 和其它 Git 忽略来源命中的文件与文件夹。",
       "label": "显示 Git 忽略项"
+    },
+    "pier.files.tree.compactFolders": {
+      "description": "将单子目录链合并为一行显示。",
+      "label": "压缩文件夹"
+    },
+    "pier.files.tree.autoReveal": {
+      "description": "切换标签时自动在项目文件树中定位当前文件。不作用于「打开文件 / 跳转定义 / 面包屑」等主动定位（这些仍会定位）。也可随时用「在文件树中显示当前文件」。",
+      "enumDescriptions": [
+        "定位并在需要时滚动到可见位置",
+        "仅选中，不滚动",
+        "不跟随标签切换"
+      ],
+      "label": "自动定位当前文件"
+    },
+    "pier.files.tree.autoRevealExcludePatterns": {
+      "description": "切换标签自动定位时忽略这些规则命中的路径。「打开文件 / 跳转定义 / 在文件树中显示当前文件」仍会定位。每行一条规则；空行和以 # 开头的行会被忽略。",
+      "label": "自动定位排除规则"
     }
   }
 }

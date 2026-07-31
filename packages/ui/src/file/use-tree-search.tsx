@@ -111,10 +111,22 @@ export function useFileTreeSearch({
     );
   }, []);
 
+  const collapseAllFolders = useCallback(() => {
+    resolvedTreeApiRef.current?.collapseAll();
+  }, [resolvedTreeApiRef]);
+
+  const expandAllFolders = useCallback(() => {
+    resolvedTreeApiRef.current?.expandAll();
+  }, [resolvedTreeApiRef]);
+
   return {
     attachTreeApi,
     changeSearch,
     closeSearch,
+    collapseAllFolders,
+    expandAllFolders,
+    /** @deprecated Prefer expandAllFolders */
+    expandKnownFolders: expandAllFolders,
     focusSignal,
     focusedMatchOpenable: matchState.focusedMatchOpenable,
     matchCount: matchState.matchCount,
@@ -123,6 +135,11 @@ export function useFileTreeSearch({
     openFocusedMatch,
     openSearch,
     toggleSearch,
+    /**
+     * Prefer this object ref for PierFileTree.treeApiRef.
+     * Callback `attachTreeApi` can miss useImperativeHandle in some paths.
+     */
+    treeApiRef: resolvedTreeApiRef,
     queryApplied:
       resolvedTreeApiRef.current != null &&
       appliedSearch === modelSearchValue(value),

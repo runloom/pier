@@ -154,7 +154,10 @@ describe("Git 变更阅读稳定性治理", () => {
     expect(navigation).not.toContain('"rebind"');
     expect(selectionSync).not.toContain("scrollToItem");
     expect(selectionSync).not.toContain("applyNavigationDemand");
-    expect(treeLayout).not.toContain("revealPath");
+    // Continuous active-file tracking is forbidden; imperative reveal on open
+    // lives in tree-reveal-selection.ts (not a revealPath prop on the tree).
+    expect(treeLayout).not.toMatch(/revealPath\s*=/);
+    expect(treeLayout).not.toContain("revealPath={");
   });
 
   it("新 index 代际的首次正文需求沿用当前树选择的锚点保护", () => {

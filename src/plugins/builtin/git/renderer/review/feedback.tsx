@@ -15,11 +15,68 @@ import { ErrorEmpty } from "@pier/ui/error-empty.tsx";
 import { Skeleton } from "@pier/ui/skeleton.tsx";
 import { cn } from "@pier/ui/utils.ts";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
-import type { GitReviewFailure } from "@shared/contracts/git/review.ts";
+import type {
+  GitReviewFailure,
+  GitReviewFailureReason,
+} from "@shared/contracts/git/review.ts";
 import { useEffect, useRef } from "react";
 import { pluginText } from "../plugin-text.ts";
 import type { ReviewFailedResource } from "./document/generation.ts";
 import { gitReviewFailureMessage } from "./message.ts";
+
+/**
+ * stage / watch 整代刷新时 document 读常撞到的竞态原因。
+ * soft-retain 仍展示旧正文，且下一次 index 会再拉——全局 error toast 是噪声。
+ * （金标准：stage 成功路径零 toast.error）
+ */
+const TRANSIENT_REVIEW_FAILURE_REASONS = new Set<GitReviewFailureReason>([
+  "aborted",
+  "busy",
+  "changeNotFound",
+  "duplicateOperation",
+  "staleRevision",
+]);
+
+function isTransientReviewFailure(resource: ReviewFailedResource): boolean {
+  return TRANSIENT_REVIEW_FAILURE_REASONS.has(resource.failure.reason);
+}
+
+function reviewFailureBasename(path: string): string {
+  const segments = path.split("/").filter(Boolean);
+  return segments.at(-1) ?? path;
+}
+
+function documentFailureToastTitle(
+  context: RendererPluginContext,
+  failures: readonly ReviewFailedResource[]
+): string {
+  if (failures.length === 1) {
+    const path = failures[0]?.entry.path ?? "";
+    return pluginText(
+      context,
+      "reviewAdditionalIssuesSingle",
+      "Could not display {{name}}.",
+      { name: reviewFailureBasename(path) }
+    );
+  }
+  return pluginText(
+    context,
+    "reviewAdditionalIssuesCount",
+    "{{count}} files could not be displayed.",
+    { count: failures.length }
+  );
+}
+
+/** soft-retain 永久失败：旧正文仍在，语气中性（非 stale 竞态专属文案）。 */
+function softRetainedRefreshToastTitle(context: RendererPluginContext): string {
+  return pluginText(
+    context,
+    "reviewRefreshSoftRetained",
+    "Couldn't refresh this diff. The previous view is still shown."
+  );
+}
+
+type DocumentFailureToastMode = "hard" | "soft";
 
 /**
  * 正文区骨架条：内容区底上用 muted 可见。
@@ -221,6 +278,7 @@ export function ReviewFeedback({
   onRetryFailure,
   onRetryIndex,
   onRetryRender,
+  softRetainedOnly = false,
 }: {
   readonly context: RendererPluginContext;
   readonly enabled?: boolean;
@@ -232,11 +290,18 @@ export function ReviewFeedback({
   readonly onRetryIndex?: () => void;
   readonly onRetryRender?: () => void;
   readonly runtimeError?: Error | null;
+  readonly softRetainedOnly?: boolean;
   readonly staleRetainedCount?: number;
 }): React.JSX.Element | null {
-  const documentFailureCycleNotifiedRef = useRef(false);
+  /**
+   * 失败波 mode：null 未通知 / soft info / hard error。
+   * 同 mode 内只通知一次；soft→hard 可升级再通知；失败清空后重置。
+   */
+  const lastDocumentFailureToastModeRef =
+    useRef<DocumentFailureToastMode | null>(null);
   const latestDocumentFailuresRef = useRef(failures);
   const latestRetryFailureRef = useRef(onRetryFailure);
+  const lastNotifiedToastEntryKeysRef = useRef<ReadonlySet<string>>(new Set());
   const lastIndexFailureRef = useRef<string | null>(null);
   const lastRuntimeErrorRef = useRef<string | null>(null);
   latestDocumentFailuresRef.current = failures;
@@ -296,32 +361,58 @@ export function ReviewFeedback({
 
   useEffect(() => {
     if (failures.length === 0) {
-      documentFailureCycleNotifiedRef.current = false;
+      lastDocumentFailureToastModeRef.current = null;
+      lastNotifiedToastEntryKeysRef.current = new Set();
       return;
     }
-    if (!enabled || documentFailureCycleNotifiedRef.current) {
-      return;
-    }
-    documentFailureCycleNotifiedRef.current = true;
-    const retryableFailures = onRetryFailure
-      ? failures.filter(({ failure }) => failure.retryable)
-      : [];
-    const title = pluginText(
-      context,
-      "reviewAdditionalIssues",
-      "Additional changes could not be displayed."
+    // stage/watch 竞态（staleRevision 等）会自愈或由下一次 index 再拉；
+    // 全局 error toast 违反金标准「stage 成功路径零 toast」，一律静默。
+    const toastFailures = failures.filter(
+      (resource) => !isTransientReviewFailure(resource)
     );
-    context.notifications.error(title, {
+    if (toastFailures.length === 0) {
+      lastDocumentFailureToastModeRef.current = null;
+      lastNotifiedToastEntryKeysRef.current = new Set();
+      return;
+    }
+    if (!enabled) {
+      return;
+    }
+    const mode: DocumentFailureToastMode = softRetainedOnly ? "soft" : "hard";
+    const previousMode = lastDocumentFailureToastModeRef.current;
+    // 同 mode 内只通知一次；允许 soft → hard 升级再发 error。
+    if (previousMode === mode || (previousMode === "hard" && mode === "soft")) {
+      return;
+    }
+    lastDocumentFailureToastModeRef.current = mode;
+    const toastEntryKeys = new Set(
+      toastFailures.map((resource) => resource.entry.entryKey)
+    );
+    lastNotifiedToastEntryKeysRef.current = toastEntryKeys;
+    const retryableFailures = onRetryFailure
+      ? toastFailures.filter(({ failure }) => failure.retryable)
+      : [];
+    // soft-retain：旧 diff 仍可见，用中性保留文案，不用「无法显示」。
+    const title =
+      mode === "soft"
+        ? softRetainedRefreshToastTitle(context)
+        : documentFailureToastTitle(context, toastFailures);
+    const notify =
+      mode === "soft"
+        ? context.notifications.info.bind(context.notifications)
+        : context.notifications.error.bind(context.notifications);
+    notify(title, {
       action:
         retryableFailures.length > 0
           ? {
               label: pluginText(context, "reviewRetry", "Retry"),
               onClick: () => {
+                const keys = lastNotifiedToastEntryKeysRef.current;
                 for (const {
                   entry,
                   failure,
                 } of latestDocumentFailuresRef.current) {
-                  if (failure.retryable) {
+                  if (failure.retryable && keys.has(entry.entryKey)) {
                     latestRetryFailureRef.current?.(entry.entryKey);
                   }
                 }
@@ -330,21 +421,23 @@ export function ReviewFeedback({
           : {
               label: pluginText(context, "reviewDetails", "Details"),
               onClick: () => {
+                const keys = lastNotifiedToastEntryKeysRef.current;
+                const body = latestDocumentFailuresRef.current
+                  .filter((resource) => keys.has(resource.entry.entryKey))
+                  .map(
+                    ({ entry, failure }) => `${entry.path}\n${failure.message}`
+                  )
+                  .join("\n\n");
                 context.dialogs
                   .alert({
-                    body: latestDocumentFailuresRef.current
-                      .map(
-                        ({ entry, failure }) =>
-                          `${entry.path}\n${failure.message}`
-                      )
-                      .join("\n\n"),
+                    body,
                     title,
                   })
                   .catch(() => undefined);
               },
             },
     });
-  }, [context, enabled, failures, onRetryFailure]);
+  }, [context, enabled, failures, onRetryFailure, softRetainedOnly]);
 
   useEffect(() => {
     if (!runtimeError) {

@@ -1,4 +1,5 @@
 import type { ActionInvocation } from "@/lib/actions/types.ts";
+import { hasSpecializedEditPipeline } from "./surface-profiles.ts";
 
 export type SelectionTextProvider = () => string;
 export type SelectionSelectAllProvider = () => boolean;
@@ -135,15 +136,21 @@ export function selectedTextFromInvocation(
   return typeof raw === "string" ? raw : "";
 }
 
-/** 已有自管复制/全选，或无可复制选区的 surface，不并入共享编辑项。 */
+/**
+ * 自带编辑管线的 surface 隐藏共享 copy/selectAll。
+ * 树等 object surface 靠 mergeEdit=false，不再假标「有本地复制」。
+ */
+export function hasSpecializedEditPipelineSurface(
+  surface: string | undefined
+): boolean {
+  return hasSpecializedEditPipeline(surface);
+}
+
+/**
+ * @deprecated 使用 hasSpecializedEditPipelineSurface；树不再返回 true。
+ */
 export function surfaceHasLocalCopyAction(
   surface: string | undefined
 ): boolean {
-  return (
-    surface === "terminal/content" ||
-    surface === "files/editor" ||
-    surface === "files/tree-item" ||
-    surface === "files/tree-background" ||
-    surface === "git/review-tree-item"
-  );
+  return hasSpecializedEditPipeline(surface);
 }

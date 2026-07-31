@@ -4,11 +4,12 @@ import { revealFilesTreePathAfterAncestors } from "../tree/reveal.ts";
 import { filesTreeVisibilityForContext } from "../tree/visibility.ts";
 import { breadcrumbRevealPathForDiskSource } from "./source.ts";
 
-const TREE_EXPAND_REVEAL_DELAY_MS = 80;
-
 /**
  * Map a disk breadcrumb segment click to a files-tree reveal, expanding the
  * sidebar first when it is collapsed.
+ *
+ * Readiness is handled inside revealFilesTreePathAfterAncestors (load ancestors
+ * → wait for tree API + model path). No fixed 80ms sleep after expand.
  */
 export function revealDiskBreadcrumbInTree(options: {
   context: RendererPluginContext;
@@ -43,19 +44,12 @@ export function revealDiskBreadcrumbInTree(options: {
   const list = filesTreeVisibilityForContext(context).list;
   if (treeCollapsed) {
     setTreeCollapsed(false);
-    setTimeout(() => {
-      revealFilesTreePathAfterAncestors({
-        instanceId,
-        list,
-        path: revealTarget,
-        root,
-      });
-    }, TREE_EXPAND_REVEAL_DELAY_MS);
-    return;
   }
   revealFilesTreePathAfterAncestors({
     instanceId,
     list,
+    // Policy defaults: explicit → center (smart-center at execute) + expandTarget.
+    options: { intent: "explicit" },
     path: revealTarget,
     root,
   });

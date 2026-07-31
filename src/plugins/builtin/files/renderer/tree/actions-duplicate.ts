@@ -31,7 +31,18 @@ export function createDuplicateAction(
   return pluginAction({
     id: FILES_DUPLICATE_COMMAND_ID,
     category: "file",
-    metadata: { group: "5_edit", sortOrder: 2 },
+    metadata: {
+      group: "5_edit",
+      menuHidden: (invocation) => {
+        const target = parseTreeMetadata(invocation);
+        return Boolean(
+          target?.selectedPaths &&
+            target.selectedPaths.length > 1 &&
+            target.selectedPaths.includes(target.path)
+        );
+      },
+      sortOrder: 2,
+    },
     surfaces: ["files/tree-item"],
     title: () => t("filePanel.tree.action.duplicate", "Duplicate"),
     handler: async (invocation) => {

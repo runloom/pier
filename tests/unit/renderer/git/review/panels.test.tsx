@@ -600,7 +600,7 @@ function pluginContext(input: {
           return text;
         }),
     },
-    notifications: { error: vi.fn(), success: vi.fn() },
+    notifications: { error: vi.fn(), info: vi.fn(), success: vi.fn() },
     panels: { openInstance: vi.fn(() => ({ kind: "opened" })) },
   } as unknown as RendererPluginContext;
 }
@@ -609,7 +609,10 @@ function latestNotificationAction(
   context: RendererPluginContext,
   label: string
 ): () => void {
-  const action = [...vi.mocked(context.notifications.error).mock.calls]
+  const action = [
+    ...vi.mocked(context.notifications.error).mock.calls,
+    ...vi.mocked(context.notifications.info).mock.calls,
+  ]
     .reverse()
     .map(([, options]) => options?.action)
     .find((candidate) => candidate?.label === label);
@@ -1801,12 +1804,16 @@ describe("Git review panel", () => {
       })
     );
     await waitFor(() =>
-      expect(context.notifications.error).toHaveBeenCalledWith(
-        "Additional changes could not be displayed.",
+      expect(context.notifications.info).toHaveBeenCalledWith(
+        "Couldn't refresh this diff. The previous view is still shown.",
         expect.objectContaining({
           action: expect.objectContaining({ label: "Retry" }),
         })
       )
+    );
+    expect(context.notifications.error).not.toHaveBeenCalledWith(
+      expect.stringMatching(/could not be displayed/iu),
+      expect.anything()
     );
     expect(view.getByTestId("pierre-diff")).toHaveAttribute(
       "data-item-ids",
@@ -3037,7 +3044,7 @@ describe("Git review panel", () => {
     const view = render(<Panel {...panelProps(createPanelHarness().api)} />);
     await waitFor(() =>
       expect(context.notifications.error).toHaveBeenCalledWith(
-        "Additional changes could not be displayed.",
+        "Could not display file-0.ts.",
         expect.objectContaining({
           action: expect.objectContaining({ label: "Retry" }),
         })
@@ -3088,7 +3095,7 @@ describe("Git review panel", () => {
     await waitFor(() => expect(getReviewFileDocument).toHaveBeenCalledTimes(3));
     await waitFor(() =>
       expect(context.notifications.error).toHaveBeenCalledWith(
-        "Additional changes could not be displayed.",
+        "Could not display file-0.ts.",
         expect.objectContaining({
           action: expect.objectContaining({ label: "Retry" }),
         })

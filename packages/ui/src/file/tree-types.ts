@@ -1,5 +1,16 @@
 import type { GitStatus as PierreGitStatus } from "@pierre/trees";
 import type * as React from "react";
+import type { TreeExpansionSeed } from "./tree-expansion-apply.ts";
+import type {
+  TreeExpansionAuthority,
+  TreeExpansionIntent,
+} from "./tree-expansion-authority.ts";
+
+export type { TreeExpansionSeed } from "./tree-expansion-apply.ts";
+export type {
+  TreeExpansionAuthority,
+  TreeExpansionIntent,
+} from "./tree-expansion-authority.ts";
 
 export type PierDirectoryLoadState =
   | "unloaded"
@@ -47,15 +58,32 @@ export interface PierFileTreeApi {
     removedPaths: readonly string[],
     restoredPaths: readonly string[]
   ) => void;
+  /**
+   * Collapse directories. With `rootPath`, only that folder and descendants;
+   * otherwise the whole tree.
+   */
+  collapseAll: (options?: PierFileTreeCollapseAllOptions) => void;
+  /**
+   * Expand folders (BFS + lazy load). With `rootPath`, only that folder and
+   * descendants; otherwise the whole tree. Never collapses unrelated folders.
+   */
+  expandAll: (options?: PierFileTreeExpandAllOptions) => void;
+  /**
+   * @deprecated Prefer expandAll. Same as expandAll({ recursive: false }) when
+   * recursive is omitted as false; default recursive matches Expand All.
+   */
+  expandKnownDirectories: (options?: PierFileTreeExpandAllOptions) => void;
   focusSearchMatch: (direction: "next" | "previous") => void;
+  getExpansionIntent: () => TreeExpansionIntent | null;
   getSearchMatchCount: () => number;
   /** 从模型移除路径(新建落盘失败回滚幽灵节点用)。 */
   removePaths: (paths: readonly string[]) => void;
   /**
    * VS Code-like reveal: expand ancestors, expand folder targets, select+focus
    * (focus ring), then scroll. Does not open files.
+   * @returns true when the path was selectable immediately; false keeps a pending retry.
    */
-  revealPath: (path: string, options?: PierFileTreeRevealOptions) => void;
+  revealPath: (path: string, options?: PierFileTreeRevealOptions) => boolean;
   /** null = 关闭搜索并恢复完整投影。搜索 UI 由业务层自绘(不用库内置头)。 */
   setSearch: (value: string | null) => void;
   /**
@@ -68,14 +96,74 @@ export interface PierFileTreeApi {
   ) => boolean;
 }
 
-export type PierFileTreeRevealScroll = "nearest" | "center" | "top";
+/** Safety caps for Expand All (performance-bounded). */
+export interface PierFileTreeExpandAllOptions {
+  /** Max concurrent onLoadDirectory calls. Default 8. */
+  maxConcurrentLists?: number;
+  /** Absolute path segment depth from repo root. Default 64. */
+  maxDepth?: number;
+  /** Max directories to expand in one run. Default 2000. */
+  maxDirectoryExpands?: number;
+  /**
+   * Max folder levels relative to expand root. Default 3.
+   * 1 = only open the start folder; 3 = start + two nested levels.
+   */
+  maxExpandLevels?: number;
+  /**
+   * When true (default), BFS into newly listed children (within level cap).
+   * When false, only expand directories already in the current path set.
+   */
+  recursive?: boolean;
+  /**
+   * Scope expand to this directory and its descendants.
+   * Omit / empty = whole tree (background menu).
+   */
+  rootPath?: string;
+}
+
+export interface PierFileTreeCollapseAllOptions {
+  /**
+   * Scope collapse to this directory and its descendants.
+   * Omit / empty = whole tree.
+   */
+  rootPath?: string;
+}
+
+/**
+ * Scroll alignment for reveal.
+ * - `nearest` / `center` / `top`: passed to `@pierre/trees` scrollToPath
+ * - `none`: select + focus only (autoReveal `select`, inspect)
+ */
+export type PierFileTreeRevealScroll = "nearest" | "center" | "top" | "none";
+
+/**
+ * Why this reveal ran. Defaults come from `resolveRevealPolicy` (single owner).
+ * - explicit / search: user action → center
+ * - active-file: follow editor → nearest | select | off
+ * - root: project root → top
+ * - inspect: context-menu inspect (not full reveal pipeline)
+ */
+export type PierFileTreeRevealIntent =
+  | "explicit"
+  | "active-file"
+  | "root"
+  | "search"
+  | "inspect";
+
+/** Active-file auto-reveal mode (VS Code explorer.autoReveal analogue). */
+export type PierFileTreeAutoRevealMode = "on" | "select" | "off";
 
 export interface PierFileTreeRevealOptions {
-  /** Expand the target when it is a directory. Default true. */
+  /** Expand the target when it is a directory. Policy default depends on intent. */
   expandTarget?: boolean;
   /**
-   * Scroll alignment. Explicit breadcrumb/command reveal defaults to `center`
-   * (VS Code-like). Active-file auto-reveal should prefer `nearest`.
+   * Reveal intent. When omitted, empty path → `root`, else `explicit`
+   * (API / breadcrumb). Active-file prop always passes `active-file`.
+   */
+  intent?: PierFileTreeRevealIntent;
+  /**
+   * Scroll alignment. Defaults from `resolveRevealPolicy(intent)` when omitted.
+   * Prefer leaving unset so policy stays the single owner.
    */
   scroll?: PierFileTreeRevealScroll;
 }
@@ -98,7 +186,13 @@ export interface PierFileTreeScrollRestoreOptions {
 }
 
 export interface PierFileTreeScrollController {
+  /**
+   * While active, path-sync `restoreSnapshotSoon` is skipped and in-flight
+   * restore locks are cancelled so reveal/scrollToPath is not overwritten.
+   */
+  beginProgrammaticScroll: () => void;
   captureSnapshot: () => PierFileTreeScrollSnapshot | null;
+  endProgrammaticScroll: () => void;
   restoreSnapshot: (snapshot: PierFileTreeScrollSnapshot) => void;
   restoreSnapshotSoon: (
     snapshot: PierFileTreeScrollSnapshot | null,
@@ -108,9 +202,25 @@ export interface PierFileTreeScrollController {
 
 export interface PierFileTreeProps
   extends Omit<React.ComponentProps<"div">, "children" | "onSelect"> {
+  /**
+   * Active-file auto-reveal mode when `revealPath` changes.
+   * Default `"on"` (select + nearest scroll). Explicit `revealPath` API ignores this.
+   */
+  autoReveal?: PierFileTreeAutoRevealMode;
   /** 目录读取失败时的本地化行内标记；详细错误仍由业务层反馈。 */
   directoryErrorLabel?: string;
   directoryStates?: ReadonlyMap<string, PierDirectoryLoadState>;
+  /**
+   * Optional expansion authority. When set, refresh/reset and Collapse All
+   * re-apply this intent instead of guessing from the path set.
+   */
+  expansionAuthority?: TreeExpansionAuthority;
+  /**
+   * Seed policy when paths have no explicit intent.
+   * - `none` (default): start collapsed except explicit expanded + compact chain
+   * - `file-ancestors`: open ancestors of files (Git review cold start)
+   */
+  expansionSeed?: TreeExpansionSeed;
   /**
    * Collapse single-child directory chains into one row (pierre default true).
    */
@@ -126,6 +236,11 @@ export interface PierFileTreeProps
    * 为 true 时右键强制 Command（即使树 L-Select 暂时丢了）。
    */
   isActiveOpenPath?: (path: string) => boolean;
+  /**
+   * When true for a path, active-file auto-reveal is skipped (exclude globs).
+   * Explicit API reveal ignores this. Default: never excluded.
+   */
+  isAutoRevealExcluded?: (path: string) => boolean;
   items: readonly PierFileTreeItem[];
   label: string;
   /**

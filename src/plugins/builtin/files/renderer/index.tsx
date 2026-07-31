@@ -10,6 +10,8 @@ import {
   FILES_SAVE_AS_COMMAND_ID,
   FILES_SAVE_COMMAND_ID,
   FILES_SEARCH_PANEL_ID,
+  FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID,
+  FILES_TREE_EXPAND_ALL_COMMAND_ID,
   FILES_TREE_SEARCH_COMMAND_ID,
 } from "../manifest.ts";
 import {
@@ -50,14 +52,23 @@ import {
   createSearchContentsAction,
   createSearchInFolderAction,
 } from "./search/actions.ts";
+import { createFilesSearchResultActions } from "./search/context-actions.ts";
 import { createFilesContentSearchPanel } from "./search/panel.tsx";
 import { createFilesQuickOpenAction } from "./search/quick-open.ts";
+import {
+  parseTreeBackgroundMetadata,
+  parseTreeMetadata,
+} from "./tree/action-utils.ts";
 import { createFilesTreeActions } from "./tree/actions.ts";
+import { registerFilesDiskOpenTreeReveal } from "./tree/open-disk-reveal.ts";
 import { filePanelProjectRoot } from "./tree/preferences.ts";
 import {
   clearFileTreeSidebarCache,
+  collapseFilesTreeFolders,
+  expandFilesTreeKnownFolders,
   openFilesTreeSearch,
 } from "./tree/registry.ts";
+import { createRevealActiveFileInTreeAction } from "./tree/reveal-active-action.ts";
 import { clearFilesTreeStore } from "./tree/store.ts";
 import { clearFilesTreeWatchers } from "./tree/watch.ts";
 import { FilesWatchHub } from "./watch-hub.ts";
@@ -153,6 +164,97 @@ function createTreeSearchAction(
     // 树内快捷键 / 控件触发；不进命令面板。
     surfaces: [],
     title: () => t("filePanel.tree.action.search", "Find in File Tree"),
+  };
+}
+
+function resolveTreeActionTarget(
+  context: RendererPluginContext,
+  invocation: Parameters<RendererPluginAction["handler"]>[0]
+): { instanceId?: string; path?: string; root: string } | null {
+  const treeItem = parseTreeMetadata(invocation);
+  const treeBackground = parseTreeBackgroundMetadata(invocation);
+  const root =
+    treeItem?.root ??
+    treeBackground?.root ??
+    filePanelProjectRoot(context.panels.getActiveContext());
+  if (!root) {
+    return null;
+  }
+  // Directory row: scope Expand/Collapse All to that folder subtree.
+  // File row: use parent directory; background: whole tree (no path).
+  let path: string | undefined;
+  if (treeItem?.kind === "directory") {
+    path = treeItem.path;
+  } else if (treeItem?.kind === "file") {
+    const slash = treeItem.path.lastIndexOf("/");
+    path = slash < 0 ? undefined : treeItem.path.slice(0, slash);
+  }
+  const treeId = treeItem?.treeId ?? treeBackground?.treeId;
+  if (treeId) {
+    return { instanceId: treeId, ...(path ? { path } : {}), root };
+  }
+  const activePanelId = context.panels.getActiveInstanceId(FILES_FILE_PANEL_ID);
+  if (activePanelId) {
+    return { instanceId: activePanelId, ...(path ? { path } : {}), root };
+  }
+  return { ...(path ? { path } : {}), root };
+}
+
+function createTreeExpandAllAction(
+  context: RendererPluginContext
+): RendererPluginAction {
+  const t = (key: string, fallback?: string) =>
+    context.i18n.t(key, undefined, fallback);
+  return {
+    category: "file",
+    handler: async (invocation) => {
+      const target = resolveTreeActionTarget(context, invocation);
+      if (!target) {
+        return;
+      }
+      expandFilesTreeKnownFolders(target);
+      return await Promise.resolve();
+    },
+    id: FILES_TREE_EXPAND_ALL_COMMAND_ID,
+    metadata: {
+      group: "2_view",
+      // 文件行不显示展开/折叠（落到父目录语义不清晰）；空白与目录保留。
+      menuHidden: (invocation) =>
+        parseTreeMetadata(invocation)?.kind === "file",
+      sortOrder: 1,
+    },
+    // Context menu only — no default keybinding, no command palette.
+    surfaces: ["files/tree-item", "files/tree-background"],
+    title: () => t("filePanel.tree.expandAll", "Expand Folders"),
+  };
+}
+
+function createTreeCollapseFoldersAction(
+  context: RendererPluginContext
+): RendererPluginAction {
+  const t = (key: string, fallback?: string) =>
+    context.i18n.t(key, undefined, fallback);
+  return {
+    category: "file",
+    handler: async (invocation) => {
+      // Prefer tree menu metadata; fall back to active panel.
+      const target = resolveTreeActionTarget(context, invocation);
+      if (!target) {
+        return;
+      }
+      collapseFilesTreeFolders(target);
+      return await Promise.resolve();
+    },
+    id: FILES_TREE_COLLAPSE_FOLDERS_COMMAND_ID,
+    metadata: {
+      group: "2_view",
+      menuHidden: (invocation) =>
+        parseTreeMetadata(invocation)?.kind === "file",
+      sortOrder: 2,
+    },
+    // Context menu only — no default keybinding, no command palette.
+    surfaces: ["files/tree-item", "files/tree-background"],
+    title: () => t("filePanel.tree.collapseAll", "Collapse Folders"),
   };
 }
 
@@ -341,9 +443,15 @@ export const filesRendererPlugin: RendererPluginModule = {
       context.actions.register(createFilesOpenDirectoryAction(context)),
       context.actions.register(createSearchContentsAction(context)),
       context.actions.register(createSearchInFolderAction(context)),
+      ...createFilesSearchResultActions(context, editorController).map(
+        (action) => context.actions.register(action)
+      ),
       context.actions.register(
         withFilesMutationGate(createTreeSearchAction(context), editorController)
       ),
+      context.actions.register(createRevealActiveFileInTreeAction(context)),
+      context.actions.register(createTreeExpandAllAction(context)),
+      context.actions.register(createTreeCollapseFoldersAction(context)),
       ...createFilesTreeActions(context, editorController).map((action) =>
         context.actions.register(
           withFilesMutationGate(action, editorController)
@@ -363,6 +471,8 @@ export const filesRendererPlugin: RendererPluginModule = {
         context,
         controller: editorController,
       }),
+      // Git review / host openInEditor → project tree reveal (explicit center).
+      registerFilesDiskOpenTreeReveal(context),
     ];
 
     return () => {

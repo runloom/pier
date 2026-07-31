@@ -17,6 +17,9 @@
     },
     "pier.files.editor.showHover": {
       "title": "Show Symbol Information"
+    },
+    "pier.files.revealActiveFileInTree": {
+      "title": "Reveal Active File in File Tree"
     }
   },
   "messages": {
@@ -146,6 +149,11 @@
     "filePanel.unsupported.revealUnavailable": "The system file manager did not reveal the file.",
     "filePanel.tree.blockedByDirtyDocument": "Save or discard the current file before opening another file from the tree.",
     "filePanel.tree.collapse": "Collapse file tree",
+    "filePanel.tree.collapseAll": "Collapse Folders",
+    "filePanel.tree.collapseFolders": "Collapse Folders",
+    "filePanel.tree.revealActiveFile": "Reveal Active File in File Tree",
+    "filePanel.tree.expandAll": "Expand Folders",
+    "filePanel.tree.expandKnownFolders": "Expand Folders",
     "filePanel.tree.expand": "Expand file tree",
     "filePanel.canvas.compileFailed": "Couldn’t compile canvas",
     "filePanel.canvas.compileFailedHint": "Fix the canvas file or its imports, then reload.",
@@ -328,7 +336,21 @@
     "filePanel.editor.hover.noInformation": "No symbol information is available here.",
     "filePanel.editor.hover.previewUnavailable": "Preview unavailable",
     "filePanel.editor.hover.symbolTitle": "Symbol information",
-    "filePanel.editor.hover.unavailable": "Symbol information is temporarily unavailable."
+    "filePanel.editor.hover.unavailable": "Symbol information is temporarily unavailable.",
+    "filePanel.tree.action.cut": "Cut",
+    "filePanel.tree.action.copy": "Copy",
+    "filePanel.tree.action.paste": "Paste",
+    "filePanel.tree.cutReady": "Ready to move",
+    "filePanel.tree.copyReady": "Ready to paste",
+    "filePanel.tree.pasteDone": "Paste complete",
+    "filePanel.tree.pasteWrongProject": "Can only paste within the same project.",
+    "filePanel.tree.pasteFailed": "Couldn't paste",
+    "filePanel.tree.pastePartial": "Pasted {{done}} of {{total}}; some items failed.",
+    "filePanel.tree.pasteIntoSelf": "Can't paste a folder into itself.",
+    "filePanel.contentSearch.action.open": "Open",
+    "filePanel.contentSearch.action.copyMatch": "Copy Match Line",
+    "filePanel.contentSearch.matchCopied": "Match line copied",
+    "filePanel.contentSearch.contextMenuFailed": "Unable to open menu"
   },
   "terminalStatusItems": {
     "pier.files.project": {
@@ -407,6 +429,23 @@
     "pier.files.tree.showGitIgnoredFiles": {
       "description": "Show files and folders matched by .gitignore, .git/info/exclude and other Git ignore sources.",
       "label": "Show Git-ignored files"
+    },
+    "pier.files.tree.compactFolders": {
+      "description": "Merge single-child folder chains into one row in the file tree.",
+      "label": "Compact folders"
+    },
+    "pier.files.tree.autoReveal": {
+      "description": "When you switch tabs, automatically locate the active file in the project file tree. Does not apply to Open File / Go to Definition / breadcrumb jumps (those always locate). Use Reveal Active File in File Tree anytime.",
+      "enumDescriptions": [
+        "Locate and scroll into view when needed",
+        "Select only, do not scroll",
+        "Do not track tab changes"
+      ],
+      "label": "Auto-locate active file"
+    },
+    "pier.files.tree.autoRevealExcludePatterns": {
+      "description": "Paths matching these patterns are skipped when automatically locating the active file on tab change. Open File, Go to Definition, and Reveal Active File in File Tree still locate. One pattern per line; blank lines and lines beginning with # are ignored.",
+      "label": "Auto-locate exclude patterns"
     }
   }
 }
