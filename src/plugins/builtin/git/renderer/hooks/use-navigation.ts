@@ -279,17 +279,17 @@ export function useGitReviewNavigation({
         }
         selectedSectionKeyRef.current = selectedSection;
         if (
-          (pendingNavigation && navigationReason === "tree") ||
+          (pendingNavigation && navigationReason !== null) ||
           options?.restoreSelection === true
         ) {
-          // 用户主动导航尚未完成时只重绑其目标；普通 index 刷新不得创建导航。
+          // 用户主动导航/恢复滚动尚未完成时只重绑其目标；普通 index 刷新不得创建导航。
           pendingNavigationRef.current = {
             entryKey: selected,
             generation,
             sectionKey: selectedSection,
           };
           navigationMemberReasonRef.current =
-            options?.restoreSelection === true ? "restore" : "tree";
+            options?.restoreSelection === true ? "restore" : navigationReason;
           setNavigationPending(true);
           setNavigationEpoch((value) => value + 1);
           lastScrolledSectionRef.current = null;

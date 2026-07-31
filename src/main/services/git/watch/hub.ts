@@ -38,7 +38,10 @@ interface CreateRepoHubOptions {
     context: { readonly signal: AbortSignal }
   ): Promise<RefsSnapshot>;
   debounceMs: number;
-  fsWatch(path: string, options?: { recursive?: boolean }): FSWatcher;
+  fsWatch(
+    path: string,
+    options?: { gitDir?: boolean; recursive?: boolean }
+  ): FSWatcher;
   isPollActive(): boolean;
   maxWaitMs: number;
   /** hub 销毁回调（最后一个 agent 卸载时），service 侧从注册表移除。 */
@@ -88,6 +91,9 @@ export function createRepoHub({
   let recreateCoolingUntil = 0;
   let debounceTimer: NodeJS.Timeout | null = null;
   let firstEventAt: number | null = null;
+  const pendingWorktreeAgents = new Set<HubAgent>();
+  let worktreeDebounceTimer: NodeJS.Timeout | null = null;
+  let worktreeFirstEventAt: number | null = null;
   let refreshing = false;
   let rerunRequested = false;
   let disposed = false;
@@ -206,10 +212,42 @@ export function createRepoHub({
     const gitDir = resolve(commonDir, "worktrees", name);
     for (const agent of agents) {
       if (agent.gitDir === gitDir) {
-        agent.requestRefresh({ kind: "worktree" });
+        // 与 repo-wide 事件同参的 debounce + max-wait：rebase/checkout 的
+        // 连续写（HEAD/index/MERGE_HEAD 轮替）合并为一轮路由刷新，避免
+        // 每个文件事件都触发一次完整签名 round。
+        scheduleWorktreeRefresh(agent);
         return;
       }
     }
+  }
+
+  /** worktree 路由事件的合并调度：burst 期间只发一轮 requestRefresh。 */
+  function scheduleWorktreeRefresh(agent: HubAgent): void {
+    if (disposed) {
+      return;
+    }
+    pendingWorktreeAgents.add(agent);
+    const now = Date.now();
+    if (worktreeFirstEventAt === null) {
+      worktreeFirstEventAt = now;
+    }
+    const delay = Math.max(
+      0,
+      Math.min(debounceMs, maxWaitMs - (now - worktreeFirstEventAt))
+    );
+    clearTimeout(worktreeDebounceTimer ?? undefined);
+    worktreeDebounceTimer = setTimeout(() => {
+      worktreeDebounceTimer = null;
+      worktreeFirstEventAt = null;
+      const agentsToRefresh = [...pendingWorktreeAgents];
+      pendingWorktreeAgents.clear();
+      if (disposed) {
+        return;
+      }
+      for (const agentToRefresh of agentsToRefresh) {
+        agentToRefresh.requestRefresh({ kind: "worktree" });
+      }
+    }, delay);
   }
 
   /**
@@ -252,7 +290,8 @@ export function createRepoHub({
     }
     let nextWatcher: FSWatcher;
     try {
-      nextWatcher = fsWatch(commonDir, { recursive: true });
+      // gitDir 标记：不支持 recursive 时降级为 watch commonDir 自身而非 `.git/.git`。
+      nextWatcher = fsWatch(commonDir, { gitDir: true, recursive: true });
     } catch {
       watcher = null;
       recreateCoolingUntil = Date.now() + WATCHER_RECREATE_COOLDOWN_MS;
@@ -294,6 +333,7 @@ export function createRepoHub({
       activeAbortController?.abort();
       activeAbortController = null;
       clearTimeout(debounceTimer ?? undefined);
+      clearTimeout(worktreeDebounceTimer ?? undefined);
       clearTimeout(recreateTimer ?? undefined);
       clearInterval(pollTimer);
       try {

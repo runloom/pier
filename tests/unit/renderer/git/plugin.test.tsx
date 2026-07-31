@@ -665,13 +665,6 @@ describe("git builtin plugin", () => {
           deleteBranch: vi.fn(async () => true),
           discardChanges: vi.fn(async () => true),
           getDiffPatch: vi.fn(async () => ({ files: [] })),
-          getDiffSummary: vi.fn(async () => ({
-            changed: 0,
-            deletions: 0,
-            files: [],
-            insertions: 0,
-          })),
-          getDiffText: vi.fn(async () => ""),
           listIgnored: vi.fn(async () => []),
           getStatus: vi.fn(async () => ({
             branch: {
@@ -696,15 +689,6 @@ describe("git builtin plugin", () => {
             repoState: { kind: "clean" as const },
             stashCount: 0,
           })),
-          getRepoInfo: vi.fn(async () => ({
-            defaultBranch: null,
-            gitCommonDir: "/Users/dev/ABC/pier/.git",
-            gitDir: "/Users/dev/ABC/pier/.git",
-            gitRoot: "/Users/dev/ABC/pier",
-            headOid: "abc123",
-            isBare: false,
-            isWorktree: false,
-          })),
           listBranches: vi.fn(async () => []),
           searchBranches: vi.fn(async () => ({
             currentBranch: "main",
@@ -722,17 +706,10 @@ describe("git builtin plugin", () => {
           applyStash: vi.fn(async () => ({ kind: "ok" as const })),
           dropStash: vi.fn(async () => ({ kind: "ok" as const })),
           rebase: vi.fn(async () => ({ kind: "ok" as const, message: "" })),
-          applyPatch: vi.fn(async () => ({
-            appliedPaths: [],
-            conflictedPaths: [],
-            skippedPaths: [],
-            status: "success" as const,
-          })),
           stage: vi.fn(async () => true),
           stash: vi.fn(async () => ({ kind: "ok" as const })),
           unstage: vi.fn(async () => true),
           undoLastCommit: vi.fn(async () => ({ kind: "ok" as const })),
-          validateBranchName: vi.fn(async () => true),
           watch: vi.fn(() => () => undefined),
         },
         terminal: {

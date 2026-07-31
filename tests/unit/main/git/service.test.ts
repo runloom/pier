@@ -1,5 +1,6 @@
 import { GitExecError } from "@main/services/git/exec.ts";
 import {
+  deriveCounts,
   parseGitBranchRefs,
   parseGitLog,
   parseGitNumstat,
@@ -117,6 +118,23 @@ describe("parseGitStatus", () => {
     expect(parseGitStatus(output).files).toEqual([
       { index: "U", origPath: null, path: "src/conflict.ts", worktree: "U" },
     ]);
+  });
+
+  it("unmerged 全部 XY 计入 conflict 且不双算 staged/modified", () => {
+    const cases = ["UU", "AA", "DD", "AU", "UD", "UA", "DU"] as const;
+    for (const xy of cases) {
+      const output = `${[
+        "# branch.head main",
+        `u ${xy} N... 100644 100644 100644 100644 oid1 oid2 oid3 src/conflict.ts`,
+      ].join("\0")}\0`;
+
+      expect(deriveCounts(parseGitStatus(output).files), `xy=${xy}`).toEqual({
+        conflict: 1,
+        modified: 0,
+        staged: 0,
+        untracked: 0,
+      });
+    }
   });
 });
 

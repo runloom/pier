@@ -50,18 +50,6 @@ export function publishReviewDocumentSoftCache(
   softByScopeKey.set(scopeKey, next);
 }
 
-/** 用当前有效 loaded 集合整体替换（dispose 时与 session 对齐）。 */
-export function replaceReviewDocumentSoftCache(
-  scopeKey: string,
-  loadedByEntryKey: ReadonlyMap<string, LoadedResource>
-): void {
-  if (loadedByEntryKey.size === 0) {
-    softByScopeKey.delete(scopeKey);
-    return;
-  }
-  softByScopeKey.set(scopeKey, new Map(loadedByEntryKey));
-}
-
 export function readReviewDocumentSoftCache(
   scopeKey: string
 ): ReadonlyMap<string, LoadedResource> {

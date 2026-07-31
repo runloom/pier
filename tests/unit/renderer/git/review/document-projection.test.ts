@@ -12,16 +12,11 @@ import {
   indexReviewSectionEntries,
   isCodeViewMemberResource,
   projectReviewDocumentResource,
-  projectReviewDocuments,
   projectReviewLedger,
   recordReviewRenderedHeightEstimates,
 } from "../../../../../src/plugins/builtin/git/renderer/review/document/projection.ts";
 import type { GitReviewDocumentResource } from "../../../../../src/plugins/builtin/git/renderer/review/document/resource.ts";
-import {
-  patchDocument,
-  patchDocumentForEntry,
-  stateDocument,
-} from "./document-fixture.ts";
+import { patchDocument } from "./document-fixture.ts";
 
 function entry(index: number): GitReviewIndexEntry {
   const path = `src/file-${index}.ts`;
@@ -590,48 +585,7 @@ describe("projectReviewLedger content-bearing body (gold standard)", () => {
   });
 });
 
-describe("projectReviewDocuments end-state membership (legacy subset)", () => {
-  it("only projects loaded and error members from snapshot resources", () => {
-    const resources: GitReviewDocumentResource[] = [
-      { entry: entry(0), kind: "idle" },
-      { entry: entry(1), kind: "loading", operationId: "op-1" },
-      loaded(2),
-      {
-        entry: entry(3),
-        failure: {
-          kind: "error",
-          message: "boom",
-          reason: "internal",
-          retryable: true,
-        },
-        kind: "error",
-      },
-      { entry: entry(4), kind: "unchanged" },
-    ];
-    const projection = projectReviewDocuments(
-      {
-        resources,
-        retainedEntryKeys: [],
-        settled: false,
-      },
-      context(),
-      "en"
-    );
-
-    expect(projection.items.map((item) => item.id)).toEqual([
-      "section:2",
-      "section:3",
-    ]);
-    expect(projection.items[0]?.patch).toContain("+new");
-    expect(projection.items[1]?.stateNotice).toBe("Unable to load this change");
-    expect(
-      projection.items.every(
-        (item) => !item.cacheKey.startsWith("git-review-placeholder:")
-      )
-    ).toBe(true);
-    expect(projection.entryKeyBySectionId.get("section:2")).toBe("entry:2");
-  });
-
+describe("isCodeViewMemberResource", () => {
   it("classifies code-view membership", () => {
     expect(isCodeViewMemberResource(loaded(0))).toBe(true);
     expect(
@@ -657,94 +611,6 @@ describe("projectReviewDocuments end-state membership (legacy subset)", () => {
       })
     ).toBe(false);
   });
-
-  it("orders projected loaded items conflict, staged, unstaged then path", () => {
-    const mixed = (partial: {
-      path: string;
-      entryKey: string;
-      slots: Array<{
-        group: "conflict" | "unstaged" | "staged" | "committed";
-        sectionKey: string;
-      }>;
-    }): GitReviewDocumentResource => {
-      const item: GitReviewIndexEntry = {
-        entryKey: partial.entryKey,
-        oldPaths: [],
-        path: partial.path,
-        renderSlots: partial.slots.map((slot) => ({
-          group: slot.group,
-          oldPath: null,
-          sectionKey: slot.sectionKey,
-          status: slot.group === "conflict" ? "conflicted" : "modified",
-          targetPath: partial.path,
-        })),
-        status: "modified",
-      };
-      const firstSlot = partial.slots[0];
-      if (firstSlot === undefined) {
-        throw new Error("missing mixed review slot");
-      }
-      return {
-        document: partial.slots.some((slot) => slot.group === "conflict")
-          ? stateDocument({
-              entryKey: partial.entryKey,
-              path: partial.path,
-              reason: "conflict",
-              revision: `rev:${partial.entryKey}`,
-              sectionKey: firstSlot.sectionKey,
-              status: "conflicted",
-            })
-          : patchDocumentForEntry(item),
-        entry: item,
-        kind: "loaded",
-      };
-    };
-    const projection = projectReviewDocuments(
-      {
-        resources: [
-          mixed({
-            entryKey: "entry:b",
-            path: "b.ts",
-            slots: [
-              { group: "staged", sectionKey: "sec:s:b" },
-              { group: "unstaged", sectionKey: "sec:u:b" },
-            ],
-          }),
-          mixed({
-            entryKey: "entry:a",
-            path: "a.ts",
-            slots: [
-              { group: "conflict", sectionKey: "sec:c:a" },
-              { group: "unstaged", sectionKey: "sec:u:a" },
-              { group: "staged", sectionKey: "sec:s:a" },
-            ],
-          }),
-          mixed({
-            entryKey: "entry:z",
-            path: "z.ts",
-            slots: [{ group: "committed", sectionKey: "sec:m:z" }],
-          }),
-        ],
-        retainedEntryKeys: [],
-        settled: false,
-      },
-      context(),
-      "en"
-    );
-    expect(projection.items.map((item) => item.id)).toEqual([
-      "sec:c:a",
-      "sec:s:a",
-      "sec:s:b",
-      "sec:u:a",
-      "sec:u:b",
-      "sec:m:z",
-    ]);
-    expect(projection.items[0]?.stageControl).toBeUndefined();
-    expect(projection.items[1]?.stageControl).toEqual({ state: "staged" });
-    expect(projection.items[3]?.stageControl).toMatchObject({
-      state: "unstaged",
-    });
-  });
 });
 
 describe("indexReviewEntrySections", () => {
@@ -755,18 +621,12 @@ describe("indexReviewEntrySections", () => {
       ["entry:1", "section:1"],
       ["entry:2", "section:2"],
     ]);
-    const projection = projectReviewDocuments(
-      {
-        resources: entries.map((item) => ({
-          entry: item,
-          kind: "idle" as const,
-        })),
-        retainedEntryKeys: [],
-        settled: true,
-      },
-      context(),
-      "en"
-    );
+    const projection = projectReviewLedger({
+      context: context(),
+      entries: [],
+      locale: "en",
+      resourceByEntryKey: new Map(),
+    });
     expect(projection.items).toEqual([]);
     expect(indexReviewDocumentProjection(projection).itemIds).toEqual([]);
   });

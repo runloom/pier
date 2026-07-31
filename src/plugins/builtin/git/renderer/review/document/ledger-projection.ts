@@ -16,10 +16,7 @@ import {
   reviewStageControl,
 } from "./estimates.ts";
 import type { ReviewDocumentProjection } from "./projection-types.ts";
-import type {
-  GitReviewDocumentLoaderSnapshot,
-  GitReviewDocumentResource,
-} from "./resource.ts";
+import type { GitReviewDocumentResource } from "./resource.ts";
 import { projectReviewDocumentResource } from "./resource-projection.ts";
 
 type ReviewProjectionGroup = GitReviewGroup;
@@ -136,26 +133,6 @@ export function projectReviewLedger(options: {
     revisionBySectionId,
     sourceIndexGeneration: options.sourceIndexGeneration ?? 0,
   };
-}
-
-export function projectReviewDocuments(
-  snapshot: GitReviewDocumentLoaderSnapshot,
-  context: RendererPluginContext,
-  locale: string
-): ReviewDocumentProjection {
-  const entries = snapshot.resources
-    .filter(
-      (resource) => resource.kind === "loaded" || resource.kind === "error"
-    )
-    .map((resource) => resource.entry);
-  return projectReviewLedger({
-    context,
-    entries,
-    locale,
-    resourceByEntryKey: new Map(
-      snapshot.resources.map((resource) => [resource.entry.entryKey, resource])
-    ),
-  });
 }
 
 function gateReviewMutationControls(

@@ -129,10 +129,6 @@ export class GitReviewMutationAuthority {
   }
 }
 
-export function gitReviewMutationAuthorityKey(source: GitReviewScope): string {
-  return authorityKey(source);
-}
-
 function authorityKey(source: GitReviewScope): string {
   return JSON.stringify([source.contextId, source.gitRootPath]);
 }

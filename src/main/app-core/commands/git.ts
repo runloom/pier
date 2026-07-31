@@ -30,7 +30,6 @@ const GIT_WRITE_COMMANDS: Record<string, true> = {
   "git.revert": true,
   "git.revertAbort": true,
   "git.revertContinue": true,
-  "git.applyPatch": true,
   "git.stage": true,
   "git.stash": true,
 
@@ -74,47 +73,10 @@ async function dispatchGitCommand(
       return success(requestId, await services.git.getStatus(command.cwd));
     case "git.listIgnored":
       return success(requestId, await services.git.listIgnored(command.cwd));
-    case "git.getRepoInfo":
-      return success(requestId, await services.git.getRepoInfo(command.cwd));
-    case "git.isWorkingTreeClean":
-      return success(
-        requestId,
-        await services.git.isWorkingTreeClean(command.cwd)
-      );
-    case "git.getDiffText":
-      return success(
-        requestId,
-        await services.git.getDiffText(command.cwd, command.options)
-      );
-    case "git.getDiffSummary":
-      return success(
-        requestId,
-        await services.git.getDiffSummary(command.cwd, command.options)
-      );
     case "git.getDiffPatch":
       return success(
         requestId,
         await services.git.getDiffPatch(command.cwd, command.options)
-      );
-    case "git.getLog":
-      return success(
-        requestId,
-        await services.git.getLog(command.cwd, command.options)
-      );
-    case "git.getCommit":
-      return success(
-        requestId,
-        await services.git.getCommit(command.cwd, command.oid)
-      );
-    case "git.getCommitPatch":
-      return success(
-        requestId,
-        await services.git.getCommitPatch(command.cwd, command.oid)
-      );
-    case "git.getFileContent":
-      return success(
-        requestId,
-        await services.git.getFileContent(command.cwd, command.options)
       );
     case "git.listBranches":
       return success(
@@ -131,34 +93,12 @@ async function dispatchGitCommand(
         requestId,
         await services.git.searchCommits(command.cwd, command.options)
       );
-    case "git.listTags":
-      return success(requestId, await services.git.listTags(command.cwd));
-    case "git.resolveRef":
-      return success(
-        requestId,
-        await services.git.resolveRef(command.cwd, command.ref)
-      );
-    case "git.validateBranchName":
-      return success(
-        requestId,
-        await services.git.validateBranchName(command.cwd, command.name)
-      );
     case "git.stage":
       await services.git.stage(command.cwd, { paths: command.paths });
       return success(requestId, true);
     case "git.unstage":
       await services.git.unstage(command.cwd, { paths: command.paths });
       return success(requestId, true);
-    case "git.applyPatch":
-      return success(
-        requestId,
-        await services.git.applyPatch(command.cwd, {
-          ...(command.atomic !== undefined && { atomic: command.atomic }),
-          diff: command.diff,
-          ...(command.revert !== undefined && { revert: command.revert }),
-          target: command.target,
-        })
-      );
     case "git.discardChanges":
       await services.git.discardChanges(command.cwd, {
         paths: command.paths,

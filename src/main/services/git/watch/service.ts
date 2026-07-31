@@ -205,7 +205,13 @@ export function createGitWatchService({
       gitRoot,
       requestRefresh: (request) => {
         const target = entries.get(gitRoot);
-        if (!target?.baselineReady) {
+        if (target === undefined || !target.baselineReady) {
+          // baseline 期间的 hub 路由事件（如 linked worktree 的空 commit 只
+          // 改 HEAD）不会产生 agent 自有 watcher 文件事件：同样记 dirty，
+          // 由 startBaseline 的重放路径补一次重读，避免错过直到 poll。
+          if (target !== undefined) {
+            target.baselineDirty = true;
+          }
           return;
         }
         refresh(

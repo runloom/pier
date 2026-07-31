@@ -169,7 +169,10 @@ export class GitReviewRepositoryCoordinator {
         ? previous.sequence + 1
         : previous.sequence;
     this.#states.set(repositoryKey, {
-      awaitingRevision: changed ? false : previous.awaitingRevision,
+      // 无论 mutation 是否改变 index revision，读回即视为已消费：
+      // no-op mutation 若保持 awaitingRevision=true，下一次外部变更会
+      // 被跳过 stamp 侧递增，破坏「序号唯一标识 revision」的不变量。
+      awaitingRevision: false,
       revision: changed ? revision : previous.revision,
       sequence,
     });

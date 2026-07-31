@@ -9,7 +9,6 @@
  */
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import type { GitReviewFileStatus } from "@shared/contracts/git/review.ts";
-import { notifyError } from "../command-helpers.ts";
 import { pluginText } from "../plugin-text.ts";
 
 export interface GitDiscardSelection {
@@ -230,39 +229,4 @@ export async function confirmGitDiscard(
     return { kind: "proceed", paths: [...tracked, ...untracked] };
   }
   return { kind: "cancel" };
-}
-
-/** Confirm + execute discard. Returns whether the operation ran successfully. */
-export async function confirmAndDiscardGitChanges(
-  context: RendererPluginContext,
-  gitRootPath: string,
-  selection: GitDiscardSelection
-): Promise<"cancelled" | "failed" | "ok"> {
-  const decision = await confirmGitDiscard(context, selection);
-  if (decision.kind === "cancel") {
-    return "cancelled";
-  }
-  if (decision.paths.length === 0) {
-    return "cancelled";
-  }
-  try {
-    const ok = await context.git.discardChanges(gitRootPath, [
-      ...decision.paths,
-    ]);
-    if (!ok) {
-      notifyError(
-        context,
-        pluginText(context, "reviewDiscardFailed", "Unable to discard changes")
-      );
-      return "failed";
-    }
-    return "ok";
-  } catch (error) {
-    notifyError(
-      context,
-      pluginText(context, "reviewDiscardFailed", "Unable to discard changes"),
-      error
-    );
-    return "failed";
-  }
 }

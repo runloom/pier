@@ -11,10 +11,7 @@ export {
   GIT_REVIEW_ESTIMATE_CACHE_PREFIX,
   recordReviewRenderedHeightEstimates,
 } from "./estimates.ts";
-export {
-  projectReviewDocuments,
-  projectReviewLedger,
-} from "./ledger-projection.ts";
+export { projectReviewLedger } from "./ledger-projection.ts";
 export {
   indexReviewDocumentProjection,
   indexReviewEntrySections,

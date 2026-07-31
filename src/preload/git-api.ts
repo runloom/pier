@@ -1,20 +1,16 @@
 import { gitWatchLeaseSchema } from "@shared/contracts/git/watch.ts";
 import type {
-  GitApplyPatchResult,
   GitBranchRef,
   GitChangeEvent,
-  GitCommit,
   GitCommitSearchResult,
   GitDiffBranchesResult,
   GitDiffPatch,
-  GitDiffSummary,
   GitMergeAbortResult,
   GitMergeResult,
   GitRebaseAbortResult,
   GitRebaseContinueResult,
   GitRebaseResult,
   GitRemoteOperationResult,
-  GitRepoInfo,
   GitSequencerAbortResult,
   GitSequencerContinueResult,
   GitSequencerResult,
@@ -31,9 +27,9 @@ import { ipcRenderer } from "electron";
 import { gitReviewApi, type PierGitReviewAPI } from "./git-review-api.ts";
 import { invokePierCommand } from "./ipc-envelope.ts";
 
-// 注意:branch 单独增删(createBranch/deleteBranch)仍保留在 main 命令表,
-// 服务 CLI 与未来表面,但不经 preload 暴露。renderer 仅暴露当前 UI 已消费的
-// 窄口(checkoutBranch / createAndSwitchBranch / commit),避免闲置写入口扩大攻击面。
+// 注意:branch 单独增删(git.createBranch/git.deleteBranch)仍保留在 main 命令表,
+// 服务 CLI 与未来表面,但不经 preload 暴露。preload 只暴露当前 UI/插件已
+// 消费的方法,避免闲置入口扩大攻击面。
 
 /** diff 范围/路径选项(IPC 层用值类型;详细 zod 在 contracts/git.ts) */
 export interface GitDiffOptionsValue {
@@ -41,20 +37,6 @@ export interface GitDiffOptionsValue {
   paths?: string[];
   staged?: boolean;
   to?: string;
-}
-
-export interface GitLogOptionsValue {
-  author?: string;
-  grep?: string;
-  maxCount?: number;
-  path?: string;
-  since?: string;
-  until?: string;
-}
-
-export interface GitFileContentOptionsValue {
-  path: string;
-  ref?: string;
 }
 
 export interface GitListBranchesOptionsValue {
@@ -89,19 +71,6 @@ export interface PierGitAPI extends PierGitReviewAPI {
   abortMerge: (cwd: string) => Promise<GitMergeAbortResult>;
   abortRebase: (cwd: string) => Promise<GitRebaseAbortResult>;
   abortRevert: (cwd: string) => Promise<GitSequencerAbortResult>;
-  /**
-   * Low-level generic `git apply` bridge retained for non-review workflows.
-   * Git Review must use applyReviewMutation so patch selection stays in main.
-   */
-  applyPatch: (
-    cwd: string,
-    options: {
-      atomic?: boolean;
-      diff: string;
-      revert?: boolean;
-      target: "staged" | "unstaged" | "staged-and-unstaged";
-    }
-  ) => Promise<GitApplyPatchResult>;
   applyStash: (cwd: string, index?: number) => Promise<GitStashApplyResult>;
   checkoutBranch: (cwd: string, name: string) => Promise<boolean>;
   cherryPick: (cwd: string, oid: string) => Promise<GitSequencerResult>;
@@ -113,38 +82,22 @@ export interface PierGitAPI extends PierGitReviewAPI {
   discardChanges: (cwd: string, paths: string[]) => Promise<boolean>;
   dropStash: (cwd: string, index?: number) => Promise<GitStashDropResult>;
   // 读(git:read)
-  getCommit: (cwd: string, oid: string) => Promise<GitCommit>;
-  getCommitPatch: (cwd: string, oid: string) => Promise<GitDiffPatch>;
   getDiffPatch: (
     cwd: string,
     options?: GitDiffOptionsValue
   ) => Promise<GitDiffPatch>;
-  getDiffSummary: (
-    cwd: string,
-    options?: GitDiffOptionsValue
-  ) => Promise<GitDiffSummary>;
-  getDiffText: (cwd: string, options?: GitDiffOptionsValue) => Promise<string>;
-  getFileContent: (
-    cwd: string,
-    options: GitFileContentOptionsValue
-  ) => Promise<string>;
-  getLog: (cwd: string, options?: GitLogOptionsValue) => Promise<GitCommit[]>;
-  getRepoInfo: (cwd: string) => Promise<GitRepoInfo>;
   getStatus: (cwd: string) => Promise<GitStatus>;
-  isWorkingTreeClean: (cwd: string) => Promise<boolean>;
   listBranches: (
     cwd: string,
     options: GitListBranchesOptionsValue
   ) => Promise<GitBranchRef[]>;
   listIgnored: (cwd: string) => Promise<string[]>;
   listStashes: (cwd: string) => Promise<GitStashListResult>;
-  listTags: (cwd: string) => Promise<string[]>;
   merge: (cwd: string, branch: string) => Promise<GitMergeResult>;
   popStash: (cwd: string, index?: number) => Promise<GitStashPopResult>;
   pullFastForward: (cwd: string) => Promise<GitRemoteOperationResult>;
   push: (cwd: string) => Promise<GitRemoteOperationResult>;
   rebase: (cwd: string, branch: string) => Promise<GitRebaseResult>;
-  resolveRef: (cwd: string, ref: string) => Promise<string>;
   revert: (cwd: string, oid: string) => Promise<GitSequencerResult>;
   searchBranches: (
     cwd: string,
@@ -162,7 +115,6 @@ export interface PierGitAPI extends PierGitReviewAPI {
   sync: (cwd: string) => Promise<GitRemoteOperationResult>;
   undoLastCommit: (cwd: string) => Promise<GitUndoCommitResult>;
   unstage: (cwd: string, paths: string[]) => Promise<boolean>;
-  validateBranchName: (cwd: string, name: string) => Promise<boolean>;
 
   /** 订阅 gitRoot 的 git 变化。返回 unsubscribe。多次 watch 同一 gitRoot 各自独立。 */
   watch: (
@@ -179,47 +131,11 @@ export const gitApi: PierGitAPI = {
     invokePierCommand<GitStatus>({ cwd, type: "git.getStatus" }),
   listIgnored: (cwd) =>
     invokePierCommand<string[]>({ cwd, type: "git.listIgnored" }),
-  getRepoInfo: (cwd) =>
-    invokePierCommand<GitRepoInfo>({ cwd, type: "git.getRepoInfo" }),
-  isWorkingTreeClean: (cwd) =>
-    invokePierCommand<boolean>({ cwd, type: "git.isWorkingTreeClean" }),
-  getDiffText: (cwd, options) =>
-    invokePierCommand<string>({
-      cwd,
-      ...(options !== undefined && { options }),
-      type: "git.getDiffText",
-    }),
-  getDiffSummary: (cwd, options) =>
-    invokePierCommand<GitDiffSummary>({
-      cwd,
-      ...(options !== undefined && { options }),
-      type: "git.getDiffSummary",
-    }),
   getDiffPatch: (cwd, options) =>
     invokePierCommand<GitDiffPatch>({
       cwd,
       ...(options !== undefined && { options }),
       type: "git.getDiffPatch",
-    }),
-  getLog: (cwd, options) =>
-    invokePierCommand<GitCommit[]>({
-      cwd,
-      ...(options !== undefined && { options }),
-      type: "git.getLog",
-    }),
-  getCommit: (cwd, oid) =>
-    invokePierCommand<GitCommit>({ cwd, oid, type: "git.getCommit" }),
-  getCommitPatch: (cwd, oid) =>
-    invokePierCommand<GitDiffPatch>({
-      cwd,
-      oid,
-      type: "git.getCommitPatch",
-    }),
-  getFileContent: (cwd, options) =>
-    invokePierCommand<string>({
-      cwd,
-      options,
-      type: "git.getFileContent",
     }),
   listBranches: (cwd, options) =>
     invokePierCommand<GitBranchRef[]>({
@@ -239,22 +155,8 @@ export const gitApi: PierGitAPI = {
       ...(options !== undefined && { options }),
       type: "git.searchCommits",
     }),
-  listTags: (cwd) => invokePierCommand<string[]>({ cwd, type: "git.listTags" }),
-  resolveRef: (cwd, ref) =>
-    invokePierCommand<string>({ cwd, ref, type: "git.resolveRef" }),
-  validateBranchName: (cwd, name) =>
-    invokePierCommand<boolean>({ cwd, name, type: "git.validateBranchName" }),
   stage: (cwd, paths) =>
     invokePierCommand<boolean>({ cwd, paths, type: "git.stage" }),
-  applyPatch: (cwd, options) =>
-    invokePierCommand<GitApplyPatchResult>({
-      cwd,
-      ...(options.atomic !== undefined && { atomic: options.atomic }),
-      diff: options.diff,
-      ...(options.revert !== undefined && { revert: options.revert }),
-      target: options.target,
-      type: "git.applyPatch",
-    }),
   unstage: (cwd, paths) =>
     invokePierCommand<boolean>({ cwd, paths, type: "git.unstage" }),
 

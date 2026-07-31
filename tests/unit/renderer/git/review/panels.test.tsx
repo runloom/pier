@@ -539,8 +539,6 @@ function pluginContext(input: {
       cancelReviewRequest:
         input.cancelReviewRequest ?? vi.fn(async () => undefined),
       commit: vi.fn(async () => true),
-      getDiffText: vi.fn(async () => ""),
-      getLog: vi.fn(async () => []),
       getReviewFileDocument:
         input.getReviewFileDocument ?? vi.fn(async () => documentResult(0)),
       getReviewIndex: input.getReviewIndex ?? vi.fn(async () => indexResult()),
@@ -583,12 +581,6 @@ function pluginContext(input: {
         remoteSync: null,
         repoState: { kind: "clean" as const },
         stashCount: 0,
-      })),
-      applyPatch: vi.fn(async () => ({
-        appliedPaths: [],
-        conflictedPaths: [],
-        skippedPaths: [],
-        status: "success" as const,
       })),
       stage: vi.fn(async () => true),
       watch: input.watch ?? vi.fn(() => () => undefined),

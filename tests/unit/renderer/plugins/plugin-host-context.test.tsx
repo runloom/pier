@@ -121,10 +121,6 @@ type ExpectedGitFacade = RendererPluginContext["git"] & {
     cwd: string,
     options?: { paths?: string[]; staged?: boolean }
   ): Promise<unknown>;
-  getFileContent(
-    cwd: string,
-    options: { path: string; ref?: string }
-  ): Promise<string>;
   stage(cwd: string, paths: string[]): Promise<boolean>;
   unstage(cwd: string, paths: string[]): Promise<boolean>;
 };
@@ -1455,8 +1451,6 @@ describe("createRendererPluginContext", () => {
       continueRebase: vi.fn(async () => ({ status: "continued" })),
       discardChanges: vi.fn(async () => true),
       getDiffPatch: vi.fn(async () => ({ files: [] })),
-      getFileContent: vi.fn(async () => "content"),
-      getRepoInfo: vi.fn(async () => null),
       getStatus: vi.fn(async () => ({ counts: {}, files: [] })),
       listBranches: vi.fn(async () => []),
       listStashes: vi.fn(async () => []),
@@ -1466,12 +1460,6 @@ describe("createRendererPluginContext", () => {
       push: vi.fn(async () => ({ kind: "ok" })),
       rebase: vi.fn(async () => ({ status: "rebased" })),
       searchBranches: vi.fn(async () => ({ branches: [] })),
-      applyPatch: vi.fn(async () => ({
-        appliedPaths: [],
-        conflictedPaths: [],
-        skippedPaths: [],
-        status: "success" as const,
-      })),
       stage: vi.fn(async () => true),
       stash: vi.fn(async () => ({ status: "stashed" })),
       sync: vi.fn(async () => ({ kind: "ok" })),
@@ -1490,8 +1478,6 @@ describe("createRendererPluginContext", () => {
 
     const readCalls: ReadonlyArray<() => Promise<unknown>> = [
       () => context.git.getDiffPatch("/repo"),
-      () => context.git.getFileContent("/repo", { path: "README.md" }),
-      () => context.git.getRepoInfo("/repo"),
       () => context.git.getStatus("/repo"),
       () => context.git.listBranches("/repo", { kind: "all" }),
       () => context.git.listStashes("/repo"),
@@ -1545,7 +1531,6 @@ describe("createRendererPluginContext", () => {
       ],
     };
     const getDiffPatch = vi.fn(async () => patch);
-    const getFileContent = vi.fn(async () => "export const value = 1;\n");
     const stage = vi.fn(async () => true);
     const unstage = vi.fn(async () => true);
     const discardChanges = vi.fn(async () => true);
@@ -1558,7 +1543,6 @@ describe("createRendererPluginContext", () => {
         git: {
           discardChanges,
           getDiffPatch,
-          getFileContent,
           pullFastForward,
           push,
           stage,
@@ -1579,12 +1563,6 @@ describe("createRendererPluginContext", () => {
         staged: true,
       })
     ).resolves.toEqual(patch);
-    await expect(
-      context.git.getFileContent("/repo", {
-        path: "src/index.ts",
-        ref: "HEAD",
-      })
-    ).resolves.toBe("export const value = 1;\n");
     await expect(context.git.stage("/repo", ["src/index.ts"])).resolves.toBe(
       true
     );
@@ -1603,10 +1581,6 @@ describe("createRendererPluginContext", () => {
     expect(getDiffPatch).toHaveBeenCalledWith("/repo", {
       paths: ["src/index.ts"],
       staged: true,
-    });
-    expect(getFileContent).toHaveBeenCalledWith("/repo", {
-      path: "src/index.ts",
-      ref: "HEAD",
     });
     expect(stage).toHaveBeenCalledWith("/repo", ["src/index.ts"]);
     expect(unstage).toHaveBeenCalledWith("/repo", ["src/index.ts"]);

@@ -150,7 +150,8 @@ export function parseGitStatus(output: string): ParsedGitStatus {
 
 /**
  * 从 files 派生工作区分类计数：staged / modified / untracked / conflict。
- * 与 porcelain v2 XY 状态码约定一致（unmerged 用 `u` 单独标记）。
+ * unmerged 条目的 XY 与 git-review primary-parser 对齐：DD|AU|UD|UA|DU|AA|UU
+ *（解析后落在 index/worktree 两字段，见 parseUnmergedEntry）。
  */
 export function deriveCounts(files: readonly GitFileStatus[]): GitCounts {
   let staged = 0;
@@ -158,7 +159,8 @@ export function deriveCounts(files: readonly GitFileStatus[]): GitCounts {
   let untracked = 0;
   let conflict = 0;
   for (const file of files) {
-    if (file.index === "u" || file.worktree === "u") {
+    const xy = `${file.index}${file.worktree}`;
+    if (/^(?:DD|AU|UD|UA|DU|AA|UU)$/u.test(xy)) {
       conflict += 1;
       continue;
     }

@@ -41,54 +41,7 @@ export function reviewStageControl(
   }
 }
 
-export function reviewEntryStageControl(
-  entry: GitReviewIndexEntry
-): ReturnType<typeof reviewStageControl> {
-  const groups = new Set(entry.renderSlots.map((slot) => slot.group));
-  if (groups.has("conflict") || groups.has("committed")) {
-    return null;
-  }
-  if (groups.has("staged") && groups.has("unstaged")) {
-    return reviewStageControl("partial", entry.status);
-  }
-  return reviewStageControl(
-    groups.has("staged") ? "staged" : "unstaged",
-    entry.status
-  );
-}
-
-export function estimateReviewEntryItem(options: {
-  readonly entry: GitReviewIndexEntry;
-  readonly measuredEstimateLinesByPath?: ReadonlyMap<string, number>;
-}): PierDiffViewItem {
-  const slot = options.entry.renderSlots[0];
-  if (slot === undefined) {
-    throw new Error("Git Review entry 缺少导航槽");
-  }
-  const stageControl = reviewEntryStageControl(options.entry);
-  const estimateLines =
-    options.measuredEstimateLinesByPath?.get(options.entry.path) ??
-    Math.max(...options.entry.renderSlots.map(estimateLinesForReviewSlot));
-  const lineStats = lineStatsFromReviewSlot(slot);
-  return {
-    cacheKey: `${GIT_REVIEW_ESTIMATE_CACHE_PREFIX}${options.entry.entryKey}`,
-    estimateLines,
-    fileDisplay: {
-      path: options.entry.path,
-      status: options.entry.status,
-      ...(options.entry.oldPaths[0] === undefined
-        ? {}
-        : { previousPath: options.entry.oldPaths[0] }),
-    },
-    id: options.entry.entryKey,
-    kind: "estimate",
-    ...(lineStats === undefined ? {} : { lineStats }),
-    patch: null,
-    ...(stageControl === null ? {} : { stageControl }),
-  };
-}
-
-/** estimate 槽 cacheKey 前缀（可 scroll；非历史 git-review-placeholder）。 */
+/** estimate 槽 cacheKey 前缀（可 scroll）。 */
 export const GIT_REVIEW_ESTIMATE_CACHE_PREFIX = "estimate:";
 
 export function estimateReviewSlotItem(options: {

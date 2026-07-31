@@ -401,9 +401,6 @@ describe("Git diff renderer governance", () => {
     expect(reviewRuntime).not.toContain("new Map(itemCacheKeysRef.current)");
     // 金标准：content-bearing projectReviewLedger；禁止 selectMembers 驱动投影 id
     expect(documentSessionRuntime).toContain("projectReviewLedger(");
-    expect(documentSessionRuntime).not.toContain(
-      "selectCodeViewMemberEntryKeys({"
-    );
     expect(documentSessionRuntime).toContain(
       "generationCallbacksRef.current.applyItemUpdates("
     );

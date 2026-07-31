@@ -31,8 +31,6 @@ export const GIT_REVIEW_SELECTION_RADIUS = 2;
  * pin（selected/visible/buffered demand）可短暂超过；其余按优先级截断。
  */
 export const GIT_REVIEW_MAX_FULL_BODY_ENTRIES = 128;
-/** @deprecated Use {@link GIT_REVIEW_MAX_FULL_BODY_ENTRIES}. */
-export const GIT_REVIEW_MAX_CODEVIEW_MEMBERS = GIT_REVIEW_MAX_FULL_BODY_ENTRIES;
 
 /** 正文成员策略用的定位原因：树点击或面板重挂载恢复。 */
 export type ReviewNavigationMemberReason = "restore" | "tree";
@@ -317,13 +315,6 @@ export function selectBodyHydrationPriorityEntryKeys(options: {
 
   return options.entryKeysInOrder.filter((entryKey) => selected.has(entryKey));
 }
-
-/**
- * @deprecated Use {@link selectBodyHydrationPriorityEntryKeys}.
- * 名称误导为「CodeView 显示成员」；stable-ledger 显示集不经此函数。
- */
-export const selectCodeViewMemberEntryKeys =
-  selectBodyHydrationPriorityEntryKeys;
 
 /** 按 parts 顺序合并 visible/buffered，去重，buffered 剔除已在 visible 中的。 */
 export function mergeReviewDocumentDemand(

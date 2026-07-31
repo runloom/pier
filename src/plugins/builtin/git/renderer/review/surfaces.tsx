@@ -263,6 +263,10 @@ function ReviewDocumentsComponent(
         candidate.path === mutationTransition.path
     );
     if (entry === undefined) {
+      // 权威 index 未到前 entry 可能尚未出现；catch-up 后仍缺失才放弃。
+      if (props.indexGeneration >= mutationTransition.minimumIndexGeneration) {
+        setMutationTransition(null);
+      }
       return;
     }
     const itemId = reviewTreeSectionKeyForSurface(
@@ -270,6 +274,11 @@ function ReviewDocumentsComponent(
       mutationTransition.targetSurface
     );
     if (itemId === null) {
+      // 权威 index 未到前 entry 仍在源面：等 catch-up，勿抢先 clear。
+      // catch-up 后仍无目标槽位才放弃，避免卡死 mutation authority。
+      if (props.indexGeneration >= mutationTransition.minimumIndexGeneration) {
+        setMutationTransition(null);
+      }
       return;
     }
     setMountedSurfaces((current) => {
@@ -294,7 +303,7 @@ function ReviewDocumentsComponent(
     navigationRequestRef.current = request;
     setNavigationRequest(request);
     setMutationTransition(null);
-  }, [mutationTransition, props.entries]);
+  }, [mutationTransition, props.entries, props.indexGeneration]);
   const handleMutationTransition = useCallback(
     (transition: GitReviewMutationTransition) => {
       setMutationTransition(transition);

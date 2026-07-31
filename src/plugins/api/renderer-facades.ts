@@ -64,10 +64,8 @@ import type {
   GitReviewPathMutationRequest,
 } from "@shared/contracts/git/review.ts";
 import type {
-  GitApplyPatchResult,
   GitBranchRef,
   GitChangeEvent,
-  GitCommit,
   GitCommitSearchResult,
   GitDiffBranchesResult,
   GitDiffPatch,
@@ -77,7 +75,6 @@ import type {
   GitRebaseContinueResult,
   GitRebaseResult,
   GitRemoteOperationResult,
-  GitRepoInfo,
   GitSequencerAbortResult,
   GitSequencerContinueResult,
   GitSequencerResult,
@@ -214,19 +211,6 @@ export interface RendererPluginGitFacade {
   abortMerge(cwd: string): Promise<GitMergeAbortResult>;
   abortRebase(cwd: string): Promise<GitRebaseAbortResult>;
   abortRevert(cwd: string): Promise<GitSequencerAbortResult>;
-  /**
-   * Codex review apply-patch (`git apply` target/revert).
-   * Caller supplies a unified patch (file or single hunk).
-   */
-  applyPatch(
-    cwd: string,
-    options: {
-      atomic?: boolean;
-      diff: string;
-      revert?: boolean;
-      target: "staged" | "unstaged" | "staged-and-unstaged";
-    }
-  ): Promise<GitApplyPatchResult>;
   applyReviewMutation(
     request: GitReviewMutationRequest
   ): Promise<GitReviewMutationResult>;
@@ -258,31 +242,6 @@ export interface RendererPluginGitFacade {
       to?: string;
     }
   ): Promise<GitDiffPatch>;
-  getDiffText(
-    cwd: string,
-    options?: {
-      from?: string;
-      paths?: string[];
-      staged?: boolean;
-      to?: string;
-    }
-  ): Promise<string>;
-  getFileContent(
-    cwd: string,
-    options: { path: string; ref?: string }
-  ): Promise<string>;
-  getLog(
-    cwd: string,
-    options?: {
-      author?: string;
-      grep?: string;
-      maxCount?: number;
-      path?: string;
-      since?: string;
-      until?: string;
-    }
-  ): Promise<GitCommit[]>;
-  getRepoInfo(cwd: string): Promise<GitRepoInfo>;
   getReviewFileDocument(
     request: GitReviewFileDocumentRequest
   ): Promise<GitReviewFileDocumentResult>;

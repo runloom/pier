@@ -95,12 +95,6 @@ export function isReviewEntryBodyHydratable(
   return reviewEntryHasBodyContent(entry, diffBase);
 }
 
-/** index 提示无文本行：强制折叠 / 禁用展开。 */
-export function reviewSlotPrefersCollapsedEmpty(slot: ReviewSlotLike): boolean {
-  const bodyClass = classifyReviewSlotBodyClass(slot);
-  return bodyClass === "meta" || bodyClass === "notice";
-}
-
 /** 当前面下 content-bearing entryKey 序（seed / demand 主路径）。 */
 export function reviewContentEntryKeysInOrder(
   entries: readonly GitReviewIndexEntry[],

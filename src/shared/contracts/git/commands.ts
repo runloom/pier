@@ -1,13 +1,10 @@
 import { z } from "zod";
 import {
-  getFileContentOptionsSchema,
-  gitApplyPatchOptionsSchema,
   gitCommitOptionsSchema,
   gitCreateBranchOptionsSchema,
   gitDeleteBranchOptionsSchema,
   gitDiffOptionsSchema,
   gitDiffSearchBranchesOptionsSchema,
-  gitLogOptionsSchema,
   gitMergeOptionsSchema,
   gitPathsSchema,
   gitRebaseOptionsSchema,
@@ -25,45 +22,10 @@ export const gitCommandSchemas = [
   z.object({ type: z.literal("git.getStatus"), cwd: z.string().min(1) }),
   ...gitReviewCommandSchemas,
   z.object({ type: z.literal("git.listIgnored"), cwd: z.string().min(1) }),
-  z.object({ type: z.literal("git.getRepoInfo"), cwd: z.string().min(1) }),
-  z.object({
-    type: z.literal("git.isWorkingTreeClean"),
-    cwd: z.string().min(1),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: gitDiffOptionsSchema.optional(),
-    type: z.literal("git.getDiffText"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: gitDiffOptionsSchema.optional(),
-    type: z.literal("git.getDiffSummary"),
-  }),
   z.object({
     cwd: z.string().min(1),
     options: gitDiffOptionsSchema.optional(),
     type: z.literal("git.getDiffPatch"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: gitLogOptionsSchema.optional(),
-    type: z.literal("git.getLog"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    oid: z.string().min(1),
-    type: z.literal("git.getCommit"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    oid: z.string().min(1),
-    type: z.literal("git.getCommitPatch"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    options: getFileContentOptionsSchema,
-    type: z.literal("git.getFileContent"),
   }),
   z.object({
     cwd: z.string().min(1),
@@ -80,17 +42,6 @@ export const gitCommandSchemas = [
     options: gitSearchCommitsOptionsSchema.optional(),
     type: z.literal("git.searchCommits"),
   }),
-  z.object({ type: z.literal("git.listTags"), cwd: z.string().min(1) }),
-  z.object({
-    cwd: z.string().min(1),
-    ref: z.string().min(1),
-    type: z.literal("git.resolveRef"),
-  }),
-  z.object({
-    cwd: z.string().min(1),
-    name: z.string().min(1),
-    type: z.literal("git.validateBranchName"),
-  }),
   // Git 写命令(需 git:write capability)
   gitPathsSchema.extend({
     cwd: z.string().min(1),
@@ -99,10 +50,6 @@ export const gitCommandSchemas = [
   gitPathsSchema.extend({
     cwd: z.string().min(1),
     type: z.literal("git.unstage"),
-  }),
-  gitApplyPatchOptionsSchema.extend({
-    cwd: z.string().min(1),
-    type: z.literal("git.applyPatch"),
   }),
 
   gitPathsSchema.extend({

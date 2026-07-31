@@ -65,16 +65,11 @@ export function isReviewNavigationContentReady(
   return resource?.kind === "loaded" || resource?.kind === "error";
 }
 
-/**
- * 历史假 placeholder cacheKey 或未投影 id：禁止作为 scroll 目标。
- * estimate: 前缀合法（全量账本）。
- */
 export function isReviewPlaceholderCacheKey(
   cacheKey: string | undefined
 ): boolean {
-  return (
-    cacheKey === undefined || cacheKey.startsWith("git-review-placeholder:")
-  );
+  // 历史假 placeholder cacheKey 不再产生；undefined 仍视为非 scroll 目标。
+  return cacheKey === undefined;
 }
 
 /** estimate 是稳定账本成员，但不代表真实正文已经提交给 CodeView。 */

@@ -86,22 +86,6 @@ export function createPluginGitContext(
         ...(path ? { paths: [path] } : {}),
       });
     },
-    getDiffText: (cwd, options) => {
-      assertPluginCapability(entry, "git:read");
-      return window.pier.git.getDiffText(cwd, options);
-    },
-    getLog: (cwd, options) => {
-      assertPluginCapability(entry, "git:read");
-      return window.pier.git.getLog(cwd, options);
-    },
-    getFileContent: (cwd, options) => {
-      assertPluginCapability(entry, "git:read");
-      return window.pier.git.getFileContent(cwd, options);
-    },
-    getRepoInfo: (cwd) => {
-      assertPluginCapability(entry, "git:read");
-      return window.pier.git.getRepoInfo(cwd);
-    },
     getReviewFileDocument: (request) => {
       assertPluginCapability(entry, "git:read");
       return window.pier.git.getReviewFileDocument(request);
@@ -165,10 +149,6 @@ export function createPluginGitContext(
     stage: (cwd, paths) => {
       assertPluginCapability(entry, "git:write");
       return window.pier.git.stage(cwd, paths);
-    },
-    applyPatch: (cwd, options) => {
-      assertPluginCapability(entry, "git:write");
-      return window.pier.git.applyPatch(cwd, options);
     },
 
     stash: (cwd, options) => {

@@ -17,7 +17,7 @@ interface WatchComputationContext {
 
 export type FsWatchFn = (
   path: string,
-  options?: { recursive?: boolean }
+  options?: { gitDir?: boolean; recursive?: boolean }
 ) => FSWatcher;
 
 export interface WatchEntry {
@@ -234,12 +234,19 @@ export function recoverWatchEntry({
   attachHandlers();
 }
 
-export function defaultFsWatch(path: string): FSWatcher {
+export function defaultFsWatch(
+  path: string,
+  options?: { gitDir?: boolean; recursive?: boolean }
+): FSWatcher {
   try {
     return fsWatchNative(path, { recursive: true });
   } catch {
-    // Linux 不支持 recursive 时,降级只 watch .git(HEAD/index 变更仍能捕获)
-    return fsWatchNative(`${path}/.git`);
+    // Linux 等不支持 recursive 时的降级：
+    // - 工作树（agent）：watch `.git`（HEAD/index 变更仍能捕获）
+    // - git 目录（hub）：watch 目录自身（非递归；refs 子目录事件由 poll
+    //   兜底），不能再拼 `.git/.git` 制造永不可能成功的路径。
+    const fallbackPath = options?.gitDir === true ? path : `${path}/.git`;
+    return fsWatchNative(fallbackPath);
   }
 }
 
