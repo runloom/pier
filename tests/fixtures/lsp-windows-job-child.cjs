@@ -11,10 +11,19 @@ if (mode === "hold") {
     stdio: "ignore",
     windowsHide: true,
   });
+  if (!grandchild.pid) {
+    process.stderr.write("failed to spawn hold grandchild\n");
+    process.exit(3);
+  }
+  // Keep a hard ref until we intentionally exit so the child is fully
+  // created before the intermediate server leaves the tree.
+  globalThis.__pierLspWindowsJobGrandchild = grandchild;
   process.stdout.write(
     `${JSON.stringify({ grandchildPid: grandchild.pid })}\n`
   );
-  process.stdout.end(() => process.exit(0));
+  setTimeout(() => {
+    process.exit(0);
+  }, 150);
 } else if (mode === "supervisor") {
   const lines = readline.createInterface({ input: process.stdin });
   lines.once("line", (line) => {

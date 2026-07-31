@@ -23,6 +23,20 @@ function isProcessAlive(pid: number): boolean {
   }
 }
 
+async function waitForProcessAlive(
+  pid: number,
+  timeoutMs = 2000
+): Promise<boolean> {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    if (isProcessAlive(pid)) {
+      return true;
+    }
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  return isProcessAlive(pid);
+}
+
 describe.skipIf(process.platform !== "win32")(
   "real Windows LSP Job Object addon",
   () => {
@@ -76,8 +90,9 @@ describe.skipIf(process.platform !== "win32")(
         }
 
         expect(grandchildPid).toBeGreaterThan(0);
-        expect(isProcessAlive(grandchildPid)).toBe(true);
-        expect(addon.queryActiveProcesses(job)).toBeGreaterThan(0);
+        expect(await waitForProcessAlive(grandchildPid)).toBe(true);
+        // Supervisor + hold grandchild remain after intermediate server exits.
+        expect(addon.queryActiveProcesses(job)).toBeGreaterThanOrEqual(2);
 
         addon.terminateJob(job);
         await supervisorClosed;
