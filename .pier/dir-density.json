@@ -23,8 +23,8 @@
       "reason": "shadcn primitives intentionally flat; feature clusters live under diff-view/, file/, image-preview/"
     },
     "src/renderer/stores": {
-      "max": 52,
-      "reason": "debt: optional domain subfolders (terminal/workspace/agent)"
+      "max": 53,
+      "reason": "debt: optional domain subfolders (terminal/workspace/agent); workspace-close split pending folder"
     },
     "src/shared/contracts": {
       "max": 50,
