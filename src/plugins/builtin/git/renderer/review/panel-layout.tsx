@@ -154,27 +154,22 @@ function GitReviewTreeSidebarComponent({
         {treeLoading === true ? (
           <ReviewTreeLoading context={context} />
         ) : (
-          <div
-            className="flex min-h-0 w-full flex-1 flex-col"
-            data-testid="git-review-tree"
-          >
-            <PierFileTree
-              className="min-h-0 w-full flex-1"
-              expansionAuthority={expansionAuthority}
-              expansionSeed="file-ancestors"
-              flattenEmptyDirectories
-              flattenMinDepth={2}
-              items={treeModel.items}
-              label={pluginText(context, "reviewTreeLabel", "Changed files")}
-              onOpenItemContextMenu={openItemContextMenu}
-              onOpenPath={handleOpenPath}
-              {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
-              {...(onContextMenuSession ? { onContextMenuSession } : {})}
-              onSearchMatchStateChange={treeSearch.updateMatchState}
-              stickyFolders
-              treeApiRef={treeSearch.treeApiRef}
-            />
-          </div>
+          <PierFileTree
+            className="min-h-0 w-full flex-1"
+            expansionAuthority={expansionAuthority}
+            expansionSeed="file-ancestors"
+            flattenEmptyDirectories
+            flattenMinDepth={2}
+            items={treeModel.items}
+            label={pluginText(context, "reviewTreeLabel", "Changed files")}
+            onOpenItemContextMenu={openItemContextMenu}
+            onOpenPath={handleOpenPath}
+            {...(isActiveOpenPath ? { isActiveOpenPath } : {})}
+            {...(onContextMenuSession ? { onContextMenuSession } : {})}
+            onSearchMatchStateChange={treeSearch.updateMatchState}
+            stickyFolders
+            treeApiRef={treeSearch.treeApiRef}
+          />
         )}
         {searchHasNoResults && treeLoading !== true ? (
           <Empty

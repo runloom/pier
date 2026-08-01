@@ -28,7 +28,12 @@ function createTemporaryDirectory(prefix: string): string {
   return realpathSync(mkdtempSync(join(tmpdir(), prefix)));
 }
 
-/** Shared sidebar tree (not nested under a surface body). */
+/**
+ * Shared sidebar tree panel (not nested under a surface body).
+ * `FilePanelLayout` sets ResizablePanel id=git-review-tree; react-resizable-panels
+ * mirrors that id onto data-testid — do not also stamp the same testid on the
+ * inner tree wrapper or Playwright strict mode fails with two matches.
+ */
 function reviewTree(page: Page): Locator {
   return page.getByTestId("git-review-tree");
 }
