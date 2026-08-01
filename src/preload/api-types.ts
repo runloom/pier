@@ -49,7 +49,21 @@ export interface PierAgentsAPI {
   selection: () => Promise<AgentSelectionResult>;
 }
 
+export interface ThemeVisualPreviewPayload {
+  stylePresetId: string;
+  theme: string;
+}
+
 export interface PierThemeAPI {
+  /** 订阅其它窗发起的 ephemeral 主题预览。 */
+  onVisualPreview: (
+    cb: (payload: ThemeVisualPreviewPayload) => void
+  ) => () => void;
+  /**
+   * 命令面板 hover 预览：广播视觉态到其它窗（不落盘）。
+   * 本窗已由 applyThemeVisual 本地应用；main 排除 sender。
+   */
+  previewVisual: (payload: ThemeVisualPreviewPayload) => Promise<void>;
   setNativeChrome: (
     resolved: "light" | "dark",
     chromeColor?: string

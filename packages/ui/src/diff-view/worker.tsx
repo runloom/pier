@@ -7,6 +7,30 @@ import {
 } from "react";
 import { PIER_DIFF_LINE_DIFF_TYPE } from "./render-profile.ts";
 
+/** Pierre dual-theme pair or a single registered theme name. */
+export type PierDiffWorkerTheme =
+  | string
+  | {
+      readonly dark: string;
+      readonly light: string;
+    };
+
+function pierDiffThemeDependency(theme: PierDiffWorkerTheme): string {
+  return typeof theme === "string" ? theme : `${theme.dark}\0${theme.light}`;
+}
+
+/** Rebuild a stable dual-theme value from the serialized key (avoids object thrash). */
+function pierDiffThemeFromDependency(key: string): PierDiffWorkerTheme {
+  const separator = key.indexOf("\0");
+  if (separator < 0) {
+    return key;
+  }
+  return {
+    dark: key.slice(0, separator),
+    light: key.slice(separator + 1),
+  };
+}
+
 const DIFF_LANGUAGES = [
   "cpp",
   "css",
@@ -94,9 +118,14 @@ function WorkerThemeSync({
 }: {
   readonly onError: (error: Error) => void;
   readonly onUnavailable: () => void;
-  readonly theme: string;
+  readonly theme: PierDiffWorkerTheme;
 }): null {
   const pool = useWorkerPool();
+  const themeKey = pierDiffThemeDependency(theme);
+  const stableTheme = useMemo(
+    () => pierDiffThemeFromDependency(themeKey),
+    [themeKey]
+  );
   useEffect(() => {
     if (!pool) {
       return;
@@ -110,7 +139,7 @@ function WorkerThemeSync({
     pool
       .setRenderOptions({
         lineDiffType: PIER_DIFF_LINE_DIFF_TYPE,
-        theme,
+        theme: stableTheme,
       })
       .then(
         () => {
@@ -132,7 +161,7 @@ function WorkerThemeSync({
       active = false;
       clearTimeout(timeout);
     };
-  }, [onError, onUnavailable, pool, theme]);
+  }, [onError, onUnavailable, pool, stableTheme]);
   return null;
 }
 
@@ -172,16 +201,21 @@ export function PierDiffWorkerHost({
   readonly children?: ReactNode;
   readonly onError?: (error: Error) => void;
   readonly onUnavailable?: () => void;
-  readonly theme: string;
+  readonly theme: PierDiffWorkerTheme;
 }): React.JSX.Element {
+  const themeKey = pierDiffThemeDependency(theme);
+  const stableTheme = useMemo(
+    () => pierDiffThemeFromDependency(themeKey),
+    [themeKey]
+  );
   const highlighterOptions = useMemo(
     () => ({
       langs: [...DIFF_LANGUAGES],
       lineDiffType: PIER_DIFF_LINE_DIFF_TYPE,
       preferredHighlighter: "shiki-wasm" as const,
-      theme,
+      theme: stableTheme,
     }),
-    [theme]
+    [stableTheme]
   );
 
   return (
@@ -192,7 +226,7 @@ export function PierDiffWorkerHost({
       <WorkerThemeSync
         onError={onError}
         onUnavailable={onUnavailable}
-        theme={theme}
+        theme={stableTheme}
       />
       <WorkerFailureSync onUnavailable={onUnavailable} />
       {children}
@@ -213,7 +247,7 @@ export function PierDiffWorkerProvider({
   readonly children: ReactNode;
   readonly onError: (error: Error) => void;
   readonly onUnavailable: () => void;
-  readonly theme: string;
+  readonly theme: PierDiffWorkerTheme;
 }): React.JSX.Element {
   const existingPool = useWorkerPool();
   if (existingPool) {

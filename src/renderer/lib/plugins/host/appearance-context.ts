@@ -4,7 +4,10 @@ import type {
 } from "@plugins/api/renderer.ts";
 import i18next from "i18next";
 import { officialMermaidRenderer } from "@/lib/live-modules/official-mermaid-renderer.ts";
-import { getShikiTheme } from "@/lib/theme/preset-registry.ts";
+import {
+  getShikiTheme,
+  getShikiThemePair,
+} from "@/lib/theme/preset-registry.ts";
 import { useFontStore } from "@/stores/font.store.ts";
 import { useLocaleStore } from "@/stores/locale.store.ts";
 import { useThemeStore } from "@/stores/theme.store.ts";
@@ -12,10 +15,12 @@ import { useThemeStore } from "@/stores/theme.store.ts";
 function currentPluginAppearance(): RendererPluginAppearance {
   const theme = useThemeStore.getState();
   const rootStyles = getComputedStyle(document.documentElement);
+  const codeThemes = getShikiThemePair(theme.stylePresetId);
   return {
     codeTheme:
       getShikiTheme(theme.stylePresetId, theme.resolvedTheme).name ??
       theme.stylePresetId,
+    codeThemes,
     density: "compact",
     language: useLocaleStore.getState().language,
     locale:

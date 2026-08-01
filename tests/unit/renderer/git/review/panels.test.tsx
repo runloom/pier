@@ -251,7 +251,11 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
           renderedItems.filter((item) => item.stageControl != null).length
         }
         data-testid="pierre-diff"
-        data-theme={props.appearance.codeTheme}
+        data-theme={
+          props.appearance.colorMode === "light"
+            ? props.appearance.codeThemes.light
+            : props.appearance.codeThemes.dark
+        }
       >
         {renderedItems
           .map((item) => item.stateNotice ?? item.patch ?? "")
@@ -493,6 +497,7 @@ function pluginContext(input: {
 }): RendererPluginContext {
   const appearance: RendererPluginAppearance = input.appearance ?? {
     codeTheme: "github-dark",
+    codeThemes: { dark: "github-dark", light: "github-light" },
     density: "compact",
     language: "en",
     locale: "en",
@@ -3677,6 +3682,7 @@ describe("Git review panel", () => {
     const context = pluginContext({
       appearance: {
         codeTheme: "github-dark",
+        codeThemes: { dark: "github-dark", light: "github-light" },
         density: "compact",
         language: "system",
         locale: "en",

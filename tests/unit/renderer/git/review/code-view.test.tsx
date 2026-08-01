@@ -20,6 +20,7 @@ const context = {
   appearance: {
     current: () => ({
       codeTheme: "github-dark",
+      codeThemes: { dark: "github-dark", light: "github-light" },
       density: "compact",
       language: "en",
       locale: "en",
@@ -84,7 +85,11 @@ it("Pierre 模块首次拒绝后显示错误，并在重试时重新加载成功
 it("appearance 变化会把最新代码主题传给 Pierre", async () => {
   const LoadedDiffView = (props: PierDiffViewProps) => (
     <output
-      data-code-theme={props.appearance.codeTheme}
+      data-code-theme={
+        props.appearance.colorMode === "light"
+          ? props.appearance.codeThemes.light
+          : props.appearance.codeThemes.dark
+      }
       data-color-mode={props.appearance.colorMode}
       data-testid="loaded-pierre"
     />
@@ -115,6 +120,7 @@ it("appearance 变化会把最新代码主题传给 Pierre", async () => {
       appearance={{
         ...context.appearance.current(),
         codeTheme: "github-light",
+        codeThemes: { dark: "github-dark", light: "github-light" },
         theme: "light",
       }}
       context={context}

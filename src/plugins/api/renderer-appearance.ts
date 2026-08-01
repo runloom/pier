@@ -1,5 +1,17 @@
 export interface RendererPluginAppearance {
+  /**
+   * Active (resolved) code theme name for single-theme surfaces
+   * (markdown fenced blocks, etc.).
+   */
   codeTheme: string;
+  /**
+   * Dual theme pair for the current style preset. Diff views load both and
+   * switch via {@link theme} so light/dark does not re-tokenize.
+   */
+  codeThemes: {
+    dark: string;
+    light: string;
+  };
   density: "compact";
   language: string;
   locale: string;

@@ -68,7 +68,7 @@ it("局部 busy 变化不更换 hunk annotation renderer，并读取最新控制
     appearance: {
       codeFontFamily: "monospace",
       codeFontSize: "13px",
-      codeTheme: "github-dark",
+      codeThemes: { dark: "github-dark", light: "github-light" },
       colorMode: "dark" as const,
     },
     codeViewRef: { current: null },
@@ -133,7 +133,7 @@ it("正文 annotation 不变时仍以实时 change capability 收起 Revert", ()
       appearance: {
         codeFontFamily: "monospace",
         codeFontSize: "13px",
-        codeTheme: "github-dark",
+        codeThemes: { dark: "github-dark", light: "github-light" },
         colorMode: "dark",
       },
       codeViewRef: { current: null },

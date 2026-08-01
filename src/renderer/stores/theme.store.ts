@@ -119,14 +119,40 @@ function applyTerminalColors(
   );
 }
 
+/**
+ * 命令面板 hover / 跨窗预览：只改视觉态，不写 preferences。
+ * @param options.broadcast 默认 true — 经 main 推到其它 BrowserWindow；
+ *   收端必须 false，避免回环。
+ */
 export function applyThemeVisual(
   themePreference: ThemePreference,
-  presetId: StylePresetId
+  presetId: StylePresetId,
+  options?: { readonly broadcast?: boolean }
 ): void {
   const resolved = resolveTheme(themePreference);
   applyTokens({ presetId, resolved });
   applyDocumentTheme(resolved);
   applyTerminalColors(presetId, resolved);
+  // 同步 store 视觉态，让 DiffWorkerHost / appearance 订阅方（markdown 代码块、
+  // mermaid、git diff）在命令面板 hover 预览时也跟随。不写 theme preference
+  // （accept 才经 setTheme 落盘）；dismiss 再调一次本函数还原。
+  useThemeStore.setState({
+    resolvedTheme: resolved,
+    stylePresetId: presetId,
+  });
+  if (options?.broadcast === false) {
+    return;
+  }
+  try {
+    window.pier?.theme
+      ?.previewVisual?.({
+        stylePresetId: presetId,
+        theme: themePreference,
+      })
+      ?.catch(() => undefined);
+  } catch {
+    // preload 未 ready 时忽略
+  }
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
@@ -191,6 +217,8 @@ let systemListenerAttached = false;
 let detachSystemListener: (() => void) | null = null;
 let preferencesListenerAttached = false;
 let detachPreferencesListener: (() => void) | null = null;
+let visualPreviewListenerAttached = false;
+let detachVisualPreviewListener: (() => void) | null = null;
 
 /**
  * 订阅 main 端广播的 preferences 变化 — 其他窗口修改 theme / stylePreset 时,
@@ -225,6 +253,40 @@ function attachPreferencesListener(): void {
   preferencesListenerAttached = true;
 }
 
+/**
+ * 命令面板 hover 预览跨窗同步（不落盘）。
+ * main 已排除 sender；本地 apply 带 broadcast:false 防回环。
+ */
+function attachVisualPreviewListener(): void {
+  if (visualPreviewListenerAttached || typeof window === "undefined") {
+    return;
+  }
+  const detach = window.pier?.theme?.onVisualPreview?.((payload) => {
+    const theme = payload.theme as ThemePreference;
+    const stylePresetId = payload.stylePresetId as StylePresetId;
+    if (!(stylePresetId in STYLE_PRESET_REGISTRY)) {
+      return;
+    }
+    if (theme !== "light" && theme !== "dark" && theme !== "system") {
+      return;
+    }
+    const current = useThemeStore.getState();
+    const resolved = resolveTheme(theme);
+    if (
+      current.resolvedTheme === resolved &&
+      current.stylePresetId === stylePresetId
+    ) {
+      return;
+    }
+    applyThemeVisual(theme, stylePresetId, { broadcast: false });
+  });
+  if (!detach) {
+    return;
+  }
+  detachVisualPreviewListener = detach;
+  visualPreviewListenerAttached = true;
+}
+
 function attachSystemListener(): void {
   if (systemListenerAttached || typeof window === "undefined") {
     return;
@@ -256,6 +318,9 @@ export function detachThemeSystemListener(): void {
   detachPreferencesListener?.();
   detachPreferencesListener = null;
   preferencesListenerAttached = false;
+  detachVisualPreviewListener?.();
+  detachVisualPreviewListener = null;
+  visualPreviewListenerAttached = false;
 }
 
 export async function initTheme(): Promise<void> {
@@ -266,6 +331,7 @@ export async function initTheme(): Promise<void> {
   // read snapshot 是相同或更旧值; 若旧值, 下次 broadcast 会再覆盖到一致.
   attachSystemListener();
   attachPreferencesListener();
+  attachVisualPreviewListener();
   try {
     const snapshot = await window.pier.preferences.read();
     useThemeStore.getState()._hydrate({

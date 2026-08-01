@@ -1,8 +1,4 @@
-import {
-  CodeView,
-  type CodeViewHandle,
-  type CodeViewItem,
-} from "@pierre/diffs/react";
+import type { CodeViewHandle, CodeViewItem } from "@pierre/diffs/react";
 import {
   type Ref,
   useCallback,
@@ -16,6 +12,8 @@ import {
   diffFontMetrics,
   ensurePierDiffLightDomStyles,
   pierDiffCodeViewKey,
+  pierDiffRenderEnvironment,
+  pierDiffThemeKey,
 } from "./appearance.ts";
 import type { PierDiffViewLabels } from "./collapse.tsx";
 import type {
@@ -50,13 +48,21 @@ import {
 } from "./use-handle.ts";
 import { useDiffViewHeaders } from "./use-headers.tsx";
 import { useDiffViewItemApply } from "./use-item-apply.ts";
-import { PierDiffWorkerProvider } from "./worker.tsx";
+import { PierDiffViewShell } from "./view-shell.tsx";
 
 export interface PierDiffViewAppearance {
   readonly codeFontFamily: string;
   /** Resolved code body size, e.g. "13px" from settings `codeFontSize`. */
   readonly codeFontSize: string;
-  readonly codeTheme: string;
+  /**
+   * Dual Shiki theme names for the current style preset.
+   * Pierre dual-theme mode: tokens use CSS variables; {@link colorMode}
+   * selects light/dark without re-tokenizing.
+   */
+  readonly codeThemes: {
+    readonly dark: string;
+    readonly light: string;
+  };
   readonly colorMode: "dark" | "light";
 }
 
@@ -240,15 +246,15 @@ export function PierDiffView({
     [appearance.codeFontSize]
   );
   const renderMode = workerUnavailable ? "inline" : "worker";
-  // selection=uncontrolled 钉进 key：避免 HMR 从旧受控实例切过来时
-  // CodeView 拒绝 controlled→uncontrolled 并卡死选区。
-  // diffStyle/overflow/lineHeight（含 codeFontSize）影响行高与布局缓存，切换时强制重建实例。
-  // 成员 id 集合变化不 remount：由 syncCodeViewItems（addItems/setItems）消化。
+  // Remount on layout + theme only (not item membership). Theme is required:
+  // Pierre onThemeChange only invalidates the pool without re-rendering.
+  const themeKey = pierDiffThemeKey(appearance);
   const codeViewKey = pierDiffCodeViewKey({
     diffStyle,
     lineHeight: metrics.lineHeight,
     overflow,
     renderMode,
+    themeKey,
   });
   // Capture while the previous CodeView instance is still mounted (render phase).
   captureTopologyScrollRestore({
@@ -261,16 +267,15 @@ export function PierDiffView({
   previousCodeViewKeyRef.current = codeViewKey;
   const renderEnvironment = useMemo(
     () =>
-      `${renderMode}\0${appearance.codeTheme}\0${appearance.colorMode}\0${metrics.diffHeaderHeight}\0${metrics.lineHeight}\0${diffStyle}\0${overflow}`,
-    [
-      appearance.codeTheme,
-      appearance.colorMode,
-      diffStyle,
-      metrics.diffHeaderHeight,
-      metrics.lineHeight,
-      overflow,
-      renderMode,
-    ]
+      pierDiffRenderEnvironment({
+        diffStyle,
+        lineHeight: metrics.lineHeight,
+        metricsDiffHeaderHeight: metrics.diffHeaderHeight,
+        overflow,
+        renderMode,
+        themeKey,
+      }),
+    [diffStyle, metrics, overflow, renderMode, themeKey]
   );
   const getRenderedItems = useCallback(
     () => codeViewRef.current?.getInstance()?.getRenderedItems() ?? [],
@@ -456,45 +461,25 @@ export function PierDiffView({
   if (inlineRenderFailed) {
     return null;
   }
-  const codeView = (
-    <CodeView
-      className="cv-scrollbar relative h-full min-h-0 w-full min-w-0 flex-1 overflow-auto overscroll-contain border-border border-b [contain:strict] [overflow-anchor:none] [scrollbar-gutter:auto] [will-change:scroll-position] md:border-b-0 [&_diffs-container]:overflow-x-visible [&_diffs-container]:shadow-[0_-1px_0_var(--diffshub-diff-separator,var(--color-border-opaque)),0_1px_0_var(--diffshub-diff-separator,var(--color-border-opaque))] [&_diffs-container]:[contain:layout_paint_style]"
-      data-scrollbar="overlay"
-      disableWorkerPool={workerUnavailable}
-      initialItems={codeViewItems}
-      key={codeViewKey}
-      onScroll={handleCodeViewScroll}
+  return (
+    <PierDiffViewShell
+      codeThemes={appearance.codeThemes}
+      codeViewItems={codeViewItems}
+      codeViewKey={codeViewKey}
+      codeViewRef={codeViewRef}
+      handleCodeViewScroll={handleCodeViewScroll}
+      handleHeaderClickCapture={handleHeaderClickCapture}
+      handlePointerDownCapture={handlePointerDownCapture}
+      handleUserScrollIntent={handleUserScrollIntent}
+      handleUserScrollKey={handleUserScrollKey}
+      onError={onError}
+      onUnavailable={disableWorkerPool}
       options={options}
-      ref={codeViewRef}
-      // Writable review only: Pierre fills annotation slots when this prop is set.
       {...(onHunkAction ? { renderAnnotation } : {})}
       renderHeaderMetadata={renderHeaderMetadata}
       renderHeaderPrefix={renderHeaderPrefix}
       style={style}
+      workerUnavailable={workerUnavailable}
     />
-  );
-
-  return (
-    <div
-      className="h-full"
-      data-testid="pierre-diff-root"
-      onClickCapture={handleHeaderClickCapture}
-      onKeyDownCapture={handleUserScrollKey}
-      onPointerDownCapture={handlePointerDownCapture}
-      onTouchMoveCapture={handleUserScrollIntent}
-      onWheelCapture={handleUserScrollIntent}
-    >
-      {workerUnavailable ? (
-        codeView
-      ) : (
-        <PierDiffWorkerProvider
-          onError={onError}
-          onUnavailable={disableWorkerPool}
-          theme={appearance.codeTheme}
-        >
-          {codeView}
-        </PierDiffWorkerProvider>
-      )}
-    </div>
   );
 }

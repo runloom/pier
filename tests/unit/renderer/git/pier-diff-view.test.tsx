@@ -89,7 +89,10 @@ class TestWorker extends EventTarget {
 const appearance = {
   codeFontFamily: "monospace",
   codeFontSize: "13px",
-  codeTheme: "github-dark",
+  codeThemes: {
+    dark: "github-dark",
+    light: "github-light",
+  },
   colorMode: "dark",
 } as const;
 
@@ -265,11 +268,24 @@ describe("PierDiffView", () => {
         .flatMap((worker) => worker.requests)
         .filter((request) => request.type === "initialize")
         .map((request) => request.renderTheme)
-    ).toEqual(expect.arrayContaining([appearance.codeTheme]));
+    ).toEqual(
+      expect.arrayContaining([
+        {
+          dark: appearance.codeThemes.dark,
+          light: appearance.codeThemes.light,
+        },
+      ])
+    );
 
     view.rerender(
       <PierDiffView
-        appearance={{ ...appearance, codeTheme: "github-light" }}
+        appearance={{
+          ...appearance,
+          codeThemes: {
+            dark: "one-dark-pro",
+            light: "one-light",
+          },
+        }}
         items={items}
         labels={labels}
         onError={vi.fn()}
@@ -281,7 +297,14 @@ describe("PierDiffView", () => {
           .flatMap((worker) => worker.requests)
           .filter((request) => request.type === "set-render-options")
           .map((request) => request.renderTheme)
-      ).toEqual(expect.arrayContaining(["github-light"]));
+      ).toEqual(
+        expect.arrayContaining([
+          {
+            dark: "one-dark-pro",
+            light: "one-light",
+          },
+        ])
+      );
     });
   });
 

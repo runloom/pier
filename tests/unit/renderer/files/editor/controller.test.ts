@@ -233,6 +233,7 @@ function createHarness(
     appearance: {
       current: () => ({
         codeTheme: "github-dark",
+        codeThemes: { dark: "github-dark", light: "github-light" },
         density: "compact",
         language: "en",
         locale: "en",

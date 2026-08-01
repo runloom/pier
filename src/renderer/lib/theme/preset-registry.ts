@@ -81,3 +81,20 @@ export function getShikiTheme(
 ): ShikiThemeLike {
   return STYLE_PRESET_REGISTRY[presetId][mode];
 }
+
+/**
+ * Dual Shiki theme names for Pierre Diffs dual-theme mode.
+ * Worker loads both once; light/dark only flips themeType (CSS variables),
+ * avoiding setRenderOptions races that leave CodeView tokens stale.
+ */
+export function getShikiThemePair(presetId: StylePresetId): {
+  readonly dark: string;
+  readonly light: string;
+} {
+  const dark = getShikiTheme(presetId, "dark");
+  const light = getShikiTheme(presetId, "light");
+  return {
+    dark: dark.name ?? `${presetId}-dark`,
+    light: light.name ?? `${presetId}-light`,
+  };
+}

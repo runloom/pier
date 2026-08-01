@@ -79,7 +79,10 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
       appearance: {
         codeFontFamily: string;
         codeFontSize: string;
-        codeTheme: string;
+        codeThemes: {
+          dark: string;
+          light: string;
+        };
         colorMode: "dark" | "light";
       };
       items: readonly PierDiffViewItem[];
@@ -269,7 +272,7 @@ export function createReviewCodeView(load: ReviewCodeViewModuleLoader) {
                 appearance={{
                   codeFontFamily: appearance.typography.codeFontFamily,
                   codeFontSize: appearance.typography.codeFontSize,
-                  codeTheme: appearance.codeTheme,
+                  codeThemes: appearance.codeThemes,
                   colorMode: appearance.theme,
                 }}
                 items={displayItems}
