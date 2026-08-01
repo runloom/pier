@@ -946,11 +946,30 @@ describe("Git review panel", () => {
     expect(
       view.container.querySelector('[data-slot="file-panel-header"]')
     ).toBeInstanceOf(HTMLElement);
+    // 冷加载：侧栏树骨架可见
+    expect(
+      view.getByRole("status", { name: "Loading changed files" })
+    ).toBeVisible();
     pendingIndex.resolve(indexResult([]));
     await expect(view.findByText("No changes")).resolves.toBeVisible();
     expect(
       view.container.querySelectorAll('[data-slot="file-panel-header"]')
     ).toHaveLength(1);
+    // 空态：隐藏变更树侧栏，主区 Empty 为唯一占位
+    expect(
+      view.queryByRole("status", { name: "Loading changed files" })
+    ).toBeNull();
+    expect(
+      view.container.querySelector(
+        'file-tree-container[data-slot="pier-file-tree"]'
+      )
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Collapse changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Find in changed files" })
+    ).toBeNull();
   });
 
   it("当前阅读面没有成员时显示明确空态而不是空 CodeView", async () => {
@@ -965,6 +984,21 @@ describe("Git review panel", () => {
     await expect(view.findByText("No changes")).resolves.toBeVisible();
     expect(
       view.container.querySelector('[data-testid="pierre-diff"]')
+    ).toBeNull();
+    // 方案 A：无变更不挂空目录树，也不展示树折叠/搜索 chrome。
+    expect(
+      view.container.querySelector(
+        'file-tree-container[data-slot="pier-file-tree"]'
+      )
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Collapse changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Expand changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Find in changed files" })
     ).toBeNull();
   });
 
@@ -1057,6 +1091,21 @@ describe("Git review panel", () => {
     expect(
       view.container.querySelector('[data-testid="pierre-diff"]')
     ).toBeNull();
+    // files→empty 过渡：权威空态下树与折叠/搜索 chrome 一并消失
+    expect(
+      view.container.querySelector(
+        'file-tree-container[data-slot="pier-file-tree"]'
+      )
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Collapse changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Expand changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Find in changed files" })
+    ).toBeNull();
   });
 
   it("初次 index 读取失败时可重试并进入 Review 正文", async () => {
@@ -1084,6 +1133,18 @@ describe("Git review panel", () => {
     ).toBeVisible();
     expect(view.queryByRole("alert")).toBeNull();
     expect(view.queryByText("initial index failed")).toBeNull();
+    // 错误态与成功空态一致：不挂变更树与树 chrome
+    expect(
+      view.container.querySelector(
+        'file-tree-container[data-slot="pier-file-tree"]'
+      )
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Collapse changed files" })
+    ).toBeNull();
+    expect(
+      view.queryByRole("button", { name: "Find in changed files" })
+    ).toBeNull();
     fireEvent.click(view.getByRole("button", { name: "Retry" }));
     expect(view.queryByRole("button", { name: "Retry" })).toBeNull();
 

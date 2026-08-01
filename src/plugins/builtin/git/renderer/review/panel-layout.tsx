@@ -254,7 +254,10 @@ export function GitReviewPanelLayout({
   treeModel?: ReturnType<typeof gitReviewTreeModel> | null;
 }) {
   const treeSearch = useFileTreeSearch();
-  const hasTree = Boolean((treeModel || treeLoading) && onOpenPath);
+  // 无变更时侧栏与树 chrome 一并隐藏，避免空树黑区；冷加载骨架仍占位。
+  const treeHasContent =
+    treeLoading === true || (treeModel != null && treeModel.items.length > 0);
+  const hasTree = Boolean(treeHasContent && onOpenPath);
 
   useEffect(() => {
     if (!(hasTree && !sidebarCollapsed && treeLoading !== true)) {
@@ -360,6 +363,7 @@ export function GitReviewPanelLayout({
                   "reviewTreeExpand",
                   "Expand changed files"
                 )}
+                hidden={!hasTree}
                 onToggle={() => {
                   if (sidebarCollapsed) {
                     setSidebarCollapsed(false);
@@ -368,14 +372,17 @@ export function GitReviewPanelLayout({
                   }
                 }}
               />
-              <FilePanelSearchButton
-                label={pluginText(
-                  context,
-                  "reviewTreeSearch",
-                  "Find in changed files"
-                )}
-                onOpenSearch={toggleSearch}
-              />
+              {hasTree ? (
+                <FilePanelSearchButton
+                  disabled={treeLoading === true}
+                  label={pluginText(
+                    context,
+                    "reviewTreeSearch",
+                    "Find in changed files"
+                  )}
+                  onOpenSearch={toggleSearch}
+                />
+              ) : null}
               {headerLeading}
             </>
           }
