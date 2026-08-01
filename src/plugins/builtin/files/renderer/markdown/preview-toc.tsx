@@ -3,6 +3,7 @@ import { cn } from "@pier/ui/utils.ts";
 import { type CSSProperties, useEffect, useRef, useState } from "react";
 import type { MarkdownHeadingSummary } from "./ir.ts";
 import {
+  MARKDOWN_TOC_EDGE_INSET_PX,
   MARKDOWN_TOC_TICK_GAP_PX,
   MARKDOWN_TOC_TICK_HEIGHT_PX,
   markdownTocTickWidthPx,
@@ -11,6 +12,8 @@ import {
 /**
  * One outline shell: Notion-style tick rail by default; hover/focus-within
  * fades the title list over the ticks, vertically centered on the tick stack.
+ * Trailing `MARKDOWN_TOC_EDGE_INSET_PX` is part of the hover group so the
+ * right blank between the card and the preview frame edge keeps the panel open.
  */
 export function MarkdownPreviewToc({
   activeHeadingId,
@@ -48,6 +51,7 @@ export function MarkdownPreviewToc({
   }
 
   const frameStyle: CSSProperties = {
+    paddingRight: MARKDOWN_TOC_EDGE_INSET_PX,
     ...(maxHeightPx > 0 ? { maxHeight: maxHeightPx } : {}),
   };
 
@@ -59,6 +63,22 @@ export function MarkdownPreviewToc({
       data-slot="markdown-preview-toc"
       style={frameStyle}
     >
+      {/*
+        Hover bridge for the trailing edge blank. Parent rail is
+        pointer-events-none; this strip re-enables hit testing so the right
+        margin stays inside group-hover. Height matches the max panel so
+        leaving a tall card into the blank does not dismiss it.
+      */}
+      <div
+        aria-hidden
+        className="pointer-events-auto absolute top-1/2 right-0 z-10 -translate-y-1/2"
+        data-slot="markdown-preview-toc-edge-bridge"
+        style={{
+          width: MARKDOWN_TOC_EDGE_INSET_PX,
+          height: maxHeightPx > 0 ? maxHeightPx : "100%",
+        }}
+      />
+
       <nav
         aria-label={labels.title}
         className={cn(
@@ -106,12 +126,14 @@ export function MarkdownPreviewToc({
 
       <aside
         className={cn(
-          "pointer-events-none absolute top-1/2 right-0 left-0 z-30 flex -translate-y-1/2 flex-col overflow-hidden rounded-md border border-border bg-background/95 shadow-sm",
+          // right inset matches trailing edge bridge so the card sits left of the blank
+          "pointer-events-none absolute top-1/2 left-0 z-30 flex -translate-y-1/2 flex-col overflow-hidden rounded-md border border-border bg-background/95 shadow-sm",
           "invisible opacity-0 transition-[opacity,visibility] duration-150",
           "group-hover/toc:pointer-events-auto group-hover/toc:visible group-hover/toc:opacity-100",
           "group-focus-within/toc:pointer-events-auto group-focus-within/toc:visible group-focus-within/toc:opacity-100"
         )}
         style={{
+          right: MARKDOWN_TOC_EDGE_INSET_PX,
           ...(maxHeightPx > 0 ? { maxHeight: maxHeightPx } : {}),
         }}
       >
@@ -128,7 +150,9 @@ export function MarkdownPreviewToc({
                 <li key={heading.id}>
                   <Button
                     className={cn(
-                      "h-auto w-full justify-start px-2 py-1 text-left font-normal text-[11px] leading-4",
+                      // Override Button defaults (whitespace-nowrap, fixed height)
+                      // so long headings wrap fully inside the panel width.
+                      "h-auto min-h-0 w-full items-start justify-start whitespace-normal px-2 py-1 text-left font-normal text-[11px] leading-4",
                       active
                         ? "bg-muted text-foreground"
                         : "text-muted-foreground/80 hover:bg-muted/50 hover:text-foreground"
@@ -141,7 +165,9 @@ export function MarkdownPreviewToc({
                     type="button"
                     variant="ghost"
                   >
-                    <span className="line-clamp-2">{heading.text}</span>
+                    <span className="min-w-0 flex-1 whitespace-normal break-words text-left">
+                      {heading.text}
+                    </span>
                   </Button>
                 </li>
               );

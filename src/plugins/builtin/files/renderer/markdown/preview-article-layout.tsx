@@ -73,9 +73,11 @@ export function useMarkdownOutlineLayout(params: {
 }
 
 /**
- * Floating outline rail on the preview frame. Width matches the hover panel
- * slot; height hugs the tick stack (maxHeight only clamps). Empty slot space is
- * pointer-events-none so prose stays clickable underneath.
+ * Floating outline rail on the preview frame. Flush to the frame's right edge;
+ * the panel content width stays `panelWidthPx` and the trailing
+ * `MARKDOWN_TOC_EDGE_INSET_PX` is a hover bridge so moving into the right blank
+ * does not dismiss the card. Height hugs the tick stack (maxHeight only clamps).
+ * Empty slot space is pointer-events-none so prose stays clickable underneath.
  */
 export function MarkdownPreviewOverlayRail({
   children,
@@ -88,8 +90,10 @@ export function MarkdownPreviewOverlayRail({
 }) {
   const style: CSSProperties = {
     top: `${MARKDOWN_TOC_TOP_RATIO * 100}%`,
-    right: MARKDOWN_TOC_EDGE_INSET_PX,
-    width: panelWidthPx > 0 ? panelWidthPx : undefined,
+    right: 0,
+    // Panel slot + right edge blank (hover bridge for the trailing margin).
+    width:
+      panelWidthPx > 0 ? panelWidthPx + MARKDOWN_TOC_EDGE_INSET_PX : undefined,
     ...(maxHeightPx > 0 ? { maxHeight: maxHeightPx } : {}),
   };
   return (

@@ -53,6 +53,9 @@ describe("markdown preview layout governance", () => {
     expect(article).toContain("markdownOutlineHoverMaxHeightPx");
     expect(article).toContain("markdownOutlineHoverWidthPx");
     expect(article).toContain("panelWidthPx");
+    // Rail is flush-right; edge inset is a trailing hover bridge, not rail offset.
+    expect(article).toMatch(/right:\s*0/);
+    expect(article).toContain("panelWidthPx + MARKDOWN_TOC_EDGE_INSET_PX");
     expect(toc).toContain("scrollIntoView");
     expect(toc).toContain("group-hover/toc");
     expect(toc).toContain("group-focus-within/toc");
@@ -60,6 +63,12 @@ describe("markdown preview layout governance", () => {
     expect(toc).toContain("top-1/2");
     expect(toc).toContain("-translate-y-1/2");
     expect(toc).toContain("MutationObserver");
+    expect(toc).toContain('data-slot="markdown-preview-toc-edge-bridge"');
+    expect(toc).toContain("MARKDOWN_TOC_EDGE_INSET_PX");
+    // Long titles wrap fully; do not clamp or force nowrap from Button defaults.
+    expect(toc).toContain("whitespace-normal");
+    expect(toc).toContain("break-words");
+    expect(toc).not.toContain("line-clamp-");
     expect(toc).not.toContain("setTocCollapsed");
     expect(toc).not.toContain("<X");
     // Pier light-DOM scrollbars only hide via data-scrollbar="none"
