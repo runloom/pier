@@ -320,18 +320,22 @@ describe("PanelTabHeader", () => {
     expect(
       container.querySelector("[data-panel-tab-state-indicator]")
     ).not.toHaveClass("pier-panel-tab-state-indicator");
-    expect(container.querySelector("[data-panel-tab-state-icon]")).toHaveClass(
-      "animate-spin",
-      "motion-reduce:animate-none"
-    );
+    // running：视觉在 .dv-tab::before；DOM 仅 a11y 锚点（无行内 spinner / 内层可见轨）
+    expect(container.querySelector("[data-panel-tab-state-icon]")).toBeNull();
+    expect(
+      container.querySelector("[data-panel-tab-state-indicator]")
+    ).toHaveClass("pier-tab-running-bar");
+    expect(
+      container.querySelector("[data-panel-tab-running-segment]")
+    ).toBeNull();
+    expect(
+      container.querySelector("[data-panel-tab-running-track]")
+    ).toBeNull();
     expect(
       container.querySelector("[data-panel-tab-state-indicator]")
     ).toHaveAccessibleName("Running");
     expect(container.querySelector("[data-panel-tab-running-ping]")).toBeNull();
     expect(container.querySelector("[data-panel-tab-running-dot]")).toBeNull();
-    expect(
-      container.querySelector("[data-panel-tab-state-icon]")
-    ).toHaveAttribute("data-panel-tab-state-icon", "running");
     expect(container.querySelector("[data-tab-state-label]")).toHaveAttribute(
       "data-tab-state-label",
       "Running"
@@ -374,8 +378,50 @@ describe("PanelTabHeader", () => {
     expect(tooltip).not.toHaveClass("pier-panel-tab-tooltip");
   });
 
+  it("renders running tab state as a Ghostty-style top-edge bounce bar", () => {
+    usePanelDescriptorStore.setState({
+      activeId: null,
+      descriptors: {
+        "terminal-1": {
+          display: { short: "pier" },
+          tab: {
+            state: { label: "Running", status: "running" },
+            title: "test",
+          },
+        },
+      },
+    });
+
+    const { container } = render(
+      <PanelTabHeader {...createHeaderProps("terminal", "Terminal")} />
+    );
+
+    const indicator = container.querySelector(
+      "[data-panel-tab-state-indicator]"
+    );
+    expect(container.querySelector(".dv-default-tab")).toHaveAttribute(
+      "data-tab-status",
+      "running"
+    );
+    expect(indicator).toHaveAttribute("data-tab-status", "running");
+    expect(indicator).toHaveAttribute("aria-label", "Running");
+    // dockview 视觉在外层 ::before；内层只留 a11y 锚点
+    expect(indicator).toHaveClass(
+      "pier-tab-running-bar",
+      "absolute",
+      "overflow-hidden"
+    );
+    expect(indicator).not.toHaveClass("pier-tab-running-bar--menu");
+    expect(indicator?.querySelector("[data-panel-tab-state-icon]")).toBeNull();
+    expect(
+      indicator?.querySelector("[data-panel-tab-running-segment]")
+    ).toBeNull();
+    expect(
+      indicator?.querySelector("[data-panel-tab-running-track]")
+    ).toBeNull();
+  });
+
   it.each([
-    ["running", "Running", "running", "text-status-info-fg"],
     ["succeeded", "Succeeded", "succeeded", "text-status-success-fg"],
     ["failed", "Failed 1", "failed", "text-status-danger-fg"],
     ["waiting", "Waiting for input", "waiting", "text-status-warning-fg"],
@@ -414,15 +460,9 @@ describe("PanelTabHeader", () => {
       indicator?.querySelector("[data-panel-tab-state-icon]")
     ).toHaveAttribute("data-panel-tab-state-icon", icon);
     expect(indicator).toHaveClass(expectedClassName);
-    if (status === "running") {
-      expect(
-        indicator?.querySelector("[data-panel-tab-state-icon]")
-      ).toHaveClass("motion-reduce:animate-none");
-    } else {
-      expect(
-        indicator?.querySelector("[data-panel-tab-running-ping]")
-      ).toBeNull();
-    }
+    expect(
+      indicator?.querySelector("[data-panel-tab-running-ping]")
+    ).toBeNull();
   });
 
   it("does not render a state indicator for idle tabs", () => {

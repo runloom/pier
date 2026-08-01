@@ -33,13 +33,44 @@ describe("Pier dockview tab focus CSS", () => {
   });
 
   it("demotes active-group S3 to S2 when window is unfocused", () => {
-    expect(css).toContain(':root[data-window-focused="false"]');
-    const demoteStart = css.indexOf(':root[data-window-focused="false"]');
+    const demoteStart = css.indexOf(
+      "/* — 窗口失焦: active-group 也降为 S2 (dockview 不会因 OS blur 翻 inactive-group) — */"
+    );
     expect(demoteStart).toBeGreaterThanOrEqual(0);
-    const demoteBlock = css.slice(demoteStart, demoteStart + 400);
+    const demoteBlock = css.slice(demoteStart, demoteStart + 450);
+    expect(demoteBlock).toContain(':root[data-window-focused="false"]');
     expect(demoteBlock).toContain(".dv-groupview.dv-active-group");
     expect(demoteBlock).toContain(".dv-tab.dv-active-tab::after");
     expect(demoteBlock).toContain("height: 1px");
     expect(demoteBlock).toContain("background-color: var(--muted-foreground)");
+  });
+
+  it("paints running track on outer .dv-tab::before full-bleed below selection", () => {
+    // 与选中线同盒：外层 ::before，inset-inline:0 → 100% 宽贴边
+    expect(css).toContain('.dv-tab:has([data-tab-status="running"])::before');
+    expect(css).toContain("pier-tab-running-bg");
+    expect(css).toContain("--pier-tab-running-accent");
+    expect(css).toContain("inset-inline: 0");
+    // 硬边定宽 25% 位移
+    expect(css).toContain("background-size: 25% 100%");
+    expect(css).toContain("1.15s cubic-bezier(0.45, 0.05, 0.55, 0.95)");
+    // 选中线不因 running 关掉
+    expect(css).not.toMatch(
+      /active-tab:has\(\[data-tab-status="running"\]\)::after\s*\{[^}]*display:\s*none/s
+    );
+    // S1 浅顶边
+    expect(css).toContain(
+      '.dv-tab.dv-inactive-tab:has([data-tab-status="running"])::after'
+    );
+    // accent：S2 muted / S3 primary
+    expect(css).toContain("--pier-tab-running-accent: var(--muted-foreground)");
+    expect(css).toContain("--pier-tab-running-accent: var(--primary)");
+    expect(css).toContain("var(--pier-tab-running-accent) 20%");
+    expect(css).toContain("var(--pier-tab-running-accent) 80%");
+    // 内层 DOM 条在 dockview 中裁成 a11y 锚点；菜单仍可见
+    expect(css).toContain("pier-tab-running-bar--menu");
+    expect(css).toContain(
+      ".dv-tab .pier-tab-running-bar:not(.pier-tab-running-bar--menu)"
+    );
   });
 });

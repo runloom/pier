@@ -766,16 +766,21 @@ describe("WorkspaceHeaderActions", () => {
     );
     expect(title).not.toHaveClass("truncate");
     expect(loading).not.toBeNull();
-    expect(loading).toHaveClass("text-status-info-fg!");
+    expect(loading).toHaveAttribute("data-tab-status", "running");
     expect(item).toHaveClass("pr-2");
     expect(item).not.toHaveClass("pr-8");
-    expect(
-      loading?.querySelector('[data-panel-tab-state-icon="running"]')
-    ).toHaveClass(
-      "animate-spin",
-      "motion-reduce:animate-none",
-      "text-status-info-fg!"
+    // overflow 不在 dockview 树内，用 --menu 档固定可读强度
+    expect(loading).toHaveClass(
+      "pier-tab-running-bar",
+      "pier-tab-running-bar--menu"
     );
+    expect(loading?.querySelector("[data-panel-tab-state-icon]")).toBeNull();
+    expect(
+      loading?.querySelector("[data-panel-tab-running-segment]")
+    ).toHaveClass("pier-tab-running-bar-segment");
+    expect(
+      loading?.querySelector("[data-panel-tab-running-track]")
+    ).toHaveClass("pier-tab-running-bar-track");
 
     header.remove();
   });

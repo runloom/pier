@@ -744,6 +744,12 @@ body {
    S2  分组选中 (visible panel, 失焦 group 或 窗口失焦) — 中等: 内容底色 + 顶部 1px muted 指示线
    S3  当前聚焦 (visible panel, 聚焦 group 且 窗口聚焦) — 最强: 内容底色 + 顶部 2px primary 指示线
 
+   running 加载轨（紧挨选中顶线下方，全宽贴边）：
+   - 选中顶线 ::after 永不因 running 改变（色/高/几何与 idle 一致）
+   - 其下 1px 全宽轨：轨 = 顶线色 20%，弹跳段 = 顶线色 80%（硬边定宽位移）
+   - S1 无选中线时补 1px 更浅顶边（轻于 S2 muted），再挂同色加载轨
+   - accent：S3=primary，S2=muted-foreground，S1=浅顶边色
+
    窗口聚焦位: html[data-window-focused] (installWindowFocusAttribute) */
 
 .dockview-theme-pier {
@@ -861,9 +867,12 @@ body {
    * Tab 仍按内容定宽（整颗 tab 不设硬顶）；标题文本槽单独 max-width +
    * ellipsis。trailing / dirty / × 始终 shrink-0 可见。多 tab 超出时由
    * dockview tabs 横向滚动承载。拖拽 ghost 另有 220px 整 tab 上限。
+   * height/width 100%：running 轨 absolute 顶边相对整颗 tab，避免落在内容垂直居中「半腰」。
    */
+  height: 100%;
   max-width: none;
   min-width: 0;
+  width: 100%;
   padding-inline: 6px 3px;
   /* 活跃任务圆点占左缘槽位：4px left + 6px 点 + 4px gap = 14 */
   &[data-pier-tab-has-active-task="true"] {
@@ -1040,6 +1049,216 @@ body {
 .dockview-theme-pier .dv-tab-ghost-drag::after,
 .dv-tab-ghost-drag::after {
   outline: none !important;
+}
+
+/*
+ * Tab running 加载轨 — 画在外层 .dv-tab::before（与选中 ::after 同盒）。
+ *
+ * 为何不用内层 .dv-default-tab：
+ *   内层有 padding、内容 flex 居中，轨会落在「半腰」且左右缩进，看起来不贴边。
+ *
+ * 选中顶线 ::after 完全不动。
+ *   track = accent@20%（background-color）
+ *   segment = 实色硬边定宽 25% + 位移动（不羽化 / 不 scale）
+ * 轨高 1px
+ * 垂直：S3 线 top1+高2 → 轨 top:3px；S2/S1 线 top1+高1 → 轨 top:2px。
+ * 水平：inset-inline:0 贴 .dv-tab 左右缘 100%。
+ */
+@keyframes pier-tab-running-bg {
+  from {
+    background-position: left center;
+  }
+  to {
+    background-position: right center;
+  }
+}
+
+/* 凡 running：外层 tab 定位上下文 + accent 默认（S1 浅顶边色） */
+.dockview-theme-pier .dv-tab:has([data-tab-status="running"]) {
+  position: relative;
+  --pier-tab-running-accent: color-mix(
+    in oklab,
+    var(--muted-foreground) 42%,
+    transparent
+  );
+}
+
+/* S1 未选中 + running：补比 S2 muted 更浅的 1px 顶边（::after；选中 tab 的 ::after 另有规则） */
+.dockview-theme-pier
+  .dv-tab.dv-inactive-tab:has([data-tab-status="running"])::after {
+  content: "";
+  position: absolute;
+  top: 1px;
+  inset-inline: 0;
+  height: 1px;
+  background-color: color-mix(
+    in oklab,
+    var(--muted-foreground) 42%,
+    transparent
+  );
+  outline: none !important;
+  z-index: 2;
+}
+
+/*
+ * 全宽加载轨：与选中线同一 containing box（.dv-tab），inset-inline:0 必满宽。
+ * background-color = 轨；background-image = 硬边实色段 25%。
+ */
+.dockview-theme-pier .dv-tab:has([data-tab-status="running"])::before {
+  content: "";
+  position: absolute;
+  top: 2px;
+  inset-inline: 0;
+  z-index: 1;
+  height: 1px;
+  pointer-events: none;
+  background-color: color-mix(
+    in oklab,
+    var(--pier-tab-running-accent) 20%,
+    transparent
+  );
+  background-image: linear-gradient(
+    90deg,
+    color-mix(in oklab, var(--pier-tab-running-accent) 80%, transparent),
+    color-mix(in oklab, var(--pier-tab-running-accent) 80%, transparent)
+  );
+  background-repeat: no-repeat;
+  background-size: 25% 100%;
+  background-position: left center;
+  animation: pier-tab-running-bg 1.15s cubic-bezier(0.45, 0.05, 0.55, 0.95)
+    infinite alternate;
+}
+
+/* — S2: 失焦 group 选中 — accent = muted 选中线 — */
+.dockview-theme-pier
+  .dv-groupview.dv-inactive-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab:has([data-tab-status="running"]) {
+  --pier-tab-running-accent: var(--muted-foreground);
+}
+
+.dockview-theme-pier
+  .dv-groupview.dv-inactive-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab:has([data-tab-status="running"])::before {
+  top: 2px;
+}
+
+/* — S2: 窗口失焦降档 — */
+:root[data-window-focused="false"]
+  .dockview-theme-pier
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab:has([data-tab-status="running"]) {
+  --pier-tab-running-accent: var(--muted-foreground);
+}
+
+:root[data-window-focused="false"]
+  .dockview-theme-pier
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab:has([data-tab-status="running"])::before {
+  top: 2px;
+}
+
+/* — S3: 真聚焦 — accent = primary；轨紧挨 2px 选中线 — */
+:root:not([data-window-focused="false"])
+  .dockview-theme-pier
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab:has([data-tab-status="running"]) {
+  --pier-tab-running-accent: var(--primary);
+}
+
+:root:not([data-window-focused="false"])
+  .dockview-theme-pier
+  .dv-groupview.dv-active-group
+  > .dv-tabs-and-actions-container
+  .dv-tabs-container
+  > .dv-tab.dv-active-tab:has([data-tab-status="running"])::before {
+  top: 3px;
+}
+
+/*
+ * dockview tab 内层 DOM 条只做 a11y 锚点，视觉已迁到 .dv-tab::before。
+ * overflow 菜单不在 .dv-tab 树内，仍用可见 .pier-tab-running-bar--menu。
+ */
+.dockview-theme-pier .dv-tab .pier-tab-running-bar:not(.pier-tab-running-bar--menu) {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  white-space: nowrap;
+  border: 0;
+  clip: rect(0, 0, 0, 0);
+  clip-path: inset(50%);
+}
+
+/* overflow 菜单：无 dockview 选中线，DOM 自绘 muted 轨 */
+.pier-tab-running-bar--menu {
+  top: 0;
+  right: 0;
+  left: 0;
+  z-index: 1;
+  height: 1px;
+  --pier-tab-running-accent: var(--muted-foreground);
+}
+
+.pier-tab-running-bar--menu .pier-tab-running-bar-track {
+  background-color: color-mix(
+    in oklab,
+    var(--pier-tab-running-accent) 20%,
+    transparent
+  );
+}
+
+.pier-tab-running-bar--menu .pier-tab-running-bar-segment {
+  width: 25%;
+  background-color: color-mix(
+    in oklab,
+    var(--pier-tab-running-accent) 80%,
+    transparent
+  );
+  animation: pier-tab-running-bounce 1.15s cubic-bezier(0.45, 0.05, 0.55, 0.95)
+    infinite alternate;
+  will-change: transform;
+}
+
+@keyframes pier-tab-running-bounce {
+  from {
+    transform: translateX(0);
+  }
+  to {
+    /* 段宽 25% → 右端偏移 = 75% 父宽 = 300% 自身 */
+    transform: translateX(300%);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dockview-theme-pier .dv-tab:has([data-tab-status="running"])::before {
+    animation: none;
+    background-image: none;
+    background-color: color-mix(
+      in oklab,
+      var(--pier-tab-running-accent) 45%,
+      transparent
+    );
+  }
+
+  .pier-tab-running-bar--menu .pier-tab-running-bar-segment {
+    animation: none;
+    inset-inline: 0;
+    width: 100%;
+    opacity: 0.7;
+    transform: none;
+  }
 }
 
 .dockview-theme-pier .dv-drop-target-container .dv-drop-target-anchor,
