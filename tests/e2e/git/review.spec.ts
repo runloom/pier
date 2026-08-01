@@ -28,19 +28,22 @@ function createTemporaryDirectory(prefix: string): string {
   return realpathSync(mkdtempSync(join(tmpdir(), prefix)));
 }
 
+/** Shared sidebar tree (not nested under a surface body). */
+function reviewTree(page: Page): Locator {
+  return page.getByTestId("git-review-tree");
+}
+
 /**
- * Half-staged files appear under both Staged Changes and Changes. Pierre's
- * virtual tree keeps treeitems flat under the tree, so disambiguate by order:
- * conflict → staged → unstaged (see TREE_GROUP_ORDER).
+ * Half-staged files appear on both staged and unstaged surfaces. The sidebar
+ * tree reflects the *active* surface only — switch surfaces before targeting
+ * a group. Order disambiguation is kept for legacy mixed trees.
  */
 function reviewTreeFileItem(
   page: Page,
   name: RegExp,
   group: "staged" | "unstaged" = "unstaged"
 ): Locator {
-  const items = activeReviewSurface(page)
-    .getByTestId("git-review-tree")
-    .getByRole("treeitem", { name });
+  const items = reviewTree(page).getByRole("treeitem", { name });
   return group === "staged" ? items.first() : items.last();
 }
 
@@ -87,12 +90,8 @@ async function ensureReviewTreeFilesVisible(
 ): Promise<void> {
   const targetSurface = group === "staged" ? "staged" : "index";
   await selectReviewSurface(page, targetSurface).catch(() => undefined);
-  await expect(
-    activeReviewSurface(page).getByTestId("git-review-tree")
-  ).toBeVisible({ timeout: 20_000 });
-  const src = activeReviewSurface(page)
-    .getByTestId("git-review-tree")
-    .getByRole("treeitem", { name: /^src$/u });
+  await expect(reviewTree(page)).toBeVisible({ timeout: 20_000 });
+  const src = reviewTree(page).getByRole("treeitem", { name: /^src$/u });
   if ((await src.count()) === 0) {
     return;
   }
@@ -259,9 +258,11 @@ async function expandReviewTreeDirectory(
   name: RegExp,
   group: "staged" | "unstaged"
 ): Promise<void> {
-  const directories = activeReviewSurface(page)
-    .getByTestId("git-review-tree")
-    .getByRole("treeitem", { name });
+  await selectReviewSurface(
+    page,
+    group === "staged" ? "staged" : "index"
+  ).catch(() => undefined);
+  const directories = reviewTree(page).getByRole("treeitem", { name });
   const directory =
     group === "staged" ? directories.first() : directories.last();
   await expect(directory).toBeVisible({ timeout: 30_000 });
