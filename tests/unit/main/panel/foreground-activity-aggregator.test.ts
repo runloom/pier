@@ -2087,23 +2087,28 @@ describe("ForegroundActivityAggregator", () => {
 
   it("Cline TaskComplete 后 TaskResume 可开始新的工具回合", () => {
     const agg = createForegroundActivityAggregator({ now });
-    const clineEvent = (event: string): AgentHookEventPayload => ({
+    const clineEvent = (
+      event: string,
+      extra: Partial<AgentHookEventPayloadV1> = {}
+    ): AgentHookEventPayload => ({
       agent: "cline",
       event,
       kind: "agentEvent",
       panelId: "p1",
       v: 1,
       windowId: "1",
+      ...extra,
     });
     agg.ingestAgentEvent(clineEvent("SessionStart"));
-    agg.ingestAgentEvent(clineEvent("ToolStart"));
+    agg.ingestAgentEvent(clineEvent("ToolStart", { toolUseId: "t1" }));
+    agg.ingestAgentEvent(clineEvent("ToolComplete", { toolUseId: "t1" }));
     agg.ingestAgentEvent(clineEvent("Stop"));
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
       "ready"
     );
 
     agg.ingestAgentEvent(clineEvent("running"));
-    agg.ingestAgentEvent(clineEvent("ToolStart"));
+    agg.ingestAgentEvent(clineEvent("ToolStart", { toolUseId: "t2" }));
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
     agg.dispose();
   });
@@ -2154,6 +2159,35 @@ describe("ForegroundActivityAggregator", () => {
     );
     agg.ingestAgentEvent(
       agentHookEvent({ event: "ToolStart", toolUseId: "late-tool" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+    agg.dispose();
+  });
+
+  it("TurnCompleted 早于未完成工具时延迟 ready，工具收尾后才落 ready", () => {
+    const agg = createForegroundActivityAggregator({ now });
+    agg.ingestAgentEvent(hookEvent("PromptSubmit"));
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "still-running" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+
+    agg.ingestAgentEvent(hookEvent("TurnCompleted"));
+    // 不得在工具仍登记时谎报「等待输入」
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe("tool");
+
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolComplete", toolUseId: "still-running" })
+    );
+    expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
+      "ready"
+    );
+
+    // 密封后迟到工具吸收
+    agg.ingestAgentEvent(
+      agentHookEvent({ event: "ToolStart", toolUseId: "late" })
     );
     expect((agg.snapshot().activities[0] as AgentActivity).status).toBe(
       "ready"
@@ -3354,18 +3388,44 @@ describe("ForegroundActivityAggregator", () => {
       agg.dispose();
     });
 
-    it("authoritative Stop 吸收迟到工具事件，新 PromptSubmit 才开始下一轮", () => {
+    it("authoritative Stop 在仍有工具时延迟 ready，工具收尾后才密封并吸收迟到事件", () => {
       const agg = createForegroundActivityAggregator({ now });
       agg.ingestAgentEvent(ompEvent("PromptSubmit"));
-      agg.ingestAgentEvent(ompEvent("ToolStart"));
+      agg.ingestAgentEvent(
+        agentHookEvent({
+          agent: "omp",
+          event: "ToolStart",
+          panelId: "p1",
+          toolUseId: "open-tool",
+          windowId: "1",
+        })
+      );
+      // 终态早到但工具未收尾：保持 tool，不得谎报「等待输入」
       agg.ingestAgentEvent(ompEvent("Stop"));
       let a = agg.snapshot().activities[0] as AgentActivity;
-      expect(a.status).toBe("ready");
-      // 迟到的 ToolComplete / ToolStart 不得推翻可信终态
-      agg.ingestAgentEvent(ompEvent("ToolComplete"));
+      expect(a.status).toBe("tool");
+      // 工具真正结束后才 ready
+      agg.ingestAgentEvent(
+        agentHookEvent({
+          agent: "omp",
+          event: "ToolComplete",
+          panelId: "p1",
+          toolUseId: "open-tool",
+          windowId: "1",
+        })
+      );
       a = agg.snapshot().activities[0] as AgentActivity;
       expect(a.status).toBe("ready");
-      agg.ingestAgentEvent(ompEvent("ToolStart"));
+      // 密封后的迟到工具不得推翻 ready
+      agg.ingestAgentEvent(
+        agentHookEvent({
+          agent: "omp",
+          event: "ToolStart",
+          panelId: "p1",
+          toolUseId: "late-tool",
+          windowId: "1",
+        })
+      );
       a = agg.snapshot().activities[0] as AgentActivity;
       expect(a.status).toBe("ready");
       // 新一轮 PromptSubmit → processing

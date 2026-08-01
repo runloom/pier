@@ -71,6 +71,7 @@ describe("buildOmpExtensionSource", () => {
         pierEvent: "InteractionResolved",
       },
       { nativeEvent: "agent_end.willContinue", pierEvent: "processing" },
+      { nativeEvent: "agent_end.completed", pierEvent: "TurnCompleted" },
       { nativeEvent: "agent_end.error", pierEvent: "error" },
       { nativeEvent: "agent_end.aborted", pierEvent: "TurnInterrupted" },
       { nativeEvent: "session_stop", pierEvent: "Stop" },
@@ -229,7 +230,7 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
     return records.map((record) => record.event);
   }
 
-  it("真实事件载荷形成严格 v3 闭环，agent_end 只有 willContinue 时续为处理中", async () => {
+  it("真实事件载荷形成严格 v3 闭环：willContinue 续处理，正常 agent_end 落 TurnCompleted", async () => {
     const { factory, logPath } = await loadFreshExtension();
     const main = createFakePi();
     factory(main.pi);
@@ -269,9 +270,14 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       toolName: "write",
       type: "tool_approval_resolved",
     });
+    // 正常回合结束（willContinue=false）必须发出 TurnCompleted，不能静默。
     main.fire("agent_end", ctx, {
       type: "agent_end",
       willContinue: false,
+    });
+    main.fire("before_agent_start", ctx, {
+      prompt: "continue",
+      type: "before_agent_start",
     });
     main.fire("agent_end", ctx, {
       type: "agent_end",
@@ -286,6 +292,8 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       "ToolComplete",
       "InteractionRequested",
       "InteractionResolved",
+      "TurnCompleted",
+      "PromptSubmit",
       "processing",
       "Stop",
     ]);
@@ -315,6 +323,12 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       nativeState: "rejected",
       toolUseId: "approval-1",
     });
+    expect(records[6]).toMatchObject({
+      event: "TurnCompleted",
+      nativeEvent: "agent_end.completed",
+      nativeState: "completed",
+      v: 3,
+    });
     expect(records.some((record) => record.event === "error")).toBe(false);
     const aggregator = createForegroundActivityAggregator();
     const statuses: string[] = [];
@@ -334,6 +348,8 @@ describe("生成源码行为（临时文件动态加载 + 假 pi 触发）", () 
       "tool",
       "processing",
       "waiting",
+      "processing",
+      "ready",
       "processing",
       "processing",
       "ready",
