@@ -77,19 +77,29 @@ async function selectReviewSurface(
   ).toHaveAttribute("data-git-review-navigation-surface", "");
 }
 
-/** Expand the active surface's group root (and optional src/) so file rows exist. */
+/**
+ * Switch to the target surface and expand directory roots so file rows exist.
+ * Per-surface trees no longer include a "Staged Changes"/"Changes" group root.
+ */
 async function ensureReviewTreeFilesVisible(
   page: Page,
   group: "staged" | "unstaged" = "unstaged"
 ): Promise<void> {
   const targetSurface = group === "staged" ? "staged" : "index";
   await selectReviewSurface(page, targetSurface).catch(() => undefined);
-  await expandReviewTreeGroup(page, group);
+  await expect(
+    activeReviewSurface(page).getByTestId("git-review-tree")
+  ).toBeVisible({ timeout: 20_000 });
   const src = activeReviewSurface(page)
     .getByTestId("git-review-tree")
     .getByRole("treeitem", { name: /^src$/u });
-  if ((await src.count()) > 0) {
-    await expandReviewTreeDirectory(page, /^src$/u, group);
+  if ((await src.count()) === 0) {
+    return;
+  }
+  const directory = src.first();
+  if ((await directory.getAttribute("aria-expanded")) !== "true") {
+    await directory.click({ force: true });
+    await expect(directory).toHaveAttribute("aria-expanded", "true");
   }
 }
 
@@ -265,19 +275,8 @@ async function expandReviewTreeGroup(
   page: Page,
   group: "staged" | "unstaged"
 ): Promise<void> {
-  const name =
-    group === "staged"
-      ? /Staged Changes|已暂存更改/u
-      : /Unstaged Changes|Changes|更改/u;
-  const root = activeReviewSurface(page)
-    .getByTestId("git-review-tree")
-    .getByRole("treeitem", { name })
-    .first();
-  await expect(root).toBeVisible({ timeout: 30_000 });
-  if ((await root.getAttribute("aria-expanded")) !== "true") {
-    await root.click({ force: true });
-    await expect(root).toHaveAttribute("aria-expanded", "true");
-  }
+  // Surface tabs own the group; expand file directories on that surface.
+  await ensureReviewTreeFilesVisible(page, group);
 }
 
 async function waitForReviewPathViewportSettle(
