@@ -3677,6 +3677,10 @@ describe("createCommandRouter", () => {
     ]);
     expect(rendererCommands.at(-1)).toEqual({
       context: panelContext("/repo/.worktrees/feature-a"),
+      exitPresentation: {
+        dismissMode: "explicit",
+        role: "agent",
+      },
       focus: true,
       initialInput: "修复终端焦点问题\r",
       launchId: "launch-1",

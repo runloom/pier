@@ -1621,7 +1621,7 @@ describe("TerminalPanel lifecycle", () => {
     fireEvent.contextMenu(result, { clientX: 18, clientY: 30 });
     await waitFor(() => {
       expect(popupContextMenuAtMock).toHaveBeenCalledWith(
-        "terminal/content",
+        "terminal/restored",
         { x: 18, y: 30 },
         {
           sourcePanelComponent: "terminal",
@@ -2458,6 +2458,7 @@ describe("TerminalPanel lifecycle", () => {
           y: 24,
         },
         {
+          metadata: {},
           sourcePanelComponent: "terminal",
           sourcePanelContext: props.params.context,
           sourcePanelGroupId: "group-terminal-1",

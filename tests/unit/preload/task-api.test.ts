@@ -7,9 +7,11 @@ const ipcOffMock = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", () => ({
   ipcRenderer: {
+    getMaxListeners: () => 10,
     invoke: ipcInvokeMock,
     off: ipcOffMock,
     on: ipcOnMock,
+    setMaxListeners: vi.fn(),
   },
 }));
 

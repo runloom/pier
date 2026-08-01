@@ -48,7 +48,8 @@ describe("revealDiskBreadcrumbInTree", () => {
     expect(revealAfterAncestors).toHaveBeenCalledWith(
       expect.objectContaining({
         instanceId: "panel-1",
-        options: { expandTarget: true, scroll: "center" },
+        options: { intent: "explicit" },
+        path: "src",
         root: "/tmp/proj",
       })
     );

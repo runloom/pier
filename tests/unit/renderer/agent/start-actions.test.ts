@@ -224,6 +224,10 @@ describe("agent start actions", () => {
 
     expect(addTerminal).toHaveBeenCalledWith({
       context: sourceContext,
+      exitPresentation: {
+        dismissMode: "explicit",
+        role: "agent",
+      },
       launchId: "launch-source",
       referenceGroup: sourceGroup,
     });
@@ -258,6 +262,10 @@ describe("agent start actions", () => {
 
     expect(addTerminal).toHaveBeenCalledWith({
       context: null,
+      exitPresentation: {
+        dismissMode: "explicit",
+        role: "agent",
+      },
       launchId: "launch-shell-default",
       referenceGroup: sourceGroup,
     });
@@ -303,6 +311,10 @@ describe("agent start actions", () => {
     expect(prepareLaunch).toHaveBeenCalledWith("claude");
     expect(addTerminal).toHaveBeenCalledWith({
       context: null,
+      exitPresentation: {
+        dismissMode: "explicit",
+        role: "agent",
+      },
       launchId: "launch-1",
       referenceGroup: group,
     });

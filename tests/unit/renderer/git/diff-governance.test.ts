@@ -385,8 +385,9 @@ describe("Git diff renderer governance", () => {
       "utf8"
     );
     expect(reviewPanelLayout).toContain(
-      'import { PierFileTree } from "@pier/ui/file/tree.tsx";'
+      'PierFileTree,\n} from "@pier/ui/file/tree.tsx"'
     );
+    expect(reviewPanelLayout).toContain('from "@pier/ui/file/tree.tsx"');
     expect(reviewPanelLayout.match(/<PierFileTree\b/gu)).toHaveLength(1);
     expect(reviewDocumentView).toContain("<GitReviewPanelLayout");
     expect(projectionCommit).toContain(
@@ -517,7 +518,9 @@ describe("Git diff renderer governance", () => {
       },
       {
         command: "git.applyReviewPathMutation",
-        consumers: ["src/plugins/builtin/git/renderer/review/tree-actions.ts"],
+        consumers: [
+          "src/plugins/builtin/git/renderer/review/tree-item-model.ts",
+        ],
         method: "applyReviewPathMutation",
         service: "applyPathMutation",
       },

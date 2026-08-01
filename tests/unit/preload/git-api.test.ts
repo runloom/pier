@@ -8,7 +8,13 @@ const offMock = vi.hoisted(() => vi.fn());
 const onMock = vi.hoisted(() => vi.fn());
 
 vi.mock("electron", () => ({
-  ipcRenderer: { invoke: invokeMock, off: offMock, on: onMock },
+  ipcRenderer: {
+    getMaxListeners: () => 10,
+    invoke: invokeMock,
+    off: offMock,
+    on: onMock,
+    setMaxListeners: vi.fn(),
+  },
 }));
 
 import { gitApi } from "@preload/git-api.ts";

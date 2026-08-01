@@ -1,8 +1,11 @@
 import { readFile } from "node:fs/promises";
 import { join } from "node:path";
+import { resetTreeExpansionAuthoritiesForTests } from "@pier/ui/file/tree.tsx";
 import { TerminalOverlayContext } from "@pier/ui/use-terminal-overlay.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { FILES_PLUGIN_MANIFEST } from "@plugins/builtin/files/manifest.ts";
+import { clearFileTreeSidebarCache } from "@plugins/builtin/files/renderer/tree/registry.ts";
+import { clearFilesTreeStore } from "@plugins/builtin/files/renderer/tree/store.ts";
 import {
   GIT_CHANGES_PANEL_ID,
   GIT_PLUGIN_ID,
@@ -411,7 +414,10 @@ function makeFilesPanelProps(
   } as unknown as IDockviewPanelProps<Record<string, unknown>>;
 }
 
-function renderFilesFilePanel(list: RendererPluginContext["files"]["list"]) {
+function renderFilesFilePanel(
+  list: RendererPluginContext["files"]["list"],
+  options?: { projectRootPath?: string }
+) {
   const filesModule = BUILTIN_RENDERER_PLUGIN_MODULES.find(
     (plugin) => plugin.id === FILES_PLUGIN_ID
   );
@@ -433,8 +439,23 @@ function renderFilesFilePanel(list: RendererPluginContext["files"]["list"]) {
     throw new Error("expected Files file-panel registration");
   }
 
+  const panelContext =
+    options?.projectRootPath === undefined
+      ? context
+      : {
+          ...context,
+          cwd: options.projectRootPath,
+          gitRoot: options.projectRootPath,
+          openedPath: options.projectRootPath,
+          projectRootPath: options.projectRootPath,
+          worktreeKey: options.projectRootPath,
+          worktreeRoot: options.projectRootPath,
+        };
+
   return {
-    ...render(<FilesPanel {...makeFilesPanelProps({ context })} />),
+    ...render(
+      <FilesPanel {...makeFilesPanelProps({ context: panelContext })} />
+    ),
     disposeFiles,
   };
 }
@@ -745,6 +766,9 @@ describe("git builtin plugin", () => {
     terminalStatusItemRegistry.clearForTests();
     resetGitStatusSessionsForTests();
     resetAppContentDialogForTests();
+    clearFileTreeSidebarCache();
+    clearFilesTreeStore();
+    resetTreeExpansionAuthoritiesForTests();
     usePanelDescriptorStore.setState({ activeId: null, descriptors: {} });
     useWorkspaceStore.setState({ api: null });
     resetTerminalInputRoutingForTests();
@@ -2593,12 +2617,7 @@ describe("git builtin plugin", () => {
   });
 
   it("Files file-panel tree lazily loads expanded directory children from the host files API", async () => {
-    const projectRoot =
-      context.projectRootPath ??
-      context.worktreeRoot ??
-      context.gitRoot ??
-      context.cwd ??
-      "/Users/dev/ABC/pier";
+    const projectRoot = "/tmp/pier-lazy-first-level";
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       (_root, options) => {
         if (options?.path === "") {
@@ -2624,7 +2643,9 @@ describe("git builtin plugin", () => {
         );
       }
     );
-    const { container, disposeFiles } = renderFilesFilePanel(list);
+    const { container, disposeFiles } = renderFilesFilePanel(list, {
+      projectRootPath: projectRoot,
+    });
 
     try {
       await waitFor(() => {
@@ -2647,12 +2668,9 @@ describe("git builtin plugin", () => {
   });
 
   it("Files file-panel tree lazily loads second-level directory children after a first-level expand", async () => {
-    const projectRoot =
-      context.projectRootPath ??
-      context.worktreeRoot ??
-      context.gitRoot ??
-      context.cwd ??
-      "/Users/dev/ABC/pier";
+    // Dedicated root so prior files-tree sessions cannot leave expanded dirs
+    // or merged entries that flip the first click into a collapse.
+    const projectRoot = "/tmp/pier-lazy-second-level";
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       (_root, options) => {
         if (options?.path === "") {
@@ -2677,7 +2695,9 @@ describe("git builtin plugin", () => {
         );
       }
     );
-    const { container, disposeFiles } = renderFilesFilePanel(list);
+    const { container, disposeFiles } = renderFilesFilePanel(list, {
+      projectRootPath: projectRoot,
+    });
 
     try {
       await waitFor(() => {

@@ -25,7 +25,7 @@ function joinAbsolutePath(root: string, path: string): string {
 }
 
 async function writeClipboardText(text: string): Promise<void> {
-  // Plugin renderer must not touch preload globals (window.pier); use browser API.
+  // Plugin renderer must not touch preload globals; use browser clipboard API.
   await navigator.clipboard.writeText(text);
 }
 

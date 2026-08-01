@@ -9,19 +9,10 @@ import {
   resetFilesLspNavigationForTests,
 } from "@plugins/builtin/files/renderer/lsp/navigation.ts";
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { openFilesDiskPath } from "@/lib/files/open-disk-file-panel.ts";
-
-vi.mock("@/lib/files/open-disk-file-panel.ts", () => ({
-  openFilesDiskPath: vi.fn(() => true),
-}));
 
 describe("files LSP navigation", () => {
-  const openDisk = vi.mocked(openFilesDiskPath);
-
   afterEach(() => {
     resetFilesLspNavigationForTests();
-    openDisk.mockClear();
-    openDisk.mockReturnValue(true);
     vi.useRealTimers();
   });
 
@@ -50,7 +41,9 @@ describe("files LSP navigation", () => {
 
   it("always opens the disk panel (activates tab + tree reveal) even when view exists", async () => {
     vi.useFakeTimers();
+    const openInEditor = vi.fn(() => true);
     const context = {
+      files: { openInEditor },
       panels: {
         listInstances: vi.fn(() => [
           {
@@ -79,7 +72,7 @@ describe("files LSP navigation", () => {
     await vi.advanceTimersByTimeAsync(0);
     const resolved = await opening;
 
-    expect(openDisk).toHaveBeenCalledWith({
+    expect(openInEditor).toHaveBeenCalledWith({
       path: "src/main.ts",
       root: "/repo",
     });
@@ -93,6 +86,7 @@ describe("files LSP navigation", () => {
 
   it("activates source mode and opens disk path for a cold panel", async () => {
     vi.useFakeTimers();
+    const openInEditor = vi.fn(() => true);
     const listInstances = vi
       .fn()
       .mockReturnValueOnce([])
@@ -105,6 +99,7 @@ describe("files LSP navigation", () => {
         },
       ]);
     const context = {
+      files: { openInEditor },
       panels: { listInstances },
     } as unknown as RendererPluginContext;
     const showSourceMode = vi.fn();
@@ -116,7 +111,7 @@ describe("files LSP navigation", () => {
 
     const opening = openFilesLspAbsolutePath("/repo/src/main.ts", "/repo");
 
-    expect(openDisk).toHaveBeenCalledWith({
+    expect(openInEditor).toHaveBeenCalledWith({
       path: "src/main.ts",
       root: "/repo",
     });

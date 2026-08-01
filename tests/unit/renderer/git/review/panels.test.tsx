@@ -4,6 +4,7 @@ import type {
   PierDiffViewItem,
   PierDiffViewRenderWindow,
 } from "@pier/ui/diff-view/index.tsx";
+import { resetTreeExpansionAuthoritiesForTests } from "@pier/ui/file/tree.tsx";
 import { TooltipProvider } from "@pier/ui/tooltip.tsx";
 import type {
   RendererPluginAppearance,
@@ -631,7 +632,11 @@ function fileTree(container: HTMLElement): ShadowRoot {
 function findTreeItem(container: HTMLElement, name: string): Element {
   const item = [
     ...fileTree(container).querySelectorAll('[role="treeitem"]'),
-  ].find((element) => element.textContent?.includes(name));
+  ].find((element) => {
+    const label =
+      element.getAttribute("aria-label") ?? element.textContent ?? "";
+    return label.includes(name);
+  });
   expect(item).toBeDefined();
   return item as Element;
 }
@@ -681,6 +686,9 @@ afterEach(() => {
   cleanup();
   // cleanup unmount 会写 session；必须在其后清空。
   clearAllReviewSessionsForTests();
+  // Shared expansion authority scopes leak collapsed/expanded intents across
+  // tests that reuse contextId + gitRoot; clear so file-ancestors seed re-runs.
+  resetTreeExpansionAuthoritiesForTests();
   if (originalScrollIntoView) {
     Element.prototype.scrollIntoView = originalScrollIntoView;
   } else {
@@ -1526,6 +1534,7 @@ describe("Git review panel", () => {
           ...scope,
           target: { kind: "commit", oid: commitOid },
         },
+        tabChangeSummary: null,
       })
     );
   });
@@ -2424,7 +2433,11 @@ describe("Git review panel", () => {
     );
     const appRows = [
       ...fileTree(view.container).querySelectorAll('[role="treeitem"]'),
-    ].filter((element) => element.textContent?.includes("app.ts"));
+    ].filter((element) => {
+      const label =
+        element.getAttribute("aria-label") ?? element.textContent ?? "";
+      return label.includes("app.ts");
+    });
     expect(appRows).toHaveLength(2);
     const scrolledSectionIds: string[] = [];
     for (const row of appRows) {

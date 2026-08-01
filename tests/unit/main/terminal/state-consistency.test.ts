@@ -367,9 +367,10 @@ describe("Swift terminal state consistency via main IPC paths", () => {
       expect.anything(),
       expect.anything(),
       expect.objectContaining({
-        command: "claude --dangerously-skip-permissions --resume session-123",
+        command:
+          "/bin/sh -lc 'claude --dangerously-skip-permissions --resume session-123'",
       }),
-      "",
+      expect.any(String),
       2
     );
     expect(sessionState.updateTerminalPanelAgent).toHaveBeenCalledWith(

@@ -69,8 +69,10 @@ const HELPER_LOADS_LAYOUT_BY_RECORD_RE =
 const FRESH_MODE_SKIP_RE = /windowContext\.mode !== "fresh"/;
 const FLUSH_LAYOUT_COMMAND_RE =
   /envelope\.command\.type === "workspace\.flushLayout"/;
+// flush 路径：persistCurrentLayout 用 stripEphemeralLayoutParams 后 saveLayout，
+// 再 registerWorkspaceLayoutFlusher 挂到 main flush 请求。
 const FLUSH_SAVES_CURRENT_LAYOUT_RE =
-  /window\.pier\.workspace[\s\S]{0,80}?\.saveLayout\(\s*event\.api\.toJSON\(\),\s*windowContext\.recordId\s*\)/;
+  /const persistCurrentLayout = async \(\): Promise<void> => \{[\s\S]{0,500}?window\.pier\.workspace\.saveLayout\(\s*stripEphemeralLayoutParams\(event\.api\.toJSON\(\)\),\s*windowContext\.recordId\s*\)[\s\S]{0,200}?registerWorkspaceLayoutFlusher\(persistCurrentLayout\)/;
 const WRITABLE_MAIN_FALLBACK_RE = /recordId: "main"/;
 const WINDOW_CONTEXT_PROMISE_RE =
   /const windowContextPromise = window\.pier\.window\.getContext\(\)/;

@@ -28,6 +28,9 @@ const RAW_COLOR_LITERAL_ALLOWANCES = new Map<string, RegExp>([
 ]);
 const COLOR_MIX_OWNERS = new Set([
   "packages/ui/src/diff-view/appearance.ts",
+  // Diff/review estimate skeleton: shadow DOM bars use Canvas/CanvasText mixes
+  // (no access to product CSS variables inside Pierre's shadow root).
+  "packages/ui/src/diff-view/estimate-skeleton.ts",
   // Native data-URL fallback cannot consume renderer theme tokens.
   "src/main/windows/renderer-recovery-page.ts",
   "src/plugins/builtin/files/renderer/editor/cm-theme.ts",

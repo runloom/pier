@@ -2306,12 +2306,12 @@ describe("Files file-panel", () => {
   it("opens two different tree files each as a preview (dropUnpinnedInstances stays true)", async () => {
     // 单击 A 后单击 B:两次都走 pinned:false + dropUnpinnedInstances:true,
     // 宿主 openInstance 逻辑负责关掉旧 preview 面板。文件面板本身两次调用
-    // 用相同语义,不做区分。
+    // 用相同语义,不做区分。根级文件避免合成中间目录后还需展开。
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       async () =>
         [
-          { kind: "file", path: "src/a.ts", root: PROJECT_ROOT },
-          { kind: "file", path: "src/b.ts", root: PROJECT_ROOT },
+          { kind: "file", path: "a.ts", root: PROJECT_ROOT },
+          { kind: "file", path: "b.ts", root: PROJECT_ROOT },
         ] satisfies FileEntry[]
     );
     const openInstance =
@@ -2337,14 +2337,14 @@ describe("Files file-panel", () => {
       dropUnpinnedInstances: true,
       params: {
         pinned: false,
-        source: { kind: "disk", path: "src/a.ts", root: PROJECT_ROOT },
+        source: { kind: "disk", path: "a.ts", root: PROJECT_ROOT },
       },
     });
     expect(openInstance.mock.calls[1]?.[0]).toMatchObject({
       dropUnpinnedInstances: true,
       params: {
         pinned: false,
-        source: { kind: "disk", path: "src/b.ts", root: PROJECT_ROOT },
+        source: { kind: "disk", path: "b.ts", root: PROJECT_ROOT },
       },
     });
     // 两次不同文件的 instanceId 必须不同,否则新 preview 会被"激活已有"分支
@@ -2362,7 +2362,7 @@ describe("Files file-panel", () => {
     // dblclick 分支承接。
     const source = {
       kind: "disk",
-      path: "src/a.ts",
+      path: "a.ts",
       root: PROJECT_ROOT,
     } satisfies FilesDocumentPanelSource;
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
@@ -3875,7 +3875,9 @@ describe("Files file-panel", () => {
     vi.useRealTimers();
   });
 
-  it("does not fall back to another same-root tree when a target tree instance is missing", async () => {
+  it("falls back to a same-root live tree when the target tree instance is missing", async () => {
+    // Stale treeId (panel remount / group drift) must not silent-no-op: prefer
+    // any mounted tree with the same root so search/reveal still work.
     const list = vi.fn<RendererPluginContext["files"]["list"]>(
       async () =>
         [
@@ -3911,7 +3913,7 @@ describe("Files file-panel", () => {
       expect(list).toHaveBeenCalled();
     });
 
-    let opened = true;
+    let opened = false;
     act(() => {
       opened = openFilesTreeSearch({
         instanceId: "tree-instance-missing",
@@ -3921,13 +3923,15 @@ describe("Files file-panel", () => {
 
     const sidebarA = container.querySelector('[data-testid="sidebar-a"]');
     const sidebarB = container.querySelector('[data-testid="sidebar-b"]');
-    expect(opened).toBe(false);
-    expect(
-      sidebarA?.querySelector('[data-testid="files-tree-search-bar"]')
-    ).toBeNull();
-    expect(
-      sidebarB?.querySelector('[data-testid="files-tree-search-bar"]')
-    ).toBeNull();
+    expect(opened).toBe(true);
+    const searchInA = sidebarA?.querySelector(
+      '[data-testid="files-tree-search-bar"]'
+    );
+    const searchInB = sidebarB?.querySelector(
+      '[data-testid="files-tree-search-bar"]'
+    );
+    // Exactly one live same-root tree receives the openSearch (last match).
+    expect(Boolean(searchInA) !== Boolean(searchInB)).toBe(true);
   });
 
   it("keeps the injected files group view node across thin panel tab switches", async () => {
@@ -5193,7 +5197,10 @@ describe("Files file-panel", () => {
       expect(status).toBeInstanceOf(HTMLElement);
       return status as HTMLElement;
     });
-    expect(languageBadge.nextElementSibling).toBe(languageStatus);
+    // Status sits in a tooltip trigger wrapper immediately after the language badge.
+    const statusHost = languageBadge.nextElementSibling;
+    expect(statusHost).toBeInstanceOf(HTMLElement);
+    expect(statusHost).toContainElement(languageStatus);
     expect(languageStatus).toHaveAttribute("role", "status");
     expect(languageStatus).toHaveAttribute("aria-live", "polite");
     // Status badges stay out of tab order (focus governance); aria-label carries detail.

@@ -133,6 +133,10 @@ describe("new agent action", () => {
     expect(prepareLaunch).toHaveBeenCalledWith("claude");
     expect(addTerminal).toHaveBeenCalledWith({
       context: null,
+      exitPresentation: {
+        dismissMode: "explicit",
+        role: "agent",
+      },
       launchId: "launch-1",
     });
     expect(toastMocks.error).not.toHaveBeenCalled();
@@ -253,6 +257,10 @@ describe("new agent action", () => {
     });
     expect(addTerminal).toHaveBeenCalledWith({
       context: null,
+      exitPresentation: {
+        dismissMode: "explicit",
+        role: "agent",
+      },
       launchId: "launch-dock-error",
     });
     expect(toastMocks.error).not.toHaveBeenCalled();
@@ -337,6 +345,10 @@ describe("new agent action", () => {
 
     expect(addTerminal).toHaveBeenCalledWith({
       context: null,
+      exitPresentation: {
+        dismissMode: "explicit",
+        role: "agent",
+      },
       launchId: "launch-shell-default",
       referenceGroup: sourceGroup,
     });
@@ -356,6 +368,10 @@ describe("new agent action", () => {
     expect(addTerminal).toHaveBeenCalledTimes(1);
     expect(addTerminal).toHaveBeenCalledWith({
       context: null,
+      exitPresentation: {
+        dismissMode: "explicit",
+        role: "agent",
+      },
       launchId: "launch-xyz",
     });
     expect(toastMocks.error).not.toHaveBeenCalled();
