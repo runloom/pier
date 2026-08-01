@@ -145,7 +145,15 @@ describe("managed plugin packaging governance", () => {
     expect(packageJson.scripts?.["check:plugin-index"]).toContain(
       "plugins:pack"
     );
-    expect(prePushHook).toContain("pnpm check:plugin-index");
+    // pre-push delegates to preflight:* which always runs check:plugin-index
+    expect(prePushHook).toMatch(
+      /preflight:(push|merge|ci|full)|check:plugin-index/
+    );
+    const preflightScript = readFileSync(
+      join(process.cwd(), "scripts/preflight-ci.sh"),
+      "utf8"
+    );
+    expect(preflightScript).toContain("pnpm check:plugin-index");
     expect(verifyIndexWorkflow).toContain(
       "verify-plugin-index-assets.mjs --source=release"
     );

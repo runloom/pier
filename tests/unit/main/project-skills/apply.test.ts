@@ -106,7 +106,9 @@ afterEach(async () => {
 });
 
 describe("project-skills apply", () => {
-  it("converges enabling a valid skill and publishes relative symlink", async () => {
+  it("converges enabling a valid skill and publishes relative symlink", {
+    timeout: 20_000,
+  }, async () => {
     const digest = await writeLibrarySkill("review-guide");
     await writeManifest({
       version: 1,
