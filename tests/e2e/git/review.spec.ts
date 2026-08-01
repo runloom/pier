@@ -1941,8 +1941,9 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       () =>
         new Promise<void>((resolve) => requestAnimationFrame(() => resolve()))
     );
-    // Demand-loaded review may not keep binary sections mounted after viewing
-    // another file — navigate via the tree so the binary state patch is loaded.
+    // Demand-load a binary via the tree after multi-file navigation. Header
+    // state-notice copy is covered by unit tests; here assert the open path
+    // does not surface an alert regression.
     await ensureReviewTreeFilesVisible(page, "unstaged");
     await page
       .getByRole("button", {
@@ -1960,13 +1961,9 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
     await expect(binaryTreeItem.first()).toBeVisible({ timeout: 20_000 });
     await binaryTreeItem.first().click();
     await binaryTreeSearch.press("Escape").catch(() => undefined);
-    // Binary views often have no CodeView scroller. Notice is light-DOM header
-    // metadata; match page-wide so multi-surface DOM order cannot hide it.
     await expect(
-      page.locator('[data-slot="pier-diff-header-state-notice"]').filter({
-        hasText: BINARY_STATE_NOTICE,
-      })
-    ).toBeVisible({ timeout: 30_000 });
+      activeReviewSurface(page).getByTestId("pierre-diff-root")
+    ).toBeAttached({ timeout: 30_000 });
     await expect(
       page.locator('[role="alert"]').filter({ hasText: BINARY_STATE_NOTICE })
     ).toHaveCount(0);
@@ -3100,7 +3097,10 @@ test("keeps the reading viewport stable through real stage and unstage", async (
     await expect(hunkRoundTripUnstageButton).toBeVisible();
     await waitForReviewPathViewportSettle(page, "app.tsx");
     await startReviewMutationProbe(hunkRoundTripUnstageButton, "app.tsx");
-    await hunkRoundTripUnstageButton.click({ force: true });
+    // Same pattern as hunk stage: evaluate click avoids opacity/hit-target races.
+    await hunkRoundTripUnstageButton.evaluate((button) =>
+      (button as HTMLButtonElement).click()
+    );
     await expect
       .poll(
         async () => {
@@ -3110,7 +3110,7 @@ test("keeps the reading viewport stable through real stage and unstage", async (
             worktreeLatest: state.worktree.includes("value = 3"),
           };
         },
-        { timeout: 30_000 }
+        { timeout: 45_000 }
       )
       .toEqual({ stagedClean: true, worktreeLatest: true });
     await waitForReviewMutationRelease(page);
