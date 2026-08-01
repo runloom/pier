@@ -14,7 +14,8 @@ description: >
 
 - **默认全自动跑完**：合并 PR、选插件、patch bump、推 tag 均自行决策并执行，中途不向用户确认。仅在**无法继续的硬阻塞**时停下报告（脏工作区且有不明改动、缺 secrets、权限不足、需人工裁决的策略冲突）。
 - 默认走 GitHub Actions，不本地硬发。
-- CI 红必须修绿再往下；禁止 force-push `main`。
+- **正确性在本地**：默认 pre-push 已是 `preflight:push`（static+unit+component）。合 main / 发版 push 前再跑 `pnpm preflight:ci`（或 `PIER_PREFLIGHT=ci git push`）；mac 需要 native 时用 `preflight:full`。目标 **远程一次绿**。
+- CI 红：先本地复现修绿再 push；禁止「改一处 → 盲等远程」。禁止 force-push `main`。
 - 插件 tag：`plugin-<tail>-v<ver>`（prerelease）；宿主 tag：`vX.Y.Z`（Latest）。
 - 插件 `package.json` 与 `plugin.json` 的 version 必须一致；有实质变更必须 bump。
 - 默认 **patch** bump；用户在触发时若写明 minor/major 或指定版本则从其约定。
@@ -33,11 +34,15 @@ git merge-base --is-ancestor HEAD origin/main && echo MERGED || echo NOT_MERGED
 | 结果 | 动作 |
 |---|---|
 | 已合入 | `git checkout main && git pull --ff-only` → 阶段 B |
-| 未合入 | 推分支 → 开/复用 PR 到 main → 盯 CI → 修 → 绿 → **直接合并** → pull main |
+| 未合入 | **本地** `pnpm preflight:ci` 绿 → push → 开/复用 PR → CI 确认一次绿 → 合并 → pull main |
 
-**CI 循环：** `gh pr checks` / 失败日志 → 最小修复 → push；冲突先 rebase/merge `origin/main`。  
-可合并后直接 `gh pr merge`（优先 squash 若仓库默认允许，否则 merge commit；勿 rebase 合并策略除非仓库要求）。  
-脏工作区：能归入本发布分支的明确修复则 stage 提交后继续；不明改动才停并报告，不猜测丢弃。
+```bash
+pnpm preflight:ci && git push
+# 或 PIER_PREFLIGHT=ci git push
+```
+
+CI 若仍红：日志定位失败文件 → 本地修到 `preflight:ci` 绿 → **一次** push。  
+冲突先 rebase/merge `origin/main`。可合并后 `gh pr merge`（优先 squash 若仓库允许）。脏工作区：明确修复可 stage；不明改动停并报告。
 
 ---
 
@@ -78,8 +83,11 @@ git merge-base --is-ancestor HEAD origin/main && echo MERGED || echo NOT_MERGED
 
 ## CI 怎么修
 
-读日志 → 本地复现（优先 `pnpm check:static`）→ 小步提交 → push。  
-同一 flaky job 最多重跑一次；再红当实错修。  
+1. `gh run view <id> --log-failed` / `rg "FAIL  tests/"` 收集失败文件  
+2. 本地：`pnpm preflight:ci` 或针对性 `pnpm exec vitest run <file>`  
+3. 绿后一次 push；同一 flaky job 最多重跑一次，再红当实错修  
+
+本地档位见 `pnpm preflight --help` / `docs/development.md`（push / merge / ci / full）。  
 发布失败对照 `docs/app-release.md`（宿主）/ `docs/release.md`（插件）。
 
 ---

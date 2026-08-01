@@ -405,9 +405,7 @@
       "cachedInputMicrousd": 0.0028,
       "inputMicrousd": 0.14,
       "outputMicrousd": 0.28,
-      "aliases": [
-        "deepseek/deepseek-v4-flash-0731"
-      ]
+      "aliases": ["deepseek/deepseek-v4-flash-0731"]
     },
     "deepseek-v4-pro": {
       "cachedInputMicrousd": 0.0036,

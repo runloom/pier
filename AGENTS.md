@@ -450,9 +450,11 @@ capability 和 `accounts.*` 命令。迁移完成后，Codex 账号状态是插�
 - 类型检查：`pnpm typecheck`
 - Lint + Format：`pnpm lint` / `pnpm lint:fix`
 - 完整检查：`pnpm check`（typecheck + lint + depcruise + file-size + dir-density + unit + component 测试）
+- **推送前正确性（默认 pre-push）**：`pnpm preflight:push`（static + unit + component + plugin-index）。目标 **CI 一次绿**；禁止用远程 coverage 当调试器。
+- 合 main / 发版前：`pnpm preflight:ci`（+ coverage 棘轮 + build）；mac native：`pnpm preflight:full`
 - 单文件行数：`pnpm check:file-size`（硬上限 500 行）
 - 目录密度：`pnpm check:dir-density`（单目录直接源码文件硬上限见 `.pier/dir-density.json`；资源目录 skip，过渡债 allowlist 棘轮）
-- 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`
+- 单元测试：`pnpm test` / `pnpm test:unit`；组件测试：`pnpm test:component`；覆盖率：`pnpm test:coverage`
 - E2E 测试：优先 `pnpm test:e2e:auto`（见下节）；强制本机仍可用 `pnpm test:e2e`
 - 构建：`pnpm build`（electron-vite build）
 - 图标重建：`pnpm build:icons`（改 `build/app-icon-*.svg` 后跑一次，产出 `build/icon.{icns,ico,png}`）

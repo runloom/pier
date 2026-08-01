@@ -32,9 +32,16 @@ export default defineConfig({
     setupFiles: ["./tests/setup/jsdom-setup.ts"],
     include: ["tests/{unit,component,integration}/**/*.{test,spec}.{ts,tsx}"],
     exclude: ["tests/e2e/**", "node_modules/**"],
+    // Parallel test files = main coverage wall-clock win. Isolation for flaky
+    // suites is per-file / `test:integration --no-file-parallelism`, not global serial.
+    fileParallelism: true,
+    pool: "forks",
     coverage: {
       provider: "v8",
-      reporter: ["text", "html", "json"],
+      // CI: less report IO. Local: html/json for browsing.
+      reporter: process.env.CI
+        ? (["text-summary", "json-summary"] as const)
+        : (["text", "html", "json"] as const),
       include: [
         "src/**/*.{ts,tsx}",
         "packages/{plugin-api,plugin-claude,plugin-codex,plugin-grok,ui}/src/**/*.{ts,tsx}",
