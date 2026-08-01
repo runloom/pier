@@ -310,7 +310,9 @@ export async function buildRepairPlan(
           continue;
         }
         if (linkTarget === desired.expectedRelativeLinkTarget && !owned) {
-          // Correct link but not in our ledger — unmanaged, do not adopt.
+          // Correct link but not in our ledger — unmanaged. Settings-only
+          // integrity (health-mappings): surface the issue, never adopt or
+          // hard-block agent launch.
           blockingIssues.push(
             buildProjectSkillsIssue({
               code: "unmanaged-conflict",

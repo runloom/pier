@@ -10,7 +10,7 @@ import {
   writeFile,
 } from "node:fs/promises";
 import { tmpdir } from "node:os";
-import { join } from "node:path";
+import { dirname, join } from "node:path";
 import { FilePathTransactionLock } from "@main/services/files/path-transaction-lock.ts";
 import { createProjectSkillsFileSystemAdapter } from "@main/services/project-skills/fs-adapter.ts";
 import {
@@ -19,6 +19,8 @@ import {
 } from "@main/services/project-skills/identity.ts";
 import { createProjectSkillsLock } from "@main/services/project-skills/lock.ts";
 import { createProjectSkillsPaths } from "@main/services/project-skills/paths.ts";
+import type { RepairContext } from "@main/services/project-skills/repair/log.ts";
+import { buildRepairPlan } from "@main/services/project-skills/repair/plan-builder.ts";
 import { createProjectSkillsRepairService } from "@main/services/project-skills/repair/service.ts";
 import {
   createProjectSkillsStore,
@@ -293,12 +295,8 @@ describe("project-skills repair / ensureReady", () => {
       agentId: "codex",
       launchAttemptId: "attempt-4",
     });
-    expect(result.status).toBe("blocked");
-    if (result.status !== "blocked") return;
-    expect(
-      result.issueSummary.some((i) => i.code === "unmanaged-conflict")
-    ).toBe(true);
-    // Still a directory, not replaced.
+    // Settings-only integrity: spawn proceeds; foreign object stays put.
+    expect(result.status).toBe("ready");
     expect((await lstat(join(agentsDir, "guide"))).isDirectory()).toBe(true);
   });
 
@@ -350,14 +348,10 @@ describe("project-skills repair / ensureReady", () => {
     );
   });
 
-  it("ensureReady launch-blocks a foreign system projection target", async () => {
-    const source = join(userData, "system-source");
-    await mkdir(source, { recursive: true });
-    await writeFile(
-      join(source, "SKILL.md"),
-      "---\nname: pier-test-capability\ndescription: test capability\n---\n# Test\n",
-      "utf8"
-    );
+  it("ensureReady does not hard-block a foreign system projection target", async () => {
+    // Real directory at the system projection path — Pier must not overwrite
+    // it, and must not refuse opening an agent either. Settings surfaces the
+    // unmanaged state; launch is the user's intent.
     const target = join(
       projectRoot,
       ".agents",
@@ -366,6 +360,14 @@ describe("project-skills repair / ensureReady", () => {
     );
     await mkdir(target, { recursive: true });
     await writeFile(join(target, "SKILL.md"), "# foreign\n", "utf8");
+
+    const source = join(userData, "system-source");
+    await mkdir(source, { recursive: true });
+    await writeFile(
+      join(source, "SKILL.md"),
+      "---\nname: pier-test-capability\ndescription: test capability\n---\n# Test\n",
+      "utf8"
+    );
     const systemSkills = createSystemSkillsChannel({
       userData,
       isProduction: false,
@@ -383,20 +385,150 @@ describe("project-skills repair / ensureReady", () => {
       agentId: "codex",
       launchAttemptId: "system-conflict-attempt",
     });
-    expect(result.status).toBe("blocked");
-    if (result.status !== "blocked") return;
-    expect(result.issueSummary).toEqual(
-      expect.arrayContaining([
-        expect.objectContaining({
-          code: "unmanaged-conflict",
-          skillId: "pier-test-capability",
-          relativeTarget: ".agents/skills/pier-test-capability",
-        }),
-      ])
-    );
+    expect(result.status).toBe("ready");
+    // Foreign directory left untouched — no overwrite, no silent adopt.
     expect((await lstat(target)).isDirectory()).toBe(true);
     expect(await readFile(join(target, "SKILL.md"), "utf8")).toBe(
       "# foreign\n"
     );
+  });
+
+  it("ensureReady proceeds past a correct unowned system link without adopting", async () => {
+    const source = join(userData, "system-source");
+    await mkdir(source, { recursive: true });
+    await writeFile(
+      join(source, "SKILL.md"),
+      "---\nname: pier-test-capability\ndescription: test capability\n---\n# Test\n",
+      "utf8"
+    );
+    // Projection already in place with the correct target, but the ownership
+    // ledger has no record (old projection path / lost ledger).
+    const target = join(
+      projectRoot,
+      ".agents",
+      "skills",
+      "pier-test-capability"
+    );
+    await mkdir(dirname(target), { recursive: true });
+    await symlink("../../.pier/skills/library/pier-test-capability", target);
+
+    const systemSkills = createSystemSkillsChannel({
+      userData,
+      isProduction: false,
+      contributions: [
+        {
+          id: "pier-test-capability",
+          contentDir: source,
+          provider: { id: "pier.test", version: "1.0.0" },
+        },
+      ],
+    });
+
+    const result = await createRepair({ systemSkills }).ensureReady({
+      projectRef: await projectRef(),
+      agentId: "codex",
+      launchAttemptId: "system-unowned-attempt",
+    });
+
+    // Launch proceeds — no dialog, no ledger write on the spawn path.
+    expect(result.status).toBe("ready");
+    expect(await readlink(target)).toBe(
+      "../../.pier/skills/library/pier-test-capability"
+    );
+    const identity = await resolveStableProjectIdentity(projectRoot);
+    const store = createProjectSkillsStore({ userData });
+    const ownership = await store.readOwnership(
+      createProjectSkillsPaths(userData).rootKeyFor(identity)
+    );
+    expect(
+      ownership?.targets.some(
+        (t) => t.relativePath === ".agents/skills/pier-test-capability"
+      ) ?? false
+    ).toBe(false);
+  });
+
+  it("repair plan reports unmanaged-conflict for unowned links without adopting", async () => {
+    const agentsDir = join(projectRoot, ".agents", "skills");
+    await mkdir(agentsDir, { recursive: true });
+    await symlink(
+      "../../.pier/skills/library/pier-test-capability",
+      join(agentsDir, "pier-test-capability")
+    );
+
+    const paths = createProjectSkillsPaths(userData);
+    const store = createProjectSkillsStore({ userData });
+    const desiredProjections = [
+      {
+        skillId: "pier-test-capability",
+        relativeTarget: ".agents/skills/pier-test-capability",
+        expectedRelativeLinkTarget:
+          "../../.pier/skills/library/pier-test-capability",
+      },
+    ];
+
+    const plan = await buildRepairPlan(
+      {
+        fs: createProjectSkillsFileSystemAdapter(),
+        getObservedRevision: async () => "observed-rev-1",
+        inspectGitState: async () => "absent",
+        now: Date.now,
+        paths,
+        store,
+      } as RepairContext,
+      await projectRef(),
+      "observed-rev-1",
+      undefined,
+      { desiredSystemProjections: desiredProjections }
+    );
+    // Settings-only issue — still reported, never turned into an adopt op.
+    expect(
+      plan.blockingIssues.some(
+        (i) =>
+          i.code === "unmanaged-conflict" &&
+          i.skillId === "pier-test-capability"
+      )
+    ).toBe(true);
+    // No create op either — Pier does not schedule overwrite of foreign paths.
+    expect(
+      plan.targetOperations.some(
+        (op) =>
+          op.relativeTarget === ".agents/skills/pier-test-capability" &&
+          op.kind !== "noop"
+      )
+    ).toBe(false);
+    // And launch is not in its blocking scopes (settings hygiene only).
+    const issue = plan.blockingIssues.find(
+      (i) =>
+        i.code === "unmanaged-conflict" && i.skillId === "pier-test-capability"
+    );
+    expect(issue?.blockingScopes.includes("launch")).toBe(false);
+
+    // A real directory at the system target is the same settings-only issue.
+    await rm(join(agentsDir, "pier-test-capability"), {
+      force: true,
+      recursive: true,
+    });
+    await mkdir(join(agentsDir, "pier-test-capability"));
+    const foreignPlan = await buildRepairPlan(
+      {
+        fs: createProjectSkillsFileSystemAdapter(),
+        getObservedRevision: async () => "observed-rev-1",
+        inspectGitState: async () => "absent",
+        now: Date.now,
+        paths,
+        store,
+      } as RepairContext,
+      await projectRef(),
+      "observed-rev-1",
+      undefined,
+      { desiredSystemProjections: desiredProjections }
+    );
+    expect(
+      foreignPlan.blockingIssues.some(
+        (i) =>
+          i.code === "unmanaged-conflict" &&
+          i.relativeTarget === ".agents/skills/pier-test-capability"
+      )
+    ).toBe(true);
   });
 });

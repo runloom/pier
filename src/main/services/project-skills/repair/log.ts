@@ -110,6 +110,18 @@ export type EnsureReadyResult =
 export interface RepairRequest {
   acknowledgements: readonly ProjectSkillsAcknowledgement[];
   continuationOf?: string;
+  /**
+   * System/pier-bound projection inputs from the ensureReady capability
+   * channels. Required for digest-stable re-planning of auto-repair: the
+   * request must re-derive the SAME plan the caller already computed
+   * (prepareLog re-plans and compares digests). Optional — the command path
+   * (settings repair) never carries projections.
+   */
+  desiredSystemProjections?: ReadonlyArray<{
+    skillId: string;
+    relativeTarget: string;
+    expectedRelativeLinkTarget: string;
+  }>;
   observedRevision: string;
   operationId: string;
   projectRef: ContractProjectRootRef | MainProjectRootRef;

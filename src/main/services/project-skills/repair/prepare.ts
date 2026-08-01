@@ -123,7 +123,13 @@ export async function prepareLog(
     ctx,
     request.projectRef,
     request.observedRevision,
-    request.continuationOf
+    request.continuationOf,
+    {
+      safeOnly: false,
+      ...(request.desiredSystemProjections === undefined
+        ? {}
+        : { desiredSystemProjections: request.desiredSystemProjections }),
+    }
   );
   if (plan.repairPlanDigest !== request.repairPlanDigest) {
     throw new ProjectSkillsRepairError(

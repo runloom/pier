@@ -176,9 +176,12 @@ export const HEALTH_ISSUE_MAPPINGS: readonly HealthIssueMapping[] = [
   {
     code: "unmanaged-conflict",
     severity: "error",
-    // Launch scope declared to match the gate's hard-block behavior
-    // (ensureReady refuses managed launches on unresolved conflicts).
-    blockingScopes: ["enable", "projection", "write", "launch"],
+    // Settings-only integrity (mirror library-drift): foreign/unowned objects
+    // at a projection path block enable/projection/write, but must NOT refuse
+    // opening an agent. Launch is the user's intent — never a skills hygiene
+    // decision point. Surface the state in settings; do not auto-adopt or
+    // prompt-to-block at spawn.
+    blockingScopes: ["enable", "projection", "write"],
     degradePolicy: "denied",
     repairable: false,
   },

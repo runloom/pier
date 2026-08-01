@@ -95,6 +95,10 @@ export const settingsSkills = {
   userGlobalBadge: "本机全局",
   importAsManaged: "用 Pier 管理",
   systemBadge: "Pier 系统",
+  unmanagedConflictBadge: "路径占用",
+  unmanagedConflictHelpLabel: "路径占用说明",
+  unmanagedConflictHint:
+    "{{target}} 已有同名内容，Pier 不会覆盖。启动智能体不受影响。若要改用 Pier 提供的版本，请先在项目里移走该路径。",
   pierLibraryBadge: "Pier",
   pierBoundBadge: "Pier",
   alwaysIncludeBadge: "始终包含",
@@ -135,7 +139,7 @@ export const settingsSkills = {
   confirmContentDeleteBody:
     "将从本项目移除该技能。关闭开关只会让智能体暂时看不到它。此操作不可撤销。",
   issueUnmanagedConflict:
-    "{{target}} 已有同名目录（非 Pier 托管），Pier 不会覆盖。请先移除该目录，或取消并继续使用原目录。",
+    "{{target}} 已有同名内容，Pier 不会覆盖。启动智能体不受影响。若要改用 Pier 提供的版本，请先在项目里移走该路径。",
   issueDuplicateDiscovery:
     "开启 Claude Code 后，{{agent}} 会在多个目录重复发现同名技能。关闭 Claude Code 可消除。",
   issueIdentityChanged: "项目目录已被移动或替换。请返回项目列表重新打开。",

@@ -203,13 +203,13 @@ export async function ensureReady(
     );
 
     // Hard blocks: only launch-scoped issues. Denied integrity without a
-    // launch scope (e.g. library-drift → settings-only) must not refuse spawn.
+    // launch scope (library-drift / unmanaged-conflict → settings-only) must
+    // not refuse spawn — opening an agent is not a skills hygiene decision.
     const hard = plan.blockingIssues.filter(
       (i) =>
         i.blockingScopes.includes("launch") &&
         (i.code === "ledger-corrupt" ||
           i.code === "recovery-record-corrupt" ||
-          i.code === "unmanaged-conflict" ||
           i.code === "managed-target-modified" ||
           i.code === "invalid-skill" ||
           i.code === "project-identity-changed" ||
@@ -242,6 +242,7 @@ export async function ensureReady(
         operationId,
         repairPlanDigest: plan.repairPlanDigest,
         acknowledgements: [],
+        desiredSystemProjections,
       });
       const result = log.finalizedResult ?? (await drive(ctx, log));
       repaired = result.status === "converged" || result.status === "degraded";

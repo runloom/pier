@@ -169,7 +169,9 @@ describe("project-skills health issue mapping (§5.1)", () => {
         code: "unmanaged-conflict",
         severity: "error",
         degradePolicy: "denied",
-        includes: ["launch"],
+        // Settings-only integrity: enable/projection/write blocked; launch allowed.
+        includes: ["enable", "projection", "write"],
+        excludes: ["launch"],
       },
       {
         code: "managed-target-modified",
