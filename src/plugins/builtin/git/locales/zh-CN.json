@@ -212,6 +212,31 @@
       "description": "放弃本地修改；新增文件会移到废纸篓。",
       "title": "Git: 放弃更改"
     },
+    "pier.git.review.expandAll": {
+      "category": "Git",
+      "description": "展开审查文件树中的全部文件夹。",
+      "title": "展开文件夹"
+    },
+    "pier.git.review.collapseFolders": {
+      "category": "Git",
+      "description": "折叠审查文件树中的全部文件夹。",
+      "title": "折叠文件夹"
+    },
+    "pier.git.review.copyPath": {
+      "category": "Git",
+      "description": "复制所选变更的绝对路径。",
+      "title": "Git: 复制路径"
+    },
+    "pier.git.review.copyRelativePath": {
+      "category": "Git",
+      "description": "复制所选变更在仓库内的相对路径。",
+      "title": "Git: 复制相对路径"
+    },
+    "pier.git.review.revealInFinder": {
+      "category": "Git",
+      "description": "在系统文件管理器中显示所选变更。",
+      "title": "Git: 在访达中显示"
+    },
     "pier.worktree.create": {
       "aliases": [
         "工作树",

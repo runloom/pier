@@ -169,6 +169,31 @@
       "description": "Discard local changes, or move new files to Trash.",
       "title": "Git: Discard Changes"
     },
+    "pier.git.review.expandAll": {
+      "category": "Git",
+      "description": "Expand all folders in the review tree.",
+      "title": "Expand Folders"
+    },
+    "pier.git.review.collapseFolders": {
+      "category": "Git",
+      "description": "Collapse all folders in the review tree.",
+      "title": "Collapse Folders"
+    },
+    "pier.git.review.copyPath": {
+      "category": "Git",
+      "description": "Copy the absolute path of the selected change.",
+      "title": "Git: Copy Path"
+    },
+    "pier.git.review.copyRelativePath": {
+      "category": "Git",
+      "description": "Copy the repository-relative path of the selected change.",
+      "title": "Git: Copy Relative Path"
+    },
+    "pier.git.review.revealInFinder": {
+      "category": "Git",
+      "description": "Reveal the selected change in the system file manager.",
+      "title": "Git: Reveal in Finder"
+    },
     "pier.worktree.create": {
       "aliases": [
         "worktree",
