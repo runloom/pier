@@ -1,4 +1,4 @@
-import type { ThemeVisualPreviewPayload } from "@shared/contracts/theme-visual-preview.ts";
+import type { ThemeVisualPreviewPayload } from "@shared/contracts/theme/visual-preview.ts";
 import { PIER, PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { NATIVE_CHROME_FALLBACK } from "@shared/theme-colors.ts";
 import { type IpcMain, type IpcMainInvokeEvent, nativeTheme } from "electron";

@@ -1,4 +1,4 @@
-import type { StylePresetId, ThemePreference } from "./preferences.ts";
+import type { StylePresetId, ThemePreference } from "../preferences.ts";
 
 /**
  * Ephemeral multi-window theme/style preview (command palette arrow keys).

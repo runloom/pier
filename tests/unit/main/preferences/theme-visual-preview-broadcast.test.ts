@@ -1,3 +1,4 @@
+import type { ThemeVisualPreviewPayload } from "@shared/contracts/theme/visual-preview.ts";
 import { PIER_BROADCAST } from "@shared/ipc-channels.ts";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
@@ -38,7 +39,7 @@ describe("broadcastThemeVisualPreview", () => {
       },
     ]);
 
-    const payload = {
+    const payload: ThemeVisualPreviewPayload = {
       stylePresetId: "github",
       theme: "light" as const,
     };

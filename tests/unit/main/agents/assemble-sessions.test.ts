@@ -88,6 +88,7 @@ describe("assembleSessionRows", () => {
           kind: "agent",
           panelId: "panel-a",
           sessionTitle: "Refactor helpers",
+          sessionTitleSource: "provider",
           source: "hook",
           spawnedAt: 1,
           status: "processing",
@@ -112,6 +113,8 @@ describe("assembleSessionRows", () => {
     expect(hot?.identity).toMatchObject({
       agentId: "codex",
       kind: "agent",
+      sessionTitle: "Refactor helpers",
+      sessionTitleSource: "provider",
     });
     expect(hot?.hot).toBe(true);
 

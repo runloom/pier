@@ -102,7 +102,7 @@ describe("智能体状态官方轨迹跨层验收", () => {
     );
   });
 
-  it("27 个主动集成的 fixture 与 148 项非 unsupported 维度严格等集", () => {
+  it("27 个主动集成的 fixture 与 149 项非 unsupported 维度严格等集", () => {
     const actualAgents = new Set(
       ACTIVE_AGENT_STATUS_TRACES.map((trace) => trace.agentId)
     );
@@ -113,7 +113,7 @@ describe("智能体状态官方轨迹跨层验收", () => {
     );
 
     expect(actualAgents.size).toBe(27);
-    expect(actualCoverage.size).toBe(148);
+    expect(actualCoverage.size).toBe(149);
     expect(actualCoverage).toEqual(expectedActiveCoverage());
   });
 

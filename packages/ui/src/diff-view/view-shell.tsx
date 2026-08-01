@@ -26,10 +26,14 @@ export function PierDiffViewShell(props: {
   readonly codeViewKey: string;
   readonly codeViewRef: RefObject<CodeViewHandle<PierHunkAnnotationMetadata> | null>;
   readonly handleCodeViewScroll: () => void;
-  readonly handleHeaderClickCapture: (event: MouseEvent) => void;
-  readonly handlePointerDownCapture: (event: PointerEvent) => void;
+  readonly handleHeaderClickCapture: (
+    event: MouseEvent<HTMLDivElement>
+  ) => void;
+  readonly handlePointerDownCapture: (
+    event: PointerEvent<HTMLDivElement>
+  ) => void;
   readonly handleUserScrollIntent: () => void;
-  readonly handleUserScrollKey: (event: KeyboardEvent) => void;
+  readonly handleUserScrollKey: (event: KeyboardEvent<HTMLDivElement>) => void;
   readonly onError: (error: Error) => void;
   readonly onUnavailable: () => void;
   readonly options: CodeViewOptions<PierHunkAnnotationMetadata>;

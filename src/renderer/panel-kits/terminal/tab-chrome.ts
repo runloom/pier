@@ -1,5 +1,6 @@
 import { truncateTerminalTitleForTooltip } from "@shared/agent-session-title/index.ts";
 import { agentTabIconId } from "@shared/contracts/agent/session.ts";
+import type { AgentKind } from "@shared/contracts/agent.ts";
 import {
   type AgentSessionTitleSource,
   type ForegroundActivity,

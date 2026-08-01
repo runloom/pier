@@ -1,5 +1,6 @@
 import type {
   PierDiffViewAnchor,
+  PierDiffViewAppearance,
   PierDiffViewHandle,
   PierDiffViewItem,
   PierDiffViewRenderWindow,
@@ -109,7 +110,7 @@ vi.mock("@pier/ui/diff-view/index.tsx", () => ({
   PIER_DIFF_DEFAULT_ESTIMATE_LINES: 16,
   PIER_DIFF_ESTIMATE_SLOT_HEIGHT_PX: 360,
   PierDiffView: (props: {
-    appearance: RendererPluginAppearance;
+    appearance: PierDiffViewAppearance;
     items: readonly PierDiffViewItem[];
     onRenderWindowChange?: (window: PierDiffViewRenderWindow) => void;
     onScroll?: () => void;
@@ -2783,7 +2784,7 @@ describe("Git review panel", () => {
     expect(diffViewRuntime.unmounts).toBe(unmountsBefore);
   });
 
-  it("跨阅读面点击：目标正文水合前保留当前阅读面，水合后原子切换并定位", async () => {
+  it("跨阅读面点击：目标面立即切换，正文水合后保持定位", async () => {
     const stagedPath = "src/far-staged.ts";
     const stagedSectionKey = "staged:far";
     const stagedEntry = entry(1, stagedPath, [
@@ -2822,18 +2823,22 @@ describe("Git review panel", () => {
     fireEvent.click(findTreeItem(view.container, "far-staged.ts"));
     await waitFor(() => expect(stagedRequested).toBe(true));
 
-    expect(
-      view.container.querySelector(
-        '[data-git-review-surface="index"][aria-hidden="false"]'
-      )
-    ).toBeInTheDocument();
+    await waitFor(() =>
+      expect(
+        view.container.querySelector(
+          '[data-git-review-surface="staged"][aria-hidden="false"]'
+        )
+      ).toBeInTheDocument()
+    );
     expect(activeDiff(view.container)).toHaveAttribute(
       "data-item-ids",
-      "section:0"
+      stagedSectionKey
     );
-    expect(
-      scrollToItem.mock.calls.filter(([id]) => id === stagedSectionKey)
-    ).toHaveLength(0);
+    await waitFor(() =>
+      expect(
+        scrollToItem.mock.calls.filter(([id]) => id === stagedSectionKey)
+      ).toHaveLength(1)
+    );
 
     act(() =>
       stagedPending.resolve(
@@ -2863,11 +2868,9 @@ describe("Git review panel", () => {
       "data-item-ids",
       stagedSectionKey
     );
-    await waitFor(() =>
-      expect(
-        scrollToItem.mock.calls.filter(([id]) => id === stagedSectionKey)
-      ).toHaveLength(1)
-    );
+    expect(
+      scrollToItem.mock.calls.filter(([id]) => id === stagedSectionKey)
+    ).toHaveLength(1);
   });
 
   it("连续点击不同树文件时 boost demand 并定位最新目标", async () => {

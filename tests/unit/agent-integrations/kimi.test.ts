@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
+  PIER_HOOK_COMMAND_GENERATION,
   pierHooksCurrentDir,
 } from "../../../src/main/services/agents/hooks-install.ts";
 import {
@@ -23,6 +24,7 @@ import { agentHookEventSchema } from "../../../src/shared/contracts/agent/sessio
 import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
+const HIGHER_HOOK_GENERATION = PIER_HOOK_COMMAND_GENERATION + 1;
 const COMMAND_LINE_RE = /^command = (".*")$/;
 const SESSION_START_HOOK_RE =
   /event = "SessionStart"[^[]*command = ".*SessionStart/;
@@ -228,7 +230,7 @@ describe("withPierKimiHooks (TOML 注入)", () => {
       "# >>> pier-agent-status:kimi (managed by Pier; do not edit) >>>",
       "[[hooks]]",
       'event = "Stop"',
-      `command = "pier-hook-gen=11; \${PIER_AGENT_HOOKS_DIR}/emit"`,
+      `command = "pier-hook-gen=${HIGHER_HOOK_GENERATION}; \${PIER_AGENT_HOOKS_DIR}/emit"`,
       "# <<< pier-agent-status:kimi <<<",
       "",
     ].join("\n");
@@ -246,7 +248,7 @@ describe("withPierKimiHooks (TOML 注入)", () => {
       'command = "pier-hook-gen=1; emit"',
       end,
       begin,
-      'command = "pier-hook-gen=11; emit"',
+      `command = "pier-hook-gen=${HIGHER_HOOK_GENERATION}; emit"`,
       end,
       "",
     ].join("\n");

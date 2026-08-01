@@ -5,6 +5,7 @@ import { describe, expect, it, vi } from "vitest";
 import {
   atomicReplaceSymlink,
   isPierHooksCurrentSymlink,
+  PIER_HOOK_COMMAND_GENERATION,
   readInstalledHookRuntimeGeneration,
   withAgentHooksInstallLock,
 } from "../../../../src/main/services/agents/hooks-install.ts";
@@ -14,6 +15,8 @@ import {
   uninstallAllAgentHooks,
 } from "../../../../src/main/services/agents/integrations/registry.ts";
 import type { AgentHookIntegration } from "../../../../src/main/services/agents/integrations/types.ts";
+
+const HIGHER_HOOK_GENERATION = PIER_HOOK_COMMAND_GENERATION + 1;
 
 function fakeIntegration(
   id: AgentHookIntegration["id"],
@@ -36,9 +39,14 @@ function fakeIntegration(
 }
 
 async function publishHigherRuntime(hooksHome: string): Promise<void> {
-  await mkdir(join(hooksHome, "v11"), { recursive: true });
-  await atomicReplaceSymlink(join(hooksHome, "current"), "v11");
-  await writeFile(join(hooksHome, "GENERATION"), "11\n", "utf8");
+  const higherDirectory = `v${HIGHER_HOOK_GENERATION}`;
+  await mkdir(join(hooksHome, higherDirectory), { recursive: true });
+  await atomicReplaceSymlink(join(hooksHome, "current"), higherDirectory);
+  await writeFile(
+    join(hooksHome, "GENERATION"),
+    `${HIGHER_HOOK_GENERATION}\n`,
+    "utf8"
+  );
 }
 
 describe("installAgentHooksStack", () => {
@@ -49,7 +57,9 @@ describe("installAgentHooksStack", () => {
     const skippedInstall = vi.fn(async () => undefined);
     const assertRuntimeReady = async () => {
       expect(await isPierHooksCurrentSymlink(hooksHome)).toBe(true);
-      expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(10);
+      expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(
+        PIER_HOOK_COMMAND_GENERATION
+      );
     };
     const integrations = [
       fakeIntegration("claude", {
@@ -114,8 +124,14 @@ describe("installAgentHooksStack", () => {
     const hooksHome = join(root, "hooks");
     const detect = vi.fn(() => true);
     const install = vi.fn(async () => undefined);
-    await mkdir(join(hooksHome, "v11"), { recursive: true });
-    await writeFile(join(hooksHome, "GENERATION"), "11\n", "utf8");
+    await mkdir(join(hooksHome, `v${HIGHER_HOOK_GENERATION}`), {
+      recursive: true,
+    });
+    await writeFile(
+      join(hooksHome, "GENERATION"),
+      `${HIGHER_HOOK_GENERATION}\n`,
+      "utf8"
+    );
 
     await installAgentHooksStack(
       { hooksHome, userData: join(root, "userData") },
@@ -124,7 +140,9 @@ describe("installAgentHooksStack", () => {
 
     expect(detect).not.toHaveBeenCalled();
     expect(install).not.toHaveBeenCalled();
-    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(11);
+    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(
+      HIGHER_HOOK_GENERATION
+    );
   });
 
   it("提供方安装完成前持续持锁，较高世代只能随后发布并成为最终配置", async () => {
@@ -144,7 +162,7 @@ describe("installAgentHooksStack", () => {
           install: async () => {
             providerEntered.resolve();
             await releaseProvider.promise;
-            configOwner = "v10";
+            configOwner = `v${PIER_HOOK_COMMAND_GENERATION}`;
           },
         }),
       ]
@@ -155,7 +173,7 @@ describe("installAgentHooksStack", () => {
       hooksHome,
       async () => {
         await publishHigherRuntime(hooksHome);
-        configOwner = "v11";
+        configOwner = `v${HIGHER_HOOK_GENERATION}`;
         higherEntered.resolve();
       },
       {
@@ -177,8 +195,10 @@ describe("installAgentHooksStack", () => {
     await higherInstall;
 
     expect(outcome).toBe("waited");
-    expect(configOwner).toBe("v11");
-    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(11);
+    expect(configOwner).toBe(`v${HIGHER_HOOK_GENERATION}`);
+    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(
+      HIGHER_HOOK_GENERATION
+    );
   });
 });
 
@@ -213,8 +233,14 @@ describe("uninstallAllAgentHooks", () => {
     const hooksHome = join(root, "hooks");
     const detect = vi.fn(() => true);
     const uninstall = vi.fn(async () => undefined);
-    await mkdir(join(hooksHome, "v11"), { recursive: true });
-    await writeFile(join(hooksHome, "GENERATION"), "11\n", "utf8");
+    await mkdir(join(hooksHome, `v${HIGHER_HOOK_GENERATION}`), {
+      recursive: true,
+    });
+    await writeFile(
+      join(hooksHome, "GENERATION"),
+      `${HIGHER_HOOK_GENERATION}\n`,
+      "utf8"
+    );
 
     await uninstallAllAgentHooks({ hooksHome }, [
       fakeIntegration("devin", {
@@ -235,8 +261,14 @@ describe("uninstallAllAgentHooks", () => {
     const root = await mkdtemp(join(tmpdir(), "pier-hook-uninstall-current-"));
     const hooksHome = join(root, "hooks");
     if (current) {
-      await mkdir(join(hooksHome, "v10"), { recursive: true });
-      await writeFile(join(hooksHome, "GENERATION"), "10\n", "utf8");
+      await mkdir(join(hooksHome, `v${PIER_HOOK_COMMAND_GENERATION}`), {
+        recursive: true,
+      });
+      await writeFile(
+        join(hooksHome, "GENERATION"),
+        `${PIER_HOOK_COMMAND_GENERATION}\n`,
+        "utf8"
+      );
     }
     const detectFirst = vi.fn(() => {
       throw new Error("detect must not run during uninstall");
@@ -276,14 +308,20 @@ describe("uninstallAllAgentHooks", () => {
   it("提供方卸载完成前持续持锁，较高世代只能随后发布并保留最终配置", async () => {
     const root = await mkdtemp(join(tmpdir(), "pier-hook-uninstall-race-"));
     const hooksHome = join(root, "hooks");
-    await mkdir(join(hooksHome, "v10"), { recursive: true });
-    await writeFile(join(hooksHome, "GENERATION"), "10\n", "utf8");
+    await mkdir(join(hooksHome, `v${PIER_HOOK_COMMAND_GENERATION}`), {
+      recursive: true,
+    });
+    await writeFile(
+      join(hooksHome, "GENERATION"),
+      `${PIER_HOOK_COMMAND_GENERATION}\n`,
+      "utf8"
+    );
     const providerEntered = Promise.withResolvers<void>();
     const releaseProvider = Promise.withResolvers<void>();
     const higherContended = Promise.withResolvers<void>();
     const retryHigher = Promise.withResolvers<void>();
     const higherEntered = Promise.withResolvers<void>();
-    let configOwner = "v10";
+    let configOwner = `v${PIER_HOOK_COMMAND_GENERATION}`;
 
     const lowerUninstall = uninstallAllAgentHooks({ hooksHome }, [
       fakeIntegration("devin", {
@@ -291,7 +329,7 @@ describe("uninstallAllAgentHooks", () => {
         uninstall: async () => {
           providerEntered.resolve();
           await releaseProvider.promise;
-          configOwner = "removed-by-v10";
+          configOwner = `removed-by-v${PIER_HOOK_COMMAND_GENERATION}`;
         },
       }),
     ]);
@@ -301,7 +339,7 @@ describe("uninstallAllAgentHooks", () => {
       hooksHome,
       async () => {
         await publishHigherRuntime(hooksHome);
-        configOwner = "v11";
+        configOwner = `v${HIGHER_HOOK_GENERATION}`;
         higherEntered.resolve();
       },
       {
@@ -323,7 +361,9 @@ describe("uninstallAllAgentHooks", () => {
     await higherInstall;
 
     expect(outcome).toBe("waited");
-    expect(configOwner).toBe("v11");
-    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(11);
+    expect(configOwner).toBe(`v${HIGHER_HOOK_GENERATION}`);
+    expect(await readInstalledHookRuntimeGeneration(hooksHome)).toBe(
+      HIGHER_HOOK_GENERATION
+    );
   });
 });

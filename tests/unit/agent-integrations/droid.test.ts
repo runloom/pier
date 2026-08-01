@@ -2,9 +2,11 @@ import { mkdir, mkdtemp, readFile, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { PIER_HOOK_COMMAND_GENERATION } from "../../../src/main/services/agents/hooks-install.ts";
 import { droidIntegration } from "../../../src/main/services/agents/integrations/droid.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
+const HIGHER_HOOK_GENERATION = PIER_HOOK_COMMAND_GENERATION + 1;
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -345,7 +347,7 @@ describe("droid 从 settings.json fallback 迁移到官方 hooks.json", () => {
               { type: "command", command: "settings-user-stop" },
               {
                 type: "command",
-                command: `pier-hook-gen=11; "\${PIER_AGENT_HOOKS_DIR}/emit" newer`,
+                command: `pier-hook-gen=${HIGHER_HOOK_GENERATION}; "\${PIER_AGENT_HOOKS_DIR}/emit" newer`,
               },
             ],
           },
@@ -370,7 +372,7 @@ describe("droid 从 settings.json fallback 迁移到官方 hooks.json", () => {
             hooks: [
               {
                 type: "command",
-                command: `pier-hook-gen=11; "\${PIER_AGENT_HOOKS_DIR}/emit" newer`,
+                command: `pier-hook-gen=${HIGHER_HOOK_GENERATION}; "\${PIER_AGENT_HOOKS_DIR}/emit" newer`,
               },
             ],
           },

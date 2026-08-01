@@ -572,7 +572,7 @@ describe("filesLspHoverExtension", () => {
 
     movePointer(view, { metaKey: true });
     await flushAsyncWork();
-    view.measure();
+    view.requestMeasure();
     await flushAsyncWork();
 
     const mark = view.dom.querySelector(".cm-lsp-definition-affordance");

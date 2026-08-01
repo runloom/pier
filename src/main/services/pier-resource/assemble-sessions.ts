@@ -34,6 +34,9 @@ export function identityFromActivity(
         ...(activity.sessionTitle === undefined
           ? {}
           : { sessionTitle: activity.sessionTitle }),
+        ...(activity.sessionTitleSource === undefined
+          ? {}
+          : { sessionTitleSource: activity.sessionTitleSource }),
         ...(activity.status === undefined ? {} : { status: activity.status }),
       };
     case "task":

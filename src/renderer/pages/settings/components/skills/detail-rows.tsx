@@ -133,7 +133,6 @@ export function ManagedSkillRow({
                   <Badge
                     aria-label={t("settings.skills.unmanagedConflictHelpLabel")}
                     className="cursor-help gap-0.5"
-                    tabIndex={0}
                     variant="outline"
                   >
                     {t("settings.skills.unmanagedConflictBadge")}

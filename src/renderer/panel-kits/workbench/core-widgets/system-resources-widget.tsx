@@ -140,6 +140,7 @@ function sessionTitle(
           agentId: identity.agentId,
           projectRootPath: projectPath,
           sessionTitle: identity.sessionTitle,
+          sessionTitleSource: identity.sessionTitleSource,
         })
       ).primary;
     case "task":

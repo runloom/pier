@@ -5,6 +5,7 @@ import {
   getShikiThemePair,
   STYLE_PRESET_REGISTRY,
 } from "@/lib/theme/preset-registry.ts";
+import tokyoNightLight from "@/lib/theme/presets/tokyo-night-light.ts";
 
 describe("tokyo-night style preset", () => {
   it("is registered with Shiki night + Enkia light pair", () => {
@@ -20,6 +21,12 @@ describe("tokyo-night style preset", () => {
     expect(getShikiThemePair("tokyo-night")).toEqual({
       dark: "tokyo-night",
       light: "tokyo-night-light",
+    });
+  });
+
+  it("normalizes VS Code semantic token rules for Shiki", () => {
+    expect(tokyoNightLight.semanticTokenColors).toMatchObject({
+      parameter: "#634f30",
     });
   });
 

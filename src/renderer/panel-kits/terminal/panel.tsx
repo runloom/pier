@@ -203,9 +203,7 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     getGroupId,
     panelId,
     title:
-      terminalTitle?.trim() ||
-      (effectiveCwd ? basename(effectiveCwd) : null) ||
-      undefined,
+      terminalTitle?.trim() || (effectiveCwd ? basename(effectiveCwd) : null),
   };
   const hasStatusBar = shouldMountTerminalStatusBar(
     statusItems,

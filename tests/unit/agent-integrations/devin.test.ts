@@ -6,6 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   eventsJsonlPath,
   installAgentHooksEmitScript,
+  PIER_HOOK_COMMAND_GENERATION,
   pierHooksCurrentDir,
 } from "../../../src/main/services/agents/hooks-install.ts";
 import { stripJsonComments } from "../../../src/main/services/agents/integrations/devin.ts";
@@ -14,6 +15,7 @@ import { agentHookEventSchema } from "../../../src/shared/contracts/agent/sessio
 import { pathForHookSpawn } from "./hook-spawn-path.ts";
 
 const MARK = "PIER_AGENT_HOOKS_DIR";
+const HIGHER_HOOK_GENERATION = PIER_HOOK_COMMAND_GENERATION + 1;
 
 function hookCommands(settings: Record<string, unknown>): string[] {
   const hooks = (settings.hooks ?? {}) as Record<
@@ -393,7 +395,7 @@ describe("devinIntegration", () => {
       "{",
       "  // installed by a newer Pier",
       '  "hooks": {',
-      `    "Stop": [{ "hooks": [{ "type": "command", "command": "pier-hook-gen=11; \${PIER_AGENT_HOOKS_DIR}/emit" }] }],`,
+      `    "Stop": [{ "hooks": [{ "type": "command", "command": "pier-hook-gen=${HIGHER_HOOK_GENERATION}; \${PIER_AGENT_HOOKS_DIR}/emit" }] }],`,
       "  },",
       "}",
       "",
@@ -425,7 +427,9 @@ describe("devinIntegration", () => {
     const integration = await loadIntegration();
     await integration.install();
     const installed = await readFile(configPath(), "utf8");
-    expect(installed).toContain("pier-hook-gen=10");
+    expect(installed).toContain(
+      `pier-hook-gen=${PIER_HOOK_COMMAND_GENERATION}`
+    );
     expect(installed).toContain("// keep this account note");
     expect(installed).toContain("// keep this user hook note");
     expect(installed).toContain('"unknown": { "enabled": true }');
