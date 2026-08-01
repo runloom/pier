@@ -434,6 +434,7 @@ export const settings = {
     "rose-pine": "Rose Pine",
     slack: "Slack",
     solarized: "Solarized",
+    "tokyo-night": "Tokyo Night",
     vitesse: "Vitesse",
   },
   locale: {

@@ -27,6 +27,7 @@ export const STYLE_PRESET_OPTIONS: readonly StylePresetOption[] = [
   { value: "rose-pine", labelKey: "settings.stylePreset.rose-pine" },
   { value: "slack", labelKey: "settings.stylePreset.slack" },
   { value: "solarized", labelKey: "settings.stylePreset.solarized" },
+  { value: "tokyo-night", labelKey: "settings.stylePreset.tokyo-night" },
   { value: "vitesse", labelKey: "settings.stylePreset.vitesse" },
 ];
 

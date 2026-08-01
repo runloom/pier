@@ -69,6 +69,8 @@ export const stylePresetIdSchema = z.enum([
   "rose-pine",
   "slack",
   "solarized",
+  /** Tokyo Night (Shiki) + Enkia Tokyo Night Light. */
+  "tokyo-night",
   "vitesse",
 ]);
 
