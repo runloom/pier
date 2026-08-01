@@ -1950,7 +1950,14 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
       .poll(
         () =>
           page.evaluate((noticePatternSource) => {
-            const scroller = document.querySelector<HTMLElement>(
+            // Multi-surface layout keeps inactive roots in the DOM — scope to active.
+            const surface = document.querySelector(
+              '[data-git-review-surface][aria-hidden="false"]'
+            );
+            if (!(surface instanceof HTMLElement)) {
+              return false;
+            }
+            const scroller = surface.querySelector<HTMLElement>(
               '[data-testid="pierre-diff-root"] .cv-scrollbar'
             );
             if (!scroller) {
@@ -1960,7 +1967,7 @@ test("opens one multi-file Review with the real tree and official Pierre CodeVie
             const noticePattern = new RegExp(noticePatternSource, "u");
             // Binary notice lives in Pier light-DOM header metadata (not shadow).
             const notices = [
-              ...document.querySelectorAll(
+              ...surface.querySelectorAll(
                 '[data-slot="pier-diff-header-state-notice"]'
               ),
             ];
