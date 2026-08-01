@@ -1,11 +1,11 @@
 {
-  "generatedAt": 1785151921347,
+  "generatedAt": 1785569412708,
   "plugins": {
     "pier.claude": {
       "description": "Manage Claude accounts and switch the active login for Pier.",
       "displayName": "Claude Account Management",
       "id": "pier.claude",
-      "latest": "1.3.5",
+      "latest": "1.3.6",
       "locales": {
         "en": {
           "name": "Claude Account Management",
@@ -40,6 +40,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "8c59d3dc1290100676fdc216d755c60b178b8e713a0194816c3c4201c8cb3790",
           "size": 632900
+        },
+        "1.3.6": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-claude-v1.3.6/pier.claude-1.3.6.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "290d8ca047bf4d2189f4ab1374dde0238df7abb5620c5d057606cd280acef6cd",
+          "size": 671305
         }
       }
     },
@@ -47,7 +53,7 @@
       "description": "Codex account management and usage monitoring for Pier.",
       "displayName": "Codex Account Management",
       "id": "pier.codex",
-      "latest": "1.4.6",
+      "latest": "1.4.7",
       "locales": {
         "en": {
           "name": "Codex Account Management",
@@ -88,6 +94,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "0e136d0f6db9da228f121705ef98e0329eb94676142b769cc780e59da16ee2a0",
           "size": 624196
+        },
+        "1.4.7": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-codex-v1.4.7/pier.codex-1.4.7.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "794c823c348338ae23589b07aba8dce836c7bf3445903449f3a0327cb77bb871",
+          "size": 666185
         }
       }
     },
@@ -95,7 +107,7 @@
       "description": "Manage Grok accounts, login, and switch for Pier.",
       "displayName": "Grok Account Management",
       "id": "pier.grok",
-      "latest": "1.1.6",
+      "latest": "1.1.7",
       "locales": {
         "en": {
           "name": "Grok Account Management",
@@ -136,6 +148,12 @@
           "pier": ">=0.1.0 <0.2.0",
           "sha256": "e87a7d60558dee799a67ea0e4e899e8b1fcb1163f1e8cbb7618d34c19281bc28",
           "size": 671305
+        },
+        "1.1.7": {
+          "assetUrl": "https://github.com/runloom/pier/releases/download/plugin-grok-v1.1.7/pier.grok-1.1.7.tgz",
+          "pier": ">=0.1.0 <0.2.0",
+          "sha256": "7165de887ba671f62764345143c429e301638fdd577a00785c85a799d4bc4c06",
+          "size": 713801
         }
       }
     },
@@ -176,11 +194,11 @@
       }
     }
   },
-  "sequence": 24,
+  "sequence": 25,
   "version": 1,
   "signature": {
     "alg": "Ed25519",
     "keyId": "pier-official-dev-test",
-    "value": "Bph59/C1ndRAn/NJt6s0U9EQr/oH7wQ4PgpP/Y1qMqBBLH3rcsfNKfhFgu03m+wznDyPzpy9ns3GM/2mEviJBQ=="
+    "value": "CPoUyZTf4Hx2WI3xvGLHJDCX2Qduxzegb5GfekwCdD2bSVC6lbGl7RFzyy/vv4pFHN722UqBYYRBQyoLObcGBw=="
   }
 }
