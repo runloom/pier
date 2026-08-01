@@ -70,8 +70,12 @@ run_static() {
 }
 
 run_fast_tests() {
-  run "pnpm test:unit"
-  run "pnpm test:component"
+  # Cap workers locally: full-core parallel unit thrashing tmp FS makes
+  # project-skills (renamex/symlink) and similar suites flake with false
+  # timeouts / EXDEV races. CI keeps default parallelism for wall-clock.
+  local workers="${PIER_PREFLIGHT_MAX_WORKERS:-4}"
+  run "pnpm exec vitest run tests/unit --maxWorkers=${workers}"
+  run "pnpm exec vitest run tests/component --maxWorkers=${workers}"
 }
 
 # --- push: default pre-push; must catch common CI unit/static failures ---

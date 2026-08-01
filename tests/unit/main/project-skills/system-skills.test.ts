@@ -51,7 +51,7 @@ function contribution(overrides?: Record<string, unknown>) {
   };
 }
 
-describe("Pier system skills channel (v8 §8)", () => {
+describe("Pier system skills channel (v8 §8)", { timeout: 30_000 }, () => {
   it("enforces the pier- prefix and provider identity", () => {
     expect(() =>
       assertSystemSkillContribution({

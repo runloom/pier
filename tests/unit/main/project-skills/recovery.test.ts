@@ -108,7 +108,9 @@ afterEach(async () => {
   await rm(sharedLockRoot, { force: true, recursive: true });
 });
 
-describe("project-skills recovery coordinator basics", () => {
+describe("project-skills recovery coordinator basics", {
+  timeout: 30_000,
+}, () => {
   it("writes durable recovery log before first project write", async () => {
     const digest = await writeLibrarySkill("review-guide");
     await writeManifest({

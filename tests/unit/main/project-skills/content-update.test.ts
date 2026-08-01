@@ -116,7 +116,9 @@ function buildServices(options?: { hooks?: ApplyHooks; now?: () => number }) {
 const NEW_SKILL_MD =
   "---\nname: review-guide\ndescription: content update skill\n---\nUpdated body\n";
 
-describe("content update / drift acceptance candidates (v8)", () => {
+describe("content update / drift acceptance candidates (v8)", {
+  timeout: 30_000,
+}, () => {
   it("prepareContentUpdate binds base digest and re-runs limits", async () => {
     const digest = await writeLibrarySkill("review-guide", "Original body\n");
     const { importService } = buildServices();

@@ -17,8 +17,8 @@ describe("preflight-ci governance", () => {
     }
     // push tier must run unit+component so CI is not the first place tests fail
     expect(source).toContain("pnpm check:static");
-    expect(source).toContain("pnpm test:unit");
-    expect(source).toContain("pnpm test:component");
+    expect(source).toContain("vitest run tests/unit");
+    expect(source).toContain("vitest run tests/component");
     expect(source).toContain("pnpm test:coverage");
     expect(source).toContain("pnpm build");
   });
