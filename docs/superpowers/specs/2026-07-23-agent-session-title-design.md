@@ -2,9 +2,17 @@
 
 > 日期：2026-07-23
 >
-> 状态：已实现并完成边界加固
+> 状态：**部分废止 / 由终端 OSC 金标准收口**（2026-08-01）
+>
+> **终态覆盖**：终端 tab 主标题 = **OSC 0/2 → cwd basename**（对齐 Ghostty），见
+> `AGENTS.md`「终端 tab 标题与 Agent 身份」与 `terminalPanelDescriptor`。
+> 本文中「产品 sessionTitle 作 tab 主标题」「PromptSubmit 派生」「prompt 来源枚举」
+> 「Claude derive-claude-session-title 双写」均已废止。
+> 产品 sessionTitle 枚举仅 `provider` | `user`（Index / 改名）；历史
+> `prompt`/`auto`/`rule`/`model` 读取期整段丢弃。
 >
 > 实施计划：[../plans/2026-07-23-agent-session-title.md](../plans/2026-07-23-agent-session-title.md)
+> （计划内 T 项历史归档；新行为以 AGENTS.md 与单测为准）
 
 ## 1. 目标和完成标准
 

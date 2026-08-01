@@ -1,8 +1,8 @@
 import {
   agentSessionTitleRank,
   decideAgentSessionTitleWrite,
-  deriveAgentSessionTitleFromPrompt,
   disambiguateAgentSessionTitles,
+  firstAgentPromptLine,
   MAX_AGENT_SESSION_TITLE_LENGTH,
   MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH,
   normalizeAgentSessionTitle,
@@ -14,18 +14,39 @@ import {
 import { describe, expect, it } from "vitest";
 
 describe("resolveAgentSessionTitle", () => {
-  it("prefers sessionTitle over placeholder", () => {
+  it("honors provider and user sessionTitle over placeholder", () => {
     expect(
       resolveAgentSessionTitle({
         agentId: "claude",
         projectRootPath: "/repo/pier",
         sessionTitle: "Fix parser crash",
-        sessionTitleSource: "prompt",
+        sessionTitleSource: "provider",
       })
     ).toMatchObject({
       primary: "Fix parser crash",
       placeholder: "Claude · pier",
       secondary: "pier",
+    });
+    expect(
+      resolveAgentSessionTitle({
+        agentId: "claude",
+        projectRootPath: "/repo/pier",
+        sessionTitle: "My rename",
+        sessionTitleSource: "user",
+      })
+    ).toMatchObject({ primary: "My rename" });
+  });
+
+  it("ignores titles without a provider/user source", () => {
+    expect(
+      resolveAgentSessionTitle({
+        agentId: "claude",
+        projectRootPath: "/repo/pier",
+        sessionTitle: "orphan title",
+      })
+    ).toMatchObject({
+      primary: "Claude · pier",
+      placeholder: "Claude · pier",
     });
   });
 
@@ -53,27 +74,29 @@ describe("resolveAgentSessionTitle", () => {
     });
   });
 
-  it("rejects multiline sessionTitle and truncates overlong for display", () => {
+  it("rejects multiline user title and truncates overlong for display", () => {
     expect(
       resolveAgentSessionTitle({
         agentId: "claude",
         sessionTitle: "line one\nline two",
+        sessionTitleSource: "user",
       }).primary
     ).toBe("Claude");
     const primary = resolveAgentSessionTitle({
       agentId: "claude",
       sessionTitle: "x".repeat(MAX_AGENT_SESSION_TITLE_LENGTH + 1),
+      sessionTitleSource: "user",
     }).primary;
     expect(primary.length).toBe(MAX_AGENT_SESSION_TITLE_LENGTH);
     expect(primary.endsWith("…")).toBe(true);
   });
 
-  it("strips persisted user_query markup on display", () => {
+  it("strips persisted user_query markup on user/provider display", () => {
     expect(
       resolveAgentSessionTitle({
         agentId: "claude",
         sessionTitle: "<user_query> cmd + p 会先展示 loading",
-        sessionTitleSource: "prompt",
+        sessionTitleSource: "user",
       }).primary
     ).toBe("cmd + p 会先展示 loading");
   });
@@ -103,84 +126,16 @@ describe("stripAgentPromptMarkup", () => {
   });
 });
 
-describe("deriveAgentSessionTitleFromPrompt", () => {
-  it("keeps the prompt verbatim after stripping markup", () => {
-    // 确定性派生：只剥协议标记，不改写语义——用户看到的就是自己写的那句话。
-    expect(
-      deriveAgentSessionTitleFromPrompt(
-        "[Image #1] 帮我修一下 parser 崩溃，复现步骤在下面"
-      )
-    ).toBe("帮我修一下 parser 崩溃，复现步骤在下面");
-  });
-
-  it("does not judge greetings, slash commands, paths or stack traces", () => {
-    // 启发式已整体移除：短输入、slash 命令、路径、报错栈都照原样成为标题，
-    // 用户不满意可以改名，但结果永远可复现。
-    expect(deriveAgentSessionTitleFromPrompt("你好")).toBe("你好");
-    expect(deriveAgentSessionTitleFromPrompt("/clear")).toBe("/clear");
-    expect(deriveAgentSessionTitleFromPrompt("src/foo/bar.ts")).toBe(
-      "src/foo/bar.ts"
+describe("firstAgentPromptLine / strip (legacy helpers, no title pipeline)", () => {
+  it("takes the first non-empty line after markup strip", () => {
+    expect(firstAgentPromptLine("修 parser 崩溃\n\n复现步骤：\n1. 打开")).toBe(
+      "修 parser 崩溃"
     );
-    expect(deriveAgentSessionTitleFromPrompt("    at foo (bar.ts:12:34)")).toBe(
-      "at foo (bar.ts:12:34)"
-    );
-  });
-
-  it("takes the first line, not the whole prompt folded into one", () => {
-    // 多行 prompt 的后续说明不该拼进标题（首行几乎总是更好的标题）。
     expect(
-      deriveAgentSessionTitleFromPrompt("修 parser 崩溃\n\n复现步骤：\n1. 打开")
-    ).toBe("修 parser 崩溃");
-  });
-
-  it("skips leading blank lines before the first real line", () => {
-    expect(deriveAgentSessionTitleFromPrompt("\n\n  \n改一下 toast 位置")).toBe(
-      "改一下 toast 位置"
-    );
-  });
-
-  it("strips user_query wrappers before deriving", () => {
-    expect(
-      deriveAgentSessionTitleFromPrompt(
+      firstAgentPromptLine(
         "<user_query>\ncmd + p 会先展示 loading spinner\n</user_query>"
       )
     ).toBe("cmd + p 会先展示 loading spinner");
-  });
-
-  it("returns null for empty and markup-only prompts", () => {
-    expect(deriveAgentSessionTitleFromPrompt(undefined)).toBeNull();
-    expect(deriveAgentSessionTitleFromPrompt("   ")).toBeNull();
-    expect(deriveAgentSessionTitleFromPrompt("<user_query></user_query>")).toBe(
-      null
-    );
-  });
-
-  it("truncates overlong prompts with an ellipsis", () => {
-    const title = deriveAgentSessionTitleFromPrompt(
-      "a".repeat(MAX_AGENT_SESSION_TITLE_LENGTH * 2)
-    );
-    expect(title?.length).toBe(MAX_AGENT_SESSION_TITLE_LENGTH);
-    expect(title?.endsWith("…")).toBe(true);
-  });
-
-  it("soft-breaks near spaces when truncating", () => {
-    const title = deriveAgentSessionTitleFromPrompt(
-      `fix the terminal open url path when pasting images into rich input ${"tail ".repeat(20)}`
-    );
-    expect(title?.length).toBeLessThanOrEqual(MAX_AGENT_SESSION_TITLE_LENGTH);
-    expect(title?.endsWith("…")).toBe(true);
-    expect(title?.includes("<")).toBe(false);
-  });
-
-  it("counts Unicode code points without splitting emoji surrogate pairs", () => {
-    const title = deriveAgentSessionTitleFromPrompt("😀".repeat(121));
-    expect(title).not.toBeNull();
-    expect(Array.from(title ?? "")).toHaveLength(
-      MAX_AGENT_SESSION_TITLE_LENGTH
-    );
-    expect(title?.endsWith("…")).toBe(true);
-    expect(title).not.toContain("\uFFFD");
-    expect(() => encodeURIComponent(title ?? "")).not.toThrow();
   });
 });
 
@@ -246,14 +201,14 @@ describe("normalizeAgentSessionTitle", () => {
 });
 
 describe("normalizeAgentSessionTitleSource", () => {
-  it("maps legacy auto / rule / model to prompt", () => {
-    expect(normalizeAgentSessionTitleSource("auto")).toBe("prompt");
-    expect(normalizeAgentSessionTitleSource("rule")).toBe("prompt");
-    expect(normalizeAgentSessionTitleSource("model")).toBe("prompt");
+  it("drops legacy prompt / auto / rule / model", () => {
+    expect(normalizeAgentSessionTitleSource("prompt")).toBeUndefined();
+    expect(normalizeAgentSessionTitleSource("auto")).toBeUndefined();
+    expect(normalizeAgentSessionTitleSource("rule")).toBeUndefined();
+    expect(normalizeAgentSessionTitleSource("model")).toBeUndefined();
   });
 
-  it("passes through current values", () => {
-    expect(normalizeAgentSessionTitleSource("prompt")).toBe("prompt");
+  it("passes through provider and user only", () => {
     expect(normalizeAgentSessionTitleSource("provider")).toBe("provider");
     expect(normalizeAgentSessionTitleSource("user")).toBe("user");
   });
@@ -265,39 +220,38 @@ describe("normalizeAgentSessionTitleSource", () => {
 });
 
 describe("agentSessionTitleRank", () => {
-  it("orders placeholder < prompt < provider < user", () => {
+  it("orders placeholder < provider < user", () => {
     expect(agentSessionTitleRank(undefined)).toBe(0);
-    expect(agentSessionTitleRank("prompt")).toBe(1);
-    expect(agentSessionTitleRank("provider")).toBe(2);
-    expect(agentSessionTitleRank("user")).toBe(3);
+    expect(agentSessionTitleRank("provider")).toBe(1);
+    expect(agentSessionTitleRank("user")).toBe(2);
   });
 });
 
 describe("decideAgentSessionTitleWrite", () => {
-  it("writes into an empty slot from any source", () => {
+  it("writes into an empty slot from provider", () => {
     expect(
       decideAgentSessionTitleWrite({
-        nextSource: "prompt",
+        nextSource: "provider",
         nextTitle: "First",
       })
-    ).toEqual({ apply: true, source: "prompt", title: "First" });
+    ).toEqual({ apply: true, source: "provider", title: "First" });
   });
 
-  it("blocks lower-rank over higher-rank", () => {
+  it("blocks provider over user", () => {
     expect(
       decideAgentSessionTitleWrite({
         currentSource: "user",
         currentTitle: "Mine",
-        nextSource: "prompt",
+        nextSource: "provider",
         nextTitle: "New",
       })
     ).toEqual({ apply: false });
   });
 
-  it("allows higher-rank over lower-rank", () => {
+  it("allows user over provider", () => {
     expect(
       decideAgentSessionTitleWrite({
-        currentSource: "prompt",
+        currentSource: "provider",
         currentTitle: "Old",
         nextSource: "user",
         nextTitle: "Mine",
@@ -305,21 +259,20 @@ describe("decideAgentSessionTitleWrite", () => {
     ).toEqual({ apply: true, source: "user", title: "Mine" });
   });
 
-  it("treats same auto-rank as no-op (later prompts do not rewrite)", () => {
+  it("treats same provider rank as no-op", () => {
     expect(
       decideAgentSessionTitleWrite({
-        currentSource: "prompt",
+        currentSource: "provider",
         currentTitle: "Old",
-        nextSource: "prompt",
+        nextSource: "provider",
         nextTitle: "New",
       })
     ).toEqual({ apply: false });
   });
 
-  it("lets provider name replace a prompt-derived title", () => {
+  it("lets provider write when current has title but no valid source", () => {
     expect(
       decideAgentSessionTitleWrite({
-        currentSource: "prompt",
         currentTitle: "把这段改成三层",
         nextSource: "provider",
         nextTitle: "标题分层重构",
@@ -362,12 +315,16 @@ describe("decideAgentSessionTitleWrite", () => {
 });
 
 describe("truncateTerminalTitleForTooltip", () => {
-  it("returns undefined for empty or multiline", () => {
+  it("returns undefined for empty / whitespace-only", () => {
     expect(truncateTerminalTitleForTooltip("  ")).toBeUndefined();
-    expect(truncateTerminalTitleForTooltip("a\nb")).toBeUndefined();
+    expect(truncateTerminalTitleForTooltip("\n\t")).toBeUndefined();
   });
 
-  it("truncates past the tooltip cap", () => {
+  it("collapses newlines to spaces instead of dropping the OSC title", () => {
+    expect(truncateTerminalTitleForTooltip("a\nb")).toBe("a b");
+  });
+
+  it("truncates past the display safety cap", () => {
     const raw = "a".repeat(MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH + 10);
     const out = truncateTerminalTitleForTooltip(raw);
     expect(out?.endsWith("…")).toBe(true);

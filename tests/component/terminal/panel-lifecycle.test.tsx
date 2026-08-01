@@ -674,8 +674,9 @@ describe("TerminalPanel lifecycle", () => {
 
     render(<TerminalPanel {...props} />);
 
+    // Ghostty-aligned: persisted OSC title wins over cwd basename.
     await waitFor(() => {
-      expect(props.api.setTitle).toHaveBeenCalledWith("pier");
+      expect(props.api.setTitle).toHaveBeenCalledWith("Claude Code");
     });
     expect(props.api.setTitle).not.toHaveBeenCalledWith("Terminal");
     expect(window.pier.terminal.create).not.toHaveBeenCalled();

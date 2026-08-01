@@ -374,7 +374,8 @@ describe("withPierNestedHooks（matcher 约定）", () => {
       expect(cmd).not.toContain(process.execPath);
       expect(cmd).not.toMatch(/\/Users\/|\/home\/|\/Applications\//);
     }
-    expect(cmds[2]).toContain(`${hooksDirRef}/derive-claude-session-title`);
+    // gen≥11：Claude UserPromptSubmit 不再双写 sessionTitle。
+    expect(cmds[2]).not.toContain("derive-claude-session-title");
   });
 
   it("幂等 + 保留用户条目 + 卸载还原", () => {

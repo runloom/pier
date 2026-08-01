@@ -327,21 +327,18 @@ section 根节点下的裸子节点。
 - 模块内不 import `services/agents/`（agent 只是 activity 的一种 kind，边界单向）
 - Agent 提供方（Provider）原生 session / transcript 只可作为对应适配器内部的兼容输入；宿主不提供公共 Transcript capability、读取 API、统一存储、索引或回放
 
-#### Agent 会话标题与身份（标题 ≠ 身份）
+#### 终端 tab 标题与 Agent 身份（标题 ≠ 身份）— 金标准
 
-标题是**尽力而为的可读性信号**：来源不可靠（不同 agent 的 hook 能力不一致）、用户随时可改、永不全覆盖。**多 agent 调度要用的身份必须确定性**，不得从标题反推。
+**单一真源（对齐 Ghostty）**：终端 tab short = 进程/TUI **OSC 0/2**；无 OSC → **cwd basename**。宿主不得用 prompt 截断、catalog 占位抢 tab。入口：`terminalPanelDescriptor`。
 
-- **身份四件套**：`agentId` + 项目路径锚点（`projectRootPath` / `cwd`）+ `panelId` + 角色（`actorHint` 主/子会话，`parentSessionId` 记委派边，`sessionId` 由 provider 原样上报）。这些字段在 `agentActivitySchema`（`.strict()`）里，缺席只表示证据不足，消费方按主会话处理。
-- **身份只由主会话事件推进**：主/子会话判据唯一实现在 `src/shared/agent-session-actor.ts`（`isSubagentHookEvent` / `SUBAGENT_HOOK_EVENTS`），main 与 foreground-activity 都必须消费它，不得各写一份。子会话事件只累加计数，永不写面板行身份；`SessionStart` 是**换会话**（resume / clear 后会话号会变），身份整体替换而非叠加，否则旧 `sessionId` 会残留成错误身份；`agent-launch` 先验没有任何 hook 事实，因此不带身份字段，也不得从命令行反推会话号。
-- **标题只有三层**：`prompt`(1) < `provider`(2) < `user`(3)。`prompt` 来自首条 prompt 的**确定性截断**（`deriveAgentSessionTitleFromPrompt`：清协议标记 → 取首行 → 规范化 + 软断点硬截断）；`provider` 是 **agent 自己算好的会话名**，从其原生 transcript 读出后原样采信；`user` 是改名。历史 `auto` / `rule` / `model` 在读取期归一为 `prompt`，**不回写**。
-- **provider 秩是「尽量用 agent 自身能力」的唯一正确形态**：通路在 `transcript-tail-reconciler.ts` 的 `classifyTitleLine` / `onTitleRecord`（逐 agent 增量接入，当前只有 Claude 的 `ai-title`），宿主侧消费在 `session-title/index.ts` 的 `applyProviderAgentSessionTitle`。硬约束：**不额外起进程、不花 token、不需要 `titleArgs`**；**只收 agent 真正自己生成的标题**——Claude 的 `custom-title` / `agent-name` 装的是 Pier 经 `derive-claude-session-title` 双写回去的 prompt 派生（逐字相同，含 `…` 截断标记），收下等于把自己的截断洗成更高的秩，且它们先到会把随后真正的 `ai-title` 永久挡在门外；只在增量区消费（初始 tail 回扫的旧标题不得占空槽）；`sessionId` 对不上且 transcript 有多个 owner 时**放弃**而非猜；同秩不覆盖，所以每回合重算的 `ai-title` 只有第一条生效，标题不抖。**接不到就不接**——静默降级回 `prompt` 地板，不报错、不影响终态对账。
-- **没有启发式改写层，也没有模型精修层**：不判断寒暄、不剥前缀、不名词化、不猜「这条 prompt 值不值得当标题」。那类规则在中文口语输入下不可复现也无法解释，标题会随措辞抖动。宁可原样呈现用户写的第一句话。`titleArgs`（标题专用模型调用入口）与 refine 偏好开关均已删除，不得复活。
-- **写入裁决**在 `precedence.ts`：空槽可写；`user` 永远可写；否则要求 rank 严格递增。
-- **标题按主会话绑定**：持久化同时保存 `sessionTitleSessionId`。主会话 `SessionStart` 会统一对账作用域：首次可靠会话可接管历史未绑定标题；会话号变化必须清除旧标题。写入被拒时，运行投影只能水合持久化返回的最终真值，禁止继续使用本次尝试值。
-- **长度**：存全（上限 `MAX_AGENT_SESSION_TITLE_LENGTH` = 120 code points，唯一来源 `agent-session-title/constants.ts`，各 schema 引常量而非字面量），视觉截断交给 CSS（tab / 行内 `truncate`）。
-- **展示层硬规则**：产品标题唯一入口是 `resolveAgentSessionTitle`，**不接收 OSC / terminalTitle**（OSC 只能做 tooltip）。每个 `agentSessionTitleInput` 调用点**必须传路径锚点**——否则无标题会话的 placeholder 塌成裸 catalog 标签，同 agent 的多个面板行完全一样。同名会话经 `disambiguateAgentSessionTitles` 追加序号。列表行的无障碍名字要能读出「哪个 agent · 哪个项目 · 是否子会话」。
-- **hook 同构**：下发的 `derive-claude-session-title` 脚本必须与 shared 侧 `deriveAgentSessionTitleFromPrompt` 行为逐字一致（治理测试按严格相等校验）；改脚本必须同时 bump `PIER_HOOK_COMMAND_GENERATION`。
-- 检查点在 `tests/unit/agent-session-title-governance.test.ts`、`tests/unit/agent-session-title-hook-parity.test.ts`、`tests/unit/agent-session-title.test.ts`、`tests/unit/main/foreground-activity-aggregator.test.ts`（身份闸门）与 `tests/component/activity-widget.test.tsx`。
+- **tab 优先级**：显式 chrome（任务 label / **用户钉名** `source=user` / end-state）→ **OSC** → cwd basename → `"Terminal"`。long：OSC → 全路径 cwd。
+- **用户改名 = 钉死 tab**（`user`），优先于后续 OSC，直到再次改名；对话框初值优先当前 tab 所见（OSC/cwd）。
+- **活体 agent**：overlay 只写状态点 + icon；无 user 钉名时 `stripTabChromeTitle`，勿让旧 chrome title 压 OSC。
+- **产品 `sessionTitle`（仅 Index / 改名，≠ tab）**：枚举只有 `provider` | `user`；历史 `prompt`/`auto`/`rule`/`model` **读取期整段丢弃**；**禁止** prompt 派生与 Claude derive 双写（gen≥11 已卸，`derive.ts` 已删）。
+- **provider 写入**：`applyProviderAgentSessionTitle` 只收真自生成名（如 `ai-title`），不收 `custom-title`/`agent-name`；同秩不覆盖。
+- **OSC 展示**：折叠空白后进 short；安全上限 `MAX_AGENT_TERMINAL_TITLE_TOOLTIP_LENGTH`；视觉截断 CSS。落盘可更长。
+- **身份**与标题无关：`agentId` + 路径锚点 + `panelId` + actor/session 字段；判据只在 `agent-session-actor.ts`。
+- 检查点：`tests/unit/app/cwd-derive.test.ts`、`tests/unit/agent/session-title-governance.test.ts`、`tests/unit/agent/session-title-hook-parity.test.ts`、`tests/unit/main/agents/agent-session-title-hook-event.test.ts`。
 
 ### 路径锚点上下文 `src/main/services/panel-context-resolver.ts` + `src/shared/contracts/panel.ts`
 

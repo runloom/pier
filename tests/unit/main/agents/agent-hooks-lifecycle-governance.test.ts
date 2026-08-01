@@ -48,13 +48,13 @@ describe("agent hooks lifecycle governance", () => {
     // 卸载注释在函数声明之前：关偏好/退出不得删共享运行时
     expect(registry).toMatch(/不删除[\s\S]*\.pier\/hooks/);
 
+    // session-title 不再为 PromptSubmit 自愈装 hooks（tab 标题走 OSC / cwd）。
     const sessionTitle = readSrc(
       "src/main/services/agents/session-title/index.ts"
     );
-    expect(sessionTitle).toContain("installAgentHooksStack");
-    expect(sessionTitle).not.toMatch(
-      /selfHealAgentHooksIfNeeded[\s\S]{0,200}installAllAgentHooks\s*\(/
-    );
+    expect(sessionTitle).not.toContain("installAgentHooksStack");
+    expect(sessionTitle).not.toContain("selfHealAgentHooksIfNeeded");
+    expect(sessionTitle).not.toContain("deriveFromPromptSubmit");
   });
 
   it("PTY 注入共享 current 与实例私有 event log", () => {

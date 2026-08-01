@@ -70,7 +70,7 @@ import {
   TerminalStatusBar,
   useTerminalStatusBarItems,
 } from "./status-bar.tsx";
-import { agentPanelDisplayPrimary, tabChromeFromParams } from "./tab-chrome.ts";
+import { basename, tabChromeFromParams } from "./tab-chrome.ts";
 export function TerminalPanel(props: IDockviewPanelProps) {
   const { api } = props;
   const panelId = api.id;
@@ -184,12 +184,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
           n.termination === "force"
       )
   );
-  const agentDisplayPrimary = agentPanelDisplayPrimary(activity, {
-    cwd: effectiveCwd,
-    projectRootPath: effectiveContext?.projectRootPath,
-    sessionTitle: savedSession?.sessionTitle,
-    sessionTitleSource: savedSession?.sessionTitleSource,
-  });
   const { effectiveTab, endState } = useTerminalEndStateTab({
     activeLaunchTab: activeLaunch.tab,
     activeLaunchTask: activeLaunch.task,
@@ -202,12 +196,16 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     selectedTaskRunId,
     taskRunsSnapshot,
   });
+  // 状态栏标题与 tab 同构：OSC → cwd basename（不吃 prompt 派生 sessionTitle）。
   const statusContext = {
     context: effectiveContext,
     cwd: effectiveCwd,
     getGroupId,
     panelId,
-    title: agentDisplayPrimary ?? terminalTitle,
+    title:
+      terminalTitle?.trim() ||
+      (effectiveCwd ? basename(effectiveCwd) : null) ||
+      undefined,
   };
   const hasStatusBar = shouldMountTerminalStatusBar(
     statusItems,
@@ -260,7 +258,6 @@ export function TerminalPanel(props: IDockviewPanelProps) {
     [api, effectiveContext, panelId, windowZoomLevel]
   );
   useTerminalPanelDescriptor(api, {
-    displayPrimary: agentDisplayPrimary,
     effectiveContext,
     effectiveCwd,
     effectiveTab,

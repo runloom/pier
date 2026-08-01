@@ -43,27 +43,60 @@ export const terminalAgentPanelMetadataSchema = z.object({
   status: z.enum(["exited", "running"]),
 });
 
-export const terminalPanelSessionSchema = z.object({
-  agent: terminalAgentPanelMetadataSchema.optional(),
-  context: panelContextSchema.optional(),
-  tab: z.preprocess(
-    normalizePanelTabChromeInput,
-    panelTabChromeSchema.optional()
-  ),
-  task: taskPanelMetadataSchema.optional(),
-  /** OSC / 终端装饰标题（≠ 产品 sessionTitle）。 */
-  title: z.string().optional(),
-  /** 产品会话名（Agent sessionTitle 金标准字段）。 */
-  sessionTitle: agentSessionTitleValueSchema.optional(),
-  /** 标题所属的 provider 主会话；缺席表示历史数据尚未绑定。 */
-  sessionTitleSessionId: z.string().min(1).max(128).optional(),
-  /** 历史落盘过 `auto` / `rule` / `model`；读取期归一为 `prompt`，永不写回。 */
-  sessionTitleSource: z.preprocess(
-    normalizeAgentSessionTitleSource,
-    agentSessionTitleSourceSchema.optional()
-  ),
-  updatedAt: z.string(),
-});
+/**
+ * 读取期清洗产品 sessionTitle：仅 provider / user。
+ * 历史 prompt/auto/rule/model 或有标题无合法来源 → 字段整段丢弃（不回写盘，
+ * 下次合法写入时自然覆盖）。
+ */
+function scrubLegacyAgentSessionTitle(raw: unknown): unknown {
+  if (!(raw && typeof raw === "object" && !Array.isArray(raw))) {
+    return raw;
+  }
+  const record = raw as Record<string, unknown>;
+  const source = normalizeAgentSessionTitleSource(record.sessionTitleSource);
+  if (source) {
+    return { ...record, sessionTitleSource: source };
+  }
+  if (
+    record.sessionTitle === undefined &&
+    record.sessionTitleSource === undefined &&
+    record.sessionTitleSessionId === undefined
+  ) {
+    return record;
+  }
+  const {
+    sessionTitle: _t,
+    sessionTitleSource: _s,
+    sessionTitleSessionId: _id,
+    ...rest
+  } = record;
+  return rest;
+}
+
+export const terminalPanelSessionSchema = z.preprocess(
+  scrubLegacyAgentSessionTitle,
+  z.object({
+    agent: terminalAgentPanelMetadataSchema.optional(),
+    context: panelContextSchema.optional(),
+    tab: z.preprocess(
+      normalizePanelTabChromeInput,
+      panelTabChromeSchema.optional()
+    ),
+    task: taskPanelMetadataSchema.optional(),
+    /** OSC / 终端装饰标题（≠ 产品 sessionTitle）。 */
+    title: z.string().optional(),
+    /** 产品会话名：仅 provider / user。 */
+    sessionTitle: agentSessionTitleValueSchema.optional(),
+    /** 标题所属的 provider 主会话；缺席表示尚未绑定。 */
+    sessionTitleSessionId: z.string().min(1).max(128).optional(),
+    /** 仅 provider | user；旧源读取期丢弃。 */
+    sessionTitleSource: z.preprocess(
+      normalizeAgentSessionTitleSource,
+      agentSessionTitleSourceSchema.optional()
+    ),
+    updatedAt: z.string(),
+  })
+);
 
 const terminalWindowSessionSchema = z.object({
   panels: z.record(z.string(), terminalPanelSessionSchema),

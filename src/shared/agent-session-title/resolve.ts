@@ -1,4 +1,7 @@
-/** 展示层：sessionTitle → tab / Index / 标题栏。**不读 OSC**。 */
+/**
+ * 展示层：产品 sessionTitle → Index / 活动行 / 改名初值。
+ * **不驱动终端 tab**（tab 走 OSC → cwd，见 terminalPanelDescriptor）。
+ */
 
 import { getAgentCatalogEntry } from "../agent-catalog.ts";
 import type { AgentKind } from "../contracts/agent.ts";
@@ -17,7 +20,7 @@ export interface ResolveAgentSessionTitleInput {
 export interface ResolvedAgentSessionTitle {
   /** 无 sessionTitle 时的 primary（便于测试与调试）。 */
   placeholder: string;
-  /** tab / Index 主行 / 标题栏。 */
+  /** Index 主行等。 */
   primary: string;
   /** Index 副行等可用的项目短名；无路径时缺席。 */
   secondary?: string;
@@ -74,8 +77,8 @@ export function agentSessionTitleInput(args: {
 }
 
 /**
- * Agent 产品主标题唯一入口。
- * 不接收 OSC / terminalTitle——调用方不得把终端装饰标题传进来。
+ * 产品会话名展示入口（Index / 活动行等）。
+ * 仅 provider / user；无合法来源则占位。不接收 OSC。
  */
 export function resolveAgentSessionTitle(
   input: ResolveAgentSessionTitleInput
@@ -85,9 +88,11 @@ export function resolveAgentSessionTitle(
     input.projectRootPath,
     input.cwd
   );
-  const raw = input.sessionTitle?.trim();
-  // 展示路径也过一遍 strip：历史上已落盘的 `<user_query> …` 脏标题
-  // 不用迁移就能正常显示。
+  const source = input.sessionTitleSource;
+  const raw =
+    source === "provider" || source === "user"
+      ? input.sessionTitle?.trim()
+      : undefined;
   const title =
     raw && !raw.includes("\n")
       ? normalizeAgentSessionTitle(stripAgentPromptMarkup(raw))

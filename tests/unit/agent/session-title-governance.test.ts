@@ -86,18 +86,13 @@ function titleInputCallBodies(source: string): string[] {
 }
 
 describe("agent-session-title governance", () => {
-  it("title source enum is exactly prompt < provider < user", () => {
-    expect(agentSessionTitleSourceSchema.options).toEqual([
-      "prompt",
-      "provider",
-      "user",
-    ]);
+  it("title source enum is exactly provider < user", () => {
+    expect(agentSessionTitleSourceSchema.options).toEqual(["provider", "user"]);
   });
 
   it("provider tier never ingests pier's own dual-write echo", async () => {
-    // Claude 的 custom-title / agent-name 装的是我方 derive-claude-session-title
-    // 双写回去的 prompt 派生。收下就是把自己的截断洗成更高的 provider 秩，而且
-    // 它们比真正的 ai-title 先到，同秩不覆盖会把好标题永久挡在门外。
+    // 历史 custom-title / agent-name 曾被 Pier 双写污染；gen≥11 已停双写，
+    // 分类器仍不得把这两类当 provider 标题（旧 transcript 残留）。
     const source = await readFile(
       join(
         REPO_ROOT,
@@ -110,6 +105,42 @@ describe("agent-session-title governance", () => {
     );
     expect(classifier).not.toContain("customTitle");
     expect(classifier).not.toContain("agentName");
+  });
+
+  it("Claude UserPromptSubmit no longer dual-writes sessionTitle", async () => {
+    const stdin = await readFile(
+      join(
+        REPO_ROOT,
+        "src/main/services/agents/integrations/hooks/stdin-commands.ts"
+      ),
+      "utf8"
+    );
+    // 命令体不得 import / pipe 旧 derive 脚本。
+    expect(stdin).not.toContain("DERIVE_CLAUDE_SESSION_TITLE");
+    expect(stdin).not.toContain("derive-claude-session-title");
+    const install = await readFile(
+      join(REPO_ROOT, "src/main/services/agents/hooks-install.ts"),
+      "utf8"
+    );
+    // 安装路径不得再 writeExecutable derive 脚本。
+    expect(install).not.toMatch(
+      /writeExecutableIfChanged\(\s*join\(versionDir,\s*DERIVE_CLAUDE/
+    );
+  });
+
+  it("Index resolver only honors provider and user sources", async () => {
+    const resolve = await readFile(
+      join(REPO_ROOT, "src/shared/agent-session-title/resolve.ts"),
+      "utf8"
+    );
+    expect(resolve).toContain('source === "provider" || source === "user"');
+    expect(resolve).not.toContain('"prompt"');
+  });
+
+  it("deriveAgentSessionTitleFromPrompt module is gone", () => {
+    expect(
+      existsSync(join(REPO_ROOT, "src/shared/agent-session-title/derive.ts"))
+    ).toBe(false);
   });
 
   it("provider tier costs no extra process or token", async () => {

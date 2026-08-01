@@ -10,9 +10,8 @@ import { usePanelDescriptorStore } from "@/stores/panel-descriptor.store.ts";
 import { projectPathFromContext } from "@/stores/workspace-panel-helpers.ts";
 
 /**
- * 用户改名是标题体系里唯一确定可靠的来源（`user` 秩最高），因此入口不能只挂在
- * 终端右键菜单：终端右键、面板 tab、命令面板和活动总览行内共用本函数，
- * 保证初值、校验、失败反馈完全一致。
+ * 用户改名 = 钉死 tab 覆盖（source=user），优先于 OSC，直到再次改名。
+ * 入口：终端右键、面板 tab、命令面板、活动总览——共用本函数，初值/校验/失败一致。
  */
 export function canRenameAgentSession(panelId: string): boolean {
   return (
@@ -20,22 +19,34 @@ export function canRenameAgentSession(panelId: string): boolean {
   );
 }
 
-/** 改名对话框初值：用户当前看到的那个名字（路径锚点必传）。 */
+/**
+ * 改名对话框初值：
+ * 1. 已有 user/provider 产品名 → 用它
+ * 2. 否则用当前 tab 展示名（OSC / cwd，与用户所见一致）
+ * 3. 再否则 catalog·项目占位
+ */
 export function currentAgentSessionTitle(panelId: string): string | undefined {
   const activity = useForegroundActivityStore.getState().activities[panelId];
   if (activity?.kind !== "agent") {
     return;
   }
-  return resolveAgentSessionTitle(
+  const descriptor = usePanelDescriptorStore.getState().descriptors[panelId];
+  const resolved = resolveAgentSessionTitle(
     agentSessionTitleInput({
       agentId: activity.agentId,
-      projectRootPath: projectPathFromContext(
-        usePanelDescriptorStore.getState().descriptors[panelId]?.context
-      ),
+      projectRootPath: projectPathFromContext(descriptor?.context),
       sessionTitle: activity.sessionTitle,
       sessionTitleSource: activity.sessionTitleSource,
     })
-  ).primary;
+  );
+  if (resolved.primary !== resolved.placeholder) {
+    return resolved.primary;
+  }
+  const tabShort = descriptor?.display.short?.trim();
+  if (tabShort) {
+    return tabShort;
+  }
+  return resolved.primary;
 }
 
 /**
