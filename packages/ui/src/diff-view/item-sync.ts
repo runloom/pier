@@ -1,5 +1,9 @@
 import type { CodeViewHandle, SelectionSide } from "@pierre/diffs/react";
 import { DIFF_HEADER_HEIGHT_PX } from "./appearance.ts";
+import {
+  hardenCodeViewInstanceChanged,
+  scheduleCodeViewMembershipLayoutFlush,
+} from "./code-view-runtime.ts";
 import type { PierHunkAnnotationMetadata } from "./hunk-actions.tsx";
 import {
   hasSameCodeViewItemIdOrder,
@@ -214,6 +218,7 @@ export function applyCodeViewItemsAnchored(
   } = {}
 ): DiffViewAnchoredApplyResult {
   const instanceBefore = handle.getInstance();
+  hardenCodeViewInstanceChanged(instanceBefore);
   const viewportAnchor = captureCodeViewItemAnchor(instanceBefore);
   const contentChanged = codeViewItemsContentChanged(previousItems, nextItems);
   const accepted = syncCodeViewItems(handle, nextItems, previousItems);
@@ -221,6 +226,7 @@ export function applyCodeViewItemsAnchored(
     return { accepted: false, disposition: "noop" };
   }
   const instance = handle.getInstance();
+  hardenCodeViewInstanceChanged(instance);
   // membership 显式 flush 或任意正文版本变化：都要 remeasure 虚拟窗口
   const shouldFlush = options.flushLayout === true || contentChanged;
   if (options.focusId !== undefined) {
@@ -275,25 +281,8 @@ function flushCodeViewMembershipLayout(
   // Pierre 1.2.x：render(true) 内部 flushSync。membership apply 常在
   // useLayoutEffect 中调用；React 19 禁止在 lifecycle 里再 flushSync。
   // 命令式 setItems 仍同步；measure 放到 microtask，同一事件循环、commit 之后。
-  if (instance == null) {
-    return;
-  }
-  const target = instance;
-  queueMicrotask(() => {
-    try {
-      for (let pass = 0; pass < MEMBERSHIP_LAYOUT_PASSES; pass += 1) {
-        target.render(true);
-      }
-    } catch (error) {
-      // unmount / 测试替身不完整时实例可能已拆；其它异常在 dev 可见
-      if (import.meta.env.DEV) {
-        console.warn(
-          "[PierDiffView] deferred membership layout flush failed",
-          error
-        );
-      }
-    }
-  });
+  // 连续 apply 只保留最后一代 flush，避免对已拆/换代实例 render。
+  scheduleCodeViewMembershipLayoutFlush(instance, MEMBERSHIP_LAYOUT_PASSES);
 }
 
 /**

@@ -11,6 +11,8 @@
  * 虚拟化 onPostRender 应传 `reapply: false`——只 patch 一次，避免每帧写 style 造成滚动卡顿。
  */
 
+import { hardenCodeViewInstanceChanged } from "./code-view-runtime.ts";
+
 interface StickyBounds {
   readonly stickyBottom: number;
   readonly stickyTop: number;
@@ -51,6 +53,9 @@ export function stabilizeCodeViewStickyPositioning(
   viewer: unknown,
   options?: { readonly reapply?: boolean }
 ): void {
+  // Same hot path as sticky patch: install instanceChanged guard before any
+  // post-render / layout callback can fire on a recycled Virtualized* instance.
+  hardenCodeViewInstanceChanged(viewer);
   if (!isStickyCodeView(viewer)) {
     return;
   }

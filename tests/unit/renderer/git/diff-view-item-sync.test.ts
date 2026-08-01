@@ -62,7 +62,9 @@ function mockHandle(options?: { readonly items?: Item[] }): {
     return true;
   });
   const instance = {
-    getContainerElement: () => null,
+    getContainerElement: () => document.createElement("div"),
+    instanceChanged: vi.fn(),
+    render: vi.fn(),
     setItems,
   };
   const handle = {
