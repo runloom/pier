@@ -105,6 +105,29 @@ describe("GitReviewDocumentLoader", () => {
     expect(loader.getSnapshot().resources[0]?.kind).toBe("idle");
   });
 
+  it("soft-drops stale window demand keys after stage/watch entry moves", () => {
+    // 全量 stage 后 ref 里仍可能带旧 entryKey；禁止 throw 打爆 UI
+    const loader = new GitReviewDocumentLoader({
+      cancel: vi.fn(async () => undefined),
+      entries: [entry(0), entry(1)],
+      load: vi.fn(async (item: GitReviewIndexEntry) => documentFor(item)),
+      maxRetainedBytes: 1024,
+      maxRetainedLines: 100,
+    });
+    expect(() =>
+      loader.setWindowDemand({
+        bufferedEntryKeys: ["entry:gone-after-stage-all"],
+        visibleEntryKeys: ["entry:0", "sha256:stale-after-stage-all"],
+      })
+    ).not.toThrow();
+    // 只保留仍在 #resources 的 entry:0
+    loader.setWindowDemand({
+      bufferedEntryKeys: [],
+      visibleEntryKeys: ["entry:0"],
+    });
+    expect(loader.getResource("entry:0")).toBeDefined();
+  });
+
   it("does not load documents until demand or selection is set", () => {
     const entries = Array.from({ length: 2001 }, (_, index) => entry(index));
     const load = vi.fn(async (item: GitReviewIndexEntry) => documentFor(item));

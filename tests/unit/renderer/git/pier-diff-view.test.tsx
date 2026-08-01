@@ -1366,6 +1366,10 @@ describe("PierDiffView", () => {
       offset: -12,
       type: "item",
     });
+    // membership layout flush 经 queueMicrotask（避 layout flushSync）
+    await act(async () => {
+      await Promise.resolve();
+    });
     expect(renderNow).toHaveBeenCalledWith(true);
   });
 

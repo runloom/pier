@@ -152,23 +152,47 @@ function ReviewSurfaceComponent({
   const applyNavigationDemand = useCallback((entryKey: string) => {
     // full-alignment：boost selected，保留 window/seed（禁止 pin-only exclusive replace）
     const current = currentDemandRef.current;
+    const loader = loaderRef.current;
+    // stage-all 等 mutation 后 window ref 可能仍含已迁走/消失的 entryKey；
+    // 只保留 loader 仍认识的键（与 setProtectedEntryKey 软丢弃一致）。
+    const known = (keys: readonly string[]): string[] =>
+      loader
+        ? keys.filter((key) => loader.getResource(key) !== undefined)
+        : [...keys];
+    const filteredCurrent = {
+      bufferedEntryKeys: known(current.bufferedEntryKeys),
+      visibleEntryKeys: known(current.visibleEntryKeys),
+    };
     const hasWindow =
-      current.visibleEntryKeys.length > 0 ||
-      current.bufferedEntryKeys.length > 0;
+      filteredCurrent.visibleEntryKeys.length > 0 ||
+      filteredCurrent.bufferedEntryKeys.length > 0;
+    const seedKnown = known(seedEntryKeysRef.current);
+    const entryKnown =
+      loader === null || loader.getResource(entryKey) !== undefined;
+    let seedVisibleEntryKeys: readonly string[] = [];
+    if (seedKnown.length > 0) {
+      seedVisibleEntryKeys = seedKnown;
+    } else if (entryKnown) {
+      seedVisibleEntryKeys = [entryKey];
+    }
     const base = hasWindow
-      ? current
+      ? filteredCurrent
       : {
           bufferedEntryKeys: [] as const,
-          visibleEntryKeys:
-            seedEntryKeysRef.current.length > 0
-              ? seedEntryKeysRef.current
-              : ([entryKey] as const),
+          visibleEntryKeys: seedVisibleEntryKeys,
         };
-    const demand = prioritizeReviewNavigationDemand(base, entryKey, true);
+    // 选中项若已不在本面（全量 stage 走光），只收敛 window，勿 pin 幽灵 key
+    const demand = entryKnown
+      ? prioritizeReviewNavigationDemand(base, entryKey, true)
+      : base;
     currentDemandRef.current = demand;
     // 先 demand（含 selected boost）再 protect，避免无 window 时 protect 误开读
-    loaderRef.current?.setWindowDemand(demand);
-    loaderRef.current?.setProtectedEntryKey(entryKey);
+    loader?.setWindowDemand(demand);
+    if (entryKnown) {
+      loader?.setProtectedEntryKey(entryKey);
+    } else {
+      loader?.setProtectedEntryKey(null);
+    }
   }, []);
   const {
     beginReadingNavigating,

@@ -141,6 +141,28 @@ export function isPathUnderRoot(path: string, rootPath: string): boolean {
   );
 }
 
+/**
+ * Expand All 是否因 user-collapsed 而跳过该目录。
+ *
+ * - 整树 expand（无 root）：尊重 collapsed，避免一次抹掉用户折叠习惯
+ * - 子树 Expand Folders（有 root）：root 范围内一律不跳过——Collapse Folders
+ *   会把子孙整树标 collapsed，若 Expand 只开 root 会表现为「只展开第一层」
+ */
+export function shouldSkipExpandDueToCollapse(options: {
+  readonly isUserCollapsed: boolean;
+  readonly path: string;
+  readonly rootPath: string;
+}): boolean {
+  if (!options.isUserCollapsed) {
+    return false;
+  }
+  const root = normalizeExpansionPath(options.rootPath);
+  if (root.length > 0 && isPathUnderRoot(options.path, root)) {
+    return false;
+  }
+  return true;
+}
+
 export function filterPathsUnderRoot(
   paths: Iterable<string>,
   rootPath: string | undefined

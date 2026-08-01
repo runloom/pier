@@ -17,6 +17,7 @@ import {
   gitReviewTreeExpansionScopeId,
   PierFileTree,
 } from "@pier/ui/file/tree.tsx";
+import type { PierFileTreeExpandAllOptions } from "@pier/ui/file/tree-types.ts";
 import { useFileTreeSearch } from "@pier/ui/file/use-tree-search.tsx";
 import type { RendererPluginContext } from "@plugins/api/renderer.ts";
 import { SearchX } from "lucide-react";
@@ -29,6 +30,11 @@ import { useGitReviewTreeContextMenu } from "./tree-context-menu.ts";
 import { revealGitReviewTreeSelection } from "./tree-reveal-selection.ts";
 
 const REVIEW_TREE_WIDTH_STORAGE_KEY = "pier.git.review.treeWidthPx";
+/**
+ * Review 树已全量投影，Expand Folders 用独立层数预算（勿直接复用 maxDepth 标识符）。
+ * 与 absolute maxDepth 安全轨同数量级，避免默认 3 层只开浅目录。
+ */
+const GIT_REVIEW_TREE_EXPAND_ALL_MAX_LEVELS = 64;
 
 function GitReviewTreeSidebarComponent({
   context,
@@ -259,29 +265,53 @@ export function GitReviewPanelLayout({
     treeLoading === true || (treeModel != null && treeModel.items.length > 0);
   const hasTree = Boolean(treeHasContent && onOpenPath);
 
+  // 依赖稳定 ref / callback，避免 treeSearch 对象每 render 换新导致 handler 空窗
+  const treeApiRef = treeSearch.treeApiRef;
+  const collapseAllFolders = treeSearch.collapseAllFolders;
+  const expandAllFolders = treeSearch.expandAllFolders;
   useEffect(() => {
     if (!(hasTree && !sidebarCollapsed && treeLoading !== true)) {
       return;
     }
+    const reviewExpandOptions = (
+      rootPath?: string
+    ): PierFileTreeExpandAllOptions =>
+      rootPath
+        ? {
+            maxExpandLevels: GIT_REVIEW_TREE_EXPAND_ALL_MAX_LEVELS,
+            rootPath,
+          }
+        : { maxExpandLevels: GIT_REVIEW_TREE_EXPAND_ALL_MAX_LEVELS };
     return registerGitReviewTreeFolderHandlers({
       collapseAll: (rootPath) => {
-        const api = treeSearch.treeApiRef.current;
+        const options = rootPath ? { rootPath } : undefined;
+        const api = treeApiRef.current;
         if (api) {
-          api.collapseAll(rootPath ? { rootPath } : undefined);
+          api.collapseAll(options);
           return;
         }
-        treeSearch.collapseAllFolders();
+        // 与主路径同 scope，禁止无参整树 collapse
+        collapseAllFolders(options);
       },
       expandAll: (rootPath) => {
-        const api = treeSearch.treeApiRef.current;
+        const options = reviewExpandOptions(rootPath);
+        const api = treeApiRef.current;
         if (api) {
-          api.expandAll(rootPath ? { rootPath } : undefined);
+          api.expandAll(options);
           return;
         }
-        treeSearch.expandAllFolders();
+        // 与主路径同 options，禁止无参整树 / 默认 3 层
+        expandAllFolders(options);
       },
     });
-  }, [hasTree, sidebarCollapsed, treeLoading, treeSearch]);
+  }, [
+    collapseAllFolders,
+    expandAllFolders,
+    hasTree,
+    sidebarCollapsed,
+    treeApiRef,
+    treeLoading,
+  ]);
 
   const toggleSearch = () => {
     if (!hasTree || treeLoading) {

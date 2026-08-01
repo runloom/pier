@@ -72,7 +72,7 @@ describe("Git 变更阅读稳定性治理", () => {
     expect(panelState).not.toContain("stateSequence");
   });
 
-  it("冲突、未暂存与已暂存是隔离阅读面，跨面导航等待真实正文后再切换", () => {
+  it("冲突、未暂存与已暂存是隔离阅读面；树跨面立即切面且不盖旧 handoff", () => {
     const surfaces = read(
       "src/plugins/builtin/git/renderer/review/surfaces.tsx"
     );
@@ -105,13 +105,21 @@ describe("Git 变更阅读稳定性治理", () => {
     expect(surfaces).toContain("onNavigationMaterialized");
     expect(surfaces).toContain("data-git-review-surface");
     expect(surfaces).toContain("inert={active ? undefined : true}");
+    // 树跨面：requestTreeOpen 立即 setActiveSurface；无 handoff 叠层状态机
+    expect(surfaces).toContain("activeSurfaceRef");
+    expect(surfaces).toContain("树跨面点击：立即切面");
+    expect(surfaces).not.toContain("handoffSourceSurface");
+    expect(surfaces).not.toContain("handoffOverlay");
     expect(surfaceView).toContain("projection={projection}");
     expect(surfaceView).not.toContain("renderedProjectionRef");
     expect(surfaceView).not.toContain("readOnlyReviewProjection");
     expect(content).toContain("enabledRef: activeRef");
     expect(content).toContain("useGitReviewSurfaceNavigationHandoff");
-    expect(handoff).toContain("isReviewEstimateCacheKey");
+    // 树 activate 主路径不依赖 materialize；placeholder 仍挡兜底路径
     expect(handoff).toContain("isReviewPlaceholderCacheKey");
+    expect(handoff).not.toContain("isReviewEstimateCacheKey");
+    expect(handoff).toContain("NAVIGATION_SETTLE_SAFETY_MS");
+    expect(handoff).toContain("requestTreeOpen");
     expect(handoff).toContain("useLayoutEffect(() =>");
     expect(projection).not.toContain('options.diffBase === "head"');
     expect(projection).toContain("reviewGroupsForSurface(diffBase)");

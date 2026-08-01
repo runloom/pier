@@ -11,6 +11,7 @@ import {
   pathSegmentDepth,
   relativeExpandDepth,
   resolveExpandedPaths,
+  shouldSkipExpandDueToCollapse,
 } from "./tree-expansion-apply.ts";
 import type { TreeExpansionAuthority } from "./tree-expansion-authority.ts";
 import { normalizeExpansionPath } from "./tree-expansion-authority.ts";
@@ -203,12 +204,21 @@ export function useFileTreeExpandCollapse(options: {
           ?.getIntent()
           .collapsed.has(normalizeExpansionPath(path)) === true;
 
+      // 子树 Expand：root 范围内强制打开（清 Collapse Folders 写的子孙 collapsed）。
+      // 整树 Expand：仍尊重 user-collapsed。
+      const blocksExpand = (path: string): boolean =>
+        shouldSkipExpandDueToCollapse({
+          isUserCollapsed: isUserCollapsed(path),
+          path,
+          rootPath,
+        });
+
       const expandDesiredFromVisited = (
         visited: ReadonlySet<string>
       ): Set<string> => {
         const desired = new Set<string>();
         for (const path of visited) {
-          if (!isUserCollapsed(path)) {
+          if (!blocksExpand(path)) {
             desired.add(path);
           }
         }
@@ -260,8 +270,8 @@ export function useFileTreeExpandCollapse(options: {
         const visited = new Set<string>();
         let expandCount = 0;
 
-        // Subtree expand always starts by expanding the root folder itself.
-        if (rootPath.length > 0 && !isUserCollapsed(rootPath)) {
+        // Subtree：始终先打开 root（右键 Expand 语义）。
+        if (rootPath.length > 0) {
           visited.add(rootPath);
           if (expansionAuthority) {
             expansionAuthority.setDirectoryExpanded(rootPath, true, "api");
@@ -291,7 +301,11 @@ export function useFileTreeExpandCollapse(options: {
           const known = collectKnownDirectoryPaths(itemsRef.current);
           const candidates: string[] = [];
           for (const path of known) {
-            if (visited.has(path) || isUserCollapsed(path)) {
+            if (visited.has(path)) {
+              continue;
+            }
+            // 子树：不因 collapsed 跳过；整树：尊重 user-collapsed。
+            if (blocksExpand(path)) {
               continue;
             }
             if (rootPath.length > 0 && !isPathUnderRoot(path, rootPath)) {
@@ -318,15 +332,15 @@ export function useFileTreeExpandCollapse(options: {
           expandCount += wave.length;
 
           if (expansionAuthority) {
-            // expandPaths clears collapsed — only pass still-desired paths.
+            // expandPaths 清 collapsed：子树范围内全部 + 整树时仅 non-collapsed
             expansionAuthority.expandPaths(
-              wave.filter((path) => !isUserCollapsed(path)),
+              wave.filter((path) => !blocksExpand(path)),
               "api"
             );
           }
 
           // expand-only: do NOT collapse siblings (e.g. right-click .husky must
-          // not close an open `src`). Never re-open user-collapsed dirs.
+          // not close an open `src`). Subtree force-opens under root.
           applyDirectoryExpansion(
             expandDesiredFromVisited(visited),
             "expand-only"
@@ -337,7 +351,7 @@ export function useFileTreeExpandCollapse(options: {
           }
 
           const toLoad = wave.filter(
-            (path) => !isUserCollapsed(path) && needsLoad(path)
+            (path) => !blocksExpand(path) && needsLoad(path)
           );
           const onLoadDirectory = readRefs().onLoadDirectory;
           if (toLoad.length > 0 && onLoadDirectory) {

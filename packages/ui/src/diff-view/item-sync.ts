@@ -272,12 +272,28 @@ export function applyCodeViewItemsAnchored(
 function flushCodeViewMembershipLayout(
   instance: ReturnType<PierCodeViewHandle["getInstance"]>
 ): void {
-  // Pierre 1.2.x flushes item render managers after its first height
-  // reconciliation. A second immediate pass measures the populated DOM and
-  // commits the final virtual window before the browser can paint it.
-  for (let pass = 0; pass < MEMBERSHIP_LAYOUT_PASSES; pass += 1) {
-    instance?.render(true);
+  // Pierre 1.2.x：render(true) 内部 flushSync。membership apply 常在
+  // useLayoutEffect 中调用；React 19 禁止在 lifecycle 里再 flushSync。
+  // 命令式 setItems 仍同步；measure 放到 microtask，同一事件循环、commit 之后。
+  if (instance == null) {
+    return;
   }
+  const target = instance;
+  queueMicrotask(() => {
+    try {
+      for (let pass = 0; pass < MEMBERSHIP_LAYOUT_PASSES; pass += 1) {
+        target.render(true);
+      }
+    } catch (error) {
+      // unmount / 测试替身不完整时实例可能已拆；其它异常在 dev 可见
+      if (import.meta.env.DEV) {
+        console.warn(
+          "[PierDiffView] deferred membership layout flush failed",
+          error
+        );
+      }
+    }
+  });
 }
 
 /**

@@ -67,7 +67,7 @@ describe("toCodeViewItem estimate slots", () => {
     expect(pierDiffItemPresentation(input)).toBe("loading");
   });
 
-  it("marks self-contained new-file patches as non-partial for safe render", () => {
+  it("keeps patch-only new-file diffs as isPartial (no loadDiffFiles)", () => {
     const patch = [
       "diff --git a/b.ts b/b.ts",
       "new file mode 100644",
@@ -92,9 +92,98 @@ describe("toCodeViewItem estimate slots", () => {
     if (entry.item.type !== "diff") {
       throw new Error("expected diff item");
     }
-    // processFile 默认 isPartial；Pier 无 loadDiffFiles 时必须清掉
-    expect(entry.item.fileDiff.isPartial).toBe(false);
+    // 金标准：无全文缓冲时 isPartial 必须为 true，禁止假全文展开 collapsed
+    expect(entry.item.fileDiff.isPartial).toBe(true);
     expect(entry.item.fileDiff.additionLines.length).toBe(3);
+    expect(
+      entry.item.fileDiff.additionLines.every(
+        (line) =>
+          typeof line === "string" && !line.includes("undefinedundefined")
+      )
+    ).toBe(true);
+  });
+
+  it("keeps mid-file patches isPartial so collapsed context cannot glue undefined", () => {
+    // 对齐 plan-types 类中段变更：collapsedBefore > 0、hunk 局部缓冲
+    const patch = [
+      "diff --git a/plan-types.ts b/plan-types.ts",
+      "index 1111111..2222222 100644",
+      "--- a/plan-types.ts",
+      "+++ b/plan-types.ts",
+      "@@ -32,6 +32,12 @@ export type PlanTargetOperation =",
+      "       skillId: string;",
+      "       expectedRelativeLinkTarget: string;",
+      "     }",
+      "+  | {",
+      '+      kind: "adopt-symlink";',
+      "+      relativeTarget: string;",
+      "+      skillId: string;",
+      "+      expectedRelativeLinkTarget: string;",
+      "+    }",
+      "   | {",
+      '       kind: "delete-symlink";',
+      "       relativeTarget: string;",
+      "",
+    ].join("\n");
+    const input: PierDiffViewItem = {
+      cacheKey: "loaded:mid",
+      fileDisplay: { path: "plan-types.ts", status: "modified" },
+      id: "section:mid",
+      kind: "loaded",
+      patch,
+    };
+    const { entry, error } = toCodeViewItem(input, undefined);
+    expect(error).toBeNull();
+    if (entry.item.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(entry.item.fileDiff.isPartial).toBe(true);
+    expect(entry.item.fileDiff.hunks[0]?.collapsedBefore ?? 0).toBeGreaterThan(
+      0
+    );
+    for (const line of entry.item.fileDiff.additionLines) {
+      expect(line).toBeTypeOf("string");
+      expect(line).not.toMatch(/^(?:undefined)+$/);
+    }
+    for (const line of entry.item.fileDiff.deletionLines) {
+      expect(line).toBeTypeOf("string");
+      expect(line).not.toMatch(/^(?:undefined)+$/);
+    }
+    expect(
+      entry.item.fileDiff.additionLines.some((line) =>
+        line.includes("adopt-symlink")
+      )
+    ).toBe(true);
+  });
+
+  it("treats zero-hunk patches as empty body without throwing", () => {
+    // mode-only / 无 @@ hunk：不得因 assert 误报 error notice
+    const patch = [
+      "diff --git a/empty.ts b/empty.ts",
+      "index 1111111..2222222 100644",
+      "--- a/empty.ts",
+      "+++ b/empty.ts",
+      "",
+    ].join("\n");
+    const input: PierDiffViewItem = {
+      cacheKey: "loaded:empty",
+      fileDisplay: { path: "empty.ts", status: "modified" },
+      id: "section:empty",
+      kind: "loaded",
+      patch,
+    };
+    const { entry, error } = toCodeViewItem(input, undefined);
+    // processFile 可能对无 hunk 失败或产出 0 hunk；0 hunk 不得硬 throw 覆盖
+    if (error) {
+      // Pierre 解析失败可接受；关键是 assert 不得把 0 hunk 当成 buffer 缺失
+      expect(error.message).not.toMatch(/do not cover hunks/);
+      return;
+    }
+    if (entry.item.type !== "diff") {
+      throw new Error("expected diff item");
+    }
+    expect(entry.item.fileDiff.hunks).toHaveLength(0);
+    expect(entry.item.fileDiff.isPartial).toBe(true);
   });
 
   it("surfaces real addition counts after a new-file patch loads", () => {

@@ -13,6 +13,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 
 type Item = PierDiffCodeViewItem;
 
+/** membership layout flush is queueMicrotask'd (React 19 flushSync rule). */
+async function flushMembershipLayoutMicrotasks(): Promise<void> {
+  await Promise.resolve();
+}
+
 function makeItem(id: string, version = 1, path = id): Item {
   return {
     id,
@@ -127,7 +132,7 @@ describe("anchored item fallback", () => {
     expect(deletedAnchorFallbackId("a", ["a"], new Set())).toBeNull();
   });
 
-  it("resets deleted-file depth before one final layout transaction", () => {
+  it("resets deleted-file depth before one final layout transaction", async () => {
     const previous = [makeItem("a"), makeItem("b"), makeItem("c")];
     const next = [previous[0]!, previous[2]!];
     const events: string[] = [];
@@ -170,10 +175,13 @@ describe("anchored item fallback", () => {
       offset: 0,
       type: "item",
     });
+    // scroll 同步；render(true)×2 在 microtask（避 layout flushSync）
+    expect(events).toEqual(["scroll"]);
+    await flushMembershipLayoutMicrotasks();
     expect(events).toEqual(["scroll", "render", "render"]);
   });
 
-  it("preserves a visible line anchor across a path-aligned id migration", () => {
+  it("preserves a visible line anchor across a path-aligned id migration", async () => {
     const previous = [makeItem("unstaged:a", 1, "a.ts")];
     const next = [makeItem("staged:a", 2, "a.ts")];
     const events: string[] = [];
@@ -221,10 +229,12 @@ describe("anchored item fallback", () => {
       side: "additions",
       type: "line",
     });
+    expect(events).toEqual(["scroll"]);
+    await flushMembershipLayoutMicrotasks();
     expect(events).toEqual(["scroll", "render", "render"]);
   });
 
-  it("uses a second synchronous layout pass after membership reconciliation", () => {
+  it("schedules two layout passes after membership reconciliation", async () => {
     const previous = [makeItem("a"), makeItem("b")];
     const next = [makeItem("a"), makeItem("c")];
     const { handle } = mockHandle({ items: previous });
@@ -244,12 +254,14 @@ describe("anchored item fallback", () => {
       flushLayout: true,
     });
 
+    expect(render).not.toHaveBeenCalled();
+    await flushMembershipLayoutMicrotasks();
     expect(render).toHaveBeenCalledTimes(2);
     expect(render).toHaveBeenNthCalledWith(1, true);
     expect(render).toHaveBeenNthCalledWith(2, true);
   });
 
-  it("flushes layout on content-only version bump without membership change", () => {
+  it("flushes layout on content-only version bump without membership change", async () => {
     // 回归：estimate→loaded 同 id 升 version 时若不 render(true)，
     // 虚拟列表继续画旧 estimate，用户要滚一下才对。
     const previous = [makeItem("section:a", 1, "a.ts")];
@@ -271,11 +283,13 @@ describe("anchored item fallback", () => {
     applyCodeViewItemsAnchored(handle, next, previous);
 
     expect(updateItem).toHaveBeenCalled();
+    expect(render).not.toHaveBeenCalled();
+    await flushMembershipLayoutMicrotasks();
     expect(render).toHaveBeenCalledTimes(2);
     expect(render).toHaveBeenCalledWith(true);
   });
 
-  it("uses updateItem for single estimate→loaded (avoids full-ledger setItems thrash)", () => {
+  it("uses updateItem for single estimate→loaded (avoids full-ledger setItems thrash)", async () => {
     const previous = [
       {
         id: "section:a",
@@ -327,6 +341,7 @@ describe("anchored item fallback", () => {
     applyCodeViewItemsAnchored(handle, next, previous);
     expect(updateItem).toHaveBeenCalled();
     expect(setItems).not.toHaveBeenCalled();
+    await flushMembershipLayoutMicrotasks();
     expect(instance.render).toHaveBeenCalledWith(true);
   });
 });

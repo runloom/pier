@@ -1,6 +1,7 @@
 import {
   collectKnownDirectoryPaths,
   resolveExpandedPaths,
+  shouldSkipExpandDueToCollapse,
 } from "@pier/ui/file/tree-expansion-apply.ts";
 import {
   getTreeExpansionAuthority,
@@ -27,6 +28,40 @@ describe("TreeExpansionAuthority", () => {
     const intent = authority.getIntent();
     expect(intent.expanded.has("src")).toBe(false);
     expect(intent.collapsed.has("src")).toBe(true);
+  });
+
+  it("api expand clears user-collapsed root (Expand Folders intent)", () => {
+    // 右键 Expand Folders：必须 setDirectoryExpanded(root, true, "api") 清 collapsed
+    const authority = getTreeExpansionAuthority("expand-folders-root");
+    authority.setDirectoryExpanded("src", false, "user");
+    authority.setDirectoryExpanded("docs", false, "user");
+    authority.setDirectoryExpanded("src", true, "api");
+    const intent = authority.getIntent();
+    expect(intent.expanded.has("src")).toBe(true);
+    expect(intent.collapsed.has("src")).toBe(false);
+    // sibling 仍可保持 user-collapsed
+    expect(intent.collapsed.has("docs")).toBe(true);
+  });
+
+  it("subtree Expand Folders re-opens descendants after Collapse Folders", () => {
+    // Collapse Folders 会把 root+子孙全部 collapsed；Expand 必须强制整子树
+    const authority = getTreeExpansionAuthority("collapse-then-expand");
+    const group = "\u0001Changes";
+    const paths = [group, `${group}/src`, `${group}/src/lib`, "\u0002Staged"];
+    authority.collapseAll(paths, "api");
+    // 模拟 Expand 子树：清 group 范围内全部 collapsed
+    for (const path of paths) {
+      if (path === group || path.startsWith(`${group}/`)) {
+        authority.setDirectoryExpanded(path, true, "api");
+      }
+    }
+    const intent = authority.getIntent();
+    expect(intent.collapsed.has(group)).toBe(false);
+    expect(intent.collapsed.has(`${group}/src`)).toBe(false);
+    expect(intent.collapsed.has(`${group}/src/lib`)).toBe(false);
+    expect(intent.expanded.has(`${group}/src/lib`)).toBe(true);
+    // sibling group 仍 collapsed
+    expect(intent.collapsed.has("\u0002Staged")).toBe(true);
   });
 
   it("collapseAll marks known directories collapsed", () => {
@@ -104,6 +139,56 @@ describe("TreeExpansionAuthority", () => {
     const intent = restored.getIntent();
     expect(intent.expanded.has("src")).toBe(true);
     expect(intent.collapsed.has("docs")).toBe(true);
+  });
+});
+
+describe("shouldSkipExpandDueToCollapse", () => {
+  it("subtree Expand does not skip collapsed descendants under root", () => {
+    const group = "\u0001Changes";
+    expect(
+      shouldSkipExpandDueToCollapse({
+        isUserCollapsed: true,
+        path: `${group}/src/lib`,
+        rootPath: group,
+      })
+    ).toBe(false);
+    expect(
+      shouldSkipExpandDueToCollapse({
+        isUserCollapsed: true,
+        path: group,
+        rootPath: group,
+      })
+    ).toBe(false);
+  });
+
+  it("whole-tree Expand still skips user-collapsed dirs", () => {
+    expect(
+      shouldSkipExpandDueToCollapse({
+        isUserCollapsed: true,
+        path: "src",
+        rootPath: "",
+      })
+    ).toBe(true);
+  });
+
+  it("does not force-open siblings outside expand root", () => {
+    expect(
+      shouldSkipExpandDueToCollapse({
+        isUserCollapsed: true,
+        path: "\u0002Staged/src",
+        rootPath: "\u0001Changes",
+      })
+    ).toBe(true);
+  });
+
+  it("never skips when not user-collapsed", () => {
+    expect(
+      shouldSkipExpandDueToCollapse({
+        isUserCollapsed: false,
+        path: "src",
+        rootPath: "",
+      })
+    ).toBe(false);
   });
 });
 

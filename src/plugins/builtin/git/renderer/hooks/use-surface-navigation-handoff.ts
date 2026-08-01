@@ -1,11 +1,18 @@
 import { useEffect, useLayoutEffect, useRef } from "react";
 import type { ReviewDocumentProjection } from "../review/document/projection.ts";
-import {
-  isReviewEstimateCacheKey,
-  isReviewPlaceholderCacheKey,
-} from "../review/navigation.ts";
+import { isReviewPlaceholderCacheKey } from "../review/navigation.ts";
 import type { GitReviewReadingSurface } from "../review/reading-surface.ts";
 import type { ReviewSurfaceNavigationRequest } from "../review/surface-types.ts";
+
+/**
+ * Cross-surface tree open 契约（金标准）：
+ * - 树点击：`requestTreeOpen` **立即** setActiveSurface；本 hook 在 **active 面**
+ *   上 `beginNavigation`（demand + scroll）
+ * - materialize 仅兜底 inactive 面（如 mutation preserve）；**不是** 树 activate 切面门闩
+ * - settle：pending 结束后清 navigationRequest；超时强制 settle 防卡死
+ */
+/** pending scroll 卡住时仍清 navigationRequest 的安全上限 */
+const NAVIGATION_SETTLE_SAFETY_MS = 1200;
 
 export function useGitReviewSurfaceNavigationHandoff(options: {
   readonly active: boolean;
@@ -70,18 +77,27 @@ export function useGitReviewSurfaceNavigationHandoff(options: {
     setSelectedTreeTarget,
   ]);
 
+  // pending 结束后 settle；若 scroll 卡住则安全超时强制 settle
   useEffect(() => {
     if (
       !active ||
       navigationRequest === null ||
       navigationRequest.surface !== diffBase ||
-      handledNavigationNonceRef.current !== navigationRequest.nonce ||
-      navigationPending ||
-      hasPendingNavigation()
+      handledNavigationNonceRef.current !== navigationRequest.nonce
     ) {
       return;
     }
-    onSurfaceNavigationSettled(navigationRequest);
+    if (!(navigationPending || hasPendingNavigation())) {
+      onSurfaceNavigationSettled(navigationRequest);
+      return;
+    }
+    const request = navigationRequest;
+    const timer = globalThis.setTimeout(() => {
+      onSurfaceNavigationSettled(request);
+    }, NAVIGATION_SETTLE_SAFETY_MS);
+    return () => {
+      globalThis.clearTimeout(timer);
+    };
   }, [
     active,
     diffBase,
@@ -104,11 +120,9 @@ export function useGitReviewSurfaceNavigationHandoff(options: {
     const target = projection.items.find(
       (item) => item.id === navigationRequest.itemId
     );
-    if (
-      target === undefined ||
-      isReviewEstimateCacheKey(target.cacheKey) ||
-      isReviewPlaceholderCacheKey(target.cacheKey)
-    ) {
+    // 兜底路径（面仍 inactive 时）：账本有成员即可 materialize 切面（含 estimate）。
+    // 树 activate 主路径不依赖本 effect（已在 requestTreeOpen 切面）。
+    if (target === undefined || isReviewPlaceholderCacheKey(target.cacheKey)) {
       return;
     }
     onNavigationMaterialized(navigationRequest);

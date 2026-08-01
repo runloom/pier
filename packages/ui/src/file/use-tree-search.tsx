@@ -1,5 +1,9 @@
 import { type RefObject, useCallback, useRef, useState } from "react";
 import type { PierFileTreeApi, PierFileTreeProps } from "./tree.tsx";
+import type {
+  PierFileTreeCollapseAllOptions,
+  PierFileTreeExpandAllOptions,
+} from "./tree-types.ts";
 
 type FileTreeSearchMatchState = Parameters<
   NonNullable<PierFileTreeProps["onSearchMatchStateChange"]>
@@ -111,13 +115,19 @@ export function useFileTreeSearch({
     );
   }, []);
 
-  const collapseAllFolders = useCallback(() => {
-    resolvedTreeApiRef.current?.collapseAll();
-  }, [resolvedTreeApiRef]);
+  const collapseAllFolders = useCallback(
+    (options?: PierFileTreeCollapseAllOptions) => {
+      resolvedTreeApiRef.current?.collapseAll(options);
+    },
+    [resolvedTreeApiRef]
+  );
 
-  const expandAllFolders = useCallback(() => {
-    resolvedTreeApiRef.current?.expandAll();
-  }, [resolvedTreeApiRef]);
+  const expandAllFolders = useCallback(
+    (options?: PierFileTreeExpandAllOptions) => {
+      resolvedTreeApiRef.current?.expandAll(options);
+    },
+    [resolvedTreeApiRef]
+  );
 
   return {
     attachTreeApi,
