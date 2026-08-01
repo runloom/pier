@@ -4,8 +4,12 @@
 
 ## [Unreleased]
 
-### Changed
+## [0.1.11] - 2026-08-01
 
+### Added
+
+- **本地 preflight 与精简 Quality Gate。** 默认 pre-push 跑 static+unit+component；
+  path filter 跳过无关 native/windows job；coverage 文件并行以缩短 CI wall-clock。
 - **Git Review 金标准（G0–G4 + G6 探针；G5 为 Z1 中间态）。** 正文仅
   content-bearing（pure rename / empty / binary 默认不进 CodeView）；pending
   骨架 5 行真实 DOM + **inline 几何**（防整宽灰板）；**estimate 仅 demand/seed
@@ -15,6 +19,11 @@
 - **G5 / 加载路径（Z1 达 DoD，Z2 批摘录未合入）。** 当前主路径仍为 content 子集
   上的有界 `getReviewFileDocument`。S1–S9 在 Z1 机测可证；**Z2 多文件批摘录流
   未完成**，超大仓仍可能有界排队。后续须补 Z2。
+
+### Fixed
+
+- **Coverage / 单测与 CI 对齐。** agent 配置路径 XDG 隔离、git symlink 省略理由、
+  review stage long-task 预算、preflight 下 unit worker 上限，减少假红。
 
 ## [0.1.10] - 2026-07-27
 
